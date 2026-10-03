@@ -17,42 +17,22 @@ import (
 // cluster-dns page rather than blame on nodes or consumers. CoreDNS is
 // restored before the scenario ends.
 func TestScenarioExtendedClusterDNSDown(t *testing.T) {
-	runExtendedScenario(t, "integration.cluster-dns", func(
-		ctx context.Context,
-		t *testing.T,
-		e *harness.Environment,
-	) {
-		deployments := e.Client.AppsV1().Deployments("kube-system")
-		scale, err := deployments.GetScale(ctx, "coredns", metav1.GetOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		original := scale.Spec.Replicas
-		started := time.Now()
-		scale.Spec.Replicas = 0
-		if _, err := deployments.UpdateScale(
-			ctx, "coredns", scale, metav1.UpdateOptions{},
-		); err != nil {
-			t.Fatal(err)
-		}
-		defer restoreCoreDNS(t, e, original)
-		assertRoot(ctx, t, e, "", started, harness.RootExpectation{
+	inExtendedCluster(t, "integration.cluster-dns", func(s *Scenario) {
+		extScaleCoreDNSToZero(s)
+		s.ExpectRoot(harness.RootExpectation{
 			Root:         "cluster-dns//cluster-dns",
 			Tier:         "page",
 			MaxMessages:  2,
-			MustNotBlame: kindNodeRoots(ctx, t, e),
+			MustNotBlame: extKindNodeRoots(s),
 		})
 	})
 }
 
-func kindNodeRoots(
-	ctx context.Context, t *testing.T, e *harness.Environment,
-) []string {
-	t.Helper()
-	nodes, err := e.Client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
+func extKindNodeRoots(s *Scenario) []string {
+	s.T.Helper()
+	nodes, err := s.Env.Client.CoreV1().Nodes().List(s.Ctx,
+		metav1.ListOptions{})
+	s.Must(err)
 	roots := make([]string, 0, len(nodes.Items))
 	for _, node := range nodes.Items {
 		roots = append(roots, "node//"+node.Name)
@@ -60,11 +40,27 @@ func kindNodeRoots(
 	return roots
 }
 
-func restoreCoreDNS(t *testing.T, e *harness.Environment, replicas int32) {
+// extScaleCoreDNSToZero stops CoreDNS and scales it back to its original
+// size when the test ends.
+func extScaleCoreDNSToZero(s *Scenario) {
+	s.T.Helper()
+	deployments := s.Env.Client.AppsV1().Deployments("kube-system")
+	scale, err := deployments.GetScale(s.Ctx, "coredns", metav1.GetOptions{})
+	s.Must(err)
+	original := scale.Spec.Replicas
+	scale.Spec.Replicas = 0
+	_, err = deployments.UpdateScale(
+		s.Ctx, "coredns", scale, metav1.UpdateOptions{})
+	s.Must(err)
+	s.T.Cleanup(func() { extRestoreCoreDNS(s, original) })
+}
+
+func extRestoreCoreDNS(s *Scenario, replicas int32) {
+	t := s.T
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	deployments := e.Client.AppsV1().Deployments("kube-system")
+	deployments := s.Env.Client.AppsV1().Deployments("kube-system")
 	scale, err := deployments.GetScale(ctx, "coredns", metav1.GetOptions{})
 	if err != nil {
 		t.Errorf("read CoreDNS scale: %v", err)
@@ -80,8 +76,7 @@ func restoreCoreDNS(t *testing.T, e *harness.Environment, replicas int32) {
 	err = wait.PollUntilContextTimeout(ctx, time.Second, 3*time.Minute, true,
 		func(ctx context.Context) (bool, error) {
 			current, getErr := deployments.Get(
-				ctx, "coredns", metav1.GetOptions{},
-			)
+				ctx, "coredns", metav1.GetOptions{})
 			return getErr == nil &&
 				current.Status.ReadyReplicas >= replicas, nil
 		})

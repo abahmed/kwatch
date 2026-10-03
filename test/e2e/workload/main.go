@@ -66,7 +66,12 @@ func consumeMemory() {
 	megabytes := envInt("MEMORY_MB", 512)
 	blocks := make([][]byte, 0, megabytes)
 	for range megabytes {
-		blocks = append(blocks, make([]byte, 1024*1024))
+		block := make([]byte, 1024*1024)
+		// Write one byte per page so the memory is really resident.
+		for i := 0; i < len(block); i += 4096 {
+			block[i] = 1
+		}
+		blocks = append(blocks, block)
 	}
 	select {}
 }

@@ -5,7 +5,6 @@ package scenarios
 import (
 	"context"
 	"testing"
-	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -29,176 +28,59 @@ func TestScenarioResolution(t *testing.T) {
 }
 
 func TestScenarioRefailureAfterRecovery(t *testing.T) {
-	runScenario(t, "pod.re-failure-after-recovery", func(
-		ctx context.Context,
-		t *testing.T,
-		e *harness.Environment,
-	) {
-		namespace := uniqueNamespace(t.Name())
-		if err := createNamespace(ctx, e, namespace); err != nil {
-			t.Fatal(err)
-		}
-		defer cleanupNamespace(t, e, namespace)
-		_, err := createLifecycleDeployment(ctx, e, namespace,
-			"refailure", "crash")
-		if err != nil {
-			t.Fatal(err)
-		}
-		match := harness.AuditMatch{
-			Namespace: namespace, Resource: "refailure",
-			Reason: "CrashLoopBackOff", Action: "create", Count: 1,
-		}
-		if _, err := e.Audit.WaitFor(ctx, match); err != nil {
-			t.Fatal(err)
-		}
-		if err := setLifecycleMode(
-			ctx, e, namespace, "refailure", "healthy",
-		); err != nil {
-			t.Fatal(err)
-		}
-		waitCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-		defer cancel()
-		if err := e.WaitForDeployment(waitCtx, namespace, "refailure"); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Namespace: namespace, Resource: "refailure",
-			Reason: "CrashLoopBackOff", Action: "resolved", Count: 1,
-		}); err != nil {
-			t.Fatal(err)
-		}
-		if err := setLifecycleMode(
-			ctx, e, namespace, "refailure", "crash",
-		); err != nil {
-			t.Fatal(err)
-		}
-		entries, err := e.Audit.WaitFor(ctx, match)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(entries) != 2 {
-			t.Fatalf("expected two create transitions, got %d", len(entries))
-		}
+	inNamespace(t, "pod.re-failure-after-recovery", func(s *Scenario) {
+		_, err := createLifecycleDeployment(
+			s.Ctx, s.Env, s.Namespace, "refailure", "crash")
+		s.Must(err)
+		s.ExpectIncident("refailure", "CrashLoopBackOff", 0)
+
+		s.Must(setLifecycleMode(
+			s.Ctx, s.Env, s.Namespace, "refailure", "healthy"))
+		s.ExpectResolved("refailure", "CrashLoopBackOff")
+
+		s.Must(setLifecycleMode(
+			s.Ctx, s.Env, s.Namespace, "refailure", "crash"))
+		lifecycleExpectIncidents(s, "refailure", "CrashLoopBackOff", 2)
 	})
 }
 
 func TestScenarioRestartPersistence(t *testing.T) {
-	runScenario(t, "lifecycle.restart-persistence", func(
-		ctx context.Context,
-		t *testing.T,
-		e *harness.Environment,
-	) {
-		namespace := uniqueNamespace(t.Name())
-		if err := e.Receiver.Clear(ctx); err != nil {
-			t.Fatal(err)
-		}
-		if err := createNamespace(ctx, e, namespace); err != nil {
-			t.Fatal(err)
-		}
-		defer cleanupNamespace(t, e, namespace)
-		if _, err := createLifecycleDeployment(ctx, e, namespace,
-			"persistent", "crash"); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Namespace: namespace,
-			Resource:  "persistent",
-			Reason:    "CrashLoopBackOff",
-			Action:    "create",
-			Count:     1,
-		}); err != nil {
-			t.Fatal(err)
-		}
-		deliveryMatch := harness.DeliveryMatch{
+	inNamespace(t, "lifecycle.restart-persistence", func(s *Scenario) {
+		s.Must(s.Env.Receiver.Clear(s.Ctx))
+		_, err := createLifecycleDeployment(
+			s.Ctx, s.Env, s.Namespace, "persistent", "crash")
+		s.Must(err)
+		s.ExpectIncident("persistent", "CrashLoopBackOff", 0)
+		sent := harness.DeliveryMatch{
 			Name: "persistent", Reason: "CrashLoopBackOff",
 		}
-		if _, err := e.Receiver.WaitForMatchCount(
-			ctx, deliveryMatch, 1,
-		); err != nil {
-			t.Fatal(err)
+		_, err = s.Env.Receiver.WaitForMatchCount(s.Ctx, sent, 1)
+		s.Must(err)
+
+		lifecycleDeleteLeader(s)
+		deliveries, err := s.Env.Receiver.Matching(s.Ctx, sent)
+		s.Must(err)
+		if len(deliveries) != 1 {
+			t.Fatalf("restart changed delivery count: %d", len(deliveries))
 		}
-		leader, err := e.WaitForLeaseHolder(ctx, "kwatch", "kwatch-leader")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := e.Client.CoreV1().Pods("kwatch").Delete(
-			ctx, leader, metav1.DeleteOptions{},
-		); err != nil {
-			t.Fatal(err)
-		}
-		waitCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-		defer cancel()
-		if _, err := e.WaitForLeaseChange(
-			waitCtx, "kwatch", "kwatch-leader", leader,
-		); err != nil {
-			t.Fatal(err)
-		}
-		entries, err := e.Receiver.Matching(ctx, deliveryMatch)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(entries) != 1 {
-			t.Fatalf("restart changed delivery count: %d", len(entries))
-		}
-		if err := e.AssertHealthy(ctx); err != nil {
-			t.Fatal(err)
-		}
+		s.Must(s.Env.AssertHealthy(s.Ctx))
 	})
 }
 
 // TestScenarioLeaseHandover deletes the only Pod. The replacement must
 // acquire the Lease, become available, and keep detecting new incidents.
 func TestScenarioLeaseHandover(t *testing.T) {
-	runScenario(t, "lifecycle.lease-handover", func(
-		ctx context.Context,
-		t *testing.T,
-		e *harness.Environment,
-	) {
-		oldHolder, err := e.WaitForLeaseHolder(ctx, "kwatch", "kwatch-leader")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := e.Client.CoreV1().Pods("kwatch").Delete(
-			ctx, oldHolder, metav1.DeleteOptions{},
-		); err != nil {
-			t.Fatal(err)
-		}
-		waitCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-		defer cancel()
-		newHolder, err := e.WaitForLeaseChange(
-			waitCtx, "kwatch", "kwatch-leader", oldHolder,
-		)
-		if err != nil {
-			t.Fatal(err)
-		}
+	inNamespace(t, "lifecycle.lease-handover", func(s *Scenario) {
+		oldHolder, newHolder := lifecycleDeleteLeader(s)
 		if newHolder == oldHolder {
 			t.Fatalf("Lease holder did not change from %q", oldHolder)
 		}
-		if err := e.Health.AssertOK(ctx, "/availabilityz"); err != nil {
-			t.Fatal(err)
-		}
-		namespace := uniqueNamespace(t.Name())
-		if err := createNamespace(ctx, e, namespace); err != nil {
-			t.Fatal(err)
-		}
-		defer cleanupNamespace(t, e, namespace)
-		if _, err := createLifecycleDeployment(ctx, e, namespace,
-			"takeover", "crash"); err != nil {
-			t.Fatal(err)
-		}
-		entries, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Namespace: namespace,
-			Resource:  "takeover",
-			Reason:    "CrashLoopBackOff",
-			Action:    "create",
-			Count:     1,
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(entries) != 1 {
-			t.Fatalf("expected one post-handover incident, got %d", len(entries))
-		}
+		s.Must(s.Env.Health.AssertOK(s.Ctx, "/availabilityz"))
+
+		_, err := createLifecycleDeployment(
+			s.Ctx, s.Env, s.Namespace, "takeover", "crash")
+		s.Must(err)
+		s.ExpectIncident("takeover", "CrashLoopBackOff", 0)
 	})
 }
 

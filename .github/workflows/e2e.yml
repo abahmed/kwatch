@@ -98,7 +98,8 @@ env:
 
 jobs:
   scenarios:
-    name: Kind regression scenarios
+    name: >-
+      Kind regression scenarios${{ matrix.shard != '' && format(' ({0})', matrix.shard) || '' }}
     if: >-
       (github.event_name != 'pull_request'
       || contains(github.event.pull_request.labels.*.name, 'e2e'))
@@ -108,6 +109,17 @@ jobs:
     timeout-minutes: 150
     permissions:
       contents: read
+    # The full suite is split over four Kind clusters that run in parallel.
+    # A filtered or compare run keeps one cluster, since its own filter
+    # already picks the scenarios.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: >-
+          ${{ fromJSON(
+          (inputs.scenario != '' || inputs.family != '' || inputs.shard != ''
+          || inputs.compare_with_main) && '[""]'
+          || '["1/4","2/4","3/4","4/4"]') }}
     env:
       SOURCE_REF: >-
         ${{ inputs.compare_with_main && 'main' || github.ref_name }}
@@ -172,7 +184,7 @@ jobs:
           KEEP_CLUSTER: "${{ inputs.keep_cluster || false }}"
           SCENARIO_REGEX: "${{ inputs.scenario }}"
           SCENARIO_FAMILY: "${{ inputs.family }}"
-          SCENARIO_SHARD: "${{ inputs.shard }}"
+          SCENARIO_SHARD: "${{ inputs.shard || matrix.shard }}"
           SUITE_TIMEOUT: "${{ inputs.suite_timeout || '60m' }}"
           REPORTED_REF: "${{ inputs.reported_ref }}"
           REPORTED_VERSION: "${{ inputs.reported_version }}"
@@ -189,7 +201,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: kwatch-e2e-${{ github.run_id }}
+          name: kwatch-e2e-${{ github.run_id }}-${{ strategy.job-index }}
           path: |
             ${{ runner.temp }}/kwatch-e2e
             ${{ runner.temp }}/kwatch-source.txt

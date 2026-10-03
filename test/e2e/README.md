@@ -72,7 +72,10 @@ or uploaded.
 
 The `e2e.yml` workflow (nightly, manual, or on PRs labelled `e2e`) resolves the
 latest `main` commit to an immutable SHA before building and runs the complete
-scenario suite, including the extended Kind cases. It accepts a scenario regex,
+scenario suite, including the extended Kind cases. A full run is split over
+four Kind clusters that run in parallel (each takes every fourth scenario of
+`coverage/coverage.yaml`); a run with a scenario, family, shard or compare
+filter uses one cluster. It accepts a scenario regex,
 family, shard, and optional cluster retention for debugging. In compare mode it
 also accepts a release tag or commit. The workflow runs that reported source
 and the latest `main` in separate Kind clusters and writes one of

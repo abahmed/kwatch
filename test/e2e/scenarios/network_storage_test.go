@@ -3,103 +3,64 @@
 package scenarios
 
 import (
-	"context"
 	"testing"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/abahmed/kwatch/internal/detection/detectors"
 	"github.com/abahmed/kwatch/test/e2e/harness"
 )
 
 func TestScenarioServiceWithoutEndpoints(t *testing.T) {
-	runScenario(t, "networking.service-endpoint", func(
-		ctx context.Context,
-		t *testing.T,
-		e *harness.Environment,
-	) {
-		namespace := uniqueNamespace(t.Name())
-		if err := createNamespace(ctx, e, namespace); err != nil {
-			t.Fatal(err)
-		}
-		defer cleanupNamespace(t, e, namespace)
-		_, err := e.Client.CoreV1().Services(namespace).Create(ctx,
-			&corev1.Service{
-				ObjectMeta: metav1.ObjectMeta{Name: "empty-service"},
-				Spec: corev1.ServiceSpec{
-					Selector: map[string]string{"app": "does-not-exist"},
-					Ports:    []corev1.ServicePort{{Port: 8080}},
-				},
-			}, metav1.CreateOptions{},
-		)
-		if err != nil {
-			t.Fatal(err)
-		}
+	inNamespace(t, "networking.service-endpoint", func(s *Scenario) {
+		services := s.Env.Client.CoreV1().Services(s.Namespace)
+		_, err := services.Create(s.Ctx, &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "empty-service"},
+			Spec: corev1.ServiceSpec{
+				Selector: map[string]string{"app": "does-not-exist"},
+				Ports:    []corev1.ServicePort{{Port: 8080}},
+			},
+		}, metav1.CreateOptions{})
+		s.Must(err)
+
 		// A Service that was never backed is empty on purpose. One that
 		// emptied after its selector changed was broken by the edit.
-		selector := []byte(`{"spec":{"selector":{"app":"renamed"}}}`)
-		if _, err := e.Client.CoreV1().Services(namespace).Patch(
-			ctx, "empty-service", types.MergePatchType, selector,
-			metav1.PatchOptions{},
-		); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Namespace: namespace, Resource: "empty-service",
-			Reason: "ServiceNoEndpoints", Count: 1,
-		}); err != nil {
-			t.Fatal(err)
-		}
+		_, err = services.Patch(s.Ctx, "empty-service",
+			types.MergePatchType,
+			[]byte(`{"spec":{"selector":{"app":"renamed"}}}`),
+			metav1.PatchOptions{})
+		s.Must(err)
+		s.ExpectIncident("empty-service", "ServiceNoEndpoints",
+			detectors.DefaultNoEndpoints)
 	})
 }
 
 func TestScenarioPersistentVolumeClaimFailure(t *testing.T) {
-	runScenario(t, "storage.pvc-pv", func(
-		ctx context.Context,
-		t *testing.T,
-		e *harness.Environment,
-	) {
-		namespace := uniqueNamespace(t.Name())
-		if err := createNamespace(ctx, e, namespace); err != nil {
-			t.Fatal(err)
-		}
-		defer cleanupNamespace(t, e, namespace)
-		started := time.Now()
-		_, err := e.Client.CoreV1().PersistentVolumeClaims(namespace).Create(
-			ctx, &corev1.PersistentVolumeClaim{
-				ObjectMeta: metav1.ObjectMeta{Name: "missing-volume"},
-				Spec: corev1.PersistentVolumeClaimSpec{
-					StorageClassName: stringPtr("kwatch-e2e-missing"),
-					AccessModes: []corev1.PersistentVolumeAccessMode{
-						corev1.ReadWriteOnce,
-					},
-					Resources: corev1.VolumeResourceRequirements{
-						Requests: corev1.ResourceList{
-							corev1.ResourceStorage: resource.MustParse("1Gi"),
-						},
+	inNamespace(t, "storage.pvc-pv", func(s *Scenario) {
+		claims := s.Env.Client.CoreV1().PersistentVolumeClaims(s.Namespace)
+		_, err := claims.Create(s.Ctx, &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: "missing-volume"},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				StorageClassName: stringPtr("kwatch-e2e-missing"),
+				AccessModes: []corev1.PersistentVolumeAccessMode{
+					corev1.ReadWriteOnce,
+				},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse("1Gi"),
 					},
 				},
-			}, metav1.CreateOptions{},
-		)
-		if err != nil {
-			t.Fatal(err)
-		}
-		waitCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-		defer cancel()
-		if err := wait.PollUntilContextTimeout(waitCtx, 500*time.Millisecond,
-			5*time.Minute, true, func(ctx context.Context) (bool, error) {
-				pvc, err := e.Client.CoreV1().PersistentVolumeClaims(namespace).
-					Get(ctx, "missing-volume", metav1.GetOptions{})
-				return err == nil && pvc.Status.Phase == corev1.ClaimPending, nil
-			}); err != nil {
-			t.Fatal(err)
-		}
-		assertRoot(ctx, t, e, namespace, started, harness.RootExpectation{
-			Root:        "persistentvolumeclaim/" + namespace + "/missing-volume",
+			},
+		}, metav1.CreateOptions{})
+		s.Must(err)
+		s.ExpectIncident("missing-volume", "PersistentVolumeClaimFailure",
+			detectors.DefaultClaimPending)
+		s.ExpectRoot(harness.RootExpectation{
+			Root: "persistentvolumeclaim/" + s.Namespace +
+				"/missing-volume",
 			Tier:        "notify",
 			MaxMessages: 2,
 		})

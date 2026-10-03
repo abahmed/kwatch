@@ -7,8 +7,10 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -19,6 +21,7 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
+	"github.com/abahmed/kwatch/test/e2e/coverage"
 	"github.com/abahmed/kwatch/test/e2e/harness"
 )
 
@@ -151,9 +154,35 @@ func belongsToShard(id, value string) bool {
 	if indexErr != nil || totalErr != nil || index < 1 || index > total {
 		return false
 	}
-	hash := sha1.Sum([]byte(id))
-	return int(hash[0])%total == index-1
+	return shardOf(id, total) == index-1
 }
+
+// shardOf spreads scenarios evenly: each covered scenario takes the next
+// shard in the order of coverage.yaml. An ID missing from the catalog falls
+// back to a hash, so it still lands in exactly one shard.
+func shardOf(id string, total int) int {
+	for position, scenarioID := range coveredScenarioIDs() {
+		if scenarioID == id {
+			return position % total
+		}
+	}
+	hash := sha1.Sum([]byte(id))
+	return int(hash[0]) % total
+}
+
+var coveredScenarioIDs = sync.OnceValue(func() []string {
+	catalog, err := coverage.Load(filepath.Join("..", "coverage", "coverage.yaml"))
+	if err != nil {
+		return nil
+	}
+	var ids []string
+	for _, entry := range catalog.Entries {
+		if entry.Status == "covered" {
+			ids = append(ids, entry.ID)
+		}
+	}
+	return ids
+})
 
 // assertRoot waits for the incident rooted at exp.Root and requires the
 // expected tier, message budget and absence of blamed entities. started

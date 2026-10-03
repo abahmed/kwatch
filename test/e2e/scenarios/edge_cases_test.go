@@ -3,347 +3,91 @@
 package scenarios
 
 import (
-	"context"
 	"testing"
-	"time"
 
-	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/abahmed/kwatch/test/e2e/harness"
 )
 
 func TestScenarioPodLifecycleHookFailure(t *testing.T) {
-	runScenario(t, "pod.lifecycle-hook", func(
-		ctx context.Context,
-		t *testing.T,
-		e *harness.Environment,
-	) {
-		namespace := uniqueNamespace(t.Name())
-		if err := createNamespace(ctx, e, namespace); err != nil {
-			t.Fatal(err)
-		}
-		defer cleanupNamespace(t, e, namespace)
-		_, err := e.Client.CoreV1().Pods(namespace).Create(ctx, &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "post-start"},
-			Spec: corev1.PodSpec{Containers: []corev1.Container{{
-				Name: "workload", Image: workloadImage(),
-				Command:         []string{"/kwatch-e2e-workload", "sleep"},
-				ImagePullPolicy: corev1.PullNever,
-				Lifecycle: &corev1.Lifecycle{PostStart: &corev1.LifecycleHandler{
-					Exec: &corev1.ExecAction{
-						Command: []string{
-							"/kwatch-e2e-workload", "startup-error",
-						},
-					},
-				}},
-			}}},
-		}, metav1.CreateOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Namespace: namespace, Resource: "post-start",
-			Reason: "FailedPostStartHook", Count: 1,
-		}); err != nil {
-			t.Fatal(err)
-		}
+	inNamespace(t, "pod.lifecycle-hook", func(s *Scenario) {
+		s.Must(edgeCreatePod(
+			s.Ctx, s.Env, s.Namespace, edgeFailingHookPod("post-start")))
+		s.ExpectIncident("post-start", "FailedPostStartHook", 0)
 	})
 }
 
 func TestScenarioCronJobSuspended(t *testing.T) {
-	runScenario(t, "workload.cronjob", func(
-		ctx context.Context,
-		t *testing.T,
-		e *harness.Environment,
-	) {
-		namespace := uniqueNamespace(t.Name())
-		if err := createNamespace(ctx, e, namespace); err != nil {
-			t.Fatal(err)
-		}
-		defer cleanupNamespace(t, e, namespace)
-		suspended := true
-		_, err := e.Client.BatchV1().CronJobs(namespace).Create(ctx,
-			&batchv1.CronJob{
-				ObjectMeta: metav1.ObjectMeta{Name: "suspended"},
-				Spec: batchv1.CronJobSpec{
-					Schedule: "*/5 * * * *", Suspend: &suspended,
-					JobTemplate: batchv1.JobTemplateSpec{Spec: batchv1.JobSpec{
-						Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
-							RestartPolicy: corev1.RestartPolicyNever,
-							Containers: []corev1.Container{{
-								Name: "workload", Image: workloadImage(),
-								Command: []string{
-									"/kwatch-e2e-workload", "healthy",
-								},
-								ImagePullPolicy: corev1.PullNever,
-							}},
-						}},
-					}},
-				},
-			}, metav1.CreateOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Namespace: namespace, Resource: "suspended",
-			Reason: "CronJobSuspended", Count: 1,
-		}); err != nil {
-			t.Fatal(err)
-		}
+	inNamespace(t, "workload.cronjob", func(s *Scenario) {
+		s.Must(edgeCreateSuspendedCronJob(
+			s.Ctx, s.Env, s.Namespace, "suspended"))
+		s.ExpectIncident("suspended", "CronJobSuspended", 0)
 	})
 }
 
 func TestScenarioMissingRequiredReferences(t *testing.T) {
-	runScenario(t, "security.secret-reference", func(
-		ctx context.Context,
-		t *testing.T,
-		e *harness.Environment,
-	) {
-		namespace := uniqueNamespace(t.Name())
-		if err := createNamespace(ctx, e, namespace); err != nil {
-			t.Fatal(err)
-		}
-		defer cleanupNamespace(t, e, namespace)
-		started := time.Now()
-		_, err := e.Client.CoreV1().Pods(namespace).Create(ctx, &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "missing-references"},
-			Spec: corev1.PodSpec{Containers: []corev1.Container{{
-				Name: "workload", Image: workloadImage(),
-				Command:         []string{"/kwatch-e2e-workload", "sleep"},
-				ImagePullPolicy: corev1.PullNever,
-				EnvFrom: []corev1.EnvFromSource{{
-					SecretRef: &corev1.SecretEnvSource{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: "missing-secret",
-						},
-					},
-				}},
-			}}},
-		}, metav1.CreateOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		assertRoot(ctx, t, e, namespace, started, harness.RootExpectation{
-			Root:         "secret/" + namespace + "/missing-secret",
+	inNamespace(t, "security.secret-reference", func(s *Scenario) {
+		pod := edgePodWithEnvFrom(
+			"missing-references", edgeSecretEnvFrom("missing-secret"))
+		s.Must(edgeCreatePod(s.Ctx, s.Env, s.Namespace, pod))
+		blamed := "pod/" + s.Namespace + "/missing-references"
+		s.ExpectRoot(harness.RootExpectation{
+			Root:         "secret/" + s.Namespace + "/missing-secret",
 			Tier:         "notify",
 			MaxMessages:  2,
-			MustNotBlame: []string{"pod/" + namespace + "/missing-references"},
+			MustNotBlame: []string{blamed},
 		})
 	})
 }
 
 func TestScenarioMissingConfigMapReference(t *testing.T) {
-	runScenario(t, "security.configmap-reference", func(
-		ctx context.Context,
-		t *testing.T,
-		e *harness.Environment,
-	) {
-		namespace := uniqueNamespace(t.Name())
-		if err := createNamespace(ctx, e, namespace); err != nil {
-			t.Fatal(err)
-		}
-		defer cleanupNamespace(t, e, namespace)
-		started := time.Now()
-		_, err := e.Client.CoreV1().Pods(namespace).Create(ctx, &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "missing-configmap"},
-			Spec: corev1.PodSpec{Containers: []corev1.Container{{
-				Name: "workload", Image: workloadImage(),
-				Command:         []string{"/kwatch-e2e-workload", "sleep"},
-				ImagePullPolicy: corev1.PullNever,
-				EnvFrom: []corev1.EnvFromSource{{
-					ConfigMapRef: &corev1.ConfigMapEnvSource{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: "missing-configmap",
-						},
-					},
-				}},
-			}}},
-		}, metav1.CreateOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		assertRoot(ctx, t, e, namespace, started, harness.RootExpectation{
-			Root:         "configmap/" + namespace + "/missing-configmap",
+	inNamespace(t, "security.configmap-reference", func(s *Scenario) {
+		pod := edgePodWithEnvFrom(
+			"missing-configmap", edgeConfigMapEnvFrom("missing-configmap"))
+		s.Must(edgeCreatePod(s.Ctx, s.Env, s.Namespace, pod))
+		s.ExpectRoot(harness.RootExpectation{
+			Root:         "configmap/" + s.Namespace + "/missing-configmap",
 			Tier:         "notify",
 			MaxMessages:  2,
-			MustNotBlame: []string{"pod/" + namespace + "/missing-configmap"},
+			MustNotBlame: []string{"pod/" + s.Namespace + "/missing-configmap"},
 		})
 	})
 }
 
 func TestScenarioMissingServiceAccountReference(t *testing.T) {
-	runScenario(t, "security.rbac", func(
-		ctx context.Context,
-		t *testing.T,
-		e *harness.Environment,
-	) {
-		namespace := uniqueNamespace(t.Name())
-		if err := createNamespace(ctx, e, namespace); err != nil {
-			t.Fatal(err)
-		}
-		defer cleanupNamespace(t, e, namespace)
-		_, err := e.Client.CoreV1().ServiceAccounts(namespace).Create(ctx,
-			&corev1.ServiceAccount{
-				ObjectMeta: metav1.ObjectMeta{Name: "missing-service-account"},
-			}, metav1.CreateOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		pod, err := e.Client.CoreV1().Pods(namespace).Create(ctx, &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "missing-service-account"},
-			Spec: corev1.PodSpec{
-				ServiceAccountName: "missing-service-account",
-				Containers: []corev1.Container{{
-					Name: "workload", Image: workloadImage(),
-					Command:         []string{"/kwatch-e2e-workload", "sleep"},
-					ImagePullPolicy: corev1.PullNever,
-				}},
-			},
-		}, metav1.CreateOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := e.Client.CoreV1().ServiceAccounts(namespace).Delete(
-			ctx, "missing-service-account", metav1.DeleteOptions{},
-		); err != nil {
-			t.Fatal(err)
-		}
-		label := []byte(
-			`{"metadata":{"labels":{"kwatch-e2e":"missing-service-account"}}}`)
-		if _, err := e.Client.CoreV1().Pods(namespace).Patch(
-			ctx, pod.Name, types.MergePatchType, label,
-			metav1.PatchOptions{},
-		); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Namespace: namespace, Resource: "missing-service-account",
-			Reason: "ServiceAccountMissing", Count: 1,
-		}); err != nil {
-			t.Fatal(err)
-		}
+	inNamespace(t, "security.rbac", func(s *Scenario) {
+		s.Must(edgeCreatePodWithDeletedServiceAccount(
+			s.Ctx, s.Env, s.Namespace, "missing-service-account"))
+		s.ExpectIncident(
+			"missing-service-account", "ServiceAccountMissing", 0)
 	})
 }
 
 func TestScenarioMissingIngressBackend(t *testing.T) {
-	runScenario(t, "networking.ingress", func(
-		ctx context.Context,
-		t *testing.T,
-		e *harness.Environment,
-	) {
-		namespace := uniqueNamespace(t.Name())
-		if err := createNamespace(ctx, e, namespace); err != nil {
-			t.Fatal(err)
-		}
-		defer cleanupNamespace(t, e, namespace)
-		pathType := networkingv1.PathTypePrefix
-		_, err := e.Client.NetworkingV1().Ingresses(namespace).Create(ctx,
-			&networkingv1.Ingress{
-				ObjectMeta: metav1.ObjectMeta{Name: "missing-backend"},
-				Spec: networkingv1.IngressSpec{Rules: []networkingv1.IngressRule{{
-					HTTP: &networkingv1.HTTPIngressRuleValue{
-						Paths: []networkingv1.HTTPIngressPath{{
-							Path: "/", PathType: &pathType,
-							Backend: networkingv1.IngressBackend{
-								Service: &networkingv1.IngressServiceBackend{
-									Name: "missing-service",
-									Port: networkingv1.ServiceBackendPort{
-										Number: 8080,
-									},
-								},
-							},
-						}}},
-				}}},
-			}, metav1.CreateOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		waitCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-		defer cancel()
-		if _, err := e.Audit.WaitFor(waitCtx, harness.AuditMatch{
-			Namespace: namespace, Resource: "missing-service",
-			Reason: "IngressBackendNotFound", Count: 1,
-		}); err != nil {
-			t.Fatal(err)
-		}
+	inNamespace(t, "networking.ingress", func(s *Scenario) {
+		s.Must(edgeCreateIngressToMissingService(
+			s.Ctx, s.Env, s.Namespace, "missing-backend", "missing-service"))
+		s.ExpectIncident("missing-service", "IngressBackendNotFound", 0)
 	})
 }
 
 func TestScenarioRestrictiveNetworkPolicy(t *testing.T) {
-	runScenario(t, "networking.network-policy", func(
-		ctx context.Context,
-		t *testing.T,
-		e *harness.Environment,
-	) {
-		namespace := uniqueNamespace(t.Name())
-		if err := createNamespace(ctx, e, namespace); err != nil {
-			t.Fatal(err)
-		}
-		defer cleanupNamespace(t, e, namespace)
-		_, err := e.Client.NetworkingV1().NetworkPolicies(namespace).Create(
-			ctx, &networkingv1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Name: "deny-egress"},
-				Spec: networkingv1.NetworkPolicySpec{
-					PodSelector: metav1.LabelSelector{},
-					PolicyTypes: []networkingv1.PolicyType{
-						networkingv1.PolicyTypeEgress,
-					},
-					Egress: []networkingv1.NetworkPolicyEgressRule{},
-				},
-			}, metav1.CreateOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Namespace: namespace, Resource: "deny-egress",
-			Reason: "RestrictiveNetworkPolicy", Count: 1,
-		}); err != nil {
-			t.Fatal(err)
-		}
+	inNamespace(t, "networking.network-policy", func(s *Scenario) {
+		s.Must(edgeCreateDenyAllEgressPolicy(
+			s.Ctx, s.Env, s.Namespace, "deny-egress"))
+		s.ExpectIncident("deny-egress", "RestrictiveNetworkPolicy", 0)
 	})
 }
 
 func TestScenarioPodSecurityAdmission(t *testing.T) {
-	runScenario(t, "security.pod-security-admission", func(
-		ctx context.Context,
-		t *testing.T,
-		e *harness.Environment,
-	) {
-		namespace := uniqueNamespace(t.Name())
-		_, err := e.Client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-				Labels: map[string]string{
-					"pod-security.kubernetes.io/enforce": "restricted",
-				},
-			},
-		}, metav1.CreateOptions{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer cleanupNamespace(t, e, namespace)
-		privileged := true
-		_, err = e.Client.CoreV1().Pods(namespace).Create(ctx, &corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "privileged"},
-			Spec: corev1.PodSpec{Containers: []corev1.Container{{
-				Name: "workload", Image: workloadImage(),
-				Command:         []string{"/kwatch-e2e-workload", "sleep"},
-				ImagePullPolicy: corev1.PullNever,
-				SecurityContext: &corev1.SecurityContext{
-					Privileged: &privileged,
-				},
-			}}},
-		}, metav1.CreateOptions{})
+	inNamespace(t, "security.pod-security-admission", func(s *Scenario) {
+		s.Must(edgeEnforceRestrictedSecurity(s.Ctx, s.Env, s.Namespace))
+		err := edgeCreatePod(
+			s.Ctx, s.Env, s.Namespace, edgePrivilegedPod("privileged"))
 		if !apierrors.IsForbidden(err) {
 			t.Fatalf("expected Pod Security Admission rejection, got %v", err)
 		}
-		if err := e.AssertHealthy(ctx); err != nil {
-			t.Fatal(err)
-		}
+		s.ExpectKwatchHealthy()
 	})
 }
