@@ -76,11 +76,14 @@ func EvaluateRoot(
 ) RootVerdict {
 	var verdict RootVerdict
 	incidents := make(map[string]bool)
+	older := openedBefore(entries, scope.Since)
 	for _, entry := range entries {
-		if !inScope(entry, scope) {
+		if !inScope(entry, scope) || older[entry.Incident] {
 			continue
 		}
-		if rootMatches(entry.Root, exp.Root) {
+		// Only an announcement counts: a "resolved" entry can belong to an
+		// incident that an earlier scenario opened before this one started.
+		if messageActions[entry.Action] && rootMatches(entry.Root, exp.Root) {
 			incidents[entry.Incident] = true
 			verdict.Rooted = true
 		}
@@ -99,8 +102,9 @@ func judgeEntries(
 ) string {
 	tier := ""
 	total := 0
+	older := openedBefore(entries, scope.Since)
 	for _, entry := range entries {
-		if !inScope(entry, scope) {
+		if !inScope(entry, scope) || older[entry.Incident] {
 			continue
 		}
 		for _, blamed := range exp.MustNotBlame {
@@ -173,4 +177,20 @@ func rootMatches(actual, want string) bool {
 		return strings.HasPrefix(a[2], prefix)
 	}
 	return a[2] == w[2]
+}
+
+// openedBefore lists the incidents announced before since. Their later
+// updates and resolves belong to an earlier scenario, so they must not
+// count as this scenario blaming or messaging anyone.
+func openedBefore(entries []AuditEntry, since time.Time) map[string]bool {
+	older := map[string]bool{}
+	if since.IsZero() {
+		return older
+	}
+	for _, entry := range entries {
+		if entry.Action == "create" && entry.Timestamp.Before(since) {
+			older[entry.Incident] = true
+		}
+	}
+	return older
 }

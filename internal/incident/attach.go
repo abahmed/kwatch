@@ -3,6 +3,8 @@ package incident
 import (
 	"time"
 
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/rootcause"
@@ -159,6 +161,7 @@ func (m *Manager) attach(
 		p.note(now, s.Summary+" ("+describe(s.Entity)+")")
 	}
 	p.Members[key] = s
+	logMember("added to", p, key)
 	p.SupersededBy = ""
 	if where.cause != nil {
 		p.Cause, p.CauseUnclear = where.cause, false
@@ -210,6 +213,7 @@ func (m *Manager) revise(
 		return false
 	}
 	delete(old.Members, key)
+	logMember("moved out of", old, key)
 	m.changed[old.ID] = true
 	old.note(now, "cause revised: "+describe(s.Entity)+
 		" is now explained by "+describe(root))
@@ -269,6 +273,7 @@ func (m *Manager) detach(now time.Time, s detection.Finding) {
 	delete(m.byMember, key)
 	if p := m.incidents[id]; p != nil {
 		delete(p.Members, key)
+		logMember("removed from", p, key)
 		p.note(now, "recovered: "+s.Summary+" ("+describe(s.Entity)+")")
 	}
 }
@@ -321,4 +326,13 @@ func (m *Manager) recur(p, previous *Incident, now time.Time) {
 	// The recurrence carries everything the predecessor knew, so keeping
 	// the predecessor would only grow memory with every blip.
 	m.forget(previous)
+}
+
+// logMember writes a debug line when a finding joins or leaves an incident.
+// It is off by default; -v=4 shows which member keeps an incident open.
+func logMember(change string, p *Incident, key detection.Key) {
+	klog.V(4).InfoS("incident: finding "+change+" incident",
+		"component", "incident", "incident", p.ID, "root", p.Root.String(),
+		"entity", key.Entity.String(), "reason", key.Reason,
+		"members", len(p.Members), "state", p.State.String())
 }

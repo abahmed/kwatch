@@ -8,6 +8,69 @@ The installer and Helm chart are separate from the semantic suite. Keeping
 packaging paths out of it makes a failed incident, grouping, delivery, or
 recovery test an actual Kwatch runtime failure.
 
+## Writing a scenario
+
+A scenario is a short story: create something broken, say what Kwatch must
+announce, fix it, say what must happen next. Use `inNamespace` (or
+`onCluster` for nodes, webhooks and other cluster-wide objects). It creates
+a namespace, cleans it up and stops the test on any error, so the scenario
+has no error handling:
+
+```go
+func TestScenarioResolution(t *testing.T) {
+	inNamespace(t, "lifecycle.resolution", func(s *Scenario) {
+		s.CreateDeployment("recovery", "healthy",
+			withConfigMapEnv("settings"))
+		incident := s.ExpectIncident(
+			"settings", "ProjectedConfigMapMissing", 0)
+
+		s.FixMissingConfigMap("recovery", "settings")
+		s.ExpectResolved(incident)
+	})
+}
+```
+
+Every helper is a method on `*Scenario` or a plain builder that returns a
+Kubernetes object, so a scenario never passes a context, client or
+namespace. Helpers that create things sit in `*_build_test.go`, named after
+what they build: `pods_build_test.go`, `workloads_build_test.go`,
+`config_build_test.go`, `node_build_test.go`, `cluster_build_test.go` and
+`kwatch_build_test.go`. Builders are named after the object
+(`crashingPod`, `failingJob`, `suspendedCronJob`) and `Create*` methods
+create it (`s.CreatePod(pod)`, `s.CreateDeployment(name, mode, options...)`).
+
+Rules:
+
+1. Copy a nearby scenario; keep the `TestScenario<Behavior>` name and the
+   scenario ID in `coverage/coverage.yaml`.
+2. Wait only with the `Expect*` helpers and `timing_test.go`. Never write a
+   raw `time.Minute` wait. Pass the detector's sustain time (see
+   `internal/detection/detectors`) to `ExpectIncident`.
+3. Name the object Kwatch blames, not the object you created. An incident is
+   rooted at the root cause: a missing Secret, the Service behind an
+   Ingress or an APIService can be the root rather than the Pod you made.
+4. Do not read the audit log or webhook payload directly. Use the helpers in
+   `scenarios/scenario_test.go` and `harness/`.
+5. A state Kwatch deliberately ignores, or one Kind cannot reproduce, is not
+   an E2E scenario. Test it with a replay scenario in `internal/scenarios`.
+6. Pick how the scenario shares the cluster:
+   - `inNamespace` runs it at the same time as other scenarios. Use it when
+     everything it creates lives in its own namespace.
+   - `inNamespaceAlone` runs it while nothing else runs. Use it when it
+     stops a node, deletes or restarts Kwatch, changes the webhook
+     receiver, or breaks something cluster-wide such as an APIService or
+     an admission webhook.
+   - `onCluster` also runs alone, for scenarios without a namespace.
+   When unsure, use `inNamespaceAlone`: it is slower but never flaky
+   because of another scenario.
+7. If the scenario takes more than a few minutes, set `minutes:` on its
+   entry in `coverage/coverage.yaml`, so CI can spread slow scenarios over
+   the shards. Every CI run prints the measured time of each scenario.
+8. Keep a scenario under about 30 lines. Move object building into the
+   matching `*_build_test.go` file as a builder plus a `Create*` method, and
+   reuse `workloadContainer`, `workloadPod` and `deployment` instead of
+   writing a new container or Deployment.
+
 ## Local run
 
 Install Docker, Kind, kubectl, Go, Bash, and curl. Then run:
@@ -15,6 +78,11 @@ Install Docker, Kind, kubectl, Go, Bash, and curl. Then run:
 ```sh
 make verify-scenarios
 ```
+
+A scenario that exposes a known Kwatch bug calls `knownGap` and is skipped.
+Set `KWATCH_E2E_RUN_KNOWN_GAPS=true` to run it while fixing the bug, and
+`KWATCH_VERBOSITY=4` to make Kwatch log every finding and incident membership
+change. The CI workflow sets both when you run it for one scenario.
 
 Useful filters are:
 
@@ -32,7 +100,13 @@ or uploaded.
 
 The `e2e.yml` workflow (nightly, manual, or on PRs labelled `e2e`) resolves the
 latest `main` commit to an immutable SHA before building and runs the complete
-scenario suite, including the extended Kind cases. It accepts a scenario regex,
+scenario suite, including the extended Kind cases. A full run is split over
+four Kind clusters that run in parallel. Tests are dealt to the clusters
+longest first using the `minutes:` in `coverage/coverage.yaml`, so every
+cluster gets about the same work. Inside a cluster the scenarios that must
+run alone go first, then the rest run side by side (six at a time; set
+`SCENARIO_PARALLEL` to change it). A run with a scenario, family, shard or
+compare filter uses one cluster. It accepts a scenario regex,
 family, shard, and optional cluster retention for debugging. In compare mode it
 also accepts a release tag or commit. The workflow runs that reported source
 and the latest `main` in separate Kind clusters and writes one of

@@ -31,19 +31,23 @@ func (a *ArtifactWriter) WriteJSON(name string, value any) error {
 	if err != nil {
 		return err
 	}
-	return a.write(name, append(payload, '\n'))
+	return a.Write(name, append(payload, '\n'))
 }
 
 func (a *ArtifactWriter) Write(name string, payload []byte) error {
-	return a.write(name, payload)
-}
-
-func (a *ArtifactWriter) write(name string, payload []byte) error {
 	path := filepath.Join(a.Root, filepath.Clean(name))
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	return os.WriteFile(path, payload, 0o600)
+}
+
+// CaptureDiagnosticsOnce runs CaptureDiagnostics the first time it is called
+// and does nothing afterwards.
+func (e *Environment) CaptureDiagnosticsOnce(ctx context.Context) error {
+	var err error
+	e.diagnostics.Do(func() { err = e.CaptureDiagnostics(ctx) })
+	return err
 }
 
 func (e *Environment) CaptureDiagnostics(ctx context.Context) error {

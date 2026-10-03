@@ -102,7 +102,7 @@ func (m *Manager) deadline(p *Incident, now time.Time) (time.Time, bool) {
 	switch p.State {
 	case Settling:
 		if len(p.Members) == 0 {
-			return m.graceDeadline(now)
+			return m.graceDeadline(p, now)
 		}
 		settle := m.cfg.Settle
 		if p.Tier == Page {
@@ -111,7 +111,7 @@ func (m *Manager) deadline(p *Incident, now time.Time) (time.Time, bool) {
 		return p.Opened.Add(settle), true
 	case Open:
 		if len(p.Members) == 0 {
-			return m.graceDeadline(now)
+			return m.graceDeadline(p, now)
 		}
 		if p.revised {
 			return p.revisedAt.Add(m.cfg.ReviseSettle), true
@@ -119,12 +119,12 @@ func (m *Manager) deadline(p *Incident, now time.Time) (time.Time, bool) {
 	case Recovering:
 		if len(p.Members) == 0 {
 			hold := m.cfg.hold(len(recent(p.Cycles, now, m.cfg.FlapWindow)))
-			return m.afterGrace(p.RecoveringSince.Add(hold), now), true
+			return m.afterGrace(p, p.RecoveringSince.Add(hold), now), true
 		}
 	case Flapping:
 		if len(p.Members) == 0 && !p.RecoveringSince.IsZero() {
 			due := p.RecoveringSince.Add(m.cfg.MaxHold)
-			return m.afterGrace(due, now), true
+			return m.afterGrace(p, due, now), true
 		}
 	case Resolved:
 		return p.Resolved.Add(m.cfg.Remember + time.Nanosecond), true
@@ -132,8 +132,10 @@ func (m *Manager) deadline(p *Incident, now time.Time) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-func (m *Manager) graceDeadline(now time.Time) (time.Time, bool) {
-	return m.restoreGrace, now.Before(m.restoreGrace)
+func (m *Manager) graceDeadline(
+	p *Incident, now time.Time,
+) (time.Time, bool) {
+	return m.restoreGrace, m.inGrace(p, now)
 }
 
 func (m *Manager) advance(p *Incident, now time.Time) (Decision, bool) {
@@ -312,7 +314,14 @@ func (m *Manager) awaitingEvidence(p *Incident, now time.Time) bool {
 	if len(p.Members) > 0 {
 		return false
 	}
-	return now.Before(m.restoreGrace) || !m.verifiable(p)
+	return m.inGrace(p, now) || !m.verifiable(p)
+}
+
+// inGrace reports whether p is a restored incident still inside the
+// restore grace. Incidents opened after the restart have no stale
+// model to wait for: their members come from this session's detectors.
+func (m *Manager) inGrace(p *Incident, now time.Time) bool {
+	return p.restored && now.Before(m.restoreGrace)
 }
 
 // holdRecovery reports whether a recovering incident without members
@@ -332,8 +341,10 @@ func (m *Manager) holdRecovery(p *Incident, now time.Time) bool {
 
 // afterGrace moves a deadline that falls inside the restore grace to the
 // end of the grace, when recovery may first be decided.
-func (m *Manager) afterGrace(at, now time.Time) time.Time {
-	if now.Before(m.restoreGrace) && at.Before(m.restoreGrace) {
+func (m *Manager) afterGrace(
+	p *Incident, at, now time.Time,
+) time.Time {
+	if m.inGrace(p, now) && at.Before(m.restoreGrace) {
 		return m.restoreGrace
 	}
 	return at

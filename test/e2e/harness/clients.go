@@ -3,11 +3,9 @@
 package harness
 
 import (
-	"context"
 	"fmt"
+	"sync"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -17,12 +15,15 @@ import (
 type Environment struct {
 	Client    kubernetes.Interface
 	Dynamic   dynamic.Interface
-	Discovery discovery.DiscoveryInterface
 	Config    Config
 	Health    *HealthClient
 	Audit     *AuditReader
 	Receiver  *ReceiverClient
 	Artifacts *ArtifactWriter
+	// diagnostics makes sure a scenario's state is captured once: the first
+	// capture runs before the scenario namespace is deleted, and a later
+	// one would overwrite it with a cluster that no longer has it.
+	diagnostics sync.Once
 }
 
 func NewEnvironment(config Config) (*Environment, error) {
@@ -38,15 +39,10 @@ func NewEnvironment(config Config) (*Environment, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create dynamic client: %w", err)
 	}
-	discoveryClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
-	if err != nil {
-		return nil, fmt.Errorf("create discovery client: %w", err)
-	}
 	environment := &Environment{
-		Client:    client,
-		Dynamic:   dynamicClient,
-		Discovery: discoveryClient,
-		Config:    config,
+		Client:  client,
+		Dynamic: dynamicClient,
+		Config:  config,
 	}
 	environment.Health = NewHealthClient(environment)
 	environment.Audit = NewAuditReader(environment)
@@ -71,20 +67,4 @@ func loadRESTConfig(config Config) (*rest.Config, error) {
 		rules,
 		overrides,
 	).ClientConfig()
-}
-
-func (e *Environment) Lease(
-	ctx context.Context,
-	namespace, name string,
-) (string, error) {
-	lease, err := e.Client.CoordinationV1().Leases(namespace).Get(
-		ctx, name, metav1.GetOptions{},
-	)
-	if err != nil {
-		return "", err
-	}
-	if lease.Spec.HolderIdentity == nil {
-		return "", nil
-	}
-	return string(*lease.Spec.HolderIdentity), nil
 }

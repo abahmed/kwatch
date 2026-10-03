@@ -135,9 +135,33 @@ func (v *view) changesOf(id inventory.EntityID) []inventory.Change {
 	if cached, ok := v.changes[id]; ok {
 		return cached
 	}
-	out := v.s.Changes.Changes(id, v.since, v.s.Now)
+	out := dropHarmlessCreations(v.s.Changes.Changes(id, v.since, v.s.Now))
 	v.changes[id] = out
 	return out
+}
+
+// dropHarmlessCreations removes the creation of a ConfigMap, Secret or
+// ServiceAccount. Creating one can only satisfy a reference, never break
+// it, and a new namespace creates kube-root-ca.crt and the default
+// ServiceAccount that every pod in it references: counting them would
+// blame a healthy bootstrap object for the pod's own failure.
+func dropHarmlessCreations(changes []inventory.Change) []inventory.Change {
+	out := changes[:0:0]
+	for _, change := range changes {
+		if change.Created && harmlessToCreate(change.Entity.Kind) {
+			continue
+		}
+		out = append(out, change)
+	}
+	return out
+}
+
+func harmlessToCreate(kind inventory.Kind) bool {
+	switch kind {
+	case kube.KindConfigMap, kube.KindSecret, kube.KindAccount:
+		return true
+	}
+	return false
 }
 
 // text is an effect's error text: its findings and the recent notes of
@@ -253,7 +277,7 @@ func (v *view) virtualModes(
 	}
 	switch id.Kind {
 	case kube.KindRegistry:
-		if class := classifyPull(v.text(effect)); class != pullImage {
+		if class := classifyRegistryPull(v.text(effect)); class != pullImage {
 			return failing(class)
 		}
 	case kindClusterDNS:

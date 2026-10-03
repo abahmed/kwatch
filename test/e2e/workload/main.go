@@ -17,7 +17,7 @@ func main() {
 
 	switch command {
 	case "healthy", "sleep":
-		select {}
+		blockForever()
 	case "startup-error", "crash", "recurring-error":
 		os.Exit(42)
 	case "delayed-error":
@@ -51,7 +51,7 @@ func oneShotExit() {
 		path = "/state/failed"
 	}
 	if _, err := os.Stat(path); err == nil {
-		select {}
+		blockForever()
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		os.Exit(43)
@@ -66,9 +66,14 @@ func consumeMemory() {
 	megabytes := envInt("MEMORY_MB", 512)
 	blocks := make([][]byte, 0, megabytes)
 	for range megabytes {
-		blocks = append(blocks, make([]byte, 1024*1024))
+		block := make([]byte, 1024*1024)
+		// Write one byte per page so the memory is really resident.
+		for i := 0; i < len(block); i += 4096 {
+			block[i] = 1
+		}
+		blocks = append(blocks, block)
 	}
-	select {}
+	blockForever()
 }
 
 func consumeDisk() {
@@ -87,7 +92,7 @@ func consumeDisk() {
 			os.Exit(42)
 		}
 	}
-	select {}
+	blockForever()
 }
 
 func serve(healthy bool) {
@@ -113,4 +118,13 @@ func envInt(name string, fallback int) int {
 		return fallback
 	}
 	return value
+}
+
+// blockForever keeps the process alive without exiting. A bare select{} in
+// main would make the Go runtime stop with "all goroutines are asleep -
+// deadlock!", so healthy workloads would crash instead of staying up.
+func blockForever() {
+	for {
+		time.Sleep(time.Hour)
+	}
 }

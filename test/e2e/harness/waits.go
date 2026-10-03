@@ -169,3 +169,30 @@ func PodHasReason(pod *corev1.Pod, reason string) bool {
 	}
 	return false
 }
+
+// WaitForKwatchAge waits until every Kwatch Pod has been running for at
+// least minAge. Right after it starts, Kwatch collects the incidents it
+// finds into one startup summary instead of announcing them, so a test that
+// runs in that window would not see its own incident announced.
+func (e *Environment) WaitForKwatchAge(
+	ctx context.Context,
+	minAge time.Duration,
+) error {
+	pods := e.Client.CoreV1().Pods(e.Config.KwatchNamespace)
+	return wait.PollUntilContextCancel(ctx, 5*time.Second, true,
+		func(ctx context.Context) (bool, error) {
+			list, err := pods.List(ctx, metav1.ListOptions{
+				LabelSelector: "app=kwatch",
+			})
+			if err != nil {
+				return false, nil
+			}
+			for _, pod := range list.Items {
+				started := pod.Status.StartTime
+				if started == nil || time.Since(started.Time) < minAge {
+					return false, nil
+				}
+			}
+			return len(list.Items) > 0, nil
+		})
+}

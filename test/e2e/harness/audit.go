@@ -16,11 +16,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// auditPollInterval is how often a wait re-reads the Kwatch log. Scenarios
+// run in parallel and each one reads the whole log, so this stays modest.
+const auditPollInterval = 2 * time.Second
+
 type AuditReader struct {
 	environment *Environment
 }
 
 type AuditMatch struct {
+	// Incident, when set, matches only entries of that incident ID.
+	Incident  string
 	Namespace string
 	Resource  string
 	Reason    string
@@ -36,9 +42,9 @@ func (a *AuditReader) WaitFor(
 	ctx context.Context,
 	match AuditMatch,
 ) ([]AuditEntry, error) {
-	deadline, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	deadline, cancel := withDefaultDeadline(ctx, 10*time.Minute)
 	defer cancel()
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(auditPollInterval)
 	defer ticker.Stop()
 	for {
 		entries, err := a.snapshot(deadline)
@@ -101,6 +107,9 @@ func parseAudit(payload []byte) []AuditEntry {
 func matchingEntries(entries []AuditEntry, match AuditMatch) []AuditEntry {
 	result := make([]AuditEntry, 0, len(entries))
 	for _, entry := range entries {
+		if match.Incident != "" && entry.Incident != match.Incident {
+			continue
+		}
 		if match.Namespace != "" && entry.Namespace != match.Namespace {
 			continue
 		}
@@ -120,8 +129,9 @@ func matchingEntries(entries []AuditEntry, match AuditMatch) []AuditEntry {
 
 // resourceMatches compares the audit root ("Kind/namespace/name") with the
 // scenario resource. A root that is a Pod owned by the resource
-// (name-hash-suffix) counts as the resource, because the incident may be
-// rooted at the failing Pod or at its owner.
+// (name-hash-suffix) or a container of the Pod ("pod/container") counts as
+// the resource, because the incident may be rooted at the failing Pod, at
+// one of its containers or at its owner.
 func resourceMatches(entry AuditEntry, match AuditMatch) bool {
 	name := entry.Name
 	if name == "" {
@@ -134,7 +144,8 @@ func resourceMatches(entry AuditEntry, match AuditMatch) bool {
 		entry.Namespace+"/"+name == match.Resource {
 		return true
 	}
-	return entry.Root != "" && strings.HasPrefix(name, match.Resource+"-")
+	return entry.Root != "" && (strings.HasPrefix(name, match.Resource+"-") ||
+		strings.HasPrefix(name, match.Resource+"/"))
 }
 
 // reasonMatches accepts the exact reason list or any one reason in it. The
@@ -165,9 +176,9 @@ func rootName(root string) string {
 func (a *AuditReader) AssertRoot(
 	ctx context.Context, exp RootExpectation, scope RootScope,
 ) error {
-	deadline, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	deadline, cancel := withDefaultDeadline(ctx, 10*time.Minute)
 	defer cancel()
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(auditPollInterval)
 	defer ticker.Stop()
 	var verdict RootVerdict
 	for {
@@ -184,4 +195,15 @@ func (a *AuditReader) AssertRoot(
 		case <-ticker.C:
 		}
 	}
+}
+
+// withDefaultDeadline keeps the caller's deadline when it has one, so a
+// scenario can wait longer than the default, and adds limit otherwise.
+func withDefaultDeadline(
+	ctx context.Context, limit time.Duration,
+) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, limit)
 }

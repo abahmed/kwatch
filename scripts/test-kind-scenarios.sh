@@ -376,6 +376,15 @@ if ! grep -q "image: $KWATCH_IMAGE\$" "$kwatch_manifest" ||
 	exit 1
 fi
 kubectl apply -f "$kwatch_manifest"
+# KWATCH_VERBOSITY=4 makes Kwatch log every finding and incident membership
+# change, which explains an incident that does not resolve.
+if [ -n "${KWATCH_VERBOSITY:-}" ]; then
+	args_path=/spec/template/spec/containers/0/args
+	verbosity_patch="[{\"op\":\"add\",\"path\":\"$args_path\","
+	verbosity_patch="$verbosity_patch\"value\":[\"-v=$KWATCH_VERBOSITY\"]}]"
+	kubectl --namespace kwatch patch deployment kwatch --type json \
+		-p "$verbosity_patch"
+fi
 sed "s#kwatch-e2e-receiver:e2e#$receiver_image#g" \
 	test/e2e/receiver/deployment.yaml | kubectl apply -f -
 kubectl -n kwatch rollout status deployment/kwatch --timeout=10m
@@ -431,14 +440,21 @@ KWATCH_E2E="$KWATCH_E2E" \
 	KWATCH_EXTENDED=true \
 	KWATCH_IMAGE="$KWATCH_IMAGE" \
 	WORKLOAD_IMAGE="$workload_image" \
-	SCENARIO_TIMEOUT="${SCENARIO_TIMEOUT:-10m}" \
+	SCENARIO_TIMEOUT="${SCENARIO_TIMEOUT:-20m}" \
 	SCENARIO_FAMILY="${SCENARIO_FAMILY:-}" \
 	SCENARIO_SHARD="${SCENARIO_SHARD:-}" \
-	go test -tags=e2e -count=1 ./test/e2e/... \
+	go test -tags=e2e -count=1 -v ./test/e2e/... \
 		-timeout "$SUITE_TIMEOUT" \
+		-parallel "${SCENARIO_PARALLEL:-6}" \
 		-run "$scenario_regex" \
 		>"$ARTIFACTS/go-test.log" 2>&1
 test_status=$?
 set -e
 cat "$ARTIFACTS/go-test.log"
+# One line per scenario with its result and duration, slowest first; use it
+# to update the minutes in test/e2e/coverage/coverage.yaml.
+echo "Scenario timings:"
+grep -E -- '^--- (PASS|FAIL|SKIP): TestScenario' "$ARTIFACTS/go-test.log" |
+	sed -E 's/^--- ([A-Z]+): ([A-Za-z0-9]+) \(([0-9.]+)s\)/\3 \1 \2/' |
+	sort -rn | awk '{printf "  %4.0fs %-4s %s\n", $1, $2, $3}' || true
 cleanup "$test_status"

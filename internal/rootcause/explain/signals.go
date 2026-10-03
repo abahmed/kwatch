@@ -79,7 +79,20 @@ const (
 	// status whose code was cut from the message. Image-level answers
 	// say "not found", so what is left is the registry refusing.
 	pullStatus detection.Mode = "Status"
+	// pullUnexplained is a pull that keeps failing with no text naming
+	// why: kubelet event dedup and the back-off message drop the dial or
+	// status error. It blames the registry only when several pulls from
+	// it fail (the row's MinCovered), never one image.
+	pullUnexplained detection.Mode = "Failing"
 )
+
+// imageErrorPattern marks an error of one image, never of its registry.
+var imageErrorPattern = regexp.MustCompile(`not found|manifest unknown|` +
+	`name unknown|does not exist|invalid reference`)
+
+// pullFailingPattern is a pull that failed or backs off without a cause.
+var pullFailingPattern = regexp.MustCompile(`back-off pulling image|` +
+	`errimagepull|imagepullbackoff`)
 
 // pullPatterns classify pull errors, first match wins. Image-level
 // markers come first: Docker Hub answers "pull access denied,
@@ -88,8 +101,7 @@ var pullPatterns = []struct {
 	class   detection.Mode
 	pattern *regexp.Regexp
 }{
-	{pullImage, regexp.MustCompile(`not found|manifest unknown|` +
-		`name unknown|does not exist|invalid reference`)},
+	{pullImage, imageErrorPattern},
 	{pullRateLimit, regexp.MustCompile(`toomanyrequests|too many ` +
 		`requests|rate limit|` + statusCode(`429`))},
 	{pullAuth, regexp.MustCompile(`unauthorized|authentication ` +
@@ -122,4 +134,16 @@ func classifyPull(text string) detection.Mode {
 		}
 	}
 	return pullImage
+}
+
+// classifyRegistryPull is classifyPull for blaming a registry: a pull
+// that fails without any cause text becomes pullUnexplained.
+func classifyRegistryPull(text string) detection.Mode {
+	class := classifyPull(text)
+	lower := strings.ToLower(text)
+	if class == pullImage && !imageErrorPattern.MatchString(lower) &&
+		pullFailingPattern.MatchString(lower) {
+		return pullUnexplained
+	}
+	return class
 }
