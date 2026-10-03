@@ -109,3 +109,19 @@ func TestEvaluateRootBoundsTotalMessagesAcrossIncidents(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestEvaluateRootIgnoresAnEarlierIncidentResolving(t *testing.T) {
+	// An earlier scenario's node incident resolves after this scenario
+	// started; only this scenario's own announcement may count.
+	resolved := []AuditEntry{{Incident: "old", Action: "resolved",
+		Root: "Node//n1", Tier: "page"}}
+	exp := RootExpectation{Root: "node//n1", Tier: "page"}
+	if EvaluateRoot(resolved, exp, RootScope{}).Rooted {
+		t.Fatal("a resolved entry alone must not count as rooted")
+	}
+	announced := append(resolved, AuditEntry{Incident: "new",
+		Action: "create", Root: "Node//n1", Tier: "page"})
+	if err := EvaluateRoot(announced, exp, RootScope{}).Err(); err != nil {
+		t.Fatal(err)
+	}
+}

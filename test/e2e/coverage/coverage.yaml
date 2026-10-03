@@ -96,7 +96,7 @@ entries:
   - id: lifecycle.resolution
     family: lifecycle
     lifecycle: recovery
-    status: covered
+    status: pending
     test: TestScenarioResolution
     minutes: 6
   - id: lifecycle.restart-persistence

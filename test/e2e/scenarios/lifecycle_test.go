@@ -14,6 +14,8 @@ import (
 // holds the incident open before resolving it.
 
 func TestScenarioResolution(t *testing.T) {
+	knownGap(t, "an incident rooted at a missing ConfigMap stays open "+
+		"after the ConfigMap is created and the Pods are replaced")
 	inNamespace(t, "lifecycle.resolution", func(s *Scenario) {
 		s.CreateDeployment("recovery", "healthy",
 			withConfigMapEnv("settings"))

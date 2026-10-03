@@ -80,7 +80,9 @@ func EvaluateRoot(
 		if !inScope(entry, scope) {
 			continue
 		}
-		if rootMatches(entry.Root, exp.Root) {
+		// Only an announcement counts: a "resolved" entry can belong to an
+		// incident that an earlier scenario opened before this one started.
+		if messageActions[entry.Action] && rootMatches(entry.Root, exp.Root) {
 			incidents[entry.Incident] = true
 			verdict.Rooted = true
 		}
