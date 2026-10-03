@@ -15,8 +15,6 @@ import (
 // TestScenarioRootCauseSharedNode stops one node under many Pods and
 // expects a single node-rooted page instead of one message per Pod.
 func TestScenarioRootCauseSharedNode(t *testing.T) {
-	knownGap(t, "pod incidents are announced about a minute before the "+
-		"node is recognised as their cause")
 	inNamespace(t, "rootcause.shared-node", func(s *Scenario) {
 		nodeRequireKind(s)
 		node := nodeToStop(s)

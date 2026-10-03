@@ -82,6 +82,9 @@ func runScenario(
 		if err != nil {
 			t.Fatal(err)
 		}
+		if err := waitForColdStart(ctx, environment); err != nil {
+			t.Fatal(err)
+		}
 		t.Cleanup(func() {
 			if !t.Failed() {
 				return

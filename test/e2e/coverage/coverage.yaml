@@ -56,11 +56,13 @@ entries:
   - id: pod.eviction
     family: pod
     lifecycle: recovery
-    status: unsupported-in-kind
+    status: covered
+    test: TestScenarioPodEphemeralStorageEviction
   - id: pod.ephemeral-storage-pressure
     family: pod
     lifecycle: pressure
-    status: unsupported-in-kind
+    status: covered
+    test: TestScenarioPodEphemeralStorageEviction
   - id: pod.re-failure-after-recovery
     family: pod
     lifecycle: re-failure
@@ -69,7 +71,7 @@ entries:
   - id: rootcause.shared-node
     family: rootcause
     lifecycle: node-impact
-    status: pending
+    status: covered
     test: TestScenarioRootCauseSharedNode
     modes: [NotReady]
   - id: rootcause.shared-registry
@@ -154,18 +156,18 @@ entries:
   - id: node.not-ready
     family: node
     lifecycle: failure
-    status: pending
+    status: covered
     test: TestScenarioNodeRecovery
     modes: [NotReady]
   - id: node.shared-pod-impact
     family: node
     lifecycle: fanout
-    status: pending
+    status: covered
     test: TestScenarioNodeRecovery
   - id: node.recovery
     family: node
     lifecycle: recovery
-    status: pending
+    status: covered
     test: TestScenarioNodeRecovery
   - id: node.memory-pressure
     family: node

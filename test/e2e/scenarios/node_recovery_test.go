@@ -9,8 +9,6 @@ import (
 )
 
 func TestScenarioNodeRecovery(t *testing.T) {
-	knownGap(t, "pod incidents are announced about a minute before the "+
-		"node is recognised as their cause")
 	inNamespace(t, "node.recovery", func(s *Scenario) {
 		nodeRequireKind(s)
 		node := nodeToStop(s)
