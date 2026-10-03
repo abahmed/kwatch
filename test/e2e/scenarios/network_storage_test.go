@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/abahmed/kwatch/test/e2e/harness"
@@ -36,6 +37,15 @@ func TestScenarioServiceWithoutEndpoints(t *testing.T) {
 			}, metav1.CreateOptions{},
 		)
 		if err != nil {
+			t.Fatal(err)
+		}
+		// A Service that was never backed is empty on purpose. One that
+		// emptied after its selector changed was broken by the edit.
+		selector := []byte(`{"spec":{"selector":{"app":"renamed"}}}`)
+		if _, err := e.Client.CoreV1().Services(namespace).Patch(
+			ctx, "empty-service", types.MergePatchType, selector,
+			metav1.PatchOptions{},
+		); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{

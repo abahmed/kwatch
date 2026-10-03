@@ -10,61 +10,21 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 
 	"github.com/abahmed/kwatch/test/e2e/harness"
 )
 
 func TestScenarioResolution(t *testing.T) {
-	runScenario(t, "lifecycle.resolution", func(
-		ctx context.Context,
-		t *testing.T,
-		e *harness.Environment,
-	) {
-		namespace := uniqueNamespace(t.Name())
-		if err := createNamespace(ctx, e, namespace); err != nil {
-			t.Fatal(err)
-		}
-		defer cleanupNamespace(t, e, namespace)
-		deployment, err := createLifecycleDeployment(ctx, e, namespace,
-			"recovery", "crash")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Namespace: namespace,
-			Resource:  "recovery",
-			Reason:    "CrashLoopBackOff",
-			Action:    "create",
-			Count:     1,
-		}); err != nil {
-			t.Fatal(err)
-		}
-		deployment.Spec.Template.Spec.Containers[0].Command = []string{
-			"/kwatch-e2e-workload", "healthy",
-		}
-		if _, err := e.Client.AppsV1().Deployments(namespace).Update(
-			ctx, deployment, metav1.UpdateOptions{},
-		); err != nil {
-			t.Fatal(err)
-		}
-		waitCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-		defer cancel()
-		if err := e.WaitForDeployment(waitCtx, namespace, "recovery"); err != nil {
-			t.Fatal(err)
-		}
-		entries, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Namespace: namespace,
-			Resource:  "recovery",
-			Reason:    "CrashLoopBackOff",
-			Action:    "resolved",
-			Count:     1,
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(entries) != 1 {
-			t.Fatalf("expected one resolution, got %d", len(entries))
-		}
+	inNamespace(t, "lifecycle.resolution", func(s *Scenario) {
+		_, err := createLifecycleDeployment(
+			s.Ctx, s.Env, s.Namespace, "recovery", "crash")
+		s.Must(err)
+		s.ExpectIncident("recovery", "CrashLoopBackOff", 0)
+
+		s.Must(setLifecycleMode(
+			s.Ctx, s.Env, s.Namespace, "recovery", "healthy"))
+		s.ExpectResolved("recovery", "CrashLoopBackOff")
 	})
 }
 
@@ -79,7 +39,7 @@ func TestScenarioRefailureAfterRecovery(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer cleanupNamespace(t, e, namespace)
-		deployment, err := createLifecycleDeployment(ctx, e, namespace,
+		_, err := createLifecycleDeployment(ctx, e, namespace,
 			"refailure", "crash")
 		if err != nil {
 			t.Fatal(err)
@@ -91,13 +51,9 @@ func TestScenarioRefailureAfterRecovery(t *testing.T) {
 		if _, err := e.Audit.WaitFor(ctx, match); err != nil {
 			t.Fatal(err)
 		}
-		deployment.Spec.Template.Spec.Containers[0].Command = []string{
-			"/kwatch-e2e-workload", "healthy",
-		}
-		deployment, err = e.Client.AppsV1().Deployments(namespace).Update(
-			ctx, deployment, metav1.UpdateOptions{},
-		)
-		if err != nil {
+		if err := setLifecycleMode(
+			ctx, e, namespace, "refailure", "healthy",
+		); err != nil {
 			t.Fatal(err)
 		}
 		waitCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
@@ -111,11 +67,8 @@ func TestScenarioRefailureAfterRecovery(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		deployment.Spec.Template.Spec.Containers[0].Command = []string{
-			"/kwatch-e2e-workload", "crash",
-		}
-		if _, err := e.Client.AppsV1().Deployments(namespace).Update(
-			ctx, deployment, metav1.UpdateOptions{},
+		if err := setLifecycleMode(
+			ctx, e, namespace, "refailure", "crash",
 		); err != nil {
 			t.Fatal(err)
 		}
@@ -277,4 +230,26 @@ func createLifecycleDeployment(
 				},
 			},
 		}, metav1.CreateOptions{})
+}
+
+// setLifecycleMode switches the workload of a lifecycle Deployment. It
+// re-reads the Deployment on every attempt, because the Deployment
+// controller updates it concurrently.
+func setLifecycleMode(
+	ctx context.Context,
+	e *harness.Environment,
+	namespace, name, mode string,
+) error {
+	deployments := e.Client.AppsV1().Deployments(namespace)
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		deployment, err := deployments.Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		deployment.Spec.Template.Spec.Containers[0].Command = []string{
+			"/kwatch-e2e-workload", mode,
+		}
+		_, err = deployments.Update(ctx, deployment, metav1.UpdateOptions{})
+		return err
+	})
 }

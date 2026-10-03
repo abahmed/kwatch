@@ -8,6 +8,46 @@ The installer and Helm chart are separate from the semantic suite. Keeping
 packaging paths out of it makes a failed incident, grouping, delivery, or
 recovery test an actual Kwatch runtime failure.
 
+## Writing a scenario
+
+A scenario is a short story: create something broken, say what Kwatch must
+announce, fix it, say what must happen next. Use `inNamespace` (or
+`onCluster` for nodes, webhooks and other cluster-wide objects). It creates
+a namespace, cleans it up and stops the test on any error, so the scenario
+has no error handling:
+
+```go
+func TestScenarioResolution(t *testing.T) {
+	inNamespace(t, "lifecycle.resolution", func(s *Scenario) {
+		_, err := createLifecycleDeployment(
+			s.Ctx, s.Env, s.Namespace, "recovery", "crash")
+		s.Must(err)
+		s.ExpectIncident("recovery", "CrashLoopBackOff", 0)
+
+		s.Must(setLifecycleMode(
+			s.Ctx, s.Env, s.Namespace, "recovery", "healthy"))
+		s.ExpectResolved("recovery", "CrashLoopBackOff")
+	})
+}
+```
+
+Rules:
+
+1. Copy a nearby scenario; keep the `TestScenario<Behavior>` name and the
+   scenario ID in `coverage/coverage.yaml`.
+2. Wait only with the `Expect*` helpers and `timing_test.go`. Never write a
+   raw `time.Minute` wait. Pass the detector's sustain time (see
+   `internal/detection/detectors`) to `ExpectIncident`.
+3. Name the object Kwatch blames, not the object you created. An incident is
+   rooted at the root cause: a missing Secret, the Service behind an
+   Ingress or an APIService can be the root rather than the Pod you made.
+4. Do not read the audit log or webhook payload directly. Use the helpers in
+   `scenarios/scenario_test.go` and `harness/`.
+5. A state Kwatch deliberately ignores, or one Kind cannot reproduce, is not
+   an E2E scenario. Test it with a replay scenario in `internal/scenarios`.
+6. Keep a scenario under about 30 lines. Move object building into
+   `fixtures_test.go`.
+
 ## Local run
 
 Install Docker, Kind, kubectl, Go, Bash, and curl. Then run:

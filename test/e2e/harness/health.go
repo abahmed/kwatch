@@ -4,10 +4,13 @@ package harness
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 type HealthClient struct {
@@ -63,10 +66,20 @@ func (h *HealthClient) Get(
 	return body, response.StatusCode, nil
 }
 
+// AssertOK expects a 2xx answer. It retries while the Lease holder cannot be
+// reached, because right after a handover the new Pod may not be running
+// yet; an answer with a bad status is never retried.
 func (h *HealthClient) AssertOK(ctx context.Context, path string) error {
-	_, status, err := h.Get(ctx, path)
+	var status int
+	var last error
+	err := wait.PollUntilContextTimeout(ctx, 2*time.Second, time.Minute, true,
+		func(ctx context.Context) (bool, error) {
+			_, code, err := h.Get(ctx, path)
+			status, last = code, err
+			return err == nil, nil
+		})
 	if err != nil {
-		return err
+		return fmt.Errorf("%s unreachable: %w", path, errors.Join(err, last))
 	}
 	if status < http.StatusOK || status >= http.StatusMultipleChoices {
 		return fmt.Errorf("%s returned HTTP %d", path, status)

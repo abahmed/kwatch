@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -109,15 +110,39 @@ func (r *ReceiverClient) Matching(
 		if json.Unmarshal(request.JSON, &payload) != nil {
 			continue
 		}
-		if match.Name != "" && payload["Name"] != match.Name {
+		if match.Name != "" && !titleNames(payload, match.Name) {
 			continue
 		}
-		if match.Reason != "" && payload["Reason"] != match.Reason {
+		if match.Reason != "" && !routeHasReason(payload, match.Reason) {
 			continue
 		}
 		matched = append(matched, request)
 	}
 	return matched, nil
+}
+
+// titleNames reports whether the notification title mentions name as a
+// whole word, such as "persistent is failing in <namespace>".
+func titleNames(payload map[string]any, name string) bool {
+	title, _ := payload["title"].(string)
+	for _, word := range strings.Fields(title) {
+		if strings.Trim(word, ".,:;()") == name {
+			return true
+		}
+	}
+	return false
+}
+
+// routeHasReason reports whether the notification route lists reason.
+func routeHasReason(payload map[string]any, reason string) bool {
+	route, _ := payload["route"].(map[string]any)
+	reasons, _ := route["Reasons"].([]any)
+	for _, item := range reasons {
+		if item == reason {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *ReceiverClient) WaitForMatchCount(

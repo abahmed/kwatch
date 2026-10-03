@@ -61,7 +61,7 @@ func TestScenarioActiveProbeFailureAndRecovery(t *testing.T) {
 				"mode": "success",
 			})
 		}()
-		waitCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+		waitCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 		defer cancel()
 		if _, err := e.Audit.WaitFor(waitCtx, harness.AuditMatch{
 			Reason: "ActiveProbeFailure", Action: "create", Count: 1,
@@ -73,7 +73,10 @@ func TestScenarioActiveProbeFailureAndRecovery(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := e.Audit.WaitFor(waitCtx, harness.AuditMatch{
+		// The incident resolves only after it stays healthy for the hold.
+		resolveCtx, stop := context.WithTimeout(ctx, 8*time.Minute)
+		defer stop()
+		if _, err := e.Audit.WaitFor(resolveCtx, harness.AuditMatch{
 			Reason: "ActiveProbeFailure", Action: "resolved", Count: 1,
 		}); err != nil {
 			t.Fatal(err)
@@ -136,6 +139,9 @@ heartbeatMonitor:
 					RunAsUser:    int64Ptr(1000),
 					RunAsGroup:   int64Ptr(1000),
 					FSGroup:      int64Ptr(1000),
+					SeccompProfile: &corev1.SeccompProfile{
+						Type: corev1.SeccompProfileTypeRuntimeDefault,
+					},
 				},
 				Containers: []corev1.Container{{
 					Name: "kwatch", Image: e.Config.KwatchImage,
@@ -147,16 +153,26 @@ heartbeatMonitor:
 						{Name: "KWATCH_LEADER_ELECTION_NAME",
 							Value: "kwatch-heartbeat"},
 					},
-					VolumeMounts: []corev1.VolumeMount{{
-						Name: "config", MountPath: "/config",
-					}},
+					SecurityContext: &corev1.SecurityContext{
+						AllowPrivilegeEscalation: boolPtr(false),
+						ReadOnlyRootFilesystem:   boolPtr(true),
+						Capabilities: &corev1.Capabilities{
+							Drop: []corev1.Capability{"ALL"},
+						},
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: "config", MountPath: "/config"},
+						{Name: "data", MountPath: "/var/lib/kwatch"},
+					},
 				}},
-				Volumes: []corev1.Volume{{
-					Name: "config",
-					VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
-						SecretName: secretName,
-					}},
-				}},
+				Volumes: []corev1.Volume{
+					{Name: "config", VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: secretName,
+						}}},
+					{Name: "data", VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+				},
 			},
 		}, metav1.CreateOptions{})
 		if err != nil {

@@ -156,8 +156,8 @@ func TestScenarioExtendedMetricsAPIFailure(t *testing.T) {
 		}
 		createMetricsHPA(ctx, t, e, namespace)
 		if _, err := e.Audit.WaitFor(ctx, harness.AuditMatch{
-			Namespace: namespace, Resource: "metrics-target",
-			Reason: "FailedGetResourceMetric", Count: 1,
+			Resource: "v1beta1.metrics.k8s.io",
+			Reason:   "FailedGetResourceMetric", Count: 1,
 		}); err != nil {
 			t.Fatal(err)
 		}
