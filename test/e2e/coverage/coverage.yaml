@@ -70,13 +70,13 @@ entries:
   - id: pod.re-failure-after-recovery
     family: pod
     lifecycle: re-failure
-    status: covered
+    status: pending
     test: TestScenarioRefailureAfterRecovery
     minutes: 6
   - id: rootcause.shared-node
     family: rootcause
     lifecycle: node-impact
-    status: covered
+    status: pending
     test: TestScenarioRootCauseSharedNode
     minutes: 3
     modes: [NotReady]
