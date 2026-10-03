@@ -350,7 +350,16 @@ if [[ "${KWATCH_NODE_RECOVERY:-true}" == true ]]; then
 	echo "Restarting disposable control-plane node $node"
 	docker stop "$node" >/dev/null
 	docker start "$node" >/dev/null
-	kubectl wait node --all --for=condition=Ready --timeout=180s
+	# Right after a restart the API server answers before its RBAC rules are
+	# loaded, so even the admin user is briefly forbidden to list nodes.
+	for _ in $(seq 1 60); do
+		if kubectl wait node --all --for=condition=Ready \
+			--timeout=5s >/dev/null 2>&1; then
+			break
+		fi
+		sleep 3
+	done
+	kubectl wait node --all --for=condition=Ready --timeout=60s
 	wait_for_deployment_rollout "$replicas"
 	# The API server and the old port-forward went down with the node, so
 	# re-read the Lease holder and forward to it again before probing.

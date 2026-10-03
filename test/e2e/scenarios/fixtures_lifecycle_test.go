@@ -4,13 +4,19 @@ package scenarios
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
+	"testing"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/abahmed/kwatch/test/e2e/harness"
 )
@@ -124,12 +130,20 @@ func lifecycleStartHeartbeatKwatch(s *Scenario) {
 	_, err = client.CoreV1().Secrets(kwatchNamespace).Create(s.Ctx,
 		&corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: name},
-			Data:       map[string][]byte{"config.yaml": []byte(config)},
+			// base-config.yaml reads the webhook URL from /config/webhook-url.
+			Data: map[string][]byte{
+				"config.yaml": []byte(config),
+				"webhook-url": []byte(receiverWebhook),
+			},
 		}, metav1.CreateOptions{})
 	s.Must(err)
+	lifecycleGrantLease(s, name)
 	s.T.Cleanup(func() {
 		ctx := context.Background()
 		opts := metav1.DeleteOptions{}
+		if s.T.Failed() {
+			lifecycleLogPod(s.T, client, name)
+		}
 		_ = client.CoreV1().Pods(kwatchNamespace).Delete(ctx, name, opts)
 		_ = client.CoordinationV1().Leases(kwatchNamespace).
 			Delete(ctx, name, opts)
@@ -198,4 +212,116 @@ func lifecycleWaitPodRunning(s *Scenario, name string) {
 		func(pod *corev1.Pod) bool {
 			return pod.Status.Phase == corev1.PodRunning
 		}))
+}
+
+// lifecycleGrantLease lets the Kwatch ServiceAccount use the extra Lease
+// named name. The installed Role only allows the main "kwatch-leader" Lease,
+// so a second Kwatch with its own Lease needs this Role and binding. They
+// are removed when the test ends.
+func lifecycleGrantLease(s *Scenario, name string) {
+	s.T.Helper()
+	client := s.Env.Client.RbacV1()
+	_, err := client.Roles(kwatchNamespace).Create(s.Ctx, &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Rules: []rbacv1.PolicyRule{{
+			APIGroups:     []string{"coordination.k8s.io"},
+			Resources:     []string{"leases"},
+			ResourceNames: []string{name},
+			Verbs:         []string{"get", "update"},
+		}},
+	}, metav1.CreateOptions{})
+	s.Must(err)
+	_, err = client.RoleBindings(kwatchNamespace).Create(s.Ctx,
+		&rbacv1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{Name: name},
+			RoleRef: rbacv1.RoleRef{
+				APIGroup: "rbac.authorization.k8s.io",
+				Kind:     "Role", Name: name,
+			},
+			Subjects: []rbacv1.Subject{{
+				Kind: "ServiceAccount", Name: "kwatch",
+				Namespace: kwatchNamespace,
+			}},
+		}, metav1.CreateOptions{})
+	s.Must(err)
+	s.T.Cleanup(func() {
+		ctx := context.Background()
+		opts := metav1.DeleteOptions{}
+		_ = client.RoleBindings(kwatchNamespace).Delete(ctx, name, opts)
+		_ = client.Roles(kwatchNamespace).Delete(ctx, name, opts)
+	})
+}
+
+// lifecycleLogPod prints the log of a Pod that is about to be deleted, so a
+// failed test explains why the Pod did not work.
+func lifecycleLogPod(t *testing.T, client kubernetes.Interface, name string) {
+	t.Helper()
+	stream, err := client.CoreV1().Pods(kwatchNamespace).
+		GetLogs(name, &corev1.PodLogOptions{}).Stream(context.Background())
+	if err != nil {
+		t.Logf("no log for pod %s: %v", name, err)
+		return
+	}
+	defer stream.Close()
+	logs, _ := io.ReadAll(io.LimitReader(stream, 16<<10))
+	t.Logf("log of pod %s:\n%s", name, logs)
+}
+
+// lifecycleCreateNeedyDeployment creates a Deployment whose Pod reads all of
+// its environment from the ConfigMap named configMap, so the Pod cannot
+// start until that ConfigMap exists.
+func lifecycleCreateNeedyDeployment(s *Scenario, name, configMap string) {
+	s.T.Helper()
+	labels := map[string]string{"app": name}
+	source := corev1.ConfigMapEnvSource{
+		LocalObjectReference: corev1.LocalObjectReference{Name: configMap},
+	}
+	_, err := s.Env.Client.AppsV1().Deployments(s.Namespace).Create(s.Ctx,
+		&appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: name},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: int32Ptr(1),
+				Selector: &metav1.LabelSelector{MatchLabels: labels},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Labels: labels},
+					Spec: corev1.PodSpec{Containers: []corev1.Container{{
+						Name:            "workload",
+						Image:           workloadImage(),
+						Command:         []string{"/kwatch-e2e-workload", "healthy"},
+						EnvFrom:         []corev1.EnvFromSource{{ConfigMapRef: &source}},
+						ImagePullPolicy: corev1.PullNever,
+					}}},
+				},
+			},
+		}, metav1.CreateOptions{})
+	s.Must(err)
+}
+
+func lifecycleCreateConfigMap(s *Scenario, name string) {
+	s.T.Helper()
+	_, err := s.Env.Client.CoreV1().ConfigMaps(s.Namespace).Create(s.Ctx,
+		&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Name: name},
+			Data:       map[string]string{"mode": "ok"},
+		}, metav1.CreateOptions{})
+	s.Must(err)
+}
+
+func lifecycleDeleteConfigMap(s *Scenario, name string) {
+	s.T.Helper()
+	s.Must(s.Env.Client.CoreV1().ConfigMaps(s.Namespace).Delete(s.Ctx, name,
+		metav1.DeleteOptions{}))
+}
+
+// lifecycleRestartPods replaces the Pods of a Deployment by changing an
+// annotation of its Pod template.
+func lifecycleRestartPods(s *Scenario, deployment string) {
+	s.T.Helper()
+	patch := `{"spec":{"template":{"metadata":{"annotations":` +
+		`{"kwatch-e2e/restarted":"` +
+		time.Now().Format(time.RFC3339Nano) + `"}}}}}`
+	_, err := s.Env.Client.AppsV1().Deployments(s.Namespace).Patch(s.Ctx,
+		deployment, types.StrategicMergePatchType, []byte(patch),
+		metav1.PatchOptions{})
+	s.Must(err)
 }

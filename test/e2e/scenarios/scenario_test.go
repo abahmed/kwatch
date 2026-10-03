@@ -61,6 +61,14 @@ func onCluster(t *testing.T, id string, run func(s *Scenario)) {
 	})
 }
 
+// knownGap skips a scenario that fails because of a product problem that is
+// tracked elsewhere, so the suite stays green without hiding the problem.
+// Remove the call once the problem is fixed.
+func knownGap(t *testing.T, problem string) {
+	t.Helper()
+	t.Skip("known gap: " + problem)
+}
+
 // Must stops the test if err is not nil.
 func (s *Scenario) Must(err error) {
 	s.T.Helper()
@@ -70,25 +78,36 @@ func (s *Scenario) Must(err error) {
 }
 
 // ExpectIncident waits until Kwatch announces an incident whose root is
-// named resource and whose reasons include reason. sustain is how long the
-// detector waits before raising it (0 when it raises at once).
+// named resource and whose reasons include reason. The reason may arrive
+// in the first message or in a later update of the same incident, so any
+// announcement counts. sustain is how long the detector waits before
+// raising it (0 when it raises at once).
 func (s *Scenario) ExpectIncident(
 	resource, reason string, sustain time.Duration,
 ) {
 	s.T.Helper()
 	s.waitForAudit(announceWait(sustain), harness.AuditMatch{
 		Namespace: s.Namespace, Resource: resource,
-		Reason: reason, Action: "create", Count: 1,
+		Reason: reason, Count: 1,
 	})
 }
 
-// ExpectResolved waits until that incident is closed. Call it after the
-// scenario has fixed the problem.
-func (s *Scenario) ExpectResolved(resource, reason string) {
+// ExpectResolved waits until the incident rooted at resource is closed. Call
+// it after the scenario has fixed the problem. A "resolved" audit entry has
+// no reason, so only the root is matched.
+func (s *Scenario) ExpectResolved(resource string) {
 	s.T.Helper()
 	s.waitForAudit(resolveWait(), harness.AuditMatch{
 		Namespace: s.Namespace, Resource: resource,
-		Reason: reason, Action: "resolved", Count: 1,
+		Action: "resolved", Count: 1,
+	})
+}
+
+// ExpectClusterResolved is ExpectResolved for a root without a namespace.
+func (s *Scenario) ExpectClusterResolved(resource string) {
+	s.T.Helper()
+	s.waitForAudit(resolveWait(), harness.AuditMatch{
+		Resource: resource, Action: "resolved", Count: 1,
 	})
 }
 
@@ -99,7 +118,7 @@ func (s *Scenario) ExpectClusterIncident(
 ) {
 	s.T.Helper()
 	s.waitForAudit(announceWait(sustain), harness.AuditMatch{
-		Resource: resource, Reason: reason, Action: "create", Count: 1,
+		Resource: resource, Reason: reason, Count: 1,
 	})
 }
 

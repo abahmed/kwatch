@@ -9,38 +9,38 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/util/retry"
 
 	"github.com/abahmed/kwatch/test/e2e/harness"
 )
 
+// The scenarios below break a Deployment with a missing ConfigMap and fix
+// it by creating the ConfigMap. A crash loop would not do: its pod flips
+// between failing and recovering, and every flip doubles the time Kwatch
+// holds the incident open before resolving it.
+
 func TestScenarioResolution(t *testing.T) {
 	inNamespace(t, "lifecycle.resolution", func(s *Scenario) {
-		_, err := createLifecycleDeployment(
-			s.Ctx, s.Env, s.Namespace, "recovery", "crash")
-		s.Must(err)
-		s.ExpectIncident("recovery", "CrashLoopBackOff", 0)
+		lifecycleCreateNeedyDeployment(s, "recovery", "settings")
+		s.ExpectIncident("settings", "ProjectedConfigMapMissing", 0)
 
-		s.Must(setLifecycleMode(
-			s.Ctx, s.Env, s.Namespace, "recovery", "healthy"))
-		s.ExpectResolved("recovery", "CrashLoopBackOff")
+		lifecycleCreateConfigMap(s, "settings")
+		s.ExpectResolved("settings")
 	})
 }
 
 func TestScenarioRefailureAfterRecovery(t *testing.T) {
 	inNamespace(t, "pod.re-failure-after-recovery", func(s *Scenario) {
-		_, err := createLifecycleDeployment(
-			s.Ctx, s.Env, s.Namespace, "refailure", "crash")
-		s.Must(err)
-		s.ExpectIncident("refailure", "CrashLoopBackOff", 0)
+		lifecycleCreateNeedyDeployment(s, "refailure", "settings")
+		s.ExpectIncident("settings", "ProjectedConfigMapMissing", 0)
 
-		s.Must(setLifecycleMode(
-			s.Ctx, s.Env, s.Namespace, "refailure", "healthy"))
-		s.ExpectResolved("refailure", "CrashLoopBackOff")
+		lifecycleCreateConfigMap(s, "settings")
+		s.ExpectResolved("settings")
 
-		s.Must(setLifecycleMode(
-			s.Ctx, s.Env, s.Namespace, "refailure", "crash"))
-		lifecycleExpectIncidents(s, "refailure", "CrashLoopBackOff", 2)
+		// Pods that already started keep their environment, so the
+		// problem only returns when the Pods are replaced.
+		lifecycleDeleteConfigMap(s, "settings")
+		lifecycleRestartPods(s, "refailure")
+		lifecycleExpectIncidents(s, "settings", "ProjectedConfigMapMissing", 2)
 	})
 }
 
@@ -112,26 +112,4 @@ func createLifecycleDeployment(
 				},
 			},
 		}, metav1.CreateOptions{})
-}
-
-// setLifecycleMode switches the workload of a lifecycle Deployment. It
-// re-reads the Deployment on every attempt, because the Deployment
-// controller updates it concurrently.
-func setLifecycleMode(
-	ctx context.Context,
-	e *harness.Environment,
-	namespace, name, mode string,
-) error {
-	deployments := e.Client.AppsV1().Deployments(namespace)
-	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		deployment, err := deployments.Get(ctx, name, metav1.GetOptions{})
-		if err != nil {
-			return err
-		}
-		deployment.Spec.Template.Spec.Containers[0].Command = []string{
-			"/kwatch-e2e-workload", mode,
-		}
-		_, err = deployments.Update(ctx, deployment, metav1.UpdateOptions{})
-		return err
-	})
 }

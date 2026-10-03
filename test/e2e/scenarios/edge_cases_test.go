@@ -4,6 +4,7 @@ package scenarios
 
 import (
 	"testing"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
@@ -59,8 +60,10 @@ func TestScenarioMissingServiceAccountReference(t *testing.T) {
 	inNamespace(t, "security.rbac", func(s *Scenario) {
 		s.Must(edgeCreatePodWithDeletedServiceAccount(
 			s.Ctx, s.Env, s.Namespace, "missing-service-account"))
-		s.ExpectIncident(
-			"missing-service-account", "ServiceAccountMissing", 0)
+		// Kwatch sees the missing ServiceAccount only after the Pod's
+		// mount failures start, which takes a couple of minutes.
+		s.ExpectIncident("missing-service-account",
+			"ServiceAccountMissing", 2*time.Minute)
 	})
 }
 

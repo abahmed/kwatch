@@ -37,10 +37,10 @@ func TestScenarioPDBDisruption(t *testing.T) {
 			s.Ctx, s.Env, s.Namespace, "protected", "crash")
 		s.Must(err)
 		_, err = s.Env.Client.PolicyV1().PodDisruptionBudgets(s.Namespace).
-			Create(s.Ctx, workloadsPDB("protected-budget", "protected"),
+			Create(s.Ctx, workloadsPDB("protected", "protected"),
 				metav1.CreateOptions{})
 		s.Must(err)
-		s.ExpectIncident("protected-budget", "PdbViolation",
+		s.ExpectIncident("protected", "PdbViolation",
 			10*time.Minute)
 	})
 }

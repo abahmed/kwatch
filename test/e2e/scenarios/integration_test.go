@@ -14,10 +14,11 @@ func TestScenarioActiveProbeFailureAndRecovery(t *testing.T) {
 	onCluster(t, "integration.active-probe", func(s *Scenario) {
 		lifecycleReceiverMode(s, "http-500")
 		lifecycleCreateProbeConfig(s)
-		s.ExpectClusterIncident("", "ActiveProbeFailure", 2*time.Minute)
+		s.ExpectClusterIncident("receiver", "ActiveProbeFailure",
+			2*time.Minute)
 
 		lifecycleReceiverMode(s, "success")
-		s.ExpectResolved("", "ActiveProbeFailure")
+		s.ExpectClusterResolved("receiver")
 	})
 }
 

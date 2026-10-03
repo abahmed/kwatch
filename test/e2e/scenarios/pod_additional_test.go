@@ -2,12 +2,7 @@
 
 package scenarios
 
-import (
-	"testing"
-	"time"
-
-	"github.com/abahmed/kwatch/internal/detection/detectors"
-)
+import "testing"
 
 func TestScenarioPodStartupFailureProfiles(t *testing.T) {
 	inNamespace(t, "pod.startup-additional", func(s *Scenario) {
@@ -26,8 +21,7 @@ func TestScenarioPodReadinessFailure(t *testing.T) {
 	inNamespace(t, "pod.not-ready", func(s *Scenario) {
 		s.Must(podsCreate(s.Ctx, s.Env, s.Namespace,
 			podsNeverReady("not-ready")))
-		s.ExpectIncident("not-ready", "ContainersNotReady",
-			detectors.DefaultNotReady+time.Minute)
+		s.ExpectIncident("not-ready", "ReadinessProbeFailed", 0)
 		s.ExpectKwatchHealthy()
 	})
 }
