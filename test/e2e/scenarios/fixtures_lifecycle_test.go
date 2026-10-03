@@ -123,8 +123,10 @@ func lifecycleStartHeartbeatKwatch(s *Scenario) {
 	base, err := os.ReadFile(filepath.Join(
 		"..", "testdata", "base-config.yaml"))
 	s.Must(err)
+	// The heartbeat URL is sensitive, so Kwatch only accepts it as a file
+	// reference to a mounted Secret key.
 	config := string(base) + "\nheartbeatMonitor:\n  enabled: true\n" +
-		"  interval: 1\n  url: \"" + receiverWebhook + "\"\n"
+		"  interval: 1\n  url: \"${file:/config/heartbeat-url}\"\n"
 	const name = "kwatch-heartbeat"
 	client := s.Env.Client
 	_, err = client.CoreV1().Secrets(kwatchNamespace).Create(s.Ctx,
@@ -132,8 +134,9 @@ func lifecycleStartHeartbeatKwatch(s *Scenario) {
 			ObjectMeta: metav1.ObjectMeta{Name: name},
 			// base-config.yaml reads the webhook URL from /config/webhook-url.
 			Data: map[string][]byte{
-				"config.yaml": []byte(config),
-				"webhook-url": []byte(receiverWebhook),
+				"config.yaml":   []byte(config),
+				"webhook-url":   []byte(receiverWebhook),
+				"heartbeat-url": []byte(receiverWebhook),
 			},
 		}, metav1.CreateOptions{})
 	s.Must(err)

@@ -264,6 +264,17 @@ start_port_forward() {
 	port_forward_pid=$!
 }
 
+# http_ready answers once whether the path works through the port-forward.
+http_ready() {
+	for _ in $(seq 1 5); do
+		if curl --fail --silent "http://127.0.0.1:$port$1" >/dev/null; then
+			return 0
+		fi
+		sleep 2
+	done
+	return 1
+}
+
 wait_http() {
 	local path="$1"
 	for _ in $(seq 1 60); do
@@ -363,12 +374,24 @@ if [[ "${KWATCH_NODE_RECOVERY:-true}" == true ]]; then
 	wait_for_deployment_rollout "$replicas"
 	# The API server and the old port-forward went down with the node, so
 	# re-read the Lease holder and forward to it again before probing.
-	await_lease_holder
-	kubectl wait pod "$leader_pod" --namespace "$namespace" \
-		--for=condition=Ready --timeout=180s
-	start_port_forward "$leader_pod"
-	wait_http /healthz
-	wait_http /readyz
+	# The Lease can still name a Pod that the restart replaced, so look the
+	# holder up again on every attempt.
+	recovered=false
+	for _ in $(seq 1 30); do
+		await_lease_holder
+		kubectl wait pod "$leader_pod" --namespace "$namespace" \
+			--for=condition=Ready --timeout=60s >/dev/null 2>&1 || true
+		start_port_forward "$leader_pod"
+		if http_ready /healthz && http_ready /readyz; then
+			recovered=true
+			break
+		fi
+		sleep 5
+	done
+	if [[ "$recovered" != true ]]; then
+		echo "kwatch did not recover after the node restart" >&2
+		exit 1
+	fi
 fi
 
 echo "Kind production smoke test passed."
