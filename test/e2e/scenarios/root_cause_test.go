@@ -16,7 +16,7 @@ const stormReplicas = 50
 // TestScenarioRootCauseSharedNode stops one node under many Pods and
 // expects a single node-rooted page instead of one message per Pod.
 func TestScenarioRootCauseSharedNode(t *testing.T) {
-	inNamespace(t, "rootcause.shared-node", func(s *Scenario) {
+	inNamespaceAlone(t, "rootcause.shared-node", func(s *Scenario) {
 		s.RequireKind()
 		node := s.FreeWorkerNode()
 		blamed := s.CreateSleepingDeployments(node, 6)
@@ -65,7 +65,7 @@ func TestScenarioRootCauseSharedRegistry(t *testing.T) {
 // TestScenarioRootCauseSmallStorm crashes 50 Pods of one workload and
 // holds the whole namespace to three messages.
 func TestScenarioRootCauseSmallStorm(t *testing.T) {
-	inNamespace(t, "rootcause.small-storm", func(s *Scenario) {
+	inNamespaceAlone(t, "rootcause.small-storm", func(s *Scenario) {
 		s.CreateDeployment("storm", "crash", withReplicas(stormReplicas))
 		s.WaitForPodReason(8*time.Minute, stormReplicas, "CrashLoopBackOff")
 

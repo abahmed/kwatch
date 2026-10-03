@@ -8,7 +8,7 @@ import (
 )
 
 func TestScenarioProviderFailureRecovery(t *testing.T) {
-	inNamespace(t, "lifecycle.provider-failure", func(s *Scenario) {
+	inNamespaceAlone(t, "lifecycle.provider-failure", func(s *Scenario) {
 		s.ClearReceiver()
 		s.SetReceiverMode("http-500")
 		s.CreatePod(crashingPod("provider-failure"))

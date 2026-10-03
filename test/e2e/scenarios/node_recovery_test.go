@@ -9,7 +9,7 @@ import (
 )
 
 func TestScenarioNodeRecovery(t *testing.T) {
-	inNamespace(t, "node.recovery", func(s *Scenario) {
+	inNamespaceAlone(t, "node.recovery", func(s *Scenario) {
 		s.RequireKind()
 		node := s.FreeWorkerNode()
 		s.CreateSleepingPods(node, 3)

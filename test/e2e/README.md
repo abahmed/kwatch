@@ -52,7 +52,20 @@ Rules:
    `scenarios/scenario_test.go` and `harness/`.
 5. A state Kwatch deliberately ignores, or one Kind cannot reproduce, is not
    an E2E scenario. Test it with a replay scenario in `internal/scenarios`.
-6. Keep a scenario under about 30 lines. Move object building into the
+6. Pick how the scenario shares the cluster:
+   - `inNamespace` runs it at the same time as other scenarios. Use it when
+     everything it creates lives in its own namespace.
+   - `inNamespaceAlone` runs it while nothing else runs. Use it when it
+     stops a node, deletes or restarts Kwatch, changes the webhook
+     receiver, or breaks something cluster-wide such as an APIService or
+     an admission webhook.
+   - `onCluster` also runs alone, for scenarios without a namespace.
+   When unsure, use `inNamespaceAlone`: it is slower but never flaky
+   because of another scenario.
+7. If the scenario takes more than a few minutes, set `minutes:` on its
+   entry in `coverage/coverage.yaml`, so CI can spread slow scenarios over
+   the shards. Every CI run prints the measured time of each scenario.
+8. Keep a scenario under about 30 lines. Move object building into the
    matching `*_build_test.go` file as a builder plus a `Create*` method, and
    reuse `workloadContainer`, `workloadPod` and `deployment` instead of
    writing a new container or Deployment.
@@ -82,9 +95,12 @@ or uploaded.
 The `e2e.yml` workflow (nightly, manual, or on PRs labelled `e2e`) resolves the
 latest `main` commit to an immutable SHA before building and runs the complete
 scenario suite, including the extended Kind cases. A full run is split over
-four Kind clusters that run in parallel (each takes every fourth scenario of
-`coverage/coverage.yaml`); a run with a scenario, family, shard or compare
-filter uses one cluster. It accepts a scenario regex,
+four Kind clusters that run in parallel. Tests are dealt to the clusters
+longest first using the `minutes:` in `coverage/coverage.yaml`, so every
+cluster gets about the same work. Inside a cluster the scenarios that must
+run alone go first, then the rest run side by side (six at a time; set
+`SCENARIO_PARALLEL` to change it). A run with a scenario, family, shard or
+compare filter uses one cluster. It accepts a scenario regex,
 family, shard, and optional cluster retention for debugging. In compare mode it
 also accepts a release tag or commit. The workflow runs that reported source
 and the latest `main` in separate Kind clusters and writes one of

@@ -68,11 +68,13 @@ entries:
     lifecycle: re-failure
     status: covered
     test: TestScenarioRefailureAfterRecovery
+    minutes: 12
   - id: rootcause.shared-node
     family: rootcause
     lifecycle: node-impact
     status: covered
     test: TestScenarioRootCauseSharedNode
+    minutes: 9
     modes: [NotReady]
   - id: rootcause.shared-registry
     family: rootcause
@@ -85,32 +87,38 @@ entries:
     lifecycle: simultaneous
     status: covered
     test: TestScenarioRootCauseSmallStorm
+    minutes: 5
     modes: [CrashLoop]
   - id: lifecycle.resolution
     family: lifecycle
     lifecycle: recovery
     status: covered
     test: TestScenarioResolution
+    minutes: 7
   - id: lifecycle.restart-persistence
     family: lifecycle
     lifecycle: restart
     status: covered
     test: TestScenarioRestartPersistence
+    minutes: 5
   - id: lifecycle.lease-handover
     family: lifecycle
     lifecycle: lease
     status: covered
     test: TestScenarioLeaseHandover
+    minutes: 4
   - id: lifecycle.provider-failure
     family: lifecycle
     lifecycle: delivery
     status: covered
     test: TestScenarioProviderFailureRecovery
+    minutes: 5
   - id: lifecycle.configuration-reload
     family: lifecycle
     lifecycle: reload
     status: covered
     test: TestScenarioConfigurationReload
+    minutes: 3
   - id: workload.deployment-rollout
     family: workload
     lifecycle: rollout
@@ -148,16 +156,19 @@ entries:
     status: covered
     environment: kind-extended
     test: TestScenarioExtendedMetricsAPIFailure
+    minutes: 7
   - id: workload.pdb-disruption
     family: workload
     lifecycle: disruption
     status: covered
     test: TestScenarioPDBDisruption
+    minutes: 15
   - id: node.not-ready
     family: node
     lifecycle: failure
     status: covered
     test: TestScenarioNodeRecovery
+    minutes: 9
     modes: [NotReady]
   - id: node.shared-pod-impact
     family: node
@@ -174,6 +185,7 @@ entries:
     lifecycle: pressure
     status: covered
     test: TestScenarioNodePressureSignals
+    minutes: 9
     modes: [MemoryPressure]
   - id: node.disk-pressure
     family: node
@@ -233,6 +245,7 @@ entries:
     status: covered
     environment: kind-extended
     test: TestScenarioExtendedAdmissionWebhook
+    minutes: 4
   - id: security.admission-policy
     family: security
     lifecycle: policy
@@ -275,6 +288,7 @@ entries:
     lifecycle: delivery
     status: covered
     test: TestScenarioHeartbeatDelivery
+    minutes: 4
   - id: integration.metrics-api
     family: integration
     lifecycle: dependency
@@ -290,17 +304,20 @@ entries:
     lifecycle: startup
     status: covered
     test: TestScenarioInvalidStartupConfiguration
+    minutes: 3
   - id: invalid-config.live-reload
     family: invalid-config
     lifecycle: reload
     status: covered
     test: TestScenarioInvalidLiveConfiguration
+    minutes: 3
   - id: integration.cluster-dns
     family: integration
     lifecycle: failure
     status: covered
     environment: kind-extended
     test: TestScenarioExtendedClusterDNSDown
+    minutes: 5
     modes: [Unavailable.CoreDNS]
   - id: rootcause.zone-failure
     family: rootcause

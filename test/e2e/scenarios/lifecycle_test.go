@@ -44,7 +44,7 @@ func TestScenarioRefailureAfterRecovery(t *testing.T) {
 }
 
 func TestScenarioRestartPersistence(t *testing.T) {
-	inNamespace(t, "lifecycle.restart-persistence", func(s *Scenario) {
+	inNamespaceAlone(t, "lifecycle.restart-persistence", func(s *Scenario) {
 		s.ClearReceiver()
 		s.CreateDeployment("persistent", "crash")
 		s.ExpectIncident("persistent", "CrashLoopBackOff", 0)
@@ -62,7 +62,7 @@ func TestScenarioRestartPersistence(t *testing.T) {
 // TestScenarioLeaseHandover deletes the only Pod. The replacement must
 // acquire the Lease, become available, and keep detecting new incidents.
 func TestScenarioLeaseHandover(t *testing.T) {
-	inNamespace(t, "lifecycle.lease-handover", func(s *Scenario) {
+	inNamespaceAlone(t, "lifecycle.lease-handover", func(s *Scenario) {
 		oldHolder, newHolder := s.DeleteLeader()
 		if newHolder == oldHolder {
 			t.Fatalf("Lease holder did not change from %q", oldHolder)

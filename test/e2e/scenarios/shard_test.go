@@ -4,25 +4,35 @@ package scenarios
 
 import "testing"
 
-func TestShardOfSpreadsScenariosEvenly(t *testing.T) {
+func TestShardPlanBalancesWork(t *testing.T) {
 	const shards = 4
-	ids := coveredScenarioIDs()
-	if len(ids) == 0 {
+	plan := shardPlan(shards)
+	if len(plan) == 0 {
 		t.Fatal("no covered scenarios found in coverage.yaml")
 	}
-	counts := make([]int, shards)
-	for _, id := range ids {
-		counts[shardOf(id, shards)]++
+	minutes := map[string]int{}
+	for _, entry := range coveredEntries() {
+		minutes[entry.Test] = max(minutes[entry.Test], entry.Minutes, 1)
 	}
-	for shard, count := range counts {
-		if count < len(ids)/shards || count > len(ids)/shards+1 {
-			t.Errorf("shard %d has %d of %d scenarios", shard+1, count, len(ids))
-		}
+	load := make([]int, shards)
+	longest := 0
+	for test, shard := range plan {
+		load[shard] += minutes[test]
+		longest = max(longest, minutes[test])
+	}
+	lightest, heaviest := load[0], load[0]
+	for _, work := range load {
+		lightest, heaviest = min(lightest, work), max(heaviest, work)
+	}
+	// Dealing longest first keeps every shard within one test of the others.
+	if heaviest-lightest > longest {
+		t.Errorf("shard work %v differs by more than %d minutes",
+			load, longest)
 	}
 }
 
 func TestBelongsToShardPlacesEachScenarioOnce(t *testing.T) {
-	for _, id := range coveredScenarioIDs() {
+	for id := range scenarioTests() {
 		var owners int
 		for _, shard := range []string{"1/4", "2/4", "3/4", "4/4"} {
 			if belongsToShard(id, shard) {

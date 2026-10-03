@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -152,30 +153,76 @@ func belongsToShard(id, value string) bool {
 	return shardOf(id, total) == index-1
 }
 
-// shardOf spreads scenarios evenly: each covered scenario takes the next
-// shard in the order of coverage.yaml. An ID missing from the catalog falls
-// back to a hash, so it still lands in exactly one shard.
+// shardOf picks the shard that runs scenario id. Scenarios are grouped by
+// their test function (several coverage entries can share one test) and the
+// tests are dealt out longest first, each to the shard with the least work
+// so far, using the minutes in coverage.yaml (one minute when unset). An ID
+// missing from the catalog falls back to a hash.
 func shardOf(id string, total int) int {
-	for position, scenarioID := range coveredScenarioIDs() {
-		if scenarioID == id {
-			return position % total
-		}
+	test, ok := scenarioTests()[id]
+	if !ok {
+		hash := sha1.Sum([]byte(id))
+		return int(hash[0]) % total
 	}
-	hash := sha1.Sum([]byte(id))
-	return int(hash[0]) % total
+	return shardPlan(total)[test]
 }
 
-var coveredScenarioIDs = sync.OnceValue(func() []string {
+// shardPlan maps every covered test to its shard.
+func shardPlan(total int) map[string]int {
+	type work struct {
+		test    string
+		minutes int
+	}
+	minutes := map[string]int{}
+	var tests []string
+	for _, entry := range coveredEntries() {
+		if _, seen := minutes[entry.Test]; !seen {
+			tests = append(tests, entry.Test)
+		}
+		minutes[entry.Test] = max(minutes[entry.Test], entry.Minutes, 1)
+	}
+	jobs := make([]work, 0, len(tests))
+	for _, test := range tests {
+		jobs = append(jobs, work{test, minutes[test]})
+	}
+	sort.SliceStable(jobs, func(i, j int) bool {
+		return jobs[i].minutes > jobs[j].minutes
+	})
+	load := make([]int, total)
+	plan := make(map[string]int, len(jobs))
+	for _, job := range jobs {
+		lightest := 0
+		for shard := range load {
+			if load[shard] < load[lightest] {
+				lightest = shard
+			}
+		}
+		plan[job.test] = lightest
+		load[lightest] += job.minutes
+	}
+	return plan
+}
+
+// scenarioTests maps every covered scenario ID to its test function.
+func scenarioTests() map[string]string {
+	tests := map[string]string{}
+	for _, entry := range coveredEntries() {
+		tests[entry.ID] = entry.Test
+	}
+	return tests
+}
+
+var coveredEntries = sync.OnceValue(func() []coverage.Entry {
 	path := filepath.Join("..", "coverage", "coverage.yaml")
 	catalog, err := coverage.Load(path)
 	if err != nil {
 		return nil
 	}
-	var ids []string
+	var entries []coverage.Entry
 	for _, entry := range catalog.Entries {
-		if entry.Status == "covered" {
-			ids = append(ids, entry.ID)
+		if entry.Status == "covered" && entry.Test != "" {
+			entries = append(entries, entry)
 		}
 	}
-	return ids
+	return entries
 })

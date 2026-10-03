@@ -17,6 +17,10 @@ type Entry struct {
 	Environment string `yaml:"environment,omitempty"`
 	// Modes lists the detection failure modes the scenario exercises.
 	Modes []string `yaml:"modes,omitempty"`
+	// Minutes is roughly how long the test keeps its cluster busy. It only
+	// needs to be set for slow tests; CI uses it to give every shard about
+	// the same amount of work.
+	Minutes int `yaml:"minutes,omitempty"`
 }
 
 type Catalog struct {

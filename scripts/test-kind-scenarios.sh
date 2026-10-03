@@ -434,11 +434,18 @@ KWATCH_E2E="$KWATCH_E2E" \
 	SCENARIO_TIMEOUT="${SCENARIO_TIMEOUT:-20m}" \
 	SCENARIO_FAMILY="${SCENARIO_FAMILY:-}" \
 	SCENARIO_SHARD="${SCENARIO_SHARD:-}" \
-	go test -tags=e2e -count=1 ./test/e2e/... \
+	go test -tags=e2e -count=1 -v ./test/e2e/... \
 		-timeout "$SUITE_TIMEOUT" \
+		-parallel "${SCENARIO_PARALLEL:-6}" \
 		-run "$scenario_regex" \
 		>"$ARTIFACTS/go-test.log" 2>&1
 test_status=$?
 set -e
 cat "$ARTIFACTS/go-test.log"
+# One line per scenario with its result and duration, slowest first; use it
+# to update the minutes in test/e2e/coverage/coverage.yaml.
+echo "Scenario timings:"
+grep -E -- '^--- (PASS|FAIL|SKIP): TestScenario' "$ARTIFACTS/go-test.log" |
+	sed -E 's/^--- ([A-Z]+): ([A-Za-z0-9]+) \(([0-9.]+)s\)/\3 \1 \2/' |
+	sort -rn | awk '{printf "  %4.0fs %-4s %s\n", $1, $2, $3}' || true
 cleanup "$test_status"

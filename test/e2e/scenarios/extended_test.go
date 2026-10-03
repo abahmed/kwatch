@@ -17,7 +17,7 @@ func TestScenarioExtendedTLS(t *testing.T) {
 }
 
 func TestScenarioExtendedAdmissionWebhook(t *testing.T) {
-	inExtendedNamespace(t, "security.admission-webhook", func(s *Scenario) {
+	inExtendedNamespaceAlone(t, "security.admission-webhook", func(s *Scenario) {
 		s.CreateWebhookWithoutService()
 		s.ExpectRoot(harness.RootExpectation{
 			Root: "validatingwebhookconfiguration//" +
@@ -29,7 +29,7 @@ func TestScenarioExtendedAdmissionWebhook(t *testing.T) {
 }
 
 func TestScenarioExtendedMetricsAPIFailure(t *testing.T) {
-	inExtendedNamespace(t, "integration.metrics-api", func(s *Scenario) {
+	inExtendedNamespaceAlone(t, "integration.metrics-api", func(s *Scenario) {
 		restoreMetricsAPI := s.BreakMetricsAPI()
 		s.CreateDeployment("metrics-target", "healthy",
 			withCPURequest("10m"))

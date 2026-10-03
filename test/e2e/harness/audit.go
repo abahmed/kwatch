@@ -16,6 +16,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// auditPollInterval is how often a wait re-reads the Kwatch log. Scenarios
+// run in parallel and each one reads the whole log, so this stays modest.
+const auditPollInterval = 2 * time.Second
+
 type AuditReader struct {
 	environment *Environment
 }
@@ -38,7 +42,7 @@ func (a *AuditReader) WaitFor(
 ) ([]AuditEntry, error) {
 	deadline, cancel := withDefaultDeadline(ctx, 10*time.Minute)
 	defer cancel()
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(auditPollInterval)
 	defer ticker.Stop()
 	for {
 		entries, err := a.snapshot(deadline)
@@ -169,7 +173,7 @@ func (a *AuditReader) AssertRoot(
 ) error {
 	deadline, cancel := withDefaultDeadline(ctx, 10*time.Minute)
 	defer cancel()
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(auditPollInterval)
 	defer ticker.Stop()
 	var verdict RootVerdict
 	for {

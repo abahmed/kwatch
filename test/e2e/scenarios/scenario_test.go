@@ -36,9 +36,26 @@ type Scenario struct {
 	started   time.Time
 }
 
-// inNamespace runs a scenario in its own namespace. id is the scenario ID
-// from test/e2e/coverage/coverage.yaml.
+// inNamespace runs a scenario in its own namespace, at the same time as the
+// other inNamespace scenarios. Use it when everything the scenario creates
+// lives in that namespace. id is the scenario ID from
+// test/e2e/coverage/coverage.yaml.
 func inNamespace(t *testing.T, id string, run func(s *Scenario)) {
+	t.Helper()
+	t.Parallel()
+	inOwnNamespace(t, id, run)
+}
+
+// inNamespaceAlone runs a scenario in its own namespace while no other
+// scenario runs. Use it when the scenario disturbs something every scenario
+// shares: a node, the Kwatch Pod, the webhook receiver, or the cluster's
+// APIs and admission webhooks.
+func inNamespaceAlone(t *testing.T, id string, run func(s *Scenario)) {
+	t.Helper()
+	inOwnNamespace(t, id, run)
+}
+
+func inOwnNamespace(t *testing.T, id string, run func(s *Scenario)) {
 	t.Helper()
 	runScenario(t, id, func(
 		ctx context.Context, t *testing.T, e *harness.Environment,
@@ -54,7 +71,8 @@ func inNamespace(t *testing.T, id string, run func(s *Scenario)) {
 }
 
 // onCluster runs a scenario that has no namespace of its own, such as a
-// node, webhook or APIService failure.
+// node, webhook or APIService failure. It runs while no other scenario
+// runs.
 func onCluster(t *testing.T, id string, run func(s *Scenario)) {
 	t.Helper()
 	runScenario(t, id, func(
@@ -70,6 +88,15 @@ func inExtendedNamespace(t *testing.T, id string, run func(s *Scenario)) {
 	t.Helper()
 	skipUnlessExtended(t)
 	inNamespace(t, id, run)
+}
+
+// inExtendedNamespaceAlone is inNamespaceAlone for the extended scenarios.
+func inExtendedNamespaceAlone(
+	t *testing.T, id string, run func(s *Scenario),
+) {
+	t.Helper()
+	skipUnlessExtended(t)
+	inNamespaceAlone(t, id, run)
 }
 
 // inExtendedCluster is onCluster for the extended scenarios.
