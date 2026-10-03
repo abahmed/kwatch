@@ -124,8 +124,10 @@ func extCreateWebhookWithoutService(s *Scenario) {
 }
 
 // extBreakMetricsAPI points the metrics APIService at a Service that does
-// not exist and restores the original spec when the test ends.
-func extBreakMetricsAPI(s *Scenario) {
+// not exist. Call the returned function to restore it: namespace deletion
+// waits on every API group, so it must be restored before the scenario
+// ends. It also restores when the test ends, in case the scenario fails.
+func extBreakMetricsAPI(s *Scenario) (restore func()) {
 	s.T.Helper()
 	apiServices := s.Env.Dynamic.Resource(schema.GroupVersionResource{
 		Group: "apiregistration.k8s.io", Version: "v1",
@@ -142,13 +144,15 @@ func extBreakMetricsAPI(s *Scenario) {
 		s.T.Fatal("metrics APIService has no backing Service")
 	}
 	original := apiService.DeepCopy()
-	s.T.Cleanup(func() { extRestoreMetricsAPI(s, original) })
+	restore = func() { extRestoreMetricsAPI(s, original) }
+	s.T.Cleanup(restore)
 	service["name"] = "kwatch-e2e-missing-metrics"
 	service["namespace"] = s.Namespace
 	s.Must(unstructured.SetNestedMap(
 		apiService.Object, service, "spec", "service"))
 	_, err = apiServices.Update(s.Ctx, apiService, metav1.UpdateOptions{})
 	s.Must(err)
+	return restore
 }
 
 func extRestoreMetricsAPI(s *Scenario, original *unstructured.Unstructured) {

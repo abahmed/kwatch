@@ -36,7 +36,7 @@ func (a *AuditReader) WaitFor(
 	ctx context.Context,
 	match AuditMatch,
 ) ([]AuditEntry, error) {
-	deadline, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	deadline, cancel := withDefaultDeadline(ctx, 10*time.Minute)
 	defer cancel()
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
@@ -167,7 +167,7 @@ func rootName(root string) string {
 func (a *AuditReader) AssertRoot(
 	ctx context.Context, exp RootExpectation, scope RootScope,
 ) error {
-	deadline, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	deadline, cancel := withDefaultDeadline(ctx, 10*time.Minute)
 	defer cancel()
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
@@ -186,4 +186,15 @@ func (a *AuditReader) AssertRoot(
 		case <-ticker.C:
 		}
 	}
+}
+
+// withDefaultDeadline keeps the caller's deadline when it has one, so a
+// scenario can wait longer than the default, and adds limit otherwise.
+func withDefaultDeadline(
+	ctx context.Context, limit time.Duration,
+) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, limit)
 }

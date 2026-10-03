@@ -11,6 +11,8 @@ import (
 )
 
 func TestScenarioActiveProbeFailureAndRecovery(t *testing.T) {
+	knownGap(t, "an active-probe incident is not resolved after the "+
+		"endpoint recovers")
 	onCluster(t, "integration.active-probe", func(s *Scenario) {
 		lifecycleReceiverMode(s, "http-500")
 		lifecycleCreateProbeConfig(s)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/abahmed/kwatch/test/e2e/harness"
 )
@@ -160,11 +161,16 @@ func (s *Scenario) WaitForPods(
 	s.Must(s.Env.WaitForPodCount(ctx, s.Namespace, done))
 }
 
-// ExpectKwatchHealthy checks that Kwatch is live and ready and did not
-// panic while the scenario ran.
+// ExpectKwatchHealthy checks that Kwatch becomes live and ready within
+// slackTime (a new leader needs a moment to sync) and did not panic while
+// the scenario ran.
 func (s *Scenario) ExpectKwatchHealthy() {
 	s.T.Helper()
-	s.Must(s.Env.Health.AssertOK(s.Ctx, "/healthz"))
-	s.Must(s.Env.Health.AssertOK(s.Ctx, "/readyz"))
+	ctx, cancel := context.WithTimeout(s.Ctx, slackTime)
+	defer cancel()
+	s.Must(wait.PollUntilContextCancel(ctx, 5*time.Second, true,
+		func(ctx context.Context) (bool, error) {
+			return s.Env.AssertHealthy(ctx) == nil, nil
+		}))
 	s.Must(s.Env.AssertNoRuntimePanic(s.Ctx))
 }

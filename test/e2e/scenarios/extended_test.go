@@ -29,10 +29,11 @@ func TestScenarioExtendedAdmissionWebhook(t *testing.T) {
 
 func TestScenarioExtendedMetricsAPIFailure(t *testing.T) {
 	inExtendedNamespace(t, "integration.metrics-api", func(s *Scenario) {
-		extBreakMetricsAPI(s)
+		restoreMetricsAPI := extBreakMetricsAPI(s)
 		extCreateAutoscaledDeployment(s)
 		s.ExpectClusterIncident(extMetricsAPIName,
 			"FailedGetResourceMetric", detectors.DefaultConditionGrace)
+		restoreMetricsAPI()
 	})
 }
 

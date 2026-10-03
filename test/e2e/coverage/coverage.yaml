@@ -262,7 +262,7 @@ entries:
   - id: integration.active-probe
     family: integration
     lifecycle: health
-    status: covered
+    status: pending
     test: TestScenarioActiveProbeFailureAndRecovery
   - id: integration.tls
     family: integration
