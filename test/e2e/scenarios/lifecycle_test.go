@@ -65,7 +65,7 @@ func TestScenarioRestartPersistence(t *testing.T) {
 		if len(deliveries) != 1 {
 			t.Fatalf("restart changed delivery count: %d", len(deliveries))
 		}
-		s.Must(s.Env.AssertHealthy(s.Ctx))
+		s.ExpectKwatchHealthy()
 	})
 }
 
