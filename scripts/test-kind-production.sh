@@ -230,17 +230,17 @@ assert_can yes --as="$sa" --namespace "$namespace" get pods
 assert_can no --as="$sa" --namespace default get pods
 assert_can yes --as="$sa" get nodes
 assert_can yes --as="$sa" --namespace "$namespace" \
-	update leases --resource-name "${release}-leader"
+	update "leases/${release}-leader"
 # Lease get/update are limited to kwatch's own Lease.
 assert_can no --as="$sa" --namespace "$namespace" \
-	update leases --resource-name not-kwatch
+	update leases/not-kwatch
 # Kubelet stats are read from each kubelet directly.
 assert_can yes --as="$sa" get nodes --subresource=stats
 assert_can yes --as="$sa" get nodes --subresource=metrics
 assert_can no --as="$sa" get nodes --subresource=proxy
 assert_can no --as="$sa" --namespace "$namespace" delete pods
 assert_can no --as="$sa" --namespace "$namespace" \
-	update configmaps --resource-name not-owned
+	update configmaps/not-owned
 # watch.secrets=false removes every Secret permission in both modes.
 if [[ "$watch_secrets" == true ]]; then
 	assert_can yes --as="$sa" --namespace default list secrets
