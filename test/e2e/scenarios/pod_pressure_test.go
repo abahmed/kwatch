@@ -10,9 +10,8 @@ import (
 
 func TestScenarioPodEphemeralStorageEviction(t *testing.T) {
 	inNamespace(t, "pod.ephemeral-storage-pressure", func(s *Scenario) {
-		s.Must(podsCreate(s.Ctx, s.Env, s.Namespace, podsWithLimit(
-			podsWorkload("disk-pressure", "disk"),
-			corev1.ResourceEphemeralStorage, "1Mi")))
+		s.CreatePod(podWithLimit(workloadPod("disk-pressure", "disk"),
+			corev1.ResourceEphemeralStorage, "1Mi"))
 		s.ExpectIncident("disk-pressure", "Evicted", 0)
 	})
 }

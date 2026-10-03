@@ -13,25 +13,22 @@ import (
 
 func TestScenarioPodLifecycleHookFailure(t *testing.T) {
 	inNamespace(t, "pod.lifecycle-hook", func(s *Scenario) {
-		s.Must(edgeCreatePod(
-			s.Ctx, s.Env, s.Namespace, edgeFailingHookPod("post-start")))
+		s.CreatePod(podWithFailingStartHook("post-start"))
 		s.ExpectIncident("post-start", "FailedPostStartHook", 0)
 	})
 }
 
 func TestScenarioCronJobSuspended(t *testing.T) {
 	inNamespace(t, "workload.cronjob", func(s *Scenario) {
-		s.Must(edgeCreateSuspendedCronJob(
-			s.Ctx, s.Env, s.Namespace, "suspended"))
+		s.CreateCronJob(suspendedCronJob("suspended"))
 		s.ExpectIncident("suspended", "CronJobSuspended", 0)
 	})
 }
 
 func TestScenarioMissingRequiredReferences(t *testing.T) {
 	inNamespace(t, "security.secret-reference", func(s *Scenario) {
-		pod := edgePodWithEnvFrom(
-			"missing-references", edgeSecretEnvFrom("missing-secret"))
-		s.Must(edgeCreatePod(s.Ctx, s.Env, s.Namespace, pod))
+		s.CreatePod(podWithEnvFrom(
+			"missing-references", secretEnvFrom("missing-secret")))
 		blamed := "pod/" + s.Namespace + "/missing-references"
 		s.ExpectRoot(harness.RootExpectation{
 			Root:         "secret/" + s.Namespace + "/missing-secret",
@@ -44,9 +41,8 @@ func TestScenarioMissingRequiredReferences(t *testing.T) {
 
 func TestScenarioMissingConfigMapReference(t *testing.T) {
 	inNamespace(t, "security.configmap-reference", func(s *Scenario) {
-		pod := edgePodWithEnvFrom(
-			"missing-configmap", edgeConfigMapEnvFrom("missing-configmap"))
-		s.Must(edgeCreatePod(s.Ctx, s.Env, s.Namespace, pod))
+		s.CreatePod(podWithEnvFrom(
+			"missing-configmap", configMapEnvFrom("missing-configmap")))
 		s.ExpectRoot(harness.RootExpectation{
 			Root:         "configmap/" + s.Namespace + "/missing-configmap",
 			Tier:         "notify",
@@ -58,8 +54,7 @@ func TestScenarioMissingConfigMapReference(t *testing.T) {
 
 func TestScenarioMissingServiceAccountReference(t *testing.T) {
 	inNamespace(t, "security.rbac", func(s *Scenario) {
-		s.Must(edgeCreatePodWithDeletedServiceAccount(
-			s.Ctx, s.Env, s.Namespace, "missing-service-account"))
+		s.CreatePodWithDeletedServiceAccount("missing-service-account")
 		// Kwatch sees the missing ServiceAccount only after the Pod's
 		// mount failures start, which takes a couple of minutes.
 		s.ExpectIncident("missing-service-account",
@@ -69,25 +64,23 @@ func TestScenarioMissingServiceAccountReference(t *testing.T) {
 
 func TestScenarioMissingIngressBackend(t *testing.T) {
 	inNamespace(t, "networking.ingress", func(s *Scenario) {
-		s.Must(edgeCreateIngressToMissingService(
-			s.Ctx, s.Env, s.Namespace, "missing-backend", "missing-service"))
+		s.CreateIngress(ingressToMissingService(
+			"missing-backend", "missing-service"))
 		s.ExpectIncident("missing-service", "IngressBackendNotFound", 0)
 	})
 }
 
 func TestScenarioRestrictiveNetworkPolicy(t *testing.T) {
 	inNamespace(t, "networking.network-policy", func(s *Scenario) {
-		s.Must(edgeCreateDenyAllEgressPolicy(
-			s.Ctx, s.Env, s.Namespace, "deny-egress"))
+		s.CreateNetworkPolicy(denyAllEgressPolicy("deny-egress"))
 		s.ExpectIncident("deny-egress", "RestrictiveNetworkPolicy", 0)
 	})
 }
 
 func TestScenarioPodSecurityAdmission(t *testing.T) {
 	inNamespace(t, "security.pod-security-admission", func(s *Scenario) {
-		s.Must(edgeEnforceRestrictedSecurity(s.Ctx, s.Env, s.Namespace))
-		err := edgeCreatePod(
-			s.Ctx, s.Env, s.Namespace, edgePrivilegedPod("privileged"))
+		s.EnforceRestrictedPodSecurity()
+		err := s.TryCreatePod(privilegedPod("privileged"))
 		if !apierrors.IsForbidden(err) {
 			t.Fatalf("expected Pod Security Admission rejection, got %v", err)
 		}

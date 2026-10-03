@@ -10,12 +10,12 @@ import (
 
 func TestScenarioNodeRecovery(t *testing.T) {
 	inNamespace(t, "node.recovery", func(s *Scenario) {
-		nodeRequireKind(s)
-		node := nodeToStop(s)
-		nodeCreateSleepingPods(s, node, 3)
-		s.Must(s.Env.Receiver.Clear(s.Ctx))
+		s.RequireKind()
+		node := s.FreeWorkerNode()
+		s.CreateSleepingPods(node, 3)
+		s.ClearReceiver()
 
-		nodeStopUntilNotReady(s, node)
+		s.StopNode(node)
 		s.ExpectRoot(harness.RootExpectation{
 			Root:         "node//" + node,
 			Tier:         "page",
@@ -23,7 +23,7 @@ func TestScenarioNodeRecovery(t *testing.T) {
 			MustNotBlame: []string{"pod/" + s.Namespace + "/node-impact-*"},
 		})
 
-		nodeStartUntilReady(s, node)
+		s.StartNode(node)
 		s.ExpectKwatchHealthy()
 	})
 }

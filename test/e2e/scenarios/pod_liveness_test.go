@@ -6,8 +6,7 @@ import "testing"
 
 func TestScenarioPodLivenessFailure(t *testing.T) {
 	inNamespace(t, "pod.liveness-failure", func(s *Scenario) {
-		s.Must(podsCreate(s.Ctx, s.Env, s.Namespace,
-			podsFailingLiveness("liveness")))
+		s.CreatePod(podWithFailingLiveness("liveness"))
 		// Failed liveness probes restart the container, so Kwatch reports
 		// the restarts as a crash loop.
 		s.ExpectIncident("liveness", "CrashLoopBackOff", 0)

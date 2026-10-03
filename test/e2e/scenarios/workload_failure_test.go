@@ -5,26 +5,21 @@ package scenarios
 import (
 	"testing"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/abahmed/kwatch/test/e2e/harness"
 )
 
 func TestScenarioDeploymentRolloutFailure(t *testing.T) {
 	inNamespace(t, "workload.deployment-rollout", func(s *Scenario) {
-		_, err := createLifecycleDeployment(
-			s.Ctx, s.Env, s.Namespace, "rollout", "healthy")
-		s.Must(err)
-		s.Must(s.Env.WaitForDeployment(s.Ctx, s.Namespace, "rollout"))
+		s.CreateDeployment("rollout", "healthy")
+		s.WaitForRollout("rollout")
 
-		s.Must(workloadsBreakRollout(s.Ctx, s.Env, s.Namespace, "rollout"))
+		s.BreakRollout("rollout")
 		s.ExpectIncident("rollout", "ProgressDeadlineExceeded", 0)
 		s.ExpectRoot(harness.RootExpectation{
 			Root:        "deployment/" + s.Namespace + "/rollout",
 			Tier:        "notify",
 			MaxMessages: 2,
-			MustNotBlame: append(
-				scheduledNodes(s.Ctx, s.T, s.Env, s.Namespace),
+			MustNotBlame: append(s.ScheduledNodes(),
 				"registry//example.invalid"),
 		})
 	})
@@ -33,10 +28,7 @@ func TestScenarioDeploymentRolloutFailure(t *testing.T) {
 // With no retries the Job fails with BackoffLimitExceeded.
 func TestScenarioJobFailure(t *testing.T) {
 	inNamespace(t, "workload.job", func(s *Scenario) {
-		_, err := s.Env.Client.BatchV1().Jobs(s.Namespace).Create(
-			s.Ctx, workloadsFailingJob("failed-job"),
-			metav1.CreateOptions{})
-		s.Must(err)
+		s.CreateJob(failingJob("failed-job"))
 		s.ExpectIncident("failed-job", "JobBackoffLimitExceeded", 0)
 	})
 }

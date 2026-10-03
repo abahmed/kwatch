@@ -19,17 +19,24 @@ has no error handling:
 ```go
 func TestScenarioResolution(t *testing.T) {
 	inNamespace(t, "lifecycle.resolution", func(s *Scenario) {
-		_, err := createLifecycleDeployment(
-			s.Ctx, s.Env, s.Namespace, "recovery", "crash")
-		s.Must(err)
-		s.ExpectIncident("recovery", "CrashLoopBackOff", 0)
+		s.CreateDeployment("recovery", "healthy",
+			withConfigMapEnv("settings"))
+		s.ExpectIncident("settings", "ProjectedConfigMapMissing", 0)
 
-		s.Must(setLifecycleMode(
-			s.Ctx, s.Env, s.Namespace, "recovery", "healthy"))
-		s.ExpectResolved("recovery", "CrashLoopBackOff")
+		s.FixMissingConfigMap("recovery", "settings")
+		s.ExpectResolved("recovery")
 	})
 }
 ```
+
+Every helper is a method on `*Scenario` or a plain builder that returns a
+Kubernetes object, so a scenario never passes a context, client or
+namespace. Helpers that create things sit in `*_build_test.go`, named after
+what they build: `pods_build_test.go`, `workloads_build_test.go`,
+`config_build_test.go`, `node_build_test.go`, `cluster_build_test.go` and
+`kwatch_build_test.go`. Builders are named after the object
+(`crashingPod`, `failingJob`, `suspendedCronJob`) and `Create*` methods
+create it (`s.CreatePod(pod)`, `s.CreateDeployment(name, mode, options...)`).
 
 Rules:
 
@@ -45,8 +52,10 @@ Rules:
    `scenarios/scenario_test.go` and `harness/`.
 5. A state Kwatch deliberately ignores, or one Kind cannot reproduce, is not
    an E2E scenario. Test it with a replay scenario in `internal/scenarios`.
-6. Keep a scenario under about 30 lines. Move object building into
-   `fixtures_test.go`.
+6. Keep a scenario under about 30 lines. Move object building into the
+   matching `*_build_test.go` file as a builder plus a `Create*` method, and
+   reuse `workloadContainer`, `workloadPod` and `deployment` instead of
+   writing a new container or Deployment.
 
 ## Local run
 

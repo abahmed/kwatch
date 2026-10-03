@@ -4,10 +4,11 @@ package scenarios
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/abahmed/kwatch/test/e2e/harness"
@@ -19,13 +20,14 @@ import (
 //
 //	func TestScenarioPodCrashLoop(t *testing.T) {
 //		inNamespace(t, "pod.crashloop", func(s *Scenario) {
-//			s.Must(createFailingDeployment(s.Ctx, s.Env, s.Namespace, "api"))
+//			s.CreateDeployment("api", "crash")
 //			s.ExpectWorkloadRoot("deployment", "api")
 //		})
 //	}
 //
 // Every helper stops the test on failure, so scenario code has no error
-// handling and reads from top to bottom.
+// handling and reads from top to bottom. The helpers that create things
+// live in the *_build_test.go files, named after what they build.
 type Scenario struct {
 	T         *testing.T
 	Ctx       context.Context
@@ -62,6 +64,28 @@ func onCluster(t *testing.T, id string, run func(s *Scenario)) {
 	})
 }
 
+// inExtendedNamespace is inNamespace for the extended scenarios, which
+// only run when KWATCH_EXTENDED=true.
+func inExtendedNamespace(t *testing.T, id string, run func(s *Scenario)) {
+	t.Helper()
+	skipUnlessExtended(t)
+	inNamespace(t, id, run)
+}
+
+// inExtendedCluster is onCluster for the extended scenarios.
+func inExtendedCluster(t *testing.T, id string, run func(s *Scenario)) {
+	t.Helper()
+	skipUnlessExtended(t)
+	onCluster(t, id, run)
+}
+
+func skipUnlessExtended(t *testing.T) {
+	t.Helper()
+	if os.Getenv("KWATCH_EXTENDED") != "true" {
+		t.Skip("set KWATCH_EXTENDED=true for extended Kind scenarios")
+	}
+}
+
 // knownGap skips a scenario that fails because of a product problem that is
 // tracked elsewhere, so the suite stays green without hiding the problem.
 // Remove the call once the problem is fixed.
@@ -93,6 +117,27 @@ func (s *Scenario) ExpectIncident(
 	})
 }
 
+// ExpectIncidents waits until Kwatch has announced count incidents for
+// resource, for example after a problem came back.
+func (s *Scenario) ExpectIncidents(resource, reason string, count int) {
+	s.T.Helper()
+	s.waitForAudit(announceWait(0), harness.AuditMatch{
+		Namespace: s.Namespace, Resource: resource,
+		Reason: reason, Action: "create", Count: count,
+	})
+}
+
+// ExpectClusterIncident is ExpectIncident for a root without a namespace,
+// such as a node or an APIService.
+func (s *Scenario) ExpectClusterIncident(
+	resource, reason string, sustain time.Duration,
+) {
+	s.T.Helper()
+	s.waitForAudit(announceWait(sustain), harness.AuditMatch{
+		Resource: resource, Reason: reason, Count: 1,
+	})
+}
+
 // ExpectResolved waits until the incident rooted at resource is closed. Call
 // it after the scenario has fixed the problem. A "resolved" audit entry has
 // no reason, so only the root is matched.
@@ -112,20 +157,11 @@ func (s *Scenario) ExpectClusterResolved(resource string) {
 	})
 }
 
-// ExpectClusterIncident is ExpectIncident for a root without a namespace,
-// such as a node or an APIService.
-func (s *Scenario) ExpectClusterIncident(
-	resource, reason string, sustain time.Duration,
+func (s *Scenario) waitForAudit(
+	timeout time.Duration, m harness.AuditMatch,
 ) {
 	s.T.Helper()
-	s.waitForAudit(announceWait(sustain), harness.AuditMatch{
-		Resource: resource, Reason: reason, Count: 1,
-	})
-}
-
-func (s *Scenario) waitForAudit(wait time.Duration, m harness.AuditMatch) {
-	s.T.Helper()
-	ctx, cancel := context.WithTimeout(s.Ctx, wait)
+	ctx, cancel := context.WithTimeout(s.Ctx, timeout)
 	defer cancel()
 	if _, err := s.Env.Audit.WaitFor(ctx, m); err != nil {
 		s.T.Fatalf("waiting for %+v: %v", m, err)
@@ -141,24 +177,39 @@ func (s *Scenario) ExpectWorkloadRoot(kind, name string) {
 		Root:         kind + "/" + s.Namespace + "/" + name,
 		Tier:         "notify",
 		MaxMessages:  2,
-		MustNotBlame: scheduledNodes(s.Ctx, s.T, s.Env, s.Namespace),
+		MustNotBlame: s.ScheduledNodes(),
 	})
 }
 
-// ExpectRoot is the general form of ExpectWorkloadRoot.
+// ExpectRoot is the general form of ExpectWorkloadRoot. It waits for the
+// incident with the expected root, then requires the tier, the message
+// budget and the absence of blamed entities. Only audit entries from this
+// scenario count.
 func (s *Scenario) ExpectRoot(exp harness.RootExpectation) {
 	s.T.Helper()
-	assertRoot(s.Ctx, s.T, s.Env, s.Namespace, s.started, exp)
+	ctx, cancel := context.WithTimeout(s.Ctx, 8*time.Minute)
+	defer cancel()
+	scope := harness.RootScope{Namespace: s.Namespace, Since: s.started}
+	s.Must(s.Env.Audit.AssertRoot(ctx, exp, scope))
 }
 
-// WaitForPods waits until the namespace's pods satisfy done.
-func (s *Scenario) WaitForPods(
-	timeout time.Duration, done func(pods []corev1.Pod) bool,
-) {
+// ScheduledNodes lists the nodes hosting the namespace's Pods as
+// must-not-blame roots: a workload failure is not a node failure.
+func (s *Scenario) ScheduledNodes() []string {
 	s.T.Helper()
-	ctx, cancel := context.WithTimeout(s.Ctx, timeout)
-	defer cancel()
-	s.Must(s.Env.WaitForPodCount(ctx, s.Namespace, done))
+	pods, err := s.Env.Client.CoreV1().Pods(s.Namespace).List(
+		s.Ctx, metav1.ListOptions{},
+	)
+	s.Must(err)
+	seen := make(map[string]bool)
+	var roots []string
+	for _, pod := range pods.Items {
+		if pod.Spec.NodeName != "" && !seen[pod.Spec.NodeName] {
+			seen[pod.Spec.NodeName] = true
+			roots = append(roots, "node//"+pod.Spec.NodeName)
+		}
+	}
+	return roots
 }
 
 // ExpectKwatchHealthy checks that Kwatch becomes live and ready within

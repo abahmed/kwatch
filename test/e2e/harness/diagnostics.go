@@ -31,14 +31,10 @@ func (a *ArtifactWriter) WriteJSON(name string, value any) error {
 	if err != nil {
 		return err
 	}
-	return a.write(name, append(payload, '\n'))
+	return a.Write(name, append(payload, '\n'))
 }
 
 func (a *ArtifactWriter) Write(name string, payload []byte) error {
-	return a.write(name, payload)
-}
-
-func (a *ArtifactWriter) write(name string, payload []byte) error {
 	path := filepath.Join(a.Root, filepath.Clean(name))
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

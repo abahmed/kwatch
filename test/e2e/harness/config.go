@@ -18,7 +18,6 @@ type Config struct {
 	Artifacts         string
 	KwatchImage       string
 	ScenarioTimeout   time.Duration
-	SuiteTimeout      time.Duration
 }
 
 func ConfigFromEnv() Config {
@@ -35,7 +34,6 @@ func ConfigFromEnv() Config {
 		Artifacts:       valueOr("ARTIFACTS", "artifacts"),
 		KwatchImage:     valueOr("KWATCH_IMAGE", "kwatch:e2e"),
 		ScenarioTimeout: durationOr("SCENARIO_TIMEOUT", 10*time.Minute),
-		SuiteTimeout:    durationOr("SUITE_TIMEOUT", 60*time.Minute),
 	}
 }
 

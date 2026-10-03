@@ -10,16 +10,16 @@ import (
 
 func TestScenarioNodePressureSignals(t *testing.T) {
 	onCluster(t, "node.pressure-signals", func(s *Scenario) {
-		nodeRequireKind(s)
-		node := nodeToStop(s)
-		nodeStopUntilNotReady(s, node)
-		nodePressureConditions(s, node)
+		s.RequireKind()
+		node := s.FreeWorkerNode()
+		s.StopNode(node)
+		s.MarkNodePressure(node)
 		s.ExpectRoot(harness.RootExpectation{
 			Root:        "node//" + node,
 			MaxMessages: 4,
 		})
 
-		nodeStartUntilReady(s, node)
+		s.StartNode(node)
 		s.ExpectKwatchHealthy()
 	})
 }
