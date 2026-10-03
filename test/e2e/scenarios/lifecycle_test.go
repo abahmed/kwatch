@@ -25,7 +25,7 @@ func TestScenarioResolution(t *testing.T) {
 
 		// Once the ConfigMap exists the incident is rooted at the
 		// Deployment, so that is the root that resolves.
-		lifecycleCreateConfigMap(s, "settings")
+		lifecycleFixMissingConfigMap(s, "recovery", "settings")
 		s.ExpectResolved("recovery")
 	})
 }
@@ -35,7 +35,7 @@ func TestScenarioRefailureAfterRecovery(t *testing.T) {
 		lifecycleCreateNeedyDeployment(s, "refailure", "settings")
 		s.ExpectIncident("settings", "ProjectedConfigMapMissing", 0)
 
-		lifecycleCreateConfigMap(s, "settings")
+		lifecycleFixMissingConfigMap(s, "refailure", "settings")
 		s.ExpectResolved("refailure")
 
 		// Pods that already started keep their environment, so the

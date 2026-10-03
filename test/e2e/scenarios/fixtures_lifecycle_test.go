@@ -310,6 +310,16 @@ func lifecycleCreateConfigMap(s *Scenario, name string) {
 	s.Must(err)
 }
 
+// lifecycleFixMissingConfigMap creates the missing ConfigMap and replaces the
+// Pods. The kubelet retries a Pod that cannot start less and less often (up
+// to every five minutes), so without new Pods the fix would reach the
+// workload at an unpredictable time.
+func lifecycleFixMissingConfigMap(s *Scenario, deployment, name string) {
+	s.T.Helper()
+	lifecycleCreateConfigMap(s, name)
+	lifecycleRestartPods(s, deployment)
+}
+
 func lifecycleDeleteConfigMap(s *Scenario, name string) {
 	s.T.Helper()
 	s.Must(s.Env.Client.CoreV1().ConfigMaps(s.Namespace).Delete(s.Ctx, name,
