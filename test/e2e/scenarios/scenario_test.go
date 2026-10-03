@@ -116,8 +116,13 @@ func skipUnlessExtended(t *testing.T) {
 // knownGap skips a scenario that fails because of a product problem that is
 // tracked elsewhere, so the suite stays green without hiding the problem.
 // Remove the call once the problem is fixed.
+// Set KWATCH_E2E_RUN_KNOWN_GAPS=true to run it anyway while fixing it.
 func knownGap(t *testing.T, problem string) {
 	t.Helper()
+	if os.Getenv("KWATCH_E2E_RUN_KNOWN_GAPS") == "true" {
+		t.Logf("running known gap: %s", problem)
+		return
+	}
 	t.Skip("known gap: " + problem)
 }
 

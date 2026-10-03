@@ -79,6 +79,11 @@ Install Docker, Kind, kubectl, Go, Bash, and curl. Then run:
 make verify-scenarios
 ```
 
+A scenario that exposes a known Kwatch bug calls `knownGap` and is skipped.
+Set `KWATCH_E2E_RUN_KNOWN_GAPS=true` to run it while fixing the bug, and
+`KWATCH_VERBOSITY=4` to make Kwatch log every finding and incident membership
+change. The CI workflow sets both when you run it for one scenario.
+
 Useful filters are:
 
 ```sh

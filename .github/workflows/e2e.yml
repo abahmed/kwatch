@@ -186,6 +186,10 @@ jobs:
           SCENARIO_FAMILY: "${{ inputs.family }}"
           SCENARIO_SHARD: "${{ inputs.shard || matrix.shard }}"
           SUITE_TIMEOUT: "${{ inputs.suite_timeout || '60m' }}"
+          # A run filtered to some scenarios is a debugging run: log every
+          # finding and incident membership change.
+          KWATCH_VERBOSITY: "${{ inputs.scenario != '' && '4' || '' }}"
+          KWATCH_E2E_RUN_KNOWN_GAPS: "${{ inputs.scenario != '' }}"
           REPORTED_REF: "${{ inputs.reported_ref }}"
           REPORTED_VERSION: "${{ inputs.reported_version }}"
           COMPARE_WITH_MAIN: "${{ inputs.compare_with_main || false }}"

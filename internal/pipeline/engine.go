@@ -292,8 +292,9 @@ func (e *Engine) evaluate(
 		if result.RecheckAfter > 0 {
 			checks.schedule(id, now.Add(result.RecheckAfter))
 		}
-		transitions = append(transitions,
-			e.tracker.Observe(id, result.Findings)...)
+		changed := e.tracker.Observe(id, result.Findings)
+		logTransitions(changed)
+		transitions = append(transitions, changed...)
 		e.keepFindings(id)
 	}
 	e.storage.history.transitions(now, transitions, e.tracker.Active)
@@ -335,4 +336,27 @@ func notify(ch chan struct{}) {
 	case ch <- struct{}{}:
 	default:
 	}
+}
+
+// logTransitions writes one debug line per finding change. It is off by
+// default; -v=4 shows why an incident gains or keeps a member.
+func logTransitions(transitions []detection.Transition) {
+	if !klog.V(4).Enabled() {
+		return
+	}
+	for _, t := range transitions {
+		klog.V(4).InfoS("pipeline: finding "+transitionName(t.Kind),
+			"component", "pipeline", "entity", t.Finding.Entity.String(),
+			"reason", t.Finding.Reason)
+	}
+}
+
+func transitionName(kind detection.TransitionKind) string {
+	switch kind {
+	case detection.Raised:
+		return "raised"
+	case detection.Cleared:
+		return "cleared"
+	}
+	return "changed"
 }
