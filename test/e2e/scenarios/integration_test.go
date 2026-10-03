@@ -13,11 +13,11 @@ func TestScenarioActiveProbeFailureAndRecovery(t *testing.T) {
 	onCluster(t, "integration.active-probe", func(s *Scenario) {
 		s.SetReceiverMode("http-500")
 		s.CreateKwatchConfig("kwatch-e2e-active-probe", activeProbeSpec())
-		s.ExpectClusterIncident("receiver", "ActiveProbeFailure",
+		incident := s.ExpectClusterIncident("receiver", "ActiveProbeFailure",
 			2*time.Minute)
 
 		s.SetReceiverMode("success")
-		s.ExpectClusterResolved("receiver")
+		s.ExpectResolved(incident)
 	})
 }
 

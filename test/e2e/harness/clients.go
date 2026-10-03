@@ -4,6 +4,7 @@ package harness
 
 import (
 	"fmt"
+	"sync"
 
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -19,6 +20,10 @@ type Environment struct {
 	Audit     *AuditReader
 	Receiver  *ReceiverClient
 	Artifacts *ArtifactWriter
+	// diagnostics makes sure a scenario's state is captured once: the first
+	// capture runs before the scenario namespace is deleted, and a later
+	// one would overwrite it with a cluster that no longer has it.
+	diagnostics sync.Once
 }
 
 func NewEnvironment(config Config) (*Environment, error) {

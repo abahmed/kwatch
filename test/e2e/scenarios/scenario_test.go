@@ -130,15 +130,15 @@ func (s *Scenario) Must(err error) {
 }
 
 // ExpectIncident waits until Kwatch announces an incident whose root is
-// named resource and whose reasons include reason. The reason may arrive
-// in the first message or in a later update of the same incident, so any
-// announcement counts. sustain is how long the detector waits before
-// raising it (0 when it raises at once).
+// named resource and whose reasons include reason, and returns the incident
+// ID for ExpectResolved. The reason may arrive in the first message or in a
+// later update of the same incident, so any announcement counts. sustain is
+// how long the detector waits before raising it (0 when it raises at once).
 func (s *Scenario) ExpectIncident(
 	resource, reason string, sustain time.Duration,
-) {
+) (incident string) {
 	s.T.Helper()
-	s.waitForAudit(announceWait(sustain), harness.AuditMatch{
+	return s.waitForAudit(announceWait(sustain), harness.AuditMatch{
 		Namespace: s.Namespace, Resource: resource,
 		Reason: reason, Count: 1,
 	})
@@ -158,41 +158,37 @@ func (s *Scenario) ExpectIncidents(resource, reason string, count int) {
 // such as a node or an APIService.
 func (s *Scenario) ExpectClusterIncident(
 	resource, reason string, sustain time.Duration,
-) {
+) (incident string) {
 	s.T.Helper()
-	s.waitForAudit(announceWait(sustain), harness.AuditMatch{
+	return s.waitForAudit(announceWait(sustain), harness.AuditMatch{
 		Resource: resource, Reason: reason, Count: 1,
 	})
 }
 
-// ExpectResolved waits until the incident rooted at resource is closed. Call
-// it after the scenario has fixed the problem. A "resolved" audit entry has
-// no reason, so only the root is matched.
-func (s *Scenario) ExpectResolved(resource string) {
+// ExpectResolved waits until the incident returned by ExpectIncident is
+// closed. Call it after the scenario has fixed the problem. The incident is
+// matched by ID because its root can change while it is open, for example
+// from a missing ConfigMap to the Deployment that needed it.
+func (s *Scenario) ExpectResolved(incident string) {
 	s.T.Helper()
 	s.waitForAudit(resolveWait(), harness.AuditMatch{
-		Namespace: s.Namespace, Resource: resource,
-		Action: "resolved", Count: 1,
+		Incident: incident, Action: "resolved", Count: 1,
 	})
 }
 
-// ExpectClusterResolved is ExpectResolved for a root without a namespace.
-func (s *Scenario) ExpectClusterResolved(resource string) {
-	s.T.Helper()
-	s.waitForAudit(resolveWait(), harness.AuditMatch{
-		Resource: resource, Action: "resolved", Count: 1,
-	})
-}
-
+// waitForAudit waits for audit entries matching m and returns the incident
+// ID of the first one.
 func (s *Scenario) waitForAudit(
 	timeout time.Duration, m harness.AuditMatch,
-) {
+) string {
 	s.T.Helper()
 	ctx, cancel := context.WithTimeout(s.Ctx, timeout)
 	defer cancel()
-	if _, err := s.Env.Audit.WaitFor(ctx, m); err != nil {
+	entries, err := s.Env.Audit.WaitFor(ctx, m)
+	if err != nil {
 		s.T.Fatalf("waiting for %+v: %v", m, err)
 	}
+	return entries[0].Incident
 }
 
 // ExpectWorkloadRoot checks that one notification-tier incident is rooted at

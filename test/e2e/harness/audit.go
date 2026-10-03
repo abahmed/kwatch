@@ -25,6 +25,8 @@ type AuditReader struct {
 }
 
 type AuditMatch struct {
+	// Incident, when set, matches only entries of that incident ID.
+	Incident  string
 	Namespace string
 	Resource  string
 	Reason    string
@@ -105,6 +107,9 @@ func parseAudit(payload []byte) []AuditEntry {
 func matchingEntries(entries []AuditEntry, match AuditMatch) []AuditEntry {
 	result := make([]AuditEntry, 0, len(entries))
 	for _, entry := range entries {
+		if match.Incident != "" && entry.Incident != match.Incident {
+			continue
+		}
 		if match.Namespace != "" && entry.Namespace != match.Namespace {
 			continue
 		}

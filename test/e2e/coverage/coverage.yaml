@@ -4,12 +4,14 @@ entries:
     lifecycle: recurring
     status: covered
     test: TestScenarioPodCrashLoop
+    minutes: 2
     modes: [CrashLoop]
   - id: pod.startup-error
     family: pod
     lifecycle: startup
     status: covered
     test: TestScenarioPodFailureProfiles
+    minutes: 3
   - id: pod.delayed-one-shot
     family: pod
     lifecycle: delayed
@@ -26,12 +28,14 @@ entries:
     lifecycle: pending
     status: covered
     test: TestScenarioPodUnschedulable
+    minutes: 4
     modes: [Unschedulable]
   - id: pod.not-ready
     family: pod
     lifecycle: readiness
     status: covered
     test: TestScenarioPodReadinessFailure
+    minutes: 2
   - id: pod.image-pull
     family: pod
     lifecycle: startup
@@ -68,13 +72,13 @@ entries:
     lifecycle: re-failure
     status: covered
     test: TestScenarioRefailureAfterRecovery
-    minutes: 12
+    minutes: 6
   - id: rootcause.shared-node
     family: rootcause
     lifecycle: node-impact
     status: covered
     test: TestScenarioRootCauseSharedNode
-    minutes: 9
+    minutes: 3
     modes: [NotReady]
   - id: rootcause.shared-registry
     family: rootcause
@@ -87,38 +91,38 @@ entries:
     lifecycle: simultaneous
     status: covered
     test: TestScenarioRootCauseSmallStorm
-    minutes: 5
+    minutes: 2
     modes: [CrashLoop]
   - id: lifecycle.resolution
     family: lifecycle
     lifecycle: recovery
     status: covered
     test: TestScenarioResolution
-    minutes: 7
+    minutes: 6
   - id: lifecycle.restart-persistence
     family: lifecycle
     lifecycle: restart
     status: covered
     test: TestScenarioRestartPersistence
-    minutes: 5
+    minutes: 2
   - id: lifecycle.lease-handover
     family: lifecycle
     lifecycle: lease
     status: covered
     test: TestScenarioLeaseHandover
-    minutes: 4
+    minutes: 2
   - id: lifecycle.provider-failure
     family: lifecycle
     lifecycle: delivery
     status: covered
     test: TestScenarioProviderFailureRecovery
-    minutes: 5
+    minutes: 2
   - id: lifecycle.configuration-reload
     family: lifecycle
     lifecycle: reload
     status: covered
     test: TestScenarioConfigurationReload
-    minutes: 3
+    minutes: 2
   - id: workload.deployment-rollout
     family: workload
     lifecycle: rollout
@@ -156,19 +160,19 @@ entries:
     status: covered
     environment: kind-extended
     test: TestScenarioExtendedMetricsAPIFailure
-    minutes: 7
+    minutes: 4
   - id: workload.pdb-disruption
     family: workload
     lifecycle: disruption
     status: covered
     test: TestScenarioPDBDisruption
-    minutes: 15
+    minutes: 12
   - id: node.not-ready
     family: node
     lifecycle: failure
     status: covered
     test: TestScenarioNodeRecovery
-    minutes: 9
+    minutes: 4
     modes: [NotReady]
   - id: node.shared-pod-impact
     family: node
@@ -185,7 +189,7 @@ entries:
     lifecycle: pressure
     status: covered
     test: TestScenarioNodePressureSignals
-    minutes: 9
+    minutes: 2
     modes: [MemoryPressure]
   - id: node.disk-pressure
     family: node
@@ -217,6 +221,7 @@ entries:
     lifecycle: failure
     status: covered
     test: TestScenarioPersistentVolumeClaimFailure
+    minutes: 3
     modes: [ClaimFailed]
   - id: storage.volume-attachment
     family: storage
@@ -229,6 +234,7 @@ entries:
     lifecycle: dependency
     status: covered
     test: TestScenarioServiceWithoutEndpoints
+    minutes: 3
   - id: networking.ingress
     family: networking
     lifecycle: dependency
@@ -245,7 +251,7 @@ entries:
     status: covered
     environment: kind-extended
     test: TestScenarioExtendedAdmissionWebhook
-    minutes: 4
+    minutes: 2
   - id: security.admission-policy
     family: security
     lifecycle: policy
@@ -288,7 +294,6 @@ entries:
     lifecycle: delivery
     status: covered
     test: TestScenarioHeartbeatDelivery
-    minutes: 4
   - id: integration.metrics-api
     family: integration
     lifecycle: dependency
@@ -304,20 +309,18 @@ entries:
     lifecycle: startup
     status: covered
     test: TestScenarioInvalidStartupConfiguration
-    minutes: 3
   - id: invalid-config.live-reload
     family: invalid-config
     lifecycle: reload
     status: covered
     test: TestScenarioInvalidLiveConfiguration
-    minutes: 3
   - id: integration.cluster-dns
     family: integration
     lifecycle: failure
     status: covered
     environment: kind-extended
     test: TestScenarioExtendedClusterDNSDown
-    minutes: 5
+    minutes: 4
     modes: [Unavailable.CoreDNS]
   - id: rootcause.zone-failure
     family: rootcause

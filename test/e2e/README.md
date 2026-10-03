@@ -21,10 +21,11 @@ func TestScenarioResolution(t *testing.T) {
 	inNamespace(t, "lifecycle.resolution", func(s *Scenario) {
 		s.CreateDeployment("recovery", "healthy",
 			withConfigMapEnv("settings"))
-		s.ExpectIncident("settings", "ProjectedConfigMapMissing", 0)
+		incident := s.ExpectIncident(
+			"settings", "ProjectedConfigMapMissing", 0)
 
 		s.FixMissingConfigMap("recovery", "settings")
-		s.ExpectResolved("recovery")
+		s.ExpectResolved(incident)
 	})
 }
 ```

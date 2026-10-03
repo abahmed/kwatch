@@ -93,7 +93,7 @@ func captureDiagnosticsIfFailed(t *testing.T, e *harness.Environment) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	if err := e.CaptureDiagnostics(ctx); err != nil {
+	if err := e.CaptureDiagnosticsOnce(ctx); err != nil {
 		t.Errorf("capture diagnostics: %v", err)
 	}
 }

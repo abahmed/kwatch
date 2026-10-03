@@ -42,6 +42,14 @@ func (a *ArtifactWriter) Write(name string, payload []byte) error {
 	return os.WriteFile(path, payload, 0o600)
 }
 
+// CaptureDiagnosticsOnce runs CaptureDiagnostics the first time it is called
+// and does nothing afterwards.
+func (e *Environment) CaptureDiagnosticsOnce(ctx context.Context) error {
+	var err error
+	e.diagnostics.Do(func() { err = e.CaptureDiagnostics(ctx) })
+	return err
+}
+
 func (e *Environment) CaptureDiagnostics(ctx context.Context) error {
 	commands := []struct {
 		name string
