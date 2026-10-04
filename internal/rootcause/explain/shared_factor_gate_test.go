@@ -83,3 +83,23 @@ func TestSharedNodeNeedsThreeFailuresNothingSpecificExplains(t *testing.T) {
 		t.Fatalf("two leftover failures must not suspect the node: %+v", c)
 	}
 }
+
+// Workloads with no replica elsewhere cannot show that the node is the
+// difference: each may simply be broken, so the node is not suspected.
+func TestSharedNodeNeedsAHealthyReplicaElsewhere(t *testing.T) {
+	f := newFixture(t)
+	var first inventory.EntityID
+	for i := 0; i < 4; i++ {
+		suffix := string(rune('a' + i))
+		pods := f.workload("shop", "lone"+suffix, 1,
+			f.nodes("zone-a", sharedNode.Name)...)
+		f.fail(pods[0], detection.ModeCrashLoop, failingH, 2+i, "")
+		if i == 0 {
+			first = pods[0]
+		}
+	}
+
+	if c, ok := f.explain().CauseOf(first); ok && c.Root == sharedNode {
+		t.Fatalf("lone workloads must not suspect their node: %+v", c)
+	}
+}
