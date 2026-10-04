@@ -39,6 +39,11 @@ type ActiveProbeMonitor struct {
 	// ExcludeNamespaces are namespaces AutoServices skips entirely. Use it
 	// for namespaces with default-deny ingress that do not admit kwatch.
 	ExcludeNamespaces []string `yaml:"excludeNamespaces"`
+	// AutoDependencies probes, over TCP from kwatch's own pod, every
+	// endpoint outside the cluster that a pod's environment names (a
+	// database URL, a queue address). A dependency that refuses
+	// connections then explains the pods that call it.
+	AutoDependencies bool `yaml:"autoDependencies"`
 }
 
 // HTTPProbeTarget is one HTTP endpoint the probe monitor checks.

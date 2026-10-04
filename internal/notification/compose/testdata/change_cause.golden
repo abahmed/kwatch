@@ -1,0 +1,3 @@
+🔴 payments is down in shop after the 14:02 release of payments:2.3. alice released it; the previous image was payments:2.2, recorded as "bump payments to 2.3 for the refund fix". Only pods of the new revision fail. Service payments and ingress storefront can't serve traffic. checkout is affected as well. Rolling back fixes it (changes the cluster): kubectl rollout undo deployment/payments -n shop --to-revision=13
+
+🔴 payments is down in shop after the 14:02 release of payments:2.3.

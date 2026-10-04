@@ -55,10 +55,14 @@ type Entry struct {
 	ContentHash string `json:"contentHash,omitempty"`
 	// Previous is the resolved incident this one repeats, when linked.
 	Previous string `json:"previous,omitempty"`
+	// Considered lists the other causes the solver weighed, best first,
+	// as "root (row, confidence)", so a reader can see what was ruled
+	// out without the solver's full trace.
+	Considered []string `json:"considered,omitempty"`
 	// Delivery says how the decision reaches people when not as a message
-	// of its own: "digest" or "startup summary" when that message carries
-	// it, "paging" when only alert-tracking providers receive it. Empty
-	// for an ordinary message.
+	// of its own: "digest", "roll-up" or "startup summary" when that
+	// message carries it, "paging" when only alert-tracking providers
+	// receive it. Empty for an ordinary message.
 	Delivery string `json:"delivery,omitempty"`
 }
 

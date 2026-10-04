@@ -75,6 +75,9 @@ const (
 	// ModeMetricsUnserved is a metrics API that cannot answer, seen
 	// from the autoscalers that read it.
 	ModeMetricsUnserved detection.Mode = "MetricsUnserved"
+	// ModeVolumePinned is a claim bound to a volume in a zone where
+	// its pod cannot be placed, seen from the scheduler's verdict.
+	ModeVolumePinned detection.Mode = "VolumePinned"
 )
 
 // Side selects the cause or the effect of a row. A mode matches itself

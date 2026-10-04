@@ -1,0 +1,11 @@
+{
+  "name": "dependency-refuses-connections",
+  "description": "One Deployment crash-loops on the database its environment names; kwatch's probe of that endpoint is refused.",
+  "root": "external-endpoint//db.example.com:5432",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/orders/api",
+    "node//n1"
+  ]
+}

@@ -1,6 +1,8 @@
 package rootcause
 
 import (
+	"time"
+
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 )
@@ -39,6 +41,10 @@ type CauseRecord struct {
 	// Unverified names, in plain words, what kwatch could not see where
 	// a cause might have been ("secrets in billing").
 	Unverified []string `json:",omitempty"`
+	// Began is when the cause went wrong, when known. An incident that
+	// was announced long before a cause began keeps its root instead of
+	// being taken over by it.
+	Began time.Time `json:",omitempty"`
 }
 
 // Confidence levels shown to readers. They match explain's

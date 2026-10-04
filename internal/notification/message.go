@@ -66,9 +66,9 @@ type Message struct {
 	// elsewhere; an alert opened by key must still be closed by key.
 	PagingOnly bool `json:",omitempty"`
 	// Carrier names the message that carries this one to people, when it
-	// is not delivered on its own: "digest" or "startup summary". Such a
-	// message exists for the audit log, which records every decision when
-	// it is made; delivery drops it.
+	// is not delivered on its own: "digest", "roll-up" or "startup
+	// summary". Such a message exists for the audit log, which records
+	// every decision when it is made; delivery drops it.
 	Carrier string `json:",omitempty"`
 }
 

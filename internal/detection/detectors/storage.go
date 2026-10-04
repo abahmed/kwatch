@@ -50,6 +50,10 @@ func (Claim) Detect(
 			Since:    valueSince(e, kube.AttrPhase),
 			Summary:  "Volume claim lost its bound volume",
 		})
+	case "Bound":
+		if s, ok := unusedClaim(ctx, e); ok {
+			out = append(out, s)
+		}
 	}
 	// A finding is keyed by entity and reason, so a claim reports one
 	// finding: the phase problem first, else the first resize failure.
@@ -150,4 +154,24 @@ func reclaimEvents(
 		}
 	}
 	return out
+}
+
+// unusedClaim reports a bound claim no pod has mounted for a day: a
+// volume that costs money and serves nothing. It waits for the digest.
+func unusedClaim(
+	ctx detection.Context, e inventory.Entity,
+) (detection.Finding, bool) {
+	if ctx.Model == nil || !ctx.Synced(kube.KindPod) || len(ctx.Model.Related(
+		e.ID, inventory.Mounts, inventory.Incoming)) > 0 {
+		return detection.Finding{}, false
+	}
+	since := ctx.Onset("unused", valueSince(e, kube.AttrPhase))
+	if !sustained(ctx, "unused", since, DefaultUnusedAfter) {
+		return detection.Finding{}, false
+	}
+	return detection.Finding{
+		Reason: reasons.ClaimUnused, Severity: detection.Info, Since: since,
+		Summary: "Volume claim is bound but no pod has mounted it for " +
+			format.Duration(ctx.Now.Sub(since)),
+	}, true
 }

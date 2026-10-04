@@ -59,8 +59,7 @@ func TestWriteStatesUnverified(t *testing.T) {
 		incident.Decision{Action: incident.Announce, Incident: p}, now)
 	assert.Contains(t, msg.Lines, "I can't see secrets in billing, so a "+
 		"changed secret can't be ruled out.")
-	assert.Contains(t, msg.Title,
-		"I couldn't find an outside cause among what I can see")
+	assert.NotContains(t, msg.Title, "couldn't find")
 
 	p.Unverified = nil
 	msg = Writer{}.Write(

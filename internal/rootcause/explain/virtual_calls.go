@@ -22,10 +22,10 @@ const (
 // Virtual kinds read from error text. They let a storm with no
 // Kubernetes object to blame still become one incident.
 const (
-	// KindExternalEndpoint is a network endpoint named in error text,
-	// such as "db.example.com:5432": something outside the cluster
-	// objects kwatch watches.
-	KindExternalEndpoint inventory.Kind = "external-endpoint"
+	// KindExternalEndpoint is a network endpoint outside the cluster
+	// objects kwatch watches, such as "db.example.com:5432", named in
+	// error text or in a pod's configuration (see kube.KindExternalEndpoint).
+	KindExternalEndpoint = kube.KindExternalEndpoint
 	// KindFailureSignature is one error message several workloads
 	// fail with, normalised so IDs and numbers do not split it. Its
 	// name is built by signatureName.
@@ -51,6 +51,18 @@ var callerFailures = []detection.Mode{
 // calledRows cover failures that only error text connects: many
 // workloads failing on one external endpoint, or with one error.
 var calledRows = []Row{
+	{
+		// A dependency a pod is configured to call, which kwatch's own
+		// probe finds refusing connections. The probe is the proof, so
+		// the callers' errors need not name it, and one workload is
+		// enough: the endpoint is down whoever calls it.
+		Name: "external-endpoint-unreachable",
+		Cause: Side{Kind: KindExternalEndpoint,
+			Modes: []detection.Mode{detection.ModeActiveProbe}},
+		Link:   LinkCalls,
+		Effect: Side{Kind: kube.KindPod, Modes: callerFailures},
+		Prior:  0.75,
+	},
 	{
 		Name: "external-endpoint-failing",
 		Cause: Side{Kind: KindExternalEndpoint,

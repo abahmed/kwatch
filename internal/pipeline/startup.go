@@ -8,23 +8,96 @@ import (
 	"github.com/abahmed/kwatch/internal/incident"
 )
 
-// StartupState is the persisted startup summary marker. It makes a cold
-// start explicit instead of inferring it from an empty incident store, and
-// lets the summary be closed once everything it listed has resolved.
+// Listing is one message that named several incidents instead of one
+// message each: the startup summary, or a roll-up of problems found at
+// the same time. It remembers what the message listed, so the first own
+// message of a listed incident introduces it and the listing is closed
+// once everything it named has resolved.
+type Listing struct {
+	// Key is the conversation key of the message sent.
+	Key string `json:",omitempty"`
+	// Incidents lists the incidents the message still waits on.
+	Incidents []string `json:",omitempty"`
+	// Followed lists the listed incidents that have since sent a
+	// message of their own, and Resolved those whose own resolve was
+	// sent. A listing without them reads as "nothing sent yet", which
+	// costs at most one extra message.
+	Followed []string `json:",omitempty"`
+	Resolved []string `json:",omitempty"`
+}
+
+// StartupState is the persisted startup summary marker, with the
+// roll-ups still open. It makes a cold start explicit instead of
+// inferring it from an empty incident store. The embedded Listing is the
+// startup summary itself; its fields are stored flat, as earlier
+// versions wrote them.
 type StartupState struct {
 	// Complete is true once a startup summary was handed to delivery, or
 	// the startup window closed with nothing to report.
 	Complete bool
-	// Key is the conversation key of the last summary sent.
-	Key string `json:",omitempty"`
-	// Incidents lists the incidents that summary still waits on.
-	Incidents []string `json:",omitempty"`
-	// Followed lists the listed incidents that have since sent a
-	// message of their own, and Resolved those whose own resolve was
-	// sent. A marker without them reads as "nothing sent yet", which
-	// costs at most one extra message.
-	Followed []string `json:",omitempty"`
-	Resolved []string `json:",omitempty"`
+	Listing
+	// Rollups are the roll-ups whose incidents have not all resolved.
+	Rollups []Listing `json:",omitempty"`
+}
+
+// listings returns the startup summary and every open roll-up.
+func (s *StartupState) listings() []*Listing {
+	out := []*Listing{&s.Listing}
+	for i := range s.Rollups {
+		out = append(out, &s.Rollups[i])
+	}
+	return out
+}
+
+// clone copies the state deeply, for a writer on another goroutine.
+func (s StartupState) clone() StartupState {
+	s.Listing = s.Listing.clone()
+	s.Rollups = slices.Clone(s.Rollups)
+	for i := range s.Rollups {
+		s.Rollups[i] = s.Rollups[i].clone()
+	}
+	return s
+}
+
+func (l Listing) clone() Listing {
+	l.Incidents = slices.Clone(l.Incidents)
+	l.Followed = slices.Clone(l.Followed)
+	l.Resolved = slices.Clone(l.Resolved)
+	return l
+}
+
+// follow records an own message of an incident the listing named. It
+// reports whether d is about such an incident; the decision it returns
+// is the one to write the message for: the listing only named the
+// incident, so its first own message is a full announcement, not a bare
+// update.
+func (l *Listing) follow(d incident.Decision) (incident.Decision, bool) {
+	id := d.Incident.ID
+	if !slices.Contains(l.Incidents, id) {
+		return d, false
+	}
+	first := !slices.Contains(l.Followed, id)
+	if first {
+		l.Followed = append(l.Followed, id)
+	}
+	if d.Action == incident.Resolve {
+		l.Resolved = append(l.Resolved, id)
+	}
+	if first && d.Action == incident.Update {
+		d.Action = incident.Announce
+	}
+	return d, true
+}
+
+// closes reports whether the listing is over: every incident it named
+// has resolved, and whether people must be told. When every listed
+// incident already said it resolved, one more "all resolved" would be a
+// repeated recovery.
+func (l *Listing) closes(incidents *incident.Manager) (over, tell bool) {
+	if len(l.Incidents) == 0 || !incidents.Closed(l.Incidents) {
+		return false, false
+	}
+	return true, !containsAll(l.Resolved, l.Incidents)
 }
 
 // startupWindow covers the initial list plus one settle period, so the
@@ -44,10 +117,10 @@ type startupSummary struct {
 	until time.Time
 	// collected are the announcements the summary will list.
 	collected []incident.Decision
-	// summary is the last startup summary sent.
+	// summary is the last startup summary sent, with the open roll-ups.
 	summary StartupState
-	// checkSummary asks the next tick whether every incident the
-	// summary listed has resolved.
+	// checkSummary asks the next tick whether every incident a listing
+	// named has resolved.
 	checkSummary bool
 }
 
@@ -157,67 +230,81 @@ func (s *startupSummary) indexOf(id string) int {
 // so they are persisted as announced only after delivery has them.
 func (a *announcer) finishStartup(ctx context.Context, now time.Time) {
 	s := &a.startup
-	state := StartupState{Complete: true}
+	state := StartupState{Complete: true, Rollups: s.summary.Rollups}
 	if len(s.collected) > 0 {
 		msg := a.messages.StartupSummary(s.collected, now)
 		a.sink(ctx, incident.Decision{Reason: "startup summary"}, msg)
-		state.Key = msg.Key
-		for _, d := range s.collected {
-			state.Incidents = append(state.Incidents, d.Incident.ID)
-			a.incidents.ReleaseAnnouncement(d.Incident.ID)
-		}
+		state.Listing = a.listed(msg.Key, s.collected)
 	}
 	s.summary = state
 	a.storage.saveStartup(state)
 	s.collected, s.until = nil, time.Time{}
 }
 
-// closeSummary resolves the startup summary once every incident it listed
-// has resolved. It reports whether it sent the resolve.
+// listed builds the listing of the message with key that named the
+// announcements, and releases their held announcements: delivery has the
+// message now.
+func (a *announcer) listed(
+	key string, announcements []incident.Decision,
+) Listing {
+	l := Listing{Key: key}
+	for _, d := range announcements {
+		l.Incidents = append(l.Incidents, d.Incident.ID)
+		a.incidents.ReleaseAnnouncement(d.Incident.ID)
+	}
+	return l
+}
+
+// closeSummary resolves the startup summary and every roll-up whose
+// listed incidents have all resolved. It reports whether it sent a
+// resolve.
 func (a *announcer) closeSummary(ctx context.Context) bool {
 	s := &a.startup
 	if !s.checkSummary {
 		return false
 	}
 	s.checkSummary = false
-	ids := s.summary.Incidents
-	if len(ids) == 0 || !a.incidents.Closed(ids) {
-		return false
+	sent, changed := false, false
+	if over, tell := s.summary.Listing.closes(a.incidents); over {
+		if tell {
+			a.sink(ctx, incident.Decision{
+				Reason: "startup summary resolved"},
+				a.messages.StartupResolved(s.summary.Key,
+					len(s.summary.Incidents)))
+		}
+		s.summary.Listing = Listing{}
+		sent, changed = sent || tell, true
 	}
-	// When every listed incident already said it resolved, one more
-	// "all resolved" would be a repeated recovery.
-	sent := !containsAll(s.summary.Resolved, ids)
-	if sent {
-		a.sink(ctx, incident.Decision{
-			Reason: "startup summary resolved"},
-			a.messages.StartupResolved(s.summary.Key, len(ids)))
+	open := s.summary.Rollups[:0]
+	for _, r := range s.summary.Rollups {
+		over, tell := r.closes(a.incidents)
+		if !over {
+			open = append(open, r)
+			continue
+		}
+		if tell {
+			a.sink(ctx, incident.Decision{Reason: "roll-up resolved"},
+				a.messages.RollupResolved(r.Key, len(r.Incidents)))
+		}
+		sent, changed = sent || tell, true
 	}
-	s.summary.Incidents, s.summary.Followed = nil, nil
-	s.summary.Resolved = nil
-	a.storage.saveStartup(s.summary)
+	s.summary.Rollups = open
+	if changed {
+		a.storage.saveStartup(s.summary)
+	}
 	return sent
 }
 
 // followSummary records the own messages of incidents the startup
-// summary listed. The summary only named them, so the first message of
-// their own is written as a full announcement, not as a bare update.
-// It returns the decision to write the message for.
+// summary or a roll-up listed. The listing only named them, so the first
+// message of their own is written as a full announcement, not as a bare
+// update. It returns the decision to write the message for.
 func (a *announcer) followSummary(d incident.Decision) incident.Decision {
-	summary := &a.startup.summary
-	id := d.Incident.ID
-	if !slices.Contains(summary.Incidents, id) {
-		return d
-	}
-	first := !slices.Contains(summary.Followed, id)
-	if first {
-		summary.Followed = append(summary.Followed, id)
-	}
-	if d.Action == incident.Resolve {
-		summary.Resolved = append(summary.Resolved, id)
-	}
-	a.storage.saveStartup(*summary)
-	if first && d.Action == incident.Update {
-		d.Action = incident.Announce
+	for _, l := range a.startup.summary.listings() {
+		if out, listed := l.follow(d); listed {
+			a.storage.saveStartup(a.startup.summary)
+			return out
+		}
 	}
 	return d
 }

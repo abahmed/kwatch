@@ -226,7 +226,8 @@ func auditEntries(prefix string, result replay.Result) []audit.Entry {
 				entry.Incident = "startup-summary"
 			}
 			entry.Action = audit.ActionCreate
-			if d.Reason == "startup summary resolved" {
+			if d.Reason == "startup summary resolved" ||
+				d.Reason == "roll-up resolved" {
 				entry.Action = audit.ActionResolved
 			}
 		}

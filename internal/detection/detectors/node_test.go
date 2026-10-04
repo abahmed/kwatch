@@ -236,3 +236,29 @@ func TestNodeNetworkUnavailable(t *testing.T) {
 	require.Len(t, findings, 1)
 	assert.Equal(t, reasons.NetworkUnavailable, findings[0].Reason)
 }
+
+// A removal taint announces a drain before the node is cordoned or
+// deleted.
+func TestNodeRemovalTaintIsADrain(t *testing.T) {
+	now := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	for taints, want := range map[string]string{
+		"ToBeDeletedByClusterAutoscaler=1700000000:NoSchedule": "scale-down",
+		"node.kubernetes.io/out-of-service=nodeshutdown:NoExecute": "marked " +
+			"out of service",
+		"gpu=true:NoSchedule": "",
+	} {
+		node := buildNode("n1", now.Add(-time.Minute),
+			map[string]inventory.Value{
+				kube.AttrTaints:   inventory.Text(taints),
+				"condition.Ready": inventory.Text("True"),
+			})
+		ok, drain := drainFinding(node)
+		if want == "" {
+			assert.False(t, ok, taints)
+			continue
+		}
+		require.True(t, ok, taints)
+		assert.Equal(t, reasons.NodeDraining, drain.Reason)
+		assert.Contains(t, drain.Summary, want)
+	}
+}

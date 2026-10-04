@@ -40,6 +40,12 @@ type Finding struct {
 	// as a Service without endpoints. They never become a root on their own
 	// when a cause can be found.
 	Symptom bool
+	// Advisory marks a configuration risk, not a failure: a workload
+	// with no readiness probe, a single replica, an image tag that can
+	// change. It is reported in the digest, never leads a message about
+	// a failure, is never a failure to explain nor a cause, and only
+	// adds a consequence to a failure it made worse.
+	Advisory bool `json:",omitempty"`
 }
 
 // Key identifies a finding across evaluations.

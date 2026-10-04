@@ -35,7 +35,7 @@ rules:
 - apiGroups: [""]
   resources: ["nodes/stats", "nodes/metrics", "pods/log"]
   verbs: ["get"]
-- nonResourceURLs: ["/readyz"]
+- nonResourceURLs: ["/readyz", "/metrics"]
   verbs: ["get"]
 - apiGroups: ["authorization.k8s.io"]
   resources: ["selfsubjectaccessreviews"]

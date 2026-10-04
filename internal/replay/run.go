@@ -35,6 +35,16 @@ type Options struct {
 	SyncAt time.Time
 }
 
+// CarriedDecision is a decision people heard through another message;
+// see notification.Message.Carrier.
+type CarriedDecision struct {
+	Decision incident.Decision
+	Carrier  string
+	// At is the simulated time the decision was made. A roll-up carries
+	// it at once; a digest or the startup summary later.
+	At time.Time
+}
+
 // Result is everything the engine decided during a replay.
 type Result struct {
 	Decisions []incident.Decision
@@ -42,8 +52,8 @@ type Result struct {
 	// Times holds the simulated time each message was delivered.
 	Times []time.Time
 	// Carried are the decisions recorded for the audit log only, which
-	// the digest or the startup summary carried; see Message.Carrier.
-	Carried []incident.Decision
+	// a digest, a roll-up or the startup summary carried.
+	Carried []CarriedDecision
 	// Incidents are the tracked incidents when the replay ended.
 	Incidents []incident.Incident
 	// End is the simulated time the replay stopped at.
@@ -76,7 +86,8 @@ func Run(
 		ctx context.Context, d incident.Decision, m notification.Message,
 	) {
 		if m.Carrier != "" {
-			result.Carried = append(result.Carried, d)
+			result.Carried = append(result.Carried, CarriedDecision{
+				Decision: d, Carrier: m.Carrier, At: sim.Now()})
 			return
 		}
 		result.Decisions = append(result.Decisions, d)

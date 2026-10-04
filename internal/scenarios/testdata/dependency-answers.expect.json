@@ -1,0 +1,11 @@
+{
+  "name": "dependency-answers",
+  "description": "One Deployment crash-loops on a database error while kwatch's probe of the database succeeds.",
+  "root": "deployment/orders/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "external-endpoint//db.example.com:5432",
+    "node//n1"
+  ]
+}

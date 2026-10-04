@@ -1,6 +1,8 @@
 package explain
 
 import (
+	"time"
+
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 )
@@ -79,6 +81,10 @@ type Cause struct {
 	Contributions []Contribution
 	// Changes are the root's changes inside the causal window.
 	Changes []inventory.Change
+	// Began is when the root went wrong: its earliest unhealthy finding
+	// or change, or for a zone or pool its first broken node. Zero when
+	// unknown.
+	Began time.Time
 }
 
 // Trace records how an area was solved.
@@ -87,6 +93,11 @@ type Trace struct {
 	Candidates []Cause
 	// Rejected are the entities that were considered and dropped.
 	Rejected []Rejection
+	// Checked lists, per failure, the entities upstream of it that were
+	// reached and showed no finding and no change: its node, its image,
+	// the configuration it uses. They were checked and found fine, which
+	// a message says when no cause is found.
+	Checked map[inventory.EntityID][]inventory.EntityID `json:",omitempty"`
 }
 
 // Rejection names an entity that was not chosen and why. Insufficient

@@ -129,7 +129,7 @@ func (p *pipelineBuild) newRunners(
 	// The dynamic source is built first: the typed source asks it whether
 	// the kinds it does not watch itself are synced and verifiable.
 	dynamicSource := kube.NewDynamicSource(
-		dynamicSourceConfig(deps, engine.Submit, maintenance))
+		dynamicSourceConfig(deps, engine.Submit, maintenance, p.model))
 	source, err := kube.NewSource(typedSourceConfig(deps, engine.Submit,
 		maintenance, dynamicSource, sourceDigestKey(p.state)))
 	if err != nil {
@@ -151,6 +151,8 @@ func (p *pipelineBuild) newRunners(
 		Resolver: deps.clients.Resolver,
 		Now:      p.clock.Now,
 		Submit:   engine.Submit,
+		HTTP:     deps.clients.ProbeHTTP,
+		Model:    p.model,
 	})
 	runners := []func(context.Context){
 		source.Run, stats.Run, dynamicSource.Run, prober.Run,

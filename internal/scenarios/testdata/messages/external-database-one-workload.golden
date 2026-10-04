@@ -1,4 +1,4 @@
 10:04:15 settled
-🟠 builder in reports (prod-eu-1) keeps crashing, and I couldn't find an outside cause. It fails with "dial tcp db.example.com:5432: connect: connection refused". To read the output of the last crash, run kubectl logs builder-709322f4-a -c app -n reports --previous
-🟠 builder in reports (prod-eu-1) keeps crashing, and I couldn't find an outside cause.
+🟠 builder in reports (prod-eu-1) keeps crashing. Its node is healthy and unchanged, so nothing outside it explains this. It fails with "dial tcp db.example.com:5432: connect: connection refused". To read the output of the last crash, run kubectl logs builder-709322f4-a -c app -n reports --previous
+🟠 builder in reports (prod-eu-1) keeps crashing.
 

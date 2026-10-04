@@ -50,6 +50,9 @@ func (NodeSchema) Describe(obj any) (Description, bool) {
 			node.Labels[corev1.LabelInstanceTypeStable]),
 	}
 	attrs[AttrDeleting] = inventory.Bool(node.DeletionTimestamp != nil)
+	if !node.CreationTimestamp.IsZero() {
+		attrs[AttrCreated] = inventory.Time(node.CreationTimestamp.Time)
+	}
 	setMilli(attrs, AttrCPUAllocatable, node.Status.Allocatable.Cpu())
 	setQuantity(attrs, AttrMemoryAllocatable,
 		node.Status.Allocatable.Memory())

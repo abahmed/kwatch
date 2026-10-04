@@ -33,6 +33,13 @@ const (
 	AttrEphemeralUsed  = "ephemeral.used.bytes"
 	AttrNetErrorRate   = "network.errors.per.second"
 	AttrRuntimeErrRate = "runtime.errors.per.second"
+	// AttrPLEGRelistMS is the kubelet's mean pod lifecycle relist time
+	// since the previous poll; a slow relist means a kubelet that falls
+	// behind its pods.
+	AttrPLEGRelistMS = "kubelet.pleg.relist.ms"
+	// AttrEvictionRate is pods the kubelet evicted per second since the
+	// previous poll.
+	AttrEvictionRate   = "kubelet.evictions.per.second"
 	statsConcurrency   = 8
 	statsRequestBudget = 10 * time.Second
 )
@@ -208,21 +215,46 @@ func (p *StatsPoller) kubeletMetrics(
 		}
 	}
 	if body, err := p.read(ctx, node, "metrics", maxMetricsBytes); err == nil {
-		if total, ok := sumMetric(body,
-			"kubelet_runtime_operations_errors_total"); ok {
-			if rate, ok := p.counters.rate("runtime/"+node.Name, now,
-				total); ok {
-				observations = append(observations, inventory.Observation{
-					Kind: inventory.Observed, Source: runtimeSource, At: now,
-					Entity: node,
-					Attributes: map[string]inventory.Value{
-						AttrRuntimeErrRate: inventory.Number(rate),
-					},
-				})
-			}
+		if attrs := p.kubeletHealth(node, body, now); len(attrs) > 0 {
+			observations = append(observations, inventory.Observation{
+				Kind: inventory.Observed, Source: runtimeSource, At: now,
+				Entity: node, Attributes: attrs,
+			})
 		}
 	}
 	return observations
+}
+
+// kubeletHealth reads the kubelet's own counters into rates since the
+// previous poll: runtime errors, pod lifecycle relist time, evictions.
+func (p *StatsPoller) kubeletHealth(
+	node inventory.EntityID, body []byte, now time.Time,
+) map[string]inventory.Value {
+	attrs := map[string]inventory.Value{}
+	if total, ok := sumMetric(body,
+		"kubelet_runtime_operations_errors_total"); ok {
+		if rate, ok := p.counters.rate("runtime/"+node.Name, now,
+			total); ok {
+			attrs[AttrRuntimeErrRate] = inventory.Number(rate)
+		}
+	}
+	if sum, ok1 := sumMetric(body,
+		"kubelet_pleg_relist_duration_seconds_sum"); ok1 {
+		if count, ok2 := sumMetric(body,
+			"kubelet_pleg_relist_duration_seconds_count"); ok2 {
+			if mean, ok := p.counters.meanRate("pleg/"+node.Name, now,
+				sum, count); ok {
+				attrs[AttrPLEGRelistMS] = inventory.Number(mean * 1000)
+			}
+		}
+	}
+	if total, ok := sumMetric(body, "kubelet_evictions"); ok {
+		if rate, ok := p.counters.rate("evictions/"+node.Name, now,
+			total); ok {
+			attrs[AttrEvictionRate] = inventory.Number(rate)
+		}
+	}
+	return attrs
 }
 
 // read reads one kubelet endpoint, refusing a body larger than limit

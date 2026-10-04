@@ -14,6 +14,7 @@ activeProbeMonitor.timeoutSeconds|Monitors|Timeout for each active probe.|active
 activeProbeMonitor.failureThreshold|Monitors|Consecutive probe failures before alerting.|active|
 activeProbeMonitor.autoServices|Monitors|Probe discoverable Service ports automatically; opt in to avoid unexpected traffic.|active|
 activeProbeMonitor.excludeNamespaces|Monitors|Namespaces automatic Service probing skips, for default-deny ingress that does not admit kwatch.|active|
+activeProbeMonitor.autoDependencies|Monitors|Probe the endpoints outside the cluster that pod environments name, over TCP; a refused dependency explains its callers.|active|
 activeProbeMonitor.http|Monitors|JSON array of HTTP probe targets with optional paths, headers, and latency limits.|active|
 activeProbeMonitor.tcp|Monitors|JSON array of TCP probe targets.|active|
 activeProbeMonitor.dns|Monitors|JSON array of DNS probe targets.|active|

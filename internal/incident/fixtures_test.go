@@ -23,6 +23,10 @@ type stubExplainer struct {
 	unverified map[inventory.EntityID][]string
 	// rejected are the candidates dropped for a failure's area.
 	rejected map[inventory.EntityID][]explain.Rejection
+	// checked are the healthy upstream entities of a failure.
+	checked map[inventory.EntityID][]inventory.EntityID
+	// alternatives are the other causes weighed for a failure.
+	alternatives map[inventory.EntityID][]explain.Cause
 	// last is the snapshot of the latest Solve.
 	last explain.Snapshot
 }
@@ -41,6 +45,11 @@ func (e *stubExplainer) Solve(
 		area := explain.Area{Failures: []inventory.EntityID{id},
 			Unverified: e.unverified[id],
 			Trace:      explain.Trace{Rejected: e.rejected[id]}}
+		if ids, ok := e.checked[id]; ok {
+			area.Trace.Checked = map[inventory.EntityID][]inventory.EntityID{
+				id: ids}
+		}
+		area.Alternatives = e.alternatives[id]
 		if c, ok := e.causes[id]; ok {
 			c.Covers = []inventory.EntityID{id}
 			area.Causes = []explain.Cause{c}

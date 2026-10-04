@@ -148,6 +148,7 @@ var nodeModes = map[string]Mode{
 	reasons.NodePSIHigh:                   ModePressureStall,
 	reasons.NodeNetworkErrors:             ModeNetworkErrors,
 	reasons.NodeRuntimeErrors:             ModeRuntimeErrors,
+	reasons.NodeMemoryOvercommitted:       ModeMemoryOvercommitted,
 }
 
 var workloadModes = map[string]Mode{
@@ -178,6 +179,21 @@ var workloadModes = map[string]Mode{
 	reasons.CronJobNotScheduled:          ModeNotScheduling,
 	reasons.CronJobInvalidSchedule:       ModeInvalidSchedule,
 	reasons.PdbViolation:                 ModeDisruptionBudget,
+	reasons.ImageDigestDrift:             ModeImageDrift,
+	reasons.LeaseStale:                   ModeLeaseStale,
+	reasons.APIServerErrors:              ModeAPIServerErrors,
+	reasons.CoreDNSServfail:              ModeDNSServfail,
+	reasons.NodePLEGSlow:                 ModePLEGSlow,
+	reasons.NodeEvicting:                 ModeEvicting,
+	reasons.ServiceUnused:                ModeUnused,
+	reasons.ClaimUnused:                  ModeUnused,
+	reasons.RiskPrefix:                   ModeRisk,
+	reasons.RiskNoReadinessProbe:         ModeRiskNoReadinessProbe,
+	reasons.RiskNoMemoryLimit:            ModeRiskNoMemoryLimit,
+	reasons.RiskMutableImageTag:          ModeRiskMutableImageTag,
+	reasons.RiskSingleReplica:            ModeRiskSingleReplica,
+	reasons.RiskSingleNode:               ModeRiskSingleNode,
+	reasons.RiskPrivileged:               ModeRiskPrivileged,
 }
 
 var serviceModes = map[string]Mode{
@@ -230,11 +246,13 @@ var storageModes = map[string]Mode{
 }
 
 var genericModes = map[string]Mode{
-	reasons.ConditionFailure:  ModeCondition,
-	reasons.GenerationLagging: ModeNotReconciling,
-	reasons.StuckDeleting:     ModeStuckDeleting,
-	reasons.PhaseFailed:       ModeFailed,
-	reasons.PhasePending:      ModePending,
+	// UnusualEventPrefix is a prefix: the finding sets the mode itself.
+	reasons.UnusualEventPrefix: ModeUnusualEvent,
+	reasons.ConditionFailure:   ModeCondition,
+	reasons.GenerationLagging:  ModeNotReconciling,
+	reasons.StuckDeleting:      ModeStuckDeleting,
+	reasons.PhaseFailed:        ModeFailed,
+	reasons.PhasePending:       ModePending,
 }
 
 var syntheticModes = map[string]Mode{}

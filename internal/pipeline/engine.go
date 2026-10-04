@@ -128,6 +128,7 @@ func NewEngine(deps Dependencies) (*Engine, error) {
 	}
 	e.storage = newPersistence(deps, &e.stats)
 	e.announcer = newAnnouncer(deps, e.storage, &e.stats)
+	e.announcer.advisories = e.activeAdvisories
 	return e, nil
 }
 

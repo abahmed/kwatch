@@ -16,7 +16,10 @@ type AuditEntry struct {
 	Root      string    `json:"root"`
 	Tier      string    `json:"tier,omitempty"`
 	Previous  string    `json:"previous,omitempty"`
-	Name      string    `json:"-"`
+	// Delivery is set when a digest, roll-up or startup summary carried
+	// the decision; such an entry is not a message of its own.
+	Delivery string `json:"delivery,omitempty"`
+	Name     string `json:"-"`
 }
 
 // RootExpectation is the root-cause contract of one scenario. It has the
@@ -49,6 +52,16 @@ type RootScope struct {
 // messageActions are the audit actions that put a message in front of a
 // person; resolved entries close the conversation and are not counted.
 var messageActions = map[string]bool{"create": true, "update": true}
+
+// isMessage reports whether the entry put a message of its own in front
+// of a person: a create or update not carried by a digest, roll-up or
+// startup summary. Paging-only entries still page, so they count.
+func isMessage(entry AuditEntry) bool {
+	if !messageActions[entry.Action] {
+		return false
+	}
+	return entry.Delivery == "" || entry.Delivery == "paging"
+}
 
 // RootVerdict is the evaluated outcome for one expectation.
 type RootVerdict struct {
@@ -113,15 +126,17 @@ func judgeEntries(
 					fmt.Sprintf("incident %s blames %q", entry.Incident, blamed))
 			}
 		}
-		if messageActions[entry.Action] {
+		if isMessage(entry) {
 			total++
 		}
 		if !incidents[entry.Incident] || !messageActions[entry.Action] {
 			continue
 		}
-		verdict.Messages++
 		if entry.Tier != "" {
 			tier = entry.Tier
+		}
+		if isMessage(entry) {
+			verdict.Messages++
 		}
 	}
 	if verdict.Rooted && exp.Tier != "" && tier != exp.Tier {

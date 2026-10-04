@@ -140,7 +140,11 @@ internal failure, or after a gap in monitoring, uses 🟠 and says which period
 went unwatched. When there are problems that were already there at startup,
 one startup summary lists them, page-tier problems included; the paging
 tools and issue trackers below receive each page-tier announcement on its
-own instead, since they never receive summaries. Summaries and plain
+own instead, since they never receive summaries. Problems that start at the
+same moment are announced the same way: two or more announcements made in
+one pass go as one roll-up that names them, each problem then gets its own
+message when it changes or resolves, and the roll-up closes once all of
+them have. Summaries and plain
 notices are information,
 not incidents: PagerDuty, Opsgenie, Squadcast, GoAlert, Zenduty, incident.io,
 iLert and SIGNL4 (paging) and GitHub, GitLab, Gitea, Jira and ClickUp (issue
@@ -440,12 +444,23 @@ heartbeat.
 
 ### 🌐 Active Probes
 
+Besides your own probes, kwatch reads the API server's `/metrics` and the
+cluster DNS pods' metrics port (9153). Both are optional: without access to
+them only those findings are dropped.
+
 Active probes are opt-in and target only endpoints explicitly listed by the
 operator by default. Set `autoServices: true` to probe every advertised
 Service port from inside the kwatch Pod (TCP for all ports, plus HTTP for
 ports whose name starts with `http`). A target must fail
 `failureThreshold` consecutive checks before alerting; it resolves on the
 first successful check.
+
+Set `autoDependencies: true` to probe the dependencies outside the cluster
+that pods are configured to call: kwatch reads host and port from environment
+values that look like a URL or a `host:port` (user names, passwords and paths
+never leave the value) and opens a TCP connection from its own Pod. A
+dependency that refuses connections is then named as the cause of the pods
+that call it, with the probe as proof.
 
 Explicit `http`, `tcp`, and `dns` targets are the recommended low-noise mode.
 `autoServices` is opt-in and probes every advertised Service port; it uses
@@ -459,7 +474,8 @@ response.
 | `activeProbeMonitor.timeoutSeconds` | ⏱️ Timeout for each probe (default: 5) |
 | `activeProbeMonitor.failureThreshold` | 🔁 Consecutive failures before alerting (default: 3) |
 | `activeProbeMonitor.autoServices` | 🔗 Probe discoverable Service ports automatically (default: false) |
-| `activeProbeMonitor.excludeNamespaces` | 🚫 Namespaces `autoServices` skips entirely |
+| `activeProbeMonitor.excludeNamespaces` | 🚫 Namespaces `autoServices` and `autoDependencies` skip entirely |
+| `activeProbeMonitor.autoDependencies` | 🔌 Probe the endpoints outside the cluster that pod environments name, over TCP (default: false) |
 | `activeProbeMonitor.http` | 🌐 Explicit HTTP targets with optional status and latency limits |
 | `activeProbeMonitor.tcp` | 🔌 Explicit TCP targets |
 | `activeProbeMonitor.dns` | 🔎 Explicit DNS targets |
@@ -662,10 +678,29 @@ searchable history of everything it decided. `kwatch-scorecard` reads this log.
 | `auditLog.enabled` | Write one structured JSON entry per incident decision (default: true) |
 | `auditLog.output` | Destination: `stdout` (default) or a file path |
 
+The digest also names, once each, the configuration risks kwatch found: a
+workload with no readiness probe or memory limit, an image tag that can
+change, a single replica, every replica on one node, a privileged container.
+A risk is never an incident on its own; when a failure of that workload shows
+what the risk cost, the failure's message says so.
+
+kwatch also remembers what people have already heard:
+
+- A problem you were told about at least twice over a day (the same failure)
+  goes to the digest when it recurs. Page-tier problems are still paged.
+- A failure that recurs on a regular rhythm (three or more times in a day at
+  steady intervals) is recognised, stated once ("fails every ~40 minutes")
+  and then goes to the digest.
+- An incident that stays open gets one "still open" update per week.
+- A resolve message names what the incident was blamed on.
+- Pods starting on a node younger than ten minutes get five extra minutes
+  before they, or their workload, are reported.
+
 Every decision is recorded when it is made, including the ones people hear
-through another message: `delivery` is `digest` or `startup summary` when the
-decision was held for that message, `paging` when only paging tools and issue
-trackers receive it, and absent for a message of its own.
+through another message: `delivery` is `digest`, `roll-up` or `startup
+summary` when the decision was held for that message, `paging` when only
+paging tools and issue trackers receive it, and absent for a message of its
+own.
 
 File output is append-only. Configure rotation and retention in the container
 runtime or log collector; kwatch does not rename or delete audit files.

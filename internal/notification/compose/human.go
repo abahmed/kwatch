@@ -42,7 +42,8 @@ func plural(n int, unit string) string {
 }
 
 // humanDuration rounds a duration the way a person would say it:
-// "less than a minute", "seven minutes", "about 2 hours", "six days".
+// "less than a minute", "seven minutes", "about 2 hours", "six days",
+// "three weeks".
 func humanDuration(d time.Duration) string {
 	switch {
 	case d < time.Minute:
@@ -51,8 +52,11 @@ func humanDuration(d time.Duration) string {
 		return roughly(d.Minutes(), "minute")
 	case d < 24*time.Hour:
 		return roughly(d.Hours(), "hour")
-	default:
+	case d < 14*24*time.Hour:
 		return roughly(d.Hours()/24, "day")
+	default:
+		// Why: "21 days" reads worse than "three weeks".
+		return roughly(d.Hours()/24/7, "week")
 	}
 }
 

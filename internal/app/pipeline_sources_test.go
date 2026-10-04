@@ -64,7 +64,8 @@ func TestSourceConfigsShareDynamicStateAndMaintenance(t *testing.T) {
 		Enabled: true, Annotation: "kwatch/hold",
 		UntilAnnotation: "kwatch/hold-until",
 	}
-	dynamicCfg := dynamicSourceConfig(deps, nil, maintenance)
+	dynamicCfg := dynamicSourceConfig(deps, nil, maintenance,
+		inventory.NewModel(inventory.Options{}))
 	dynamic := kube.NewDynamicSource(dynamicCfg)
 
 	typed := typedSourceConfig(deps, nil, maintenance, dynamic,

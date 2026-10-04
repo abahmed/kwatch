@@ -115,3 +115,42 @@ func TestStartupResolvedSingularReadsNaturally(t *testing.T) {
 		t.Fatalf("note = %q, want %q", msg.Note, want)
 	}
 }
+
+func TestRollupNamesProblemsLoudestFirst(t *testing.T) {
+	now := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
+
+	msg := Writer{}.Rollup([]incident.Decision{
+		podDecision("quiet", incident.Notify),
+		podDecision("loud", incident.Page),
+	}, now)
+
+	if want := "rollup/20240115T100000.000Z"; msg.Key != want {
+		t.Errorf("Key = %s, want %s", msg.Key, want)
+	}
+	if msg.Title != "kwatch found two new problems at the same time." {
+		t.Errorf("Title = %q", msg.Title)
+	}
+	if msg.Marker != notification.MarkerPage || !msg.IsSummary() {
+		t.Errorf("marker = %q summary=%v", msg.Marker, msg.IsSummary())
+	}
+	if strings.Index(msg.Note, "loud") > strings.Index(msg.Note, "quiet") {
+		t.Errorf("paging problem should come first: %q", msg.Note)
+	}
+	if !strings.HasSuffix(msg.Note, eachOwnMessage) {
+		t.Errorf("roll-up should say each problem gets its own message: %q",
+			msg.Note)
+	}
+}
+
+func TestRollupResolvedClosesTheConversation(t *testing.T) {
+	msg := Writer{}.RollupResolved("rollup/x", 3)
+
+	if msg.Key != "rollup/x" || msg.Revision != 2 ||
+		msg.Status != notification.StatusResolved {
+		t.Errorf("message = %+v", msg)
+	}
+	if msg.Title != "All three problems found at the same time have "+
+		"resolved." {
+		t.Errorf("Title = %q", msg.Title)
+	}
+}

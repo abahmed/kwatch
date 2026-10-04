@@ -120,5 +120,6 @@ func TestMissingReferenceKinds(t *testing.T) {
 	assert.Equal(t, "missing-reference", Missing{}.Name())
 	assert.Equal(t, []inventory.Kind{kube.KindPod}, Missing{}.Kinds())
 	assert.Equal(t, "certificate", Certificate{}.Name())
-	assert.Equal(t, []inventory.Kind{kube.KindSecret}, Certificate{}.Kinds())
+	assert.Equal(t, []inventory.Kind{kube.KindSecret, kube.KindEndpoint},
+		Certificate{}.Kinds())
 }

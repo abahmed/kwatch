@@ -97,6 +97,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 
 | Mode | Health | Reasons | Detectors |
 |:--|:--|:--|:--|
+| APIServer.Errors | varies | `APIServerErrors` | `controlplane` |
 | APIServiceUnavailable | varies | `APIServiceFailure` | `custom` |
 | ActiveProbe | failing | `ActiveProbeFailure` | `active_probe` |
 | ActiveProbe.Latency | varies | `ActiveProbeLatency` | `active_probe` |
@@ -139,6 +140,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | EphemeralStorageHigh | varies | `ContainerEphemeralStorageUsageHigh` | `resources` |
 | Error | varies | `Error` | `container` |
 | Evicted | varies | `Evicted` | `pod` |
+| Evicting | degraded | `NodeEvicting` | `kubelet_health` |
 | Exit.CommandNotFound | varies | `ContainerExitCommandNotFound` | `container_exit` |
 | Exit.Killed | varies | `ContainerExitKilled` | `container_exit` |
 | Exit.NotExecutable | varies | `ContainerExitNotExecutable` | `container_exit` |
@@ -149,6 +151,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Heartbeat.Stale | degraded | `NodeHeartbeatStale` | `node_health` |
 | Hook.PostStart | failing | `PostStartHookError` | `container` |
 | Hook.PreStart | failing | `PreStartHookError` | `container` |
+| ImageDrift | degraded | `ImageDigestDrift` | `image_drift` |
 | ImagePull | failing | `ErrImagePull`, `ImagePullBackOff` | `container` |
 | ImagePull.Inspect | failing | `ImageInspectError` | `container` |
 | ImagePull.InvalidName | failing | `InvalidImageName` | `container` |
@@ -170,9 +173,11 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | JobFailed.Deadline | varies | `JobDeadlineExceeded` | `workload` |
 | Killed | varies | `Killed` | - |
 | Latency.APIServer | degraded | `APIServerLatency` | `controlplane` |
+| LeaseStale | degraded | `LeaseStale` | `lease` |
 | LoadBalancer.SyncFailed | degraded | `LoadBalancerSyncFailed` | `loadbalancer` |
 | LoadBalancerPending | degraded | `LoadBalancerProvisioning` | `network` |
 | MemoryHigh | varies | `ContainerMemoryUsageHigh` | `resources` |
+| MemoryOvercommitted | degraded | `NodeMemoryOvercommitted` | `node_commitment` |
 | MemoryPressure | varies | `MemoryPressure`, `NodeMemoryPressure` | `node` |
 | Missing.ConfigMap | varies | `ProjectedConfigMapMissing` | `config` |
 | Missing.Secret | varies | `ProjectedSecretMissing` | `config` |
@@ -188,6 +193,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | NotScheduling | degraded | `CronJobNotScheduled` | `schedule` |
 | OOMKilled | failing | `OOMKILLED`, `OOMKilled` | `container`, `container_exit` |
 | PIDPressure | varies | `PIDPressure` | `node` |
+| PLEGSlow | degraded | `NodePLEGSlow` | `kubelet_health` |
 | Pending | degraded | `PhasePending`, `PodPending` | `generic`, `pod` |
 | PortMismatch | degraded | `ServicePortMismatch` | `network` |
 | Preempted.Repeatedly | degraded | `PodPreemptedRepeatedly` | `pod_preemption` |
@@ -203,9 +209,17 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Resize.Deferred | varies | `PodResizeDeferred` | `pod_resize` |
 | Resize.Error | varies | `PodResizeError` | `pod_resize` |
 | Resize.Infeasible | varies | `PodResizeInfeasible` | `pod_resize` |
+| Resolution.Servfail | varies | `CoreDNSServfail` | `controlplane` |
 | ResourceCritical | varies | `NodeResourceCritical` | `resources` |
 | ResourceHigh | varies | `NodeResourceHigh` | `resources` |
 | Restarting | degraded | `HighRestartCount` | `container` |
+| Risk | varies | `Risk.` | - |
+| Risk.MutableImageTag | varies | `Risk.MutableImageTag` | `risk` |
+| Risk.NoMemoryLimit | varies | `Risk.NoMemoryLimit` | `risk` |
+| Risk.NoReadinessProbe | varies | `Risk.NoReadinessProbe` | `risk` |
+| Risk.Privileged | varies | `Risk.Privileged` | `risk` |
+| Risk.SingleNode | varies | `Risk.SingleNode` | `risk` |
+| Risk.SingleReplica | varies | `Risk.SingleReplica` | `risk` |
 | Rollout.Stuck | varies | `StatefulSetRolloutStuck` | `rollout` |
 | RolloutStuck | failing | `DeploymentProgressingFalse`, `ProgressDeadlineExceeded` | `workload` |
 | RuntimeErrors | varies | `NodeRuntimeErrors` | `resources` |
@@ -230,6 +244,8 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Unavailable.Etcd | varies | `EtcdUnavailable` | `controlplane` |
 | Unavailable.Scheduler | varies | `SchedulerUnavailable` | `controlplane` |
 | Unschedulable | degraded | `FailedScheduling`, `Unschedulable` | `pod` |
+| Unused | degraded | `ClaimUnused`, `ServiceUnused` | `network`, `storage` |
+| UnusualEvent | varies | `UnusualEvent.` | - |
 | Volume.AttachWaiting | varies | `VolumeAttachWaiting` | `event_storage` |
 | Volume.DetachFailed | degraded | `VolumeDetachFailure` | `quota_attach` |
 | Volume.MapFailed | failing | `FailedMapVolume` | `event`, `event_storage` |

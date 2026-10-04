@@ -1,8 +1,8 @@
-10:02:30 settled
+10:02:45 settled
 🔴 Zone zone-a (prod-eu-1) is failing as a whole: four nodes have not reported for about two minutes. One of its nodes reports "Kubelet stopped posting node status". Two failing workloads all depend on it. To see the object's state and events, run kubectl describe node n1
 🔴 Zone zone-a (prod-eu-1) is failing as a whole: four nodes have not reported for about two minutes.
 
 10:03:55 settled
-🟠 api in shop (prod-eu-1) keeps crashing, and I couldn't find an outside cause. It fails with "panic: assignment to entry in nil map". To read the output of the last crash, run kubectl logs api-ed3e6bad-a -c app -n shop --previous
-🟠 api in shop (prod-eu-1) keeps crashing, and I couldn't find an outside cause.
+🟠 api in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: assignment to entry in nil map". To read the output of the last crash, run kubectl logs api-ed3e6bad-a -c app -n shop --previous
+🟠 api in shop (prod-eu-1) keeps crashing.
 

@@ -38,6 +38,7 @@ func (v *view) virtualHops(id inventory.EntityID) []hop {
 		out = append(out, v.removedNodeHops(id)...)
 		out = append(out, v.helperHops(id)...)
 		out = append(out, v.calledHops(id)...)
+		out = append(out, v.agentHops(id)...)
 	}
 	if v.hasMode(id, createModes) {
 		out = append(out, v.admitHops(id)...)
@@ -63,9 +64,6 @@ func (v *view) virtualHops(id inventory.EntityID) []hop {
 	return append(out, v.controlPlaneHops(id)...)
 }
 
-// dnsServerNames are the Deployments that serve the cluster DNS.
-var dnsServerNames = map[string]bool{"coredns": true, "kube-dns": true}
-
 // dnsServer reports whether a pod serves the cluster DNS: it belongs
 // to the coredns or kube-dns Deployment of kube-system.
 func (v *view) dnsServer(pod inventory.EntityID) bool {
@@ -73,7 +71,7 @@ func (v *view) dnsServer(pod inventory.EntityID) bool {
 		return false
 	}
 	top := rootcause.TopOwner(v.s.Model, pod)
-	return top != pod && dnsServerNames[top.Name]
+	return top != pod && kube.DNSServerNames[top.Name]
 }
 
 // dnsSignalled reports whether any failure's error text shows name
@@ -192,24 +190,38 @@ func (v *view) metricsAPIHops() []hop {
 // schedulingHops lead from an unschedulable pod to the constraint that
 // rejects most nodes, as a virtual "scheduling" entity.
 func (v *view) schedulingHops(pod inventory.EntityID) []hop {
+	reason, ok := v.schedulerVerdict(pod)
+	switch {
+	case !ok:
+		return nil
+	case v.capacityLeft(reason, pod):
+		// The shortage is the node that left, not a reason of its
+		// own: the removed node is the candidate.
+		return nil
+	case volumeConflict(reason) && len(v.claimsOf(pod)) > 0:
+		// The claim, not the scheduler, pins the pod; its mount
+		// relation is the hop (storedHops).
+		return nil
+	}
+	return []hop{{link: LinkSchedules, to: inventory.CoreID(
+		KindScheduling, "", reason)}}
+}
+
+// schedulerVerdict is the most common reason the scheduler gave for
+// not placing the pod, read from its findings' evidence.
+func (v *view) schedulerVerdict(pod inventory.EntityID) (string, bool) {
 	for _, f := range v.s.Findings[pod] {
 		for _, e := range f.Evidence {
 			if e.Label != "scheduler" {
 				continue
 			}
-			blockers, _ := rootcause.ParseSchedulerMessage(e.Value)
-			if len(blockers) > 0 && v.capacityLeft(blockers[0].Reason, pod) {
-				// The shortage is the node that left, not a reason
-				// of its own: the removed node is the candidate.
-				return nil
-			}
-			if len(blockers) > 0 {
-				return []hop{{link: LinkSchedules, to: inventory.CoreID(
-					KindScheduling, "", blockers[0].Reason)}}
+			if blockers, _ := rootcause.ParseSchedulerMessage(
+				e.Value); len(blockers) > 0 {
+				return blockers[0].Reason, true
 			}
 		}
 	}
-	return nil
+	return "", false
 }
 
 // policyHops lead from a pod to the network policies selecting it.
@@ -272,4 +284,31 @@ func (v *view) selected(
 	}
 	v.selects[id] = out
 	return out
+}
+
+// volumeAffinityConflict is the scheduler's wording for a pod whose
+// bound volume lives where the pod cannot run.
+const volumeAffinityConflict = "volume node affinity conflict"
+
+// volumeConflict reports a scheduler reason naming a volume node
+// affinity conflict.
+func volumeConflict(reason string) bool {
+	return strings.Contains(reason, volumeAffinityConflict)
+}
+
+// claimsOf lists the claims a pod mounts.
+func (v *view) claimsOf(pod inventory.EntityID) []inventory.EntityID {
+	return v.s.Model.Related(pod, inventory.Mounts, inventory.Outgoing)
+}
+
+// pinnedClaim reports whether claim pins the effect pod: the scheduler
+// rejected the pod for a volume node affinity conflict and the pod
+// mounts the claim. It is the pseudo mode of the claim for that pod.
+func (v *view) pinnedClaim(claim, effect inventory.EntityID) bool {
+	pod, ok := v.unitOf(effect)
+	if !ok {
+		return false
+	}
+	reason, ok := v.schedulerVerdict(pod)
+	return ok && volumeConflict(reason) && containsID(v.claimsOf(pod), claim)
 }

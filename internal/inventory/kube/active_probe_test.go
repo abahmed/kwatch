@@ -188,3 +188,69 @@ func TestActiveProberLateServiceProbeDoesNotResurrect(t *testing.T) {
 	assert.True(t, model.Exists(endpoint("db")),
 		"configured probe target must still create its endpoint")
 }
+
+// With autoDependencies on, every external endpoint a pod's environment
+// names is dialled once, and the result lands on the endpoint entity.
+func TestActiveProberProbesPodDependencies(t *testing.T) {
+	model := inventory.NewModel(inventory.Options{})
+	db := inventory.CoreID(kube.KindExternalEndpoint, "", "db.example.com:5432")
+	for _, name := range []string{"api-a", "api-b"} {
+		pod := inventory.CoreID(kube.KindPod, "shop", name)
+		_, err := model.Apply(inventory.Observation{
+			Kind: inventory.Observed, Source: kube.ObservationSource,
+			At: fixedTime(), Entity: pod,
+			Attributes: map[string]inventory.Value{},
+		})
+		require.NoError(t, err)
+		_, err = model.Apply(inventory.Observation{
+			Kind: inventory.Related, Source: kube.ObservationSource,
+			At: fixedTime(), Entity: pod, Relation: inventory.Calls,
+			Targets: []inventory.EntityID{db},
+		})
+		require.NoError(t, err)
+	}
+	var dialed []string
+	var mu sync.Mutex
+	refuse := func(_ context.Context, _, address string) (net.Conn, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		dialed = append(dialed, address)
+		return nil, errors.New("connection refused")
+	}
+
+	observations := runActive(t, kube.ActiveProbeConfig{
+		AutoDependencies: true, Model: model,
+		Timeout: 200 * time.Millisecond, Dial: refuse,
+	})
+
+	mu.Lock()
+	assert.Equal(t, []string{"db.example.com:5432"}, dialed)
+	mu.Unlock()
+	require.Contains(t, observations, db)
+	assert.Equal(t, "active-probe-dependency", observations[db].Source)
+	healthy, _ := observations[db].Attributes[kube.AttrHealthy].AsBool()
+	assert.False(t, healthy)
+}
+
+// An HTTPS target records the expiry of the certificate it served, so the
+// certificate check covers what clients see.
+func TestActiveProberRecordsServedCertificateExpiry(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+	defer srv.Close()
+
+	observations := runActive(t, kube.ActiveProbeConfig{
+		Targets:    []kube.ProbeTarget{{Name: "tls", URL: srv.URL}},
+		HTTPClient: srv.Client(), Resolver: fakeResolver{},
+		Interval: time.Minute, FailureThreshold: 2,
+	})
+
+	got := observations[endpoint("tls")]
+	assert.True(t, healthy(t, got))
+	expiry, ok := got.Attributes[kube.AttrCertExpiry]
+	require.True(t, ok, "expiry recorded")
+	at := expiry.AsTime()
+	assert.Equal(t, srv.Certificate().NotAfter.UTC(), at.UTC())
+}

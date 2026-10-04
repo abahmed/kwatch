@@ -2,8 +2,10 @@ package pipeline
 
 import (
 	"context"
+	"sort"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/incident"
 )
 
@@ -46,6 +48,43 @@ func (a *announcer) collectDigest(
 		a.recordCarried(ctx, now, d, "digest")
 	}
 	return rest, a.flushDigest(ctx, now)
+}
+
+// maxMentionedRisks bounds the memory of named risks; past it the
+// digest may name old risks again, which costs one line each. Risks
+// ride along a digest that goes out anyway: they never cost a message
+// of their own.
+const maxMentionedRisks = 4096
+
+// pendingRisks lists the active configuration risks no digest has
+// named yet, in a stable order.
+func (a *announcer) pendingRisks() []detection.Finding {
+	if a.advisories == nil {
+		return nil
+	}
+	var out []detection.Finding
+	for _, f := range a.advisories() {
+		if !a.mentionedRisks[f.Key()] {
+			out = append(out, f)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Entity != out[j].Entity {
+			return out[i].Entity.String() < out[j].Entity.String()
+		}
+		return out[i].Reason < out[j].Reason
+	})
+	return out
+}
+
+// mentionRisks remembers that a digest named these risks.
+func (a *announcer) mentionRisks(risks []detection.Finding) {
+	if len(a.mentionedRisks) > maxMentionedRisks {
+		a.mentionedRisks = map[detection.Key]bool{}
+	}
+	for _, f := range risks {
+		a.mentionedRisks[f.Key()] = true
+	}
 }
 
 // recordCarried hands a held decision to the sink for the audit log only:
@@ -117,11 +156,13 @@ func (a *announcer) flushDigest(ctx context.Context, now time.Time) bool {
 	}
 	sent := false
 	if len(g.opened)+len(g.resolved) > 0 {
-		msg := a.messages.Digest(g.opened, g.resolved, now)
+		risks := a.pendingRisks()
+		msg := a.messages.Digest(g.opened, g.resolved, risks, now)
 		a.sink(ctx, incident.Decision{Reason: "digest"}, msg)
 		for _, d := range g.opened {
 			a.incidents.ReleaseAnnouncement(d.Incident.ID)
 		}
+		a.mentionRisks(risks)
 		sent = true
 	}
 	*g = lowDigest{}

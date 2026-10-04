@@ -1,6 +1,7 @@
 package incident
 
 import (
+	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -25,6 +26,22 @@ var digestReasons = map[string]bool{
 	// A budget selecting no pods protects nothing, but on a cluster that
 	// scales workloads to zero it is the normal night.
 	reasons.PdbSelectsNothing: true,
+	// An overcommitted node is a risk until something is killed; the
+	// kill is the incident, and this is its cause.
+	reasons.NodeMemoryOvercommitted: true,
+	// Evictions are the kubelet doing its job; the evicted pods are
+	// the incidents. Idle objects are clutter, not failures.
+	reasons.NodeEvicting:  true,
+	reasons.ServiceUnused: true,
+	reasons.ClaimUnused:   true,
+}
+
+// digestReason reports whether a finding reason waits for the digest.
+// Repeated unknown Warning events are worth a look, not an interruption.
+func digestReason(reason string) bool {
+	return digestReasons[reason] ||
+		strings.HasPrefix(reason, reasons.UnusualEventPrefix) ||
+		strings.HasPrefix(reason, reasons.RiskPrefix)
 }
 
 // A routine incident happens at about the same time of day, again and
@@ -47,7 +64,7 @@ func tier(p *Incident) Tier {
 	digestOnly := true
 	for _, s := range p.Members {
 		worst = max(worst, s.Severity)
-		if !digestReasons[s.Reason] {
+		if !digestReason(s.Reason) {
 			digestOnly = false
 		}
 	}
@@ -59,6 +76,10 @@ func tier(p *Incident) Tier {
 	case routine(p):
 		// Happens at the same time every day and resolves on its own:
 		// learned normal, reported in the digest.
+		return Digest
+	case p.Tier != Page && (Known(*p, p.Opened) || hasRhythm(p)):
+		// Heard about for a day, or failing on a regular rhythm: not
+		// news any more. The digest keeps counting it.
 		return Digest
 	case digestOnly || worst <= detection.Info:
 		// Planned disruption or informational only.
@@ -130,4 +151,10 @@ func timeOfDayDistance(a, b time.Time) time.Duration {
 		diff = -diff
 	}
 	return min(diff, day-diff)
+}
+
+// hasRhythm reports whether the incident's occurrences show a rhythm.
+func hasRhythm(p *Incident) bool {
+	_, ok := Rhythm(*p, p.Opened)
+	return ok
 }

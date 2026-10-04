@@ -1,6 +1,7 @@
 package detectors
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -38,7 +39,7 @@ func (ClusterService) Detect(
 		return nil
 	}
 	if ok, _ := healthy.Value.AsBool(); ok {
-		return apiLatency(ctx, e)
+		return append(apiLatency(ctx, e), errorRates(ctx, e)...)
 	}
 	if !sustained(ctx, "api-unhealthy", healthy.Since, DefaultProbeFailing) {
 		return nil
@@ -90,5 +91,62 @@ func apiLatency(ctx detection.Context, e inventory.Entity) []detection.Finding {
 		Reason: reasons.APIServerLatency, Severity: detection.Warning,
 		Since:   since,
 		Summary: "Kubernetes API is slow to respond",
+	}}
+}
+
+// Error-rate thresholds for the API server and the cluster DNS, read
+// from their own metrics by the prober. A share needs a floor of
+// traffic: one failing request out of three is not a rate.
+const (
+	apiErrorShare    = 5.0
+	dnsServfailShare = 10.0
+	minRequestRate   = 1.0
+)
+
+// errorRates reports an API server answering many requests with 5xx,
+// or a cluster DNS failing many lookups, while both still answer the
+// probe: degraded, not down.
+func errorRates(
+	ctx detection.Context, e inventory.Entity,
+) []detection.Finding {
+	switch e.ID {
+	case kube.APIServer:
+		return shareFinding(ctx, e, "api-errors", kube.AttrAPIErrorRate,
+			kube.AttrAPIRequestRate, apiErrorShare, reasons.APIServerErrors,
+			"Kubernetes API answers %s of requests with server errors")
+	case kube.ClusterDNS:
+		return shareFinding(ctx, e, "dns-servfail", kube.AttrDNSServfailRate,
+			kube.AttrDNSRequestRate, dnsServfailShare, reasons.CoreDNSServfail,
+			"Cluster DNS fails %s of lookups with SERVFAIL")
+	}
+	return nil
+}
+
+// shareFinding reports failures as a share of requests above threshold,
+// sustained for DefaultProbeFailing. summary takes the share.
+func shareFinding(
+	ctx detection.Context, e inventory.Entity, key, failedAttr,
+	totalAttr string, threshold float64, reason, summary string,
+) []detection.Finding {
+	failed, ok1 := number(e, failedAttr)
+	total, ok2 := number(e, totalAttr)
+	if !ok1 || !ok2 || total < minRequestRate {
+		return nil
+	}
+	share := 100 * failed / total
+	if share < threshold {
+		return nil
+	}
+	since := ctx.Onset(key, valueSince(e, failedAttr))
+	if !sustained(ctx, key, since, DefaultProbeFailing) {
+		return nil
+	}
+	return []detection.Finding{{
+		Reason: reason, Severity: detection.Warning, Since: since,
+		Summary: fmt.Sprintf(summary, percentText(share)),
+		Evidence: []detection.Evidence{
+			{Label: "failures per second", Value: fmt.Sprintf("%.1f", failed)},
+			{Label: "requests per second", Value: fmt.Sprintf("%.1f", total)},
+		},
 	}}
 }

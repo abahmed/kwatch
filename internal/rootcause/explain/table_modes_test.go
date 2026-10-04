@@ -13,7 +13,8 @@ var pseudoModes = []detection.Mode{
 	ModeMissing, ModeMembersFailing, ModeRejectsNodes, ModeResolution,
 	ModeMetricsUnserved, ModeWebhookTimeout, ModeWebhookCallFailed,
 	ModeEndpointFailing, ModeSharedSignature, ModeMemoryTooLow,
-	ModeProbePortMismatch, ModeStartupBudgetShort,
+	ModeProbePortMismatch, ModeStartupBudgetShort, ModeSharedFactor,
+	ModeVolumePinned,
 	pullAuth, pullRateLimit, pullServer, pullTLS, pullNetwork, pullStatus,
 	pullUnexplained,
 }

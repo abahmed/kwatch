@@ -56,6 +56,14 @@ var workloadConfigRowCases = []rowCase{
 			f.fail(pod, "NotReady", degradedH, 2, "")
 			return pod
 		}},
+	{row: "image-drift", want: "deployment/shop/api",
+		build: func(f *fixture) inventory.EntityID {
+			pods := f.workload("shop", "api", 2)
+			f.fail(inventory.CoreID(kube.KindDeployment, "shop", "api"),
+				"ImageDrift", degradedH, 1, "")
+			f.fail(containerOf(pods[0]), "CrashLoop", failingH, 2, "")
+			return containerOf(pods[0])
+		}},
 }
 
 // observe sets attributes of id, creating it if needed.

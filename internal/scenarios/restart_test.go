@@ -53,7 +53,7 @@ func TestWarmRestartMidIncidentAnnouncesOnce(t *testing.T) {
 	resolved := 0
 	for _, d := range secondRun.Decisions {
 		switch {
-		case d.Reason == "startup summary":
+		case d.Reason == "startup summary", d.Reason == "roll-up":
 			reannounced++
 		case d.Action == incident.Announce:
 			reannounced++

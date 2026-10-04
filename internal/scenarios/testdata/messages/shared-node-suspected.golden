@@ -1,0 +1,4 @@
+10:03:55 settled
+🟠 orders in shop (prod-eu-1) keeps crashing, possibly because node n1 is what the failing workloads have in common, though it looks healthy. It fails with "fatal: orders worker lost its socket". All of its dependents are failing. cart and payments are affected as well. To check the node's conditions and recent events, run kubectl describe node n1
+🟠 orders in shop (prod-eu-1) keeps crashing, possibly because node n1 is what the failing workloads have in common, though it looks healthy.
+

@@ -98,6 +98,18 @@ func (c *candidate) bestMatch() coverage {
 type candidateSet struct {
 	byID     map[inventory.EntityID]*candidate
 	rejected map[inventory.EntityID]rejectNote
+	// checked lists, per effect, the upstream entities that showed
+	// nothing wrong; see Trace.Checked.
+	checked map[inventory.EntityID][]inventory.EntityID
+}
+
+// noteChecked records that id, upstream of effect, was reached and
+// showed no finding and no change.
+func (cs *candidateSet) noteChecked(effect, id inventory.EntityID) {
+	if cs.checked == nil {
+		cs.checked = map[inventory.EntityID][]inventory.EntityID{}
+	}
+	cs.checked[effect] = append(cs.checked[effect], id)
 }
 
 // rejectNote says why an entity was dropped, and for which failure.
@@ -155,6 +167,7 @@ func (v *view) candidates(failures []inventory.EntityID) *candidateSet {
 		v.addSelf(cs, effect)
 	}
 	applyMinCovered(cs)
+	v.applySharedFactorWindow(cs)
 	v.applyMinWorkloads(cs)
 	// After pruning, so a summary is never covered through an effect
 	// that was dropped.
@@ -173,7 +186,13 @@ func (v *view) addUpstream(cs *candidateSet, effect inventory.EntityID) {
 	for _, r := range reached {
 		cause := v.causeState(r.id, effect, r.link)
 		if len(cause.modes) == 0 {
-			continue
+			// Nothing is wrong with it; it is still what several
+			// failing workloads may have in common.
+			cs.noteChecked(effect, r.id)
+			cause = v.sharedFactorState(r.id)
+			if len(cause.modes) == 0 {
+				continue
+			}
 		}
 		if v.throughHealthyNode(r) {
 			cs.reject(r.id, effect, "the node between it and "+
@@ -194,6 +213,9 @@ func (v *view) addUpstream(cs *candidateSet, effect inventory.EntityID) {
 			cs.reject(r.id, effect, "kwatch cannot see "+scope)
 			continue
 		}
+		// A part of the failure's own workload (an init container, a
+		// sidecar) is not timed against it: the pod and its container
+		// date their findings differently.
 		cs.add(r.id, effect, coverage{match: match, link: r.link,
 			chain: r.chain})
 	}

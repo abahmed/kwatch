@@ -5,6 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/abahmed/kwatch/internal/inventory"
 )
 
 func planned(group, resource string, tier int) plannedResource {
@@ -26,7 +28,7 @@ func TestApplyBudgetKeepsPriorityOrder(t *testing.T) {
 		planned(crdResource.Group, crdResource.Resource, tierAnchor),
 	}
 
-	kept, skipped := applyBudget(resources, 5, notRunning)
+	kept, skipped := applyBudget(resources, 5, notRunning, nil)
 
 	assert.Equal(t, []string{"zeta.example.com"}, groups(skipped))
 	assert.Equal(t, []string{
@@ -46,7 +48,7 @@ func TestApplyBudgetKeepsRunningTypes(t *testing.T) {
 		return gvr.Group == "zeta.example.com"
 	}
 
-	kept, skipped := applyBudget(resources, 2, running)
+	kept, skipped := applyBudget(resources, 2, running, nil)
 
 	assert.Equal(t, []string{crdResource.Group, "zeta.example.com"},
 		groups(kept), "a new type must not push out a running one")
@@ -55,7 +57,8 @@ func TestApplyBudgetKeepsRunningTypes(t *testing.T) {
 
 func TestApplyBudgetWithinBudgetSkipsNothing(t *testing.T) {
 	kept, skipped := applyBudget(
-		[]plannedResource{planned("a", "b", tierCustom)}, 5, notRunning)
+		[]plannedResource{planned("a", "b", tierCustom)}, 5, notRunning,
+		nil)
 	assert.Len(t, kept, 1)
 	assert.Empty(t, skipped)
 }
@@ -159,4 +162,21 @@ func TestAuditedDynamicResourcesCoverMetadataKinds(t *testing.T) {
 	}
 	assert.True(t, audited[Resource{Group: crdResource.Group,
 		Name: crdResource.Resource}])
+}
+
+// Over the budget, a kind whose objects had Warning events recently is
+// watched before a kind nothing complained about.
+func TestApplyBudgetFavoursNotedKinds(t *testing.T) {
+	quiet := planned("a.example", "quiets", tierCustom)
+	quiet.kind = "Quiet"
+	noisy := planned("b.example", "noisies", tierCustom)
+	noisy.kind = "Noisy"
+	noted := map[inventory.Kind]bool{KindFor("Noisy"): true}
+
+	kept, skipped := applyBudget([]plannedResource{quiet, noisy}, 1,
+		notRunning, noted)
+
+	assert.Len(t, kept, 1)
+	assert.Equal(t, "Noisy", kept[0].kind)
+	assert.Len(t, skipped, 1)
 }

@@ -32,6 +32,7 @@ func Explain(s Snapshot) Explanation {
 // read which failures they explained.
 func (v *view) rank(cs *candidateSet) []scored {
 	v.rejected = cs.rejected
+	v.checked = cs.checked
 	v.explainedBy = map[inventory.EntityID]bool{}
 	var ranked, selves []scored
 	for _, id := range sortedKeys(cs.byID) {
@@ -152,11 +153,12 @@ func setCover(
 	for id := range inArea {
 		uncovered[id] = true
 	}
+	specific := specificEffects(viable)
 	var chosen []scored
 	for len(uncovered) > 0 {
 		best, gain := -1, 0.0
 		for i, s := range viable {
-			g := float64(countCovered(s, uncovered)) * s.raw
+			g := float64(coverGain(s, uncovered, specific)) * s.raw
 			if g > gain || (g == gain && best >= 0 && g > 0 &&
 				better(s, viable[best])) {
 				best, gain = i, g
@@ -166,9 +168,7 @@ func setCover(
 			break
 		}
 		chosen = append(chosen, viable[best])
-		for effect := range viable[best].c.covers {
-			delete(uncovered, effect)
-		}
+		claimCovered(viable[best], uncovered, specific)
 	}
 	return chosen, sortedKeys(uncovered)
 }

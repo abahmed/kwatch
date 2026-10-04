@@ -106,12 +106,7 @@ func (m *Manager) deadline(p *Incident, now time.Time) (time.Time, bool) {
 		}
 		return p.Opened.Add(m.settleFor(p)), true
 	case Open:
-		if len(p.Members) == 0 {
-			return m.graceDeadline(p, now)
-		}
-		if p.revised {
-			return p.revisedAt.Add(m.cfg.ReviseSettle), true
-		}
+		return m.openDeadline(p, now)
 	case Recovering:
 		if len(p.Members) == 0 {
 			hold := m.cfg.hold(len(recent(p.Cycles, now, m.cfg.FlapWindow)))
@@ -126,6 +121,24 @@ func (m *Manager) deadline(p *Incident, now time.Time) (time.Time, bool) {
 		return p.Resolved.Add(m.cfg.Remember + time.Nanosecond), true
 	}
 	return time.Time{}, false
+}
+
+// openDeadline is the next timer of an open incident: its revision
+// settle, or else its weekly reminder.
+func (m *Manager) openDeadline(
+	p *Incident, now time.Time,
+) (time.Time, bool) {
+	switch {
+	case len(p.Members) == 0:
+		return m.graceDeadline(p, now)
+	case p.revised:
+		return p.revisedAt.Add(m.cfg.ReviseSettle), true
+	}
+	last := p.Reminded
+	if last.IsZero() {
+		last = p.Announced
+	}
+	return last.Add(RemindEvery), !last.IsZero()
 }
 
 func (m *Manager) graceDeadline(
@@ -226,9 +239,23 @@ func (m *Manager) open(p *Incident, now time.Time) (Decision, bool) {
 		return m.decide(p, Update, ReasonCauseRevised), true
 	}
 	if fingerprint(p) == p.Digest {
+		if m.reminderDue(p, now) {
+			p.Reminded = now
+			return m.decide(p, Update, ReasonReminder), true
+		}
 		return Decision{}, false
 	}
-	return m.decide(p, Update, "material change"), true
+	return m.decide(p, Update, ReasonMaterialChange), true
+}
+
+// reminderDue reports an announced incident open for another
+// RemindEvery since its announcement or its last reminder.
+func (m *Manager) reminderDue(p *Incident, now time.Time) bool {
+	last := p.Reminded
+	if last.IsZero() {
+		last = p.Announced
+	}
+	return !last.IsZero() && now.Sub(last) >= RemindEvery
 }
 
 func (m *Manager) recovering(p *Incident, now time.Time) (Decision, bool) {
@@ -284,6 +311,7 @@ func (m *Manager) resolve(p *Incident, now time.Time, why string) Decision {
 func (m *Manager) decide(p *Incident, action Action, why string) Decision {
 	p.Revision++
 	p.Digest = fingerprint(p)
+	p.movedTo = nil
 	d := Decision{Action: action, Incident: p.Snapshot(), Reason: why}
 	p.sent.decided(p.Scope != ScopeOut && !p.Held)
 	return d

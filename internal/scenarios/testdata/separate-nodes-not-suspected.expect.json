@@ -1,0 +1,17 @@
+{
+  "name": "separate-nodes-not-suspected",
+  "description": "Three Deployments crash-loop at the same time, each on a different node; nothing is shared.",
+  "root": "deployment/shop/orders",
+  "otherRoots": [
+    "deployment/shop/payments",
+    "deployment/shop/cart"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "node//n3",
+    "zone//zone-a"
+  ]
+}

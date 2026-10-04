@@ -72,8 +72,24 @@ func TestUnclearCauseIsNotRepeatedOrContradicted(t *testing.T) {
 	}
 	text := notification.Text(Writer{}.Write(announce(noRootFinding),
 		at(6, 0)))
-	if !strings.Contains(text, "couldn't find an outside cause") {
-		t.Errorf("lead must still say no outside cause was found:\n%s",
+	if !strings.Contains(text, "Nothing outside it explains this.") {
+		t.Errorf("the note must still say nothing outside explains it:\n%s",
 			text)
+	}
+}
+
+// Without a cause, the note says what was checked and found healthy
+// instead of saying no cause was found.
+func TestCheckedSentencesNameWhatWasHealthy(t *testing.T) {
+	p := unclearIncident(false)
+	p.CauseUnclear = false
+	p.Checked = []string{"configmap", "image", "node", "secret", "zone"}
+
+	text := notification.Text(Writer{}.Write(announce(p), at(6, 0)))
+
+	want := "Its configuration, image and node are healthy and " +
+		"unchanged, so nothing outside it explains this."
+	if !strings.Contains(text, want) {
+		t.Fatalf("note = %s\nwant %q", text, want)
 	}
 }

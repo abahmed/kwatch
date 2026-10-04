@@ -38,5 +38,9 @@ func Default() []detection.Detector {
 		NodeHealth{},
 		VersionSkew{},
 		ActiveProbe{},
+		NodeCommitment{},
+		Risk{},
+		ImageDrift{},
+		Lease{},
 	}
 }

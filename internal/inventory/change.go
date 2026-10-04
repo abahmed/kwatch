@@ -23,9 +23,13 @@ type Change struct {
 	// Revision is the object's revision after the change: a Deployment
 	// revision, a controller revision, a generation or a data hash.
 	Revision string
-	Created  bool
-	Deleted  bool
-	Fields   []FieldChange
+	// Cause is the kubernetes.io/change-cause annotation after the
+	// change, when the person or tool that made it recorded one:
+	// "bump api to 2.4 for the payments fix". Empty when unset.
+	Cause   string `json:",omitempty"`
+	Created bool
+	Deleted bool
+	Fields  []FieldChange
 }
 
 // ReceivedAt is when kwatch received the change, falling back to At for

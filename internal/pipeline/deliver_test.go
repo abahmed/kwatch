@@ -268,3 +268,58 @@ func TestEngineInvestigationCarriesDeadline(t *testing.T) {
 		t.Fatal("an investigation must be allowed the whole output wait")
 	}
 }
+
+// A material change is investigated again when its evidence is old, and
+// the update waits for the fresh result like an announcement does.
+func TestEngineReinvestigatesMaterialChange(t *testing.T) {
+	clock := &fakeClock{now: time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)}
+	g := newGatedInvestigator()
+	close(g.release)
+	sink := &sinkLog{}
+	e := investigatingEngine(t, clock, g, sink)
+	startPool(t, e)
+	e.announcer.deliver(context.Background(), clock.now,
+		[]incident.Decision{announce("a")})
+	e.announcer.attachOutput(context.Background(), receive(t, e))
+	update := incident.Decision{Action: incident.Update,
+		Reason:   incident.ReasonMaterialChange,
+		Incident: incident.Incident{ID: "a", Revision: 2}}
+
+	later := clock.now.Add(reinvestigateAfter + time.Second)
+	e.announcer.deliver(context.Background(), later,
+		[]incident.Decision{update})
+
+	if len(sink.all()) != 1 {
+		t.Fatalf("the update must wait for the new investigation: %+v",
+			sink.all())
+	}
+	e.announcer.attachOutput(context.Background(), receive(t, e))
+	got := sink.all()
+	if len(got) != 2 || got[1].Action != incident.Update {
+		t.Fatalf("delivered %+v, want the update after its evidence", got)
+	}
+	if e.announcer.evidence["a"].seq != 2 {
+		t.Fatalf("seq = %d, want a second investigation",
+			e.announcer.evidence["a"].seq)
+	}
+}
+
+// A cause revision carries its cause already and is sent at once.
+func TestEngineDoesNotHoldCauseRevisions(t *testing.T) {
+	clock := &fakeClock{now: time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)}
+	g := newGatedInvestigator()
+	sink := &sinkLog{}
+	e := investigatingEngine(t, clock, g, sink)
+	startPool(t, e)
+	revised := incident.Decision{Action: incident.Update,
+		Reason:   incident.ReasonCauseRevised,
+		Incident: incident.Incident{ID: "a", Revision: 2}}
+
+	e.announcer.deliver(context.Background(), clock.now,
+		[]incident.Decision{revised})
+
+	if len(sink.all()) != 1 {
+		t.Fatalf("a cause revision must go at once: %+v", sink.all())
+	}
+	close(g.release)
+}

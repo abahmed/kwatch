@@ -56,6 +56,8 @@ func SourceAccess() []Access {
 		// Investigation reads a short log excerpt for announcements.
 		Access{Resource: Resource{Name: "pods/log"}, Verb: "get"},
 		Access{NonResourceURL: "/readyz", Verb: "get"},
+		// The prober reads the API server's own metrics; optional.
+		Access{NonResourceURL: "/metrics", Verb: "get"},
 		Access{Resource: Resource{Group: "coordination.k8s.io",
 			Name: "leases"}, Verb: "get", Namespace: "kube-system"},
 		// Restart evidence reads the node the previous kwatch Pod ran on.

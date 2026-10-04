@@ -93,9 +93,29 @@ func (v *view) score(c *candidate) scored {
 		return abs(out.contributions[i].Weight) >
 			abs(out.contributions[j].Weight)
 	})
+	if sharedFactorOnly(c) {
+		total = min(total, SharedFactorMaxConfidence)
+	}
 	out.raw = total
 	out.confidence = min(max(total, 0), 1)
 	return out
+}
+
+// sharedFactorOnly reports a candidate covering its effects only as
+// what they have in common (ModeSharedFactor), with no finding or
+// change of its own to blame.
+func sharedFactorOnly(c *candidate) bool {
+	shared := false
+	for _, how := range c.covers {
+		if how.derived || how.match.row.Name == selfRow.Name {
+			continue
+		}
+		if how.match.causeMode != ModeSharedFactor {
+			return false
+		}
+		shared = true
+	}
+	return shared
 }
 
 // priorOf averages the priors of the rows that cover other entities,

@@ -1,0 +1,12 @@
+{
+  "name": "claim-pins-pod",
+  "description": "A pod cannot be scheduled because its bound claim's volume lives in a zone with no node for it.",
+  "root": "persistentvolumeclaim/streaming/data-kafka-0",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n2",
+    "deployment/streaming/kafka",
+    "scheduling//had volume node affinity conflict"
+  ]
+}

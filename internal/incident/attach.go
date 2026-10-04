@@ -1,6 +1,8 @@
 package incident
 
 import (
+	"slices"
+	"strconv"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -21,6 +23,12 @@ type placement struct {
 	root       inventory.EntityID
 	cause      *rootcause.CauseRecord
 	unverified []string
+	// checked lists the kinds upstream of the failure that were found
+	// healthy and unchanged; see Incident.Checked.
+	checked []string
+	// considered lists the other causes above the floor, best first,
+	// as "root (row, confidence)"; see Incident.Considered.
+	considered []string
 	// unclear is set, with no cause, when candidates outside root's
 	// own workload were considered and dropped.
 	unclear bool
@@ -37,6 +45,11 @@ func (m *Manager) placeArea(
 	for _, failure := range area.Failures {
 		where := p.placementOf(failure)
 		for _, f := range s.Findings[failure] {
+			if f.Advisory {
+				// A configuration risk follows no cause; it joins the
+				// incident rooted at its own object (adoptAdvisories).
+				continue
+			}
 			m.attach(s.Now, f, where)
 			placed[f.Key()] = true
 		}
@@ -83,7 +96,9 @@ func newAreaPlacer(s explain.Snapshot, area explain.Area) *areaPlacer {
 // candidates outside its workload were dropped has an unclear cause.
 func (a *areaPlacer) placementOf(failure inventory.EntityID) placement {
 	own := defaultRoot(a.s.Model, failure)
-	out := placement{root: own, unverified: a.area.Unverified}
+	out := placement{root: own, unverified: a.area.Unverified,
+		checked:    checkedKinds(a.area.Trace.Checked[failure]),
+		considered: consideredCauses(a.area.Alternatives)}
 	i, ok := a.covering[failure]
 	if !ok {
 		out.unclear = a.rejectedOutside(own)
@@ -99,6 +114,43 @@ func (a *areaPlacer) placementOf(failure inventory.EntityID) placement {
 	record := a.record(i)
 	out.root, out.cause = root, &record
 	return out
+}
+
+// maxConsidered bounds the alternatives an incident remembers.
+const maxConsidered = 3
+
+// consideredCauses words the alternatives the solver weighed and did
+// not choose, best first, for the audit log: "node//n1 (node-not-ready,
+// 0.42)". They let a reader see what the engine ruled out.
+func consideredCauses(alternatives []explain.Cause) []string {
+	var out []string
+	for i, c := range alternatives {
+		if i == maxConsidered {
+			break
+		}
+		out = append(out, c.Root.String()+" ("+c.Row+", "+
+			strconv.FormatFloat(c.Confidence, 'f', 2, 64)+")")
+	}
+	return out
+}
+
+// checkedKinds names the kinds of the checked entities, sorted and
+// without repeats.
+func checkedKinds(ids []inventory.EntityID) []string {
+	var out []string
+	for _, id := range ids {
+		out = mergeSorted(out, string(id.Kind))
+	}
+	return out
+}
+
+// mergeSorted inserts value into the sorted list unless it is there.
+func mergeSorted(sorted []string, value string) []string {
+	i, found := slices.BinarySearch(sorted, value)
+	if found {
+		return sorted
+	}
+	return slices.Insert(sorted, i, value)
 }
 
 // rejectedOutside reports whether the area dropped a candidate that is
@@ -147,9 +199,22 @@ func (a *areaPlacer) record(i int) rootcause.CauseRecord {
 func (m *Manager) attach(
 	now time.Time, s detection.Finding, where placement,
 ) {
+	if s.Advisory && !m.hasFailure(where.root) {
+		// A configuration risk is not an incident. It joins the
+		// incident of a real failure of the same root, if there is one.
+		return
+	}
 	key := s.Key()
 	revised, rerooted := false, false
 	if previous, ok := m.byMember[key]; ok && !m.holds(previous, where.root) {
+		if m.beganTooLate(previous, where.cause) {
+			// What people were told about long ago was not caused by
+			// something that began this morning: the finding stays
+			// where it is, and the new cause explains only the new
+			// failures.
+			m.incidents[previous].Members[key] = s
+			return
+		}
 		revised = true
 		rerooted = m.revise(now, s, previous, where.root)
 	}
@@ -169,6 +234,12 @@ func (m *Manager) attach(
 		p.CauseUnclear = true
 	}
 	p.Unverified = rootcause.MergeUnverified(p.Unverified, where.unverified)
+	for _, kind := range where.checked {
+		p.Checked = mergeSorted(p.Checked, kind)
+	}
+	if len(where.considered) > 0 {
+		p.Considered = where.considered
+	}
 	m.byMember[key] = p.ID
 	m.changed[p.ID] = true
 }
@@ -204,6 +275,21 @@ func (m *Manager) refresh(model inventory.Reader) {
 	clear(m.changed)
 }
 
+// beganTooLate reports whether cause began more than
+// explain.TemporalExclusion after the announced incident id was opened.
+// A cause with an unknown start, or an incident nobody heard of yet,
+// never counts: the first message may still name the better cause.
+func (m *Manager) beganTooLate(
+	id string, cause *rootcause.CauseRecord,
+) bool {
+	p := m.incidents[id]
+	if p == nil || cause == nil || cause.Began.IsZero() ||
+		!wasAnnounced(p) || p.Opened.IsZero() {
+		return false
+	}
+	return cause.Began.After(p.Opened.Add(explain.TemporalExclusion))
+}
+
 // holds reports whether incident id is the current incident of root.
 func (m *Manager) holds(id string, root inventory.EntityID) bool {
 	p := m.lookup(root)
@@ -214,7 +300,13 @@ func (m *Manager) holds(id string, root inventory.EntityID) bool {
 // root. When that leaves an announced incident empty, the incident is
 // either superseded, because root already has its own announced
 // incident, or moved to root so the conversation continues under the
-// same ID. It reports whether the incident was moved.
+// same ID. It is moved only when every member that left since people
+// last heard about it went to root: that is the same story with a
+// revised cause. Members that dispersed to several roots, as when a
+// node pool stops failing as a whole and its workloads fail on their
+// own again, end the story instead; the empty incident recovers and
+// resolves on its own, and the workloads are announced anew. It reports
+// whether the incident was moved.
 func (m *Manager) revise(
 	now time.Time, s detection.Finding, previous string,
 	root inventory.EntityID,
@@ -228,6 +320,11 @@ func (m *Manager) revise(
 	delete(old.Members, key)
 	logMember("moved out of", old, key)
 	m.changed[old.ID] = true
+	old.movedTo = append(old.movedTo, root)
+	if !hasFailingMember(old) {
+		// Only configuration risks are left: they go with the failure.
+		m.dropAdvisories(old)
+	}
 	old.note(now, "cause revised: "+describe(s.Entity)+
 		" is now explained by "+describe(root))
 	if len(old.Members) > 0 || !wasAnnounced(old) {
@@ -237,8 +334,22 @@ func (m *Manager) revise(
 		old.SupersededBy = target.ID
 		return false
 	}
+	if dispersed(old.movedTo) {
+		old.note(now, "its failures went their own ways; this ends here")
+		return false
+	}
 	m.reroot(now, old, root)
 	return true
+}
+
+// dispersed reports whether the members left for more than one root.
+func dispersed(roots []inventory.EntityID) bool {
+	for _, root := range roots {
+		if root != roots[0] {
+			return true
+		}
+	}
+	return false
 }
 
 // reroot moves incident p to root and marks its next update as a cause
@@ -263,6 +374,7 @@ func (m *Manager) reroot(
 	m.unindex(p)
 	p.Root = root
 	m.index(p)
+	p.movedTo = nil
 	p.revised, p.revisedAt = true, now
 	p.note(now, "cause revised: now explained by "+describe(root))
 }
@@ -284,10 +396,66 @@ func (m *Manager) detach(now time.Time, s detection.Finding) {
 		return
 	}
 	delete(m.byMember, key)
-	if p := m.incidents[id]; p != nil {
-		delete(p.Members, key)
-		logMember("removed from", p, key)
-		p.note(now, "recovered: "+s.Summary+" ("+describe(s.Entity)+")")
+	p := m.incidents[id]
+	if p == nil {
+		return
+	}
+	delete(p.Members, key)
+	logMember("removed from", p, key)
+	p.note(now, "recovered: "+s.Summary+" ("+describe(s.Entity)+")")
+	if !s.Advisory && !hasFailingMember(p) {
+		m.dropAdvisories(p)
+	}
+}
+
+// hasFailure reports whether root has a live incident with a real
+// failure among its members.
+func (m *Manager) hasFailure(root inventory.EntityID) bool {
+	p := m.lookup(root)
+	return p != nil && p.State != Resolved && hasFailingMember(p)
+}
+
+// hasFailingMember reports whether any member of p is a failure rather
+// than a configuration risk.
+func hasFailingMember(p *Incident) bool {
+	for _, s := range p.Members {
+		if !s.Advisory {
+			return true
+		}
+	}
+	return false
+}
+
+// dropAdvisories removes the configuration risks from an incident whose
+// last failure recovered, so the incident recovers too. The risks stay
+// active findings and join the next failure of the same root.
+func (m *Manager) dropAdvisories(p *Incident) {
+	for key, s := range p.Members {
+		if s.Advisory {
+			delete(p.Members, key)
+			delete(m.byMember, key)
+		}
+	}
+	m.changed[p.ID] = true
+}
+
+// adoptAdvisories adds the active configuration risks of each changed
+// incident's root to its members, when the incident has a real failure:
+// the message then says what the risk cost.
+func (m *Manager) adoptAdvisories(s explain.Snapshot) {
+	for id := range m.changed {
+		p := m.incidents[id]
+		if p == nil || !hasFailingMember(p) {
+			continue
+		}
+		for _, f := range s.Findings[p.Root] {
+			key := f.Key()
+			if _, ok := p.Members[key]; !f.Advisory || ok {
+				continue
+			}
+			p.Members[key] = f
+			m.byMember[key] = p.ID
+		}
 	}
 }
 

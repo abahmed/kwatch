@@ -30,7 +30,8 @@ func (e *Engine) restore() error {
 	}
 	if !startup.coldStart {
 		startup.summary = marker
-		startup.checkSummary = len(marker.Incidents) > 0
+		startup.checkSummary = len(marker.Incidents) > 0 ||
+			len(marker.Rollups) > 0
 	}
 	e.deps.Incidents.Restore(records, e.deps.Clock.Now().Add(restoreGrace))
 	saved, err := e.deps.Store.LoadFingerprints()

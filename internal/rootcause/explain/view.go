@@ -23,6 +23,9 @@ type view struct {
 	explainedBy map[inventory.EntityID]bool
 	// rejected collects why entities were dropped.
 	rejected map[inventory.EntityID]rejectNote
+	// checked lists, per failure, the upstream entities that showed
+	// nothing wrong; see Trace.Checked.
+	checked map[inventory.EntityID][]inventory.EntityID
 	// inputs lists, per failure, the entities its walk went through.
 	// A change to any of them can change the failure's explanation.
 	inputs map[inventory.EntityID][]inventory.EntityID
@@ -317,6 +320,10 @@ func (v *view) virtualModes(
 		if v.membersFailing(id) >= MinGroupMembersFailing {
 			return failing(ModeMembersFailing)
 		}
+	case kube.KindPVC:
+		if modes := v.claimModes(id, effect, link); len(modes) > 0 {
+			return modes
+		}
 	case KindScheduling:
 		return failing(ModeRejectsNodes)
 	case KindExternalEndpoint, KindFailureSignature:
@@ -391,15 +398,44 @@ func (v *view) objectModes(
 	return v.storageModes(id, effect, link)
 }
 
-// membersFailing counts the failing nodes of a zone or pool.
+// membersFailing counts the broken nodes of a zone or pool. A node
+// under strain, with a CPU stall or high usage, is not a broken node:
+// two strained nodes do not make their pool fail as a whole, and a
+// pool blamed for them would take over every workload incident on
+// those nodes and hand them back when the strain passes.
 func (v *view) membersFailing(group inventory.EntityID) int {
 	count := 0
 	for _, node := range v.s.Model.Related(
 		group, inventory.PartOf, inventory.Incoming,
 	) {
-		if v.failing(node) {
+		if v.broken(node) {
 			count++
 		}
 	}
 	return count
+}
+
+// broken reports whether id has a failing finding, one that says it
+// does not do its job: not ready, under pressure, its network
+// unavailable. A degraded finding, such as a CPU stall or high usage,
+// does not count.
+func (v *view) broken(id inventory.EntityID) bool {
+	for _, f := range v.s.Findings[id] {
+		if f.Health == detection.Failing {
+			return true
+		}
+	}
+	return false
+}
+
+// claimModes is the pseudo mode of a claim that pins the effect pod to
+// a zone it cannot be placed in; nothing otherwise.
+func (v *view) claimModes(
+	claim, effect inventory.EntityID, link LinkType,
+) []modeHealth {
+	if link != LinkMounts || !v.pinnedClaim(claim, effect) {
+		return nil
+	}
+	return []modeHealth{{mode: ModeVolumePinned, health: detection.Failing,
+		pseudo: true}}
 }

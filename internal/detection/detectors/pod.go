@@ -210,6 +210,7 @@ func (d Pod) notReady(
 	if budget := startupBudget(ctx, e.ID); budget > threshold {
 		threshold = budget
 	}
+	threshold += replacementGraceFor(ctx, e)
 	if !sustained(ctx, "pod-not-ready", since, threshold) {
 		return nil
 	}

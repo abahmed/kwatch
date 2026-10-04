@@ -2,9 +2,11 @@ package scenarios
 
 import (
 	"flag"
+	"sort"
 	"strings"
 	"testing"
 
+	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/notification"
 )
 
@@ -18,13 +20,27 @@ var only = flag.String("scenario", "",
 //	go test ./internal/scenarios -run TestScenarioReplay -v \
 //		-scenario bad-rollout
 func TestScenarioReplay(t *testing.T) {
-	for _, s := range library() {
+	// Held-out scenarios are replayed too when one is named, so any
+	// scenario can be read while it is written.
+	scenarios := library()
+	heldout := map[string]bool{}
+	if *only != "" {
+		for _, s := range heldoutLibrary() {
+			heldout[s.expect.Name] = true
+			scenarios = append(scenarios, s)
+		}
+	}
+	for _, s := range scenarios {
 		name := s.expect.Name
 		if *only != "" && name != *only {
 			continue
 		}
 		t.Run(name, func(t *testing.T) {
-			log, e := loadScenario(t, name)
+			dir := labelledDir
+			if heldout[name] {
+				dir = heldoutDir
+			}
+			log, e := loadScenarioFrom(t, dir, name)
 			result := replayLog(t, log, e.options(log.Start))
 			v := judge(e, result)
 			t.Logf("%s: %d messages; %s", outcome(v), v.messages,
@@ -37,8 +53,24 @@ func TestScenarioReplay(t *testing.T) {
 					"15:04:05"), result.Decisions[i].Reason,
 					result.Decisions[i].Incident.Root, notification.Text(m))
 			}
+			for _, p := range result.Incidents {
+				t.Logf("incident %s %s %s members: %s", p.ID, p.Root,
+					p.Tier, describeMembers(p))
+			}
 		})
 	}
+}
+
+// describeMembers lists an incident's members as "reason@since", so a
+// scenario's grouping can be read while it is written.
+func describeMembers(p incident.Incident) string {
+	var parts []string
+	for key, f := range p.Members {
+		parts = append(parts, key.Entity.String()+" "+f.Reason+"@"+
+			f.Since.Format("15:04:05"))
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ", ")
 }
 
 func describeIncidents(incidents []reported) string {

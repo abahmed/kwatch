@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"slices"
 	"sync/atomic"
 )
 
@@ -57,9 +56,7 @@ func (p *persistence) saveStartup(state StartupState) {
 	}
 	// The writer reads the marker on its own goroutine: hand it copies
 	// the loop never appends to.
-	state.Incidents = slices.Clone(state.Incidents)
-	state.Followed = slices.Clone(state.Followed)
-	state.Resolved = slices.Clone(state.Resolved)
+	state = state.clone()
 	p.incidents.offer(storeSnapshot{startup: &state})
 }
 

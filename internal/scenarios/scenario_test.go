@@ -108,6 +108,7 @@ func library() []scenario {
 		borderlineTrafficScenarios(), storageScenarios(),
 		admissionScenarios(), trafficBackendScenarios(),
 		autoscalingScenarios(), sharedErrorScenarios(),
+		commonFactorScenarios(), dependencyScenarios(),
 	} {
 		out = append(out, group...)
 	}

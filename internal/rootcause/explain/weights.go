@@ -49,6 +49,15 @@ const (
 	// TemporalSlack absorbs clock skew between sources and the time
 	// a detector needs to notice a condition.
 	TemporalSlack = time.Minute
+	// TemporalExclusion is how long after an incident was opened a
+	// cause may still have begun and take the incident over as its
+	// revised cause. A cause that began later did not cause what people
+	// were already told about: a node pool that starts failing this
+	// morning does not explain a deployment that has been unavailable
+	// for a week, and the incident keeps its root. The incident layer
+	// applies it (incident.Manager.attach); explain reports when each
+	// cause began (Cause.Began).
+	TemporalExclusion = 10 * time.Minute
 )
 
 // Coverage: the share of a candidate's dependents that fail.
@@ -146,12 +155,32 @@ const (
 	DataQualityPenalty = 0.1
 )
 
+// Common factors.
+const (
+	// SharedFactorWindow is how close together the failures of several
+	// workloads must have begun for the node they share to be
+	// suspected although it shows nothing wrong.
+	SharedFactorWindow = 10 * time.Minute
+	// SharedFactorMinWorkloads is how many workloads must fail together
+	// before a healthy thing they share is suspected.
+	SharedFactorMinWorkloads = 3
+	// SharedFactorMaxConfidence caps a shared factor: with no finding
+	// and no change of its own it is a suspect, worded "possibly", and
+	// any cause with evidence of its own outranks it.
+	SharedFactorMaxConfidence = 0.49
+	// SharedFactorMinShare is the share of a shared factor's dependents
+	// that must fail. Why: a node where most pods are fine is not what
+	// breaks the failing ones.
+	SharedFactorMinShare = 0.5
+)
+
 // Groups of nodes.
 const (
-	// MinGroupMembersFailing is the fewest failing nodes that make a
+	// MinGroupMembersFailing is the fewest broken nodes that make a
 	// zone or a node pool a candidate. The row's MinCovered counts
 	// failures of any kind, so one failing node and its pods would
-	// otherwise blame the zone.
+	// otherwise blame the zone. Only failing node findings count; see
+	// view.broken.
 	MinGroupMembersFailing = 2
 )
 

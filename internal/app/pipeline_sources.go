@@ -40,6 +40,7 @@ func kubeletReader(deps *serverDeps) kube.KubeletReader {
 // maintenance annotations as the typed source.
 func dynamicSourceConfig(
 	deps *serverDeps, submit kube.Submit, maintenance config.MaintenanceConfig,
+	model *inventory.Model,
 ) kube.DynamicConfig {
 	return kube.DynamicConfig{
 		Client:      deps.clients.Dynamic,
@@ -49,6 +50,7 @@ func dynamicSourceConfig(
 		Now:         deps.clients.Clock.Now,
 		Submit:      submit,
 		Maintenance: maintenanceAnnotations(maintenance),
+		Noted:       model.NotedKinds,
 	}
 }
 

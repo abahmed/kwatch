@@ -53,7 +53,16 @@ func changeSentences(f caseFacts) []sentence {
 		text = upperFirst(text)
 	}
 	return []sentence{{part: partProof, weight: weightChange,
-		text: endSentence(text)}}
+		text: endSentence(text + changeCauseText(change))}}
+}
+
+// changeCauseText quotes the reason recorded with the change, when the
+// person or tool that made it left one: `, recorded as "bump to 2.4"`.
+func changeCauseText(change inventory.Change) string {
+	if change.Cause == "" {
+		return ""
+	}
+	return ", recorded as \"" + clip(change.Cause) + "\""
 }
 
 // blamedChangeText adds to a lead that already named the change: the

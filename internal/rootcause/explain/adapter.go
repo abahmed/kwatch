@@ -34,7 +34,7 @@ func NewSnapshot(
 func (s Snapshot) Record(c Cause) rootcause.CauseRecord {
 	out := rootcause.CauseRecord{
 		Rule: c.Row, Mode: c.Mode, Root: c.Root, Chain: c.Chain,
-		Summary: c.Summary, Score: c.Confidence,
+		Summary: c.Summary, Score: c.Confidence, Began: c.Began,
 	}
 	for _, f := range s.Findings[c.Root] {
 		// A symptom finding ("1 of 2 replicas are ready") restates

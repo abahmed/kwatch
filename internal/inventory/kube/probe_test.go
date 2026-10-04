@@ -31,6 +31,22 @@ func leaseJSON(name string, renewed time.Time) string {
 		renewed.UTC().Format("2006-01-02T15:04:05.000000Z"))
 }
 
+// leaseListJSON lists an operator's Lease in ops, a node heartbeat
+// Lease and the scheduler's: only the first is reported.
+func leaseListJSON(now time.Time) string {
+	item := func(ns, name, holder string) string {
+		return fmt.Sprintf(`{"metadata":{"name":%q,"namespace":%q},`+
+			`"spec":{"holderIdentity":%q,"leaseDurationSeconds":15,`+
+			`"renewTime":%q}}`, name, ns, holder,
+			now.Add(-5*time.Minute).UTC().Format(
+				"2006-01-02T15:04:05.000000Z"))
+	}
+	return `{"apiVersion":"coordination.k8s.io/v1","kind":"LeaseList",` +
+		`"items":[` + item("ops", "operator-leader", "operator-7d9f_1") +
+		`,` + item("kube-node-lease", "n1", "n1") + `,` +
+		item("kube-system", "kube-scheduler", "s_1") + `]}`
+}
+
 func probeHandler(readyz string, now time.Time) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -46,6 +62,8 @@ func probeHandler(readyz string, now time.Time) http.Handler {
 		case strings.HasSuffix(r.URL.Path, "/kube-controller-manager"):
 			_, _ = w.Write([]byte(leaseJSON(
 				"kube-controller-manager", now.Add(-10*time.Minute))))
+		case strings.HasSuffix(r.URL.Path, "/leases"):
+			_, _ = w.Write([]byte(leaseListJSON(now)))
 		default:
 			http.NotFound(w, r)
 		}
@@ -152,4 +170,27 @@ func TestParseMinorReadsDistributionVersions(t *testing.T) {
 	}
 	_, ok := kube.ParseMinor("unknown")
 	assert.False(t, ok)
+}
+
+// The prober reports the Leases of controllers and operators, leaving
+// node heartbeats and the control-plane leaders to their own checks.
+func TestProberReportsOperatorLeases(t *testing.T) {
+	now := fixedTime()
+	observations := runProbe(t, kube.ProbeConfig{
+		Client:   restClient(t, probeHandler("[+]etcd ok\n", now)),
+		Resolver: fakeResolver{},
+		Now:      func() time.Time { return now },
+	})
+
+	lease := inventory.CoreID(kube.KindLease, "ops", "operator-leader")
+	got, ok := observations[lease]
+	require.True(t, ok, "operator lease reported: %v", observations)
+	holder := got.Attributes[kube.AttrLeaseHolder].AsText()
+	assert.Equal(t, "operator-7d9f_1", holder)
+	_, node := observations[inventory.CoreID(kube.KindLease,
+		"kube-node-lease", "n1")]
+	assert.False(t, node, "node heartbeats are not leases to report")
+	_, scheduler := observations[inventory.CoreID(kube.KindLease,
+		"kube-system", "kube-scheduler")]
+	assert.False(t, scheduler, "the scheduler has its own check")
 }

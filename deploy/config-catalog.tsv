@@ -43,3 +43,4 @@ ignoreNodeMessages|list|legacy|Compatibility|Legacy node-message suppression fie
 heartbeatMonitor.url|string|empty|Security|External dead-man heartbeat URL; stored only through a mounted Secret.|secret|
 kubelet.insecureSkipVerify|boolean|false|Security|Skip kubelet serving certificate verification for direct node stats reads; only for self-signed kubelet certificates.|active|
 watch.secrets|boolean|true|Scope|Watch Secrets (values hashed, never stored); false removes Secret RBAC and Secret-based checks report that they cannot verify.|active|
+activeProbeMonitor.autoDependencies|boolean|false|Monitors|Probe the endpoints outside the cluster that pod environments name, over TCP; a refused dependency explains its callers.|active|

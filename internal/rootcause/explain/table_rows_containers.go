@@ -27,6 +27,19 @@ var containerRows = []Row{
 			detection.ModeRestarting, detection.ModeCreating),
 		Prior: 0.8, Inside: true,
 	},
+	{
+		// The workload's own tag moved under it: replicas running the
+		// newer build fail while the others do not.
+		Name: "image-drift",
+		Cause: Side{Kind: AnyKind, Modes: []detection.Mode{
+			detection.ModeImageDrift}},
+		Link: LinkOwns,
+		Effect: podSide(
+			detection.ModeCrashLoop, detection.ModeError, detection.ModeExit,
+			detection.ModeProbe, detection.ModeNotReady,
+			detection.ModeRestarting),
+		Prior: 0.7, Inside: true,
+	},
 }
 
 // helperHops lead from a pod to its init and sidecar containers, which

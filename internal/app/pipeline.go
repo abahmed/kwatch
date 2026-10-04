@@ -173,6 +173,7 @@ func newActiveProber(
 	}
 	return kube.NewActiveProber(kube.ActiveProbeConfig{
 		Targets: targets, AutoServices: cfg.AutoServices, Excluded: excluded,
+		AutoDependencies: cfg.AutoDependencies,
 		Interval:         time.Duration(cfg.IntervalSeconds) * time.Second,
 		Timeout:          time.Duration(cfg.TimeoutSeconds) * time.Second,
 		FailureThreshold: cfg.FailureThreshold,

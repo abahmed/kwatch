@@ -24,6 +24,20 @@ var calledRowCases = []rowCase{
 		build: func(f *fixture) inventory.EntityID {
 			return signatureStorm(f, 3)[0]
 		}},
+	{row: "external-endpoint-unreachable",
+		want: "external-endpoint//db.example.com:5432",
+		build: func(f *fixture) inventory.EntityID {
+			db := inventory.CoreID(kube.KindExternalEndpoint, "",
+				"db.example.com:5432")
+			f.add(db)
+			f.fail(db, "ActiveProbe", failingH, 1, "connection refused")
+			pods := f.workload("shop", "api", 2)
+			for _, pod := range pods {
+				f.relate(pod, inventory.Calls, db)
+				f.fail(pod, detection.ModeCrashLoop, failingH, 2, "")
+			}
+			return pods[0]
+		}},
 }
 
 // callStorm makes n workloads of two pods each crash with text, in

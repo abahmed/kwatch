@@ -17,15 +17,23 @@ func scopedHarness(t *testing.T, start time.Time) *harness {
 
 func wantAnnounceThenResolve(t *testing.T, h *harness) {
 	t.Helper()
-	counts := map[incident.Action]int{}
+	// Digests and summaries are messages of their own, not decisions
+	// about the incident.
+	var decisions []incident.Decision
 	for _, d := range h.decisions {
+		if d.Incident.ID != "" {
+			decisions = append(decisions, d)
+		}
+	}
+	counts := map[incident.Action]int{}
+	for _, d := range decisions {
 		counts[d.Action]++
 	}
 	if counts[incident.Announce] != 1 || counts[incident.Resolve] != 1 {
 		t.Fatalf("want one announce and one resolve, got %v:\n%s",
 			counts, joinTitles(h))
 	}
-	if last := h.decisions[len(h.decisions)-1]; last.Action !=
+	if last := decisions[len(decisions)-1]; last.Action !=
 		incident.Resolve {
 		t.Fatalf("last decision = %v, want resolve", last.Action)
 	}

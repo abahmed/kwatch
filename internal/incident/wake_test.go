@@ -37,11 +37,15 @@ func TestManagerTickWithoutTimersReturnsZero(t *testing.T) {
 	if _, next := r.m.Tick(at(0)); next != 0 {
 		t.Fatalf("empty manager next wake = %v, want 0", next)
 	}
-	web := podSig("web")
-	r.raise(at(0), web)
+}
+
+// An open incident's only timer is its weekly reminder.
+func TestManagerTickOpenIncidentWakesForItsReminder(t *testing.T) {
+	r := newRig(t, Config{Remember: time.Hour})
+	r.raise(at(0), podSig("web"))
 	wantAction(t, r.tick(at(DefaultSettle)), Announce, "settled")
-	if _, next := r.m.Tick(at(DefaultSettle)); next != 0 {
-		t.Fatalf("open incident next wake = %v, want 0", next)
+	if _, next := r.m.Tick(at(DefaultSettle)); next != RemindEvery {
+		t.Fatalf("open incident next wake = %v, want %v", next, RemindEvery)
 	}
 }
 

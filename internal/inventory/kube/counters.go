@@ -40,6 +40,19 @@ func (c *counterRates) rate(
 	return (value - previous.value) / seconds, true
 }
 
+// meanRate records a histogram's sum and count for key and returns the
+// mean value of the observations made since the last sample.
+func (c *counterRates) meanRate(
+	key string, at time.Time, sum, count float64,
+) (float64, bool) {
+	sumRate, ok1 := c.rate(key+"/sum", at, sum)
+	countRate, ok2 := c.rate(key+"/count", at, count)
+	if !ok1 || !ok2 || countRate <= 0 {
+		return 0, false
+	}
+	return sumRate / countRate, true
+}
+
 // forgetBefore drops counters last sampled before cutoff, so containers
 // and nodes that went away do not keep their samples forever.
 func (c *counterRates) forgetBefore(cutoff time.Time) {
@@ -114,6 +127,22 @@ func liveCgroup(pairs map[string]periodPair) periodPair {
 		}
 	}
 	return live
+}
+
+// forEachMetric calls visit with the labels and value of every sample
+// of one metric name.
+func forEachMetric(
+	body []byte, wanted string,
+	visit func(labels map[string]string, value float64),
+) {
+	scanner := bufio.NewScanner(bytes.NewReader(body))
+	scanner.Buffer(make([]byte, 0, 64<<10), 1<<20)
+	for scanner.Scan() {
+		if name, labels, value, ok := metricLine(scanner.Text()); ok &&
+			name == wanted {
+			visit(labels, value)
+		}
+	}
 }
 
 // sumMetric adds every sample of one metric name.

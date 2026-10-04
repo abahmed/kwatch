@@ -75,12 +75,14 @@ type sentenceWriter func(caseFacts) []sentence
 // type. Adding a fact means adding a writer here.
 var noteWriters = []sentenceWriter{
 	unclearSentences,
+	checkedSentences,
 	changeSentences,
 	causeProofSentences,
 	errorSentences,
 	usageSentences,
 	schedulerSentences,
 	consequenceSentences,
+	riskSentences,
 	evidenceSentences,
 	impactSentences,
 	unverifiedSentences,

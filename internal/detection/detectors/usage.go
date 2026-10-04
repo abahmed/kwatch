@@ -40,7 +40,7 @@ func (NodeUsage) Kinds() []inventory.Kind {
 func (NodeUsage) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
-	var out []detection.Finding
+	out := kubeletFindings(ctx, e)
 	if s, ok := threshold(ctx, e, kube.AttrFSUsedPct,
 		reasons.NodeFilesystemHigh, "disk"); ok {
 		out = append(out, s)
