@@ -24,7 +24,7 @@ func scoreSpecificity(v *view, c *candidate) outcome {
 	}
 	named := 0
 	for _, effect := range effects {
-		if mentionsAny(v.text(effect), names) {
+		if mentionsAny(v.errorText(effect), names) {
 			named++
 		}
 	}

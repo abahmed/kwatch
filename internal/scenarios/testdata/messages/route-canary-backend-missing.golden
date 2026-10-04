@@ -1,4 +1,4 @@
 10:02:15 settled
-🔴 HTTP route checkout in storefront (prod-eu-1) is failing because service checkout-canary does not exist. The error mentions it. To see the object's state and events, run kubectl describe httproute checkout -n storefront
+🔴 HTTP route checkout in storefront (prod-eu-1) is failing because service checkout-canary does not exist. To see the object's state and events, run kubectl describe httproute checkout -n storefront
 🔴 HTTP route checkout in storefront (prod-eu-1) is failing because service checkout-canary does not exist.
 

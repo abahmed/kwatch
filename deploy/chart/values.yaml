@@ -108,6 +108,16 @@ persistence:
   emptyDir: false
   # -- sizeLimit applied to the emptyDir volume (emptyDir mode only).
   emptyDirSizeLimit: 2Gi
+  # -- Keep kwatch on the nodes where the StorageClass's CSI driver is
+  # registered when the driver runs on only some nodes; otherwise a
+  # WaitForFirstConsumer claim placed on another node never binds. Looked
+  # up at install and upgrade time; offline renders (helm template, Argo
+  # CD) cannot look it up and render nothing.
+  pinToStorageDriverNodes: true
+  # -- The storage driver's topology label to require explicitly, for
+  # offline renders (kubectl get csinodes shows each driver's topologyKeys).
+  # A node carries it only once the driver is registered there.
+  storageDriverTopologyKey: ""
 
 nodeSelector: {}
 

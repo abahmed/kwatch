@@ -191,6 +191,29 @@ func (v *view) text(id inventory.EntityID) string {
 	return out
 }
 
+// errorText is the error text of an effect without kwatch's own finding
+// summaries: the evidence Kubernetes or the workload reported, and the
+// recent notes. A summary that names a Service ("backend istiod has no
+// ready pods") is kwatch naming it, which proves nothing.
+func (v *view) errorText(id inventory.EntityID) string {
+	var parts []string
+	for _, f := range v.s.Findings[id] {
+		for _, e := range f.Evidence {
+			parts = append(parts, e.Value)
+		}
+	}
+	sources := []inventory.EntityID{id}
+	if pod, ok := v.podOf(id); ok && pod != id {
+		sources = append(sources, pod)
+	}
+	for _, source := range sources {
+		for _, note := range v.s.Model.Notes(source, v.since) {
+			parts = append(parts, note.Message)
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
 // effectState is how a failing entity is matched as a row's effect.
 func (v *view) effectState(id inventory.EntityID) state {
 	return state{id: id, modes: findingModes(v.s.Findings[id]),
@@ -298,8 +321,48 @@ func (v *view) virtualModes(
 		return failing(ModeRejectsNodes)
 	case KindExternalEndpoint, KindFailureSignature:
 		return v.calledModes(id, effect, link)
+	case kube.KindService:
+		if modes := v.backendModes(id, effect, link); len(modes) > 0 {
+			return modes
+		}
 	}
 	return v.missingModes(id, link)
+}
+
+// backendModes are the pseudo modes of a webhook's backend Service, read
+// from the webhook's own finding: the Service does not exist, or it has
+// no ready endpoints. A Service scaled to zero has no finding of its own,
+// so the webhooks behind it would each be a root; with these modes the
+// Service is the one root they share, and the rows that use them ask for
+// more than one webhook before inferring it.
+func (v *view) backendModes(
+	id, effect inventory.EntityID, link LinkType,
+) []modeHealth {
+	if link != LinkServedBy || !isAdmissionKind(effect.Kind) {
+		return nil
+	}
+	failing := func(mode detection.Mode) []modeHealth {
+		return []modeHealth{{mode: mode, health: detection.Failing,
+			pseudo: true}}
+	}
+	if !v.s.Model.Exists(id) {
+		return failing(ModeMissing)
+	}
+	for _, m := range findingModes(v.s.Findings[effect]) {
+		if m.mode == detection.ModeWebhookNoEndpoints {
+			return failing(detection.ModeNoEndpoints)
+		}
+	}
+	return nil
+}
+
+func isAdmissionKind(kind inventory.Kind) bool {
+	for _, k := range admitKinds {
+		if k == kind {
+			return true
+		}
+	}
+	return false
 }
 
 // missingModes is ModeMissing for an object named by reference (used,

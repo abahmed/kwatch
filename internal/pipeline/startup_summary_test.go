@@ -131,9 +131,16 @@ func TestEngineStartupSummaryReleasesAndLaterResolves(t *testing.T) {
 	}
 }
 
-func TestEngineStartupDoesNotHoldPageTier(t *testing.T) {
+// A pre-existing page-tier incident is held for the chat summary like
+// any other, and its announcement goes at once to the providers that
+// track alerts by key, marked for them only.
+func TestEngineStartupHoldsPageTierAndPagesSeparately(t *testing.T) {
 	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
-	e := newTestEngine(t, &fakeClock{now: now}, (&sinkLog{}).sink, nil)
+	var sent []notification.Message
+	sink := func(_ context.Context, _ incident.Decision, m notification.Message) {
+		sent = append(sent, m)
+	}
+	e := newTestEngine(t, &fakeClock{now: now}, sink, nil)
 	e.announcer.startup.until = now.Add(time.Minute)
 	page := announce("node")
 	page.Incident.Tier = incident.Page
@@ -141,8 +148,40 @@ func TestEngineStartupDoesNotHoldPageTier(t *testing.T) {
 	rest, _ := e.announcer.collectStartup(context.Background(), now,
 		[]incident.Decision{page, announce("a")})
 
-	if len(rest) != 1 || rest[0].Incident.ID != "node" {
-		t.Fatalf("page tier must pass through, rest = %+v", rest)
+	if len(rest) != 0 {
+		t.Fatalf("page tier must be held for the summary, rest = %+v", rest)
+	}
+	if len(e.announcer.startup.collected) != 2 {
+		t.Fatalf("collected = %+v, want both", e.announcer.startup.collected)
+	}
+	if len(sent) != 1 || !sent[0].PagingOnly || sent[0].Key != "node" {
+		t.Fatalf("want one paging-only announcement of the page, got %+v",
+			sent)
+	}
+	// The second time the same announcement is held, nothing is sent.
+	e.announcer.collectStartup(context.Background(), now,
+		[]incident.Decision{page})
+	if len(sent) != 1 {
+		t.Fatalf("a held page must be paged once, got %d messages", len(sent))
+	}
+}
+
+// The close of an incident whose failures another incident took over is
+// for alert-tracking providers only; chat reads about those failures in
+// the other incident's update.
+func TestEngineSupersededResolveIsPagingOnly(t *testing.T) {
+	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
+	e := newTestEngine(t, &fakeClock{now: now}, (&sinkLog{}).sink, nil)
+	resolve := incident.Decision{Action: incident.Resolve,
+		Incident: incident.Incident{ID: "a", SupersededBy: "b"}}
+	plain := incident.Decision{Action: incident.Resolve,
+		Incident: incident.Incident{ID: "c"}}
+
+	if !e.announcer.write(resolve, now).PagingOnly {
+		t.Fatal("a superseded resolve must be paging-only")
+	}
+	if e.announcer.write(plain, now).PagingOnly {
+		t.Fatal("an ordinary resolve goes everywhere")
 	}
 }
 

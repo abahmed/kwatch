@@ -126,6 +126,16 @@ spec:
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
+      {{- else }}
+      {{- with (include "kwatch.storageTopologyKey" . | trim) }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: {{ . }}
+                    operator: Exists
+      {{- end }}
       {{- end }}
       {{- with (include "kwatch.tolerations" . | trim) }}
       tolerations:

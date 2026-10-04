@@ -138,7 +138,10 @@ with one status emoji and no links, for example `🟡 kwatch v1.2.0 started.` an
 `🟡 kwatch v1.3.0 is available; this cluster runs v1.2.0.`. A restart after an
 internal failure, or after a gap in monitoring, uses 🟠 and says which period
 went unwatched. When there are problems that were already there at startup,
-one startup summary lists them. Summaries and plain notices are information,
+one startup summary lists them, page-tier problems included; the paging
+tools and issue trackers below receive each page-tier announcement on its
+own instead, since they never receive summaries. Summaries and plain
+notices are information,
 not incidents: PagerDuty, Opsgenie, Squadcast, GoAlert, Zenduty, incident.io,
 iLert and SIGNL4 (paging) and GitHub, GitLab, Gitea, Jira and ClickUp (issue
 trackers) do not receive them, because nothing would ever close the alert or
@@ -513,12 +516,15 @@ Severity decides how loudly it is delivered. The values `severityByReason` and
 | `critical` | Pages | 🔴 |
 | `high` | Notifies | 🟠 |
 | `medium` / `warning` | Notifies | 🟠 |
-| `normal` | Goes to the digest | 🟡 |
+| `normal` | Goes to the digest: one 🟡 message every 30 minutes lists the low-priority problems that opened or resolved | 🟡 |
 
 Without an override, kwatch derives the tier itself: an incident with a critical finding
 pages only when it also matches a page rule (for example a lost node, an unavailable
 API server or cluster DNS, or an Ingress that lost its backends); otherwise it notifies.
-An incident made only of informational or digest-only findings goes to the digest.
+An incident made only of informational or digest-only findings goes to the
+digest: it is not announced on its own, one digest message every 30 minutes
+lists what opened and what resolved, and it is announced at once if it gets
+worse. Paging tools and issue trackers never receive digests.
 
 Every message starts with exactly one status emoji and no other: 🔴 page,
 🟠 notify, 🟡 low, ✅ resolved. Red is reserved for incidents that page.

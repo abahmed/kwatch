@@ -104,6 +104,9 @@ type candidateSet struct {
 type rejectNote struct {
 	reason string
 	effect inventory.EntityID
+	// insufficient marks a candidate dropped only because too few
+	// failures share it; the cause of each failure is not in doubt.
+	insufficient bool
 }
 
 // add records that id explains effect, keeping the best row.
@@ -128,6 +131,16 @@ func (cs *candidateSet) reject(
 ) {
 	if _, ok := cs.rejected[id]; !ok {
 		cs.rejected[id] = rejectNote{reason: reason, effect: effect}
+	}
+}
+
+// rejectInsufficient records a candidate dropped for want of sharers.
+func (cs *candidateSet) rejectInsufficient(
+	id, effect inventory.EntityID, reason string,
+) {
+	if _, ok := cs.rejected[id]; !ok {
+		cs.rejected[id] = rejectNote{reason: reason, effect: effect,
+			insufficient: true}
 	}
 }
 
@@ -291,8 +304,8 @@ func applyMinCovered(cs *candidateSet) {
 			if need := how.match.row.MinCovered; need > 0 &&
 				counts[how.match.row.Name] < need {
 				delete(c.covers, effect)
-				cs.reject(c.id, effect, "row "+how.match.row.Name+
-					" needs more failures than it explains")
+				cs.rejectInsufficient(c.id, effect, "row "+
+					how.match.row.Name+" needs more failures than it explains")
 			}
 		}
 		if len(c.covers) == 0 {

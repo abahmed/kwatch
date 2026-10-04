@@ -60,6 +60,35 @@ same file at all. With a shared file system two Pods on two nodes can open the
 file at once, and bbolt file locks are not reliable over network file
 systems, so the state file can be corrupted.
 
+**The claim stays `Pending`.** With a `WaitForFirstConsumer` StorageClass
+the claim is provisioned for the node the scheduler picked for the Pod. When
+the class's CSI driver is registered on only some nodes (for example the
+driver's DaemonSet does not run on an architecture or node group), a Pod
+placed on a node without it never gets a volume, and the claim's events say
+`no topology key found for node <name>`. Either keep kwatch on nodes the
+driver serves, with a node affinity on the driver's own topology label (the
+label exists only where the driver is registered; any CSI driver has one),
+or use an `emptyDir`. With the chart:
+
+```yaml
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: <the driver's topology key>   # e.g. topology.ebs.csi.aws.com/zone
+              operator: Exists
+```
+
+`kubectl get csinodes -o yaml` lists each node's drivers and their topology
+keys. Both installers handle this case before it fails: `helm install` and
+`helm upgrade` look the driver up and add that affinity when
+`persistence.pinToStorageDriverNodes` is true (the default; offline renders
+such as `helm template` or Argo CD cannot look it up and take
+`persistence.storageDriverTopologyKey` instead), and `kwatch.sh` checks the
+driver's node coverage before applying and pins the Pod the same way. The
+raw `deploy/deploy.yaml` cannot ask the cluster; add the affinity by hand.
+
 Initial operating targets are: readiness within 120 seconds after a healthy
 startup and graceful shutdown within 45 seconds. These are SLO targets for
 capacity planning and alerting, not guarantees. Queue limits and configured

@@ -2,6 +2,8 @@ package kube
 
 import (
 	"context"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -285,7 +287,7 @@ func (d *DynamicSource) reconcile(ctx context.Context) {
 		klog.InfoS("resource types over the watch budget are skipped",
 			"component", "inventory", "operation", "discover",
 			"discovered", len(discovered), "budget", d.cfg.Budget,
-			"skipped", len(skipped))
+			"skipped", len(skipped), "kinds", skippedKinds(skipped))
 	}
 	for _, w := range retired {
 		d.retire(ctx, w)
@@ -386,4 +388,16 @@ func (d *DynamicSource) stopAll() {
 		}
 		delete(d.refused, gvr)
 	}
+}
+
+// skippedKinds names the kinds the budget left out, sorted, so an
+// operator can raise the budget or recognise a gap without guessing. The
+// list is bounded by what discovery returned beyond the budget.
+func skippedKinds(skipped []plannedResource) string {
+	names := make([]string, 0, len(skipped))
+	for _, r := range skipped {
+		names = append(names, r.kind)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ",")
 }

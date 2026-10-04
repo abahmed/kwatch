@@ -243,7 +243,7 @@ func (v *view) applyMinWorkloads(cs *candidateSet) {
 			}
 			for _, effect := range group.effects {
 				delete(c.covers, effect)
-				cs.reject(c.id, effect, "row "+group.row+
+				cs.rejectInsufficient(c.id, effect, "row "+group.row+
 					" needs failures in more workloads")
 			}
 		}

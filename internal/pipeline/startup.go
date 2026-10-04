@@ -62,9 +62,12 @@ func (s *startupSummary) openWindow(now time.Time) {
 // collectStartup holds cold-start announcements until the startup window
 // ends, then sends them as one summary. Only incidents that were already
 // failing when the sources synced are held: a problem that starts later
-// is news and is announced at once. Page-tier announcements are never
-// held. Updates and resolves of a held incident fold into the held entry.
-// It reports whether the summary window finished in this call.
+// is news and is announced at once. A page-tier announcement is held for
+// the chat summary too, and sent on its own to the paging tools and issue
+// trackers, which never receive summaries, so an active page is not
+// delayed by the window. Updates and resolves of a held incident fold
+// into the held entry. It reports whether the summary window finished in
+// this call.
 func (a *announcer) collectStartup(
 	ctx context.Context, now time.Time, decisions []incident.Decision,
 ) ([]incident.Decision, bool) {
@@ -73,7 +76,7 @@ func (a *announcer) collectStartup(
 	}
 	var rest []incident.Decision
 	for _, d := range decisions {
-		if !a.holdStartup(d) {
+		if !a.holdStartup(ctx, now, d) {
 			rest = append(rest, d)
 		}
 	}
@@ -85,19 +88,25 @@ func (a *announcer) collectStartup(
 }
 
 // holdStartup reports whether d was absorbed by the startup summary.
-func (a *announcer) holdStartup(d incident.Decision) bool {
+func (a *announcer) holdStartup(
+	ctx context.Context, now time.Time, d incident.Decision,
+) bool {
 	s := &a.startup
 	id := d.Incident.ID
 	held := s.indexOf(id)
 	switch {
-	case d.Action == incident.Announce && d.Incident.Tier != incident.Page &&
-		s.predatesSync(d.Incident):
+	case d.Action == incident.Announce && s.predatesSync(d.Incident):
 		if held >= 0 {
 			s.collected[held] = d
 		} else {
 			s.collected = append(s.collected, d)
 		}
 		a.incidents.HoldAnnouncement(id)
+		if held < 0 && d.Incident.Tier == incident.Page {
+			msg := a.write(d, now)
+			msg.PagingOnly = true
+			a.sink(ctx, d, msg)
+		}
 		return true
 	case held >= 0 && d.Action == incident.Update:
 		s.collected[held].Incident = d.Incident

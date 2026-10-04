@@ -469,10 +469,13 @@ Some quirks are load-bearing. Preserve them unless a change explicitly says othe
   no members before the restore grace ends is not recovered, so a restart
   never resolves incidents whose detectors have not re-run.
 - An update is announced only when the digest changes (tier, root, cause, the
-  root's own reasons, bucketed impact size, state). Counters and timestamps
-  must never enter the digest.
+  root's own reasons seen so far, bucketed impact size, state). A root reason
+  that clears while the incident stays open is not news, so the set only
+  grows. Counters and timestamps must never enter the digest.
 - Pods and containers are excluded from the impact size that drives the digest:
   replicas failing one by one are not news.
+- An announced incident's tier only rises (`ratchetTier`); de-escalation is
+  told by the recovery. While settling, the tier follows the members.
 - The first list of every source only observes; changes made while kwatch was
   down are reconstructed from saved fingerprints after every source has
   synced and are dated at the last snapshot, so they precede the failures
@@ -480,8 +483,8 @@ Some quirks are load-bearing. Preserve them unless a change explicitly says othe
 - Decisions for out-of-scope incidents are dropped before delivery, but the
   incident is still tracked so reasoning keeps its evidence.
 - The audit decision reason strings (`settled`, `material change`,
-  `flapping`, `healthy for ...`, `stable for ...`, `startup summary`) are
-  stable strings people grep for.
+  `flapping`, `healthy for ...`, `stable for ...`, `startup summary`,
+  `digest`) are stable strings people grep for.
 
 ## Extension contract
 

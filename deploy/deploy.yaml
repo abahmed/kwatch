@@ -303,7 +303,11 @@ spec:
           claimName: kwatch-data
 ---
 # State store: incidents, change history and baselines. Uses the
-# cluster's default StorageClass.
+# cluster's default StorageClass. If the claim stays Pending with
+# "no topology key found for node", the class's CSI driver runs on only
+# some nodes: add a node affinity on the driver's topology label (for
+# example topology.ebs.csi.aws.com/zone, operator Exists) to the Pod
+# template above, or switch the data volume to emptyDir.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

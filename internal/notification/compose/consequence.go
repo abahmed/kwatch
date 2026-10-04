@@ -153,9 +153,11 @@ func recurrenceSentences(f caseFacts) []sentence {
 		return []sentence{{part: partRecurrence, text: "It has recovered " +
 			"and failed again " + plural(cycles, "time") + " recently."}}
 	}
-	times := 0
-	for _, at := range f.p.Occurrences {
-		if f.now.Sub(at) <= week {
+	// This message is one time; earlier times count only when people
+	// heard about them.
+	times := 1
+	for _, o := range f.p.History {
+		if o.Heard && f.now.Sub(o.Opened) <= week {
 			times++
 		}
 	}

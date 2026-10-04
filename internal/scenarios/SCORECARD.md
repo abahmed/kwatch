@@ -33,19 +33,19 @@ other target was relaxed.
 
 | Metric | Target | Rule engine | Start | Now | Result |
 | --- | --- | --- | --- | --- | --- |
-| Correct root cause (labelled) | >= 90% | 63.0% | 96.5% (55 of 57) | 97.4% (74 of 76) | pass |
+| Correct root cause (labelled) | >= 90% | 63.0% | 96.5% (55 of 57) | 97.4% (76 of 78) | pass |
 | Correct root cause (held-out) | >= 80% | - | 71.4% (10 of 14) | 85.7% (12 of 14) | pass |
-| Wrong high-confidence root | <= 5% of high-confidence cases, labelled and held-out, gated at 20 or more | 0% | 2.5% (1 of 40) | 4.1% (3 of 73) | pass |
-| Calibration: high confidence | 80-100% (at least 10 cases) | 100% (10 of 10) | 97.5% (39 of 40) | 96.8% (60 of 62) | pass |
+| Wrong high-confidence root | <= 5% of high-confidence cases, labelled and held-out, gated at 20 or more | 0% | 2.5% (1 of 40) | 4% (3 of 75) | pass |
+| Calibration: high confidence | 80-100% (at least 10 cases) | 100% (10 of 10) | 97.5% (39 of 40) | 96.9% (62 of 64) | pass |
 | Calibration: likely confidence | 50-90% (at least 10 cases) | 66.7% (4 of 6) | 90.9% (10 of 11) | not gated: 4 of 4 right, 10 cases needed | pass |
 | Messages per incident (p95) | <= 3 | - | 3 | 3 | pass |
 | Messages per incident (most) | <= 5 | 4 | 3 | 4 | pass |
-| Time to first message (page tier, max) | <= 2m (was 60s) | - | 1m45s (p95 1m45s, 9 scenarios) | 1m45s (p95 1m45s, 16 scenarios) | pass |
-| Time to first message (notify tier, max) | <= 5m (was 180s) | - | 4m15s (p95 3m15s, 43 scenarios) | 3m15s (p95 3m15s, 52 scenarios) | pass |
+| Time to first message (page tier, max) | <= 2m (was 60s) | - | 1m45s (p95 1m45s, 9 scenarios) | 1m45s (p95 1m45s, 17 scenarios) | pass |
+| Time to first message (notify tier, max) | <= 5m (was 180s) | - | 4m15s (p95 3m15s, 43 scenarios) | 5m0s (p95 5m0s, 55 scenarios) | pass |
 | Notifications from non-events (staging day) | 0 | - | 4 (all digest) | 0 | pass |
 | Notifications per hour (staging day peak) | <= 30/h (sanity ceiling) | 20/h | 18/h | 23/h | pass |
 | Unchanged updates | 0% | 0% | 0% | 0% | pass |
-| Re-created incidents | <= 5% | 2.1% | 1.6% | 1.2% | pass |
+| Re-created incidents | <= 5% | 2.1% | 1.6% | 2.5% | pass |
 | Repeated recoveries | 0 | 0 | 0 | 0 | pass |
 | Storm messages in 2 minutes (shared node) | <= 3 | 2 | 1 | 1 | pass |
 | Storm messages in 2 minutes (shared registry) | <= 3 | 102 | 1 | 1 | pass |
@@ -158,8 +158,11 @@ measure the initial sync rather than detection.
 | borderline-init-after-rotation | 4m15s | at most 1m15s | measurement: the fixture dated the rollout's new pod an hour back, so the failure seemed to start at the log's start |
 | operator and route conditions, Pending pods (8 scenarios) | 3m15s | 3m15s | the 2-minute custom-resource and pod-Pending graces plus the 75-second settle; not shortened: an operator passing through a failed state and a pod waiting for an autoscaled node are not conclusive |
 
-The notify p95 stays at 3m15s, over the 3-minute aim: eight scenarios
-wait out a 2-minute grace that only a conclusive signal could shorten.
+| autoscaler at its maximum (3 scenarios) | 3m15s (as an update) | 5m0s | the digest: an autoscaler at its maximum is low priority on its own and waits for the half-hourly digest; its first interrupting message is the promotion when the Deployment falls short of replicas, which the scorecard now counts as the first message instead of an update |
+
+The notify p95 is now 5m0s, at the target: the three autoscaler
+scenarios dominate it, and before them eight scenarios wait out a
+2-minute grace that only a conclusive signal could shorten.
 Page incidents take 15 seconds to 1m45s; the slowest are control-plane
 components, whose detectors sustain unavailability for a minute and a
 half.

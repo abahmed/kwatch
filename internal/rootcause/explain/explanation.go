@@ -89,10 +89,14 @@ type Trace struct {
 	Rejected []Rejection
 }
 
-// Rejection names an entity that was not chosen and why.
+// Rejection names an entity that was not chosen and why. Insufficient
+// marks one dropped only because too few failures share it: a single
+// webhook behind an empty Service is its own root, and that is not
+// doubt about its cause.
 type Rejection struct {
-	Root   inventory.EntityID
-	Reason string
+	Root         inventory.EntityID
+	Reason       string
+	Insufficient bool `json:",omitempty"`
 }
 
 // CauseOf returns the stated cause that covers a failure, and whether

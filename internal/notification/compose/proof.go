@@ -189,7 +189,7 @@ func errorSentences(f caseFacts) []sentence {
 		}
 	case said != "" && !restartNoise.MatchString(said):
 		return []sentence{{part: partProof, weight: weightError,
-			text: errorVerb(f.lead.Entity) + " " + quoted(said) + "."}}
+			text: errorIntro(f) + " " + quoted(said) + "."}}
 	}
 	if first := investigatedError(f); first != nil {
 		return first
@@ -275,6 +275,19 @@ var restartNoise = regexp.MustCompile(
 // pullNoise matches the kubelet's pull back-off, which only repeats the
 // image name.
 var pullNoise = regexp.MustCompile(`^(?i:back-off) pulling image `)
+
+// errorIntro introduces the lead finding's quoted error. Under a group
+// lead the error belongs to one of the group's nodes, not to the zone or
+// pool the sentence is about.
+func errorIntro(f caseFacts) string {
+	if leadIsGroup(f) {
+		if f.lead.Entity.Kind == kube.KindNode {
+			return "One of its nodes reports"
+		}
+		return "One of them reports"
+	}
+	return errorVerb(f.lead.Entity)
+}
 
 // errorVerb introduces a quoted error: a program "fails with" it, a
 // node or service "reports" it.

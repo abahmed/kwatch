@@ -28,7 +28,7 @@ func (m *Manager) fanOut(job deliverJob) {
 	}
 	for _, name := range generation.order {
 		entry := generation.entries[name]
-		if !routedTo(entry.routes, job) {
+		if !routedTo(entry.routes, job) || !acceptsPagingOnly(entry, job) {
 			continue
 		}
 		copied := job
@@ -36,6 +36,17 @@ func (m *Manager) fanOut(job deliverJob) {
 		copied.outboxID = m.outbox.Load().add(copied, name)
 		m.offer(entry, copied)
 	}
+}
+
+// acceptsPagingOnly reports whether a provider may receive job. A
+// paging-only announcement goes to the providers that skip plain
+// messages: the startup summary that stands in for it never reaches them.
+func acceptsPagingOnly(entry providerEntry, job deliverJob) bool {
+	if job.kind != jobIncident || job.incident == nil ||
+		!job.incident.PagingOnly {
+		return true
+	}
+	return skipsPlainMessages(entry.provider)
 }
 
 // offer queues one provider's copy of a job and settles what coalescing

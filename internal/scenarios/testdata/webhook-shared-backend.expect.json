@@ -1,0 +1,17 @@
+{
+  "name": "webhook-shared-backend",
+  "description": "Three fail-closed webhooks call a Service with no ready endpoints and two call a Service that does not exist; each backend is one incident.",
+  "root": "service/policy/policy-svc",
+  "otherRoots": [
+    "service/mesh-system/mesh-webhook"
+  ],
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "validatingwebhookconfiguration//mesh-validator",
+    "validatingwebhookconfiguration//mesh-default-validator",
+    "mutatingwebhookconfiguration//mesh-injector",
+    "validatingwebhookconfiguration//policy-cleanup",
+    "validatingwebhookconfiguration//policy-exceptions"
+  ]
+}

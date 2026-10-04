@@ -21,11 +21,14 @@ import (
 // Free text such as summaries carries live counters, percentages and
 // estimates, so it never enters the fingerprint.
 func fingerprint(p *Incident) string {
-	reasons := make([]string, 0, len(p.Members))
+	reasons := make([]string, 0, len(p.Members)+len(p.rootReasons))
 	for key, s := range p.Members {
 		if key.Entity == p.Root && !s.Symptom {
 			reasons = append(reasons, key.Reason)
 		}
+	}
+	for reason := range p.rootReasons {
+		reasons = append(reasons, reason)
 	}
 	sort.Strings(reasons)
 	parts := []string{
@@ -84,6 +87,32 @@ func rootFindingReasons(
 	}
 	sort.Strings(reasons)
 	return uniq(reasons)
+}
+
+// rememberRootReasons adds the root's current own reasons to the set the
+// fingerprint reads. A reason that clears while the incident stays open
+// is not news; the incident's recovery is.
+func (p *Incident) rememberRootReasons() {
+	for key, s := range p.Members {
+		if key.Entity != p.Root || s.Symptom {
+			continue
+		}
+		if p.rootReasons == nil {
+			p.rootReasons = map[string]struct{}{}
+		}
+		p.rootReasons[key.Reason] = struct{}{}
+	}
+}
+
+// rootReasonList returns the remembered root reasons, sorted, for the
+// persisted record.
+func (p *Incident) rootReasonList() []string {
+	out := make([]string, 0, len(p.rootReasons))
+	for reason := range p.rootReasons {
+		out = append(out, reason)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // impactSize counts affected workloads, Services and Ingresses. Pods and

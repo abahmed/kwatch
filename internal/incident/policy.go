@@ -22,6 +22,9 @@ var digestReasons = map[string]bool{
 	reasons.ContainerCPUHigh:        true,
 	reasons.ContainerCPUThrottled:   true,
 	reasons.NodeResourceHigh:        true,
+	// A budget selecting no pods protects nothing, but on a cluster that
+	// scales workloads to zero it is the normal night.
+	reasons.PdbSelectsNothing: true,
 }
 
 // A routine incident happens at about the same time of day, again and

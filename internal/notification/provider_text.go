@@ -62,16 +62,21 @@ func (m Message) IsNotice() bool {
 	return m.conversationKey() == noticeKey
 }
 
-// SummaryKeyPrefix starts the conversation key of every startup summary.
-// compose.StartupKey builds the key; this prefix is how a provider tells a
-// summary from an incident.
-const SummaryKeyPrefix = "startup/"
+// SummaryKeyPrefix starts the conversation key of every startup summary
+// and DigestKeyPrefix that of every low-priority digest. compose builds
+// the keys; the prefixes are how a provider tells a summary from an
+// incident.
+const (
+	SummaryKeyPrefix = "startup/"
+	DigestKeyPrefix  = "digest/"
+)
 
-// IsSummary reports whether the message is the startup summary or its
-// closing resolve. The summary lists problems that already have their own
-// conversations, so it is information, not an incident to page on.
+// IsSummary reports whether the message is a startup summary, its closing
+// resolve, or a digest. They list problems that have their own
+// conversations, so they are information, not incidents to page on.
 func (m Message) IsSummary() bool {
-	return strings.HasPrefix(m.Key, SummaryKeyPrefix)
+	return strings.HasPrefix(m.Key, SummaryKeyPrefix) ||
+		strings.HasPrefix(m.Key, DigestKeyPrefix)
 }
 
 // IsInformational reports whether the message only informs: a plain

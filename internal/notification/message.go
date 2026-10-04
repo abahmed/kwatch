@@ -59,6 +59,12 @@ type Message struct {
 	// the same conversation. Delivery sends it combined with this message
 	// to a provider whose copy of the announcement was lost.
 	Opening *Message `json:",omitempty"`
+	// PagingOnly marks a message for the providers that track alerts by
+	// key (paging tools and issue trackers) only: a startup announcement
+	// the chat summary already covers, or the close of an incident whose
+	// failures another incident took over. Chat channels read about both
+	// elsewhere; an alert opened by key must still be closed by key.
+	PagingOnly bool `json:",omitempty"`
 }
 
 // IsOpening reports whether the message announces its conversation.

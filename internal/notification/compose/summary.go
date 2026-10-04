@@ -2,6 +2,7 @@ package compose
 
 import (
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/notification"
@@ -64,6 +65,78 @@ func (w Writer) StartupSummary(
 	}
 	fill(&msg, mark, sentences)
 	return msg
+}
+
+// DigestKey is the conversation key of the digest sent at at. Each digest
+// is its own conversation; nothing ever updates or resolves it.
+func DigestKey(at time.Time) string {
+	return notification.DigestKeyPrefix + at.UTC().Format("20060102T150405.000Z")
+}
+
+// Digest is one message for the low-priority incidents of the last
+// window: the ones that opened, at their current state, and the ones an
+// earlier digest listed that have resolved. None of them interrupts on
+// its own.
+func (w Writer) Digest(
+	opened, resolved []incident.Decision, now time.Time,
+) notification.Message {
+	opened = append([]incident.Decision(nil), opened...)
+	sort.SliceStable(opened, func(i, j int) bool {
+		return opened[i].Incident.Tier > opened[j].Incident.Tier
+	})
+	var counts []string
+	if len(opened) > 0 {
+		counts = append(counts, plural(len(opened), "low-priority problem"))
+	}
+	if len(resolved) > 0 {
+		counts = append(counts, plural(len(resolved), "earlier one")+
+			" that resolved")
+	}
+	sentences := []sentence{{part: partLead, text: "kwatch" +
+		w.clusterTag() + " has " + joinWords(counts) + " to report."}}
+	sentences = append(sentences, digestTitles(opened, now, "")...)
+	sentences = append(sentences,
+		digestTitles(resolved, now, "Resolved: ")...)
+	sentences = append(sentences, sentence{part: partAction,
+		text: "None of them is urgent; one that gets worse gets its own " +
+			"message."})
+	msg := notification.Message{
+		Key: DigestKey(now), Revision: 1, Status: notification.StatusLow,
+		Opens: true,
+	}
+	fill(&msg, notification.MarkerLow, sentences)
+	return msg
+}
+
+// digestTitles lists up to maxSummaryNamed incidents by their title.
+func digestTitles(
+	decisions []incident.Decision, now time.Time, prefix string,
+) []sentence {
+	var out []sentence
+	for i, d := range decisions {
+		if i == maxSummaryNamed {
+			out = append(out, sentence{part: partProof,
+				text: sentenceCase(numberWord(len(decisions)-i) + " more" +
+					" " + verb(len(decisions)-i, "is", "are") +
+					" not described here")})
+			break
+		}
+		out = append(out, sentence{part: partProof,
+			text: prefix + Writer{}.Write(d, now).Title})
+	}
+	return out
+}
+
+// joinWords joins two or three phrases with commas and "and".
+func joinWords(words []string) string {
+	switch len(words) {
+	case 0:
+		return "nothing"
+	case 1:
+		return words[0]
+	}
+	return strings.Join(words[:len(words)-1], ", ") + " and " +
+		words[len(words)-1]
 }
 
 // StartupResolved closes the startup summary with key once every incident

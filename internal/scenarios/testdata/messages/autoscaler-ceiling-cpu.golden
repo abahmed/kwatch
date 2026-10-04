@@ -1,8 +1,4 @@
-10:05:45 settled
-🟡 Autoscaler worker in orders (prod-eu-1) is at its maximum of 8 replicas and wants more. To see the object's state and events, run kubectl describe horizontalpodautoscaler worker -n orders
-🟡 Autoscaler worker in orders (prod-eu-1) is at its maximum of 8 replicas and wants more.
-
 10:09:30 material change
-🟠 Autoscaler worker in orders (prod-eu-1) is spreading to worker: it has only 4 of 8 replicas ready.
-🟠 Autoscaler worker in orders (prod-eu-1) is spreading to worker: it has only 4 of 8 replicas ready.
+🟠 Autoscaler worker in orders (prod-eu-1) is at its maximum of 8 replicas and wants more. worker is affected as well. To see the object's state and events, run kubectl describe deployment worker -n orders
+🟠 Autoscaler worker in orders (prod-eu-1) is at its maximum of 8 replicas and wants more.
 
