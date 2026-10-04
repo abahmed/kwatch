@@ -87,7 +87,10 @@ func (a *announcer) collectStartup(
 	return rest, true
 }
 
-// holdStartup reports whether d was absorbed by the startup summary.
+// holdStartup reports whether d was absorbed by the startup summary. A
+// held decision still reaches the sink for the audit log: as a paging-only
+// message when it is a page-tier announcement, otherwise marked as carried
+// by the summary.
 func (a *announcer) holdStartup(
 	ctx context.Context, now time.Time, d incident.Decision,
 ) bool {
@@ -106,15 +109,19 @@ func (a *announcer) holdStartup(
 			msg := a.write(d, now)
 			msg.PagingOnly = true
 			a.sink(ctx, d, msg)
+			return true
 		}
+		a.recordCarried(ctx, now, d, "startup summary")
 		return true
 	case held >= 0 && d.Action == incident.Update:
 		s.collected[held].Incident = d.Incident
+		a.recordCarried(ctx, now, d, "startup summary")
 		return true
 	case held >= 0 && d.Action == incident.Resolve:
 		// Resolved before anyone was told: leave it out of the summary.
 		s.collected = append(s.collected[:held], s.collected[held+1:]...)
 		a.incidents.ReleaseAnnouncement(id)
+		a.recordCarried(ctx, now, d, "startup summary")
 		return true
 	}
 	return false

@@ -108,8 +108,11 @@ type sinkLog struct {
 }
 
 func (s *sinkLog) sink(
-	_ context.Context, d incident.Decision, _ notification.Message,
+	_ context.Context, d incident.Decision, m notification.Message,
 ) {
+	if m.Carrier != "" {
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.decisions = append(s.decisions, d)

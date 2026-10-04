@@ -50,6 +50,9 @@ func newHarnessWith(
 		Incidents: incident.NewManager(
 			incident.Config{IDNonce: harnessNonce}, explain.NewSolver()),
 		Sink: func(_ context.Context, d incident.Decision, m notification.Message) {
+			if m.Carrier != "" {
+				return
+			}
 			h.decisions = append(h.decisions, d)
 			h.messages = append(h.messages, m)
 		},

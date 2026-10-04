@@ -41,6 +41,9 @@ type Result struct {
 	Messages  []notification.Message
 	// Times holds the simulated time each message was delivered.
 	Times []time.Time
+	// Carried are the decisions recorded for the audit log only, which
+	// the digest or the startup summary carried; see Message.Carrier.
+	Carried []incident.Decision
 	// Incidents are the tracked incidents when the replay ended.
 	Incidents []incident.Incident
 	// End is the simulated time the replay stopped at.
@@ -72,6 +75,10 @@ func Run(
 	deps.Sink = func(
 		ctx context.Context, d incident.Decision, m notification.Message,
 	) {
+		if m.Carrier != "" {
+			result.Carried = append(result.Carried, d)
+			return
+		}
 		result.Decisions = append(result.Decisions, d)
 		result.Messages = append(result.Messages, m)
 		result.Times = append(result.Times, sim.Now())

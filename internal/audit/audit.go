@@ -55,6 +55,11 @@ type Entry struct {
 	ContentHash string `json:"contentHash,omitempty"`
 	// Previous is the resolved incident this one repeats, when linked.
 	Previous string `json:"previous,omitempty"`
+	// Delivery says how the decision reaches people when not as a message
+	// of its own: "digest" or "startup summary" when that message carries
+	// it, "paging" when only alert-tracking providers receive it. Empty
+	// for an ordinary message.
+	Delivery string `json:"delivery,omitempty"`
 }
 
 // Config selects where entries go.

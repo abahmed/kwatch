@@ -351,6 +351,10 @@
   reported for about two minutes") instead of whichever pod was worst.
 - **Skipped resource types are named.** The startup log line about kinds
   left out by the watch budget now lists them.
+- **Audit log records every decision.** Decisions the digest or the startup
+  summary carry are written to the audit log when they are made, with
+  `delivery: digest` or `delivery: startup summary`; announcements that go
+  only to paging tools carry `delivery: paging`.
 - **Low-priority digest.** Digest-tier incidents (an autoscaler at its
   maximum, a budget that selects nothing, a throttled container, learned
   routines) are no longer announced one by one. One 🟡 digest every 30

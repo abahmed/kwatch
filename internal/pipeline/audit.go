@@ -39,6 +39,10 @@ func AuditEntry(
 		DecisionReason: d.Reason,
 		ContentHash:    p.Digest,
 		Previous:       p.Previous,
+		Delivery:       m.Carrier,
+	}
+	if m.PagingOnly {
+		entry.Delivery = "paging"
 	}
 	if p.Cause != nil {
 		entry.RootCause = p.Cause.Summary

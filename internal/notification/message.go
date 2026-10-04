@@ -65,6 +65,11 @@ type Message struct {
 	// failures another incident took over. Chat channels read about both
 	// elsewhere; an alert opened by key must still be closed by key.
 	PagingOnly bool `json:",omitempty"`
+	// Carrier names the message that carries this one to people, when it
+	// is not delivered on its own: "digest" or "startup summary". Such a
+	// message exists for the audit log, which records every decision when
+	// it is made; delivery drops it.
+	Carrier string `json:",omitempty"`
 }
 
 // IsOpening reports whether the message announces its conversation.

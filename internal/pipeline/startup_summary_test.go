@@ -138,7 +138,9 @@ func TestEngineStartupHoldsPageTierAndPagesSeparately(t *testing.T) {
 	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
 	var sent []notification.Message
 	sink := func(_ context.Context, _ incident.Decision, m notification.Message) {
-		sent = append(sent, m)
+		if m.Carrier == "" {
+			sent = append(sent, m)
+		}
 	}
 	e := newTestEngine(t, &fakeClock{now: now}, sink, nil)
 	e.announcer.startup.until = now.Add(time.Minute)
@@ -277,5 +279,36 @@ func TestIncidentStoreStartupMarkerRoundTrip(t *testing.T) {
 		len(got.Incidents) != 1 || !got.Complete ||
 		len(got.Followed) != 1 || len(got.Resolved) != 1 {
 		t.Fatalf("round trip = %+v found=%v err=%v", got, found, err)
+	}
+}
+
+// Decisions the startup summary holds reach the sink marked as carried,
+// except a page-tier announcement, which goes out as paging-only.
+func TestEngineStartupRecordsHeldDecisionsForTheAuditLog(t *testing.T) {
+	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
+	var seen []notification.Message
+	sink := func(_ context.Context, _ incident.Decision, m notification.Message) {
+		seen = append(seen, m)
+	}
+	e := newTestEngine(t, &fakeClock{now: now}, sink, nil)
+	e.announcer.startup.until = now.Add(time.Minute)
+	page := announce("node")
+	page.Incident.Tier = incident.Page
+	resolve := announce("pod")
+	resolve.Action = incident.Resolve
+
+	e.announcer.collectStartup(context.Background(), now,
+		[]incident.Decision{page, announce("pod"), resolve})
+
+	if len(seen) != 3 {
+		t.Fatalf("want three sink calls, got %d: %+v", len(seen), seen)
+	}
+	if !seen[0].PagingOnly || seen[0].Carrier != "" {
+		t.Fatalf("the page goes out paging-only, got %+v", seen[0])
+	}
+	for _, m := range seen[1:] {
+		if m.Carrier != "startup summary" || m.PagingOnly {
+			t.Fatalf("held decisions are carried by the summary, got %+v", m)
+		}
 	}
 }

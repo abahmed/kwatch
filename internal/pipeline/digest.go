@@ -38,11 +38,26 @@ func (a *announcer) collectDigest(
 ) ([]incident.Decision, bool) {
 	rest := make([]incident.Decision, 0, len(decisions))
 	for _, d := range decisions {
-		if out, held := a.holdDigest(now, d); !held {
+		out, held := a.holdDigest(now, d)
+		if !held {
 			rest = append(rest, out)
+			continue
 		}
+		a.recordCarried(ctx, now, d, "digest")
 	}
 	return rest, a.flushDigest(ctx, now)
+}
+
+// recordCarried hands a held decision to the sink for the audit log only:
+// the message names its carrier and delivery drops it. The audit log then
+// records every decision when it is made, whether people hear it on its
+// own or through the digest or the startup summary.
+func (a *announcer) recordCarried(
+	ctx context.Context, now time.Time, d incident.Decision, carrier string,
+) {
+	msg := a.write(d, now)
+	msg.Carrier = carrier
+	a.sink(ctx, d, msg)
 }
 
 // holdDigest reports whether d was absorbed by the digest. A decision
