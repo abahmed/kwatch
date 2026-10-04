@@ -372,12 +372,14 @@
   failure it checked and found healthy and unchanged, and the message says
   so: "Its node, image and configuration are healthy and unchanged, so
   nothing outside it explains this." The quoted crash output follows.
-- **What failing workloads share is suspected.** When three or more
-  workloads start failing within ten minutes and nothing upstream shows a
-  fault, the node, image, ConfigMap, Secret or ServiceAccount they all share
-  is named as a possible cause, never above "possibly", and any cause with
-  evidence of its own outranks it. It is suspected only when most of what
-  depends on it is failing.
+- **A node that failing workloads share is suspected.** When three or more
+  workloads on one node start failing within ten minutes, most pods on that
+  node fail, and nothing upstream shows a fault, the node is named as a
+  possible cause, never above "possibly", and any cause with evidence of its
+  own outranks it. An unchanged shared image, ConfigMap, Secret or
+  ServiceAccount is no longer suspected: that is weak evidence, and bad
+  builds are covered by rollout, image digest drift and the shared failure
+  signature.
 - **Dependencies outside the cluster are modelled and probed.** Environment
   values that name a URL or a `host:port` (only host and port are kept; user
   names, passwords and paths never leave the value) become

@@ -158,8 +158,8 @@ const (
 // Common factors.
 const (
 	// SharedFactorWindow is how close together the failures of several
-	// workloads must have begun for what they share (a node, an image,
-	// a config) to be suspected although it shows nothing wrong.
+	// workloads must have begun for the node they share to be
+	// suspected although it shows nothing wrong.
 	SharedFactorWindow = 10 * time.Minute
 	// SharedFactorMinWorkloads is how many workloads must fail together
 	// before a healthy thing they share is suspected.

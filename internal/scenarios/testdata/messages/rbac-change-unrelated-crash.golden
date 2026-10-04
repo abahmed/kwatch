@@ -1,4 +1,4 @@
 10:02:35 settled
-🟠 api in shop (prod-eu-1) keeps crashing. Its image, node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "Error: parse LOG_LEVEL: unknown level "verbose"". To read the output of the last crash, run kubectl logs api-626da116-a -c app -n shop --previous
+🟠 api in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "Error: parse LOG_LEVEL: unknown level "verbose"". To read the output of the last crash, run kubectl logs api-626da116-a -c app -n shop --previous
 🟠 api in shop (prod-eu-1) keeps crashing.
 

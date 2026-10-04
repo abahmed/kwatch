@@ -8,21 +8,17 @@ import (
 
 // ModeSharedFactor is the pseudo mode of a healthy, unchanged entity
 // that several workloads failing at the same time have in common: the
-// node they all run on, the image they all run, the config they all
-// read. Nothing is known to be wrong with it, so it is a suspect, not
-// a cause; the shared-* rows give it a low prior and demand several
-// workloads whose failures began together.
+// node they all run on. Nothing is known to be wrong with it, so it is
+// a suspect, not a cause; the shared-node row gives it a low prior and
+// demands several workloads whose failures began together.
 const ModeSharedFactor detection.Mode = "SharedFactor"
 
-// sharedFactorModes is the cause side of every shared-* row.
+// sharedFactorModes is the cause side of the shared-node row.
 var sharedFactorModes = []detection.Mode{ModeSharedFactor}
 
 // sharedFactorKinds are the kinds workloads share and that can break
 // several of them at once while showing nothing themselves.
-var sharedFactorKinds = map[inventory.Kind]bool{
-	kube.KindNode: true, kube.KindImage: true, kube.KindConfigMap: true,
-	kube.KindSecret: true, kube.KindAccount: true,
-}
+var sharedFactorKinds = map[inventory.Kind]bool{kube.KindNode: true}
 
 // sharedFactorState is the state of an upstream entity that showed no
 // finding and no change: the SharedFactor pseudo mode when its kind is

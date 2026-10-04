@@ -507,11 +507,13 @@ Some quirks are load-bearing. Preserve them unless a change explicitly says othe
   cause" must not come back.
 - A healthy, unchanged node, image, ConfigMap, Secret or ServiceAccount
   reached from a failure gets the pseudo mode `ModeSharedFactor`
-  (`shared_factor.go`). The `shared-*` rows need `SharedFactorMinWorkloads`
+  (`shared_factor.go`). The `shared-node` row needs `SharedFactorMinWorkloads`
   workloads whose failures began within `SharedFactorWindow`, and a
   shared-factor-only candidate is capped at `SharedFactorMaxConfidence`
   and viable only when at least `SharedFactorMinShare` of its dependents
-  fail.
+  fail. Only a node is suspected (an unchanged shared image, config, secret
+  or account is weak evidence), and `setCover` never lets a shared factor
+  claim a failure a candidate with its own evidence explains.
 - `detection.Finding.Advisory` marks a configuration risk (`Risk.*` reasons,
   `detectors.Risk`). Advisory findings are not failures to explain nor
   causes (`explain.unhealthy`), never open an incident (`Manager.attach`),

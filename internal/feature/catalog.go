@@ -120,8 +120,8 @@ var definitions = []Definition{
 		Runtime, nil,
 	},
 	{
-		SharedFactors, "Suspect what workloads failing together share " +
-			"when nothing else explains them",
+		SharedFactors, "Suspect a node that workloads failing together " +
+			"share when nothing else explains them",
 		Runtime, []ID{RootCause},
 	},
 	{

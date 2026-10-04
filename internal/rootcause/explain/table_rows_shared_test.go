@@ -47,25 +47,12 @@ func sharedCase(
 }
 
 var (
-	sharedImage = inventory.CoreID(kube.KindImage, "",
-		"registry.example.com/base:9")
-	sharedConfig  = inventory.CoreID(kube.KindConfigMap, "shop", "common")
-	sharedSecret  = inventory.CoreID(kube.KindSecret, "shop", "common-creds")
-	sharedAccount = inventory.CoreID(kube.KindAccount, "shop", "runner")
-	sharedNode    = inventory.CoreID(kube.KindNode, "", "n1")
+	sharedNode = inventory.CoreID(kube.KindNode, "", "n1")
 )
 
 var sharedRowCases = []rowCase{
 	{row: "shared-node", want: "node//n1",
 		build: sharedCase(sharedNode, "", 3, 1)},
-	{row: "shared-image", want: sharedImage.String(),
-		build: sharedCase(sharedImage, inventory.Pulls, 3, 1)},
-	{row: "shared-configmap", want: sharedConfig.String(),
-		build: sharedCase(sharedConfig, inventory.References, 3, 1)},
-	{row: "shared-secret", want: sharedSecret.String(),
-		build: sharedCase(sharedSecret, inventory.References, 3, 1)},
-	{row: "shared-account", want: sharedAccount.String(),
-		build: sharedCase(sharedAccount, inventory.References, 3, 1)},
 }
 
 // Two workloads sharing a healthy node are not a pattern: each is its

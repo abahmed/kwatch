@@ -147,10 +147,11 @@ say, in this order of strength:
    kept). With `autoDependencies` on, kwatch dials them, and a dependency
    that refuses connections is the cause of the pods that call it.
 2. **What the failures share.** Three or more workloads failing within ten
-   minutes with a healthy node, image, ConfigMap, Secret or ServiceAccount
-   in common make that object a suspect (`shared-*` rows, pseudo mode
-   `SharedFactor`). It is capped below "likely": nothing is known to be
-   wrong with it.
+   minutes on one healthy node, where most pods on that node fail, make the
+   node a suspect (`shared-node` row, pseudo mode `SharedFactor`). It is
+   capped below "likely": nothing is known to be wrong with it. An
+   unchanged shared image, ConfigMap, Secret or ServiceAccount is weak
+   evidence and is not suspected.
 3. **What was checked.** The solver records the upstream objects it reached
    that showed nothing wrong (`Trace.Checked`), and the message says "Its
    node, image and configuration are healthy and unchanged, so nothing

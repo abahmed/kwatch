@@ -84,18 +84,10 @@ var causeWords = map[string]causeWording{
 	"scheduler-capacity":    {words: "rejects every node"},
 	"scheduler-unavailable": {words: "is down"},
 	"self":                  {words: "is failing on its own"},
-	// shared-* rows suspect what failing workloads have in common.
+	// shared-node suspects what failing workloads have in common.
 	"shared-node": {
 		words: "is what the failing workloads have in common, though " +
 			"it looks healthy"},
-	"shared-image": {
-		words: "is the image every failing workload runs"},
-	"shared-configmap": {
-		words: "is what the failing workloads have in common"},
-	"shared-secret": {
-		words: "is what the failing workloads have in common"},
-	"shared-account": {
-		words: "is what the failing workloads have in common"},
 	"service-no-endpoints": {words: "has no ready endpoints"},
 	// shared-failure-signature is worded by signatureLead.
 	"shared-failure-signature": {

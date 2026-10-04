@@ -23,7 +23,7 @@ core.detection.probes|runtime|Run configured HTTP, TCP and DNS checks|
 core.detection.risks|runtime|Report configuration risks (no probe, no limit, mutable tag, single replica) in the digest|core.detection.workloads
 core.detection.unusual-events|runtime|Report repeated Warning events kwatch has no detector for, quoting the event|
 analysis.root-cause|runtime|Explain each incident by its most likely root cause|
-analysis.shared-factors|runtime|Suspect what workloads failing together share when nothing else explains them|analysis.root-cause
+analysis.shared-factors|runtime|Suspect a node that workloads failing together share when nothing else explains them|analysis.root-cause
 analysis.changes|runtime|Relate incidents to recent changes and who made them|analysis.root-cause
 analysis.impact|runtime|Show which workloads and services an incident affects|analysis.root-cause
 analysis.investigation|runtime|Attach a redacted log excerpt to announcements|

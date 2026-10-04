@@ -1,4 +1,4 @@
 10:03:45 settled
-🟠 worker in shop (prod-eu-1) keeps crashing. Its image and registry are healthy and unchanged, so nothing outside it explains this. It fails with "Error: queue consumer: unexpected message schema version 7". It runs a single replica, so this is downtime, not degradation. To read the output of the last crash, run kubectl logs worker-83df8007-a -c app -n shop --previous
+🟠 worker in shop (prod-eu-1) keeps crashing. Its registry is healthy and unchanged, so nothing outside it explains this. It fails with "Error: queue consumer: unexpected message schema version 7". It runs a single replica, so this is downtime, not degradation. To read the output of the last crash, run kubectl logs worker-83df8007-a -c app -n shop --previous
 🟠 worker in shop (prod-eu-1) keeps crashing.
 
