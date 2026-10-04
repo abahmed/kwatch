@@ -218,7 +218,13 @@ func auditEntries(prefix string, result replay.Result) []audit.Entry {
 	for i, d := range result.Decisions {
 		entry := pipeline.AuditEntry(d, result.Messages[i], result.Times[i])
 		if entry.Incident == "" {
-			entry.Incident = "startup-summary"
+			// Summaries and digests are conversations of their own, one
+			// per message key, so several digests never count as one
+			// incident with many messages.
+			entry.Incident = result.Messages[i].Key
+			if entry.Incident == "" {
+				entry.Incident = "startup-summary"
+			}
 			entry.Action = audit.ActionCreate
 			if d.Reason == "startup summary resolved" {
 				entry.Action = audit.ActionResolved

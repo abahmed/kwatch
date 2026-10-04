@@ -49,6 +49,10 @@ type Record struct {
 	ImpactPeak int       `json:",omitempty"`
 	Revised    bool      `json:",omitempty"`
 	RevisedAt  time.Time `json:",omitempty"`
+	// RootReasons are the root's own reasons seen so far, so a restart
+	// does not re-report a condition the incident already covered. Older
+	// records restore without them and rebuild the set from the members.
+	RootReasons []string `json:",omitempty"`
 	// AlertKey was added so paging alerts keep their identity across
 	// restarts. An older announced record restores with the key derived
 	// from its root and mode, as a new announcement would get it.
@@ -74,6 +78,7 @@ func (m *Manager) Export() []Record {
 			Mode: p.Mode, Fix: p.Fix, History: p.History,
 			ImpactPeak: p.impactPeak, Revised: p.revised,
 			RevisedAt: p.revisedAt, AlertKey: p.AlertKey,
+			RootReasons: p.rootReasonList(),
 		})
 	}
 	return out
@@ -132,6 +137,12 @@ func restored(r Record) *Incident {
 		impactPeak: r.ImpactPeak, revised: r.Revised,
 		revisedAt: r.RevisedAt, AlertKey: r.AlertKey,
 		sent: restoredMark(len(r.Timeline)), restored: true,
+	}
+	for _, reason := range r.RootReasons {
+		if p.rootReasons == nil {
+			p.rootReasons = map[string]struct{}{}
+		}
+		p.rootReasons[reason] = struct{}{}
 	}
 	if p.AlertKey == "" && wasAnnounced(p) {
 		p.AlertKey = alertKey(p.Root, p.Mode)

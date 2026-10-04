@@ -10,7 +10,8 @@ import (
 
 // announcer decides when and how each incident decision reaches people.
 // It drops decisions nobody wants to hear about, collects the incidents
-// that already existed at a cold start into one startup summary, holds
+// that already existed at a cold start into one startup summary, rolls
+// digest-tier incidents into one message per half hour, holds
 // an announcement for a few seconds while its investigation runs, and
 // then writes the message and hands it to the sink.
 //
@@ -34,6 +35,7 @@ type announcer struct {
 	// evidence is what investigation found, by incident ID.
 	evidence map[string]*evidenceState
 	startup  startupSummary
+	digest   lowDigest
 	storage  *persistence
 	stats    *workerStats
 }
@@ -66,10 +68,11 @@ func (a *announcer) announce(
 	a.startup.checkSummary = a.startup.checkSummary || hasResolve(decisions)
 	decisions = a.inScope(decisions)
 	decisions, summarised := a.collectStartup(ctx, now, decisions)
+	decisions, digested := a.collectDigest(ctx, now, decisions)
 	a.expireHeld(ctx, now)
 	a.deliver(ctx, now, decisions)
 	closed := a.closeSummary(ctx)
-	return summarised || closed
+	return summarised || digested || closed
 }
 
 // outputs is the channel finished investigations arrive on; nil, which

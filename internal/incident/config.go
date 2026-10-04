@@ -12,6 +12,11 @@ type Config struct {
 	// message. Page-tier incidents use PageSettle.
 	Settle     time.Duration
 	PageSettle time.Duration
+	// BurstIncidents is how many incidents settling at once make a
+	// burst. A burst takes Settle, not PageSettle, even at page tier: a
+	// shared cause (a node pool, a registry) usually surfaces within it,
+	// and one incident then replaces many.
+	BurstIncidents int
 	// ReviseSettle is how long a revised cause must hold before the
 	// "cause revised" update is sent.
 	ReviseSettle time.Duration
@@ -43,8 +48,9 @@ type Config struct {
 
 // Defaults for Config.
 const (
-	DefaultSettle     = 75 * time.Second
-	DefaultPageSettle = 15 * time.Second
+	DefaultSettle         = 75 * time.Second
+	DefaultPageSettle     = 15 * time.Second
+	DefaultBurstIncidents = 3
 	// DefaultReviseSettle covers the failures that usually follow a
 	// revised cause within seconds, such as evictions after pressure.
 	DefaultReviseSettle = 30 * time.Second
@@ -66,6 +72,9 @@ func (c Config) withDefaults() Config {
 	set(&c.Settle, DefaultSettle)
 	set(&c.PageSettle, DefaultPageSettle)
 	set(&c.ReviseSettle, DefaultReviseSettle)
+	if c.BurstIncidents <= 0 {
+		c.BurstIncidents = DefaultBurstIncidents
+	}
 	set(&c.Hold, DefaultHold)
 	set(&c.MaxHold, DefaultMaxHold)
 	set(&c.FlapWindow, DefaultFlapWindow)

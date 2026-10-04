@@ -111,7 +111,7 @@ func (a *areaPlacer) rejectedOutside(own inventory.EntityID) bool {
 		return outside
 	}
 	for _, r := range a.area.Trace.Rejected {
-		if defaultRoot(a.s.Model, r.Root) != own {
+		if !r.Insufficient && defaultRoot(a.s.Model, r.Root) != own {
 			outside = true
 			break
 		}
@@ -173,6 +173,18 @@ func (m *Manager) attach(
 	m.changed[p.ID] = true
 }
 
+// ratchetTier keeps an announced incident at the loudest tier it reached.
+// Members of a crash loop come and go within seconds, and a tier that
+// followed them would flip between page and notify, each flip a
+// "material change". Escalation is news; de-escalation is told by the
+// recovery. Before the first message the tier still follows the members.
+func (m *Manager) ratchetTier(p *Incident, computed Tier) Tier {
+	if p.Announced.IsZero() || computed >= p.Tier {
+		return computed
+	}
+	return p.Tier
+}
+
 // refresh recomputes what depends on the whole member set of every
 // incident that changed in this Apply: mode, impact and tier. Doing it
 // once per incident keeps a storm of members linear.
@@ -185,7 +197,8 @@ func (m *Manager) refresh(model inventory.Reader) {
 			p.admissionBlocked = admissionBlocked(model, p)
 			p.routedMissing = routedMissing(model, p)
 			p.impactPeak = max(p.impactPeak, impactSize(p))
-			p.Tier = m.override.apply(p, tier(p))
+			p.rememberRootReasons()
+			p.Tier = m.ratchetTier(p, m.override.apply(p, tier(p)))
 		}
 	}
 	clear(m.changed)

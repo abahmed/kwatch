@@ -114,7 +114,7 @@ func TestRecurrenceRemembersHowEachOccurrenceEnded(t *testing.T) {
 			last, ok := again.LastOccurrence()
 			require.True(t, ok)
 			assert.Equal(t, Occurrence{Mode: "CrashLoop", Opened: at(0),
-				Resolved: first.Resolved, Fix: tt.want}, last)
+				Resolved: first.Resolved, Fix: tt.want, Heard: true}, last)
 			assert.Positive(t, last.Duration())
 		})
 	}

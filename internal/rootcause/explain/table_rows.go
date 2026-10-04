@@ -66,12 +66,15 @@ var genericRows = []Row{
 	},
 	{
 		// A Service without endpoints explains what it serves: an
-		// admission webhook or an APIService.
+		// admission webhook or an APIService. Inferred from the webhooks'
+		// own findings (the Service itself may be scaled to zero), it
+		// needs more than one webhook: a single webhook stays its own root.
 		Name: "service-no-endpoints",
 		Cause: Side{Kind: kube.KindService,
 			Modes: []detection.Mode{
 				detection.ModeNoEndpoints, detection.ModeBackendsDegraded}},
 		Link: LinkServedBy, Effect: anything, Prior: 0.7,
+		InferredMinWorkloads: SharedMinWorkloads,
 	},
 	{
 		// An unavailable APIService explains every client of its API.
@@ -297,15 +300,16 @@ var clusterRows = []Row{
 		Prior: 0.8,
 	},
 	{
-		// The Service behind a webhook fails with the webhook it
-		// serves: its missing endpoints are the webhook's outage,
-		// not a second incident.
-		Name: "webhook-backend",
-		Cause: Side{Group: AnyGroup, Kind: AnyKind,
-			Modes: []detection.Mode{detection.ModeWebhook}},
-		Link:   LinkContains,
-		Effect: Side{Kind: kube.KindService},
-		Prior:  0.7,
+		// Several webhooks calling one Service that does not exist fail
+		// together; the missing Service is their one root. A single
+		// webhook keeps its own root.
+		Name: "webhook-backend-missing",
+		Cause: Side{Kind: kube.KindService,
+			Modes: []detection.Mode{ModeMissing}},
+		Link: LinkServedBy,
+		Effect: Side{Group: AnyGroup, Kind: AnyKind,
+			Modes: []detection.Mode{detection.ModeWebhookBackendMissing}},
+		Prior: 0.8, InferredMinWorkloads: SharedMinWorkloads,
 	},
 	{
 		Name: "metrics-api-down",

@@ -82,11 +82,11 @@ var causeWords = map[string]causeWording{
 		words: "is the error several workloads fail with"},
 	"startup-budget-too-short": {own: true,
 		words: "its containers get too little time to start"},
-	"summary":         {words: "is failing"},
-	"used-missing":    {words: "does not exist"},
-	"webhook-backend": {words: "has no working backend"},
-	"webhook-rejects": {words: "is rejecting requests"},
-	"zone-failing":    {words: "is failing as a whole"},
+	"summary":                 {words: "is failing"},
+	"used-missing":            {words: "does not exist"},
+	"webhook-backend-missing": {words: "does not exist"},
+	"webhook-rejects":         {words: "is rejecting requests"},
+	"zone-failing":            {words: "is failing as a whole"},
 }
 
 // ownCause reports a cause worded as a clause about the subject.

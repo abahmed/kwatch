@@ -126,6 +126,11 @@ type Incident struct {
 	// the new cause held since revisedAt for the revise settle.
 	revised   bool
 	revisedAt time.Time
+	// rootReasons are the root's own finding reasons ever seen in this
+	// incident. The fingerprint reads them, so a crash loop whose pods
+	// come up and fall over again, toggling the workload's own
+	// conditions, is not a stream of "material changes".
+	rootReasons map[string]struct{}
 	// impactPeak is the largest impact size seen. The fingerprint reads it,
 	// so impact that shrinks while failures churn is not news.
 	impactPeak int

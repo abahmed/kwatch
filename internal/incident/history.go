@@ -32,6 +32,11 @@ type Occurrence struct {
 	Opened   time.Time
 	Resolved time.Time
 	Fix      Fix
+	// Heard is true when the occurrence was announced. A blip that
+	// recovered inside its settle, or a root another incident took over
+	// first, is remembered for routines and flapping but is not "the
+	// second time this week" to anyone.
+	Heard bool `json:",omitempty"`
 }
 
 // Duration is how long the occurrence lasted.
@@ -69,6 +74,7 @@ func (inc *Incident) LastOccurrence() (Occurrence, bool) {
 func occurrenceOf(p *Incident) Occurrence {
 	return Occurrence{
 		Mode: p.Mode, Opened: p.Opened, Resolved: p.Resolved, Fix: p.Fix,
+		Heard: !p.Announced.IsZero(),
 	}
 }
 

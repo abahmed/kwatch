@@ -66,6 +66,14 @@
         "emptyDirSizeLimit": {
           "type": "string",
           "default": "2Gi"
+        },
+        "pinToStorageDriverNodes": {
+          "type": "boolean",
+          "default": true
+        },
+        "storageDriverTopologyKey": {
+          "type": "string",
+          "default": ""
         }
       },
       "additionalProperties": false

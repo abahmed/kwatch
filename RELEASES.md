@@ -166,6 +166,13 @@
   `-max-peak-per-hour` to 30. The new histogram
   `kwatch_pipeline_decision_lag_seconds` measures the time from an
   observation being submitted to its decisions being applied.
+- **Chart: state volume placement.** When the StorageClass's CSI driver is
+  registered on only some nodes, `helm install` and `helm upgrade` now add a
+  node affinity on the driver's topology label so the state claim can bind
+  where the Pod lands (`persistence.pinToStorageDriverNodes`, default
+  `true`; `persistence.storageDriverTopologyKey` sets the label for offline
+  renders). Before, the Pod could stay `Pending` with the claim reporting
+  `no topology key found for node`.
 - **Chart.** `tolerations` are now merged with `defaultTolerations`; an entry
   with the same key and effect wins (an entry without an effect covers every
   effect of its key), so a `not-ready` `NoSchedule` toleration keeps the
@@ -331,6 +338,42 @@
   full within hours; a lost PVC with a resize error stays Critical; a
   restored recovering incident no longer sends an empty update; crash log
   excerpts keep the end of the log, where the crash message is.
+- **Webhooks share their backend as root.** Several admission webhooks
+  that call one Service with no ready endpoints, or one Service that does
+  not exist, are now one incident rooted at that Service instead of one
+  incident per webhook configuration. A single webhook keeps its own root.
+- **Tier never drops while open.** An announced incident keeps the loudest
+  tier it reached; a crash loop whose critical member clears for a moment
+  no longer flips between page and notify with a message per flip.
+- **Zones and node pools lead their incidents.** An incident caused by a
+  zone or node pool failing as a whole now opens with the place and its
+  nodes ("Node pool dev-arm-np is failing as a whole: two nodes have not
+  reported for about two minutes") instead of whichever pod was worst.
+- **Skipped resource types are named.** The startup log line about kinds
+  left out by the watch budget now lists them.
+- **Low-priority digest.** Digest-tier incidents (an autoscaler at its
+  maximum, a budget that selects nothing, a throttled container, learned
+  routines) are no longer announced one by one. One 🟡 digest every 30
+  minutes lists what opened and what resolved; an incident that gets worse
+  is announced at once. Paging tools and issue trackers never receive it.
+- **"The second time this week" counts heard times.** A blip that recovered
+  before it was announced still counts for flapping and routines, but is
+  no longer called an earlier time in the next message.
+- **One message when incidents merge.** When another incident takes over
+  an incident's failures (a node pool explaining a dozen crashing
+  Deployments), the absorbed incident's close now goes only to paging tools
+  and issue trackers, which hold an alert under its key; chat channels read
+  about those failures in the merged incident's update instead of one
+  "cause revised" message per workload.
+- **Bursts settle longer.** Three or more incidents settling at the same
+  time take the 75-second settle even at page tier, so a shared cause can
+  surface and be announced once instead of each incident paging and then
+  being revised seconds later.
+- **Startup summary holds pages too.** At a cold start, pre-existing
+  page-tier problems are listed in the startup summary instead of being
+  announced one by one to chat channels; paging tools and issue trackers,
+  which never receive summaries, still get each of those announcements on
+  its own.
 - **Fewer wrong roots.** A zone or node pool is no longer blamed for a
   crash on a healthy node; stack-trace locations such as `Pool.java:512`
   are no longer read as external endpoints; one pod's lookup of a

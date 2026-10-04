@@ -22,6 +22,7 @@ import (
 func clusterScenarios() []scenario {
 	return []scenario{
 		clusterDNSDown(), clusterWebhookNoEndpoints(),
+		clusterWebhookSharedBackend(),
 		clusterQuotaExhausted(), clusterMetricsAPIDown(),
 		clusterRegistryAuth(), clusterImageTypo(),
 		clusterNetworkPolicyChange(), clusterOperatorCRStuck(),
@@ -110,6 +111,61 @@ func clusterWebhookNoEndpoints() scenario {
 		},
 		build: buildClusterWebhook,
 	}
+}
+
+// clusterWebhookSharedBackend: three webhook configurations call one
+// Service whose Deployment is scaled to zero, and two more call a Service
+// that does not exist. Each backend is one root; its webhooks are its
+// symptoms, not five incidents.
+func clusterWebhookSharedBackend() scenario {
+	return scenario{
+		expect: expectation{
+			Name: "webhook-shared-backend",
+			Description: "Three fail-closed webhooks call a Service " +
+				"with no ready endpoints and two call a Service that " +
+				"does not exist; each backend is one incident.",
+			Root:        "service/policy/policy-svc",
+			OtherRoots:  []string{"service/mesh-system/mesh-webhook"},
+			Tier:        "page",
+			MaxMessages: 2,
+			MustNotBlame: []string{
+				"validatingwebhookconfiguration//mesh-validator",
+				"validatingwebhookconfiguration//mesh-default-validator",
+				"mutatingwebhookconfiguration//mesh-injector",
+				"validatingwebhookconfiguration//policy-cleanup",
+				"validatingwebhookconfiguration//policy-exceptions",
+			},
+		},
+		build: buildClusterWebhookSharedBackend,
+	}
+}
+
+func buildClusterWebhookSharedBackend(c *cluster) {
+	c.list(c.node("n1", "zone-a"), c.node("n2", "zone-a"))
+	mesh := c.deployment("mesh-system", "mesh-webhook",
+		"registry.example.com/mesh:1.2", 2)
+	c.list(mesh.objects())
+	pods := []*corev1.Pod{mesh.pod(0, "n1"), mesh.pod(1, "n2")}
+	c.list(pods[0], pods[1])
+	c.list(clusterService(c, "mesh-system", "mesh-webhook", 443))
+	c.list(clusterSlice(c, "mesh-system", "mesh-webhook", pods...))
+	c.list(clusterValidatingHook(c, "mesh-validator",
+		"validate.mesh.example.com", "mesh-system", "mesh-webhook"))
+	c.list(clusterValidatingHook(c, "mesh-default-validator",
+		"default.mesh.example.com", "mesh-system", "mesh-webhook"))
+	c.list(admissionMutatingHook(c, "mesh-injector",
+		"inject.mesh.example.com", "mesh-system", "mesh-webhook", 10))
+	c.list(clusterValidatingHook(c, "policy-cleanup",
+		"cleanup.policy.example.com", "policy", "policy-svc"))
+	c.list(clusterValidatingHook(c, "policy-exceptions",
+		"exceptions.policy.example.com", "policy", "policy-svc"))
+	c.after(time.Minute)
+	setReplicas(mesh, 0)
+	mesh.setReady(0)
+	c.update(mesh.objects())
+	c.remove(pods[0], pods[1])
+	c.update(clusterSlice(c, "mesh-system", "mesh-webhook"))
+	c.after(3 * time.Minute)
 }
 
 func buildClusterWebhook(c *cluster) {

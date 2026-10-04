@@ -119,15 +119,19 @@ var clusterRowCases = []rowCase{
 			f.fail(hook, "Webhook.NoEndpoints", failingH, 1, "")
 			return createCase(f, `failed calling webhook "v.example"`)
 		}},
-	{row: "webhook-backend", want: "validatingwebhookconfiguration//policy",
+	{row: "service-no-endpoints", want: "service/policy/hook",
 		build: func(f *fixture) inventory.EntityID {
-			hook := inventory.CoreID(kube.KindValidatingHook, "", "policy")
 			service := inventory.CoreID(kube.KindService, "policy", "hook")
-			f.add(hook, service)
-			f.relate(hook, inventory.Serves, service)
-			f.fail(hook, "Webhook.NoEndpoints", failingH, 1, "")
-			f.fail(service, "PortMismatch", degradedH, 1, "")
-			return service
+			f.add(service)
+			return webhooksBehind(f, service, "Webhook.NoEndpoints",
+				"policy", "mutate")
+		}},
+	{row: "webhook-backend-missing", want: "service/kyverno/kyverno-svc",
+		build: func(f *fixture) inventory.EntityID {
+			service := inventory.CoreID(kube.KindService, "kyverno",
+				"kyverno-svc")
+			return webhooksBehind(f, service, "Webhook.BackendMissing",
+				"cleanup", "exception")
 		}},
 	{row: "metrics-api-down", want: "apiservice//v1beta1.metrics.k8s.io",
 		build: func(f *fixture) inventory.EntityID {

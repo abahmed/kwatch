@@ -51,8 +51,8 @@ func (v *view) traceOf(
 		}
 		trace.Candidates = append(trace.Candidates, v.causeOf(s))
 		if note, ok := rejected[s.c.id]; ok {
-			trace.Rejected = append(trace.Rejected,
-				Rejection{Root: s.c.id, Reason: note.reason})
+			trace.Rejected = append(trace.Rejected, Rejection{Root: s.c.id,
+				Reason: note.reason, Insufficient: note.insufficient})
 		} else if !chosen[s.c.id] {
 			trace.Rejected = append(trace.Rejected, Rejection{
 				Root:   s.c.id,
@@ -63,8 +63,8 @@ func (v *view) traceOf(
 	for _, id := range sortedKeys(rejected) {
 		note := rejected[id]
 		if !scoredIDs[id] && inArea[note.effect] {
-			trace.Rejected = append(trace.Rejected,
-				Rejection{Root: id, Reason: note.reason})
+			trace.Rejected = append(trace.Rejected, Rejection{Root: id,
+				Reason: note.reason, Insufficient: note.insufficient})
 		}
 	}
 	return trace

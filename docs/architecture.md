@@ -92,7 +92,8 @@ the `bad-rollout` scenario in `internal/scenarios`.
    cover picks the Deployment as the one cause. The node is not blamed.
 6. **The incident manager decides.** `incident.Manager.Apply` attaches the
    findings to an incident rooted at the Deployment. Its tier is page. The
-   incident settles for 15 seconds (75 for lower tiers) so late failures join
+   incident settles for 15 seconds (75 for lower tiers, and for a burst of
+   three or more incidents settling at once) so late failures join
    it, then `Tick` returns an announce decision.
 7. **Investigation joins in.** When the incident opened, a worker read a short
    log excerpt, redacted. If it arrives within a short wait it is attached;

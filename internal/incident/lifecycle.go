@@ -104,11 +104,7 @@ func (m *Manager) deadline(p *Incident, now time.Time) (time.Time, bool) {
 		if len(p.Members) == 0 {
 			return m.graceDeadline(p, now)
 		}
-		settle := m.cfg.Settle
-		if p.Tier == Page {
-			settle = m.cfg.PageSettle
-		}
-		return p.Opened.Add(settle), true
+		return p.Opened.Add(m.settleFor(p)), true
 	case Open:
 		if len(p.Members) == 0 {
 			return m.graceDeadline(p, now)
@@ -165,11 +161,7 @@ func (m *Manager) settle(p *Incident, now time.Time) (Decision, bool) {
 		p.Fix = fixOf(m.model, p, now)
 		return Decision{}, false
 	}
-	settle := m.cfg.Settle
-	if p.Tier == Page {
-		settle = m.cfg.PageSettle
-	}
-	if now.Before(p.Opened.Add(settle)) {
+	if now.Before(p.Opened.Add(m.settleFor(p))) {
 		return Decision{}, false
 	}
 	if p.Tier == Silent {
@@ -186,6 +178,28 @@ func (m *Manager) settle(p *Incident, now time.Time) (Decision, bool) {
 			" recurrences in "+m.cfg.FlapWindow.String())
 	}
 	return m.decide(p, Announce, "settled"), true
+}
+
+// settleFor is how long p collects findings before its first message. A
+// page settles fast on its own; in a burst of incidents settling at once
+// it waits the full settle, so the cause they share can surface and one
+// incident replaces many instead of many being announced and revised.
+func (m *Manager) settleFor(p *Incident) time.Duration {
+	if p.Tier == Page && m.settlingCount() < m.cfg.BurstIncidents {
+		return m.cfg.PageSettle
+	}
+	return m.cfg.Settle
+}
+
+// settlingCount is how many incidents with members are settling now.
+func (m *Manager) settlingCount() int {
+	count := 0
+	for _, p := range m.incidents {
+		if p.State == Settling && len(p.Members) > 0 {
+			count++
+		}
+	}
+	return count
 }
 
 // superseded reports whether an announced incident lost every member to

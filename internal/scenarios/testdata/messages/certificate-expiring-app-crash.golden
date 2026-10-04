@@ -1,7 +1,3 @@
-10:01:15 settled
-🟡 Secret bank-client-tls in shop (prod-eu-1) has a TLS certificate that expires in ten days. Clients will reject it once it expires. To list the keys of the Secret the pods depend on, run kubectl describe secret bank-client-tls -n shop
-🟡 Secret bank-client-tls in shop (prod-eu-1) has a TLS certificate that expires in ten days.
-
 10:02:15 settled
 🟠 payments in shop (prod-eu-1) keeps crashing, and I couldn't find an outside cause. It fails with "panic: assignment to entry in nil map". To read the output of the last crash, run kubectl logs payments-10be2a67-a -c app -n shop --previous
 🟠 payments in shop (prod-eu-1) keeps crashing, and I couldn't find an outside cause.

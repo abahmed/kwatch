@@ -130,7 +130,15 @@ func (a *announcer) write(
 	if fix := d.Incident.FixedBy; d.Action == incident.Resolve && fix != nil {
 		return a.messages.WriteResolvedBy(d, at, *fix)
 	}
-	return a.messages.Write(d, at)
+	msg := a.messages.Write(d, at)
+	// An incident whose failures another incident took over closes its
+	// own alert, but the chat channel already reads about those failures
+	// in the other incident's update; a "cause revised" per absorbed
+	// incident would be one message per workload in a storm.
+	if d.Action == incident.Resolve && d.Incident.SupersededBy != "" {
+		msg.PagingOnly = true
+	}
+	return msg
 }
 
 func (a *announcer) noteLate() {

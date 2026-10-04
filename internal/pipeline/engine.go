@@ -242,7 +242,8 @@ func (e *Engine) timer(
 	}
 	now := e.deps.Clock.Now()
 	wait := heartbeat
-	deadlines := []time.Time{checks.next(), nextTick, e.announcer.nextHeld()}
+	deadlines := []time.Time{checks.next(), nextTick, e.announcer.nextHeld(),
+		e.announcer.nextDigest()}
 	for _, at := range deadlines {
 		if !at.IsZero() {
 			wait = min(wait, max(at.Sub(now), 0))

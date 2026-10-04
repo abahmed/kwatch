@@ -3,6 +3,7 @@ package compose
 import (
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -58,6 +59,8 @@ func leadText(f caseFacts) string {
 	switch {
 	case p.Cause != nil && p.Cause.Root.Kind == explain.KindFailureSignature:
 		return signatureLead(f)
+	case leadIsGroup(f):
+		return groupLead(f)
 	case ownCause(p.Cause):
 		return ownCauseLead(f)
 	case blamedChange(f) != nil:
@@ -66,6 +69,54 @@ func leadText(f caseFacts) string {
 		return causedLead(f)
 	}
 	return ownLead(f)
+}
+
+// leadIsGroup reports an incident caused by a place failing as a whole:
+// a zone or a node pool.
+func leadIsGroup(f caseFacts) bool {
+	if f.p.Cause == nil {
+		return false
+	}
+	kind := f.p.Cause.Root.Kind
+	return kind == kube.KindZone || kind == kube.KindNodePool
+}
+
+// groupLead leads with the zone or node pool that fails as a whole: the
+// place is the news, not whichever of its nodes or pods happens to be
+// the worst. "Zone zone-b (prod-eu-1) is failing as a whole: two nodes
+// have not reported for about two minutes".
+func groupLead(f caseFacts) string {
+	text := upperFirst(f.leadName(f.p.Cause.Root)) + " " +
+		causeWordsFor(f.p.Cause)
+	nodes, state := failingNodes(f)
+	switch {
+	case nodes == 0 || state == "":
+		return text
+	case nodes == 1:
+		return text + ": one node " + state
+	}
+	return text + ": " + numberWord(nodes) + " nodes " + pluralPredicate(state)
+}
+
+// failingNodes counts the node members and words the condition of the
+// most severe one as a predicate.
+func failingNodes(f caseFacts) (int, string) {
+	count := 0
+	var worst detection.Finding
+	found := false
+	for _, m := range f.members {
+		if m.Entity.Kind != kube.KindNode {
+			continue
+		}
+		count++
+		if !found || m.Severity > worst.Severity {
+			worst, found = m, true
+		}
+	}
+	if !found {
+		return 0, ""
+	}
+	return count, beforeColon(predicate(worst.Entity, worst.Summary))
 }
 
 // blamedChange is the change the lead blames, or nil. A change is not
