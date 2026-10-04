@@ -1,6 +1,8 @@
 package compose
 
 import (
+	"strings"
+
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -24,7 +26,7 @@ func resolveNote(f caseFacts) (string, []sentence) {
 	lead := sentence{part: partLead, text: capitalName(subject,
 		f.leadName(subject)+" "+resolution(f, subject)+".")}
 	lasted := "it was " + downWord(p) + " for " +
-		humanDuration(p.Resolved.Sub(p.Opened))
+		humanDuration(p.Resolved.Sub(p.Opened)) + resolvedCause(f, subject)
 	detail := sentenceCase(lasted)
 	if fix := fixPhrase(f); fix != "" {
 		detail = fix + "; " + lasted + "."
@@ -80,4 +82,29 @@ func fixPhrase(f caseFacts) string {
 		return who + " changed " + fieldWords(fix.Fields[0].Path) + at
 	}
 	return who + " changed " + nameFrom(p.Root, fix.Entity) + at
+}
+
+// resolvedCause says, in the resolve, what the incident was blamed on:
+// " because node n3 was low on memory". The resolve is the message
+// people read when they come back, so it carries the cause. A workload
+// blamed for itself names none.
+func resolvedCause(f caseFacts, subject inventory.EntityID) string {
+	cause := f.p.Cause
+	if cause == nil || cause.Rule == "self" || cause.Root == subject {
+		return ""
+	}
+	return " because " + pastTense(causePhrase(cause, subject))
+}
+
+// pastTense moves the cause's verb into the past: "is low on memory"
+// becomes "was low on memory".
+func pastTense(text string) string {
+	for _, r := range [][2]string{
+		{" is ", " was "}, {" are ", " were "}, {" has ", " had "},
+		{" does ", " did "}, {" keeps ", " kept "}, {" refuses ", " refused "},
+		{" cannot ", " could not "},
+	} {
+		text = strings.Replace(text, r[0], r[1], 1)
+	}
+	return text
 }

@@ -73,6 +73,11 @@ func usesCase(
 }
 
 var clusterRowCases = []rowCase{
+	{row: "claim-pins-pod", want: "persistentvolumeclaim/streaming/data-kafka-0",
+		build: func(f *fixture) inventory.EntityID {
+			pod, _ := pinnedPod(f)
+			return pod
+		}},
 	{row: "registry-refuses", want: "registry//registry.corp.example",
 		build: func(f *fixture) inventory.EntityID {
 			var first inventory.EntityID
@@ -206,10 +211,11 @@ func createCase(f *fixture, text string) inventory.EntityID {
 // TestTableRows solves one fixture per row and checks that the row
 // links the expected root to the failure.
 func TestTableRows(t *testing.T) {
-	groups := [][]rowCase{genericRowCases, nodeRowCases,
+	groups := [][]rowCase{genericRowCases, nodeRowCases, sharedRowCases,
 		workloadRowCases, clusterRowCases, controlPlaneRowCases,
 		accessRowCases, trafficRowCases, lifecycleRowCases,
-		workloadConfigRowCases, calledRowCases, scalingRowCases}
+		workloadConfigRowCases, calledRowCases, scalingRowCases,
+		agentRowCases}
 	tested := map[string]bool{}
 	for _, group := range groups {
 		for _, tc := range group {

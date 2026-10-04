@@ -42,13 +42,14 @@ var extraSubjectWords = map[inventory.Kind][]string{
 	"validatingwebhookconfiguration": {"admission webhook"},
 	"mutatingwebhookconfiguration":   {"admission webhook"},
 	"resourcequota":                  {"namespace quota"},
+	"external-endpoint":              {"endpoint"},
 }
 
 // subjectlessVerbs start summaries that leave the subject out
 // ("Reports phase Failed", "Has been pending").
 var subjectlessVerbs = []string{"reports ", "has ", "is ", "keeps ",
 	"cannot ", "can't ", "references ", "routes ", "calls ", "stopped ",
-	"was ", "allows ", "uses ", "needs ", "selects "}
+	"was ", "allows ", "uses ", "needs ", "selects ", "does "}
 
 func hasPrefixFold(text, prefix string) bool {
 	return len(text) >= len(prefix) &&

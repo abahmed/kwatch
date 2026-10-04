@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -52,17 +53,41 @@ type ProbeConfig struct {
 	Resolver Resolver
 	Now      func() time.Time
 	Submit   Submit
+	// HTTP reaches pods directly, for the cluster DNS metrics; nil
+	// skips them.
+	HTTP *http.Client
+	// Model finds the cluster DNS pods; nil skips their metrics.
+	Model inventory.Reader
 }
 
 // Prober checks the API server and cluster DNS every probeInterval. Each
 // check has its own timeout, so a slow API server never makes DNS look
-// broken.
+// broken. Every leaseScanEvery rounds it also reads the Leases of
+// controllers and operators (see leases).
 type Prober struct {
-	cfg ProbeConfig
+	cfg    ProbeConfig
+	rounds int
+	// rates turns the request and response counters into per-second
+	// rates between rounds.
+	rates *counterRates
 }
 
+// Lease scan limits. Leases renew every few seconds, so they are read on
+// a slow cadence and never watched; a bounded list keeps a cluster with
+// thousands of leases from turning the scan into a load.
+const (
+	leaseScanEvery = 4
+	leaseScanLimit = 500
+	// nodeLeaseNamespace holds the kubelet heartbeats, read through the
+	// node conditions instead.
+	nodeLeaseNamespace  = "kube-node-lease"
+	defaultLeaseSeconds = 15
+)
+
 // NewProber builds a prober.
-func NewProber(cfg ProbeConfig) *Prober { return &Prober{cfg: cfg} }
+func NewProber(cfg ProbeConfig) *Prober {
+	return &Prober{cfg: cfg, rates: newCounterRates()}
+}
 
 // Run probes until ctx ends.
 func (p *Prober) Run(ctx context.Context) {
@@ -71,6 +96,10 @@ func (p *Prober) Run(ctx context.Context) {
 	for {
 		observations := append(p.apiServer(ctx), p.dns(ctx))
 		observations = append(observations, p.leaders(ctx)...)
+		if p.rounds%leaseScanEvery == 0 {
+			observations = append(observations, p.leases(ctx)...)
+		}
+		p.rounds++
 		p.cfg.Submit(ctx, observations...)
 		select {
 		case <-ctx.Done():
@@ -91,6 +120,7 @@ func (p *Prober) apiServer(ctx context.Context) []inventory.Observation {
 	api := probeObservation(APIServer, now, now.Sub(start), err)
 	if err == nil {
 		p.addServerVersion(probeCtx, api.Attributes)
+		p.addServerMetrics(probeCtx, api.Attributes, now)
 	}
 	observations := []inventory.Observation{api}
 	if etcdErr, known := etcdCheck(string(body)); known {
@@ -181,7 +211,10 @@ func (p *Prober) dns(ctx context.Context) inventory.Observation {
 	defer cancel()
 	start := p.cfg.Now()
 	_, err := p.cfg.Resolver.LookupHost(probeCtx, clusterDNSLookup)
-	return probeObservation(ClusterDNS, p.cfg.Now(), p.cfg.Now().Sub(start), err)
+	out := probeObservation(ClusterDNS, p.cfg.Now(), p.cfg.Now().Sub(start),
+		err)
+	p.addDNSMetrics(probeCtx, out.Attributes, p.cfg.Now())
+	return out
 }
 
 func probeObservation(
@@ -198,4 +231,44 @@ func probeObservation(
 		Kind: inventory.Observed, Source: ProbeSource, At: at, Entity: id,
 		Attributes: attrs,
 	}
+}
+
+// leases records every Lease outside the node heartbeats and the
+// control-plane leaders: who holds it, when it was last renewed and
+// for how long it is valid. The detector decides what is stale; the
+// prober only reports. An error (no RBAC, a managed control plane that
+// hides them) reports nothing.
+func (p *Prober) leases(ctx context.Context) []inventory.Observation {
+	probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+	list, err := p.cfg.Client.CoordinationV1().Leases("").List(probeCtx,
+		metav1.ListOptions{Limit: leaseScanLimit})
+	if err != nil {
+		return nil
+	}
+	now := p.cfg.Now()
+	var out []inventory.Observation
+	for _, lease := range list.Items {
+		if lease.Namespace == nodeLeaseNamespace ||
+			lease.Spec.RenewTime == nil || lease.Spec.HolderIdentity == nil ||
+			(lease.Namespace == "kube-system" &&
+				(lease.Name == Scheduler.Name ||
+					lease.Name == ControllerManager.Name)) {
+			continue
+		}
+		seconds := float64(defaultLeaseSeconds)
+		if lease.Spec.LeaseDurationSeconds != nil {
+			seconds = float64(*lease.Spec.LeaseDurationSeconds)
+		}
+		out = append(out, inventory.Observation{
+			Kind: inventory.Observed, Source: ProbeSource, At: now,
+			Entity: inventory.CoreID(KindLease, lease.Namespace, lease.Name),
+			Attributes: map[string]inventory.Value{
+				AttrLeaseHolder:   inventory.Text(*lease.Spec.HolderIdentity),
+				AttrLeaseRenewed:  inventory.Time(lease.Spec.RenewTime.Time),
+				AttrLeaseDuration: inventory.Number(seconds),
+			},
+		})
+	}
+	return out
 }

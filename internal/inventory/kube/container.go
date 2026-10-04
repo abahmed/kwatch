@@ -1,6 +1,8 @@
 package kube
 
 import (
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -60,8 +62,30 @@ func containerSpecAttributes(
 	if budget := probeBudgetSeconds(c); budget > 0 {
 		attrs[AttrProbeBudget] = inventory.Number(float64(budget))
 	}
+	if probes := declaredProbes(c); probes != "" {
+		attrs[AttrProbes] = inventory.Text(probes)
+	}
+	if sc := c.SecurityContext; sc != nil && sc.Privileged != nil &&
+		*sc.Privileged {
+		attrs[AttrPrivileged] = inventory.Bool(true)
+	}
 	setPortAttributes(attrs, c)
 	return attrs
+}
+
+// declaredProbes names the probes a container declares.
+func declaredProbes(c corev1.Container) string {
+	var out []string
+	for _, probe := range []struct {
+		name  string
+		probe *corev1.Probe
+	}{{"startup", c.StartupProbe}, {"readiness", c.ReadinessProbe},
+		{"liveness", c.LivenessProbe}} {
+		if probe.probe != nil {
+			out = append(out, probe.name)
+		}
+	}
+	return strings.Join(out, ",")
 }
 
 func containerStatusAttributes(
@@ -69,6 +93,9 @@ func containerStatusAttributes(
 ) {
 	attrs[AttrReady] = inventory.Bool(s.Ready)
 	attrs[AttrRestarts] = inventory.Number(float64(s.RestartCount))
+	if s.ImageID != "" {
+		attrs[AttrImageID] = inventory.Text(s.ImageID)
+	}
 	switch {
 	case s.State.Running != nil:
 		attrs[AttrState] = inventory.Text("running")

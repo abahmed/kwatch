@@ -1,0 +1,4 @@
+10:02:15 settled
+🟠 api in orders (prod-eu-1) keeps crashing. Its dependencies, image, node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "FATAL: could not open database connection". To read the output of the last crash, run kubectl logs api-0dc35fed-a -c app -n orders --previous
+🟠 api in orders (prod-eu-1) keeps crashing.
+

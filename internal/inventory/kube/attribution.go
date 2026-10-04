@@ -18,9 +18,16 @@ type Attribution struct {
 	Actor    string
 	App      string
 	Revision string
+	// Cause is the kubernetes.io/change-cause annotation, when set.
+	Cause string
 	// At is the API server time of the write, or zero when unknown.
 	At time.Time
 }
+
+// changeCauseAnnotation is the standard annotation kubectl records with
+// --record and people set by hand to say why an object changed; kubectl
+// rollout history shows it as CHANGE-CAUSE.
+const changeCauseAnnotation = "kubernetes.io/change-cause"
 
 // apiTimeSkew is how far an API server time may lie ahead of the receive
 // time before it is treated as clock skew and ignored.
@@ -44,6 +51,7 @@ func Attribute(obj any, created bool) Attribution {
 	}
 	out := Attribution{
 		Actor: actor, App: GitOpsApp(meta), Revision: Revision(obj),
+		Cause: evidenceText(meta.GetAnnotations()[changeCauseAnnotation]),
 	}
 	if created {
 		out.At = meta.GetCreationTimestamp().Time
@@ -162,6 +170,6 @@ func attributedChange(
 	return inventory.Change{
 		At: changeTime(who.At, receivedAt), Observed: receivedAt,
 		Actor: who.Actor, App: who.App, Revision: who.Revision,
-		Created: created, Fields: fields,
+		Cause: who.Cause, Created: created, Fields: fields,
 	}
 }

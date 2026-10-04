@@ -264,7 +264,7 @@ enforces, are in `docs/contributor-architecture.md`.
 | `internal/rootcause` | Shared root-cause types: the `Cause` record, confidence levels, graph and scheduler-message helpers |
 | `internal/rootcause/explain` | The root-cause engine: propagation table (data), candidate walk, scorers and weights, set-cover solver, incremental cache; a pure function of an inventory snapshot |
 | `internal/incident` | Incident manager: root resolution, settling, material-change digest, resolve hold, flapping, recurrence, routine, tiers, severity overrides, restore |
-| `internal/notification/compose` | Writes an incident decision as a `notification.Message`: one narrative note built from per-fact sentence writers, steps, runbooks, startup summary |
+| `internal/notification/compose` | Writes an incident decision as a `notification.Message`: one narrative note built from per-fact sentence writers, steps, runbooks, startup summary, roll-up and digest |
 | `internal/notification` | Provider-neutral message type, severity levels, and rendering helpers such as chunking and mention neutralizing (leaf) |
 | `internal/scope` | Delivery scope over findings: namespaces, reasons, silences, and maintenance holds |
 | `internal/pipeline` | Engine loop: observation queue, model update, detectors, incident manager, scope, investigation, downtime reconciliation, audit entries; the only producer of incident decisions |
@@ -483,12 +483,94 @@ Some quirks are load-bearing. Preserve them unless a change explicitly says othe
 - Decisions for out-of-scope incidents are dropped before delivery, but the
   incident is still tracked so reasoning keeps its evidence.
 - The audit log records every in-scope decision when it is made. A decision
-  the digest or the startup summary carries reaches the sink with
+  the digest, a roll-up or the startup summary carries reaches the sink with
   `Message.Carrier` set; delivery drops it, the replay keeps it apart from
   delivered messages, and the audit entry says `delivery: digest`.
+- Two or more announcements in one tick go as one roll-up
+  (`internal/pipeline/rollup.go`). A roll-up is a `Listing` like the startup
+  summary: the first own message of a listed incident is written as an
+  announcement, and the roll-up resolves once every listed incident has.
+  Open roll-ups are persisted in the startup marker.
+- An announced incident that loses every member is rerooted (same ID, "cause
+  revised") only when all members that left since its last decision went to
+  one root (`Incident.movedTo`); members that dispersed leave it empty, and it
+  recovers and resolves like any incident whose failures cleared.
+- `explain` reports when each cause began (`Cause.Began`, from
+  `view.startOf`; a zone or pool starts with its first broken node). The
+  incident layer refuses a cause that began more than
+  `explain.TemporalExclusion` (10m) after an announced incident was opened
+  (`Manager.beganTooLate`): the finding stays in its incident.
+- `explain` records, per failure, the upstream entities that were reached
+  and showed nothing wrong (`Trace.Checked`); the incident keeps their kinds
+  (`Incident.Checked`) and `compose.checkedSentences` says what was found
+  healthy when no cause is found. The phrase "couldn't find an outside
+  cause" must not come back.
+- A healthy, unchanged node, image, ConfigMap, Secret or ServiceAccount
+  reached from a failure gets the pseudo mode `ModeSharedFactor`
+  (`shared_factor.go`). The `shared-*` rows need `SharedFactorMinWorkloads`
+  workloads whose failures began within `SharedFactorWindow`, and a
+  shared-factor-only candidate is capped at `SharedFactorMaxConfidence`
+  and viable only when at least `SharedFactorMinShare` of its dependents
+  fail.
+- `detection.Finding.Advisory` marks a configuration risk (`Risk.*` reasons,
+  `detectors.Risk`). Advisory findings are not failures to explain nor
+  causes (`explain.unhealthy`), never open an incident (`Manager.attach`),
+  join the incident of a real failure of the same root
+  (`adoptAdvisories`) and leave with it (`dropAdvisories`), never lead a
+  message (`compose.rootFinding`) and add a consequence only through
+  `compose.riskSentences`.
+- Pods relate to the external endpoints their environment names
+  (`kube.podDependencies`, relation `Calls`, kind
+  `kube.KindExternalEndpoint`). Host and port only: credentials never
+  leave the value. The active prober dials them when
+  `autoDependencies` is on, and the `external-endpoint-unreachable` row
+  blames a probed-down endpoint for its callers.
+- A failing pod reaches the failing kube-system DaemonSet pods on its node
+  (`agentHops`, `LinkNodeAgent`); the `node-agent-failing` row needs two
+  workloads. `detectors.ImageDrift` reads `AttrImageID`; the `image-drift`
+  row is an Inside row. `daemonSetGaps` adds evidence to a DaemonSet's
+  availability finding. The prober lists Leases every `leaseScanEvery`
+  rounds into `kube.KindLease` entities and `detectors.Lease` flags a stale
+  one only while its holder pod runs. `announcer.deliver` holds a
+  `ReasonMaterialChange` update for a fresh investigation when the last one
+  is older than `reinvestigateAfter`. HTTPS probes record `AttrCertExpiry`
+  on their endpoint, which `detectors.Certificate` reads.
+  `incident.TriggerOf` classifies a cause for `Occurrence.Trigger`, which
+  `compose.recurrenceSentences` summarises.
+- A scheduler verdict naming a volume node affinity conflict gives the
+  pod's claim the pseudo mode `ModeVolumePinned` (`view.pinnedClaim`) and
+  the `claim-pins-pod` row blames it; `schedulingHops` then adds no
+  scheduling candidate. `detectors.removalTaint` turns scale-down and
+  out-of-service taints into `NodeDraining`. `Incident.Considered` keeps the
+  area's alternatives for the audit entry's `considered`. The prober reads
+  `/metrics` of the API server and of the cluster DNS pods
+  (`probe_metrics.go`, `AttrPodIP`) into rate attributes that
+  `detectors.errorRates` turns into `APIServerErrors` and
+  `CoreDNSServfail`.
+- The announcer reads the engine's active advisory findings
+  (`Engine.activeAdvisories`) and names each once in a digest that goes
+  out anyway (`pendingRisks`, `mentionRisks`); risks never open a window.
+  `StatsPoller.kubeletHealth` adds `AttrPLEGRelistMS` and
+  `AttrEvictionRate` for `detectors.kubeletFindings`. `unusedService` and
+  `unusedClaim` are digest-tier hygiene after `DefaultUnusedAfter`.
+  `applyBudget` ranks kinds in `Model.NotedKinds` (recent Warning events)
+  before silent ones (`DynamicConfig.Noted`).
+- Known problems and rhythms: `incident.Known` (two heard occurrences, the
+  first a day old) and `incident.Rhythm` (three occurrences in a day at even
+  gaps) send non-page incidents to the digest in `tier`. An announced open
+  incident is reminded every `RemindEvery` (`Incident.Reminded`,
+  `ReasonReminder`). Resolve messages name the cause (`resolvedCause`).
+  `replacementGraceFor` adds five minutes for young pods on fresh nodes
+  (`kube.AttrCreated`) to `notReady` and workload availability.
+- Repeated unknown Warning events become `UnusualEvent.<Reason>` findings
+  (`detectors.unusualEvents`, digest tier); `shownByState` lists the
+  event reasons object state already covers.
+- A zone or node pool is `MembersFailing` only when two or more of its nodes
+  have a finding with `Health == Failing`; degraded nodes (CPU stall, high
+  usage) do not count, so a strained pool never absorbs workload incidents.
 - The audit decision reason strings (`settled`, `material change`,
   `flapping`, `healthy for ...`, `stable for ...`, `startup summary`,
-  `digest`) are stable strings people grep for.
+  `roll-up`, `digest`) are stable strings people grep for.
 
 ## Extension contract
 

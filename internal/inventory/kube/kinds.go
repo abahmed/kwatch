@@ -36,6 +36,16 @@ const (
 	KindRegistry      inventory.Kind = "registry"
 	KindZone          inventory.Kind = "zone"
 	KindNodePool      inventory.Kind = "nodepool"
+	// KindLease is a coordination Lease read by the prober, outside the
+	// node leases and the control-plane leaders it already covers: the
+	// leader election of an operator or controller.
+	KindLease inventory.Kind = "lease"
+	// KindExternalEndpoint is a network endpoint outside the objects
+	// kwatch watches, named "host:port": a database, a queue, a
+	// third-party API. Pods call it (their configuration or their error
+	// text names it), and kwatch's own probe reports whether it accepts
+	// connections.
+	KindExternalEndpoint inventory.Kind = "external-endpoint"
 )
 
 // builtinGroups are the API groups kube-apiserver serves itself. They

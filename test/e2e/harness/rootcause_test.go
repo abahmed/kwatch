@@ -144,3 +144,23 @@ func TestEvaluateRootIgnoresIncidentsOpenedBeforeTheScenario(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestEvaluateRootCountsOnlyOwnMessages(t *testing.T) {
+	entries := []AuditEntry{
+		{Action: "create", Incident: "i1", Root: "pod/ns/a"},
+		{Action: "update", Incident: "i1", Root: "pod/ns/a",
+			Delivery: "paging"},
+		{Action: "update", Incident: "i1", Root: "pod/ns/a",
+			Delivery: "digest"},
+		{Action: "update", Incident: "i1", Root: "pod/ns/a",
+			Delivery: "roll-up"},
+		{Action: "update", Incident: "i1", Root: "pod/ns/a",
+			Delivery: "startup summary"},
+	}
+	exp := RootExpectation{Root: "pod/ns/a", MaxMessages: 2,
+		MaxTotalMessages: 2}
+	verdict := EvaluateRoot(entries, exp, RootScope{})
+	if verdict.Messages != 2 || verdict.Err() != nil {
+		t.Fatalf("messages = %d, err = %v", verdict.Messages, verdict.Err())
+	}
+}

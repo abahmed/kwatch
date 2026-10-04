@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 func TestOccurrenceDescribe(t *testing.T) {
@@ -192,4 +193,27 @@ func TestResolveWithoutChangeHasNoFixingChange(t *testing.T) {
 	r.observe(web.Entity)
 	failOnce(r, web, 0, 4*time.Minute)
 	assert.Nil(t, r.of(web.Entity).FixedBy)
+}
+
+func TestTriggerOfClassifiesCauses(t *testing.T) {
+	node := entity(kube.KindNode, "n1")
+	for name, c := range map[string]struct {
+		cause *rootcause.CauseRecord
+		want  string
+	}{
+		"none":    {nil, ""},
+		"rollout": {&rootcause.CauseRecord{Rule: "rollout"}, TriggerRollout},
+		"config change": {&rootcause.CauseRecord{
+			Rule:   "configmap-missing-or-changed",
+			Change: &inventory.Change{}}, TriggerConfig},
+		"config missing": {&rootcause.CauseRecord{
+			Rule: "configmap-missing-or-changed"}, ""},
+		"node": {&rootcause.CauseRecord{Rule: "node-not-ready",
+			Root: node}, TriggerNode},
+		"other": {&rootcause.CauseRecord{Rule: "webhook-rejects"}, ""},
+	} {
+		if got := TriggerOf(c.cause); got != c.want {
+			t.Errorf("%s: trigger = %q, want %q", name, got, c.want)
+		}
+	}
 }

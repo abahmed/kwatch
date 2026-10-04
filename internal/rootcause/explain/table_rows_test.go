@@ -142,4 +142,6 @@ var nodeRowCases = []rowCase{
 		build: nodeCase("PIDPressure", "CannotRun")},
 	{row: "node-network", want: "node//n1",
 		build: nodeCase("NetworkUnavailable", "Creating")},
+	{row: "node-overcommitted", want: "node//n1",
+		build: nodeCase("MemoryOvercommitted", "OOMKilled")},
 }

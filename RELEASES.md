@@ -351,10 +351,131 @@
   reported for about two minutes") instead of whichever pod was worst.
 - **Skipped resource types are named.** The startup log line about kinds
   left out by the watch budget now lists them.
-- **Audit log records every decision.** Decisions the digest or the startup
-  summary carry are written to the audit log when they are made, with
-  `delivery: digest` or `delivery: startup summary`; announcements that go
-  only to paging tools carry `delivery: paging`.
+- **Problems found together are one message.** Two or more announcements
+  made in the same pass go as one roll-up that names them, like the startup
+  summary; each problem gets its own message when it changes or resolves,
+  page-tier ones still reach the paging tools on their own, and the roll-up
+  closes once all it listed have resolved.
+- **A strained node pool is not a failing one.** A zone or node pool fails as
+  a whole only when two or more of its nodes have a failing finding (not
+  ready, under pressure, network unavailable). Nodes with a CPU stall or high
+  usage no longer make the pool take over the workload incidents on them and
+  hand them back minutes later.
+- **A late cause does not take over an announced incident.** A cause that
+  began more than ten minutes after an incident was opened did not cause
+  what people were already told about: the incident keeps its root and the
+  new cause explains only the new failures. A zone or pool counts as having
+  begun when its first node broke. A node pool that fails this morning no
+  longer takes over a deployment that has been unavailable for a week.
+- **Every crash loop gets a reason or the facts.** "I couldn't find an
+  outside cause" is gone. The engine records which objects upstream of a
+  failure it checked and found healthy and unchanged, and the message says
+  so: "Its node, image and configuration are healthy and unchanged, so
+  nothing outside it explains this." The quoted crash output follows.
+- **What failing workloads share is suspected.** When three or more
+  workloads start failing within ten minutes and nothing upstream shows a
+  fault, the node, image, ConfigMap, Secret or ServiceAccount they all share
+  is named as a possible cause, never above "possibly", and any cause with
+  evidence of its own outranks it. It is suspected only when most of what
+  depends on it is failing.
+- **Dependencies outside the cluster are modelled and probed.** Environment
+  values that name a URL or a `host:port` (only host and port are kept; user
+  names, passwords and paths never leave the value) become
+  `external-endpoint` entities the pods call. With
+  `activeProbeMonitor.autoDependencies: true` kwatch dials them from its own
+  Pod, and a dependency that refuses connections is named as the cause of
+  the pods that call it, even for a single workload.
+- **Configuration risks, in the digest and as the cost of a failure.** A new
+  detector reports a workload with no readiness probe, no memory limit, an
+  image tag that can change (`latest` or none), a single replica, every
+  replica on one node, or a privileged container. These are advisory: they
+  never open an incident on their own, they wait for the digest, and when a
+  failure of that workload shows what the risk cost, the message says so
+  ("It runs a single replica, so this is downtime, not degradation.").
+- **An overcommitted node explains kills on it.** A node whose pods' memory
+  limits add up to more than 150% of its memory is reported (digest tier)
+  and becomes a cause for OOM kills and evictions of pods that stayed within
+  their own limit.
+- **Unknown Warning events are not silent.** A Warning event kwatch has no
+  detector for, repeated three times in a quarter hour on one object, becomes
+  an informational finding that quotes the event text, so a new failure
+  type is seen before a detector exists for it.
+- **Changes say why they were made.** The `kubernetes.io/change-cause`
+  annotation of a blamed change is quoted: `recorded as "bump payments to
+  2.3 for the refund fix"`.
+- **A failing node agent explains the pods beside it.** A kube-system
+  DaemonSet pod (the CNI, kube-proxy, a CSI node plugin) that fails on a
+  node is named as the cause when two or more workloads on that node lose
+  their readiness or network at the same time.
+- **The same tag, different builds.** A workload whose running pods report
+  different image IDs for the same image reference is reported
+  (`ImageDigestDrift`), and the drift explains why some replicas fail and
+  others do not.
+- **DaemonSet gaps name their nodes.** A DaemonSet below its desired count
+  lists the nodes whose pod is not ready and the taints on them.
+- **Controllers that run but do not work.** kwatch reads every leader Lease
+  outside node heartbeats every two minutes; a Lease its running holder has
+  not renewed for three durations is reported (`LeaseStale`). A Lease whose
+  holder is gone is left alone, since an uninstalled controller leaves one.
+- **Updates carry current evidence.** A material change whose evidence is
+  older than two minutes is investigated again before the update is sent,
+  so the quoted output is what the application says now.
+- **HTTPS probes watch the certificate.** A probed HTTPS target records the
+  expiry of the certificate it served, and the certificate check covers it.
+- **Recurrences name their shape.** When every time people heard about
+  followed the same kind of cause, the message says so: "This is the third
+  time this week, each time after a rollout."
+- **A claim can pin a pod.** When the scheduler rejects a pod for a volume
+  node affinity conflict, the claim bound to a volume in a zone with no
+  node for the pod is the cause (`claim-pins-pod`), not the scheduler.
+- **Removal taints are drains.** A node tainted for scale-down or marked
+  out of service is treated like a cordoned node: its disruption is the
+  maintenance itself, and only what fails because of it is reported.
+- **The audit log says what was ruled out.** Each entry carries
+  `considered`: the other causes the solver weighed, best first, as
+  `root (row, confidence)`.
+- **API server and cluster DNS metrics.** The prober reads the API server's
+  own `/metrics` and the cluster DNS pods' metrics port, both part of
+  Kubernetes itself, and reports an API server answering 5% or more of
+  requests with server errors (`APIServerErrors`) or a cluster DNS failing
+  10% or more of lookups with SERVFAIL (`CoreDNSServfail`). A cluster
+  without those endpoints loses only these findings.
+- **Configuration risks reach the digest.** A risk the detector finds is
+  named once in the next low-priority digest ("Risk: orders runs a single
+  replica"); it never costs a message of its own.
+- **Kubelet evidence.** The kubelet's pod lifecycle relist time and its
+  evictions are read from its own metrics: a kubelet that takes over a
+  second to list its pods is reported (`NodePLEGSlow`), and evictions in
+  progress go to the digest (`NodeEvicting`).
+- **Idle objects in the digest.** A Service that has selected no pod for a
+  day (`ServiceUnused`) and a bound claim no pod has mounted for a day
+  (`ClaimUnused`) wait for the digest.
+- **The watch budget favours noisy kinds.** Over the resource-type budget,
+  kinds whose objects had Warning events in the last hour are watched
+  before kinds nothing has complained about, instead of alphabetical order.
+- **Known problems go to the digest after a day.** A problem people have
+  heard about twice, the first time a day ago or more, no longer interrupts
+  on its next recurrence; the digest keeps counting it. A page stays a page.
+- **Regular rhythms are recognised and stated.** An incident that recurs at
+  even intervals within a day is treated as known, and says so: "It fails
+  every 40 minutes or so; this is the third time in a day."
+- **A weekly "still open" reminder.** An announced incident that stays open
+  gets one update a week: "payments in shop is still down, for two weeks now."
+- **The resolve message names the cause.** "... it was failing for 42 minutes
+  because node n3 was low on memory." A workload blamed on itself names none.
+- **Replacement grace for pods on fresh nodes.** A pod younger than ten
+  minutes on a node younger than ten minutes gets five extra minutes before
+  `ContainersNotReady` or workload unavailability is reported, so a scale-up
+  or consolidation is not announced as an outage.
+- **A dissolved group ends instead of changing subject.** When the members of
+  an announced incident disperse to several roots, the incident recovers and
+  resolves on its own and the workloads are announced anew (as one roll-up).
+  Its conversation no longer continues under whichever member left last.
+  Members that all leave for one root still move the conversation there.
+- **Audit log records every decision.** Decisions the digest, a roll-up or
+  the startup summary carry are written to the audit log when they are made,
+  with `delivery: digest`, `roll-up` or `startup summary`; announcements that
+  go only to paging tools carry `delivery: paging`.
 - **Low-priority digest.** Digest-tier incidents (an autoscaler at its
   maximum, a budget that selects nothing, a throttled container, learned
   routines) are no longer announced one by one. One 🟡 digest every 30

@@ -87,7 +87,7 @@ func (Event) Detect(
 	for _, key := range order {
 		out = append(out, byReason[key].finding(key))
 	}
-	return out
+	return append(out, unusualEvents(ctx, e)...)
 }
 
 // eventGroup folds the notes of one reason: notes are kept per source,

@@ -53,6 +53,7 @@ func goldenCases() []goldenCase {
 		{"flapping_update", writeFlappingUpdate},
 		{"likely_config_change", writeLikelyConfigChange},
 		{"startup_summary", writeStartupSummary},
+		{"change_cause", writeChangeCause},
 	}...)
 }
 
@@ -301,4 +302,12 @@ func writeNodeMemoryHogIncident() incident.Incident {
 			Since:   at(0, 0),
 			Summary: "Node is low on memory; pods may be evicted"}),
 	}
+}
+
+// writeChangeCause blames a rollout whose change-cause annotation says
+// why it was made.
+func writeChangeCause() notification.Message {
+	p := badRollout()
+	p.Cause.Change.Cause = "bump payments to 2.3 for the refund fix"
+	return Writer{}.Write(announce(p), at(5, 0))
 }

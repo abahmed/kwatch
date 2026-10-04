@@ -20,7 +20,8 @@ func (ActiveProbe) Name() string { return "active-probe" }
 
 // Kinds implements detection.Detector.
 func (ActiveProbe) Kinds() []inventory.Kind {
-	return []inventory.Kind{kube.KindEndpoint, kube.KindService}
+	return []inventory.Kind{kube.KindEndpoint, kube.KindService,
+		kube.KindExternalEndpoint}
 }
 
 // Detect implements detection.Detector.
@@ -39,14 +40,18 @@ func (ActiveProbe) Detect(
 	if !sustained(ctx, "probe-failing", healthy.Since, failFor) {
 		return nil
 	}
-	what := "Probe " + e.ID.Name
-	if e.ID.Kind == kube.KindService {
+	what, state := "Probe "+e.ID.Name, "is unreachable"
+	switch e.ID.Kind {
+	case kube.KindService:
 		what = "Service port"
+	case kube.KindExternalEndpoint:
+		// The entity's name is the endpoint; the lead names it.
+		what, state = "Endpoint", "does not accept connections"
 	}
 	return []detection.Finding{{
 		Reason: reasons.ActiveProbeFailure, Severity: detection.Critical,
 		Since:    healthy.Since,
-		Summary:  what + " is unreachable",
+		Summary:  what + " " + state,
 		Evidence: errorEvidence(e),
 	}}
 }

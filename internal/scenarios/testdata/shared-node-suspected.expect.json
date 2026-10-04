@@ -1,0 +1,13 @@
+{
+  "name": "shared-node-suspected",
+  "description": "Three Deployments crash-loop their replicas on one healthy node within a minute, each with its own error; replicas elsewhere are fine.",
+  "root": "node//n1",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "deployment/shop/payments",
+    "deployment/shop/cart",
+    "zone//zone-a"
+  ]
+}

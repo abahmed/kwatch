@@ -6,7 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/notification"
 )
 
@@ -144,5 +148,39 @@ func TestEngineDigestRecordsHeldDecisionsForTheAuditLog(t *testing.T) {
 		carried[0].Carrier != "digest" {
 		t.Fatalf("want the held announcement marked carried, got %+v",
 			carried)
+	}
+}
+
+// Configuration risks ride along a digest that goes out anyway, each
+// named once; the next digest does not repeat them.
+func TestEngineDigestNamesNewRisksOnce(t *testing.T) {
+	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
+	e, sent := digestHarness(t, now)
+	orders := inventory.CoreID(kube.KindDeployment, "shop", "orders")
+	e.announcer.advisories = func() []detection.Finding {
+		return []detection.Finding{{Entity: orders,
+			Reason: reasons.RiskSingleReplica, Advisory: true,
+			Summary: "It runs a single replica, so any restart is downtime"}}
+	}
+
+	e.announcer.collectDigest(context.Background(), now,
+		[]incident.Decision{digestAnnounce("a")})
+	e.announcer.collectDigest(context.Background(), now.Add(digestWindow),
+		nil)
+	e.announcer.collectDigest(context.Background(),
+		now.Add(digestWindow+time.Minute),
+		[]incident.Decision{digestAnnounce("b")})
+	e.announcer.collectDigest(context.Background(),
+		now.Add(2*digestWindow+time.Minute), nil)
+
+	if len(*sent) != 2 {
+		t.Fatalf("want two digests, got %d", len(*sent))
+	}
+	if !strings.Contains((*sent)[0].Note, "Risk: orders runs a single "+
+		"replica") {
+		t.Fatalf("the first digest must name the risk: %s", (*sent)[0].Note)
+	}
+	if strings.Contains((*sent)[1].Note, "Risk:") {
+		t.Fatalf("a named risk must not repeat: %s", (*sent)[1].Note)
 	}
 }

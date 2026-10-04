@@ -33,9 +33,11 @@ var causeWords = map[string]causeWording{
 		words: "has reached its autoscaling limit"},
 	"autoscaling-limit-unavailable": {
 		words: "has reached its autoscaling limit"},
-	"budget-blocks-drain":          {words: "allows no eviction"},
-	"certificate-expired":          {words: "holds an expired certificate"},
-	"claim-not-usable":             {words: "cannot be used"},
+	"budget-blocks-drain": {words: "allows no eviction"},
+	"certificate-expired": {words: "holds an expired certificate"},
+	"claim-not-usable":    {words: "cannot be used"},
+	"claim-pins-pod": {
+		words: "is bound to a volume in a zone with no node for the pod"},
 	"cluster-dns-failing":          {words: "is not resolving names"},
 	"cluster-dns-servers":          {words: "is not resolving names"},
 	"config-missing-or-changed":    {words: "does not exist"},
@@ -45,9 +47,12 @@ var causeWords = map[string]causeWording{
 	"custom-resource-failing": {words: "is not ready"},
 	"etcd-unavailable":        {words: "is unavailable"},
 	// external-endpoint-failing is worded by endpointWords.
-	"external-endpoint-failing": {words: "cannot be reached"},
+	"external-endpoint-failing":     {words: "cannot be reached"},
+	"external-endpoint-unreachable": {words: "does not accept connections"},
 	// helper-container-blocks-pod is worded by containerPhrase.
 	"helper-container-blocks-pod": {words: "keeps failing and blocks its pod"},
+	"image-drift": {own: true,
+		words: "its pods run different builds of the same image tag"},
 	"memory-limit-too-low": {own: true,
 		words: "its memory limit is too low for normal use"},
 	"metrics-api-down":             {words: "is not serving metrics"},
@@ -56,9 +61,12 @@ var causeWords = map[string]causeWording{
 	"node-memory-pressure":         {words: "is low on memory"},
 	"node-memory-pressure-unready": {words: "is low on memory"},
 	"node-network":                 {words: "has lost its network"},
-	"node-not-ready":               {words: "is not ready"},
-	"node-pid-pressure":            {words: "is running out of process IDs"},
-	"node-removed":                 {words: "was removed"},
+	"node-agent-failing": {
+		words: "serves every pod on that node and is failing"},
+	"node-not-ready":     {words: "is not ready"},
+	"node-overcommitted": {words: "is overcommitted on memory"},
+	"node-pid-pressure":  {words: "is running out of process IDs"},
+	"node-removed":       {words: "was removed"},
 	"node-removed-capacity": {
 		words: "was removed and no other node has room"},
 	"nodepool-failing": {words: "is failing as a whole"},
@@ -76,7 +84,19 @@ var causeWords = map[string]causeWording{
 	"scheduler-capacity":    {words: "rejects every node"},
 	"scheduler-unavailable": {words: "is down"},
 	"self":                  {words: "is failing on its own"},
-	"service-no-endpoints":  {words: "has no ready endpoints"},
+	// shared-* rows suspect what failing workloads have in common.
+	"shared-node": {
+		words: "is what the failing workloads have in common, though " +
+			"it looks healthy"},
+	"shared-image": {
+		words: "is the image every failing workload runs"},
+	"shared-configmap": {
+		words: "is what the failing workloads have in common"},
+	"shared-secret": {
+		words: "is what the failing workloads have in common"},
+	"shared-account": {
+		words: "is what the failing workloads have in common"},
+	"service-no-endpoints": {words: "has no ready endpoints"},
 	// shared-failure-signature is worded by signatureLead.
 	"shared-failure-signature": {
 		words: "is the error several workloads fail with"},
@@ -102,7 +122,8 @@ func causeWordsFor(cause *rootcause.CauseRecord) string {
 			return strings.TrimPrefix(words, "the registry ")
 		}
 	}
-	if cause.Root.Kind == explain.KindExternalEndpoint {
+	if cause.Root.Kind == explain.KindExternalEndpoint &&
+		cause.Rule != "external-endpoint-unreachable" {
 		return endpointWords(cause.Mode)
 	}
 	if claimFull(cause) {

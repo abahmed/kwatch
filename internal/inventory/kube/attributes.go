@@ -31,6 +31,22 @@ const (
 	AttrLastStarted = "last.started"
 	// AttrContainerPorts lists the container's declared port numbers.
 	AttrContainerPorts = "container.ports"
+	// AttrProbes lists the probes the container declares, in startup,
+	// readiness, liveness order: "readiness,liveness". Absent when none.
+	AttrProbes = "probes"
+	// AttrPrivileged is true for a container that runs privileged.
+	AttrPrivileged = "privileged"
+	// AttrPodIP is the pod's address, for the metrics the prober reads
+	// from the cluster DNS pods.
+	AttrPodIP = "pod.ip"
+	// Lease attributes, written by the prober's Lease scan.
+	AttrLeaseHolder   = "lease.holder"
+	AttrLeaseRenewed  = "lease.renewed"
+	AttrLeaseDuration = "lease.duration.seconds"
+	// AttrImageID is the image the container actually runs, by digest,
+	// as the kubelet reports it; two pods with the same image tag and
+	// different IDs run different builds.
+	AttrImageID = "image.id"
 	// AttrProbePorts lists the ports the container's probes connect to,
 	// named ports resolved against the container's own port names.
 	AttrProbePorts        = "probe.ports"

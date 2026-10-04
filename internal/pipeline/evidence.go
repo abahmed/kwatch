@@ -13,6 +13,11 @@ import (
 const (
 	evidenceMemory  = 30 * time.Minute
 	maxEvidenceKept = 512
+	// reinvestigateAfter is how old an incident's evidence may be when
+	// a material change arrives before the logs are read again, so the
+	// update quotes what the application says now, not at the first
+	// message.
+	reinvestigateAfter = 2 * time.Minute
 )
 
 // evidenceState is what the loop knows about one incident's
@@ -70,10 +75,12 @@ func (a *announcer) investigate(p incident.Incident, now time.Time) bool {
 	return true
 }
 
-// awaitsEvidence reports whether announcement d should wait for an
+// awaitsEvidence reports whether decision d should wait for an
 // investigation. One started at open is waited for; an incident whose
 // root kind changed since, or that was never investigated, is
-// investigated now.
+// investigated now. A material change whose evidence is older than
+// reinvestigateAfter is investigated again, so the update carries the
+// current output.
 func (a *announcer) awaitsEvidence(d incident.Decision, now time.Time) bool {
 	if a.pool == nil {
 		return false
@@ -84,7 +91,13 @@ func (a *announcer) awaitsEvidence(d incident.Decision, now time.Time) bool {
 	}
 	state := a.evidence[d.Incident.ID]
 	if state != nil && state.kind == plan.Kind {
-		return state.running
+		if state.running {
+			return true
+		}
+		if d.Action != incident.Update ||
+			now.Sub(state.started) < reinvestigateAfter {
+			return false
+		}
 	}
 	return a.investigate(d.Incident, now)
 }

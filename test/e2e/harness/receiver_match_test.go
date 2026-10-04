@@ -31,3 +31,16 @@ func TestDeliveryPayloadMatchersReadNotificationFields(t *testing.T) {
 		}
 	}
 }
+
+func TestTitleNamesSearchesRollupLinesOnly(t *testing.T) {
+	roll := map[string]any{"key": "rollup/x",
+		"title": "kwatch found 2 new problems at the same time.",
+		"lines": []any{"web is failing in apps", "api is failing in apps"}}
+	if !titleNames(roll, "api") {
+		t.Error("roll-up line should name api")
+	}
+	roll["key"] = "incident/x"
+	if titleNames(roll, "api") {
+		t.Error("lines of a normal message must not match")
+	}
+}

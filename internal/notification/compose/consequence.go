@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
@@ -149,6 +150,11 @@ func unverifiedSentences(f caseFacts) []sentence {
 // recurrenceSentences say that this has happened before, or keeps
 // coming back.
 func recurrenceSentences(f caseFacts) []sentence {
+	if every, ok := incident.Rhythm(f.p, f.now); ok {
+		return []sentence{{part: partRecurrence, text: "It fails every " +
+			humanDuration(every) + " or so; this is the " +
+			ordinalWord(len(f.p.Occurrences)) + " time in a day."}}
+	}
 	if cycles := len(f.p.Cycles); cycles > 1 {
 		return []sentence{{part: partRecurrence, text: "It has recovered " +
 			"and failed again " + plural(cycles, "time") + " recently."}}
@@ -156,16 +162,30 @@ func recurrenceSentences(f caseFacts) []sentence {
 	// This message is one time; earlier times count only when people
 	// heard about them.
 	times := 1
+	trigger, shared := incident.TriggerOf(f.p.Cause), true
 	for _, o := range f.p.History {
 		if o.Heard && f.now.Sub(o.Opened) <= week {
 			times++
+			shared = shared && o.Trigger == trigger
 		}
 	}
 	if times < 2 {
 		return nil
 	}
-	return []sentence{{part: partRecurrence,
-		text: "This is the " + ordinalWord(times) + " time this week."}}
+	text := "This is the " + ordinalWord(times) + " time this week"
+	if words, ok := triggerWords[trigger]; ok && shared {
+		// Every time people heard about followed the same kind of
+		// cause: that is the shape of the problem.
+		text += ", each time after " + words
+	}
+	return []sentence{{part: partRecurrence, text: text + "."}}
+}
+
+// triggerWords say what a recurring incident keeps following.
+var triggerWords = map[string]string{
+	incident.TriggerRollout: "a rollout",
+	incident.TriggerConfig:  "a configuration change",
+	incident.TriggerNode:    "a node failure",
 }
 
 // pluralWord writes the plural of a kind word: "pods", "ingresses",

@@ -13,7 +13,9 @@ func TestHumanDurationRoundsLikePeople(t *testing.T) {
 		time.Hour:                       "one hour",
 		2*time.Hour + 30*time.Minute:    "about three hours",
 		6 * 24 * time.Hour:              "six days",
-		14*24*time.Hour + 2*time.Minute: "14 days",
+		13 * 24 * time.Hour:             "13 days",
+		14*24*time.Hour + 2*time.Minute: "two weeks",
+		21 * 24 * time.Hour:             "three weeks",
 	}
 	for d, want := range tests {
 		if got := humanDuration(d); got != want {

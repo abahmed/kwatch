@@ -130,7 +130,7 @@ func bestRow(
 func findingModes(findings []detection.Finding) []modeHealth {
 	var out []modeHealth
 	for _, f := range findings {
-		if f.Health == detection.Healthy {
+		if f.Health == detection.Healthy || f.Advisory {
 			continue
 		}
 		out = append(out, modeHealth{mode: f.Mode, health: f.Health})
@@ -141,5 +141,8 @@ func findingModes(findings []detection.Finding) []modeHealth {
 // unhealthy reports whether a finding shows the entity failing or
 // degraded.
 func unhealthy(f detection.Finding) bool {
-	return f.Health == detection.Failing || f.Health == detection.Degraded
+	// A risk is advice about configuration, not a failure to explain
+	// nor a state that explains anything.
+	return !f.Advisory &&
+		(f.Health == detection.Failing || f.Health == detection.Degraded)
 }

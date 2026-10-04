@@ -23,7 +23,9 @@ func (Certificate) Name() string { return "certificate" }
 
 // Kinds implements detection.Detector.
 func (Certificate) Kinds() []inventory.Kind {
-	return []inventory.Kind{kube.KindSecret}
+	// A probed HTTPS endpoint carries the expiry of the certificate it
+	// served, so the check covers what clients see too.
+	return []inventory.Kind{kube.KindSecret, kube.KindEndpoint}
 }
 
 // Detect implements detection.Detector.

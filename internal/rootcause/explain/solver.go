@@ -32,6 +32,7 @@ func Explain(s Snapshot) Explanation {
 // read which failures they explained.
 func (v *view) rank(cs *candidateSet) []scored {
 	v.rejected = cs.rejected
+	v.checked = cs.checked
 	v.explainedBy = map[inventory.EntityID]bool{}
 	var ranked, selves []scored
 	for _, id := range sortedKeys(cs.byID) {

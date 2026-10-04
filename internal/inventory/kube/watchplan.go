@@ -1,6 +1,8 @@
 package kube
 
 import (
+	"github.com/abahmed/kwatch/internal/inventory"
+
 	"sort"
 	"strings"
 
@@ -175,15 +177,21 @@ func builtinMode(r Resource, hasStatus bool) WatchMode {
 func applyBudget(
 	resources []plannedResource, budget int,
 	running func(schema.GroupVersionResource) bool,
+	noted map[inventory.Kind]bool,
 ) (kept, skipped []plannedResource) {
+	// Anchors first, then what is already watched, then kinds whose
+	// objects had Warning events recently: over the budget, a kind
+	// something complains about is worth more than one in silence.
 	rank := func(r plannedResource) int {
 		switch {
 		case r.tier == tierAnchor:
 			return 0
 		case running(r.gvr):
 			return 1
+		case noted[KindFor(r.kind)]:
+			return 2
 		}
-		return 2
+		return 3
 	}
 	sort.Slice(resources, func(i, j int) bool {
 		a, b := resources[i], resources[j]

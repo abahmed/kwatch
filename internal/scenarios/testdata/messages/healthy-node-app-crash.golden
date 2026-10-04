@@ -1,4 +1,4 @@
 10:02:45 settled
-🟠 api in shop (prod-eu-1) keeps crashing, and I couldn't find an outside cause. It fails with "panic: assignment to entry in nil map". To read the output of the last crash, run kubectl logs api-ed3e6bad-a -c app -n shop --previous
-🟠 api in shop (prod-eu-1) keeps crashing, and I couldn't find an outside cause.
+🟠 api in shop (prod-eu-1) keeps crashing. Its image, node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: assignment to entry in nil map". To read the output of the last crash, run kubectl logs api-ed3e6bad-a -c app -n shop --previous
+🟠 api in shop (prod-eu-1) keeps crashing.
 

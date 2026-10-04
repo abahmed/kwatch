@@ -106,8 +106,23 @@ var definitions = []Definition{
 		Runtime, nil,
 	},
 	{
+		ConfigurationRisks, "Report configuration risks (no probe, no " +
+			"limit, mutable tag, single replica) in the digest",
+		Runtime, []ID{WorkloadDetection},
+	},
+	{
+		UnusualEvents, "Report repeated Warning events kwatch has no " +
+			"detector for, quoting the event",
+		Runtime, nil,
+	},
+	{
 		RootCause, "Explain each incident by its most likely root cause",
 		Runtime, nil,
+	},
+	{
+		SharedFactors, "Suspect what workloads failing together share " +
+			"when nothing else explains them",
+		Runtime, []ID{RootCause},
 	},
 	{
 		ChangeCorrelation, "Relate incidents to recent changes and who made them",

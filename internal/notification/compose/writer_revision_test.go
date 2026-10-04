@@ -87,8 +87,9 @@ func TestWriteNoCauseQuotesOutputOnlyWhenPresent(t *testing.T) {
 	d.Output = []string{"panic: missing key", ""}
 	with := Writer{}.Write(d, revisionNow)
 
-	if !strings.Contains(without.Title, "I couldn't find an outside cause") {
-		t.Fatalf("lead should say no cause was found: %q", without.Title)
+	if !strings.Contains(without.Note, "Nothing outside it explains this.") {
+		t.Fatalf("note should say nothing outside explains it: %q",
+			without.Note)
 	}
 	if strings.Contains(without.Note, "last output") {
 		t.Fatalf("no output must not be quoted: %s", without.Note)

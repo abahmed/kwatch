@@ -154,3 +154,17 @@ func (e *Engine) readers(
 	}
 	return out
 }
+
+// activeAdvisories lists the configuration risks among the active
+// findings, for the digest to name once each.
+func (e *Engine) activeAdvisories() []detection.Finding {
+	var out []detection.Finding
+	for _, found := range e.findings {
+		for _, f := range found {
+			if f.Advisory {
+				out = append(out, f)
+			}
+		}
+	}
+	return out
+}

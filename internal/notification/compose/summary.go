@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/notification"
 
 	"github.com/abahmed/kwatch/internal/incident"
@@ -46,24 +48,64 @@ func (w Writer) StartupSummary(
 		w.clusterTag() + " started and found " +
 		plural(len(decisions), "problem") + " that " +
 		"began before it was watching."}}
-	for i, d := range decisions {
-		if i == maxSummaryNamed {
-			sentences = append(sentences, sentence{part: partProof,
-				text: sentenceCase(numberWord(len(decisions)-i) + " more" +
-					" " + verb(len(decisions)-i, "is", "are") +
-					" not described here")})
-			break
-		}
-		// The lead named the cluster; the listed titles do not repeat it.
-		sentences = append(sentences, sentence{part: partProof,
-			text: Writer{}.Write(d, now).Title})
-	}
+	// The lead named the cluster; the listed titles do not repeat it.
+	sentences = append(sentences, digestTitles(decisions, now, "")...)
 	sentences = append(sentences, sentence{part: partAction,
-		text: "Each gets its own message when it changes or resolves."})
+		text: eachOwnMessage})
 	msg := notification.Message{
 		Key: StartupKey(now), Revision: 1, Status: status, Opens: true,
 	}
 	fill(&msg, mark, sentences)
+	return msg
+}
+
+// eachOwnMessage closes a message that lists several incidents.
+const eachOwnMessage = "Each gets its own message when it changes or " +
+	"resolves."
+
+// RollupKey is the conversation key of the roll-up sent at at.
+func RollupKey(at time.Time) string {
+	return notification.RollupKeyPrefix + at.UTC().Format("20060102T150405.000Z")
+}
+
+// Rollup is one message for several incidents announced at the same
+// moment, instead of one message each. Like the startup summary it only
+// names them: each keeps its own conversation for its updates and its
+// resolve, and RollupResolved closes the roll-up once all have resolved.
+func (w Writer) Rollup(
+	decisions []incident.Decision, now time.Time,
+) notification.Message {
+	decisions = append([]incident.Decision(nil), decisions...)
+	sort.SliceStable(decisions, func(i, j int) bool {
+		return decisions[i].Incident.Tier > decisions[j].Incident.Tier
+	})
+	mark, status := notification.MarkerLow, notification.StatusLow
+	if len(decisions) > 0 {
+		mark = marker(decisions[0].Incident)
+		status = tierStatus(decisions[0].Incident.Tier)
+	}
+	sentences := []sentence{{part: partLead, text: "kwatch" +
+		w.clusterTag() + " found " + plural(len(decisions), "new problem") +
+		" at the same time."}}
+	sentences = append(sentences, digestTitles(decisions, now, "")...)
+	sentences = append(sentences, sentence{part: partAction,
+		text: eachOwnMessage})
+	msg := notification.Message{
+		Key: RollupKey(now), Revision: 1, Status: status, Opens: true,
+	}
+	fill(&msg, mark, sentences)
+	return msg
+}
+
+// RollupResolved closes the roll-up with key once every incident it
+// listed has resolved.
+func (w Writer) RollupResolved(key string, count int) notification.Message {
+	msg := notification.Message{
+		Key: key, Revision: 2, Status: notification.StatusResolved,
+	}
+	fill(&msg, notification.MarkerResolved, []sentence{{part: partLead,
+		text: sentenceCase("all " + plural(count, "problem") +
+			" found at the same time have resolved")}})
 	return msg
 }
 
@@ -74,11 +116,13 @@ func DigestKey(at time.Time) string {
 }
 
 // Digest is one message for the low-priority incidents of the last
-// window: the ones that opened, at their current state, and the ones an
-// earlier digest listed that have resolved. None of them interrupts on
-// its own.
+// window: the ones that opened, at their current state, the ones an
+// earlier digest listed that have resolved, and the configuration
+// risks found since the last digest. None of them interrupts on its
+// own.
 func (w Writer) Digest(
-	opened, resolved []incident.Decision, now time.Time,
+	opened, resolved []incident.Decision, risks []detection.Finding,
+	now time.Time,
 ) notification.Message {
 	opened = append([]incident.Decision(nil), opened...)
 	sort.SliceStable(opened, func(i, j int) bool {
@@ -92,11 +136,15 @@ func (w Writer) Digest(
 		counts = append(counts, plural(len(resolved), "earlier one")+
 			" that resolved")
 	}
+	if len(risks) > 0 {
+		counts = append(counts, plural(len(risks), "configuration risk"))
+	}
 	sentences := []sentence{{part: partLead, text: "kwatch" +
 		w.clusterTag() + " has " + joinWords(counts) + " to report."}}
 	sentences = append(sentences, digestTitles(opened, now, "")...)
 	sentences = append(sentences,
 		digestTitles(resolved, now, "Resolved: ")...)
+	sentences = append(sentences, riskTitles(risks)...)
 	sentences = append(sentences, sentence{part: partAction,
 		text: "None of them is urgent; one that gets worse gets its own " +
 			"message."})
@@ -125,6 +173,44 @@ func digestTitles(
 			text: prefix + Writer{}.Write(d, now).Title})
 	}
 	return out
+}
+
+// riskTitles lists up to maxSummaryNamed configuration risks, each as
+// its workload and what is risky about it: "orders in shop runs a
+// single replica, so any restart is downtime".
+func riskTitles(risks []detection.Finding) []sentence {
+	var out []sentence
+	for i, f := range risks {
+		if i == maxSummaryNamed {
+			out = append(out, sentence{part: partProof,
+				text: sentenceCase(numberWord(len(risks)-i) + " more " +
+					verb(len(risks)-i, "risk is", "risks are") +
+					" not described here")})
+			break
+		}
+		out = append(out, sentence{part: partProof, text: "Risk: " +
+			shortName(f.Entity) + " " + riskClause(f)})
+	}
+	return out
+}
+
+// riskClauses word each configuration risk as what the workload does.
+var riskClauses = map[string]string{
+	reasons.RiskNoReadinessProbe: "has no readiness probe",
+	reasons.RiskNoMemoryLimit:    "has containers without a memory limit",
+	reasons.RiskMutableImageTag:  "runs an image tag that can change",
+	reasons.RiskSingleReplica:    "runs a single replica",
+	reasons.RiskSingleNode:       "runs every replica on one node",
+	reasons.RiskPrivileged:       "runs a privileged container",
+}
+
+// riskClause is the clause for a risk finding; an unknown risk falls
+// back to its summary as a predicate.
+func riskClause(f detection.Finding) string {
+	if clause, ok := riskClauses[f.Reason]; ok {
+		return clause
+	}
+	return predicate(f.Entity, f.Summary)
 }
 
 // joinWords joins two or three phrases with commas and "and".

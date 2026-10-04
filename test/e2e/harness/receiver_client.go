@@ -122,10 +122,35 @@ func (r *ReceiverClient) Matching(
 }
 
 // titleNames reports whether the notification title mentions name as a
-// whole word, such as "persistent is failing in <namespace>".
+// whole word, such as "persistent is failing in <namespace>". A roll-up
+// title only counts the problems, so its listed lines and note, which
+// carry each problem's own title, are searched too.
 func titleNames(payload map[string]any, name string) bool {
 	title, _ := payload["title"].(string)
-	for _, word := range strings.Fields(title) {
+	if hasWord(title, name) {
+		return true
+	}
+	key, _ := payload["key"].(string)
+	if !strings.HasPrefix(key, "rollup/") {
+		return false
+	}
+	note, _ := payload["note"].(string)
+	if hasWord(note, name) {
+		return true
+	}
+	lines, _ := payload["lines"].([]any)
+	for _, line := range lines {
+		text, _ := line.(string)
+		if hasWord(text, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasWord reports whether text contains name as a whole word.
+func hasWord(text, name string) bool {
+	for _, word := range strings.Fields(text) {
 		if strings.Trim(word, ".,:;()") == name {
 			return true
 		}

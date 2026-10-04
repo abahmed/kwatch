@@ -40,6 +40,7 @@ func AuditEntry(
 		ContentHash:    p.Digest,
 		Previous:       p.Previous,
 		Delivery:       m.Carrier,
+		Considered:     p.Considered,
 	}
 	if m.PagingOnly {
 		entry.Delivery = "paging"

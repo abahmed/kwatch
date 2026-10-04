@@ -178,8 +178,55 @@ func Condition(conditionType string) string {
 	return ConditionFailure + "." + conditionType
 }
 
-// Synthetic and startup reasons.
-const ()
+// Synthetic reasons kwatch derives rather than reads from one object.
+const (
+	// UnusualEventPrefix starts the reason of a Warning event kwatch has
+	// no detector for, repeated enough to matter: "UnusualEvent.SystemOOM".
+	UnusualEventPrefix = "UnusualEvent."
+	// NodeMemoryOvercommitted is a node whose pods' memory limits add up
+	// to far more memory than it has.
+	NodeMemoryOvercommitted = "NodeMemoryOvercommitted"
+	// ImageDigestDrift is a workload whose pods run different builds of
+	// the same image tag.
+	ImageDigestDrift = "ImageDigestDrift"
+	// LeaseStale is a controller's Lease that its running holder stopped
+	// renewing: the controller runs but does not work.
+	LeaseStale = "LeaseStale"
+	// APIServerErrors is the API server answering a notable share of
+	// requests with server errors.
+	APIServerErrors = "APIServerErrors"
+	// CoreDNSServfail is the cluster DNS failing a notable share of
+	// lookups with SERVFAIL.
+	CoreDNSServfail = "CoreDNSServfail"
+	// NodePLEGSlow is a kubelet whose pod lifecycle relist takes so
+	// long that it falls behind its pods.
+	NodePLEGSlow = "NodePLEGSlow"
+	// NodeEvicting is a kubelet evicting pods right now.
+	NodeEvicting = "NodeEvicting"
+	// ServiceUnused is a Service that has selected no pod for a day.
+	ServiceUnused = "ServiceUnused"
+	// ClaimUnused is a bound claim no pod has mounted for a day.
+	ClaimUnused = "ClaimUnused"
+)
+
+// Configuration risks: advisory findings about how a workload is set
+// up, reported in the digest and quoted as a consequence when a failure
+// shows what the risk cost. They share RiskPrefix.
+const (
+	RiskPrefix           = "Risk."
+	RiskNoReadinessProbe = "Risk.NoReadinessProbe"
+	RiskNoMemoryLimit    = "Risk.NoMemoryLimit"
+	RiskMutableImageTag  = "Risk.MutableImageTag"
+	RiskSingleReplica    = "Risk.SingleReplica"
+	RiskSingleNode       = "Risk.SingleNode"
+	RiskPrivileged       = "Risk.Privileged"
+)
+
+// UnusualEvent is the reason for a repeated Warning event kwatch does
+// not otherwise detect, named after the event's own reason.
+func UnusualEvent(eventReason string) string {
+	return UnusualEventPrefix + eventReason
+}
 
 // Pod, container and node failure modes (pod runtime). Kubernetes strings
 // matched by the detectors (kubelet admission reasons, event reasons,

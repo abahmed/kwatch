@@ -80,6 +80,24 @@ const (
 	ModeNotScheduling          Mode = "NotScheduling"
 	ModeInvalidSchedule        Mode = "InvalidSchedule"
 	ModeDisruptionBudget       Mode = "DisruptionBudget"
+	ModeImageDrift             Mode = "ImageDrift"
+	ModeLeaseStale             Mode = "LeaseStale"
+	ModeAPIServerErrors        Mode = "APIServer.Errors"
+	ModePLEGSlow               Mode = "PLEGSlow"
+	ModeEvicting               Mode = "Evicting"
+	ModeUnused                 Mode = "Unused"
+	// ModeDNSServfail is a finer mode of explain's "Resolution": the
+	// cluster DNS answers, but with failures.
+	ModeDNSServfail Mode = "Resolution.Servfail"
+	// Configuration risks carry their reason as their mode; no
+	// propagation row matches them.
+	ModeRisk                 Mode = "Risk"
+	ModeRiskNoReadinessProbe Mode = "Risk.NoReadinessProbe"
+	ModeRiskNoMemoryLimit    Mode = "Risk.NoMemoryLimit"
+	ModeRiskMutableImageTag  Mode = "Risk.MutableImageTag"
+	ModeRiskSingleReplica    Mode = "Risk.SingleReplica"
+	ModeRiskSingleNode       Mode = "Risk.SingleNode"
+	ModeRiskPrivileged       Mode = "Risk.Privileged"
 )
 
 // Service, admission and reference modes.
@@ -158,6 +176,10 @@ const (
 	ModeResizeDeferred        Mode = "Resize.Deferred"
 	ModeResizeError           Mode = "Resize.Error"
 	ModePreemptedRepeatedly   Mode = "Preempted.Repeatedly"
+	ModeMemoryOvercommitted   Mode = "MemoryOvercommitted"
+	// ModeUnusualEvent is a repeated Warning event kwatch has no
+	// detector for; the finding's reason names the event.
+	ModeUnusualEvent Mode = "UnusualEvent"
 )
 
 // Workload, network, storage and admission resource modes.

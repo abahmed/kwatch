@@ -18,6 +18,8 @@ type firstMessage struct {
 	scenario string
 	tier     incident.Tier
 	delay    time.Duration
+	// at is when the message went, on the simulated clock.
+	at time.Time
 }
 
 // timeToFirstMessage measures one replay. It reports false when nothing
@@ -33,23 +35,39 @@ type firstMessage struct {
 func timeToFirstMessage(
 	name string, log replay.Log, result replay.Result,
 ) (firstMessage, bool) {
-	for i, d := range result.Decisions {
+	var first firstMessage
+	found := false
+	consider := func(d incident.Decision, at time.Time) {
 		p := d.Incident
 		if d.Action != incident.Announce || p.ID == "" ||
 			p.Tier < incident.Notify {
-			continue
+			return
 		}
 		start := firstObservation(log, p, failureStart(p, log.Start))
-		return firstMessage{
-			scenario: name, tier: p.Tier, delay: result.Times[i].Sub(start),
-		}, true
+		if candidate := (firstMessage{scenario: name, tier: p.Tier,
+			delay: at.Sub(start)}); !found || at.Before(first.at) {
+			first, first.at, found = candidate, at, true
+		}
 	}
-	return firstMessage{}, false
+	for i, d := range result.Decisions {
+		consider(d, result.Times[i])
+	}
+	// A roll-up interrupts people the moment its announcements are made.
+	for _, c := range result.Carried {
+		if c.Carrier == "roll-up" {
+			consider(c.Decision, c.At)
+		}
+	}
+	return first, found
 }
 
 func failureStart(p incident.Incident, floor time.Time) time.Time {
 	start := p.Opened
 	for _, finding := range p.Members {
+		// A configuration risk predates the failure and is not one.
+		if finding.Advisory {
+			continue
+		}
 		if !finding.Since.IsZero() && finding.Since.Before(start) {
 			start = finding.Since
 		}

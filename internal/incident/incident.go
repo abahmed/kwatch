@@ -56,6 +56,15 @@ type Incident struct {
 	// says the cause is not clear. A root with nothing upstream to weigh
 	// (a node that stopped reporting) is not unclear.
 	CauseUnclear bool
+	// Checked lists the kinds of objects upstream of the failures that
+	// were reached and found healthy and unchanged when no cause was
+	// found: "node", "image", "configmap". A message says so instead of
+	// leaving the reader with no cause at all. Sorted, without repeats.
+	Checked []string
+	// Considered lists the other causes the solver weighed for the
+	// latest placement, best first, as "root (row, confidence)". The
+	// audit log carries them; messages do not.
+	Considered []string
 	// Unverified names what root-cause rules could not check because
 	// kwatch cannot see that kind ("secrets in billing"). It is kept for
 	// the incident's life so every message states the gap.
@@ -121,11 +130,18 @@ type Incident struct {
 	// after a cause revision. The incident closes without claiming
 	// recovery.
 	SupersededBy string
+	// Reminded is when the last weekly "still open" update was sent;
+	// zero until the first.
+	Reminded time.Time
 
 	// revised asks the next update to say the cause was revised, once
 	// the new cause held since revisedAt for the revise settle.
 	revised   bool
 	revisedAt time.Time
+	// movedTo lists the roots members left for since people last heard
+	// about the incident. When they all went to one place the story
+	// moved there; when they dispersed, the story is over.
+	movedTo []inventory.EntityID
 	// rootReasons are the root's own finding reasons ever seen in this
 	// incident. The fingerprint reads them, so a crash loop whose pods
 	// come up and fall over again, toggling the workload's own
@@ -178,6 +194,9 @@ const (
 const (
 	// ReasonCauseRevised is an update whose incident moved to a new root.
 	ReasonCauseRevised = "cause revised"
+	// ReasonMaterialChange is an update because the incident's
+	// fingerprint changed: new members, a new impact.
+	ReasonMaterialChange = "material change"
 	// ReasonSuperseded closes an incident whose members now belong to
 	// another announced incident.
 	ReasonSuperseded = "superseded by revised cause"
@@ -202,6 +221,8 @@ func (inc *Incident) Snapshot() Incident {
 	out.History = append([]Occurrence(nil), inc.History...)
 	out.Timeline = append([]Event(nil), inc.Timeline...)
 	out.Unverified = append([]string(nil), inc.Unverified...)
+	out.Checked = append([]string(nil), inc.Checked...)
+	out.Considered = append([]string(nil), inc.Considered...)
 	out.Reported, out.ReportedKnown = inc.sent.reported(len(inc.Timeline))
 	if inc.Cause != nil {
 		cause := *inc.Cause

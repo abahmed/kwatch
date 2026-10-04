@@ -7,6 +7,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 // Fix says how an earlier occurrence of an incident ended. Values are
@@ -37,6 +38,35 @@ type Occurrence struct {
 	// first, is remembered for routines and flapping but is not "the
 	// second time this week" to anyone.
 	Heard bool `json:",omitempty"`
+	// Trigger is what the occurrence's cause was blamed on, as one of
+	// the TriggerOf words, or empty when none was named.
+	Trigger string `json:",omitempty"`
+}
+
+// Triggers are the kinds of cause a recurrence can share.
+const (
+	TriggerRollout = "rollout"
+	TriggerConfig  = "config change"
+	TriggerNode    = "node"
+)
+
+// TriggerOf classifies a cause as one of the triggers, or "".
+func TriggerOf(cause *rootcause.CauseRecord) string {
+	if cause == nil {
+		return ""
+	}
+	switch cause.Rule {
+	case "rollout", "own-change":
+		return TriggerRollout
+	case "config-missing-or-changed", "configmap-missing-or-changed":
+		if cause.Change != nil {
+			return TriggerConfig
+		}
+	}
+	if cause.Root.Kind == kube.KindNode {
+		return TriggerNode
+	}
+	return ""
 }
 
 // Duration is how long the occurrence lasted.
@@ -74,7 +104,7 @@ func (inc *Incident) LastOccurrence() (Occurrence, bool) {
 func occurrenceOf(p *Incident) Occurrence {
 	return Occurrence{
 		Mode: p.Mode, Opened: p.Opened, Resolved: p.Resolved, Fix: p.Fix,
-		Heard: !p.Announced.IsZero(),
+		Heard: !p.Announced.IsZero(), Trigger: TriggerOf(p.Cause),
 	}
 }
 

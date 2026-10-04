@@ -12,6 +12,7 @@ import (
 func storageScenarios() []scenario {
 	return []scenario{
 		claimFullWithVolume(), claimFullUnlistedVolume(), pvcFull(),
+		claimPinsPod(),
 	}
 }
 
@@ -197,5 +198,37 @@ func buildPVCFull(c *cluster) {
 		w.setReady(0)
 		c.update(w.objects())
 		c.after(time.Minute)
+	}
+}
+
+// claimPinsPod: a broker's claim is bound to a volume in zone-a, and the
+// only node left runs in zone-b. The scheduler rejects the replacement
+// pod for a volume node affinity conflict. The claim is the cause.
+func claimPinsPod() scenario {
+	return scenario{
+		expect: expectation{
+			Name: "claim-pins-pod",
+			Description: "A pod cannot be scheduled because its bound " +
+				"claim's volume lives in a zone with no node for it.",
+			Root: "persistentvolumeclaim/streaming/data-kafka-0",
+			Tier: "notify", MaxMessages: 2,
+			MustNotBlame: []string{"node//n2", "deployment/streaming/kafka",
+				"scheduling//had volume node affinity conflict"},
+		},
+		build: func(c *cluster) {
+			c.list(c.node("n2", "zone-b"))
+			claim := storageBoundClaim(c, "streaming", "data-kafka-0",
+				"fast", "100Gi", "pv-kafka-0")
+			c.list(claim, storageVolume(c, claim, "pv-kafka-0"))
+			w := c.deployment("streaming", "kafka",
+				"registry.example.com/kafka:3.7", 1)
+			storageMount(w, claim.Name)
+			c.list(w.objects())
+			c.list(w.pod(0, "", pendingUnscheduled("0/1 nodes are "+
+				"available: 1 node(s) had volume node affinity conflict. "+
+				"preemption: 0/1 nodes are available: 1 Preemption is not "+
+				"helpful for scheduling.")))
+			c.after(5 * time.Minute)
+		},
 	}
 }

@@ -268,9 +268,9 @@ func TestIncidentStoreStartupMarkerRoundTrip(t *testing.T) {
 	if _, found, err := ps.LoadStartup(); err != nil || found {
 		t.Fatalf("empty store: found=%v err=%v", found, err)
 	}
-	want := StartupState{Complete: true, Key: "startup/x",
+	want := StartupState{Complete: true, Listing: Listing{Key: "startup/x",
 		Incidents: []string{"a"}, Followed: []string{"a"},
-		Resolved: []string{"a"}}
+		Resolved: []string{"a"}}}
 	if err := ps.SaveStartup(want); err != nil {
 		t.Fatal(err)
 	}

@@ -37,6 +37,16 @@ type Record struct {
 	// restore without them and the next explanation fills them again.
 	Unverified   []string `json:",omitempty"`
 	CauseUnclear bool     `json:",omitempty"`
+	// Checked was added with the "checked and found healthy" wording;
+	// older records restore without it and the next explanation fills
+	// it again.
+	Checked []string `json:",omitempty"`
+	// Considered was added with the audit log's alternatives; older
+	// records restore without it.
+	Considered []string `json:",omitempty"`
+	// Reminded was added with the weekly reminder; an older record
+	// restores as never reminded, which costs at most one reminder.
+	Reminded time.Time `json:",omitempty"`
 	// Mode, Fix and History were added for recurrence memory; older
 	// records restore without them.
 	Mode    detection.Mode `json:",omitempty"`
@@ -75,7 +85,8 @@ func (m *Manager) Export() []Record {
 			Digest: p.Digest, Timeline: p.Timeline, Scope: p.Scope,
 			Held: p.Held, SupersededBy: p.SupersededBy,
 			Unverified: p.Unverified, CauseUnclear: p.CauseUnclear,
-			Mode: p.Mode, Fix: p.Fix, History: p.History,
+			Checked: p.Checked, Considered: p.Considered, Mode: p.Mode,
+			Fix: p.Fix, History: p.History, Reminded: p.Reminded,
 			ImpactPeak: p.impactPeak, Revised: p.revised,
 			RevisedAt: p.revisedAt, AlertKey: p.AlertKey,
 			RootReasons: p.rootReasonList(),
@@ -132,6 +143,7 @@ func restored(r Record) *Incident {
 		Revision: r.Revision, Digest: r.Digest, Timeline: r.Timeline,
 		Scope: r.Scope, SupersededBy: r.SupersededBy,
 		Unverified: r.Unverified, CauseUnclear: r.CauseUnclear,
+		Checked: r.Checked, Considered: r.Considered, Reminded: r.Reminded,
 		Mode: r.Mode, Fix: r.Fix, History: r.History,
 		Members:    make(map[detection.Key]detection.Finding),
 		impactPeak: r.ImpactPeak, revised: r.Revised,

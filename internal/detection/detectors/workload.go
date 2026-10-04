@@ -1,7 +1,9 @@
 package detectors
 
 import (
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -100,7 +102,8 @@ func (d Workload) availability(
 	since := ctx.Onset("unavailable", latest(
 		valueSince(e, kube.AttrReadyReplicas),
 		valueSince(e, desiredAttr(e))))
-	if !sustained(ctx, "unavailable", since, d.unavailable) {
+	wait := d.unavailable + workloadReplacementGrace(ctx, e.ID)
+	if !sustained(ctx, "unavailable", since, wait) {
 		return detection.Finding{}, false
 	}
 	return detection.Finding{
@@ -109,7 +112,60 @@ func (d Workload) availability(
 		Since: since, Symptom: true,
 		Summary: strconv.Itoa(int(ready)) + " of " +
 			strconv.Itoa(int(desired)) + " replicas are ready",
+		Evidence: daemonSetGaps(ctx.Model, e),
 	}, true
+}
+
+// maxGapNodes bounds how many nodes the DaemonSet evidence names.
+const maxGapNodes = 3
+
+// daemonSetGaps names, for a DaemonSet, the nodes whose pod is not
+// ready and the taints on them, so the message says where the agent is
+// missing instead of only how many. Other kinds get no evidence here.
+func daemonSetGaps(
+	model inventory.Reader, e inventory.Entity,
+) []detection.Evidence {
+	if e.ID.Kind != kube.KindDaemonSet || model == nil {
+		return nil
+	}
+	var nodes, tainted []string
+	for _, id := range model.Related(e.ID, inventory.OwnedBy,
+		inventory.Incoming) {
+		pod, ok := model.Entity(id)
+		if !ok || id.Kind != kube.KindPod || flag(pod, kube.AttrReady) {
+			continue
+		}
+		for _, node := range model.Related(id, inventory.RunsOn,
+			inventory.Outgoing) {
+			nodes = append(nodes, node.Name)
+			if entity, ok := model.Entity(node); ok &&
+				text(entity, kube.AttrTaints) != "" {
+				tainted = append(tainted, node.Name+" ("+
+					text(entity, kube.AttrTaints)+")")
+			}
+		}
+	}
+	if len(nodes) == 0 {
+		return nil
+	}
+	sort.Strings(nodes)
+	out := []detection.Evidence{{Label: "nodes without a ready pod",
+		Value: nameList(nodes)}}
+	if len(tainted) > 0 {
+		sort.Strings(tainted)
+		out = append(out, detection.Evidence{Label: "tainted nodes",
+			Value: nameList(tainted)})
+	}
+	return out
+}
+
+// nameList joins up to maxGapNodes names and counts the rest.
+func nameList(names []string) string {
+	if len(names) <= maxGapNodes {
+		return strings.Join(names, ", ")
+	}
+	return strings.Join(names[:maxGapNodes], ", ") + " and " +
+		strconv.Itoa(len(names)-maxGapNodes) + " more"
 }
 
 func desiredReplicas(e inventory.Entity) (float64, bool) {

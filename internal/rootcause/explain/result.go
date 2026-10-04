@@ -16,6 +16,7 @@ func (v *view) causeOf(s scored) Cause {
 		Confidence: s.confidence, Level: levelOf(s.confidence),
 		Contributions: s.contributions, Changes: v.changesOf(s.c.id),
 		Summary: summaryOf(s.c.id, best.match.causeMode, len(s.c.covers)),
+		Began:   v.began(s.c.id),
 	}
 }
 
@@ -67,5 +68,24 @@ func (v *view) traceOf(
 				Reason: note.reason, Insufficient: note.insufficient})
 		}
 	}
+	trace.Checked = v.checkedInArea(inArea)
 	return trace
+}
+
+// checkedInArea is the checked map restricted to the area's failures;
+// nil when none of them had anything checked.
+func (v *view) checkedInArea(
+	inArea map[inventory.EntityID]bool,
+) map[inventory.EntityID][]inventory.EntityID {
+	var out map[inventory.EntityID][]inventory.EntityID
+	for effect, ids := range v.checked {
+		if !inArea[effect] {
+			continue
+		}
+		if out == nil {
+			out = map[inventory.EntityID][]inventory.EntityID{}
+		}
+		out[effect] = ids
+	}
+	return out
 }

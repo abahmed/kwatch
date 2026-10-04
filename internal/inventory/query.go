@@ -148,6 +148,26 @@ func (m *Model) Notes(id EntityID, since time.Time) []Note {
 	return out
 }
 
+// NotedKinds lists the kinds of the entities that have a Warning note
+// since the given time, so a watch budget can favour them.
+func (m *Model) NotedKinds(since time.Time) map[Kind]bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := map[Kind]bool{}
+	for id, rec := range m.records {
+		if out[id.Kind] {
+			continue
+		}
+		for _, note := range rec.notes {
+			if note.Warning && !note.At.Before(since) {
+				out[id.Kind] = true
+				break
+			}
+		}
+	}
+	return out
+}
+
 func pruneNotes(notes []Note, before time.Time) []Note {
 	kept := notes[:0]
 	for _, note := range notes {

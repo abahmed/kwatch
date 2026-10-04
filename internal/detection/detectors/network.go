@@ -7,6 +7,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
@@ -83,6 +84,8 @@ func backendFindings(
 	switch {
 	case endpoints == 0:
 		if s, ok := selectsNothing(ctx, e); ok {
+			out = append(out, s)
+		} else if s, ok := unusedService(ctx, since); ok {
 			out = append(out, s)
 		}
 		return out
@@ -275,4 +278,26 @@ func (EgressPolicy) Detect(
 		Since:    valueSince(e, kube.AttrDeniesEgress),
 		Summary:  "Policy blocks all outgoing traffic of the pods it selects",
 	}}
+}
+
+// DefaultUnusedAfter is how long a Service may select no pod, or a
+// bound claim go unmounted, before it is reported as unused. A day
+// covers nightly scale-downs and weekend quiet.
+const DefaultUnusedAfter = 24 * time.Hour
+
+// unusedService reports a Service whose selector has matched no pod for
+// a day: clutter at best, a wrong selector at worst. It waits for the
+// digest.
+func unusedService(
+	ctx detection.Context, since time.Time,
+) (detection.Finding, bool) {
+	since = ctx.Onset("unused", since)
+	if !sustained(ctx, "unused", since, DefaultUnusedAfter) {
+		return detection.Finding{}, false
+	}
+	return detection.Finding{
+		Reason: reasons.ServiceUnused, Severity: detection.Info, Since: since,
+		Summary: "Service has selected no pod for " +
+			format.Duration(ctx.Now.Sub(since)),
+	}, true
 }

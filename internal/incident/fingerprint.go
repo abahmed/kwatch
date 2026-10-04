@@ -23,7 +23,7 @@ import (
 func fingerprint(p *Incident) string {
 	reasons := make([]string, 0, len(p.Members)+len(p.rootReasons))
 	for key, s := range p.Members {
-		if key.Entity == p.Root && !s.Symptom {
+		if key.Entity == p.Root && !s.Symptom && !s.Advisory {
 			reasons = append(reasons, key.Reason)
 		}
 	}
@@ -94,7 +94,7 @@ func rootFindingReasons(
 // is not news; the incident's recovery is.
 func (p *Incident) rememberRootReasons() {
 	for key, s := range p.Members {
-		if key.Entity != p.Root || s.Symptom {
+		if key.Entity != p.Root || s.Symptom || s.Advisory {
 			continue
 		}
 		if p.rootReasons == nil {

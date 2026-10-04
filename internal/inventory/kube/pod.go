@@ -40,7 +40,7 @@ func (PodSchema) Kind() inventory.Kind { return KindPod }
 func (PodSchema) RelationTypes() []inventory.RelationType {
 	return []inventory.RelationType{
 		inventory.OwnedBy, inventory.RunsOn, inventory.References,
-		inventory.Mounts, inventory.Pulls,
+		inventory.Mounts, inventory.Pulls, inventory.Calls,
 	}
 }
 
@@ -58,6 +58,7 @@ func (PodSchema) Describe(obj any) (Description, bool) {
 	rel.add(inventory.References, podReferences(pod)...)
 	rel.add(inventory.Mounts, podClaims(pod)...)
 	rel.add(inventory.Pulls, podImages(pod)...)
+	rel.add(inventory.Calls, podDependencies(pod)...)
 	return Description{
 		ID: id, UID: string(pod.UID),
 		Attributes: podAttributes(pod),
@@ -105,6 +106,9 @@ func podAttributes(pod *corev1.Pod) map[string]inventory.Value {
 	}
 	if pod.Status.StartTime != nil {
 		attrs[AttrStartTime] = inventory.Time(pod.Status.StartTime.Time)
+	}
+	if pod.Status.PodIP != "" {
+		attrs[AttrPodIP] = inventory.Text(pod.Status.PodIP)
 	}
 	if !pod.CreationTimestamp.IsZero() {
 		attrs[AttrCreated] = inventory.Time(pod.CreationTimestamp.Time)

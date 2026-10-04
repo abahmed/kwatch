@@ -22,6 +22,8 @@ func updateSentences(f caseFacts) []sentence {
 		return revisedSentences(f)
 	case "flapping":
 		return flappingSentences(f)
+	case incident.ReasonReminder:
+		return reminderSentences(f)
 	}
 	if changed := changedSentences(f); len(changed) > 0 {
 		return changed
@@ -238,4 +240,14 @@ func limitSentences(sentences []sentence, n int) []sentence {
 		return sentences[:n]
 	}
 	return sentences
+}
+
+// reminderSentences restate an incident that has stayed open for
+// another week: "payments in shop is still down, for two weeks now."
+func reminderSentences(f caseFacts) []sentence {
+	subject := leadSubject(f)
+	open := humanDuration(f.now.Sub(f.p.Opened))
+	return append([]sentence{{part: partLead, text: capitalName(subject,
+		f.leadName(subject)+" is still "+downWord(f.p)+", for "+open+
+			" now.")}}, strongestProof(f)...)
 }

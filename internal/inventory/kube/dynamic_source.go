@@ -58,7 +58,15 @@ type DynamicConfig struct {
 	// Reconciled, when set, receives the status after every discovery
 	// pass. It runs on the source's goroutine and must not block.
 	Reconciled func(DynamicStatus)
+	// Noted, when set, lists the kinds that had Warning events since
+	// the given time. Over the budget they are watched before kinds
+	// nothing has complained about; nil ranks none.
+	Noted func(since time.Time) map[inventory.Kind]bool
 }
+
+// notedWindow is how recent a Warning event must be to pull its kind
+// into the watch budget.
+const notedWindow = time.Hour
 
 // DynamicStatus summarises the dynamic watch plan.
 type DynamicStatus struct {
@@ -267,7 +275,7 @@ func (d *DynamicSource) reconcile(ctx context.Context) {
 		func(gvr schema.GroupVersionResource) bool {
 			_, ok := d.running[gvr]
 			return ok
-		})
+		}, d.notedKinds())
 	retry := d.retryDue
 	d.retryDue = false
 	d.complete = complete
@@ -400,4 +408,13 @@ func skippedKinds(skipped []plannedResource) string {
 	}
 	sort.Strings(names)
 	return strings.Join(names, ",")
+}
+
+// notedKinds asks the model which kinds had Warning events recently,
+// once per reconcile; nil when the source has no model to ask.
+func (d *DynamicSource) notedKinds() map[inventory.Kind]bool {
+	if d.cfg.Noted == nil {
+		return nil
+	}
+	return d.cfg.Noted(d.cfg.Now().Add(-notedWindow))
 }

@@ -138,6 +138,37 @@ reason for its value. Each contribution carries a code and its numbers
 those fields, never from the solver's trace text. Below the confidence floor the cause is stated as
 unknown. The solver is a pure function of a snapshot: no clock, no I/O.
 
+When nothing upstream shows a fault, the engine still has three things to
+say, in this order of strength:
+
+1. **A probed dependency.** Pods relate to the endpoints outside the cluster
+   that their environment names (`postgres://db.example.com:5432/...` becomes
+   the `external-endpoint` `db.example.com:5432`; only host and port are
+   kept). With `autoDependencies` on, kwatch dials them, and a dependency
+   that refuses connections is the cause of the pods that call it.
+2. **What the failures share.** Three or more workloads failing within ten
+   minutes with a healthy node, image, ConfigMap, Secret or ServiceAccount
+   in common make that object a suspect (`shared-*` rows, pseudo mode
+   `SharedFactor`). It is capped below "likely": nothing is known to be
+   wrong with it.
+3. **What was checked.** The solver records the upstream objects it reached
+   that showed nothing wrong (`Trace.Checked`), and the message says "Its
+   node, image and configuration are healthy and unchanged, so nothing
+   outside it explains this", followed by the quoted crash output.
+
+Two kinds of finding are not failures. A *symptom* (a Deployment below its
+replicas) restates its pods' failures and never leads a message. An
+*advisory* finding (`Finding.Advisory`: no readiness probe, no memory
+limit, a `latest` tag, a single replica) is a configuration risk: it never
+opens an incident, joins the incident of a real failure of the same
+workload, and adds one sentence when the failure shows what the risk cost.
+
+A cause can also arrive too late. Once an incident has been announced, a
+cause that began more than ten minutes afterwards (`Cause.Began`) does not
+take it over: people were told about something that cause cannot have
+caused, so the incident keeps its root and the new cause explains only the
+new failures.
+
 ## How kwatch watches
 
 Sources turn Kubernetes objects into observations. Each kind has a schema in

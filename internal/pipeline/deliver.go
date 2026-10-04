@@ -20,21 +20,31 @@ type heldAnnouncement struct {
 }
 
 // deliver hands decisions to the sink in order, with the evidence
-// investigation found. An announcement whose investigation still runs is
-// held for it; every other decision goes at once. A decision about a
-// held incident first releases the held announcement, so people never
-// hear an update before the news.
+// investigation found. An announcement, or an update for a material
+// change, whose investigation still runs is held for it; every other
+// decision goes at once. A decision about a held incident first releases
+// what is held, so people never hear an update before the news.
 func (a *announcer) deliver(
 	ctx context.Context, now time.Time, decisions []incident.Decision,
 ) {
 	for _, d := range decisions {
 		a.releaseHeld(ctx, d.Incident.ID)
-		if d.Action == incident.Announce && a.hold(d, now) {
+		if investigable(d) && a.hold(d, now) {
 			continue
 		}
 		a.send(ctx, a.withEvidence(d), now)
 		a.forgetEvidence(d)
 	}
+}
+
+// investigable reports a decision worth fresh evidence: the first
+// message, or an update because the incident changed materially. A
+// cause revision carries the new cause already, and a resolve needs no
+// logs.
+func investigable(d incident.Decision) bool {
+	return d.Action == incident.Announce ||
+		(d.Action == incident.Update &&
+			d.Reason == incident.ReasonMaterialChange)
 }
 
 // hold holds announcement d until its investigation's result arrives or
@@ -43,9 +53,12 @@ func (a *announcer) hold(d incident.Decision, now time.Time) bool {
 	if !a.awaitsEvidence(d, now) {
 		return false
 	}
-	// Persist it as not announced until delivery has it, so a restart
-	// in the meantime announces it again instead of losing it.
-	a.incidents.HoldAnnouncement(d.Incident.ID)
+	if d.Action == incident.Announce {
+		// Persist it as not announced until delivery has it, so a
+		// restart in the meantime announces it again instead of
+		// losing it. A held update changes nothing about that.
+		a.incidents.HoldAnnouncement(d.Incident.ID)
+	}
 	a.held = append(a.held, heldAnnouncement{
 		decision: d, decided: now, until: now.Add(outputWait),
 	})

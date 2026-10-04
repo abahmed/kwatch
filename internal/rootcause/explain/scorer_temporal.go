@@ -3,7 +3,9 @@ package explain
 import (
 	"time"
 
+	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
@@ -21,16 +23,50 @@ func (tv timeValue) earlier(t time.Time) timeValue {
 	return tv
 }
 
-// candidateStart is when the candidate went wrong: its earliest
-// unhealthy finding or its earliest change in the window.
+// candidateStart is when the candidate went wrong; see startOf.
 func (v *view) candidateStart(c *candidate) timeValue {
-	start := v.earliestSince([]inventory.EntityID{c.id})
-	for _, change := range v.changesOf(c.id) {
+	return v.startOf(c.id)
+}
+
+// startOf is when id went wrong: its earliest unhealthy finding or its
+// earliest change in the window. A zone or node pool has no findings
+// of its own; it went wrong when its first node broke.
+func (v *view) startOf(id inventory.EntityID) timeValue {
+	start := v.earliestSince([]inventory.EntityID{id})
+	if id.Kind == kube.KindZone || id.Kind == kube.KindNodePool {
+		start = v.groupStart(id)
+	}
+	for _, change := range v.changesOf(id) {
 		if changeMode(change) != ModeScaled {
 			start = start.earlier(change.At)
 		}
 	}
 	return start
+}
+
+// groupStart is the earliest failing finding among the broken nodes of
+// a zone or pool.
+func (v *view) groupStart(group inventory.EntityID) (start timeValue) {
+	for _, node := range v.s.Model.Related(
+		group, inventory.PartOf, inventory.Incoming,
+	) {
+		for _, f := range v.s.Findings[node] {
+			if f.Health == detection.Failing && !f.Since.IsZero() {
+				start = start.earlier(f.Since)
+			}
+		}
+	}
+	return start
+}
+
+// began is when the candidate went wrong, as a time for the incident
+// layer; zero when unknown. See startOf.
+func (v *view) began(id inventory.EntityID) time.Time {
+	start := v.startOf(id)
+	if !start.ok {
+		return time.Time{}
+	}
+	return start.t
 }
 
 // scoreTemporal checks that the cause began before its effects. A

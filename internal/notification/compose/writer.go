@@ -141,7 +141,8 @@ func rootFinding(
 	p incident.Incident, members []detection.Finding,
 ) *detection.Finding {
 	for i := range members {
-		if members[i].Entity == p.Root && !members[i].Symptom {
+		if members[i].Entity == p.Root && !members[i].Symptom &&
+			!members[i].Advisory {
 			return &members[i]
 		}
 	}

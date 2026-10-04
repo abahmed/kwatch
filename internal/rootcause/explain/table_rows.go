@@ -207,6 +207,20 @@ var nodeRows = []Row{
 			detection.ModeCrashLoop),
 		Prior: 0.7,
 	},
+	{
+		// The limits of the pods on the node add up to more memory than
+		// it has: a pod killed within its own limit was killed for
+		// the node's sake. Weaker than memory pressure, which the
+		// kubelet states outright.
+		Name: "node-overcommitted",
+		Cause: Side{Kind: kube.KindNode, Modes: []detection.Mode{
+			detection.ModeMemoryOvercommitted}},
+		Link: LinkRunsOn,
+		Effect: podSide(
+			detection.ModeOOMKilled, detection.ModeEvicted,
+			detection.ModeExitKilled, detection.ModeKilled),
+		Prior: 0.5,
+	},
 }
 
 // workloadRows cover rollouts and references.
@@ -342,6 +356,17 @@ var clusterRows = []Row{
 		Prior:  0.7,
 	},
 	{
+		// The scheduler names a volume node affinity conflict: the
+		// pod's claim is bound to a volume in a zone with no node for
+		// it. The claim is the cause, not the scheduler.
+		Name: "claim-pins-pod",
+		Cause: Side{Kind: kube.KindPVC,
+			Modes: []detection.Mode{ModeVolumePinned}},
+		Link:   LinkMounts,
+		Effect: podSide(detection.ModePending, detection.ModeUnschedulable),
+		Prior:  0.8,
+	},
+	{
 		// Several failing nodes of one zone: an outage, not one
 		// broken node.
 		Name: "zone-failing",
@@ -364,7 +389,7 @@ var clusterRows = []Row{
 var specificRows = concatRows(nodeRows, workloadRows, clusterRows,
 	controlPlaneRows, accessRows, trafficRows, nodeLifecycleRows,
 	operatorRows, workloadConfigRows, containerRows, calledRows,
-	scalingRows)
+	scalingRows, sharedRows, agentRows)
 
 func concatRows(groups ...[]Row) []Row {
 	var out []Row

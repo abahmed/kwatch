@@ -263,17 +263,10 @@ func beforeColon(text string) string {
 }
 
 // ownLead is about the root's own condition, or a failure without an
-// outside cause.
+// outside cause. What was checked and found fine is said by
+// checkedSentences, after the lead.
 func ownLead(f caseFacts) string {
-	text := subjectWithState(f, f.p.Root)
-	if f.p.Cause != nil || rootFinding(f.p, f.members) != nil {
-		return text
-	}
-	if len(f.p.Unverified) > 0 {
-		return text + ", and I couldn't find an outside cause among " +
-			"what I can see"
-	}
-	return text + ", and I couldn't find an outside cause"
+	return subjectWithState(f, f.p.Root)
 }
 
 func subjectWithState(f caseFacts, subject inventory.EntityID) string {

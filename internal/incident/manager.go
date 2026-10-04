@@ -114,6 +114,7 @@ func (m *Manager) Apply(
 			m.attach(s.Now, t.Finding, own)
 		}
 	}
+	m.adoptAdvisories(s)
 	m.refresh(s.Model)
 }
 

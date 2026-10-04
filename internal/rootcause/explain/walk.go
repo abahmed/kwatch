@@ -49,6 +49,7 @@ var storedHops = []struct {
 	{inventory.ResolvesVia, LinkResolvesVia},
 	{inventory.PartOf, LinkContains},
 	{inventory.RoutesTo, LinkRoutesTo},
+	{inventory.Calls, LinkCalls},
 }
 
 // walkItem is one entity on the walk's frontier.
@@ -116,13 +117,16 @@ func (v *view) upstream(id inventory.EntityID) []hop {
 	return out
 }
 
-// pullHops leads from what pulls an image to the image's registry.
+// pullHops leads from what pulls an image to the image itself and to
+// its registry. The image has no findings of its own; it is reached so
+// that the same image failing in several workloads can be suspected.
 func (v *view) pullHops(id inventory.EntityID) []hop {
 	var out []hop
 	for _, image := range v.s.Model.Related(
 		id, inventory.Pulls, inventory.Outgoing,
 	) {
-		out = append(out, hop{link: LinkPulls, to: registryOf(image)})
+		out = append(out, hop{link: LinkPulls, to: image},
+			hop{link: LinkPulls, to: registryOf(image)})
 	}
 	return out
 }

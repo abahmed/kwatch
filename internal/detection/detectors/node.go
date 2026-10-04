@@ -1,6 +1,7 @@
 package detectors
 
 import (
+	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -170,17 +171,42 @@ func (d Node) readiness(
 // an upgrade, autoscaler scale-down or spot replacement.
 func drainFinding(e inventory.Entity) (bool, detection.Finding) {
 	deleting := flag(e, kube.AttrDeleting)
-	if !deleting && !flag(e, kube.AttrUnschedulable) {
+	removal := removalTaint(text(e, kube.AttrTaints))
+	if !deleting && !flag(e, kube.AttrUnschedulable) && removal == "" {
 		return false, detection.Finding{}
 	}
 	summary, since := "Node is cordoned for maintenance",
 		valueSince(e, kube.AttrUnschedulable)
-	if deleting {
+	switch {
+	case deleting:
 		summary, since = "Node is being removed",
 			valueSince(e, kube.AttrDeleting)
+	case removal != "":
+		summary, since = "Node is being removed ("+removal+")",
+			valueSince(e, kube.AttrTaints)
 	}
 	return true, detection.Finding{
 		Reason: reasons.NodeDraining, Severity: detection.Info,
 		Since: since, Summary: summary,
 	}
+}
+
+// removalTaints are the taints Kubernetes and its autoscalers put on a
+// node they are taking away, each with how a message names the reason.
+var removalTaints = []struct{ key, reason string }{
+	{"node.kubernetes.io/out-of-service", "marked out of service"},
+	{"ToBeDeletedByClusterAutoscaler", "scale-down"},
+	{"DeletionCandidateOfClusterAutoscaler", "scale-down"},
+	{"node.kubernetes.io/unschedulable", "cordoned"},
+}
+
+// removalTaint names the removal a node's taints announce, or "".
+func removalTaint(taints string) string {
+	for _, taint := range removalTaints {
+		if strings.Contains(taints, taint.key+":") ||
+			strings.Contains(taints, taint.key+"=") {
+			return taint.reason
+		}
+	}
+	return ""
 }

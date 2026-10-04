@@ -44,8 +44,8 @@ func TestEngineStartupHoldsOnlyWhatFailedBeforeSync(t *testing.T) {
 
 func TestEngineFirstMessageAfterSummaryIsAnnouncement(t *testing.T) {
 	e := newTestEngine(t, &fakeClock{}, (&sinkLog{}).sink, nil)
-	e.announcer.startup.summary = StartupState{Complete: true, Key: "startup/x",
-		Incidents: []string{"a"}}
+	e.announcer.startup.summary = StartupState{Complete: true,
+		Listing: Listing{Key: "startup/x", Incidents: []string{"a"}}}
 	update := incident.Decision{Action: incident.Update,
 		Incident: incident.Incident{ID: "a", Revision: 2}}
 
@@ -76,8 +76,9 @@ func TestEngineSummaryResolvesOnlyWhenSomeoneWasNotTold(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			log := &sinkLog{}
 			e := newTestEngine(t, &fakeClock{}, log.sink, nil)
-			e.announcer.startup.summary = StartupState{Complete: true, Key: "startup/x",
-				Incidents: []string{"a", "b"}, Resolved: c.resolved}
+			e.announcer.startup.summary = StartupState{Complete: true,
+				Listing: Listing{Key: "startup/x",
+					Incidents: []string{"a", "b"}, Resolved: c.resolved}}
 			e.announcer.startup.checkSummary = true
 
 			sent := e.announcer.closeSummary(context.Background())
