@@ -12,6 +12,10 @@ import (
 // NotifyIncident queues one incident message for every provider. It never
 // performs provider I/O on the caller's goroutine.
 func (m *Manager) NotifyIncident(msg notification.Message) {
+	if msg.Carrier != "" {
+		// Recorded for the audit log; the digest or summary carries it.
+		return
+	}
 	klog.V(2).InfoS("queue incident", "component", "delivery",
 		"conversation", msg.Key, "revision", msg.Revision)
 	incident := msg

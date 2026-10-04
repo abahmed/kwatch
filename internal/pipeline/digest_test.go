@@ -23,7 +23,9 @@ func digestHarness(
 	t.Helper()
 	var sent []notification.Message
 	sink := func(_ context.Context, _ incident.Decision, m notification.Message) {
-		sent = append(sent, m)
+		if m.Carrier == "" {
+			sent = append(sent, m)
+		}
 	}
 	return newTestEngine(t, &fakeClock{now: now}, sink, nil), &sent
 }
@@ -120,5 +122,27 @@ func TestEngineDigestReleasesPromotedIncident(t *testing.T) {
 	}
 	if len(e.announcer.digest.opened) != 0 {
 		t.Fatal("the promoted incident must leave the digest")
+	}
+}
+
+// A held digest-tier decision still reaches the sink, marked as carried
+// by the digest, so the audit log records it when it is made.
+func TestEngineDigestRecordsHeldDecisionsForTheAuditLog(t *testing.T) {
+	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
+	var carried []notification.Message
+	sink := func(_ context.Context, _ incident.Decision, m notification.Message) {
+		if m.Carrier != "" {
+			carried = append(carried, m)
+		}
+	}
+	e := newTestEngine(t, &fakeClock{now: now}, sink, nil)
+
+	e.announcer.collectDigest(context.Background(), now,
+		[]incident.Decision{digestAnnounce("a"), announce("urgent")})
+
+	if len(carried) != 1 || carried[0].Key != announce("a").Incident.ID ||
+		carried[0].Carrier != "digest" {
+		t.Fatalf("want the held announcement marked carried, got %+v",
+			carried)
 	}
 }

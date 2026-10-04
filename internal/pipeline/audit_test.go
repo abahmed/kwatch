@@ -60,6 +60,23 @@ func TestAuditEntryRecordsDecision(t *testing.T) {
 	}, entry)
 }
 
+// The entry says how a decision reaches people when not as a message of
+// its own.
+func TestAuditEntryRecordsDelivery(t *testing.T) {
+	pod := inventory.EntityID{Kind: "pod", Namespace: "shop", Name: "api-1"}
+	p := auditIncident(nil, pod)
+	d := incident.Decision{Action: incident.Announce, Incident: p}
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	own := AuditEntry(d, notification.Message{}, at)
+	carried := AuditEntry(d, notification.Message{Carrier: "digest"}, at)
+	paging := AuditEntry(d, notification.Message{PagingOnly: true}, at)
+
+	assert.Empty(t, own.Delivery)
+	assert.Equal(t, "digest", carried.Delivery)
+	assert.Equal(t, "paging", paging.Delivery)
+}
+
 func TestAuditCauseState(t *testing.T) {
 	pod := inventory.EntityID{Kind: "pod", Namespace: "shop", Name: "api-1"}
 	self := &rootcause.CauseRecord{Root: pod}

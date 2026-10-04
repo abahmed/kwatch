@@ -662,6 +662,11 @@ searchable history of everything it decided. `kwatch-scorecard` reads this log.
 | `auditLog.enabled` | Write one structured JSON entry per incident decision (default: true) |
 | `auditLog.output` | Destination: `stdout` (default) or a file path |
 
+Every decision is recorded when it is made, including the ones people hear
+through another message: `delivery` is `digest` or `startup summary` when the
+decision was held for that message, `paging` when only paging tools and issue
+trackers receive it, and absent for a message of its own.
+
 File output is append-only. Configure rotation and retention in the container
 runtime or log collector; kwatch does not rename or delete audit files.
 

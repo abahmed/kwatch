@@ -482,6 +482,10 @@ Some quirks are load-bearing. Preserve them unless a change explicitly says othe
   they may have caused.
 - Decisions for out-of-scope incidents are dropped before delivery, but the
   incident is still tracked so reasoning keeps its evidence.
+- The audit log records every in-scope decision when it is made. A decision
+  the digest or the startup summary carries reaches the sink with
+  `Message.Carrier` set; delivery drops it, the replay keeps it apart from
+  delivered messages, and the audit entry says `delivery: digest`.
 - The audit decision reason strings (`settled`, `material change`,
   `flapping`, `healthy for ...`, `stable for ...`, `startup summary`,
   `digest`) are stable strings people grep for.
