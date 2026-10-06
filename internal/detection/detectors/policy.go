@@ -87,12 +87,15 @@ func (Quota) Detect(
 	exhausted := withoutZeroHard(
 		text(e, kube.AttrExhausted), text(e, kube.AttrQuotaZeroHard))
 	if exhausted == "" {
+		if f, ok := quotaForbidsCreates(ctx, e); ok {
+			return []detection.Finding{f}
+		}
 		return quotaNearLimit(e)
 	}
 	// Used equal to hard is a full quota, not yet a failure: it is a
 	// warning only once a controller was refused for exceeding it.
 	severity := detection.Info
-	if quotaRefusedCreate(ctx, e.ID.Namespace) {
+	if quotaRefusedCreate(ctx, e.ID.Namespace, "") {
 		severity = detection.Warning
 	}
 	return []detection.Finding{{
@@ -102,6 +105,26 @@ func (Quota) Detect(
 		Summary: "Namespace quota is used up (" +
 			strings.ReplaceAll(exhausted, ",", ", ") + ")",
 	}}
+}
+
+// quotaForbidsCreates reports a quota whose zero limit just refused a
+// create. A zero limit alone is deliberate and says nothing, but once a
+// controller is refused by this very quota it is why the pods are missing.
+func quotaForbidsCreates(
+	ctx detection.Context, e inventory.Entity,
+) (detection.Finding, bool) {
+	zero := text(e, kube.AttrQuotaZeroHard)
+	if zero == "" ||
+		!quotaRefusedCreate(ctx, e.ID.Namespace, e.ID.Name) {
+		return detection.Finding{}, false
+	}
+	return detection.Finding{
+		Reason:   reasons.ResourceQuotaExhausted,
+		Severity: detection.Warning,
+		Since:    valueSince(e, kube.AttrQuotaZeroHard),
+		Summary: "Namespace quota allows none of: " +
+			strings.ReplaceAll(zero, ",", ", "),
+	}, true
 }
 
 // withoutZeroHard drops the resources whose hard limit is zero from the

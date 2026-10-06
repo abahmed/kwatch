@@ -23,7 +23,8 @@ func clusterScenarios() []scenario {
 	return []scenario{
 		clusterDNSDown(), clusterWebhookNoEndpoints(),
 		clusterWebhookSharedBackend(),
-		clusterQuotaExhausted(), clusterMetricsAPIDown(),
+		clusterQuotaExhausted(), clusterQuotaForbidsPods(),
+		clusterMetricsAPIDown(),
 		clusterRegistryAuth(), clusterImageTypo(),
 		clusterNetworkPolicyChange(), clusterOperatorCRStuck(),
 	}

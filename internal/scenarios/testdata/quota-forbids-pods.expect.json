@@ -1,0 +1,7 @@
+{
+  "name": "quota-forbids-pods",
+  "description": "A ReplicaSet cannot create pods in a namespace whose ResourceQuota allows none.",
+  "root": "resourcequota/analytics/zero-pods",
+  "tier": "notify",
+  "maxMessages": 2
+}

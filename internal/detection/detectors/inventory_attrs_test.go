@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -37,6 +38,46 @@ func TestQuotaWithOnlyZeroHardResourcesSaysNothing(t *testing.T) {
 	})
 
 	assert.Empty(t, evaluate(Quota{}, m, t0, id, nil).Findings)
+}
+
+// A zero limit that just refused a create is the reason pods are missing.
+func TestQuotaWithZeroHardIsReportedOnceItRefusesACreate(t *testing.T) {
+	m := newTestModel()
+	id := newID(kube.KindQuota, "ns", "zero-pods")
+	put(m, id, t0, map[string]inventory.Value{
+		kube.AttrExhausted:     inventory.Text("pods"),
+		kube.AttrQuotaZeroHard: inventory.Text("pods"),
+	})
+	rs := newID(kube.KindReplicaSet, "ns", "blocked")
+	put(m, rs, t0, nil)
+	warn(m, rs, t0, "FailedCreate", `Error creating: pods "blocked-x" is `+
+		`forbidden: exceeded quota: zero-pods, requested: pods=1, `+
+		`used: pods=0, limited: pods=0`)
+
+	got := evaluate(Quota{}, m, t0.Add(time.Minute), id, nil).Findings
+
+	require.Len(t, got, 1)
+	assert.Equal(t, reasons.ResourceQuotaExhausted, got[0].Reason)
+	assert.Equal(t, detection.Warning, got[0].Severity)
+	assert.Contains(t, got[0].Summary, "allows none of: pods")
+}
+
+// A refusal that names another quota does not blame this zero limit.
+func TestQuotaWithZeroHardIgnoresRefusalsByOtherQuotas(t *testing.T) {
+	m := newTestModel()
+	id := newID(kube.KindQuota, "ns", "zero-pods")
+	put(m, id, t0, map[string]inventory.Value{
+		kube.AttrExhausted:     inventory.Text("pods"),
+		kube.AttrQuotaZeroHard: inventory.Text("pods"),
+	})
+	rs := newID(kube.KindReplicaSet, "ns", "blocked")
+	put(m, rs, t0, nil)
+	warn(m, rs, t0, "FailedCreate", `Error creating: forbidden: `+
+		`exceeded quota: compute, requested: cpu=1`)
+
+	got := evaluate(Quota{}, m, t0.Add(time.Minute), id, nil).Findings
+
+	assert.Empty(t, got)
 }
 
 func deletingPod(

@@ -206,7 +206,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Probe.Readiness | varies | `ReadinessProbeFailed` | `container_probe` |
 | Probe.Startup | varies | `StartupProbeFailed` | `container_probe` |
 | Quota.NearLimit | degraded | `ResourceQuotaNearLimit` | `quota_attach` |
-| QuotaExhausted | varies | `ResourceQuotaExhausted` | `policy` |
+| QuotaExhausted | degraded | `ResourceQuotaExhausted` | `policy` |
 | Reference.PriorityClassMissing | varies | `PriorityClassMissing` | `references` |
 | Reference.RuntimeClassMissing | varies | `RuntimeClassMissing` | `config`, `references` |
 | ReleaseRegression | degraded | `ReleaseRegression` | `release_watch` |

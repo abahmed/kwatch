@@ -18,6 +18,9 @@
 - **Unschedulable pods, quantified.** When the scheduler reports
   "Insufficient cpu" or "Insufficient memory", the finding carries what the pod
   needs and the most any schedulable node has free.
+- **A zero quota that refuses pods is named.** A ResourceQuota that allows
+  none of a resource stays quiet until a controller is refused by that very
+  quota; then it is reported and is the root of the missing pods.
 - **Metrics API failures grouped.** Autoscalers in two or more workloads that
   cannot read resource metrics are one incident rooted at the metrics API, or
   at the failing metrics-server Deployment behind it; one autoscaler with a bad

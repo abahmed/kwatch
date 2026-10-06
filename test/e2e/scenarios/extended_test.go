@@ -34,8 +34,10 @@ func TestScenarioExtendedMetricsAPIFailure(t *testing.T) {
 		s.CreateDeployment("metrics-target", "healthy",
 			withCPURequest("10m"))
 		s.CreateAutoscaler(cpuAutoscaler("metrics-target"))
+		// One autoscaler failing to read metrics waits ten minutes before
+		// it is reported, so the incident is the unavailable API itself.
 		s.ExpectClusterIncident(metricsAPIName,
-			"FailedGetResourceMetric", detectors.DefaultConditionGrace)
+			"APIServiceFailure", detectors.DefaultCustomFailing)
 		restoreMetricsAPI()
 	})
 }
@@ -43,6 +45,9 @@ func TestScenarioExtendedMetricsAPIFailure(t *testing.T) {
 func TestScenarioExtendedVolumeAttachment(t *testing.T) {
 	inExtendedCluster(t, "storage.volume-attachment", func(s *Scenario) {
 		name := s.CreateFailedVolumeAttachment()
-		s.ExpectClusterIncident(name, "VolumeAttachmentFailure", 0)
+		// An attach error must last DefaultCustomFailing before it is
+		// reported, because a successful retry clears it.
+		s.ExpectClusterIncident(name, "VolumeAttachmentFailure",
+			detectors.DefaultCustomFailing)
 	})
 }

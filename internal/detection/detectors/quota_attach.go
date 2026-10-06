@@ -42,17 +42,24 @@ var quotaCreators = []inventory.Kind{
 }
 
 // quotaRefusedCreate reports whether a controller in the namespace was
-// recently refused a create because it would exceed a quota.
-func quotaRefusedCreate(ctx detection.Context, namespace string) bool {
+// recently refused a create because it would exceed a quota. A non-empty
+// quota name narrows this to refusals that name that quota.
+func quotaRefusedCreate(
+	ctx detection.Context, namespace, quota string,
+) bool {
 	if ctx.Model == nil {
 		return false
 	}
 	since := ctx.Now.Add(-EventWindow)
+	needle := "exceeded quota: "
+	if quota != "" {
+		needle += quota + ","
+	}
 	for _, kind := range quotaCreators {
 		for _, id := range ctx.Model.EntitiesIn(kind, namespace) {
 			for _, note := range ctx.Model.Notes(id, since) {
 				if note.Reason == "FailedCreate" &&
-					strings.Contains(note.Message, "exceeded quota") {
+					strings.Contains(note.Message, needle) {
 					ctx.RecheckAfter(note.At.Add(EventWindow).
 						Sub(ctx.Now) + time.Nanosecond)
 					return true
