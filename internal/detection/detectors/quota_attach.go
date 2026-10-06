@@ -41,6 +41,19 @@ var quotaCreators = []inventory.Kind{
 	kube.KindJob,
 }
 
+// quotaRefusalText is what the API server says when a quota refuses a
+// create: "... is forbidden: exceeded quota: NAME, requested: ...".
+const quotaRefusalText = "exceeded quota: "
+
+// IsQuotaRefusal reports whether an event on a controller says the API
+// server refused its create because a quota would be exceeded. The engine
+// uses it to re-check the namespace quotas when such an event arrives,
+// because the event lands on the controller and not on the quota.
+func IsQuotaRefusal(note inventory.Note) bool {
+	return note.Reason == "FailedCreate" &&
+		strings.Contains(note.Message, quotaRefusalText)
+}
+
 // quotaRefusedCreate reports whether a controller in the namespace was
 // recently refused a create because it would exceed a quota. A non-empty
 // quota name narrows this to refusals that name that quota.
@@ -51,14 +64,14 @@ func quotaRefusedCreate(
 		return false
 	}
 	since := ctx.Now.Add(-EventWindow)
-	needle := "exceeded quota: "
+	needle := quotaRefusalText
 	if quota != "" {
 		needle += quota + ","
 	}
 	for _, kind := range quotaCreators {
 		for _, id := range ctx.Model.EntitiesIn(kind, namespace) {
 			for _, note := range ctx.Model.Notes(id, since) {
-				if note.Reason == "FailedCreate" &&
+				if IsQuotaRefusal(note) &&
 					strings.Contains(note.Message, needle) {
 					ctx.RecheckAfter(note.At.Add(EventWindow).
 						Sub(ctx.Now) + time.Nanosecond)

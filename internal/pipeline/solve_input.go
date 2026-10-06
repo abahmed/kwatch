@@ -4,7 +4,9 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/detection/detectors"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
 // movedSet collects entities, each once, in the order they first moved.
@@ -145,6 +147,13 @@ func (e *Engine) readers(
 	o inventory.Observation, update inventory.Update,
 ) []inventory.EntityID {
 	out := e.deps.Model.Related(o.Entity, inventory.Backs, inventory.Outgoing)
+	if o.Kind == inventory.Noted && detectors.IsQuotaRefusal(o.Note) {
+		// The refusal is recorded on the controller, yet it explains the
+		// quota: judge the namespace quotas again so the one named in the
+		// message becomes the cause of the missing pods.
+		out = append(out, e.deps.Model.EntitiesIn(
+			kube.KindQuota, o.Entity.Namespace)...)
+	}
 	if o.Kind != inventory.Gone && !update.Appeared {
 		return out
 	}

@@ -181,3 +181,72 @@ func TestEngineMarksReferrersOfACreatedObject(t *testing.T) {
 		t.Fatal("TLS Secret finding still active after one loop")
 	}
 }
+
+// The API server's refusal is recorded on the ReplicaSet, not on the
+// quota, yet it is what makes a zero-limit quota matter. The quota must
+// be judged again when the event arrives, or its finding never appears.
+func TestEngineMarksQuotasWhenAControllerIsRefused(t *testing.T) {
+	e := solveInputEngine(t)
+	quota := inventory.CoreID(kube.KindQuota, "shop", "zero-pods")
+	other := inventory.CoreID(kube.KindQuota, "other", "zero-pods")
+	set := inventory.CoreID(kube.KindReplicaSet, "shop", "blocked")
+	e.apply([]inventory.Observation{
+		seen(quota, time.Now(), nil), seen(other, time.Now(), nil),
+		seen(set, time.Now(), nil)})
+	note := func(reason, message string) inventory.Observation {
+		return inventory.Observation{Kind: inventory.Noted,
+			Source: "test", At: time.Now(), Entity: set,
+			Note: inventory.Note{At: time.Now(), Source: "events",
+				Reason: reason, Message: message}}
+	}
+	refusal := "Error creating: pods \"blocked-x\" is forbidden: " +
+		"exceeded quota: zero-pods, requested: pods=1, used: pods=0, " +
+		"limited: pods=0"
+	dirty := e.apply([]inventory.Observation{note("FailedCreate", refusal)})
+	if !containsEntity(dirty, quota) {
+		t.Fatalf("dirty = %v, want the namespace quota", dirty)
+	}
+	if containsEntity(dirty, other) {
+		t.Fatalf("dirty = %v, must not include another namespace", dirty)
+	}
+	dirty = e.apply([]inventory.Observation{
+		note("FailedCreate", "image pull failed")})
+	if containsEntity(dirty, quota) {
+		t.Fatalf("dirty = %v, an unrelated event must not mark it", dirty)
+	}
+}
+
+// In a real cluster the quota exists first and the refusal arrives
+// later, on the ReplicaSet. The quota's finding must appear then.
+func TestEngineRaisesQuotaFindingWhenRefusalArrivesLater(t *testing.T) {
+	start := time.Date(2026, 1, 5, 12, 0, 0, 0, time.UTC)
+	h := newHarness(t, start)
+	quota := inventory.CoreID(kube.KindQuota, "shop", "zero-pods")
+	set := inventory.CoreID(kube.KindReplicaSet, "shop", "blocked")
+	h.engine.Submit(context.Background(),
+		seen(quota, start, map[string]inventory.Value{
+			kube.AttrExhausted:     inventory.Text("pods"),
+			kube.AttrQuotaZeroHard: inventory.Text("pods"),
+		}),
+		seen(set, start, nil))
+	h.engine.step(context.Background(), h.now, h.checks)
+	if got := h.engine.tracker.Active(quota); len(got) != 0 {
+		t.Fatalf("quota findings before any refusal = %v", got)
+	}
+
+	h.now = start.Add(time.Minute)
+	h.engine.Submit(context.Background(), inventory.Observation{
+		Kind: inventory.Noted, Source: "test", At: h.now, Entity: set,
+		Note: inventory.Note{At: h.now, Source: "events",
+			Reason: "FailedCreate",
+			Message: "Error creating: pods \"blocked-x\" is " +
+				"forbidden: exceeded quota: zero-pods, requested: " +
+				"pods=1, used: pods=0, limited: pods=0"}})
+	h.engine.step(context.Background(), h.now, h.checks)
+	for _, f := range h.engine.tracker.Active(quota) {
+		if f.Reason == reasons.ResourceQuotaExhausted {
+			return
+		}
+	}
+	t.Fatalf("quota finding not raised: %v", h.engine.tracker.Active(quota))
+}
