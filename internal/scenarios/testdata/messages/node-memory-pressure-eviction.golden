@@ -2,7 +2,7 @@
 🟠 Node n1 (prod-eu-1) is low on memory. All of its dependents are failing. Replicas that do not depend on it are healthy. cart, orders and payments in shop are affected as well. To check the node's conditions and recent events, run kubectl describe node n1
 🟠 Node n1 (prod-eu-1) is low on memory.
 
-10:06:35 material change
-🟠 Node n1 (prod-eu-1) has crossed its eviction threshold. All of its dependents are failing.
-🟠 Node n1 (prod-eu-1) has crossed its eviction threshold.
+10:19:00 healthy for 3m0s
+✅ Node n1 (prod-eu-1) is ready again. It was failing for 18 minutes.
+✅ Node n1 (prod-eu-1) is ready again.
 

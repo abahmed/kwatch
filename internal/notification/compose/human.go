@@ -9,6 +9,9 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/abahmed/kwatch/internal/format"
+	"github.com/abahmed/kwatch/internal/redact"
 )
 
 var numberWords = []string{"zero", "one", "two", "three", "four", "five",
@@ -50,9 +53,9 @@ func humanDuration(d time.Duration) string {
 		return "less than a minute"
 	case d < time.Hour:
 		return roughly(d.Minutes(), "minute")
-	case d < 24*time.Hour:
+	case d < format.Day:
 		return roughly(d.Hours(), "hour")
-	case d < 14*24*time.Hour:
+	case d < 2*format.Week:
 		return roughly(d.Hours()/24, "day")
 	default:
 		// Why: "21 days" reads worse than "three weeks".
@@ -209,7 +212,10 @@ func joinAnd(values []string, n int) string {
 // clip shortens a quote to at most maxQuote runes on a word boundary.
 func clip(text string) string {
 	const n = maxQuote
-	runes := []rune(strings.TrimSpace(text))
+	// Everything a pod wrote loses its credentials here, the last step
+	// before a message. Private addresses stay: a pod or service IP is no
+	// secret and helps whoever debugs the failure.
+	runes := []rune(strings.TrimSpace(redact.Credentials(text)))
 	if len(runes) <= n {
 		return string(runes)
 	}

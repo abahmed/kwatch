@@ -74,3 +74,10 @@ func TestChangeReceivedAtFallsBackToAt(t *testing.T) {
 	change.Observed = testTime.Add(3)
 	assert.Equal(t, testTime.Add(3), change.ReceivedAt())
 }
+
+func TestChangeClassifyDeletionTimestampIsNotConfig(t *testing.T) {
+	pod := CoreID("pod", "shop", "api-1")
+	change := Change{Entity: pod, Fields: []FieldChange{{
+		Path: "metadata.deletionTimestamp", After: "set"}}}
+	assert.Equal(t, ClassOther, change.Classify())
+}

@@ -8,6 +8,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -95,10 +96,8 @@ func (s *Goalert) SendIncident(
 			"component", "delivery", "provider", s.Name())
 		return nil
 	}
-	details := m.NoteText()
-	if len(m.Output) > 0 {
-		details += "\n\n" + strings.Join(m.Output, "\n")
-	}
+	details := safetext.PlainWithOutput(
+		m.NoteText(), m.Output, "\n\n", safetext.DetailsLimit)
 	payload := goalertPayload{
 		Summary: notification.Truncate(m.ShortText(), summaryLimit),
 		Details: details,

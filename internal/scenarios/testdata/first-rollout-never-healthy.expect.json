@@ -1,0 +1,8 @@
+{
+  "name": "first-rollout-never-healthy",
+  "description": "A new Deployment's first rollout runs but never becomes ready.",
+  "root": "deployment/shop/web",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "20m0s"
+}

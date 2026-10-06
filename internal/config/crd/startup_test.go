@@ -9,7 +9,7 @@ import (
 func TestRejectSecretConfigAllowsOrdinarySettings(t *testing.T) {
 	err := rejectSecretConfig(map[string]interface{}{
 		"workers": float64(2),
-		"healthCheck": map[string]interface{}{
+		"telemetry": map[string]interface{}{
 			"enabled": true,
 		},
 	})
@@ -44,6 +44,8 @@ func TestRejectSecretConfigRejectsTransportFields(t *testing.T) {
 		{"app", "caBundlePath"},
 		{"kubelet", "insecureSkipVerify"},
 		{"auditLog", "output"},
+		{"healthCheck", "enabled"},
+		{"healthCheck", "port"},
 	} {
 		spec := map[string]interface{}{
 			path[0]: map[string]interface{}{path[1]: "x"},

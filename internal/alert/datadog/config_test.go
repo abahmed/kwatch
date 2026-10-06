@@ -23,3 +23,23 @@ func TestDatadogConfig(t *testing.T) {
 	assert.Equal(t, "https://api.datadoghq.eu/api/v1/events", c.url)
 	assert.Equal(t, []string{"team:sre"}, c.tags)
 }
+
+func TestDatadogSiteIsTrimmedAndChecked(t *testing.T) {
+	deps := providertest.NewRecorder(t).Dependencies()
+
+	c := NewDatadog(map[string]interface{}{
+		"apiKey": "k", "site": " datadoghq.eu ",
+	}, "dev", deps)
+	assert.Equal(t, "https://api.datadoghq.eu/api/v1/events", c.url)
+
+	c = NewDatadog(map[string]interface{}{
+		"apiKey": "k", "site": "   ",
+	}, "dev", deps)
+	assert.Equal(t, "https://api.datadoghq.com/api/v1/events", c.url)
+
+	for _, site := range []string{"evil.com@x.com", "a.com/x", "a b.com"} {
+		assert.Nil(t, NewDatadog(map[string]interface{}{
+			"apiKey": "k", "site": site,
+		}, "dev", deps), site)
+	}
+}

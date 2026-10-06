@@ -3,6 +3,8 @@ package explain
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 )
@@ -107,4 +109,29 @@ func TestExplainGenericErrorIsNoSharedSignature(t *testing.T) {
 				c.Root.Name)
 		}
 	}
+}
+
+func TestEndpointHostIgnoresPortAndIPv6Brackets(t *testing.T) {
+	tests := map[string]string{
+		"db.shop.svc:5432":  "db.shop.svc",
+		"cache":             "cache",
+		"[fd00::1]:6379":    "fd00::1",
+		"api.example.com:3": "api.example.com",
+	}
+	for endpoint, want := range tests {
+		assert.Equal(t, want, endpointHost(endpoint), endpoint)
+	}
+}
+
+func TestClusterLocalHostsAreNeverBlamedByName(t *testing.T) {
+	assert.True(t, clusterLocal("localhost"))
+	assert.True(t, clusterLocal("db.shop.svc"))
+	assert.True(t, clusterLocal("db.shop.svc.cluster.local"))
+	assert.False(t, clusterLocal("api.example.com"))
+}
+
+func TestSignatureTextDropsTheModeFamily(t *testing.T) {
+	name := signatureName(detection.Mode("CrashLoop"), "panic: key rejected")
+	assert.Equal(t, "panic: key rejected", SignatureText(name))
+	assert.Equal(t, "single", SignatureText("single"))
 }

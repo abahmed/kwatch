@@ -3,6 +3,7 @@ package compose
 import (
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/rootcause"
@@ -58,6 +59,7 @@ var singletonNames = map[inventory.EntityID]string{
 	kube.Etcd:              "etcd",
 	kube.Scheduler:         "the scheduler",
 	kube.ControllerManager: "the controller manager",
+	kube.KwatchSelf:        "kwatch",
 }
 
 func kindWord(kind inventory.Kind) string {
@@ -74,7 +76,7 @@ func shortName(id inventory.EntityID) string {
 		return name
 	}
 	switch {
-	case isWorkload(id.Kind):
+	case incident.IsWorkload(id.Kind):
 		return id.Name
 	case id.Kind == kube.KindContainer:
 		pod, container := splitContainer(id.Name)
@@ -106,7 +108,7 @@ func nameFrom(home, other inventory.EntityID) string {
 // resource's own name, which must keep its case ("payments", "etcd").
 // Every other name starts with a kind word that is capitalised.
 func startsWithName(id inventory.EntityID) bool {
-	return isWorkload(id.Kind) || id == kube.Etcd
+	return incident.IsWorkload(id.Kind) || id == kube.Etcd
 }
 
 // capitalName capitalises text, a sentence that starts with id's name,

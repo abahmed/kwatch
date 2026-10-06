@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -132,4 +133,93 @@ func TestRotatingFileKeepsWritingWhenRotationFails(t *testing.T) {
 	data, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 	require.Equal(t, 33, len(data))
+}
+
+// When the rename works but the reopen does not, the renamed backup must
+// not grow without bound, and the path is picked up again once it works.
+func TestRotatingFileBoundsWritesWhenReopenFails(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "audit.log")
+	rf, err := openRotatingFile(filePath, 20)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = rf.Close() })
+	clock := time.Unix(0, 0)
+	rf.now = func() time.Time { return clock }
+	healthy := rf.openFile
+	rf.openFile = func(string) (*os.File, error) {
+		return nil, errors.New("disk gone")
+	}
+
+	line := []byte("0123456789\n") // 11 bytes
+	var dropped int
+	for i := 0; i < 10; i++ {
+		if _, err := rf.Write(line); errors.Is(err, errAuditDropped) {
+			dropped++
+		}
+	}
+	backup, err := os.ReadFile(filePath + ".1")
+	require.NoError(t, err)
+	require.LessOrEqual(t, len(backup), 2*20, "bounded by the cap")
+	require.Greater(t, dropped, 0, "entries past the cap are dropped")
+
+	rf.openFile = healthy
+	clock = clock.Add(reopenBackoff)
+	_, err = rf.Write(line)
+	require.NoError(t, err)
+	require.False(t, rf.detached)
+	fresh, err := os.ReadFile(filePath)
+	require.NoError(t, err)
+	require.Equal(t, string(line), string(fresh))
+}
+
+// A rename that keeps failing is retried once per backoff, not once per
+// entry, so it does not flood the log; entries are still written.
+func TestRotatingFileRetriesAFailingRenameOncePerBackoff(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "audit.log")
+	require.NoError(t, os.Mkdir(filePath+".1", 0o700))
+	rf, err := openRotatingFile(filePath, 10)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = rf.Close() })
+	clock := time.Unix(100, 0)
+	rf.now = func() time.Time { return clock }
+	line := []byte("0123456789\n")
+
+	_, err = rf.Write(line)
+	require.NoError(t, err)
+	_, err = rf.Write(line) // size > max: rotation is tried and fails
+	require.NoError(t, err)
+	first := rf.rotateRetryAt
+	require.Equal(t, clock.Add(reopenBackoff), first)
+
+	clock = clock.Add(time.Second)
+	_, err = rf.Write(line)
+	require.NoError(t, err)
+	require.Equal(t, first, rf.rotateRetryAt, "no retry inside the backoff")
+
+	clock = clock.Add(reopenBackoff)
+	_, err = rf.Write(line)
+	require.NoError(t, err)
+	require.NotEqual(t, first, rf.rotateRetryAt, "retried after it")
+}
+
+// When the new file opened, the rotation worked even if closing the old
+// handle fails: the file must not be marked detached.
+func TestRotatingFileIsNotDetachedByACloseError(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "audit.log")
+	rf, err := openRotatingFile(filePath, 20)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = rf.Close() })
+	line := []byte("0123456789\n")
+	_, err = rf.Write(line)
+	require.NoError(t, err)
+	old := rf.file
+	_ = old.Close() // closing it again will fail
+
+	_, err = rf.Write(line) // rotates: the old handle fails to close
+	require.NoError(t, err)
+
+	require.False(t, rf.detached)
+	require.NotSame(t, old, rf.file)
+	fresh, err := os.ReadFile(filePath)
+	require.NoError(t, err)
+	require.Equal(t, string(line), string(fresh))
 }

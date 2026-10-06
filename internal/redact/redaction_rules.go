@@ -10,13 +10,16 @@ import (
 // their own, without a key such as "token=" in front of them. Minimum
 // lengths keep short words like "sk-learn" visible.
 var bareTokenPrefixes = []string{
-	`gh[pousr]_[A-Za-z0-9]{20,}`,        // GitHub tokens
-	`github_pat_[A-Za-z0-9_]{20,}`,      // GitHub fine-grained tokens
-	`xox[abpr]-[A-Za-z0-9-]{10,}`,       // Slack tokens
-	`glpat-[A-Za-z0-9_-]{20,}`,          // GitLab personal tokens
-	`AIza[0-9A-Za-z_-]{35}`,             // Google API keys
-	`sk_(?:live|test)_[0-9A-Za-z]{16,}`, // Stripe secret keys
-	`sk-[A-Za-z0-9_-]{20,}`,             // OpenAI-style keys
+	`gh[pousr]_[A-Za-z0-9]{20,}`,                 // GitHub tokens
+	`github_pat_[A-Za-z0-9_]{20,}`,               // GitHub fine-grained tokens
+	`xox[abpr]-[A-Za-z0-9-]{10,}`,                // Slack tokens
+	`glpat-[A-Za-z0-9_-]{20,}`,                   // GitLab personal tokens
+	`AIza[0-9A-Za-z_-]{35}`,                      // Google API keys
+	`sk_(?:live|test)_[0-9A-Za-z]{16,}`,          // Stripe secret keys
+	`sk-[A-Za-z0-9_-]{20,}`,                      // OpenAI-style keys
+	`ya29\.[A-Za-z0-9_-]{20,}`,                   // Google OAuth access tokens
+	`npm_[A-Za-z0-9]{30,}`,                       // npm access tokens
+	`SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}`, // SendGrid keys
 }
 
 var bareTokenPattern = regexp.MustCompile(
@@ -39,7 +42,7 @@ func skipDescriptiveKey(groups []string) bool {
 	if len(groups) < 2 {
 		return false
 	}
-	key := strings.TrimLeft(groups[1], `?&"`)
+	key := strings.TrimLeft(groups[1], `?&"\`)
 	if end := strings.IndexFunc(key, notKeyChar); end >= 0 {
 		key = key[:end]
 	}
@@ -81,7 +84,7 @@ var proseKeys = map[string]bool{
 // the generic key/value rule. groups[1] is the key with its separator and
 // groups[2] the value.
 func skipNonSecret(groups []string) bool {
-	if skipDescriptiveKey(groups) {
+	if skipDescriptiveOrCount(groups) {
 		return true
 	}
 	if len(groups) < 3 {

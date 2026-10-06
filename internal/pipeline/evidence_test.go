@@ -8,6 +8,7 @@ import (
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/pipeline/investigate"
 )
 
 // The investigation starts when the incident opens, its result arrives
@@ -16,9 +17,9 @@ func TestEngineInvestigatesAtOpenAndAnnouncesWithEvidence(t *testing.T) {
 	started := make(chan string, 8)
 	investigator := funcInvestigator(func(
 		_ context.Context, p incident.Incident,
-	) Result {
+	) testResult {
 		started <- p.ID
-		return Result{Output: []string{"panic: boom"},
+		return testResult{Output: []string{"panic: boom"},
 			Evidence: []incident.Fact{
 				{Kind: incident.FactError, Text: "panic: boom"}}}
 	})
@@ -48,9 +49,9 @@ func TestEngineInvestigatesAtOpenAndAnnouncesWithEvidence(t *testing.T) {
 			h.decisions, id)
 	}
 	got := h.decisions[0]
-	if len(got.Evidence) != 1 || len(got.Output) != 1 {
-		t.Fatalf("announcement evidence = %+v output = %q", got.Evidence,
-			got.Output)
+	if len(got.Facts.Evidence) != 1 || len(got.Facts.Output) != 1 {
+		t.Fatalf("announcement evidence = %+v output = %q", got.Facts.Evidence,
+			got.Facts.Output)
 	}
 	if len(started) != 0 || h.engine.Stats().InvestigationsLate != 0 {
 		t.Fatal("the announcement must not start or wait for another " +
@@ -70,13 +71,13 @@ func TestEngineLateEvidenceJoinsOnlyTheNextUpdate(t *testing.T) {
 	if !e.announcer.investigate(incident.Incident{ID: "a"}, clock.now) {
 		t.Fatal("the investigation must start")
 	}
-	e.announcer.deliver(ctx, clock.now, []incident.Decision{announce("a")})
+	e.announcer.deliver(ctx, clock.now, []incident.Decision{announcement("a")})
 	e.announcer.expireHeld(ctx, clock.now.Add(outputWait))
 
 	close(g.release)
 	e.announcer.attachOutput(ctx, receive(t, e))
 
-	if got := sink.all(); len(got) != 1 || got[0].Evidence != nil {
+	if got := sink.all(); len(got) != 1 || got[0].Facts.Evidence != nil {
 		t.Fatalf("delivered %+v, want only the announcement, without "+
 			"evidence", got)
 	}
@@ -84,11 +85,12 @@ func TestEngineLateEvidenceJoinsOnlyTheNextUpdate(t *testing.T) {
 		Incident: incident.Incident{ID: "a"}}
 	e.announcer.deliver(ctx, clock.now, []incident.Decision{update, update})
 	got := sink.all()
-	if len(got) != 3 || len(got[1].Evidence) != 1 || got[2].Evidence != nil {
+	if len(got) != 3 || len(got[1].Facts.Evidence) != 1 ||
+		got[2].Facts.Evidence != nil {
 		t.Fatalf("updates = %+v, want the late fact in the first only",
 			got[1:])
 	}
-	if len(got[1].Output) != 1 || got[2].Output != nil {
+	if len(got[1].Facts.Output) != 1 || got[2].Facts.Output != nil {
 		t.Fatal("the output joins the update with the new fact, once")
 	}
 }
@@ -106,7 +108,7 @@ func TestEngineReinvestigatesWhenRootKindChanged(t *testing.T) {
 	e.announcer.investigate(opened, clock.now)
 	e.announcer.attachOutput(ctx, receive(t, e))
 
-	revised := announce("a")
+	revised := announcement("a")
 	revised.Incident.Root = inventory.CoreID(kube.KindNode, "", "n1")
 	e.announcer.deliver(ctx, clock.now, []incident.Decision{revised})
 
@@ -172,20 +174,23 @@ func TestEngineInvestigationBudgetBoundsTheRun(t *testing.T) {
 	if n := e.Stats().InvestigationTimeouts; n != 1 {
 		t.Fatalf("timeouts = %d, want 1", n)
 	}
-	if budgetOf(Investigation{}) != investigationTimeout ||
-		budgetOf(Investigation{Budget: time.Hour}) != investigationTimeout ||
-		budgetOf(Investigation{Budget: budget}) != budget {
+	limit := investigate.MaxBudget
+	if budgetOf(testPlan{}) != limit ||
+		budgetOf(testPlan{Budget: time.Hour}) != limit ||
+		budgetOf(testPlan{Budget: budget}) != budget {
 		t.Fatal("a budget must be its own, capped at the pool deadline")
 	}
 }
 
 type budgetInvestigator struct{ budget time.Duration }
 
-func (b budgetInvestigator) Plan(incident.Incident) (Investigation, bool) {
-	return Investigation{Kind: "slow", Budget: b.budget,
-		Run: func(ctx context.Context) Result {
+func (b budgetInvestigator) Plan(
+	incident.Incident,
+) (testPlan, bool) {
+	return testPlan{Kind: "slow", Budget: b.budget,
+		Run: func(ctx context.Context) testResult {
 			<-ctx.Done()
-			return Result{Evidence: []incident.Fact{
+			return testResult{Evidence: []incident.Fact{
 				{Kind: incident.FactError, Text: "partial"}}}
 		}}, true
 }
@@ -193,12 +198,15 @@ func (b budgetInvestigator) Plan(incident.Incident) (Investigation, bool) {
 // kindInvestigator names its plan after the root kind.
 type kindInvestigator struct{ started chan string }
 
-func (k kindInvestigator) Plan(p incident.Incident) (Investigation, bool) {
+func (k kindInvestigator) Plan(
+	p incident.Incident,
+) (testPlan, bool) {
 	kind := string(p.Root.Kind)
-	return Investigation{Kind: kind, Run: func(context.Context) Result {
+	run := func(context.Context) testResult {
 		k.started <- kind
-		return Result{}
-	}}, true
+		return testResult{}
+	}
+	return testPlan{Kind: kind, Run: run}, true
 }
 
 func waitForID(t *testing.T, ch <-chan string) string {

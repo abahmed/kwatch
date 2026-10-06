@@ -26,6 +26,21 @@ var workloadConfigRowCases = []rowCase{
 			}
 			return containerOf(pods[0])
 		}},
+	// A liveness kill loop is a crash loop to the table, so a probe
+	// that checks a port the container does not serve is still found.
+	{row: "probe-port-mismatch", want: "deployment/shop/api",
+		build: func(f *fixture) inventory.EntityID {
+			pods := f.workload("shop", "api", 2)
+			for _, pod := range pods {
+				f.observe(containerOf(pod), map[string]inventory.Value{
+					kube.AttrContainerPorts: inventory.Text("8080"),
+					kube.AttrProbePorts:     inventory.Text("8081"),
+				})
+				f.fail(containerOf(pod), "CrashLoop.Liveness", failingH,
+					2, "Liveness probe failed: connection refused")
+			}
+			return containerOf(pods[0])
+		}},
 	{row: "startup-budget-too-short", want: "deployment/shop/api",
 		build: func(f *fixture) inventory.EntityID {
 			pods := f.workload("shop", "api", 3)

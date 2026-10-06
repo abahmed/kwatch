@@ -18,3 +18,12 @@ type Provider interface {
 type PlainMessageSkipper interface {
 	SkipsPlainMessages() bool
 }
+
+// PagingOnlyReceiver is implemented by providers that take plain messages
+// and also want paging-only messages: structured receivers (webhook, n8n,
+// zapier, Splunk) that must see the close of an incident another incident
+// took over. They are not paging tools, so they still get every notice
+// and summary.
+type PagingOnlyReceiver interface {
+	ReceivesPagingOnly() bool
+}

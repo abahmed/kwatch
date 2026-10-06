@@ -2,8 +2,8 @@ package compose
 
 import (
 	"strings"
-	"time"
 
+	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -11,9 +11,6 @@ import (
 
 // maxNamed bounds how many affected names one sentence lists.
 const maxNamed = 3
-
-// week is the window recurrences are counted in.
-const week = 7 * 24 * time.Hour
 
 // impactSentences say who else is affected: "service cart can't serve
 // traffic." and "checkout is affected as well."
@@ -28,7 +25,7 @@ func impactSentences(f caseFacts) []sentence {
 			// service policy-webhook").
 		case id.Kind == kube.KindService || id.Kind == kube.KindIngress:
 			traffic = append(traffic, id)
-		case isWorkload(id.Kind):
+		case incident.IsWorkload(id.Kind):
 			workloads = append(workloads, id)
 		}
 	}
@@ -86,7 +83,7 @@ func nameList(home inventory.EntityID, ids []inventory.EntityID) string {
 // kind, which a list can say once.
 func sharedKind(ids []inventory.EntityID) (inventory.Kind, bool) {
 	kind := ids[0].Kind
-	if isWorkload(kind) || kind == kube.KindContainer {
+	if incident.IsWorkload(kind) || kind == kube.KindContainer {
 		return "", false
 	}
 	for _, id := range ids {
@@ -164,7 +161,7 @@ func recurrenceSentences(f caseFacts) []sentence {
 	times := 1
 	trigger, shared := incident.TriggerOf(f.p.Cause), true
 	for _, o := range f.p.History {
-		if o.Heard && f.now.Sub(o.Opened) <= week {
+		if o.Heard && f.now.Sub(o.Opened) <= format.Week {
 			times++
 			shared = shared && o.Trigger == trigger
 		}
@@ -178,7 +175,34 @@ func recurrenceSentences(f caseFacts) []sentence {
 		// cause: that is the shape of the problem.
 		text += ", each time after " + words
 	}
-	return []sentence{{part: partRecurrence, text: text + "."}}
+	text += "." + lastTimeWords(f.p.History)
+	return []sentence{{part: partRecurrence, text: text}}
+}
+
+// lastTimeWords say how the most recent occurrence people heard about
+// ended, so a reader knows what worked before: " Last time it recovered
+// after a rollback." Empty when that is unknown.
+func lastTimeWords(history []incident.Occurrence) string {
+	for i := len(history) - 1; i >= 0; i-- {
+		if !history[i].Heard {
+			continue
+		}
+		how, ok := lastTimeHow[history[i].Fix]
+		if !ok {
+			return ""
+		}
+		return " Last time it recovered " + how + "."
+	}
+	return ""
+}
+
+// lastTimeHow words each fix for "Last time it recovered ...".
+var lastTimeHow = map[incident.Fix]string{
+	incident.FixRollback:     "after a rollback",
+	incident.FixConfig:       "after a configuration fix",
+	incident.FixNodeReplaced: "after its node was replaced",
+	incident.FixChange:       "after a change",
+	incident.FixNone:         "on its own",
 }
 
 // triggerWords say what a recurring incident keeps following.

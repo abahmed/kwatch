@@ -16,6 +16,7 @@ import (
 // Attribute names specific to networking entities.
 const (
 	AttrServiceType     = "service.type"
+	AttrHeadless        = "service.headless"
 	AttrSelector        = "selector"
 	AttrPorts           = "ports"
 	AttrLoadBalancer    = "loadbalancer.assigned"
@@ -27,6 +28,9 @@ const (
 	AttrEndpointPorts   = "endpoint.ports"
 	endpointServiceName = discoveryv1.LabelServiceName
 )
+
+// skipProbeAnnotation opts a Service out of automatic probing.
+const skipProbeAnnotation = "kwatch.io/skip-probe"
 
 // ServiceSchema describes Services. Which pods back a Service comes from
 // its EndpointSlices, not from re-evaluating the selector.
@@ -50,6 +54,12 @@ func (ServiceSchema) Describe(obj any) (Description, bool) {
 		AttrPorts:        inventory.Text(servicePorts(svc)),
 		AttrLoadBalancer: inventory.Bool(loadBalancerAssigned(svc)),
 		AttrTargetPorts:  inventory.Text(targetPorts(svc)),
+	}
+	if svc.Annotations[skipProbeAnnotation] == "true" {
+		attrs[AttrSkipProbe] = inventory.Bool(true)
+	}
+	if svc.Spec.ClusterIP == corev1.ClusterIPNone {
+		attrs[AttrHeadless] = inventory.Bool(true)
 	}
 	if svc.Spec.ExternalName != "" {
 		attrs[AttrExternalName] = inventory.Text(svc.Spec.ExternalName)

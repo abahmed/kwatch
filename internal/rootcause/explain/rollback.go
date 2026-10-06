@@ -9,47 +9,68 @@ import (
 )
 
 // rollbackRevision is the Deployment revision a rollback of a blamed
-// rollout returns to, read from the first failing pod the cause covers.
-// It is empty when no covered pod runs under a Deployment with known
-// revisions.
+// rollout returns to: the one before the Deployment's newest
+// ReplicaSet, whichever revision the covered pod itself runs. Covers
+// are tried in order until one belongs to a Deployment with an earlier
+// revision; it is empty when none does.
 func rollbackRevision(
 	model inventory.Reader, covers []inventory.EntityID,
 ) string {
 	for _, id := range covers {
-		if pod, ok := rootcause.PodOf(model, id); ok {
-			return previousRevision(model, pod)
+		deployment, ok := deploymentOf(model, id)
+		if !ok {
+			continue
+		}
+		if revision := deploymentPrevious(model, deployment); revision != "" {
+			return revision
 		}
 	}
 	return ""
 }
 
-// previousRevision returns the Deployment revision before the one the
-// pod runs: the highest ReplicaSet revision below the pod's own.
-func previousRevision(
-	model inventory.Reader, pod inventory.EntityID,
-) string {
-	chain := ownerChain(model, pod)
+// deploymentOf finds the Deployment an entity is or runs under, through
+// its ReplicaSet.
+func deploymentOf(
+	model inventory.Reader, id inventory.EntityID,
+) (inventory.EntityID, bool) {
+	if id.Kind == kube.KindDeployment {
+		return id, true
+	}
+	pod, ok := rootcause.PodOf(model, id)
+	if !ok {
+		return inventory.EntityID{}, false
+	}
+	chain := rootcause.OwnerChain(model, pod)
 	if len(chain) < 2 || chain[0].Kind != kube.KindReplicaSet ||
 		chain[1].Kind != kube.KindDeployment {
-		return ""
+		return inventory.EntityID{}, false
 	}
-	current, ok := revisionOf(model, chain[0])
-	if !ok {
-		return ""
-	}
-	best := 0
+	return chain[1], true
+}
+
+// deploymentPrevious returns the highest ReplicaSet revision below the
+// newest one of a Deployment: the revision a rollback returns to when
+// the finding names the Deployment itself, not one of its pods.
+func deploymentPrevious(
+	model inventory.Reader, deployment inventory.EntityID,
+) string {
+	newest, previous := 0, 0
 	for _, rs := range model.Related(
-		chain[1], inventory.OwnedBy, inventory.Incoming,
+		deployment, inventory.OwnedBy, inventory.Incoming,
 	) {
-		if revision, ok := revisionOf(model, rs); ok &&
-			revision < current && revision > best {
-			best = revision
+		revision, ok := revisionOf(model, rs)
+		switch {
+		case !ok:
+		case revision > newest:
+			previous, newest = newest, revision
+		case revision > previous && revision < newest:
+			previous = revision
 		}
 	}
-	if best == 0 {
+	if previous == 0 {
 		return ""
 	}
-	return strconv.Itoa(best)
+	return strconv.Itoa(previous)
 }
 
 // revisionOf reads a ReplicaSet's Deployment revision.

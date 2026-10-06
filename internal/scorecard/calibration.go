@@ -66,11 +66,12 @@ func calibrationBuckets(cases []Case) (
 	counts = map[int]*Level{}
 	lowest, highest = math.MaxInt, math.MinInt
 	for _, c := range cases {
-		if c.Confidence < LikelyConfidence {
+		if c.Confidence+confidenceEpsilon < LikelyConfidence {
 			continue
 		}
 		// The epsilon keeps 0.7 in the 0.70 range despite rounding.
-		bucket := int(math.Floor(c.Confidence/CalibrationBucket + 1e-9))
+		bucket := int(math.Floor(
+			c.Confidence/CalibrationBucket + confidenceEpsilon))
 		if counts[bucket] == nil {
 			counts[bucket] = &Level{}
 		}

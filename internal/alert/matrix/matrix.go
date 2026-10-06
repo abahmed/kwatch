@@ -8,9 +8,11 @@ import (
 	"net/url"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -66,7 +68,7 @@ func NewMatrix(
 	return &Matrix{
 		nonce:          newNonce(),
 		sender:         transport.NewSender(dependencies),
-		homeServer:     homeServer,
+		homeServer:     strings.TrimRight(homeServer, "/"),
 		accessToken:    accessToken,
 		internalRoomID: internalRoomID,
 		clusterName:    clusterName,
@@ -81,7 +83,7 @@ func (m *Matrix) Name() string {
 // SendMessage sends a plain operator message. The text is escaped before
 // it becomes the HTML body so no markup can be injected.
 func (m *Matrix) SendMessage(ctx context.Context, msg string) error {
-	msg = notification.NeutralizeMentions(msg)
+	msg = safetext.Matrix(msg)
 	identity := fmt.Sprintf("plain|%s|%d", m.nonce, m.counter.Add(1))
 	return m.sendBodies(ctx, identity, msg, escapeHTML(msg))
 }
@@ -92,10 +94,10 @@ func (m *Matrix) SendMessage(ctx context.Context, msg string) error {
 func (m *Matrix) SendIncident(
 	ctx context.Context, msg notification.Message,
 ) error {
-	plain := notification.NeutralizeMentions(msg.NoteText())
+	plain := safetext.Matrix(msg.NoteText())
 	formatted := escapeHTML(plain)
 	if len(msg.Output) > 0 {
-		output := notification.NeutralizeMentions(
+		output := safetext.Matrix(
 			strings.Join(msg.Output, "\n"))
 		plain += "\n\n" + output
 		formatted += "<pre><code>" + html.EscapeString(output) +
@@ -146,6 +148,8 @@ func (m *Matrix) sendBodies(
 		),
 		Body:    msgBytes,
 		Headers: map[string]string{"Authorization": "Bearer " + m.accessToken},
+		// Matrix reports the back-off in the JSON body, in milliseconds.
+		RetryAfterFromBody: retryAfterFromBody,
 	})
 	if err != nil {
 		return err
@@ -165,4 +169,21 @@ func checkMatrixBody(body []byte) error {
 	}
 	return transport.Permanent(fmt.Errorf(
 		"call to Matrix returned error code %s", reply.ErrCode))
+}
+
+// retryAfterFromBody reads retry_after_ms from a 429 answer. Zero means
+// the body has none, so the default backoff applies.
+func retryAfterFromBody(body []byte) time.Duration {
+	var reply struct {
+		RetryAfterMs int64 `json:"retry_after_ms"`
+	}
+	if json.Unmarshal(body, &reply) != nil || reply.RetryAfterMs <= 0 {
+		return 0
+	}
+	const maxWait = time.Hour
+	wait := time.Duration(reply.RetryAfterMs) * time.Millisecond
+	if wait > maxWait {
+		return maxWait
+	}
+	return wait
 }

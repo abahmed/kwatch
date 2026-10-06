@@ -40,6 +40,31 @@ func alertKey(root inventory.EntityID, mode detection.Mode) string {
 	return "alert-" + hex.EncodeToString(sum[:hashBytes])
 }
 
+// freeAlertKey is the alert key of a new incident: the key of its root
+// and mode, unless a live incident holds it. A revised incident keeps the
+// key of its first root, so a later incident on that root and mode would
+// share its alert: each would update and resolve the other's. The new one
+// gets a numbered suffix instead.
+func (m *Manager) freeAlertKey(p *Incident) string {
+	base := alertKey(p.Root, p.Mode)
+	key := base
+	for n := 2; m.liveAlertKey(p, key); n++ {
+		key = fmt.Sprintf("%s-%d", base, n)
+	}
+	return key
+}
+
+// liveAlertKey reports whether an incident other than p, not yet
+// resolved, holds the alert key.
+func (m *Manager) liveAlertKey(p *Incident, key string) bool {
+	for _, other := range m.incidents {
+		if other != p && other.State != Resolved && other.AlertKey == key {
+			return true
+		}
+	}
+	return false
+}
+
 // idNonceBytes is the random part of an ID nonce: 2 bytes, 4 hex
 // characters, so two stores of one cluster collide once in 65536.
 const idNonceBytes = 2

@@ -1,0 +1,8 @@
+{
+  "name": "digest-never-paged-resolve",
+  "description": "A digest-tier autoscaler problem is listed in a digest and then recovers.",
+  "root": "horizontalpodautoscaler/shop/orders",
+  "tier": "digest",
+  "maxMessages": 3,
+  "tail": "1h0m0s"
+}

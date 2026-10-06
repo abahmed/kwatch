@@ -22,7 +22,7 @@ func scenarioNotes(t *testing.T, name string) string {
 	var b strings.Builder
 	for i, m := range result.Messages {
 		b.WriteString(result.Times[i].Format("15:04:05") + " " +
-			result.Decisions[i].Reason + "\n")
+			string(result.Decisions[i].Reason) + "\n")
 		b.WriteString(m.Note + "\n" + m.Short + "\n\n")
 	}
 	return b.String()

@@ -23,7 +23,8 @@ func clusterScenarios() []scenario {
 	return []scenario{
 		clusterDNSDown(), clusterWebhookNoEndpoints(),
 		clusterWebhookSharedBackend(),
-		clusterQuotaExhausted(), clusterMetricsAPIDown(),
+		clusterQuotaExhausted(), clusterQuotaForbidsPods(),
+		clusterMetricsAPIDown(),
 		clusterRegistryAuth(), clusterImageTypo(),
 		clusterNetworkPolicyChange(), clusterOperatorCRStuck(),
 	}
@@ -308,11 +309,15 @@ func buildClusterMetricsAPI(c *cluster) {
 		"server is currently unable to handle the request (get " +
 		"pods.metrics.k8s.io)"
 	c.after(30 * time.Second)
-	for n := int32(1); n <= 6; n++ {
+	// The failure lasts past HPAMetricsGrace. The HPA condition changes
+	// once; later rounds only repeat the controller's event.
+	for n := int32(1); n <= 24; n++ {
 		for _, ns := range namespaces {
 			hpa := clusterHPA(c, ns, "web", "False",
 				"FailedGetResourceMetric", message)
-			c.update(hpa)
+			if n == 1 {
+				c.update(hpa)
+			}
 			c.warn(c.warningEvent(hpa, "HorizontalPodAutoscaler",
 				"FailedGetResourceMetric", message,
 				"horizontal-pod-autoscaler", n))

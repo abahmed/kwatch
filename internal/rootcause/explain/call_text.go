@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/format"
 )
 
 // Endpoint classes: how a call to an endpoint failed. They are also the
@@ -63,7 +64,8 @@ var sourceExtensions = map[string]bool{
 	"go": true, "java": true, "py": true, "js": true, "ts": true,
 	"rb": true, "rs": true, "cs": true, "kt": true, "php": true,
 	"c": true, "cc": true, "cpp": true, "h": true, "scala": true,
-	"swift": true,
+	"swift": true, "yaml": true, "yml": true, "json": true, "conf": true,
+	"log": true, "txt": true,
 }
 
 // ipv4 is a dotted IPv4 address.
@@ -179,21 +181,6 @@ func clusterLocal(host string) bool {
 	return false
 }
 
-// signatureNoise turns the parts of an error that differ between
-// replicas and runs into placeholders, so one error reads the same in
-// every pod. Order matters: whole identifiers go before numbers.
-var signatureNoise = []struct {
-	pattern *regexp.Regexp
-	with    string
-}{
-	{regexp.MustCompile(`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-` +
-		`[0-9a-f]{4}-[0-9a-f]{12}`), "<id>"},
-	{regexp.MustCompile(`\b\d{4}-\d\d-\d\d[t ][0-9:.]+z?\b`), "<time>"},
-	{regexp.MustCompile(`\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b`), "<ip>"},
-	{regexp.MustCompile(`\b[0-9a-f]*\d[0-9a-z]*\b`), "#"},
-	{regexp.MustCompile(`\s+`), " "},
-}
-
 // Signature limits: a signature must say something, and stays short
 // enough to quote.
 const (
@@ -206,12 +193,8 @@ const (
 // message, or "" when what is left is too short to tell errors apart
 // ("exit status 1").
 func normalizeSignature(text string) string {
-	text = strings.ToLower(strings.TrimSpace(text))
-	for _, noise := range signatureNoise {
-		text = noise.pattern.ReplaceAllString(text, noise.with)
-	}
-	text = strings.TrimSpace(text)
-	if len(text) < signatureMinLength ||
+	text = format.Signature(text)
+	if format.IsGenericSignature(text) || len(text) < signatureMinLength ||
 		len(strings.Fields(text)) < signatureMinWords ||
 		onlyGeneric(text) {
 		return ""
@@ -221,8 +204,10 @@ func normalizeSignature(text string) string {
 
 // genericWords say how a call failed, never why. Every network failure
 // shares them, so on their own they cannot tell one cause from another.
+// "connection refused" is not here: a refusal from one address is a
+// definite answer, and a Redis outage must be able to group by it.
 var genericWords = regexp.MustCompile(`context deadline exceeded|` +
-	`connection reset by peer|connection refused|i/o timeout|` +
+	`connection reset by peer|i/o timeout|` +
 	`broken pipe|unexpected eof|<ip>|<id>|<time>|#|` +
 	`\b(?:eof|read|write|dial|tcp|udp|error|err|fatal|panic)\b`)
 

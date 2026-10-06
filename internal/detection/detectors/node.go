@@ -146,12 +146,20 @@ func (d Node) readiness(
 	ctx detection.Context, e inventory.Entity,
 ) (detection.Finding, bool) {
 	status, reason, since := condition(e, "Ready")
-	if status == "" || status == "True" {
+	if status == "" {
 		return detection.Finding{}, false
 	}
+	if status == "True" {
+		holdBlip(ctx, since)
+		return detection.Finding{}, false
+	}
+	// A NotReady that follows a brief Ready blip continues the earlier
+	// one: it keeps its onset, so the wait is not restarted by a flap.
+	since = ctx.Onset(notReadyOnset, since)
 	if !sustained(ctx, "node-not-ready", since, d.notReady) {
 		return detection.Finding{}, false
 	}
+	ctx.Onset(reportedOnset, ctx.Now)
 	summary := "Node is NotReady for " + format.Duration(ctx.Now.Sub(since))
 	if status == "Unknown" {
 		summary = "Node stopped reporting (kubelet unreachable) for " +
@@ -165,6 +173,38 @@ func (d Node) readiness(
 			{Label: "message", Value: conditionMessage(e, "Ready")},
 		},
 	}, true
+}
+
+// notReadyOnset names the remembered start of a NotReady episode.
+const notReadyOnset = "node-not-ready"
+
+// reportedOnset marks an episode that already became a finding. Only
+// such an episode survives a Ready blip: NotReady stretches that each
+// stay under the threshold never add up to a finding.
+const reportedOnset = "node-not-ready/reported"
+
+// readyBlip is how long a node may be Ready between two NotReady
+// stretches and still count as one flapping episode. Nodes blip like
+// this while pools scale and consolidate.
+const readyBlip = 2 * time.Minute
+
+// holdBlip keeps the onset of a reported NotReady episode alive while the node
+// has been Ready for less than readyBlip. Nothing is reported for the
+// Ready node; only the onset survives, so a node that goes NotReady
+// again resumes the old episode instead of starting a new one. After
+// readyBlip of steady Ready the onset is forgotten.
+func holdBlip(ctx detection.Context, readySince time.Time) {
+	if !ctx.Ongoing(reportedOnset) {
+		return
+	}
+	ready := ctx.Onset("node-ready-blip", readySince)
+	remaining := readyBlip - ctx.Now.Sub(ready)
+	if remaining <= 0 {
+		return
+	}
+	ctx.Onset(notReadyOnset, ctx.Now)
+	ctx.Onset(reportedOnset, ctx.Now)
+	ctx.RecheckAfter(remaining)
 }
 
 // drainFinding reports a node that is cordoned or being deleted: a drain,
@@ -193,11 +233,12 @@ func drainFinding(e inventory.Entity) (bool, detection.Finding) {
 
 // removalTaints are the taints Kubernetes and its autoscalers put on a
 // node they are taking away, each with how a message names the reason.
+// The unschedulable taint is not listed: every cordon adds it, so it
+// says nothing beyond spec.unschedulable.
 var removalTaints = []struct{ key, reason string }{
 	{"node.kubernetes.io/out-of-service", "marked out of service"},
 	{"ToBeDeletedByClusterAutoscaler", "scale-down"},
 	{"DeletionCandidateOfClusterAutoscaler", "scale-down"},
-	{"node.kubernetes.io/unschedulable", "cordoned"},
 }
 
 // removalTaint names the removal a node's taints announce, or "".

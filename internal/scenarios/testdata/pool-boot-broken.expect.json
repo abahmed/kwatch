@@ -1,0 +1,13 @@
+{
+  "name": "pool-boot-broken",
+  "description": "A node pool boots and every pod comes up; three minutes later one API replica turns not ready and is still not ready when the boot is over.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "nodepool//workers",
+    "zone//zone-a",
+    "node//n1"
+  ],
+  "tail": "30m0s"
+}

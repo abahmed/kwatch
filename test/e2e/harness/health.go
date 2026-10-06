@@ -66,9 +66,10 @@ func (h *HealthClient) Get(
 	return body, response.StatusCode, nil
 }
 
-// AssertOK expects a 2xx answer. It retries while the Lease holder cannot be
-// reached, because right after a handover the new Pod may not be running
-// yet; an answer with a bad status is never retried.
+// AssertOK expects a 2xx answer. It retries for up to a minute while the
+// Lease holder cannot be reached or answers with another status: right after
+// a restart or handover the new Pod can briefly answer 503 on /readyz or
+// /availabilityz before it settles.
 func (h *HealthClient) AssertOK(ctx context.Context, path string) error {
 	var status int
 	var last error
@@ -76,15 +77,19 @@ func (h *HealthClient) AssertOK(ctx context.Context, path string) error {
 		func(ctx context.Context) (bool, error) {
 			_, code, err := h.Get(ctx, path)
 			status, last = code, err
-			return err == nil, nil
+			return err == nil && isSuccess(code), nil
 		})
-	if err != nil {
+	if err == nil {
+		return nil
+	}
+	if last != nil {
 		return fmt.Errorf("%s unreachable: %w", path, errors.Join(err, last))
 	}
-	if status < http.StatusOK || status >= http.StatusMultipleChoices {
-		return fmt.Errorf("%s returned HTTP %d", path, status)
-	}
-	return nil
+	return fmt.Errorf("%s returned HTTP %d", path, status)
+}
+
+func isSuccess(code int) bool {
+	return code >= http.StatusOK && code < http.StatusMultipleChoices
 }
 
 func (e *Environment) AssertHealthy(ctx context.Context) error {

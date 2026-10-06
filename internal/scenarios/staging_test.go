@@ -15,14 +15,14 @@ import (
 	"github.com/abahmed/kwatch/internal/scorecard"
 )
 
-// The staging day is twelve hours of a busy staging cluster: every
-// labelled scenario happens once, at a spread-out time, and is fixed
+// The staging day is a busy staging cluster: every labelled scenario
+// happens once, at a spread-out time, and is fixed
 // stagingFix later, while background workloads roll out and scale
 // successfully the whole day and the explicit non-events of
 // nonevent_test.go (rollouts, scaling, a drain, Jobs, a CronJob) run
 // twice each.
 const (
-	stagingDay        = 12 * time.Hour
+	stagingSpacing    = 9 * time.Minute
 	stagingFix        = 45 * time.Minute
 	stagingBackground = 24
 	// Healthy churn: one successful rollout every rolloutEvery and one
@@ -30,6 +30,34 @@ const (
 	rolloutEvery = 15 * time.Minute
 	scaleEvery   = 25 * time.Minute
 )
+
+// stagingDay is the length of the staging day. It grows with the scenario
+// library, one stagingSpacing per scenario (twelve hours for the 79
+// scenarios the gate was set on), so the alert density the peak gate
+// measures does not depend on how many scenarios the library holds.
+func stagingDay() time.Duration {
+	return stagingSpacing * time.Duration(len(stagingScenarios())+1)
+}
+
+// multiDay is how long a scenario may last and still be part of the
+// staging day. A problem that is known needs two earlier days of history,
+// so a scenario of days has no place in a day.
+const multiDay = 24 * time.Hour
+
+// stagingScenarios are the scenarios that happen in the staging day: the
+// library, without the scenarios that last more than a day.
+func stagingScenarios() []scenario {
+	var out []scenario
+	for _, s := range library() {
+		log := s.generate(stagingStart, "")
+		if n := len(log.Entries); n > 0 &&
+			log.Entries[n-1].At.Sub(log.Start) > multiDay {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
+}
 
 var stagingStart = time.Date(2026, 9, 30, 7, 0, 0, 0, time.UTC)
 
@@ -66,9 +94,9 @@ func runStagingDay(t *testing.T) stagingResult {
 // stagingLog interleaves one instance of every scenario with the
 // background churn and the non-events.
 func stagingLog() replay.Log {
-	scenarios := library()
+	scenarios := stagingScenarios()
 	logs := append([]replay.Log{backgroundChurn()}, nonEventLogs()...)
-	spacing := stagingDay / time.Duration(len(scenarios)+1)
+	spacing := stagingSpacing
 	for i, s := range scenarios {
 		start := stagingStart.Add(spacing*time.Duration(i+1) +
 			jitter(s.expect.Name, spacing/3))
@@ -177,13 +205,14 @@ type churnEvent struct {
 func stagingEvents() []churnEvent {
 	half := stagingBackground / 2
 	var events []churnEvent
-	for at, i := rolloutEvery, 0; at < stagingDay; at, i = at+rolloutEvery,
+	day := stagingDay()
+	for at, i := rolloutEvery, 0; at < day; at, i = at+rolloutEvery,
 		i+1 {
 		events = append(events, churnEvent{
 			at: stagingStart.Add(at), index: i % half, kind: churnRollout,
 		})
 	}
-	for at, i := scaleEvery, 0; at < stagingDay; at, i = at+scaleEvery,
+	for at, i := scaleEvery, 0; at < day; at, i = at+scaleEvery,
 		i+1 {
 		out := stagingStart.Add(at + 7*time.Minute)
 		index := half + i%half

@@ -30,7 +30,7 @@ func TestMapSkipsUpdatesForUntrackedIssue(t *testing.T) {
 	if got := counter.Load() - before; got != 1 {
 		t.Fatalf("untracked counter grew by %d, want 1", got)
 	}
-	if m.lookup(providertest.Announce().ThreadKey()) != "" {
+	if id, _ := m.lookup(providertest.Announce().ThreadKey()); id != "" {
 		t.Fatal("resolve kept the untracked marker")
 	}
 }
@@ -57,7 +57,7 @@ func TestMapRestoreIgnoresUntrackedMarker(t *testing.T) {
 	m.RestoreThreads(map[string]string{
 		providertest.Announce().ThreadKey(): untracked,
 	})
-	if m.lookup(providertest.Announce().ThreadKey()) != "" {
+	if id, _ := m.lookup(providertest.Announce().ThreadKey()); id != "" {
 		t.Fatal("restore accepted the untracked marker")
 	}
 }

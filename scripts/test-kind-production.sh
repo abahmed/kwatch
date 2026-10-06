@@ -17,6 +17,13 @@ replicas=1
 image="${KWATCH_IMAGE:-kwatch:ci}"
 port=18060
 
+# Refuse to run against anything but the kind cluster before anything is
+# created and before the EXIT trap below can delete things.
+root_dir=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
+# shellcheck source=scripts/require-kind-context.sh
+. "$root_dir/scripts/require-kind-context.sh"
+require_kind_context "kind-$cluster" || exit 2
+
 cleanup() {
 	kill "${port_forward_pid:-}" >/dev/null 2>&1 || true
 	helm uninstall "$release" --namespace "$namespace" >/dev/null 2>&1 || true

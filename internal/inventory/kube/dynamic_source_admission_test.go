@@ -106,8 +106,16 @@ func TestCappedHandlerDropsVersionOnlyUpdates(t *testing.T) {
 	h.UpdateFunc(old, renewed)
 	assert.Empty(t, *got)
 
-	// A resync repeats the same version and is still observed.
+	// A resync repeats the same version: the translator has nothing new
+	// to say (see TestTranslatorSkipsAResyncOfAnUnchangedVersion).
 	h.UpdateFunc(old, old)
+	assert.Empty(t, *got)
+
+	// A real change at a new version is still observed.
+	changed := widget("a")
+	changed.SetResourceVersion("3")
+	changed.Object["spec"] = map[string]any{"size": "big"}
+	h.UpdateFunc(old, changed)
 	assert.NotEmpty(t, *got)
 }
 

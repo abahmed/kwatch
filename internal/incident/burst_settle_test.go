@@ -44,3 +44,23 @@ func TestManagerTwoPagesStillSettleFast(t *testing.T) {
 		t.Fatalf("want two announcements at the page settle, got %+v", ds)
 	}
 }
+
+// A silent incident is never announced, so it is not part of a burst: two
+// pages next to it still settle fast.
+func TestManagerSilentIncidentIsNotAPageBurst(t *testing.T) {
+	r := newRig(t, Config{})
+	quiet := entity("node", "n3")
+	r.raise(at(0),
+		sig(entity("node", "n1"), "NodeNotReady", detection.Critical),
+		sig(entity("node", "n2"), "NodeNotReady", detection.Critical),
+		sig(quiet, "NodeNotReady", detection.Critical))
+	r.m.mu.Lock()
+	r.m.lookup(quiet).Tier = Silent
+	r.m.mu.Unlock()
+
+	ds := r.tick(at(DefaultPageSettle))
+
+	if len(ds) != 2 {
+		t.Fatalf("want two pages at the page settle, got %+v", ds)
+	}
+}

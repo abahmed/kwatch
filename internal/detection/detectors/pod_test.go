@@ -197,6 +197,24 @@ func TestPodEvicted(t *testing.T) {
 	assert.Equal(t, reasons.Evicted, findings[0].Reason)
 }
 
+// An eviction happened once: after EventWindow the evicted pod, which
+// stays in the API until garbage collection, is history, not a failure.
+func TestPodEvictedStopsCountingAfterTheEventWindow(t *testing.T) {
+	now := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	failed := now.Add(-EventWindow)
+
+	pod := buildPod("test", "default", failed, map[string]inventory.Value{
+		kube.AttrPhase:   inventory.Text("Failed"),
+		kube.AttrReason:  inventory.Text(reasons.Evicted),
+		kube.AttrMessage: inventory.Text("Pod evicted"),
+	})
+	detector := NewPod(PodThresholds{})
+
+	assert.Empty(t, detector.Detect(testDetectorContext(nil, now), pod))
+	young := testDetectorContext(nil, now.Add(-time.Second))
+	assert.Len(t, detector.Detect(young, pod), 1)
+}
+
 func TestPodUnknownState(t *testing.T) {
 	now := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
 	unknown := now.Add(-1 * time.Minute)

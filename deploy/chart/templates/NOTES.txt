@@ -6,3 +6,32 @@ thread IDs) is stored on an emptyDir volume (limit
 restarted on another node. Incidents may be announced again after a restart.
 Use a PersistentVolumeClaim for production.
 {{- end }}
+
+{{- if include "kwatch.crdOwnedElsewhere" . }}
+
+NOTE: the KwatchConfig CRD (kwatchconfigs.kwatch.abahmed.dev) already exists
+and is not owned by this release, so the chart did not manage it. That is
+expected when another kwatch release installed it. The CRD is shared by every
+release in the cluster; upgrade it from the release that owns it, or apply
+deploy/crd.yaml yourself. Set crd.install=false to silence this note.
+{{- end }}
+
+{{- $np := default dict .Values.networkPolicy }}
+{{- $cfg := default dict .Values.config }}
+{{- $probes := default dict $cfg.activeProbeMonitor }}
+{{- $app := default dict $cfg.app }}
+{{- if and $np.enabled (not $np.allowProbeEgressAll) (or $probes.enabled $app.proxyURL) }}
+
+WARNING: networkPolicy.enabled=true limits egress to DNS, the API server
+ports, the kubelet and the DNS metrics port, but your configuration makes
+kwatch dial other addresses:
+{{- if $probes.enabled }}
+  - activeProbeMonitor targets (http, tcp, dns{{ if $probes.autoServices }}, autoServices{{ end }}{{ if $probes.autoDependencies }}, autoDependencies{{ end }}) are blocked and report as down.
+{{- end }}
+{{- if $app.proxyURL }}
+  - app.proxyURL: the proxy's port is not open.
+{{- end }}
+Open them with networkPolicy.extraEgressPorts or networkPolicy.egress, or set
+networkPolicy.allowProbeEgressAll=true. Alert providers or heartbeat URLs on a
+port other than 443 need the same.
+{{- end }}

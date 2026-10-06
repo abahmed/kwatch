@@ -2,7 +2,7 @@
 🟠 API service v1beta1.metrics.k8s.io (prod-eu-1) is not available (missing endpoints). To see the object's state and events, run kubectl describe apiservice v1beta1.metrics.k8s.io
 🟠 API service v1beta1.metrics.k8s.io (prod-eu-1) is not available (missing endpoints).
 
-10:06:00 material change
+10:11:30 material change
 🟠 API service v1beta1.metrics.k8s.io (prod-eu-1) is spreading to autoscaler web in billing, autoscaler web in search and autoscaler web in shop: they cannot read the metrics it scales on.
 🟠 API service v1beta1.metrics.k8s.io (prod-eu-1) is spreading to autoscaler web in billing, autoscaler web in search and autoscaler web in shop: they cannot read the metrics it scales on.
 

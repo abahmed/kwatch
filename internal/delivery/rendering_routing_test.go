@@ -1,9 +1,13 @@
 package delivery
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 func TestDefaultMaxBytes(t *testing.T) {
@@ -62,5 +66,21 @@ func TestCompileTemplatesEmpty(t *testing.T) {
 	setTestTemplates(&am, map[string]string{})
 	if am.templates != nil {
 		t.Fatal("expected nil templates for empty map")
+	}
+}
+
+// Every provider whose service has a message limit is capped after the
+// user template ran, and a cut never leaves a code fence open.
+func TestPrepareIncidentCapsProvidersWithLimitsAndClosesFences(t *testing.T) {
+	for _, name := range []string{"ntfy", "webex", "zulip", "googlechat"} {
+		limit := defaultMaxBytes(name)
+		require.NotZero(t, limit, name)
+		msg := notification.Message{Note: "🔴 x\n```\n" +
+			strings.Repeat("log line\n", limit) + "```\ntail"}
+		got := prepareIncident(msg, nil, "", limit)
+		assert.LessOrEqual(t, len(got.Note), limit, name)
+		assert.Zero(t, strings.Count(got.Note, "```")%2,
+			"%s: unclosed fence", name)
+		assert.True(t, strings.HasPrefix(got.Note, "🔴"), name)
 	}
 }

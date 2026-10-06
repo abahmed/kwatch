@@ -3,6 +3,6 @@
 🟠 pg-operator in db-operators (prod-eu-1) keeps crashing.
 
 10:06:45 material change
-🟠 pg-operator in db-operators (prod-eu-1) is now failing: it runs a single replica, so any restart is downtime. It is spreading to postgresclusters orders-db and users-db in data: they are waiting for their controller to process the latest change.
-🟠 pg-operator in db-operators (prod-eu-1) is now failing: it runs a single replica, so any restart is downtime.
+🟠 pg-operator in db-operators (prod-eu-1) now has no ready replicas (0 of 1). It is spreading to postgresclusters orders-db and users-db in data: they are waiting for their controller to process the latest change.
+🟠 pg-operator in db-operators (prod-eu-1) now has no ready replicas (0 of 1).
 

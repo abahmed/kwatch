@@ -30,7 +30,7 @@ func (e *Engine) persist(g *saveGate, now time.Time, decided bool) {
 }
 
 func (e *Engine) snapshotNow(g *saveGate, now time.Time) {
-	e.save()
+	e.saveAt(now, false)
 	g.dirty, g.armed = false, nil
 	g.lastSnapshot, g.lastSave = now, now
 }

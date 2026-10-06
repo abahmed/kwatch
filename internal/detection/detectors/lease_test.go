@@ -26,13 +26,16 @@ func leaseModel(
 	})
 	if podPhase != "" {
 		put(m, newID(kube.KindPod, "ops", "operator-7d9f"), t0,
-			map[string]inventory.Value{kube.AttrPhase: inventory.Text(podPhase)})
+			map[string]inventory.Value{
+				kube.AttrPhase: inventory.Text(podPhase),
+				kube.AttrReady: inventory.Bool(podPhase == "Running"),
+			})
 	}
 	return m, lease
 }
 
 func TestLeaseStaleWhileHolderRuns(t *testing.T) {
-	m, lease := leaseModel(5*time.Minute, "operator-7d9f_1a2b", "Running")
+	m, lease := leaseModel(leaseStaleMin, "operator-7d9f_1a2b", "Running")
 
 	got := Lease{}.Detect(testDetectorContext(m, t0), entityOf(m, lease))
 
@@ -55,4 +58,32 @@ func TestLeaseQuietWhenFreshOrHolderGone(t *testing.T) {
 	done, lease := leaseModel(time.Hour, "operator-7d9f_1a2b", "Succeeded")
 	assert.Empty(t, Lease{}.Detect(testDetectorContext(done, t0),
 		entityOf(done, lease)))
+}
+
+// A holder that crash loops or is restarting is explained by its own
+// findings: the stale lease must not repeat them.
+func TestLeaseQuietWhenHolderIsNotReady(t *testing.T) {
+	m, lease := leaseModel(time.Hour, "operator-7d9f_1a2b", "Running")
+	put(m, newID(kube.KindPod, "ops", "operator-7d9f"), t0,
+		map[string]inventory.Value{
+			kube.AttrPhase: inventory.Text("Running"),
+			kube.AttrReady: inventory.Bool(false),
+		})
+	assert.Empty(t, Lease{}.Detect(testDetectorContext(m, t0),
+		entityOf(m, lease)))
+
+	pending, lease := leaseModel(time.Hour, "operator-7d9f_1a2b", "Pending")
+	assert.Empty(t, Lease{}.Detect(testDetectorContext(pending, t0),
+		entityOf(pending, lease)))
+}
+
+// The lease inventory is rescanned every couple of minutes, so a renewal
+// can be that old in the model while the holder is perfectly healthy.
+func TestLeaseToleratesTheScanPeriod(t *testing.T) {
+	// Two whole scans can pass before a renewal is read.
+	m, lease := leaseModel(2*kube.LeaseScanPeriod, "operator-7d9f_1a2b",
+		"Running")
+
+	assert.Empty(t, Lease{}.Detect(testDetectorContext(m, t0),
+		entityOf(m, lease)))
 }

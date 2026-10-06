@@ -66,12 +66,3 @@ func (a *announcer) inScope(
 	}
 	return kept
 }
-
-func hasResolve(decisions []incident.Decision) bool {
-	for _, d := range decisions {
-		if d.Action == incident.Resolve {
-			return true
-		}
-	}
-	return false
-}

@@ -1,4 +1,7 @@
 {{- if .Values.networkPolicy.enabled }}
+{{- if and .Values.networkPolicy.allowDefaults (not .Values.networkPolicy.apiServerPorts) }}
+{{- fail "networkPolicy.apiServerPorts must list at least one port: an empty list would open all egress" }}
+{{- end }}
 {{- $port := include "kwatch.healthPort" . | int }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -39,6 +42,20 @@ spec:
         - protocol: TCP
           port: {{ . }}
         {{- end }}
+    {{- with .Values.networkPolicy.dnsMetricsPort }}
+    # Cluster DNS metrics (CoreDNS or kube-dns pods): DNS request and
+    # SERVFAIL rates.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: TCP
+          port: {{ . }}
+    {{- end }}
     # Kubelet on every node: kwatch reads node stats and metrics directly.
     - ports:
         - protocol: TCP
@@ -50,6 +67,11 @@ spec:
             cidr: {{ . }}
         {{- end }}
       {{- end }}
+    {{- end }}
+    {{- if .Values.networkPolicy.allowProbeEgressAll }}
+    # allowProbeEgressAll: active probe targets, autoServices,
+    # autoDependencies, a proxy or providers on unusual ports.
+    - {}
     {{- end }}
     {{- with .Values.networkPolicy.extraEgressPorts }}
     # extraEgressPorts: provider ports other than 443, such as SMTP

@@ -1,0 +1,8 @@
+{
+  "name": "hpa-target-missing",
+  "description": "An HPA keeps reporting that the Deployment it scales does not exist.",
+  "root": "horizontalpodautoscaler/istio-system/istiod",
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "30m0s"
+}

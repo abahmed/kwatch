@@ -1,0 +1,11 @@
+{
+  "name": "page-flaps-reopens",
+  "description": "A node that pages fails again twice more within two hours of resolving; the first message pages and the returns do not.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 5,
+  "mustNotBlame": [
+    "deployment/shop/api"
+  ],
+  "tail": "10m0s"
+}

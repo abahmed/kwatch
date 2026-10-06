@@ -55,25 +55,38 @@ func TestCertificateExpiring(t *testing.T) {
 }
 
 func TestCertificateExpired(t *testing.T) {
-	now := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
-	expiry := now.Add(-24 * time.Hour)
+	m := newTestModel()
+	secret := newID(kube.KindSecret, "default", "tls")
+	put(m, secret, t0, map[string]inventory.Value{
+		kube.AttrCertExpiry: inventory.Time(t0.Add(-24 * time.Hour)),
+	})
+	ingress := newID(kube.KindIngress, "default", "web")
+	put(m, ingress, t0, nil)
+	link(m, ingress, inventory.References, secret)
 
-	secret := buildStorage(
-		kube.KindSecret, "tls", "default", now,
-		map[string]inventory.Value{
-			kube.AttrCertExpiry: inventory.Time(expiry),
-		},
-	)
-
-	detector := Certificate{}
-	ctx := testDetectorContext(nil, now)
-
-	findings := detector.Detect(ctx, secret)
+	findings := Certificate{}.Detect(testDetectorContext(m, t0),
+		entityOf(m, secret))
 
 	require.Len(t, findings, 1)
 	assert.Equal(t, reasons.TLSCertExpired, findings[0].Reason)
 	assert.Equal(t, detection.Critical, findings[0].Severity)
 	assert.Contains(t, findings[0].Summary, "expired")
+}
+
+// Nothing references the Secret, so the expired certificate breaks
+// nothing: it is reported, but not as an outage.
+func TestCertificateExpiredButUnreferencedIsAWarning(t *testing.T) {
+	m := newTestModel()
+	secret := newID(kube.KindSecret, "default", "old-tls")
+	put(m, secret, t0, map[string]inventory.Value{
+		kube.AttrCertExpiry: inventory.Time(t0.Add(-24 * time.Hour)),
+	})
+
+	findings := Certificate{}.Detect(testDetectorContext(m, t0),
+		entityOf(m, secret))
+
+	require.Len(t, findings, 1)
+	assert.Equal(t, detection.Warning, findings[0].Severity)
 }
 
 func TestMissingSecret(t *testing.T) {
@@ -175,4 +188,45 @@ func TestMissingSkipsOptionalReference(t *testing.T) {
 	findings := Missing{}.Detect(testDetectorContext(model, now), entity)
 
 	assert.Empty(t, findings, "an optional Secret does not break the pod")
+}
+
+// podMissingSecret builds a pod with the given attributes that
+// references a Secret nobody created.
+func podMissingSecret(
+	attrs map[string]inventory.Value,
+) (*inventory.Model, inventory.Entity) {
+	m := newTestModel()
+	pod := newID(kube.KindPod, "default", "pod")
+	put(m, pod, t0, attrs)
+	link(m, pod, inventory.References,
+		newID(kube.KindSecret, "default", "creds"))
+	return m, entityOf(m, pod)
+}
+
+func TestMissingSkipsFinishedAndDeletingPods(t *testing.T) {
+	for name, attrs := range map[string]map[string]inventory.Value{
+		"succeeded": {kube.AttrPhase: inventory.Text("Succeeded")},
+		"failed":    {kube.AttrPhase: inventory.Text("Failed")},
+		"deleting":  {kube.AttrDeleting: inventory.Bool(true)},
+	} {
+		m, pod := podMissingSecret(attrs)
+
+		assert.Empty(t, Missing{}.Detect(testDetectorContext(m, t0), pod),
+			name)
+	}
+}
+
+// A pod that already runs read its Secret at start. The deletion only
+// matters at the next restart, so it is a heads-up, not an outage.
+func TestMissingDowngradesARunningReadyPod(t *testing.T) {
+	m, pod := podMissingSecret(map[string]inventory.Value{
+		kube.AttrPhase: inventory.Text("Running"),
+		kube.AttrReady: inventory.Bool(true),
+	})
+
+	got := Missing{}.Detect(testDetectorContext(m, t0), pod)
+
+	require.Len(t, got, 1)
+	assert.Equal(t, detection.Warning, got[0].Severity)
+	assert.Contains(t, got[0].Summary, "next restart")
 }

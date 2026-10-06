@@ -1,0 +1,8 @@
+10:05:15 settled
+🟠 warehouse in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: warehouse: stock service answered 503". To read the output of the last crash, run kubectl logs warehouse-bda8df4e-a -c app -n shop --previous
+🟠 warehouse in shop (prod-eu-1) keeps crashing.
+
+10:31:15 digest
+🟡 kwatch (prod-eu-1) has one low-priority problem and configuration risks on one workload to report. Autoscaler warehouse in shop is at its maximum of 2 replicas and wants more. Configuration risks: 1 workload has containers without a memory limit (warehouse); 1 workload has no readiness probe (warehouse); 1 workload runs every replica on one node (warehouse). None of them is urgent; one that gets worse gets its own message.
+🟡 kwatch (prod-eu-1) has one low-priority problem and configuration risks on one workload to report.
+

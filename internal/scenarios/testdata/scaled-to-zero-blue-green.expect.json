@@ -1,0 +1,7 @@
+{
+  "name": "scaled-to-zero-blue-green",
+  "description": "A Deployment is scaled to zero while an Ingress routes to its Service, and another Deployment behind the same Service keeps its endpoints ready.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "15m0s"
+}

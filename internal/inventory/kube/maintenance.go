@@ -49,7 +49,8 @@ func (t *Translator) annotate(obj any, desc *Description) {
 		desc.Attributes = make(map[string]inventory.Value)
 	}
 	if m.On != "" && on {
-		desc.Attributes[AttrMaintenance] = inventory.Text(value)
+		desc.Attributes[AttrMaintenance] = inventory.Text(
+			evidenceText(value))
 	}
 	if m.Until == "" || !until {
 		return

@@ -1,0 +1,8 @@
+10:03:15 settled
+🟠 app0 in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "fatal: cache lost its own dependency". It runs a single replica, so this is downtime, not degradation. To read the output of the last crash, run kubectl logs app0-921c6b1a-a -c app -n shop --previous
+🟠 app0 in shop (prod-eu-1) keeps crashing.
+
+10:07:55 settled
+🟠 app1 in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "fatal: queue lost its own dependency". It runs a single replica, so this is downtime, not degradation. To read the output of the last crash, run kubectl logs app1-7a4b74f3-a -c app -n shop --previous
+🟠 app1 in shop (prod-eu-1) keeps crashing.
+

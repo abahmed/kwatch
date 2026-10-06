@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode"
 
 	"k8s.io/klog/v2"
 
@@ -49,8 +50,10 @@ func NewDatadog(
 	}
 
 	site := defaultDatadogSite
-	if s, ok := config["site"].(string); ok && len(s) > 0 {
-		site = s
+	// The config validator trims the site too, so a stray space around
+	// the host is accepted by lint and by the provider alike.
+	if s, ok := config["site"].(string); ok && strings.TrimSpace(s) != "" {
+		site = strings.TrimSpace(s)
 	}
 
 	appKey, _ := config["applicationKey"].(string)
@@ -77,11 +80,18 @@ func NewDatadog(
 		}
 	}
 
+	endpoint := fmt.Sprintf("https://api.%s/api/v1/events", site)
+	if !transport.ValidEndpoint(endpoint) || badSite(site) {
+		klog.InfoS("initializing datadog with an invalid site",
+			"setting", "site")
+		return nil
+	}
+
 	klog.InfoS("initializing datadog", "site", site, "title", title)
 
 	return &Datadog{
 		sender:      transport.NewSender(dependencies),
-		url:         fmt.Sprintf("https://api.%s/api/v1/events", site),
+		url:         endpoint,
 		apiKey:      apiKey,
 		appKey:      appKey,
 		title:       title,
@@ -113,6 +123,13 @@ var validAlertTypes = map[string]bool{
 func (d *Datadog) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
+	// A plain notice (startup, upgrade, test) or the startup summary is
+	// not an incident, and nothing would ever resolve what it opens.
+	if m.IsInformational() {
+		klog.V(4).InfoS("skipping informational message",
+			"component", "delivery", "provider", d.Name())
+		return nil
+	}
 	body, err := json.Marshal(d.buildPayload(m))
 	if err != nil {
 		return err
@@ -142,10 +159,26 @@ func (d *Datadog) buildPayload(m notification.Message) datadogPayload {
 	return datadogPayload{
 		Title:          title,
 		Text:           notification.Truncate(text, maxTextBytes),
-		Tags:           d.tags,
+		Tags:           d.tagsWithCluster(),
 		AlertType:      d.alertTypeFor(m),
 		AggregationKey: m.AlertKey(d.clusterName),
 	}
+}
+
+// tagsWithCluster is the configured tags plus cluster:<name>, so events
+// from several clusters can be told apart. A configured cluster: tag wins.
+func (d *Datadog) tagsWithCluster() []string {
+	if d.clusterName == "" {
+		return d.tags
+	}
+	for _, tag := range d.tags {
+		if strings.HasPrefix(tag, "cluster:") {
+			return d.tags
+		}
+	}
+	tags := make([]string, 0, len(d.tags)+1)
+	tags = append(tags, d.tags...)
+	return append(tags, "cluster:"+d.clusterName)
 }
 
 // alertTypeFor is "success" for a resolve, "info" for a notice, the
@@ -171,4 +204,15 @@ func (d *Datadog) alertTypeFor(m notification.Message) string {
 // SendMessage sends a plain notice as an informational event.
 func (d *Datadog) SendMessage(ctx context.Context, msg string) error {
 	return d.SendIncident(ctx, notification.Notice(msg))
+}
+
+// SkipsPlainMessages implements api.PlainMessageSkipper: plain messages
+// become notices, which SendIncident skips.
+func (d *Datadog) SkipsPlainMessages() bool { return true }
+
+// badSite reports a site that is more than a host name: a path, query,
+// fragment, user info ("@") or whitespace would redirect the events.
+func badSite(site string) bool {
+	return strings.ContainsAny(site, "/?#@") ||
+		strings.IndexFunc(site, unicode.IsSpace) >= 0
 }

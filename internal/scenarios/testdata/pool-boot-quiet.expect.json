@@ -1,0 +1,7 @@
+{
+  "name": "pool-boot-quiet",
+  "description": "A node pool scales from zero to three nodes; pods are pending, creating and not ready for a few minutes, then all become ready within eight minutes.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

@@ -7,6 +7,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -63,7 +64,7 @@ func NewSplunkOncall(
 		server = u
 	}
 
-	klog.InfoS("initializing splunkoncall", "routingKey", routingKey)
+	klog.InfoS("initializing splunkoncall")
 
 	return &SplunkOncall{
 		sender:      transport.NewSender(dependencies),
@@ -84,6 +85,13 @@ func (s *SplunkOncall) Name() string {
 func (s *SplunkOncall) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
+	// A plain notice (startup, upgrade, test) or the startup summary is
+	// not an incident, and nothing would ever resolve what it opens.
+	if m.IsInformational() {
+		klog.V(4).InfoS("skipping informational message",
+			"component", "delivery", "provider", s.Name())
+		return nil
+	}
 	payload := splunkOnCallPayload{
 		MessageType:       messageType(m),
 		EntityID:          m.AlertKey(s.clusterName),
@@ -110,21 +118,24 @@ func messageType(m notification.Message) string {
 	case m.IsNotice(),
 		m.Route.Severity == "info":
 		return "INFO"
-	case m.Route.Severity == "warning":
-		return "WARNING"
+	case m.Route.Severity == "critical":
+		return "CRITICAL"
 	}
-	return "CRITICAL"
+	// An unknown or empty severity must not page as critical: WARNING is
+	// what the other paging providers default to.
+	return "WARNING"
 }
 
 func stateMessage(m notification.Message) string {
-	text := m.NoteText()
-	if len(m.Output) > 0 {
-		text += "\n\n" + strings.Join(m.Output, "\n")
-	}
-	return text
+	return safetext.PlainWithOutput(
+		m.NoteText(), m.Output, "\n\n", safetext.DetailsLimit)
 }
 
 // SendMessage sends a plain notice as an informational alert.
 func (s *SplunkOncall) SendMessage(ctx context.Context, msg string) error {
 	return s.SendIncident(ctx, notification.Notice(msg))
 }
+
+// SkipsPlainMessages implements api.PlainMessageSkipper: plain messages
+// become notices, which SendIncident skips.
+func (s *SplunkOncall) SkipsPlainMessages() bool { return true }

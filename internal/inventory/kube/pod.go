@@ -61,6 +61,7 @@ func (PodSchema) Describe(obj any) (Description, bool) {
 	rel.add(inventory.Calls, podDependencies(pod)...)
 	return Description{
 		ID: id, UID: string(pod.UID),
+		AltUID:     pod.Annotations[corev1.MirrorPodAnnotationKey],
 		Attributes: podAttributes(pod),
 		Relations:  rel,
 		Children:   containerDescriptions(pod, id),
@@ -100,6 +101,12 @@ func podAttributes(pod *corev1.Pod) map[string]inventory.Value {
 	}
 	if pod.Status.Reason != "" {
 		attrs[AttrReason] = inventory.Text(pod.Status.Reason)
+	}
+	if pod.DeletionTimestamp != nil {
+		attrs[AttrDeletionTime] = inventory.Time(pod.DeletionTimestamp.Time)
+	}
+	if grace := pod.Spec.TerminationGracePeriodSeconds; grace != nil {
+		attrs[AttrTerminationGrace] = inventory.Number(float64(*grace))
 	}
 	if pod.Status.Message != "" {
 		attrs[AttrMessage] = inventory.Text(evidenceText(pod.Status.Message))

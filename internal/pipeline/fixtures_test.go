@@ -11,6 +11,8 @@ import (
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/pipeline/announce"
+	"github.com/abahmed/kwatch/internal/pipeline/investigate"
 	"github.com/abahmed/kwatch/internal/storage"
 )
 
@@ -27,9 +29,9 @@ type memStore struct {
 	printsErr    error
 	saveErr      error
 	savePrintErr error
-	startup      *StartupState
+	startup      *announce.StartupState
 	startupErr   error
-	startups     []StartupState
+	startups     []announce.StartupState
 	// lastSaved holds the records of the latest SaveIncidents call.
 	lastSaved []incident.Record
 	// entered, when set, receives a value as each SaveIncidents starts;
@@ -67,16 +69,16 @@ func (m *memStore) SaveFingerprints(map[string]any) error {
 	return m.savePrintErr
 }
 
-func (m *memStore) LoadStartup() (StartupState, bool, error) {
+func (m *memStore) LoadStartup() (announce.StartupState, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.startup == nil {
-		return StartupState{}, false, m.startupErr
+		return announce.StartupState{}, false, m.startupErr
 	}
 	return *m.startup, true, m.startupErr
 }
 
-func (m *memStore) SaveStartup(state StartupState) error {
+func (m *memStore) SaveStartup(state announce.StartupState) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.startups = append(m.startups, state)
@@ -158,4 +160,25 @@ func openTempStore(t *testing.T) *storage.Store {
 		t.Fatal(err)
 	}
 	return s
+}
+
+// Short names for the investigation types the fakes return.
+type (
+	testPlan   = investigate.Investigation
+	testResult = investigate.Result
+)
+
+func observed(
+	id inventory.EntityID, attrs map[string]inventory.Value,
+) inventory.Observation {
+	return inventory.Observation{Kind: inventory.Observed, Entity: id,
+		Attributes: attrs}
+}
+
+func related(
+	id inventory.EntityID, rel inventory.RelationType,
+	targets ...inventory.EntityID,
+) inventory.Observation {
+	return inventory.Observation{Kind: inventory.Related, Entity: id,
+		Relation: rel, Targets: targets}
 }

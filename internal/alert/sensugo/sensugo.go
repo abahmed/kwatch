@@ -8,6 +8,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -107,10 +108,15 @@ func (s *Sensugo) Name() string {
 func (s *Sensugo) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
-	output := m.NoteText()
-	if len(m.Output) > 0 {
-		output += "\n\nLast output:\n" + strings.Join(m.Output, "\n")
+	// A plain notice (startup, upgrade, test) or the startup summary is
+	// not an incident, and nothing would ever resolve what it opens.
+	if m.IsInformational() {
+		klog.V(4).InfoS("skipping informational message",
+			"component", "delivery", "provider", s.Name())
+		return nil
 	}
+	output := safetext.PlainWithOutput(
+		m.NoteText(), safetext.LastOutput(m.Output), "\n\n", safetext.DetailsLimit)
 	payload := sensuPayload{
 		Entity: sensuEntity{
 			Metadata: sensuMetadata{Name: s.entity},
@@ -153,3 +159,7 @@ func checkStatus(m notification.Message) int {
 func (s *Sensugo) SendMessage(ctx context.Context, msg string) error {
 	return s.SendIncident(ctx, notification.Notice(msg))
 }
+
+// SkipsPlainMessages implements api.PlainMessageSkipper: plain messages
+// become notices, which SendIncident skips.
+func (s *Sensugo) SkipsPlainMessages() bool { return true }

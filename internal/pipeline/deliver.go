@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/incident"
@@ -56,8 +57,12 @@ func (a *announcer) hold(d incident.Decision, now time.Time) bool {
 	if d.Action == incident.Announce {
 		// Persist it as not announced until delivery has it, so a
 		// restart in the meantime announces it again instead of
-		// losing it. A held update changes nothing about that.
+		// losing it.
 		a.incidents.HoldAnnouncement(d.Incident.ID)
+	} else {
+		// A held update is lost by a restart too; the record keeps
+		// the fingerprint from before it so it is decided again.
+		a.incidents.HoldUpdate(d.Incident.ID)
 	}
 	a.held = append(a.held, heldAnnouncement{
 		decision: d, decided: now, until: now.Add(outputWait),
@@ -68,24 +73,31 @@ func (a *announcer) hold(d incident.Decision, now time.Time) bool {
 // attachOutput keeps a finished investigation's result and sends the
 // held announcement waiting for it. A result that comes after its
 // announcement went is kept: the next update quotes it if it adds a new
-// fact, but it never causes an update on its own.
-func (a *announcer) attachOutput(ctx context.Context, r investigationResult) {
+// fact, but it never causes an update on its own. It reports whether it
+// released an announcement, which changes the incident's saved state.
+func (a *announcer) attachOutput(
+	ctx context.Context, r investigationResult,
+) bool {
 	a.pool.received()
 	if !a.storeResult(r) {
-		return
+		return false
 	}
 	if i := a.heldIndexOf(r.id); i >= 0 {
-		a.sendHeld(ctx, a.takeHeld(i))
+		return a.sendHeld(ctx, a.takeHeld(i))
 	}
+	return false
 }
 
 // expireHeld sends, without output, every held announcement whose wait
-// is over.
-func (a *announcer) expireHeld(ctx context.Context, now time.Time) {
+// is over. It reports whether it sent one, which changes the incident's
+// saved state.
+func (a *announcer) expireHeld(ctx context.Context, now time.Time) bool {
+	sent := false
 	for len(a.held) > 0 && !a.held[0].until.After(now) {
 		a.noteLate()
-		a.sendHeld(ctx, a.takeHeld(0))
+		sent = a.sendHeld(ctx, a.takeHeld(0)) || sent
 	}
+	return sent
 }
 
 // releaseHeld sends the held announcement of incident id, if any, without
@@ -122,9 +134,24 @@ func (a *announcer) takeHeld(i int) heldAnnouncement {
 	return h
 }
 
-func (a *announcer) sendHeld(ctx context.Context, h heldAnnouncement) {
+// dropHeld forgets the held announcements of incidents that resolved
+// without a message: they have no story to start.
+func (a *announcer) dropHeld(ids []string) {
+	a.held = slices.DeleteFunc(a.held, func(h heldAnnouncement) bool {
+		return slices.Contains(ids, h.decision.Incident.ID)
+	})
+}
+
+// sendHeld sends a held decision and reports whether it did: an
+// incident that resolved without a message has nothing to say.
+func (a *announcer) sendHeld(ctx context.Context, h heldAnnouncement) bool {
+	if a.incidents.ResolvedQuietly(h.decision.Incident.ID) {
+		return false
+	}
 	a.incidents.ReleaseAnnouncement(h.decision.Incident.ID)
+	a.incidents.ReleaseUpdate(h.decision.Incident.ID)
 	a.send(ctx, a.withEvidence(h.decision), h.decided)
+	return true
 }
 
 // send writes the message for d as of at and hands both to the sink.
@@ -134,7 +161,58 @@ func (a *announcer) sendHeld(ctx context.Context, h heldAnnouncement) {
 func (a *announcer) send(
 	ctx context.Context, d incident.Decision, at time.Time,
 ) {
-	a.sink(ctx, d, a.write(a.followSummary(d), at))
+	d = a.withKindNames(a.withChanges(d, at))
+	msg := a.write(a.collect.Follow(d), at)
+	a.scopePaging(d, &msg)
+	if d.PagedAlready {
+		msg.SkipPaging = true
+	}
+	if d.Action == incident.Resolve && msg.Carrier == "" && !msg.PagingOnly {
+		a.collect.NoteResolveDelivered(d.Incident.ID)
+	}
+	a.sink(ctx, d, msg)
+}
+
+// scopePaging keeps the paging providers' view of an incident whole: any
+// message of its own reaches them and is remembered, and a resolve goes to
+// them only when an announcement did. A resolve of an incident that only a
+// digest, roll-up or summary carried would close an alert nobody opened.
+func (a *announcer) scopePaging(
+	d incident.Decision, msg *notification.Message,
+) {
+	id := d.Incident.ID
+	if d.Action != incident.Resolve {
+		if pageHeldBack(d) {
+			// The page of this outage already went out and its resolve
+			// closed it. Every later message (failing again, reminders,
+			// material changes) is chat news; the pagers hear of it
+			// again only when the tier itself rises to Page.
+			msg.SkipPaging = true
+			return
+		}
+		a.incidents.RecordPaged(id, true)
+		return
+	}
+	if a.incidents.Paged(id) {
+		a.incidents.RecordPaged(id, false)
+		return
+	}
+	msg.SkipPaging = true
+	if msg.PagingOnly {
+		// Paging was the only audience and it never heard of the
+		// incident: nobody receives this, the audit log still records it.
+		msg.PagingOnly = false
+		msg.Carrier = "unannounced"
+	}
+}
+
+// pageHeldBack reports a message of an incident whose page was held at
+// notify (PageHeld) because the page of the same outage already went out.
+// That page stays the one page of the outage: the incident pages again
+// only when its tier is Page again.
+func pageHeldBack(d incident.Decision) bool {
+	return d.Action != incident.Resolve &&
+		d.Incident.Delivery.PageHeld() && d.Incident.Tier != incident.Page
 }
 
 func (a *announcer) write(
@@ -148,7 +226,8 @@ func (a *announcer) write(
 	// own alert, but the chat channel already reads about those failures
 	// in the other incident's update; a "cause revised" per absorbed
 	// incident would be one message per workload in a storm.
-	if d.Action == incident.Resolve && d.Incident.SupersededBy != "" {
+	if d.Action == incident.Resolve &&
+		(d.Incident.SupersededBy != "" || d.Unannounced) {
 		msg.PagingOnly = true
 	}
 	return msg

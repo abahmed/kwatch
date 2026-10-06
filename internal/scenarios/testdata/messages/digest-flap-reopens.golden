@@ -1,0 +1,8 @@
+10:33:15 digest
+🟡 kwatch (prod-eu-1) has one low-priority problem to report. Autoscaler orders in shop targets Deployment orders, which does not exist. None of them is urgent; one that gets worse gets its own message.
+🟡 kwatch (prod-eu-1) has one low-priority problem to report.
+
+11:16:00 digest
+🟡 kwatch (prod-eu-1) has one low-priority problem to report. Autoscaler orders in shop is failing again: 2nd time in two hours. None of them is urgent; one that gets worse gets its own message.
+🟡 kwatch (prod-eu-1) has one low-priority problem to report.
+

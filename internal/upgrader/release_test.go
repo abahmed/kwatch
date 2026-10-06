@@ -173,3 +173,16 @@ func TestNewUpgraderDoesNotMutateCallerConfig(t *testing.T) {
 	assert.False(t, cfg.DisableUpdateCheck)
 	assert.True(t, u.config.DisableUpdateCheck)
 }
+
+func TestSkipUpgradeCheckUsesBooleanParsing(t *testing.T) {
+	for value, want := range map[string]bool{
+		"yes": true, "ON": true, "1": true, "no": false,
+		"": false, "typo": false,
+	} {
+		t.Setenv("SKIP_UPGRADE_CHECK", value)
+
+		u := NewUpgrader(&config.Upgrader{}, nil, nil, nil)
+
+		assert.Equal(t, want, u.config.DisableUpdateCheck, value)
+	}
+}

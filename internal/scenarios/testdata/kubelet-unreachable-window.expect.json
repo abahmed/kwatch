@@ -1,0 +1,8 @@
+{
+  "name": "kubelet-unreachable-window",
+  "description": "A Ready node's kubelet stats could not be read four times in six hours.",
+  "root": "node//n1",
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "45m0s"
+}

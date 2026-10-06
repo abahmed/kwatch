@@ -10,9 +10,6 @@ func classifyRestart(previous runtimeSession) string {
 	if previous.SessionID == "" {
 		return ""
 	}
-	if previous.FailureCode != "" {
-		return normalizeRestartReason(previous.FailureCode)
-	}
 	if previous.EndReason == "graceful_shutdown" {
 		// A clean stop, as in a rollout: nothing was interrupted.
 		return ""
@@ -37,7 +34,7 @@ func classifyWithEvidence(
 	evidence restartEvidence,
 	fallback string,
 ) string {
-	if previous.FailureCode != "" || previous.EndReason != "" {
+	if previous.EndReason != "" {
 		return fallback
 	}
 	if evidence.APIUnavailable {

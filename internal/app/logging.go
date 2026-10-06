@@ -20,12 +20,14 @@ const logFormatJSON = "json"
 const jsonLogVerbosity = 10
 
 // applyLogFormat applies app.logFormatter: "json" writes structured JSON
-// lines to stderr, anything else keeps klog's text format.
+// lines to stderr, anything else keeps klog's text format. It runs again
+// after the KwatchConfig overlay, so an overlay can also switch back to text.
 func applyLogFormat(format string) {
-	if !strings.EqualFold(strings.TrimSpace(format), logFormatJSON) {
+	if strings.EqualFold(strings.TrimSpace(format), logFormatJSON) {
+		klog.SetLogger(newJSONLogger(os.Stderr))
 		return
 	}
-	klog.SetLogger(newJSONLogger(os.Stderr))
+	klog.ClearLogger()
 }
 
 // newJSONLogger writes each log entry as one JSON object to out.

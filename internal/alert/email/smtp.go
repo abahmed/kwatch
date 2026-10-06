@@ -3,14 +3,18 @@ package email
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/smtp"
+	"net/textproto"
 	"strings"
 	"time"
 
 	gomail "gopkg.in/mail.v2"
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 )
 
 const smtpTimeout = 10 * time.Second
@@ -112,9 +116,26 @@ func sendSMTP(
 	return nil
 }
 
+// smtpContextError reports the caller's cancellation when there is one,
+// and otherwise the SMTP failure, classified for retry.
 func smtpContextError(ctx context.Context, err error) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return ctxErr
+	}
+	return classifySMTP(err)
+}
+
+// classifySMTP marks a 5xx reply (bad credentials, unknown recipient,
+// rejected sender) permanent, since sending the same mail again gets the
+// same answer. A 4xx reply is the server asking to try later, and any
+// other failure (a dropped connection) stays retryable. 552 (mailbox full
+// or message size exceeded) is the one 5xx that clears when the recipient
+// frees space, so it is retried like the 4xx replies.
+func classifySMTP(err error) error {
+	var reply *textproto.Error
+	if errors.As(err, &reply) && reply.Code >= 500 &&
+		reply.Code != 552 {
+		return transport.Permanent(err)
 	}
 	return err
 }

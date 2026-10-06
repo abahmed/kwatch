@@ -46,6 +46,10 @@ spec:
                     type: string
                 resyncSeconds:
                   type: integer
+                  minimum: 0
+                  x-kubernetes-validations:
+                    - rule: "self == 0 || self >= 30"
+                      message: "resyncSeconds must be 0 (off) or at least 30"
                 crd:
                   type: object
                   properties:
@@ -116,13 +120,7 @@ spec:
                       type: boolean
                     interval:
                       type: integer
-                healthCheck:
-                  type: object
-                  properties:
-                    enabled:
-                      type: boolean
-                    port:
-                      type: integer
+                      minimum: 0
                 telemetry:
                   type: object
                   properties:
@@ -146,6 +144,9 @@ spec:
                       type: boolean
                     logFormatter:
                       type: string
+                      enum:
+                        - text
+                        - json
                 templates:
                   type: object
                   additionalProperties:

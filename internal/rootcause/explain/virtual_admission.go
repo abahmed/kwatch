@@ -18,6 +18,9 @@ const (
 	// ModeWebhookCallFailed is a webhook whose calls fail another way:
 	// refused, reset or a failed handshake.
 	ModeWebhookCallFailed detection.Mode = "Webhook.CallFailed"
+	// ModeWebhookDenied is a webhook that answered and denied the
+	// request: a policy decision about one object, not an outage.
+	ModeWebhookDenied detection.Mode = "Webhook.Denied"
 )
 
 // failedCall finds the webhook the API server failed to call, in its
@@ -27,7 +30,15 @@ const (
 var failedCall = regexp.MustCompile(`failed calling webhook "([^"]+)"`)
 
 // callTimeout is a failed call that ran out of time.
-var callTimeout = regexp.MustCompile(`deadline exceeded|timeout|timed out`)
+var callTimeout = regexp.MustCompile(
+	`deadline exceeded|timeout|timed out`)
+
+// timeoutQuery is the "?timeout=10s" the API server adds to every
+// webhook URL. It is the limit it set, not proof the call ran out of it.
+var timeoutQuery = regexp.MustCompile(`\?timeout=[^\s"]*`)
+
+// noEndpoints is a call to a webhook Service with nothing behind it.
+const noEndpoints = "no endpoints available"
 
 // namedWebhook finds a webhook the API server names, as one it failed
 // to call or one that denied the request.
@@ -65,24 +76,53 @@ func (v *view) admissionModes(
 		if !containsFold(names, text[m[2]:m[3]]) {
 			continue
 		}
-		end := len(text)
-		if i+1 < len(calls) {
-			end = calls[i+1][0]
-		}
+		end := callEnd(text, m[1], calls, i)
 		if mode, ok := callMode(text[m[1]:end]); ok {
 			return []modeHealth{{mode: mode, health: detection.Failing,
 				pseudo: true}}
 		}
 	}
+	if deniedBy(text, names) {
+		return []modeHealth{{mode: ModeWebhookDenied,
+			health: detection.Failing, pseudo: true}}
+	}
 	return nil
+}
+
+// callEnd is where the call at calls[i] stops: at the next failed call
+// or the next webhook named in the error, so a later denial's wording
+// (a reason that says "timeout") is never read as this call's failure.
+func callEnd(text string, from int, calls [][]int, i int) int {
+	end := len(text)
+	if i+1 < len(calls) {
+		end = calls[i+1][0]
+	}
+	if n := namedWebhook.FindStringIndex(text[from:]); n != nil &&
+		from+n[0] < end {
+		end = from + n[0]
+	}
+	return end
+}
+
+// deniedBy reports a denial from one of the configuration's webhooks:
+// it answered, so it was called whatever its failure policy says.
+func deniedBy(text string, names []string) bool {
+	for _, m := range namedWebhook.FindAllStringSubmatch(text, -1) {
+		if m[2] != "" && containsFold(names, m[1]) {
+			return true
+		}
+	}
+	return false
 }
 
 // callMode classifies the text of one failed webhook call.
 func callMode(segment string) (detection.Mode, bool) {
+	segment = timeoutQuery.ReplaceAllString(segment, "")
 	if callTimeout.MatchString(segment) {
 		return ModeWebhookTimeout, true
 	}
-	if hasSignal(SignalConnection, segment) {
+	if hasSignal(SignalConnection, segment) ||
+		strings.Contains(segment, noEndpoints) {
 		return ModeWebhookCallFailed, true
 	}
 	return "", false

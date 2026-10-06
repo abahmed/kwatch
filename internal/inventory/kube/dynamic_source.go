@@ -111,7 +111,9 @@ type DynamicSource struct {
 	// over the budget, or with no client for their mode.
 	left     map[schema.GroupVersionResource]kindIssue
 	complete bool
-	wg       sync.WaitGroup
+	// loggedSkipped is the skipped-kind list last written to the log.
+	loggedSkipped string
+	wg            sync.WaitGroup
 }
 
 // kindIssue is why one resource type of an entity kind is not watched.
@@ -291,11 +293,11 @@ func (d *DynamicSource) reconcile(ctx context.Context) {
 	retired := d.dropUnwanted(desired, skipped, complete)
 	status := d.statusLocked()
 	d.mu.Unlock()
-	if len(skipped) > 0 {
+	if kinds, changed := d.skippedChanged(skipped); changed {
 		klog.InfoS("resource types over the watch budget are skipped",
 			"component", "inventory", "operation", "discover",
 			"discovered", len(discovered), "budget", d.cfg.Budget,
-			"skipped", len(skipped), "kinds", skippedKinds(skipped))
+			"skipped", len(skipped), "kinds", kinds)
 	}
 	for _, w := range retired {
 		d.retire(ctx, w)
@@ -303,6 +305,21 @@ func (d *DynamicSource) reconcile(ctx context.Context) {
 	if d.cfg.Reconciled != nil {
 		d.cfg.Reconciled(status)
 	}
+}
+
+// skippedChanged returns the skipped kinds and whether they differ from
+// the list last logged, so the log names them at startup and again only
+// when the list changes, not on every discovery pass. An empty list is
+// never logged.
+func (d *DynamicSource) skippedChanged(
+	skipped []plannedResource,
+) (string, bool) {
+	kinds := skippedKinds(skipped)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	changed := kinds != "" && kinds != d.loggedSkipped
+	d.loggedSkipped = kinds
+	return kinds, changed
 }
 
 // watch starts a wanted type that is not running, taking over a refused

@@ -33,6 +33,10 @@ type Observation struct {
 	At     time.Time
 	Entity EntityID
 	UID    string
+	// AltUID is a second identifier events may name the object by, such
+	// as the config hash of a static pod's mirror. Notes carrying it are
+	// about this object.
+	AltUID string
 
 	// Attributes are set by Observed observations. An attribute absent from a
 	// later Observed observation from the same source is removed.
@@ -100,6 +104,7 @@ type observationWire struct {
 	At         *time.Time       `json:"at,omitempty"`
 	Entity     entityWire       `json:"entity"`
 	UID        string           `json:"uid,omitempty"`
+	AltUID     string           `json:"alt_uid,omitempty"`
 	Attributes map[string]Value `json:"attributes,omitempty"`
 	Relation   RelationType     `json:"relation,omitempty"`
 	Targets    []entityWire     `json:"targets,omitempty"`
@@ -121,6 +126,7 @@ type changeWire struct {
 	At       *time.Time        `json:"at,omitempty"`
 	Observed *time.Time        `json:"observed,omitempty"`
 	Actor    string            `json:"actor,omitempty"`
+	Cause    string            `json:"cause,omitempty"`
 	App      string            `json:"app,omitempty"`
 	Revision string            `json:"revision,omitempty"`
 	Created  bool              `json:"created,omitempty"`
@@ -142,13 +148,15 @@ type noteWire struct {
 	Message   string     `json:"message,omitempty"`
 	Count     int        `json:"count,omitempty"`
 	Warning   bool       `json:"warning,omitempty"`
+	UID       string     `json:"uid,omitempty"`
+	Origin    string     `json:"origin,omitempty"`
 }
 
 // MarshalJSON encodes the observation in the stable recorded-log shape.
 func (o Observation) MarshalJSON() ([]byte, error) {
 	wire := observationWire{
 		Kind: o.Kind, Source: o.Source, At: wireTime(o.At),
-		Entity: toEntityWire(o.Entity), UID: o.UID,
+		Entity: toEntityWire(o.Entity), UID: o.UID, AltUID: o.AltUID,
 		Attributes: o.Attributes, Relation: o.Relation,
 	}
 	for _, target := range o.Targets {
@@ -163,6 +171,7 @@ func (o Observation) MarshalJSON() ([]byte, error) {
 			Source: o.Note.Source,
 			Reason: o.Note.Reason, Message: o.Note.Message,
 			Count: o.Note.Count, Warning: o.Note.Warning,
+			UID: o.Note.UID, Origin: o.Note.Origin,
 		}
 	}
 	return json.Marshal(wire)
@@ -179,7 +188,7 @@ func (o *Observation) UnmarshalJSON(data []byte) error {
 	}
 	out := Observation{
 		Kind: wire.Kind, Source: wire.Source, At: fromWireTime(wire.At),
-		Entity: wire.Entity.id(), UID: wire.UID,
+		Entity: wire.Entity.id(), UID: wire.UID, AltUID: wire.AltUID,
 		Attributes: wire.Attributes, Relation: wire.Relation,
 	}
 	for _, target := range wire.Targets {
@@ -195,6 +204,7 @@ func (o *Observation) UnmarshalJSON(data []byte) error {
 			Source:    wire.Note.Source,
 			Reason:    wire.Note.Reason, Message: wire.Note.Message,
 			Count: wire.Note.Count, Warning: wire.Note.Warning,
+			UID: wire.Note.UID, Origin: wire.Note.Origin,
 		}
 	}
 	*o = out
@@ -202,9 +212,7 @@ func (o *Observation) UnmarshalJSON(data []byte) error {
 }
 
 func toEntityWire(id EntityID) entityWire {
-	return entityWire{
-		Group: id.Group, Kind: id.Kind, Namespace: id.Namespace, Name: id.Name,
-	}
+	return entityWire(id)
 }
 
 func (w entityWire) id() EntityID {
@@ -213,14 +221,14 @@ func (w entityWire) id() EntityID {
 
 func isZeroChange(c Change) bool {
 	return c.Entity.IsZero() && c.At.IsZero() && c.Observed.IsZero() &&
-		c.Actor == "" && c.App == "" && c.Revision == "" &&
+		c.Actor == "" && c.Cause == "" && c.App == "" && c.Revision == "" &&
 		!c.Created && !c.Deleted && len(c.Fields) == 0
 }
 
 func toChangeWire(c Change) *changeWire {
 	wire := &changeWire{
 		At: wireTime(c.At), Observed: wireTime(c.Observed),
-		Actor: c.Actor, App: c.App, Revision: c.Revision,
+		Actor: c.Actor, Cause: c.Cause, App: c.App, Revision: c.Revision,
 		Created: c.Created, Deleted: c.Deleted,
 	}
 	if !c.Entity.IsZero() {
@@ -236,7 +244,7 @@ func toChangeWire(c Change) *changeWire {
 func (w *changeWire) change() Change {
 	out := Change{
 		At: fromWireTime(w.At), Observed: fromWireTime(w.Observed),
-		Actor: w.Actor, App: w.App, Revision: w.Revision,
+		Actor: w.Actor, Cause: w.Cause, App: w.App, Revision: w.Revision,
 		Created: w.Created, Deleted: w.Deleted,
 	}
 	if w.Entity != nil {

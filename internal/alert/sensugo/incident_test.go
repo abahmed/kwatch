@@ -59,13 +59,9 @@ func TestSensugoCheckStatus(t *testing.T) {
 	}))
 }
 
-func TestSensugoSendMessageIsPassingNotice(t *testing.T) {
+func TestSensugoSkipsInformationalMessages(t *testing.T) {
 	c, rec := newTestSensugo(t)
-	require.NoError(t, c.SendMessage(context.Background(), "started"))
-	check := rec.Last(t).JSON(t)["check"].(map[string]any)
-	// A notice must not leave a failing check open in Sensu.
-	assert.Equal(t, float64(0), check["status"])
-	assert.Equal(t, "started", check["output"])
+	providertest.AssertNoticesSkipped(t, c, rec)
 }
 
 func TestSensugoClassifiesErrors(t *testing.T) {
@@ -76,5 +72,6 @@ func TestSensugoClassifiesErrors(t *testing.T) {
 	err := c.SendIncident(context.Background(), providertest.Announce())
 	assert.True(t, transport.IsPermanent(err))
 	c.url = "h ttp://bad"
-	assert.Error(t, c.SendMessage(context.Background(), "x"))
+	assert.Error(t, c.SendIncident(
+		context.Background(), providertest.Announce()))
 }

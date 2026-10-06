@@ -38,11 +38,15 @@ func (s workloadSchema[T]) Describe(obj any) (Description, bool) {
 	attrs := map[string]inventory.Value{
 		AttrGeneration: inventory.Number(float64(workload.GetGeneration())),
 		AttrDeleting:   inventory.Bool(workload.GetDeletionTimestamp() != nil),
+		AttrCreated: inventory.Time(
+			workload.GetCreationTimestamp().Time),
 	}
 	rel := relations{}
 	rel.add(inventory.OwnedBy, ownerIDs(workload)...)
 	if template := s.template(workload); template != nil {
 		attrs[AttrTemplateHash] = inventory.Text(TemplateHash(template))
+		attrs[AttrTemplateLabels] = inventory.Text(
+			labelText(template.Labels))
 		rel.add(inventory.References,
 			templateReferences(workload.GetNamespace(), template)...)
 	}

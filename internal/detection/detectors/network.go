@@ -76,9 +76,6 @@ func backendFindings(
 	}
 	endpoints, ready, since := sumEndpoints(ctx, slices)
 	var out []detection.Finding
-	if s, ok := portMismatch(ctx, e, slices); ok {
-		out = append(out, s)
-	}
 	// No endpoints at all means nothing is selected (scaled to zero on
 	// purpose); unready endpoints mean selected pods are failing.
 	switch {
@@ -91,6 +88,9 @@ func backendFindings(
 		return out
 	case ready == 0:
 		since = ctx.Onset("no-ready-backends", since)
+		if backendsAreStarting(ctx, e.ID) {
+			return out
+		}
 		if sustained(ctx, "no-ready-backends", since, DefaultNoEndpoints) {
 			out = append(out, detection.Finding{
 				Reason:   reasons.ServiceNoEndpoints,
@@ -141,49 +141,6 @@ func sumEndpoints(
 // DefaultDegradedBackends is how long a Service may run with some unready
 // backends; rolling updates pass through this state briefly.
 const DefaultDegradedBackends = 5 * time.Minute
-
-// portMismatch reports numeric target ports that no EndpointSlice
-// publishes. Named target ports resolve per pod and are not checked.
-func portMismatch(
-	ctx detection.Context, e inventory.Entity, slices []inventory.EntityID,
-) (detection.Finding, bool) {
-	published := map[string]bool{}
-	for _, id := range slices {
-		slice, ok := ctx.Model.Entity(id)
-		if !ok {
-			continue
-		}
-		if up, _ := number(slice, kube.AttrEndpoints); up == 0 {
-			continue
-		}
-		for _, port := range strings.Split(
-			text(slice, kube.AttrEndpointPorts), ",") {
-			published[port] = true
-		}
-	}
-	if len(published) == 0 {
-		return detection.Finding{}, false
-	}
-	var missing []string
-	for _, port := range strings.Split(text(e, kube.AttrTargetPorts), ",") {
-		if _, err := strconv.Atoi(port); err == nil && !published[port] {
-			missing = append(missing, port)
-		}
-	}
-	if len(missing) == 0 {
-		return detection.Finding{}, false
-	}
-	since := valueSince(e, kube.AttrTargetPorts)
-	if !sustained(ctx, "missing-target-ports", since, DefaultNoEndpoints) {
-		return detection.Finding{}, false
-	}
-	return detection.Finding{
-		Reason: reasons.ServicePortMismatch, Severity: detection.Warning,
-		Since: since,
-		Summary: "Service targets port " + strings.Join(missing, ", ") +
-			", which its pods do not expose",
-	}, true
-}
 
 // Ingress detects Ingresses whose backend Service, TLS Secret or
 // IngressClass does not exist.
@@ -241,7 +198,8 @@ func missingBackends(
 			missing = append(missing, service.Name)
 		}
 	}
-	if len(missing) == 0 {
+	if len(missing) == 0 ||
+		!sustained(ctx, "missing-backend", e.FirstSeen, DefaultBackendGrace) {
 		return nil
 	}
 	return []detection.Finding{{

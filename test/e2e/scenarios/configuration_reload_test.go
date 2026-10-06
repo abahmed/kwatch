@@ -9,8 +9,9 @@ import (
 )
 
 // resyncSeconds is a KwatchConfig field that deploy/crd.yaml defines, so the
-// API server keeps it. Kwatch accepts 0 or more and rejects a negative value
-// (internal/config/validate_semantic.go).
+// API server keeps it. The CRD already refuses a value kwatch would reject
+// (0 or at least 30), so the invalid-overlay scenario below uses a spec the
+// schema accepts but kwatch's semantic validation refuses.
 const resyncSeconds = "resyncSeconds"
 
 func TestScenarioConfigurationReload(t *testing.T) {
@@ -24,7 +25,10 @@ func TestScenarioConfigurationReload(t *testing.T) {
 func TestScenarioInvalidLiveConfiguration(t *testing.T) {
 	onCluster(t, "invalid-config.live-reload", func(s *Scenario) {
 		s.CreateKwatchConfig("kwatch-e2e-invalid",
-			map[string]any{resyncSeconds: int64(-1)})
+			map[string]any{
+				// Allowed and forbidden namespaces cannot be mixed.
+				"namespaces": []any{"default", "!kube-system"},
+			})
 		s.ExpectKwatchHealthy()
 	})
 }

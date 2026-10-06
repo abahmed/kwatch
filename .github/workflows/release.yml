@@ -485,21 +485,6 @@ jobs:
 
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Push the version bump to main
-        if: ${{ steps.bump.outputs.bumped == 'true' && inputs.target == '' }}
-        env:
-          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          MAIN_SHA: ${{ steps.bump.outputs.main_sha }}
-        run: |
-          set -euo pipefail
-          basic=$(printf 'x-access-token:%s' "$RELEASE_TOKEN" | base64 -w0)
-          if ! git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $basic" \
-            push origin "$MAIN_SHA:refs/heads/main"; then
-            echo "::error::could not push the version bump to main. RELEASE_TOKEN must be a classic PAT with repo scope, allowed to bypass branch protection. Push it manually and re-run:"
-            echo "::error::  git push origin $MAIN_SHA:main"
-            exit 1
-          fi
-
       - name: Verify release contents before tagging
         if: ${{ !inputs.dry_run }}
         env:
@@ -546,6 +531,23 @@ jobs:
           basic=$(printf 'x-access-token:%s' "$RELEASE_TOKEN" | base64 -w0)
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $basic" \
             push origin "refs/tags/$VERSION"
+
+      # Pushed only after the contents were verified and the tag exists, so a
+      # failed check never leaves main pinned to a version that was not cut.
+      - name: Push the version bump to main
+        if: ${{ steps.bump.outputs.bumped == 'true' && inputs.target == '' }}
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          MAIN_SHA: ${{ steps.bump.outputs.main_sha }}
+        run: |
+          set -euo pipefail
+          basic=$(printf 'x-access-token:%s' "$RELEASE_TOKEN" | base64 -w0)
+          if ! git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $basic" \
+            push origin "$MAIN_SHA:refs/heads/main"; then
+            echo "::error::could not push the version bump to main. RELEASE_TOKEN must be a classic PAT with repo scope, allowed to bypass branch protection. Push it manually and re-run:"
+            echo "::error::  git push origin $MAIN_SHA:main"
+            exit 1
+          fi
 
       - name: Create GitHub release
         if: ${{ !inputs.dry_run }}

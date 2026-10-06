@@ -16,8 +16,9 @@ const (
 	limitWarning       = 90.0
 	limitCritical      = 95.0
 	throttleWarning    = 50.0
-	throttleCritical   = 75.0
 	cpuSustained       = 10 * time.Minute
+	memorySustained    = 2 * time.Minute
+	errorRateSustained = 3 * time.Minute
 	errorRateWarning   = 1.0
 	errorRateCritical  = 10.0
 	overcommitWarning  = 2.0
@@ -41,12 +42,19 @@ func (ContainerResources) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	var out []detection.Finding
-	if pct, ok := ratio(e, kube.AttrMemoryWorking, kube.AttrMemoryLimit); ok &&
-		pct >= limitWarning {
-		out = append(out, levelFinding(pct, reasons.ContainerMemoryHigh,
-			valueSince(e, kube.AttrMemoryWorking),
-			"Memory use is "+percentText(pct)+" of the limit; the "+
-				"container is close to being OOM-killed"))
+	if attr, what := memoryReading(e); attr != "" {
+		pct, _ := ratio(e, attr, kube.AttrMemoryLimit)
+		if pct >= limitWarning {
+			// Memory moves with every sample and hovers around the
+			// line, so the finding waits for a level that lasts.
+			since := ctx.Onset("memory-high", valueSince(e, attr))
+			if sustained(ctx, "memory-high", since, memorySustained) {
+				out = append(out, levelFinding(pct,
+					reasons.ContainerMemoryHigh, since, what+" is "+
+						percentText(pct)+" of the limit; the container "+
+						"is close to being OOM-killed"))
+			}
+		}
 	}
 	if pct, ok := ratio(e, kube.AttrCPUUsageMilli, kube.AttrCPULimit); ok &&
 		pct >= limitWarning {
@@ -69,14 +77,30 @@ func (ContainerResources) Detect(
 			s := levelFinding(pct, reasons.ContainerCPUThrottled, since,
 				"CPU is throttled "+percentText(pct)+" of the time; "+
 					"requests slow down")
+			// Throttling slows requests down; it never fails them, so
+			// even heavy throttling is only a warning.
 			s.Severity = detection.Warning
-			if pct >= throttleCritical {
-				s.Severity = detection.Critical
-			}
 			out = append(out, s)
 		}
 	}
 	return out
+}
+
+// memoryReading picks the memory figure to compare with the limit: the
+// resident set (anonymous memory) when the kubelet reports it, because
+// file cache is reclaimed before the kernel kills anything; otherwise the
+// working set. It returns the attribute and how the text names it, or ""
+// when the container has no figure or no limit.
+func memoryReading(e inventory.Entity) (attr, what string) {
+	attr, what = kube.AttrMemoryRSS, "Resident memory (RSS)"
+	if _, ok := ratio(e, attr, kube.AttrMemoryLimit); ok {
+		return attr, what
+	}
+	attr, what = kube.AttrMemoryWorking, "Working set memory"
+	if _, ok := ratio(e, attr, kube.AttrMemoryLimit); ok {
+		return attr, what
+	}
+	return "", ""
 }
 
 // PodStorage detects pods close to their ephemeral-storage limit, which
@@ -171,13 +195,17 @@ func (NodeHealth) Detect(
 		if !ok || rate < errorRateWarning {
 			continue
 		}
+		since := ctx.Onset("errors/"+r.attr, valueSince(e, r.attr))
+		if !sustained(ctx, "errors/"+r.attr, since, errorRateSustained) {
+			continue
+		}
 		severity := detection.Warning
 		if rate >= errorRateCritical {
 			severity = detection.Critical
 		}
 		out = append(out, detection.Finding{
 			Reason: r.reason, Severity: severity,
-			Since: valueSince(e, r.attr),
+			Since: since,
 			Summary: fmt.Sprintf("Node reports %.1f %s per second", rate,
 				r.what),
 		})
@@ -214,7 +242,13 @@ func overcommit(
 		}
 	}
 	ratioCPU, ratioMem := cpu/cpuAlloc, mem/memAlloc
-	worst := max(ratioCPU, ratioMem)
+	// Memory between overcommitWarning and overcommitCritical belongs to
+	// NodeCommitment (NodeMemoryOvercommitted); counting it here too
+	// would announce one condition twice.
+	worst := ratioCPU
+	if ratioMem >= overcommitCritical {
+		worst = max(worst, ratioMem)
+	}
 	if worst < overcommitWarning {
 		return detection.Finding{}, false
 	}

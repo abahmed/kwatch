@@ -23,7 +23,7 @@ func TestJSONLoggerWritesOneObjectPerLine(t *testing.T) {
 }
 
 func TestApplyLogFormatKeepsTextByDefault(t *testing.T) {
-	// Only "json" replaces klog's logger; text and empty leave it alone.
+	// Text and empty keep klog's own format; text also resets a JSON logger.
 	applyLogFormat("text")
 	applyLogFormat("")
 }

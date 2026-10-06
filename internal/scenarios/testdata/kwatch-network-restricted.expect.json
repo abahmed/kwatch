@@ -1,0 +1,8 @@
+{
+  "name": "kwatch-network-restricted",
+  "description": "All five probed dependencies fail in every probe round.",
+  "root": "kwatch//kwatch",
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "45m0s"
+}

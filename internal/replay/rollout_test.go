@@ -136,7 +136,7 @@ func summarise(result replay.Result) string {
 	for i, d := range result.Decisions {
 		m := result.Messages[i]
 		b.WriteString(strings.Join([]string{
-			d.Incident.ID, d.Incident.Root.String(), d.Reason,
+			d.Incident.ID, d.Incident.Root.String(), string(d.Reason),
 			d.Incident.Opened.String(), d.Incident.Announced.String(),
 			m.Key, m.Title, strings.Join(m.Lines, "|"),
 			strings.Join(m.Timeline, "|"),

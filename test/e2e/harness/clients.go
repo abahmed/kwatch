@@ -54,6 +54,12 @@ func NewEnvironment(config Config) (*Environment, error) {
 	return environment, nil
 }
 
+// Close releases what the environment holds open: the receiver
+// port-forward.
+func (e *Environment) Close() error {
+	return e.Receiver.Close()
+}
+
 func loadRESTConfig(config Config) (*rest.Config, error) {
 	rules := clientcmd.NewDefaultClientConfigLoadingRules()
 	if config.Kubeconfig != "" {

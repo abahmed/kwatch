@@ -1,0 +1,11 @@
+{
+  "name": "rollup-chronic-worsens",
+  "description": "Two crash loops are announced in one roll-up; one then grows from one failing pod to six.",
+  "root": "deployment/shop/worker",
+  "otherRoots": [
+    "deployment/shop/api"
+  ],
+  "tier": "notify",
+  "maxMessages": 6,
+  "tail": "10m0s"
+}

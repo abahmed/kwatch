@@ -56,11 +56,19 @@ func leadSentences(f caseFacts) []sentence {
 
 func leadText(f caseFacts) string {
 	p := f.p
+	if own := releaseRegression(f); own != nil {
+		return releaseLead(f, *own)
+	}
+	if text, ok := firstRolloutLead(f); ok {
+		return text
+	}
 	switch {
 	case p.Cause != nil && p.Cause.Root.Kind == explain.KindFailureSignature:
 		return signatureLead(f)
 	case leadIsGroup(f):
 		return groupLead(f)
+	case selfCause(p.Cause):
+		return selfLead(f)
 	case ownCause(p.Cause):
 		return ownCauseLead(f)
 	case blamedChange(f) != nil:
@@ -104,7 +112,7 @@ func failingNodes(f caseFacts) (int, string) {
 	count := 0
 	var worst detection.Finding
 	found := false
-	for _, m := range f.members {
+	for _, m := range failing(f.members) {
 		if m.Entity.Kind != kube.KindNode {
 			continue
 		}
@@ -129,7 +137,7 @@ func blamedChange(f caseFacts) *inventory.Change {
 		return nil
 	}
 	change := cause.Change
-	if change.Entity == f.p.Root && !isWorkload(f.p.Root.Kind) &&
+	if change.Entity == f.p.Root && !incident.IsWorkload(f.p.Root.Kind) &&
 		rootFinding(f.p, f.members) != nil {
 		return nil
 	}
@@ -182,7 +190,7 @@ func changePhrase(change inventory.Change, workload inventory.EntityID,
 		return at + " " + changeNoun(change) + " " +
 			nameFrom(workload, change.Entity)
 	}
-	if !isWorkload(workload.Kind) {
+	if !incident.IsWorkload(workload.Kind) {
 		if len(change.Fields) > 0 {
 			return at + " change to its " +
 				fieldNoun(change.Fields[0].Path)
@@ -228,9 +236,23 @@ func ownCauseLead(f caseFacts) string {
 		causeWordsFor(f.p.Cause)
 }
 
+// selfCause reports a cause that blames nothing but the subject itself.
+func selfCause(cause *rootcause.CauseRecord) bool {
+	return cause != nil && cause.Rule == "self"
+}
+
+// selfLead is only the subject's state. "It is failing because it is
+// failing on its own" says nothing, so the lead stops before "because".
+func selfLead(f caseFacts) string {
+	return symptomState(f, symptomSubject(f))
+}
+
 // causedLead blames another entity: "api in shop is crash looping
 // because secret db-creds does not exist".
 func causedLead(f caseFacts) string {
+	if deniedCause(f.p.Cause) {
+		return deniedLead(f)
+	}
 	subject := symptomSubject(f)
 	return symptomState(f, subject) + causeLinks[certaintyOf(f.p.Cause)] +
 		causePhrase(f.p.Cause, subject)
@@ -274,6 +296,9 @@ func subjectWithState(f caseFacts, subject inventory.EntityID) string {
 	switch {
 	case f.p.State == incident.Flapping:
 		return name + " keeps failing and recovering"
+	case onlyAdvisory(f.members):
+		// Only configuration risks remain: nothing is failing.
+		return name + " is no longer failing"
 	case !f.ok:
 		return name + " " + stateWords(f.p)
 	}
@@ -316,7 +341,9 @@ func containerPhrase(id inventory.EntityID, summary string) string {
 	state := predicate(id, summary)
 	if strings.HasPrefix(state, "has ") {
 		// "has an init container that keeps crashing"
-		_, state, _ = strings.Cut(state, " that ")
+		if _, rest, ok := strings.Cut(state, " that "); ok {
+			state = rest
+		}
 	}
 	return "its " + role + " " + name + " " + state
 }

@@ -79,17 +79,13 @@ func TestServiceBackendsQuiet(t *testing.T) {
 	assert.Equal(t, []inventory.Kind{kube.KindService}, Service{}.Kinds())
 }
 
-func TestServicePortMismatch(t *testing.T) {
+// The EndpointSlice controller copies a numeric targetPort as it is, so
+// the slice always "publishes" it; comparing the two never finds a real
+// mismatch. A wrong port is found by the active probe, not here.
+func TestServiceDoesNotCompareTargetPorts(t *testing.T) {
 	m, id := serviceWithSlice(2, 2, "8080", "80,http")
-	early := evaluate(Service{}, m, t0.Add(30*time.Second), id, nil)
-	assert.Empty(t, early.Findings)
-	assert.Equal(t, 30*time.Second, early.RecheckAfter)
-
-	got := evaluate(Service{}, m, t0.Add(time.Minute), id, nil).Findings
-	require.Len(t, got, 1)
-	assert.Equal(t, reasons.ServicePortMismatch, got[0].Reason)
-	assert.Equal(t, detection.Warning, got[0].Severity)
-	assert.Contains(t, got[0].Summary, "80")
+	assert.Empty(t, evaluate(Service{}, m, t0.Add(time.Hour), id,
+		nil).Findings)
 }
 
 func TestServicePortMatchQuiet(t *testing.T) {
@@ -104,8 +100,11 @@ func TestIngressMetadataAndSyncGate(t *testing.T) {
 	put(m, ing, t0, nil)
 	link(m, ing, inventory.RoutesTo, newID(kube.KindService, "default", "x"))
 	unsynced := func(k inventory.Kind) bool { return k != kube.KindService }
-	assert.Empty(t, evaluate(Ingress{}, m, t0, ing, unsynced).Findings)
-	assert.Len(t, evaluate(Ingress{}, m, t0, ing, nil).Findings, 1)
+	now := t0.Add(DefaultBackendGrace)
+	assert.Empty(t, evaluate(Ingress{}, m, now, ing, unsynced).Findings)
+	assert.Empty(t, evaluate(Ingress{}, m, t0.Add(time.Second), ing,
+		nil).Findings, "the Service may be applied just after the Ingress")
+	assert.Len(t, evaluate(Ingress{}, m, now, ing, nil).Findings, 1)
 	assert.Equal(t, "ingress", Ingress{}.Name())
 	assert.Equal(t, []inventory.Kind{kube.KindIngress}, Ingress{}.Kinds())
 	assert.Equal(t, "egress-policy", EgressPolicy{}.Name())

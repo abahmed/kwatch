@@ -12,6 +12,9 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/notification"
 	"github.com/abahmed/kwatch/internal/notification/compose"
+	"github.com/abahmed/kwatch/internal/pipeline/announce"
+	"github.com/abahmed/kwatch/internal/pipeline/coverage"
+	"github.com/abahmed/kwatch/internal/pipeline/investigate"
 	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
@@ -47,7 +50,7 @@ type Dependencies struct {
 	// Investigator plans the investigation of each incident when it
 	// opens. The reads run on a bounded worker pool under a per-kind
 	// budget, never on the decision loop. Optional.
-	Investigator Investigator
+	Investigator investigate.Investigator
 	// InScope reports whether people want to hear about an incident.
 	// Decisions for incidents out of scope are dropped before delivery; the
 	// incident is still tracked so reasoning keeps its evidence. Optional.
@@ -69,8 +72,8 @@ type IncidentStore interface {
 	LoadFingerprints() (map[string]string, error)
 	SaveFingerprints(map[string]any) error
 	// LoadStartup reports false when no marker was ever saved.
-	LoadStartup() (StartupState, bool, error)
-	SaveStartup(StartupState) error
+	LoadStartup() (announce.StartupState, bool, error)
+	SaveStartup(announce.StartupState) error
 }
 
 // restoreGrace is how long restored incidents wait for their findings to be
@@ -104,6 +107,9 @@ type Engine struct {
 	// findings are the active findings by entity, as the tracker
 	// holds them. Every solve reads them.
 	findings map[inventory.EntityID][]detection.Finding
+	// coverage is the state of the check for failing workloads that no
+	// incident covers.
+	coverage coverage.Watch
 	// announcer turns decisions into messages for the sink.
 	announcer *announcer
 	// storage writes incidents and history to the store.
@@ -128,7 +134,7 @@ func NewEngine(deps Dependencies) (*Engine, error) {
 	}
 	e.storage = newPersistence(deps, &e.stats)
 	e.announcer = newAnnouncer(deps, e.storage, &e.stats)
-	e.announcer.advisories = e.activeAdvisories
+	e.announcer.collect.SetAdvisories(e.activeAdvisories)
 	return e, nil
 }
 
@@ -161,6 +167,7 @@ func (e *Engine) Run(ctx context.Context) error {
 	gate := &saveGate{lastSave: e.deps.Clock.Now()}
 	for {
 		timer := e.timer(checks, nextTick)
+		var released bool
 		select {
 		case <-ctx.Done():
 			return nil
@@ -171,12 +178,14 @@ func (e *Engine) Run(ctx context.Context) error {
 		case <-e.synced:
 			e.reconcileDowntime()
 		case result := <-e.announcer.outputs():
-			e.announcer.attachOutput(ctx, result)
+			released = e.announcer.attachOutput(ctx, result)
 		}
 		now := e.deps.Clock.Now()
 		var decided bool
 		nextTick, decided = e.step(ctx, now, checks)
-		e.persist(gate, now, decided)
+		// A held announcement handed to delivery changes what the
+		// record says (no longer held), so it is saved like a decision.
+		e.persist(gate, now, decided || released)
 		e.progress()
 	}
 }
@@ -190,7 +199,7 @@ func (e *Engine) reconcileDowntime() {
 		return
 	}
 	e.storage.reconciled = true
-	e.announcer.startup.openWindow(e.deps.Clock.Now())
+	e.announcer.collect.Startup.OpenWindow(e.deps.Clock.Now())
 	// Split before draining: a kind synced now has submitted its list.
 	compare, carried := splitSaved(e.storage.saved, e.deps.Synced)
 	e.storage.saved, e.storage.carried = nil, carried
@@ -228,6 +237,7 @@ func (e *Engine) step(
 	dirty = append(dirty, e.applyDowntime(late)...)
 	dirty = append(dirty, checks.due(now)...)
 	e.evaluate(ctx, now, dirty, checks)
+	e.checkCoverage(now)
 	next, decided := e.tick(ctx, now)
 	e.observeLag()
 	return next, decided
@@ -244,7 +254,8 @@ func (e *Engine) timer(
 	now := e.deps.Clock.Now()
 	wait := heartbeat
 	deadlines := []time.Time{checks.next(), nextTick, e.announcer.nextHeld(),
-		e.announcer.nextDigest()}
+		e.announcer.collect.NextDigest(), e.announcer.collect.NextOutage(),
+		e.announcer.collect.NextWarm(), e.announcer.collect.NextStartup()}
 	for _, at := range deadlines {
 		if !at.IsZero() {
 			wait = min(wait, max(at.Sub(now), 0))

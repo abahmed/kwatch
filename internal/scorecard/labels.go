@@ -50,10 +50,21 @@ type Level struct {
 // AccuracyPercent is the share of the level's cases that were right.
 func (l Level) AccuracyPercent() float64 { return percent(l.Correct, l.Cases) }
 
-// Calibrated reports whether the level is right at least as often as its
-// stated confidence promises. A level without cases makes no promise.
+// Calibrated reports whether the level is right at least as often as it
+// promises. A level without cases makes no promise. The high level
+// promises CalibrationHighAccuracy, the bar CalibratedHigh holds the
+// boundary to, not its own floor: a cause worded plainly at 70% would
+// otherwise read as calibrated while the method itself demands 80%.
 func (l Level) Calibrated() bool {
-	return l.Cases == 0 || l.AccuracyPercent() >= l.Floor*100
+	return l.Cases == 0 || l.AccuracyPercent() >= l.promise()
+}
+
+// promise is the accuracy, in percent, the level must show.
+func (l Level) promise() float64 {
+	if l.Name == LevelHigh {
+		return CalibrationHighAccuracy
+	}
+	return l.Floor * 100
 }
 
 // Accuracy is the root-cause quality of a set of labelled cases.
@@ -96,17 +107,23 @@ func (a Accuracy) Calibrated() bool {
 	return true
 }
 
+// confidenceEpsilon keeps a score that is 0.7 up to rounding (0.6999999)
+// in the 0.70 level, as the calibration buckets do.
+const confidenceEpsilon = 1e-9
+
 // ConfidenceLevel names the level a confidence is stated at.
 func ConfidenceLevel(confidence float64) string {
+	if confidence <= 0 {
+		return LevelNone
+	}
+	confidence += confidenceEpsilon
 	switch {
 	case confidence >= HighConfidence:
 		return LevelHigh
 	case confidence >= LikelyConfidence:
 		return LevelLikely
-	case confidence > 0:
-		return LevelPossible
 	}
-	return LevelNone
+	return LevelPossible
 }
 
 // ScoreCases measures root-cause accuracy and calibration.

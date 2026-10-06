@@ -1,0 +1,10 @@
+{
+  "name": "metrics-api-hpas",
+  "description": "metrics-server crash-loops while its APIService still reads Available; four HPAs cannot read CPU metrics.",
+  "root": "deployment/kube-system/metrics-server",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "horizontalpodautoscaler/shop/web"
+  ]
+}

@@ -1,6 +1,7 @@
 package dingtalk
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -8,11 +9,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"strings"
 	"time"
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -87,10 +88,7 @@ func (d *DingTalk) SendIncident(
 	if len(title) == 0 {
 		title = m.ShortText()
 	}
-	text := m.NoteText()
-	if len(m.Output) > 0 {
-		text += "\n\n```\n" + strings.Join(m.Output, "\n") + "\n```"
-	}
+	text := safetext.NoteWithOutput(m.NoteText(), m.Output, "\n\n", 0)
 
 	payload := struct {
 		MsgType  string `json:"msgtype"`
@@ -147,6 +145,10 @@ func (d *DingTalk) sendAPI(ctx context.Context, msg string) error {
 	// DingTalk answers 200 to a rejected message and reports the failure in
 	// the body instead. Some of those codes are transient (130101 is its
 	// frequency limit), so it is reported as rate limited.
+	// An empty body is a plain acceptance, as with the other providers.
+	if len(bytes.TrimSpace(data)) == 0 {
+		return nil
+	}
 	var dr dingResponse
 	if err := json.Unmarshal(data, &dr); err != nil {
 		return err

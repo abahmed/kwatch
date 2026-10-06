@@ -1,0 +1,11 @@
+{
+  "name": "service-backend-flip",
+  "description": "The pods behind a Service crash and recover twice, the Service losing its endpoints each time; the story is one incident with no revised cause.",
+  "root": "deployment/shop/cart",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "service/shop/cart",
+    "node//n1"
+  ]
+}

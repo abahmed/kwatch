@@ -1,5 +1,5 @@
 # kwatch config catalog v1
-resyncSeconds|integer|300|Performance|Periodic safety resync interval in seconds; zero keeps event-driven mode.|active|
+resyncSeconds|integer|300|Performance|Periodic safety resync interval in seconds; zero keeps event-driven mode, otherwise at least 30.|active|
 namespaces|list|all|Scope|Comma-separated namespaces to watch; leave empty to watch every namespace.|active|
 namespaceSelector|string|empty|Scope|Kubernetes label selector used to choose namespaces.|active|
 reasons|list|all|Scope|Comma-separated event reasons to allow or exclude with a leading !.|active|

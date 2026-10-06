@@ -24,6 +24,17 @@ var payloadPolicies = map[string]payloadPolicy{
 	"messagebird": {maxBytes: 1600, mode: payloadBounded},
 	"wecom":       {maxBytes: 4096, mode: payloadBounded},
 	"feishu":      {maxBytes: 30000, mode: payloadBounded},
+	// Providers whose service rejects or silently cuts a longer message.
+	// The limits are the services' published ones, kept a little below.
+	"ntfy":       {maxBytes: 4096, mode: payloadBounded},
+	"webex":      {maxBytes: 7000, mode: payloadBounded},
+	"zulip":      {maxBytes: 10000, mode: payloadBounded},
+	"googlechat": {maxBytes: 4000, mode: payloadBounded},
+	"matrix":     {maxBytes: 32000, mode: payloadBounded},
+	"mattermost": {maxBytes: 16000, mode: payloadBounded},
+	"line":       {maxBytes: 4500, mode: payloadBounded},
+	"dingtalk":   {maxBytes: 19000, mode: payloadBounded},
+	"threema":    {maxBytes: 3400, mode: payloadBounded},
 }
 
 func providerPayloadPolicy(providerName string) payloadPolicy {

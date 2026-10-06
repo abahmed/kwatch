@@ -20,8 +20,8 @@ func Warnings(cfg *Config) []string {
 
 // LintWarnings is Warnings plus the findings only `kwatch lint` reports.
 // A running kwatch with no provider is a legitimate configuration (it still
-// exposes /incidents and metrics), but it is almost never what someone
-// linting a file intended, so lint says so without failing.
+// serves its health endpoints and metrics), but it is almost never what
+// someone linting a file intended, so lint says so without failing.
 func LintWarnings(cfg *Config) []string {
 	warnings := Warnings(cfg)
 	if cfg != nil && len(cfg.Alert) == 0 {

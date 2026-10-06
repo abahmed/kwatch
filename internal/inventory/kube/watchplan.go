@@ -31,9 +31,12 @@ const (
 // Dynamic watch budget. Typed kinds (the registrations in source.go) are
 // always watched and never count against it.
 //
-// Resource types discovered beyond the typed kinds are ordered by tier,
-// then by group and resource name, and the first DefaultResourceBudget
-// are watched; the rest are skipped and counted (DynamicStatus.Skipped):
+// Resource types discovered beyond the typed kinds are ranked, and the
+// first DefaultResourceBudget are watched; the rest are skipped and
+// counted (DynamicStatus.Skipped). The order is: the discovery anchors,
+// then types already running, then types whose objects had Warning notes
+// recently, then the rest; inside each of those, by tier, then group, then
+// resource name. The tiers are:
 //
 //  0. discovery anchors: CustomResourceDefinitions and APIServices,
 //     whose changes trigger re-discovery;
@@ -42,9 +45,9 @@ const (
 //  3. well-known operator groups (operatorGroups);
 //  4. every other custom or aggregated API.
 //
-// Types already running are kept before new ones of any tier except
-// the anchors, so a newly installed CRD never pushes out a type that is
-// being watched. A type the budget leaves out is not verifiable, and a
+// Because running types rank before new ones of any tier except the
+// anchors, a newly installed CRD never pushes out a type that is being
+// watched. A type the budget leaves out is not verifiable, and a
 // running type it drops stops quietly: its entities are not reported
 // gone, because the objects still exist.
 //
@@ -54,8 +57,17 @@ const (
 // stubs (name, namespace, UID and resource version; see capTransform), so
 // informer memory stays bounded, and produce no observations. The type is
 // reported with reason object_cap_reached and a warning is logged once.
+//
+// Why 300 types: a mid-size cluster with a service mesh, an ingress
+// controller, cert-manager, a GitOps tool, an autoscaler and a secrets
+// operator discovers 200-250 types beyond the typed kinds, and at 200
+// common ones (TraefikService, SecurityGroupPolicy) were dropped. A
+// type's own cost is small: one informer, one watch connection and
+// its cache, about 50 KB when it holds few objects, so 100 more types
+// add roughly 5 MB. What really costs memory is the object count, and
+// that stays bounded by the two object caps below, not by this number.
 const (
-	DefaultResourceBudget    = 200
+	DefaultResourceBudget    = 300
 	DefaultMaxObjectsPerKind = 5000
 	DefaultObjectBudget      = 50000
 )

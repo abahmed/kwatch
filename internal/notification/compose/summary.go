@@ -1,12 +1,10 @@
 package compose
 
 import (
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
-	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/notification"
 
 	"github.com/abahmed/kwatch/internal/incident"
@@ -36,9 +34,7 @@ func (w Writer) StartupSummary(
 ) notification.Message {
 	// The caller's order is its own; the summary sorts a copy.
 	decisions = append([]incident.Decision(nil), decisions...)
-	sort.SliceStable(decisions, func(i, j int) bool {
-		return decisions[i].Incident.Tier > decisions[j].Incident.Tier
-	})
+	sortByImpact(decisions)
 	mark, status := notification.MarkerLow, notification.StatusLow
 	if len(decisions) > 0 {
 		mark = marker(decisions[0].Incident)
@@ -54,6 +50,7 @@ func (w Writer) StartupSummary(
 		text: eachOwnMessage})
 	msg := notification.Message{
 		Key: StartupKey(now), Revision: 1, Status: status, Opens: true,
+		Route: summaryRoute(decisions, nil),
 	}
 	fill(&msg, mark, sentences)
 	return msg
@@ -76,9 +73,7 @@ func (w Writer) Rollup(
 	decisions []incident.Decision, now time.Time,
 ) notification.Message {
 	decisions = append([]incident.Decision(nil), decisions...)
-	sort.SliceStable(decisions, func(i, j int) bool {
-		return decisions[i].Incident.Tier > decisions[j].Incident.Tier
-	})
+	sortByImpact(decisions)
 	mark, status := notification.MarkerLow, notification.StatusLow
 	if len(decisions) > 0 {
 		mark = marker(decisions[0].Incident)
@@ -92,6 +87,7 @@ func (w Writer) Rollup(
 		text: eachOwnMessage})
 	msg := notification.Message{
 		Key: RollupKey(now), Revision: 1, Status: status, Opens: true,
+		Route: summaryRoute(decisions, nil),
 	}
 	fill(&msg, mark, sentences)
 	return msg
@@ -125,9 +121,7 @@ func (w Writer) Digest(
 	now time.Time,
 ) notification.Message {
 	opened = append([]incident.Decision(nil), opened...)
-	sort.SliceStable(opened, func(i, j int) bool {
-		return opened[i].Incident.Tier > opened[j].Incident.Tier
-	})
+	sortByImpact(opened)
 	var counts []string
 	if len(opened) > 0 {
 		counts = append(counts, plural(len(opened), "low-priority problem"))
@@ -136,8 +130,10 @@ func (w Writer) Digest(
 		counts = append(counts, plural(len(resolved), "earlier one")+
 			" that resolved")
 	}
+	risks = withoutSystemRisks(risks)
 	if len(risks) > 0 {
-		counts = append(counts, plural(len(risks), "configuration risk"))
+		counts = append(counts, "configuration risks on "+
+			plural(riskWorkloads(risks), "workload"))
 	}
 	sentences := []sentence{{part: partLead, text: "kwatch" +
 		w.clusterTag() + " has " + joinWords(counts) + " to report."}}
@@ -151,6 +147,8 @@ func (w Writer) Digest(
 	msg := notification.Message{
 		Key: DigestKey(now), Revision: 1, Status: notification.StatusLow,
 		Opens: true,
+		Route: summaryRoute(append(append([]incident.Decision(nil),
+			opened...), resolved...), risks),
 	}
 	fill(&msg, notification.MarkerLow, sentences)
 	return msg
@@ -161,6 +159,8 @@ func digestTitles(
 	decisions []incident.Decision, now time.Time, prefix string,
 ) []sentence {
 	var out []sentence
+	decisions = append([]incident.Decision(nil), decisions...)
+	sortByImpact(decisions)
 	for i, d := range decisions {
 		if i == maxSummaryNamed {
 			out = append(out, sentence{part: partProof,
@@ -173,44 +173,6 @@ func digestTitles(
 			text: prefix + Writer{}.Write(d, now).Title})
 	}
 	return out
-}
-
-// riskTitles lists up to maxSummaryNamed configuration risks, each as
-// its workload and what is risky about it: "orders in shop runs a
-// single replica, so any restart is downtime".
-func riskTitles(risks []detection.Finding) []sentence {
-	var out []sentence
-	for i, f := range risks {
-		if i == maxSummaryNamed {
-			out = append(out, sentence{part: partProof,
-				text: sentenceCase(numberWord(len(risks)-i) + " more " +
-					verb(len(risks)-i, "risk is", "risks are") +
-					" not described here")})
-			break
-		}
-		out = append(out, sentence{part: partProof, text: "Risk: " +
-			shortName(f.Entity) + " " + riskClause(f)})
-	}
-	return out
-}
-
-// riskClauses word each configuration risk as what the workload does.
-var riskClauses = map[string]string{
-	reasons.RiskNoReadinessProbe: "has no readiness probe",
-	reasons.RiskNoMemoryLimit:    "has containers without a memory limit",
-	reasons.RiskMutableImageTag:  "runs an image tag that can change",
-	reasons.RiskSingleReplica:    "runs a single replica",
-	reasons.RiskSingleNode:       "runs every replica on one node",
-	reasons.RiskPrivileged:       "runs a privileged container",
-}
-
-// riskClause is the clause for a risk finding; an unknown risk falls
-// back to its summary as a predicate.
-func riskClause(f detection.Finding) string {
-	if clause, ok := riskClauses[f.Reason]; ok {
-		return clause
-	}
-	return predicate(f.Entity, f.Summary)
 }
 
 // joinWords joins two or three phrases with commas and "and".

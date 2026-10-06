@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert/issues"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 )
 
 const githubAPIURL = "https://api.github.com"
@@ -138,6 +140,14 @@ func (g *Github) Close(ctx context.Context, id, body string) error {
 	return err
 }
 
+// Reopen implements issues.Reopener: an incident that fails again inside
+// its reopen window reopens the issue it closed.
+func (g *Github) Reopen(ctx context.Context, id string) error {
+	_, err := g.call(ctx, "PATCH",
+		g.url+"/"+id, map[string]string{"state": "open"})
+	return err
+}
+
 func (g *Github) call(
 	ctx context.Context, method, url string, payload interface{},
 ) ([]byte, error) {
@@ -145,13 +155,40 @@ func (g *Github) call(
 	if err != nil {
 		return nil, err
 	}
-	return g.sender.Send(ctx, transport.Request{
+	response, err := g.sender.Send(ctx, transport.Request{
 		Provider: g.Name(), Method: method, URL: url, Body: body,
 		ContentType: "application/json", Headers: map[string]string{
 			"Authorization": "Bearer " + g.token,
 			"Accept":        "application/vnd.github+json",
 		},
 	})
+	if err != nil && rateLimited(err, response) {
+		return response, &ratelimit.Error{
+			// Not wrapping err: it is marked permanent.
+			Provider: g.Name(), StatusCode: 403,
+			RetryAfter: waitHint(err, response),
+		}
+	}
+	return response, err
+}
+
+// rateLimited reports whether err is GitHub's primary or secondary rate
+// limit. GitHub answers those with 403, not 429, so the shared status
+// policy calls them permanent. The sender does not hand back response
+// headers, so the documented message text is the signal: "API rate limit
+// exceeded" (primary) and "secondary rate limit" (secondary).
+func rateLimited(err error, body []byte) bool {
+	if status, ok := transport.StatusOf(err); !ok ||
+		status != 403 {
+		return false
+	}
+	text := strings.ToLower(string(body))
+	return strings.Contains(text, "rate limit")
+}
+
+// HasThread implements delivery.ThreadLookup.
+func (g *Github) HasThread(key string) bool {
+	return g.issues.HasThread(key)
 }
 
 // SnapshotThreads implements delivery.ThreadStateProvider.

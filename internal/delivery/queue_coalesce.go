@@ -17,9 +17,11 @@ type offerResult struct {
 // A queued, unsent job of the same conversation is always replaced, so a
 // provider recovering from an outage sends each conversation's newest
 // state once instead of every revision in turn. A resolve is never
-// dropped: in a full queue with nothing to replace it takes the place of
-// the newest queued job that is not a resolve, which goes to the
-// overflow summary instead.
+// dropped for a routine job: in a full queue with nothing to replace it
+// takes the place of the newest routine job, which goes to the overflow
+// summary instead. It never takes the place of another resolve or of a
+// page announcement, whose alert would then never open; when only those
+// are queued the resolve is dropped and logged as lost.
 func offerQueuedJob(
 	queue chan deliverJob,
 	job deliverJob,
@@ -33,8 +35,46 @@ func offerQueuedJob(
 	}
 	queued := drainQueuedJobs(queue)
 	queued, result := coalesce(queued, job, cap(queue))
+	if result.accepted && job.urgent() {
+		queued = moveAheadOfRoutine(queued, job)
+	}
 	refillQueuedJobs(queue, queued)
 	return result
+}
+
+// urgent reports whether the job must not wait behind routine ones: a
+// resolve closes an alert someone may be looking at, and a page wakes
+// someone up. Every other job is paced at one every few seconds, so a
+// full queue of them would hold an urgent job for minutes.
+func (j deliverJob) urgent() bool {
+	return j.kind == jobIncident && j.incident != nil &&
+		(j.incident.Resolved() || j.incident.IsPage())
+}
+
+// moveAheadOfRoutine moves the job to the end of the urgent jobs at the
+// front of the queue, ahead of every routine one. Urgent jobs keep their
+// order among themselves, and a conversation's own messages never swap:
+// the arriving job either replaced the conversation's queued message or
+// is the only queued message of it.
+func moveAheadOfRoutine(queued []deliverJob, job deliverJob) []deliverJob {
+	at := -1
+	for i, q := range queued {
+		if q.outboxID == job.outboxID && q.target == job.target &&
+			q.key() == job.key() {
+			at = i
+		}
+	}
+	if at < 0 {
+		return queued
+	}
+	front := 0
+	for front < at && queued[front].urgent() {
+		front++
+	}
+	moved := queued[at]
+	copy(queued[front+1:at+1], queued[front:at])
+	queued[front] = moved
+	return queued
 }
 
 // coalesce applies the full-queue rules to the drained jobs and returns
@@ -54,7 +94,7 @@ func coalesce(
 	if !job.isResolve() {
 		return queued, offerResult{}
 	}
-	index := newestNonResolve(queued)
+	index := displacementVictim(queued)
 	if index < 0 {
 		return queued, offerResult{}
 	}
@@ -106,12 +146,29 @@ func replacementIndex(queued []deliverJob, arriving deliverJob) int {
 	return -1
 }
 
-// newestNonResolve finds the newest queued job that is not a resolve.
-func newestNonResolve(queued []deliverJob) int {
+// displacementVictim picks the queued job a full queue gives up for a
+// resolve: the newest routine job, else the newest other job that is
+// neither a resolve nor a page announcement. It is -1 when there is none.
+func displacementVictim(queued []deliverJob) int {
+	fallback := -1
 	for i := len(queued) - 1; i >= 0; i-- {
-		if !queued[i].isResolve() {
+		job := queued[i]
+		if job.isResolve() || job.announcesPage() {
+			continue
+		}
+		if !job.urgent() {
 			return i
 		}
+		if fallback < 0 {
+			fallback = i
+		}
 	}
-	return -1
+	return fallback
+}
+
+// announcesPage reports the first message of a page: if it is lost, the
+// alert never opens.
+func (j deliverJob) announcesPage() bool {
+	return j.kind == jobIncident && j.incident != nil &&
+		j.incident.IsPage() && j.incident.IsOpening()
 }

@@ -82,15 +82,24 @@ func readForwardedPort(stdout, stderr io.Reader) (int, error) {
 	done := make(chan struct{}, 2)
 	stop := make(chan struct{})
 	defer close(stop)
+	// read forwards lines until the port is found (stop is closed), then
+	// keeps draining and discarding: kubectl logs a line for every
+	// forwarded connection, and a full pipe would stall it.
 	read := func(reader io.Reader) {
 		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
 			select {
+			case <-stop:
+				continue
+			default:
+			}
+			select {
 			case lines <- scanner.Text():
 			case <-stop:
-				return
 			}
 		}
+		// A line longer than the scanner buffer stops it; drain the rest.
+		_, _ = io.Copy(io.Discard, reader)
 		select {
 		case done <- struct{}{}:
 		case <-stop:

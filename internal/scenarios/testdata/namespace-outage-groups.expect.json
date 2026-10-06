@@ -1,0 +1,21 @@
+{
+  "name": "namespace-outage-groups",
+  "description": "Eight of fifteen Deployments in one namespace crash-loop within seconds of each other, on separate nodes and with separate errors: one namespace message.",
+  "root": "deployment/shop/app0",
+  "otherRoots": [
+    "deployment/shop/app1",
+    "deployment/shop/app2",
+    "deployment/shop/app3",
+    "deployment/shop/app4",
+    "deployment/shop/app5",
+    "deployment/shop/app6",
+    "deployment/shop/app7"
+  ],
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "node//n0",
+    "node//n1",
+    "zone//zone-a"
+  ]
+}

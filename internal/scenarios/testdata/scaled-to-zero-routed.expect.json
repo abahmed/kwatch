@@ -1,0 +1,8 @@
+{
+  "name": "scaled-to-zero-routed",
+  "description": "A Deployment is scaled to zero replicas by kubectl-scale while an Ingress still routes to its Service.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "15m0s"
+}

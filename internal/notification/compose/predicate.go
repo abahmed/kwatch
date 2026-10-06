@@ -24,6 +24,9 @@ func predicate(id inventory.EntityID, summary string) string {
 			return lowerFirst(summary)
 		}
 	}
+	if strings.TrimSpace(summary) == "" {
+		return "is failing"
+	}
 	return "is failing: " + lowerFirst(summary)
 }
 
@@ -49,7 +52,8 @@ var extraSubjectWords = map[inventory.Kind][]string{
 // ("Reports phase Failed", "Has been pending").
 var subjectlessVerbs = []string{"reports ", "has ", "is ", "keeps ",
 	"cannot ", "can't ", "references ", "routes ", "calls ", "stopped ",
-	"was ", "allows ", "uses ", "needs ", "selects ", "does "}
+	"was ", "allows ", "uses ", "needs ", "selects ", "does ", "targets ",
+	"did ", "refused ", "could "}
 
 func hasPrefixFold(text, prefix string) bool {
 	return len(text) >= len(prefix) &&
@@ -74,6 +78,8 @@ var summaryRewrites = []summaryRewrite{
 	{regexp.MustCompile(
 		`^is killed for exceeding its memory limit and restarting$`),
 		"keeps running out of memory"},
+	{regexp.MustCompile(`^CPU is throttled (.+) of the time$`),
+		"is throttled on CPU $1 of the time"},
 	{regexp.MustCompile(`^TLS certificate (.+)$`),
 		"has a TLS certificate that $1"},
 	{regexp.MustCompile(`^backend (\S+) has no ready pods$`),
@@ -98,6 +104,19 @@ var summaryRewrites = []summaryRewrite{
 		"has crossed its eviction threshold"},
 	{regexp.MustCompile(`^selects no pods since its \S+ changed$`),
 		"selects no pods"},
+	{regexp.MustCompile(
+		`^(?:HPA )?\S+ targets (.+), which does not exist\.?$`),
+		"targets $1, which does not exist"},
+	{regexp.MustCompile(`^kwatch could not reach the kubelet on node \S+ ` +
+		`(\d+) times in the last (\d+) hours$`),
+		"has a kubelet that kwatch could not reach $1 times in the " +
+			"last $2 hours"},
+	{regexp.MustCompile(`^last run failed (.+)$`),
+		"has a last run that failed $1"},
+	{regexp.MustCompile(`^name does not resolve$`),
+		"has a name that does not resolve"},
+	{regexp.MustCompile(`^DNS lookup failed$`),
+		"has a DNS lookup that failed"},
 }
 
 // conditionPattern matches "reports Ready=False (InvalidBrokerConfig)".
@@ -167,7 +186,9 @@ func pluralPredicate(text string) string {
 	if plural, ok := pluralVerbs[first]; ok {
 		first = plural
 	}
-	rest = strings.ReplaceAll(" "+rest, " its ", " their ")
+	rest = outsideQuotes(" "+rest, func(part string) string {
+		return strings.ReplaceAll(part, " its ", " their ")
+	})
 	return first + rest
 }
 
@@ -175,7 +196,7 @@ var pluralVerbs = map[string]string{
 	"is": "are", "has": "have", "keeps": "keep", "reports": "report",
 	"was": "were", "references": "reference", "uses": "use",
 	"needs": "need", "allows": "allow", "calls": "call", "routes": "route",
-	"selects": "select",
+	"selects": "select", "runs": "run",
 }
 
 // nowState puts "now" into a predicate: "is now not available", "now

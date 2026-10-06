@@ -12,6 +12,7 @@ import (
 	"github.com/abahmed/kwatch/internal/delivery/signing"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 )
 
 const (
@@ -147,9 +148,26 @@ func (s *Ses) send(ctx context.Context, subject, msg string) error {
 		return err
 	}
 
-	_, err = s.sender.Send(ctx, transport.Request{
+	answer, err := s.sender.Send(ctx, transport.Request{
 		Provider: s.Name(), URL: s.url, Body: body,
 		ContentType: contentType, Headers: headers,
 	})
+	if err != nil && throttled(err, answer) {
+		return &ratelimit.Error{
+			// Not wrapping err: it is marked permanent.
+			Provider: s.Name(), StatusCode: 400,
+		}
+	}
 	return err
+}
+
+// throttled reports whether SES refused the send for sending too fast.
+// SES answers that with HTTP 400 and the error code Throttling, which the
+// shared status policy would call permanent.
+func throttled(err error, answer []byte) bool {
+	if status, ok := transport.StatusOf(err); !ok ||
+		status != 400 {
+		return false
+	}
+	return strings.Contains(string(answer), "<Code>Throttling")
 }

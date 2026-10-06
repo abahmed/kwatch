@@ -32,8 +32,9 @@ func detectHPA(
 			"condition message", now)
 	}
 	entity, _ := model.Entity(id)
-	// Conditions are reported once they outlast the grace period.
-	later := now.Add(DefaultConditionGrace)
+	// Conditions are reported once they outlast the grace period; a
+	// metrics failure has the longer one.
+	later := now.Add(HPAMetricsGrace)
 	return HPA{}.Detect(testDetectorContext(model, later), entity)
 }
 

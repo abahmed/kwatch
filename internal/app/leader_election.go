@@ -55,6 +55,9 @@ type leaderCallbacks struct {
 	epoch          atomic.Int64
 	takeovers      atomic.Int64
 	observedLeader atomic.Bool
+	// renewalNanos is the newest Lease write, kept so the "leader" status
+	// starts with the acquire write that came before the callback.
+	renewalNanos atomic.Int64
 }
 
 func (c *leaderCallbacks) callbacks() leaderelection.LeaderCallbacks {
@@ -87,6 +90,7 @@ func (c *leaderCallbacks) onStartedLeading(leaderCtx context.Context) {
 		Epoch:         currentEpoch,
 		AcquiredAt:    c.deps.clients.Clock.Now(),
 		TakeoverCount: takeoverCount,
+		LastRenewal:   c.lastRenewal(),
 	})
 	if currentEpoch > 1 || c.observedLeader.Load() {
 		metrics.DefaultRegistry().LeaderTakeovers.Add(1)
@@ -145,8 +149,15 @@ func (c *leaderCallbacks) onStoppedLeading() {
 	})
 }
 
+// onNewLeader reports who holds the Lease. client-go runs it in its own
+// goroutine, so it can arrive after this pod became leader or stopped. It
+// holds c.mu while it checks and writes, so it can never overwrite the
+// "leader" or "stopped" status that markStarted and onStoppedLeading
+// protect.
 func (c *leaderCallbacks) onNewLeader(newLeader string) {
-	if c.started.Load() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.started.Load() || c.stopped {
 		return
 	}
 	if newLeader != "" && newLeader != c.identity {
@@ -157,7 +168,15 @@ func (c *leaderCallbacks) onNewLeader(newLeader string) {
 	})
 }
 
+func (c *leaderCallbacks) lastRenewal() time.Time {
+	if nanos := c.renewalNanos.Load(); nanos != 0 {
+		return time.Unix(0, nanos)
+	}
+	return time.Time{}
+}
+
 func (c *leaderCallbacks) recordRenewal(renewal time.Time) {
+	c.renewalNanos.Store(renewal.UnixNano())
 	c.deps.healthServer.SetLeadershipRenewal(renewal)
 }
 
@@ -187,28 +206,28 @@ func validateElectionInputs(
 	activeRunner activeComponentRunner,
 ) error {
 	if deps == nil || deps.healthServer == nil {
-		return fmt.Errorf("leader election requires health server")
+		return fmt.Errorf("state lock requires health server")
 	}
 	if deps.clients.Kubernetes == nil {
-		return fmt.Errorf("leader election requires Kubernetes client")
+		return fmt.Errorf("state lock requires Kubernetes client")
 	}
 	if deps.clients.Clock == nil {
-		return fmt.Errorf("leader election requires application clock")
+		return fmt.Errorf("state lock requires application clock")
 	}
 	if factory == nil || activeRunner == nil {
-		return fmt.Errorf("leader election requires runtime dependencies")
+		return fmt.Errorf("state lock requires runtime dependencies")
 	}
 	if os.Getenv("POD_NAME") != "" &&
 		os.Getenv("KWATCH_LEADER_ELECTION_NAME") == "" &&
 		os.Getenv("KWATCH_INSTALLATION_ID") == "" {
 		return fmt.Errorf(
-			"leader election requires an installation-specific Lease name",
+			"state lock requires an installation-specific Lease name",
 		)
 	}
 	problems := validation.IsDNS1123Subdomain(electionLeaseName())
 	if len(problems) > 0 {
 		return fmt.Errorf(
-			"invalid leader election Lease name %q: %s",
+			"invalid state lock Lease name %q: %s",
 			electionLeaseName(), problems[0],
 		)
 	}

@@ -2,7 +2,6 @@ package detectors
 
 import (
 	"strings"
-	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
@@ -13,7 +12,7 @@ import (
 
 // DefaultCertificateWarning is how far ahead an expiring TLS certificate
 // is reported.
-const DefaultCertificateWarning = 14 * 24 * time.Hour
+const DefaultCertificateWarning = 2 * format.Week
 
 // Certificate detects expired and soon-expiring TLS Secrets.
 type Certificate struct{}
@@ -38,8 +37,13 @@ func (Certificate) Detect(
 	}
 	remaining := notAfter.Sub(ctx.Now)
 	if remaining <= 0 {
+		// An expired certificate nobody uses breaks nothing yet.
+		severity := detection.Warning
+		if certificateInUse(ctx, e) {
+			severity = detection.Critical
+		}
 		return []detection.Finding{{
-			Reason: reasons.TLSCertExpired, Severity: detection.Critical,
+			Reason: reasons.TLSCertExpired, Severity: severity,
 			Since: notAfter,
 			Summary: "TLS certificate expired " +
 				format.Duration(-remaining) + " ago",
@@ -55,6 +59,17 @@ func (Certificate) Detect(
 		Since:   notAfter.Add(-DefaultCertificateWarning),
 		Summary: "TLS certificate expires in " + format.Duration(remaining),
 	}}
+}
+
+// certificateInUse reports whether something serves or mounts the
+// certificate: a probed endpoint serves it by definition, and a Secret
+// counts once an Ingress, pod or other object references it.
+func certificateInUse(ctx detection.Context, e inventory.Entity) bool {
+	if e.ID.Kind != kube.KindSecret {
+		return true
+	}
+	return ctx.Model != nil && len(ctx.Model.Related(e.ID,
+		inventory.References, inventory.Incoming)) > 0
 }
 
 // Missing detects references to objects that do not exist: a pod that
@@ -75,6 +90,13 @@ func (Missing) Kinds() []inventory.Kind {
 func (Missing) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
+	// A finished pod never starts again and a deleting one is going
+	// away: what it referenced no longer matters.
+	if podFinished(e) || flag(e, kube.AttrDeleting) {
+		return nil
+	}
+	running := text(e, kube.AttrPhase) == "Running" &&
+		flag(e, kube.AttrReady)
 	missing := make(map[string][]string)
 	var missingReasons []string
 	for _, id := range ctx.Model.Related(
@@ -98,11 +120,17 @@ func (Missing) Detect(
 			evidence = append(evidence,
 				detection.Evidence{Label: "missing", Value: name})
 		}
+		severity := detection.Critical
+		summary := "Pod references " + strings.Join(names, ", ") +
+			", which does not exist"
+		if running {
+			// It read the object when it started; only a restart fails.
+			severity = detection.Warning
+			summary += "; the pod runs now but will fail on its next restart"
+		}
 		out = append(out, detection.Finding{
-			Reason: reason, Severity: detection.Critical,
-			Summary: "Pod references " + strings.Join(names, ", ") +
-				", which does not exist",
-			Evidence: evidence,
+			Reason: reason, Severity: severity,
+			Summary: summary, Evidence: evidence,
 		})
 	}
 	return out

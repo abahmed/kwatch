@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/delivery/providertest"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 )
 
@@ -92,4 +93,23 @@ func TestDiscordHTTPClientErrorsAreClassified(t *testing.T) {
 	assert.False(t, transport.IsPermanent(wrapDiscordRateLimit(transient)))
 	assert.False(t, transport.IsPermanent(
 		wrapDiscordRateLimit(errors.New("network"))))
+}
+
+func TestVerifyUsesConfiguredHostAndThread(t *testing.T) {
+	rec := providertest.NewRecorder(t)
+	c := NewDiscord(map[string]interface{}{
+		"webhook": rec.URL() + "/api/webhooks/123/tok?thread_id=77",
+	}, "dev", rec.Dependencies())
+	if c == nil {
+		t.Fatal("discord was not constructed")
+	}
+	if err := c.Verify(context.Background()); err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	last := rec.Last(t)
+	if last.Method != "GET" || last.Path != "/api/webhooks/123/tok" ||
+		last.Query != "thread_id=77" {
+		t.Fatalf("verify request = %s %s?%s",
+			last.Method, last.Path, last.Query)
+	}
 }

@@ -77,6 +77,12 @@ func (d Workload) Detect(
 	if s, ok := d.availability(ctx, e); ok {
 		out = append(out, s)
 	}
+	if s, ok := neverReady(ctx, e); ok {
+		out = append(out, s)
+	}
+	if s, ok := scaledToZeroRouted(ctx, e); ok {
+		out = append(out, s)
+	}
 	if e.ID.Kind == kube.KindStatefulSet {
 		if s, ok := statefulSetRollout(ctx, e); ok {
 			out = append(out, s)
@@ -112,7 +118,8 @@ func (d Workload) availability(
 		Since: since, Symptom: true,
 		Summary: strconv.Itoa(int(ready)) + " of " +
 			strconv.Itoa(int(desired)) + " replicas are ready",
-		Evidence: daemonSetGaps(ctx.Model, e),
+		Evidence: append(daemonSetGaps(ctx.Model, e),
+			neverHealthyEvidence(ctx, e)...),
 	}, true
 }
 
@@ -213,6 +220,9 @@ func (Job) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	out := classReferences(ctx, e)
+	if f, ok := runningLong(ctx, e); ok {
+		out = append(out, f)
+	}
 	status, reason, since := condition(e, "Failed")
 	if status != "True" {
 		return out
@@ -226,7 +236,8 @@ func (Job) Detect(
 	}
 	failed, _ := number(e, kube.AttrFailed)
 	return append(out, detection.Finding{
-		Reason: findingReason, Severity: detection.Warning, Since: since,
+		Reason: findingReason, Severity: failedJobSeverity(ctx, e, since),
+		Since: since,
 		Summary: "Job failed after " + strconv.Itoa(int(failed)) +
 			" failed pod(s)",
 		Evidence: []detection.Evidence{{

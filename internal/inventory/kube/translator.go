@@ -3,6 +3,8 @@ package kube
 import (
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+
 	"github.com/abahmed/kwatch/internal/inventory"
 )
 
@@ -41,15 +43,27 @@ func (t *Translator) Added(
 	return observations
 }
 
-// Updated handles an informer update. Attributes and relations are always
+// Updated handles an informer update. Attributes and relations are
 // refreshed; a change is recorded only when the schema finds a meaningful
-// difference, so resyncs and status churn never look like changes.
+// difference, so status churn never looks like a change. A periodic
+// resync repeats an object at the same resource version: it is skipped,
+// because every schema describes an object from its content alone, so
+// the model already holds exactly what the resync would say. A new UID
+// under the same name is a re-created object (the watch missed the delete)
+// and is told as a delete followed by a create.
 func (t *Translator) Updated(
 	old, new any, at time.Time,
 ) []inventory.Observation {
 	desc, ok := t.schema.Describe(new)
 	if !ok {
 		return nil
+	}
+	if sameVersion(old, new) {
+		return nil
+	}
+	if oldDesc, ok := t.schema.Describe(old); ok &&
+		oldDesc.UID != "" && desc.UID != "" && oldDesc.UID != desc.UID {
+		return append(t.Deleted(old, at), t.Added(new, false, at)...)
 	}
 	t.annotate(new, &desc)
 	link(new, &desc)
@@ -105,7 +119,8 @@ func entityObservations(
 ) []inventory.Observation {
 	observations := []inventory.Observation{{
 		Kind: inventory.Observed, Source: ObservationSource, At: at,
-		Entity: desc.ID, UID: desc.UID, Attributes: desc.Attributes,
+		Entity: desc.ID, UID: desc.UID, AltUID: desc.AltUID,
+		Attributes: desc.Attributes,
 	}}
 	for _, relation := range types {
 		observations = append(observations, inventory.Observation{
@@ -143,4 +158,18 @@ func goneObservation(
 	return inventory.Observation{
 		Kind: inventory.Gone, Source: ObservationSource, At: at, Entity: id,
 	}
+}
+
+// sameVersion reports the same object at the same resource version, which
+// is what a periodic resync delivers. Objects without a version are never
+// the same.
+func sameVersion(old, new any) bool {
+	before, err1 := meta.Accessor(old)
+	after, err2 := meta.Accessor(new)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	return before.GetResourceVersion() != "" &&
+		before.GetResourceVersion() == after.GetResourceVersion() &&
+		before.GetUID() == after.GetUID()
 }

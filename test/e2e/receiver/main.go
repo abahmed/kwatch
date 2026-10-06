@@ -3,9 +3,15 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 )
 
 func main() {
 	server := NewServer()
-	log.Fatal(http.ListenAndServe(":8080", server.Handler()))
+	httpServer := &http.Server{
+		Addr:              ":8080",
+		Handler:           server.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	log.Fatal(httpServer.ListenAndServe())
 }

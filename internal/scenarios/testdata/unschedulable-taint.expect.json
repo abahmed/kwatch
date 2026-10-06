@@ -1,0 +1,7 @@
+{
+  "name": "unschedulable-taint",
+  "description": "A pod is Pending because every node carries a taint it does not tolerate; there is no resource gap to quantify.",
+  "root": "scheduling//had untolerated taint",
+  "tier": "notify",
+  "maxMessages": 2
+}

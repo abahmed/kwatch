@@ -11,11 +11,12 @@
 // epoch: a newer claim abandons older handles in this process, and every
 // write, including the compactor's deletes, checks that its epoch is
 // still the newest stored one. A file with another schema version, or
-// one bbolt cannot read (checked page by page at open), is deleted and
-// replaced by a fresh store; no backup is kept. Options.DeferRepair
-// opens the file read-only and writes nothing, not even the deletion,
-// until Claim. A value that does not decode is skipped and counted. The
-// Compactor enforces retention and size caps off the decision loop, on
-// logical bytes and on the file size (physical.go); a Mirror saves a
-// whole keyed snapshot while writing only what changed.
+// one bbolt reports as structurally bad (checked page by page at open),
+// is moved aside as state.db.corrupt (one copy, a later reset replaces
+// it) and replaced by a fresh store. Locked or unknown errors never reset.
+// Options.DeferRepair opens the file read-only and writes nothing, not
+// even the move, until Claim. A value that does not decode is skipped and
+// counted. The Compactor enforces retention and size caps off the decision
+// loop, on logical bytes and on the file size (physical.go); a Mirror saves
+// a whole keyed snapshot while writing only what changed.
 package storage

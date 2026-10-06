@@ -93,20 +93,25 @@ func (QuotaSchema) Describe(obj any) (Description, bool) {
 	if !ok {
 		return Description{}, false
 	}
-	var exhausted []string
+	var exhausted, zero []string
 	for name, hard := range quota.Status.Hard {
 		if used, ok := quota.Status.Used[name]; ok && used.Cmp(hard) >= 0 {
 			exhausted = append(exhausted, string(name))
 		}
+		if hard.IsZero() {
+			zero = append(zero, string(name))
+		}
 	}
 	sort.Strings(exhausted)
+	sort.Strings(zero)
 	rel := relations{}
 	rel.add(inventory.Constrains,
 		inventory.CoreID(KindNamespace, "", quota.Namespace))
 	return Description{
 		ID: objectID(KindQuota, quota), UID: string(quota.UID),
 		Attributes: map[string]inventory.Value{
-			AttrExhausted: inventory.Text(strings.Join(exhausted, ",")),
+			AttrExhausted:     inventory.Text(strings.Join(exhausted, ",")),
+			AttrQuotaZeroHard: inventory.Text(strings.Join(zero, ",")),
 			AttrQuotaNearLimit: inventory.Text(
 				quotaNearLimit(quota.Status)),
 		},

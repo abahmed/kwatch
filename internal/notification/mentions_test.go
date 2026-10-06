@@ -4,14 +4,14 @@ import "testing"
 
 func TestNeutralizeMentionsBreaksBroadcasts(t *testing.T) {
 	got := NeutralizeMentions("ping @channel @All @here me@example.com")
-	want := "ping @​channel @​All @​here me@example.com"
+	want := "ping @\u200bchannel @\u200bAll @\u200bhere me@example.com"
 	if got != want {
 		t.Fatalf("NeutralizeMentions = %q, want %q", got, want)
 	}
 }
 
 func TestNeutralizeProviderMentions(t *testing.T) {
-	const zw = "​"
+	const zw = "\u200b"
 	tests := []struct {
 		name       string
 		neutralize func(string) string
@@ -46,7 +46,7 @@ func TestNeutralizeProviderMentions(t *testing.T) {
 
 func TestNeutralizeMentionsBreaksRoom(t *testing.T) {
 	got := NeutralizeMentions("ping @room")
-	if got != "ping @​room" {
+	if got != "ping @\u200broom" {
 		t.Fatalf("NeutralizeMentions = %q", got)
 	}
 }

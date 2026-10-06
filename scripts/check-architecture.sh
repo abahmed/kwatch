@@ -142,6 +142,14 @@ forbid_imports "scope imports an upper layer" \
 	'rootcause|incident|notification|pipeline|delivery|alert|app'
 forbid_imports "pipeline imports delivery or composition" \
 	internal/pipeline 'delivery|alert|app|health|config'
+# The pipeline wires its subpackages, so each is a leaf: it never imports
+# the pipeline itself or a sibling.
+for part in announce coverage investigate
+do
+	report_matches "pipeline/$part imports the pipeline or a sibling" \
+		"\"$module/internal/pipeline(/(announce|coverage|investigate))?\"" \
+		'' "internal/pipeline/$part"
+done
 forbid_imports "rbac imports the domain layers" \
 	internal/rbac \
 	'detection|rootcause|incident|notification|pipeline|delivery|alert|app'

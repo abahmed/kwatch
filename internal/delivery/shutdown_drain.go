@@ -37,7 +37,7 @@ func (m *Manager) deliverQueuedJobs(
 			backlog = m.takeBacklog(entry)
 		}
 		if len(handedOff)+len(backlog) == 0 &&
-			(entry.ch == nil || len(entry.ch) == 0) {
+			len(entry.ch) == 0 {
 			continue
 		}
 		wg.Add(1)
@@ -81,7 +81,7 @@ func (m *Manager) deliverQueue(
 func (m *Manager) drainOne(
 	ctx context.Context, entry *providerEntry, job deliverJob,
 ) {
-	if !routedTo(entry.routes, job) {
+	if !m.wants(*entry, job) {
 		m.outbox.Load().remove(job.outboxID)
 		return
 	}
@@ -129,7 +129,7 @@ func (m *Manager) drainChannel(entry providerEntry) {
 			if !ok {
 				return
 			}
-			if routedTo(entry.routes, job) {
+			if m.wants(entry, job) {
 				m.deferJob(&entry, job, errDeliveryShutdown)
 			}
 		default:

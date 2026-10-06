@@ -39,9 +39,9 @@ func (m *Manager) dispatchIncident(
 	msg := m.makeUpForLostOpen(entry, *job.incident)
 	msg = prepareIncident(msg, templates, opts.fallbackFrom, entry.maxBytes)
 	requestCtx := m.requestContext(ctx)
-	return sendWithRetry(ctx, func() error {
+	return sendWithRetry(ctx, opts.counted(func() error {
 		return p.SendIncident(requestCtx, msg)
-	}, opts.retry, p.Name())
+	}), opts.retry, p.Name())
 }
 
 // prepareIncident applies the user template and the fallback notice to

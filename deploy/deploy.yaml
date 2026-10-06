@@ -188,6 +188,11 @@ spec:
       app.kubernetes.io/instance: kwatch
   template:
     metadata:
+      # Plain annotations that ask node autoscalers not to evict this
+      # single-writer pod; inert where no autoscaler reads them.
+      annotations:
+        karpenter.sh/do-not-disrupt: "true"
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
       labels:
         app: kwatch
         app.kubernetes.io/instance: kwatch
@@ -270,16 +275,20 @@ spec:
             port: health
           initialDelaySeconds: 10
           periodSeconds: 15
+          timeoutSeconds: 3
+          failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /availabilityz
             port: health
           initialDelaySeconds: 5
           periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
         resources:
           limits:
             memory: "512Mi"
-            cpu: "100m"
+            cpu: "500m"
           requests:
             memory: "128Mi"
             cpu: "100m"

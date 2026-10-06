@@ -6,9 +6,10 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/pipeline/announce"
 )
 
-func announce(id string) incident.Decision {
+func announcement(id string) incident.Decision {
 	return incident.Decision{
 		Action: incident.Announce, Incident: incident.Incident{ID: id},
 	}
@@ -18,16 +19,16 @@ func TestEngineCollectStartupHoldsAnnouncementsInWindow(t *testing.T) {
 	log := &sinkLog{}
 	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
 	e := newTestEngine(t, &fakeClock{now: now}, log.sink, nil)
-	e.announcer.startup.until = now.Add(time.Minute)
+	e.announcer.collect.Startup.Until = now.Add(time.Minute)
 	resolve := incident.Decision{Action: incident.Resolve}
 
-	rest, _ := e.announcer.collectStartup(context.Background(), now,
-		[]incident.Decision{announce("a"), resolve})
+	rest, _ := e.announcer.collect.CollectStartup(context.Background(), now,
+		[]incident.Decision{announcement("a"), resolve})
 
 	if len(rest) != 1 || rest[0].Action != incident.Resolve {
 		t.Fatalf("rest = %v, want only the resolve", rest)
 	}
-	if len(e.announcer.startup.collected) != 1 || len(log.all()) != 0 {
+	if len(e.announcer.collect.Startup.Collected) != 1 || len(log.all()) != 0 {
 		t.Fatal("announcement must be held, nothing sent yet")
 	}
 }
@@ -36,10 +37,10 @@ func TestEngineCollectStartupSendsSummaryAfterWindow(t *testing.T) {
 	log := &sinkLog{}
 	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
 	e := newTestEngine(t, &fakeClock{now: now}, log.sink, nil)
-	e.announcer.startup.until = now
-	e.announcer.startup.collected = []incident.Decision{announce("a")}
+	e.announcer.collect.Startup.Until = now
+	e.announcer.collect.Startup.Collected = []incident.Decision{announcement("a")}
 
-	rest, _ := e.announcer.collectStartup(context.Background(),
+	rest, _ := e.announcer.collect.CollectStartup(context.Background(),
 		now.Add(time.Second), nil)
 
 	if len(rest) != 0 {
@@ -49,8 +50,8 @@ func TestEngineCollectStartupSendsSummaryAfterWindow(t *testing.T) {
 	if len(sent) != 1 || sent[0].Reason != "startup summary" {
 		t.Fatalf("sent = %v, want one startup summary", sent)
 	}
-	startup := e.announcer.startup
-	if !startup.until.IsZero() || startup.collected != nil {
+	startup := e.announcer.collect.Startup
+	if !startup.Until.IsZero() || startup.Collected != nil {
 		t.Error("startup collection must reset")
 	}
 }
@@ -59,11 +60,12 @@ func TestEngineCollectStartupEmptyWindowSendsNothing(t *testing.T) {
 	log := &sinkLog{}
 	now := time.Now()
 	e := newTestEngine(t, &fakeClock{now: now}, log.sink, nil)
-	e.announcer.startup.until = now
+	e.announcer.collect.Startup.Until = now
 
-	e.announcer.collectStartup(context.Background(), now.Add(time.Hour), nil)
+	e.announcer.collect.CollectStartup(
+		context.Background(), now.Add(time.Hour), nil)
 
-	if len(log.all()) != 0 || !e.announcer.startup.until.IsZero() {
+	if len(log.all()) != 0 || !e.announcer.collect.Startup.Until.IsZero() {
 		t.Fatal("no summary expected for an empty startup")
 	}
 }
@@ -71,16 +73,16 @@ func TestEngineCollectStartupEmptyWindowSendsNothing(t *testing.T) {
 func TestEngineReconcileDowntimeStartsColdWindowOnce(t *testing.T) {
 	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
 	e := newTestEngine(t, &fakeClock{now: now}, (&sinkLog{}).sink, nil)
-	e.announcer.startup.coldStart = true
+	e.announcer.collect.Startup.ColdStart = true
 
 	e.reconcileDowntime()
-	first := e.announcer.startup.until
+	first := e.announcer.collect.Startup.Until
 	e.reconcileDowntime()
 
-	if want := now.Add(startupWindow); !first.Equal(want) {
+	if want := now.Add(announce.StartupWindow); !first.Equal(want) {
 		t.Fatalf("startupUntil = %v, want %v", first, want)
 	}
-	if !e.storage.reconciled || !e.announcer.startup.until.Equal(first) {
+	if !e.storage.reconciled || !e.announcer.collect.Startup.Until.Equal(first) {
 		t.Fatal("second reconcile must be a no-op")
 	}
 }
@@ -95,7 +97,7 @@ func TestEngineRestoreWarmStartKeepsIncidentsQuiet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if e.announcer.startup.coldStart {
+	if e.announcer.collect.Startup.ColdStart {
 		t.Error("restored incidents mean a warm start")
 	}
 }
@@ -108,9 +110,9 @@ func TestEngineTickIdleDecidesNothing(t *testing.T) {
 		func(d *Dependencies) {
 			d.Investigator = funcInvestigator(func(
 				_ context.Context, p incident.Incident,
-			) Result {
+			) testResult {
 				asked = append(asked, p.ID)
-				return Result{Output: []string{"line"}}
+				return testResult{Output: []string{"line"}}
 			})
 		})
 

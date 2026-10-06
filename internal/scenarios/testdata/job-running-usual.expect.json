@@ -1,0 +1,7 @@
+{
+  "name": "job-running-usual",
+  "description": "A CronJob's Job has run for 20 minutes while its last three runs took 8 to 12 minutes.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "5m0s"
+}

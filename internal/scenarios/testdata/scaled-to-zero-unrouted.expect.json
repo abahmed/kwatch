@@ -1,0 +1,7 @@
+{
+  "name": "scaled-to-zero-unrouted",
+  "description": "A Deployment is scaled to zero replicas and no Ingress routes to its Service.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "15m0s"
+}

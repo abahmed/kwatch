@@ -113,3 +113,31 @@ func TestInvalidHttpRequest(t *testing.T) {
 
 	assertions.NotNil(c.SendMessage(context.Background(), "test"))
 }
+
+func TestSecretAndDefaultTitleAreRead(t *testing.T) {
+	assertions := assert.New(t)
+
+	c := NewFeiShu(map[string]interface{}{
+		"webhook": "https://example.test/hook",
+		"secret":  "s3cret",
+	}, testAppConfig(), testDeps)
+	assertions.NotNil(c)
+	assertions.Equal("s3cret", c.secret)
+	assertions.Equal("kwatch", c.title)
+
+	body, err := c.buildRequestBodyFeiShu("hello")
+	assertions.NoError(err)
+	assertions.Contains(body, `"sign":`)
+	assertions.Contains(body, `"timestamp":`)
+	assertions.Contains(body, `"content":"kwatch"`)
+}
+
+func TestNoSecretMeansNoSignature(t *testing.T) {
+	c := NewFeiShu(map[string]interface{}{
+		"webhook": "https://example.test/hook", "title": "ops",
+	}, testAppConfig(), testDeps)
+	body, err := c.buildRequestBodyFeiShu("hello")
+	assert.NoError(t, err)
+	assert.NotContains(t, body, `"sign"`)
+	assert.Contains(t, body, `"content":"ops"`)
+}

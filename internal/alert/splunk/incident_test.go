@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -65,4 +66,24 @@ func TestSplunkClassifiesErrors(t *testing.T) {
 	assert.True(t, transport.IsPermanent(err))
 	c.url = "h ttp://bad"
 	assert.Error(t, c.SendMessage(context.Background(), "x"))
+}
+
+func TestSplunkEventCarriesDeliveryFlags(t *testing.T) {
+	c, rec := newTestSplunk(t)
+	m := providertest.Resolve()
+	m.PagingOnly = true
+	m.SkipPaging = true
+	m.ReopenWithin = 2 * time.Minute
+	require.NoError(t, c.SendIncident(context.Background(), m))
+
+	ev := rec.Last(t).JSON(t)["event"].(map[string]any)
+	assert.Equal(t, true, ev["pagingOnly"])
+	assert.Equal(t, true, ev["skipPaging"])
+	assert.EqualValues(t, 120, ev["reopenWithinSeconds"])
+
+	require.NoError(t, c.SendIncident(
+		context.Background(), providertest.Update()))
+	ev = rec.Last(t).JSON(t)["event"].(map[string]any)
+	assert.NotContains(t, ev, "pagingOnly")
+	assert.True(t, c.ReceivesPagingOnly())
 }

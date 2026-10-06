@@ -17,11 +17,14 @@ func (m *Manager) Tick(now time.Time) ([]Decision, time.Duration) {
 	// Only live incidents advance; resolved ones only wait to expire.
 	for _, id := range m.liveIDs() {
 		p := m.incidents[id]
+		if p.restored && p.bootedAt.IsZero() {
+			p.bootedAt = now
+		}
 		d, ok := m.advance(p, now)
 		if ok {
 			decisions = append(decisions, d)
 		}
-		if p.State == Resolved {
+		if p.State == Resolved && m.incidents[id] == p {
 			m.markResolved(p)
 		}
 	}
@@ -73,84 +76,22 @@ func adoptedFingerprint(p *Incident) string {
 	return fingerprint(&reopened)
 }
 
-// nextWake returns the delay to the earliest future deadline over all
-// incidents, or zero when no timer is pending.
-func (m *Manager) nextWake(now time.Time) time.Duration {
-	var next time.Duration
-	consider := func(at time.Time) {
-		if delay := at.Sub(now); delay > 0 && (next == 0 || delay < next) {
-			next = delay
-		}
-	}
-	if p := m.oldestResolved(); p != nil {
-		consider(p.Resolved.Add(m.cfg.Remember + time.Nanosecond))
-	}
-	for _, p := range m.incidents {
-		if p.State == Resolved {
-			continue
-		}
-		at, ok := m.deadline(p, now)
-		if ok {
-			consider(at)
-		}
-	}
-	return next
-}
-
-// deadline reports when the incident next needs a tick on its own.
-func (m *Manager) deadline(p *Incident, now time.Time) (time.Time, bool) {
-	switch p.State {
-	case Settling:
-		if len(p.Members) == 0 {
-			return m.graceDeadline(p, now)
-		}
-		return p.Opened.Add(m.settleFor(p)), true
-	case Open:
-		return m.openDeadline(p, now)
-	case Recovering:
-		if len(p.Members) == 0 {
-			hold := m.cfg.hold(len(recent(p.Cycles, now, m.cfg.FlapWindow)))
-			return m.afterGrace(p, p.RecoveringSince.Add(hold), now), true
-		}
-	case Flapping:
-		if len(p.Members) == 0 && !p.RecoveringSince.IsZero() {
-			due := p.RecoveringSince.Add(m.cfg.MaxHold)
-			return m.afterGrace(p, due, now), true
-		}
-	case Resolved:
-		return p.Resolved.Add(m.cfg.Remember + time.Nanosecond), true
-	}
-	return time.Time{}, false
-}
-
-// openDeadline is the next timer of an open incident: its revision
-// settle, or else its weekly reminder.
-func (m *Manager) openDeadline(
-	p *Incident, now time.Time,
-) (time.Time, bool) {
-	switch {
-	case len(p.Members) == 0:
-		return m.graceDeadline(p, now)
-	case p.revised:
-		return p.revisedAt.Add(m.cfg.ReviseSettle), true
-	}
-	last := p.Reminded
-	if last.IsZero() {
-		last = p.Announced
-	}
-	return last.Add(RemindEvery), !last.IsZero()
-}
-
-func (m *Manager) graceDeadline(
-	p *Incident, now time.Time,
-) (time.Time, bool) {
-	return m.restoreGrace, m.inGrace(p, now)
-}
-
+// advance moves one live incident through one tick. The order is:
+// superseded (the incident lost every member to another one), reopened
+// (its "failing again" update is due), escalation (a tier or state change
+// without a message), then the handler of its state.
 func (m *Manager) advance(p *Incident, now time.Time) (Decision, bool) {
 	if superseded(p) {
+		if m.quietSupersede(p, now) {
+			m.resolveQuietly(p, now)
+			return Decision{}, false
+		}
 		return m.resolve(p, now, ReasonSuperseded), true
 	}
+	if m.reopenPending(p) {
+		return m.reopenUpdate(p, now)
+	}
+	m.escalate(p, now)
 	switch p.State {
 	case Settling:
 		return m.settle(p, now)
@@ -169,9 +110,14 @@ func (m *Manager) settle(p *Incident, now time.Time) (Decision, bool) {
 		return Decision{}, false
 	}
 	if len(p.Members) == 0 {
-		// Recovered before anyone was told: stay silent.
+		// Recovered before anyone was told: stay silent, unless a page
+		// reached the pagers first (a held page restored after a
+		// restart): its alert is closed, and only that.
 		p.State, p.Resolved = Resolved, now
 		p.Fix = fixOf(m.model, p, now)
+		if p.Delivery.OpenAtPagers() {
+			return m.closeUnheardPage(p, now), true
+		}
 		return Decision{}, false
 	}
 	if now.Before(p.Opened.Add(m.settleFor(p))) {
@@ -181,16 +127,45 @@ func (m *Manager) settle(p *Incident, now time.Time) (Decision, bool) {
 		return Decision{}, false
 	}
 	p.State, p.Announced = Open, now
+	m.holdRepeatedPage(p, now)
 	if p.AlertKey == "" {
-		p.AlertKey = alertKey(p.Root, p.Mode)
+		p.AlertKey = m.freeAlertKey(p)
 	}
 	if cycles := len(recent(p.Cycles, now, m.cfg.FlapWindow)); cycles >=
 		m.cfg.FlapCycles {
-		p.State = Flapping
-		p.note(now, "flapping: "+strconv.Itoa(cycles)+
-			" recurrences in "+m.cfg.FlapWindow.String())
+		m.enterFlapping(p, now, cycles, "recurrences")
 	}
-	return m.decide(p, Announce, "settled"), true
+	return m.decide(p, Announce, ReasonSettled), true
+}
+
+// closeUnheardPage is the resolve of an incident that paged while its
+// announcement was held and then recovered before anyone but the pagers
+// heard of it. It is not recorded as told, so the incident stays one
+// nobody can reopen, and it carries Unannounced so that only the pagers
+// get it (the same as closing a held page in the startup summary).
+func (m *Manager) closeUnheardPage(p *Incident, now time.Time) Decision {
+	p.Pending.ClearReopen()
+	p.Pending.ClearRevised()
+	p.note(now, "resolved: "+string(ReasonRecoveredUnheard))
+	return Decision{Action: Resolve, Incident: p.Snapshot(),
+		Reason: ReasonRecoveredUnheard, Unannounced: true}
+}
+
+// holdRepeatedPage keeps a page that re-opens soon after a page resolved
+// from paging again: the outage is the same, and a fourth page in two
+// hours tells no one more than the first. The incident notifies, says it
+// failed again, and keeps the page's reminders.
+func (m *Manager) holdRepeatedPage(p *Incident, now time.Time) {
+	if p.Tier != Page {
+		return
+	}
+	times, repeat := repeatsPage(p, now)
+	if !repeat {
+		return
+	}
+	p.Delivery.HoldAtNotify()
+	p.Tier = Notify
+	p.note(now, repeatNote(times))
 }
 
 // settleFor is how long p collects findings before its first message. A
@@ -204,11 +179,13 @@ func (m *Manager) settleFor(p *Incident) time.Duration {
 	return m.cfg.Settle
 }
 
-// settlingCount is how many incidents with members are settling now.
+// settlingCount is how many announceable incidents with members are
+// settling now; a silent one never speaks, so it joins no burst.
 func (m *Manager) settlingCount() int {
 	count := 0
 	for _, p := range m.incidents {
-		if p.State == Settling && len(p.Members) > 0 {
+		if p.State == Settling && len(p.Members) > 0 &&
+			p.Tier != Silent {
 			count++
 		}
 	}
@@ -221,33 +198,6 @@ func superseded(p *Incident) bool {
 	return p.SupersededBy != "" && len(p.Members) == 0 && wasAnnounced(p)
 }
 
-func (m *Manager) open(p *Incident, now time.Time) (Decision, bool) {
-	if m.awaitingEvidence(p, now) {
-		return Decision{}, false
-	}
-	if len(p.Members) == 0 {
-		p.State, p.RecoveringSince = Recovering, now
-		return Decision{}, false
-	}
-	if p.revised {
-		if now.Before(p.revisedAt.Add(m.cfg.ReviseSettle)) {
-			// Let the new cause settle, so one update carries it
-			// with whatever joins it in the next seconds.
-			return Decision{}, false
-		}
-		p.revised = false
-		return m.decide(p, Update, ReasonCauseRevised), true
-	}
-	if fingerprint(p) == p.Digest {
-		if m.reminderDue(p, now) {
-			p.Reminded = now
-			return m.decide(p, Update, ReasonReminder), true
-		}
-		return Decision{}, false
-	}
-	return m.decide(p, Update, ReasonMaterialChange), true
-}
-
 // reminderDue reports an announced incident open for another
 // RemindEvery since its announcement or its last reminder.
 func (m *Manager) reminderDue(p *Incident, now time.Time) bool {
@@ -255,18 +205,38 @@ func (m *Manager) reminderDue(p *Incident, now time.Time) bool {
 	if last.IsZero() {
 		last = p.Announced
 	}
-	return !last.IsZero() && now.Sub(last) >= RemindEvery
+	return !last.IsZero() && now.Sub(last) >= reminderEvery(p)
+}
+
+// reminderEvery is how long after its announcement or last reminder an
+// open incident is said again.
+func reminderEvery(p *Incident) time.Duration {
+	switch {
+	case isPage(p):
+		if p.Reminded.IsZero() {
+			return PageRemindAfter
+		}
+		return RemindEvery
+	case p.Delivery.RolledUp() || p.Tier == Digest:
+		return ChronicRemindEvery
+	}
+	return RemindEvery
 }
 
 func (m *Manager) recovering(p *Incident, now time.Time) (Decision, bool) {
+	if len(p.Members) > 0 && (m.inGrace(p, now) || !m.verifiable(p)) {
+		// A restored incident whose findings are coming back: the
+		// failure never stopped, the restart only hid it. A root kind
+		// kwatch cannot observe never proved a recovery either. No cycle.
+		p.State = Open
+		return Decision{}, false
+	}
 	if len(p.Members) > 0 {
 		// Failed again inside the hold: same incident, no new message.
 		p.Cycles = recent(append(p.Cycles, now), now, m.cfg.FlapWindow)
 		if len(p.Cycles) >= m.cfg.FlapCycles {
-			p.State = Flapping
-			p.note(now, "flapping: "+strconv.Itoa(len(p.Cycles))+
-				" recoveries in "+m.cfg.FlapWindow.String())
-			return m.decide(p, Update, "flapping"), true
+			m.enterFlapping(p, now, len(p.Cycles), "recoveries")
+			return m.decide(p, Update, ReasonFlapping), true
 		}
 		p.State = Open
 		return Decision{}, false
@@ -274,17 +244,29 @@ func (m *Manager) recovering(p *Incident, now time.Time) (Decision, bool) {
 	if m.holdRecovery(p, now) {
 		return Decision{}, false
 	}
-	hold := m.cfg.hold(len(recent(p.Cycles, now, m.cfg.FlapWindow)))
-	if due := p.RecoveringSince.Add(hold); now.Before(due) {
+	hold := m.holdFor(p, now)
+	if due := p.RecoveringSince.Add(hold); now.Before(due) ||
+		m.stillBroken(p, now) {
 		return Decision{}, false
 	}
-	return m.resolve(p, now, "healthy for "+hold.String()), true
+	healthy := Reason("healthy for " + hold.String())
+	return m.resolve(p, now, m.resolveReason(p, healthy)), true
+}
+
+// enterFlapping turns p into a flapping incident and notes how many
+// cycles (named by what, "recurrences" or "recoveries") put it there.
+func (m *Manager) enterFlapping(
+	p *Incident, now time.Time, cycles int, what string,
+) {
+	p.State = Flapping
+	p.note(now, "flapping: "+strconv.Itoa(cycles)+" "+what+" in "+
+		m.cfg.FlapWindow.String())
 }
 
 func (m *Manager) flapping(p *Incident, now time.Time) (Decision, bool) {
 	if len(p.Members) > 0 {
 		p.RecoveringSince = time.Time{}
-		return Decision{}, false
+		return m.flappingNews(p, now)
 	}
 	if p.RecoveringSince.IsZero() {
 		p.RecoveringSince = now
@@ -292,29 +274,79 @@ func (m *Manager) flapping(p *Incident, now time.Time) (Decision, bool) {
 	if m.holdRecovery(p, now) {
 		return Decision{}, false
 	}
-	if due := p.RecoveringSince.Add(m.cfg.MaxHold); now.Before(due) {
+	if due := p.RecoveringSince.Add(m.cfg.MaxHold); now.Before(due) ||
+		m.stillBroken(p, now) {
 		return Decision{}, false
 	}
-	return m.resolve(p, now, "stable for "+m.cfg.MaxHold.String()), true
+	stable := Reason("stable for " + m.cfg.MaxHold.String())
+	return m.resolve(p, now, m.resolveReason(p, stable)), true
 }
 
-func (m *Manager) resolve(p *Incident, now time.Time, why string) Decision {
+// flappingNews is what a flapping incident with failing members may say:
+// that the failure grew, or, for an announced incident, its reminder.
+func (m *Manager) flappingNews(p *Incident, now time.Time) (Decision, bool) {
+	if flapGrew(p) {
+		return m.decide(p, Update, ReasonMaterialChange), true
+	}
+	if wasAnnounced(p) && m.reminderDue(p, now) {
+		p.Reminded = now
+		return m.decide(p, Update, ReasonReminder), true
+	}
+	return Decision{}, false
+}
+
+func (m *Manager) resolve(p *Incident, now time.Time, why Reason) Decision {
 	p.State, p.Resolved = Resolved, now
+	p.Pending.ClearReopen()
+	p.Pending.ClearRevised()
 	p.Fix = fixOf(m.model, p, now)
 	if why != ReasonSuperseded {
 		p.FixedBy = fixingChange(m.model, p, now)
 	}
-	p.note(now, "resolved: "+why)
-	return m.decide(p, Resolve, why)
+	p.note(now, "resolved: "+string(why))
+	d := m.decide(p, Resolve, why)
+	m.reform(p, now)
+	return d
 }
 
-func (m *Manager) decide(p *Incident, action Action, why string) Decision {
+// resolveQuietly closes p without a message: its failures live on in
+// another incident that already tells the story.
+func (m *Manager) resolveQuietly(p *Incident, now time.Time) {
+	p.State, p.Resolved, p.quiet = Resolved, now, true
+	p.Held = false
+	p.Pending.ClearReopen()
+	p.Pending.ClearRevised()
+	m.quietIDs = append(m.quietIDs, p.ID)
+	p.Fix = fixOf(m.model, p, now)
+	p.note(now, "resolved: "+string(ReasonSuperseded))
+}
+
+func (m *Manager) decide(p *Incident, action Action, why Reason) Decision {
 	p.Revision++
+	p.prevDigest, p.updateHeld = p.Digest, false
 	p.Digest = fingerprint(p)
+	p.Delivery.RecordSent(p.Tier, growthKey(p))
+	p.decided = failingKeys(p)
 	p.movedTo = nil
+	delivered := p.Scope != ScopeOut && !p.Held
+	p.noteRoute(action, delivered)
 	d := Decision{Action: action, Incident: p.Snapshot(), Reason: why}
-	p.sent.decided(p.Scope != ScopeOut && !p.Held)
+	// An announcement of an incident whose alert is already open (a
+	// restored held page) must not page again.
+	d.PagedAlready = action == Announce && p.Delivery.OpenAtPagers()
+	p.sent.decided(delivered)
 	return d
+}
+
+// noteRoute keeps AnnouncedRoute: the announcement records it, and each
+// update that is sent widens it. A resolve never changes it.
+func (p *Incident) noteRoute(action Action, delivered bool) {
+	switch {
+	case action == Announce && p.AnnouncedRoute == nil:
+		p.AnnouncedRoute = routeOf(p)
+	case action == Update && delivered && p.AnnouncedRoute != nil:
+		p.AnnouncedRoute.widen(routeOf(p))
+	}
 }
 
 func (m *Manager) sortedIDs() []string {
@@ -346,52 +378,4 @@ func uniq(sorted []string) []string {
 		}
 	}
 	return out
-}
-
-// awaitingEvidence reports whether an incident without members must keep
-// its state: during the restore grace detectors may not have re-raised
-// its findings yet, and a root kind kwatch cannot observe says nothing
-// about recovery.
-func (m *Manager) awaitingEvidence(p *Incident, now time.Time) bool {
-	if len(p.Members) > 0 {
-		return false
-	}
-	return m.inGrace(p, now) || !m.verifiable(p)
-}
-
-// inGrace reports whether p is a restored incident still inside the
-// restore grace. Incidents opened after the restart have no stale
-// model to wait for: their members come from this session's detectors.
-func (m *Manager) inGrace(p *Incident, now time.Time) bool {
-	return p.restored && now.Before(m.restoreGrace)
-}
-
-// holdRecovery reports whether a recovering incident without members
-// must not resolve yet. During the restore grace the model is still being
-// rebuilt, so missing members say nothing; the hold keeps running. A root
-// kwatch cannot observe restarts the hold instead of resolving on missing
-// data.
-func (m *Manager) holdRecovery(p *Incident, now time.Time) bool {
-	if !m.awaitingEvidence(p, now) {
-		return false
-	}
-	if !m.verifiable(p) {
-		p.RecoveringSince = now
-	}
-	return true
-}
-
-// afterGrace moves a deadline that falls inside the restore grace to the
-// end of the grace, when recovery may first be decided.
-func (m *Manager) afterGrace(
-	p *Incident, at, now time.Time,
-) time.Time {
-	if m.inGrace(p, now) && at.Before(m.restoreGrace) {
-		return m.restoreGrace
-	}
-	return at
-}
-
-func (m *Manager) verifiable(p *Incident) bool {
-	return m.cfg.Verifiable == nil || m.cfg.Verifiable(p.Root.Kind)
 }

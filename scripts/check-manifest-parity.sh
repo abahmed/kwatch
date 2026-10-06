@@ -47,7 +47,18 @@ fi
 # Get and update only on kwatch's own Lease.
 require '  resourceNames: ["kwatch-leader"]' \
 	"Lease get/update must be limited to the Lease name"
+require 'karpenter.sh/do-not-disrupt: "true"' \
+	"pod must ask node autoscalers not to disrupt it"
+require 'cluster-autoscaler.kubernetes.io/safe-to-evict: "false"' \
+	"pod must ask the cluster autoscaler not to evict it"
 require 'memory: "512Mi"' "memory limit must be 512Mi"
+require 'cpu: "500m"' "cpu limit must be 500m (matches the chart)"
+# Both probes need a timeout that survives a busy pod; the chart sets 3s.
+probe_timeouts=$(grep -c 'timeoutSeconds: 3' "$manifest" || true)
+if [ "$probe_timeouts" -lt 2 ]; then
+	echo "manifest parity: liveness and readiness need timeoutSeconds: 3" >&2
+	exit 1
+fi
 require 'name: KWATCH_MEMORY_LIMIT' "memory limit is not passed to kwatch"
 if grep -Fq 'name: GOMEMLIMIT' "$manifest"; then
 	echo "manifest parity: GOMEMLIMIT is derived from the limit" >&2

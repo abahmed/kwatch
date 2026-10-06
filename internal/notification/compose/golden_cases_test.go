@@ -145,7 +145,7 @@ func writeUnknownUnverified() notification.Message {
 				Value: "invalid credentials for database invoices"}}}),
 	}
 	d := announce(p)
-	d.Output = []string{"starting invoices", "auth failed"}
+	d.Facts.Output = []string{"starting invoices", "auth failed"}
 	return Writer{}.Write(d, at(4, 0))
 }
 
@@ -186,7 +186,8 @@ func writeSpreading() notification.Message {
 	p.Timeline = []incident.Event{
 		{At: at(2, 20), Text: "Container is crash looping " +
 			"(container shop/payments-7d9f/app)"},
-		{At: at(7, 0), Text: backends.Summary + " (service shop/cart)"},
+		{At: at(7, 0), Text: backends.Summary + " (service shop/cart)",
+			Entity: aboutEntity(cart)},
 	}
 	d := incident.Decision{Action: incident.Update, Incident: p,
 		Reason: "material change"}

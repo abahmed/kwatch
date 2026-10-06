@@ -44,11 +44,14 @@ lifecycles. Slow work never runs on the loop. Log reads and other
 investigations run on a bounded worker pool with deadlines. Storage writes go
 to one writer that batches the latest snapshot. Delivery has its own queues.
 Every loop iteration reports progress, so a stuck loop shows up as a stall and
-Kubernetes restarts the pod.
+Kubernetes restarts the pod. The loop's helpers live in subpackages of
+`internal/pipeline`: `announce` (summary, digest, roll-up, outage),
+`coverage` and `investigate`.
 
 Each stage is its own package, and the arrow is also the import direction.
 [Contributor architecture](./contributor-architecture.md) lists the packages
-and the rules.
+and the rules. [The life of an incident](./incident-lifecycle.md) walks
+through settle, announce, updates, reminders, resolve and reopen.
 
 ## The four concepts
 
@@ -65,7 +68,7 @@ never lets an incident resolve.
 
 ## One incident, from crash to message
 
-A bad release of `payments` in namespace `shop` makes its pods crash. This is
+A bad release of `api` in namespace `shop` makes its pods crash. This is
 the `bad-rollout` scenario in `internal/scenarios`.
 
 1. **A change is recorded.** Someone sets a new image on the Deployment. The
@@ -100,7 +103,9 @@ the `bad-rollout` scenario in `internal/scenarios`.
    otherwise the message goes without it.
 8. **The note is written.** `compose.Writer` turns the facts into sentences:
    what broke and why, who changed what, the one or two facts that prove it,
-   who is affected, and one read-only `kubectl` suggestion. The result is one
+   who is affected, and one `kubectl` suggestion. A read-only suggestion
+   stands as it is; one that changes the cluster, such as a rollback, is
+   marked "(changes the cluster)". The result is one
    `notification.Message`.
 9. **Delivery sends it.** The sink in `internal/app` records an audit entry
    and calls `NotifyIncident`. The delivery manager queues the message per
@@ -111,10 +116,11 @@ manager resolves the incident and the writer says who fixed it, for example
 that someone rolled back.
 
 ```text
-🔴 payments is down in shop after the 14:02 release of payments:2.3. alice
-changed the image from payments:2.2 to payments:2.3. Only pods of the new
-revision fail. Service payments and ingress storefront can't serve traffic.
-Rolling back fixes it: kubectl rollout undo deployment/payments -n shop
+🟠 api in shop (prod-eu-1): rollout 14 restarted 4 times in its first 2
+minutes; rollout 13 did not restart. The previous image was
+registry.example.com/api:2.2. Its dependents failed soon after it
+changed. Rolling back fixes it (changes the cluster): kubectl rollout
+undo deployment/api -n shop --to-revision=13
 ```
 
 ## Where root cause comes from
@@ -138,7 +144,7 @@ reason for its value. Each contribution carries a code and its numbers
 those fields, never from the solver's trace text. Below the confidence floor the cause is stated as
 unknown. The solver is a pure function of a snapshot: no clock, no I/O.
 
-When nothing upstream shows a fault, the engine still has three things to
+When nothing upstream shows a fault, the engine still has four things to
 say, in this order of strength:
 
 1. **A probed dependency.** Pods relate to the endpoints outside the cluster
@@ -146,13 +152,19 @@ say, in this order of strength:
    the `external-endpoint` `db.example.com:5432`; only host and port are
    kept). With `autoDependencies` on, kwatch dials them, and a dependency
    that refuses connections is the cause of the pods that call it.
-2. **What the failures share.** Three or more workloads failing within ten
+2. **The same error.** Three or more workloads that began failing within
+   thirty minutes with the same normalised error line (times, IDs, addresses
+   and numbers replaced; see `docs/incident-lifecycle.md`) share a virtual
+   `failure-signature` cause (`shared-failure-signature` row, prior 0.55).
+   It is the weakest named row, so a probed dependency or any better cause
+   wins, and one message says the shared error is the cause.
+3. **What the failures share.** Three or more workloads failing within ten
    minutes on one healthy node, where most pods on that node fail, make the
    node a suspect (`shared-node` row, pseudo mode `SharedFactor`). It is
    capped below "likely": nothing is known to be wrong with it. An
    unchanged shared image, ConfigMap, Secret or ServiceAccount is weak
    evidence and is not suspected.
-3. **What was checked.** The solver records the upstream objects it reached
+4. **What was checked.** The solver records the upstream objects it reached
    that showed nothing wrong (`Trace.Checked`), and the message says "Its
    node, image and configuration are healthy and unchanged, so nothing
    outside it explains this", followed by the quoted crash output.
@@ -228,10 +240,12 @@ write checks a claim epoch, so a process that lost the Lease cannot overwrite
 newer state.
 
 Reset: if the file has another schema version or bbolt cannot read it, kwatch
-deletes it and starts fresh. No backup is kept, and the reset is logged and
-shown in `/health`. A single record that does not decode is skipped and
-counted. There is no migration and no backup before the first stable
-release. To reset by hand, stop kwatch and delete `state.db`; the next start
+renames it to `state.db.corrupt` (one copy; a later reset replaces it) and
+starts fresh. Only structural errors reset: a locked or inaccessible file
+fails startup instead. The reset is logged and shown in `/health`. A single
+record that does not decode is skipped and counted. There is no migration
+before the first stable release. To reset by hand, stop kwatch and delete
+`state.db`; the next start
 repeats the startup summary and relearns baselines.
 
 ## Endpoints
@@ -247,16 +261,16 @@ or user-facing API endpoints.
 | `/health` | Optional component state and safe reason codes (unwatched kinds, a failed reset, missing permissions). |
 | `/metrics` | Prometheus metrics with bounded labels. |
 
-## One replica and a Lease lock
+## One replica and a state lock
 
 kwatch runs as one replica with the `Recreate` strategy. The state volume is
-a PVC. A Kubernetes Lease is only a lock: it keeps two processes from sharing
-the volume during a rollout or a node move. The state file is fenced by its
-own epoch counter, which only the Lease holder claims. The application supervisor starts the components when the pod
-holds the Lease and stops them when it is lost. A required component that
-fails or stalls removes readiness and the pod restarts. There is no second
-replica and no self-failover: if the pod or its node fails, Kubernetes
-restarts it and kwatch resumes from the volume.
+a PVC. A Kubernetes Lease is only a lock: it guards the state volume during
+a rollout or a node move. The state file is fenced by its own epoch counter,
+which only the state lock holder claims. The application supervisor starts
+the components when the pod holds the state lock and stops them when it is
+lost. A required component that fails or stalls removes readiness and the pod
+restarts. There is no second replica and no self-failover: if the pod or its
+node fails, Kubernetes restarts it and kwatch resumes from the volume.
 
 ## Delivery guarantee
 
@@ -269,6 +283,6 @@ past that the oldest job loses its crash protection (it is still sent in this
 session), and a job older than 24 hours is dropped at restore. So a message is
 not lost across a restart, within those bounds. A send that
 was interrupted mid-request may be repeated, because kwatch cannot know
-whether the provider received it. If the Lease is lost, nothing more is sent.
-Drops are counted by `kwatch_delivery_outbox_dropped_total` and
+whether the provider received it. If the state lock is lost, nothing more is
+sent. Drops are counted by `kwatch_delivery_outbox_dropped_total` and
 `kwatch_delivery_dropped_total`.

@@ -161,3 +161,27 @@ func TestOpsgenieUpdateFailureIsReturned(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+// Closing an alias Opsgenie does not know (404) means the alert is already
+// gone, so the resolve succeeds instead of failing for good.
+func TestOpsgenieCloseOfUnknownAliasSucceeds(t *testing.T) {
+	c, rec := newTestOpsgenie(t)
+	rec.Reply = func(w http.ResponseWriter, _ providertest.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}
+	if err := c.SendIncident(
+		context.Background(), providertest.Resolve()); err != nil {
+		t.Fatalf("close of a missing alert must succeed: %v", err)
+	}
+}
+
+func TestOpsgenieCloseOtherFailureStillFails(t *testing.T) {
+	c, rec := newTestOpsgenie(t)
+	rec.Reply = func(w http.ResponseWriter, _ providertest.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}
+	if err := c.SendIncident(
+		context.Background(), providertest.Resolve()); err == nil {
+		t.Fatal("a 403 on close must still fail")
+	}
+}

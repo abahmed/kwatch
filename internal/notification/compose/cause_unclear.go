@@ -48,14 +48,14 @@ func checkedSentences(f caseFacts) []sentence {
 		onlyAdvisory(f.members) {
 		return nil
 	}
-	words := checkedWordsFor(p.Checked)
-	if len(words) == 0 {
-		return []sentence{{part: partCause,
-			text: "Nothing outside it explains this."}}
+	text := "Nothing outside it explains this."
+	if words := checkedWordsFor(p.Checked); len(words) > 0 {
+		text = "Its " + joinWords(words) + " " +
+			verb(len(words), "is", "are") + " healthy and unchanged, " +
+			"so nothing outside it explains this."
 	}
-	return []sentence{{part: partCause, text: "Its " + joinWords(words) +
-		" " + verb(len(words), "is", "are") + " healthy and unchanged, so " +
-		"nothing outside it explains this."}}
+	return append([]sentence{{part: partCause, text: text}},
+		recentChangeSentence(f)...)
 }
 
 // onlyAdvisory reports members that are all configuration risks: there

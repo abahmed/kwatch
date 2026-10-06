@@ -2,6 +2,7 @@ package detectors
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,14 +18,21 @@ func TestIngressReportsMissingTLSSecret(t *testing.T) {
 	link(m, ing, inventory.References,
 		inventory.CoreID(kube.KindSecret, "ns", "web-tls"))
 
-	eval := evaluate(Ingress{}, m, t0, ing, nil)
+	// A certificate controller creates the Secret after the Ingress.
+	early := evaluate(Ingress{}, m, t0.Add(DefaultTLSSecretGrace-time.Second),
+		ing, nil)
+	assert.Empty(t, early.Findings)
+	assert.Equal(t, time.Second, early.RecheckAfter)
+
+	eval := evaluate(Ingress{}, m, t0.Add(DefaultTLSSecretGrace), ing, nil)
 
 	require.Len(t, eval.Findings, 1)
 	assert.Equal(t, "Ingress.TLSSecretMissing", string(eval.Findings[0].Mode))
 	assert.Contains(t, eval.Findings[0].Summary, "web-tls")
 
 	put(m, inventory.CoreID(kube.KindSecret, "ns", "web-tls"), t0, nil)
-	assert.Empty(t, evaluate(Ingress{}, m, t0, ing, nil).Findings)
+	assert.Empty(t, evaluate(Ingress{}, m, t0.Add(time.Hour), ing,
+		nil).Findings)
 }
 
 func TestIngressReportsMissingClass(t *testing.T) {

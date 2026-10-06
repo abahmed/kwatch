@@ -86,16 +86,19 @@ splunk|Splunk|sourcetype|string|false|false|||Source type (optional)
 splunk|Splunk|index|string|false|false|||Index name (optional)
 splunk|Splunk|host|string|false|false|||Host name (optional)
 datadog|Datadog|apiKey|string|true|true|||API key
-datadog|Datadog|site|string|false|false||datadoghq.com|Datadog site (default: datadoghq.com)
+datadog|Datadog|site|string|false|false||datadoghq.com|Datadog site as a bare host name (default: datadoghq.com)
 datadog|Datadog|applicationKey|string|false|true|||Optional application key
 datadog|Datadog|title|string|false|false|||Custom title
 datadog|Datadog|alertType|string|false|false||error|Alert type (default: error)
 datadog|Datadog|tags|list|false|false|list||Comma-separated tags
 newrelic|New Relic|apiKey|string|true|true|||User API key
 newrelic|New Relic|accountId|string|true|false|||Account ID
+newrelic|New Relic|region|string|false|false||us|Data-center region: us (default) or eu
 clickup|ClickUp|token|string|true|true|||Personal API token
 clickup|ClickUp|listId|string|true|false|||List ID to create tasks in
 clickup|ClickUp|priority|integer|false|false|integer||Optional task priority (1-4)
+clickup|ClickUp|closeStatus|string|false|false|||List status a resolve moves the task to (default: comment only)
+clickup|ClickUp|reopenStatus|string|false|false|||List status a closed task returns to when the incident fails again (needs closeStatus; default: open a new task)
 ilert|iLert|integrationKey|string|true|true|||Integration key
 ilert|iLert|priority|string|false|false|one-of:LOW,HIGH,CRITICAL|HIGH|Priority (LOW/HIGH/CRITICAL, default: HIGH)
 incidentio|Incident.io|url|string|true|true|url||Incident.io URL
@@ -146,6 +149,8 @@ jira|Jira|user|string|true|false|||Email or username
 jira|Jira|apiToken|string|true|true|||API token
 jira|Jira|projectKey|string|true|false|||Project key
 jira|Jira|issueType|string|false|false||Task|Issue type (default: Task)
+jira|Jira|closeTransition|string|false|false|||Workflow transition a resolve applies (default: comment only)
+jira|Jira|reopenTransition|string|false|false|||Transition that reopens a closed issue when the incident fails again (needs closeTransition; default: open a new issue)
 wecom|WeCom|webhook|string|true|true|url||Group robot webhook URL
 splunkoncall|Splunk On-Call|apiKey|string|true|true|||API key
 splunkoncall|Splunk On-Call|routingKey|string|true|true|||Routing key

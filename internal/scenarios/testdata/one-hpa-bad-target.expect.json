@@ -1,0 +1,11 @@
+{
+  "name": "one-hpa-bad-target",
+  "description": "One HPA reads a custom metric nobody serves; the metrics API and the other HPAs are healthy.",
+  "root": "horizontalpodautoscaler/shop/web",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "apiservice//v1beta1.metrics.k8s.io",
+    "deployment/kube-system/metrics-server"
+  ]
+}

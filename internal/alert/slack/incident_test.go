@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/delivery/providertest"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 // tokenSlack talks to an httptest Slack Web API.
@@ -58,16 +59,17 @@ func TestSlackTokenIncidentLifecycleThreadsByKey(t *testing.T) {
 	s, rec := tokenSlack(t)
 	want := map[string][]slackCall{
 		"announce": {
-			{"chat.postMessage", "", providertest.Announce().Short},
-			{"chat.postMessage", "111.1", providertest.Announce().Note},
+			{"chat.postMessage", "", providertest.Announce().Note},
 		},
+		// Same marker as the announcement: nothing to edit.
 		"update": {
 			{"chat.postMessage", "111.1", providertest.Update().Note},
-			{"chat.update", "", providertest.Update().Short},
 		},
+		// The root becomes the announcement under the resolved marker.
 		"resolve": {
 			{"chat.postMessage", "111.1", providertest.Resolve().Note},
-			{"chat.update", "", providertest.Resolve().Short},
+			{"chat.update", "", swapMarker(
+				providertest.Announce().Note, notification.MarkerResolved)},
 		},
 	}
 	for _, tc := range providertest.Lifecycle() {

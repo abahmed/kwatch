@@ -5,11 +5,12 @@ import (
 
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/metrics"
+	"github.com/abahmed/kwatch/internal/pipeline/investigate"
 )
 
 // Investigation memory. An incident's evidence is kept after its
 // announcement so a late result can join the next update; it is
-// forgotten on resolve or once it is this old.
+// forgotten on resolve, or once it is this old and its incident closed.
 const (
 	evidenceMemory  = 30 * time.Minute
 	maxEvidenceKept = 512
@@ -27,7 +28,7 @@ type evidenceState struct {
 	seq     int
 	started time.Time
 	running bool
-	result  Result
+	result  investigate.Result
 	// sent marks the facts already delivered, so an update carries only
 	// new ones; outputSent marks that the output went with a message.
 	sent       map[evidenceKey]bool
@@ -132,10 +133,10 @@ func (a *announcer) withEvidence(d incident.Decision) incident.Decision {
 		}
 	}
 	if d.Action == incident.Announce || len(fresh) > 0 {
-		d.Evidence = fresh
+		d.Facts.Evidence = fresh
 		if !state.outputSent {
 			state.outputSent = len(state.result.Output) > 0
-			d.Output = state.result.Output
+			d.Facts.Output = state.result.Output
 		}
 	}
 	return d
@@ -148,12 +149,16 @@ func (a *announcer) forgetEvidence(d incident.Decision) {
 	}
 }
 
-// forgetOldEvidence drops evidence older than evidenceMemory, and the
-// oldest beyond maxEvidenceKept, except investigations still running:
-// their slot in the pool is still counted.
+// forgetOldEvidence drops evidence older than evidenceMemory unless its
+// incident is still open, and the oldest beyond maxEvidenceKept, except
+// investigations still running: their slot in the pool is still counted.
+// An open incident keeps its evidence: forgetting what was already said
+// would make its next update quote every fact again as new. The cap still
+// bounds the memory.
 func (a *announcer) forgetOldEvidence(now time.Time) {
 	for id, state := range a.evidence {
-		if !state.running && now.Sub(state.started) > evidenceMemory {
+		if !state.running && now.Sub(state.started) > evidenceMemory &&
+			a.incidents.Closed([]string{id}) {
 			delete(a.evidence, id)
 		}
 	}

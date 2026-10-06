@@ -1,9 +1,11 @@
 package kube
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -53,4 +55,22 @@ func TestPodDependenciesListsEachEndpointOnce(t *testing.T) {
 	}
 	assert.Equal(t, []string{"cache.example.com:6379", "db.example.com:5432"},
 		names)
+}
+
+func TestPodDependenciesAreCappedPerPod(t *testing.T) {
+	var env []corev1.EnvVar
+	for i := range 3 * maxPodDependencies {
+		env = append(env, corev1.EnvVar{
+			Name:  fmt.Sprintf("DB_%d", i),
+			Value: fmt.Sprintf("db%03d.example.com:5432", i),
+		})
+	}
+	pod := &corev1.Pod{Spec: corev1.PodSpec{
+		Containers: []corev1.Container{{Name: "app", Env: env}}}}
+
+	got := podDependencies(pod)
+
+	require.Len(t, got, maxPodDependencies)
+	assert.Equal(t, "db000.example.com:5432", got[0].Name,
+		"the first endpoints by name are kept")
 }

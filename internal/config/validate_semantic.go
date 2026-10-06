@@ -30,6 +30,10 @@ func Validate(cfg *Config) []error {
 		errs = append(errs, fmt.Errorf("unknown alert provider %q", name))
 	}
 	errs = append(errs, validateProviderRequired(cfg)...)
+	errs = append(errs, validateDatadogSite(cfg)...)
+	errs = append(errs, validateTemplates(cfg)...)
+	errs = append(errs, validateRunbooks(cfg)...)
+	errs = append(errs, validateFallbacks(cfg)...)
 	errs = append(errs, validateSeverityMaps(cfg)...)
 	errs = append(errs, caseCollisionErrors(
 		"severityByReason", cfg.SeverityByReason)...)
@@ -41,8 +45,16 @@ func Validate(cfg *Config) []error {
 // validateLifecycleSettings checks resync, health check and audit log.
 func validateLifecycleSettings(cfg *Config) []error {
 	var errs []error
-	if cfg.ResyncSeconds < 0 {
-		errs = append(errs, errors.New("resyncSeconds must be >= 0"))
+	if cfg.ResyncSeconds < 0 ||
+		(cfg.ResyncSeconds > 0 && cfg.ResyncSeconds < minResyncSeconds) {
+		errs = append(errs, fmt.Errorf(
+			"resyncSeconds must be 0 (off) or at least %d",
+			minResyncSeconds))
+	}
+	if !validLogFormatter(cfg.App.LogFormatter) {
+		errs = append(errs, fmt.Errorf(
+			"app.logFormatter %q must be \"text\" or \"json\"",
+			cfg.App.LogFormatter))
 	}
 	if cfg.HealthCheck.Enabled && !validPort(cfg.HealthCheck.Port) {
 		errs = append(errs, errors.New(
@@ -117,4 +129,18 @@ func caseCollisionErrors(mapName string, m map[string]string) []error {
 			"%s keys %q differ only in case", mapName, keys))
 	}
 	return errs
+}
+
+// minResyncSeconds keeps a typo such as 1 from re-listing every object
+// every second.
+const minResyncSeconds = 30
+
+// validLogFormatter accepts the two formats app.logFormatter documents.
+// An empty value means the default.
+func validLogFormatter(format string) bool {
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "", "text", "json":
+		return true
+	}
+	return false
 }

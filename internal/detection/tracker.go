@@ -4,6 +4,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/inventory"
 )
 
@@ -24,10 +25,10 @@ type Transition struct {
 }
 
 // Tracker holds the active findings and turns evaluations into
-// transitions. Changed is reported only when the severity, health or
-// mode differs; summaries carry elapsed times and counts, so text alone
-// never re-announces a steady incident. The latest finding, with its
-// current summary, is always kept.
+// transitions. Changed is reported only when the severity, health, mode
+// or error line differs; summaries carry elapsed times and counts, so
+// text alone never re-announces a steady incident. The latest finding,
+// with its current summary, is always kept.
 type Tracker struct {
 	mu     sync.Mutex
 	active map[inventory.EntityID]map[string]Finding
@@ -98,8 +99,36 @@ func (t *Tracker) Has(id inventory.EntityID) bool {
 }
 
 // changed reports whether a re-evaluated finding describes a different
-// condition than the one already announced.
+// condition than the one already announced. A new or different error
+// line counts: the crash log is read after the finding is raised, and
+// the incident must then be regrouped by the message it carries.
 func changed(old, current Finding) bool {
 	return old.Severity != current.Severity ||
-		old.Health != current.Health || old.Mode != current.Mode
+		old.Health != current.Health || old.Mode != current.Mode ||
+		errorChanged(errorShape(old), errorShape(current))
+}
+
+// errorChanged reports a new or different error. A line that goes away
+// is not announced: the crash log is cleared between restarts.
+func errorChanged(old, current string) bool {
+	return current != "" && old != current
+}
+
+// errorShape is the error line in its normalised form (format.Signature):
+// times, counts, addresses and request ids are replaced. A line that only
+// counts ("not renewed for 3m5s") or carries a fresh address or id on
+// every restart is the same error, so it does not announce a change on
+// every evaluation. A line that appears, or says something else, does.
+func errorShape(f Finding) string {
+	return format.Signature(evidenceValue(f, EvidenceError))
+}
+
+// evidenceValue returns the first evidence value with the label, or "".
+func evidenceValue(f Finding, label string) string {
+	for _, e := range f.Evidence {
+		if e.Label == label {
+			return e.Value
+		}
+	}
+	return ""
 }

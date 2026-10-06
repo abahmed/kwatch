@@ -1,0 +1,14 @@
+{
+  "name": "hpa-resolve-while-workload-broken",
+  "description": "An HPA at its maximum stops being limited while the Deployment it scales crash-loops with no ready replica.",
+  "root": "deployment/shop/warehouse",
+  "otherRoots": [
+    "horizontalpodautoscaler/shop/warehouse"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "1h0m0s"
+}

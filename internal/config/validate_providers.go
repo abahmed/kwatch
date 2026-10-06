@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode"
 
 	providercatalog "github.com/abahmed/kwatch/internal/provider/catalog"
 )
@@ -80,4 +81,34 @@ func providerValuePresent(
 		return len(v) > 0
 	}
 	return true
+}
+
+// badDatadogSite reports a site the provider cannot use: kwatch sends
+// events to https://api.<site>, so the value must not carry a scheme, path,
+// query, fragment, "@" (user info) or whitespace. Anything else (host:port,
+// a single-label host, underscores) was accepted before and still is.
+func badDatadogSite(site string) bool {
+	return strings.ContainsAny(site, "/?#@") ||
+		strings.IndexFunc(site, unicode.IsSpace) >= 0
+}
+
+// validateDatadogSite rejects an alert.datadog.site that carries more
+// than a host name, so the mistake shows up in lint and at startup
+// instead of the provider silently failing to start.
+func validateDatadogSite(cfg *Config) []error {
+	var errs []error
+	for _, name := range sortedProviderNames(cfg) {
+		if canonicalProviderName(name) != "datadog" {
+			continue
+		}
+		site := strings.TrimSpace(stringValue(cfg.Alert[name]["site"]))
+		if site == "" || !badDatadogSite(site) {
+			continue
+		}
+		errs = append(errs, fmt.Errorf(
+			"alert.%s.site %q must be a host name such as "+
+				"datadoghq.com, datadoghq.eu or us3.datadoghq.com "+
+				"(no https://, path, query, @ or spaces)", name, site))
+	}
+	return errs
 }

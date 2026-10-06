@@ -1,0 +1,6 @@
+{
+  "name": "node-ready-blips",
+  "description": "A node flaps NotReady and Ready three times in four minutes, each NotReady under a minute.",
+  "maxMessages": 0,
+  "quiet": true
+}

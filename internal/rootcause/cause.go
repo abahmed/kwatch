@@ -7,6 +7,10 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory"
 )
 
+// KindScheduling is the virtual entity for a cluster-wide scheduling
+// constraint, named after the dominant blocker ("Insufficient memory").
+const KindScheduling inventory.Kind = "scheduling"
+
 // CauseRecord is the record of a stated root cause: what an incident
 // keeps and messages are written from. explain.Snapshot.Record builds it
 // from an explain.Cause. Writers read its fields, never its text: Mode,

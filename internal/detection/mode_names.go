@@ -18,6 +18,7 @@ const (
 	ModeCreating             Mode = "Creating"
 	ModeInitializing         Mode = "Initializing"
 	ModeNotReady             Mode = "NotReady"
+	ModeNeverReady           Mode = "NotReady.Never"
 	ModeCannotRun            Mode = "CannotRun"
 	ModeCreateError          Mode = "CreateError"
 	ModeCreateErrorConfig    Mode = "CreateError.Config"
@@ -73,6 +74,7 @@ const (
 	ModeScalingInvalidSelector Mode = "Scaling.InvalidSelector"
 	ModeScalingMaxedOut        Mode = "Scaling.MaxedOut"
 	ModeScalingError           Mode = "Scaling.Error"
+	ModeScalingTargetMissing   Mode = "Scaling.TargetMissing"
 	ModeJobFailed              Mode = "JobFailed"
 	ModeJobFailedDeadline      Mode = "JobFailed.Deadline"
 	ModeJobFailedBackoffLimit  Mode = "JobFailed.BackoffLimit"
@@ -81,10 +83,15 @@ const (
 	ModeInvalidSchedule        Mode = "InvalidSchedule"
 	ModeDisruptionBudget       Mode = "DisruptionBudget"
 	ModeImageDrift             Mode = "ImageDrift"
+	ModeReleaseRegression      Mode = "ReleaseRegression"
 	ModeLeaseStale             Mode = "LeaseStale"
 	ModeAPIServerErrors        Mode = "APIServer.Errors"
 	ModePLEGSlow               Mode = "PLEGSlow"
 	ModeEvicting               Mode = "Evicting"
+	ModeKubeletUnreachable     Mode = "Kubelet.Unreachable"
+	ModeKwatchNetwork          Mode = "Kwatch.NetworkRestricted"
+	ModeJobRunningLong         Mode = "JobRunningLong"
+	ModeScaledToZero           Mode = "ScaledToZero"
 	ModeUnused                 Mode = "Unused"
 	// ModeDNSServfail is a finer mode of explain's "Resolution": the
 	// cluster DNS answers, but with failures.
@@ -104,7 +111,6 @@ const (
 const (
 	ModeNoEndpoints           Mode = "NoEndpoints"
 	ModeBackendsDegraded      Mode = "BackendsDegraded"
-	ModePortMismatch          Mode = "PortMismatch"
 	ModeLoadBalancerPending   Mode = "LoadBalancerPending"
 	ModeBackendMissing        Mode = "BackendMissing"
 	ModeWebhookBackendMissing Mode = "Webhook.BackendMissing"
@@ -157,6 +163,7 @@ const (
 // Pod, container and node runtime modes.
 const (
 	ModeProbeLiveness         Mode = "Probe.Liveness"
+	ModeCrashLoopLiveness     Mode = "CrashLoop.Liveness"
 	ModeProbeReadiness        Mode = "Probe.Readiness"
 	ModeAdmissionRejected     Mode = "Admission.Rejected"
 	ModeExitNotExecutable     Mode = "Exit.NotExecutable"
@@ -190,6 +197,7 @@ const (
 	ModeScheduleMissed                Mode = "Schedule.Missed"
 	ModeScheduleBlocked               Mode = "Schedule.Blocked"
 	ModeScheduleRepeatedFailure       Mode = "Schedule.RepeatedFailure"
+	ModeScheduleLastRunFailed         Mode = "Schedule.LastRunFailed"
 	ModeLoadBalancerSyncFailed        Mode = "LoadBalancer.SyncFailed"
 	ModeIngressTLSSecretMissing       Mode = "Ingress.TLSSecretMissing"
 	ModeIngressClassMissing           Mode = "Ingress.ClassMissing"

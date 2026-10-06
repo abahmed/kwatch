@@ -99,7 +99,7 @@ func TestConfigFromFile(t *testing.T) {
 	t.Setenv("CONFIG_FILE", configPath)
 
 	yamlContent := `
-resyncSeconds: 20
+resyncSeconds: 45
 namespaces:
   - default
   - kwatch
@@ -121,7 +121,7 @@ app:
 	assert.Equal(cfg.App.ClusterName, "development")
 	assert.Equal(cfg.App.ProxyURL, "https://localhost")
 
-	assert.Equal(20, cfg.ResyncSeconds)
+	assert.Equal(45, cfg.ResyncSeconds)
 	assert.Len(cfg.AllowedNamespaces, 2)
 	assert.Len(cfg.AllowedReasons, 2)
 	assert.Len(cfg.ForbiddenNamespaces, 0)

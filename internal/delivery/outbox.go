@@ -85,6 +85,8 @@ type outbox struct {
 	live map[string]time.Time
 	// sweepEvery is the age sweep interval; tests shorten it.
 	sweepEvery time.Duration
+	// drainGrace is outboxDrainGrace unless a test shortens it.
+	drainGrace time.Duration
 
 	wake    chan struct{}
 	stop    chan struct{}
@@ -221,8 +223,14 @@ func (o *outbox) start(ctx context.Context) {
 	go o.run(ctx)
 }
 
-// run writes batches and sweeps expired records until ctx ends or close
-// is called.
+// outboxDrainGrace bounds how long the writer keeps writing after its
+// context ended. Delivery drains after that, and every job it delivers
+// removes a record; a crash during the drain must not leave those
+// records behind to be sent again. close ends the writer sooner.
+const outboxDrainGrace = 30 * time.Second
+
+// run writes batches and sweeps expired records until close is called, or
+// until outboxDrainGrace after ctx ended.
 func (o *outbox) run(ctx context.Context) {
 	defer close(o.done)
 	every := o.sweepEvery
@@ -231,9 +239,16 @@ func (o *outbox) run(ctx context.Context) {
 	}
 	sweep := time.NewTicker(every)
 	defer sweep.Stop()
+	ended := ctx.Done()
+	var grace <-chan time.Time
 	for {
 		select {
-		case <-ctx.Done():
+		case <-ended:
+			ended = nil
+			timer := time.NewTimer(o.graceAfterContext())
+			defer timer.Stop()
+			grace = timer.C
+		case <-grace:
 			return
 		case <-o.stop:
 			return
@@ -243,6 +258,13 @@ func (o *outbox) run(ctx context.Context) {
 			o.flush()
 		}
 	}
+}
+
+func (o *outbox) graceAfterContext() time.Duration {
+	if o.drainGrace > 0 {
+		return o.drainGrace
+	}
+	return outboxDrainGrace
 }
 
 // flush writes every buffered change in one batch. A failed batch is put

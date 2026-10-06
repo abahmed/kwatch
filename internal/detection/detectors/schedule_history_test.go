@@ -119,8 +119,34 @@ func TestScheduleIgnoresRecoveredOrFewFailures(t *testing.T) {
 	finishedRun(m, few, "few-2", t0.Add(time.Hour), true)
 	now := t0.Add(4 * time.Hour)
 
-	for _, id := range []inventory.EntityID{recovered, few} {
-		assert.Empty(t, evaluate(Schedule{}, m, now, id, nil).Findings,
-			id.Name)
+	assert.Empty(t, evaluate(Schedule{}, m, now, recovered, nil).Findings)
+	// Two failures are not repeated; the failed last run is reported.
+	assert.Equal(t, []string{"Schedule.LastRunFailed"},
+		findingModes(evaluate(Schedule{}, m, now, few, nil)))
+}
+
+// Slots the controller skipped (Forbid with a long run, a missed
+// window) were never Jobs, so they are not failed runs.
+func TestScheduleDoesNotCountSkippedSlotsAsFailures(t *testing.T) {
+	m := newTestModel()
+	forbid := newID(kube.KindCronJob, "ns", "forbid")
+	put(m, forbid, t0, map[string]inventory.Value{
+		kube.AttrRunsSinceSuccess:  inventory.Number(48),
+		kube.AttrConcurrencyPolicy: inventory.Text("Forbid"),
+	})
+	finishedRun(m, forbid, "forbid-1", t0, true)
+	missed := newID(kube.KindCronJob, "ns", "missed")
+	put(m, missed, t0, map[string]inventory.Value{
+		kube.AttrRunsSinceSuccess: inventory.Number(48),
+	})
+	finishedRun(m, missed, "missed-1", t0, true)
+	warn(m, missed, t0, "MissSchedule", "Missed scheduled time to start")
+	now := t0.Add(time.Minute)
+
+	for _, cron := range []inventory.EntityID{forbid, missed} {
+		for _, mode := range findingModes(evaluate(Schedule{}, m, now,
+			cron, nil)) {
+			assert.NotEqual(t, "Schedule.RepeatedFailure", mode, cron.Name)
+		}
 	}
 }

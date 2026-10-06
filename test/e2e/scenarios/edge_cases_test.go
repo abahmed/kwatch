@@ -8,6 +8,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
+	"github.com/abahmed/kwatch/internal/detection/detectors"
 	"github.com/abahmed/kwatch/test/e2e/harness"
 )
 
@@ -66,7 +67,9 @@ func TestScenarioMissingIngressBackend(t *testing.T) {
 	inNamespace(t, "networking.ingress", func(s *Scenario) {
 		s.CreateIngress(ingressToMissingService(
 			"missing-backend", "missing-service"))
-		s.ExpectIncident("missing-service", "IngressBackendNotFound", 0)
+		// A new Ingress may wait for its backend Service for a grace period.
+		s.ExpectIncident("missing-service", "IngressBackendNotFound",
+			detectors.DefaultBackendGrace)
 	})
 }
 

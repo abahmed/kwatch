@@ -47,3 +47,65 @@ func TestEventUnknownWarningNeedsRepeatsAndSkipsKnownState(t *testing.T) {
 
 	assert.Empty(t, got)
 }
+
+// An event that comes back after its finding cleared is reported again:
+// the count of the Event object keeps growing and its last time moves.
+func TestEventUnusualRecurringEventIsReportedAgainAfterItCleared(t *testing.T) {
+	m := newTestModel()
+	id := newID(kube.KindService, "shop", "web")
+	put(m, id, t0, nil)
+	detect := func(at time.Time) []detection.Finding {
+		return Event{}.Detect(testDetectorContext(m, at), entityOf(m, id))
+	}
+
+	noteEntity(m, id, "FailedDeployModel", "Failed deploy model", 4, t0)
+	require.Len(t, detect(t0.Add(time.Minute)), 1)
+	assert.Empty(t, detect(t0.Add(EventWindow+time.Minute)),
+		"the finding clears once the event stops")
+
+	again := t0.Add(40 * time.Minute)
+	noteEntity(m, id, "FailedDeployModel", "Failed deploy model", 5, again)
+	got := detect(again.Add(time.Minute))
+	require.Len(t, got, 1)
+	assert.Equal(t, "UnusualEvent.FailedDeployModel", got[0].Reason)
+	assert.Equal(t, again, got[0].Since)
+}
+
+// Each sighting may be a fresh Event with a count of one: the second
+// sighting in a later quarter hour is still a recurrence, reported
+// without inventing a count.
+func TestEventUnusualFreshEventsThatKeepComingBackAreReported(t *testing.T) {
+	m := newTestModel()
+	id := newID(kube.KindService, "shop", "web")
+	put(m, id, t0, nil)
+	noteEntity(m, id, "FailedDeployModel", "first", 1, t0)
+	assert.Empty(t, Event{}.Detect(
+		testDetectorContext(m, t0.Add(time.Minute)), entityOf(m, id)),
+		"one sighting is noise")
+
+	again := t0.Add(40 * time.Minute)
+	noteEntity(m, id, "FailedDeployModel", "second", 1, again)
+	got := Event{}.Detect(
+		testDetectorContext(m, again.Add(time.Minute)), entityOf(m, id))
+	require.Len(t, got, 1)
+	assert.Equal(t, "Kubernetes reported FailedDeployModel again",
+		got[0].Summary)
+}
+
+// The recheck lands just after the last event ages out of the window, so
+// the finding clears then and not at the next event.
+func TestEventUnusualRecheckFallsAfterTheWindowEdge(t *testing.T) {
+	m := newTestModel()
+	id := newID(kube.KindService, "shop", "web")
+	put(m, id, t0, nil)
+	noteEntity(m, id, "FailedDeployModel", "Failed deploy model", 4, t0)
+	registry := detection.NewRegistry(nil, Event{})
+
+	first := registry.Evaluate(m, t0.Add(time.Minute), id)
+	require.Len(t, first.Findings, 1)
+	require.Positive(t, first.RecheckAfter)
+
+	again := registry.Evaluate(
+		m, t0.Add(time.Minute).Add(first.RecheckAfter), id)
+	assert.Empty(t, again.Findings)
+}

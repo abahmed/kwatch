@@ -11,7 +11,8 @@ import (
 // container that keeps failing, a sidecar proxy that keeps crashing.
 // The helper is the cause, never the application container.
 func containerScenarios() []scenario {
-	return []scenario{initContainerFails(), sidecarCrashLoops()}
+	return []scenario{initContainerFails(), sidecarCrashLoops(),
+		livenessKillLoop(), livenessSingleKill()}
 }
 
 // initContainerFails: a release adds a migration init container that

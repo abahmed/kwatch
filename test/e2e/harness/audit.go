@@ -20,6 +20,14 @@ import (
 // run in parallel and each one reads the whole log, so this stays modest.
 const auditPollInterval = 2 * time.Second
 
+const (
+	// maxAuditLineBytes is the longest log line parseAudit accepts; the
+	// default scanner stops at 64 KiB and would drop every later entry.
+	maxAuditLineBytes = 4 << 20
+	// maxAuditLogBytes bounds one pod's log read on each poll.
+	maxAuditLogBytes = 256 << 20
+)
+
 type AuditReader struct {
 	environment *Environment
 }
@@ -75,7 +83,12 @@ func (a *AuditReader) snapshot(ctx context.Context) ([]AuditEntry, error) {
 		if err != nil {
 			continue
 		}
-		result = append(result, parseAudit(output)...)
+		entries, parseErr := parseAudit(output)
+		if parseErr != nil {
+			return nil, fmt.Errorf("read audit log of %s: %w",
+				pod.Name, parseErr)
+		}
+		result = append(result, entries...)
 	}
 	return result, nil
 }
@@ -89,19 +102,20 @@ func (a *AuditReader) logs(ctx context.Context, pod string) ([]byte, error) {
 		return nil, err
 	}
 	defer stream.Close()
-	return io.ReadAll(stream)
+	return io.ReadAll(io.LimitReader(stream, maxAuditLogBytes))
 }
 
-func parseAudit(payload []byte) []AuditEntry {
+func parseAudit(payload []byte) ([]AuditEntry, error) {
 	var result []AuditEntry
 	scanner := bufio.NewScanner(bytes.NewReader(payload))
+	scanner.Buffer(make([]byte, 0, 64<<10), maxAuditLineBytes)
 	for scanner.Scan() {
 		var entry AuditEntry
 		if json.Unmarshal(scanner.Bytes(), &entry) == nil {
 			result = append(result, entry)
 		}
 	}
-	return result
+	return result, scanner.Err()
 }
 
 func matchingEntries(entries []AuditEntry, match AuditMatch) []AuditEntry {

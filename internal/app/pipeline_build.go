@@ -15,6 +15,7 @@ import (
 	"github.com/abahmed/kwatch/internal/notification"
 	"github.com/abahmed/kwatch/internal/notification/compose"
 	"github.com/abahmed/kwatch/internal/pipeline"
+	"github.com/abahmed/kwatch/internal/pipeline/investigate"
 	"github.com/abahmed/kwatch/internal/rootcause/explain"
 	"github.com/abahmed/kwatch/internal/scope"
 	"github.com/abahmed/kwatch/internal/storage"
@@ -65,6 +66,11 @@ func newPipelineBuild(
 			return p.source == nil || p.source.Verifiable(kind)
 		},
 	}, explain.NewSolver())
+	// The pipeline marks a page open when it hands the message over;
+	// delivery says when no pager took it after all.
+	deps.deliveryManager.AttachPageObserver(func(key string) {
+		p.incidents.RecordPaged(key, false)
+	})
 	p.decisions = newDecisionLog(
 		p.auditLog.Record, metrics.DefaultRegistry(), p.incidents.Incidents)
 	return p, nil
@@ -96,7 +102,7 @@ func (p *pipelineBuild) newEngine() (*pipeline.Engine, error) {
 		Sink:  p.recordDecision,
 		Clock: pipelineClock{deps.clients.Clock},
 		Store: pipeline.NewIncidentStore(p.state),
-		Investigator: pipeline.NewInvestigator(pipeline.Sources{
+		Investigator: investigate.NewInvestigator(investigate.Sources{
 			Model: p.model,
 			Logs:  kube.LogReader{Client: deps.clients.Kubernetes}.Lines,
 			Endpoints: kube.EndpointReader{
@@ -137,12 +143,11 @@ func (p *pipelineBuild) newRunners(
 	}
 	p.source = source
 	stats := kube.NewStatsPoller(kube.StatsConfig{
-		Kubelet: kubeletReader(deps),
-		Now:     p.clock.Now,
-		Submit:  engine.Submit,
-		Nodes: func() []inventory.EntityID {
-			return p.model.Entities(kube.KindNode)
-		},
+		Kubelet:    kubeletReader(deps),
+		Now:        p.clock.Now,
+		Submit:     engine.Submit,
+		Nodes:      entitiesOf(p.model, kube.KindNode),
+		Containers: entitiesOf(p.model, kube.KindContainer),
 		Report: newKubeletStatsHealth(
 			healthSink(deps), metrics.DefaultRegistry()).report,
 	})
@@ -154,8 +159,15 @@ func (p *pipelineBuild) newRunners(
 		HTTP:     deps.clients.ProbeHTTP,
 		Model:    p.model,
 	})
+	crashLogs := kube.NewCrashLogRound(kube.CrashLogConfig{
+		Logs:   kube.LogReader{Client: deps.clients.Kubernetes},
+		Model:  p.model,
+		Now:    p.clock.Now,
+		Submit: engine.Submit,
+	})
 	runners := []func(context.Context){
 		source.Run, stats.Run, dynamicSource.Run, prober.Run,
+		crashLogs.Run,
 		func(ctx context.Context) {
 			pruneModel(ctx, p.model, p.clock.Now)
 		},
@@ -186,4 +198,11 @@ func (p *pipelineBuild) syncReporter(
 		defer ticker.Stop()
 		health.run(ctx, ticker.C)
 	}
+}
+
+// entitiesOf lists the entities of a kind the model has now.
+func entitiesOf(
+	model inventory.Reader, kind inventory.Kind,
+) func() []inventory.EntityID {
+	return func() []inventory.EntityID { return model.Entities(kind) }
 }

@@ -1,0 +1,4 @@
+10:01:15 settled
+🟠 Quota zero-pods in analytics (prod-eu-1) allows none of: pods. The error mentions it. ingest is affected as well. To see the object's state and events, run kubectl describe replicaset ingest-1274ca81 -n analytics
+🟠 Quota zero-pods in analytics (prod-eu-1) allows none of: pods.
+

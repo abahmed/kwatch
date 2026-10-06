@@ -139,6 +139,14 @@ func (g *Gitlab) Close(ctx context.Context, id, body string) error {
 	return err
 }
 
+// Reopen implements issues.Reopener: an incident that fails again inside
+// its reopen window reopens the issue it closed.
+func (g *Gitlab) Reopen(ctx context.Context, id string) error {
+	_, err := g.call(ctx, "PUT",
+		g.url+"/"+id, map[string]string{"state_event": "reopen"})
+	return err
+}
+
 func (g *Gitlab) call(
 	ctx context.Context, method, url string, payload interface{},
 ) ([]byte, error) {
@@ -152,6 +160,11 @@ func (g *Gitlab) call(
 			"PRIVATE-TOKEN": g.token,
 		},
 	})
+}
+
+// HasThread implements delivery.ThreadLookup.
+func (g *Gitlab) HasThread(key string) bool {
+	return g.issues.HasThread(key)
 }
 
 // SnapshotThreads implements delivery.ThreadStateProvider.

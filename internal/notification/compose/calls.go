@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 )
 
@@ -48,7 +49,7 @@ func signatureLead(f caseFacts) string {
 func otherWorkloads(f caseFacts, subject inventory.EntityID) int {
 	n := 0
 	for _, id := range f.p.Impact {
-		if isWorkload(id.Kind) && id != subject {
+		if incident.IsWorkload(id.Kind) && id != subject {
 			n++
 		}
 	}

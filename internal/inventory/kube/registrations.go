@@ -91,9 +91,7 @@ func networkRegistrations() []registration {
 				return f.Networking().V1().Ingresses().Informer()
 			}},
 		{SecretsResource, SecretSchema{},
-			func(f factory) informer {
-				return f.Core().V1().Secrets().Informer()
-			}},
+			secretInformer},
 		{Resource{"", "configmaps"}, ConfigMapSchema{},
 			func(f factory) informer {
 				return f.Core().V1().ConfigMaps().Informer()

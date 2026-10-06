@@ -58,15 +58,17 @@ func TestClickupIncidentLifecycleFollowsOneTask(t *testing.T) {
 				t.Fatalf("task = %v", body)
 			}
 			providertest.AssertOneLeadingEmoji(t, body["name"].(string))
-			text, _ = body["description"].(string)
+			text, _ = body["markdown_description"].(string)
 		}
 		providertest.AssertOneLeadingEmoji(t, text)
 		if !strings.Contains(text, tc.Message.Note) {
 			t.Fatalf("%s text = %q", tc.Name, text)
 		}
 	}
-	if len(c.SnapshotThreads()) != 0 {
-		t.Fatal("resolved task is still tracked")
+	// No close setting: the resolve only commented, the task is still
+	// open, so it stays mapped for a recurrence.
+	if len(c.SnapshotThreads()) != 1 {
+		t.Fatal("an unclosed task must stay tracked")
 	}
 }
 

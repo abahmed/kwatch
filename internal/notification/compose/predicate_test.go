@@ -9,6 +9,7 @@ import (
 
 func TestPredicateReadsAsPlainEnglish(t *testing.T) {
 	secret := inventory.CoreID(kube.KindSecret, "shop", "tls")
+	node := inventory.CoreID(kube.KindNode, "", "n1")
 	cases := []struct {
 		id      inventory.EntityID
 		summary string
@@ -31,7 +32,37 @@ func TestPredicateReadsAsPlainEnglish(t *testing.T) {
 		{inventory.CoreID(kube.KindValidatingHook, "", "policy"),
 			"Admission webhook backend policy-webhook has no ready pods",
 			"has no ready pods behind service policy-webhook"},
+		{inventory.CoreID(kube.KindContainer, "staging", "draftor-1/app"),
+			"CPU is throttled 75% of the time; requests slow down",
+			"is throttled on CPU 75% of the time"},
 		{secret, "DNS lookups fail", "is failing: DNS lookups fail"},
+		{node, "Node is overcommitted on memory: its pods' limits add " +
+			"up to 155% of its memory; under load pods are killed",
+			"is overcommitted on memory: its pods' limits add up to " +
+				"155% of its memory"},
+		{node, "Node is under CPU pressure: workloads stall on CPU",
+			"is under CPU pressure: workloads stall on CPU"},
+		{inventory.CoreID(kube.KindHPA, "istio-system", "istiod"),
+			"HPA istio-system/istiod targets Deployment istiod, which " +
+				"does not exist.",
+			"targets Deployment istiod, which does not exist"},
+		{node, "kwatch could not reach the kubelet on node 10-0-67-130 6 " +
+			"times in the last 6 hours; node metrics for it are missing.",
+			"has a kubelet that kwatch could not reach 6 times in the " +
+				"last 6 hours"},
+		{kube.KwatchSelf, "kwatch could not reach any of its 5 probed " +
+			"dependencies; its own network may be restricted",
+			"could not reach any of its 5 probed dependencies"},
+		{inventory.CoreID(kube.KindExternalEndpoint, "", "db:5432"),
+			"Endpoint did not answer within 3 seconds",
+			"did not answer within 3 seconds"},
+		{inventory.CoreID(kube.KindExternalEndpoint, "", "db:5432"),
+			"Endpoint refused the connection", "refused the connection"},
+		{inventory.CoreID(kube.KindExternalEndpoint, "", "db:5432"),
+			"Endpoint name does not resolve",
+			"has a name that does not resolve"},
+		{inventory.CoreID(kube.KindExternalEndpoint, "", "db:5432"),
+			"Endpoint DNS lookup failed", "has a DNS lookup that failed"},
 	}
 	for _, c := range cases {
 		if got := predicate(c.id, c.summary); got != c.want {
@@ -100,5 +131,31 @@ func TestOwnerInFindsTheWorkloadOfAPod(t *testing.T) {
 	other := inventory.CoreID(kube.KindPod, "billing", "api-7d-a")
 	if _, ok := ownerIn(impact, other); ok {
 		t.Fatal("a pod in another namespace has no owner here")
+	}
+}
+
+// A custom resource keeps the kind spelling its CRD declares, which
+// travels with the decision; one the API never declared stays in lower
+// case, and commands are left as written.
+func TestCustomKindKeepsDeclaredSpelling(t *testing.T) {
+	agent := inventory.EntityID{Group: "datadoghq.com",
+		Kind: kube.KindFor("DatadogAgent"), Namespace: "datadog",
+		Name: "datadog"}
+	names := map[inventory.Kind]string{agent.Kind: "DatadogAgent"}
+	lead := []sentence{{part: partLead,
+		text: capitalName(agent, shortName(agent)+" is failing.")}}
+	if got := respell(lead, names)[0].text; got !=
+		"DatadogAgent datadog is failing." {
+		t.Fatalf("declared kind: %q", got)
+	}
+	step := []sentence{{part: partAction,
+		text: "run kubectl get datadogagent datadog"}}
+	if got := respell(step, names)[0].text; got != step[0].text {
+		t.Fatalf("a command must stay as written: %q", got)
+	}
+	unknown := inventory.CoreID("widgetset", "shop", "w")
+	got := capitalName(unknown, shortName(unknown)+" is failing.")
+	if got != "Widgetset w is failing." {
+		t.Fatalf("undeclared kind: %q", got)
 	}
 }

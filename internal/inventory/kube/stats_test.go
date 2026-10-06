@@ -110,6 +110,8 @@ func TestStatsPollerRecordsUsageAndRates(t *testing.T) {
 	assert.InDelta(t, 2, v, 0.001)
 	v, _ = attr(first, ctr, kube.AttrMemoryWorking)
 	assert.InDelta(t, 4096, v, 0.001)
+	v, _ = attr(first, ctr, kube.AttrMemoryPeak24h)
+	assert.InDelta(t, 4096, v, 0.001, "the history starts with the reading")
 	pod := inventory.CoreID(kube.KindPod, "ns", "p")
 	v, _ = attr(first, pod, kube.AttrEphemeralUsed)
 	assert.InDelta(t, 77, v, 0.001)
@@ -137,8 +139,13 @@ func TestStatsPollerSkipsUnavailableNode(t *testing.T) {
 	polled := make(chan struct{})
 	poller := kube.NewStatsPoller(kube.StatsConfig{
 		Kubelet: kubelet, Now: fixedTime,
-		Submit: func(context.Context, ...inventory.Observation) {
-			t.Error("unexpected submit")
+		Submit: func(_ context.Context, obs ...inventory.Observation) {
+			// Only the failure count may be submitted for a dead node.
+			for _, o := range obs {
+				if _, ok := o.Attributes[kube.AttrKubeletFailures]; !ok {
+					t.Error("unexpected submit")
+				}
+			}
 		},
 		Nodes: func() []inventory.EntityID {
 			defer func() {

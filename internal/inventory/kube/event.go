@@ -32,11 +32,20 @@ func EventNote(obj any, now time.Time) (inventory.Observation, bool) {
 	if ev.Series != nil {
 		count = int(ev.Series.Count)
 	}
+	// Events written through events.k8s.io carry no count; one event
+	// is still one occurrence.
+	count = max(count, 1)
+	uid := string(ref.UID)
+	if ref.Kind == "Node" && uid == ref.Name {
+		// The kubelet names the node by its name here, not its UID.
+		uid = ""
+	}
 	return inventory.Observation{
 		Kind: inventory.Noted, Source: ObservationSource, At: now, Entity: id,
 		Note: inventory.Note{
 			At: eventTime(ev), Source: eventSource(ev), Reason: ev.Reason,
 			Message: evidenceText(ev.Message), Count: count, Warning: true,
+			UID: uid, Origin: eventOrigin(ev),
 		},
 	}, true
 }
@@ -61,4 +70,12 @@ func eventSource(ev *corev1.Event) string {
 		return ev.ReportingController
 	}
 	return ev.Source.Component
+}
+
+// eventOrigin names the Event object by its UID, so repeated updates of
+// one Event replace its count and different Events of one reason add up.
+// An Event without a UID (only tests build those) has no origin and the
+// latest note of its reason wins.
+func eventOrigin(ev *corev1.Event) string {
+	return string(ev.UID)
 }

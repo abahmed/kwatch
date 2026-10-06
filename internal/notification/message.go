@@ -1,5 +1,7 @@
 package notification
 
+import "time"
+
 // Message is a provider-neutral notification. Renderers turn it into plain
 // text, Markdown, Slack blocks or HTML.
 type Message struct {
@@ -65,11 +67,38 @@ type Message struct {
 	// failures another incident took over. Chat channels read about both
 	// elsewhere; an alert opened by key must still be closed by key.
 	PagingOnly bool `json:",omitempty"`
+	// SkipPaging marks the resolve of an incident whose announcement
+	// never reached the paging and issue-tracker providers (it waited
+	// for a digest, or a summary carried it). Those providers never
+	// opened an alert for it, so a resolve would close nothing; chat
+	// channels still get it.
+	SkipPaging bool `json:",omitempty"`
+	// Listed describes what a digest holds, for the audit log: counts and
+	// the first incidents named. Nil for every other message.
+	Listed *Listed `json:",omitempty"`
 	// Carrier names the message that carries this one to people, when it
 	// is not delivered on its own: "digest", "roll-up" or "startup
 	// summary". Such a message exists for the audit log, which records
 	// every decision when it is made; delivery drops it.
 	Carrier string `json:",omitempty"`
+	// ReopenWithin is set on the resolve of an incident that may reopen:
+	// a failure within this long of the resolve continues the same
+	// conversation. A threading provider keeps the thread that long, so
+	// the "failing again" update replies in it.
+	ReopenWithin time.Duration `json:",omitempty"`
+	// Members is set on a roll-up: the conversation keys of the incidents
+	// it announced. A provider that threads uses it to reply to the
+	// roll-up when one of them updates or resolves.
+	Members []string `json:",omitempty"`
+}
+
+// Listed is the content of a digest, summarised for the audit log.
+type Listed struct {
+	// Opened, Resolved and Risks count what the digest names.
+	Opened, Resolved, Risks int
+	// Items name the first incidents as "id: title", at most the bound
+	// the producer chose; Opened+Resolved may be larger.
+	Items []string `json:",omitempty"`
 }
 
 // IsOpening reports whether the message announces its conversation.
@@ -80,6 +109,12 @@ func (m Message) IsOpening() bool {
 	return m.Opens || m.Revision <= 1
 }
 
+// IsPage reports whether the message is at the page tier, the one that
+// wakes people up. Its route severity is "critical".
+func (m Message) IsPage() bool {
+	return NormalizeSeverity(m.Route.Severity) == SeverityCritical
+}
+
 // Route describes a message for provider routing: the namespaces it
 // concerns, the finding reasons it contains, and its severity
 // ("critical", "warning" or "info").
@@ -87,6 +122,12 @@ type Route struct {
 	Namespaces []string
 	Reasons    []string
 	Severity   string
+	// AnyOf is set on a message that names several problems (a startup
+	// summary, roll-up, outage message or digest): the routes of those
+	// problems. Such a message matches a provider's route when any one
+	// of them does, so a provider routed by reason or namespace still
+	// hears about a summary that contains something it would be sent.
+	AnyOf []Route `json:",omitempty"`
 }
 
 // RouteSeverities are the only values Route.Severity takes, so they are

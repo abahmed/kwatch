@@ -49,7 +49,7 @@ func Parse(body string) (Reproduction, error) {
 
 func extractBlock(body, name string, requireFence bool) (string, error) {
 	lines := strings.Split(body, "\n")
-	marker := "" + name
+	marker := name
 	for index, line := range lines {
 		lower := strings.ToLower(strings.TrimSpace(line))
 		if !strings.Contains(lower, marker) ||

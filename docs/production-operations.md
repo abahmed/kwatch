@@ -109,7 +109,21 @@ every node (`networkPolicy.kubeletPort`, default 10250) for node stats. Set
 rule. Providers on other ports need their port in
 `networkPolicy.extraEgressPorts`, for example SMTP (25, 465 or 587) for the
 email provider, or a custom webhook or self-hosted server on a non-443 port.
-Add `ingress` or `egress` rules for anything else. The policy is disabled by default: the API server address,
+It also opens TCP `networkPolicy.dnsMetricsPort` (default 9153) to the cluster
+DNS pods in `kube-system` for the DNS request and SERVFAIL rates.
+`networkPolicy.apiServerPorts` must list at least one port, because an empty
+egress port list would admit all egress.
+
+The defaults do not cover what your own configuration makes kwatch dial:
+active probe targets (`http`, `tcp`, `dns`), every `autoServices` Service
+and `autoDependencies` endpoint, the `app.proxyURL` port, and heartbeat or
+provider URLs on a port other than 443. With the policy enabled they fail
+(for example, active probes report every target down) until you open them
+with `networkPolicy.extraEgressPorts`, a precise `networkPolicy.egress` rule,
+or, when you accept unrestricted egress from the pod,
+`networkPolicy.allowProbeEgressAll: true`. `helm install` prints a warning
+when the policy is on and active probes or a proxy are configured. Add
+`ingress` or `egress` rules for anything else. The policy is disabled by default: the API server address,
 the kubelet port and the alert providers differ per cluster, a policy that
 misses one silently stops monitoring or alerting, and existing installations
 must not lose connectivity during an upgrade.
@@ -140,14 +154,35 @@ minutes, with one log line on recovery. Each round starts at the first node
 the previous round did not reach, so a slow round never starves the same
 nodes.
 
+### CPU and probes
+
+The default CPU request is 100m with a 500m limit, so a burst of events
+(for example a nightly node scale-up) is not throttled. The liveness and
+readiness probes wait 3 seconds for an answer and tolerate 3 failures in a
+row.
+
+### Node autoscalers
+
+kwatch holds one state file under one lock, so evicting its Pod to repack
+or scale down nodes costs a restart and a gap in monitoring. The manifest
+and the chart's default `podAnnotations` set the plain annotations
+`karpenter.sh/do-not-disrupt: "true"` and
+`cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`. They only ask a
+node autoscaler to leave the Pod alone, and they do nothing where none reads
+them; kwatch itself uses only the Kubernetes API and the kubelet.
+
 ### Memory
 
 The default memory limit is 512Mi. kwatch sets the Go soft memory limit
 (`GOMEMLIMIT`) to 90% of the container limit, read from the
 `KWATCH_MEMORY_LIMIT` downward-API variable, so the garbage collector works
 harder before the kernel would kill the Pod. An explicit `GOMEMLIMIT` always
-wins. A model of 5,000 pods and 500 nodes measured about 81 MiB of live heap
-(`TestMemoryBudgetLargeCluster`, which fails above 400 MiB).
+wins. A model of 5,000 pods and 500 nodes measured about 83 MiB of live heap
+(`TestMemoryBudgetLargeCluster`, which fails above 250 MiB of live heap or
+512 MiB of peak heap). Every 30
+minutes kwatch logs a `self-health` line with the Go heap in use, the
+number of goroutines and the sizes of its bounded in-memory maps, so slow
+growth shows in the logs before the limit does.
 
 The chart takes the container and probe port from `config.healthCheck.port`
 (default 8060) and refuses to render with `config.healthCheck.enabled: false`,
@@ -231,8 +266,10 @@ lost the Lease cannot write or delete anything.
 
 **Schema changes reset the store.** There are no migrations. When the file
 has another schema version (older or newer) or bbolt cannot read it, Kwatch
-deletes it, creates a fresh store, and continues: it starts cold and sends
-one startup summary. No backup is kept. The event is logged with the old
+renames it to `state.db.corrupt` (one copy, replaced by a later reset),
+creates a fresh store, and continues: it starts cold and sends one startup
+summary. A locked or otherwise unknown open error does not reset; startup
+fails instead. The event is logged with the old
 version and reason and appears on `/health` as the degraded `state-store`
 component with reason `storage_reset`; it does not affect readiness. The
 `kwatch_storage_resets_total` metric counts it by reason (`schema_mismatch`,
@@ -246,7 +283,7 @@ start. It never stops startup.
 
 **Retention.** A background compactor runs every 15 minutes in the active
 session, off the decision path, in transactions of at most 500 entries. It
-stops within one transaction on shutdown or loss of leadership.
+stops within one transaction on shutdown or loss of the state lock.
 
 | Data | Retention |
 | --- | --- |
@@ -359,9 +396,11 @@ The chart value `rbac.mode` selects the cluster read access:
   `nodes/metrics` and `pods/log`; a wildcard `get` would also match `pods/exec` and similar
   subresources. Secret values are covered by the grant but are hashed in
   the informer transform and never stored. The only other grants are the
-  audit's `selfsubjectaccessreviews` create, the `/readyz` read, and in
-  kwatch's own namespace the Lease writes and `get` on pods (restart
-  evidence for the previous kwatch Pod).
+  audit's `selfsubjectaccessreviews` create, the `/readyz` and `/metrics`
+  non-resource URL reads, `get` on `nodes` (restart evidence and kubelet
+  addresses), `get` on the scheduler and controller-manager Leases in
+  `kube-system`, and in kwatch's own namespace the Lease writes and `get`
+  on pods (restart evidence for the previous kwatch Pod).
 - `least-privilege` grants an explicit `list`/`watch` set derived from
   `kube.SourceAccess()` (typed sources, audited dynamic kinds, CRDs,
   Leases, ControllerRevisions and RBAC objects) plus the optional Gateway
@@ -382,7 +421,7 @@ that they cannot verify instead of guessing. The chart also passes
 `KWATCH_WATCH_SECRETS=false`, so the setting holds when `config.yaml` comes
 from your own Secret.
 
-In both modes the leader-election Role grants `get` and `update` only on
+In both modes the state lock Role grants `get` and `update` only on
 kwatch's own Lease (`resourceNames`); `create` cannot be limited by name in
 Kubernetes RBAC and is granted on Leases in kwatch's namespace.
 

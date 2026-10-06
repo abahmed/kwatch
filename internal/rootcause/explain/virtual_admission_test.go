@@ -36,6 +36,20 @@ func TestWebhookCallFailures(t *testing.T) {
 			ModeWebhookTimeout},
 		"refused": {prefix + "dial tcp 10.0.0.4:443: connect: " +
 			"connection refused", ModeWebhookCallFailed},
+		// The API server puts "?timeout=10s" in every webhook URL; that
+		// is the configured limit, not a sign the call timed out.
+		"refused with timeout query": {prefix + "Post \"https://" +
+			"p.svc:443/validate?timeout=10s\": dial tcp 10.0.0.4:443: " +
+			"connect: connection refused", ModeWebhookCallFailed},
+		"no endpoints": {prefix + "Post \"https://p.svc:443/validate" +
+			"?timeout=10s\": no endpoints available for service " +
+			"\"p\"", ModeWebhookCallFailed},
+		"real timeout with query": {prefix + "Post \"https://p.svc:443" +
+			"/validate?timeout=10s\": context deadline exceeded",
+			ModeWebhookTimeout},
+		"i/o timeout with query": {prefix + "Post \"https://p.svc:443" +
+			"/validate?timeout=10s\": dial tcp 10.0.0.4:443: i/o " +
+			"timeout", ModeWebhookTimeout},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -51,13 +65,13 @@ func TestWebhookCallFailures(t *testing.T) {
 }
 
 // TestWebhookCallNamesTheWebhook: a failed call blames only the
-// configuration whose webhook the error names, and a webhook that
-// answers with a denial did not fail to be called.
+// configuration whose webhook the error names, and another webhook's
+// denial is not this one's.
 func TestWebhookCallNamesTheWebhook(t *testing.T) {
 	cases := map[string]string{
 		"another webhook": "failed calling webhook \"x.example.com\": " +
 			"context deadline exceeded",
-		"a denial": "admission webhook \"image.example.com\" denied " +
+		"another denial": "admission webhook \"x.example.com\" denied " +
 			"the request: image is not signed",
 	}
 	for name, text := range cases {

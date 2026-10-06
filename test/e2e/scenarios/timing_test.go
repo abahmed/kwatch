@@ -52,3 +52,16 @@ func announceWait(sustain time.Duration) time.Duration {
 func resolveWait() time.Duration {
 	return holdTime + settleTime + slackTime
 }
+
+// syncedQuietTime is how long Kwatch must have been running before a
+// scenario may start a problem that it announces only much later. The
+// startup summary holds only problems that existed when Kwatch's sources
+// synced, which takes seconds, so a problem that starts after this time
+// is announced as usual.
+const syncedQuietTime = 30 * time.Second
+
+// waitForKwatchSynced is the short wait of a scenario whose announcement
+// is minutes away (see inNamespaceEarly).
+func waitForKwatchSynced(ctx context.Context, e *harness.Environment) error {
+	return e.WaitForKwatchAge(ctx, syncedQuietTime)
+}

@@ -21,6 +21,10 @@ const (
 	maxProviderBackoff = 5 * time.Minute
 )
 
+// rateLimitJitter spreads the wait after a rate limit that named none by
+// up to this fraction either way.
+const rateLimitJitter = 0.2
+
 // providerBackoff is the wait after the given number of failed rounds in
 // a row: 5s, 10s, 20s ... capped at maxProviderBackoff.
 func providerBackoff(failures int) time.Duration {
@@ -77,7 +81,11 @@ func (m *Manager) recordProviderFailure(entry *providerEntry, err error) {
 	now := m.nowTime()
 	if wait, limited := serverRetryAfter(err); limited {
 		if wait <= 0 {
-			wait = providerBackoff(1)
+			// No wait was named: back off like an outage, with jitter
+			// so several pods do not retry together.
+			wait = m.pacer.recordOutage(name)
+			wait = min(applyJitter(wait, rateLimitJitter),
+				maxProviderBackoff)
 		}
 		m.pacer.block(name, now.Add(wait))
 		m.setProviderHealth(entry, reasonRateLimited)

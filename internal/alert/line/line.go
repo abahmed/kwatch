@@ -24,7 +24,10 @@ type Line struct {
 	clusterName string
 }
 
-// NewLine returns a new Line object
+// NewLine returns a new Line object.
+//
+// Deprecated: LINE Notify was shut down on 2025-03-31. The provider is
+// kept until the owner decides to remove it.
 
 func NewLine(
 	config map[string]interface{},
@@ -37,7 +40,11 @@ func NewLine(
 		return nil
 	}
 
-	klog.InfoS("initializing line")
+	// Deprecated: not removed yet so existing configs still load, but
+	// every send fails, so say so loudly at startup.
+	klog.ErrorS(nil, "LINE Notify no longer exists: LINE shut it down "+
+		"on 2025-03-31, so every send to this provider will fail; "+
+		"use another provider such as webhook")
 
 	return &Line{
 		sender:      transport.NewSender(dependencies),

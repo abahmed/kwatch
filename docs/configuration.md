@@ -54,7 +54,7 @@ narrowing the watch list and turning off the noisy reasons.
 
 | Parameter | What it does |
 |:---|---|
-| `resyncSeconds` | How often informers re-list everything (default: 300). It is a safety net for lost watch events, not the detection path; `0` turns it off |
+| `resyncSeconds` | How often informers re-list everything (default: 300). It is a safety net for lost watch events, not the detection path; `0` turns it off, and any other value must be at least 30 so a typo cannot re-list every object every second |
 | `namespaces` | 🔽 Deliver only incidents in these namespaces — or use `!kube-system` to deliver *everything except* it |
 | `namespaceSelector` | 🏷️ Pick namespaces by K8s label selector (use *instead of* `namespaces`, not with it) |
 | `reasons` | 🔽 Deliver only these reasons — or exclude some with `!` (e.g. `reasons: ["!Started"]`) |
@@ -129,14 +129,14 @@ talks to the outside world.
 | `app.proxyURL` | 🔗 Proxy for outgoing HTTP requests |
 | `app.clusterName` | 🏷️ Name shown in alerts so you know which cluster |
 | `app.disableStartupMessage` | Silence the "kwatch is alive" welcome message |
-| `app.logFormatter` | Log format: `text` (default) or `json`. `json` writes one JSON object per log line to stderr |
+| `app.logFormatter` | Log format: `text` (default) or `json`. `json` writes one JSON object per log line to stderr. Any other value fails startup |
 | `app.insecureSkipTLSVerify` | 🔓 Skip TLS verification on outbound HTTP (default: false) |
 | `app.caBundlePath` | 📜 Path to a PEM CA bundle for outbound HTTP |
 
 The startup message and the upgrade notice are each a single plain sentence
 with one status emoji and no links, for example `🟡 kwatch v1.2.0 started.` and
 `🟡 kwatch v1.3.0 is available; this cluster runs v1.2.0.`. A restart after an
-internal failure, or after a gap in monitoring, uses 🟠 and says which period
+internal failure, after a gap in monitoring, or after a state reset uses 🟠 and says which period
 went unwatched. When there are problems that were already there at startup,
 one startup summary lists them, page-tier problems included; the paging
 tools and issue trackers below receive each page-tier announcement on its
@@ -156,7 +156,7 @@ SNS and Splunk HEC receive them as informational.
 
 | Parameter | What it does |
 |:---|---|
-| `kubelet.insecureSkipVerify` | 🔓 Skip kubelet serving certificate verification for direct node stats reads (default: false). Set it only when kubelet serving certificates are self-signed rather than signed by the cluster CA. Mounted configuration only; a KwatchConfig cannot set it |
+| `kubelet.insecureSkipVerify` | 🔓 Skip kubelet serving certificate verification for direct node stats reads (default: false). Set it only when kubelet serving certificates are self-signed rather than signed by the cluster CA. **Risk:** kwatch sends its ServiceAccount token to every kubelet it reads, so with verification off a compromised or impersonated node could capture that token. kwatch logs a warning at startup when this is on. Mounted configuration only; a KwatchConfig cannot set it |
 | `watch.secrets` | 🔐 Watch Secrets (values are hashed, never stored; default: true). `false` stops the Secret watch, lists Secret as `disabled_by_config` in `/health` coverage and makes checks that need Secrets report that they cannot verify. The Helm value `watch.secrets` also removes Secret RBAC |
 
 kwatch reads node stats directly from each kubelet over HTTPS (node
@@ -178,15 +178,15 @@ are the only HTTP endpoints; there are no diagnostic, profiling, or test-alert e
 
 **Endpoints:**
 - `GET /healthz` — ✅ Liveness
-- `GET /readyz` — ✅ Readiness. Ready when the leader has restored its on-disk state,
-  configured required sources, and synchronized required informer caches. Optional
-  API absence remains degraded and does not fail readiness. An unrecoverable
-  required startup or cache failure causes the active process to stop so
-  Kubernetes can restart or replace it.
-- `GET /availabilityz` — ✅ Deployment availability. A leader, or a Pod
-  still waiting for the Lease, can pass the rolling-update probe.
-- `GET /health` — JSON containing overall status, leadership, component states,
-  and bounded degradation reasons.
+- `GET /readyz` — ✅ Readiness. Ready when the state lock holder has restored
+  its on-disk state, configured required sources, and synchronized
+  required informer caches. Optional API absence remains degraded and does not
+  fail readiness. An unrecoverable required startup or cache failure causes the
+  active process to stop so Kubernetes can restart or replace it.
+- `GET /availabilityz` — ✅ Deployment availability. A state lock holder,
+  or a Pod still waiting for the state lock, can pass the rolling-update probe.
+- `GET /health` — JSON containing overall status, state lock status, component
+  states, and bounded degradation reasons.
 - `GET /metrics` — 📊 Prometheus-format metrics. It does not require Prometheus to be
   installed. Every series has a production writer; labels are a fixed, bounded set.
 
@@ -200,6 +200,7 @@ are the only HTTP endpoints; there are no diagnostic, profiling, or test-alert e
 | `kwatch_delivery_retries_total` | counter | none | Delivery retry attempts |
 | `kwatch_delivery_terminal_errors_total` | counter | none | Deliveries that failed with no fallback left |
 | `kwatch_delivery_dead_letters_total` | counter | none | Dead-lettered deliveries |
+| `kwatch_delivery_resolves_lost_total` | counter | none | Resolves given up on (dead-lettered, expired or dropped by a full queue); the alert they would have closed may stay open |
 | `kwatch_delivery_queue_saturated_total` | counter | none | Delivery queue saturation events |
 | `kwatch_delivery_pending_dropped_total` | counter | none | Notifications dropped before delivery started (pending queue full, or shutdown before start) |
 | `kwatch_delivery_budget_folded_total` | counter | none | Notifications folded into the overflow digest by the hourly budget |
@@ -226,7 +227,7 @@ are the only HTTP endpoints; there are no diagnostic, profiling, or test-alert e
 | `kwatch_component_stalls_total`, `kwatch_component_unexpected_stops_total` | counter | none | Required component stalls and unexpected stops |
 | `kwatch_shutdown_timeouts_total` | counter | none | Component shutdown timeouts |
 | `kwatch_source_unavailable_total` | counter | none | Required monitor sources unavailable |
-| `kwatch_leadership_acquisitions_total`, `kwatch_leadership_losses_total`, `kwatch_leader_takeovers_total` | counter | none | Leader election transitions |
+| `kwatch_leadership_acquisitions_total`, `kwatch_leadership_losses_total`, `kwatch_leader_takeovers_total` | counter | none | State lock transitions |
 | `kwatch_telemetry_attempts_total`, `kwatch_telemetry_successes_total`, `kwatch_telemetry_retries_total` | counter | none | Adoption telemetry |
 | `kwatch_telemetry_failures_total` | counter | `reason` = `state_read`, `invalid_identity`, `network`, `http_status`, `state_write` | Adoption telemetry failures |
 | `kwatch_rendered_details_omitted_total` | counter | none | Provider detail sections omitted by bounds |
@@ -265,6 +266,36 @@ status, resource versions, and deletion metadata remain intact.
   overflow digest instead of one message each. Updates and resolves of
   announced conversations are never counted. There is no global default;
   set it per provider.
+- **Routing.** A provider's `routes` (namespaces, severities, reasons;
+  reasons compare ignoring case) decide which incidents it is sent. A
+  conversation then stays with the providers that received its
+  announcement: every later update and the resolve go to exactly those
+  providers, even though a resolve names no reasons. After a restart,
+  when delivery has forgotten who was told, a resolve is judged on the
+  parts of its route it carries. Startup summaries, roll-ups, namespace
+  outage messages, restored-incident summaries and digests match a
+  provider's route when the route would match at least one problem they
+  name. The closing messages of those carry no problems and follow the
+  summary they close. Plain notices go to every provider.
+- **Pages are never folded.** Page-tier messages (route severity
+  `critical`) and the resolves of paged incidents are exempt from the
+  hourly budget, because a pager skips the overflow digest and a folded
+  page would reach nobody.
+- **Fallbacks.** A fallback is not used for what only the primary can do:
+  a pager or issue tracker keeps being retried for the opening and
+  resolve of an alert, and a paging provider is never the fallback for a
+  plain notice or summary, which it would silently skip.
+- **Rate limits and waits.** A `Retry-After` on a 429 or 503 is honoured.
+  A 429 without one backs off exponentially (5 s doubling to 5 min, with
+  jitter) instead of retrying every few seconds.
+- **Evidence policy.** Text a pod wrote (quoted errors, log lines)
+  is shown with credentials removed; there is no switch to show them.
+  Messages keep the private addresses (`10.x`, `172.16-31.x`, `192.168.x`)
+  in quoted text: a pod or service IP is no secret and helps debugging.
+  Only the log lines kwatch reads from the API server have private
+  addresses (`10.x`, `172.16-31.x`, `192.168.x`, `fc00::/7`, `fe80::`)
+  replaced. Resolves and pages go ahead of routine messages in a
+  provider's queue.
 - **Digest wording.** The digest says how many notifications were folded,
   counted per reason (the most common reasons first, the rest as
   "+N other kinds"), so a channel never receives a bare update for an
@@ -312,7 +343,7 @@ reported as `component_failed`.
 | `heartbeat_failed` | A heartbeat ping failed or was rejected |
 | `kubelet_unreachable`, `kubelet_partially_unreachable` | The `kubelet-stats` component could reach no node's kubelet, or only some of them, in the last stats round; only usage attributes are affected |
 | `config_overlay_invalid` | The `KwatchConfig` overlay is invalid; kwatch runs on the mounted configuration (`config-overlay` component), or the watcher rejected an edit without restarting (`crd-watcher` component) |
-| `leadership_lost`, `shutdown` | Why leadership ended |
+| `leadership_lost`, `shutdown` | Why the state lock was lost or the process ended |
 
 The vocabulary also allows `source_configuration_failed`, `discovery_failed`,
 `persistence_write_failed`, `provider_shutdown_timeout` and `rate_limited`.
@@ -339,15 +370,37 @@ In both modes:
 - `get` is granted only where kwatch reads a single object: `namespaces`,
   `nodes`, `nodes/stats`, `nodes/metrics` and `pods/log`. There is no wildcard
   `get`, which would also match subresources such as `pods/exec`.
+- `get` on the non-resource URLs `/readyz` and `/metrics` lets kwatch read the
+  API server's health and request counters.
+- `get` on `leases` in `kube-system` is granted by a namespaced Role, so
+  kwatch can see whether the scheduler and controller-manager are alive.
+- `list` and `watch` on `kwatchconfigs` (only when the CRD overlay is
+  enabled) is a namespaced Role in kwatch's own namespace, rendered in
+  both `least-privilege` and `full` modes (in `full` mode it repeats what
+  the wildcard already allows, which is harmless).
 - `get` on `pods` is granted only in kwatch's own namespace, to explain why
   the previous kwatch Pod restarted.
-- `get` and `update` on Leases are limited by name to kwatch's own Lease;
-  `create` is granted on Leases in kwatch's namespace because RBAC cannot
-  limit it by name.
+- `get` and `update` on Leases are limited by name to kwatch's own state lock
+  Lease; `create` is granted on Leases in kwatch's namespace because RBAC
+  cannot limit it by name.
 - `create` on `selfsubjectaccessreviews` lets kwatch audit its own
   permissions.
 - Secrets are covered by the grant but their values are hashed in the
   informer transform and never stored.
+
+**Secrets: the trade-off.** Watching Secrets is on by default. It lets kwatch
+notice that a Pod references a missing Secret, that a changed Secret
+(by value hash, never by value) may explain a restart, and that a
+certificate Secret is about to expire. The cost is RBAC: the default chart
+grant lets the kwatch ServiceAccount `list` and `watch` Secrets in every
+namespace, so anyone who can run code as that account, or who can read its
+token, can read Secret values through the API. kwatch itself keeps only
+hashes, but the permission exists. Helm release Secrets (type
+`helm.sh/release.v1`) are large and often hold rendered values; a field
+selector `type!=helm.sh/release.v1` keeps them out of the watch where the
+Secret informer supports it. To opt out entirely, set `watch.secrets: false`
+(see below) or export `KWATCH_WATCH_SECRETS=false`; the chart then also
+removes every Secret permission.
 
 Set `watch.secrets: false` (chart value and configuration field) to run
 without any Secret permission. kwatch then starts no Secret watch, lists
@@ -383,6 +436,31 @@ general configuration catalog.
 Missing optional endpoints and permissions are visible on `/health` as
 degraded components or in its `coverage` object, without becoming fabricated
 incidents.
+
+## 🌱 Environment variables
+
+kwatch reads these variables. The chart and `deploy/deploy.yaml` set the ones
+they need; set the others yourself when you run the binary another way.
+Booleans accept `true`/`false`, `1`/`0`, `on`/`off` and `yes`/`no` in any
+letter case; an empty value counts as unset, and any other text fails startup
+(except `SKIP_UPGRADE_CHECK`, where it is logged and ignored).
+
+| Variable | What it does |
+|:---|---|
+| `CONFIG_FILE` | Path of the mounted `config.yaml`. Unset runs on the built-in defaults; set to a missing file stops startup |
+| `KWATCH_WATCH_SECRETS` | `false` stops the Secret watch (see Kubernetes permissions); `true` leaves the file's setting alone |
+| `KWATCH_CRD_ENABLED` | Overrides `crd.enabled` in both directions; the chart sets it from `config.crd.enabled` |
+| `KWATCH_TELEMETRY` | `false` turns adoption telemetry off |
+| `SKIP_UPGRADE_CHECK` | A true value turns the update check off, like `upgrader.disableUpdateCheck` |
+| `CI` | Any value except empty, `false`, `0`, `no` or `off` marks a CI environment: telemetry is never sent |
+| `KWATCH_DATA_DIR` | Directory of the state file (default `/var/lib/kwatch`) |
+| `KWATCH_VOLUME_LIMIT` | Size limit of the data volume as a Kubernetes quantity such as `2Gi`; the chart sets it for `emptyDir`. An unreadable value fails startup |
+| `KWATCH_MEMORY_LIMIT` | Container memory limit in bytes (the chart sets it from the limit); kwatch sets the Go soft limit to 90% of it. Not a positive number fails startup. An explicit `GOMEMLIMIT` wins |
+| `KWATCH_INSTALLATION_ID` | Names this installation; the state lock Lease is `<id>-leader` |
+| `KWATCH_LEADER_ELECTION_NAME` | Exact name of the state lock Lease. With `POD_NAME` set, this or `KWATCH_INSTALLATION_ID` is required, so two installations never share a Lease |
+| `POD_NAME` | The Pod's name, used as the state lock identity (falls back to the host name) and to explain the previous Pod's restart |
+| `POD_NAMESPACE` | The namespace kwatch runs in: its Lease, `KwatchConfig` and own-namespace reads (falls back to `kwatch`) |
+| `POD_UID`, `NODE_NAME` | Recorded in the runtime session, to tell a node disruption or rollout from a crash |
 
 ## 🔄 Upgrader
 
@@ -427,6 +505,8 @@ monitoring.
 
 **How to disable it.** Set `telemetry.enabled: false` in the configuration, or
 set the environment variable `KWATCH_TELEMETRY` to `false`, `0`, `off` or `no`.
+An unrecognized value (a typo such as `flase`) fails startup with a clear
+error instead of being ignored.
 Development builds, recognized CI environments (`CI` is set) and installs
 without a state store do not send telemetry. At startup kwatch logs one line
 naming the endpoint and either that it is enabled or why it is skipped
@@ -449,9 +529,10 @@ cluster DNS pods' metrics port (9153). Both are optional: without access to
 them only those findings are dropped.
 
 Active probes are opt-in and target only endpoints explicitly listed by the
-operator by default. Set `autoServices: true` to probe every advertised
-Service port from inside the kwatch Pod (TCP for all ports, plus HTTP for
-ports whose name starts with `http`). A target must fail
+operator by default. Set `autoServices: true` to probe ClusterIP Services
+from inside the kwatch Pod: one TCP connection per Service, to its first
+advertised port. HTTP is not used, and at most 200 Services are probed per
+round, so a large cluster cannot turn probing into a scan. A target must fail
 `failureThreshold` consecutive checks before alerting; it resolves on the
 first successful check.
 
@@ -463,9 +544,8 @@ dependency that refuses connections is then named as the cause of the pods
 that call it, with the probe as proof.
 
 Explicit `http`, `tcp`, and `dns` targets are the recommended low-noise mode.
-`autoServices` is opt-in and probes every advertised Service port; it uses
-paginated Kubernetes API lists so large clusters are not fetched as one large
-response.
+`autoServices` is opt-in. It reads Services from kwatch's in-memory
+inventory, so it adds no API requests.
 
 | Parameter | What it does |
 |:---|---|
@@ -473,7 +553,7 @@ response.
 | `activeProbeMonitor.intervalSeconds` | ⏱️ Seconds between probe rounds (default: 30) |
 | `activeProbeMonitor.timeoutSeconds` | ⏱️ Timeout for each probe (default: 5) |
 | `activeProbeMonitor.failureThreshold` | 🔁 Consecutive failures before alerting (default: 3) |
-| `activeProbeMonitor.autoServices` | 🔗 Probe discoverable Service ports automatically (default: false) |
+| `activeProbeMonitor.autoServices` | 🔗 Probe each ClusterIP Service's first TCP port automatically, at most 200 per round (default: false) |
 | `activeProbeMonitor.excludeNamespaces` | 🚫 Namespaces `autoServices` and `autoDependencies` skip entirely |
 | `activeProbeMonitor.autoDependencies` | 🔌 Probe the endpoints outside the cluster that pod environments name, over TCP (default: false) |
 | `activeProbeMonitor.http` | 🌐 Explicit HTTP targets with optional status and latency limits |
@@ -488,6 +568,14 @@ response.
 > `activeProbeMonitor.excludeNamespaces`, or annotate the individual Service
 > with `kwatch.io/skip-probe: "true"`. Explicitly configured `http`, `tcp` and
 > `dns` targets are never filtered by either — you asked for those by name.
+
+> ⚠️ **Outbound NetworkPolicy.** Probes, `autoServices`, `autoDependencies`,
+> `app.proxyURL` and providers on a port other than 443 all make kwatch dial
+> addresses the Helm chart's default egress policy does not open. With
+> `networkPolicy.enabled=true` they fail until you open them
+> (`networkPolicy.extraEgressPorts`, `networkPolicy.egress`, or
+> `networkPolicy.allowProbeEgressAll`); see the chart README. The default
+> policy does open the cluster DNS metrics port (9153) in `kube-system`.
 
 ```yaml
 activeProbeMonitor:
@@ -600,9 +688,14 @@ templates:
   CrashLoopBackOff: "{{ .Text }} (see the runbook)"
 ```
 
+A provider can override the global `templates` for itself with
+`alert.<provider>.templates`, a map of the same shape. A template that does
+not parse is a configuration error: startup and `kwatch lint` both report it.
+
 ### 📚 Runbooks
 
 `runbooks` maps a reason to a URL that is added to the next steps of every incident with that reason.
+Each value must be an absolute `http` or `https` URL; startup and `kwatch lint` reject anything else.
 
 ```yaml
 runbooks:
@@ -640,6 +733,10 @@ of running with defaults and no providers. Without `CONFIG_FILE` kwatch uses
 the built-in defaults.
 `${VAR}` remains available for non-sensitive settings only. Sensitive settings
 accept absolute `${file:/path}` references exclusively.
+
+`${VAR}` is expanded in every string value, including silence patterns and
+message substrings, and an unset variable stops startup. To keep a literal
+`${NAME}` (for example in a `containerMessages` substring), write `$${NAME}`.
 
 If a token has ever been committed to a ConfigMap, rotate it — it should be treated as
 disclosed, not merely moved.
@@ -719,6 +816,21 @@ before enabling it.
 The chart passes `config.crd.enabled` to the container as `KWATCH_CRD_ENABLED`
 (`true` or `false`), which overrides `crd.enabled` in the mounted file, so the
 setting also holds when you bring your own Secret with `configSecretName`.
+
+**Environment booleans.** `KWATCH_WATCH_SECRETS`, `KWATCH_CRD_ENABLED` and
+`KWATCH_TELEMETRY` accept `true`/`false`, `1`/`0`, `on`/`off` and `yes`/`no`
+in any letter case; an empty value counts as unset. Any other text fails
+startup with an error naming the variable, so a typo can never silently leave
+Secret watching on. `KWATCH_WATCH_SECRETS` can only turn watching off: `true`
+leaves `config.yaml`'s setting alone.
+
+The CRD schema rejects values kwatch would reject: `resyncSeconds` must be
+`0` or at least `30`, `app.logFormatter` must be `text` or `json`, and
+`heartbeatMonitor.interval` cannot be negative. `healthCheck` is not part of the
+schema and a `KwatchConfig` cannot set it: the probes and the chart depend on
+the health server, so it is configured in the mounted configuration only. The
+CRD is cluster-wide and shared by every release; see the chart README for
+`crd.install` when you run more than one release.
 
 An invalid overlay never crash-loops kwatch. The watcher checks an edited
 `KwatchConfig` against the mounted configuration before it restarts: an

@@ -168,10 +168,12 @@ func (v *view) candidates(failures []inventory.EntityID) *candidateSet {
 	}
 	applyMinCovered(cs)
 	v.applySharedFactorWindow(cs)
+	v.applySignatureWindow(cs)
 	v.applyMinWorkloads(cs)
 	// After pruning, so a summary is never covered through an effect
 	// that was dropped.
 	v.addSummaries(cs, failures)
+	v.addMetricsBackends(cs)
 	for id, c := range cs.byID {
 		c.findings = v.s.Findings[id]
 	}
@@ -293,7 +295,7 @@ func (v *view) summaryOwners(effect inventory.EntityID) []inventory.EntityID {
 	if unit.Kind == kube.KindPod {
 		out = append(out, v.servicesSelecting(unit)...)
 	}
-	return append(out, ownerChain(v.s.Model, unit)...)
+	return append(out, rootcause.OwnerChain(v.s.Model, unit)...)
 }
 
 // onlySummaries reports whether every unhealthy finding of id is a
@@ -333,27 +335,6 @@ func applyMinCovered(cs *candidateSet) {
 		if len(c.covers) == 0 {
 			delete(cs.byID, c.id)
 		}
-	}
-}
-
-// ownerChain walks owned-by from id to the top controller, id
-// excluded. Static pods owned by their node stop the walk: a node is
-// where they run, not a controller.
-func ownerChain(
-	model inventory.Reader, id inventory.EntityID,
-) []inventory.EntityID {
-	var chain []inventory.EntityID
-	seen := map[inventory.EntityID]bool{id: true}
-	for current := id; ; {
-		owners := model.Related(current, inventory.OwnedBy,
-			inventory.Outgoing)
-		if len(owners) == 0 || seen[owners[0]] ||
-			owners[0].Kind == kube.KindNode {
-			return chain
-		}
-		current = owners[0]
-		seen[current] = true
-		chain = append(chain, current)
 	}
 }
 

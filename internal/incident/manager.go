@@ -36,6 +36,9 @@ type Manager struct {
 	// restoreGrace delays recovery of restored incidents until detectors
 	// had time to re-raise their findings.
 	restoreGrace time.Time
+	// quietIDs are the incidents that resolved without a decision, until
+	// TakeQuietResolves reports them.
+	quietIDs []string
 	// changed collects the incidents an Apply touched, refreshed once
 	// at its end.
 	changed map[string]bool
@@ -116,6 +119,7 @@ func (m *Manager) Apply(
 	}
 	m.adoptAdvisories(s)
 	m.refresh(s.Model)
+	m.observeAttempts(dirty, s.Now)
 }
 
 // maxTimeline bounds the events an incident keeps. The timeline is
@@ -124,7 +128,15 @@ func (m *Manager) Apply(
 const maxTimeline = 50
 
 func (inc *Incident) note(at time.Time, text string) {
-	inc.Timeline = append(inc.Timeline, Event{At: at, Text: text})
+	inc.noteAbout(at, text, nil)
+}
+
+// noteAbout adds an event about one member entity.
+func (inc *Incident) noteAbout(
+	at time.Time, text string, about *inventory.EntityID,
+) {
+	inc.Timeline = append(inc.Timeline,
+		Event{At: at, Text: text, Entity: about})
 	inc.sent.noted++
 	if over := len(inc.Timeline) - maxTimeline; over > 0 {
 		inc.Timeline = append(inc.Timeline[:0:0], inc.Timeline[over:]...)
@@ -175,4 +187,25 @@ func (m *Manager) Incidents() []Incident {
 		out = append(out, m.incidents[id].Snapshot())
 	}
 	return out
+}
+
+// SettlingUnexplained counts the incidents of namespace that are still
+// settling at the notify tier or higher, have no cause and opened at or
+// after since: the ones that may join a namespace outage. It reads the
+// incidents in place, without copying them, because the announcer asks
+// for every candidate announcement of a storm.
+func (m *Manager) SettlingUnexplained(
+	namespace string, since time.Time,
+) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := 0
+	for _, p := range m.incidents {
+		if p.State == Settling && p.Cause == nil &&
+			p.Root.Namespace == namespace && p.Tier >= Notify &&
+			!p.Opened.Before(since) {
+			n++
+		}
+	}
+	return n
 }

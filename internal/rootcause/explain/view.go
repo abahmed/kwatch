@@ -7,6 +7,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 // view is a Snapshot with the lookups one solve repeats, memoised.
@@ -261,7 +262,7 @@ func (v *view) changeModes(id inventory.EntityID) []modeHealth {
 
 // ownerChanged reports whether an owner of id changed in the window.
 func (v *view) ownerChanged(id inventory.EntityID) bool {
-	for _, owner := range ownerChain(v.s.Model, id) {
+	for _, owner := range rootcause.OwnerChain(v.s.Model, id) {
 		for _, change := range v.changesOf(owner) {
 			if changeMode(change) != ModeScaled {
 				return true
@@ -316,10 +317,7 @@ func (v *view) virtualModes(
 			return failing(ModeMetricsUnserved)
 		}
 	case kube.KindZone, kube.KindNodePool:
-		// One failing node is that node's problem, not its zone's.
-		if v.membersFailing(id) >= MinGroupMembersFailing {
-			return failing(ModeMembersFailing)
-		}
+		return v.groupModes(id)
 	case kube.KindPVC:
 		if modes := v.claimModes(id, effect, link); len(modes) > 0 {
 			return modes
@@ -334,6 +332,19 @@ func (v *view) virtualModes(
 		}
 	}
 	return v.missingModes(id, link)
+}
+
+// groupModes is ModeMembersFailing for a zone or pool with several
+// broken nodes. A booting group has young nodes that fail while they
+// come up: that is the boot, not a failing group. One failing node is
+// that node's problem, not its group's.
+func (v *view) groupModes(group inventory.EntityID) []modeHealth {
+	if kube.GroupBootRemaining(v.s.Model, group, v.s.Now) > 0 ||
+		v.membersFailing(group) < MinGroupMembersFailing {
+		return nil
+	}
+	return []modeHealth{{mode: ModeMembersFailing,
+		health: detection.Failing, pseudo: true}}
 }
 
 // backendModes are the pseudo modes of a webhook's backend Service, read

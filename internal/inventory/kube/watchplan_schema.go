@@ -91,6 +91,8 @@ func setDefault(
 type MetadataSchema struct {
 	group string
 	kind  inventory.Kind
+	// spelling is the Kubernetes Kind as the API writes it.
+	spelling string
 }
 
 // NewMetadataSchema builds a schema for one Kubernetes Kind of one API
@@ -98,6 +100,7 @@ type MetadataSchema struct {
 func NewMetadataSchema(apiGroup, kubernetesKind string) MetadataSchema {
 	return MetadataSchema{
 		group: GroupFor(apiGroup), kind: KindFor(kubernetesKind),
+		spelling: kubernetesKind,
 	}
 }
 
@@ -121,7 +124,7 @@ func (s MetadataSchema) Describe(obj any) (Description, bool) {
 		ID: inventory.NewEntityID(
 			s.group, s.kind, m.GetNamespace(), m.GetName()),
 		UID:        string(m.GetUID()),
-		Attributes: map[string]inventory.Value{},
+		Attributes: KindNameAttributes(s.spelling),
 		Relations:  rel,
 	}, true
 }

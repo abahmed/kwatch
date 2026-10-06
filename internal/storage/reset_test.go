@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	bolt "go.etcd.io/bbolt"
+	berrors "go.etcd.io/bbolt/errors"
 )
 
 // writeVersion stores version in the file at path, as an older or newer
@@ -32,6 +34,13 @@ func leftovers(t *testing.T, path string) []string {
 	names, err := filepath.Glob(path + ".*")
 	require.NoError(t, err)
 	return names
+}
+
+// assertKeptAside checks that the replaced file survives as the single
+// path+".corrupt" copy.
+func assertKeptAside(t *testing.T, path string) {
+	t.Helper()
+	assert.Equal(t, []string{path + corruptSuffix}, leftovers(t, path))
 }
 
 // seeded creates a claimed file at path holding one state value.
@@ -59,7 +68,7 @@ func TestOpenCurrentVersionDoesNotReset(t *testing.T) {
 	assert.Empty(t, leftovers(t, path))
 }
 
-func TestOpenSchemaMismatchDeletesAndStartsFresh(t *testing.T) {
+func TestOpenSchemaMismatchKeepsOldFileAndStartsFresh(t *testing.T) {
 	for name, version := range map[string]uint64{
 		"older": SchemaVersion - 1, "newer": SchemaVersion + 1,
 	} {
@@ -75,7 +84,7 @@ func TestOpenSchemaMismatchDeletesAndStartsFresh(t *testing.T) {
 			require.True(t, ok)
 			assert.Equal(t, ResetSchemaMismatch, reset.Reason)
 			assert.Equal(t, version, reset.OldVersion)
-			assert.Empty(t, leftovers(t, path), "no backup is kept")
+			assertKeptAside(t, path)
 			assert.Equal(t, uint64(1), claim(t, s), "fresh epoch")
 			_, found, err := state(s).Get("k")
 			require.NoError(t, err)
@@ -103,7 +112,7 @@ func TestOpenFileWithoutVersionIsSchemaMismatch(t *testing.T) {
 	assert.Zero(t, reset.OldVersion)
 }
 
-func TestOpenUnreadableFileDeletesAndStartsFresh(t *testing.T) {
+func TestOpenUnreadableFileKeepsOldFileAndStartsFresh(t *testing.T) {
 	for name, size := range map[string]int{
 		"tiny": 15, "page sized": 16 << 10, "large": 64 << 10,
 	} {
@@ -121,7 +130,7 @@ func TestOpenUnreadableFileDeletesAndStartsFresh(t *testing.T) {
 			reset, ok := s.Reset()
 			require.True(t, ok)
 			assert.Equal(t, ResetUnreadable, reset.Reason)
-			assert.Empty(t, leftovers(t, path), "no backup is kept")
+			assertKeptAside(t, path)
 			claim(t, s)
 			require.NoError(t, state(s).Put("k", "v"))
 		})
@@ -153,4 +162,55 @@ func TestOpenInaccessibleDirectoryFailsWithoutReset(t *testing.T) {
 		Options{Now: newFakeClock().Now})
 
 	require.Error(t, err)
+}
+
+// A second reset replaces the older quarantined file: only one is kept.
+func TestSecondResetOverwritesQuarantinedFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+	require.NoError(t, os.WriteFile(path, []byte("first bad file"), 0o600))
+	openStoreAt(t, path).Close()
+	require.NoError(t, os.Remove(path))
+	require.NoError(t, os.WriteFile(path, []byte("second bad"), 0o600))
+	openStoreAt(t, path).Close()
+
+	assertKeptAside(t, path)
+	kept, err := os.ReadFile(path + corruptSuffix)
+	require.NoError(t, err)
+	assert.Equal(t, "second bad", string(kept))
+}
+
+// An error that is not structural must never move a file aside.
+func TestUnknownOpenErrorIsNotResettable(t *testing.T) {
+	assert.False(t, resettable(errors.New("out of memory")))
+	assert.True(t, resettable(berrors.ErrInvalid))
+	assert.True(t, resettable(berrors.ErrChecksum))
+}
+
+func openWithVolumeLimit(t *testing.T, path string, limit int64) {
+	t.Helper()
+	s, err := Open(path, Options{
+		Now: newFakeClock().Now, VolumeLimit: limit,
+	})
+	require.NoError(t, err)
+	require.NoError(t, s.Close())
+}
+
+// With a volume limit, a quarantined copy larger than its share would eat
+// the budget the fresh file needs, so it is deleted.
+func TestResetDeletesQuarantinedFileBeyondVolumeShare(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+	require.NoError(t, os.WriteFile(path, make([]byte, 4096), 0o600))
+
+	openWithVolumeLimit(t, path, 8192)
+
+	assert.Empty(t, leftovers(t, path), "the oversized copy must go")
+}
+
+func TestResetKeepsSmallQuarantinedFileWithVolumeLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+	require.NoError(t, os.WriteFile(path, []byte("bad"), 0o600))
+
+	openWithVolumeLimit(t, path, 1<<20)
+
+	assertKeptAside(t, path)
 }

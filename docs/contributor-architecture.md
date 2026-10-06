@@ -26,6 +26,9 @@ Each line matches the package's `doc.go`.
 | `internal/notification/compose` | Writes the note for an incident decision as a short narrative. |
 | `internal/scope` | Namespaces, reasons, silences and maintenance holds: which findings are in scope. |
 | `internal/pipeline` | The decision loop, bounded investigation and storage workers, downtime reconciliation, audit entries. |
+| `internal/pipeline/announce` | Startup summary, digest, roll-up and namespace outage collecting. |
+| `internal/pipeline/coverage` | Memory and timings of the coverage backstop; its `doc.go` explains the whole check. |
+| `internal/pipeline/investigate` | Evidence investigators run by the investigation pool. |
 | `internal/storage` | The bbolt state file: one bucket per data class, epoch fencing, retention, reset. |
 | `internal/delivery` | Routing, retries, pacing, fallback and provider dispatch. |
 | `internal/delivery/transport` | The shared outbound HTTP boundary providers use. |
@@ -72,7 +75,9 @@ The script enforces these rules:
 - `storage` imports no domain package. `scope` imports nothing at or above
   rootcause, and `rbac` nothing at or above detection.
 - `pipeline` does not import delivery, alert, app, health or config. Only
-  `app` (and `replay`, which is test tooling) imports `pipeline`.
+  `app` (and `replay`, which is test tooling) imports `pipeline`. Its
+  subpackages `announce`, `coverage` and `investigate` never import
+  `pipeline` or each other; the pipeline wires them.
 - Leaf packages (`notification`, `format`, `redact`, `ratelimit`,
   `detection/reasons`) import no upper layer.
 - `alert/*` and `delivery` import no domain package, no `kube`, no
@@ -116,13 +121,14 @@ provider catalog and the website reference.
 ## Persistence
 
 Keep persisted records flat. A format change bumps `storage.SchemaVersion`.
-Because an unreadable or mismatched file is deleted and recreated, add a
+Because an unreadable or mismatched file is renamed to `state.db.corrupt`
+(one copy, replaced by a later reset) and a fresh one is created, add a
 test that an old-version file is reset and reported, and a release note.
 
 ## Test and verify
 
 Name tests after behavior. Split large test files by responsibility
-(`queue_retry_test.go`), with shared setup in `fixtures_test.go`. Use fake
+(`queue_coalesce_test.go`), with shared setup in `fixtures_test.go`. Use fake
 clocks and fake clients, not sleeps. Before handoff run:
 
 ```sh

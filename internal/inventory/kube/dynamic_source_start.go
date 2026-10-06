@@ -38,15 +38,18 @@ func (d *DynamicSource) start(
 	resourceCtx, cancel := context.WithCancel(ctx)
 	w := &dynamicWatch{
 		kind: KindFor(r.kind), mode: r.mode, parent: ctx, cancel: cancel,
-		done:  make(chan struct{}),
-		store: informer.GetStore(),
-		translator: NewTranslator(withGenericAttributes(sch, r.mode)).
-			WithMaintenance(d.cfg.Maintenance),
+		done:      make(chan struct{}),
+		store:     informer.GetStore(),
 		admission: admission,
 	}
 	if prev != nil {
+		// The new watch keeps the previous one's translator, which holds
+		// what it already knows about the objects.
 		w.translator = prev.translator
 		w.handedOver = make(chan struct{})
+	} else {
+		w.translator = NewTranslator(withGenericAttributes(sch, r.mode)).
+			WithMaintenance(d.cfg.Maintenance)
 	}
 	if err := d.addHandlers(resourceCtx, r, informer, w); err != nil {
 		cancel()

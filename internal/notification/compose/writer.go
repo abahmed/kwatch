@@ -64,22 +64,26 @@ func (w Writer) write(
 	p := f.p
 	msg := notification.Message{
 		Key: p.ID, DedupKey: p.AlertKey, Revision: p.Revision,
-		Route:    route(p, f.members),
+		Route:    routeOfMessage(d.Action, p, f.members),
 		Timeline: timeline(p, maxTimelineLines),
 	}
 	if d.Action == incident.Resolve {
 		msg.Status = notification.StatusResolved
 		mark, sentences := resolveNote(f)
-		fill(&msg, mark, arrange(sentences))
+		fill(&msg, mark, respell(arrange(sentences), d.Facts.KindNames))
 		msg.Opening = w.opening(d, now)
+		if p.CanReopen() {
+			msg.ReopenWithin = incident.RepageWindow
+		}
 		return msg
 	}
 	msg.Status = status(p)
-	msg.Output = d.Output
+	msg.Output = d.Facts.Output
 	msg.Steps = append(nextSteps(p, f.members),
 		w.runbookSteps(f.members)...)
 	msg.Confidence = confidence(p.Cause)
-	fill(&msg, marker(p), arrange(noteSentences(d, f)))
+	fill(&msg, marker(p),
+		respell(arrange(noteSentences(d, f)), d.Facts.KindNames))
 	msg.Opens = d.Action == incident.Announce
 	if !msg.Opens {
 		msg.Opening = w.opening(d, now)
@@ -94,8 +98,7 @@ func (w Writer) opening(
 	d incident.Decision, now time.Time,
 ) *notification.Message {
 	announce := incident.Decision{Action: incident.Announce,
-		Incident: d.Incident, Reason: d.Reason, Output: d.Output,
-		Evidence: d.Evidence}
+		Incident: d.Incident, Reason: d.Reason, Facts: d.Facts}
 	if announce.Incident.State == incident.Resolved {
 		// Written as it was while open: a resolved announcement would
 		// read as a recovery.
@@ -237,6 +240,44 @@ func lowerFirst(value string) string {
 		}
 	}
 	return strings.ToLower(value)
+}
+
+// routeOfMessage is the route of a message. The announcement is routed
+// from the live members. Every later message is routed with what the
+// announcement named (Incident.AnnouncedRoute, kept across restarts), or
+// a resolve with no members left would match no rule that asked for a
+// reason: a resolve takes the announced route whole, an update adds the
+// live members to it and keeps its live severity.
+func routeOfMessage(
+	action incident.Action, p incident.Incident,
+	members []detection.Finding,
+) notification.Route {
+	live := route(p, members)
+	told := p.AnnouncedRoute
+	if action == incident.Announce || told == nil {
+		return live
+	}
+	if action == incident.Resolve {
+		return notification.Route{
+			Namespaces: append([]string(nil), told.Namespaces...),
+			Reasons:    append([]string(nil), told.Reasons...),
+			Severity:   told.Severity,
+		}
+	}
+	return notification.Route{
+		Namespaces: mergeSorted(told.Namespaces, live.Namespaces),
+		Reasons:    mergeSorted(told.Reasons, live.Reasons),
+		Severity:   live.Severity,
+	}
+}
+
+// mergeSorted is the sorted union of two string lists.
+func mergeSorted(a, b []string) []string {
+	set := map[string]bool{}
+	for _, v := range append(append([]string(nil), a...), b...) {
+		set[v] = true
+	}
+	return sortedSet(set)
 }
 
 // route summarises an incident for provider routing rules.

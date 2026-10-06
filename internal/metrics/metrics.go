@@ -23,6 +23,7 @@ type Registry struct {
 	DeliveryRetries          atomic.Int64
 	DeliveryTerminalErrors   atomic.Int64
 	DeliveryDeadLetters      atomic.Int64
+	DeliveryResolvesLost     atomic.Int64
 	DeliveryQueueSaturated   atomic.Int64
 	DeliveryPendingDropped   atomic.Int64
 	DeliveryDigestSkipped    atomic.Int64
@@ -161,6 +162,9 @@ var scalarMetrics = []scalarMetric{
 	counter("kwatch_delivery_dead_letters_total",
 		"Delivery dead-letter entries",
 		func(r *Registry) int64 { return r.DeliveryDeadLetters.Load() }),
+	counter("kwatch_delivery_resolves_lost_total",
+		"Resolves given up on, which can leave an alert open",
+		func(r *Registry) int64 { return r.DeliveryResolvesLost.Load() }),
 	counter("kwatch_delivery_queue_saturated_total",
 		"Delivery queue saturation events",
 		func(r *Registry) int64 { return r.DeliveryQueueSaturated.Load() }),

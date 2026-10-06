@@ -37,13 +37,16 @@ func TestProgressCheckIntervalHasBoundedMinimum(t *testing.T) {
 	}
 }
 
+// shutdownTestKey is a typed context key, so values cannot collide.
+type shutdownTestKey struct{}
+
 func TestDetachedShutdownContextsRetainValues(t *testing.T) {
-	parent := context.WithValue(context.Background(), "key", "value")
+	parent := context.WithValue(context.Background(), shutdownTestKey{}, "value")
 	parent, cancel := context.WithCancel(parent)
 	cancel()
 	shutdown, stop := boundedShutdownContext(parent, time.Second)
 	defer stop()
-	if shutdown.Value("key") != "value" {
+	if shutdown.Value(shutdownTestKey{}) != "value" {
 		t.Fatal("shutdown context lost parent values")
 	}
 	if shutdown.Err() != nil {

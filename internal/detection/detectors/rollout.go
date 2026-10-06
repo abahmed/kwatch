@@ -34,13 +34,7 @@ func statefulSetRollout(
 	partition, _ := number(e, kube.AttrPartition)
 	evidence := rolloutEvidence(e, updated, partition)
 	if partition > 0 && updated >= desired-partition {
-		return detection.Finding{
-			Reason: reasons.StatefulSetRolloutStuck, Severity: detection.Info,
-			Since: valueSince(e, kube.AttrPartition),
-			Summary: "Rollout is held by partition " + countText(partition) +
-				": ordinals below it keep revision " + current,
-			Evidence: evidence,
-		}, true
+		return heldByPartition(ctx, e, current, partition, evidence)
 	}
 	since := latest(valueSince(e, kube.AttrRevision),
 		valueSince(e, kube.AttrUpdatedReplicas))
@@ -59,6 +53,33 @@ func statefulSetRollout(
 	return detection.Finding{
 		Reason: reasons.StatefulSetRolloutStuck, Severity: detection.Warning,
 		Health: detection.Failing, Since: since, Summary: summary,
+		Evidence: evidence,
+	}, true
+}
+
+// heldByPartition handles a rollout that stops at a partition. Setting a
+// partition is how a canary or staged rollout is done on purpose, so it is
+// not a finding by itself. It becomes one when pods of the StatefulSet are
+// failing, because then the held rollout may be the reason.
+func heldByPartition(
+	ctx detection.Context, e inventory.Entity, current string,
+	partition float64, evidence []detection.Evidence,
+) (detection.Finding, bool) {
+	blocked := unreadyPods(ctx, e.ID)
+	if len(blocked) == 0 {
+		return detection.Finding{}, false
+	}
+	for _, name := range blocked {
+		evidence = append(evidence,
+			detection.Evidence{Label: "not ready", Value: name})
+	}
+	return detection.Finding{
+		Reason: reasons.StatefulSetRolloutStuck, Severity: detection.Warning,
+		Health: detection.Failing,
+		Since:  valueSince(e, kube.AttrPartition),
+		Summary: "Rollout is held by partition " + countText(partition) +
+			" and " + strings.Join(blocked, ", ") + " not ready: " +
+			"ordinals below it keep revision " + current,
 		Evidence: evidence,
 	}, true
 }

@@ -9,6 +9,13 @@ package delivery
 // name and restores them before delivery starts; a provider that no longer
 // exists simply has its entry ignored.
 
+// ThreadLookup is an optional cheap per-key check next to
+// ThreadStateProvider: HasThread reports whether the provider tracks key,
+// even an incident it created but could not address (not persisted).
+type ThreadLookup interface {
+	HasThread(key string) bool
+}
+
 // ThreadStateProvider is an optional interface for providers that keep
 // per-problem conversation ids worth surviving a restart.
 type ThreadStateProvider interface {

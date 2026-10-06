@@ -1,8 +1,8 @@
 // Package rootcause holds what the root-cause engine shares with the
 // layers above it: the CauseRecord an incident keeps, the confidence
 // levels readers see, plain-word notes for what kwatch cannot see, and
-// small graph and text helpers (pods, owners, registries, scheduler
-// messages). The engine itself is package explain.
+// small graph and text helpers (pods, owners, registries). The engine
+// itself is package explain.
 //
 // Vocabulary:
 //   - explain.Cause: one cause the engine states for some failures.

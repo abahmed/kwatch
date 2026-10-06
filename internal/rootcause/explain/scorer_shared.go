@@ -47,11 +47,16 @@ func scoreShared(v *view, c *candidate) outcome {
 func (v *view) workloadsOf(effects []inventory.EntityID) int {
 	owners := map[inventory.EntityID]bool{}
 	for _, effect := range effects {
-		unit := effect
-		if pod, ok := v.podOf(effect); ok {
-			unit = pod
-		}
-		owners[rootcause.TopOwner(v.s.Model, unit)] = true
+		owners[v.workloadOf(effect)] = true
 	}
 	return len(owners)
+}
+
+// workloadOf is the top owner of an effect, or of its pod.
+func (v *view) workloadOf(effect inventory.EntityID) inventory.EntityID {
+	unit := effect
+	if pod, ok := v.podOf(effect); ok {
+		unit = pod
+	}
+	return rootcause.TopOwner(v.s.Model, unit)
 }

@@ -34,6 +34,55 @@ func quotaNearLimit(e inventory.Entity) []detection.Finding {
 	}}
 }
 
+// quotaCreators are the kinds whose controllers record FailedCreate when
+// the API server refuses the pods they ask for.
+var quotaCreators = []inventory.Kind{
+	kube.KindReplicaSet, kube.KindStatefulSet, kube.KindDaemonSet,
+	kube.KindJob,
+}
+
+// quotaRefusalText is what the API server says when a quota refuses a
+// create: "... is forbidden: exceeded quota: NAME, requested: ...".
+const quotaRefusalText = "exceeded quota: "
+
+// IsQuotaRefusal reports whether an event on a controller says the API
+// server refused its create because a quota would be exceeded. The engine
+// uses it to re-check the namespace quotas when such an event arrives,
+// because the event lands on the controller and not on the quota.
+func IsQuotaRefusal(note inventory.Note) bool {
+	return note.Reason == "FailedCreate" &&
+		strings.Contains(note.Message, quotaRefusalText)
+}
+
+// quotaRefusedCreate reports whether a controller in the namespace was
+// recently refused a create because it would exceed a quota. A non-empty
+// quota name narrows this to refusals that name that quota.
+func quotaRefusedCreate(
+	ctx detection.Context, namespace, quota string,
+) bool {
+	if ctx.Model == nil {
+		return false
+	}
+	since := ctx.Now.Add(-EventWindow)
+	needle := quotaRefusalText
+	if quota != "" {
+		needle += quota + ","
+	}
+	for _, kind := range quotaCreators {
+		for _, id := range ctx.Model.EntitiesIn(kind, namespace) {
+			for _, note := range ctx.Model.Notes(id, since) {
+				if IsQuotaRefusal(note) &&
+					strings.Contains(note.Message, needle) {
+					ctx.RecheckAfter(note.At.Add(EventWindow).
+						Sub(ctx.Now) + time.Nanosecond)
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 // DefaultDetachStuck is how long a VolumeAttachment may take to detach;
 // the attach-detach controller force-detaches after six minutes.
 const DefaultDetachStuck = 10 * time.Minute

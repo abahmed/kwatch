@@ -22,8 +22,8 @@ func PodOf(model inventory.Reader, id inventory.EntityID) (
 	return inventory.EntityID{}, false
 }
 
-// ownerChain walks owned-by from id to the top controller, id excluded.
-func ownerChain(
+// OwnerChain walks owned-by from id to the top controller, id excluded.
+func OwnerChain(
 	model inventory.Reader, id inventory.EntityID,
 ) []inventory.EntityID {
 	var chain []inventory.EntityID
@@ -47,7 +47,7 @@ func ownerChain(
 func TopOwner(
 	model inventory.Reader, id inventory.EntityID,
 ) inventory.EntityID {
-	chain := ownerChain(model, id)
+	chain := OwnerChain(model, id)
 	if len(chain) == 0 {
 		return id
 	}

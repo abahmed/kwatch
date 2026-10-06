@@ -43,6 +43,18 @@
       },
       "additionalProperties": false
     },
+    "crd": {
+      "type": "object",
+      "description": "Cluster-wide KwatchConfig CRD ownership",
+      "properties": {
+        "install": {
+          "type": "boolean",
+          "default": true,
+          "description": "Install the shared KwatchConfig CRD with this release; skipped automatically when another release owns it"
+        }
+      },
+      "additionalProperties": false
+    },
     "persistence": {
       "type": "object",
       "description": "State store volume",
@@ -121,7 +133,7 @@
             "object",
             "array"
           ],
-          "default": "1000"
+          "default": 1000
         },
         "runAsGroup": {
           "type": [
@@ -131,7 +143,7 @@
             "object",
             "array"
           ],
-          "default": "1000"
+          "default": 1000
         },
         "runAsNonRoot": {
           "type": [
@@ -141,7 +153,7 @@
             "object",
             "array"
           ],
-          "default": "true"
+          "default": true
         },
         "readOnlyRootFilesystem": {
           "type": [
@@ -151,7 +163,7 @@
             "object",
             "array"
           ],
-          "default": "true"
+          "default": true
         },
         "allowPrivilegeEscalation": {
           "type": [
@@ -161,7 +173,7 @@
             "object",
             "array"
           ],
-          "default": "false"
+          "default": false
         },
         "capabilities": {
           "type": "object",
@@ -197,7 +209,7 @@
             "object",
             "array"
           ],
-          "default": "1000"
+          "default": 1000
         }
       }
     },
@@ -227,7 +239,7 @@
                 "object",
                 "array"
               ],
-              "default": "100m"
+              "default": "500m"
             }
           }
         },
@@ -287,7 +299,16 @@
       "description": "kwatch configuration (see deploy/config.yaml for full reference)",
       "properties": {
         "resyncSeconds": {
-          "type": "integer"
+          "type": "integer",
+          "description": "Informer resync in seconds: 0 (off) or at least 30",
+          "anyOf": [
+            {
+              "const": 0
+            },
+            {
+              "minimum": 30
+            }
+          ]
         },
         "namespaces": {
           "type": "array",
@@ -320,7 +341,9 @@
               "type": "boolean"
             },
             "interval": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0,
+              "description": "Seconds between pings; 0 uses the default (300)"
             },
             "url": {
               "type": "string"
@@ -442,7 +465,19 @@
               "type": "boolean"
             },
             "logFormatter": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "text",
+                "json"
+              ]
+            },
+            "insecureSkipTLSVerify": {
+              "type": "boolean",
+              "description": "Skip TLS verification of outbound HTTPS; only for testing"
+            },
+            "caBundlePath": {
+              "type": "string",
+              "description": "PEM CA bundle for outbound HTTP, added to the system roots"
             }
           }
         },
@@ -518,7 +553,110 @@
           "additionalProperties": false
         },
         "activeProbeMonitor": {
-          "type": "object"
+          "type": "object",
+          "description": "Active probes of HTTP, TCP and DNS targets",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "intervalSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "timeoutSeconds": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "failureThreshold": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "http": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "url"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "expectedStatus": {
+                    "type": "integer",
+                    "minimum": 100,
+                    "maximum": 599
+                  },
+                  "latencyWarningMs": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "latencyCriticalMs": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "tcp": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "address"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "dns": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "host"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "host": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "autoServices": {
+              "type": "boolean",
+              "description": "Probe the first TCP port of every ClusterIP Service (at most 200); needs egress, see networkPolicy"
+            },
+            "excludeNamespaces": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "autoDependencies": {
+              "type": "boolean",
+              "description": "Probe external endpoints named in pod environments over TCP; needs egress, see networkPolicy"
+            }
+          },
+          "additionalProperties": false
         },
         "kubelet": {
           "type": "object",
@@ -569,7 +707,8 @@
             443,
             6443
           ],
-          "description": "TCP ports opened for the Kubernetes API server and HTTPS providers"
+          "description": "TCP ports opened for the Kubernetes API server and HTTPS providers",
+          "minItems": 1
         },
         "ingress": {
           "type": "array",
@@ -607,6 +746,18 @@
           },
           "default": [],
           "description": "Extra TCP ports kwatch may reach on any address, such as SMTP 25/465/587 or a webhook on a custom port"
+        },
+        "allowProbeEgressAll": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow all egress from the pod: active probe targets, autoServices, autoDependencies, a proxy or providers on unusual ports"
+        },
+        "dnsMetricsPort": {
+          "type": "integer",
+          "default": 9153,
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Cluster DNS metrics port opened to kube-dns pods in kube-system; 0 omits the rule"
         }
       },
       "additionalProperties": false
@@ -627,8 +778,11 @@
       "additionalProperties": {
         "type": "string"
       },
-      "default": {},
-      "description": "Extra annotations for the kwatch Pod"
+      "default": {
+        "karpenter.sh/do-not-disrupt": "true",
+        "cluster-autoscaler.kubernetes.io/safe-to-evict": "false"
+      },
+      "description": "Annotations for the kwatch Pod; the defaults keep node autoscalers from evicting it"
     },
     "podLabels": {
       "type": "object",

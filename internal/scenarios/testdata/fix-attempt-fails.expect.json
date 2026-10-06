@@ -1,0 +1,11 @@
+{
+  "name": "fix-attempt-fails",
+  "description": "A second rollout, made to fix a crash-looping one, crash-loops as well; the thread says it still fails ten minutes after the rollout.",
+  "root": "deployment/shop/payments",
+  "tier": "notify",
+  "maxMessages": 5,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

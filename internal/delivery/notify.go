@@ -64,15 +64,19 @@ func (m *Manager) holdPendingLocked(job deliverJob) {
 		return
 	}
 	limit := channelCap * len(generation.order)
+	var routed []string
 	for _, name := range generation.order {
-		if !routedTo(generation.entries[name].routes, job) {
+		entry := generation.entries[name]
+		if !m.wants(entry, job) || !acceptsPagingOnly(entry, job) {
 			continue
 		}
+		routed = append(routed, name)
 		copied := job
 		copied.target = name
 		copied.outboxID = m.outbox.Load().add(copied, name)
 		m.holdOnePendingLocked(copied, limit)
 	}
+	m.noteRouted(job, routed...)
 }
 
 func (m *Manager) holdOnePendingLocked(job deliverJob, limit int) {

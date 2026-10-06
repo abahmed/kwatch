@@ -6,6 +6,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/rootcause/explain"
@@ -85,7 +86,7 @@ func blamedChangeText(change inventory.Change) string {
 		return change.Actor + " changed " + fieldList(change) +
 			changeValues(change)
 	}
-	if isWorkload(change.Entity.Kind) {
+	if incident.IsWorkload(change.Entity.Kind) {
 		return "the release changed " + fieldList(change) +
 			changeValues(change)
 	}
@@ -171,8 +172,10 @@ func causeProofSentences(f caseFacts) []sentence {
 	var out []sentence
 	for _, item := range f.p.Cause.Proof {
 		text := proofWords(item)
-		if !item.Supports || text == "" || (f.p.Cause.Change != nil &&
-			strings.HasSuffix(text, "changed shortly before")) {
+		if !item.Supports || text == "" || (deniedCause(f.p.Cause) &&
+			strings.Contains(text, "mention")) ||
+			(f.p.Cause.Change != nil &&
+				strings.HasSuffix(text, "changed shortly before")) {
 			// The change sentence already says what changed.
 			continue
 		}
@@ -190,6 +193,10 @@ func errorSentences(f caseFacts) []sentence {
 		return nil
 	}
 	said := evidence(f.lead, "error", "message")
+	if kube.IsRuntimeLogFailure(said) {
+		// The kubelet failing to read the log is not the app's error.
+		said = ""
+	}
 	switch {
 	case pullNoise.MatchString(said):
 		if !strings.Contains(leadText(f), " pull") {
@@ -242,13 +249,15 @@ func schedulerSentences(f caseFacts) []sentence {
 	if counted := investigatedScheduler(f); counted != nil {
 		return counted
 	}
+	out := schedulerNumbers(f)
 	for _, s := range f.members {
 		if said := evidence(s, "scheduler"); said != "" {
-			return []sentence{{part: partProof, weight: weightScheduler,
-				text: "The scheduler says " + quoted(said) + "."}}
+			return append(out, sentence{part: partProof,
+				weight: weightScheduler,
+				text:   "The scheduler says " + quoted(said) + "."})
 		}
 	}
-	return nil
+	return out
 }
 
 // reasonConsequences say what the lead's own condition breaks.

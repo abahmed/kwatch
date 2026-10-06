@@ -65,11 +65,30 @@ func TestQuotaExhausted(t *testing.T) {
 	put(m, id, t0, map[string]inventory.Value{
 		kube.AttrExhausted: inventory.Text("pods,cpu"),
 	})
-	got := evaluate(Quota{}, m, t0, id, nil).Findings
+	rs := newID(kube.KindReplicaSet, "default", "web-1")
+	put(m, rs, t0, nil)
+	warn(m, rs, t0, "FailedCreate",
+		`Error creating: pods "web-1-x" is forbidden: exceeded quota: q`)
+	got := evaluate(Quota{}, m, t0.Add(time.Minute), id, nil).Findings
 	require.Len(t, got, 1)
 	assert.Equal(t, reasons.ResourceQuotaExhausted, got[0].Reason)
 	assert.Equal(t, detection.Warning, got[0].Severity)
 	assert.Contains(t, got[0].Summary, "pods, cpu")
+}
+
+// A quota used up to exactly its limit is normal when nothing more is
+// being created; only a refused create makes it a problem.
+func TestQuotaAtTheLimitIsInfoUntilACreateIsRefused(t *testing.T) {
+	m := newTestModel()
+	id := newID(kube.KindQuota, "default", "q")
+	put(m, id, t0, map[string]inventory.Value{
+		kube.AttrExhausted: inventory.Text("pods"),
+	})
+
+	got := evaluate(Quota{}, m, t0, id, nil).Findings
+
+	require.Len(t, got, 1)
+	assert.Equal(t, detection.Info, got[0].Severity)
 }
 
 func TestQuotaQuiet(t *testing.T) {
@@ -87,7 +106,12 @@ func TestAttachmentFailed(t *testing.T) {
 	put(m, id, t0, map[string]inventory.Value{
 		kube.AttrAttachError: inventory.Text("timeout"),
 	})
-	got := evaluate(Attachment{}, m, t0, id, nil).Findings
+	// A throttled or retried attach clears itself within moments.
+	early := evaluate(Attachment{}, m, t0.Add(time.Second), id, nil)
+	assert.Empty(t, early.Findings)
+	assert.Positive(t, early.RecheckAfter)
+	got := evaluate(Attachment{}, m, t0.Add(DefaultCustomFailing), id,
+		nil).Findings
 	require.Len(t, got, 1)
 	assert.Equal(t, reasons.VolumeAttachmentFailure, got[0].Reason)
 	assert.Equal(t, detection.Critical, got[0].Severity)

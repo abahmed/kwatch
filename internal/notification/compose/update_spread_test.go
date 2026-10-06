@@ -28,8 +28,10 @@ func spreadUpdate(sinceSent bool) string {
 	p.Timeline = []incident.Event{
 		{At: at(2, 20), Text: "Container is crash looping " +
 			"(container shop/payments-7d9f/app)"},
-		{At: at(7, 0), Text: cart.Summary + " (service shop/cart)"},
-		{At: at(8, 0), Text: search.Summary + " (service shop/search)"},
+		{At: at(7, 0), Text: cart.Summary + " (service shop/cart)",
+			Entity: aboutEntity(inventory.CoreID(kube.KindService, "shop", "cart"))},
+		{At: at(8, 0), Text: search.Summary + " (service shop/search)",
+			Entity: aboutEntity(inventory.CoreID(kube.KindService, "shop", "search"))},
 	}
 	if sinceSent {
 		// The last message reported the crash loop, the first entry.
@@ -66,8 +68,10 @@ func TestUpdateRecoveredMemberNamesTheSubject(t *testing.T) {
 	p.Timeline = []incident.Event{
 		{At: at(2, 20), Text: "Container is crash looping " +
 			"(container shop/payments-7d9f/app)"},
-		{At: at(9, 0), Text: recoveredPrefix + "Service has no ready " +
-			"backends (service shop/cart)"},
+		{At: at(9, 0), Text: incident.RecoveredPrefix +
+			"Service has no ready backends (service shop/cart)",
+			Entity: aboutEntity(inventory.CoreID(
+				kube.KindService, "shop", "cart"))},
 	}
 	p.Reported, p.ReportedKnown = 1, true
 	d := incident.Decision{Action: incident.Update, Incident: p,
@@ -125,8 +129,10 @@ func TestUpdateNamesTheSubjectOnce(t *testing.T) {
 	p.Timeline = []incident.Event{
 		{At: at(2, 20), Text: "Container is crash looping " +
 			"(container shop/payments-7d9f/app)"},
-		{At: at(7, 0), Text: down.Summary + " (deployment shop/payments)"},
-		{At: at(7, 0), Text: cart.Summary + " (service shop/cart)"},
+		{At: at(7, 0), Text: down.Summary + " (deployment shop/payments)",
+			Entity: aboutEntity(payments)},
+		{At: at(7, 0), Text: cart.Summary + " (service shop/cart)",
+			Entity: aboutEntity(inventory.CoreID(kube.KindService, "shop", "cart"))},
 	}
 	p.Reported, p.ReportedKnown = 1, true
 	d := incident.Decision{Action: incident.Update, Incident: p,

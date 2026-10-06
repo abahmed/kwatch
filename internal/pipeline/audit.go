@@ -36,19 +36,37 @@ func AuditEntry(
 		AffectedCount:  len(p.Impact),
 		CauseState:     causeState(p),
 		Confidence:     m.Confidence,
-		DecisionReason: d.Reason,
-		ContentHash:    p.Digest,
+		DecisionReason: string(d.Reason),
+		ContentHash:    contentHash(d),
 		Previous:       p.Previous,
 		Delivery:       m.Carrier,
 		Considered:     p.Considered,
 	}
-	if m.PagingOnly {
+	switch {
+	case m.PagingOnly:
 		entry.Delivery = "paging"
+	case m.SkipPaging && entry.Delivery == "":
+		entry.Delivery = "chat"
+	}
+	if m.Listed != nil {
+		entry.Opened, entry.Resolved = m.Listed.Opened, m.Listed.Resolved
+		entry.Risks, entry.Items = m.Listed.Risks, m.Listed.Items
 	}
 	if p.Cause != nil {
 		entry.RootCause = p.Cause.Summary
 	}
 	return entry
+}
+
+// contentHash fingerprints what the message says. A reminder states how
+// long the incident has been open, so it says something new each time
+// even though the incident's fingerprint has not changed.
+func contentHash(d incident.Decision) string {
+	p := d.Incident
+	if d.Reason == incident.ReasonReminder {
+		return p.Digest + "@" + p.Reminded.UTC().Format(time.RFC3339)
+	}
+	return p.Digest
 }
 
 // causeState classifies the explanation. A cause is only the failing

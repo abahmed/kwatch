@@ -16,6 +16,9 @@ type AuditEntry struct {
 	Root      string    `json:"root"`
 	Tier      string    `json:"tier,omitempty"`
 	Previous  string    `json:"previous,omitempty"`
+	// DecisionReason is why the message was sent; "failing again" marks
+	// an incident that came back after it was resolved.
+	DecisionReason string `json:"decisionReason,omitempty"`
 	// Delivery is set when a digest, roll-up or startup summary carried
 	// the decision; such an entry is not a message of its own.
 	Delivery string `json:"delivery,omitempty"`
@@ -91,7 +94,7 @@ func EvaluateRoot(
 	incidents := make(map[string]bool)
 	older := openedBefore(entries, scope.Since)
 	for _, entry := range entries {
-		if !inScope(entry, scope) || older[entry.Incident] {
+		if !inScope(entry, scope) || older.skips(entry) {
 			continue
 		}
 		// Only an announcement counts: a "resolved" entry can belong to an
@@ -117,7 +120,7 @@ func judgeEntries(
 	total := 0
 	older := openedBefore(entries, scope.Since)
 	for _, entry := range entries {
-		if !inScope(entry, scope) || older[entry.Incident] {
+		if !inScope(entry, scope) || older.skips(entry) {
 			continue
 		}
 		for _, blamed := range exp.MustNotBlame {
@@ -194,18 +197,44 @@ func rootMatches(actual, want string) bool {
 	return a[2] == w[2]
 }
 
+// failingAgain is the decision reason of an update that reopens an
+// incident Kwatch resolved earlier, keeping its ID.
+const failingAgain = "failing again"
+
+// staleIncidents maps an incident opened before the scenario to the time
+// it became the scenario's own: never, or when it was reopened.
+type staleIncidents map[string]time.Time
+
+// skips reports whether the entry still belongs to an earlier scenario.
+func (s staleIncidents) skips(entry AuditEntry) bool {
+	from, stale := s[entry.Incident]
+	return stale && entry.Timestamp.Before(from)
+}
+
 // openedBefore lists the incidents announced before since. Their later
 // updates and resolves belong to an earlier scenario, so they must not
-// count as this scenario blaming or messaging anyone.
-func openedBefore(entries []AuditEntry, since time.Time) map[string]bool {
-	older := map[string]bool{}
+// count as this scenario blaming or messaging anyone. The exception is an
+// incident that fails again after since: Kwatch reopens it under the same
+// ID, so its entries from the reopening on are this scenario's.
+func openedBefore(entries []AuditEntry, since time.Time) staleIncidents {
+	older := staleIncidents{}
 	if since.IsZero() {
 		return older
 	}
+	never := time.Unix(1<<40, 0)
 	for _, entry := range entries {
 		if entry.Action == "create" && entry.Timestamp.Before(since) {
-			older[entry.Incident] = true
+			older[entry.Incident] = never
 		}
+	}
+	for _, entry := range entries {
+		from, stale := older[entry.Incident]
+		if !stale || entry.Action != "update" ||
+			entry.DecisionReason != failingAgain ||
+			entry.Timestamp.Before(since) || !entry.Timestamp.Before(from) {
+			continue
+		}
+		older[entry.Incident] = entry.Timestamp
 	}
 	return older
 }

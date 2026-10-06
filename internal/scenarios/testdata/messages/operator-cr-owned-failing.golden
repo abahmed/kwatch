@@ -1,4 +1,4 @@
 10:04:15 settled
-🟠 Kafkacluster events in data (prod-eu-1) is not ready (invalid broker config). All of its dependents are failing. To read the output of the last crash, run kubectl logs events-kafka-0 -c app -n data --previous
-🟠 Kafkacluster events in data (prod-eu-1) is not ready (invalid broker config).
+🟠 KafkaCluster events in data (prod-eu-1) is not ready (invalid broker config). All of its dependents are failing. To read the output of the last crash, run kubectl logs events-kafka-0 -c app -n data --previous
+🟠 KafkaCluster events in data (prod-eu-1) is not ready (invalid broker config).
 

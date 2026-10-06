@@ -175,7 +175,7 @@ func decisionEntry(d incident.Decision, now time.Time) TimelineEntry {
 	return TimelineEntry{
 		At: now, Received: now, Kind: TimelineDecision,
 		Entity: d.Incident.Root.String(), Action: decisionActions[d.Action],
-		Text: d.Reason, Incident: d.Incident.ID,
+		Text: string(d.Reason), Incident: d.Incident.ID,
 		Mode: string(d.Incident.Mode),
 	}
 }

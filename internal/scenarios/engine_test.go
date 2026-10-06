@@ -15,6 +15,7 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/notification/compose"
 	"github.com/abahmed/kwatch/internal/pipeline"
+	"github.com/abahmed/kwatch/internal/pipeline/announce"
 	"github.com/abahmed/kwatch/internal/replay"
 	"github.com/abahmed/kwatch/internal/rootcause"
 	"github.com/abahmed/kwatch/internal/rootcause/explain"
@@ -105,11 +106,11 @@ func (m *memoryStore) LoadFingerprints() (map[string]string, error) {
 
 func (m *memoryStore) SaveFingerprints(map[string]any) error { return nil }
 
-func (m *memoryStore) LoadStartup() (pipeline.StartupState, bool, error) {
-	return pipeline.StartupState{}, false, nil
+func (m *memoryStore) LoadStartup() (announce.StartupState, bool, error) {
+	return announce.StartupState{}, false, nil
 }
 
-func (m *memoryStore) SaveStartup(pipeline.StartupState) error { return nil }
+func (m *memoryStore) SaveStartup(announce.StartupState) error { return nil }
 
 // replayLog runs a log through a fresh engine.
 func replayLog(
@@ -124,7 +125,9 @@ func replayLog(
 	return result
 }
 
-// reported is one incident people heard about, in its final state.
+// reported is one incident people heard about, in its final state. Tier
+// is the loudest tier it reached, not its final one: a page that was
+// later held to notify still paged.
 type reported struct {
 	ID    string
 	Root  string
@@ -152,6 +155,7 @@ func reportedIncidents(result replay.Result) []reported {
 		final[p.ID] = p
 	}
 	first := map[string]time.Time{}
+	loudest := loudestTiers(result)
 	note := func(id string, at time.Time) {
 		if _, seen := first[id]; !seen && id != "" {
 			first[id] = at
@@ -167,15 +171,17 @@ func reportedIncidents(result replay.Result) []reported {
 		}
 	}
 	var out []reported
-	seen := map[string]bool{}
+	index := map[string]int{}
 	for id, at := range first {
 		p := successor(final, final[id])
-		if seen[p.ID] {
+		tier := max(loudest[id], loudest[p.ID], p.Tier)
+		if i, seen := index[p.ID]; seen {
+			out[i].Tier = max(out[i].Tier, tier)
 			continue
 		}
-		seen[p.ID] = true
+		index[p.ID] = len(out)
 		out = append(out, reported{
-			ID: p.ID, Root: p.Root.String(), Cause: p.Cause, Tier: p.Tier,
+			ID: p.ID, Root: p.Root.String(), Cause: p.Cause, Tier: tier,
 			First: at,
 		})
 	}
@@ -186,6 +192,22 @@ func reportedIncidents(result replay.Result) []reported {
 		return out[i].ID < out[j].ID
 	})
 	return out
+}
+
+// loudestTiers is the loudest tier each incident had in any decision or
+// final state.
+func loudestTiers(result replay.Result) map[string]incident.Tier {
+	loudest := map[string]incident.Tier{}
+	note := func(p incident.Incident) {
+		loudest[p.ID] = max(loudest[p.ID], p.Tier)
+	}
+	for _, p := range result.Incidents {
+		note(p)
+	}
+	for _, d := range result.Decisions {
+		note(d.Incident)
+	}
+	return loudest
 }
 
 // latest keeps the tracked final state unless only the decision knows the

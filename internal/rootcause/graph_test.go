@@ -84,7 +84,7 @@ func TestOwnerChainWalksToTopController(t *testing.T) {
 	h.relateOwned(p, rs)
 	h.relate(rs, inventory.OwnedBy, d)
 
-	chain := ownerChain(h.model, p)
+	chain := OwnerChain(h.model, p)
 	if len(chain) != 2 || chain[0] != rs || chain[1] != d {
 		t.Fatalf("chain = %v", chain)
 	}
@@ -98,7 +98,7 @@ func TestOwnerChainExcludesStaticPodNodeOwner(t *testing.T) {
 	p, n := podID("static"), eid(kube.KindNode, "", "n1")
 	h.relateOwned(p, n)
 
-	if chain := ownerChain(h.model, p); len(chain) != 0 {
+	if chain := OwnerChain(h.model, p); len(chain) != 0 {
 		t.Errorf("node must not be an owner, got %v", chain)
 	}
 	if TopOwner(h.model, p) != p {
@@ -113,7 +113,7 @@ func TestOwnerChainStopsOnCycle(t *testing.T) {
 	h.relate(a, inventory.OwnedBy, b)
 	h.relate(b, inventory.OwnedBy, a)
 
-	if chain := ownerChain(h.model, a); len(chain) != 1 || chain[0] != b {
+	if chain := OwnerChain(h.model, a); len(chain) != 1 || chain[0] != b {
 		t.Errorf("cycle chain = %v", chain)
 	}
 }

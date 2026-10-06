@@ -20,6 +20,19 @@ const (
 type deliverOpts struct {
 	retry        retryConfig
 	fallbackFrom string
+	// attempts, when set, counts the provider calls the send made, so
+	// the send log can say how many retries it took.
+	attempts *int
+}
+
+// counted wraps one provider call so opts.attempts counts it.
+func (o deliverOpts) counted(send func() error) func() error {
+	return func() error {
+		if o.attempts != nil {
+			*o.attempts++
+		}
+		return send()
+	}
 }
 
 // dispatch sends one job to one provider. It is the single place that
@@ -30,10 +43,16 @@ func (m *Manager) dispatch(
 	job deliverJob,
 	opts deliverOpts,
 ) error {
+	attempts := 0
+	opts.attempts = &attempts
+	var err error
 	if job.kind == jobIncident && job.incident != nil {
-		return m.dispatchIncident(ctx, entry, job, opts)
+		err = m.dispatchIncident(ctx, entry, job, opts)
+	} else {
+		err = m.dispatchMessage(ctx, entry, job, opts)
 	}
-	return m.dispatchMessage(ctx, entry, job, opts)
+	logSend(newSendRecord(entry.provider.Name(), job, opts, attempts, err))
+	return err
 }
 
 // dispatchMessage sends a plain operator message as text, cut to the
@@ -53,7 +72,7 @@ func (m *Manager) dispatchMessage(
 		msg = truncateMsg(msg, entry.maxBytes)
 	}
 	requestCtx := m.requestContext(ctx)
-	return sendWithRetry(ctx, func() error {
+	return sendWithRetry(ctx, opts.counted(func() error {
 		return p.SendMessage(requestCtx, msg)
-	}, opts.retry, p.Name())
+	}), opts.retry, p.Name())
 }

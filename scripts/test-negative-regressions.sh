@@ -39,7 +39,7 @@ run_tests ./internal/rootcause/explain \
 echo "Checking Slack retry and thread regressions..."
 run_tests ./internal/alert/slack \
 	TestPostWithThreadFallbackRetriesToTopLevelOnStaleThread \
-	TestSlackIncidentPostsShortRootThenNoteInThread \
+	TestSlackIncidentPostsFullNoteAsRoot \
 	TestSlackRestoredThreadIsReused
 
 echo "Checking incident lifecycle regressions..."

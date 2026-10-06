@@ -78,7 +78,7 @@ func (c *client) Send(ctx context.Context, r Request) ([]byte, error) {
 		return nil, fmt.Errorf("%s: outbound HTTP client is not configured",
 			r.Provider)
 	}
-	response, err := c.httpClient.Do(req)
+	response, err := noRedirects(c.httpClient).Do(req)
 	if err != nil {
 		return nil, RedactURLError(err)
 	}
@@ -95,10 +95,24 @@ func (c *client) Send(ctx context.Context, r Request) ([]byte, error) {
 	}
 	// The bounded read protects memory use. Drain the remainder so the
 	// application-owned HTTP transport can reuse the connection.
-	if _, err := io.Copy(io.Discard, response.Body); err != nil {
+	// The drain is capped too: a hostile endpoint must not hold the worker.
+	const maxDrainBytes = 1 << 20
+	if _, err := io.CopyN(io.Discard, response.Body, maxDrainBytes); err != nil &&
+		!errors.Is(err, io.EOF) {
 		return body, fmt.Errorf("%s: drain response body: %w", r.Provider, err)
 	}
 	return classifyResponse(r, response, body, c.now)
+}
+
+// noRedirects returns a copy of c that never follows a redirect: a 301, 302
+// or 303 would turn the POST into a GET that is counted as delivered, and a
+// redirect to another host would carry the provider's auth headers there.
+func noRedirects(c *http.Client) *http.Client {
+	copied := *c
+	copied.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	return &copied
 }
 
 // buildRequest turns a provider Request into an HTTP request with its
@@ -150,17 +164,39 @@ func classifyResponse(
 			RetryAfter: retryAfter,
 		}
 	}
+	if response.StatusCode >= 300 && response.StatusCode <= 399 {
+		return body, Permanent(fmt.Errorf(
+			"call to %s was redirected (status code %d) and kwatch does "+
+				"not follow redirects: check the configured URL",
+			r.Provider, response.StatusCode))
+	}
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		err := fmt.Errorf(
-			"call to %s returned status code %d: %s",
-			r.Provider, response.StatusCode, responseSummary(body),
-		)
-		if IsPermanentHTTPStatus(response.StatusCode) {
-			return body, Permanent(err)
-		}
-		return body, err
+		return body, failureOf(r, response, body, now)
 	}
 	return body, nil
+}
+
+// failureOf is the error of a non-2xx answer: a StatusError, permanent for
+// a client error, with the wait of a 503 that names one.
+func failureOf(
+	r Request, response *http.Response, body []byte,
+	now func() time.Time,
+) error {
+	var err error = &StatusError{
+		Provider: r.Provider, StatusCode: response.StatusCode,
+		Body: responseSummary(body),
+	}
+	switch {
+	case IsPermanentHTTPStatus(response.StatusCode):
+		return Permanent(err)
+	case response.StatusCode == http.StatusServiceUnavailable:
+		// A busy server says how long to wait; honour it like a rate
+		// limit.
+		if wait := ratelimit.ParseRetryAfterAt(response, now()); wait > 0 {
+			return &RetryAfterError{Err: err, RetryAfter: wait}
+		}
+	}
+	return err
 }
 
 func responseSummary(body []byte) string {

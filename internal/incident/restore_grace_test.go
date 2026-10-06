@@ -3,6 +3,9 @@ package incident
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // An incident opened after a restart is not a restored one: when it
@@ -23,5 +26,27 @@ func TestManagerRestoreGraceSparesIncidentsOpenedAfterRestart(t *testing.T) {
 
 	ds := fresh.tick(
 		at(2*time.Minute + time.Second + DefaultHold))
-	wantAction(t, ds, Resolve, "healthy for "+DefaultHold.String())
+	wantAction(t, ds, Resolve, Reason("healthy for "+DefaultHold.String()))
+}
+
+// A restored recovering incident whose findings come back during the
+// grace is the same failure continuing, not a new flap: a restart must
+// not add a cycle to its flap count.
+func TestRestoredRecoveringReturnIsNotAFlapCycle(t *testing.T) {
+	web := podSig("web")
+	old := newRig(t, Config{})
+	announced(t, old, web)
+	old.clear(at(2*time.Minute), web)
+	old.tick(at(2 * time.Minute))
+	require.Equal(t, Recovering, old.only().State)
+	before := len(old.only().Cycles)
+
+	fresh := newRig(t, Config{})
+	fresh.m.Restore(old.m.Export(), at(12*time.Minute))
+	fresh.raise(at(3*time.Minute), web)
+	fresh.tick(at(3*time.Minute + time.Second))
+
+	got := fresh.only()
+	assert.Equal(t, Open, got.State, "the failure is back")
+	assert.Len(t, got.Cycles, before, "a restart is not a recovery")
 }

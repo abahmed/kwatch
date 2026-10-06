@@ -75,3 +75,41 @@ func TestLogReaderKeepsTheEndOfALongTail(t *testing.T) {
 		"the first kept line is whole")
 	assert.Less(t, len(lines), 199, "the front of the tail is dropped")
 }
+
+func TestLogReaderDropsRuntimeLogFailures(t *testing.T) {
+	client := fake.NewSimpleClientset(pod("p"))
+	serveLogs(client, "unable to retrieve container logs for "+
+		"containerd://3cc241fa\n"+
+		"failed to try resolving symlinks in path \"/var/log/x.log\"\n"+
+		"container abc not found\n"+
+		"real application line\n")
+	id := kube.ContainerID(testNamespace, "p", "app")
+
+	got := kube.LogReader{Client: client}.Lines(context.Background(), id)
+
+	assert.Equal(t, []string{"real application line"}, got)
+}
+
+func TestLogReaderPreviousLinesRedactsAndKeepsPreviousOnly(t *testing.T) {
+	client := fake.NewSimpleClientset(pod("p"))
+	var previous []bool
+	client.PrependReactor("get", "pods",
+		func(a ktesting.Action) (bool, runtime.Object, error) {
+			g, ok := a.(ktesting.GenericAction)
+			if !ok || a.GetSubresource() != "log" {
+				return false, nil, nil
+			}
+			opts, _ := g.GetValue().(*corev1.PodLogOptions)
+			previous = append(previous, opts.Previous)
+			assert.Equal(t, int64(50), *opts.TailLines)
+			body := "fatal: login failed password=hunter2hunter2\n"
+			return true, &runtime.Unknown{Raw: []byte(body)}, nil
+		})
+	id := kube.ContainerID(testNamespace, "p", "app")
+	lines, err := kube.LogReader{Client: client}.PreviousLines(
+		context.Background(), id)
+	require.NoError(t, err)
+	require.Len(t, lines, 1)
+	assert.NotContains(t, lines[0], "hunter2hunter2")
+	assert.Equal(t, []bool{true}, previous)
+}

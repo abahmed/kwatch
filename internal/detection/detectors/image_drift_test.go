@@ -2,6 +2,7 @@ package detectors
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,7 +39,8 @@ func driftWorkload(imageIDs ...string) (*inventory.Model, inventory.EntityID) {
 func TestImageDriftReportsTwoBuildsUnderOneTag(t *testing.T) {
 	m, deploy := driftWorkload("sha256:aaa", "sha256:bbb", "sha256:aaa")
 
-	got := ImageDrift{}.Detect(testDetectorContext(m, t0), entityOf(m, deploy))
+	now := t0.Add(DefaultImageDriftGrace)
+	got := ImageDrift{}.Detect(testDetectorContext(m, now), entityOf(m, deploy))
 
 	require.Len(t, got, 1)
 	assert.Equal(t, "ImageDigestDrift", got[0].Reason)
@@ -52,4 +54,72 @@ func TestImageDriftStaysQuietForOneBuild(t *testing.T) {
 
 	assert.Empty(t, ImageDrift{}.Detect(testDetectorContext(m, t0),
 		entityOf(m, deploy)))
+}
+
+func TestImageDriftWaitsOutTheGracePeriod(t *testing.T) {
+	m, deploy := driftWorkload("sha256:aaa", "sha256:bbb")
+	ctx := testDetectorContext(m, t0.Add(DefaultImageDriftGrace-time.Second))
+
+	assert.Empty(t, ImageDrift{}.Detect(ctx, entityOf(m, deploy)))
+}
+
+func TestImageDriftWaitsForARolloutToFinish(t *testing.T) {
+	m, deploy := driftWorkload("sha256:aaa", "sha256:bbb")
+	// 1 of 2 replicas is updated: a rolling update is still in progress.
+	put(m, deploy, t0, map[string]inventory.Value{
+		kube.AttrReplicas:        inventory.Number(2),
+		kube.AttrUpdatedReplicas: inventory.Number(1),
+		kube.AttrAvailable:       inventory.Number(2),
+	})
+	ctx := testDetectorContext(m, t0.Add(time.Hour))
+
+	assert.Empty(t, ImageDrift{}.Detect(ctx, entityOf(m, deploy)))
+}
+
+func TestImageDriftWaitsWhileTwoReplicaSetsHavePods(t *testing.T) {
+	m, deploy := driftWorkload("sha256:aaa")
+	rs2 := newID(kube.KindReplicaSet, "shop", "api-2")
+	pod := newID(kube.KindPod, "shop", "api-2-a")
+	container := newID(kube.KindContainer, "shop", "api-2-a/app")
+	put(m, rs2, t0, nil)
+	put(m, pod, t0, map[string]inventory.Value{
+		kube.AttrPhase: inventory.Text("Running")})
+	put(m, container, t0, map[string]inventory.Value{
+		kube.AttrImage:   inventory.Text("registry/api:latest"),
+		kube.AttrImageID: inventory.Text("sha256:bbb"),
+	})
+	relateEntity(m, rs2, inventory.OwnedBy, deploy)
+	relateEntity(m, pod, inventory.OwnedBy, rs2)
+	relateEntity(m, container, inventory.PartOf, pod)
+	ctx := testDetectorContext(m, t0.Add(time.Hour))
+
+	assert.Empty(t, ImageDrift{}.Detect(ctx, entityOf(m, deploy)))
+}
+
+func TestImageDriftReportsAfterTheRolloutSettled(t *testing.T) {
+	m, deploy := driftWorkload("sha256:aaa", "sha256:bbb")
+	put(m, deploy, t0, map[string]inventory.Value{
+		kube.AttrReplicas:        inventory.Number(2),
+		kube.AttrUpdatedReplicas: inventory.Number(2),
+		kube.AttrAvailable:       inventory.Number(2),
+	})
+	ctx := testDetectorContext(m, t0.Add(time.Hour))
+
+	assert.Len(t, ImageDrift{}.Detect(ctx, entityOf(m, deploy)), 1)
+}
+
+// Pods that fail because of the drifted build leave fewer replicas
+// available than wanted. That must not hide the drift for ever.
+func TestImageDriftReportsWhenReplicasAreUnavailableButNotRolling(
+	t *testing.T,
+) {
+	m, deploy := driftWorkload("sha256:aaa", "sha256:bbb")
+	put(m, deploy, t0, map[string]inventory.Value{
+		kube.AttrReplicas:        inventory.Number(2),
+		kube.AttrUpdatedReplicas: inventory.Number(2),
+		kube.AttrAvailable:       inventory.Number(1),
+	})
+	ctx := testDetectorContext(m, t0.Add(time.Hour))
+
+	assert.Len(t, ImageDrift{}.Detect(ctx, entityOf(m, deploy)), 1)
 }

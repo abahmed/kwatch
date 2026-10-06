@@ -1,0 +1,17 @@
+{
+  "name": "redis-storm-logs-late",
+  "description": "Six Deployments are killed by their liveness probe with an empty termination message; their previous logs all start with one Redis error. The log lines arrive 30 seconds after each restart.",
+  "root": "failure-signature//CrashLoop unhandled exception. stackexchange.redis.redisconnectionexception: it was not po",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "node//s1",
+    "node//s2",
+    "deployment/shop/cart",
+    "deployment/shop/session",
+    "deployment/shop/search",
+    "deployment/billing/ledger",
+    "deployment/billing/invoicer",
+    "deployment/billing/exporter"
+  ]
+}

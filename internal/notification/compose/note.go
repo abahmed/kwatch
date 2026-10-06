@@ -21,26 +21,42 @@ type caseFacts struct {
 	ok     bool
 	now    time.Time
 	fix    *inventory.Change
-	reason string
+	reason incident.Reason
 	// output is the application's own recent output, already redacted.
 	output []string
 	// evidence holds the facts investigation found, already redacted.
 	evidence []incident.Fact
 	// cluster is the configured cluster name, said once in the lead.
 	cluster string
+	// changes are the latest changes next to an incident with no cause,
+	// newest first, set by the pipeline.
+	changes []inventory.Change
 }
 
 func gatherFacts(d incident.Decision, now time.Time, fix *inventory.Change,
 ) caseFacts {
 	f := caseFacts{p: d.Incident, members: sortedMembers(d.Incident),
-		now: now, fix: fix, reason: d.Reason, output: d.Output,
-		evidence: d.Evidence}
+		now: now, fix: fix, reason: d.Reason, output: d.Facts.Output,
+		evidence: d.Facts.Evidence, changes: d.Facts.Changes}
 	if own := rootFinding(f.p, f.members); own != nil {
 		f.lead, f.ok = *own, true
-	} else if len(f.members) > 0 {
-		f.lead, f.ok = f.members[0], true
+	} else if failures := failing(f.members); len(failures) > 0 {
+		f.lead, f.ok = failures[0], true
 	}
 	return f
+}
+
+// failing keeps the members that are failures. Configuration risks
+// (advisory findings) are never the state of a message: they only feed
+// riskSentences.
+func failing(members []detection.Finding) []detection.Finding {
+	var out []detection.Finding
+	for _, m := range members {
+		if !m.Advisory {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 // part is where a sentence goes in a note. Parts are read in this
@@ -80,6 +96,9 @@ var noteWriters = []sentenceWriter{
 	causeProofSentences,
 	errorSentences,
 	usageSentences,
+	memorySentences,
+	jobRunSentences,
+	scaledZeroSentences,
 	schedulerSentences,
 	consequenceSentences,
 	riskSentences,

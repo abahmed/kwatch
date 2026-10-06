@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -65,6 +66,9 @@ type startupManager struct {
 	// zero when there is no previous record or the gap was insignificant.
 	downtime       time.Duration
 	currentVersion string
+	// sessionMu guards session: the alive loop and the shutdown path may
+	// touch it while startup is still finishing.
+	sessionMu      sync.Mutex
 	session        runtimeSession
 	restartReason  string
 	evidenceSource restartEvidenceSource
@@ -230,6 +234,8 @@ func (s *startupManager) loadRuntimeSession(ctx context.Context) error {
 			)
 		}
 	}
+	s.sessionMu.Lock()
+	defer s.sessionMu.Unlock()
 	s.session = runtimeSession{
 		SessionID:     uuid.NewString(),
 		PodName:       os.Getenv("POD_NAME"),
@@ -259,16 +265,14 @@ func (s *startupManager) claimStartupAnnouncement(
 // session is evidence of an unclean stop, but its reason is kept bounded so
 // it is safe to expose in diagnostics. Its JSON shape is persisted.
 type runtimeSession struct {
-	SessionID       string    `json:"sessionID"`
-	PodName         string    `json:"podName,omitempty"`
-	PodUID          string    `json:"podUID,omitempty"`
-	NodeName        string    `json:"nodeName,omitempty"`
-	StartedAt       time.Time `json:"startedAt"`
-	LastHeartbeat   time.Time `json:"lastHeartbeat"`
-	EndedAt         time.Time `json:"endedAt,omitempty"`
-	EndReason       string    `json:"endReason,omitempty"`
-	FailedComponent string    `json:"failedComponent,omitempty"`
-	FailureCode     string    `json:"failureCode,omitempty"`
+	SessionID     string    `json:"sessionID"`
+	PodName       string    `json:"podName,omitempty"`
+	PodUID        string    `json:"podUID,omitempty"`
+	NodeName      string    `json:"nodeName,omitempty"`
+	StartedAt     time.Time `json:"startedAt"`
+	LastHeartbeat time.Time `json:"lastHeartbeat"`
+	EndedAt       time.Time `json:"endedAt,omitempty"`
+	EndReason     string    `json:"endReason,omitempty"`
 }
 
 // minReportableDowntime keeps ordinary restarts quiet. Rollouts and pod moves
@@ -298,6 +302,8 @@ func (s *startupManager) RecordAlive(ctx context.Context) {
 	if err := s.persistenceManager.SetLastSeen(ctx, s.now()); err != nil {
 		klog.V(2).InfoS("failed to record liveness stamp", "error", err)
 	}
+	s.sessionMu.Lock()
+	defer s.sessionMu.Unlock()
 	if store, ok := s.persistenceManager.(runtimeSessionStore); ok &&
 		s.session.SessionID != "" {
 		s.session.LastHeartbeat = s.now()
@@ -310,6 +316,8 @@ func (s *startupManager) RecordAlive(ctx context.Context) {
 // EndSession marks a controlled process stop. An unmarked session is used as
 // evidence of an unexpected termination on the next active start.
 func (s *startupManager) EndSession(ctx context.Context, reason string) {
+	s.sessionMu.Lock()
+	defer s.sessionMu.Unlock()
 	if s.session.SessionID == "" {
 		return
 	}
@@ -321,41 +329,5 @@ func (s *startupManager) EndSession(ctx context.Context, reason string) {
 	s.session.EndReason = normalizeRestartReason(reason)
 	if err := store.SaveRuntimeSession(ctx, s.session); err != nil {
 		klog.V(2).InfoS("failed to close runtime session", "error", err)
-	}
-}
-
-// RecordFailure preserves bounded failure evidence before the final session
-// marker is written. The raw error remains in logs only; persisted state must
-// be safe to expose through diagnostics.
-func (s *startupManager) RecordFailure(
-	ctx context.Context, component, code string,
-) {
-	if s.session.SessionID == "" {
-		return
-	}
-	store, ok := s.persistenceManager.(runtimeSessionStore)
-	if !ok {
-		return
-	}
-	s.session.FailedComponent = boundedFailureField(component)
-	s.session.FailureCode = normalizeFailureCode(code)
-	if err := store.SaveRuntimeSession(ctx, s.session); err != nil {
-		klog.V(2).InfoS("failed to persist runtime failure", "error", err)
-	}
-}
-
-func boundedFailureField(value string) string {
-	if len(value) > 64 {
-		return value[:64]
-	}
-	return value
-}
-
-func normalizeFailureCode(code string) string {
-	switch code {
-	case "api_unavailable", "leader_handoff", "internal_failure":
-		return code
-	default:
-		return "internal_failure"
 	}
 }

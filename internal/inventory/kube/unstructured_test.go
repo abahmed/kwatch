@@ -99,3 +99,21 @@ func TestUnstructuredSchemaDiffTracksGeneration(t *testing.T) {
 	assert.Equal(t, "generation 3", got[0].After)
 	assert.Nil(t, s.Diff(before, "x"))
 }
+
+// The declared spelling of a custom kind is recorded on the entity, so
+// messages need no global registry; a plain kind records nothing.
+func TestSchemasRecordTheDeclaredKindSpelling(t *testing.T) {
+	custom := object("DatadogAgent", map[string]any{})
+	desc, ok := kube.NewUnstructuredSchema("example.com",
+		"DatadogAgent").Describe(custom)
+	assert.True(t, ok)
+	assert.Equal(t, "DatadogAgent",
+		desc.Attributes[kube.AttrKindName].AsText())
+
+	plain := object("Gateway", map[string]any{})
+	desc, ok = kube.NewUnstructuredSchema("example.com",
+		"Gateway").Describe(plain)
+	assert.True(t, ok)
+	_, has := desc.Attributes[kube.AttrKindName]
+	assert.False(t, has)
+}

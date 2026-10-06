@@ -1,0 +1,8 @@
+10:02:15 settled
+🟠 draftor in shop (prod-eu-1) keeps crashing. It fails with "panic: draftor: template cache is corrupt". All of its dependents are failing. Service draftor can't serve traffic. To read the output of the last crash, run kubectl logs draftor-32b3b99b-a -c app -n shop --previous
+🟠 draftor in shop (prod-eu-1) keeps crashing.
+
+10:16:00 flapping
+🟠 draftor in shop (prod-eu-1) keeps failing and recovering: it has recovered three times recently. I'll write again when it stays healthy or fails differently.
+🟠 draftor in shop (prod-eu-1) keeps failing and recovering: it has recovered three times recently.
+

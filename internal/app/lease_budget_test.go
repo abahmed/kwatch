@@ -105,3 +105,25 @@ func TestStoppedLeadingKeepsLastRenewalForDrainBudget(t *testing.T) {
 	require.Equal(t, renewed, lastRenewalFrom(deps)())
 	require.Equal(t, "stopped", deps.healthServer.LeadershipStatus().Role)
 }
+
+// The acquire write lands before OnStartedLeading, while the role is still
+// "starting"; the leader status must still carry that renewal.
+func TestStartedLeadingKeepsRenewalFromAcquireWrite(t *testing.T) {
+	deps := testServerDeps()
+	renewed := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	callbacks := &leaderCallbacks{
+		parent: context.Background(), deps: deps, identity: "kwatch-a",
+		cancelElection: func() {}, activeDone: make(chan struct{}),
+		activeErrors: make(chan error, 1),
+		activeRunner: func(context.Context, *serverDeps) error {
+			return nil
+		},
+	}
+	callbacks.recordRenewal(renewed)
+
+	callbacks.onStartedLeading(context.Background())
+
+	status := deps.healthServer.LeadershipStatus()
+	require.Equal(t, "leader", status.Role)
+	require.True(t, status.LastRenewal.Equal(renewed))
+}

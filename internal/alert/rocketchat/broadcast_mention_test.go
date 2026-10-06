@@ -32,5 +32,5 @@ func TestSendMessageNeutralizesBroadcastMention(t *testing.T) {
 	assert.Nil(c.SendMessage(
 		context.Background(), "heads up @channel please look",
 	))
-	assert.True(strings.Contains(gotBody, "@​channel"))
+	assert.True(strings.Contains(gotBody, "@\u200bchannel"))
 }

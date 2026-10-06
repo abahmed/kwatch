@@ -256,7 +256,7 @@ func TestJobBackoffLimitExceeded(t *testing.T) {
 
 func TestHPAScalingFailure(t *testing.T) {
 	now := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
-	since := now.Add(-3 * time.Minute)
+	since := now.Add(-HPAMetricsGrace)
 
 	model := newTestModel()
 	id := inventory.EntityID{Kind: kube.KindHPA, Namespace: "default",

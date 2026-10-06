@@ -8,6 +8,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/format"
@@ -121,11 +122,10 @@ func (t *Teams) buildRequestBodyTeams(
 	if len(title) == 0 {
 		title = format.OrDefault(m.Title, defaultTeamsTitle)
 	}
-	text := m.NoteText()
-	if len(m.Output) > 0 {
-		text += "\n\n```\n" + strings.Join(m.Output, "\n") + "\n```"
-	}
-	text = notification.NeutralizeMentions(text)
+	text := safetext.NoteWithOutput(
+		notification.NeutralizeMentions(m.NoteText()),
+		safetext.Lines(m.Output, notification.NeutralizeMentions),
+		"\n\n", 0)
 	payload := &teamsFlowPayload{
 		Title: title, Text: text,
 		Attachment: textCardAttachments(title, text),

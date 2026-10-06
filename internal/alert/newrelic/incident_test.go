@@ -71,12 +71,9 @@ func TestNewRelicTruncatesAttributes(t *testing.T) {
 	assert.LessOrEqual(t, len(ev["message"].(string)), maxMessageBytes)
 }
 
-func TestNewRelicSendMessageIsNotice(t *testing.T) {
+func TestNewRelicSkipsInformationalMessages(t *testing.T) {
 	c, rec := newTestNewRelic(t)
-	require.NoError(t, c.SendMessage(context.Background(), "started"))
-	ev := lastEvent(t, rec)
-	assert.Equal(t, "notice", ev["state"])
-	assert.Equal(t, "started", ev["message"])
+	providertest.AssertNoticesSkipped(t, c, rec)
 }
 
 func TestNewRelicClassifiesErrors(t *testing.T) {
@@ -87,5 +84,6 @@ func TestNewRelicClassifiesErrors(t *testing.T) {
 	err := c.SendIncident(context.Background(), providertest.Announce())
 	assert.True(t, transport.IsPermanent(err))
 	c.url = "h ttp://bad"
-	assert.Error(t, c.SendMessage(context.Background(), "x"))
+	assert.Error(t, c.SendIncident(
+		context.Background(), providertest.Announce()))
 }

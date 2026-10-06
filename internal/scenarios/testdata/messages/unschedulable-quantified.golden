@@ -1,0 +1,4 @@
+10:03:15 settled
+🟠 etl in analytics (prod-eu-1) has waited two minutes for a node because no node has enough cpu. It needs 3 CPU; the most any node has free is 1.5 CPU, on n1. The scheduler says "0/3 nodes are available: 3 Insufficient cpu. preemption: 0/3 nodes are available: 3 No preemption victims found for…". To see the object's state and events, run kubectl describe pod etl-081a5719-a -n analytics
+🟠 etl in analytics (prod-eu-1) has waited two minutes for a node because no node has enough cpu.
+

@@ -46,7 +46,11 @@ type record struct {
 	relations  map[relationKeyBySource][]EntityID
 	changes    []Change
 	notes      []Note
+	noteParts  map[noteKey][]originCount
 	health     []HealthMark
+	// altUID is a second identifier events may use for the object, such
+	// as the config hash of a static pod's mirror.
+	altUID string
 }
 
 type relationKeyBySource struct {
@@ -101,12 +105,18 @@ func (m *Model) Apply(observation Observation) (Update, error) {
 	defer m.mu.Unlock()
 	switch observation.Kind {
 	case Observed:
-		return m.observe(observation), nil
+		update := m.observe(observation)
+		update.Touched = append(update.Touched,
+			m.backedReferrers(observation.Entity)...)
+		return update, nil
 	case Related:
 		if observation.Relation == "" {
 			return Update{}, ErrInvalidRelation
 		}
-		return m.relate(observation), nil
+		update := m.relate(observation)
+		update.Touched = append(update.Touched,
+			m.backedReferrers(observation.Entity)...)
+		return update, nil
 	case Changed:
 		return m.change(observation), nil
 	case Gone:
@@ -148,9 +158,7 @@ func (m *Model) observe(observation Observation) Update {
 		rec.entity.FirstSeen = observation.At
 		m.indexKind(observation.Entity)
 	}
-	if observation.UID != "" {
-		rec.entity.UID = observation.UID
-	}
+	rec.adoptUID(observation.UID, observation.AltUID)
 	for name, source := range rec.attrSource {
 		_, still := observation.Attributes[name]
 		if source == observation.Source && !still {
@@ -214,29 +222,6 @@ func (m *Model) change(observation Observation) Update {
 	m.history.addChange(change)
 	if overflow := len(rec.changes) - m.maxChanges; overflow > 0 {
 		rec.changes = append(rec.changes[:0:0], rec.changes[overflow:]...)
-	}
-	return Update{Touched: []EntityID{observation.Entity}}
-}
-
-func (m *Model) note(observation Observation) Update {
-	rec := m.recordFor(observation.Entity)
-	note := observation.Note
-	if note.At.IsZero() {
-		note.At = observation.At
-	}
-	if note.FirstSeen.IsZero() || note.FirstSeen.After(note.At) {
-		note.FirstSeen = note.At
-	}
-	for i, existing := range rec.notes {
-		if existing.Source == note.Source && existing.Reason == note.Reason {
-			note.FirstSeen = earliest(existing.FirstSeen, note.FirstSeen)
-			rec.notes = append(rec.notes[:i], rec.notes[i+1:]...)
-			break
-		}
-	}
-	rec.notes = append(rec.notes, note)
-	if over := len(rec.notes) - DefaultMaxNotesPerEntity; over > 0 {
-		rec.notes = append(rec.notes[:0:0], rec.notes[over:]...)
 	}
 	return Update{Touched: []EntityID{observation.Entity}}
 }

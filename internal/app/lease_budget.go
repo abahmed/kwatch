@@ -11,16 +11,16 @@ import (
 )
 
 // leaseDrainMargin is kept between the end of the delivery drain and the
-// moment the Lease can no longer be renewed.
+// moment the state lock can no longer be renewed.
 const leaseDrainMargin = 3 * time.Second
 
 // drainBudget bounds the session-end delivery drain by the time left on
-// the Lease. lastRenewal is the last successful Lease write; a zero value
-// means unknown and leaves the default budget. Another replica can take
-// over once the Lease duration has passed since that write, so that is the
-// deadline; the renew deadline only governs this replica's own retries. A
-// drain that would outlive the Lease gets less time or none, so the rest
-// is dead-lettered before another replica can take over.
+// the state lock. lastRenewal is the last successful state lock write;
+// a zero value means unknown and leaves the default budget. Another replica
+// can take over once the state lock duration has passed since that write,
+// so that is the deadline; the renew deadline only governs this replica's
+// own retries. A drain that would outlive the state lock gets less time or
+// none, so the rest is dead-lettered before another replica can take over.
 func drainBudget(
 	lastRenewal, now time.Time, limit time.Duration,
 ) time.Duration {
@@ -34,7 +34,7 @@ func drainBudget(
 	return min(limit, left)
 }
 
-// leaseDrainBudget reads the renewal time from the leadership status.
+// leaseDrainBudget reads the renewal time from the state lock status.
 func (s activeShutdown) leaseDrainBudget() time.Duration {
 	if s.lastRenewal == nil || s.now == nil {
 		return deliveryDrainTimeout
@@ -48,10 +48,10 @@ type deliveryStopper interface {
 }
 
 // stopDelivery drains delivery within budget (at most
-// deliveryDrainTimeout, less when the Lease is about to expire). After
-// leadership is lost it sends nothing: Stop gets an already ended context,
+// deliveryDrainTimeout, less when the state lock is about to expire). After
+// state lock is lost it sends nothing: Stop gets an already ended context,
 // so every queued job is dead-lettered instead; the outbox keeps them for
-// the next leader. It reports false when the final outbox write is still
+// the next holder. It reports false when the final outbox write is still
 // running, so the caller must not close the store.
 func stopDelivery(
 	parent context.Context, stopper deliveryStopper, fenced bool,
@@ -68,10 +68,10 @@ func stopDelivery(
 	err := stopper.Stop(ctx)
 	switch {
 	case fenced:
-		klog.InfoS("delivery fenced after leadership loss",
+		klog.InfoS("delivery fenced after state lock loss",
 			"component", "delivery", "operation", "fence")
 	case budget <= 0:
-		klog.InfoS("delivery drain skipped: Lease about to expire",
+		klog.InfoS("delivery drain skipped: state lock about to expire",
 			"component", "delivery", "operation", "fence")
 	case err != nil:
 		recordShutdownTimeout("delivery")

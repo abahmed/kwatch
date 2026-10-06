@@ -1,0 +1,10 @@
+{
+  "name": "node-stays-down",
+  "description": "A node stays NotReady for five minutes and its pod goes not ready.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/api"
+  ]
+}

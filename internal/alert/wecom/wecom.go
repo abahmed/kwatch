@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 	"github.com/abahmed/kwatch/internal/ratelimit"
@@ -75,11 +75,10 @@ func (s *Wecom) Name() string {
 func (s *Wecom) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
-	content := m.NoteText()
-	if len(m.Output) > 0 {
-		content += "\n\n```\n" + strings.Join(m.Output, "\n") + "\n```"
-	}
-	return s.SendMessage(ctx, notification.Truncate(content, wecomTextLimit))
+	return s.SendMessage(ctx, safetext.NoteWithOutput(
+		safetext.WeCom(m.NoteText()),
+		safetext.Lines(m.Output, safetext.WeCom),
+		"\n\n", wecomTextLimit))
 }
 
 // SendMessage sends text message to the provider

@@ -191,8 +191,11 @@ func NewKubeletTransport(
 	cfg.TLSClientConfig.ServerName = ""
 	cfg.Proxy = func(*http.Request) (*url.URL, error) { return nil, nil }
 	if insecureSkipVerify {
-		klog.InfoS("kubelet serving certificate verification is disabled",
-			"component", "kubelet", "operation", "transport")
+		klog.Warning("kubelet.insecureSkipVerify is true: kwatch sends its " +
+			"ServiceAccount token to kubelets without verifying their " +
+			"certificates, so a compromised or impersonated node could " +
+			"capture that token. Prefer fixing the kubelet serving " +
+			"certificate or its CA over keeping this setting")
 		// client-go refuses a CA together with the insecure flag.
 		cfg.TLSClientConfig.Insecure = true
 		cfg.TLSClientConfig.CAFile = ""

@@ -69,6 +69,9 @@ func markdownSection(txt string) slackClient.SectionBlock {
 // are added, so the closing fence is never lost.
 func codeSection(txt string) slackClient.SectionBlock {
 	const fence = "```"
+	// Output is workload text: break any fence in it so it cannot end the
+	// block early and turn the rest into live mrkdwn.
+	txt = strings.ReplaceAll(txt, fence, "``\u200b`")
 	body := truncateMrkdwn(escapeMrkdwn(txt),
 		maxSectionTextChars-2*len(fence))
 	return escapedSection(fence + body + fence)

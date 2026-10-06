@@ -22,7 +22,7 @@ func nextSteps(
 	root := p.Root
 	switch {
 	case p.Cause != nil && p.Cause.Change != nil &&
-		isWorkload(root.Kind):
+		incident.IsWorkload(root.Kind):
 		return rolloutSteps(root, p.Cause.RollbackRevision)
 	case root.Kind == kube.KindNode && !nodeRemoved(p):
 		return nodeSteps(root)
@@ -38,6 +38,13 @@ func nextSteps(
 			Text: "Check the object the pods depend on",
 			Command: "kubectl get configmap " + quote(root.Name) +
 				namespaceFlag(root.Namespace) + " -o yaml",
+		}}
+	case webhookKind(root.Kind) && deniedCause(p.Cause) &&
+		p.Cause.Root == root:
+		return []notification.Step{{
+			Text: "See the policy that denies the pods",
+			Command: "kubectl get " + string(root.Kind) + " " +
+				quote(root.Name) + " -o yaml",
 		}}
 	case webhookKind(root.Kind) && p.Cause != nil &&
 		p.Cause.Root == root:
@@ -175,16 +182,9 @@ func containerSteps(s detection.Finding) []notification.Step {
 			Command: "kubectl top pod " + quote(pod) + ns +
 				" --containers",
 		})
+		steps = append(steps, memorySteps(s)...)
 	}
 	return steps
-}
-
-func isWorkload(kind inventory.Kind) bool {
-	switch kind {
-	case kube.KindDeployment, kube.KindStatefulSet, kube.KindDaemonSet:
-		return true
-	}
-	return false
 }
 
 func splitContainer(name string) (string, string) {

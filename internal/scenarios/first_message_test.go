@@ -7,6 +7,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/replay"
 	"github.com/abahmed/kwatch/internal/scorecard"
 )
@@ -20,6 +21,9 @@ type firstMessage struct {
 	delay    time.Duration
 	// at is when the message went, on the simulated clock.
 	at time.Time
+	// bootHeld is set when the node boot grace holds the message on
+	// purpose, so it has its own gate.
+	bootHeld bool
 }
 
 // timeToFirstMessage measures one replay. It reports false when nothing
@@ -96,7 +100,9 @@ func firstObservation(
 }
 
 // firstMessageGates gate the slowest first message of each tier and
-// report its 95th percentile next to it.
+// report its 95th percentile next to it. Messages held on purpose by
+// the node boot grace are left out of those and have a gate of their
+// own: the boot window plus the same allowance.
 func firstMessageGates(measured []firstMessage) []scorecard.Gate {
 	limits := []struct {
 		tier  incident.Tier
@@ -105,24 +111,39 @@ func firstMessageGates(measured []firstMessage) []scorecard.Gate {
 		{incident.Page, scorecard.GoalPageFirstMessage},
 		{incident.Notify, scorecard.GoalNotifyFirstMessage},
 	}
-	gates := make([]scorecard.Gate, 0, len(limits))
+	gates := make([]scorecard.Gate, 0, len(limits)+1)
 	for _, l := range limits {
 		var delays []time.Duration
 		for _, m := range measured {
-			if m.tier == l.tier {
+			if !m.bootHeld && m.tier == l.tier {
 				delays = append(delays, m.delay)
 			}
 		}
 		gates = append(gates, firstMessageGate(l.tier, delays, l.limit))
 	}
-	return gates
+	var held []time.Duration
+	for _, m := range measured {
+		if m.bootHeld {
+			held = append(held, m.delay)
+		}
+	}
+	return append(gates, namedFirstMessageGate(
+		"Time to first message (boot-held)", held,
+		kube.BootWindow+scorecard.GoalNotifyFirstMessage))
 }
 
 func firstMessageGate(
 	tier incident.Tier, delays []time.Duration, limit time.Duration,
 ) scorecard.Gate {
+	return namedFirstMessageGate(
+		"Time to first message ("+tier.String()+" tier)", delays, limit)
+}
+
+func namedFirstMessageGate(
+	name string, delays []time.Duration, limit time.Duration,
+) scorecard.Gate {
 	gate := scorecard.Gate{
-		Name:   "Time to first message (" + tier.String() + " tier)",
+		Name:   name,
 		Target: "max <= " + limit.String(),
 		Value:  "no cases",
 		Pass:   true,

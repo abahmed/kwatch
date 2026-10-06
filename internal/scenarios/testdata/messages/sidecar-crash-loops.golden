@@ -3,6 +3,6 @@
 🟠 payments in shop (prod-eu-1) has a sidecar container that keeps crashing.
 
 10:07:45 material change
-🟠 payments in shop (prod-eu-1) is now failing: it runs a single replica, so any restart is downtime. It is spreading to pod payments-fc5a0372-a: it has not been ready for three minutes.
-🟠 payments in shop (prod-eu-1) is now failing: it runs a single replica, so any restart is downtime.
+🟠 payments in shop (prod-eu-1) now has no ready replicas (0 of 1). It is spreading to pod payments-fc5a0372-a: it has not been ready for three minutes.
+🟠 payments in shop (prod-eu-1) now has no ready replicas (0 of 1).
 

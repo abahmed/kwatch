@@ -186,5 +186,5 @@ func TestActiveProbeQuiet(t *testing.T) {
 	assert.Empty(t, evaluate(ActiveProbe{}, m, t0, id, nil).Findings,
 		"no thresholds configured")
 	assert.Equal(t, "active-probe", ActiveProbe{}.Name())
-	assert.Len(t, ActiveProbe{}.Kinds(), 3)
+	assert.Len(t, ActiveProbe{}.Kinds(), 4)
 }

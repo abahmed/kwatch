@@ -145,7 +145,7 @@ var nodeRows = []Row{
 			detection.ModeNotReady, detection.ModeStatusUnknown,
 			detection.ModeEvicted, detection.ModeUnreachable,
 			detection.ModeFailed, detection.ModeStuckDeleting,
-			detection.ModeProbe),
+			detection.ModeProbe, detection.ModePending),
 		Prior: 0.8,
 	},
 	{
@@ -333,7 +333,7 @@ var clusterRows = []Row{
 		Link: LinkServedBy,
 		Effect: Side{Kind: kube.KindHPA,
 			Modes: []detection.Mode{detection.ModeScalingNoMetrics}},
-		Prior: 0.8,
+		Prior: 0.8, InferredMinWorkloads: SharedMinWorkloads,
 	},
 	{
 		Name: "quota-exhausted",

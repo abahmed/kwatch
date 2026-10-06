@@ -215,7 +215,7 @@ func (v *view) schedulerVerdict(pod inventory.EntityID) (string, bool) {
 			if e.Label != "scheduler" {
 				continue
 			}
-			if blockers, _ := rootcause.ParseSchedulerMessage(
+			if blockers, _ := kube.ParseSchedulerMessage(
 				e.Value); len(blockers) > 0 {
 				return blockers[0].Reason, true
 			}

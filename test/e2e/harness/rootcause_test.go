@@ -164,3 +164,61 @@ func TestEvaluateRootCountsOnlyOwnMessages(t *testing.T) {
 		t.Fatalf("messages = %d, err = %v", verdict.Messages, verdict.Err())
 	}
 }
+
+func reopenEntries() []AuditEntry {
+	return []AuditEntry{
+		{Incident: "old", Action: "create", Timestamp: time.Unix(100, 0),
+			Root: "Node//n1", Tier: "notify"},
+		{Incident: "old", Action: "resolved", Timestamp: time.Unix(150, 0),
+			Root: "Node//n1"},
+	}
+}
+
+func TestEvaluateRootCountsIncidentCreatedInScope(t *testing.T) {
+	entries := []AuditEntry{{Incident: "new", Action: "create",
+		Timestamp: time.Unix(250, 0), Root: "Node//n1", Tier: "notify"}}
+	exp := RootExpectation{Root: "node//n1", Tier: "notify", MaxMessages: 1}
+	v := EvaluateRoot(entries, exp, RootScope{Since: time.Unix(200, 0)})
+	if err := v.Err(); err != nil || v.Messages != 1 {
+		t.Fatalf("created in scope must count: %+v", v)
+	}
+}
+
+func TestEvaluateRootCountsIncidentReopenedInScope(t *testing.T) {
+	entries := append(reopenEntries(),
+		AuditEntry{Incident: "old", Action: "update",
+			Timestamp: time.Unix(250, 0), Root: "Node//n1",
+			Tier: "notify", DecisionReason: "failing again"})
+	exp := RootExpectation{Root: "node//n1", Tier: "notify", MaxMessages: 2}
+	v := EvaluateRoot(entries, exp, RootScope{Since: time.Unix(200, 0)})
+	if err := v.Err(); err != nil || !v.Rooted || v.Messages != 1 {
+		t.Fatalf("reopened incident must count once: %+v", v)
+	}
+}
+
+func TestEvaluateRootIgnoresStaleIncidentWithoutReopen(t *testing.T) {
+	entries := append(reopenEntries(),
+		AuditEntry{Incident: "old", Action: "update",
+			Timestamp: time.Unix(250, 0), Root: "Node//n1",
+			Tier: "notify", DecisionReason: "material change"})
+	exp := RootExpectation{Root: "node//n1"}
+	v := EvaluateRoot(entries, exp, RootScope{Since: time.Unix(200, 0)})
+	if v.Rooted {
+		t.Fatalf("stale incident without reopen must not count: %+v", v)
+	}
+}
+
+func TestEvaluateRootReopenIgnoresUpdatesBeforeReopen(t *testing.T) {
+	entries := append(reopenEntries(),
+		AuditEntry{Incident: "old", Action: "update",
+			Timestamp: time.Unix(210, 0), Root: "Node//n1",
+			DecisionReason: "material change"},
+		AuditEntry{Incident: "old", Action: "update",
+			Timestamp: time.Unix(250, 0), Root: "Node//n1",
+			DecisionReason: "failing again"})
+	exp := RootExpectation{Root: "node//n1", MaxMessages: 1}
+	v := EvaluateRoot(entries, exp, RootScope{Since: time.Unix(200, 0)})
+	if err := v.Err(); err != nil || v.Messages != 1 {
+		t.Fatalf("only the reopening onward counts: %+v", v)
+	}
+}

@@ -60,15 +60,25 @@ type keyState struct {
 	resolved bool
 }
 
-// Score replays entries, which must be in time order.
+// Score replays entries, which must be in time order. It counts the
+// messages people received. An entry whose decision a carrier message
+// holds (a digest, a roll-up, the startup summary) or that nobody got
+// (see audit.Carried) adds to no volume, update, cause or per-incident
+// number: its carrier is an entry of its own, and counting the member
+// lines too would score a 1000-incident roll-up as 1000 messages. It
+// still tells the lifecycle of its incident (re-created, repeated
+// recovery), which does not depend on who was told. A "paging" entry
+// whose decision also has a message of its own is skipped the same way:
+// it would count one decision twice, once for the pagers and once for
+// chat.
 func Score(entries []audit.Entry) Report {
 	var report Report
 	keys := make(map[string]*keyState)
 	reasons := make(map[string]int)
 	var first, last time.Time
 	times := make([]time.Time, 0, len(entries))
+	spoken := spokenDecisions(entries)
 	for _, entry := range entries {
-		times = append(times, entry.Timestamp)
 		if first.IsZero() {
 			first = entry.Timestamp
 		}
@@ -78,6 +88,16 @@ func Score(entries []audit.Entry) Report {
 			state = &keyState{}
 			keys[entry.Incident] = state
 		}
+		if audit.Carried(entry.Delivery) {
+			scoreLifecycle(&report, state, entry)
+			continue
+		}
+		if entry.Delivery == "paging" && spoken[decisionOf(entry)] {
+			// The same decision also reached chat as a message of its
+			// own: one message of the incident, not two.
+			continue
+		}
+		times = append(times, entry.Timestamp)
 		report.Notifications++
 		reasons[entry.Reason]++
 		scoreEntry(&report, state, entry)
@@ -94,24 +114,58 @@ func Score(entries []audit.Entry) Report {
 	return report
 }
 
-func scoreEntry(report *Report, state *keyState, entry audit.Entry) {
+// decision names one decision of an incident: the same one can be logged
+// twice, once for the pagers and once for chat.
+type decision struct {
+	incident string
+	action   audit.Action
+	revision int
+}
+
+func decisionOf(entry audit.Entry) decision {
+	return decision{entry.Incident, entry.Action, entry.Revision}
+}
+
+// spokenDecisions are the decisions that have an ordinary message of
+// their own (to everyone, or to chat only).
+func spokenDecisions(entries []audit.Entry) map[decision]bool {
+	spoken := make(map[decision]bool)
+	for _, entry := range entries {
+		if entry.Delivery == "" || entry.Delivery == "chat" {
+			spoken[decisionOf(entry)] = true
+		}
+	}
+	return spoken
+}
+
+// scoreLifecycle counts what an entry says about its incident's life:
+// announced again after it resolved, or resolved twice in a row. It runs
+// for every entry, delivered or carried.
+func scoreLifecycle(report *Report, state *keyState, entry audit.Entry) {
 	switch entry.Action {
 	case audit.ActionCreate:
 		if state.resolved || entry.Previous != "" {
 			report.Recreated++
 		}
 		state.resolved = false
-	case audit.ActionUpdate:
-		report.Updates++
-		if entry.ContentHash != "" && entry.ContentHash == state.lastHash {
-			report.UnchangedUpdates++
-		}
 	case audit.ActionResolved:
 		if state.lastSent == audit.ActionResolved {
 			report.RepeatedResolves++
 		}
 		state.resolved = true
 	}
+	state.lastSent = entry.Action
+}
+
+// scoreEntry counts a message people received.
+func scoreEntry(report *Report, state *keyState, entry audit.Entry) {
+	if entry.Action == audit.ActionUpdate {
+		report.Updates++
+		if entry.ContentHash != "" && entry.ContentHash == state.lastHash {
+			report.UnchangedUpdates++
+		}
+	}
+	scoreLifecycle(report, state, entry)
 	if entry.AffectedCount > 1 {
 		report.Grouped++
 	}
@@ -124,7 +178,6 @@ func scoreEntry(report *Report, state *keyState, entry audit.Entry) {
 		}
 	}
 	state.messages++
-	state.lastSent = entry.Action
 	if entry.ContentHash != "" {
 		state.lastHash = entry.ContentHash
 	}

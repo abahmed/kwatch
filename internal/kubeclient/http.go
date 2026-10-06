@@ -72,15 +72,21 @@ func NewHTTPClient(cfg config.ApplicationRuntime) *http.Client {
 	}
 }
 
-// applyCABundle trusts the CA certificates in the file at path. A missing
-// or invalid bundle is logged and the system roots stay in use.
+// applyCABundle trusts the CA certificates in the file at path, in
+// addition to the system roots. A missing or invalid bundle is logged and
+// the system roots stay in use.
 func applyCABundle(tlsCfg *tls.Config, path string) {
 	caCert, err := os.ReadFile(path)
 	if err != nil {
 		klog.ErrorS(err, "could not read outbound CA bundle", "path", path)
 		return
 	}
-	pool := x509.NewCertPool()
+	// Keep the system roots so public endpoints (telemetry, update check,
+	// SaaS providers) still verify next to a private bundle.
+	pool, sysErr := x509.SystemCertPool()
+	if sysErr != nil || pool == nil {
+		pool = x509.NewCertPool()
+	}
 	if !pool.AppendCertsFromPEM(caCert) {
 		klog.Warningf(
 			"outbound CA bundle contains no valid certificates: %s", path)

@@ -129,7 +129,7 @@ func telemetrySkipReason(
 		return "disabled_env"
 	case version == "dev":
 		return "dev_build"
-	case os.Getenv("CI") != "":
+	case runningInCI():
 		return "ci_environment"
 	case store == nil:
 		return "persistence_unavailable"
@@ -142,15 +142,12 @@ func telemetrySkipReason(
 	}
 }
 
-// telemetryEnvDisabled lets operators opt out without editing config.
+// telemetryEnvDisabled lets operators opt out without editing config. An
+// invalid value was already rejected at startup by config.LoadConfig.
 func telemetryEnvDisabled() bool {
-	switch strings.ToLower(strings.TrimSpace(
-		os.Getenv("KWATCH_TELEMETRY"),
-	)) {
-	case "false", "0", "off", "no":
-		return true
-	}
-	return false
+	value, set, err := config.ParseEnvBool(
+		"KWATCH_TELEMETRY", os.Getenv("KWATCH_TELEMETRY"))
+	return err == nil && set && !value
 }
 
 // sendTelemetry sends at most one heartbeat per interval. sent remembers the
@@ -242,4 +239,14 @@ func waitTelemetry(ctx context.Context, delay time.Duration) bool {
 	case <-timer.C:
 		return true
 	}
+}
+
+// runningInCI reports a CI environment: CI set to anything except a
+// false-like value. CI=false must not silence telemetry.
+func runningInCI() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("CI"))) {
+	case "", "false", "0", "no", "off":
+		return false
+	}
+	return true
 }

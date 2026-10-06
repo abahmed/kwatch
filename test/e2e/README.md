@@ -63,9 +63,10 @@ Rules:
    - `onCluster` also runs alone, for scenarios without a namespace.
    When unsure, use `inNamespaceAlone`: it is slower but never flaky
    because of another scenario.
-7. If the scenario takes more than a few minutes, set `minutes:` on its
-   entry in `coverage/coverage.yaml`, so CI can spread slow scenarios over
-   the shards. Every CI run prints the measured time of each scenario.
+7. Add the test to `scenarioCosts` in `scenarios/sharding_test.go` with its
+   measured seconds and whether it runs alone. CI uses the table to give
+   every shard about the same work. Every CI run prints the measured time of
+   each scenario; a test checks that the table matches the helper you chose.
 8. Keep a scenario under about 30 lines. Move object building into the
    matching `*_build_test.go` file as a builder plus a `Create*` method, and
    reuse `workloadContainer`, `workloadPod` and `deployment` instead of
@@ -95,16 +96,20 @@ make verify-negative-regressions
 ```
 
 The script builds temporary images with `docker build --load`, loads them into
-Kind, and removes them and the cluster after the run. Images are never pushed
-or uploaded.
+Kind, and removes them and the cluster after the run. In CI one job builds the
+images and shares them with the other jobs as a one-day workflow artifact;
+they are never pushed to a registry.
 
 The `e2e.yml` workflow (nightly, manual, or on PRs labelled `e2e`) resolves the
 latest `main` commit to an immutable SHA before building and runs the complete
 scenario suite, including the extended Kind cases. A full run is split over
-four Kind clusters that run in parallel. Tests are dealt to the clusters
-longest first using the `minutes:` in `coverage/coverage.yaml`, so every
-cluster gets about the same work. Inside a cluster the scenarios that must
-run alone go first, then the rest run side by side (six at a time; set
+ten Kind clusters that run in parallel. Tests are dealt to the clusters
+longest first using the measured seconds in `scenarios/sharding_test.go`,
+so every cluster finishes at about the same time. The ten-minute PDB scenario
+and the cluster DNS outage each get a cluster to themselves. The lock table in
+that file says what every exclusive scenario disturbs. Inside a cluster the
+scenarios that must run alone go first, then the rest run side by side (ten
+at a time; set
 `SCENARIO_PARALLEL` to change it). A run with a scenario, family, shard or
 compare filter uses one cluster. It accepts a scenario regex,
 family, shard, and optional cluster retention for debugging. In compare mode it
@@ -113,6 +118,13 @@ and the latest `main` in separate Kind clusters and writes one of
 `fixed_on_main`, `still_failing`, `regression_on_main`, or `not_reproduced` to
 the artifacts. Both image sets are built locally and removed after each cluster
 run.
+
+Runs for the same event, action and ref share a concurrency group. A new push
+to a pull request cancels the older run of that push; a label event, a manual
+dispatch or a scheduled run never cancels a running one but waits behind it.
+GitHub keeps only one waiting run per group, so a newer queued dispatch
+replaces an older queued one: start the next manual run after the previous
+one has started.
 
 ## Architecture
 
@@ -130,7 +142,8 @@ runs as one replica.
 
 1. Inspect `test/e2e/coverage/coverage.yaml` and choose a stable ID.
 2. Confirm that the behavior is not already covered.
-3. Add the smallest deterministic fixture under `test/e2e/fixtures/`.
+3. Add the smallest deterministic workload: reuse a command of the
+   `test/e2e/workload` image from a scenario in `test/e2e/scenarios/`.
 4. Reuse the harness waiters and oracle helpers.
 5. Add a Go test under `test/e2e/scenarios/`.
 6. Assert expected behavior and forbidden behavior.
@@ -196,6 +209,15 @@ This writes `config.yaml`, sanitized `resources.yaml`, `expectation.txt`, and
 commands, or apply the output. Review the files, copy only the required
 declarative fixture into a permanent scenario, then add positive, negative,
 recovery, and cleanup assertions.
+
+## Shared fixtures
+
+`test/e2e/testdata` holds the two files every scenario starts from:
+`base-config.yaml` is the kwatch configuration the harness extends (it sets
+`kubelet.insecureSkipVerify: true` because Kind kubelets serve self-signed
+certificates; never copy that into a real configuration) and
+`kind-config.yaml` is the cluster layout. Replay fixtures for
+`internal/scenarios` live in `internal/scenarios/testdata`.
 
 ## Root-cause assertions
 

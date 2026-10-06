@@ -1,0 +1,8 @@
+{
+  "name": "oom-steady-climb",
+  "description": "A container's memory rose steadily from 200Mi to its 512Mi limit over three hours before it was OOM-killed.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "10m0s"
+}

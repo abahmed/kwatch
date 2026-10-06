@@ -9,6 +9,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 func announced(t *testing.T, r *rig, s detection.Finding) {
@@ -145,5 +146,65 @@ func TestIncidentFingerprintIgnoresSymptomsOfOtherEntities(t *testing.T) {
 	base.Members[pod.Key()] = pod
 	if fingerprint(base) != before {
 		t.Fatal("symptom of another entity must not change the fingerprint")
+	}
+}
+
+// A cause that blames a change names its root findings. One that ages
+// out, such as an event leaving its window, is not news: the
+// fingerprint keeps what the cause once had.
+func TestFingerprintIgnoresRootFindingsThatAgeOut(t *testing.T) {
+	cr := entity(kube.KindDeployment, "operator")
+	events := sig(cr, reasons.CrashLoopBackOff, detection.Warning)
+	ready := sig(cr, reasons.DeploymentUnavailable, detection.Warning)
+	p := incidentOf(entity(kube.KindDeployment, "web"), nil)
+	p.Cause = &rootcause.CauseRecord{
+		Rule: "own-change", Root: cr,
+		Change:       &inventory.Change{Entity: cr, Revision: "7"},
+		RootFindings: []detection.Finding{events, ready},
+	}
+	p.rememberRootReasons()
+	before := fingerprint(p)
+
+	p.Cause.RootFindings = []detection.Finding{ready}
+	p.rememberRootReasons()
+
+	if fingerprint(p) != before {
+		t.Fatal("a finding that aged out changed the fingerprint")
+	}
+}
+
+// A workload behind a Service with no endpoints, already reported,
+// gains "pods run but never become ready": a later stage of the same
+// story, not news. After plain unavailability it is a milestone.
+func TestFingerprintIgnoresNeverReadyAfterNoEndpoints(t *testing.T) {
+	root := entity(kube.KindDeployment, "api")
+	p := incidentOf(root, nil)
+	first := sig(root, reasons.ServiceNoEndpoints, detection.Warning)
+	first.Symptom = true
+	p.Members[first.Key()] = first
+	before := fingerprint(p)
+	never := sig(root, reasons.WorkloadNeverReady, detection.Warning)
+	p.Members[never.Key()] = never
+	p.rememberRootReasons()
+	if fingerprint(p) != before {
+		t.Fatal("never ready after no endpoints changed the fingerprint")
+	}
+
+	// Unavailable alone keeps its "never healthy" milestone.
+	waiting := incidentOf(root, nil)
+	down := sig(root, reasons.DeploymentUnavailable, detection.Warning)
+	down.Symptom = true
+	waiting.Members[down.Key()] = down
+	before = fingerprint(waiting)
+	waiting.Members[never.Key()] = never
+	if fingerprint(waiting) == before {
+		t.Fatal("never ready after unavailable is a milestone")
+	}
+
+	alone := incidentOf(root, nil)
+	before = fingerprint(alone)
+	alone.Members[never.Key()] = never
+	if fingerprint(alone) == before {
+		t.Fatal("never ready on its own must change the fingerprint")
 	}
 }

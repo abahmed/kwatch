@@ -36,6 +36,8 @@ func RunWithClock(now func() time.Time) int {
 		klog.ErrorS(err, "failed to initialize application")
 		return 1
 	}
+	// The KwatchConfig overlay may change app.logFormatter.
+	applyLogFormat(boot.runtime.Application().LogFormatter)
 	deps := newServerDeps(ctx, cancel, boot)
 	if err := deps.healthServer.Open(); err != nil {
 		klog.ErrorS(err, "failed to open health server")

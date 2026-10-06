@@ -67,16 +67,9 @@ func TestSplunkOncallTitleIsTruncated(t *testing.T) {
 	}
 }
 
-func TestSplunkOncallSendMessageIsInfoNotice(t *testing.T) {
+func TestSplunkOncallSkipsInformationalMessages(t *testing.T) {
 	c, rec := newTestSplunkOncall(t)
-	if err := c.SendMessage(context.Background(), "hello"); err != nil {
-		t.Fatal(err)
-	}
-	p := decodePayload(t, rec.Last(t).Body)
-	if p.MessageType != "INFO" || p.EntityID != "kwatch-dev-notice" ||
-		p.EntityDisplayName != "hello" || p.StateMessage != "hello" {
-		t.Fatalf("payload = %+v", p)
-	}
+	providertest.AssertNoticesSkipped(t, c, rec)
 }
 
 func TestSplunkOncallRejectedRequestFails(t *testing.T) {
@@ -84,11 +77,25 @@ func TestSplunkOncallRejectedRequestFails(t *testing.T) {
 	rec.Reply = func(w http.ResponseWriter, _ providertest.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 	}
-	if err := c.SendMessage(context.Background(), "x"); err == nil {
+	if err := c.SendIncident(context.Background(),
+		providertest.Announce()); err == nil {
 		t.Fatal("expected an error for 401")
 	}
 	c.url = "h ttp://localhost/%s"
-	if err := c.SendMessage(context.Background(), "x"); err == nil {
+	if err := c.SendIncident(context.Background(),
+		providertest.Announce()); err == nil {
 		t.Fatal("expected an error for an invalid URL")
+	}
+}
+
+func TestUnknownSeverityIsAWarningNotCritical(t *testing.T) {
+	m := providertest.Announce()
+	m.Route.Severity = ""
+	if got := messageType(m); got != "WARNING" {
+		t.Fatalf("messageType = %s, want WARNING", got)
+	}
+	m.Route.Severity = "critical"
+	if got := messageType(m); got != "CRITICAL" {
+		t.Fatalf("messageType = %s, want CRITICAL", got)
 	}
 }

@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strings"
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -150,10 +150,8 @@ func (z *Zenduty) alertTypeFor(m notification.Message) string {
 const maxMessageBytes = 130
 
 func (z *Zenduty) buildPayload(m notification.Message) zendutyPayload {
-	summary := m.NoteText()
-	if len(m.Output) > 0 {
-		summary += "\n\nLast output:\n" + strings.Join(m.Output, "\n")
-	}
+	summary := safetext.PlainWithOutput(
+		m.NoteText(), safetext.LastOutput(m.Output), "\n\n", safetext.DetailsLimit)
 	if z.clusterName != "" {
 		summary += "\n\nCluster: " + z.clusterName
 	}

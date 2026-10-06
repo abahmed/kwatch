@@ -19,7 +19,7 @@ func newRecordedJira(t *testing.T) (*Jira, *providertest.Recorder) {
 	}
 	j := NewJira(map[string]interface{}{
 		"url": rec.URL(), "user": "u", "apiToken": "secret",
-		"projectKey": "OPS",
+		"projectKey": "OPS", "closeTransition": "",
 	}, "dev", rec.Dependencies())
 	if j == nil {
 		t.Fatal("jira was not constructed")
@@ -27,8 +27,8 @@ func newRecordedJira(t *testing.T) (*Jira, *providertest.Recorder) {
 	return j, rec
 }
 
-// Jira workflows name their closing transition per project, so recovery
-// is a comment on the same issue.
+// With the closing transition turned off, recovery is a comment on the
+// same issue.
 func TestJiraIncidentLifecycleFollowsOneIssue(t *testing.T) {
 	j, rec := newRecordedJira(t)
 	auth := "Basic " + base64.StdEncoding.EncodeToString([]byte("u:secret"))
@@ -71,8 +71,10 @@ func TestJiraIncidentLifecycleFollowsOneIssue(t *testing.T) {
 			t.Fatalf("%s text = %q", tc.Name, text)
 		}
 	}
-	if len(j.SnapshotThreads()) != 0 {
-		t.Fatal("resolved issue is still tracked")
+	// No close setting: the resolve only commented, the issue is still
+	// open, so it stays mapped for a recurrence.
+	if len(j.SnapshotThreads()) != 1 {
+		t.Fatal("an unclosed issue must stay tracked")
 	}
 }
 

@@ -1,0 +1,24 @@
+10:02:15 settled
+🟠 warehouse in data (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "FileNotFoundException: Could not load file or assembly 'Trella.Models.Common, Version=3.1.120.0'". To read the output of the last crash, run kubectl logs warehouse-c1f19d7b-a -c app -n data --previous
+🟠 warehouse in data (prod-eu-1) keeps crashing.
+
+10:10:00 healthy for 3m0s
+✅ warehouse in data (prod-eu-1) is healthy again. It was failing for nine minutes.
+✅ warehouse in data (prod-eu-1) is healthy again.
+
+10:02:15 settled
+🟠 warehouse in data (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "FileNotFoundException: Could not load file or assembly 'Trella.Models.Common, Version=3.1.120.0'". This is the second time this week. Last time it recovered on its own. To read the output of the last crash, run kubectl logs warehouse-c1f19d7b-a -c app -n data --previous
+🟠 warehouse in data (prod-eu-1) keeps crashing.
+
+10:10:00 healthy for 3m0s
+✅ warehouse in data (prod-eu-1) is healthy again. It was failing for nine minutes.
+✅ warehouse in data (prod-eu-1) is healthy again.
+
+10:32:15 digest
+🟡 kwatch (prod-eu-1) has one earlier one that resolved and configuration risks on seven workloads to report. Resolved: warehouse in data is healthy again. Configuration risks: 7 workloads have containers without a memory limit (warehouse, web, web and 4 more); 7 workloads have no readiness probe (warehouse, web, web and 4 more). None of them is urgent; one that gets worse gets its own message.
+🟡 kwatch (prod-eu-1) has one earlier one that resolved and configuration risks on seven workloads to report.
+
+10:11:00 material change
+🟠 warehouse in data (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "FileNotFoundException: Could not load file or assembly 'Trella.Models.Common, Version=3.1.120.0'". This is the fourth time this week. Last time it recovered on its own. To read the output of the last crash, run kubectl logs warehouse-c1f19d7b-b -c app -n data --previous
+🟠 warehouse in data (prod-eu-1) keeps crashing.
+

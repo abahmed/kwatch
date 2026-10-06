@@ -123,7 +123,7 @@ func TestManagerRestoreRoundTripKeepsIDRootAndLink(t *testing.T) {
 	src.clear(at(2*time.Minute), web)
 	src.tick(at(2 * time.Minute))
 	src.tick(at(2*time.Minute + DefaultHold))
-	src.raise(at(time.Hour), web)
+	src.raise(at(3*time.Hour), web)
 	want := src.of(web.Entity)
 
 	dst := newRig(t, Config{})

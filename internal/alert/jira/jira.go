@@ -34,6 +34,13 @@ type Jira struct {
 	apiToken   string
 	projectKey string
 	issueType  string
+	// closeTransition names the workflow transition a resolve applies;
+	// empty means the resolve only comments.
+	closeTransition string
+	// reopenTransition names the transition that reopens a closed issue
+	// when its incident fails again; empty means a recurrence opens a new
+	// issue instead.
+	reopenTransition string
 
 	clusterName string
 }
@@ -80,20 +87,31 @@ func NewJira(
 		issueType = "Task"
 	}
 
+	// Workflows differ per project, so closing is opt-in: unset, a
+	// resolve only comments.
+	closeTransition, _ := config["closeTransition"].(string)
+	closeTransition = strings.TrimSpace(closeTransition)
+	reopenTransition, _ := config["reopenTransition"].(string)
+	reopenTransition = strings.TrimSpace(reopenTransition)
+
 	klog.InfoS("initializing jira",
 		"url", transport.LogURL(url),
 		"projectKey", projectKey,
-		"issueType", issueType)
+		"issueType", issueType,
+		"closeTransition", closeTransition,
+		"reopenTransition", reopenTransition)
 
 	return &Jira{
-		issues:      issues.NewMap(),
-		sender:      transport.NewSender(dependencies),
-		url:         strings.TrimRight(url, "/") + jiraAPIPath,
-		user:        user,
-		apiToken:    apiToken,
-		projectKey:  projectKey,
-		issueType:   issueType,
-		clusterName: clusterName,
+		issues:           issues.NewMap(),
+		sender:           transport.NewSender(dependencies),
+		url:              strings.TrimRight(url, "/") + jiraAPIPath,
+		user:             user,
+		apiToken:         apiToken,
+		projectKey:       projectKey,
+		issueType:        issueType,
+		closeTransition:  closeTransition,
+		reopenTransition: reopenTransition,
+		clusterName:      clusterName,
 	}
 }
 
@@ -112,7 +130,7 @@ func (g *Jira) SendIncident(
 ) error {
 	return g.issues.Deliver(ctx, g, msg,
 		issues.Title(msg, titleLimit),
-		issues.FencedBody(msg, "{noformat}"))
+		issues.FencedBodyWith(msg, "{noformat}", escapeWiki))
 }
 
 // SendMessage treats a plain message as a notice, which never opens an
@@ -156,18 +174,15 @@ func (g *Jira) Comment(ctx context.Context, id, body string) error {
 	return err
 }
 
-// Close comments the recovery. Jira workflows name their transitions per
-// project, so kwatch cannot pick a closing transition generically.
-func (g *Jira) Close(ctx context.Context, id, body string) error {
-	return g.Comment(ctx, id, body)
-}
-
 func (g *Jira) call(
 	ctx context.Context, method, url string, payload interface{},
 ) ([]byte, error) {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
+	var body []byte
+	if payload != nil {
+		var err error
+		if body, err = json.Marshal(payload); err != nil {
+			return nil, err
+		}
 	}
 	auth := "Basic " + base64.StdEncoding.EncodeToString(
 		[]byte(g.user+":"+g.apiToken),
@@ -178,6 +193,11 @@ func (g *Jira) call(
 			"Authorization": auth,
 		},
 	})
+}
+
+// HasThread implements delivery.ThreadLookup.
+func (g *Jira) HasThread(key string) bool {
+	return g.issues.HasThread(key)
 }
 
 // SnapshotThreads implements delivery.ThreadStateProvider.

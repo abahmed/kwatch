@@ -4,13 +4,57 @@ import (
 	"context"
 	"sort"
 	"strings"
+	"time"
 
 	slackClient "github.com/slack-go/slack"
+
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 // conversationState is the Slack thread that carries one incident.
+// Root is the message the root post was built from, kept so the root can
+// be edited under a new status. It is persisted with ThreadTS (see
+// root_state.go) and is nil only for state saved before that existed.
+//
+// Rollup is set when the incident was announced inside a roll-up: ThreadTS
+// is then the roll-up message's thread, the roll-up owns the root (so Root
+// is nil and is never edited for this incident), and the key names the
+// roll-up conversation.
+//
+// ReopenUntil is set after a resolve whose incident may reopen (see
+// notification.Message.ReopenWithin): the thread is kept until then so a
+// "failing again" update replies in it. Zero while the incident is open.
+//
+// Posted names the message already posted into the thread whose root edit
+// was rate limited, so the delivery retry does not post it again. It lives
+// in memory only: after a restart the retry may post once more.
 type conversationState struct {
-	ThreadTS string
+	ThreadTS    string
+	Root        *notification.Message
+	Rollup      string
+	ReopenUntil time.Time
+	Posted      postedMark
+}
+
+// postedMark identifies one message of a conversation.
+type postedMark struct {
+	Revision int
+	Status   notification.Status
+}
+
+func markOf(m notification.Message) postedMark {
+	return postedMark{Revision: m.Revision, Status: m.Status}
+}
+
+// posted reports whether m is the message already posted into the thread
+// while its root edit is still owed.
+func (c conversationState) posted(m notification.Message) bool {
+	return c.Posted != postedMark{} && c.Posted == markOf(m)
+}
+
+// expired reports a resolved conversation whose reopen window has passed.
+func (c conversationState) expired(now time.Time) bool {
+	return !c.ReopenUntil.IsZero() && now.After(c.ReopenUntil)
 }
 
 // staleThreadErrors are Slack API errors meaning the thread root is gone,
@@ -97,7 +141,7 @@ func (s *Slack) updateChannel() string {
 }
 
 // SnapshotThreads implements delivery.ThreadStateProvider: incident key to
-// thread timestamp.
+// the thread timestamp, followed by the stored root when there is one.
 func (s *Slack) SnapshotThreads() map[string]string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -105,8 +149,11 @@ func (s *Slack) SnapshotThreads() map[string]string {
 		return nil
 	}
 	out := make(map[string]string, len(s.conversations))
+	now := s.clockSource.Now()
 	for key, state := range s.conversations {
-		out[key] = state.ThreadTS
+		if !state.expired(now) {
+			out[key] = encodeThread(state)
+		}
 	}
 	return out
 }
@@ -116,8 +163,8 @@ func (s *Slack) SnapshotThreads() map[string]string {
 // thread already posted by this run always wins over a saved one.
 func (s *Slack) RestoreThreads(saved map[string]string) {
 	keys := make([]string, 0, len(saved))
-	for key, ts := range saved {
-		if ts != "" {
+	for key := range saved {
+		if decodeThread(saved[key]).ThreadTS != "" {
 			keys = append(keys, key)
 		}
 	}
@@ -127,7 +174,7 @@ func (s *Slack) RestoreThreads(saved map[string]string) {
 		_, live := s.conversations[key]
 		s.mu.Unlock()
 		if !live {
-			s.saveConversation(key, conversationState{ThreadTS: saved[key]})
+			s.saveConversation(key, decodeThread(saved[key]))
 		}
 	}
 }

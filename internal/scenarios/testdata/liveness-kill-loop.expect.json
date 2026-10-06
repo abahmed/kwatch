@@ -1,0 +1,11 @@
+{
+  "name": "liveness-kill-loop",
+  "description": "The kubelet kills every pod of a Deployment every 40s for a failing liveness probe; restarts climb and it reads as a crash loop.",
+  "root": "deployment/shop/web",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

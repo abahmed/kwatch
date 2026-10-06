@@ -7,6 +7,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/pipeline/announce"
 	"github.com/abahmed/kwatch/internal/storage"
 )
 
@@ -28,7 +29,7 @@ type diskIncidents struct {
 	store        *storage.Store
 	incidents    *storage.Mirror[incident.Record]
 	fingerprints *storage.Mirror[any]
-	state        storage.Keyed[StartupState]
+	state        storage.Keyed[announce.StartupState]
 
 	mu sync.Mutex
 	// pending is the newest fingerprint set not yet written; nil when
@@ -46,7 +47,7 @@ func NewIncidentStore(s *storage.Store) IncidentStore {
 		incidents: storage.NewMirror(
 			storage.IncidentRecords[incident.Record](s)),
 		fingerprints: storage.NewMirror(storage.FingerprintValues[any](s)),
-		state:        storage.StateValues[StartupState](s),
+		state:        storage.StateValues[announce.StartupState](s),
 	}
 	s.OnClose(d.flushOnClose)
 	return d
@@ -103,12 +104,12 @@ func (d *diskIncidents) LoadFingerprints() (map[string]string, error) {
 const startupKey = "pipeline.startup"
 
 // LoadStartup implements IncidentStore.
-func (d *diskIncidents) LoadStartup() (StartupState, bool, error) {
+func (d *diskIncidents) LoadStartup() (announce.StartupState, bool, error) {
 	return d.state.Get(startupKey)
 }
 
 // SaveStartup implements IncidentStore.
-func (d *diskIncidents) SaveStartup(state StartupState) error {
+func (d *diskIncidents) SaveStartup(state announce.StartupState) error {
 	return d.state.Put(startupKey, state)
 }
 

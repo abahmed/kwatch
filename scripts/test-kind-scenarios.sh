@@ -42,6 +42,11 @@ built_images=""
 sanitize_bin=""
 metrics_manifest=""
 kubeconfig_file=""
+cluster_created=false
+kind_pid=""
+warm_pid=""
+metrics_pid=""
+images_pid=""
 
 require_tool() {
 	if ! command -v "$1" >/dev/null 2>&1; then
@@ -132,6 +137,9 @@ EOF
   "finishedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF
+	if [ "$cluster_created" != true ]; then
+		return
+	fi
 	kubectl get pods -A -o yaml 2>&1 | sanitize_to "$ARTIFACTS/pods.yaml" || true
 	kubectl get events -A --sort-by=.lastTimestamp -o yaml \
 		2>&1 | sanitize_to "$ARTIFACTS/events.yaml" || true
@@ -164,14 +172,23 @@ EOF
 	fi
 }
 
+# quarantine_unsafe_artifacts redacts the unsafe lines of every file that
+# fails the safety check, so the rest of a failing run's diagnostics survive.
+# A file that cannot be redacted (binary content) is removed.
 quarantine_unsafe_artifacts() {
 	quarantine_log="$ARTIFACTS/artifact-safety-quarantine.txt"
 	printf '%s\n' \
 		'artifact safety check found one or more unsafe files' \
 		>"$quarantine_log"
 	while IFS= read -r artifact; do
-		if ! "$harness_root/scripts/check-e2e-artifacts.sh" "$artifact";
-		then
+		if "$harness_root/scripts/check-e2e-artifacts.sh" "$artifact"; then
+			continue
+		fi
+		if "$harness_root/scripts/check-e2e-artifacts.sh" --redact \
+			"$artifact"; then
+			printf 'redacted=%s\n' "${artifact#"$ARTIFACTS"/}" \
+				>>"$quarantine_log"
+		else
 			printf 'removed=%s\n' "${artifact#"$ARTIFACTS"/}" \
 				>>"$quarantine_log"
 			rm -f "$artifact"
@@ -257,8 +274,14 @@ wait_for_http() {
 cleanup() {
 	status=${1:-$?}
 	trap - EXIT INT TERM
+	if [ -n "$kind_pid" ]; then
+		wait "$kind_pid" >/dev/null 2>&1 || true
+	fi
+	for background in $warm_pid $metrics_pid $images_pid; do
+		kill "$background" >/dev/null 2>&1 || true
+	done
 	collect_diagnostics
-	if [ "$KEEP_CLUSTER" != true ]; then
+	if [ "$KEEP_CLUSTER" != true ] && [ "$cluster_created" = true ]; then
 		kind delete cluster --name "$KIND_CLUSTER_NAME" >/dev/null 2>&1 || true
 	fi
 	for image in $built_images; do
@@ -289,13 +312,53 @@ if [ -n "${SCENARIO_FAMILY:-}" ]; then
 	fi
 fi
 
-trap cleanup EXIT INT TERM
-
 require_tool docker
 require_tool kind
 require_tool kubectl
 require_tool go
 require_tool curl
+
+# Every kubectl call below, including the diagnostics collected on failure,
+# uses this script's own kubeconfig, never the developer's default one. The
+# file is empty until kind writes the new cluster into it, so an early
+# failure cannot reach any other cluster.
+kubeconfig_file=$(mktemp)
+export KUBECONFIG="$kubeconfig_file"
+trap cleanup EXIT INT TERM
+
+# The cluster needs nothing but its own config, so it is the first thing
+# started and everything else below overlaps with its creation (about 40
+# seconds). cluster_created is set first so a failed run still deletes the
+# cluster in cleanup.
+cluster_created=true
+kind create cluster \
+	--name "$KIND_CLUSTER_NAME" \
+	--kubeconfig "$kubeconfig_file" \
+	--config test/e2e/testdata/kind-config.yaml &
+kind_pid=$!
+
+# KWATCH_IMAGES_ARCHIVE is the gzip tar saved by scripts/build-e2e-images.sh.
+# Loading it into Docker also overlaps with the cluster creation.
+if [ -n "${KWATCH_IMAGES_ARCHIVE:-}" ]; then
+	docker load --input "$KWATCH_IMAGES_ARCHIVE" >/dev/null &
+	images_pid=$!
+fi
+
+# Compile the test binary now, so the build cache is warm when the tests
+# start. A failure here is harmless: the real run reports it.
+if [ "$install_only" != true ]; then
+	go test -tags=e2e -count=1 -run '^$' ./test/e2e/... \
+		>/dev/null 2>&1 &
+	warm_pid=$!
+fi
+
+# Download the metrics-server manifest while the cluster is created.
+metrics_manifest=$(mktemp)
+curl -fsSL "https://github.com/kubernetes-sigs/metrics-server/releases/\
+download/$METRICS_SERVER_VERSION/components.yaml" \
+	-o "$metrics_manifest" &
+metrics_pid=$!
+
 sanitize_bin=$(mktemp)
 go build -o "$sanitize_bin" ./cmd/kwatch-e2e-sanitize
 
@@ -308,36 +371,57 @@ for required_file in Dockerfile deploy/crd.yaml deploy/deploy.yaml; do
 		exit 2
 	fi
 done
-if [ "$KWATCH_IMAGE" = kwatch:e2e ]; then
-	KWATCH_IMAGE="kwatch:e2e-${source_sha}"
-	docker build --load --tag "$KWATCH_IMAGE" \
-		--build-arg RELEASE_VERSION=e2e \
-		--build-arg GIT_COMMIT="$source_sha" \
-		--build-arg BUILD_DATE="$BUILD_DATE" "$candidate_root"
-	built_images="$KWATCH_IMAGE"
-fi
-
 receiver_image="kwatch-e2e-receiver:${source_sha}"
 workload_image="kwatch-e2e-workload:${source_sha}"
 receiver_host="kwatch-e2e-receiver.kwatch-e2e-system.svc.cluster.local"
 receiver_url="http://${receiver_host}:8080/webhook"
-docker build --load --tag "$receiver_image" test/e2e/receiver
-docker build --load --tag "$workload_image" test/e2e/workload
-built_images="$built_images $receiver_image $workload_image"
+default_kwatch_image=false
+if [ "$KWATCH_IMAGE" = kwatch:e2e ]; then
+	KWATCH_IMAGE="kwatch:e2e-${source_sha}"
+	default_kwatch_image=true
+fi
 
-kind create cluster \
-	--name "$KIND_CLUSTER_NAME" \
-	--config test/e2e/testdata/kind-config.yaml
-kubeconfig_file=$(mktemp)
-kind get kubeconfig --name "$KIND_CLUSTER_NAME" >"$kubeconfig_file"
-export KUBECONFIG="$kubeconfig_file"
+# KWATCH_PREBUILT_IMAGES=true means an earlier CI job built the images and
+# loaded them into Docker; they are only checked here, never removed.
+if [ "${KWATCH_PREBUILT_IMAGES:-false}" = true ]; then
+	if [ -n "$images_pid" ]; then
+		wait "$images_pid"
+		images_pid=""
+	fi
+	for image in "$KWATCH_IMAGE" "$receiver_image" "$workload_image"; do
+		if ! docker image inspect "$image" >/dev/null 2>&1; then
+			echo "prebuilt image is missing: $image" >&2
+			exit 1
+		fi
+	done
+else
+	BUILD_KWATCH_IMAGE="$default_kwatch_image" \
+		KWATCH_SOURCE_SHA="$source_sha" BUILD_DATE="$BUILD_DATE" \
+		KWATCH_CANDIDATE_ROOT="$candidate_root" \
+		"$harness_root/scripts/build-e2e-images.sh"
+	built_images="$receiver_image $workload_image"
+	if [ "$default_kwatch_image" = true ]; then
+		built_images="$KWATCH_IMAGE $built_images"
+	fi
+fi
+
+wait "$kind_pid"
+kind_pid=""
+# shellcheck source=scripts/require-kind-context.sh
+. "$harness_root/scripts/require-kind-context.sh"
+require_kind_context "kind-$KIND_CLUSTER_NAME"
+# Kwatch starts as early as possible, because its startup window (and the
+# wait the scenarios make for it to end) runs from the moment it starts.
+# Only what it needs at once is done first: its image, the receiver it
+# reports to, and its own manifests. The workload image and the
+# metrics-server rollout are finished while Kwatch starts.
 kind load docker-image "$KWATCH_IMAGE" --name "$KIND_CLUSTER_NAME"
 kind load docker-image "$receiver_image" --name "$KIND_CLUSTER_NAME"
-kind load docker-image "$workload_image" --name "$KIND_CLUSTER_NAME"
+kind load docker-image "$workload_image" --name "$KIND_CLUSTER_NAME" &
+workload_load_pid=$!
 
-metrics_manifest=$(mktemp)
-curl -fsSL "https://github.com/kubernetes-sigs/metrics-server/releases/\
-download/$METRICS_SERVER_VERSION/components.yaml" -o "$metrics_manifest"
+wait "$metrics_pid"
+metrics_pid=""
 metrics_checksum=$(sha256sum "$metrics_manifest" | awk '{print $1}')
 if [ "$metrics_checksum" != "$METRICS_SERVER_MANIFEST_SHA256" ]; then
 	echo "metrics-server manifest checksum mismatch" >&2
@@ -349,10 +433,6 @@ metrics_patch="${metrics_patch}\"/spec/template/spec/containers/0/args/-\","
 metrics_patch="${metrics_patch}\"value\":\"--kubelet-insecure-tls\"}]"
 kubectl -n kube-system patch deployment metrics-server --type=json \
 	-p "$metrics_patch"
-kubectl -n kube-system rollout status deployment/metrics-server \
-	--timeout=5m
-kubectl wait --for=condition=Available \
-	apiservice/v1beta1.metrics.k8s.io --timeout=5m
 
 kubectl apply -f "$candidate_root/deploy/crd.yaml"
 kubectl wait --for=condition=Established \
@@ -388,6 +468,11 @@ fi
 sed "s#kwatch-e2e-receiver:e2e#$receiver_image#g" \
 	test/e2e/receiver/deployment.yaml | kubectl apply -f -
 kubectl -n kwatch rollout status deployment/kwatch --timeout=10m
+wait "$workload_load_pid"
+kubectl -n kube-system rollout status deployment/metrics-server \
+	--timeout=5m
+kubectl wait --for=condition=Available \
+	apiservice/v1beta1.metrics.k8s.io --timeout=5m
 kubectl -n kwatch annotate deployment/kwatch \
 		"kwatch.e2e/source-sha=$source_sha" --overwrite
 actual_image=$(kubectl -n kwatch get deployment/kwatch \
@@ -435,6 +520,10 @@ if [ -n "${SCENARIO_FAMILY:-}" ]; then
 	fi
 fi
 
+if [ -n "$warm_pid" ]; then
+	wait "$warm_pid" || true
+	warm_pid=""
+fi
 set +e
 KWATCH_E2E="$KWATCH_E2E" \
 	KWATCH_EXTENDED=true \
@@ -445,7 +534,7 @@ KWATCH_E2E="$KWATCH_E2E" \
 	SCENARIO_SHARD="${SCENARIO_SHARD:-}" \
 	go test -tags=e2e -count=1 -v ./test/e2e/... \
 		-timeout "$SUITE_TIMEOUT" \
-		-parallel "${SCENARIO_PARALLEL:-6}" \
+		-parallel "${SCENARIO_PARALLEL:-10}" \
 		-run "$scenario_regex" \
 		>"$ARTIFACTS/go-test.log" 2>&1
 test_status=$?
