@@ -2,7 +2,7 @@
 # Without --platform=$BUILDPLATFORM this stage runs under QEMU for arm64,
 # arm/v7 and arm/v6, which is what made a release build take over an hour.
 # Go cross-compiles fine and CGO is off, so emulation buys nothing.
-FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:cf6fca6641884b8433441b2b0652976f975e1d0fdd26d177eaaf8596087f3125 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS builder
 
 ARG RELEASE_VERSION="dev"
 ARG GIT_COMMIT="none"

@@ -3,6 +3,7 @@ package kube
 import (
 	"sort"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -120,6 +121,9 @@ func podAttributes(pod *corev1.Pod) map[string]inventory.Value {
 	if !pod.CreationTimestamp.IsZero() {
 		attrs[AttrCreated] = inventory.Time(pod.CreationTimestamp.Time)
 	}
+	if started := newestContainerStart(pod); !started.IsZero() {
+		attrs[AttrContainersStarted] = inventory.Time(started)
+	}
 	conditions := make([]condition, 0, len(pod.Status.Conditions))
 	for _, c := range pod.Status.Conditions {
 		conditions = append(conditions, condition{
@@ -139,6 +143,32 @@ func podAttributes(pod *corev1.Pod) map[string]inventory.Value {
 		attrs[AttrOptionalRefs] = inventory.Text(optional)
 	}
 	return attrs
+}
+
+// newestContainerStart is when the pod's latest container started, running
+// or not; zero when none has.
+func newestContainerStart(pod *corev1.Pod) time.Time {
+	var newest time.Time
+	for _, s := range pod.Status.ContainerStatuses {
+		for _, at := range []time.Time{
+			startOf(s.State), startOf(s.LastTerminationState),
+		} {
+			if at.After(newest) {
+				newest = at
+			}
+		}
+	}
+	return newest
+}
+
+func startOf(state corev1.ContainerState) time.Time {
+	switch {
+	case state.Running != nil:
+		return state.Running.StartedAt.Time
+	case state.Terminated != nil:
+		return state.Terminated.StartedAt.Time
+	}
+	return time.Time{}
 }
 
 // podRef is one Secret or ConfigMap reference and whether the pod starts

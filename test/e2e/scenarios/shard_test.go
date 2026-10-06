@@ -193,3 +193,54 @@ func TestNodeStoppingScenariosUseDifferentShards(t *testing.T) {
 		}
 	}
 }
+
+// Own scenarios must have their cluster to themselves: anything else in
+// the shard runs before or beside them and delays the slowest job.
+func TestOwnScenarioShardHoldsNothingElse(t *testing.T) {
+	plan := shardPlan(10)
+	for own, ownShard := range plan {
+		if !costOf(own).Own {
+			continue
+		}
+		for test, shard := range plan {
+			if test != own && shard == ownShard {
+				t.Errorf("%s shares shard %d with own scenario %s",
+					test, shard+1, own)
+			}
+		}
+	}
+}
+
+// Every scenario test is placed by the plan through its test name, never
+// by the hash fallback, even when its helper is given a non-catalog ID.
+func TestEveryScenarioTestIsPlannedByName(t *testing.T) {
+	plan := shardPlan(10)
+	files, err := filepath.Glob("*_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A scenario test calls one of the run helpers first thing.
+	helper := regexp.MustCompile(`func (TestScenario\w+)\(t \*testing\.T\)` +
+		` \{\s+(in\w*Namespace\w*|in\w*Cluster|onCluster)\(t, `)
+	found := 0
+	for _, file := range files {
+		body, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, match := range helper.FindAllStringSubmatch(string(body), -1) {
+			test := match[1]
+			found++
+			if _, ok := plan[test]; !ok {
+				t.Errorf("%s (%s) is not in the shard plan", test, file)
+				continue
+			}
+			if got := shardOf(test, 10); got != plan[test] {
+				t.Errorf("%s: shardOf = %d, plan = %d", test, got, plan[test])
+			}
+		}
+	}
+	if found < len(plan) {
+		t.Errorf("found %d scenario tests, plan has %d", found, len(plan))
+	}
+}

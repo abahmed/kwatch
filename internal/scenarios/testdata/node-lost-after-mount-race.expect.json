@@ -1,0 +1,12 @@
+{
+  "name": "node-lost-after-mount-race",
+  "description": "Pods that overcame a start-up FailedMount lose their node; the old event must not blame the volume for the pods going not ready.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/apps/tenant-0",
+    "deployment/apps/tenant-3",
+    "deployment/apps/tenant-5"
+  ]
+}

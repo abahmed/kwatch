@@ -314,14 +314,17 @@ jobs:
           echo "tagging at $RESOLVED"
 
       # The commit being released must already have passed the required CI
-      # run, the security workflow, and a full nightly-equivalent E2E run
-      # (run name "E2E full") on main. Read from the Actions API with the
-      # read-only GITHUB_TOKEN. A dry run reports the gate without failing.
+      # run and the security workflow on main. Stable and patch releases also
+      # need a full nightly-equivalent E2E run (run name "E2E full"); an rc is
+      # a pre-release, so it skips E2E and stable stays the E2E gate. Read
+      # from the Actions API with the read-only GITHUB_TOKEN. A dry run
+      # reports the gate without failing.
       - name: Require green CI, security and E2E on the target commit
         if: ${{ steps.meta.outputs.resume != 'true' }}
         env:
           SHA: ${{ steps.target.outputs.sha }}
           DRY_RUN: ${{ inputs.dry_run }}
+          COMMAND: ${{ inputs.command }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -345,7 +348,11 @@ jobs:
           }
           check ci.yml ""
           check security.yml ""
-          check e2e.yml "E2E full"
+          if [ "$COMMAND" = rc ]; then
+            echo "e2e.yml: not required for an rc release"
+          else
+            check e2e.yml "E2E full"
+          fi
           if [ -n "$missing" ]; then
             message="no successful run on main for $SHA:$missing. Run the missing workflow on this commit and retry."
             if [ "$DRY_RUN" = true ]; then

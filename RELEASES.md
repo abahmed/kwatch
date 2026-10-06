@@ -865,8 +865,9 @@
   scenarios` and `Operational validation`; required status checks are now
   `Verify`, `Image`, `Chart lifecycle`, `Go dependency scan` and
   `Analyze (actions)` (import `.github/rulesets/main-branch.json`). A
-  release now requires green CI, security and full E2E runs on the tagged
-  commit, and the image is scanned before it is pushed.
+  release now requires green CI and security runs on the tagged commit,
+  plus a full E2E run for stable and patch releases (an rc skips E2E),
+  and the image is scanned before it is pushed.
 - **Readiness follows required sources.** `/readyz` now fails while a
   required source (Pods, Nodes) is unavailable, such as after its RBAC
   permission is revoked, and recovers with it. A source counts as synced
@@ -1322,7 +1323,7 @@ An RC should not be promoted until all of these hold:
 
 - [ ] RC has been published for at least **2 weeks** of soak (unless a critical fix is blocking).
 - [ ] No open **critical** issues / known regressions against the RC.
-- [ ] `CI`, `Security and supply chain` and a full `E2E` run are green on the RC commit (the release workflow enforces this).
+- [ ] `CI`, `Security and supply chain` and a full `E2E` run are green on the RC commit (the release workflow enforces E2E when promoting to stable; an rc itself needs only CI and security).
 - [ ] `helm lint` + `test_helm.sh` pass for the released chart.
 - [ ] Release notes reviewed (generated automatically from merged commit titles).
 - [ ] README and `docs/` contain no `🚧 Unreleased` banners (stripped automatically on stable).
