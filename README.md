@@ -4,7 +4,7 @@
   </a>
 </p>
 
-<h2 align="center">Stop reading alerts. Start fixing the cause.</h2>
+<h2 align="center">See what broke. Understand why. Know what to do next. 👀🧠⚡</h2>
 
 <p align="center">
   kwatch is the on-call teammate for your Kubernetes cluster. When something

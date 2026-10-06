@@ -219,11 +219,18 @@ func TestEventStartFailureOvercomeByReadyPod(t *testing.T) {
 		name       string
 		ready      bool
 		readySince time.Time
+		started    time.Time
 		want       int
 	}{
-		{"ready after the event", true, mount.Add(time.Second), 0},
-		{"ready before the event", true, mount.Add(-time.Minute), 1},
-		{"never ready", false, time.Time{}, 1},
+		{"ready after the event", true, mount.Add(time.Second),
+			time.Time{}, 0},
+		{"ready before the event", true, mount.Add(-time.Minute),
+			time.Time{}, 1},
+		{"never ready", false, time.Time{}, time.Time{}, 1},
+		{"not ready now, container started after the event", false,
+			now.Add(-10 * time.Second), mount.Add(time.Second), 0},
+		{"not ready now, container started before the event", false,
+			now.Add(-10 * time.Second), mount.Add(-time.Minute), 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			model := newTestModel()
@@ -231,8 +238,9 @@ func TestEventStartFailureOvercomeByReadyPod(t *testing.T) {
 			model.Apply(inventory.Observation{
 				Kind: inventory.Observed, Source: "test", At: mount,
 				Entity: id, Attributes: map[string]inventory.Value{
-					kube.AttrReady:      inventory.Bool(tc.ready),
-					kube.AttrReadySince: inventory.Time(tc.readySince),
+					kube.AttrReady:             inventory.Bool(tc.ready),
+					kube.AttrReadySince:        inventory.Time(tc.readySince),
+					kube.AttrContainersStarted: inventory.Time(tc.started),
 				},
 			})
 			warn(model, id, mount, "FailedMount",

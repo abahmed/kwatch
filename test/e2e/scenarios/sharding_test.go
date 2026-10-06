@@ -169,17 +169,22 @@ func (l shardLoad) finish() time.Duration {
 	return time.Duration(l.alone+max(l.longest, lanes)) * time.Second
 }
 
-// shardOf picks the shard that runs scenario id. Scenarios are grouped by
+// shardOf picks the shard that runs a scenario, given its catalog ID or its
+// test function name. Scenarios are grouped by
 // their test function (several coverage entries can share one test) and
 // dealt out longest first, each to the shard that would finish earliest
 // with it. An ID missing from the catalog falls back to a hash.
 func shardOf(id string, total int) int {
-	test, ok := scenarioTests()[id]
-	if !ok {
-		hash := sha1Sum(id)
-		return int(hash[0]) % total
+	plan := shardPlan(total)
+	if test, ok := scenarioTests()[id]; ok {
+		return plan[test]
 	}
-	return shardPlan(total)[test]
+	// id may already be a test function name (see shardKey).
+	if shard, ok := plan[id]; ok {
+		return shard
+	}
+	hash := sha1Sum(id)
+	return int(hash[0]) % total
 }
 
 // shardPlan maps every covered test to its shard.

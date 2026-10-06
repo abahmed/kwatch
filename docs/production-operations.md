@@ -505,9 +505,11 @@ Rulesets → New ruleset → Import a ruleset, or with
 .github/rulesets/main-branch.json`. Remove the old `Check` required
 status check when you apply it.
 
-The `Release` workflow refuses to tag a commit unless `CI`, `Security and
-supply chain`, and a full `E2E` run (run name `E2E full`, the nightly run or
-an unfiltered dispatch) all succeeded on `main` for that exact commit.
+The `Release` workflow refuses to tag a commit unless `CI` and `Security and
+supply chain` succeeded on `main` for that exact commit. Stable and patch
+releases also need a full `E2E` run (run name `E2E full`, the nightly run or
+an unfiltered dispatch) on that commit; an rc pre-release skips E2E, so the
+E2E gate applies when the rc is promoted to stable.
 `Publish` then builds the release image, scans it with Trivy before anything
 is pushed, pushes the multi-platform image, moves `latest` for stable
 releases, and signs and attests the digest.

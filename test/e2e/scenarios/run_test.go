@@ -64,7 +64,7 @@ func runScenarioAfter(
 	if os.Getenv("KWATCH_E2E") != "true" {
 		t.Skip("set KWATCH_E2E=true to run real-cluster scenarios")
 	}
-	if !belongsToShard(id, os.Getenv("SCENARIO_SHARD")) {
+	if !belongsToShard(shardKey(t), os.Getenv("SCENARIO_SHARD")) {
 		t.Skip("scenario belongs to another shard")
 	}
 	config, err := harness.ConfigFromEnvChecked()
@@ -152,6 +152,14 @@ func cleanupNamespace(t *testing.T, e *harness.Environment, name string) {
 
 func sha1Sum(text string) [sha1.Size]byte {
 	return sha1.Sum([]byte(text))
+}
+
+// shardKey is the name a scenario is sharded by: its top-level test
+// function. Scenario IDs passed to the helpers are not always catalog IDs
+// (one test can cover several), so the test name is the stable key.
+func shardKey(t *testing.T) string {
+	name, _, _ := strings.Cut(t.Name(), "/")
+	return name
 }
 
 // belongsToShard reports whether this run owns the scenario. value is

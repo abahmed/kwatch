@@ -159,11 +159,19 @@ var startReasons = map[string]bool{
 }
 
 // overcomeAtStart reports whether note is a start-up failure of a pod that
-// became ready after it: the retry worked, so the event is history, not a
-// failure. A failure after the pod became ready still counts.
+// ran after it: the retry worked, so the event is history, not a failure.
+// A pod that became ready after the note, or whose containers started
+// after it, overcame it even if it is not ready now (its node may be
+// lost). A failure after that still counts.
 func overcomeAtStart(e inventory.Entity, note inventory.Note) bool {
-	if e.ID.Kind != kube.KindPod || !startReasons[note.Reason] ||
-		!flag(e, kube.AttrReady) {
+	if e.ID.Kind != kube.KindPod || !startReasons[note.Reason] {
+		return false
+	}
+	started := timestamp(e, kube.AttrContainersStarted)
+	if !started.IsZero() && !started.Before(note.At) {
+		return true
+	}
+	if !flag(e, kube.AttrReady) {
 		return false
 	}
 	readySince := timestamp(e, kube.AttrReadySince)

@@ -58,8 +58,12 @@ const (
 	AttrImageID = "image.id"
 	// AttrProbePorts lists the ports the container's probes connect to,
 	// named ports resolved against the container's own port names.
-	AttrProbePorts        = "probe.ports"
-	AttrStartedAt         = "started.at"
+	AttrProbePorts = "probe.ports"
+	AttrStartedAt  = "started.at"
+	// AttrContainersStarted is on a pod: when its newest container
+	// started. The kubelet only starts containers once their volumes
+	// and network are ready, and the value survives a lost node.
+	AttrContainersStarted = "containers.started"
 	AttrImage             = "image"
 	AttrInit              = "init"
 	AttrSidecar           = "sidecar"
