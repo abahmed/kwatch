@@ -221,6 +221,20 @@ func TestIngressTLSSecretReference(t *testing.T) {
 	assert.True(t, found, "tls-cert reference not found")
 }
 
+// The class is a reference, so an Ingress is judged again when its class
+// appears or goes away.
+func TestIngressClassReference(t *testing.T) {
+	ing := ingress("ing1")
+	class := "alb"
+	ing.Spec.IngressClassName = &class
+
+	desc, ok := kube.IngressSchema{}.Describe(ing)
+
+	assert.True(t, ok)
+	assert.Contains(t, desc.Relations[inventory.References],
+		inventory.CoreID(kube.KindIngressClass, "", "alb"))
+}
+
 func TestIngressBackendDiff(t *testing.T) {
 	old := ingress("ing1")
 	new := ingress("ing1")

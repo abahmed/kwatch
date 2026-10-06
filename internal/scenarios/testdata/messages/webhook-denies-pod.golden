@@ -1,4 +1,9 @@
 10:03:15 settled
 🟠 Replica set checkout-60c14ab6 in payments (prod-eu-1) is blocked by admission policy image-policy: image registry.example.com/checkout:unsigned has no signature. checkout is affected as well. To see the policy that denies the pods, run kubectl get validatingwebhookconfiguration image-policy -o yaml
 🟠 Replica set checkout-60c14ab6 in payments (prod-eu-1) is blocked by admission policy image-policy: image registry.example.com/checkout:unsigned has no signature.
-
+| 🟠 Replica set **checkout-60c14ab6** in **payments** (**prod-eu-1**) is blocked by admission policy image-policy: image registry.example.com/checkout:unsigned has no signature.
+| **checkout** is affected as well.
+| To see the policy that denies the pods, run
+| ```
+| kubectl get validatingwebhookconfiguration image-policy -o yaml
+| ```

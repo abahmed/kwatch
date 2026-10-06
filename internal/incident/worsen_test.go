@@ -138,3 +138,21 @@ func TestHPAMaxedOutLongEscalatesOnce(t *testing.T) {
 	assert.Equal(t, Notify, ds[0].Incident.Tier)
 	wantNone(t, r.tick(at(HPAStuckAfter+time.Hour)))
 }
+
+// A known workload whose pods have not been ready since long before this
+// run started is no boot: the kubelet's own time says the failure did not
+// begin with the restart, so the boot window is not waited for again.
+func TestKnownNeverReadySinceBeforeTheRunIsNotDemoted(t *testing.T) {
+	longNeverReady := func(pod inventory.EntityID) detection.Finding {
+		f := sig(pod, reasons.WorkloadNeverReady, detection.Warning)
+		f.Mode = detection.ModeNeverReady
+		f.Since = at(-10 * time.Hour)
+		return f
+	}
+	r, _ := knownRig(t, longNeverReady)
+
+	ds := r.tick(at(DefaultSettle))
+
+	require.Len(t, ds, 1)
+	assert.Equal(t, Notify, ds[0].Incident.Tier)
+}

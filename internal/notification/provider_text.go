@@ -11,6 +11,15 @@ const noticeKey = "notice"
 // NoteText is the full narrative a provider sends. It falls back to the
 // structured text rendering when a message carries no Note.
 func (m Message) NoteText() string {
+	if len(m.Doc) > 0 {
+		return m.Plain()
+	}
+	return m.NoteParagraph()
+}
+
+// NoteParagraph is the Note as one plain paragraph, the form the webhook,
+// n8n and zapier payloads keep.
+func (m Message) NoteParagraph() string {
 	if note := strings.TrimSpace(m.Note); note != "" {
 		return note
 	}

@@ -50,4 +50,8 @@ type Decision struct {
 	// reached people (a restart lost it while held) but whose page did
 	// reach the pagers. It closes that alert and goes to the pagers alone.
 	Unannounced bool
+	// Handover marks the resolve of a restored incident whose failures
+	// another incident took over. Chat hears it as a reply in the old
+	// thread, since the restart left that thread open.
+	Handover bool
 }

@@ -1,4 +1,10 @@
 10:02:30 startup summary
 🟠 kwatch (prod-eu-1) started and found two problems that began before it was watching. invoicer in billing cannot start because secret invoicer-creds does not exist. api in shop keeps crashing. Each gets its own message when it changes or resolves.
 🟠 kwatch (prod-eu-1) started and found two problems that began before it was watching.
-
+| 🟠 **kwatch started** · prod-eu-1 — 2 problems began before it was watching
+|
+| **Problems**
+| - **invoicer** in **billing** cannot start because secret **invoicer-creds** does not exist
+| - **api** in **shop** keeps crashing
+|
+| *Each gets its own message when it changes or resolves.*

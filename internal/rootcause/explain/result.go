@@ -17,6 +17,7 @@ func (v *view) causeOf(s scored) Cause {
 		Contributions: s.contributions, Changes: v.changesOf(s.c.id),
 		Summary: summaryOf(s.c.id, best.match.causeMode, len(s.c.covers)),
 		Began:   v.began(s.c.id),
+		Hops:    s.c.chain.hops, Beyond: s.c.chain.beyond,
 	}
 }
 
@@ -69,6 +70,7 @@ func (v *view) traceOf(
 		}
 	}
 	trace.Checked = v.checkedInArea(inArea)
+	trace.Compared = v.comparedInArea(inArea)
 	return trace
 }
 

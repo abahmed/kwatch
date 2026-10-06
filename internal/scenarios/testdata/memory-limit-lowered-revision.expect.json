@@ -1,0 +1,11 @@
+{
+  "name": "memory-limit-lowered-revision",
+  "description": "A Deployment's memory limit is lowered from 512Mi to 256Mi; the pods of the new revision are OOMKilled and the previous revision stays healthy.",
+  "root": "deployment/shop/checkout",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

@@ -167,16 +167,31 @@ func rootFindingReasons(
 	return uniq(reasons)
 }
 
+// maxCauseFindings bounds the root findings an open incident remembers.
+// A chronic incident whose cause is a crash loop of replaced pods would
+// otherwise add one entry for every pod it ever had.
+const maxCauseFindings = 256
+
+// rememberCauseFinding adds one "entity=reason" pair, unless the set is
+// full and the pair is new.
+func (p *Incident) rememberCauseFinding(pair string) {
+	if p.causeFindings == nil {
+		p.causeFindings = map[string]struct{}{}
+	}
+	if _, known := p.causeFindings[pair]; !known &&
+		len(p.causeFindings) >= maxCauseFindings {
+		return
+	}
+	p.causeFindings[pair] = struct{}{}
+}
+
 // rememberRootReasons adds the root's current own reasons to the set the
 // fingerprint reads. A reason that clears while the incident stays open
 // is not news; the incident's recovery is.
 func (p *Incident) rememberRootReasons() {
 	if p.Cause != nil {
 		for _, pair := range rootFindingReasons(p.Cause, nil) {
-			if p.causeFindings == nil {
-				p.causeFindings = map[string]struct{}{}
-			}
-			p.causeFindings[pair] = struct{}{}
+			p.rememberCauseFinding(pair)
 		}
 	}
 	for key, s := range p.Members {

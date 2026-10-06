@@ -61,6 +61,9 @@ func (ServiceSchema) Describe(obj any) (Description, bool) {
 	if svc.Spec.ClusterIP == corev1.ClusterIPNone {
 		attrs[AttrHeadless] = inventory.Bool(true)
 	}
+	if ip := svc.Spec.ClusterIP; ip != "" && ip != corev1.ClusterIPNone {
+		attrs[AttrClusterIP] = inventory.Text(ip)
+	}
 	if svc.Spec.ExternalName != "" {
 		attrs[AttrExternalName] = inventory.Text(svc.Spec.ExternalName)
 	}
@@ -169,8 +172,12 @@ func (IngressSchema) Describe(obj any) (Description, bool) {
 		AttrLoadBalancer: inventory.Bool(
 			len(ing.Status.LoadBalancer.Ingress) > 0),
 	}
-	if ing.Spec.IngressClassName != nil {
-		attrs[AttrIngressClass] = inventory.Text(*ing.Spec.IngressClassName)
+	if name := ing.Spec.IngressClassName; name != nil && *name != "" {
+		attrs[AttrIngressClass] = inventory.Text(*name)
+		// A reference, so the Ingress is judged again when its class
+		// is listed late or removed (see Engine.readers).
+		rel.add(inventory.References,
+			inventory.CoreID(KindIngressClass, "", *name))
 	}
 	return Description{
 		ID: objectID(KindIngress, ing), UID: string(ing.UID),
@@ -185,14 +192,10 @@ func (IngressSchema) Diff(old, new any) []inventory.FieldChange {
 	if !ok1 || !ok2 {
 		return nil
 	}
-	b := strings.Join(ingressServices(before), ",")
-	a := strings.Join(ingressServices(after), ",")
-	if b == a {
-		return nil
-	}
-	return []inventory.FieldChange{{
-		Path: "spec.backends", Before: b, After: a,
-	}}
+	fields := appendText(nil, "spec.backends",
+		strings.Join(ingressServices(before), ","),
+		strings.Join(ingressServices(after), ","))
+	return append(fields, ingressRuleChanges(before, after)...)
 }
 
 const actionBackendPort = "use-annotation"

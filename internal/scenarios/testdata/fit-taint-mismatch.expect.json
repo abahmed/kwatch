@@ -1,0 +1,7 @@
+{
+  "name": "fit-taint-mismatch",
+  "description": "A pod is Pending because the general pool is full and the gpu pool, which has room, is tainted; the message says the taint is the blocker and that tolerating it would fit.",
+  "root": "scheduling//Insufficient cpu",
+  "tier": "notify",
+  "maxMessages": 2
+}

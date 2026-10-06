@@ -69,16 +69,25 @@ type runtimePolicy struct {
 	maintenance         MaintenanceConfig
 }
 
+// activeProviderNames lists the configured providers in a stable order,
+// leaving out removed ones whose section is only kept so the file loads.
+func activeProviderNames(alert map[string]map[string]interface{}) []string {
+	names := make([]string, 0, len(alert))
+	for name := range alert {
+		if !isRemovedProvider(name) {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
 // CompileRuntimeConfig creates a defensive snapshot of derived settings.
 func CompileRuntimeConfig(c *Config) RuntimeConfig {
 	if c == nil {
 		return RuntimeConfig{}
 	}
-	providers := make([]string, 0, len(c.Alert))
-	for name := range c.Alert {
-		providers = append(providers, name)
-	}
-	sort.Strings(providers)
+	providers := activeProviderNames(c.Alert)
 	return RuntimeConfig{
 		compiled: true,
 		application: ApplicationRuntime{

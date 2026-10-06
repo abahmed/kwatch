@@ -68,5 +68,5 @@ func (v *view) controlPlaneHops(id inventory.EntityID) []hop {
 	if id == kube.APIServer && v.failing(id) {
 		out = append(out, hop{link: LinkServedBy, to: kube.Etcd})
 	}
-	return out
+	return append(out, v.apiLatencyHops(id)...)
 }

@@ -81,12 +81,15 @@ func adoptedFingerprint(p *Incident) string {
 // (its "failing again" update is due), escalation (a tier or state change
 // without a message), then the handler of its state.
 func (m *Manager) advance(p *Incident, now time.Time) (Decision, bool) {
+	m.handOver(p, now)
 	if superseded(p) {
 		if m.quietSupersede(p, now) {
 			m.resolveQuietly(p, now)
 			return Decision{}, false
 		}
-		return m.resolve(p, now, ReasonSuperseded), true
+		d := m.resolve(p, now, ReasonSuperseded)
+		d.Handover = p.restored
+		return d, true
 	}
 	if m.reopenPending(p) {
 		return m.reopenUpdate(p, now)

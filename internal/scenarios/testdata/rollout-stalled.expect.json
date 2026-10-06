@@ -1,0 +1,11 @@
+{
+  "name": "rollout-stalled",
+  "description": "A Deployment's new revision never passes its readiness probe: nothing crashes, but the rollout stops and the controller reports that it missed its progress deadline.",
+  "root": "deployment/shop/ledger",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "20m0s"
+}

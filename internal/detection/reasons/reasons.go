@@ -194,9 +194,36 @@ const (
 	// LeaseStale is a controller's Lease that its running holder stopped
 	// renewing: the controller runs but does not work.
 	LeaseStale = "LeaseStale"
+	// DeprecatedAPIInUse is an API version that something still requests
+	// and that a Kubernetes release removes.
+	DeprecatedAPIInUse = "DeprecatedAPIInUse"
 	// APIServerErrors is the API server answering a notable share of
 	// requests with server errors.
 	APIServerErrors = "APIServerErrors"
+	// APIServerWritesSlow is the API server taking seconds to create,
+	// update or delete objects.
+	APIServerWritesSlow = "APIServerWritesSlow"
+	// APIServerReadsSlow is the API server taking seconds to answer gets
+	// and lists.
+	APIServerReadsSlow = "APIServerReadsSlow"
+	// APIServerThrottling is the API server rejecting requests because a
+	// priority level is full.
+	APIServerThrottling = "APIServerThrottling"
+	// EtcdDatabaseLarge is an etcd database close to its default size
+	// quota, past which etcd refuses writes.
+	EtcdDatabaseLarge = "EtcdDatabaseLarge"
+	// StorageObjectsHigh is one resource with so many stored objects
+	// that listing it strains the API server and etcd.
+	StorageObjectsHigh = "StorageObjectsHigh"
+	// WebhookSlow is an admission webhook that takes seconds per call,
+	// slowing every request it intercepts.
+	WebhookSlow = "WebhookSlow"
+	// WebhookRejecting is an admission webhook that fails a large share
+	// of its calls while set to fail closed: those requests are refused.
+	WebhookRejecting = "WebhookRejecting"
+	// WebhookFailingOpen is an admission webhook that fails a large share
+	// of its calls but is set to ignore failures: its checks are skipped.
+	WebhookFailingOpen = "WebhookFailingOpen"
 	// CoreDNSServfail is the cluster DNS failing a notable share of
 	// lookups with SERVFAIL.
 	CoreDNSServfail = "CoreDNSServfail"
@@ -266,7 +293,10 @@ const (
 	CronJobRepeatedFailure  = "CronJobRepeatedFailure"
 	// CronJobLastRunFailed is a CronJob whose latest run failed and has
 	// not been followed by a success; it waits for the digest.
-	CronJobLastRunFailed          = "CronJobLastRunFailed"
+	CronJobLastRunFailed = "CronJobLastRunFailed"
+	// CronJobNoRecentSuccess is a CronJob that has not succeeded for
+	// several scheduled runs; it waits for the digest.
+	CronJobNoRecentSuccess        = "CronJobNoRecentSuccess"
 	LoadBalancerSyncFailed        = "LoadBalancerSyncFailed"
 	IngressTLSSecretMissing       = "IngressTLSSecretMissing"
 	IngressClassMissing           = "IngressClassMissing"

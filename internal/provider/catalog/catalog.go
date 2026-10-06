@@ -9,7 +9,7 @@ var providerNames = []string{
 	"alerta", "clickup", "datadog", "dingtalk", "discord", "email",
 	"feishu", "flock", "gitea", "github", "gitlab", "goalert",
 	"googlechat", "gotify", "homeassistant", "ifttt", "ilert",
-	"incident.io", "incidentio", "jira", "line", "mailgun", "matrix",
+	"incident.io", "incidentio", "jira", "mailgun", "matrix",
 	"mattermost", "messagebird", "n8n", "newrelic", "ntfy", "opsgenie",
 	"pagerduty", "plivo", "pushbullet", "pushover", "resend",
 	"rocketchat", "sendgrid", "sensugo", "ses", "signal", "signl4",

@@ -48,6 +48,11 @@ const (
 	// AttrPodIP is the pod's address, for the metrics the prober reads
 	// from the cluster DNS pods.
 	AttrPodIP = "pod.ip"
+	// AttrClusterIP is a Service's virtual address; absent for a
+	// headless Service. AttrNodeIP is a Node's InternalIP. Both let a
+	// quoted log line name the object an address belongs to.
+	AttrClusterIP = "service.cluster.ip"
+	AttrNodeIP    = "node.ip"
 	// Lease attributes, written by the prober's Lease scan.
 	AttrLeaseHolder   = "lease.holder"
 	AttrLeaseRenewed  = "lease.renewed"

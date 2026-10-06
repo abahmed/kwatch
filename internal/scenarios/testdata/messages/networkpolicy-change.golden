@@ -1,4 +1,14 @@
 10:02:35 settled
 🟠 api is failing in payments (prod-eu-1) after the 10:01 creation of network policy restrict-egress. It fails with "FATAL: failed to connect to `host=10.0.3.4 user=payments database=payments`: dial error (dial tcp 10.0.3.4:5432: i/o…". To read the output of the last crash, run kubectl logs api-86824958-a -c app -n payments --previous
+Checked: both replicas fail, on 2 nodes.
 🟠 api is failing in payments (prod-eu-1) after the 10:01 creation of network policy restrict-egress.
-
+| 🟠 **api** is failing in **payments** (**prod-eu-1**) after the 10:01 creation of network policy **restrict-egress**.
+| It fails with
+| ```
+| FATAL: failed to connect to `host=10.0.3.4 user=payments database=payments`: dial error (dial tcp 10.0.3.4:5432: i/o…
+| ```
+| To read the output of the last crash, run
+| ```
+| kubectl logs api-86824958-a -c app -n payments --previous
+| ```
+| *Checked: both replicas fail, on 2 nodes.*

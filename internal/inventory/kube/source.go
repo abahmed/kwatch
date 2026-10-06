@@ -94,8 +94,10 @@ func dropLastAppliedTyped(obj any) {
 type Source struct {
 	cfg     SourceConfig
 	factory informers.SharedInformerFactory
-	synced  map[inventory.Kind]cache.InformerSynced
-	watches []*watchState
+	// scaleEvents hold the Normal autoscaler events (event_autoscaler.go).
+	scaleEvents []informers.SharedInformerFactory
+	synced      map[inventory.Kind]cache.InformerSynced
+	watches     []*watchState
 	// disabled are the resources configuration turned off.
 	disabled []registration
 	started  chan struct{}
@@ -155,6 +157,10 @@ func NewSource(cfg SourceConfig) (*Source, error) {
 	if err := s.track(eventsResource, false, events, handle); err != nil {
 		return nil, err
 	}
+	s.scaleEvents, err = scaleEventFactories(cfg, s.eventHandler())
+	if err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -185,9 +191,15 @@ func (s *Source) eventHandler() cache.ResourceEventHandler {
 func (s *Source) Run(ctx context.Context) {
 	s.lifecycle.Store(&ctx)
 	s.factory.Start(ctx.Done())
+	for _, f := range s.scaleEvents {
+		f.Start(ctx.Done())
+	}
 	close(s.started)
 	<-ctx.Done()
 	s.factory.Shutdown()
+	for _, f := range s.scaleEvents {
+		f.Shutdown()
+	}
 }
 
 // Synced reports whether a kind has completed its initial list. Kinds

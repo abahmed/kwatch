@@ -1,12 +1,30 @@
 10:03:15 settled
 🟠 orders in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "fatal: orders worker lost its socket". To read the output of the last crash, run kubectl logs orders-5936569f-a -c app -n shop --previous
 🟠 orders in shop (prod-eu-1) keeps crashing.
-
+| 🟠 **orders** in **shop** (**prod-eu-1**) keeps crashing.
+| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| It fails with `fatal: orders worker lost its socket`.
+| To read the output of the last crash, run
+| ```
+| kubectl logs orders-5936569f-a -c app -n shop --previous
+| ```
 10:03:35 settled
 🟠 payments in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "fatal: payments worker lost its socket". To read the output of the last crash, run kubectl logs payments-9a62e7e4-b -c app -n shop --previous
 🟠 payments in shop (prod-eu-1) keeps crashing.
-
+| 🟠 **payments** in **shop** (**prod-eu-1**) keeps crashing.
+| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| It fails with `fatal: payments worker lost its socket`.
+| To read the output of the last crash, run
+| ```
+| kubectl logs payments-9a62e7e4-b -c app -n shop --previous
+| ```
 10:03:55 settled
 🟠 cart in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "fatal: cart worker lost its socket". To read the output of the last crash, run kubectl logs cart-58d28062-c -c app -n shop --previous
 🟠 cart in shop (prod-eu-1) keeps crashing.
-
+| 🟠 **cart** in **shop** (**prod-eu-1**) keeps crashing.
+| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| It fails with `fatal: cart worker lost its socket`.
+| To read the output of the last crash, run
+| ```
+| kubectl logs cart-58d28062-c -c app -n shop --previous
+| ```

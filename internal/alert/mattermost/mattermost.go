@@ -114,10 +114,8 @@ func (m *Mattermost) buildMessage(msg string) ([]byte, error) {
 }
 
 func (m *Mattermost) buildIncident(msg notification.Message) ([]byte, error) {
-	text := safetext.NoteWithOutput(
-		notification.NeutralizeMentions(msg.NoteText()),
-		safetext.Lines(msg.Output, notification.NeutralizeMentions),
-		"\n", 0)
+	text := safetext.RichWithOutput(msg,
+		notification.MarkdownDialect(nil, "\n"), "\n", 0)
 	payload := mmPayload{Text: text}
 	if m.clusterName != "" {
 		payload.Attachments = []mmAttachment{{Fields: []mmField{{

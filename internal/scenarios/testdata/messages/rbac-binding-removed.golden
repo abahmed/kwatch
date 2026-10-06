@@ -1,4 +1,11 @@
 10:02:35 settled
 🟠 api is failing in shop (prod-eu-1) after the 10:01 deletion of role binding api-config-reader. It fails with "Error: configmaps "api-settings" is forbidden: User "system:serviceaccount:shop:api" cannot get resource "configmaps"…". To read the output of the last crash, run kubectl logs api-626da116-a -c app -n shop --previous
+Checked: both replicas fail, on 2 nodes.
 🟠 api is failing in shop (prod-eu-1) after the 10:01 deletion of role binding api-config-reader.
-
+| 🟠 **api** is failing in **shop** (**prod-eu-1**) after the 10:01 deletion of role binding **api-config-reader**.
+| It fails with `Error: configmaps`api-settings`is forbidden: User`system:serviceaccount:shop:api`cannot get resource`configmaps`…`.
+| To read the output of the last crash, run
+| ```
+| kubectl logs api-626da116-a -c app -n shop --previous
+| ```
+| *Checked: both replicas fail, on 2 nodes.*

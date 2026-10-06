@@ -6,15 +6,19 @@ import "github.com/abahmed/kwatch/internal/notification"
 // message; a receiver groups updates by key and orders them by revision.
 // Field meanings are documented in docs/providers.md.
 type Incident struct {
-	Cluster    string              `json:"cluster"`
-	Key        string              `json:"key"`
-	AlertKey   string              `json:"alertKey"`
-	Revision   int                 `json:"revision"`
-	Status     string              `json:"status"`
-	Resolved   bool                `json:"resolved"`
-	Marker     string              `json:"marker"`
-	Short      string              `json:"short"`
-	Note       string              `json:"note"`
+	Cluster  string `json:"cluster"`
+	Key      string `json:"key"`
+	AlertKey string `json:"alertKey"`
+	Revision int    `json:"revision"`
+	Status   string `json:"status"`
+	Resolved bool   `json:"resolved"`
+	Marker   string `json:"marker"`
+	Short    string `json:"short"`
+	Note     string `json:"note"`
+	// Markdown is the narrative as CommonMark: bold names, code spans,
+	// bullets and a code block for the command. Note stays the plain
+	// single paragraph.
+	Markdown   string              `json:"markdown,omitempty"`
 	Title      string              `json:"title"`
 	Lines      []string            `json:"lines,omitempty"`
 	Timeline   []string            `json:"timeline,omitempty"`
@@ -67,9 +71,18 @@ func NewIncident(cluster string, m notification.Message) Incident {
 		Cluster: cluster, Key: m.Key, AlertKey: m.AlertKey(cluster),
 		Revision: m.Revision, Status: m.Status.String(),
 		Resolved: m.Resolved(), Marker: m.Marker,
-		Short: m.ShortText(), Note: m.NoteText(), Title: m.Title,
+		Short: m.ShortText(), Note: m.NoteParagraph(),
+		Markdown: markdown(m), Title: m.Title,
 		Lines: m.Lines, Timeline: m.Timeline, Output: m.Output,
 		Steps: m.Steps, Confidence: m.Confidence, Route: m.Route,
 		Flags: FlagsOf(m),
 	}
+}
+
+// markdown is the message's blocks as CommonMark.
+func markdown(m notification.Message) string {
+	if len(m.Doc) == 0 {
+		return ""
+	}
+	return m.Render(notification.MarkdownDialect(nil, "\n\n"))
 }

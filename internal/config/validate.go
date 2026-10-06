@@ -131,7 +131,7 @@ func numericFloat(value interface{}) (float64, bool) {
 func unknownProviders(cfg *Config) []string {
 	var unknown []string
 	for name := range cfg.Alert {
-		if !IsKnownProvider(name) {
+		if !IsKnownProvider(name) && !isRemovedProvider(name) {
 			unknown = append(unknown, name)
 		}
 	}

@@ -2,12 +2,16 @@ package scenarios
 
 import (
 	"time"
+
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // readyNeverScenarios are workloads and autoscalers that look healthy to
 // every crash and restart check but never do their job.
 func readyNeverScenarios() []scenario {
-	return []scenario{readyNever(), hpaTargetMissing()}
+	return []scenario{readyNever(), readyNeverSinceBeforeStart(),
+		hpaTargetMissing()}
 }
 
 // readyNever: a controller's pod runs, never restarts and never passes
@@ -40,6 +44,48 @@ func buildReadyNever(c *cluster) {
 		c.after(5 * time.Minute)
 		c.warn(c.warningEvent(pod, "Pod", "Unhealthy", probe, "kubelet",
 			count))
+	}
+}
+
+// readyNeverSinceBeforeStart: kwatch starts while a controller's only pod
+// has run for ten hours without restarting and without ever passing its
+// readiness probe.
+func readyNeverSinceBeforeStart() scenario {
+	return scenario{
+		expect: expectation{
+			Name: "ready-never-since-before-start",
+			Description: "kwatch starts while a Deployment's only pod has " +
+				"run for ten hours without restarting and without " +
+				"passing its readiness probe.",
+			Root: "deployment/shop/cert-controller", Tier: "notify",
+			MaxMessages: 3, Tail: duration(30 * time.Minute),
+		},
+		build: func(c *cluster) {
+			c.list(c.node("n1", "zone-a"))
+			w := c.deployment("shop", "cert-controller",
+				"registry.example.com/cert-controller:1.0", 1)
+			w.setReady(0)
+			probe := &corev1.Probe{
+				ProbeHandler: corev1.ProbeHandler{
+					HTTPGet: &corev1.HTTPGetAction{
+						Path: "/readyz", Port: intstr.FromInt(8081)},
+				},
+				InitialDelaySeconds: 20, PeriodSeconds: 5,
+				FailureThreshold: 3,
+			}
+			w.deployment.Spec.Template.Spec.Containers[0].ReadinessProbe =
+				probe
+			w.replicaSet.Spec.Template.Spec.Containers[0].ReadinessProbe =
+				probe
+			c.list(w.objects())
+			pod := w.pod(0, "n1", createdAt(c.now.Add(-10*time.Hour)),
+				notReadySince(c.now.Add(-10*time.Hour)))
+			c.list(pod)
+			c.after(5 * time.Minute)
+			c.warn(c.warningEvent(pod, "Pod", "Unhealthy",
+				"Readiness probe failed: HTTP probe failed with "+
+					"statuscode: 500", "kubelet", 7228))
+		},
 	}
 }
 

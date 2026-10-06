@@ -1,8 +1,13 @@
 10:02:10 settled
 🔴 Node n1 (prod-eu-1) has not reported for about two minutes. It reports "Kubelet stopped posting node status". To check the node's conditions and recent events, run kubectl describe node n1
 🔴 Node n1 (prod-eu-1) has not reported for about two minutes.
-
+| 🔴 Node n1 (**prod-eu-1**) has not reported for about two minutes.
+| It reports `Kubelet stopped posting node status`.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```
 10:03:40 material change
 🔴 Node n1 (prod-eu-1) is spreading to pods tenant-0-3589794e-a, tenant-1-8c453a45-a, tenant-2-77544be4-a and three others in apps: they have not been ready for three minutes.
 🔴 Node n1 (prod-eu-1) is spreading to pods tenant-0-3589794e-a, tenant-1-8c453a45-a, tenant-2-77544be4-a and three others in apps: they have not been ready for three minutes.
-
+| 🔴 Node n1 (**prod-eu-1**) is spreading to pods **tenant-0-3589794e-a**, **tenant-1-8c453a45-a**, **tenant-2-77544be4-a** and three others in apps: they have not been ready for three minutes.

@@ -1,0 +1,8 @@
+{
+  "name": "stable-restarts-spike",
+  "description": "A Deployment that has not restarted for twelve hours has one container restart six times in forty minutes. The message sets that against its usual none.",
+  "root": "deployment/shop/orders",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "20m0s"
+}

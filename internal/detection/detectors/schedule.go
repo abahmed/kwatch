@@ -39,6 +39,10 @@ func (Schedule) Detect(
 	} else if f, ok := lastRunFailed(ctx, e); ok {
 		out = append(out, f)
 	}
+	if f, ok := noRecentSuccess(e); ok && !hasReason(out,
+		reasons.CronJobRepeatedFailure) {
+		out = append(out, f)
+	}
 	return append(out, classReferences(ctx, e)...)
 }
 

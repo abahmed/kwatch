@@ -108,3 +108,18 @@ func TestNodePressureStallWaitsForYoungNode(t *testing.T) {
 	require.Len(t, late.Findings, 1)
 	assert.Equal(t, reasons.NodePSIHigh, late.Findings[0].Reason)
 }
+
+func TestNodeOvercommitWaitsForYoungNode(t *testing.T) {
+	m, node := overcommittedNode(2000, 100)
+	put(m, node, t0, map[string]inventory.Value{
+		kube.AttrCPUAllocatable:    inventory.Number(1000),
+		kube.AttrMemoryAllocatable: inventory.Number(1000),
+		kube.AttrCreated:           inventory.Time(t0)})
+
+	early := evaluate(NodeHealth{}, m, t0.Add(5*time.Minute), node, nil)
+	assert.Empty(t, early.Findings)
+	assert.Equal(t, 5*time.Minute, early.RecheckAfter)
+	late := evaluate(NodeHealth{}, m, t0.Add(kube.BootWindow), node, nil)
+	require.Len(t, late.Findings, 1)
+	assert.Equal(t, reasons.NodeResourceHigh, late.Findings[0].Reason)
+}

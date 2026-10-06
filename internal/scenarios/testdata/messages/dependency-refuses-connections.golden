@@ -1,4 +1,11 @@
 10:02:15 settled
 🟠 External endpoint db.example.com:5432 (prod-eu-1) does not accept connections. It reports "dial tcp: connection refused". All of its dependents are failing. api in orders is affected as well. To read the output of the last crash, run kubectl logs api-0dc35fed-a -c app -n orders --previous
 🟠 External endpoint db.example.com:5432 (prod-eu-1) does not accept connections.
-
+| 🟠 External endpoint **db.example.com:5432** (**prod-eu-1**) does not accept connections.
+| It reports `dial tcp: connection refused`.
+| All of its dependents are failing.
+| **api** in **orders** is affected as well.
+| To read the output of the last crash, run
+| ```
+| kubectl logs api-0dc35fed-a -c app -n orders --previous
+| ```

@@ -1,0 +1,10 @@
+{
+  "name": "chain-wrong-time-order",
+  "description": "An API that calls postgres crash-loops ten minutes before postgres runs out of memory.",
+  "root": "deployment/shop/api",
+  "otherRoots": [
+    "deployment/shop/postgres"
+  ],
+  "tier": "page",
+  "maxMessages": 5
+}

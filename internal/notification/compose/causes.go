@@ -26,9 +26,12 @@ type causeWording struct {
 // causeWords are keyed by the explain row that blamed the cause
 // (rootcause.CauseRecord.Rule). A row missing here reads "is failing".
 var causeWords = map[string]causeWording{
-	"apiserver-unavailable":  {words: "is not answering"},
-	"apiservice-unavailable": {words: "is unavailable"},
-	"backends-failing":       {words: "has no healthy backends"},
+	"apiserver-unavailable":           {words: "is not answering"},
+	"apiservice-unavailable":          {words: "is unavailable"},
+	"backends-failing":                {words: "has no healthy backends"},
+	"called-service-backend-changed":  {words: "changed shortly before"},
+	"called-service-backends-failing": {words: "is failing"},
+	"called-service-no-endpoints":     {words: "has no ready endpoints"},
 	"autoscaling-limit": {
 		words: "has reached its autoscaling limit"},
 	"autoscaling-limit-unavailable": {
@@ -69,10 +72,11 @@ var causeWords = map[string]causeWording{
 	"node-removed":       {words: "was removed"},
 	"node-removed-capacity": {
 		words: "was removed and no other node has room"},
-	"nodepool-failing": {words: "is failing as a whole"},
-	"own-change":       {words: "changed shortly before"},
-	"owner-failing":    {words: "is failing"},
-	"policy-restricts": {words: "blocks its traffic"},
+	"nodepool-failing":   {words: "is failing as a whole"},
+	"own-change":         {words: "changed shortly before"},
+	"owner-failing":      {words: "is failing"},
+	"policy-restricts":   {words: "blocks its traffic"},
+	"policy-blocks-call": {words: "blocks its traffic"},
 	"probe-port-mismatch": {own: true,
 		words: "its probe checks a port the container does not listen on"},
 	"quota-exhausted":  {words: "is used up"},
@@ -98,6 +102,7 @@ var causeWords = map[string]causeWording{
 	"used-missing":            {words: "does not exist"},
 	"webhook-backend-missing": {words: "does not exist"},
 	"webhook-rejects":         {words: "is rejecting requests"},
+	"webhook-slows-api":       {words: "is slowing the API server"},
 	"zone-failing":            {words: "is failing as a whole"},
 }
 

@@ -1,4 +1,10 @@
 10:37:15 settled
 🟠 Job invoice-export-123 in billing (prod-eu-1) has run far longer than its recent runs. It has run 36m; recent runs took 8–12m. Nothing it depends on is failing. To see the object's state and events, run kubectl describe job invoice-export-123 -n billing
 🟠 Job invoice-export-123 in billing (prod-eu-1) has run far longer than its recent runs.
-
+| 🟠 Job **invoice-export-123** in **billing** (**prod-eu-1**) has run far longer than its recent runs.
+| It has run 36m; recent runs took 8–12m.
+| Nothing it depends on is failing.
+| To see the object's state and events, run
+| ```
+| kubectl describe job invoice-export-123 -n billing
+| ```

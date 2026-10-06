@@ -16,6 +16,13 @@ import (
 // is healthy: its failures now belong to another incident.
 func resolveNote(f caseFacts) (string, []sentence) {
 	p := f.p
+	if p.SupersededBy != "" && p.SupersededRoot != (inventory.EntityID{}) {
+		return marker(p), []sentence{{part: partLead,
+			text: "Moved to the incident for " +
+				string(p.SupersededRoot.Kind) + " " + p.SupersededRoot.Name +
+				" (" + p.SupersededBy + "): " + f.leadName(p.Root) +
+				" is not resolved."}}
+	}
 	if p.SupersededBy != "" {
 		return marker(p), []sentence{{part: partLead,
 			text: "Cause revised: the failures of " + f.leadName(p.Root) +

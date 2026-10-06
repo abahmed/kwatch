@@ -1,0 +1,13 @@
+{
+  "name": "bad-image-everywhere",
+  "description": "A release's new image crash-loops on every replica of a workload across three nodes; another workload on the same nodes is healthy.",
+  "root": "deployment/shop/checkout",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "node//n3",
+    "zone//zone-a"
+  ]
+}

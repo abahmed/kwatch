@@ -2,6 +2,7 @@ package kube
 
 import (
 	"runtime"
+	"runtime/metrics"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -27,16 +28,41 @@ func (c *selfHealthClock) due(now time.Time) bool {
 	return true
 }
 
-// runtimeFields are the Go runtime's own numbers, as key/value pairs for
+// RuntimeFields are the Go runtime's own numbers, as key/value pairs for
 // a log line: heap in use, heap held from the system, goroutines.
-func runtimeFields() []any {
+//
+// heapAllocMiB counts garbage the collector has not freed yet, so it
+// swings between the live heap and about twice that. heapLiveMiB is what
+// the last collection found still reachable: the number to watch for a
+// leak. heapGoalMiB is the size at which the next collection starts.
+func RuntimeFields() []any {
 	var stats runtime.MemStats
 	runtime.ReadMemStats(&stats)
+	live, goal := collectorHeap()
 	return []any{
 		"heapAllocMiB", stats.HeapAlloc >> 20,
 		"heapInuseMiB", stats.HeapInuse >> 20,
+		"heapLiveMiB", live >> 20,
+		"heapGoalMiB", goal >> 20,
 		"goroutines", runtime.NumGoroutine(),
 	}
+}
+
+// collectorHeap reads the live heap of the last collection and the next
+// collection's goal, in bytes. Both are zero when the runtime does not
+// report them.
+func collectorHeap() (live, goal uint64) {
+	samples := []metrics.Sample{
+		{Name: "/gc/heap/live:bytes"}, {Name: "/gc/heap/goal:bytes"},
+	}
+	metrics.Read(samples)
+	if samples[0].Value.Kind() == metrics.KindUint64 {
+		live = samples[0].Value.Uint64()
+	}
+	if samples[1].Value.Kind() == metrics.KindUint64 {
+		goal = samples[1].Value.Uint64()
+	}
+	return live, goal
 }
 
 // size is how many entries the log holds.
@@ -70,7 +96,7 @@ func (g *growthTracker) size() int {
 // selfHealthFields are the stats poller's bounded maps and the runtime
 // numbers, as key/value pairs for the self-health line.
 func (p *StatsPoller) selfHealthFields() []any {
-	return append(runtimeFields(),
+	return append(RuntimeFields(),
 		"memoryLogContainers", p.memory.size(),
 		"reachLogNodes", p.reach.size(),
 		"counterSamples", p.counters.size(),

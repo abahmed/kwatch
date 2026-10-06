@@ -122,10 +122,8 @@ func (t *Teams) buildRequestBodyTeams(
 	if len(title) == 0 {
 		title = format.OrDefault(m.Title, defaultTeamsTitle)
 	}
-	text := safetext.NoteWithOutput(
-		notification.NeutralizeMentions(m.NoteText()),
-		safetext.Lines(m.Output, notification.NeutralizeMentions),
-		"\n\n", 0)
+	text := safetext.RichWithOutput(m,
+		notification.MarkdownDialect(nil, "\n\n"), "\n\n", 0)
 	payload := &teamsFlowPayload{
 		Title: title, Text: text,
 		Attachment: textCardAttachments(title, text),

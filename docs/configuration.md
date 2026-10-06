@@ -25,6 +25,9 @@ interactive installer stores the files in a Kubernetes Secret.
 > obvious typo, a suggestion (`alert.slack.webhok ...; did you mean
 > "webhook"?`). `kwatch lint` also warns, without failing, when no alert
 > provider is configured.
+>
+> LINE Notify was removed: LINE shut the service down on 2025-03-31. An
+> `alert.line` section is ignored, and kwatch logs a warning at startup.
 
 ## 🗺️ Find what you need
 
@@ -290,12 +293,14 @@ status, resource versions, and deletion metadata remain intact.
   jitter) instead of retrying every few seconds.
 - **Evidence policy.** Text a pod wrote (quoted errors, log lines)
   is shown with credentials removed; there is no switch to show them.
-  Messages keep the private addresses (`10.x`, `172.16-31.x`, `192.168.x`)
-  in quoted text: a pod or service IP is no secret and helps debugging.
-  Only the log lines kwatch reads from the API server have private
-  addresses (`10.x`, `172.16-31.x`, `192.168.x`, `fc00::/7`, `fe80::`)
-  replaced. Resolves and pages go ahead of routine messages in a
-  provider's queue.
+  Private addresses (`10.x`, `172.16-31.x`, `192.168.x`, `fc00::/7`,
+  `fe80::`) are shown too: a pod or service IP is no secret and helps
+  debugging. When kwatch knows what an IPv4 address belongs to, it adds
+  the owner after it, as in `dial tcp 10.0.3.4:5432 (db/postgres):
+  connection refused`: the Service (ClusterIP), Pod (pod IP) or Node
+  (InternalIP). Credentials are always redacted. Resolves and pages go
+  ahead of routine messages
+  in a provider's queue.
 - **Digest wording.** The digest says how many notifications were folded,
   counted per reason (the most common reasons first, the rest as
   "+N other kinds"), so a channel never receives a bare update for an
@@ -623,8 +628,10 @@ Severity decides how loudly it is delivered. The values `severityByReason` and
 | `normal` | Goes to the digest: one 🟡 message every 30 minutes lists the low-priority problems that opened or resolved | 🟡 |
 
 Without an override, kwatch derives the tier itself: an incident with a critical finding
-pages only when it also matches a page rule (for example a lost node, an unavailable
-API server or cluster DNS, or an Ingress that lost its backends); otherwise it notifies.
+pages only when users feel it, that is when it also matches a page rule: a Service
+that users reach (Ingress, Gateway route, LoadBalancer or NodePort) lost its backends,
+the last replica of a user-facing workload is down, or a cluster-critical component
+(a lost node, the API server, cluster DNS) is down; otherwise it notifies.
 An incident made only of informational or digest-only findings goes to the
 digest: it is not announced on its own, one digest message every 30 minutes
 lists what opened and what resolved, and it is announced at once if it gets

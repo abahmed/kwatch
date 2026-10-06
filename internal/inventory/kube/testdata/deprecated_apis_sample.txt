@@ -1,0 +1,6 @@
+# TYPE apiserver_requested_deprecated_apis gauge
+apiserver_requested_deprecated_apis{group="policy",removed_release="1.25",resource="poddisruptionbudgets",subresource="",version="v1beta1"} 1
+apiserver_requested_deprecated_apis{group="batch",removed_release="1.25",resource="cronjobs",subresource="status",version="v1beta1"} 1
+apiserver_requested_deprecated_apis{group="",removed_release="",resource="endpoints",subresource="",version="v1"} 1
+apiserver_requested_deprecated_apis{group="policy",removed_release="1.25",resource="podsecuritypolicies",subresource="",version="v1beta1"} 0
+apiserver_request_total{code="200",verb="GET"} 5

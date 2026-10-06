@@ -94,8 +94,11 @@ func (m *Matrix) SendMessage(ctx context.Context, msg string) error {
 func (m *Matrix) SendIncident(
 	ctx context.Context, msg notification.Message,
 ) error {
-	plain := safetext.Matrix(msg.NoteText())
-	formatted := escapeHTML(plain)
+	plainDialect := notification.PlainDialect()
+	plainDialect.Neutralize = safetext.Matrix
+	plain := msg.Render(plainDialect)
+	formatted := msg.Render(
+		notification.HTMLDialect(safetext.Matrix, true))
 	if len(msg.Output) > 0 {
 		output := safetext.Matrix(
 			strings.Join(msg.Output, "\n"))

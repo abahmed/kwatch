@@ -1,6 +1,7 @@
 package detection
 
 import (
+	"slices"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ type Context struct {
 
 	recheck     *time.Duration
 	synced      func(inventory.Kind) bool
+	unsynced    *[]inventory.Kind
 	specialised bool
 	onsets      *onsetScope
 }
@@ -28,8 +30,18 @@ func (c Context) Specialised() bool { return c.specialised }
 // Synced reports whether the kind is fully watched. Detectors must not
 // conclude that an object is missing when its kind is not synced, for
 // example because RBAC denies listing it.
+//
+// A kind that is not synced is noted in the Evaluation, so the caller can
+// evaluate the entity again when the kind syncs: an absent object that
+// was never listed raises no event of its own to do it.
 func (c Context) Synced(kind inventory.Kind) bool {
-	return c.synced == nil || c.synced(kind)
+	if c.synced == nil || c.synced(kind) {
+		return true
+	}
+	if c.unsynced != nil && !slices.Contains(*c.unsynced, kind) {
+		*c.unsynced = append(*c.unsynced, kind)
+	}
+	return false
 }
 
 // RecheckAfter asks for another evaluation of this entity after delay. The
@@ -48,6 +60,9 @@ type Evaluation struct {
 	Findings []Finding
 	// RecheckAfter is zero when no time-based condition is pending.
 	RecheckAfter time.Duration
+	// Unsynced lists the kinds a detector needed that were not synced.
+	// The entity must be evaluated again once they are.
+	Unsynced []inventory.Kind
 }
 
 // Detector evaluates entities of the kinds it declares.
@@ -113,10 +128,12 @@ func (r *Registry) Evaluate(
 		entity = inventory.Entity{ID: id}
 	}
 	var recheck time.Duration
+	var unsynced []inventory.Kind
 	scope := r.onsets.begin(id)
 	defer r.onsets.finish(id, scope)
 	ctx := Context{
 		Model: model, Now: now, recheck: &recheck, synced: r.synced,
+		unsynced:    &unsynced,
 		specialised: present && len(r.byKind[id.Kind]) > 0,
 		onsets:      scope,
 	}
@@ -136,7 +153,8 @@ func (r *Registry) Evaluate(
 		}
 	}
 	out = append(out, withoutReportedModes(fallback, out)...)
-	return Evaluation{Findings: collapseReasons(out), RecheckAfter: recheck}
+	return Evaluation{Findings: collapseReasons(out), RecheckAfter: recheck,
+		Unsynced: unsynced}
 }
 
 // collapseReasons keeps one finding per reason of an entity, the most

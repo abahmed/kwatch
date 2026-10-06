@@ -1,0 +1,12 @@
+10:06:55 settled
+🟠 checkout is failing in shop (prod-eu-1) after the 10:05 release. Only change in revision 14: memory limit 512Mi → 256Mi (by alice); pods OOMKilled since. It was killed within 10 seconds of starting. Rolling back fixes it (changes the cluster): kubectl rollout undo deployment/checkout -n shop --to-revision=13
+Checked: the previous revision ran healthy for 65 minutes before the change.
+🟠 checkout is failing in shop (prod-eu-1) after the 10:05 release.
+| 🟠 **checkout** is failing in **shop** (**prod-eu-1**) after the 10:05 release.
+| Only change in revision 14: memory limit 512Mi → 256Mi (by alice); pods OOMKilled since.
+| It was killed within 10 seconds of starting.
+| Rolling back fixes it (changes the cluster):
+| ```
+| kubectl rollout undo deployment/checkout -n shop --to-revision=13
+| ```
+| *Checked: the previous revision ran healthy for 65 minutes before the change.*

@@ -78,13 +78,26 @@ type Stats struct {
 	Tombstones int
 	Relations  int
 	Changes    int
+	// Notes counts event notes, NoteParts the per-origin counters behind
+	// them, and Health the failing/recovered marks, over all records.
+	Notes     int
+	NoteParts int
+	Health    int
+	// Recent and Churn are the cluster-wide change rings.
+	Recent int
+	Churn  int
+	// Baselines is how many workloads have a rolling baseline.
+	Baselines int
 }
 
 // Stats returns the current model size.
 func (m *Model) Stats() Stats {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	stats := Stats{Relations: m.edges.n}
+	stats := Stats{
+		Relations: m.edges.n, Recent: len(m.history.recent),
+		Churn: len(m.history.churn), Baselines: m.history.baselines.Len(),
+	}
 	for _, rec := range m.records {
 		if rec.present {
 			stats.Entities++
@@ -92,6 +105,9 @@ func (m *Model) Stats() Stats {
 			stats.Tombstones++
 		}
 		stats.Changes += len(rec.changes)
+		stats.Notes += len(rec.notes)
+		stats.NoteParts += len(rec.noteParts)
+		stats.Health += len(rec.health)
 	}
 	return stats
 }

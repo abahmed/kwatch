@@ -31,6 +31,8 @@ type candidate struct {
 	covers map[inventory.EntityID]coverage
 	// findings are the candidate's own active findings.
 	findings []detection.Finding
+	// chain is the failure chain the candidate was extended along.
+	chain chainResult
 }
 
 // direct returns the effects the candidate explains through a row,

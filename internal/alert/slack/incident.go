@@ -178,7 +178,8 @@ const outputLabel = "_Its recent output:_"
 // noteBlocks is the full narrative, then the workload's last output as a
 // labelled code block when there is one. Each section escapes its text once.
 func noteBlocks(m notification.Message) *slackClient.Blocks {
-	blocks := []slackClient.Block{textSection(m.NoteText())}
+	blocks := []slackClient.Block{escapedSection(
+		m.RenderWithin(notification.SlackDialect(), maxSectionTextChars))}
 	if len(m.Output) > 0 {
 		output := notification.NeutralizeMentions(
 			strings.Join(m.Output, "\n"))

@@ -103,8 +103,6 @@ func (g *GoogleChat) buildRequestBody(text string) ([]byte, error) {
 // incidentText is the Note with the last output as a code block. Mentions
 // are neutralized so log text cannot notify a whole space.
 func incidentText(m notification.Message) string {
-	return safetext.NoteWithOutput(
-		notification.NeutralizeGoogleChatMentions(m.NoteText()),
-		safetext.Lines(m.Output, notification.NeutralizeGoogleChatMentions),
+	return safetext.RichWithOutput(m, notification.GoogleChatDialect(),
 		"\n", 0)
 }

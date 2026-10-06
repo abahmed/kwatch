@@ -33,6 +33,12 @@ type Options struct {
 	// first. A cold start then collects early announcements into one
 	// startup summary. The zero value never signals the sync.
 	SyncAt time.Time
+	// Tick, when set with Every, is called each time simulated time
+	// passes a multiple of Every after the log's start. The engine is
+	// idle when it runs, so a soak test can measure memory or prune the
+	// model at a steady point. It receives the simulated tick time.
+	Tick  func(at time.Time)
+	Every time.Duration
 }
 
 // CarriedDecision is a decision people heard through another message;
@@ -106,6 +112,10 @@ func Run(
 		end:      endOf(log, opts),
 		maxSteps: opts.MaxSteps,
 		syncAt:   opts.SyncAt, syncPending: !opts.SyncAt.IsZero(),
+		tick: opts.Tick, every: opts.Every, nextTick: log.Start,
+	}
+	if d.every > 0 {
+		d.nextTick = log.Start.Add(d.every)
 	}
 	if d.maxSteps <= 0 {
 		d.maxSteps = defaultMaxSteps
@@ -144,6 +154,22 @@ type driver struct {
 	// until it was.
 	syncAt      time.Time
 	syncPending bool
+	// tick runs every `every`; nextTick is the next boundary.
+	tick     func(time.Time)
+	every    time.Duration
+	nextTick time.Time
+}
+
+// ticks calls the tick hook for every boundary up to the time the clock
+// is about to reach. The engine is idle, so the hook sees steady state.
+func (d *driver) ticks(upTo time.Time) {
+	if d.tick == nil || d.every <= 0 {
+		return
+	}
+	for !d.nextTick.After(upTo) && !d.nextTick.After(d.end) {
+		d.tick(d.nextTick)
+		d.nextTick = d.nextTick.Add(d.every)
+	}
 }
 
 func (d *driver) run(parent context.Context) error {
@@ -184,6 +210,7 @@ func (d *driver) steps(ctx context.Context, done chan error) error {
 			return ctx.Err()
 		}
 		due, kind := d.nextEvent(next)
+		d.ticks(minTime(due, wait.at))
 		switch {
 		case !wait.at.After(due) && !wait.at.After(d.end):
 			d.clock.set(wait.at)
@@ -331,4 +358,11 @@ func (c *simClock) After(wait time.Duration) <-chan time.Time {
 	case <-c.stopped:
 	}
 	return request.fire
+}
+
+func minTime(a, b time.Time) time.Time {
+	if b.Before(a) {
+		return b
+	}
+	return a
 }

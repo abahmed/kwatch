@@ -88,6 +88,24 @@ func TestResolveAfterAPageGoesToPagingToo(t *testing.T) {
 	assert.False(t, (*sent)[3].SkipPaging)
 }
 
+// A restored incident handed to another one tells chat where its failures
+// went, and closes its alert when it paged: not a paging-only close.
+func TestHandoverResolveReachesChatAndPagers(t *testing.T) {
+	e, sent := scopeHarness(t)
+	ctx := context.Background()
+	announce := incident.Decision{Action: incident.Announce,
+		Incident: incident.Incident{ID: "a", Tier: incident.Page}}
+	e.announcer.send(ctx, announce, scopeNow)
+	handover := resolveOf("a", "b")
+	handover.Handover = true
+
+	e.announcer.send(ctx, handover, scopeNow)
+
+	require.Len(t, *sent, 2)
+	assert.False(t, (*sent)[1].PagingOnly, "chat hears it too")
+	assert.False(t, (*sent)[1].SkipPaging, "the alert is closed")
+}
+
 // A resolve closes the alert at the paging providers, so the incident is
 // no longer paged: a second resolve (a reopen that recovered before its
 // "failing again" update) must not close the closed alert again, and the

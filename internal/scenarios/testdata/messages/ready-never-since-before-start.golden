@@ -1,0 +1,9 @@
+10:01:15 settled
+🟠 cert-controller in shop (prod-eu-1) has pods that run without restarting but are not ready. It runs a single replica, so this is downtime, not degradation. To see the object's state and events, run kubectl describe deployment cert-controller -n shop
+🟠 cert-controller in shop (prod-eu-1) has pods that run without restarting but are not ready.
+| 🟠 **cert-controller** in **shop** (**prod-eu-1**) has pods that run without restarting but are not ready.
+| It runs a single replica, so this is downtime, not degradation.
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment cert-controller -n shop
+| ```

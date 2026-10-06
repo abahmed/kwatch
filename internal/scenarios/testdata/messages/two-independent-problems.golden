@@ -1,8 +1,23 @@
 10:03:15 settled
 🟠 Node n1 (prod-eu-1) is low on memory. All of its dependents are failing. Replicas that do not depend on it are healthy. indexer in batch is affected as well. To check the node's conditions and recent events, run kubectl describe node n1
+Checked: 2 failing replicas share node n1 while 1 run healthy on other nodes.
 🟠 Node n1 (prod-eu-1) is low on memory.
-
+| 🟠 Node n1 (**prod-eu-1**) is low on memory.
+| All of its dependents are failing.
+| Replicas that do not depend on it are healthy.
+| **indexer** in **batch** is affected as well.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```
+| *Checked: 2 failing replicas share node n1 while 1 run healthy on other nodes.*
 10:05:05 settled
 🟠 checkout is failing in shop (prod-eu-1) after the 10:03 release of registry.example.com/checkout:8.01. The previous image was registry.example.com/checkout:8.0. It fails with "TypeError: cannot read properties of undefined (reading 'currency')". To see the rollout state, run kubectl rollout status deployment/checkout -n shop
 🟠 checkout is failing in shop (prod-eu-1) after the 10:03 release of registry.example.com/checkout:8.01.
-
+| 🟠 **checkout** is failing in **shop** (**prod-eu-1**) after the 10:03 release of registry.example.com/checkout:8.01.
+| The previous image was registry.example.com/checkout:8.0.
+| It fails with `TypeError: cannot read properties of undefined (reading 'currency')`.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/checkout -n shop
+| ```

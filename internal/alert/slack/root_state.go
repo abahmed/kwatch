@@ -28,6 +28,9 @@ type storedRoot struct {
 	Short  string `json:"short"`
 	Note   string `json:"note"`
 	Output string `json:"output,omitempty"`
+	// Doc is the structured narrative, kept only when it is small, so
+	// an edited root keeps its bold names and lists.
+	Doc []notification.Block `json:"doc,omitempty"`
 	// Rollup marks a member of a roll-up: the roll-up's conversation key.
 	// Such a record holds no announcement of its own.
 	Rollup string `json:"rollup,omitempty"`
@@ -97,6 +100,7 @@ func newStoredRoot(m notification.Message) storedRoot {
 		Note:   truncateMrkdwn(m.NoteText(), maxSectionTextChars),
 		Output: truncateMrkdwn(
 			strings.Join(m.Output, "\n"), maxStoredOutputChars),
+		Doc: storedDoc(m),
 	}
 }
 
@@ -106,9 +110,22 @@ func (r storedRoot) message() notification.Message {
 		Status: notification.Status(r.Status),
 		Short:  r.Short,
 		Note:   r.Note,
+		Doc:    r.Doc,
 	}
 	if r.Output != "" {
 		m.Output = []string{r.Output}
 	}
 	return m
+}
+
+// storedDoc is the message's blocks when they fit the stored size.
+func storedDoc(m notification.Message) []notification.Block {
+	size := 0
+	for _, b := range m.Doc {
+		size += len(b.Text())
+	}
+	if size > maxSectionTextChars {
+		return nil
+	}
+	return m.Doc
 }

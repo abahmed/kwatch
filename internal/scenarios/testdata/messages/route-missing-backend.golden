@@ -1,4 +1,9 @@
 10:02:15 settled
-🔴 HTTP route web in shop (prod-eu-1) is failing because service checkout-v2 does not exist. To see the object's state and events, run kubectl describe httproute web -n shop
+🔴 HTTP route web in shop (prod-eu-1) is failing because service checkout-v2 does not exist. Also changed before it broke: HTTP route web: backends web:8080 → checkout-v2:8080 at 10:02. To see the object's state and events, run kubectl describe httproute web -n shop
 🔴 HTTP route web in shop (prod-eu-1) is failing because service checkout-v2 does not exist.
-
+| 🔴 HTTP route **web** in **shop** (**prod-eu-1**) is failing because service **checkout-v2** does not exist.
+| Also changed before it broke: HTTP route web: backends web:8080 → checkout-v2:8080 at 10:02.
+| To see the object's state and events, run
+| ```
+| kubectl describe httproute web -n shop
+| ```

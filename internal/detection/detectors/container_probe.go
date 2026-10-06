@@ -93,7 +93,7 @@ func probeVisible(
 	if ctx.Now.Sub(note.At) > keep ||
 		(readiness && flag(e, kube.AttrReady)) ||
 		(!liveness && (withinStartupBudget(ctx, e) ||
-			podBooting(ctx, e))) ||
+			podBooting(ctx, e) || podRollingOut(ctx, e))) ||
 		!probeSustained(ctx, e, note) || shuttingDown(ctx, e) ||
 		(liveness && oneOffKill(e)) {
 		return 0, false
@@ -162,4 +162,11 @@ func probeEvidence(note inventory.Note) []detection.Evidence {
 func podBooting(ctx detection.Context, e inventory.Entity) bool {
 	pod, ok := owningPod(ctx, e)
 	return ok && bootGraceFor(ctx, pod) > 0
+}
+
+// podRollingOut reports a container whose pod is a young replica of a
+// workload that is rolling out normally.
+func podRollingOut(ctx detection.Context, e inventory.Entity) bool {
+	pod, ok := owningPod(ctx, e)
+	return ok && podStartingInRollout(ctx, pod)
 }

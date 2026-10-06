@@ -44,6 +44,7 @@ var kindWords = map[inventory.Kind]string{
 	"tlsroute":                   "TLS route",
 	"tcproute":                   "TCP route",
 	"cluster-dns":                "cluster DNS",
+	kube.KindDeprecatedAPI:       "deprecated API",
 	"apiserver":                  "API server",
 	"controller-manager":         "controller manager",
 	rootcause.KindScheduling:     "scheduling",

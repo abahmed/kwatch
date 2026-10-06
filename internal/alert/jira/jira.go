@@ -130,7 +130,7 @@ func (g *Jira) SendIncident(
 ) error {
 	return g.issues.Deliver(ctx, g, msg,
 		issues.Title(msg, titleLimit),
-		issues.FencedBodyWith(msg, "{noformat}", escapeWiki))
+		issues.RichBody(msg, notification.JiraDialect(), "{noformat}"))
 }
 
 // SendMessage treats a plain message as a notice, which never opens an

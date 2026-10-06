@@ -47,6 +47,10 @@ func (c *Collector) CollectDigest(
 			rest = append(rest, out)
 			continue
 		}
+		if carrier == CarrierDropped {
+			c.recordDropped(ctx, now, d)
+			continue
+		}
 		c.recordCarried(ctx, now, d, carrier)
 	}
 	sent := c.flushDigest(ctx, now)

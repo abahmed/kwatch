@@ -12,16 +12,23 @@ import (
 // a greedy weighted set cover. It is a pure function of the snapshot.
 func Explain(s Snapshot) Explanation {
 	v := newView(s)
-	all := focused(failures(s.Findings), s.Focus)
+	every := failures(s.Findings)
+	graph := v.chainGraph(every)
+	all := focused(every, s.Focus)
+	if s.Focus != nil {
+		all = graph.widen(all)
+	}
 	ranked := v.rank(v.candidates(all))
 	sort.SliceStable(ranked, func(i, j int) bool {
 		return ranked[i].raw > ranked[j].raw
 	})
 	viable, rejected := splitViable(ranked, v.rejected)
+	viable = v.extendChains(viable, graph, all)
 	var out Explanation
 	for _, area := range areasOf(all, viable) {
-		out.Areas = append(out.Areas, v.solveArea(area, ranked, viable,
-			rejected))
+		solved := v.solveArea(area, ranked, viable, rejected)
+		solved.noteChain(graph)
+		out.Areas = append(out.Areas, solved)
 	}
 	return out
 }

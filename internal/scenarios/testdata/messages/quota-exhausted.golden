@@ -1,4 +1,10 @@
 10:02:15 settled
 🟠 Quota compute-quota in analytics (prod-eu-1) is used up (requests.cpu). The error mentions it. ingest is affected as well. To see the object's state and events, run kubectl describe replicaset ingest-1274ca81 -n analytics
 🟠 Quota compute-quota in analytics (prod-eu-1) is used up (requests.cpu).
-
+| 🟠 Quota **compute-quota** in **analytics** (**prod-eu-1**) is used up (requests.cpu).
+| The error mentions it.
+| **ingest** is affected as well.
+| To see the object's state and events, run
+| ```
+| kubectl describe replicaset ingest-1274ca81 -n analytics
+| ```

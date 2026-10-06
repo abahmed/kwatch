@@ -73,6 +73,12 @@ type Prober struct {
 	// leasesSeen are the Leases the last scan reported. Only the Run
 	// goroutine touches it.
 	leasesSeen map[inventory.EntityID]bool
+	// deprecatedSeen is when each deprecated API was last reported by
+	// the API server's metrics.
+	deprecatedSeen map[inventory.EntityID]time.Time
+	// plane remembers the control-plane metrics of each API server
+	// process, to measure the calls made between two rounds.
+	plane planeMemory
 }
 
 // LeaseScanPeriod is the time between two Lease scans. A detector that
@@ -129,11 +135,12 @@ func (p *Prober) apiServer(ctx context.Context) []inventory.Observation {
 		AbsPath("/readyz").Param("verbose", "true").DoRaw(probeCtx)
 	now := p.cfg.Now()
 	api := probeObservation(APIServer, now, now.Sub(start), err)
+	observations := []inventory.Observation{api}
 	if err == nil {
 		p.addServerVersion(probeCtx, api.Attributes)
-		p.addServerMetrics(probeCtx, api.Attributes, now)
+		observations = append(observations,
+			p.addServerMetrics(probeCtx, api.Attributes, now)...)
 	}
-	observations := []inventory.Observation{api}
 	if etcdErr, known := etcdCheck(string(body)); known {
 		observations = append(observations, probeObservation(Etcd, now, 0, etcdErr))
 	}

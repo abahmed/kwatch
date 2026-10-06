@@ -1,8 +1,20 @@
 10:02:15 roll-up
 🟠 kwatch (prod-eu-1) found two new problems at the same time. api in shop keeps crashing. worker in shop keeps crashing. Each gets its own message when it changes or resolves.
 🟠 kwatch (prod-eu-1) found two new problems at the same time.
-
+| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
+|
+| **Problems**
+| - **api** in **shop** keeps crashing
+| - **worker** in **shop** keeps crashing
+|
+| *Each gets its own message when it changes or resolves.*
 10:39:00 material change
 🟠 api in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: connection refused". To read the output of the last crash, run kubectl logs api-e04f9b69-a -c app -n shop --previous
 🟠 api in shop (prod-eu-1) keeps crashing.
-
+| 🟠 **api** in **shop** (**prod-eu-1**) keeps crashing.
+| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| It fails with `panic: connection refused`.
+| To read the output of the last crash, run
+| ```
+| kubectl logs api-e04f9b69-a -c app -n shop --previous
+| ```

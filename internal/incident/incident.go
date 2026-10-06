@@ -160,6 +160,9 @@ type Incident struct {
 	// after a cause revision. The incident closes without claiming
 	// recovery.
 	SupersededBy string
+	// SupersededRoot is the root of that incident, so the closing message
+	// can name it. It is not persisted: the message is written at once.
+	SupersededRoot inventory.EntityID
 	// Reminded is when the last weekly "still open" update was sent;
 	// zero until the first.
 	Reminded time.Time
@@ -243,6 +246,10 @@ type Incident struct {
 	// Ingress or route, has no ready backends or mostly failing ones.
 	// It is recomputed with the impact; the traffic-lost page reads it.
 	trafficLost bool
+	// servingDown records that a user-facing workload in the root or
+	// impact has no ready replica. It is recomputed with the impact;
+	// the last-replica-down page reads it.
+	servingDown bool
 	// admissionBlocked records that the root is a fail-closed admission
 	// webhook whose failed calls block creates. Such a root often has
 	// no finding of its own (its endpoints are ready, its backend just

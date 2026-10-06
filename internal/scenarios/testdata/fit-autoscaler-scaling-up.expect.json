@@ -1,0 +1,6 @@
+{
+  "name": "fit-autoscaler-scaling-up",
+  "description": "A pod is Pending for six minutes while the cluster autoscaler reports TriggeredScaleUp; a node joins and the pod starts. Nothing is sent.",
+  "maxMessages": 0,
+  "quiet": true
+}

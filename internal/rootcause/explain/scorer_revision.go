@@ -32,9 +32,11 @@ func scoreRevision(v *view, c *candidate) outcome {
 	}
 	switch {
 	case failingRevisions == 1 && healthyRevisions > 0:
-		return outcome{weight: RevisionWeight,
-			code: rootcause.ProofNewRevisionFails, text: "only the new " +
-				"revision fails; the previous one stays healthy"}
+		revision, edits := v.revisionEdits(c.id)
+		return outcome{weight: RevisionWeight, count: revision,
+			code: rootcause.ProofNewRevisionFails, edits: edits,
+			text: "only the new revision fails; the previous one " +
+				"stays healthy" + editsText(edits)}
 	case failingRevisions > 1 && healthyRevisions == 0:
 		return outcome{weight: -RevisionPenalty,
 			code: rootcause.ProofEveryRevisionFails,
@@ -51,4 +53,12 @@ func (v *view) anyFailing(pods []inventory.EntityID) bool {
 		}
 	}
 	return false
+}
+
+// editsText says, for the trace, what the new revision changed.
+func editsText(edits []inventory.FieldChange) string {
+	if len(edits) == 0 {
+		return ""
+	}
+	return "; it changed " + describeChange(inventory.Change{Fields: edits})
 }

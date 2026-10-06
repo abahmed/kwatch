@@ -302,5 +302,6 @@ func EnrichmentSources() []string {
 	return []string{
 		StatsSource, throttleSource, runtimeSource, reachSource,
 		memorySource, serviceProbeSource, crashLogSource,
+		webhookMetricsSource,
 	}
 }

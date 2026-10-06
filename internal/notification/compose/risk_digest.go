@@ -43,6 +43,8 @@ type riskGroup struct {
 	// clause words the risk for one workload: "runs a single replica".
 	clause string
 	names  []string
+	// ids are the same workloads, for lists that tell namespaces apart.
+	ids []inventory.EntityID
 }
 
 // riskTitles summarises the risks by type, with a few example
@@ -77,6 +79,7 @@ func groupRisks(risks []detection.Finding) []riskGroup {
 			byReason[f.Reason] = g
 		}
 		g.names = append(g.names, shortName(f.Entity))
+		g.ids = append(g.ids, f.Entity)
 	}
 	out := make([]riskGroup, 0, len(byReason))
 	for _, g := range byReason {

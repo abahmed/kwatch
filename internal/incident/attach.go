@@ -189,6 +189,7 @@ func (a *areaPlacer) record(i int) rootcause.CauseRecord {
 	if !ok {
 		record = a.s.Record(a.area.Causes[i])
 		record.Unverified = a.area.Unverified
+		a.annotate(&record, a.area.Causes[i])
 		a.records[i] = record
 	}
 	return record
@@ -223,7 +224,7 @@ func (m *Manager) attach(
 	}
 	p.Members[key] = s
 	logMember("added to", p, key)
-	p.SupersededBy = ""
+	p.SupersededBy, p.SupersededRoot = "", inventory.EntityID{}
 	if where.cause != nil {
 		p.Cause, p.CauseUnclear = where.cause, false
 	} else if p.Cause == nil && where.unclear {
@@ -281,6 +282,7 @@ func (m *Manager) refresh(model inventory.Reader) {
 			p.Mode = incidentMode(p)
 			p.Impact = impact(model, p)
 			p.trafficLost = trafficLost(model, p)
+			p.servingDown = servingDown(model, p)
 			p.admissionBlocked = admissionBlocked(model, p)
 			p.routedMissing = routedMissing(model, p)
 			p.impactPeak = max(p.impactPeak, impactSize(p))

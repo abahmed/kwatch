@@ -70,6 +70,24 @@ func TestEngineMarksReferrersOfAGoneObject(t *testing.T) {
 	}
 }
 
+// An Ingress whose class was listed after it is judged again once the
+// class appears, so a class seen late never leaves a false finding.
+func TestEngineMarksTheIngressOfAClassThatAppears(t *testing.T) {
+	e := solveInputEngine(t)
+	ingress := inventory.CoreID(kube.KindIngress, "shop", "front")
+	class := inventory.CoreID(kube.KindIngressClass, "", "alb")
+	e.apply([]inventory.Observation{
+		seen(ingress, time.Now(), nil),
+		link(ingress, inventory.References, class),
+	})
+
+	dirty := e.apply([]inventory.Observation{seen(class, time.Now(), nil)})
+
+	if !containsEntity(dirty, ingress) {
+		t.Fatalf("dirty = %v, want the Ingress of the class", dirty)
+	}
+}
+
 // Endpoints going unready reach the Service's detector at once, so the
 // finding is raised as soon as its waiting period ends, not whenever
 // something else happens to touch the Service.

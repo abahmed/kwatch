@@ -47,6 +47,11 @@ type view struct {
 	// empty value means the pod names none.
 	calls      map[inventory.EntityID]endpointCall
 	signatures map[inventory.EntityID]string
+	// compared lists, per failure, what the counterfactual checks
+	// compared it with; see Trace.Compared.
+	compared map[inventory.EntityID][]Comparison
+	// callMemo holds what is read from error text and policies.
+	callMemo
 }
 
 func newView(s Snapshot) *view {
@@ -330,6 +335,9 @@ func (v *view) virtualModes(
 		if modes := v.backendModes(id, effect, link); len(modes) > 0 {
 			return modes
 		}
+	}
+	if modes := v.callModes(id, effect, link); len(modes) > 0 {
+		return modes
 	}
 	return v.missingModes(id, link)
 }

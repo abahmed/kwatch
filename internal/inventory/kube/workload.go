@@ -29,6 +29,11 @@ func (s workloadSchema[T]) RelationTypes() []inventory.RelationType {
 	return []inventory.RelationType{inventory.OwnedBy, inventory.References}
 }
 
+// AttrSpecWritten is when the API server last recorded a write to the
+// spec of a workload at zero replicas. It says how long the workload has
+// been parked, even when kwatch only just started.
+const AttrSpecWritten = "spec.written"
+
 // Describe implements Schema.
 func (s workloadSchema[T]) Describe(obj any) (Description, bool) {
 	workload, ok := obj.(T)
@@ -53,6 +58,10 @@ func (s workloadSchema[T]) Describe(obj any) (Description, bool) {
 	if s.replicas != nil {
 		if replicas := s.replicas(workload); replicas != nil {
 			attrs[AttrReplicas] = inventory.Number(float64(*replicas))
+			if at := latestSpecTime(workload); *replicas == 0 &&
+				!at.IsZero() {
+				attrs[AttrSpecWritten] = inventory.Time(at)
+			}
 		}
 	}
 	s.status(workload, attrs)

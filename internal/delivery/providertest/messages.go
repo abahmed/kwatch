@@ -81,3 +81,34 @@ func Summary() notification.Message {
 		Note:  "🟠 kwatch started and found 2 problems that were there.",
 	}
 }
+
+// Rich is an incident with structured blocks: a headline with bold
+// names, a quoted pod error, a line with the affected service and the
+// suggested command in a code block. The pod text is hostile on purpose:
+// it holds markup and a broadcast mention.
+func Rich() notification.Message {
+	m := Announce()
+	m.Note = "🔴 payments in shop is crash-looping. It said " +
+		"\"boom *x* @channel\". Service web can't serve traffic. " +
+		"Run kubectl logs payments -n shop"
+	m.Doc = []notification.Block{
+		{Kind: notification.Para, Spans: []notification.Span{
+			{Text: "🔴 "},
+			{Text: "payments", Style: notification.Bold},
+			{Text: " in "},
+			{Text: "shop", Style: notification.Bold},
+			{Text: " is crash-looping."}}},
+		{Kind: notification.Para, Spans: []notification.Span{
+			{Text: "It said "},
+			{Text: "boom *x* @channel", Style: notification.Code},
+			{Text: "."}}},
+		{Kind: notification.Para, Spans: []notification.Span{
+			{Text: "Service "},
+			{Text: "web", Style: notification.Bold},
+			{Text: " can't serve traffic. Run"}}},
+		{Kind: notification.CodeBlock, Spans: []notification.Span{
+			{Text: "kubectl logs payments -n shop"}}},
+	}
+	m.Output = nil
+	return m
+}

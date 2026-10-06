@@ -71,6 +71,7 @@ func (w Writer) write(
 		msg.Status = notification.StatusResolved
 		mark, sentences := resolveNote(f)
 		fill(&msg, mark, respell(arrange(sentences), d.Facts.KindNames))
+		boldNames(msg.Doc, incidentNames(p, w.Cluster))
 		msg.Opening = w.opening(d, now)
 		if p.CanReopen() {
 			msg.ReopenWithin = incident.RepageWindow
@@ -79,11 +80,12 @@ func (w Writer) write(
 	}
 	msg.Status = status(p)
 	msg.Output = d.Facts.Output
-	msg.Steps = append(nextSteps(p, f.members),
+	msg.Steps = append(nextSteps(p, stepMembers(p, f.members)),
 		w.runbookSteps(f.members)...)
 	msg.Confidence = confidence(p.Cause)
 	fill(&msg, marker(p),
 		respell(arrange(noteSentences(d, f)), d.Facts.KindNames))
+	boldNames(msg.Doc, incidentNames(p, w.Cluster))
 	msg.Opens = d.Action == incident.Announce
 	if !msg.Opens {
 		msg.Opening = w.opening(d, now)
@@ -160,16 +162,7 @@ func nonEmpty(value string) []string {
 }
 
 func confidence(cause *rootcause.CauseRecord) string {
-	switch {
-	case cause == nil:
-		return ""
-	case cause.Score >= rootcause.High:
-		return "high"
-	case cause.Score >= rootcause.Likely:
-		return "likely"
-	default:
-		return "possible"
-	}
+	return certaintyOf(cause).word()
 }
 
 func sortedMembers(p incident.Incident) []detection.Finding {
@@ -230,7 +223,8 @@ func upperFirst(value string) string {
 // lowerFirst lower-cases the first letter, except in an acronym such
 // as "TLS" or "DNS", which keeps its capitals.
 func lowerFirst(value string) string {
-	if value == "" || isAcronym(value) {
+	if value == "" || isAcronym(value) ||
+		strings.HasPrefix(value, "Kubernetes") {
 		return value
 	}
 	// Cut the first rune whole, as upperFirst does.

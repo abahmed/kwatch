@@ -99,3 +99,18 @@ func TestAuditReminderHashDiffersFromTheAnnouncement(t *testing.T) {
 	assert.Equal(t, "h1", plain.ContentHash)
 	assert.NotEqual(t, plain.ContentHash, again.ContentHash)
 }
+
+// A roll-up, startup summary or digest is not about one incident: its
+// entry says it is a summary, names no root, and lists what it carries.
+func TestAuditEntryOfASummaryHasNoIncidentRoot(t *testing.T) {
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	entry := AuditEntry(incident.Decision{Reason: "roll-up"},
+		notification.Message{Members: []string{"p1", "p2"}}, at)
+
+	assert.Equal(t, audit.ActionSummary, entry.Action)
+	assert.Empty(t, entry.Root)
+	assert.Equal(t, "roll-up", entry.DecisionReason)
+	assert.Equal(t, []string{"p1", "p2"}, entry.Items)
+	assert.Equal(t, 2, entry.Opened)
+}

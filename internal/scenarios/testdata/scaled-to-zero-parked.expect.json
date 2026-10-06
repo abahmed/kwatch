@@ -1,0 +1,8 @@
+{
+  "name": "scaled-to-zero-parked",
+  "description": "A Deployment has been at zero replicas for thirty days, by the API server's record, when kwatch starts; an Ingress still routes to its Service.",
+  "root": "deployment/shop/api",
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "15m0s"
+}

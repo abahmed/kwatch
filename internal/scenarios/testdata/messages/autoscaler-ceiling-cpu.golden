@@ -1,4 +1,9 @@
 10:09:30 material change
 🟠 Autoscaler worker in orders (prod-eu-1) is at its maximum of 8 replicas and wants more. worker is affected as well. To see the object's state and events, run kubectl describe deployment worker -n orders
 🟠 Autoscaler worker in orders (prod-eu-1) is at its maximum of 8 replicas and wants more.
-
+| 🟠 Autoscaler **worker** in **orders** (**prod-eu-1**) is at its maximum of 8 replicas and wants more.
+| **worker** is affected as well.
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment worker -n orders
+| ```

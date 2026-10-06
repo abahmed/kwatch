@@ -1,0 +1,11 @@
+{
+  "name": "networkpolicy-blocks-dependency",
+  "description": "A default-deny NetworkPolicy is created and the API times out calling the Service its environment names.",
+  "root": "networkpolicy/shop/deny-all",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/postgres",
+    "node//n1"
+  ]
+}

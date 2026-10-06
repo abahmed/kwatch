@@ -1,0 +1,11 @@
+{
+  "name": "internal-only-down",
+  "description": "Every replica of an internal Deployment behind a ClusterIP Service crash-loops: no user-facing Service is affected, so nobody is paged.",
+  "root": "deployment/shop/front",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "service/shop/front"
+  ]
+}

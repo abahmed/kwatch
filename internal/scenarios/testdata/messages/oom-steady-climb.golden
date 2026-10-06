@@ -1,4 +1,10 @@
 10:02:15 settled
 🟠 api in shop (prod-eu-1) keeps running out of memory. Its node and registry are healthy and unchanged, so nothing outside it explains this. Its memory rose steadily from 200Mi to 512Mi over three hours before the kill. To read the output of the last crash, run kubectl logs api-d461a92b-a -c app -n shop --previous
 🟠 api in shop (prod-eu-1) keeps running out of memory.
-
+| 🟠 **api** in **shop** (**prod-eu-1**) keeps running out of memory.
+| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| Its memory rose steadily from 200Mi to 512Mi over three hours before the kill.
+| To read the output of the last crash, run
+| ```
+| kubectl logs api-d461a92b-a -c app -n shop --previous
+| ```

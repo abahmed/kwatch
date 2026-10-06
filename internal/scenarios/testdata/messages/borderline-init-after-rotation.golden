@@ -1,4 +1,10 @@
 10:04:15 settled
-🟠 orders is failing in shop (prod-eu-1) after the 10:01 change to secret orders-db. Key password changed. It fails with "psql: error: connection to server at "10.0.3.9", port 5432 failed: FATAL:  password authentication failed for user…". To list the keys of the Secret the pods depend on, run kubectl describe secret orders-db -n shop
-🟠 orders is failing in shop (prod-eu-1) after the 10:01 change to secret orders-db.
-
+🟠 orders in shop (prod-eu-1) has an init container that keeps crashing; two possible causes: secret orders-db does not exist or it rolled out a change shortly before. Key password changed. It fails with "psql: error: connection to server at "10.0.3.9", port 5432 failed: FATAL:  password authentication failed for user…". To list the keys of the Secret the pods depend on, run kubectl describe secret orders-db -n shop
+🟠 orders in shop (prod-eu-1) has an init container that keeps crashing; two possible causes: secret orders-db does not exist or it rolled out a change shortly before.
+| 🟠 **orders** in **shop** (**prod-eu-1**) has an init container that keeps crashing; two possible causes: secret **orders-db** does not exist or it rolled out a change shortly before.
+| Key password changed.
+| It fails with `psql: error: connection to server at`10.0.3.9`, port 5432 failed: FATAL: password authentication failed for user…`.
+| To list the keys of the Secret the pods depend on, run
+| ```
+| kubectl describe secret orders-db -n shop
+| ```

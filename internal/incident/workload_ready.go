@@ -127,8 +127,13 @@ func (m *Manager) workloadBroken(p *Incident) bool {
 	if m.model == nil {
 		return false
 	}
-	r, ok := ReadinessOf(m.model, workloadFor(m.model, p.Root))
-	return ok && r.Short() && r.Failing
+	// A Service is as broken as the workloads behind it.
+	for _, w := range workloadsOf(m.model, workloadFor(m.model, p.Root)) {
+		if r, ok := ReadinessOf(m.model, w); ok && r.Short() && r.Failing {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveReason is why a recovering or flapping incident ends now. It

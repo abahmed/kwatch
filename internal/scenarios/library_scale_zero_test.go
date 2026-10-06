@@ -10,7 +10,7 @@ import (
 // scaleZeroScenarios are workloads scaled to zero replicas.
 func scaleZeroScenarios() []scenario {
 	return []scenario{scaledToZeroRouted(), scaledToZeroUnrouted(),
-		scaledToZeroBlueGreen()}
+		scaledToZeroBlueGreen(), scaledToZeroParked()}
 }
 
 // scaledToZeroRouted: someone scales the shop API to zero while the
@@ -57,6 +57,36 @@ func scaledToZeroBlueGreen() scenario {
 			Quiet: true, Tail: duration(15 * time.Minute),
 		},
 		build: func(c *cluster) { buildScaledToZero(c, true, true) },
+	}
+}
+
+// scaledToZeroParked: kwatch starts while a Deployment has been at zero
+// replicas for weeks and an Ingress still routes to its Service. It is
+// left over, not news: the digest names it and nobody is notified.
+func scaledToZeroParked() scenario {
+	return scenario{
+		expect: expectation{
+			Name: "scaled-to-zero-parked",
+			Description: "A Deployment has been at zero replicas for " +
+				"thirty days, by the API server's record, when kwatch " +
+				"starts; an Ingress still routes to its Service.",
+			Root: "deployment/shop/api", Tier: "digest", MaxMessages: 2,
+			Tail: duration(15 * time.Minute),
+		},
+		build: func(c *cluster) {
+			c.list(c.node("n1", "zone-a"))
+			w := c.deployment("shop", "api",
+				"registry.example.com/api:1.0", 0)
+			w.deployment.ManagedFields = []metav1.ManagedFieldsEntry{{
+				Manager:   "argocd-controller",
+				Operation: metav1.ManagedFieldsOperationUpdate,
+				Time:      &metav1.Time{Time: c.now.Add(-30 * 24 * time.Hour)},
+			}}
+			c.list(w.objects())
+			c.list(clusterService(c, "shop", "api", 8080))
+			c.list(trafficIngress(c, "api", ""))
+			c.after(30 * time.Minute)
+		},
 	}
 }
 

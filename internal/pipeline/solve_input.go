@@ -60,6 +60,18 @@ func (e *Engine) moves(o inventory.Observation) bool {
 	return false
 }
 
+// movedWith are the entities that also move when o's entity does. A
+// NetworkPolicy decides which calls in its namespace go through, and a
+// failing pod's walk is gated on its namespace (see explain's
+// policyCallHops), so a policy created or edited later moves it.
+func movedWith(o inventory.Observation) []inventory.EntityID {
+	if o.Entity.Kind != kube.KindNetworkPolicy || o.Entity.Namespace == "" {
+		return nil
+	}
+	return []inventory.EntityID{inventory.CoreID(kube.KindNamespace, "",
+		o.Entity.Namespace)}
+}
+
 // knownNote reports whether the entity already holds a note with the
 // same reason and message: a repeated event says nothing new.
 func (e *Engine) knownNote(o inventory.Observation) bool {
@@ -134,7 +146,7 @@ func (e *Engine) markDependents(transitions []detection.Transition) {
 // judged: an Ingress is judged by the Service it routes to, a workload
 // by the ConfigMaps and Secrets it references.
 var referrers = []inventory.RelationType{
-	inventory.RoutesTo, inventory.References,
+	inventory.RoutesTo, inventory.References, inventory.Calls,
 }
 
 // readers returns the entities, other than the observed one, whose

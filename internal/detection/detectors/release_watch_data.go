@@ -17,6 +17,8 @@ type release struct {
 	pods                 []inventory.Entity
 	podContainers        [][]inventory.Entity
 	revisionAge          time.Duration
+	// edits are what the new revision changed in the pod template.
+	edits []inventory.FieldChange
 }
 
 // started is when the revision's first pod was created.
@@ -119,8 +121,9 @@ func latestRelease(
 				podContainers(model, id))
 		}
 	}
-	out.previousImage, out.image = imageChange(model, deployment,
-		out.started().Add(-releaseChangeLead))
+	since := out.started().Add(-releaseChangeLead)
+	out.previousImage, out.image = imageChange(model, deployment, since)
+	out.edits = inventory.RevisionDiff(model.Changes(deployment, since))
 	return out, true
 }
 

@@ -182,31 +182,58 @@ incident in your channel, twice.
 
 **After: one message with the cause, then one when it is over**
 
+Messages are written as short lines, with the resource names in bold, text
+from your pods in code and the command in a code block. Slack, Discord,
+Telegram, Jira and the other chat and ticket providers show it as below;
+SMS, push and pager providers get the same lines as plain text.
+
 ```text
-🟠 Node n1 (prod-eu-1) is low on memory. All of its dependents are failing.
-Replicas that do not depend on it are healthy. cart, orders and api in
-shop are affected as well. To check the node's conditions and recent events,
-run kubectl describe node n1
+🟠 **Node n1** (**prod-eu-1**) is low on memory. All of its dependents are failing.
+Replicas that do not depend on it are healthy.
+**cart**, **orders** and **api** in **shop** are affected as well.
+To check the node's conditions and recent events, run
+    kubectl describe node n1
 ```
 
 ```text
-✅ Node n1 (prod-eu-1) is ready again. It was failing for ten minutes.
+✅ **Node n1** (**prod-eu-1**) is ready again. It was failing for ten minutes.
 ```
 
 The same goes for the other incidents you care about:
 
 ```text
-🟠 api is failing in shop (prod-eu-1) after the 10:01 release of
-registry.example.com/api:2.3. The previous image was
-registry.example.com/api:2.2. It fails with "panic: missing key
-DB_PASSWORD_V2". To see the rollout state, run
-kubectl rollout status deployment/api -n shop
+🟠 **api** is failing in **shop** (**prod-eu-1**) after the 10:01 release of registry.example.com/api:2.3.
+The previous image was registry.example.com/api:2.2.
+It fails with `panic: missing key DB_PASSWORD_V2`.
+To see the rollout state, run
+    kubectl rollout status deployment/api -n shop
+```
+
+Messages that list several problems are short lists, the ones that need
+attention first, what resolved on one line and the configuration risks last:
+
+```text
+🟡 **kwatch digest** · staging — 2 problems · 5 resolved · risks on 6 workloads
+
+**Problems**
+• Node **ip-10-0-67-211** — failing again
+• Service **ingress-nginx** (**kube-addons**) — Kubernetes reported FailedDeployModel 3 times in the last quarter hour
+
+✅ 5 resolved since last digest: accounts, assets, comms +2
+
+**Configuration risks (none urgent)**
+• Single replica — 5: accounts, app, web +2
+• Mutable image tag — 1: website
 ```
 
 ```text
-🟠 kwatch (prod-eu-1) found two new problems at the same time. ledger in
-billing keeps crashing. checkout in orders keeps crashing. Each gets its own
-message when it changes or resolves.
+🟠 **kwatch** · prod-eu-1 — 2 new problems at the same time
+
+**Problems**
+• **ledger** in **billing** keeps crashing
+• **checkout** in **orders** keeps crashing
+
+_Each gets its own message when it changes or resolves._
 ```
 
 One message per problem, with its cause and the command to fix or check it.

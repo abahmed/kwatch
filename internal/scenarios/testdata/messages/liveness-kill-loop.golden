@@ -1,4 +1,9 @@
 10:02:55 settled
 🟠 web in shop (prod-eu-1) keeps being killed by its liveness probe. Its node and registry are healthy and unchanged, so nothing outside it explains this. To read the output of the last crash, run kubectl logs web-4f4969d4-a -c app -n shop --previous
 🟠 web in shop (prod-eu-1) keeps being killed by its liveness probe.
-
+| 🟠 **web** in **shop** (**prod-eu-1**) keeps being killed by its liveness probe.
+| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| To read the output of the last crash, run
+| ```
+| kubectl logs web-4f4969d4-a -c app -n shop --previous
+| ```

@@ -39,6 +39,7 @@ func capacityEvidence(
 	model inventory.Reader, pod inventory.EntityID, message string,
 ) []detection.Evidence {
 	blockers, _ := kube.ParseSchedulerMessage(message)
+	eligible := eligibleNodes(model, pod)
 	var out []detection.Evidence
 	for _, ask := range []resourceAsk{cpuAsk, memoryAsk} {
 		if !blocked(blockers, ask.blocker) {
@@ -51,7 +52,7 @@ func capacityEvidence(
 		out = append(out, detection.Evidence{
 			Label: "needs", Value: ask.text(need, true),
 		})
-		out = append(out, mostFree(model, ask))
+		out = append(out, mostFree(model, ask, eligible))
 	}
 	return out
 }
@@ -66,14 +67,17 @@ func blocked(blockers []kube.Blocker, reason string) bool {
 }
 
 // mostFree names the schedulable node with the most unrequested
-// capacity of the resource.
+// capacity of the resource. With eligible set, only those nodes count:
+// a node the pod cannot use for another reason (a taint it does not
+// tolerate, a node selector) has room that does not help it.
 func mostFree(
-	model inventory.Reader, ask resourceAsk,
+	model inventory.Reader, ask resourceAsk, eligible map[string]bool,
 ) detection.Evidence {
 	best, bestNode, found := 0.0, "", false
 	for _, id := range model.Entities(kube.KindNode) {
 		node, ok := model.Entity(id)
-		if !ok || !schedulableNode(node) {
+		if !ok || !schedulableNode(node) ||
+			(eligible != nil && !eligible[id.Name]) {
 			continue
 		}
 		total, ok := number(node, ask.allocatable)

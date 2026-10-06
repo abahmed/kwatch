@@ -1,8 +1,14 @@
 10:04:15 settled
 🟠 cert-controller in shop (prod-eu-1) has not been ready for three minutes. Its node and registry are healthy and unchanged, so nothing outside it explains this. It runs a single replica, so this is downtime, not degradation. To see the object's state and events, run kubectl describe pod cert-controller-733b4b6c-a -n shop
 🟠 cert-controller in shop (prod-eu-1) has not been ready for three minutes.
-
+| 🟠 **cert-controller** in **shop** (**prod-eu-1**) has not been ready for three minutes.
+| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| It runs a single replica, so this is downtime, not degradation.
+| To see the object's state and events, run
+| ```
+| kubectl describe pod cert-controller-733b4b6c-a -n shop
+| ```
 10:10:00 material change
 🟠 cert-controller in shop (prod-eu-1) now has pods that run without restarting but are not ready.
 🟠 cert-controller in shop (prod-eu-1) now has pods that run without restarting but are not ready.
-
+| 🟠 **cert-controller** in **shop** (**prod-eu-1**) now has pods that run without restarting but are not ready.

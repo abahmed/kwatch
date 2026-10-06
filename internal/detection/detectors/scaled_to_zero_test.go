@@ -50,6 +50,57 @@ func TestWorkloadReportsScaleToZeroWhileAnIngressStillRoutesToIt(t *testing.T) {
 		"traffic to it via Service api", got[0].Summary)
 }
 
+// A workload parked at zero for a long time is no news: it goes to the
+// digest. The age comes from the latest spec write on the object.
+func TestWorkloadScaledToZeroForDaysIsOnlyInformational(t *testing.T) {
+	m, api := zeroShop()
+	put(m, api, t0.Add(-10*time.Minute), map[string]inventory.Value{
+		kube.AttrReplicas:       inventory.Number(0),
+		kube.AttrTemplateLabels: inventory.Text("app=api"),
+		kube.AttrSpecWritten:    inventory.Time(t0.Add(-48 * time.Hour)),
+	})
+
+	got := detectZero(m, api)
+
+	require.Len(t, got, 1)
+	assert.Equal(t, reasons.ScaledToZeroRouted, got[0].Reason)
+	assert.Equal(t, detection.Info, got[0].Severity)
+}
+
+// A scale-down kwatch saw, long ago, counts the same.
+func TestWorkloadScaledToZeroDaysAgoPerHistoryIsOnlyInformational(
+	t *testing.T,
+) {
+	m, api := zeroShop()
+	scaledAt := t0.Add(-3 * 24 * time.Hour)
+	m.Apply(inventory.Observation{
+		Kind: inventory.Changed, Source: "test", At: scaledAt, Entity: api,
+		Change: inventory.Change{Entity: api, At: scaledAt,
+			Actor: "kubectl-scale", Fields: []inventory.FieldChange{{
+				Path: "spec.replicas", Before: "3", After: "0"}}},
+	})
+
+	got := detectZero(m, api)
+
+	require.Len(t, got, 1)
+	assert.Equal(t, detection.Info, got[0].Severity)
+}
+
+// A scale-down within the last day still notifies.
+func TestWorkloadScaledToZeroRecentlyStillWarns(t *testing.T) {
+	m, api := zeroShop()
+	put(m, api, t0.Add(-10*time.Minute), map[string]inventory.Value{
+		kube.AttrReplicas:       inventory.Number(0),
+		kube.AttrTemplateLabels: inventory.Text("app=api"),
+		kube.AttrSpecWritten:    inventory.Time(t0.Add(-23 * time.Hour)),
+	})
+
+	got := detectZero(m, api)
+
+	require.Len(t, got, 1)
+	assert.Equal(t, detection.Warning, got[0].Severity)
+}
+
 func TestWorkloadNamesWhoScaledItToZeroAndWhen(t *testing.T) {
 	m, api := zeroShop()
 	scaledAt := t0.Add(-9 * time.Minute)

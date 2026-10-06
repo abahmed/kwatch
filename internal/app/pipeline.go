@@ -105,12 +105,15 @@ func pruneModel(
 ) {
 	ticker := time.NewTicker(modelPruneInterval)
 	defer ticker.Stop()
+	var health modelHealthLog
+	health.log(model, now())
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			pruneOnce(model, now())
+			health.log(model, now())
 		}
 	}
 }

@@ -3,6 +3,7 @@ package telegram
 import (
 	"context"
 	"encoding/json"
+	"html"
 	"strings"
 	"testing"
 
@@ -33,16 +34,16 @@ func TestTelegramPlainMessageHasNoParseMode(t *testing.T) {
 	assert.Equal(t, msg, body["text"])
 }
 
-func TestTelegramIncidentEscapesMarkdown(t *testing.T) {
+func TestTelegramIncidentEscapesHTML(t *testing.T) {
 	c, rec := recorderTelegram(t)
 	m := providertest.Announce()
 	m.Note = "🔴 my_app hit *bad* `x` [y]"
 	m.Output = []string{"panic: `boom`"}
 	require.NoError(t, c.SendIncident(context.Background(), m))
 	body := rec.Last(t).JSON(t)
-	assert.Equal(t, "MARKDOWN", body["parse_mode"])
+	assert.Equal(t, "HTML", body["parse_mode"])
 	assert.Equal(t,
-		"🔴 my\\_app hit \\*bad\\* \\`x\\` \\[y]\n\n```\npanic: 'boom'\n```",
+		"🔴 my_app hit *bad* `x` [y]\n\n<pre>panic: `boom`</pre>",
 		body["text"])
 }
 
@@ -76,10 +77,10 @@ func TestTelegramIncidentTruncationKeepsCodeFence(t *testing.T) {
 			text := incidentText(m, telegramTextLimit)
 
 			assert.LessOrEqual(t, len(text), telegramTextLimit)
-			assert.True(t, strings.HasSuffix(text, "\n```"),
+			assert.True(t, strings.HasSuffix(text, "</pre>"),
 				"closing fence must survive: %q", text[len(text)-20:])
-			assert.Equal(t, 2, strings.Count(text, "```"))
-			assert.Contains(t, text, "\n\n```\noo")
+			assert.Equal(t, 1, strings.Count(text, "<pre>"))
+			assert.Contains(t, text, "\n\n<pre>oo")
 		})
 	}
 }
@@ -95,7 +96,7 @@ func TestTelegramSendIncidentRendersNote(t *testing.T) {
 			body := req.JSON(t)
 			assert.Equal(t, "chat", body["chat_id"])
 			text := body["text"].(string)
-			assert.True(t, strings.HasPrefix(text, escapeMarkdown(m.Note)))
+			assert.True(t, strings.HasPrefix(text, html.EscapeString(m.Note)))
 			providertest.AssertOneLeadingEmoji(t, text)
 		})
 	}

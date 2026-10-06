@@ -138,7 +138,8 @@ func (d Pod) pending(
 	}
 	if status == "False" {
 		// While a pool boots, capacity for the pod is on its way.
-		wait := d.thresholds.Pending + bootGraceFor(ctx, e)
+		wait := d.thresholds.Pending + bootGraceFor(ctx, e) +
+			scaleUpGrace(ctx, e)
 		if !sustained(ctx, "pod-unschedulable", since, wait) {
 			return nil
 		}
@@ -233,12 +234,16 @@ func (d Pod) notReady(
 	if !sustained(ctx, "pod-not-ready", since, threshold) {
 		return nil
 	}
-	return []detection.Finding{{
+	s := detection.Finding{
 		Reason: reasons.ContainersNotReady, Severity: detection.Warning,
 		Since: since,
 		Summary: "Pod has not been ready for " +
 			format.Duration(ctx.Now.Sub(since)),
-	}}
+	}
+	// A start inside what the workload's pods usually need is the
+	// usual start, a slow one that the digest can carry.
+	readyJudgement(ctx, e, since).apply(&s)
+	return []detection.Finding{s}
 }
 
 func startupBudget(
@@ -291,7 +296,8 @@ func unschedulableEvidence(
 ) []detection.Evidence {
 	message := conditionMessage(e, "PodScheduled")
 	out := []detection.Evidence{{Label: "scheduler", Value: message}}
-	return append(out, capacityEvidence(ctx.Model, e.ID, message)...)
+	out = append(out, capacityEvidence(ctx.Model, e.ID, message)...)
+	return append(out, fitEvidence(ctx, e)...)
 }
 
 // evictionOver reports an eviction older than EventWindow. The evicted

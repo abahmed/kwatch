@@ -16,6 +16,12 @@ import (
 // the first message inside the five minutes the alert-quality goal allows.
 const scaledToZeroGrace = 3 * time.Minute
 
+// scaledToZeroParked is how long a workload may have been at zero
+// replicas before it counts as parked: its routes are left over from
+// work nobody means to finish, so it is reported in the digest, not as
+// news. A scale-down within this time still notifies.
+const scaledToZeroParked = 24 * time.Hour
+
 // scaleChangeWindow is how far back the history is searched for who
 // scaled the workload.
 const scaleChangeWindow = 7 * 24 * time.Hour
@@ -63,12 +69,32 @@ func scaledToZeroRouted(
 	if !sustained(ctx, "scaled-to-zero", since, scaledToZeroGrace) {
 		return detection.Finding{}, false
 	}
+	severity := detection.Warning
+	if parkedFor(ctx, e, scaled) >= scaledToZeroParked {
+		severity = detection.Info
+	}
 	return detection.Finding{
-		Reason: reasons.ScaledToZeroRouted, Severity: detection.Warning,
+		Reason: reasons.ScaledToZeroRouted, Severity: severity,
 		Since:    since,
 		Summary:  "Is scaled to 0 but " + exposureText(exposed[0]),
 		Evidence: scaleEvidence(exposed, scaled),
 	}, true
+}
+
+// parkedFor is how long the workload has been at zero replicas: from the
+// scale-down kwatch saw, else from the latest spec write the API server
+// recorded (known at the first sight of the object), else unknown (zero).
+func parkedFor(
+	ctx detection.Context, e inventory.Entity, scaled inventory.Change,
+) time.Duration {
+	at := scaled.At
+	if at.IsZero() {
+		at = timestamp(e, kube.AttrSpecWritten)
+	}
+	if at.IsZero() {
+		return 0
+	}
+	return ctx.Now.Sub(at)
 }
 
 // scalesToZeroByDesign is a workload an autoscaler may scale to zero or

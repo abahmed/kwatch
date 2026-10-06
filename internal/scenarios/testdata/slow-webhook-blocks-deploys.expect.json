@@ -1,0 +1,12 @@
+{
+  "name": "slow-webhook-blocks-deploys",
+  "description": "A fail-closed webhook takes eight seconds per call and 40% of its calls hit the deadline; a Deployment cannot create pods.",
+  "root": "validatingwebhookconfiguration//policy-check",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "apiserver//kube-apiserver",
+    "deployment/shop/cart",
+    "node//n1"
+  ]
+}

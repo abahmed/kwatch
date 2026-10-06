@@ -1,0 +1,12 @@
+{
+  "name": "ingress-service-no-endpoints-chain",
+  "description": "An Ingress routes to a web Service whose pods crash calling a cache Service that was scaled to zero.",
+  "root": "deployment/shop/cache",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/web",
+    "node//n1",
+    "service/shop/cache"
+  ]
+}

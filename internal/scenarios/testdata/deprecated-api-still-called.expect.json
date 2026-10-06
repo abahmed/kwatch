@@ -1,0 +1,8 @@
+{
+  "name": "deprecated-api-still-called",
+  "description": "The API server reports a request for policy/v1beta1 poddisruptionbudgets, removed in the next minor upgrade.",
+  "root": "deprecated-api//policy/v1beta1 poddisruptionbudgets",
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "45m0s"
+}

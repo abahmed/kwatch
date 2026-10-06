@@ -1,0 +1,12 @@
+10:10:45 settled
+🔴 cache is down in shop (prod-eu-1) after the 10:10 release. kubectl-scale changed the replicas from 1 to 0. web fails calling service cache with "redis: dial tcp cache:6379: connect: connection refused". Ingress shop and service web can't serve traffic. web is affected as well. To see the rollout state, run kubectl rollout status deployment/cache -n shop
+🔴 cache is down in shop (prod-eu-1) after the 10:10 release.
+| 🔴 **cache** is down in **shop** (**prod-eu-1**) after the 10:10 release.
+| kubectl-scale changed the replicas from 1 to 0.
+| **web** fails calling service **cache** with `redis: dial tcp cache:6379: connect: connection refused`.
+| Ingress **shop** and service **web** can't serve traffic.
+| **web** is affected as well.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/cache -n shop
+| ```

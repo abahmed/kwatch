@@ -8,7 +8,7 @@ import (
 
 // Every duration that shapes an incident's life lives here, so the
 // relations between them can be read in one place. See
-// docs/incident-lifecycle.md for the story they tell.
+// docs/incident-lifecycle/timings.md for the story they tell.
 //
 // How they relate:
 //

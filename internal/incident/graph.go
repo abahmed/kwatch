@@ -69,13 +69,13 @@ func servicesOf(
 	return out
 }
 
-// trafficLost reports whether the root or a Service in the impact, that
-// an Ingress or route sends traffic to, has lost it: it does not exist,
+// trafficLost reports whether the root or a Service in the impact that
+// users reach (see exposed) has lost its backends: it does not exist,
 // none of its backends is ready, or more than half of them are failing.
 // A Service without EndpointSlices says nothing, so it does not count.
 func trafficLost(model inventory.Reader, p *Incident) bool {
 	for _, id := range append([]inventory.EntityID{p.Root}, p.Impact...) {
-		if id.Kind != kube.KindService || !routed(model, id) {
+		if id.Kind != kube.KindService || !exposed(model, id) {
 			continue
 		}
 		if backendsLost(model, id) {

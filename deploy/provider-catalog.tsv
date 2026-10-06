@@ -11,7 +11,6 @@ email|Email|tls|string|false|false|||required (TLS on 465, STARTTLS otherwise) o
 email|Email|host|string|true|false|||SMTP host
 email|Email|port|string|true|false|port||SMTP port
 email|Email|to|string|true|false|||Receiver email
-line|LINE|token|string|true|true|||LINE Notify access token
 pagerduty|PagerDuty|integrationKey|string|true|true|||PagerDuty integration key
 telegram|Telegram|token|string|true|true|||Bot token
 telegram|Telegram|chatId|string|true|false|signed-integer||Chat ID
@@ -197,10 +196,6 @@ email|Email|routes|json|false|false|json||Optional JSON route filters.
 email|Email|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
 email|Email|retry.delay|string|false|false|||Optional retry delay, for example 5s.
 email|Email|fallback|string|false|false|||Optional fallback provider name.
-line|LINE|routes|json|false|false|json||Optional JSON route filters.
-line|LINE|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
-line|LINE|retry.delay|string|false|false|||Optional retry delay, for example 5s.
-line|LINE|fallback|string|false|false|||Optional fallback provider name.
 pagerduty|PagerDuty|routes|json|false|false|json||Optional JSON route filters.
 pagerduty|PagerDuty|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
 pagerduty|PagerDuty|retry.delay|string|false|false|||Optional retry delay, for example 5s.

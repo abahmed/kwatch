@@ -19,6 +19,9 @@ type Contribution struct {
 	Count, Total int
 	// Fields are the field paths of a rootcause.ProofChanged change.
 	Fields []string
+	// Edits are the values a rootcause.ProofNewRevisionFails revision
+	// changed, likeliest culprit first. Count is the revision number.
+	Edits  []inventory.FieldChange
 	Weight float64
 	Text   string
 }
@@ -31,6 +34,7 @@ type outcome struct {
 	// count, total and fields are the data of the code.
 	count, total int
 	fields       []string
+	edits        []inventory.FieldChange
 	text         string
 	veto         string
 }
@@ -56,6 +60,12 @@ var scorers = []scorer{
 	{"shared", scoreShared},
 	{"baseline", scoreBaseline},
 	{"quality", scoreQuality},
+}
+
+func init() {
+	// The counterfactual checks come last: they compare with healthy
+	// twins and only break ties the other evidence leaves open.
+	scorers = append(scorers, counterfactualScorers...)
 }
 
 // scored is a candidate with its confidence and evidence.
@@ -85,7 +95,7 @@ func (v *view) score(c *candidate) scored {
 		total += o.weight
 		out.contributions = append(out.contributions, Contribution{
 			Scorer: s.name, Code: o.code, Count: o.count, Total: o.total,
-			Fields: o.fields, Weight: o.weight,
+			Fields: o.fields, Edits: o.edits, Weight: o.weight,
 			Text: firstNonEmpty(o.text, o.veto),
 		})
 	}

@@ -1,0 +1,10 @@
+10:03:15 settled
+🟠 etl in analytics (prod-eu-1) has waited two minutes for a node because no node has enough cpu. It needs 1.5 CPU; the most any node has free is 1.2 CPU, on n1. No node fits: pool general has no node with 1.5 CPU free (best: n1 has 1.2 CPU free); pool bulk has no node with 1.5 CPU free (best: big1 has 1 CPU free). To see the object's state and events, run kubectl describe pod etl-4a6bfd72-a -n analytics
+🟠 etl in analytics (prod-eu-1) has waited two minutes for a node because no node has enough cpu.
+| 🟠 **etl** in **analytics** (**prod-eu-1**) has waited two minutes for a node because no node has enough cpu.
+| It needs 1.5 CPU; the most any node has free is 1.2 CPU, on n1.
+| No node fits: pool general has no node with 1.5 CPU free (best: n1 has 1.2 CPU free); pool bulk has no node with 1.5 CPU free (best: big1 has 1 CPU free).
+| To see the object's state and events, run
+| ```
+| kubectl describe pod etl-4a6bfd72-a -n analytics
+| ```

@@ -1,4 +1,11 @@
 10:03:15 settled
 🔴 Replica set reader-d51c41a2 in catalog (prod-eu-1) cannot create pods because mutating webhook mesh-injector times out on every call. Every error mentions it. Three failing workloads all depend on it. reader, writer in ledger and resizer in media are affected as well. To check the webhook's backend and timeout, run kubectl get mutatingwebhookconfiguration mesh-injector -o yaml
 🔴 Replica set reader-d51c41a2 in catalog (prod-eu-1) cannot create pods because mutating webhook mesh-injector times out on every call.
-
+| 🔴 Replica set **reader-d51c41a2** in **catalog** (**prod-eu-1**) cannot create pods because mutating webhook **mesh-injector** times out on every call.
+| Every error mentions it.
+| Three failing workloads all depend on it.
+| **reader**, **writer** in **ledger** and **resizer** in **media** are affected as well.
+| To check the webhook's backend and timeout, run
+| ```
+| kubectl get mutatingwebhookconfiguration mesh-injector -o yaml
+| ```

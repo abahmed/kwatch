@@ -1,0 +1,11 @@
+10:02:15 settled
+🟠 front in shop (prod-eu-1) keeps crashing. It fails with "panic: config: listen address is empty". All of its dependents are failing. Service front can't serve traffic. To read the output of the last crash, run kubectl logs front-79a45689-a -c app -n shop --previous
+🟠 front in shop (prod-eu-1) keeps crashing.
+| 🟠 **front** in **shop** (**prod-eu-1**) keeps crashing.
+| It fails with `panic: config: listen address is empty`.
+| All of its dependents are failing.
+| Service **front** can't serve traffic.
+| To read the output of the last crash, run
+| ```
+| kubectl logs front-79a45689-a -c app -n shop --previous
+| ```

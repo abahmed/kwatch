@@ -18,6 +18,10 @@ const (
 	ActionCreate   Action = "create"
 	ActionUpdate   Action = "update"
 	ActionResolved Action = "resolved"
+	// ActionSummary is a message about several incidents at once, such
+	// as a roll-up, a startup summary or a digest. It has no incident
+	// and no root; DecisionReason says which kind it is.
+	ActionSummary Action = "summary"
 )
 
 // Cause states.
@@ -67,6 +71,9 @@ type Entry struct {
 	// alert-tracking providers receive it, "chat" for a resolve the
 	// paging providers skip. Empty for an ordinary message.
 	Delivery string `json:"delivery,omitempty"`
+	// DeliveryNote says why a decision was dropped: the rule of the
+	// digest tier that left it out.
+	DeliveryNote string `json:"deliveryNote,omitempty"`
 	// Opened, Resolved and Risks count what a digest listed: incidents
 	// still open, earlier ones that resolved, and configuration risks.
 	Opened   int `json:"opened,omitempty"`

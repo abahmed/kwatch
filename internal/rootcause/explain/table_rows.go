@@ -387,8 +387,10 @@ var clusterRows = []Row{
 
 // specificRows are the precise rows for the most common failures.
 var specificRows = concatRows(nodeRows, workloadRows, clusterRows,
-	controlPlaneRows, accessRows, trafficRows, nodeLifecycleRows,
+	controlPlaneRows, apiLatencyRows, accessRows, trafficRows,
+	nodeLifecycleRows,
 	operatorRows, workloadConfigRows, containerRows, calledRows,
+	serviceCallRows, policyCallRows,
 	scalingRows, sharedRows, agentRows)
 
 func concatRows(groups ...[]Row) []Row {

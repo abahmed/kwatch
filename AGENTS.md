@@ -6,7 +6,7 @@ user-facing contribution process and published technical documentation, see
 `docs/contributor-architecture.md` first: it explains the packages and import
 rules in plain English before this file's rules. Anyone changing
 `internal/incident` should also read `docs/incident-lifecycle.md`, the
-one-page guide to the life of an incident and its timings. The root `CONTRIBUTING.md` is
+guide to the life of an incident and its timings. The root `CONTRIBUTING.md` is
 a short repository entry point; it must not become a second public
 documentation source.
 
@@ -573,6 +573,12 @@ Some quirks are load-bearing. Preserve them unless a change explicitly says othe
   (`probe_metrics.go`, `AttrPodIP`) into rate attributes that
   `detectors.errorRates` turns into `APIServerErrors` and
   `CoreDNSServfail`.
+  The same response gives control-plane health (`control_plane_scan.go`,
+  `control_plane_metrics.go`, `webhook_metrics.go`): histogram deltas
+  between two readings of one API server process become p99 attributes,
+  and `APIServerLoad` and `WebhookCalls` raise slow-write, throttling,
+  etcd-size and slow or failing webhook findings. The `webhook-slows-api`
+  row (`LinkSlows`) blames a slow webhook for slow API writes.
 - The announcer reads the engine's active advisory findings
   (`Engine.activeAdvisories`) and names each once in a digest that goes
   out anyway (`pendingRisks`, `mentionRisks`); risks never open a window.

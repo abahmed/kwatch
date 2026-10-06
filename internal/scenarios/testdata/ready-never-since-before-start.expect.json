@@ -1,0 +1,8 @@
+{
+  "name": "ready-never-since-before-start",
+  "description": "kwatch starts while a Deployment's only pod has run for ten hours without restarting and without passing its readiness probe.",
+  "root": "deployment/shop/cert-controller",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "30m0s"
+}

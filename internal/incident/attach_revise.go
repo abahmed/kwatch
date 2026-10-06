@@ -69,7 +69,7 @@ func (m *Manager) revise(
 		return false
 	}
 	if target := m.lookup(root); target != nil && wasAnnounced(target) {
-		old.SupersededBy = target.ID
+		old.SupersededBy, old.SupersededRoot = target.ID, target.Root
 		return false
 	}
 	if dispersed(old.movedTo) {

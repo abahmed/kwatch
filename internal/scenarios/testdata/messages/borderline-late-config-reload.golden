@@ -1,4 +1,10 @@
 10:13:15 settled
 🟠 worker is failing in batch (prod-eu-1) after the 10:01 change to config map worker-config. Key worker.toml changed. It fails with "fatal: invalid configuration". To check the object the pods depend on, run kubectl get configmap worker-config -n batch -o yaml
 🟠 worker is failing in batch (prod-eu-1) after the 10:01 change to config map worker-config.
-
+| 🟠 **worker** is failing in **batch** (**prod-eu-1**) after the 10:01 change to config map **worker-config**.
+| Key worker.toml changed.
+| It fails with `fatal: invalid configuration`.
+| To check the object the pods depend on, run
+| ```
+| kubectl get configmap worker-config -n batch -o yaml
+| ```

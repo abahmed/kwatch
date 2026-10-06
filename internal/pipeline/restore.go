@@ -13,6 +13,7 @@ import (
 // of the previous run. It runs before the loop starts.
 func (e *Engine) restore() error {
 	startup := &e.announcer.collect.Startup
+	began := e.deps.Clock.Now()
 	if e.deps.Store == nil {
 		startup.ColdStart = true
 		return nil
@@ -34,6 +35,11 @@ func (e *Engine) restore() error {
 		return fmt.Errorf("pipeline: restore fingerprints: %w", err)
 	}
 	e.storage.saved = saved
+	took := e.deps.Clock.Now().Sub(began)
+	klog.InfoS("restored state", "component", "pipeline",
+		"operation", "restore", "incidents", len(records),
+		"fingerprints", len(saved), "coldStart", startup.ColdStart,
+		"durationMs", took.Milliseconds())
 	if startup.ColdStart {
 		// Restore runs before the loop starts, so it may write directly.
 		if err := e.deps.Store.SaveStartup(announce.StartupState{}); err != nil {
