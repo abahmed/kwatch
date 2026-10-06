@@ -72,10 +72,9 @@ func (w *Webex) Name() string {
 func (w *Webex) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
-	return w.SendMessage(ctx, safetext.NoteWithOutput(
-		notification.NeutralizeWebexMentions(m.NoteText()),
-		safetext.Lines(m.Output, notification.NeutralizeWebexMentions),
-		"\n", 0))
+	return w.SendMessage(ctx, safetext.RichWithOutput(m,
+		notification.MarkdownDialect(
+			notification.NeutralizeWebexMentions, "\n\n"), "\n\n", 0))
 }
 
 // SendMessage sends text message to the provider

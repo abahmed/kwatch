@@ -1,0 +1,14 @@
+10:09:15 settled
+🟠 ledger is failing in shop (prod-eu-1) after the 10:05 release of registry.example.com/ledger:10. The previous image was registry.example.com/ledger:9. Only the new revision fails; the previous one stays healthy. To see the rollout state, run kubectl rollout status deployment/ledger -n shop
+🟠 ledger is failing in shop (prod-eu-1) after the 10:05 release of registry.example.com/ledger:10.
+| 🟠 **ledger** is failing in **shop** (**prod-eu-1**) after the 10:05 release of registry.example.com/ledger:10.
+| The previous image was registry.example.com/ledger:9.
+| Only the new revision fails; the previous one stays healthy.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/ledger -n shop
+| ```
+10:15:00 material change
+🟠 ledger in shop (prod-eu-1) now has 3 of 4 replicas ready.
+🟠 ledger in shop (prod-eu-1) now has 3 of 4 replicas ready.
+| 🟠 **ledger** in **shop** (**prod-eu-1**) now has 3 of 4 replicas ready.

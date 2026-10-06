@@ -105,6 +105,7 @@ func (t *Tracker) Has(id inventory.EntityID) bool {
 func changed(old, current Finding) bool {
 	return old.Severity != current.Severity ||
 		old.Health != current.Health || old.Mode != current.Mode ||
+		old.Normal != current.Normal ||
 		errorChanged(errorShape(old), errorShape(current))
 }
 

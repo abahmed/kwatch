@@ -60,10 +60,17 @@ func (PodSchema) Describe(obj any) (Description, bool) {
 	rel.add(inventory.Mounts, podClaims(pod)...)
 	rel.add(inventory.Pulls, podImages(pod)...)
 	rel.add(inventory.Calls, podDependencies(pod)...)
+	serviceCalls := podServiceCalls(pod)
+	rel.add(inventory.Calls, serviceCallIDs(serviceCalls)...)
+	attrs := podAttributes(pod)
+	if len(serviceCalls) > 0 {
+		attrs[AttrServiceCalls] = inventory.Text(
+			serviceCallsText(serviceCalls))
+	}
 	return Description{
 		ID: id, UID: string(pod.UID),
 		AltUID:     pod.Annotations[corev1.MirrorPodAnnotationKey],
-		Attributes: podAttributes(pod),
+		Attributes: attrs,
 		Relations:  rel,
 		Children:   containerDescriptions(pod, id),
 	}, true
@@ -142,6 +149,7 @@ func podAttributes(pod *corev1.Pod) map[string]inventory.Value {
 	if optional := optionalReferences(pod); optional != "" {
 		attrs[AttrOptionalRefs] = inventory.Text(optional)
 	}
+	setSchedulingSpec(attrs, pod)
 	return attrs
 }
 

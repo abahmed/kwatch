@@ -1,4 +1,14 @@
 10:03:22 roll-up
 🟠 shop (prod-eu-1): 8 of 15 workloads failing since 10:02 app0 in shop keeps crashing. app1 in shop keeps crashing. app2 in shop keeps crashing. app3 in shop keeps crashing. app4 in shop keeps crashing. Three more are not described here. Each gets its own message when it changes or resolves.
 🟠 shop (prod-eu-1): 8 of 15 workloads failing since 10:02
-
+| 🟠 **shop** · prod-eu-1 — 8 of 15 workloads failing since 10:02
+|
+| **Problems**
+| - **app0** in **shop** keeps crashing
+| - **app1** in **shop** keeps crashing
+| - **app2** in **shop** keeps crashing
+| - **app3** in **shop** keeps crashing
+| - **app4** in **shop** keeps crashing
+| - +3 more
+|
+| *Each gets its own message when it changes or resolves.*

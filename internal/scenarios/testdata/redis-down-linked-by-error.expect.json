@@ -1,0 +1,11 @@
+{
+  "name": "redis-down-linked-by-error",
+  "description": "A Service loses every ready endpoint and the API crashes with an error that names the Service.",
+  "root": "deployment/shop/redis",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/api",
+    "node//n1"
+  ]
+}

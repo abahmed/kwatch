@@ -1,0 +1,15 @@
+10:03:35 settled
+🟠 frontend is failing in web (prod-eu-1) after the 10:01 change to config map frontend-config. Key app.yaml changed. It fails with "config: /etc/frontend/app.yaml: max_connections: cannot unmarshal !!str `unlimited` into int". To check the object the pods depend on, run kubectl get configmap frontend-config -n web -o yaml
+Checked: same image registry.example.com/frontend:7.2 runs fine in staging-2/frontend, so it is not the image itself; both replicas fail, on 2 nodes.
+🟠 frontend is failing in web (prod-eu-1) after the 10:01 change to config map frontend-config.
+| 🟠 **frontend** is failing in **web** (**prod-eu-1**) after the 10:01 change to config map **frontend-config**.
+| Key app.yaml changed.
+| It fails with
+| ```
+| config: /etc/frontend/app.yaml: max_connections: cannot unmarshal !!str `unlimited` into int
+| ```
+| To check the object the pods depend on, run
+| ```
+| kubectl get configmap frontend-config -n web -o yaml
+| ```
+| *Checked: same image registry.example.com/frontend:7.2 runs fine in staging-2/frontend, so it is not the image itself; both replicas fail, on 2 nodes.*

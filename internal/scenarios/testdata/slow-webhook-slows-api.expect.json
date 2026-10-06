@@ -1,0 +1,10 @@
+{
+  "name": "slow-webhook-slows-api",
+  "description": "A validating webhook answers in six seconds; the API server's writes are slow and nothing fails.",
+  "root": "validatingwebhookconfiguration//policy-check",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "apiserver//kube-apiserver"
+  ]
+}

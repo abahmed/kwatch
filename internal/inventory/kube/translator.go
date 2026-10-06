@@ -72,7 +72,7 @@ func (t *Translator) Updated(
 		previous = &oldDesc
 	}
 	observations := t.describe(desc, previous, at)
-	if fields := t.schema.Diff(old, new); len(fields) > 0 {
+	if fields := boundFields(t.schema.Diff(old, new)); len(fields) > 0 {
 		observations = append(observations, inventory.Observation{
 			Kind: inventory.Changed, Source: ObservationSource, At: at, Entity: desc.ID,
 			Change: attributedChange(new, false, at, fields),

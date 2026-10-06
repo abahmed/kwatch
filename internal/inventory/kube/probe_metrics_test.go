@@ -1,6 +1,7 @@
 package kube
 
 import (
+	_ "embed"
 	"fmt"
 	"testing"
 	"time"
@@ -145,4 +146,54 @@ func TestThrottleRatiosRestartWhenTheLiveCgroupChanges(t *testing.T) {
 	assert.Empty(t, got, "a different cgroup is not comparable")
 	got = c.throttleRatios(page("new", 5100, 9200), now.Add(2*time.Minute))
 	assert.InDelta(t, 50.0, got["n/p/c"], 0.001)
+}
+
+// deprecatedPage is the shape of a real API server response: two APIs
+// with a removal planned (one a subresource), one with none, and a
+// series that is no longer 1.
+//
+//go:embed testdata/deprecated_apis_sample.txt
+var deprecatedPage string
+
+func TestDeprecatedAPIsParseEverySeries(t *testing.T) {
+	got := deprecatedAPIs([]byte(deprecatedPage))
+
+	assert.Equal(t, []DeprecatedAPI{
+		{Group: "batch", Version: "v1beta1", Resource: "cronjobs/status",
+			Removed: "1.25"},
+		{Group: "policy", Version: "v1beta1",
+			Resource: "poddisruptionbudgets", Removed: "1.25"},
+		{Group: "", Version: "v1", Resource: "endpoints"},
+	}, got)
+	assert.Equal(t, "policy/v1beta1 poddisruptionbudgets", got[1].ID().Name)
+	assert.Equal(t, "v1 endpoints", got[2].ID().Name)
+}
+
+func TestDeprecatedObservationsSkipApisWithoutARemoval(t *testing.T) {
+	p := NewProber(ProbeConfig{})
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	got := p.deprecatedAPIObservations([]byte(deprecatedPage), now)
+
+	require.Len(t, got, 2)
+	assert.Equal(t, inventory.Observed, got[0].Kind)
+	assert.Equal(t, "1.25",
+		got[1].Attributes[AttrDeprecatedRemoved].AsText())
+}
+
+func TestDeprecatedAPIsClearOnlyAfterTheyStayMissing(t *testing.T) {
+	p := NewProber(ProbeConfig{})
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	p.deprecatedAPIObservations([]byte(deprecatedPage), now)
+
+	// Another API server answers without the series: not gone yet.
+	got := p.deprecatedAPIObservations([]byte("up 1\n"),
+		now.Add(time.Minute))
+	assert.Empty(t, got)
+
+	got = p.deprecatedAPIObservations([]byte("up 1\n"),
+		now.Add(metricsKeepFor+time.Minute))
+	require.Len(t, got, 2)
+	assert.Equal(t, inventory.Gone, got[0].Kind)
+	assert.Empty(t, p.deprecatedSeen)
 }

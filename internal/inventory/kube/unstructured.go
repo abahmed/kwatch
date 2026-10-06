@@ -106,18 +106,32 @@ func (s UnstructuredSchema) id(
 
 // Diff implements Schema. Controllers increase metadata.generation on every
 // spec change and never on status updates.
-func (UnstructuredSchema) Diff(old, new any) []inventory.FieldChange {
+func (s UnstructuredSchema) Diff(old, new any) []inventory.FieldChange {
 	before, ok1 := old.(*unstructured.Unstructured)
 	after, ok2 := new.(*unstructured.Unstructured)
 	if !ok1 || !ok2 || before.GetGeneration() == after.GetGeneration() ||
 		after.GetGeneration() == 0 {
 		return nil
 	}
+	if fields := s.specFields(before, after); len(fields) > 0 {
+		return fields
+	}
 	return []inventory.FieldChange{{
 		Path:   "spec",
 		Before: "generation " + strconv.FormatInt(before.GetGeneration(), 10),
 		After:  "generation " + strconv.FormatInt(after.GetGeneration(), 10),
 	}}
+}
+
+// specFields reads the edit when the kind is one whose spec is known.
+func (s UnstructuredSchema) specFields(
+	before, after *unstructured.Unstructured,
+) []inventory.FieldChange {
+	switch s.kind {
+	case "httproute", "grpcroute", "tlsroute", "tcproute":
+		return routeChanges(before, after)
+	}
+	return nil
 }
 
 func (s UnstructuredSchema) wellKnownRelations(

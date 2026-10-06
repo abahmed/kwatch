@@ -42,6 +42,8 @@ func templateDiff(
 	oldPod := &corev1.Pod{Spec: before.Spec}
 	newPod := &corev1.Pod{Spec: after.Spec}
 	fields = append(fields, resourceDiff(oldPod, newPod)...)
+	fields = append(fields, containerFieldChanges(before, after)...)
+	fields = append(fields, volumeChanges(before, after)...)
 	if restart := after.Annotations[restartedAtAnnotation]; restart !=
 		before.Annotations[restartedAtAnnotation] {
 		fields = append(fields, inventory.FieldChange{

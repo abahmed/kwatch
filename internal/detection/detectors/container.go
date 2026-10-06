@@ -46,14 +46,16 @@ func (Container) Detect(
 ) []detection.Finding {
 	switch text(e, kube.AttrState) {
 	case "waiting":
-		return livenessKilledWaiting(ctx, e, waitingFinding(e))
+		return withRestartBaseline(ctx, e,
+			livenessKilledWaiting(ctx, e, waitingFinding(e)))
 	case "terminated":
 		return terminatedFinding(ctx, e)
 	case "running":
 		if killed := livenessKilledFinding(ctx, e); killed != nil {
 			return killed
 		}
-		return append(restartingFinding(ctx, e), probeFindings(ctx, e)...)
+		return append(withRestartBaseline(ctx, e,
+			restartingFinding(ctx, e)), probeFindings(ctx, e)...)
 	default:
 		return nil
 	}

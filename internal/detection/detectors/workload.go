@@ -99,7 +99,7 @@ func (d Workload) availability(
 		return detection.Finding{}, false
 	}
 	ready, _ := number(e, kube.AttrReadyReplicas)
-	if ready >= desired {
+	if ready >= desired || rolloutProgressing(ctx, e) {
 		return detection.Finding{}, false
 	}
 	// The wait runs from when the workload first fell short, not from

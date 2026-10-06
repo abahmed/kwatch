@@ -54,13 +54,21 @@ func prepareIncident(
 	fallbackFrom string,
 	maxBytes int,
 ) notification.Message {
-	m.Note = incidentNote(m, templates)
+	text := incidentNote(m, templates)
+	if len(m.Doc) == 0 || text != m.NoteText() {
+		// No blocks, or a user template wrote the narrative: it
+		// replaces them.
+		m.Note, m.Doc = text, nil
+	}
 	if fallbackFrom != "" {
-		m.Note += "\n(Sent through the fallback because " + fallbackFrom +
-			" failed.)"
+		m.AppendNote("\n", "(Sent through the fallback because "+
+			fallbackFrom+" failed.)")
 	}
 	if maxBytes > 0 {
-		m.Note = notification.Truncate(m.Note, maxBytes)
+		if flat := m.NoteText(); len(flat) > maxBytes {
+			// A cut would land inside markup: send the plain lines.
+			m.Note, m.Doc = notification.Truncate(flat, maxBytes), nil
+		}
 		m.Short = notification.Truncate(m.ShortText(), maxBytes)
 	}
 	return m

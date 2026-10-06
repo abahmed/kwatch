@@ -70,6 +70,7 @@ func containerSpecAttributes(
 		attrs[AttrPrivileged] = inventory.Bool(true)
 	}
 	setPortAttributes(attrs, c)
+	setContainerScheduling(attrs, c)
 	return attrs
 }
 

@@ -1,0 +1,11 @@
+{
+  "name": "bad-config-value-change",
+  "description": "A Deployment's DB_HOST env var is changed to a host that does not exist; the pods of the new revision crash-loop and the previous one stays healthy.",
+  "root": "deployment/shop/checkout",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

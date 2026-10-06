@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 // messagesPath is where a scenario's delivered notes are kept.
@@ -23,9 +25,22 @@ func scenarioNotes(t *testing.T, name string) string {
 	for i, m := range result.Messages {
 		b.WriteString(result.Times[i].Format("15:04:05") + " " +
 			string(result.Decisions[i].Reason) + "\n")
-		b.WriteString(m.Note + "\n" + m.Short + "\n\n")
+		b.WriteString(m.Note + "\n" + m.Short + "\n")
+		b.WriteString(layout(m) + "\n")
 	}
 	return b.String()
+}
+
+// layout is how the message reads as Markdown: the same words as the
+// note, split into lines with bold names, code spans and a code block.
+// Each line starts with "| " so it is not mistaken for the note.
+func layout(m notification.Message) string {
+	text := m.Render(notification.MarkdownDialect(nil, "\n"))
+	lines := strings.Split(text, "\n")
+	for i, l := range lines {
+		lines[i] = strings.TrimRight("| "+l, " ")
+	}
+	return strings.Join(lines, "\n")
 }
 
 // TestScenarioMessagesGolden keeps the wording of every message each

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	bolt "go.etcd.io/bbolt"
+	"k8s.io/klog/v2"
 )
 
 // SchemaVersion is the on-disk format version. Any change to a persisted
@@ -113,6 +114,7 @@ func Open(path string, options Options) (*Store, error) {
 	if options.Now == nil {
 		return nil, errors.New("store: clock is required")
 	}
+	opening := startStep("open")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("store: create directory: %w", err)
 	}
@@ -140,7 +142,18 @@ func Open(path string, options Options) (*Store, error) {
 			return nil, err
 		}
 	}
+	logOpened(path, options.DeferRepair, f.absent, opening.end())
 	return &Store{file: f}, nil
+}
+
+// logOpened says what Open found and how long it took, so a slow start
+// can be traced to the file instead of showing as a silent gap.
+func logOpened(path string, deferred, absent bool, took time.Duration) {
+	size, _ := fileSize(path)
+	klog.InfoS("state file opened", "component", "state",
+		"operation", "open", "fileBytes", size,
+		"schemaVersion", SchemaVersion, "newFile", absent,
+		"repairDeferred", deferred, "durationMs", took.Milliseconds())
 }
 
 // repair performs the pending reset and rewrite. It runs once, under
@@ -282,11 +295,14 @@ func (s *Store) ClaimNew() (*Store, error) {
 func (f *file) claimInto(handle *Store) (uint64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if err := f.repair(); err != nil {
+	repairing := startStep("repair")
+	err := f.repair()
+	repairing.end()
+	if err != nil {
 		return 0, err
 	}
 	var epoch uint64
-	err := f.db.Update(func(tx *bolt.Tx) error {
+	err = f.db.Update(func(tx *bolt.Tx) error {
 		meta := tx.Bucket(metaBucket)
 		epoch = readUint(meta.Get(epochKey)) + 1
 		return meta.Put(epochKey, writeUint(epoch))

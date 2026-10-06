@@ -1,0 +1,7 @@
+{
+  "name": "rollout-healthy-slow",
+  "description": "A four-replica Deployment rolls out one pod at a time, each taking over two minutes to become ready. One replica is short for nine minutes, as the rollout intends.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "20m0s"
+}

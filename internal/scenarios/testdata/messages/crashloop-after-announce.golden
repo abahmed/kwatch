@@ -1,8 +1,14 @@
 10:05:15 settled
 🟠 pay in shop (prod-eu-1) has not been ready for three minutes. Its node and registry are healthy and unchanged, so nothing outside it explains this. To see the object's state and events, run kubectl describe pod pay-ac7bbfa2-a -n shop
 🟠 pay in shop (prod-eu-1) has not been ready for three minutes.
-
+| 🟠 **pay** in **shop** (**prod-eu-1**) has not been ready for three minutes.
+| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| To see the object's state and events, run
+| ```
+| kubectl describe pod pay-ac7bbfa2-a -n shop
+| ```
 10:09:00 material change
 🟠 pay in shop (prod-eu-1) is getting worse: container app in pod pay-ac7bbfa2-a now crash-loops. It fails with "panic: pay: ledger schema is older than the code".
 🟠 pay in shop (prod-eu-1) is getting worse: container app in pod pay-ac7bbfa2-a now crash-loops.
-
+| 🟠 **pay** in **shop** (**prod-eu-1**) is getting worse: container app in pod pay-ac7bbfa2-a now crash-loops.
+| It fails with `panic: pay: ledger schema is older than the code`.

@@ -227,7 +227,7 @@ func (a *announcer) write(
 	// in the other incident's update; a "cause revised" per absorbed
 	// incident would be one message per workload in a storm.
 	if d.Action == incident.Resolve &&
-		(d.Incident.SupersededBy != "" || d.Unannounced) {
+		((d.Incident.SupersededBy != "" && !d.Handover) || d.Unannounced) {
 		msg.PagingOnly = true
 	}
 	return msg

@@ -74,7 +74,9 @@ func TestInvestigateCrashShowsReplicaSignatureOnce(t *testing.T) {
 		observed(a, map[string]inventory.Value{
 			kube.AttrLastMessage: text("cannot open /etc/app/config.yaml")}),
 		observed(b, map[string]inventory.Value{
-			kube.AttrLastMessage: text("cannot open /etc/app/config.yaml")}))
+			kube.AttrLastMessage: text("cannot open /etc/app/config.yaml")}),
+		observed(inventory.CoreID(kube.KindService, "db", "postgres"),
+			map[string]inventory.Value{kube.AttrClusterIP: text("10.0.0.9")}))
 	logs := map[inventory.EntityID][]string{
 		a: {"2026-09-29T10:00:01Z boot", "2026-09-29T10:00:02Z ERROR " +
 			"db 10.0.0.4:5432 refused", "at db.connect(db.js:10)"},
@@ -91,10 +93,10 @@ func TestInvestigateCrashShowsReplicaSignatureOnce(t *testing.T) {
 	if plan.Kind != kindCrash {
 		t.Fatalf("kind = %q, want crash", plan.Kind)
 	}
-	// Containers are read in name order; addresses are redacted.
+	// Containers are read in name order; a known address is named.
 	errs := evidenceOf(r, incident.FactError)
 	if len(errs) != 1 || errs[0].Text != "2026-09-29T10:00:09Z ERROR "+
-		"db [private-address]:5432 refused" {
+		"db 10.0.0.9:5432 (db/postgres) refused" {
 		t.Fatalf("errors = %+v, want one replica's line once", errs)
 	}
 	if got := evidenceOf(r, incident.FactTermination); len(got) != 1 {

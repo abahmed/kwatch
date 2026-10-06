@@ -90,7 +90,8 @@ const DefaultDetachStuck = 10 * time.Minute
 // detachFailure reports a volume that cannot be detached: the CSI driver
 // returned a detach error, or deletion of the attachment has been pending
 // for DefaultDetachStuck. Until it detaches, the volume cannot attach to
-// another node.
+// another node. When the node or the volume the attachment names no
+// longer exists, nothing will ever finish the detach: the summary says so.
 func detachFailure(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
@@ -100,25 +101,80 @@ func detachFailure(
 		return nil
 	}
 	since := valueSince(e, kube.AttrDetachError)
-	summary := "Volume cannot be detached from its node"
-	var evidence []detection.Evidence
+	if deleting {
+		if at := deletingSince(e); !at.IsZero() {
+			since = at
+		}
+	}
+	if message == "" &&
+		!sustained(ctx, "detach-stuck", since, DefaultDetachStuck) {
+		return nil
+	}
+	f := detection.Finding{
+		Reason: reasons.VolumeDetachFailure, Severity: detection.Warning,
+		Health: detection.Failing, Since: since,
+		Summary: "Volume cannot be detached from its node",
+	}
 	if message != "" {
-		evidence = append(evidence,
-			detection.Evidence{Label: "detach error", Value: message})
+		f.Evidence = []detection.Evidence{
+			{Label: "detach error", Value: message}}
 	} else {
-		since = timestamp(e, kube.AttrDeletingSince)
-		if since.IsZero() {
-			since = valueSince(e, kube.AttrDeleting)
-		}
-		if !sustained(ctx, "detach-stuck", since, DefaultDetachStuck) {
-			return nil
-		}
-		summary = "Volume has been detaching for " +
+		f.Summary = "Volume has been detaching for " +
 			format.Duration(ctx.Now.Sub(since))
 	}
-	return []detection.Finding{{
-		Reason: reasons.VolumeDetachFailure, Severity: detection.Warning,
-		Health: detection.Failing, Since: since, Summary: summary,
-		Evidence: evidence,
-	}}
+	if deleting {
+		stuckDeleting(ctx, e, &f)
+	}
+	return []detection.Finding{f}
+}
+
+// deletingSince is when deletion of e was requested, or zero.
+func deletingSince(e inventory.Entity) time.Time {
+	since := timestamp(e, kube.AttrDeletingSince)
+	if since.IsZero() {
+		since = valueSince(e, kube.AttrDeleting)
+	}
+	return since
+}
+
+// stuckDeleting words a deleting attachment whose node or volume is gone.
+// With both gone nothing depends on it, so it is only housekeeping
+// (Info); with only the node gone the volume still cannot attach to
+// another node, which stays a warning.
+func stuckDeleting(
+	ctx detection.Context, e inventory.Entity, f *detection.Finding,
+) {
+	nodeGone := relatedGone(ctx, e, inventory.RunsOn, kube.KindNode)
+	pvGone := relatedGone(ctx, e, inventory.References, kube.KindPV)
+	var what string
+	switch {
+	case nodeGone && pvGone:
+		what, f.Severity = "its node and PV no longer exist",
+			detection.Info
+	case nodeGone:
+		what = "its node no longer exists"
+	case pvGone:
+		what = "its PV no longer exists"
+	default:
+		return
+	}
+	f.Summary = "VolumeAttachment " + e.ID.Name + " is stuck deleting; " +
+		what
+}
+
+// relatedGone reports whether e names an object of kind through rel that
+// is not in the model. It concludes nothing while the kind is not synced.
+func relatedGone(
+	ctx detection.Context, e inventory.Entity, rel inventory.RelationType,
+	kind inventory.Kind,
+) bool {
+	if ctx.Model == nil || !ctx.Synced(kind) {
+		return false
+	}
+	for _, id := range ctx.Model.Related(e.ID, rel, inventory.Outgoing) {
+		if id.Kind == kind && !ctx.Model.Exists(id) {
+			return true
+		}
+	}
+	return false
 }

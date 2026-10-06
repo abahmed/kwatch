@@ -2,8 +2,10 @@ package kube_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -28,6 +30,34 @@ func TestDeploymentSchemaDescribe(t *testing.T) {
 	hash, ok := desc.Attributes["template.hash"]
 	assert.True(t, ok)
 	assert.NotEmpty(t, hash.AsText())
+}
+
+// A workload at zero replicas carries the time of its latest spec write,
+// so how long it has been parked is known from the first sight.
+func TestDeploymentAtZeroReplicasRecordsTheLatestSpecWrite(t *testing.T) {
+	d := deployment("d1")
+	zero := int32(0)
+	d.Spec.Replicas = &zero
+	wrote := fixedTime().Add(-72 * time.Hour)
+	d.ManagedFields = []metav1.ManagedFieldsEntry{{
+		Manager: "argocd-controller", Time: timePtr(wrote),
+		Operation: metav1.ManagedFieldsOperationUpdate,
+	}}
+
+	desc, ok := kube.DeploymentSchema().Describe(d)
+
+	assert.True(t, ok)
+	got, found := desc.Attributes[kube.AttrSpecWritten]
+	assert.True(t, found)
+	assert.True(t, wrote.Equal(got.AsTime()))
+}
+
+func TestDeploymentWithReplicasRecordsNoSpecWrite(t *testing.T) {
+	desc, _ := kube.DeploymentSchema().Describe(deployment("d1"))
+
+	_, found := desc.Attributes[kube.AttrSpecWritten]
+
+	assert.False(t, found)
 }
 
 func TestStatefulSetSchemaDescribe(t *testing.T) {

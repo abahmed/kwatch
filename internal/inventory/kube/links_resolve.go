@@ -30,7 +30,7 @@ var managerKinds = []inventory.Kind{
 func Links(r inventory.Reader, id inventory.EntityID) []Link {
 	var out []Link
 	for _, relation := range []inventory.RelationType{
-		inventory.References, inventory.Serves,
+		inventory.References, inventory.Serves, inventory.Calls,
 	} {
 		for _, target := range r.Related(id, relation, inventory.Outgoing) {
 			if r.Exists(target) {

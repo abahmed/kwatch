@@ -41,7 +41,7 @@ func gatherFacts(d incident.Decision, now time.Time, fix *inventory.Change,
 	if own := rootFinding(f.p, f.members); own != nil {
 		f.lead, f.ok = *own, true
 	} else if failures := failing(f.members); len(failures) > 0 {
-		f.lead, f.ok = failures[0], true
+		f.lead, f.ok = leadFailure(f.p.Root, failures), true
 	}
 	return f
 }
@@ -67,10 +67,13 @@ const (
 	partLead part = iota
 	partCause
 	partProof
+	partChanges
 	partConsequence
 	partUnverified
 	partRecurrence
 	partAction
+	// partChecked is last so a cut message loses it first.
+	partChecked
 )
 
 // maxProof bounds the proof: one or two facts convince, more is noise.
@@ -94,12 +97,18 @@ var noteWriters = []sentenceWriter{
 	checkedSentences,
 	changeSentences,
 	causeProofSentences,
+	revisionDiffSentences,
+	changesBeforeSentences,
 	errorSentences,
+	calledServiceSentences,
 	usageSentences,
 	memorySentences,
+	baselineSentences,
 	jobRunSentences,
 	scaledZeroSentences,
 	schedulerSentences,
+	fitSentences,
+	autoscalerSentences,
 	consequenceSentences,
 	riskSentences,
 	evidenceSentences,
@@ -107,6 +116,8 @@ var noteWriters = []sentenceWriter{
 	unverifiedSentences,
 	recurrenceSentences,
 	actionSentences,
+	chainLineSentences,
+	checkedLineSentences,
 }
 
 func writeAll(f caseFacts, writers []sentenceWriter) []sentence {
@@ -157,15 +168,28 @@ func fill(msg *notification.Message, marker string, sentences []sentence) {
 	}
 	texts := make([]string, 0, len(sentences))
 	msg.Lines = nil
+	note := marker
 	for i, s := range sentences {
 		texts = append(texts, s.text)
+		note += noteGap(s.part) + s.text
 		if i > 0 && s.part != partAction {
 			msg.Lines = append(msg.Lines, s.text)
 		}
 	}
 	msg.Title = texts[0]
 	msg.Short = marker + " " + texts[0]
-	msg.Note = marker + " " + strings.Join(texts, " ")
+	msg.Note = note
+	msg.Doc = docOf(*msg, marker, sentences)
+}
+
+// noteGap separates a sentence from the one before it in Note. The
+// checked line starts a new line so it is not read as part of the
+// command that ends the action.
+func noteGap(p part) string {
+	if p == partChecked {
+		return "\n"
+	}
+	return " "
 }
 
 // marker is the one status emoji for an incident's tier.

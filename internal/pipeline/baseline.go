@@ -12,10 +12,6 @@ import (
 // would distort the ready-time baseline.
 const maxBaselineDelay = time.Hour
 
-// maxOwnerHops bounds the owner chain followed to find a workload: pod,
-// ReplicaSet, Deployment.
-const maxOwnerHops = 3
-
 // baselineSampler turns observations into workload baseline samples. It
 // runs on the decision loop and only touches memory. Each pod and Job
 // counts once; container restart counts are compared with the last seen
@@ -26,6 +22,11 @@ type baselineSampler struct {
 	ready    map[inventory.EntityID]bool
 	jobs     map[inventory.EntityID]bool
 	restarts map[inventory.EntityID]float64
+	// warnings is the event count already added, per entity and reason,
+	// so a repeated event adds only its new occurrences.
+	warnings map[inventory.EntityID]map[string]int
+	// sweepAt is the warnings size that triggers the next sweep.
+	sweepAt int
 }
 
 func newBaselineSampler(model *inventory.Model) *baselineSampler {
@@ -35,6 +36,7 @@ func newBaselineSampler(model *inventory.Model) *baselineSampler {
 		ready:    make(map[inventory.EntityID]bool),
 		jobs:     make(map[inventory.EntityID]bool),
 		restarts: make(map[inventory.EntityID]float64),
+		warnings: make(map[inventory.EntityID]map[string]int),
 	}
 }
 
@@ -42,6 +44,10 @@ func newBaselineSampler(model *inventory.Model) *baselineSampler {
 func (b *baselineSampler) observe(o inventory.Observation) {
 	if o.Kind == inventory.Gone {
 		b.forget(o.Entity)
+		return
+	}
+	if o.Kind == inventory.Noted {
+		b.sampleWarning(o)
 		return
 	}
 	if o.Kind != inventory.Observed {
@@ -54,7 +60,63 @@ func (b *baselineSampler) observe(o inventory.Observation) {
 		b.sampleContainer(o)
 	case kube.KindJob:
 		b.sampleJob(o)
+	case kube.KindDeployment, kube.KindStatefulSet, kube.KindDaemonSet:
+		b.sampleTemplate(o)
 	}
+}
+
+// sampleTemplate tells the baseline which pod template the workload
+// runs, so memory learned for old code is dropped when new code rolls
+// out.
+func (b *baselineSampler) sampleTemplate(o inventory.Observation) {
+	template := o.Attributes[kube.AttrTemplateHash].AsText()
+	if template == "" {
+		template = o.Attributes[kube.AttrRevision].AsText()
+	}
+	b.model.Baselines().Touch(o.Entity, o.At)
+	b.model.Baselines().Rebase(o.Entity, template, o.At)
+}
+
+// sampleWarning counts Warning events per hour for the workload the
+// event is about. Each report adds only the occurrences it adds to the
+// count already seen.
+func (b *baselineSampler) sampleWarning(o inventory.Observation) {
+	note := o.Note
+	if !note.Warning || note.Reason == "" {
+		return
+	}
+	seen := b.warnings[o.Entity]
+	if seen == nil {
+		seen = make(map[string]int)
+		b.warnings[o.Entity] = seen
+	}
+	total := max(note.Count, 1)
+	added := max(total-seen[note.Reason], 1)
+	seen[note.Reason] = total
+	b.model.Baselines().AddWarning(
+		b.workload(o.Entity), note.Reason, added, o.At)
+	b.sweepWarnings()
+}
+
+// warningSweepFloor is how many entities' warning counters the sampler
+// holds before it looks for counters of entities that are gone.
+const warningSweepFloor = 4096
+
+// sweepWarnings drops the counters of entities that are not in the
+// model. A late Warning event about a deleted pod (events outlive pods
+// by an hour) creates a counter after the pod's Gone was seen, so
+// nothing else would ever remove it. The sweep runs when the map has
+// doubled since the last one, so its cost is amortized.
+func (b *baselineSampler) sweepWarnings() {
+	if len(b.warnings) < max(b.sweepAt, warningSweepFloor) {
+		return
+	}
+	for id := range b.warnings {
+		if !b.model.Exists(id) {
+			delete(b.warnings, id)
+		}
+	}
+	b.sweepAt = 2 * len(b.warnings)
 }
 
 func (b *baselineSampler) forget(id inventory.EntityID) {
@@ -62,6 +124,7 @@ func (b *baselineSampler) forget(id inventory.EntityID) {
 	delete(b.ready, id)
 	delete(b.jobs, id)
 	delete(b.restarts, id)
+	delete(b.warnings, id)
 }
 
 // samplePod records how long the pod waited to start and to be ready,
@@ -72,10 +135,15 @@ func (b *baselineSampler) samplePod(o inventory.Observation) {
 		return
 	}
 	workload := b.workload(o.Entity)
+	if workload != o.Entity {
+		// A pod seen before its owner is known has no workload yet.
+		b.model.Baselines().Touch(workload, o.At)
+	}
 	if start := o.Attributes[kube.AttrStartTime].AsTime(); !start.IsZero() &&
 		!b.pending[o.Entity] {
 		b.pending[o.Entity] = true
-		b.add(workload, inventory.MetricPendingSeconds, start.Sub(created), o.At)
+		b.add(workload, inventory.MetricPendingSeconds,
+			start.Sub(created), o.At)
 	}
 	ready, _ := o.Attributes[kube.AttrReady].AsBool()
 	since := o.Attributes[kube.AttrReadySince].AsTime()
@@ -88,6 +156,7 @@ func (b *baselineSampler) samplePod(o inventory.Observation) {
 // sampleContainer counts restarts since the container was last seen.
 // The first sighting only sets the starting count.
 func (b *baselineSampler) sampleContainer(o inventory.Observation) {
+	b.sampleMemory(o)
 	count, ok := o.Attributes[kube.AttrRestarts].AsNumber()
 	if !ok {
 		return
@@ -103,6 +172,23 @@ func (b *baselineSampler) sampleContainer(o inventory.Observation) {
 	}
 	b.model.Baselines().AddRestarts(
 		b.workload(pods[0]), int(count-previous), o.At)
+}
+
+// sampleMemory records the container's memory: the resident set when
+// the kubelet reports it, else the working set.
+func (b *baselineSampler) sampleMemory(o inventory.Observation) {
+	bytes, ok := o.Attributes[kube.AttrMemoryRSS].AsNumber()
+	if !ok {
+		bytes, ok = o.Attributes[kube.AttrMemoryWorking].AsNumber()
+	}
+	if !ok || bytes <= 0 {
+		return
+	}
+	pods := b.model.Related(o.Entity, inventory.PartOf, inventory.Outgoing)
+	if len(pods) == 0 {
+		return
+	}
+	b.model.Baselines().AddMemory(b.workload(pods[0]), bytes, o.At)
 }
 
 // completeCondition is the Job condition set when it succeeded.
@@ -133,16 +219,7 @@ func (b *baselineSampler) add(
 	b.model.Baselines().Add(workload, metric, value.Seconds(), at)
 }
 
-// workload follows id's owners to the top-level controller: a pod's
-// Deployment, a Job's CronJob. An object without an owner is its own
-// workload.
+// workload follows id's owners to the top-level controller.
 func (b *baselineSampler) workload(id inventory.EntityID) inventory.EntityID {
-	for hop := 0; hop < maxOwnerHops; hop++ {
-		owners := b.model.Related(id, inventory.OwnedBy, inventory.Outgoing)
-		if len(owners) == 0 {
-			break
-		}
-		id = owners[0]
-	}
-	return id
+	return inventory.TopOwner(b.model, id)
 }

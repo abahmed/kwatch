@@ -1,12 +1,21 @@
 10:02:15 settled
 🟠 mailer in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: mailer: smtp relay rejected the credentials". It runs a single replica, so this is downtime, not degradation. To read the output of the last crash, run kubectl logs mailer-315ce708-a -c app -n shop --previous
 🟠 mailer in shop (prod-eu-1) keeps crashing.
-
+| 🟠 **mailer** in **shop** (**prod-eu-1**) keeps crashing.
+| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| It fails with `panic: mailer: smtp relay rejected the credentials`.
+| It runs a single replica, so this is downtime, not degradation.
+| To read the output of the last crash, run
+| ```
+| kubectl logs mailer-315ce708-a -c app -n shop --previous
+| ```
 10:14:00 healthy for 3m0s
 ✅ mailer in shop (prod-eu-1) is healthy again. It was failing for 13 minutes.
 ✅ mailer in shop (prod-eu-1) is healthy again.
-
+| ✅ **mailer** in **shop** (**prod-eu-1**) is healthy again.
+| It was failing for 13 minutes.
 10:16:30 failing again
 🟠 mailer in shop (prod-eu-1) is failing again: 2nd time in two hours. It fails with "panic: mailer: smtp relay rejected the credentials".
 🟠 mailer in shop (prod-eu-1) is failing again: 2nd time in two hours.
-
+| 🟠 **mailer** in **shop** (**prod-eu-1**) is failing again: 2nd time in two hours.
+| It fails with `panic: mailer: smtp relay rejected the credentials`.

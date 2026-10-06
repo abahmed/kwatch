@@ -194,11 +194,8 @@ func (d *Discord) SendIncident(
 // incidentContent is the Note plus the last output, mention-neutralized
 // and bounded.
 func incidentContent(m notification.Message) string {
-	return safetext.NoteWithOutput(
-		notification.NeutralizeMentions(m.NoteText()),
-		safetext.Lines(m.Output, notification.NeutralizeMentions),
-		"\n", maxContent,
-	)
+	return safetext.RichWithOutput(m,
+		notification.MarkdownDialect(nil, "\n"), "\n", maxContent)
 }
 
 // SendMessage sends text using the caller's cancellation context.

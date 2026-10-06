@@ -34,5 +34,8 @@ func (w Writer) RestoredSummary(
 		Route: summaryRoute(decisions, nil),
 	}
 	fill(&msg, mark, sentences)
+	msg.Doc = w.listDoc(mark, "kwatch restarted", []string{countFact(
+		len(decisions), "problem") + " from before still failing"},
+		decisions, now)
 	return msg
 }

@@ -1,8 +1,15 @@
 10:02:15 settled
 🟠 api in shop (prod-eu-1) keeps running out of memory because its memory limit is too low for normal use. It was killed within 10 seconds of starting. The error mentions it. To read the output of the last crash, run kubectl logs api-aeb6377b-a -c app -n shop --previous
 🟠 api in shop (prod-eu-1) keeps running out of memory because its memory limit is too low for normal use.
-
+| 🟠 **api** in **shop** (**prod-eu-1**) keeps running out of memory because its memory limit is too low for normal use.
+| It was killed within 10 seconds of starting.
+| The error mentions it.
+| To read the output of the last crash, run
+| ```
+| kubectl logs api-aeb6377b-a -c app -n shop --previous
+| ```
 10:05:30 cause revised
 🟠 Node n3 (prod-eu-1) is the revised cause: it is low on memory. All of its dependents are failing.
 🟠 Node n3 (prod-eu-1) is the revised cause: it is low on memory.
-
+| 🟠 Node n3 (**prod-eu-1**) is the revised cause: it is low on memory.
+| All of its dependents are failing.

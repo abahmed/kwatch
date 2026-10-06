@@ -26,8 +26,28 @@ import (
 type overflowSummary struct {
 	byReason map[string]int
 	total    int
+	// unnamed counts notifications whose reason did not fit in byReason
+	// (see maxOverflowReasonKeys); they are in total but have no name.
+	unnamed int
 	// since is when the oldest summarized notification was added.
 	since time.Time
+}
+
+// maxOverflowReasonKeys bounds the distinct reasons one summary stores.
+// A provider that stays down for days would otherwise keep one entry for
+// every distinct incident title. Later reasons are only counted.
+const maxOverflowReasonKeys = 256
+
+// count adds n notifications of reason, or counts them unnamed when the
+// summary already holds maxOverflowReasonKeys other reasons.
+func (s *overflowSummary) count(reason string, n int) {
+	if _, known := s.byReason[reason]; !known &&
+		len(s.byReason) >= maxOverflowReasonKeys {
+		s.unnamed += n
+	} else {
+		s.byReason[reason] += n
+	}
+	s.total += n
 }
 
 // addToOverflowSummary records a notification that could not be queued.
@@ -51,8 +71,7 @@ func (m *Manager) addToOverflowSummary(
 		}
 		m.pacer.summaries[provider] = state
 	}
-	state.byReason[reason]++
-	state.total++
+	state.count(reason, 1)
 }
 
 // takeOverflowSummary claims and renders the pending overflow summary for
@@ -88,9 +107,10 @@ func (m *Manager) restoreOverflowSummary(
 		m.pacer.summaries[provider] = current
 	}
 	for reason, count := range state.byReason {
-		current.byReason[reason] += count
+		current.count(reason, count)
 	}
-	current.total += state.total
+	current.unnamed += state.unnamed
+	current.total += state.unnamed
 }
 
 // renderOverflowSummary names the most frequent reasons and counts the
@@ -119,6 +139,10 @@ func renderOverflowSummary(state *overflowSummary) string {
 			parts,
 			fmt.Sprintf("%s ×%d", reason, state.byReason[reason]),
 		)
+	}
+	if state.unnamed > 0 {
+		parts = append(parts, fmt.Sprintf("%d more of other kinds",
+			state.unnamed))
 	}
 	return fmt.Sprintf(
 		"%s not sent one by one to avoid flooding this channel: %s.",

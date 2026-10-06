@@ -171,7 +171,23 @@ func releaseEvidence(
 			detection.Evidence{Label: "image before", Value: r.previousImage},
 			detection.Evidence{Label: "image after", Value: r.image})
 	}
+	for i, edit := range r.edits {
+		if i == detection.MaxEditEvidence {
+			break
+		}
+		out = append(out, detection.Evidence{
+			Label: detection.EvidenceEditPrefix + edit.Path,
+			Value: unsetIfEmpty(edit.Before) + detection.EvidenceEditArrow +
+				unsetIfEmpty(edit.After)})
+	}
 	return out
+}
+
+func unsetIfEmpty(value string) string {
+	if value == "" {
+		return "unset"
+	}
+	return value
 }
 
 func rateText(perPodHour float64) string {

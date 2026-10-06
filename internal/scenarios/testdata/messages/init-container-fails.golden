@@ -1,4 +1,10 @@
 10:02:15 settled
-🟠 orders in shop (prod-eu-1) is failing, probably because its init container migrate keeps crashing. It fails with "ERROR: relation "orders_v2" already exists". It runs a single replica, so this is downtime, not degradation. To read the output of the last crash, run kubectl logs orders-8c662d15-a -c migrate -n shop --previous
-🟠 orders in shop (prod-eu-1) is failing, probably because its init container migrate keeps crashing.
-
+🟠 orders in shop (prod-eu-1) is failing, likely because its init container migrate keeps crashing. It fails with "ERROR: relation "orders_v2" already exists". It runs a single replica, so this is downtime, not degradation. To read the output of the last crash, run kubectl logs orders-8c662d15-a -c migrate -n shop --previous
+🟠 orders in shop (prod-eu-1) is failing, likely because its init container migrate keeps crashing.
+| 🟠 **orders** in **shop** (**prod-eu-1**) is failing, likely because its init container migrate keeps crashing.
+| It fails with `ERROR: relation`orders\_v2`already exists`.
+| It runs a single replica, so this is downtime, not degradation.
+| To read the output of the last crash, run
+| ```
+| kubectl logs orders-8c662d15-a -c migrate -n shop --previous
+| ```

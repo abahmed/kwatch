@@ -42,7 +42,9 @@ var DNSServerNames = map[string]bool{"coredns": true, "kube-dns": true}
 const metricsKeepFor = 10 * time.Minute
 
 // addServerMetrics reads the API server's request counters and records
-// the overall and the 5xx response rates since the previous round.
+// the overall and the 5xx response rates since the previous round. It
+// returns the observations of the deprecated APIs the metrics list and
+// of the admission webhooks they time.
 //
 // The request goes through the kubernetes Service, so on a cluster with
 // several API servers each round may reach a different one, and the
@@ -51,13 +53,15 @@ const metricsKeepFor = 10 * time.Minute
 // without a start time gives no rate.
 func (p *Prober) addServerMetrics(
 	ctx context.Context, attrs map[string]inventory.Value, now time.Time,
-) {
+) []inventory.Observation {
 	body, err := p.cfg.Client.Discovery().RESTClient().Get().
 		AbsPath("/metrics").DoRaw(ctx)
 	if err != nil {
-		return
+		return nil
 	}
 	p.serverRates(body, attrs, now)
+	out := p.deprecatedAPIObservations(body, now)
+	return append(out, p.addControlPlaneMetrics(body, attrs, now)...)
 }
 
 // serverRates records the rates of one API server response.

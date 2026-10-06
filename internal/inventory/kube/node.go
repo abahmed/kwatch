@@ -31,6 +31,16 @@ func (NodeSchema) RelationTypes() []inventory.RelationType {
 	return []inventory.RelationType{inventory.PartOf}
 }
 
+// setNodeIP records the node's InternalIP address, when it has one.
+func setNodeIP(attrs map[string]inventory.Value, node *corev1.Node) {
+	for _, a := range node.Status.Addresses {
+		if a.Type == corev1.NodeInternalIP {
+			attrs[AttrNodeIP] = inventory.Text(a.Address)
+			return
+		}
+	}
+}
+
 // Describe implements Schema.
 func (NodeSchema) Describe(obj any) (Description, bool) {
 	node, ok := obj.(*corev1.Node)
@@ -50,6 +60,7 @@ func (NodeSchema) Describe(obj any) (Description, bool) {
 			node.Labels[corev1.LabelInstanceTypeStable]),
 	}
 	attrs[AttrDeleting] = inventory.Bool(node.DeletionTimestamp != nil)
+	setNodeIP(attrs, node)
 	if !node.CreationTimestamp.IsZero() {
 		attrs[AttrCreated] = inventory.Time(node.CreationTimestamp.Time)
 	}
@@ -71,6 +82,7 @@ func (NodeSchema) Describe(obj any) (Description, bool) {
 		}
 	}
 	setConditions(attrs, conditions)
+	setNodeScheduling(attrs, node)
 	rel := relations{}
 	rel.add(inventory.PartOf,
 		inventory.CoreID(KindZone, "",
@@ -112,7 +124,7 @@ func (NodeSchema) Diff(old, new any) []inventory.FieldChange {
 	add("status.nodeInfo.kernelVersion",
 		before.Status.NodeInfo.KernelVersion,
 		after.Status.NodeInfo.KernelVersion)
-	return fields
+	return append(fields, nodeLabelChanges(before, after)...)
 }
 
 func nodePool(labels map[string]string) string {

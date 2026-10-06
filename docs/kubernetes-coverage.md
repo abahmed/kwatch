@@ -98,9 +98,11 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Mode | Health | Reasons | Detectors |
 |:--|:--|:--|:--|
 | APIServer.Errors | varies | `APIServerErrors` | `controlplane` |
+| APIServer.Throttling | degraded | `APIServerThrottling` | `control_plane_load` |
 | APIServiceUnavailable | varies | `APIServiceFailure` | `custom` |
 | ActiveProbe | failing | `ActiveProbeFailure` | `active_probe` |
 | ActiveProbe.Latency | varies | `ActiveProbeLatency` | `active_probe` |
+| Admission.FailingOpen | degraded | `WebhookFailingOpen` | `webhook_calls` |
 | Admission.Rejected | failing | `PodAdmissionRejected` | `pod_admission` |
 | AttachFailed | failing | `VolumeAttachmentFailure` | `policy` |
 | BackendMissing | failing | `IngressBackendNotFound` | `network` |
@@ -129,6 +131,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | CreateError.Config | failing | `CreateContainerConfigError` | `container` |
 | Creating | varies | `ContainerCreating` | - |
 | DeadlineExceeded | varies | `DeadlineExceeded` | - |
+| DeprecatedAPI | degraded | `DeprecatedAPIInUse` | `deprecated_api` |
 | Device.PrepareFailed | failing | `FailedPrepareDynamicResources` | `event`, `event_storage` |
 | Device.Unallocated | degraded | `ResourceClaimUnallocated` | `custom_kinds` |
 | Disk.ContainerGCFailed | degraded | `ContainerGCFailed` | `event`, `event_kubelet` |
@@ -140,6 +143,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Draining | degraded | `NodeDraining` | `node` |
 | EphemeralStorageHigh | varies | `ContainerEphemeralStorageUsageHigh` | `resources` |
 | Error | varies | `Error` | `container` |
+| Etcd.Large | degraded | `EtcdDatabaseLarge` | `control_plane_storage` |
 | Evicted | varies | `Evicted` | `pod` |
 | Evicting | degraded | `NodeEvicting` | `kubelet_health` |
 | Exit.CommandNotFound | varies | `ContainerExitCommandNotFound` | `container_exit` |
@@ -177,6 +181,8 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Kubelet.Unreachable | degraded | `KubeletUnreachable` | `kubelet_health` |
 | Kwatch.NetworkRestricted | degraded | `KwatchNetworkRestricted` | `active_probe` |
 | Latency.APIServer | degraded | `APIServerLatency` | `controlplane` |
+| Latency.APIServer.Reads | varies | `APIServerReadsSlow` | `control_plane_load` |
+| Latency.APIServer.Writes | varies | `APIServerWritesSlow` | `control_plane_load` |
 | LeaseStale | degraded | `LeaseStale` | `lease` |
 | LoadBalancer.SyncFailed | degraded | `LoadBalancerSyncFailed` | `loadbalancer` |
 | LoadBalancerPending | degraded | `LoadBalancerProvisioning` | `network` |
@@ -228,7 +234,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Rollout.Stuck | degraded | `StatefulSetRolloutStuck` | `rollout` |
 | RolloutStuck | failing | `DeploymentProgressingFalse`, `ProgressDeadlineExceeded` | `workload` |
 | RuntimeErrors | varies | `NodeRuntimeErrors` | `resources` |
-| ScaledToZero | degraded | `ScaledToZeroRouted` | `scaled_to_zero` |
+| ScaledToZero | varies | `ScaledToZeroRouted` | `scaled_to_zero` |
 | Scaling.Disabled | varies | `ScalingDisabled` | - |
 | Scaling.Error | varies | `HPAScalingError` | `hpa` |
 | Scaling.InvalidSelector | varies | `HPAInvalidSelector` | `hpa` |
@@ -239,10 +245,12 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Schedule.Blocked | degraded | `CronJobBlocked` | `schedule_history` |
 | Schedule.LastRunFailed | degraded | `CronJobLastRunFailed` | `schedule_last_run` |
 | Schedule.Missed | degraded | `CronJobMissedRuns` | `schedule_history` |
-| Schedule.RepeatedFailure | degraded | `CronJobRepeatedFailure` | `schedule_history` |
+| Schedule.NoRecentSuccess | degraded | `CronJobNoRecentSuccess` | `schedule_stale` |
+| Schedule.RepeatedFailure | degraded | `CronJobRepeatedFailure` | `schedule`, `schedule_history` |
 | SchedulingGated | degraded | `SchedulingGated` | `pod` |
 | SnapshotFailed | varies | `VolumeSnapshotFailure` | `custom` |
 | StatusUnknown | degraded | `PodStatusUnknown` | `pod` |
+| Storage.ObjectsHigh | degraded | `StorageObjectsHigh` | `control_plane_storage` |
 | StuckDeleting | degraded | `NamespaceStuckTerminating`, `NodeStuckTerminating`, `PodStuckTerminating`, `StuckDeleting` | `generic`, `namespace`, `node`, `pod` |
 | Suspended | varies | `CronJobSuspended`, `JobSuspended` | `schedule` |
 | Unavailable | varies | `DaemonSetUnavailable`, `DeploymentAvailableFalse`, `DeploymentUnavailable`, `StsUnavailable` | `workload` |
@@ -263,3 +271,5 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | VolumeFull | varies | `VolumeUsageHigh` | `usage` |
 | Webhook.BackendMissing | varies | `WebhookBackendNotFound` | `policy` |
 | Webhook.NoEndpoints | varies | `WebhookNoEndpoints` | `policy` |
+| Webhook.Rejecting | degraded | `WebhookRejecting` | `webhook_calls` |
+| Webhook.Slow | varies | `WebhookSlow` | `webhook_calls` |

@@ -210,7 +210,9 @@ func (p *ActiveProber) dependencyTargets() (
 		}
 		for _, endpoint := range p.cfg.Model.Related(pod, inventory.Calls,
 			inventory.Outgoing) {
-			if called[endpoint] {
+			// In-cluster Services are called too (see
+			// podServiceCalls); they are not dialled from here.
+			if endpoint.Kind != KindExternalEndpoint || called[endpoint] {
 				continue
 			}
 			called[endpoint] = true

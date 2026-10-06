@@ -122,7 +122,7 @@ func (t *Telegram) SendMessage(ctx context.Context, msg string) error {
 
 func (t *Telegram) incidentBody(m notification.Message) string {
 	return t.body(telegramPayload{
-		ChatID: t.chatId, ParseMode: "MARKDOWN",
+		ChatID: t.chatId, ParseMode: "HTML",
 		Text: incidentText(m, telegramTextLimit),
 	})
 }
@@ -132,17 +132,24 @@ func (t *Telegram) incidentBody(m notification.Message) string {
 // so a long message can never lose its closing fence and break parsing.
 // The output gets at most half of the limit; the narrative comes first.
 func incidentText(m notification.Message, limit int) string {
-	note := escapeMarkdown(m.NoteText())
+	d := notification.HTMLDialect(nil, false)
 	if len(m.Output) == 0 {
-		return notification.Truncate(note, limit)
+		return m.RenderWithin(d, limit)
 	}
-	const open, closing = "\n\n```\n", "\n```"
-	output := strings.ReplaceAll(strings.Join(m.Output, "\n"), "`", "'")
-	outputBudget := min(len(output), limit/2)
-	note = notification.Truncate(note,
-		limit-outputBudget-len(open)-len(closing))
-	outputBudget = limit - len(note) - len(open) - len(closing)
-	return note + open + notification.Truncate(output, outputBudget) + closing
+	const sep = "\n\n"
+	output := strings.Join(m.Output, "\n")
+	// The output gets at most half of the limit; the narrative comes
+	// first and is cut by whole lines, so no tag is ever cut open.
+	budget := min(len(output), limit/2)
+	note := m.RenderWithin(d, limit-budget-len("<pre></pre>")-len(sep))
+	for {
+		block := d.Fence(notification.NeutralizeMentions(
+			notification.Truncate(output, budget)))
+		if len(note)+len(sep)+len(block) <= limit || budget <= 0 {
+			return note + sep + block
+		}
+		budget = budget * 3 / 4
+	}
 }
 
 func (t *Telegram) body(payload telegramPayload) string {
@@ -176,14 +183,4 @@ func (t *Telegram) sendByTelegramApi(
 		},
 	})
 	return err
-}
-
-// markdownEscaper escapes the legacy Telegram Markdown entity characters so
-// pod names, logs and messages cannot break parsing or inject formatting.
-var markdownEscaper = strings.NewReplacer(
-	"_", "\\_", "*", "\\*", "`", "\\`", "[", "\\[",
-)
-
-func escapeMarkdown(value string) string {
-	return markdownEscaper.Replace(value)
 }

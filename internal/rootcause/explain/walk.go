@@ -105,6 +105,11 @@ func (v *view) upstream(id inventory.EntityID) []hop {
 		for _, to := range v.s.Model.Related(
 			id, stored.relation, inventory.Outgoing,
 		) {
+			if stored.link == LinkCalls && to.Kind == kube.KindService {
+				// Only an error that names the Service links to it
+				// (serviceCallHops); configuration alone proves nothing.
+				continue
+			}
 			out = append(out, hop{link: stored.link, to: to})
 		}
 	}

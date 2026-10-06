@@ -1,0 +1,8 @@
+{
+  "name": "apiserver-writes-slow",
+  "description": "The API server's writes stay slow for ten minutes because etcd is slow; nothing else fails.",
+  "root": "apiserver//kube-apiserver",
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "45m0s"
+}

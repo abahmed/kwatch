@@ -1,0 +1,19 @@
+10:11:05 settled
+🔴 postgres in shop (prod-eu-1) keeps running out of memory because its memory limit is too low for normal use. It was killed within 10 seconds of starting. The error mentions it. services api and postgres can't serve traffic. Its containers have no memory limit, so nothing stopped them before the node ran short. It runs a single replica, so this is downtime, not degradation. To read the output of the last crash, run kubectl logs postgres-1ff9723b-a -c app -n shop --previous
+Chain: postgres (10:09) → api (10:10) → service api (10:10).
+🔴 postgres in shop (prod-eu-1) keeps running out of memory because its memory limit is too low for normal use.
+| 🔴 **postgres** in **shop** (**prod-eu-1**) keeps running out of memory because its memory limit is too low for normal use.
+| It was killed within 10 seconds of starting.
+| The error mentions it.
+| services **api** and **postgres** can't serve traffic.
+| Its containers have no memory limit, so nothing stopped them before the node ran short.
+| It runs a single replica, so this is downtime, not degradation.
+| To read the output of the last crash, run
+| ```
+| kubectl logs postgres-1ff9723b-a -c app -n shop --previous
+| ```
+| *Chain: postgres (10:09) → api (10:10) → service api (10:10).*
+10:13:05 material change
+🔴 postgres in shop (prod-eu-1) is spreading to pods postgres-1ff9723b-a, api-bee69fdb-a and api-bee69fdb-b: they have not been ready for three minutes.
+🔴 postgres in shop (prod-eu-1) is spreading to pods postgres-1ff9723b-a, api-bee69fdb-a and api-bee69fdb-b: they have not been ready for three minutes.
+| 🔴 **postgres** in **shop** (**prod-eu-1**) is spreading to pods **postgres-1ff9723b-a**, **api-bee69fdb-a** and api-bee69fdb-b: they have not been ready for three minutes.

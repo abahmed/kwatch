@@ -1,4 +1,9 @@
 10:09:30 material change
 🟠 Autoscaler api in search (prod-eu-1) is at its maximum of 5 replicas and wants more. api is affected as well. To see the object's state and events, run kubectl describe deployment api -n search
 🟠 Autoscaler api in search (prod-eu-1) is at its maximum of 5 replicas and wants more.
-
+| 🟠 Autoscaler **api** in **search** (**prod-eu-1**) is at its maximum of 5 replicas and wants more.
+| **api** is affected as well.
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment api -n search
+| ```

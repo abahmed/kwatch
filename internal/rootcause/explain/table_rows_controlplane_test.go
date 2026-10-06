@@ -38,4 +38,14 @@ var controlPlaneRowCases = []rowCase{
 			f.fail(kube.APIServer, "Unavailable.APIServer", failingH, 2, "")
 			return kube.APIServer
 		}},
+	{row: "webhook-slows-api",
+		want: "validatingwebhookconfiguration//policy",
+		build: func(f *fixture) inventory.EntityID {
+			hook := inventory.CoreID(kube.KindValidatingHook, "", "policy")
+			f.add(hook)
+			f.fail(hook, "Webhook.Slow", degradedH, 1, "")
+			f.fail(kube.APIServer, "Latency.APIServer.Writes", degradedH,
+				2, "")
+			return kube.APIServer
+		}},
 }

@@ -11,43 +11,6 @@ import (
 	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
-// certainty is how sure the cause is; it chooses the lead's wording.
-type certainty uint8
-
-const (
-	certaintyNone certainty = iota
-	certaintyPossible
-	certaintyLikely
-	certaintyHigh
-)
-
-func certaintyOf(cause *rootcause.CauseRecord) certainty {
-	switch {
-	case cause == nil:
-		return certaintyNone
-	case cause.Score >= rootcause.High:
-		return certaintyHigh
-	case cause.Score >= rootcause.Likely:
-		return certaintyLikely
-	default:
-		return certaintyPossible
-	}
-}
-
-// causeLinks join a symptom to its cause, by certainty.
-var causeLinks = map[certainty]string{
-	certaintyHigh:     " because ",
-	certaintyLikely:   ", probably because ",
-	certaintyPossible: ", possibly because ",
-}
-
-// changeLinks join a symptom to the change blamed for it, by certainty.
-var changeLinks = map[certainty]string{
-	certaintyHigh:     " after ",
-	certaintyLikely:   ", probably caused by ",
-	certaintyPossible: ", possibly related to ",
-}
-
 // leadSentences writes what broke and why in one sentence.
 func leadSentences(f caseFacts) []sentence {
 	text := capitalName(leadSubject(f), leadText(f))
@@ -62,7 +25,12 @@ func leadText(f caseFacts) string {
 	if text, ok := firstRolloutLead(f); ok {
 		return text
 	}
+	if text, ok := rivalLead(f); ok {
+		return text
+	}
 	switch {
+	case policyBlocksCall(p.Cause):
+		return policyBlockLead(f)
 	case p.Cause != nil && p.Cause.Root.Kind == explain.KindFailureSignature:
 		return signatureLead(f)
 	case leadIsGroup(f):
@@ -170,8 +138,8 @@ func changeLead(f caseFacts) string {
 	if workload.Namespace != "" {
 		text += " in " + workload.Namespace
 	}
-	return text + f.clusterTag() + changeLinks[certaintyOf(f.p.Cause)] +
-		changePhrase(*blamedChange(f), workload)
+	return changeLink(f.p.Cause, text+f.clusterTag(),
+		changePhrase(*blamedChange(f), workload))
 }
 
 func stateWords(p incident.Incident) string {
@@ -232,13 +200,14 @@ func releasedImage(change inventory.Change) string {
 // normal use".
 func ownCauseLead(f caseFacts) string {
 	subject := affectedWorkload(f)
-	return symptomState(f, subject) + causeLinks[certaintyOf(f.p.Cause)] +
-		causeWordsFor(f.p.Cause)
+	return causeLink(f.p.Cause, symptomState(f, subject),
+		causeWordsFor(f.p.Cause))
 }
 
 // selfCause reports a cause that blames nothing but the subject itself.
 func selfCause(cause *rootcause.CauseRecord) bool {
-	return cause != nil && cause.Rule == "self"
+	return cause != nil && (cause.Rule == "self" ||
+		cause.Rule == "called-service-backends-failing")
 }
 
 // selfLead is only the subject's state. "It is failing because it is
@@ -254,8 +223,8 @@ func causedLead(f caseFacts) string {
 		return deniedLead(f)
 	}
 	subject := symptomSubject(f)
-	return symptomState(f, subject) + causeLinks[certaintyOf(f.p.Cause)] +
-		causePhrase(f.p.Cause, subject)
+	return causeLink(f.p.Cause, symptomState(f, subject),
+		causePhrase(f.p.Cause, subject))
 }
 
 // symptomState is the subject and what is wrong with it, short enough

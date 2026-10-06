@@ -45,10 +45,32 @@ type CauseRecord struct {
 	// Unverified names, in plain words, what kwatch could not see where
 	// a cause might have been ("secrets in billing").
 	Unverified []string `json:",omitempty"`
+	// Rival is another cause for the same failures whose score is
+	// within RivalMargin of this one's. While it is set the cause is
+	// not stated alone: a message names both. It never has a Rival.
+	Rival *CauseRecord `json:",omitempty"`
+	// Checked says, in explain's words, what counterfactual checks
+	// compared the failures with: "node n3 is healthy for 12 other
+	// pods". Strongest first, empty when nothing was compared.
+	Checked []string `json:",omitempty"`
 	// Began is when the cause went wrong, when known. An incident that
 	// was announced long before a cause began keeps its root instead of
 	// being taken over by it.
 	Began time.Time `json:",omitempty"`
+	// Hops is the failure chain from the root to the deepest failure
+	// the cause was extended to, the root first; empty when the cause
+	// explains only what it reaches directly.
+	Hops []Hop `json:",omitempty"`
+	// Beyond are failures one step past the chain's limit: they follow
+	// from it but are not claimed by it.
+	Beyond []Hop `json:",omitempty"`
+}
+
+// Hop is one step of a failure chain: an entity that failed, a workload,
+// a Service or a route, and when it began to.
+type Hop struct {
+	Entity inventory.EntityID
+	Began  time.Time `json:",omitempty"`
 }
 
 // Confidence levels shown to readers. They match explain's
@@ -57,4 +79,7 @@ type CauseRecord struct {
 const (
 	High   = 0.70
 	Likely = 0.5
+	// RivalMargin is how close two causes of the same failures must
+	// score to be told as two possible causes instead of one answer.
+	RivalMargin = 0.05
 )

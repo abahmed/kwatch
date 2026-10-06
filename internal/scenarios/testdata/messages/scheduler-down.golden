@@ -1,8 +1,9 @@
 10:02:45 settled
 🔴 The scheduler (prod-eu-1) has been failing for about two minutes. It reports "leader lease not renewed for 1m35s".
 🔴 The scheduler (prod-eu-1) has been failing for about two minutes.
-
+| 🔴 The scheduler (**prod-eu-1**) has been failing for about two minutes.
+| It reports `leader lease not renewed for 1m35s`.
 10:03:30 material change
 🔴 The scheduler (prod-eu-1) is spreading to pod invoices-6d1a1db5-c in billing and pods cart-0757cde3-c and search-bfb8b61b-c in shop: they have not been looked at by the scheduler for two minutes.
 🔴 The scheduler (prod-eu-1) is spreading to pod invoices-6d1a1db5-c in billing and pods cart-0757cde3-c and search-bfb8b61b-c in shop: they have not been looked at by the scheduler for two minutes.
-
+| 🔴 The scheduler (**prod-eu-1**) is spreading to pod **invoices-6d1a1db5-c** in **billing** and pods **cart-0757cde3-c** and **search-bfb8b61b-c** in shop: they have not been looked at by the scheduler for two minutes.

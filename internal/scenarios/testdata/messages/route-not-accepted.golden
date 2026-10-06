@@ -1,4 +1,10 @@
 10:04:15 settled
 🟠 HTTP route web in shop (prod-eu-1) is not accepted (no matching parent). Its spec changed at 10:01. Its dependents failed soon after it changed. To see the object's state and events, run kubectl describe httproute web -n shop
 🟠 HTTP route web in shop (prod-eu-1) is not accepted (no matching parent).
-
+| 🟠 HTTP route **web** in **shop** (**prod-eu-1**) is not accepted (no matching parent).
+| Its spec changed at 10:01.
+| Its dependents failed soon after it changed.
+| To see the object's state and events, run
+| ```
+| kubectl describe httproute web -n shop
+| ```

@@ -1,0 +1,11 @@
+{
+  "name": "chain-postgres-api-ingress",
+  "description": "A database is OOM-killed, the API behind the Ingress stops being ready because it cannot reach it.",
+  "root": "deployment/shop/postgres",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/api",
+    "node//n1"
+  ]
+}

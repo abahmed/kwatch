@@ -119,12 +119,17 @@ func library() []scenario {
 		nodePinnedScenarios(),
 		recentChangeScenarios(), fixAttemptScenarios(),
 		flipScenarios(), unschedulableQuantifiedScenarios(),
+		schedulingFitScenarios(),
 		readyNeverScenarios(), namespaceOutageScenarios(),
 		reopenScenarios(), jobLongScenarios(), scaleZeroScenarios(),
 		firstRolloutScenarios(), usageHistoryScenarios(),
 		kwatchViewScenarios(), escalationScenarios(),
 		crashReplaceScenarios(), metricsBlipScenarios(),
-		digestFlapScenarios(),
+		digestFlapScenarios(), deprecatedAPIScenarios(),
+		controlPlaneLoadScenarios(),
+		serviceCallScenarios(), chainScenarios(), impactScenarios(),
+		rolloutHoldScenarios(), baselineScenarios(),
+		counterfactualScenarios(), revisionDiffScenarios(),
 	} {
 		out = append(out, group...)
 	}

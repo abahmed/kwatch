@@ -17,7 +17,26 @@ func Title(msg notification.Message, limit int) string {
 // first character. The cluster is not added as a label line: the
 // composer names it in the Note's sentences.
 func Body(msg notification.Message) string {
-	return FencedBody(msg, "```")
+	return RichBody(msg, notification.MarkdownDialect(
+		NeutralizeMentions, "\n\n"), "```")
+}
+
+// RichBody writes the structured message in a tracker's dialect, then
+// the output in a code block of the tracker's fence. Every tracker
+// neutralises @mentions in the message; output stays verbatim inside its
+// fence, where mentions are inert.
+func RichBody(
+	msg notification.Message, d notification.Dialect, fence string,
+) string {
+	d.Neutralize = NeutralizeMentions
+	var b strings.Builder
+	b.WriteString(msg.Render(d))
+	if len(msg.Output) > 0 {
+		text := strings.Join(msg.Output, "\n")
+		fence, text = safeFence(fence, text)
+		b.WriteString("\n\n" + fence + "\n" + text + "\n" + fence)
+	}
+	return b.String()
 }
 
 // FencedBody is Body with a tracker-specific code fence, such as Jira's

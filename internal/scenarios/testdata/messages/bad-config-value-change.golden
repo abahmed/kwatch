@@ -1,0 +1,12 @@
+10:06:55 settled
+🟠 checkout is failing in shop (prod-eu-1) after the 10:05 release. Only change in revision 14: env DB_HOST db-old → db-new (by alice); pods crash-looping since. It fails with "dial tcp: lookup db-new: no such host". Rolling back fixes it (changes the cluster): kubectl rollout undo deployment/checkout -n shop --to-revision=13
+Checked: the previous revision ran healthy for 65 minutes before the change.
+🟠 checkout is failing in shop (prod-eu-1) after the 10:05 release.
+| 🟠 **checkout** is failing in **shop** (**prod-eu-1**) after the 10:05 release.
+| Only change in revision 14: env DB\_HOST db-old → db-new (by alice); pods crash-looping since.
+| It fails with `dial tcp: lookup db-new: no such host`.
+| Rolling back fixes it (changes the cluster):
+| ```
+| kubectl rollout undo deployment/checkout -n shop --to-revision=13
+| ```
+| *Checked: the previous revision ran healthy for 65 minutes before the change.*

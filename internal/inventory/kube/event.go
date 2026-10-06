@@ -19,7 +19,7 @@ var containerFieldPath = regexp.MustCompile(
 // failure.
 func EventNote(obj any, now time.Time) (inventory.Observation, bool) {
 	ev, ok := obj.(*corev1.Event)
-	if !ok || ev.Type != corev1.EventTypeWarning {
+	if !ok || !keepEvent(ev) {
 		return inventory.Observation{}, false
 	}
 	ref := ev.InvolvedObject
@@ -44,8 +44,9 @@ func EventNote(obj any, now time.Time) (inventory.Observation, bool) {
 		Kind: inventory.Noted, Source: ObservationSource, At: now, Entity: id,
 		Note: inventory.Note{
 			At: eventTime(ev), Source: eventSource(ev), Reason: ev.Reason,
-			Message: evidenceText(ev.Message), Count: count, Warning: true,
-			UID: uid, Origin: eventOrigin(ev),
+			Message: evidenceText(ev.Message), Count: count,
+			Warning: ev.Type == corev1.EventTypeWarning,
+			UID:     uid, Origin: eventOrigin(ev),
 		},
 	}, true
 }
@@ -78,4 +79,11 @@ func eventSource(ev *corev1.Event) string {
 // latest note of its reason wins.
 func eventOrigin(ev *corev1.Event) string {
 	return string(ev.UID)
+}
+
+// keepEvent is true for every Warning event, and for the Normal events
+// in which an autoscaler says what it decided for a pod.
+func keepEvent(ev *corev1.Event) bool {
+	return ev.Type == corev1.EventTypeWarning ||
+		autoscalerReason(ev.Reason)
 }

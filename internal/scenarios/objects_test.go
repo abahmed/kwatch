@@ -283,6 +283,20 @@ func notReady(c *cluster, pod *corev1.Pod) {
 	}
 }
 
+// notReadySince turns the pod's readiness off since at.
+func notReadySince(at time.Time) podState {
+	return func(c *cluster, pod *corev1.Pod) {
+		notReady(c, pod)
+		for i := range pod.Status.Conditions {
+			switch pod.Status.Conditions[i].Type {
+			case corev1.PodReady, corev1.ContainersReady:
+				pod.Status.Conditions[i].LastTransitionTime =
+					metav1.NewTime(at)
+			}
+		}
+	}
+}
+
 // crashLoop is a container that keeps exiting with code and message.
 func crashLoop(
 	exitCode int32, reason, message string, restarts int32,

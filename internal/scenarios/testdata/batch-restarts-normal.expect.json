@@ -1,0 +1,8 @@
+{
+  "name": "batch-restarts-normal",
+  "description": "A worker restarts twice an hour, as it has for thirteen hours. Its restarts are within its normal, so only the digest carries them, with that normal shown.",
+  "root": "deployment/shop/batch-worker",
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "1h0m0s"
+}

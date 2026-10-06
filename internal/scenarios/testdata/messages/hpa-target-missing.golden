@@ -1,4 +1,7 @@
 10:33:15 digest
 🟡 kwatch (prod-eu-1) has one low-priority problem to report. Autoscaler istiod in istio-system targets Deployment istiod, which does not exist. None of them is urgent; one that gets worse gets its own message.
 🟡 kwatch (prod-eu-1) has one low-priority problem to report.
-
+| 🟡 **kwatch digest** · prod-eu-1 — 1 problem
+|
+| **Problems**
+| - Autoscaler **istiod** in **istio-system** targets Deployment **istiod**, which does not exist

@@ -66,23 +66,13 @@ const (
 // incident's impact. A critical incident that matches one of pageRules
 // pages; an incident made only of digest findings waits for the digest.
 func tier(p *Incident) Tier {
-	worst := detection.Severity(0)
-	digestOnly := true
-	for _, s := range p.Members {
-		if s.Advisory || digestReason(s.Reason) {
-			// A risk or a digest finding never raises the tier, at
-			// any severity: it waits for the digest.
-			continue
-		}
-		worst = max(worst, s.Severity)
-		digestOnly = false
-	}
+	worst, digestOnly := interrupting(p)
 	switch {
 	case len(p.Members) == 0:
 		return p.Tier
 	case drainingRoot(p):
 		return drainTier(p)
-	case routine(p) && !p.persistent:
+	case routine(p) && !p.persistent && !unusual(p):
 		// Happens at the same time every day and resolves on its own:
 		// learned normal, reported in the digest. One that outlasts
 		// the boot window with a crash loop or nothing ready does not
@@ -92,7 +82,7 @@ func tier(p *Incident) Tier {
 		// An autoscaler at its maximum for a long time has no headroom
 		// left; one notification says so (the tier never falls back).
 		return Notify
-	case !reachedPaging(p) && !p.persistent &&
+	case !reachedPaging(p) && !p.persistent && !unusual(p) &&
 		(Known(*p, p.Opened) || hasRhythm(p)):
 		// Heard about for a day, or failing on a regular rhythm: not
 		// news any more. The digest keeps counting it, unless it
@@ -112,6 +102,25 @@ func tier(p *Incident) Tier {
 	default:
 		return Notify
 	}
+}
+
+// interrupting is the worst severity among the members that may
+// interrupt anyone, and whether there is none. A risk, a digest finding
+// or behaviour that is usual for the workload never raises the tier, at
+// any severity: it waits for the digest. Usual stops excusing once the
+// workload has been down past the boot window (see escalate): history
+// never silences an outage.
+func interrupting(p *Incident) (worst detection.Severity, digestOnly bool) {
+	digestOnly = true
+	for _, s := range p.Members {
+		if s.Advisory || digestReason(s.Reason) ||
+			(s.Normal == detection.NormalUsual && !p.persistent) {
+			continue
+		}
+		worst = max(worst, s.Severity)
+		digestOnly = false
+	}
+	return worst, digestOnly
 }
 
 // drainingRoot reports an incident rooted at a node that is cordoned or

@@ -89,6 +89,13 @@ func (sv *Solver) dropStale(
 		}
 		a.addFailures(failing, focus)
 	}
+	sv.setAreas(kept)
+}
+
+// setAreas keeps kept, which filters sv.areas in place, and clears the
+// slots past it so the dropped areas can be collected.
+func (sv *Solver) setAreas(kept []solvedArea) {
+	clear(sv.areas[len(kept):])
 	sv.areas = kept
 }
 
@@ -108,7 +115,7 @@ func (sv *Solver) mergeOverlapping(
 		cached.addFailures(failing, focus)
 		merged = true
 	}
-	sv.areas = kept
+	sv.setAreas(kept)
 	return merged
 }
 

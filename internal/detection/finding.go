@@ -46,6 +46,11 @@ type Finding struct {
 	// a failure, is never a failure to explain nor a cause, and only
 	// adds a consequence to a failure it made worse.
 	Advisory bool `json:",omitempty"`
+	// Normal says how the finding compares with the workload's own
+	// learned normal. Zero means it was not compared. The policy layer
+	// demotes a Usual finding to the digest, and does not let an
+	// Unusual one be written off as routine.
+	Normal Normality `json:",omitempty"`
 }
 
 // Key identifies a finding across evaluations.

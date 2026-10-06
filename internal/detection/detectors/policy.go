@@ -198,7 +198,9 @@ func (Webhook) Detect(
 		return nil
 	}
 	blocking := strings.Contains(text(e, kube.AttrFailurePolicy), "Fail")
-	severity := detection.Warning
+	// With failurePolicy Ignore on every webhook, requests skip a dead
+	// backend and nothing is blocked: that is only worth the digest.
+	severity := detection.Info
 	if blocking {
 		severity = detection.Critical
 	}
@@ -213,7 +215,7 @@ func (Webhook) Detect(
 				Reason:   reasons.WebhookBackendNotFound,
 				Severity: severity,
 				Summary: "Admission webhook calls Service " + service.Name +
-					", which does not exist",
+					", which does not exist" + effect(blocking),
 			}}
 		}
 		if ready, known := readyEndpoints(ctx, service); known && ready == 0 {
@@ -223,11 +225,19 @@ func (Webhook) Detect(
 			return []detection.Finding{{
 				Reason: reasons.WebhookNoEndpoints, Severity: severity,
 				Summary: "Admission webhook backend " + service.Name +
-					" has no ready pods",
+					" has no ready pods" + effect(blocking),
 			}}
 		}
 	}
 	return nil
+}
+
+// effect says what a dead webhook backend does to requests.
+func effect(blocking bool) string {
+	if blocking {
+		return "; it blocks matching requests (failurePolicy Fail)"
+	}
+	return "; requests skip it because failurePolicy is Ignore"
 }
 
 // readyEndpoints sums ready endpoints across a Service's slices.

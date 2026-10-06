@@ -1,4 +1,13 @@
 10:24:15 settled
 🟠 etl in shop (prod-eu-1) has waited two minutes for a node because no node has enough cpu. The scheduler says "0/2 nodes are available: 2 Insufficient cpu. preemption: 0/2 nodes are available: 2 No preemption victims found for…". Replicas that do not depend on it are healthy. To see the object's state and events, run kubectl describe pod etl-7cef123e-c -n shop
 🟠 etl in shop (prod-eu-1) has waited two minutes for a node because no node has enough cpu.
-
+| 🟠 **etl** in **shop** (**prod-eu-1**) has waited two minutes for a node because no node has enough cpu.
+| The scheduler says
+| ```
+| 0/2 nodes are available: 2 Insufficient cpu. preemption: 0/2 nodes are available: 2 No preemption victims found for…
+| ```
+| Replicas that do not depend on it are healthy.
+| To see the object's state and events, run
+| ```
+| kubectl describe pod etl-7cef123e-c -n shop
+| ```

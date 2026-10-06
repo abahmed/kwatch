@@ -79,7 +79,8 @@ func (r *RootInvestigator) Plan(p incident.Incident) (Investigation, bool) {
 		sources, read := r.sources, inv.read
 		return Investigation{Kind: inv.kind, Budget: inv.budget,
 			Run: func(ctx context.Context) Result {
-				return read(ctx, sources, p)
+				return annotateResult(read(ctx, sources, p),
+					sources.Model)
 			}}, true
 	}
 	return Investigation{}, false
@@ -92,21 +93,22 @@ const (
 	maxOutputLines  = 5
 )
 
-// Bounded caps a result's size and redacts it once more, so a buggy
-// investigator can never leak a secret or flood a message.
+// Bounded caps a result's size and redacts credentials once more, so a
+// buggy investigator can never leak a secret or flood a message.
+// Private addresses stay: they are no secret and help whoever debugs.
 func Bounded(r Result) Result {
 	out := Result{}
 	for _, line := range r.Output {
 		if len(out.Output) == maxOutputLines {
 			break
 		}
-		out.Output = append(out.Output, clip(redact.Evidence(line)))
+		out.Output = append(out.Output, clip(redact.Credentials(line)))
 	}
 	for _, e := range r.Evidence {
 		if len(out.Evidence) == maxEvidence {
 			break
 		}
-		e.Text = clip(redact.Evidence(e.Text))
+		e.Text = clip(redact.Credentials(e.Text))
 		e.Subject = clip(e.Subject)
 		if e.Text != "" {
 			out.Evidence = append(out.Evidence, e)

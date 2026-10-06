@@ -1,4 +1,13 @@
 10:03:15 settled
 🟠 report in analytics (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (had untolerated taint). The scheduler says "0/2 nodes are available: 2 node(s) had untolerated taint {dedicated: gpu}. preemption: 0/2 nodes are available: 2…". The error mentions it. To see the object's state and events, run kubectl describe pod report-25042d19-a -n analytics
 🟠 report in analytics (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (had untolerated taint).
-
+| 🟠 **report** in **analytics** (**prod-eu-1**) has waited two minutes for a node because the scheduler rejects every node (**had untolerated taint**).
+| The scheduler says
+| ```
+| 0/2 nodes are available: 2 node(s) had untolerated taint {dedicated: gpu}. preemption: 0/2 nodes are available: 2…
+| ```
+| The error mentions it.
+| To see the object's state and events, run
+| ```
+| kubectl describe pod report-25042d19-a -n analytics
+| ```

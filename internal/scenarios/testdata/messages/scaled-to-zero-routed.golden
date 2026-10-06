@@ -1,4 +1,9 @@
 10:34:15 settled
 🟠 api in shop (prod-eu-1) is scaled to 0 but Ingress shop/shop still routes traffic to it via Service api. It was scaled to 0 by kubectl-scale at 10:30. To see the object's state and events, run kubectl describe deployment api -n shop
 🟠 api in shop (prod-eu-1) is scaled to 0 but Ingress shop/shop still routes traffic to it via Service api.
-
+| 🟠 **api** in **shop** (**prod-eu-1**) is scaled to 0 but Ingress shop/shop still routes traffic to it via Service **api**.
+| It was scaled to 0 by kubectl-scale at 10:30.
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment api -n shop
+| ```

@@ -30,12 +30,13 @@ func LintWarnings(cfg *Config) []string {
 	return warnings
 }
 
-// providerWarnings flags providers whose upstream service no longer exists.
+// providerWarnings flags providers that were removed because their upstream
+// service no longer exists. The section is ignored, not rejected.
 func providerWarnings(cfg *Config) []string {
 	if _, ok := cfg.Alert["line"]; ok {
-		return []string{"alert.line uses LINE Notify, which LINE shut down " +
-			"on 2025-03-31; notifications to it will fail. Use another " +
-			"provider such as webhook."}
+		return []string{"LINE Notify was shut down by LINE on " +
+			"2025-03-31 and has been removed; the `line` provider " +
+			"config is ignored."}
 	}
 	return nil
 }

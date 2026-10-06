@@ -103,3 +103,22 @@ func TestWriteNoCauseQuotesOutputOnlyWhenPresent(t *testing.T) {
 			with.Output)
 	}
 }
+
+// A restored incident handed to another one says where its failures went.
+func TestWriteSupersededResolveNamesTheIncidentItMovedTo(t *testing.T) {
+	p := crashIncident()
+	p.Members = nil
+	p.State, p.Resolved = incident.Resolved, revisionNow
+	p.SupersededBy = "inc-20240115-0002"
+	p.SupersededRoot = inventory.CoreID("deployment", "shop", "warehouse")
+	d := incident.Decision{Action: incident.Resolve, Incident: p,
+		Reason: incident.ReasonSuperseded, Handover: true}
+
+	msg := Writer{}.Write(d, revisionNow)
+
+	if !strings.Contains(msg.Note, "Moved to the incident for deployment "+
+		"warehouse") || strings.Contains(msg.Note, "healthy") ||
+		msg.Marker == notification.MarkerResolved {
+		t.Fatalf("want a move, not a recovery: %s", msg.Note)
+	}
+}

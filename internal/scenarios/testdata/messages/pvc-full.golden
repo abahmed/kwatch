@@ -1,4 +1,9 @@
 10:06:15 settled
 🟠 postgres in inventory (prod-eu-1) keeps crashing because volume claim pgdata is out of space. It fails with "PANIC:  could not write to file "pg_wal/xlogtemp.31": No space left on device". To check the size and capacity of the full volume claim, run kubectl describe pvc pgdata -n inventory
 🟠 postgres in inventory (prod-eu-1) keeps crashing because volume claim pgdata is out of space.
-
+| 🟠 **postgres** in **inventory** (**prod-eu-1**) keeps crashing because volume claim **pgdata** is out of space.
+| It fails with `PANIC: could not write to file`pg\_wal/xlogtemp.31`: No space left on device`.
+| To check the size and capacity of the full volume claim, run
+| ```
+| kubectl describe pvc pgdata -n inventory
+| ```

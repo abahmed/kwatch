@@ -31,7 +31,8 @@ const maxQuote = 120
 // quoted.
 func changeSentences(f caseFacts) []sentence {
 	if f.p.Cause == nil || f.p.Cause.Change == nil ||
-		systemChange(*f.p.Cause.Change) {
+		systemChange(*f.p.Cause.Change) || hasRevisionEdits(f) ||
+		policyBlocksCall(f.p.Cause) {
 		return nil
 	}
 	change := *f.p.Cause.Change
@@ -175,7 +176,9 @@ func causeProofSentences(f caseFacts) []sentence {
 		if !item.Supports || text == "" || (deniedCause(f.p.Cause) &&
 			strings.Contains(text, "mention")) ||
 			(f.p.Cause.Change != nil &&
-				strings.HasSuffix(text, "changed shortly before")) {
+				strings.HasSuffix(text, "changed shortly before")) ||
+			(policyBlocksCall(f.p.Cause) &&
+				strings.HasSuffix(text, "shortly before")) {
 			// The change sentence already says what changed.
 			continue
 		}

@@ -1,0 +1,11 @@
+{
+  "name": "serving-last-replica-down",
+  "description": "Every replica of a Deployment behind a LoadBalancer Service crash-loops: the Service has no ready endpoint and users get errors.",
+  "root": "deployment/shop/front",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "service/shop/front"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "name": "chain-capped-at-three-steps",
+  "description": "Five workloads that call each other in a row fail one after another, from a database.",
+  "root": "deployment/shop/postgres",
+  "otherRoots": [
+    "service/shop/web"
+  ],
+  "tier": "notify",
+  "maxMessages": 6,
+  "mustNotBlame": [
+    "deployment/shop/api",
+    "deployment/shop/gateway",
+    "deployment/shop/web"
+  ]
+}

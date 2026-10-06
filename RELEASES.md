@@ -4,6 +4,13 @@
 
 ### Highlights
 
+- **Memory is easier to read, and the last slow growers are capped.** The
+  self-health log line now shows `heapLiveMiB` (what the last collection
+  kept, the number that tells a leak from garbage) and `heapGoalMiB`, and a
+  new `self-health-model` line shows the model's sizes. A simulated day
+  (`TestSoakHeapPlateaus`) shows the heap flat. The small growers found
+  were capped: overflow-summary reasons, an incident's remembered cause
+  findings, and the baseline sampler's warning counters.
 - **A new core.** kwatch now builds an understanding of the whole cluster
   (workloads, nodes, volumes, networking, configuration) and keeps it current.
   A root-cause engine ranks the likely cause of each incident, and symptoms of
@@ -11,6 +18,17 @@
 - **Narrative messages.** Every notification is one readable message: what is
   wrong, where, the likely cause, the impact and what to try next. The cluster
   name is included in every message.
+- **Formatted messages.** Messages are short lines with the resource
+  names in bold, pod text in code and the command in a code block, written
+  in each provider's own markup (Slack mrkdwn, Markdown, Telegram HTML,
+  Jira wiki); digests and roll-ups are scannable lists. SMS, push and pager
+  providers get the same lines as plain text, and webhook payloads keep
+  the plain `note` and add `markdown`.
+- **Wording follows confidence.** A high-confidence cause is stated ("X is
+  down because Y"), a likely one says "likely because", a possible one says
+  it might be related, and two causes that score almost alike are told as
+  "two possible causes". A closing "Checked:" line lists up to three
+  comparisons that ruled causes in or out.
 - **Smaller operational surface.** One state file, a short list of endpoints
   and a smaller metric set.
 - **Lease terminology.** Logs and docs call the Lease a state lock, not leader
@@ -18,6 +36,42 @@
 - **Unschedulable pods, quantified.** When the scheduler reports
   "Insufficient cpu" or "Insufficient memory", the finding carries what the pod
   needs and the most any schedulable node has free.
+- **Unschedulable pods, node by node.** For a pod no node takes, kwatch checks
+  each node against the pod's CPU, memory, ephemeral storage, pod count and
+  extended resources, taints and tolerations, node selector and required node
+  affinity, volume topology, and (best effort) pod affinity, anti-affinity and
+  topology spread. The message names the best node of each node pool and what
+  stops it, and states a change that would fit, for example "tolerating
+  gpu=true:NoSchedule would fit it on gpu-1". It reads the cluster
+  autoscaler's and Karpenter's events (`TriggeredScaleUp`, `NotTriggerScaleUp`,
+  `Nominated`) and quotes them: a pod the autoscaler is adding a node for is
+  held for up to 15 minutes, one it says it cannot help is reported with its
+  words. kwatch now also watches those three Normal events.
+- **A crash that names a Service is linked to it.** When a crashing pod's
+  error quotes a Service of the cluster ("dial tcp redis:6379: connection
+  refused"), kwatch links the pod to that Service. If the Service has no ready
+  endpoints, or its workload is failing or was just changed (scaled to zero),
+  the incident is rooted there, and the message quotes the caller's line and
+  says since when the Service has had none. Pods also record the Services their
+  environment names, so the dependency graph reaches from Ingress and routes to
+  Service, EndpointSlice, pod and the Services it calls.
+- **A NetworkPolicy that blocks a dependency is named.** kwatch checks the
+  policies against the calls a failing pod makes to a Service (selectors,
+  namespaces, ports, address ranges and default-deny). A policy created or
+  edited just before that blocks such a call is the root: "orders in shop
+  can't reach postgres:5432: network policy deny-all (created 10:05 by bob)
+  blocks the call". Anything kwatch cannot read, such as a named port, counts
+  as allowed, so only a denial that can be shown is reported.
+- **A cascade is one incident.** A failure that travels, such as postgres
+  OOM-killed, then the API that calls it not ready, then the Service in front
+  of the API with no endpoints, is one incident rooted at the first failure.
+  Each step needs evidence (an error naming the Service, a Service with no
+  ready endpoint, pods that are not ready and call it) and must begin after
+  the one before it, and a step that is healthy ends the chain. A chain
+  follows at most three steps from the cause, trusting each a tenth less; the
+  message ends with "Chain: postgres (10:00) → api (10:01) → service api
+  (10:01)." and names any failure past the limit, which is reported on its
+  own.
 - **A zero quota that refuses pods is named.** A ResourceQuota that allows
   none of a resource stays quiet until a controller is refused by that very
   quota; then it is reported and is the root of the missing pods.
@@ -25,6 +79,23 @@
   cannot read resource metrics are one incident rooted at the metrics API, or
   at the failing metrics-server Deployment behind it; one autoscaler with a bad
   target stays its own incident.
+- **Deprecated API calls are reported.** When the API server has seen a request
+  for an API version a Kubernetes release will remove (for example
+  `policy/v1beta1` poddisruptionbudgets), the digest lists it with the release
+  that removes it, the next upgrade when it is close, and "calls fail" when
+  the cluster is already past it. The metric is per API, not per caller, so
+  the message says where to look; it clears when the API server restarts.
+- **Control-plane health from the API server's own metrics.** kwatch reads
+  how long the API server's writes and reads took since its last round (99th
+  percentile, from the histogram) and reports writes slower than one second
+  for five minutes as a digest line naming the slowest verb and resource, and
+  the admission webhook that is slow, if one is. A webhook that takes seconds
+  per call is reported on its own configuration and is the root of the slow
+  API; one that fails over a fifth of its calls while failing closed is a
+  warning. Requests refused by priority and fairness, an etcd database near
+  its default 2 GiB limit and one resource with over 100,000 stored objects
+  are reported too. Rounds that reach another API server process, or one that
+  restarted, give no number.
 - **Node flaps stay quiet.** A node that goes NotReady and Ready again within
   two minutes keeps its reported episode instead of starting a new one, and
   NotReady blips shorter than the threshold never add up to a finding.
@@ -120,6 +191,21 @@
   fails in the same round, kwatch reports one digest finding ("kwatch could
   not reach any of its 5 probed dependencies; its own network may be
   restricted") instead of blaming each of them.
+- **Workloads are judged against their own normal.** kwatch learns, per
+  workload, how often it restarts, how long its pods take to become ready,
+  how much memory it peaks at and which Warning events it gets, over the
+  last seven days. Restarts from a workload that never restarts say so
+  ("restarts 12×/h vs a usual 0.1×/h"), and a worker that always restarts
+  twice an hour goes to the digest with that shown. Crash loops and
+  not-ready workloads are never excused by history.
+- **Pages need user impact.** An incident pages only when a Service users
+  reach has no ready backend, the last replica of a user-facing workload is
+  down, or a cluster-critical component is down; a failing internal-only
+  workload notifies.
+- **Healthy rollouts stay quiet.** While a Deployment or StatefulSet
+  rollout is progressing inside its deadline, the transient "replicas not
+  ready" finding is held; a rollout that stalls or crashes is reported at
+  once.
 - **Readable digest lines.** Autoscalers with a missing target, kubelets kwatch
   cannot reach and workloads whose pods run but never become ready read as
   plain clauses in the digest, and never-ready system workloads are listed.
@@ -149,7 +235,12 @@
   webhook without ready endpoints waits while every not-ready pod behind it is
   still starting (on a booting pool, or younger than 10 minutes, with no
   restarts). Anything still wrong after that is reported at once; crash-looping
-  pods get no grace.
+  pods get no grace. The node "pod limits exceed capacity" advisory waits the
+  same way.
+- **Webhooks that cannot block go to the digest.** An admission webhook whose
+  backend is missing or has no ready pods is an informational digest item when
+  every webhook in its configuration has failurePolicy Ignore (requests skip
+  it); with Fail, it still notifies because it blocks matching requests.
 - **Roomier default CPU limit and probe timeouts.** The default CPU limit is
   500m (request stays 100m) and the liveness and readiness probes wait 3
   seconds, so an event storm no longer fails kwatch's own readiness check.
@@ -218,6 +309,13 @@
   "cause revised", a quiet supersede closes the listings it was in, a restart
   no longer adds a flap cycle, and the restored-incident listing skips
   incidents that already spoke for themselves.
+- **A restored incident never ends as healthy while it still fails.** When
+  its failures are now explained by another incident (a Service with no
+  endpoints, now blamed on its crashing Deployment), it closes as "moved to
+  the incident for deployment X" in its old thread, and its alert closes with
+  it. A Service whose workload is still short and crashing is held like one.
+- **Dropped digest decisions say why.** The audit entry of a decision the
+  digest leaves out carries `deliveryNote` ("digest-only: ...").
 - **Fallbacks follow paging rules.** A fallback provider no longer takes a
   paging-only message or a resolve that skips paging.
 - **CronJob time zones work.** The binary embeds the IANA zone database, so a
@@ -458,6 +556,56 @@
     opening message does, so a restart cannot leave an open alert unclosed.
   - Fix: a Jira or ClickUp issue whose resolve only commented (no close
     setting) stays mapped, so a recurrence comments on it, not a duplicate.
+  - Fix: an Ingress is judged again when its IngressClass appears or goes
+    away, so a class listed after the Ingress no longer leaves a false
+    `IngressClassMissing` open.
+  - Logs: opening the state file reports its size, schema version and how
+    long it took; any startup step slower than five seconds (page check,
+    rewrite, lease check, claim) is logged by name, and so is the number of
+    incidents restored.
+  - Fix: a workload that has been at zero replicas for a day or more (by the
+    API server's record of its latest spec write, or the scale-down kwatch
+    saw) and is still routed to goes to the digest, not as a notification.
+  - Fix: an event about a Deployment, StatefulSet, DaemonSet or Pod that is
+    fully ready now, and was ready before the event was written or before
+    kwatch first saw it ready, no longer opens an incident, so replayed
+    events from before a restart do not announce a recovered failure.
+  - Fix: a known workload whose pods have not been ready since before this
+    run started escalates at once instead of waiting a boot window after
+    every restart of kwatch.
+  - Fix: the audit entry of a roll-up, startup summary or digest has the
+    action `summary`, no root, and lists the incidents it carries.
+  - Fix: an object judged while a kind it needs is not synced yet (a webhook
+    whose Service list had not arrived, a PodDisruptionBudget before the
+    pods) is judged again when the kind syncs. A webhook calling a Service
+    that does not exist was left unreported after a start, so restored
+    incidents about it resolved as healthy while the problem remained.
+  - Fix: a VolumeAttachment that is being deleted now says so, so a detach
+    that never finishes is found; one whose node and PV are gone reads
+    "is stuck deleting; its node and PV no longer exist" and goes to the
+    digest, with only the node gone it stays a warning.
+  - A CronJob with three or more scheduled runs since its last success (or
+    since it was created) is listed in the digest as `CronJobNoRecentSuccess`:
+    "Has not succeeded since 2024-05-20 (29 scheduled runs)". Suspended and
+    repeatedly failing CronJobs keep their own findings.
+  - Root cause now compares a failure with healthy twins elsewhere, and
+    keeps what it compared as "what was checked": the same image running
+    fine in another workload, a ConfigMap or Secret that healthy workloads
+    use too, the other replicas of the workload (failing on one node while
+    the rest run elsewhere, or failing on every node), the healthy pods of
+    other workloads on the node, and a previous revision that ran healthy
+    before the change. Each is a small bounded weight; none decides alone.
+- **What a change touched, and what the new revision changed.** Every
+  recorded change now carries a field-level summary for workloads (image, env
+  values, command, probes, resources, volumes), config keys (names only for
+  Secrets), Services, Ingresses and routes, autoscalers, budgets, network
+  policies and node labels, with the actor and time; values are redacted and
+  bounded. When only a new revision fails, the message names what it changed
+  from the healthy one, likeliest culprit first ("Only change in revision 14:
+  memory limit 512Mi → 256Mi (by alice); pods OOMKilled since."), and every
+  message lists the other nearby changes made before the failure, ranked by
+  closeness to the failing object (itself, the config it uses, its Service or
+  Ingress, its node, then its namespace).
 
 ### Breaking changes
 
@@ -723,9 +871,10 @@
 - **ntfy publishes to the server root.** kwatch posts JSON to the server URL
   with the topic in the body, as ntfy documents. `alert.ntfy.url` must be the
   server address and the topic goes in `alert.ntfy.topic`.
-- **LINE Notify is deprecated.** LINE shut the service down on 31 March 2025,
-  so every send fails. kwatch still starts the provider and logs an error at
-  startup; remove `alert.line` and use another provider.
+- **LINE Notify is removed.** LINE shut the service down on 31 March 2025,
+  so the provider could never deliver. An `alert.line` section no longer
+  fails startup: kwatch ignores it and logs a warning. Remove it and use
+  another provider.
 - **ClickUp `closeStatus`.** New and optional. Set it to a status of the list
   (for example `complete`) and a resolve moves the task there after its
   comment. Task descriptions are sent as Markdown. `reopenStatus` moves a

@@ -1,4 +1,12 @@
 10:04:15 settled
 🟠 billing in tenants (prod-eu-1) and three other workloads keep crashing with the same error. It fails with "panic: license check failed for tenant 23". reports, router and search are affected as well. To read the output of the last crash, run kubectl logs billing-af7818bc-a -c app -n tenants --previous
+Checked: both replicas fail, on 2 nodes.
 🟠 billing in tenants (prod-eu-1) and three other workloads keep crashing with the same error.
-
+| 🟠 **billing** in **tenants** (**prod-eu-1**) and three other workloads keep crashing with the same error.
+| It fails with `panic: license check failed for tenant 23`.
+| **reports**, **router** and **search** are affected as well.
+| To read the output of the last crash, run
+| ```
+| kubectl logs billing-af7818bc-a -c app -n tenants --previous
+| ```
+| *Checked: both replicas fail, on 2 nodes.*

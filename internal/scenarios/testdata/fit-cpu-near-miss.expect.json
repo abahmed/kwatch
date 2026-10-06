@@ -1,0 +1,7 @@
+{
+  "name": "fit-cpu-near-miss",
+  "description": "A pod asking for 1.5 CPU is Pending; pool general's best node has 1.2 CPU free and pool bulk's has 1; the message names both near misses.",
+  "root": "scheduling//Insufficient cpu",
+  "tier": "notify",
+  "maxMessages": 2
+}

@@ -51,6 +51,11 @@ type Message struct {
 	// engineer would write it: marker and lead, proof, consequence and
 	// one suggested command. It has no labels, lists or links.
 	Note string
+	// Doc is the Note as structured blocks (headline, one line per
+	// fact, bullets, a command in a code block), with meaning-only
+	// emphasis. Renderers write it in their provider's markup; Note stays
+	// the plain single paragraph.
+	Doc []Block `json:",omitempty"`
 
 	// Opens marks the message that announces its conversation, the first
 	// one sent for Key. Delivery uses it to notice when a provider never
@@ -81,6 +86,9 @@ type Message struct {
 	// summary". Such a message exists for the audit log, which records
 	// every decision when it is made; delivery drops it.
 	Carrier string `json:",omitempty"`
+	// CarrierNote says why a decision was dropped (Carrier "dropped"),
+	// for the audit log.
+	CarrierNote string `json:",omitempty"`
 	// ReopenWithin is set on the resolve of an incident that may reopen:
 	// a failure within this long of the resolve continues the same
 	// conversation. A threading provider keeps the thread that long, so

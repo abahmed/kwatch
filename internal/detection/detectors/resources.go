@@ -49,10 +49,16 @@ func (ContainerResources) Detect(
 			// line, so the finding waits for a level that lasts.
 			since := ctx.Onset("memory-high", valueSince(e, attr))
 			if sustained(ctx, "memory-high", since, memorySustained) {
-				out = append(out, levelFinding(pct,
+				s := levelFinding(pct,
 					reasons.ContainerMemoryHigh, since, what+" is "+
 						percentText(pct)+" of the limit; the container "+
-						"is close to being OOM-killed"))
+						"is close to being OOM-killed")
+				// Close to the limit is only usual, not safe, below the
+				// critical level: that stays an interruption.
+				used, _ := number(e, attr)
+				memoryJudgement(ctx, e, used).
+					keepUsual(pct < limitCritical).apply(&s)
+				out = append(out, s)
 			}
 		}
 	}
@@ -210,7 +216,8 @@ func (NodeHealth) Detect(
 				r.what),
 		})
 	}
-	if s, ok := overcommit(ctx, e); ok {
+	// Pods are still landing on a fresh node: its commitment settles.
+	if s, ok := overcommit(ctx, e); ok && !nodeIsYoung(ctx, e) {
 		out = append(out, s)
 	}
 	return out

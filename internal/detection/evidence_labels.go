@@ -47,3 +47,13 @@ const (
 // rollout has not become healthy yet. Its value is when the workload
 // was created, in RFC 3339.
 const EvidenceNeverHealthy = "never healthy since"
+
+// EvidenceEditPrefix starts the label of one edit a new revision made to
+// its pod template: "edit containers[api].resources.limits.memory". The
+// value is "before → after", an empty side written as "unset". At most
+// MaxEditEvidence are listed, likeliest culprit first.
+const (
+	EvidenceEditPrefix = "edit "
+	EvidenceEditArrow  = " → "
+	MaxEditEvidence    = 3
+)

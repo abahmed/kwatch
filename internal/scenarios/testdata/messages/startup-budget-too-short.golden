@@ -1,4 +1,10 @@
 10:02:15 settled
 🟠 api in shop (prod-eu-1) keeps crashing because its containers get too little time to start. The 10:01 release changed the replicas from 2 to 4. It fails with "Startup probe failed: Get "http://10.244.0.12:8080/healthz": context deadline exceeded". To see the rollout state, run kubectl rollout status deployment/api -n shop
 🟠 api in shop (prod-eu-1) keeps crashing because its containers get too little time to start.
-
+| 🟠 **api** in **shop** (**prod-eu-1**) keeps crashing because its containers get too little time to start.
+| The 10:01 release changed the replicas from 2 to 4.
+| It fails with `Startup probe failed: Get`http://10.244.0.12:8080/healthz`: context deadline exceeded`.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/api -n shop
+| ```

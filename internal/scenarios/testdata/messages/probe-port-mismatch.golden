@@ -1,4 +1,12 @@
 10:03:15 settled
-🟠 api in shop (prod-eu-1) keeps failing its readiness probe because its probe checks a port the container does not listen on. The 10:01 release changed the template. Its dependents failed soon after it changed. To see the rollout state, run kubectl rollout status deployment/api -n shop
+🟠 api in shop (prod-eu-1) keeps failing its readiness probe because its probe checks a port the container does not listen on. The 10:01 release changed the readinessProbe from http /healthz :8080 every 0s, timeout 0s, 0 failures to http /healthz :8081 every 0s, timeout 0s, 0 failures. Its dependents failed soon after it changed. To see the rollout state, run kubectl rollout status deployment/api -n shop
+Checked: both replicas fail, on 2 nodes.
 🟠 api in shop (prod-eu-1) keeps failing its readiness probe because its probe checks a port the container does not listen on.
-
+| 🟠 **api** in **shop** (**prod-eu-1**) keeps failing its readiness probe because its probe checks a port the container does not listen on.
+| The 10:01 release changed the readinessProbe from http /healthz :8080 every 0s, timeout 0s, 0 failures to http /healthz :8081 every 0s, timeout 0s, 0 failures.
+| Its dependents failed soon after it changed.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/api -n shop
+| ```
+| *Checked: both replicas fail, on 2 nodes.*

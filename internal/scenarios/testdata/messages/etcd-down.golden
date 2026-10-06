@@ -1,4 +1,5 @@
 10:02:45 settled
 🔴 etcd (prod-eu-1) has been failing for about two minutes. It reports "[-]etcd failed: error getting data from etcd: context deadline exceeded".
 🔴 etcd (prod-eu-1) has been failing for about two minutes.
-
+| 🔴 **etcd** (**prod-eu-1**) has been failing for about two minutes.
+| It reports `[-]etcd failed: error getting data from etcd: context deadline exceeded`.

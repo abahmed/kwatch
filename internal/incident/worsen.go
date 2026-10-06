@@ -119,11 +119,34 @@ func (m *Manager) lastsPastBoot(p *Incident, now time.Time) bool {
 // an incident restored after a gap, when this run started watching. The
 // pods of a restored incident boot again after the restart, and their
 // crashes are boot noise measured from that boot, not from last night.
+// A workload whose pods have not been ready since before that moment is
+// the exception: the kubelet's own time says it did not boot with this
+// run, so its window began then.
 func (p *Incident) bootStart() time.Time {
-	if p.bootedAt.After(p.Opened) {
-		return p.bootedAt
+	start := p.Opened
+	if p.bootedAt.After(start) {
+		start = p.bootedAt
 	}
-	return p.Opened
+	if since := p.unreadySince(); !since.IsZero() && since.Before(start) {
+		return since
+	}
+	return start
+}
+
+// unreadySince is the earliest time the kubelet recorded for a
+// WorkloadNeverReady member that reports a failure (not a risk), or zero.
+func (p *Incident) unreadySince() time.Time {
+	var first time.Time
+	for key, s := range p.Members {
+		if key.Reason != reasons.WorkloadNeverReady || s.Advisory ||
+			s.Since.IsZero() {
+			continue
+		}
+		if first.IsZero() || s.Since.Before(first) {
+			first = s.Since
+		}
+	}
+	return first
 }
 
 // workloadDown reports that the incident's workload has no ready replica.

@@ -154,10 +154,10 @@ say, in this order of strength:
    that refuses connections is the cause of the pods that call it.
 2. **The same error.** Three or more workloads that began failing within
    thirty minutes with the same normalised error line (times, IDs, addresses
-   and numbers replaced; see `docs/incident-lifecycle.md`) share a virtual
-   `failure-signature` cause (`shared-failure-signature` row, prior 0.55).
-   It is the weakest named row, so a probed dependency or any better cause
-   wins, and one message says the shared error is the cause.
+   and numbers replaced; see `docs/incident-lifecycle/examples.md`) share a
+   virtual `failure-signature` cause (`shared-failure-signature` row, prior
+   0.55). It is the weakest named row, so a probed dependency or any better
+   cause wins, and one message says the shared error is the cause.
 3. **What the failures share.** Three or more workloads failing within ten
    minutes on one healthy node, where most pods on that node fail, make the
    node a suspect (`shared-node` row, pseudo mode `SharedFactor`). It is
@@ -175,6 +175,22 @@ replicas) restates its pods' failures and never leads a message. An
 limit, a `latest` tag, a single replica) is a configuration risk: it never
 opens an incident, joins the incident of a real failure of the same
 workload, and adds one sentence when the failure shows what the risk cost.
+
+A failure can also travel. Once a cause is chosen, `explain/chain.go`
+extends it down the failure chain: postgres OOM-killed, then the API that
+calls it not ready, then the Service in front of the API with no endpoints.
+A step joins two failing workloads or Services and needs evidence: a pod that
+is not ready (or whose error names the Service) and calls a Service with no
+ready endpoint, the failing pods behind a Service with no ready endpoint, or a
+route that sends traffic to such a Service. The effect must begin after its
+cause (strictly for a call), within the causal window, and a healthy step ends
+the chain, as does a workload with a change or a failure of its own. A chain
+runs at most `ChainMaxHops` (3) steps from what the cause explains directly
+and trusts each step `ChainDecay` (0.9) times the one before. It adds derived
+coverage (like the summary of a pod), so the failures of every step are one
+incident rooted at the first one. The chain is `Cause.Hops` (and
+`Trace.Chain`), and the message ends with "Chain: postgres (10:00) → api
+(10:01) → service api (10:01)."
 
 A cause can also arrive too late. Once an incident has been announced, a
 cause that began more than ten minutes afterwards (`Cause.Began`) does not
@@ -216,7 +232,7 @@ one bucket per data class:
 | --- | --- | --- |
 | `incidents` | The latest record per incident ID | Resolved ones for 7 days |
 | `changes` | Recorded changes per object | 30 days |
-| `baselines` | Rolling per-workload statistics | Dropped 7 days after the workload is gone |
+| `baselines` | Rolling per-workload statistics over 7 days: restarts, readiness, memory, Warning events | Dropped 7 days after the workload is gone |
 | `evidence` | Log excerpts and termination messages | 30 days, at most 128 MiB |
 | `timeline` | Health transitions, changes, events, decisions | 30 days |
 | `audit` | One entry per incident decision | 30 days |

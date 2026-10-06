@@ -2,6 +2,7 @@ package compose
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/incident"
@@ -65,6 +66,7 @@ func (w Writer) NamespaceOutage(
 		Route: summaryRoute(decisions, nil),
 	}
 	fill(&msg, mark, sentences)
+	msg.Doc = w.outageDoc(o, decisions, now, mark)
 	return msg
 }
 
@@ -109,4 +111,25 @@ func sharedSentences(s OutageShared) []sentence {
 			text: "Shortly before, " + changeFact(*s.Change) + "."})
 	}
 	return out
+}
+
+// outageDoc is the structured outage message: the headline names the
+// namespace and the count, then the failing workloads, then what they
+// share.
+func (w Writer) outageDoc(
+	o NamespaceOutage, ds []incident.Decision, now time.Time, mark string,
+) []notification.Block {
+	lead := strings.TrimPrefix(outageLead(o, "", ds), o.Namespace+": ")
+	doc := w.listDoc(mark, o.Namespace, []string{lead}, ds, now)
+	var shared []notification.Block
+	for _, s := range sharedSentences(o.Shared) {
+		shared = append(shared, notification.Block{Kind: notification.Para,
+			Spans: podSpans(s.text)})
+	}
+	if len(shared) == 0 {
+		return doc
+	}
+	last := doc[len(doc)-1]
+	doc = append(doc[:len(doc)-1], shared...)
+	return append(doc, last)
 }

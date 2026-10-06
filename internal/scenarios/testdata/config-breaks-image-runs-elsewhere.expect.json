@@ -1,0 +1,13 @@
+{
+  "name": "config-breaks-image-runs-elsewhere",
+  "description": "A ConfigMap edit crash-loops one workload; the same image runs healthy in another namespace.",
+  "root": "configmap/web/frontend-config",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/web/frontend",
+    "node//n1",
+    "node//n2",
+    "zone//zone-a"
+  ]
+}

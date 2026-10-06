@@ -1,5 +1,7 @@
 package rootcause
 
+import "github.com/abahmed/kwatch/internal/inventory"
+
 // Proof is one piece of evidence for or against a cause: one scorer's
 // contribution (explain.Contribution) as an incident keeps it.
 type Proof struct {
@@ -13,6 +15,10 @@ type Proof struct {
 	Total int `json:",omitempty"`
 	// Fields are the field paths a ProofChanged change touched.
 	Fields []string `json:",omitempty"`
+	// Edits are what a ProofNewRevisionFails revision changed in its pod
+	// template compared with the previous revision, likeliest culprit
+	// first; Count is the revision number. Values are already redacted.
+	Edits []inventory.FieldChange `json:",omitempty"`
 	// Text is explain's own wording, for traces and audit.
 	Text   string
 	Weight float64

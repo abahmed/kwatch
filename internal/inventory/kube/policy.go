@@ -74,7 +74,14 @@ func (PDBSchema) Describe(obj any) (Description, bool) {
 }
 
 // Diff implements Schema.
-func (PDBSchema) Diff(_, _ any) []inventory.FieldChange { return nil }
+func (PDBSchema) Diff(old, new any) []inventory.FieldChange {
+	before, ok1 := old.(*policyv1.PodDisruptionBudget)
+	after, ok2 := new.(*policyv1.PodDisruptionBudget)
+	if !ok1 || !ok2 {
+		return nil
+	}
+	return pdbChanges(before, after)
+}
 
 // QuotaSchema describes ResourceQuotas; a quota constrains its namespace.
 type QuotaSchema struct{}
@@ -152,14 +159,18 @@ func (NetworkPolicySchema) Describe(obj any) (Description, bool) {
 	if !ok {
 		return Description{}, false
 	}
+	attrs := map[string]inventory.Value{
+		AttrSelector: inventory.Text(selectorText(&np.Spec.PodSelector)),
+		AttrPolicyDigest: inventory.Text(
+			digest([]byte(np.Spec.String()))),
+		AttrDeniesEgress: inventory.Bool(deniesAllEgress(np)),
+	}
+	if rules, ok := policyRulesValue(np); ok {
+		attrs[AttrPolicyRules] = rules
+	}
 	return Description{
 		ID: objectID(KindNetworkPolicy, np), UID: string(np.UID),
-		Attributes: map[string]inventory.Value{
-			AttrSelector: inventory.Text(selectorText(&np.Spec.PodSelector)),
-			AttrPolicyDigest: inventory.Text(
-				digest([]byte(np.Spec.String()))),
-			AttrDeniesEgress: inventory.Bool(deniesAllEgress(np)),
-		},
+		Attributes: attrs,
 	}, true
 }
 
@@ -174,6 +185,9 @@ func (NetworkPolicySchema) Diff(old, new any) []inventory.FieldChange {
 	a := digest([]byte(after.Spec.String()))
 	if b == a {
 		return nil
+	}
+	if fields := policyChanges(before, after); len(fields) > 0 {
+		return fields
 	}
 	return []inventory.FieldChange{{Path: "spec", Before: b, After: a}}
 }
@@ -199,6 +213,12 @@ func (VolumeAttachmentSchema) Describe(obj any) (Description, bool) {
 	}
 	attrs := map[string]inventory.Value{
 		AttrAttached: inventory.Bool(va.Status.Attached),
+		// A detach that never finishes is a deleting attachment: the
+		// detector times it from when deletion was requested.
+		AttrDeleting: inventory.Bool(va.DeletionTimestamp != nil),
+	}
+	if at := va.DeletionTimestamp; at != nil {
+		attrs[AttrDeletingSince] = inventory.Time(at.Time)
 	}
 	if err := va.Status.AttachError; err != nil {
 		attrs[AttrAttachError] = inventory.Text(evidenceText(err.Message))

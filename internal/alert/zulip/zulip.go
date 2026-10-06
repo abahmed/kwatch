@@ -89,10 +89,8 @@ func (z *Zulip) Name() string {
 func (z *Zulip) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
-	return z.SendMessage(ctx, safetext.NoteWithOutput(
-		safetext.Zulip(m.NoteText()),
-		safetext.Lines(m.Output, safetext.Zulip),
-		"\n\n", 0))
+	return z.SendMessage(ctx, safetext.RichWithOutput(m,
+		notification.MarkdownDialect(safetext.Zulip, "\n"), "\n\n", 0))
 }
 
 // SendMessage sends text message to the provider

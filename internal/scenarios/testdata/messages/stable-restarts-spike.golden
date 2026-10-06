@@ -1,0 +1,10 @@
+22:15:15 settled
+🟠 orders in shop (prod-eu-1) keeps restarting. Its node and registry are healthy and unchanged, so nothing outside it explains this. That is unusual for this workload: restarts 6×/h vs a usual 0×/h. To read the output of the last crash, run kubectl logs orders-cf72f2df-a -c app -n shop --previous
+🟠 orders in shop (prod-eu-1) keeps restarting.
+| 🟠 **orders** in **shop** (**prod-eu-1**) keeps restarting.
+| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| That is unusual for this workload: restarts 6×/h vs a usual 0×/h.
+| To read the output of the last crash, run
+| ```
+| kubectl logs orders-cf72f2df-a -c app -n shop --previous
+| ```

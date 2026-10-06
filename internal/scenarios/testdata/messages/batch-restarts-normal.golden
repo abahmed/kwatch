@@ -1,0 +1,12 @@
+23:01:15 digest
+🟡 kwatch (prod-eu-1) has one low-priority problem and configuration risks on one workload to report. batch-worker in shop keeps restarting (within its normal: restarts 2×/h vs a usual 2×/h). Configuration risks: 1 workload has containers without a memory limit (batch-worker); 1 workload has no readiness probe (batch-worker); 1 workload runs a single replica (batch-worker). None of them is urgent; one that gets worse gets its own message.
+🟡 kwatch (prod-eu-1) has one low-priority problem and configuration risks on one workload to report.
+| 🟡 **kwatch digest** · prod-eu-1 — 1 problem · risks on 1 workload
+|
+| **Problems**
+| - **batch-worker** in **shop** keeps restarting (within its normal: restarts 2×/h vs a usual 2×/h)
+|
+| **Configuration risks (none urgent)**
+| - No memory limit — 1: batch-worker
+| - No readiness probe — 1: batch-worker
+| - Single replica — 1: batch-worker

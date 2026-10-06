@@ -1,4 +1,10 @@
 10:02:15 settled
 🟠 checkout is failing in shop (prod-eu-1) after the 10:01 release of registry.corp.example/shop/checkout:1.9.O. The previous image was registry.corp.example/shop/checkout:1.9.0. Its image cannot be pulled. To see the rollout state, run kubectl rollout status deployment/checkout -n shop
 🟠 checkout is failing in shop (prod-eu-1) after the 10:01 release of registry.corp.example/shop/checkout:1.9.O.
-
+| 🟠 **checkout** is failing in **shop** (**prod-eu-1**) after the 10:01 release of registry.corp.example/shop/checkout:1.9.O.
+| The previous image was registry.corp.example/shop/checkout:1.9.0.
+| Its image cannot be pulled.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/checkout -n shop
+| ```

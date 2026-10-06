@@ -141,7 +141,7 @@ func (HPASchema) Diff(old, new any) []inventory.FieldChange {
 			After:  replicaText(&after.Spec.MaxReplicas),
 		})
 	}
-	return fields
+	return append(fields, hpaTargetChanges(before, after)...)
 }
 
 // nextRun is when the CronJob should next start: the first schedule time

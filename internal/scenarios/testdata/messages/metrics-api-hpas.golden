@@ -1,8 +1,18 @@
 10:02:15 settled
 🟠 metrics-server in kube-system (prod-eu-1) keeps crashing. It fails with "Error: tls: failed to load serving certificate". All of its dependents are failing. Service metrics-server can't serve traffic. To read the output of the last crash, run kubectl logs metrics-server-efcd4397-a -c app -n kube-system --previous
+Checked: node n1 is healthy for 8 other pods.
 🟠 metrics-server in kube-system (prod-eu-1) keeps crashing.
-
+| 🟠 **metrics-server** in **kube-system** (**prod-eu-1**) keeps crashing.
+| It fails with `Error: tls: failed to load serving certificate`.
+| All of its dependents are failing.
+| Service **metrics-server** can't serve traffic.
+| To read the output of the last crash, run
+| ```
+| kubectl logs metrics-server-efcd4397-a -c app -n kube-system --previous
+| ```
+| *Checked: node n1 is healthy for 8 other pods.*
 10:13:30 material change
 🟠 metrics-server in kube-system (prod-eu-1) is spreading to pods metrics-server-efcd4397-a and metrics-server-efcd4397-b: they have not been ready for three minutes. It is also spreading to autoscaler web in billing, autoscaler web in orders, autoscaler web in search and one other: they cannot read the metrics it scales on.
 🟠 metrics-server in kube-system (prod-eu-1) is spreading to pods metrics-server-efcd4397-a and metrics-server-efcd4397-b: they have not been ready for three minutes.
-
+| 🟠 **metrics-server** in **kube-system** (**prod-eu-1**) is spreading to pods **metrics-server-efcd4397-a** and metrics-server-efcd4397-b: they have not been ready for three minutes.
+| It is also spreading to autoscaler **web** in **billing**, autoscaler **web** in **orders**, autoscaler **web** in **search** and one other: they cannot read the metrics it scales on.

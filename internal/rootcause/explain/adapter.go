@@ -36,6 +36,7 @@ func (s Snapshot) Record(c Cause) rootcause.CauseRecord {
 		Rule: c.Row, Mode: c.Mode, Root: c.Root, Chain: c.Chain,
 		Summary: c.Summary, Score: c.Confidence, Began: c.Began,
 	}
+	out.Hops, out.Beyond = recordHops(c.Hops), recordHops(c.Beyond)
 	for _, f := range s.Findings[c.Root] {
 		// A symptom finding ("1 of 2 replicas are ready") restates
 		// the failures the cause explains; it does not describe it.
@@ -51,8 +52,17 @@ func (s Snapshot) Record(c Cause) rootcause.CauseRecord {
 	for _, e := range c.Contributions {
 		out.Proof = append(out.Proof, rootcause.Proof{
 			Code: e.Code, Count: e.Count, Total: e.Total, Fields: e.Fields,
-			Text: e.Text, Weight: abs(e.Weight), Supports: e.Weight > 0,
+			Edits: e.Edits, Text: e.Text, Weight: abs(e.Weight), Supports: e.Weight > 0,
 		})
+	}
+	return out
+}
+
+// recordHops keeps what a message says about each hop of a chain.
+func recordHops(hops []Hop) []rootcause.Hop {
+	var out []rootcause.Hop
+	for _, h := range hops {
+		out = append(out, rootcause.Hop{Entity: h.Entity, Began: h.Began})
 	}
 	return out
 }

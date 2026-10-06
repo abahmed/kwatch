@@ -1,8 +1,13 @@
 10:02:30 settled
 🔴 Node n1 (prod-eu-1) has not reported for about two minutes. It reports "Kubelet stopped posting node status". To check the node's conditions and recent events, run kubectl describe node n1
 🔴 Node n1 (prod-eu-1) has not reported for about two minutes.
-
+| 🔴 Node n1 (**prod-eu-1**) has not reported for about two minutes.
+| It reports `Kubelet stopped posting node status`.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```
 10:04:40 material change
 🔴 Node n1 (prod-eu-1) is spreading to pods svc-0-f3031657-a, svc-1-6893a91b-a, svc-2-dbb4f7b4-a and five others in apps: they have not been ready for three minutes.
 🔴 Node n1 (prod-eu-1) is spreading to pods svc-0-f3031657-a, svc-1-6893a91b-a, svc-2-dbb4f7b4-a and five others in apps: they have not been ready for three minutes.
-
+| 🔴 Node n1 (**prod-eu-1**) is spreading to pods **svc-0-f3031657-a**, **svc-1-6893a91b-a**, **svc-2-dbb4f7b4-a** and five others in apps: they have not been ready for three minutes.

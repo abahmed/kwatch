@@ -32,7 +32,6 @@ var payloadPolicies = map[string]payloadPolicy{
 	"googlechat": {maxBytes: 4000, mode: payloadBounded},
 	"matrix":     {maxBytes: 32000, mode: payloadBounded},
 	"mattermost": {maxBytes: 16000, mode: payloadBounded},
-	"line":       {maxBytes: 4500, mode: payloadBounded},
 	"dingtalk":   {maxBytes: 19000, mode: payloadBounded},
 	"threema":    {maxBytes: 3400, mode: payloadBounded},
 }

@@ -17,6 +17,15 @@ func IsKnownProvider(name string) bool {
 	return false
 }
 
+// removedProviders are provider keys whose upstream service is gone. A
+// config that still has one loads, the section is ignored, and Warnings
+// says so, so an upgrade does not fail on a file that used to work.
+var removedProviders = map[string]bool{"line": true}
+
+func isRemovedProvider(name string) bool {
+	return removedProviders[strings.ToLower(name)]
+}
+
 // KnownProviderNames returns a stable, sorted copy for catalogs and tooling.
 func KnownProviderNames() []string {
 	return providercatalog.Names()

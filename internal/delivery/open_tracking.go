@@ -140,10 +140,11 @@ func (m *Manager) makeUpForLostOpen(
 // keeps its marker as the first character of the note.
 func combinedResolve(m notification.Message) notification.Message {
 	if m.Opening != nil {
-		m.Note = m.NoteText() + "\n\nIt opened without a notification " +
-			"reaching this channel:\n" + m.Opening.NoteText()
+		m.AppendNote("\n\n", "It opened without a notification "+
+			"reaching this channel:")
+		m.AppendMessage("\n", *m.Opening)
 		return m
 	}
-	m.Note = m.NoteText() + "\n\n" + lostOpeningNote
+	m.AppendNote("\n\n", lostOpeningNote)
 	return m
 }

@@ -53,6 +53,9 @@ func (w Writer) StartupSummary(
 		Route: summaryRoute(decisions, nil),
 	}
 	fill(&msg, mark, sentences)
+	msg.Doc = w.listDoc(mark, "kwatch started", []string{countFact(
+		len(decisions), "problem") + " began before it was watching"},
+		decisions, now)
 	return msg
 }
 
@@ -90,6 +93,9 @@ func (w Writer) Rollup(
 		Route: summaryRoute(decisions, nil),
 	}
 	fill(&msg, mark, sentences)
+	msg.Doc = w.listDoc(mark, "kwatch roll-up", []string{countFact(
+		len(decisions), "new problem") + " at the same time"},
+		decisions, now)
 	return msg
 }
 
@@ -151,6 +157,7 @@ func (w Writer) Digest(
 			opened...), resolved...), risks),
 	}
 	fill(&msg, notification.MarkerLow, sentences)
+	msg.Doc = w.digestDoc(opened, resolved, risks, now)
 	return msg
 }
 
@@ -170,7 +177,7 @@ func digestTitles(
 			break
 		}
 		out = append(out, sentence{part: partProof,
-			text: prefix + Writer{}.Write(d, now).Title})
+			text: prefix + withUsualTail(Writer{}.Write(d, now).Title, d)})
 	}
 	return out
 }

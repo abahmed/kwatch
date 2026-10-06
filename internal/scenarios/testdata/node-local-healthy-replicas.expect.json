@@ -1,0 +1,11 @@
+{
+  "name": "node-local-healthy-replicas",
+  "description": "A node stops reporting; two replicas of an app on it go not ready while its third replica and a neighbour workload stay healthy on other nodes.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/api",
+    "zone//zone-a"
+  ]
+}

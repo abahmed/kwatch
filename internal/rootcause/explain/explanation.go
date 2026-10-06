@@ -5,6 +5,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 // Level words a confidence for readers.
@@ -85,6 +86,13 @@ type Cause struct {
 	// or change, or for a zone or pool its first broken node. Zero when
 	// unknown.
 	Began time.Time
+	// Hops is the failure chain the cause was extended along, from the
+	// cause to the deepest failure it explains; empty when it explains
+	// only what it reaches directly. See chain.go.
+	Hops []Hop `json:",omitempty"`
+	// Beyond are the failures one step past ChainMaxHops: they follow
+	// from the chain but are not claimed by it.
+	Beyond []Hop `json:",omitempty"`
 }
 
 // Trace records how an area was solved.
@@ -98,6 +106,27 @@ type Trace struct {
 	// the configuration it uses. They were checked and found fine, which
 	// a message says when no cause is found.
 	Checked map[inventory.EntityID][]inventory.EntityID `json:",omitempty"`
+	// Compared lists, per failure, the healthy twins the counterfactual
+	// checks compared it with: the same image in another workload, the
+	// other replicas, the other pods on its node. Each rules a cause in
+	// or out; Text says it in words for "what was checked".
+	Compared map[inventory.EntityID][]Comparison `json:",omitempty"`
+	// Chain is the failure chain of the first chosen cause that has
+	// one: what failed after what, and how each step led to the next.
+	Chain []Hop `json:",omitempty"`
+}
+
+// Comparison is one counterfactual check: what a failure was compared
+// with and what that showed.
+type Comparison struct {
+	// Code is the proof the check gives its cause.
+	Code rootcause.ProofCode
+	// With is the healthy twin: a workload, a node or a pod.
+	With inventory.EntityID
+	// Count is the number the code counts, such as the other healthy
+	// pods on a node.
+	Count int `json:",omitempty"`
+	Text  string
 }
 
 // Rejection names an entity that was not chosen and why. Insufficient

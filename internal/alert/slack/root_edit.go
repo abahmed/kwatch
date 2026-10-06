@@ -69,8 +69,7 @@ func withStatus(
 	root.Marker = marker
 	root.Status = current.Status
 	root.Short = swapMarker(root.ShortText(), marker)
-	root.Note = swapMarker(root.NoteText(), marker)
-	return root
+	return root.WithMarker(marker)
 }
 
 // swapMarker replaces the status marker text starts with. Text without a

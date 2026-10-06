@@ -92,3 +92,71 @@ func TestVolumeFailedCarriesReclaimEventMessage(t *testing.T) {
 	assert.Contains(t, eval.Findings[0].Evidence, detection.Evidence{
 		Label: "VolumeFailedDelete", Value: "disk is attached to a VM"})
 }
+
+// stuckAttachment is a VolumeAttachment deleting since long ago, linked
+// to a node and a PV; the caller decides which of them exist.
+func stuckAttachment(
+	m *inventory.Model, node, pv inventory.EntityID,
+) inventory.EntityID {
+	id := newID(kube.KindVolumeAttachment, "", "csi-old")
+	put(m, id, t0, map[string]inventory.Value{
+		kube.AttrDeleting:      inventory.Bool(true),
+		kube.AttrDeletingSince: inventory.Time(t0.Add(-400 * 24 * time.Hour)),
+		kube.AttrDetachError:   inventory.Text("persistentvolume not found"),
+	})
+	link(m, id, inventory.RunsOn, node)
+	link(m, id, inventory.References, pv)
+	return id
+}
+
+func TestAttachmentNamesAnOrphanStuckDeleting(t *testing.T) {
+	m := newTestModel()
+	node := newID(kube.KindNode, "", "gone-node")
+	pv := newID(kube.KindPV, "", "gone-pv")
+	id := stuckAttachment(m, node, pv)
+
+	eval := evaluate(Attachment{}, m, t0, id, nil)
+
+	require.Len(t, eval.Findings, 1)
+	f := eval.Findings[0]
+	assert.Equal(t, reasons.VolumeDetachFailure, f.Reason)
+	assert.Equal(t, detection.Info, f.Severity)
+	assert.Equal(t, "VolumeAttachment csi-old is stuck deleting; "+
+		"its node and PV no longer exist", f.Summary)
+	assert.Contains(t, f.Evidence, detection.Evidence{
+		Label: "detach error", Value: "persistentvolume not found"})
+}
+
+// A node that is gone while its volume still exists keeps the volume
+// from attaching elsewhere, so it stays a warning.
+func TestAttachmentWithLivePVStaysAWarning(t *testing.T) {
+	m := newTestModel()
+	node := newID(kube.KindNode, "", "gone-node")
+	pv := newID(kube.KindPV, "", "live-pv")
+	put(m, pv, t0, nil)
+	id := stuckAttachment(m, node, pv)
+
+	eval := evaluate(Attachment{}, m, t0, id, nil)
+
+	require.Len(t, eval.Findings, 1)
+	assert.Equal(t, detection.Warning, eval.Findings[0].Severity)
+	assert.Contains(t, eval.Findings[0].Summary,
+		"is stuck deleting; its node no longer exists")
+}
+
+// Nothing is concluded about a node or PV that may not be listed yet,
+// and the attachment is judged again once they are.
+func TestAttachmentWaitsForNodesAndPVsToSync(t *testing.T) {
+	m := newTestModel()
+	id := stuckAttachment(m, newID(kube.KindNode, "", "n"),
+		newID(kube.KindPV, "", "p"))
+	notSynced := func(inventory.Kind) bool { return false }
+
+	eval := evaluate(Attachment{}, m, t0, id, notSynced)
+
+	require.Len(t, eval.Findings, 1)
+	assert.Equal(t, "Volume cannot be detached from its node",
+		eval.Findings[0].Summary)
+	assert.ElementsMatch(t, []inventory.Kind{kube.KindNode, kube.KindPV},
+		eval.Unsynced)
+}

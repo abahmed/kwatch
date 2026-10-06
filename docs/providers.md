@@ -61,7 +61,7 @@ anyone. Sensu Go records them as a passing (OK) check.
 
 | Group | Providers | What they send |
 |:--|:--|:--|
-| 💬 Chat | Slack, Discord, Microsoft Teams, Teams Workflow, Mattermost, Rocket.Chat, Google Chat, Webex, Matrix, Telegram, Zulip, Feishu, DingTalk, WeCom, LINE, Flock, Threema, Signal | The Note as the message text, escaped for the chat's markup, with recent application output as a code or quoted block when there is any. Broadcast mentions such as `@channel` are neutralized. Matrix sends the Note as `body` and HTML-escaped as `formatted_body`. Slack with a bot token announces each incident as one root message holding the whole Note and its output, keeps every update and the resolve in its thread, and edits the root to the same announcement under the new status marker when the status changes (a thread reply that is not a status change leaves the root alone; after a restart the root cannot be rebuilt, so only the thread grows). Application output is fenced with a code fence longer than any run of backticks in it, so it cannot close the block; it is cut before the closing fence is added. WeCom `<@userid>` and Zulip `@*group*` mentions in workload text are neutralized too. |
+| 💬 Chat | Slack, Discord, Microsoft Teams, Teams Workflow, Mattermost, Rocket.Chat, Google Chat, Webex, Matrix, Telegram, Zulip, Feishu, DingTalk, WeCom, Flock, Threema, Signal | The Note as the message text, escaped for the chat's markup, with recent application output as a code or quoted block when there is any. Broadcast mentions such as `@channel` are neutralized. Matrix sends the Note as `body` and HTML-escaped as `formatted_body`. Slack with a bot token announces each incident as one root message holding the whole Note and its output, keeps every update and the resolve in its thread, and edits the root to the same announcement under the new status marker when the status changes (a thread reply that is not a status change leaves the root alone; after a restart the root cannot be rebuilt, so only the thread grows). Application output is fenced with a code fence longer than any run of backticks in it, so it cannot close the block; it is cut before the closing fence is added. WeCom `<@userid>` and Zulip `@*group*` mentions in workload text are neutralized too. |
 | 🚨 Paging | PagerDuty, Opsgenie, Splunk On-Call, GoAlert, ilert, incident.io, Squadcast, Zenduty, SIGNL4, Alerta, Datadog, New Relic, AWS SNS, Splunk HEC, Sensu Go | The Short as the alert title or summary, the Note (plus output) as details, the incident id as the dedup or alert key, and the provider's resolve or close action when the incident resolves. Severity follows the incident severity. |
 | 📋 Issue trackers | GitHub, GitLab, Gitea, Jira, ClickUp | One issue per incident: the Short as title and the Note (plus output and the cluster name) as body. Updates add a comment. On resolve kwatch comments and closes the issue (GitHub, GitLab, Gitea; Jira moves it through `closeTransition` and ClickUp to `closeStatus` when you set one, otherwise they only comment, because workflows are defined per project or list). A resolved incident that fails again within its reopen window comments on the same issue and reopens it on GitHub, GitLab and Gitea. Jira (`reopenTransition`) and ClickUp (`reopenStatus`) reopen only when you configure both the close and the reopen name; otherwise the mapping is forgotten at resolve and a recurrence opens a new issue. Pod-controlled text in the Note has its `@mentions` neutralized, and Jira wiki markup in it is escaped. A GitHub 403 that says the rate limit was hit is retried like a 429. |
 | 📱 SMS and push | Twilio, Plivo, Vonage, MessageBird, Pushover, Pushbullet, Gotify, ntfy, IFTTT, Home Assistant | The Short. A resolve is sent at normal priority. IFTTT also sends the Note as `value2` and the status as `value3`. |
@@ -186,24 +186,6 @@ search.
 | `alert.email.host` | 🖥️ SMTP host |
 | `alert.email.port` | 🔌 SMTP port |
 | `alert.email.to` | 📥 Receiver email |
-
-### 💬 LINE
-
-> **Deprecated.** LINE shut down the LINE Notify service on 31 March 2025, so
-> this provider can no longer deliver messages. It stays only so existing
-> configurations still load. Move to another provider, for example the
-> custom webhook with a LINE Messaging API bridge. kwatch logs an error at
-> startup when it is configured, and `kwatch lint` warns.
-
-| Parameter | What it does |
-|:---|---|
-| `alert.line.token` | 🔑 LINE Notify access token |
-
-```yaml
-alert:
-  line:
-    token: "${file:/config/line-token}"
-```
 
 ### 🚨 PagerDuty
 
@@ -824,7 +806,8 @@ object. Plain operator messages keep their own small shape
 | `resolved` | `true` only on the message that closes the incident |
 | `marker` | The one status emoji |
 | `short` | The marker and the lead sentence |
-| `note` | The full narrative, starting with the marker |
+| `note` | The full narrative as one plain paragraph, starting with the marker |
+| `markdown` | The same narrative as CommonMark: short lines, bold names, code spans and a code block for the command (omitted when the message has no structure) |
 | `title` | One line: what is wrong and where |
 | `lines` | Explanation sentences (omitted when empty) |
 | `timeline` | Relevant events, oldest first (omitted when empty) |

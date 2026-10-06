@@ -34,6 +34,10 @@ func changeFact(change inventory.Change) string {
 	}
 	at := " at " + clock(change.At)
 	name := shortName(change.Entity)
+	if edits := valueEdits(change); len(edits) > 0 &&
+		!change.Created && !change.Deleted {
+		return name + ": " + editList(edits) + at + authoredBy(who)
+	}
 	switch {
 	case change.Deleted:
 		return passive(who, "deleted", name, "was deleted") + at
@@ -74,4 +78,12 @@ func person(actor string) string {
 		return ""
 	}
 	return actor
+}
+
+// authoredBy is " by alice" for a named actor and nothing for nobody.
+func authoredBy(who string) string {
+	if who == "" {
+		return ""
+	}
+	return " by " + strings.TrimSpace(who)
 }

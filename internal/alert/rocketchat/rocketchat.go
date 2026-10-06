@@ -105,5 +105,6 @@ func (r *RocketChat) buildRequestBodyRocketChat(text string) ([]byte, error) {
 
 // incidentText is the Note with the last output as a Markdown code block.
 func incidentText(m notification.Message) string {
-	return safetext.NoteWithOutput(m.NoteText(), m.Output, "\n", 0)
+	return safetext.RichWithOutput(m,
+		notification.MarkdownDialect(nil, "\n"), "\n", 0)
 }

@@ -1,0 +1,12 @@
+{
+  "name": "image-and-env-change-ranking",
+  "description": "A release changes the image, an env var and a probe together; the message ranks the image first and names the edit of the ConfigMap the pods mount, not an unrelated one.",
+  "root": "deployment/shop/checkout",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "configmap/shop/unrelated-flags"
+  ]
+}

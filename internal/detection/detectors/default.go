@@ -42,6 +42,9 @@ func Default() []detection.Detector {
 		Risk{},
 		ImageDrift{},
 		Lease{},
+		DeprecatedAPI{},
+		APIServerLoad{},
+		WebhookCalls{},
 		ReleaseWatch{},
 	}
 }

@@ -1,8 +1,16 @@
 10:02:15 settled
 🟠 pg-operator in db-operators (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: runtime error: index out of range [3] with length 3". It runs a single replica, so this is downtime, not degradation. To read the output of the last crash, run kubectl logs pg-operator-089c8d3b-a -c app -n db-operators --previous
 🟠 pg-operator in db-operators (prod-eu-1) keeps crashing.
-
+| 🟠 **pg-operator** in **db-operators** (**prod-eu-1**) keeps crashing.
+| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| It fails with `panic: runtime error: index out of range [3] with length 3`.
+| It runs a single replica, so this is downtime, not degradation.
+| To read the output of the last crash, run
+| ```
+| kubectl logs pg-operator-089c8d3b-a -c app -n db-operators --previous
+| ```
 10:06:45 material change
 🟠 pg-operator in db-operators (prod-eu-1) now has no ready replicas (0 of 1). It is spreading to postgresclusters orders-db and users-db in data: they are waiting for their controller to process the latest change.
 🟠 pg-operator in db-operators (prod-eu-1) now has no ready replicas (0 of 1).
-
+| 🟠 **pg-operator** in **db-operators** (**prod-eu-1**) now has no ready replicas (0 of 1).
+| It is spreading to postgresclusters **orders-db** and **users-db** in data: they are waiting for their controller to process the latest change.

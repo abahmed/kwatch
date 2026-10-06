@@ -86,6 +86,7 @@ func compactOversized(
 	if !hasRoomToCopy(db, path, free) {
 		return db, nil
 	}
+	rewriting := startStep("rewrite")
 	if err := copyTo(db, path+".compact"); err != nil {
 		klog.ErrorS(err, "state file rewrite failed; using it as is",
 			"component", "state", "operation", "compact")
@@ -100,8 +101,11 @@ func compactOversized(
 		_ = os.Remove(path + ".compact")
 	} else {
 		_ = syncDir(filepath.Dir(path))
+		after, _ := fileSize(path)
 		klog.InfoS("rewrote oversized state file", "component", "state",
-			"operation", "compact", "beforeBytes", size)
+			"operation", "compact", "beforeBytes", size,
+			"afterBytes", after,
+			"durationMs", rewriting.end().Milliseconds())
 	}
 	db, err := bolt.Open(path, 0o600, &bolt.Options{Timeout: openTimeout})
 	if err != nil {

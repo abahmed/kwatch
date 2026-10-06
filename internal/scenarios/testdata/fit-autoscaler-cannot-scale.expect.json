@@ -1,0 +1,7 @@
+{
+  "name": "fit-autoscaler-cannot-scale",
+  "description": "A pod is Pending and the cluster autoscaler reports NotTriggerScaleUp because the node group is at its maximum; the message quotes it.",
+  "root": "scheduling//Insufficient cpu",
+  "tier": "notify",
+  "maxMessages": 2
+}

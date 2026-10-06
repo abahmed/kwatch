@@ -40,6 +40,7 @@ func AuditEntry(
 		ContentHash:    contentHash(d),
 		Previous:       p.Previous,
 		Delivery:       m.Carrier,
+		DeliveryNote:   m.CarrierNote,
 		Considered:     p.Considered,
 	}
 	switch {
@@ -52,10 +53,30 @@ func AuditEntry(
 		entry.Opened, entry.Resolved = m.Listed.Opened, m.Listed.Resolved
 		entry.Risks, entry.Items = m.Listed.Risks, m.Listed.Items
 	}
+	if p.ID == "" {
+		summaryEntry(&entry, m)
+	}
 	if p.Cause != nil {
 		entry.RootCause = p.Cause.Summary
 	}
 	return entry
+}
+
+// summaryItems bounds the incidents a roll-up entry names.
+const summaryItems = 10
+
+// summaryEntry makes the entry of a message that is about several
+// incidents (a roll-up, a startup summary, a digest) say so: it has no
+// incident, so it names no root, and a roll-up lists its incidents.
+func summaryEntry(entry *audit.Entry, m notification.Message) {
+	if entry.Action == "" {
+		entry.Action = audit.ActionSummary
+	}
+	entry.Namespace, entry.Root = "", ""
+	if len(m.Members) > 0 && entry.Items == nil {
+		entry.Items = m.Members[:min(len(m.Members), summaryItems)]
+		entry.Opened = len(m.Members)
+	}
 }
 
 // contentHash fingerprints what the message says. A reminder states how

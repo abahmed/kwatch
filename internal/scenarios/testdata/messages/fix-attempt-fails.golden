@@ -1,16 +1,25 @@
 10:02:25 settled
 🟠 payments is failing in shop (prod-eu-1) after the 10:01 release of registry.example.com/payments:2.3. The previous image was registry.example.com/payments:2.2. It fails with "panic: missing key DB_PASSWORD_V2". To see the rollout state, run kubectl rollout status deployment/payments -n shop
+Checked: both replicas fail, on 2 nodes.
 🟠 payments is failing in shop (prod-eu-1) after the 10:01 release of registry.example.com/payments:2.3.
-
+| 🟠 **payments** is failing in **shop** (**prod-eu-1**) after the 10:01 release of registry.example.com/payments:2.3.
+| The previous image was registry.example.com/payments:2.2.
+| It fails with `panic: missing key DB_PASSWORD_V2`.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/payments -n shop
+| ```
+| *Checked: both replicas fail, on 2 nodes.*
 10:06:10 fix attempt
 🟠 Rollout 15 of payments in shop (prod-eu-1) started at 10:06 (alice); watching.
 🟠 Rollout 15 of payments in shop (prod-eu-1) started at 10:06 (alice); watching.
-
+| 🟠 Rollout 15 of **payments** in **shop** (**prod-eu-1**) started at 10:06 (alice); watching.
 10:07:10 material change
 🟠 Container app in pod payments-859c30b8-a has recovered; payments in shop (prod-eu-1) still has two open failures. Pod payments-859c30b8-a has recovered; payments in shop (prod-eu-1) still has two open failures.
 🟠 Container app in pod payments-859c30b8-a has recovered; payments in shop (prod-eu-1) still has two open failures.
-
+| 🟠 Container app in pod payments-859c30b8-a has recovered; **payments** in **shop** (**prod-eu-1**) still has two open failures.
+| Pod payments-859c30b8-a has recovered; **payments** in **shop** (**prod-eu-1**) still has two open failures.
 10:16:10 fix attempt still failing
 🟠 Still failing 10 minutes after rollout 15 (prod-eu-1).
 🟠 Still failing 10 minutes after rollout 15 (prod-eu-1).
-
+| 🟠 Still failing 10 minutes after rollout 15 (**prod-eu-1**).

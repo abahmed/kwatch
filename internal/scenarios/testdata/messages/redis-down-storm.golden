@@ -1,4 +1,12 @@
 10:04:15 settled
 🟠 invoicer in billing (prod-eu-1) and four other workloads keep crashing with the same error. It fails with "dial tcp 10.4.5.9:6379: connect: connection refused". ledger, cart and search in shop and one other are affected as well. To read the output of the last crash, run kubectl logs invoicer-3f4c2152-a -c app -n billing --previous
+Checked: both replicas fail, on 2 nodes.
 🟠 invoicer in billing (prod-eu-1) and four other workloads keep crashing with the same error.
-
+| 🟠 **invoicer** in **billing** (**prod-eu-1**) and four other workloads keep crashing with the same error.
+| It fails with `dial tcp 10.4.5.9:6379: connect: connection refused`.
+| **ledger**, **cart** and **search** in **shop** and one other are affected as well.
+| To read the output of the last crash, run
+| ```
+| kubectl logs invoicer-3f4c2152-a -c app -n billing --previous
+| ```
+| *Checked: both replicas fail, on 2 nodes.*

@@ -109,6 +109,9 @@ func (PVSchema) Describe(obj any) (Description, bool) {
 		attrs[AttrMessage] = inventory.Text(evidenceText(pv.Status.Message))
 	}
 	setQuantity(attrs, AttrCapacity, pv.Spec.Capacity.Storage())
+	if terms := pvNodeTerms(pv); terms != "" {
+		attrs[AttrNodeTerms] = inventory.Text(terms)
+	}
 	rel := relations{}
 	rel.add(inventory.References, inventory.CoreID(
 		KindStorageClass, "", pv.Spec.StorageClassName))
@@ -138,12 +141,16 @@ func (StorageClassSchema) Describe(obj any) (Description, bool) {
 	if !ok {
 		return Description{}, false
 	}
+	attrs := map[string]inventory.Value{
+		AttrProvisioner: inventory.Text(sc.Provisioner),
+		AttrBindingMode: inventory.Text(bindingMode(sc)),
+	}
+	if terms := classNodeTerms(sc); terms != "" {
+		attrs[AttrNodeTerms] = inventory.Text(terms)
+	}
 	return Description{
 		ID: objectID(KindStorageClass, sc), UID: string(sc.UID),
-		Attributes: map[string]inventory.Value{
-			AttrProvisioner: inventory.Text(sc.Provisioner),
-			AttrBindingMode: inventory.Text(bindingMode(sc)),
-		},
+		Attributes: attrs,
 	}, true
 }
 

@@ -21,14 +21,41 @@ const (
 	MetricPendingSeconds Metric = "pending_seconds"
 	// MetricJobSeconds is how long a Job runs until it completes.
 	MetricJobSeconds Metric = "job_seconds"
+	// MetricMemoryPeak is the largest container memory (resident set,
+	// else working set) of the workload in an hour, in bytes.
+	MetricMemoryPeak Metric = "memory_peak_bytes"
 )
+
+// warningMetricPrefix starts the name of a per-reason Warning event
+// rate; WarningMetric builds the whole name.
+const warningMetricPrefix = "warnings_per_hour/"
+
+// WarningMetric is the events per hour of one Warning reason.
+func WarningMetric(reason string) Metric {
+	return Metric(warningMetricPrefix + reason)
+}
 
 // Sketch sizes and smoothing.
 const (
-	// sketchSize is how many recent samples a stat keeps for quantiles.
+	// sketchSize is how many recent samples an event-driven stat keeps
+	// for quantiles.
 	sketchSize = 64
+	// hourlySketchSize is how many samples an hourly stat keeps: a
+	// week of hours.
+	hourlySketchSize = 168
+	// BaselineWindow is how far back samples count. Older ones are
+	// dropped so the normal range follows the workload as it changes.
+	BaselineWindow = 7 * 24 * time.Hour
+	// maxWarningReasons bounds the Warning reasons learned per
+	// workload; reasons beyond it are not learned.
+	maxWarningReasons = 8
 	// ewmaAlpha weighs a new sample in the moving average.
 	ewmaAlpha = 0.2
+	// madScale makes a MAD comparable to a standard deviation.
+	madScale = 1.4826
+	// madSpread is how many scaled MADs above the median still count
+	// as normal.
+	madSpread = 3.0
 	// MinBaselineSamples is how many samples a stat needs before
 	// IsUnusual judges anything.
 	MinBaselineSamples = 10
@@ -50,49 +77,34 @@ var unusualFloor = map[Metric]float64{
 	MetricReadySeconds:    30,
 	MetricPendingSeconds:  30,
 	MetricJobSeconds:      60,
+	MetricMemoryPeak:      64 << 20,
 }
 
-// Stat is one rolling statistic: an exponentially weighted mean and the
-// most recent samples, which serve as a small quantile sketch.
-type Stat struct {
-	Count  int
-	Mean   float64
-	Recent []float64 `json:",omitempty"`
-}
-
-func (s *Stat) add(value float64) {
-	if s.Count == 0 {
-		s.Mean = value
-	} else {
-		s.Mean += ewmaAlpha * (value - s.Mean)
+// floorOf is the unusual floor of metric; a Warning rate has its own.
+func floorOf(metric Metric) float64 {
+	if floor, ok := unusualFloor[metric]; ok {
+		return floor
 	}
-	s.Count++
-	s.Recent = append(s.Recent, value)
-	if over := len(s.Recent) - sketchSize; over > 0 {
-		s.Recent = append(s.Recent[:0:0], s.Recent[over:]...)
-	}
-}
-
-// Quantile returns the q-quantile (0..1) of the recent samples by the
-// nearest-rank method, or 0 without samples.
-func (s Stat) Quantile(q float64) float64 {
-	if len(s.Recent) == 0 {
-		return 0
-	}
-	sorted := append([]float64(nil), s.Recent...)
-	sort.Float64s(sorted)
-	rank := int(math.Ceil(q*float64(len(sorted)))) - 1
-	return sorted[min(max(rank, 0), len(sorted)-1)]
+	return 3
 }
 
 // Baseline is the persisted statistics of one workload.
 type Baseline struct {
 	Metrics map[Metric]Stat
-	// HourStart and HourRestarts count restarts in the current hour; the
-	// count becomes a restarts_per_hour sample when the hour ends.
-	HourStart    time.Time `json:",omitempty"`
-	HourRestarts float64   `json:",omitempty"`
-	Updated      time.Time
+	// HourStart is the start of the hour being counted. HourRestarts,
+	// HourMemory and HourWarnings are what happened in it; each becomes
+	// one sample when the hour ends.
+	HourStart    time.Time          `json:",omitempty"`
+	HourRestarts float64            `json:",omitempty"`
+	HourMemory   float64            `json:",omitempty"`
+	HourWarnings map[string]float64 `json:",omitempty"`
+	// Template is the pod template (or revision) the memory samples
+	// belong to. A new one starts the memory statistic again.
+	Template string `json:",omitempty"`
+	Updated  time.Time
+	// marks are the restarts of the last hour; kwatch rebuilds them
+	// after a restart, so they are not persisted.
+	marks []restartMark
 }
 
 func (b Baseline) clone() Baseline {
@@ -100,8 +112,14 @@ func (b Baseline) clone() Baseline {
 	out.Metrics = make(map[Metric]Stat, len(b.Metrics))
 	for metric, stat := range b.Metrics {
 		stat.Recent = append([]float64(nil), stat.Recent...)
+		stat.At = append([]int64(nil), stat.At...)
 		out.Metrics[metric] = stat
 	}
+	out.HourWarnings = make(map[string]float64, len(b.HourWarnings))
+	for reason, count := range b.HourWarnings {
+		out.HourWarnings[reason] = count
+	}
+	out.marks = append([]restartMark(nil), b.marks...)
 	return out
 }
 
@@ -120,6 +138,13 @@ func NewBaselines() *Baselines {
 	}
 }
 
+// Len is how many workloads have a baseline.
+func (b *Baselines) Len() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.byKey)
+}
+
 // Add records one sample of metric for workload at at.
 func (b *Baselines) Add(workload EntityID, metric Metric, value float64,
 	at time.Time) {
@@ -130,44 +155,9 @@ func (b *Baselines) Add(workload EntityID, metric Metric, value float64,
 	defer b.mu.Unlock()
 	base := b.baselineLocked(workload.String())
 	stat := base.Metrics[metric]
-	stat.add(value)
+	stat.add(value, at, sketchSize)
 	base.Metrics[metric] = stat
 	base.Updated = at
-}
-
-// AddRestarts counts restarts of workload's containers at at. Each full
-// hour becomes one restarts_per_hour sample; hours without restarts
-// count as zero, up to one sketch of them.
-func (b *Baselines) AddRestarts(workload EntityID, restarts int,
-	at time.Time) {
-	if workload.IsZero() || restarts < 0 {
-		return
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	base := b.baselineLocked(workload.String())
-	b.rollHourLocked(base, at)
-	base.HourRestarts += float64(restarts)
-	base.Updated = at
-}
-
-func (b *Baselines) rollHourLocked(base *Baseline, at time.Time) {
-	hour := at.Truncate(time.Hour)
-	if base.HourStart.IsZero() {
-		base.HourStart = hour
-		return
-	}
-	if !hour.After(base.HourStart) {
-		return
-	}
-	stat := base.Metrics[MetricRestartsPerHour]
-	stat.add(base.HourRestarts)
-	idle := int(hour.Sub(base.HourStart)/time.Hour) - 1
-	for i := 0; i < min(idle, sketchSize); i++ {
-		stat.add(0)
-	}
-	base.Metrics[MetricRestartsPerHour] = stat
-	base.HourStart, base.HourRestarts = hour, 0
 }
 
 func (b *Baselines) baselineLocked(key string) *Baseline {
@@ -190,6 +180,7 @@ func (b *Baselines) Stat(workload EntityID, metric Metric) (Stat, bool) {
 	}
 	stat, ok := base.Metrics[metric]
 	stat.Recent = append([]float64(nil), stat.Recent...)
+	stat.At = append([]int64(nil), stat.At...)
 	return stat, ok && stat.Count > 0
 }
 
@@ -254,7 +245,8 @@ func (b *Baselines) Restore(saved map[string]Baseline, now time.Time) {
 		if !copied.HourStart.IsZero() &&
 			now.Sub(copied.Updated) > maxRestoredGap {
 			copied.HourStart = now.Truncate(time.Hour)
-			copied.HourRestarts = 0
+			copied.HourRestarts, copied.HourMemory = 0, 0
+			copied.HourWarnings = nil
 		}
 		b.byKey[key] = &copied
 	}

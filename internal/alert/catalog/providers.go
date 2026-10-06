@@ -23,7 +23,6 @@ import (
 	"github.com/abahmed/kwatch/internal/alert/ilert"
 	"github.com/abahmed/kwatch/internal/alert/incidentio"
 	"github.com/abahmed/kwatch/internal/alert/jira"
-	"github.com/abahmed/kwatch/internal/alert/line"
 	"github.com/abahmed/kwatch/internal/alert/mailgun"
 	"github.com/abahmed/kwatch/internal/alert/matrix"
 	"github.com/abahmed/kwatch/internal/alert/mattermost"
@@ -87,8 +86,8 @@ var factories = map[string]factoryFunc{
 	"gotify":     factory(gotify.NewGotify), "ntfy": factory(ntfy.NewNtfy),
 	"pushover": factory(pushover.NewPushover),
 	"webex":    factory(webex.NewWebex), "github": factory(github.NewGithub),
-	"line": factory(line.NewLine), "gitlab": factory(gitlab.NewGitlab),
-	"gitea": factory(gitea.NewGitea), "zapier": factory(zapier.NewZapier),
+	"gitlab": factory(gitlab.NewGitlab),
+	"gitea":  factory(gitea.NewGitea), "zapier": factory(zapier.NewZapier),
 	"n8n": factory(n8n.NewN8n), "ifttt": factory(ifttt.NewIfttt),
 	"teamsworkflow": factory(teamsworkflow.NewTeamsWorkflow),
 	"zulip":         factory(zulip.NewZulip),

@@ -167,7 +167,10 @@ func openVerified(path string, readOnly bool) (db *bolt.DB, err error) {
 		}
 	}()
 	// Pages are checked before initialise writes to the file.
-	if err = checkPages(db); err != nil {
+	check := startStep("page check")
+	err = checkPages(db)
+	check.end()
+	if err != nil {
 		_ = db.Close()
 		return nil, &unusableError{reason: ResetUnreadable, cause: err}
 	}

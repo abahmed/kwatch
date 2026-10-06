@@ -117,6 +117,26 @@ func (c *Collector) recordCarried(
 	c.env.Sink(ctx, d, msg)
 }
 
+// recordDropped is recordCarried for a decision the digest left out. The
+// digest tier is meant to be quiet, so this is by design; the note says
+// which rule applied, so a reader of the audit log need not guess.
+func (c *Collector) recordDropped(
+	ctx context.Context, now time.Time, d incident.Decision,
+) {
+	msg := c.env.Write(d, now)
+	msg.Carrier, msg.CarrierNote = CarrierDropped, droppedWhy(d)
+	c.env.Sink(ctx, d, msg)
+}
+
+// droppedWhy words the rule that left d out of the digest.
+func droppedWhy(d incident.Decision) string {
+	if d.Action == incident.Resolve {
+		return "digest-only: a short blip nobody was told about"
+	}
+	return "digest-only: an update the digest does not list (" +
+		string(d.Reason) + ")"
+}
+
 // risesToPage reports an update that took a held incident to the page
 // tier when no page reached the pagers for it yet: the hold folded the
 // update into its entry, which the pagers never receive, so it is paged

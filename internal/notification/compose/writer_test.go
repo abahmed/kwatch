@@ -104,12 +104,14 @@ func TestWriteResolvedBySaysWhoFixedIt(t *testing.T) {
 
 func TestWriteConfidenceShowsInWording(t *testing.T) {
 	tests := []struct {
-		name, wantConf, wantWords string
-		score                     float64
+		name, wantConf, wantTail string
+		score                    float64
 	}{
-		{"high", "high", " because ", rootcause.High},
-		{"likely", "likely", ", probably because ", rootcause.Likely},
-		{"possible", "possible", ", possibly because ", 0.3},
+		{"high", "high", " because secret db is missing.", rootcause.High},
+		{"likely", "likely", ", likely because secret db is missing.",
+			rootcause.Likely},
+		{"possible", "possible",
+			"; secret db is missing, which might be related.", 0.3},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -124,8 +126,7 @@ func TestWriteConfidenceShowsInWording(t *testing.T) {
 				t.Errorf("Confidence = %s, want %s", msg.Confidence,
 					tt.wantConf)
 			}
-			want := "pod api-1 in default is crash looping" +
-				tt.wantWords + "secret db is missing."
+			want := "pod api-1 in default is crash looping" + tt.wantTail
 			if msg.Title != upperFirst(want) {
 				t.Errorf("Title = %q, want %q", msg.Title, upperFirst(want))
 			}

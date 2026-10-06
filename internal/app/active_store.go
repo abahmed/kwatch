@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -31,27 +32,70 @@ func openStore(ctx context.Context, deps *serverDeps) (*storage.Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	s, err := storage.Open(filepath.Join(dataDir(), "state.db"),
-		storage.Options{
-			Now:         deps.clients.Clock.Now,
-			DeferRepair: true,
-			VolumeLimit: limit,
-		})
+	path := filepath.Join(dataDir(), "state.db")
+	steps := newStartupSteps(deps.clients.Clock.Now)
+	s, err := storage.Open(path, storage.Options{
+		Now:         deps.clients.Clock.Now,
+		DeferRepair: true,
+		VolumeLimit: limit,
+	})
+	steps.done("open")
 	if err != nil {
 		return nil, err
 	}
-	if err := verifyLeaseHolder(ctx, deps, identity); err != nil {
+	err = verifyLeaseHolder(ctx, deps, identity)
+	steps.done("lease check")
+	if err != nil {
 		closeStore(s)
 		return nil, err
 	}
 	epoch, err := s.Claim()
+	steps.done("claim")
 	if err != nil {
 		closeStore(s)
 		return nil, err
 	}
+	size := int64(0)
+	if info, err := os.Stat(path); err == nil {
+		size = info.Size()
+	}
 	klog.InfoS("claimed state store", "component", "state",
-		"operation", "claim", "epoch", epoch)
+		"operation", "claim", "epoch", epoch, "fileBytes", size,
+		"schemaVersion", storage.SchemaVersion,
+		"openMs", steps.took["open"].Milliseconds(),
+		"leaseCheckMs", steps.took["lease check"].Milliseconds(),
+		"claimMs", steps.took["claim"].Milliseconds(),
+		"totalMs", steps.total().Milliseconds())
 	return s, nil
+}
+
+// startupSteps times the steps of openStore, so the gap between the
+// Lease and the claim is accounted for. A step that takes longer than
+// storage.SlowStep is logged as soon as it ends.
+type startupSteps struct {
+	now   func() time.Time
+	began time.Time
+	last  time.Time
+	took  map[string]time.Duration
+}
+
+func newStartupSteps(now func() time.Time) *startupSteps {
+	at := now()
+	return &startupSteps{
+		now: now, began: at, last: at, took: map[string]time.Duration{},
+	}
+}
+
+// done ends the step that started when the previous one ended.
+func (s *startupSteps) done(name string) {
+	at := s.now()
+	s.took[name] = at.Sub(s.last)
+	storage.LogIfSlow(name, s.took[name])
+	s.last = at
+}
+
+func (s *startupSteps) total() time.Duration {
+	return s.last.Sub(s.began)
 }
 
 // reportStoreReset makes a reset at open visible on /health. The state

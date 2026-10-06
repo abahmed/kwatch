@@ -138,10 +138,11 @@ func TestDigestListedIncidentIsAnnouncedWhenItEscalates(t *testing.T) {
 // A digest-tier update with nothing to list is audited as dropped, not
 // as carried by a digest that never mentions it.
 func TestDroppedDigestUpdateIsAuditedAsDropped(t *testing.T) {
-	var carriers []string
+	var carriers, notes []string
 	sink := func(_ context.Context, _ incident.Decision,
 		m notification.Message) {
 		carriers = append(carriers, m.Carrier)
+		notes = append(notes, m.CarrierNote)
 	}
 	e := newTestEngine(t, &fakeClock{now: holdsNow}, sink, nil)
 	up := incident.Decision{Action: incident.Update,
@@ -153,6 +154,31 @@ func TestDroppedDigestUpdateIsAuditedAsDropped(t *testing.T) {
 
 	assert.Empty(t, rest)
 	assert.Equal(t, []string{announce.CarrierDropped}, carriers)
+	require.Len(t, notes, 1)
+	assert.Contains(t, notes[0], "digest-only")
+	assert.Contains(t, notes[0], string(incident.ReasonMaterialChange))
+}
+
+// The resolve of a blip nobody was told about is dropped on purpose, and
+// the audit entry says so.
+func TestDroppedDigestResolveSaysWhy(t *testing.T) {
+	var notes []string
+	sink := func(_ context.Context, _ incident.Decision,
+		m notification.Message) {
+		notes = append(notes, m.CarrierNote)
+	}
+	e := newTestEngine(t, &fakeClock{now: holdsNow}, sink, nil)
+	in := incident.Incident{ID: "x", Tier: incident.Digest}
+	c := e.announcer.collect
+	c.CollectDigest(context.Background(), holdsNow, []incident.Decision{
+		{Action: incident.Announce, Incident: in}})
+	notes = nil
+
+	c.CollectDigest(context.Background(), holdsNow, []incident.Decision{
+		{Action: incident.Resolve, Incident: in}})
+
+	require.Len(t, notes, 1)
+	assert.Contains(t, notes[0], "blip nobody was told about")
 }
 
 // A listing counts a member as having said it resolved only when the

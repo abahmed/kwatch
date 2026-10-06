@@ -1,0 +1,7 @@
+{
+  "name": "fit-volume-zone-no-nodes",
+  "description": "A pod is Pending because its bound volume can only attach in zone-b, where the cluster has no nodes; the message says so.",
+  "root": "persistentvolumeclaim/analytics/data-etl",
+  "tier": "notify",
+  "maxMessages": 2
+}

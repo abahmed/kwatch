@@ -1,4 +1,12 @@
 10:02:15 settled
 🟠 cart in shop (prod-eu-1) keeps running out of memory because its memory limit is too low for normal use. It was killed within 10 seconds of starting. All of its dependents are failing. To read the output of the last crash, run kubectl logs cart-532cd6e1-a -c app -n shop --previous
+Checked: both replicas fail, on 2 nodes.
 🟠 cart in shop (prod-eu-1) keeps running out of memory because its memory limit is too low for normal use.
-
+| 🟠 **cart** in **shop** (**prod-eu-1**) keeps running out of memory because its memory limit is too low for normal use.
+| It was killed within 10 seconds of starting.
+| All of its dependents are failing.
+| To read the output of the last crash, run
+| ```
+| kubectl logs cart-532cd6e1-a -c app -n shop --previous
+| ```
+| *Checked: both replicas fail, on 2 nodes.*

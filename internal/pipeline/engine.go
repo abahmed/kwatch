@@ -100,6 +100,9 @@ type Engine struct {
 	synced chan struct{}
 	// dirty carries entities touched outside step, evaluated next step.
 	dirty []inventory.EntityID
+	// waits holds the entities evaluated before a kind they needed
+	// synced; see syncWaits.
+	waits syncWaits
 	// moved collects the entities whose relations, notes or changes
 	// moved since the last solve; root causes upstream of them are
 	// explained again.
@@ -235,6 +238,7 @@ func (e *Engine) step(
 	late := e.storage.carried.due(e.deps.Synced)
 	dirty = append(dirty, e.drain()...)
 	dirty = append(dirty, e.applyDowntime(late)...)
+	dirty = append(dirty, e.waits.ready(e.deps.Synced)...)
 	dirty = append(dirty, checks.due(now)...)
 	e.evaluate(ctx, now, dirty, checks)
 	e.checkCoverage(now)
@@ -282,6 +286,9 @@ func (e *Engine) apply(
 		e.storage.history.observed(observation)
 		if moved {
 			e.moved.add(observation.Entity)
+			for _, id := range movedWith(observation) {
+				e.moved.add(id)
+			}
 		}
 		touched := update.Touched
 		touched = append(touched, e.readers(observation, update)...)
@@ -305,6 +312,13 @@ func (e *Engine) evaluate(
 		if result.RecheckAfter > 0 {
 			checks.schedule(id, now.Add(result.RecheckAfter))
 		}
+		unsynced := result.Unsynced
+		if !e.deps.Model.Exists(id) {
+			// A gone entity waits for nothing; without this its entry
+			// would stay while a kind never syncs.
+			unsynced = nil
+		}
+		e.waits.record(id, unsynced)
 		changed := e.tracker.Observe(id, result.Findings)
 		logTransitions(changed)
 		transitions = append(transitions, changed...)
