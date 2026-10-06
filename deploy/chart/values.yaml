@@ -38,7 +38,7 @@ rbac:
   # list/watch set matching the built-in sources and skips other kinds.
   # Both modes also grant get on pods in the release namespace only, to
   # explain why the previous kwatch Pod restarted, and get/update only on
-  # kwatch's own leader-election Lease.
+  # kwatch's own state lock Lease.
   mode: full
 
 watch:
@@ -51,6 +51,16 @@ watch:
   # "disabled_by_config" in /health coverage, and checks that need
   # Secrets report that they cannot verify.
   secrets: true
+
+crd:
+  # -- Install the cluster-wide KwatchConfig CRD with this release. The CRD
+  # is shared by every kwatch release in the cluster and Helm keeps it on
+  # uninstall, so only one release can own it. When a CRD owned by another
+  # release already exists, this release leaves it alone (a live lookup;
+  # offline renders always include it). Set false on every release but one,
+  # or when you apply deploy/crd.yaml yourself. config.crd.enabled, below,
+  # is a separate switch: it turns the live KwatchConfig overlay on or off.
+  install: true
 
 # -- Time allowed for workers and persistence savers to stop cleanly.
 terminationGracePeriodSeconds: 60
@@ -69,10 +79,28 @@ terminationGracePeriodSeconds: 60
 # ingress/egress for full rules (for example to limit a port to one
 # address). Set allowDefaults=false only when your own rules cover the API
 # server, kubelets and probes; without them kwatch cannot start.
+#
+# What the defaults do not cover (kwatch dials these itself):
+#   - activeProbeMonitor http/tcp/dns targets, and autoServices and
+#     autoDependencies targets (any Service or external port);
+#   - app.proxyURL (the proxy's port);
+#   - alert providers and heartbeat URLs on a port other than 443.
+# With the policy on and none of these opened, active probes report every
+# target down and providers stop delivering. Open them with
+# extraEgressPorts or egress, or set allowProbeEgressAll to admit all egress
+# from the pod (ingress stays limited). The defaults do open the cluster DNS
+# metrics port (dnsMetricsPort, CoreDNS/kube-dns pods in kube-system), which
+# feeds the DNS request and SERVFAIL rates.
 networkPolicy:
   enabled: false
   allowDefaults: true
+  # -- Must list at least one port: an empty list would open all egress.
   apiServerPorts: [443, 6443]
+  # -- Allow all egress from the pod, for active probes, autoServices,
+  # autoDependencies, a proxy or providers on unusual ports.
+  allowProbeEgressAll: false
+  # -- TCP port of the cluster DNS metrics endpoint; 0 omits the rule.
+  dnsMetricsPort: 9153
   kubeletPort: 10250
   kubeletCIDRs: []
   # -- Extra TCP egress ports open to any address, e.g. [587] for SMTP.
@@ -82,11 +110,11 @@ networkPolicy:
 
 # -- kwatch sets the Go soft memory limit (GOMEMLIMIT) to 90% of the
 # memory limit, so garbage collection works harder before the kernel would
-# kill the Pod. A 5,000-pod cluster model needs about 100 MiB of live heap.
+# kill the Pod. A 5,000-pod cluster model needs about 83 MiB of live heap.
 resources:
   limits:
     memory: 512Mi
-    cpu: 100m
+    cpu: 500m
   requests:
     memory: 128Mi
     cpu: 100m
@@ -145,7 +173,17 @@ defaultTolerations:
 
 affinity: {}
 
-podAnnotations: {}
+# Kwatch keeps one state file and one lock; evicting its pod to repack or
+# scale down nodes costs a restart and a gap in monitoring. These plain
+# annotations ask the node autoscaler to leave the pod alone. They do
+# nothing where no autoscaler reads them. To opt out, remove a key (set it
+# to null, for example --set 'podAnnotations.karpenter\.sh/do-not-disrupt=null')
+# or set it to the permissive value: "false" for karpenter.sh/do-not-disrupt
+# and "true" for cluster-autoscaler.kubernetes.io/safe-to-evict. ("false" on
+# safe-to-evict is the protective value.)
+podAnnotations:
+  karpenter.sh/do-not-disrupt: "true"
+  cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
 
 sacAnnotations: {}
 

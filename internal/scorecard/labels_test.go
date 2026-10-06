@@ -54,3 +54,29 @@ func TestScoreCasesWithoutCases(t *testing.T) {
 	assert.Zero(t, accuracy.CorrectPercent())
 	assert.True(t, accuracy.Calibrated())
 }
+
+// A score that is 0.7 up to rounding is high, as in the calibration
+// buckets; the same score cannot be "likely" in one and 0.70 in another.
+func TestConfidenceLevelToleratesRounding(t *testing.T) {
+	assert.Equal(t, LevelHigh, ConfidenceLevel(0.6999999999999))
+	assert.Equal(t, LevelLikely, ConfidenceLevel(0.4999999999999))
+	assert.Equal(t, LevelPossible, ConfidenceLevel(0.49))
+	assert.Equal(t, LevelNone, ConfidenceLevel(0))
+}
+
+// The high level promises what CalibratedHigh demands (80%), not its own
+// 70% floor: 3 of 4 right (75%) at high confidence is not calibrated.
+func TestHighLevelPromisesTheCalibrationBar(t *testing.T) {
+	accuracy := ScoreCases([]Case{
+		{Correct: true, Confidence: 0.8}, {Correct: true, Confidence: 0.8},
+		{Correct: true, Confidence: 0.8}, {Correct: false, Confidence: 0.8},
+	})
+	assert.False(t, accuracy.Calibrated())
+
+	accuracy = ScoreCases([]Case{
+		{Correct: true, Confidence: 0.8}, {Correct: true, Confidence: 0.8},
+		{Correct: true, Confidence: 0.8}, {Correct: true, Confidence: 0.8},
+		{Correct: false, Confidence: 0.8},
+	})
+	assert.True(t, accuracy.Calibrated(), "exactly 80%")
+}

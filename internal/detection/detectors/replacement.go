@@ -20,8 +20,15 @@ const (
 )
 
 // replacementGraceFor is the extra time a pod gets while it starts on
-// a fresh node, or zero.
+// a fresh node or in a booting node pool, or zero.
 func replacementGraceFor(
+	ctx detection.Context, pod inventory.Entity,
+) time.Duration {
+	return max(freshNodeGrace(ctx, pod), bootGraceFor(ctx, pod))
+}
+
+// freshNodeGrace is replacementGrace for a young pod on a young node.
+func freshNodeGrace(
 	ctx detection.Context, pod inventory.Entity,
 ) time.Duration {
 	created := timestamp(pod, kube.AttrCreated)
@@ -43,13 +50,21 @@ func replacementGraceFor(
 }
 
 // workloadReplacementGrace is the extra time a workload gets while any
-// of its running pods starts on a fresh node, or zero.
+// of its running pods starts on a fresh node, or while every pod it is
+// missing is only waiting for a booting pool, or zero.
 func workloadReplacementGrace(
 	ctx detection.Context, workload inventory.EntityID,
 ) time.Duration {
 	if ctx.Model == nil {
 		return 0
 	}
+	return max(workloadFreshGrace(ctx, workload),
+		workloadBootGrace(ctx, workload))
+}
+
+func workloadFreshGrace(
+	ctx detection.Context, workload inventory.EntityID,
+) time.Duration {
 	for _, id := range runningPodsOf(ctx.Model, workload) {
 		pod, ok := ctx.Model.Entity(id)
 		if !ok {

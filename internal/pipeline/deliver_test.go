@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/pipeline/investigate"
 )
 
 // gatedInvestigator blocks every investigation until release is closed or
@@ -26,34 +27,37 @@ func newGatedInvestigator() *gatedInvestigator {
 
 func (g *gatedInvestigator) investigate(
 	ctx context.Context, p incident.Incident,
-) Result {
+) testResult {
 	g.started <- p.ID
 	select {
 	case <-g.release:
 		g.ended <- nil
-		return Result{Output: []string{"output of " + p.ID},
+		return testResult{Output: []string{"output of " + p.ID},
 			Evidence: []incident.Fact{
 				{Kind: incident.FactError, Text: "error of " + p.ID}}}
 	case <-ctx.Done():
 		g.ended <- ctx.Err()
-		return Result{}
+		return testResult{}
 	}
 }
 
-// Plan implements Investigator.
-func (g *gatedInvestigator) Plan(p incident.Incident) (Investigation, bool) {
+// Plan implements investigate.Investigator.
+func (g *gatedInvestigator) Plan(
+	p incident.Incident,
+) (testPlan, bool) {
 	return funcInvestigator(g.investigate).Plan(p)
 }
 
 // funcInvestigator plans every incident as one investigation that runs
 // the function.
-type funcInvestigator func(context.Context, incident.Incident) Result
+type funcInvestigator func(
+	context.Context, incident.Incident,
+) testResult
 
-// Plan implements Investigator.
-func (f funcInvestigator) Plan(p incident.Incident) (Investigation, bool) {
-	return Investigation{Kind: "test", Run: func(ctx context.Context) Result {
-		return f(ctx, p)
-	}}, true
+// Plan implements investigate.Investigator.
+func (f funcInvestigator) Plan(p incident.Incident) (testPlan, bool) {
+	run := func(ctx context.Context) testResult { return f(ctx, p) }
+	return testPlan{Kind: "test", Run: run}, true
 }
 
 func investigatingEngine(
@@ -97,7 +101,7 @@ func TestEngineSlowInvestigationNeverDelaysOtherDecisions(t *testing.T) {
 		Incident: incident.Incident{ID: "other"}}
 
 	e.announcer.deliver(context.Background(), clock.now,
-		[]incident.Decision{announce("a"), update})
+		[]incident.Decision{announcement("a"), update})
 
 	if got := sink.all(); len(got) != 1 || got[0].Incident.ID != "other" {
 		t.Fatalf("delivered %+v, want the update at once", got)
@@ -117,12 +121,12 @@ func TestEngineAttachesOutputThatArrivesInTime(t *testing.T) {
 	startPool(t, e)
 
 	e.announcer.deliver(context.Background(), clock.now,
-		[]incident.Decision{announce("a")})
+		[]incident.Decision{announcement("a")})
 	e.announcer.attachOutput(context.Background(), receive(t, e))
 
 	got := sink.all()
-	if len(got) != 1 || len(got[0].Output) != 1 ||
-		got[0].Output[0] != "output of a" {
+	if len(got) != 1 || len(got[0].Facts.Output) != 1 ||
+		got[0].Facts.Output[0] != "output of a" {
 		t.Fatalf("delivered %+v, want the announcement with output", got)
 	}
 	if len(e.announcer.held) != 0 || e.announcer.pool.inFlight != 0 {
@@ -138,7 +142,7 @@ func TestEngineSendsHeldAnnouncementWithoutLateOutput(t *testing.T) {
 	e := investigatingEngine(t, clock, g, sink)
 	startPool(t, e)
 	e.announcer.deliver(context.Background(), clock.now,
-		[]incident.Decision{announce("a")})
+		[]incident.Decision{announcement("a")})
 
 	e.announcer.expireHeld(context.Background(), clock.now.Add(outputWait-1))
 	if got := sink.all(); len(got) != 0 {
@@ -152,7 +156,7 @@ func TestEngineSendsHeldAnnouncementWithoutLateOutput(t *testing.T) {
 	e.announcer.attachOutput(context.Background(), receive(t, e))
 
 	got := sink.all()
-	if len(got) != 1 || got[0].Output != nil {
+	if len(got) != 1 || got[0].Facts.Output != nil {
 		t.Fatalf("delivered %+v, want one announcement without output", got)
 	}
 	if s := e.Stats(); s.InvestigationsLate != 1 {
@@ -170,7 +174,7 @@ func TestEngineUpdateReleasesHeldAnnouncementFirst(t *testing.T) {
 		Incident: incident.Incident{ID: "a"}}
 
 	e.announcer.deliver(context.Background(), clock.now,
-		[]incident.Decision{announce("a")})
+		[]incident.Decision{announcement("a")})
 	e.announcer.deliver(context.Background(), clock.now,
 		[]incident.Decision{resolve})
 
@@ -190,10 +194,10 @@ func TestEngineSendsAtOnceWhenEveryInvestigationSlotIsBusy(t *testing.T) {
 	startPool(t, e)
 	var first, rest []incident.Decision
 	for i := range investigationWorkers {
-		first = append(first, announce(string(rune('a'+i))))
+		first = append(first, announcement(string(rune('a'+i))))
 	}
 	for i := range investigationQueue + 2 {
-		rest = append(rest, announce(string(rune('A'+i))))
+		rest = append(rest, announcement(string(rune('A'+i))))
 	}
 	e.announcer.deliver(context.Background(), clock.now, first)
 	for range investigationWorkers {
@@ -220,9 +224,9 @@ func TestEngineDeliversWithoutInvestigator(t *testing.T) {
 	e := newTestEngine(t, &fakeClock{}, sink.sink, nil)
 
 	e.announcer.deliver(context.Background(), time.Time{},
-		[]incident.Decision{announce("a")})
+		[]incident.Decision{announcement("a")})
 
-	if got := sink.all(); len(got) != 1 || got[0].Output != nil {
+	if got := sink.all(); len(got) != 1 || got[0].Facts.Output != nil {
 		t.Fatalf("delivered %+v", got)
 	}
 }
@@ -233,7 +237,7 @@ func TestEngineInvestigationPoolStopsOnCancel(t *testing.T) {
 	e := investigatingEngine(t, clock, g, &sinkLog{})
 	ctx, cancel := context.WithCancel(context.Background())
 	e.announcer.pool.start(ctx)
-	e.announcer.deliver(ctx, clock.now, []incident.Decision{announce("a")})
+	e.announcer.deliver(ctx, clock.now, []incident.Decision{announcement("a")})
 	<-g.started
 
 	cancel()
@@ -250,21 +254,21 @@ func TestEngineInvestigationCarriesDeadline(t *testing.T) {
 	e := newTestEngine(t, clock, (&sinkLog{}).sink, func(d *Dependencies) {
 		d.Investigator = funcInvestigator(func(
 			ctx context.Context, _ incident.Incident,
-		) Result {
+		) testResult {
 			_, ok := ctx.Deadline()
 			deadlines <- ok
-			return Result{}
+			return testResult{}
 		})
 	})
 	startPool(t, e)
 
 	e.announcer.deliver(context.Background(), clock.now,
-		[]incident.Decision{announce("a")})
+		[]incident.Decision{announcement("a")})
 
 	if !<-deadlines {
 		t.Fatal("investigation must carry a deadline")
 	}
-	if outputWait > investigationTimeout {
+	if outputWait > investigate.MaxBudget {
 		t.Fatal("an investigation must be allowed the whole output wait")
 	}
 }
@@ -279,7 +283,7 @@ func TestEngineReinvestigatesMaterialChange(t *testing.T) {
 	e := investigatingEngine(t, clock, g, sink)
 	startPool(t, e)
 	e.announcer.deliver(context.Background(), clock.now,
-		[]incident.Decision{announce("a")})
+		[]incident.Decision{announcement("a")})
 	e.announcer.attachOutput(context.Background(), receive(t, e))
 	update := incident.Decision{Action: incident.Update,
 		Reason:   incident.ReasonMaterialChange,

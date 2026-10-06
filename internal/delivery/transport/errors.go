@@ -2,9 +2,46 @@ package transport
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/abahmed/kwatch/internal/ratelimit"
 )
+
+// StatusError is a provider answer that was not a success. Callers read
+// the status with StatusOf instead of searching the message.
+type StatusError struct {
+	Provider   string
+	StatusCode int
+	// Body is the bounded, credential-free summary of the response body.
+	Body string
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("call to %s returned status code %d: %s",
+		e.Provider, e.StatusCode, e.Body)
+}
+
+// StatusOf returns the HTTP status err carries: a StatusError or a rate
+// limit, however deeply wrapped. ok is false when err has no status.
+func StatusOf(err error) (code int, ok bool) {
+	var status *StatusError
+	if errors.As(err, &status) {
+		return status.StatusCode, true
+	}
+	var limited *ratelimit.Error
+	if errors.As(err, &limited) {
+		return limited.StatusCode, true
+	}
+	return 0, false
+}
+
+// IsNotFound reports whether err is an HTTP 404 answer.
+func IsNotFound(err error) bool {
+	code, ok := StatusOf(err)
+	return ok && code == http.StatusNotFound
+}
 
 // RetryAfterError wraps an error with the delay the provider asked for.
 // A zero RetryAfter means "use the default backoff".

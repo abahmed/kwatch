@@ -317,6 +317,9 @@ func waitAfterCancellation(
 	case <-done:
 		return result
 	case <-timer.C:
+		// result is formatted with %v on purpose: wrapping a context
+		// error would let the supervisor read the timeout as a clean
+		// cancellation and hide the shutdown failure.
 		return fmt.Errorf("%w: %v", errComponentShutdown, result)
 	}
 }

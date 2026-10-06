@@ -10,14 +10,21 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
+// ReceiverClient talks to the e2e receiver through one kubectl port-forward
+// that all of a scenario's calls share. It is started on first use and
+// replaced when a call finds it broken; Close stops it.
 type ReceiverClient struct {
 	environment *Environment
 	client      *http.Client
+
+	mu      sync.Mutex
+	forward *PortForward
 }
 
 type ReceiverRequest struct {
@@ -188,46 +195,104 @@ func (r *ReceiverClient) WaitForMatchCount(
 	return requests, err
 }
 
+// sharedForward returns the open port-forward, starting it when needed. The
+// forward outlives the calling context (it is stopped by Close), so it is
+// not tied to any single request.
+func (r *ReceiverClient) sharedForward() (*PortForward, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.forward != nil {
+		return r.forward, nil
+	}
+	config := r.environment.Config
+	forward, err := StartPortForwardTarget(
+		context.Background(),
+		config.Kubeconfig, config.Context,
+		config.ReceiverNamespace,
+		"service/"+config.ReceiverService,
+		8080,
+	)
+	if err != nil {
+		return nil, err
+	}
+	r.forward = forward
+	return forward, nil
+}
+
+// dropForward closes bad if it is still the shared forward, so the next call
+// starts a fresh one.
+func (r *ReceiverClient) dropForward(bad *PortForward) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.forward == bad {
+		r.forward = nil
+		_ = bad.Close()
+	}
+}
+
+// Close stops the shared port-forward.
+func (r *ReceiverClient) Close() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	forward := r.forward
+	r.forward = nil
+	return forward.Close()
+}
+
 func (r *ReceiverClient) doJSON(
 	ctx context.Context,
 	method, path string,
 	payload []byte,
 	result any,
 ) error {
-	forward, err := StartPortForwardTarget(
-		ctx,
-		r.environment.Config.Kubeconfig,
-		r.environment.Config.Context,
-		r.environment.Config.ReceiverNamespace,
-		"service/"+r.environment.Config.ReceiverService,
-		8080,
-	)
-	if err != nil {
-		return err
+	// A transport error usually means the receiver Pod restarted and the
+	// forward died: retry once on a fresh forward.
+	var err error
+	for attempt := 0; attempt < 2; attempt++ {
+		var retry bool
+		retry, err = r.tryJSON(ctx, method, path, payload, result)
+		if !retry || ctx.Err() != nil {
+			return err
+		}
 	}
-	defer func() { _ = forward.Close() }()
+	return err
+}
+
+// tryJSON makes one call. retry is true when the error came from the
+// connection rather than from the receiver's answer.
+func (r *ReceiverClient) tryJSON(
+	ctx context.Context,
+	method, path string,
+	payload []byte,
+	result any,
+) (retry bool, err error) {
+	forward, err := r.sharedForward()
+	if err != nil {
+		return false, err
+	}
 	request, err := http.NewRequestWithContext(
 		ctx, method, forward.URL(path), bytes.NewReader(payload),
 	)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if payload != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
 	response, err := r.client.Do(request)
 	if err != nil {
-		return err
+		r.dropForward(forward)
+		return true, err
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK ||
 		response.StatusCode >= http.StatusMultipleChoices {
 		body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-		return fmt.Errorf("receiver returned HTTP %d: %s",
+		return false, fmt.Errorf("receiver returned HTTP %d: %s",
 			response.StatusCode, body)
 	}
 	if result == nil || response.StatusCode == http.StatusNoContent {
-		return nil
+		return false, nil
 	}
-	return json.NewDecoder(response.Body).Decode(result)
+	return false, json.NewDecoder(response.Body).Decode(result)
 }

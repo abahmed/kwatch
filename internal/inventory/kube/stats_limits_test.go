@@ -51,8 +51,12 @@ func TestStatsPollerSkipsNodeWithOversizeSummary(t *testing.T) {
 	submitted := false
 	p := NewStatsPoller(StatsConfig{
 		Kubelet: kubelet, Now: func() time.Time { return time.Unix(0, 0) },
-		Submit: func(context.Context, ...inventory.Observation) {
-			submitted = true
+		Submit: func(_ context.Context, obs ...inventory.Observation) {
+			for _, o := range obs {
+				if _, ok := o.Attributes[AttrKubeletFailures]; !ok {
+					submitted = true
+				}
+			}
 		},
 		Nodes: func() []inventory.EntityID {
 			return []inventory.EntityID{inventory.CoreID(KindNode, "", "n1")}

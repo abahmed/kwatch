@@ -71,8 +71,12 @@ var pathRules = []pathRule{
 	{"labels", ClassLabels},
 	{"template", ClassRollout},
 	{"containers[", ClassRollout},
-	{"data.", ClassConfig},
 }
+
+// configPathPrefix starts the path of a changed ConfigMap or Secret key.
+// It is a prefix, not a substring: "metadata.deletionTimestamp" contains
+// "data." too, and is not a configuration edit.
+const configPathPrefix = "data."
 
 // Classify returns the class of c. An image edit wins over the rollout
 // it causes, because the image is what a reader wants to know.
@@ -117,6 +121,9 @@ func fieldClass(path string) ChangeClass {
 		if strings.Contains(path, rule.contains) {
 			return rule.class
 		}
+	}
+	if strings.HasPrefix(path, configPathPrefix) {
+		return ClassConfig
 	}
 	return ClassOther
 }

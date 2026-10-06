@@ -94,6 +94,12 @@ func jobStatus(j *batchv1.Job, attrs map[string]inventory.Value) {
 	if st.StartTime != nil {
 		attrs[AttrStartTime] = inventory.Time(st.StartTime.Time)
 	}
+	if st.CompletionTime != nil {
+		attrs[AttrCompletionTime] = inventory.Time(st.CompletionTime.Time)
+	}
+	if deadline := j.Spec.ActiveDeadlineSeconds; deadline != nil {
+		attrs[AttrActiveDeadline] = inventory.Number(float64(*deadline))
+	}
 	conditions := make([]condition, 0, len(st.Conditions))
 	for _, c := range st.Conditions {
 		conditions = append(conditions, condition{

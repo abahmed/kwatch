@@ -1,0 +1,11 @@
+{
+  "name": "known-crashloop-past-boot",
+  "description": "A known crash loop at the start of the day lasts thirty minutes with no ready replica.",
+  "root": "deployment/shop/sync",
+  "tier": "notify",
+  "maxMessages": 7,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "1h0m0s"
+}

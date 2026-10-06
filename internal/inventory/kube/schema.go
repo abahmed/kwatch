@@ -8,8 +8,10 @@ import (
 
 // Description is everything a Schema extracts from one object version.
 type Description struct {
-	ID         inventory.EntityID
-	UID        string
+	ID  inventory.EntityID
+	UID string
+	// AltUID is a second identifier events name the object by.
+	AltUID     string
 	Attributes map[string]inventory.Value
 	Relations  map[inventory.RelationType][]inventory.EntityID
 	// Children are dependent entities described with the object, such as a

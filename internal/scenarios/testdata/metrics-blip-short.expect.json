@@ -1,0 +1,7 @@
+{
+  "name": "metrics-blip-short",
+  "description": "Ten HPAs cannot read metrics for 2m0s while metrics-server runs.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

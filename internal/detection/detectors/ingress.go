@@ -2,12 +2,23 @@ package detectors
 
 import (
 	"strings"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
+
+// DefaultTLSSecretGrace is how long a new Ingress may wait for its TLS
+// Secret: certificate controllers create the Secret after the Ingress,
+// so it is missing for as long as issuance takes.
+const DefaultTLSSecretGrace = 10 * time.Minute
+
+// DefaultBackendGrace is how long a new Ingress or route may point at a
+// Service that is not there yet: manifests are often applied in an order
+// that creates the Ingress first.
+const DefaultBackendGrace = 2 * time.Minute
 
 // ingressTLSSecrets reports spec.tls secrets that do not exist. Most
 // controllers then serve their default certificate, so HTTPS clients see
@@ -27,7 +38,8 @@ func ingressTLSSecrets(
 			missing = append(missing, id.Name)
 		}
 	}
-	if len(missing) == 0 {
+	if len(missing) == 0 ||
+		!sustained(ctx, "tls-secret", e.FirstSeen, DefaultTLSSecretGrace) {
 		return nil
 	}
 	evidence := make([]detection.Evidence, 0, len(missing))

@@ -21,13 +21,16 @@ func (ActiveProbe) Name() string { return "active-probe" }
 // Kinds implements detection.Detector.
 func (ActiveProbe) Kinds() []inventory.Kind {
 	return []inventory.Kind{kube.KindEndpoint, kube.KindService,
-		kube.KindExternalEndpoint}
+		kube.KindExternalEndpoint, kube.KindKwatch}
 }
 
 // Detect implements detection.Detector.
 func (ActiveProbe) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
+	if e.ID.Kind == kube.KindKwatch {
+		return networkRestricted(ctx, e)
+	}
 	healthy, known := e.Attribute(kube.AttrHealthy)
 	if !known {
 		return nil
@@ -47,6 +50,9 @@ func (ActiveProbe) Detect(
 	case kube.KindExternalEndpoint:
 		// The entity's name is the endpoint; the lead names it.
 		what, state = "Endpoint", "does not accept connections"
+	}
+	if words, known := failureWords(e); known {
+		state = words
 	}
 	return []detection.Finding{{
 		Reason: reasons.ActiveProbeFailure, Severity: detection.Critical,
@@ -103,5 +109,55 @@ func probeLatency(e inventory.Entity) []detection.Finding {
 		Since: valueSince(e, kube.AttrLatencyMS),
 		Summary: "Probe " + e.ID.Name + " responds slowly (" +
 			strconv.Itoa(int(latency)) + " ms)",
+	}}
+}
+
+// failureWords say how the probe failed, when it recorded how: a
+// silent target, a refusal and a missing name call for different fixes.
+func failureWords(e inventory.Entity) (string, bool) {
+	switch text(e, kube.AttrProbeFailureKind) {
+	case kube.FailureTimeout:
+		wait, ok := number(e, kube.AttrProbeTimeoutSeconds)
+		if !ok {
+			return "did not answer in time", true
+		}
+		// Whole seconds, spelled out: the message writer would turn
+		// a bare "3s" into "less than a minute".
+		return "did not answer within " + seconds(
+			time.Duration(wait*float64(time.Second))), true
+	case kube.FailureRefused:
+		return "refused the connection", true
+	case kube.FailureDNS:
+		return "name does not resolve", true
+	case kube.FailureDNSLookup:
+		return "DNS lookup failed", true
+	}
+	return "", false
+}
+
+// networkRestricted reports that every dependency kwatch probed failed
+// in the same round. The cause is more likely kwatch's own network
+// (an egress policy, a missing route) than that many dependencies
+// being down at once, so no dependency is blamed. It is informational.
+func networkRestricted(
+	ctx detection.Context, e inventory.Entity,
+) []detection.Finding {
+	failed, _ := number(e, kube.AttrDependenciesUnreachable)
+	if failed < 1 {
+		return nil
+	}
+	seconds, _ := number(e, kube.AttrFailureDuration)
+	since := valueSince(e, kube.AttrDependenciesUnreachable)
+	if !sustained(ctx, "kwatch-network", since, boundedSeconds(seconds)) {
+		return nil
+	}
+	count := strconv.Itoa(int(failed))
+	return []detection.Finding{{
+		Reason: reasons.KwatchNetworkRestricted, Severity: detection.Info,
+		Since: since,
+		Summary: "kwatch could not reach any of its " + count +
+			" probed dependencies; its own network may be restricted",
+		Evidence: []detection.Evidence{{
+			Label: "dependencies probed, all failing", Value: count}},
 	}}
 }

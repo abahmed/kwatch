@@ -161,3 +161,27 @@ func TestTierKnownPageStaysPage(t *testing.T) {
 		t.Fatalf("tier = %v, want Page", got)
 	}
 }
+
+func TestIncidentModeIgnoresConfigurationRisks(t *testing.T) {
+	root := inventory.EntityID{Kind: kube.KindDeployment, Name: "web"}
+	pod := inventory.EntityID{Kind: kube.KindPod, Name: "web-1"}
+	risk := detection.Finding{Entity: root,
+		Reason: reasons.RiskNoMemoryLimit,
+		Mode:   detection.ModeRiskNoMemoryLimit, Advisory: true}
+	failure := detection.Finding{Entity: pod,
+		Reason: reasons.ContainersNotReady,
+		Mode:   detection.ModeNotReady}
+	p := &Incident{Root: root, Members: map[detection.Key]detection.Finding{
+		{Entity: root, Reason: risk.Reason}:   risk,
+		{Entity: pod, Reason: failure.Reason}: failure,
+	}}
+
+	if got := incidentMode(p); got != detection.ModeNotReady {
+		t.Fatalf("mode = %q, want the failure's, not the risk's", got)
+	}
+
+	delete(p.Members, detection.Key{Entity: pod, Reason: failure.Reason})
+	if got := incidentMode(p); got != detection.ModeRiskNoMemoryLimit {
+		t.Fatalf("risk-only incident mode = %q", got)
+	}
+}

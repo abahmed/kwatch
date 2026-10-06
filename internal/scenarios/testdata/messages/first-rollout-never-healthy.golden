@@ -1,0 +1,8 @@
+10:04:15 settled
+🟠 web in shop (prod-eu-1) has not been ready for three minutes. Its node and registry are healthy and unchanged, so nothing outside it explains this. It runs a single replica, so this is downtime, not degradation. To see the object's state and events, run kubectl describe pod web-187b2ca1-a -n shop
+🟠 web in shop (prod-eu-1) has not been ready for three minutes.
+
+10:10:00 material change
+🟠 web in shop (prod-eu-1) has never become healthy since it was created ten minutes ago.
+🟠 web in shop (prod-eu-1) has never become healthy since it was created ten minutes ago.
+

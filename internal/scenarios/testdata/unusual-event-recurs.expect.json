@@ -1,0 +1,8 @@
+{
+  "name": "unusual-event-recurs",
+  "description": "A Service gets repeated FailedDeployModel events, they stop, and they return.",
+  "root": "service/shop/web",
+  "tier": "digest",
+  "maxMessages": 4,
+  "tail": "40m0s"
+}

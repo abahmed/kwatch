@@ -35,7 +35,30 @@ func TestOfferQueuedJobResolveDisplacesNewestOtherJob(t *testing.T) {
 	require.True(t, result.accepted, "a resolve is never dropped")
 	require.NotNil(t, result.displaced)
 	assert.Equal(t, "b", result.displaced.key())
-	assert.Equal(t, []string{"a", "c"}, queuedKeys(queue))
+	assert.Equal(t, []string{"c", "a"}, queuedKeys(queue),
+		"the resolve goes ahead of the routine job")
+}
+
+// Resolves and pages go ahead of routine jobs, which are paced, and keep
+// their order among themselves.
+func TestOfferQueuedJobPutsUrgentJobsFirst(t *testing.T) {
+	queue := make(chan deliverJob, 16)
+	for _, key := range []string{"a", "b", "c"} {
+		require.True(t, offerQueuedJob(queue, incidentJob(key, "ns")).accepted)
+	}
+	plain := deliverJob{kind: jobMessage, msg: "hello"}
+	require.True(t, offerQueuedJob(queue, plain).accepted)
+
+	require.True(t, offerQueuedJob(queue, resolveJob("d")).accepted)
+	page := incidentJob("e", "ns")
+	page.incident.Route.Severity = "critical"
+	require.True(t, offerQueuedJob(queue, page).accepted)
+	// A resolve of a queued conversation replaces its update in place and
+	// then moves forward too.
+	require.True(t, offerQueuedJob(queue, resolveJob("b")).accepted)
+
+	assert.Equal(t, []string{"d", "e", "b", "a", "c", "message"},
+		queuedKeys(queue))
 }
 
 func TestOfferQueuedJobNeverReplacesQueuedResolve(t *testing.T) {

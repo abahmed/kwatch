@@ -14,8 +14,8 @@ import (
 )
 
 // SchemaVersion is the on-disk format version. Any change to a persisted
-// layout must bump it. There are no migrations and no backups: a file
-// with another version is deleted and replaced by a fresh store (see
+// layout must bump it. There are no migrations: a file
+// with another version is moved aside and replaced by a fresh store (see
 // reset.go).
 const SchemaVersion = 2
 
@@ -85,6 +85,8 @@ type file struct {
 	now     func() time.Time
 	sizeCap int64
 	free    freeSpaceFunc
+	// volumeLimit is Options.VolumeLimit; zero means no volume budget.
+	volumeLimit int64
 
 	mu      sync.RWMutex
 	db      *bolt.DB       // nil while a reset is pending or absent
@@ -117,7 +119,7 @@ func Open(path string, options Options) (*Store, error) {
 	f := &file{
 		path: path, now: options.Now,
 		sizeCap: capOrDefault(options.SizeCap), free: freeSpaceOf(options),
-		writes: newGenerations(),
+		volumeLimit: options.VolumeLimit, writes: newGenerations(),
 	}
 	var db *bolt.DB
 	var err error
@@ -148,7 +150,7 @@ func (f *file) repair() error {
 		return err
 	}
 	if f.pending != nil {
-		db, err := resetFile(f.path, f.pending)
+		db, err := resetFile(f.path, f.pending, f.volumeLimit)
 		if err != nil {
 			return err
 		}

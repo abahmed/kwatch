@@ -2,6 +2,7 @@ package detectors
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
@@ -15,6 +16,15 @@ import (
 // the node mean that under load the kernel kills pods that stayed
 // within their own limit.
 const memoryOvercommit = 1.5
+
+// memoryOvercommitClear is the share a raised finding must fall below to
+// end, and overcommitSustain is how long the share must stay at
+// memoryOvercommit before the finding is raised. Pods come and go, so a
+// share that touches 150% for one evaluation says little.
+const (
+	memoryOvercommitClear = 1.4
+	overcommitSustain     = 5 * time.Minute
+)
 
 // NodeCommitment detects nodes whose pods' memory limits add up to far
 // more than the node has. It explains OOM kills and evictions of pods
@@ -34,12 +44,22 @@ func (NodeCommitment) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	allocatable, ok := number(e, kube.AttrMemoryAllocatable)
-	if !ok || allocatable <= 0 {
+	if !ok || allocatable <= 0 || nodeIsYoung(ctx, e) {
 		return nil
 	}
-	limits, unlimited := memoryLimitsOn(ctx.Model, e.ID)
+	limits, unlimited := memoryLimitsOn(ctx, e.ID)
 	share := limits / allocatable
-	if share < memoryOvercommit {
+	// From overcommitCritical on, NodeHealth reports the node as a
+	// critical resource problem; one condition gets one finding.
+	level := memoryOvercommit
+	if ctx.Ongoing("memory-overcommit") {
+		level = memoryOvercommitClear
+	}
+	if share < level || share >= overcommitCritical {
+		return nil
+	}
+	if !sustained(ctx, "memory-overcommit", time.Time{},
+		overcommitSustain) {
 		return nil
 	}
 	since := ctx.Onset("memory-overcommit", ctx.Now)
@@ -55,30 +75,27 @@ func (NodeCommitment) Detect(
 	return []detection.Finding{{
 		Reason: reasons.NodeMemoryOvercommitted, Severity: detection.Warning,
 		Since: since,
-		Summary: "Memory limits of the pods on this node add up to " +
-			percentText(share*100) + " of its memory; under load the " +
-			"kernel will kill pods that stayed within their own limit",
+		Summary: "Node is overcommitted on memory: its pods' limits " +
+			"add up to " + percentText(share*100) + " of its memory; " +
+			"under load the kernel will kill pods that stayed within " +
+			"their own limit",
 		Evidence: evidence,
 	}}
 }
 
-// memoryLimitsOn sums the memory limits of the containers of the pods
-// running on node, and counts the containers that have none. Pods that
-// finished no longer hold memory.
+// memoryLimitsOn sums the memory limits of the app containers of the
+// pods running on node, and counts the containers that have none. Pods
+// that finished and regular init containers hold no memory (the same
+// rule NodeHealth applies, through runningContainers).
 func memoryLimitsOn(
-	model inventory.Reader, node inventory.EntityID,
+	ctx detection.Context, node inventory.EntityID,
 ) (limits float64, unlimited int) {
-	for _, pod := range model.Related(node, inventory.RunsOn,
+	for _, pod := range ctx.Model.Related(node, inventory.RunsOn,
 		inventory.Incoming) {
-		if entity, ok := model.Entity(pod); ok && podFinished(entity) {
+		if entity, ok := ctx.Model.Entity(pod); ok && podFinished(entity) {
 			continue
 		}
-		for _, id := range model.Related(pod, inventory.PartOf,
-			inventory.Incoming) {
-			container, ok := model.Entity(id)
-			if !ok {
-				continue
-			}
+		for _, container := range runningContainers(ctx, pod) {
 			limit, ok := number(container, kube.AttrMemoryLimit)
 			if !ok {
 				unlimited++

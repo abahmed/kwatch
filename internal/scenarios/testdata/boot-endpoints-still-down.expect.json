@@ -1,0 +1,13 @@
+{
+  "name": "boot-endpoints-still-down",
+  "description": "A node pool boots; the API pods start but stay not ready, so its Service and the webhook it serves still have no endpoints after the boot window.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "bootHeld": true,
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "nodepool//workers",
+    "node//n1"
+  ],
+  "tail": "30m0s"
+}

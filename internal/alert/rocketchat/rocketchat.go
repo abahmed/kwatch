@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -105,9 +105,5 @@ func (r *RocketChat) buildRequestBodyRocketChat(text string) ([]byte, error) {
 
 // incidentText is the Note with the last output as a Markdown code block.
 func incidentText(m notification.Message) string {
-	text := m.NoteText()
-	if len(m.Output) > 0 {
-		text += "\n```\n" + strings.Join(m.Output, "\n") + "\n```"
-	}
-	return text
+	return safetext.NoteWithOutput(m.NoteText(), m.Output, "\n", 0)
 }

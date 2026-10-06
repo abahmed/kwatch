@@ -4,7 +4,9 @@ Guidance for humans and AI agents making changes to this repository. For the
 user-facing contribution process and published technical documentation, see
 [kwatch.dev/docs](https://kwatch.dev/docs). New contributors should read
 `docs/contributor-architecture.md` first: it explains the packages and import
-rules in plain English before this file's rules. The root `CONTRIBUTING.md` is
+rules in plain English before this file's rules. Anyone changing
+`internal/incident` should also read `docs/incident-lifecycle.md`, the
+one-page guide to the life of an incident and its timings. The root `CONTRIBUTING.md` is
 a short repository entry point; it must not become a second public
 documentation source.
 
@@ -50,10 +52,10 @@ true when extending the system:
   write transaction verifies the claim, so a process whose claim was
   superseded fails with a fenced error instead of overwriting newer state. A
   failed save is logged and retried; it never stops delivery.
-- The leader session ends in a fixed order: readiness is withdrawn at once,
+- The active session ends in a fixed order: readiness is withdrawn at once,
   components stop, delivery drains, thread IDs are saved, the session end is
   recorded, and the file is closed. Delivery drains before the thread save
-  so the thread IDs of the last sends survive. After leadership is lost,
+  so the thread IDs of the last sends survive. After the state lock is lost,
   delivery sends nothing more: queued jobs are dead-lettered.
 - Every queued delivery is written to the persisted outbox when a provider
   queue accepts it and removed when a provider (or its fallback) accepted it
@@ -268,6 +270,9 @@ enforces, are in `docs/contributor-architecture.md`.
 | `internal/notification` | Provider-neutral message type, severity levels, and rendering helpers such as chunking and mention neutralizing (leaf) |
 | `internal/scope` | Delivery scope over findings: namespaces, reasons, silences, and maintenance holds |
 | `internal/pipeline` | Engine loop: observation queue, model update, detectors, incident manager, scope, investigation, downtime reconciliation, audit entries; the only producer of incident decisions |
+| `internal/pipeline/announce` | Collecting steps: startup summary, digest, roll-up, namespace outage hold, listings; the pipeline wires it and it never imports the pipeline |
+| `internal/pipeline/coverage` | Memory of the coverage backstop (failing workloads, hand-backs) and its timings |
+| `internal/pipeline/investigate` | Evidence investigators (crash, node, scheduling, config, admission, registry) and the `Investigator` contract |
 | `internal/delivery/*` | Delivery manager for notification messages: routing, retries, fallback, pacing, queue coalescing, transport, provider dispatch |
 | `internal/delivery/api` | Neutral provider contract shared by delivery and the static catalog |
 | `internal/alert/*` | Provider adapters; one subpackage per provider |
@@ -288,8 +293,8 @@ Application composition is split by responsibility:
 
 - `internal/app/bootstrap.go` and `serve.go` own infrastructure, health, and
   the serve loop.
-- `internal/app/leader_election.go` and `election_lock.go` own the Lease lock.
-- `internal/app/active.go` runs the leader session: state file, startup
+- `internal/app/leader_election.go` and `election_lock.go` own the state lock.
+- `internal/app/active.go` runs the active session: state file, startup
   bookkeeping, and supervised components. `startup.go`,
   `restart_classification.go`, and `startup_message.go` own the runtime
   session, restart classification, and the startup message.
@@ -443,6 +448,25 @@ Step-by-step guides with real examples and test commands:
    lifecycle with the injected clock, and update
    `docs/kubernetes-coverage.md`.
 
+### Message data flows (writers never read the model)
+
+- `incident.Decision` carries data the pipeline adds before writing:
+  `Output`, `Evidence`, `Changes` (latest namespace changes, only for an
+  incident without a cause, from `incident.RecentChanges`) and `KindNames`
+  (declared spelling of custom kinds, from the `kube.AttrKindName` entity
+  attribute). Compose reads these; it never reads the model or a package
+  global.
+- Fix attempts: `Incident.Attempt` is the latest rollout or config change
+  while open. It makes `ReasonFixAttempt` once per change and
+  `ReasonFixStillFailing` once, `FixWatch` later, only while `Revision` is at
+  most `maxAttemptRevision` (the message budget). It is in the fingerprint.
+- Damping: `keepsMember` keeps a finding in its incident when it was told
+  about it and the new root is in the same workload chain
+  (`sameChainFlip`); a superseded non-page incident with the same failures
+  as a target created within `ReviseSettle` resolves quietly. `holdFor`
+  doubles the resolve hold once more for roots reopened more than
+  `ChronicReopens` times within `ChronicWindow`.
+
 ## Naming conventions
 
 - `New*` constructors; `Detect`, `Explain`, `Apply`, `Tick`, `Write`,
@@ -487,7 +511,7 @@ Some quirks are load-bearing. Preserve them unless a change explicitly says othe
   `Message.Carrier` set; delivery drops it, the replay keeps it apart from
   delivered messages, and the audit entry says `delivery: digest`.
 - Two or more announcements in one tick go as one roll-up
-  (`internal/pipeline/rollup.go`). A roll-up is a `Listing` like the startup
+  (`internal/pipeline/announce/rollup.go`). A roll-up is a `Listing` like the startup
   summary: the first own message of a listed incident is written as an
   announcement, and the roll-up resolves once every listed incident has.
   Open roll-ups are persisted in the startup marker.
@@ -763,16 +787,16 @@ Kwatch runs as one replica with the `Recreate` strategy; there is no standby
 and no self-failover. The Lease is a lock, not a failover mechanism: it stops
 two processes from writing the state volume at once, for example during a
 rollout. The epoch that fences the state file is a counter kept in the file
-itself and claimed only by the Lease holder; it does not come from the Lease,
-so a deleted or recreated Lease cannot fence the new leader. The volume must
-be `ReadWriteOnce` block storage, because RWO attach exclusivity is what keeps
-a partitioned node off the file. A restart resumes from the PVC, so incidents
-are not re-announced and
-changes made while kwatch was down are still found. This does not protect
-against total cluster, node, API, volume, or network failure. Delivery is at
-least once: queued jobs persist in the delivery outbox (at most 2048, none
-older than 24 hours) and are re-sent after a restart, and a send interrupted
-mid-request may repeat. Exactly-once delivery is not promised.
+itself and claimed only by the state lock holder; it does not come from the
+Lease, so a deleted or recreated Lease cannot fence the new holder. The volume
+must be `ReadWriteOnce` block storage, because RWO attach exclusivity is what
+keeps a partitioned node off the file. A restart resumes from the PVC, so
+incidents are not re-announced and changes made while kwatch was down are still
+found. This does not protect against total cluster, node, API, volume, or
+network failure. Delivery is at least once: queued jobs persist in the delivery
+outbox (at most 2048, none older than 24 hours) and are re-sent after a
+restart, and a send interrupted mid-request may repeat. Exactly-once delivery
+is not promised.
 
 Production readiness means that required readiness, bounded shutdown, safe
 persistence recovery, Kubernetes and provider outage behavior, bounded queues,
@@ -787,8 +811,8 @@ Required components have bounded startup and stall deadlines; components that
 can be idle must still report lifecycle progress. A required failure or stall
 removes readiness immediately, before any shutdown work, then cancels the
 active session, drains delivery, closes the state file, and exits so
-Kubernetes restarts the Pod. The Lease is not released on a failure; the
-next leader takes it when it expires, and the store's epoch claim fences any
+Kubernetes restarts the Pod. The state lock is not released on a failure; the
+next holder takes it when it expires, and the store's epoch claim fences any
 late write.
 Optional components retry with `1s, 2s, 4s, 8s` backoff capped at `60s`; the
 backoff resets after a minute of healthy execution. Component completion is
@@ -844,11 +868,11 @@ no backup is kept. The reset is counted in
 
 ## Current lifecycle safeguards
 
-Application readiness is coordinated per leadership epoch. The process is not
-ready until it holds the Lease, has claimed and opened the state file, every
-source finished its initial list, and configured delivery is running. A stale
-callback from an earlier epoch must not restore readiness or clear a newer
-failure.
+Application readiness is coordinated per state lock epoch. The process is not
+ready until it holds the state lock, has claimed and opened the state file,
+every source finished its initial list, and configured delivery is running. A
+stale callback from an earlier epoch must not restore readiness or clear a
+newer failure.
 
 Delivery generations have explicit `accepting`, `draining`, `stopped`, and
 `failed` states. Reconfiguration publishes a new generation only after the old
@@ -858,8 +882,8 @@ generation replacement have separate completion signals.
 
 The engine writes incidents after a decision and at least once a minute, and
 once more when it stops. Every write passes the store's epoch claim; a saver
-must not create detached background writes that can outlive shutdown or
-leadership loss.
+must not create detached background writes that can outlive shutdown or state
+lock loss.
 
 CRD and dynamic watcher generations own their discovery and informer goroutines.
 Failure paths cancel and wait for those routines before retrying or replacing a

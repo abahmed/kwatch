@@ -129,7 +129,8 @@ func TestSendMessage(t *testing.T) {
 	assert.Contains(gotBody, "user=user123")
 	assert.Contains(gotBody, "message=hello+alert")
 	assert.Contains(gotBody, "title=kwatch")
-	assert.Contains(gotBody, "priority=1")
+	// Plain messages (startup, notices) never use the alert priority.
+	assert.NotContains(gotBody, "priority=")
 }
 
 func TestSendMessageError(t *testing.T) {

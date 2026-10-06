@@ -46,10 +46,13 @@ func (Container) Detect(
 ) []detection.Finding {
 	switch text(e, kube.AttrState) {
 	case "waiting":
-		return waitingFinding(e)
+		return livenessKilledWaiting(ctx, e, waitingFinding(e))
 	case "terminated":
 		return terminatedFinding(ctx, e)
 	case "running":
+		if killed := livenessKilledFinding(ctx, e); killed != nil {
+			return killed
+		}
 		return append(restartingFinding(ctx, e), probeFindings(ctx, e)...)
 	default:
 		return nil
@@ -240,7 +243,14 @@ func containerEvidence(e inventory.Entity) []detection.Evidence {
 			out = append(out, detection.Evidence{Label: label, Value: value})
 		}
 	}
-	add("error", text(e, kube.AttrLastMessage))
+	// The termination message is the container's own last word; a
+	// container killed by a probe leaves it empty, and the first error
+	// line of its previous log stands in. Either is quoted as is.
+	errorText := text(e, kube.AttrLastMessage)
+	if errorText == "" {
+		errorText = text(e, kube.AttrLastErrorLine)
+	}
+	add(detection.EvidenceError, errorText)
 	add("message", text(e, kube.AttrMessage))
 	add("last termination", text(e, kube.AttrLastReason))
 	if code, ok := number(e, kube.AttrLastExitCode); ok {
@@ -250,5 +260,8 @@ func containerEvidence(e inventory.Entity) []detection.Evidence {
 		add("restarts", strconv.Itoa(int(restarts)))
 	}
 	add("image", text(e, kube.AttrImage))
+	if killedByMemory(e) {
+		out = append(out, memoryEvidence(e)...)
+	}
 	return out
 }

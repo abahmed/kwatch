@@ -42,5 +42,6 @@ func Default() []detection.Detector {
 		Risk{},
 		ImageDrift{},
 		Lease{},
+		ReleaseWatch{},
 	}
 }

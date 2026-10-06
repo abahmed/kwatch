@@ -163,7 +163,7 @@ func TestEngineHungInvestigationStillAnnounces(t *testing.T) {
 
 	h.run(start.Add(10*time.Minute), 10*time.Second)
 
-	if len(h.decisions) != 1 || h.decisions[0].Output != nil {
+	if len(h.decisions) != 1 || h.decisions[0].Facts.Output != nil {
 		t.Fatalf("decisions = %+v, want one announcement without output",
 			h.decisions)
 	}

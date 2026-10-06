@@ -6,6 +6,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/structured"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -107,6 +108,7 @@ func (s *Splunk) SendIncident(
 	if len(m.Output) > 0 {
 		event["output"] = m.Output
 	}
+	addFlags(event, structured.FlagsOf(m))
 	return s.send(ctx, event)
 }
 
@@ -143,3 +145,28 @@ func (s *Splunk) send(
 	})
 	return err
 }
+
+// addFlags adds the delivery hints a search or alert needs, only when set,
+// so an ordinary event keeps its shape.
+func addFlags(event map[string]interface{}, f structured.Flags) {
+	if f.Opens {
+		event["opens"] = true
+	}
+	if f.PagingOnly {
+		event["pagingOnly"] = true
+	}
+	if f.SkipPaging {
+		event["skipPaging"] = true
+	}
+	if f.Carrier != "" {
+		event["carrier"] = f.Carrier
+	}
+	if f.ReopenWithinSeconds > 0 {
+		event["reopenWithinSeconds"] = f.ReopenWithinSeconds
+	}
+}
+
+// ReceivesPagingOnly says this receiver tracks incidents by key and must
+// get a PagingOnly close for an incident it opened, even though it also
+// takes plain messages. Delivery reads it next to SkipsPlainMessages.
+func (s *Splunk) ReceivesPagingOnly() bool { return true }

@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -79,10 +79,8 @@ func (s *Squadcast) SendIncident(
 	if m.Resolved() {
 		status = "resolve"
 	}
-	description := m.NoteText()
-	if len(m.Output) > 0 {
-		description += "\n\n" + strings.Join(m.Output, "\n")
-	}
+	description := safetext.PlainWithOutput(
+		m.NoteText(), m.Output, "\n\n", safetext.DetailsLimit)
 	payload := squadcastPayload{
 		Message:     notification.Truncate(m.ShortText(), messageLimit),
 		Description: description,

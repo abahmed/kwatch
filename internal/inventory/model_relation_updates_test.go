@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRelatedReplaceTargets(t *testing.T) {
@@ -194,4 +195,32 @@ func TestRelatedInvalidRelation(t *testing.T) {
 	}
 	_, err := m.Apply(observation)
 	assert.Equal(t, ErrInvalidRelation, err)
+}
+
+func TestEndpointSliceChangeTouchesWhatDependsOnItsService(t *testing.T) {
+	m := NewModel(Options{})
+	service := CoreID("service", "mesh", "hook")
+	slice := CoreID("endpointslice", "mesh", "hook-abc")
+	webhook := CoreID("mutatingwebhookconfiguration", "", "injector")
+	ingress := CoreID("ingress", "mesh", "web")
+	for _, id := range []EntityID{service, slice, webhook, ingress} {
+		_, err := m.Apply(Observation{Kind: Observed, Source: "k",
+			At: testTime, Entity: id})
+		require.NoError(t, err)
+	}
+	relate := func(from EntityID, relation RelationType) {
+		_, err := m.Apply(Observation{Kind: Related, Source: "k",
+			At: testTime, Entity: from, Relation: relation,
+			Targets: []EntityID{service}})
+		require.NoError(t, err)
+	}
+	relate(slice, Backs)
+	relate(webhook, Serves)
+	relate(ingress, RoutesTo)
+
+	update, err := m.Apply(Observation{Kind: Observed, Source: "k",
+		At: testTime, Entity: slice})
+	require.NoError(t, err)
+	assert.Contains(t, update.Touched, webhook)
+	assert.Contains(t, update.Touched, ingress)
 }

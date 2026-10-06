@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/pipeline/announce"
 )
 
 // batchTimer hands the writer a batch channel the test fires, and reports
@@ -109,7 +110,7 @@ func TestStoreWriterFlushesPendingOnClose(t *testing.T) {
 	st := &memStore{}
 	timer := newBatchTimer()
 	w := startWriter(t, st, timer)
-	state := StartupState{Complete: true}
+	state := announce.StartupState{Complete: true}
 
 	w.offer(records("a"))
 	w.offer(storeSnapshot{startup: &state})

@@ -1,10 +1,13 @@
 package incident
 
 import (
+	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/rootcause"
@@ -29,7 +32,10 @@ const maxHistory = 10
 
 // Occurrence is one earlier, resolved occurrence of the same root.
 type Occurrence struct {
-	Mode     detection.Mode `json:",omitempty"`
+	Mode detection.Mode `json:",omitempty"`
+	// Modes are all the modes the occurrence's members had, Mode
+	// included; older records have none.
+	Modes    []detection.Mode `json:",omitempty"`
 	Opened   time.Time
 	Resolved time.Time
 	Fix      Fix
@@ -41,6 +47,12 @@ type Occurrence struct {
 	// Trigger is what the occurrence's cause was blamed on, as one of
 	// the TriggerOf words, or empty when none was named.
 	Trigger string `json:",omitempty"`
+	// Page is true when the occurrence paged, or would have if a repeat
+	// had not been held. A page that re-opens soon after one is a
+	// repeat of the same outage.
+	Page bool `json:",omitempty"`
+	// Digested is when a digest last listed the occurrence.
+	Digested time.Time `json:",omitempty"`
 }
 
 // Triggers are the kinds of cause a recurrence can share.
@@ -103,9 +115,20 @@ func (inc *Incident) LastOccurrence() (Occurrence, bool) {
 // occurrenceOf closes p as one occurrence.
 func occurrenceOf(p *Incident) Occurrence {
 	return Occurrence{
-		Mode: p.Mode, Opened: p.Opened, Resolved: p.Resolved, Fix: p.Fix,
-		Heard: !p.Announced.IsZero(), Trigger: TriggerOf(p.Cause),
+		Mode: p.Mode, Modes: p.modeList(), Opened: p.Opened,
+		Resolved: p.Resolved, Fix: p.Fix,
+		Heard: p.sent.told, Trigger: TriggerOf(p.Cause),
+		Page:     pagedOccurrence(p),
+		Digested: p.DigestedAt,
 	}
+}
+
+// pagedOccurrence reports a page that people (or the pagers) got: an
+// announcement that was decided but dropped or held and never sent paged
+// nobody, so it must not suppress the next real page as a "repeat".
+func pagedOccurrence(p *Incident) bool {
+	return !p.Announced.IsZero() && isPage(p) &&
+		(p.sent.told || p.Delivery.OpenAtPagers())
 }
 
 // appendHistory returns history with o appended, keeping the most recent
@@ -119,11 +142,21 @@ func appendHistory(history []Occurrence, o Occurrence) []Occurrence {
 }
 
 // incidentMode picks the mode of the root's own finding, or of the first
-// member by key when the root has none.
+// member by key when the root has none. Configuration risks never name
+// the mode: they come and go on their own, so a mode taken from one would
+// differ between occurrences of the same failure and the problem would
+// never be recognised as known. They are used only when nothing else is.
 func incidentMode(p *Incident) detection.Mode {
 	keys := make([]detection.Key, 0, len(p.Members))
-	for key := range p.Members {
-		keys = append(keys, key)
+	for key, member := range p.Members {
+		if !isRisk(member) {
+			keys = append(keys, key)
+		}
+	}
+	if len(keys) == 0 {
+		for key := range p.Members {
+			keys = append(keys, key)
+		}
 	}
 	sort.Slice(keys, func(i, j int) bool {
 		if keys[i].Entity != keys[j].Entity {
@@ -140,6 +173,11 @@ func incidentMode(p *Incident) detection.Mode {
 		return p.Members[keys[0]].Mode
 	}
 	return p.Mode
+}
+
+// isRisk reports a configuration risk finding.
+func isRisk(f detection.Finding) bool {
+	return f.Advisory || strings.HasPrefix(f.Reason, reasons.RiskPrefix)
 }
 
 // fixOf judges how p ended at now from the change history around its
@@ -213,10 +251,12 @@ func fixByChanges(outcomes []inventory.ChangeOutcome, opened time.Time) Fix {
 	return fix
 }
 
-// nodeReplaced reports a node root that is gone, or a node added while
-// the incident was open.
+// nodeReplaced reports a node root that failed for real and is gone, or
+// was followed by a node added while the incident was open. A drain is
+// maintenance, and a node that joined somewhere else says nothing about
+// this one, so neither counts.
 func nodeReplaced(model inventory.HistoryReader, p *Incident) bool {
-	if p.Root.Kind != kube.KindNode {
+	if p.Root.Kind != kube.KindNode || !hadNodeFailure(p) {
 		return false
 	}
 	if !model.Exists(p.Root) {
@@ -225,10 +265,65 @@ func nodeReplaced(model inventory.HistoryReader, p *Incident) bool {
 	for _, set := range model.RecentChangeSets(p.Opened) {
 		for _, change := range set.Changes {
 			if change.Classify() == inventory.ClassNodeAdded &&
-				!change.At.Before(p.Opened) {
+				!change.At.Before(p.Opened) &&
+				sameNodeGroup(model, p.Root, change.Entity) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// hadNodeFailure reports that the node had a failing finding of its own
+// other than being drained: members now, or reasons seen before they
+// cleared.
+func hadNodeFailure(p *Incident) bool {
+	for key, s := range p.Members {
+		if key.Entity == p.Root && !s.Advisory &&
+			key.Reason != reasons.NodeDraining {
+			return true
+		}
+	}
+	for reason := range p.rootReasons {
+		if reason != reasons.NodeDraining {
+			return true
+		}
+	}
+	return false
+}
+
+// sameNodeGroup reports whether an added node could replace the root:
+// it shares the root's node pool or zone. When the root has neither (or
+// is gone and cannot be asked), nothing says otherwise, so it matches.
+func sameNodeGroup(
+	model inventory.HistoryReader, root, added inventory.EntityID,
+) bool {
+	known := false
+	for _, group := range []inventory.Kind{kube.KindNodePool, kube.KindZone} {
+		want := relatedOfKind(model, root, group)
+		if len(want) == 0 {
+			continue
+		}
+		known = true
+		for _, id := range relatedOfKind(model, added, group) {
+			if slices.Contains(want, id) {
+				return true
+			}
+		}
+	}
+	return !known
+}
+
+// relatedOfKind lists what id is part of, of one kind.
+func relatedOfKind(
+	model inventory.Reader, id inventory.EntityID, kind inventory.Kind,
+) []inventory.EntityID {
+	var out []inventory.EntityID
+	for _, target := range model.Related(
+		id, inventory.PartOf, inventory.Outgoing) {
+		if target.Kind == kind {
+			out = append(out, target)
+		}
+	}
+	return out
 }

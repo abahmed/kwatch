@@ -173,7 +173,7 @@ func TestManagerRestoreGraceHoldsFlappingIncidents(t *testing.T) {
 		t.Fatal("flapping incident must not resolve during grace")
 	}
 	ds := fresh.tick(grace)
-	wantAction(t, ds, Resolve, "stable for "+DefaultMaxHold.String())
+	wantAction(t, ds, Resolve, Reason("stable for "+DefaultMaxHold.String()))
 }
 
 // The impact peak and a pending cause revision survive a restart, so the
@@ -182,15 +182,16 @@ func TestManagerRestoreKeepsImpactPeakAndPendingRevision(t *testing.T) {
 	old := newRig(t, Config{})
 	announced(t, old, podSig("web"))
 	p := old.m.incidents[old.idOf(entity(kube.KindPod, "web"))]
-	p.impactPeak, p.revised, p.revisedAt = 5, true, at(time.Minute)
+	p.impactPeak = 5
+	p.Pending.MarkRevised(at(time.Minute))
 
 	fresh := newRig(t, Config{})
 	fresh.m.Restore(old.m.Export(), time.Time{})
 	got := fresh.m.incidents[p.ID]
-	if got.impactPeak != 5 || !got.revised ||
-		!got.revisedAt.Equal(at(time.Minute)) {
+	if got.impactPeak != 5 || !got.Pending.RevisedOwed() ||
+		!got.Pending.RevisedDueAt(0).Equal(at(time.Minute)) {
 		t.Fatalf("restored peak=%d revised=%v at %v", got.impactPeak,
-			got.revised, got.revisedAt)
+			got.Pending.RevisedOwed(), got.Pending.RevisedDueAt(0))
 	}
 }
 
@@ -238,7 +239,7 @@ func TestManagerRestoreWithoutLiveRecordsHasNoGrace(t *testing.T) {
 	r.tick(at(2 * time.Minute))
 
 	ds := r.tick(at(2*time.Minute + DefaultHold))
-	wantAction(t, ds, Resolve, "healthy for "+DefaultHold.String())
+	wantAction(t, ds, Resolve, Reason("healthy for "+DefaultHold.String()))
 }
 
 func TestManagerRestoreRecoveringReturnAfterGraceIsSilent(t *testing.T) {

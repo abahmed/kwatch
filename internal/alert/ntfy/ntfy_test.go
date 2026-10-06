@@ -37,7 +37,8 @@ func TestNtfy(t *testing.T) {
 	c := NewNtfy(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Equal(c.Name(), "Ntfy")
-	assert.Equal(c.url, "https://ntfy.example.com/kwatch")
+	assert.Equal(c.url, "https://ntfy.example.com")
+	assert.Equal(c.topic, "kwatch")
 }
 
 func TestNtfyDefaultServer(t *testing.T) {
@@ -48,7 +49,8 @@ func TestNtfyDefaultServer(t *testing.T) {
 	}
 	c := NewNtfy(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
-	assert.Equal(c.url, "https://ntfy.sh/kwatch")
+	assert.Equal(c.url, "https://ntfy.sh")
+	assert.Equal(c.topic, "kwatch")
 }
 
 func TestNtfyInvalidConfig(t *testing.T) {

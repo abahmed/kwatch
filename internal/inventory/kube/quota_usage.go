@@ -13,6 +13,12 @@ import (
 // "name=percent%" sorted by name.
 const AttrQuotaNearLimit = "quota.near.limit"
 
+// AttrQuotaZeroHard lists the quota resources whose hard limit is zero,
+// comma separated. A zero limit is a deliberate "none allowed" (a namespace
+// that may not use a resource), not a quota that ran out; such resources
+// are also named in AttrExhausted, so a detector skips them using this.
+const AttrQuotaZeroHard = "quota.zero.hard"
+
 // QuotaNearLimitRatio is the share of a hard limit that counts as near.
 const QuotaNearLimitRatio = 0.8
 

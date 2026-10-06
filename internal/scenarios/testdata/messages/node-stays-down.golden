@@ -1,0 +1,4 @@
+10:02:45 settled
+🔴 Node n1 (prod-eu-1) is NotReady for about two minutes. It reports "container runtime is restarting". To check the node's conditions and recent events, run kubectl describe node n1
+🔴 Node n1 (prod-eu-1) is NotReady for about two minutes.
+

@@ -34,6 +34,35 @@ func quotaNearLimit(e inventory.Entity) []detection.Finding {
 	}}
 }
 
+// quotaCreators are the kinds whose controllers record FailedCreate when
+// the API server refuses the pods they ask for.
+var quotaCreators = []inventory.Kind{
+	kube.KindReplicaSet, kube.KindStatefulSet, kube.KindDaemonSet,
+	kube.KindJob,
+}
+
+// quotaRefusedCreate reports whether a controller in the namespace was
+// recently refused a create because it would exceed a quota.
+func quotaRefusedCreate(ctx detection.Context, namespace string) bool {
+	if ctx.Model == nil {
+		return false
+	}
+	since := ctx.Now.Add(-EventWindow)
+	for _, kind := range quotaCreators {
+		for _, id := range ctx.Model.EntitiesIn(kind, namespace) {
+			for _, note := range ctx.Model.Notes(id, since) {
+				if note.Reason == "FailedCreate" &&
+					strings.Contains(note.Message, "exceeded quota") {
+					ctx.RecheckAfter(note.At.Add(EventWindow).
+						Sub(ctx.Now) + time.Nanosecond)
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 // DefaultDetachStuck is how long a VolumeAttachment may take to detach;
 // the attach-detach controller force-detaches after six minutes.
 const DefaultDetachStuck = 10 * time.Minute

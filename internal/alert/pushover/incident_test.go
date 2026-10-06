@@ -31,16 +31,16 @@ func TestSendIncidentSendsShortWithStatusPriority(t *testing.T) {
 				t.Fatalf("message = %q", form.Get("message"))
 			}
 			providertest.AssertOneLeadingEmoji(t, form.Get("message"))
-			assertPushoverPriority(t, form, tc.Message.Resolved())
+			assertPushoverPriority(t, form, tc.Name)
 		})
 	}
 }
 
-func assertPushoverPriority(t *testing.T, form url.Values, resolved bool) {
+func assertPushoverPriority(t *testing.T, form url.Values, step string) {
 	t.Helper()
-	if resolved {
+	if step != "announce" {
 		if form.Has("priority") || form.Has("retry") {
-			t.Fatalf("resolve must use normal priority: %v", form)
+			t.Fatalf("%s must use normal priority: %v", step, form)
 		}
 		return
 	}

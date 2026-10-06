@@ -51,10 +51,11 @@ func (Risk) Detect(
 			"readiness probe, so traffic reaches them before they can "+
 			"serve and keeps reaching them while they fail")
 	}
-	if shape.withoutMemoryLimit > 0 {
-		add(reasons.RiskNoMemoryLimit, strconv.Itoa(shape.withoutMemoryLimit)+
-			" of its containers have no memory limit, so one leak can "+
-			"take the node down with it")
+	if len(shape.withoutMemoryLimit) > 0 {
+		add(reasons.RiskNoMemoryLimit,
+			strconv.Itoa(len(shape.withoutMemoryLimit))+
+				" of its containers have no memory limit, so one leak can "+
+				"take the node down with it")
 	}
 	if shape.mutableImage != "" {
 		add(reasons.RiskMutableImageTag, "Its image "+shape.mutableImage+
@@ -81,9 +82,12 @@ func (Risk) Detect(
 type workloadShape struct {
 	// containers counts the main containers seen; init containers and
 	// sidecars serve no traffic and have no readiness to check.
-	containers         int
-	withReadiness      int
-	withoutMemoryLimit int
+	containers    int
+	withReadiness int
+	// withoutMemoryLimit holds the names of the containers that have no
+	// memory limit. It is a set so that replicas of one container count
+	// once: the fix is one line in the pod template.
+	withoutMemoryLimit map[string]bool
 	// mutableImage is the first image whose tag can change, or "".
 	mutableImage string
 	// privileged is the first privileged container's name, or "".
@@ -96,7 +100,8 @@ type workloadShape struct {
 func readWorkloadShape(
 	model inventory.Reader, pods []inventory.EntityID,
 ) workloadShape {
-	shape := workloadShape{nodes: map[string]bool{}}
+	shape := workloadShape{nodes: map[string]bool{},
+		withoutMemoryLimit: map[string]bool{}}
 	for _, pod := range pods {
 		for _, node := range model.Related(pod, inventory.RunsOn,
 			inventory.Outgoing) {
@@ -124,7 +129,8 @@ func (s *workloadShape) read(container inventory.Entity) {
 		}
 	}
 	if _, ok := number(container, kube.AttrMemoryLimit); !ok {
-		s.withoutMemoryLimit++
+		_, name := splitContainerName(container.ID.Name)
+		s.withoutMemoryLimit[name] = true
 	}
 	if image := text(container, kube.AttrImage); s.mutableImage == "" &&
 		mutableTag(image) {

@@ -41,9 +41,9 @@ func TestClassifyRestartIgnoresCompletedSession(t *testing.T) {
 	}
 }
 
-func TestClassifyRestartUsesPersistedFailureCode(t *testing.T) {
+func TestClassifyRestartUsesPersistedEndReason(t *testing.T) {
 	previous := runtimeSession{
-		SessionID: "previous", FailureCode: "oom_killed",
+		SessionID: "previous", EndReason: "oom_killed",
 	}
 	if got := classifyRestart(previous); got != "oom_killed" {
 		t.Fatalf("classifyRestart() = %q", got)
@@ -130,30 +130,6 @@ func TestStartupPersistsAndClosesRuntimeSession(t *testing.T) {
 	if store.session.EndReason != "graceful_shutdown" ||
 		store.session.EndedAt.IsZero() {
 		t.Fatalf("session was not closed: %+v", store.session)
-	}
-}
-
-func TestRecordFailurePersistsBoundedEvidence(t *testing.T) {
-	store := &sessionStore{testStateStore: testStateStore{
-		version: "dev", clusterID: "cluster-1",
-	}}
-	manager := newStartupManagerWithRuntime(
-		store, config.RuntimeConfigFor(&config.Config{}), clock.RealClock{},
-	)
-	if _, err := manager.Start(context.Background()); err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
-	manager.RecordFailure(
-		context.Background(),
-		"component-with-a-name-longer-than-is-useful-for-diagnostics-"+
-			"and-more",
-		"unknown-code",
-	)
-	if store.session.FailureCode != "internal_failure" {
-		t.Fatalf("failure code = %q", store.session.FailureCode)
-	}
-	if len(store.session.FailedComponent) > 64 {
-		t.Fatalf("failure component length = %d", len(store.session.FailedComponent))
 	}
 }
 

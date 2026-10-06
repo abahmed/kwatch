@@ -61,9 +61,32 @@ type Entry struct {
 	Considered []string `json:"considered,omitempty"`
 	// Delivery says how the decision reaches people when not as a message
 	// of its own: "digest", "roll-up" or "startup summary" when that
-	// message carries it, "paging" when only alert-tracking providers
-	// receive it. Empty for an ordinary message.
+	// message carries it, "unannounced" when nobody receives it (a
+	// resolve of an incident that never paged or spoke), "dropped" when
+	// the digest took it in and left it out, "paging" when only
+	// alert-tracking providers receive it, "chat" for a resolve the
+	// paging providers skip. Empty for an ordinary message.
 	Delivery string `json:"delivery,omitempty"`
+	// Opened, Resolved and Risks count what a digest listed: incidents
+	// still open, earlier ones that resolved, and configuration risks.
+	Opened   int `json:"opened,omitempty"`
+	Resolved int `json:"resolved,omitempty"`
+	Risks    int `json:"risks,omitempty"`
+	// Items names the first incidents a digest listed as "id: title",
+	// bounded; the counts above say how many there were in all.
+	Items []string `json:"items,omitempty"`
+}
+
+// Carried reports whether a Delivery value names a decision that people
+// do not receive as a message of its own: a carrier message holds it, or
+// nobody gets it. The carrier message is an entry of its own, so counting
+// the carried ones too would count the same message again.
+func Carried(delivery string) bool {
+	switch delivery {
+	case "digest", "roll-up", "startup summary", "unannounced", "dropped":
+		return true
+	}
+	return false
 }
 
 // Config selects where entries go.

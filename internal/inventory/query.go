@@ -106,6 +106,7 @@ func (m *Model) Prune(before time.Time) int {
 	removed := 0
 	for id, rec := range m.records {
 		rec.notes = pruneNotes(rec.notes, before)
+		rec.dropOrphanParts()
 		kept := rec.changes[:0]
 		for _, change := range rec.changes {
 			if !change.At.Before(before) {
@@ -141,7 +142,7 @@ func (m *Model) Notes(id EntityID, since time.Time) []Note {
 	}
 	var out []Note
 	for _, note := range rec.notes {
-		if !note.At.Before(since) {
+		if !note.At.Before(since) && !m.aboutOlderObject(rec, note) {
 			out = append(out, note)
 		}
 	}
@@ -159,7 +160,8 @@ func (m *Model) NotedKinds(since time.Time) map[Kind]bool {
 			continue
 		}
 		for _, note := range rec.notes {
-			if note.Warning && !note.At.Before(since) {
+			if note.Warning && !note.At.Before(since) &&
+				!m.aboutOlderObject(rec, note) {
 				out[id.Kind] = true
 				break
 			}

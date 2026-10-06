@@ -9,6 +9,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/pipeline/announce"
 )
 
 // rollupHarness is an engine whose sink keeps every message, delivered
@@ -32,13 +33,13 @@ func TestEngineRollupSendsOneMessageForSimultaneousAnnouncements(
 ) {
 	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
 	e, seen := rollupHarness(t, now)
-	page := announce("node")
+	page := announcement("node")
 	page.Incident.Tier = incident.Page
-	update := announce("other")
+	update := announcement("other")
 	update.Action = incident.Update
 
-	rest, rolled := e.announcer.collectRollup(context.Background(), now,
-		[]incident.Decision{page, announce("a"), update, announce("b")})
+	rest, rolled := e.announcer.collect.CollectRollup(context.Background(), now,
+		[]incident.Decision{page, announcement("a"), update, announcement("b")})
 
 	if !rolled || len(rest) != 1 || rest[0].Action != incident.Update {
 		t.Fatalf("only the update passes through, rest = %+v", rest)
@@ -60,7 +61,7 @@ func TestEngineRollupSendsOneMessageForSimultaneousAnnouncements(
 			t.Fatalf("want carried by the roll-up, got %+v", m)
 		}
 	}
-	rollups := e.announcer.startup.summary.Rollups
+	rollups := e.announcer.collect.Startup.Summary.Rollups
 	if len(rollups) != 1 || rollups[0].Key != rollup.Key ||
 		len(rollups[0].Incidents) != 3 {
 		t.Fatalf("roll-up not remembered: %+v", rollups)
@@ -72,8 +73,8 @@ func TestEngineRollupLeavesASingleAnnouncementAlone(t *testing.T) {
 	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
 	e, seen := rollupHarness(t, now)
 
-	rest, rolled := e.announcer.collectRollup(context.Background(), now,
-		[]incident.Decision{announce("a")})
+	rest, rolled := e.announcer.collect.CollectRollup(context.Background(), now,
+		[]incident.Decision{announcement("a")})
 
 	if rolled || len(rest) != 1 || len(*seen) != 0 {
 		t.Fatalf("rolled=%v rest=%+v seen=%d", rolled, rest, len(*seen))
@@ -85,23 +86,23 @@ func TestEngineRollupLeavesASingleAnnouncementAlone(t *testing.T) {
 func TestEngineRollupFollowsAndCloses(t *testing.T) {
 	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
 	e, seen := rollupHarness(t, now)
-	e.announcer.collectRollup(context.Background(), now,
-		[]incident.Decision{announce("a"), announce("b")})
-	update := announce("a")
+	e.announcer.collect.CollectRollup(context.Background(), now,
+		[]incident.Decision{announcement("a"), announcement("b")})
+	update := announcement("a")
 	update.Action, update.Incident.Revision = incident.Update, 2
 
-	first := e.announcer.followSummary(update)
+	first := e.announcer.collect.Follow(update)
 	if first.Action != incident.Announce {
 		t.Fatalf("first own message = %v, want an announcement", first.Action)
 	}
-	if again := e.announcer.followSummary(update); again.Action !=
+	if again := e.announcer.collect.Follow(update); again.Action !=
 		incident.Update {
 		t.Fatalf("later messages stay updates, got %v", again.Action)
 	}
 
 	// a and b are unknown to the manager, so they count as closed.
-	e.announcer.startup.checkSummary = true
-	sent := e.announcer.closeSummary(context.Background())
+	e.announcer.collect.Startup.CheckSummary = true
+	sent := e.announcer.collect.CloseListings(context.Background())
 
 	last := (*seen)[len(*seen)-1]
 	if !sent || last.Status != notification.StatusResolved ||
@@ -109,9 +110,9 @@ func TestEngineRollupFollowsAndCloses(t *testing.T) {
 		!strings.Contains(last.Note, "two problems") {
 		t.Fatalf("sent=%v last=%+v", sent, last)
 	}
-	if len(e.announcer.startup.summary.Rollups) != 0 {
+	if len(e.announcer.collect.Startup.Summary.Rollups) != 0 {
 		t.Fatalf("closed roll-up still kept: %+v",
-			e.announcer.startup.summary.Rollups)
+			e.announcer.collect.Startup.Summary.Rollups)
 	}
 }
 
@@ -120,7 +121,7 @@ func TestEngineRollupFollowsAndCloses(t *testing.T) {
 func TestStartupStateReadsEarlierMarkers(t *testing.T) {
 	old := `{"Complete":true,"Key":"startup/x","Incidents":["a"],` +
 		`"Followed":["a"]}`
-	var state StartupState
+	var state announce.StartupState
 	if err := json.Unmarshal([]byte(old), &state); err != nil {
 		t.Fatal(err)
 	}
@@ -128,9 +129,9 @@ func TestStartupStateReadsEarlierMarkers(t *testing.T) {
 		len(state.Incidents) != 1 || len(state.Followed) != 1 {
 		t.Fatalf("state = %+v", state)
 	}
-	out, err := json.Marshal(StartupState{Complete: true,
-		Listing: Listing{Key: "startup/x"},
-		Rollups: []Listing{{Key: "rollup/y", Incidents: []string{"b"}}}})
+	out, err := json.Marshal(announce.StartupState{Complete: true,
+		Listing: announce.Listing{Key: "startup/x"},
+		Rollups: []announce.Listing{{Key: "rollup/y", Incidents: []string{"b"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}

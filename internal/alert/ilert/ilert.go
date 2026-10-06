@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -87,10 +87,8 @@ func (i *Ilert) SendIncident(
 	if m.Resolved() {
 		eventType = "RESOLVE"
 	}
-	details := m.NoteText()
-	if len(m.Output) > 0 {
-		details += "\n\n" + strings.Join(m.Output, "\n")
-	}
+	details := safetext.PlainWithOutput(
+		m.NoteText(), m.Output, "\n\n", safetext.DetailsLimit)
 	payload := ilertPayload{
 		EventType: eventType,
 		Summary:   notification.Truncate(m.ShortText(), summaryLimit),

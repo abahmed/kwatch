@@ -38,7 +38,8 @@ func TestContainerResourcesMemory(t *testing.T) {
 				kube.AttrMemoryWorking: inventory.Number(tt.used),
 				kube.AttrMemoryLimit:   inventory.Number(100),
 			})
-			got := evaluate(ContainerResources{}, m, t0, id, nil).Findings
+			got := evaluate(ContainerResources{}, m,
+				t0.Add(memorySustained), id, nil).Findings
 			if !tt.fires {
 				assert.Empty(t, got)
 				return
@@ -50,6 +51,53 @@ func TestContainerResourcesMemory(t *testing.T) {
 			assert.NotEmpty(t, got[0].Summary)
 		})
 	}
+}
+
+// The kubelet's RSS leaves out file cache, so it is preferred when
+// present; the text says which figure it used.
+func TestContainerResourcesMemoryPrefersRSS(t *testing.T) {
+	m, id := containerWith(map[string]inventory.Value{
+		kube.AttrMemoryWorking: inventory.Number(95),
+		kube.AttrMemoryRSS:     inventory.Number(40),
+		kube.AttrMemoryLimit:   inventory.Number(100),
+	})
+	got := evaluate(ContainerResources{}, m,
+		t0.Add(memorySustained), id, nil).Findings
+	assert.Empty(t, got, "the working set is mostly reclaimable cache")
+
+	m, id = containerWith(map[string]inventory.Value{
+		kube.AttrMemoryWorking: inventory.Number(95),
+		kube.AttrMemoryRSS:     inventory.Number(92),
+		kube.AttrMemoryLimit:   inventory.Number(100),
+	})
+	got = evaluate(ContainerResources{}, m,
+		t0.Add(memorySustained), id, nil).Findings
+	require.Len(t, got, 1)
+	assert.Contains(t, got[0].Summary, "RSS")
+}
+
+func TestContainerResourcesMemoryNamesTheWorkingSet(t *testing.T) {
+	m, id := containerWith(map[string]inventory.Value{
+		kube.AttrMemoryWorking: inventory.Number(92),
+		kube.AttrMemoryLimit:   inventory.Number(100),
+	})
+	got := evaluate(ContainerResources{}, m,
+		t0.Add(memorySustained), id, nil).Findings
+	require.Len(t, got, 1)
+	assert.Contains(t, got[0].Summary, "Working set memory is 92%")
+}
+
+// A value that touches the line for one sample must not raise a finding.
+func TestContainerResourcesMemoryNeedsToLast(t *testing.T) {
+	m, id := containerWith(map[string]inventory.Value{
+		kube.AttrMemoryWorking: inventory.Number(92),
+		kube.AttrMemoryLimit:   inventory.Number(100),
+	})
+
+	early := evaluate(ContainerResources{}, m, t0, id, nil)
+
+	assert.Empty(t, early.Findings)
+	assert.Equal(t, memorySustained, early.RecheckAfter)
 }
 
 func TestContainerResourcesCPUSustained(t *testing.T) {
@@ -78,7 +126,8 @@ func TestContainerResourcesThrottled(t *testing.T) {
 	}{
 		{"quiet below 50", 49, false, 0},
 		{"warning at 50", 50, true, detection.Warning},
-		{"critical at 75", 75, true, detection.Critical},
+		{"still a warning at 75", 75, true, detection.Warning},
+		{"still a warning at 100", 100, true, detection.Warning},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -170,7 +219,11 @@ func TestNodeHealthErrorRates(t *testing.T) {
 		kube.AttrNetErrorRate:   inventory.Number(1),
 		kube.AttrRuntimeErrRate: inventory.Number(10),
 	})
-	got := evaluate(NodeHealth{}, m, t0, id, nil).Findings
+	early := evaluate(NodeHealth{}, m, t0, id, nil)
+	assert.Empty(t, early.Findings, "one noisy sample is not a problem")
+	assert.Equal(t, errorRateSustained, early.RecheckAfter)
+	got := evaluate(NodeHealth{}, m, t0.Add(errorRateSustained), id,
+		nil).Findings
 	require.Len(t, got, 2)
 	assert.Equal(t, reasons.NodeNetworkErrors, got[0].Reason)
 	assert.Equal(t, detection.Warning, got[0].Severity)

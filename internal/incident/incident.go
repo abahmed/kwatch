@@ -38,6 +38,27 @@ const (
 	Page
 )
 
+// State flags of an Incident: who sets each, who clears it, what it means.
+// The delivery-facing ones live in Delivery and Pending (flags.go) and
+// change only through their methods.
+//
+//	Delivery.paged        MarkPaged on any own message; ClosePage on a
+//	                      resolve sent to pagers. Alert open at pagers.
+//	Delivery.pageHeld     HoldAtNotify (holdRepeatedPage, reopen); never
+//	                      cleared. A repeated page notifies instead.
+//	Delivery.rolledUp     MarkRolledUp; never cleared. A roll-up carried
+//	                      it, so more failing pods are news.
+//	Delivery.sentTier,
+//	sentGrowth            RecordSent in decide, replaced by the next one:
+//	                      what people were last told.
+//	Delivery.lastMaterial MarkMaterial; spaces material updates.
+//	Pending.reopenedAt    ScheduleReopenUpdate (reopen); ClearReopen
+//	                      (reopenUpdate, resolve). "failing again" is due.
+//	Pending.revised       MarkRevised (cause revision); ClearRevised
+//	                      (revisedStep). Say "cause revised" once.
+//	decided               set by decide, replaced by the next one.
+//	refingerprint (Manager): restored incidents adopting a fingerprint.
+
 // Incident is one root cause and everything it explains.
 type Incident struct {
 	// ID is opaque and never changes, so delivery keeps one conversation
@@ -92,6 +113,10 @@ type Incident struct {
 	// when it resolved. Nil when nothing changed. It is not persisted:
 	// only the resolve message reads it.
 	FixedBy *inventory.Change
+	// Attempt is the latest change to the root's workload, or to a
+	// ConfigMap or Secret it uses, made while the incident was open:
+	// someone trying to fix it. Nil when none. It is not persisted.
+	Attempt *inventory.Change
 	// History holds the earlier resolved occurrences of this root, oldest
 	// first, with how each ended.
 	History []Occurrence
@@ -109,6 +134,11 @@ type Incident struct {
 	// revised, so one alert follows the incident to its resolve.
 	AlertKey string
 	Timeline []Event
+	// AnnouncedRoute is how the first announcement was routed to
+	// providers; nil until then, and for incidents announced by an older
+	// kwatch. Persisted. Delivery routes the resolve with it (see
+	// route.go).
+	AnnouncedRoute *AnnouncedRoute
 	// Reported is how many entries at the start of Timeline the previous
 	// delivered message already covered. ReportedKnown is false when that
 	// is unknown, for example after a restart. A decision carries the
@@ -133,11 +163,32 @@ type Incident struct {
 	// Reminded is when the last weekly "still open" update was sent;
 	// zero until the first.
 	Reminded time.Time
+	// DigestedAt is when a digest last listed this incident; zero when
+	// none did. A recurrence reads it through History (see
+	// DigestWorthy).
+	DigestedAt time.Time
+	// Delivery is what people were told and where it reached (see
+	// flags.go). Pending is follow-up work the thread is owed.
+	Delivery Delivery
+	Pending  Pending
 
-	// revised asks the next update to say the cause was revised, once
-	// the new cause held since revisedAt for the revise settle.
-	revised   bool
-	revisedAt time.Time
+	// decided is the set of failure findings at the latest decision, so
+	// a later re-blaming of the same failures can be told from news.
+	// It is replaced, never changed, so snapshots may share it. Not
+	// persisted: without it nothing is damped.
+	decided map[detection.Key]struct{}
+	// RepeatCount is how many times, this one included, the incident came
+	// back within RepageWindow at its latest reopen; zero when it never
+	// reopened. Writers read it instead of the timeline note.
+	RepeatCount int
+	// attemptLate records that the thread already said the incident
+	// still fails FixWatch after Attempt.
+	attemptLate bool
+	// attemptSeen is a fix attempt observed but not yet told. Apply
+	// records it when the change arrives; attemptUpdate tells it on the
+	// first tick no earlier step ends, then moves it to Attempt. Not
+	// persisted: the change history still holds the change.
+	attemptSeen *inventory.Change
 	// movedTo lists the roots members left for since people last heard
 	// about the incident. When they all went to one place the story
 	// moved there; when they dispersed, the story is over.
@@ -147,9 +198,44 @@ type Incident struct {
 	// come up and fall over again, toggling the workload's own
 	// conditions, is not a stream of "material changes".
 	rootReasons map[string]struct{}
+	// causeFindings are the "entity=reason" pairs of the cause's root
+	// findings ever seen. The fingerprint reads them, so a finding that
+	// ages out of the cause is not a "material change". Not persisted:
+	// a restored incident adopts its fingerprint.
+	causeFindings map[string]struct{}
 	// impactPeak is the largest impact size seen. The fingerprint reads it,
 	// so impact that shrinks while failures churn is not news.
 	impactPeak int
+	// modes is every failure mode the members of this incident had; see
+	// modes.go.
+	modes map[detection.Mode]struct{}
+	// stagePeak is the worst stage the members reached; the fingerprint
+	// reads it, so a crash loop that begins after the announcement is
+	// one update (see worsen.go).
+	stagePeak stage
+	// persistent marks a failure that outlasted the boot window while a
+	// member crash-looped or the workload had nothing ready: known and
+	// rhythmic demotion no longer applies. maxedLong marks an autoscaler
+	// at its maximum for HPAStuckAfter. Neither is persisted; the next
+	// tick judges them again.
+	persistent, maxedLong bool
+	// causeChain records that the cause blames another object of the
+	// root's own workload chain (a pod, a Service, a ReplicaSet). The
+	// reasoning flips between those for the very same failures, so the
+	// fingerprint does not read which one.
+	causeChain bool
+	// bootedAt is when this run first ticked a restored incident; see
+	// bootStart. Zero for incidents opened by this run.
+	bootedAt time.Time
+	// quiet marks an incident that resolveQuietly closed without a
+	// message. Not persisted: the announcer reads it within a tick.
+	quiet bool
+	// updateHeld marks a material-change update that is waiting for its
+	// investigation, and prevDigest is the fingerprint before it. While
+	// the update is held the record keeps prevDigest, so a restart that
+	// loses the held update still sees the change as news.
+	updateHeld bool
+	prevDigest string
 	// restored marks an incident loaded from the state file; only such
 	// incidents wait out the restore grace.
 	restored bool
@@ -177,6 +263,14 @@ func (inc *Incident) criticalRoot() bool {
 	return inc.admissionBlocked || inc.routedMissing
 }
 
+// TrafficLost reports an incident that takes requests away from
+// someone: a Service in its impact, routed to by an Ingress or route,
+// has no ready backends or mostly failing ones. Digest lists put such
+// incidents first.
+func (inc Incident) TrafficLost() bool {
+	return inc.trafficLost
+}
+
 // Scope records the delivery scope of an incident's announcement.
 type Scope uint8
 
@@ -190,22 +284,13 @@ const (
 	ScopeOut
 )
 
-// Decision reasons that renderers and audits distinguish.
-const (
-	// ReasonCauseRevised is an update whose incident moved to a new root.
-	ReasonCauseRevised = "cause revised"
-	// ReasonMaterialChange is an update because the incident's
-	// fingerprint changed: new members, a new impact.
-	ReasonMaterialChange = "material change"
-	// ReasonSuperseded closes an incident whose members now belong to
-	// another announced incident.
-	ReasonSuperseded = "superseded by revised cause"
-)
-
 // Event is one line of the incident timeline.
 type Event struct {
 	At   time.Time
 	Text string
+	// Entity is the member the event is about: the one that joined or
+	// recovered. Nil for events about the incident itself.
+	Entity *inventory.EntityID `json:",omitempty"`
 }
 
 // Snapshot returns a detached copy safe to hand to writers.
@@ -223,6 +308,7 @@ func (inc *Incident) Snapshot() Incident {
 	out.Unverified = append([]string(nil), inc.Unverified...)
 	out.Checked = append([]string(nil), inc.Checked...)
 	out.Considered = append([]string(nil), inc.Considered...)
+	out.AnnouncedRoute = inc.AnnouncedRoute.clone()
 	out.Reported, out.ReportedKnown = inc.sent.reported(len(inc.Timeline))
 	if inc.Cause != nil {
 		cause := *inc.Cause
@@ -232,31 +318,11 @@ func (inc *Incident) Snapshot() Incident {
 		fix := *inc.FixedBy
 		out.FixedBy = &fix
 	}
+	if inc.Attempt != nil {
+		attempt := *inc.Attempt
+		out.Attempt = &attempt
+	}
 	return out
-}
-
-// Action is what a decision asks delivery to do.
-type Action uint8
-
-// Actions.
-const (
-	Announce Action = iota + 1
-	Update
-	Resolve
-)
-
-// Decision is one message-worthy transition.
-type Decision struct {
-	Action   Action
-	Incident Incident
-	// Reason explains why this decision was made, for the audit trail.
-	Reason string
-	// Output holds application output gathered by investigation after the
-	// decision, already redacted. Empty when none was needed or found.
-	Output []string
-	// Evidence holds the facts investigation found, already redacted.
-	// Writers quote them as proof. Empty when none were found.
-	Evidence []Fact
 }
 
 // String names the state for diagnostics.

@@ -23,6 +23,11 @@ type sentMark struct {
 	// before is covered from before the latest decision, restored when
 	// that decision turns out not to be delivered.
 	before int
+	// told is true once a message of this incident reached people: the
+	// announcement was delivered, not just decided. A held or out-of-scope
+	// announcement leaves it false, so an incident nobody heard of never
+	// reads as "failing again". toldBefore restores it with before.
+	told, toldBefore bool
 }
 
 // unknownMark is covered when no one knows what was delivered: after a
@@ -30,10 +35,12 @@ type sentMark struct {
 const unknownMark = -1
 
 // restoredMark is the mark of an incident restored with n timeline
-// entries: what was delivered before the restart is unknown.
-func restoredMark(n int) sentMark {
+// entries: what was delivered before the restart is unknown, but whether
+// anyone was told at all is kept.
+func restoredMark(n int, told bool) sentMark {
 	return sentMark{noted: n, covered: unknownMark,
-		pending: unknownMark, before: unknownMark}
+		pending: unknownMark, before: unknownMark,
+		told: told, toldBefore: told}
 }
 
 // reported converts the mark into a count of the first entries of a
@@ -51,17 +58,18 @@ func (s sentMark) reported(n int) (count int, known bool) {
 // announcement is held.
 func (s *sentMark) decided(delivered bool) {
 	s.before, s.pending = s.covered, s.noted
+	s.toldBefore = s.told
 	if delivered {
-		s.covered = s.noted
+		s.covered, s.told = s.noted, true
 	}
 }
 
 // confirm marks the latest decision as delivered.
 func (s *sentMark) confirm() {
-	s.covered = s.pending
+	s.covered, s.told = s.pending, true
 }
 
 // withdraw marks the latest decision as not delivered.
 func (s *sentMark) withdraw() {
-	s.covered = s.before
+	s.covered, s.told = s.before, s.toldBefore
 }

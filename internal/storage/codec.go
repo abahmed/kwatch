@@ -67,7 +67,7 @@ func decodeValue(data []byte, out any) (header, error) {
 		return header{}, errCorrupt
 	}
 	if err := json.Unmarshal(data[headerSize:], out); err != nil {
-		return header{}, fmt.Errorf("%w: %v", errCorrupt, err)
+		return header{}, fmt.Errorf("%w: %w", errCorrupt, err)
 	}
 	return h, nil
 }

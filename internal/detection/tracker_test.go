@@ -270,3 +270,70 @@ func TestMultipleEntities(t *testing.T) {
 	require.Len(t, active2, 1)
 	assert.Equal(t, "Pod2 not ready", active2[0].Summary)
 }
+
+// The crash log is read after the finding is raised. A new error line
+// is a Changed transition so the incident is grouped again.
+func TestObserveChangedWhenTheErrorLineArrives(t *testing.T) {
+	tr := NewTracker()
+	id := inventory.EntityID{Kind: "Container", Namespace: "default",
+		Name: "app/main"}
+	finding := Finding{Entity: id, Reason: "CrashLoopBackOff",
+		Severity: Critical}
+	tr.Observe(id, []Finding{finding})
+
+	finding.Evidence = []Evidence{{Label: EvidenceError,
+		Value: "dial tcp 10.0.0.5:6379: connection refused"}}
+	moved := tr.Observe(id, []Finding{finding})
+
+	require.Len(t, moved, 1)
+	assert.Equal(t, Changed, moved[0].Kind)
+	assert.Empty(t, tr.Observe(id, []Finding{finding}),
+		"the same line again is not a change")
+}
+
+// An error line that only counts up is the same error.
+func TestObserveIgnoresACountingErrorLine(t *testing.T) {
+	tr := NewTracker()
+	id := inventory.EntityID{Kind: "Scheduler", Name: "kube-scheduler"}
+	finding := Finding{Entity: id, Reason: "ControlPlaneDown",
+		Severity: Critical, Evidence: []Evidence{{Label: EvidenceError,
+			Value: "leader lease not renewed for 1m35s"}}}
+	tr.Observe(id, []Finding{finding})
+
+	finding.Evidence[0].Value = "leader lease not renewed for 3m5s"
+
+	assert.Empty(t, tr.Observe(id, []Finding{finding}))
+}
+
+// An address or request id that differs on every restart is the same
+// error, not a new condition to announce.
+func TestObserveIgnoresChangingAddressesAndIDs(t *testing.T) {
+	tr := NewTracker()
+	id := inventory.EntityID{Kind: "Container", Namespace: "default",
+		Name: "app/main"}
+	finding := Finding{Entity: id, Reason: "CrashLoopBackOff",
+		Severity: Critical, Evidence: []Evidence{{Label: EvidenceError,
+			Value: "panic at 0xc000123abc handling req 7f3a9c2e1b4d5e6f"}}}
+	tr.Observe(id, []Finding{finding})
+
+	finding.Evidence = []Evidence{{Label: EvidenceError,
+		Value: "panic at 0xc000999def handling req 1a2b3c4d5e6f7a8b"}}
+
+	assert.Empty(t, tr.Observe(id, []Finding{finding}))
+}
+
+// A different message is still a change.
+func TestObserveChangedWhenTheErrorSaysSomethingElse(t *testing.T) {
+	tr := NewTracker()
+	id := inventory.EntityID{Kind: "Container", Namespace: "default",
+		Name: "app/main"}
+	finding := Finding{Entity: id, Reason: "CrashLoopBackOff",
+		Severity: Critical, Evidence: []Evidence{{Label: EvidenceError,
+			Value: "connection refused"}}}
+	tr.Observe(id, []Finding{finding})
+
+	finding.Evidence = []Evidence{{Label: EvidenceError,
+		Value: "out of memory"}}
+
+	require.Len(t, tr.Observe(id, []Finding{finding}), 1)
+}

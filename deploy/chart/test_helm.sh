@@ -25,6 +25,13 @@ grep -Fq "path: /availabilityz" <<<"$OUT1" || {
 grep -Fq "terminationGracePeriodSeconds: 60" <<<"$OUT1" || {
   echo "FAIL: termination grace period is not configured"; exit 1;
 }
+grep -Fq 'karpenter.sh/do-not-disrupt: "true"' <<<"$OUT1" || {
+  echo "FAIL: pod must ask node autoscalers not to disrupt it"; exit 1;
+}
+grep -Fq 'cluster-autoscaler.kubernetes.io/safe-to-evict: "false"' \
+  <<<"$OUT1" || {
+  echo "FAIL: pod must ask the cluster autoscaler not to evict it"; exit 1;
+}
 if grep -Fq "kind: PodDisruptionBudget" <<<"$OUT1"; then
   echo "FAIL: a single-writer deployment must not have a PDB"; exit 1;
 fi
@@ -80,7 +87,13 @@ echo "=== values schema ==="
 for bad in "unknownTopLevel=1" "rbac.bogus=1" "watch.bogus=1" \
   "persistence.bogus=1" "networkPolicy.bogus=1" \
   "config.healthCheck.port=0" "config.healthCheck.port=70000" \
-  "config.kubelet.bogus=1" "config.watch.bogus=1"; do
+  "config.kubelet.bogus=1" "config.watch.bogus=1" \
+  "config.resyncSeconds=5" "config.resyncSeconds=-3" \
+  "config.app.logFormatter=xml" "config.heartbeatMonitor.interval=-1" \
+  "config.activeProbeMonitor.intervalSeconds=0" \
+  "config.activeProbeMonitor.bogus=1" \
+  "config.activeProbeMonitor.http[0].expectedStatus=99" \
+  "networkPolicy.apiServerPorts={}" "crd.bogus=1"; do
   if helm template test-schema . --set "$bad" >/dev/null 2>&1; then
     echo "FAIL: values schema accepted $bad"; exit 1;
   fi
@@ -89,6 +102,14 @@ helm template test-schema . --set config.kubelet.insecureSkipVerify=true \
   --set config.watch.secrets=true >/dev/null || {
   echo "FAIL: values schema rejects config.kubelet or config.watch"; exit 1;
 }
+for good in "config.resyncSeconds=0" "config.resyncSeconds=30" \
+  "config.app.logFormatter=json" "config.app.caBundlePath=/etc/ca.pem" \
+  "config.app.insecureSkipTLSVerify=false" "config.heartbeatMonitor.interval=0" \
+  "config.activeProbeMonitor.autoServices=true" "crd.install=false"; do
+  helm template test-schema . --set "$good" >/dev/null || {
+    echo "FAIL: values schema rejects $good"; exit 1;
+  }
+done
 echo "PASS: values schema"
 
 echo "=== custom tolerations keep failover defaults ==="
@@ -126,6 +147,12 @@ if helm template test-nohealth . \
   echo "FAIL: a disabled health check must fail rendering"; exit 1;
 fi
 echo "PASS: health port"
+
+echo "=== resource defaults ==="
+grep -Fq "cpu: 500m" <<<"$OUT1" || {
+  echo "FAIL: cpu limit must be 500m"; exit 1;
+}
+echo "PASS: resource defaults"
 
 echo "=== memory limit ==="
 grep -Fq "memory: 512Mi" <<<"$OUT1" || {
@@ -196,6 +223,22 @@ grep -Fq "port: 587" <<<"$OUT_NP_EXTRA" || {
 if grep -Fq "port: 587" <<<"$OUT2"; then
   echo "FAIL: SMTP egress must not be open by default"; exit 1;
 fi
+grep -Fq "port: 9153" <<<"$OUT2" || {
+  echo "FAIL: network policy must open the DNS metrics port"; exit 1;
+}
+OUT_NP_NODNS=$(helm template test-np . --set networkPolicy.enabled=true \
+  --set networkPolicy.dnsMetricsPort=0 2>&1)
+if grep -Fq "port: 9153" <<<"$OUT_NP_NODNS"; then
+  echo "FAIL: dnsMetricsPort=0 must omit the DNS metrics rule"; exit 1;
+fi
+if grep -Fq -- "- {}" <<<"$OUT2"; then
+  echo "FAIL: all-egress rule must not be rendered by default"; exit 1;
+fi
+OUT_NP_ALL=$(helm template test-np . --set networkPolicy.enabled=true \
+  --set networkPolicy.allowProbeEgressAll=true 2>&1)
+grep -Fq -- "- {}" <<<"$OUT_NP_ALL" || {
+  echo "FAIL: allowProbeEgressAll must render an all-egress rule"; exit 1;
+}
 echo "PASS: optional network policy"
 
 echo "=== rbac modes ==="
@@ -239,6 +282,24 @@ grep -A8 'kind: ClusterRole$' <<<"$OUT_A" |
 }
 echo "PASS: rbac modes"
 
+echo "=== KwatchConfig RBAC is namespaced ==="
+# The overlay is read from kwatch's own namespace, so list/watch on
+# kwatchconfigs is a Role, never a ClusterRole rule, and only with the CRD
+# overlay enabled.
+if sed -n '/^kind: ClusterRole$/,/^---$/p' <<<"$OUT_LP" |
+  grep -Fq kwatchconfigs; then
+  echo "FAIL: ClusterRole must not grant kwatchconfigs"; exit 1;
+fi
+grep -Fq "name: test-lp-config-overlay" <<<"$OUT_LP" || {
+  echo "FAIL: namespaced kwatchconfigs Role is missing"; exit 1;
+}
+OUT_NOCRD=$(helm template test-nocrd . --set rbac.mode=least-privilege \
+  --set config.crd.enabled=false 2>&1)
+if grep -Fq "config-overlay" <<<"$OUT_NOCRD"; then
+  echo "FAIL: no kwatchconfigs access without the CRD overlay"; exit 1;
+fi
+echo "PASS: KwatchConfig RBAC"
+
 echo "=== watch.secrets ==="
 grep -Fq '"secrets"' <<<"$OUT_LP" || {
   echo "FAIL: Secrets are watched by default"; exit 1;
@@ -259,7 +320,8 @@ if grep -Fq 'name: KWATCH_WATCH_SECRETS' <<<"$OUT1"; then
 fi
 echo "PASS: watch.secrets"
 
-cmp -s ../crd.yaml templates/kwatchconfig-crd.yaml || {
+# The chart template is deploy/crd.yaml wrapped in the crd.install guard.
+sed '1d;$d' templates/kwatchconfig-crd.yaml | cmp -s ../crd.yaml - || {
   echo "FAIL: chart CRD is out of sync with deploy/crd.yaml"
   exit 1
 }
@@ -269,6 +331,28 @@ grep -Fq "kind: CustomResourceDefinition" <<<"$OUT1" || {
   echo "FAIL: CRD is not rendered by the chart"
   exit 1
 }
+OUT_NOINSTALL=$(helm template test-crd . --set crd.install=false 2>&1)
+if grep -Fq "kind: CustomResourceDefinition" <<<"$OUT_NOINSTALL"; then
+  echo "FAIL: crd.install=false must not render the CRD"
+  exit 1
+fi
+grep -Fq "name: test-crd-config-overlay" <<<"$OUT_NOINSTALL" || {
+  echo "FAIL: crd.install=false must keep the overlay RBAC"
+  exit 1
+}
 echo "PASS: CRD is rendered"
+
+echo "=== CRD validation matches the binary ==="
+grep -Fq 'self == 0 || self >= 30' ../crd.yaml || {
+  echo "FAIL: CRD must validate resyncSeconds (0 or >= 30)"; exit 1;
+}
+grep -Fq -- '- json' ../crd.yaml || {
+  echo "FAIL: CRD must restrict app.logFormatter"; exit 1;
+}
+# A KwatchConfig must not disable or move the health server.
+if grep -Fq 'healthCheck:' ../crd.yaml; then
+  echo "FAIL: CRD must not offer healthCheck"; exit 1;
+fi
+echo "PASS: CRD validation"
 
 echo "All helm template tests passed."

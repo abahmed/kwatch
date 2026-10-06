@@ -114,20 +114,21 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | CRD.NotEstablished | degraded | `CustomResourceDefinitionNotEstablished` | `custom_kinds` |
 | CSRFailed | varies | `CertificateSigningRequestFailure` | `custom` |
 | CannotRun | failing | `ContainerCannotRun` | `container` |
-| Cert.Expired | failing | `TLSCertExpired` | `config` |
+| Cert.Expired | varies | `TLSCertExpired` | `config` |
 | Cert.Expiring | degraded | `TLSCertExpiringSoon` | `config` |
 | Certificate.Denied | degraded | `CertificateSigningRequestDenied` | `custom_kinds` |
 | Certificate.NotIssued | degraded | `CertificateSigningRequestNotIssued` | `custom_kinds` |
 | ClaimFailed | varies | `PersistentVolumeClaimFailure`, `ResourceClaimFailure` | `custom`, `storage` |
 | Cluster.VersionSkew | degraded | `ClusterVersionSkew` | `version_skew` |
-| Completed | varies | `Completed`, `PodCompleted` | `container` |
+| Completed | varies | `Completed`, `PodCompleted` | - |
 | Condition | varies | `ConditionFailure` | - |
 | ConditionFailure | varies | `DaemonSetConditionFailure`, `StatefulSetConditionFailure` | - |
 | CrashLoop | failing | `CrashLoopBackOff` | `container` |
+| CrashLoop.Liveness | failing | `LivenessKilled` | `container_liveness` |
 | CreateError | failing | `CreateContainerError` | `container` |
 | CreateError.Config | failing | `CreateContainerConfigError` | `container` |
 | Creating | varies | `ContainerCreating` | - |
-| DeadlineExceeded | varies | `DeadlineExceeded` | `workload` |
+| DeadlineExceeded | varies | `DeadlineExceeded` | - |
 | Device.PrepareFailed | failing | `FailedPrepareDynamicResources` | `event`, `event_storage` |
 | Device.Unallocated | degraded | `ResourceClaimUnallocated` | `custom_kinds` |
 | Disk.ContainerGCFailed | degraded | `ContainerGCFailed` | `event`, `event_kubelet` |
@@ -171,7 +172,10 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | JobFailed | varies | `JobFailed` | `workload` |
 | JobFailed.BackoffLimit | varies | `JobBackoffLimitExceeded` | `workload` |
 | JobFailed.Deadline | varies | `JobDeadlineExceeded` | `workload` |
+| JobRunningLong | degraded | `JobRunningLong` | `job_runtime` |
 | Killed | varies | `Killed` | - |
+| Kubelet.Unreachable | degraded | `KubeletUnreachable` | `kubelet_health` |
+| Kwatch.NetworkRestricted | degraded | `KwatchNetworkRestricted` | `active_probe` |
 | Latency.APIServer | degraded | `APIServerLatency` | `controlplane` |
 | LeaseStale | degraded | `LeaseStale` | `lease` |
 | LoadBalancer.SyncFailed | degraded | `LoadBalancerSyncFailed` | `loadbalancer` |
@@ -189,22 +193,23 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | NetworkUnavailable | failing | `NetworkUnavailable` | `node` |
 | NoEndpoints | failing | `ServiceNoEndpoints` | `network`, `service_selector` |
 | NotReady | varies | `ContainersNotReady`, `NodeNotReady`, `NotReady` | `node`, `pod` |
+| NotReady.Never | varies | `WorkloadNeverReady` | `workload_never_ready` |
 | NotReconciling | degraded | `CustomResourceFailure`, `GenerationLagging` | `custom`, `generic` |
 | NotScheduling | degraded | `CronJobNotScheduled` | `schedule` |
-| OOMKilled | failing | `OOMKILLED`, `OOMKilled` | `container`, `container_exit` |
+| OOMKilled | failing | `OOMKILLED`, `OOMKilled` | `container` |
 | PIDPressure | varies | `PIDPressure` | `node` |
 | PLEGSlow | degraded | `NodePLEGSlow` | `kubelet_health` |
 | Pending | degraded | `PhasePending`, `PodPending` | `generic`, `pod` |
-| PortMismatch | degraded | `ServicePortMismatch` | `network` |
 | Preempted.Repeatedly | degraded | `PodPreemptedRepeatedly` | `pod_preemption` |
 | PressureStall | degraded | `NodePressureStall` | `usage` |
 | Probe.Liveness | varies | `LivenessProbeFailed` | `container_probe` |
 | Probe.Readiness | varies | `ReadinessProbeFailed` | `container_probe` |
 | Probe.Startup | varies | `StartupProbeFailed` | `container_probe` |
 | Quota.NearLimit | degraded | `ResourceQuotaNearLimit` | `quota_attach` |
-| QuotaExhausted | degraded | `ResourceQuotaExhausted` | `policy` |
+| QuotaExhausted | varies | `ResourceQuotaExhausted` | `policy` |
 | Reference.PriorityClassMissing | varies | `PriorityClassMissing` | `references` |
 | Reference.RuntimeClassMissing | varies | `RuntimeClassMissing` | `config`, `references` |
+| ReleaseRegression | degraded | `ReleaseRegression` | `release_watch` |
 | ReplicaFailure | failing | `DeploymentReplicaFailure`, `ReplicaSetFailure` | `workload` |
 | Resize.Deferred | varies | `PodResizeDeferred` | `pod_resize` |
 | Resize.Error | varies | `PodResizeError` | `pod_resize` |
@@ -220,16 +225,19 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Risk.Privileged | varies | `Risk.Privileged` | `risk` |
 | Risk.SingleNode | varies | `Risk.SingleNode` | `risk` |
 | Risk.SingleReplica | varies | `Risk.SingleReplica` | `risk` |
-| Rollout.Stuck | varies | `StatefulSetRolloutStuck` | `rollout` |
+| Rollout.Stuck | degraded | `StatefulSetRolloutStuck` | `rollout` |
 | RolloutStuck | failing | `DeploymentProgressingFalse`, `ProgressDeadlineExceeded` | `workload` |
 | RuntimeErrors | varies | `NodeRuntimeErrors` | `resources` |
-| Scaling.Disabled | varies | `ScalingDisabled` | `hpa` |
+| ScaledToZero | degraded | `ScaledToZeroRouted` | `scaled_to_zero` |
+| Scaling.Disabled | varies | `ScalingDisabled` | - |
 | Scaling.Error | varies | `HPAScalingError` | `hpa` |
 | Scaling.InvalidSelector | varies | `HPAInvalidSelector` | `hpa` |
 | Scaling.MaxedOut | degraded | `HPAMaxedOut` | `hpa` |
-| Scaling.NoMetrics | varies | `FailedComputeMetricsReplicas`, `FailedGetMetrics`, `FailedGetResourceMetric`, `FailedGetScale` | `hpa` |
+| Scaling.NoMetrics | varies | `FailedComputeMetricsReplicas`, `FailedGetMetrics`, `FailedGetResourceMetric` | `hpa` |
+| Scaling.TargetMissing | degraded | `FailedGetScale`, `HPATargetMissing` | `hpa`, `hpa_target` |
 | Scaling.UpdateFailed | varies | `FailedUpdateScale` | `hpa` |
 | Schedule.Blocked | degraded | `CronJobBlocked` | `schedule_history` |
+| Schedule.LastRunFailed | degraded | `CronJobLastRunFailed` | `schedule_last_run` |
 | Schedule.Missed | degraded | `CronJobMissedRuns` | `schedule_history` |
 | Schedule.RepeatedFailure | degraded | `CronJobRepeatedFailure` | `schedule_history` |
 | SchedulingGated | degraded | `SchedulingGated` | `pod` |

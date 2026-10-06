@@ -176,3 +176,106 @@ func TestVolumeUsageIgnoresInvalidFillEstimates(t *testing.T) {
 		assert.Empty(t, got, "estimate %v must not raise a finding", seconds)
 	}
 }
+
+func kubeletFailureNode(
+	status string, failures float64, span time.Duration,
+) (*inventory.Model, inventory.EntityID) {
+	model := newTestModel()
+	node := newID(kube.KindNode, "", "10-0-67-130")
+	put(model, node, t0, map[string]inventory.Value{
+		kube.AttrKubeletFailures:    inventory.Number(failures),
+		kube.AttrKubeletFailureSpan: inventory.Number(span.Seconds())})
+	setCondition(model, node, "Ready", status, "KubeletReady", "", t0)
+	return model, node
+}
+
+func TestNodeUsageReportsAKubeletKwatchKeepsFailingToReach(t *testing.T) {
+	model, node := kubeletFailureNode("True", 6, time.Hour)
+
+	got := NodeUsage{}.Detect(testDetectorContext(model, t0),
+		entityOf(model, node))
+
+	require.Len(t, got, 1)
+	assert.Equal(t, reasons.KubeletUnreachable, got[0].Reason)
+	assert.Equal(t, detection.Info, got[0].Severity)
+	assert.Equal(t, "kwatch could not reach the kubelet on node "+
+		"10-0-67-130 6 times in the last 6 hours; node metrics for it are "+
+		"missing.", got[0].Summary)
+}
+
+func TestNodeUsageIgnoresFewKubeletFailuresAndNotReadyNodes(t *testing.T) {
+	for name, tc := range map[string]struct {
+		status   string
+		failures float64
+		span     time.Duration
+	}{
+		"two_failures_are_a_blip":            {"True", 2, time.Hour},
+		"not_ready_node_has_its_own_finding": {"False", 9, time.Hour},
+		"failures_within_minutes_are_a_blip": {"True", 6, time.Minute},
+		"cleared_once_the_kubelet_answers":   {"True", 0, 0},
+	} {
+		t.Run(name, func(t *testing.T) {
+			model, node := kubeletFailureNode(tc.status, tc.failures, tc.span)
+
+			got := NodeUsage{}.Detect(testDetectorContext(model, t0),
+				entityOf(model, node))
+
+			assert.Empty(t, got)
+		})
+	}
+}
+
+// When the kubelet cannot be read, the model forgets the disk figures
+// after a few failed polls. The disk did not get emptier meanwhile, so
+// the finding is held instead of resolving "healthy".
+func TestNodeDiskFindingIsHeldWhileTheKubeletIsUnreachable(t *testing.T) {
+	m := newTestModel()
+	node := newID(kube.KindNode, "", "n1")
+	put(m, node, t0, map[string]inventory.Value{
+		kube.AttrFSUsedPct: inventory.Number(96)})
+	registry := detection.NewRegistry(nil, NodeUsage{})
+	first := registry.Evaluate(m, t0, node)
+	require.Len(t, first.Findings, 1)
+
+	put(m, node, t0.Add(time.Minute), map[string]inventory.Value{
+		kube.AttrKubeletFailures: inventory.Number(3)})
+	held := registry.Evaluate(m, t0.Add(time.Minute), node)
+	require.Len(t, held.Findings, 1)
+	assert.Equal(t, first.Findings[0].Reason, held.Findings[0].Reason)
+	assert.Equal(t, first.Findings[0].Severity, held.Findings[0].Severity)
+	assert.Equal(t, first.Findings[0].Since, held.Findings[0].Since)
+
+	put(m, node, t0.Add(2*time.Minute), map[string]inventory.Value{
+		kube.AttrKubeletFailures: inventory.Number(0)})
+	cleared := registry.Evaluate(m, t0.Add(2*time.Minute), node)
+	assert.Empty(t, cleared.Findings, "the kubelet answers; no reading")
+}
+
+// The hold is for a short outage of the kubelet. After half an hour the
+// last reading is too old to keep claiming the disk is full.
+func TestHeldDiskFindingIsCappedAndSaysItIsStale(t *testing.T) {
+	m := newTestModel()
+	node := newID(kube.KindNode, "", "n1")
+	put(m, node, t0, map[string]inventory.Value{
+		kube.AttrFSUsedPct: inventory.Number(96)})
+	registry := detection.NewRegistry(nil, NodeUsage{})
+	require.Len(t, registry.Evaluate(m, t0, node).Findings, 1)
+
+	put(m, node, t0.Add(time.Minute), map[string]inventory.Value{
+		kube.AttrKubeletFailures: inventory.Number(3)})
+	held := registry.Evaluate(m, t0.Add(time.Minute), node)
+	require.Len(t, held.Findings, 1)
+	var stale string
+	for _, e := range held.Findings[0].Evidence {
+		if e.Label == "reading stale since" {
+			stale = e.Value
+		}
+	}
+	assert.Contains(t, stale, "UTC", "the stale time is named")
+
+	for _, minutes := range []int{10, 20, 31, 32} {
+		at := t0.Add(time.Duration(minutes) * time.Minute)
+		held = registry.Evaluate(m, at, node)
+	}
+	assert.Empty(t, held.Findings, "held no longer than usageHoldMax")
+}

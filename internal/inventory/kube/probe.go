@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
+	coordinationv1 "k8s.io/api/coordination/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -70,7 +70,15 @@ type Prober struct {
 	// rates turns the request and response counters into per-second
 	// rates between rounds.
 	rates *counterRates
+	// leasesSeen are the Leases the last scan reported. Only the Run
+	// goroutine touches it.
+	leasesSeen map[inventory.EntityID]bool
 }
+
+// LeaseScanPeriod is the time between two Lease scans. A detector that
+// judges a Lease by its last renewal must wait longer than this before it
+// calls a holder stuck, or it raises and clears on every scan.
+const LeaseScanPeriod = leaseScanEvery * probeInterval
 
 // Lease scan limits. Leases renew every few seconds, so they are read on
 // a slow cadence and never watched; a bounded list keeps a cluster with
@@ -78,6 +86,9 @@ type Prober struct {
 const (
 	leaseScanEvery = 4
 	leaseScanLimit = 500
+	// leaseScanPages bounds one scan to leaseScanLimit*leaseScanPages
+	// Leases.
+	leaseScanPages = 20
 	// nodeLeaseNamespace holds the kubelet heartbeats, read through the
 	// node conditions instead.
 	nodeLeaseNamespace  = "kube-node-lease"
@@ -226,6 +237,9 @@ func probeObservation(
 	}
 	if err != nil {
 		attrs[AttrProbeError] = inventory.Text(evidenceText(err.Error()))
+		// Always written on a failure: an unknown kind must replace
+		// the previous failure's, not inherit it.
+		attrs[AttrProbeFailureKind] = inventory.Text(probeFailureKind(err))
 	}
 	return inventory.Observation{
 		Kind: inventory.Observed, Source: ProbeSource, At: at, Entity: id,
@@ -237,18 +251,15 @@ func probeObservation(
 // control-plane leaders: who holds it, when it was last renewed and
 // for how long it is valid. The detector decides what is stale; the
 // prober only reports. An error (no RBAC, a managed control plane that
-// hides them) reports nothing.
+// hides them) reports nothing. Leases are only known through this scan,
+// so a Lease the last complete scan saw and this one did not is gone. An
+// incomplete scan (a failed page, too many pages) retires nothing.
 func (p *Prober) leases(ctx context.Context) []inventory.Observation {
-	probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
-	defer cancel()
-	list, err := p.cfg.Client.CoordinationV1().Leases("").List(probeCtx,
-		metav1.ListOptions{Limit: leaseScanLimit})
-	if err != nil {
-		return nil
-	}
+	items, complete := p.listLeases(ctx)
 	now := p.cfg.Now()
 	var out []inventory.Observation
-	for _, lease := range list.Items {
+	seen := make(map[inventory.EntityID]bool, len(items))
+	for _, lease := range items {
 		if lease.Namespace == nodeLeaseNamespace ||
 			lease.Spec.RenewTime == nil || lease.Spec.HolderIdentity == nil ||
 			(lease.Namespace == "kube-system" &&
@@ -260,9 +271,11 @@ func (p *Prober) leases(ctx context.Context) []inventory.Observation {
 		if lease.Spec.LeaseDurationSeconds != nil {
 			seconds = float64(*lease.Spec.LeaseDurationSeconds)
 		}
+		id := inventory.CoreID(KindLease, lease.Namespace, lease.Name)
+		seen[id] = true
 		out = append(out, inventory.Observation{
 			Kind: inventory.Observed, Source: ProbeSource, At: now,
-			Entity: inventory.CoreID(KindLease, lease.Namespace, lease.Name),
+			Entity: id,
 			Attributes: map[string]inventory.Value{
 				AttrLeaseHolder:   inventory.Text(*lease.Spec.HolderIdentity),
 				AttrLeaseRenewed:  inventory.Time(lease.Spec.RenewTime.Time),
@@ -270,5 +283,41 @@ func (p *Prober) leases(ctx context.Context) []inventory.Observation {
 			},
 		})
 	}
+	if !complete {
+		for id := range p.leasesSeen {
+			seen[id] = true
+		}
+	}
+	for id := range p.leasesSeen {
+		if !seen[id] {
+			out = append(out, inventory.Observation{
+				Kind: inventory.Gone, Source: ProbeSource, At: now,
+				Entity: id,
+			})
+		}
+	}
+	p.leasesSeen = seen
 	return out
+}
+
+// listLeases reads the Leases of every namespace page by page. complete
+// is false when a page failed or the page cap was reached.
+func (p *Prober) listLeases(
+	ctx context.Context,
+) (items []coordinationv1.Lease, complete bool) {
+	token := ""
+	for page := 0; page < leaseScanPages; page++ {
+		probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+		list, err := p.cfg.Client.CoordinationV1().Leases("").List(probeCtx,
+			metav1.ListOptions{Limit: leaseScanLimit, Continue: token})
+		cancel()
+		if err != nil {
+			return items, false
+		}
+		items = append(items, list.Items...)
+		if token = list.Continue; token == "" {
+			return items, true
+		}
+	}
+	return items, false
 }

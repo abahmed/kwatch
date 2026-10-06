@@ -1,9 +1,9 @@
 package kube
 
 import (
-	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"regexp"
 	"strings"
 	"time"
@@ -18,6 +18,10 @@ import (
 
 const (
 	logTailLines = 200
+	// crashTailLines and crashKeepBytes bound the previous-run read that
+	// looks for the crash's first error line.
+	crashTailLines = 50
+	crashKeepBytes = 16 << 10
 	// logFetchBytes is asked of the API server, logLimitBytes is kept.
 	// The server applies LimitBytes to the start of the tail, so a tail
 	// over the limit loses its end, where the crash message is; kwatch
@@ -37,6 +41,22 @@ var errorLine = regexp.MustCompile(`(?i)\b(error|fatal|panic|exception|` +
 // base64Line matches a line that is nothing but a long base64 run, such as
 // the body of a key whose BEGIN line fell outside the log tail.
 var base64Line = regexp.MustCompile(`^[A-Za-z0-9+/_-]{40,}={0,2}$`)
+
+// runtimeLogFailure matches what the kubelet or container runtime writes
+// into the log body when it cannot read the container's log file. It is
+// the node's error, not the application's, so it is never output.
+var runtimeLogFailure = regexp.MustCompile(`(?i)^(` +
+	`unable to retrieve container logs for |` +
+	`failed to try resolving symlinks in path|` +
+	`rpc error: .*(container|task) .*not found|` +
+	`container \S+ not found|` +
+	`failed to get container logs? )`)
+
+// IsRuntimeLogFailure reports text that is the kubelet or runtime failing
+// to read a container's log, not anything the application said.
+func IsRuntimeLogFailure(text string) bool {
+	return runtimeLogFailure.MatchString(strings.TrimSpace(text))
+}
 
 // IsErrorLine reports whether a log line looks like it carries a failure.
 func IsErrorLine(line string) bool {
@@ -65,24 +85,46 @@ func (r LogReader) Excerpt(
 func (r LogReader) Lines(
 	ctx context.Context, container inventory.EntityID,
 ) []string {
-	pod, name, ok := strings.Cut(container.Name, "/")
-	if !ok || r.Client == nil {
-		return nil
-	}
-	fetchCtx, cancel := context.WithTimeout(ctx, logFetchBudget)
-	defer cancel()
 	for _, previous := range []bool{true, false} {
-		tail, limit := int64(logTailLines), int64(logFetchBytes)
-		body, err := r.Client.CoreV1().Pods(container.Namespace).GetLogs(
-			pod, &corev1.PodLogOptions{
-				Container: name, Previous: previous,
-				TailLines: &tail, LimitBytes: &limit,
-			}).DoRaw(fetchCtx)
+		body, err := r.read(ctx, container, previous, logTailLines, logFetchBytes)
 		if err == nil && len(bytes.TrimSpace(body)) > 0 {
 			return logLines(lastBytes(body, logLimitBytes))
 		}
 	}
 	return nil
+}
+
+// PreviousLines returns the output of a container's previous run only,
+// never of the current one, as Lines would. An empty result with a nil
+// error means the previous run printed nothing; an error means the
+// read failed (a Forbidden one means pods/log is not granted).
+func (r LogReader) PreviousLines(
+	ctx context.Context, container inventory.EntityID,
+) ([]string, error) {
+	body, err := r.read(ctx, container, true, crashTailLines, logFetchBytes)
+	if err != nil {
+		return nil, err
+	}
+	return logLines(lastBytes(body, crashKeepBytes)), nil
+}
+
+// read fetches one run's log tail within logFetchBudget.
+func (r LogReader) read(
+	ctx context.Context, container inventory.EntityID, previous bool,
+	lines, fetch int64,
+) ([]byte, error) {
+	pod, name, ok := strings.Cut(container.Name, "/")
+	if !ok || r.Client == nil {
+		return nil, errors.New("no log client or container name")
+	}
+	fetchCtx, cancel := context.WithTimeout(ctx, logFetchBudget)
+	defer cancel()
+	tail, limit := lines, fetch
+	return r.Client.CoreV1().Pods(container.Namespace).GetLogs(
+		pod, &corev1.PodLogOptions{
+			Container: name, Previous: previous,
+			TailLines: &tail, LimitBytes: &limit,
+		}).DoRaw(fetchCtx)
 }
 
 // lastBytes keeps at most the last n bytes of body, from the first
@@ -113,11 +155,13 @@ func lastBytes(body []byte, n int) []byte {
 func logLines(body []byte) []string {
 	var lines []string
 	text := redact.Evidence(string(body))
-	scanner := bufio.NewScanner(strings.NewReader(text))
-	scanner.Buffer(make([]byte, 0, 4096), 64<<10)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line != "" && !base64Line.MatchString(line) {
+	// Split rather than scan: a scanner stops for good at its first line
+	// over its token limit (redaction can lengthen one past the body's
+	// own limit) and would silently drop the rest of the excerpt.
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" && !base64Line.MatchString(line) &&
+			!IsRuntimeLogFailure(line) {
 			lines = append(lines, truncate(line))
 		}
 	}

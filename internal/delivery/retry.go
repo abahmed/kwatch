@@ -110,7 +110,7 @@ func sendWithRetry(
 		lastErr = err
 		if transport.IsPermanent(err) {
 			klog.ErrorS(
-				err,
+				loggedErr(err),
 				"provider rejected the notification; not retrying",
 				"provider",
 				providerName,
@@ -130,7 +130,7 @@ func sendWithRetry(
 		}
 	}
 	klog.ErrorS(
-		lastErr,
+		loggedErr(lastErr),
 		"failed to deliver after retries",
 		"provider",
 		providerName,
@@ -160,7 +160,7 @@ func waitBeforeRetry(
 	klog.V(4).InfoS(
 		"retrying provider delivery", "provider", providerName,
 		"attempt", attempt, "maxAttempts", rc.maxAttempts,
-		"backoff", delay, "error", sendErr,
+		"backoff", delay, "error", loggedError(sendErr),
 	)
 	return sleepWithContext(ctx, delay)
 }

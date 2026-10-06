@@ -40,6 +40,10 @@ type expectation struct {
 	OtherRoots []string `json:"otherRoots,omitempty"`
 	// Tier is the expected delivery tier of the first incident.
 	Tier string `json:"tier,omitempty"`
+	// BootHeld marks a scenario whose first message is held on purpose
+	// by the node boot grace. It is measured by its own gate, not the
+	// general first-message gate.
+	BootHeld bool `json:"bootHeld,omitempty"`
 	// MaxMessages bounds every message the scenario may produce.
 	MaxMessages int `json:"maxMessages"`
 	// MustNotBlame lists entities no stated cause may name.
@@ -108,7 +112,18 @@ func library() []scenario {
 		borderlineTrafficScenarios(), storageScenarios(),
 		admissionScenarios(), trafficBackendScenarios(),
 		autoscalingScenarios(), sharedErrorScenarios(),
-		commonFactorScenarios(), dependencyScenarios(),
+		logsOnlyScenarios(),
+		commonFactorScenarios(), dependencyScenarios(), bootScenarios(),
+		bootEndpointScenarios(),
+		releaseScenarios(), metricsHPAScenarios(), nodeFlapScenarios(),
+		recentChangeScenarios(), fixAttemptScenarios(),
+		flipScenarios(), unschedulableQuantifiedScenarios(),
+		readyNeverScenarios(), namespaceOutageScenarios(),
+		reopenScenarios(), jobLongScenarios(), scaleZeroScenarios(),
+		firstRolloutScenarios(), usageHistoryScenarios(),
+		kwatchViewScenarios(), escalationScenarios(),
+		crashReplaceScenarios(), metricsBlipScenarios(),
+		digestFlapScenarios(),
 	} {
 		out = append(out, group...)
 	}

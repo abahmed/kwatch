@@ -1,0 +1,12 @@
+{
+  "name": "cause-flip-stable",
+  "description": "The pods behind a Service crash and recover five times in half an hour, the Service losing its endpoints each time; no round re-posts.",
+  "root": "deployment/shop/draftor",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "service/shop/draftor",
+    "node//n1"
+  ],
+  "tail": "15m0s"
+}

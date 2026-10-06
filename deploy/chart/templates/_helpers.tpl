@@ -203,3 +203,35 @@ the cluster up.
 {{- $key -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+Whether this release renders the cluster-wide KwatchConfig CRD. The CRD is a
+singleton: Helm stamps it with the first release that created it and keeps it
+on uninstall, so a second release (another name or namespace) or a reinstall
+under a new name would fail with "exists and cannot be imported". Render it
+when crd.install is true and either no such CRD exists yet or this release
+owns it. Offline renders (helm template, Argo CD) cannot look the cluster up
+and always render it. Returns "true" or nothing.
+*/}}
+{{- define "kwatch.renderCRD" -}}
+{{- $crd := default dict .Values.crd -}}
+{{- if dig "install" true $crd -}}
+{{- $existing := lookup "apiextensions.k8s.io/v1" "CustomResourceDefinition" "" "kwatchconfigs.kwatch.abahmed.dev" -}}
+{{- if not $existing -}}
+true
+{{- else if and (eq (dig "metadata" "annotations" "meta.helm.sh/release-name" "" $existing) .Release.Name) (eq (dig "metadata" "annotations" "meta.helm.sh/release-namespace" "" $existing) .Release.Namespace) -}}
+true
+{{- end -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+True when a KwatchConfig CRD exists that this release does not own, so the
+chart left it alone.
+*/}}
+{{- define "kwatch.crdOwnedElsewhere" -}}
+{{- $crd := default dict .Values.crd -}}
+{{- if and (dig "install" true $crd) (not (include "kwatch.renderCRD" .)) -}}
+true
+{{- end -}}
+{{- end }}

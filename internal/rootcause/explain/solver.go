@@ -42,7 +42,11 @@ func (v *view) rank(cs *candidateSet) []scored {
 		}
 		s := v.score(c)
 		ranked = append(ranked, s)
-		if s.veto == "" && s.confidence >= ConfidenceFloor {
+		// A shared-factor suspect only says what the failures have in
+		// common. It may lose them to specific causes and not be chosen,
+		// so it must not use up the self row's "nothing upstream".
+		if s.veto == "" && s.confidence >= ConfidenceFloor &&
+			!sharedFactorOnly(c) {
 			for _, effect := range c.others() {
 				v.explainedBy[effect] = true
 			}

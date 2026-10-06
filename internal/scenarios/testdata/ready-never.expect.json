@@ -1,0 +1,8 @@
+{
+  "name": "ready-never",
+  "description": "A Deployment's only pod runs for two hours without restarting and its readiness probe never passes.",
+  "root": "deployment/shop/cert-controller",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "30m0s"
+}

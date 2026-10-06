@@ -1,0 +1,8 @@
+{
+  "name": "cronjob-last-run-failed",
+  "description": "A weekly CronJob's last run failed three days ago (BackoffLimitExceeded) and no run has succeeded since.",
+  "root": "cronjob/reports/weekly-export",
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "10m0s"
+}

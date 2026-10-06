@@ -23,12 +23,18 @@ func resolveNote(f caseFacts) (string, []sentence) {
 				" and are not resolved."}}
 	}
 	subject := leadSubject(f)
+	if rest, ok := strings.CutPrefix(string(f.reason),
+		incident.StoppedTrackingPrefix); ok {
+		return notification.MarkerResolved, stoppedTracking(f, subject, rest)
+	}
 	lead := sentence{part: partLead, text: capitalName(subject,
 		f.leadName(subject)+" "+resolution(f, subject)+".")}
 	lasted := "it was " + downWord(p) + " for " +
 		humanDuration(p.Resolved.Sub(p.Opened)) + resolvedCause(f, subject)
 	detail := sentenceCase(lasted)
-	if fix := fixPhrase(f); fix != "" {
+	if fix := fixedByPhrase(f); fix != "" {
+		detail = fix + "; " + lasted + "."
+	} else if fix := fixPhrase(f); fix != "" {
 		detail = fix + "; " + lasted + "."
 	}
 	return notification.MarkerResolved, []sentence{lead,
@@ -104,7 +110,31 @@ func pastTense(text string) string {
 		{" does ", " did "}, {" keeps ", " kept "}, {" refuses ", " refused "},
 		{" cannot ", " could not "},
 	} {
-		text = strings.Replace(text, r[0], r[1], 1)
+		done := false
+		text = outsideQuotes(text, func(part string) string {
+			if done || !strings.Contains(part, r[0]) {
+				return part
+			}
+			done = true
+			return strings.Replace(part, r[0], r[1], 1)
+		})
 	}
 	return text
+}
+
+// stoppedTracking closes an incident that ended at its still-broken cap:
+// the workload is still short of replicas, so the message must not say it
+// is healthy. rest is the reason after its prefix, "2h; coverage check
+// continues".
+func stoppedTracking(
+	f caseFacts, subject inventory.EntityID, rest string,
+) []sentence {
+	span, _, _ := strings.Cut(rest, ";")
+	return []sentence{
+		{part: partLead, text: capitalName(subject, f.leadName(subject)+
+			" is still short of replicas.")},
+		{part: partProof, text: "kwatch stopped tracking this incident " +
+			"after " + strings.TrimSpace(span) + "; the coverage check " +
+			"keeps watching it."},
+	}
 }

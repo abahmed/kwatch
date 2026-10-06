@@ -2,6 +2,7 @@ package compose
 
 import (
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
 // Proof weights of investigated facts. A changed config key is almost
@@ -94,7 +95,8 @@ func evidenceSentences(f caseFacts) []sentence {
 // investigated is the text of the first investigated fact of kind fact.
 func investigated(f caseFacts, fact string) string {
 	for _, e := range f.evidence {
-		if e.Kind == fact && e.Text != "" {
+		if e.Kind == fact && e.Text != "" &&
+			!kube.IsRuntimeLogFailure(e.Text) {
 			return e.Text
 		}
 	}

@@ -40,3 +40,11 @@ func TestKnownModeCoversTablesFamiliesAndConditions(t *testing.T) {
 	assert.True(t, KnownMode(ModeTerminating))
 	assert.False(t, KnownMode("CrashLop"))
 }
+
+// FailedGetScale says the autoscaler cannot read its scale target; it
+// is not a metrics problem.
+func TestFailedGetScaleIsATargetProblemNotAMetricsOne(t *testing.T) {
+	got := Classify(Finding{Reason: "FailedGetScale"})
+
+	assert.Equal(t, ModeScalingTargetMissing, got.Mode)
+}

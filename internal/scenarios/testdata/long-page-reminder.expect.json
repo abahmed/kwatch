@@ -1,0 +1,11 @@
+{
+  "name": "long-page-reminder",
+  "description": "A node that pages stays down for seven hours.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/api"
+  ],
+  "tail": "7h10m0s"
+}

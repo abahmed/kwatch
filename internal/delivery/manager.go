@@ -83,6 +83,13 @@ type Manager struct {
 	// provider, or sending. See LastProgress.
 	busy atomic.Int32
 
+	// told remembers which providers each conversation was routed to.
+	told routeLedger
+	// pagerLanded remembers which pagers accepted a message of each
+	// conversation; pageObserver hears what became of the alerts.
+	pagerLanded  routeLedger
+	pageObserver atomic.Pointer[PageObserver]
+
 	opensMu sync.Mutex
 	// opens remembers, per provider and key, announcements that did not
 	// reach the provider.

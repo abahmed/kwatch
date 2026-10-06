@@ -1,0 +1,8 @@
+10:08:15 settled
+🟠 checkout in shop (prod-eu-1): rollout 14 restarted 4 times in its first 2 minutes; rollout 13 did not restart. The previous image was registry.example.com/checkout:5.1. Its dependents failed soon after it changed. Rolling back fixes it (changes the cluster): kubectl rollout undo deployment/checkout -n shop --to-revision=13
+🟠 checkout in shop (prod-eu-1): rollout 14 restarted 4 times in its first 2 minutes; rollout 13 did not restart.
+
+10:23:00 healthy for 3m0s
+✅ checkout in shop (prod-eu-1) is healthy again. It was failing for 16 minutes.
+✅ checkout in shop (prod-eu-1) is healthy again.
+

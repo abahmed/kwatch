@@ -56,19 +56,18 @@ func firstText(b *slackClient.Blocks) string {
 	return ""
 }
 
-func TestSlackIncidentPostsShortRootThenNoteInThread(t *testing.T) {
+func TestSlackIncidentPostsFullNoteAsRoot(t *testing.T) {
 	s, recorder := threadedSlack(t)
 	m := providertest.Announce()
 
 	require.NoError(t, s.SendIncident(context.Background(), m))
 
-	require.Len(t, recorder.posts, 2)
+	require.Len(t, recorder.posts, 1, "no thread reply repeats the note")
 	require.Empty(t, recorder.posts[0].threadTS)
-	require.Equal(t, m.Short, firstText(recorder.posts[0].blocks))
-	require.Equal(t, "root-ts", recorder.posts[1].threadTS)
-	require.Equal(t, m.Note, firstText(recorder.posts[1].blocks))
-	require.Len(t, recorder.posts[1].blocks.BlockSet, 2, "output block")
-	require.Equal(t, "root-ts", s.SnapshotThreads()[m.Key])
+	require.Equal(t, m.Note, firstText(recorder.posts[0].blocks))
+	require.Len(t, recorder.posts[0].blocks.BlockSet, 3,
+		"note, output label, output block")
+	require.Equal(t, "root-ts", threadTS(s, m.Key))
 }
 
 func TestSlackIncidentUpdateStaysInThread(t *testing.T) {
@@ -78,10 +77,10 @@ func TestSlackIncidentUpdateStaysInThread(t *testing.T) {
 
 	require.NoError(t, s.SendIncident(ctx, providertest.Update()))
 
-	require.Len(t, recorder.posts, 3)
-	require.Equal(t, "root-ts", recorder.posts[2].threadTS)
+	require.Len(t, recorder.posts, 2)
+	require.Equal(t, "root-ts", recorder.posts[1].threadTS)
 	require.Equal(t, providertest.Update().Note,
-		firstText(recorder.posts[2].blocks))
+		firstText(recorder.posts[1].blocks))
 }
 
 func TestSlackIncidentResolvedForgetsThread(t *testing.T) {
@@ -115,7 +114,7 @@ func TestSlackRestoreKeepsLiveThread(t *testing.T) {
 
 	s.RestoreThreads(map[string]string{providertest.Key: "stale-ts"})
 
-	require.Equal(t, "root-ts", s.SnapshotThreads()[providertest.Key])
+	require.Equal(t, "root-ts", threadTS(s, providertest.Key))
 }
 
 func TestSlackResolveAsFirstMessageKeepsNoConversation(t *testing.T) {
@@ -124,7 +123,8 @@ func TestSlackResolveAsFirstMessageKeepsNoConversation(t *testing.T) {
 	require.NoError(t, s.SendIncident(
 		context.Background(), providertest.Resolve()))
 
-	require.Len(t, recorder.posts, 2, "root and note are still posted")
+	require.Len(t, recorder.posts, 1, "one root with the note")
+	require.Empty(t, recorder.posts[0].threadTS)
 	require.Empty(t, s.SnapshotThreads(),
 		"a resolved conversation is not persisted")
 }

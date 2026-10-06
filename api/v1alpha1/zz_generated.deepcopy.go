@@ -15,19 +15,6 @@ func (in *AppConfig) DeepCopy() *AppConfig {
 	return out
 }
 
-func (in *HealthCheckConfig) DeepCopyInto(out *HealthCheckConfig) {
-	*out = *in
-}
-
-func (in *HealthCheckConfig) DeepCopy() *HealthCheckConfig {
-	if in == nil {
-		return nil
-	}
-	out := new(HealthCheckConfig)
-	in.DeepCopyInto(out)
-	return out
-}
-
 func (in *MaintenanceConfig) DeepCopyInto(out *MaintenanceConfig) {
 	*out = *in
 }
@@ -166,7 +153,6 @@ func (in *KwatchConfigSpec) DeepCopyInto(out *KwatchConfigSpec) {
 	out.Maintenance = in.Maintenance
 	out.Telemetry = in.Telemetry
 	out.HeartbeatMonitor = in.HeartbeatMonitor
-	out.HealthCheck = in.HealthCheck
 	out.App = in.App
 }
 

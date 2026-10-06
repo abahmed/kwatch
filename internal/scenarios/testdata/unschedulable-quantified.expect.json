@@ -1,0 +1,7 @@
+{
+  "name": "unschedulable-quantified",
+  "description": "A pod asking for 3 CPU is Pending on a cluster whose nodes have at most 1.5 CPU free; the message states the need and the most free.",
+  "root": "scheduling//Insufficient cpu",
+  "tier": "notify",
+  "maxMessages": 2
+}

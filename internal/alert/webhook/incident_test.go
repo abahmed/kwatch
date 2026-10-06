@@ -71,3 +71,21 @@ func TestWebhookSendIncidentReportsHTTPFailure(t *testing.T) {
 	assert.Error(t, c.SendIncident(context.Background(),
 		providertest.Announce()))
 }
+
+func TestWebhookPayloadCarriesDeliveryFlags(t *testing.T) {
+	rec := providertest.NewRecorder(t)
+	c := NewWebhook(map[string]interface{}{"url": rec.URL()},
+		"dev", rec.Dependencies())
+	require.NotNil(t, c)
+	m := providertest.Resolve()
+	m.PagingOnly = true
+	m.SkipPaging = true
+	m.Carrier = "digest"
+	require.NoError(t, c.SendIncident(context.Background(), m))
+
+	got := rec.Last(t).JSON(t)
+	assert.Equal(t, true, got["pagingOnly"])
+	assert.Equal(t, true, got["skipPaging"])
+	assert.Equal(t, "digest", got["carrier"])
+	assert.True(t, c.ReceivesPagingOnly())
+}

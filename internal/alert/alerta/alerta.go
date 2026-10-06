@@ -101,6 +101,13 @@ func (s *Alerta) Name() string {
 func (s *Alerta) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
+	// A plain notice (startup, upgrade, test) or the startup summary is
+	// not an incident, and nothing would ever resolve what it opens.
+	if m.IsInformational() {
+		klog.V(4).InfoS("skipping informational message",
+			"component", "delivery", "provider", s.Name())
+		return nil
+	}
 	body, err := json.Marshal(s.buildPayload(m))
 	if err != nil {
 		return err
@@ -119,6 +126,8 @@ func (s *Alerta) buildPayload(m notification.Message) alertaPayload {
 	// state reset is still the one a later resolve closes.
 	resource := m.AlertKey("")
 	if len(s.clusterName) > 0 {
+		// Kept exactly as before so an alert opened by an older kwatch
+		// is still the one a later resolve closes.
 		resource = s.clusterName + "/" + resource
 	}
 	eventName := incidentEvent
@@ -173,3 +182,7 @@ func alertaSeverity(m notification.Message) string {
 func (s *Alerta) SendMessage(ctx context.Context, msg string) error {
 	return s.SendIncident(ctx, notification.Notice(msg))
 }
+
+// SkipsPlainMessages implements api.PlainMessageSkipper: plain messages
+// become notices, which SendIncident skips.
+func (s *Alerta) SkipsPlainMessages() bool { return true }

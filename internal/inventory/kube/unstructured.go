@@ -1,6 +1,7 @@
 package kube
 
 import (
+	"maps"
 	"strconv"
 	"strings"
 	"time"
@@ -24,6 +25,8 @@ const AttrCustom = "custom.resource"
 type UnstructuredSchema struct {
 	group string
 	kind  inventory.Kind
+	// spelling is the Kubernetes Kind as the API writes it.
+	spelling string
 }
 
 // gatewayGroup is the Gateway API group, the default group of a route's
@@ -37,6 +40,7 @@ func NewUnstructuredSchema(
 ) UnstructuredSchema {
 	return UnstructuredSchema{
 		group: GroupFor(apiGroup), kind: KindFor(kubernetesKind),
+		spelling: kubernetesKind,
 	}
 }
 
@@ -68,6 +72,7 @@ func (s UnstructuredSchema) Describe(obj any) (Description, bool) {
 		u.Object, "status", "observedGeneration"); found {
 		attrs[AttrObservedGen] = inventory.Number(float64(observed))
 	}
+	maps.Copy(attrs, KindNameAttributes(s.spelling))
 	setConditions(attrs, s.conditions(u))
 	s.wellKnownStatus(u, attrs)
 	if ready, found, _ := unstructured.NestedBool(

@@ -3,6 +3,7 @@ package delivery
 import (
 	"fmt"
 
+	deliveryapi "github.com/abahmed/kwatch/internal/delivery/api"
 	"github.com/abahmed/kwatch/internal/metrics"
 )
 
@@ -23,30 +24,55 @@ func (m *Manager) fanOut(job deliverJob) {
 			return
 		}
 		job.target = name
-		m.offer(generation.entries[name], job)
+		entry := generation.entries[name]
+		if !acceptsPagingOnly(entry, job) {
+			// The paging scope of the message excludes this provider,
+			// whoever queued the job for it.
+			m.outbox.Load().remove(job.outboxID)
+			return
+		}
+		m.offer(entry, job)
 		return
 	}
+	var routed []string
 	for _, name := range generation.order {
 		entry := generation.entries[name]
-		if !routedTo(entry.routes, job) || !acceptsPagingOnly(entry, job) {
+		if !m.wants(entry, job) || !acceptsPagingOnly(entry, job) {
 			continue
 		}
+		routed = append(routed, name)
 		copied := job
 		copied.target = name
 		copied.outboxID = m.outbox.Load().add(copied, name)
 		m.offer(entry, copied)
 	}
+	m.noteRouted(job, routed...)
 }
 
 // acceptsPagingOnly reports whether a provider may receive job. A
 // paging-only announcement goes to the providers that skip plain
 // messages: the startup summary that stands in for it never reaches them.
+// A resolve marked SkipPaging goes to every other provider: the paging
+// providers never opened an alert for that incident.
 func acceptsPagingOnly(entry providerEntry, job deliverJob) bool {
-	if job.kind != jobIncident || job.incident == nil ||
-		!job.incident.PagingOnly {
+	if job.kind != jobIncident || job.incident == nil {
 		return true
 	}
-	return skipsPlainMessages(entry.provider)
+	if job.incident.SkipPaging && skipsPlainMessages(entry.provider) {
+		return false
+	}
+	if !job.incident.PagingOnly {
+		return true
+	}
+	return skipsPlainMessages(entry.provider) ||
+		receivesPagingOnly(entry.provider)
+}
+
+// receivesPagingOnly reports whether the provider asked for paging-only
+// messages although it also takes plain ones.
+func receivesPagingOnly(p Provider) bool {
+	receiver, ok := p.(deliveryapi.PagingOnlyReceiver)
+	return ok && receiver.ReceivesPagingOnly()
 }
 
 // offer queues one provider's copy of a job and settles what coalescing
@@ -101,6 +127,7 @@ func (m *Manager) recordQueueDrop(
 	metrics.DefaultRegistry().NotificationsDropped.Add(1)
 	metrics.DefaultRegistry().DeliveryQueueSaturated.Add(1)
 	m.openFailed(&entry, job)
+	m.pageLost(&entry, job)
 	m.addToOverflowSummary(entry.provider.Name(), job)
 	m.recordDeadLetter(entry.provider.Name(), job,
 		fmt.Errorf("delivery queue saturated"))

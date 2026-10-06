@@ -3,17 +3,26 @@ package kube
 // Attribute names shared by schemas, detectors and rules. Names are stable:
 // they are persisted and referenced by rule definitions.
 const (
-	AttrPhase           = "phase"
-	AttrLabels          = "labels"
-	AttrReady           = "ready"
-	AttrReadySince      = "ready.transition"
-	AttrReason          = "reason"
-	AttrMessage         = "message"
-	AttrDeleting        = "deleting"
-	AttrQoS             = "qos"
-	AttrScheduled       = "scheduled"
-	AttrScheduledReason = "scheduled.reason"
-	AttrStartTime       = "start.time"
+	AttrPhase      = "phase"
+	AttrLabels     = "labels"
+	AttrReady      = "ready"
+	AttrReadySince = "ready.transition"
+	AttrReason     = "reason"
+	AttrMessage    = "message"
+	AttrDeleting   = "deleting"
+	// AttrDeletionTime is when the pod's deletion was requested; set only
+	// while it is being deleted. AttrTerminationGrace is the seconds its
+	// containers are given to stop (spec.terminationGracePeriodSeconds).
+	AttrDeletionTime     = "deletion.timestamp"
+	AttrTerminationGrace = "termination.grace.seconds"
+	AttrQoS              = "qos"
+	AttrScheduled        = "scheduled"
+	AttrScheduledReason  = "scheduled.reason"
+	AttrStartTime        = "start.time"
+	// AttrCompletionTime is when a Job finished all its pods, and
+	// AttrActiveDeadline is its spec.activeDeadlineSeconds.
+	AttrCompletionTime = "completion.time"
+	AttrActiveDeadline = "active.deadline.seconds"
 	// AttrCreated is the pod creation time, for pending and ready
 	// baselines.
 	AttrCreated = "created"
@@ -101,3 +110,8 @@ const (
 	AttrMinReplicas      = "replicas.min"
 	AttrMaxReplicas      = "replicas.max"
 )
+
+// AttrTemplateLabels are the labels of the pods a workload creates, in
+// the format of AttrLabels. They stay known when the workload has no
+// pods, so a Service can still be matched to it.
+const AttrTemplateLabels = "template.labels"

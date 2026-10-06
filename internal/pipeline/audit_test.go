@@ -86,3 +86,16 @@ func TestAuditCauseState(t *testing.T) {
 	assert.Equal(t, audit.CauseSelf, causeState(auditIncident(self, pod)))
 	assert.Equal(t, audit.CauseKnown, causeState(auditIncident(change, pod)))
 }
+
+func TestAuditReminderHashDiffersFromTheAnnouncement(t *testing.T) {
+	p := auditIncident(nil)
+	p.Reminded = time.Date(2026, 9, 29, 16, 0, 0, 0, time.UTC)
+	at := p.Reminded
+	update := incident.Decision{Action: incident.Update, Incident: p}
+	reminder := incident.Decision{Action: incident.Update, Incident: p,
+		Reason: incident.ReasonReminder}
+	plain := AuditEntry(update, notification.Message{}, at)
+	again := AuditEntry(reminder, notification.Message{}, at)
+	assert.Equal(t, "h1", plain.ContentHash)
+	assert.NotEqual(t, plain.ContentHash, again.ContentHash)
+}

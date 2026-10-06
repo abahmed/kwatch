@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"io"
 	"sort"
 	"strings"
@@ -21,7 +22,7 @@ const maxLineBytes = 4 << 20
 func Parse(r io.Reader) ([]audit.Entry, error) {
 	reader := bufio.NewReaderSize(r, 64<<10)
 	head, err := reader.Peek(1)
-	if err == io.EOF {
+	if errors.Is(err, io.EOF) {
 		return nil, nil
 	}
 	if err != nil {

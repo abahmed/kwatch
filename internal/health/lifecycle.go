@@ -39,7 +39,11 @@ func (h *HealthServer) Open() error {
 		WriteTimeout:      10 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	ln, err := net.Listen("tcp", h.server.Addr)
+	// Open has no caller context; binding a port does not block, so a
+	// background context only satisfies the listener API.
+	var listenConfig net.ListenConfig
+	ln, err := listenConfig.Listen(
+		context.Background(), "tcp", h.server.Addr)
 	if err != nil {
 		h.lifecycleMu.Unlock()
 		return err

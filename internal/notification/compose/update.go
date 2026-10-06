@@ -12,18 +12,50 @@ import (
 // sentences.
 const maxUpdate = 2
 
-// recoveredPrefix starts the timeline note of a member that recovered.
-const recoveredPrefix = "recovered: "
-
 // updateSentences say only what changed since the last message.
 func updateSentences(f caseFacts) []sentence {
-	switch f.reason {
+	build, _ := sentencesFor(f.reason)
+	return build(f)
+}
+
+// sentencesFor picks the sentence builder of a decision reason. known is
+// false for a reason compose has no rule for (such as a free-text resolve
+// reason); the builder is then the material-change one. Every value in
+// incident.AllReasons must be known (see TestEveryReasonIsHandled).
+func sentencesFor(
+	reason incident.Reason,
+) (build func(caseFacts) []sentence, known bool) {
+	switch reason {
 	case incident.ReasonCauseRevised:
-		return revisedSentences(f)
-	case "flapping":
-		return flappingSentences(f)
+		return revisedSentences, true
+	case incident.ReasonFlapping:
+		return flappingSentences, true
 	case incident.ReasonReminder:
-		return reminderSentences(f)
+		return reminderSentences, true
+	case incident.ReasonFixAttempt:
+		return attemptSentences, true
+	case incident.ReasonFixStillFailing:
+		return stillFailingSentences, true
+	case incident.ReasonFailingAgain:
+		return failingAgainSentences, true
+	case incident.ReasonMaterialChange:
+		return changeSentencesFor, true
+	case incident.ReasonSettled, incident.ReasonSuperseded:
+		// Announce and Resolve decisions never reach updateSentences.
+		return changeSentencesFor, true
+	}
+	return changeSentencesFor, false
+}
+
+// changeSentencesFor says what changed: worsening, a rollout, a changed
+// fact, or else the case restated.
+func changeSentencesFor(f caseFacts) []sentence {
+	if worse := worseningSentences(f); len(worse) > 0 {
+		return worse
+	}
+	if text, ok := firstRolloutLead(f); ok {
+		return []sentence{{part: partLead, text: capitalName(
+			leadSubject(f), endSentence(text))}}
 	}
 	if changed := changedSentences(f); len(changed) > 0 {
 		return changed
@@ -103,21 +135,22 @@ func flappingSentences(f caseFacts) []sentence {
 // changedSentences read the newest timeline entries: members that
 // joined ("It's spreading to …") or recovered.
 func changedSentences(f caseFacts) []sentence {
-	current := map[string]detection.Finding{}
-	for _, s := range f.members {
-		current[describe(s.Entity)] = s
+	current := map[inventory.EntityID]detection.Finding{}
+	for _, s := range failing(f.members) {
+		current[s.Entity] = s
 	}
 	var out []sentence
 	var spread []detection.Finding
 	named := map[inventory.EntityID]bool{}
 	for _, e := range newEvents(f.p) {
-		text := e.Text
-		recovered := strings.HasPrefix(text, recoveredPrefix)
-		_, subject := splitSubject(strings.TrimPrefix(text, recoveredPrefix))
-		s, active := current[subject]
+		if e.Entity == nil {
+			continue
+		}
+		recovered := strings.HasPrefix(e.Text, incident.RecoveredPrefix)
+		s, active := current[*e.Entity]
 		switch {
-		case recovered && !active && subject != "":
-			out = append(out, recoveredSentence(f, subject))
+		case recovered && !active:
+			out = append(out, recoveredSentence(f, *e.Entity))
 		case !recovered && active && !named[s.Entity]:
 			named[s.Entity] = true
 			spread = append(spread, s)
@@ -178,33 +211,20 @@ func spreadSentences(f caseFacts, spread []detection.Finding) []sentence {
 // recoveredSentence says a member recovered and what is still open,
 // naming the subject: "Service cart has recovered; payments in shop
 // still has one open failure."
-func recoveredSentence(f caseFacts, subject string) sentence {
-	id := parseDescribed(subject)
+func recoveredSentence(f caseFacts, id inventory.EntityID) sentence {
 	home := leadSubject(f)
-	failing := len(f.members)
-	if id == home || failing == 0 {
+	open := len(failing(f.members))
+	if id == home || open == 0 {
 		text := f.leadName(id) + " has recovered"
-		if failing > 0 {
-			text += "; " + plural(failing, "other failure") + " " +
-				verb(failing, "is", "are") + " still open"
+		if open > 0 {
+			text += "; " + plural(open, "other failure") + " " +
+				verb(open, "is", "are") + " still open"
 		}
 		return sentence{part: partLead, text: capitalName(id, text+".")}
 	}
 	text := nameFrom(home, id) + " has recovered; " + f.leadName(home) +
-		" still has " + plural(failing, "open failure")
+		" still has " + plural(open, "open failure")
 	return sentence{part: partLead, text: capitalName(id, text+".")}
-}
-
-// parseDescribed reads back "kind namespace/name" as written by the
-// incident timeline.
-func parseDescribed(text string) inventory.EntityID {
-	kind, rest, _ := strings.Cut(text, " ")
-	namespace, name, found := strings.Cut(rest, "/")
-	if !found {
-		namespace, name = "", rest
-	}
-	return inventory.EntityID{Kind: inventory.Kind(kind),
-		Namespace: namespace, Name: name}
 }
 
 // newEvents are the timeline entries the last delivered message did not
@@ -250,4 +270,19 @@ func reminderSentences(f caseFacts) []sentence {
 	return append([]sentence{{part: partLead, text: capitalName(subject,
 		f.leadName(subject)+" is still "+downWord(f.p)+", for "+open+
 			" now.")}}, strongestProof(f)...)
+}
+
+// failingAgainSentences tell that a page that had resolved is back,
+// with the count the incident carries (RepeatCount), so consecutive
+// returns do not read alike: "api in shop is failing again: 4th time
+// in two hours."
+func failingAgainSentences(f caseFacts) []sentence {
+	subject := leadSubject(f)
+	text := f.leadName(subject) + " is failing again"
+	if f.p.RepeatCount > 0 {
+		text += ": " + humanizeText(incident.RepeatPhrase(f.p.RepeatCount))
+	}
+	return append([]sentence{{part: partLead,
+		text: capitalName(subject, endSentence(text))}},
+		strongestProof(f)...)
 }

@@ -3,6 +3,7 @@ package detectors
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
@@ -46,7 +47,9 @@ func loadBalancerEvents(
 	}
 	for _, reason := range names {
 		note := latest[reason]
-		ctx.RecheckAfter(note.At.Add(EventWindow).Sub(ctx.Now))
+		// +1ns: the window is inclusive, so the note is gone just after it.
+		ctx.RecheckAfter(note.At.Add(EventWindow).Sub(ctx.Now) +
+			time.Nanosecond)
 		if loadBalancerFailures[reason] > f.Severity {
 			f.Severity = loadBalancerFailures[reason]
 		}

@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -114,11 +114,11 @@ func (m *Mattermost) buildMessage(msg string) ([]byte, error) {
 }
 
 func (m *Mattermost) buildIncident(msg notification.Message) ([]byte, error) {
-	text := msg.NoteText()
-	if len(msg.Output) > 0 {
-		text += "\n```\n" + strings.Join(msg.Output, "\n") + "\n```"
-	}
-	payload := mmPayload{Text: notification.NeutralizeMentions(text)}
+	text := safetext.NoteWithOutput(
+		notification.NeutralizeMentions(msg.NoteText()),
+		safetext.Lines(msg.Output, notification.NeutralizeMentions),
+		"\n", 0)
+	payload := mmPayload{Text: text}
 	if m.clusterName != "" {
 		payload.Attachments = []mmAttachment{{Fields: []mmField{{
 			Title: "Cluster", Value: m.clusterName, Short: true,

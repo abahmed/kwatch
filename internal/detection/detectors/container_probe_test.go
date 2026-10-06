@@ -123,3 +123,23 @@ func TestContainerProbeFailuresIgnored(t *testing.T) {
 		})
 	}
 }
+
+// The kubelet's event spam filter slows a steady failure to one event
+// per five minutes, so the newest event can be older than probeRecency
+// while the container is still not ready. The finding must stay.
+func TestReadinessFindingStaysWhileStillNotReady(t *testing.T) {
+	found := detectProbe(t, probeFixture{
+		message: "Readiness probe failed: connection refused",
+		count:   1, age: 10 * time.Minute, started: time.Hour,
+	})
+
+	require.Len(t, found, 1)
+	assert.Equal(t, reasons.ReadinessProbeFailed, found[0].Reason)
+}
+
+func TestReadinessFindingEndsOnceTheEventIsVeryOld(t *testing.T) {
+	assert.Empty(t, detectProbe(t, probeFixture{
+		message: "Readiness probe failed: connection refused",
+		count:   1, age: time.Hour, started: 2 * time.Hour,
+	}))
+}

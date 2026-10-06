@@ -118,13 +118,13 @@ func TestSlackSectionsEscapeBeforeTruncating(t *testing.T) {
 	m.Note = strings.Repeat("&", maxSectionTextChars)
 	m.Output = []string{strings.Repeat("<", maxSectionTextChars)}
 	blocks := noteBlocks(m).BlockSet
-	require.Len(t, blocks, 2)
+	require.Len(t, blocks, 3, "note, output label, output")
 	for _, block := range blocks {
 		text := block.(slackClient.SectionBlock).Text.Text
 		assert.LessOrEqual(t,
 			utf8.RuneCountInString(text), maxSectionTextChars)
 	}
-	code := blocks[1].(slackClient.SectionBlock).Text.Text
+	code := blocks[2].(slackClient.SectionBlock).Text.Text
 	assert.True(t, strings.HasPrefix(code, "```"))
 	assert.True(t, strings.HasSuffix(code, "...```"),
 		"the closing fence must survive truncation")

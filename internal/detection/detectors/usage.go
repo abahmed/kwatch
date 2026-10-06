@@ -49,6 +49,14 @@ func (NodeUsage) Detect(
 		reasons.NodeInodesHigh, "inodes"); ok {
 		out = append(out, s)
 	}
+	if !nodeIsYoung(ctx, e) {
+		out = append(out, stallFindings(e)...)
+	}
+	return out
+}
+
+// stallFindings reports the first resource the node's tasks stall on.
+func stallFindings(e inventory.Entity) []detection.Finding {
 	for _, p := range []struct{ attr, resource string }{
 		{kube.AttrMemoryPSI, "memory"}, {kube.AttrCPUPSI, "CPU"},
 		{kube.AttrIOPSI, "disk IO"},
@@ -57,18 +65,18 @@ func (NodeUsage) Detect(
 		if !ok || stall < psiThreshold {
 			continue
 		}
-		out = append(out, detection.Finding{
+		return []detection.Finding{{
 			Reason: reasons.NodePSIHigh, Severity: detection.Warning,
-			Since:   valueSince(e, p.attr),
-			Summary: "Node workloads stall on " + p.resource,
+			Since: valueSince(e, p.attr),
+			Summary: "Node is under " + p.resource + " pressure: " +
+				"workloads stall on " + p.resource,
 			Evidence: []detection.Evidence{{
 				Label: "stalled",
 				Value: strconv.Itoa(int(stall)) + "% of the last minute",
 			}},
-		})
-		break
+		}}
 	}
-	return out
+	return nil
 }
 
 // VolumeUsage detects claims that are nearly full or filling up fast.
@@ -124,6 +132,9 @@ func (VolumeUsage) Detect(
 // not flip between warning and critical with every sample.
 const usageHysteresis = 5.0
 
+// usageHoldMax is how long a usage finding is held without a reading.
+const usageHoldMax = 30 * time.Minute
+
 // threshold reports usage above the warning level as one finding whose
 // severity rises to critical at the critical level. Both levels have
 // hysteresis, and the finding dates from when usage first crossed the
@@ -132,7 +143,10 @@ func threshold(
 	ctx detection.Context, e inventory.Entity, attr, reason, what string,
 ) (detection.Finding, bool) {
 	pct, ok := number(e, attr)
-	if !ok || !crossed(ctx, "high:"+attr, pct, usageWarning) {
+	if !ok {
+		return heldUsage(ctx, e, attr, reason, what)
+	}
+	if !crossed(ctx, "high:"+attr, pct, usageWarning) {
 		return detection.Finding{}, false
 	}
 	since := ctx.Onset("high:"+attr, valueSince(e, attr))
@@ -151,6 +165,64 @@ func threshold(
 			Label: "used", Value: strconv.Itoa(int(pct)) + "%",
 		}},
 	}, true
+}
+
+// heldUsage keeps a usage finding alive while its reading is gone only
+// because the kubelet cannot be read. The model drops usage figures after
+// a few failed polls; the disk did not empty meanwhile, so a finding
+// that held at the previous evaluation holds now, with the severity it
+// had, until the kubelet answers again or usageHoldMax has passed. The
+// hold ends because an old reading says less and less about the disk: a
+// node that stays unreachable is a finding of its own.
+func heldUsage(
+	ctx detection.Context, e inventory.Entity, attr, reason, what string,
+) (detection.Finding, bool) {
+	if !ctx.Ongoing("high:"+attr) || !kubeletBlind(ctx, e) {
+		return detection.Finding{}, false
+	}
+	staleSince := ctx.Onset("held:"+attr, ctx.Now)
+	if ctx.Now.Sub(staleSince) > usageHoldMax {
+		return detection.Finding{}, false
+	}
+	since := ctx.Onset("high:"+attr, ctx.Now)
+	severity := detection.Warning
+	if ctx.Ongoing("critical:" + attr) {
+		ctx.Onset("critical:"+attr, ctx.Now)
+		severity = detection.Critical
+	}
+	return detection.Finding{
+		Reason: reason, Severity: severity, Since: since,
+		Summary: upper(what) + " was over " + strconv.Itoa(
+			int(usageWarning)) + "% used and the kubelet cannot be " +
+			"read, so it is assumed to be still full",
+		Evidence: []detection.Evidence{{
+			Label: "reading stale since",
+			Value: staleSince.UTC().Format("2006-01-02 15:04 MST"),
+		}},
+	}, true
+}
+
+// kubeletBlind reports whether the kubelet that would report the usage
+// of e failed its last reads: the node itself, or the nodes of the pods
+// that mount a claim.
+func kubeletBlind(ctx detection.Context, e inventory.Entity) bool {
+	nodes := []inventory.EntityID{e.ID}
+	if e.ID.Kind == kube.KindPVC {
+		nodes = nil
+		for _, pod := range ctx.Model.Related(e.ID, inventory.Mounts,
+			inventory.Incoming) {
+			nodes = append(nodes, ctx.Model.Related(pod, inventory.RunsOn,
+				inventory.Outgoing)...)
+		}
+	}
+	for _, id := range nodes {
+		node, ok := ctx.Model.Entity(id)
+		if failures, _ := number(node, kube.AttrKubeletFailures); ok &&
+			failures > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // crossed reports whether pct is at or over level, or was over it at

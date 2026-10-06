@@ -162,8 +162,11 @@ func TestEngineMarksReferrersOfACreatedObject(t *testing.T) {
 		}
 		return false
 	}
+	// A new Ingress may wait for its TLS Secret (cert-manager makes it);
+	// the finding exists only once the Ingress is older than that grace.
+	old := start.Add(-detectors.DefaultTLSSecretGrace - time.Minute)
 	h.engine.Submit(context.Background(),
-		seen(ingress, start, nil),
+		seen(ingress, old, nil),
 		link(ingress, inventory.References, secret))
 	h.engine.step(context.Background(), h.now, h.checks)
 	if !missing() {

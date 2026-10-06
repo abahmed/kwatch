@@ -46,21 +46,10 @@ type Config struct {
 	IDNonce string
 }
 
-// Defaults for Config.
+// Defaults for Config counts; the durations are in timings.go.
 const (
-	DefaultSettle         = 75 * time.Second
-	DefaultPageSettle     = 15 * time.Second
 	DefaultBurstIncidents = 3
-	// DefaultReviseSettle covers the failures that usually follow a
-	// revised cause within seconds, such as evictions after pressure.
-	DefaultReviseSettle = 30 * time.Second
-	DefaultHold         = 3 * time.Minute
-	DefaultMaxHold      = 30 * time.Minute
-	DefaultFlapWindow   = 30 * time.Minute
-	DefaultFlapCycles   = 3
-	// DefaultRemember keeps resolved incidents for a week, long enough to
-	// learn daily routines and to say "3rd time this week".
-	DefaultRemember = 7 * 24 * time.Hour
+	DefaultFlapCycles     = 3
 )
 
 func (c Config) withDefaults() Config {
@@ -92,4 +81,15 @@ func (c Config) hold(recentCycles int) time.Duration {
 		hold *= 2
 	}
 	return min(hold, c.MaxHold)
+}
+
+// holdFor is how long p must stay healthy before it resolves: the base
+// hold doubled for each recent recovery, and multiplied by ChronicFactor
+// when p is a chronic flapper, never beyond MaxHold.
+func (m *Manager) holdFor(p *Incident, now time.Time) time.Duration {
+	hold := m.cfg.hold(len(recent(p.Cycles, now, m.cfg.FlapWindow)))
+	if len(recent(p.Occurrences, now, ChronicWindow)) >= ChronicOccurrences {
+		hold = min(hold*ChronicFactor, m.cfg.MaxHold)
+	}
+	return hold
 }

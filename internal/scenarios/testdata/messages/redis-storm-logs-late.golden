@@ -1,0 +1,4 @@
+10:04:45 settled
+🟠 exporter in billing (prod-eu-1) and five other workloads keep crashing with the same error. It fails with "Unhandled exception. StackExchange.Redis.RedisConnectionException: It was not possible to connect to the redis…". invoicer and ledger, cart in shop and two others are affected as well. To read the output of the last crash, run kubectl logs exporter-69070cef-a -c app -n billing --previous
+🟠 exporter in billing (prod-eu-1) and five other workloads keep crashing with the same error.
+

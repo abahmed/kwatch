@@ -90,3 +90,20 @@ func TestEventNoteTimestampPrecedence(t *testing.T) {
 		})
 	}
 }
+
+func TestEventNoteCarriesTheObjectAndEventIdentity(t *testing.T) {
+	ev := warningEvent("Pod", "")
+	ev.InvolvedObject.UID = "pod-uid"
+	ev.UID = "event-uid"
+	observation, ok := kube.EventNote(ev, fixedTime())
+	assert.True(t, ok)
+	assert.Equal(t, "pod-uid", observation.Note.UID)
+	assert.Equal(t, "event-uid", observation.Note.Origin)
+}
+
+func TestEventNoteWithoutAnEventUIDHasNoOrigin(t *testing.T) {
+	ev := warningEvent("Pod", "")
+	ev.Name = "p.17a"
+	observation, _ := kube.EventNote(ev, fixedTime())
+	assert.Empty(t, observation.Note.Origin)
+}

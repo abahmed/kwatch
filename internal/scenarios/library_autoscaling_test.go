@@ -237,11 +237,21 @@ func buildHPAAtMax(c *cluster) {
 // with the observed CPU utilization; limited sets ScalingLimited.
 func hpaAtMaxAutoscaler(c *cluster, current, desired, cpu int32,
 	limited bool) *autoscalingv2.HorizontalPodAutoscaler {
-	hpa := clusterHPA(c, "shop", "web", "True", "ValidMetricFound",
+	return autoscalerAtMax(c, "shop", "web", 6, current, desired, cpu,
+		limited)
+}
+
+// autoscalerAtMax is the CPU HPA (70% target) of Deployment name with the
+// given maximum and the observed CPU utilization; limited sets
+// ScalingLimited.
+func autoscalerAtMax(c *cluster, namespace, name string, maximum, current,
+	desired, cpu int32,
+	limited bool) *autoscalingv2.HorizontalPodAutoscaler {
+	hpa := clusterHPA(c, namespace, name, "True", "ValidMetricFound",
 		"the HPA was able to successfully calculate a replica count "+
 			"from cpu resource utilization (percentage of request)")
 	target := int32(70)
-	hpa.Spec.MaxReplicas = 6
+	hpa.Spec.MaxReplicas = maximum
 	hpa.Spec.Metrics = []autoscalingv2.MetricSpec{{
 		Type: autoscalingv2.ResourceMetricSourceType,
 		Resource: &autoscalingv2.ResourceMetricSource{

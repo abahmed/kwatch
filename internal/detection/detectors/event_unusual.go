@@ -2,6 +2,7 @@ package detectors
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
@@ -42,11 +43,22 @@ func unusualEvents(
 ) []detection.Finding {
 	var order []string
 	byReason := map[string]*eventGroup{}
+	// recurred marks a reason seen again in a later quarter hour than
+	// its first sighting. It counts as repeating even when each sighting
+	// came as a fresh Event with a count of one (the model keeps one
+	// note per source and reason, so such counts do not add up). A
+	// failure that recurs after its first finding cleared is reported
+	// again this way.
+	recurred := map[string]bool{}
 	for _, note := range ctx.Model.Notes(e.ID, ctx.Now.Add(-EventWindow)) {
 		if !note.Warning || knownEvent(note.Reason) {
 			continue
 		}
-		ctx.RecheckAfter(note.At.Add(EventWindow).Sub(ctx.Now))
+		// The window includes a note exactly EventWindow old, so the
+		// recheck falls just after it: a finding must clear when its
+		// last event ages out, not stay until the next event.
+		ctx.RecheckAfter(
+			note.At.Add(EventWindow).Sub(ctx.Now) + time.Nanosecond)
 		group, seen := byReason[note.Reason]
 		if !seen {
 			group = &eventGroup{}
@@ -54,20 +66,21 @@ func unusualEvents(
 			order = append(order, note.Reason)
 		}
 		group.add(note, detection.Info)
+		if note.At.Sub(note.FirstSeen) > EventWindow {
+			recurred[note.Reason] = true
+		}
 	}
 	var out []detection.Finding
 	for _, reason := range order {
 		group := byReason[reason]
-		if group.count < unusualEventMin {
+		if group.count < unusualEventMin && !recurred[reason] {
 			continue
 		}
 		out = append(out, detection.Finding{
 			Reason:   reasons.UnusualEvent(reason),
 			Severity: detection.Info, Mode: detection.ModeUnusualEvent,
-			Since: group.newest.At,
-			Summary: "Kubernetes reported " + reason + " " +
-				strconv.Itoa(group.count) + " times in the last " +
-				"quarter hour",
+			Since:   group.newest.At,
+			Summary: unusualSummary(reason, group.count),
 			Evidence: []detection.Evidence{
 				{Label: "event", Value: group.newest.Message},
 				{Label: "occurrences", Value: strconv.Itoa(group.count)},
@@ -82,4 +95,14 @@ func unusualEvents(
 func knownEvent(reason string) bool {
 	_, detected := eventReasons[reason]
 	return detected || shownByState[reason]
+}
+
+// unusualSummary says what Kubernetes reported. A reason that recurred
+// with a count of one or two has no count worth quoting.
+func unusualSummary(reason string, count int) string {
+	if count < unusualEventMin {
+		return "Kubernetes reported " + reason + " again"
+	}
+	return "Kubernetes reported " + reason + " " + strconv.Itoa(count) +
+		" times in the last quarter hour"
 }

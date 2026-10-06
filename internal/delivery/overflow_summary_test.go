@@ -2,10 +2,13 @@ package delivery
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/metrics"
 )
 
@@ -54,4 +57,44 @@ func TestFlushOverflowSummaryCountsSkipOnPagingProvider(t *testing.T) {
 		metrics.DefaultRegistry().DeliveryDigestSkipped.Load()-before)
 	_, text := am.takeOverflowSummary(provider.Name())
 	assert.Empty(t, text, "a skipped summary is not retried")
+}
+
+// A summary the provider rejects for good is given up, not re-queued to
+// fail and be counted again at every flush.
+func TestFlushOverflowSummaryDropsPermanentlyRejectedSummary(t *testing.T) {
+	provider := &errorRecorderProvider{name: "Chat",
+		err: transport.Permanent(errors.New("invalid token"))}
+	am := managerWithEntries([]providerEntry{{
+		provider: provider,
+		retry:    retryConfig{maxAttempts: 1, delay: time.Millisecond},
+	}})
+	entry := &managerEntries(am)[0]
+	am.addToOverflowSummary("Chat", incidentJob("k", "default"))
+	registry := metrics.DefaultRegistry()
+	before := registry.DeliveryDeadLetters.Load()
+
+	am.flushOverflowSummary(context.Background(), entry)
+	am.flushOverflowSummary(context.Background(), entry)
+
+	assert.Equal(t, 1, provider.callCount, "not tried again")
+	assert.Equal(t, int64(1), registry.DeliveryDeadLetters.Load()-before)
+	_, text := am.takeOverflowSummary("Chat")
+	assert.Empty(t, text)
+}
+
+// One that fails in a way that passes stays pending for the next flush.
+func TestFlushOverflowSummaryKeepsSummaryOnTemporaryFailure(t *testing.T) {
+	provider := &errorRecorderProvider{name: "Chat",
+		err: errors.New("connection refused")}
+	am := managerWithEntries([]providerEntry{{
+		provider: provider,
+		retry:    retryConfig{maxAttempts: 1, delay: time.Millisecond},
+	}})
+	entry := &managerEntries(am)[0]
+	am.addToOverflowSummary("Chat", incidentJob("k", "default"))
+
+	am.flushOverflowSummary(context.Background(), entry)
+
+	_, text := am.takeOverflowSummary("Chat")
+	assert.NotEmpty(t, text)
 }

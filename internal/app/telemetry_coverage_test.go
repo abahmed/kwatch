@@ -364,3 +364,15 @@ func TestConfigureTelemetryRunnerSkipsWhenDisabled(t *testing.T) {
 		t.Fatal("disabled telemetry must not build a runner")
 	}
 }
+
+func TestRunningInCITreatsFalseLikeValuesAsOff(t *testing.T) {
+	for value, want := range map[string]bool{
+		"": false, "false": false, "FALSE": false, "0": false,
+		"no": false, "true": true, "1": true, "github": true,
+	} {
+		t.Setenv("CI", value)
+		if got := runningInCI(); got != want {
+			t.Errorf("CI=%q: runningInCI() = %v, want %v", value, got, want)
+		}
+	}
+}

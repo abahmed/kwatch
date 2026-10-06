@@ -214,7 +214,7 @@ func podSig(name string) detection.Finding {
 		reasons.CrashLoopBackOff, detection.Warning)
 }
 
-func wantAction(t *testing.T, ds []Decision, a Action, why string) {
+func wantAction(t *testing.T, ds []Decision, a Action, why Reason) {
 	t.Helper()
 	if len(ds) != 1 || ds[0].Action != a || ds[0].Reason != why {
 		t.Fatalf("want one %v (%s), got %+v", a, why, ds)

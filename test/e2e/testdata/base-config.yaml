@@ -15,3 +15,7 @@ alert:
 
 crd:
   enabled: true
+
+# Kind kubelets serve self-signed certificates.
+kubelet:
+  insecureSkipVerify: true

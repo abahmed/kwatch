@@ -28,6 +28,11 @@ var hostPort = regexp.MustCompile(`^([A-Za-z0-9.-]+):(\d{2,5})$`)
 // Kubernetes objects kwatch already watches, not external dependencies.
 var clusterSuffixes = []string{".svc", ".svc.cluster.local", ".cluster.local"}
 
+// maxPodDependencies bounds the external endpoints kept for one pod, so a
+// pod with hundreds of URL-looking environment values cannot add
+// hundreds of entities. The first ones by name are kept.
+const maxPodDependencies = 20
+
 // podDependencies lists the external endpoints a pod's containers are
 // configured to call, read from environment values that look like a
 // URL or a host:port: "postgres://db.example.com:5432/orders" or
@@ -50,6 +55,9 @@ func podDependencies(pod *corev1.Pod) []inventory.EntityID {
 		}
 	})
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	if len(out) > maxPodDependencies {
+		out = out[:maxPodDependencies]
+	}
 	return out
 }
 

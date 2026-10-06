@@ -114,6 +114,13 @@ and the latest `main` in separate Kind clusters and writes one of
 the artifacts. Both image sets are built locally and removed after each cluster
 run.
 
+Runs for the same event, action and ref share a concurrency group. A new push
+to a pull request cancels the older run of that push; a label event, a manual
+dispatch or a scheduled run never cancels a running one but waits behind it.
+GitHub keeps only one waiting run per group, so a newer queued dispatch
+replaces an older queued one: start the next manual run after the previous
+one has started.
+
 ## Architecture
 
 Kind owns the real Kubernetes cluster. The Go tests use Kubernetes SIG's
@@ -130,7 +137,8 @@ runs as one replica.
 
 1. Inspect `test/e2e/coverage/coverage.yaml` and choose a stable ID.
 2. Confirm that the behavior is not already covered.
-3. Add the smallest deterministic fixture under `test/e2e/fixtures/`.
+3. Add the smallest deterministic workload: reuse a command of the
+   `test/e2e/workload` image from a scenario in `test/e2e/scenarios/`.
 4. Reuse the harness waiters and oracle helpers.
 5. Add a Go test under `test/e2e/scenarios/`.
 6. Assert expected behavior and forbidden behavior.
@@ -196,6 +204,15 @@ This writes `config.yaml`, sanitized `resources.yaml`, `expectation.txt`, and
 commands, or apply the output. Review the files, copy only the required
 declarative fixture into a permanent scenario, then add positive, negative,
 recovery, and cleanup assertions.
+
+## Shared fixtures
+
+`test/e2e/testdata` holds the two files every scenario starts from:
+`base-config.yaml` is the kwatch configuration the harness extends (it sets
+`kubelet.insecureSkipVerify: true` because Kind kubelets serve self-signed
+certificates; never copy that into a real configuration) and
+`kind-config.yaml` is the cluster layout. Replay fixtures for
+`internal/scenarios` live in `internal/scenarios/testdata`.
 
 ## Root-cause assertions
 

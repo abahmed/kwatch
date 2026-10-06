@@ -1,5 +1,7 @@
 package kube
 
+import "time"
+
 // statsSummary is the subset of the kubelet summary API kwatch reads.
 type statsSummary struct {
 	Node struct {
@@ -14,16 +16,8 @@ type statsSummary struct {
 			Name      string `json:"name"`
 			Namespace string `json:"namespace"`
 		} `json:"podRef"`
-		Containers []struct {
-			Name string `json:"name"`
-			CPU  struct {
-				UsageNanoCores *uint64 `json:"usageNanoCores"`
-			} `json:"cpu"`
-			Memory struct {
-				WorkingSetBytes *uint64 `json:"workingSetBytes"`
-			} `json:"memory"`
-		} `json:"containers"`
-		EphemeralStorage *fsStats `json:"ephemeral-storage"`
+		Containers       []statsContainer `json:"containers"`
+		EphemeralStorage *fsStats         `json:"ephemeral-storage"`
 		Volumes          []struct {
 			fsStats
 			PVCRef *struct {
@@ -32,6 +26,32 @@ type statsSummary struct {
 			} `json:"pvcRef"`
 		} `json:"volume"`
 	} `json:"pods"`
+}
+
+// statsContainer is one container's usage in the summary.
+type statsContainer struct {
+	Name string `json:"name"`
+	// StartTime is when the container's current run began.
+	StartTime string `json:"startTime"`
+	CPU       struct {
+		UsageNanoCores *uint64 `json:"usageNanoCores"`
+	} `json:"cpu"`
+	Memory struct {
+		WorkingSetBytes *uint64 `json:"workingSetBytes"`
+		// RSSBytes is the anonymous memory of the container, without
+		// file cache. Not every kubelet reports it.
+		RSSBytes *uint64 `json:"rssBytes"`
+	} `json:"memory"`
+}
+
+// startTime reads the container's start time; zero when the kubelet
+// sent none or one that does not parse.
+func (c statsContainer) startTime() time.Time {
+	parsed, err := time.Parse(time.RFC3339, c.StartTime)
+	if err != nil {
+		return time.Time{}
+	}
+	return parsed
 }
 
 type fsStats struct {

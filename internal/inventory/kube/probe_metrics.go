@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -34,8 +35,20 @@ const (
 // DNSServerNames are the Deployments that serve the cluster DNS.
 var DNSServerNames = map[string]bool{"coredns": true, "kube-dns": true}
 
+// metricsKeepFor is how long a counter sample of the API server or a DNS
+// pod is kept. Several API servers may answer one Service in turn, so a
+// sample is compared with the previous sample of the same process, which
+// can be a few rounds back.
+const metricsKeepFor = 10 * time.Minute
+
 // addServerMetrics reads the API server's request counters and records
 // the overall and the 5xx response rates since the previous round.
+//
+// The request goes through the kubernetes Service, so on a cluster with
+// several API servers each round may reach a different one, and the
+// counters belong to one process. A rate is only computed between two
+// samples of the same process, told apart by its start time; a response
+// without a start time gives no rate.
 func (p *Prober) addServerMetrics(
 	ctx context.Context, attrs map[string]inventory.Value, now time.Time,
 ) {
@@ -44,11 +57,25 @@ func (p *Prober) addServerMetrics(
 	if err != nil {
 		return
 	}
+	p.serverRates(body, attrs, now)
+}
+
+// serverRates records the rates of one API server response.
+func (p *Prober) serverRates(
+	body []byte, attrs map[string]inventory.Value, now time.Time,
+) {
+	p.rates.forgetBefore(now.Add(-metricsKeepFor))
+	start, ok := sumMetric(body, "process_start_time_seconds")
+	if !ok {
+		return
+	}
+	process := strconv.FormatFloat(start, 'f', -1, 64)
 	total, errors := requestCounts(body)
-	if rate, ok := p.rates.rate("api/requests", now, total); ok {
+	if rate, ok := p.rates.rate("api/requests/"+process, now,
+		total); ok {
 		attrs[AttrAPIRequestRate] = inventory.Number(rate)
 	}
-	if rate, ok := p.rates.rate("api/errors", now, errors); ok {
+	if rate, ok := p.rates.rate("api/errors/"+process, now, errors); ok {
 		attrs[AttrAPIErrorRate] = inventory.Number(rate)
 	}
 }
@@ -68,40 +95,56 @@ func requestCounts(body []byte) (total, errors float64) {
 }
 
 // addDNSMetrics reads every cluster DNS pod's metrics and records the
-// summed answer and SERVFAIL rates since the previous round.
+// summed answer and SERVFAIL rates since the previous round. Each pod's
+// rate is taken from its own counter; when a pod has no earlier sample
+// (the pod set changed) the round gives no rate, rather than a sum that
+// jumps with the number of pods.
 func (p *Prober) addDNSMetrics(
 	ctx context.Context, attrs map[string]inventory.Value, now time.Time,
 ) {
 	if p.cfg.HTTP == nil || p.cfg.Model == nil {
 		return
 	}
-	var total, servfail float64
-	read := false
+	pages := map[string][]byte{}
 	for _, ip := range p.dnsPodIPs() {
 		body, err := p.fetch(ctx, "http://"+net.JoinHostPort(ip,
 			dnsMetricsPort)+"/metrics")
-		if err != nil {
-			continue
+		if err == nil {
+			pages[ip] = body
 		}
-		read = true
+	}
+	p.dnsRates(pages, attrs, now)
+}
+
+// dnsRates records the summed rates of the metrics pages read from the
+// DNS pods, by pod IP.
+func (p *Prober) dnsRates(
+	pages map[string][]byte, attrs map[string]inventory.Value, now time.Time,
+) {
+	p.rates.forgetBefore(now.Add(-metricsKeepFor))
+	var requests, servfail float64
+	complete := len(pages) > 0
+	for ip, body := range pages {
+		var total, failed float64
 		forEachMetric(body, "coredns_dns_responses_total", func(
 			labels map[string]string, value float64,
 		) {
 			total += value
 			if labels["rcode"] == "SERVFAIL" {
-				servfail += value
+				failed += value
 			}
 		})
+		totalRate, ok1 := p.rates.rate("dns/requests/"+ip, now, total)
+		failedRate, ok2 := p.rates.rate("dns/servfail/"+ip, now, failed)
+		complete = complete && ok1 && ok2
+		requests += totalRate
+		servfail += failedRate
 	}
-	if !read {
+	if !complete {
 		return
 	}
-	if rate, ok := p.rates.rate("dns/requests", now, total); ok {
-		attrs[AttrDNSRequestRate] = inventory.Number(rate)
-	}
-	if rate, ok := p.rates.rate("dns/servfail", now, servfail); ok {
-		attrs[AttrDNSServfailRate] = inventory.Number(rate)
-	}
+	attrs[AttrDNSRequestRate] = inventory.Number(requests)
+	attrs[AttrDNSServfailRate] = inventory.Number(servfail)
 }
 
 // dnsPodIPs lists the IPs of the pods that serve the cluster DNS.

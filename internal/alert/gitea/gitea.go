@@ -147,6 +147,14 @@ func (g *Gitea) Close(ctx context.Context, id, body string) error {
 	return err
 }
 
+// Reopen implements issues.Reopener: an incident that fails again inside
+// its reopen window reopens the issue it closed.
+func (g *Gitea) Reopen(ctx context.Context, id string) error {
+	_, err := g.call(ctx, "PATCH",
+		g.url+"/"+id, map[string]string{"state": "open"})
+	return err
+}
+
 func (g *Gitea) call(
 	ctx context.Context, method, url string, payload interface{},
 ) ([]byte, error) {
@@ -160,6 +168,11 @@ func (g *Gitea) call(
 			"Authorization": "token " + g.token,
 		},
 	})
+}
+
+// HasThread implements delivery.ThreadLookup.
+func (g *Gitea) HasThread(key string) bool {
+	return g.issues.HasThread(key)
 }
 
 // SnapshotThreads implements delivery.ThreadStateProvider.

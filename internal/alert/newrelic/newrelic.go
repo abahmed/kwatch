@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"k8s.io/klog/v2"
@@ -12,7 +13,14 @@ import (
 	"github.com/abahmed/kwatch/internal/notification"
 )
 
-const newRelicAPIURL = "https://insights-collector.newrelic.com/v1/accounts/%s/events"
+// Event API endpoints by data-center region. An account in the EU region
+// must use the EU collector, or New Relic rejects the key.
+const (
+	newRelicAPIURL = "https://insights-collector.newrelic.com" +
+		"/v1/accounts/%s/events"
+	newRelicEUAPIURL = "https://insights-collector.eu01.nr-data.net" +
+		"/v1/accounts/%s/events"
+)
 
 type NewRelic struct {
 	sender    transport.Sender
@@ -42,11 +50,22 @@ func NewNewRelic(
 		return nil
 	}
 
+	endpoint := newRelicAPIURL
+	region, _ := config["region"].(string)
+	switch strings.ToLower(strings.TrimSpace(region)) {
+	case "", "us":
+	case "eu":
+		endpoint = newRelicEUAPIURL
+	default:
+		klog.InfoS("ignoring unknown newrelic region, using us",
+			"region", region)
+	}
+
 	klog.InfoS("initializing newrelic", "accountId", accountID)
 
 	return &NewRelic{
 		sender:      transport.NewSender(dependencies),
-		url:         fmt.Sprintf(newRelicAPIURL, accountID),
+		url:         fmt.Sprintf(endpoint, url.PathEscape(accountID)),
 		apiKey:      apiKey,
 		accountID:   accountID,
 		clusterName: clusterName,
@@ -70,6 +89,13 @@ const (
 func (n *NewRelic) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
+	// A plain notice (startup, upgrade, test) or the startup summary is
+	// not an incident, and nothing would ever resolve what it opens.
+	if m.IsInformational() {
+		klog.V(4).InfoS("skipping informational message",
+			"component", "delivery", "provider", n.Name())
+		return nil
+	}
 	return n.send(ctx, buildEvent(m, n.clusterName))
 }
 
@@ -123,3 +149,7 @@ func (n *NewRelic) send(
 	})
 	return err
 }
+
+// SkipsPlainMessages implements api.PlainMessageSkipper: plain messages
+// become notices, which SendIncident skips.
+func (n *NewRelic) SkipsPlainMessages() bool { return true }

@@ -1,0 +1,8 @@
+{
+  "name": "digest-flap-reopens",
+  "description": "A digest-tier autoscaler problem is listed in a digest, recovers, and fails again within two hours.",
+  "root": "horizontalpodautoscaler/shop/orders",
+  "tier": "digest",
+  "maxMessages": 3,
+  "tail": "1h0m0s"
+}

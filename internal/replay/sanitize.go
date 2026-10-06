@@ -33,7 +33,8 @@ type SanitizeOptions struct {
 // chains and label selectors still line up after sanitizing. Label keys
 // are kept and label values are hashed. Kinds, relation types, sources,
 // attribute names, reason codes, numbers, booleans and times are kept.
-// Free text (messages, errors, anything containing spaces) is dropped.
+// Free text (messages, errors, change causes, anything containing spaces)
+// is dropped.
 type Sanitizer struct {
 	salt         string
 	keep         map[string]bool
@@ -88,6 +89,11 @@ func (s *Sanitizer) Observation(o inventory.Observation) inventory.Observation {
 		out.Note.Message = o.Note.Message
 	}
 	out.Note.Reason = s.code(o.Note.Reason)
+	// The UID of the object and the origin (the Event object) identify
+	// real objects in the cluster, so they get pseudonyms like any other
+	// UID. They still match one another: a note stays tied to its object.
+	out.Note.UID = s.optional("uid", o.Note.UID)
+	out.Note.Origin = s.optional("origin", o.Note.Origin)
 	// The reporting component can be a custom controller named after
 	// the company or product.
 	out.Note.Source = s.optional("source", o.Note.Source)
@@ -180,6 +186,12 @@ func (s *Sanitizer) change(c inventory.Change) inventory.Change {
 	// The GitOps application ("argocd/shop") names teams and products.
 	out.App = s.name(c.App)
 	out.Revision = s.code(c.Revision)
+	// The change cause is free text ("deploy of the billing hotfix"),
+	// dropped like note messages unless they are kept.
+	out.Cause = ""
+	if s.keepMessages {
+		out.Cause = c.Cause
+	}
 	out.Fields = nil
 	for _, field := range c.Fields {
 		path := s.path(field.Path)

@@ -42,6 +42,7 @@ built_images=""
 sanitize_bin=""
 metrics_manifest=""
 kubeconfig_file=""
+cluster_created=false
 
 require_tool() {
 	if ! command -v "$1" >/dev/null 2>&1; then
@@ -132,6 +133,9 @@ EOF
   "finishedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 EOF
+	if [ "$cluster_created" != true ]; then
+		return
+	fi
 	kubectl get pods -A -o yaml 2>&1 | sanitize_to "$ARTIFACTS/pods.yaml" || true
 	kubectl get events -A --sort-by=.lastTimestamp -o yaml \
 		2>&1 | sanitize_to "$ARTIFACTS/events.yaml" || true
@@ -164,14 +168,23 @@ EOF
 	fi
 }
 
+# quarantine_unsafe_artifacts redacts the unsafe lines of every file that
+# fails the safety check, so the rest of a failing run's diagnostics survive.
+# A file that cannot be redacted (binary content) is removed.
 quarantine_unsafe_artifacts() {
 	quarantine_log="$ARTIFACTS/artifact-safety-quarantine.txt"
 	printf '%s\n' \
 		'artifact safety check found one or more unsafe files' \
 		>"$quarantine_log"
 	while IFS= read -r artifact; do
-		if ! "$harness_root/scripts/check-e2e-artifacts.sh" "$artifact";
-		then
+		if "$harness_root/scripts/check-e2e-artifacts.sh" "$artifact"; then
+			continue
+		fi
+		if "$harness_root/scripts/check-e2e-artifacts.sh" --redact \
+			"$artifact"; then
+			printf 'redacted=%s\n' "${artifact#"$ARTIFACTS"/}" \
+				>>"$quarantine_log"
+		else
 			printf 'removed=%s\n' "${artifact#"$ARTIFACTS"/}" \
 				>>"$quarantine_log"
 			rm -f "$artifact"
@@ -258,7 +271,7 @@ cleanup() {
 	status=${1:-$?}
 	trap - EXIT INT TERM
 	collect_diagnostics
-	if [ "$KEEP_CLUSTER" != true ]; then
+	if [ "$KEEP_CLUSTER" != true ] && [ "$cluster_created" = true ]; then
 		kind delete cluster --name "$KIND_CLUSTER_NAME" >/dev/null 2>&1 || true
 	fi
 	for image in $built_images; do
@@ -289,13 +302,19 @@ if [ -n "${SCENARIO_FAMILY:-}" ]; then
 	fi
 fi
 
-trap cleanup EXIT INT TERM
-
 require_tool docker
 require_tool kind
 require_tool kubectl
 require_tool go
 require_tool curl
+
+# Every kubectl call below, including the diagnostics collected on failure,
+# uses this script's own kubeconfig, never the developer's default one. The
+# file is empty until kind writes the new cluster into it, so an early
+# failure cannot reach any other cluster.
+kubeconfig_file=$(mktemp)
+export KUBECONFIG="$kubeconfig_file"
+trap cleanup EXIT INT TERM
 sanitize_bin=$(mktemp)
 go build -o "$sanitize_bin" ./cmd/kwatch-e2e-sanitize
 
@@ -327,10 +346,12 @@ built_images="$built_images $receiver_image $workload_image"
 
 kind create cluster \
 	--name "$KIND_CLUSTER_NAME" \
+	--kubeconfig "$kubeconfig_file" \
 	--config test/e2e/testdata/kind-config.yaml
-kubeconfig_file=$(mktemp)
-kind get kubeconfig --name "$KIND_CLUSTER_NAME" >"$kubeconfig_file"
-export KUBECONFIG="$kubeconfig_file"
+cluster_created=true
+# shellcheck source=scripts/require-kind-context.sh
+. "$harness_root/scripts/require-kind-context.sh"
+require_kind_context "kind-$KIND_CLUSTER_NAME"
 kind load docker-image "$KWATCH_IMAGE" --name "$KIND_CLUSTER_NAME"
 kind load docker-image "$receiver_image" --name "$KIND_CLUSTER_NAME"
 kind load docker-image "$workload_image" --name "$KIND_CLUSTER_NAME"

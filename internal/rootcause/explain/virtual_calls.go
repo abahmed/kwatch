@@ -3,6 +3,7 @@ package explain
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -93,15 +94,21 @@ func (v *view) calledHops(pod inventory.EntityID) []hop {
 	if !v.unitGate(pod) {
 		return nil
 	}
+	// Both hops are offered. Why: an endpoint only counts when
+	// EndpointMinWorkloads workloads name the same one, and pods that
+	// each name a different address (a pod IP, a changing port) would
+	// otherwise never reach the signature they all share. The rows'
+	// priors and minimums decide which one stands.
+	var hops []hop
 	if call, ok := v.callOf(pod); ok {
-		return []hop{{link: LinkCalls, to: inventory.CoreID(
-			KindExternalEndpoint, "", call.endpoint)}}
+		hops = append(hops, hop{link: LinkCalls, to: inventory.CoreID(
+			KindExternalEndpoint, "", call.endpoint)})
 	}
 	if name, ok := v.signatureOf(pod); ok {
-		return []hop{{link: LinkSharesError, to: inventory.CoreID(
-			KindFailureSignature, "", name)}}
+		hops = append(hops, hop{link: LinkSharesError, to: inventory.CoreID(
+			KindFailureSignature, "", name)})
 	}
-	return nil
+	return hops
 }
 
 // calledModes are the pseudo modes of an endpoint or a signature, read
@@ -153,8 +160,11 @@ func (v *view) callOf(id inventory.EntityID) (endpointCall, bool) {
 }
 
 // signatureOf is the error signature of the failing pod of id, read
-// from its containers' own error messages (the "error" evidence, the
-// termination message), never from event text every crash shares.
+// from its containers' own error messages (the "error" evidence: the
+// last termination message, or, when that is empty, the first error line
+// of the previous log, see detectors/container.go), never from event
+// text every crash shares. The text is only normalised, never
+// interpreted.
 func (v *view) signatureOf(id inventory.EntityID) (string, bool) {
 	unit, ok := v.unitOf(id)
 	if !ok {
@@ -310,4 +320,82 @@ func effectsNeedingWorkloads(c *candidate) []workloadGroup {
 		return out[i].need < out[j].need
 	})
 	return out
+}
+
+// applySignatureWindow keeps failure-signature coverage only for the
+// failures that began within SignatureWindow of each other. Why: the
+// same words weeks apart are two outages, not one; a shared error that
+// takes down many workloads does so within minutes. The densest
+// window of start times is kept; effects with no known start stay.
+func (v *view) applySignatureWindow(cs *candidateSet) {
+	for _, id := range sortedKeys(cs.byID) {
+		c := cs.byID[id]
+		if c.id.Kind != KindFailureSignature {
+			continue
+		}
+		effects := c.direct()
+		starts := map[inventory.EntityID]time.Time{}
+		var timed []inventory.EntityID
+		for _, effect := range effects {
+			start := v.earliestSince([]inventory.EntityID{effect})
+			if start.ok {
+				starts[effect] = start.t
+				timed = append(timed, effect)
+			}
+		}
+		sort.SliceStable(timed, func(i, j int) bool {
+			return starts[timed[i]].Before(starts[timed[j]])
+		})
+		keep := v.densestWindow(timed, starts)
+		for _, effect := range timed {
+			if keep[effect] {
+				continue
+			}
+			delete(c.covers, effect)
+			cs.rejectInsufficient(c.id, effect, "the failures sharing "+
+				"this error did not begin together")
+		}
+		if len(c.direct()) == 0 {
+			delete(cs.byID, c.id)
+		}
+	}
+}
+
+// densestWindow returns the effects, sorted by start, inside the
+// SignatureWindow that holds failures of the most distinct workloads:
+// one workload with many failing replicas must not outvote several
+// workloads that failed together. The number of effects breaks a tie,
+// then the earliest window. The window slides over the sorted effects
+// once, counting how many of its effects each workload has.
+func (v *view) densestWindow(
+	sorted []inventory.EntityID, starts map[inventory.EntityID]time.Time,
+) map[inventory.EntityID]bool {
+	owners := make([]inventory.EntityID, len(sorted))
+	for i, effect := range sorted {
+		owners[i] = v.workloadOf(effect)
+	}
+	inWindow := map[inventory.EntityID]int{}
+	bestFrom, bestTo, bestWorkloads := 0, -1, 0
+	to := -1
+	for from := range sorted {
+		for to+1 < len(sorted) && !starts[sorted[to+1]].After(
+			starts[sorted[from]].Add(SignatureWindow)) {
+			to++
+			inWindow[owners[to]]++
+		}
+		if len(inWindow) > bestWorkloads || (len(inWindow) ==
+			bestWorkloads && to-from > bestTo-bestFrom) {
+			bestFrom, bestTo, bestWorkloads = from, to, len(inWindow)
+		}
+		// The effect at from leaves before the next window starts.
+		inWindow[owners[from]]--
+		if inWindow[owners[from]] == 0 {
+			delete(inWindow, owners[from])
+		}
+	}
+	keep := map[inventory.EntityID]bool{}
+	for i := bestFrom; i <= bestTo; i++ {
+		keep[sorted[i]] = true
+	}
+	return keep
 }

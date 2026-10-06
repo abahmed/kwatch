@@ -1,0 +1,12 @@
+{
+  "name": "webhook-flaps-hourly",
+  "description": "A validating webhook times out for two minutes every quarter of an hour; the incident does not ping-pong between healthy and failing.",
+  "root": "validatingwebhookconfiguration//image-policy",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/payments/gateway",
+    "node//n1",
+    "node//n2"
+  ]
+}

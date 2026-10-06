@@ -348,3 +348,14 @@ func TestSendIncidentEmptyTitle(t *testing.T) {
 	err := c.SendIncident(context.Background(), providertest.Announce())
 	assert.Nil(err)
 }
+
+func TestSendMessageAcceptsEmptyBody(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, _ *http.Request) {}))
+	defer s.Close()
+	c := NewDingTalk(map[string]interface{}{
+		"accessToken": "t",
+	}, "dev", testDeps)
+	c.url = s.URL + "/%s"
+	assert.NoError(t, c.SendMessage(context.Background(), "hi"))
+}

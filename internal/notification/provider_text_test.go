@@ -1,6 +1,9 @@
 package notification
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestMessageNoteTextFallsBackToText(t *testing.T) {
 	m := Message{Status: StatusCritical, Title: "api is down"}
@@ -129,5 +132,49 @@ func TestMailSubjectAndBody(t *testing.T) {
 	m.Output = nil
 	if got := m.MailBody(); got != m.Note {
 		t.Fatalf("MailBody() without output = %q", got)
+	}
+}
+
+func TestTruncateKeepsMarkupWellFormed(t *testing.T) {
+	cases := []struct {
+		name, text string
+		limit      int
+	}{
+		{"open fence", "intro\n```\nline one\nline two\nline three\n```\nend", 30},
+		{"cut inside a fence marker", "ab```code```cd", 7},
+		{"cut inside a tag", "<b>bold</b> and <a href=\"http://x\">link</a>", 28},
+		{"closed fence kept", "```\nok\n```\nand a long tail of text", 20},
+	}
+	for _, tc := range cases {
+		got := Truncate(tc.text, tc.limit)
+		if len(got) > tc.limit {
+			t.Errorf("%s: %q is %d bytes, limit %d",
+				tc.name, got, len(got), tc.limit)
+		}
+		if strings.Count(got, "```")%2 != 0 {
+			t.Errorf("%s: unclosed fence in %q", tc.name, got)
+		}
+		if i := strings.LastIndex(got, "<"); i >= 0 &&
+			!strings.Contains(got[i:], ">") {
+			t.Errorf("%s: %q ends inside a tag", tc.name, got)
+		}
+	}
+}
+
+// A cut that leaves a code block open closes it, within the limit, and
+// a cut after the block leaves nothing to close.
+func TestTruncateClosesAnOpenFence(t *testing.T) {
+	text := "```\n" + strings.Repeat("line of output\n", 20)
+	got := Truncate(text, 60)
+
+	if !strings.HasSuffix(got, "…\n```") {
+		t.Fatalf("fence not closed after the ellipsis: %q", got)
+	}
+	if len(got) > 60 {
+		t.Fatalf("%d bytes, limit 60", len(got))
+	}
+	closed := "```\nok\n```\n" + strings.Repeat("tail ", 20)
+	if got := Truncate(closed, 40); strings.HasSuffix(got, "\n```") {
+		t.Fatalf("a closed block got a second fence: %q", got)
 	}
 }

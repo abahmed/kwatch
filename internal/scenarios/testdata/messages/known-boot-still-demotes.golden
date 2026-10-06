@@ -1,0 +1,20 @@
+10:02:15 settled
+🟠 sync in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: sync: cursor table is locked". It runs a single replica, so this is downtime, not degradation. To read the output of the last crash, run kubectl logs sync-d4ad54cc-a -c app -n shop --previous
+🟠 sync in shop (prod-eu-1) keeps crashing.
+
+10:16:00 healthy for 3m0s
+✅ sync in shop (prod-eu-1) is healthy again. It was failing for 15 minutes.
+✅ sync in shop (prod-eu-1) is healthy again.
+
+09:14:15 settled
+🟠 sync in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: sync: cursor table is locked". It runs a single replica, so this is downtime, not degradation. This is the second time this week. Last time it recovered on its own. To read the output of the last crash, run kubectl logs sync-d4ad54cc-a -c app -n shop --previous
+🟠 sync in shop (prod-eu-1) keeps crashing.
+
+09:28:00 healthy for 3m0s
+✅ sync in shop (prod-eu-1) is healthy again. It was failing for 15 minutes.
+✅ sync in shop (prod-eu-1) is healthy again.
+
+08:57:15 digest
+🟡 kwatch (prod-eu-1) has one earlier one that resolved and configuration risks on one workload to report. Resolved: sync in shop is healthy again. Configuration risks: 1 workload has containers without a memory limit (sync); 1 workload has no readiness probe (sync); 1 workload runs a single replica (sync). None of them is urgent; one that gets worse gets its own message.
+🟡 kwatch (prod-eu-1) has one earlier one that resolved and configuration risks on one workload to report.
+

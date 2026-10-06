@@ -262,3 +262,23 @@ func TestNodeRemovalTaintIsADrain(t *testing.T) {
 		assert.Contains(t, drain.Summary, want)
 	}
 }
+
+// Cordoning adds the node.kubernetes.io/unschedulable taint by itself.
+// That is a plain cordon, not a removal: the wording and the start time
+// come from the cordon, not from the taint.
+func TestPlainCordonIsNotCalledARemoval(t *testing.T) {
+	now := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	node := buildNode("n1", now.Add(-10*time.Minute),
+		map[string]inventory.Value{
+			kube.AttrUnschedulable: inventory.Bool(true),
+			kube.AttrTaints: inventory.Text(
+				"node.kubernetes.io/unschedulable:NoSchedule"),
+		})
+
+	ok, drain := drainFinding(node)
+
+	require.True(t, ok)
+	assert.Contains(t, drain.Summary, "is cordoned")
+	assert.NotContains(t, drain.Summary, "removed")
+	assert.Equal(t, valueSince(node, kube.AttrUnschedulable), drain.Since)
+}

@@ -56,7 +56,10 @@ func runScenario(
 	if !belongsToShard(id, os.Getenv("SCENARIO_SHARD")) {
 		t.Skip("scenario belongs to another shard")
 	}
-	config := harness.ConfigFromEnv()
+	config, err := harness.ConfigFromEnvChecked()
+	if err != nil {
+		t.Fatal(err)
+	}
 	config.Artifacts = config.Artifacts + "/" + strings.NewReplacer(
 		"/", "_", " ", "_",
 	).Replace(id)
@@ -70,6 +73,7 @@ func runScenario(
 		if err != nil {
 			t.Fatal(err)
 		}
+		t.Cleanup(func() { _ = environment.Close() })
 		if err := waitForColdStart(ctx, environment); err != nil {
 			t.Fatal(err)
 		}

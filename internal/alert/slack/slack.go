@@ -57,9 +57,14 @@ type Slack struct {
 }
 
 func (s *Slack) conversationLock(key string) *sync.Mutex {
+	return &s.conversationLocks[lockIndex(key)]
+}
+
+// lockIndex is the stripe of conversationLocks that guards key.
+func lockIndex(key string) uint32 {
 	hash := fnv.New32a()
 	_, _ = hash.Write([]byte(key))
-	return &s.conversationLocks[hash.Sum32()%conversationLockCount]
+	return hash.Sum32() % conversationLockCount
 }
 
 // NewSlack returns new Slack instance
@@ -140,6 +145,7 @@ func (s *Slack) saveConversation(key string, state conversationState) {
 	if s.conversations == nil {
 		s.conversations = make(map[string]conversationState)
 	}
+	s.dropExpiredLocked()
 	if _, exists := s.conversations[key]; !exists {
 		s.conversationOrder = append(s.conversationOrder, key)
 	}
@@ -147,15 +153,52 @@ func (s *Slack) saveConversation(key string, state conversationState) {
 	for s.maxThreadMapSize > 0 &&
 		len(s.conversations) > s.maxThreadMapSize &&
 		len(s.conversationOrder) > 0 {
-		oldest := s.conversationOrder[0]
-		s.conversationOrder = s.conversationOrder[1:]
-		delete(s.conversations, oldest)
+		s.removeLocked(s.evictionCandidateLocked(key))
+	}
+}
+
+// evictionCandidateLocked picks the conversation to drop when the map is
+// full: the oldest one kept only for a possible reopen (ReopenUntil set),
+// else the oldest of all. An open incident's thread is worth more than a
+// resolved one's. The conversation just saved (keep) is never chosen
+// unless it is the only one. The caller holds s.mu.
+func (s *Slack) evictionCandidateLocked(keep string) string {
+	oldest := ""
+	for _, key := range s.conversationOrder {
+		if key == keep {
+			continue
+		}
+		if !s.conversations[key].ReopenUntil.IsZero() {
+			return key
+		}
+		if oldest == "" {
+			oldest = key
+		}
+	}
+	if oldest == "" {
+		return keep
+	}
+	return oldest
+}
+
+// dropExpiredLocked forgets resolved conversations whose reopen window
+// has passed. The caller holds s.mu.
+func (s *Slack) dropExpiredLocked() {
+	now := s.clockSource.Now()
+	for key, state := range s.conversations {
+		if state.expired(now) {
+			s.removeLocked(key)
+		}
 	}
 }
 
 func (s *Slack) deleteConversation(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.removeLocked(key)
+}
+
+func (s *Slack) removeLocked(key string) {
 	delete(s.conversations, key)
 	for i, k := range s.conversationOrder {
 		if k == key {

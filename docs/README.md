@@ -32,6 +32,8 @@ implementation-only notes may remain beside code when they are not published.
   `kwatch.dev`.
 - [Contributor architecture guide](./contributor-architecture.md) — the
   package table, import direction rules and where new code belongs.
+- [The life of an incident](./incident-lifecycle.md) — settle, announce,
+  updates, reminders, resolve hold, reopen and supersede, with the timings.
 - Contributor guides, each five steps with a real example and test command:
   [add a detector](./contributing-detector.md),
   [add a propagation rule](./contributing-propagation-rule.md),

@@ -262,7 +262,7 @@ func TestLeaderElectionRequiresKubernetesClient(t *testing.T) {
 			return nil, nil
 		}, func(context.Context, *serverDeps) error { return nil },
 	)
-	if err == nil || err.Error() != "leader election requires Kubernetes client" {
+	if err == nil || err.Error() != "state lock requires Kubernetes client" {
 		t.Fatalf("error = %v", err)
 	}
 }

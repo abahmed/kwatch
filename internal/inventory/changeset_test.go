@@ -100,3 +100,22 @@ func TestImageTag(t *testing.T) {
 		assert.Equal(t, want, imageTag(image), image)
 	}
 }
+
+func TestChangeSetsStopGrowingAfterTheMaxSpan(t *testing.T) {
+	h := newHistoryModel(t)
+	// A controller that never stops: each change is within the window of
+	// the one before, for 40 minutes.
+	for i := range 27 {
+		h.change(t, h.deployment, time.Duration(i)*90*time.Second,
+			Change{App: "argocd/shop", Fields: []FieldChange{{
+				Path: "spec.replicas", After: "3"}}})
+	}
+	sets := h.RecentChangeSets(time.Time{})
+	require.Greater(t, len(sets), 1, "one chain is cut into several sets")
+	total := 0
+	for _, set := range sets {
+		assert.LessOrEqual(t, set.End.Sub(set.Start), ChangeSetMaxSpan)
+		total += len(set.Changes)
+	}
+	assert.Equal(t, 27, total)
+}

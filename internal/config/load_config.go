@@ -48,7 +48,10 @@ func LintStrict() error {
 // quote, colon, or newline stays one string. Bare $ is preserved for
 // passwords and hashes. A referenced variable that is not set is an error
 // rather than an empty string that would corrupt the configuration.
-var envVarRe = regexp.MustCompile(`\$\{(\w+)\}`)
+//
+// Write $${NAME} to keep a literal ${NAME}, for example in a silence regexp
+// or a message substring.
+var envVarRe = regexp.MustCompile(`(\$?)\$\{(\w+)\}`)
 var fileRefRe = regexp.MustCompile(`^\$\{file:(/[^}]*)\}$`)
 
 func expandConfigDocument(raw string) (*yaml.Node, error) {
@@ -112,7 +115,11 @@ func expandScalar(node *yaml.Node, unset map[string]bool) error {
 	}
 	node.Value = envVarRe.ReplaceAllStringFunc(
 		node.Value, func(m string) string {
-			name := envVarRe.FindStringSubmatch(m)[1]
+			parts := envVarRe.FindStringSubmatch(m)
+			if parts[1] == "$" {
+				return m[1:] // $${NAME} is the literal ${NAME}
+			}
+			name := parts[2]
 			v, ok := os.LookupEnv(name)
 			if !ok {
 				unset[name] = true
@@ -270,7 +277,9 @@ func LoadConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	applyEnvironmentOverrides(config)
+	if err := applyEnvironmentOverrides(config); err != nil {
+		return nil, err
+	}
 
 	if errs := prepareConfig(config); len(errs) > 0 {
 		return nil, errors.Join(errs...)
@@ -294,7 +303,9 @@ func LoadConfig() (*Config, error) {
 // RebuildAfterOverlay refreshes validation and derived indexes after a
 // startup-only configuration source has overlaid the base file.
 func RebuildAfterOverlay(c *Config) error {
-	applyEnvironmentOverrides(c)
+	if err := applyEnvironmentOverrides(c); err != nil {
+		return err
+	}
 	if errs := prepareConfig(c); len(errs) > 0 {
 		return errors.Join(errs...)
 	}

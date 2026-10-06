@@ -2,7 +2,6 @@ package notification
 
 import (
 	"strings"
-	"unicode/utf8"
 )
 
 // noticeKey groups plain operator messages (startup, upgrade, test) so
@@ -130,24 +129,6 @@ func markerStatus(marker string) Status {
 	default:
 		return StatusWarning
 	}
-}
-
-// Truncate cuts text to at most limit bytes on a rune boundary, ending in
-// an ellipsis. Cutting is deterministic, so a retried delivery sends the
-// same bytes.
-func Truncate(text string, limit int) string {
-	if limit <= 0 || len(text) <= limit {
-		return text
-	}
-	const ellipsis = "…"
-	cut := limit - len(ellipsis)
-	if cut <= 0 {
-		return ""
-	}
-	for cut > 0 && !utf8.RuneStart(text[cut]) {
-		cut--
-	}
-	return text[:cut] + ellipsis
 }
 
 // MailSubject is the Short lead folded onto one line, so message text can

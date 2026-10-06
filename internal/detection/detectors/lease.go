@@ -14,13 +14,20 @@ import (
 // leaseStaleFactor is how many lease durations may pass without a
 // renewal before the holder counts as stuck; leaseStaleMin keeps very
 // short leases from flagging a slow API server.
+//
+// leaseStaleMin must stay well above the time between two scans of the
+// Lease objects: the model only learns of a renewal at the next scan, so
+// a younger limit would flag a healthy holder whose latest renewal is
+// simply not read yet. It is two scans plus a margin, taken from the scan
+// period itself so the two cannot drift apart.
 const (
 	leaseStaleFactor = 3
-	leaseStaleMin    = 2 * time.Minute
+	leaseStaleMargin = time.Minute
+	leaseStaleMin    = 2*kube.LeaseScanPeriod + leaseStaleMargin
 )
 
 // Lease detects a controller or operator that holds its leader Lease but
-// stopped renewing it while its pod still runs: the process is alive and
+// stopped renewing it while its pod runs and is ready: the process is alive and
 // does nothing, which no pod status shows. A Lease whose holder is gone
 // is left alone; it is what an uninstalled controller leaves behind.
 type Lease struct{}
@@ -64,7 +71,7 @@ func (Lease) Detect(
 	}}
 }
 
-// holderPod finds the running pod a holder identity names. Leader
+// holderPod finds the running, ready pod a holder identity names. Leader
 // election writes "<pod>_<id>"; the pod name is the part before the
 // underscore, or the whole identity when there is none.
 func holderPod(
@@ -73,7 +80,10 @@ func holderPod(
 	name, _, _ := strings.Cut(holder, "_")
 	id := inventory.CoreID(kube.KindPod, namespace, name)
 	pod, ok := model.Entity(id)
-	if !ok || podFinished(pod) {
+	// A pod that is not Running and Ready (crash looping, restarting,
+	// starting) explains the stale lease with its own findings.
+	if !ok || text(pod, kube.AttrPhase) != "Running" ||
+		!flag(pod, kube.AttrReady) {
 		return inventory.EntityID{}, false
 	}
 	return id, true

@@ -1,0 +1,6 @@
+{
+  "name": "liveness-single-kill",
+  "description": "One pod is killed once by its liveness probe and then stays healthy.",
+  "maxMessages": 0,
+  "quiet": true
+}

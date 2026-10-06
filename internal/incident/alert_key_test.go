@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
@@ -78,5 +80,62 @@ func TestAlertKeyStaysWhenCauseIsRevised(t *testing.T) {
 	if got := ds[0].Incident; got.Root != node || got.AlertKey != key {
 		t.Fatalf("revised alert key = %q on %v, want %q", got.AlertKey,
 			got.Root, key)
+	}
+}
+
+// A revised incident keeps its first root's alert key. A new incident on
+// that old root and mode must not share it while the revised one lives,
+// or the two would update and resolve each other's alert.
+func TestAlertKeyIsNotSharedAfterAReroot(t *testing.T) {
+	r := newRig(t, Config{})
+	web := podSig("web")
+	announced(t, r, web)
+	oldKey := r.of(web.Entity).AlertKey
+	node := entity(kube.KindNode, "n1")
+	r.cause(web.Entity, node, "node n1 is out of memory")
+	r.apply(at(2*time.Minute), detection.Changed, web)
+	wantAction(t, r.tick(at(2*time.Minute+DefaultReviseSettle)),
+		Update, ReasonCauseRevised)
+
+	// Another workload now fails because of the old root.
+	api := podSig("api")
+	r.cause(api.Entity, web.Entity, "web is failing")
+	r.raise(at(5*time.Minute), api)
+	wantAction(t, r.tick(at(5*time.Minute+DefaultSettle)), Announce,
+		"settled")
+	require.Len(t, r.m.Incidents(), 2)
+
+	keys := map[string]int{}
+	for _, p := range r.m.Incidents() {
+		if p.State != Resolved && p.AlertKey != "" {
+			keys[p.AlertKey]++
+		}
+	}
+	for key, n := range keys {
+		if n > 1 {
+			t.Fatalf("alert key %q is held by %d live incidents", key, n)
+		}
+	}
+	if keys[oldKey] != 1 {
+		t.Fatalf("the revised incident lost its key: %v", keys)
+	}
+}
+
+func TestFreeAlertKeyNumbersACollision(t *testing.T) {
+	m := NewManager(Config{IDNonce: testNonce}, nil)
+	root := entity(kube.KindDeployment, "web")
+	first := &Incident{ID: "a", Root: root, State: Open}
+	first.AlertKey = alertKey(root, "")
+	m.incidents = map[string]*Incident{"a": first}
+	second := &Incident{ID: "b", Root: root}
+
+	got := m.freeAlertKey(second)
+
+	if got != first.AlertKey+"-2" {
+		t.Fatalf("key = %q, want a suffix after %q", got, first.AlertKey)
+	}
+	first.State = Resolved
+	if m.freeAlertKey(second) != first.AlertKey {
+		t.Fatal("a resolved incident frees its key")
 	}
 }

@@ -3,10 +3,10 @@ package incidentio
 import (
 	"context"
 	"encoding/json"
-	"strings"
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -80,10 +80,8 @@ func (i *Incidentio) SendIncident(
 	if m.Resolved() {
 		status = "resolved"
 	}
-	description := m.NoteText()
-	if len(m.Output) > 0 {
-		description += "\n\n" + strings.Join(m.Output, "\n")
-	}
+	description := safetext.PlainWithOutput(
+		m.NoteText(), m.Output, "\n\n", safetext.DetailsLimit)
 	payload := incidentioPayload{
 		Title:            notification.Truncate(m.ShortText(), titleLimit),
 		Description:      description,

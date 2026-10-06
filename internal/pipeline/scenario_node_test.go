@@ -53,7 +53,7 @@ func TestEngineNodePressureIsOneIncident(t *testing.T) {
 func joinTitles(h *harness) string {
 	out := ""
 	for i, m := range h.messages {
-		out += h.decisions[i].Reason + ": " + m.Title + "\n"
+		out += string(h.decisions[i].Reason) + ": " + m.Title + "\n"
 	}
 	return out
 }

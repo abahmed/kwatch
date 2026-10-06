@@ -23,7 +23,7 @@ func testConfigMap(value string) *corev1.ConfigMap {
 }
 
 func TestTransformHashesConfigMapValues(t *testing.T) {
-	out, err := transform(testConfigMap("hunter2"))
+	out, err := testTransform(testConfigMap("hunter2"))
 	require.NoError(t, err)
 	cm := out.(*corev1.ConfigMap)
 	assert.NotContains(t, cm.Data["app.conf"], "hunter2")
@@ -45,8 +45,8 @@ func TestTransformConfigMapKeepsChangeDetection(t *testing.T) {
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			before, _ := transform(testConfigMap(tc.before))
-			after, _ := transform(testConfigMap(tc.after))
+			before, _ := testTransform(testConfigMap(tc.before))
+			after, _ := testTransform(testConfigMap(tc.after))
 			changes := ConfigMapSchema{}.Diff(before, after)
 			assert.Equal(t, tc.wantChange, len(changes) > 0)
 			b, _ := ConfigMapSchema{}.Describe(before)

@@ -60,8 +60,8 @@ and start digging.
 <td valign="top">
 
 ```text
-🔴 api is down in shop after the
-14:02 release of api:2.3. alice
+🔴 api is down in shop (prod-eu-1)
+after the 14:02 release of api:2.3. alice
 released it; the previous image was
 api:2.2. Only pods of the new
 revision fail. Service api and
@@ -161,24 +161,78 @@ flowchart LR
 4. **Tell.** One message per cause, written for people. It is updated only
    when something new is true, and closed once when it is fixed.
 
+## 🔁 Before and after
+
+One node runs low on memory and starts evicting pods. Here is the same
+incident in your channel, twice.
+
+**Before: one alert per pod**
+
+```text
+🔥 Pod api-7d9f-x2k CrashLoopBackOff
+🔥 Pod orders-5b2c-p1z CrashLoopBackOff
+⚠️ Pod cart-6c8d-k7w Readiness probe failed
+⚠️ Deployment api unavailable
+🔥 Pod api-7d9f-x2k restarted (5 times)
+⚠️ Node pool-a-n1 NotReady
+✅ Node pool-a-n1 Ready
+⚠️ Node pool-a-n1 NotReady
+... 14 more
+```
+
+**After: one message with the cause, then one when it is over**
+
+```text
+🟠 Node n1 (prod-eu-1) is low on memory. All of its dependents are failing.
+Replicas that do not depend on it are healthy. cart, orders and api in
+shop are affected as well. To check the node's conditions and recent events,
+run kubectl describe node n1
+```
+
+```text
+✅ Node n1 (prod-eu-1) is ready again. It was failing for ten minutes.
+```
+
+The same goes for the other incidents you care about:
+
+```text
+🟠 api is failing in shop (prod-eu-1) after the 10:01 release of
+registry.example.com/api:2.3. The previous image was
+registry.example.com/api:2.2. It fails with "panic: missing key
+DB_PASSWORD_V2". To see the rollout state, run
+kubectl rollout status deployment/api -n shop
+```
+
+```text
+🟠 kwatch (prod-eu-1) found two new problems at the same time. ledger in
+billing keeps crashing. checkout in orders keeps crashing. Each gets its own
+message when it changes or resolves.
+```
+
+One message per problem, with its cause and the command to fix or check it.
+Known and low-priority problems stay quiet, and the resolve message tells you
+what happened.
+
 ## 💬 More real messages
 
 When five apps fail because a database outside the cluster is down, kwatch
 blames the database, not the apps:
 
 ```text
-🔴 api in shop is crash looping because external endpoint db.example.com:5432
-refuses connections. It fails with "dial tcp db.example.com:5432: connect:
-connection refused". Every error mentions it. cart, search, auth and one other
-are affected as well. To read the output of the last crash, run
+🟠 api in shop (prod-eu-1) keeps crashing because external endpoint
+db.example.com:5432 refuses connections. It fails with "dial tcp
+db.example.com:5432: connect: connection refused". Every error mentions it.
+cart, search, auth and one other are affected as well. To read the output
+of the last crash, run
 kubectl logs api-6d4f-0 -c app -n shop --previous
 ```
 
 When a node disappears:
 
 ```text
-🔴 Node n1 (prod-eu-1) has not reported for two minutes. To check the node's
-conditions and recent events, run kubectl describe node n1
+🔴 Node n1 (prod-eu-1) has not reported for about two minutes. It reports
+"Kubelet stopped posting node status". To check the node's conditions and
+recent events, run kubectl describe node n1
 ```
 
 When kwatch is not sure, it says so instead of guessing. One emoji tells you

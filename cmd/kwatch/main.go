@@ -10,6 +10,10 @@ import (
 
 	"github.com/abahmed/kwatch/internal/app"
 	"github.com/abahmed/kwatch/internal/version"
+
+	// Embed the IANA zone database: the runtime image has none, and
+	// CronJob spec.timeZone needs it.
+	_ "time/tzdata"
 )
 
 func main() {
@@ -17,7 +21,10 @@ func main() {
 }
 
 func run() int {
-	setMemoryLimitFromEnv()
+	if err := setMemoryLimitFromEnv(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
 	return runWithFlags()
 }
 

@@ -2,12 +2,11 @@ package kube
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
-	"strconv"
-	"sync"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -69,6 +68,18 @@ type ActiveProbeConfig struct {
 // enabled, a TCP probe of every Service port.
 type ActiveProber struct {
 	cfg ActiveProbeConfig
+	// restricted is whether the last round found every dependency
+	// unreachable. Only the Run goroutine touches it.
+	restricted bool
+	// probed holds the external endpoints probed so far, with the rounds
+	// since a pod last called them. Only the Run goroutine touches it.
+	probed map[inventory.EntityID]int
+	// capLogged is set once the Service cap has been reported.
+	capLogged bool
+	// dependencyDial opens connections for dependency probes: the same
+	// as cfg.Dial when the caller set one, else a dialer that refuses
+	// private addresses.
+	dependencyDial func(context.Context, string, string) (net.Conn, error)
 }
 
 // NewActiveProber builds a prober with defaults for unset intervals.
@@ -82,10 +93,12 @@ func NewActiveProber(cfg ActiveProbeConfig) *ActiveProber {
 	if cfg.FailureThreshold <= 0 {
 		cfg.FailureThreshold = 3
 	}
+	dependencyDial := cfg.Dial
 	if cfg.Dial == nil {
 		cfg.Dial = (&net.Dialer{}).DialContext
+		dependencyDial = externalDialer()
 	}
-	return &ActiveProber{cfg: cfg}
+	return &ActiveProber{cfg: cfg, dependencyDial: dependencyDial}
 }
 
 // Run probes every interval until ctx ends.
@@ -99,48 +112,6 @@ func (p *ActiveProber) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 		}
-	}
-}
-
-func (p *ActiveProber) round(ctx context.Context) {
-	var (
-		mu           sync.Mutex
-		observations []inventory.Observation
-		wg           sync.WaitGroup
-	)
-	collect := func(observation inventory.Observation) {
-		mu.Lock()
-		observations = append(observations, observation)
-		mu.Unlock()
-	}
-	for _, target := range p.cfg.Targets {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			collect(p.check(ctx, target))
-		}()
-	}
-	if p.cfg.AutoServices {
-		for _, target := range p.serviceTargets() {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				collect(p.checkService(ctx, target))
-			}()
-		}
-	}
-	if p.cfg.AutoDependencies {
-		for _, endpoint := range p.dependencyTargets() {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				collect(p.checkDependency(ctx, endpoint))
-			}()
-		}
-	}
-	wg.Wait()
-	if len(observations) > 0 {
-		p.cfg.Submit(ctx, observations...)
 	}
 }
 
@@ -166,8 +137,7 @@ func (p *ActiveProber) check(
 		inventory.CoreID(KindEndpoint, "", target.Name),
 		p.cfg.Now(), p.cfg.Now().Sub(start), err)
 	observation.Source = activeProbeSource
-	observation.Attributes[AttrFailureDuration] = inventory.Number(
-		float64(p.cfg.FailureThreshold) * p.cfg.Interval.Seconds())
+	p.stampLimits(&observation)
 	if !expiry.IsZero() {
 		observation.Attributes[AttrCertExpiry] = inventory.Time(expiry)
 	}
@@ -214,69 +184,11 @@ func (p *ActiveProber) http(
 	}
 }
 
-// serviceTarget is one Service port for automatic probing.
-type serviceTarget struct {
-	service inventory.EntityID
-	address string
-}
-
-// serviceTargets lists ClusterIP Service ports from the model, bounded so
-// a large cluster cannot turn probing into a scan.
-func (p *ActiveProber) serviceTargets() []serviceTarget {
-	var out []serviceTarget
-	for _, id := range p.cfg.Model.Entities(KindService) {
-		if p.cfg.Excluded[id.Namespace] || len(out) >= autoProbeLimit {
-			continue
-		}
-		entity, ok := p.cfg.Model.Entity(id)
-		if !ok {
-			continue
-		}
-		attr, ok := entity.Attribute(AttrPorts)
-		if !ok || attr.Value.AsText() == "" {
-			continue
-		}
-		port := firstPort(attr.Value.AsText())
-		if port == "" {
-			continue
-		}
-		out = append(out, serviceTarget{service: id,
-			address: net.JoinHostPort(id.Name+"."+id.Namespace+".svc", port)})
-	}
-	return out
-}
-
-func (p *ActiveProber) checkService(
-	ctx context.Context, target serviceTarget,
-) inventory.Observation {
-	probeCtx, cancel := context.WithTimeout(ctx, p.cfg.Timeout)
-	defer cancel()
-	start := p.cfg.Now()
-	err := p.dial(probeCtx, target.address)
-	observation := probeObservation(target.service, p.cfg.Now(),
-		p.cfg.Now().Sub(start), err)
-	observation.Source = serviceProbeSource
-	observation.Attributes[AttrFailureDuration] = inventory.Number(
-		float64(p.cfg.FailureThreshold) * p.cfg.Interval.Seconds())
-	return observation
-}
-
-// firstPort reads the first port number from the "port/proto->target"
-// list a ServiceSchema records.
-func firstPort(ports string) string {
-	for i, r := range ports {
-		if r < '0' || r > '9' {
-			if _, err := strconv.Atoi(ports[:i]); err == nil {
-				return ports[:i]
-			}
-			return ""
-		}
-	}
-	return ports
-}
-
 func (p *ActiveProber) dial(ctx context.Context, address string) error {
-	conn, err := p.cfg.Dial(ctx, "tcp", address)
+	return closeDialed(p.cfg.Dial(ctx, "tcp", address))
+}
+
+func closeDialed(conn net.Conn, err error) error {
 	if err != nil {
 		return err
 	}
@@ -284,9 +196,13 @@ func (p *ActiveProber) dial(ctx context.Context, address string) error {
 }
 
 // dependencyTargets lists the external endpoints the pods in scope are
-// configured to call, each once, bounded like Service probing.
-func (p *ActiveProber) dependencyTargets() []inventory.EntityID {
-	seen := map[inventory.EntityID]bool{}
+// configured to call, each once, bounded like Service probing. It also
+// returns every endpoint called, probed or not, so the ones the cap left
+// out are not taken for abandoned.
+func (p *ActiveProber) dependencyTargets() (
+	[]inventory.EntityID, map[inventory.EntityID]bool,
+) {
+	called := map[inventory.EntityID]bool{}
 	var out []inventory.EntityID
 	for _, pod := range p.cfg.Model.Entities(KindPod) {
 		if p.cfg.Excluded[pod.Namespace] {
@@ -294,14 +210,16 @@ func (p *ActiveProber) dependencyTargets() []inventory.EntityID {
 		}
 		for _, endpoint := range p.cfg.Model.Related(pod, inventory.Calls,
 			inventory.Outgoing) {
-			if seen[endpoint] || len(out) >= autoProbeLimit {
+			if called[endpoint] {
 				continue
 			}
-			seen[endpoint] = true
-			out = append(out, endpoint)
+			called[endpoint] = true
+			if len(out) < autoProbeLimit {
+				out = append(out, endpoint)
+			}
 		}
 	}
-	return out
+	return out, called
 }
 
 // checkDependency opens one TCP connection to the endpoint named
@@ -312,11 +230,17 @@ func (p *ActiveProber) checkDependency(
 	probeCtx, cancel := context.WithTimeout(ctx, p.cfg.Timeout)
 	defer cancel()
 	start := p.cfg.Now()
-	err := p.dial(probeCtx, endpoint.Name)
+	err := closeDialed(p.dependencyDial(probeCtx, "tcp", endpoint.Name))
 	observation := probeObservation(endpoint, p.cfg.Now(),
 		p.cfg.Now().Sub(start), err)
+	if errors.Is(err, errBlockedAddress) {
+		// Not an outage of the dependency: kwatch refused to dial it.
+		delete(observation.Attributes, AttrHealthy)
+		delete(observation.Attributes, AttrProbeFailureKind)
+		observation.Attributes[AttrProbeError] = inventory.Text(
+			errBlockedAddress.Error())
+	}
 	observation.Source = dependencyProbeSource
-	observation.Attributes[AttrFailureDuration] = inventory.Number(
-		float64(p.cfg.FailureThreshold) * p.cfg.Interval.Seconds())
+	p.stampLimits(&observation)
 	return observation
 }

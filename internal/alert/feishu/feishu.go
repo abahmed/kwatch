@@ -13,6 +13,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -21,6 +22,9 @@ import (
 
 // feiShuTextLimit keeps the card within Feishu's request size limit.
 const feiShuTextLimit = 30000
+
+// defaultTitle is the card header when the operator sets none.
+const defaultTitle = "kwatch"
 
 type FeiShu struct {
 	sender  transport.Sender
@@ -92,11 +96,17 @@ func NewFeiShu(
 	klog.InfoS("initializing Fei Shu with webhook configured")
 
 	title, _ := config["title"].(string)
+	if strings.TrimSpace(title) == "" {
+		// Feishu may reject a card whose header title is empty.
+		title = defaultTitle
+	}
+	secret, _ := config["secret"].(string)
 
 	return &FeiShu{
 		sender:      transport.NewSender(dependencies),
 		webhook:     webhook,
 		title:       title,
+		secret:      secret,
 		clusterName: clusterName,
 		clockSource: clock.Require(dependencies.Clock),
 	}
@@ -113,13 +123,9 @@ func (f *FeiShu) Name() string {
 func (f *FeiShu) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
-	text := m.NoteText()
-	if len(m.Output) > 0 {
-		text += "\n\n```\n" + strings.Join(m.Output, "\n") + "\n```"
-	}
-	body, err := f.buildRequestBodyFeiShu(
-		notification.Truncate(text, feiShuTextLimit),
-	)
+	text := safetext.NoteWithOutput(
+		m.NoteText(), m.Output, "\n\n", feiShuTextLimit)
+	body, err := f.buildRequestBodyFeiShu(text)
 	if err != nil {
 		return err
 	}

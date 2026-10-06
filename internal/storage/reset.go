@@ -6,7 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"syscall"
+	"strings"
 
 	bolt "go.etcd.io/bbolt"
 	berrors "go.etcd.io/bbolt/errors"
@@ -43,22 +43,72 @@ func (e *unusableError) Error() string {
 		e.reason, e.version, e.cause)
 }
 
-// resetFile deletes the unusable file at path and opens a fresh store
-// in its place. No backup is kept. The fresh open is not retried, so a
-// bad disk fails instead of looping through resets.
-func resetFile(path string, bad *unusableError) (*bolt.DB, error) {
-	if err := removeFile(path); err != nil {
-		return nil, fmt.Errorf("store: remove %s: %w", path, err)
+// corruptSuffix names the quarantined copy of a state file that Open
+// replaced. Only one copy is kept: a later reset overwrites it.
+const corruptSuffix = ".corrupt"
+
+// maxKeptShare is the part of a volume limit the quarantined copy may use:
+// one in this many bytes. A larger copy would eat the budget the fresh file
+// and its later rewrite need, so it is deleted instead.
+const maxKeptShare = 4
+
+// resetFile moves the unusable file at path aside to path+".corrupt" and
+// opens a fresh store in its place, so an operator can still inspect it or
+// recover the outbox from it. With a volume limit the copy is kept only
+// when it fits in a quarter of that limit. The fresh open is not retried,
+// so a bad disk fails instead of looping through resets.
+func resetFile(
+	path string, bad *unusableError, volumeLimit int64,
+) (*bolt.DB, error) {
+	aside := path + corruptSuffix
+	if err := quarantine(path, aside); err != nil {
+		return nil, fmt.Errorf("store: set aside %s: %w", path, err)
 	}
-	klog.InfoS("state store reset", "component", "state",
-		"operation", "reset", "reason", bad.reason,
-		"oldVersion", bad.version, "supportedVersion", SchemaVersion,
-		"cause", bad.cause.Error())
+	kept := trimQuarantine(aside, volumeLimit)
+	if kept {
+		klog.ErrorS(bad.cause, "state store reset: the old file was kept",
+			"component", "state", "operation", "reset",
+			"reason", bad.reason, "oldVersion", bad.version,
+			"supportedVersion", SchemaVersion, "keptAs", aside)
+	} else {
+		klog.ErrorS(bad.cause, "state store reset: the old file was "+
+			"deleted because it would not fit the volume limit",
+			"component", "state", "operation", "reset",
+			"reason", bad.reason, "oldVersion", bad.version,
+			"supportedVersion", SchemaVersion,
+			"volumeLimitBytes", volumeLimit)
+	}
 	db, err := openChecked(path)
 	if err != nil {
 		return nil, fmt.Errorf("store: open fresh %s: %w", path, err)
 	}
 	return db, nil
+}
+
+// trimQuarantine deletes the quarantined file when a volume limit is set and
+// the file is larger than its share of it. It reports whether the file is
+// still there.
+func trimQuarantine(aside string, volumeLimit int64) bool {
+	if volumeLimit <= 0 {
+		return true
+	}
+	info, err := os.Stat(aside)
+	if err != nil {
+		return false
+	}
+	if info.Size() <= volumeLimit/maxKeptShare {
+		return true
+	}
+	return os.Remove(aside) != nil
+}
+
+// quarantine renames path to aside, replacing an older quarantined file,
+// and makes the rename durable.
+func quarantine(path, aside string) error {
+	if err := os.Rename(path, aside); err != nil {
+		return err
+	}
+	return syncDir(filepath.Dir(path))
 }
 
 // openChecked opens path, verifies its schema and reads every page once.
@@ -151,18 +201,16 @@ func checkPages(db *bolt.DB) error {
 	})
 }
 
-// resettable reports whether an open error means the file content is bad,
-// as opposed to the file being locked or inaccessible.
+// resettable reports whether an open error is structural: the file
+// content is bad (wrong magic, version or checksum). A locked or
+// inaccessible file, or any error this list does not know, is reported
+// instead, because moving a healthy file aside would lose state.
 func resettable(err error) bool {
-	var pathErr *fs.PathError
-	var errno syscall.Errno
-	switch {
-	case errors.Is(err, berrors.ErrTimeout), errors.As(err, &pathErr),
-		errors.As(err, &errno):
-		return false
-	default:
-		return true
-	}
+	return errors.Is(err, berrors.ErrInvalid) ||
+		errors.Is(err, berrors.ErrVersionMismatch) ||
+		errors.Is(err, berrors.ErrChecksum) ||
+		// bbolt reports a truncated file with a plain error.
+		strings.Contains(err.Error(), "file size too small")
 }
 
 // initialise creates every bucket in a new file and checks the version
@@ -213,14 +261,6 @@ func storedVersion(tx *bolt.Tx) (version uint64, known bool) {
 		return nil
 	})
 	return 0, hasData
-}
-
-// removeFile deletes path and makes the removal durable.
-func removeFile(path string) error {
-	if err := os.Remove(path); err != nil {
-		return err
-	}
-	return syncDir(filepath.Dir(path))
 }
 
 // syncDir makes a rename durable.

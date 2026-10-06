@@ -63,5 +63,7 @@ LABEL org.opencontainers.image.source="https://github.com/abahmed/kwatch" \
 RUN apk add --no-cache ca-certificates && \
     adduser -D -u 1000 kwatch
 COPY --from=builder /build/kwatch /bin/kwatch
-USER kwatch
+# Numeric, so runAsNonRoot can be verified without runAsUser; it matches the
+# chart's runAsUser and runAsGroup.
+USER 1000:1000
 ENTRYPOINT ["/bin/kwatch"]

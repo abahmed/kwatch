@@ -205,6 +205,13 @@ verify-manifests:
 		$(HELM) lint deploy/chart && ./deploy/chart/test_helm.sh
 	./scripts/check-manifest-parity.sh
 	./scripts/check-release-consistency.sh
+	@command -v kubectl >/dev/null 2>&1 || { \
+		if [ "$${CI:-}" = true ]; then \
+			echo "kubectl is required in CI" >&2; exit 1; fi; \
+		echo "SKIP: kubectl is not installed (CI runs this check)"; \
+		exit 0; }; \
+		./scripts/test-require-kind-context.sh
+	./scripts/test-check-e2e-artifacts.sh
 
 verify-scenarios:
 	./scripts/test-kind-scenarios.sh

@@ -77,10 +77,11 @@ func scanDetectors(root string) (detectorUsage, error) {
 func scanFile(
 	file *ast.File, base string, names map[string]string, u detectorUsage,
 ) {
+	reads := readOnlyReferences(file)
 	ast.Inspect(file, func(node ast.Node) bool {
 		switch n := node.(type) {
 		case *ast.SelectorExpr:
-			if v, ok := reasonValue(n, names); ok {
+			if v, ok := reasonValue(n, names); ok && !reads[n] {
 				add(u.files, v, base)
 			}
 		case *ast.CompositeLit:
@@ -90,6 +91,33 @@ func scanFile(
 		}
 		return true
 	})
+}
+
+// readOnlyReferences finds the references to a reason that only look at
+// a reason and never raise it: a comparison (x == reasons.Y), a case of
+// a switch. A detector that only reads a reason is not listed for it.
+func readOnlyReferences(file *ast.File) map[*ast.SelectorExpr]bool {
+	reads := make(map[*ast.SelectorExpr]bool)
+	mark := func(expr ast.Expr) {
+		if sel, ok := expr.(*ast.SelectorExpr); ok {
+			reads[sel] = true
+		}
+	}
+	ast.Inspect(file, func(node ast.Node) bool {
+		switch n := node.(type) {
+		case *ast.BinaryExpr:
+			if n.Op == token.EQL || n.Op == token.NEQ {
+				mark(n.X)
+				mark(n.Y)
+			}
+		case *ast.CaseClause:
+			for _, expr := range n.List {
+				mark(expr)
+			}
+		}
+		return true
+	})
+	return reads
 }
 
 // recordLiteral pairs Reason and Severity fields of one struct literal.

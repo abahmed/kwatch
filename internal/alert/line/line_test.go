@@ -1,6 +1,7 @@
 package line
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/providertest"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
@@ -125,4 +127,17 @@ func TestInvalidHttpRequest(t *testing.T) {
 
 	c.url = "http://localhost:132323/%s"
 	assert.NotNil(c.SendMessage(context.Background(), "test"))
+}
+
+func TestStartupLogsThatLineNotifyIsGone(t *testing.T) {
+	var buf bytes.Buffer
+	klog.LogToStderr(false)
+	klog.SetOutput(&buf)
+	defer klog.LogToStderr(true)
+
+	c := NewLine(map[string]interface{}{"token": "t"}, "dev", testDeps)
+	klog.Flush()
+
+	assert.NotNil(t, c)
+	assert.Contains(t, buf.String(), "LINE Notify no longer exists")
 }

@@ -24,7 +24,8 @@ func TestManagerRecordScopeIsKeptUntilRecurrence(t *testing.T) {
 	r.clear(at(2*time.Minute), web)
 	r.tick(at(2 * time.Minute))
 	r.tick(at(2*time.Minute + DefaultHold))
-	r.raise(at(time.Hour), web)
+	// Past RepageWindow, so a new incident opens.
+	r.raise(at(3*time.Hour), web)
 	if got := r.of(web.Entity).Scope; got != ScopeUnknown {
 		t.Fatalf("recurrence scope = %v, want unknown", got)
 	}

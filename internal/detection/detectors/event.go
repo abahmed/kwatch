@@ -70,10 +70,15 @@ func (Event) Detect(
 	byReason := map[string]*eventGroup{}
 	for _, note := range ctx.Model.Notes(e.ID, ctx.Now.Add(-EventWindow)) {
 		severity, failing := eventReasons[note.Reason]
-		if !note.Warning || !failing || overcomeAtStart(e, note) {
+		if !note.Warning || !failing || overcomeAtStart(e, note) ||
+			bootNoise(ctx, e, note) {
 			continue
 		}
-		ctx.RecheckAfter(note.At.Add(EventWindow).Sub(ctx.Now))
+		// The window includes a note exactly EventWindow old, so the
+		// recheck falls just after it: the finding must clear when
+		// its last event ages out.
+		ctx.RecheckAfter(
+			note.At.Add(EventWindow).Sub(ctx.Now) + time.Nanosecond)
 		key := eventReason(note)
 		group, seen := byReason[key]
 		if !seen {
@@ -163,6 +168,24 @@ func overcomeAtStart(e inventory.Entity, note inventory.Note) bool {
 	}
 	readySince := timestamp(e, kube.AttrReadySince)
 	return !readySince.IsZero() && !readySince.Before(note.At)
+}
+
+// bootReasons are the start-up events a node that has just joined
+// produces while its network plugin comes up: the pod retries and
+// the failure passes by itself.
+var bootReasons = map[string]bool{
+	"FailedCreatePodSandBox": true,
+	"NetworkNotReady":        true,
+}
+
+// bootNoise reports a bootReasons event of a pod that starts in a
+// booting node pool. Once the boot is over the event counts again, so a
+// pod that still cannot start its sandbox is reported.
+func bootNoise(
+	ctx detection.Context, e inventory.Entity, note inventory.Note,
+) bool {
+	return e.ID.Kind == kube.KindPod && bootReasons[note.Reason] &&
+		bootGraceFor(ctx, e) > 0
 }
 
 // deleted reports whether e was an object of a watched kind that is gone.

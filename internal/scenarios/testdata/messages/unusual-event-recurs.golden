@@ -1,0 +1,4 @@
+11:29:15 digest
+🟡 kwatch (prod-eu-1) has one low-priority problem to report. Service web in shop is failing: kubernetes reported FailedDeployModel 5 times in the last quarter hour. None of them is urgent; one that gets worse gets its own message.
+🟡 kwatch (prod-eu-1) has one low-priority problem to report.
+

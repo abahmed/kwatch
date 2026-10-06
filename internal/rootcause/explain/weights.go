@@ -142,6 +142,10 @@ const (
 	// one error before the error itself becomes the incident. Words
 	// are weaker than a name, so it takes one more.
 	SignatureMinWorkloads = 3
+	// SignatureWindow is how close together the failures that share
+	// one error must have begun. One outage breaks its callers within
+	// minutes; the same words much later are another event.
+	SignatureWindow = 30 * time.Minute
 )
 
 // Baseline deviation and data quality.

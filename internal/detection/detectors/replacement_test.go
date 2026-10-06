@@ -83,6 +83,6 @@ func TestWorkloadAvailabilityGetsTheReplacementGrace(t *testing.T) {
 	}
 
 	assert.Empty(t, detect(6*time.Minute), "grace holds it back")
-	assert.Equal(t, []string{reasons.DeploymentUnavailable},
-		detect(5*time.Minute+replacementGrace))
+	assert.Contains(t, detect(5*time.Minute+replacementGrace),
+		reasons.DeploymentUnavailable)
 }

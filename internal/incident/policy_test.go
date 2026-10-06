@@ -42,6 +42,30 @@ func TestTierDerivation(t *testing.T) {
 		p    *Incident
 		want Tier
 	}{
+		"a node that only stalls waits for the digest": {
+			incidentOf(node, nil,
+				sig(node, reasons.NodePSIHigh, detection.Warning)),
+			Digest,
+		},
+		"critical throttling alone waits for the digest": {
+			lostTraffic(incidentOf(deploy, []inventory.EntityID{ingress},
+				sig(deploy, reasons.ContainerCPUThrottled,
+					detection.Critical))),
+			Digest,
+		},
+		"critical throttling does not lift a warning to a page": {
+			lostTraffic(incidentOf(deploy, []inventory.EntityID{ingress},
+				sig(deploy, reasons.ContainerCPUThrottled,
+					detection.Critical),
+				sig(deploy, crash, detection.Warning))),
+			Notify,
+		},
+		"a risk never raises the tier": {
+			incidentOf(deploy, nil, detection.Finding{Entity: deploy,
+				Reason: reasons.RiskSingleReplica, Advisory: true,
+				Severity: detection.Critical}),
+			Digest,
+		},
 		"warning notifies": {
 			incidentOf(deploy, nil, sig(deploy, crash, detection.Warning)),
 			Notify,
@@ -237,5 +261,31 @@ func TestManagerSeverityOverrideAppliesToTier(t *testing.T) {
 	r.raise(at(0), podSig("web"))
 	if got := r.only().Tier; got != Digest {
 		t.Fatalf("tier = %v, want Digest", got)
+	}
+}
+
+// A reopened page is held at notify but it paged: a rhythm or an old
+// age must not drop it to the digest, which would leave its alert open.
+func TestTierKeepsAHeldPageOutOfTheDigest(t *testing.T) {
+	deploy := entity(kube.KindDeployment, "web")
+	p := incidentOf(deploy, nil,
+		sig(deploy, reasons.CrashLoopBackOff, detection.Critical))
+	p.Opened = at(3 * 24 * time.Hour)
+	p.Mode = detection.ModeCrashLoop
+	p.History = []Occurrence{
+		{Opened: at(0), Mode: p.Mode, Heard: true},
+		{Opened: at(24 * time.Hour), Mode: p.Mode, Heard: true},
+	}
+	if got := tier(p); got != Digest {
+		t.Fatalf("setup: tier = %v, want Digest for a known problem", got)
+	}
+	p.Delivery.HoldAtNotify()
+	if got := tier(p); got == Digest {
+		t.Fatalf("tier = %v, a held page must not be demoted", got)
+	}
+	p.Delivery = Delivery{}
+	p.Delivery.MarkPaged()
+	if got := tier(p); got == Digest {
+		t.Fatalf("tier = %v, a paged incident must not be demoted", got)
 	}
 }

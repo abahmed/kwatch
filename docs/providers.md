@@ -61,9 +61,9 @@ anyone. Sensu Go records them as a passing (OK) check.
 
 | Group | Providers | What they send |
 |:--|:--|:--|
-| 💬 Chat | Slack, Discord, Microsoft Teams, Teams Workflow, Mattermost, Rocket.Chat, Google Chat, Webex, Matrix, Telegram, Zulip, Feishu, DingTalk, WeCom, LINE, Flock, Threema, Signal | The Note as the message text, escaped for the chat's markup, with recent application output as a code or quoted block when there is any. Broadcast mentions such as `@channel` are neutralized. Matrix sends the Note as `body` and HTML-escaped as `formatted_body`. Slack with a bot token posts the Short as one root message per incident, keeps every update in its thread and edits the root as the status changes. |
+| 💬 Chat | Slack, Discord, Microsoft Teams, Teams Workflow, Mattermost, Rocket.Chat, Google Chat, Webex, Matrix, Telegram, Zulip, Feishu, DingTalk, WeCom, LINE, Flock, Threema, Signal | The Note as the message text, escaped for the chat's markup, with recent application output as a code or quoted block when there is any. Broadcast mentions such as `@channel` are neutralized. Matrix sends the Note as `body` and HTML-escaped as `formatted_body`. Slack with a bot token announces each incident as one root message holding the whole Note and its output, keeps every update and the resolve in its thread, and edits the root to the same announcement under the new status marker when the status changes (a thread reply that is not a status change leaves the root alone; after a restart the root cannot be rebuilt, so only the thread grows). Application output is fenced with a code fence longer than any run of backticks in it, so it cannot close the block; it is cut before the closing fence is added. WeCom `<@userid>` and Zulip `@*group*` mentions in workload text are neutralized too. |
 | 🚨 Paging | PagerDuty, Opsgenie, Splunk On-Call, GoAlert, ilert, incident.io, Squadcast, Zenduty, SIGNL4, Alerta, Datadog, New Relic, AWS SNS, Splunk HEC, Sensu Go | The Short as the alert title or summary, the Note (plus output) as details, the incident id as the dedup or alert key, and the provider's resolve or close action when the incident resolves. Severity follows the incident severity. |
-| 📋 Issue trackers | GitHub, GitLab, Gitea, Jira, ClickUp | One issue per incident: the Short as title and the Note (plus output and the cluster name) as body. Updates add a comment. On resolve kwatch comments and closes the issue (GitHub, GitLab, Gitea); Jira and ClickUp get a closing comment, because their closing states are defined per project or list. |
+| 📋 Issue trackers | GitHub, GitLab, Gitea, Jira, ClickUp | One issue per incident: the Short as title and the Note (plus output and the cluster name) as body. Updates add a comment. On resolve kwatch comments and closes the issue (GitHub, GitLab, Gitea; Jira moves it through `closeTransition` and ClickUp to `closeStatus` when you set one, otherwise they only comment, because workflows are defined per project or list). A resolved incident that fails again within its reopen window comments on the same issue and reopens it on GitHub, GitLab and Gitea. Jira (`reopenTransition`) and ClickUp (`reopenStatus`) reopen only when you configure both the close and the reopen name; otherwise the mapping is forgotten at resolve and a recurrence opens a new issue. Pod-controlled text in the Note has its `@mentions` neutralized, and Jira wiki markup in it is escaped. A GitHub 403 that says the rate limit was hit is retried like a 429. |
 | 📱 SMS and push | Twilio, Plivo, Vonage, MessageBird, Pushover, Pushbullet, Gotify, ntfy, IFTTT, Home Assistant | The Short. A resolve is sent at normal priority. IFTTT also sends the Note as `value2` and the status as `value3`. |
 | 📧 Email | Email (SMTP), AWS SES, SendGrid, Mailgun, Resend | Subject is the Short on one line; the body is the Note followed by recent output as a `> ` quoted block. |
 | 🔗 Structured | Custom Webhook, n8n, Zapier | The whole message as JSON (fields below). |
@@ -109,7 +109,7 @@ alert:
     compact: true
 ```
 
-> 💡 **Pro tip:** When using bot token mode, alerts become threaded conversations — root message on first alert, updates as replies. Clean and organized! 🧹
+> 💡 **Pro tip:** When using bot token mode, alerts become threaded conversations — the full alert is the root message, updates and the resolve are replies, and the root's status marker follows the incident. Clean and organized! 🧹
 
 #### 📮 Routing, Retry & Fallback (applies to every provider)
 
@@ -124,9 +124,19 @@ In plain words: the same options work for all providers, not just Slack.
   a rate limit (which waits exactly as long as the provider's `Retry-After` asks). A failure
   that says the request itself is wrong — a 4xx, a rejected payload, an unknown channel, a
   revoked token — is given up on immediately and goes straight to the dead-letter queue, so
-  it cannot hold up the alerts queued behind it.
+  it cannot hold up the alerts queued behind it. The retry options are
+  `maxAttempts` (default 3, 1 to 20), `delay` (default `1s`), `maxBackoff`
+  (cap on the growing wait, default `30s`), `jitterEnabled` (default `false`)
+  and `jitterFactor` (0 to 1, default `0.25`, used only when jitter is on).
+  Durations are strings such as `5s`.
 - **`fallback`** — if this provider fails for good, hand the alert to another provider
-  (e.g. Slack → PagerDuty when Slack is down).
+  (e.g. Slack → PagerDuty when Slack is down). It must name a provider that is
+  configured under `alert`; startup and `kwatch lint` reject an unknown name.
+- **`templates`** — message text per reason for this provider, overriding the
+  global `templates` (see the configuration reference). An invalid template is a
+  configuration error.
+- **`hourlyBudget`** — at most this many new conversations per hour
+  (default 60, `0` is unlimited); the rest go into one overflow digest.
 
 ```yaml
 alert:
@@ -182,7 +192,8 @@ search.
 > **Deprecated.** LINE shut down the LINE Notify service on 31 March 2025, so
 > this provider can no longer deliver messages. It stays only so existing
 > configurations still load. Move to another provider, for example the
-> custom webhook with a LINE Messaging API bridge.
+> custom webhook with a LINE Messaging API bridge. kwatch logs an error at
+> startup when it is configured, and `kwatch lint` warns.
 
 | Parameter | What it does |
 |:---|---|
@@ -247,7 +258,7 @@ Father to get a `token` and a `chatId`.
 
 | Parameter | What it does |
 |:---|---|
-| `alert.matrix.homeServer` | 🖥️ HomeServer URL |
+| `alert.matrix.homeServer` | 🖥️ HomeServer URL (a trailing `/` is ignored). A 429 is retried after the server's `retry_after_ms` |
 | `alert.matrix.accessToken` | 🔑 Access token |
 | `alert.matrix.internalRoomId` | 🆔 Room ID |
 
@@ -264,8 +275,8 @@ Father to get a `token` and a `chatId`.
 | Parameter | What it does |
 |:---|---|
 | `alert.feishu.webhook` | 🔗 Webhook URL |
-| `alert.feishu.title` | ✏️ Custom title |
-| `alert.feishu.secret` | 🔑 Signing secret (optional, when signature verification is on) |
+| `alert.feishu.title` | ✏️ Custom card title (default: `kwatch`) |
+| `alert.feishu.secret` | 🔑 Signing secret. Set it when the bot has signature verification on; every message is then signed, and a bot with verification on rejects unsigned ones |
 
 ### 🛡️ Zenduty
 
@@ -300,7 +311,7 @@ alert:
 
 | Parameter | What it does |
 |:---|---|
-| `alert.ntfy.topic` | 📢 Topic to publish to |
+| `alert.ntfy.topic` | 📢 Topic to publish to. kwatch publishes JSON to the server root with the topic in the body, as ntfy documents |
 | `alert.ntfy.url` | 🔗 Server URL (default: `https://ntfy.sh`) |
 | `alert.ntfy.token` | 🔑 Optional auth token |
 | `alert.ntfy.priority` | 🎚️ Priority 1-5 (default: 4) |
@@ -318,7 +329,7 @@ alert:
 |:---|---|
 | `alert.pushover.token` | 🔑 Application token |
 | `alert.pushover.user` | 👤 User or group key |
-| `alert.pushover.priority` | 🎚️ Priority from -2 to 2 (optional) |
+| `alert.pushover.priority` | 🎚️ Priority from -2 to 2 (optional). It applies to the announcement of an incident only; priority 2 (emergency) only to a page-tier announcement, other tiers are held at 1. Updates, summaries, digests, startup and plain messages are normal priority. A resolve cancels the emergency receipt first, so the alarm stops repeating, and then sends the normal-priority "resolved" push; if the cancel fails transiently nothing is sent and the whole resolve is retried |
 | `alert.pushover.retry` | ⏱️ Emergency retry interval in seconds |
 | `alert.pushover.expire` | ⌛ Emergency expiration in seconds |
 | `alert.pushover.title` | ✏️ Custom title |
@@ -448,11 +459,11 @@ alert:
 | Parameter | What it does |
 |:---|---|
 | `alert.datadog.apiKey` | 🔑 API key |
-| `alert.datadog.site` | 🌍 Datadog site (default: `datadoghq.com`) |
+| `alert.datadog.site` | 🌍 Datadog site as a bare host name (default: `datadoghq.com`). Examples: `datadoghq.eu`, `us3.datadoghq.com`, `us5.datadoghq.com`, `ap1.datadoghq.com`, `ddog-gov.com`. Events go to `https://api.<site>`. A value with a scheme, path, port or space fails config validation (lint and startup) |
 | `alert.datadog.applicationKey` | 🔑 Optional application key |
 | `alert.datadog.alertType` | 🏷️ Fixed alert type for every incident: `error`, `warning`, `info`, `success`, `user_update`, `recommendation` or `snapshot`. Unset, each incident uses its own severity; an unknown value is ignored with a log line |
 | `alert.datadog.title` | 🏷️ Fixed event title, cut to Datadog's 100-byte limit |
-| `alert.datadog.tags` | 🏷️ Comma-separated tags |
+| `alert.datadog.tags` | 🏷️ Comma-separated tags. Every event also carries `cluster:<clusterName>` unless you set a `cluster:` tag yourself |
 
 ### 📈 New Relic
 
@@ -460,6 +471,7 @@ alert:
 |:---|---|
 | `alert.newrelic.apiKey` | 🔑 User API key |
 | `alert.newrelic.accountId` | 🆔 Account ID |
+| `alert.newrelic.region` | 🌍 Data-center region: `us` (default) or `eu`. An EU account must set `eu`, or New Relic rejects the key |
 
 ```yaml
 alert:
@@ -475,6 +487,8 @@ alert:
 | `alert.clickup.token` | 🔑 Personal API token |
 | `alert.clickup.listId` | 🆔 List ID to create tasks in |
 | `alert.clickup.priority` | 🎚️ Optional task priority (1-4) |
+| `alert.clickup.closeStatus` | ✅ List status a resolve moves the task to, for example `complete`. Unset, a resolve only comments. A name the list does not have is logged and ignored |
+| `alert.clickup.reopenStatus` | 🔁 List status a closed task returns to when its incident fails again, for example `to do`. Needs `closeStatus`. Unset, a recurrence opens a new task |
 
 ```yaml
 alert:
@@ -637,6 +651,8 @@ alert:
 | `alert.jira.apiToken` | 🔑 API token |
 | `alert.jira.projectKey` | 🆔 Project key |
 | `alert.jira.issueType` | 🏷️ Issue type (default: `Task`) |
+| `alert.jira.closeTransition` | ✅ Workflow transition a resolve applies, for example `Done` (matched against the transition name or its target status). Unset (the default), a resolve only comments, because workflows differ per project. A project without that transition is logged and left as it is |
+| `alert.jira.reopenTransition` | 🔁 Transition that reopens a closed issue when its incident fails again, for example `Reopen`. Needs `closeTransition`. Unset, a recurrence opens a new issue |
 
 ```yaml
 alert:
@@ -816,3 +832,11 @@ object. Plain operator messages keep their own small shape
 | `steps` | Suggested actions as `{"Text","Command","Mutating"}` (omitted when empty) |
 | `confidence` | How sure the cause is (omitted when empty) |
 | `route` | `{"Namespaces","Reasons","Severity"}` used by routing rules |
+| `opens` | `true` on the message that announces the incident (omitted otherwise) |
+| `pagingOnly` | `true` on a message meant for receivers that track incidents by `alertKey`: the close of an incident whose failures another incident took over. If you opened that `alertKey`, close it (omitted otherwise) |
+| `skipPaging` | `true` on the resolve of an incident whose announcement was never sent to receivers that track alerts by key, because a digest or summary carried it. There may be nothing for you to close (omitted otherwise) |
+| `carrier` | `digest`, `roll-up` or `startup summary`: the message that carries this one to people (omitted otherwise) |
+| `reopenWithinSeconds` | On a resolve that may reopen: a failure within this many seconds continues the same incident (omitted otherwise) |
+
+The same flag fields (`opens`, `pagingOnly`, `skipPaging`, `carrier`,
+`reopenWithinSeconds`) are added to Splunk events when set.

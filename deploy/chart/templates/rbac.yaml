@@ -110,9 +110,6 @@ rules:
 - apiGroups: ["gateway.networking.k8s.io"]
   resources: ["gatewayclasses", "gateways", "httproutes", "grpcroutes", "tcproutes", "tlsroutes", "referencegrants"]
   verbs: ["list", "watch"]
-- apiGroups: ["kwatch.abahmed.dev"]
-  resources: ["kwatchconfigs"]
-  verbs: ["list", "watch"]
 - apiGroups: ["authorization.k8s.io"]
   resources: ["selfsubjectaccessreviews"]
   verbs: ["create"]
@@ -227,3 +224,35 @@ subjects:
 - kind: ServiceAccount
   name: {{ .Release.Name }}
   namespace: {{ .Release.Namespace }}
+{{- if eq (dig "crd" "enabled" true (default dict .Values.config) | toString) "true" }}
+---
+# The KwatchConfig overlay is read from kwatch's own namespace only, so the
+# list and watch grant is a Role here, not a cluster-wide rule.
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ .Release.Name }}-config-overlay
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kwatch.labels" . | nindent 4 }}
+rules:
+- apiGroups: ["kwatch.abahmed.dev"]
+  resources: ["kwatchconfigs"]
+  verbs: ["list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-config-overlay
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kwatch.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Release.Name }}-config-overlay
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

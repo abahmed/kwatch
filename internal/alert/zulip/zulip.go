@@ -8,6 +8,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -88,11 +89,10 @@ func (z *Zulip) Name() string {
 func (z *Zulip) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
-	content := m.NoteText()
-	if len(m.Output) > 0 {
-		content += "\n\n```\n" + strings.Join(m.Output, "\n") + "\n```"
-	}
-	return z.SendMessage(ctx, notification.NeutralizeZulipMentions(content))
+	return z.SendMessage(ctx, safetext.NoteWithOutput(
+		safetext.Zulip(m.NoteText()),
+		safetext.Lines(m.Output, safetext.Zulip),
+		"\n\n", 0))
 }
 
 // SendMessage sends text message to the provider

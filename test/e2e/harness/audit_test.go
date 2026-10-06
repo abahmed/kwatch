@@ -2,7 +2,10 @@
 
 package harness
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestMatchingEntriesAcceptsNamespacedResourceNames(t *testing.T) {
 	entries := []AuditEntry{{
@@ -74,5 +77,29 @@ func TestMatchingEntriesAcceptsContainerRoots(t *testing.T) {
 		if got := len(matchingEntries(entries, match)); got != want {
 			t.Fatalf("resource %q matched %d, want %d", resource, got, want)
 		}
+	}
+}
+
+func TestParseAuditReadsLinesLongerThanDefaultScannerBuffer(t *testing.T) {
+	long := `{"action":"create","note":"` + strings.Repeat("x", 100<<10) + `"}`
+	payload := []byte(long + "\n" + `{"action":"resolve"}` + "\n")
+
+	entries, err := parseAudit(payload)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 || entries[1].Action != "resolve" {
+		t.Fatalf("entries = %+v", entries)
+	}
+}
+
+func TestParseAuditReportsOversizedLine(t *testing.T) {
+	huge := strings.Repeat("x", maxAuditLineBytes+1)
+
+	_, err := parseAudit([]byte(huge + "\n"))
+
+	if err == nil {
+		t.Fatal("an oversized line must be reported, not dropped silently")
 	}
 }

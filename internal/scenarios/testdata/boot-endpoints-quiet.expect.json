@@ -1,0 +1,7 @@
+{
+  "name": "boot-endpoints-quiet",
+  "description": "A node pool boots; the Services and the webhook backend have no ready endpoints for four minutes while their pods start, then all are ready.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

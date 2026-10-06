@@ -1,6 +1,7 @@
 package detectors
 
 import (
+	"slices"
 	"strings"
 	"time"
 
@@ -81,19 +82,42 @@ func (Quota) Kinds() []inventory.Kind {
 
 // Detect implements detection.Detector.
 func (Quota) Detect(
-	_ detection.Context, e inventory.Entity,
+	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
-	exhausted := text(e, kube.AttrExhausted)
+	exhausted := withoutZeroHard(
+		text(e, kube.AttrExhausted), text(e, kube.AttrQuotaZeroHard))
 	if exhausted == "" {
 		return quotaNearLimit(e)
 	}
+	// Used equal to hard is a full quota, not yet a failure: it is a
+	// warning only once a controller was refused for exceeding it.
+	severity := detection.Info
+	if quotaRefusedCreate(ctx, e.ID.Namespace) {
+		severity = detection.Warning
+	}
 	return []detection.Finding{{
 		Reason:   reasons.ResourceQuotaExhausted,
-		Severity: detection.Warning,
+		Severity: severity,
 		Since:    valueSince(e, kube.AttrExhausted),
 		Summary: "Namespace quota is used up (" +
 			strings.ReplaceAll(exhausted, ",", ", ") + ")",
 	}}
+}
+
+// withoutZeroHard drops the resources whose hard limit is zero from the
+// exhausted list. A zero limit means "none allowed", not "ran out".
+func withoutZeroHard(exhausted, zeroHard string) string {
+	if zeroHard == "" {
+		return exhausted
+	}
+	skip := strings.Split(zeroHard, ",")
+	var kept []string
+	for _, name := range strings.Split(exhausted, ",") {
+		if name != "" && !slices.Contains(skip, name) {
+			kept = append(kept, name)
+		}
+	}
+	return strings.Join(kept, ",")
 }
 
 // Attachment detects CSI volume attachments that failed to attach or
@@ -114,13 +138,17 @@ func (Attachment) Detect(
 ) []detection.Finding {
 	out := detachFailure(ctx, e)
 	message := text(e, kube.AttrAttachError)
-	if message == "" {
+	since := valueSince(e, kube.AttrAttachError)
+	// Any failed attempt sets the error, and a successful retry clears
+	// it, so only an error that lasts is a problem.
+	if message == "" ||
+		!sustained(ctx, "attach-error", since, DefaultCustomFailing) {
 		return out
 	}
 	return append(out, detection.Finding{
 		Reason:   reasons.VolumeAttachmentFailure,
 		Severity: detection.Critical,
-		Since:    valueSince(e, kube.AttrAttachError),
+		Since:    since,
 		Summary:  "Volume cannot be attached to its node",
 		Evidence: []detection.Evidence{{Label: "error", Value: message}},
 	})
@@ -166,6 +194,9 @@ func (Webhook) Detect(
 			}}
 		}
 		if ready, known := readyEndpoints(ctx, service); known && ready == 0 {
+			if backendsAreStarting(ctx, service) {
+				return nil
+			}
 			return []detection.Finding{{
 				Reason: reasons.WebhookNoEndpoints, Severity: severity,
 				Summary: "Admission webhook backend " + service.Name +

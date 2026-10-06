@@ -7,6 +7,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // pageRule is one named reason a critical incident pages: it takes
@@ -112,10 +113,13 @@ var webhookKinds = []inventory.Kind{
 // admissionBlocked reports an incident rooted at a webhook
 // configuration that rejects creates (explain's webhook-rejects row)
 // and fails closed: with failurePolicy Fail, a webhook that cannot be
-// called blocks every create it intercepts, in every namespace.
+// called blocks every create it intercepts, in every namespace. A
+// webhook that answered and denied one workload's request is a policy
+// decision, not an outage: that notifies.
 func admissionBlocked(model inventory.Reader, p *Incident) bool {
 	if !hasKind(webhookKinds, p.Root.Kind) || p.Cause == nil ||
-		p.Cause.Root != p.Root || p.Cause.Rule != webhookRejectsRule {
+		p.Cause.Root != p.Root || p.Cause.Rule != webhookRejectsRule ||
+		p.Cause.Mode == explain.ModeWebhookDenied {
 		return false
 	}
 	e, ok := model.Entity(p.Root)

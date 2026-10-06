@@ -1,0 +1,13 @@
+{
+  "name": "unknown-cause-recent-change",
+  "description": "An app crash-loops with its own panic and no cause is found; the message lists the recent change in the namespace without blaming it.",
+  "root": "unknown",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "configmap/shop/feature-flags",
+    "node//n1",
+    "node//n2",
+    "zone//zone-a"
+  ]
+}

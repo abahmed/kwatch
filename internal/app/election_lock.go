@@ -99,9 +99,9 @@ func podIdentity() (string, error) {
 	}
 	identity, err := os.Hostname()
 	if err != nil || identity == "" {
-		return "", fmt.Errorf("leader election requires Pod identity: %w", err)
+		return "", fmt.Errorf("state lock requires Pod identity: %w", err)
 	}
-	klog.InfoS("using host identity for leader election", "identity", identity)
+	klog.InfoS("using host identity for state lock", "identity", identity)
 	return identity, nil
 }
 
@@ -124,6 +124,6 @@ func releaseLease(
 	record.RenewTime = released
 	record.AcquireTime = released
 	if err := lock.Update(ctx, *record); err != nil {
-		klog.ErrorS(err, "failed to release leader election lease")
+		klog.ErrorS(err, "failed to release state lock lease")
 	}
 }

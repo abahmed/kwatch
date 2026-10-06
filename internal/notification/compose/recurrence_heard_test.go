@@ -60,3 +60,33 @@ func TestRecurrenceSentenceNamesTheSharedTrigger(t *testing.T) {
 		t.Fatalf("mixed triggers must not be summarised: %+v", got)
 	}
 }
+
+// A recurrence says how the last heard occurrence ended, so a reader
+// knows what worked before.
+func TestRecurrenceSentenceSaysHowLastTimeEnded(t *testing.T) {
+	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
+	const last = " Last time it recovered "
+	cases := map[incident.Fix]string{
+		incident.FixRollback:     last + "after a rollback.",
+		incident.FixConfig:       last + "after a configuration fix.",
+		incident.FixNodeReplaced: last + "after its node was replaced.",
+		incident.FixChange:       last + "after a change.",
+		incident.FixNone:         last + "on its own.",
+		"":                       "",
+	}
+	for fix, tail := range cases {
+		f := caseFacts{now: now, p: incident.Incident{
+			History: []incident.Occurrence{
+				{Opened: now.Add(-48 * time.Hour), Heard: true,
+					Fix: incident.FixRollback},
+				{Opened: now.Add(-24 * time.Hour), Heard: true, Fix: fix},
+				{Opened: now.Add(-2 * time.Hour), Fix: incident.FixConfig},
+			},
+		}}
+		got := recurrenceSentences(f)
+		want := "This is the third time this week." + tail
+		if len(got) != 1 || got[0].text != want {
+			t.Errorf("fix %q: got %+v, want %q", fix, got, want)
+		}
+	}
+}

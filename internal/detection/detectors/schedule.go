@@ -36,6 +36,8 @@ func (Schedule) Detect(
 	}
 	if f, ok := repeatedFailure(ctx, e); ok {
 		out = append(out, f)
+	} else if f, ok := lastRunFailed(ctx, e); ok {
+		out = append(out, f)
 	}
 	return append(out, classReferences(ctx, e)...)
 }

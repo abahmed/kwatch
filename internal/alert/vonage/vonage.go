@@ -10,6 +10,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 )
 
 const vonageAPIURL = "https://rest.nexmo.com/sms/json"
@@ -114,8 +115,26 @@ func (v *Vonage) SendMessage(ctx context.Context, msg string) error {
 	}
 	for _, message := range result.Messages {
 		if message.Status != "0" {
-			return fmt.Errorf("vonage message failed with status %s", message.Status)
+			return classifyStatus(message.Status)
 		}
 	}
 	return nil
+}
+
+// classifyStatus turns a non-zero per-message status into an error the
+// retry logic understands. Status 1 is throttling; 5 (internal error) and
+// 13 (communication failed) are Vonage-side and worth another try. Every
+// other status (bad parameters, bad credentials, quota, barred number)
+// repeats forever, so it is permanent.
+func classifyStatus(status string) error {
+	err := fmt.Errorf("vonage message failed with status %s", status)
+	switch status {
+	case "1":
+		return &ratelimit.Error{Provider: "Vonage",
+			StatusCode: ratelimit.InBodyStatus, Err: err}
+	case "5", "13":
+		return err
+	default:
+		return transport.Permanent(err)
+	}
 }

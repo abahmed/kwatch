@@ -9,6 +9,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/metrics"
+	"github.com/abahmed/kwatch/internal/pipeline/announce"
 	"github.com/abahmed/kwatch/internal/storage"
 )
 
@@ -23,7 +24,7 @@ type storeSnapshot struct {
 	incidents    []incident.Record
 	hasIncidents bool
 	fingerprints map[string]any
-	startup      *StartupState
+	startup      *announce.StartupState
 }
 
 // replaceWith overwrites every part that newer carries: only the latest

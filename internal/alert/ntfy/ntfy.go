@@ -3,7 +3,6 @@ package ntfy
 import (
 	"context"
 	"encoding/json"
-	"net/url"
 	"strings"
 
 	"k8s.io/klog/v2"
@@ -25,6 +24,7 @@ type ntfyPayload struct {
 type Ntfy struct {
 	sender   transport.Sender
 	url      string
+	topic    string
 	token    string
 	title    string
 	priority int
@@ -74,8 +74,11 @@ func NewNtfy(
 
 	return &Ntfy{
 		sender: transport.NewSender(dependencies),
-		url: strings.TrimRight(server, "/") + "/" +
-			url.PathEscape(strings.TrimLeft(topic, "/")),
+		// ntfy reads a JSON publish only at the server root, with the
+		// topic in the body; POSTing JSON to /topic would show the JSON
+		// text itself as the message.
+		url:         strings.TrimRight(server, "/"),
+		topic:       strings.Trim(topic, "/"),
 		token:       token,
 		title:       title,
 		priority:    priority,
@@ -119,6 +122,7 @@ func (n *Ntfy) SendMessage(ctx context.Context, msg string) error {
 }
 
 func (n *Ntfy) send(ctx context.Context, payload ntfyPayload) error {
+	payload.Topic = n.topic
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err

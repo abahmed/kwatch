@@ -1,0 +1,7 @@
+{
+  "name": "release-steady",
+  "description": "Rollout 14 of a Deployment replaces rollout 13. One of its four pods restarts once, as one pod of rollout 13 did now and then: nothing worse than before.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

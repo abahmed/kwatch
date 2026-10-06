@@ -14,6 +14,7 @@ func sharedErrorScenarios() []scenario {
 	return []scenario{
 		externalDatabaseStorm(), externalDatabaseOneWorkload(),
 		sharedPanicStorm(), stackFrameNotEndpoint(),
+		redisDownStorm(), differentErrorsStayApart(),
 	}
 }
 
@@ -182,5 +183,84 @@ func sharedErrorCrash(c *cluster, fleet []*workload,
 			c.update(w.objects())
 		}
 		c.after(time.Minute)
+	}
+}
+
+// redisRefusedRoot is the signature every caller of the in-cluster
+// Redis shares once its IP and numbers are normalised; the port stays.
+const redisRefusedRoot = "failure-signature//CrashLoop " +
+	"dial tcp <ip>:6379: connect: connection refused"
+
+// redisDownStorm: the in-cluster Redis is down and five Deployments
+// crash-loop. Each termination message is the same connection error
+// but names a different address ("dial tcp 10.4.7.21:6379",
+// "dial tcp 10.4.9.3:6379"), so no endpoint is named by two workloads.
+// The port is the same: it names the backend, so it stays in the error.
+// The shared error is the root, and the storm is one incident.
+func redisDownStorm() scenario {
+	apps := []string{"shop/cart", "shop/session", "shop/search",
+		"billing/ledger", "billing/invoicer"}
+	addresses := []string{"10.4.7.21:6379", "10.4.9.3:6379",
+		"10.4.2.118:6379", "10.4.11.40:6379", "10.4.5.9:6379"}
+	notBlamed := []string{"node//s1", "node//s2"}
+	for _, app := range apps {
+		notBlamed = append(notBlamed, "deployment/"+app)
+	}
+	return scenario{
+		expect: expectation{
+			Name: "redis-down-storm",
+			Description: "Five Deployments crash-loop with the same " +
+				"connection refused error, each naming a different " +
+				"address on the Redis port.",
+			Root: redisRefusedRoot, Tier: "notify", MaxMessages: 3,
+			MustNotBlame: notBlamed,
+		},
+		build: func(c *cluster) {
+			c.list(c.node("s1", "zone-a"), c.node("s2", "zone-b"))
+			var fleet []*workload
+			for _, app := range apps {
+				fleet = append(fleet, sharedErrorApp(c, app))
+			}
+			c.after(3 * time.Minute)
+			sharedErrorCrash(c, fleet, func(i int) string {
+				return "dial tcp " + addresses[i] +
+					": connect: connection refused"
+			})
+		},
+	}
+}
+
+// differentErrorsStayApart: three Deployments crash-loop at once, each
+// with its own error. Nothing is shared, so nothing is grouped: each
+// is its own incident.
+func differentErrorsStayApart() scenario {
+	apps := []string{"shop/cart", "shop/search", "billing/ledger"}
+	messages := []string{
+		"panic: cannot parse feature flag file features.yaml",
+		"fatal: certificate for payments gateway has expired",
+		"error: migration 42 failed: column owner does not exist",
+	}
+	return scenario{
+		expect: expectation{
+			Name: "different-errors-stay-apart",
+			Description: "Three Deployments crash-loop at once, each " +
+				"with a different error.",
+			Root: "deployment/shop/cart",
+			OtherRoots: []string{"deployment/shop/search",
+				"deployment/billing/ledger"},
+			Tier: "notify", MaxMessages: 6,
+			MustNotBlame: []string{"node//s1", "node//s2"},
+		},
+		build: func(c *cluster) {
+			c.list(c.node("s1", "zone-a"), c.node("s2", "zone-b"))
+			var fleet []*workload
+			for _, app := range apps {
+				fleet = append(fleet, sharedErrorApp(c, app))
+			}
+			c.after(3 * time.Minute)
+			sharedErrorCrash(c, fleet, func(i int) string {
+				return messages[i]
+			})
+		},
 	}
 }

@@ -74,9 +74,11 @@ func (c *counterRates) throttleRatios(
 ) map[string]float64 {
 	out := map[string]float64{}
 	for key, pairs := range parseThrottleSamples(body) {
-		live := liveCgroup(pairs)
-		throttled, ok1 := c.rate("throttled/"+key, at, live.throttled)
-		periods, ok2 := c.rate("periods/"+key, at, live.periods)
+		id, live := liveCgroup(pairs)
+		// The cgroup is part of the key: when the live one changes, its
+		// counters are not comparable with the previous one's.
+		throttled, ok1 := c.rate("throttled/"+key+"/"+id, at, live.throttled)
+		periods, ok2 := c.rate("periods/"+key+"/"+id, at, live.periods)
 		if ok1 && ok2 && periods > 0 {
 			out[key] = 100 * throttled / periods
 		}
@@ -118,15 +120,16 @@ func isCFSMetric(name string) bool {
 		name == "container_cpu_cfs_periods_total"
 }
 
-// liveCgroup picks the cgroup with the most periods.
-func liveCgroup(pairs map[string]periodPair) periodPair {
+// liveCgroup picks the cgroup with the most periods and returns its id.
+func liveCgroup(pairs map[string]periodPair) (string, periodPair) {
 	var live periodPair
-	for _, p := range pairs {
+	liveID := ""
+	for id, p := range pairs {
 		if p.periods > live.periods {
-			live = p
+			live, liveID = p, id
 		}
 	}
-	return live
+	return liveID, live
 }
 
 // forEachMetric calls visit with the labels and value of every sample
@@ -168,8 +171,8 @@ func metricLine(line string) (string, map[string]string, float64, bool) {
 	name, rest := line, ""
 	labels := map[string]string{}
 	if open := strings.IndexByte(line, '{'); open >= 0 {
-		end := strings.LastIndexByte(line, '}')
-		if end < open {
+		end := labelsEnd(line, open)
+		if end < 0 {
 			return "", nil, 0, false
 		}
 		name, rest = line[:open], line[end+1:]
@@ -188,6 +191,24 @@ func metricLine(line string) (string, map[string]string, float64, bool) {
 	}
 	value, err := strconv.ParseFloat(fields[0], 64)
 	return name, labels, value, err == nil
+}
+
+// labelsEnd finds the "}" that closes the label set opened at open,
+// skipping braces inside quoted values. An OpenMetrics exemplar after the
+// value has its own braces, so the last "}" of the line is not the one.
+func labelsEnd(line string, open int) int {
+	quoted := false
+	for i := open + 1; i < len(line); i++ {
+		switch {
+		case line[i] == '\\' && quoted:
+			i++
+		case line[i] == '"':
+			quoted = !quoted
+		case line[i] == '}' && !quoted:
+			return i
+		}
+	}
+	return -1
 }
 
 // splitLabels splits a label set on commas outside quotes.

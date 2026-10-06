@@ -112,7 +112,6 @@ const (
 const (
 	ServiceNoEndpoints      = "ServiceNoEndpoints"
 	ServiceBackendsDegraded = "ServiceBackendsDegraded"
-	ServicePortMismatch     = "ServicePortMismatch"
 	LoadBalancerPending     = "LoadBalancerProvisioning"
 	// IngressBackendNotFound is an Ingress or a Gateway API route that
 	// sends traffic to a Service that does not exist. The name predates
@@ -189,6 +188,9 @@ const (
 	// ImageDigestDrift is a workload whose pods run different builds of
 	// the same image tag.
 	ImageDigestDrift = "ImageDigestDrift"
+	// ReleaseRegression is a Deployment whose new revision restarts far
+	// more often than the revision it replaced did.
+	ReleaseRegression = "ReleaseRegression"
 	// LeaseStale is a controller's Lease that its running holder stopped
 	// renewing: the controller runs but does not work.
 	LeaseStale = "LeaseStale"
@@ -233,6 +235,7 @@ func UnusualEvent(eventReason string) string {
 // probe messages) are verified against kubernetes/kubernetes master.
 const (
 	LivenessProbeFailed    = "LivenessProbeFailed"
+	LivenessKilled         = "LivenessKilled"
 	ReadinessProbeFailed   = "ReadinessProbeFailed"
 	PodAdmissionRejected   = "PodAdmissionRejected"
 	ExitNotExecutable      = "ContainerExitNotExecutable"
@@ -257,10 +260,13 @@ const (
 
 // Workload, network, storage and admission failure modes.
 const (
-	StatefulSetRolloutStuck       = "StatefulSetRolloutStuck"
-	CronJobMissedRuns             = "CronJobMissedRuns"
-	CronJobBlocked                = "CronJobBlocked"
-	CronJobRepeatedFailure        = "CronJobRepeatedFailure"
+	StatefulSetRolloutStuck = "StatefulSetRolloutStuck"
+	CronJobMissedRuns       = "CronJobMissedRuns"
+	CronJobBlocked          = "CronJobBlocked"
+	CronJobRepeatedFailure  = "CronJobRepeatedFailure"
+	// CronJobLastRunFailed is a CronJob whose latest run failed and has
+	// not been followed by a success; it waits for the digest.
+	CronJobLastRunFailed          = "CronJobLastRunFailed"
 	LoadBalancerSyncFailed        = "LoadBalancerSyncFailed"
 	IngressTLSSecretMissing       = "IngressTLSSecretMissing"
 	IngressClassMissing           = "IngressClassMissing"
@@ -280,4 +286,28 @@ const (
 	CertificateDenied             = "CertificateSigningRequestDenied"
 	CertificateNotIssued          = "CertificateSigningRequestNotIssued"
 	CRDNotEstablished             = "CustomResourceDefinitionNotEstablished"
+)
+
+// Reasons for workloads that run but never serve, autoscalers that point
+// at nothing, and kubelets kwatch cannot read.
+const (
+	// WorkloadNeverReady is a workload whose running pods are not ready
+	// and have not crashed: a readiness probe that never passes.
+	WorkloadNeverReady = "WorkloadNeverReady"
+	// HPATargetMissing is an autoscaler whose scale target does not
+	// exist.
+	HPATargetMissing = "HPATargetMissing"
+	// KubeletUnreachable is a Ready node whose kubelet kwatch could not
+	// reach at least three times within six hours.
+	KubeletUnreachable = "KubeletUnreachable"
+	// JobRunningLong is a CronJob's Job that has run far longer than
+	// the recent runs of that CronJob took.
+	JobRunningLong = "JobRunningLong"
+	// ScaledToZeroRouted is a workload scaled to zero replicas that a
+	// Service, an Ingress or a Gateway route still sends traffic to.
+	ScaledToZeroRouted = "ScaledToZeroRouted"
+	// KwatchNetworkRestricted is kwatch failing to reach every one of
+	// its probed dependencies in the same round: a sign that its own
+	// network is restricted, not that they are all down.
+	KwatchNetworkRestricted = "KwatchNetworkRestricted"
 )

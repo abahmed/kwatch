@@ -15,6 +15,10 @@ import (
 // the resolve of a folded conversation, so the channel never receives a
 // bare update for an incident it was not told about.
 //
+// Page-tier messages (route severity "critical") and the resolves of
+// paged incidents are exempt. A pager skips the overflow summary, so a
+// folded page would reach nobody.
+//
 // Updates and resolves of announced conversations are not counted: the
 // queue already keeps only the newest revision of each, and a channel
 // must always learn that something it was told about changed or ended.
@@ -66,6 +70,15 @@ func (m *Manager) foldOverBudget(entry *providerEntry, job deliverJob) bool {
 	}
 	name, key := entry.lookupName(), job.key()
 	fate := m.openFateOf(name, key)
+	if job.incident.IsPage() {
+		// A page is never folded: the overflow summary is plain text,
+		// which a pager skips, so the page would be lost. A conversation
+		// folded at a lower tier is announced now instead.
+		if fate == openFolded {
+			m.setOpenFate(name, key, openLost)
+		}
+		return false
+	}
 	announces := job.opens() || fate == openLost
 	if fate != openFolded {
 		if !announces || m.pacer.admit(name, entry.hourlyBudget,

@@ -7,7 +7,7 @@ import (
 
 // zeroWidthSpace breaks a mention so it renders as text but no longer
 // notifies anyone.
-const zeroWidthSpace = "​"
+const zeroWidthSpace = "\u200b"
 
 // broadcastMention matches the channel-wide mentions chat servers expand.
 var broadcastMention = regexp.MustCompile(

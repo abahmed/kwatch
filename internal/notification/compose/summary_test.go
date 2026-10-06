@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/notification"
 )
 
@@ -152,5 +154,38 @@ func TestRollupResolvedClosesTheConversation(t *testing.T) {
 	if msg.Title != "All three problems found at the same time have "+
 		"resolved." {
 		t.Errorf("Title = %q", msg.Title)
+	}
+}
+
+func TestDigestSummarisesRisksByTypeWithExamples(t *testing.T) {
+	now := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
+	var risks []detection.Finding
+	add := func(reason, ns, name string) {
+		risks = append(risks, detection.Finding{Advisory: true,
+			Reason: reason,
+			Entity: inventory.CoreID(kube.KindDeployment, ns, name)})
+	}
+	for _, name := range []string{"orders", "payments", "cart", "a", "b"} {
+		add(reasons.RiskNoReadinessProbe, "shop", name)
+	}
+	add(reasons.RiskSingleReplica, "shop", "api")
+	add(reasons.RiskSingleReplica, "kube-system", "coredns")
+	add(reasons.RiskNoReadinessProbe, "kube-system", "kube-dns")
+
+	msg := Writer{}.Digest([]incident.Decision{
+		podDecision("a", incident.Digest)}, nil, risks, now)
+
+	want := "Configuration risks: 5 workloads have no readiness probe " +
+		"(a, b, cart and 2 more); 1 workload runs a single replica " +
+		"(api)."
+	if !strings.Contains(msg.Note, want) {
+		t.Fatalf("note = %q, want %q", msg.Note, want)
+	}
+	if !strings.Contains(msg.Title, "configuration risks on six workloads") {
+		t.Fatalf("title = %q", msg.Title)
+	}
+	if strings.Contains(msg.Note, "coredns") ||
+		strings.Contains(msg.Note, "kube-dns") {
+		t.Fatalf("system namespaces must be skipped: %q", msg.Note)
 	}
 }

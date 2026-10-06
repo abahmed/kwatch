@@ -23,6 +23,9 @@
 // hands them snapshots. Engine.Run starts every worker and, on shutdown,
 // waits for all of them within one bounded deadline.
 //
+// Subpackages hold what the loop wires: announce (summary, digest,
+// roll-up, outage), coverage and investigate (evidence investigators).
+//
 // In: Observations submitted by sources from any goroutine. Out: Messages
 // and audit decisions. Only internal/app constructs the Engine.
 package pipeline

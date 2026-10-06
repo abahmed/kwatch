@@ -162,9 +162,11 @@ func (m *Manager) flushOverflowSummary(
 		return
 	}
 	// A summary that cannot be sent now stays pending for the next flush;
-	// it is neither retried here nor dead-lettered.
+	// it is neither retried here nor dead-lettered. One the provider
+	// rejected for good was dead-lettered by deliver; keeping it would
+	// fail and count it again at every flush.
 	outcome := m.deliver(ctx, entry, deliverJob{kind: jobMessage, msg: text})
-	if outcome != outcomeDelivered {
+	if outcome == outcomeRetryLater || outcome == outcomeInterrupted {
 		m.restoreOverflowSummary(name, state)
 	}
 }

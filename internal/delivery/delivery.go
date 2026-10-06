@@ -57,7 +57,8 @@ func (m *Manager) deliverFallback(
 	primary string,
 	job deliverJob,
 ) error {
-	if !routedTo(entry.routes, job) {
+	if !m.wants(*entry, job) || !acceptsPagingOnly(*entry, job) ||
+		(job.informational() && skipsPlainMessages(entry.provider)) {
 		return errFallbackNotRouted
 	}
 	opts := deliverOpts{retry: fallbackRetryConfig(entry.retry)}
@@ -67,8 +68,10 @@ func (m *Manager) deliverFallback(
 	return m.dispatch(ctx, entry, job, opts)
 }
 
-// errFallbackNotRouted means the fallback's routes exclude the job, so the
-// job was not delivered anywhere.
+// errFallbackNotRouted means the fallback's routes, or the paging rules of
+// the job (PagingOnly, SkipPaging), exclude it, or the job only informs
+// and the fallback skips such messages, so the job was not delivered
+// anywhere.
 var errFallbackNotRouted = errors.New("fallback_not_routed")
 
 // channelCap is the capacity of each provider queue and, per provider, of
@@ -93,10 +96,25 @@ func (m *Manager) recordDeadLetter(
 	err error,
 ) {
 	metrics.DefaultRegistry().DeliveryDeadLetters.Add(1)
+	noteLostResolve(job, deadLetterReason(err))
 	klog.InfoS("delivery dead-lettered",
 		"component", "delivery", "operation", "dead_letter",
 		"provider", provider, "key", job.key(),
 		"reason", deadLetterReason(err))
+}
+
+// noteLostResolve makes the loss of a resolve visible: its alert may now
+// stay open until someone closes it by hand. Every path that gives up on
+// a job (a permanent failure, expiry, a full queue) comes through the
+// dead letter.
+func noteLostResolve(job deliverJob, reason string) {
+	if !job.isResolve() {
+		return
+	}
+	metrics.DefaultRegistry().DeliveryResolvesLost.Add(1)
+	klog.ErrorS(nil, "resolve was not delivered; its alert may stay open",
+		"component", "delivery", "key", job.key(),
+		"alertKey", job.incident.DedupKey, "reason", reason)
 }
 
 // pendingProvider labels dead letters of jobs that never reached a
@@ -196,7 +214,7 @@ func (m *Manager) deliverViaFallback(
 	if ctx.Err() != nil {
 		return outcomeInterrupted
 	}
-	klog.ErrorS(fbErr, "fallback delivery failed",
+	klog.ErrorS(loggedErr(fbErr), "fallback delivery failed",
 		"provider", fallback.provider.Name())
 	m.recordTerminalFailure(&fallback, job, fbErr)
 	return outcomeFailed
@@ -211,7 +229,7 @@ func (m *Manager) fallbackOrRetry(
 	job deliverJob,
 ) deliverOutcome {
 	fallback, ok := m.fallbackFor(entry.fallbackName, job.generation)
-	if !ok {
+	if !ok || mustReachPrimary(entry, job) {
 		return outcomeRetryLater
 	}
 	err := m.deliverFallback(ctx, &fallback, entry.provider.Name(), job)
@@ -222,9 +240,27 @@ func (m *Manager) fallbackOrRetry(
 	case ctx.Err() != nil:
 		return outcomeInterrupted
 	}
-	klog.ErrorS(err, "fallback delivery failed",
+	klog.ErrorS(loggedErr(err), "fallback delivery failed",
 		"provider", fallback.provider.Name())
 	return outcomeRetryLater
+}
+
+// mustReachPrimary reports whether only the primary can do the job. A
+// pager or issue tracker opens and closes alerts by key; a fallback chat
+// message about the same incident does neither, and chat already gets
+// its own copy of the message. The primary is retried until it takes it.
+func mustReachPrimary(entry *providerEntry, job deliverJob) bool {
+	return skipsPlainMessages(entry.provider) &&
+		(job.isResolve() || job.opens())
+}
+
+// informational reports whether the job only informs: a plain message
+// or a summary. Nothing closes the alert such a message would open.
+func (j deliverJob) informational() bool {
+	if j.kind == jobMessage {
+		return true
+	}
+	return j.incident != nil && j.incident.IsInformational()
 }
 
 // deliver sends one job and settles its outbox record, except when ctx
@@ -247,7 +283,7 @@ func (m *Manager) deliver(
 
 	// Routes are evaluated before rendering: a filtered incident should not
 	// pay for message building, and routes depend only on the incident.
-	if !routedTo(entry.routes, job) {
+	if !m.wants(*entry, job) {
 		klog.V(4).InfoS("incident filtered by route",
 			"provider", p.Name(),
 			"key", job.key())
@@ -255,10 +291,12 @@ func (m *Manager) deliver(
 		return outcomeDelivered
 	}
 
+	warnUnmappedResolve(entry, job)
 	err := m.dispatch(ctx, entry, job, deliverOpts{retry: entry.retry})
 	if err == nil {
 		m.recordProviderSuccess(entry)
 		m.openSettled(entry, job)
+		m.pageLanded(entry, job)
 		m.accepted(job)
 		return outcomeDelivered
 	}
@@ -266,7 +304,7 @@ func (m *Manager) deliver(
 		// Shutting down: no fallback, and no permanent dead letter.
 		return outcomeInterrupted
 	}
-	klog.ErrorS(err, "failed to send",
+	klog.ErrorS(loggedErr(err), "failed to send",
 		"provider", p.Name(), "key", job.key())
 	m.recordProviderFailure(entry, err)
 	switch {
@@ -297,6 +335,7 @@ func (m *Manager) recordTerminalFailure(
 	registry.NotificationsDropped.Add(1)
 	registry.DeliveryTerminalErrors.Add(1)
 	m.recordDeadLetter(entry.provider.Name(), job, err)
+	m.pageLost(entry, job)
 	m.outbox.Load().remove(job.outboxID)
 }
 

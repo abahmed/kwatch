@@ -1,0 +1,11 @@
+{
+  "name": "fix-attempt-works",
+  "description": "A second rollout, made to fix a crash-looping one, brings the pods back; the thread says the rollout started and the resolve credits it.",
+  "root": "deployment/shop/payments",
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

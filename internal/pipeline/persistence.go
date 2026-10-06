@@ -2,6 +2,9 @@ package pipeline
 
 import (
 	"sync/atomic"
+	"time"
+
+	"github.com/abahmed/kwatch/internal/pipeline/announce"
 )
 
 // persistence owns everything the engine keeps in its store. Two writers
@@ -26,6 +29,8 @@ type persistence struct {
 	// returns before it when restore fails; a writer that never ran
 	// counts as stopped, so the caller may close the store.
 	started atomic.Bool
+	// fingerprinted is when the last fingerprint snapshot was built.
+	fingerprinted time.Time
 	// carried are the saved fingerprints of kinds that had not synced
 	// when they were compared (see carriedKinds).
 	carried carriedKinds
@@ -39,6 +44,13 @@ func newPersistence(deps Dependencies, stats *workerStats) *persistence {
 	return p
 }
 
+// fingerprintsDue reports whether the store would write a fingerprint
+// snapshot built at now (see fingerprintInterval).
+func (p *persistence) fingerprintsDue(now time.Time) bool {
+	return p.fingerprinted.IsZero() ||
+		now.Sub(p.fingerprinted) >= fingerprintInterval
+}
+
 // startIncidentWriter starts the incident writer's goroutine.
 func (p *persistence) startIncidentWriter() {
 	if p.incidents != nil {
@@ -50,13 +62,13 @@ func (p *persistence) startIncidentWriter() {
 // saveStartup hands the startup marker to the incident writer. A failed
 // write is retried with the next batch; the worst case is one more
 // startup summary.
-func (p *persistence) saveStartup(state StartupState) {
+func (p *persistence) saveStartup(state announce.StartupState) {
 	if p.incidents == nil {
 		return
 	}
 	// The writer reads the marker on its own goroutine: hand it copies
 	// the loop never appends to.
-	state = state.clone()
+	state = state.Clone()
 	p.incidents.offer(storeSnapshot{startup: &state})
 }
 

@@ -109,12 +109,15 @@ func TestRecurrenceRemembersHowEachOccurrenceEnded(t *testing.T) {
 			first := r.of(web.Entity)
 			assert.Equal(t, tt.want, first.Fix)
 
-			r.raise(at(2*time.Hour), web)
+			// Past RepageWindow: an earlier return would re-open the
+			// same incident instead.
+			r.raise(at(3*time.Hour), web)
 			again := r.of(web.Entity)
 			require.NotEqual(t, first.ID, again.ID)
 			last, ok := again.LastOccurrence()
 			require.True(t, ok)
-			assert.Equal(t, Occurrence{Mode: "CrashLoop", Opened: at(0),
+			assert.Equal(t, Occurrence{Mode: "CrashLoop",
+				Modes: []detection.Mode{"CrashLoop"}, Opened: at(0),
 				Resolved: first.Resolved, Fix: tt.want, Heard: true}, last)
 			assert.Positive(t, last.Duration())
 		})

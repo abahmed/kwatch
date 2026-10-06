@@ -37,7 +37,7 @@ var ErrInvalidOverlay = stderrors.New("KwatchConfig is invalid")
 // transport, TLS trust, diagnostics exposure and file paths change who can
 // observe provider credentials; they stay in the mounted config, which
 // needs more privilege to edit than a KwatchConfig. The CRD schema omits
-// them too.
+// them too (the health check section is not in it at all).
 var forbiddenSpecPaths = [][]string{
 	{"heartbeatMonitor", "url"},
 	{"app", "proxyURL"},
@@ -45,6 +45,10 @@ var forbiddenSpecPaths = [][]string{
 	{"app", "caBundlePath"},
 	{"kubelet", "insecureSkipVerify"},
 	{"auditLog", "output"},
+	// The probes and the chart target the health server, so an overlay
+	// that disabled or moved it would restart the Pod forever.
+	{"healthCheck", "enabled"},
+	{"healthCheck", "port"},
 }
 
 func applyStartupConfig(

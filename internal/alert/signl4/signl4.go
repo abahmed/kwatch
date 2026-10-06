@@ -7,6 +7,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -132,10 +133,8 @@ func severityFor(m notification.Message) string {
 
 // alertBody is the narrative, the recent output and the cluster.
 func alertBody(m notification.Message, clusterName string) string {
-	body := m.NoteText()
-	if len(m.Output) > 0 {
-		body += "\n\nLast output:\n" + strings.Join(m.Output, "\n")
-	}
+	body := safetext.PlainWithOutput(
+		m.NoteText(), safetext.LastOutput(m.Output), "\n\n", safetext.DetailsLimit)
 	if clusterName != "" {
 		body += "\n\nCluster: " + clusterName
 	}

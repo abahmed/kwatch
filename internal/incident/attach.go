@@ -207,23 +207,19 @@ func (m *Manager) attach(
 	key := s.Key()
 	revised, rerooted := false, false
 	if previous, ok := m.byMember[key]; ok && !m.holds(previous, where.root) {
-		if m.beganTooLate(previous, where.cause) {
-			// What people were told about long ago was not caused by
-			// something that began this morning: the finding stays
-			// where it is, and the new cause explains only the new
-			// failures.
-			m.incidents[previous].Members[key] = s
+		if m.keepsMember(previous, s, where) {
 			return
 		}
 		revised = true
 		rerooted = m.revise(now, s, previous, where.root)
 	}
-	p := m.incident(now, where.root)
+	p := m.incident(now, where.root, s.Mode)
 	if revised && !rerooted {
 		p.note(now, "cause revised: now explained by "+describe(where.root))
 	}
 	if _, known := p.Members[key]; !known {
-		p.note(now, s.Summary+" ("+describe(s.Entity)+")")
+		about := s.Entity
+		p.noteAbout(now, s.Summary+" ("+describe(s.Entity)+")", &about)
 	}
 	p.Members[key] = s
 	logMember("added to", p, key)
@@ -242,6 +238,26 @@ func (m *Manager) attach(
 	}
 	m.byMember[key] = p.ID
 	m.changed[p.ID] = true
+}
+
+// keepsMember keeps finding s in its incident, and says so, when moving
+// it would only be noise. What people were told about long ago was not
+// caused by something that began this morning: the new cause explains
+// only the new failures. And the same failures blamed on another object
+// of the same workload are not news either: the root stays as announced.
+// A failure whose evidence merely aged out is not a new problem while
+// the incident's root still fails.
+func (m *Manager) keepsMember(
+	previous string, s detection.Finding, where placement,
+) bool {
+	key := s.Key()
+	if !m.beganTooLate(previous, where.cause) &&
+		!m.sameChainFlip(previous, key, where.root) &&
+		!m.explanationLapsed(previous, where) {
+		return false
+	}
+	m.incidents[previous].Members[key] = s
+	return true
 }
 
 // ratchetTier keeps an announced incident at the loudest tier it reached.
@@ -269,114 +285,14 @@ func (m *Manager) refresh(model inventory.Reader) {
 			p.routedMissing = routedMissing(model, p)
 			p.impactPeak = max(p.impactPeak, impactSize(p))
 			p.rememberRootReasons()
+			p.noteStage()
+			p.noteModes()
+			p.notePodPeak()
+			p.causeChain = m.inChain(p)
 			p.Tier = m.ratchetTier(p, m.override.apply(p, tier(p)))
 		}
 	}
 	clear(m.changed)
-}
-
-// beganTooLate reports whether cause began more than
-// explain.TemporalExclusion after the announced incident id was opened.
-// A cause with an unknown start, or an incident nobody heard of yet,
-// never counts: the first message may still name the better cause.
-func (m *Manager) beganTooLate(
-	id string, cause *rootcause.CauseRecord,
-) bool {
-	p := m.incidents[id]
-	if p == nil || cause == nil || cause.Began.IsZero() ||
-		!wasAnnounced(p) || p.Opened.IsZero() {
-		return false
-	}
-	return cause.Began.After(p.Opened.Add(explain.TemporalExclusion))
-}
-
-// holds reports whether incident id is the current incident of root.
-func (m *Manager) holds(id string, root inventory.EntityID) bool {
-	p := m.lookup(root)
-	return p != nil && p.ID == id
-}
-
-// revise moves s away from incident previous after its cause changed to
-// root. When that leaves an announced incident empty, the incident is
-// either superseded, because root already has its own announced
-// incident, or moved to root so the conversation continues under the
-// same ID. It is moved only when every member that left since people
-// last heard about it went to root: that is the same story with a
-// revised cause. Members that dispersed to several roots, as when a
-// node pool stops failing as a whole and its workloads fail on their
-// own again, end the story instead; the empty incident recovers and
-// resolves on its own, and the workloads are announced anew. It reports
-// whether the incident was moved.
-func (m *Manager) revise(
-	now time.Time, s detection.Finding, previous string,
-	root inventory.EntityID,
-) bool {
-	key := s.Key()
-	delete(m.byMember, key)
-	old := m.incidents[previous]
-	if old == nil {
-		return false
-	}
-	delete(old.Members, key)
-	logMember("moved out of", old, key)
-	m.changed[old.ID] = true
-	old.movedTo = append(old.movedTo, root)
-	if !hasFailingMember(old) {
-		// Only configuration risks are left: they go with the failure.
-		m.dropAdvisories(old)
-	}
-	old.note(now, "cause revised: "+describe(s.Entity)+
-		" is now explained by "+describe(root))
-	if len(old.Members) > 0 || !wasAnnounced(old) {
-		return false
-	}
-	if target := m.lookup(root); target != nil && wasAnnounced(target) {
-		old.SupersededBy = target.ID
-		return false
-	}
-	if dispersed(old.movedTo) {
-		old.note(now, "its failures went their own ways; this ends here")
-		return false
-	}
-	m.reroot(now, old, root)
-	return true
-}
-
-// dispersed reports whether the members left for more than one root.
-func dispersed(roots []inventory.EntityID) bool {
-	for _, root := range roots {
-		if root != roots[0] {
-			return true
-		}
-	}
-	return false
-}
-
-// reroot moves incident p to root and marks its next update as a cause
-// revision. An incident of root that is still settling is merged into p:
-// nobody has heard of it yet.
-func (m *Manager) reroot(
-	now time.Time, p *Incident, root inventory.EntityID,
-) {
-	// The old root's cause does not explain the new root: the members
-	// that move here bring the new one.
-	p.Cause, p.CauseUnclear = nil, false
-	if target := m.lookup(root); target != nil && target.State == Settling {
-		for key, s := range target.Members {
-			p.Members[key] = s
-			m.byMember[key] = p.ID
-		}
-		p.Cause, p.CauseUnclear = target.Cause, target.CauseUnclear
-		p.Unverified = rootcause.MergeUnverified(
-			p.Unverified, target.Unverified)
-		delete(m.incidents, target.ID)
-	}
-	m.unindex(p)
-	p.Root = root
-	m.index(p)
-	p.movedTo = nil
-	p.revised, p.revisedAt = true, now
-	p.note(now, "cause revised: now explained by "+describe(root))
 }
 
 // wasAnnounced reports whether people were told about p and it is not
@@ -402,7 +318,9 @@ func (m *Manager) detach(now time.Time, s detection.Finding) {
 	}
 	delete(p.Members, key)
 	logMember("removed from", p, key)
-	p.note(now, "recovered: "+s.Summary+" ("+describe(s.Entity)+")")
+	about := s.Entity
+	p.noteAbout(now,
+		RecoveredPrefix+s.Summary+" ("+describe(s.Entity)+")", &about)
 	if !s.Advisory && !hasFailingMember(p) {
 		m.dropAdvisories(p)
 	}
@@ -457,56 +375,6 @@ func (m *Manager) adoptAdvisories(s explain.Snapshot) {
 			m.byMember[key] = p.ID
 		}
 	}
-}
-
-// incident returns the live incident for root, opening a new one when
-// there is none.
-func (m *Manager) incident(
-	now time.Time, root inventory.EntityID,
-) *Incident {
-	previous := m.lookup(root)
-	if previous != nil && previous.State != Resolved {
-		return previous
-	}
-	p := &Incident{
-		ID: m.newID(now), Root: root, State: Settling, Opened: now,
-		Members:     make(map[detection.Key]detection.Finding),
-		Occurrences: []time.Time{now},
-	}
-	if previous != nil {
-		m.recur(p, previous, now)
-	}
-	m.incidents[p.ID] = p
-	m.index(p)
-	m.noteOpened(p.ID)
-	return p
-}
-
-// recurrenceWeek is the window of "the third time this week": the
-// timeline counts the occurrences inside it.
-const recurrenceWeek = 7 * 24 * time.Hour
-
-// recur links a new incident to the resolved incident of the same root
-// and carries its history over, so flapping and daily routines are still
-// recognised. A recurrence within FlapWindow of the resolve counts as a
-// cycle, so an incident that stays healthy longer than its hold between
-// failures still doubles its hold and flaps.
-func (m *Manager) recur(p, previous *Incident, now time.Time) {
-	p.Previous = previous.ID
-	p.Cycles = recent(previous.Cycles, now, m.cfg.FlapWindow)
-	if now.Sub(previous.Resolved) <= m.cfg.FlapWindow {
-		p.Cycles = append(p.Cycles, now)
-	}
-	p.Occurrences = appendOccurrence(previous.Occurrences, now)
-	if previous.SupersededBy == "" {
-		p.History = appendHistory(previous.History, occurrenceOf(previous))
-	}
-	week := recent(p.Occurrences, now, recurrenceWeek)
-	p.note(now, "happened again ("+ordinal(len(week))+
-		" time this week, last time "+previous.ID+")")
-	// The recurrence carries everything the predecessor knew, so keeping
-	// the predecessor would only grow memory with every blip.
-	m.forget(previous)
 }
 
 // logMember writes a debug line when a finding joins or leaves an incident.

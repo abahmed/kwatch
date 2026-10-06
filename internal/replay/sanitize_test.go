@@ -13,6 +13,7 @@ import (
 var secretWords = []string{
 	"shop", "payments", "n1", "registry.corp", "2.3", "alice",
 	"DB_PASSWORD", "panic", "prod", "argocd", "acme-operator",
+	"hotfix", "acme-billing", "9f3a-secret", "acme-origin",
 }
 
 // mustSanitizer builds a sanitizer or fails the test.
@@ -61,7 +62,7 @@ func sensitiveObservations() []inventory.Observation {
 		{Kind: inventory.Changed, Source: "kubernetes", At: at,
 			Entity: pod, Change: inventory.Change{
 				Entity: pod, At: at, Actor: "alice", Revision: "3",
-				App: "argocd/payments",
+				App: "argocd/payments", Cause: "hotfix for acme-billing",
 				Fields: []inventory.FieldChange{
 					{Path: "containers[app].image",
 						Before: "registry.corp/payments:2.2",
@@ -74,6 +75,7 @@ func sensitiveObservations() []inventory.Observation {
 			Note: inventory.Note{
 				At: at, Source: "acme-operator", Reason: "BackOff",
 				Message: "Back-off restarting payments", Count: 2,
+				UID: "uid-9f3a-secret", Origin: "events/acme-origin-77",
 			}},
 	}
 }
@@ -91,6 +93,32 @@ func TestSanitizerHidesIdentifyingData(t *testing.T) {
 				t.Errorf("%s leaks %q: %s", in.Kind, word, data)
 			}
 		}
+	}
+}
+
+// The change cause is free text; the UID and origin of a note identify
+// real objects. A note keeps its link to its object: the same UID gives
+// the same pseudonym as the observation's own UID.
+func TestSanitizerHidesChangeCauseAndNoteIdentity(t *testing.T) {
+	sanitizer := mustSanitizer(t, replay.SanitizeOptions{Salt: "s"})
+	obs := sensitiveObservations()
+	if got := sanitizer.Observation(obs[4]).Change.Cause; got != "" {
+		t.Fatalf("change cause kept: %q", got)
+	}
+	note := sanitizer.Observation(obs[5]).Note
+	if note.UID == "" || note.UID == obs[5].Note.UID ||
+		note.Origin == "" || note.Origin == obs[5].Note.Origin {
+		t.Fatalf("note identity not hidden: %+v", note)
+	}
+	again := sanitizer.Observation(obs[5]).Note
+	if again.UID != note.UID || again.Origin != note.Origin {
+		t.Fatal("pseudonyms must be stable")
+	}
+	kept := mustSanitizer(t, replay.SanitizeOptions{Salt: "s",
+		KeepMessages: true})
+	if got := kept.Observation(obs[4]).Change.Cause; got !=
+		"hotfix for acme-billing" {
+		t.Fatalf("kept cause = %q", got)
 	}
 }
 

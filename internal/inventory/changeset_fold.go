@@ -100,7 +100,7 @@ func (c *setCache) fold(
 	}
 	target := oldestSet(joined)
 	for _, other := range joined {
-		if other != target {
+		if other != target && target.mergeFits(other, entry.change.At) {
 			target.absorb(other)
 		}
 	}
@@ -108,9 +108,49 @@ func (c *setCache) fold(
 	c.removeEmpty()
 }
 
+// mergeFits reports whether absorbing other, and the change made at at,
+// keeps the set within ChangeSetMaxSpan. A change that links two sets
+// must not bridge them into one longer than the cap: the other set stays
+// apart and the change joins this one.
+func (s *liveSet) mergeFits(other *liveSet, at time.Time) bool {
+	start, end := s.set.Start, s.set.End
+	for _, t := range []time.Time{other.set.Start, at} {
+		if t.Before(start) {
+			start = t
+		}
+	}
+	for _, t := range []time.Time{other.set.End, at} {
+		if t.After(end) {
+			end = t
+		}
+	}
+	return end.Sub(start) <= ChangeSetMaxSpan
+}
+
+// ChangeSetMaxSpan caps how long one change set can grow. Without it a
+// chatty app or a controller that never stops changing things would chain
+// every change into one ever-growing "release".
+const ChangeSetMaxSpan = 15 * time.Minute
+
 func (s *liveSet) linksTo(
 	change Change, scopeOf func(EntityID) entityScope,
 ) bool {
+	// Cheap checks on the set's whole span first, so the members are only
+	// scanned for sets the change can possibly join.
+	start, end := s.set.Start, s.set.End
+	if change.At.Before(start.Add(-ChangeSetWindow)) ||
+		change.At.After(end.Add(ChangeSetWindow)) {
+		return false
+	}
+	if change.At.After(end) {
+		end = change.At
+	}
+	if change.At.Before(start) {
+		start = change.At
+	}
+	if end.Sub(start) > ChangeSetMaxSpan {
+		return false
+	}
 	for _, member := range s.set.Changes {
 		gap := change.At.Sub(member.At)
 		if gap < 0 {

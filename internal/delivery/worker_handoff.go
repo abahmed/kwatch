@@ -25,7 +25,7 @@ func (m *Manager) workOne(
 	// is not a delivery, and making it wait its turn spent the provider's
 	// send slot on nothing: with a route that matches one namespace, a
 	// storm elsewhere throttled the alerts that did match.
-	if !routedTo(entry.routes, job) {
+	if !m.wants(*entry, job) {
 		m.outbox.Load().remove(job.outboxID)
 		return true
 	}

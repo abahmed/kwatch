@@ -1,6 +1,7 @@
 package detectors
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -78,4 +79,13 @@ func sustained(
 	}
 	ctx.RecheckAfter(remaining)
 	return false
+}
+
+// seconds writes a short span in whole seconds: "1 second", "30 seconds".
+func seconds(d time.Duration) string {
+	n := int(d.Round(time.Second) / time.Second)
+	if n == 1 {
+		return "1 second"
+	}
+	return strconv.Itoa(n) + " seconds"
 }

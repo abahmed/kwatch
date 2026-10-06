@@ -81,13 +81,9 @@ func TestDatadogTruncatesTitleAndText(t *testing.T) {
 	assert.LessOrEqual(t, len(body["text"].(string)), maxTextBytes)
 }
 
-func TestDatadogCustomTitleAndNotice(t *testing.T) {
-	c, rec := newTestDatadog(t, map[string]interface{}{"title": "Custom"})
-	require.NoError(t, c.SendMessage(context.Background(), "started"))
-	body := rec.Last(t).JSON(t)
-	assert.Equal(t, "Custom", body["title"])
-	assert.Equal(t, "started", body["text"])
-	assert.Equal(t, "kwatch-dev-notice", body["aggregation_key"])
+func TestDatadogSkipsInformationalMessages(t *testing.T) {
+	c, rec := newTestDatadog(t, nil)
+	providertest.AssertNoticesSkipped(t, c, rec)
 }
 
 func TestDatadogClassifiesErrors(t *testing.T) {
@@ -98,7 +94,8 @@ func TestDatadogClassifiesErrors(t *testing.T) {
 	err := c.SendIncident(context.Background(), providertest.Announce())
 	assert.True(t, transport.IsPermanent(err))
 	c.url = "h ttp://bad"
-	assert.Error(t, c.SendMessage(context.Background(), "x"))
+	assert.Error(t, c.SendIncident(
+		context.Background(), providertest.Announce()))
 }
 
 func TestDatadogConfiguredAlertTypeIsValidated(t *testing.T) {
@@ -127,4 +124,37 @@ func TestDatadogConfiguredTitleIsTruncated(t *testing.T) {
 		context.Background(), providertest.Announce()))
 	title := rec.Last(t).JSON(t)["title"].(string)
 	assert.LessOrEqual(t, len(title), maxTitleBytes)
+}
+
+func TestDatadogCustomTitle(t *testing.T) {
+	c, rec := newTestDatadog(t, map[string]interface{}{"title": "Custom"})
+	require.NoError(t, c.SendIncident(
+		context.Background(), providertest.Announce()))
+	assert.Equal(t, "Custom", rec.Last(t).JSON(t)["title"])
+}
+
+func TestDatadogEventsCarryTheClusterTag(t *testing.T) {
+	c, rec := newTestDatadog(t, map[string]interface{}{
+		"tags": []interface{}{"team:ops"},
+	})
+	require.NoError(t, c.SendIncident(
+		context.Background(), providertest.Announce()))
+	tags := rec.Last(t).JSON(t)["tags"].([]any)
+	assert.Equal(t, []any{"team:ops", "cluster:dev"}, tags)
+	assert.Equal(t, []string{"team:ops"}, c.tags, "config is not mutated")
+}
+
+func TestDatadogConfiguredClusterTagWins(t *testing.T) {
+	c, _ := newTestDatadog(t, map[string]interface{}{
+		"tags": []interface{}{"cluster:prod-eu"},
+	})
+	assert.Equal(t, []string{"cluster:prod-eu"}, c.tagsWithCluster())
+}
+
+func TestDatadogRejectsAnInvalidSite(t *testing.T) {
+	rec := providertest.NewRecorder(t)
+	c := NewDatadog(map[string]interface{}{
+		"apiKey": "k", "site": "evil.test/x?",
+	}, "dev", rec.Dependencies())
+	assert.Nil(t, c)
 }

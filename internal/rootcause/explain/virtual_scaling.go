@@ -63,3 +63,40 @@ func (v *view) scalerHops(id inventory.EntityID) []hop {
 	}
 	return out
 }
+
+// addMetricsBackends lets whatever explains a failing metrics Service
+// (its crashing pods, through their Deployment) also explain the
+// autoscalers that Service explains: the HPAs failed because the
+// metrics API had no backend, and the backend is what broke. Without
+// it the Deployment and the Service would be two incidents.
+func (v *view) addMetricsBackends(cs *candidateSet) {
+	for _, id := range sortedKeys(cs.byID) {
+		service := cs.byID[id]
+		if service.id.Kind != kube.KindService {
+			continue
+		}
+		for _, cause := range coveringService(cs, service.id) {
+			for _, effect := range service.direct() {
+				if effect.Kind == kube.KindHPA {
+					cs.add(cause, effect, coverage{derived: true,
+						match: rowMatch{row: summaryRow},
+						chain: []inventory.EntityID{cause, effect}})
+				}
+			}
+		}
+	}
+}
+
+// coveringService lists the candidates, other than the Service itself,
+// that explain the Service.
+func coveringService(
+	cs *candidateSet, service inventory.EntityID,
+) []inventory.EntityID {
+	var out []inventory.EntityID
+	for _, id := range sortedKeys(cs.byID) {
+		if _, ok := cs.byID[id].covers[service]; ok && id != service {
+			out = append(out, id)
+		}
+	}
+	return out
+}

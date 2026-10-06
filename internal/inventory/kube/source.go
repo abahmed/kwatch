@@ -7,6 +7,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -55,15 +56,6 @@ func (r registration) mode() WatchMode {
 	return WatchFull
 }
 
-// processDigester keys the informer transform until the caller supplies
-// a stored key. It is set once at start-up and never changed.
-var processDigester = NewDigester(nil)
-
-// transform is newTransform with the per-process key.
-func transform(obj any) (any, error) {
-	return newTransform(processDigester)(obj)
-}
-
 // newTransform keeps informer caches small and free of secret material:
 // Secret and ConfigMap values are replaced by digests keyed with d.
 func newTransform(d Digester) cache.TransformFunc {
@@ -72,6 +64,7 @@ func newTransform(d Digester) cache.TransformFunc {
 		if err != nil {
 			return obj, err
 		}
+		dropLastAppliedTyped(obj)
 		switch obj.(type) {
 		case *corev1.Secret:
 			return d.HashSecretData(obj)
@@ -79,6 +72,21 @@ func newTransform(d Digester) cache.TransformFunc {
 			return d.HashConfigMapData(obj)
 		}
 		return obj, nil
+	}
+}
+
+// dropLastAppliedTyped removes the kubectl last-applied copy of an object
+// from its annotations. It repeats the whole object, so keeping it in the
+// cache can double what the cache holds; nothing reads it.
+func dropLastAppliedTyped(obj any) {
+	meta, ok := obj.(metav1.Object)
+	if !ok {
+		return
+	}
+	annotations := meta.GetAnnotations()
+	if _, found := annotations[lastAppliedAnnotation]; found {
+		delete(annotations, lastAppliedAnnotation)
+		meta.SetAnnotations(annotations)
 	}
 }
 

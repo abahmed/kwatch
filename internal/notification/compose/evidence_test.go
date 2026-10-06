@@ -11,10 +11,11 @@ import (
 func TestWriteQuotesInvestigatedErrorBeforeLastOutput(t *testing.T) {
 	d := incident.Decision{Action: incident.Announce,
 		Incident: crashIncident(),
-		Output:   []string{"panic: db down", "at main.go:12"},
-		Evidence: []incident.Fact{
-			{Kind: incident.FactError, Text: "panic: db down"},
-		}}
+		Facts: incident.Facts{
+			Output: []string{"panic: db down", "at main.go:12"},
+			Evidence: []incident.Fact{
+				{Kind: incident.FactError, Text: "panic: db down"},
+			}}}
 
 	msg := Writer{}.Write(d, revisionNow)
 
@@ -61,7 +62,8 @@ func TestWriteRendersEachInvestigatedFact(t *testing.T) {
 			p := crashIncident()
 			p.Root = inventory.CoreID("pod", "shop", "web-a")
 			d := incident.Decision{Action: incident.Announce, Incident: p,
-				Evidence: []incident.Fact{tt.fact}}
+				Facts: incident.Facts{
+					Evidence: []incident.Fact{tt.fact}}}
 
 			msg := Writer{}.Write(d, revisionNow)
 
@@ -77,7 +79,7 @@ func TestWriteUpdateQuotesOnlyFreshEvidence(t *testing.T) {
 		Incident: crashIncident(), Reason: "material change"}
 
 	without := Writer{}.Write(d, revisionNow)
-	d.Evidence = []incident.Fact{
+	d.Facts.Evidence = []incident.Fact{
 		{Kind: incident.FactError, Text: "panic: late"}}
 	with := Writer{}.Write(d, revisionNow)
 
@@ -86,5 +88,22 @@ func TestWriteUpdateQuotesOnlyFreshEvidence(t *testing.T) {
 	}
 	if !strings.Contains(with.Note, `"panic: late"`) {
 		t.Fatalf("a new fact should join the update: %s", with.Note)
+	}
+}
+
+func TestWriteNeverQuotesAKubeletLogFailureAsTheError(t *testing.T) {
+	text := "unable to retrieve container logs for containerd://3cc241fa"
+	d := incident.Decision{Action: incident.Announce,
+		Incident: crashIncident(),
+		Facts: incident.Facts{Evidence: []incident.Fact{
+			{Kind: incident.FactError, Text: text},
+		}}}
+	d.Incident.Members = nil
+
+	msg := Writer{}.Write(d, revisionNow)
+
+	if strings.Contains(msg.Note, "unable to retrieve") {
+		t.Fatalf("the kubelet's failure is not the app's error: %s",
+			msg.Note)
 	}
 }

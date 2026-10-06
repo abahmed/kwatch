@@ -1,0 +1,11 @@
+{
+  "name": "notify-flap-reopens",
+  "description": "A crash-looping Deployment recovers and fails again twice within two hours.",
+  "root": "deployment/shop/mailer",
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

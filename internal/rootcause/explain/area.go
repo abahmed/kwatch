@@ -13,8 +13,7 @@ func areasOf(
 	for _, f := range failures {
 		parent[f] = f
 	}
-	var find func(inventory.EntityID) inventory.EntityID
-	find = func(id inventory.EntityID) inventory.EntityID {
+	find := func(id inventory.EntityID) inventory.EntityID {
 		for parent[id] != id {
 			parent[id] = parent[parent[id]]
 			id = parent[id]

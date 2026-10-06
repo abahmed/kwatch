@@ -16,7 +16,7 @@ stringData:
   config.yaml: |
     # ── General ──────────────────────────────────────────────
     # Periodic informer resync, a safety net for lost watch events
-    # (default 300, 0 = off).
+    # (default 300, 0 = off, otherwise at least 30).
     resyncSeconds: <seconds>
 
     # ── Scope: what is delivered ──────────────────────────

@@ -10,27 +10,19 @@ import (
 // once a week. A problem that fails on a regular rhythm is known too,
 // once the rhythm shows.
 const (
-	// KnownAfter is how long a problem must have been heard about, from
-	// its first heard occurrence, before its recurrences are known.
-	KnownAfter = 24 * time.Hour
 	// KnownOccurrences is how many heard occurrences make a problem
-	// known, with KnownAfter.
+	// known, with KnownAfter (timings.go).
 	KnownOccurrences = 2
-	// RemindEvery is how often an incident that stays open is said
-	// again: "still failing, for a week now".
-	RemindEvery = 7 * 24 * time.Hour
 	// RhythmOccurrences is the fewest occurrences within RhythmWindow
 	// that can show a rhythm.
 	RhythmOccurrences = 3
-	// RhythmWindow is how far back a rhythm is looked for.
-	RhythmWindow = 24 * time.Hour
 	// RhythmTolerance is how far each interval may stray from the mean
 	// interval, as a share of it, and still be the same rhythm.
 	RhythmTolerance = 0.35
 )
 
 // ReasonReminder is the audit reason of a weekly "still open" update.
-const ReasonReminder = "still open"
+const ReasonReminder Reason = "still open"
 
 // Known reports a recurrence of a problem people have already heard
 // about for KnownAfter: at least KnownOccurrences heard occurrences of
@@ -43,7 +35,7 @@ func Known(p Incident, now time.Time) bool {
 	for _, o := range p.History {
 		// Why: a root known for one failure must not hide a new one.
 		// An unknown mode on either side is not a match.
-		if !o.Heard || p.Mode == "" || o.Mode != p.Mode {
+		if !o.Heard || p.Mode == "" || !o.sharesMode(p) {
 			continue
 		}
 		heard++

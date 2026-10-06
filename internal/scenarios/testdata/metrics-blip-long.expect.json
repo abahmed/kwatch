@@ -1,0 +1,8 @@
+{
+  "name": "metrics-blip-long",
+  "description": "Ten HPAs cannot read metrics for 20m0s while metrics-server runs.",
+  "root": "apiservice//v1beta1.metrics.k8s.io",
+  "tier": "digest",
+  "maxMessages": 3,
+  "tail": "30m0s"
+}

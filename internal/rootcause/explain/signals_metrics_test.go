@@ -51,3 +51,20 @@ func TestClassifyPullStatusWithoutCode(t *testing.T) {
 		t.Fatalf("a missing image blamed the registry: %q", got)
 	}
 }
+
+// One autoscaler whose text mentions the metrics API is not enough to
+// call the API down: its own target may be wrong.
+func TestMetricsAPINotBlamedForOneAutoscaler(t *testing.T) {
+	f := newFixture(t)
+	api := inventory.CoreID(kube.KindAPIService, "",
+		"v1beta1.metrics.k8s.io")
+	hpa := inventory.CoreID(kube.KindHPA, "shop", "web")
+	f.add(api, hpa)
+	f.fail(hpa, "Scaling.NoMetrics", degradedH, 2,
+		"unable to fetch metrics from resource metrics API: the "+
+			"server is currently unable to handle the request "+
+			"(get pods.metrics.k8s.io)")
+	if c, ok := f.explain().CauseOf(hpa); ok && c.Root == api {
+		t.Fatalf("one autoscaler blamed the metrics API: %+v", c)
+	}
+}

@@ -1,0 +1,16 @@
+{
+  "name": "redis-down-storm",
+  "description": "Five Deployments crash-loop with the same connection refused error, each naming a different address on the Redis port.",
+  "root": "failure-signature//CrashLoop dial tcp \u003cip\u003e:6379: connect: connection refused",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//s1",
+    "node//s2",
+    "deployment/shop/cart",
+    "deployment/shop/session",
+    "deployment/shop/search",
+    "deployment/billing/ledger",
+    "deployment/billing/invoicer"
+  ]
+}

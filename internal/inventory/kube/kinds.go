@@ -109,3 +109,29 @@ func EntityFor(
 	return inventory.NewEntityID(GroupForAPIVersion(apiVersion),
 		KindFor(kubernetesKind), namespace, name)
 }
+
+// AttrKindName is how the API spells the entity's Kind ("DatadogAgent"),
+// set only when the spelling says more than the lower-case entity kind,
+// so messages can name a custom resource the way its CRD does.
+const AttrKindName = "kind.name"
+
+// KindNameAttributes returns the attributes (maybe none) that record the
+// spelling of a Kubernetes Kind. Only a name with a capital inside it
+// ("DatadogAgent") says more than the entity kind; "Gateway" reads the
+// same in lower case.
+func KindNameAttributes(
+	kubernetesKind string,
+) map[string]inventory.Value {
+	attrs := map[string]inventory.Value{}
+	if len(kubernetesKind) > 1 &&
+		kubernetesKind[1:] != strings.ToLower(kubernetesKind[1:]) {
+		attrs[AttrKindName] = inventory.Text(kubernetesKind)
+	}
+	return attrs
+}
+
+// WorkloadKinds are the controller workloads that run pods and report
+// replica counts.
+var WorkloadKinds = []inventory.Kind{
+	KindDeployment, KindStatefulSet, KindDaemonSet,
+}

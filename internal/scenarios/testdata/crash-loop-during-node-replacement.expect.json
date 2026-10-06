@@ -1,0 +1,12 @@
+{
+  "name": "crash-loop-during-node-replacement",
+  "description": "Both replicas of a Deployment abort on start for an hour while Karpenter keeps replacing nodes and the HPA cannot read metrics.",
+  "root": "deployment/data/warehouse",
+  "tier": "notify",
+  "maxMessages": 6,
+  "mustNotBlame": [
+    "nodepool//workers",
+    "horizontalpodautoscaler/data/warehouse"
+  ],
+  "tail": "10m0s"
+}

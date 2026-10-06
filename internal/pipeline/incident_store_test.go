@@ -6,6 +6,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/pipeline/announce"
 )
 
 func TestIncidentStoreRoundTripsIncidents(t *testing.T) {
@@ -104,7 +105,7 @@ func TestIncidentStoreRoundTripsStartupMarker(t *testing.T) {
 	if _, found, err := ps.LoadStartup(); err != nil || found {
 		t.Fatalf("empty store: found=%v err=%v", found, err)
 	}
-	if err := ps.SaveStartup(StartupState{}); err != nil {
+	if err := ps.SaveStartup(announce.StartupState{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, found, err := ps.LoadStartup(); err != nil || !found {

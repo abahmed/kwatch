@@ -1,0 +1,15 @@
+{
+  "name": "namespace-two-failures-stay-separate",
+  "description": "Two of fifteen Deployments in one namespace crash-loop minutes apart: each is its own message.",
+  "root": "deployment/shop/app0",
+  "otherRoots": [
+    "deployment/shop/app1"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n0",
+    "node//n1",
+    "zone//zone-a"
+  ]
+}

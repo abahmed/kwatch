@@ -76,13 +76,9 @@ func TestAlertaSeverityMapping(t *testing.T) {
 	}
 }
 
-func TestAlertaSendMessageIsNotice(t *testing.T) {
+func TestAlertaSkipsInformationalMessages(t *testing.T) {
 	c, rec := newTestAlerta(t)
-	require.NoError(t, c.SendMessage(context.Background(), "started"))
-	body := rec.Last(t).JSON(t)
-	assert.Equal(t, "kwatch", body["event"])
-	assert.Equal(t, "dev/kwatch-notice", body["resource"])
-	assert.Equal(t, "started", body["text"])
+	providertest.AssertNoticesSkipped(t, c, rec)
 }
 
 func TestAlertaClassifiesErrors(t *testing.T) {
@@ -93,7 +89,8 @@ func TestAlertaClassifiesErrors(t *testing.T) {
 	err := c.SendIncident(context.Background(), providertest.Announce())
 	assert.True(t, transport.IsPermanent(err))
 	c.url = "h ttp://bad"
-	assert.Error(t, c.SendMessage(context.Background(), "x"))
+	assert.Error(t, c.SendIncident(
+		context.Background(), providertest.Announce()))
 }
 
 func TestAlertaUsesStableDedupKeyAsResource(t *testing.T) {
@@ -104,5 +101,17 @@ func TestAlertaUsesStableDedupKeyAsResource(t *testing.T) {
 	require.NoError(t, c.SendIncident(context.Background(), msg))
 
 	assert.Equal(t, "dev/kwatch-deployment-shop-payments-crashloop",
+		rec.Last(t).JSON(t)["resource"])
+}
+
+func TestAlertaKeepsTheClusterNameInTheResourceAsIs(t *testing.T) {
+	c, rec := newTestAlerta(t)
+	c.clusterName = "prod/eu west"
+	msg := providertest.Lifecycle()[0].Message
+	msg.DedupKey = "k"
+
+	require.NoError(t, c.SendIncident(context.Background(), msg))
+
+	assert.Equal(t, "prod/eu west/kwatch-k",
 		rec.Last(t).JSON(t)["resource"])
 }

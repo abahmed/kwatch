@@ -1,0 +1,8 @@
+{
+  "name": "job-running-long",
+  "description": "A CronJob's Job has run for over two hours while its last three runs took 8 to 12 minutes.",
+  "root": "cronjob/billing/invoice-export",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "10m0s"
+}

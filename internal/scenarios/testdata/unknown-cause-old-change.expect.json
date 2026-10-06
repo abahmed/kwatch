@@ -1,0 +1,13 @@
+{
+  "name": "unknown-cause-old-change",
+  "description": "The same crash loop when the namespace's last edit is over 30 minutes old: no change is named.",
+  "root": "unknown",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "configmap/shop/feature-flags",
+    "node//n1",
+    "node//n2",
+    "zone//zone-a"
+  ]
+}

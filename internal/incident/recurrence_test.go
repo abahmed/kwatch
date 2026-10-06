@@ -73,7 +73,8 @@ func TestManagerRecurrenceStartsItsOwnConversation(t *testing.T) {
 	ds := r.tick(at(2*time.Minute + DefaultHold))
 	wantAction(t, ds, Resolve, "healthy for 3m0s")
 
-	again := at(time.Hour)
+	// Past RepageWindow; sooner it would re-open the same incident.
+	again := at(3 * time.Hour)
 	r.raise(again, web)
 	ds = r.tick(again.Add(DefaultSettle))
 	wantAction(t, ds, Announce, "settled")

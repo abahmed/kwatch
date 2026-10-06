@@ -2,6 +2,7 @@ package detectors
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
@@ -59,6 +60,12 @@ func hpaFailureFor(reason, fallbackSummary string) hpaFailure {
 	return hpaFailure{reasons.HPAScalingError, fallbackSummary}
 }
 
+// HPAMetricsGrace is how long an autoscaler must fail to read its
+// metrics before it is a finding. The metrics API blips for a minute or
+// two whenever metrics-server restarts or a node goes; a blip that ends
+// by itself is not news.
+const HPAMetricsGrace = 10 * time.Minute
+
 // HPA detects autoscalers that cannot compute or apply a scale.
 type HPA struct{}
 
@@ -72,11 +79,23 @@ func (HPA) Kinds() []inventory.Kind { return []inventory.Kind{kube.KindHPA} }
 func (HPA) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
-	out := hpaConditionFindings(ctx, e)
+	var out []detection.Finding
+	missing, targetMissing := missingScaleTarget(ctx, e)
+	if targetMissing {
+		out = append(out, missing)
+	}
+	out = append(out, hpaConditionFindings(ctx, e, targetMissing)...)
 	current, _ := number(e, kube.AttrCurrentReplicas)
 	desired, _ := number(e, kube.AttrDesiredReplicas)
 	maximum, ok := number(e, kube.AttrMaxReplicas)
-	if ok && current >= maximum && desired >= maximum {
+	// A pinned autoscaler (min equals max) cannot scale by design. An
+	// unset minReplicas means 1.
+	floor, known := number(e, kube.AttrMinReplicas)
+	if !known {
+		floor = 1
+	}
+	pinned := floor >= maximum
+	if ok && !pinned && current >= maximum && desired >= maximum {
 		if status, _, since := condition(e, "ScalingLimited"); status ==
 			"True" {
 			out = append(out, detection.Finding{
@@ -90,11 +109,22 @@ func (HPA) Detect(
 	return out
 }
 
+// hpaGrace is how long the failure must last before it is reported.
+func hpaGrace(failure hpaFailure) time.Duration {
+	if failure.reason == reasons.FailedGetResourceMetric {
+		return HPAMetricsGrace
+	}
+	return DefaultConditionGrace
+}
+
 // hpaConditionFindings reports each false condition once: both conditions
 // often carry the same reason (for example FailedGetScale). A condition
-// must stay False for DefaultConditionGrace, as other conditions do.
+// must stay False for DefaultConditionGrace, as other conditions do,
+// and a metrics failure for HPAMetricsGrace.
+// When the scale target is known to be missing, FailedGetScale is that
+// finding already and is not reported a second time.
 func hpaConditionFindings(
-	ctx detection.Context, e inventory.Entity,
+	ctx detection.Context, e inventory.Entity, targetMissing bool,
 ) []detection.Finding {
 	var out []detection.Finding
 	seen := map[string]bool{}
@@ -103,12 +133,13 @@ func hpaConditionFindings(
 		if status != "False" || reason == reasons.ScalingDisabled {
 			return
 		}
+		failure := hpaFailureFor(reason, fallbackSummary)
 		if !sustained(ctx, "hpa/"+conditionType, since,
-			DefaultConditionGrace) {
+			hpaGrace(failure)) {
 			return
 		}
-		failure := hpaFailureFor(reason, fallbackSummary)
-		if seen[failure.reason] {
+		if seen[failure.reason] ||
+			(targetMissing && failure.reason == reasons.FailedGetScale) {
 			return
 		}
 		seen[failure.reason] = true

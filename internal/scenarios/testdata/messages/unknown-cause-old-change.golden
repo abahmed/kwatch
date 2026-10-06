@@ -1,0 +1,4 @@
+10:46:15 settled
+🟠 reports in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: nil pointer dereference in render()". To read the output of the last crash, run kubectl logs reports-c3027a87-a -c app -n shop --previous
+🟠 reports in shop (prod-eu-1) keeps crashing.
+

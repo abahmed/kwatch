@@ -1,0 +1,13 @@
+{
+  "name": "webhook-denies-pod",
+  "description": "A healthy validating webhook denies the pods of one Deployment; the policy is the cause, not an outage.",
+  "root": "validatingwebhookconfiguration//image-policy",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "service/policy-system/image-policy",
+    "deployment/policy-system/image-policy",
+    "deployment/search/api",
+    "node//n1"
+  ]
+}

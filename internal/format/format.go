@@ -7,6 +7,12 @@ import (
 	"time"
 )
 
+// Day and Week are the long spans shared by timings and wording.
+const (
+	Day  = 24 * time.Hour
+	Week = 7 * Day
+)
+
 // OrDefault returns value when it is non-empty, otherwise fallback.
 func OrDefault(value, fallback string) string {
 	if value == "" {

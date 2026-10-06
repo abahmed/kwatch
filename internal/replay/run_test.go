@@ -10,7 +10,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/notification"
-	"github.com/abahmed/kwatch/internal/pipeline"
+	"github.com/abahmed/kwatch/internal/pipeline/announce"
 	"github.com/abahmed/kwatch/internal/replay"
 )
 
@@ -142,11 +142,11 @@ func (failingStore) LoadFingerprints() (map[string]string, error) {
 
 func (failingStore) SaveFingerprints(map[string]any) error { return nil }
 
-func (failingStore) LoadStartup() (pipeline.StartupState, bool, error) {
-	return pipeline.StartupState{}, false, nil
+func (failingStore) LoadStartup() (announce.StartupState, bool, error) {
+	return announce.StartupState{}, false, nil
 }
 
-func (failingStore) SaveStartup(pipeline.StartupState) error { return nil }
+func (failingStore) SaveStartup(announce.StartupState) error { return nil }
 
 // memoryStore keeps the last saved incidents.
 type memoryStore struct {
@@ -173,11 +173,11 @@ func (s *memoryStore) LoadFingerprints() (map[string]string, error) {
 
 func (s *memoryStore) SaveFingerprints(map[string]any) error { return nil }
 
-func (s *memoryStore) LoadStartup() (pipeline.StartupState, bool, error) {
-	return pipeline.StartupState{}, false, nil
+func (s *memoryStore) LoadStartup() (announce.StartupState, bool, error) {
+	return announce.StartupState{}, false, nil
 }
 
-func (s *memoryStore) SaveStartup(pipeline.StartupState) error { return nil }
+func (s *memoryStore) SaveStartup(announce.StartupState) error { return nil }
 
 // Workers run on simulated time: the caller's wall timer is never used,
 // and the final incidents are written before Run returns.

@@ -89,7 +89,7 @@ kwatch does not learn from user feedback. It reasons from the cluster:
 - 5,000 pods and 500 nodes within the default 512Mi memory limit (the Go
   memory limit is set at 90% of it). Tests assert a live heap of at most
   250 MiB and a peak of at most 512 MiB; the measured live heap is about
-  81 MiB.
+  83 MiB.
 - Decisions are fresh: at 5,000 pods, the p99 time from an observation
   being submitted to its decisions being applied is at most 2 seconds
   in-process. Production exports it as
@@ -112,8 +112,8 @@ kwatch does not learn from user feedback. It reasons from the cluster:
   start.
 - A stale writer is fenced.
 - A corrupt record is skipped.
-- A schema mismatch or an unreadable file causes a reset (no backup, no
-  migration).
+- A schema mismatch or an unreadable file causes a reset (the old
+  file is kept as `state.db.corrupt`; no migration).
 
 ## Security
 

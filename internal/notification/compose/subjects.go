@@ -3,6 +3,7 @@ package compose
 import (
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
@@ -26,7 +27,7 @@ func leadSubject(f caseFacts) inventory.EntityID {
 func affectedWorkload(f caseFacts) inventory.EntityID {
 	if f.p.Cause != nil {
 		for _, id := range f.p.Cause.Chain {
-			if isWorkload(id.Kind) {
+			if incident.IsWorkload(id.Kind) {
 				return id
 			}
 		}
@@ -42,7 +43,7 @@ func affectedWorkload(f caseFacts) inventory.EntityID {
 // symptomSubject is what the reader runs: the workload hit by the
 // cause, else the failing entity itself.
 func symptomSubject(f caseFacts) inventory.EntityID {
-	if workload := affectedWorkload(f); isWorkload(workload.Kind) {
+	if workload := affectedWorkload(f); incident.IsWorkload(workload.Kind) {
 		return workload
 	}
 	if f.ok {
@@ -66,7 +67,7 @@ func ownerIn(
 	}
 	var best inventory.EntityID
 	for _, w := range impact {
-		if isWorkload(w.Kind) && w.Namespace == id.Namespace &&
+		if incident.IsWorkload(w.Kind) && w.Namespace == id.Namespace &&
 			strings.HasPrefix(pod, w.Name+"-") &&
 			len(w.Name) > len(best.Name) {
 			best = w

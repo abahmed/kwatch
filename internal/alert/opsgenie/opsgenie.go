@@ -3,9 +3,11 @@ package opsgenie
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"k8s.io/klog/v2"
 
@@ -31,6 +33,8 @@ type Opsgenie struct {
 	url string
 
 	clusterName string
+	// wait pauses between update attempts; tests replace it.
+	wait func(ctx context.Context, d time.Duration) error
 }
 
 type ogPayload struct {
@@ -71,6 +75,19 @@ func NewOpsgenie(
 		apikey:      apiKey,
 		url:         apiURL,
 		clusterName: clusterName,
+		wait:        sleepContext,
+	}
+}
+
+// sleepContext waits for d or until ctx ends.
+func sleepContext(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
@@ -104,7 +121,13 @@ func (o *Opsgenie) SendIncident(
 	}
 	alias := m.AlertKey(o.clusterName)
 	if m.Resolved() {
-		return o.send(ctx, "POST", o.actionURL(alias, "close"), []byte(`{}`))
+		err := o.send(ctx, "POST", o.actionURL(alias, "close"), []byte(`{}`))
+		if transport.IsNotFound(err) {
+			// No such alert: it is already closed, or was never opened.
+			// Either way there is nothing left to close.
+			return nil
+		}
+		return err
 	}
 	payload := o.buildPayload(m)
 	body, err := json.Marshal(payload)
@@ -142,11 +165,45 @@ func (o *Opsgenie) updateAlert(
 				update.action, err)
 		}
 		target := o.actionURL(alias, update.action)
-		if err := o.send(ctx, "PUT", target, body); err != nil {
+		if err := o.sendUpdate(ctx, target, body); err != nil {
 			return fmt.Errorf("update opsgenie %s: %w", update.action, err)
 		}
 	}
 	return nil
+}
+
+// updateAttempts and updateRetryDelay bound how long an update waits for
+// an alert that Opsgenie is still creating.
+const (
+	updateAttempts   = 3
+	updateRetryDelay = time.Second
+)
+
+// sendUpdate sends one PUT. Opsgenie creates alerts asynchronously, so an
+// update that follows the create at once can answer 404 for a moment. That
+// is retried a few times; if the alert is still unknown the error is
+// returned as retryable, so delivery tries again later instead of
+// treating the 404 as permanent.
+func (o *Opsgenie) sendUpdate(
+	ctx context.Context, target string, body []byte,
+) error {
+	var err error
+	for attempt := 1; attempt <= updateAttempts; attempt++ {
+		err = o.send(ctx, "PUT", target, body)
+		if err == nil || !transport.IsNotFound(err) {
+			return err
+		}
+		if attempt == updateAttempts {
+			break
+		}
+		delay := updateRetryDelay * time.Duration(attempt)
+		if waitErr := o.wait(ctx, delay); waitErr != nil {
+			return waitErr
+		}
+	}
+	// A new error without the permanent marker: the alert is probably
+	// still being created.
+	return errors.New(err.Error() + " (alert not visible yet, will retry)")
 }
 
 // actionURL addresses one alert by its alias, e.g. .../{alias}/close.

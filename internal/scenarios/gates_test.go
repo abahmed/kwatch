@@ -77,6 +77,7 @@ func measure(t *testing.T) card {
 		// A cold start measures the sync, not detection.
 		if m, ok := timeToFirstMessage(e.Name, log, result); ok &&
 			e.SyncAfter == 0 {
+			m.bootHeld = e.BootHeld
 			c.firstMessages = append(c.firstMessages, m)
 		}
 	}

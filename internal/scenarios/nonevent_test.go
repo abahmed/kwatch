@@ -50,7 +50,7 @@ func nonEventCases() []nonEventCase {
 func nonEventLogs() []replay.Log {
 	cases := nonEventCases()
 	runs := 2 * len(cases)
-	spacing := stagingDay / time.Duration(runs+1)
+	spacing := stagingDay() / time.Duration(runs+1)
 	logs := make([]replay.Log, 0, runs)
 	for i := range runs {
 		nc := cases[i%len(cases)]

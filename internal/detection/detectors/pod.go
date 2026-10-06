@@ -75,7 +75,7 @@ func (d Pod) Detect(
 	case "Pending":
 		return d.pending(ctx, e)
 	case "Failed":
-		return failed(e)
+		return failed(ctx, e)
 	case "Running":
 		return append(d.notReady(ctx, e), resizeFindings(ctx, e)...)
 	case "Unknown":
@@ -93,16 +93,31 @@ func (d Pod) Detect(
 func (d Pod) terminating(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
-	since := valueSince(e, kube.AttrDeleting)
-	if !sustained(ctx, "pod-terminating", since, d.thresholds.Terminating) {
+	requested, deadline := deletionTimes(e)
+	if !sustained(ctx, "pod-terminating", deadline, d.thresholds.Terminating) {
 		return nil
 	}
 	return []detection.Finding{{
 		Reason: reasons.PodStuckTerminating, Severity: detection.Warning,
-		Since: since,
+		Since: requested,
 		Summary: "Pod has been terminating for " +
-			format.Duration(ctx.Now.Sub(since)),
+			format.Duration(ctx.Now.Sub(requested)),
 	}}
+}
+
+// deletionTimes returns when the pod's deletion was requested and when it
+// was due to be over. The API server sets deletionTimestamp to the request
+// plus the grace period, so a pod is only stuck once that deadline has
+// passed by the threshold. A pod without the attributes (seen before they
+// existed) counts from the moment kwatch saw it deleting.
+func deletionTimes(e inventory.Entity) (requested, deadline time.Time) {
+	deadline = timestamp(e, kube.AttrDeletionTime)
+	if deadline.IsZero() {
+		seen := valueSince(e, kube.AttrDeleting)
+		return seen, seen
+	}
+	grace, _ := number(e, kube.AttrTerminationGrace)
+	return deadline.Add(-time.Duration(grace) * time.Second), deadline
 }
 
 func (d Pod) pending(
@@ -122,7 +137,9 @@ func (d Pod) pending(
 		}}
 	}
 	if status == "False" {
-		if !sustained(ctx, "pod-unschedulable", since, d.thresholds.Pending) {
+		// While a pool boots, capacity for the pod is on its way.
+		wait := d.thresholds.Pending + bootGraceFor(ctx, e)
+		if !sustained(ctx, "pod-unschedulable", since, wait) {
 			return nil
 		}
 		return []detection.Finding{{
@@ -130,10 +147,7 @@ func (d Pod) pending(
 			Since: since,
 			Summary: "Pod cannot be scheduled (" + reason + ") for " +
 				format.Duration(ctx.Now.Sub(since)),
-			Evidence: []detection.Evidence{{
-				Label: "scheduler",
-				Value: conditionMessage(e, "PodScheduled"),
-			}},
+			Evidence: unschedulableEvidence(ctx, e),
 		}}
 	}
 	if status == "" {
@@ -146,7 +160,8 @@ func (d Pod) pending(
 		// No start time yet: count from when the phase was first seen.
 		started = valueSince(e, kube.AttrPhase)
 	}
-	wait := d.thresholds.Pending * startedPendingFactor
+	wait := d.thresholds.Pending*startedPendingFactor +
+		bootGraceFor(ctx, e)
 	if !sustained(ctx, "pod-pending", started, wait) {
 		return nil
 	}
@@ -163,8 +178,9 @@ func (d Pod) unscheduled(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	created := timestamp(e, kube.AttrCreated)
+	wait := d.thresholds.Pending + bootGraceFor(ctx, e)
 	if created.IsZero() ||
-		!sustained(ctx, "pod-unscheduled", created, d.thresholds.Pending) {
+		!sustained(ctx, "pod-unscheduled", created, wait) {
 		return nil
 	}
 	return []detection.Finding{{
@@ -175,8 +191,11 @@ func (d Pod) unscheduled(
 	}}
 }
 
-func failed(e inventory.Entity) []detection.Finding {
+func failed(ctx detection.Context, e inventory.Entity) []detection.Finding {
 	evicted := text(e, kube.AttrReason) == reasons.Evicted
+	if evicted && evictionOver(ctx, valueSince(e, kube.AttrPhase)) {
+		return nil
+	}
 	if disrupted(e) && !(evicted && nodePressureEviction(e)) {
 		return nil
 	}
@@ -263,4 +282,32 @@ func disrupted(e inventory.Entity) bool {
 func nodePressureEviction(e inventory.Entity) bool {
 	_, reason, _ := condition(e, "DisruptionTarget")
 	return reason == "TerminationByKubelet"
+}
+
+// unschedulableEvidence is the scheduler's message plus, when it names
+// a CPU or memory shortage, the numbers behind it.
+func unschedulableEvidence(
+	ctx detection.Context, e inventory.Entity,
+) []detection.Evidence {
+	message := conditionMessage(e, "PodScheduled")
+	out := []detection.Evidence{{Label: "scheduler", Value: message}}
+	return append(out, capacityEvidence(ctx.Model, e.ID, message)...)
+}
+
+// evictionOver reports an eviction older than EventWindow. The evicted
+// pod stays in the API until pod garbage collection, but the eviction
+// happened once: like a Warning event, it stops counting as current when
+// the window has passed, and a healthy replacement has long since taken
+// over. Otherwise old evicted pods would be announced as new problems
+// when the node's own events age out.
+func evictionOver(ctx detection.Context, since time.Time) bool {
+	if since.IsZero() {
+		return false
+	}
+	left := since.Add(EventWindow).Sub(ctx.Now)
+	if left <= 0 {
+		return true
+	}
+	ctx.RecheckAfter(left + time.Nanosecond)
+	return false
 }

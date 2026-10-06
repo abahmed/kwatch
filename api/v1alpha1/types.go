@@ -19,7 +19,6 @@ type KwatchConfigSpec struct {
 	Telemetry        TelemetryConfig        `json:"telemetry,omitempty"`
 	Upgrader         map[string]interface{} `json:"upgrader,omitempty"`
 	HeartbeatMonitor HeartbeatMonitorConfig `json:"heartbeatMonitor,omitempty"`
-	HealthCheck      HealthCheckConfig      `json:"healthCheck,omitempty"`
 	Maintenance      MaintenanceConfig      `json:"maintenance,omitempty"`
 
 	Namespaces        []string `json:"namespaces,omitempty"`
@@ -70,11 +69,6 @@ type AuditLogConfig struct {
 type HeartbeatMonitorConfig struct {
 	Enabled  bool `json:"enabled,omitempty"`
 	Interval int  `json:"interval,omitempty"`
-}
-
-type HealthCheckConfig struct {
-	Enabled bool `json:"enabled,omitempty"`
-	Port    int  `json:"port,omitempty"`
 }
 
 // AppConfig omits the outbound proxy and TLS trust settings: they decide

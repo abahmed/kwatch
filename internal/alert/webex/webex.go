@@ -3,10 +3,10 @@ package webex
 import (
 	"context"
 	"encoding/json"
-	"strings"
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -72,11 +72,10 @@ func (w *Webex) Name() string {
 func (w *Webex) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
-	text := m.NoteText()
-	if len(m.Output) > 0 {
-		text += "\n```\n" + strings.Join(m.Output, "\n") + "\n```"
-	}
-	return w.SendMessage(ctx, notification.NeutralizeWebexMentions(text))
+	return w.SendMessage(ctx, safetext.NoteWithOutput(
+		notification.NeutralizeWebexMentions(m.NoteText()),
+		safetext.Lines(m.Output, notification.NeutralizeWebexMentions),
+		"\n", 0))
 }
 
 // SendMessage sends text message to the provider

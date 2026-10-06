@@ -103,3 +103,22 @@ func TestSharedNodeNeedsAHealthyReplicaElsewhere(t *testing.T) {
 		t.Fatalf("lone workloads must not suspect their node: %+v", c)
 	}
 }
+
+// The node suspect that is not chosen must not use up the "nothing
+// upstream" evidence: the two leftover failures are then their own
+// workloads' problem, not unexplained.
+func TestLeftoverFailuresAreTheirOwnWorkloads(t *testing.T) {
+	f := newFixture(t)
+	_, otherPod := configMapCase(f, 3)
+
+	c, ok := f.explain().CauseOf(otherPod)
+
+	if !ok || c.Root.Kind == kube.KindNode {
+		t.Fatalf("leftover failure cause = %+v (%v), want its workload",
+			c, ok)
+	}
+	if c.Root.Name != "appc" && c.Root.Name != "appb" {
+		t.Fatalf("leftover failure blamed on %v, want its workload",
+			c.Root)
+	}
+}

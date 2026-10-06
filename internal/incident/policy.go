@@ -6,6 +6,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/format"
 )
 
 // Delivery policy. These values decide who is interrupted and when; they
@@ -23,6 +24,9 @@ var digestReasons = map[string]bool{
 	reasons.ContainerCPUHigh:        true,
 	reasons.ContainerCPUThrottled:   true,
 	reasons.NodeResourceHigh:        true,
+	// A node whose workloads stall on CPU, memory or disk is under
+	// strain, not failing: when a pod on it fails, that pod is the news.
+	reasons.NodePSIHigh: true,
 	// A budget selecting no pods protects nothing, but on a cluster that
 	// scales workloads to zero it is the normal night.
 	reasons.PdbSelectsNothing: true,
@@ -34,6 +38,11 @@ var digestReasons = map[string]bool{
 	reasons.NodeEvicting:  true,
 	reasons.ServiceUnused: true,
 	reasons.ClaimUnused:   true,
+	// A scale target that does not exist and a Ready node whose kubelet
+	// kwatch cannot reach are worth a look; whatever fails because of
+	// them is the incident.
+	reasons.HPATargetMissing:   true,
+	reasons.KubeletUnreachable: true,
 }
 
 // digestReason reports whether a finding reason waits for the digest.
@@ -48,9 +57,6 @@ func digestReason(reason string) bool {
 // again, and resolves on its own: a nightly batch job, a daily restart.
 // It is learned normal and goes to the digest.
 const (
-	// routineWindow is how close to the same time of day occurrences
-	// must be.
-	routineWindow = 45 * time.Minute
 	// routineDays is how many distinct days, the current one included,
 	// must have such an occurrence.
 	routineDays = 3
@@ -63,29 +69,45 @@ func tier(p *Incident) Tier {
 	worst := detection.Severity(0)
 	digestOnly := true
 	for _, s := range p.Members {
-		worst = max(worst, s.Severity)
-		if !digestReason(s.Reason) {
-			digestOnly = false
+		if s.Advisory || digestReason(s.Reason) {
+			// A risk or a digest finding never raises the tier, at
+			// any severity: it waits for the digest.
+			continue
 		}
+		worst = max(worst, s.Severity)
+		digestOnly = false
 	}
 	switch {
 	case len(p.Members) == 0:
 		return p.Tier
 	case drainingRoot(p):
 		return drainTier(p)
-	case routine(p):
+	case routine(p) && !p.persistent:
 		// Happens at the same time every day and resolves on its own:
-		// learned normal, reported in the digest.
+		// learned normal, reported in the digest. One that outlasts
+		// the boot window with a crash loop or nothing ready does not
+		// resolve on its own (see escalate).
 		return Digest
-	case p.Tier != Page && (Known(*p, p.Opened) || hasRhythm(p)):
+	case digestOnly && p.maxedLong:
+		// An autoscaler at its maximum for a long time has no headroom
+		// left; one notification says so (the tier never falls back).
+		return Notify
+	case !reachedPaging(p) && !p.persistent &&
+		(Known(*p, p.Opened) || hasRhythm(p)):
 		// Heard about for a day, or failing on a regular rhythm: not
-		// news any more. The digest keeps counting it.
+		// news any more. The digest keeps counting it, unless it
+		// crash-loops or has nothing ready past the boot window:
+		// that is not routine boot noise (see escalate).
 		return Digest
 	case digestOnly || worst <= detection.Info:
 		// Planned disruption or informational only.
 		return Digest
 	case (worst == detection.Critical || p.criticalRoot()) &&
 		pageRuleOf(p) != "":
+		if p.Delivery.PageHeld() {
+			// A repeat of a page that just resolved: no new page.
+			return Notify
+		}
 		return Page
 	default:
 		return Notify
@@ -143,7 +165,7 @@ func routine(p *Incident) bool {
 }
 
 func timeOfDayDistance(a, b time.Time) time.Duration {
-	day := 24 * time.Hour
+	day := format.Day
 	da := a.UTC().Sub(a.UTC().Truncate(day))
 	db := b.UTC().Sub(b.UTC().Truncate(day))
 	diff := da - db

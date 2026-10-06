@@ -175,6 +175,9 @@ func TestEndpointIn(t *testing.T) {
 			": connection reset by peer", "mq.example.net:5672",
 			endpointRefused},
 		"no failed call": {"panic: nil map", "", ""},
+		"config file line": {"connection refused while reading " +
+			"config.yaml:12", "", ""},
+		"log file line": {"connection reset, see app.log:40", "", ""},
 		"dns server": {"lookup x.example.com on 10.96.0.10:53: " +
 			"server misbehaving", "", ""},
 	}
@@ -203,5 +206,171 @@ func TestNormalizeSignature(t *testing.T) {
 	}
 	if got := SignatureText(signatureName("CrashLoop.Panic", a)); got != a {
 		t.Fatalf("SignatureText = %q, want %q", got, a)
+	}
+}
+
+// redisStorm makes n workloads crash with one connection error that
+// names a different address in every pod (one port: one backend).
+func redisStorm(f *fixture, n int) []inventory.EntityID {
+	return refusalStorm(f, n, 0, 6379)
+}
+
+// refusalStorm is redisStorm for any port, with workloads numbered from
+// first, so two storms against different backends can share a fixture.
+func refusalStorm(
+	f *fixture, n, first, port int,
+) []inventory.EntityID {
+	var out []inventory.EntityID
+	for i := first; i < first+n; i++ {
+		for j, pod := range f.workload("shop", fmt.Sprintf("app%d", i), 2) {
+			f.failError(containerOf(pod), "CrashLoop", fmt.Sprintf(
+				"dial tcp 10.4.%d.%d:%d: connect: connection refused",
+				i, 10+j, port))
+			out = append(out, containerOf(pod))
+		}
+	}
+	return out
+}
+
+// TestExplainDifferentAddressesShareOneSignature: workloads that name
+// a different address each still share the error once it is
+// normalised, so the error is the root and the storm is one cause.
+func TestExplainDifferentAddressesShareOneSignature(t *testing.T) {
+	f := newFixture(t)
+	effects := redisStorm(f, 4)
+
+	e := f.explain()
+
+	want := "failure-signature//CrashLoop dial tcp <ip>:6379: connect: " +
+		"connection refused"
+	for _, effect := range effects {
+		requireCause(t, e, effect, want)
+	}
+	if got := causes(e); len(got) != 1 {
+		t.Fatalf("causes = %v, want one shared error", got)
+	}
+}
+
+// TestExplainPostgresAndRedisRefusalsStaySeparate: two storms with the
+// same words but different backend ports are two causes, not one.
+func TestExplainPostgresAndRedisRefusalsStaySeparate(t *testing.T) {
+	f := newFixture(t)
+	redis := refusalStorm(f, 3, 0, 6379)
+	postgres := refusalStorm(f, 3, 3, 5432)
+
+	e := f.explain()
+
+	requireCause(t, e, redis[0], "failure-signature//CrashLoop dial tcp "+
+		"<ip>:6379: connect: connection refused")
+	requireCause(t, e, postgres[0], "failure-signature//CrashLoop dial "+
+		"tcp <ip>:5432: connect: connection refused")
+	if got := causes(e); len(got) != 2 {
+		t.Fatalf("causes = %v, want two", got)
+	}
+}
+
+func TestExplainSignatureNeedsSeveralWorkloads(t *testing.T) {
+	f := newFixture(t)
+	effects := redisStorm(f, SignatureMinWorkloads-1)
+
+	e := f.explain()
+
+	for _, effect := range effects {
+		if c, ok := e.CauseOf(effect); ok &&
+			c.Root.Kind == KindFailureSignature {
+			t.Fatalf("%s blamed on %q with too few workloads", effect,
+				c.Root.Name)
+		}
+	}
+}
+
+// TestExplainSignatureNeedsFailuresBegunTogether: the same words days
+// apart are separate events, not one shared error.
+func TestExplainSignatureNeedsFailuresBegunTogether(t *testing.T) {
+	f := newFixture(t)
+	effects := redisStorm(f, 4)
+	for i, effect := range effects {
+		// Each workload fails a day after the one before it.
+		f.findings[effect][0].Since = t0.Add(
+			time.Duration(i/2) * 24 * time.Hour)
+	}
+
+	e := f.explain()
+
+	for _, effect := range effects {
+		if c, ok := e.CauseOf(effect); ok &&
+			c.Root.Kind == KindFailureSignature {
+			t.Fatalf("%s blamed on %q though failures were days apart",
+				effect, c.Root.Name)
+		}
+	}
+}
+
+// TestExplainDifferentErrorsShareNoSignature: three workloads, three
+// different errors: no shared signature.
+func TestExplainDifferentErrorsShareNoSignature(t *testing.T) {
+	f := newFixture(t)
+	messages := []string{"panic: cannot parse feature flag file",
+		"fatal: certificate for payments gateway expired",
+		"error: migration failed: column owner is missing"}
+	var effects []inventory.EntityID
+	for i, text := range messages {
+		for _, pod := range f.workload("shop", fmt.Sprintf("app%d", i), 2) {
+			f.failError(containerOf(pod), "CrashLoop", text)
+			effects = append(effects, containerOf(pod))
+		}
+	}
+
+	e := f.explain()
+
+	for _, effect := range effects {
+		if c, ok := e.CauseOf(effect); ok &&
+			c.Root.Kind == KindFailureSignature {
+			t.Fatalf("%s blamed on %q though errors differ", effect,
+				c.Root.Name)
+		}
+	}
+}
+
+// TestExplainBareGenericLinesShareNoSignature: lines every crash can
+// print never group workloads.
+func TestExplainBareGenericLinesShareNoSignature(t *testing.T) {
+	for _, text := range []string{"Error", "exit status 1", "panic:",
+		"Killed"} {
+		f := newFixture(t)
+		effects := callStorm(f, 4, text)
+		e := f.explain()
+		for _, effect := range effects {
+			if c, ok := e.CauseOf(effect); ok &&
+				c.Root.Kind == KindFailureSignature {
+				t.Fatalf("%q grouped %s under %q", text, effect,
+					c.Root.Name)
+			}
+		}
+	}
+}
+
+// TestExplainSignatureWindowCountsWorkloads: one workload with many
+// failing replicas must not outvote three workloads that began failing
+// together later; the window with the most workloads is the one kept.
+func TestExplainSignatureWindowCountsWorkloads(t *testing.T) {
+	f := newFixture(t)
+	for _, pod := range f.workload("shop", "big", 8) {
+		f.failError(containerOf(pod), "CrashLoop", "dial tcp 10.4.9.1:"+
+			"6379: connect: connection refused")
+	}
+	later := refusalStorm(f, 3, 1, 6379)
+	for _, effect := range later {
+		f.findings[effect][0].Since = t0.Add(2 * time.Hour)
+	}
+
+	e := f.explain()
+
+	for _, effect := range later {
+		c, ok := e.CauseOf(effect)
+		if !ok || c.Root.Kind != KindFailureSignature {
+			t.Fatalf("%s cause = %v, want the shared signature", effect,
+				c.Root)
+		}
 	}
 }

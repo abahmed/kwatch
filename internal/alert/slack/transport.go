@@ -75,6 +75,9 @@ var permanentSlackErrors = map[string]bool{
 	"msg_too_long":          true,
 	"no_text":               true,
 	"missing_scope":         true,
+	// chat.update refusals: the root cannot be edited, now or later.
+	"cant_update_message": true,
+	"edit_window_closed":  true,
 }
 
 // wrapSlackRateLimit classifies a Slack API error so retry logic can act on

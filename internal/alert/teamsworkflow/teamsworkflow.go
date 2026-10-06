@@ -3,10 +3,10 @@ package teamsworkflow
 import (
 	"context"
 	"encoding/json"
-	"strings"
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -78,11 +78,10 @@ func (t *TeamsWorkflow) Name() string {
 func (t *TeamsWorkflow) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
-	text := m.NoteText()
-	if len(m.Output) > 0 {
-		text += "\n\n```\n" + strings.Join(m.Output, "\n") + "\n```"
-	}
-	return t.SendMessage(ctx, notification.NeutralizeMentions(text))
+	return t.SendMessage(ctx, safetext.NoteWithOutput(
+		notification.NeutralizeMentions(m.NoteText()),
+		safetext.Lines(m.Output, notification.NeutralizeMentions),
+		"\n\n", 0))
 }
 
 // SendMessage sends text message to the provider

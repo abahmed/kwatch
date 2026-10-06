@@ -20,6 +20,8 @@ type workerStats struct {
 	skipped       atomic.Int64
 	late          atomic.Int64
 	jobTimeouts   atomic.Int64
+	abandoned     atomic.Int64
+	refused       atomic.Int64
 	timeouts      atomic.Int64
 }
 
@@ -43,6 +45,12 @@ type Stats struct {
 	InvestigationsLate int64
 	// InvestigationTimeouts counts investigations that hit their deadline.
 	InvestigationTimeouts int64
+	// InvestigationsAbandoned counts investigations that ignored their
+	// budget and were left running.
+	InvestigationsAbandoned int64
+	// InvestigationsRefused counts jobs refused because their kind had
+	// too many abandoned investigations still running.
+	InvestigationsRefused int64
 	// ShutdownTimeouts counts workers that did not stop within their
 	// shutdown deadline.
 	ShutdownTimeouts int64
@@ -53,13 +61,15 @@ type Stats struct {
 func (e *Engine) Stats() Stats {
 	s := &e.stats
 	return Stats{
-		StoreBatches:          s.batches.Load(),
-		StoreWriteFailures:    s.writeFailures.Load(),
-		Investigations:        s.investigated.Load(),
-		InvestigationsSkipped: s.skipped.Load(),
-		InvestigationsLate:    s.late.Load(),
-		InvestigationTimeouts: s.jobTimeouts.Load(),
-		ShutdownTimeouts:      s.timeouts.Load(),
+		StoreBatches:            s.batches.Load(),
+		StoreWriteFailures:      s.writeFailures.Load(),
+		Investigations:          s.investigated.Load(),
+		InvestigationsSkipped:   s.skipped.Load(),
+		InvestigationsLate:      s.late.Load(),
+		InvestigationTimeouts:   s.jobTimeouts.Load(),
+		InvestigationsAbandoned: s.abandoned.Load(),
+		InvestigationsRefused:   s.refused.Load(),
+		ShutdownTimeouts:        s.timeouts.Load(),
 	}
 }
 

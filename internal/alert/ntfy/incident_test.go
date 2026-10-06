@@ -21,7 +21,14 @@ func TestSendIncidentSendsShortWithPlainTags(t *testing.T) {
 			); err != nil {
 				t.Fatalf("SendIncident() error = %v", err)
 			}
-			body := rec.Last(t).JSON(t)
+			last := rec.Last(t)
+			if last.Path != "/" {
+				t.Fatalf("published to %q, want the server root", last.Path)
+			}
+			body := last.JSON(t)
+			if body["topic"] != "kwatch" {
+				t.Fatalf("topic = %v, want kwatch", body["topic"])
+			}
 			message, _ := body["message"].(string)
 			if message != tc.Message.Short {
 				t.Fatalf("message = %q", message)

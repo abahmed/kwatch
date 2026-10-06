@@ -170,3 +170,15 @@ func TestYamlNodeUnmarshalAndExpand(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Empty(t, unset)
 }
+
+func TestExpandConfigDocumentDoubleDollarKeepsLiteral(t *testing.T) {
+	os.Unsetenv("NOT_SET_ANYWHERE")
+
+	raw := "app:\n  clusterName: 'a-$${NOT_SET_ANYWHERE}-b'"
+	doc, err := expandConfigDocument(raw)
+
+	assert.NoError(t, err)
+	var result Config
+	assert.NoError(t, doc.Decode(&result))
+	assert.Equal(t, "a-${NOT_SET_ANYWHERE}-b", result.App.ClusterName)
+}

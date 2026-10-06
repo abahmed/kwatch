@@ -1,0 +1,7 @@
+{
+  "name": "release-regression",
+  "description": "Rollout 14 of a Deployment replaces a stable rollout 13. Its four pods stay running and ready but restart twice each within three minutes; rollout 13 never restarted.",
+  "root": "deployment/shop/checkout",
+  "tier": "notify",
+  "maxMessages": 2
+}

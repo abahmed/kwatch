@@ -72,17 +72,40 @@ func TestWorkloadStatefulSetRolloutWaitsForGrace(t *testing.T) {
 	assert.Equal(t, 9*time.Minute, eval.RecheckAfter)
 }
 
-func TestWorkloadStatefulSetRolloutHeldByPartition(t *testing.T) {
+func TestWorkloadStatefulSetRolloutHeldByPartitionIsIntentional(
+	t *testing.T,
+) {
 	m := newTestModel()
 	sts := newID(kube.KindStatefulSet, "ns", "web")
 	put(m, sts, t0, stsRollout(1, 2))
+	pod := newID(kube.KindPod, "ns", "web-0")
+	put(m, pod, t0, map[string]inventory.Value{
+		kube.AttrReady: inventory.Bool(true)})
+	link(m, pod, inventory.OwnedBy, sts)
+
+	eval := evaluate(NewWorkload(0), m, t0.Add(time.Hour), sts, nil)
+
+	assert.Empty(t, rolloutFindings(eval), "a canary is not a problem")
+}
+
+func TestWorkloadStatefulSetRolloutHeldByPartitionWithFailingPod(
+	t *testing.T,
+) {
+	m := newTestModel()
+	sts := newID(kube.KindStatefulSet, "ns", "web")
+	put(m, sts, t0, stsRollout(1, 2))
+	pod := newID(kube.KindPod, "ns", "web-2")
+	put(m, pod, t0, map[string]inventory.Value{
+		kube.AttrReady: inventory.Bool(false)})
+	link(m, pod, inventory.OwnedBy, sts)
 
 	eval := evaluate(NewWorkload(0), m, t0.Add(time.Minute), sts, nil)
 
 	found := rolloutFindings(eval)
 	require.Len(t, found, 1)
-	assert.Equal(t, detection.Info, found[0].Severity)
+	assert.Equal(t, detection.Warning, found[0].Severity)
 	assert.Contains(t, found[0].Summary, "partition 2")
+	assert.Contains(t, found[0].Summary, "web-2 not ready")
 }
 
 func TestWorkloadStatefulSetRolloutIgnoresSettledAndOnDelete(t *testing.T) {

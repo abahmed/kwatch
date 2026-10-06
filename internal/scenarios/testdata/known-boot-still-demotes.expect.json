@@ -1,0 +1,11 @@
+{
+  "name": "known-boot-still-demotes",
+  "description": "A known crash loop at the start of the day lasts six minutes, inside the boot window.",
+  "root": "deployment/shop/sync",
+  "tier": "notify",
+  "maxMessages": 5,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "1h0m0s"
+}

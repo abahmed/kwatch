@@ -10,7 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/abahmed/kwatch/internal/incident"
-	"github.com/abahmed/kwatch/internal/pipeline"
+	"github.com/abahmed/kwatch/internal/pipeline/announce"
 	"github.com/abahmed/kwatch/internal/replay"
 )
 
@@ -181,7 +181,7 @@ type persistingStore struct {
 	mu           sync.Mutex
 	incidents    []incident.Record
 	fingerprints map[string]string
-	startup      pipeline.StartupState
+	startup      announce.StartupState
 	hasStartup   bool
 }
 
@@ -230,13 +230,13 @@ func (s *persistingStore) SaveFingerprints(values map[string]any) error {
 	return nil
 }
 
-func (s *persistingStore) LoadStartup() (pipeline.StartupState, bool, error) {
+func (s *persistingStore) LoadStartup() (announce.StartupState, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.startup, s.hasStartup, nil
 }
 
-func (s *persistingStore) SaveStartup(state pipeline.StartupState) error {
+func (s *persistingStore) SaveStartup(state announce.StartupState) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.startup, s.hasStartup = state, true

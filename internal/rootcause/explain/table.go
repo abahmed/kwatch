@@ -49,7 +49,7 @@ const (
 // AnyKind and AnyGroup make a side match every kind or every group.
 const (
 	AnyKind  inventory.Kind = "*"
-	AnyGroup                = "*"
+	AnyGroup string         = "*"
 )
 
 // Pseudo modes describe candidates that have no finding of their own.

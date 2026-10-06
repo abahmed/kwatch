@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"time"
 )
@@ -73,6 +74,9 @@ func consumeMemory() {
 		}
 		blocks = append(blocks, block)
 	}
+	// Keeps every block reachable, so the memory stays resident.
+	// The deferred call keeps blocks live while blockForever never returns.
+	defer runtime.KeepAlive(blocks)
 	blockForever()
 }
 
@@ -107,7 +111,10 @@ func serve(healthy bool) {
 	http.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	httpServer := &http.Server{
+		Addr: ":8080", ReadHeaderTimeout: 10 * time.Second,
+	}
+	if err := httpServer.ListenAndServe(); err != nil {
 		os.Exit(44)
 	}
 }

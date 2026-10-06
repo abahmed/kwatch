@@ -72,8 +72,14 @@ func NewUpgrader(
 		copied = *upCfg
 	}
 	upCfg = &copied
-	if os.Getenv("SKIP_UPGRADE_CHECK") == "1" ||
-		os.Getenv("SKIP_UPGRADE_CHECK") == "true" {
+	skip, _, err := config.ParseEnvBool(
+		"SKIP_UPGRADE_CHECK", os.Getenv("SKIP_UPGRADE_CHECK"))
+	if err != nil {
+		// The constructor cannot fail; the check stays on.
+		klog.ErrorS(err, "ignoring SKIP_UPGRADE_CHECK",
+			"component", "upgrader")
+	}
+	if skip {
 		upCfg.DisableUpdateCheck = true
 	}
 	return &Upgrader{

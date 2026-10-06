@@ -1,0 +1,11 @@
+{
+  "name": "crashloop-after-announce",
+  "description": "A pod that was announced as not ready begins to crash-loop; the incident says so once.",
+  "root": "deployment/shop/pay",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "20m0s"
+}

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
@@ -99,4 +100,18 @@ func TestMutableTag(t *testing.T) {
 	} {
 		assert.Equal(t, want, mutableTag(image), image)
 	}
+}
+
+// Three replicas of one container are one container to fix, not three.
+func TestRiskCountsUnlimitedContainersPerTemplate(t *testing.T) {
+	m, deploy := riskWorkload(3, []string{"n1", "n2", "n3"},
+		map[string]inventory.Value{
+			kube.AttrImage:  inventory.Text("registry/api:2.4"),
+			kube.AttrProbes: inventory.Text("readiness"),
+		})
+
+	got := Risk{}.Detect(testDetectorContext(m, t0), entityOf(m, deploy))
+
+	require.Len(t, got, 1)
+	assert.Contains(t, got[0].Summary, "1 of its containers")
 }

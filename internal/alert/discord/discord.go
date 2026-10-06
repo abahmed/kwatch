@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -20,9 +21,13 @@ import (
 // maxContent is Discord's message content limit.
 const maxContent = 2000
 
+// defaultHost is where webhooks live unless the URL names another host.
+const defaultHost = "https://discord.com"
+
 type Discord struct {
 	httpClient *http.Client
 	sender     transport.Sender
+	host       string
 	id         string
 	token      string
 	send       func(webhookID,
@@ -60,6 +65,16 @@ func parseWebhook(webhook string) (string, string, string, bool) {
 	}
 	return parts[len(parts)-2], parts[len(parts)-1],
 		parsed.Query().Get("thread_id"), true
+}
+
+// webhookHost is the scheme and host of the webhook URL, or "" when the
+// URL has none (the default host is used then).
+func webhookHost(webhook string) string {
+	parsed, err := url.Parse(webhook)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	return parsed.Scheme + "://" + parsed.Host
 }
 
 // execute sends through the webhook, inside the configured thread if any.
@@ -103,10 +118,12 @@ func NewDiscord(
 		return nil
 	}
 	discordClient.Client = httpClient
+	disableLibraryRetries(discordClient)
 
 	return &Discord{
 		httpClient:  httpClient,
 		sender:      transport.NewSender(dependencies),
+		host:        webhookHost(webhook),
 		id:          webhookID,
 		token:       webhookToken,
 		send:        discordClient.WebhookExecute,
@@ -117,6 +134,14 @@ func NewDiscord(
 	}
 }
 
+// disableLibraryRetries stops discordgo from sleeping through a 429 on its
+// own. That sleep ignores the context, so the 429 must surface and be
+// handled by delivery's rate limiting instead.
+func disableLibraryRetries(s *discordgo.Session) {
+	s.ShouldRetryOnRateLimit = false
+	s.MaxRestRetries = 0
+}
+
 // Name returns name of the provider
 func (d *Discord) Name() string {
 	return "Discord"
@@ -124,13 +149,27 @@ func (d *Discord) Name() string {
 
 // Verify checks webhook credentials by issuing a GET to the webhook URL.
 func (d *Discord) Verify(ctx context.Context) error {
-	url := fmt.Sprintf("https://discord.com/api/webhooks/%s/%s", d.id, d.token)
 	_, err := d.sender.Send(ctx, transport.Request{
 		Provider: "Discord",
 		Method:   http.MethodGet,
-		URL:      url,
+		URL:      d.verifyURL(),
 	})
 	return err
+}
+
+// verifyURL is the webhook's own URL: the configured host (discord.com,
+// discordapp.com or a compatible server) and the thread it posts into.
+func (d *Discord) verifyURL() string {
+	host := d.host
+	if host == "" {
+		host = defaultHost
+	}
+	target := fmt.Sprintf("%s/api/webhooks/%s/%s",
+		host, url.PathEscape(d.id), url.PathEscape(d.token))
+	if d.threadID != "" {
+		target += "?thread_id=" + url.QueryEscape(d.threadID)
+	}
+	return target
 }
 
 // SendIncident posts the incident narrative as the message content, with
@@ -155,12 +194,10 @@ func (d *Discord) SendIncident(
 // incidentContent is the Note plus the last output, mention-neutralized
 // and bounded.
 func incidentContent(m notification.Message) string {
-	text := m.NoteText()
-	if len(m.Output) > 0 {
-		text += "\n```\n" + strings.Join(m.Output, "\n") + "\n```"
-	}
-	return notification.Truncate(
-		notification.NeutralizeMentions(text), maxContent,
+	return safetext.NoteWithOutput(
+		notification.NeutralizeMentions(m.NoteText()),
+		safetext.Lines(m.Output, notification.NeutralizeMentions),
+		"\n", maxContent,
 	)
 }
 
