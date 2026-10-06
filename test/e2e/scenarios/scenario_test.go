@@ -46,6 +46,18 @@ func inNamespace(t *testing.T, id string, run func(s *Scenario)) {
 	inOwnNamespace(t, id, run)
 }
 
+// inNamespaceEarly is inNamespace for a scenario that waits many minutes
+// for its announcement and so is the longest one of a run. It starts as
+// soon as Kwatch has synced instead of after the whole startup window,
+// because the clock of its detector starts when Kwatch first sees the
+// object. Its own problem is created after the sync, so the startup
+// summary does not hold it, and its expectation is checked as always.
+func inNamespaceEarly(t *testing.T, id string, run func(s *Scenario)) {
+	t.Helper()
+	t.Parallel()
+	runScenarioAfter(t, id, waitForKwatchSynced, namespaceRunner(run))
+}
+
 // inNamespaceAlone runs a scenario in its own namespace while no other
 // scenario runs. Use it when the scenario disturbs something every scenario
 // shares: a node, the Kwatch Pod, the webhook receiver, or the cluster's
@@ -57,9 +69,15 @@ func inNamespaceAlone(t *testing.T, id string, run func(s *Scenario)) {
 
 func inOwnNamespace(t *testing.T, id string, run func(s *Scenario)) {
 	t.Helper()
-	runScenario(t, id, func(
-		ctx context.Context, t *testing.T, e *harness.Environment,
-	) {
+	runScenario(t, id, namespaceRunner(run))
+}
+
+// namespaceRunner wraps run so it gets a fresh namespace that is deleted
+// afterwards.
+func namespaceRunner(
+	run func(s *Scenario),
+) func(context.Context, *testing.T, *harness.Environment) {
+	return func(ctx context.Context, t *testing.T, e *harness.Environment) {
 		namespace := uniqueNamespace(t.Name())
 		if err := createNamespace(ctx, e, namespace); err != nil {
 			t.Fatal(err)
@@ -67,7 +85,7 @@ func inOwnNamespace(t *testing.T, id string, run func(s *Scenario)) {
 		defer cleanupNamespace(t, e, namespace)
 		run(&Scenario{T: t, Ctx: ctx, Env: e, Namespace: namespace,
 			started: time.Now()})
-	})
+	}
 }
 
 // onCluster runs a scenario that has no namespace of its own, such as a

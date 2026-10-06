@@ -146,12 +146,14 @@ jobs:
     timeout-minutes: 150
     permissions:
       contents: read
-    # The full suite is split over six Kind clusters that run in parallel.
+    # The full suite is split over ten Kind clusters that run in parallel.
     # The shard count is only this list: scenarios are dealt to shards by
-    # test/e2e/scenarios/sharding_test.go, so any count works. Each extra
-    # shard costs a few minutes of cluster setup and cold start. A filtered or compare
-    # run keeps one cluster, since its own filter already picks the
-    # scenarios.
+    # test/e2e/scenarios/sharding_test.go, so any count works. The slowest
+    # scenarios (the ten-minute PDB one and the cluster DNS outage) get a
+    # cluster each. Extra clusters are free on a public repository, but a
+    # run should stay under the 20 concurrent jobs GitHub allows. A
+    # filtered or compare run keeps one cluster, since its own filter
+    # already picks the scenarios.
     strategy:
       fail-fast: false
       matrix:
@@ -159,7 +161,7 @@ jobs:
           ${{ fromJSON(
           (inputs.scenario != '' || inputs.family != '' || inputs.shard != ''
           || inputs.compare_with_main) && '[""]'
-          || '["1/6","2/6","3/6","4/6","5/6","6/6"]') }}
+          || '["1/10","2/10","3/10","4/10","5/10","6/10","7/10","8/10","9/10","10/10"]') }}
     env:
       SOURCE_REF: >-
         ${{ inputs.compare_with_main && 'main' || github.ref_name }}
@@ -224,13 +226,14 @@ jobs:
           name: kwatch-e2e-images-${{ github.run_attempt }}
           path: ${{ runner.temp }}/e2e-images
 
-      - name: Load e2e images
-        if: ${{ !inputs.compare_with_main }}
-        run: docker load --input "${RUNNER_TEMP}/e2e-images/e2e-images.tar.gz"
-
       - name: Run Kind scenarios
         env:
           KWATCH_PREBUILT_IMAGES: "${{ !inputs.compare_with_main }}"
+          # The script loads the images while the Kind cluster is created.
+          KWATCH_IMAGES_ARCHIVE: >-
+            ${{ !inputs.compare_with_main
+            && format('{0}/e2e-images/e2e-images.tar.gz', runner.temp)
+            || '' }}
           ARTIFACTS: "${{ runner.temp }}/kwatch-e2e"
           KIND_CLUSTER_NAME: "kwatch-e2e-${{ github.run_id }}"
           KEEP_CLUSTER: "${{ inputs.keep_cluster || false }}"

@@ -145,7 +145,7 @@ var nodeRows = []Row{
 			detection.ModeNotReady, detection.ModeStatusUnknown,
 			detection.ModeEvicted, detection.ModeUnreachable,
 			detection.ModeFailed, detection.ModeStuckDeleting,
-			detection.ModeProbe),
+			detection.ModeProbe, detection.ModePending),
 		Prior: 0.8,
 	},
 	{

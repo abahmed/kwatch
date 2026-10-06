@@ -116,6 +116,7 @@ func library() []scenario {
 		commonFactorScenarios(), dependencyScenarios(), bootScenarios(),
 		bootEndpointScenarios(),
 		releaseScenarios(), metricsHPAScenarios(), nodeFlapScenarios(),
+		nodePinnedScenarios(),
 		recentChangeScenarios(), fixAttemptScenarios(),
 		flipScenarios(), unschedulableQuantifiedScenarios(),
 		readyNeverScenarios(), namespaceOutageScenarios(),

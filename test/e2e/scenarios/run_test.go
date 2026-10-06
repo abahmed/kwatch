@@ -49,6 +49,18 @@ func runScenario(
 	run func(context.Context, *testing.T, *harness.Environment),
 ) {
 	t.Helper()
+	runScenarioAfter(t, id, waitForColdStart, run)
+}
+
+// runScenarioAfter is runScenario with its own rule for how long to wait
+// for Kwatch before the scenario starts.
+func runScenarioAfter(
+	t *testing.T,
+	id string,
+	waitForKwatch func(context.Context, *harness.Environment) error,
+	run func(context.Context, *testing.T, *harness.Environment),
+) {
+	t.Helper()
 	if os.Getenv("KWATCH_E2E") != "true" {
 		t.Skip("set KWATCH_E2E=true to run real-cluster scenarios")
 	}
@@ -73,7 +85,7 @@ func runScenario(
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = environment.Close() })
-		if err := waitForColdStart(ctx, environment); err != nil {
+		if err := waitForKwatch(ctx, environment); err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { captureDiagnosticsIfFailed(t, environment) })

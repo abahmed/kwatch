@@ -24,9 +24,10 @@ func TestScenarioDaemonSetFailure(t *testing.T) {
 	})
 }
 
-// A budget that cannot be met is raised only after ten minutes.
+// A budget that cannot be met is raised only after ten minutes, counted
+// from when Kwatch first sees it, so the scenario starts early.
 func TestScenarioPDBDisruption(t *testing.T) {
-	inNamespace(t, "workload.pdb-disruption", func(s *Scenario) {
+	inNamespaceEarly(t, "workload.pdb-disruption", func(s *Scenario) {
 		s.CreateDeployment("protected", "crash")
 		s.CreatePodDisruptionBudget(
 			podDisruptionBudget("protected", "protected"))

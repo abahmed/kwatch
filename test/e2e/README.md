@@ -103,10 +103,13 @@ they are never pushed to a registry.
 The `e2e.yml` workflow (nightly, manual, or on PRs labelled `e2e`) resolves the
 latest `main` commit to an immutable SHA before building and runs the complete
 scenario suite, including the extended Kind cases. A full run is split over
-six Kind clusters that run in parallel. Tests are dealt to the clusters
+ten Kind clusters that run in parallel. Tests are dealt to the clusters
 longest first using the measured seconds in `scenarios/sharding_test.go`,
-so every cluster finishes at about the same time. Inside a cluster the scenarios that must
-run alone go first, then the rest run side by side (six at a time; set
+so every cluster finishes at about the same time. The ten-minute PDB scenario
+and the cluster DNS outage each get a cluster to themselves. The lock table in
+that file says what every exclusive scenario disturbs. Inside a cluster the
+scenarios that must run alone go first, then the rest run side by side (ten
+at a time; set
 `SCENARIO_PARALLEL` to change it). A run with a scenario, family, shard or
 compare filter uses one cluster. It accepts a scenario regex,
 family, shard, and optional cluster retention for debugging. In compare mode it

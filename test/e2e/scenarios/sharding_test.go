@@ -16,6 +16,54 @@ type scenarioCost struct {
 	// Alone is true when the scenario runs through inNamespaceAlone or
 	// onCluster. Alone scenarios run one after another before the rest.
 	Alone bool
+	// Disturbs names what an Alone scenario changes for everyone else, so
+	// that a reader can see why it is exclusive. It is empty for scenarios
+	// that stay inside their own namespace. See the lock table below.
+	Disturbs string
+	// Own gives the scenario a Kind cluster to itself, so nothing waits
+	// for it and it waits for nothing.
+	Own bool
+}
+
+// Lock table. Every Alone scenario names in Disturbs what it changes for
+// the others, and Alone scenarios run one after another inside a shard:
+//
+//	kwatch-pod         restarts or replaces the Kwatch Pod
+//	kwatch-config      changes the KwatchConfig Kwatch is running with
+//	receiver           makes the webhook receiver fail or empties it
+//	cluster-dns        stops CoreDNS, which every Pod depends on
+//	metrics-api        breaks the metrics APIService HPAs read
+//	admission-webhook  adds a webhook that sees every create
+//	volume-attachment  adds a failed cluster-wide VolumeAttachment
+//	worker-node        stops a worker node and its Pods
+//	scheduler-load     crashes 50 Pods and floods the event stream
+//
+// Two scenarios that disturb different things could in principle overlap,
+// but nothing proves they cannot influence each other's assertions (all of
+// them read the same Kwatch output), so they stay exclusive. The speed-up
+// comes from the cluster count instead: extra Kind clusters are free, so
+// the balancer deals Alone scenarios over many shards and gives the
+// slowest ones (Own) a whole cluster. Treat an unlisted scenario as
+// exclusive.
+
+// shared is a scenario that stays inside its own namespace.
+func shared(seconds int) scenarioCost { return scenarioCost{Seconds: seconds} }
+
+// alone is an exclusive scenario that disturbs the named resource.
+func alone(seconds int, disturbs string) scenarioCost {
+	return scenarioCost{Seconds: seconds, Alone: true, Disturbs: disturbs}
+}
+
+// own is an exclusive scenario that also gets a cluster to itself.
+func own(seconds int, disturbs string) scenarioCost {
+	c := alone(seconds, disturbs)
+	c.Own = true
+	return c
+}
+
+// ownShared is a namespaced scenario that gets a cluster to itself.
+func ownShared(seconds int) scenarioCost {
+	return scenarioCost{Seconds: seconds, Own: true}
 }
 
 // scenarioCosts lists every covered test. A test missing here is treated as
@@ -23,65 +71,77 @@ type scenarioCost struct {
 // TestScenarioCostsMatchHelpers fails when Alone disagrees with the helper
 // the test really uses.
 var scenarioCosts = map[string]scenarioCost{
-	"TestScenarioActiveProbeFailureAndRecovery":  {260, true},
-	"TestScenarioConfigurationReload":            {3, true},
-	"TestScenarioCronJobSuspended":               {82, false},
-	"TestScenarioDaemonSetFailure":               {87, false},
-	"TestScenarioDeploymentRolloutFailure":       {88, false},
-	"TestScenarioExtendedAdmissionWebhook":       {147, true},
-	"TestScenarioExtendedClusterDNSDown":         {232, true},
-	"TestScenarioExtendedMetricsAPIFailure":      {207, true},
-	"TestScenarioExtendedTLS":                    {82, false},
-	"TestScenarioExtendedVolumeAttachment":       {214, true},
-	"TestScenarioHeartbeatDelivery":              {2, true},
-	"TestScenarioInvalidLiveConfiguration":       {61, true},
-	"TestScenarioInvalidStartupConfiguration":    {87, true},
-	"TestScenarioJobFailure":                     {84, false},
-	"TestScenarioLeaseHandover":                  {91, true},
-	"TestScenarioMissingConfigMapReference":      {87, false},
-	"TestScenarioMissingIngressBackend":          {142, false},
-	"TestScenarioMissingRequiredReferences":      {87, false},
-	"TestScenarioMissingServiceAccountReference": {87, false},
-	"TestScenarioNodePressureSignals":            {84, true},
-	"TestScenarioNodeRecovery":                   {184, true},
-	// Kwatch raises a PDB violation only after ten minutes. It runs
-	// beside other scenarios, but no shard can finish before it does.
-	"TestScenarioPDBDisruption":                {687, false},
-	"TestScenarioPersistentVolumeClaimFailure": {131, false},
-	"TestScenarioPodCrashLoop":                 {87, false},
-	"TestScenarioPodEphemeralStorageEviction":  {94, false},
-	"TestScenarioPodFailureProfiles":           {177, false},
-	"TestScenarioPodLifecycleHookFailure":      {87, false},
-	"TestScenarioPodLivenessFailure":           {91, false},
-	"TestScenarioPodOOMKilled":                 {90, false},
-	"TestScenarioPodReadinessFailure":          {117, false},
-	"TestScenarioPodSecurityAdmission":         {6, false},
-	"TestScenarioPodStartupFailureProfiles":    {89, false},
-	"TestScenarioPodUnschedulable":             {202, false},
-	"TestScenarioProviderFailureRecovery":      {210, true},
-	"TestScenarioRefailureAfterRecovery":       {345, false},
-	"TestScenarioReplicaSetFailure":            {82, false},
-	"TestScenarioResolution":                   {264, false},
-	"TestScenarioRestartPersistence":           {91, true},
-	"TestScenarioRestrictiveNetworkPolicy":     {82, false},
-	"TestScenarioRootCauseSharedNode":          {180, true},
-	"TestScenarioRootCauseSharedRegistry":      {88, false},
-	"TestScenarioRootCauseSmallStorm":          {89, true},
-	"TestScenarioServiceWithoutEndpoints":      {142, false},
-	"TestScenarioStatefulSetFailure":           {89, false},
+	"TestScenarioActiveProbeFailureAndRecovery":  alone(268, "kwatch-config"),
+	"TestScenarioConfigurationReload":            alone(3, "kwatch-config"),
+	"TestScenarioCronJobSuspended":               shared(82),
+	"TestScenarioDaemonSetFailure":               shared(87),
+	"TestScenarioDeploymentRolloutFailure":       shared(88),
+	"TestScenarioExtendedAdmissionWebhook":       alone(147, "admission-webhook"),
+	"TestScenarioExtendedClusterDNSDown":         own(206, "cluster-dns"),
+	"TestScenarioExtendedMetricsAPIFailure":      alone(203, "metrics-api"),
+	"TestScenarioExtendedTLS":                    shared(82),
+	"TestScenarioExtendedVolumeAttachment":       alone(198, "volume-attachment"),
+	"TestScenarioHeartbeatDelivery":              alone(2, "kwatch-pod"),
+	"TestScenarioInvalidLiveConfiguration":       alone(65, "kwatch-config"),
+	"TestScenarioInvalidStartupConfiguration":    alone(3, "kwatch-config"),
+	"TestScenarioJobFailure":                     shared(84),
+	"TestScenarioLeaseHandover":                  alone(91, "kwatch-pod"),
+	"TestScenarioMissingConfigMapReference":      shared(87),
+	"TestScenarioMissingIngressBackend":          shared(142),
+	"TestScenarioMissingRequiredReferences":      shared(87),
+	"TestScenarioMissingServiceAccountReference": shared(87),
+	"TestScenarioNodePressureSignals":            alone(84, "worker-node"),
+	"TestScenarioNodeRecovery":                   alone(222, "worker-node"),
+	// Kwatch raises a PDB violation ten minutes after it first sees the
+	// budget, so this scenario sets the length of the whole run. It has a
+	// Kind cluster to itself and starts as soon as Kwatch is running.
+	"TestScenarioPDBDisruption":                ownShared(665),
+	"TestScenarioPersistentVolumeClaimFailure": shared(131),
+	"TestScenarioPodCrashLoop":                 shared(87),
+	"TestScenarioPodEphemeralStorageEviction":  shared(94),
+	"TestScenarioPodFailureProfiles":           shared(241),
+	"TestScenarioPodLifecycleHookFailure":      shared(87),
+	"TestScenarioPodLivenessFailure":           shared(91),
+	"TestScenarioPodOOMKilled":                 shared(90),
+	"TestScenarioPodReadinessFailure":          shared(117),
+	"TestScenarioPodSecurityAdmission":         shared(6),
+	"TestScenarioPodStartupFailureProfiles":    shared(89),
+	"TestScenarioPodUnschedulable":             shared(202),
+	"TestScenarioProviderFailureRecovery":      alone(210, "receiver"),
+	"TestScenarioRefailureAfterRecovery":       shared(345),
+	"TestScenarioReplicaSetFailure":            shared(82),
+	"TestScenarioResolution":                   shared(264),
+	"TestScenarioRestartPersistence":           alone(91, "kwatch-pod"),
+	"TestScenarioRestrictiveNetworkPolicy":     shared(82),
+	"TestScenarioRootCauseSharedNode":          alone(180, "worker-node"),
+	"TestScenarioRootCauseSharedRegistry":      shared(88),
+	"TestScenarioRootCauseSmallStorm":          alone(89, "scheduler-load"),
+	"TestScenarioServiceWithoutEndpoints":      shared(142),
+	"TestScenarioStatefulSetFailure":           shared(89),
 }
 
 // parallelSlots is how many side-by-side scenarios one shard runs; it
 // matches the default SCENARIO_PARALLEL of scripts/test-kind-scenarios.sh.
-const parallelSlots = 6
+const parallelSlots = 10
 
 const unknownScenarioSeconds = 90
+
+// nodeDisturbance is the Disturbs value of the scenarios that stop a worker
+// node. A node incident stays open for a while after the node is back, so a
+// second scenario that stops the same worker in the same cluster would only
+// update that incident. Each such scenario therefore gets its own shard
+// whenever there are enough shards.
+const nodeDisturbance = "worker-node"
+
+// ownShardsFrom is the smallest shard count that gives Own scenarios a
+// shard each; with fewer shards they would starve the others.
+const ownShardsFrom = 8
 
 func costOf(test string) scenarioCost {
 	if cost, ok := scenarioCosts[test]; ok {
 		return cost
 	}
-	return scenarioCost{unknownScenarioSeconds, true}
+	return alone(unknownScenarioSeconds, "unknown")
 }
 
 // shardLoad is the work already dealt to one shard.
@@ -141,14 +201,35 @@ func shardPlan(total int) map[string]int {
 	})
 	loads := make([]shardLoad, total)
 	plan := make(map[string]int, len(tests))
+	// Own scenarios take the first shards, one each, when there are enough
+	// shards. The rest are dealt over the other shards.
+	first := 0
+	var rest []string
 	for _, test := range tests {
-		best := 0
-		for shard := range loads {
-			cost := costOf(test)
-			if loads[shard].with(cost).finish() <
+		if costOf(test).Own && total >= ownShardsFrom && first < total-1 {
+			plan[test] = first
+			loads[first] = loads[first].with(costOf(test))
+			first++
+			continue
+		}
+		rest = append(rest, test)
+	}
+	nodeShards := map[int]bool{}
+	for _, test := range rest {
+		cost := costOf(test)
+		best := -1
+		for shard := first; shard < total; shard++ {
+			if cost.Disturbs == nodeDisturbance && nodeShards[shard] &&
+				len(nodeShards) < total-first {
+				continue
+			}
+			if best < 0 || loads[shard].with(cost).finish() <
 				loads[best].with(cost).finish() {
 				best = shard
 			}
+		}
+		if cost.Disturbs == nodeDisturbance {
+			nodeShards[best] = true
 		}
 		plan[test] = best
 		loads[best] = loads[best].with(costOf(test))

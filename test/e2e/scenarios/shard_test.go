@@ -3,6 +3,7 @@
 package scenarios
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,7 +12,7 @@ import (
 )
 
 func TestShardPlanBalancesWork(t *testing.T) {
-	for _, shards := range []int{4, 5, 6} {
+	for _, shards := range []int{4, 6, 8, 10} {
 		checkBalance(t, shards)
 	}
 }
@@ -42,7 +43,7 @@ func checkBalance(t *testing.T, shards int) {
 }
 
 func TestShardPlanAssignsEveryTestToAValidShard(t *testing.T) {
-	for _, shards := range []int{1, 4, 6} {
+	for _, shards := range []int{1, 4, 6, 10} {
 		plan := shardPlan(shards)
 		for test, shard := range plan {
 			if shard < 0 || shard >= shards {
@@ -55,8 +56,8 @@ func TestShardPlanAssignsEveryTestToAValidShard(t *testing.T) {
 func TestBelongsToShardPlacesEachScenarioOnce(t *testing.T) {
 	for id := range scenarioTests() {
 		var owners int
-		for _, shard := range []string{"1/6", "2/6", "3/6", "4/6", "5/6", "6/6"} {
-			if belongsToShard(id, shard) {
+		for index := 1; index <= 10; index++ {
+			if belongsToShard(id, fmt.Sprintf("%d/10", index)) {
 				owners++
 			}
 		}
@@ -67,7 +68,7 @@ func TestBelongsToShardPlacesEachScenarioOnce(t *testing.T) {
 	if !belongsToShard("anything", "") {
 		t.Error("an empty shard value must run every scenario")
 	}
-	if belongsToShard("anything", "7/6") {
+	if belongsToShard("anything", "11/10") {
 		t.Error("an out-of-range shard must run nothing")
 	}
 }
@@ -93,7 +94,7 @@ var (
 		`^\s*(inNamespaceAlone|inExtendedNamespaceAlone|onCluster|` +
 			`inExtendedCluster)\(`)
 	sharedCalls = regexp.MustCompile(
-		`^\s*(inNamespace|inExtendedNamespace)\(`)
+		`^\s*(inNamespace|inNamespaceEarly|inExtendedNamespace)\(`)
 )
 
 // The Alone flag decides which scenarios are dealt as exclusive, so it must
@@ -146,4 +147,49 @@ func helperClass(body string) (alone, ok bool) {
 		}
 	}
 	return false, false
+}
+
+// Every exclusive scenario must say what it disturbs, and no other one may.
+func TestAloneScenariosNameWhatTheyDisturb(t *testing.T) {
+	for test, cost := range scenarioCosts {
+		if cost.Alone && cost.Disturbs == "" {
+			t.Errorf("%s is Alone but names nothing it disturbs", test)
+		}
+		if !cost.Alone && cost.Disturbs != "" {
+			t.Errorf("%s disturbs %q but is not Alone", test, cost.Disturbs)
+		}
+	}
+}
+
+// An Own scenario must be the only one on its shard.
+func TestOwnScenariosShareNoShard(t *testing.T) {
+	plan := shardPlan(10)
+	for test, cost := range scenarioCosts {
+		if !cost.Own {
+			continue
+		}
+		for other, shard := range plan {
+			if other != test && shard == plan[test] {
+				t.Errorf("%s shares shard %d with %s", test, shard+1, other)
+			}
+		}
+	}
+}
+
+// Two scenarios that stop a worker node must not share a cluster.
+func TestNodeStoppingScenariosUseDifferentShards(t *testing.T) {
+	for _, shards := range []int{6, 8, 10} {
+		plan := shardPlan(shards)
+		seen := map[int]string{}
+		for test, cost := range scenarioCosts {
+			if cost.Disturbs != nodeDisturbance {
+				continue
+			}
+			if other, ok := seen[plan[test]]; ok {
+				t.Errorf("%d shards: %s and %s share shard %d",
+					shards, test, other, plan[test]+1)
+			}
+			seen[plan[test]] = test
+		}
+	}
 }
