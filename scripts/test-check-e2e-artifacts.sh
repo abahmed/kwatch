@@ -24,9 +24,9 @@ sh "$check" --redact "$tmp_dir" || {
 	echo "FAIL: redaction must leave a clean directory" >&2
 	exit 1
 }
-grep -q 'keep me' "$tmp_dir/unsafe.log" &&
-	grep -q 'keep too' "$tmp_dir/unsafe.log" || {
+if ! grep -q 'keep me' "$tmp_dir/unsafe.log" ||
+	! grep -q 'keep too' "$tmp_dir/unsafe.log"; then
 	echo "FAIL: redaction must keep the safe lines" >&2
 	exit 1
-}
+fi
 echo "e2e artifact check: PASS"

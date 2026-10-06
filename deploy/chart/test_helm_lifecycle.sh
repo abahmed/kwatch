@@ -14,7 +14,8 @@ tmp_chart="$(mktemp -d)"
 root_dir="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=scripts/require-kind-context.sh
 . "$root_dir/scripts/require-kind-context.sh"
-require_kind_context || exit 2
+# No argument: any kind-* context is accepted.
+require_kind_context "" || exit 2
 
 cleanup() {
   helm uninstall "$release" --namespace "$namespace" >/dev/null 2>&1 || true
