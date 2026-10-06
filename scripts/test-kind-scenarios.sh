@@ -43,6 +43,7 @@ sanitize_bin=""
 metrics_manifest=""
 kubeconfig_file=""
 cluster_created=false
+kind_pid=""
 
 require_tool() {
 	if ! command -v "$1" >/dev/null 2>&1; then
@@ -270,6 +271,9 @@ wait_for_http() {
 cleanup() {
 	status=${1:-$?}
 	trap - EXIT INT TERM
+	if [ -n "$kind_pid" ]; then
+		wait "$kind_pid" >/dev/null 2>&1 || true
+	fi
 	collect_diagnostics
 	if [ "$KEEP_CLUSTER" != true ] && [ "$cluster_created" = true ]; then
 		kind delete cluster --name "$KIND_CLUSTER_NAME" >/dev/null 2>&1 || true
@@ -327,28 +331,48 @@ for required_file in Dockerfile deploy/crd.yaml deploy/deploy.yaml; do
 		exit 2
 	fi
 done
-if [ "$KWATCH_IMAGE" = kwatch:e2e ]; then
-	KWATCH_IMAGE="kwatch:e2e-${source_sha}"
-	docker build --load --tag "$KWATCH_IMAGE" \
-		--build-arg RELEASE_VERSION=e2e \
-		--build-arg GIT_COMMIT="$source_sha" \
-		--build-arg BUILD_DATE="$BUILD_DATE" "$candidate_root"
-	built_images="$KWATCH_IMAGE"
-fi
-
 receiver_image="kwatch-e2e-receiver:${source_sha}"
 workload_image="kwatch-e2e-workload:${source_sha}"
 receiver_host="kwatch-e2e-receiver.kwatch-e2e-system.svc.cluster.local"
 receiver_url="http://${receiver_host}:8080/webhook"
-docker build --load --tag "$receiver_image" test/e2e/receiver
-docker build --load --tag "$workload_image" test/e2e/workload
-built_images="$built_images $receiver_image $workload_image"
+default_kwatch_image=false
+if [ "$KWATCH_IMAGE" = kwatch:e2e ]; then
+	KWATCH_IMAGE="kwatch:e2e-${source_sha}"
+	default_kwatch_image=true
+fi
 
+# The cluster does not need the images to start, so create it while the
+# images build. cluster_created is set first so a failed build still deletes
+# the cluster in cleanup.
+cluster_created=true
 kind create cluster \
 	--name "$KIND_CLUSTER_NAME" \
 	--kubeconfig "$kubeconfig_file" \
-	--config test/e2e/testdata/kind-config.yaml
-cluster_created=true
+	--config test/e2e/testdata/kind-config.yaml &
+kind_pid=$!
+
+# KWATCH_PREBUILT_IMAGES=true means an earlier CI job built the images and
+# loaded them into Docker; they are only checked here, never removed.
+if [ "${KWATCH_PREBUILT_IMAGES:-false}" = true ]; then
+	for image in "$KWATCH_IMAGE" "$receiver_image" "$workload_image"; do
+		if ! docker image inspect "$image" >/dev/null 2>&1; then
+			echo "prebuilt image is missing: $image" >&2
+			exit 1
+		fi
+	done
+else
+	BUILD_KWATCH_IMAGE="$default_kwatch_image" \
+		KWATCH_SOURCE_SHA="$source_sha" BUILD_DATE="$BUILD_DATE" \
+		KWATCH_CANDIDATE_ROOT="$candidate_root" \
+		"$harness_root/scripts/build-e2e-images.sh"
+	built_images="$receiver_image $workload_image"
+	if [ "$default_kwatch_image" = true ]; then
+		built_images="$KWATCH_IMAGE $built_images"
+	fi
+fi
+
+wait "$kind_pid"
+kind_pid=""
 # shellcheck source=scripts/require-kind-context.sh
 . "$harness_root/scripts/require-kind-context.sh"
 require_kind_context "kind-$KIND_CLUSTER_NAME"

@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -112,7 +111,7 @@ func uniqueNamespace(name string) string {
 		value = time.Now().Format("20060102150405")
 	}
 	sequence := namespaceSequence.Add(1)
-	hash := sha1.Sum([]byte(name + ":" + value))
+	hash := sha1Sum(name + ":" + value)
 	suffix := hex.EncodeToString(hash[:])[:8]
 	return "kwatch-e2e-" + value + "-" + suffix +
 		"-" + strconv.FormatUint(uint64(sequence), 10)
@@ -139,6 +138,10 @@ func cleanupNamespace(t *testing.T, e *harness.Environment, name string) {
 	}
 }
 
+func sha1Sum(text string) [sha1.Size]byte {
+	return sha1.Sum([]byte(text))
+}
+
 // belongsToShard reports whether this run owns the scenario. value is
 // "index/total" (for example "2/4"); an empty value owns every scenario.
 func belongsToShard(id, value string) bool {
@@ -155,56 +158,6 @@ func belongsToShard(id, value string) bool {
 		return false
 	}
 	return shardOf(id, total) == index-1
-}
-
-// shardOf picks the shard that runs scenario id. Scenarios are grouped by
-// their test function (several coverage entries can share one test) and the
-// tests are dealt out longest first, each to the shard with the least work
-// so far, using the minutes in coverage.yaml (one minute when unset). An ID
-// missing from the catalog falls back to a hash.
-func shardOf(id string, total int) int {
-	test, ok := scenarioTests()[id]
-	if !ok {
-		hash := sha1.Sum([]byte(id))
-		return int(hash[0]) % total
-	}
-	return shardPlan(total)[test]
-}
-
-// shardPlan maps every covered test to its shard.
-func shardPlan(total int) map[string]int {
-	type work struct {
-		test    string
-		minutes int
-	}
-	minutes := map[string]int{}
-	var tests []string
-	for _, entry := range coveredEntries() {
-		if _, seen := minutes[entry.Test]; !seen {
-			tests = append(tests, entry.Test)
-		}
-		minutes[entry.Test] = max(minutes[entry.Test], entry.Minutes, 1)
-	}
-	jobs := make([]work, 0, len(tests))
-	for _, test := range tests {
-		jobs = append(jobs, work{test, minutes[test]})
-	}
-	sort.SliceStable(jobs, func(i, j int) bool {
-		return jobs[i].minutes > jobs[j].minutes
-	})
-	load := make([]int, total)
-	plan := make(map[string]int, len(jobs))
-	for _, job := range jobs {
-		lightest := 0
-		for shard := range load {
-			if load[shard] < load[lightest] {
-				lightest = shard
-			}
-		}
-		plan[job.test] = lightest
-		load[lightest] += job.minutes
-	}
-	return plan
 }
 
 // scenarioTests maps every covered scenario ID to its test function.

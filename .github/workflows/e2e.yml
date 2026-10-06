@@ -100,11 +100,45 @@ env:
   KIND_VERSION: v0.30.0
 
 jobs:
+  # The images are built once here and loaded by every job below, instead of
+  # being rebuilt in each of them. Compare mode builds its own images from
+  # two different sources, so it does not use them.
+  build:
+    name: Build e2e images
+    if: >-
+      (github.event_name != 'pull_request'
+      || contains(github.event.pull_request.labels.*.name, 'e2e'))
+      && !inputs.compare_with_main
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Build and save images
+        run: ./scripts/build-e2e-images.sh "${RUNNER_TEMP}/e2e-images.tar.gz"
+
+      - name: Upload images
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: kwatch-e2e-images-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/e2e-images.tar.gz
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
   scenarios:
+    needs: build
     name: >-
       Kind regression scenarios${{ matrix.shard != '' && format(' ({0})', matrix.shard) || '' }}
     if: >-
-      (github.event_name != 'pull_request'
+      !cancelled() && (needs.build.result == 'success'
+      || inputs.compare_with_main)
+      && (github.event_name != 'pull_request'
       || contains(github.event.pull_request.labels.*.name, 'e2e'))
       && (github.event_name != 'workflow_dispatch'
       || inputs.suite == 'all' || inputs.suite == 'scenarios')
@@ -112,9 +146,12 @@ jobs:
     timeout-minutes: 150
     permissions:
       contents: read
-    # The full suite is split over four Kind clusters that run in parallel.
-    # A filtered or compare run keeps one cluster, since its own filter
-    # already picks the scenarios.
+    # The full suite is split over six Kind clusters that run in parallel.
+    # The shard count is only this list: scenarios are dealt to shards by
+    # test/e2e/scenarios/sharding_test.go, so any count works. Each extra
+    # shard costs a few minutes of cluster setup and cold start. A filtered or compare
+    # run keeps one cluster, since its own filter already picks the
+    # scenarios.
     strategy:
       fail-fast: false
       matrix:
@@ -122,7 +159,7 @@ jobs:
           ${{ fromJSON(
           (inputs.scenario != '' || inputs.family != '' || inputs.shard != ''
           || inputs.compare_with_main) && '[""]'
-          || '["1/4","2/4","3/4","4/4"]') }}
+          || '["1/6","2/6","3/6","4/6","5/6","6/6"]') }}
     env:
       SOURCE_REF: >-
         ${{ inputs.compare_with_main && 'main' || github.ref_name }}
@@ -180,8 +217,20 @@ jobs:
             echo "resolved_sha=$SOURCE_SHA"
           } > "${RUNNER_TEMP}/kwatch-source.txt"
 
+      - name: Download e2e images
+        if: ${{ !inputs.compare_with_main }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: kwatch-e2e-images-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/e2e-images
+
+      - name: Load e2e images
+        if: ${{ !inputs.compare_with_main }}
+        run: docker load --input "${RUNNER_TEMP}/e2e-images/e2e-images.tar.gz"
+
       - name: Run Kind scenarios
         env:
+          KWATCH_PREBUILT_IMAGES: "${{ !inputs.compare_with_main }}"
           ARTIFACTS: "${{ runner.temp }}/kwatch-e2e"
           KIND_CLUSTER_NAME: "kwatch-e2e-${{ github.run_id }}"
           KEEP_CLUSTER: "${{ inputs.keep_cluster || false }}"
@@ -215,6 +264,7 @@ jobs:
           if-no-files-found: warn
 
   operational:
+    needs: build
     name: Operational smoke (${{ matrix.rbac }}, secrets=${{ matrix.secrets }})
     if: >-
       (github.event_name != 'pull_request'
@@ -249,8 +299,19 @@ jobs:
         with:
           cluster_name: ${{ env.KIND_CLUSTER_NAME }}
 
-      - name: Build image
-        run: docker build --tag kwatch:ci .
+      # The scenarios' Kwatch image, which the smoke test only needs under
+      # another name.
+      - name: Download e2e images
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: kwatch-e2e-images-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/e2e-images
+
+      - name: Tag image
+        run: |
+          set -euo pipefail
+          docker load --input "${RUNNER_TEMP}/e2e-images/e2e-images.tar.gz"
+          docker tag "kwatch:e2e-$(git rev-parse HEAD)" kwatch:ci
 
       - name: Run production smoke test
         env:

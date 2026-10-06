@@ -63,9 +63,10 @@ Rules:
    - `onCluster` also runs alone, for scenarios without a namespace.
    When unsure, use `inNamespaceAlone`: it is slower but never flaky
    because of another scenario.
-7. If the scenario takes more than a few minutes, set `minutes:` on its
-   entry in `coverage/coverage.yaml`, so CI can spread slow scenarios over
-   the shards. Every CI run prints the measured time of each scenario.
+7. Add the test to `scenarioCosts` in `scenarios/sharding_test.go` with its
+   measured seconds and whether it runs alone. CI uses the table to give
+   every shard about the same work. Every CI run prints the measured time of
+   each scenario; a test checks that the table matches the helper you chose.
 8. Keep a scenario under about 30 lines. Move object building into the
    matching `*_build_test.go` file as a builder plus a `Create*` method, and
    reuse `workloadContainer`, `workloadPod` and `deployment` instead of
@@ -95,15 +96,16 @@ make verify-negative-regressions
 ```
 
 The script builds temporary images with `docker build --load`, loads them into
-Kind, and removes them and the cluster after the run. Images are never pushed
-or uploaded.
+Kind, and removes them and the cluster after the run. In CI one job builds the
+images and shares them with the other jobs as a one-day workflow artifact;
+they are never pushed to a registry.
 
 The `e2e.yml` workflow (nightly, manual, or on PRs labelled `e2e`) resolves the
 latest `main` commit to an immutable SHA before building and runs the complete
 scenario suite, including the extended Kind cases. A full run is split over
-four Kind clusters that run in parallel. Tests are dealt to the clusters
-longest first using the `minutes:` in `coverage/coverage.yaml`, so every
-cluster gets about the same work. Inside a cluster the scenarios that must
+six Kind clusters that run in parallel. Tests are dealt to the clusters
+longest first using the measured seconds in `scenarios/sharding_test.go`,
+so every cluster finishes at about the same time. Inside a cluster the scenarios that must
 run alone go first, then the rest run side by side (six at a time; set
 `SCENARIO_PARALLEL` to change it). A run with a scenario, family, shard or
 compare filter uses one cluster. It accepts a scenario regex,

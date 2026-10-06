@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -29,6 +30,17 @@ func (s *Scenario) RequireKind() {
 	}
 }
 
+// disruptedNodes remembers the workers earlier scenarios of this process
+// took down. Kwatch reopens an incident that fails again within its
+// re-page window under the same ID, so stopping the node a previous
+// scenario already stopped would revive that scenario's incident instead
+// of opening a new one. Fresh workers keep every scenario's incident its
+// own.
+var (
+	disruptedMu    sync.Mutex
+	disruptedNodes = map[string]bool{}
+)
+
 // FreeWorkerNode picks a worker node that hosts neither Kwatch nor the
 // receiver, so stopping it cannot kill the thing that watches or records
 // the result. The Kind config has three workers, so one is always free.
@@ -46,13 +58,25 @@ func (s *Scenario) FreeWorkerNode() string {
 	nodes, err := s.Env.Client.CoreV1().Nodes().List(
 		s.Ctx, metav1.ListOptions{})
 	s.Must(err)
+	disruptedMu.Lock()
+	defer disruptedMu.Unlock()
+	fallback := ""
 	for _, node := range nodes.Items {
-		if strings.Contains(node.Name, "worker") && !busy[node.Name] {
+		if !strings.Contains(node.Name, "worker") || busy[node.Name] {
+			continue
+		}
+		if !disruptedNodes[node.Name] {
+			disruptedNodes[node.Name] = true
 			return node.Name
 		}
+		if fallback == "" {
+			fallback = node.Name
+		}
 	}
-	s.T.Fatal("no worker node is free of Kwatch and the receiver")
-	return ""
+	if fallback == "" {
+		s.T.Fatal("no worker node is free of Kwatch and the receiver")
+	}
+	return fallback
 }
 
 // NodeRoots lists every node as a must-not-blame root.
