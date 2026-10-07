@@ -106,6 +106,7 @@ var containerModes = map[string]Mode{
 	reasons.CreateContainerError: ModeCreateError,
 	reasons.CreateConfigError:    ModeCreateErrorConfig,
 	reasons.InitContainerError:   ModeInitError,
+	reasons.InitContainerWaiting: ModeInitWaiting,
 	reasons.DeadlineExceeded:     ModeDeadlineExceeded,
 	reasons.PostStartHookError:   ModeHookPostStart,
 	reasons.StartupProbeFailed:   ModeProbeStartup,
@@ -124,16 +125,14 @@ var schedulingModes = map[string]Mode{
 }
 
 var nodeModes = map[string]Mode{
-	reasons.NodeNotReady:         ModeNotReady,
-	reasons.NodeDraining:         ModeDraining,
-	reasons.NotReady:             ModeNotReady,
-	reasons.MemoryPressure:       ModeMemoryPressure,
-	reasons.NodeMemoryPressure:   ModeMemoryPressure,
-	reasons.DiskPressure:         ModeDiskPressure,
-	reasons.PIDPressure:          ModePIDPressure,
-	reasons.NetworkUnavailable:   ModeNetworkUnavailable,
-	reasons.NodeResourceHigh:     ModeResourceHigh,
-	reasons.NodeResourceCritical: ModeResourceCritical,
+	reasons.NodeNotReady:       ModeNotReady,
+	reasons.NodeDraining:       ModeDraining,
+	reasons.NotReady:           ModeNotReady,
+	reasons.MemoryPressure:     ModeMemoryPressure,
+	reasons.NodeMemoryPressure: ModeMemoryPressure,
+	reasons.DiskPressure:       ModeDiskPressure,
+	reasons.PIDPressure:        ModePIDPressure,
+	reasons.NetworkUnavailable: ModeNetworkUnavailable,
 	// One mode per resource: severity says how full it is, and the
 	// Critical reasons, which only persisted findings carry, share it.
 	reasons.NodeFilesystemHigh:            ModeFilesystemUsage,
@@ -173,6 +172,7 @@ var workloadModes = map[string]Mode{
 	reasons.HPAScalingError:              ModeScalingError,
 	reasons.HPATargetMissing:             ModeScalingTargetMissing,
 	reasons.WorkloadNeverReady:           ModeNeverReady,
+	reasons.ReadinessFlapping:            ModeReadinessFlapping,
 	reasons.KubeletUnreachable:           ModeKubeletUnreachable,
 	reasons.KwatchNetworkRestricted:      ModeKwatchNetwork,
 	reasons.JobRunningLong:               ModeJobRunningLong,
@@ -200,8 +200,6 @@ var workloadModes = map[string]Mode{
 	reasons.RiskNoMemoryLimit:            ModeRiskNoMemoryLimit,
 	reasons.RiskMutableImageTag:          ModeRiskMutableImageTag,
 	reasons.RiskSingleReplica:            ModeRiskSingleReplica,
-	reasons.RiskSingleNode:               ModeRiskSingleNode,
-	reasons.RiskPrivileged:               ModeRiskPrivileged,
 }
 
 var serviceModes = map[string]Mode{
@@ -210,6 +208,8 @@ var serviceModes = map[string]Mode{
 	reasons.LoadBalancerPending:              ModeLoadBalancerPending,
 	reasons.IngressBackendNotFound:           ModeBackendMissing,
 	reasons.WebhookBackendNotFound:           ModeWebhookBackendMissing,
+	reasons.ServicePortMismatch:              ModePortMismatch,
+	reasons.IngressBackendPortMissing:        ModePortMismatch,
 	reasons.WebhookNoEndpoints:               ModeWebhookNoEndpoints,
 	reasons.WebhookSlow:                      ModeWebhookSlow,
 	reasons.WebhookRejecting:                 ModeWebhookRejecting,
@@ -251,7 +251,7 @@ var controlPlaneModes = map[string]Mode{
 
 var storageModes = map[string]Mode{
 	reasons.VolumeUsageHigh:        ModeVolumeFull,
-	reasons.VolumeFillingUp:        ModeVolumeFillingUp,
+	reasons.VolumeInodesHigh:       ModeVolumeInodes,
 	reasons.PersistentVolumeClaim:  ModeClaimFailed,
 	reasons.PersistentVolume:       ModeVolumeFailed,
 	reasons.ResourceQuotaExhausted: ModeQuotaExhausted,
@@ -305,6 +305,8 @@ var podNodeModes = map[string]Mode{
 	reasons.PodResizeDeferred:      ModeResizeDeferred,
 	reasons.PodResizeError:         ModeResizeError,
 	reasons.PodPreemptedRepeatedly: ModePreemptedRepeatedly,
+	reasons.PodPreempted:           ModePreempted,
+	reasons.PodKilledAtGrace:       ModeKilledGracePeriod,
 }
 
 // Workload, network, storage and admission failure modes.

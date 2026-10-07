@@ -1,0 +1,8 @@
+{
+  "name": "wake-up-crash-loop",
+  "description": "Six Deployments scale from zero while a dependency is down; one workload's pods crash-loop and the rest recover.",
+  "root": "deployment/shop/wake-app2",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "30m0s"
+}

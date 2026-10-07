@@ -5,7 +5,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
-	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
@@ -35,16 +34,13 @@ func (Namespace) Detect(
 	}
 	var out []detection.Finding
 	if text(e, kube.AttrPhase) == "Terminating" {
-		since := valueSince(e, kube.AttrPhase)
+		since := timestamp(e, kube.AttrDeletingSince)
+		if since.IsZero() {
+			since = valueSince(e, kube.AttrPhase)
+		}
 		if sustained(ctx, "namespace-terminating", since,
 			DefaultNamespaceTerminating) {
-			out = append(out, detection.Finding{
-				Reason:   reasons.NamespaceStuck,
-				Severity: detection.Warning, Since: since,
-				Summary: "Namespace has been terminating for " +
-					format.Duration(ctx.Now.Sub(since)) +
-					"; a finalizer is likely blocking it",
-			})
+			out = append(out, stuckNamespace(ctx, e, since))
 		}
 	}
 	if incident := text(e, kube.AttrPodSecurityInvalid); incident != "" {

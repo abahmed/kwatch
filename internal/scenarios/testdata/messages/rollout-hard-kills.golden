@@ -1,0 +1,12 @@
+10:02:15 settled
+🟠 api is failing in shop (prod-eu-1) after the 10:01 release of registry.example.com/api:2. The previous image was registry.example.com/api:1. During the rollout at 10:01, 3 api pods did not stop within their 30s grace period and were killed (exit code 137); work in flight was cut off. To see the rollout state, run kubectl rollout status deployment/api -n shop
+Checked: all 3 replicas fail, on 3 nodes.
+🟠 api is failing in shop (prod-eu-1) after the 10:01 release of registry.example.com/api:2.
+| 🟠 **api** is failing in **shop** (**prod-eu-1**) after the 10:01 release of registry.example.com/api:2.
+| The previous image was registry.example.com/api:1.
+| During the rollout at 10:01, 3 **api** pods did not stop within their 30s grace period and were killed (exit code 137); work in flight was cut off.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/api -n shop
+| ```
+| *Checked: all 3 replicas fail, on 3 nodes.*

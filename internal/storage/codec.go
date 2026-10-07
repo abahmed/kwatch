@@ -83,6 +83,12 @@ type counters struct {
 	writeTxs atomic.Uint64
 	scans    atomic.Uint64
 	overCap  atomic.Bool
+	// rewrites counts online rewrites that shrank the file; fileBytes
+	// and freeBytes are the size of the file and of its free pages after
+	// the last compactor pass.
+	rewrites  atomic.Uint64
+	fileBytes atomic.Int64
+	freeBytes atomic.Int64
 	// rewriteDue is set while the file waits for a startup rewrite.
 	rewriteDue atomic.Bool
 }
@@ -115,6 +121,12 @@ type Stats struct {
 	// RewriteDue is true when the last compactor pass found the file so
 	// far over its size cap that the next start rewrites it.
 	RewriteDue bool
+	// Rewrites counts the times the file was rewritten while running to
+	// give back free pages.
+	Rewrites uint64
+	// FileBytes is the size of the state file after the last pass, and
+	// FreeBytes the part of it that is free pages inside the file.
+	FileBytes, FreeBytes int64
 }
 
 // Stats returns the counters since Open.
@@ -125,5 +137,8 @@ func (s *Store) Stats() Stats {
 		Evicted:        s.counters.evicted.Load(),
 		OverCap:        s.counters.overCap.Load(),
 		RewriteDue:     s.counters.rewriteDue.Load(),
+		Rewrites:       s.counters.rewrites.Load(),
+		FileBytes:      s.counters.fileBytes.Load(),
+		FreeBytes:      s.counters.freeBytes.Load(),
 	}
 }

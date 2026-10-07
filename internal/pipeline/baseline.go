@@ -21,6 +21,7 @@ type baselineSampler struct {
 	pending  map[inventory.EntityID]bool
 	ready    map[inventory.EntityID]bool
 	jobs     map[inventory.EntityID]bool
+	inits    map[inventory.EntityID]bool
 	restarts map[inventory.EntityID]float64
 	// warnings is the event count already added, per entity and reason,
 	// so a repeated event adds only its new occurrences.
@@ -35,6 +36,7 @@ func newBaselineSampler(model *inventory.Model) *baselineSampler {
 		pending:  make(map[inventory.EntityID]bool),
 		ready:    make(map[inventory.EntityID]bool),
 		jobs:     make(map[inventory.EntityID]bool),
+		inits:    make(map[inventory.EntityID]bool),
 		restarts: make(map[inventory.EntityID]float64),
 		warnings: make(map[inventory.EntityID]map[string]int),
 	}
@@ -123,6 +125,7 @@ func (b *baselineSampler) forget(id inventory.EntityID) {
 	delete(b.pending, id)
 	delete(b.ready, id)
 	delete(b.jobs, id)
+	delete(b.inits, id)
 	delete(b.restarts, id)
 	delete(b.warnings, id)
 }
@@ -150,13 +153,31 @@ func (b *baselineSampler) samplePod(o inventory.Observation) {
 	if ready && !since.IsZero() && !b.ready[o.Entity] {
 		b.ready[o.Entity] = true
 		b.add(workload, inventory.MetricReadySeconds, since.Sub(created), o.At)
+		b.sampleStart(workload, o, since)
 	}
+}
+
+// sampleStart records how long the pod's containers took from starting
+// to being ready. A pod whose containers restarted counts from the last
+// start, so the value is what one start needs, not what the kills cost.
+func (b *baselineSampler) sampleStart(
+	workload inventory.EntityID, o inventory.Observation, ready time.Time,
+) {
+	started := o.Attributes[kube.AttrContainersStarted].AsTime()
+	if started.IsZero() {
+		started = o.Attributes[kube.AttrStartTime].AsTime()
+	}
+	if started.IsZero() || ready.Before(started) {
+		return
+	}
+	b.add(workload, inventory.MetricStartSeconds, ready.Sub(started), o.At)
 }
 
 // sampleContainer counts restarts since the container was last seen.
 // The first sighting only sets the starting count.
 func (b *baselineSampler) sampleContainer(o inventory.Observation) {
 	b.sampleMemory(o)
+	b.sampleInit(o)
 	count, ok := o.Attributes[kube.AttrRestarts].AsNumber()
 	if !ok {
 		return

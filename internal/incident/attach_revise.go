@@ -112,6 +112,7 @@ func (m *Manager) reroot(
 ) {
 	// The old root's cause does not explain the new root: the members
 	// that move here bring the new one.
+	hadCause := p.Cause != nil && !p.CauseUnclear
 	p.Cause, p.CauseUnclear = nil, false
 	if target := m.lookup(root); target != nil && target.State == Settling {
 		for key, s := range target.Members {
@@ -128,5 +129,8 @@ func (m *Manager) reroot(
 	m.index(p)
 	p.movedTo = nil
 	p.Pending.MarkRevised(now)
+	if hadCause {
+		p.Pending.MarkReplaced()
+	}
 	p.note(now, "cause revised: now explained by "+describe(root))
 }

@@ -22,6 +22,9 @@ const (
 	FactWebhook = "webhook"
 	// FactPull is the error class of a failed image pull.
 	FactPull = "pull"
+	// FactDependency is the Service a stuck init container's output
+	// names, with what is wrong with it, if anything.
+	FactDependency = "dependency"
 )
 
 // Fact is one fact an investigation found about an incident, such

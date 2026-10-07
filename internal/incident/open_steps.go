@@ -15,8 +15,9 @@ type step func(m *Manager, p *Incident, now time.Time) (d Decision, done bool)
 //  2. revised: a new cause goes first, after ReviseSettle collects what
 //     joins it.
 //  3. attempt: a fix attempt, only when no material change is pending.
-//  4. reminder: unchanged content may be said again when it is due.
-//  5. material: the content changed (a tier rise, more failing, a worse
+//  4. ack: an acknowledgement that appeared or went is told once.
+//  5. reminder: unchanged content may be said again when it is due.
+//  6. material: the content changed (a tier rise, more failing, a worse
 //     stage), spaced by MaterialGap.
 //
 // A reopened incident's "failing again" update comes before all of these,
@@ -39,6 +40,7 @@ var openSteps = []step{
 	(*Manager).evidenceStep,
 	(*Manager).revisedStep,
 	(*Manager).attemptUpdate,
+	(*Manager).ackStep,
 	(*Manager).reminderStep,
 	(*Manager).materialStep,
 }

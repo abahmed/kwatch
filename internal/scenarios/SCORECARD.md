@@ -38,20 +38,20 @@ other target was relaxed.
 
 | Metric | Target | Rule engine | Start | Now | Result |
 | --- | --- | --- | --- | --- | --- |
-| Correct root cause (labelled) | >= 90% | 63.0% | 96.5% (55 of 57) | 98.6% (140 of 142) | pass |
-| Correct root cause (held-out) | >= 80% | - | 71.4% (10 of 14) | 92.9% (13 of 14) | pass |
-| Wrong high-confidence root | <= 5% of high-confidence cases, labelled and held-out, gated at 20 or more | 0% | 2.5% (1 of 40) | 2.1% (2 of 95) | pass |
-| Calibration: high confidence | 80-100% (at least 10 cases) | 100% (10 of 10) | 97.5% (39 of 40) | 97.6% (82 of 84) | pass |
-| Calibration: likely confidence | 50-90% (at least 10 cases) | 66.7% (4 of 6) | 90.9% (10 of 11) | not gated: 6 of 6 right, 10 cases needed | pass |
+| Correct root cause (labelled) | >= 90% | 63.0% | 96.5% (55 of 57) | 99.1% (223 of 225) | pass |
+| Correct root cause (held-out) | >= 80% | - | 71.4% (10 of 14) | 100% (14 of 14) | pass |
+| Wrong high-confidence root | <= 5% of high-confidence cases, labelled and held-out, gated at 20 or more | 0% | 2.5% (1 of 40) | 1.3% (2 of 153) | pass |
+| Calibration: high confidence | 80-100% (at least 10 cases) | 100% (10 of 10) | 97.5% (39 of 40) | 98.6% (139 of 141) | pass |
+| Calibration: likely confidence | 50-90% (at least 10 cases) | 66.7% (4 of 6) | 90.9% (10 of 11) | not gated: 7 of 7 right, 10 cases needed | pass |
 | Messages per incident (p95) | <= 3 | - | 3 | 3 | pass |
 | Messages per incident (most) | <= 5 | 4 | 3 | 5 | pass |
-| Time to first message (page tier, max) | <= 2m (was 60s) | - | 1m45s (p95 1m45s, 9 scenarios) | 1m45s (p95 1m45s, 21 scenarios) | pass |
-| Time to first message (notify tier, max) | <= 5m (was 180s) | - | 4m15s (p95 3m15s, 43 scenarios) | 5m0s (p95 4m15s, 91 scenarios) | pass |
+| Time to first message (page tier, max) | <= 2m (was 60s) | - | 1m45s (p95 1m45s, 9 scenarios) | 1m45s (p95 1m45s, 33 scenarios) | pass |
+| Time to first message (notify tier, max) | <= 5m (was 180s) | - | 4m15s (p95 3m15s, 43 scenarios) | 5m0s (p95 4m15s, 152 scenarios) | pass |
 | Time to first message (boot-held, max) | <= 15m (boot window + 5m) | - | - | 12m15s (p95 12m15s, 1 scenario) | pass |
 | Notifications from non-events (staging day) | 0 | - | 4 (all digest) | 0 | pass |
-| Notifications per hour (staging day peak) | <= 30/h (sanity ceiling) | 20/h | 18/h | 24/h | pass |
+| Notifications per hour (staging day peak) | <= 30/h (sanity ceiling) | 20/h | 18/h | 28/h | pass |
 | Unchanged updates | 0% | 0% | 0% | 0% | pass |
-| Re-created incidents | <= 5% | 2.1% | 1.6% | 2.0% | pass |
+| Re-created incidents | <= 5% | 2.1% | 1.6% | 1.4% | pass |
 | Repeated recoveries | 0 | 0 | 0 | 0 | pass |
 | Storm messages in 2 minutes (shared node) | <= 3 | 2 | 1 | 1 | pass |
 | Storm messages in 2 minutes (shared registry) | <= 3 | 102 | 1 | 1 | pass |
@@ -61,15 +61,30 @@ other target was relaxed.
 | Quiet scenarios that alerted | 0 | 0 | 0 | 0 | pass |
 | Scenarios over their message budget | 0 | 7 | 0 | 0 | pass |
 
-22 of 22 gates pass. 142 labelled root cases in 133 scenarios;
-first-incident tier matches in 133 of 133. Staging day: 309 notifications
-in 22h28m (13.8/h mean, peak hour 24); none from non-events. The
+22 of 22 gates pass. 225 labelled root cases in 228 scenarios;
+first-incident tier matches in 228 of 228. Staging day: 518 notifications
+in 41h57m (12.3/h mean, peak hour 28); none from non-events. The
 `boot-endpoints-still-down` scenario is held on purpose by the node boot
 grace, so it is measured by its own gate (see Time to first message).
 Its third message (a "pods run but are
 not ready" update that restated the Service already announced with no
 endpoints) is gone: that reason after a Service-no-endpoints finding is
 one story, not a new problem.
+
+Three measurements moved when the library grew from 133 to 228
+scenarios, none by changing a target:
+
+- The time to first message no longer counts from the moment replicas
+  began to run different builds of one tag. They are healthy side by
+  side until one fails (`same-tag-new-digest` measured 9m15s from the
+  drift, 1m15s from the first crash).
+- The `autoscaling-limit` row's prior went from 0.65 to 0.70. Its three
+  scenarios were all right and sat 0.001 to 0.004 under the calibrated
+  boundary only through the hop decay, which left the likely level with
+  a perfect record over ten cases (underconfident, so the gate failed).
+- A kubelet probe failure names the address the kubelet probes, never
+  one the pod calls, so the explainer no longer reads it as an external
+  endpoint that several workloads share.
 
 Two earlier misses were closed on 2026-10-05, without changing a target:
 

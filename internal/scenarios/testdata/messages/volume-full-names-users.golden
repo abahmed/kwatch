@@ -1,0 +1,12 @@
+10:06:15 settled
+🟠 Volume claim pgdata in inventory (prod-eu-1) is failing: storage is over 95% used. postgres fails with "PANIC:  could not write to file "pg_wal/xlogtemp.31": No space left on device". It is at 98% of 20 GiB. It is used by postgres and reporter. postgres is affected as well. To check the size and capacity of the full volume claim, run kubectl describe pvc pgdata -n inventory
+🟠 Volume claim pgdata in inventory (prod-eu-1) is failing: storage is over 95% used.
+| 🟠 Volume claim **pgdata** in **inventory** (**prod-eu-1**) is failing: storage is over 95% used.
+| **postgres** fails with `PANIC: could not write to file`pg\_wal/xlogtemp.31`: No space left on device`.
+| It is at 98% of 20 GiB.
+| It is used by **postgres** and reporter.
+| **postgres** is affected as well.
+| To check the size and capacity of the full volume claim, run
+| ```
+| kubectl describe pvc pgdata -n inventory
+| ```

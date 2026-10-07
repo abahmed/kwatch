@@ -1,0 +1,8 @@
+{
+  "name": "scale-failure-replaced",
+  "description": "An HPA first fails with the controller's FailedGetScale, then names a Deployment that is gone.",
+  "root": "horizontalpodautoscaler/staging/thirdparty",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "30m0s"
+}

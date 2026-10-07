@@ -8,7 +8,7 @@ import (
 
 func TestDefaultDetectorsAreDistinct(t *testing.T) {
 	all := Default()
-	assert.Len(t, all, 38)
+	assert.Len(t, all, 39)
 	names := map[string]bool{}
 	for _, d := range all {
 		assert.False(t, names[d.Name()], "duplicate detector %s", d.Name())

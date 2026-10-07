@@ -138,6 +138,7 @@ func (s SecretSchema) Describe(obj any) (Description, bool) {
 		AttrDataDigest: inventory.Text(
 			mapDigestWith(s.digester, digests(secret.Data))),
 	}
+	setLoginChanged(attrs, secret)
 	if raw := secret.Annotations[certExpiryAnnotation]; raw != "" {
 		if notAfter, err := time.Parse(time.RFC3339, raw); err == nil {
 			attrs[AttrCertExpiry] = inventory.Time(notAfter)

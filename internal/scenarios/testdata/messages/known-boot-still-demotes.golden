@@ -33,12 +33,7 @@
 | ✅ **sync** in **shop** (**prod-eu-1**) is healthy again.
 | It was failing for 15 minutes.
 08:57:15 digest
-🟡 kwatch (prod-eu-1) has one earlier one that resolved and configuration risks on one workload to report. Resolved: sync in shop is healthy again. Configuration risks: 1 workload has containers without a memory limit (sync); 1 workload has no readiness probe (sync); 1 workload runs a single replica (sync). None of them is urgent; one that gets worse gets its own message.
-🟡 kwatch (prod-eu-1) has one earlier one that resolved and configuration risks on one workload to report.
-| 🟡 **kwatch digest** · prod-eu-1 — 1 resolved · risks on 1 workload
+🟡 kwatch (prod-eu-1) has one earlier one that resolved to report. Resolved: sync in shop is healthy again. None of them is urgent; one that gets worse gets its own message.
+🟡 kwatch (prod-eu-1) has one earlier one that resolved to report.
+| 🟡 **kwatch digest** · prod-eu-1 — 1 resolved
 | ✅ 1 resolved since last digest: sync
-|
-| **Configuration risks (none urgent)**
-| - No memory limit — 1: sync
-| - No readiness probe — 1: sync
-| - Single replica — 1: sync

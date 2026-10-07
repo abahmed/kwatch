@@ -1,0 +1,10 @@
+{
+  "name": "small-scale-up-node-lost",
+  "description": "Four Deployments scale up from zero (no wake-up); ten minutes later a node stops reporting and the pods of eight workloads on it go not ready.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "zone//zone-a"
+  ]
+}

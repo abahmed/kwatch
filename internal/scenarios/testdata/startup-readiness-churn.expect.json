@@ -1,0 +1,6 @@
+{
+  "name": "startup-readiness-churn",
+  "description": "Eight new pods of a rollout each become ready for the first time within a minute.",
+  "maxMessages": 0,
+  "quiet": true
+}

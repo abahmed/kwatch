@@ -21,7 +21,7 @@ const (
 	// messages), 30 days and at most DefaultEvidenceCap bytes.
 	Evidence Bucket = "evidence"
 	// Timeline: log per entity (health transitions, changes, events and
-	// decisions), 30 days.
+	// decisions), 7 days and at most DefaultTimelineCap bytes.
 	Timeline Bucket = "timeline"
 	// Audit: log per decision stream, 30 days.
 	Audit Bucket = "audit"
@@ -79,6 +79,16 @@ const (
 	// DefaultEvidenceCap bounds evidence, the largest and least
 	// essential class, to a quarter of the total cap (128 MiB).
 	DefaultEvidenceCap = DefaultSizeCap / 4
+	// DefaultTimelineRetention keeps timeline entries for 7 days. The
+	// timeline is a write-only trail for post-mortems: what the
+	// lifecycle remembers (resolved incidents, baselines, recurrence)
+	// is stored in its own buckets and is at most 7 days old. A busy
+	// cluster writes a timeline entry every second or two, so 30 days
+	// of it filled the state file and made every start check it.
+	DefaultTimelineRetention = 7 * 24 * time.Hour
+	// DefaultTimelineCap bounds the timeline to 32 MiB, about 100,000
+	// entries, however fast a cluster writes. The oldest go first.
+	DefaultTimelineCap int64 = 32 << 20
 )
 
 // Policy is what the compactor enforces.
@@ -88,6 +98,8 @@ type Policy struct {
 	Retention map[Bucket]time.Duration
 	// EvidenceCap bounds the evidence bucket, oldest first.
 	EvidenceCap int64
+	// TimelineCap bounds the timeline bucket, oldest first.
+	TimelineCap int64
 	// SizeCap bounds the whole store. Only evictable data (history log
 	// entries) is deleted, oldest first, and it always keeps at least a
 	// quarter of the cap; pinned data over the cap is reported as
@@ -103,10 +115,11 @@ type Policy struct {
 func DefaultPolicy() Policy {
 	return Policy{
 		Retention: map[Bucket]time.Duration{
-			Changes: DefaultLogRetention, Timeline: DefaultLogRetention,
-			Evidence: DefaultLogRetention, Audit: DefaultLogRetention,
+			Changes: DefaultLogRetention, Evidence: DefaultLogRetention,
+			Timeline: DefaultTimelineRetention, Audit: DefaultLogRetention,
 		},
 		EvidenceCap: DefaultEvidenceCap,
+		TimelineCap: DefaultTimelineCap,
 		SizeCap:     DefaultSizeCap,
 		Batch:       defaultBatch,
 	}

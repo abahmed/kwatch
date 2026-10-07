@@ -1,0 +1,8 @@
+{
+  "name": "upgrade-readiness-digest",
+  "description": "A deprecated API is still requested and a PodDisruptionBudget allows no disruption; the digest adds one upgrade-readiness line for the budget.",
+  "root": "deprecated-api//policy/v1beta1 poddisruptionbudgets",
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "45m0s"
+}

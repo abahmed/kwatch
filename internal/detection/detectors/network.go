@@ -32,35 +32,18 @@ func (Service) Kinds() []inventory.Kind {
 func (Service) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
-	out := append(loadBalancerPending(ctx, e),
+	out := append(loadBalancerWaiting(ctx, e),
 		loadBalancerEvents(ctx, e)...)
 	if text(e, kube.AttrSelector) == "" ||
 		text(e, kube.AttrServiceType) == "ExternalName" {
 		return out
 	}
+	// Endpoints that are missing or unready because the port leads
+	// nowhere are that mismatch's consequence, not a second failure.
+	if mismatch := portMismatch(ctx, e); len(mismatch) > 0 {
+		return append(out, mismatch...)
+	}
 	return append(out, backendFindings(ctx, e)...)
-}
-
-// DefaultLoadBalancerPending is how long a LoadBalancer may wait for an
-// address; cloud load balancers normally provision within minutes.
-const DefaultLoadBalancerPending = 5 * time.Minute
-
-func loadBalancerPending(
-	ctx detection.Context, e inventory.Entity,
-) []detection.Finding {
-	if text(e, kube.AttrServiceType) != "LoadBalancer" ||
-		flag(e, kube.AttrLoadBalancer) {
-		return nil
-	}
-	since := valueSince(e, kube.AttrLoadBalancer)
-	if !sustained(ctx, "lb-pending", since, DefaultLoadBalancerPending) {
-		return nil
-	}
-	return []detection.Finding{{
-		Reason: reasons.LoadBalancerPending, Severity: detection.Warning,
-		Since:   since,
-		Summary: "LoadBalancer Service has no external address yet",
-	}}
 }
 
 func backendFindings(
@@ -159,6 +142,7 @@ func (Ingress) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	out := ingressBackends(ctx, e)
+	out = append(out, ingressBackendPorts(ctx, e)...)
 	out = append(out, ingressTLSSecrets(ctx, e)...)
 	return append(out, ingressClass(ctx, e)...)
 }

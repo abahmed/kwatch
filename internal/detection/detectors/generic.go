@@ -63,6 +63,12 @@ func (Generic) Detect(
 		out = append(out, f)
 	}
 	if ctx.Specialised() {
+		// Few specialised detectors look at deletion, so a claim or a
+		// workload held by a finalizer is reported here. Pods, nodes and
+		// namespaces judge their own deletion.
+		if f, ok := stuckDeletion(ctx, e); ok && !ownsDeletion[e.ID.Kind] {
+			out = append(out, f)
+		}
 		return out
 	}
 	out = append(out, badConditions(ctx, e)...)
@@ -171,6 +177,12 @@ func generationLag(
 	}, true
 }
 
+// ownsDeletion are the kinds whose own detector judges a deletion that
+// takes long.
+var ownsDeletion = map[inventory.Kind]bool{
+	kube.KindPod: true, kube.KindNode: true, kube.KindNamespace: true,
+}
+
 // stuckDeletion reports an object whose deletion finalizers have held
 // for DefaultDeletionGrace.
 func stuckDeletion(
@@ -188,13 +200,17 @@ func stuckDeletion(
 		return detection.Finding{}, false
 	}
 	names := strings.Join(finalizers, ", ")
+	summary := "Deletion is blocked by finalizers " + names
+	evidence := []detection.Evidence{{Label: "finalizers", Value: names}}
+	if users := claimUsers(ctx, e); users != "" {
+		summary += " (still used by " + users + ")"
+		evidence = append(evidence,
+			detection.Evidence{Label: "still used by", Value: users})
+	}
 	return detection.Finding{
 		Reason: reasons.StuckDeleting, Severity: detection.Warning,
 		Health: detection.Degraded, Since: since,
-		Summary: "Deletion is blocked by finalizers " + names,
-		Evidence: []detection.Evidence{
-			{Label: "finalizers", Value: names},
-		},
+		Summary: summary, Evidence: evidence,
 	}, true
 }
 

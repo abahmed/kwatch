@@ -1,0 +1,14 @@
+10:02:15 settled
+🟠 api in shop (prod-eu-1) keeps being killed by its liveness probe because its containers get too little time to start. Liveness gives api 40s (10s delay + 3 × 10s) but api normally needs about 75s to become ready (last 5 starts), so it is killed before it finishes starting. A startupProbe or a longer delay would let it start. Every error mentions it. To read the output of the last crash, run kubectl logs api-8ab26137-f -c app -n shop --previous
+🟠 api in shop (prod-eu-1) keeps being killed by its liveness probe because its containers get too little time to start.
+| 🟠 **api** in **shop** (**prod-eu-1**) keeps being killed by its liveness probe because its containers get too little time to start.
+| Liveness gives **api** 40s (10s delay + 3 × 10s) but **api** normally needs about 75s to become ready (last 5 starts), so it is killed before it finishes starting. A startupProbe or a longer delay would let it start.
+| Every error mentions it.
+| To read the output of the last crash, run
+| ```
+| kubectl logs api-8ab26137-f -c app -n shop --previous
+| ```
+10:06:00 material change
+🟠 api in shop (prod-eu-1) now has 5 of 7 replicas ready.
+🟠 api in shop (prod-eu-1) now has 5 of 7 replicas ready.
+| 🟠 **api** in **shop** (**prod-eu-1**) now has 5 of 7 replicas ready.

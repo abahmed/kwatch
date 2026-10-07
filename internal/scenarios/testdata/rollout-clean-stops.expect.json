@@ -1,0 +1,7 @@
+{
+  "name": "rollout-clean-stops",
+  "description": "Old api pods stop cleanly when a rollout replaces them.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "10m0s"
+}

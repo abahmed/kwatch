@@ -7,7 +7,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
-	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
@@ -19,9 +18,6 @@ const (
 	// psiThreshold is the share of the last minute tasks stalled on a
 	// resource; above it workloads visibly slow down.
 	psiThreshold = 20.0
-	// fillWarning and fillCritical bound how soon a growing volume fills.
-	fillWarning  = 24 * time.Hour
-	fillCritical = 6 * time.Hour
 )
 
 // NodeUsage detects nodes running out of disk or inodes and nodes whose
@@ -79,7 +75,7 @@ func stallFindings(e inventory.Entity) []detection.Finding {
 	return nil
 }
 
-// VolumeUsage detects claims that are nearly full or filling up fast.
+// VolumeUsage detects claims that are nearly full.
 type VolumeUsage struct{}
 
 // Name implements detection.Detector.
@@ -99,32 +95,40 @@ func (VolumeUsage) Detect(
 		reasons.VolumeUsageHigh, "storage"); ok {
 		out = append(out, s)
 	}
-	seconds, ok := number(e, kube.AttrVolumeFillETA)
-	// A negative or very large estimate is not a fill time; converting it
-	// to a Duration could overflow into a negative "full now".
-	if !ok || seconds < 0 || seconds > fillWarning.Seconds() {
-		return out
+	if s, ok := volumeInodes(ctx, e); ok {
+		out = append(out, s)
 	}
-	eta := time.Duration(seconds) * time.Second
-	severity := detection.Warning
-	if eta <= fillCritical {
-		severity = detection.Critical
+	for i := range out {
+		out[i].Evidence = append(out[i].Evidence, volumeDetail(ctx, e)...)
 	}
-	summary := "Volume will be full within a day"
-	if severity == detection.Critical {
-		summary = "Volume will be full within " +
-			format.Duration(fillCritical)
+	return out
+}
+
+// volumeInodes reports a claim that has used most of its inodes: the
+// bytes may be plentiful, but every new file fails with "No space left
+// on device". It is the same finding as bytes running out, from
+// another count, so it uses the same levels.
+func volumeInodes(
+	ctx detection.Context, e inventory.Entity,
+) (detection.Finding, bool) {
+	f, ok := threshold(ctx, e, kube.AttrVolumeInodesPct,
+		reasons.VolumeInodesHigh, "volume inodes")
+	if !ok {
+		return f, false
 	}
-	used, _ := number(e, kube.AttrVolumeUsedPct)
-	return append(out, detection.Finding{
-		Reason: reasons.VolumeFillingUp, Severity: severity,
-		Since:   valueSince(e, kube.AttrVolumeFillETA),
-		Summary: summary,
-		Evidence: []detection.Evidence{
-			{Label: "used", Value: strconv.Itoa(int(used)) + "%"},
-			{Label: "full in", Value: "about " + format.Duration(eta)},
-		},
-	})
+	level := usageWarning
+	if f.Severity == detection.Critical {
+		level = usageCritical
+	}
+	f.Summary = "Volume has used over " + strconv.Itoa(int(level)) +
+		"% of its inodes"
+	// The share is of inodes, not bytes: a message about bytes must not
+	// read it as its own.
+	f.Evidence = []detection.Evidence{{
+		Label: detection.EvidenceVolumeInodes,
+		Value: f.Evidence[0].Value,
+	}}
+	return f, true
 }
 
 // usageHysteresis is how far usage must fall below a level it crossed

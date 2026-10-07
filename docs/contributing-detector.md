@@ -27,8 +27,9 @@ cannot read its metrics.
    Severity, Since, Summary, Evidence}`, and let the registry fill in the
    entity, health and mode. A finding that is advice about configuration
    rather than a failure (see `detectors.Risk`) sets `Advisory: true` and
-   `Severity: detection.Info`: it then waits for the digest, never opens an
-   incident on its own and never leads a message about a failure. For a condition that depends on elapsed time call
+   `Severity: detection.Info`: it is never announced, never opens an
+   incident on its own and never leads a message about a failure; a failure
+   of the same workload may quote it as a consequence. For a condition that depends on elapsed time call
    `ctx.RecheckAfter(d)`. When the kind may be unwatched, check
    `ctx.Synced(kind)` and return nothing: a missing source is never a
    recovery. Evidence is text people read; it is redacted when first recorded.

@@ -1,0 +1,12 @@
+11:01:55 settled
+🟠 api is failing in shop (prod-eu-1) after the 11:00 release. The release changed the LICENSE_URL. It fails with "fatal: cannot load license from licensing.internal". To see the rollout state, run kubectl rollout status deployment/api -n shop
+Checked: 2 of 4 pods fail; all run in zone zone-b, the 2 healthy ones in zone zone-a.
+🟠 api is failing in shop (prod-eu-1) after the 11:00 release.
+| 🟠 **api** is failing in **shop** (**prod-eu-1**) after the 11:00 release.
+| The release changed the LICENSE\_URL.
+| It fails with `fatal: cannot load license from licensing.internal`.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/api -n shop
+| ```
+| *Checked: 2 of 4 pods fail; all run in zone zone-b, the 2 healthy ones in zone zone-a.*

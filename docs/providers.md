@@ -116,7 +116,8 @@ alert:
 In plain words: the same options work for all providers, not just Slack.
 
 - **`routes`** — if you have several *channels* for one provider, send only some alerts to
-  each (filtered by `namespaces`, `severities` or `reasons`). A route severity is one of
+  each (filtered by `namespaces`, `severities`, `reasons` or `owners`, the
+  `kwatch.io/owner` of the workload or namespace). A route severity is one of
   `critical` (pages), `warning` (notifies) or `info` (digest); any other value is rejected
   at startup because it would never match. Other route keys are ignored with a warning.
 - **`retry`** — how hard kwatch tries before giving up: `maxAttempts` times, waiting `delay`

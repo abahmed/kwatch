@@ -5,6 +5,8 @@ import (
 	"slices"
 	"time"
 
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/incident"
 )
 
@@ -272,8 +274,12 @@ func (c *Collector) ListRestored(ctx context.Context, now time.Time) bool {
 	if len(listed) == 0 {
 		return false
 	}
-	c.env.Sink(ctx, incident.Decision{Reason: "restored incidents"},
-		c.env.Messages.RestoredSummary(listed, now))
+	msg := c.env.Messages.RestoredSummary(listed, now)
+	// The audit entry has no incident of its own: name the restored ones.
+	msg.Listed = restoredListing(listed)
+	klog.InfoS("pipeline: restored incidents still failing",
+		restoredTotals(listed)...)
+	c.env.Sink(ctx, incident.Decision{Reason: "restored incidents"}, msg)
 	return true
 }
 

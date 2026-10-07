@@ -17,6 +17,8 @@ func dnsVictims(
 	f *fixture, text string, names ...string,
 ) []inventory.EntityID {
 	nodes := f.nodes("zone-a", "n1", "n2")
+	// The Service the lookups name exists: only DNS can fail them.
+	f.add(inventory.CoreID(kube.KindService, "shop", "db"))
 	var out []inventory.EntityID
 	for _, name := range names {
 		pod := f.workload("shop", name, 1, nodes...)[0]

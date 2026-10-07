@@ -1,0 +1,10 @@
+10:02:15 settled
+🟠 api in shop (prod-eu-1) keeps crashing because service paymnts does not exist. api calls paymnts:8080, but there is no Service paymnts in shop. Quoted: "dial tcp: lookup paymnts.shop.svc.cluster.local: no such host". A Service named payments exists. All of its dependents are failing. To read the output of the last crash, run kubectl logs api-f206a602-a -c app -n shop --previous
+🟠 api in shop (prod-eu-1) keeps crashing because service paymnts does not exist.
+| 🟠 **api** in **shop** (**prod-eu-1**) keeps crashing because service **paymnts** does not exist.
+| **api** calls paymnts:8080, but there is no Service **paymnts** in **shop**. Quoted: `dial tcp: lookup paymnts.shop.svc.cluster.local: no such host`. A Service named payments exists.
+| All of its dependents are failing.
+| To read the output of the last crash, run
+| ```
+| kubectl logs api-f206a602-a -c app -n shop --previous
+| ```

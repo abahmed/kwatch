@@ -9,10 +9,10 @@ import (
 // counterfactualScenarios are failures where a healthy twin elsewhere
 // (the same image, the other replicas) rules a cause in or out.
 func counterfactualScenarios() []scenario {
-	return []scenario{
+	return append([]scenario{
 		configBreaksWhileImageRunsElsewhere(), nodeLocalWithHealthyReplicas(),
 		badImageEverywhere(),
-	}
+	}, differenceScenarios()...)
 }
 
 // configBreaksWhileImageRunsElsewhere: a ConfigMap edit breaks one

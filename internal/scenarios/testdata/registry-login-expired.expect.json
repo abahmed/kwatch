@@ -1,0 +1,14 @@
+{
+  "name": "registry-login-expired",
+  "description": "Workloads pull with a registry login Secret unchanged for 92 days; a new node's pulls are all answered \"unauthorized: authentication required\".",
+  "root": "registry//registry.corp.example",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n3",
+    "deployment/shop/api",
+    "deployment/shop/worker",
+    "deployment/billing/ledger",
+    "secret/shop/regcred"
+  ]
+}

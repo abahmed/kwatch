@@ -45,4 +45,12 @@ const (
 	// been ready before the change: long enough to have shown crashes
 	// and failing probes.
 	PreviousHealthyMin = 10 * time.Minute
+	// DifferenceWeight is both the reward and the penalty of the
+	// replica-difference check: one attribute (digest, container or
+	// zone) separates the failing replicas from the healthy ones, so
+	// the difference is not in the workload's shared spec.
+	DifferenceWeight = 0.1
+	// DifferenceMinFailing is the fewest failing replicas that make a
+	// pattern; one failing pod differs from the rest in many ways.
+	DifferenceMinFailing = 2
 )

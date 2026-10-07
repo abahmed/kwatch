@@ -66,8 +66,9 @@ func (m *Manager) escalationOwed(p *Incident, now time.Time) bool {
 // RestoredFailing returns the announced incidents restored from the
 // previous session that fail again now, loudest first by ID order, for
 // the startup listing: a restart announces none of them one by one, so
-// without it nobody would be told they still fail. Digest-tier and
-// out-of-scope incidents are left out, and so are those that have spoken
+// without it nobody would be told they still fail. Digest-tier ones are
+// listed too, after the louder ones, so nothing restored stays silent.
+// Out-of-scope incidents are left out, and so are those that have spoken
 // for themselves since the restart: the listing would repeat their own
 // message.
 func (m *Manager) RestoredFailing() []Incident {
@@ -77,7 +78,7 @@ func (m *Manager) RestoredFailing() []Incident {
 	for _, id := range m.sortedIDs() {
 		p := m.incidents[id]
 		if p.restored && wasAnnounced(p) && hasFailingMember(p) &&
-			p.Tier >= Notify && p.Scope != ScopeOut &&
+			p.Scope != ScopeOut &&
 			p.sent.covered == unknownMark {
 			out = append(out, p.Snapshot())
 		}

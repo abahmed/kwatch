@@ -68,12 +68,12 @@ func TestWriteCauseRevisedUpdateSaysSo(t *testing.T) {
 	if msg.Key != p.ID {
 		t.Fatalf("key = %q, want the incident ID %q", msg.Key, p.ID)
 	}
-	if !strings.HasPrefix(msg.Title, "Node n1 is the revised cause: ") {
+	if !strings.HasPrefix(msg.Title, "Cause now known: ") {
 		t.Fatalf("lead should state the revision: %q", msg.Title)
 	}
 	d.Reason = "material change"
 	plain := Writer{}.Write(d, revisionNow)
-	if strings.Contains(plain.Note, "revised cause") {
+	if strings.Contains(plain.Note, "Cause now known") {
 		t.Fatalf("ordinary update must not claim a revision: %q",
 			plain.Note)
 	}
@@ -120,5 +120,22 @@ func TestWriteSupersededResolveNamesTheIncidentItMovedTo(t *testing.T) {
 		"warehouse") || strings.Contains(msg.Note, "healthy") ||
 		msg.Marker == notification.MarkerResolved {
 		t.Fatalf("want a move, not a recovery: %s", msg.Note)
+	}
+}
+
+func TestWriteCauseReplacedUpdateSaysChanged(t *testing.T) {
+	p := crashIncident()
+	p.Root = inventory.CoreID("node", "", "n1")
+	p.Pending.MarkRevised(revisionNow)
+	p.Pending.MarkReplaced()
+	d := incident.Decision{
+		Action: incident.Update, Incident: p,
+		Reason: incident.ReasonCauseRevised,
+	}
+
+	msg := Writer{}.Write(d, revisionNow)
+
+	if !strings.Contains(msg.Title, "Cause changed: ") {
+		t.Fatalf("a replaced cause should say so: %q", msg.Title)
 	}
 }

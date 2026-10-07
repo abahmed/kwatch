@@ -12,6 +12,7 @@ type routeSubject struct {
 	namespaces []string
 	severity   notification.Severity
 	reasons    []string
+	owners     []string
 	// anyOf is set on a summary: it matches when any one of these
 	// alternatives, the routes of the problems it names, matches.
 	anyOf []routeSubject
@@ -26,6 +27,7 @@ func incidentSubject(m *notification.Message) routeSubject {
 		namespaces: m.Route.Namespaces,
 		severity:   notification.NormalizeSeverity(m.Route.Severity),
 		reasons:    m.Route.Reasons,
+		owners:     m.Route.Owners,
 		anyOf:      routesOf(m.Route.AnyOf),
 	}
 }
@@ -45,7 +47,8 @@ func matchesRoute(route config.AlertRoute, subject routeSubject) bool {
 	return matchesValues(route.Namespaces, subject.namespaces,
 		subject.partial) &&
 		matchesSeverity(route.Severities, subject.severity) &&
-		matchesValues(route.Reasons, subject.reasons, subject.partial)
+		matchesValues(route.Reasons, subject.reasons, subject.partial) &&
+		matchesValues(route.Owners, subject.owners, subject.partial)
 }
 
 // matchesValues is true when nothing is allowed-listed, when one allowed

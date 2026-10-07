@@ -17,8 +17,15 @@ const (
 	MetricRestartsPerHour Metric = "restarts_per_hour"
 	// MetricReadySeconds is how long a new pod takes to become ready.
 	MetricReadySeconds Metric = "ready_seconds"
+	// MetricStartSeconds is how long a pod's containers take from
+	// starting to making the pod ready: what a start needs, without the
+	// scheduling and image pull that come before it.
+	MetricStartSeconds Metric = "start_seconds"
 	// MetricPendingSeconds is how long a new pod waits before it starts.
 	MetricPendingSeconds Metric = "pending_seconds"
+	// MetricInitSeconds is how long an init container runs until it
+	// completes.
+	MetricInitSeconds Metric = "init_seconds"
 	// MetricJobSeconds is how long a Job runs until it completes.
 	MetricJobSeconds Metric = "job_seconds"
 	// MetricMemoryPeak is the largest container memory (resident set,
@@ -75,8 +82,10 @@ const (
 var unusualFloor = map[Metric]float64{
 	MetricRestartsPerHour: 2,
 	MetricReadySeconds:    30,
+	MetricStartSeconds:    30,
 	MetricPendingSeconds:  30,
 	MetricJobSeconds:      60,
+	MetricInitSeconds:     30,
 	MetricMemoryPeak:      64 << 20,
 }
 

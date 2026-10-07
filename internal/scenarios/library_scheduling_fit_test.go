@@ -15,6 +15,7 @@ func schedulingFitScenarios() []scenario {
 	return []scenario{
 		fitCPUNearMiss(), fitTaintMismatch(), fitVolumeZoneNoNodes(),
 		fitAutoscalerScalingUp(), fitAutoscalerCannotScale(),
+		fitVolumeZoneNodeFull(), fitLocalVolumeNodeGone(),
 	}
 }
 

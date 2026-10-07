@@ -72,6 +72,8 @@ func (m *Manager) openDeadline(
 		return p.Pending.RevisedDueAt(m.cfg.ReviseSettle), true
 	}
 	due, ok := m.reminderDeadline(p)
+	low, lowOK := m.reassessDeadline(p, now)
+	due, ok = soonest(due, ok, low, lowOK)
 	if p.Attempt != nil && !p.attemptLate {
 		due = earliest(due, p.Attempt.At.Add(FixWatch))
 	}
@@ -111,7 +113,7 @@ func (m *Manager) reminderDeadline(p *Incident) (time.Time, bool) {
 	if last.IsZero() {
 		last = p.Announced
 	}
-	return last.Add(reminderEvery(p)), !last.IsZero()
+	return last.Add(reminderEvery(p)), !last.IsZero() && !acked(p)
 }
 
 // earliest is the earlier of two times.

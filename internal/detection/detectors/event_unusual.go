@@ -51,7 +51,8 @@ func unusualEvents(
 	// again this way.
 	recurred := map[string]bool{}
 	for _, note := range ctx.Model.Notes(e.ID, ctx.Now.Add(-EventWindow)) {
-		if !note.Warning || knownEvent(note.Reason) {
+		if !note.Warning || knownEvent(note.Reason) ||
+			quotedByService(e, note.Reason) {
 			continue
 		}
 		// The window includes a note exactly EventWindow old, so the

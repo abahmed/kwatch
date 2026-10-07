@@ -307,9 +307,12 @@ func (v *view) virtualModes(
 	if modes, ok := v.objectModes(id, effect, link); ok {
 		return modes
 	}
+	if modes := preemptionModes(link); len(modes) > 0 {
+		return modes
+	}
 	switch id.Kind {
 	case kube.KindRegistry:
-		if class := classifyRegistryPull(v.text(effect)); class != pullImage {
+		if class, ok := v.registryClass(effect); ok {
 			return failing(class)
 		}
 	case kindClusterDNS:

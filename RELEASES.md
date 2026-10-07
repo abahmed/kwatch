@@ -127,7 +127,7 @@
   recurs and resolves before its digest goes out is listed as resolved; periodic
   noise is listed at least once a day.
 - **Digest audit entries carry content.** The digest's audit entry holds the
-  opened, resolved and risk counts and the first 20 incidents as "id: title".
+  opened, resolved and not-ready counts and the first 20 incidents as "id: title".
 - **A returning page is the same incident.** A page-tier failure that comes
   back within 2 hours of resolving re-opens its own incident instead of
   starting a new one: same Slack thread, same paging alert key, one update
@@ -235,8 +235,7 @@
   webhook without ready endpoints waits while every not-ready pod behind it is
   still starting (on a booting pool, or younger than 10 minutes, with no
   restarts). Anything still wrong after that is reported at once; crash-looping
-  pods get no grace. The node "pod limits exceed capacity" advisory waits the
-  same way.
+  pods get no grace.
 - **Webhooks that cannot block go to the digest.** An admission webhook whose
   backend is missing or has no ready pods is an informational digest item when
   every webhook in its configuration has failurePolicy Ignore (requests skip
@@ -607,10 +606,277 @@
   closeness to the failing object (itself, the config it uses, its Service or
   Ingress, its node, then its namespace).
 
+- **No second "resolved" for an outage the thread never heard was back.** An
+  incident that reopened and recovered before its "failing again" update went
+  out used to edit the resolve message a second time. It now closes quietly
+  and can still reopen.
+
+- **Private addresses in crash logs, with their owner.** Quoted crash-log
+  and error lines no longer hide private IPs as `[private-address]`. When
+  kwatch knows the address, it adds the Service, Pod or Node that owns it
+  (`dial tcp 10.0.3.4:5432 (db/postgres): connection refused`).
+  Credentials are still redacted.
+
+- **OOM kills by the node, and CPU throttling behind failing probes.** A
+  container killed far below its own memory limit while the node reports a
+  system OOM or memory pressure is now said to be killed by the node: the
+  message names the node and its biggest memory users instead of advising a
+  higher limit. A failing liveness, readiness or startup probe on a container
+  that is CPU-throttled at least half the time says so (`Liveness timed out
+  while the container was CPU-throttled 72% of the time (limit 200m)`). Both
+  use readings kwatch already collects; no new permissions.
+
+- **Why only some replicas fail.** When some replicas of one workload fail and
+  others are healthy, kwatch compares them and says what cleanly separates the
+  two groups: the zone they run in, an injected container only the failing pods
+  carry, or the image digest a mutable tag resolved to (`Same tag
+  registry/api:latest, but the failing pods run sha256:9f1c0a2b44d1, the
+  healthy ones sha256:aaaa1111bbbb`). It only speaks when two or more pods fail
+  and at least one is healthy, and it adjusts the confidence of the cause
+  accordingly. Uses pod and node data kwatch already reads.
+
+- **A "what is wrong right now" page.** `GET /status` on the health port lists
+  the open incidents (tier, root, age, one-line cause), control plane state, upgrade readiness, zone health and what kwatch cannot
+  see (kinds it is forbidden to read, unreachable kubelets). Text by default,
+  JSON with `?format=json`. It is read-only, needs no new permissions and
+  shows object names to anyone who can reach the health port.
+- **Upgrade readiness.** `/status` and, at most once a day and only when it
+  changed, the digest list what is true now that matters for an upgrade:
+  deprecated APIs in use with the release that removes them, kubelets outside
+  the supported skew, PodDisruptionBudgets that currently allow 0
+  disruptions, and `Fail` admission webhooks whose backend is unhealthy.
+- **Zone health.** `/status` shows, per availability zone, the nodes not ready
+  and the failing pods on them. It says failures are all in one zone only
+  when the cluster has two or more zones and every other zone is clean.
+- **Pods on different config versions.** When a ConfigMap or Secret changes,
+  pods that read it through environment variables or a `subPath` mount keep
+  the old content until their containers restart. A failure now says when the
+  object changed, which keys (names only, never values) and who changed it,
+  and whether the pods started since fail while the older ones are healthy, or
+  the reverse. Plain volume mounts, which update in place, are never called
+  stale.
+- **Acknowledge an incident with an annotation.** `kubectl annotate
+  deploy/api kwatch.io/ack="looking into it"` posts one update in the
+  incident's thread and stops its reminders, including the page reminder,
+  until the annotation is removed (which is told once too). Resolves and real
+  news still go out. A reopen inside the repage window stays acknowledged; a
+  new incident is not pre-acknowledged but says when the annotation is still
+  on the object. The note is quoted, bounded and stripped of credentials.
+- **Route incidents by owner.** A provider route can list `owners`. An
+  incident's owner is the `kwatch.io/owner` label or annotation of its root,
+  else of what owns the root, else of its namespace; with none it goes to the
+  routes that ask for no owner. Provider routes did not look at labels before.
+- **A cluster waking up is not a storm.** When five or more workloads start
+  from zero replicas, or three or more nodes join, within minutes of each
+  other, the pods they create are not reported for startup noise (probe
+  failures, pending, empty Services) until the wake-up is over, and a
+  crash loop, an OOM or anything still failing then is announced as before,
+  with "the cluster was waking up" as context. The next digest carries one
+  line: "Cluster waking up: 42 workloads started between 06:51 and 07:03;
+  5 had brief startup failures, all recovered." Workloads set to zero
+  together in a planned scale-down no longer raise "scaled to 0 but still
+  routed".
+- **Digests keep naming problems that stay open.** A digest-tier problem an
+  earlier digest listed (an event that returns every quarter hour, say) is
+  listed again in each following digest as `Service web (shop) — still
+  failing: FailedDeployModel ×14 since 17:14`, and opens a digest of its
+  own if it returns and none was sent for six hours.
+- **The state file stays small and starts fast.** The write-only timeline
+  is kept 7 days and at most 32 MiB (it was 30 days, up to the whole 512 MiB
+  cap, which left a 650 MB file and a five minute page check on every
+  restart). The compactor now gives free pages back by rewriting the file
+  while running, reads the file front to back before checking it, and logs
+  `state compaction pass` with the file size, free bytes and bucket sizes
+  (also `kwatch_storage_file_bytes`). A file from an earlier release is
+  trimmed and shrunk by the first pass after the upgrade.
+- **Stuck deletions name what holds them.** A terminating Namespace now
+  quotes the messages of its own deletion conditions
+  (`NamespaceContentRemaining`, `NamespaceFinalizersRemaining`,
+  `NamespaceDeletionContentFailure`, `NamespaceDeletionDiscoveryFailure`)
+  and counts the time from the deletion request, not from when kwatch first
+  saw it. Claims, volumes and workloads held by a finalizer are reported
+  with the finalizer names (a claim also names the pods still using it),
+  and a pod stuck terminating lists its finalizers. A pod stuck on an
+  unreachable node is still explained by the node's incident.
+- **A controller that stopped renewing its Lease is reported even when its
+  pod is failing.** The finding names the holder pod and its state
+  (`CrashLoopBackOff`, `Pending`, not ready) and joins that pod's incident,
+  so the Lease is no longer silent while the holder crash-loops. kwatch's
+  own leader Lease is left out of the scan.
+- **A CronJob that skips runs says how many and why.** With
+  `concurrencyPolicy: Forbid`, the finding now counts the runs skipped
+  since the last one started, names the Job that is still running and the
+  state of its pod ("skipped 5 scheduled runs: job nightly-report-28812340
+  from 02:00 is still running (pod stuck in ImagePullBackOff)").
+- **A call to a Service that does not exist is named as the cause.** A
+  failing workload that calls such a Service gets it named, quoting the
+  failed lookup: "api
+  calls paymnts:8080, but there is no Service paymnts in shop. Quoted:
+  "dial tcp: lookup paymnts.shop.svc.cluster.local: no such host". A
+  Service named payments exists." It applies only to a workload that is
+  failing (crashing, not ready, or quoting the failed lookup), never to a
+  healthy workload whose configuration names the Service, and it waits
+  until Services are listed. The Service it suggests is only one a couple
+  of edits away.
+- **Readiness flapping is reported.** Pods of a workload that switch
+  between ready and not ready at least six times in ten minutes without
+  restarting are one finding ("has pods that went ready to unready 9 times in the last 10
+  min. Service api's endpoints keep changing. Quoted readiness failure:
+  ..."). A pod's first Ready, restarting pods, booting node pools and the
+  young pods of a rollout are not counted, and a workload that never
+  flaps is called unusual.
+- **Full volumes say who they hurt, and inodes count.** A claim over
+  85% used (95% critical) now names its size and the workloads that
+  mount it ("It is at 98% of 20 GiB. It is used by postgres and
+  reporter."), and a claim whose inodes are nearly gone is a finding of
+  its own (`VolumeInodesHigh`, mode `VolumeFull.Inodes`) even with bytes
+  free. When a container on a nearly full claim crashes with "No space
+  left on device", the claim is the cause and the application's own line
+  is quoted. Current state only: no prediction, no new settings.
+- **Rejected registry logins name the Secret.** When pulls from one
+  registry fail with an authentication error, the one incident now says
+  which image pull Secret the failing pods use, its type and when it
+  last changed ("It pulls with Secret regcred in ci
+  (kubernetes.io/dockerconfigjson, last changed 92 days ago), and the
+  registry answers "unauthorized: authentication required"."), or that
+  the pods name none. Pods whose pull Secret does not exist blame that
+  Secret instead of the registry. Only the Secret's name, type and
+  change time are read, never its content; rate limits stay separate.
+- **A clearer cause no longer stays silent.** When every finding an
+  announced notify incident stood on is replaced by digest findings (a
+  restart turns an old `FailedGetScale` into the clearer
+  `HPATargetMissing`), the incident falls to the digest tier and its thread
+  hears the new cause once; a page is never lowered. The thread still gets
+  its resolve, the digest lists the open incident as ongoing, and the
+  restart summary now also names restored digest-tier incidents.
+- **A port that matches nothing is reported as a fact.** A Service whose
+  `targetPort` names a port none of its pods declare (it gets no endpoints),
+  or sends traffic to a number its pods do not declare while connections
+  to it are refused right now, says what it sends to and what the pods
+  listen on. An Ingress rule whose backend port, a number or a name, the
+  Service does not have names the rule and the ports the Service has. A
+  declared port is only information: a number with nothing failing stays
+  quiet.
+- **A pod held in Init says what it waits for.** An init container that runs
+  far longer than this workload's own earlier init runs (three minutes when
+  there is no history) is reported as stuck, with the Service its command,
+  arguments or environment name, whether that Service has no ready
+  endpoints, and a link to that Service's own incident. The last lines the
+  container wrote are quoted as written, with credentials redacted; a
+  Service the output names is stated too. A healthy dependency is not
+  blamed.
+- **No configuration advice in the digest or `/status`.** kwatch reports
+  what is happening, not what could happen. The digest no longer has a
+  "Configuration risks" section or "risks on N workloads" in its header, and
+  `/status` no longer has a configuration risks section (the
+  `configurationRisks` key is gone from its JSON). A single replica, a missing
+  probe or memory limit and a mutable image tag are still quoted in a failure
+  of that workload when they show what it cost. Workloads whose pods run but
+  never become ready are still named in the digest. The advisory detectors
+  for "every replica on one node", "privileged container" and "pods on mixed
+  config versions" are removed; the root-cause check for config versions
+  stays.
+- **A liveness probe that kills a slow start is named.** When a container is
+  restarted by "Liveness probe failed" and never became ready before each
+  kill, the message says what liveness allows and what the workload's own
+  starts took: "Liveness gives api 40s (10s delay + 3 × 10s) but api normally
+  needs about 75s to become ready (last 5 starts), so it is killed before it
+  finishes starting. A startupProbe or a longer delay would let it start."
+  The starts come from the workload's learned baseline (a new `start_seconds`
+  metric: container start to ready, bounded like the others), else from its
+  ready pods. Without any history kwatch says only that the container was not
+  ready when each kill came. A kill of a container that had time to start
+  (it ran longer than a usual start) never gets this explanation, and a
+  liveness kill is no longer blamed on a startup or readiness probe budget.
+- **Restarts that a failing dependency causes through liveness join its
+  incident.** When pods are killed by a liveness probe that runs the same
+  check as their readiness probe, and a Service they are configured to call
+  has no ready endpoints or failing pods behind it, the restarts become
+  members of the dependency's incident: "db went down at 10:02; 12 pods of
+  api and worker were then restarted by their liveness probe (same check as
+  readiness), so the restarts are a symptom." Both only explain restarts that
+  are happening; a probe that checks something else, or a healthy dependency,
+  leaves each workload its own incident.
+- **A LoadBalancer Service that never gets an address says why.** A
+  Service of type LoadBalancer with no address after its type was set now
+  quotes the newest event about it ("has been waiting 40 min for a load
+  balancer: "Failed to build model: ... subnets not found""), or says no
+  controller has acted on it (naming its load balancer class when it has
+  one). One that an Ingress routes to, or that had an address and lost it,
+  notifies; a brand-new one waits for the digest. Its FailedDeployModel and
+  FailedBuildModel events are quoted there instead of becoming a second
+  finding.
+- **A webhook whose TLS handshake fails is blamed with the API server's own
+  words.** When creates fail with `failed calling webhook ...: x509: ...`,
+  the webhook configuration is the cause and the x509 error is quoted:
+  "validating webhook image-policy rejects calls: "x509: certificate signed
+  by unknown authority"". When the Secret its pods mount holds a
+  certificate that has already expired, the message adds when. A
+  fail-closed webhook pages as before; kwatch reads only the public
+  expiry it already recorded, never the certificates' contents.
+- A NotReady node now says why in its own words. The note quotes the
+  Ready condition's message, picking the nested fault out of a long
+  runtime network message ("container runtime network not ready: ...
+  cni plugin not initialized"), and adds the other node conditions that
+  are True and the node's recent Warning events (ImageGCFailed,
+  Rebooted, SystemOOM), each quoted. When the kubelet stopped reporting
+  the note says kwatch cannot see why from inside the cluster and the
+  node may be down or unreachable. The incident's root does not change.
+- A pod held by where its volume lives now names the volume. The
+  scheduling explanation reads: claim data-0 (volume pv-1) can only
+  attach where topology.kubernetes.io/zone=eu-west-1b; the only node
+  there, n2, has only 100m CPU free of the 1 CPU it needs. A local
+  volume tied to a node says it lives on that node, which is gone or
+  NotReady.
+- **Wrong CPU architecture is named.** A container that crashes with
+  "exec format error" on a node of a known `kubernetes.io/arch` is reported
+  as an image that does not run there ("crashes on arm64 node n1 ..."), with
+  the quoted error line and, when replicas of the same workload run fine on
+  nodes of another architecture, how many.
+- **Out of pod IPs is one incident with the numbers.** Pods stuck in
+  ContainerCreating on nodes that ran out of addresses read "14 pods can't
+  start on 3 nodes: no free pod IPs", with the kubelet's own sandbox error
+  quoted; nodes of one zone are one incident.
+- **Preemption names the preemptor.** A pod the scheduler preempted, while
+  its workload is still short of replicas, says who preempted it, both
+  priorities and when. Many victims of one preemptor, and the replacements
+  that cannot be scheduled, are one incident rooted at the preemptor's
+  workload.
+- **Hard kills at the end of the grace period.** A pod terminated by a
+  rollout, scale-down or drain whose container did not stop within its
+  grace period and was killed (exit 137) is reported, with the failed
+  preStop hook quoted when there is one. It waits for the digest unless the
+  workload also fails; pods on a lost node are never reported.
+- **Limits above a node's capacity are no longer a finding.** Pod limits
+  adding up to more than the node has are normal for burstable pods, so the
+  "Pod limits exceed node capacity" finding (`NodeResourceHigh` and
+  `NodeResourceCritical`) is gone. The memory commitment is reported only
+  while the node is short of memory (pressure, evictions or a kernel OOM),
+  as the reason pods inside their own limit were killed.
+- **Restored incidents are auditable.** The audit entry of the "restored
+  incidents" summary lists the incidents it covers as "id: root tier=T
+  reasons=A,B" (the first 50, with the full count in `opened`), and each
+  restore logs one INFO line with the totals by tier.
+- **A known problem no longer hides a workload with nothing ready.** A
+  failure explained by another root, such as a node pool, joins that
+  root's incident. When the pool's problem was already known the incident
+  went to the digest, and it spoke up past the boot window only if the
+  root itself was the workload with nothing ready. It now speaks when any
+  workload it holds has no ready replica after the boot window, as it
+  already did for one rooted at the workload.
+- **A replaced node's first sandbox failures no longer page.** When a
+  node is terminated and a new one joins, the replacement pods can fail
+  to set up their network sandbox for a minute or two while the new
+  node's network plugin starts. A sandbox or network-not-ready event on a
+  pod whose node joined less than the boot window ago is now held, as it
+  already was while a whole pool boots, and is quoted again if the pod
+  still cannot start once the node is old. An exhausted address pool is
+  never held.
+
 ### Breaking changes
 
 - **Endpoints.** kwatch serves only `/healthz`, `/readyz`, `/availabilityz`,
-  `/health` and `/metrics`. The diagnostics endpoints are gone. The
+  `/health`, `/status` and `/metrics`. The diagnostics endpoints are gone. The
   incident list was first renamed from `/problems` to `/incidents` and then
   removed with the rest.
 - **Metrics.** Removed: `kwatch_apiserver_latency_milliseconds`,
@@ -1086,17 +1352,16 @@
   `activeProbeMonitor.autoDependencies: true` kwatch dials them from its own
   Pod, and a dependency that refuses connections is named as the cause of
   the pods that call it, even for a single workload.
-- **Configuration risks, in the digest and as the cost of a failure.** A new
-  detector reports a workload with no readiness probe, no memory limit, an
-  image tag that can change (`latest` or none), a single replica, every
-  replica on one node, or a privileged container. These are advisory: they
-  never open an incident on their own, they wait for the digest, and when a
-  failure of that workload shows what the risk cost, the message says so
-  ("It runs a single replica, so this is downtime, not degradation.").
-- **An overcommitted node explains kills on it.** A node whose pods' memory
-  limits add up to more than 150% of its memory is reported (digest tier)
-  and becomes a cause for OOM kills and evictions of pods that stayed within
-  their own limit.
+- **Configuration risks, as the cost of a failure.** A new detector notes a
+  workload with no readiness probe, no memory limit, an image tag that can
+  change (`latest` or none) or a single replica. These are advisory: they
+  never open an incident or appear in the digest, and when a failure of that
+  workload shows what the risk cost, the message says so ("It runs a single
+  replica, so this is downtime, not degradation.").
+- **An overcommitted node explains kills on it.** A node that is short of
+  memory and whose pods' memory limits add up to more than 150% of its
+  memory becomes a cause for OOM kills and evictions of pods that stayed
+  within their own limit. Limits above capacity alone are never reported.
 - **Unknown Warning events are not silent.** A Warning event kwatch has no
   detector for, repeated three times in a quarter hour on one object, becomes
   an informational finding that quotes the event text, so a new failure
@@ -1141,9 +1406,6 @@
   requests with server errors (`APIServerErrors`) or a cluster DNS failing
   10% or more of lookups with SERVFAIL (`CoreDNSServfail`). A cluster
   without those endpoints loses only these findings.
-- **Configuration risks reach the digest.** A risk the detector finds is
-  named once in the next low-priority digest ("Risk: orders runs a single
-  replica"); it never costs a message of its own.
 - **Kubelet evidence.** The kubelet's pod lifecycle relist time and its
   evictions are read from its own metrics: a kubelet that takes over a
   second to list its pods is reported (`NodePLEGSlow`), and evictions in
@@ -1262,9 +1524,7 @@
   message, changes its tier or counts as a new failure, and CPU throttling
   is always low priority ("api in shop is throttled on CPU 75% of the time").
   A failure that only blames itself no longer says "because it is failing on
-  its own". The digest lists configuration risks by type, with up to three
-  example workloads each, and skips `kube-system`, `kube-public`,
-  `kube-node-lease` and kwatch's own namespace. A stale Lease is reported
+  its own". A stale Lease is reported
   only while its holder pod is Running and Ready, so it no longer repeats a
   crash loop. Custom resources keep their declared kind spelling
   ("DatadogAgent datadog").
@@ -1293,6 +1553,14 @@
   as often, with at least three restarts, is reported as a release regression
   on the Deployment. A first deploy, a rollout past the window and a revision
   already crash-looping are not reported. There is nothing to configure.
+- **No more volume fill forecasts.** kwatch no longer predicts that a volume
+  will fill ("full in about 3 hours"), and the `VolumeFillingUp` finding and
+  mode are gone. A claim over 85% used (95% critical) is still reported, as
+  are claims out of inodes. Rules that match `VolumeFillingUp` should use
+  `VolumeFull`.
+- **Cause updates say what changed.** An update that follows a revised cause
+  now leads with "Cause now known:" (or "Cause changed:" when it replaces a
+  cause already told) instead of "is the revised cause".
 
 This document describes how kwatch is branched and released. Releases are cut with the
 `.github/workflows/release.yml` workflow using `workflow_dispatch`. It creates the version

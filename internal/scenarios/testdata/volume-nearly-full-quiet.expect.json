@@ -1,0 +1,10 @@
+{
+  "name": "volume-nearly-full-quiet",
+  "description": "A claim is 96% used and its workload still runs; the full claim alone is reported.",
+  "root": "persistentvolumeclaim/files/uploads",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "node//w1"
+  ]
+}

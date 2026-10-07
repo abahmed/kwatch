@@ -1,0 +1,13 @@
+{
+  "name": "config-edited-new-pods-fail",
+  "description": "A ConfigMap edit breaks the environment of the two replicas started after it; the three older pods keep the old environment and stay healthy.",
+  "root": "configmap/shop/api-config",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/api",
+    "node//n1",
+    "node//n2",
+    "zone//zone-a"
+  ]
+}

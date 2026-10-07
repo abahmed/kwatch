@@ -1,0 +1,18 @@
+10:03:05 settled
+🟠 payments is failing in shop (prod-eu-1) after the 10:01 release of registry.example.com/payments:2.3. The previous image was registry.example.com/payments:2.2. It fails with "panic: missing key DB_PASSWORD_V2". To see the rollout state, run kubectl rollout status deployment/payments -n shop
+🟠 payments is failing in shop (prod-eu-1) after the 10:01 release of registry.example.com/payments:2.3.
+| 🟠 **payments** is failing in **shop** (**prod-eu-1**) after the 10:01 release of registry.example.com/payments:2.3.
+| The previous image was registry.example.com/payments:2.2.
+| It fails with `panic: missing key DB_PASSWORD_V2`.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/payments -n shop
+| ```
+10:08:50 acknowledged
+🟠 Acknowledged on deployment/payments (prod-eu-1): "looking into it".
+🟠 Acknowledged on deployment/payments (prod-eu-1): "looking into it".
+| 🟠 Acknowledged on deployment/payments (**prod-eu-1**): `looking into it`.
+10:08:50 acknowledgement removed
+🟠 Acknowledgement removed for payments in shop (prod-eu-1).
+🟠 Acknowledgement removed for payments in shop (prod-eu-1).
+| 🟠 Acknowledgement removed for **payments** in **shop** (**prod-eu-1**).

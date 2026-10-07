@@ -208,10 +208,11 @@ var nodeRows = []Row{
 		Prior: 0.7,
 	},
 	{
-		// The limits of the pods on the node add up to more memory than
-		// it has: a pod killed within its own limit was killed for
-		// the node's sake. Weaker than memory pressure, which the
-		// kubelet states outright.
+		// The node is short of memory and the limits of its pods add up
+		// to more than it has: a pod killed within its own limit was
+		// killed for the node's sake. The finding exists only while the
+		// node is short, never for the limits alone. Weaker than memory
+		// pressure, which the kubelet states outright.
 		Name: "node-overcommitted",
 		Cause: Side{Kind: kube.KindNode, Modes: []detection.Mode{
 			detection.ModeMemoryOvercommitted}},
@@ -236,7 +237,11 @@ var workloadRows = []Row{
 		Name: "config-missing-or-changed",
 		Cause: Side{Kind: kube.KindSecret, Modes: []detection.Mode{ModeMissing,
 			ModeChanged}},
-		Link: LinkUses, Effect: podSide(configModes...), Prior: 0.7,
+		// A Secret can be an image pull Secret: a pod that cannot
+		// pull with a missing or rotated login fails with ImagePull.
+		Link: LinkUses, Effect: podSide(
+			append([]detection.Mode{detection.ModeImagePull},
+				configModes...)...), Prior: 0.7,
 	},
 	{
 		Name: "configmap-missing-or-changed",
@@ -248,7 +253,7 @@ var workloadRows = []Row{
 		Name: "claim-not-usable",
 		Cause: Side{Kind: kube.KindPVC, Modes: []detection.Mode{
 			detection.ModeClaimFailed, detection.ModeVolume,
-			detection.ModeVolumeFull, detection.ModeVolumeFillingUp,
+			detection.ModeVolumeFull,
 			detection.ModeAttachFailed, detection.ModePending, ModeMissing}},
 		Link: LinkMounts,
 		Effect: podSide(
@@ -390,8 +395,9 @@ var specificRows = concatRows(nodeRows, workloadRows, clusterRows,
 	controlPlaneRows, apiLatencyRows, accessRows, trafficRows,
 	nodeLifecycleRows,
 	operatorRows, workloadConfigRows, containerRows, calledRows,
-	serviceCallRows, policyCallRows,
-	scalingRows, sharedRows, agentRows)
+	serviceCallRows, policyCallRows, livenessStartRows,
+	scalingRows, sharedRows, agentRows, preemptionRows, leaseRows,
+	missingServiceRows, initWaitRows)
 
 func concatRows(groups ...[]Row) []Row {
 	var out []Row

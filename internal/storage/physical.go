@@ -17,8 +17,8 @@ import (
 //     new writes, so the file stops growing.
 //   - When the file passes SizeCap by the rewrite margin, the pass
 //     reports RewriteDue and the next Open (or Claim) rewrites the file
-//     with copy-compaction (shrink.go). A rewrite while running would
-//     pause every reader and writer for the whole copy.
+//     with copy-compaction (shrink.go). Free pages alone never need a
+//     restart: the pass rewrites the file while running (reclaim.go).
 //   - The rewrite checks free space against the volume's real limit
 //     (Options.VolumeLimit), not only what the file system reports.
 

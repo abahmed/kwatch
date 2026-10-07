@@ -6,6 +6,7 @@ import (
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // leadSubject is the entity the lead sentence is about. It follows the
@@ -27,6 +28,10 @@ func leadSubject(f caseFacts) inventory.EntityID {
 func affectedWorkload(f caseFacts) inventory.EntityID {
 	if f.p.Cause != nil {
 		for _, id := range f.p.Cause.Chain {
+			if f.p.Cause.Rule == explain.RowPreemptor &&
+				id == f.p.Cause.Root {
+				continue // the preemptor is the cause, not the victim
+			}
 			if incident.IsWorkload(id.Kind) {
 				return id
 			}

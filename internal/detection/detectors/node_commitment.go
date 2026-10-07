@@ -26,9 +26,10 @@ const (
 	overcommitSustain     = 5 * time.Minute
 )
 
-// NodeCommitment detects nodes whose pods' memory limits add up to far
-// more than the node has. It explains OOM kills and evictions of pods
-// that did nothing wrong on their own.
+// NodeCommitment detects nodes that are short of memory (pressure,
+// evictions or a kernel OOM) while their pods' memory limits add up to
+// far more than the node has. It explains OOM kills and evictions of pods
+// that did nothing wrong on their own. Limits alone are never reported.
 type NodeCommitment struct{}
 
 // Name implements detection.Detector.
@@ -49,17 +50,21 @@ func (NodeCommitment) Detect(
 	}
 	limits, unlimited := memoryLimitsOn(ctx, e.ID)
 	share := limits / allocatable
-	// From overcommitCritical on, NodeHealth reports the node as a
-	// critical resource problem; one condition gets one finding.
 	level := memoryOvercommit
 	if ctx.Ongoing("memory-overcommit") {
 		level = memoryOvercommitClear
 	}
-	if share < level || share >= overcommitCritical {
+	if share < level {
 		return nil
 	}
 	if !sustained(ctx, "memory-overcommit", time.Time{},
 		overcommitSustain) {
+		return nil
+	}
+	// Limits above the node's memory are normal, and a risk is not news.
+	// The commitment is reported only while the node is short of memory,
+	// as the reason pods on it are killed.
+	if !nodeShortOnMemory(e) && !systemOOMNear(ctx, e, ctx.Now) {
 		return nil
 	}
 	since := ctx.Onset("memory-overcommit", ctx.Now)
@@ -75,10 +80,9 @@ func (NodeCommitment) Detect(
 	return []detection.Finding{{
 		Reason: reasons.NodeMemoryOvercommitted, Severity: detection.Warning,
 		Since: since,
-		Summary: "Node is overcommitted on memory: its pods' limits " +
-			"add up to " + percentText(share*100) + " of its memory; " +
-			"under load the kernel will kill pods that stayed within " +
-			"their own limit",
+		Summary: "Node is short on memory and its pods' limits add up " +
+			"to " + percentText(share*100) + " of its memory, so pods " +
+			"that stayed within their own limit are killed",
 		Evidence: evidence,
 	}}
 }

@@ -165,6 +165,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Ingress.ClassMissing | degraded | `IngressClassMissing` | `ingress` |
 | Ingress.TLSSecretMissing | degraded | `IngressTLSSecretMissing` | `ingress` |
 | InitError | varies | `InitContainerError` | `container` |
+| InitWaiting | degraded | `InitContainerWaiting` | `init_wait` |
 | Initializing | varies | `PodInitializing` | - |
 | Inodes.Usage | varies | `NodeInodesUsageCritical`, `NodeInodesUsageHigh` | `usage` |
 | InvalidLimitRange | degraded | `LimitRangeInvalid` | `namespace` |
@@ -178,6 +179,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | JobFailed.Deadline | varies | `JobDeadlineExceeded` | `workload` |
 | JobRunningLong | degraded | `JobRunningLong` | `job_runtime` |
 | Killed | varies | `Killed` | - |
+| Killed.GracePeriod | degraded | `PodKilledAtGrace` | `pod_grace_kill` |
 | Kubelet.Unreachable | degraded | `KubeletUnreachable` | `kubelet_health` |
 | Kwatch.NetworkRestricted | degraded | `KwatchNetworkRestricted` | `active_probe` |
 | Latency.APIServer | degraded | `APIServerLatency` | `controlplane` |
@@ -185,7 +187,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Latency.APIServer.Writes | varies | `APIServerWritesSlow` | `control_plane_load` |
 | LeaseStale | degraded | `LeaseStale` | `lease` |
 | LoadBalancer.SyncFailed | degraded | `LoadBalancerSyncFailed` | `loadbalancer` |
-| LoadBalancerPending | degraded | `LoadBalancerProvisioning` | `network` |
+| LoadBalancerPending | degraded | `LoadBalancerProvisioning` | `loadbalancer_wait` |
 | MemoryHigh | varies | `ContainerMemoryUsageHigh` | `resources` |
 | MemoryOvercommitted | degraded | `NodeMemoryOvercommitted` | `node_commitment` |
 | MemoryPressure | varies | `MemoryPressure`, `NodeMemoryPressure` | `node` |
@@ -206,10 +208,13 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | PIDPressure | varies | `PIDPressure` | `node` |
 | PLEGSlow | degraded | `NodePLEGSlow` | `kubelet_health` |
 | Pending | degraded | `PhasePending`, `PodPending` | `generic`, `pod` |
+| PortMismatch | failing | `IngressBackendPortMissing`, `ServicePortMismatch` | `ingress_ports`, `service_ports` |
+| Preempted | degraded | `PodPreempted` | `pod_preempted` |
 | Preempted.Repeatedly | degraded | `PodPreemptedRepeatedly` | `pod_preemption` |
 | PressureStall | degraded | `NodePressureStall` | `usage` |
 | Probe.Liveness | varies | `LivenessProbeFailed` | `container_probe` |
 | Probe.Readiness | varies | `ReadinessProbeFailed` | `container_probe` |
+| Probe.Readiness.Flapping | degraded | `ReadinessFlapping` | `workload_flapping` |
 | Probe.Startup | varies | `StartupProbeFailed` | `container_probe` |
 | Quota.NearLimit | degraded | `ResourceQuotaNearLimit` | `quota_attach` |
 | QuotaExhausted | degraded | `ResourceQuotaExhausted` | `policy` |
@@ -221,15 +226,11 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Resize.Error | varies | `PodResizeError` | `pod_resize` |
 | Resize.Infeasible | varies | `PodResizeInfeasible` | `pod_resize` |
 | Resolution.Servfail | varies | `CoreDNSServfail` | `controlplane` |
-| ResourceCritical | varies | `NodeResourceCritical` | `resources` |
-| ResourceHigh | varies | `NodeResourceHigh` | `resources` |
 | Restarting | degraded | `HighRestartCount` | `container` |
 | Risk | varies | `Risk.` | - |
 | Risk.MutableImageTag | varies | `Risk.MutableImageTag` | `risk` |
 | Risk.NoMemoryLimit | varies | `Risk.NoMemoryLimit` | `risk` |
 | Risk.NoReadinessProbe | varies | `Risk.NoReadinessProbe` | `risk` |
-| Risk.Privileged | varies | `Risk.Privileged` | `risk` |
-| Risk.SingleNode | varies | `Risk.SingleNode` | `risk` |
 | Risk.SingleReplica | varies | `Risk.SingleReplica` | `risk` |
 | Rollout.Stuck | degraded | `StatefulSetRolloutStuck` | `rollout` |
 | RolloutStuck | failing | `DeploymentProgressingFalse`, `ProgressDeadlineExceeded` | `workload` |
@@ -251,7 +252,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | SnapshotFailed | varies | `VolumeSnapshotFailure` | `custom` |
 | StatusUnknown | degraded | `PodStatusUnknown` | `pod` |
 | Storage.ObjectsHigh | degraded | `StorageObjectsHigh` | `control_plane_storage` |
-| StuckDeleting | degraded | `NamespaceStuckTerminating`, `NodeStuckTerminating`, `PodStuckTerminating`, `StuckDeleting` | `generic`, `namespace`, `node`, `pod` |
+| StuckDeleting | degraded | `NamespaceStuckTerminating`, `NodeStuckTerminating`, `PodStuckTerminating`, `StuckDeleting` | `generic`, `namespace_stuck`, `node`, `pod` |
 | Suspended | varies | `CronJobSuspended`, `JobSuspended` | `schedule` |
 | Unavailable | varies | `DaemonSetUnavailable`, `DeploymentAvailableFalse`, `DeploymentUnavailable`, `StsUnavailable` | `workload` |
 | Unavailable.APIServer | varies | `APIServerUnavailable` | `controlplane` |
@@ -267,8 +268,8 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Volume.MapFailed | failing | `FailedMapVolume` | `event`, `event_storage` |
 | Volume.ProvisioningFailed | varies | `ProvisioningFailed` | `event_storage` |
 | VolumeFailed | failing | `PersistentVolumeFailure` | `storage` |
-| VolumeFillingUp | varies | `VolumeFillingUp` | `usage` |
 | VolumeFull | varies | `VolumeUsageHigh` | `usage` |
+| VolumeFull.Inodes | varies | `VolumeInodesHigh` | `usage` |
 | Webhook.BackendMissing | varies | `WebhookBackendNotFound` | `policy` |
 | Webhook.NoEndpoints | varies | `WebhookNoEndpoints` | `policy` |
 | Webhook.Rejecting | degraded | `WebhookRejecting` | `webhook_calls` |

@@ -1,0 +1,12 @@
+10:02:15 settled
+🟠 api in shop (prod-eu-1) keeps being killed by its liveness probe because its containers are not ready when liveness gives up. Liveness gives api 40s (10s delay + 3 × 10s), and api was not ready when each kill came. All of its dependents are failing. To read the output of the last crash, run kubectl logs api-8ab26137-a -c app -n shop --previous
+Checked: both replicas fail, on 2 nodes.
+🟠 api in shop (prod-eu-1) keeps being killed by its liveness probe because its containers are not ready when liveness gives up.
+| 🟠 **api** in **shop** (**prod-eu-1**) keeps being killed by its liveness probe because its containers are not ready when liveness gives up.
+| Liveness gives **api** 40s (10s delay + 3 × 10s), and **api** was not ready when each kill came.
+| All of its dependents are failing.
+| To read the output of the last crash, run
+| ```
+| kubectl logs api-8ab26137-a -c app -n shop --previous
+| ```
+| *Checked: both replicas fail, on 2 nodes.*

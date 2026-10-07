@@ -85,8 +85,10 @@ func (s *Sanitizer) Observation(o inventory.Observation) inventory.Observation {
 	out.Change = s.change(o.Change)
 	out.Note = o.Note
 	out.Note.Message = ""
+	out.Note.Refusal = ""
 	if s.keepMessages {
 		out.Note.Message = o.Note.Message
+		out.Note.Refusal = o.Note.Refusal
 	}
 	out.Note.Reason = s.code(o.Note.Reason)
 	// The UID of the object and the origin (the Event object) identify

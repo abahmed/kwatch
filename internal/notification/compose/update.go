@@ -38,6 +38,10 @@ func sentencesFor(
 		return stillFailingSentences, true
 	case incident.ReasonFailingAgain:
 		return failingAgainSentences, true
+	case incident.ReasonAcknowledged:
+		return acknowledgedSentences, true
+	case incident.ReasonAckRemoved:
+		return ackRemovedSentences, true
 	case incident.ReasonMaterialChange:
 		return changeSentencesFor, true
 	case incident.ReasonSettled, incident.ReasonSuperseded:
@@ -64,50 +68,17 @@ func changeSentencesFor(f caseFacts) []sentence {
 	return append(leadSentences(f), strongestProof(f)...)
 }
 
-// revisedSentences restate the case under its new cause, led by the
-// subject: "api in shop has a revised cause: it was evicted because
-// node n2 is low on memory". When the subject is the new cause itself,
-// the lead says so: "Node n3 is the revised cause: it is low on
-// memory".
+// revisedSentences restate the case under its new cause, led by what
+// the thread now learns: "Cause now known: Node n3 is low on memory."
+// A cause that replaces one already told says "Cause changed:" instead.
 func revisedSentences(f caseFacts) []sentence {
 	lead := leadSentences(f)
-	subject := leadSubject(f)
-	name := f.leadName(subject)
-	text := strings.TrimSuffix(leadText(f), ".")
-	link := " has a revised cause: "
-	if ownState(f) {
-		link = " is the revised cause: "
+	label := "Cause now known: "
+	if f.p.Pending.CauseReplaced() {
+		label = "Cause changed: "
 	}
-	lead[0].text = endSentence(capitalName(subject,
-		name+link+"it "+withoutSubject(f, subject, text)))
+	lead[0].text = label + lead[0].text
 	return append(lead, strongestProof(f)...)
-}
-
-// ownState reports a lead about the root's own condition, with no
-// change or outside cause to blame: the root itself is the cause.
-func ownState(f caseFacts) bool {
-	p := f.p
-	return !ownCause(p.Cause) && blamedChange(f) == nil &&
-		(p.Cause == nil || rootFinding(p, f.members) != nil)
-}
-
-// withoutSubject is a lead without its subject: "payments in shop is
-// down" and "payments is down in shop" both become "is down".
-func withoutSubject(
-	f caseFacts, subject inventory.EntityID, text string,
-) string {
-	if rest, ok := strings.CutPrefix(text, f.leadName(subject)+" "); ok {
-		return rest
-	}
-	rest, ok := strings.CutPrefix(text, shortName(subject)+" ")
-	if !ok {
-		return stateWords(f.p)
-	}
-	if subject.Namespace != "" {
-		rest = strings.Replace(rest,
-			" in "+subject.Namespace+f.clusterTag(), "", 1)
-	}
-	return rest
 }
 
 func strongestProof(f caseFacts) []sentence {

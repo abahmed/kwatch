@@ -168,6 +168,7 @@ func openVerified(path string, readOnly bool) (db *bolt.DB, err error) {
 	}()
 	// Pages are checked before initialise writes to the file.
 	check := startStep("page check")
+	prefetch(path)
 	err = checkPages(db)
 	check.end()
 	if err != nil {

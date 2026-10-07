@@ -49,6 +49,8 @@ func (s Snapshot) Record(c Cause) rootcause.CauseRecord {
 		out.Change = &change
 		out.RollbackRevision = rollbackRevision(s.Model, c.Covers)
 	}
+	out.Logins, out.Refused = s.pullLogins(c)
+	out.ServingCert = s.servingCert(c)
 	for _, e := range c.Contributions {
 		out.Proof = append(out.Proof, rootcause.Proof{
 			Code: e.Code, Count: e.Count, Total: e.Total, Fields: e.Fields,

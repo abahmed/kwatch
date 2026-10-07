@@ -1,0 +1,10 @@
+10:03:15 settled
+🟠 Service api in shop (prod-eu-1) is failing: sends traffic to the port named web, but none of its pods declares a port with that name (they listen on 8080 (http)). api gets no endpoints for that port. Its ports changed at 10:01 from 80/->http to 80/->web. Its dependents failed soon after it changed. To see the object's state and events, run kubectl describe service api -n shop
+🟠 Service api in shop (prod-eu-1) is failing: sends traffic to the port named web, but none of its pods declares a port with that name (they listen on 8080 (http)). api gets no endpoints for that port.
+| 🟠 Service **api** in **shop** (**prod-eu-1**) is failing: sends traffic to the port named web, but none of its pods declares a port with that name (they listen on 8080 (http)). **api** gets no endpoints for that port.
+| Its ports changed at 10:01 from 80/-\>http to 80/-\>web.
+| Its dependents failed soon after it changed.
+| To see the object's state and events, run
+| ```
+| kubectl describe service api -n shop
+| ```

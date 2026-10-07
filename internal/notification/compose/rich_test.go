@@ -43,13 +43,13 @@ func digestMessage() notification.Message {
 			Reason: reason,
 			Entity: inventory.CoreID(kube.KindDeployment, "shop", name)})
 	}
+	// Configuration advice is hidden; only pods that never become ready
+	// are announced.
 	for _, n := range []string{"accounts", "web", "app", "x", "y"} {
 		add(reasons.RiskSingleReplica, n)
 	}
 	add(reasons.RiskMutableImageTag, "website")
-	risks = append(risks, detection.Finding{Advisory: true,
-		Reason: reasons.RiskSingleReplica,
-		Entity: inventory.CoreID(kube.KindDeployment, "data", "web")})
+	add(reasons.WorkloadNeverReady, "cart")
 	return Writer{Cluster: "staging"}.Digest(open, resolved, risks, now)
 }
 
@@ -57,15 +57,14 @@ func TestDigestIsAScannableList(t *testing.T) {
 	msg := digestMessage()
 	slack := msg.Render(notification.SlackDialect())
 	want := "🟡 *kwatch digest* · staging — 2 problems · 5 resolved · " +
-		"risks on 7 workloads\n\n" +
+		"1 workload not ready\n\n" +
 		"*Problems*\n" +
 		"• Node *ip-10-0-67-211* — failing again (2nd time in 2h)\n" +
 		"• Service *ingress-nginx* (*kube-addons*) — can't deploy its " +
 		"load balancer: FailedDeployModel ×3 in 15 min\n\n" +
 		"✅ 5 resolved since last digest: accounts, assets, comms +2\n\n" +
-		"*Configuration risks (none urgent)*\n" +
-		"• Single replica — 6: accounts, app, web (data, shop) +2\n" +
-		"• Mutable image tag — 1: website"
+		"*Running but not ready*\n" +
+		"• Pods never ready — 1: cart"
 	if slack != want {
 		t.Fatalf("slack digest:\n%s\nwant:\n%s", slack, want)
 	}

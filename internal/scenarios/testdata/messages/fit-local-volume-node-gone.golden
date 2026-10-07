@@ -1,0 +1,13 @@
+10:03:15 settled
+🟠 etl in analytics (prod-eu-1) has waited two minutes for a node because volume claim data-etl is bound to a volume in a zone with no node for the pod. No node fits: claim data-etl (volume pv-etl) lives on node n9, which is gone. The scheduler says "0/1 nodes are available: 1 node(s) had volume node affinity conflict. preemption: 0/1 nodes are available: 1 Preemption…". To see why the volume claim is not usable, run kubectl describe pvc data-etl -n analytics
+🟠 etl in analytics (prod-eu-1) has waited two minutes for a node because volume claim data-etl is bound to a volume in a zone with no node for the pod.
+| 🟠 **etl** in **analytics** (**prod-eu-1**) has waited two minutes for a node because volume claim **data-etl** is bound to a volume in a zone with no node for the pod.
+| No node fits: claim **data-etl** (volume pv-etl) lives on node n9, which is gone.
+| The scheduler says
+| ```
+| 0/1 nodes are available: 1 node(s) had volume node affinity conflict. preemption: 0/1 nodes are available: 1 Preemption…
+| ```
+| To see why the volume claim is not usable, run
+| ```
+| kubectl describe pvc data-etl -n analytics
+| ```

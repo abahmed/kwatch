@@ -15,6 +15,9 @@ type AnnouncedRoute struct {
 	Namespaces []string
 	Reasons    []string
 	Severity   string
+	// Owners are the owners the incident had when it was told about;
+	// a route that asks for an owner matches on them.
+	Owners []string `json:",omitempty"`
 }
 
 // clone copies the route so a snapshot never shares its slices.
@@ -25,6 +28,7 @@ func (r *AnnouncedRoute) clone() *AnnouncedRoute {
 	return &AnnouncedRoute{
 		Namespaces: slices.Clone(r.Namespaces),
 		Reasons:    slices.Clone(r.Reasons), Severity: r.Severity,
+		Owners: slices.Clone(r.Owners),
 	}
 }
 
@@ -33,6 +37,7 @@ func (r *AnnouncedRoute) clone() *AnnouncedRoute {
 func (r *AnnouncedRoute) widen(other *AnnouncedRoute) {
 	r.Namespaces = unionSorted(r.Namespaces, other.Namespaces)
 	r.Reasons = unionSorted(r.Reasons, other.Reasons)
+	r.Owners = unionSorted(r.Owners, other.Owners)
 	if severityRank(other.Severity) > severityRank(r.Severity) {
 		r.Severity = other.Severity
 	}
@@ -77,7 +82,7 @@ func routeOf(p *Incident) *AnnouncedRoute {
 	}
 	return &AnnouncedRoute{
 		Namespaces: sortedKeys(namespaces), Reasons: sortedKeys(reasons),
-		Severity: severityOfTier(p.Tier),
+		Severity: severityOfTier(p.Tier), Owners: ownersOf(p.Owner),
 	}
 }
 

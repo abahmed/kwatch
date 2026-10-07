@@ -57,3 +57,50 @@ const (
 	EvidenceEditArrow  = " → "
 	MaxEditEvidence    = 3
 )
+
+// Evidence labels of a probe that fails while its container is starved
+// of CPU.
+const (
+	// EvidenceCPUThrottled is the share of CPU periods the container was
+	// throttled in, such as "72%".
+	EvidenceCPUThrottled = "cpu throttled"
+	// EvidenceCPULimit is the container's CPU limit, such as "200m".
+	EvidenceCPULimit = "cpu limit"
+)
+
+// Evidence labels of a container killed by the node running out of
+// memory rather than by its own limit.
+const (
+	// EvidenceKilledByNode is the name of the node that ran out of
+	// memory.
+	EvidenceKilledByNode = "killed by node"
+	// EvidenceMemoryUsed is what the container used before the kill,
+	// such as "180Mi".
+	EvidenceMemoryUsed = "memory used"
+	// EvidenceNodeMemoryUser is one of the biggest memory users on that
+	// node, such as "batch/importer 3.1Gi (no limit)". It repeats, the
+	// biggest first.
+	EvidenceNodeMemoryUser = "node memory user"
+)
+
+// Evidence labels of a container that liveness kills while it is still
+// starting.
+const (
+	// EvidenceLivenessGives is the time liveness allows before the kill,
+	// with its parts: "40s (10s delay + 3 × 10s)".
+	EvidenceLivenessGives = "liveness gives"
+	// EvidenceUsualStart is how long the workload's containers usually
+	// take from starting to ready, such as "75s".
+	EvidenceUsualStart = "usually ready after"
+	// EvidenceStartSamples is how many past starts that figure covers,
+	// at most the last five.
+	EvidenceStartSamples = "starts seen"
+	// EvidenceKilledBeforeReady is "true" when the last run ended
+	// within the liveness budget and the container declares a readiness
+	// probe: it never reached Ready before the kill. It is written only
+	// when no history of starts says how long a start takes.
+	EvidenceKilledBeforeReady = "killed before ready"
+	// EvidenceLivenessSameCheck is "true" when the liveness probe runs
+	// the same check as the readiness probe.
+	EvidenceLivenessSameCheck = "liveness same check"
+)

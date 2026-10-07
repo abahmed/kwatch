@@ -1,0 +1,13 @@
+10:02:15 settled
+🟠 db in shop (prod-eu-1) keeps crashing. db went down at 10:01; 5 pods of api and worker were then restarted by their liveness probe (same check as readiness), so the restarts are a symptom. It fails with "FATAL: could not write to file: No space left on device". Service db can't serve traffic. It runs a single replica, so this is downtime, not degradation. api and worker are affected as well. To read the output of the last crash, run kubectl logs db-4f3043ec-a -c app -n shop --previous
+🟠 db in shop (prod-eu-1) keeps crashing.
+| 🟠 db in **shop** (**prod-eu-1**) keeps crashing.
+| db went down at 10:01; 5 pods of **api** and **worker** were then restarted by their liveness probe (same check as readiness), so the restarts are a symptom.
+| It fails with `FATAL: could not write to file: No space left on device`.
+| Service db can't serve traffic.
+| It runs a single replica, so this is downtime, not degradation.
+| **api** and **worker** are affected as well.
+| To read the output of the last crash, run
+| ```
+| kubectl logs db-4f3043ec-a -c app -n shop --previous
+| ```

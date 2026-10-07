@@ -39,6 +39,9 @@ func TestSoakHeapPlateaus(t *testing.T) {
 	if testing.Short() {
 		t.Skip("soak replay runs a simulated day")
 	}
+	if raceEnabled {
+		t.Skip("the heap is measured without -race: make verify-latency")
+	}
 	log := soakLog(soakLength)
 	deps := newDependencies()
 	model := deps.Model

@@ -88,6 +88,18 @@ func (m *Manager) reopenUpdate(p *Incident, now time.Time) (Decision, bool) {
 	return m.decide(p, Update, ReasonFailingAgain), true
 }
 
+// closeUnheardReopen resolves a reopened incident that recovered before
+// its "failing again" update went out. The thread's last word is still
+// the first resolve, so a second one would only repeat it: the incident
+// closes without a decision. It keeps its history and can reopen again.
+func (m *Manager) closeUnheardReopen(p *Incident, now time.Time) {
+	p.State, p.Resolved = Resolved, now
+	p.Pending.ClearReopen()
+	p.Pending.ClearRevised()
+	p.Fix = fixOf(m.model, p, now)
+	p.note(now, "resolved: reopened and recovered before it was reported")
+}
+
 // reopenPending reports a reopened incident whose update is still due.
 // A reopen that recovered first keeps it: the thread's last word is the
 // old resolve, so the update goes out when the failure returns. It waits

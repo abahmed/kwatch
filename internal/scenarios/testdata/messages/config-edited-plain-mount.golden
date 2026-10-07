@@ -1,0 +1,10 @@
+10:03:15 settled
+🟠 api is failing in shop (prod-eu-1) after the 10:01 change to config map api-config. Key TIMEOUT changed. It fails with "config: TIMEOUT: cannot parse "thirty" as a number". To check the object the pods depend on, run kubectl get configmap api-config -n shop -o yaml
+🟠 api is failing in shop (prod-eu-1) after the 10:01 change to config map api-config.
+| 🟠 **api** is failing in **shop** (**prod-eu-1**) after the 10:01 change to config map **api-config**.
+| Key TIMEOUT changed.
+| It fails with `config: TIMEOUT: cannot parse`thirty`as a number`.
+| To check the object the pods depend on, run
+| ```
+| kubectl get configmap api-config -n shop -o yaml
+| ```

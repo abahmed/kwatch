@@ -1,0 +1,13 @@
+{
+  "name": "webhook-tls-unknown-authority",
+  "description": "A fail-closed validating webhook with ready endpoints fails every call with an x509 unknown authority error; pod creation fails in two namespaces.",
+  "root": "validatingwebhookconfiguration//image-policy",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/payments/gateway",
+    "deployment/search/api",
+    "node//n1",
+    "node//n2"
+  ]
+}

@@ -64,6 +64,16 @@ type CauseRecord struct {
 	// Beyond are failures one step past the chain's limit: they follow
 	// from it but are not claimed by it.
 	Beyond []Hop `json:",omitempty"`
+	// Logins are the registry logins the failing pods pull with, when
+	// the root is a registry that refuses logins.
+	Logins []PullLogin `json:",omitempty"`
+	// Refused is the registry's own answer, as the pull error says it,
+	// when the error holds one: "unauthorized: authentication required".
+	Refused string `json:",omitempty"`
+	// ServingCert is the TLS Secret a webhook's pods serve when its
+	// certificate has already expired, for a webhook whose calls fail
+	// the TLS handshake.
+	ServingCert *ServingCert `json:",omitempty"`
 }
 
 // Hop is one step of a failure chain: an entity that failed, a workload,

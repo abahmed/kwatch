@@ -31,13 +31,17 @@ type caseFacts struct {
 	// changes are the latest changes next to an incident with no cause,
 	// newest first, set by the pipeline.
 	changes []inventory.Change
+	// wake is the cluster wake-up the problem began in, set by the
+	// pipeline.
+	wake *incident.WakeContext
 }
 
 func gatherFacts(d incident.Decision, now time.Time, fix *inventory.Change,
 ) caseFacts {
 	f := caseFacts{p: d.Incident, members: sortedMembers(d.Incident),
 		now: now, fix: fix, reason: d.Reason, output: d.Facts.Output,
-		evidence: d.Facts.Evidence, changes: d.Facts.Changes}
+		evidence: d.Facts.Evidence, changes: d.Facts.Changes,
+		wake: d.Facts.Wake}
 	if own := rootFinding(f.p, f.members); own != nil {
 		f.lead, f.ok = *own, true
 	} else if failures := failing(f.members); len(failures) > 0 {
@@ -97,12 +101,29 @@ var noteWriters = []sentenceWriter{
 	checkedSentences,
 	changeSentences,
 	causeProofSentences,
+	pullLoginSentences,
+	servingCertSentences,
 	revisionDiffSentences,
+	configVersionSentences,
 	changesBeforeSentences,
+	wakeSentences,
 	errorSentences,
+	nodeWhySentences,
 	calledServiceSentences,
+	missingServiceSentences,
+	readinessFlapSentences,
 	usageSentences,
+	volumeInodeSentences,
+	volumeCrashSentences,
+	nodeOOMSentences,
+	archSentences,
+	ipExhaustedSentences,
+	preemptedSentences,
+	graceKillSentences,
 	memorySentences,
+	livenessStartSentences,
+	livenessCascadeSentences,
+	throttleSentences,
 	baselineSentences,
 	jobRunSentences,
 	scaledZeroSentences,

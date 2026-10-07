@@ -1,0 +1,10 @@
+{
+  "name": "node-cni-not-ready",
+  "description": "A node stays NotReady because the container runtime network is not ready; the message quotes the cause and the failed image GC.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/api"
+  ]
+}

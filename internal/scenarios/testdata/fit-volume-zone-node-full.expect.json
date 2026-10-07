@@ -1,0 +1,7 @@
+{
+  "name": "fit-volume-zone-node-full",
+  "description": "A pod is Pending because its bound volume can only attach in zone-b, and the only node there has no room; the message says so.",
+  "root": "scheduling//Insufficient cpu",
+  "tier": "notify",
+  "maxMessages": 2
+}

@@ -18,6 +18,9 @@ const (
 	// ModeWebhookCallFailed is a webhook whose calls fail another way:
 	// refused, reset or a failed handshake.
 	ModeWebhookCallFailed detection.Mode = "Webhook.CallFailed"
+	// ModeWebhookTLS is a webhook whose calls fail the TLS handshake:
+	// the API server does not trust, or cannot verify, its certificate.
+	ModeWebhookTLS detection.Mode = "Webhook.TLS"
 	// ModeWebhookDenied is a webhook that answered and denied the
 	// request: a policy decision about one object, not an outage.
 	ModeWebhookDenied detection.Mode = "Webhook.Denied"
@@ -118,6 +121,9 @@ func deniedBy(text string, names []string) bool {
 // callMode classifies the text of one failed webhook call.
 func callMode(segment string) (detection.Mode, bool) {
 	segment = timeoutQuery.ReplaceAllString(segment, "")
+	if hasSignal(SignalTLS, segment) {
+		return ModeWebhookTLS, true
+	}
 	if callTimeout.MatchString(segment) {
 		return ModeWebhookTimeout, true
 	}

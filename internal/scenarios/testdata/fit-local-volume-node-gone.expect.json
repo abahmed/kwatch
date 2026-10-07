@@ -1,0 +1,7 @@
+{
+  "name": "fit-local-volume-node-gone",
+  "description": "A pod is Pending because its local volume is tied to a node that is gone; the message says so.",
+  "root": "persistentvolumeclaim/analytics/data-etl",
+  "tier": "notify",
+  "maxMessages": 2
+}

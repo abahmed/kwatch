@@ -46,6 +46,7 @@ func (s workloadSchema[T]) Describe(obj any) (Description, bool) {
 		AttrCreated: inventory.Time(
 			workload.GetCreationTimestamp().Time),
 	}
+	setDeletion(attrs, workload)
 	rel := relations{}
 	rel.add(inventory.OwnedBy, ownerIDs(workload)...)
 	if template := s.template(workload); template != nil {

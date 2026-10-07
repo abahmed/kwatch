@@ -1,0 +1,10 @@
+10:11:15 settled
+🟠 Volume claim uploads in files (prod-eu-1) is failing: storage is over 95% used. It is at 96% (48 GiB of 50 GiB). It is used by gallery. To see why the volume claim is not usable, run kubectl describe pvc uploads -n files
+🟠 Volume claim uploads in files (prod-eu-1) is failing: storage is over 95% used.
+| 🟠 Volume claim **uploads** in **files** (**prod-eu-1**) is failing: storage is over 95% used.
+| It is at 96% (48 GiB of 50 GiB).
+| It is used by gallery.
+| To see why the volume claim is not usable, run
+| ```
+| kubectl describe pvc uploads -n files
+| ```

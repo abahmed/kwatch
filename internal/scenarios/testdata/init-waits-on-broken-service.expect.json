@@ -1,0 +1,10 @@
+{
+  "name": "init-waits-on-broken-service",
+  "description": "An init container waits for a Service whose pods crash-loop, holding its pod in Init.",
+  "root": "deployment/shop/db",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/api"
+  ]
+}

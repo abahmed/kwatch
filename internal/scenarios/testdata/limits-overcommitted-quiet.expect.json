@@ -1,0 +1,7 @@
+{
+  "name": "limits-overcommitted-quiet",
+  "description": "Pod limits far above the node's capacity while nothing fails stay unreported.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

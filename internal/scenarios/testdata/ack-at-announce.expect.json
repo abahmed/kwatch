@@ -1,0 +1,11 @@
+{
+  "name": "ack-at-announce",
+  "description": "A crash-looping Deployment still carries an ack annotation when its incident is announced.",
+  "root": "deployment/shop/payments",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "1h0m0s"
+}

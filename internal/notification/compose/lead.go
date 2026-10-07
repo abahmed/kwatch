@@ -222,6 +222,9 @@ func causedLead(f caseFacts) string {
 	if deniedCause(f.p.Cause) {
 		return deniedLead(f)
 	}
+	if lead, ok := tlsLead(f); ok {
+		return lead
+	}
 	subject := symptomSubject(f)
 	return causeLink(f.p.Cause, symptomState(f, subject),
 		causePhrase(f.p.Cause, subject))

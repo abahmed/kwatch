@@ -1,0 +1,12 @@
+{
+  "name": "same-tag-new-digest",
+  "description": "Two of four replicas of one mutable tag pulled a new build that crash-loops; the other two run the old digest of the same tag.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "zone//zone-a"
+  ]
+}

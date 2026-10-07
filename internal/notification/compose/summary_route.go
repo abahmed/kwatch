@@ -49,7 +49,7 @@ func distinctRoutes(routes []notification.Route) []notification.Route {
 	var out []notification.Route
 	for _, r := range routes {
 		id := r.Severity + "|" + strings.Join(r.Namespaces, ",") + "|" +
-			strings.Join(r.Reasons, ",")
+			strings.Join(r.Reasons, ",") + "|" + strings.Join(r.Owners, ",")
 		if !seen[id] {
 			seen[id] = true
 			out = append(out, r)
@@ -60,6 +60,7 @@ func distinctRoutes(routes []notification.Route) []notification.Route {
 
 func unionRoute(routes []notification.Route) notification.Route {
 	namespaces, reasons := map[string]bool{}, map[string]bool{}
+	owners := map[string]bool{}
 	union := notification.Route{Severity: loudest(routes)}
 	for _, r := range routes {
 		for _, ns := range r.Namespaces {
@@ -68,8 +69,14 @@ func unionRoute(routes []notification.Route) notification.Route {
 		for _, reason := range r.Reasons {
 			reasons[reason] = true
 		}
+		for _, owner := range r.Owners {
+			owners[owner] = true
+		}
 	}
 	union.Namespaces, union.Reasons = sortedSet(namespaces), sortedSet(reasons)
+	if len(owners) > 0 {
+		union.Owners = sortedSet(owners)
+	}
 	return union
 }
 

@@ -80,6 +80,9 @@ func (d Workload) Detect(
 	if s, ok := neverReady(ctx, e); ok {
 		out = append(out, s)
 	}
+	if s, ok := readinessFlapping(ctx, e); ok {
+		out = append(out, s)
+	}
 	if s, ok := scaledToZeroRouted(ctx, e); ok {
 		out = append(out, s)
 	}

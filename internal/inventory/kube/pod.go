@@ -63,6 +63,8 @@ func (PodSchema) Describe(obj any) (Description, bool) {
 	serviceCalls := podServiceCalls(pod)
 	rel.add(inventory.Calls, serviceCallIDs(serviceCalls)...)
 	attrs := podAttributes(pod)
+	setPriority(attrs, pod)
+	setFinalizers(attrs, pod)
 	if len(serviceCalls) > 0 {
 		attrs[AttrServiceCalls] = inventory.Text(
 			serviceCallsText(serviceCalls))
@@ -131,6 +133,20 @@ func podAttributes(pod *corev1.Pod) map[string]inventory.Value {
 	if started := newestContainerStart(pod); !started.IsZero() {
 		attrs[AttrContainersStarted] = inventory.Time(started)
 	}
+	setPodConditions(attrs, pod)
+	if optional := optionalReferences(pod); optional != "" {
+		attrs[AttrOptionalRefs] = inventory.Text(optional)
+	}
+	if frozen := frozenConfig(pod); frozen != "" {
+		attrs[AttrFrozenConfig] = inventory.Text(frozen)
+	}
+	setPortMatchAttributes(attrs, pod)
+	setSpecAttributes(attrs, pod)
+	return attrs
+}
+
+// setPodConditions records the pod's conditions and its readiness.
+func setPodConditions(attrs map[string]inventory.Value, pod *corev1.Pod) {
 	conditions := make([]condition, 0, len(pod.Status.Conditions))
 	for _, c := range pod.Status.Conditions {
 		conditions = append(conditions, condition{
@@ -146,11 +162,6 @@ func podAttributes(pod *corev1.Pod) map[string]inventory.Value {
 		}
 	}
 	setConditions(attrs, conditions)
-	if optional := optionalReferences(pod); optional != "" {
-		attrs[AttrOptionalRefs] = inventory.Text(optional)
-	}
-	setSchedulingSpec(attrs, pod)
-	return attrs
 }
 
 // newestContainerStart is when the pod's latest container started, running

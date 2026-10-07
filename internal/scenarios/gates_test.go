@@ -42,6 +42,7 @@ type card struct {
 //	make alert-quality       # report only
 //	make alert-quality-gate  # fail on any miss
 func TestScorecardGates(t *testing.T) {
+	t.Parallel()
 	c := measure(t)
 	gates := buildGates(c)
 	report := renderReport(c, gates)
@@ -62,34 +63,70 @@ func TestScorecardGates(t *testing.T) {
 	}
 }
 
+// measure replays everything the gates judge. The labelled scenarios, the
+// held-out set, the staging day and the storms do not depend on each
+// other, so they run as parallel subtests; the group returns when all of
+// them are done.
 func measure(t *testing.T) card {
 	t.Helper()
 	var c card
-	var entries []audit.Entry
-	var cases []scorecard.Case
+	var labelled labelledResult
+	t.Run("replays", func(t *testing.T) {
+		t.Run("labelled", func(t *testing.T) {
+			t.Parallel()
+			labelled = measureLabelled(t)
+		})
+		t.Run("heldout", func(t *testing.T) {
+			t.Parallel()
+			c.heldout = measureHeldOut(t)
+		})
+		t.Run("staging", func(t *testing.T) {
+			t.Parallel()
+			c.staging = runStagingDay(t)
+		})
+		t.Run("storms", func(t *testing.T) {
+			t.Parallel()
+			c.storms = runStorms(t)
+		})
+		t.Run("multi", func(t *testing.T) {
+			t.Parallel()
+			c.multi = runMultiCauseStorm(t)
+		})
+	})
+	c.verdicts = labelled.verdicts
+	c.cases = labelled.cases
+	c.firstMessages = labelled.firstMessages
+	c.accuracy = scorecard.ScoreCases(c.cases)
+	entries := append(labelled.entries, c.staging.entries...)
+	c.noise = scorecard.Score(sortedEntries(entries))
+	return c
+}
+
+// labelledResult is what the labelled scenarios add to the card.
+type labelledResult struct {
+	verdicts      []verdict
+	cases         []scorecard.Case
+	entries       []audit.Entry
+	firstMessages []firstMessage
+}
+
+func measureLabelled(t *testing.T) labelledResult {
+	t.Helper()
+	var r labelledResult
 	for _, s := range library() {
-		log, e := loadScenario(t, s.expect.Name)
-		result := replayLog(t, log, e.options(log.Start))
+		log, e, result := replayScenario(t, labelledDir, s.expect.Name)
 		v := judge(e, result)
-		c.verdicts = append(c.verdicts, v)
-		cases = append(cases, v.cases...)
-		entries = append(entries, auditEntries(e.Name, result)...)
+		r.verdicts = append(r.verdicts, v)
+		r.cases = append(r.cases, v.cases...)
+		r.entries = append(r.entries, auditEntries(e.Name, result)...)
 		// A cold start measures the sync, not detection.
 		if m, ok := timeToFirstMessage(e.Name, log, result); ok &&
 			e.SyncAfter == 0 {
 			m.bootHeld = e.BootHeld
-			c.firstMessages = append(c.firstMessages, m)
+			r.firstMessages = append(r.firstMessages, m)
 		}
 	}
-	c.cases = cases
-	c.accuracy = scorecard.ScoreCases(cases)
-	c.heldout = measureHeldOut(t)
-	c.staging = runStagingDay(t)
-	entries = append(entries, c.staging.entries...)
-	c.noise = scorecard.Score(sortedEntries(entries))
-	c.storms = runStorms(t)
-	c.multi = runMultiCauseStorm(t)
-	return c
+	return r
 }
 
 func buildGates(c card) []scorecard.Gate {

@@ -18,6 +18,7 @@ const (
 	kindNode       = "node"
 	kindScheduling = "scheduling"
 	kindCrash      = "crash"
+	kindInitWait   = "init-wait"
 )
 
 // Investigation budgets. Reads from the model are fast; a read that
@@ -49,6 +50,7 @@ var investigators = []investigator{
 	{kindNode, modelReadBudget, isNodeRoot, readNode},
 	{kindScheduling, modelReadBudget, isSchedulingRoot, readScheduling},
 	{kindCrash, MaxBudget, isCrashRoot, readCrash},
+	{kindInitWait, apiReadBudget, isInitWaitRoot, readInitWait},
 }
 
 // Failure modes by investigator kind. A mode matches its own name and

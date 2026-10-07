@@ -40,6 +40,7 @@ func (PVCSchema) Describe(obj any) (Description, bool) {
 		AttrAccessModes: inventory.Text(
 			accessModes(pvc.Spec.AccessModes)),
 	}
+	setDeletion(attrs, pvc)
 	setQuantity(attrs, AttrRequested,
 		pvc.Spec.Resources.Requests.Storage())
 	setQuantity(attrs, AttrCapacity, pvc.Status.Capacity.Storage())
@@ -102,6 +103,7 @@ func (PVSchema) Describe(obj any) (Description, bool) {
 	attrs := map[string]inventory.Value{
 		AttrPhase: inventory.Text(string(pv.Status.Phase)),
 	}
+	setDeletion(attrs, pv)
 	if pv.Status.Reason != "" {
 		attrs[AttrReason] = inventory.Text(pv.Status.Reason)
 	}
@@ -186,10 +188,13 @@ func (NamespaceSchema) Describe(obj any) (Description, bool) {
 	for _, c := range ns.Status.Conditions {
 		conditions = append(conditions, condition{
 			Type: string(c.Type), Status: string(c.Status),
-			Reason: c.Reason, Since: c.LastTransitionTime.Time,
+			Reason: c.Reason, Message: c.Message,
+			Since: c.LastTransitionTime.Time,
 		})
 	}
 	setConditions(attrs, conditions)
+	setDeletion(attrs, ns)
+	setNamespaceFinalizers(attrs, ns)
 	return Description{
 		ID: objectID(KindNamespace, ns), UID: string(ns.UID),
 		Attributes: attrs,

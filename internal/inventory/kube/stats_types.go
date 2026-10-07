@@ -78,6 +78,8 @@ type volumeUsage struct {
 	Name          string
 	UsedBytes     uint64
 	CapacityBytes uint64
+	Inodes        uint64
+	InodesFree    uint64
 }
 
 // volumes lists persistent volume usage, once per claim.
@@ -97,6 +99,7 @@ func (s statsSummary) volumes() []volumeUsage {
 			out = append(out, volumeUsage{
 				Namespace: v.PVCRef.Namespace, Name: v.PVCRef.Name,
 				UsedBytes: v.UsedBytes, CapacityBytes: v.CapacityBytes,
+				Inodes: v.Inodes, InodesFree: v.InodesFree,
 			})
 		}
 	}

@@ -143,3 +143,61 @@ func TestReadinessFindingEndsOnceTheEventIsVeryOld(t *testing.T) {
 		count:   1, age: time.Hour, started: 2 * time.Hour,
 	}))
 }
+
+// detectThrottledProbe returns the liveness finding of a container that
+// the stats poller saw throttled pct of the time, with a 200m limit.
+func detectThrottledProbe(
+	t *testing.T, message string, pct float64,
+) detection.Finding {
+	t.Helper()
+	model := newTestModel()
+	pod := inventory.EntityID{Kind: kube.KindPod, Namespace: "default",
+		Name: "app"}
+	observeEntity(model, pod, podNodeNow.Add(-time.Hour),
+		map[string]inventory.Value{
+			kube.AttrPhase: inventory.Text("Running"),
+		})
+	id := kube.ContainerID("default", "app", "main")
+	observeEntity(model, id, podNodeNow.Add(-10*time.Minute),
+		map[string]inventory.Value{
+			kube.AttrState:        inventory.Text("running"),
+			kube.AttrReady:        inventory.Bool(true),
+			kube.AttrStartedAt:    inventory.Time(podNodeNow.Add(-time.Hour)),
+			kube.AttrThrottledPct: inventory.Number(pct),
+			kube.AttrCPULimit:     inventory.Number(200),
+		})
+	relateEntity(model, id, inventory.PartOf, pod)
+	noteEntity(model, id, "Unhealthy", message, 3,
+		podNodeNow.Add(-time.Minute))
+	found := Container{}.Detect(
+		testDetectorContext(model, podNodeNow), entityOf(model, id))
+	for _, f := range found {
+		if f.Reason == reasons.LivenessProbeFailed {
+			return f
+		}
+	}
+	t.Fatalf("no liveness finding in %v", found)
+	return detection.Finding{}
+}
+
+func TestProbeFailureShowsCPUThrottling(t *testing.T) {
+	f := detectThrottledProbe(t, "Liveness probe failed: Get "+
+		`"http://10.0.0.1:8080/healthz": context deadline exceeded`, 72.4)
+	assert.Equal(t, "72%", evidenceOf(f, detection.EvidenceCPUThrottled))
+	assert.Equal(t, "200m", evidenceOf(f, detection.EvidenceCPULimit))
+}
+
+func TestProbeFailureIgnoresLightThrottling(t *testing.T) {
+	f := detectThrottledProbe(t, "Liveness probe failed: timeout", 12)
+	assert.Empty(t, evidenceOf(f, detection.EvidenceCPUThrottled))
+	assert.Empty(t, evidenceOf(f, detection.EvidenceCPULimit))
+}
+
+func evidenceOf(f detection.Finding, label string) string {
+	for _, e := range f.Evidence {
+		if e.Label == label {
+			return e.Value
+		}
+	}
+	return ""
+}

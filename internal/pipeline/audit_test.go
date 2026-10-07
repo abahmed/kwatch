@@ -114,3 +114,20 @@ func TestAuditEntryOfASummaryHasNoIncidentRoot(t *testing.T) {
 	assert.Equal(t, []string{"p1", "p2"}, entry.Items)
 	assert.Equal(t, 2, entry.Opened)
 }
+
+// The restored-incidents summary has no incident of its own; its entry
+// still names the incidents it covers, from the message's listing.
+func TestAuditEntryOfRestoredSummaryNamesIncidents(t *testing.T) {
+	at := time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC)
+	msg := notification.Message{Listed: &notification.Listed{
+		Opened: 552, Items: []string{
+			"inc-1: deployment/shop/api tier=notify reasons=OOMKilled"}}}
+
+	entry := AuditEntry(incident.Decision{Reason: "restored incidents"},
+		msg, at)
+
+	assert.Equal(t, audit.ActionSummary, entry.Action)
+	assert.Equal(t, "restored incidents", entry.DecisionReason)
+	assert.Equal(t, 552, entry.Opened)
+	assert.Equal(t, msg.Listed.Items, entry.Items)
+}

@@ -157,7 +157,9 @@ func TestRollupResolvedClosesTheConversation(t *testing.T) {
 	}
 }
 
-func TestDigestSummarisesRisksByTypeWithExamples(t *testing.T) {
+func TestDigestHidesConfigurationAdviceAndNamesUnreadyWorkloads(
+	t *testing.T,
+) {
 	now := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
 	var risks []detection.Finding
 	add := func(reason, ns, name string) {
@@ -169,23 +171,19 @@ func TestDigestSummarisesRisksByTypeWithExamples(t *testing.T) {
 		add(reasons.RiskNoReadinessProbe, "shop", name)
 	}
 	add(reasons.RiskSingleReplica, "shop", "api")
-	add(reasons.RiskSingleReplica, "kube-system", "coredns")
-	add(reasons.RiskNoReadinessProbe, "kube-system", "kube-dns")
+	add(reasons.WorkloadNeverReady, "shop", "web")
 
 	msg := Writer{}.Digest([]incident.Decision{
 		podDecision("a", incident.Digest)}, nil, risks, now)
 
-	want := "Configuration risks: 5 workloads have no readiness probe " +
-		"(a, b, cart and 2 more); 1 workload runs a single replica " +
-		"(api)."
+	want := "Running but not ready: 1 workload has pods that run but " +
+		"never become ready (web)."
 	if !strings.Contains(msg.Note, want) {
 		t.Fatalf("note = %q, want %q", msg.Note, want)
 	}
-	if !strings.Contains(msg.Title, "configuration risks on six workloads") {
-		t.Fatalf("title = %q", msg.Title)
-	}
-	if strings.Contains(msg.Note, "coredns") ||
-		strings.Contains(msg.Note, "kube-dns") {
-		t.Fatalf("system namespaces must be skipped: %q", msg.Note)
+	if strings.Contains(strings.ToLower(msg.Note+msg.Title), "risk") ||
+		strings.Contains(msg.Note, "readiness probe") ||
+		strings.Contains(msg.Note, "single replica") {
+		t.Fatalf("advice must not be announced: %q", msg.Note)
 	}
 }

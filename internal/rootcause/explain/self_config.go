@@ -102,6 +102,9 @@ func (v *view) containerConfigModes(
 	if v.startupBudgetShort(failing, container) {
 		out = append(out, ModeStartupBudgetShort)
 	}
+	if mode, ok := v.livenessStartMode(id, failing); ok {
+		out = append(out, mode)
+	}
 	return out
 }
 
@@ -141,7 +144,11 @@ func (v *view) startupBudgetShort(
 ) bool {
 	budget, ok := attrNumber(container, kube.AttrProbeBudget)
 	if !ok || !v.hasMode(effect, []detection.Mode{
-		detection.ModeProbe, detection.ModeCrashLoop}) {
+		detection.ModeProbe, detection.ModeCrashLoop}) ||
+		v.hasMode(effect, []detection.Mode{
+			detection.ModeCrashLoopLiveness}) {
+		// A liveness kill is the liveness probe's doing: the startup
+		// and readiness budgets kill nothing (see self_liveness.go).
 		return false
 	}
 	needed, ok := v.readyStartup(effect)

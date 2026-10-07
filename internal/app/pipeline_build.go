@@ -11,6 +11,7 @@ import (
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/kubeclient"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/notification"
 	"github.com/abahmed/kwatch/internal/notification/compose"
@@ -105,6 +106,8 @@ func (p *pipelineBuild) newEngine() (*pipeline.Engine, error) {
 		Investigator: investigate.NewInvestigator(investigate.Sources{
 			Model: p.model,
 			Logs:  kube.LogReader{Client: deps.clients.Kubernetes}.Lines,
+			CurrentLogs: kube.LogReader{
+				Client: deps.clients.Kubernetes}.CurrentLines,
 			Endpoints: kube.EndpointReader{
 				Client: deps.clients.Kubernetes,
 			}.ReadyEndpoints,
@@ -124,6 +127,23 @@ func (p *pipelineBuild) recordDecision(
 	counted := countDecision(metrics.DefaultRegistry(), d)
 	p.decisions.record(pipeline.AuditEntry(d, m, p.clock.Now()), counted)
 	p.deps.deliveryManager.NotifyIncident(m)
+}
+
+// newProber builds the prober of the API server, cluster DNS and the
+// Leases of controllers.
+func (p *pipelineBuild) newProber(engine *pipeline.Engine) *kube.Prober {
+	deps := p.deps
+	return kube.NewProber(kube.ProbeConfig{
+		Client:   deps.clients.Kubernetes,
+		Resolver: deps.clients.Resolver,
+		Now:      p.clock.Now,
+		Submit:   engine.Submit,
+		HTTP:     deps.clients.ProbeHTTP,
+		Model:    p.model,
+		// kwatch renews its own leader Lease; it is not a controller.
+		OwnLeaseNamespace: kubeclient.GetNamespace(),
+		OwnLeaseName:      electionLeaseName(),
+	})
 }
 
 // newRunners builds every source and returns the functions that run them.
@@ -151,14 +171,7 @@ func (p *pipelineBuild) newRunners(
 		Report: newKubeletStatsHealth(
 			healthSink(deps), metrics.DefaultRegistry()).report,
 	})
-	prober := kube.NewProber(kube.ProbeConfig{
-		Client:   deps.clients.Kubernetes,
-		Resolver: deps.clients.Resolver,
-		Now:      p.clock.Now,
-		Submit:   engine.Submit,
-		HTTP:     deps.clients.ProbeHTTP,
-		Model:    p.model,
-	})
+	prober := p.newProber(engine)
 	crashLogs := kube.NewCrashLogRound(kube.CrashLogConfig{
 		Logs:   kube.LogReader{Client: deps.clients.Kubernetes},
 		Model:  p.model,

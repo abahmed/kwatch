@@ -1,0 +1,9 @@
+{
+  "name": "node-replace-sandbox-stuck",
+  "description": "A node is replaced; the replacement pods of three single-replica Deployments keep failing sandbox network setup and never start.",
+  "root": "node//n3",
+  "tier": "page",
+  "bootHeld": true,
+  "maxMessages": 2,
+  "tail": "5m0s"
+}

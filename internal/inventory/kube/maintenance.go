@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -29,14 +30,24 @@ func (t *Translator) WithMaintenance(m MaintenanceAnnotations) *Translator {
 	return t
 }
 
-// annotate adds the maintenance attributes of obj to desc.
+// annotate adds the attributes obj's labels and annotations give desc:
+// the acknowledgement, the owner and the maintenance hold.
 func (t *Translator) annotate(obj any, desc *Description) {
-	m := t.maintenance
-	if m.On == "" && m.Until == "" {
-		return
-	}
 	accessor, err := meta.Accessor(obj)
 	if err != nil {
+		return
+	}
+	annotateAck(accessor, desc)
+	annotateOwner(accessor, desc)
+	t.annotateMaintenance(accessor, desc)
+}
+
+// annotateMaintenance adds the maintenance attributes of obj to desc.
+func (t *Translator) annotateMaintenance(
+	accessor metav1.Object, desc *Description,
+) {
+	m := t.maintenance
+	if m.On == "" && m.Until == "" {
 		return
 	}
 	annotations := accessor.GetAnnotations()

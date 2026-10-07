@@ -62,6 +62,10 @@ func scaledToZeroRouted(
 		return detection.Finding{}, false
 	}
 	scaled := scaledBy(ctx, e.ID)
+	if kube.ScaledDownInBatch(ctx.Model, e.ID, scaled.At) {
+		// A planned scale-down put it at zero on purpose.
+		return detection.Finding{}, false
+	}
 	since := valueSince(e, kube.AttrReplicas)
 	if !scaled.At.IsZero() {
 		since = scaled.At

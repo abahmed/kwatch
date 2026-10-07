@@ -2,8 +2,10 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -54,4 +56,31 @@ func TestCompactorCountsOnlyEvictableBytesAgainstRoomLeft(t *testing.T) {
 	assert.False(t, result.OverCap)
 	assert.False(t, s.Stats().OverCap)
 	assert.LessOrEqual(t, result.Bytes, policy.SizeCap)
+}
+
+// The timeline is bounded by its own cap, oldest entries first, so a
+// busy cluster cannot fill the file with it.
+func TestCompactorTimelineCapEvictsOldestTimeline(t *testing.T) {
+	s := openClaimed(t, newFakeClock())
+	entries := make([]Entry[string], 1000)
+	for i := range entries {
+		entries[i] = Entry[string]{
+			Entity: fmt.Sprintf("pod-%04d", i), At: minute(i), Value: "t",
+		}
+	}
+	require.NoError(t, TimelineLog[string](s).AppendAll(entries))
+	size := entrySize(t, "pod-0000", "t")
+	policy := Policy{TimelineCap: 400 * size, Batch: 10}
+
+	result, err := NewCompactor(s, policy).Pass(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, 600, result.Evicted)
+	sizes, err := s.LogicalSize()
+	require.NoError(t, err)
+	assert.Equal(t, 400*size, sizes[Timeline])
+	assert.Empty(t, collect(t, TimelineLog[string](s), "pod-0599",
+		time.Time{}, time.Time{}), "the oldest went first")
+	assert.Len(t, collect(t, TimelineLog[string](s), "pod-0600",
+		time.Time{}, time.Time{}), 1)
 }

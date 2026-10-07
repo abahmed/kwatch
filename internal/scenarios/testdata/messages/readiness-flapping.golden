@@ -1,0 +1,9 @@
+10:23:45 settled
+🟠 api in shop (prod-eu-1) has pods that went ready to unready 4 times in the last 10 min. Service api's endpoints keep changing. Quoted readiness failure: "Readiness probe failed: Get "http://10.0.1.5:8080/ready": context deadline exceeded". To see the object's state and events, run kubectl describe deployment api -n shop
+🟠 api in shop (prod-eu-1) has pods that went ready to unready 4 times in the last 10 min.
+| 🟠 **api** in **shop** (**prod-eu-1**) has pods that went ready to unready 4 times in the last 10 min.
+| Service **api**'s endpoints keep changing. Quoted readiness failure: `Readiness probe failed: Get`http://10.0.1.5:8080/ready`: context deadline exceeded`.
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment api -n shop
+| ```

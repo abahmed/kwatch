@@ -1,0 +1,11 @@
+{
+  "name": "liveness-never-ready",
+  "description": "Every pod of a new Deployment is killed by its liveness probe before it is ready; no start has ever completed.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "missing-service-lookup",
+  "description": "The API crashes with a failed lookup of paymnts.shop.svc; only a Service named payments exists.",
+  "root": "service/shop/paymnts",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/payments",
+    "node//n1"
+  ]
+}

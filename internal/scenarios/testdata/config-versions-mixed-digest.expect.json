@@ -1,0 +1,7 @@
+{
+  "name": "config-versions-mixed-digest",
+  "description": "Pods started before and after a ConfigMap edit run side by side for a long time, none failing: advice for the digest, never an interruption.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "45m0s"
+}

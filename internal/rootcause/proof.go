@@ -80,6 +80,11 @@ const (
 	// ProofBaseline: the cause deviates Count percent from its learned
 	// baseline (baseline).
 	ProofBaseline ProofCode = "baseline"
+	// ProofMissingCall: the pods call a Service that does not exist;
+	// Count is the port their configuration names (0 when none) and
+	// Fields holds the name of a very close existing Service, if any
+	// (missing call).
+	ProofMissingCall ProofCode = "missing-call"
 	// ProofDoubtfulData: some of the data is doubtful; Text says what
 	// (quality).
 	ProofDoubtfulData ProofCode = "doubtful-data"

@@ -168,10 +168,10 @@ func (d Node) readiness(
 	return detection.Finding{
 		Reason: reasons.NodeNotReady, Severity: detection.Critical,
 		Since: since, Summary: summary,
-		Evidence: []detection.Evidence{
+		Evidence: append([]detection.Evidence{
 			{Label: "reason", Value: reason},
 			{Label: "message", Value: conditionMessage(e, "Ready")},
-		},
+		}, nodeWhy(ctx, e, status)...),
 	}, true
 }
 

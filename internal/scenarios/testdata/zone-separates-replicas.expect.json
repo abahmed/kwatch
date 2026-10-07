@@ -1,0 +1,11 @@
+{
+  "name": "zone-separates-replicas",
+  "description": "A release is followed by two of four replicas crash-looping; both run in zone-b, the healthy two in zone-a.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//a1",
+    "node//a2"
+  ]
+}

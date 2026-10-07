@@ -1,0 +1,7 @@
+{
+  "name": "node-replace-sandbox-blip",
+  "description": "A node is replaced; the replacement pods of three single-replica Deployments fail sandbox network setup for two minutes, then start.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "15m0s"
+}

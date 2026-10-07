@@ -6,7 +6,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
-	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
@@ -60,16 +59,26 @@ func blockedRun(
 	if text(e, kube.AttrConcurrencyPolicy) != "Forbid" || active == 0 {
 		return detection.Finding{}, false
 	}
+	summary := "Scheduled run was skipped: the previous run is still " +
+		"active and concurrencyPolicy is Forbid"
+	evidence := []detection.Evidence{
+		{Label: "concurrency policy", Value: "Forbid"},
+		{Label: "active jobs", Value: countText(active)},
+	}
+	runs, counted := skippedRuns(ctx, e)
+	if job, ok := activeJob(ctx, e.ID); ok {
+		summary = blockedText(job, runs)
+		evidence = append(evidence,
+			detection.Evidence{Label: "blocking job", Value: job.name})
+	}
+	if counted && runs > 0 {
+		evidence = append(evidence, detection.Evidence{
+			Label: "skipped runs", Value: countText(float64(runs))})
+	}
 	return detection.Finding{
 		Reason: reasons.CronJobBlocked, Severity: detection.Warning,
-		Health: detection.Failing, Since: next,
-		Summary: "Scheduled run was skipped: the previous run is still " +
-			"active and concurrencyPolicy is Forbid (due " +
-			format.Duration(ctx.Now.Sub(next)) + " ago)",
-		Evidence: []detection.Evidence{
-			{Label: "concurrency policy", Value: "Forbid"},
-			{Label: "active jobs", Value: countText(active)},
-		},
+		Health: detection.Failing, Since: next, Summary: summary,
+		Evidence: evidence,
 	}, true
 }
 

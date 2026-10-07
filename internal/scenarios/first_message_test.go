@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -69,7 +70,10 @@ func failureStart(p incident.Incident, floor time.Time) time.Time {
 	start := p.Opened
 	for _, finding := range p.Members {
 		// A configuration risk predates the failure and is not one.
-		if finding.Advisory {
+		// Replicas that run different builds of one tag are healthy
+		// side by side until one of them fails: the outage begins
+		// then, not when the builds began to differ.
+		if finding.Advisory || finding.Reason == reasons.ImageDigestDrift {
 			continue
 		}
 		if !finding.Since.IsZero() && finding.Since.Before(start) {

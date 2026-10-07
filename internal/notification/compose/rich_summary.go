@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
-	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -15,19 +14,9 @@ import (
 // The messages that list several incidents (digest, roll-up, startup
 // and restored summaries, namespace outage) read as a short list: a
 // headline with the count, a "Problems" section with one bullet each,
-// one line for what resolved, and the configuration risks last. The
+// one line for what resolved, and the workloads that never become ready
+// last. The
 // Note keeps the old single paragraph for payloads that expect it.
-
-// riskLabels name each risk type in a few words for the risks list.
-var riskLabels = map[string]string{
-	reasons.RiskNoReadinessProbe: "No readiness probe",
-	reasons.RiskNoMemoryLimit:    "No memory limit",
-	reasons.RiskMutableImageTag:  "Mutable image tag",
-	reasons.RiskSingleReplica:    "Single replica",
-	reasons.RiskSingleNode:       "All replicas on one node",
-	reasons.RiskPrivileged:       "Privileged container",
-	reasons.WorkloadNeverReady:   "Pods never ready",
-}
 
 // headline is the marker, a bold name and the facts after it:
 // "🟡 kwatch digest · prod — 2 problems · 14 resolved".
@@ -108,20 +97,17 @@ func resolvedBlock(ds []incident.Decision, since string) notification.Block {
 		Spans: []notification.Span{{Text: text}}}
 }
 
-// riskBlocks is the configuration risks, one bullet per type with its
-// count and up to three workloads.
+// riskBlocks lists the workloads with pods that run but never become
+// ready: a count and up to three workloads.
 func riskBlocks(risks []detection.Finding) []notification.Block {
-	groups := groupRisks(withoutSystemRisks(risks))
+	groups := groupRisks(neverReady(risks))
 	if len(groups) == 0 {
 		return nil
 	}
 	out := []notification.Block{headingBlock(
-		"Configuration risks (none urgent)")}
+		"Running but not ready")}
 	for _, g := range groups {
-		label := riskLabels[g.reason]
-		if label == "" {
-			label = upperFirst(g.clause)
-		}
+		label := "Pods never ready"
 		text := label + " — " + strconv.Itoa(len(g.ids)) + ": " +
 			workloadList(g.ids)
 		out = append(out, notification.Block{Kind: notification.Bullet,
@@ -156,25 +142,33 @@ func (w Writer) listDoc(
 // digestDoc is the structured digest.
 func (w Writer) digestDoc(
 	opened, resolved []incident.Decision, risks []detection.Finding,
-	now time.Time,
+	extras DigestExtras, now time.Time,
 ) []notification.Block {
-	risks = withoutSystemRisks(risks)
+	risks = neverReady(risks)
 	var facts []string
 	if len(opened) > 0 {
 		facts = append(facts, countFact(len(opened), "problem"))
+	}
+	if n := len(extras.Ongoing); n > 0 {
+		facts = append(facts, strconv.Itoa(n)+" ongoing")
 	}
 	if len(resolved) > 0 {
 		facts = append(facts, strconv.Itoa(len(resolved))+" resolved")
 	}
 	if len(risks) > 0 {
-		facts = append(facts, "risks on "+
-			countFact(riskWorkloads(risks), "workload"))
+		facts = append(facts, countFact(riskWorkloads(risks),
+			"workload")+" not ready")
 	}
 	doc := []notification.Block{
 		w.headline(notification.MarkerLow, "kwatch digest", facts)}
-	if len(opened) > 0 {
+	if extras.Wake != nil {
+		doc = append(doc, notification.Block{Kind: notification.Para,
+			Spans: []notification.Span{{Text: extras.Wake.Text()}}})
+	}
+	if len(opened)+len(extras.Ongoing) > 0 {
 		doc = append(doc, headingBlock("Problems"))
 		doc = append(doc, w.problemBullets(opened, now)...)
+		doc = append(doc, ongoingBullets(extras.Ongoing, now)...)
 	}
 	if len(resolved) > 0 {
 		doc = append(doc, resolvedBlock(resolved, "since last digest"))

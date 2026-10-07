@@ -22,6 +22,7 @@ var counterfactualScorers = []scorer{
 	{"image-elsewhere", scoreImageElsewhere},
 	{"config-elsewhere", scoreConfigElsewhere},
 	{"replicas", scoreReplicas},
+	{"difference", scoreDifference},
 	{"node-peers", scoreNodePeers},
 	{"previous-revision", scorePreviousHealthy},
 }

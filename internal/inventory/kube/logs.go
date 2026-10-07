@@ -94,6 +94,19 @@ func (r LogReader) Lines(
 	return nil
 }
 
+// CurrentLines returns the recent output of a container's current run
+// only, oldest first, redacted and bounded like Lines. It is for a
+// container that is still running, such as a stuck init container.
+func (r LogReader) CurrentLines(
+	ctx context.Context, container inventory.EntityID,
+) []string {
+	body, err := r.read(ctx, container, false, crashTailLines, logFetchBytes)
+	if err != nil {
+		return nil
+	}
+	return logLines(lastBytes(body, crashKeepBytes))
+}
+
 // PreviousLines returns the output of a container's previous run only,
 // never of the current one, as Lines would. An empty result with a nil
 // error means the previous run printed nothing; an error means the

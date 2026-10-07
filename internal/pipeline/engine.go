@@ -110,6 +110,9 @@ type Engine struct {
 	// findings are the active findings by entity, as the tracker
 	// holds them. Every solve reads them.
 	findings map[inventory.EntityID][]detection.Finding
+	// published is the copy of findings that /status and the digest
+	// read from other goroutines.
+	published publishedFindings
 	// coverage is the state of the check for failing workloads that no
 	// incident covers.
 	coverage coverage.Watch
@@ -138,6 +141,7 @@ func NewEngine(deps Dependencies) (*Engine, error) {
 	e.storage = newPersistence(deps, &e.stats)
 	e.announcer = newAnnouncer(deps, e.storage, &e.stats)
 	e.announcer.collect.SetAdvisories(e.activeAdvisories)
+	e.announcer.collect.SetReadiness(e.Readiness)
 	return e, nil
 }
 

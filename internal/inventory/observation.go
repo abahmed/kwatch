@@ -150,6 +150,7 @@ type noteWire struct {
 	Warning   bool       `json:"warning,omitempty"`
 	UID       string     `json:"uid,omitempty"`
 	Origin    string     `json:"origin,omitempty"`
+	Refusal   string     `json:"refusal,omitempty"`
 }
 
 // MarshalJSON encodes the observation in the stable recorded-log shape.
@@ -172,6 +173,7 @@ func (o Observation) MarshalJSON() ([]byte, error) {
 			Reason: o.Note.Reason, Message: o.Note.Message,
 			Count: o.Note.Count, Warning: o.Note.Warning,
 			UID: o.Note.UID, Origin: o.Note.Origin,
+			Refusal: o.Note.Refusal,
 		}
 	}
 	return json.Marshal(wire)
@@ -205,6 +207,7 @@ func (o *Observation) UnmarshalJSON(data []byte) error {
 			Reason:    wire.Note.Reason, Message: wire.Note.Message,
 			Count: wire.Note.Count, Warning: wire.Note.Warning,
 			UID: wire.Note.UID, Origin: wire.Note.Origin,
+			Refusal: wire.Note.Refusal,
 		}
 	}
 	*o = out

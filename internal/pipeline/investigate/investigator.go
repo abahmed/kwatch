@@ -49,9 +49,12 @@ type ServiceEndpoints func(
 // safe to read from pool workers. Logs and Endpoints do API reads and
 // are optional.
 type Sources struct {
-	Model     inventory.Reader
-	Logs      ContainerOutput
-	Endpoints ServiceEndpoints
+	Model inventory.Reader
+	Logs  ContainerOutput
+	// CurrentLogs reads only the container's current run, for one that
+	// is still running.
+	CurrentLogs ContainerOutput
+	Endpoints   ServiceEndpoints
 }
 
 // RootInvestigator picks the investigator of an incident by the kind of

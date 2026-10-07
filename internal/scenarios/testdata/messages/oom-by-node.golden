@@ -1,0 +1,10 @@
+10:02:15 settled
+🟠 api in shop (prod-eu-1) was OOM-killed by the node and not by its own limit. It used 180Mi of its 512Mi limit. Node n1 ran out of memory; biggest users: batch/importer 3.1Gi (no limit). To see the node's memory use and the pods on it, run kubectl describe node n1
+🟠 api in shop (prod-eu-1) was OOM-killed by the node and not by its own limit.
+| 🟠 **api** in **shop** (**prod-eu-1**) was OOM-killed by the node and not by its own limit.
+| It used 180Mi of its 512Mi limit.
+| Node n1 ran out of memory; biggest users: batch/importer 3.1Gi (no limit).
+| To see the node's memory use and the pods on it, run
+| ```
+| kubectl describe node n1
+| ```

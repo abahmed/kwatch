@@ -40,8 +40,8 @@ func TestReadinessOfReadsReplicasAndFailingPods(t *testing.T) {
 	assert.False(t, ok, "a pod has no replicas")
 }
 
-// After a restart, announced incidents that fail again are listed; a
-// digest-tier one is not.
+// After a restart, announced incidents that fail again are listed, the
+// digest-tier ones after the louder ones.
 func TestRestoredFailingListsAnnouncedIncidentsStillFailing(t *testing.T) {
 	src := newRig(t, Config{})
 	_, pod := src.workloadRig(t, 2, 1, 3)
@@ -59,6 +59,7 @@ func TestRestoredFailingListsAnnouncedIncidentsStillFailing(t *testing.T) {
 	dst.raise(at(time.Minute), notReadySig(pod), other)
 
 	got := dst.m.RestoredFailing()
-	require.Len(t, got, 1)
+	require.Len(t, got, 2)
 	assert.Equal(t, src.of(entity(kube.KindDeployment, "api")).ID, got[0].ID)
+	assert.Equal(t, src.of(other.Entity).ID, got[1].ID)
 }

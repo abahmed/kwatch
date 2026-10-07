@@ -171,11 +171,20 @@ func containerSteps(s detection.Finding) []notification.Step {
 			Command: "kubectl describe pod " + quote(pod) + ns,
 		}}
 	}
-	steps := []notification.Step{{
+	if s.Reason == reasons.InitContainerWaiting {
+		// It is still running: its current output is what to read.
+		return []notification.Step{{
+			Text: "Read what the init container is printing",
+			Command: "kubectl logs " + quote(pod) + " -c " +
+				quote(container) + ns,
+		}}
+	}
+	steps := nodeOOMSteps(s)
+	steps = append(steps, notification.Step{
 		Text: "Read the output of the last crash",
 		Command: "kubectl logs " + quote(pod) + " -c " + quote(container) +
 			ns + " --previous",
-	}}
+	})
 	if s.Reason == reasons.OOMKilled {
 		steps = append(steps, notification.Step{
 			Text: "Compare memory use with the limit",

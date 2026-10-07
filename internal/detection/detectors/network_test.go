@@ -66,7 +66,8 @@ func TestServiceLoadBalancerPending(t *testing.T) {
 
 	require.Len(t, findings, 1)
 	assert.Equal(t, reasons.LoadBalancerPending, findings[0].Reason)
-	assert.Equal(t, detection.Warning, findings[0].Severity)
+	// A brand-new LoadBalancer nobody uses yet waits in the digest.
+	assert.Equal(t, detection.Info, findings[0].Severity)
 }
 
 func TestServiceExternalName(t *testing.T) {

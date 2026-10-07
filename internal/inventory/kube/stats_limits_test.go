@@ -76,7 +76,6 @@ func TestStatsPollerForgetsSamplesOfVanishedEntities(t *testing.T) {
 		Nodes:    func() []inventory.EntityID { return nil },
 	})
 	p.counters.rate("network/n1", now, 1)
-	p.growth.observe(inventory.CoreID(KindPVC, "ns", "data"), now, 1, 10)
 
 	now = now.Add(5 * time.Minute)
 	p.poll(context.Background())
@@ -85,5 +84,4 @@ func TestStatsPollerForgetsSamplesOfVanishedEntities(t *testing.T) {
 	now = now.Add(time.Hour)
 	p.poll(context.Background())
 	assert.Empty(t, p.counters.previous)
-	assert.Empty(t, p.growth.samples)
 }

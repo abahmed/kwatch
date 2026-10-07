@@ -1,0 +1,12 @@
+{
+  "name": "preempted-by-higher-priority",
+  "description": "Two replicas of a worker are preempted for a higher-priority batch importer and cannot be rescheduled.",
+  "root": "deployment/batch/importer",
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

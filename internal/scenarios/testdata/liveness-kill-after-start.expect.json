@@ -1,0 +1,11 @@
+{
+  "name": "liveness-kill-after-start",
+  "description": "Pods that started in 75s are killed by liveness after running for two minutes.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

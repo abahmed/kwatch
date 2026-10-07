@@ -54,34 +54,10 @@ func TopOwner(
 	return chain[len(chain)-1]
 }
 
-func collectPods(
-	model inventory.Reader, owner inventory.EntityID,
-	seen map[inventory.EntityID]bool, out *[]inventory.EntityID,
-) {
-	if seen[owner] {
-		return
-	}
-	seen[owner] = true
-	for _, child := range model.Related(
-		owner, inventory.OwnedBy, inventory.Incoming,
-	) {
-		if child.Kind == kube.KindPod {
-			*out = append(*out, child)
-			continue
-		}
-		collectPods(model, child, seen, out)
-	}
-}
-
 // OwnedPods lists every pod a controller owns, directly or through
 // intermediate controllers such as ReplicaSets.
 func OwnedPods(
 	model inventory.Reader, owner inventory.EntityID,
 ) []inventory.EntityID {
-	if owner.Kind == kube.KindPod {
-		return []inventory.EntityID{owner}
-	}
-	var out []inventory.EntityID
-	collectPods(model, owner, map[inventory.EntityID]bool{}, &out)
-	return out
+	return kube.OwnedPods(model, owner)
 }

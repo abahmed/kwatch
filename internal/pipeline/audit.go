@@ -84,8 +84,13 @@ func summaryEntry(entry *audit.Entry, m notification.Message) {
 // even though the incident's fingerprint has not changed.
 func contentHash(d incident.Decision) string {
 	p := d.Incident
-	if d.Reason == incident.ReasonReminder {
+	switch d.Reason {
+	case incident.ReasonReminder:
 		return p.Digest + "@" + p.Reminded.UTC().Format(time.RFC3339)
+	case incident.ReasonAcknowledged, incident.ReasonAckRemoved:
+		// Told once each: the thread learns something the fingerprint
+		// does not carry.
+		return p.Digest + "@" + string(d.Reason)
 	}
 	return p.Digest
 }

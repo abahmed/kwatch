@@ -30,6 +30,7 @@ type HealthServer struct {
 	serveErrors     chan error
 	leadership      LeadershipStatus
 	coverage        *CoverageSummary
+	statusHolder    statusHolder
 }
 
 // HealthResponse is the JSON body of the /health endpoint.

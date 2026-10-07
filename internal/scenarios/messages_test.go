@@ -19,8 +19,7 @@ func messagesPath(name string) string {
 // paragraph, with the time and the decision that sent it.
 func scenarioNotes(t *testing.T, name string) string {
 	t.Helper()
-	log, e := loadScenario(t, name)
-	result := replayLog(t, log, e.options(log.Start))
+	_, _, result := replayScenario(t, labelledDir, name)
 	var b strings.Builder
 	for i, m := range result.Messages {
 		b.WriteString(result.Times[i].Format("15:04:05") + " " +
@@ -50,9 +49,11 @@ func layout(m notification.Message) string {
 //
 // and review the diff like any other code change.
 func TestScenarioMessagesGolden(t *testing.T) {
+	runParallelUnlessUpdating(t)
 	for _, s := range library() {
 		name := s.expect.Name
 		t.Run(name, func(t *testing.T) {
+			runParallelUnlessUpdating(t)
 			got := scenarioNotes(t, name)
 			path := messagesPath(name)
 			if *update {
@@ -89,11 +90,12 @@ var unreadable = regexp.MustCompile(
 // TestScenarioMessagesAreReadable checks every scenario message for
 // leaked identifiers and wrong resolutions.
 func TestScenarioMessagesAreReadable(t *testing.T) {
+	t.Parallel()
 	for _, s := range library() {
 		name := s.expect.Name
 		t.Run(name, func(t *testing.T) {
-			log, e := loadScenario(t, name)
-			result := replayLog(t, log, e.options(log.Start))
+			t.Parallel()
+			_, _, result := replayScenario(t, labelledDir, name)
 			for _, m := range result.Messages {
 				if found := unreadable.FindString(m.Note); found != "" {
 					t.Errorf("note shows %q: %s", found, m.Note)

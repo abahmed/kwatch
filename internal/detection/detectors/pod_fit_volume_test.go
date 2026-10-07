@@ -32,7 +32,7 @@ func TestFitVolumeZoneHasNoNodes(t *testing.T) {
 	pod := fitPending(m, "p", 1000, kube.SchedulingSpec{})
 	mountClaim(m, pod, zoneTerms)
 	assert.Equal(t, []string{
-		"claim data-0 can only attach where " +
+		"claim data-0 (volume pv-1) can only attach where " +
 			"topology.kubernetes.io/zone=eu-west-1b, and no node is there"},
 		fitLines(fitOf(t, m, pod), detection.EvidenceFit))
 }
@@ -46,8 +46,10 @@ func TestFitVolumeZoneWithNodeThatIsFull(t *testing.T) {
 	mountClaim(m, pod, zoneTerms)
 	got := fitLines(fitOf(t, m, pod), detection.EvidenceFit)
 	assert.Equal(t, []string{
-		"pool general has no node with 1 CPU free " +
-			"(best: n2 has 100m CPU free)"}, got)
+		"claim data-0 (volume pv-1) can only attach where " +
+			"topology.kubernetes.io/zone=eu-west-1b; the only node " +
+			"there, n2, has only 100m CPU free of the 1 CPU it needs"},
+		got)
 }
 
 func TestFitUnboundClaimUsesStorageClassTopology(t *testing.T) {

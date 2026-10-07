@@ -36,9 +36,9 @@ func TestPredicateReadsAsPlainEnglish(t *testing.T) {
 			"CPU is throttled 75% of the time; requests slow down",
 			"is throttled on CPU 75% of the time"},
 		{secret, "DNS lookups fail", "is failing: DNS lookups fail"},
-		{node, "Node is overcommitted on memory: its pods' limits add " +
-			"up to 155% of its memory; under load pods are killed",
-			"is overcommitted on memory: its pods' limits add up to " +
+		{node, "Node is short on memory and its pods' limits add up " +
+			"to 155% of its memory; pods are killed",
+			"is short on memory and its pods' limits add up to " +
 				"155% of its memory"},
 		{node, "Node is under CPU pressure: workloads stall on CPU",
 			"is under CPU pressure: workloads stall on CPU"},

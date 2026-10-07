@@ -1,0 +1,7 @@
+{
+  "name": "preempted-and-rescheduled",
+  "description": "Two worker replicas are preempted and their replacements run again within a minute.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "10m0s"
+}

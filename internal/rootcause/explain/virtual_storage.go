@@ -32,7 +32,7 @@ func (v *view) storageModes(
 		// the errors of the pods that mount the claim, for clusters
 		// where it cannot.
 		if link == LinkMounts && v.claimFull(id, effect) {
-			return []modeHealth{{mode: detection.ModeVolumeFull,
+			return []modeHealth{{mode: v.claimFullMode(id),
 				health: detection.Failing, pseudo: true}}, true
 		}
 	case kube.KindPV:
@@ -58,8 +58,11 @@ func (v *view) claimFull(claim, effect inventory.EntityID) bool {
 		return false
 	}
 	if e, ok := v.s.Model.Entity(claim); ok {
-		if used, ok := attrNumber(e, kube.AttrVolumeUsedPct); ok {
-			return used >= claimNearFullPct
+		used, hasBytes := attrNumber(e, kube.AttrVolumeUsedPct)
+		inodes, hasInodes := attrNumber(e, kube.AttrVolumeInodesPct)
+		if hasBytes || hasInodes {
+			// Out of inodes fails a write the same way as out of bytes.
+			return used >= claimNearFullPct || inodes >= claimNearFullPct
 		}
 	}
 	if v.namesClaim(claim, strings.ToLower(text)) {
@@ -68,6 +71,19 @@ func (v *view) claimFull(claim, effect inventory.EntityID) bool {
 	pod, ok := v.unitOf(effect)
 	return ok && len(v.s.Model.Related(pod, inventory.Mounts,
 		inventory.Outgoing)) == 1
+}
+
+// claimFullMode is VolumeFull, or its kind VolumeFull.Inodes when the
+// claim's usage shows inodes gone with bytes to spare.
+func (v *view) claimFullMode(claim inventory.EntityID) detection.Mode {
+	if e, ok := v.s.Model.Entity(claim); ok {
+		used, _ := attrNumber(e, kube.AttrVolumeUsedPct)
+		inodes, _ := attrNumber(e, kube.AttrVolumeInodesPct)
+		if inodes >= claimNearFullPct && used < claimNearFullPct {
+			return detection.ModeVolumeInodes
+		}
+	}
+	return detection.ModeVolumeFull
 }
 
 // namesClaim reports whether lower-case text names the claim or the

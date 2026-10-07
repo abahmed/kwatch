@@ -1,0 +1,10 @@
+10:03:15 settled
+🟠 etl in analytics (prod-eu-1) has waited two minutes for a node because no node has enough cpu. It needs 2 CPU; the most any node has free is 500m CPU, on b1. No node fits: claim data-etl (volume pv-etl) can only attach where topology.kubernetes.io/zone=zone-b; the only node there, b1, has only 500m CPU free of the 2 CPU it needs. To see the object's state and events, run kubectl describe pod etl-09833c07-a -n analytics
+🟠 etl in analytics (prod-eu-1) has waited two minutes for a node because no node has enough cpu.
+| 🟠 **etl** in **analytics** (**prod-eu-1**) has waited two minutes for a node because no node has enough cpu.
+| It needs 2 CPU; the most any node has free is 500m CPU, on b1.
+| No node fits: claim data-etl (volume pv-etl) can only attach where topology.kubernetes.io/zone=zone-b; the only node there, b1, has only 500m CPU free of the 2 CPU it needs.
+| To see the object's state and events, run
+| ```
+| kubectl describe pod etl-09833c07-a -n analytics
+| ```

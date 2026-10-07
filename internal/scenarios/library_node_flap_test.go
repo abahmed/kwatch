@@ -9,7 +9,8 @@ import (
 // nodeFlapScenarios are nodes whose Ready condition changes: brief
 // blips that must stay quiet, and a node that really stays down.
 func nodeFlapScenarios() []scenario {
-	return []scenario{nodeReadyBlips(), nodeStaysDown()}
+	return []scenario{nodeReadyBlips(), nodeStaysDown(),
+		nodeCNINotReady()}
 }
 
 // setNodeReady flips the Ready condition of node and delivers it.

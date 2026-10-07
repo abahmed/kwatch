@@ -115,7 +115,8 @@ func noteSentences(d incident.Decision, f caseFacts) []sentence {
 	if d.Action == incident.Update {
 		return append(updateSentences(f), freshEvidenceSentences(f)...)
 	}
-	return append(leadSentences(f), writeAll(f, noteWriters)...)
+	return append(append(leadSentences(f), writeAll(f, noteWriters)...),
+		ackAnnouncedSentences(f)...)
 }
 
 // status is the machine-readable status of an incident's message. It
@@ -256,12 +257,14 @@ func routeOfMessage(
 			Namespaces: append([]string(nil), told.Namespaces...),
 			Reasons:    append([]string(nil), told.Reasons...),
 			Severity:   told.Severity,
+			Owners:     append([]string(nil), told.Owners...),
 		}
 	}
 	return notification.Route{
 		Namespaces: mergeSorted(told.Namespaces, live.Namespaces),
 		Reasons:    mergeSorted(told.Reasons, live.Reasons),
 		Severity:   live.Severity,
+		Owners:     mergeSorted(told.Owners, live.Owners),
 	}
 }
 
@@ -298,8 +301,16 @@ func route(
 	}
 	return notification.Route{
 		Namespaces: sortedSet(namespaces), Reasons: sortedSet(reasons),
-		Severity: severity,
+		Severity: severity, Owners: ownerList(p.Owner),
 	}
+}
+
+// ownerList is the owner as the list a route carries.
+func ownerList(owner string) []string {
+	if owner == "" {
+		return nil
+	}
+	return []string{owner}
 }
 
 func sortedSet(values map[string]bool) []string {

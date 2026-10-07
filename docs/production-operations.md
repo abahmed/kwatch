@@ -96,8 +96,10 @@ worker counts remain the authority for memory and delivery capacity.
 
 Use the published image digest for production deployments. Version tags and
 chart versions must refer to the same release. Kwatch serves only `/healthz`,
-`/readyz`, `/availabilityz`, `/health`, and `/metrics`; it has no diagnostic
-or profiling endpoints to protect.
+`/readyz`, `/availabilityz`, `/health`, `/status`, and `/metrics`; it has no
+diagnostic or profiling endpoints to protect. `/status` is read-only and lists
+object names (workloads, nodes, budgets, webhooks) to anyone who can reach the
+health port, so do not expose that port outside the cluster.
 
 The Helm chart includes an opt-in NetworkPolicy template. With its default
 `networkPolicy.allowDefaults: true` it admits the health port (kubelet probes
@@ -287,7 +289,8 @@ stops within one transaction on shutdown or loss of the state lock.
 
 | Data | Retention |
 | --- | --- |
-| Changes, timeline, audit | 30 days after the entry time |
+| Changes, audit | 30 days after the entry time |
+| Timeline | 7 days after the entry time, and at most 32 MiB |
 | Evidence | 30 days, and at most 128 MiB |
 | Resolved incidents | 7 days after resolution |
 | Baselines | Dropped 7 days after their workload is gone (checked every 10 minutes) |
@@ -306,7 +309,21 @@ defaults in this release. Retention deletes are counted by
 `kwatch_storage_expired_total` and size-cap deletes by
 `kwatch_storage_evicted_total`.
 
-**Physical size.** bbolt reuses freed space but never shrinks its file, so the
+**Physical size.** Every compactor pass logs `state compaction pass` with
+`fileBytes`, `freeBytes` (free pages inside the file), `logicalBytes` and the
+live bytes of the timeline, evidence and incidents, and publishes the file
+size and free pages as `kwatch_storage_file_bytes` and
+`kwatch_storage_free_bytes`. When free pages are at least 64 MiB and half of
+the file, the same pass rewrites the file while running: it copies the live
+data to `state.db.compact` and renames it over the original, which pauses
+writes (never the decision loop) for about a second per 50 MiB of live data
+and is counted by `kwatch_storage_rewrites_total`. It needs the same free
+space as the startup copy and is skipped without it. A file left by an older
+release is trimmed and rewritten by the first pass after the upgrade. At open
+the whole file is read once, front to back, before its pages are checked, so
+a slow network volume is not read page by page at random.
+
+bbolt reuses freed space but never shrinks its file, so the
 file is larger than the live data, and the volume fills with file bytes, not
 logical bytes. The cap therefore also applies to the file: when the file is
 clearly past the cap, the compactor lowers its logical target by the excess so

@@ -154,16 +154,16 @@ func TestEngineDigestRecordsHeldDecisionsForTheAuditLog(t *testing.T) {
 	}
 }
 
-// Configuration risks ride along a digest that goes out anyway, each
-// named once; the next digest does not repeat them.
+// Workloads whose pods never become ready ride along a digest that goes
+// out anyway, each named once; the next digest does not repeat them.
 func TestEngineDigestNamesNewRisksOnce(t *testing.T) {
 	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
 	e, sent := digestHarness(t, now)
 	orders := inventory.CoreID(kube.KindDeployment, "shop", "orders")
 	e.announcer.collect.SetAdvisories(func() []detection.Finding {
 		return []detection.Finding{{Entity: orders,
-			Reason: reasons.RiskSingleReplica, Advisory: true,
-			Summary: "It runs a single replica, so any restart is downtime"}}
+			Reason: reasons.WorkloadNeverReady, Advisory: true,
+			Summary: "Has pods that run but are not ready"}}
 	})
 
 	e.announcer.collect.CollectDigest(context.Background(), now,
@@ -180,33 +180,32 @@ func TestEngineDigestNamesNewRisksOnce(t *testing.T) {
 	if len(*sent) != 2 {
 		t.Fatalf("want two digests, got %d", len(*sent))
 	}
-	if !strings.Contains((*sent)[0].Note, "1 workload runs a single "+
-		"replica (orders)") {
+	if !strings.Contains((*sent)[0].Note, "1 workload has pods that "+
+		"run but never become ready (orders)") {
 		t.Fatalf("the first digest must name the risk: %s", (*sent)[0].Note)
 	}
-	if strings.Contains((*sent)[1].Note, "Configuration risks") {
+	if strings.Contains((*sent)[1].Note, "Running but not ready") {
 		t.Fatalf("a named risk must not repeat: %s", (*sent)[1].Note)
 	}
 }
 
-// Risks of system namespaces and of kwatch's own namespace are not the
-// team's to fix: the digest leaves them out.
-func TestEngineDigestSkipsSystemAndOwnNamespaceRisks(t *testing.T) {
+// Configuration advice is never announced, in any namespace.
+func TestEngineDigestHidesConfigurationAdvice(t *testing.T) {
 	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
-	t.Setenv("POD_NAMESPACE", "kwatch")
 	e, _ := digestHarness(t, now)
-	risk := func(ns, name string) detection.Finding {
-		return detection.Finding{
-			Entity: inventory.CoreID(kube.KindDeployment, ns, name),
-			Reason: reasons.RiskSingleReplica, Advisory: true}
-	}
 	e.announcer.collect.SetAdvisories(func() []detection.Finding {
-		return []detection.Finding{risk("kube-system", "coredns"),
-			risk("kwatch", "kwatch"), risk("shop", "orders")}
+		var out []detection.Finding
+		for _, reason := range []string{reasons.RiskSingleReplica,
+			reasons.RiskNoReadinessProbe, reasons.RiskNoMemoryLimit,
+			reasons.RiskMutableImageTag} {
+			out = append(out, detection.Finding{Reason: reason,
+				Entity: inventory.CoreID(kube.KindDeployment, "shop",
+					"orders"), Advisory: true})
+		}
+		return out
 	})
-	got := e.announcer.collect.PendingRisks()
-	if len(got) != 1 || got[0].Entity.Name != "orders" {
-		t.Fatalf("pending risks = %v, want only orders", got)
+	if got := e.announcer.collect.PendingRisks(); len(got) != 0 {
+		t.Fatalf("pending risks = %v, want none", got)
 	}
 }
 

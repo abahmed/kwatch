@@ -1,0 +1,8 @@
+{
+  "name": "ready-never-service",
+  "description": "A Deployment's only pod runs for 45 minutes without restarting, its readiness probe answers 500 every ten seconds and its Service has no endpoints.",
+  "root": "deployment/external-secrets/cert-controller",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "30m0s"
+}

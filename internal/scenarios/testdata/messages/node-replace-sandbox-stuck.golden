@@ -1,0 +1,16 @@
+10:17:15 settled
+🟠 fleet is failing in shop (prod-eu-1) after the 10:10 removal of node n3. Three failing workloads all depend on it. services fleet, storage and support can't serve traffic. Storage and support are affected as well. To see the object's state and events, run kubectl describe pod fleet-2deb324e-b -n shop
+🟠 fleet is failing in shop (prod-eu-1) after the 10:10 removal of node n3.
+| 🟠 **fleet** is failing in **shop** (**prod-eu-1**) after the 10:10 removal of node n3.
+| Three failing workloads all depend on it.
+| services **fleet**, **storage** and **support** can't serve traffic.
+| Storage and **support** are affected as well.
+| To see the object's state and events, run
+| ```
+| kubectl describe pod fleet-2deb324e-b -n shop
+| ```
+10:20:00 material change
+🔴 Node n3 (prod-eu-1) is spreading to fleet, storage and support in shop: they have no ready replicas (0 of 1). It is also spreading to pods fleet-2deb324e-b, storage-9dec5f4b-b and support-5b472f12-b in shop: they have been Pending since it was scheduled.
+🔴 Node n3 (prod-eu-1) is spreading to fleet, storage and support in shop: they have no ready replicas (0 of 1).
+| 🔴 Node n3 (**prod-eu-1**) is spreading to **fleet**, **storage** and **support** in shop: they have no ready replicas (0 of 1).
+| It is also spreading to pods **fleet-2deb324e-b**, **storage-9dec5f4b-b** and **support-5b472f12-b** in shop: they have been Pending since it was scheduled.

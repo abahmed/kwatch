@@ -2,7 +2,10 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"k8s.io/klog/v2"
 )
 
 // CompactInterval is how often the production compactor runs a pass.
@@ -38,6 +41,11 @@ type PassResult struct {
 	// RewriteDue is true when the file is so far over SizeCap that the
 	// next start rewrites it (see physical.go).
 	RewriteDue bool
+	// FreeBytes is the part of FileBytes that is free pages.
+	FreeBytes int64
+	// Rewrote is true when the pass gave free pages back by rewriting
+	// the file while running (see reclaim.go).
+	Rewrote bool
 }
 
 // minHistoryDivisor sets the history the size cap always keeps: a
@@ -87,6 +95,7 @@ func (c *Compactor) Run(ctx context.Context, tick <-chan time.Time) error {
 // Pass runs retention and both caps once.
 func (c *Compactor) Pass(ctx context.Context) (PassResult, error) {
 	var result PassResult
+	began := startupNow()
 	expired, err := c.expire(ctx)
 	result.Expired = expired
 	if err != nil {
@@ -105,10 +114,29 @@ func (c *Compactor) Pass(ctx context.Context) (PassResult, error) {
 	result.Bytes, result.PinnedBytes = report.total(), report.pinned()
 	result.OverCap = result.Bytes > c.policy.SizeCap
 	c.store.counters.overCap.Store(result.OverCap)
-	result.FileBytes, _ = fileSize(c.store.path)
+	result.Rewrote, err = c.reclaim()
+	if err != nil {
+		return result, err
+	}
+	result.FileBytes, result.FreeBytes = c.store.fileUsage()
+	c.store.counters.fileBytes.Store(result.FileBytes)
+	c.store.counters.freeBytes.Store(result.FreeBytes)
 	result.RewriteDue = oversized(c.store.path, c.policy.SizeCap)
 	c.store.noteRewriteDue(result.RewriteDue, result.FileBytes)
+	logPass(result, report.buckets, startupNow().Sub(began))
 	return result, nil
+}
+
+// reclaim gives free pages back when most of the file is free. A failure
+// other than losing the claim is logged: the file still works.
+func (c *Compactor) reclaim() (bool, error) {
+	rewrote, err := c.store.Reclaim()
+	if err == nil || errors.Is(err, ErrFenced) {
+		return rewrote, err
+	}
+	klog.ErrorS(err, "state file rewrite failed", "component", "state",
+		"operation", "reclaim")
+	return false, nil
 }
 
 func (c *Compactor) expire(ctx context.Context) (int, error) {
@@ -146,10 +174,13 @@ func (c *Compactor) enforceCaps(
 		return 0, err
 	}
 	evicted := 0
-	over := report.buckets[Evidence] - c.policy.EvidenceCap
-	if c.policy.EvidenceCap > 0 && over > 0 {
+	for _, capped := range c.bucketCaps() {
+		over := report.buckets[capped.bucket] - capped.limit
+		if over <= 0 {
+			continue
+		}
 		n, err := c.store.evictOldest(
-			ctx, []Bucket{Evidence}, over, c.policy.Batch)
+			ctx, []Bucket{capped.bucket}, over, c.policy.Batch)
 		evicted += n
 		if err != nil {
 			return evicted, err
@@ -158,12 +189,30 @@ func (c *Compactor) enforceCaps(
 			return evicted, err
 		}
 	}
-	over = report.evictable - c.historyBudget(report.pinned(), fileBytes)
+	over := report.evictable - c.historyBudget(report.pinned(), fileBytes)
 	if over <= 0 {
 		return evicted, nil
 	}
 	n, err := c.store.evictOldest(ctx, evictable, over, c.policy.Batch)
 	return evicted + n, err
+}
+
+// bucketCap is the byte limit of one bucket.
+type bucketCap struct {
+	bucket Bucket
+	limit  int64
+}
+
+// bucketCaps lists the per-bucket limits the policy sets.
+func (c *Compactor) bucketCaps() []bucketCap {
+	var out []bucketCap
+	if c.policy.EvidenceCap > 0 {
+		out = append(out, bucketCap{Evidence, c.policy.EvidenceCap})
+	}
+	if c.policy.TimelineCap > 0 {
+		out = append(out, bucketCap{Timeline, c.policy.TimelineCap})
+	}
+	return out
 }
 
 // historyBudget is how many evictable bytes the total cap keeps.

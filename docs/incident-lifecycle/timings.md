@@ -34,6 +34,9 @@ read the header there for how they relate.
 | coverage `Every` / `After` / `Retry` | 5m / 15m / 30m | coverage check cadence, wait before a workload is believed lost, quiet time after a hand-back |
 | explain `SignatureWindow` / `SignatureMinWorkloads` | 30m / 3 | failures sharing one error began this close; this many workloads |
 | `kube.BootWindow` | 10m | a node pool still booting is not an incident; `coverage.After` is longer |
+| `kube.WakeQuiet` / `WakeMax` | 10m / 30m | a wake-up ends this long after its last start, or at most this long after its first |
+| `kube.ScaleDownSpan` | 15m | workloads set to 0 this close together are one planned scale-down |
+| announce `OngoingEvery` | 6h | an open digest problem that came back is listed again after this long, even when no other digest is due |
 
 ---
 

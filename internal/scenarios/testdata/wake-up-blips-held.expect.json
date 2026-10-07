@@ -1,0 +1,7 @@
+{
+  "name": "wake-up-blips-held",
+  "description": "Six Deployments scale from zero to two replicas within two minutes; their pods fail the readiness probe for nine minutes, then all pass.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "20m0s"
+}

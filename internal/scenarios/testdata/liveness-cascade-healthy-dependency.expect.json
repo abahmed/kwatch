@@ -1,0 +1,11 @@
+{
+  "name": "liveness-cascade-healthy-dependency",
+  "description": "API pods are killed by a liveness probe that is the same check as readiness while the database they call is healthy.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/db",
+    "node//n1"
+  ]
+}

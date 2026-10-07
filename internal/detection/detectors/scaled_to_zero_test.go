@@ -227,3 +227,46 @@ func TestWorkloadIgnoresScaleToZeroAnAutoscalerDisabled(t *testing.T) {
 
 	assert.Empty(t, detectZero(m, api))
 }
+
+// scaleDown records that a workload was set to zero replicas at at.
+func scaleDown(m *inventory.Model, id inventory.EntityID, at time.Time) {
+	m.Apply(inventory.Observation{
+		Kind: inventory.Changed, Source: "test", At: at, Entity: id,
+		Change: inventory.Change{Entity: id, At: at, Fields: []inventory.
+			FieldChange{{Path: "spec.replicas", Before: "2", After: "0"}}},
+	})
+}
+
+// Putting many workloads to sleep together is planned: the routes that
+// are left over are not news.
+func TestWorkloadScaledToZeroInAPlannedScaleDownIsLeftAlone(t *testing.T) {
+	m, api := zeroShop()
+	scaleDown(m, api, t0.Add(-9*time.Minute))
+	for i := range kube.ScaleDownMin - 1 {
+		other := newID(kube.KindDeployment, "shop", "other"+string(
+			rune('a'+i)))
+		put(m, other, t0.Add(-10*time.Minute), map[string]inventory.Value{
+			kube.AttrReplicas: inventory.Number(0)})
+		scaleDown(m, other, t0.Add(-time.Duration(8-i)*time.Minute))
+	}
+
+	assert.Empty(t, detectZero(m, api))
+}
+
+// A few workloads switched off are not a scale-down: still reported.
+func TestWorkloadScaledToZeroWithFewOthersStillWarns(t *testing.T) {
+	m, api := zeroShop()
+	scaleDown(m, api, t0.Add(-9*time.Minute))
+	for i := range kube.ScaleDownMin - 2 {
+		other := newID(kube.KindDeployment, "shop", "other"+string(
+			rune('a'+i)))
+		put(m, other, t0.Add(-10*time.Minute), map[string]inventory.Value{
+			kube.AttrReplicas: inventory.Number(0)})
+		scaleDown(m, other, t0.Add(-8*time.Minute))
+	}
+
+	got := detectZero(m, api)
+
+	require.Len(t, got, 1)
+	assert.Equal(t, reasons.ScaledToZeroRouted, got[0].Reason)
+}

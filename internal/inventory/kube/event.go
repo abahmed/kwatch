@@ -47,6 +47,7 @@ func EventNote(obj any, now time.Time) (inventory.Observation, bool) {
 			Message: evidenceText(ev.Message), Count: count,
 			Warning: ev.Type == corev1.EventTypeWarning,
 			UID:     uid, Origin: eventOrigin(ev),
+			Refusal: PullRefusal(ev.Message),
 		},
 	}, true
 }
@@ -82,8 +83,9 @@ func eventOrigin(ev *corev1.Event) string {
 }
 
 // keepEvent is true for every Warning event, and for the Normal events
-// in which an autoscaler says what it decided for a pod.
+// in which an autoscaler says what it decided for a pod, or the scheduler
+// says which pod preempted another.
 func keepEvent(ev *corev1.Event) bool {
 	return ev.Type == corev1.EventTypeWarning ||
-		autoscalerReason(ev.Reason)
+		autoscalerReason(ev.Reason) || ev.Reason == PreemptedReason
 }

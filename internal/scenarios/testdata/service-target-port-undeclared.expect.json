@@ -1,0 +1,7 @@
+{
+  "name": "service-target-port-undeclared",
+  "description": "A Service targets a number its pods do not declare, yet its endpoints are ready and nothing fails.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "15m0s"
+}

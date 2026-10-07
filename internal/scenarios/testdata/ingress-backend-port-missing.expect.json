@@ -1,0 +1,11 @@
+{
+  "name": "ingress-backend-port-missing",
+  "description": "An Ingress is edited to route to a Service port the Service does not have.",
+  "root": "ingress/shop/shop",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "service/shop/api",
+    "deployment/shop/api"
+  ]
+}

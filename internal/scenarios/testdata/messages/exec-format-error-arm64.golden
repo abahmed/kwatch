@@ -1,0 +1,11 @@
+10:02:15 settled
+🟠 api in shop (prod-eu-1) is failing: crashes on arm64 node n1 with "exec format error": the image has no arm64 build. Its node and registry are healthy and unchanged, so nothing outside it explains this. The 2 pods on amd64 nodes run fine. It fails with "exec /app/api: exec format error". To read the output of the last crash, run kubectl logs api-2e66a9fd-a -c app -n shop --previous
+🟠 api in shop (prod-eu-1) is failing: crashes on arm64 node n1 with "exec format error": the image has no arm64 build.
+| 🟠 **api** in **shop** (**prod-eu-1**) is failing: crashes on arm64 node n1 with `exec format error`: the image has no arm64 build.
+| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| The 2 pods on amd64 nodes run fine.
+| It fails with `exec /app/api: exec format error`.
+| To read the output of the last crash, run
+| ```
+| kubectl logs api-2e66a9fd-a -c app -n shop --previous
+| ```
