@@ -42,11 +42,12 @@ func resolvedRootKinds(result replay.Result) map[inventory.Kind]bool {
 // data, not recovery: with the root kind unverifiable, no scenario may
 // resolve an incident rooted there.
 func TestScenariosNeverResolveUnverifiableRoots(t *testing.T) {
+	t.Parallel()
 	checked := 0
 	for _, s := range library() {
-		log, e := loadScenario(t, s.expect.Name)
+		log, e, first := replayScenario(t, labelledDir, s.expect.Name)
 		opts := e.options(log.Start)
-		for kind := range resolvedRootKinds(replayLog(t, log, opts)) {
+		for kind := range resolvedRootKinds(first) {
 			hidden := replayHiding(t, log, opts, kind)
 			checked++
 			for _, d := range hidden.Decisions {
@@ -68,9 +69,9 @@ func TestScenariosNeverResolveUnverifiableRoots(t *testing.T) {
 // Scenario messages are written for a named cluster: every incident
 // message names it, the way production does when clusterName is set.
 func TestScenarioMessagesNameTheCluster(t *testing.T) {
+	t.Parallel()
 	for _, s := range library() {
-		log, e := loadScenario(t, s.expect.Name)
-		result := replayLog(t, log, e.options(log.Start))
+		_, e, result := replayScenario(t, labelledDir, s.expect.Name)
 		for i, m := range result.Messages {
 			if !strings.Contains(m.Note, "("+scenarioCluster+")") {
 				t.Errorf("%s message %d does not name the cluster: %q",

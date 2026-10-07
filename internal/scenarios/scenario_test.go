@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -198,6 +199,7 @@ func encodeExpectation(t *testing.T, e expectation) []byte {
 //
 //	go test ./internal/scenarios -run TestScenarioFixtures -update
 func TestScenarioFixtures(t *testing.T) {
+	runParallelUnlessUpdating(t)
 	seen := map[string]bool{}
 	checkFixtures(t, labelledDir, library(), seen)
 	checkFixtures(t, heldoutDir, heldoutLibrary(), seen)
@@ -263,22 +265,32 @@ func loadScenarioFrom(
 	t *testing.T, dir, name string,
 ) (replay.Log, expectation) {
 	t.Helper()
-	file, err := os.Open(logPath(dir, name))
+	log, e, err := readScenarioFrom(dir, name)
 	if err != nil {
 		t.Fatal(err)
+	}
+	return log, e
+}
+
+// readScenarioFrom is loadScenarioFrom for callers that cannot fail a test.
+func readScenarioFrom(dir, name string) (replay.Log, expectation, error) {
+	var e expectation
+	file, err := os.Open(logPath(dir, name))
+	if err != nil {
+		return replay.Log{}, e, err
 	}
 	defer func() { _ = file.Close() }()
 	log, err := replay.Read(file)
 	if err != nil {
-		t.Fatalf("%s: %v", name, err)
+		return replay.Log{}, e, fmt.Errorf("%s: %w", name, err)
 	}
 	data, err := os.ReadFile(expectPath(dir, name))
 	if err != nil {
-		t.Fatal(err)
+		return replay.Log{}, e, err
 	}
-	var e expectation
 	if err := json.Unmarshal(data, &e); err != nil {
-		t.Fatalf("%s: %v", expectPath(dir, name), err)
+		return replay.Log{}, e, fmt.Errorf("%s: %w",
+			expectPath(dir, name), err)
 	}
-	return log, e
+	return log, e, nil
 }

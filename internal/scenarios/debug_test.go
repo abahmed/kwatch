@@ -20,6 +20,7 @@ var only = flag.String("scenario", "",
 //	go test ./internal/scenarios -run TestScenarioReplay -v \
 //		-scenario bad-rollout
 func TestScenarioReplay(t *testing.T) {
+	t.Parallel()
 	// Held-out scenarios are replayed too when one is named, so any
 	// scenario can be read while it is written.
 	scenarios := library()
@@ -40,8 +41,7 @@ func TestScenarioReplay(t *testing.T) {
 			if heldout[name] {
 				dir = heldoutDir
 			}
-			log, e := loadScenarioFrom(t, dir, name)
-			result := replayLog(t, log, e.options(log.Start))
+			_, e, result := replayScenario(t, dir, name)
 			v := judge(e, result)
 			t.Logf("%s: %d messages; %s", outcome(v), v.messages,
 				describeIncidents(v.incidents))

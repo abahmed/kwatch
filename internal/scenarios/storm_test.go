@@ -37,17 +37,25 @@ type storm struct {
 	log  replay.Log
 }
 
+// runStorms replays the storms side by side, each as a parallel subtest.
 func runStorms(t *testing.T) []stormResult {
 	t.Helper()
-	var out []stormResult
-	for _, s := range []storm{sharedNodeStorm(), sharedRegistryStorm()} {
-		result := replayLog(t, s.log, replay.Options{})
-		out = append(out, stormResult{
-			name: s.name, pods: s.pods, messages: len(result.Messages),
-			peak: scorecard.PeakInWindow(result.Times,
-				scorecard.GoalStormWindow),
-		})
-	}
+	storms := []storm{sharedNodeStorm(), sharedRegistryStorm()}
+	out := make([]stormResult, len(storms))
+	t.Run("each", func(t *testing.T) {
+		for i, s := range storms {
+			t.Run(s.name, func(t *testing.T) {
+				t.Parallel()
+				result := replayLog(t, s.log, replay.Options{})
+				out[i] = stormResult{
+					name: s.name, pods: s.pods,
+					messages: len(result.Messages),
+					peak: scorecard.PeakInWindow(result.Times,
+						scorecard.GoalStormWindow),
+				}
+			})
+		}
+	})
 	return out
 }
 

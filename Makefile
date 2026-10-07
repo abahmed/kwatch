@@ -184,11 +184,15 @@ verify-fast:
 # Wall-clock budgets of docs/production-goals.md: the p99 decision lag at
 # 5,000 pods and the memory budget. The race detector slows the engine
 # several times over, so the lag test skips under -race and both run here
-# once more without it, after the race run.
+# once more without it, after the race run. The soak test measures the heap
+# of a simulated day, which -race inflates, so it runs here only.
+LATENCY_LAG := TestEngineDecisionLagAt5000Pods
+LATENCY_MEMORY := TestMemoryBudget.*
+LATENCY_SOAK := TestSoakHeapPlateaus
 verify-latency:
-	$(GOTEST) -count=1 \
-		-run 'TestEngineDecisionLagAt5000Pods|TestMemoryBudget.*' \
-		./internal/pipeline/ ./internal/app/
+	$(GOTEST) -count=1 -timeout $(TEST_TIMEOUT) \
+		-run '$(LATENCY_LAG)|$(LATENCY_MEMORY)|$(LATENCY_SOAK)' \
+		./internal/pipeline/ ./internal/app/ ./internal/scenarios/
 
 # Serialized race run for workstream or release milestones.
 verify-race:
