@@ -133,6 +133,10 @@ func (v *view) calledModes(
 	return nil
 }
 
+// probeEvidenceLabel labels the kubelet's own probe failure message. Its
+// address is the kubelet's call to the pod, never one the pod makes.
+const probeEvidenceLabel = "probe"
+
 // callOf is the endpoint the failing pod of id names in its errors.
 func (v *view) callOf(id inventory.EntityID) (endpointCall, bool) {
 	unit, ok := v.unitOf(id)
@@ -145,6 +149,9 @@ func (v *view) callOf(id inventory.EntityID) (endpointCall, bool) {
 	var found endpointCall
 	for _, f := range v.unitFindings(unit) {
 		for _, e := range f.Evidence {
+			if e.Label == probeEvidenceLabel {
+				continue
+			}
 			call, ok := endpointIn(e.Value)
 			if ok && !v.inCluster(endpointHost(call.endpoint), unit) {
 				found = call

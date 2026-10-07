@@ -18,6 +18,9 @@ const memoryAdvice = "Raise the memory limit above the observed peak, " +
 // memory history its finding carries. They describe the past only, and
 // say nothing when the finding has no such history.
 func memorySentences(f caseFacts) []sentence {
+	if _, _, byNode := nodeKill(f.members); byNode {
+		return nil
+	}
 	for _, m := range f.members {
 		if m.Reason != reasons.OOMKilled {
 			continue
@@ -59,6 +62,7 @@ func memoryText(m detection.Finding) string {
 // memorySteps is the advice for a kill whose memory use is known.
 func memorySteps(s detection.Finding) []notification.Step {
 	if s.Reason != reasons.OOMKilled ||
+		evidence(s, detection.EvidenceKilledByNode) != "" ||
 		(evidence(s, detection.EvidenceMemoryPeak) == "" &&
 			evidence(s, detection.EvidenceKilledAfter) == "") {
 		return nil

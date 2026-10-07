@@ -119,12 +119,21 @@ func DigestKey(at time.Time) string {
 
 // Digest is one message for the low-priority incidents of the last
 // window: the ones that opened, at their current state, the ones an
-// earlier digest listed that have resolved, and the configuration
-// risks found since the last digest. None of them interrupts on its
-// own.
+// earlier digest listed that have resolved, and the workloads whose pods
+// never become ready, found since the last digest. None of them
+// interrupts on its own. Configuration advice is not part of it.
 func (w Writer) Digest(
 	opened, resolved []incident.Decision, risks []detection.Finding,
 	now time.Time,
+) notification.Message {
+	return w.DigestWith(opened, resolved, risks, DigestExtras{}, now)
+}
+
+// DigestWith is Digest with its extras: the problems an earlier digest
+// listed that are still open, and the summary of a cluster wake-up.
+func (w Writer) DigestWith(
+	opened, resolved []incident.Decision, risks []detection.Finding,
+	extras DigestExtras, now time.Time,
 ) notification.Message {
 	opened = append([]incident.Decision(nil), opened...)
 	sortByImpact(opened)
@@ -132,18 +141,29 @@ func (w Writer) Digest(
 	if len(opened) > 0 {
 		counts = append(counts, plural(len(opened), "low-priority problem"))
 	}
+	if len(extras.Ongoing) > 0 {
+		counts = append(counts, plural(len(extras.Ongoing), "ongoing problem"))
+	}
 	if len(resolved) > 0 {
 		counts = append(counts, plural(len(resolved), "earlier one")+
 			" that resolved")
 	}
-	risks = withoutSystemRisks(risks)
+	risks = neverReady(risks)
 	if len(risks) > 0 {
-		counts = append(counts, "configuration risks on "+
-			plural(riskWorkloads(risks), "workload"))
+		counts = append(counts, plural(riskWorkloads(risks), "workload")+
+			" with pods that never become ready")
+	}
+	if extras.Wake != nil && len(counts) == 0 {
+		counts = append(counts, "a cluster wake-up")
 	}
 	sentences := []sentence{{part: partLead, text: "kwatch" +
 		w.clusterTag() + " has " + joinWords(counts) + " to report."}}
+	if extras.Wake != nil {
+		sentences = append(sentences, sentence{part: partProof,
+			text: extras.Wake.Text()})
+	}
 	sentences = append(sentences, digestTitles(opened, now, "")...)
+	sentences = append(sentences, ongoingSentences(extras.Ongoing, now)...)
 	sentences = append(sentences,
 		digestTitles(resolved, now, "Resolved: ")...)
 	sentences = append(sentences, riskTitles(risks)...)
@@ -157,7 +177,7 @@ func (w Writer) Digest(
 			opened...), resolved...), risks),
 	}
 	fill(&msg, notification.MarkerLow, sentences)
-	msg.Doc = w.digestDoc(opened, resolved, risks, now)
+	msg.Doc = w.digestDoc(opened, resolved, risks, extras, now)
 	return msg
 }
 

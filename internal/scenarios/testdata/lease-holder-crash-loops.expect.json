@@ -1,0 +1,8 @@
+{
+  "name": "lease-holder-crash-loops",
+  "description": "A controller's Lease is not renewed for twelve minutes because its holder pod crash-loops.",
+  "root": "deployment/kube-system/ccm",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "10m0s"
+}

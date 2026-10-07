@@ -95,9 +95,10 @@ func compileRoutes(settings map[string]interface{}) []AlertRoute {
 			Namespaces: runtimeStringList(routeMap["namespaces"]),
 			Severities: runtimeStringList(routeMap["severities"]),
 			Reasons:    runtimeStringList(routeMap["reasons"]),
+			Owners:     runtimeStringList(routeMap["owners"]),
 		}
 		if len(route.Namespaces) > 0 || len(route.Severities) > 0 ||
-			len(route.Reasons) > 0 {
+			len(route.Reasons) > 0 || len(route.Owners) > 0 {
 			routes = append(routes, route)
 		}
 	}
@@ -258,6 +259,7 @@ func cloneRoutes(routes []AlertRoute) []AlertRoute {
 			Namespaces: cloneStrings(route.Namespaces),
 			Severities: cloneStrings(route.Severities),
 			Reasons:    cloneStrings(route.Reasons),
+			Owners:     cloneStrings(route.Owners),
 		})
 	}
 	return result

@@ -87,3 +87,15 @@ func TestStorageMetricsSharedAcrossRestartsCountsOnce(t *testing.T) {
 
 	assert.Equal(t, int64(7), registry.StorageEvicted.Load())
 }
+
+func TestStorageMetricsPublishFileSizeAndRewrites(t *testing.T) {
+	registry := &metrics.Registry{}
+	m := newStorageMetrics(registry)
+
+	m.publish(storage.Stats{FileBytes: 900, FreeBytes: 700, Rewrites: 1})
+	m.publish(storage.Stats{FileBytes: 100, FreeBytes: 10, Rewrites: 2})
+
+	assert.Equal(t, int64(100), registry.StorageFileBytes.Load())
+	assert.Equal(t, int64(10), registry.StorageFreeBytes.Load())
+	assert.Equal(t, int64(2), registry.StorageRewrites.Load())
+}

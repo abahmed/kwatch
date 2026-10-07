@@ -544,7 +544,10 @@ Some quirks are load-bearing. Preserve them unless a change explicitly says othe
   join the incident of a real failure of the same root
   (`adoptAdvisories`) and leave with it (`dropAdvisories`), never lead a
   message (`compose.rootFinding`) and add a consequence only through
-  `compose.riskSentences`.
+  `compose.riskSentences`. Product rule: kwatch reports what is happening,
+  not what could happen, so no digest, startup message or `/status` lists
+  advice. The one advisory finding announced is `WorkloadNeverReady`
+  (some replicas serve, others run but never become ready).
 - Pods relate to the external endpoints their environment names
   (`kube.podDependencies`, relation `Calls`, kind
   `kube.KindExternalEndpoint`). Host and port only: credentials never
@@ -581,7 +584,8 @@ Some quirks are load-bearing. Preserve them unless a change explicitly says othe
   row (`LinkSlows`) blames a slow webhook for slow API writes.
 - The announcer reads the engine's active advisory findings
   (`Engine.activeAdvisories`) and names each once in a digest that goes
-  out anyway (`pendingRisks`, `mentionRisks`); risks never open a window.
+  out anyway (`PendingRisks`, `mentionRisks`; only `WorkloadNeverReady`);
+  they never open a window.
   `StatsPoller.kubeletHealth` adds `AttrPLEGRelistMS` and
   `AttrEvictionRate` for `detectors.kubeletFindings`. `unusedService` and
   `unusedClaim` are digest-tier hygiene after `DefaultUnusedAfter`.

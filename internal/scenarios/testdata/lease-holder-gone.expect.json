@@ -1,0 +1,7 @@
+{
+  "name": "lease-holder-gone",
+  "description": "A Lease nobody renews because its controller was uninstalled: no pod holds it, nothing runs.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "10m0s"
+}

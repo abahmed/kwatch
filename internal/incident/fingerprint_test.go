@@ -66,12 +66,12 @@ func TestManagerFingerprintIgnoresLiveNumbersInCauseSummary(t *testing.T) {
 	node := entity(kube.KindNode, "n1")
 	pod := podSig("web")
 	r.relate(pod.Entity, inventory.RunsOn, node)
-	r.cause(pod.Entity, node, "node memory at 91%, full in about 3h")
+	r.cause(pod.Entity, node, "node memory at 91%")
 	announced(t, r, pod)
 
 	summaries := []string{
-		"node memory at 93%, full in about 2h",
-		"node memory at 97%, full in about 40m",
+		"node memory at 93%",
+		"node memory at 97%",
 	}
 	for i, summary := range summaries {
 		r.cause(pod.Entity, node, summary)

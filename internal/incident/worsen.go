@@ -5,6 +5,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
@@ -149,12 +150,33 @@ func (p *Incident) unreadySince() time.Time {
 	return first
 }
 
-// workloadDown reports that the incident's workload has no ready replica.
+// workloadDown reports that a workload the incident speaks for has no
+// ready replica: the one at its root, or the owner of any member. A
+// failure explained by another root (a node pool, a node) is still the
+// workload's outage, and the incident of that root must not stay quiet
+// about it because its own problem is known.
 func (m *Manager) workloadDown(p *Incident) bool {
 	if m.model == nil {
 		return false
 	}
-	r, ok := ReadinessOf(m.model, workloadFor(m.model, p.Root))
+	if workloadHasNoneReady(m.model, p.Root) {
+		return true
+	}
+	for key, s := range p.Members {
+		if !s.Advisory && workloadHasNoneReady(m.model, key.Entity) {
+			return true
+		}
+	}
+	return false
+}
+
+// workloadHasNoneReady reports that the workload owning id wants
+// replicas and has none ready. Anything that is not, or has no, workload
+// is not down.
+func workloadHasNoneReady(
+	model inventory.Reader, id inventory.EntityID,
+) bool {
+	r, ok := ReadinessOf(model, workloadFor(model, id))
 	return ok && r.Desired > 0 && r.Ready == 0
 }
 

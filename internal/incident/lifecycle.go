@@ -94,6 +94,7 @@ func (m *Manager) advance(p *Incident, now time.Time) (Decision, bool) {
 	if m.reopenPending(p) {
 		return m.reopenUpdate(p, now)
 	}
+	m.reassess(p, now)
 	m.escalate(p, now)
 	switch p.State {
 	case Settling:
@@ -130,6 +131,7 @@ func (m *Manager) settle(p *Incident, now time.Time) (Decision, bool) {
 		return Decision{}, false
 	}
 	p.State, p.Announced = Open, now
+	m.adoptAck(p)
 	m.holdRepeatedPage(p, now)
 	if p.AlertKey == "" {
 		p.AlertKey = m.freeAlertKey(p)
@@ -204,6 +206,9 @@ func superseded(p *Incident) bool {
 // reminderDue reports an announced incident open for another
 // RemindEvery since its announcement or its last reminder.
 func (m *Manager) reminderDue(p *Incident, now time.Time) bool {
+	if acked(p) {
+		return false
+	}
 	last := p.Reminded
 	if last.IsZero() {
 		last = p.Announced
@@ -252,6 +257,11 @@ func (m *Manager) recovering(p *Incident, now time.Time) (Decision, bool) {
 		m.stillBroken(p, now) {
 		return Decision{}, false
 	}
+	if p.Pending.ReopenOwed() {
+		// It never told the thread it was back: no second resolve.
+		m.closeUnheardReopen(p, now)
+		return Decision{}, false
+	}
 	healthy := Reason("healthy for " + hold.String())
 	return m.resolve(p, now, m.resolveReason(p, healthy)), true
 }
@@ -288,6 +298,9 @@ func (m *Manager) flapping(p *Incident, now time.Time) (Decision, bool) {
 // flappingNews is what a flapping incident with failing members may say:
 // that the failure grew, or, for an announced incident, its reminder.
 func (m *Manager) flappingNews(p *Incident, now time.Time) (Decision, bool) {
+	if d, done := m.ackStep(p, now); done {
+		return d, true
+	}
 	if flapGrew(p) {
 		return m.decide(p, Update, ReasonMaterialChange), true
 	}
@@ -325,6 +338,7 @@ func (m *Manager) resolveQuietly(p *Incident, now time.Time) {
 }
 
 func (m *Manager) decide(p *Incident, action Action, why Reason) Decision {
+	p.Owner = m.ownerOf(p)
 	p.Revision++
 	p.prevDigest, p.updateHeld = p.Digest, false
 	p.Digest = fingerprint(p)
@@ -333,7 +347,8 @@ func (m *Manager) decide(p *Incident, action Action, why Reason) Decision {
 	p.movedTo = nil
 	delivered := p.Scope != ScopeOut && !p.Held
 	p.noteRoute(action, delivered)
-	d := Decision{Action: action, Incident: p.Snapshot(), Reason: why}
+	d := Decision{Action: action, Incident: p.Snapshot(), Reason: why,
+		Thread: p.Delivery.Demoted() && p.Tier == Digest && p.sent.told}
 	// An announcement of an incident whose alert is already open (a
 	// restored held page) must not page again.
 	d.PagedAlready = action == Announce && p.Delivery.OpenAtPagers()

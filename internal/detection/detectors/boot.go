@@ -28,20 +28,35 @@ func bootGraceFor(
 	}
 	// Look again when the boot is over: nothing else wakes the pod up.
 	ctx.RecheckAfter(remaining)
-	return kube.BootWindow
+	return max(kube.BootWindow, wakeHold(ctx, pod))
 }
 
-// podNodeBootRemaining is how much longer the pool of the pod's node
-// boots. A pod no node holds yet waits for capacity: it is expected
-// while any pool boots.
+// wakeHold is how long a pod the wake-up created may stay behind its
+// usual thresholds: its whole age so far and what is left of the
+// wake-up, so what still fails when the wake-up ends is reported at
+// once. It is zero for any other pod.
+func wakeHold(ctx detection.Context, pod inventory.Entity) time.Duration {
+	remaining := kube.PodWakeRemaining(ctx.Model, pod, ctx.Now)
+	if remaining <= 0 {
+		return 0
+	}
+	created, _ := pod.Attribute(kube.AttrCreated)
+	return remaining + max(0, ctx.Now.Sub(created.Value.AsTime()))
+}
+
+// podNodeBootRemaining is how much longer the pod is expected to start
+// slowly: while the pool of its node boots, and while the cluster wakes
+// up if the pod was created by the wake-up. A pod no node holds yet
+// waits for capacity: it is expected while any pool boots.
 func podNodeBootRemaining(
 	ctx detection.Context, pod inventory.Entity,
 ) time.Duration {
+	wake := kube.PodWakeRemaining(ctx.Model, pod, ctx.Now)
 	nodes := ctx.Model.Related(pod.ID, inventory.RunsOn, inventory.Outgoing)
 	if len(nodes) == 0 {
-		return kube.ClusterBootRemaining(ctx.Model, ctx.Now)
+		return max(wake, kube.ClusterBootRemaining(ctx.Model, ctx.Now))
 	}
-	var remaining time.Duration
+	remaining := wake
 	for _, node := range nodes {
 		remaining = max(remaining,
 			kube.NodeBootRemaining(ctx.Model, node, ctx.Now))

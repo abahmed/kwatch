@@ -68,6 +68,13 @@ func (Pod) Kinds() []inventory.Kind { return []inventory.Kind{kube.KindPod} }
 func (d Pod) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
+	return append(append(d.detect(ctx, e), preemptedFindings(ctx, e)...),
+		graceKillFindings(ctx, e)...)
+}
+
+func (d Pod) detect(
+	ctx detection.Context, e inventory.Entity,
+) []detection.Finding {
 	if flag(e, kube.AttrDeleting) {
 		return append(d.terminating(ctx, e), preemptionFindings(ctx, e)...)
 	}
@@ -102,6 +109,7 @@ func (d Pod) terminating(
 		Since: requested,
 		Summary: "Pod has been terminating for " +
 			format.Duration(ctx.Now.Sub(requested)),
+		Evidence: finalizerEvidence(e),
 	}}
 }
 

@@ -309,3 +309,19 @@ func TestPodNotReadyExceededThreshold(t *testing.T) {
 	assert.Equal(t, reasons.ContainersNotReady, findings[0].Reason)
 	assert.Equal(t, detection.Warning, findings[0].Severity)
 }
+
+func TestStuckTerminatingPodNamesItsFinalizers(t *testing.T) {
+	m := newTestModel()
+	id := newID(kube.KindPod, "shop", "api-1")
+	put(m, id, t0, map[string]inventory.Value{
+		kube.AttrPhase:      inventory.Text("Running"),
+		kube.AttrDeleting:   inventory.Bool(true),
+		kube.AttrFinalizers: inventory.Text("example.com/hold"),
+	})
+
+	got := evaluate(NewPod(PodThresholds{}), m, t0.Add(time.Hour), id,
+		nil).Findings
+
+	require.Len(t, got, 1)
+	assert.Equal(t, "example.com/hold", evidenceValues(got[0])["finalizers"])
+}

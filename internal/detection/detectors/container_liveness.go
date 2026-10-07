@@ -62,7 +62,8 @@ func livenessKilledFinding(
 	}
 	lastRestart := timestamp(e, kube.AttrLastFinished)
 	ctx.RecheckAfter(lastRestart.Add(restartRecency).Sub(ctx.Now))
-	return []detection.Finding{livenessFinding(e, note)}
+	return []detection.Finding{
+		withStartFacts(ctx, e, livenessFinding(e, note))}
 }
 
 // livenessKilledWaiting turns the CrashLoopBackOff finding of a
@@ -80,7 +81,7 @@ func livenessKilledWaiting(
 		return found
 	}
 	since := found[0].Since
-	killed := livenessFinding(e, note)
+	killed := withStartFacts(ctx, e, livenessFinding(e, note))
 	killed.Since = since
 	return []detection.Finding{killed}
 }
@@ -93,7 +94,8 @@ func livenessFinding(
 		Since: timestamp(e, kube.AttrLastFinished),
 		Summary: containerRole(e) + " keeps being killed by its " +
 			"liveness probe",
-		Evidence: append(containerEvidence(e), probeEvidence(note)...),
+		Evidence: append(append(containerEvidence(e),
+			probeEvidence(note)...), throttleEvidence(e)...),
 	}
 }
 

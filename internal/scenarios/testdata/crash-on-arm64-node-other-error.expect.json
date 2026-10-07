@@ -1,0 +1,11 @@
+{
+  "name": "crash-on-arm64-node-other-error",
+  "description": "A replica on an arm64 node crashes with an unrelated error; the architecture is not named.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

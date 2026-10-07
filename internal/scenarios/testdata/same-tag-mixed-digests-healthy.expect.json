@@ -1,0 +1,6 @@
+{
+  "name": "same-tag-mixed-digests-healthy",
+  "description": "Replicas of one mutable tag run two digests and all are healthy: a configuration risk, not a page.",
+  "maxMessages": 0,
+  "quiet": true
+}

@@ -8,7 +8,9 @@ decision is `Announce`. The tier decides the audience: page, notify or
 digest (`policy.go`). A page that follows another page of the same failure
 within `RepageWindow` is held at notify, so one flapping outage does not
 page again and again (`isPage` and `reachedPaging` in `flags.go` say what
-counts as a page).
+counts as a page). After the announcement the tier only falls when
+nothing but digest findings is left, never from a page (see
+[Updates](./updates.md)).
 
 ## Who is paged: user impact
 

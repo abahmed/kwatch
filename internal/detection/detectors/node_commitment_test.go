@@ -37,6 +37,14 @@ func commitmentModel(allocatable float64, limits ...float64) (
 	return m, node
 }
 
+// underMemoryPressure makes the kubelet report MemoryPressure on node:
+// the present failure that gives the commitment something to explain.
+func underMemoryPressure(m *inventory.Model, node inventory.EntityID) {
+	put(m, node, t0, conditionAttrs(map[string]inventory.Value{
+		kube.AttrMemoryAllocatable: inventory.Number(1000)},
+		"MemoryPressure", "True", "KubeletHasInsufficientMemory", t0))
+}
+
 // sustainedEval evaluates the node at t0 and again overcommitSustain
 // later, which is when a steady overcommit is raised.
 func sustainedEval(
@@ -49,6 +57,7 @@ func sustainedEval(
 
 func TestNodeCommitmentReportsMemoryLimitsFarAboveAllocatable(t *testing.T) {
 	m, node := commitmentModel(1000, 800, 800, 0)
+	underMemoryPressure(m, node)
 
 	got := sustainedEval(NodeCommitment{}, m, node).Findings
 
@@ -56,14 +65,35 @@ func TestNodeCommitmentReportsMemoryLimitsFarAboveAllocatable(t *testing.T) {
 	assert.Equal(t, "NodeMemoryOvercommitted", got[0].Reason)
 	assert.Equal(t, detection.Warning, got[0].Severity)
 	assert.Contains(t, got[0].Summary, "160% of its memory")
-	assert.Contains(t, got[0].Summary, "is overcommitted on memory: its pods")
+	assert.Contains(t, got[0].Summary, "is short on memory and its pods")
 	assert.Contains(t, got[0].Evidence, detection.Evidence{
 		Label: "containers without a memory limit", Value: "1"})
+}
+
+// Limits above the node's memory are normal for burstable pods: with no
+// pressure, eviction or kernel OOM on the node, nothing is reported, so
+// no incident opens for a risk.
+func TestNodeCommitmentStaysQuietWhileNothingIsShort(t *testing.T) {
+	m, node := commitmentModel(1000, 800, 800, 0)
+
+	assert.Empty(t, sustainedEval(NodeCommitment{}, m, node).Findings)
+}
+
+// The kernel's own OOM event on the node is a present failure too.
+func TestNodeCommitmentFollowsAKernelOOMOnTheNode(t *testing.T) {
+	m, node := commitmentModel(1000, 800, 800)
+	registry := detection.NewRegistry(nil, NodeCommitment{})
+	registry.Evaluate(m, t0, node)
+	at := t0.Add(overcommitSustain)
+	noteEntity(m, node, "SystemOOM", "System OOM encountered", 1, at)
+
+	assert.Len(t, registry.Evaluate(m, at, node).Findings, 1)
 }
 
 // A share that crosses the limit for one evaluation is not raised.
 func TestNodeCommitmentWaitsForTheShareToHold(t *testing.T) {
 	m, node := commitmentModel(1000, 800, 800)
+	underMemoryPressure(m, node)
 	registry := detection.NewRegistry(nil, NodeCommitment{})
 
 	first := registry.Evaluate(m, t0, node)
@@ -76,6 +106,7 @@ func TestNodeCommitmentWaitsForTheShareToHold(t *testing.T) {
 // A raised finding holds while the share hovers just under the limit.
 func TestNodeCommitmentHoldsWhileTheShareHovers(t *testing.T) {
 	m, node := commitmentModel(1000, 800, 800)
+	underMemoryPressure(m, node)
 	registry := detection.NewRegistry(nil, NodeCommitment{})
 	registry.Evaluate(m, t0, node)
 	at := t0.Add(overcommitSustain)
@@ -128,31 +159,4 @@ func TestNodeCommitmentIgnoresInitContainers(t *testing.T) {
 	got := NodeCommitment{}.Detect(testDetectorContext(m, t0), entityOf(m, node))
 
 	assert.Empty(t, got)
-}
-
-// One condition, one finding: at 2x memory only the memory finding
-// speaks, and from 4x on only the critical resource finding does.
-func TestMemoryOvercommitIsReportedOnce(t *testing.T) {
-	for _, tt := range []struct {
-		limit float64
-		want  []string
-	}{
-		{800, nil},
-		{1600, []string{"NodeMemoryOvercommitted"}},
-		{2000, []string{"NodeMemoryOvercommitted"}},
-		{4000, []string{"NodeResourceCritical"}},
-	} {
-		m, node := commitmentModel(1000, tt.limit)
-		put(m, node, t0, map[string]inventory.Value{
-			kube.AttrMemoryAllocatable: inventory.Number(1000),
-			kube.AttrCPUAllocatable:    inventory.Number(1000)})
-		var got []string
-		for _, d := range []detection.Detector{NodeCommitment{},
-			NodeHealth{}} {
-			for _, f := range sustainedEval(d, m, node).Findings {
-				got = append(got, f.Reason)
-			}
-		}
-		assert.Equal(t, tt.want, got, "limit %v", tt.limit)
-	}
 }

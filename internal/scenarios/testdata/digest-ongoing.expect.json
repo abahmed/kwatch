@@ -1,0 +1,8 @@
+{
+  "name": "digest-ongoing",
+  "description": "A Service gets the same FailedDeployModel warning every sixteen minutes for eight hours.",
+  "root": "service/kube-system/ingress-internal",
+  "tier": "digest",
+  "maxMessages": 3,
+  "tail": "1h0m0s"
+}

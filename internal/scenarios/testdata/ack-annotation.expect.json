@@ -1,0 +1,11 @@
+{
+  "name": "ack-annotation",
+  "description": "A crash-looping Deployment is acknowledged with an annotation; it stays quiet for eight days, and the removal of the annotation is told.",
+  "root": "deployment/shop/payments",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "1h0m0s"
+}

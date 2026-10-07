@@ -184,3 +184,26 @@ func TestRepeatCountAndMemberEventsArePersisted(t *testing.T) {
 	}
 	assert.Positive(t, about, "member events keep their entity")
 }
+
+// A reopened incident that recovers for good before its "failing again"
+// update was ever sent never told the thread it was back: the thread
+// still ends on the first resolve. It closes again without a second
+// resolve message, and stays reopenable.
+func TestReopenThatRecoversUnheardResolvesNoSecondTime(t *testing.T) {
+	r, _ := pagedRig(t)
+	id := r.only().ID
+	resolved := resolvePage(t, r, 5*time.Minute)
+	raiseAt := resolved + 10*time.Minute
+	r.raise(at(raiseAt), nodeDown())
+	require.Empty(t, r.tick(at(raiseAt+time.Second)))
+
+	r.clear(at(raiseAt+5*time.Second), nodeDown())
+	got := tickEvery(r, raiseAt+5*time.Second, raiseAt+time.Hour)
+
+	assert.Empty(t, got, "the thread already says resolved")
+	p := r.only()
+	assert.Equal(t, id, p.ID)
+	assert.Equal(t, Resolved, p.State)
+	assert.False(t, p.Pending.ReopenOwed())
+	assert.True(t, p.CanReopen(), "a later failure still reopens it")
+}

@@ -55,6 +55,8 @@ func (ServiceSchema) Describe(obj any) (Description, bool) {
 		AttrLoadBalancer: inventory.Bool(loadBalancerAssigned(svc)),
 		AttrTargetPorts:  inventory.Text(targetPorts(svc)),
 	}
+	setPortMatchAttributes(attrs, svc)
+	setLoadBalancerClass(attrs, svc)
 	if svc.Annotations[skipProbeAnnotation] == "true" {
 		attrs[AttrSkipProbe] = inventory.Bool(true)
 	}
@@ -172,6 +174,7 @@ func (IngressSchema) Describe(obj any) (Description, bool) {
 		AttrLoadBalancer: inventory.Bool(
 			len(ing.Status.LoadBalancer.Ingress) > 0),
 	}
+	setPortMatchAttributes(attrs, ing)
 	if name := ing.Spec.IngressClassName; name != nil && *name != "" {
 		attrs[AttrIngressClass] = inventory.Text(*name)
 		// A reference, so the Ingress is judged again when its class

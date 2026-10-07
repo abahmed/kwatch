@@ -263,66 +263,15 @@ func overcommittedNode(cpuLimit, memLimit float64,
 	return m, node
 }
 
-func TestNodeHealthOvercommit(t *testing.T) {
-	tests := []struct {
-		name     string
-		cpu, mem float64
-		reason   string
-		severity detection.Severity
-		fires    bool
-	}{
-		{"quiet under 2x", 1999, 100, "", 0, false},
-		{"high at 2x", 2000, 100, reasons.NodeResourceHigh,
-			detection.Warning, true},
-		{"critical at 4x memory", 100, 4000,
-			reasons.NodeResourceCritical, detection.Critical, true},
+// Limits above the node's capacity are normal for burstable pods and
+// nothing is broken by them: NodeHealth stays quiet however far they go.
+func TestNodeHealthIgnoresLimitsAboveCapacity(t *testing.T) {
+	for _, tt := range []struct{ cpu, mem float64 }{
+		{2000, 100}, {100, 4000}, {9000, 9000}} {
+		m, node := overcommittedNode(tt.cpu, tt.mem)
+		got := evaluate(NodeHealth{}, m, t0, node, nil).Findings
+		assert.Empty(t, got, "cpu %v mem %v", tt.cpu, tt.mem)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m, node := overcommittedNode(tt.cpu, tt.mem)
-			got := evaluate(NodeHealth{}, m, t0, node, nil).Findings
-			if !tt.fires {
-				assert.Empty(t, got)
-				return
-			}
-			require.Len(t, got, 1)
-			assert.Equal(t, tt.reason, got[0].Reason)
-			assert.Equal(t, tt.severity, got[0].Severity)
-			assert.NotEmpty(t, got[0].Summary)
-		})
-	}
-}
-
-func TestNodeHealthOvercommitNeedsAllocatable(t *testing.T) {
-	m := newTestModel()
-	id := newID(kube.KindNode, "", "n1")
-	put(m, id, t0, nil)
-	assert.Empty(t, evaluate(NodeHealth{}, m, t0, id, nil).Findings)
-}
-
-// TestNodeHealthOvercommitCountsOnlyRunningAppLimits: finished pods and
-// init containers hold no limits against the node.
-func TestNodeHealthOvercommitCountsOnlyRunningAppLimits(t *testing.T) {
-	m, node := overcommittedNode(100, 100)
-	done := newID(kube.KindPod, "default", "job")
-	put(m, done, t0, map[string]inventory.Value{
-		kube.AttrPhase: inventory.Text("Succeeded"),
-	})
-	link(m, done, inventory.RunsOn, node)
-	big := newID(kube.KindContainer, "default", "job/main")
-	put(m, big, t0, map[string]inventory.Value{
-		kube.AttrCPULimit: inventory.Number(9000),
-	})
-	link(m, big, inventory.PartOf, done)
-	pod := newID(kube.KindPod, "default", "web")
-	setup := newID(kube.KindContainer, "default", "web/setup")
-	put(m, setup, t0, map[string]inventory.Value{
-		kube.AttrInit:     inventory.Bool(true),
-		kube.AttrCPULimit: inventory.Number(9000),
-	})
-	link(m, setup, inventory.PartOf, pod)
-
-	assert.Empty(t, evaluate(NodeHealth{}, m, t0, node, nil).Findings)
 }
 
 // TestPodStorageNeedsEveryContainerLimited: a container without an

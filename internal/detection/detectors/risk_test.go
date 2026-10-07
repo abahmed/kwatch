@@ -46,18 +46,16 @@ func riskReasons(findings []detection.Finding) []string {
 }
 
 func TestRiskReportsEveryRiskOnce(t *testing.T) {
-	m, deploy := riskWorkload(2, []string{"n1", "n1"},
+	m, deploy := riskWorkload(1, []string{"n1"},
 		map[string]inventory.Value{
-			kube.AttrImage:      inventory.Text("registry/api:latest"),
-			kube.AttrPrivileged: inventory.Bool(true),
+			kube.AttrImage: inventory.Text("registry/api:latest"),
 		})
 
 	got := Risk{}.Detect(testDetectorContext(m, t0), entityOf(m, deploy))
 
 	assert.ElementsMatch(t, []string{
 		reasons.RiskNoReadinessProbe, reasons.RiskNoMemoryLimit,
-		reasons.RiskMutableImageTag, reasons.RiskSingleNode,
-		reasons.RiskPrivileged,
+		reasons.RiskMutableImageTag, reasons.RiskSingleReplica,
 	}, riskReasons(got))
 	for _, f := range got {
 		assert.True(t, f.Advisory, f.Reason)

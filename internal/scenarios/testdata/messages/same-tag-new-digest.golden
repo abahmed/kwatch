@@ -1,0 +1,10 @@
+11:09:15 settled
+🟠 api in shop (prod-eu-1) is failing because its pods run different builds of the same image tag. To read the output of the last crash, run kubectl logs api-d1e1e5ea-a -c app -n shop --previous
+Checked: same tag registry.example.com/api:latest, but the failing pods run sha256:9f1c0a2b44d1 (seen 11:00), the healthy ones sha256:aaaa1111bbbb.
+🟠 api in shop (prod-eu-1) is failing because its pods run different builds of the same image tag.
+| 🟠 **api** in **shop** (**prod-eu-1**) is failing because its pods run different builds of the same image tag.
+| To read the output of the last crash, run
+| ```
+| kubectl logs api-d1e1e5ea-a -c app -n shop --previous
+| ```
+| *Checked: same tag registry.example.com/api:latest, but the failing pods run sha256:9f1c0a2b44d1 (seen 11:00), the healthy ones sha256:aaaa1111bbbb.*

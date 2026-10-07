@@ -1,0 +1,12 @@
+{
+  "name": "rollout-hard-kills",
+  "description": "Three api pods ignore SIGTERM during a rollout and are killed when their grace period ends; the new pods crash without a word.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

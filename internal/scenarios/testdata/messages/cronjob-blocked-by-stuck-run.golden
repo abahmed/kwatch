@@ -1,0 +1,8 @@
+10:01:15 settled
+🟠 Cron job nightly-report in reports (prod-eu-1) is failing: skipped 6 scheduled runs: job nightly-report-run from 2026-09-29 07:00 UTC is still running (pod stuck in ImagePullBackOff) and concurrencyPolicy is Forbid. To see why the container cannot start, run kubectl describe pod nightly-report-run-x -n reports
+🟠 Cron job nightly-report in reports (prod-eu-1) is failing: skipped 6 scheduled runs: job nightly-report-run from 2026-09-29 07:00 UTC is still running (pod stuck in ImagePullBackOff) and concurrencyPolicy is Forbid.
+| 🟠 Cron job **nightly-report** in **reports** (**prod-eu-1**) is failing: skipped 6 scheduled runs: job nightly-report-run from 2026-09-29 07:00 UTC is still running (pod stuck in ImagePullBackOff) and concurrencyPolicy is Forbid.
+| To see why the container cannot start, run
+| ```
+| kubectl describe pod nightly-report-run-x -n reports
+| ```

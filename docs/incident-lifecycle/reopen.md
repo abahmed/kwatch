@@ -25,7 +25,10 @@ resolve line it may still hold for it). It keeps the page's reminders. One `fail
 again` update is sent after `ReviseSettle`, so the members that return are in
 the same message. If the reopened incident recovers before that update is
 due, the update is sent when the failure returns and the incident is `Open`
-again (never while `Recovering`). After the window, or for another mode, the failure is a new
+again (never while `Recovering`). If it recovers for good before that
+update was ever sent, it closes without a second resolve message
+(`closeUnheardReopen`): the thread already ends on the first resolve.
+After the window, or for another mode, the failure is a new
 incident that remembers the old one. A reopen also forgets the fix attempt
 of the earlier occurrence (`Attempt`, the unsent attempt and its late flag).
 

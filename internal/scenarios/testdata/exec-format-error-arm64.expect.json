@@ -1,0 +1,11 @@
+{
+  "name": "exec-format-error-arm64",
+  "description": "A replica on an arm64 node crashes with \"exec format error\" while its siblings on amd64 nodes run fine.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

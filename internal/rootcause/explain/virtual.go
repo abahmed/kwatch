@@ -40,7 +40,12 @@ func (v *view) virtualHops(id inventory.EntityID) []hop {
 		out = append(out, v.helperHops(id)...)
 		out = append(out, v.calledHops(id)...)
 		out = append(out, v.serviceCallHops(id)...)
+		out = append(out, v.missingServiceHops(id)...)
 		out = append(out, v.agentHops(id)...)
+		out = append(out, v.preemptionHops(id)...)
+	}
+	if id.Kind == kube.KindContainer {
+		out = append(out, v.initWaitHops(id)...)
 	}
 	if v.hasMode(id, createModes) {
 		out = append(out, v.admitHops(id)...)

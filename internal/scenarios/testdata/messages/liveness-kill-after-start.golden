@@ -1,0 +1,9 @@
+10:02:15 settled
+🟠 api in shop (prod-eu-1) keeps being killed by its liveness probe. Its node is healthy and unchanged, so nothing outside it explains this. To read the output of the last crash, run kubectl logs api-8ab26137-a -c app -n shop --previous
+🟠 api in shop (prod-eu-1) keeps being killed by its liveness probe.
+| 🟠 **api** in **shop** (**prod-eu-1**) keeps being killed by its liveness probe.
+| Its node is healthy and unchanged, so nothing outside it explains this.
+| To read the output of the last crash, run
+| ```
+| kubectl logs api-8ab26137-a -c app -n shop --previous
+| ```

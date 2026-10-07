@@ -43,8 +43,11 @@ type fitPeer struct {
 // fitClaim is a volume claim of the pod and the node terms it limits
 // the pod to: empty when the claim does not limit placement.
 type fitClaim struct {
-	name  string
-	terms [][]kube.Requirement
+	name string
+	// volume is the bound PersistentVolume's name; empty for a claim
+	// that is not bound yet.
+	volume string
+	terms  [][]kube.Requirement
 }
 
 // fitCase is everything known about the pending pod's placement.
@@ -260,28 +263,43 @@ func podClaimTerms(
 		if id.Kind != kube.KindPVC {
 			continue
 		}
-		if terms := claimTerms(model, id); len(terms) > 0 {
-			out = append(out, fitClaim{name: id.Name, terms: terms})
+		if terms, volume := claimTerms(model, id); len(terms) > 0 {
+			out = append(out, fitClaim{name: id.Name, volume: volume,
+				terms: terms})
 		}
 	}
 	return out
 }
 
+// claimTerms returns the node terms of a claim and, when they come from
+// its bound volume, the volume's name.
 func claimTerms(
 	model inventory.Reader, claim inventory.EntityID,
-) [][]kube.Requirement {
-	for _, kind := range []inventory.Kind{kube.KindPV,
-		kube.KindStorageClass} {
-		for _, id := range model.Related(claim, inventory.References,
-			inventory.Outgoing) {
-			if e, ok := model.Entity(id); ok && id.Kind == kind {
-				if terms := kube.ParseNodeTerms(e); len(terms) > 0 {
-					return terms
-				}
+) ([][]kube.Requirement, string) {
+	if terms, id := referencedTerms(model, claim, kube.KindPV); terms != nil {
+		return terms, id.Name
+	}
+	terms, _ := referencedTerms(model, claim, kube.KindStorageClass)
+	return terms, ""
+}
+
+// referencedTerms reads the node terms of the first object of kind that
+// claim references and that has any.
+func referencedTerms(
+	model inventory.Reader, claim inventory.EntityID, kind inventory.Kind,
+) ([][]kube.Requirement, inventory.EntityID) {
+	for _, id := range model.Related(claim, inventory.References,
+		inventory.Outgoing) {
+		if id.Kind != kind {
+			continue
+		}
+		if e, ok := model.Entity(id); ok {
+			if terms := kube.ParseNodeTerms(e); len(terms) > 0 {
+				return terms, id
 			}
 		}
 	}
-	return nil
+	return nil, inventory.EntityID{}
 }
 
 // requirementText writes requirements as "k=v" where they name one

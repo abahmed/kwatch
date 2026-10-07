@@ -21,9 +21,11 @@ var digestReasons = map[string]bool{
 	reasons.HPAMaxedOut:             true,
 	reasons.TLSCertExpiringSoon:     true,
 	reasons.PodStuckTerminating:     true,
-	reasons.ContainerCPUHigh:        true,
-	reasons.ContainerCPUThrottled:   true,
-	reasons.NodeResourceHigh:        true,
+	// A hard kill at the end of the grace period is a shutdown that
+	// did not finish; the workload failing after it is the incident.
+	reasons.PodKilledAtGrace:      true,
+	reasons.ContainerCPUHigh:      true,
+	reasons.ContainerCPUThrottled: true,
 	// A node whose workloads stall on CPU, memory or disk is under
 	// strain, not failing: when a pod on it fails, that pod is the news.
 	reasons.NodePSIHigh: true,

@@ -87,6 +87,7 @@ func newServeMux(h *HealthServer) *http.ServeMux {
 	mux.HandleFunc("/health", h.healthHandler)
 	mux.HandleFunc("/readyz", h.readyzHandler)
 	mux.HandleFunc("/availabilityz", h.availabilityzHandler)
+	mux.HandleFunc("/status", h.statusHandler)
 	mux.Handle("/metrics", metrics.DefaultRegistry().Handler())
 	return mux
 }

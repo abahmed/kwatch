@@ -1,0 +1,10 @@
+10:02:50 settled
+🟠 cert-controller in external-secrets (prod-eu-1) keeps failing its readiness probe. Its node is healthy and unchanged, so nothing outside it explains this. Service cert-controller can't serve traffic. To read the output of the last crash, run kubectl logs cert-controller-0d9addc3-a -c app -n external-secrets --previous
+🟠 cert-controller in external-secrets (prod-eu-1) keeps failing its readiness probe.
+| 🟠 **cert-controller** in **external-secrets** (**prod-eu-1**) keeps failing its readiness probe.
+| Its node is healthy and unchanged, so nothing outside it explains this.
+| Service **cert-controller** can't serve traffic.
+| To read the output of the last crash, run
+| ```
+| kubectl logs cert-controller-0d9addc3-a -c app -n external-secrets --previous
+| ```

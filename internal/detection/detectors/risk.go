@@ -12,9 +12,9 @@ import (
 
 // Risk reports how a workload is set up to fail worse than it needs
 // to: no readiness probe, no memory limit, an image tag that can
-// change, a single replica, every replica on one node, a privileged
-// container. Each is an advisory finding: reported in the digest once,
-// and quoted as a consequence when a failure shows what it cost.
+// change, a single replica. Each is an advisory finding. Nobody is told
+// about it on its own: it is quoted as a consequence only when a
+// failure shows what it cost.
 type Risk struct{}
 
 // Name implements detection.Detector.
@@ -65,16 +65,6 @@ func (Risk) Detect(
 		add(reasons.RiskSingleReplica, "It runs a single replica, so "+
 			"any restart is downtime")
 	}
-	if replicas >= 2 && len(pods) >= 2 && len(shape.nodes) == 1 {
-		for node := range shape.nodes {
-			add(reasons.RiskSingleNode, "All of its replicas run on node "+
-				node+", so that node is a single point of failure")
-		}
-	}
-	if shape.privileged != "" {
-		add(reasons.RiskPrivileged, "Its container "+shape.privileged+
-			" runs privileged")
-	}
 	return out
 }
 
@@ -90,23 +80,14 @@ type workloadShape struct {
 	withoutMemoryLimit map[string]bool
 	// mutableImage is the first image whose tag can change, or "".
 	mutableImage string
-	// privileged is the first privileged container's name, or "".
-	privileged string
-	// nodes are the nodes the pods run on.
-	nodes map[string]bool
 }
 
-// readWorkloadShape reads the containers and nodes of pods once.
+// readWorkloadShape reads the containers of pods once.
 func readWorkloadShape(
 	model inventory.Reader, pods []inventory.EntityID,
 ) workloadShape {
-	shape := workloadShape{nodes: map[string]bool{},
-		withoutMemoryLimit: map[string]bool{}}
+	shape := workloadShape{withoutMemoryLimit: map[string]bool{}}
 	for _, pod := range pods {
-		for _, node := range model.Related(pod, inventory.RunsOn,
-			inventory.Outgoing) {
-			shape.nodes[node.Name] = true
-		}
 		for _, id := range model.Related(pod, inventory.PartOf,
 			inventory.Incoming) {
 			container, ok := model.Entity(id)
@@ -135,10 +116,6 @@ func (s *workloadShape) read(container inventory.Entity) {
 	if image := text(container, kube.AttrImage); s.mutableImage == "" &&
 		mutableTag(image) {
 		s.mutableImage = image
-	}
-	if flag(container, kube.AttrPrivileged) && s.privileged == "" {
-		_, name := splitContainerName(container.ID.Name)
-		s.privileged = name
 	}
 }
 

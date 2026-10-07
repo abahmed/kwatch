@@ -1,0 +1,10 @@
+{
+  "name": "service-target-port-name-missing",
+  "description": "A Service is edited to target a named port that none of its pods declare.",
+  "root": "service/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/api"
+  ]
+}

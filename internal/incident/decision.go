@@ -1,6 +1,10 @@
 package incident
 
-import "github.com/abahmed/kwatch/internal/inventory"
+import (
+	"time"
+
+	"github.com/abahmed/kwatch/internal/inventory"
+)
 
 // Action is what a decision asks delivery to do.
 type Action uint8
@@ -30,6 +34,18 @@ type Facts struct {
 	// the entities' kind.name attribute so a message names a custom
 	// resource the way its CRD does.
 	KindNames map[inventory.Kind]string
+	// Wake is the cluster wake-up the problem began in or right after,
+	// set on an announcement; nil when there was none.
+	Wake *WakeContext
+}
+
+// WakeContext is a cluster wake-up, as a message mentions it: the
+// workloads that started from zero replicas, the first and latest start,
+// and whether it is still going on.
+type WakeContext struct {
+	Started  int
+	From, To time.Time
+	Ongoing  bool
 }
 
 // Decision is one message-worthy transition.
@@ -54,4 +70,8 @@ type Decision struct {
 	// another incident took over. Chat hears it as a reply in the old
 	// thread, since the restart left that thread open.
 	Handover bool
+	// Thread marks a decision of a digest-tier incident that fell from a
+	// louder tier after people were told in its own thread. The cause
+	// update and the resolve belong to that thread, not to a digest.
+	Thread bool
 }

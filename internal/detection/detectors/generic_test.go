@@ -184,3 +184,41 @@ func TestGenericAbsentEntityIsQuiet(t *testing.T) {
 	got := evaluate(Generic{}, m, t0, newID("widget", "a", "gone"), nil)
 	assert.Empty(t, got.Findings)
 }
+
+// A claim has its own detector, which does not look at deletion: the
+// generic rule still names what holds it.
+func TestGenericReportsClaimHeldByFinalizer(t *testing.T) {
+	m := newTestModel()
+	id := newID(kube.KindPVC, "shop", "data")
+	put(m, id, t0, map[string]inventory.Value{
+		kube.AttrPhase:         inventory.Text("Bound"),
+		kube.AttrDeleting:      inventory.Bool(true),
+		kube.AttrDeletingSince: inventory.Time(t0),
+		kube.AttrFinalizers:    inventory.Text("kubernetes.io/pvc-protection"),
+	})
+	registry := detection.NewRegistry(nil, Generic{}, Claim{})
+
+	got := registry.Evaluate(m, t0.Add(time.Hour), id).Findings
+
+	require.Len(t, got, 1)
+	assert.Equal(t, reasons.StuckDeleting, got[0].Reason)
+	assert.Contains(t, got[0].Summary, "kubernetes.io/pvc-protection")
+}
+
+func TestGenericNamesThePodsHoldingAClaim(t *testing.T) {
+	m := newTestModel()
+	id := newID(kube.KindPVC, "shop", "data-db-0")
+	put(m, id, t0, map[string]inventory.Value{
+		kube.AttrDeleting:      inventory.Bool(true),
+		kube.AttrDeletingSince: inventory.Time(t0),
+		kube.AttrFinalizers:    inventory.Text("kubernetes.io/pvc-protection"),
+	})
+	pod := newID(kube.KindPod, "shop", "db-0")
+	put(m, pod, t0, nil)
+	link(m, pod, inventory.Mounts, id)
+
+	got := evaluate(Generic{}, m, t0.Add(time.Hour), id, nil).Findings
+
+	require.Len(t, got, 1)
+	assert.Contains(t, got[0].Summary, "(still used by pod db-0)")
+}

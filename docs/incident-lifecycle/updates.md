@@ -42,6 +42,21 @@ step that decides ends the tick, so one tick sends at most one update:
    until the material update goes out and the digest catches up (it is
    recorded meanwhile, see step 3).
 
+**Falling to the digest** (`reassess.go`, called from `advance`). An
+announced incident keeps the loudest tier it reached, so crash-loop members
+that come and go never flip it. One change is not churn: every finding the
+tier stood on is gone and only digest findings are left, as when a restart
+brings an old `FailedGetScale` back as the clearer `HPATargetMissing`. A
+`Notify` incident then falls to `Digest` (after the restore grace, and not
+within `MaterialGap` of its last update) and owes its thread one `cause
+revised` update, sent through step 2 above. A page never falls: it is not
+un-paged and nothing new is paged. The update and the resolve of such an
+incident carry `Decision.Thread` and go to the thread people were told in
+(`threadNews` in `digest.go`); reminders and other updates ride in the
+digest, which lists the still-open incident as an ongoing item
+(`announce/ongoing.go`). A real failure that returns raises the tier again,
+told by the usual material change. A user severity override keeps its tier.
+
 A reopened incident's `failing again` update comes before all of these. If
 the reopened incident recovered before the update was due, it is sent when
 the failure returns and the incident is `Open` again, not before.

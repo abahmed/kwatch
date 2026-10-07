@@ -1,0 +1,55 @@
+10:02:50 settled
+🟠 cert-controller in external-secrets (prod-eu-1) keeps failing its readiness probe. Its node is healthy and unchanged, so nothing outside it explains this. To read the output of the last crash, run kubectl logs cert-controller-0d9addc3-a -c app -n external-secrets --previous
+🟠 cert-controller in external-secrets (prod-eu-1) keeps failing its readiness probe.
+| 🟠 **cert-controller** in **external-secrets** (**prod-eu-1**) keeps failing its readiness probe.
+| Its node is healthy and unchanged, so nothing outside it explains this.
+| To read the output of the last crash, run
+| ```
+| kubectl logs cert-controller-0d9addc3-a -c app -n external-secrets --previous
+| ```
+10:11:00 material change
+🟠 cert-controller in external-secrets (prod-eu-1) now has pods that run without restarting but are not ready. It is spreading to pod cert-controller-0d9addc3-a: it has not been ready for three minutes.
+🟠 cert-controller in external-secrets (prod-eu-1) now has pods that run without restarting but are not ready.
+| 🟠 **cert-controller** in **external-secrets** (**prod-eu-1**) now has pods that run without restarting but are not ready.
+| It is spreading to pod cert-controller-0d9addc3-a: it has not been ready for three minutes.
+10:16:00 healthy for 3m0s
+✅ cert-controller in external-secrets (prod-eu-1) is healthy again. It was failing for 14 minutes.
+✅ cert-controller in external-secrets (prod-eu-1) is healthy again.
+| ✅ **cert-controller** in **external-secrets** (**prod-eu-1**) is healthy again.
+| It was failing for 14 minutes.
+09:14:50 settled
+🟠 cert-controller in external-secrets (prod-eu-1) keeps failing its readiness probe. Its node is healthy and unchanged, so nothing outside it explains this. This is the second time this week. Last time it recovered on its own. To read the output of the last crash, run kubectl logs cert-controller-0d9addc3-a -c app -n external-secrets --previous
+🟠 cert-controller in external-secrets (prod-eu-1) keeps failing its readiness probe.
+| 🟠 **cert-controller** in **external-secrets** (**prod-eu-1**) keeps failing its readiness probe.
+| Its node is healthy and unchanged, so nothing outside it explains this.
+| This is the second time this week. Last time it recovered on its own.
+| To read the output of the last crash, run
+| ```
+| kubectl logs cert-controller-0d9addc3-a -c app -n external-secrets --previous
+| ```
+09:23:00 material change
+🟠 cert-controller in external-secrets (prod-eu-1) now has pods that run without restarting but are not ready. It is spreading to pod cert-controller-0d9addc3-a: it has not been ready for three minutes.
+🟠 cert-controller in external-secrets (prod-eu-1) now has pods that run without restarting but are not ready.
+| 🟠 **cert-controller** in **external-secrets** (**prod-eu-1**) now has pods that run without restarting but are not ready.
+| It is spreading to pod cert-controller-0d9addc3-a: it has not been ready for three minutes.
+09:28:00 healthy for 3m0s
+✅ cert-controller in external-secrets (prod-eu-1) is healthy again. It was failing for 14 minutes.
+✅ cert-controller in external-secrets (prod-eu-1) is healthy again.
+| ✅ **cert-controller** in **external-secrets** (**prod-eu-1**) is healthy again.
+| It was failing for 14 minutes.
+08:36:00 material change
+🟠 cert-controller in external-secrets (prod-eu-1) has pods that run without restarting but are not ready. The cause is not clear yet. It runs a single replica, so this is downtime, not degradation. This is the third time this week. Last time it recovered on its own. To see the object's state and events, run kubectl describe deployment cert-controller -n external-secrets
+🟠 cert-controller in external-secrets (prod-eu-1) has pods that run without restarting but are not ready.
+| 🟠 **cert-controller** in **external-secrets** (**prod-eu-1**) has pods that run without restarting but are not ready.
+| The cause is not clear yet.
+| It runs a single replica, so this is downtime, not degradation.
+| This is the third time this week. Last time it recovered on its own.
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment cert-controller -n external-secrets
+| ```
+09:14:00 healthy for 3m0s
+✅ cert-controller in external-secrets (prod-eu-1) is healthy again. It was failing for 47 minutes.
+✅ cert-controller in external-secrets (prod-eu-1) is healthy again.
+| ✅ **cert-controller** in **external-secrets** (**prod-eu-1**) is healthy again.
+| It was failing for 47 minutes.

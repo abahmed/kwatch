@@ -1,0 +1,8 @@
+{
+  "name": "known-never-ready-past-boot",
+  "description": "A known not-ready start lasts 45 minutes with no ready replica and no restart.",
+  "root": "deployment/external-secrets/cert-controller",
+  "tier": "notify",
+  "maxMessages": 8,
+  "tail": "1h0m0s"
+}

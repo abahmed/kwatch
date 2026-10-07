@@ -25,7 +25,6 @@ const (
 	AttrCPUPSI         = "psi.cpu.some.avg60"
 	AttrIOPSI          = "psi.io.some.avg60"
 	AttrVolumeUsedPct  = "volume.used.pct"
-	AttrVolumeFillETA  = "volume.full.eta.seconds"
 	AttrCPUUsageMilli  = "cpu.usage.milli"
 	AttrMemoryWorking  = "memory.working.bytes"
 	AttrMemoryRSS      = "memory.rss.bytes"
@@ -90,7 +89,6 @@ type StatsConfig struct {
 // usage as observations.
 type StatsPoller struct {
 	cfg       StatsConfig
-	growth    *growthTracker
 	counters  *counterRates
 	reach     *reachLog
 	memory    *memoryLog
@@ -108,7 +106,7 @@ func NewStatsPoller(cfg StatsConfig) *StatsPoller {
 		cfg.Interval = time.Minute
 	}
 	return &StatsPoller{
-		cfg: cfg, growth: newGrowthTracker(), counters: newCounterRates(),
+		cfg: cfg, counters: newCounterRates(),
 		reach: newReachLog(), memory: newMemoryLog(),
 		published: newPublishLog(),
 	}
@@ -171,12 +169,11 @@ func (p *StatsPoller) poll(ctx context.Context) {
 	}
 }
 
-// forgetStale drops rate and growth samples for containers, nodes and
-// volumes that no poll has reported for several rounds.
+// forgetStale drops rate samples for containers and nodes that no poll
+// has reported for several rounds.
 func (p *StatsPoller) forgetStale(ctx context.Context, now time.Time) {
 	cutoff := now.Add(-max(sampleRounds*p.cfg.Interval, minSampleTTL))
 	p.counters.forgetBefore(cutoff)
-	p.growth.forgetBefore(cutoff)
 	p.reach.forgetBefore(now.Add(-KubeletFailureWindow))
 	p.clearMemory(ctx, now)
 	p.logSelfHealth(now)
@@ -248,10 +245,7 @@ func (p *StatsPoller) observations(
 		volumeAttrs := map[string]inventory.Value{
 			AttrVolumeUsedPct: inventory.Number(pct),
 		}
-		if eta, ok := p.growth.observe(claim, now, volume.UsedBytes,
-			volume.CapacityBytes); ok {
-			volumeAttrs[AttrVolumeFillETA] = inventory.Number(eta.Seconds())
-		}
+		setVolumeSize(volumeAttrs, volume)
 		observations = append(observations, inventory.Observation{
 			Kind: inventory.Observed, Source: StatsSource, At: now,
 			Entity: claim, Attributes: volumeAttrs,

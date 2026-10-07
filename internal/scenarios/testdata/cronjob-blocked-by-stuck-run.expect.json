@@ -1,0 +1,8 @@
+{
+  "name": "cronjob-blocked-by-stuck-run",
+  "description": "A Forbid CronJob skips its runs because the previous run's pod has been in ImagePullBackOff for three hours.",
+  "root": "cronjob/reports/nightly-report",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "10m0s"
+}

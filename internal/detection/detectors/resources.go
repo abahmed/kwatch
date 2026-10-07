@@ -21,8 +21,6 @@ const (
 	errorRateSustained = 3 * time.Minute
 	errorRateWarning   = 1.0
 	errorRateCritical  = 10.0
-	overcommitWarning  = 2.0
-	overcommitCritical = 4.0
 )
 
 // ContainerResources detects containers close to their memory or CPU
@@ -174,8 +172,9 @@ func runningContainers(
 	return out
 }
 
-// NodeHealth detects node network and container-runtime error rates and
-// nodes whose pods' limits far exceed what the node can provide.
+// NodeHealth detects node network and container-runtime error rates.
+// Pod limits above the node's capacity are not reported here: they are
+// normal for burstable pods (see NodeCommitment).
 type NodeHealth struct{}
 
 // Name implements detection.Detector.
@@ -216,60 +215,7 @@ func (NodeHealth) Detect(
 				r.what),
 		})
 	}
-	// Pods are still landing on a fresh node: its commitment settles.
-	if s, ok := overcommit(ctx, e); ok && !nodeIsYoung(ctx, e) {
-		out = append(out, s)
-	}
 	return out
-}
-
-// overcommit compares the pods' limits with what the node can provide.
-// Limits beyond capacity mean pods are OOM-killed or throttled under load.
-// Finished pods and regular init containers reserve nothing, so they are
-// left out; sidecars run beside the app containers and count.
-func overcommit(
-	ctx detection.Context, node inventory.Entity,
-) (detection.Finding, bool) {
-	cpuAlloc, _ := number(node, kube.AttrCPUAllocatable)
-	memAlloc, _ := number(node, kube.AttrMemoryAllocatable)
-	if cpuAlloc <= 0 || memAlloc <= 0 {
-		return detection.Finding{}, false
-	}
-	var cpu, mem float64
-	for _, pod := range ctx.Model.Related(node.ID, inventory.RunsOn,
-		inventory.Incoming) {
-		if p, ok := ctx.Model.Entity(pod); ok && podFinished(p) {
-			continue
-		}
-		for _, c := range runningContainers(ctx, pod) {
-			limit, _ := number(c, kube.AttrCPULimit)
-			cpu += limit
-			memory, _ := number(c, kube.AttrMemoryLimit)
-			mem += memory
-		}
-	}
-	ratioCPU, ratioMem := cpu/cpuAlloc, mem/memAlloc
-	// Memory between overcommitWarning and overcommitCritical belongs to
-	// NodeCommitment (NodeMemoryOvercommitted); counting it here too
-	// would announce one condition twice.
-	worst := ratioCPU
-	if ratioMem >= overcommitCritical {
-		worst = max(worst, ratioMem)
-	}
-	if worst < overcommitWarning {
-		return detection.Finding{}, false
-	}
-	reason, severity := reasons.NodeResourceHigh, detection.Warning
-	if worst >= overcommitCritical {
-		reason, severity = reasons.NodeResourceCritical,
-			detection.Critical
-	}
-	return detection.Finding{
-		Reason: reason, Severity: severity,
-		Since: valueSince(node, kube.AttrMemoryAllocatable),
-		Summary: fmt.Sprintf("Pod limits exceed node capacity: CPU %.1f×, "+
-			"memory %.1f×", ratioCPU, ratioMem),
-	}, true
 }
 
 func ratio(e inventory.Entity, usedAttr, limitAttr string) (float64, bool) {

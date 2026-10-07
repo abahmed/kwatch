@@ -11,6 +11,7 @@ import (
 // knownRouteKeys are the fields a provider route understands.
 var knownRouteKeys = map[string]bool{
 	"namespaces": true, "severities": true, "reasons": true,
+	"owners": true,
 }
 
 // validateAlertRoutes rejects route severities that no message ever has.
@@ -48,7 +49,7 @@ func routeWarnings(cfg *Config) []string {
 		for _, key := range keys {
 			warnings = append(warnings, fmt.Sprintf(
 				"alert.%s.routes[%d].%s is not a route field and is "+
-					"ignored (use namespaces, severities or reasons)",
+					"ignored (use namespaces, severities, reasons or owners)",
 				provider, i, key))
 		}
 	})

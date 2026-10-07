@@ -54,11 +54,18 @@ var causeWords = map[string]causeWording{
 	"external-endpoint-unreachable": {words: "does not accept connections"},
 	// helper-container-blocks-pod is worded by containerPhrase.
 	"helper-container-blocks-pod": {words: "keeps failing and blocks its pod"},
+	"init-waits-on-service":       {words: "has no ready endpoints"},
 	"image-drift": {own: true,
 		words: "its pods run different builds of the same image tag"},
+	"liveness-shorter-than-start": {own: true,
+		words: "its containers get too little time to start"},
+	"liveness-kills-before-ready": {own: true,
+		words: "its containers are not ready when liveness gives up"},
 	"memory-limit-too-low": {own: true,
 		words: "its memory limit is too low for normal use"},
-	"metrics-api-down":             {words: "is not serving metrics"},
+	"metrics-api-down": {words: "is not serving metrics"},
+	"lease-holder-failing": {
+		words: "holds the Lease and is failing, so nobody renews it"},
 	"namespace-terminating":        {words: "is being deleted"},
 	"node-disk-pressure":           {words: "is low on disk"},
 	"node-memory-pressure":         {words: "is low on memory"},
@@ -73,17 +80,20 @@ var causeWords = map[string]causeWording{
 	"node-removed-capacity": {
 		words: "was removed and no other node has room"},
 	"nodepool-failing":   {words: "is failing as a whole"},
+	"preemptor":          {words: "is preempting lower-priority pods"},
 	"own-change":         {words: "changed shortly before"},
 	"owner-failing":      {words: "is failing"},
 	"policy-restricts":   {words: "blocks its traffic"},
 	"policy-blocks-call": {words: "blocks its traffic"},
 	"probe-port-mismatch": {own: true,
 		words: "its probe checks a port the container does not listen on"},
-	"quota-exhausted":  {words: "is used up"},
-	"rbac-change":      {words: "no longer grants the access it needs"},
-	"registry-refuses": {words: "refuses the image pulls"},
-	"rollout":          {words: "rolled out a change shortly before"},
-	"routed-missing":   {words: "does not exist"},
+	"quota-exhausted":            {words: "is used up"},
+	"rbac-change":                {words: "no longer grants the access it needs"},
+	"registry-refuses":           {words: "refuses the image pulls"},
+	"rollout":                    {words: "rolled out a change shortly before"},
+	"routed-missing":             {words: "does not exist"},
+	"missing-service-called":     {words: "does not exist"},
+	"missing-service-configured": {words: "does not exist"},
 	// scheduler-capacity is worded by schedulingWords.
 	"scheduler-capacity":    {words: "rejects every node"},
 	"scheduler-unavailable": {words: "is down"},
@@ -124,6 +134,9 @@ func causeWordsFor(cause *rootcause.CauseRecord) string {
 		return endpointWords(cause.Mode)
 	}
 	if claimFull(cause) {
+		if cause.Mode == detection.ModeVolumeInodes {
+			return "is out of inodes"
+		}
 		return "is out of space"
 	}
 	if words, ok := webhookCallWords[cause.Mode]; ok {
@@ -140,12 +153,14 @@ func causeWordsFor(cause *rootcause.CauseRecord) string {
 var webhookCallWords = map[detection.Mode]string{
 	explain.ModeWebhookTimeout:    "times out on every call",
 	explain.ModeWebhookCallFailed: "cannot be called",
+	explain.ModeWebhookTLS:        "fails every call's TLS handshake",
 }
 
 // claimFull reports a volume claim blamed because it has no space left.
 func claimFull(cause *rootcause.CauseRecord) bool {
 	return cause != nil && cause.Root.Kind == kube.KindPVC &&
-		cause.Mode == detection.ModeVolumeFull
+		(cause.Mode == detection.ModeVolumeFull ||
+			cause.Mode == detection.ModeVolumeInodes)
 }
 
 // knownRule reports a cause whose rule has words in causeWords.

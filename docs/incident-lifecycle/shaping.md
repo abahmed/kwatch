@@ -60,12 +60,30 @@ another that closed), and then nobody would be told.
   node are expected, not failures (`detectors/boot.go`). A digest-tier
   incident is promoted (`escalate` in `worsen.go`) only when it has lasted
   `BootWindow` and a crash keeps going or the workload is down.
+- **Wake-up and scale-down.** A cluster put to sleep at night wakes up all
+  at once: five workloads (`kube.WakeMinWorkloads`) set from 0 replicas to
+  some, or three nodes (`WakeMinNodes`) joining, each start less than
+  `WakeQuiet` (10m) after the one before (`inventory/kube/wake.go`). While
+  it lasts, at most `WakeMax` (30m) from its first start, the pods it
+  created get the boot grace above, so probe failures, pending pods and
+  empty Services wait. A pod that crashes, restarts or cannot pull its image
+  is never held, and what still fails when the wake-up ends is reported at
+  once, with "the cluster was waking up" as context
+  (`Facts.Wake`). A wake-up in which pods had startup warnings
+  and recovered costs one line in the next digest ("Cluster waking up: 42
+  workloads started between 06:51 and 07:03; 5 had brief startup failures,
+  all recovered"); one without is not mentioned. The mirror image, five
+  workloads set to 0 within `ScaleDownSpan` (15m), is a planned scale-down:
+  those workloads raise no "scaled to 0 but still routed" finding, and a
+  cordoned node that leaves is a drain (`NodeDraining`), not a loss.
 - **Restart.** Incidents are saved and restored. For `restoreGrace` (10m) a
   restored incident without members does not recover, because detectors
   have not re-raised its findings yet (`grace.go`). A restart announces no
   incident, so when the grace is over one summary (`ListRestored` in
   `pipeline/announce/startup.go`) names the restored incidents that still fail
-  and have not spoken for themselves since the restart. On a
+  and have not spoken for themselves since the restart, digest-tier ones
+  after the louder ones, within the usual cap, so nothing restored is
+  silent. On a
   cold start the first `StartupWindow` (2m) collects existing incidents into
   one startup summary; an active page still reaches the pagers at once.
   What a restart keeps: the incident records (with the worst stage reached,

@@ -129,6 +129,7 @@ func routesOf(alternatives []notification.Route) []routeSubject {
 			namespaces: route.Namespaces,
 			severity:   notification.NormalizeSeverity(route.Severity),
 			reasons:    route.Reasons,
+			owners:     route.Owners,
 		})
 	}
 	return out

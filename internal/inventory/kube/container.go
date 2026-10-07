@@ -28,8 +28,16 @@ func containerDescriptions(
 	var out []Description
 	forEachContainer(pod, func(c corev1.Container, init bool) {
 		attrs := containerSpecAttributes(c, init)
-		if status, ok := statuses[c.Name]; ok {
+		status, hasStatus := statuses[c.Name]
+		if hasStatus {
 			containerStatusAttributes(attrs, status)
+		}
+		if init && !flagAttr(attrs, AttrSidecar) {
+			if !hasStatus {
+				setInitAttributes(attrs, c, nil, pod.Namespace)
+			} else {
+				setInitAttributes(attrs, c, &status, pod.Namespace)
+			}
 		}
 		rel := relations{}
 		rel.add(inventory.PartOf, podID)
@@ -70,6 +78,7 @@ func containerSpecAttributes(
 		attrs[AttrPrivileged] = inventory.Bool(true)
 	}
 	setPortAttributes(attrs, c)
+	setLivenessAttributes(attrs, c)
 	setContainerScheduling(attrs, c)
 	return attrs
 }
@@ -114,6 +123,7 @@ func containerStatusAttributes(
 		attrs[AttrState] = inventory.Text("terminated")
 		attrs[AttrStateReason] = inventory.Text(t.Reason)
 		attrs[AttrExitCode] = inventory.Number(float64(t.ExitCode))
+		setFinished(attrs, t)
 		if t.Message != "" {
 			attrs[AttrMessage] = inventory.Text(evidenceText(t.Message))
 		}
@@ -215,4 +225,9 @@ func quantityText(q resource.Quantity) string {
 		return ""
 	}
 	return q.String()
+}
+
+func flagAttr(attrs map[string]inventory.Value, name string) bool {
+	set, _ := attrs[name].AsBool()
+	return set
 }

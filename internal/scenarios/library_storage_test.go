@@ -10,10 +10,10 @@ import (
 // storageScenarios are volumes that are bound and mounted but cannot be
 // written to.
 func storageScenarios() []scenario {
-	return []scenario{
+	return append([]scenario{
 		claimFullWithVolume(), claimFullUnlistedVolume(), pvcFull(),
 		claimPinsPod(),
-	}
+	}, append(volumeFullScenarios(), pullLoginScenarios()...)...)
 }
 
 // claimFullWithVolume: a log store's 50Gi claim fills up. The store

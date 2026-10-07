@@ -78,6 +78,7 @@ func sandboxFindings(
 	}
 	pods := make(map[detection.Mode]int)
 	first := make(map[detection.Mode]time.Time)
+	newest := make(map[detection.Mode]inventory.Note)
 	pending := false
 	for _, id := range ctx.Model.Related(
 		e.ID, inventory.RunsOn, inventory.Incoming,
@@ -86,29 +87,32 @@ func sandboxFindings(
 			text(pod, kube.AttrPhase) == "Pending" {
 			pending = true
 		}
-		for mode, at := range podSandboxFailures(ctx, id) {
+		for mode, note := range podSandboxFailures(ctx, id) {
 			pods[mode]++
-			if first[mode].IsZero() || at.Before(first[mode]) {
-				first[mode] = at
+			if first[mode].IsZero() || note.At.Before(first[mode]) {
+				first[mode] = note.At
+			}
+			if note.At.After(newest[mode].At) {
+				newest[mode] = note
 			}
 		}
 	}
 	if pending {
 		ctx.RecheckAfter(sandboxRecheck)
 	}
-	return buildSandboxFindings(ctx, pods, first)
+	return buildSandboxFindings(ctx, pods, first, newest)
 }
 
-// podSandboxFailures returns the latest time of each classified network
+// podSandboxFailures returns the latest event of each classified network
 // failure of one pod.
 func podSandboxFailures(
 	ctx detection.Context, pod inventory.EntityID,
-) map[detection.Mode]time.Time {
-	out := make(map[detection.Mode]time.Time)
+) map[detection.Mode]inventory.Note {
+	out := make(map[detection.Mode]inventory.Note)
 	for _, note := range ctx.Model.Notes(pod, ctx.Now.Add(-EventWindow)) {
 		if mode, ok := sandboxFailure(note); ok &&
-			note.At.After(out[mode]) {
-			out[mode] = note.At
+			note.At.After(out[mode].At) {
+			out[mode] = note
 		}
 	}
 	return out
@@ -117,6 +121,7 @@ func podSandboxFailures(
 func buildSandboxFindings(
 	ctx detection.Context, pods map[detection.Mode]int,
 	first map[detection.Mode]time.Time,
+	newest map[detection.Mode]inventory.Note,
 ) []detection.Finding {
 	modes := make([]detection.Mode, 0, len(pods))
 	for mode, count := range pods {
@@ -134,6 +139,9 @@ func buildSandboxFindings(
 			Since: first[mode], Summary: spec.summary,
 			Evidence: []detection.Evidence{{
 				Label: "affected pods", Value: strconv.Itoa(pods[mode]),
+			}, {
+				Label: detection.EvidenceSandboxEvent,
+				Value: sandboxQuote(newest[mode].Message),
 			}},
 		})
 	}

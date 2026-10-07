@@ -1,0 +1,21 @@
+10:01:50 material change
+🟠 Secret policy-tls in policy-system (prod-eu-1) has a TLS certificate that expired less than a minute ago. Clients are rejecting it now. To list the keys of the Secret the pods depend on, run kubectl describe secret policy-tls -n policy-system
+🟠 Secret policy-tls in policy-system (prod-eu-1) has a TLS certificate that expired less than a minute ago.
+| 🟠 Secret **policy-tls** in **policy-system** (**prod-eu-1**) has a TLS certificate that expired less than a minute ago.
+| Clients are rejecting it now.
+| To list the keys of the Secret the pods depend on, run
+| ```
+| kubectl describe secret policy-tls -n policy-system
+| ```
+10:02:15 settled
+🔴 Replica set gateway-7278a355 in payments (prod-eu-1) cannot create pods because validating webhook image-policy rejects calls: "x509: certificate has expired or is not yet valid: current time is a…". Its serving certificate in Secret policy-system/policy-tls expired at 2026-09-29 10:01. Every error mentions it. Two failing workloads all depend on it. gateway and api in search are affected as well. To check the webhook's backend and timeout, run kubectl get validatingwebhookconfiguration image-policy -o yaml
+🔴 Replica set gateway-7278a355 in payments (prod-eu-1) cannot create pods because validating webhook image-policy rejects calls: "x509: certificate has expired or is not yet valid: current time is a…".
+| 🔴 Replica set **gateway-7278a355** in **payments** (**prod-eu-1**) cannot create pods because validating webhook **image-policy** rejects calls: `x509: certificate has expired or is not yet valid: current time is a…`.
+| Its serving certificate in Secret policy-system/policy-tls expired at 2026-09-29 10:01.
+| Every error mentions it.
+| Two failing workloads all depend on it.
+| **gateway** and **api** in **search** are affected as well.
+| To check the webhook's backend and timeout, run
+| ```
+| kubectl get validatingwebhookconfiguration image-policy -o yaml
+| ```

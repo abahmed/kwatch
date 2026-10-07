@@ -49,6 +49,9 @@ func (m *storageMetrics) publish(now storage.Stats) {
 		int64(now.CorruptRecords - m.last.CorruptRecords))
 	m.registry.StorageExpired.Add(int64(now.Expired - m.last.Expired))
 	m.registry.StorageEvicted.Add(int64(now.Evicted - m.last.Evicted))
+	m.registry.StorageRewrites.Add(int64(now.Rewrites - m.last.Rewrites))
+	m.registry.StorageFileBytes.Store(now.FileBytes)
+	m.registry.StorageFreeBytes.Store(now.FreeBytes)
 	if m.overCap != nil && now.OverCap != m.last.OverCap {
 		m.overCap(now.OverCap)
 	}

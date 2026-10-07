@@ -1,0 +1,8 @@
+{
+  "name": "oom-by-overcommitted-node",
+  "description": "A container is OOM-killed far below its own limit on a node under memory pressure whose pods' limits add up to far more than its memory.",
+  "root": "node//n1",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "15m0s"
+}

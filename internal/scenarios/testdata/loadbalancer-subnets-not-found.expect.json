@@ -1,0 +1,10 @@
+{
+  "name": "loadbalancer-subnets-not-found",
+  "description": "A LoadBalancer Service behind an Ingress has no address for minutes; the controller fails to build its model.",
+  "root": "service/shop/web",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

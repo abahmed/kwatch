@@ -89,8 +89,14 @@ type file struct {
 	// volumeLimit is Options.VolumeLimit; zero means no volume budget.
 	volumeLimit int64
 
+	// gate keeps writes out while the file is rewritten or claimed:
+	// writes hold it shared, those two hold it exclusively. Take it
+	// before mu, never after.
+	gate sync.RWMutex
+
 	mu      sync.RWMutex
 	db      *bolt.DB       // nil while a reset is pending or absent
+	closed  bool           // Close ran; the file must not be reopened
 	absent  bool           // no file yet; Claim creates it
 	inspect bool           // db is read-only until Claim
 	reset   *Reset         // the reset Open or Claim performed
@@ -220,8 +226,11 @@ func (s *Store) Close() error {
 	for _, fn := range closers {
 		fn()
 	}
+	s.gate.Lock()
+	defer s.gate.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.closed = true
 	if s.db == nil {
 		return nil
 	}
@@ -293,6 +302,8 @@ func (s *Store) ClaimNew() (*Store, error) {
 }
 
 func (f *file) claimInto(handle *Store) (uint64, error) {
+	f.gate.Lock()
+	defer f.gate.Unlock()
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	repairing := startStep("repair")
@@ -327,54 +338,6 @@ func (s *Store) Epoch() uint64 {
 // this handle.
 func (s *Store) Abandoned() bool {
 	return s.abandoned.Load()
-}
-
-// update runs fn in a write transaction after verifying that this handle
-// still holds the newest claim. Every write, including compaction, goes
-// through it, so a deposed leader can neither write nor delete.
-func (s *Store) update(fn func(*bolt.Tx) error) error {
-	epoch := s.epoch.Load()
-	if epoch == 0 {
-		return ErrNotClaimed
-	}
-	if s.abandoned.Load() {
-		return ErrFenced
-	}
-	s.counters.writeTxs.Add(1)
-	return s.bolt().Update(func(tx *bolt.Tx) error {
-		stored := readUint(tx.Bucket(metaBucket).Get(epochKey))
-		if stored != epoch {
-			return ErrFenced
-		}
-		return fn(tx)
-	})
-}
-
-// view runs fn in a read transaction. Before the first Claim of a
-// deferred Open with no file yet there is nothing to read: fn is not
-// called and view returns nil, as for an empty store.
-func (s *Store) view(fn func(*bolt.Tx) error) error {
-	db, absent := s.readable()
-	if db == nil {
-		if absent {
-			return nil
-		}
-		return ErrRepairPending
-	}
-	return db.View(fn)
-}
-
-func (f *file) readable() (*bolt.DB, bool) {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-	return f.db, f.absent
-}
-
-// bolt returns the open database; nil while a reset is pending.
-func (f *file) bolt() *bolt.DB {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-	return f.db
 }
 
 func readUint(data []byte) uint64 {

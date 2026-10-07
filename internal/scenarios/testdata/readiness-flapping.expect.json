@@ -1,0 +1,12 @@
+{
+  "name": "readiness-flapping",
+  "description": "Two API pods switch between ready and not ready nine times in five minutes without restarting.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "service/shop/api"
+  ],
+  "tail": "5m0s"
+}

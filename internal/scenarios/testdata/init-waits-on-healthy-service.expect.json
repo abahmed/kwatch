@@ -1,0 +1,10 @@
+{
+  "name": "init-waits-on-healthy-service",
+  "description": "An init container runs for minutes while the Service it names is healthy.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/db"
+  ]
+}

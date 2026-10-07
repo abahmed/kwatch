@@ -104,6 +104,9 @@ type Message struct {
 type Listed struct {
 	// Opened, Resolved and Risks count what the digest names.
 	Opened, Resolved, Risks int
+	// Ongoing counts the problems an earlier digest listed that this one
+	// names again because they are still open.
+	Ongoing int `json:",omitempty"`
 	// Items name the first incidents as "id: title", at most the bound
 	// the producer chose; Opened+Resolved may be larger.
 	Items []string `json:",omitempty"`
@@ -130,6 +133,10 @@ type Route struct {
 	Namespaces []string
 	Reasons    []string
 	Severity   string
+	// Owners are the owners of the problem: the kwatch.io/owner value of
+	// its workload or namespace, empty when it has none. A summary
+	// lists the owners of all its problems.
+	Owners []string `json:",omitempty"`
 	// AnyOf is set on a message that names several problems (a startup
 	// summary, roll-up, outage message or digest): the routes of those
 	// problems. Such a message matches a provider's route when any one

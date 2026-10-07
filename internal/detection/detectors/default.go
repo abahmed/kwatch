@@ -9,6 +9,7 @@ import "github.com/abahmed/kwatch/internal/detection"
 func Default() []detection.Detector {
 	return []detection.Detector{
 		Container{},
+		InitWait{},
 		Generic{},
 		NewPod(PodThresholds{}),
 		NewNode(0),

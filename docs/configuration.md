@@ -122,6 +122,30 @@ findings are on annotated objects, or on objects in annotated namespaces. An
 incident that also has a finding on an unannotated object is still delivered.
 Invalid expiry values are ignored rather than suppressing incidents.
 
+#### 🙋 Acknowledging an incident
+
+Tell the thread you are on it, from the terminal:
+
+```sh
+kubectl annotate deploy/api kwatch.io/ack="looking into it"
+```
+
+Put `kwatch.io/ack` on the incident's root object or on any object that
+fails in it. kwatch posts one update in the incident's thread,
+`Acknowledged on deployment/api: "looking into it"`, and stops reminding
+(including the page reminder) while the annotation is there. News still
+goes out, and so does the resolve. Remove the annotation
+(`kubectl annotate deploy/api kwatch.io/ack-`) and kwatch posts
+`Acknowledgement removed` and resumes its reminders.
+
+- An incident that comes back within the repage window is the same
+  incident and stays acknowledged. A new incident is not pre-acknowledged,
+  but if the annotation is still on the object its announcement says so.
+- The note is quoted as one line, without credentials, up to 200 bytes.
+  kwatch does not say who set it: Kubernetes records the tool that wrote
+  an object, not the person.
+- kwatch only reads objects; the annotation needs no extra permission.
+
 ## 📱 App settings
 
 Small but useful global options — mostly about **what alerts say** and how kwatch
@@ -190,6 +214,14 @@ are the only HTTP endpoints; there are no diagnostic, profiling, or test-alert e
   or a Pod still waiting for the state lock, can pass the rolling-update probe.
 - `GET /health` — JSON containing overall status, state lock status, component
   states, and bounded degradation reasons.
+- `GET /status` — 🔎 What is wrong right now, read-only: open incidents,
+  control plane, upgrade readiness, zone health and what
+  kwatch cannot see. Plain text; add `?format=json` for JSON. It uses no new
+  RBAC and writes nothing. It shows object names (workloads, nodes, PDBs,
+  webhooks) to anyone who can reach the health port, so keep that port
+  inside the cluster; the chart's NetworkPolicy admits it from any source by
+  default, so narrow it with a policy of your own. It never shows
+  Secret values.
 - `GET /metrics` — 📊 Prometheus-format metrics. It does not require Prometheus to be
   installed. Every series has a production writer; labels are a fixed, bounded set.
 
@@ -222,6 +254,8 @@ are the only HTTP endpoints; there are no diagnostic, profiling, or test-alert e
 | `kwatch_storage_corrupt_records_total` | counter | none | Stored values skipped because they did not decode |
 | `kwatch_storage_expired_total` | counter | none | Stored entries deleted by retention |
 | `kwatch_storage_evicted_total` | counter | none | Stored entries deleted to meet the size cap |
+| `kwatch_storage_rewrites_total` | counter | none | Times the state file was rewritten while running to shrink it |
+| `kwatch_storage_file_bytes`, `kwatch_storage_free_bytes` | gauge | none | State file size and its free pages, after the last compactor pass |
 | `kwatch_storage_write_failures_total` | counter | none | Pipeline storage batches with at least one failed write |
 | `kwatch_informer_handler_panics_total` | counter | none | Recovered informer handler panics |
 | `kwatch_optional_api_unavailable_total` | counter | none | Optional APIs missing at watcher setup |
@@ -269,7 +303,7 @@ status, resource versions, and deletion metadata remain intact.
   overflow digest instead of one message each. Updates and resolves of
   announced conversations are never counted. There is no global default;
   set it per provider.
-- **Routing.** A provider's `routes` (namespaces, severities, reasons;
+- **Routing.** A provider's `routes` (namespaces, severities, reasons, owners;
   reasons compare ignoring case) decide which incidents it is sent. A
   conversation then stays with the providers that received its
   announcement: every later update and the resolve go to exactly those
@@ -280,6 +314,32 @@ status, resource versions, and deletion metadata remain intact.
   provider's route when the route would match at least one problem they
   name. The closing messages of those carry no problems and follow the
   summary they close. Plain notices go to every provider.
+- **Routing by owner.** Label or annotate a workload, or its namespace,
+  with `kwatch.io/owner: payments`, and give a provider a route for it:
+
+  ```yaml
+  alert:
+    slack:
+      webhook: https://hooks.slack.com/services/T000/B000/payments
+      routes:
+        - owners: ["payments"]
+    pagerduty:
+      routingKey: "..."
+      routes:
+        - owners: ["platform"]
+        - severities: ["critical"]   # no owner asked: the default route
+  ```
+
+  An incident's owner is the value on its root (the label first, then the
+  annotation), else on what owns the root, up the owner chain (so a failing
+  Pod takes its Deployment's), else on the root's namespace. An incident
+  with no owner goes only to routes that do not list `owners`, the default
+  routes. A route that lists `owners` still needs every other field it sets
+  (namespaces, severities, reasons) to match. A provider with no routes
+  still gets everything. Owners compare ignoring case. A conversation stays
+  with the providers that heard its announcement, even if the owner is
+  edited later. Digests, roll-ups and summaries match when one problem
+  they name matches.
 - **Pages are never folded.** Page-tier messages (route severity
   `critical`) and the resolves of paged incidents are exempt from the
   hourly budget, because a pager skips the overflow digest and a folded
@@ -782,11 +842,12 @@ searchable history of everything it decided. `kwatch-scorecard` reads this log.
 | `auditLog.enabled` | Write one structured JSON entry per incident decision (default: true) |
 | `auditLog.output` | Destination: `stdout` (default) or a file path |
 
-The digest also names, once each, the configuration risks kwatch found: a
-workload with no readiness probe or memory limit, an image tag that can
-change, a single replica, every replica on one node, a privileged container.
-A risk is never an incident on its own; when a failure of that workload shows
-what the risk cost, the failure's message says so.
+kwatch reports what is happening, not what could happen. A workload with no
+readiness probe or memory limit, an image tag that can change or a single
+replica is never listed in the digest or `/status`, and is never an incident
+on its own; when a failure of that workload shows what it cost, the failure's
+message says so. The digest does name, once each, workloads whose pods run but
+never become ready while others serve.
 
 kwatch also remembers what people have already heard:
 

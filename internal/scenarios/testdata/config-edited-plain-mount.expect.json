@@ -1,0 +1,13 @@
+{
+  "name": "config-edited-plain-mount",
+  "description": "A ConfigMap edit breaks the two replicas started after it; the config is a plain volume mount that updates in place, so no version split is claimed.",
+  "root": "configmap/shop/api-config",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/api",
+    "node//n1",
+    "node//n2",
+    "zone//zone-a"
+  ]
+}

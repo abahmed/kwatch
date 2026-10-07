@@ -147,12 +147,10 @@ func (c *fitCase) volumeBlockers(n fitNode) []blocker {
 	var out []blocker
 	for _, claim := range c.claims {
 		if !anyTermMatches(claim.terms, n.labels) {
-			where := requirementText(claim.terms[0])
 			out = append(out, blocker{kind: blockVolume,
 				text: "is not where claim " + claim.name +
-					" can attach (" + where + ")",
-				all: "claim " + claim.name + " can only attach where " +
-					where + ", and no node is there"})
+					" can attach (" + requirementText(claim.terms[0]) + ")",
+				all: claim.nowhere()})
 		}
 	}
 	return out

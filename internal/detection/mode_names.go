@@ -23,6 +23,7 @@ const (
 	ModeCreateError          Mode = "CreateError"
 	ModeCreateErrorConfig    Mode = "CreateError.Config"
 	ModeInitError            Mode = "InitError"
+	ModeInitWaiting          Mode = "InitWaiting"
 	ModeDeadlineExceeded     Mode = "DeadlineExceeded"
 	ModeHookPostStart        Mode = "Hook.PostStart"
 	ModeProbe                Mode = "Probe"
@@ -104,8 +105,6 @@ const (
 	ModeRiskNoMemoryLimit    Mode = "Risk.NoMemoryLimit"
 	ModeRiskMutableImageTag  Mode = "Risk.MutableImageTag"
 	ModeRiskSingleReplica    Mode = "Risk.SingleReplica"
-	ModeRiskSingleNode       Mode = "Risk.SingleNode"
-	ModeRiskPrivileged       Mode = "Risk.Privileged"
 )
 
 // Service, admission and reference modes.
@@ -114,6 +113,7 @@ const (
 	ModeBackendsDegraded      Mode = "BackendsDegraded"
 	ModeLoadBalancerPending   Mode = "LoadBalancerPending"
 	ModeBackendMissing        Mode = "BackendMissing"
+	ModePortMismatch          Mode = "PortMismatch"
 	ModeWebhookBackendMissing Mode = "Webhook.BackendMissing"
 	ModeWebhookNoEndpoints    Mode = "Webhook.NoEndpoints"
 	ModeWebhookSlow           Mode = "Webhook.Slow"
@@ -157,8 +157,10 @@ const (
 
 // Storage, quota and deletion modes.
 const (
-	ModeVolumeFull        Mode = "VolumeFull"
-	ModeVolumeFillingUp   Mode = "VolumeFillingUp"
+	ModeVolumeFull Mode = "VolumeFull"
+	// ModeVolumeInodes is a claim with inodes left to none, bytes or not;
+	// it is a kind of VolumeFull, so every row for a full claim matches.
+	ModeVolumeInodes      Mode = "VolumeFull.Inodes"
 	ModeVolumeFailed      Mode = "VolumeFailed"
 	ModeQuotaExhausted    Mode = "QuotaExhausted"
 	ModeInvalidLimitRange Mode = "InvalidLimitRange"
@@ -171,9 +173,11 @@ const (
 
 // Pod, container and node runtime modes.
 const (
-	ModeProbeLiveness         Mode = "Probe.Liveness"
-	ModeCrashLoopLiveness     Mode = "CrashLoop.Liveness"
-	ModeProbeReadiness        Mode = "Probe.Readiness"
+	ModeProbeLiveness     Mode = "Probe.Liveness"
+	ModeCrashLoopLiveness Mode = "CrashLoop.Liveness"
+	ModeProbeReadiness    Mode = "Probe.Readiness"
+	// ModeReadinessFlapping is a readiness failure that comes and goes.
+	ModeReadinessFlapping     Mode = "Probe.Readiness.Flapping"
 	ModeAdmissionRejected     Mode = "Admission.Rejected"
 	ModeExitNotExecutable     Mode = "Exit.NotExecutable"
 	ModeExitCommandNotFound   Mode = "Exit.CommandNotFound"
@@ -191,6 +195,8 @@ const (
 	ModeResizeInfeasible      Mode = "Resize.Infeasible"
 	ModeResizeDeferred        Mode = "Resize.Deferred"
 	ModeResizeError           Mode = "Resize.Error"
+	ModePreempted             Mode = "Preempted"
+	ModeKilledGracePeriod     Mode = "Killed.GracePeriod"
 	ModePreemptedRepeatedly   Mode = "Preempted.Repeatedly"
 	ModeMemoryOvercommitted   Mode = "MemoryOvercommitted"
 	// ModeUnusualEvent is a repeated Warning event kwatch has no

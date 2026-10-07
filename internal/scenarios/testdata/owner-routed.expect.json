@@ -1,0 +1,10 @@
+{
+  "name": "owner-routed",
+  "description": "A crash-looping Deployment in a namespace labelled with its owner.",
+  "root": "deployment/shop/payments",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

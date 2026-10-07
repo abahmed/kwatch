@@ -102,11 +102,13 @@ func sameTargets(a, b []inventory.EntityID) bool {
 
 // keepFindings copies the tracker's active findings of id.
 func (e *Engine) keepFindings(id inventory.EntityID) {
-	if active := e.tracker.Active(id); len(active) > 0 {
+	active := e.tracker.Active(id)
+	if len(active) > 0 {
 		e.findings[id] = active
 	} else {
 		delete(e.findings, id)
 	}
+	e.published.set(id, active)
 }
 
 // activeFindings returns a shallow copy of the active findings, so the
@@ -166,6 +168,12 @@ func (e *Engine) readers(
 		out = append(out, e.deps.Model.EntitiesIn(
 			kube.KindQuota, o.Entity.Namespace)...)
 	}
+	if o.Entity.Kind == kube.KindService {
+		// A Service edit can add or remove the port an Ingress names.
+		out = append(out, e.deps.Model.Related(
+			o.Entity, inventory.RoutesTo, inventory.Incoming)...)
+	}
+	out = append(out, e.preemptedPods(o.Entity)...)
 	if o.Kind != inventory.Gone && !update.Appeared {
 		return out
 	}

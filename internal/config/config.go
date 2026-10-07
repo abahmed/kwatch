@@ -184,6 +184,11 @@ type AlertRoute struct {
 	Severities []string `yaml:"severities"`
 	// Reasons is an optional list of allowed reasons.
 	Reasons []string `yaml:"reasons"`
+	// Owners is an optional list of allowed owners: the kwatch.io/owner
+	// label or annotation of the failing workload, else of its
+	// namespace. An incident with no owner matches no route that sets
+	// Owners.
+	Owners []string `yaml:"owners"`
 }
 
 // AuditLogConfig configures the JSON decision log.

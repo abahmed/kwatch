@@ -1,0 +1,3 @@
+🟠 api is failing in shop, likely caused by the 14:00 change to config map api-config. Config map api-config changed ten minutes ago (keys: DB_HOST, TIMEOUT; by alice); the two pods started since then fail, the three older ones are healthy. To check the object the pods depend on, run kubectl get configmap api-config -n shop -o yaml
+
+🟠 api is failing in shop, likely caused by the 14:00 change to config map api-config.

@@ -172,8 +172,8 @@ say, in this order of strength:
 Two kinds of finding are not failures. A *symptom* (a Deployment below its
 replicas) restates its pods' failures and never leads a message. An
 *advisory* finding (`Finding.Advisory`: no readiness probe, no memory
-limit, a `latest` tag, a single replica) is a configuration risk: it never
-opens an incident, joins the incident of a real failure of the same
+limit, a `latest` tag, a single replica) is configuration advice: it never
+opens an incident, is never announced on its own, joins the incident of a real failure of the same
 workload, and adds one sentence when the failure shows what the risk cost.
 
 A failure can also travel. Once a cause is chosen, `explain/chain.go`
@@ -234,7 +234,7 @@ one bucket per data class:
 | `changes` | Recorded changes per object | 30 days |
 | `baselines` | Rolling per-workload statistics over 7 days: restarts, readiness, memory, Warning events | Dropped 7 days after the workload is gone |
 | `evidence` | Log excerpts and termination messages | 30 days, at most 128 MiB |
-| `timeline` | Health transitions, changes, events, decisions | 30 days |
+| `timeline` | Health transitions, changes, events, decisions | 7 days, at most 32 MiB |
 | `audit` | One entry per incident decision | 30 days |
 | `fingerprints` | Last seen digest per object | No expiry |
 | `state` | Cluster identity, version, startup and telemetry markers | No expiry |
@@ -242,7 +242,10 @@ one bucket per data class:
 | `outbox` | Delivery jobs not yet accepted by a provider | Until accepted; at most 2048 jobs, none older than 24 hours |
 
 A compactor off the decision loop enforces retention and a total size cap of
-512 MiB of logical data (keys and values), of which evidence may use 128 MiB.
+512 MiB of logical data (keys and values), of which evidence may use 128 MiB
+and the timeline 32 MiB. When most of the file is free pages, the compactor
+rewrites the file while running (a copy of the live data renamed over the
+original; writes wait about a second), so the file follows its content down.
 Only history is evicted, oldest first; open incidents, baselines, fingerprints,
 state, threads and the outbox are never evicted. The file itself is larger than
 its logical data, because bbolt keeps freed pages. When the file is more than a
@@ -275,6 +278,7 @@ or user-facing API endpoints.
 | `/readyz` | Monitoring readiness: this pod holds the Lease, claimed the state file, finished the initial list of every required source, and delivery is running. |
 | `/availabilityz` | The pod takes part in the application lifecycle; used by Deployment rollouts. Not monitoring readiness. |
 | `/health` | Optional component state and safe reason codes (unwatched kinds, a failed reset, missing permissions). |
+| `/status` | Read-only "what is wrong right now": incidents, control plane, upgrade readiness, zones and coverage gaps. Text, or JSON with `?format=json`. |
 | `/metrics` | Prometheus metrics with bounded labels. |
 
 ## One replica and a state lock

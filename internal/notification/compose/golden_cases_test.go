@@ -54,6 +54,7 @@ func goldenCases() []goldenCase {
 		{"likely_config_change", writeLikelyConfigChange},
 		{"startup_summary", writeStartupSummary},
 		{"change_cause", writeChangeCause},
+		{"config_version_split", writeConfigVersionSplit},
 	}...)
 }
 

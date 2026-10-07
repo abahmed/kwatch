@@ -86,21 +86,13 @@ func (c *counterRates) size() int {
 	return len(c.previous)
 }
 
-// size is how many volumes have samples.
-func (g *growthTracker) size() int {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	return len(g.samples)
-}
-
 // selfHealthFields are the stats poller's bounded maps and the runtime
 // numbers, as key/value pairs for the self-health line.
 func (p *StatsPoller) selfHealthFields() []any {
 	return append(RuntimeFields(),
 		"memoryLogContainers", p.memory.size(),
 		"reachLogNodes", p.reach.size(),
-		"counterSamples", p.counters.size(),
-		"growthVolumes", p.growth.size())
+		"counterSamples", p.counters.size())
 }
 
 // logSelfHealth writes the self-health line when it is due.

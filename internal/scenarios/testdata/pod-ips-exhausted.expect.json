@@ -1,0 +1,12 @@
+{
+  "name": "pod-ips-exhausted",
+  "description": "Fourteen pods of three workloads cannot start on three nodes: the CNI has no free pod addresses.",
+  "root": "zone//zone-a",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/api",
+    "node//n4"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "liveness-timeout-cpu-throttled",
+  "description": "Liveness probes time out and the kubelet kills the pods in a loop while their 200m CPU limit throttles them 72% of the time.",
+  "root": "deployment/shop/web",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

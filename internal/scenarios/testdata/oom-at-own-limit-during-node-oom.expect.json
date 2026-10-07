@@ -1,0 +1,11 @@
+{
+  "name": "oom-at-own-limit-during-node-oom",
+  "description": "A container is OOM-killed at its own limit while the node also reports a system OOM; the kill stays the container's.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

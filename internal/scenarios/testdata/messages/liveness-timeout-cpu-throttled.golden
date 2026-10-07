@@ -1,0 +1,10 @@
+10:02:55 settled
+🟠 web in shop (prod-eu-1) keeps being killed by its liveness probe. Its node and registry are healthy and unchanged, so nothing outside it explains this. Liveness timed out while the container was CPU-throttled 72% of the time (limit 200m). To read the output of the last crash, run kubectl logs web-181fa9e6-a -c app -n shop --previous
+🟠 web in shop (prod-eu-1) keeps being killed by its liveness probe.
+| 🟠 **web** in **shop** (**prod-eu-1**) keeps being killed by its liveness probe.
+| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| Liveness timed out while the container was CPU-throttled 72% of the time (limit 200m).
+| To read the output of the last crash, run
+| ```
+| kubectl logs web-181fa9e6-a -c app -n shop --previous
+| ```

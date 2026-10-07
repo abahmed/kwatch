@@ -42,6 +42,7 @@ var AllReasons = []Reason{
 	ReasonSettled, ReasonCauseRevised, ReasonMaterialChange,
 	ReasonFlapping, ReasonSuperseded, ReasonReminder,
 	ReasonFixAttempt, ReasonFixStillFailing, ReasonFailingAgain,
+	ReasonAcknowledged, ReasonAckRemoved,
 }
 
 // RecoveredPrefix starts the timeline note of a member that recovered;

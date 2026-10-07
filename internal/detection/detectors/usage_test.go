@@ -69,51 +69,16 @@ func TestNodeUsageQuietBelowThreshold(t *testing.T) {
 	assert.Equal(t, []inventory.Kind{kube.KindNode}, NodeUsage{}.Kinds())
 }
 
-func TestVolumeUsageThresholdAndFill(t *testing.T) {
+func TestVolumeUsageThreshold(t *testing.T) {
 	m := newTestModel()
 	id := newID(kube.KindPVC, "default", "data")
 	put(m, id, t0, map[string]inventory.Value{
 		kube.AttrVolumeUsedPct: inventory.Number(90),
-		kube.AttrVolumeFillETA: inventory.Number(3600),
 	})
 	got := evaluate(VolumeUsage{}, m, t0, id, nil).Findings
-	require.Len(t, got, 2)
+	require.Len(t, got, 1)
 	assert.Equal(t, reasons.VolumeUsageHigh, got[0].Reason)
 	assert.Equal(t, detection.Warning, got[0].Severity)
-	assert.Equal(t, reasons.VolumeFillingUp, got[1].Reason)
-	assert.Equal(t, detection.Critical, got[1].Severity)
-	assert.NotEmpty(t, got[1].Summary)
-}
-
-func TestVolumeUsageFillBoundaries(t *testing.T) {
-	tests := []struct {
-		name     string
-		eta      time.Duration
-		fires    bool
-		severity detection.Severity
-	}{
-		{"critical at 6h", 6 * time.Hour, true, detection.Critical},
-		{"warning just past 6h", 6*time.Hour + time.Second, true,
-			detection.Warning},
-		{"warning at 24h", 24 * time.Hour, true, detection.Warning},
-		{"quiet past 24h", 24*time.Hour + time.Second, false, 0},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m := newTestModel()
-			id := newID(kube.KindPVC, "default", "data")
-			put(m, id, t0, map[string]inventory.Value{
-				kube.AttrVolumeFillETA: inventory.Number(tt.eta.Seconds()),
-			})
-			got := evaluate(VolumeUsage{}, m, t0, id, nil).Findings
-			if !tt.fires {
-				assert.Empty(t, got)
-				return
-			}
-			require.Len(t, got, 1)
-			assert.Equal(t, tt.severity, got[0].Severity)
-		})
-	}
 }
 
 func TestVolumeUsageQuiet(t *testing.T) {
@@ -163,18 +128,6 @@ func TestNodeUsageHysteresisKeepsOneFinding(t *testing.T) {
 	assert.Empty(t, sample(len(steps), 79).Findings)
 	assert.Empty(t, sample(len(steps)+1, 82).Findings,
 		"a level left must be crossed again")
-}
-
-func TestVolumeUsageIgnoresInvalidFillEstimates(t *testing.T) {
-	for _, seconds := range []float64{-9.2e9, 1e12} {
-		m := newTestModel()
-		id := newID(kube.KindPVC, "default", "data")
-		put(m, id, t0, map[string]inventory.Value{
-			kube.AttrVolumeFillETA: inventory.Number(seconds),
-		})
-		got := evaluate(VolumeUsage{}, m, t0, id, nil).Findings
-		assert.Empty(t, got, "estimate %v must not raise a finding", seconds)
-	}
 }
 
 func kubeletFailureNode(

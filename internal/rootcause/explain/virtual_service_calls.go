@@ -24,6 +24,9 @@ type clusterCall struct {
 	class detection.Mode
 	// line is the error text the Service was read from, quoted as is.
 	line string
+	// cascade is set when no error names the Service: a liveness kill
+	// that runs the readiness check stands for the call.
+	cascade bool
 }
 
 // serviceMentions find host names in error text, most precise first:
@@ -63,7 +66,10 @@ func (v *view) callModes(
 	case kube.KindNetworkPolicy:
 		return v.blockModes(id, effect, link)
 	case kube.KindService:
-		return v.calledServiceModes(id, effect, link)
+		if modes := v.calledServiceModes(id, effect, link); len(modes) > 0 {
+			return modes
+		}
+		return v.missingCalledModes(id, effect, link)
 	}
 	return v.calledBackendModes(id, effect, link)
 }
@@ -115,7 +121,10 @@ func (v *view) serviceCallHops(pod inventory.EntityID) []hop {
 	if !ok {
 		return nil
 	}
-	out := []hop{{link: LinkCalls, to: call.service}}
+	var out []hop
+	if !call.cascade || !v.backendsFailing(call.service) {
+		out = append(out, hop{link: LinkCalls, to: call.service})
+	}
 	own := rootcause.TopOwner(v.s.Model, pod)
 	for _, owner := range v.backendOwners(call.service) {
 		if owner != own {
@@ -212,6 +221,9 @@ func (v *view) clusterCallOf(id inventory.EntityID) (clusterCall, bool) {
 		if found.line != "" {
 			break
 		}
+	}
+	if found.line == "" {
+		found, _ = v.cascadeCall(unit)
 	}
 	v.clusterCalls[unit] = found
 	return found, found.line != ""

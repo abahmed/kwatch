@@ -1,7 +1,6 @@
 package detectors
 
 import (
-	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -27,9 +26,11 @@ const (
 )
 
 // Lease detects a controller or operator that holds its leader Lease but
-// stopped renewing it while its pod runs and is ready: the process is alive and
-// does nothing, which no pod status shows. A Lease whose holder is gone
-// is left alone; it is what an uninstalled controller leaves behind.
+// stopped renewing it, and nobody took over. A holder that runs and is
+// ready is alive and does nothing, which no pod status shows; a holder
+// that crash loops or is stuck says why, and its own incident explains
+// the Lease. A Lease whose holder is gone is left alone; it is what an
+// uninstalled controller leaves behind.
 type Lease struct{}
 
 // Name implements detection.Detector.
@@ -57,34 +58,43 @@ func (Lease) Detect(
 		ctx.RecheckAfter(stale - age)
 		return nil
 	}
-	pod, ok := holderPod(ctx.Model, e.ID.Namespace, holder)
+	pod, state, ok := holderPod(ctx.Model, e.ID.Namespace, holder)
 	if !ok {
 		return nil
 	}
+	summary := "Lease held by pod " + pod.Name + " has not been renewed " +
+		"for " + format.Duration(age) + "; the controller runs but " +
+		"does not work"
+	if state != "" {
+		summary = "Lease held by pod " + pod.Name + " has not been " +
+			"renewed for " + format.Duration(age) + "; the pod is " +
+			state + ": the controller is not acting"
+	}
 	return []detection.Finding{{
 		Reason: reasons.LeaseStale, Severity: detection.Warning,
-		Since: renewed.Add(stale),
-		Summary: "Lease held by pod " + pod.Name + " has not been renewed " +
-			"for " + format.Duration(age) + "; the controller runs but " +
-			"does not work",
+		Since: renewed.Add(stale), Summary: summary,
 		Evidence: []detection.Evidence{{Label: "holder", Value: holder}},
 	}}
 }
 
-// holderPod finds the running, ready pod a holder identity names. Leader
-// election writes "<pod>_<id>"; the pod name is the part before the
-// underscore, or the whole identity when there is none.
+// holderPod finds the pod a holder identity names. state is what is
+// wrong with it, empty for a pod that runs and is ready. A holder that
+// is gone or finished is left alone: an uninstalled controller leaves
+// its Lease behind, and a Job's pod ends with Succeeded.
 func holderPod(
 	model inventory.Reader, namespace, holder string,
-) (inventory.EntityID, bool) {
-	name, _, _ := strings.Cut(holder, "_")
-	id := inventory.CoreID(kube.KindPod, namespace, name)
+) (inventory.EntityID, string, bool) {
+	id := inventory.CoreID(kube.KindPod, namespace,
+		kube.HolderPodName(holder))
 	pod, ok := model.Entity(id)
-	// A pod that is not Running and Ready (crash looping, restarting,
-	// starting) explains the stale lease with its own findings.
-	if !ok || text(pod, kube.AttrPhase) != "Running" ||
-		!flag(pod, kube.AttrReady) {
-		return inventory.EntityID{}, false
+	if !ok || text(pod, kube.AttrPhase) == "Succeeded" {
+		return inventory.EntityID{}, "", false
 	}
-	return id, true
+	if state := podTrouble(model, pod); state != "" {
+		return id, state, true
+	}
+	if text(pod, kube.AttrPhase) != "Running" || !flag(pod, kube.AttrReady) {
+		return id, "not ready", true
+	}
+	return id, "", true
 }

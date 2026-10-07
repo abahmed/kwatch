@@ -36,14 +36,18 @@ var evictionResourceModes = []struct {
 }
 
 // sandboxClasses are pod network setup failure classes, matched in lower
-// case against the sandbox error the runtime and CNI plugin return.
+// case against the sandbox error the runtime and CNI plugin return. The
+// strings are generic wording of address exhaustion ("no IP addresses
+// available" is host-local and Cilium, "failed to assign an IP address"
+// the AWS VPC CNI); no CNI is detected, only its text is matched.
 var sandboxClasses = []struct {
 	mode     detection.Mode
 	patterns []string
 }{
 	{detection.ModeNetworkIPExhausted, []string{
 		"no ip addresses available", "failed to allocate for range",
-		"failed to assign an ip address",
+		"failed to assign an ip address", "out of ip addresses",
+		"no free ip",
 	}},
 	{detection.ModeNetworkCNINotReady, []string{
 		"network plugin is not ready", "cni plugin not initialized",
@@ -89,4 +93,28 @@ func sandboxFailure(note inventory.Note) (detection.Mode, bool) {
 	}
 	mode := sandboxMode(note.Message)
 	return mode, mode != ""
+}
+
+// sandboxQuote is the part of a sandbox failure message that names the
+// failure: from the matched string to the end, as written. The runtime
+// wraps it in a long prefix ("Failed to create pod sandbox: rpc error:
+// ...") that would crowd the quote out of a short message.
+func sandboxQuote(message string) string {
+	lower := strings.ToLower(message)
+	if len(lower) != len(message) {
+		return message
+	}
+	first := -1
+	for _, class := range sandboxClasses {
+		for _, pattern := range class.patterns {
+			if i := strings.Index(lower, pattern); i >= 0 &&
+				(first < 0 || i < first) {
+				first = i
+			}
+		}
+	}
+	if first < 0 {
+		return message
+	}
+	return message[first:]
 }

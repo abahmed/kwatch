@@ -167,15 +167,7 @@ func (m *Model) observe(observation Observation) Update {
 		}
 	}
 	for name, value := range observation.Attributes {
-		current, ok := rec.entity.Attributes[name]
-		if ok && current.Value.Equal(value) {
-			current.Updated = observation.At
-			rec.entity.Attributes[name] = current
-		} else {
-			rec.entity.Attributes[name] = Attribute{
-				Value: value, Since: observation.At, Updated: observation.At,
-			}
-		}
+		rec.setAttribute(name, value, observation.At)
 		rec.attrSource[name] = observation.Source
 	}
 	return Update{

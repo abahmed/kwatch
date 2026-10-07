@@ -1,0 +1,8 @@
+{
+  "name": "oom-by-node",
+  "description": "A container is OOM-killed far below its own limit while the node's kernel reports a system OOM and an importer without a limit holds the memory.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "10m0s"
+}

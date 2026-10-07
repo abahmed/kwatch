@@ -1,0 +1,11 @@
+{
+  "name": "liveness-slow-start",
+  "description": "New replicas are killed by a liveness probe that allows 40s while the last five starts took 75s.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

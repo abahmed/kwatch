@@ -1,0 +1,11 @@
+{
+  "name": "pod-terminating-node-lost",
+  "description": "A pod deleted from an unreachable node stays Terminating for over ten minutes: the node is the cause.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/apps/svc"
+  ],
+  "tail": "25m0s"
+}

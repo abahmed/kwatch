@@ -193,7 +193,7 @@ func bootNoise(
 	ctx detection.Context, e inventory.Entity, note inventory.Note,
 ) bool {
 	return e.ID.Kind == kube.KindPod && bootReasons[note.Reason] &&
-		bootGraceFor(ctx, e) > 0
+		(bootGraceFor(ctx, e) > 0 || youngNodeNoise(ctx, e, note))
 }
 
 // deleted reports whether e was an object of a watched kind that is gone.

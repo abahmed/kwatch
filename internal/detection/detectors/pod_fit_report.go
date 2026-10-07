@@ -48,6 +48,9 @@ func (c *fitCase) verdict() []detection.Evidence {
 		out = append(out, detection.Evidence{Label: detection.EvidenceFit,
 			Value: globalText(b)})
 	}
+	volumes, served := c.volumeNodes(results)
+	out = append(out, volumes...)
+	groups = withoutNodes(groups, served)
 	out = append(out, groupEvidence(groups)...)
 	out = append(out, wouldFitEvidence(groups)...)
 	return append(out, c.limitNotes(results)...)

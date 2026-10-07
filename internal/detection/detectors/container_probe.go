@@ -68,9 +68,10 @@ func probeFindings(
 		ctx.RecheckAfter(note.At.Add(keep).Sub(ctx.Now) + time.Nanosecond)
 		return []detection.Finding{{
 			Reason: kind.reason, Severity: detection.Warning,
-			Since:    note.At,
-			Summary:  containerRole(e) + " " + kind.summary,
-			Evidence: probeEvidence(note),
+			Since:   note.At,
+			Summary: containerRole(e) + " " + kind.summary,
+			Evidence: append(probeEvidence(note),
+				throttleEvidence(e)...),
 		}}
 	}
 	return nil

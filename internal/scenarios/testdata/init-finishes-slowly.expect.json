@@ -1,0 +1,7 @@
+{
+  "name": "init-finishes-slowly",
+  "description": "An init container runs for two minutes and completes; the pod starts.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "15m0s"
+}

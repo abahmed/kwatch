@@ -1,0 +1,16 @@
+{
+  "name": "webhook-tls-serving-cert-expired",
+  "description": "A fail-closed validating webhook fails every call with an expired certificate error; the Secret its pods serve expired seconds before, and is its own incident.",
+  "root": "secret/policy-system/policy-tls",
+  "otherRoots": [
+    "validatingwebhookconfiguration//image-policy"
+  ],
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/payments/gateway",
+    "deployment/search/api",
+    "node//n1",
+    "node//n2"
+  ]
+}

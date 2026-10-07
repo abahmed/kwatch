@@ -53,6 +53,9 @@ type Registry struct {
 	StorageExpired           atomic.Int64
 	StorageEvicted           atomic.Int64
 	StorageWriteFailures     atomic.Int64
+	StorageRewrites          atomic.Int64
+	StorageFileBytes         atomic.Int64
+	StorageFreeBytes         atomic.Int64
 	Investigations           [4]atomic.Int64
 	AuditDropped             atomic.Int64
 	DecisionLag              LagHistogram
@@ -245,6 +248,15 @@ var scalarMetrics = []scalarMetric{
 	counter("kwatch_storage_write_failures_total",
 		"Pipeline storage batches with at least one failed write",
 		func(r *Registry) int64 { return r.StorageWriteFailures.Load() }),
+	counter("kwatch_storage_rewrites_total",
+		"Times the state file was rewritten while running to shrink it",
+		func(r *Registry) int64 { return r.StorageRewrites.Load() }),
+	gauge("kwatch_storage_file_bytes",
+		"Size of the state file after the last compactor pass",
+		func(r *Registry) int64 { return r.StorageFileBytes.Load() }),
+	gauge("kwatch_storage_free_bytes",
+		"Free pages inside the state file after the last compactor pass",
+		func(r *Registry) int64 { return r.StorageFreeBytes.Load() }),
 	counter("kwatch_audit_dropped_total",
 		"Audit entries dropped because the audit queue was full",
 		func(r *Registry) int64 { return r.AuditDropped.Load() }),

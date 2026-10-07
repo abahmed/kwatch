@@ -27,6 +27,11 @@ type Note struct {
 	// object. Notes of one source, reason and UID with different origins
 	// add their counts; the same origin again replaces its own count.
 	Origin string
+	// Refusal is the registry's own words when the note is a failed
+	// image pull the registry refused, such as "unauthorized:
+	// authentication required". Message is cut to a bounded length and
+	// the refusal comes last, so it is kept apart.
+	Refusal string
 }
 
 // maxNoteOrigins bounds the origins remembered for one note.

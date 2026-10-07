@@ -1,0 +1,8 @@
+{
+  "name": "namespace-stuck-terminating",
+  "description": "A namespace has been terminating for hours; its conditions say a claim still has a finalizer.",
+  "root": "namespace//old-shop",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "10m0s"
+}

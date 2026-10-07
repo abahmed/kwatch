@@ -59,6 +59,8 @@ type Record struct {
 	ImpactPeak int       `json:",omitempty"`
 	Revised    bool      `json:",omitempty"`
 	RevisedAt  time.Time `json:",omitempty"`
+	// Replaced says the revision swapped a known cause for another.
+	Replaced bool `json:",omitempty"`
 	// RootReasons are the root's own reasons seen so far, so a restart
 	// does not re-report a condition the incident already covered. Older
 	// records restore without them and rebuild the set from the members.
@@ -103,6 +105,10 @@ type Record struct {
 	// records restore without them.
 	StagePeak      uint8           `json:",omitempty"`
 	AnnouncedRoute *AnnouncedRoute `json:",omitempty"`
+	// Ack is the acknowledgement the thread was told about.
+	Ack *Ack `json:",omitempty"`
+	// Demoted was added with lowering the tier of an announced incident.
+	Demoted bool `json:",omitempty"`
 	// HeldUpdate marks a material-change update that was waiting for its
 	// investigation when the record was saved. Digest then holds the
 	// fingerprint before that update, and the restore does not adopt the
@@ -130,6 +136,7 @@ func (m *Manager) Export() []Record {
 			Checked: p.Checked, Considered: p.Considered, Mode: p.Mode,
 			Fix: p.Fix, History: p.History, Reminded: p.Reminded,
 			ImpactPeak: p.impactPeak, Revised: p.Pending.revised,
+			Replaced:  p.Pending.replaced,
 			RevisedAt: p.Pending.revisedAt, AlertKey: p.AlertKey,
 			RootReasons: p.rootReasonList(),
 			Paged:       p.Delivery.paged, PagedKnown: true,
@@ -139,6 +146,7 @@ func (m *Manager) Export() []Record {
 			RepeatCount: p.RepeatCount, Unheard: !p.sent.told,
 			ToldKnown: true,
 			StagePeak: uint8(p.stagePeak), AnnouncedRoute: p.AnnouncedRoute,
+			Ack: p.Ack, Demoted: p.Delivery.demoted,
 		})
 	}
 	return out
@@ -233,13 +241,15 @@ func restored(r Record) *Incident {
 		sent: restoredMark(len(r.Timeline), r.heard()), restored: true,
 		DigestedAt: r.DigestedAt, RepeatCount: r.RepeatCount,
 		stagePeak: stage(r.StagePeak), AnnouncedRoute: r.AnnouncedRoute,
+		Ack: r.Ack,
 		Delivery: Delivery{
 			paged: r.Paged, rolledUp: r.RolledUp,
 			podPeak: r.PodPeak, pageHeld: r.PageHeld,
+			demoted: r.Demoted,
 		},
 		Pending: Pending{
 			reopenedAt: r.ReopenedAt, revised: r.Revised,
-			revisedAt: r.RevisedAt,
+			revisedAt: r.RevisedAt, replaced: r.Replaced,
 		},
 	}
 	restoreSets(p, r)

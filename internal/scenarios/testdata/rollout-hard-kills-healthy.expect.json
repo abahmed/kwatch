@@ -1,0 +1,7 @@
+{
+  "name": "rollout-hard-kills-healthy",
+  "description": "Three api pods are killed at the end of their grace period in a rollout that succeeds; nobody is interrupted.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "10m0s"
+}

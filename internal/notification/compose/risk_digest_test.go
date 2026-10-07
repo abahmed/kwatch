@@ -32,7 +32,8 @@ func TestDigestNamesWorkloadsWithPodsThatNeverBecomeReady(t *testing.T) {
 }
 
 // Pods that run but never become ready are happening now; unlike a
-// configuration choice, they are listed even in a system namespace.
+// configuration choice, they are listed even in a system namespace, and
+// the advice is not listed at all.
 func TestDigestKeepsNeverReadySystemWorkloads(t *testing.T) {
 	risks := []detection.Finding{
 		{Advisory: true, Reason: reasons.WorkloadNeverReady,
@@ -43,7 +44,7 @@ func TestDigestKeepsNeverReadySystemWorkloads(t *testing.T) {
 				"coredns")},
 	}
 
-	kept := withoutSystemRisks(risks)
+	kept := neverReady(risks)
 
 	if len(kept) != 1 || kept[0].Reason != reasons.WorkloadNeverReady {
 		t.Fatalf("kept = %+v", kept)

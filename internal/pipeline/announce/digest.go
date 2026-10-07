@@ -9,6 +9,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/notification/compose"
 )
 
 // DigestWindow is how long low-tier news is collected before one digest
@@ -35,7 +36,8 @@ type LowDigest struct {
 // the newest state. A resolve of an incident nobody heard of yet is
 // dropped with its announcement; one of an incident an earlier digest
 // listed goes into the next digest. An incident that leaves the digest
-// tier before its digest is announced at once: that is news. It reports
+// tier before its digest is announced at once: that is news; so is the
+// new cause of one that fell to it from a thread (see threadNews). It reports
 // whether a digest was sent in this call.
 func (c *Collector) CollectDigest(
 	ctx context.Context, now time.Time, decisions []incident.Decision,
@@ -53,32 +55,31 @@ func (c *Collector) CollectDigest(
 		}
 		c.recordCarried(ctx, now, d, carrier)
 	}
+	c.noteWake(now)
+	c.noteOngoing(now)
 	sent := c.flushDigest(ctx, now)
 	c.saveDigest()
 	return rest, sent
 }
 
-// maxMentionedRisks bounds the memory of named risks; past it the
-// digest may name old risks again, which costs one line each. Risks
-// ride along a digest that goes out anyway: they never cost a message
-// of their own.
+// maxMentionedRisks bounds the memory of named workloads; past it the
+// digest may name old ones again, which costs one line each. They ride
+// along a digest that goes out anyway: they never cost a message of
+// their own.
 const maxMentionedRisks = 4096
 
-// PendingRisks lists the active configuration risks no digest has
-// named yet, in a stable order.
+// PendingRisks lists the active workloads whose pods run but never
+// become ready, which no digest has named yet, in a stable order. That
+// is the only advisory finding announced: it is happening now. Advice
+// such as a single replica or a missing probe is never listed.
 func (c *Collector) PendingRisks() []detection.Finding {
 	if c.advisories == nil {
 		return nil
 	}
 	var out []detection.Finding
 	for _, f := range c.advisories() {
-		ns := f.Entity.Namespace
-		held := detection.SystemNamespace(ns) ||
-			(ns != "" && ns == c.env.OwnNamespace)
-		if held && f.Reason != reasons.WorkloadNeverReady {
-			continue
-		}
-		if !c.mentionedRisks[f.Key()] {
+		if f.Reason == reasons.WorkloadNeverReady &&
+			!c.mentionedRisks[f.Key()] {
 			out = append(out, f)
 		}
 	}
@@ -116,6 +117,9 @@ func (c *Collector) holdDigest(
 	if d.Incident.Tier != incident.Digest {
 		return c.promoteFromDigest(g, i, d), ""
 	}
+	if threadNews(d) {
+		return d, ""
+	}
 	carrier := "digest"
 	switch d.Action {
 	case incident.Announce:
@@ -139,6 +143,16 @@ func (c *Collector) holdDigest(
 		g.Since = now
 	}
 	return d, carrier
+}
+
+// threadNews reports a decision of an incident that fell to the digest
+// tier after its own thread was opened above it: the new cause and the
+// resolve go to that thread, which a digest line would leave open. Its
+// other updates, reminders among them, ride in the digest.
+func threadNews(d incident.Decision) bool {
+	return d.Thread && (d.Action == incident.Resolve ||
+		(d.Action == incident.Update &&
+			d.Reason == incident.ReasonCauseRevised))
 }
 
 // promoteFromDigest takes an incident that left the digest tier out of the
@@ -231,25 +245,42 @@ func (c *Collector) flushDigest(ctx context.Context, now time.Time) bool {
 		return false
 	}
 	sent := false
-	if len(g.Opened)+len(g.Resolved) > 0 {
+	ongoing := c.ongoingProblems()
+	if len(g.Opened)+len(g.Resolved)+len(ongoing) > 0 || c.wake != nil {
 		risks := c.PendingRisks()
-		msg := c.env.Messages.Digest(g.Opened, g.Resolved, risks, now)
-		msg.Listed = c.listedInDigest(g, len(risks), now)
+		msg := c.env.Messages.DigestWith(g.Opened, g.Resolved, risks,
+			c.digestExtras(ongoing), now)
+		msg.Listed = c.listedInDigest(g, len(risks), ongoing, now)
 		c.env.Sink(ctx, incident.Decision{Reason: "digest"}, msg)
 		for _, d := range g.Opened {
 			c.env.Incidents.ReleaseAnnouncement(d.Incident.ID)
 			c.env.Incidents.RecordDigested(d.Incident.ID, now)
 			c.markListed(d.Incident.ID)
+			c.markSeen(d.Incident)
 		}
 		for _, d := range g.Resolved {
 			c.env.Incidents.RecordDigested(d.Incident.ID, now)
 			c.takeListed(d.Incident.ID)
 		}
+		for _, item := range ongoing {
+			c.env.Incidents.RecordDigested(item.p.ID, now)
+			c.markSeen(item.p)
+		}
 		c.mentionRisks(risks)
+		c.wake = nil
 		sent = true
 	}
 	*g = LowDigest{}
 	return sent
+}
+
+// digestExtras is what the digest says beyond its incidents.
+func (c *Collector) digestExtras(ongoing []ongoingItem) compose.DigestExtras {
+	extras := compose.DigestExtras{Wake: c.wake}
+	for _, item := range ongoing {
+		extras.Ongoing = append(extras.Ongoing, item.Ongoing)
+	}
+	return extras
 }
 
 // MaxAuditItems bounds the incidents a digest's audit entry names.
@@ -258,10 +289,11 @@ const MaxAuditItems = 20
 // listedInDigest summarises a digest for the audit log: the counts, and
 // the first MaxAuditItems incidents as "id: title".
 func (c *Collector) listedInDigest(
-	g *LowDigest, risks int, now time.Time,
+	g *LowDigest, risks int, ongoing []ongoingItem, now time.Time,
 ) *notification.Listed {
 	listed := &notification.Listed{
 		Opened: len(g.Opened), Resolved: len(g.Resolved), Risks: risks,
+		Ongoing: len(ongoing),
 	}
 	add := func(decisions []incident.Decision, suffix string) {
 		for _, d := range decisions {
@@ -274,6 +306,12 @@ func (c *Collector) listedInDigest(
 	}
 	add(g.Opened, "")
 	add(g.Resolved, " (resolved)")
+	for _, item := range ongoing {
+		if len(listed.Items) < MaxAuditItems {
+			listed.Items = append(listed.Items,
+				item.p.ID+": "+item.Line(now)+" (ongoing)")
+		}
+	}
 	return listed
 }
 

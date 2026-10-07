@@ -47,6 +47,18 @@ func TestWebhookCallFailures(t *testing.T) {
 		"real timeout with query": {prefix + "Post \"https://p.svc:443" +
 			"/validate?timeout=10s\": context deadline exceeded",
 			ModeWebhookTimeout},
+		"unknown authority": {prefix + "Post \"https://p.svc:443/validate" +
+			"?timeout=10s\": x509: certificate signed by unknown " +
+			"authority", ModeWebhookTLS},
+		"expired certificate": {prefix + "Post \"https://p.svc:443" +
+			"\": tls: failed to verify certificate: x509: certificate " +
+			"has expired or is not yet valid", ModeWebhookTLS},
+		"wrong name": {prefix + "Post \"https://p.svc:443\": x509: " +
+			"certificate is valid for a.svc, not p.svc", ModeWebhookTLS},
+		// A handshake that runs out of time is a timeout, not a bad
+		// certificate.
+		"handshake timeout": {prefix + "Post \"https://p.svc:443\": " +
+			"net/http: TLS handshake timeout", ModeWebhookTimeout},
 		"i/o timeout with query": {prefix + "Post \"https://p.svc:443" +
 			"/validate?timeout=10s\": dial tcp 10.0.0.4:443: i/o " +
 			"timeout", ModeWebhookTimeout},

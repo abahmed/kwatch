@@ -1,0 +1,7 @@
+{
+  "name": "planned-scale-down-quiet",
+  "description": "Five Deployments with Ingresses are scaled to zero within a minute and a node is cordoned, drained and removed.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "20m0s"
+}

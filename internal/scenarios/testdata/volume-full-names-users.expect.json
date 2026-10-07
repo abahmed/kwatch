@@ -1,0 +1,11 @@
+{
+  "name": "volume-full-names-users",
+  "description": "A claim two workloads mount is 98% used; the database crash-loops with \"No space left on device\".",
+  "root": "persistentvolumeclaim/inventory/pgdata",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//w1",
+    "storageclass//standard"
+  ]
+}

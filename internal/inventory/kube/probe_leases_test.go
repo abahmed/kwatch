@@ -114,3 +114,35 @@ func TestLeaseScanKeepsLeasesWhenAPageFails(t *testing.T) {
 		assert.NotEqual(t, "gone", state)
 	}
 }
+
+func TestLeaseScanSkipsKwatchsOwnLease(t *testing.T) {
+	s := &leaseServer{names: []string{"kwatch-leader", "other"}}
+	prober := leaseProber(t, s)
+	prober.cfg.OwnLeaseNamespace = "ops"
+	prober.cfg.OwnLeaseName = "kwatch-leader"
+
+	got := leaseNames(prober.leases(context.Background()))
+
+	assert.Equal(t, map[string]string{"other": "observed"}, got)
+}
+
+func TestLeaseScanLinksTheHolderPod(t *testing.T) {
+	s := &leaseServer{names: []string{"operator-leader"}}
+	prober := leaseProber(t, s)
+	model := inventory.NewModel(inventory.Options{})
+	pod := inventory.CoreID(KindPod, "ops", "h")
+	model.Apply(inventory.Observation{Kind: inventory.Observed,
+		Source: "test", At: fixedNow(), Entity: pod})
+	prober.cfg.Model = model
+
+	var related []inventory.Observation
+	for _, o := range prober.leases(context.Background()) {
+		if o.Kind == inventory.Related {
+			related = append(related, o)
+		}
+	}
+
+	require.Len(t, related, 1)
+	assert.Equal(t, inventory.References, related[0].Relation)
+	assert.Equal(t, []inventory.EntityID{pod}, related[0].Targets)
+}

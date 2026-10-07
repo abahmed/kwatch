@@ -24,7 +24,18 @@ type Delivery struct {
 	sentGrowth string
 	// lastMaterial is when the last material-change update was decided.
 	lastMaterial time.Time
+	// demoted: the incident fell from the notify tier to the digest
+	// tier while its thread was open (see reassess).
+	demoted bool
 }
+
+// Demoted reports an incident that fell to the digest tier after it was
+// announced above it: its thread is still open.
+func (d *Delivery) Demoted() bool { return d.demoted }
+
+// MarkDemoted records the fall; never cleared, so the thread keeps
+// hearing the incident's resolve.
+func (d *Delivery) MarkDemoted() { d.demoted = true }
 
 // OpenAtPagers reports an alert open at the paging providers.
 func (d *Delivery) OpenAtPagers() bool { return d.paged }
@@ -92,6 +103,9 @@ type Pending struct {
 	// the new cause held since revisedAt for the revise settle.
 	revised   bool
 	revisedAt time.Time
+	// replaced: the revision swapped one known cause for another, as
+	// opposed to finding a cause where none was known.
+	replaced bool
 }
 
 // ScheduleReopenUpdate owes a "failing again" update, due after the
@@ -117,8 +131,16 @@ func (p *Pending) DueReopenUpdate(now time.Time, settle time.Duration) bool {
 
 // MarkRevised owes a "cause revised" update, due after the settle.
 func (p *Pending) MarkRevised(now time.Time) {
-	p.revised, p.revisedAt = true, now
+	p.revised, p.revisedAt, p.replaced = true, now, false
 }
+
+// MarkReplaced notes that the owed revision replaces a cause that was
+// known before, so its update says "changed" and not "now known".
+func (p *Pending) MarkReplaced() { p.replaced = true }
+
+// CauseReplaced reports that the revision swapped one known cause for
+// another. It stays set after ClearRevised, for the update's wording.
+func (p *Pending) CauseReplaced() bool { return p.replaced }
 
 // ClearRevised drops the owed update: it is being sent now.
 func (p *Pending) ClearRevised() { p.revised = false }

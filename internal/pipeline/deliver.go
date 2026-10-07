@@ -161,7 +161,7 @@ func (a *announcer) sendHeld(ctx context.Context, h heldAnnouncement) bool {
 func (a *announcer) send(
 	ctx context.Context, d incident.Decision, at time.Time,
 ) {
-	d = a.withKindNames(a.withChanges(d, at))
+	d = a.withWake(a.withKindNames(a.withChanges(d, at)), at)
 	msg := a.write(a.collect.Follow(d), at)
 	a.scopePaging(d, &msg)
 	if d.PagedAlready {

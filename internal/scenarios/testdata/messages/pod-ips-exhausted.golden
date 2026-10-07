@@ -1,0 +1,13 @@
+10:02:15 settled
+🟠 Zone zone-a (prod-eu-1) is failing as a whole: three nodes have run out of pod IP addresses. 14 pods can't start on 3 nodes: no free pod IPs. Their events say "failed to assign an IP address to container". All of its dependents are failing. api, web and worker in shop are affected as well. To see the object's state and events, run kubectl describe node n1
+Checked: all 6 replicas fail, on 3 nodes; all 5 replicas fail, on 3 nodes; all 3 replicas fail, on 3 nodes.
+🟠 Zone zone-a (prod-eu-1) is failing as a whole: three nodes have run out of pod IP addresses.
+| 🟠 Zone **zone-a** (**prod-eu-1**) is failing as a whole: three nodes have run out of pod IP addresses.
+| 14 pods can't start on 3 nodes: no free pod IPs. Their events say `failed to assign an IP address to container`.
+| All of its dependents are failing.
+| **api**, **web** and **worker** in **shop** are affected as well.
+| To see the object's state and events, run
+| ```
+| kubectl describe node n1
+| ```
+| *Checked: all 6 replicas fail, on 3 nodes; all 5 replicas fail, on 3 nodes; all 3 replicas fail, on 3 nodes.*

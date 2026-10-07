@@ -1,0 +1,8 @@
+{
+  "name": "loadbalancer-no-controller",
+  "description": "A new LoadBalancer Service names a load balancer class and no controller has acted on it.",
+  "root": "service/shop/api",
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "20m0s"
+}

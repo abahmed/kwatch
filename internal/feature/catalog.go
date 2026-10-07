@@ -74,7 +74,7 @@ var definitions = []Definition{
 		Runtime, nil,
 	},
 	{
-		VolumeUsage, "Predict volumes filling up",
+		VolumeUsage, "Detect volumes nearly full",
 		Runtime, []ID{StorageDetection},
 	},
 	{
@@ -106,8 +106,9 @@ var definitions = []Definition{
 		Runtime, nil,
 	},
 	{
-		ConfigurationRisks, "Report configuration risks (no probe, no " +
-			"limit, mutable tag, single replica) in the digest",
+		ConfigurationRisks, "Quote configuration risks (no probe, no " +
+			"limit, mutable tag, single replica) when a failure shows " +
+			"their cost",
 		Runtime, []ID{WorkloadDetection},
 	},
 	{

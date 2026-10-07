@@ -60,21 +60,43 @@ func TestLeaseQuietWhenFreshOrHolderGone(t *testing.T) {
 		entityOf(done, lease)))
 }
 
-// A holder that crash loops or is restarting is explained by its own
-// findings: the stale lease must not repeat them.
-func TestLeaseQuietWhenHolderIsNotReady(t *testing.T) {
+// A holder that crash loops or is stuck is reported with its state, so
+// the Lease is linked to the pod's own incident.
+func TestLeaseNamesTheHoldersTrouble(t *testing.T) {
 	m, lease := leaseModel(time.Hour, "operator-7d9f_1a2b", "Running")
-	put(m, newID(kube.KindPod, "ops", "operator-7d9f"), t0,
-		map[string]inventory.Value{
-			kube.AttrPhase: inventory.Text("Running"),
-			kube.AttrReady: inventory.Bool(false),
-		})
-	assert.Empty(t, Lease{}.Detect(testDetectorContext(m, t0),
-		entityOf(m, lease)))
+	pod := newID(kube.KindPod, "ops", "operator-7d9f")
+	put(m, pod, t0, map[string]inventory.Value{
+		kube.AttrPhase: inventory.Text("Running"),
+		kube.AttrReady: inventory.Bool(false),
+	})
+	box := newID(kube.KindContainer, "ops", "operator-7d9f/manager")
+	put(m, box, t0, map[string]inventory.Value{
+		kube.AttrState:       inventory.Text("waiting"),
+		kube.AttrStateReason: inventory.Text("CrashLoopBackOff"),
+	})
+	link(m, box, inventory.PartOf, pod)
+
+	got := Lease{}.Detect(testDetectorContext(m, t0), entityOf(m, lease))
+
+	require.Len(t, got, 1)
+	assert.Contains(t, got[0].Summary, "the pod is CrashLoopBackOff")
+	assert.Contains(t, got[0].Summary, "the controller is not acting")
 
 	pending, lease := leaseModel(time.Hour, "operator-7d9f_1a2b", "Pending")
-	assert.Empty(t, Lease{}.Detect(testDetectorContext(pending, t0),
-		entityOf(pending, lease)))
+	got = Lease{}.Detect(testDetectorContext(pending, t0),
+		entityOf(pending, lease))
+	require.Len(t, got, 1)
+	assert.Contains(t, got[0].Summary, "the pod is Pending")
+
+	idle, lease := leaseModel(time.Hour, "operator-7d9f_1a2b", "Running")
+	put(idle, pod, t0, map[string]inventory.Value{
+		kube.AttrPhase: inventory.Text("Running"),
+		kube.AttrReady: inventory.Bool(false),
+	})
+	got = Lease{}.Detect(testDetectorContext(idle, t0),
+		entityOf(idle, lease))
+	require.Len(t, got, 1)
+	assert.Contains(t, got[0].Summary, "the pod is not ready")
 }
 
 // The lease inventory is rescanned every couple of minutes, so a renewal

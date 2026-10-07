@@ -13,22 +13,22 @@ import (
 // maxRiskExamples bounds how many workloads one risk type names.
 const maxRiskExamples = 3
 
-// withoutSystemRisks drops the risks of workloads in system
-// namespaces: they are the cluster's, not the team's, to fix. Pods that
-// run but never become ready are not a configuration choice but a state
-// that is happening now, so a system workload's are kept.
-func withoutSystemRisks(risks []detection.Finding) []detection.Finding {
+// neverReady keeps the findings the digest announces beside its
+// problems: pods that run but never become ready while others serve.
+// That is happening now, system namespaces included. Configuration
+// advice (no probe, a single replica) is never announced; a failure
+// quotes it only as a consequence.
+func neverReady(findings []detection.Finding) []detection.Finding {
 	var out []detection.Finding
-	for _, f := range risks {
-		if !detection.SystemNamespace(f.Entity.Namespace) ||
-			f.Reason == reasons.WorkloadNeverReady {
+	for _, f := range findings {
+		if f.Reason == reasons.WorkloadNeverReady {
 			out = append(out, f)
 		}
 	}
 	return out
 }
 
-// riskWorkloads counts the distinct workloads that have a risk.
+// riskWorkloads counts the distinct workloads with pods never ready.
 func riskWorkloads(risks []detection.Finding) int {
 	seen := map[inventory.EntityID]bool{}
 	for _, f := range risks {
@@ -37,22 +37,21 @@ func riskWorkloads(risks []detection.Finding) int {
 	return len(seen)
 }
 
-// riskGroup is every workload that has one type of risk.
+// riskGroup is every workload that has one type of finding.
 type riskGroup struct {
 	reason string
-	// clause words the risk for one workload: "runs a single replica".
+	// clause words the finding for one workload.
 	clause string
 	names  []string
 	// ids are the same workloads, for lists that tell namespaces apart.
 	ids []inventory.EntityID
 }
 
-// riskTitles summarises the risks by type, with a few example
-// workloads each, in one sentence: "Configuration risks: 40 workloads
-// have no readiness probe (orders, payments, cart and 37 more); one
-// workload runs a single replica (api)."
+// riskTitles names the workloads with pods that never become ready, with
+// a few examples, in one sentence: "Running but not ready: 2 workloads
+// have pods that run but never become ready (api, cart)."
 func riskTitles(risks []detection.Finding) []sentence {
-	groups := groupRisks(withoutSystemRisks(risks))
+	groups := groupRisks(neverReady(risks))
 	if len(groups) == 0 {
 		return nil
 	}
@@ -60,7 +59,7 @@ func riskTitles(risks []detection.Finding) []sentence {
 	for _, g := range groups {
 		clauses = append(clauses, riskGroupText(g))
 	}
-	return []sentence{{part: partProof, text: "Configuration risks: " +
+	return []sentence{{part: partProof, text: "Running but not ready: " +
 		strings.Join(clauses, "; ") + "."}}
 }
 
@@ -107,24 +106,12 @@ func riskGroupText(g riskGroup) string {
 	return text + " (" + strings.Join(shown, ", ") + more(n, len(shown)) + ")"
 }
 
-// riskClauses word each configuration risk as what the workload does.
-var riskClauses = map[string]string{
-	reasons.RiskNoReadinessProbe: "has no readiness probe",
-	reasons.RiskNoMemoryLimit:    "has containers without a memory limit",
-	reasons.RiskMutableImageTag:  "runs an image tag that can change",
-	reasons.RiskSingleReplica:    "runs a single replica",
-	reasons.RiskSingleNode:       "runs every replica on one node",
-	reasons.RiskPrivileged:       "runs a privileged container",
-	// Some replicas serve and the rest run but fail their readiness
-	// probe: not a configuration risk, but worth the digest.
-	reasons.WorkloadNeverReady: "has pods that run but never become ready",
-}
-
-// riskClause is the clause for a risk finding; an unknown risk falls
-// back to its summary as a predicate.
+// riskClause words what the workload does: its pods run but never
+// become ready. Some replicas serve and the rest fail their readiness
+// probe; an unknown reason falls back to its summary as a predicate.
 func riskClause(f detection.Finding) string {
-	if clause, ok := riskClauses[f.Reason]; ok {
-		return clause
+	if f.Reason == reasons.WorkloadNeverReady {
+		return "has pods that run but never become ready"
 	}
 	return predicate(f.Entity, f.Summary)
 }

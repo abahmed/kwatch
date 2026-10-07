@@ -46,14 +46,27 @@ type Collector struct {
 	// Outages holds each namespace's announcements while an outage opens.
 	Outages map[string]*OutageHold
 
-	// advisories lists the active configuration risks; nil when the
-	// engine has none to offer. The digest names each once.
+	// advisories lists the active advisory findings; nil when the
+	// engine has none to offer. The digest names only the ones that
+	// are happening now (see PendingRisks), each once.
 	advisories func() []detection.Finding
 	// digested are the incidents a digest listed that have not spoken
 	// since (see DigestState.Listed).
 	digested []string
-	// mentionedRisks are the risks a digest already named.
+	// mentionedRisks are the findings a digest already named.
 	mentionedRisks map[detection.Key]bool
+	// ongoingMarks is how often each listed problem had been seen when
+	// a digest last listed it, by incident ID; ongoingChecked is when
+	// the open ones were last compared with it.
+	ongoingMarks   map[string]int
+	ongoingChecked time.Time
+	// seenAt is when the collector first ran; wakeDone is the start of
+	// the last wake-up summarised and wake the summary the next digest
+	// carries (see noteWake).
+	seenAt, wakeDone time.Time
+	wake             *compose.WakeLine
+	// readiness is the daily upgrade-readiness line of the digest.
+	readiness readinessItem
 }
 
 // New returns a Collector over env.
@@ -62,10 +75,11 @@ func New(env Env) *Collector {
 		env:            env,
 		Outages:        map[string]*OutageHold{},
 		mentionedRisks: map[detection.Key]bool{},
+		ongoingMarks:   map[string]int{},
 	}
 }
 
-// SetAdvisories sets the source of the active configuration risks.
+// SetAdvisories sets the source of the active advisory findings.
 func (c *Collector) SetAdvisories(f func() []detection.Finding) {
 	c.advisories = f
 }

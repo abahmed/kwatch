@@ -27,6 +27,9 @@ const (
 	CreateContainerError = "CreateContainerError"
 	CreateConfigError    = "CreateContainerConfigError"
 	InitContainerError   = "InitContainerError"
+	// InitContainerWaiting is an init container that runs far longer
+	// than usual and holds the pod in Init.
+	InitContainerWaiting = "InitContainerWaiting"
 	DeadlineExceeded     = "DeadlineExceeded"
 	PostStartHookError   = "PostStartHookError"
 	StartupProbeFailed   = "StartupProbeFailed"
@@ -47,17 +50,15 @@ const (
 
 // Node reasons.
 const (
-	NodeNotReady         = "NodeNotReady"
-	NodeDraining         = "NodeDraining"
-	NotReady             = "NotReady"
-	MemoryPressure       = "MemoryPressure"
-	NodeMemoryPressure   = "NodeMemoryPressure"
-	DiskPressure         = "DiskPressure"
-	PIDPressure          = "PIDPressure"
-	NetworkUnavailable   = "NetworkUnavailable"
-	NodeResourceHigh     = "NodeResourceHigh"
-	NodeResourceCritical = "NodeResourceCritical"
-	NodeFilesystemHigh   = "NodeFilesystemUsageHigh"
+	NodeNotReady       = "NodeNotReady"
+	NodeDraining       = "NodeDraining"
+	NotReady           = "NotReady"
+	MemoryPressure     = "MemoryPressure"
+	NodeMemoryPressure = "NodeMemoryPressure"
+	DiskPressure       = "DiskPressure"
+	PIDPressure        = "PIDPressure"
+	NetworkUnavailable = "NetworkUnavailable"
+	NodeFilesystemHigh = "NodeFilesystemUsageHigh"
 	// NodeFilesystemCritical and NodeInodesCritical are never raised: the
 	// High reasons turn critical instead. They exist so findings and
 	// incidents persisted by earlier versions keep their mode.
@@ -116,8 +117,13 @@ const (
 	// IngressBackendNotFound is an Ingress or a Gateway API route that
 	// sends traffic to a Service that does not exist. The name predates
 	// route support and is kept: audit logs and filters refer to it.
-	IngressBackendNotFound           = "IngressBackendNotFound"
-	WebhookBackendNotFound           = "WebhookBackendNotFound"
+	IngressBackendNotFound = "IngressBackendNotFound"
+	WebhookBackendNotFound = "WebhookBackendNotFound"
+	// ServicePortMismatch is a Service whose targetPort matches no port
+	// of the pods it selects. IngressBackendPortMissing is an Ingress
+	// rule that names a Service port the Service does not have.
+	ServicePortMismatch              = "ServicePortMismatch"
+	IngressBackendPortMissing        = "IngressBackendPortMissing"
 	WebhookNoEndpoints               = "WebhookNoEndpoints"
 	AdmissionPolicyInvalid           = "AdmissionPolicyInvalid"
 	AdmissionBindingInvalid          = "AdmissionPolicyBindingInvalid"
@@ -152,7 +158,7 @@ const (
 // Storage reasons.
 const (
 	VolumeUsageHigh        = "VolumeUsageHigh"
-	VolumeFillingUp        = "VolumeFillingUp"
+	VolumeInodesHigh       = "VolumeInodesHigh"
 	PersistentVolumeClaim  = "PersistentVolumeClaimFailure"
 	PersistentVolume       = "PersistentVolumeFailure"
 	ResourceQuotaExhausted = "ResourceQuotaExhausted"
@@ -239,16 +245,14 @@ const (
 )
 
 // Configuration risks: advisory findings about how a workload is set
-// up, reported in the digest and quoted as a consequence when a failure
-// shows what the risk cost. They share RiskPrefix.
+// up. They are never announced on their own; a failure quotes one as a
+// consequence when it shows what the risk cost. They share RiskPrefix.
 const (
 	RiskPrefix           = "Risk."
 	RiskNoReadinessProbe = "Risk.NoReadinessProbe"
 	RiskNoMemoryLimit    = "Risk.NoMemoryLimit"
 	RiskMutableImageTag  = "Risk.MutableImageTag"
 	RiskSingleReplica    = "Risk.SingleReplica"
-	RiskSingleNode       = "Risk.SingleNode"
-	RiskPrivileged       = "Risk.Privileged"
 )
 
 // UnusualEvent is the reason for a repeated Warning event kwatch does
@@ -261,9 +265,12 @@ func UnusualEvent(eventReason string) string {
 // matched by the detectors (kubelet admission reasons, event reasons,
 // probe messages) are verified against kubernetes/kubernetes master.
 const (
-	LivenessProbeFailed    = "LivenessProbeFailed"
-	LivenessKilled         = "LivenessKilled"
-	ReadinessProbeFailed   = "ReadinessProbeFailed"
+	LivenessProbeFailed  = "LivenessProbeFailed"
+	LivenessKilled       = "LivenessKilled"
+	ReadinessProbeFailed = "ReadinessProbeFailed"
+	// ReadinessFlapping is a workload whose pods keep switching between
+	// ready and not ready, so the endpoints of its Service keep changing.
+	ReadinessFlapping      = "ReadinessFlapping"
 	PodAdmissionRejected   = "PodAdmissionRejected"
 	ExitNotExecutable      = "ContainerExitNotExecutable"
 	ExitCommandNotFound    = "ContainerExitCommandNotFound"
@@ -282,6 +289,8 @@ const (
 	PodResizeDeferred      = "PodResizeDeferred"
 	PodResizeError         = "PodResizeError"
 	PodPreemptedRepeatedly = "PodPreemptedRepeatedly"
+	PodPreempted           = "PodPreempted"
+	PodKilledAtGrace       = "PodKilledAtGrace"
 	ClusterVersionSkew     = "ClusterVersionSkew"
 )
 

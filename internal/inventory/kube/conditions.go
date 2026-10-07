@@ -67,6 +67,13 @@ var failureConditionTypes = map[string]bool{
 	"NetworkUnavailable":  true,
 	"PodResizePending":    true,
 	"PodResizeInProgress": true,
+	// DisruptionTarget=True names who preempted or evicted the pod.
+	"DisruptionTarget": true,
+	// A terminating namespace reports what keeps it alive as True.
+	"NamespaceDeletionDiscoveryFailure": true,
+	"NamespaceDeletionContentFailure":   true,
+	"NamespaceContentRemaining":         true,
+	"NamespaceFinalizersRemaining":      true,
 }
 
 // keepsMessage skips the message of healthy conditions ("Available=True")

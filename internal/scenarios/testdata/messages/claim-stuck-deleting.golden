@@ -1,0 +1,9 @@
+10:01:15 settled
+🟠 Volume claim data in shop (prod-eu-1) is failing: deletion is blocked by finalizers kubernetes.io/pvc-protection (still used by pod db-dc3bac48-a). The cause is not clear yet. To see why the volume claim is not usable, run kubectl describe pvc data -n shop
+🟠 Volume claim data in shop (prod-eu-1) is failing: deletion is blocked by finalizers kubernetes.io/pvc-protection (still used by pod db-dc3bac48-a).
+| 🟠 Volume claim **data** in **shop** (**prod-eu-1**) is failing: deletion is blocked by finalizers kubernetes.io/pvc-protection (still used by pod db-dc3bac48-a).
+| The cause is not clear yet.
+| To see why the volume claim is not usable, run
+| ```
+| kubectl describe pvc data -n shop
+| ```

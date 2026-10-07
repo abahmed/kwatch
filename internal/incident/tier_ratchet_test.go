@@ -15,7 +15,7 @@ func TestManagerAnnouncedTierNeverDrops(t *testing.T) {
 	r := newRig(t, Config{})
 	node := entity("node", "n1")
 	critical := sig(node, "NodeNotReady", detection.Critical)
-	warning := sig(node, "NodeResourceHigh", detection.Warning)
+	warning := sig(node, "ContainerCPUHigh", detection.Warning)
 	r.raise(at(0), critical, warning)
 	ds := r.tick(at(DefaultPageSettle))
 	wantAction(t, ds, Announce, "settled")

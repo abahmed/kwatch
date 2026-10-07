@@ -1,0 +1,11 @@
+{
+  "name": "volume-inodes-full",
+  "description": "A mail relay's PersistentVolumeClaim runs out of inodes with 88% of its bytes free; the relay crash-loops with \"No space left on device\".",
+  "root": "persistentvolumeclaim/mail/spool",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//w1",
+    "storageclass//standard"
+  ]
+}

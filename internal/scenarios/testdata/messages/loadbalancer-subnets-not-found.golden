@@ -1,0 +1,8 @@
+10:03:15 settled
+🟠 Service web in shop (prod-eu-1) has been waiting 2 min for a load balancer: "Failed build model due to couldn't auto-discover subnets: unable to resolve at least one subnet (0 match VPC and tags: [kubernetes.io/role/elb])". To see the object's state and events, run kubectl describe service web -n shop
+🟠 Service web in shop (prod-eu-1) has been waiting 2 min for a load balancer: "Failed build model due to couldn't auto-discover subnets: unable to resolve at least one subnet (0 match VPC and tags: [kubernetes.io/role/elb])".
+| 🟠 Service **web** in **shop** (**prod-eu-1**) has been waiting 2 min for a load balancer: `Failed build model due to couldn't auto-discover subnets: unable to resolve at least one subnet (0 match VPC and tags: [kubernetes.io/role/elb])`.
+| To see the object's state and events, run
+| ```
+| kubectl describe service web -n shop
+| ```

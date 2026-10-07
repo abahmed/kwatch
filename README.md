@@ -210,20 +210,18 @@ To see the rollout state, run
 ```
 
 Messages that list several problems are short lists, the ones that need
-attention first, what resolved on one line and the configuration risks last:
+attention first and what resolved on one line. kwatch reports what is
+happening, not what could happen: advice such as a single replica or a missing
+probe is never listed:
 
 ```text
-🟡 **kwatch digest** · staging — 2 problems · 5 resolved · risks on 6 workloads
+🟡 **kwatch digest** · staging — 2 problems · 5 resolved
 
 **Problems**
 • Node **ip-10-0-67-211** — failing again
 • Service **ingress-nginx** (**kube-addons**) — Kubernetes reported FailedDeployModel 3 times in the last quarter hour
 
 ✅ 5 resolved since last digest: accounts, assets, comms +2
-
-**Configuration risks (none urgent)**
-• Single replica — 5: accounts, app, web +2
-• Mutable image tag — 1: website
 ```
 
 ```text
@@ -295,7 +293,7 @@ updates the same page and closes it when it is fixed.
 | 🗓️ **Scheduling** | Pods that cannot be placed, quota limits, affinity and taint mismatches |
 | 🖥️ **Nodes** | Lost or not-ready nodes, memory, disk and PID pressure |
 | 🌐 **Network** | Services without endpoints, broken Ingress and Gateway routes, failing webhooks, unreachable external endpoints |
-| 💾 **Storage** | Volumes filling up, failed attachments, stuck claims |
+| 💾 **Storage** | Nearly full volumes, failed attachments, stuck claims |
 | 🔐 **Config** | Missing or rotated Secrets and ConfigMaps, image pull failures, expiring certificates |
 | 🧩 **Your CRDs** | Anything that reports standard status conditions |
 

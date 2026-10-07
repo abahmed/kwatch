@@ -22,4 +22,8 @@ const (
 	// ProofPreviousHealthy: the previous revision ran healthy for Count
 	// minutes before the change (counterfactual).
 	ProofPreviousHealthy ProofCode = "previous-healthy"
+	// ProofReplicasDiffer: one attribute separates the failing
+	// replicas from the healthy ones: image digest, container or zone
+	// (counterfactual).
+	ProofReplicasDiffer ProofCode = "replicas-differ"
 )

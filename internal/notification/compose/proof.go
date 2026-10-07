@@ -32,6 +32,7 @@ const maxQuote = 120
 func changeSentences(f caseFacts) []sentence {
 	if f.p.Cause == nil || f.p.Cause.Change == nil ||
 		systemChange(*f.p.Cause.Change) || hasRevisionEdits(f) ||
+		hasConfigVersion(f) ||
 		policyBlocksCall(f.p.Cause) {
 		return nil
 	}
@@ -192,7 +193,7 @@ func causeProofSentences(f caseFacts) []sentence {
 // errorSentences quote the failure's own error, else the first error
 // line investigation found, else the last line the application wrote.
 func errorSentences(f caseFacts) []sentence {
-	if !f.ok {
+	if !f.ok || hasProof(nodeWhySentences(f)) {
 		return nil
 	}
 	said := evidence(f.lead, "error", "message")
@@ -206,6 +207,8 @@ func errorSentences(f caseFacts) []sentence {
 			return []sentence{{part: partProof, weight: weightError,
 				text: "Its image cannot be pulled."}}
 		}
+	case said != "" && quotedByMissingService(f, said):
+		return nil
 	case said != "" && !restartNoise.MatchString(said):
 		return []sentence{{part: partProof, weight: weightError,
 			text: errorIntro(f) + " " + quoted(said) + "."}}
@@ -220,8 +223,8 @@ func errorSentences(f caseFacts) []sentence {
 	return nil
 }
 
-// usageSentences state how full something is: "It is at 94% and will
-// be full in about 3 hours." or "etl uses about 11 GiB."
+// usageSentences state how full something is: "It is at 94% of 20 GiB."
+// or "etl uses about 11 GiB."
 func usageSentences(f caseFacts) []sentence {
 	var out []sentence
 	for _, s := range f.members {
@@ -235,13 +238,11 @@ func usageSentences(f caseFacts) []sentence {
 		}
 		text := subject + " uses " + humanBytes(used)
 		if strings.HasSuffix(used, "%") {
-			text = subject + " is at " + used
-		}
-		if eta := evidence(s, "full in"); eta != "" {
-			text += " and will be full in " + humanizeText(eta)
+			text = subject + " is at " + usedOfWords(used, s)
 		}
 		out = append(out, sentence{part: partProof, weight: weightUsage,
 			text: endSentence(text)})
+		out = append(out, volumeUserSentences(s)...)
 	}
 	return out
 }

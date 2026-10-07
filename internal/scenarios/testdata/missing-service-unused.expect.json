@@ -1,0 +1,6 @@
+{
+  "name": "missing-service-unused",
+  "description": "The API's configuration names a Service that does not exist, and the API is healthy.",
+  "maxMessages": 0,
+  "quiet": true
+}

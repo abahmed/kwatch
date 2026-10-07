@@ -28,6 +28,7 @@ func cronJobRuns(cron *batchv1.CronJob, attrs map[string]inventory.Value) {
 		policy = batchv1.AllowConcurrent
 	}
 	attrs[AttrConcurrencyPolicy] = inventory.Text(string(policy))
+	scheduleText(cron, attrs)
 	if runs, ok := runsSinceSuccess(cron); ok {
 		attrs[AttrRunsSinceSuccess] = inventory.Number(float64(runs))
 	}

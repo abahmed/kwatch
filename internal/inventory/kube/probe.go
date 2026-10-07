@@ -58,6 +58,10 @@ type ProbeConfig struct {
 	HTTP *http.Client
 	// Model finds the cluster DNS pods; nil skips their metrics.
 	Model inventory.Reader
+	// OwnLease is kwatch's own leader Lease, which the Lease scan
+	// leaves out: kwatch is the one renewing it. Empty names skip
+	// nothing.
+	OwnLeaseNamespace, OwnLeaseName string
 }
 
 // Prober checks the API server and cluster DNS every probeInterval. Each
@@ -267,11 +271,7 @@ func (p *Prober) leases(ctx context.Context) []inventory.Observation {
 	var out []inventory.Observation
 	seen := make(map[inventory.EntityID]bool, len(items))
 	for _, lease := range items {
-		if lease.Namespace == nodeLeaseNamespace ||
-			lease.Spec.RenewTime == nil || lease.Spec.HolderIdentity == nil ||
-			(lease.Namespace == "kube-system" &&
-				(lease.Name == Scheduler.Name ||
-					lease.Name == ControllerManager.Name)) {
+		if p.skipLease(lease) {
 			continue
 		}
 		seconds := float64(defaultLeaseSeconds)
@@ -289,6 +289,9 @@ func (p *Prober) leases(ctx context.Context) []inventory.Observation {
 				AttrLeaseDuration: inventory.Number(seconds),
 			},
 		})
+		if related, ok := p.holderRelation(id, *lease.Spec.HolderIdentity); ok {
+			out = append(out, related)
+		}
 	}
 	if !complete {
 		for id := range p.leasesSeen {
@@ -305,6 +308,23 @@ func (p *Prober) leases(ctx context.Context) []inventory.Observation {
 	}
 	p.leasesSeen = seen
 	return out
+}
+
+// skipLease is a Lease the scan leaves out: node heartbeats, the
+// control-plane leaders, kwatch's own and one nobody holds or renews.
+func (p *Prober) skipLease(lease coordinationv1.Lease) bool {
+	return lease.Namespace == nodeLeaseNamespace ||
+		lease.Spec.RenewTime == nil || lease.Spec.HolderIdentity == nil ||
+		p.isOwnLease(lease.Namespace, lease.Name) ||
+		(lease.Namespace == "kube-system" &&
+			(lease.Name == Scheduler.Name ||
+				lease.Name == ControllerManager.Name))
+}
+
+// isOwnLease reports kwatch's own leader Lease.
+func (p *Prober) isOwnLease(namespace, name string) bool {
+	return p.cfg.OwnLeaseName != "" && name == p.cfg.OwnLeaseName &&
+		namespace == p.cfg.OwnLeaseNamespace
 }
 
 // listLeases reads the Leases of every namespace page by page. complete

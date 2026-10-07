@@ -48,6 +48,10 @@ func checkedSentences(f caseFacts) []sentence {
 		onlyAdvisory(f.members) {
 		return nil
 	}
+	if _, _, byNode := nodeKill(f.members); byNode {
+		// The node is named as the cause by the sentences that follow.
+		return recentChangeSentence(f)
+	}
 	text := "Nothing outside it explains this."
 	if words := checkedWordsFor(p.Checked); len(words) > 0 {
 		text = "Its " + joinWords(words) + " " +

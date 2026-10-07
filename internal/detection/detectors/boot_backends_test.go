@@ -81,9 +81,10 @@ func TestWebhookNoEndpointsWaitsForStartingPods(t *testing.T) {
 
 func TestNodeCommitmentWaitsForYoungNode(t *testing.T) {
 	m, node := commitmentModel(1000, 800, 800)
-	put(m, node, t0, map[string]inventory.Value{
+	put(m, node, t0, conditionAttrs(map[string]inventory.Value{
 		kube.AttrMemoryAllocatable: inventory.Number(1000),
-		kube.AttrCreated:           inventory.Time(t0)})
+		kube.AttrCreated:           inventory.Time(t0)},
+		"MemoryPressure", "True", "KubeletHasInsufficientMemory", t0))
 
 	early := evaluate(NodeCommitment{}, m, t0.Add(5*time.Minute), node, nil)
 	assert.Empty(t, early.Findings)
@@ -107,19 +108,4 @@ func TestNodePressureStallWaitsForYoungNode(t *testing.T) {
 	late := evaluate(NodeUsage{}, m, t0.Add(kube.BootWindow), node, nil)
 	require.Len(t, late.Findings, 1)
 	assert.Equal(t, reasons.NodePSIHigh, late.Findings[0].Reason)
-}
-
-func TestNodeOvercommitWaitsForYoungNode(t *testing.T) {
-	m, node := overcommittedNode(2000, 100)
-	put(m, node, t0, map[string]inventory.Value{
-		kube.AttrCPUAllocatable:    inventory.Number(1000),
-		kube.AttrMemoryAllocatable: inventory.Number(1000),
-		kube.AttrCreated:           inventory.Time(t0)})
-
-	early := evaluate(NodeHealth{}, m, t0.Add(5*time.Minute), node, nil)
-	assert.Empty(t, early.Findings)
-	assert.Equal(t, 5*time.Minute, early.RecheckAfter)
-	late := evaluate(NodeHealth{}, m, t0.Add(kube.BootWindow), node, nil)
-	require.Len(t, late.Findings, 1)
-	assert.Equal(t, reasons.NodeResourceHigh, late.Findings[0].Reason)
 }

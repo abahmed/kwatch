@@ -53,6 +53,10 @@ var evidenceWriters = map[string]func(incident.Fact) (sentence, bool){
 			" of "+e.Subject+"."), true
 	},
 	incident.FactEndpoints: endpointSentence,
+	incident.FactDependency: func(e incident.Fact) (sentence, bool) {
+		return proof(weightEndpoints,
+			"Its output names "+e.Text+"."), true
+	},
 	incident.FactWebhook: func(e incident.Fact) (sentence, bool) {
 		return proof(weightWebhook,
 			"The API server says "+quoted(e.Text)+"."), true

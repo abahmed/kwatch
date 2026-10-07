@@ -1,0 +1,12 @@
+{
+  "name": "liveness-cascade",
+  "description": "A database fails; the API and worker pods are restarted by a liveness probe that is the same check as readiness.",
+  "root": "deployment/shop/db",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/api",
+    "deployment/shop/worker",
+    "node//n1"
+  ]
+}

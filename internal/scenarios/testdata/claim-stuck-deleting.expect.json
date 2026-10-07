@@ -1,0 +1,8 @@
+{
+  "name": "claim-stuck-deleting",
+  "description": "A PersistentVolumeClaim deleted an hour ago is held by its protection finalizer while a pod uses it.",
+  "root": "persistentvolumeclaim/shop/data",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "10m0s"
+}

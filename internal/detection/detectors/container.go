@@ -41,7 +41,15 @@ func (Container) Kinds() []inventory.Kind {
 }
 
 // Detect implements detection.Detector.
-func (Container) Detect(
+func (c Container) Detect(
+	ctx detection.Context, e inventory.Entity,
+) []detection.Finding {
+	return withArchMismatch(ctx, e,
+		withNodeOOM(ctx, e, c.byState(ctx, e)))
+}
+
+// byState finds what the container's state shows.
+func (Container) byState(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	switch text(e, kube.AttrState) {
