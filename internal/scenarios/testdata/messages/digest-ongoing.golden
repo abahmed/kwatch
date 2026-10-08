@@ -6,12 +6,12 @@
 | **Problems**
 | - Service **ingress-internal** (**kube-system**) — can't deploy its load balancer again
 17:20:50 digest
-🟡 kwatch (prod-eu-1) has one ongoing problem to report. Service ingress-internal (kube-system) — still failing: FailedDeployModel ×28 since 10:16. None of them is urgent; one that gets worse gets its own message.
+🟡 kwatch (prod-eu-1) has one ongoing problem to report. 1 more still failing, unchanged (ingress-internal). None of them is urgent; one that gets worse gets its own message.
 🟡 kwatch (prod-eu-1) has one ongoing problem to report.
 | 🟡 **kwatch digest** · prod-eu-1 — 1 ongoing
 |
 | **Problems**
-| - Service **ingress-internal** (**kube-system**) — still failing: FailedDeployModel ×28 since 10:16
+| - 1 more still failing, unchanged (ingress-internal)
 18:35:00 digest
 🟡 kwatch (prod-eu-1) has one earlier one that resolved to report. Resolved: Service ingress-internal in kube-system is healthy again. None of them is urgent; one that gets worse gets its own message.
 🟡 kwatch (prod-eu-1) has one earlier one that resolved to report.

@@ -49,6 +49,21 @@ func logSend(r sendRecord) {
 	klog.InfoS("provider send", pairs...)
 }
 
+// logUnsent writes the line of a message no provider received, so each
+// audited decision has a delivery line: carried by a digest or summary
+// (carrier names it), or routed to no provider.
+func logUnsent(job deliverJob, result, carrier string) {
+	kind, placement := describeJob(job)
+	pairs := []any{
+		"component", "delivery", "provider", "none", "key", job.key(),
+		"kind", kind, "placement", placement, "result", result,
+	}
+	if carrier != "" {
+		pairs = append(pairs, "carrier", carrier)
+	}
+	klog.InfoS("provider send", pairs...)
+}
+
 // loggedError is the error text without URLs, cut to a bounded length.
 // The cut is on a character boundary, so the text stays valid UTF-8.
 func loggedError(err error) string {

@@ -87,7 +87,7 @@ func TestAgedMissingScaleTargetIsFoundWhenDeploymentsSyncLate(
 // A restart over an incident an older release opened for the same
 // autoscaler (it read the failure as FailedGetScale) ends with that
 // incident holding the missing-target finding, and the restart listing
-// names it.
+// names it; the fall to the digest tier posts nothing by itself.
 func TestRestartMovesOldScaleFailureToMissingTarget(t *testing.T) {
 	store := newPersistingStore()
 	c := newCluster(scenarioStart, "")
@@ -130,8 +130,11 @@ func TestRestartMovesOldScaleFailureToMissingTarget(t *testing.T) {
 		t.Errorf("restart did not list the incident: %s",
 			describeDecisions(second))
 	}
-	if !saidCauseRevised(second) {
-		t.Errorf("the thread never heard the new cause: %s",
+	// The restored incident falls to the digest tier: its thread may
+	// never have been told, so the restart posts nothing of its own for
+	// it and the listing and the next digest carry it.
+	if saidCauseRevised(second) {
+		t.Errorf("a restored demotion posted on its own: %s",
 			describeDecisions(second))
 	}
 	for _, p := range second.Incidents {

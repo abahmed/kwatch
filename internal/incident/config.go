@@ -85,11 +85,17 @@ func (c Config) hold(recentCycles int) time.Duration {
 
 // holdFor is how long p must stay healthy before it resolves: the base
 // hold doubled for each recent recovery, and multiplied by ChronicFactor
-// when p is a chronic flapper, never beyond MaxHold.
+// when p is a chronic flapper, never beyond MaxHold. A digest-tier
+// incident that opened twice within DigestChronicWindow waits MaxHold.
 func (m *Manager) holdFor(p *Incident, now time.Time) time.Duration {
 	hold := m.cfg.hold(len(recent(p.Cycles, now, m.cfg.FlapWindow)))
 	if len(recent(p.Occurrences, now, ChronicWindow)) >= ChronicOccurrences {
 		hold = min(hold*ChronicFactor, m.cfg.MaxHold)
+	}
+	if p.Tier == Digest &&
+		len(recent(p.Occurrences, now, DigestChronicWindow)) >=
+			ChronicOccurrences {
+		hold = m.cfg.MaxHold
 	}
 	return hold
 }

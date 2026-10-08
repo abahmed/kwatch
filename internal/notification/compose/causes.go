@@ -49,6 +49,9 @@ var causeWords = map[string]causeWording{
 		words: "is down, so nothing processes their changes"},
 	"custom-resource-failing": {words: "is not ready"},
 	"etcd-unavailable":        {words: "is unavailable"},
+	"finalizer-handler-stopped": {
+		words: "is not running, so it removes no finalizers"},
+	"finalizer-unhandled": {words: "is never removed"},
 	// external-endpoint-failing is worded by endpointWords.
 	"external-endpoint-failing":     {words: "cannot be reached"},
 	"external-endpoint-unreachable": {words: "does not accept connections"},

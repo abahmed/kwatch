@@ -1,0 +1,8 @@
+{
+  "name": "ambiguous-cron-no-change",
+  "description": "A CronJob's run fails and nothing it reads was edited.",
+  "root": "cronjob/reports/nightly-export",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "10m0s"
+}

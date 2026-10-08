@@ -222,12 +222,14 @@ func (a *announcer) write(
 		return a.messages.WriteResolvedBy(d, at, *fix)
 	}
 	msg := a.messages.Write(d, at)
-	// An incident whose failures another incident took over closes its
-	// own alert, but the chat channel already reads about those failures
-	// in the other incident's update; a "cause revised" per absorbed
-	// incident would be one message per workload in a storm.
-	if d.Action == incident.Resolve &&
-		((d.Incident.SupersededBy != "" && !d.Handover) || d.Unannounced) {
+	// An incident whose failures another incident took over closes like
+	// any other: its thread is edited to say "Moved: ...", and the
+	// paging providers close the alert they opened. One a roll-up
+	// carried has no thread of its own, and one nobody heard of has
+	// none at all: those close for the alert-tracking providers alone.
+	if d.Action == incident.Resolve && (d.Unannounced ||
+		(d.Incident.SupersededBy != "" && !d.Handover &&
+			d.Incident.Delivery.RolledUp())) {
 		msg.PagingOnly = true
 	}
 	return msg

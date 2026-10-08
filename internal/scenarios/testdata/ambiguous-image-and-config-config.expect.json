@@ -1,0 +1,11 @@
+{
+  "name": "ambiguous-image-and-config-config",
+  "description": "A new image and an edited ConfigMap arrive within a minute and the pods panic parsing their settings.",
+  "root": "configmap/shop/checkout-config",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

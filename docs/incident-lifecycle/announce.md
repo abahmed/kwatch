@@ -30,7 +30,10 @@ feel the failure:
    judged instead, and the incident notifies.
 3. **A cluster-critical component is down.** Cluster DNS, the API server and
    etcd, the scheduler, the controller manager, a fail-closed admission
-   webhook that blocks every create, or a node, which takes its capacity and
+   webhook that blocks every create (it must have refused a request:
+   a `failed calling webhook` event or the API server's fail-closed
+   call metrics; until then it notifies once and waits for the digest,
+   see `idle_webhook.go`), or a node, which takes its capacity and
    its network plugin with it (`node-lost`).
 
 Everything else that is critical notifies; what is only worth knowing waits

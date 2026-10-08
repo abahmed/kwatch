@@ -159,3 +159,37 @@ func TestDeliveryLogsNeverCarryProviderURLs(t *testing.T) {
 	assert.NotEmpty(t, buf.String())
 	assert.NotContains(t, buf.String(), "s3cret")
 }
+
+// A decision a digest or summary carries has a line too, so the audit log
+// and the delivery log can be matched.
+func TestCarriedMessageLogsItsCarrier(t *testing.T) {
+	out := captureKlog(t)
+
+	newTestManager().NotifyIncident(notification.Message{
+		Key: "inc-1", Revision: 2, Carrier: "digest"})
+	klog.Flush()
+
+	line := sendLine(out.String())
+	assert.Contains(t, line, `key="inc-1"`)
+	assert.Contains(t, line, `placement="thread"`)
+	assert.Contains(t, line, `result="carried"`)
+	assert.Contains(t, line, `carrier="digest"`)
+}
+
+// A paging-only message with no paging provider reaches nobody; the log
+// says so instead of staying silent.
+func TestUnroutedMessageLogsThatNobodyGotIt(t *testing.T) {
+	out := captureKlog(t)
+	chat := providerEntry{provider: &errorRecorderProvider{name: "Chat"}}
+	m := managerWithEntries([]providerEntry{chat})
+	job := incidentJob("inc-2", "default")
+	job.incident.PagingOnly = true
+
+	m.fanOut(job)
+	klog.Flush()
+
+	line := sendLine(out.String())
+	assert.Contains(t, line, `key="inc-2"`)
+	assert.Contains(t, line, `result="not routed"`)
+	assert.Contains(t, line, `provider="none"`)
+}

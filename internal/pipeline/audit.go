@@ -52,6 +52,7 @@ func AuditEntry(
 	if m.Listed != nil {
 		entry.Opened, entry.Resolved = m.Listed.Opened, m.Listed.Resolved
 		entry.Risks, entry.Items = m.Listed.Risks, m.Listed.Items
+		entry.Ongoing = m.Listed.Ongoing
 	}
 	if p.ID == "" {
 		summaryEntry(&entry, m)

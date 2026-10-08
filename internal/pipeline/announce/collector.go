@@ -60,11 +60,18 @@ type Collector struct {
 	// the open ones were last compared with it.
 	ongoingMarks   map[string]int
 	ongoingChecked time.Time
+	// ongoingShown is how each ongoing problem was last listed in full
+	// (see ongoing_compact.go), by incident ID.
+	ongoingShown map[string]shown
 	// seenAt is when the collector first ran; wakeDone is the start of
 	// the last wake-up summarised and wake the summary the next digest
 	// carries (see noteWake).
 	seenAt, wakeDone time.Time
 	wake             *compose.WakeLine
+	// folded are the restored incidents whose first demotion to the
+	// digest tier was folded into a digest, not posted (see
+	// carriesThread).
+	folded map[string]bool
 	// readiness is the daily upgrade-readiness line of the digest.
 	readiness readinessItem
 }
@@ -76,6 +83,7 @@ func New(env Env) *Collector {
 		Outages:        map[string]*OutageHold{},
 		mentionedRisks: map[detection.Key]bool{},
 		ongoingMarks:   map[string]int{},
+		folded:         map[string]bool{},
 	}
 }
 

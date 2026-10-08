@@ -1,0 +1,20 @@
+10:01:15 settled
+🟠 Node n1 (prod-eu-1) is low on memory. To check the node's conditions and recent events, run kubectl describe node n1
+🟠 Node n1 (prod-eu-1) is low on memory.
+| 🟠 Node n1 (**prod-eu-1**) is low on memory.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```
+10:07:55 settled
+🟠 payments is failing in shop (prod-eu-1) after the 10:06 release of registry.example.com/payments:5.2. The previous image was registry.example.com/payments:5.1. It fails with "panic: nil pointer dereference in ledger.Open()". To see the rollout state, run kubectl rollout status deployment/payments -n shop
+Checked: all 3 replicas fail, on 3 nodes.
+🟠 payments is failing in shop (prod-eu-1) after the 10:06 release of registry.example.com/payments:5.2.
+| 🟠 **payments** is failing in **shop** (**prod-eu-1**) after the 10:06 release of registry.example.com/payments:5.2.
+| The previous image was registry.example.com/payments:5.1.
+| It fails with `panic: nil pointer dereference in ledger.Open()`.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/payments -n shop
+| ```
+| *Checked: all 3 replicas fail, on 3 nodes.*

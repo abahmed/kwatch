@@ -1,0 +1,11 @@
+{
+  "name": "attachment-volume-gone",
+  "description": "Two VolumeAttachments are stuck deleting; the volumes they attach no longer exist.",
+  "root": "volumeattachment//csi-0a1b2c",
+  "otherRoots": [
+    "volumeattachment//csi-3d4e5f"
+  ],
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "30m0s"
+}

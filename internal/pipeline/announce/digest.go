@@ -2,6 +2,7 @@ package announce
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"time"
 
@@ -117,7 +118,7 @@ func (c *Collector) holdDigest(
 	if d.Incident.Tier != incident.Digest {
 		return c.promoteFromDigest(g, i, d), ""
 	}
-	if threadNews(d) {
+	if c.carriesThread(d) {
 		return d, ""
 	}
 	carrier := "digest"
@@ -245,24 +246,32 @@ func (c *Collector) flushDigest(ctx context.Context, now time.Time) bool {
 		return false
 	}
 	sent := false
-	ongoing := c.ongoingProblems()
-	if len(g.Opened)+len(g.Resolved)+len(ongoing) > 0 || c.wake != nil {
+	ongoing, unchanged := c.splitOngoing(c.ongoingProblems(now), now)
+	if len(g.Opened)+len(g.Resolved)+len(ongoing)+len(unchanged) > 0 ||
+		c.wake != nil {
 		risks := c.PendingRisks()
 		msg := c.env.Messages.DigestWith(g.Opened, g.Resolved, risks,
-			c.digestExtras(ongoing), now)
-		msg.Listed = c.listedInDigest(g, len(risks), ongoing, now)
+			c.digestExtras(ongoing, unchanged), now)
+		msg.Listed = c.listedInDigest(g, len(risks),
+			append(slices.Clone(ongoing), unchanged...), now)
 		c.env.Sink(ctx, incident.Decision{Reason: "digest"}, msg)
 		for _, d := range g.Opened {
 			c.env.Incidents.ReleaseAnnouncement(d.Incident.ID)
 			c.env.Incidents.RecordDigested(d.Incident.ID, now)
 			c.markListed(d.Incident.ID)
 			c.markSeen(d.Incident)
+			c.markShown(d.Incident, now)
 		}
 		for _, d := range g.Resolved {
 			c.env.Incidents.RecordDigested(d.Incident.ID, now)
 			c.takeListed(d.Incident.ID)
 		}
 		for _, item := range ongoing {
+			c.env.Incidents.RecordDigested(item.p.ID, now)
+			c.markSeen(item.p)
+			c.markShown(item.p, now)
+		}
+		for _, item := range unchanged {
 			c.env.Incidents.RecordDigested(item.p.ID, now)
 			c.markSeen(item.p)
 		}
@@ -275,11 +284,11 @@ func (c *Collector) flushDigest(ctx context.Context, now time.Time) bool {
 }
 
 // digestExtras is what the digest says beyond its incidents.
-func (c *Collector) digestExtras(ongoing []ongoingItem) compose.DigestExtras {
+func (c *Collector) digestExtras(
+	ongoing, unchanged []ongoingItem,
+) compose.DigestExtras {
 	extras := compose.DigestExtras{Wake: c.wake}
-	for _, item := range ongoing {
-		extras.Ongoing = append(extras.Ongoing, item.Ongoing)
-	}
+	extras.Ongoing, extras.Unchanged = ongoingExtras(ongoing, unchanged)
 	return extras
 }
 
@@ -292,8 +301,8 @@ func (c *Collector) listedInDigest(
 	g *LowDigest, risks int, ongoing []ongoingItem, now time.Time,
 ) *notification.Listed {
 	listed := &notification.Listed{
-		Opened: len(g.Opened), Resolved: len(g.Resolved), Risks: risks,
-		Ongoing: len(ongoing),
+		Opened: opened(g.Opened), Resolved: len(g.Resolved), Risks: risks,
+		Ongoing: len(ongoing) + len(g.Opened) - opened(g.Opened),
 	}
 	add := func(decisions []incident.Decision, suffix string) {
 		for _, d := range decisions {
@@ -313,6 +322,19 @@ func (c *Collector) listedInDigest(
 		}
 	}
 	return listed
+}
+
+// opened counts the decisions that announce an incident in this digest's
+// window. The others are reminders and returns of problems an earlier
+// digest or message already told: they are still failing, not opened.
+func opened(decisions []incident.Decision) int {
+	count := 0
+	for _, d := range decisions {
+		if d.Action == incident.Announce {
+			count++
+		}
+	}
+	return count
 }
 
 // NextDigest is when the pending digest is due, or zero when none is.

@@ -1,0 +1,9 @@
+10:02:15 settled
+🟠 Validating webhook widget-operator (prod-eu-1) calls Service widget-operator, which does not exist. No request has been rejected yet; any create it matches will be. To see the object's state and events, run kubectl describe validatingwebhookconfiguration widget-operator
+🟠 Validating webhook widget-operator (prod-eu-1) calls Service widget-operator, which does not exist.
+| 🟠 Validating webhook **widget-operator** (**prod-eu-1**) calls Service **widget-operator**, which does not exist.
+| No request has been rejected yet; any create it matches will be.
+| To see the object's state and events, run
+| ```
+| kubectl describe validatingwebhookconfiguration widget-operator
+| ```

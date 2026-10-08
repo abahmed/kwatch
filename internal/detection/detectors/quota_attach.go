@@ -138,43 +138,66 @@ func deletingSince(e inventory.Entity) time.Time {
 }
 
 // stuckDeleting words a deleting attachment whose node or volume is gone.
-// With both gone nothing depends on it, so it is only housekeeping
-// (Info); with only the node gone the volume still cannot attach to
-// another node, which stays a warning.
+// With the volume gone nothing can attach or detach it any more and no
+// workload can ask for it, so the attachment is only housekeeping
+// (Info), whether or not the node is gone too; with only the node gone
+// the volume still cannot attach to another node, which stays a warning.
+// The summary names the volume, the node and the driver: the
+// attachment's own name is an opaque hash.
 func stuckDeleting(
 	ctx detection.Context, e inventory.Entity, f *detection.Finding,
 ) {
-	nodeGone := relatedGone(ctx, e, inventory.RunsOn, kube.KindNode)
-	pvGone := relatedGone(ctx, e, inventory.References, kube.KindPV)
-	var what string
+	node, nodeGone := goneRelated(ctx, e, inventory.RunsOn, kube.KindNode)
+	pv, pvGone := goneRelated(ctx, e, inventory.References, kube.KindPV)
+	subject := "Attachment of volume " + pv + " to node " + node
+	driver := text(e, kube.AttrAttacher)
+	if driver != "" {
+		subject += " by " + driver
+	}
+	var gone string
 	switch {
 	case nodeGone && pvGone:
-		what, f.Severity = "its node and PV no longer exist",
-			detection.Info
-	case nodeGone:
-		what = "its node no longer exists"
+		gone = "volume and node"
+		f.Summary = subject + " is stuck deleting; the volume " + pv +
+			" it attaches and the node no longer exist"
 	case pvGone:
-		what = "its PV no longer exists"
+		gone = "volume"
+		f.Summary = subject + " is stuck deleting; the volume " + pv +
+			" it attaches no longer exists"
+	case nodeGone:
+		gone = "node"
+		f.Summary = subject + " is stuck deleting; its node no longer " +
+			"exists"
 	default:
 		return
 	}
-	f.Summary = "VolumeAttachment " + e.ID.Name + " is stuck deleting; " +
-		what
+	if pvGone {
+		f.Severity = detection.Info
+	}
+	f.Evidence = append(f.Evidence,
+		detection.Evidence{Label: detection.EvidenceAttachVolume, Value: pv},
+		detection.Evidence{Label: detection.EvidenceAttachNode, Value: node},
+		detection.Evidence{Label: detection.EvidenceAttachGone, Value: gone})
+	if driver != "" {
+		f.Evidence = append(f.Evidence, detection.Evidence{
+			Label: detection.EvidenceAttachDriver, Value: driver})
+	}
 }
 
-// relatedGone reports whether e names an object of kind through rel that
-// is not in the model. It concludes nothing while the kind is not synced.
-func relatedGone(
+// goneRelated is the name of the object of kind that e names through rel,
+// and whether it is missing from the model. The name is empty when e
+// names none.
+func goneRelated(
 	ctx detection.Context, e inventory.Entity, rel inventory.RelationType,
 	kind inventory.Kind,
-) bool {
-	if ctx.Model == nil || !ctx.Synced(kind) {
-		return false
+) (string, bool) {
+	if ctx.Model == nil {
+		return "", false
 	}
 	for _, id := range ctx.Model.Related(e.ID, rel, inventory.Outgoing) {
-		if id.Kind == kind && !ctx.Model.Exists(id) {
-			return true
+		if id.Kind == kind {
+			return id.Name, ctx.Synced(kind) && !ctx.Model.Exists(id)
 		}
 	}
-	return false
+	return "", false
 }

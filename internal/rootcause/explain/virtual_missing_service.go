@@ -113,8 +113,10 @@ func (v *view) missingRefs(pod inventory.EntityID) []missingRef {
 		refs.add(ref)
 	}
 	if entity, ok := v.s.Model.Entity(pod); ok {
+		quoted := v.crashErrors(pod)
 		for _, call := range kube.ServiceCalls(entity) {
-			if v.namesMissingService(call.Service, pod) {
+			if v.namesMissingService(call.Service, pod) &&
+				namedOrSilent(quoted, call.Service) {
 				refs.add(missingRef{service: call.Service, port: call.Port})
 			}
 		}
@@ -123,6 +125,45 @@ func (v *view) missingRefs(pod inventory.EntityID) []missingRef {
 		return refs.list[:maxMissingRefs]
 	}
 	return refs.list
+}
+
+// crashErrors are the errors the pod's containers left as their last
+// words, as written: the termination message, or the first error line
+// of the previous log. They are kept while the container runs again.
+func (v *view) crashErrors(pod inventory.EntityID) []string {
+	var out []string
+	for _, id := range v.s.Model.Related(pod, inventory.PartOf,
+		inventory.Incoming) {
+		e, ok := v.s.Model.Entity(id)
+		if !ok {
+			continue
+		}
+		for _, name := range []string{kube.AttrLastMessage,
+			kube.AttrLastErrorLine} {
+			if a, ok := e.Attribute(name); ok &&
+				a.Value.AsText() != "" {
+				out = append(out, a.Value.AsText())
+				break
+			}
+		}
+	}
+	return out
+}
+
+// namedOrSilent reports whether a name only the configuration holds may
+// explain the crash: the quoted errors name the Service, or the pod
+// quotes none. A crash that quotes a different error is its own cause;
+// a name in its configuration does not outrank it.
+func namedOrSilent(quoted []string, service inventory.EntityID) bool {
+	if len(quoted) == 0 {
+		return true
+	}
+	for _, line := range quoted {
+		if strings.Contains(strings.ToLower(line), service.Name) {
+			return true
+		}
+	}
+	return false
 }
 
 // refList collects missing Services, one entry for each, merging what

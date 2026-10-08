@@ -25,7 +25,7 @@ var sharedKinds = map[inventory.Kind]bool{
 // is the app's problem even if the pods share a node.
 func scoreShared(v *view, c *candidate) outcome {
 	effects := c.others()
-	if len(effects) == 0 {
+	if len(effects) == 0 || holdsFinalizers(c) {
 		return outcome{}
 	}
 	workloads := v.workloadsOf(effects)

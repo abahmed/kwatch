@@ -1,0 +1,15 @@
+10:02:35 settled
+🟠 warehouse in staging (prod-eu-1) keeps crashing because service regional does not exist. warehouse calls regional:8080, but there is no Service regional in staging. Quoted: "panic: no route to regional". The error mentions it. To read the output of the last crash, run kubectl logs warehouse-b3e14f5e-a -c app -n staging --previous
+🟠 warehouse in staging (prod-eu-1) keeps crashing because service regional does not exist.
+| 🟠 **warehouse** in **staging** (**prod-eu-1**) keeps crashing because service **regional** does not exist.
+| **warehouse** calls regional:8080, but there is no Service **regional** in **staging**. Quoted: `panic: no route to regional`.
+| The error mentions it.
+| To read the output of the last crash, run
+| ```
+| kubectl logs warehouse-b3e14f5e-a -c app -n staging --previous
+| ```
+10:11:10 cause revised
+🟠 Cause changed: warehouse in staging (prod-eu-1) is failing: exited with code 1. It fails with "panic: no route to regional".
+🟠 Cause changed: warehouse in staging (prod-eu-1) is failing: exited with code 1.
+| 🟠 Cause changed: **warehouse** in **staging** (**prod-eu-1**) is failing: exited with code 1.
+| It fails with `panic: no route to regional`.

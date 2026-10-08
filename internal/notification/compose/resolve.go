@@ -16,18 +16,8 @@ import (
 // is healthy: its failures now belong to another incident.
 func resolveNote(f caseFacts) (string, []sentence) {
 	p := f.p
-	if p.SupersededBy != "" && p.SupersededRoot != (inventory.EntityID{}) {
-		return marker(p), []sentence{{part: partLead,
-			text: "Moved to the incident for " +
-				string(p.SupersededRoot.Kind) + " " + p.SupersededRoot.Name +
-				" (" + p.SupersededBy + "): " + f.leadName(p.Root) +
-				" is not resolved."}}
-	}
 	if p.SupersededBy != "" {
-		return marker(p), []sentence{{part: partLead,
-			text: "Cause revised: the failures of " + f.leadName(p.Root) +
-				" are now tracked in incident " + p.SupersededBy +
-				" and are not resolved."}}
+		return marker(p), movedNote(f)
 	}
 	subject := leadSubject(f)
 	if rest, ok := strings.CutPrefix(string(f.reason),
@@ -59,7 +49,7 @@ func resolution(f caseFacts, subject inventory.EntityID) string {
 	case f.p.Fix == incident.FixNodeReplaced:
 		return "was replaced and its pods were rescheduled"
 	}
-	return "is ready again"
+	return nodeRecovered(f)
 }
 
 // nodeDeleted reports that the change which ended the incident deleted

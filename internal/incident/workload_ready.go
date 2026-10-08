@@ -118,7 +118,8 @@ func workloadFor(
 // member it ends anyway, so one pod no detector flags cannot keep an
 // incident open for ever.
 func (m *Manager) stillBroken(p *Incident, now time.Time) bool {
-	return now.Before(brokenHoldEnd(p)) && m.workloadBroken(p)
+	return now.Before(brokenHoldEnd(p)) &&
+		(m.workloadBroken(p) || m.crashing(p, now))
 }
 
 // workloadBroken reports a workload below its desired replicas whose
@@ -139,8 +140,10 @@ func (m *Manager) workloadBroken(p *Incident) bool {
 // resolveReason is why a recovering or flapping incident ends now. It
 // says what held, unless the workload is still broken: the cap ended the
 // hold and not a recovery, so the reason must not claim health.
-func (m *Manager) resolveReason(p *Incident, healthy Reason) Reason {
-	if m.workloadBroken(p) {
+func (m *Manager) resolveReason(
+	p *Incident, now time.Time, healthy Reason,
+) Reason {
+	if m.workloadBroken(p) || m.crashing(p, now) {
 		return Reason(StoppedTrackingPrefix + format.Duration(StillBrokenMax) +
 			"; coverage check continues")
 	}

@@ -170,10 +170,9 @@ func TestEngineStartupHoldsPageTierAndPagesSeparately(t *testing.T) {
 	}
 }
 
-// The close of an incident whose failures another incident took over is
-// for alert-tracking providers only; chat reads about those failures in
-// the other incident's update.
-func TestEngineSupersededResolveIsPagingOnly(t *testing.T) {
+// The close of an incident whose failures another incident took over
+// goes everywhere: the thread is edited to say where the failures went.
+func TestEngineSupersededResolveReachesTheThread(t *testing.T) {
 	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
 	e := newTestEngine(t, &fakeClock{now: now}, (&sinkLog{}).sink, nil)
 	resolve := incident.Decision{Action: incident.Resolve,
@@ -181,8 +180,8 @@ func TestEngineSupersededResolveIsPagingOnly(t *testing.T) {
 	plain := incident.Decision{Action: incident.Resolve,
 		Incident: incident.Incident{ID: "c"}}
 
-	if !e.announcer.write(resolve, now).PagingOnly {
-		t.Fatal("a superseded resolve must be paging-only")
+	if e.announcer.write(resolve, now).PagingOnly {
+		t.Fatal("a superseded resolve must reach the thread")
 	}
 	if e.announcer.write(plain, now).PagingOnly {
 		t.Fatal("an ordinary resolve goes everywhere")

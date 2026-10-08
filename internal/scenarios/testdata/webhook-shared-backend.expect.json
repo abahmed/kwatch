@@ -5,7 +5,7 @@
   "otherRoots": [
     "service/mesh-system/mesh-webhook"
   ],
-  "tier": "page",
+  "tier": "notify",
   "maxMessages": 2,
   "mustNotBlame": [
     "validatingwebhookconfiguration//mesh-validator",

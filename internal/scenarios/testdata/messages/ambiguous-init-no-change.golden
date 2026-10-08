@@ -1,0 +1,10 @@
+10:02:15 settled
+🟠 orders in shop (prod-eu-1) is failing, likely because its init container migrate keeps crashing. It fails with "migrate: authentication failed for user orders". It runs a single replica, so this is downtime, not degradation. To read the output of the last crash, run kubectl logs orders-8dbe284e-a -c migrate -n shop --previous
+🟠 orders in shop (prod-eu-1) is failing, likely because its init container migrate keeps crashing.
+| 🟠 **orders** in **shop** (**prod-eu-1**) is failing, likely because its init container migrate keeps crashing.
+| It fails with `migrate: authentication failed for user orders`.
+| It runs a single replica, so this is downtime, not degradation.
+| To read the output of the last crash, run
+| ```
+| kubectl logs orders-8dbe284e-a -c migrate -n shop --previous
+| ```

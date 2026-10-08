@@ -125,6 +125,7 @@ func (m *Manager) reroot(
 		delete(m.incidents, target.ID)
 	}
 	m.unindex(p)
+	m.leaveRoot(now, p)
 	p.Root = root
 	m.index(p)
 	p.movedTo = nil

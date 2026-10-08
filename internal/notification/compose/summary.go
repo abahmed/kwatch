@@ -141,8 +141,8 @@ func (w Writer) DigestWith(
 	if len(opened) > 0 {
 		counts = append(counts, plural(len(opened), "low-priority problem"))
 	}
-	if len(extras.Ongoing) > 0 {
-		counts = append(counts, plural(len(extras.Ongoing), "ongoing problem"))
+	if n := len(extras.Ongoing) + len(extras.Unchanged); n > 0 {
+		counts = append(counts, plural(n, "ongoing problem"))
 	}
 	if len(resolved) > 0 {
 		counts = append(counts, plural(len(resolved), "earlier one")+
@@ -162,8 +162,11 @@ func (w Writer) DigestWith(
 		sentences = append(sentences, sentence{part: partProof,
 			text: extras.Wake.Text()})
 	}
-	sentences = append(sentences, digestTitles(opened, now, "")...)
-	sentences = append(sentences, ongoingSentences(extras.Ongoing, now)...)
+	list := foldLeftovers(opened, extras)
+	sentences = append(sentences, digestTitles(list.opened, now, "")...)
+	sentences = append(sentences, lineSentences(list.full)...)
+	sentences = append(sentences, ongoingSentences(list.extras, now)...)
+	sentences = append(sentences, lineSentences(list.same)...)
 	sentences = append(sentences,
 		digestTitles(resolved, now, "Resolved: ")...)
 	sentences = append(sentences, riskTitles(risks)...)

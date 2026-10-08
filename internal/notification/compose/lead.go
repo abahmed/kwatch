@@ -28,6 +28,12 @@ func leadText(f caseFacts) string {
 	if text, ok := rivalLead(f); ok {
 		return text
 	}
+	if text, ok := finalizerLead(f); ok {
+		return text
+	}
+	if text, ok := attachmentLead(f); ok {
+		return text
+	}
 	switch {
 	case policyBlocksCall(p.Cause):
 		return policyBlockLead(f)

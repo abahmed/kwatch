@@ -1,0 +1,10 @@
+{
+  "name": "ambiguous-rollout-every-node",
+  "description": "A rollout while one node is under memory pressure; the new replicas fail on every node.",
+  "root": "deployment/shop/payments",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

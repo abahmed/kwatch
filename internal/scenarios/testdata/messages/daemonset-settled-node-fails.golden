@@ -1,0 +1,8 @@
+10:03:15 settled
+🟠 aws-node in kube-system (prod-eu-1) is failing: Kubernetes reported FailedDaemonPod. To see the object's state and events, run kubectl describe pod aws-node-n2 -n kube-system
+🟠 aws-node in kube-system (prod-eu-1) is failing: Kubernetes reported FailedDaemonPod.
+| 🟠 **aws-node** in **kube-system** (**prod-eu-1**) is failing: Kubernetes reported FailedDaemonPod.
+| To see the object's state and events, run
+| ```
+| kubectl describe pod aws-node-n2 -n kube-system
+| ```

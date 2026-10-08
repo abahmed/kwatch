@@ -8,11 +8,11 @@
 | ```
 | kubectl describe deployment api -n shop
 | ```
-10:14:15 settled
-🔴 Mutating webhook policy (prod-eu-1) is down because service api in shop has no ready endpoints. It rejects every create and update it checks. To see the object's state and events, run kubectl describe mutatingwebhookconfiguration policy
-🔴 Mutating webhook policy (prod-eu-1) is down because service api in shop has no ready endpoints.
-| 🔴 Mutating webhook **policy** (**prod-eu-1**) is down because service **api** in **shop** has no ready endpoints.
-| It rejects every create and update it checks.
+10:15:15 settled
+🟠 Mutating webhook policy (prod-eu-1) is failing because service api in shop has no ready endpoints. No request has been rejected yet; any create it matches will be. To see the object's state and events, run kubectl describe mutatingwebhookconfiguration policy
+🟠 Mutating webhook policy (prod-eu-1) is failing because service api in shop has no ready endpoints.
+| 🟠 Mutating webhook **policy** (**prod-eu-1**) is failing because service **api** in **shop** has no ready endpoints.
+| No request has been rejected yet; any create it matches will be.
 | To see the object's state and events, run
 | ```
 | kubectl describe mutatingwebhookconfiguration policy

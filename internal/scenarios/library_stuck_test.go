@@ -15,11 +15,11 @@ import (
 // held by finalizers, a controller that stopped renewing its Lease and a
 // CronJob whose earlier run never finishes.
 func stuckScenarios() []scenario {
-	return []scenario{
+	return append([]scenario{
 		namespaceStuckTerminating(), claimStuckDeleting(),
 		leaseHolderCrashLoops(), leaseHolderGone(),
 		cronJobBlockedByStuckRun(), podTerminatingOnLostNode(),
-	}
+	}, finalizerScenarios()...)
 }
 
 // deleting marks an object as deleted since at, held by finalizers.

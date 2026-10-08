@@ -146,6 +146,8 @@ func library() []scenario {
 		livenessCascadeScenarios(),
 		stuckScenarios(),
 		replacedFindingScenarios(), sandboxBlipScenarios(),
+		crashCycleScenarios(), nodeChurnScenarios(),
+		ambiguousScenarios(),
 	} {
 		out = append(out, group...)
 	}

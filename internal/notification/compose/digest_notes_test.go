@@ -14,22 +14,21 @@ import (
 
 var extrasNow = time.Date(2026, 10, 6, 21, 0, 0, 0, time.UTC)
 
-func lbOngoing(count int) Ongoing {
+func lbOngoing() Ongoing {
 	return Ongoing{
 		Root: inventory.CoreID(kube.KindService, "kube-system",
 			"internal-ingress-nginx-controller-internal"),
-		Reason: "FailedDeployModel", Count: count,
 		Since: time.Date(2026, 10, 6, 17, 14, 0, 0, time.UTC),
 	}
 }
 
-func TestDigestListsAnOngoingProblemWithCountAndAge(t *testing.T) {
+func TestDigestListsAnOngoingProblemWithItsAge(t *testing.T) {
 	msg := Writer{}.DigestWith(nil, nil, nil,
-		DigestExtras{Ongoing: []Ongoing{lbOngoing(14)}}, extrasNow)
+		DigestExtras{Ongoing: []Ongoing{lbOngoing()}}, extrasNow)
 
 	assert.Equal(t, "🟡 *kwatch digest* — 1 ongoing\n\n*Problems*\n• "+
 		"Service *internal-ingress-nginx-controller-internal* "+
-		"(*kube-system*) — still failing: FailedDeployModel ×14 since 17:14",
+		"(*kube-system*) — still failing since 17:14",
 		msg.Render(notification.SlackDialect()))
 	assert.Contains(t, msg.Note, "one ongoing problem to report")
 }
@@ -37,7 +36,7 @@ func TestDigestListsAnOngoingProblemWithCountAndAge(t *testing.T) {
 func TestOngoingProblemsShareTheDigestCap(t *testing.T) {
 	var ongoing []Ongoing
 	for range maxSummaryNamed + 3 {
-		ongoing = append(ongoing, lbOngoing(2))
+		ongoing = append(ongoing, lbOngoing())
 	}
 
 	msg := Writer{}.DigestWith(nil, nil, nil,
@@ -47,11 +46,18 @@ func TestOngoingProblemsShareTheDigestCap(t *testing.T) {
 }
 
 func TestOngoingProblemOfAnEarlierDayNamesTheDay(t *testing.T) {
-	o := lbOngoing(1)
+	o := lbOngoing()
 	o.Since = extrasNow.Add(-50 * time.Hour)
 
-	assert.Contains(t, o.Line(extrasNow), "FailedDeployModel since Oct 4")
-	assert.NotContains(t, o.Line(extrasNow), "×")
+	assert.Contains(t, o.Line(extrasNow), "still failing since Oct 4")
+}
+
+// A titled problem reads exactly as the title: the incident's own words.
+func TestOngoingProblemUsesItsTitle(t *testing.T) {
+	o := lbOngoing()
+	o.Title = "Service x (kube-system) is still failing, for 2 days now."
+
+	assert.Equal(t, o.Title, o.Line(extrasNow))
 }
 
 func TestWakeLineSaysWhatRecovered(t *testing.T) {
@@ -95,4 +101,40 @@ func TestDigestWithoutExtrasIsTheDigest(t *testing.T) {
 	d := []incident.Decision{podDecision("a", incident.Digest)}
 	assert.Equal(t, Writer{}.Digest(d, nil, nil, extrasNow),
 		Writer{}.DigestWith(d, nil, nil, DigestExtras{}, extrasNow))
+}
+
+// Unchanged problems are one summary line, named up to a cap, however
+// many there are; the digest still counts them as ongoing.
+func TestUnchangedOngoingProblemsAreOneLine(t *testing.T) {
+	var unchanged []Ongoing
+	for _, name := range []string{"a", "b", "c", "d", "e"} {
+		o := lbOngoing()
+		o.Root.Name = name
+		unchanged = append(unchanged, o)
+	}
+
+	msg := Writer{}.DigestWith(nil, nil, nil,
+		DigestExtras{Unchanged: unchanged}, extrasNow)
+
+	assert.Contains(t, msg.Plain(),
+		"- 5 more still failing, unchanged (a, b, c +2)")
+	assert.Contains(t, msg.Note, "five ongoing problems to report")
+	assert.Contains(t, msg.Note,
+		"5 more still failing, unchanged (a, b, c +2).")
+	assert.False(t, DigestExtras{Unchanged: unchanged}.Empty())
+}
+
+// A changed problem is listed in full beside the line of the rest.
+func TestChangedAndUnchangedOngoingProblemsShareADigest(t *testing.T) {
+	changed := lbOngoing()
+	changed.Title = "Service x (kube-system) is still failing, for 2 days now."
+	other := lbOngoing()
+	other.Root.Name = "db"
+
+	msg := Writer{}.DigestWith(nil, nil, nil, DigestExtras{
+		Ongoing: []Ongoing{changed}, Unchanged: []Ongoing{other}},
+		extrasNow)
+
+	assert.Contains(t, msg.Plain(), changed.Title)
+	assert.Contains(t, msg.Plain(), "- 1 more still failing, unchanged (db)")
 }

@@ -1,0 +1,8 @@
+{
+  "name": "ambiguous-oom-half-limit",
+  "description": "A container is OOM-killed at half its limit on an overcommitted node under memory pressure.",
+  "root": "node//n1",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "15m0s"
+}

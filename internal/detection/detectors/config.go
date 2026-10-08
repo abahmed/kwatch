@@ -2,6 +2,7 @@ package detectors
 
 import (
 	"strings"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
@@ -37,17 +38,7 @@ func (Certificate) Detect(
 	}
 	remaining := notAfter.Sub(ctx.Now)
 	if remaining <= 0 {
-		// An expired certificate nobody uses breaks nothing yet.
-		severity := detection.Warning
-		if certificateInUse(ctx, e) {
-			severity = detection.Critical
-		}
-		return []detection.Finding{{
-			Reason: reasons.TLSCertExpired, Severity: severity,
-			Since: notAfter,
-			Summary: "TLS certificate expired " +
-				format.Duration(-remaining) + " ago",
-		}}
+		return []detection.Finding{expiredCertificate(ctx, e, notAfter)}
 	}
 	if remaining > DefaultCertificateWarning {
 		ctx.RecheckAfter(remaining - DefaultCertificateWarning)
@@ -59,6 +50,48 @@ func (Certificate) Detect(
 		Since:   notAfter.Add(-DefaultCertificateWarning),
 		Summary: "TLS certificate expires in " + format.Duration(remaining),
 	}}
+}
+
+// expiredCertificate is the finding for a certificate past its end. One
+// nobody uses breaks nothing: it is a warning that says so, and it
+// waits for the digest. One in use is critical.
+func expiredCertificate(
+	ctx detection.Context, e inventory.Entity, notAfter time.Time,
+) detection.Finding {
+	if !certificateInUse(ctx, e) {
+		return detection.Finding{
+			Reason: reasons.TLSCertExpired, Severity: detection.Warning,
+			Since: notAfter,
+			Summary: "TLS certificate expired on " +
+				notAfter.UTC().Format("2006-01-02") +
+				" and nothing in the cluster references it",
+		}
+	}
+	return detection.Finding{
+		Reason: reasons.TLSCertExpired, Severity: detection.Critical,
+		Since: notAfter,
+		Summary: "TLS certificate expired " +
+			format.Duration(ctx.Now.Sub(notAfter)) + " ago",
+		Evidence: certificateUsers(ctx, e),
+	}
+}
+
+// certificateUsers names what references the Secret, so the next steps
+// can point at the real user (an Ingress, not "the pods").
+func certificateUsers(
+	ctx detection.Context, e inventory.Entity,
+) []detection.Evidence {
+	if e.ID.Kind != kube.KindSecret || ctx.Model == nil {
+		return nil
+	}
+	var out []detection.Evidence
+	for _, user := range ctx.Model.Related(e.ID, inventory.References,
+		inventory.Incoming) {
+		out = append(out, detection.Evidence{
+			Label: detection.EvidenceUsedBy,
+			Value: string(user.Kind) + "/" + user.Name})
+	}
+	return out
 }
 
 // certificateInUse reports whether something serves or mounts the

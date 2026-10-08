@@ -1,0 +1,8 @@
+{
+  "name": "ambiguous-oom-near-limit",
+  "description": "A container is OOM-killed at 92% of its limit on an overcommitted node under memory pressure.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "15m0s"
+}

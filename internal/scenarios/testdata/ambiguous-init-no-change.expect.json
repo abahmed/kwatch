@@ -1,0 +1,11 @@
+{
+  "name": "ambiguous-init-no-change",
+  "description": "An init container fails on authentication and nothing it reads changed.",
+  "root": "deployment/shop/orders",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "secret/shop/orders-db"
+  ]
+}

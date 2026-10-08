@@ -1,0 +1,8 @@
+{
+  "name": "certificate-expired-unused",
+  "description": "An expired TLS Secret that no pod, Ingress or account references: a digest line, not an outage.",
+  "root": "secret/shop/old-operator-tls",
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "45m0s"
+}

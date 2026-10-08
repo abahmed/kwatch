@@ -202,6 +202,10 @@ type Incident struct {
 	// about the incident. When they all went to one place the story
 	// moved there; when they dispersed, the story is over.
 	movedTo []inventory.EntityID
+	// formerRoot is the root the incident was moved away from by its
+	// latest cause revision, and rerootedAt is when; see retakeFormer.
+	formerRoot inventory.EntityID
+	rerootedAt time.Time
 	// rootReasons are the root's own finding reasons ever seen in this
 	// incident. The fingerprint reads them, so a crash loop whose pods
 	// come up and fall over again, toggling the workload's own
@@ -262,6 +266,11 @@ type Incident struct {
 	// does not answer), so its members alone are not critical. It is
 	// recomputed with the impact; the admission-blocked page reads it.
 	admissionBlocked bool
+	// rejectionSeen records that a request was refused because of the
+	// incident's webhooks (idleWebhook), and when it was last seen. The
+	// time is persisted, so a restored page keeps what it earned.
+	rejectionSeen bool
+	rejectionAt   time.Time
 	// routedMissing records that the root is a Service an Ingress or
 	// route sends traffic to and that does not exist: every request
 	// routed to it fails. A Gateway API route reports this through a

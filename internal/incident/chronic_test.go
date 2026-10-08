@@ -76,3 +76,27 @@ func TestChronicFlapperStillResolvesAfterMaxHold(t *testing.T) {
 	wantAction(t, r.tick(at(last+DefaultMaxHold)), Resolve,
 		"stable for 30m0s")
 }
+
+// A digest-tier incident that opened twice within DigestChronicWindow
+// waits MaxHold: nobody is waiting for its "healthy again", so a
+// recovery that does not last must not be announced as one. The window
+// is longer than a notifying incident's, because node churn recurs
+// hourly, not by the minute. A notifying incident keeps the usual hold.
+func TestHoldForDigestChronicFlapper(t *testing.T) {
+	m := NewManager(Config{}, nil)
+	now := at(8 * time.Hour)
+	opens := []time.Time{now.Add(-3 * time.Hour), now}
+
+	digest := &Incident{Tier: Digest, Occurrences: opens}
+	assert.Equal(t, DefaultMaxHold, m.holdFor(digest, now))
+
+	once := &Incident{Tier: Digest, Occurrences: opens[1:]}
+	assert.Equal(t, DefaultHold, m.holdFor(once, now))
+
+	old := &Incident{Tier: Digest, Occurrences: []time.Time{
+		now.Add(-DigestChronicWindow - time.Minute), now}}
+	assert.Equal(t, DefaultHold, m.holdFor(old, now))
+
+	notify := &Incident{Tier: Notify, Occurrences: opens}
+	assert.Equal(t, DefaultHold, m.holdFor(notify, now))
+}

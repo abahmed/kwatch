@@ -1,0 +1,8 @@
+10:01:15 settled
+🟠 Attachment of volume pvc-3333 to node removed-node by ebs.csi.example.com (prod-eu-1) is stuck deleting; its node no longer exists. To see the object's state and events, run kubectl describe volumeattachment csi-6a7b8c
+🟠 Attachment of volume pvc-3333 to node removed-node by ebs.csi.example.com (prod-eu-1) is stuck deleting; its node no longer exists.
+| 🟠 Attachment of volume pvc-3333 to node removed-node by ebs.csi.example.com (**prod-eu-1**) is stuck deleting; its node no longer exists.
+| To see the object's state and events, run
+| ```
+| kubectl describe volumeattachment csi-6a7b8c
+| ```

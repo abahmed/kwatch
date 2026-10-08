@@ -1,0 +1,12 @@
+{
+  "name": "ambiguous-ceiling-dependency-fine",
+  "description": "An HPA at its maximum while the replicas time out and the database they call answers kwatch's probe.",
+  "root": "horizontalpodautoscaler/orders/worker",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//w7",
+    "node//w8",
+    "external-endpoint//db.example.com:5432"
+  ]
+}

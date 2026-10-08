@@ -26,7 +26,7 @@ func quietMembers(p *Incident) bool {
 			continue
 		}
 		failing = true
-		if !digestReason(s.Reason) && s.Severity > detection.Info {
+		if !waitsForDigest(s) && s.Severity > detection.Info {
 			return false
 		}
 	}
@@ -40,7 +40,8 @@ func quietMembers(p *Incident) bool {
 func (m *Manager) lowerable(p *Incident, now time.Time) bool {
 	if p.State != Open || p.Tier != Notify || isPage(p) ||
 		m.inGrace(p, now) || p.maxedLong || drainingRoot(p) ||
-		!quietMembers(p) || m.override.apply(p, Digest) >= p.Tier {
+		!(quietMembers(p) || idleWebhook(p)) ||
+		m.override.apply(p, Digest) >= p.Tier {
 		return false
 	}
 	last := p.Delivery.LastMaterial()
@@ -57,6 +58,12 @@ func (m *Manager) reassess(p *Incident, now time.Time) {
 	}
 	p.Tier = m.override.apply(p, Digest)
 	p.Delivery.MarkDemoted()
+	if idleWebhook(p) {
+		// Told once at the announcement; the digest carries it now,
+		// and the new tier is no news for the thread.
+		p.Digest = fingerprint(p)
+		return
+	}
 	p.Delivery.MarkMaterial(now)
 	p.Pending.MarkRevised(now)
 	p.note(now, "cause revised: only digest findings are left")
@@ -69,7 +76,7 @@ func (m *Manager) reassessDeadline(
 	p *Incident, now time.Time,
 ) (time.Time, bool) {
 	if p.State != Open || p.Tier != Notify || isPage(p) ||
-		!quietMembers(p) {
+		!(quietMembers(p) || idleWebhook(p)) {
 		return time.Time{}, false
 	}
 	if m.inGrace(p, now) {

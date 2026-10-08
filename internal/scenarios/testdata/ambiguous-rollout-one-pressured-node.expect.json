@@ -1,0 +1,7 @@
+{
+  "name": "ambiguous-rollout-one-pressured-node",
+  "description": "A rollout while one node is under memory pressure; only the new replica on that node fails.",
+  "root": "node//n1",
+  "tier": "notify",
+  "maxMessages": 3
+}

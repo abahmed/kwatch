@@ -30,7 +30,7 @@ var scalingRows = []Row{
 		Effect: Side{Kind: kube.KindPod, Modes: []detection.Mode{
 			detection.ModeNotReady,
 			detection.ModeProbe}, Signal: SignalTimeout},
-		Prior: 0.70,
+		Prior: 0.65,
 	},
 	{
 		// The same ceiling seen from the workload it scales: fewer

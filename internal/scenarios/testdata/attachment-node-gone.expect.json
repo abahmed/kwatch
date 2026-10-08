@@ -1,0 +1,8 @@
+{
+  "name": "attachment-node-gone",
+  "description": "A VolumeAttachment is stuck deleting; its node no longer exists but its volume does.",
+  "root": "volumeattachment//csi-6a7b8c",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "30m0s"
+}

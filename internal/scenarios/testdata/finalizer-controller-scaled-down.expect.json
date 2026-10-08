@@ -1,0 +1,8 @@
+{
+  "name": "finalizer-controller-scaled-down",
+  "description": "Six objects have been stuck deleting for ten days; the Deployment that handles their finalizers is scaled to zero.",
+  "root": "deployment/widget-system/widget-controller",
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "30m0s"
+}

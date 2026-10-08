@@ -71,6 +71,13 @@ const (
 	// against 13), so its next "healthy" and "failing again" were still
 	// sent.
 	ChronicFactor = 4
+	// DigestChronicWindow is the ChronicWindow of a digest-tier
+	// incident. It has no message of its own to save, but each resolve
+	// and "failing again" is a line in a digest. Node churn brings the
+	// same problem back every hour or two, not every few minutes, so
+	// such an incident that opened twice in this window resolves only
+	// after MaxHold.
+	DigestChronicWindow = 6 * time.Hour
 )
 
 // Reminders and repeats for incidents that stay open or keep coming back.

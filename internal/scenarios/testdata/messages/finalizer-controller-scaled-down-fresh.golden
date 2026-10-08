@@ -1,0 +1,8 @@
+10:01:15 settled
+🟠 Six objects in widget-system (prod-eu-1) have been stuck deleting since Sep 29: their finalizer widgets.example.com/cleanup is never removed; the controller that handles it, deployment widget-system/widget-controller, is scaled to 0. To see whether the controller that handles the finalizer runs, run kubectl get deployment widget-controller -n widget-system
+🟠 Six objects in widget-system (prod-eu-1) have been stuck deleting since Sep 29: their finalizer widgets.example.com/cleanup is never removed; the controller that handles it, deployment widget-system/widget-controller, is scaled to 0.
+| 🟠 Six objects in **widget-system** (**prod-eu-1**) have been stuck deleting since Sep 29: their finalizer widgets.example.com/cleanup is never removed; the controller that handles it, deployment widget-system/widget-controller, is scaled to 0.
+| To see whether the controller that handles the finalizer runs, run
+| ```
+| kubectl get deployment widget-controller -n widget-system
+| ```

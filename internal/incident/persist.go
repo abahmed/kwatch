@@ -114,6 +114,15 @@ type Record struct {
 	// fingerprint before that update, and the restore does not adopt the
 	// current one, so the update is decided again.
 	HeldUpdate bool `json:",omitempty"`
+	// FormerRoot and RerootedAt remember the root a cause revision moved
+	// the incident away from, so a restart does not make the failure
+	// that goes back there look new. Older records restore without them.
+	FormerRoot inventory.EntityID `json:",omitempty"`
+	RerootedAt time.Time          `json:",omitempty"`
+	// RejectionSeenAt is when a request was last seen refused because of
+	// the incident's webhooks. Older records restore without it, as
+	// never having seen one.
+	RejectionSeenAt time.Time `json:",omitempty"`
 }
 
 // Export returns every incident as a record, for persistence.
@@ -147,6 +156,8 @@ func (m *Manager) Export() []Record {
 			ToldKnown: true,
 			StagePeak: uint8(p.stagePeak), AnnouncedRoute: p.AnnouncedRoute,
 			Ack: p.Ack, Demoted: p.Delivery.demoted,
+			FormerRoot: p.formerRoot, RerootedAt: p.rerootedAt,
+			RejectionSeenAt: p.rejectionAt,
 		})
 	}
 	return out
@@ -171,6 +182,7 @@ func (m *Manager) Restore(records []Record, graceUntil time.Time) {
 		}
 		m.incidents[p.ID] = p
 		m.indexRestored(p)
+		m.restoreFormer(p)
 		if wasAnnounced(p) && !r.HeldUpdate {
 			m.refingerprint = append(m.refingerprint, p.ID)
 		}
@@ -241,7 +253,8 @@ func restored(r Record) *Incident {
 		sent: restoredMark(len(r.Timeline), r.heard()), restored: true,
 		DigestedAt: r.DigestedAt, RepeatCount: r.RepeatCount,
 		stagePeak: stage(r.StagePeak), AnnouncedRoute: r.AnnouncedRoute,
-		Ack: r.Ack,
+		Ack: r.Ack, formerRoot: r.FormerRoot, rerootedAt: r.RerootedAt,
+		rejectionAt: r.RejectionSeenAt, rejectionSeen: !r.RejectionSeenAt.IsZero(),
 		Delivery: Delivery{
 			paged: r.Paged, rolledUp: r.RolledUp,
 			podPeak: r.PodPeak, pageHeld: r.PageHeld,

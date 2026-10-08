@@ -1,0 +1,11 @@
+{
+  "name": "ambiguous-ceiling-slow-dependency",
+  "description": "An HPA at its maximum while the replicas time out and the database they call times out kwatch's probe as well.",
+  "root": "external-endpoint//db.example.com:5432",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//w7",
+    "node//w8"
+  ]
+}

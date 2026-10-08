@@ -53,6 +53,11 @@ type Finding struct {
 	Normal Normality `json:",omitempty"`
 }
 
+// EvidenceUsedBy labels evidence that names an object using the finding's
+// entity, valued "kind/name" (an Ingress that terminates TLS with a
+// Secret).
+const EvidenceUsedBy = "used by"
+
 // Key identifies a finding across evaluations.
 func (s Finding) Key() Key {
 	return Key{Entity: s.Entity, Reason: s.Reason}

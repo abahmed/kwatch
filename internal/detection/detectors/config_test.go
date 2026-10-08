@@ -87,6 +87,31 @@ func TestCertificateExpiredButUnreferencedIsAWarning(t *testing.T) {
 
 	require.Len(t, findings, 1)
 	assert.Equal(t, detection.Warning, findings[0].Severity)
+	assert.Contains(t, findings[0].Summary,
+		"nothing in the cluster references it")
+}
+
+// A pod that mounts the Secret uses the certificate: the finding is
+// critical and does not say nothing references it.
+func TestCertificateExpiredMountedByPodIsCritical(t *testing.T) {
+	m := newTestModel()
+	secret := newID(kube.KindSecret, "default", "tls")
+	put(m, secret, t0, map[string]inventory.Value{
+		kube.AttrCertExpiry: inventory.Time(t0.Add(-24 * time.Hour)),
+	})
+	pod := newID(kube.KindPod, "default", "web-0")
+	put(m, pod, t0, nil)
+	link(m, pod, inventory.References, secret)
+
+	findings := Certificate{}.Detect(testDetectorContext(m, t0),
+		entityOf(m, secret))
+
+	require.Len(t, findings, 1)
+	assert.Equal(t, detection.Critical, findings[0].Severity)
+	assert.NotContains(t, findings[0].Summary, "references it")
+	assert.Equal(t, []detection.Evidence{{
+		Label: detection.EvidenceUsedBy, Value: "pod/web-0"}},
+		findings[0].Evidence)
 }
 
 func TestMissingSecret(t *testing.T) {

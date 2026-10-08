@@ -1,0 +1,8 @@
+{
+  "name": "certificate-expired-ingress",
+  "description": "An Ingress terminates TLS with a certificate that has expired: clients refuse the site now.",
+  "root": "secret/shop/shop-tls",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "45m0s"
+}

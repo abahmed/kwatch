@@ -19,11 +19,18 @@ A flapping incident also gets its reminder when it is due.
 A digest lists a problem once, and the daily reminder above comes only
 when the incident stays quiet. A digest-tier incident that a digest listed
 and that is still open (also flapping or recovering) and not acknowledged
-is therefore named again in every digest that goes out, as an ongoing item
-in the Problems list: `Service web (shop) — still failing:
-FailedDeployModel ×14 since 17:14`. The count is the Kubernetes event
-count since the incident opened, and is left out when kwatch has none. It
-is capped like the rest of the list (five, then `+N more still failing`).
+is therefore named again in the digests that go out, as an ongoing item
+in the Problems list: `Service web (shop) is still failing, for two days
+now.` Each ongoing item is listed in full at most once a day (UTC): in the
+first digest of the day, or when it changed (flapping, its reason, how many
+things fail, its cause). Other digests carry one line for the rest: `3 more
+still failing, unchanged (web, db, cache +1)`. The audit entry of a digest
+names every ongoing item. The list is capped like the rest (five, then
+`+N more still failing`; `announce/ongoing_compact.go`).
+
+An idle webhook (a fail-closed webhook whose backend is gone and that
+refused nothing) is announced once, falls to the digest quietly and is not
+reminded: its daily "still failing" is the digest line.
 An ongoing problem that came back since its last listing also opens a
 digest window on its own, but no sooner than `OngoingEvery` (6h) after
 the last listing, so a quiet cluster still hears about a problem that

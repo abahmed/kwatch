@@ -149,7 +149,7 @@ func (w Writer) digestDoc(
 	if len(opened) > 0 {
 		facts = append(facts, countFact(len(opened), "problem"))
 	}
-	if n := len(extras.Ongoing); n > 0 {
+	if n := len(extras.Ongoing) + len(extras.Unchanged); n > 0 {
 		facts = append(facts, strconv.Itoa(n)+" ongoing")
 	}
 	if len(resolved) > 0 {
@@ -165,10 +165,13 @@ func (w Writer) digestDoc(
 		doc = append(doc, notification.Block{Kind: notification.Para,
 			Spans: []notification.Span{{Text: extras.Wake.Text()}}})
 	}
-	if len(opened)+len(extras.Ongoing) > 0 {
+	if len(opened)+len(extras.Ongoing)+len(extras.Unchanged) > 0 {
 		doc = append(doc, headingBlock("Problems"))
-		doc = append(doc, w.problemBullets(opened, now)...)
-		doc = append(doc, ongoingBullets(extras.Ongoing, now)...)
+		list := foldLeftovers(opened, extras)
+		doc = append(doc, w.problemBullets(list.opened, now)...)
+		doc = append(doc, lineBullets(list.full)...)
+		doc = append(doc, ongoingBullets(list.extras, now)...)
+		doc = append(doc, lineBullets(list.same)...)
 	}
 	if len(resolved) > 0 {
 		doc = append(doc, resolvedBlock(resolved, "since last digest"))

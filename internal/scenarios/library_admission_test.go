@@ -14,6 +14,7 @@ func admissionScenarios() []scenario {
 	return []scenario{
 		mutatingWebhookSlowBackend(), validatingWebhookDeadline(),
 		webhookTimeout(), webhookDeniesPod(),
+		webhookIdleBackendGone(), webhookIdleThenRejects(),
 	}
 }
 
