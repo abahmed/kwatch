@@ -290,7 +290,10 @@ which only the state lock holder claims. The application supervisor starts
 the components when the pod holds the state lock and stops them when it is
 lost. A required component that fails or stalls removes readiness and the pod
 restarts. There is no second replica and no self-failover: if the pod or its
-node fails, Kubernetes restarts it and kwatch resumes from the volume.
+node fails, Kubernetes restarts it and kwatch resumes from the volume. The
+lock is still needed with one replica, because an old pod on a node cut off
+from the network can run beside its replacement for a while; see
+[Production operations](./production-operations.md#operating-model).
 
 ## Delivery guarantee
 
