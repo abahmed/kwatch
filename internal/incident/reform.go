@@ -29,6 +29,6 @@ func (m *Manager) reform(p *Incident, now time.Time) {
 	}
 	if m.model != nil {
 		// Outside Apply nothing else computes the new incidents' tier.
-		m.refresh(m.model)
+		m.refresh(m.model, now)
 	}
 }

@@ -1,19 +1,19 @@
-10:00:15 settled
-🔴 Validating webhook policy-cleanup (prod-eu-1) is down because service policy-svc in policy does not exist. Two failing workloads all depend on it. It rejects every create and update it checks. To see the object's state and events, run kubectl describe validatingwebhookconfiguration policy-cleanup
-🔴 Validating webhook policy-cleanup (prod-eu-1) is down because service policy-svc in policy does not exist.
-| 🔴 Validating webhook **policy-cleanup** (**prod-eu-1**) is down because service **policy-svc** in **policy** does not exist.
+10:01:15 settled
+🟠 Validating webhook policy-cleanup (prod-eu-1) is failing because service policy-svc in policy does not exist. Two failing workloads all depend on it. No request has been rejected yet; any create it matches will be. To see the object's state and events, run kubectl describe validatingwebhookconfiguration policy-cleanup
+🟠 Validating webhook policy-cleanup (prod-eu-1) is failing because service policy-svc in policy does not exist.
+| 🟠 Validating webhook **policy-cleanup** (**prod-eu-1**) is failing because service **policy-svc** in **policy** does not exist.
 | Two failing workloads all depend on it.
-| It rejects every create and update it checks.
+| No request has been rejected yet; any create it matches will be.
 | To see the object's state and events, run
 | ```
 | kubectl describe validatingwebhookconfiguration policy-cleanup
 | ```
-10:01:15 settled
-🔴 Mutating webhook mesh-injector (prod-eu-1) is down because service mesh-webhook in mesh-system has no ready endpoints. Three failing workloads all depend on it. It rejects every create and update it checks. To see the object's state and events, run kubectl describe mutatingwebhookconfiguration mesh-injector
-🔴 Mutating webhook mesh-injector (prod-eu-1) is down because service mesh-webhook in mesh-system has no ready endpoints.
-| 🔴 Mutating webhook **mesh-injector** (**prod-eu-1**) is down because service **mesh-webhook** in **mesh-system** has no ready endpoints.
+10:02:15 settled
+🟠 Mutating webhook mesh-injector (prod-eu-1) is failing because service mesh-webhook in mesh-system has no ready endpoints. Three failing workloads all depend on it. No request has been rejected yet; any create it matches will be. To see the object's state and events, run kubectl describe mutatingwebhookconfiguration mesh-injector
+🟠 Mutating webhook mesh-injector (prod-eu-1) is failing because service mesh-webhook in mesh-system has no ready endpoints.
+| 🟠 Mutating webhook **mesh-injector** (**prod-eu-1**) is failing because service **mesh-webhook** in **mesh-system** has no ready endpoints.
 | Three failing workloads all depend on it.
-| It rejects every create and update it checks.
+| No request has been rejected yet; any create it matches will be.
 | To see the object's state and events, run
 | ```
 | kubectl describe mutatingwebhookconfiguration mesh-injector

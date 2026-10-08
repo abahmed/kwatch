@@ -29,6 +29,10 @@ type Manager struct {
 	// derived from the root: a revised cause changes the root and keeps
 	// the ID.
 	byRoot map[string]string
+	// former maps a root an incident was moved away from to that
+	// incident's ID, for retakeFormer. Restore rebuilds it from the
+	// FormerRoot of each record.
+	former map[string]string
 	// seq numbers new incident IDs; nonce tells IDs of one store
 	// apart from those of an earlier, reset store (see newID).
 	seq   int
@@ -73,6 +77,7 @@ func NewManager(cfg Config, explainer Explainer) *Manager {
 		incidents: make(map[string]*Incident),
 		byMember:  make(map[detection.Key]string),
 		byRoot:    make(map[string]string),
+		former:    make(map[string]string),
 		changed:   make(map[string]bool),
 		resolved:  newResolvedIndex(),
 	}
@@ -118,7 +123,7 @@ func (m *Manager) Apply(
 		}
 	}
 	m.adoptAdvisories(s)
-	m.refresh(s.Model)
+	m.refresh(s.Model, s.Now)
 	m.observeAttempts(dirty, s.Now)
 }
 

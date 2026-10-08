@@ -1,0 +1,16 @@
+10:12:25 settled
+🟠 checkout is failing in shop (prod-eu-1) after the 10:10 release of registry.example.com/checkout:2.4. The previous image was registry.example.com/checkout:2.3. It fails with "panic: runtime error: index out of range at checkout/v2/pricing.go:88 (new in 2.4)". Also changed before it broke: bob changed config map checkout-config at 10:10. To see the rollout state, run kubectl rollout status deployment/checkout -n shop
+Checked: both replicas fail, on 2 nodes.
+🟠 checkout is failing in shop (prod-eu-1) after the 10:10 release of registry.example.com/checkout:2.4.
+| 🟠 **checkout** is failing in **shop** (**prod-eu-1**) after the 10:10 release of registry.example.com/checkout:2.4.
+| The previous image was registry.example.com/checkout:2.3.
+| It fails with
+| ```
+| panic: runtime error: index out of range at checkout/v2/pricing.go:88 (new in 2.4)
+| ```
+| Also changed before it broke: bob changed config map checkout-config at 10:10.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/checkout -n shop
+| ```
+| *Checked: both replicas fail, on 2 nodes.*

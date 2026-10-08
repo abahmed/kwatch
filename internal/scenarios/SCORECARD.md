@@ -42,7 +42,7 @@ other target was relaxed.
 | Correct root cause (held-out) | >= 80% | - | 71.4% (10 of 14) | 100% (14 of 14) | pass |
 | Wrong high-confidence root | <= 5% of high-confidence cases, labelled and held-out, gated at 20 or more | 0% | 2.5% (1 of 40) | 1.3% (2 of 153) | pass |
 | Calibration: high confidence | 80-100% (at least 10 cases) | 100% (10 of 10) | 97.5% (39 of 40) | 98.6% (139 of 141) | pass |
-| Calibration: likely confidence | 50-90% (at least 10 cases) | 66.7% (4 of 6) | 90.9% (10 of 11) | not gated: 7 of 7 right, 10 cases needed | pass |
+| Calibration: likely confidence | 50-90% (at least 10 cases) | 66.7% (4 of 6) | 90.9% (10 of 11) | 88.2% (15 of 17 right) | pass |
 | Messages per incident (p95) | <= 3 | - | 3 | 3 | pass |
 | Messages per incident (most) | <= 5 | 4 | 3 | 5 | pass |
 | Time to first message (page tier, max) | <= 2m (was 60s) | - | 1m45s (p95 1m45s, 9 scenarios) | 1m45s (p95 1m45s, 33 scenarios) | pass |
@@ -78,10 +78,13 @@ scenarios, none by changing a target:
   began to run different builds of one tag. They are healthy side by
   side until one fails (`same-tag-new-digest` measured 9m15s from the
   drift, 1m15s from the first crash).
-- The `autoscaling-limit` row's prior went from 0.65 to 0.70. Its three
-  scenarios were all right and sat 0.001 to 0.004 under the calibrated
-  boundary only through the hop decay, which left the likely level with
-  a perfect record over ten cases (underconfident, so the gate failed).
+- The `autoscaling-limit` row's prior stays at 0.65. An unreleased
+  change had raised it to 0.70 so its three scenarios (right every
+  time, 0.001 to 0.004 under the boundary through the hop decay) left
+  the likely level; that was done to move a gate, not on evidence, and
+  with it the likely level was unmeasured (8 cases). A ceiling with
+  timing-out pods cannot rule out other saturation, so "likely" is the
+  honest word for four right cases of four.
 - A kubelet probe failure names the address the kubelet probes, never
   one the pod calls, so the explainer no longer reads it as an external
   endpoint that several workloads share.
@@ -246,8 +249,25 @@ between 0.50 and 0.70 were all right but are too few to judge, so the
 likely level is reported as not gated. No boundary would have kept
 "likely" inside 50 to 90% with 10 or more cases: every range of 10 or
 more includes the 13 tied cases at 0.70, of which only one is wrong.
-Measuring the likely level needs more genuinely ambiguous labelled
-scenarios, not different boundaries.
+The likely level is now measured: 17 cases, 15 right (88.2%). Twelve
+`ambiguous-*` scenarios (`library_ambiguous_test.go`) were added, as
+pairs labelled with the root a person would conclude from the whole
+story. Of them, five land in the likely band: an init container with
+nothing edited (right), a CronJob run that failed after its Secret was
+rotated (blamed on the CronJob: wrong) and with nothing edited (right),
+and an OOM kill on an overcommitted node under pressure at 92% of the
+container's limit (blamed on the node: wrong) and at 51% (right). The
+rest sit elsewhere: the init container after a Secret rotation is high
+and right; an image bump and a ConfigMap edit a minute apart are both
+blamed on the image at high (right for one, wrong for the config-parse
+panic); a rollout during node pressure names the node without a cause
+(right when only its replica fails, wrong when every replica fails); a
+ceiling over a dependency that stopped answering names the dependency
+(right), and one over a healthy dependency names the autoscaler (right).
+Three wrong high-confidence roots remain (1.9%). The rate is near the
+top of its band: the three autoscaler ceilings and the healthy-
+dependency ceiling are right at 0.70, so a few more right cases would
+push it over 90%.
 
 ## Non-events
 

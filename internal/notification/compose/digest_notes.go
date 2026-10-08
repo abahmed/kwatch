@@ -2,6 +2,7 @@ package compose
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -9,16 +10,18 @@ import (
 )
 
 // Ongoing is a digest-tier problem an earlier digest listed that is still
-// open. The digest says so again, with how often it was seen and since
-// when, so a problem that never goes away is not forgotten.
+// open. The digest says so again, in the words the incident's own
+// reminder uses, so a problem that never goes away is not forgotten.
 type Ongoing struct {
 	Root inventory.EntityID
-	// Reason is what keeps failing, as the finding names it.
-	Reason string
-	// Count is how many times it was seen since Since; zero when kwatch
-	// does not count it.
-	Count int
+	// Title is the one-line description of the problem (see
+	// Writer.OngoingTitle); empty when the writer had none.
+	Title string
+	// Since is when the problem began (see StartedAt).
 	Since time.Time
+	// Leftover is the reason that makes it a leftover that groups with
+	// the others of its reason (see LeftoverReason); empty otherwise.
+	Leftover string
 }
 
 // WakeLine is the summary of a cluster wake-up that ended: the workloads
@@ -35,14 +38,19 @@ type WakeLine struct {
 // DigestExtras is what a digest says beyond the incidents that opened
 // and resolved in its window.
 type DigestExtras struct {
+	// Ongoing are the ongoing problems listed in full: new to the day
+	// or changed since they were last listed.
 	Ongoing []Ongoing
+	// Unchanged are ongoing problems this day's digests already listed
+	// in full and that did not change: one summary line names them.
+	Unchanged []Ongoing
 	// Wake is the summary of a wake-up; nil when none ended.
 	Wake *WakeLine
 }
 
 // Empty reports nothing to add.
 func (x DigestExtras) Empty() bool {
-	return len(x.Ongoing) == 0 && x.Wake == nil
+	return len(x.Ongoing) == 0 && len(x.Unchanged) == 0 && x.Wake == nil
 }
 
 // Text words the wake-up on one line: "Cluster waking up: 42 workloads
@@ -72,28 +80,53 @@ func startedWhen(from, to time.Time) string {
 	return "between " + clock(from) + " and " + clock(to)
 }
 
-// Line is one bullet: "Service web (shop) — still failing:
-// FailedDeployModel ×14 since 17:14".
+// Line is one bullet: "Service web (shop) is still failing, for two days
+// now." Without a title it says only the subject and when it began:
+// "Service web (shop) — still failing since 17:14". A reason code is never
+// part of it.
 func (o Ongoing) Line(now time.Time) string {
+	if o.Title != "" {
+		return o.Title
+	}
 	subject := capitalKind(shortName(o.Root))
 	if o.Root.Namespace != "" {
 		subject += " (" + o.Root.Namespace + ")"
-	}
-	what := o.Reason
-	if o.Count > 1 {
-		what += " ×" + strconv.Itoa(o.Count)
 	}
 	since := clock(o.Since)
 	if o.Since.UTC().YearDay() != now.UTC().YearDay() ||
 		now.Sub(o.Since) >= 24*time.Hour {
 		since = o.Since.UTC().Format("Jan 2 15:04")
 	}
-	return subject + " — still failing: " + what + " since " + since
+	return subject + " — still failing since " + since
+}
+
+// maxUnchangedNamed is how many unchanged problems the summary line
+// names before "+K".
+const maxUnchangedNamed = 3
+
+// unchangedLine is the one line for the problems that did not change:
+// "2 more still failing, unchanged (web, db +1)". Empty when none.
+func unchangedLine(unchanged []Ongoing) string {
+	if len(unchanged) == 0 {
+		return ""
+	}
+	var names []string
+	for _, o := range unchanged[:min(len(unchanged), maxUnchangedNamed)] {
+		names = append(names, o.Root.Name)
+	}
+	list := strings.Join(names, ", ")
+	if extra := len(unchanged) - len(names); extra > 0 {
+		list += " +" + strconv.Itoa(extra)
+	}
+	return strconv.Itoa(len(unchanged)) + " more still failing, " +
+		"unchanged (" + list + ")"
 }
 
 // ongoingSentences are the ongoing problems for the plain note, as many
-// as a digest names, then how many more there are.
-func ongoingSentences(ongoing []Ongoing, now time.Time) []sentence {
+// as a digest names, then how many more there are, then the line for
+// the unchanged ones.
+func ongoingSentences(extras DigestExtras, now time.Time) []sentence {
+	ongoing := extras.Ongoing
 	var out []sentence
 	for i, o := range ongoing {
 		if i == maxSummaryNamed {
@@ -104,11 +137,16 @@ func ongoingSentences(ongoing []Ongoing, now time.Time) []sentence {
 		out = append(out, sentence{part: partProof,
 			text: endSentence(o.Line(now))})
 	}
+	if line := unchangedLine(extras.Unchanged); line != "" {
+		out = append(out, sentence{part: partProof,
+			text: endSentence(line)})
+	}
 	return out
 }
 
 // ongoingBullets are the same lines as bullets of the Problems list.
-func ongoingBullets(ongoing []Ongoing, now time.Time) []notification.Block {
+func ongoingBullets(extras DigestExtras, now time.Time) []notification.Block {
+	ongoing := extras.Ongoing
 	var out []notification.Block
 	for i, o := range ongoing {
 		if i == maxSummaryNamed {
@@ -121,6 +159,10 @@ func ongoingBullets(ongoing []Ongoing, now time.Time) []notification.Block {
 			Spans: podSpans(o.Line(now))}}
 		boldNames(bullet, []string{o.Root.Name, o.Root.Namespace})
 		out = append(out, bullet[0])
+	}
+	if line := unchangedLine(extras.Unchanged); line != "" {
+		out = append(out, notification.Block{Kind: notification.Bullet,
+			Spans: []notification.Span{{Text: line}}})
 	}
 	return out
 }

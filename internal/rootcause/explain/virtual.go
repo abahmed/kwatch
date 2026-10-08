@@ -58,6 +58,7 @@ func (v *view) virtualHops(id inventory.EntityID) []hop {
 		out = append(out, v.drainBlockerHops(id)...)
 	}
 	out = append(out, v.scalerHops(id)...)
+	out = append(out, v.finalizerHops(id)...)
 	if id.Kind == kube.KindHPA && len(v.s.Findings[id]) > 0 {
 		out = append(out, v.metricsAPIHops()...)
 	}

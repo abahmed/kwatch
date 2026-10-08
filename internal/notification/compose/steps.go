@@ -19,6 +19,22 @@ import (
 func nextSteps(
 	p incident.Incident, members []detection.Finding,
 ) []notification.Step {
+	if root := p.Root; finalizerCause(p.Cause) &&
+		incident.IsWorkload(root.Kind) {
+		return []notification.Step{{
+			Text: "See whether the controller that handles the " +
+				"finalizer runs",
+			Command: "kubectl get " + string(root.Kind) + " " +
+				quote(root.Name) + namespaceFlag(root.Namespace),
+		}}
+	}
+	return rootSteps(p, members)
+}
+
+// rootSteps suggests the steps for the incident's root.
+func rootSteps(
+	p incident.Incident, members []detection.Finding,
+) []notification.Step {
 	root := p.Root
 	switch {
 	case p.Cause != nil && p.Cause.Change != nil &&
@@ -27,12 +43,7 @@ func nextSteps(
 	case root.Kind == kube.KindNode && !nodeRemoved(p):
 		return nodeSteps(root)
 	case root.Kind == kube.KindSecret:
-		return []notification.Step{{
-			// describe lists each key and its size, never a value.
-			Text: "List the keys of the Secret the pods depend on",
-			Command: "kubectl describe secret " + quote(root.Name) +
-				namespaceFlag(root.Namespace),
-		}}
+		return secretSteps(root, members)
 	case root.Kind == kube.KindConfigMap:
 		return []notification.Step{{
 			Text: "Check the object the pods depend on",

@@ -1,0 +1,12 @@
+{
+  "name": "webhook-idle-backend-gone",
+  "description": "A fail-closed webhook outlives its uninstalled operator and no create is refused for an hour: one notification, no page.",
+  "root": "validatingwebhookconfiguration//widget-operator",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "node//n1"
+  ],
+  "tail": "1h0m0s"
+}

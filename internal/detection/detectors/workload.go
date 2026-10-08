@@ -102,7 +102,8 @@ func (d Workload) availability(
 		return detection.Finding{}, false
 	}
 	ready, _ := number(e, kube.AttrReadyReplicas)
-	if ready >= desired || rolloutProgressing(ctx, e) {
+	if ready >= desired || rolloutProgressing(ctx, e) ||
+		daemonGapsInTransition(ctx, e) {
 		return detection.Finding{}, false
 	}
 	// The wait runs from when the workload first fell short, not from

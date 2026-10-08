@@ -1,0 +1,16 @@
+10:01:15 settled
+🟠 Node n1 (prod-eu-1) is low on memory. It used 260Mi of its 512Mi limit. Node n1 ran out of memory; biggest users: batch/importer 3.1Gi. api in shop is affected as well. To check the node's conditions and recent events, run kubectl describe node n1
+🟠 Node n1 (prod-eu-1) is low on memory.
+| 🟠 Node n1 (**prod-eu-1**) is low on memory.
+| It used 260Mi of its 512Mi limit.
+| Node n1 ran out of memory; biggest users: batch/importer 3.1Gi.
+| **api** in **shop** is affected as well.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```
+10:06:00 material change
+🟠 Node n1 (prod-eu-1) is now short on memory and its pods' limits add up to 190% of its memory, so pods that stayed within their own limit are killed. It is spreading to pod api-d461a92b-a in shop: it has not been ready for three minutes.
+🟠 Node n1 (prod-eu-1) is now short on memory and its pods' limits add up to 190% of its memory, so pods that stayed within their own limit are killed.
+| 🟠 Node n1 (**prod-eu-1**) is now short on memory and its pods' limits add up to 190% of its memory, so pods that stayed within their own limit are killed.
+| It is spreading to pod **api-d461a92b-a** in shop: it has not been ready for three minutes.

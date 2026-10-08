@@ -198,12 +198,8 @@ func (Webhook) Detect(
 		return nil
 	}
 	blocking := strings.Contains(text(e, kube.AttrFailurePolicy), "Fail")
-	// With failurePolicy Ignore on every webhook, requests skip a dead
-	// backend and nothing is blocked: that is only worth the digest.
-	severity := detection.Info
-	if blocking {
-		severity = detection.Critical
-	}
+	rejected := blocking && webhookRejected(ctx, e)
+	severity := backendSeverity(blocking, rejected)
 	for _, service := range ctx.Model.Related(
 		e.ID, inventory.Serves, inventory.Outgoing,
 	) {
@@ -215,7 +211,7 @@ func (Webhook) Detect(
 				Reason:   reasons.WebhookBackendNotFound,
 				Severity: severity,
 				Summary: "Admission webhook calls Service " + service.Name +
-					", which does not exist" + effect(blocking),
+					", which does not exist" + effect(blocking, rejected),
 			}}
 		}
 		if ready, known := readyEndpoints(ctx, service); known && ready == 0 {
@@ -225,17 +221,36 @@ func (Webhook) Detect(
 			return []detection.Finding{{
 				Reason: reasons.WebhookNoEndpoints, Severity: severity,
 				Summary: "Admission webhook backend " + service.Name +
-					" has no ready pods" + effect(blocking),
+					" has no ready pods" + effect(blocking, rejected),
 			}}
 		}
 	}
 	return nil
 }
 
+// backendSeverity is how much a dead webhook backend matters. With
+// failurePolicy Ignore, requests skip it and nothing is blocked: that is
+// only worth the digest. With Fail it blocks every request the webhook
+// matches, but it is critical only once a request was refused: an
+// operator's leftover webhook matches only that operator's own objects
+// and may never be called again. Until then it is a warning.
+func backendSeverity(blocking, rejected bool) detection.Severity {
+	switch {
+	case rejected:
+		return detection.Critical
+	case blocking:
+		return detection.Warning
+	}
+	return detection.Info
+}
+
 // effect says what a dead webhook backend does to requests.
-func effect(blocking bool) string {
-	if blocking {
+func effect(blocking, rejected bool) string {
+	switch {
+	case rejected:
 		return "; it blocks matching requests (failurePolicy Fail)"
+	case blocking:
+		return "; no request has been rejected yet (failurePolicy Fail)"
 	}
 	return "; requests skip it because failurePolicy is Ignore"
 }

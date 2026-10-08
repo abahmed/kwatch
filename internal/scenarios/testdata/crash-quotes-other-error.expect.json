@@ -1,0 +1,11 @@
+{
+  "name": "crash-quotes-other-error",
+  "description": "A crash loop quotes a missing assembly while the configuration names a Service that does not exist; the workload is blamed, not the name.",
+  "root": "deployment/staging/warehouse",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "service/staging/regional"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,6 @@
+{
+  "name": "pressure-spike-fresh-node",
+  "description": "Memory stall spikes of two minutes on a node that joined half an hour ago.",
+  "maxMessages": 0,
+  "quiet": true
+}

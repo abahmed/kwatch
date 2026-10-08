@@ -32,15 +32,6 @@ func TestNodeUsageThresholds(t *testing.T) {
 		{"inodes critical", map[string]inventory.Value{
 			kube.AttrInodesUsedPct: inventory.Number(99)},
 			reasons.NodeInodesHigh, detection.Critical},
-		{"memory stall", map[string]inventory.Value{
-			kube.AttrMemoryPSI: inventory.Number(20)},
-			reasons.NodePSIHigh, detection.Warning},
-		{"cpu stall", map[string]inventory.Value{
-			kube.AttrCPUPSI: inventory.Number(30)},
-			reasons.NodePSIHigh, detection.Warning},
-		{"io stall", map[string]inventory.Value{
-			kube.AttrIOPSI: inventory.Number(50)},
-			reasons.NodePSIHigh, detection.Warning},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -52,6 +43,28 @@ func TestNodeUsageThresholds(t *testing.T) {
 			assert.Equal(t, tt.reason, got[0].Reason)
 			assert.Equal(t, tt.severity, got[0].Severity)
 			assert.NotEmpty(t, got[0].Summary)
+		})
+	}
+}
+
+// A stall on memory, CPU or IO is a finding once it has lasted.
+func TestNodeUsageStalls(t *testing.T) {
+	for name, attr := range map[string]string{
+		"memory": kube.AttrMemoryPSI, "cpu": kube.AttrCPUPSI,
+		"io": kube.AttrIOPSI,
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := newTestModel()
+			id := newID(kube.KindNode, "", "n1")
+			put(m, id, t0, map[string]inventory.Value{
+				attr: inventory.Number(25)})
+			registry := detection.NewRegistry(nil, NodeUsage{})
+			assert.Empty(t, registry.Evaluate(m, t0, id).Findings)
+			got := registry.Evaluate(m, t0.Add(psiSustain), id).Findings
+			require.Len(t, got, 1)
+			assert.Equal(t, reasons.NodePSIHigh, got[0].Reason)
+			assert.Equal(t, detection.Warning, got[0].Severity)
+			assert.Equal(t, t0, got[0].Since)
 		})
 	}
 }
@@ -231,4 +244,30 @@ func TestHeldDiskFindingIsCappedAndSaysItIsStale(t *testing.T) {
 		held = registry.Evaluate(m, at, node)
 	}
 	assert.Empty(t, held.Findings, "held no longer than usageHoldMax")
+}
+
+// A pressure-stall spike on a node that is no longer young is not a
+// finding until the stall has lasted; a spike that ends starts over.
+func TestNodePressureStallNeedsASustainedStall(t *testing.T) {
+	m := newTestModel()
+	node := newID(kube.KindNode, "", "n1")
+	set := func(at time.Time, v float64) {
+		put(m, node, at, map[string]inventory.Value{
+			kube.AttrCreated:   inventory.Time(t0),
+			kube.AttrMemoryPSI: inventory.Number(v)})
+	}
+	registry := detection.NewRegistry(nil, NodeUsage{})
+	at := t0.Add(30 * time.Minute)
+	step := func(d time.Duration, v float64) []detection.Finding {
+		set(at.Add(d), v)
+		return registry.Evaluate(m, at.Add(d), node).Findings
+	}
+
+	assert.Empty(t, step(0, 40), "a spike on a 30-minute-old node")
+	assert.Empty(t, step(2*time.Minute, 5), "it ended")
+	assert.Empty(t, step(6*time.Minute, 40), "a new spike starts over")
+	assert.Empty(t, step(8*time.Minute, 45))
+	got := step(16*time.Minute, 45)
+	require.Len(t, got, 1, "the stall lasted")
+	assert.Equal(t, reasons.NodePSIHigh, got[0].Reason)
 }

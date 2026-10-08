@@ -105,7 +105,9 @@ func TestNodePressureStallWaitsForYoungNode(t *testing.T) {
 
 	early := evaluate(NodeUsage{}, m, t0.Add(5*time.Minute), node, nil)
 	assert.Empty(t, early.Findings)
-	late := evaluate(NodeUsage{}, m, t0.Add(kube.BootWindow), node, nil)
+	registry := detection.NewRegistry(nil, NodeUsage{})
+	registry.Evaluate(m, t0.Add(kube.BootWindow), node)
+	late := registry.Evaluate(m, t0.Add(kube.BootWindow+psiSustain), node)
 	require.Len(t, late.Findings, 1)
 	assert.Equal(t, reasons.NodePSIHigh, late.Findings[0].Reason)
 }

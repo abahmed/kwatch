@@ -103,7 +103,7 @@ func TestVolumeAttachmentSchemaRecordsAttachError(t *testing.T) {
 	va := &storagev1.VolumeAttachment{
 		ObjectMeta: metav1.ObjectMeta{Name: "va"},
 		Spec: storagev1.VolumeAttachmentSpec{
-			NodeName: "n1",
+			NodeName: "n1", Attacher: "ebs.csi.example.com",
 			Source: storagev1.VolumeAttachmentSource{
 				PersistentVolumeName: &pv,
 			},
@@ -116,6 +116,7 @@ func TestVolumeAttachmentSchemaRecordsAttachError(t *testing.T) {
 	d, ok := s.Describe(va)
 	assert.True(t, ok)
 	assert.Equal(t, "timeout", text(d, kube.AttrAttachError))
+	assert.Equal(t, "ebs.csi.example.com", text(d, kube.AttrAttacher))
 	assert.Len(t, d.Relations[inventory.RunsOn], 1)
 	assert.Len(t, d.Relations[inventory.References], 1)
 	assert.Nil(t, s.Diff(va, va))

@@ -157,8 +157,8 @@ func TestWebhookBackendMissing(t *testing.T) {
 		policy   string
 		severity detection.Severity
 	}{
-		{"Fail", detection.Critical}, {"Ignore", detection.Info},
-		{"Ignore,Fail", detection.Critical},
+		{"Fail", detection.Warning}, {"Ignore", detection.Info},
+		{"Ignore,Fail", detection.Warning},
 	}
 	for _, tt := range tests {
 		t.Run(tt.policy, func(t *testing.T) {
@@ -178,7 +178,8 @@ func TestWebhookNoReadyEndpoints(t *testing.T) {
 	got := evaluate(Webhook{}, m, t0, id, nil).Findings
 	require.Len(t, got, 1)
 	assert.Equal(t, reasons.WebhookNoEndpoints, got[0].Reason)
-	assert.Equal(t, detection.Critical, got[0].Severity)
+	assert.Equal(t, detection.Warning, got[0].Severity,
+		"nothing was refused yet")
 }
 
 func TestWebhookNoEndpointsIgnoreIsInfo(t *testing.T) {
@@ -190,7 +191,7 @@ func TestWebhookNoEndpointsIgnoreIsInfo(t *testing.T) {
 
 	m, id = webhook("Fail", true, []float64{0})
 	got = evaluate(Webhook{}, m, t0, id, nil).Findings
-	assert.Contains(t, got[0].Summary, "blocks matching requests")
+	assert.Contains(t, got[0].Summary, "no request has been rejected yet")
 }
 
 func TestWebhookQuiet(t *testing.T) {

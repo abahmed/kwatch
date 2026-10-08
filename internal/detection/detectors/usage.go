@@ -18,6 +18,12 @@ const (
 	// psiThreshold is the share of the last minute tasks stalled on a
 	// resource; above it workloads visibly slow down.
 	psiThreshold = 20.0
+	// psiSustain is how long a stall must last before it is a finding.
+	// The reading is an average of the last minute, so a minute of stall
+	// is already a spike that passes; a node that stalls this long keeps
+	// slowing its workloads. A shorter stall opens and resolves an
+	// incident on every pod-start storm of a busy node.
+	psiSustain = 5 * time.Minute
 )
 
 // NodeUsage detects nodes running out of disk or inodes and nodes whose
@@ -46,24 +52,34 @@ func (NodeUsage) Detect(
 		out = append(out, s)
 	}
 	if !nodeIsYoung(ctx, e) {
-		out = append(out, stallFindings(e)...)
+		out = append(out, stallFindings(ctx, e)...)
 	}
 	return out
 }
 
-// stallFindings reports the first resource the node's tasks stall on.
-func stallFindings(e inventory.Entity) []detection.Finding {
+// stallFindings reports the first resource the node's tasks stall on,
+// once the stall has lasted psiSustain. A reading a little below the
+// threshold keeps a stall going, so a value near it does not restart the
+// wait with every sample.
+func stallFindings(
+	ctx detection.Context, e inventory.Entity,
+) []detection.Finding {
 	for _, p := range []struct{ attr, resource string }{
 		{kube.AttrMemoryPSI, "memory"}, {kube.AttrCPUPSI, "CPU"},
 		{kube.AttrIOPSI, "disk IO"},
 	} {
 		stall, ok := number(e, p.attr)
-		if !ok || stall < psiThreshold {
+		key := "stall:" + p.attr
+		if !ok || !crossed(ctx, key, stall, psiThreshold) {
 			continue
+		}
+		since := ctx.Onset(key, time.Time{})
+		if !sustained(ctx, key, since, psiSustain) {
+			return nil
 		}
 		return []detection.Finding{{
 			Reason: reasons.NodePSIHigh, Severity: detection.Warning,
-			Since: valueSince(e, p.attr),
+			Since: since,
 			Summary: "Node is under " + p.resource + " pressure: " +
 				"workloads stall on " + p.resource,
 			Evidence: []detection.Evidence{{

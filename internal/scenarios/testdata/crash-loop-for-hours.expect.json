@@ -1,0 +1,11 @@
+{
+  "name": "crash-loop-for-hours",
+  "description": "The only replica of a Deployment crashes on every start for nearly two hours, cycling through running, Error and CrashLoopBackOff; it stays one incident with one revised cause.",
+  "root": "deployment/staging/warehouse",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

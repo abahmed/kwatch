@@ -53,23 +53,16 @@ func TestResolveOfNeverPagedIncidentSkipsPaging(t *testing.T) {
 	assert.False(t, (*sent)[0].PagingOnly)
 }
 
-// The superseded close is for paging providers only; with no alert ever
-// opened it reaches nobody, and the audit log still records it.
-func TestSupersededResolveOfNeverPagedIncidentReachesNobody(t *testing.T) {
+// The superseded close of an incident chat heard of edits its thread;
+// the paging providers never opened an alert, so they skip it.
+func TestSupersededResolveEditsTheThread(t *testing.T) {
 	e, sent := scopeHarness(t)
-	var carried []notification.Message
-	e.announcer.sink = func(_ context.Context, _ incident.Decision,
-		m notification.Message) {
-		carried = append(carried, m)
-	}
 
 	e.announcer.send(context.Background(), resolveOf("a", "b"), scopeNow)
 
-	require.Len(t, carried, 1)
-	assert.Equal(t, "unannounced", carried[0].Carrier,
-		"delivery drops a carried message")
-	assert.False(t, carried[0].PagingOnly)
-	assert.Empty(t, *sent)
+	require.Len(t, *sent, 1)
+	assert.False(t, (*sent)[0].PagingOnly)
+	assert.True(t, (*sent)[0].SkipPaging, "no alert was opened")
 }
 
 func TestResolveAfterAPageGoesToPagingToo(t *testing.T) {
@@ -84,8 +77,8 @@ func TestResolveAfterAPageGoesToPagingToo(t *testing.T) {
 
 	require.Len(t, *sent, 4)
 	assert.False(t, (*sent)[1].SkipPaging)
-	assert.True(t, (*sent)[3].PagingOnly, "superseded stays paging-only")
-	assert.False(t, (*sent)[3].SkipPaging)
+	assert.False(t, (*sent)[3].PagingOnly, "the thread hears the move")
+	assert.False(t, (*sent)[3].SkipPaging, "and the alert is closed")
 }
 
 // A restored incident handed to another one tells chat where its failures

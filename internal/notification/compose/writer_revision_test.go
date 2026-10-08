@@ -45,13 +45,14 @@ func TestWriteSupersededResolveMakesNoHealthyClaim(t *testing.T) {
 			msg.Status)
 	}
 	if strings.Contains(msg.Note, "healthy again") ||
+		strings.Contains(msg.Note, "inc-") ||
 		msg.Marker == notification.MarkerResolved {
 		t.Fatalf("superseded incident must not claim recovery: %s",
 			msg.Note)
 	}
-	if !strings.Contains(msg.Note, "incident inc-20240115-0002") ||
+	if !strings.Contains(msg.Note, "Moved:") ||
 		!strings.Contains(msg.Note, "not resolved") {
-		t.Fatalf("message should name the successor: %s", msg.Note)
+		t.Fatalf("message should say where it went: %s", msg.Note)
 	}
 }
 
@@ -116,8 +117,10 @@ func TestWriteSupersededResolveNamesTheIncidentItMovedTo(t *testing.T) {
 
 	msg := Writer{}.Write(d, revisionNow)
 
-	if !strings.Contains(msg.Note, "Moved to the incident for deployment "+
-		"warehouse") || strings.Contains(msg.Note, "healthy") ||
+	if !strings.Contains(msg.Note, "Moved: this is now part of the "+
+		"warehouse failure in shop.") ||
+		strings.Contains(msg.Note, "inc-") ||
+		strings.Contains(msg.Note, "healthy") ||
 		msg.Marker == notification.MarkerResolved {
 		t.Fatalf("want a move, not a recovery: %s", msg.Note)
 	}

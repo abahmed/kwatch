@@ -237,7 +237,7 @@ func limitSentences(sentences []sentence, n int) []sentence {
 // another week: "payments in shop is still down, for two weeks now."
 func reminderSentences(f caseFacts) []sentence {
 	subject := leadSubject(f)
-	open := humanDuration(f.now.Sub(f.p.Opened))
+	open := humanDuration(f.now.Sub(StartedAt(f.p)))
 	return append([]sentence{{part: partLead, text: capitalName(subject,
 		f.leadName(subject)+" is still "+downWord(f.p)+", for "+open+
 			" now.")}}, strongestProof(f)...)

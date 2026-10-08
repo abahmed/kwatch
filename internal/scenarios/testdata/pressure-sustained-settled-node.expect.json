@@ -1,0 +1,7 @@
+{
+  "name": "pressure-sustained-settled-node",
+  "description": "A memory stall of twelve minutes on a node that has been up for a day.",
+  "root": "node//n1",
+  "tier": "digest",
+  "maxMessages": 2
+}

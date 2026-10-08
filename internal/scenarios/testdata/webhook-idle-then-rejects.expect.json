@@ -1,0 +1,11 @@
+{
+  "name": "webhook-idle-then-rejects",
+  "description": "A leftover fail-closed webhook with no backend is quiet for an hour; the first refused pod create escalates it to a page.",
+  "root": "validatingwebhookconfiguration//widget-operator",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "node//n1"
+  ]
+}

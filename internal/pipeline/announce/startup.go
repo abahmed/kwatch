@@ -34,6 +34,9 @@ type Startup struct {
 	// there is nothing to list. A cold start lists nothing here: its
 	// summary names every existing incident.
 	WarmAt time.Time
+	// Warm are the announcements of old problems found after a restart,
+	// held for the restored-incidents summary (see holdWarm).
+	Warm []incident.Decision
 	// CheckSummary asks the next tick whether every incident a listing
 	// named has resolved.
 	CheckSummary bool
@@ -60,7 +63,7 @@ func (c *Collector) CollectStartup(
 	ctx context.Context, now time.Time, decisions []incident.Decision,
 ) ([]incident.Decision, bool) {
 	if c.Startup.Until.IsZero() {
-		return decisions, false
+		return c.holdWarm(ctx, now, decisions), false
 	}
 	var rest []incident.Decision
 	for _, d := range decisions {
@@ -271,6 +274,7 @@ func (c *Collector) ListRestored(ctx context.Context, now time.Time) bool {
 				Reason: "restored"})
 		}
 	}
+	listed = c.takeWarm(listed)
 	if len(listed) == 0 {
 		return false
 	}

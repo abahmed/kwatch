@@ -275,7 +275,11 @@ var reasonConsequences = map[string]string{
 }
 
 // consequenceSentences say what the lead's condition breaks. A webhook
-// only blocks requests when it is critical: its failurePolicy is Fail.
+// blocks requests only when its failurePolicy is Fail: critical once a
+// request was refused, a warning before, and then it says so.
+// An expired certificate only has clients rejecting it when something
+// uses it, which is also what makes it critical; one nothing references
+// is stated as a fact and breaks nothing.
 func consequenceSentences(f caseFacts) []sentence {
 	text, ok := reasonConsequences[f.lead.Reason]
 	if !f.ok || !ok {
@@ -283,7 +287,14 @@ func consequenceSentences(f caseFacts) []sentence {
 	}
 	webhook := f.lead.Reason == reasons.WebhookNoEndpoints ||
 		f.lead.Reason == reasons.WebhookBackendNotFound
-	if webhook && f.lead.Severity != detection.Critical {
+	expired := f.lead.Reason == reasons.TLSCertExpired
+	if webhook && f.lead.Severity == detection.Warning {
+		// A fail-closed webhook nothing was refused by yet.
+		return []sentence{{part: partConsequence, weight: 1,
+			text: "No request has been rejected yet; any create it " +
+				"matches will be."}}
+	}
+	if (webhook || expired) && f.lead.Severity != detection.Critical {
 		return nil
 	}
 	return []sentence{{part: partConsequence, weight: 1, text: text}}

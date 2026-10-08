@@ -1,0 +1,11 @@
+{
+  "name": "finalizer-controller-running",
+  "description": "Six objects have been stuck deleting for ten days; the Deployment that handles their finalizers runs.",
+  "root": "finalizer/widget-system/widgets.example.com/cleanup",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/widget-system/widget-controller"
+  ],
+  "tail": "30m0s"
+}

@@ -103,6 +103,7 @@ func stuckAttachment(
 		kube.AttrDeleting:      inventory.Bool(true),
 		kube.AttrDeletingSince: inventory.Time(t0.Add(-400 * 24 * time.Hour)),
 		kube.AttrDetachError:   inventory.Text("persistentvolume not found"),
+		kube.AttrAttacher:      inventory.Text("ebs.csi.example.com"),
 	})
 	link(m, id, inventory.RunsOn, node)
 	link(m, id, inventory.References, pv)
@@ -121,10 +122,30 @@ func TestAttachmentNamesAnOrphanStuckDeleting(t *testing.T) {
 	f := eval.Findings[0]
 	assert.Equal(t, reasons.VolumeDetachFailure, f.Reason)
 	assert.Equal(t, detection.Info, f.Severity)
-	assert.Equal(t, "VolumeAttachment csi-old is stuck deleting; "+
-		"its node and PV no longer exist", f.Summary)
+	assert.Equal(t, "Attachment of volume gone-pv to node gone-node by "+
+		"ebs.csi.example.com is stuck deleting; the volume gone-pv it "+
+		"attaches and the node no longer exist", f.Summary)
 	assert.Contains(t, f.Evidence, detection.Evidence{
 		Label: "detach error", Value: "persistentvolume not found"})
+}
+
+// The volume is gone and the node is not: the attachment is a leftover,
+// named by the volume and the node, not by its hash.
+func TestAttachmentNamesTheVolumeThatNoLongerExists(t *testing.T) {
+	m := newTestModel()
+	node := newID(kube.KindNode, "", "ip-10-0-1-5")
+	put(m, node, t0, nil)
+	id := stuckAttachment(m, node, newID(kube.KindPV, "", "pv-1234"))
+
+	eval := evaluate(Attachment{}, m, t0, id, nil)
+
+	require.Len(t, eval.Findings, 1)
+	f := eval.Findings[0]
+	assert.Equal(t, detection.Info, f.Severity)
+	assert.Equal(t, "Attachment of volume pv-1234 to node ip-10-0-1-5 by "+
+		"ebs.csi.example.com is stuck deleting; the volume pv-1234 it "+
+		"attaches no longer exists", f.Summary)
+	assert.NotContains(t, f.Summary, "csi-old")
 }
 
 // A node that is gone while its volume still exists keeps the volume
@@ -141,7 +162,8 @@ func TestAttachmentWithLivePVStaysAWarning(t *testing.T) {
 	require.Len(t, eval.Findings, 1)
 	assert.Equal(t, detection.Warning, eval.Findings[0].Severity)
 	assert.Contains(t, eval.Findings[0].Summary,
-		"is stuck deleting; its node no longer exists")
+		"to node gone-node by ebs.csi.example.com is stuck deleting; "+
+			"its node no longer exists")
 }
 
 // Nothing is concluded about a node or PV that may not be listed yet,

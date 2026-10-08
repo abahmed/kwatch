@@ -14,12 +14,23 @@ import (
 func (m *Manager) NotifyIncident(msg notification.Message) {
 	if msg.Carrier != "" {
 		// Recorded for the audit log; the digest or summary carries it.
+		if !bulkCarrier(msg.Carrier) {
+			logUnsent(deliverJob{kind: jobIncident, incident: &msg},
+				"carried", msg.Carrier)
+		}
 		return
 	}
 	klog.V(2).InfoS("queue incident", "component", "delivery",
 		"conversation", msg.Key, "revision", msg.Revision)
 	incident := msg
 	m.enqueue(deliverJob{kind: jobIncident, incident: &incident})
+}
+
+// bulkCarrier reports a carrier that takes in hundreds of decisions at
+// once (a cold start, a storm): its own message lists them, so logging a
+// line for each would not stay bounded.
+func bulkCarrier(carrier string) bool {
+	return carrier == "startup summary" || carrier == "roll-up"
 }
 
 // dispatchIncident hands the message to the provider's own renderer. The

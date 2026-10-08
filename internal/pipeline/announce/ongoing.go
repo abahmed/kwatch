@@ -29,18 +29,18 @@ type ongoingItem struct {
 
 // ongoingProblems are the digest-tier incidents an earlier digest listed
 // that are still open and that the digest being written does not list
-// already, oldest first.
-func (c *Collector) ongoingProblems() []ongoingItem {
+// already, oldest first by when the problem began.
+func (c *Collector) ongoingProblems(now time.Time) []ongoingItem {
 	var out []ongoingItem
 	for _, p := range c.openListed() {
 		if indexOfIncident(c.Low.Opened, p.ID) >= 0 ||
 			indexOfIncident(c.Low.Resolved, p.ID) >= 0 {
 			continue
 		}
-		reason := ongoingReason(p)
 		out = append(out, ongoingItem{p: p, Ongoing: compose.Ongoing{
-			Root: p.Root, Reason: reason, Since: p.Opened,
-			Count: c.timesSeen(p, reason)}})
+			Root: p.Root, Since: compose.StartedAt(p),
+			Title:    c.env.Messages.OngoingTitle(p, now),
+			Leftover: compose.LeftoverReason(p)}})
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		return out[i].Since.Before(out[j].Since)

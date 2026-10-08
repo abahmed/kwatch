@@ -55,6 +55,17 @@ func digestReason(reason string) bool {
 		strings.HasPrefix(reason, reasons.RiskPrefix)
 }
 
+// waitsForDigest reports whether a finding waits for the digest. An
+// expired certificate does so unless it is critical: the detector marks
+// it critical only when something uses it, and one nothing references
+// breaks nothing.
+func waitsForDigest(s detection.Finding) bool {
+	if s.Reason == reasons.TLSCertExpired {
+		return s.Severity < detection.Critical
+	}
+	return digestReason(s.Reason)
+}
+
 // A routine incident happens at about the same time of day, again and
 // again, and resolves on its own: a nightly batch job, a daily restart.
 // It is learned normal and goes to the digest.
@@ -68,12 +79,11 @@ const (
 // incident's impact. A critical incident that matches one of pageRules
 // pages; an incident made only of digest findings waits for the digest.
 func tier(p *Incident) Tier {
+	if fixed, ok := fixedTier(p); ok {
+		return fixed
+	}
 	worst, digestOnly := interrupting(p)
 	switch {
-	case len(p.Members) == 0:
-		return p.Tier
-	case drainingRoot(p):
-		return drainTier(p)
 	case routine(p) && !p.persistent && !unusual(p):
 		// Happens at the same time every day and resolves on its own:
 		// learned normal, reported in the digest. One that outlasts
@@ -115,7 +125,7 @@ func tier(p *Incident) Tier {
 func interrupting(p *Incident) (worst detection.Severity, digestOnly bool) {
 	digestOnly = true
 	for _, s := range p.Members {
-		if s.Advisory || digestReason(s.Reason) ||
+		if s.Advisory || waitsForDigest(s) ||
 			(s.Normal == detection.NormalUsual && !p.persistent) {
 			continue
 		}
@@ -151,7 +161,7 @@ func drainTier(p *Incident) Tier {
 		if s.Entity == p.Root || s.Severity <= detection.Info {
 			continue
 		}
-		if !digestReasons[s.Reason] {
+		if !digestReasons[s.Reason] && !waitsForDigest(s) {
 			return Notify
 		}
 		tier = Digest

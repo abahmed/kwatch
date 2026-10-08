@@ -4,6 +4,61 @@
 
 ### Highlights
 
+- **Node churn no longer flaps the digest.** A node-level DaemonSet pod
+  (aws-node, kube-proxy, the CSI node agent) that fails on a node that is
+  leaving, not ready, gone or younger than the boot window is that node's
+  lifecycle: no `FailedDaemonPod` or unavailable finding is raised for it,
+  and it is raised after all if the pod still fails once the node has
+  settled. A pressure stall now has to last five minutes before it is a
+  finding, so a short spike while a node starts its pods stays quiet. A
+  digest-tier problem that opened twice in six hours waits the full
+  stability hold before it resolves, so recoveries that do not last are no
+  longer announced as resolved and "failing again".
+- **Expired, unused TLS Secrets are one digest line, not an outage.** Ten
+  leftover Secrets no longer read as ten lines: the digest says "9 expired
+  TLS Secrets that nothing references: a/x, b/y, c/z +6", in the new and the
+  ongoing sections and again, as "unchanged", on the days they did not
+  change. "Clients are rejecting it now" is said only when a pod, an Ingress
+  or an account references the Secret; one referenced by nothing says so
+  ("expired on <date> and nothing in the cluster references it") and waits
+  for the digest, and restored chat incidents for such Secrets fall to the
+  digest. The audit log still names each one.
+- **The next step names who uses an expired Secret.** For an Ingress it is
+  `kubectl get ingress <name>` to see the hosts; for a Secret nothing
+  references it is a read-only check that nothing names it. Pods keep the
+  "list the keys" step.
+- **A fail-closed webhook with no backend pages only when a request is
+  refused.** A webhook with failurePolicy Fail whose
+  Service is missing or has no ready pods, such as one an uninstalled
+  operator left behind, now sends one notification ("Validating webhook x is
+  failing because service y does not exist. No request has been rejected
+  yet; any create it matches will be."), then waits for the digest as an
+  ongoing item, with no page and no "still open" reminders. It pages as
+  before once kwatch sees a request refused because of it: a `failed calling
+  webhook "<name>"` event on a controller, or the API server's metrics
+  counting its calls that failed closed. A restored page that has no such
+  evidence drops to a notification, but one that saw a refusal before the
+  restart keeps its page (the sighting is saved with the incident).
+  failurePolicy Ignore is unchanged.
+- **Ongoing problems are listed in full once a day.** A digest lists each
+  ongoing problem in full in the first digest of the day that names it, or
+  when it changed (flapping, its reason, how many things fail, its cause).
+  Other digests show only the changed ones plus one line: "3 more still
+  failing, unchanged (web, db, cache +1)". The audit log still lists them all.
+- **Objects stuck deleting for good are one digest line that names the
+  cause.** Objects held by the same finalizer are one incident. When the
+  controller that handles the finalizer (same namespace, and its pods carry
+  the finalizer's API group, or it is the field manager of the object) is
+  scaled to zero or has no ready replica, the message says so: "Six objects
+  in shop have been stuck deleting since Dec 4: their finalizer
+  example.com/cleanup is never removed; the controller that handles it,
+  deployment shop/widget-ctl, is scaled to 0." With no such controller it
+  says "no running controller found for it". A deletion stuck for more than
+  a day that nothing live depends on waits for the digest; one that blocks a
+  claim a pod uses, or a child that is not being deleted, still notifies.
+  A stuck VolumeAttachment is named by its volume, node and driver, not its
+  hash, and one whose volume no longer exists is a digest line; restored
+  chat incidents for such leftovers fall to the digest.
 - **Memory is easier to read, and the last slow growers are capped.** The
   self-health log line now shows `heapLiveMiB` (what the last collection
   kept, the number that tells a leak from garbage) and `heapGoalMiB`, and a
@@ -121,8 +176,9 @@
   page is the same incident").
 - **Chronic incidents are not forgotten.** An incident named in a roll-up or
   the startup summary gets its own update when the failing pods triple, and
-  open incidents that wait for the digest or a roll-up are listed again daily
-  with how long they have failed.
+  open incidents that wait for the digest or a roll-up are counted daily
+  (listed in full once a day, then as an "unchanged" line; see "Ongoing
+  problems are listed in full once a day").
 - **Recurring noise after a resolve is reported.** A digest-tier incident that
   recurs and resolves before its digest goes out is listed as resolved; periodic
   noise is listed at least once a day.
@@ -239,7 +295,8 @@
 - **Webhooks that cannot block go to the digest.** An admission webhook whose
   backend is missing or has no ready pods is an informational digest item when
   every webhook in its configuration has failurePolicy Ignore (requests skip
-  it); with Fail, it still notifies because it blocks matching requests.
+  it); with Fail, it notifies once, and pages only after a request was
+  refused (see the leftover-webhook item above).
 - **Roomier default CPU limit and probe timeouts.** The default CPU limit is
   500m (request stays 100m) and the liveness and readiness probes wait 3
   seconds, so an event storm no longer fails kwatch's own readiness check.
@@ -872,6 +929,52 @@
   already was while a whole pool boots, and is quoted again if the pod
   still cannot start once the node is old. An exhausted address pool is
   never held.
+- **A crash loop that swings between two causes stays one incident.** A
+  pod that runs, ends with Error, then waits in CrashLoopBackOff can be
+  blamed on the workload, then on something it depends on, then on the
+  workload again. Each swing closed one incident as superseded or moved
+  its root, and the next one opened a fresh incident with a new first
+  message and, for a page, a new page, every few minutes for as long as
+  the loop lasted. A failure that goes back to the root it just left now
+  stays with the incident that took over, for as long as that incident
+  is open and for up to the repage window (2h) after the swing. A
+  simulated two-hour crash loop (`crash-loop-for-hours`) that produced 21
+  messages now produces 2. An incident is also no longer closed as
+  superseded by one that has already resolved. A Service that only the
+  configuration names no longer outranks the error the crashing container
+  quotes, unless that error names the Service. The memory of where an
+  incident moved survives a restart. A container waiting in back-off, or
+  that crashed within the hold, no longer counts as healthy, so a loop
+  with long back-offs does not resolve between crashes. An outage split
+  over two incidents pages once. An incident closed as superseded edits
+  its thread: "Moved: this is now part of the warehouse crash in staging."
+- **Ongoing digest lines read like the incident.** A problem an earlier
+  digest listed and that is still open said "still failing: HPATargetMissing
+  since Oct 3 22:20 (ongoing)" in later digests, after "is still failing,
+  for four days now" in the first. It now always uses the incident's own
+  words, never a reason code.
+- **"Since" is when the problem began.** A Service stuck deleting since April
+  said "since Oct 6", the day kwatch first saw it, and a reopened incident
+  said the day it reopened. The start is now the earlier of the incident's
+  opening and its first finding's own time, in the ongoing lines and in
+  reminders ("for two days now").
+- **A node resolve says what ended.** A node that was under CPU or memory
+  pressure said "is ready again", though it was never NotReady. It now says
+  "is no longer under CPU pressure"; "ready again" is kept for a node that
+  was down.
+- **A restart posts no burst.** The first time a restored incident falls to
+  the digest tier after a restart, its thread gets no post: the restored
+  summary and the next digest list it as still failing. A problem found
+  after the restart that began long before it (a Secret stuck deleting for
+  months) joins the restored summary instead of opening a chat thread.
+- **A digest counts only what opened in it.** "opened" in the audit entry of
+  a digest counted old problems it listed again; those are now `ongoing`.
+- **Every decision has a delivery line.** A decision carried by a digest or
+  the restored summary, or sent to no provider (a paging-only message with
+  no pager), now logs a `provider send` line with `provider="none"`,
+  `result="carried"` or `"not routed"` and its placement, so the audit log
+  and the delivery log can be matched. Startup-summary and roll-up carriers
+  are not logged one by one.
 
 ### Breaking changes
 
@@ -1538,8 +1641,8 @@
   denies a request is a policy rejection (`Webhook.Denied`): it blames the
   webhook configuration only for the workload it denied and notifies, even
   when the webhook fails closed. A webhook that times out or cannot be called
-  still pages. A denial reason that mentions a timeout is no longer read as a
-  failed call.
+  pages once a request was refused because of it. A denial reason that
+  mentions a timeout is no longer read as a failed call.
 - **Quiet scale-up.** A node pool is booting while at least half of its
   nodes are under ten minutes old. Pods on it that are pending, creating or
   not ready, workload unavailability caused only by such pods, readiness and

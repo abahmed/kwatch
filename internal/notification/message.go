@@ -68,9 +68,8 @@ type Message struct {
 	Opening *Message `json:",omitempty"`
 	// PagingOnly marks a message for the providers that track alerts by
 	// key (paging tools and issue trackers) only: a startup announcement
-	// the chat summary already covers, or the close of an incident whose
-	// failures another incident took over. Chat channels read about both
-	// elsewhere; an alert opened by key must still be closed by key.
+	// the chat summary already covers, or the close of a page that chat
+	// never heard of. An alert opened by key must still be closed by key.
 	PagingOnly bool `json:",omitempty"`
 	// SkipPaging marks the resolve of an incident whose announcement
 	// never reached the paging and issue-tracker providers (it waited

@@ -13,6 +13,17 @@ so a process whose claim was superseded cannot overwrite newer state. There
 is no second Pod and no Kwatch self-failover; if the Pod or its node fails,
 Kubernetes restarts it and Kwatch resumes from the volume.
 
+The lock matters even with one replica because two Kwatch processes can
+still exist for a short time: a node cut off from the network keeps its old
+Pod running while Kubernetes starts a new one elsewhere, and a Pod stuck in
+`Terminating` or a manual restart can overlap the next one. The process that
+loses the Lease stops sending and stops writing, so alerts are never sent
+twice and the state file has one writer. Some names still say "leader"
+(`KWATCH_LEADER_ELECTION_NAME`, the `<id>-leader` Lease, the
+`*-leader-election` Role and the `kwatch_leadership_*` metrics); they are
+kept so existing installs and dashboards keep working, and all refer to this
+state lock.
+
 ### Node failure: the real monitoring gap
 
 A crashed or unreachable node is the slowest case, because Kubernetes, not

@@ -74,9 +74,12 @@ type Entry struct {
 	// DeliveryNote says why a decision was dropped: the rule of the
 	// digest tier that left it out.
 	DeliveryNote string `json:"deliveryNote,omitempty"`
-	// Opened, Resolved and Risks count what a digest listed: incidents
-	// still open, earlier ones that resolved, and configuration risks.
+	// Opened, Ongoing, Resolved and Risks count what a digest listed:
+	// incidents that opened in its window, problems told before that
+	// are still failing, earlier ones that resolved, and configuration
+	// risks.
 	Opened   int `json:"opened,omitempty"`
+	Ongoing  int `json:"ongoing,omitempty"`
 	Resolved int `json:"resolved,omitempty"`
 	Risks    int `json:"risks,omitempty"`
 	// Items names the first incidents a digest listed as "id: title",
@@ -90,7 +93,8 @@ type Entry struct {
 // the carried ones too would count the same message again.
 func Carried(delivery string) bool {
 	switch delivery {
-	case "digest", "roll-up", "startup summary", "unannounced", "dropped":
+	case "digest", "roll-up", "startup summary", "restored summary",
+		"unannounced", "dropped":
 		return true
 	}
 	return false

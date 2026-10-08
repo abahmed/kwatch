@@ -202,8 +202,13 @@ func translator(obj runtime.Object) *kube.Translator {
 
 func schemaFor(obj runtime.Object) kube.Schema {
 	if u, ok := obj.(*unstructured.Unstructured); ok {
-		return kube.NewUnstructuredSchema(
+		schema := kube.NewUnstructuredSchema(
 			u.GroupVersionKind().Group, u.GetKind())
+		if u.GetDeletionTimestamp() != nil {
+			// A watch records what holds a deletion; see deleting.
+			return kube.WithGenericAttributes(schema, kube.WatchFull)
+		}
+		return schema
 	}
 	if schema, ok := workloadSchemaFor(obj); ok {
 		return schema

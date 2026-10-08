@@ -206,6 +206,8 @@ func (m *Manager) attach(
 		return
 	}
 	key := s.Key()
+	where = m.retakeSuperseded(now, s, where)
+	where = m.retakeFormer(now, s, where)
 	revised, rerooted := false, false
 	if previous, ok := m.byMember[key]; ok && !m.holds(previous, where.root) {
 		if m.keepsMember(previous, s, where) {
@@ -215,6 +217,7 @@ func (m *Manager) attach(
 		rerooted = m.revise(now, s, previous, where.root)
 	}
 	p := m.incident(now, where.root, s.Mode)
+	m.inheritPage(now, p, s)
 	if revised && !rerooted {
 		p.note(now, "cause revised: now explained by "+describe(where.root))
 	}
@@ -267,7 +270,7 @@ func (m *Manager) keepsMember(
 // "material change". Escalation is news; de-escalation is told by the
 // recovery. Before the first message the tier still follows the members.
 func (m *Manager) ratchetTier(p *Incident, computed Tier) Tier {
-	if p.Announced.IsZero() || computed >= p.Tier {
+	if p.Announced.IsZero() || computed >= p.Tier || unpaged(p) {
 		return computed
 	}
 	return p.Tier
@@ -276,7 +279,7 @@ func (m *Manager) ratchetTier(p *Incident, computed Tier) Tier {
 // refresh recomputes what depends on the whole member set of every
 // incident that changed in this Apply: mode, impact and tier. Doing it
 // once per incident keeps a storm of members linear.
-func (m *Manager) refresh(model inventory.Reader) {
+func (m *Manager) refresh(model inventory.Reader, now time.Time) {
 	for id := range m.changed {
 		if p := m.incidents[id]; p != nil {
 			p.Mode = incidentMode(p)
@@ -284,6 +287,7 @@ func (m *Manager) refresh(model inventory.Reader) {
 			p.trafficLost = trafficLost(model, p)
 			p.servingDown = servingDown(model, p)
 			p.admissionBlocked = admissionBlocked(model, p)
+			p.noteRejection(now)
 			p.routedMissing = routedMissing(model, p)
 			p.impactPeak = max(p.impactPeak, impactSize(p))
 			p.rememberRootReasons()

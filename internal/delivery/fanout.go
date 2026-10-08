@@ -46,6 +46,9 @@ func (m *Manager) fanOut(job deliverJob) {
 		copied.outboxID = m.outbox.Load().add(copied, name)
 		m.offer(entry, copied)
 	}
+	if len(routed) == 0 {
+		logUnsent(job, "not routed", "")
+	}
 	m.noteRouted(job, routed...)
 }
 

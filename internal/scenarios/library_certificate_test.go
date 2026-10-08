@@ -10,7 +10,8 @@ import (
 // that use them, and the negative case of a certificate that is only
 // close to expiry while its pods crash for another reason.
 func certificateScenarios() []scenario {
-	return []scenario{certificateExpired(), certificateExpiringAppCrash()}
+	return []scenario{certificateExpired(), certificateExpiringAppCrash(),
+		certificateExpiredUnused(), certificateExpiredIngress()}
 }
 
 // certificateExpired: the client certificate the payments pods present

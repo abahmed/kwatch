@@ -1,0 +1,7 @@
+{
+  "name": "daemonset-settled-node-fails",
+  "description": "A node-level DaemonSet pod keeps failing on a node that has been up for a day.",
+  "root": "daemonset/kube-system/aws-node",
+  "tier": "notify",
+  "maxMessages": 2
+}

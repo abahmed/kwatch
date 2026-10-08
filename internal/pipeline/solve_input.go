@@ -168,6 +168,12 @@ func (e *Engine) readers(
 		out = append(out, e.deps.Model.EntitiesIn(
 			kube.KindQuota, o.Entity.Namespace)...)
 	}
+	if o.Kind == inventory.Noted && detectors.IsWebhookRejection(o.Note) {
+		// The refusal is recorded on the controller, yet it is what turns
+		// a dead webhook backend from a warning into a blocked create.
+		out = append(out, e.deps.Model.Entities(kube.KindValidatingHook)...)
+		out = append(out, e.deps.Model.Entities(kube.KindMutatingWebhook)...)
+	}
 	if o.Entity.Kind == kube.KindService {
 		// A Service edit can add or remove the port an Ingress names.
 		out = append(out, e.deps.Model.Related(

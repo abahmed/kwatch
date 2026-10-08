@@ -201,14 +201,19 @@ func stuckDeletion(
 	}
 	names := strings.Join(finalizers, ", ")
 	summary := "Deletion is blocked by finalizers " + names
-	evidence := []detection.Evidence{{Label: "finalizers", Value: names}}
+	evidence := []detection.Evidence{
+		{Label: detection.EvidenceFinalizers, Value: names}}
 	if users := claimUsers(ctx, e); users != "" {
 		summary += " (still used by " + users + ")"
 		evidence = append(evidence,
 			detection.Evidence{Label: "still used by", Value: users})
 	}
+	severity := detection.Warning
+	if leftover(ctx, e, since) {
+		severity = detection.Info
+	}
 	return detection.Finding{
-		Reason: reasons.StuckDeleting, Severity: detection.Warning,
+		Reason: reasons.StuckDeleting, Severity: severity,
 		Health: detection.Degraded, Since: since,
 		Summary: summary, Evidence: evidence,
 	}, true

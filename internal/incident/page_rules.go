@@ -19,7 +19,8 @@ type pageRule struct {
 	reasons []string
 	// critical asks the matching member itself to be critical. The
 	// webhook detector marks a webhook critical only when its
-	// failurePolicy is Fail, so only a blocking webhook pages.
+	// failurePolicy is Fail and a request was refused because of it,
+	// so only a webhook seen blocking pages (see idle_webhook.go).
 	critical bool
 	// admission also matches an incident whose root is a fail-closed
 	// webhook blocking creates (Incident.admissionBlocked).

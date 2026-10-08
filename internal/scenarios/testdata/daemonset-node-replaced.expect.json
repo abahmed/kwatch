@@ -1,0 +1,6 @@
+{
+  "name": "daemonset-node-replaced",
+  "description": "A node is replaced; its node-level DaemonSet pods fail on the leaving node and on the new one.",
+  "maxMessages": 0,
+  "quiet": true
+}

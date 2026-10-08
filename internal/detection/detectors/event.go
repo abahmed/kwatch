@@ -71,7 +71,8 @@ func (Event) Detect(
 	for _, note := range ctx.Model.Notes(e.ID, ctx.Now.Add(-EventWindow)) {
 		severity, failing := eventReasons[note.Reason]
 		if !note.Warning || !failing || overcomeAtStart(e, note) ||
-			recoveredBefore(e, note) || bootNoise(ctx, e, note) {
+			recoveredBefore(e, note) || bootNoise(ctx, e, note) ||
+			daemonNodeNoise(ctx, e, note) {
 			continue
 		}
 		// The window includes a note exactly EventWindow old, so the

@@ -1,0 +1,14 @@
+10:02:35 settled
+🟠 warehouse in staging (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "FileNotFoundException: Could not load file or assembly 'Trella.Models.Common, Version=3.1.120.0'". It runs a single replica, so this is downtime, not degradation. To read the output of the last crash, run kubectl logs warehouse-b3e14f5e-a -c app -n staging --previous
+🟠 warehouse in staging (prod-eu-1) keeps crashing.
+| 🟠 **warehouse** in **staging** (**prod-eu-1**) keeps crashing.
+| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| It fails with
+| ```
+| FileNotFoundException: Could not load file or assembly 'Trella.Models.Common, Version=3.1.120.0'
+| ```
+| It runs a single replica, so this is downtime, not degradation.
+| To read the output of the last crash, run
+| ```
+| kubectl logs warehouse-b3e14f5e-a -c app -n staging --previous
+| ```

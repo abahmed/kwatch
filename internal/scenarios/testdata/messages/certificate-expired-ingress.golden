@@ -1,0 +1,9 @@
+10:01:15 settled
+🟠 Secret shop-tls in shop (prod-eu-1) has a TLS certificate that expired one day ago. Clients are rejecting it now. To see which hosts use the Secret, run kubectl get ingress shop -n shop
+🟠 Secret shop-tls in shop (prod-eu-1) has a TLS certificate that expired one day ago.
+| 🟠 Secret **shop-tls** in **shop** (**prod-eu-1**) has a TLS certificate that expired one day ago.
+| Clients are rejecting it now.
+| To see which hosts use the Secret, run
+| ```
+| kubectl get ingress shop -n shop
+| ```
