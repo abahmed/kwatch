@@ -219,7 +219,7 @@ spec:
         # Main pins the latest stable release (the release workflow rewrites
         # this tag; RC tags carry the preview image). It must equal the chart
         # appVersion (scripts/check-release-consistency.sh).
-        image: ghcr.io/abahmed/kwatch:v0.10.5
+        image: ghcr.io/abahmed/kwatch:v1.0.0-rc.17
         imagePullPolicy: IfNotPresent
         securityContext:
           runAsNonRoot: true
