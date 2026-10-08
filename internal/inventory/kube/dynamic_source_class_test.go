@@ -3,7 +3,7 @@ package kube
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	metadatafake "k8s.io/client-go/metadata/fake"
@@ -33,7 +33,10 @@ func TestDynamicSourceAnnouncesMetadataClassUnderCoreID(t *testing.T) {
 
 	r.observed(t, inventory.Observed,
 		entityIs(inventory.CoreID(KindIngressClass, "", "alb")))
-	state, found := r.src.KindState(KindIngressClass)
-	assert.True(t, found)
-	assert.True(t, state.Synced)
+	// The informer can deliver its first object a moment before it
+	// reports synced, so wait for the flag like the other source tests.
+	require.Eventually(t, func() bool {
+		state, found := r.src.KindState(KindIngressClass)
+		return found && state.Synced
+	}, testWait, testPoll)
 }
