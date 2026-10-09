@@ -1,0 +1,5 @@
+{{- $fullName := include "kwatch.fullname" . -}}
+1. Get the application pod running these commands:
+echo "kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "kwatch.name" . }},app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}"
+
+
