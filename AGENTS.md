@@ -265,7 +265,7 @@ enforces, are in `docs/contributor-architecture.md`.
 | `internal/detection/detectors` | Built-in Kubernetes detectors: pure functions of entity attributes and relations |
 | `internal/detection/reasons` | Stable finding reason codes shared by every layer (leaf) |
 | `internal/rootcause` | Shared root-cause types: the `Cause` record, confidence levels, graph and scheduler-message helpers |
-| `internal/rootcause/explain` | The root-cause engine: propagation table (data), candidate walk, scorers and weights, set-cover solver, incremental cache; a pure function of an inventory snapshot |
+| `internal/rootcause/explain` | The root-cause engine: propagation table (data), candidate walk, scorers and weights, greedy weighted set-cover solver, incremental cache; a pure function of an inventory snapshot |
 | `internal/incident` | Incident manager: root resolution, settling, material-change digest, resolve hold, flapping, recurrence, routine, tiers, severity overrides, restore |
 | `internal/notification/compose` | Writes an incident decision as a `notification.Message`: one narrative note built from per-fact sentence writers, steps, runbooks, startup summary, roll-up and digest |
 | `internal/notification` | Provider-neutral message type, severity levels, and rendering helpers such as chunking and mention neutralizing (leaf) |
@@ -422,8 +422,9 @@ incidents → decisions → scope → messages → sink
   instead of polling. The `Tracker` turns successive results into transitions.
 - `explain.Explain` solves a snapshot: it walks links upstream from each
   failure, keeps candidates that are unhealthy or changed inside the causal
-  window, scores them against the propagation table rows and picks the fewest
-  causes by set cover. How failure spreads is a table row, not code.
+  window, scores them against the propagation table rows and picks causes
+  with a greedy, score-weighted set cover. How failure spreads is a table
+  row, not code.
 - `incident.Manager` attaches findings to the incident of their explained root
   and decides announce, update, and resolve in `Tick`.
 - Detector reason names come from `internal/detection/reasons`; treat them as

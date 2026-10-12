@@ -7,8 +7,8 @@ use the [interactive manager](./kwatch-sh.md); for settings use the
 [production goals](./production-goals.md).
 
 kwatch does not forward Kubernetes events to chat. It keeps a model of the
-whole cluster, finds what is unhealthy, works out the fewest causes that
-explain it, and sends one short message per incident. A node that runs out of
+whole cluster, finds what is unhealthy, works out a small set of causes
+that explain it, and sends one short message per incident. A node that runs out of
 memory and takes forty pods with it is one incident that names the node.
 
 ## The pipeline
@@ -21,7 +21,7 @@ memory and takes forty pods with it is one incident that names the node.
  │  decision loop (one goroutine, no I/O)                              │
  │                                                                     │
  │  inventory ─► detection ─► rootcause/explain ─► incident            │
- │  objects      health +      fewest causes        settle, update,    │
+ │  objects      health +      chosen causes        settle, update,    │
  │  links        failure mode  that cover the       resolve, flapping  │
  │  changes      per object    failures                  │             │
  │                                                       ▼             │

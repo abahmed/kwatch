@@ -52,6 +52,9 @@ func TestScorecardGates(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if *enforceGates {
+		checkScorecardPage(t, report)
+	}
 	for _, gate := range scorecard.Failed(gates) {
 		message := fmt.Sprintf("gate missed: %s is %s, target %s",
 			gate.Name, gate.Value, gate.Target)
