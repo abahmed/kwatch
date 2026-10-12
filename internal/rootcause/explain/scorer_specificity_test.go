@@ -81,6 +81,24 @@ func TestScoreSpecificityIgnoresGenericChangedKeys(t *testing.T) {
 	}
 }
 
+// A credential key is not generic: an authentication error that names
+// the changed password key points at the Secret that holds it.
+func TestScoreSpecificityKeepsCredentialChangedKeys(t *testing.T) {
+	secret := inventory.CoreID(kube.KindSecret, "shop", "creds")
+	f := newFixture(t)
+	pods := f.workload("shop", "ingest", 2)
+	f.add(secret)
+	f.change(secret, 1, "data.password")
+	for _, pod := range pods {
+		f.relate(pod, inventory.References, secret)
+		f.fail(containerOf(pod), "CrashLoop", failingH, 2,
+			"password authentication failed for user app")
+	}
+	if o := scoreOf(t, f, secret, scoreSpecificity); !o.said() {
+		t.Fatalf("outcome = %+v, want specificity", o)
+	}
+}
+
 // An error that quotes a key that changed names the object.
 func TestScoreSpecificityRewardsAQuotedChangedKey(t *testing.T) {
 	cm := inventory.CoreID(kube.KindConfigMap, "shop", "ab")

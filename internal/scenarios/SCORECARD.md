@@ -623,7 +623,7 @@ Calibration: the labelled cases put high confidence at 0.65 (committed 0.70).
 | borderline-late-config-reload | `configmap/batch/worker-config` | `configmap/batch/worker-config` | high 1.00 | notify/notify | 1 (2) | pass |
 | borderline-route-and-gateway-edit | `httproute.gateway.networking.k8s.io/shop/web` | `httproute.gateway.networking.k8s.io/shop/web` | high 0.70 | notify/notify | 1 (2) | pass |
 | borderline-two-policies | `networkpolicy/payments/allow-cache` | `networkpolicy/payments/allow-cache` | likely 0.69 | notify/notify | 1 (2) | pass |
-| borderline-init-after-rotation | `secret/shop/orders-db` | `secret/shop/orders-db` | high 0.85 | notify/notify | 1 (2) | pass |
+| borderline-init-after-rotation | `secret/shop/orders-db` | `secret/shop/orders-db` | high 1.00 | notify/notify | 1 (2) | pass |
 | claim-full-with-volume | `persistentvolumeclaim/observability/chunks` | `persistentvolumeclaim/observability/chunks` | high 0.85 | notify/notify | 1 (2) | pass |
 | claim-full-unlisted-volume | `persistentvolumeclaim/messaging/broker-log` | `persistentvolumeclaim/messaging/broker-log` | high 0.70 | notify/notify | 1 (2) | pass |
 | pvc-full | `persistentvolumeclaim/inventory/pgdata` | `persistentvolumeclaim/inventory/pgdata` | high 0.70 | notify/notify | 1 (2) | pass |

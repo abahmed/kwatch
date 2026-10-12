@@ -39,17 +39,16 @@ func scoreSpecificity(v *view, c *candidate) outcome {
 // that an error names the object: an error about a "host" does not point
 // at the object whose key is literally named host. Only a key that is
 // exactly one of these is ignored; a compound key such as "db-host" is
-// named only as that whole word, so it stays evidence.
+// named only as that whole word, so it stays evidence. Credential and
+// endpoint keys (password, token, url, port, ...) are kept: an
+// authentication or connection error that names one points at it.
 var genericKeys = map[string]bool{
 	"config": true, "configuration": true, "conf": true,
 	"value": true, "values": true, "data": true, "name": true,
 	"key": true, "keys": true, "default": true, "server": true,
-	"host": true, "url": true, "uri": true, "addr": true,
-	"address": true, "port": true, "dsn": true, "endpoint": true,
-	"path": true, "file": true, "timeout": true, "retry": true,
-	"mode": true, "type": true, "user": true, "username": true,
-	"password": true, "token": true, "secret": true, "image": true,
-	"version": true,
+	"host": true, "addr": true, "address": true, "path": true,
+	"file": true, "timeout": true, "retry": true, "mode": true,
+	"type": true, "image": true, "version": true,
 }
 
 // namesOf lists the words that identify id in error text: its name, the
