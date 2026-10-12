@@ -24,6 +24,9 @@ const (
 	// AttrDataDigest fingerprints all values, so a change is detectable
 	// without keeping any value.
 	AttrDataDigest = "data.digest"
+	// AttrAccountPullSecrets lists the pull Secrets a ServiceAccount hands to
+	// its pods, sorted and comma separated.
+	AttrAccountPullSecrets = "account.pull.secrets"
 )
 
 // certExpiryAnnotation carries a TLS certificate's expiry on the cached
@@ -230,13 +233,17 @@ func (ServiceAccountSchema) Describe(obj any) (Description, bool) {
 	}
 	return Description{
 		ID: objectID(KindAccount, account), UID: string(account.UID),
-		Attributes: map[string]inventory.Value{}, Relations: rel,
+		Attributes: map[string]inventory.Value{
+			AttrAccountPullSecrets: inventory.Text(
+				pullSecretNames(account)),
+		},
+		Relations: rel,
 	}, true
 }
 
 // Diff implements Schema.
-func (ServiceAccountSchema) Diff(_, _ any) []inventory.FieldChange {
-	return nil
+func (ServiceAccountSchema) Diff(old, new any) []inventory.FieldChange {
+	return serviceAccountChanges(old, new)
 }
 
 func keyChanges(before, after map[string]string) []inventory.FieldChange {

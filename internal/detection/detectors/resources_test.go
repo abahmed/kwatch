@@ -48,6 +48,7 @@ func TestContainerResourcesMemory(t *testing.T) {
 			assert.Equal(t, reasons.ContainerMemoryHigh,
 				got[0].Reason)
 			assert.Equal(t, tt.severity, got[0].Severity)
+			assert.True(t, got[0].Advisory, "nothing was killed yet")
 			assert.NotEmpty(t, got[0].Summary)
 		})
 	}
@@ -114,6 +115,7 @@ func TestContainerResourcesCPUSustained(t *testing.T) {
 		nil)
 	require.Len(t, late.Findings, 1)
 	assert.Equal(t, reasons.ContainerCPUHigh, late.Findings[0].Reason)
+	assert.True(t, late.Findings[0].Advisory)
 	assert.Zero(t, late.RecheckAfter)
 }
 
@@ -184,6 +186,7 @@ func TestPodStorageNearLimit(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, reasons.ContainerEphemeralStorageHigh,
 		got[0].Reason)
+	assert.True(t, got[0].Advisory, "nothing was evicted yet")
 	assert.Equal(t, detection.Warning, got[0].Severity)
 	assert.NotEmpty(t, got[0].Summary)
 }

@@ -13,10 +13,10 @@ func upgradeReadinessScenarios() []scenario {
 	return []scenario{upgradeReadinessDigest()}
 }
 
-// upgradeReadinessDigest: a deprecated API is still requested (a digest
-// incident) and a PodDisruptionBudget currently allows no disruption. The
-// digest lists the API as an incident and adds one readiness line for the
-// budget; it does not say the API twice.
+// upgradeReadinessDigest: a deprecated API is still requested and a
+// PodDisruptionBudget currently allows no disruption. Both are advice
+// about a future upgrade, not failures, so no message goes out; /status
+// lists them as upgrade blockers.
 func upgradeReadinessDigest() scenario {
 	api := kube.DeprecatedAPI{Group: "policy", Version: "v1beta1",
 		Resource: "poddisruptionbudgets", Removed: "1.25"}
@@ -26,10 +26,9 @@ func upgradeReadinessDigest() scenario {
 		expect: expectation{
 			Name: "upgrade-readiness-digest",
 			Description: "A deprecated API is still requested and a " +
-				"PodDisruptionBudget allows no disruption; the digest " +
-				"adds one upgrade-readiness line for the budget.",
-			Root: "deprecated-api//policy/v1beta1 poddisruptionbudgets",
-			Tier: "digest", MaxMessages: 2, Tail: duration(45 * time.Minute),
+				"PodDisruptionBudget allows no disruption; both are " +
+				"advice about an upgrade, so nothing is sent.",
+			Quiet: true, MaxMessages: 0, Tail: duration(45 * time.Minute),
 		},
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))

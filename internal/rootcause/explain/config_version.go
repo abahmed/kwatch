@@ -48,6 +48,11 @@ func scoreConfigVersion(v *view, c *candidate) outcome {
 		if !ok {
 			continue
 		}
+		if v.splitsWithConfig(v.workloadOf(u.pods[0]), c.id) {
+			// The same pods are the new revision's: the rollout
+			// splits them as well.
+			return outcome{}
+		}
 		split := v.splitByVersion(owner, c.id, changed)
 		if o, found := versionOutcome(c.id, split); found {
 			return o

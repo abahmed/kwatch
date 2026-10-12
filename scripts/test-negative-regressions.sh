@@ -17,7 +17,9 @@ run_tests() {
 	listed=$(go test -list '.*' "$pkg")
 	pattern=""
 	for name in "$@"; do
-		if ! printf '%s\n' "$listed" | grep -Fxq "$name"; then
+		# Not grep -q: its early exit makes printf hit SIGPIPE, which
+		# pipefail reports as a miss for a test that exists.
+		if ! printf '%s\n' "$listed" | grep -Fx "$name" >/dev/null; then
 			echo "negative regressions: $pkg has no test $name" >&2
 			exit 1
 		fi

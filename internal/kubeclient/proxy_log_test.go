@@ -2,6 +2,7 @@ package kubeclient
 
 import (
 	"bytes"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -34,5 +35,19 @@ func TestNewHTTPClientInvalidProxyLogsNoCredentials(t *testing.T) {
 	}
 	if strings.Contains(logged, "s3cret") || strings.Contains(logged, "user:") {
 		t.Fatalf("proxy credentials logged: %q", logged)
+	}
+}
+
+func TestNewHTTPClientInvalidProxyDisablesEnvironmentProxy(t *testing.T) {
+	client := NewHTTPClient(config.ApplicationRuntime{
+		ProxyURL: "http://proxy:bad-port/",
+	})
+
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("unexpected transport %T", client.Transport)
+	}
+	if transport.Proxy != nil {
+		t.Fatal("an invalid proxy must not fall back to the environment")
 	}
 }

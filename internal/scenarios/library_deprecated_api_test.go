@@ -14,7 +14,8 @@ func deprecatedAPIScenarios() []scenario {
 
 // deprecatedAPIStillCalled: the API server reports that
 // policy/v1beta1 poddisruptionbudgets was requested, and the next minor
-// upgrade removes it. Nothing is failing now, so it is one digest line.
+// upgrade removes it. Nothing is failing now: the finding is advisory
+// and no message is sent; /status lists it.
 func deprecatedAPIStillCalled() scenario {
 	api := kube.DeprecatedAPI{Group: "policy", Version: "v1beta1",
 		Resource: "poddisruptionbudgets", Removed: "1.25"}
@@ -23,9 +24,9 @@ func deprecatedAPIStillCalled() scenario {
 			Name: "deprecated-api-still-called",
 			Description: "The API server reports a request for " +
 				"policy/v1beta1 poddisruptionbudgets, removed in the " +
-				"next minor upgrade.",
-			Root: "deprecated-api//policy/v1beta1 poddisruptionbudgets",
-			Tier: "digest", MaxMessages: 2, Tail: duration(45 * time.Minute),
+				"next minor upgrade; nothing failed, so it is advice " +
+				"and stays quiet (it is listed in /status).",
+			Quiet: true, MaxMessages: 0, Tail: duration(45 * time.Minute),
 		},
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))

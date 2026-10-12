@@ -49,5 +49,5 @@ func worseningSentences(f caseFacts) []sentence {
 // crashLoops reports a finding of a container that keeps crashing.
 func crashLoops(s detection.Finding) bool {
 	return s.Mode == detection.ModeCrashLoop ||
-		s.Mode == detection.ModeOOMKilled
+		s.Mode.Within(detection.ModeOOMKilled)
 }

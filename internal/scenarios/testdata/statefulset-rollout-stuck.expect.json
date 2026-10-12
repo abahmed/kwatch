@@ -1,0 +1,8 @@
+{
+  "name": "statefulset-rollout-stuck",
+  "description": "A StatefulSet rolls to a new revision and the first replaced pod never becomes ready.",
+  "root": "statefulset/streaming/queue",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "10m0s"
+}

@@ -1,0 +1,12 @@
+{
+  "name": "node-agent-outside-kube-system",
+  "description": "A log shipper DaemonSet on every node, outside kube-system, crash-loops on one node while pods of two workloads beside it turn unready.",
+  "root": "daemonset/observability/logship",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/cart",
+    "deployment/shop/search"
+  ]
+}

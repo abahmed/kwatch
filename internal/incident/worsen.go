@@ -27,7 +27,7 @@ const (
 // crashLooping reports a finding of a container that keeps failing.
 func crashLooping(s detection.Finding) bool {
 	return s.Mode == detection.ModeCrashLoop ||
-		s.Mode == detection.ModeOOMKilled
+		s.Mode.Within(detection.ModeOOMKilled)
 }
 
 // memberStage is the worst stage among the failing members of p.
@@ -61,25 +61,9 @@ func lastingCrash(p *Incident) bool {
 	return false
 }
 
-// maxedSince is the earliest Since among the HPAMaxedOut members, and
-// whether there is one.
-func maxedSince(p *Incident) (time.Time, bool) {
-	var first time.Time
-	found := false
-	for key, s := range p.Members {
-		if key.Reason != reasons.HPAMaxedOut || s.Since.IsZero() {
-			continue
-		}
-		if !found || s.Since.Before(first) {
-			first, found = s.Since, true
-		}
-	}
-	return first, found
-}
-
 // escalate re-judges the tier of a digest-tier incident once time has
-// made a habit-demoted failure lasting, or an autoscaler's maximum
-// stuck. It reports whether the tier changed.
+// made a habit-demoted failure lasting. It reports whether the tier
+// changed.
 //
 // Known and rhythmic incidents are demoted to the digest because their
 // boot noise is routine. A member that crash-loops past the boot window,
@@ -93,10 +77,6 @@ func (m *Manager) escalate(p *Incident, now time.Time) bool {
 	}
 	if !p.persistent && m.lastsPastBoot(p, now) {
 		p.persistent = true
-	}
-	if since, ok := maxedSince(p); ok && !p.maxedLong &&
-		now.Sub(since) >= HPAStuckAfter {
-		p.maxedLong = true
 	}
 	next := m.override.apply(p, tier(p))
 	if next <= p.Tier {
@@ -195,9 +175,6 @@ func escalationDeadline(p *Incident) (time.Time, bool) {
 	}
 	if !p.persistent {
 		consider(p.bootStart().Add(kube.BootWindow))
-	}
-	if since, found := maxedSince(p); found && !p.maxedLong {
-		consider(since.Add(HPAStuckAfter))
 	}
 	return due, ok
 }

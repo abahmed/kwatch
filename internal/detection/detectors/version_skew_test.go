@@ -42,6 +42,7 @@ func TestVersionSkewFlagsUnsupportedKubelets(t *testing.T) {
 			found := detectVersionSkew(&server, kubelet)
 			require.Len(t, found, 1)
 			assert.Equal(t, reasons.ClusterVersionSkew, found[0].Reason)
+			assert.True(t, found[0].Advisory)
 			assert.Equal(t, "Cluster.VersionSkew", string(found[0].Mode))
 			assert.Equal(t, detection.Degraded, found[0].Health)
 		})

@@ -51,3 +51,33 @@ func blamesAnother(f caseFacts) bool {
 	cause := f.p.Cause
 	return cause != nil && !selfCause(cause) && cause.Root != f.p.Root
 }
+
+// createdFailureWindow is how soon after its creation a workload must
+// have started failing for the message to say it never worked.
+const createdFailureWindow = 3 * time.Minute
+
+// createdLead says that a workload which failed from the start never
+// worked: the blamed change is its own creation, and nothing is read into
+// "its dependents failed after it changed". It covers Deployments,
+// StatefulSets and DaemonSets, whether their pods are unready or crash.
+func createdLead(f caseFacts) (string, bool) {
+	change := blamedChange(f)
+	if change == nil || !ownCreation(f, *change) {
+		return "", false
+	}
+	onset := f.p.Onset()
+	if !onset.IsZero() && onset.Sub(change.At) > createdFailureWindow {
+		return "", false
+	}
+	workload := affectedWorkload(f)
+	return f.leadName(workload) + " has never worked since it was " +
+		"created at " + clock(change.At), true
+}
+
+// ownCreation reports that change is the creation of the workload the
+// message is about.
+func ownCreation(f caseFacts, change inventory.Change) bool {
+	workload := affectedWorkload(f)
+	return change.Created && change.Entity == workload &&
+		incident.IsWorkload(workload.Kind)
+}

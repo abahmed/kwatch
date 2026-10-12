@@ -33,7 +33,10 @@ func (a *announcer) deliver(
 		if investigable(d) && a.hold(d, now) {
 			continue
 		}
-		a.send(ctx, a.withEvidence(d), now)
+		// A writer that panics on one decision loses that message only.
+		contain("compose", "write", func() {
+			a.send(ctx, a.withEvidence(d), now)
+		})
 		a.forgetEvidence(d)
 	}
 }
@@ -162,7 +165,11 @@ func (a *announcer) send(
 	ctx context.Context, d incident.Decision, at time.Time,
 ) {
 	d = a.withWake(a.withKindNames(a.withChanges(d, at)), at)
-	msg := a.write(a.collect.Follow(d), at)
+	written := a.collect.Follow(d)
+	msg := a.write(written, at)
+	if written.Action == incident.Announce {
+		a.incidents.RecordSubject(d.Incident.ID, a.messages.Subject(written))
+	}
 	a.scopePaging(d, &msg)
 	if d.PagedAlready {
 		msg.SkipPaging = true

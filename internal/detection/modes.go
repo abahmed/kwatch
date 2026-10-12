@@ -44,7 +44,25 @@ const (
 	// ModeFailedCreate is the mode of a FailedCreate event: the reason
 	// has no shorter name, so it is its own mode.
 	ModeFailedCreate Mode = "FailedCreate"
+	// ModeOOMKilledNode and ModeOOMKilledLimit are the verdicts on an
+	// OOM kill (see detectors.markNodeOOM): the node ran out of memory
+	// and killed a container that stayed within its limit, or the
+	// container used most of its own limit. They nest in OOMKilled;
+	// an OOM kill without evidence either way stays plain OOMKilled.
+	ModeOOMKilledNode  Mode = "OOMKilled.Node"
+	ModeOOMKilledLimit Mode = "OOMKilled.Limit"
 )
+
+// ModeNodeCondition is the family of a node condition that is True, as
+// in "Node.Condition.KernelDeadlock". The condition type is bounded by
+// the model, so the family stays a bounded set.
+const ModeNodeCondition Mode = "Node.Condition"
+
+// NodeConditionModeOf is the mode of a True node condition of the
+// given type.
+func NodeConditionModeOf(conditionType string) Mode {
+	return ModeNodeCondition + "." + Mode(conditionType)
+}
 
 // Modes no built-in detector reports. A finding whose reason has no
 // shorter name carries the reason as its mode, so custom detectors can
@@ -62,6 +80,7 @@ const (
 var extraModes = []Mode{
 	ModeMemoryEvictionThreshold, ModePIDEvictionThreshold,
 	ModeFailedCreate, ModeTerminating, ModeUnreachable,
+	ModeOOMKilledNode, ModeOOMKilledLimit, ModeNodeCondition,
 }
 
 // Mode families that tables match as a whole. A family matches each of

@@ -73,6 +73,7 @@ func ownShared(seconds int) scenarioCost {
 var scenarioCosts = map[string]scenarioCost{
 	"TestScenarioActiveProbeFailureAndRecovery":  alone(268, "kwatch-config"),
 	"TestScenarioConfigurationReload":            alone(3, "kwatch-config"),
+	"TestScenarioAdmissionPolicy":                shared(150),
 	"TestScenarioCronJobSuspended":               shared(82),
 	"TestScenarioDaemonSetFailure":               shared(87),
 	"TestScenarioDeploymentRolloutFailure":       shared(88),

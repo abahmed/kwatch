@@ -9,10 +9,10 @@
 | kubectl logs search-d44e0da6-a -c app -n shop --previous
 | ```
 10:11:30 healthy for 3m0s
-✅ search in shop (prod-eu-1) is healthy again. It was failing for eight minutes.
+✅ search in shop (prod-eu-1) is healthy again. It was failing for about five minutes.
 ✅ search in shop (prod-eu-1) is healthy again.
 | ✅ **search** in **shop** (**prod-eu-1**) is healthy again.
-| It was failing for eight minutes.
+| It was failing for about five minutes.
 10:13:00 failing again
 🟠 search in shop (prod-eu-1) is failing again: 2nd time in two hours. It fails with "fatal: connection pool exhausted".
 🟠 search in shop (prod-eu-1) is failing again: 2nd time in two hours.

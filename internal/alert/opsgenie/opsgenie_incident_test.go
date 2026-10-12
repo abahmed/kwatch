@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/delivery/providertest"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
 
@@ -162,16 +164,52 @@ func TestOpsgenieUpdateFailureIsReturned(t *testing.T) {
 	}
 }
 
-// Closing an alias Opsgenie does not know (404) means the alert is already
-// gone, so the resolve succeeds instead of failing for good.
-func TestOpsgenieCloseOfUnknownAliasSucceeds(t *testing.T) {
+// Closing an alias Opsgenie does not know (404) right after the create is
+// retryable, because alerts are created asynchronously. Once the alias has
+// stayed unknown past the grace period the alert is taken as already gone.
+func TestOpsgenieCloseOfUnknownAliasIsRetryableThenSucceeds(t *testing.T) {
 	c, rec := newTestOpsgenie(t)
 	rec.Reply = func(w http.ResponseWriter, _ providertest.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	c.now = func() time.Time { return now }
+
+	err := c.SendIncident(context.Background(), providertest.Resolve())
+	if err == nil || transport.IsPermanent(err) {
+		t.Fatalf("an early 404 on close must be retryable: %v", err)
+	}
+	now = now.Add(closeGrace - time.Second)
+	if err := c.SendIncident(
+		context.Background(), providertest.Resolve()); err == nil {
+		t.Fatal("still inside the grace period, close must keep retrying")
+	}
+	now = now.Add(time.Second)
 	if err := c.SendIncident(
 		context.Background(), providertest.Resolve()); err != nil {
-		t.Fatalf("close of a missing alert must succeed: %v", err)
+		t.Fatalf("a long-missing alert counts as closed: %v", err)
+	}
+}
+
+func TestOpsgenieCloseFindsAlertAfterEarly404(t *testing.T) {
+	c, rec := newTestOpsgenie(t)
+	var calls int
+	rec.Reply = func(w http.ResponseWriter, _ providertest.Request) {
+		calls++
+		if calls == 1 {
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}
+	if err := c.SendIncident(
+		context.Background(), providertest.Resolve()); err == nil {
+		t.Fatal("first close must be retried")
+	}
+	if err := c.SendIncident(
+		context.Background(), providertest.Resolve()); err != nil {
+		t.Fatalf("close must succeed once the alert is visible: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("calls = %d", calls)
 	}
 }
 

@@ -140,6 +140,7 @@ func emailFactory(
 	return email.NewEmail(
 		values,
 		providerContext.ClusterName,
+		providerContext.Dependencies,
 	)
 }
 

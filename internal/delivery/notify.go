@@ -14,7 +14,7 @@ import (
 // from the goroutine that then starts the informers, so an inline send to
 // an unreachable provider would hold up monitoring. Queuing also puts
 // messages on the same paced, summarized, dead-lettered path as
-// incidents, so a message that fails everywhere appears in /deadletters.
+// incidents, so a message that fails everywhere is dead-lettered and counted.
 func (m *Manager) Notify(msg string) {
 	klog.InfoS("sending message", "messageLength", len(msg))
 	m.enqueue(deliverJob{kind: jobMessage, msg: msg})

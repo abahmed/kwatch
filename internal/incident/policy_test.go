@@ -104,8 +104,13 @@ func TestTierDerivation(t *testing.T) {
 		},
 		"digest reasons digest": {
 			incidentOf(deploy, nil, sig(deploy,
-				reasons.HPAMaxedOut, detection.Critical)),
+				reasons.ServiceUnused, detection.Critical)),
 			Digest,
+		},
+		"cause-only reasons are silent": {
+			incidentOf(deploy, nil, sig(deploy,
+				reasons.HPAMaxedOut, detection.Critical)),
+			Silent,
 		},
 		"drain within its envelope is silent": {
 			incidentOf(node, nil,

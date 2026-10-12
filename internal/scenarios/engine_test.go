@@ -83,10 +83,22 @@ func defaultScope() pipeline.FindingScope {
 }
 
 // memoryStore is the engine's incident store, in memory. Replays start
-// empty and never restart, so it only has to accept writes.
+// empty and never restart, so it only has to accept writes. Unless cold,
+// it says a startup summary was already sent: a replay without a sync
+// is a session that is already running.
 type memoryStore struct {
 	mu    sync.Mutex
 	saves int
+	cold  bool
+}
+
+// withSync gives deps a store that starts cold when opts signal a sync,
+// so the startup summary waits for it like a new installation's.
+func withSync(
+	deps pipeline.Dependencies, opts replay.Options,
+) pipeline.Dependencies {
+	deps.Store = &memoryStore{cold: !opts.SyncAt.IsZero()}
+	return deps
 }
 
 func (m *memoryStore) LoadIncidents() ([]incident.Record, error) {
@@ -107,7 +119,10 @@ func (m *memoryStore) LoadFingerprints() (map[string]string, error) {
 func (m *memoryStore) SaveFingerprints(map[string]any) error { return nil }
 
 func (m *memoryStore) LoadStartup() (announce.StartupState, bool, error) {
-	return announce.StartupState{}, false, nil
+	if m.cold {
+		return announce.StartupState{}, false, nil
+	}
+	return announce.StartupState{Complete: true}, true, nil
 }
 
 func (m *memoryStore) SaveStartup(announce.StartupState) error { return nil }
@@ -117,8 +132,8 @@ func replayLog(
 	t testing.TB, log replay.Log, opts replay.Options,
 ) replay.Result {
 	t.Helper()
-	result, err := replay.Run(context.Background(), log, newDependencies(),
-		opts)
+	result, err := replay.Run(context.Background(), log,
+		withSync(newDependencies(), opts), opts)
 	if err != nil {
 		t.Fatal(err)
 	}

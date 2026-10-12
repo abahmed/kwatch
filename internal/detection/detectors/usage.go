@@ -43,12 +43,16 @@ func (NodeUsage) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	out := kubeletFindings(ctx, e)
+	// High usage predicts disk pressure but is not it: the kubelet
+	// reports the pressure and the evictions, which are the failures.
 	if s, ok := threshold(ctx, e, kube.AttrFSUsedPct,
 		reasons.NodeFilesystemHigh, "disk"); ok {
+		s.Advisory = true
 		out = append(out, s)
 	}
 	if s, ok := threshold(ctx, e, kube.AttrInodesUsedPct,
 		reasons.NodeInodesHigh, "inodes"); ok {
+		s.Advisory = true
 		out = append(out, s)
 	}
 	if !nodeIsYoung(ctx, e) {

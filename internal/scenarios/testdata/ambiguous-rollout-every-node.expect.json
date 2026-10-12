@@ -4,6 +4,9 @@
   "root": "deployment/shop/payments",
   "tier": "notify",
   "maxMessages": 3,
+  "unrelated": [
+    "node//n1"
+  ],
   "mustNotBlame": [
     "node//n1"
   ]

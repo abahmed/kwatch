@@ -155,6 +155,10 @@ func terminatedFinding(
 	if code == 0 || reason == reasons.Completed {
 		return nil
 	}
+	if pod, ok := owningPod(ctx, e); ok && ownerJobComplete(ctx, pod) {
+		// The Job succeeded on a retry: this run is history, even an OOM.
+		return nil
+	}
 	if reason != reasons.OOMKilled && stoppedOnPurpose(ctx, e, code) {
 		return nil
 	}

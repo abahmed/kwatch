@@ -52,6 +52,25 @@ func PodFreezes(pod inventory.Entity, config inventory.EntityID) bool {
 	return false
 }
 
+// FrozenConfigs lists the ConfigMaps and Secrets the pod reads only
+// when a container starts, in the pod's namespace.
+func FrozenConfigs(pod inventory.Entity) []inventory.EntityID {
+	attr, ok := pod.Attribute(AttrFrozenConfig)
+	if !ok {
+		return nil
+	}
+	var out []inventory.EntityID
+	for _, ref := range strings.Split(attr.Value.AsText(), ",") {
+		kind, name, found := strings.Cut(ref, "/")
+		if found {
+			out = append(out, inventory.EntityID{
+				Kind: inventory.Kind(kind), Namespace: pod.ID.Namespace,
+				Name: name})
+		}
+	}
+	return out
+}
+
 // PodConfigAge compares the pod's start with a change of its config. A
 // pod whose containers restarted since the change may have read either
 // content, so it is unknown rather than guessed.

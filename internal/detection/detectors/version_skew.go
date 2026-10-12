@@ -48,7 +48,8 @@ func (VersionSkew) Detect(
 	}
 	return []detection.Finding{{
 		Reason: reasons.ClusterVersionSkew, Severity: detection.Warning,
-		Since: valueSince(e, kube.AttrKubelet),
+		Advisory: true,
+		Since:    valueSince(e, kube.AttrKubelet),
 		Summary: fmt.Sprintf("Kubelet %s is outside the supported skew "+
 			"of API server %s", kubelet, text(api, kube.AttrServerVersion)),
 		Evidence: []detection.Evidence{

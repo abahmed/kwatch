@@ -105,6 +105,9 @@ type Record struct {
 	// records restore without them.
 	StagePeak      uint8           `json:",omitempty"`
 	AnnouncedRoute *AnnouncedRoute `json:",omitempty"`
+	// Subject is what the first message was about. Older records restore
+	// without it and their resolve names the root.
+	Subject inventory.EntityID `json:",omitempty"`
 	// Ack is the acknowledgement the thread was told about.
 	Ack *Ack `json:",omitempty"`
 	// Demoted was added with lowering the tier of an announced incident.
@@ -155,7 +158,7 @@ func (m *Manager) Export() []Record {
 			RepeatCount: p.RepeatCount, Unheard: !p.sent.told,
 			ToldKnown: true,
 			StagePeak: uint8(p.stagePeak), AnnouncedRoute: p.AnnouncedRoute,
-			Ack: p.Ack, Demoted: p.Delivery.demoted,
+			Ack: p.Ack, Demoted: p.Delivery.demoted, Subject: p.Subject,
 			FormerRoot: p.formerRoot, RerootedAt: p.rerootedAt,
 			RejectionSeenAt: p.rejectionAt,
 		})
@@ -253,8 +256,9 @@ func restored(r Record) *Incident {
 		sent: restoredMark(len(r.Timeline), r.heard()), restored: true,
 		DigestedAt: r.DigestedAt, RepeatCount: r.RepeatCount,
 		stagePeak: stage(r.StagePeak), AnnouncedRoute: r.AnnouncedRoute,
-		Ack: r.Ack, formerRoot: r.FormerRoot, rerootedAt: r.RerootedAt,
-		rejectionAt: r.RejectionSeenAt, rejectionSeen: !r.RejectionSeenAt.IsZero(),
+		Ack: r.Ack, Subject: r.Subject, formerRoot: r.FormerRoot,
+		rerootedAt: r.RerootedAt, rejectionAt: r.RejectionSeenAt,
+		rejectionSeen: !r.RejectionSeenAt.IsZero(),
 		Delivery: Delivery{
 			paged: r.Paged, rolledUp: r.RolledUp,
 			podPeak: r.PodPeak, pageHeld: r.PageHeld,

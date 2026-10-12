@@ -56,7 +56,7 @@ jobs:
       with:
         # Pinned. "latest" means an upstream release can break CI with no
         # change on our side.
-        version: v2.13.1
+        version: v2.14.0
         install-only: true
 
     - name: Run make ci

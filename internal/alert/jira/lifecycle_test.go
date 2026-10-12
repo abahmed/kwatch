@@ -42,7 +42,7 @@ func TestJiraIncidentLifecycleFollowsOneIssue(t *testing.T) {
 		if err := j.SendIncident(context.Background(), tc.Message); err != nil {
 			t.Fatalf("%s: %v", tc.Name, err)
 		}
-		requests := rec.Requests()
+		requests := withoutSearch(rec.Requests())
 		if len(requests) != 1 {
 			t.Fatalf("%s sent %d requests", tc.Name, len(requests))
 		}

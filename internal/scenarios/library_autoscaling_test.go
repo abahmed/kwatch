@@ -14,6 +14,7 @@ import (
 func autoscalingScenarios() []scenario {
 	return []scenario{
 		autoscalerCeilingCPU(), autoscalerCeilingRequests(), hpaAtMax(),
+		hpaAtMaxHealthy(),
 	}
 }
 

@@ -223,18 +223,17 @@ func buildKnownCrash(c *cluster, message string, last time.Duration) {
 
 // hpaResolveWhileWorkloadBroken: an autoscaler at its maximum clears
 // while the Deployment it scales is down: both pods crash-loop on the
-// same bad dependency. The autoscaler's incident does not resolve
-// ("stable", "healthy") while the workload behind it still fails.
+// same bad dependency. The autoscaler at its maximum is a cause, not
+// news: only the Deployment, which fails, is announced.
 func hpaResolveWhileWorkloadBroken() scenario {
 	return scenario{
 		expect: expectation{
 			Name: "hpa-resolve-while-workload-broken",
 			Description: "An HPA at its maximum stops being limited " +
 				"while the Deployment it scales crash-loops with no " +
-				"ready replica.",
+				"ready replica; only the Deployment is announced.",
 			Root: "deployment/shop/warehouse", Tier: "notify",
-			OtherRoots:   []string{"horizontalpodautoscaler/shop/warehouse"},
-			MaxMessages:  4,
+			MaxMessages:  2,
 			MustNotBlame: []string{"node//n1"},
 			Tail:         duration(time.Hour),
 		},

@@ -15,6 +15,7 @@ import (
 	gomail "gopkg.in/mail.v2"
 
 	"github.com/abahmed/kwatch/internal/delivery/providertest"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
 
@@ -29,7 +30,7 @@ func newCapturingEmail(t *testing.T) (*Email, *[]sentMail) {
 	c := NewEmail(map[string]interface{}{
 		"from": "kwatch@test.com", "to": "a@test.com,b@test.com",
 		"host": "127.0.0.1", "port": "587",
-	}, "dev")
+	}, "dev", transport.Dependencies{})
 	require.NotNil(t, c)
 	var sent []sentMail
 	c.send = func(messages ...*gomail.Message) error {

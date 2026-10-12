@@ -160,6 +160,17 @@ type Incident struct {
 	// after a cause revision. The incident closes without claiming
 	// recovery.
 	SupersededBy string
+	// Subject is the entity the first message was about, which a resolve
+	// names again even when no member is left to lead it. Zero when it
+	// is unknown (an older record).
+	Subject inventory.EntityID
+	// Removed lists the root and Subject that were deleted while the
+	// incident was open, and NamespaceRemoved says the root's namespace
+	// was. Set when the incident resolves; the resolve says "deleted"
+	// instead of "healthy again". Not persisted: the message is written
+	// at once.
+	Removed          []inventory.EntityID
+	NamespaceRemoved bool
 	// SupersededRoot is the root of that incident, so the closing message
 	// can name it. It is not persisted: the message is written at once.
 	SupersededRoot inventory.EntityID
@@ -228,10 +239,9 @@ type Incident struct {
 	stagePeak stage
 	// persistent marks a failure that outlasted the boot window while a
 	// member crash-looped or the workload had nothing ready: known and
-	// rhythmic demotion no longer applies. maxedLong marks an autoscaler
-	// at its maximum for HPAStuckAfter. Neither is persisted; the next
-	// tick judges them again.
-	persistent, maxedLong bool
+	// rhythmic demotion no longer applies. Not persisted; the next tick
+	// judges it again.
+	persistent bool
 	// causeChain records that the cause blames another object of the
 	// root's own workload chain (a pod, a Service, a ReplicaSet). The
 	// reasoning flips between those for the very same failures, so the
@@ -323,6 +333,7 @@ func (inc *Incident) Snapshot() Incident {
 		out.Members[key] = s
 	}
 	out.Impact = append([]inventory.EntityID(nil), inc.Impact...)
+	out.Removed = append([]inventory.EntityID(nil), inc.Removed...)
 	out.Cycles = append([]time.Time(nil), inc.Cycles...)
 	out.Occurrences = append([]time.Time(nil), inc.Occurrences...)
 	out.History = append([]Occurrence(nil), inc.History...)

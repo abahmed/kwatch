@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"time"
@@ -34,6 +35,19 @@ func ShouldSend(lastSent, now time.Time) bool {
 	return lastSent.IsZero() || now.Sub(lastSent) >= WeeklyInterval
 }
 
+// maxDrainBytes caps the response body read so connections can be reused.
+const maxDrainBytes = 4 << 10
+
+// withoutRedirects returns a copy of the shared client that reports a
+// redirect as the response instead of following it.
+func withoutRedirects(client *http.Client) *http.Client {
+	c := *client
+	c.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	return &c
+}
+
 // Report sends one adoption heartbeat. It returns nil only after receiving a
 // successful 2xx response; callers should persist the send time only then.
 func Report(ctx context.Context, client *http.Client, endpoint, clusterID, version string) error {
@@ -53,11 +67,12 @@ func Report(ctx context.Context, client *http.Client, endpoint, clusterID, versi
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "kwatch-telemetry/1")
-	resp, err := client.Do(req)
+	resp, err := withoutRedirects(client).Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxDrainBytes))
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return fmt.Errorf("telemetry endpoint returned status %d", resp.StatusCode)
 	}

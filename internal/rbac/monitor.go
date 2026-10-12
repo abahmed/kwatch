@@ -18,14 +18,20 @@ import (
 // is one SelfSubjectAccessReview per permission.
 const (
 	checkInterval = 15 * time.Minute
-	checkTimeout  = 15 * time.Second
+	// checkTimeout bounds one review; sweepTimeout bounds all of them, so
+	// one slow answer cannot starve the checks after it.
+	checkTimeout = 5 * time.Second
+	sweepTimeout = 2 * time.Minute
 )
 
 // Status is the result of one permission sweep.
 type Status struct {
 	LastCheck time.Time
-	// Unavailable is true when the review API itself failed.
+	// Unavailable is true when at least one review could not be
+	// evaluated; Unchecked lists those permissions.
 	Unavailable bool
+	// Unchecked lists permissions whose review failed or timed out.
+	Unchecked []kube.Access
 	// Missing lists denied permissions.
 	Missing []kube.Access
 }
@@ -108,24 +114,38 @@ func (m *Monitor) Start(ctx context.Context) error {
 	}
 }
 
-// Sweep checks every permission once.
+// Sweep checks every permission once. A review that fails or times out is
+// recorded in Unchecked and the sweep goes on with the next one.
 func (m *Monitor) Sweep(ctx context.Context) Status {
-	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
+	ctx, cancel := context.WithTimeout(ctx, sweepTimeout)
 	defer cancel()
 	status := Status{LastCheck: m.clock.Now()}
-	for _, access := range m.checks {
-		allowed, err := m.allowed(ctx, access)
+	for i, access := range m.checks {
+		if ctx.Err() != nil {
+			status.Unchecked = append(status.Unchecked, m.checks[i:]...)
+			break
+		}
+		allowed, err := m.review(ctx, access)
 		if err != nil {
 			klog.V(2).InfoS("permission review unavailable",
 				"component", "rbac", "error", err)
-			status.Unavailable = true
-			return status
+			status.Unchecked = append(status.Unchecked, access)
+			continue
 		}
 		if !allowed {
 			status.Missing = append(status.Missing, access)
 		}
 	}
+	status.Unavailable = len(status.Unchecked) > 0
 	return status
+}
+
+func (m *Monitor) review(
+	ctx context.Context, access kube.Access,
+) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
+	defer cancel()
+	return m.allowed(ctx, access)
 }
 
 func (m *Monitor) allowed(

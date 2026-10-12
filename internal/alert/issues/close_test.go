@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/delivery/providertest"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
@@ -33,7 +34,7 @@ func openIssue(t *testing.T, m *Map, tr Tracker) {
 // Closing an issue that was deleted (404) must forget the mapping, so the
 // resolve is not retried forever.
 func TestCloseOn404ForgetsMapping(t *testing.T) {
-	m := NewMap()
+	m := NewMap(time.Now)
 	tr := &closeFailTracker{closeErr: transport.Permanent(
 		&transport.StatusError{Provider: "GitHub", StatusCode: 404,
 			Body: "Not Found"})}
@@ -50,7 +51,7 @@ func TestCloseOn404ForgetsMapping(t *testing.T) {
 
 // Any other close failure keeps the mapping so the retry can close it.
 func TestCloseOtherErrorKeepsMapping(t *testing.T) {
-	m := NewMap()
+	m := NewMap(time.Now)
 	tr := &closeFailTracker{closeErr: errors.New(
 		"call to GitHub returned status code 500: boom")}
 	openIssue(t, m, tr)

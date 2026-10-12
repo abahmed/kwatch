@@ -1,0 +1,14 @@
+10:05:15 settled
+🟠 transcoder in media (prod-eu-1) keeps crashing. Its node is healthy and unchanged, so nothing outside it explains this. To read the output of the last crash, run kubectl logs transcoder-79849f35-c -c app -n media --previous
+🟠 transcoder in media (prod-eu-1) keeps crashing.
+| 🟠 **transcoder** in **media** (**prod-eu-1**) keeps crashing.
+| Its node is healthy and unchanged, so nothing outside it explains this.
+| To read the output of the last crash, run
+| ```
+| kubectl logs transcoder-79849f35-c -c app -n media --previous
+| ```
+10:05:20 material change
+🟠 transcoder in media (prod-eu-1) keeps being killed by its liveness probe because its containers get too little time to start. The replicas were scaled from 2 to 5 at 10:04.
+🟠 transcoder in media (prod-eu-1) keeps being killed by its liveness probe because its containers get too little time to start.
+| 🟠 **transcoder** in **media** (**prod-eu-1**) keeps being killed by its liveness probe because its containers get too little time to start.
+| The replicas were scaled from 2 to 5 at 10:04.

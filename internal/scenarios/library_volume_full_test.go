@@ -107,16 +107,15 @@ func volumeFullNamesUsers() scenario {
 }
 
 // volumeNearlyFullQuiet: a claim is 96% used but nothing fails yet. The
-// finding is real and the claim is its subject; nothing else is blamed.
+// finding is a cause, not a failure that has happened, so it is silent
+// until a workload fails on it.
 func volumeNearlyFullQuiet() scenario {
 	return scenario{
 		expect: expectation{
 			Name: "volume-nearly-full-quiet",
 			Description: "A claim is 96% used and its workload still " +
-				"runs; the full claim alone is reported.",
-			Root: "persistentvolumeclaim/files/uploads", Tier: "notify",
-			MaxMessages:  1,
-			MustNotBlame: []string{"node//w1"},
+				"runs; nothing has failed, so nothing is sent.",
+			Quiet: true, MaxMessages: 0, Tail: duration(5 * time.Minute),
 		},
 		build: func(c *cluster) {
 			c.list(c.node("w1", "zone-a"))

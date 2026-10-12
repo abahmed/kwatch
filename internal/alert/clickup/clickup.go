@@ -9,6 +9,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert/issues"
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -83,7 +84,7 @@ func NewClickup(
 		"reopenStatus", reopenStatus)
 
 	return &Clickup{
-		issues:       issues.NewMap(),
+		issues:       issues.NewMap(clock.Require(dependencies.Clock).Now),
 		sender:       transport.NewSender(dependencies),
 		api:          clickupAPIURL,
 		url:          fmt.Sprintf("%s/list/%s/task", clickupAPIURL, listID),

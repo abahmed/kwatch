@@ -172,8 +172,9 @@ func TestNotifyScaleFailureReplacedByMissingTargetSaysSo(t *testing.T) {
 	c.after(30 * time.Minute)
 	log := c.log()
 
-	result, err := replay.Run(context.Background(), log, newDependencies(),
-		replay.Options{SyncAt: log.Start, Tail: 40 * time.Minute})
+	opts := replay.Options{SyncAt: log.Start, Tail: 40 * time.Minute}
+	result, err := replay.Run(context.Background(), log,
+		withSync(newDependencies(), opts), opts)
 	if err != nil {
 		t.Fatal(err)
 	}

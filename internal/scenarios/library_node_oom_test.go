@@ -108,26 +108,48 @@ func buildNodeOOM(c *cluster, usedMi float64) {
 func buildNodeOOMWith(
 	c *cluster, usedMi float64, hogLimit string, pressure bool,
 ) {
-	node := c.node("n1", "zone-a")
-	if pressure {
+	buildOOMKill(c, oomKill{
+		node: "n1", victimNS: "shop", victim: "api",
+		hogNS: "batch", hog: "importer", usedMi: usedMi,
+		hogLimit: hogLimit, pressure: pressure,
+	})
+}
+
+// oomKill describes one container killed with the node's memory taken by
+// a hog: the names, the victim's use before the kill (against its 512Mi
+// limit), the hog's limit and whether the kubelet reports pressure.
+type oomKill struct {
+	node, victimNS, victim, hogNS, hog string
+	usedMi                             float64
+	hogLimit                           string
+	pressure                           bool
+	// pressureAfter, when set, has the kubelet report MemoryPressure
+	// that long after the kill instead of before it.
+	pressureAfter time.Duration
+}
+
+func buildOOMKill(c *cluster, k oomKill) {
+	node := c.node(k.node, "zone-a")
+	if k.pressure {
 		setNodeCondition(node, corev1.NodeMemoryPressure,
 			corev1.ConditionTrue, "KubeletHasInsufficientMemory",
 			"memory is short", c.start.Add(-time.Minute))
 	}
 	c.list(node)
-	api := c.deployment("shop", "api", "registry.example.com/api:2.0", 1)
+	api := c.deployment(k.victimNS, k.victim,
+		"registry.example.com/"+k.victim+":2.0", 1)
 	api.setReady(0)
-	importer := c.deployment("batch", "importer",
-		"registry.example.com/importer:1.0", 1)
+	importer := c.deployment(k.hogNS, k.hog,
+		"registry.example.com/"+k.hog+":1.0", 1)
 	c.list(api.objects())
 	c.list(importer.objects())
 	c.after(time.Minute)
-	victim := api.pod(0, "n1", crashLoop(137, "OOMKilled", "", 4),
+	victim := api.pod(0, k.node, crashLoop(137, "OOMKilled", "", 4),
 		longRun(2*time.Hour))
-	hog := importer.pod(0, "n1")
-	if hogLimit != "" {
+	hog := importer.pod(0, k.node)
+	if k.hogLimit != "" {
 		hog.Spec.Containers[0].Resources.Limits = corev1.ResourceList{
-			corev1.ResourceMemory: resource.MustParse(hogLimit),
+			corev1.ResourceMemory: resource.MustParse(k.hogLimit),
 		}
 	}
 	c.list(victim, hog)
@@ -139,15 +161,23 @@ func buildNodeOOMWith(
 			Kind: inventory.Observed, Source: kube.StatsSource, At: c.now,
 			Entity: kube.ContainerID(victim.Namespace, victim.Name, "app"),
 			Attributes: map[string]inventory.Value{
-				kube.AttrMemoryPeak24h: inventory.Number(usedMi * mib),
+				kube.AttrMemoryPeak24h: inventory.Number(k.usedMi * mib),
 			},
 		})
 	event := c.warningEvent(node, "Node", "SystemOOM",
-		"System OOM encountered, victim process: importer, pid: 4242",
+		"System OOM encountered, victim process: "+k.hog+", pid: 4242",
 		"kernel-monitor", 1)
 	event.InvolvedObject.UID = types.UID(node.Name)
 	c.warn(event)
 	c.after(time.Minute)
+	if k.pressureAfter > 0 {
+		c.after(k.pressureAfter)
+		setNodeCondition(node, corev1.NodeMemoryPressure,
+			corev1.ConditionTrue, "KubeletHasInsufficientMemory",
+			"memory is short", c.now.Add(-time.Minute))
+		c.update(node)
+		c.after(time.Minute)
+	}
 }
 
 // usage is a kubelet reading of one container's working set.

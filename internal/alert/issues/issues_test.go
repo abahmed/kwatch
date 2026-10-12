@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/delivery/providertest"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -38,7 +39,7 @@ func (f *fakeTracker) Close(_ context.Context, id, _ string) error {
 }
 
 func TestMapFilesOneIssuePerIncident(t *testing.T) {
-	m := NewMap()
+	m := NewMap(time.Now)
 	tracker := &fakeTracker{}
 	ctx := context.Background()
 	for _, tc := range providertest.Lifecycle() {
@@ -60,7 +61,7 @@ func TestMapFilesOneIssuePerIncident(t *testing.T) {
 }
 
 func TestMapSkipsStartupSummary(t *testing.T) {
-	m := NewMap()
+	m := NewMap(time.Now)
 	tracker := &fakeTracker{}
 	ctx := context.Background()
 	summary := providertest.Summary()
@@ -78,7 +79,7 @@ func TestMapSkipsStartupSummary(t *testing.T) {
 
 func TestMapIgnoresResolveWithoutIssue(t *testing.T) {
 	tracker := &fakeTracker{}
-	err := NewMap().Deliver(context.Background(), tracker,
+	err := NewMap(time.Now).Deliver(context.Background(), tracker,
 		providertest.Resolve(), "t", "b")
 	if err != nil || len(tracker.calls) != 0 {
 		t.Fatalf("calls = %v, err = %v", tracker.calls, err)
@@ -86,7 +87,7 @@ func TestMapIgnoresResolveWithoutIssue(t *testing.T) {
 }
 
 func TestMapRestoresIssuesAcrossRestart(t *testing.T) {
-	m := NewMap()
+	m := NewMap(time.Now)
 	m.RestoreThreads(map[string]string{
 		providertest.Announce().ThreadKey(): "7",
 	})
@@ -102,7 +103,7 @@ func TestMapRestoresIssuesAcrossRestart(t *testing.T) {
 }
 
 func TestMapBoundsTrackedIssues(t *testing.T) {
-	m := NewMap()
+	m := NewMap(time.Now)
 	saved := make(map[string]string)
 	for i := 0; i < maxTrackedIssues+5; i++ {
 		saved["k"+strings.Repeat("x", i)] = "1"

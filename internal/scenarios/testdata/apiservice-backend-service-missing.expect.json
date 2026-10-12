@@ -1,0 +1,11 @@
+{
+  "name": "apiservice-backend-service-missing",
+  "description": "An APIService points at a Service that does not exist and reports itself unavailable.",
+  "root": "service/reports/report-adapter",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//w2"
+  ],
+  "tail": "15m0s"
+}

@@ -58,8 +58,13 @@ func SourceAccess() []Access {
 		Access{NonResourceURL: "/readyz", Verb: "get"},
 		// The prober reads the API server's own metrics; optional.
 		Access{NonResourceURL: "/metrics", Verb: "get"},
+		// The grant is limited to the two leader Leases by name.
 		Access{Resource: Resource{Group: "coordination.k8s.io",
-			Name: "leases"}, Verb: "get", Namespace: "kube-system"},
+			Name: "leases"}, Verb: "get", Namespace: "kube-system",
+			Name: Scheduler.Name},
+		Access{Resource: Resource{Group: "coordination.k8s.io",
+			Name: "leases"}, Verb: "get", Namespace: "kube-system",
+			Name: ControllerManager.Name},
 		// Restart evidence reads the node the previous kwatch Pod ran on.
 		Access{Resource: Resource{Name: "nodes"}, Verb: "get"},
 	)

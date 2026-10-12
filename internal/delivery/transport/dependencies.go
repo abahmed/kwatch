@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"crypto/tls"
 	"net/http"
 	"time"
 
@@ -38,4 +39,20 @@ func NewSender(dependencies Dependencies) Sender {
 		return dependencies.Sender
 	}
 	return NewWithDependencies(dependencies)
+}
+
+// TLSConfig returns a copy of the TLS settings (extra root CAs, skip
+// verify) carried by the application-owned HTTP client, or nil when it has
+// none. Providers that speak TLS without HTTP, such as SMTP, use it so they
+// honor the same trust configuration. The application's proxy is an HTTP
+// proxy and does not apply to them.
+func (d Dependencies) TLSConfig() *tls.Config {
+	if d.HTTPClient == nil {
+		return nil
+	}
+	base, ok := d.HTTPClient.Transport.(*http.Transport)
+	if !ok || base.TLSClientConfig == nil {
+		return nil
+	}
+	return base.TLSClientConfig.Clone()
 }

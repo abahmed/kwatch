@@ -143,5 +143,7 @@ var nodeRowCases = []rowCase{
 	{row: "node-network", want: "node//n1",
 		build: nodeCase("NetworkUnavailable", "Creating")},
 	{row: "node-overcommitted", want: "node//n1",
-		build: nodeCase("MemoryOvercommitted", "OOMKilled")},
+		build: nodeCase("MemoryOvercommitted", "OOMKilled.Node")},
+	{row: "node-degraded", want: "node//n1",
+		build: nodeCase("PLEGSlow", "NotReady")},
 }

@@ -191,7 +191,10 @@ func missingWebhook(
 					Name: "missing-webhook", Namespace: namespace,
 				}},
 			AdmissionReviewVersions: []string{"v1"},
-			FailurePolicy:           ptr(admissionregistrationv1.Ignore),
+			// Ignore would only reach the digest: requests skip a
+			// dead backend. Fail is announced once. The webhook
+			// has no rules, so it never intercepts a request.
+			FailurePolicy: ptr(admissionregistrationv1.Fail),
 			SideEffects: ptr(
 				admissionregistrationv1.SideEffectClassNone),
 		}},

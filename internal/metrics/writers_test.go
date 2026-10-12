@@ -21,6 +21,7 @@ var writtenVia = map[string]string{
 	"StorageResets":     "IncStorageReset",
 	"Investigations":    "IncInvestigation",
 	"DecisionLag":       "ObserveDecisionLag",
+	"Panics":            "IncPanic",
 }
 
 // productionSelectors returns every selector name used by non-test Go files

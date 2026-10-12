@@ -27,7 +27,8 @@ func quotaNearLimit(e inventory.Entity) []detection.Finding {
 	return []detection.Finding{{
 		Reason:   reasons.ResourceQuotaNearLimit,
 		Severity: detection.Warning, Health: detection.Degraded,
-		Since: valueSince(e, kube.AttrQuotaNearLimit),
+		Advisory: true,
+		Since:    valueSince(e, kube.AttrQuotaNearLimit),
 		Summary: "Namespace quota is nearly used up (" +
 			strings.Join(items, ", ") + ")",
 		Evidence: evidence,

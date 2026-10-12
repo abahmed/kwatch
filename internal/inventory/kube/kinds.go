@@ -135,3 +135,15 @@ func KindNameAttributes(
 var WorkloadKinds = []inventory.Kind{
 	KindDeployment, KindStatefulSet, KindDaemonSet,
 }
+
+// HarmlessToCreate reports a kind whose creation can only satisfy a
+// reference, never break one: a ConfigMap, Secret or ServiceAccount. A new
+// namespace creates kube-root-ca.crt and the default ServiceAccount, so
+// naming their creation as a change would blame a bootstrap object.
+func HarmlessToCreate(kind inventory.Kind) bool {
+	switch kind {
+	case KindConfigMap, KindSecret, KindAccount:
+		return true
+	}
+	return false
+}

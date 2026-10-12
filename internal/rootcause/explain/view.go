@@ -134,7 +134,8 @@ func (v *view) unitGate(pod inventory.EntityID) bool {
 	return v.unitFailing(pod)
 }
 
-// changesOf returns id's changes inside the causal window.
+// changesOf returns id's changes inside the causal window, which a
+// failing run's exposure can extend (see changeFrom).
 func (v *view) changesOf(id inventory.EntityID) []inventory.Change {
 	if v.s.Changes == nil {
 		return nil
@@ -142,7 +143,8 @@ func (v *view) changesOf(id inventory.EntityID) []inventory.Change {
 	if cached, ok := v.changes[id]; ok {
 		return cached
 	}
-	out := dropHarmlessCreations(v.s.Changes.Changes(id, v.since, v.s.Now))
+	out := dropHarmlessCreations(
+		v.s.Changes.Changes(id, v.changeFrom(id), v.s.Now))
 	v.changes[id] = out
 	return out
 }
@@ -155,20 +157,12 @@ func (v *view) changesOf(id inventory.EntityID) []inventory.Change {
 func dropHarmlessCreations(changes []inventory.Change) []inventory.Change {
 	out := changes[:0:0]
 	for _, change := range changes {
-		if change.Created && harmlessToCreate(change.Entity.Kind) {
+		if change.Created && kube.HarmlessToCreate(change.Entity.Kind) {
 			continue
 		}
 		out = append(out, change)
 	}
 	return out
-}
-
-func harmlessToCreate(kind inventory.Kind) bool {
-	switch kind {
-	case kube.KindConfigMap, kube.KindSecret, kube.KindAccount:
-		return true
-	}
-	return false
 }
 
 // text is an effect's error text: its findings and the recent notes of
@@ -224,7 +218,7 @@ func (v *view) errorText(id inventory.EntityID) string {
 // effectState is how a failing entity is matched as a row's effect.
 func (v *view) effectState(id inventory.EntityID) state {
 	return state{id: id, modes: findingModes(v.s.Findings[id]),
-		text: v.text(id)}
+		text: v.text(id), verdicts: v.containerVerdicts(id)}
 }
 
 // causeState is how an upstream entity is matched as a row's cause:

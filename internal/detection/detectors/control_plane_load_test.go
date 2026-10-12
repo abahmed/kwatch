@@ -117,6 +117,7 @@ func TestAPIServerLoadReportsEtcdNearItsQuota(t *testing.T) {
 
 	require.Len(t, got, 1)
 	assert.Equal(t, "EtcdDatabaseLarge", got[0].Reason)
+	assert.True(t, got[0].Advisory)
 	assert.Equal(t, "etcd database is 1.8 GiB, close to its default "+
 		"2 GiB limit", got[0].Summary)
 	assert.Contains(t, got[0].Evidence, detection.Evidence{
@@ -142,6 +143,7 @@ func TestAPIServerLoadReportsAnObjectExplosion(t *testing.T) {
 
 	require.Len(t, got, 1)
 	assert.Equal(t, "StorageObjectsHigh", got[0].Reason)
+	assert.True(t, got[0].Advisory)
 	assert.Equal(t, "etcd stores 240,000 events objects", got[0].Summary)
 }
 

@@ -196,12 +196,13 @@ to TCP 10250 on the nodes (the chart's opt-in policy does this through
 ## 💓 Health checks
 
 Endpoints kwatch serves so you can see it's alive and grab Prometheus metrics. These five
-are the only HTTP endpoints; there are no diagnostic, profiling, or test-alert endpoints.
+(plus the opt-in `/status`) are the only HTTP endpoints; there are no profiling or test-alert endpoints.
 
 | Parameter | What it does |
 |:---|---|
 | `healthCheck.enabled` | ✅ Health endpoints (default: true) |
 | `healthCheck.port` | Port to serve health on (default: 8060) |
+| `healthCheck.statusEndpoint` | Serve the read-only `/status` view (default: false; `/status` is 404 otherwise). Needs `healthCheck.enabled`. Not available in `KwatchConfig` |
 
 **Endpoints:**
 - `GET /healthz` — ✅ Liveness
@@ -210,6 +211,11 @@ are the only HTTP endpoints; there are no diagnostic, profiling, or test-alert e
   required informer caches. Optional API absence remains degraded and does not
   fail readiness. An unrecoverable required startup or cache failure causes the
   active process to stop so Kubernetes can restart or replace it.
+- `GET /status` — only with `healthCheck.statusEndpoint: true`. Open incidents
+  with root object names and cause lines, read-only; plain text, or JSON with
+  `?format=json`. It has no authentication and shows object names to anyone who
+  can reach the port, so keep it cluster-internal and read it through
+  `kubectl port-forward deploy/kwatch 8060:8060`.
 - `GET /availabilityz` — ✅ Deployment availability. A state lock holder,
   or a Pod still waiting for the state lock, can pass the rolling-update probe.
 - `GET /health` — JSON containing overall status, state lock status, component
@@ -230,6 +236,7 @@ are the only HTTP endpoints; there are no diagnostic, profiling, or test-alert e
 | `kwatch_incidents_total` | counter | `action` = `announce`, `update`, `resolve` | Incident lifecycle decisions |
 | `kwatch_incidents_open` | gauge | none | Incidents not yet resolved |
 | `kwatch_investigations_total` | counter | `result` = `done`, `skipped`, `late`, `timeout` | Announcement investigations (log excerpts and similar evidence) by outcome |
+| `kwatch_panics_recovered_total` | counter | `stage` = `detector`, `incident`, `compose`, `announce` | Panics contained on the decision path; the affected entity or area is skipped for that pass and monitoring continues |
 | `kwatch_delivery_notifications_total` | counter | none | Notification attempts |
 | `kwatch_delivery_dropped_total` | counter | none | Notifications no provider accepted: dead-lettered, failed with no fallback left, dropped by a full queue, or dropped before delivery started |
 | `kwatch_delivery_retries_total` | counter | none | Delivery retry attempts |
@@ -250,7 +257,7 @@ are the only HTTP endpoints; there are no diagnostic, profiling, or test-alert e
 | `kwatch_audit_dropped_total` | counter | none | Audit entries dropped because the audit queue was full |
 | `kwatch_heartbeat_failures_total` | counter | none | Heartbeat pings that failed or were rejected |
 | `kwatch_kubelet_stats_failures_total` | counter | none | Kubelet stats summary reads that failed, one per node per round |
-| `kwatch_storage_resets_total` | counter | `reason` = `schema_mismatch`, `unreadable` | State files deleted and recreated at open |
+| `kwatch_storage_resets_total` | counter | `reason` = `schema_mismatch`, `unreadable` | State files set aside (or deleted) and recreated at open |
 | `kwatch_storage_corrupt_records_total` | counter | none | Stored values skipped because they did not decode |
 | `kwatch_storage_expired_total` | counter | none | Stored entries deleted by retention |
 | `kwatch_storage_evicted_total` | counter | none | Stored entries deleted to meet the size cap |
@@ -400,7 +407,7 @@ reported as `component_failed`.
 | `optional_api_unavailable` | An optional API (for example Gateway API or the `KwatchConfig` CRD) is not installed |
 | `watcher_failed` | A dynamic watcher failed |
 | `persistence_restore_failed` | Saved state could not be read back, for example the delivery outbox |
-| `storage_reset` | The state file had another schema version or was unreadable and was deleted and recreated |
+| `storage_reset` | The state file had another schema version or was unreadable and was set aside as `state.db.corrupt` and recreated |
 | `storage_over_cap` | Data that is never evicted keeps the state store over its size cap |
 | `provider_unavailable` | The `provider-<name>` component could not reach its provider (transient failures; the job stays queued) |
 | `provider_rejected` | The `provider-<name>` component's provider refused a message permanently, for example a revoked token |

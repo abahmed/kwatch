@@ -1,0 +1,12 @@
+{
+  "name": "policy-blocks-call-by-address",
+  "description": "A ConfigMap edit and an egress NetworkPolicy land together; the pods time out dialing the address of a Service their environment does not name.",
+  "root": "networkpolicy/shop/dns-only-egress",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n2",
+    "configmap/shop/invoicer-settings"
+  ],
+  "tail": "10m0s"
+}

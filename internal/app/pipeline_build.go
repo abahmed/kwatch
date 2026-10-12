@@ -200,13 +200,19 @@ func (p *pipelineBuild) syncReporter(
 	engine *pipeline.Engine, health *sourceHealth,
 ) func(context.Context) {
 	return func(ctx context.Context) {
+		// The startup hold ends with the required kinds: a slow or
+		// absent optional kind is carried (see Engine.reconcileDowntime)
+		// and must not delay the first alerts of a cold start.
+		if !p.source.WaitForRequiredSync(ctx) {
+			return
+		}
+		engine.SourcesSynced()
 		if !p.source.WaitForSync(ctx) {
 			return
 		}
 		// The first report sets pipeline readiness from the required
 		// kinds; later reports withdraw or restore it.
 		health.report()
-		engine.SourcesSynced()
 		ticker := time.NewTicker(sourceHealthInterval)
 		defer ticker.Stop()
 		health.run(ctx, ticker.C)

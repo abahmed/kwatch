@@ -1,0 +1,8 @@
+{
+  "name": "flowschema-dangling-priority-level",
+  "description": "A FlowSchema reports Dangling because the priority level it names does not exist.",
+  "root": "flowschema//batch-jobs",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "10m0s"
+}

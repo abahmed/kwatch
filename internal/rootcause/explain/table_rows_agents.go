@@ -7,8 +7,9 @@ import (
 	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
-// LinkNodeAgent links an effect to a pod of a kube-system DaemonSet
-// running on its node. Such a pod (the CNI, kube-proxy, a CSI node
+// LinkNodeAgent links an effect to a pod of a node-agent DaemonSet
+// running on its node: one of kube-system, or one of any namespace that
+// runs on every node. Such a pod (the CNI, kube-proxy, a CSI node
 // plugin, a log shipper) serves every pod on its node; when it fails,
 // the pods beside it lose their network, their storage or their
 // readiness without any fault of their own.
@@ -36,7 +37,7 @@ var agentRows = []Row{
 	},
 }
 
-// agentHops lead from a failing pod to the kube-system DaemonSet pods on
+// agentHops lead from a failing pod to the node-agent DaemonSet pods on
 // its node that are failing too. The hop is added only for a failing
 // pod, so healthy pods never fan out to their node's agents.
 func (v *view) agentHops(pod inventory.EntityID) []hop {
@@ -59,12 +60,37 @@ func (v *view) agentHops(pod inventory.EntityID) []hop {
 	return out
 }
 
-// nodeAgent reports a pod of a kube-system DaemonSet other than the
-// failing pod's own workload.
+// nodeAgent reports a pod of a DaemonSet other than the failing pod's
+// own workload that serves its node: any DaemonSet of kube-system, or a
+// DaemonSet of another namespace that runs on every node.
 func (v *view) nodeAgent(pod, own inventory.EntityID) bool {
-	if pod.Namespace != "kube-system" {
+	top := rootcause.TopOwner(v.s.Model, pod)
+	if top.Kind != kube.KindDaemonSet || top == own {
 		return false
 	}
-	top := rootcause.TopOwner(v.s.Model, pod)
-	return top.Kind == kube.KindDaemonSet && top != own
+	return pod.Namespace == "kube-system" || v.runsOnEveryNode(top)
+}
+
+// runsOnEveryNode reports a DaemonSet with a pod on each of at least
+// two nodes of the cluster: one that serves every node, as an agent
+// does, and not a workload that happens to be a DaemonSet.
+func (v *view) runsOnEveryNode(ds inventory.EntityID) bool {
+	nodes := v.s.Model.Entities(kube.KindNode)
+	if len(nodes) < 2 {
+		return false
+	}
+	hosting := map[inventory.EntityID]bool{}
+	for _, pod := range v.s.Model.Related(ds, inventory.OwnedBy,
+		inventory.Incoming) {
+		for _, node := range v.s.Model.Related(pod, inventory.RunsOn,
+			inventory.Outgoing) {
+			hosting[node] = true
+		}
+	}
+	for _, node := range nodes {
+		if !hosting[node] {
+			return false
+		}
+	}
+	return true
 }

@@ -207,6 +207,7 @@ metadata:
 rules:
 - apiGroups: ["coordination.k8s.io"]
   resources: ["leases"]
+  resourceNames: ["kube-scheduler", "kube-controller-manager"]
   verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

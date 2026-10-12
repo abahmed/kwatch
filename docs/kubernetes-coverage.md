@@ -200,6 +200,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | NetworkPolicy | degraded | `RestrictiveNetworkPolicy` | `network` |
 | NetworkUnavailable | failing | `NetworkUnavailable` | `node` |
 | NoEndpoints | failing | `ServiceNoEndpoints` | `network`, `service_selector` |
+| Node.Condition | varies | `NodeCondition.` | `node_conditions` |
 | NotReady | varies | `ContainersNotReady`, `NodeNotReady`, `NotReady` | `node`, `pod` |
 | NotReady.Never | varies | `WorkloadNeverReady` | `workload_never_ready` |
 | NotReconciling | degraded | `CustomResourceFailure`, `GenerationLagging` | `custom`, `generic` |

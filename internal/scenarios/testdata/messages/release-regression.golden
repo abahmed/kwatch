@@ -9,7 +9,7 @@
 | kubectl rollout undo deployment/checkout -n shop --to-revision=13
 | ```
 10:23:00 healthy for 3m0s
-✅ checkout in shop (prod-eu-1) is healthy again. It was failing for 16 minutes.
+✅ checkout in shop (prod-eu-1) is healthy again. It was failing for 13 minutes.
 ✅ checkout in shop (prod-eu-1) is healthy again.
 | ✅ **checkout** in **shop** (**prod-eu-1**) is healthy again.
-| It was failing for 16 minutes.
+| It was failing for 13 minutes.

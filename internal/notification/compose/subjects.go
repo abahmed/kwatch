@@ -14,6 +14,8 @@ import (
 func leadSubject(f caseFacts) inventory.EntityID {
 	p := f.p
 	switch {
+	case !f.ok && p.State == incident.Resolved && !zeroID(p.Subject):
+		return p.Subject
 	case ownCause(p.Cause), blamedChange(f) != nil:
 		return affectedWorkload(f)
 	case p.Cause != nil && rootFinding(p, f.members) == nil:
@@ -94,3 +96,5 @@ func (f caseFacts) clusterTag() string {
 	}
 	return " (" + f.cluster + ")"
 }
+
+func zeroID(id inventory.EntityID) bool { return id == inventory.EntityID{} }

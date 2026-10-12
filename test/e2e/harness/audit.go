@@ -70,6 +70,18 @@ func (a *AuditReader) WaitFor(
 	}
 }
 
+// Matching returns the audit entries that match m as of now, without
+// waiting. A scenario uses it to show that something was not announced.
+func (a *AuditReader) Matching(
+	ctx context.Context, m AuditMatch,
+) ([]AuditEntry, error) {
+	entries, err := a.snapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return matchingEntries(entries, m), nil
+}
+
 func (a *AuditReader) snapshot(ctx context.Context) ([]AuditEntry, error) {
 	pods, err := a.environment.Client.CoreV1().Pods(
 		a.environment.Config.KwatchNamespace,

@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/delivery/providertest"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 )
 
 // serveSMTP answers one plain SMTP session and calls onQuit when the
@@ -74,7 +75,7 @@ func TestEmailAcceptedMessageIgnoresLateCancellation(t *testing.T) {
 	c := NewEmail(map[string]interface{}{
 		"from": "kwatch@example.test", "to": "ops@example.test",
 		"host": "127.0.0.1", "port": port, "tls": "none",
-	}, "dev")
+	}, "dev", transport.Dependencies{})
 	require.NotNil(t, c)
 
 	err := c.SendIncident(ctx, providertest.Announce())

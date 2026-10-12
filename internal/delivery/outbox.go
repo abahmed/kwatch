@@ -87,6 +87,11 @@ type outbox struct {
 	sweepEvery time.Duration
 	// drainGrace is outboxDrainGrace unless a test shortens it.
 	drainGrace time.Duration
+	// after returns a channel that fires after d; tests replace it so a
+	// failed write is retried without sleeping.
+	after func(d time.Duration) <-chan time.Time
+	// failedWrites counts consecutive failed batches, for the backoff.
+	failedWrites int
 
 	wake    chan struct{}
 	stop    chan struct{}
@@ -106,7 +111,24 @@ func newOutbox(store OutboxStore, now func() time.Time) *outbox {
 		wake:    make(chan struct{}, 1),
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
+		after:   time.After,
 	}
+}
+
+// outboxRetryBase and outboxRetryMax bound the wait before a failed batch
+// is written again.
+const (
+	outboxRetryBase = time.Second
+	outboxRetryMax  = 30 * time.Second
+)
+
+// retryDelay is the backoff after failedWrites consecutive failures.
+func (o *outbox) retryDelay() time.Duration {
+	delay := outboxRetryBase
+	for i := 1; i < o.failedWrites && delay < outboxRetryMax; i++ {
+		delay *= 2
+	}
+	return min(delay, outboxRetryMax)
 }
 
 func outboxID(seq uint64) string {
@@ -240,7 +262,7 @@ func (o *outbox) run(ctx context.Context) {
 	sweep := time.NewTicker(every)
 	defer sweep.Stop()
 	ended := ctx.Done()
-	var grace <-chan time.Time
+	var grace, retry <-chan time.Time
 	for {
 		select {
 		case <-ended:
@@ -255,7 +277,9 @@ func (o *outbox) run(ctx context.Context) {
 		case <-sweep.C:
 			o.sweepExpired(o.now())
 		case <-o.wake:
-			o.flush()
+			retry = o.flushOrRetry(retry)
+		case <-retry:
+			retry = o.flushOrRetry(nil)
 		}
 	}
 }
@@ -267,20 +291,35 @@ func (o *outbox) graceAfterContext() time.Duration {
 	return outboxDrainGrace
 }
 
-// flush writes every buffered change in one batch. A failed batch is put
-// back, so the next flush retries it.
-func (o *outbox) flush() {
+// flushOrRetry writes the buffer and, when the batch failed, arms a
+// backed-off retry unless one is already pending, so a failed write is not
+// left waiting for the next change or the age sweep.
+func (o *outbox) flushOrRetry(pending <-chan time.Time) <-chan time.Time {
+	if o.flush() {
+		o.failedWrites = 0
+		return pending
+	}
+	o.failedWrites++
+	if pending != nil {
+		return pending
+	}
+	return o.after(o.retryDelay())
+}
+
+// flush writes every buffered change in one batch and reports whether the
+// write failed. A failed batch is put back, so the next flush retries it.
+func (o *outbox) flush() (ok bool) {
 	o.mu.Lock()
 	if o.sealed {
 		o.mu.Unlock()
-		return
+		return true
 	}
 	puts, removes := o.puts, o.removes
 	o.puts = make(map[string]OutboxRecord)
 	o.removes = make(map[string]struct{})
 	o.mu.Unlock()
 	if len(puts) == 0 && len(removes) == 0 {
-		return
+		return true
 	}
 	putList := make([]OutboxRecord, 0, len(puts))
 	for _, record := range puts {
@@ -295,7 +334,9 @@ func (o *outbox) flush() {
 		klog.ErrorS(err, "write delivery outbox",
 			"component", "delivery", "operation", "outbox")
 		o.restoreBatch(puts, removes)
+		return false
 	}
+	return true
 }
 
 // restoreBatch puts a failed batch back unless newer changes replaced it.

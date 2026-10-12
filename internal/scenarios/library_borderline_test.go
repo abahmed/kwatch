@@ -34,43 +34,50 @@ func borderlinePolicyAndConfig() scenario {
 			Root: "networkpolicy/payments/restrict-egress", Tier: "notify",
 			MaxMessages: 2, MustNotBlame: []string{"node//n1", "node//n2"},
 		},
-		build: func(c *cluster) {
-			c.list(c.node("n1", "zone-a"), c.node("n2", "zone-a"))
-			cm := configMap(c, "payments", "api-config",
-				map[string]string{"log_format": "text"})
-			api := c.deployment("payments", "api",
-				"registry.example.com/pay:6", 2)
-			configTemplate(api, func(spec *corev1.PodSpec) {
-				spec.Containers[0].EnvFrom = []corev1.EnvFromSource{{
-					ConfigMapRef: &corev1.ConfigMapEnvSource{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: cm.Name,
-						},
-					},
-				}}
-			})
-			c.list(cm)
-			c.list(api.objects())
-			c.list(api.pod(0, "n1"), api.pod(1, "n2"))
-			c.after(time.Minute)
-			edited := last(c, cm)
-			edited.Data["log_format"] = "json"
-			c.update(edited)
-			c.after(10 * time.Second)
-			c.create(clusterEgressPolicy(c, api))
-			c.after(20 * time.Second)
-			message := "FATAL: failed to connect to `host=10.0.3.4 " +
-				"user=payments database=payments`: dial error (dial tcp " +
-				"10.0.3.4:5432: i/o timeout)"
-			for restarts := int32(1); restarts <= 5; restarts++ {
-				c.update(api.pod(0, "n1", crashLoop(1, "Error", message,
-					restarts)), api.pod(1, "n2", crashLoop(1, "Error",
-					message, restarts)))
-				api.setReady(0)
-				c.update(api.objects())
-				c.after(45 * time.Second)
-			}
-		},
+		build: func(c *cluster) { policyAndConfig(c, dialTimeoutMessage) },
+	}
+}
+
+// dialTimeoutMessage is the database timeout the api reports once the
+// policy is in place.
+const dialTimeoutMessage = "FATAL: failed to connect to `host=10.0.3.4 " +
+	"user=payments database=payments`: dial error (dial tcp " +
+	"10.0.3.4:5432: i/o timeout)"
+
+// policyAndConfig edits the api ConfigMap, creates an egress policy ten
+// seconds later and fails both replicas with message.
+func policyAndConfig(c *cluster, message string) {
+	c.list(c.node("n1", "zone-a"), c.node("n2", "zone-a"))
+	cm := configMap(c, "payments", "api-config",
+		map[string]string{"log_format": "text"})
+	api := c.deployment("payments", "api",
+		"registry.example.com/pay:6", 2)
+	configTemplate(api, func(spec *corev1.PodSpec) {
+		spec.Containers[0].EnvFrom = []corev1.EnvFromSource{{
+			ConfigMapRef: &corev1.ConfigMapEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: cm.Name,
+				},
+			},
+		}}
+	})
+	c.list(cm)
+	c.list(api.objects())
+	c.list(api.pod(0, "n1"), api.pod(1, "n2"))
+	c.after(time.Minute)
+	edited := last(c, cm)
+	edited.Data["log_format"] = "json"
+	c.update(edited)
+	c.after(10 * time.Second)
+	c.create(clusterEgressPolicy(c, api))
+	c.after(20 * time.Second)
+	for restarts := int32(1); restarts <= 5; restarts++ {
+		c.update(api.pod(0, "n1", crashLoop(1, "Error", message,
+			restarts)), api.pod(1, "n2", crashLoop(1, "Error",
+			message, restarts)))
+		api.setReady(0)
+		c.update(api.objects())
+		c.after(45 * time.Second)
 	}
 }
 

@@ -27,7 +27,8 @@ func etcdSize(
 	}
 	return []detection.Finding{{
 		Reason: reasons.EtcdDatabaseLarge, Severity: detection.Info,
-		Since: since,
+		Advisory: true,
+		Since:    since,
 		Summary: "etcd database is " + gibText(size) +
 			", close to its default 2 GiB limit",
 		Evidence: []detection.Evidence{
@@ -55,7 +56,7 @@ func manyStored(
 	resource := text(e, kube.AttrObjectsResource)
 	return []detection.Finding{{
 		Reason: reasons.StorageObjectsHigh, Severity: detection.Info,
-		Since: since,
+		Since: since, Advisory: true,
 		Summary: fmt.Sprintf("etcd stores %s %s objects",
 			thousandsText(count), resource),
 		Evidence: []detection.Evidence{

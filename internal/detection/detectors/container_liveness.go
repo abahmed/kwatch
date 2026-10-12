@@ -37,6 +37,12 @@ func livenessKilled(
 		return inventory.Note{}, false
 	}
 	note, ok := latestUnhealthy(ctx, e.ID, probeRecency)
+	if !ok {
+		// An event that names no container belongs to the pod.
+		if pod, found := owningPod(ctx, e); found {
+			note, ok = latestUnhealthy(ctx, pod.ID, probeRecency)
+		}
+	}
 	if !ok || !isLivenessNote(note) ||
 		note.At.Before(lastRestart.Add(-livenessNoteLead)) {
 		return inventory.Note{}, false

@@ -180,6 +180,7 @@ func (e *Engine) readers(
 			o.Entity, inventory.RoutesTo, inventory.Incoming)...)
 	}
 	out = append(out, e.preemptedPods(o.Entity)...)
+	out = append(out, e.jobRuns(o.Entity)...)
 	if o.Kind != inventory.Gone && !update.Appeared {
 		return out
 	}

@@ -126,7 +126,7 @@ func sumEndpoints(
 const DefaultDegradedBackends = 5 * time.Minute
 
 // Ingress detects Ingresses whose backend Service, TLS Secret or
-// IngressClass does not exist.
+// IngressClass does not exist, or that never get an address.
 type Ingress struct{}
 
 // Name implements detection.Detector.
@@ -141,7 +141,8 @@ func (Ingress) Kinds() []inventory.Kind {
 func (Ingress) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
-	out := ingressBackends(ctx, e)
+	out := loadBalancerWaiting(ctx, e)
+	out = append(out, ingressBackends(ctx, e)...)
 	out = append(out, ingressBackendPorts(ctx, e)...)
 	out = append(out, ingressTLSSecrets(ctx, e)...)
 	return append(out, ingressClass(ctx, e)...)

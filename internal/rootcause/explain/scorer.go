@@ -99,6 +99,7 @@ func (v *view) score(c *candidate) scored {
 			Text: firstNonEmpty(o.text, o.veto),
 		})
 	}
+	total = capCorrelated(&out, total)
 	sort.SliceStable(out.contributions, func(i, j int) bool {
 		return abs(out.contributions[i].Weight) >
 			abs(out.contributions[j].Weight)
@@ -197,4 +198,32 @@ func (v *view) hasUnknown(id inventory.EntityID) bool {
 		}
 	}
 	return false
+}
+
+// correlatedScorers are the scorers that all read one fact: something
+// changed or began before the failures. Their rewards stack without
+// being independent, so together they count at most CorrelatedCap.
+var correlatedScorers = map[string]bool{
+	"temporal": true, "change": true, "outcome": true,
+}
+
+// capCorrelated lowers the total by what the correlated rewards exceed
+// CorrelatedCap and says so in the trace.
+func capCorrelated(out *scored, total float64) float64 {
+	sum := 0.0
+	for _, c := range out.contributions {
+		if correlatedScorers[c.Scorer] && c.Weight > 0 {
+			sum += c.Weight
+		}
+	}
+	if sum <= CorrelatedCap+1e-9 {
+		return total
+	}
+	excess := sum - CorrelatedCap
+	out.contributions = append(out.contributions, Contribution{
+		Scorer: "correlated", Code: rootcause.ProofCorrelated,
+		Weight: -excess,
+		Text: "timing, change and outcome evidence is one fact; " +
+			"only part of it counts"})
+	return total - excess
 }

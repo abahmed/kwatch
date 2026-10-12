@@ -39,7 +39,7 @@ func TestGiteaIncidentLifecycleFollowsOneIssue(t *testing.T) {
 		if err := g.SendIncident(context.Background(), tc.Message); err != nil {
 			t.Fatalf("%s: %v", tc.Name, err)
 		}
-		requests := rec.Requests()
+		requests := withoutSearch(rec.Requests())
 		if len(requests) != len(want[tc.Name]) {
 			t.Fatalf("%s sent %d requests", tc.Name, len(requests))
 		}

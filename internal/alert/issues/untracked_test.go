@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/delivery/providertest"
 	"github.com/abahmed/kwatch/internal/metrics"
@@ -11,7 +12,7 @@ import (
 )
 
 func TestMapSkipsUpdatesForUntrackedIssue(t *testing.T) {
-	m := NewMap()
+	m := NewMap(time.Now)
 	tracker := &fakeTracker{unreadable: true}
 	ctx := context.Background()
 	counter := &metrics.DefaultRegistry().Delivery.TrackerUntracked
@@ -36,7 +37,7 @@ func TestMapSkipsUpdatesForUntrackedIssue(t *testing.T) {
 }
 
 func TestMapOpensNewIssueAfterUntrackedResolve(t *testing.T) {
-	m := NewMap()
+	m := NewMap(time.Now)
 	tracker := &fakeTracker{unreadable: true}
 	ctx := context.Background()
 	for _, msg := range []notification.Message{
@@ -53,7 +54,7 @@ func TestMapOpensNewIssueAfterUntrackedResolve(t *testing.T) {
 }
 
 func TestMapRestoreIgnoresUntrackedMarker(t *testing.T) {
-	m := NewMap()
+	m := NewMap(time.Now)
 	m.RestoreThreads(map[string]string{
 		providertest.Announce().ThreadKey(): untracked,
 	})

@@ -50,6 +50,7 @@ func TestDeprecatedAPIFarRemovalIsOneInfoFinding(t *testing.T) {
 
 	require.Len(t, got, 1)
 	assert.Equal(t, "DeprecatedAPIInUse", got[0].Reason)
+	assert.True(t, got[0].Advisory)
 	assert.Equal(t, detection.Info, got[0].Severity)
 	assert.Equal(t, "removed in 1.25", got[0].Summary)
 	assert.Contains(t, got[0].Evidence[0].Value, "Something still calls "+

@@ -14,7 +14,8 @@ func readinessFindings() []detection.Finding {
 	return []detection.Finding{
 		{Entity: inventory.CoreID(kube.KindDeprecatedAPI, "",
 			"batch/v1beta1 cronjobs"),
-			Reason: reasons.DeprecatedAPIInUse, Summary: "removed in 1.25"},
+			Reason: reasons.DeprecatedAPIInUse, Advisory: true,
+			Summary: "removed in 1.25"},
 		{Entity: inventory.CoreID(kube.KindValidatingHook, "",
 			"policy.example.com"), Reason: reasons.WebhookNoEndpoints,
 			Severity: detection.Critical},

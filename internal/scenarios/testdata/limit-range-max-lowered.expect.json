@@ -1,0 +1,12 @@
+{
+  "name": "limit-range-max-lowered",
+  "description": "A LimitRange is edited to cap containers at one CPU; a scale-up of a Deployment whose pods limit two is refused.",
+  "root": "limitrange/billing/container-bounds",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/billing/api",
+    "namespace//billing"
+  ]
+}

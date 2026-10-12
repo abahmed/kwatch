@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -35,6 +37,10 @@ type Opsgenie struct {
 	clusterName string
 	// wait pauses between update attempts; tests replace it.
 	wait func(ctx context.Context, d time.Duration) error
+
+	now func() time.Time
+	// missing records when a close first found no alert, per alias.
+	missing sync.Map
 }
 
 type ogPayload struct {
@@ -76,6 +82,7 @@ func NewOpsgenie(
 		url:         apiURL,
 		clusterName: clusterName,
 		wait:        sleepContext,
+		now:         clock.Require(dependencies.Clock).Now,
 	}
 }
 
@@ -121,13 +128,7 @@ func (o *Opsgenie) SendIncident(
 	}
 	alias := m.AlertKey(o.clusterName)
 	if m.Resolved() {
-		err := o.send(ctx, "POST", o.actionURL(alias, "close"), []byte(`{}`))
-		if transport.IsNotFound(err) {
-			// No such alert: it is already closed, or was never opened.
-			// Either way there is nothing left to close.
-			return nil
-		}
-		return err
+		return o.closeAlert(ctx, alias)
 	}
 	payload := o.buildPayload(m)
 	body, err := json.Marshal(payload)
@@ -170,6 +171,43 @@ func (o *Opsgenie) updateAlert(
 		}
 	}
 	return nil
+}
+
+// closeGrace is how long a close may keep finding no alert before it is
+// taken as already closed. Opsgenie creates alerts asynchronously, so a
+// close that follows the create at once (a flapping incident, or an outbox
+// replay of announce and resolve) can answer 404 for a short while.
+const closeGrace = 5 * time.Minute
+
+// closeAlert closes the alert. An early 404 is returned without the
+// permanent marker so delivery retries it with its own backoff; once the
+// alert has stayed unknown for closeGrace it is already closed, or was
+// never opened, and there is nothing left to close.
+func (o *Opsgenie) closeAlert(ctx context.Context, alias string) error {
+	err := o.send(ctx, "POST", o.actionURL(alias, "close"), []byte(`{}`))
+	if !transport.IsNotFound(err) {
+		o.missing.Delete(alias)
+		return err
+	}
+	now := o.now()
+	first, _ := o.missing.LoadOrStore(alias, now)
+	if now.Sub(first.(time.Time)) >= closeGrace {
+		o.missing.Delete(alias)
+		return nil
+	}
+	o.pruneMissing(now)
+	return errors.New(err.Error() + " (alert not visible yet, will retry)")
+}
+
+// pruneMissing forgets aliases nobody retried for twice the grace period,
+// so the record stays small.
+func (o *Opsgenie) pruneMissing(now time.Time) {
+	o.missing.Range(func(alias, first any) bool {
+		if now.Sub(first.(time.Time)) >= 2*closeGrace {
+			o.missing.Delete(alias)
+		}
+		return true
+	})
 }
 
 // updateAttempts and updateRetryDelay bound how long an update waits for

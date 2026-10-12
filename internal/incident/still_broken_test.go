@@ -21,7 +21,7 @@ func TestIncidentDoesNotResolveWhileItsWorkloadIsBroken(t *testing.T) {
 	deploy, pod := r.workloadRig(t, 2, 0, 5)
 	hpa := entity(kube.KindHPA, "api")
 	r.relate(hpa, inventory.Scales, deploy)
-	maxed := sig(hpa, reasons.HPAMaxedOut, detection.Warning)
+	maxed := sig(hpa, reasons.FailedGetResourceMetric, detection.Warning)
 	r.raise(at(0), maxed)
 	require.Len(t, r.tick(at(DefaultSettle)), 1)
 
@@ -48,7 +48,7 @@ func TestShortWorkloadWithoutFailingPodsDoesNotBlockResolve(t *testing.T) {
 	hpa := entity(kube.KindHPA, "api")
 	r.relate(hpa, inventory.Scales, deploy)
 	_ = pod
-	maxed := sig(hpa, reasons.HPAMaxedOut, detection.Warning)
+	maxed := sig(hpa, reasons.FailedGetResourceMetric, detection.Warning)
 	r.raise(at(0), maxed)
 	require.Len(t, r.tick(at(DefaultSettle)), 1)
 	r.clear(at(5*time.Minute), maxed)
@@ -92,7 +92,7 @@ func TestStillBrokenHoldIsBounded(t *testing.T) {
 	deploy, _ := r.workloadRig(t, 2, 0, 5)
 	hpa := entity(kube.KindHPA, "api")
 	r.relate(hpa, inventory.Scales, deploy)
-	maxed := sig(hpa, reasons.HPAMaxedOut, detection.Warning)
+	maxed := sig(hpa, reasons.FailedGetResourceMetric, detection.Warning)
 	r.raise(at(0), maxed)
 	require.Len(t, r.tick(at(DefaultSettle)), 1)
 

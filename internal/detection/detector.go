@@ -144,7 +144,7 @@ func (r *Registry) Evaluate(
 	var out, fallback []Finding
 	for _, group := range groups {
 		for _, detector := range group {
-			found := detect(ctx, detector, entity)
+			found := detectContained(ctx, detector, entity)
 			if _, ok := detector.(Fallback); ok {
 				fallback = append(fallback, found...)
 			} else {

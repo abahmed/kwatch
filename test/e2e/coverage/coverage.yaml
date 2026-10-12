@@ -236,8 +236,9 @@ entries:
   - id: security.admission-policy
     family: security
     lifecycle: policy
-    status: planned
+    status: covered
     environment: kind-extended
+    test: TestScenarioAdmissionPolicy
   - id: security.rbac
     family: security
     lifecycle: permission

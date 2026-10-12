@@ -134,6 +134,7 @@ func podAttributes(pod *corev1.Pod) map[string]inventory.Value {
 		attrs[AttrContainersStarted] = inventory.Time(started)
 	}
 	setPodConditions(attrs, pod)
+	setReadinessGates(attrs, pod)
 	if optional := optionalReferences(pod); optional != "" {
 		attrs[AttrOptionalRefs] = inventory.Text(optional)
 	}

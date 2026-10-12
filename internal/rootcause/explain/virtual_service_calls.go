@@ -54,6 +54,7 @@ type callMemo struct {
 	clusterCalls map[inventory.EntityID]clusterCall
 	blocks       map[blockKey]blockedCall
 	owners       map[inventory.EntityID][]inventory.EntityID
+	addressIndex *addressIndex
 }
 
 // callModes are the pseudo modes of what a failing pod's call depends
@@ -240,8 +241,15 @@ func (v *view) serviceIn(
 	if class == "" || dnsServerFailure.MatchString(lower) {
 		return clusterCall{}, false
 	}
+	ported := map[string]bool{}
 	for _, mention := range serviceMentions {
 		for _, m := range mention.FindAllStringSubmatch(lower, -1) {
+			if len(m) > 2 {
+				ported[m[1]] = true
+			} else if ported[m[1]] {
+				// The same host was read with its port already.
+				continue
+			}
 			call, ok := v.serviceNamed(m, pod)
 			if ok {
 				call.class, call.line = class, text
@@ -257,8 +265,18 @@ func (v *view) serviceIn(
 func (v *view) serviceNamed(
 	m []string, pod inventory.EntityID,
 ) (clusterCall, bool) {
+	if len(m) > 2 && m[2] == "53" {
+		return clusterCall{}, false
+	}
+	port := 0
+	if len(m) > 2 {
+		port, _ = strconv.Atoi(m[2])
+	}
+	if service, ok := v.serviceAtAddress(m[1], port, pod); ok {
+		return clusterCall{service: service, port: port}, true
+	}
 	ns, name, ok := kube.ClusterServiceName(m[1], pod.Namespace)
-	if !ok || (len(m) > 2 && m[2] == "53") {
+	if !ok {
 		return clusterCall{}, false
 	}
 	service := inventory.CoreID(kube.KindService, ns, name)
@@ -266,11 +284,7 @@ func (v *view) serviceNamed(
 	if !v.s.Model.Exists(service) {
 		return clusterCall{}, false
 	}
-	call := clusterCall{service: service}
-	if len(m) > 2 {
-		call.port, _ = strconv.Atoi(m[2])
-	}
-	return call, true
+	return clusterCall{service: service, port: port}, true
 }
 
 // calledServiceModes is the pseudo mode of a Service the effect's error

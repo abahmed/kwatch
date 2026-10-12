@@ -1,0 +1,11 @@
+{
+  "name": "pdb-overlap-eviction-refused",
+  "description": "Two disruption budgets select the same pods and the controller reports that evicting them fails.",
+  "root": "poddisruptionbudget/shop/cart-min",
+  "otherRoots": [
+    "poddisruptionbudget/shop/cart-max"
+  ],
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "10m0s"
+}

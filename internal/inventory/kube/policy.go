@@ -318,7 +318,9 @@ func (w WebhookSchema) Describe(obj any) (Description, bool) {
 }
 
 // Diff implements Schema.
-func (WebhookSchema) Diff(_, _ any) []inventory.FieldChange { return nil }
+func (WebhookSchema) Diff(old, new any) []inventory.FieldChange {
+	return webhookChanges(old, new)
+}
 
 func failurePolicy(policy *admissionv1.FailurePolicyType) string {
 	if policy == nil {

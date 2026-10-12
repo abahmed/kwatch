@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert/issues"
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 	"github.com/abahmed/kwatch/internal/ratelimit"
@@ -21,9 +23,11 @@ type Github struct {
 	issues *issues.Map
 	sender transport.Sender
 	url    string
-	token  string
-	owner  string
-	repo   string
+	// searchURL is the issue search endpoint of the same server.
+	searchURL string
+	token     string
+	owner     string
+	repo      string
 
 	clusterName string
 }
@@ -66,9 +70,10 @@ func NewGithub(
 	klog.InfoS("initializing github", "owner", owner, "repo", repo)
 
 	return &Github{
-		issues:      issues.NewMap(),
+		issues:      issues.NewMap(clock.Require(dependencies.Clock).Now),
 		sender:      transport.NewSender(dependencies),
 		url:         fmt.Sprintf("%s/repos/%s/%s/issues", server, owner, repo),
+		searchURL:   server + "/search/issues",
 		token:       token,
 		owner:       owner,
 		repo:        repo,
@@ -123,6 +128,34 @@ func (g *Github) Create(
 	return strconv.Itoa(created.Number), nil
 }
 
+// Find implements issues.Finder with the issue search API. Search is
+// eventually consistent, so an issue created a moment ago may be missed;
+// the lookup still removes the duplicates a lost create answer causes.
+func (g *Github) Find(ctx context.Context, marker string) (string, error) {
+	query := fmt.Sprintf("%s repo:%s/%s is:issue is:open in:body",
+		marker, g.owner, g.repo)
+	response, err := g.call(ctx, "GET",
+		g.searchURL+"?q="+url.QueryEscape(query), nil)
+	if err != nil {
+		return "", err
+	}
+	var found struct {
+		Items []struct {
+			Number int    `json:"number"`
+			Body   string `json:"body"`
+		} `json:"items"`
+	}
+	if json.Unmarshal(response, &found) != nil {
+		return "", nil
+	}
+	for _, item := range found.Items {
+		if strings.Contains(item.Body, marker) {
+			return strconv.Itoa(item.Number), nil
+		}
+	}
+	return "", nil
+}
+
 // Comment implements issues.Tracker.
 func (g *Github) Comment(ctx context.Context, id, body string) error {
 	_, err := g.call(ctx, "POST",
@@ -151,9 +184,12 @@ func (g *Github) Reopen(ctx context.Context, id string) error {
 func (g *Github) call(
 	ctx context.Context, method, url string, payload interface{},
 ) ([]byte, error) {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
+	var body []byte
+	if payload != nil {
+		var err error
+		if body, err = json.Marshal(payload); err != nil {
+			return nil, err
+		}
 	}
 	response, err := g.sender.Send(ctx, transport.Request{
 		Provider: g.Name(), Method: method, URL: url, Body: body,

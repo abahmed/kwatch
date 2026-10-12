@@ -122,23 +122,6 @@ func knownRig(
 	return r, pod
 }
 
-// An autoscaler at its maximum for 30 minutes goes from the digest to
-// a notification, once.
-func TestHPAMaxedOutLongEscalatesOnce(t *testing.T) {
-	r := newRig(t, Config{})
-	hpa := sig(entity(kube.KindHPA, "api"), reasons.HPAMaxedOut,
-		detection.Warning)
-	r.raise(at(0), hpa)
-	ds := r.tick(at(DefaultSettle))
-	require.Equal(t, Digest, ds[0].Incident.Tier)
-	wantNone(t, r.tick(at(HPAStuckAfter-time.Second)))
-
-	ds = r.tick(at(HPAStuckAfter))
-	wantAction(t, ds, Update, ReasonMaterialChange)
-	assert.Equal(t, Notify, ds[0].Incident.Tier)
-	wantNone(t, r.tick(at(HPAStuckAfter+time.Hour)))
-}
-
 // A known workload whose pods have not been ready since long before this
 // run started is no boot: the kubelet's own time says the failure did not
 // begin with the restart, so the boot window is not waited for again.

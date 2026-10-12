@@ -1,0 +1,11 @@
+10:05:15 settled
+🟠 ValidatingAdmissionPolicy require-team.example.com is failing (prod-eu-1) after the 10:03 change. The error mentions it. It was created shortly before. relay in mailing is affected as well. To see the object's state and events, run kubectl describe replicaset relay-d9d73841 -n mailing
+🟠 ValidatingAdmissionPolicy require-team.example.com is failing (prod-eu-1) after the 10:03 change.
+| 🟠 ValidatingAdmissionPolicy **require-team.example.com** is failing (**prod-eu-1**) after the 10:03 change.
+| The error mentions it.
+| It was created shortly before.
+| **relay** in **mailing** is affected as well.
+| To see the object's state and events, run
+| ```
+| kubectl describe replicaset relay-d9d73841 -n mailing
+| ```

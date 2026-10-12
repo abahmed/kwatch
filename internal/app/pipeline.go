@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection/detectors"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/kubeclient"
 	"github.com/abahmed/kwatch/internal/pipeline"
 	"github.com/abahmed/kwatch/internal/storage"
 )
@@ -64,7 +65,7 @@ func newPipelineSourceHealth(
 	health := newSourceHealth(sink, source).withReadiness(
 		func(ready bool) {
 			deps.readiness.setCurrent("pipeline", ready)
-		})
+		}).withHandlerPanics(kubeclient.HandlerPanics)
 	if deps.healthServer != nil {
 		health.withCoverage(coveragePublisher{
 			sink: deps.healthServer, typed: source, dynamic: dynamic,

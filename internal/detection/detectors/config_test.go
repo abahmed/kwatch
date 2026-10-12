@@ -50,6 +50,7 @@ func TestCertificateExpiring(t *testing.T) {
 
 	require.Len(t, findings, 1)
 	assert.Equal(t, reasons.TLSCertExpiringSoon, findings[0].Reason)
+	assert.True(t, findings[0].Advisory)
 	assert.Equal(t, detection.Warning, findings[0].Severity)
 	assert.Contains(t, findings[0].Summary, "expires in")
 }
@@ -142,11 +143,7 @@ func TestMissingSecret(t *testing.T) {
 		Targets:  []inventory.EntityID{secretID},
 	})
 
-	entity, _ := model.Entity(podID)
-	detector := Missing{}
-	ctx := testDetectorContext(model, now)
-
-	findings := detector.Detect(ctx, entity)
+	findings := missingFindings(model, now, podID)
 
 	require.Len(t, findings, 1)
 	assert.Equal(t, reasons.ProjectedSecretMissing, findings[0].Reason)
@@ -180,11 +177,7 @@ func TestMissingConfigMap(t *testing.T) {
 		Targets:  []inventory.EntityID{configID},
 	})
 
-	entity, _ := model.Entity(podID)
-	detector := Missing{}
-	ctx := testDetectorContext(model, now)
-
-	findings := detector.Detect(ctx, entity)
+	findings := missingFindings(model, now, podID)
 
 	require.Len(t, findings, 1)
 	assert.Equal(t, reasons.ProjectedConfigMapMissing, findings[0].Reason)
@@ -249,9 +242,10 @@ func TestMissingDowngradesARunningReadyPod(t *testing.T) {
 		kube.AttrReady: inventory.Bool(true),
 	})
 
-	got := Missing{}.Detect(testDetectorContext(m, t0), pod)
+	got := missingFindings(m, t0, pod.ID)
 
 	require.Len(t, got, 1)
-	assert.Equal(t, detection.Warning, got[0].Severity)
+	assert.Equal(t, detection.Info, got[0].Severity)
+	assert.True(t, got[0].Advisory)
 	assert.Contains(t, got[0].Summary, "next restart")
 }

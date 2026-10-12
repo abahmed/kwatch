@@ -39,7 +39,7 @@ func quietMembers(p *Incident) bool {
 // not within MaterialGap. Pages and held pages never fall.
 func (m *Manager) lowerable(p *Incident, now time.Time) bool {
 	if p.State != Open || p.Tier != Notify || isPage(p) ||
-		m.inGrace(p, now) || p.maxedLong || drainingRoot(p) ||
+		m.inGrace(p, now) || drainingRoot(p) ||
 		!(quietMembers(p) || idleWebhook(p)) ||
 		m.override.apply(p, Digest) >= p.Tier {
 		return false

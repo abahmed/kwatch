@@ -1,0 +1,8 @@
+{
+  "name": "csr-denied",
+  "description": "A certificate signing request for a node's client certificate is denied.",
+  "root": "certificatesigningrequest//csr-w7k2p",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "10m0s"
+}

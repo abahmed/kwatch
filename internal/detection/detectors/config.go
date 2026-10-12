@@ -47,8 +47,9 @@ func (Certificate) Detect(
 	ctx.RecheckAfter(remaining)
 	return []detection.Finding{{
 		Reason: reasons.TLSCertExpiringSoon, Severity: detection.Warning,
-		Since:   notAfter.Add(-DefaultCertificateWarning),
-		Summary: "TLS certificate expires in " + format.Duration(remaining),
+		Advisory: true,
+		Since:    notAfter.Add(-DefaultCertificateWarning),
+		Summary:  "TLS certificate expires in " + format.Duration(remaining),
 	}}
 }
 
@@ -124,8 +125,11 @@ func (Missing) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	// A finished pod never starts again and a deleting one is going
-	// away: what it referenced no longer matters.
-	if podFinished(e) || flag(e, kube.AttrDeleting) {
+	// away: what it referenced no longer matters. Namespace deletion
+	// removes Secrets before pods. An object applied next to its pod is
+	// absorbed by the incident's settling, not delayed here.
+	if podFinished(e) || flag(e, kube.AttrDeleting) ||
+		namespaceTerminating(ctx, e.ID.Namespace) {
 		return nil
 	}
 	running := text(e, kube.AttrPhase) == "Running" &&
@@ -157,12 +161,13 @@ func (Missing) Detect(
 		summary := "Pod references " + strings.Join(names, ", ") +
 			", which does not exist"
 		if running {
-			// It read the object when it started; only a restart fails.
-			severity = detection.Warning
+			// It read the object when it started; only a restart
+			// fails, so nothing has failed yet.
+			severity = detection.Info
 			summary += "; the pod runs now but will fail on its next restart"
 		}
 		out = append(out, detection.Finding{
-			Reason: reason, Severity: severity,
+			Reason: reason, Severity: severity, Advisory: running,
 			Summary: summary, Evidence: evidence,
 		})
 	}

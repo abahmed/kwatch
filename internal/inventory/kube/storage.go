@@ -157,8 +157,8 @@ func (StorageClassSchema) Describe(obj any) (Description, bool) {
 }
 
 // Diff implements Schema.
-func (StorageClassSchema) Diff(_, _ any) []inventory.FieldChange {
-	return nil
+func (StorageClassSchema) Diff(old, new any) []inventory.FieldChange {
+	return storageClassChanges(old, new)
 }
 
 // NamespaceSchema describes Namespaces.
@@ -179,8 +179,9 @@ func (NamespaceSchema) Describe(obj any) (Description, bool) {
 		return Description{}, false
 	}
 	attrs := map[string]inventory.Value{
-		AttrPhase:  inventory.Text(string(ns.Status.Phase)),
-		AttrLabels: inventory.Text(labelText(ns.Labels)),
+		AttrPhase:       inventory.Text(string(ns.Status.Phase)),
+		AttrPodSecurity: inventory.Text(podSecurityLabels(ns)),
+		AttrLabels:      inventory.Text(labelText(ns.Labels)),
 		AttrPodSecurityInvalid: inventory.Text(
 			podSecurityIncident(ns.Labels)),
 	}
@@ -202,7 +203,9 @@ func (NamespaceSchema) Describe(obj any) (Description, bool) {
 }
 
 // Diff implements Schema.
-func (NamespaceSchema) Diff(_, _ any) []inventory.FieldChange { return nil }
+func (NamespaceSchema) Diff(old, new any) []inventory.FieldChange {
+	return namespaceChanges(old, new)
+}
 
 func accessModes(modes []corev1.PersistentVolumeAccessMode) string {
 	out := ""

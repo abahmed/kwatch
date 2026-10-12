@@ -19,6 +19,13 @@ const DefaultNodeRemoval = 30 * time.Minute
 // finding; brief kubelet restarts recover faster than this.
 const DefaultNodeNotReady = 90 * time.Second
 
+// DefaultNodePressure is how long a pressure condition must hold before
+// it is a finding. The kubelet already keeps a pressure condition true
+// for its eviction transition period, so a short window only filters a
+// condition that flaps while a node starts its pods; a longer one would
+// delay the cause of evictions that are already happening.
+const DefaultNodePressure = time.Minute
+
 // nodePressure maps pressure conditions to their finding reasons.
 var nodePressure = []struct {
 	condition string
@@ -71,9 +78,12 @@ func (d Node) Detect(
 		out = append(out, s)
 	}
 	out = append(out, sandboxFindings(ctx, e)...)
+	out = append(out, nodeConditionFindings(ctx, e)...)
 	for _, p := range nodePressure {
 		status, _, since := condition(e, p.condition)
-		if status == "True" {
+		if status == "True" &&
+			sustained(ctx, "pressure/"+p.condition, since,
+				DefaultNodePressure) {
 			out = append(out, detection.Finding{
 				Reason: p.reason, Severity: detection.Critical,
 				Since: since, Summary: p.summary,

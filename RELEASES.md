@@ -4,6 +4,56 @@
 
 ### Highlights
 
+- **`/status` is opt-in.** The read-only `/status` view (open incidents with
+  object names, no authentication) is served only with
+  `healthCheck.statusEndpoint: true`; by default it answers 404. Read it with
+  `kubectl port-forward`. `KwatchConfig` cannot set it.
+- **Findings that predict are context, not alerts.** Certificates close to
+  expiry, quotas near their limit, version skew, a large etcd database and
+  deprecated API use appear only as evidence inside a real incident; kwatch
+  reports failures that happened. The same holds for container memory, CPU
+  or ephemeral storage close to a limit, node filesystems or inodes filling
+  up, many objects in etcd, a budget that selects nothing or overlaps
+  without a refused eviction, a Job running long, and a missing reference
+  of a pod that still runs. An Ingress without an address is reported only
+  with evidence: a controller warning, a lost address, or peers of its class
+  that have one.
+- **Messages are more exact.** The resolve duration counts until the failure
+  cleared, not the resolve hold. Deleted subjects say "was deleted" or "was
+  deleted with its namespace". A resolve names the subject that was
+  announced. A first deploy that never worked reads "has never worked since
+  it was created". A workload no longer "spreads" to its own pods and
+  containers. Containers that never started or were evicted get next steps.
+  Builds that are not releases no longer announce an upgrade.
+- **Delivery and providers.** Email uses the application CA bundle and
+  `insecureSkipTLSVerify`; the HTTP proxy does not apply to SMTP. An Opsgenie
+  close that gets 404 early is retried for up to five minutes. GitHub, Gitea,
+  GitLab and Jira search for their key marker before creating an issue
+  (ClickUp does not). Every provider has an explicit payload limit (Rocket.Chat
+  is now 4000, Teams workflow 28000). Matrix `M_LIMIT_EXCEEDED` is retried.
+  Failed outbox writes back off. A proxy URL that cannot be parsed disables
+  the proxy. Heartbeat and telemetry requests do not follow redirects.
+- **Permissions and RBAC.** The permission audit has a per-check timeout and
+  reports checks it could not run as unchecked. The kube-system Lease Role is
+  limited to `kube-scheduler` and `kube-controller-manager`.
+- **Detection and engine.** An informer handler panic degrades health as
+  `handler_panics`, and panics in detection and the pipeline are contained. Node
+  pressure must be sustained before it is a finding. The cold-start summary
+  waits for required sources. An OOM kill is told apart as by the node or by
+  the container's own limit. Missing references are ignored while a namespace
+  terminates. Name matching is word-bounded. New causes: missing
+  StorageClass, APIService without a Service, ephemeral-storage limit. A call
+  error naming an IP is resolved to its Service.
+- **Fewer confident wrong causes.** The error has to fit the cause: a
+  connection timeout points at a policy, Service or node, not at a
+  ConfigMap edit unless the edited key names an address, and a parse error
+  points at the configuration. A rollout and a configuration change that
+  split the same pods no longer both claim that split. A failing Job or
+  CronJob run can blame a ConfigMap or Secret changed up to a day before
+  it, but not before its last success. Two causes that stay close are both
+  named at "likely" instead of one at "high". A liveness probe that kills
+  a slow-starting app is stated as the cause.
+
 - **Node churn no longer flaps the digest.** A node-level DaemonSet pod
   (aws-node, kube-proxy, the CSI node agent) that fails on a node that is
   leaving, not ready, gone or younger than the boot window is that node's
@@ -975,6 +1025,47 @@
   `result="carried"` or `"not routed"` and its placement, so the audit log
   and the delivery log can be matched. Startup-summary and roll-up carriers
   are not logged one by one.
+
+- **kwatch reports what has failed, not what might.** A Job that runs long, a
+  deprecated API still in use, a disruption budget shared by pods that no one
+  tried to evict, a ConfigMap or Secret edited under pods that only read it at
+  start, a node whose disk or inodes are filling and a container near its
+  limits are advisory findings: no message of their own, evidence inside a real
+  incident, and a line in `/status` (deprecated APIs and version skew are
+  still listed there as upgrade blockers). An Ingress with no address is a
+  finding only when its controller warned, it lost an address it had, or its
+  peers of the same class are addressed and it is not.
+- **A cause that has not failed anything is silent.** A volume nearly full
+  (`VolumeUsageHigh`, `VolumeInodesHigh`), an autoscaler at its maximum
+  (`HPAMaxedOut`) and any other node condition that is True are still named
+  as the cause when pods fail, but an incident made only of them sends no
+  message, not even a digest line. It is announced, with the finding as the
+  cause, the moment a real failure joins it. The "autoscaler at its maximum
+  for 30 minutes" notification (`HPAStuckAfter`) is removed. An expiring
+  certificate is no longer a digest line; the expired one is still reported.
+- **Changes made to cluster-wide settings are found, and blamed.** A Pod
+  Security label on a namespace, a LimitRange, a webhook configuration, a
+  ServiceAccount's image pull Secrets and a StorageClass are recorded as
+  changes, and also when they were edited while kwatch was down. The creation
+  of a ConfigMap, Secret or ServiceAccount is never named as the change that
+  broke a pod.
+- **More built-in causes.** A pod refused by Pod Security Admission names the
+  namespace whose enforce label did it; one refused by a LimitRange names the
+  LimitRange; one denied by a ValidatingAdmissionPolicy names the policy. A
+  node that is struggling (slow kubelet pod relist, container runtime errors,
+  tasks stalled on CPU, memory or disk, evictions, or an extra node condition
+  that is True) is blamed for the pods that go unready, fail to start or
+  crash on it. A failing DaemonSet that runs on every node is a node agent
+  outside kube-system too. A throttling API server or slow reads explain
+  controllers that stopped reconciling and autoscalers that cannot scale. A
+  ResourceClaim no device could be allocated for is the cause of the pod that
+  waits for it.
+- **A scale is not a release.** A change of only the replica count reads "the
+  replicas were scaled from 2 to 5 at 10:04" or "the 10:04 scale-up", not
+  "the 10:04 release changed the replicas".
+- **Upgrade note.** The persisted downtime fingerprints now include the new
+  kinds above; the first start after the upgrade reports no change for them.
+  No state schema change and no reset.
 
 ### Breaking changes
 

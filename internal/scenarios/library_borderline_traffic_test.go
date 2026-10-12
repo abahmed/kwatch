@@ -65,18 +65,22 @@ func borderlineRouteAndGatewayEdit() scenario {
 }
 
 // borderlineTwoPolicies: a minute apart, the payments team adds a policy
-// allowing the api to reach the cache and another that denies all of
-// the api's egress except DNS. The api times out on its database. The
-// deny policy is the root; the allow policy is the plausible
-// alternative.
+// allowing the api to reach the cache and another that allows only DNS
+// egress. The api times out on its database. NetworkPolicies are
+// additive allow-lists: the first policy to select the pods for egress
+// isolates them, so the database port was denied from the first
+// policy on and the second only widened what is allowed (DNS). The
+// first policy is the root; the second, which the failures followed
+// more closely, is the plausible alternative.
 func borderlineTwoPolicies() scenario {
 	return scenario{
 		expect: expectation{
 			Name: "borderline-two-policies",
 			Description: "Two egress NetworkPolicies for the same pods " +
-				"land a minute apart, one allowing and one denying; the " +
-				"pods time out reaching their database.",
-			Root: "networkpolicy/payments/restrict-egress", Tier: "notify",
+				"land a minute apart; the first isolates their egress " +
+				"to the cache port, the second adds DNS; the pods time " +
+				"out reaching their database.",
+			Root: "networkpolicy/payments/allow-cache", Tier: "notify",
 			MaxMessages: 2,
 			MustNotBlame: []string{"node//n1", "node//n2",
 				"cluster-dns//cluster-dns"},

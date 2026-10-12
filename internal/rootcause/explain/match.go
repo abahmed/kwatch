@@ -13,6 +13,9 @@ type state struct {
 	modes []modeHealth
 	// text is the effect's error text, for signals.
 	text string
+	// verdicts are modes of the entity's containers that settle how
+	// the entity itself fails; a side with Unless refuses them.
+	verdicts []detection.Mode
 }
 
 // modeHealth is one mode an entity shows with the health it implies.
@@ -50,6 +53,16 @@ func (s Side) kindMatches(id inventory.EntityID) bool {
 	return s.Kind == kube.KindPod && id.Kind == kube.KindContainer
 }
 
+// refusedBy reports a verdict the side's Unless excludes.
+func (s Side) refusedBy(verdicts []detection.Mode) bool {
+	for _, verdict := range verdicts {
+		if anyModeMatches(s.Unless, verdict) {
+			return true
+		}
+	}
+	return false
+}
+
 // healthMatches reports whether health is one the side accepts.
 func (s Side) healthMatches(health detection.Health) bool {
 	if len(s.Health) == 0 {
@@ -66,7 +79,8 @@ func (s Side) healthMatches(health detection.Health) bool {
 // matches reports whether the side selects the state, and the first
 // mode that made it match.
 func (s Side) matches(st state) (modeHealth, bool) {
-	if !s.kindMatches(st.id) || !hasSignal(s.Signal, st.text) {
+	if !s.kindMatches(st.id) || !hasSignal(s.Signal, st.text) ||
+		s.refusedBy(st.verdicts) {
 		return modeHealth{}, false
 	}
 	for _, mh := range st.modes {

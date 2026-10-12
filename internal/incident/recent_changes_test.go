@@ -65,3 +65,27 @@ func TestRecentChangesIsBoundedInTimeAndCount(t *testing.T) {
 	assert.Equal(t, "d", got[0].Entity.Name)
 	assert.Nil(t, RecentChanges(nil, root, at(time.Hour)))
 }
+
+// A namespace's bootstrap objects are created with it; they are not
+// something a person changed.
+func TestRecentChangesIgnoresBootstrapCreations(t *testing.T) {
+	r := newRig(t, Config{})
+	root := entity(kube.KindDeployment, "api")
+	r.observe(root)
+	for _, id := range []inventory.EntityID{
+		entity(kube.KindConfigMap, "kube-root-ca.crt"),
+		entity(kube.KindAccount, "default"),
+		entity(kube.KindSecret, "token"),
+	} {
+		r.observe(id)
+		r.change(id, time.Minute, inventory.Change{Created: true})
+	}
+	svc := entity(kube.KindService, "api")
+	r.observe(svc)
+	r.change(svc, 2*time.Minute, inventory.Change{Created: true})
+
+	got := RecentChanges(r.model, root, at(5*time.Minute))
+
+	assert.Len(t, got, 1)
+	assert.Equal(t, svc, got[0].Entity)
+}

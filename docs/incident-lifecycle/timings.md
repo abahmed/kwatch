@@ -20,7 +20,6 @@ read the header there for how they relate.
 | `RemindEvery` / `ChronicRemindEvery` | 7d / 24h | still-open reminders |
 | `MaterialGap` | 10m | at most one material update per 10 minutes |
 | `FixWatch` | 10m | when to say a fix attempt did not work |
-| `HPAStuckAfter` | 30m | an autoscaler at its maximum this long is out of headroom |
 | `RecentWindow` | 30m | how far back "what changed" looks |
 | `DigestReportEvery` | 24h | at least one digest a day lists a periodic recurrence |
 | `DefaultRemember` | 7d | resolved incidents are kept this long ("3rd time this week") |

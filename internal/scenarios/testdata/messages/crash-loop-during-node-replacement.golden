@@ -12,10 +12,10 @@
 | kubectl logs warehouse-c1f19d7b-a -c app -n data --previous
 | ```
 10:10:00 healthy for 3m0s
-✅ warehouse in data (prod-eu-1) is healthy again. It was failing for nine minutes.
+✅ warehouse in data (prod-eu-1) is healthy again. It was failing for six minutes.
 ✅ warehouse in data (prod-eu-1) is healthy again.
 | ✅ **warehouse** in **data** (**prod-eu-1**) is healthy again.
-| It was failing for nine minutes.
+| It was failing for six minutes.
 10:02:15 settled
 🟠 warehouse in data (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. That is unusual for this workload: restarts 1442×/h vs a usual 0.3×/h; restarts 1442×/h vs a usual 0.3×/h. It fails with "FileNotFoundException: Could not load file or assembly 'Trella.Models.Common, Version=3.1.120.0'". This is the second time this week. Last time it recovered on its own. To read the output of the last crash, run kubectl logs warehouse-c1f19d7b-a -c app -n data --previous
 🟠 warehouse in data (prod-eu-1) keeps crashing.
@@ -32,10 +32,10 @@
 | kubectl logs warehouse-c1f19d7b-a -c app -n data --previous
 | ```
 10:10:00 healthy for 3m0s
-✅ warehouse in data (prod-eu-1) is healthy again. It was failing for nine minutes.
+✅ warehouse in data (prod-eu-1) is healthy again. It was failing for six minutes.
 ✅ warehouse in data (prod-eu-1) is healthy again.
 | ✅ **warehouse** in **data** (**prod-eu-1**) is healthy again.
-| It was failing for nine minutes.
+| It was failing for six minutes.
 10:32:15 digest
 🟡 kwatch (prod-eu-1) has one earlier one that resolved to report. Resolved: warehouse in data is healthy again. None of them is urgent; one that gets worse gets its own message.
 🟡 kwatch (prod-eu-1) has one earlier one that resolved to report.

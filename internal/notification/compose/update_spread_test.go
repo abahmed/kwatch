@@ -104,6 +104,10 @@ func TestReplicaCountsReadPlainly(t *testing.T) {
 	cases := map[string]string{
 		"0 of 1 replicas are ready": "now has no ready replicas (0 of 1)",
 		"1 of 3 replicas are ready": "now has 1 of 3 replicas ready",
+		"has not been ready for three minutes": "has not been ready " +
+			"for three minutes now",
+		"has been waiting for a volume for two minutes": "has been " +
+			"waiting for a volume for two minutes now",
 	}
 	for summary, want := range cases {
 		if got := nowState(predicate(id, summary)); got != want {

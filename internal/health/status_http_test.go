@@ -71,8 +71,20 @@ func TestStatusTextAndJSONAddCoverageGaps(t *testing.T) {
 	}
 }
 
+func TestStatusIsNotFoundByDefault(t *testing.T) {
+	h := NewHealthServerWithClock(
+		config.HealthCheck{Enabled: true, Port: 8060}, clock.RealClock{})
+	h.SetStatusSource(func() status.Report { return status.Report{} })
+	w := httptest.NewRecorder()
+	newServeMux(h).ServeHTTP(w, httptest.NewRequest("GET", "/status", nil))
+	if w.Code != 404 {
+		t.Fatalf("code = %d, want 404 while statusEndpoint is off", w.Code)
+	}
+}
+
 func TestStatusIsServedOnTheMux(t *testing.T) {
-	h := newStatusServer()
+	h := NewHealthServerWithClock(
+		config.HealthCheck{StatusEndpoint: true}, clock.RealClock{})
 	h.SetStatusSource(func() status.Report { return status.Report{} })
 	w := httptest.NewRecorder()
 	newServeMux(h).ServeHTTP(w, httptest.NewRequest("GET", "/status", nil))

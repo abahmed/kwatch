@@ -1,0 +1,11 @@
+{
+  "name": "claim-names-missing-storage-class",
+  "description": "A claim asks for a StorageClass that does not exist; provisioning fails and its pod stays pending.",
+  "root": "storageclass//nvme-archive",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//w2"
+  ],
+  "tail": "10m0s"
+}

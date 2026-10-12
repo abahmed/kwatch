@@ -95,6 +95,10 @@ type Side struct {
 	Modes []detection.Mode
 	// NotModes lists modes that never match, even if Modes does.
 	NotModes []detection.Mode
+	// Unless lists container verdicts that exclude an effect pod: a
+	// pod whose container was killed at its own limit is unready
+	// because of that kill, whatever else is wrong around it.
+	Unless []detection.Mode
 	// Health lists the health states that match; empty matches
 	// Failing and Degraded. Pseudo modes count as Failing.
 	Health []detection.Health

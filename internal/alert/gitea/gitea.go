@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert/issues"
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -68,7 +70,7 @@ func NewGitea(
 		"repo", repo)
 
 	return &Gitea{
-		issues: issues.NewMap(),
+		issues: issues.NewMap(clock.Require(dependencies.Clock).Now),
 		sender: transport.NewSender(dependencies),
 		url: fmt.Sprintf(
 			"%s/repos/%s/%s/issues",
@@ -130,6 +132,28 @@ func (g *Gitea) Create(
 	return strconv.Itoa(created.Number), nil
 }
 
+// Find implements issues.Finder with the repository issue search.
+func (g *Gitea) Find(ctx context.Context, marker string) (string, error) {
+	response, err := g.call(ctx, "GET",
+		g.url+"?state=open&type=issues&q="+url.QueryEscape(marker), nil)
+	if err != nil {
+		return "", err
+	}
+	var found []struct {
+		Number int    `json:"number"`
+		Body   string `json:"body"`
+	}
+	if json.Unmarshal(response, &found) != nil {
+		return "", nil
+	}
+	for _, item := range found {
+		if strings.Contains(item.Body, marker) {
+			return strconv.Itoa(item.Number), nil
+		}
+	}
+	return "", nil
+}
+
 // Comment implements issues.Tracker.
 func (g *Gitea) Comment(ctx context.Context, id, body string) error {
 	_, err := g.call(ctx, "POST",
@@ -158,9 +182,12 @@ func (g *Gitea) Reopen(ctx context.Context, id string) error {
 func (g *Gitea) call(
 	ctx context.Context, method, url string, payload interface{},
 ) ([]byte, error) {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
+	var body []byte
+	if payload != nil {
+		var err error
+		if body, err = json.Marshal(payload); err != nil {
+			return nil, err
+		}
 	}
 	return g.sender.Send(ctx, transport.Request{
 		Provider: g.Name(), Method: method, URL: url, Body: body,

@@ -14,6 +14,6 @@ Chain: postgres (10:09) → api (10:10) → service api (10:10).
 | ```
 | *Chain: postgres (10:09) → api (10:10) → service api (10:10).*
 10:13:05 material change
-🔴 postgres in shop (prod-eu-1) is spreading to pods postgres-1ff9723b-a, api-bee69fdb-a and api-bee69fdb-b: they have not been ready for three minutes.
-🔴 postgres in shop (prod-eu-1) is spreading to pods postgres-1ff9723b-a, api-bee69fdb-a and api-bee69fdb-b: they have not been ready for three minutes.
-| 🔴 **postgres** in **shop** (**prod-eu-1**) is spreading to pods **postgres-1ff9723b-a**, **api-bee69fdb-a** and api-bee69fdb-b: they have not been ready for three minutes.
+🔴 postgres in shop (prod-eu-1) is spreading to pods api-bee69fdb-a and api-bee69fdb-b: they have not been ready for three minutes.
+🔴 postgres in shop (prod-eu-1) is spreading to pods api-bee69fdb-a and api-bee69fdb-b: they have not been ready for three minutes.
+| 🔴 **postgres** in **shop** (**prod-eu-1**) is spreading to pods **api-bee69fdb-a** and api-bee69fdb-b: they have not been ready for three minutes.

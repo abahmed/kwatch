@@ -173,6 +173,11 @@ type HealthCheck struct {
 	// Port is the port to listen on for health check requests
 	// By default, this value is 8060
 	Port int `yaml:"port"`
+
+	// StatusEndpoint if set to true, serves the read-only /status
+	// diagnostics view (open incidents with object names) on the health
+	// port, without authentication. By default, this value is false.
+	StatusEndpoint bool `yaml:"statusEndpoint"`
 }
 
 // AlertRoute defines routing filters for a provider. An incident matching at

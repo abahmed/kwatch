@@ -2,7 +2,11 @@
 
 package scenarios
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/abahmed/kwatch/internal/inventory/kube"
+)
 
 func TestScenarioPodStartupFailureProfiles(t *testing.T) {
 	inNamespace(t, "pod.startup-additional", func(s *Scenario) {
@@ -19,7 +23,12 @@ func TestScenarioPodStartupFailureProfiles(t *testing.T) {
 func TestScenarioPodReadinessFailure(t *testing.T) {
 	inNamespace(t, "pod.not-ready", func(s *Scenario) {
 		s.CreatePod(podNeverReady("not-ready"))
-		s.ExpectIncident("not-ready", "ReadinessProbeFailed", 0)
+		// A fresh Kind cluster has nodes that joined together, which
+		// kwatch reads as a wake-up: readiness failures of pods it
+		// created wait until the wake-up is over (kube.WakeQuiet
+		// after the last node joined).
+		s.ExpectIncident("not-ready", "ReadinessProbeFailed",
+			kube.WakeQuiet)
 		s.ExpectKwatchHealthy()
 	})
 }

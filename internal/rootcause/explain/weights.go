@@ -212,3 +212,22 @@ const (
 	// MaxAlternatives bounds the alternatives kept per area.
 	MaxAlternatives = 5
 )
+
+// Error class: what kind of failure the errors describe, against what
+// kind of object the candidate is.
+const (
+	// ErrorClassWeight rewards a candidate of the kind an error class
+	// points at: a parse error and a changed config, a refused
+	// connection and a network policy.
+	ErrorClassWeight = 0.1
+	// ErrorClassPenalty punishes a candidate of a kind the class does
+	// not fit: a connection timeout is not what a changed config
+	// causes, unless the changed key names an address.
+	ErrorClassPenalty = 0.15
+)
+
+// CorrelatedCap is the most that the timing, change and outcome
+// scorers add together: they all read that something changed before
+// the failures began, so three agreeing readings are not three
+// independent proofs.
+const CorrelatedCap = 0.20

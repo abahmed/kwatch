@@ -15,7 +15,7 @@ Checked: both replicas fail, on 2 nodes.
 🟠 Rollout 15 of payments in shop (prod-eu-1) started at 10:06 (alice); watching.
 | 🟠 Rollout 15 of **payments** in **shop** (**prod-eu-1**) started at 10:06 (alice); watching.
 10:11:10 healthy for 3m0s
-✅ payments in shop (prod-eu-1) is healthy again. Fixed by rollout 15 (alice) after 5 minutes; it was failing for ten minutes.
+✅ payments in shop (prod-eu-1) is healthy again. Fixed by rollout 15 (alice) after 5 minutes; it was failing for seven minutes.
 ✅ payments in shop (prod-eu-1) is healthy again.
 | ✅ **payments** in **shop** (**prod-eu-1**) is healthy again.
-| Fixed by rollout 15 (alice) after 5 minutes; it was failing for ten minutes.
+| Fixed by rollout 15 (alice) after 5 minutes; it was failing for seven minutes.

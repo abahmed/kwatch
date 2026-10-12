@@ -11,6 +11,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/rootcause"
 )
@@ -107,11 +108,7 @@ func causeIdentity(p *Incident) string {
 	if c == nil {
 		return ""
 	}
-	change := ""
-	if c.Change != nil {
-		change = c.Change.Entity.String() + "@" + c.Change.Revision +
-			"@" + c.Change.At.UTC().Format(time.RFC3339)
-	}
+	change := changeIdentity(c.Change)
 	if c.Root == p.Root && change == "" {
 		return strings.Join(rootFindingReasons(c, p.Members), ",")
 	}
@@ -126,6 +123,21 @@ func causeIdentity(p *Incident) string {
 		c.Rule, c.Root.String(),
 		strings.Join(p.seenCauseFindings(c), ","), change,
 	}, ";")
+}
+
+// changeIdentity names a blamed change. One revision is one release: the
+// API server stamps its creation and the spec write that follows seconds
+// apart, and the reasoning moves the blame between those records. Only a
+// change without a revision is told apart by its time.
+func changeIdentity(change *inventory.Change) string {
+	if change == nil {
+		return ""
+	}
+	out := change.Entity.String() + "@" + change.Revision
+	if change.Revision == "" {
+		out += "@" + change.At.UTC().Format(time.RFC3339)
+	}
+	return out
 }
 
 // seenCauseFindings lists the cause's root findings and those it had

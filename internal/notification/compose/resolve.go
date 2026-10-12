@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/incident"
@@ -27,19 +28,45 @@ func resolveNote(f caseFacts) (string, []sentence) {
 	lead := sentence{part: partLead, text: capitalName(subject,
 		f.leadName(subject)+" "+resolution(f, subject)+".")}
 	lasted := "it was " + downWord(p) + " for " +
-		humanDuration(p.Resolved.Sub(p.Opened)) + resolvedCause(f, subject)
+		humanDuration(p.FailedFor()) + resolvedCause(f, subject)
 	detail := sentenceCase(lasted)
-	if fix := fixedByPhrase(f); fix != "" {
-		detail = fix + "; " + lasted + "."
-	} else if fix := fixPhrase(f); fix != "" {
+	if fix := resolveFixer(f, subject); fix != "" {
 		detail = fix + "; " + lasted + "."
 	}
 	return notification.MarkerResolved, []sentence{lead,
 		{part: partProof, text: detail}}
 }
 
+// resolveFixer names who fixed it; nobody fixed a deletion.
+func resolveFixer(f caseFacts, subject inventory.EntityID) string {
+	if removed(f, subject) {
+		return ""
+	}
+	if fix := fixedByPhrase(f); fix != "" {
+		return fix
+	}
+	return fixPhrase(f)
+}
+
+// removed reports that the subject ended because it was deleted, alone
+// or with its namespace, not because it recovered. A node has its own
+// wording.
+func removed(f caseFacts, subject inventory.EntityID) bool {
+	if subject.Kind == kube.KindNode {
+		return false
+	}
+	return slices.Contains(f.p.Removed, subject) ||
+		(f.p.NamespaceRemoved && subject.Namespace == f.p.Root.Namespace)
+}
+
 // resolution says how the subject ended: gone, replaced or healthy.
 func resolution(f caseFacts, subject inventory.EntityID) string {
+	switch {
+	case removed(f, subject) && f.p.NamespaceRemoved:
+		return "was deleted with its namespace"
+	case removed(f, subject):
+		return "was deleted"
+	}
 	if subject.Kind != kube.KindNode {
 		return "is healthy again"
 	}

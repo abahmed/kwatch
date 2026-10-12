@@ -41,6 +41,7 @@ func (e *Engine) restore() error {
 		"fingerprints", len(saved), "coldStart", startup.ColdStart,
 		"durationMs", took.Milliseconds())
 	if startup.ColdStart {
+		startup.HoldUntilSync()
 		// Restore runs before the loop starts, so it may write directly.
 		if err := e.deps.Store.SaveStartup(announce.StartupState{}); err != nil {
 			klog.ErrorS(err, "pipeline: save startup marker",

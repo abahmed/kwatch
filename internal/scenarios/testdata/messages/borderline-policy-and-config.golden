@@ -1,15 +1,15 @@
 10:02:45 settled
-🟠 api is failing in payments (prod-eu-1) after the 10:01 change to config map api-config. Key log_format changed. It fails with "FATAL: failed to connect to `host=10.0.3.4 user=payments database=payments`: dial error (dial tcp 10.0.3.4:5432: i/o…". To check the object the pods depend on, run kubectl get configmap api-config -n payments -o yaml
+🟠 api is failing in payments (prod-eu-1) after the 10:01 creation of network policy restrict-egress. It fails with "FATAL: failed to connect to `host=10.0.3.4 user=payments database=payments`: dial error (dial tcp 10.0.3.4:5432: i/o…". All of its dependents are failing. To read the output of the last crash, run kubectl logs api-3e0e8667-a -c app -n payments --previous
 Checked: both replicas fail, on 2 nodes.
-🟠 api is failing in payments (prod-eu-1) after the 10:01 change to config map api-config.
-| 🟠 **api** is failing in **payments** (**prod-eu-1**) after the 10:01 change to config map **api-config**.
-| Key log\_format changed.
+🟠 api is failing in payments (prod-eu-1) after the 10:01 creation of network policy restrict-egress.
+| 🟠 **api** is failing in **payments** (**prod-eu-1**) after the 10:01 creation of network policy **restrict-egress**.
 | It fails with
 | ```
 | FATAL: failed to connect to `host=10.0.3.4 user=payments database=payments`: dial error (dial tcp 10.0.3.4:5432: i/o…
 | ```
-| To check the object the pods depend on, run
+| All of its dependents are failing.
+| To read the output of the last crash, run
 | ```
-| kubectl get configmap api-config -n payments -o yaml
+| kubectl logs api-3e0e8667-a -c app -n payments --previous
 | ```
 | *Checked: both replicas fail, on 2 nodes.*

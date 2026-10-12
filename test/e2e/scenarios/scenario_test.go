@@ -188,6 +188,20 @@ func (s *Scenario) ExpectClusterIncident(
 	})
 }
 
+// ExpectNoIncident checks that Kwatch has announced nothing about resource
+// in this namespace so far. It proves a negative only after the scenario
+// has waited for the incident it does expect, which is announced later.
+func (s *Scenario) ExpectNoIncident(resource string) {
+	s.T.Helper()
+	entries, err := s.Env.Audit.Matching(s.Ctx, harness.AuditMatch{
+		Namespace: s.Namespace, Resource: resource,
+	})
+	s.Must(err)
+	if len(entries) > 0 {
+		s.T.Fatalf("unexpected incident for %s: %+v", resource, entries[0])
+	}
+}
+
 // ExpectResolved waits until the incident returned by ExpectIncident is
 // closed. Call it after the scenario has fixed the problem. The incident is
 // matched by ID because its root can change while it is open, for example

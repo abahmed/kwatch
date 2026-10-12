@@ -1,0 +1,11 @@
+{
+  "name": "coupled-config-rejected-value",
+  "description": "A new image and an edited ConfigMap arrive together and the pods stop on a YAML error from the loader.",
+  "root": "configmap/billing/ledger-config",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

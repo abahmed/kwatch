@@ -137,6 +137,7 @@ var neverStarted = map[string]bool{
 	reasons.ImageInspectError:    true,
 	reasons.CreateConfigError:    true,
 	reasons.CreateContainerError: true,
+	reasons.ErrImageNeverPull:    true,
 	reasons.ContainerCreating:    true,
 	reasons.PodInitializing:      true,
 	reasons.RegistryUnavailable:  true,
@@ -157,6 +158,9 @@ func symptomSteps(members []detection.Finding) []notification.Step {
 	if len(members) == 0 {
 		return nil
 	}
+	if steps := evictedSteps(members); steps != nil {
+		return steps
+	}
 	s := members[0]
 	id := s.Entity
 	if id.Kind == kube.KindContainer {
@@ -170,6 +174,27 @@ func symptomSteps(members []detection.Finding) []notification.Step {
 		Command: "kubectl describe " + string(id.Kind) + " " +
 			quote(id.Name) + namespaceFlag(id.Namespace),
 	}}
+}
+
+// evictedSteps reads an evicted pod's state: the kubelet removed it, so
+// its containers have no crash output and the pod's status says why.
+func evictedSteps(members []detection.Finding) []notification.Step {
+	for _, m := range members {
+		if m.Reason != reasons.Evicted && m.Mode != detection.ModeEvicted {
+			continue
+		}
+		pod := m.Entity
+		if pod.Kind == kube.KindContainer {
+			name, _ := splitContainer(pod.Name)
+			pod = inventory.CoreID(kube.KindPod, pod.Namespace, name)
+		}
+		return []notification.Step{{
+			Text: "See why the pod was evicted",
+			Command: "kubectl describe pod " + quote(pod.Name) +
+				namespaceFlag(pod.Namespace),
+		}}
+	}
+	return nil
 }
 
 func containerSteps(s detection.Finding) []notification.Step {

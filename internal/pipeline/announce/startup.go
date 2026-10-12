@@ -25,6 +25,10 @@ type Startup struct {
 	ColdStart bool
 	// Until is when the startup window closes; zero while none is open.
 	Until time.Time
+	// AwaitSync holds every announcement from a cold start until the
+	// sources synced, when OpenWindow starts the timed window. A slow
+	// initial list must not let existing failures out one by one.
+	AwaitSync bool
 	// Collected are the announcements the summary will list.
 	Collected []incident.Decision
 	// Summary is the last startup summary sent, with the open roll-ups.
@@ -42,10 +46,19 @@ type Startup struct {
 	CheckSummary bool
 }
 
-// OpenWindow starts collecting the startup summary at now, on a cold
-// start only.
+// HoldUntilSync starts collecting the startup summary on a cold start,
+// before the sources synced; the window has no end until OpenWindow.
+func (s *Startup) HoldUntilSync() {
+	if s.ColdStart && !s.Summary.Complete {
+		s.AwaitSync = true
+	}
+}
+
+// OpenWindow starts the timed startup window at now, when the sources
+// synced, on a cold start only. Once a summary was sent it stays closed.
 func (s *Startup) OpenWindow(now time.Time) {
-	if s.ColdStart {
+	s.AwaitSync = false
+	if s.ColdStart && !s.Summary.Complete {
 		s.Until = now.Add(StartupWindow)
 	}
 }
@@ -62,7 +75,7 @@ func (s *Startup) OpenWindow(now time.Time) {
 func (c *Collector) CollectStartup(
 	ctx context.Context, now time.Time, decisions []incident.Decision,
 ) ([]incident.Decision, bool) {
-	if c.Startup.Until.IsZero() {
+	if c.Startup.Until.IsZero() && !c.Startup.AwaitSync {
 		return c.holdWarm(ctx, now, decisions), false
 	}
 	var rest []incident.Decision
@@ -71,7 +84,7 @@ func (c *Collector) CollectStartup(
 			rest = append(rest, d)
 		}
 	}
-	if now.Before(c.Startup.Until) {
+	if c.Startup.AwaitSync || now.Before(c.Startup.Until) {
 		return rest, false
 	}
 	c.finishStartup(ctx, now)
@@ -123,8 +136,12 @@ func (c *Collector) holdStartup(
 
 // predatesSync reports whether p was already failing when the sources
 // synced: its earliest finding, or its opening, is not after that
-// moment. An incident without any known time is treated as old.
+// moment. Before the sync every incident is old, and so is one without
+// any known time.
 func (s *Startup) predatesSync(p incident.Incident) bool {
+	if s.AwaitSync {
+		return true
+	}
 	synced := s.Until.Add(-StartupWindow)
 	first := p.Opened
 	for _, member := range p.Members {

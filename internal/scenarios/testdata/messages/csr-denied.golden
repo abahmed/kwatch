@@ -1,0 +1,8 @@
+10:02:15 settled
+🟠 CertificateSigningRequest csr-w7k2p (prod-eu-1) is failing: certificate request was denied (AutoDenied). To see the object's state and events, run kubectl describe certificatesigningrequest csr-w7k2p
+🟠 CertificateSigningRequest csr-w7k2p (prod-eu-1) is failing: certificate request was denied (AutoDenied).
+| 🟠 CertificateSigningRequest **csr-w7k2p** (**prod-eu-1**) is failing: certificate request was denied (AutoDenied).
+| To see the object's state and events, run
+| ```
+| kubectl describe certificatesigningrequest csr-w7k2p
+| ```

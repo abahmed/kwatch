@@ -25,6 +25,9 @@ func leadText(f caseFacts) string {
 	if text, ok := firstRolloutLead(f); ok {
 		return text
 	}
+	if text, ok := createdLead(f); ok {
+		return text
+	}
 	if text, ok := rivalLead(f); ok {
 		return text
 	}
@@ -170,6 +173,12 @@ func changePhrase(change inventory.Change, workload inventory.EntityID,
 				fieldNoun(change.Fields[0].Path)
 		}
 		return at + " change"
+	}
+	if change.Created {
+		return at + " creation"
+	}
+	if scaleOnly(change) {
+		return at + " " + scaleNoun(change)
 	}
 	if image := releasedImage(change); image != "" {
 		return at + " release of " + image

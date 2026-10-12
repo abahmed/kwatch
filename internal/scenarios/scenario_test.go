@@ -47,6 +47,12 @@ type expectation struct {
 	BootHeld bool `json:"bootHeld,omitempty"`
 	// MaxMessages bounds every message the scenario may produce.
 	MaxMessages int `json:"maxMessages"`
+	// Unrelated lists roots of real incidents about other entities that
+	// may be heard before the failing workload's own (a node under
+	// pressure next to a bad rollout). They are not counted as the
+	// first incident when the first root is judged; their messages
+	// still count against the budget, and they may not be blamed.
+	Unrelated []string `json:"unrelated,omitempty"`
 	// MustNotBlame lists entities no stated cause may name.
 	MustNotBlame []string `json:"mustNotBlame,omitempty"`
 	// Quiet scenarios must produce no message at all.
@@ -113,6 +119,9 @@ func library() []scenario {
 		containerScenarios(), borderlineScenarios(),
 		borderlineTrafficScenarios(), storageScenarios(),
 		admissionScenarios(), webhookTLSScenarios(),
+		policyAdmissionScenarios(), nodeDegradedScenarios(),
+		nodeAgentScenarios(), apiThrottlingScenarios(),
+		builtinKindScenarios(),
 		loadBalancerScenarios(),
 		trafficBackendScenarios(),
 		autoscalingScenarios(), sharedErrorScenarios(),
@@ -128,6 +137,9 @@ func library() []scenario {
 		namespaceOutageScenarios(),
 		reopenScenarios(), jobLongScenarios(), scaleZeroScenarios(),
 		firstRolloutScenarios(), usageHistoryScenarios(), nodeOOMScenarios(),
+		oomVerdictScenarios(), namespaceDeleteScenarios(),
+		nameMatchScenarios(), namedMissingScenarios(),
+		addressCallScenarios(),
 		probeThrottleScenarios(),
 		kwatchViewScenarios(), escalationScenarios(),
 		crashReplaceScenarios(), metricsBlipScenarios(),

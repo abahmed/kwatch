@@ -15,7 +15,15 @@ sends one clear, correct, narrative message per real incident:
   changes the cluster is labelled as a change.
 
 There are no user commands or APIs. The only endpoints are `/healthz`,
-`/readyz`, `/availabilityz`, `/health`, and `/metrics`.
+`/readyz`, `/availabilityz`, `/health`, and `/metrics`, plus the read-only
+`/status` view when `healthCheck.statusEndpoint` is turned on (off by
+default).
+
+Kwatch reports failures that happened, never predictions. Findings about
+what could fail later (a certificate close to expiry, a quota near its
+limit, version skew, a large etcd database, deprecated API use) are
+advisory: they appear only as context inside a real incident and never
+produce a message of their own.
 
 ## Alert-quality gates
 
@@ -148,7 +156,8 @@ kwatch does not learn from user feedback. It reasons from the cluster:
 - LLMs.
 - Alertmanager integration.
 - Team routing and escalation.
-- Digests and quiet hours.
+- Periodic digest batching and quiet hours. Digest-tier findings exist and
+  are currently delivered as individual low-severity messages.
 - Ack and snooze inbox.
 - Shadow mode.
 - User APIs and CLI.

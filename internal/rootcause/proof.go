@@ -85,6 +85,14 @@ const (
 	// Fields holds the name of a very close existing Service, if any
 	// (missing call).
 	ProofMissingCall ProofCode = "missing-call"
+	// ProofErrorFits: the errors describe a kind of failure that the
+	// cause's kind of object produces (error class).
+	ProofErrorFits ProofCode = "error-fits"
+	// ProofErrorMisfits: the errors describe a kind of failure that the
+	// cause's kind of object does not produce.
+	ProofErrorMisfits ProofCode = "error-misfits"
+	// ProofCorrelated: evidence that reads one fact was capped.
+	ProofCorrelated ProofCode = "correlated"
 	// ProofDoubtfulData: some of the data is doubtful; Text says what
 	// (quality).
 	ProofDoubtfulData ProofCode = "doubtful-data"

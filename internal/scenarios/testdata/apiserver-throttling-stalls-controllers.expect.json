@@ -1,0 +1,13 @@
+{
+  "name": "apiserver-throttling-stalls-controllers",
+  "description": "The API server rejects requests with 429 for minutes; three edited Deployments are never reconciled while the controller manager is healthy.",
+  "root": "apiserver//kube-apiserver",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/cart",
+    "deployment/shop/search",
+    "deployment/billing/invoices",
+    "controller-manager//kube-controller-manager"
+  ]
+}

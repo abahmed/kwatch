@@ -123,9 +123,6 @@ const (
 	// FixWatch is how long after a fix attempt an incident may keep
 	// failing before the thread says so.
 	FixWatch = 10 * time.Minute
-	// HPAStuckAfter is how long an autoscaler may stay at its maximum
-	// before the digest is not enough: the workload is out of headroom.
-	HPAStuckAfter = 30 * time.Minute
 	// RecentWindow is how far back "what changed" looks.
 	RecentWindow = 30 * time.Minute
 )

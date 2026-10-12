@@ -31,6 +31,7 @@ app.insecureSkipTLSVerify|Security|Skip TLS verification for outbound providers;
 app.caBundlePath|Security|Path to a mounted PEM bundle for outbound provider TLS.|active|
 healthCheck.enabled|Operations|Expose the built-in health endpoint.|active|
 healthCheck.port|Operations|Port for health and optional diagnostic endpoints.|active|
+healthCheck.statusEndpoint|Security|Serve the read-only /status view (object names, no authentication) on the health port; off by default.|active|
 crd.enabled|Operations|Watch KwatchConfig and supported CRD status conditions; restart kwatch when configuration changes; enabled by the interactive installer after installing the CRD.|active|
 auditLog.enabled|Operations|Write structured incident lifecycle records to the configured audit sink.|active|
 auditLog.output|Operations|Audit output: stdout or a supported output sink.|active|

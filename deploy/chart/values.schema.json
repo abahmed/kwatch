@@ -360,6 +360,9 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 65535
+            },
+            "statusEndpoint": {
+              "type": "boolean"
             }
           }
         },

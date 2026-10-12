@@ -1,0 +1,8 @@
+{
+  "name": "short-name-quoted-in-error",
+  "description": "A ConfigMap named like a common word is edited just before crashes whose text quotes that name.",
+  "root": "configmap/pipeline/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "10m0s"
+}

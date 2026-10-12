@@ -1,6 +1,8 @@
 package scenarios
 
 import (
+	"slices"
+
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/replay"
 	"github.com/abahmed/kwatch/internal/scorecard"
@@ -32,8 +34,9 @@ func (v verdict) tierMatches() bool {
 
 func judge(e expectation, result replay.Result) verdict {
 	v := verdict{
-		expect: e, incidents: heardFirst(reportedIncidents(result)),
-		messages: len(result.Messages),
+		expect: e, messages: len(result.Messages),
+		incidents: withoutUnrelated(e,
+			heardFirst(reportedIncidents(result))),
 	}
 	if len(v.incidents) > 0 {
 		v.tier = v.incidents[0].Tier.String()
@@ -41,6 +44,22 @@ func judge(e expectation, result replay.Result) verdict {
 	v.cases = rootCases(e, v.incidents)
 	v.blamed = blamed(e, result)
 	return v
+}
+
+// withoutUnrelated drops the incidents the label names as real but
+// about other entities, so the first root is judged against the first
+// incident about the scenario's own subject.
+func withoutUnrelated(e expectation, incidents []reported) []reported {
+	if len(e.Unrelated) == 0 {
+		return incidents
+	}
+	out := make([]reported, 0, len(incidents))
+	for _, p := range incidents {
+		if !slices.Contains(e.Unrelated, p.Root) {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // heardFirst orders incidents as people hear them: notify and page

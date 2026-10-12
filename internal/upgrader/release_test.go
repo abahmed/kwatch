@@ -88,6 +88,7 @@ func TestCheckReleaseNewVersionNotifies(t *testing.T) {
 	)
 	u.githubClient = mockGithub
 	u.deliveryManager = notifier
+	u.current = "v0.10.5"
 
 	u.checkRelease(context.Background())
 
@@ -95,7 +96,7 @@ func TestCheckReleaseNewVersionNotifies(t *testing.T) {
 	notifier.AssertExpectations(t)
 	assert.True(t, notifier.NotifyCalled)
 	assert.Equal(t, "🟡 kwatch v99.0.0 is available; this cluster runs "+
-		version.Short()+".", notifier.NotifyLastMsg)
+		"v0.10.5.", notifier.NotifyLastMsg)
 }
 
 // The upgrade notice is one plain sentence with one leading marker and
@@ -132,6 +133,7 @@ func TestCheckReleaseNewVersionSetsState(t *testing.T) {
 	)
 	u.githubClient = mockGithub
 	u.deliveryManager = notifier
+	u.current = "v0.10.5"
 
 	u.checkRelease(context.Background())
 
@@ -156,6 +158,7 @@ func TestCheckReleaseWithoutPersistenceNotifiesOnce(t *testing.T) {
 		config:          &config.Upgrader{},
 		githubClient:    mockGithub,
 		deliveryManager: notifier,
+		current:         "v0.10.5",
 	}
 
 	u.checkRelease(context.Background())
@@ -184,5 +187,27 @@ func TestSkipUpgradeCheckUsesBooleanParsing(t *testing.T) {
 		u := NewUpgrader(&config.Upgrader{}, nil, nil, nil)
 
 		assert.Equal(t, want, u.config.DisableUpdateCheck, value)
+	}
+}
+
+// A build that is not a release (dev, e2e) must not announce a release,
+// which would be older than the build.
+func TestCheckReleaseFromNonReleaseBuildStaysQuiet(t *testing.T) {
+	for _, current := range []string{"e2e", "dev", ""} {
+		t.Run(current, func(t *testing.T) {
+			newVersion := "v0.10.5"
+			mockGithub := new(MockGitHubClient)
+			mockGithub.On("GetLatestRelease", mock.Anything, "abahmed",
+				"kwatch").Return(&github.RepositoryRelease{
+				TagName: &newVersion}, nil, nil)
+			notifier := new(recordingNotifier)
+			u := &Upgrader{config: &config.Upgrader{},
+				githubClient: mockGithub, deliveryManager: notifier,
+				current: current}
+
+			u.checkRelease(context.Background())
+
+			assert.False(t, notifier.NotifyCalled)
+		})
 	}
 }

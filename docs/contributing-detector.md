@@ -42,7 +42,11 @@ cannot read its metrics.
 5. **Choose its delivery tier.** The incident manager decides how loudly a
    finding is delivered in `internal/incident/policy.go`. A finding worth
    knowing but never worth an interruption on its own (like
-   `HPAMaxedOut`) belongs in `digestReasons`. A critical finding that should
+   `ServiceUnused`) belongs in `digestReasons`. A finding that fires before
+   anything failed but is a real cause of the failures that follow (like
+   `HPAMaxedOut` or `VolumeUsageHigh`) belongs in `causeOnlyReasons`: an
+   incident made only of such findings is silent, and is announced once a
+   real failure joins it. A critical finding that should
    page, not just notify, needs a rule in `pageRules` in
    `internal/incident/page_rules.go`. Everything else notifies by severity.
 6. **Test it.** Add a table test beside the detector, like

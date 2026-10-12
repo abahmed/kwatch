@@ -82,6 +82,7 @@ func ambiguousRolloutEveryNode() scenario {
 				"pressure; the new replicas fail on every node.",
 			Root: "deployment/shop/payments", Tier: "notify",
 			MaxMessages:  3,
+			Unrelated:    []string{"node//n1"},
 			MustNotBlame: []string{"node//n1"},
 		},
 		build: func(c *cluster) { ambiguousRollout(c, true) },

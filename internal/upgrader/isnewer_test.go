@@ -22,7 +22,10 @@ func TestIsNewer(t *testing.T) {
 			"v0.11.0-rc.4",
 			false,
 		}, // pre-release suffix ignored, same core
-		{"nightly", "v0.11.0", true}, // unparsable: differ means report
+		{"nightly", "v0.11.0", false}, // unparsable latest: not a release
+		{"v0.10.5", "e2e", false},     // development build: never announce
+		{"v0.10.5", "dev", false},
+		{"v0.10.5", "", false},
 		{"v0.11.0", "v0.11.0", false},
 	}
 	for _, c := range cases {

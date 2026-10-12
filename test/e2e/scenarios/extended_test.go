@@ -4,6 +4,9 @@ package scenarios
 
 import (
 	"testing"
+	"time"
+
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/abahmed/kwatch/internal/detection/detectors"
 	"github.com/abahmed/kwatch/test/e2e/harness"
@@ -49,5 +52,29 @@ func TestScenarioExtendedVolumeAttachment(t *testing.T) {
 		// reported, because a successful retry clears it.
 		s.ExpectClusterIncident(name, "VolumeAttachmentFailure",
 			detectors.DefaultCustomFailing)
+	})
+}
+
+// A policy that denies a workload's Pods leaves the ReplicaSet unable to
+// create them. Pods without the policy's label in the same namespace are
+// untouched, and lifting the policy lets the ReplicaSet recover.
+func TestScenarioAdmissionPolicy(t *testing.T) {
+	inExtendedNamespace(t, "security.admission-policy", func(s *Scenario) {
+		lift := s.DenyLabeledPods()
+
+		s.CreateReplicaSet(healthyReplicaSet("allowed"))
+		s.WaitForPods(2*time.Minute, func(pods []corev1.Pod) bool {
+			return podsOwnedBy(pods, "allowed")
+		})
+
+		s.CreateReplicaSet(deniedReplicaSet("denied"))
+		incident := s.ExpectIncident("denied", "ReplicaSetFailure", 0)
+		s.ExpectNoIncident("allowed")
+
+		lift()
+		s.WaitForPods(2*time.Minute, func(pods []corev1.Pod) bool {
+			return podsOwnedBy(pods, "denied")
+		})
+		s.ExpectResolved(incident)
 	})
 }

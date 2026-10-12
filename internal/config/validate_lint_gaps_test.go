@@ -24,6 +24,9 @@ func TestValidateRejectsStartupRefusedSettings(t *testing.T) {
 		{"health port too high", func(c *Config) {
 			c.HealthCheck = HealthCheck{Enabled: true, Port: 70000}
 		}, "healthCheck.port must be between 1 and 65535"},
+		{"status endpoint without health", func(c *Config) {
+			c.HealthCheck = HealthCheck{StatusEndpoint: true}
+		}, "healthCheck.statusEndpoint requires healthCheck.enabled"},
 		{"probe url scheme", func(c *Config) {
 			c.ActiveProbeMonitor = probeConfig()
 			c.ActiveProbeMonitor.HTTP = []HTTPProbeTarget{

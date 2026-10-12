@@ -57,32 +57,38 @@ func (s *Slack) sendAPIWithToken(
 	return wrapSlackRateLimit(err)
 }
 
-// permanentSlackErrors are Slack API error codes that describe the request or
-// the credentials, not the service. Retrying them cannot succeed. The
-// slack-go client surfaces these as errors whose text is the bare code.
-var permanentSlackErrors = map[string]bool{
-	"invalid_blocks":        true,
-	"invalid_blocks_format": true,
-	"invalid_arguments":     true,
-	"invalid_auth":          true,
-	"not_authed":            true,
-	"token_revoked":         true,
-	"token_expired":         true,
-	"account_inactive":      true,
-	"channel_not_found":     true,
-	"not_in_channel":        true,
-	"is_archived":           true,
-	"msg_too_long":          true,
-	"no_text":               true,
-	"missing_scope":         true,
-	// chat.update refusals: the root cannot be edited, now or later.
-	"cant_update_message": true,
-	"edit_window_closed":  true,
+// transientSlackErrors are the Slack API error codes that describe the
+// service, not the request: a later attempt can succeed. Every other bare
+// code (restricted_action, access_denied, missing_scope, ...) is permanent,
+// because Slack keeps refusing it and a retry would block the queue.
+var transientSlackErrors = map[string]bool{
+	"internal_error":      true,
+	"fatal_error":         true,
+	"service_unavailable": true,
+	"request_timeout":     true,
+	"ratelimited":         true,
+	"rate_limited":        true,
+}
+
+// isSlackAPICode reports whether text is a bare Slack error code. slack-go
+// surfaces API refusals this way; network and context errors carry spaces
+// or punctuation.
+func isSlackAPICode(text string) bool {
+	if text == "" {
+		return false
+	}
+	for _, r := range text {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_' {
+			return false
+		}
+	}
+	return true
 }
 
 // wrapSlackRateLimit classifies a Slack API error so retry logic can act on
-// it: rate limits carry their Retry-After, permanent rejections are marked so
-// they are not retried, everything else is left as a transient failure.
+// it: rate limits carry their Retry-After, Slack API codes are permanent
+// unless known to be transient, and anything that is not a Slack code
+// (network, context) is left as a transient failure.
 func wrapSlackRateLimit(err error) error {
 	if err == nil {
 		return nil
@@ -104,7 +110,8 @@ func wrapSlackRateLimit(err error) error {
 		}
 		return transport.ClassifyHTTPStatus(code, err)
 	}
-	if permanentSlackErrors[strings.TrimSpace(err.Error())] {
+	code := strings.TrimSpace(err.Error())
+	if isSlackAPICode(code) && !transientSlackErrors[code] {
 		return transport.Permanent(err)
 	}
 	return err
