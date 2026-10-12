@@ -63,6 +63,24 @@ func TestScoreSpecificityNeedsAWholeWord(t *testing.T) {
 	}
 }
 
+// A changed key that is a common word is not evidence: an error about a
+// "host" does not point at the object whose key is literally named host.
+func TestScoreSpecificityIgnoresGenericChangedKeys(t *testing.T) {
+	cm := inventory.CoreID(kube.KindConfigMap, "shop", "settings")
+	f := newFixture(t)
+	pods := f.workload("shop", "ingest", 2)
+	f.add(cm)
+	f.change(cm, 1, "data.host")
+	for _, pod := range pods {
+		f.relate(pod, inventory.References, cm)
+		f.fail(containerOf(pod), "CrashLoop", failingH, 2,
+			"dial tcp: no route to host")
+	}
+	if o := scoreOf(t, f, cm, scoreSpecificity); o.said() {
+		t.Fatalf("outcome = %+v, want nothing", o)
+	}
+}
+
 // An error that quotes a key that changed names the object.
 func TestScoreSpecificityRewardsAQuotedChangedKey(t *testing.T) {
 	cm := inventory.CoreID(kube.KindConfigMap, "shop", "ab")
