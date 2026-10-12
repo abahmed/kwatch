@@ -76,7 +76,7 @@ func TestCompactorTimelineCapEvictsOldestTimeline(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, 600, result.Evicted)
-	sizes, err := s.LogicalSize()
+	sizes, err := s.LogicalSize(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, 400*size, sizes[Timeline])
 	assert.Empty(t, collect(t, TimelineLog[string](s), "pod-0599",

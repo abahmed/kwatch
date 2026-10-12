@@ -23,7 +23,7 @@ func entrySize(t *testing.T, entity, v string) int64 {
 
 func logicalTotal(t *testing.T, s *Store) int64 {
 	t.Helper()
-	sizes, err := s.LogicalSize()
+	sizes, err := s.LogicalSize(context.Background())
 	require.NoError(t, err)
 	return total(sizes)
 }
@@ -210,4 +210,12 @@ func TestCompactorFencedStoreDeletesNothing(t *testing.T) {
 
 	assert.ErrorIs(t, err, ErrFenced)
 	assert.Len(t, collect(t, changes, "pod", time.Time{}, time.Time{}), 1)
+}
+
+// A nil context is rejected rather than replaced by an unbounded
+// background context, so a huge scan can always be cancelled.
+func TestLogicalSizeRejectsNilContext(t *testing.T) {
+	s := openClaimed(t, newFakeClock())
+	_, err := s.LogicalSize(nil)
+	require.ErrorIs(t, err, errMissingContext)
 }

@@ -85,7 +85,7 @@ func TestLegacyFileIsTrimmedAndRewrittenByTheFirstPass(t *testing.T) {
 	assert.True(t, result.Rewrote)
 	assert.Less(t, after, before/3)
 	assert.Equal(t, after, result.FileBytes)
-	sizes, err := s.LogicalSize()
+	sizes, err := s.LogicalSize(context.Background())
 	require.NoError(t, err)
 	assert.LessOrEqual(t, sizes[Timeline], DefaultTimelineCap)
 	kept := 0

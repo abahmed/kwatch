@@ -12,7 +12,7 @@ import (
 // jobs for Stop, which delivers them within its own deadline.
 func (m *Manager) Start(ctx context.Context) error {
 	if ctx == nil {
-		ctx = context.Background()
+		return errMissingContext
 	}
 	launched, err := m.launchWorkers(ctx)
 	if err != nil || !launched {
@@ -307,7 +307,7 @@ func waitForWorkers(
 // supervisor instead of hiding a context watcher inside the manager.
 func (m *Manager) Stop(ctx context.Context) error {
 	if ctx == nil {
-		ctx = context.Background()
+		return errMissingContext
 	}
 	return m.shutdownContext(ctx)
 }

@@ -171,7 +171,7 @@ func TestChurnKeepsStateFileBoundedByLiveContent(t *testing.T) {
 		c.step(pass)
 	}
 
-	sizes, err := s.LogicalSize()
+	sizes, err := s.LogicalSize(context.Background())
 	require.NoError(t, err)
 	perEntry := int64(churnTimelineEntryText + 80)
 	week := int64(7 * 24 * churnTimelinePerHour)
