@@ -27,6 +27,9 @@ const (
 	// missingMetricsService is the Service BreakMetricsAPI points the
 	// metrics APIService at; it is never created.
 	missingMetricsService = "kwatch-e2e-missing-metrics"
+	// missingStorageClass is the StorageClass a claim names but nobody
+	// creates.
+	missingStorageClass = "kwatch-e2e-missing"
 	// cleanupTimeout bounds the removal of cluster-wide objects.
 	cleanupTimeout = time.Minute
 )
@@ -60,7 +63,7 @@ func claimWithMissingStorageClass(
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 		Spec: corev1.PersistentVolumeClaimSpec{
-			StorageClassName: ptr("kwatch-e2e-missing"),
+			StorageClassName: ptr(missingStorageClass),
 			AccessModes: []corev1.PersistentVolumeAccessMode{
 				corev1.ReadWriteOnce,
 			},

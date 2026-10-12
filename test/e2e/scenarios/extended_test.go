@@ -69,7 +69,10 @@ func TestScenarioAdmissionPolicy(t *testing.T) {
 		})
 
 		s.CreateReplicaSet(deniedReplicaSet("denied"))
-		incident := s.ExpectIncident("denied", "ReplicaSetFailure", 0)
+		// The policy that refuses the Pods is the root; it has no
+		// namespace.
+		incident := s.ExpectClusterIncident(denyPolicyName(s.Namespace),
+			"ReplicaSetFailure", 0)
 		s.ExpectNoIncident("allowed")
 
 		lift()
