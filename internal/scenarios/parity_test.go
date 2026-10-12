@@ -18,7 +18,7 @@ func replayHiding(
 ) replay.Result {
 	t.Helper()
 	result, err := replay.Run(context.Background(), log,
-		newDependencies(hidden...), opts)
+		withSync(newDependencies(hidden...), opts), opts)
 	if err != nil {
 		t.Fatal(err)
 	}

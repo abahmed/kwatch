@@ -1,0 +1,8 @@
+{
+  "name": "oom-under-limit-on-pressured-node",
+  "description": "A container is OOM-killed far below its limit on a node under memory pressure; the node is the cause.",
+  "root": "node//n3",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "15m0s"
+}

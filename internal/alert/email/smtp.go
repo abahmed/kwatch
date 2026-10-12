@@ -32,6 +32,18 @@ type smtpConfig struct {
 	username string
 	password string
 	tlsMode  string
+	// tlsConfig is the application's TLS policy; nil means defaults.
+	tlsConfig *tls.Config
+}
+
+// clientTLS returns a TLS config for host, never sharing mutable state.
+func (c smtpConfig) clientTLS() *tls.Config {
+	cfg := &tls.Config{}
+	if c.tlsConfig != nil {
+		cfg = c.tlsConfig.Clone()
+	}
+	cfg.ServerName = c.host
+	return cfg
 }
 
 // sendSMTP keeps the SMTP connection tied to the caller's context. gomail's
@@ -60,7 +72,7 @@ func sendSMTP(
 	defer func() { _ = conn.Close() }()
 
 	if config.port == 465 && config.tlsMode != tlsNone {
-		tlsConn := tls.Client(conn, &tls.Config{ServerName: config.host})
+		tlsConn := tls.Client(conn, config.clientTLS())
 		if err := tlsConn.HandshakeContext(ctx); err != nil {
 			return err
 		}
@@ -76,7 +88,7 @@ func sendSMTP(
 		if ok, _ := client.Extension("STARTTLS"); !ok {
 			return fmt.Errorf("SMTP server does not support STARTTLS")
 		}
-		if err := client.StartTLS(&tls.Config{ServerName: config.host}); err != nil {
+		if err := client.StartTLS(config.clientTLS()); err != nil {
 			return smtpContextError(ctx, err)
 		}
 	}

@@ -41,6 +41,7 @@ func callHandler(component, resource string, callback func()) {
 	defer func() {
 		if recover() != nil {
 			metrics.DefaultRegistry().InformerHandlerPanics.Add(1)
+			handlerPanics.record(component, resource)
 			klog.ErrorS(nil, "informer event handler panic",
 				"component", component, "resource", resource)
 		}

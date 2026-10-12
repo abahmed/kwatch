@@ -196,6 +196,9 @@ podLabels: {}
 #
 # config.healthCheck.port sets the container port and the probe port. The
 # health server cannot be disabled: the probes need it.
+# config.healthCheck.statusEndpoint: true serves the read-only /status view
+# (open incidents with object names, no authentication) on that port; it is
+# off by default. Reach it with kubectl port-forward, never expose the port.
 #
 # Two outbound checks are on by default. Anonymous adoption telemetry
 # sends an installation ID and the kwatch version at most once every 7

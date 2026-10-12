@@ -28,6 +28,9 @@ const (
 	ReasonSyncFailed       = "cache_sync_failed"
 	ReasonSyncTimeout      = "cache_sync_timeout"
 	ReasonSyncPending      = "cache_sync_pending"
+	// ReasonHandlerPanics marks a resource whose event handler keeps
+	// panicking, so its objects are not reaching the model.
+	ReasonHandlerPanics = "handler_panics"
 	// ReasonDisabledByConfig marks a resource configuration turned off,
 	// such as Secrets with watch.secrets: false.
 	ReasonDisabledByConfig = "disabled_by_config"
@@ -191,6 +194,38 @@ func (s *Source) WaitForSync(ctx context.Context) bool {
 		case <-poll.C:
 		}
 	}
+}
+
+// WaitForRequiredSync blocks until every required kind synced. It
+// reports false only when ctx ends first. The startup hold ends here,
+// not at WaitForSync: optional kinds may take OptionalSyncTimeout, and
+// the first alerts of a cold start must not wait for them. A kind that
+// syncs later is compared with the saved state when it does.
+func (s *Source) WaitForRequiredSync(ctx context.Context) bool {
+	select {
+	case <-s.started:
+	case <-ctx.Done():
+		return false
+	}
+	poll := time.NewTicker(syncPollInterval)
+	defer poll.Stop()
+	for !s.requiredSynced() {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-poll.C:
+		}
+	}
+	return true
+}
+
+func (s *Source) requiredSynced() bool {
+	for _, w := range s.watches {
+		if w.required && !w.hasSynced() {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Source) syncComplete() bool {

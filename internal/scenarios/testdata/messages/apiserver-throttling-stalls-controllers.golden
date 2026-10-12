@@ -1,0 +1,8 @@
+10:05:15 settled
+🟠 The Kubernetes API (prod-eu-1) is rejecting 12.0 requests a second (priority level workload-low).
+🟠 The Kubernetes API (prod-eu-1) is rejecting 12.0 requests a second (priority level workload-low).
+| 🟠 The Kubernetes API (**prod-eu-1**) is rejecting 12.0 requests a second (priority level workload-low).
+10:06:00 material change
+🟠 The Kubernetes API (prod-eu-1) is spreading to invoices in billing and cart and search in shop: they are waiting for their controller to process the latest change.
+🟠 The Kubernetes API (prod-eu-1) is spreading to invoices in billing and cart and search in shop: they are waiting for their controller to process the latest change.
+| 🟠 The Kubernetes API (**prod-eu-1**) is spreading to **invoices** in **billing** and **cart** and **search** in shop: they are waiting for their controller to process the latest change.

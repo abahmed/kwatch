@@ -8,7 +8,7 @@
 | ```
 | kubectl logs api-aeb6377b-a -c app -n shop --previous
 | ```
-10:05:30 cause revised
+10:06:30 cause revised
 🟠 Cause changed: Node n3 (prod-eu-1) is low on memory. All of its dependents are failing.
 🟠 Cause changed: Node n3 (prod-eu-1) is low on memory.
 | 🟠 Cause changed: Node n3 (**prod-eu-1**) is low on memory.

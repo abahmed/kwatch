@@ -82,6 +82,9 @@ func (d Pod) detect(
 	case "Pending":
 		return d.pending(ctx, e)
 	case "Failed":
+		if ownerJobComplete(ctx, e) {
+			return nil
+		}
 		return failed(ctx, e)
 	case "Running":
 		return append(d.notReady(ctx, e), resizeFindings(ctx, e)...)
@@ -251,6 +254,7 @@ func (d Pod) notReady(
 	// A start inside what the workload's pods usually need is the
 	// usual start, a slow one that the digest can carry.
 	readyJudgement(ctx, e, since).apply(&s)
+	withReadinessGates(&s, e)
 	return []detection.Finding{s}
 }
 

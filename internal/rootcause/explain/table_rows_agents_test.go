@@ -53,3 +53,55 @@ func TestNodeAgentNeedsFailingAgentAndTwoWorkloads(t *testing.T) {
 		t.Fatalf("one workload beside the agent must not blame it: %+v", c)
 	}
 }
+
+// everyNodeAgentCase is agentCase with a DaemonSet of the monitoring
+// namespace; it has a pod on every node when onEveryNode is set.
+func everyNodeAgentCase(f *fixture, onEveryNode bool) (
+	agent, effect inventory.EntityID,
+) {
+	nodes := f.nodes("zone-a", "n1", "n2")
+	ds := inventory.CoreID(kube.KindDaemonSet, "monitoring", "shipper")
+	f.add(ds)
+	agent = inventory.CoreID(kube.KindPod, "monitoring", "shipper-n1")
+	f.add(agent)
+	f.relate(agent, inventory.OwnedBy, ds)
+	f.relate(agent, inventory.RunsOn, nodes[0])
+	f.fail(agent, detection.ModeCrashLoop, failingH, 1, "")
+	if onEveryNode {
+		other := inventory.CoreID(kube.KindPod, "monitoring", "shipper-n2")
+		f.add(other)
+		f.relate(other, inventory.OwnedBy, ds)
+		f.relate(other, inventory.RunsOn, nodes[1])
+	}
+	for _, name := range []string{"api", "web"} {
+		pods := f.workload("shop", name, 2, nodes...)
+		f.fail(pods[0], detection.ModeProbe, failingH, 2, "")
+		if effect.Name == "" {
+			effect = pods[0]
+		}
+	}
+	return agent, effect
+}
+
+// A DaemonSet outside kube-system that runs on every node is a node
+// agent too.
+func TestNodeAgentOutsideKubeSystemRunsOnEveryNode(t *testing.T) {
+	f := newFixture(t)
+	agent, effect := everyNodeAgentCase(f, true)
+
+	c := requireCause(t, f.explain(), effect, agent.String())
+	if c.Row != "node-agent-failing" {
+		t.Fatalf("row = %s, want node-agent-failing", c.Row)
+	}
+}
+
+// A DaemonSet that runs on some nodes only is a workload, not an agent
+// of the node: it is not blamed for its neighbours.
+func TestNodeAgentOutsideKubeSystemNeedsEveryNode(t *testing.T) {
+	f := newFixture(t)
+	agent, effect := everyNodeAgentCase(f, false)
+
+	if c, ok := f.explain().CauseOf(effect); ok && c.Root == agent {
+		t.Fatalf("a DaemonSet on one node blamed as an agent: %+v", c)
+	}
+}

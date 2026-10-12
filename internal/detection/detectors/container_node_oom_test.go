@@ -168,3 +168,18 @@ func TestOOMWithoutALimitDuringSystemOOMIsTheNodes(t *testing.T) {
 	assert.Equal(t, "n1", evidenceOf(f, detection.EvidenceKilledByNode))
 	assert.Empty(t, evidenceOf(f, detection.EvidenceMemoryLimit))
 }
+
+// The verdict is carried as a finer mode that the root-cause rows read.
+func TestOOMVerdictIsCarriedAsAFinerMode(t *testing.T) {
+	node := detectOOM(t, oomFixture{peak: 180 * mib, limit: 512 * mib,
+		pressure: true})
+	limit := detectOOM(t, oomFixture{peak: 500 * mib, limit: 512 * mib,
+		pressure: true})
+	unknown := detectOOM(t, oomFixture{peak: 180 * mib, limit: 512 * mib})
+
+	assert.Equal(t, detection.ModeOOMKilledNode, node.Mode)
+	assert.Equal(t, detection.ModeOOMKilledLimit, limit.Mode)
+	assert.True(t, node.Mode.Within(detection.ModeOOMKilled))
+	assert.Equal(t, detection.ModeOOMKilled,
+		detection.Classify(unknown).Mode, "no verdict stays plain")
+}

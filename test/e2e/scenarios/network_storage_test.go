@@ -24,11 +24,12 @@ func TestScenarioServiceWithoutEndpoints(t *testing.T) {
 func TestScenarioPersistentVolumeClaimFailure(t *testing.T) {
 	inNamespace(t, "storage.pvc-pv", func(s *Scenario) {
 		s.CreateVolumeClaim(claimWithMissingStorageClass("missing-volume"))
-		s.ExpectIncident("missing-volume", "PersistentVolumeClaimFailure",
+		// The claim names a StorageClass that does not exist, so the
+		// incident is rooted at that StorageClass.
+		s.ExpectClusterIncident(missingStorageClass, "ProvisioningFailed",
 			detectors.DefaultClaimPending)
 		s.ExpectRoot(harness.RootExpectation{
-			Root: "persistentvolumeclaim/" + s.Namespace +
-				"/missing-volume",
+			Root:        "storageclass//" + missingStorageClass,
 			Tier:        "notify",
 			MaxMessages: 2,
 		})

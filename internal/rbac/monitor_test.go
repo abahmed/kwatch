@@ -3,6 +3,7 @@ package rbac
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -107,4 +108,45 @@ func TestChecksScopeLeaseGetAndUpdateByName(t *testing.T) {
 		// RBAC cannot limit create by name.
 		"create": "",
 	}, names)
+}
+
+func TestSweepContinuesPastFailedReview(t *testing.T) {
+	client := reviewer(map[string]bool{"nodes": true}, nil)
+	failing := true
+	client.PrependReactor("create", "selfsubjectaccessreviews",
+		func(action k8stesting.Action) (bool, runtime.Object, error) {
+			created := action.(k8stesting.CreateAction).GetObject()
+			review := created.(*authorizationv1.SelfSubjectAccessReview)
+			attrs := review.Spec.ResourceAttributes
+			if failing && attrs != nil && attrs.Resource == "pods" {
+				return true, nil, errors.New("timeout")
+			}
+			return false, nil, nil
+		})
+	checks := Checks("kwatch", "kwatch-leader", true)
+	m := NewMonitor(client, checks, clock.RealClock{}, func(Status) {})
+
+	status := m.Sweep(context.Background())
+
+	assert.True(t, status.Unavailable)
+	require.NotEmpty(t, status.Unchecked)
+	for _, access := range status.Unchecked {
+		assert.True(t, strings.HasPrefix(access.Resource.Name, "pods"))
+	}
+	var nodes bool
+	for _, access := range status.Missing {
+		nodes = nodes || access.Resource.Name == "nodes"
+	}
+	assert.True(t, nodes, "checks after the failed one still ran")
+}
+
+func TestSweepReportsEveryCheckUnavailableWhenAPIFails(t *testing.T) {
+	checks := Checks("kwatch", "kwatch-leader", true)
+	m := NewMonitor(reviewer(nil, errors.New("down")), checks,
+		clock.RealClock{}, func(Status) {})
+
+	status := m.Sweep(context.Background())
+
+	assert.Len(t, status.Unchecked, len(checks))
+	assert.Empty(t, status.Missing)
 }

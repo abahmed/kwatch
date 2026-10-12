@@ -57,6 +57,7 @@ type Registry struct {
 	StorageFileBytes         atomic.Int64
 	StorageFreeBytes         atomic.Int64
 	Investigations           [4]atomic.Int64
+	Panics                   [len(panicStages)]atomic.Int64
 	AuditDropped             atomic.Int64
 	DecisionLag              LagHistogram
 	// Delivery holds the per-provider and outbox delivery metrics.
@@ -313,6 +314,7 @@ func (r *Registry) Describe(ch chan<- *prometheus.Desc) {
 	ch <- telemetryFailuresDesc
 	ch <- storageResetsDesc
 	ch <- investigationsDesc
+	ch <- panicsDesc
 	ch <- decisionLagDesc
 	r.describeDelivery(ch)
 	for _, m := range scalarMetrics {
@@ -347,6 +349,7 @@ func (r *Registry) Collect(ch chan<- prometheus.Metric) {
 			float64(r.Investigations[i].Load()), result,
 		)
 	}
+	r.collectPanics(ch)
 	ch <- r.DecisionLag.metric()
 	r.collectDelivery(ch)
 	for _, m := range scalarMetrics {

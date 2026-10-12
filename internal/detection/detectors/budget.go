@@ -72,7 +72,7 @@ func budgetSelectsNothing(
 	}
 	return detection.Finding{
 		Reason: reasons.PdbSelectsNothing, Severity: detection.Warning,
-		Since:   since,
+		Since: since, Advisory: true,
 		Summary: "Disruption budget selects no pods; it protects nothing",
 		Evidence: []detection.Evidence{{
 			Label: "selector", Value: text(e, kube.AttrSelector),
@@ -123,6 +123,9 @@ func budgetOverlap(
 	return detection.Finding{
 		Reason: reasons.PdbOverlap, Severity: detection.Warning,
 		Health: detection.Failing, Summary: summary, Evidence: evidence,
+		// Overlap alone predicts a failed eviction; the controller's
+		// own event says one was attempted.
+		Advisory: len(flagged) == 0,
 	}, true
 }
 

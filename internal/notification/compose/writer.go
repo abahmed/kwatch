@@ -48,6 +48,12 @@ func (w Writer) Write(d incident.Decision, now time.Time) notification.Message {
 	return w.write(d, now, nil)
 }
 
+// Subject is the entity the message of d leads with. The incident keeps
+// it from its announcement so the resolve names the same thing.
+func (w Writer) Subject(d incident.Decision) inventory.EntityID {
+	return leadSubject(gatherFacts(d, time.Time{}, nil))
+}
+
 // WriteResolvedBy composes a resolve whose fixing change is known, so
 // the note can say who fixed it and how.
 func (w Writer) WriteResolvedBy(

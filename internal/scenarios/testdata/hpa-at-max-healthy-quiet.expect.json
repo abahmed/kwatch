@@ -1,0 +1,7 @@
+{
+  "name": "hpa-at-max-healthy-quiet",
+  "description": "An HPA sits at maxReplicas and reports ScalingLimited while every replica stays ready; nothing has failed, so nothing is sent.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

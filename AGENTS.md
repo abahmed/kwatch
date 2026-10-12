@@ -149,8 +149,9 @@ architecture unless a change explicitly expands its scope.
   the current internal package layout constrain the target design. Persisted
   formats may change before the first stable release only with a schema
   version bump in `internal/storage`: a file with another version is deleted
-  and recreated (reset only: no migration, no backup), and the reset is
-  documented.
+  and recreated (reset only: no migration; the old file is kept once as
+  `state.db.corrupt` when it fits a quarter of the volume limit), and the
+  reset is documented.
 
 ### Naming standard
 
@@ -280,6 +281,8 @@ enforces, are in `docs/contributor-architecture.md`.
 | `internal/config` | Config loading/validation and the compiled `RuntimeConfig` |
 | `internal/config/crd` | KwatchConfig resource watcher, including late install and restart |
 | `internal/rbac` | Permission audit derived from `kube.SourceAccess`; reports capability gaps, never incidents |
+| `internal/status` | The read-only "what is wrong now" report behind the opt-in `/status` endpoint; reads state kwatch already holds, runs no loop |
+| `cmd/kwatch-scorecard` | Offline tool that prints the noise scorecard from an audit log |
 | `internal/audit`, `internal/scorecard` | Decision log and its offline noise scorecard |
 | `internal/replay`, `internal/scenarios` | Test tooling only: observation record/replay on a simulated clock, and the labelled scenario library with the scorecard gate; nothing in production imports them |
 | `internal/provider/catalog` | Dependency-free provider identities and metadata |
@@ -322,8 +325,11 @@ and calls `Stop`. Health must not create a second context-shutdown goroutine.
 Every background saver, watcher, ticker, source, and worker has an owner,
 cancellation path, bounded shutdown, and observable failure.
 
-The health server serves only `/healthz`, `/readyz`, `/availabilityz`,
-`/health` and `/metrics`. A component returning to the running state clears
+The health server serves `/healthz`, `/readyz`, `/availabilityz`,
+`/health` and `/metrics`, plus `/status` only when `healthCheck.statusEndpoint`
+is true (default false; otherwise 404). `/status` is the read-only view of
+open incidents with object names, built by `internal/status`; it has no
+authentication, so reach it with `kubectl port-forward`. A component returning to the running state clears
 its previous safe degradation reason.
 
 Providers and watchers use shared transport and application-owned clients. New
@@ -762,8 +768,8 @@ pre-rename `problem`, `reason`, `signal`, `knowledge`, `core`, `story`, and
 Verify imports with `rg` and run the architecture check after package changes.
 Persisted state changes require a schema version bump in
 `internal/storage`, the reset path (the old file is deleted and a fresh store
-is created; there is no migration and no backup), recovery guidance, and
-tests.
+is created and the old one is kept once as `state.db.corrupt`; there is no
+migration), recovery guidance, and tests.
 
 Do not use a broad mechanical rewrite to conceal domain changes. Preserve
 load-bearing behavior listed above unless a reviewed design change approves
@@ -781,8 +787,8 @@ compatibility constructors, setters, aliases, or wrappers merely to preserve
 old tests or historical call paths. Migrate callers to the canonical contract
 and remove the obsolete seam. Persisted data follows the reset-only policy:
 a schema version bump makes the next start delete the state file and begin
-fresh, with no migration and no backup, and the change is documented in the
-release notes.
+fresh, with no migration (the old file is kept once as `state.db.corrupt`),
+and the change is documented in the release notes.
 
 Before adding a long-running component, define its owner, required or optional
 classification, cancellation path, completion handle, startup and shutdown
@@ -869,10 +875,11 @@ internals, or arbitrary Kubernetes object data. Metrics use fixed bounded labels
 and transition-based counters.
 
 Persisted formats change only with a schema version bump. Any persisted change
-requires the reset path (no migration, no backup), recovery guidance, and
+requires the reset path (no migration), recovery guidance, and
 round-trip tests. A state file that bbolt cannot read, or that has another
-schema version (older or newer), is deleted and replaced by a fresh store;
-no backup is kept. The reset is counted in
+schema version (older or newer), is moved to `state.db.corrupt` (one copy,
+kept only when it fits a quarter of the volume limit, else deleted) and
+replaced by a fresh store. The reset is counted in
 `kwatch_storage_resets_total` by reason and shown on `/health` as
 `storage_reset` for the rest of the session.
 
@@ -963,7 +970,8 @@ discovery interface. Do not add a fallback to an unbounded, contextless
 discovery call; discovery must stop with its watcher generation.
 
 Kwatch exposes no user API. Liveness, readiness, availability, health, and
-metrics are the only HTTP endpoints; do not add diagnostics, debug, or
+metrics are the only HTTP endpoints, plus the opt-in read-only `/status`
+(`healthCheck.statusEndpoint`); do not add other diagnostics, debug, or
 action endpoints until the core reaches its production goals
 (`docs/production-goals.md`).
 

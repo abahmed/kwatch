@@ -15,7 +15,11 @@ takes incidents in `Settling` that have members and are not of the `Silent`
 tier. A `Silent` incident never speaks, so it never counts toward a burst.
 
 An incident that recovers while settling is dropped silently. A `Silent`
-incident is never announced. One exception: a page that reached the pagers
+incident is never announced until its tier rises: a drain inside its
+envelope, and an incident made only of cause-only findings (`causeOnly` in
+`policy.go`: a volume nearly full, an autoscaler at its maximum, an extra
+node condition) are silent, and speak when a real failure joins them, at the
+next tick, as a digest incident does when it is promoted. One exception: a page that reached the pagers
 while its announcement was held (startup summary, outage hold) and was then
 restored as `Settling` after a restart. If it recovers while settling, its
 pager alert would stay open for ever, so `settle` returns a `Resolve` with

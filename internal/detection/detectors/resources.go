@@ -56,6 +56,8 @@ func (ContainerResources) Detect(
 				used, _ := number(e, attr)
 				memoryJudgement(ctx, e, used).
 					keepUsual(pct < limitCritical).apply(&s)
+				// Nothing was killed yet: the OOM kill is the failure.
+				s.Advisory = true
 				out = append(out, s)
 			}
 		}
@@ -69,7 +71,10 @@ func (ContainerResources) Detect(
 			out = append(out, detection.Finding{
 				Reason:   reasons.ContainerCPUHigh,
 				Severity: detection.Warning, Since: since,
-				Summary: "CPU use is " + percentText(pct) + " of the limit",
+				// High use is not a failure; throttling is reported
+				// on its own.
+				Advisory: true,
+				Summary:  "CPU use is " + percentText(pct) + " of the limit",
 			})
 		}
 	}
@@ -135,11 +140,13 @@ func (PodStorage) Detect(
 	if pct < limitWarning {
 		return nil
 	}
-	return []detection.Finding{levelFinding(pct,
-		reasons.ContainerEphemeralStorageHigh,
+	s := levelFinding(pct, reasons.ContainerEphemeralStorageHigh,
 		valueSince(e, kube.AttrEphemeralUsed),
 		"Local storage use is "+percentText(pct)+" of the limit; the pod "+
-			"will be evicted when it is exceeded")}
+			"will be evicted when it is exceeded")
+	// The eviction is the failure; nothing has been evicted yet.
+	s.Advisory = true
+	return []detection.Finding{s}
 }
 
 // podEphemeralLimit sums the running containers' ephemeral limits. It is

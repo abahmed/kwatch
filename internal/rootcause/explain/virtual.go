@@ -35,6 +35,7 @@ func (v *view) virtualHops(id inventory.EntityID) []hop {
 		out = append(out, v.policyCallHops(id)...)
 		out = append(out, v.policyHops(id)...)
 		out = append(out, v.schedulingHops(id)...)
+		out = append(out, v.claimHops(id)...)
 		out = append(out, v.accessHops(id)...)
 		out = append(out, v.removedNodeHops(id)...)
 		out = append(out, v.helperHops(id)...)
@@ -49,6 +50,7 @@ func (v *view) virtualHops(id inventory.EntityID) []hop {
 	}
 	if v.hasMode(id, createModes) {
 		out = append(out, v.admitHops(id)...)
+		out = append(out, v.policyAdmitHops()...)
 	}
 	if id.Kind == kube.KindService {
 		out = append(out, v.backendHops(id)...)

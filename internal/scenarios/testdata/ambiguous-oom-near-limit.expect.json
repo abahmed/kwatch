@@ -4,5 +4,8 @@
   "root": "deployment/shop/api",
   "tier": "notify",
   "maxMessages": 3,
+  "unrelated": [
+    "node//n1"
+  ],
   "tail": "15m0s"
 }

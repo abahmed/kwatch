@@ -36,7 +36,7 @@ func deliver(t *testing.T, m *Map, tr Tracker, msg notification.Message) {
 
 func TestReopenInsideWindowCommentsOnTheSameIssue(t *testing.T) {
 	now := time.Unix(1000, 0)
-	m := NewMap()
+	m := NewMap(time.Now)
 	m.now = func() time.Time { return now }
 	tr := &reopenTracker{}
 
@@ -58,7 +58,7 @@ func TestReopenInsideWindowCommentsOnTheSameIssue(t *testing.T) {
 
 func TestReopenAfterWindowOpensANewIssue(t *testing.T) {
 	now := time.Unix(1000, 0)
-	m := NewMap()
+	m := NewMap(time.Now)
 	m.now = func() time.Time { return now }
 	tr := &fakeTracker{}
 
@@ -74,7 +74,7 @@ func TestReopenAfterWindowOpensANewIssue(t *testing.T) {
 }
 
 func TestTrackerThatCannotReopenForgetsAtResolve(t *testing.T) {
-	m := NewMap()
+	m := NewMap(time.Now)
 	tr := &fakeTracker{}
 	deliver(t, m, tr, providertest.Announce())
 	deliver(t, m, tr, resolveWithWindow(time.Hour))
@@ -96,7 +96,7 @@ func (c *conditionalTracker) CanReopen() bool { return c.can }
 
 func TestUnconfiguredReopenerForgetsAtResolve(t *testing.T) {
 	for _, can := range []bool{false, true} {
-		m := NewMap()
+		m := NewMap(time.Now)
 		tr := &conditionalTracker{can: can}
 		deliver(t, m, tr, providertest.Announce())
 		deliver(t, m, tr, resolveWithWindow(time.Hour))
@@ -109,7 +109,7 @@ func TestUnconfiguredReopenerForgetsAtResolve(t *testing.T) {
 }
 
 func TestResolveWithoutWindowForgetsAtOnce(t *testing.T) {
-	m := NewMap()
+	m := NewMap(time.Now)
 	tr := &fakeTracker{}
 	deliver(t, m, tr, providertest.Announce())
 	deliver(t, m, tr, providertest.Resolve())
@@ -120,7 +120,7 @@ func TestResolveWithoutWindowForgetsAtOnce(t *testing.T) {
 }
 
 func TestDuplicateResolveDoesNotCloseTwice(t *testing.T) {
-	m := NewMap()
+	m := NewMap(time.Now)
 	tr := &fakeTracker{}
 	deliver(t, m, tr, providertest.Announce())
 	deliver(t, m, tr, resolveWithWindow(time.Hour))
@@ -132,14 +132,14 @@ func TestDuplicateResolveDoesNotCloseTwice(t *testing.T) {
 
 func TestClosedIssueSurvivesARestartUntilTheWindowEnds(t *testing.T) {
 	now := time.Unix(1000, 0)
-	m := NewMap()
+	m := NewMap(time.Now)
 	m.now = func() time.Time { return now }
 	tr := &reopenTracker{}
 	deliver(t, m, tr, providertest.Announce())
 	deliver(t, m, tr, resolveWithWindow(10*time.Minute))
 	saved := m.SnapshotThreads()
 
-	restored := NewMap()
+	restored := NewMap(time.Now)
 	restored.now = func() time.Time { return now.Add(time.Minute) }
 	restored.RestoreThreads(saved)
 	deliver(t, restored, tr, providertest.Update())
@@ -147,7 +147,7 @@ func TestClosedIssueSurvivesARestartUntilTheWindowEnds(t *testing.T) {
 		t.Fatalf("last call = %s, want a comment on the old issue", got)
 	}
 
-	late := NewMap()
+	late := NewMap(time.Now)
 	late.now = func() time.Time { return now.Add(time.Hour) }
 	late.RestoreThreads(saved)
 	if len(late.SnapshotThreads()) != 0 {
@@ -175,7 +175,7 @@ func (v *vanishingTracker) Comment(
 }
 
 func TestCommentOnDeletedIssueOpensANewOne(t *testing.T) {
-	m := NewMap()
+	m := NewMap(time.Now)
 	tr := &vanishingTracker{}
 	deliver(t, m, tr, providertest.Announce())
 	deliver(t, m, tr, providertest.Update())
@@ -206,7 +206,7 @@ func TestUnclosedIssueKeepsItsMappingAtResolve(t *testing.T) {
 		{false, "create:t,close:42,comment:42"},
 		{true, "create:t,close:42,reopen:42,comment:42"},
 	} {
-		m := NewMap()
+		m := NewMap(time.Now)
 		tr := &openTracker{closes: tc.closes}
 		deliver(t, m, tr, providertest.Announce())
 		deliver(t, m, tr, resolveWithWindow(time.Hour))

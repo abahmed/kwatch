@@ -119,6 +119,19 @@ var (
 	errPingRejected = errors.New("heartbeat: ping rejected")
 )
 
+// maxDrainBytes caps the response body read so connections can be reused.
+const maxDrainBytes = 4 << 10
+
+// noRedirects copies the shared client so a redirect is reported as the
+// response; a heartbeat URL must not forward its token to another host.
+func noRedirects(client *http.Client) *http.Client {
+	c := *client
+	c.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	return &c
+}
+
 func (m *HeartbeatMonitor) ping(ctx context.Context) error {
 	if m.client == nil {
 		klog.ErrorS(nil, "heartbeat ping skipped: HTTP client is not configured")
@@ -134,13 +147,13 @@ func (m *HeartbeatMonitor) ping(ctx context.Context) error {
 			"heartbeat ping: failed to create request")
 		return errPingFailed
 	}
-	resp, err := m.client.Do(req)
+	resp, err := noRedirects(m.client).Do(req)
 	if err != nil {
 		// The URL often embeds a token; never log it.
 		klog.ErrorS(transport.RedactURLError(err), "heartbeat ping failed")
 		return errPingFailed
 	}
-	_, _ = io.Copy(io.Discard, resp.Body)
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxDrainBytes))
 	if err := resp.Body.Close(); err != nil {
 		klog.ErrorS(err, "heartbeat ping: failed to close response body")
 	}

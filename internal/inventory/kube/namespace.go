@@ -12,9 +12,14 @@ import (
 
 // Attribute names for namespace policy checks.
 const (
-	AttrPodSecurityInvalid                = "pod.security.invalid"
-	AttrLimitsInvalid                     = "limits.invalid"
-	KindLimitRange         inventory.Kind = "limitrange"
+	AttrPodSecurityInvalid = "pod.security.invalid"
+	AttrLimitsInvalid      = "limits.invalid"
+	// AttrPodSecurity is the namespace's Pod Security labels, and
+	// AttrLimitsDigest a digest of a LimitRange's bounds. Downtime
+	// fingerprints read them.
+	AttrPodSecurity                 = "pod.security"
+	AttrLimitsDigest                = "limits.digest"
+	KindLimitRange   inventory.Kind = "limitrange"
 )
 
 // podSecurityIncident validates Pod Security Admission labels; an invalid
@@ -61,13 +66,17 @@ func (LimitRangeSchema) Describe(obj any) (Description, bool) {
 		ID: objectID(KindLimitRange, lr), UID: string(lr.UID),
 		Attributes: map[string]inventory.Value{
 			AttrLimitsInvalid: inventory.Text(limitRangeIncident(lr)),
+			AttrLimitsDigest: inventory.Text(
+				digest([]byte(limitRangeText(lr)))),
 		},
 		Relations: rel,
 	}, true
 }
 
 // Diff implements Schema.
-func (LimitRangeSchema) Diff(_, _ any) []inventory.FieldChange { return nil }
+func (LimitRangeSchema) Diff(old, new any) []inventory.FieldChange {
+	return limitRangeChanges(old, new)
+}
 
 // limitRangeIncident finds contradictory constraints that make every pod in
 // the namespace fail admission.

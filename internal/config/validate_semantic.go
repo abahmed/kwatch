@@ -62,6 +62,11 @@ func validateLifecycleSettings(cfg *Config) []error {
 				"healthCheck.enabled is true",
 		))
 	}
+	if cfg.HealthCheck.StatusEndpoint && !cfg.HealthCheck.Enabled {
+		errs = append(errs, errors.New(
+			"healthCheck.statusEndpoint requires healthCheck.enabled",
+		))
+	}
 	if cfg.AuditLog.Enabled && cfg.AuditLog.Output == "" {
 		errs = append(
 			errs,

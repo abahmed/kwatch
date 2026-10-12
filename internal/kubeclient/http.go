@@ -46,6 +46,9 @@ func NewHTTPClient(cfg config.ApplicationRuntime) *http.Client {
 			// The parse error quotes the whole URL, which may carry proxy
 			// credentials, so only a fixed message is logged.
 			klog.ErrorS(nil, "invalid outbound proxy URL; proxy disabled")
+			// Disabled means disabled: do not fall back to the
+			// proxy environment variables.
+			transport.Proxy = nil
 		} else {
 			transport.Proxy = http.ProxyURL(p)
 		}

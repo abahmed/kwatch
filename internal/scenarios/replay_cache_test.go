@@ -48,8 +48,9 @@ func replayScenario(
 		if entry.err != nil {
 			return
 		}
+		opts := entry.expect.options(entry.log.Start)
 		entry.result, entry.err = replay.Run(context.Background(),
-			entry.log, newDependencies(), entry.expect.options(entry.log.Start))
+			entry.log, withSync(newDependencies(), opts), opts)
 	})
 	if entry.err != nil {
 		t.Fatal(entry.err)

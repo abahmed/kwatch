@@ -110,6 +110,8 @@ func worthNaming(change inventory.Change, now time.Time) bool {
 	case change.Entity.Kind == kube.KindNode:
 		// A node joining or leaving is capacity, not an edit.
 		return len(change.Fields) > 0 && !change.Created && !change.Deleted
+	case change.Created && kube.HarmlessToCreate(change.Entity.Kind):
+		return false
 	case change.Created || change.Deleted:
 		return true
 	}

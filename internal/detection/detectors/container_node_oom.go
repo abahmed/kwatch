@@ -54,6 +54,7 @@ func markNodeOOM(
 	limit, limited := number(e, kube.AttrMemoryLimit)
 	limited = limited && limit > 0
 	if limited && usedKnown && used >= ownLimitShare*limit {
+		f.Mode = detection.ModeOOMKilledLimit
 		return
 	}
 	under := !limited || usedKnown
@@ -61,6 +62,7 @@ func markNodeOOM(
 		!(under && nodeShortOnMemory(node)) {
 		return
 	}
+	f.Mode = detection.ModeOOMKilledNode
 	f.Summary = containerRole(e) + " was OOM-killed by the node and " +
 		"not by its own limit"
 	f.Evidence = append(f.Evidence, detection.Evidence{

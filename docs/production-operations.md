@@ -107,10 +107,12 @@ worker counts remain the authority for memory and delivery capacity.
 
 Use the published image digest for production deployments. Version tags and
 chart versions must refer to the same release. Kwatch serves only `/healthz`,
-`/readyz`, `/availabilityz`, `/health`, `/status`, and `/metrics`; it has no
-diagnostic or profiling endpoints to protect. `/status` is read-only and lists
+`/readyz`, `/availabilityz`, `/health`, and `/metrics`; `/status` is added
+only when `healthCheck.statusEndpoint` is true (default false, 404 otherwise).
+It has no profiling endpoints to protect. `/status` is read-only and lists
 object names (workloads, nodes, budgets, webhooks) to anyone who can reach the
-health port, so do not expose that port outside the cluster.
+health port, so do not expose that port outside the cluster; read it with
+`kubectl port-forward`.
 
 The Helm chart includes an opt-in NetworkPolicy template. With its default
 `networkPolicy.allowDefaults: true` it admits the health port (kubelet probes
@@ -215,6 +217,7 @@ restart the Deployment yourself after editing it.
   lifecycle and is used for Deployment rollouts. It is not monitoring
   readiness.
 - `/health` reports optional monitor degradation and safe reason codes.
+- `/status` (opt-in, `healthCheck.statusEndpoint`) shows open incidents.
 
 `/health` reasons come from a fixed vocabulary; raw errors stay in the logs.
 The ones an operator meets most often are `component_stalled` (a required

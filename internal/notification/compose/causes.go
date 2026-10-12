@@ -27,6 +27,7 @@ type causeWording struct {
 // (rootcause.CauseRecord.Rule). A row missing here reads "is failing".
 var causeWords = map[string]causeWording{
 	"apiserver-unavailable":           {words: "is not answering"},
+	"apiservice-backend-missing":      {words: "does not exist"},
 	"apiservice-unavailable":          {words: "is unavailable"},
 	"backends-failing":                {words: "has no healthy backends"},
 	"called-service-backend-changed":  {words: "changed shortly before"},
@@ -48,10 +49,15 @@ var causeWords = map[string]causeWording{
 	"controller-failing": {
 		words: "is down, so nothing processes their changes"},
 	"custom-resource-failing": {words: "is not ready"},
-	"etcd-unavailable":        {words: "is unavailable"},
+	"ephemeral-limit-too-low": {own: true,
+		words: "its ephemeral-storage limit is too low for normal use"},
+	"etcd-unavailable": {words: "is unavailable"},
 	"finalizer-handler-stopped": {
 		words: "is not running, so it removes no finalizers"},
 	"finalizer-unhandled": {words: "is never removed"},
+	// The rows of a Job run word like the pod rows.
+	"run-configmap-missing-or-changed": {words: "does not exist"},
+	"run-secret-missing-or-changed":    {words: "does not exist"},
 	// external-endpoint-failing is worded by endpointWords.
 	"external-endpoint-failing":     {words: "cannot be reached"},
 	"external-endpoint-unreachable": {words: "does not accept connections"},
@@ -69,7 +75,9 @@ var causeWords = map[string]causeWording{
 	"metrics-api-down": {words: "is not serving metrics"},
 	"lease-holder-failing": {
 		words: "holds the Lease and is failing, so nobody renews it"},
-	"namespace-terminating":        {words: "is being deleted"},
+	"namespace-terminating": {words: "is being deleted"},
+	"node-degraded": {
+		words: "is struggling and hurting the pods on it"},
 	"node-disk-pressure":           {words: "is low on disk"},
 	"node-memory-pressure":         {words: "is low on memory"},
 	"node-memory-pressure-unready": {words: "is low on memory"},
@@ -90,7 +98,14 @@ var causeWords = map[string]causeWording{
 	"policy-blocks-call": {words: "blocks its traffic"},
 	"probe-port-mismatch": {own: true,
 		words: "its probe checks a port the container does not listen on"},
-	"quota-exhausted":            {words: "is used up"},
+	"quota-exhausted": {words: "is used up"},
+	"resource-claim-unallocated": {
+		words: "has no device allocated, so its pod cannot start"},
+	"pod-security-rejects": {
+		words: "enforces a Pod Security level the new pods do not meet"},
+	"limit-range-rejects": {
+		words: "has bounds the new pods are outside of"},
+	"admission-policy-denies":    {words: "denies the pods being created"},
 	"rbac-change":                {words: "no longer grants the access it needs"},
 	"registry-refuses":           {words: "refuses the image pulls"},
 	"rollout":                    {words: "rolled out a change shortly before"},
@@ -109,6 +124,8 @@ var causeWords = map[string]causeWording{
 	// shared-failure-signature is worded by signatureLead.
 	"shared-failure-signature": {
 		words: "is the error several workloads fail with"},
+	"storage-class-missing":         {words: "does not exist"},
+	"storage-class-missing-pending": {words: "does not exist"},
 	"startup-budget-too-short": {own: true,
 		words: "its containers get too little time to start"},
 	"summary":                 {words: "is failing"},

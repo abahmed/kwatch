@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"net/url"
 	"strings"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert/issues"
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -102,7 +105,7 @@ func NewJira(
 		"reopenTransition", reopenTransition)
 
 	return &Jira{
-		issues:           issues.NewMap(),
+		issues:           issues.NewMap(clock.Require(dependencies.Clock).Now),
 		sender:           transport.NewSender(dependencies),
 		url:              strings.TrimRight(url, "/") + jiraAPIPath,
 		user:             user,
@@ -165,6 +168,37 @@ func (g *Jira) Create(
 		return "", nil
 	}
 	return created.Key, nil
+}
+
+// Find implements issues.Finder with a JQL text search for the marker in
+// the descriptions of the project's unresolved issues.
+func (g *Jira) Find(ctx context.Context, marker string) (string, error) {
+	jql := fmt.Sprintf(
+		`project = "%s" AND description ~ "%s" AND statusCategory != Done`,
+		g.projectKey, marker)
+	search := strings.TrimSuffix(g.url, "/issue") +
+		"/search?fields=description&maxResults=5&jql=" + url.QueryEscape(jql)
+	response, err := g.call(ctx, "GET", search, nil)
+	if err != nil {
+		return "", err
+	}
+	var found struct {
+		Issues []struct {
+			Key    string `json:"key"`
+			Fields struct {
+				Description string `json:"description"`
+			} `json:"fields"`
+		} `json:"issues"`
+	}
+	if json.Unmarshal(response, &found) != nil {
+		return "", nil
+	}
+	for _, issue := range found.Issues {
+		if strings.Contains(issue.Fields.Description, marker) {
+			return issue.Key, nil
+		}
+	}
+	return "", nil
 }
 
 // Comment implements issues.Tracker.

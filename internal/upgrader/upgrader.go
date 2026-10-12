@@ -59,6 +59,9 @@ type Upgrader struct {
 	// notified remembers the last announced version for the process
 	// lifetime when there is no persistence manager.
 	notified string
+	// current is the running build's version; a build that is not a
+	// release (dev, e2e) has no newer release to announce.
+	current string
 }
 
 func NewUpgrader(
@@ -87,6 +90,7 @@ func NewUpgrader(
 		deliveryManager:    deliveryManager,
 		persistenceManager: persistenceManager,
 		githubClient:       &GitHubClient{client: httpClient},
+		current:            version.Short(),
 	}
 }
 
@@ -148,7 +152,7 @@ func (u *Upgrader) checkRelease(ctx context.Context) {
 		return
 	}
 
-	if !isNewer(*r.TagName, version.Short()) {
+	if !isNewer(*r.TagName, u.current) {
 		return
 	}
 
@@ -159,7 +163,7 @@ func (u *Upgrader) checkRelease(ctx context.Context) {
 		return
 	}
 
-	u.deliveryManager.Notify(updateNotice(*r.TagName, version.Short()))
+	u.deliveryManager.Notify(updateNotice(*r.TagName, u.current))
 
 	u.notified = *r.TagName
 	if u.persistenceManager != nil {
@@ -209,13 +213,13 @@ func parseSemver(v string) (parts [3]int, ok bool) {
 // isNewer reports whether latest is a strictly newer release than current.
 // A plain string comparison would nag a v0.12.0 install about v0.9.5, and a
 // build running ahead of the latest published release about that release.
-// When either side is not a version at all, fall back to "different means
-// newer" so an unusual tag still gets reported.
+// When either side is not a version (a development or e2e build, an
+// unusual tag) nothing says the release is newer, so nothing is reported.
 func isNewer(latest, current string) bool {
 	l, lok := parseSemver(latest)
 	c, cok := parseSemver(current)
 	if !lok || !cok {
-		return latest != current
+		return false
 	}
 	for i := 0; i < 3; i++ {
 		if l[i] != c[i] {

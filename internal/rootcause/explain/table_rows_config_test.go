@@ -13,6 +13,11 @@ var workloadConfigRowCases = []rowCase{
 		build: func(f *fixture) inventory.EntityID {
 			return oomCase(f, 40*time.Second)
 		}},
+	{row: "ephemeral-limit-too-low", want: "deployment/shop/api",
+		build: func(f *fixture) inventory.EntityID {
+			return evictedCase(f, "Pod ephemeral local storage usage "+
+				"exceeds the total limit of containers 1Mi")
+		}},
 	{row: "probe-port-mismatch", want: "deployment/shop/api",
 		build: func(f *fixture) inventory.EntityID {
 			pods := f.workload("shop", "api", 2)
@@ -124,5 +129,26 @@ func TestHelperRowsAreInside(t *testing.T) {
 		if InsideRow(row) != want {
 			t.Errorf("InsideRow(%s) = %v, want %v", row, !want, want)
 		}
+	}
+}
+
+// evictedCase evicts both replicas of api with the kubelet's message.
+func evictedCase(f *fixture, message string) inventory.EntityID {
+	pods := f.workload("shop", "api", 2)
+	for _, pod := range pods {
+		f.fail(pod, "Evicted", failingH, 2, message)
+	}
+	return pods[0]
+}
+
+// An eviction for the node's own disk pressure is not the workload's
+// ephemeral-storage limit.
+func TestEphemeralLimitNeedsTheLimitMessage(t *testing.T) {
+	f := newFixture(t)
+	effect := evictedCase(f, "The node was low on resource: "+
+		"ephemeral-storage. Threshold quantity: 10%.")
+	if c, ok := f.explain().CauseOf(effect); ok &&
+		c.Row == "ephemeral-limit-too-low" {
+		t.Fatalf("node disk pressure blamed the limit: %+v", c)
 	}
 }

@@ -1,0 +1,12 @@
+{
+  "name": "liveness-scale-out-too-tight",
+  "description": "Added replicas of a slow-starting app are killed by a liveness probe that gives up after 18 seconds while running replicas needed a minute.",
+  "root": "deployment/media/transcoder",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//w1",
+    "node//w2",
+    "node//w3"
+  ]
+}

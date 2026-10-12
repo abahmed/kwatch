@@ -17,6 +17,7 @@ type HealthServer struct {
 	listener        net.Listener
 	port            int
 	enabled         bool
+	statusEnabled   bool
 	ready           atomic.Bool
 	componentMu     sync.RWMutex
 	componentErrors map[string]string
@@ -78,6 +79,7 @@ func NewHealthServerWithClock(
 	h := &HealthServer{
 		port:            cfg.Port,
 		enabled:         cfg.Enabled,
+		statusEnabled:   cfg.StatusEndpoint,
 		componentErrors: make(map[string]string),
 		componentStatus: make(map[string]ComponentStatus),
 		serveErrors:     make(chan error, 1),

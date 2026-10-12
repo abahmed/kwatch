@@ -12,12 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/delivery/providertest"
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 )
 
 func TestEmailEmptyConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	c := NewEmail(map[string]interface{}{}, "dev")
+	c := NewEmail(map[string]interface{}{}, "dev", transport.Dependencies{})
 	assert.Nil(c)
 }
 
@@ -27,14 +28,14 @@ func TestEmailInvalidConfig(t *testing.T) {
 	configMap := map[string]interface{}{
 		"from": "test@test.com",
 	}
-	c := NewEmail(configMap, "dev")
+	c := NewEmail(configMap, "dev", transport.Dependencies{})
 	assert.Nil(c)
 
 	configMap = map[string]interface{}{
 		"from": "test@test.com",
 		"to":   "test12@test.com",
 	}
-	c = NewEmail(configMap, "dev")
+	c = NewEmail(configMap, "dev", transport.Dependencies{})
 	assert.Nil(c)
 
 	configMap = map[string]interface{}{
@@ -42,7 +43,7 @@ func TestEmailInvalidConfig(t *testing.T) {
 		"to":       "test12@test.com",
 		"password": "testPassword",
 	}
-	c = NewEmail(configMap, "dev")
+	c = NewEmail(configMap, "dev", transport.Dependencies{})
 	assert.Nil(c)
 
 	configMap = map[string]interface{}{
@@ -51,7 +52,7 @@ func TestEmailInvalidConfig(t *testing.T) {
 		"password": "testPassword",
 		"host":     "chat.google.com",
 	}
-	c = NewEmail(configMap, "dev")
+	c = NewEmail(configMap, "dev", transport.Dependencies{})
 	assert.Nil(c)
 
 	configMap = map[string]interface{}{
@@ -61,7 +62,7 @@ func TestEmailInvalidConfig(t *testing.T) {
 		"host":     "chat.google.com",
 		"port":     "string",
 	}
-	c = NewEmail(configMap, "dev")
+	c = NewEmail(configMap, "dev", transport.Dependencies{})
 	assert.Nil(c)
 
 	configMap = map[string]interface{}{
@@ -71,7 +72,7 @@ func TestEmailInvalidConfig(t *testing.T) {
 		"host":     "chat.google.com",
 		"port":     "65539",
 	}
-	c = NewEmail(configMap, "dev")
+	c = NewEmail(configMap, "dev", transport.Dependencies{})
 	assert.Nil(c)
 }
 
@@ -85,7 +86,7 @@ func TestEmail(t *testing.T) {
 		"host":     "chat.google.com",
 		"port":     "587",
 	}
-	c := NewEmail(configMap, "dev")
+	c := NewEmail(configMap, "dev", transport.Dependencies{})
 	assert.NotNil(c)
 
 	assert.Equal(c.Name(), "Email")
@@ -96,7 +97,7 @@ func TestEmailSendIncidentHonorsCancellationBeforeDial(t *testing.T) {
 		"from": "test@test.com", "to": "to@test.com",
 		"password": "password", "host": "127.0.0.1", "port": "587",
 	}
-	c := NewEmail(configMap, "dev")
+	c := NewEmail(configMap, "dev", transport.Dependencies{})
 	require.NotNil(t, c)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -120,7 +121,7 @@ func TestEmailSendIncidentCancellationClosesConnection(t *testing.T) {
 		"from": "test@test.com", "to": "to@test.com",
 		"password": "password", "host": "127.0.0.1",
 		"port": fmt.Sprint(listener.Addr().(*net.TCPAddr).Port),
-	}, "dev")
+	}, "dev", transport.Dependencies{})
 	require.NotNil(t, c)
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()

@@ -18,8 +18,6 @@ import (
 // digest.
 var digestReasons = map[string]bool{
 	reasons.FailedGetResourceMetric: true,
-	reasons.HPAMaxedOut:             true,
-	reasons.TLSCertExpiringSoon:     true,
 	reasons.PodStuckTerminating:     true,
 	// A hard kill at the end of the grace period is a shutdown that
 	// did not finish; the workload failing after it is the incident.
@@ -45,6 +43,40 @@ var digestReasons = map[string]bool{
 	// them is the incident.
 	reasons.HPATargetMissing:   true,
 	reasons.KubeletUnreachable: true,
+}
+
+// causeOnlyReasons are findings that fire before anything failed (a
+// volume nearly full, an autoscaler at its maximum) yet are real causes
+// of the failures that follow. An incident made only of them is silent:
+// kwatch reports failures that have happened, so it is announced once a
+// real failure joins it, with the finding as the cause.
+var causeOnlyReasons = map[string]bool{
+	reasons.VolumeUsageHigh:  true,
+	reasons.VolumeInodesHigh: true,
+	reasons.HPAMaxedOut:      true,
+}
+
+// causeOnlyReason reports a reason that is a cause but no news alone. A
+// node condition kwatch has no detector for is one: the condition says
+// what is wrong with the node only once pods on it fail.
+func causeOnlyReason(reason string) bool {
+	return causeOnlyReasons[reason] ||
+		strings.HasPrefix(reason, reasons.NodeConditionPrefix)
+}
+
+// causeOnly reports an incident whose members are cause-only findings
+// (and advisories), with at least one of the former.
+func causeOnly(p *Incident) bool {
+	found := false
+	for key, s := range p.Members {
+		switch {
+		case causeOnlyReason(key.Reason):
+			found = true
+		case !s.Advisory:
+			return false
+		}
+	}
+	return found
 }
 
 // digestReason reports whether a finding reason waits for the digest.
@@ -84,16 +116,14 @@ func tier(p *Incident) Tier {
 	}
 	worst, digestOnly := interrupting(p)
 	switch {
+	case causeOnly(p):
+		return Silent
 	case routine(p) && !p.persistent && !unusual(p):
 		// Happens at the same time every day and resolves on its own:
 		// learned normal, reported in the digest. One that outlasts
 		// the boot window with a crash loop or nothing ready does not
 		// resolve on its own (see escalate).
 		return Digest
-	case digestOnly && p.maxedLong:
-		// An autoscaler at its maximum for a long time has no headroom
-		// left; one notification says so (the tier never falls back).
-		return Notify
 	case !reachedPaging(p) && !p.persistent && !unusual(p) &&
 		(Known(*p, p.Opened) || hasRhythm(p)):
 		// Heard about for a day, or failing on a regular rhythm: not

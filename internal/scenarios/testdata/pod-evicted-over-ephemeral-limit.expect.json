@@ -1,0 +1,11 @@
+{
+  "name": "pod-evicted-over-ephemeral-limit",
+  "description": "A pod is evicted again and again for using more local ephemeral storage than its container limit.",
+  "root": "deployment/render/thumbnailer",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//w2"
+  ],
+  "tail": "10m0s"
+}

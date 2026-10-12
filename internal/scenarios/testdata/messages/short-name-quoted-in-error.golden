@@ -1,0 +1,12 @@
+10:05:15 settled
+🟠 ingest is failing in pipeline (prod-eu-1) after the 10:02 change to config map api. Key limits.yaml changed. It fails with "fatal: configmap "api": limits.yaml: invalid quota". To check the object the pods depend on, run kubectl get configmap api -n pipeline -o yaml
+Checked: both replicas fail, on 2 nodes.
+🟠 ingest is failing in pipeline (prod-eu-1) after the 10:02 change to config map api.
+| 🟠 **ingest** is failing in **pipeline** (**prod-eu-1**) after the 10:02 change to config map **api**.
+| Key limits.yaml changed.
+| It fails with `fatal: configmap`**api**`: limits.yaml: invalid quota`.
+| To check the object the pods depend on, run
+| ```
+| kubectl get configmap api -n pipeline -o yaml
+| ```
+| *Checked: both replicas fail, on 2 nodes.*

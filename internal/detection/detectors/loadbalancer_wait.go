@@ -33,11 +33,15 @@ const eventKeepTime = time.Hour
 func loadBalancerWaiting(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
-	if !loadBalancerUnaddressed(e) {
+	if !loadBalancerUnaddressed(e) || ingressClassMissing(ctx, e) {
 		return nil
 	}
 	since := loadBalancerWaitSince(e)
 	note, acted := latestServiceNote(ctx, e.ID, since)
+	if e.ID.Kind == kube.KindIngress &&
+		!ingressWaitFailed(ctx, e, note, acted) {
+		return nil
+	}
 	// A controller that already reported a failure needs no long wait
 	// to be believed: it said it cannot build the load balancer. The
 	// cloud provider's own sync failures are reported by
@@ -59,7 +63,7 @@ func loadBalancerWaiting(
 		f.Severity = detection.Warning
 	}
 	waited := "has been waiting " + minutesText(ctx.Now.Sub(since)) +
-		" for a load balancer"
+		" for " + waitedFor(e)
 	switch {
 	case acted:
 		f.Summary = waited + ": \"" + note.Message + "\""
@@ -73,10 +77,61 @@ func loadBalancerWaiting(
 	return []detection.Finding{f}
 }
 
-// loadBalancerUnaddressed reports a LoadBalancer Service with no address.
+// ingressWaitFailed reports whether something actually failed for an
+// Ingress with no address. Controllers that never publish one (NodePort
+// setups, kind, some on-prem) are normal, so silence alone is no
+// failure: the controller warned about it, it lost an address it had, or
+// its peers of the same class are addressed and it is not.
+func ingressWaitFailed(
+	ctx detection.Context, e inventory.Entity, note inventory.Note,
+	acted bool,
+) bool {
+	if acted && note.Warning || hadAddress(e) {
+		return true
+	}
+	if ctx.Model == nil {
+		return false
+	}
+	class := text(e, kube.AttrIngressClass)
+	for _, id := range ctx.Model.Entities(kube.KindIngress) {
+		peer, ok := ctx.Model.Entity(id)
+		if ok && id != e.ID && flag(peer, kube.AttrLoadBalancer) &&
+			text(peer, kube.AttrIngressClass) == class {
+			return true
+		}
+	}
+	return false
+}
+
+// loadBalancerUnaddressed reports a LoadBalancer Service or an Ingress
+// whose status.loadBalancer holds no address.
 func loadBalancerUnaddressed(e inventory.Entity) bool {
-	return text(e, kube.AttrServiceType) == "LoadBalancer" &&
-		!flag(e, kube.AttrLoadBalancer)
+	if flag(e, kube.AttrLoadBalancer) {
+		return false
+	}
+	switch e.ID.Kind {
+	case kube.KindIngress:
+		return true
+	case kube.KindService:
+		return text(e, kube.AttrServiceType) == "LoadBalancer"
+	}
+	return false
+}
+
+// ingressClassMissing reports an Ingress whose class does not exist:
+// IngressClassMissing already says why it has no address.
+func ingressClassMissing(
+	ctx detection.Context, e inventory.Entity,
+) bool {
+	return e.ID.Kind == kube.KindIngress && len(ingressClass(ctx, e)) > 0
+}
+
+// waitedFor names what an unaddressed object waits for.
+func waitedFor(e inventory.Entity) string {
+	if e.ID.Kind == kube.KindIngress {
+		return "an address"
+	}
+	return "a load balancer"
 }
 
 // loadBalancerWaitSince is when the wait began: the later of the Service
@@ -119,6 +174,11 @@ func latestServiceNote(
 
 // noControllerText says nothing has reacted to the Service.
 func noControllerText(e inventory.Entity) string {
+	if class := text(e, kube.AttrIngressClass); class != "" &&
+		e.ID.Kind == kube.KindIngress {
+		return "no controller for ingress class " + class +
+			" has acted on it"
+	}
 	if class := text(e, kube.AttrLoadBalancerClass); class != "" {
 		return "no controller for load balancer class " + class +
 			" has acted on it"

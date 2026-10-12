@@ -1,0 +1,11 @@
+{
+  "name": "coupled-image-nil-pointer",
+  "description": "A new image and an unrelated ConfigMap edit arrive together and the pods crash with a nil pointer in new code.",
+  "root": "deployment/stock/sync",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

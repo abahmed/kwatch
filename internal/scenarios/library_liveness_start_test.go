@@ -12,6 +12,7 @@ import (
 // while they start, with and without a history of how long starts take.
 func livenessStartScenarios() []scenario {
 	return []scenario{livenessSlowStart(), livenessNeverReady(),
+		livenessScaleOutTooTight(),
 		livenessKilledAfterStart()}
 }
 

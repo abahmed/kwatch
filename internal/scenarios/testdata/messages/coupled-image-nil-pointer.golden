@@ -1,0 +1,16 @@
+10:12:25 settled
+🟠 sync is failing in stock (prod-eu-1) after the 10:10 release of registry.example.com/sync:3.4. The previous image was registry.example.com/sync:3.3. It fails with "panic: runtime error: invalid memory address or nil pointer dereference at sync/reconcile.go:131". Also changed before it broke: bob changed config map sync-config at 10:10. To see the rollout state, run kubectl rollout status deployment/sync -n stock
+Checked: both replicas fail, on 2 nodes.
+🟠 sync is failing in stock (prod-eu-1) after the 10:10 release of registry.example.com/sync:3.4.
+| 🟠 **sync** is failing in **stock** (**prod-eu-1**) after the 10:10 release of registry.example.com/sync:3.4.
+| The previous image was registry.example.com/sync:3.3.
+| It fails with
+| ```
+| panic: runtime error: invalid memory address or nil pointer dereference at sync/reconcile.go:131
+| ```
+| Also changed before it broke: bob changed config map sync-config at 10:10.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/sync -n stock
+| ```
+| *Checked: both replicas fail, on 2 nodes.*

@@ -27,6 +27,7 @@ func TestQuotaReportsNearLimit(t *testing.T) {
 	f := eval.Findings[0]
 	assert.Equal(t, "Quota.NearLimit", string(f.Mode))
 	assert.Equal(t, detection.Degraded, f.Health)
+	assert.True(t, f.Advisory)
 	assert.Contains(t, f.Summary, "cpu=85%, pods=90%")
 }
 
@@ -40,6 +41,7 @@ func TestQuotaExhaustedWinsOverNearLimit(t *testing.T) {
 	eval := evaluate(Quota{}, m, t0, id, nil)
 	require.Len(t, eval.Findings, 1)
 	assert.Equal(t, reasons.ResourceQuotaExhausted, eval.Findings[0].Reason)
+	assert.False(t, eval.Findings[0].Advisory)
 
 	put(m, id, t0, map[string]inventory.Value{})
 	assert.Empty(t, evaluate(Quota{}, m, t0, id, nil).Findings)

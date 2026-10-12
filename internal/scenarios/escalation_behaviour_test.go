@@ -96,20 +96,24 @@ func TestKnownCrashLoopPastBootIsNotDemoted(t *testing.T) {
 		"promoted when the boot window ends")
 }
 
-// An autoscaler incident does not resolve while the workload it scales
-// is down and its pods crash-loop.
-func TestHPAIncidentDoesNotResolveWhileWorkloadIsBroken(t *testing.T) {
+// An autoscaler at its maximum is a cause, not news: its incident stays
+// silent and closes quietly when it clears, while the Deployment it
+// scales, which crash-loops, is announced and stays open.
+func TestSilentHPAIncidentSaysNothingWhileWorkloadIsBroken(t *testing.T) {
 	result := replayNamed(t, "hpa-resolve-while-workload-broken")
 
-	for _, d := range result.Decisions {
+	for i, d := range result.Decisions {
 		assert.NotEqual(t, incident.Resolve, d.Action,
 			"%s resolved while the workload was down", d.Incident.Root)
+		assert.NotEqual(t, kube.KindHPA, d.Incident.Root.Kind,
+			"the autoscaler spoke at %s", result.Times[i])
 	}
 	var hpa bool
 	for _, p := range result.Incidents {
 		if p.Root.Kind == kube.KindHPA {
 			hpa = true
-			assert.NotEqual(t, incident.Resolved, p.State)
+			assert.Equal(t, incident.Silent, p.Tier)
+			assert.True(t, p.Announced.IsZero())
 		}
 	}
 	assert.True(t, hpa, "the autoscaler had an incident")

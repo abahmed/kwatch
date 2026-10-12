@@ -38,7 +38,8 @@ Each line matches the package's `doc.go`.
 | `internal/alert/*` | One adapter per provider: builds the payload, sends it through transport. |
 | `internal/alert/catalog` | Statically links provider adapters and constructs them. |
 | `internal/provider/catalog` | Provider identities and metadata. |
-| `internal/health` | `/healthz`, `/readyz`, `/availabilityz`, `/health` and `/metrics`. |
+| `internal/health` | `/healthz`, `/readyz`, `/availabilityz`, `/health` and `/metrics`, plus `/status` when `healthCheck.statusEndpoint` is on. |
+| `internal/status` | The read-only report that `/status` serves. |
 | `internal/metrics` | The process-wide Prometheus registry; labels are always bounded. |
 | `internal/config` | Loads, normalizes and validates configuration. |
 | `internal/config/crd` | Watches `KwatchConfig` resources, including late installs. |

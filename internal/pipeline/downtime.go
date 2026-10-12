@@ -38,6 +38,28 @@ var fingerprintAttributes = map[inventory.Kind][]string{
 	kube.KindService:       {kube.AttrSelector, kube.AttrPorts},
 	kube.KindNetworkPolicy: {kube.AttrPolicyDigest},
 	kube.KindNode:          {kube.AttrKubelet, kube.AttrTaints},
+	// What admits, provisions and pulls for every pod of a namespace
+	// or cluster: an edit made while kwatch was down can be why pods
+	// fail after the restart.
+	kube.KindValidatingHook: {kube.AttrFailurePolicy,
+		kube.AttrWebhookNames},
+	kube.KindMutatingWebhook: {kube.AttrFailurePolicy,
+		kube.AttrWebhookNames},
+	kube.KindAccount:      {kube.AttrAccountPullSecrets},
+	kube.KindStorageClass: {kube.AttrProvisioner, kube.AttrBindingMode},
+	kube.KindNamespace:    {kube.AttrPodSecurity},
+	kube.KindLimitRange:   {kube.AttrLimitsDigest},
+}
+
+// downtimePaths name an attribute as the live diff of its kind does, so
+// the change reads the same whether kwatch saw it or found it later.
+var downtimePaths = map[string]string{
+	kube.AttrTemplateHash:       "spec.template",
+	kube.AttrPodSecurity:        "labels.pod-security",
+	kube.AttrLimitsDigest:       "spec.limits",
+	kube.AttrAccountPullSecrets: "imagePullSecrets",
+	kube.AttrProvisioner:        "provisioner",
+	kube.AttrBindingMode:        "volumeBindingMode",
 }
 
 // Fingerprints summarises the tracked objects of the model, keyed by
@@ -181,10 +203,11 @@ func fingerprintFields(before, after string) []inventory.FieldChange {
 	return fields
 }
 
-// downtimePath maps a template hash to the path rollout rules recognise.
+// downtimePath maps an attribute to the path the live diff would use;
+// the template hash becomes the path rollout rules recognise.
 func downtimePath(attribute string) string {
-	if attribute == kube.AttrTemplateHash {
-		return "spec.template"
+	if path, ok := downtimePaths[attribute]; ok {
+		return path
 	}
 	return attribute
 }

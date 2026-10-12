@@ -202,8 +202,14 @@ var pluralVerbs = map[string]string{
 // nowState puts "now" into a predicate: "is now not available", "now
 // keeps crashing", "now has no ready replicas (0 of 1)". A state that
 // says "only" reads badly after "now", so "now has only 1 of 3
-// replicas ready" is written "now has 1 of 3 replicas ready".
+// replicas ready" is written "now has 1 of 3 replicas ready". A state
+// that counts time puts "now" last: "has not been ready for three
+// minutes now", never "now has not been ready".
 func nowState(state string) string {
+	if strings.HasPrefix(state, "has been ") ||
+		strings.HasPrefix(state, "has not been ") {
+		return state + " now"
+	}
 	if rest, ok := strings.CutPrefix(state, "is "); ok {
 		return "is now " + rest
 	}

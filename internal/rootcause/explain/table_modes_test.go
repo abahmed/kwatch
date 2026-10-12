@@ -17,7 +17,8 @@ var pseudoModes = []detection.Mode{
 	ModeVolumePinned, ModeBlocksCall, ModeBackendsFailing,
 	ModeBackendChanged, ModeLivenessStartShort, ModeLivenessNeverReady,
 	pullAuth, pullRateLimit, pullServer, pullTLS, pullNetwork, pullStatus,
-	pullUnexplained, ModePreempting,
+	pullUnexplained, ModePreempting, ModeEphemeralTooLow,
+	ModePodSecurityDenied, ModeLimitRangeDenied, ModePolicyDenied,
 }
 
 // TestTableModesAreKnown checks every mode a row names is one some

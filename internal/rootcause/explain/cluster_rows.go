@@ -64,6 +64,17 @@ var clusterRows = []Row{
 		Prior: 0.8, InferredMinWorkloads: SharedMinWorkloads,
 	},
 	{
+		// An APIService whose Service does not exist ("service not
+		// found") is unavailable for that reason alone.
+		Name: "apiservice-backend-missing",
+		Cause: Side{Kind: kube.KindService,
+			Modes: []detection.Mode{ModeMissing}},
+		Link: LinkServedBy,
+		Effect: Side{Kind: kube.KindAPIService,
+			Modes: []detection.Mode{detection.ModeAPIServiceUnavailable}},
+		Prior: 0.8,
+	},
+	{
 		Name: "metrics-api-down",
 		Cause: Side{Kind: kube.KindAPIService,
 			Modes: []detection.Mode{detection.ModeAPIServiceUnavailable,

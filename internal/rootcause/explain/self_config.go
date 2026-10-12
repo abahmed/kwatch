@@ -36,6 +36,7 @@ var workloadConfigRows = []Row{
 		Link: LinkSelf, Effect: podSide(detection.ModeOOMKilled),
 		Prior: 0.7, Inside: true,
 	},
+	ephemeralConfigRow,
 	{
 		Name: "probe-port-mismatch",
 		Cause: Side{Group: AnyGroup, Kind: AnyKind,
@@ -67,15 +68,17 @@ func (v *view) selfConfigModes(effect inventory.EntityID) []modeHealth {
 		containers = v.s.Model.Related(effect, inventory.PartOf,
 			inventory.Incoming)
 	}
+	modes := v.podConfigModes(effect)
+	for _, id := range containers {
+		modes = append(modes, v.containerConfigModes(id, effect)...)
+	}
 	seen := map[detection.Mode]bool{}
 	var out []modeHealth
-	for _, id := range containers {
-		for _, mode := range v.containerConfigModes(id, effect) {
-			if !seen[mode] {
-				seen[mode] = true
-				out = append(out, modeHealth{mode: mode,
-					health: detection.Failing, pseudo: true})
-			}
+	for _, mode := range modes {
+		if !seen[mode] {
+			seen[mode] = true
+			out = append(out, modeHealth{mode: mode,
+				health: detection.Failing, pseudo: true})
 		}
 	}
 	return out
@@ -93,6 +96,7 @@ func (v *view) containerConfigModes(
 	}
 	var out []detection.Mode
 	if v.hasMode(failing, []detection.Mode{detection.ModeOOMKilled}) &&
+		!v.hasMode(failing, []detection.Mode{detection.ModeOOMKilledNode}) &&
 		shortLastRun(container) {
 		out = append(out, ModeMemoryTooLow)
 	}

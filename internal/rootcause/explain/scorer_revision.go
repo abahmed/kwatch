@@ -32,6 +32,11 @@ func scoreRevision(v *view, c *candidate) outcome {
 	}
 	switch {
 	case failingRevisions == 1 && healthyRevisions > 0:
+		if v.splitsWithConfig(c.id, inventory.EntityID{}) {
+			// The pods differ in config too: not evidence for the
+			// rollout over the edit.
+			return outcome{}
+		}
 		revision, edits := v.revisionEdits(c.id)
 		return outcome{weight: RevisionWeight, count: revision,
 			code: rootcause.ProofNewRevisionFails, edits: edits,

@@ -1,0 +1,22 @@
+10:02:15 settled
+🟠 ledger in billing (prod-eu-1) keeps running out of memory. Its node and registry are healthy and unchanged, so nothing outside it explains this. It was killed at its 512Mi memory limit; it used 489Mi at peak in the last 24 hours. To read the output of the last crash, run kubectl logs ledger-c10ffc84-a -c app -n billing --previous
+🟠 ledger in billing (prod-eu-1) keeps running out of memory.
+| 🟠 **ledger** in **billing** (**prod-eu-1**) keeps running out of memory.
+| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| It was killed at its 512Mi memory limit; it used 489Mi at peak in the last 24 hours.
+| To read the output of the last crash, run
+| ```
+| kubectl logs ledger-c10ffc84-a -c app -n billing --previous
+| ```
+10:05:15 settled
+🟠 Node n3 (prod-eu-1) is low on memory. To check the node's conditions and recent events, run kubectl describe node n3
+🟠 Node n3 (prod-eu-1) is low on memory.
+| 🟠 Node n3 (**prod-eu-1**) is low on memory.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n3
+| ```
+10:06:00 material change
+🟠 Node n3 (prod-eu-1) is now short on memory and its pods' limits add up to 153% of its memory, so pods that stayed within their own limit are killed.
+🟠 Node n3 (prod-eu-1) is now short on memory and its pods' limits add up to 153% of its memory, so pods that stayed within their own limit are killed.
+| 🟠 Node n3 (**prod-eu-1**) is now short on memory and its pods' limits add up to 153% of its memory, so pods that stayed within their own limit are killed.

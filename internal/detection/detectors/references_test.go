@@ -79,8 +79,8 @@ func TestMissingReportsPodRuntimeClassOnly(t *testing.T) {
 		},
 	})
 
-	eval := evaluate(Missing{}, m, t0, pod, nil)
+	found := missingFindings(m, t0, pod)
 
-	require.Len(t, eval.Findings, 1, "running pods keep a deleted priority")
-	assert.Equal(t, reasons.RuntimeClassMissing, eval.Findings[0].Reason)
+	require.Len(t, found, 1, "running pods keep a deleted priority")
+	assert.Equal(t, reasons.RuntimeClassMissing, found[0].Reason)
 }

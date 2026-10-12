@@ -261,6 +261,7 @@ func (m *Manager) resolve(p *Incident, now time.Time, why Reason) Decision {
 	p.Fix = fixOf(m.model, p, now)
 	if why != ReasonSuperseded {
 		p.FixedBy = fixingChange(m.model, p, now)
+		m.noteRemoved(p)
 	}
 	p.note(now, "resolved: "+string(why))
 	d := m.decide(p, Resolve, why)

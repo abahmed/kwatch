@@ -1,0 +1,11 @@
+{
+  "name": "oom-limit-on-pressured-node",
+  "description": "A container is OOM-killed at 95% of its limit on a node under memory pressure; the limit is the cause, not the node.",
+  "root": "deployment/billing/ledger",
+  "otherRoots": [
+    "node//n3"
+  ],
+  "tier": "notify",
+  "maxMessages": 5,
+  "tail": "15m0s"
+}

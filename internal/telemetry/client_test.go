@@ -46,3 +46,25 @@ func TestReportRejectsInvalidIdentity(t *testing.T) {
 		t.Fatal("expected invalid identity error")
 	}
 }
+
+func TestReportDoesNotFollowRedirects(t *testing.T) {
+	followed := false
+	target := httptest.NewServer(http.HandlerFunc(
+		func(http.ResponseWriter, *http.Request) { followed = true }))
+	defer target.Close()
+	server := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, target.URL, http.StatusTemporaryRedirect)
+		}))
+	defer server.Close()
+
+	err := Report(context.Background(), server.Client(), server.URL,
+		"123e4567-e89b-42d3-a456-426614174000", "v1.2.3")
+
+	if err == nil {
+		t.Fatal("expected a redirect to be reported as a failure")
+	}
+	if followed {
+		t.Fatal("redirect target must not be contacted")
+	}
+}

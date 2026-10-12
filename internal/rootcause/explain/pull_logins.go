@@ -134,7 +134,11 @@ func (v *view) refusalOf(id inventory.EntityID) string {
 func (v *view) registryClass(
 	effect inventory.EntityID,
 ) (detection.Mode, bool) {
-	class := classifyRegistryPull(v.text(effect))
+	text, ok := v.pullText(effect)
+	if !ok {
+		return "", false
+	}
+	class := classifyRegistryPull(text)
 	if class == pullImage || v.pullSecretsMissing(effect, class) {
 		return "", false
 	}

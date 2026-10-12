@@ -74,8 +74,9 @@ func (DeprecatedAPI) Detect(
 	when, what := removalText(ctx, removed, removedMinor)
 	return []detection.Finding{{
 		Reason: reasons.DeprecatedAPIInUse, Severity: detection.Info,
-		Since:   since,
-		Summary: when,
+		Advisory: true,
+		Since:    since,
+		Summary:  when,
 		Evidence: []detection.Evidence{
 			{Label: "what it means", Value: "Something still calls " +
 				api + ", which " + what + " in Kubernetes " + removed},

@@ -7,6 +7,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/kubeclient"
 	"github.com/abahmed/kwatch/internal/metrics"
 )
 
@@ -33,6 +34,10 @@ type sourceHealth struct {
 	reported map[string]string
 	coverage coveragePublisher
 	ready    func(bool)
+	// panics reads the recovered handler panics; nil skips the check.
+	panics func() []kubeclient.HandlerPanicCount
+	// panicSeen is each resource's panic count at the previous report.
+	panicSeen map[string]int64
 }
 
 func newSourceHealth(
@@ -48,6 +53,37 @@ func newSourceHealth(
 func (h *sourceHealth) withCoverage(p coveragePublisher) *sourceHealth {
 	h.coverage = p
 	return h
+}
+
+// withHandlerPanics also degrades a resource whose event handler panicked
+// since the previous report. It is applied once before the first report.
+func (h *sourceHealth) withHandlerPanics(
+	read func() []kubeclient.HandlerPanicCount,
+) *sourceHealth {
+	h.panics = read
+	h.panicSeen = map[string]int64{}
+	return h
+}
+
+// panicking lists the inventory resources whose handler panicked since
+// the previous call. The state clears one report after the panics stop.
+func (h *sourceHealth) panicking() []kube.SourceStatus {
+	if h.panics == nil {
+		return nil
+	}
+	var out []kube.SourceStatus
+	for _, p := range h.panics() {
+		if p.Component != "inventory" {
+			continue
+		}
+		if p.Count > h.panicSeen[p.Resource] {
+			out = append(out, kube.SourceStatus{
+				Resource: p.Resource, Reason: kube.ReasonHandlerPanics,
+			})
+		}
+		h.panicSeen[p.Resource] = p.Count
+	}
+	return out
 }
 
 // withReadiness also reports whether every required resource is available
@@ -91,8 +127,25 @@ func (h *sourceHealth) report() {
 		h.ready(requiredAvailable(statuses))
 	}
 	if h.sink != nil {
-		h.publish(statuses)
+		h.publish(withPanicking(statuses, h.panicking()))
 	}
+}
+
+// withPanicking adds the panicking resources that are not already listed
+// as unavailable for a more basic reason.
+func withPanicking(
+	statuses, panicking []kube.SourceStatus,
+) []kube.SourceStatus {
+	for _, p := range panicking {
+		listed := false
+		for _, s := range statuses {
+			listed = listed || (s.Resource == p.Resource && s.Group == "")
+		}
+		if !listed {
+			statuses = append(statuses, p)
+		}
+	}
+	return statuses
 }
 
 func (h *sourceHealth) publish(statuses []kube.SourceStatus) {
@@ -142,6 +195,8 @@ func sourceHealthReason(status kube.SourceStatus) string {
 		return "cache_sync_timeout"
 	case kube.ReasonSyncPending:
 		return "cache_sync_pending"
+	case kube.ReasonHandlerPanics:
+		return "handler_panics"
 	default:
 		return "cache_sync_failed"
 	}

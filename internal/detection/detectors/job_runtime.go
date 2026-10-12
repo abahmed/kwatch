@@ -55,8 +55,10 @@ func runningLong(
 	}
 	return detection.Finding{
 		Reason: reasons.JobRunningLong, Severity: detection.Warning,
-		Since:   started.Add(limit),
-		Summary: "Job has run far longer than its recent runs",
+		Since: started.Add(limit),
+		// Nothing failed yet: "probably stuck" is a guess.
+		Advisory: true,
+		Summary:  "Job has run far longer than its recent runs",
 		Evidence: []detection.Evidence{
 			{Label: detection.EvidenceRunningFor,
 				Value: format.Duration(ctx.Now.Sub(started))},

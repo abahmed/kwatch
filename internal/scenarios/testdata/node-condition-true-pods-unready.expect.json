@@ -1,0 +1,12 @@
+{
+  "name": "node-condition-true-pods-unready",
+  "description": "A node reports a custom condition as True and pods of two workloads on it turn unready.",
+  "root": "node//n1",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/cart",
+    "deployment/shop/search",
+    "node//n2"
+  ]
+}

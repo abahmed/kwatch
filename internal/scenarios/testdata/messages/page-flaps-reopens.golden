@@ -8,10 +8,10 @@
 | kubectl describe node n1
 | ```
 10:08:40 healthy for 3m0s
-✅ Node n1 (prod-eu-1) is ready again. It was down for six minutes.
+✅ Node n1 (prod-eu-1) is ready again. It was down for three minutes.
 ✅ Node n1 (prod-eu-1) is ready again.
 | ✅ Node n1 (**prod-eu-1**) is ready again.
-| It was down for six minutes.
+| It was down for three minutes.
 10:16:40 failing again
 🟠 Node n1 (prod-eu-1) is failing again: 2nd time in two hours. It reports "container runtime is restarting".
 🟠 Node n1 (prod-eu-1) is failing again: 2nd time in two hours.

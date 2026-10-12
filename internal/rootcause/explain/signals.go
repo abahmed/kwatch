@@ -29,6 +29,13 @@ const (
 	// SignalConnection is a call over the network that failed:
 	// refused, reset, timed out, unresolved or a failed handshake.
 	SignalConnection Signal = "connection-error"
+	// SignalPodSecurity is Pod Security Admission refusing a pod.
+	SignalPodSecurity Signal = "pod-security-error"
+	// SignalLimitRange is a LimitRange refusing a pod or claim.
+	SignalLimitRange Signal = "limit-range-error"
+	// SignalAdmissionPolicy is a ValidatingAdmissionPolicy denying a
+	// request.
+	SignalAdmissionPolicy Signal = "admission-policy-error"
 )
 
 // signalPatterns match each signal in lower-case text.
@@ -41,7 +48,14 @@ var signalPatterns = map[Signal]*regexp.Regexp{
 		`timed out`),
 	SignalDiskFull: regexp.MustCompile(`no space left on device|enospc|` +
 		`disk quota exceeded|file system is full|filesystem is full`),
-	SignalQuota: regexp.MustCompile(`exceeded quota|failed quota`),
+	SignalQuota:       regexp.MustCompile(`exceeded quota|failed quota`),
+	SignalPodSecurity: regexp.MustCompile(`violates podsecurity`),
+	SignalLimitRange: regexp.MustCompile(`(maximum|minimum) [a-z./-]+ ` +
+		`usage per (container|pod|persistentvolumeclaim)|max limit to ` +
+		`request ratio per|must be less than or equal to (cpu|memory) ` +
+		`limit`),
+	SignalAdmissionPolicy: regexp.MustCompile(`admissionpolicy '[^']+' ` +
+		`with binding '[^']*' denied request`),
 	SignalMetricsAPI: regexp.MustCompile(`unable to fetch metrics from|` +
 		`unable to handle the request \(get [a-z.]*metrics\.k8s\.io`),
 	SignalForbidden: regexp.MustCompile(`cannot (get|list|watch|create|` +

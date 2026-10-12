@@ -1,0 +1,11 @@
+{
+  "name": "admission-policy-denies-pods",
+  "description": "A new ValidatingAdmissionPolicy denies pods without a team label; a scale-up of a Deployment is refused and the denial names the policy.",
+  "root": "validatingadmissionpolicy//require-team.example.com",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/mailing/relay"
+  ]
+}

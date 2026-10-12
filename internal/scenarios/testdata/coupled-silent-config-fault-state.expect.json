@@ -1,0 +1,11 @@
+{
+  "name": "coupled-silent-config-fault-state",
+  "description": "A new image and an edited config land together and the pods exit without saying why; the new mode is unsupported.",
+  "root": "configmap/post/ledger-config",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

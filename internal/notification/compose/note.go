@@ -127,6 +127,7 @@ var noteWriters = []sentenceWriter{
 	baselineSentences,
 	jobRunSentences,
 	scaledZeroSentences,
+	provisionSentences,
 	schedulerSentences,
 	fitSentences,
 	autoscalerSentences,

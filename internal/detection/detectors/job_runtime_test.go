@@ -55,6 +55,7 @@ func TestJobReportsARunFarLongerThanTheRecentSuccesses(t *testing.T) {
 
 	require.Len(t, got, 1)
 	assert.Equal(t, reasons.JobRunningLong, got[0].Reason)
+	assert.True(t, got[0].Advisory, "nothing failed yet")
 	assert.Equal(t, detection.Warning, got[0].Severity)
 	assert.Equal(t, "2h10m", evidenceByLabel(got[0].Evidence)[detection.
 		EvidenceRunningFor])

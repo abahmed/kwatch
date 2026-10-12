@@ -4,6 +4,9 @@ package scenarios
 
 import (
 	"testing"
+	"time"
+
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/abahmed/kwatch/internal/detection/detectors"
 	"github.com/abahmed/kwatch/test/e2e/harness"
@@ -35,8 +38,9 @@ func TestScenarioExtendedMetricsAPIFailure(t *testing.T) {
 			withCPURequest("10m"))
 		s.CreateAutoscaler(cpuAutoscaler("metrics-target"))
 		// One autoscaler failing to read metrics waits ten minutes before
-		// it is reported, so the incident is the unavailable API itself.
-		s.ExpectClusterIncident(metricsAPIName,
+		// it is reported, so the incident is the unavailable API, rooted
+		// at the Service it points to, which does not exist.
+		s.ExpectIncident(missingMetricsService,
 			"APIServiceFailure", detectors.DefaultCustomFailing)
 		restoreMetricsAPI()
 	})
@@ -49,5 +53,32 @@ func TestScenarioExtendedVolumeAttachment(t *testing.T) {
 		// reported, because a successful retry clears it.
 		s.ExpectClusterIncident(name, "VolumeAttachmentFailure",
 			detectors.DefaultCustomFailing)
+	})
+}
+
+// A policy that denies a workload's Pods leaves the ReplicaSet unable to
+// create them. Pods without the policy's label in the same namespace are
+// untouched, and lifting the policy lets the ReplicaSet recover.
+func TestScenarioAdmissionPolicy(t *testing.T) {
+	inExtendedNamespace(t, "security.admission-policy", func(s *Scenario) {
+		lift := s.DenyLabeledPods()
+
+		s.CreateReplicaSet(healthyReplicaSet("allowed"))
+		s.WaitForPods(2*time.Minute, func(pods []corev1.Pod) bool {
+			return podsOwnedBy(pods, "allowed")
+		})
+
+		s.CreateReplicaSet(deniedReplicaSet("denied"))
+		// The policy that refuses the Pods is the root; it has no
+		// namespace.
+		incident := s.ExpectClusterIncident(denyPolicyName(s.Namespace),
+			"ReplicaSetFailure", 0)
+		s.ExpectNoIncident("allowed")
+
+		lift()
+		s.WaitForPods(2*time.Minute, func(pods []corev1.Pod) bool {
+			return podsOwnedBy(pods, "denied")
+		})
+		s.ExpectResolved(incident)
 	})
 }

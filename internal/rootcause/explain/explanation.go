@@ -77,7 +77,10 @@ type Cause struct {
 	Summary string
 	// Confidence is between 0 and 1.
 	Confidence float64
-	Level      Level
+	// Raw is the score before it was clamped to 1. Causes whose
+	// Confidence is capped alike still differ in Raw.
+	Raw   float64
+	Level Level
 	// Contributions lists each scorer's contribution, strongest first.
 	Contributions []Contribution
 	// Changes are the root's changes inside the causal window.

@@ -1,0 +1,11 @@
+{
+  "name": "pod-security-enforce-label-added",
+  "description": "A namespace gets an enforced restricted Pod Security label; a scale-up of its Deployment is refused with \"violates PodSecurity\".",
+  "root": "namespace//reports",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/reports/api"
+  ]
+}

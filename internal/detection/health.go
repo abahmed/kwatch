@@ -193,6 +193,7 @@ var workloadModes = map[string]Mode{
 	reasons.CoreDNSServfail:              ModeDNSServfail,
 	reasons.NodePLEGSlow:                 ModePLEGSlow,
 	reasons.NodeEvicting:                 ModeEvicting,
+	reasons.NodeConditionPrefix:          ModeNodeCondition,
 	reasons.ServiceUnused:                ModeUnused,
 	reasons.ClaimUnused:                  ModeUnused,
 	reasons.RiskPrefix:                   ModeRisk,

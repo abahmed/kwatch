@@ -9,6 +9,7 @@ import (
 	gomail "gopkg.in/mail.v2"
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
 
@@ -24,7 +25,15 @@ type Email struct {
 }
 
 // NewEmail returns new email instance
-func NewEmail(config map[string]interface{}, clusterName string) *Email {
+//
+// SMTP is not HTTP: the application's outbound proxy does not apply to it
+// and mail is dialed directly. The application's TLS settings (extra root
+// CAs and skip-verify) are taken from the shared client in dependencies.
+func NewEmail(
+	config map[string]interface{},
+	clusterName string,
+	dependencies transport.Dependencies,
+) *Email {
 	from, ok := config["from"].(string)
 	if !ok || len(from) == 0 {
 		klog.InfoS("initializing email with an empty from")
@@ -86,7 +95,8 @@ func NewEmail(config map[string]interface{}, clusterName string) *Email {
 		smtpConfig: smtpConfig{
 			host: host, port: portNumber,
 			username: username, password: password,
-			tlsMode: tlsMode,
+			tlsMode:   tlsMode,
+			tlsConfig: dependencies.TLSConfig(),
 		},
 		clusterName: clusterName,
 	}

@@ -16,14 +16,16 @@ func jobLongScenarios() []scenario {
 
 // jobRunningLong: the nightly invoice export took 8 to 12 minutes on
 // each of its last three runs; today's has run for over two hours.
+// Nothing has failed yet, so the finding is advisory (kwatch reports
+// failures that have happened, not predictions) and no message is sent.
 func jobRunningLong() scenario {
 	return scenario{
 		expect: expectation{
 			Name: "job-running-long",
 			Description: "A CronJob's Job has run for over two hours " +
-				"while its last three runs took 8 to 12 minutes.",
-			Root: "cronjob/billing/invoice-export", Tier: "notify",
-			MaxMessages: 2, Tail: duration(10 * time.Minute),
+				"while its last three runs took 8 to 12 minutes; " +
+				"nothing has failed, so it is advice and stays quiet.",
+			Quiet: true, MaxMessages: 0, Tail: duration(10 * time.Minute),
 		},
 		build: func(c *cluster) { buildLongJob(c, 2*time.Hour+10*time.Minute) },
 	}

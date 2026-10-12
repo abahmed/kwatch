@@ -17,14 +17,17 @@ import (
 // person would conclude from the whole story, not with what kwatch
 // says; the calibration gate counts how often "likely" is right.
 func ambiguousScenarios() []scenario {
-	return []scenario{
+	library := []scenario{
 		ambiguousInitSecretEdited(), ambiguousInitNoChange(),
 		ambiguousCronSecretEdited(), ambiguousCronNoChange(),
 		ambiguousOOMNearLimit(), ambiguousOOMHalfLimit(),
 		ambiguousCeilingSlowDependency(), ambiguousCeilingDependencyFine(),
 		ambiguousImageAndConfigImage(), ambiguousImageAndConfigConfig(),
 		ambiguousRolloutOnePressuredNode(), ambiguousRolloutEveryNode(),
+		coupledConfigFaults(), coupledImageFaults(),
+		cronSecretEditedHoursBefore(), cronSecretEditedThenSucceeded(),
 	}
+	return append(library, coupledTwins()...)
 }
 
 // ambiguousInit builds the orders Deployment whose migration init
@@ -157,7 +160,8 @@ func ambiguousOOMNearLimit() scenario {
 			Description: "A container is OOM-killed at 92% of its limit " +
 				"on an overcommitted node under memory pressure.",
 			Root: "deployment/shop/api", Tier: "notify", MaxMessages: 3,
-			Tail: duration(15 * time.Minute),
+			Unrelated: []string{"node//n1"},
+			Tail:      duration(15 * time.Minute),
 		},
 		build: func(c *cluster) { buildNodeOOMWith(c, 470, "30Gi", true) },
 	}
@@ -272,41 +276,8 @@ func ambiguousCeilingDependencyFine() scenario {
 // ConfigMap, then bumps the image and edits the ConfigMap thirty seconds
 // apart. Both replicas crash with trace.
 func ambiguousChange(c *cluster, trace string) {
-	cm := configMap(c, "shop", "checkout-config",
-		map[string]string{"currency": "EGP", "tax": "14"})
-	w := c.deployment("shop", "checkout",
-		"registry.example.com/checkout:2.3", 2)
-	configTemplate(w, func(spec *corev1.PodSpec) {
-		spec.Containers[0].EnvFrom = []corev1.EnvFromSource{{
-			ConfigMapRef: &corev1.ConfigMapEnvSource{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: cm.Name}}}}
-	})
-	c.list(c.node("n1", "zone-a"), c.node("n2", "zone-a"), cm)
-	c.list(w.objects())
-	c.list(w.pod(0, "n1"), w.pod(1, "n2"))
-	c.after(10 * time.Minute)
-	edited := last(c, cm)
-	edited.Data["tax"] = "0.14"
-	editedBy(c, edited, "bob")
-	c.update(edited)
-	c.after(30 * time.Second)
-	rs := w.rollout(func(spec *corev1.PodSpec) {
-		spec.Containers[0].Image = "registry.example.com/checkout:2.4"
-	})
-	c.update(w.deployment)
-	c.create(rs)
-	c.create(w.pod(0, "n1", startedNow, notReady))
-	c.after(40 * time.Second)
-	for _, restarts := range []int32{2, 4, 6} {
-		for i := range 2 {
-			c.update(w.pod(i, "n"+itoa(i+1), startedNow,
-				crashLoop(1, "Error", trace, restarts)))
-		}
-		w.setReady(0)
-		c.update(w.objects())
-		c.after(90 * time.Second)
-	}
+	coupledChange(c, coupling{namespace: "shop", name: "checkout",
+		key: "tax", before: "14", after: "0.14", image: "2"}, trace)
 }
 
 // ambiguousImageAndConfigImage: the image bump and the ConfigMap edit

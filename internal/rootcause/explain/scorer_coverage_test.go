@@ -1,6 +1,10 @@
 package explain
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/abahmed/kwatch/internal/inventory/kube"
+)
 
 func TestScoreCoverageComparesFailingDependents(t *testing.T) {
 	for _, tc := range []struct {
@@ -21,4 +25,12 @@ func TestScoreCoverageComparesFailingDependents(t *testing.T) {
 			requireWeight(t, scoreOf(t, f, node, scoreCoverage), tc.want)
 		})
 	}
+}
+
+// A policy depends on nothing; the pods it selects are its dependents.
+func TestScoreCoverageCountsThePodsAPolicySelects(t *testing.T) {
+	f, policy := classCase(t, kube.KindNetworkPolicy, "",
+		"dial tcp 10.0.3.4:5432: i/o timeout")
+
+	requireWeight(t, scoreOf(t, f, policy, scoreCoverage), CoverageWeight)
 }

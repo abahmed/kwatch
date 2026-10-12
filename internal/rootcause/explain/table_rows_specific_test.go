@@ -138,6 +138,17 @@ var clusterRowCases = []rowCase{
 			return webhooksBehind(f, service, "Webhook.BackendMissing",
 				"cleanup", "exception")
 		}},
+	{row: "apiservice-backend-missing", want: "service/custom/adapter",
+		build: func(f *fixture) inventory.EntityID {
+			api := inventory.CoreID(kube.KindAPIService, "",
+				"v1.custom.example.com")
+			f.add(api)
+			f.relate(api, inventory.Serves,
+				inventory.CoreID(kube.KindService, "custom", "adapter"))
+			f.fail(api, "APIServiceUnavailable", failingH, 1,
+				"service not found")
+			return api
+		}},
 	{row: "metrics-api-down", want: "apiservice//v1beta1.metrics.k8s.io",
 		build: func(f *fixture) inventory.EntityID {
 			api := inventory.CoreID(kube.KindAPIService, "",
@@ -217,7 +228,8 @@ func TestTableRows(t *testing.T) {
 		workloadConfigRowCases, calledRowCases, scalingRowCases,
 		agentRowCases, serviceCallRowCases, livenessRowCases,
 		leaseRowCases, missingServiceRowCases, preemptionRowCases,
-		initWaitRowCases, finalizerRowCases}
+		initWaitRowCases, finalizerRowCases, storageRowCases,
+		runConfigRowCases, policyAdmitRowCases, claimRowCases}
 	tested := map[string]bool{}
 	for _, group := range groups {
 		for _, tc := range group {

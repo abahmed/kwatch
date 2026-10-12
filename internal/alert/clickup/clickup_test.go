@@ -6,11 +6,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 )
 
 var testDeps = transport.Dependencies{
 	HTTPClient: http.DefaultClient,
+	Clock:      clock.RealClock{},
 }
 
 func testAppConfig() string {

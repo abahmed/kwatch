@@ -13,7 +13,7 @@ func (v *view) causeOf(s scored) Cause {
 	return Cause{
 		Root: s.c.id, Row: best.match.row.Name, Mode: best.match.causeMode,
 		Covers: sortedKeys(s.c.covers), Chain: best.chain,
-		Confidence: s.confidence, Level: levelOf(s.confidence),
+		Confidence: s.confidence, Raw: s.raw, Level: levelOf(s.confidence),
 		Contributions: s.contributions, Changes: v.changesOf(s.c.id),
 		Summary: summaryOf(s.c.id, best.match.causeMode, len(s.c.covers)),
 		Began:   v.began(s.c.id),

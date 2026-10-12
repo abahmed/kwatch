@@ -1,0 +1,12 @@
+{
+  "name": "namespace-delete-crashing-pods",
+  "description": "Pods crash-loop in a namespace that is then deleted; the ConfigMap and ServiceAccount they use disappear before the pods do.",
+  "root": "deployment/preview-4/mailer",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "configmap/preview-4/mailer-settings",
+    "serviceaccount/preview-4/default"
+  ],
+  "tail": "10m0s"
+}

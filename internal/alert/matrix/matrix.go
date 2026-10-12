@@ -16,6 +16,7 @@ import (
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/ratelimit"
 )
 
 type Matrix struct {
@@ -161,17 +162,29 @@ func (m *Matrix) sendBodies(
 }
 
 // checkMatrixBody rejects a 2xx response that still carries a Matrix
-// error code, so a proxied failure is not counted as delivered.
+// error code, so a proxied failure is not counted as delivered. Rate limits
+// (M_LIMIT_EXCEEDED, or any code that names a retry_after_ms) are
+// retryable and honor the server's back-off; every other code, including
+// the hard M_RESOURCE_LIMIT_EXCEEDED, is permanent.
 func checkMatrixBody(body []byte) error {
 	var reply struct {
-		ErrCode string `json:"errcode"`
+		ErrCode      string `json:"errcode"`
+		RetryAfterMs int64  `json:"retry_after_ms"`
 	}
 	if len(body) == 0 || json.Unmarshal(body, &reply) != nil ||
 		reply.ErrCode == "" {
 		return nil
 	}
-	return transport.Permanent(fmt.Errorf(
-		"call to Matrix returned error code %s", reply.ErrCode))
+	err := fmt.Errorf("call to Matrix returned error code %s", reply.ErrCode)
+	if reply.ErrCode == "M_LIMIT_EXCEEDED" || reply.RetryAfterMs > 0 {
+		return &ratelimit.Error{
+			Provider:   "Matrix",
+			StatusCode: ratelimit.InBodyStatus,
+			RetryAfter: retryAfterFromBody(body),
+			Err:        err,
+		}
+	}
+	return transport.Permanent(err)
 }
 
 // retryAfterFromBody reads retry_after_ms from a 429 answer. Zero means

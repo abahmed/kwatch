@@ -21,7 +21,7 @@ func TestGiteaUnreadableCreateOpensOneIssue(t *testing.T) {
 			t.Fatalf("%s: %v", tc.Name, err)
 		}
 	}
-	requests := rec.Requests()
+	requests := withoutSearch(rec.Requests())
 	if len(requests) != 1 || requests[0].Method != http.MethodPost {
 		t.Fatalf("sent %d requests, want one create", len(requests))
 	}

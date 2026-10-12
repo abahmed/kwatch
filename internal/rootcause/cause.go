@@ -92,4 +92,7 @@ const (
 	// RivalMargin is how close two causes of the same failures must
 	// score to be told as two possible causes instead of one answer.
 	RivalMargin = 0.05
+	// RivalCap is the highest score of a cause that has a rival: just
+	// under High, since a message names both causes.
+	RivalCap = High - 0.01
 )

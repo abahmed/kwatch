@@ -9,6 +9,7 @@ import (
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/rootcause"
 	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
@@ -39,6 +40,8 @@ func changeSentences(f caseFacts) []sentence {
 	change := *f.p.Cause.Change
 	text := ""
 	switch {
+	case ownCause(f.p.Cause) && scaleOnly(change):
+		text = scaledText(change)
 	case ownCause(f.p.Cause) && len(change.Fields) > 0:
 		text = "the " + clock(change.At) + " release changed " +
 			fieldList(change) + changeValues(change)
@@ -87,6 +90,9 @@ func blamedChangeText(change inventory.Change) string {
 	if change.Actor != "" {
 		return change.Actor + " changed " + fieldList(change) +
 			changeValues(change)
+	}
+	if scaleOnly(change) {
+		return "the replicas were scaled" + changeValues(change)
 	}
 	if incident.IsWorkload(change.Entity.Kind) {
 		return "the release changed " + fieldList(change) +
@@ -174,6 +180,12 @@ func causeProofSentences(f caseFacts) []sentence {
 	var out []sentence
 	for _, item := range f.p.Cause.Proof {
 		text := proofWords(item)
+		if item.Code == rootcause.ProofFailedAfterChange &&
+			createdBlame(f.p.Cause) {
+			// Failing right after being created says nothing about
+			// the creation.
+			continue
+		}
 		if !item.Supports || text == "" || (deniedCause(f.p.Cause) &&
 			strings.Contains(text, "mention")) ||
 			(f.p.Cause.Change != nil &&
@@ -188,6 +200,14 @@ func causeProofSentences(f caseFacts) []sentence {
 			text:   sentenceCase(humanizeText(text))})
 	}
 	return out
+}
+
+// createdBlame reports a cause whose blamed change is the creation of
+// the failing workload itself. A new policy or config that broke
+// others still failed them after it changed.
+func createdBlame(cause *rootcause.CauseRecord) bool {
+	return cause.Change != nil && cause.Change.Created &&
+		incident.IsWorkload(cause.Change.Entity.Kind)
 }
 
 // errorSentences quote the failure's own error, else the first error

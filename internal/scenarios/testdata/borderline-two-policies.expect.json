@@ -1,7 +1,7 @@
 {
   "name": "borderline-two-policies",
-  "description": "Two egress NetworkPolicies for the same pods land a minute apart, one allowing and one denying; the pods time out reaching their database.",
-  "root": "networkpolicy/payments/restrict-egress",
+  "description": "Two egress NetworkPolicies for the same pods land a minute apart; the first isolates their egress to the cache port, the second adds DNS; the pods time out reaching their database.",
+  "root": "networkpolicy/payments/allow-cache",
   "tier": "notify",
   "maxMessages": 2,
   "mustNotBlame": [

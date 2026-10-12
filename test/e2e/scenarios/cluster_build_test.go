@@ -24,6 +24,12 @@ const (
 	missingWebhookName = "kwatch-e2e-missing-webhook"
 	// metricsAPIName is the APIService behind `kubectl top` and autoscaling.
 	metricsAPIName = "v1beta1.metrics.k8s.io"
+	// missingMetricsService is the Service BreakMetricsAPI points the
+	// metrics APIService at; it is never created.
+	missingMetricsService = "kwatch-e2e-missing-metrics"
+	// missingStorageClass is the StorageClass a claim names but nobody
+	// creates.
+	missingStorageClass = "kwatch-e2e-missing"
 	// cleanupTimeout bounds the removal of cluster-wide objects.
 	cleanupTimeout = time.Minute
 )
@@ -57,7 +63,7 @@ func claimWithMissingStorageClass(
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 		Spec: corev1.PersistentVolumeClaimSpec{
-			StorageClassName: ptr("kwatch-e2e-missing"),
+			StorageClassName: ptr(missingStorageClass),
 			AccessModes: []corev1.PersistentVolumeAccessMode{
 				corev1.ReadWriteOnce,
 			},
@@ -191,7 +197,10 @@ func missingWebhook(
 					Name: "missing-webhook", Namespace: namespace,
 				}},
 			AdmissionReviewVersions: []string{"v1"},
-			FailurePolicy:           ptr(admissionregistrationv1.Ignore),
+			// Ignore would only reach the digest: requests skip a
+			// dead backend. Fail is announced once. The webhook
+			// has no rules, so it never intercepts a request.
+			FailurePolicy: ptr(admissionregistrationv1.Fail),
 			SideEffects: ptr(
 				admissionregistrationv1.SideEffectClassNone),
 		}},
@@ -218,7 +227,7 @@ func (s *Scenario) BreakMetricsAPI() (restore func()) {
 	original := apiService.DeepCopy()
 	restore = func() { s.restoreAPIService(original) }
 	s.T.Cleanup(restore)
-	backend["name"] = "kwatch-e2e-missing-metrics"
+	backend["name"] = missingMetricsService
 	backend["namespace"] = s.Namespace
 	s.Must(unstructured.SetNestedMap(
 		apiService.Object, backend, "spec", "service"))

@@ -115,15 +115,19 @@ var genericRows = []Row{
 		Prior:  0.65,
 	},
 	{
-		// An unavailable API server explains anything that stopped
-		// being reconciled.
+		// An unavailable, slow or throttling API server explains
+		// anything that stopped being reconciled and the autoscalers
+		// whose scale reads or writes fail.
 		Name: "apiserver-unavailable",
 		Cause: Side{Kind: kindAPIServer,
 			Modes: []detection.Mode{
-				detection.ModeUnavailable, detection.ModeLatency}},
+				detection.ModeUnavailable, detection.ModeLatency,
+				detection.ModeThrottlingAPIServer}},
 		Link: LinkServedBy,
 		Effect: Side{Group: AnyGroup, Kind: AnyKind,
-			Modes: []detection.Mode{detection.ModeNotReconciling}},
+			Modes: []detection.Mode{detection.ModeNotReconciling,
+				detection.ModeScalingError,
+				detection.ModeScalingUpdateFailed}},
 		Prior: 0.5,
 	},
 }
@@ -157,7 +161,7 @@ var nodeRows = []Row{
 				detection.ModeMemoryPressure, detection.ModeMemory}},
 		Link: LinkRunsOn,
 		Effect: podSide(
-			detection.ModeEvicted, detection.ModeOOMKilled,
+			detection.ModeEvicted, detection.ModeOOMKilledNode,
 			detection.ModeFailed, detection.ModeError, detection.ModeExitKilled,
 			detection.ModeKilled),
 		Prior: 0.7,
@@ -170,9 +174,14 @@ var nodeRows = []Row{
 		Cause: Side{Kind: kube.KindNode,
 			Modes: []detection.Mode{
 				detection.ModeMemoryPressure, detection.ModeMemory}},
-		Link:   LinkRunsOn,
-		Effect: podSide(detection.ModeNotReady, detection.ModeProbe),
-		Prior:  0.55,
+		// A pod whose container was killed at its own limit is unready
+		// because of that kill, whatever the node reports.
+		Link: LinkRunsOn,
+		Effect: Side{Kind: kube.KindPod,
+			Modes: []detection.Mode{
+				detection.ModeNotReady, detection.ModeProbe},
+			Unless: []detection.Mode{detection.ModeOOMKilledLimit}},
+		Prior: 0.55,
 	},
 	{
 		Name: "node-disk-pressure",
@@ -218,7 +227,7 @@ var nodeRows = []Row{
 			detection.ModeMemoryOvercommitted}},
 		Link: LinkRunsOn,
 		Effect: podSide(
-			detection.ModeOOMKilled, detection.ModeEvicted,
+			detection.ModeOOMKilledNode, detection.ModeEvicted,
 			detection.ModeExitKilled, detection.ModeKilled),
 		Prior: 0.5,
 	},
@@ -280,8 +289,9 @@ var specificRows = concatRows(nodeRows, workloadRows, clusterRows,
 	nodeLifecycleRows,
 	operatorRows, workloadConfigRows, containerRows, calledRows,
 	serviceCallRows, policyCallRows, livenessStartRows,
-	scalingRows, sharedRows, agentRows, preemptionRows, leaseRows,
-	missingServiceRows, initWaitRows, finalizerRows)
+	scalingRows, sharedRows, agentRows, preemptionRows, leaseRows, runConfigRows,
+	missingServiceRows, initWaitRows, finalizerRows, storageRows,
+	policyAdmitRows, nodeDegradedRows, claimRows)
 
 func concatRows(groups ...[]Row) []Row {
 	var out []Row

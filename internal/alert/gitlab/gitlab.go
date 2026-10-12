@@ -11,6 +11,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert/issues"
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -61,7 +62,7 @@ func NewGitlab(
 		"projectId", projectID)
 
 	return &Gitlab{
-		issues: issues.NewMap(),
+		issues: issues.NewMap(clock.Require(dependencies.Clock).Now),
 		sender: transport.NewSender(dependencies),
 		url: fmt.Sprintf(
 			"%s/projects/%s/issues",
@@ -122,6 +123,29 @@ func (g *Gitlab) Create(
 	return strconv.Itoa(created.IID), nil
 }
 
+// Find implements issues.Finder with the project issue search.
+func (g *Gitlab) Find(ctx context.Context, marker string) (string, error) {
+	response, err := g.call(ctx, "GET",
+		g.url+"?state=opened&in=description&search="+url.QueryEscape(marker),
+		nil)
+	if err != nil {
+		return "", err
+	}
+	var found []struct {
+		IID         int    `json:"iid"`
+		Description string `json:"description"`
+	}
+	if json.Unmarshal(response, &found) != nil {
+		return "", nil
+	}
+	for _, item := range found {
+		if strings.Contains(item.Description, marker) {
+			return strconv.Itoa(item.IID), nil
+		}
+	}
+	return "", nil
+}
+
 // Comment implements issues.Tracker.
 func (g *Gitlab) Comment(ctx context.Context, id, body string) error {
 	_, err := g.call(ctx, "POST",
@@ -150,9 +174,12 @@ func (g *Gitlab) Reopen(ctx context.Context, id string) error {
 func (g *Gitlab) call(
 	ctx context.Context, method, url string, payload interface{},
 ) ([]byte, error) {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
+	var body []byte
+	if payload != nil {
+		var err error
+		if body, err = json.Marshal(payload); err != nil {
+			return nil, err
+		}
 	}
 	return g.sender.Send(ctx, transport.Request{
 		Provider: g.Name(), Method: method, URL: url, Body: body,

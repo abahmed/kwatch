@@ -17,7 +17,12 @@ func (v *view) changeModes(id inventory.EntityID) []modeHealth {
 		return nil
 	}
 	var out []modeHealth
+	terminating := v.namespaceTerminating(id.Namespace)
 	for _, change := range v.changesOf(id) {
+		if terminating && change.Deleted {
+			// A namespace deletion removes its objects on purpose.
+			continue
+		}
 		out = append(out, modeHealth{mode: changeMode(change),
 			health: detection.Failing, pseudo: true})
 	}
@@ -126,7 +131,8 @@ func (v *view) groupModes(group inventory.EntityID) []modeHealth {
 func (v *view) backendModes(
 	id, effect inventory.EntityID, link LinkType,
 ) []modeHealth {
-	if link != LinkServedBy || !isAdmissionKind(effect.Kind) {
+	if link != LinkServedBy ||
+		!(isAdmissionKind(effect.Kind) || effect.Kind == kube.KindAPIService) {
 		return nil
 	}
 	failing := func(mode detection.Mode) []modeHealth {
@@ -159,11 +165,23 @@ func (v *view) missingModes(
 	id inventory.EntityID, link LinkType,
 ) []modeHealth {
 	if (link == LinkUses || link == LinkMounts || link == LinkRoutesTo) &&
-		!v.s.Model.Exists(id) {
+		!v.s.Model.Exists(id) && !v.namespaceTerminating(id.Namespace) {
 		return []modeHealth{{mode: ModeMissing, health: detection.Failing,
 			pseudo: true}}
 	}
 	return nil
+}
+
+// namespaceTerminating reports a namespace being deleted: what it held
+// is removed on purpose, so an object missing from it is not a cause.
+func (v *view) namespaceTerminating(namespace string) bool {
+	if namespace == "" {
+		return false
+	}
+	ns, ok := v.s.Model.Entity(
+		inventory.CoreID(kube.KindNamespace, "", namespace))
+	return ok && (attrText(ns, kube.AttrPhase) == "Terminating" ||
+		attrBool(ns, kube.AttrDeleting))
 }
 
 // objectModes are the pseudo modes of kinds whose state is read from
@@ -175,6 +193,9 @@ func (v *view) objectModes(
 	switch id.Kind {
 	case kube.KindValidatingHook, kube.KindMutatingWebhook:
 		return v.admissionModes(id, effect, link), true
+	}
+	if modes := v.policyAdmissionModes(id, effect, link); len(modes) > 0 {
+		return modes, true
 	}
 	if modes, ok := v.finalizerModes(id, effect, link); ok {
 		return modes, true

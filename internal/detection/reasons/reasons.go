@@ -236,6 +236,10 @@ const (
 	// NodePLEGSlow is a kubelet whose pod lifecycle relist takes so
 	// long that it falls behind its pods.
 	NodePLEGSlow = "NodePLEGSlow"
+	// NodeConditionPrefix starts the reason of a node condition that is
+	// True although kwatch reads it nowhere else: "NodeCondition.<Type>".
+	// The type is bounded by the model.
+	NodeConditionPrefix = "NodeCondition."
 	// NodeEvicting is a kubelet evicting pods right now.
 	NodeEvicting = "NodeEvicting"
 	// ServiceUnused is a Service that has selected no pod for a day.

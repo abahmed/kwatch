@@ -333,7 +333,12 @@ func (e *Engine) evaluate(
 	if (len(transitions) == 0 && e.moved.len() == 0) || ctx.Err() != nil {
 		return
 	}
-	// One solve per iteration: a storm of transitions is explained once.
+	contain("incident", "solve", func() { e.solve(now, transitions) })
+}
+
+// solve explains the active findings once per iteration: a storm of
+// transitions is explained once.
+func (e *Engine) solve(now time.Time, transitions []detection.Transition) {
 	snapshot := explain.NewSnapshot(e.deps.Model, e.activeFindings(),
 		e.deps.Synced, now)
 	e.deps.Incidents.Apply(snapshot, e.moved.take(), transitions)
@@ -346,9 +351,18 @@ func (e *Engine) evaluate(
 func (e *Engine) tick(
 	ctx context.Context, now time.Time,
 ) (time.Time, bool) {
-	decisions, next := e.deps.Incidents.Tick(now)
+	var decisions []incident.Decision
+	var next time.Duration
+	if !contain("incident", "tick", func() {
+		decisions, next = e.deps.Incidents.Tick(now)
+	}) {
+		return time.Time{}, false
+	}
 	e.storage.history.decided(now, decisions)
-	announced := e.announcer.announce(ctx, now, decisions)
+	var announced bool
+	contain("announce", "announce", func() {
+		announced = e.announcer.announce(ctx, now, decisions)
+	})
 	decided := len(decisions) > 0 || announced
 	if next == 0 {
 		return time.Time{}, decided

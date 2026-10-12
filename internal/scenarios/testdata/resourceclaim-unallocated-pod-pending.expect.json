@@ -1,0 +1,8 @@
+{
+  "name": "resourceclaim-unallocated-pod-pending",
+  "description": "A pod waits for a device claim the scheduler could not allocate.",
+  "root": "resourceclaim/ml/gpu-claim",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "10m0s"
+}

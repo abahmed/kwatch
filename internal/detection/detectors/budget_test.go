@@ -45,6 +45,7 @@ func TestBudgetReportsSelectingNothing(t *testing.T) {
 	eval := evaluate(Budget{}, m, t0.Add(11*time.Minute), id, nil)
 	require.Len(t, eval.Findings, 1)
 	assert.Equal(t, "Budget.SelectsNothing", string(eval.Findings[0].Mode))
+	assert.True(t, eval.Findings[0].Advisory)
 }
 
 func TestBudgetSelectingPodsIsFine(t *testing.T) {
@@ -77,11 +78,24 @@ func TestBudgetReportsOverlap(t *testing.T) {
 	require.Len(t, eval.Findings, 1)
 	f := eval.Findings[0]
 	assert.Equal(t, "Budget.Overlap", string(f.Mode))
+	assert.False(t, f.Advisory, "the controller flagged an attempt")
 	assert.Equal(t, detection.Failing, f.Health)
 	assert.Contains(t, f.Summary, "also front")
 	assert.Contains(t, f.Evidence, detection.Evidence{
 		Label: "web-1",
 		Value: "Pod belongs to multiple PodDisruptionBudgets"})
+}
+
+func TestBudgetOverlapWithoutAttemptIsAdvisory(t *testing.T) {
+	m := newTestModel()
+	labelledPod(m, "web-1", "app=web,tier=front")
+	id := budget(m, "web", "app=web", 1)
+	budget(m, "front", "tier=front", 1)
+
+	eval := evaluate(Budget{}, m, t0.Add(time.Minute), id, nil)
+
+	require.Len(t, eval.Findings, 1)
+	assert.True(t, eval.Findings[0].Advisory)
 }
 
 func TestBudgetReportsSyncFailed(t *testing.T) {

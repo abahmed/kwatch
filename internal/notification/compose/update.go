@@ -1,11 +1,13 @@
 package compose
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
 // maxUpdate bounds an update: only what changed, in one or two
@@ -137,6 +139,8 @@ func changedSentences(f caseFacts) []sentence {
 // that now shows its own condition is not spreading: "API service m
 // now reports …".
 func spreadSentences(f caseFacts, spread []detection.Finding) []sentence {
+	spread = slices.DeleteFunc(slices.Clone(spread),
+		func(s detection.Finding) bool { return partOfRoot(f, s.Entity) })
 	home := leadSubject(f)
 	var order []string
 	byState := map[string][]inventory.EntityID{}
@@ -177,6 +181,28 @@ func spreadSentences(f caseFacts, spread []detection.Finding) []sentence {
 		out = append(out, sentence{part: partLead, text: endSentence(text)})
 	}
 	return out
+}
+
+// partOfRoot reports a pod or container that belongs to the incident's
+// own root: a container of the root pod, or a pod of the root workload.
+// The root failing through its parts is the root failing, not spreading.
+func partOfRoot(f caseFacts, id inventory.EntityID) bool {
+	root := f.p.Root
+	switch id.Kind {
+	case kube.KindContainer:
+		pod, _ := splitContainer(id.Name)
+		if root.Kind == kube.KindPod && root.Namespace == id.Namespace &&
+			root.Name == pod {
+			return true
+		}
+		id = inventory.CoreID(kube.KindPod, id.Namespace, pod)
+		fallthrough
+	case kube.KindPod:
+		owner, ok := ownerIn(append([]inventory.EntityID{root},
+			f.p.Impact...), id)
+		return ok && owner == root
+	}
+	return false
 }
 
 // recoveredSentence says a member recovered and what is still open,

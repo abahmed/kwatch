@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/notification"
+	providercatalog "github.com/abahmed/kwatch/internal/provider/catalog"
 )
 
 func TestDefaultMaxBytes(t *testing.T) {
@@ -37,6 +38,10 @@ func TestTruncateMsgRejectsNonPositiveBudget(t *testing.T) {
 
 func TestProviderPayloadPolicyIsExplicit(t *testing.T) {
 	for name, policy := range payloadPolicies {
+		if policy.mode == payloadProviderOwn {
+			assert.Zero(t, policy.maxBytes, name)
+			continue
+		}
 		assert.Equal(t, payloadBounded, policy.mode, name)
 		assert.Positive(t, policy.maxBytes, name)
 	}
@@ -83,4 +88,15 @@ func TestPrepareIncidentCapsProvidersWithLimitsAndClosesFences(t *testing.T) {
 			"%s: unclosed fence", name)
 		assert.True(t, strings.HasPrefix(got.Note, "🔴"), name)
 	}
+}
+
+func TestProviderPayloadPolicyCoversEveryProviderIdentity(t *testing.T) {
+	for _, name := range providercatalog.Names() {
+		policy, ok := payloadPolicies[name]
+		assert.True(t, ok, "provider %q has no payload policy", name)
+		if ok && policy.mode == payloadBounded {
+			assert.Positive(t, policy.maxBytes, name)
+		}
+	}
+	assert.Equal(t, 28000, defaultMaxBytes("teamsworkflow"))
 }

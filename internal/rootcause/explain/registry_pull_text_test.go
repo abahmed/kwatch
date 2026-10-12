@@ -3,7 +3,9 @@ package explain
 import (
 	"fmt"
 	"testing"
+	"time"
 
+	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
@@ -72,5 +74,44 @@ func TestExplainRegistryPullTextSparesSingleImage(t *testing.T) {
 	if c, ok := f.explain().CauseOf(first); ok &&
 		c.Root.Kind == kube.KindRegistry {
 		t.Fatalf("one failing image blamed registry %v", c.Root)
+	}
+}
+
+// A mount that timed out is no network fault of the registry, and an
+// image with pull policy Never was never pulled: neither blames it.
+func TestExplainRegistryPullTextIgnoresOtherEvents(t *testing.T) {
+	cases := map[string]string{
+		"pull policy never": "ImagePull.NeverPull",
+		"plain pull":        "ImagePull",
+	}
+	for name, mode := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			var first inventory.EntityID
+			for i := 0; i < 4; i++ {
+				svc := fmt.Sprintf("service-%d", i)
+				image := unreachableRegistry + "/team/" + svc + ":1"
+				pod := f.workload("shop", svc, 1)[0]
+				f.relate(containerOf(pod), inventory.Pulls,
+					inventory.CoreID(kube.KindImage, "", image))
+				f.apply(inventory.Observation{Kind: inventory.Noted,
+					Entity: pod, Note: inventory.Note{
+						At: t0.Add(time.Minute), Source: "kubelet",
+						Reason: "FailedMount", Warning: true,
+						Message: "Unable to attach or mount volumes: " +
+							"timed out waiting for the condition"}})
+				f.fail(containerOf(pod), detection.Mode(mode), failingH, 2,
+					fmt.Sprintf("Container image %q is not present "+
+						"with pull policy of Never", image))
+				if first.IsZero() {
+					first = containerOf(pod)
+				}
+			}
+			if c, ok := f.explain().CauseOf(first); ok &&
+				c.Root.Kind == kube.KindRegistry &&
+				c.Mode == pullNetwork {
+				t.Fatalf("mount timeout blamed registry %v", c.Root)
+			}
+		})
 	}
 }

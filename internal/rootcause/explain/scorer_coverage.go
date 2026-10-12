@@ -45,6 +45,10 @@ func (v *view) dependents(id inventory.EntityID) []inventory.EntityID {
 		return v.s.Model.Related(id, inventory.PartOf, inventory.Incoming)
 	case kube.KindPod:
 		return nil
+	case kube.KindNetworkPolicy:
+		// A policy depends on nothing; its dependents are the pods it
+		// selects.
+		return v.selectedBy(id)
 	}
 	if pods := rootcause.OwnedPods(v.s.Model, id); len(pods) > 0 {
 		return pods
@@ -53,6 +57,20 @@ func (v *view) dependents(id inventory.EntityID) []inventory.EntityID {
 	for _, relation := range v.s.Model.Relations(id, inventory.Incoming) {
 		if relation.From.Kind == kube.KindPod {
 			out = append(out, relation.From)
+		}
+	}
+	return out
+}
+
+// selectedBy lists the pods an entity's selector matches.
+func (v *view) selectedBy(id inventory.EntityID) []inventory.EntityID {
+	if v.s.Links == nil {
+		return nil
+	}
+	var out []inventory.EntityID
+	for _, link := range v.s.Links.Links(id) {
+		if link.Type == inventory.Selects && link.To.Kind == kube.KindPod {
+			out = append(out, link.To)
 		}
 	}
 	return out

@@ -42,6 +42,7 @@ func TestNodeUsageThresholds(t *testing.T) {
 			require.Len(t, got, 1)
 			assert.Equal(t, tt.reason, got[0].Reason)
 			assert.Equal(t, tt.severity, got[0].Severity)
+			assert.True(t, got[0].Advisory, "no pressure reported yet")
 			assert.NotEmpty(t, got[0].Summary)
 		})
 	}

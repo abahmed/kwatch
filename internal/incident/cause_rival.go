@@ -20,17 +20,21 @@ func (a *areaPlacer) annotate(record *rootcause.CauseRecord, c explain.Cause) {
 	record.Checked = a.checkedTexts(c.Covers, record.Proof)
 	for _, alt := range a.area.Alternatives {
 		if alt.Root == c.Root || !shareFailure(alt.Covers, c.Covers) ||
-			slices.Contains(c.Covers, alt.Root) ||
+			(slices.Contains(c.Covers, alt.Root) &&
+				len(alt.Changes) == 0) ||
 			slices.Contains(c.Chain, alt.Root) ||
 			slices.Contains(alt.Chain, c.Root) {
 			// One cause upstream of the other is the same story told
 			// at two depths, not a second explanation.
 			continue
 		}
-		if math.Abs(c.Confidence-alt.Confidence) <=
+		if math.Abs(c.Raw-alt.Raw) <=
 			rootcause.RivalMargin+1e-9 {
 			rival := a.s.Record(alt)
 			record.Rival = &rival
+			// Two answers within the margin are not one answer
+			// stated plainly: the score must not read as high.
+			record.Score = min(record.Score, rootcause.RivalCap)
 		}
 		return
 	}
