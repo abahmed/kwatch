@@ -38,8 +38,9 @@ func TestScenarioExtendedMetricsAPIFailure(t *testing.T) {
 			withCPURequest("10m"))
 		s.CreateAutoscaler(cpuAutoscaler("metrics-target"))
 		// One autoscaler failing to read metrics waits ten minutes before
-		// it is reported, so the incident is the unavailable API itself.
-		s.ExpectClusterIncident(metricsAPIName,
+		// it is reported, so the incident is the unavailable API, rooted
+		// at the Service it points to, which does not exist.
+		s.ExpectIncident(missingMetricsService,
 			"APIServiceFailure", detectors.DefaultCustomFailing)
 		restoreMetricsAPI()
 	})

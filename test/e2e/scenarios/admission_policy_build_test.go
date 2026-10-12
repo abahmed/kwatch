@@ -135,7 +135,9 @@ func (s *Scenario) waitForDenial(policy string) {
 					ctx, probe.Name, metav1.DeleteOptions{})
 				return false, nil
 			}
-			if !apierrors.IsForbidden(err) {
+			// A policy denies with reason Invalid (422) unless its
+			// validation names another reason; both are a denial.
+			if !apierrors.IsForbidden(err) && !apierrors.IsInvalid(err) {
 				return false, err
 			}
 			return strings.Contains(err.Error(), policy), nil
