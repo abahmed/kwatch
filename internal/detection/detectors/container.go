@@ -183,6 +183,15 @@ func terminatedFinding(
 		if exit, ok := terminatedExit(code, reason); ok {
 			findingReason = exit.reason
 			summary = containerRole(e) + " " + exit.summary
+		} else if restarts, _ := number(e, kube.AttrRestarts); restarts > 0 {
+			// A container that was restarted before and exits again
+			// is in the crash loop the kubelet is about to name. It
+			// stays one finding through the seconds it is terminated
+			// and the minutes it backs off, so which of the two the
+			// first message lands on does not change what it says.
+			findingReason = reasons.CrashLoopBackOff
+			summary = containerRole(e) + " " +
+				describeWaiting(findingReason)
 		}
 	}
 	return []detection.Finding{{
