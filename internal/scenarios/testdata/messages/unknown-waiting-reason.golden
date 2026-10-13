@@ -1,0 +1,14 @@
+10:04:15 settled
+🟠 ledger in shop (prod-eu-1) has been waiting in state WaitingOnSomethingNew. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "the runtime is waiting on something new". To see why the container cannot start, run kubectl describe pod ledger-f5f1f477-a -n shop
+🟠 ledger in shop (prod-eu-1) has been waiting in state WaitingOnSomethingNew.
+| 🟠 **ledger** in **shop** (**prod-eu-1**) has been waiting in state WaitingOnSomethingNew.
+| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| It fails with `the runtime is waiting on something new`.
+| To see why the container cannot start, run
+| ```
+| kubectl describe pod ledger-f5f1f477-a -n shop
+| ```
+10:16:15 material change
+🟠 ledger in shop (prod-eu-1) now has pods that run without restarting but are not ready.
+🟠 ledger in shop (prod-eu-1) now has pods that run without restarting but are not ready.
+| 🟠 **ledger** in **shop** (**prod-eu-1**) now has pods that run without restarting but are not ready.

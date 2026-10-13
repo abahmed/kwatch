@@ -2,6 +2,7 @@ package detectors
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 
@@ -47,13 +48,14 @@ func (ContainerResources) Detect(
 			// line, so the finding waits for a level that lasts.
 			since := ctx.Onset("memory-high", valueSince(e, attr))
 			if sustained(ctx, "memory-high", since, memorySustained) {
-				s := levelFinding(pct,
-					reasons.ContainerMemoryHigh, since, what+" is "+
-						percentText(pct)+" of the limit; the container "+
-						"is close to being OOM-killed")
+				used, _ := number(e, attr)
+				limit, _ := number(e, kube.AttrMemoryLimit)
+				s := levelFinding(pct, reasons.ContainerMemoryHigh, since,
+					"Container uses "+percentText(pct)+" of its memory "+
+						"limit ("+bytesText(used)+" of "+bytesText(limit)+
+						", "+what+")")
 				// Close to the limit is only usual, not safe, below the
 				// critical level: that stays an interruption.
-				used, _ := number(e, attr)
 				memoryJudgement(ctx, e, used).
 					keepUsual(pct < limitCritical).apply(&s)
 				// Nothing was killed yet: the OOM kill is the failure.
@@ -142,8 +144,8 @@ func (PodStorage) Detect(
 	}
 	s := levelFinding(pct, reasons.ContainerEphemeralStorageHigh,
 		valueSince(e, kube.AttrEphemeralUsed),
-		"Local storage use is "+percentText(pct)+" of the limit; the pod "+
-			"will be evicted when it is exceeded")
+		"Pod uses "+percentText(pct)+" of its ephemeral-storage limit ("+
+			bytesText(used)+" of "+bytesText(limit)+")")
 	// The eviction is the failure; nothing has been evicted yet.
 	s.Advisory = true
 	return []detection.Finding{s}
@@ -244,6 +246,17 @@ func levelFinding(
 	return detection.Finding{
 		Reason: reason, Severity: severity, Since: since, Summary: summary,
 	}
+}
+
+// bytesText writes a byte count in the unit Kubernetes users write
+// limits in: "470Mi", "1.8Gi".
+func bytesText(b float64) string {
+	const mi, gi = 1 << 20, 1 << 30
+	if b >= gi {
+		return strconv.FormatFloat(math.Round(b/gi*10)/10, 'f', -1, 64) +
+			"Gi"
+	}
+	return strconv.FormatFloat(math.Round(b/mi), 'f', -1, 64) + "Mi"
 }
 
 func percentText(pct float64) string {

@@ -20,6 +20,7 @@ var writtenVia = map[string]string{
 	"TelemetryFailures": "IncTelemetryFailure",
 	"StorageResets":     "IncStorageReset",
 	"Investigations":    "IncInvestigation",
+	"Unexplained":       "AddUnexplained",
 	"DecisionLag":       "ObserveDecisionLag",
 	"Panics":            "IncPanic",
 }

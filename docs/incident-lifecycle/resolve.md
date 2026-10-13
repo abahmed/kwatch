@@ -32,6 +32,18 @@ failure, it did not stop. The same holds for a root kind kwatch cannot
 observe: its returning findings count no cycle either (`recovering` tests
 `verifiable` as well as `inGrace`).
 
+## Resolves of one tick
+
+Incidents that only a roll-up named never spoke on their own, so they
+have no thread to close. When two or more of them resolve in the same
+tick, the first resolve is one message that also lists the others
+(`compose.Recovered`), and the other decisions are recorded in the audit
+log as carried by it (`joint recovery`, `splitRecoveries` in
+`pipeline/recoveries.go`). They still count as delivered for the roll-up
+listing's own close. A page, an incident with its own thread or one the
+pagers heard of, a handover and a superseded incident resolve on their
+own.
+
 ---
 
 Previous: [Reminders](./reminders.md) | Next: [Reopen and supersede](./reopen.md)

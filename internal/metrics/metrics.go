@@ -57,6 +57,7 @@ type Registry struct {
 	StorageFileBytes         atomic.Int64
 	StorageFreeBytes         atomic.Int64
 	Investigations           [4]atomic.Int64
+	Unexplained              [2]atomic.Int64
 	Panics                   [len(panicStages)]atomic.Int64
 	AuditDropped             atomic.Int64
 	DecisionLag              LagHistogram
@@ -137,7 +138,14 @@ var (
 		"kwatch_investigations_total",
 		"Announcement investigations by result", []string{"result"}, nil)
 
+	unexplainedDesc = prometheus.NewDesc(
+		"kwatch_unexplained_total",
+		"Failures kwatch saw but could not explain, by kind",
+		[]string{"kind"}, nil)
+
 	investigationResults = [...]string{"done", "skipped", "late", "timeout"}
+
+	unexplainedKinds = [...]string{"event", "incident"}
 
 	storageResetReasons = [...]string{"schema_mismatch", "unreadable"}
 
@@ -285,6 +293,19 @@ func (r *Registry) IncInvestigation(result string) {
 	}
 }
 
+// AddUnexplained counts n failures kwatch could not explain: kind is
+// "event" (a Warning event reason it has no entry for) or "incident" (an
+// incident whose cause is not clear). Unknown kinds are ignored so the
+// label set cannot grow.
+func (r *Registry) AddUnexplained(kind string, n int) {
+	for i, allowed := range unexplainedKinds {
+		if kind == allowed && n > 0 {
+			r.Unexplained[i].Add(int64(n))
+			return
+		}
+	}
+}
+
 // IncTelemetryFailure records one failure using a bounded reason label.
 func (r *Registry) IncTelemetryFailure(reason string) {
 	for i, allowed := range telemetryFailureReasons {
@@ -314,6 +335,7 @@ func (r *Registry) Describe(ch chan<- *prometheus.Desc) {
 	ch <- telemetryFailuresDesc
 	ch <- storageResetsDesc
 	ch <- investigationsDesc
+	ch <- unexplainedDesc
 	ch <- panicsDesc
 	ch <- decisionLagDesc
 	r.describeDelivery(ch)
@@ -347,6 +369,12 @@ func (r *Registry) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(
 			investigationsDesc, prometheus.CounterValue,
 			float64(r.Investigations[i].Load()), result,
+		)
+	}
+	for i, kind := range unexplainedKinds {
+		ch <- prometheus.MustNewConstMetric(
+			unexplainedDesc, prometheus.CounterValue,
+			float64(r.Unexplained[i].Load()), kind,
 		)
 	}
 	r.collectPanics(ch)

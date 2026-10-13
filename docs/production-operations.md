@@ -275,7 +275,8 @@ reported through health diagnostics.
 
 The state file `/var/lib/kwatch/state.db` holds one bucket per data class:
 incidents, changes, baselines, evidence, timeline, audit, object
-fingerprints, lifecycle state, provider thread IDs, and the delivery outbox.
+fingerprints, lifecycle state, provider thread IDs, the delivery outbox, and
+the flight recording.
 Every write,
 including compaction, first checks the store's claim epoch, so a process that
 lost the Lease cannot write or delete anything.
@@ -305,6 +306,7 @@ stops within one transaction on shutdown or loss of the state lock.
 | --- | --- |
 | Changes, audit | 30 days after the entry time |
 | Timeline | 7 days after the entry time, and at most 32 MiB |
+| Flight recording | 48 hours, and at most 64 MiB (see "Capturing an incident") |
 | Evidence | 30 days, and at most 128 MiB |
 | Resolved incidents | 7 days after resolution |
 | Baselines | Dropped 7 days after their workload is gone (checked every 10 minutes) |
@@ -359,6 +361,75 @@ copy.
 real limit. An `emptyDir` loses all state when the Pod is rescheduled; use it
 only for evaluation.
 
+## Capturing an incident
+
+Kwatch always keeps a flight recording: the observations its sources hand
+the pipeline (what the scenario library replays), sanitized when written,
+in the `flight` bucket of the state file. It is a ring: batches older than
+48 hours go, and past 64 MiB the compactor drops the oldest first, so a
+busy cluster keeps fewer hours, never more bytes. There is no setting; it
+is part of the state file's 512 MiB logical cap and only ever evicted
+first. A repeat of an unchanged state is skipped (and recorded again every
+10 minutes), and batches are compressed, so a typical cluster keeps the
+whole 48 hours in far less than the cap. Recording never delays the
+pipeline: a full queue (8192 entries) drops the oldest and a failed write
+is dropped, both logged at `-v=2`. Memory is bounded by that queue and
+20,000 remembered states, about 10 MiB at most.
+
+**What is in it.** Names, namespaces, UIDs, actors, GitOps applications,
+event sources, images and label values are salted hash pseudonyms
+(`pod-` style names such as `name-468f1de69a`), the same everywhere, so
+owners, selectors and rollouts still line up. Reason codes, numbers,
+booleans and times are kept. Messages, log lines, error text, change
+causes and anything with spaces are dropped, so a recording has no quoted
+log or event text; detectors that read a crash log line or an event
+message see nothing in a replay of it. A Secret keeps only numbers,
+booleans and times; its key names, types and digests are hashed. The salt
+is random, created once and kept in the state file; it is never exported.
+The state file itself still holds real names (incidents, changes), so
+treat it as before; the exported file is the one to share.
+
+**Export a window.** The state file is locked while kwatch runs, so the
+command reads a copy of it, taken next to the output file (it needs free
+space for it, up to the file size, and removes it after):
+
+```sh
+kubectl exec -n kwatch deploy/kwatch -- \
+  kwatch replay-export --since 2h --out /var/lib/kwatch/incident.jsonl
+kubectl cp kwatch/<pod>:/var/lib/kwatch/incident.jsonl ./incident.jsonl
+```
+
+`--since` and `--until` take a duration back from now (`2h`, `30m`) or an
+RFC 3339 time; `--state` names another state file (default
+`$KWATCH_DATA_DIR/state.db`). The log starts at `--since`, with the latest
+state of every object seen before it written first, so a replay begins
+from the cluster as it was. A copy taken while kwatch writes can fail to
+open; run the command again. The export is the log format of
+`internal/replay` and the scenarios, nothing else.
+
+**Turn it into a scenario.**
+
+1. Copy the file to `internal/scenarios/testdata/recorded/<name>.jsonl`.
+2. Write `<name>.expect.json` next to it, before replaying it, in the
+   format of `docs/contributing-scenario.md`: the `root` that a person who
+   knows the cluster would blame, written with the pseudonyms the log uses
+   (look the entity up in the log: `grep -m1 '"kind":"deployment"'`), its
+   `tier`, a `maxMessages` budget and `mustNotBlame`.
+3. Run `make alert-quality`. The case appears under "Recorded scenarios",
+   scored and never tuned against: a miss is reported, not fixed by
+   changing rules to fit the file. The recorded accuracy gate is
+   informational until ten recorded cases exist.
+
+**Cause self-check.** When an incident resolves, kwatch notes whether
+recovery followed a change to the cause it named (the cause entity changed
+or recovered before the members recovered), a change to something else
+nearby, or no change. Counts are kept per rule for 7 days (at most 48
+rules, a few kilobytes) in the state file, and `/status` shows, per rule,
+"cause confirmed by the fix in 3 of 4 resolved incidents (last 7 days)"
+(`causeChecks` in the JSON). It is display only: it never changes a
+confidence, a tier or a message. Incidents superseded by a revised cause
+are not counted.
+
 ## Delivery guarantee
 
 Delivery is at least once, not exactly once. A delivery is written to the
@@ -382,6 +453,30 @@ incident.io, iLert, SIGNL4) and issue trackers (GitHub, GitLab, Gitea, Jira,
 ClickUp) do not receive them, because nothing would close the alert or issue
 they open. Splunk On-Call, Alerta, Sensu Go, Datadog, New Relic, SNS and
 Splunk HEC receive them as informational.
+
+## After a crash
+
+The state file is a transactional database, so a kill (SIGKILL, OOM, node
+loss) at any moment leaves a file that opens at the next start. What is
+guaranteed, and tested by killing a real process in the middle of each write:
+
+- **Incident records, change store, digest state.** Every write is one
+  transaction: it is there whole or not at all. A write that finished before
+  the kill is there. Open incidents come back open; at most the last moment
+  of changes before the kill is lost.
+- **Online file rewrite.** The rewrite copies the live data to
+  `<state file>.compact` and renames the copy over the file. A kill during
+  the copy leaves the original whole. The leftover copy is never read: the
+  next rewrite deletes it and starts again. A kill after the rename leaves
+  the new, whole file.
+- **Messages.** A crash between a provider accepting a message and the outbox
+  forgetting it sends that message again once at the next start, with the
+  same conversation key and alert key, so a thread or a paging alert takes it
+  as the same one. It is not marked as a repeat, and a second restart sends
+  nothing. A message queued but not yet sent is sent after the restart.
+
+A file that cannot be read at all is replaced by an empty one (see
+[Storage](#storage)); that is a reset, not a crash outcome.
 
 ## Security and data sent out
 

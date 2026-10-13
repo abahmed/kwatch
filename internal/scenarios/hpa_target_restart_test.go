@@ -86,8 +86,9 @@ func TestAgedMissingScaleTargetIsFoundWhenDeploymentsSyncLate(
 
 // A restart over an incident an older release opened for the same
 // autoscaler (it read the failure as FailedGetScale) ends with that
-// incident holding the missing-target finding, and the restart listing
-// names it; the fall to the digest tier posts nothing by itself.
+// incident holding the missing-target finding. It falls to the digest
+// tier, so the restart listing does not name it (the next digest does)
+// and the fall posts nothing by itself.
 func TestRestartMovesOldScaleFailureToMissingTarget(t *testing.T) {
 	store := newPersistingStore()
 	c := newCluster(scenarioStart, "")
@@ -122,17 +123,15 @@ func TestRestartMovesOldScaleFailureToMissingTarget(t *testing.T) {
 		t.Errorf("second session members = %v, want HPATargetMissing only",
 			got)
 	}
-	listed := false
 	for _, d := range second.Decisions {
-		listed = listed || d.Reason == "restored incidents"
-	}
-	if !listed {
-		t.Errorf("restart did not list the incident: %s",
-			describeDecisions(second))
+		if d.Reason == "restored incidents" {
+			t.Errorf("restart named a digest-tier incident: %s",
+				describeDecisions(second))
+		}
 	}
 	// The restored incident falls to the digest tier: its thread may
 	// never have been told, so the restart posts nothing of its own for
-	// it and the listing and the next digest carry it.
+	// it and the next digest carries it.
 	if saidCauseRevised(second) {
 		t.Errorf("a restored demotion posted on its own: %s",
 			describeDecisions(second))

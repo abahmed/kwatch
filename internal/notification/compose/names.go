@@ -15,6 +15,7 @@ import (
 var kindWords = map[inventory.Kind]string{
 	kube.KindPVC:                 "volume claim",
 	kube.KindPV:                  "volume",
+	kube.KindVolumeAttachment:    "volume attachment",
 	kube.KindHPA:                 "autoscaler",
 	kube.KindAccount:             "service account",
 	kube.KindConfigMap:           "config map",

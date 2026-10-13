@@ -32,8 +32,7 @@ func (v *view) storageModes(
 		// the errors of the pods that mount the claim, for clusters
 		// where it cannot.
 		if link == LinkMounts && v.claimFull(id, effect) {
-			return []modeHealth{{mode: v.claimFullMode(id),
-				health: detection.Failing, pseudo: true}}, true
+			return pseudoFailing(v.claimFullMode(id)), true
 		}
 	case kube.KindPV:
 		if v.boundByClaim(id) {

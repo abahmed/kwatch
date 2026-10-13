@@ -184,6 +184,7 @@ func detect(
 	for i, s := range found {
 		s = Classify(s)
 		s.Entity = entity.ID
+		s = withPlace(entity, s)
 		if s.Since.IsZero() {
 			s.Since = ctx.Now
 		}

@@ -167,6 +167,9 @@ func (a *announcer) send(
 	d = a.withWake(a.withKindNames(a.withChanges(d, at)), at)
 	written := a.collect.Follow(d)
 	msg := a.write(written, at)
+	if written.Action == incident.Resolve && a.joint != nil {
+		msg = a.withRecovered(ctx, written, msg, at)
+	}
 	if written.Action == incident.Announce {
 		a.incidents.RecordSubject(d.Incident.ID, a.messages.Subject(written))
 	}

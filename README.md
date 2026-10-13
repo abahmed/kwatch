@@ -295,7 +295,7 @@ updates the same page and closes it when it is fixed.
 | 🖥️ **Nodes** | Lost or not-ready nodes, memory, disk and PID pressure |
 | 🌐 **Network** | Services without endpoints, broken Ingress and Gateway routes, failing webhooks, unreachable external endpoints |
 | 💾 **Storage** | Nearly full volumes, failed attachments, stuck claims |
-| 🔐 **Config** | Missing or rotated Secrets and ConfigMaps, image pull failures, expiring certificates |
+| 🔐 **Config** | Missing or rotated Secrets and ConfigMaps, image pull failures, expired certificates |
 | 🧩 **Your CRDs** | Anything that reports standard status conditions |
 
 [Full coverage list →](./docs/kubernetes-coverage.md)

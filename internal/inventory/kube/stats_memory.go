@@ -22,6 +22,11 @@ const (
 	AttrMemoryPrevEnded    = "memory.prev.ended"
 	AttrMemoryPrevSeconds  = "memory.prev.seconds"
 	AttrMemoryPrevDrawdown = "memory.prev.drawdown.pct"
+	// The last two readings of that run and the seconds between them,
+	// so a jump just before the kill can be told from a slow climb.
+	AttrMemoryPrevLast    = "memory.prev.last.bytes"
+	AttrMemoryPrevBefore  = "memory.prev.before.bytes"
+	AttrMemoryPrevGapSecs = "memory.prev.gap.seconds"
 
 	// memoryWindowHours is how far back the peak looks. One slot per
 	// hour keeps the history small for a whole cluster of containers.
@@ -34,6 +39,10 @@ type memoryRun struct {
 	samples         int
 	firstAt, lastAt time.Time
 	first, peak     float64
+	// last and before are the final two readings, beforeAt when the
+	// earlier one was taken.
+	last, before float64
+	beforeAt     time.Time
 	// drawdown is the largest fall, as a fraction, from the highest use
 	// so far: near zero for a steady climb, large for a saw-tooth.
 	drawdown float64
@@ -48,6 +57,10 @@ func (r *memoryRun) add(at time.Time, bytes float64) {
 	} else {
 		r.drawdown = max(r.drawdown, (r.peak-bytes)/r.peak)
 	}
+	if r.samples > 0 {
+		r.before, r.beforeAt = r.last, r.lastAt
+	}
+	r.last = bytes
 	r.samples++
 	r.lastAt = at
 }
@@ -112,6 +125,12 @@ func (h *memoryHistory) attributes(
 	attrs[AttrMemoryPrevSeconds] = inventory.Number(
 		h.prev.lastAt.Sub(h.prev.firstAt).Seconds())
 	attrs[AttrMemoryPrevDrawdown] = inventory.Number(h.prev.drawdown * 100)
+	if h.prev.samples > 1 {
+		attrs[AttrMemoryPrevLast] = inventory.Number(h.prev.last)
+		attrs[AttrMemoryPrevBefore] = inventory.Number(h.prev.before)
+		attrs[AttrMemoryPrevGapSecs] = inventory.Number(
+			h.prev.lastAt.Sub(h.prev.beforeAt).Seconds())
+	}
 	return attrs
 }
 

@@ -83,12 +83,9 @@ func (v *view) dropSharedCoverage(
 func (v *view) healthyReplicaElsewhere(
 	effect, id inventory.EntityID,
 ) bool {
-	for _, sibling := range v.siblings(effect) {
-		if !v.unitFailing(sibling) && !v.reaches(sibling, id) {
-			return true
-		}
-	}
-	return false
+	return anyMember(v.siblings(effect), func(s inventory.EntityID) bool {
+		return !v.unitFailing(s) && !v.reaches(s, id)
+	})
 }
 
 // sharedFactorVeto says why shared-factor coverage must be dropped, or
@@ -113,13 +110,8 @@ func (v *view) mostDependentsFail(id inventory.EntityID) bool {
 	if len(dependents) == 0 {
 		return true
 	}
-	failing := 0
-	for _, pod := range dependents {
-		if v.unitFailing(pod) {
-			failing++
-		}
-	}
-	return float64(failing)/float64(len(dependents)) >= SharedFactorMinShare
+	failing, total := shareOf(dependents, v.unitFailing)
+	return float64(failing)/float64(total) >= SharedFactorMinShare
 }
 
 // sharedFactorEffects lists the effects a candidate covers through a

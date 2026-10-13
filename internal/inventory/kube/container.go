@@ -79,6 +79,8 @@ func containerSpecAttributes(
 	}
 	setPortAttributes(attrs, c)
 	setLivenessAttributes(attrs, c)
+	setProbeSettings(attrs, c)
+	setRefAttributes(attrs, c)
 	setContainerScheduling(attrs, c)
 	return attrs
 }

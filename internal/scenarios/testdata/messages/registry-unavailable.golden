@@ -1,0 +1,10 @@
+10:02:15 settled
+🟠 invoices in shop (prod-eu-1) cannot start (RegistryUnavailable). Its node is healthy and unchanged, so nothing outside it explains this. It fails with "Get "https://registry.example.com/v2/": dial tcp: i/o timeout". To see why the container cannot start, run kubectl describe pod invoices-dfa9ef5a-a -n shop
+🟠 invoices in shop (prod-eu-1) cannot start (RegistryUnavailable).
+| 🟠 **invoices** in **shop** (**prod-eu-1**) cannot start (RegistryUnavailable).
+| Its node is healthy and unchanged, so nothing outside it explains this.
+| It fails with `Get`https://registry.example.com/v2/`: dial tcp: i/o timeout`.
+| To see why the container cannot start, run
+| ```
+| kubectl describe pod invoices-dfa9ef5a-a -n shop
+| ```

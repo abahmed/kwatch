@@ -16,6 +16,12 @@ func TestHumanDurationRoundsLikePeople(t *testing.T) {
 		13 * 24 * time.Hour:             "13 days",
 		14*24*time.Hour + 2*time.Minute: "two weeks",
 		21 * 24 * time.Hour:             "three weeks",
+		8 * 7 * 24 * time.Hour:          "eight weeks",
+		5 * 30 * 24 * time.Hour:         "five months",
+		24 * 7 * 24 * time.Hour:         "six months",
+		122 * 7 * 24 * time.Hour:        "about two years",
+		95 * 7 * 24 * time.Hour:         "two years",
+		3 * 365 * 24 * time.Hour:        "three years",
 	}
 	for d, want := range tests {
 		if got := humanDuration(d); got != want {
@@ -87,5 +93,21 @@ func TestJoinAndCountsTheRest(t *testing.T) {
 	got := joinAnd([]string{"a", "b", "c", "d", "e"}, 3)
 	if want := "a, b, c and two others"; got != want {
 		t.Errorf("joinAnd = %q, want %q", got, want)
+	}
+}
+
+func TestShortDateAddsTheYearWhenNotThisYear(t *testing.T) {
+	now := time.Date(2026, 10, 13, 9, 0, 0, 0, time.UTC)
+	older := time.Date(2025, 12, 4, 11, 59, 0, 0, time.UTC)
+	same := time.Date(2026, 4, 28, 9, 0, 0, 0, time.UTC)
+
+	if got := shortDate(older, now); got != "Dec 4, 2025" {
+		t.Errorf("older: got %q", got)
+	}
+	if got := shortDate(same, now); got != "Apr 28" {
+		t.Errorf("this year: got %q", got)
+	}
+	if got := shortDate(older, time.Time{}); got != "Dec 4" {
+		t.Errorf("no now: got %q", got)
 	}
 }

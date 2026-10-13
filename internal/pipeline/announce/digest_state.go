@@ -38,19 +38,28 @@ type DigestState struct {
 	// Listed are the incidents a digest listed and that have not spoken
 	// since: their first own message must introduce them in full.
 	Listed []string `json:",omitempty"`
+	// Shown are the ongoing problems a digest listed in full today, so a
+	// restart does not list them in full again (see ongoing_compact.go).
+	Shown []ShownLine `json:",omitempty"`
+}
+
+// ShownLine is how one ongoing problem was last listed in full.
+type ShownLine struct {
+	ID, Day, Sig string
 }
 
 func (s DigestState) clone() DigestState {
 	s.Told = slices.Clone(s.Told)
 	s.Resolved = slices.Clone(s.Resolved)
 	s.Listed = slices.Clone(s.Listed)
+	s.Shown = slices.Clone(s.Shown)
 	return s
 }
 
 func (s DigestState) equal(o DigestState) bool {
 	return s.Since.Equal(o.Since) && slices.Equal(s.Told, o.Told) &&
 		slices.Equal(s.Resolved, o.Resolved) &&
-		slices.Equal(s.Listed, o.Listed)
+		slices.Equal(s.Listed, o.Listed) && slices.Equal(s.Shown, o.Shown)
 }
 
 func linesOf(decisions []incident.Decision, told func(
@@ -67,7 +76,8 @@ func linesOf(decisions []incident.Decision, told func(
 // pendingState is the digest state to persist now.
 func (c *Collector) pendingState() DigestState {
 	g := &c.Low
-	state := DigestState{Since: g.Since, Listed: c.digested}
+	state := DigestState{Since: g.Since, Listed: c.digested,
+		Shown: c.shownLines()}
 	state.Told = linesOf(g.Opened, func(d incident.Decision) bool {
 		return d.Reason == incident.ReasonReminder ||
 			d.Reason == incident.ReasonFailingAgain
@@ -94,6 +104,7 @@ func (c *Collector) saveDigest() {
 func (c *Collector) RestoreDigest() {
 	state := c.Startup.Summary.Digest
 	c.digested = slices.Clone(state.Listed)
+	c.restoreShown(state.Shown)
 	if len(state.Told)+len(state.Resolved) == 0 {
 		return
 	}

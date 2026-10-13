@@ -50,14 +50,8 @@ jobs:
     - name: Install Helm
       uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
 
-    # Installed only; `make ci` runs it so lint executes once.
-    - name: Install golangci-lint
-      uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
-      with:
-        # Pinned. "latest" means an upstream release can break CI with no
-        # change on our side.
-        version: v2.14.0
-        install-only: true
+    # golangci-lint is pinned by GOLANGCI_VERSION in the Makefile and built
+    # by `make lint` with this Go toolchain; there is nothing to install.
 
     - name: Run make ci
       env:

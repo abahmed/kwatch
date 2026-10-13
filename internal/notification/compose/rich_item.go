@@ -6,19 +6,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 )
-
-// eventPhrases say in a few plain words what a Kubernetes event reason
-// means for the object it is about. A reason not listed is shown as is.
-var eventPhrases = map[string]string{
-	"FailedDeployModel":  "can't deploy its load balancer",
-	"FailedBuildModel":   "can't build its load balancer",
-	"FailedMount":        "can't mount a volume",
-	"FailedAttachVolume": "can't attach a volume",
-	"FailedCreate":       "can't create its pods",
-	"FailedScheduling":   "can't be scheduled",
-}
 
 var (
 	eventCount = regexp.MustCompile(
@@ -73,13 +63,13 @@ func shortWhat(rest string) string {
 	rest = strings.TrimPrefix(rest, "failing: ")
 	if m := eventCount.FindStringSubmatch(rest); m != nil {
 		what := m[1] + " ×" + m[2] + " in " + compactWindow(m[3])
-		if phrase, ok := eventPhrases[m[1]]; ok {
+		if phrase := detection.ReasonLabel(m[1]); phrase != "" {
 			return phrase + ": " + what
 		}
 		return what
 	}
 	if m := eventAgain.FindStringSubmatch(rest); m != nil {
-		if phrase, ok := eventPhrases[m[1]]; ok {
+		if phrase := detection.ReasonLabel(m[1]); phrase != "" {
 			return phrase + " again"
 		}
 		return m[1] + " again"

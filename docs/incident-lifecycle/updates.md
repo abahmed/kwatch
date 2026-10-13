@@ -57,6 +57,15 @@ digest, which lists the still-open incident as an ongoing item
 (`announce/ongoing.go`). A real failure that returns raises the tier again,
 told by the usual material change. A user severity override keeps its tier.
 
+**A withdrawn cause says nothing.** A `cause revised` that takes a known
+cause away and finds none (`causeWithdrawn`, `open_steps.go`) is not sent
+for a notify or lower incident: the evidence of the cause (an admission
+error event, say) aged out while the failure went on, and nothing
+observed contradicts what the thread says. The fingerprint adopts the new
+root so the move does not come back as a material change, and a different
+cause, a rise to page, or the resolve still speak. A page always sends
+it.
+
 A reopened incident's `failing again` update comes before all of these. If
 the reopened incident recovered before the update was due, it is sent when
 the failure returns and the incident is `Open` again, not before.

@@ -1,0 +1,12 @@
+{
+  "name": "limit-range-memory-max-lowered",
+  "description": "A LimitRange is edited to cap containers at 1Gi of memory; a scale-up of a Deployment whose pods limit 2Gi is refused.",
+  "root": "limitrange/shop/limits",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/app",
+    "namespace//shop"
+  ]
+}

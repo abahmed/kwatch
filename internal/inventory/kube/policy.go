@@ -34,6 +34,11 @@ const (
 	AttrAttachError        = "attach.error"
 	AttrDetachError        = "detach.error"
 	AttrFailurePolicy      = "failure.policy"
+	// AttrMinAvailable and AttrMaxUnavailable are a budget's own
+	// settings (spec.minAvailable, spec.maxUnavailable), as written:
+	// "2" or "50%". Only the one the budget sets is present.
+	AttrMinAvailable   = "pdb.min.available"
+	AttrMaxUnavailable = "pdb.max.unavailable"
 	// AttrWebhookNames lists a configuration's webhook names, comma
 	// separated. The API server names the webhook it failed to call
 	// ("failed calling webhook \"x.example.com\""), which is how a
@@ -65,6 +70,12 @@ func (PDBSchema) Describe(obj any) (Description, bool) {
 		AttrCurrentHealthy:     number(st.CurrentHealthy),
 		AttrDesiredHealthy:     number(st.DesiredHealthy),
 		AttrExpectedPods:       number(st.ExpectedPods),
+	}
+	if v := pdb.Spec.MinAvailable; v != nil {
+		attrs[AttrMinAvailable] = inventory.Text(v.String())
+	}
+	if v := pdb.Spec.MaxUnavailable; v != nil {
+		attrs[AttrMaxUnavailable] = inventory.Text(v.String())
 	}
 	setConditions(attrs, metaConditions(st.Conditions))
 	return Description{

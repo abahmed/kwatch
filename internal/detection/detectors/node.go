@@ -26,20 +26,6 @@ const DefaultNodeNotReady = 90 * time.Second
 // delay the cause of evictions that are already happening.
 const DefaultNodePressure = time.Minute
 
-// nodePressure maps pressure conditions to their finding reasons.
-var nodePressure = []struct {
-	condition string
-	reason    string
-	summary   string
-}{
-	{"MemoryPressure", reasons.MemoryPressure,
-		"Node is low on memory; pods may be evicted"},
-	{"DiskPressure", reasons.DiskPressure,
-		"Node is low on disk space; pods may be evicted"},
-	{"PIDPressure", reasons.PIDPressure,
-		"Node is running out of process IDs"},
-}
-
 // Node detects NotReady or unreachable nodes, resource pressure and
 // network unavailability.
 type Node struct {
@@ -79,26 +65,7 @@ func (d Node) Detect(
 	}
 	out = append(out, sandboxFindings(ctx, e)...)
 	out = append(out, nodeConditionFindings(ctx, e)...)
-	for _, p := range nodePressure {
-		status, _, since := condition(e, p.condition)
-		if status == "True" &&
-			sustained(ctx, "pressure/"+p.condition, since,
-				DefaultNodePressure) {
-			out = append(out, detection.Finding{
-				Reason: p.reason, Severity: detection.Critical,
-				Since: since, Summary: p.summary,
-			})
-		}
-	}
-	if status, reason, since := condition(e, "NetworkUnavailable"); status ==
-		"True" {
-		out = append(out, detection.Finding{
-			Reason:   reasons.NetworkUnavailable,
-			Severity: detection.Critical, Since: since,
-			Summary: "Node network is not configured (" + reason + ")",
-		})
-	}
-	return out
+	return append(out, conditionFindings(ctx, e)...)
 }
 
 // drainEnvelope bounds how long a cordoned or departing node's NotReady is

@@ -5,6 +5,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
 // maxNodeWhyEvents bounds the node Warning events quoted with a
@@ -28,12 +29,10 @@ func nodeWhy(
 ) []detection.Evidence {
 	out := []detection.Evidence{
 		{Label: detection.EvidenceReadyStatus, Value: status}}
-	for _, p := range nodePressure {
-		out = appendWhy(out, detection.EvidenceNodeCondition, p.condition,
-			e, conditionMessage(e, p.condition))
+	for _, c := range kindConditions[kube.KindNode] {
+		out = appendWhy(out, detection.EvidenceNodeCondition, c.cond,
+			e, conditionMessage(e, c.cond))
 	}
-	out = appendWhy(out, detection.EvidenceNodeCondition,
-		"NetworkUnavailable", e, conditionMessage(e, "NetworkUnavailable"))
 	return append(out, nodeEvents(ctx, e)...)
 }
 

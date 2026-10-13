@@ -48,7 +48,7 @@ func certificateExpired() scenario {
 }
 
 // certificateExpiringAppCrash: the same certificate has ten days left,
-// which is digest material, while the payments pods crash on a nil map.
+// which is no finding at all, while the payments pods crash on a nil map.
 // The application is the root; the certificate must not be blamed.
 func certificateExpiringAppCrash() scenario {
 	return scenario{

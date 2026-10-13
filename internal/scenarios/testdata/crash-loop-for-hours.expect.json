@@ -1,6 +1,6 @@
 {
   "name": "crash-loop-for-hours",
-  "description": "The only replica of a Deployment crashes on every start for nearly two hours, cycling through running, Error and CrashLoopBackOff; it stays one incident with one revised cause.",
+  "description": "The only replica of a Deployment crashes on every start for nearly two hours, cycling through running, Error and CrashLoopBackOff; it stays one incident, and a revision that only takes the cause back stays quiet.",
   "root": "deployment/staging/warehouse",
   "tier": "notify",
   "maxMessages": 3,

@@ -24,6 +24,45 @@ type Report struct {
 	Zones Zones `json:"zones"`
 	// Gaps is what kwatch cannot see.
 	Gaps []Gap `json:"coverageGaps"`
+	// CauseChecks says, per propagation rule, how often recovery
+	// followed a change to the named cause. It is display only.
+	CauseChecks []CauseCheck `json:"causeChecks,omitempty"`
+	// Unexplained counts, over the last seven days, what kwatch saw but
+	// could not explain. It is display only.
+	Unexplained Unexplained `json:"unexplained"`
+}
+
+// Unexplained is the unexplained counts of the last seven days.
+type Unexplained struct {
+	// Events counts Warning events whose reason kwatch has no entry
+	// for; Incidents counts incidents whose cause stayed unclear.
+	Events    int `json:"events"`
+	Incidents int `json:"incidents"`
+	// Top are the largest reasons, most first.
+	Top []UnexplainedRow `json:"top,omitempty"`
+}
+
+// UnexplainedRow is one failure mode and quoted reason with its count.
+type UnexplainedRow struct {
+	// Kind is "event" or "incident".
+	Kind   string `json:"kind"`
+	Mode   string `json:"mode"`
+	Reason string `json:"reason"`
+	Count  int    `json:"count"`
+	// Sample is the latest quoted evidence, already redacted.
+	Sample string `json:"sample,omitempty"`
+}
+
+// CauseCheck is one rule's self-check over the last seven days.
+type CauseCheck struct {
+	Rule           string `json:"rule"`
+	Confirmed      int    `json:"confirmed"`
+	OtherChanged   int    `json:"otherChanged"`
+	NothingChanged int    `json:"nothingChanged"`
+	Total          int    `json:"total"`
+	// Text is "cause confirmed by the fix in N of M resolved incidents
+	// (last 7 days)".
+	Text string `json:"text"`
 }
 
 // Problems are the open incidents, the worst first.

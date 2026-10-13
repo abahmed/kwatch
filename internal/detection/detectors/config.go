@@ -11,11 +11,8 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
-// DefaultCertificateWarning is how far ahead an expiring TLS certificate
-// is reported.
-const DefaultCertificateWarning = 2 * format.Week
-
-// Certificate detects expired and soon-expiring TLS Secrets.
+// Certificate detects expired TLS certificates: Secrets and probed
+// HTTPS endpoints. A certificate that has not expired yet is no finding.
 type Certificate struct{}
 
 // Name implements detection.Detector.
@@ -37,20 +34,12 @@ func (Certificate) Detect(
 		return nil
 	}
 	remaining := notAfter.Sub(ctx.Now)
-	if remaining <= 0 {
-		return []detection.Finding{expiredCertificate(ctx, e, notAfter)}
-	}
-	if remaining > DefaultCertificateWarning {
-		ctx.RecheckAfter(remaining - DefaultCertificateWarning)
+	if remaining > 0 {
+		// Look again at the moment it expires, not before.
+		ctx.RecheckAfter(remaining)
 		return nil
 	}
-	ctx.RecheckAfter(remaining)
-	return []detection.Finding{{
-		Reason: reasons.TLSCertExpiringSoon, Severity: detection.Warning,
-		Advisory: true,
-		Since:    notAfter.Add(-DefaultCertificateWarning),
-		Summary:  "TLS certificate expires in " + format.Duration(remaining),
-	}}
+	return []detection.Finding{expiredCertificate(ctx, e, notAfter)}
 }
 
 // expiredCertificate is the finding for a certificate past its end. One

@@ -222,8 +222,8 @@ func (e *Engine) applyDowntime(
 	if saved == nil {
 		return nil
 	}
-	observations := DowntimeChanges(
-		e.deps.Model, saved, e.deps.Synced, e.deps.Clock.Now())
+	observations := withoutRestored(e.deps.Model, DowntimeChanges(
+		e.deps.Model, saved, e.deps.Synced, e.deps.Clock.Now()))
 	if len(observations) == 0 {
 		return nil
 	}
@@ -368,40 +368,4 @@ func (e *Engine) tick(
 		return time.Time{}, decided
 	}
 	return now.Add(next), decided
-}
-
-func (e *Engine) progress() {
-	if e.deps.Progress != nil {
-		e.deps.Progress()
-	}
-}
-
-func notify(ch chan struct{}) {
-	select {
-	case ch <- struct{}{}:
-	default:
-	}
-}
-
-// logTransitions writes one debug line per finding change. It is off by
-// default; -v=4 shows why an incident gains or keeps a member.
-func logTransitions(transitions []detection.Transition) {
-	if !klog.V(4).Enabled() {
-		return
-	}
-	for _, t := range transitions {
-		klog.V(4).InfoS("pipeline: finding "+transitionName(t.Kind),
-			"component", "pipeline", "entity", t.Finding.Entity.String(),
-			"reason", t.Finding.Reason)
-	}
-}
-
-func transitionName(kind detection.TransitionKind) string {
-	switch kind {
-	case detection.Raised:
-		return "raised"
-	case detection.Cleared:
-		return "cleared"
-	}
-	return "changed"
 }

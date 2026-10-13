@@ -236,6 +236,7 @@ Endpoints kwatch serves so you can see it's alive and grab Prometheus metrics. T
 | `kwatch_incidents_total` | counter | `action` = `announce`, `update`, `resolve` | Incident lifecycle decisions |
 | `kwatch_incidents_open` | gauge | none | Incidents not yet resolved |
 | `kwatch_investigations_total` | counter | `result` = `done`, `skipped`, `late`, `timeout` | Announcement investigations (log excerpts and similar evidence) by outcome |
+| `kwatch_unexplained_total` | counter | `kind` = `event`, `incident` | Failures kwatch could not explain: Warning events whose reason it has no entry for, and incidents whose cause is not clear; the reasons are in /status |
 | `kwatch_panics_recovered_total` | counter | `stage` = `detector`, `incident`, `compose`, `announce` | Panics contained on the decision path; the affected entity or area is skipped for that pass and monitoring continues |
 | `kwatch_delivery_notifications_total` | counter | none | Notification attempts |
 | `kwatch_delivery_dropped_total` | counter | none | Notifications no provider accepted: dead-lettered, failed with no fallback left, dropped by a full queue, or dropped before delivery started |
@@ -463,7 +464,7 @@ In both modes:
 **Secrets: the trade-off.** Watching Secrets is on by default. It lets kwatch
 notice that a Pod references a missing Secret, that a changed Secret
 (by value hash, never by value) may explain a restart, and that a
-certificate Secret is about to expire. The cost is RBAC: the default chart
+certificate Secret has expired. The cost is RBAC: the default chart
 grant lets the kwatch ServiceAccount `list` and `watch` Secrets in every
 namespace, so anyone who can run code as that account, or who can read its
 token, can read Secret values through the API. kwatch itself keeps only

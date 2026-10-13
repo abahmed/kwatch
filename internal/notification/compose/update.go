@@ -259,14 +259,18 @@ func limitSentences(sentences []sentence, n int) []sentence {
 	return sentences
 }
 
-// reminderSentences restate an incident that has stayed open for
-// another week: "payments in shop is still down, for two weeks now."
+// reminderSentences restate an incident that has stayed open: what
+// fails, in the words of its own lead and with its cause when one is
+// known, then how long, counted from when the problem started:
+// "payments in shop keeps crash looping because secret db does not
+// exist; still failing, for two weeks now."
 func reminderSentences(f caseFacts) []sentence {
-	subject := leadSubject(f)
-	open := humanDuration(f.now.Sub(StartedAt(f.p)))
-	return append([]sentence{{part: partLead, text: capitalName(subject,
-		f.leadName(subject)+" is still "+downWord(f.p)+", for "+open+
-			" now.")}}, strongestProof(f)...)
+	age := humanDuration(f.now.Sub(StartedAt(f.p)))
+	lead := leadSentences(f)
+	text := strings.TrimSuffix(withoutSpan(lead[0].text), ".")
+	lead[0].text = text + "; still " + downWord(f.p) + ", for " + age +
+		" now."
+	return append(lead, strongestProof(f)...)
 }
 
 // failingAgainSentences tell that a page that had resolved is back,

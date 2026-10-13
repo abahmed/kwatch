@@ -110,17 +110,16 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Budget.BlocksDrain | degraded | `PdbBlocksDrain` | `budget_drain` |
 | Budget.Overlap | degraded | `PdbOverlap` | `budget` |
 | Budget.SelectsNothing | degraded | `PdbSelectsNothing` | `budget` |
-| Budget.SyncFailed | degraded | `PdbSyncFailed` | `budget` |
+| Budget.SyncFailed | degraded | `PdbSyncFailed` | `condition_rules` |
 | CPUHigh | degraded | `ContainerCPUUsageHigh` | `resources` |
 | CPUThrottled | varies | `ContainerCPUThrottled` | `resources` |
-| CRD.NotEstablished | degraded | `CustomResourceDefinitionNotEstablished` | `custom_kinds` |
+| CRD.NotEstablished | degraded | `CustomResourceDefinitionNotEstablished` | `condition_rules` |
 | CSRFailed | varies | `CertificateSigningRequestFailure` | `custom` |
 | CannotRun | failing | `ContainerCannotRun` | `container` |
 | Cert.Expired | varies | `TLSCertExpired` | `config` |
-| Cert.Expiring | degraded | `TLSCertExpiringSoon` | `config` |
 | Certificate.Denied | degraded | `CertificateSigningRequestDenied` | `custom_kinds` |
 | Certificate.NotIssued | degraded | `CertificateSigningRequestNotIssued` | `custom_kinds` |
-| ClaimFailed | varies | `PersistentVolumeClaimFailure`, `ResourceClaimFailure` | `custom`, `storage` |
+| ClaimFailed | varies | `PersistentVolumeClaimFailure`, `ResourceClaimFailure` | `condition_rules`, `custom`, `storage` |
 | Cluster.VersionSkew | degraded | `ClusterVersionSkew` | `version_skew` |
 | Completed | varies | `Completed`, `PodCompleted` | - |
 | Condition | varies | `ConditionFailure` | - |
@@ -138,18 +137,22 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Disk.EvictionThreshold | degraded | `EvictionThresholdMet` | `event`, `event_kubelet` |
 | Disk.FreeSpaceFailed | degraded | `FreeDiskSpaceFailed` | `event`, `event_kubelet` |
 | Disk.ImageGCFailed | degraded | `ImageGCFailed` | `event`, `event_kubelet` |
-| DiskPressure | varies | `DiskPressure` | `node` |
+| DiskPressure | varies | `DiskPressure` | `condition_rules` |
 | DisruptionBudget | degraded | `PdbViolation` | `policy` |
 | Draining | degraded | `NodeDraining` | `node` |
 | EphemeralStorageHigh | varies | `ContainerEphemeralStorageUsageHigh` | `resources` |
-| Error | varies | `Error` | `container` |
+| Error | varies | `Error` | `container`, `exit_codes` |
 | Etcd.Large | degraded | `EtcdDatabaseLarge` | `control_plane_storage` |
 | Evicted | varies | `Evicted` | `pod` |
 | Evicting | degraded | `NodeEvicting` | `kubelet_health` |
-| Exit.CommandNotFound | varies | `ContainerExitCommandNotFound` | `container_exit` |
-| Exit.Killed | varies | `ContainerExitKilled` | `container_exit` |
-| Exit.NotExecutable | varies | `ContainerExitNotExecutable` | `container_exit` |
-| Exit.Segfault | varies | `ContainerExitSegfault` | `container_exit` |
+| Exit.Aborted | varies | `ContainerExitAborted` | `exit_codes` |
+| Exit.BusError | varies | `ContainerExitBusError` | `exit_codes` |
+| Exit.CommandNotFound | varies | `ContainerExitCommandNotFound` | `exit_codes` |
+| Exit.FloatingPoint | varies | `ContainerExitFloatingPoint` | `exit_codes` |
+| Exit.IllegalInstruction | varies | `ContainerExitIllegalInstruction` | `exit_codes` |
+| Exit.Killed | varies | `ContainerExitKilled` | `exit_codes` |
+| Exit.NotExecutable | varies | `ContainerExitNotExecutable` | `exit_codes` |
+| Exit.Segfault | varies | `ContainerExitSegfault` | `exit_codes` |
 | Failed | degraded | `PhaseFailed`, `PodFailed` | `generic`, `pod` |
 | Filesystem.Usage | varies | `NodeFilesystemUsageCritical`, `NodeFilesystemUsageHigh` | `usage` |
 | FlowControl | varies | `APIPriorityAndFairnessFailure` | `custom` |
@@ -161,7 +164,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | ImagePull.Inspect | failing | `ImageInspectError` | `container` |
 | ImagePull.InvalidName | failing | `InvalidImageName` | `container` |
 | ImagePull.NeverPull | failing | `ErrImageNeverPull` | `container` |
-| ImagePull.Registry | varies | `RegistryUnavailable` | - |
+| ImagePull.Registry | failing | `RegistryUnavailable` | `container` |
 | Ingress.ClassMissing | degraded | `IngressClassMissing` | `ingress` |
 | Ingress.TLSSecretMissing | degraded | `IngressTLSSecretMissing` | `ingress` |
 | InitError | varies | `InitContainerError` | `container` |
@@ -190,7 +193,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | LoadBalancerPending | degraded | `LoadBalancerProvisioning` | `loadbalancer_wait` |
 | MemoryHigh | varies | `ContainerMemoryUsageHigh` | `resources` |
 | MemoryOvercommitted | degraded | `NodeMemoryOvercommitted` | `node_commitment` |
-| MemoryPressure | varies | `MemoryPressure`, `NodeMemoryPressure` | `node` |
+| MemoryPressure | varies | `MemoryPressure`, `NodeMemoryPressure` | `condition_rules` |
 | Missing.ConfigMap | varies | `ProjectedConfigMapMissing` | `config` |
 | Missing.Secret | varies | `ProjectedSecretMissing` | `config` |
 | Missing.ServiceAccount | varies | `ServiceAccountMissing` | `config` |
@@ -198,7 +201,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Network.IPExhausted | varies | `NodePodIPExhausted` | `node_health` |
 | NetworkErrors | varies | `NodeNetworkErrors` | `resources` |
 | NetworkPolicy | degraded | `RestrictiveNetworkPolicy` | `network` |
-| NetworkUnavailable | failing | `NetworkUnavailable` | `node` |
+| NetworkUnavailable | failing | `NetworkUnavailable` | `condition_rules` |
 | NoEndpoints | failing | `ServiceNoEndpoints` | `network`, `service_selector` |
 | Node.Condition | varies | `NodeCondition.` | `node_conditions` |
 | NotReady | varies | `ContainersNotReady`, `NodeNotReady`, `NotReady` | `node`, `pod` |
@@ -206,7 +209,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | NotReconciling | degraded | `CustomResourceFailure`, `GenerationLagging` | `custom`, `generic` |
 | NotScheduling | degraded | `CronJobNotScheduled` | `schedule` |
 | OOMKilled | failing | `OOMKILLED`, `OOMKilled` | `container` |
-| PIDPressure | varies | `PIDPressure` | `node` |
+| PIDPressure | varies | `PIDPressure` | `condition_rules` |
 | PLEGSlow | degraded | `NodePLEGSlow` | `kubelet_health` |
 | Pending | degraded | `PhasePending`, `PodPending` | `generic`, `pod` |
 | PortMismatch | failing | `IngressBackendPortMissing`, `ServicePortMismatch` | `ingress_ports`, `service_ports` |
@@ -217,15 +220,14 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Probe.Readiness | varies | `ReadinessProbeFailed` | `container_probe` |
 | Probe.Readiness.Flapping | degraded | `ReadinessFlapping` | `workload_flapping` |
 | Probe.Startup | varies | `StartupProbeFailed` | `container_probe` |
-| Quota.NearLimit | degraded | `ResourceQuotaNearLimit` | `quota_attach` |
 | QuotaExhausted | degraded | `ResourceQuotaExhausted` | `policy` |
 | Reference.PriorityClassMissing | varies | `PriorityClassMissing` | `references` |
 | Reference.RuntimeClassMissing | varies | `RuntimeClassMissing` | `config`, `references` |
 | ReleaseRegression | degraded | `ReleaseRegression` | `release_watch` |
-| ReplicaFailure | failing | `DeploymentReplicaFailure`, `ReplicaSetFailure` | `workload` |
-| Resize.Deferred | varies | `PodResizeDeferred` | `pod_resize` |
-| Resize.Error | varies | `PodResizeError` | `pod_resize` |
-| Resize.Infeasible | varies | `PodResizeInfeasible` | `pod_resize` |
+| ReplicaFailure | varies | `DeploymentReplicaFailure`, `ReplicaSetFailure` | `condition_rules` |
+| Resize.Deferred | degraded | `PodResizeDeferred` | `condition_rules` |
+| Resize.Error | degraded | `PodResizeError` | `condition_rules` |
+| Resize.Infeasible | degraded | `PodResizeInfeasible` | `condition_rules` |
 | Resolution.Servfail | varies | `CoreDNSServfail` | `controlplane` |
 | Restarting | degraded | `HighRestartCount` | `container` |
 | Risk | varies | `Risk.` | - |
@@ -234,7 +236,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Risk.NoReadinessProbe | varies | `Risk.NoReadinessProbe` | `risk` |
 | Risk.SingleReplica | varies | `Risk.SingleReplica` | `risk` |
 | Rollout.Stuck | degraded | `StatefulSetRolloutStuck` | `rollout` |
-| RolloutStuck | failing | `DeploymentProgressingFalse`, `ProgressDeadlineExceeded` | `workload` |
+| RolloutStuck | varies | `DeploymentProgressingFalse`, `ProgressDeadlineExceeded` | `condition_rules` |
 | RuntimeErrors | varies | `NodeRuntimeErrors` | `resources` |
 | ScaledToZero | varies | `ScaledToZeroRouted` | `scaled_to_zero` |
 | Scaling.Disabled | varies | `ScalingDisabled` | - |
@@ -267,10 +269,11 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Volume.AttachWaiting | varies | `VolumeAttachWaiting` | `event_storage` |
 | Volume.DetachFailed | degraded | `VolumeDetachFailure` | `quota_attach` |
 | Volume.MapFailed | failing | `FailedMapVolume` | `event`, `event_storage` |
-| Volume.ProvisioningFailed | varies | `ProvisioningFailed` | `event_storage` |
+| Volume.ProvisioningFailed | degraded | `ProvisioningFailed` | `event`, `event_storage` |
 | VolumeFailed | failing | `PersistentVolumeFailure` | `storage` |
 | VolumeFull | varies | `VolumeUsageHigh` | `usage` |
 | VolumeFull.Inodes | varies | `VolumeInodesHigh` | `usage` |
+| Waiting.Unknown | varies | `UnknownWaiting.` | - |
 | Webhook.BackendMissing | varies | `WebhookBackendNotFound` | `policy` |
 | Webhook.NoEndpoints | varies | `WebhookNoEndpoints` | `policy` |
 | Webhook.Rejecting | degraded | `WebhookRejecting` | `webhook_calls` |

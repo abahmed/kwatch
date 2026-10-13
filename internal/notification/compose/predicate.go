@@ -80,6 +80,8 @@ var summaryRewrites = []summaryRewrite{
 		"keeps running out of memory"},
 	{regexp.MustCompile(`^CPU is throttled (.+) of the time$`),
 		"is throttled on CPU $1 of the time"},
+	{regexp.MustCompile(`^deletion is blocked by finalizers (.+)$`),
+		"is stuck deleting: finalizers $1 hold it"},
 	{regexp.MustCompile(`^TLS certificate (.+)$`),
 		"has a TLS certificate that $1"},
 	{regexp.MustCompile(`^backend (\S+) has no ready pods$`),

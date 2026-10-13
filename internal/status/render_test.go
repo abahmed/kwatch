@@ -44,6 +44,8 @@ Zones
 
 Coverage gaps
   - secrets objects: forbidden
+
+Unexplained (last 7 days): nothing
 `
 	if got := sampleReport().Text(); got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)

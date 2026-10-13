@@ -84,11 +84,17 @@ func importsPackage(path, internal string) bool {
 	return path == full || strings.HasPrefix(path, full+"/")
 }
 
-// replay is test tooling: production code must never import it.
+// replay is test tooling: production code must never import it, except
+// the flight recorder, which writes and reads its log format and uses its
+// sanitizer so a recording is by construction what replay loads. Nothing
+// else may reach replay through it: the app and the commands import
+// internal/flight, not replay.
 func TestOnlyTestsImportReplay(t *testing.T) {
 	root := repositoryRoot(t)
 	allowed := []string{
 		filepath.Join(root, "internal", "replay") +
+			string(filepath.Separator),
+		filepath.Join(root, "internal", "flight") +
 			string(filepath.Separator),
 	}
 	for _, filename := range goFilesRecursive(t, root) {

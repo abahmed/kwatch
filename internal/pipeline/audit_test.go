@@ -131,3 +131,18 @@ func TestAuditEntryOfRestoredSummaryNamesIncidents(t *testing.T) {
 	assert.Equal(t, 552, entry.Opened)
 	assert.Equal(t, msg.Listed.Items, entry.Items)
 }
+
+// A digest's entry says how many lines it rendered and quotes its
+// grouped, unchanged and wake-up lines.
+func TestAuditEntryOfADigestCarriesTheRenderedSummary(t *testing.T) {
+	at := time.Date(2026, 10, 13, 8, 0, 0, 0, time.UTC)
+	msg := notification.Message{Listed: &notification.Listed{
+		Opened: 2, Lines: 7, Summaries: []string{
+			"11 expired TLS Secrets that nothing references",
+			"19 more still failing, unchanged"}}}
+
+	entry := AuditEntry(incident.Decision{Reason: "digest"}, msg, at)
+
+	assert.Equal(t, 7, entry.Lines)
+	assert.Equal(t, msg.Listed.Summaries, entry.Summaries)
+}

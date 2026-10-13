@@ -8,6 +8,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/audit"
 	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/flight"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -37,6 +38,8 @@ type pipelineBuild struct {
 	// incident manager read it through closures, so it may be nil while
 	// they are built.
 	source *kube.Source
+	// flight records the observations the sources submit (flight.go).
+	flight *flight.Recorder
 }
 
 // newPipelineBuild builds the model, scope, audit log, incident manager
@@ -45,6 +48,7 @@ func newPipelineBuild(
 	deps *serverDeps, state *storage.Store,
 ) (*pipelineBuild, error) {
 	p := &pipelineBuild{deps: deps, state: state, clock: deps.clients.Clock}
+	p.flight = newFlightRecorder(state, p.clock.Now)
 	p.model = inventory.NewModel(inventory.Options{
 		EnrichmentSources: kube.EnrichmentSources(),
 	})
@@ -131,13 +135,13 @@ func (p *pipelineBuild) recordDecision(
 
 // newProber builds the prober of the API server, cluster DNS and the
 // Leases of controllers.
-func (p *pipelineBuild) newProber(engine *pipeline.Engine) *kube.Prober {
+func (p *pipelineBuild) newProber(submit kube.Submit) *kube.Prober {
 	deps := p.deps
 	return kube.NewProber(kube.ProbeConfig{
 		Client:   deps.clients.Kubernetes,
 		Resolver: deps.clients.Resolver,
 		Now:      p.clock.Now,
-		Submit:   engine.Submit,
+		Submit:   submit,
 		HTTP:     deps.clients.ProbeHTTP,
 		Model:    p.model,
 		// kwatch renews its own leader Lease; it is not a controller.
@@ -151,12 +155,13 @@ func (p *pipelineBuild) newRunners(
 	engine *pipeline.Engine,
 ) ([]func(context.Context), error) {
 	deps := p.deps
+	submit := recordedSubmit(p.flight, engine.Submit)
 	maintenance := deps.runtime.Policy().Maintenance()
 	// The dynamic source is built first: the typed source asks it whether
 	// the kinds it does not watch itself are synced and verifiable.
 	dynamicSource := kube.NewDynamicSource(
-		dynamicSourceConfig(deps, engine.Submit, maintenance, p.model))
-	source, err := kube.NewSource(typedSourceConfig(deps, engine.Submit,
+		dynamicSourceConfig(deps, submit, maintenance, p.model))
+	source, err := kube.NewSource(typedSourceConfig(deps, submit,
 		maintenance, dynamicSource, sourceDigestKey(p.state)))
 	if err != nil {
 		return nil, err
@@ -165,18 +170,18 @@ func (p *pipelineBuild) newRunners(
 	stats := kube.NewStatsPoller(kube.StatsConfig{
 		Kubelet:    kubeletReader(deps),
 		Now:        p.clock.Now,
-		Submit:     engine.Submit,
+		Submit:     submit,
 		Nodes:      entitiesOf(p.model, kube.KindNode),
 		Containers: entitiesOf(p.model, kube.KindContainer),
 		Report: newKubeletStatsHealth(
 			healthSink(deps), metrics.DefaultRegistry()).report,
 	})
-	prober := p.newProber(engine)
+	prober := p.newProber(submit)
 	crashLogs := kube.NewCrashLogRound(kube.CrashLogConfig{
 		Logs:   kube.LogReader{Client: deps.clients.Kubernetes},
 		Model:  p.model,
 		Now:    p.clock.Now,
-		Submit: engine.Submit,
+		Submit: submit,
 	})
 	runners := []func(context.Context){
 		source.Run, stats.Run, dynamicSource.Run, prober.Run,
@@ -187,8 +192,11 @@ func (p *pipelineBuild) newRunners(
 		p.syncReporter(engine, newPipelineSourceHealth(
 			deps, source, dynamicSource)),
 	}
+	if p.flight != nil {
+		runners = append(runners, p.flight.Run)
+	}
 	probeModel := scopedServices{Reader: p.model, scope: p.scope}
-	if active, ok := newActiveProber(deps, probeModel, engine); ok {
+	if active, ok := newActiveProber(deps, probeModel, submit); ok {
 		runners = append(runners, active.Run)
 	}
 	return runners, nil

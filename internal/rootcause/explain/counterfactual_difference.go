@@ -63,9 +63,8 @@ func (v *view) separation(g replicaGroup) (difference, bool) {
 	if text, ok := containerDifference(head, bad, good); ok {
 		return difference{text: text}, true
 	}
-	badZone := uniform(bad, func(t podTraits) string { return t.zone })
-	goodZone := uniform(good, func(t podTraits) string { return t.zone })
-	if badZone != "" && goodZone != "" && badZone != goodZone {
+	zone := func(t podTraits) string { return t.zone }
+	if badZone, goodZone, ok := separator(bad, good, zone); ok {
 		return difference{text: fmt.Sprintf("%sall run in zone %s, the %d "+
 			"healthy ones in zone %s", head, badZone, len(good),
 			goodZone)}, true
@@ -92,8 +91,8 @@ func digestDifference(bad, good []podTraits) (string, bool) {
 	sort.Strings(refs)
 	for _, ref := range refs {
 		get := func(t podTraits) string { return t.builds[ref] }
-		x, y := uniform(bad, get), uniform(good, get)
-		if x == "" || y == "" || x == y {
+		x, y, ok := separator(bad, good, get)
+		if !ok {
 			continue
 		}
 		text := fmt.Sprintf("same tag %s, but the failing pods run %s",
@@ -112,8 +111,7 @@ func containerDifference(
 	head string, bad, good []podTraits,
 ) (string, bool) {
 	set := func(t podTraits) string { return t.containerSet() }
-	x, y := uniform(bad, set), uniform(good, set)
-	if x == "" || y == "" || x == y {
+	if _, _, ok := separator(bad, good, set); !ok {
 		return "", false
 	}
 	extra := bad[0].extraContainers(good[0])

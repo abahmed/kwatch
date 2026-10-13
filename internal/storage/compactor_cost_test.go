@@ -45,7 +45,7 @@ func TestCompactorPassWithNothingToDeleteOpensNoWriteTransaction(
 // per transaction, so expiring n entries costs about n/batch writes.
 func TestCompactorRetentionCostIsBoundedByBatches(t *testing.T) {
 	clock := newFakeClock()
-	clock.Set(minute(1000).Add(DefaultLogRetention))
+	clock.Set(minute(1000).Add(DefaultChangeRetention))
 	s := openClaimed(t, clock)
 	appendMany(t, s, 1500)
 	policy := DefaultPolicy()

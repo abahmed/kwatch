@@ -231,21 +231,23 @@ one bucket per data class:
 | Bucket | Holds | Kept |
 | --- | --- | --- |
 | `incidents` | The latest record per incident ID | Resolved ones for 7 days |
-| `changes` | Recorded changes per object | 30 days |
+| `changes` | Full change records (actor, fields, revision, times) of workloads, config, services, policy and nodes, in one time-ordered stream | 7 days, at most 8 MiB; the last 24 hours reload at start |
 | `baselines` | Rolling per-workload statistics over 7 days: restarts, readiness, memory, Warning events | Dropped 7 days after the workload is gone |
 | `evidence` | Log excerpts and termination messages | 30 days, at most 128 MiB |
 | `timeline` | Health transitions, changes, events, decisions | 7 days, at most 32 MiB |
 | `audit` | One entry per incident decision | 30 days |
 | `fingerprints` | Last seen digest per object | No expiry |
-| `state` | Cluster identity, version, startup and telemetry markers | No expiry |
+| `state` | Cluster identity, version, startup and telemetry markers (with the pending digest and what digests listed in full today), each workload's last healthy time, the flight recorder's pseudonym salt, and the 7-day counts behind the cause self-check and the unexplained list in `/status` | No expiry; a healthy time lasts 7 days; the counts hold 7 days |
+| `flight` | The flight recorder: sanitized, compressed batches of what the sources observed (names hashed, no messages), exported with `kwatch replay-export` | 48 hours, at most 64 MiB |
 | `threads` | Provider thread IDs, so updates stay in one conversation | No expiry |
 | `outbox` | Delivery jobs not yet accepted by a provider | Until accepted; at most 2048 jobs, none older than 24 hours |
 
 A compactor off the decision loop enforces retention and a total size cap of
-512 MiB of logical data (keys and values), of which evidence may use 128 MiB
-and the timeline 32 MiB. When most of the file is free pages, the compactor
-rewrites the file while running (a copy of the live data renamed over the
-original; writes wait about a second), so the file follows its content down.
+512 MiB of logical data (keys and values), of which evidence may use 128 MiB,
+the timeline 32 MiB, the changes 8 MiB and the flight recording 64 MiB. When
+most of the file is free pages, the compactor rewrites the file while running
+(a copy of the live data renamed over the original; writes wait about a
+second), so the file follows its content down.
 Only history is evicted, oldest first; open incidents, baselines, fingerprints,
 state, threads and the outbox are never evicted. The file itself is larger than
 its logical data, because bbolt keeps freed pages. When the file is more than a
@@ -257,6 +259,14 @@ limit and not against the node's disk. The default 2Gi volume fits the file and
 the temporary copy. Only the Lease holder opens the file for writing, and every
 write checks a claim epoch, so a process that lost the Lease cannot overwrite
 newer state.
+
+A restart reloads the last 24 hours of change records (the newest 1024) and
+each workload's last healthy time into the model, before the sources report,
+with the original actors and times. The comparison of fingerprints with the
+cluster then adds only what the records do not explain: a change the records
+hold for the same object and class, made after the snapshot, wins over
+"changed while kwatch was down". A state file without these records restores
+as before. Records carry a version, and one of a newer version is skipped.
 
 Reset: if the file has another schema version or bbolt cannot read it, kwatch
 renames it to `state.db.corrupt` (one copy; a later reset replaces it) and
@@ -278,7 +288,7 @@ or user-facing API endpoints.
 | `/readyz` | Monitoring readiness: this pod holds the Lease, claimed the state file, finished the initial list of every required source, and delivery is running. |
 | `/availabilityz` | The pod takes part in the application lifecycle; used by Deployment rollouts. Not monitoring readiness. |
 | `/health` | Optional component state and safe reason codes (unwatched kinds, a failed reset, missing permissions). |
-| `/status` | Read-only "what is wrong right now": incidents, control plane, upgrade readiness, zones and coverage gaps. Text, or JSON with `?format=json`. |
+| `/status` | Read-only "what is wrong right now": incidents, control plane, upgrade readiness, zones, coverage gaps, the per-rule cause self-check and what kwatch could not explain. Text, or JSON with `?format=json`. |
 | `/metrics` | Prometheus metrics with bounded labels. |
 
 ## One replica and a state lock

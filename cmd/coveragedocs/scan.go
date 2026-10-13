@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/abahmed/kwatch/internal/detection"
 )
 
 // detectorUsage records, per reason value, the detector source files that
@@ -17,20 +19,56 @@ type detectorUsage struct {
 	severities map[string]map[string]bool
 }
 
+// tableDetectors are the detectors whose reasons the registry declares
+// (a container waiting state, a Warning event) instead of the detector
+// source.
+func tableDetectors(reason string) []string {
+	var out []string
+	if _, ok := detection.WaitingSeverity(reason); ok {
+		out = append(out, "container")
+	}
+	if _, ok := detection.EventSeverity(reason); ok {
+		out = append(out, "event")
+	}
+	return out
+}
+
 func (u detectorUsage) detectors(reasonValues []string) []string {
 	set := make(map[string]bool)
 	for _, r := range reasonValues {
 		for f := range u.files[r] {
 			set[f] = true
 		}
+		for _, f := range tableDetectors(r) {
+			set[f] = true
+		}
 	}
 	return sortedKeys(set)
+}
+
+// registrySeverities are the severities the registry gives a reason as a
+// container waiting state or a Warning event.
+func registrySeverities(reason string) []string {
+	var out []string
+	for _, get := range []func(string) (detection.Severity, bool){
+		detection.WaitingSeverity, detection.EventSeverity,
+	} {
+		if sev, ok := get(reason); ok {
+			out = append(out, map[detection.Severity]string{
+				detection.Info: "Info", detection.Warning: "Warning",
+				detection.Critical: "Critical"}[sev])
+		}
+	}
+	return out
 }
 
 func (u detectorUsage) health(reasonValues []string) string {
 	set := make(map[string]bool)
 	for _, r := range reasonValues {
 		for s := range u.severities[r] {
+			set[s] = true
+		}
+		for _, s := range registrySeverities(r) {
 			set[s] = true
 		}
 	}
@@ -120,7 +158,8 @@ func readOnlyReferences(file *ast.File) map[*ast.SelectorExpr]bool {
 	return reads
 }
 
-// recordLiteral pairs Reason and Severity fields of one struct literal.
+// recordLiteral pairs Reason and Severity fields of one struct literal;
+// condition table rows name them finding and severity.
 func recordLiteral(
 	lit *ast.CompositeLit, names map[string]string, u detectorUsage,
 ) {
@@ -135,9 +174,9 @@ func recordLiteral(
 			continue
 		}
 		switch key.Name {
-		case "Reason":
+		case "Reason", "finding":
 			reason = selectorReason(kv.Value, names)
-		case "Severity":
+		case "Severity", "severity":
 			severity = severityName(kv.Value)
 		}
 	}

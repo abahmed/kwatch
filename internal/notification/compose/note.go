@@ -31,6 +31,9 @@ type caseFacts struct {
 	// changes are the latest changes next to an incident with no cause,
 	// newest first, set by the pipeline.
 	changes []inventory.Change
+	// window is the stretch between the root's last healthy mark and the
+	// first failure, with the changes inside it, set by the pipeline.
+	window *incident.HealthWindow
 	// wake is the cluster wake-up the problem began in, set by the
 	// pipeline.
 	wake *incident.WakeContext
@@ -41,7 +44,7 @@ func gatherFacts(d incident.Decision, now time.Time, fix *inventory.Change,
 	f := caseFacts{p: d.Incident, members: sortedMembers(d.Incident),
 		now: now, fix: fix, reason: d.Reason, output: d.Facts.Output,
 		evidence: d.Facts.Evidence, changes: d.Facts.Changes,
-		wake: d.Facts.Wake}
+		window: d.Facts.Window, wake: d.Facts.Wake}
 	if own := rootFinding(f.p, f.members); own != nil {
 		f.lead, f.ok = *own, true
 	} else if failures := failing(f.members); len(failures) > 0 {
@@ -75,6 +78,8 @@ const (
 	partConsequence
 	partUnverified
 	partRecurrence
+	// partPlace is the line that names the setting to change.
+	partPlace
 	partAction
 	// partChecked is last so a cut message loses it first.
 	partChecked
@@ -83,11 +88,27 @@ const (
 // maxProof bounds the proof: one or two facts convince, more is noise.
 const maxProof = 2
 
+// factKey names a fact a note must say only once, whichever sentence
+// carries it.
+type factKey string
+
+// Facts that a joined sentence and a plainer one can both state.
+const (
+	factMemory   factKey = "memory"
+	factLiveness factKey = "liveness"
+)
+
 // sentence is one finished sentence of a note.
 type sentence struct {
 	part   part
 	weight float64
 	text   string
+	// fact is the fact this sentence states alone; it is dropped when
+	// another sentence carries it.
+	fact factKey
+	// carries lists the facts this sentence states along with its own
+	// point, so the plainer sentences for them stay silent.
+	carries []factKey
 }
 
 // sentenceWriter turns one type of fact into sentences. It returns
@@ -101,11 +122,13 @@ var noteWriters = []sentenceWriter{
 	checkedSentences,
 	changeSentences,
 	causeProofSentences,
+	refusalSentences,
 	pullLoginSentences,
 	servingCertSentences,
 	revisionDiffSentences,
 	configVersionSentences,
 	changesBeforeSentences,
+	windowSentences,
 	wakeSentences,
 	errorSentences,
 	nodeWhySentences,
@@ -121,6 +144,7 @@ var noteWriters = []sentenceWriter{
 	preemptedSentences,
 	graceKillSentences,
 	memorySentences,
+	howFailedSentences,
 	livenessStartSentences,
 	livenessCascadeSentences,
 	throttleSentences,
@@ -133,10 +157,12 @@ var noteWriters = []sentenceWriter{
 	autoscalerSentences,
 	consequenceSentences,
 	riskSentences,
+	whySentences,
 	evidenceSentences,
 	impactSentences,
 	unverifiedSentences,
 	recurrenceSentences,
+	placeSentences,
 	actionSentences,
 	chainLineSentences,
 	checkedLineSentences,
@@ -150,9 +176,28 @@ func writeAll(f caseFacts, writers []sentenceWriter) []sentence {
 	return out
 }
 
+// withoutCarried drops the sentences whose fact another sentence
+// carries: a fact is said once, in the sentence that joins it to more.
+func withoutCarried(sentences []sentence) []sentence {
+	carried := map[factKey]bool{}
+	for _, s := range sentences {
+		for _, fact := range s.carries {
+			carried[fact] = true
+		}
+	}
+	var out []sentence
+	for _, s := range sentences {
+		if s.fact == "" || !carried[s.fact] {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 // arrange orders sentences by part and weight, keeps the strongest
-// proof, and drops empty and repeated sentences.
+// proof, and drops empty, repeated and carried sentences.
 func arrange(sentences []sentence) []sentence {
+	sentences = withoutCarried(sentences)
 	sort.SliceStable(sentences, func(i, j int) bool {
 		if sentences[i].part != sentences[j].part {
 			return sentences[i].part < sentences[j].part

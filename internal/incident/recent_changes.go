@@ -71,13 +71,21 @@ func rankedChanges(
 	model inventory.HistoryReader, root inventory.EntityID, now time.Time,
 	below int,
 ) []inventory.Change {
+	return rankedBetween(model, root, now.Add(-RecentWindow), now, below)
+}
+
+// rankedBetween is rankedChanges for the changes made from from to to.
+func rankedBetween(
+	model inventory.HistoryReader, root inventory.EntityID,
+	from, to time.Time, below int,
+) []inventory.Change {
 	if model == nil || root.Namespace == "" {
 		return nil
 	}
 	near := newProximity(model, root)
 	ranks := map[inventory.EntityID]int{}
 	var out []inventory.Change
-	for id, change := range newestPerObject(model, now) {
+	for id, change := range newestPerObject(model, from, to) {
 		if rank := near.rank(id); rank < below {
 			ranks[id] = rank
 			out = append(out, change)
@@ -99,12 +107,12 @@ func rankedChanges(
 	return out
 }
 
-// worthNaming reports a change a person made within the window: not
+// worthNaming reports a change a person made from from to to: not
 // noise, not a status write, not an autoscaler's replicas.
-func worthNaming(change inventory.Change, now time.Time) bool {
+func worthNaming(change inventory.Change, from, to time.Time) bool {
 	switch {
 	case noisyKinds[change.Entity.Kind],
-		change.At.Before(now.Add(-RecentWindow)), change.At.After(now),
+		change.At.Before(from), change.At.After(to),
 		strings.Contains(strings.ToLower(change.Actor), "kwatch"):
 		return false
 	case change.Entity.Kind == kube.KindNode:
@@ -120,14 +128,14 @@ func worthNaming(change inventory.Change, now time.Time) bool {
 }
 
 // newestPerObject keeps, for each object, its newest change worth naming
-// in the window before now.
+// from from to to.
 func newestPerObject(
-	model inventory.HistoryReader, now time.Time,
+	model inventory.HistoryReader, from, to time.Time,
 ) map[inventory.EntityID]inventory.Change {
 	newest := map[inventory.EntityID]inventory.Change{}
-	for _, set := range model.RecentChangeSets(now.Add(-RecentWindow)) {
+	for _, set := range model.RecentChangeSets(from) {
 		for _, change := range set.Changes {
-			if !worthNaming(change, now) {
+			if !worthNaming(change, from, to) {
 				continue
 			}
 			old, seen := newest[change.Entity]

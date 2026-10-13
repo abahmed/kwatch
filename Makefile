@@ -12,7 +12,7 @@
 	verify-operational verify-scenarios verify-negative-regressions \
 	verify-catalogs \
 	docs-verify line-check diff-check mod-tidy-check architecture-check \
-	test-layout-check lint-actions lint-shell alert-quality \
+	test-layout-check hygiene-check lint-actions lint-shell alert-quality \
 	alert-quality-gate docker-build docker-build-latest
 
 # Binary names
@@ -47,7 +47,12 @@ export BASE
 # find_tool resolves a tool from PATH, then from the Go install directory.
 find_tool = $(or $(shell command -v $(1) 2>/dev/null),$(wildcard \
 	$(GOBIN_DIR)/$(1)))
-GOLANGCI_LINT = $(call find_tool,golangci-lint)
+# golangci-lint is pinned here, the single source of truth for local runs and
+# CI, and built with the active Go toolchain so it can lint the module's Go
+# version. No manual install is needed.
+GOLANGCI_VERSION := v2.14.0
+GOLANGCI_LINT = $(GOCMD) run \
+	github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
 ACTIONLINT = $(call find_tool,actionlint)
 SHELLCHECK = $(call find_tool,shellcheck)
 HELM = $(call find_tool,helm)
@@ -85,7 +90,8 @@ help:
 	@echo "  make test          Run all tests"
 	@echo "  make test-short    Run short tests only"
 	@echo "  make vet           Run go vet, including the e2e build tag"
-	@echo "  make lint          Run golangci-lint"
+	@echo "  make lint          Run golangci-lint $(GOLANGCI_VERSION) (pinned)"
+	@echo "  make hygiene-check Forbidden files/words, gofmt, file length"
 	@echo "  make verify-fmt    Verify gofmt formatting"
 	@echo "  make coverage      Race tests with coverage into coverage.txt"
 	@echo "  make coverage-check Coverage run plus threshold enforcement"
@@ -130,10 +136,6 @@ vet:
 	$(GOVET) -tags e2e ./test/...
 
 lint:
-	@test -n "$(GOLANGCI_LINT)" || { \
-		echo "golangci-lint is required; install it with go install" >&2; \
-		exit 1; \
-	}
 	$(GOLANGCI_LINT) run ./...
 
 verify-fmt:
@@ -157,15 +159,16 @@ coverage-check: coverage
 	./scripts/check-coverage.sh coverage.txt
 
 verify: build vet lint coverage-check verify-latency line-check diff-check \
-	architecture-check test-layout-check verify-catalogs docs-verify \
-	verify-manifests verify-negative-regressions
+	architecture-check test-layout-check hygiene-check verify-catalogs \
+	docs-verify verify-manifests verify-negative-regressions
 
 ci: verify lint-actions lint-shell mod-tidy-check
 
 # Package-scoped gate for incremental refactors, for example:
 #   make verify-focused PKGS="./internal/incident ./internal/delivery/..."
 verify-focused: verify-fast
-	$(MAKE) line-check diff-check architecture-check test-layout-check
+	$(MAKE) line-check diff-check architecture-check test-layout-check \
+		hygiene-check
 
 # Package tests, vet, and lint only, after a small local edit.
 verify-fast:
@@ -175,10 +178,6 @@ verify-fast:
 	}
 	$(GOTEST) $(PKGS)
 	$(GOVET) $(PKGS)
-	@test -n "$(GOLANGCI_LINT)" || { \
-		echo "golangci-lint is required; install it with go install" >&2; \
-		exit 1; \
-	}
 	$(GOLANGCI_LINT) run $(PKGS)
 
 # Wall-clock budgets of docs/production-goals.md: the p99 decision lag at
@@ -277,6 +276,10 @@ architecture-check:
 
 test-layout-check:
 	@sh scripts/check-test-layout.sh
+
+# Forbidden scratch files and words, unformatted or oversized Go files.
+hygiene-check:
+	@$(GOTEST) -count=1 -run 'Hygiene' ./internal/architecture
 
 lint-actions:
 	@$(call tool_gate,actionlint,$(ACTIONLINT)); $(ACTIONLINT)

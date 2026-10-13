@@ -64,10 +64,6 @@ func changeMode(change inventory.Change) detection.Mode {
 func (v *view) virtualModes(
 	id, effect inventory.EntityID, link LinkType,
 ) []modeHealth {
-	failing := func(mode detection.Mode) []modeHealth {
-		return []modeHealth{{mode: mode, health: detection.Failing,
-			pseudo: true}}
-	}
 	if modes, ok := v.objectModes(id, effect, link); ok {
 		return modes
 	}
@@ -77,16 +73,16 @@ func (v *view) virtualModes(
 	switch id.Kind {
 	case kube.KindRegistry:
 		if class, ok := v.registryClass(effect); ok {
-			return failing(class)
+			return pseudoFailing(class)
 		}
 	case kindClusterDNS:
 		if v.resolutionFailing(effect, link) {
-			return failing(ModeResolution)
+			return pseudoFailing(ModeResolution)
 		}
 	case kube.KindAPIService:
 		if link == LinkServedBy && hasSignal(SignalMetricsAPI,
 			v.text(effect)) {
-			return failing(ModeMetricsUnserved)
+			return pseudoFailing(ModeMetricsUnserved)
 		}
 	case kube.KindZone, kube.KindNodePool:
 		return v.groupModes(id)
@@ -95,7 +91,7 @@ func (v *view) virtualModes(
 			return modes
 		}
 	case KindScheduling:
-		return failing(ModeRejectsNodes)
+		return pseudoFailing(ModeRejectsNodes)
 	case KindExternalEndpoint, KindFailureSignature:
 		return v.calledModes(id, effect, link)
 	case kube.KindService:
@@ -118,8 +114,7 @@ func (v *view) groupModes(group inventory.EntityID) []modeHealth {
 		v.membersFailing(group) < MinGroupMembersFailing {
 		return nil
 	}
-	return []modeHealth{{mode: ModeMembersFailing,
-		health: detection.Failing, pseudo: true}}
+	return pseudoFailing(ModeMembersFailing)
 }
 
 // backendModes are the pseudo modes of a webhook's backend Service, read
@@ -135,16 +130,12 @@ func (v *view) backendModes(
 		!(isAdmissionKind(effect.Kind) || effect.Kind == kube.KindAPIService) {
 		return nil
 	}
-	failing := func(mode detection.Mode) []modeHealth {
-		return []modeHealth{{mode: mode, health: detection.Failing,
-			pseudo: true}}
-	}
 	if !v.s.Model.Exists(id) {
-		return failing(ModeMissing)
+		return pseudoFailing(ModeMissing)
 	}
 	for _, m := range findingModes(v.s.Findings[effect]) {
 		if m.mode == detection.ModeWebhookNoEndpoints {
-			return failing(detection.ModeNoEndpoints)
+			return pseudoFailing(detection.ModeNoEndpoints)
 		}
 	}
 	return nil
@@ -166,8 +157,7 @@ func (v *view) missingModes(
 ) []modeHealth {
 	if (link == LinkUses || link == LinkMounts || link == LinkRoutesTo) &&
 		!v.s.Model.Exists(id) && !v.namespaceTerminating(id.Namespace) {
-		return []modeHealth{{mode: ModeMissing, health: detection.Failing,
-			pseudo: true}}
+		return pseudoFailing(ModeMissing)
 	}
 	return nil
 }
@@ -190,11 +180,7 @@ func (v *view) namespaceTerminating(namespace string) bool {
 func (v *view) objectModes(
 	id, effect inventory.EntityID, link LinkType,
 ) (modes []modeHealth, ok bool) {
-	switch id.Kind {
-	case kube.KindValidatingHook, kube.KindMutatingWebhook:
-		return v.admissionModes(id, effect, link), true
-	}
-	if modes := v.policyAdmissionModes(id, effect, link); len(modes) > 0 {
+	if modes, ok := v.refusalModes(id, effect, link); ok {
 		return modes, true
 	}
 	if modes, ok := v.finalizerModes(id, effect, link); ok {
@@ -241,6 +227,5 @@ func (v *view) claimModes(
 	if link != LinkMounts || !v.pinnedClaim(claim, effect) {
 		return nil
 	}
-	return []modeHealth{{mode: ModeVolumePinned, health: detection.Failing,
-		pseudo: true}}
+	return pseudoFailing(ModeVolumePinned)
 }

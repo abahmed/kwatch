@@ -87,8 +87,7 @@ func (v *view) finalizerModes(
 		return nil, false
 	}
 	failing := func(mode detection.Mode) ([]modeHealth, bool) {
-		return []modeHealth{{mode: mode, health: detection.Failing,
-			pseudo: true}}, true
+		return pseudoFailing(mode), true
 	}
 	switch {
 	case id.Kind == KindFinalizer && link == LinkFinalizes:
@@ -192,7 +191,10 @@ func (v *view) handlerStopped(id inventory.EntityID) detection.Mode {
 }
 
 // handlersOf are the workloads that probably run the controller of the
-// finalizers holding id, from the strongest evidence that finds any:
+// finalizers holding id. Objects held by the same finalizers in one
+// namespace are one problem, so a workload counts only when the evidence
+// holds for all of them (see sharedHandlers). For one object, the
+// strongest evidence that finds any:
 //
 //  1. the workload wrote the object, or an owner of it (its field
 //     manager is the workload's name);
@@ -200,6 +202,11 @@ func (v *view) handlerStopped(id inventory.EntityID) detection.Mode {
 //     API group of the finalizer or of the object's owners;
 //  3. a workload of the namespace is named after that group.
 func (v *view) handlersOf(id inventory.EntityID) []inventory.EntityID {
+	return v.sharedHandlers(id)
+}
+
+// ownHandlersOf are the handlers the evidence finds for id alone.
+func (v *view) ownHandlersOf(id inventory.EntityID) []inventory.EntityID {
 	owners := rootcause.OwnerChain(v.s.Model, id)
 	if found := v.managersOf(append([]inventory.EntityID{id},
 		owners...)); len(found) > 0 {

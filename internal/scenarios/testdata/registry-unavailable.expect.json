@@ -1,0 +1,10 @@
+{
+  "name": "registry-unavailable",
+  "description": "A container waits with the RegistryUnavailable reason: a failure of the image pull, not progress.",
+  "root": "deployment/shop/invoices",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

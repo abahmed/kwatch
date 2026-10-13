@@ -1,9 +1,10 @@
 10:08:15 settled
-🟠 checkout in shop (prod-eu-1): rollout 14 restarted 4 times in its first 2 minutes; rollout 13 did not restart. Only change in revision 14: image registry.example.com/checkout:5.1 → registry.example.com/checkout:5.2; pods restarting more than before since. Its dependents failed soon after it changed. Rolling back fixes it (changes the cluster): kubectl rollout undo deployment/checkout -n shop --to-revision=13
+🟠 checkout in shop (prod-eu-1): rollout 14 restarted 4 times in its first 2 minutes; rollout 13 did not restart. Only change in revision 14: image registry.example.com/checkout:5.1 → registry.example.com/checkout:5.2; pods restarting more than before since. Its dependents failed soon after it changed. Fix in: deployment/checkout → container app → image (registry.example.com/checkout:5.2). Rolling back fixes it (changes the cluster): kubectl rollout undo deployment/checkout -n shop --to-revision=13
 🟠 checkout in shop (prod-eu-1): rollout 14 restarted 4 times in its first 2 minutes; rollout 13 did not restart.
 | 🟠 **checkout** in **shop** (**prod-eu-1**): rollout 14 restarted 4 times in its first 2 minutes; rollout 13 did not restart.
 | Only change in revision 14: image registry.example.com/checkout:5.1 → registry.example.com/checkout:5.2; pods restarting more than before since.
 | Its dependents failed soon after it changed.
+| Fix in: deployment/checkout → container app → image (registry.example.com/checkout:5.2).
 | Rolling back fixes it (changes the cluster):
 | ```
 | kubectl rollout undo deployment/checkout -n shop --to-revision=13

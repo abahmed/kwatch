@@ -26,8 +26,7 @@ var policyCallRows = []Row{{
 	Cause: Side{Kind: kube.KindNetworkPolicy,
 		Modes: []detection.Mode{ModeBlocksCall}},
 	Link: LinkDenies,
-	Effect: Side{Kind: kube.KindPod, Modes: append(
-		append([]detection.Mode(nil), callerFailures...),
+	Effect: Side{Kind: kube.KindPod, Modes: callerFailuresAnd(
 		detection.ModeNotReady, detection.ModeProbe)},
 	Prior: 0.8,
 }}
@@ -106,9 +105,8 @@ func (v *view) blockModes(
 	if !ok {
 		return nil
 	}
-	return []modeHealth{{health: detection.Failing, pseudo: true,
-		mode: ModeBlocksCall + detection.Mode("."+edge.service.Name+
-			callPort(edge))}}
+	return pseudoFailing(ModeBlocksCall +
+		detection.Mode("."+edge.service.Name+callPort(edge)))
 }
 
 func callPort(edge blockedCall) string {

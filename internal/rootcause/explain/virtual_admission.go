@@ -73,7 +73,7 @@ func (v *view) admissionModes(
 		return nil
 	}
 	text := strings.ToLower(v.text(effect))
-	names := strings.Split(attrText(e, kube.AttrWebhookNames), ",")
+	names := attrList(e, kube.AttrWebhookNames)
 	calls := failedCall.FindAllStringSubmatchIndex(text, -1)
 	for i, m := range calls {
 		if !containsFold(names, text[m[2]:m[3]]) {
@@ -81,13 +81,11 @@ func (v *view) admissionModes(
 		}
 		end := callEnd(text, m[1], calls, i)
 		if mode, ok := callMode(text[m[1]:end]); ok {
-			return []modeHealth{{mode: mode, health: detection.Failing,
-				pseudo: true}}
+			return pseudoFailing(mode)
 		}
 	}
 	if deniedBy(text, names) {
-		return []modeHealth{{mode: ModeWebhookDenied,
-			health: detection.Failing, pseudo: true}}
+		return pseudoFailing(ModeWebhookDenied)
 	}
 	return nil
 }
@@ -134,24 +132,10 @@ func callMode(segment string) (detection.Mode, bool) {
 	return "", false
 }
 
-// admitsElsewhere reports whether an admission candidate is ruled out
-// by the effect's own words: the error names another webhook or quota,
-// or the webhook fails open, so its failed call rejected nothing.
-func (v *view) admitsElsewhere(id, effect inventory.EntityID) bool {
-	text := strings.ToLower(v.text(effect))
-	switch id.Kind {
-	case kube.KindValidatingHook, kube.KindMutatingWebhook:
-		return v.otherWebhook(id, text)
-	case kube.KindQuota:
-		names := namedQuota.FindAllStringSubmatch(text, -1)
-		for _, m := range names {
-			if strings.EqualFold(m[1], id.Name) {
-				return false
-			}
-		}
-		return len(names) > 0
-	}
-	return false
+// otherQuota reports whether the error names a quota other than id.
+func (v *view) otherQuota(id inventory.EntityID, text string) bool {
+	return len(namesIn(text, namedQuota)) > 0 &&
+		!namesObject(text, id.Name, namedQuota)
 }
 
 // otherWebhook reports whether a webhook configuration cannot be the
@@ -164,8 +148,8 @@ func (v *view) otherWebhook(id inventory.EntityID, text string) bool {
 	if !ok {
 		return false
 	}
-	names := strings.Split(attrText(e, kube.AttrWebhookNames), ",")
-	policies := strings.Split(attrText(e, kube.AttrFailurePolicy), ",")
+	names := attrList(e, kube.AttrWebhookNames)
+	policies := attrList(e, kube.AttrFailurePolicy)
 	named := namedWebhook.FindAllStringSubmatch(text, -1)
 	if len(named) == 0 {
 		return failsOpen(policies, -1)
@@ -208,4 +192,89 @@ func indexFold(names []string, name string) int {
 // containsFold reports whether names holds name, ignoring case.
 func containsFold(names []string, name string) bool {
 	return indexFold(names, name) >= 0
+}
+
+// Pseudo modes of the built-in admission checks besides webhooks and
+// quotas, read from the failed creates that quote them.
+const (
+	// ModePodSecurityDenied is a namespace whose Pod Security
+	// Admission enforce label refused a pod.
+	ModePodSecurityDenied detection.Mode = "Admission.PodSecurity"
+	// ModeLimitRangeDenied is a LimitRange whose bounds refused a pod.
+	ModeLimitRangeDenied detection.Mode = "Admission.LimitRange"
+	// ModePolicyDenied is a ValidatingAdmissionPolicy that denied a
+	// request.
+	ModePolicyDenied detection.Mode = "Admission.Policy"
+)
+
+// kindAdmissionPolicy is the entity kind of a ValidatingAdmissionPolicy.
+var kindAdmissionPolicy = kube.KindFor("ValidatingAdmissionPolicy")
+
+// podSecurityEnforce is the label that makes a namespace refuse pods.
+const podSecurityEnforce = "pod-security.kubernetes.io/enforce="
+
+// namedPolicy finds the policy that denied a request: "ValidatingAdmission
+// Policy 'name' with binding 'binding' denied request: ...".
+var namedPolicy = regexp.MustCompile(
+	`admissionpolicy '([^']+)' with binding '[^']*' denied request`)
+
+// A namespace is reached through containment, the rest by admission.
+func admitsOrContains(link LinkType, id inventory.EntityID) bool {
+	return link == LinkAdmits ||
+		(link == LinkContains && id.Kind == kube.KindNamespace)
+}
+
+// podSecurityModes: a namespace whose enforce label refused a pod, seen
+// from a controller whose creates it refuses: the effect's own error
+// must quote the check.
+func (v *view) podSecurityModes(
+	id, effect inventory.EntityID, link LinkType,
+) []modeHealth {
+	if admitsOrContains(link, id) &&
+		hasSignal(SignalPodSecurity, v.text(effect)) &&
+		v.enforcesPodSecurity(id) {
+		return pseudoFailing(ModePodSecurityDenied)
+	}
+	return nil
+}
+
+// limitRangeModes: a LimitRange whose bounds refused a pod.
+func (v *view) limitRangeModes(
+	id, effect inventory.EntityID, link LinkType,
+) []modeHealth {
+	if admitsOrContains(link, id) &&
+		hasSignal(SignalLimitRange, v.text(effect)) {
+		return pseudoFailing(ModeLimitRangeDenied)
+	}
+	return nil
+}
+
+// policyModes: a ValidatingAdmissionPolicy that denied a request.
+func (v *view) policyModes(
+	id, effect inventory.EntityID, link LinkType,
+) []modeHealth {
+	if admitsOrContains(link, id) &&
+		deniedByPolicy(v.text(effect), id.Name) {
+		return pseudoFailing(ModePolicyDenied)
+	}
+	return nil
+}
+
+// enforcesPodSecurity reports a namespace labelled to refuse pods.
+func (v *view) enforcesPodSecurity(ns inventory.EntityID) bool {
+	e, ok := v.s.Model.Entity(ns)
+	return ok && strings.Contains(attrText(e, kube.AttrLabels),
+		podSecurityEnforce)
+}
+
+// deniedByPolicy reports a denial quoted by the named policy.
+func deniedByPolicy(text, policy string) bool {
+	return namesObject(text, policy, namedPolicy)
+}
+
+// policyAdmitHops lead from a controller that cannot create objects to
+// the admission policies. The namespace (Pod Security Admission) is
+// reached by containment and a LimitRange as a constraint of it.
+func (v *view) policyAdmitHops(_ inventory.EntityID) []hop {
+	return hopsTo(LinkAdmits, v.s.Model.Entities(kindAdmissionPolicy)...)
 }

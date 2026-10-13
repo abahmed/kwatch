@@ -45,10 +45,11 @@ func layout(m notification.Message) string {
 // TestScenarioMessagesGolden keeps the wording of every message each
 // scenario sends. After a deliberate wording change, regenerate with:
 //
-//	go test ./internal/scenarios -run TestScenarioMessagesGolden -update
+//	go test ./internal/scenarios -run 'TestScenarioMessagesGolden/name$' -update
 //
 // and review the diff like any other code change.
 func TestScenarioMessagesGolden(t *testing.T) {
+	requireScopedUpdate(t)
 	runParallelUnlessUpdating(t)
 	for _, s := range library() {
 		name := s.expect.Name

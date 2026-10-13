@@ -116,22 +116,30 @@ func (m *Model) Stats() Stats {
 // then empty. The owner calls it periodically; the persistent store keeps
 // the long history.
 func (m *Model) Prune(before time.Time) int {
+	return m.PruneKeeping(before, before)
+}
+
+// PruneKeeping is Prune with a longer memory for changes and health
+// marks: notes older than before go, changes and marks older than
+// keepFrom go. A restart reloads a day of changes, so the owner keeps
+// that day while notes stay short-lived.
+func (m *Model) PruneKeeping(before, keepFrom time.Time) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.history.prune(before)
+	m.history.prune(keepFrom)
 	removed := 0
 	for id, rec := range m.records {
 		rec.notes = pruneNotes(rec.notes, before)
 		rec.dropOrphanParts()
 		kept := rec.changes[:0]
 		for _, change := range rec.changes {
-			if !change.At.Before(before) {
+			if !change.At.Before(keepFrom) {
 				kept = append(kept, change)
 			}
 		}
 		removed += len(rec.changes) - len(kept)
 		rec.changes = kept
-		rec.health = pruneHealth(rec.health, before)
+		rec.health = pruneHealth(rec.health, keepFrom)
 		// Records that hold nothing any more are dropped: tombstones
 		// whose history expired, and notes about never-observed objects.
 		if !rec.present && len(rec.changes) == 0 &&

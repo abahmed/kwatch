@@ -1,0 +1,10 @@
+{
+  "name": "recorded-bad-rollout",
+  "description": "Recorded-format example: the synthetic scenario through the flight recorder, sanitizer and export. A Deployment rolls out a new image whose pods crash-loop; pods of the previous revision stay healthy.",
+  "root": "deployment/ns-dacf0cd1f0/name-468f1de69a",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//name-3ca7ff11a2"
+  ]
+}

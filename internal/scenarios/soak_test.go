@@ -1,6 +1,7 @@
 package scenarios
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -8,7 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/flight"
+	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/replay"
+	"github.com/abahmed/kwatch/internal/storage"
 )
 
 // The soak test replays a simulated day through the engine and measures
@@ -47,9 +51,11 @@ func TestSoakHeapPlateaus(t *testing.T) {
 	model := deps.Model
 	var hours []float64
 	start := log.Start
+	record := soakRecorder(t, log)
 	opts := replay.Options{
 		Tail: time.Hour, Every: soakPrune,
 		Tick: func(at time.Time) {
+			record(at)
 			model.Prune(at.Add(-soakRetention))
 			if at.Sub(start)%time.Hour != 0 {
 				return
@@ -81,6 +87,44 @@ func TestSoakHeapPlateaus(t *testing.T) {
 	if rate > soakMaxGrowthMiBPerHour {
 		t.Errorf("heap grows %.2f MiB per simulated hour after warm-up; "+
 			"want at most %.1f", rate, soakMaxGrowthMiBPerHour)
+	}
+}
+
+// soakRecorder runs the always-on flight recorder beside the replay, on a
+// real state file, so its queue, its memory of repeats and its writes are
+// part of the heap the soak measures. The returned function records the
+// log entries up to a simulated time, as the sources would have, and
+// flushes, as the recorder's timer does.
+func soakRecorder(t *testing.T, log replay.Log) func(time.Time) {
+	t.Helper()
+	simulated := log.Start
+	now := func() time.Time { return simulated }
+	state, err := storage.Open(filepath.Join(t.TempDir(), "state.db"),
+		storage.Options{Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = state.Close() })
+	if _, err := state.Claim(); err != nil {
+		t.Fatal(err)
+	}
+	salt, err := flight.LoadSalt(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder, err := flight.NewRecorder(flight.NewRing(state), salt, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	submit := recorder.Wrap(func(context.Context, ...inventory.Observation) {})
+	next := 0
+	return func(at time.Time) {
+		simulated = at
+		for next < len(log.Entries) && !log.Entries[next].At.After(at) {
+			submit(t.Context(), log.Entries[next].Observation)
+			next++
+		}
+		recorder.Flush()
 	}
 }
 

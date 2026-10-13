@@ -165,6 +165,11 @@ func (h *HealthServer) setComponentStatusLocked(
 		if status.State == "degraded" &&
 			(!exists || previous.State != "degraded") {
 			metrics.DefaultRegistry().ComponentDegradations.Add(1)
+			// One line per transition into degraded, so the counter
+			// always has a name behind it. The reason comes from the
+			// small vocabulary of normalizeReason.
+			klog.InfoS("health: component degraded",
+				"component", name, "reason", status.Reason)
 		}
 		if h.clock != nil {
 			status.LastTransition = h.clock.Now()

@@ -38,8 +38,8 @@ func webhookUnknownAuthority() scenario {
 
 // webhookServingCertExpired: the same failure, and the certificate the
 // webhook's pods serve (Secret policy-tls) expired seconds before the first
-// failure: a present fact the message adds. The expiring-soon finding is
-// advisory (a prediction), so the Secret opens its own incident only when
+// failure: a present fact the message adds. A certificate that has not
+// expired is no finding, so the Secret opens its own incident only when
 // the certificate has expired and settles like any new incident; the
 // paging webhook incident is heard first and the Secret second.
 func webhookServingCertExpired() scenario {

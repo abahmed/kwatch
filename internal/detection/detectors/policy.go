@@ -90,7 +90,7 @@ func (Quota) Detect(
 		if f, ok := quotaForbidsCreates(ctx, e); ok {
 			return []detection.Finding{f}
 		}
-		return quotaNearLimit(e)
+		return nil
 	}
 	// Used equal to hard is a full quota, not yet a failure: it is a
 	// warning only once a controller was refused for exceeding it.

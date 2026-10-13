@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/inventory"
 )
 
 // withChanges gives a message the changes next to the failure, with what
@@ -22,9 +23,37 @@ func (a *announcer) withChanges(
 	if d.Incident.Cause == nil {
 		d.Facts.Changes = incident.RecentChanges(
 			a.history, d.Incident.Root, at)
+	} else {
+		d.Facts.Changes = incident.NearChanges(a.history, d.Incident.Root,
+			at, d.Incident.Onset(), d.Incident.Cause.Change)
+	}
+	return withWindow(d, a.history, at)
+}
+
+// withWindow adds the health window, when there is one, and takes its
+// changes out of the list of recent changes: a message says each once.
+func withWindow(
+	d incident.Decision, history inventory.HistoryReader, at time.Time,
+) incident.Decision {
+	d.Facts.Window = incident.WindowOf(history, d.Incident, at)
+	if d.Facts.Window == nil {
 		return d
 	}
-	d.Facts.Changes = incident.NearChanges(a.history, d.Incident.Root, at,
-		d.Incident.Onset(), d.Incident.Cause.Change)
+	var rest []inventory.Change
+	for _, change := range d.Facts.Changes {
+		if !inWindow(d.Facts.Window, change) {
+			rest = append(rest, change)
+		}
+	}
+	d.Facts.Changes = rest
 	return d
+}
+
+func inWindow(w *incident.HealthWindow, change inventory.Change) bool {
+	for _, named := range w.Changes {
+		if named.Entity == change.Entity && named.At.Equal(change.At) {
+			return true
+		}
+	}
+	return false
 }

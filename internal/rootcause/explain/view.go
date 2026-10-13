@@ -48,6 +48,8 @@ type view struct {
 	// compared lists, per failure, what the counterfactual checks
 	// compared it with; see Trace.Compared.
 	compared map[inventory.EntityID][]Comparison
+	// stuckIndex memoises stuck(); nil until it is computed.
+	stuckIndex *stuckGroups
 	// callMemo holds what is read from error text and policies.
 	callMemo
 }

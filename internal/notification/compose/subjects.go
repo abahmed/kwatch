@@ -86,7 +86,7 @@ func ownerIn(
 // leadName names the lead's subject with its namespace and, when one is
 // configured, the cluster: "payments in shop (prod-eu-1)".
 func (f caseFacts) leadName(id inventory.EntityID) string {
-	return placedName(id) + f.clusterTag()
+	return f.objectName(id) + f.clusterTag()
 }
 
 // clusterTag is " (prod-eu-1)", or nothing without a cluster name.

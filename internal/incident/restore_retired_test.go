@@ -17,6 +17,8 @@ var retiredNames = []struct{ reason, mode string }{
 	{"Risk.SingleNode", "Risk.SingleNode"},
 	{"Risk.Privileged", "Risk.Privileged"},
 	{"Risk.ConfigVersionSkew", "Risk.ConfigVersionSkew"},
+	{"TLSCertExpiringSoon", "Cert.Expiring"},
+	{"ResourceQuotaNearLimit", "Quota.NearLimit"},
 }
 
 // A record saved by an older version, with a reason or mode that no

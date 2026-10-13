@@ -201,7 +201,9 @@ func containerSteps(s detection.Finding) []notification.Step {
 	id := s.Entity
 	pod, container := splitContainer(id.Name)
 	ns := namespaceFlag(id.Namespace)
-	if neverStarted[s.Reason] {
+	if neverStarted[s.Reason] || s.Mode == detection.ModeUnknownWaiting {
+		// An unknown waiting reason says nothing of a previous run, so
+		// the pod's state and events are the safe thing to read.
 		return []notification.Step{{
 			Text:    "See why the container cannot start",
 			Command: "kubectl describe pod " + quote(pod) + ns,

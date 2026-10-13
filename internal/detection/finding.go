@@ -51,6 +51,10 @@ type Finding struct {
 	// demotes a Usual finding to the digest, and does not let an
 	// Unusual one be written off as routine.
 	Normal Normality `json:",omitempty"`
+	// Place is the setting this failure comes from, when it is one
+	// (a memory limit a container reached). Nil when the failure is not
+	// a setting. See Place.
+	Place *Place `json:",omitempty"`
 }
 
 // EvidenceUsedBy labels evidence that names an object using the finding's

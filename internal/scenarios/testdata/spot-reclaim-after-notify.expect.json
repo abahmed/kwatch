@@ -1,0 +1,8 @@
+{
+  "name": "spot-reclaim-after-notify",
+  "description": "A spot node is reclaimed six minutes after a notify incident resolved; its workloads are not ready for four minutes on the new node.",
+  "root": "deployment/shop/mailer",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "10m0s"
+}

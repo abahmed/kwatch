@@ -172,10 +172,10 @@ func TestEventStale(t *testing.T) {
 func TestEventReasonsAreUpstreamNames(t *testing.T) {
 	notUpstream := []string{"FailedCallingWebhook", "FailedToScaleUp"}
 	for _, reason := range notUpstream {
-		_, listed := eventReasons[reason]
+		_, listed := detection.EventSeverity(reason)
 		assert.False(t, listed, reason)
 	}
-	_, listed := eventReasons["FailedCreate"]
+	_, listed := detection.EventSeverity("FailedCreate")
 	assert.True(t, listed)
 }
 

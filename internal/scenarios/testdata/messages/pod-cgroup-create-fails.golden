@@ -1,0 +1,13 @@
+10:02:15 settled
+🟠 search in shop (prod-eu-1) cannot create the pod's cgroup. Its node and registry are healthy and unchanged, so nothing outside it explains this. To see the object's state and events, run kubectl describe pod search-152b6507-a -n shop
+🟠 search in shop (prod-eu-1) cannot create the pod's cgroup.
+| 🟠 **search** in **shop** (**prod-eu-1**) cannot create the pod's cgroup.
+| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| To see the object's state and events, run
+| ```
+| kubectl describe pod search-152b6507-a -n shop
+| ```
+10:16:15 material change
+🟠 search in shop (prod-eu-1) now has pods that run without restarting but are not ready.
+🟠 search in shop (prod-eu-1) now has pods that run without restarting but are not ready.
+| 🟠 **search** in **shop** (**prod-eu-1**) now has pods that run without restarting but are not ready.

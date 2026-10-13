@@ -13,7 +13,8 @@ const (
 	// Incidents: key incident ID, value the incident record. A resolved
 	// record expires when its writer says so (resolve time plus 7 days).
 	Incidents Bucket = "incidents"
-	// Changes: log per object key, 30 days.
+	// Changes: one log stream of full change records for workloads,
+	// config and policy, 7 days and at most DefaultChangesCap bytes.
 	Changes Bucket = "changes"
 	// Baselines: key workload or entity, rolling aggregates, no expiry.
 	Baselines Bucket = "baselines"
@@ -36,6 +37,10 @@ const (
 	// delivery manager bounds it (entry count and age) and removes a job
 	// once a provider accepted it, so it has no expiry here.
 	Outbox Bucket = "outbox"
+	// Flight: one log stream of sanitized observation batches, the
+	// flight recorder (internal/flight). 48 hours and at most
+	// DefaultFlightCap bytes, oldest first.
+	Flight Bucket = "flight"
 )
 
 // shape is how a bucket lays out its keys.
@@ -57,15 +62,15 @@ var specs = []spec{
 	{Incidents, keyed}, {Changes, logged}, {Baselines, keyed},
 	{Evidence, logged}, {Timeline, logged}, {Audit, logged},
 	{Fingerprints, keyed}, {State, keyed}, {Threads, keyed},
-	{Outbox, keyed},
+	{Outbox, keyed}, {Flight, logged},
 }
 
 // Retention and size defaults. They are constants
 // rather than configuration: no existing setting carries them, and the
 // defaults fit the default 2Gi volume budget.
 const (
-	// DefaultLogRetention keeps changes, timeline, evidence and audit
-	// entries for 30 days after the entry time.
+	// DefaultLogRetention keeps evidence and audit entries for 30 days
+	// after the entry time.
 	DefaultLogRetention = 30 * 24 * time.Hour
 	// DefaultSizeCap is the total logical size (key and value bytes)
 	// the compactor keeps the store under: 512 MiB, a quarter of the
@@ -86,9 +91,21 @@ const (
 	// cluster writes a timeline entry every second or two, so 30 days
 	// of it filled the state file and made every start check it.
 	DefaultTimelineRetention = 7 * 24 * time.Hour
+	// DefaultChangeRetention keeps change records for 7 days. A restart
+	// reloads only the last day of them; the rest is for a post-mortem.
+	DefaultChangeRetention = 7 * 24 * time.Hour
+	// DefaultChangesCap bounds the change records to 8 MiB, tens of
+	// thousands of records. The oldest go first.
+	DefaultChangesCap int64 = 8 << 20
 	// DefaultTimelineCap bounds the timeline to 32 MiB, about 100,000
 	// entries, however fast a cluster writes. The oldest go first.
 	DefaultTimelineCap int64 = 32 << 20
+	// DefaultFlightRetention keeps the flight recording for 48 hours.
+	DefaultFlightRetention = 48 * time.Hour
+	// DefaultFlightCap bounds the flight recording to 64 MiB. Past it
+	// the oldest batches go first, so a busy cluster keeps fewer hours,
+	// never more bytes.
+	DefaultFlightCap int64 = 64 << 20
 )
 
 // Policy is what the compactor enforces.
@@ -100,6 +117,10 @@ type Policy struct {
 	EvidenceCap int64
 	// TimelineCap bounds the timeline bucket, oldest first.
 	TimelineCap int64
+	// ChangesCap bounds the changes bucket, oldest first.
+	ChangesCap int64
+	// FlightCap bounds the flight recording bucket, oldest first.
+	FlightCap int64
 	// SizeCap bounds the whole store. Only evictable data (history log
 	// entries) is deleted, oldest first, and it always keeps at least a
 	// quarter of the cap; pinned data over the cap is reported as
@@ -115,11 +136,14 @@ type Policy struct {
 func DefaultPolicy() Policy {
 	return Policy{
 		Retention: map[Bucket]time.Duration{
-			Changes: DefaultLogRetention, Evidence: DefaultLogRetention,
+			Changes: DefaultChangeRetention, Evidence: DefaultLogRetention,
 			Timeline: DefaultTimelineRetention, Audit: DefaultLogRetention,
+			Flight: DefaultFlightRetention,
 		},
 		EvidenceCap: DefaultEvidenceCap,
 		TimelineCap: DefaultTimelineCap,
+		ChangesCap:  DefaultChangesCap,
+		FlightCap:   DefaultFlightCap,
 		SizeCap:     DefaultSizeCap,
 		Batch:       defaultBatch,
 	}
@@ -175,6 +199,12 @@ func EvidenceLog[T any](s *Store) Log[T] {
 // TimelineLog is the timeline bucket: what happened, per entity.
 func TimelineLog[T any](s *Store) Log[T] {
 	return Log[T]{store: s, bucket: Timeline}
+}
+
+// FlightLog is the flight recorder bucket: sanitized observation
+// batches, under one stream name.
+func FlightLog[T any](s *Store) Log[T] {
+	return Log[T]{store: s, bucket: Flight}
 }
 
 // AuditLog is the audit bucket: decisions, per stream name.

@@ -1,6 +1,8 @@
 package announce
 
 import (
+	"maps"
+	"slices"
 	"strconv"
 	"time"
 
@@ -69,6 +71,12 @@ func (c *Collector) markShown(p incident.Incident, now time.Time) {
 	if c.ongoingShown == nil {
 		c.ongoingShown = map[string]shown{}
 	}
+	today := dayOf(now)
+	for id, last := range c.ongoingShown {
+		if last.day != today {
+			delete(c.ongoingShown, id)
+		}
+	}
 	c.ongoingShown[p.ID] = shown{day: dayOf(now), sig: ongoingSignature(p)}
 }
 
@@ -84,4 +92,27 @@ func ongoingExtras(
 		same = append(same, item.Ongoing)
 	}
 	return full, same
+}
+
+// shownLines is the record of what today's digests listed, in ID order,
+// for the saved digest state: a restart must not make every ongoing
+// problem new again.
+func (c *Collector) shownLines() []ShownLine {
+	var out []ShownLine
+	for _, id := range slices.Sorted(maps.Keys(c.ongoingShown)) {
+		last := c.ongoingShown[id]
+		out = append(out, ShownLine{ID: id, Day: last.day, Sig: last.sig})
+	}
+	return out
+}
+
+// restoreShown reads the record back after a restart.
+func (c *Collector) restoreShown(lines []ShownLine) {
+	if len(lines) == 0 {
+		return
+	}
+	c.ongoingShown = map[string]shown{}
+	for _, l := range lines {
+		c.ongoingShown[l.ID] = shown{day: l.Day, sig: l.Sig}
+	}
 }

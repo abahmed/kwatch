@@ -13,6 +13,9 @@ func (m *Manager) nextWake(now time.Time) time.Duration {
 			next = delay
 		}
 	}
+	for _, at := range m.churnWakes() {
+		consider(at)
+	}
 	if p := m.oldestResolved(); p != nil {
 		consider(p.Resolved.Add(m.cfg.Remember + time.Nanosecond))
 	}

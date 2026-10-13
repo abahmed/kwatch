@@ -85,7 +85,7 @@ func TestContainerResourcesMemoryNamesTheWorkingSet(t *testing.T) {
 	got := evaluate(ContainerResources{}, m,
 		t0.Add(memorySustained), id, nil).Findings
 	require.Len(t, got, 1)
-	assert.Contains(t, got[0].Summary, "Working set memory is 92%")
+	assert.Contains(t, got[0].Summary, "uses 92% of its memory limit")
 }
 
 // A value that touches the line for one sample must not raise a finding.
@@ -286,4 +286,18 @@ func TestPodStorageNeedsEveryContainerLimited(t *testing.T) {
 	link(m, free, inventory.PartOf, pod)
 
 	assert.Empty(t, evaluate(PodStorage{}, m, t0, pod, nil).Findings)
+}
+
+func TestPodStorageSummaryStatesUseWithNumbers(t *testing.T) {
+	m, pod := podWithContainers(60, 40)
+	got := evaluate(PodStorage{}, m, t0, pod, nil).Findings
+	require.Len(t, got, 1)
+	assert.Contains(t, got[0].Summary,
+		"Pod uses 90% of its ephemeral-storage limit (")
+}
+
+func TestBytesText(t *testing.T) {
+	assert.Equal(t, "470Mi", bytesText(470<<20))
+	assert.Equal(t, "1.8Gi", bytesText(1.8*(1<<30)))
+	assert.Equal(t, "2Gi", bytesText(2<<30))
 }

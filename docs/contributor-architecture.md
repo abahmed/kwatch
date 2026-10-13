@@ -48,7 +48,9 @@ Each line matches the package's `doc.go`.
 | `internal/redact` | Removes secrets from text before kwatch keeps or sends it. A leaf. |
 | `internal/format`, `internal/ratelimit`, `internal/clock` | Pure text helpers, the rate-limit error type, the time dependency. |
 | `internal/audit` | One JSON line per incident decision, for offline scoring. |
-| `internal/replay` | Records and replays observations on a simulated clock. Test tooling only. |
+| `internal/replay` | Records and replays observations on a simulated clock. Test tooling; only `internal/flight` imports it in production code, for its log format and sanitizer. |
+| `internal/flight` | The flight recorder: a bounded, sanitized ring of the observation stream in the state file, and `kwatch replay-export`. |
+| `internal/selfcheck` | Per-rule counts of whether recovery followed a change to the named cause. Display only. |
 | `internal/scenarios` | Labelled scenario library and the scorecard gate. Tests only. |
 | `internal/scorecard` | Measures notification quality against the production goals. |
 | `internal/feature`, `internal/heartbeat`, `internal/telemetry`, `internal/upgrader`, `internal/version` | Feature identifiers, the external heartbeat ping, adoption telemetry, release check, build version. |

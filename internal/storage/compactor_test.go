@@ -33,7 +33,7 @@ func TestCompactorRetentionDeletesOnlyExpired(t *testing.T) {
 	s := openClaimed(t, clock)
 	now := clock.Now()
 	changes := ChangeLog[string](s)
-	for _, age := range []time.Duration{40 * day, 31 * day, 29 * day, 0} {
+	for _, age := range []time.Duration{40 * day, 8 * day, 6 * day, 0} {
 		require.NoError(t, changes.Append("pod", now.Add(-age), "c"))
 	}
 	require.NoError(t, AuditLog[string](s).Append(

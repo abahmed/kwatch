@@ -3,7 +3,6 @@ package compose
 import (
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -34,10 +33,10 @@ func finalizerLead(f caseFacts) (string, bool) {
 	if len(held) == 0 {
 		return "", false
 	}
-	text := upperFirst(plural(len(held), "object")) + " " +
-		heldPlace(f, held) +
+	text := upperFirst(plural(len(held), "object")) +
+		heldNames(held) + " " + heldPlace(f, held) +
 		" " + verb(len(held), "has", "have") + " been stuck deleting" +
-		heldSince(held) + ": "
+		heldSince(f, held) + ": "
 	names := heldFinalizers(held)
 	their := "their"
 	if len(held) == 1 {
@@ -55,12 +54,32 @@ func finalizerLead(f caseFacts) (string, bool) {
 // heldObjects are the members whose deletion a finalizer holds.
 func heldObjects(members []detection.Finding) []detection.Finding {
 	var out []detection.Finding
+	seen := map[inventory.EntityID]bool{}
 	for _, m := range members {
-		if m.Mode == detection.ModeStuckDeleting {
+		if m.Mode == detection.ModeStuckDeleting && !seen[m.Entity] {
+			seen[m.Entity] = true
 			out = append(out, m)
 		}
 	}
 	return out
+}
+
+// maxNamedHeld is how many held objects the lead names; more are only
+// counted.
+const maxNamedHeld = 3
+
+// heldNames is " (service account a, role b and role binding c)" for a
+// few objects, so the reader can tell what is stuck; nothing for more.
+func heldNames(held []detection.Finding) string {
+	if len(held) > maxNamedHeld {
+		return ""
+	}
+	var names []string
+	for _, m := range held {
+		names = append(names, shortName(m.Entity))
+	}
+	sort.Strings(names)
+	return " (" + joinAnd(names, maxNamedHeld) + ")"
 }
 
 // heldPlace is "in shop" for objects of one namespace and "in 3
@@ -83,9 +102,11 @@ func heldPlace(f caseFacts, held []detection.Finding) string {
 	return "in " + plural(len(spaces), "namespace") + f.clusterTag()
 }
 
-// heldSince is " since Dec 4", from the oldest deletion.
-func heldSince(held []detection.Finding) string {
-	var first time.Time
+// heldSince is " since Dec 4, 2025", from the oldest deletion, or from
+// when the problem started if that was earlier (see StartedAt). The
+// year is said unless it is this year.
+func heldSince(f caseFacts, held []detection.Finding) string {
+	first := StartedAt(f.p)
 	for _, m := range held {
 		if !m.Since.IsZero() && (first.IsZero() || m.Since.Before(first)) {
 			first = m.Since
@@ -94,7 +115,7 @@ func heldSince(held []detection.Finding) string {
 	if first.IsZero() {
 		return ""
 	}
-	return " since " + first.UTC().Format("Jan 2")
+	return " since " + shortDate(first, f.now)
 }
 
 // heldFinalizers lists the distinct finalizers named by the objects,

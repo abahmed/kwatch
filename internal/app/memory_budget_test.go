@@ -1,14 +1,17 @@
 package app
 
 import (
+	"context"
 	"runtime"
 	"testing"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/flight"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/rootcause/explain"
+	"github.com/abahmed/kwatch/internal/storage"
 )
 
 // memBudgetMiB is the most live heap the 5,000-pod cluster may keep
@@ -72,7 +75,24 @@ func TestMemoryBudgetLargeCluster(t *testing.T) {
 	})
 	// The generated objects go out of scope once translated: the model
 	// is what the measurement is about.
-	loadMemCluster(t, model, buildMemCluster(now), now)
+	// The always-on flight recorder runs beside the model, as in the
+	// application: every observation is sanitized, queued and written to
+	// a real state file in batches. Its memory counts against the budget.
+	state, err := storage.Open(t.TempDir()+"/state.db",
+		storage.Options{Now: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer state.Close()
+	if _, err := state.Claim(); err != nil {
+		t.Fatal(err)
+	}
+	recorder := newFlightRecorder(state, func() time.Time { return now })
+	if recorder == nil {
+		t.Fatal("the flight recorder did not start")
+	}
+	loadMemCluster(t, model, buildMemCluster(now), now, recorder)
+	recorder.Flush()
 	sampler.sample("load")
 
 	synced := func(inventory.Kind) bool { return true }
@@ -111,6 +131,7 @@ func TestMemoryBudgetLargeCluster(t *testing.T) {
 			got, memPeakMiB)
 	}
 	runtime.KeepAlive(model)
+	runtime.KeepAlive(recorder)
 	runtime.KeepAlive(findings)
 	runtime.KeepAlive(areas)
 }
@@ -119,6 +140,7 @@ func TestMemoryBudgetLargeCluster(t *testing.T) {
 // initial list, the way the typed source does.
 func loadMemCluster(
 	t *testing.T, model *inventory.Model, c memCluster, now time.Time,
+	recorder *flight.Recorder,
 ) {
 	t.Helper()
 	digester := kube.NewDigester([]byte("memory-budget-test-key"))
@@ -148,13 +170,21 @@ func loadMemCluster(
 		{kube.EndpointSliceSchema{}, c.slices},
 		{kube.PodSchema{}, c.pods},
 	}
+	submit := recorder.Wrap(func(_ context.Context,
+		observations ...inventory.Observation) {
+		for _, o := range observations {
+			if _, err := model.Apply(o); err != nil {
+				t.Fatalf("apply %s: %v", o.Entity, err)
+			}
+		}
+	})
 	for _, group := range groups {
 		translator := kube.NewTranslator(group.schema)
 		for _, obj := range group.objects {
-			for _, o := range translator.Added(obj, true, now) {
-				if _, err := model.Apply(o); err != nil {
-					t.Fatalf("apply %s: %v", o.Entity, err)
-				}
+			submit(t.Context(), translator.Added(obj, true, now)...)
+			// What the recorder's own timer does every few seconds.
+			if recorder.Pending() >= 2048 {
+				recorder.Flush()
 			}
 		}
 	}

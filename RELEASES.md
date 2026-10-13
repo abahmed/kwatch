@@ -4,14 +4,125 @@
 
 ### Highlights
 
+- **Every reason Kubernetes emits is classified, and the rest is counted.**
+  A checked-in snapshot of the container waiting and terminated reasons,
+  pod reasons, kubelet, scheduler and controller Warning events and built-in
+  condition types of Kubernetes 1.37 (internal/detection/upstream) is held
+  against the reason registry by a test, so a reason kwatch ignores fails CI.
+  The gaps it found are closed: about 60 Warning event reasons (kubelet
+  start and node events, controller, storage and load balancer failures), the
+  RegistryUnavailable and PreCreateHookError waiting reasons, and the
+  ModifyVolumeError claim condition. Warning events that were only digest
+  material after three repeats are now findings of their own severity.
+- **A container waiting in an unknown state is never assumed healthy.** A
+  waiting reason that is neither a known failure nor known progress
+  (ContainerCreating, PodInitializing) is reported after two minutes as a
+  warning that quotes the reason and message. An unknown terminated reason
+  with a non-zero exit was already an Error finding.
+- **`/status` shows what kwatch could not explain.** "Unexplained (last 7
+  days)" counts every occurrence of a Warning event reason without a
+  registry entry, and incidents that stayed "cause not clear", with the top
+  reasons, failure modes and a redacted sample. Counts are bounded, kept in
+  the state file, and exported as
+  `kwatch_unexplained_total{kind=event|incident}`. Display only; the
+  alerting for events without a registry entry (three repeats, digest) is
+  unchanged.
+- **Fewer notifications at the busiest hour.** A "cause revised" update that
+  only takes a known cause back (its evidence aged out, nothing new was
+  found) is no longer sent for notify and lower incidents, and incidents that
+  only a roll-up named and that resolve in the same moment get one message
+  listing them all. The staging-day peak falls from 29 to 25 notifications an
+  hour; every other gate is unchanged.
+- **More exit codes are named.** A container that ends with 132, 134, 135
+  or 136 is now reported as an illegal instruction, SIGABRT, a bus error or
+  an arithmetic error (like 139 already was), and a crash loop with one of
+  them is named after it. Exit code 255 is explained as a status of -1 or out
+  of range. No change for the codes named before.
+- **Probe changes show real timings.** A probe that leaves its period,
+  timeout or failure threshold unset is now shown with the Kubernetes
+  defaults (every 10s, timeout 1s, 3 failures) instead of "every 0s, timeout
+  0s, 0 failures" in "changed the readinessProbe from ... to ...".
+- **Real incidents become regression tests.** Kwatch now keeps a bounded,
+  sanitized flight recording of what its sources observed (48 hours, 64 MiB
+  at most, names hashed, no messages or log text, no Secret detail).
+  `kwatch replay-export --since 2h --out incident.jsonl` writes a window of
+  it in the format the scenario library loads, and the scorecard reports a
+  separate "recorded" category that is scored but never tuned against.
+  See "Capturing an incident" in docs/production-operations.md.
+- **`/status` shows whether the named cause was the fix.** Per rule, "cause
+  confirmed by the fix in N of M resolved incidents (last 7 days)": did
+  recovery follow a change to the cause, to something else, or to nothing.
+  Display only; it never changes a confidence.
+- **A node replacement no longer says "failing again".** When a node is
+  drained, terminated or lost and its pods start again elsewhere, a workload
+  with a recently resolved incident is held for the normal start time and
+  does not reopen it. If it still fails after that, it is reported as a new
+  incident; a failure on settled infrastructure still reopens the old one.
+- **Failures name the exact place to fix.** When the cause is a setting, the
+  message adds one line from the object's own fields: "Fix in:
+  deployment/api → container app → resources.limits.memory (256Mi)". It
+  covers memory and CPU limits, probe timing and ports, the image, the
+  environment variable or Secret reference that is missing, replica and
+  autoscaler limits, a disruption budget, a route's backend, a claim's size
+  and class, and the tolerations or node selector a pod lacks. A Secret is
+  named, never its value; a cause that is not a setting (a node down) adds
+  nothing.
+- **A failure reads as one joined fact.** When a container is killed at its
+  limit, or by a liveness probe, right after a release, one sentence gives
+  the numbers and the time: "it was killed at its 256Mi memory limit; it
+  used 255Mi at peak in the last 24 hours; it has failed since 10:05, 3m
+  after the 10:02 release (revision 14)". It states only what happened.
+- **Failures say how they happened, in numbers kwatch saw.** A crash loop or
+  restart storm adds how long the last run lasted and how many restarts came
+  in how long since the pod was created; an OOM kill says when memory jumped
+  between its last two readings before the kill (for example "180Mi to 512Mi
+  within 40s"). Pods that wait to start and Jobs that run long are quoted
+  beside the workload's usual wait or run time.
+- **Refusals quote the refusing object.** When a quota or a LimitRange
+  refuses pods, the message gives its exact line from the API server's own
+  text: "ResourceQuota team-a: requests.memory 31.5Gi of 32Gi used; this pod
+  asks 1Gi" or "LimitRange limits: max memory 1Gi per container; a container
+  asks 2Gi (limit)".
+- **Changes survive restarts.** Edits to workloads, config, services,
+  policy and nodes are saved with their actor, fields and time, and the last
+  day is reloaded at start, so a change made at 18:00 is still named when a
+  workload fails the next morning, not reported as "changed while kwatch was
+  down". A message also says "Between 10:01:40 (last healthy) and 10:02:10
+  (first failure): ..." when both times are known and something changed in
+  between. The last healthy time of each workload is saved too.
+- **Findings and notes state facts, never predictions.** Memory, ephemeral
+  storage and etcd size read "uses 92% of its memory limit (470Mi of 512Mi)"
+  and "etcd database is 1.9 GiB of its 2 GiB quota" instead of saying what
+  might be killed or refused; a fail-closed webhook says "any create it
+  matches is rejected" and a still-present acknowledgement says "reminders
+  are held". Two near-limit alerts are gone: a quota close to its limit
+  opens nothing (only a refused create does), and an expiring certificate is
+  reported once it has expired. A guard test fails on predictive wording in
+  any message.
+- **Restarts do not repeat old problems.** The restart summary names the
+  notify and page problems that still fail and only counts the
+  lower-priority ones ("and 19 lower-priority problems, in the next
+  digest"). The record of what a digest listed in full today is kept in the
+  state file, so a nightly restart does not make every ongoing problem new
+  again.
+- **One stuck deletion is one incident.** Objects held by the same finalizer
+  share one root: a workload that wrote only some of them is no longer
+  blamed for those, and a restored incident rooted at such a workload is
+  handed over to the finalizer's incident instead of resolving as healthy.
+- **A pod moved by a lost node is not a failure.** Probe failures of a young
+  pod that has not restarted, on a node that just joined, are the node's
+  lifecycle and open nothing.
+- **The digest audit entry shows what was rendered.** It carries the line
+  count and the grouped, unchanged and wake-up lines.
 - **`/status` is opt-in.** The read-only `/status` view (open incidents with
   object names, no authentication) is served only with
   `healthCheck.statusEndpoint: true`; by default it answers 404. Read it with
   `kubectl port-forward`. `KwatchConfig` cannot set it.
-- **Findings that predict are context, not alerts.** Certificates close to
-  expiry, quotas near their limit, version skew, a large etcd database and
-  deprecated API use appear only as evidence inside a real incident; kwatch
-  reports failures that happened. The same holds for container memory, CPU
+- **Findings that predict are context, not alerts.** Version skew, a large
+  etcd database and deprecated API use appear only as evidence inside a real
+  incident (certificates close to expiry and quotas near their limit are not
+  reported at all, see Upgrade notes); kwatch reports failures that
+  happened. The same holds for container memory, CPU
   or ephemeral storage close to a limit, node filesystems or inodes filling
   up, many objects in etcd, a budget that selects nothing or overlaps
   without a refused eviction, a Job running long, and a missing reference
@@ -82,7 +193,7 @@
   Service is missing or has no ready pods, such as one an uninstalled
   operator left behind, now sends one notification ("Validating webhook x is
   failing because service y does not exist. No request has been rejected
-  yet; any create it matches will be."), then waits for the digest as an
+  yet; any create it matches is rejected."), then waits for the digest as an
   ongoing item, with no page and no "still open" reminders. It pages as
   before once kwatch sees a request refused because of it: a `failed calling
   webhook "<name>"` event on a controller, or the API server's metrics
@@ -1066,6 +1177,15 @@
 - **Upgrade note.** The persisted downtime fingerprints now include the new
   kinds above; the first start after the upgrade reports no change for them.
   No state schema change and no reset.
+- **Ongoing and reminder lines say what fails.** A digest line or reminder
+  uses the incident's own wording and cause ("is stuck deleting: finalizers
+  ... hold it", "targets Deployment x, which does not exist"), then "still
+  failing, for ... now", counted from when the problem started. A stuck
+  VolumeAttachment is named by its volume and node everywhere, never by its
+  hash. Ages over eight weeks read in months and years; dates before this
+  year carry the year; a few stuck objects are named in the lead. A
+  flapping update followed at once by an identical "failing again" is
+  recorded once. A component degradation is logged with its name and reason.
 
 ### Breaking changes
 
@@ -1157,6 +1277,14 @@
   `networkPolicy.apiServerPorts`.
 
 ### Upgrade notes
+
+- **Expiring TLS certificates are no longer reported.** kwatch used to
+  raise `TLSCertExpiringSoon` (mode `Cert.Expiring`) for a certificate close
+  to its end date. That was a prediction, so it is gone; a certificate is
+  reported once it has expired (`TLSCertExpired`), as before. The same goes
+  for `ResourceQuotaNearLimit`: only a refused create opens an incident.
+  Incidents saved by an older version with either old reason still restore
+  and resolve.
 
 - **RBAC mode.** The chart value `rbac.mode` is `full` by default. `full`
   grants read-only `list` and `watch` on every resource in every API group so

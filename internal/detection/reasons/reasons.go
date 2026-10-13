@@ -143,7 +143,6 @@ const (
 // Certificates and control plane reasons.
 const (
 	TLSCertExpired               = "TLSCertExpired"
-	TLSCertExpiringSoon          = "TLSCertExpiringSoon"
 	APIServerUnavailable         = "APIServerUnavailable"
 	APIServerLatency             = "APIServerLatency"
 	SchedulerUnavailable         = "SchedulerUnavailable"
@@ -188,6 +187,10 @@ const (
 	// UnusualEventPrefix starts the reason of a Warning event kwatch has
 	// no detector for, repeated enough to matter: "UnusualEvent.SystemOOM".
 	UnusualEventPrefix = "UnusualEvent."
+	// UnknownWaitingPrefix starts the reason of a container that has
+	// waited in a state kwatch has no name for, long enough that it is
+	// not progress: "UnknownWaiting.SomeNewReason".
+	UnknownWaitingPrefix = "UnknownWaiting."
 	// NodeMemoryOvercommitted is a node whose pods' memory limits add up
 	// to far more memory than it has.
 	NodeMemoryOvercommitted = "NodeMemoryOvercommitted"
@@ -215,8 +218,8 @@ const (
 	// APIServerThrottling is the API server rejecting requests because a
 	// priority level is full.
 	APIServerThrottling = "APIServerThrottling"
-	// EtcdDatabaseLarge is an etcd database close to its default size
-	// quota, past which etcd refuses writes.
+	// EtcdDatabaseLarge is an etcd database using most of its default size
+	// quota.
 	EtcdDatabaseLarge = "EtcdDatabaseLarge"
 	// StorageObjectsHigh is one resource with so many stored objects
 	// that listing it strains the API server and etcd.
@@ -259,6 +262,12 @@ const (
 	RiskSingleReplica    = "Risk.SingleReplica"
 )
 
+// UnknownWaiting is the reason for a container stuck in a waiting state
+// kwatch does not know, named after the state's own reason.
+func UnknownWaiting(waitingReason string) string {
+	return UnknownWaitingPrefix + waitingReason
+}
+
 // UnusualEvent is the reason for a repeated Warning event kwatch does
 // not otherwise detect, named after the event's own reason.
 func UnusualEvent(eventReason string) string {
@@ -280,6 +289,10 @@ const (
 	ExitCommandNotFound    = "ContainerExitCommandNotFound"
 	ExitKilled             = "ContainerExitKilled"
 	ExitSegfault           = "ContainerExitSegfault"
+	ExitIllegalInstruction = "ContainerExitIllegalInstruction"
+	ExitAborted            = "ContainerExitAborted"
+	ExitBusError           = "ContainerExitBusError"
+	ExitFloatingPoint      = "ContainerExitFloatingPoint"
 	ErrImageNeverPull      = "ErrImageNeverPull"
 	PreStartHookError      = "PreStartHookError"
 	EvictionThresholdMet   = "EvictionThresholdMet"
@@ -325,7 +338,6 @@ const (
 	VolumeAttachWaiting           = "VolumeAttachWaiting"
 	ProvisioningFailed            = "ProvisioningFailed"
 	FailedMapVolume               = "FailedMapVolume"
-	ResourceQuotaNearLimit        = "ResourceQuotaNearLimit"
 	CertificateDenied             = "CertificateSigningRequestDenied"
 	CertificateNotIssued          = "CertificateSigningRequestNotIssued"
 	CRDNotEstablished             = "CustomResourceDefinitionNotEstablished"

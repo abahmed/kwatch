@@ -70,3 +70,38 @@ func TestOngoingWithoutFindingsIsUnchanged(t *testing.T) {
 
 	assert.Len(t, unchanged, 1)
 }
+
+// A nightly restart does not make the day's ongoing problems new: the
+// record of what the digests listed is saved with the digest state and
+// read back, so the first digest after the restart counts them.
+func TestShownRecordSurvivesARestart(t *testing.T) {
+	c, _ := foldHarness(demotedRecord("a"), demotedRecord("b"))
+	items := c.ongoingProblems(foldNow)
+	for _, item := range items {
+		c.markShown(item.p, foldNow)
+	}
+	saved := c.pendingState()
+
+	again, _ := foldHarness(demotedRecord("a"), demotedRecord("b"))
+	again.Startup.Summary.Digest = saved
+	again.RestoreDigest()
+	changed, unchanged := again.splitOngoing(again.ongoingProblems(foldNow),
+		foldNow.Add(time.Hour))
+
+	assert.Empty(t, changed, "listed in full earlier today")
+	assert.Len(t, unchanged, 2)
+
+	_, nextDay := again.splitOngoing(again.ongoingProblems(foldNow),
+		foldNow.Add(24*time.Hour))
+	assert.Empty(t, nextDay, "a new day lists them again")
+}
+
+// The record only keeps the current day, so it cannot grow for ever.
+func TestShownRecordForgetsEarlierDays(t *testing.T) {
+	c, _ := foldHarness(demotedRecord("a"), demotedRecord("b"))
+	items := c.ongoingProblems(foldNow)
+	c.markShown(items[0].p, foldNow)
+	c.markShown(items[1].p, foldNow.Add(24*time.Hour))
+
+	assert.Len(t, c.shownLines(), 1)
+}

@@ -96,7 +96,7 @@ func probeVisible(
 		(!liveness && (withinStartupBudget(ctx, e) ||
 			podBooting(ctx, e) || podRollingOut(ctx, e))) ||
 		!probeSustained(ctx, e, note) || shuttingDown(ctx, e) ||
-		(liveness && oneOffKill(e)) {
+		(liveness && oneOffKill(e)) || startingOnFreshNode(ctx, e) {
 		return 0, false
 	}
 	return keep, true
@@ -170,4 +170,38 @@ func podBooting(ctx detection.Context, e inventory.Entity) bool {
 func podRollingOut(ctx detection.Context, e inventory.Entity) bool {
 	pod, ok := owningPod(ctx, e)
 	return ok && podStartingInRollout(ctx, pod)
+}
+
+// startingOnFreshNode reports a container of a young pod that has not
+// restarted and runs on a node that just joined: the pod moved there
+// when its node was lost, drained or reclaimed, and probes fail while it
+// starts. That is the node's lifecycle, not a failure of the workload.
+// It asks to look again when the pod or its node turns old: a probe
+// that still fails then is reported, and so is any restart at once.
+func startingOnFreshNode(ctx detection.Context, e inventory.Entity) bool {
+	pod, ok := owningPod(ctx, e)
+	if !ok || freshNodeGrace(ctx, pod) == 0 || restartedEver(ctx, pod) {
+		return false
+	}
+	age := ctx.Now.Sub(timestamp(pod, kube.AttrCreated))
+	ctx.RecheckAfter(youngPod - age + time.Nanosecond)
+	return true
+}
+
+// restartedEver reports a pod with a container that restarted. A
+// container that does not say how often it restarted counts as one that
+// did not.
+func restartedEver(ctx detection.Context, pod inventory.Entity) bool {
+	for _, id := range ctx.Model.Related(pod.ID, inventory.PartOf,
+		inventory.Incoming) {
+		container, ok := ctx.Model.Entity(id)
+		if !ok {
+			continue
+		}
+		if restarts, known := number(container, kube.AttrRestarts); known &&
+			restarts > 0 {
+			return true
+		}
+	}
+	return false
 }

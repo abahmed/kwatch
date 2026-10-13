@@ -25,6 +25,10 @@ manifest, negative-regression, `line-check` and `diff-check` checks. The line
 and whitespace checks cover every change since the merge base with
 `BASE` (default `origin/main`), committed or not.
 
+Tooling guards (scoped `-update`, hygiene, pinned linter, golden/registry
+match) are described under "Guards" in `docs/contributing-scenario.md`.
+Regenerate scenario files only with `-run 'Test.../<name>$' -update`.
+
 `make ci` is exactly what the required CI job runs: `make verify` plus
 actionlint, ShellCheck and a `go mod tidy` drift check. Locally a missing
 actionlint, ShellCheck or Helm skips its check with a notice; under `CI=true`

@@ -1,6 +1,8 @@
 // Package replay records the observations a pipeline receives and replays
 // them later through a fresh engine on a simulated clock. It is test
-// tooling: nothing in the running application imports it.
+// tooling: the running application does not import it. Only
+// internal/flight, the flight recorder, uses its log format, encoder and
+// sanitizer to record a bounded, sanitized ring of observations.
 //
 // # Recording
 //

@@ -153,7 +153,7 @@ func (p *ActiveProber) check(
 }
 
 // http fetches the target and returns the expiry of the certificate the
-// server presented (zero over plain HTTP), so an expiring certificate is
+// server presented (zero over plain HTTP), so an expired certificate is
 // seen from the client side, where it matters.
 func (p *ActiveProber) http(
 	ctx context.Context, target ProbeTarget,

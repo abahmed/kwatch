@@ -83,8 +83,7 @@ func preemptionModes(link LinkType) []modeHealth {
 	if link != LinkPreemptedBy {
 		return nil
 	}
-	return []modeHealth{{mode: ModePreempting,
-		health: detection.Failing, pseudo: true}}
+	return pseudoFailing(ModePreempting)
 }
 
 func evidenceValue(f detection.Finding, label string) string {

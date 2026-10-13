@@ -49,13 +49,13 @@ func (v *view) accessHops(pod inventory.EntityID) []hop {
 	if !v.unitGate(pod) {
 		return nil
 	}
-	var out []hop
+	var out []inventory.EntityID
 	for _, id := range v.changedRBAC() {
 		if id.Namespace == "" || id.Namespace == pod.Namespace {
-			out = append(out, hop{link: LinkAuthorizes, to: id})
+			out = append(out, id)
 		}
 	}
-	return out
+	return hopsTo(LinkAuthorizes, out...)
 }
 
 // changedRBAC lists the RBAC objects with a change in the window,
