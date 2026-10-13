@@ -9,11 +9,12 @@
 |
 | *Each gets its own message when it changes or resolves.*
 10:39:00 material change
-🟠 api in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: connection refused". To read the output of the last crash, run kubectl logs api-e04f9b69-a -c app -n shop --previous
+🟠 api in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: connection refused". Its last run lasted 10s. To read the output of the last crash, run kubectl logs api-e04f9b69-a -c app -n shop --previous
 🟠 api in shop (prod-eu-1) keeps crashing.
 | 🟠 **api** in **shop** (**prod-eu-1**) keeps crashing.
 | Its node and registry are healthy and unchanged, so nothing outside it explains this.
 | It fails with `panic: connection refused`.
+| Its last run lasted 10s.
 | To read the output of the last crash, run
 | ```
 | kubectl logs api-e04f9b69-a -c app -n shop --previous

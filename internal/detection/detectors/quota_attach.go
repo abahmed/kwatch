@@ -11,30 +11,6 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
-// quotaNearLimit reports resources used to 80% or more of their hard
-// limit: the next rollout or scale-up may be rejected.
-func quotaNearLimit(e inventory.Entity) []detection.Finding {
-	near := text(e, kube.AttrQuotaNearLimit)
-	if near == "" {
-		return nil
-	}
-	items := strings.Split(near, ",")
-	evidence := make([]detection.Evidence, 0, len(items))
-	for _, item := range items {
-		evidence = append(evidence,
-			detection.Evidence{Label: "used", Value: item})
-	}
-	return []detection.Finding{{
-		Reason:   reasons.ResourceQuotaNearLimit,
-		Severity: detection.Warning, Health: detection.Degraded,
-		Advisory: true,
-		Since:    valueSince(e, kube.AttrQuotaNearLimit),
-		Summary: "Namespace quota is nearly used up (" +
-			strings.Join(items, ", ") + ")",
-		Evidence: evidence,
-	}}
-}
-
 // quotaCreators are the kinds whose controllers record FailedCreate when
 // the API server refuses the pods they ask for.
 var quotaCreators = []inventory.Kind{

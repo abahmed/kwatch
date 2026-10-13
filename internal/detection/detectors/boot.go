@@ -76,8 +76,9 @@ func podFailingToRun(ctx detection.Context, pod inventory.EntityID) bool {
 		// A container that restarted has already crashed or been
 		// killed: it is not slow, it is failing.
 		restarts, _ := number(container, kube.AttrRestarts)
-		if _, failing := waitingReasons[text(container,
-			kube.AttrStateReason)]; failing || restarts > 0 {
+		reason := text(container, kube.AttrStateReason)
+		if _, failing := detection.WaitingSeverity(reason); failing ||
+			restarts > 0 {
 			return true
 		}
 	}

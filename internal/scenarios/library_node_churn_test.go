@@ -21,6 +21,7 @@ func nodeChurnScenarios() []scenario {
 	return []scenario{
 		daemonSetNodeReplaced(), daemonSetSettledNodeFails(),
 		pressureSpikeOnFreshNode(), pressureSustainedOnSettledNode(),
+		spotNodeReclaimedPodsMoveQuietly(), spotReclaimAfterNotify(),
 	}
 }
 
@@ -213,6 +214,44 @@ func pressureSustainedOnSettledNode() scenario {
 				c.after(time.Minute)
 			}
 			c.after(5 * time.Minute)
+		},
+	}
+}
+
+// spotNodeReclaimedPodsMoveQuietly: the cloud reclaims a spot node. Its
+// pod starts again on the node that replaces it, its liveness probe
+// fails three times while it starts, and it is ready two minutes later
+// without a restart. That is the node's lifecycle: nothing is said.
+func spotNodeReclaimedPodsMoveQuietly() scenario {
+	return scenario{
+		expect: expectation{
+			Name: "spot-node-reclaimed-pods-move-quietly",
+			Description: "A spot node is reclaimed; the pod that moves " +
+				"to the new node fails its liveness probe while it " +
+				"starts and is ready two minutes later.",
+			Quiet: true,
+		},
+		build: func(c *cluster) {
+			w := livenessWorkload(c)
+			c.after(10 * time.Minute)
+			n3 := c.node("n3", "zone-a")
+			n3.CreationTimestamp = metav1.NewTime(c.now)
+			c.create(n3)
+			c.remove(c.node("n1", "zone-a"), w.pod(0, "n1"))
+			w.setReady(1)
+			c.update(w.objects())
+			moved := w.pod(2, "n3", startedNow, notReady)
+			c.create(moved)
+			ev := c.warningEvent(moved, "Pod", "Unhealthy",
+				"Liveness probe failed: Get \"http://10.244.0.9:8080/"+
+					"healthz\": connection refused", "kubelet", 3)
+			ev.InvolvedObject.FieldPath = "spec.containers{app}"
+			c.warn(ev)
+			c.after(2 * time.Minute)
+			c.update(w.pod(2, "n3", startedNow))
+			w.setReady(2)
+			c.update(w.objects())
+			c.after(10 * time.Minute)
 		},
 	}
 }

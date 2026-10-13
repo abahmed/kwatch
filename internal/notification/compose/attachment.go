@@ -17,12 +17,12 @@ func attachmentLead(f caseFacts) (string, bool) {
 		return "", false
 	}
 	volume := evidence(f.lead, detection.EvidenceAttachVolume)
-	node := evidence(f.lead, detection.EvidenceAttachNode)
+	name, named := attachedTo(f.lead)
 	gone := evidence(f.lead, detection.EvidenceAttachGone)
-	if volume == "" || node == "" || gone == "" {
+	if !named || gone == "" {
 		return "", false
 	}
-	text := "attachment of volume " + volume + " to node " + node
+	text := name
 	if driver := evidence(f.lead, detection.EvidenceAttachDriver); driver !=
 		"" {
 		text += " by " + driver

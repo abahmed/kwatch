@@ -137,7 +137,6 @@ const (
 // Control-plane, certificate and watch modes.
 const (
 	ModeCertExpired                  Mode = "Cert.Expired"
-	ModeCertExpiring                 Mode = "Cert.Expiring"
 	ModeUnavailableAPIServer         Mode = "Unavailable.APIServer"
 	ModeLatencyAPIServer             Mode = "Latency.APIServer"
 	ModeLatencyWrites                Mode = "Latency.APIServer.Writes"
@@ -183,6 +182,10 @@ const (
 	ModeExitCommandNotFound   Mode = "Exit.CommandNotFound"
 	ModeExitKilled            Mode = "Exit.Killed"
 	ModeExitSegfault          Mode = "Exit.Segfault"
+	ModeExitIllegal           Mode = "Exit.IllegalInstruction"
+	ModeExitAborted           Mode = "Exit.Aborted"
+	ModeExitBusError          Mode = "Exit.BusError"
+	ModeExitFloatingPoint     Mode = "Exit.FloatingPoint"
 	ModeImagePullNeverPull    Mode = "ImagePull.NeverPull"
 	ModeHookPreStart          Mode = "Hook.PreStart"
 	ModeDiskEvictionThreshold Mode = "Disk.EvictionThreshold"
@@ -202,6 +205,9 @@ const (
 	// ModeUnusualEvent is a repeated Warning event kwatch has no
 	// detector for; the finding's reason names the event.
 	ModeUnusualEvent Mode = "UnusualEvent"
+	// ModeUnknownWaiting is a container waiting in a state kwatch has
+	// no name for; it is a failure once it lasts, never assumed healthy.
+	ModeUnknownWaiting Mode = "Waiting.Unknown"
 )
 
 // Workload, network, storage and admission resource modes.
@@ -229,7 +235,6 @@ const (
 	ModeVolumeAttachWaiting           Mode = "Volume.AttachWaiting"
 	ModeVolumeProvisioningFailed      Mode = "Volume.ProvisioningFailed"
 	ModeVolumeMapFailed               Mode = "Volume.MapFailed"
-	ModeQuotaNearLimit                Mode = "Quota.NearLimit"
 	ModeCertificateDenied             Mode = "Certificate.Denied"
 	ModeCertificateNotIssued          Mode = "Certificate.NotIssued"
 	ModeCRDNotEstablished             Mode = "CRD.NotEstablished"

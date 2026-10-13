@@ -158,6 +158,7 @@ func library() []scenario {
 		livenessCascadeScenarios(),
 		stuckScenarios(),
 		replacedFindingScenarios(), sandboxBlipScenarios(),
+		upstreamReasonScenarios(),
 		crashCycleScenarios(), nodeChurnScenarios(),
 		ambiguousScenarios(),
 	} {
@@ -211,8 +212,11 @@ func encodeExpectation(t *testing.T, e expectation) []byte {
 // TestScenarioFixtures keeps the committed logs and labels in step with
 // their generators. Regenerate them with:
 //
-//	go test ./internal/scenarios -run TestScenarioFixtures -update
+//	go test ./internal/scenarios -run 'TestScenarioFixtures/name$' -update
+//
+// -update must name the scenarios it rewrites; see guards_test.go.
 func TestScenarioFixtures(t *testing.T) {
+	requireScopedUpdate(t)
 	runParallelUnlessUpdating(t)
 	seen := map[string]bool{}
 	checkFixtures(t, labelledDir, library(), seen)
@@ -231,22 +235,30 @@ func checkFixtures(
 			t.Fatalf("scenario %s is defined twice", name)
 		}
 		seen[name] = true
-		files := map[string][]byte{
-			logPath(dir, name): encodeLog(t,
-				s.generate(scenarioStart, "")),
-			expectPath(dir, name): encodeExpectation(t, s.expect),
+		t.Run(name, func(t *testing.T) {
+			checkFixture(t, dir, s)
+		})
+	}
+}
+
+func checkFixture(t *testing.T, dir string, s scenario) {
+	t.Helper()
+	name := s.expect.Name
+	files := map[string][]byte{
+		logPath(dir, name): encodeLog(t,
+			s.generate(scenarioStart, "")),
+		expectPath(dir, name): encodeExpectation(t, s.expect),
+	}
+	for path, want := range files {
+		if *update {
+			if err := os.WriteFile(path, want, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			continue
 		}
-		for path, want := range files {
-			if *update {
-				if err := os.WriteFile(path, want, 0o600); err != nil {
-					t.Fatal(err)
-				}
-				continue
-			}
-			got, err := os.ReadFile(path)
-			if err != nil || !bytes.Equal(got, want) {
-				t.Errorf("%s is stale; rerun with -update", path)
-			}
+		got, err := os.ReadFile(path)
+		if err != nil || !bytes.Equal(got, want) {
+			t.Errorf("%s is stale; rerun with -update", path)
 		}
 	}
 }

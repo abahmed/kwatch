@@ -284,8 +284,14 @@ func (c *Collector) ListRestored(ctx context.Context, now time.Time) bool {
 	}
 	s.WarmAt = time.Time{}
 	var listed []incident.Decision
+	lower := 0
 	for _, p := range c.env.Incidents.RestoredFailing() {
-		if c.env.Scope == nil || c.env.Scope(p) {
+		switch {
+		case c.env.Scope != nil && !c.env.Scope(p):
+		case p.Tier < incident.Notify:
+			// The next digest lists it (see ongoing_compact.go).
+			lower++
+		default:
 			listed = append(listed, incident.Decision{
 				Action: incident.Announce, Incident: p,
 				Reason: "restored"})
@@ -295,11 +301,11 @@ func (c *Collector) ListRestored(ctx context.Context, now time.Time) bool {
 	if len(listed) == 0 {
 		return false
 	}
-	msg := c.env.Messages.RestoredSummary(listed, now)
+	msg := c.env.Messages.RestoredSummaryWith(listed, lower, now)
 	// The audit entry has no incident of its own: name the restored ones.
 	msg.Listed = restoredListing(listed)
 	klog.InfoS("pipeline: restored incidents still failing",
-		restoredTotals(listed)...)
+		append(restoredTotals(listed), "lowerPriority", lower)...)
 	c.env.Sink(ctx, incident.Decision{Reason: "restored incidents"}, msg)
 	return true
 }

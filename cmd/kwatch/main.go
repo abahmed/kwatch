@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"k8s.io/klog/v2"
 
@@ -63,11 +64,14 @@ func runCommand(
 					"[--strict] [--check]", args[1:])
 			}
 			return runLint(strict, check, out, errOut)
+		case "replay-export":
+			return runReplayExport(args[1:], out, errOut, time.Now)
 		default:
 			// A typo must not silently start a full monitoring instance.
 			if _, err := fmt.Fprintf(
 				errOut,
-				"unknown command %q (commands: version, lint)\n",
+				"unknown command %q (commands: version, lint, "+
+					"replay-export)\n",
 				args[0],
 			); err != nil {
 				return 2

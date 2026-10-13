@@ -1,9 +1,10 @@
 10:11:15 settled
-🟠 logship in observability (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "failed to open /var/log/pods: permission denied". To read the output of the last crash, run kubectl logs logship-n1 -c app -n observability --previous
+🟠 logship in observability (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "failed to open /var/log/pods: permission denied". Its last run lasted 10s; 3 restarts in the 1h10m since its pod was created. To read the output of the last crash, run kubectl logs logship-n1 -c app -n observability --previous
 🟠 logship in observability (prod-eu-1) keeps crashing.
 | 🟠 **logship** in **observability** (**prod-eu-1**) keeps crashing.
 | Its node and registry are healthy and unchanged, so nothing outside it explains this.
 | It fails with `failed to open /var/log/pods: permission denied`.
+| Its last run lasted 10s; 3 restarts in the 1h10m since its pod was created.
 | To read the output of the last crash, run
 | ```
 | kubectl logs logship-n1 -c app -n observability --previous

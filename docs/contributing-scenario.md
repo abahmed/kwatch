@@ -24,7 +24,8 @@ regression test and part of the quality gate. Real example:
    in the diff; the label is the contract.
 
    ```sh
-   go test ./internal/scenarios -run TestScenarioFixtures -update
+   go test ./internal/scenarios -run 'TestScenarioFixtures/<name>$' -update
+   go test ./internal/scenarios -run 'TestScenarioMessagesGolden/<name>$' -update
    go test ./internal/scenarios -run TestScenarioReplay -v -scenario <name>
    ```
 
@@ -47,3 +48,26 @@ weights or detector instead. Results are summarised in
 of `make alert-quality` pasted between the markers, and
 `make alert-quality-gate` fails when that block has drifted, so refresh it
 in the same change.
+
+## Guards
+
+`make verify` (and so CI) blocks these mistakes with tooling:
+
+- **Scoped `-update` only.** `-update` refuses to run unless `-run` names
+  specific scenarios (`-run 'TestScenarioMessagesGolden/bad-rollout$'`). An
+  empty or match-everything filter fails with instructions. A deliberate full
+  regeneration, for an integration pass, needs `KWATCH_UPDATE_ALL=1`.
+- **Fixtures and goldens match the registry.** `TestScenarioFilesMatchRegistry`
+  fails on a log, label or message golden with no registered scenario, and on
+  a registered scenario missing a file. Fixture and golden tests compare bytes
+  with the generator output, so a hand edit, a missing trailing newline or a
+  stale file fails.
+- **Hygiene** (`make hygiene-check`, `internal/architecture/hygiene_test.go`).
+  Fails on `zz_*_test.go`, `*_tmp_test.go`, `*_debug_test.go`, `*.orig` and
+  `*.rej` files, tracked or untracked and not ignored; on the forbidden vendor
+  word in any text file; on Go files that are not gofmt-formatted; and on Go
+  files of 400 lines or more (three older files are allowlisted at their
+  current length and may not grow). The 80-column rule stays in `line-check`.
+- **Pinned linter.** `GOLANGCI_VERSION` in the Makefile is the only place the
+  golangci-lint version is set; `make lint` builds it with the active Go
+  toolchain, locally and in CI.

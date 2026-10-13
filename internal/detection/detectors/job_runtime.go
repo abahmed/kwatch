@@ -53,7 +53,7 @@ func runningLong(
 	if !sustained(ctx, "job-running-long", started, limit) {
 		return detection.Finding{}, false
 	}
-	return detection.Finding{
+	finding := detection.Finding{
 		Reason: reasons.JobRunningLong, Severity: detection.Warning,
 		Since: started.Add(limit),
 		// Nothing failed yet: "probably stuck" is a guess.
@@ -64,7 +64,9 @@ func runningLong(
 				Value: format.Duration(ctx.Now.Sub(started))},
 			{Label: detection.EvidenceRecentRuns, Value: runRange(runs)},
 		},
-	}, true
+	}
+	jobJudgement(ctx, e, started).quote(&finding)
+	return finding, true
 }
 
 // jobIsRunning is a Job with pods running that has neither completed

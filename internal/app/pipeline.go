@@ -11,7 +11,6 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/kubeclient"
-	"github.com/abahmed/kwatch/internal/pipeline"
 	"github.com/abahmed/kwatch/internal/storage"
 )
 
@@ -123,10 +122,12 @@ func pruneModel(
 	}
 }
 
-// pruneOnce drops change history older than modelRetention. It leaves
-// baselines alone.
+// pruneOnce drops notes older than modelRetention and changes and health
+// marks older than inventory.ChangeRetention, the day a restart reloads.
+// It leaves baselines alone.
 func pruneOnce(model *inventory.Model, now time.Time) {
-	model.Prune(now.Add(-modelRetention))
+	model.PruneKeeping(now.Add(-modelRetention),
+		now.Add(-inventory.ChangeRetention))
 }
 
 // pipelineClock adapts the application clock to the pipeline's timer needs.
@@ -154,7 +155,7 @@ func (c pipelineClock) After(d time.Duration) <-chan time.Time {
 // newActiveProber builds user-configured probes from the probe monitor
 // configuration, when enabled.
 func newActiveProber(
-	deps *serverDeps, model inventory.Reader, engine *pipeline.Engine,
+	deps *serverDeps, model inventory.Reader, submit kube.Submit,
 ) (*kube.ActiveProber, bool) {
 	cfg := deps.runtime.ActiveProbe()
 	if !cfg.Enabled {
@@ -191,7 +192,7 @@ func newActiveProber(
 		Resolver:   deps.clients.Resolver,
 		Model:      model,
 		Now:        deps.clients.Clock.Now,
-		Submit:     engine.Submit,
+		Submit:     submit,
 	}), true
 }
 

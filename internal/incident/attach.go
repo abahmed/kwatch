@@ -205,6 +205,9 @@ func (m *Manager) attach(
 		// incident of a real failure of the same root, if there is one.
 		return
 	}
+	if m.heldForChurn(now, s, where) {
+		return
+	}
 	key := s.Key()
 	where = m.retakeSuperseded(now, s, where)
 	where = m.retakeFormer(now, s, where)
@@ -216,7 +219,7 @@ func (m *Manager) attach(
 		revised = true
 		rerooted = m.revise(now, s, previous, where.root)
 	}
-	p := m.incident(now, where.root, s.Mode)
+	p := m.incident(now, where.root, s)
 	m.inheritPage(now, p, s)
 	if revised && !rerooted {
 		p.note(now, "cause revised: now explained by "+describe(where.root))
@@ -313,6 +316,7 @@ func wasAnnounced(p *Incident) bool {
 
 func (m *Manager) detach(now time.Time, s detection.Finding) {
 	key := s.Key()
+	delete(m.churn.held, key)
 	id, ok := m.byMember[key]
 	if !ok {
 		return

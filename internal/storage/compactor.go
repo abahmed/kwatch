@@ -212,6 +212,12 @@ func (c *Compactor) bucketCaps() []bucketCap {
 	if c.policy.TimelineCap > 0 {
 		out = append(out, bucketCap{Timeline, c.policy.TimelineCap})
 	}
+	if c.policy.ChangesCap > 0 {
+		out = append(out, bucketCap{Changes, c.policy.ChangesCap})
+	}
+	if c.policy.FlightCap > 0 {
+		out = append(out, bucketCap{Flight, c.policy.FlightCap})
+	}
 	return out
 }
 

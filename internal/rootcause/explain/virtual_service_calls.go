@@ -275,11 +275,10 @@ func (v *view) serviceNamed(
 	if service, ok := v.serviceAtAddress(m[1], port, pod); ok {
 		return clusterCall{service: service, port: port}, true
 	}
-	ns, name, ok := kube.ClusterServiceName(m[1], pod.Namespace)
+	service, ok := clusterServiceID(m[1], pod)
 	if !ok {
 		return clusterCall{}, false
 	}
-	service := inventory.CoreID(kube.KindService, ns, name)
 	v.gate(pod, service)
 	if !v.s.Model.Exists(service) {
 		return clusterCall{}, false
@@ -300,8 +299,7 @@ func (v *view) calledServiceModes(
 		v.backendChanged(id) {
 		return nil
 	}
-	return []modeHealth{{mode: detection.ModeNoEndpoints,
-		health: detection.Failing, pseudo: true}}
+	return pseudoFailing(detection.ModeNoEndpoints)
 }
 
 // backendChanged reports a workload behind the Service that changed
@@ -351,8 +349,7 @@ func (v *view) calledBackendModes(
 		call.service.Name)
 	if id.Kind != kube.KindPod && len(v.changesOf(id)) > 0 &&
 		v.noReadyEndpoints(call.service) {
-		return []modeHealth{{mode: ModeBackendChanged + named,
-			health: detection.Failing, pseudo: true}}
+		return pseudoFailing(ModeBackendChanged + named)
 	}
 	backends := v.selected(call.service)
 	pods := []inventory.EntityID{id}
@@ -361,8 +358,7 @@ func (v *view) calledBackendModes(
 	}
 	for _, pod := range pods {
 		if backends[pod] && v.unitFailing(pod) {
-			return []modeHealth{{mode: ModeBackendsFailing + named,
-				health: detection.Failing, pseudo: true}}
+			return pseudoFailing(ModeBackendsFailing + named)
 		}
 	}
 	return nil

@@ -137,25 +137,8 @@ func (w Writer) DigestWith(
 ) notification.Message {
 	opened = append([]incident.Decision(nil), opened...)
 	sortByImpact(opened)
-	var counts []string
-	if len(opened) > 0 {
-		counts = append(counts, plural(len(opened), "low-priority problem"))
-	}
-	if n := len(extras.Ongoing) + len(extras.Unchanged); n > 0 {
-		counts = append(counts, plural(n, "ongoing problem"))
-	}
-	if len(resolved) > 0 {
-		counts = append(counts, plural(len(resolved), "earlier one")+
-			" that resolved")
-	}
 	risks = neverReady(risks)
-	if len(risks) > 0 {
-		counts = append(counts, plural(riskWorkloads(risks), "workload")+
-			" with pods that never become ready")
-	}
-	if extras.Wake != nil && len(counts) == 0 {
-		counts = append(counts, "a cluster wake-up")
-	}
+	counts := digestCounts(opened, resolved, risks, extras)
 	sentences := []sentence{{part: partLead, text: "kwatch" +
 		w.clusterTag() + " has " + joinWords(counts) + " to report."}}
 	if extras.Wake != nil {
@@ -181,7 +164,36 @@ func (w Writer) DigestWith(
 	}
 	fill(&msg, notification.MarkerLow, sentences)
 	msg.Doc = w.digestDoc(opened, resolved, risks, extras, now)
+	msg.Listed = &notification.Listed{Lines: len(msg.Lines),
+		Summaries: summaryLines(extras.Wake, list)}
 	return msg
+}
+
+// digestCounts are the phrases of the lead sentence: how many problems
+// of each kind the digest carries.
+func digestCounts(
+	opened, resolved []incident.Decision, risks []detection.Finding,
+	extras DigestExtras,
+) []string {
+	var counts []string
+	if len(opened) > 0 {
+		counts = append(counts, plural(len(opened), "low-priority problem"))
+	}
+	if n := len(extras.Ongoing) + len(extras.Unchanged); n > 0 {
+		counts = append(counts, plural(n, "ongoing problem"))
+	}
+	if len(resolved) > 0 {
+		counts = append(counts, plural(len(resolved), "earlier one")+
+			" that resolved")
+	}
+	if len(risks) > 0 {
+		counts = append(counts, plural(riskWorkloads(risks), "workload")+
+			" with pods that never become ready")
+	}
+	if extras.Wake != nil && len(counts) == 0 {
+		counts = append(counts, "a cluster wake-up")
+	}
+	return counts
 }
 
 // digestTitles lists up to maxSummaryNamed incidents by their title.

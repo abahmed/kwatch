@@ -143,6 +143,7 @@ func podAttributes(pod *corev1.Pod) map[string]inventory.Value {
 	}
 	setPortMatchAttributes(attrs, pod)
 	setSpecAttributes(attrs, pod)
+	setVolumeRefAttributes(attrs, pod)
 	return attrs
 }
 

@@ -47,6 +47,12 @@ var callerFailures = []detection.Mode{
 	detection.ModeCrashLoop, detection.ModeRestarting, detection.ModeExit,
 	detection.ModeFailed, detection.ModeError}
 
+// callerFailuresAnd is callerFailures plus further modes of a pod that
+// depends on the call.
+func callerFailuresAnd(more ...detection.Mode) []detection.Mode {
+	return append(append([]detection.Mode(nil), callerFailures...), more...)
+}
+
 // calledRows cover failures that only error text connects: many
 // workloads failing on one external endpoint, or with one error.
 var calledRows = []Row{
@@ -114,18 +120,14 @@ func (v *view) calledHops(pod inventory.EntityID) []hop {
 func (v *view) calledModes(
 	id, effect inventory.EntityID, link LinkType,
 ) []modeHealth {
-	failing := func(mode detection.Mode) []modeHealth {
-		return []modeHealth{{mode: mode, health: detection.Failing,
-			pseudo: true}}
-	}
 	switch {
 	case id.Kind == KindExternalEndpoint && link == LinkCalls:
 		if call, ok := v.callOf(effect); ok && call.endpoint == id.Name {
-			return failing(ModeEndpointFailing + "." + call.class)
+			return pseudoFailing(ModeEndpointFailing + "." + call.class)
 		}
 	case id.Kind == KindFailureSignature && link == LinkSharesError:
 		if name, ok := v.signatureOf(effect); ok && name == id.Name {
-			return failing(ModeSharedSignature)
+			return pseudoFailing(ModeSharedSignature)
 		}
 	}
 	return nil

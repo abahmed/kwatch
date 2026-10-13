@@ -13,54 +13,15 @@ import (
 // are product decisions, kept together so they can be read and changed in
 // one place. tier applies them.
 
-// digestReasons are findings worth knowing but never worth an
-// interruption on their own: an incident made only of them waits for the
-// digest.
-var digestReasons = map[string]bool{
-	reasons.FailedGetResourceMetric: true,
-	reasons.PodStuckTerminating:     true,
-	// A hard kill at the end of the grace period is a shutdown that
-	// did not finish; the workload failing after it is the incident.
-	reasons.PodKilledAtGrace:      true,
-	reasons.ContainerCPUHigh:      true,
-	reasons.ContainerCPUThrottled: true,
-	// A node whose workloads stall on CPU, memory or disk is under
-	// strain, not failing: when a pod on it fails, that pod is the news.
-	reasons.NodePSIHigh: true,
-	// A budget selecting no pods protects nothing, but on a cluster that
-	// scales workloads to zero it is the normal night.
-	reasons.PdbSelectsNothing: true,
-	// An overcommitted node is a risk until something is killed; the
-	// kill is the incident, and this is its cause.
-	reasons.NodeMemoryOvercommitted: true,
-	// Evictions are the kubelet doing its job; the evicted pods are
-	// the incidents. Idle objects are clutter, not failures.
-	reasons.NodeEvicting:  true,
-	reasons.ServiceUnused: true,
-	reasons.ClaimUnused:   true,
-	// A scale target that does not exist and a Ready node whose kubelet
-	// kwatch cannot reach are worth a look; whatever fails because of
-	// them is the incident.
-	reasons.HPATargetMissing:   true,
-	reasons.KubeletUnreachable: true,
-}
-
-// causeOnlyReasons are findings that fire before anything failed (a
-// volume nearly full, an autoscaler at its maximum) yet are real causes
-// of the failures that follow. An incident made only of them is silent:
-// kwatch reports failures that have happened, so it is announced once a
-// real failure joins it, with the finding as the cause.
-var causeOnlyReasons = map[string]bool{
-	reasons.VolumeUsageHigh:  true,
-	reasons.VolumeInodesHigh: true,
-	reasons.HPAMaxedOut:      true,
-}
+// Which reasons wait for the digest (detection.DigestOnly) or are causes
+// without news (detection.CauseOnly) is declared with the reason, in the
+// detection reason tables.
 
 // causeOnlyReason reports a reason that is a cause but no news alone. A
 // node condition kwatch has no detector for is one: the condition says
 // what is wrong with the node only once pods on it fail.
 func causeOnlyReason(reason string) bool {
-	return causeOnlyReasons[reason] ||
+	return detection.CauseOnly(reason) ||
 		strings.HasPrefix(reason, reasons.NodeConditionPrefix)
 }
 
@@ -82,7 +43,7 @@ func causeOnly(p *Incident) bool {
 // digestReason reports whether a finding reason waits for the digest.
 // Repeated unknown Warning events are worth a look, not an interruption.
 func digestReason(reason string) bool {
-	return digestReasons[reason] ||
+	return detection.DigestOnly(reason) ||
 		strings.HasPrefix(reason, reasons.UnusualEventPrefix) ||
 		strings.HasPrefix(reason, reasons.RiskPrefix)
 }
@@ -191,7 +152,7 @@ func drainTier(p *Incident) Tier {
 		if s.Entity == p.Root || s.Severity <= detection.Info {
 			continue
 		}
-		if !digestReasons[s.Reason] && !waitsForDigest(s) {
+		if !detection.DigestOnly(s.Reason) && !waitsForDigest(s) {
 			return Notify
 		}
 		tier = Digest

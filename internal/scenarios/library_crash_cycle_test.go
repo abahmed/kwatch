@@ -25,7 +25,8 @@ func crashLoopForHours() scenario {
 			Description: "The only replica of a Deployment crashes on " +
 				"every start for nearly two hours, cycling through " +
 				"running, Error and CrashLoopBackOff; it stays one " +
-				"incident with one revised cause.",
+				"incident, and a revision that only takes the " +
+				"cause back stays quiet.",
 			Root: "deployment/staging/warehouse", Tier: "notify",
 			MaxMessages:  3,
 			MustNotBlame: []string{"node//n1"},

@@ -60,24 +60,7 @@ func (Claim) Detect(
 	if len(out) > 0 {
 		return out
 	}
-	for _, conditionType := range []string{
-		"ControllerResizeError", "NodeResizeError",
-	} {
-		if status, reason, since := condition(e, conditionType); status ==
-			"True" {
-			out = append(out, detection.Finding{
-				Reason:   reasons.PersistentVolumeClaim,
-				Severity: detection.Warning, Since: since,
-				Summary: "Volume resize failed (" + reason + ")",
-				Evidence: []detection.Evidence{{
-					Label: "message",
-					Value: conditionMessage(e, conditionType),
-				}},
-			})
-			break
-		}
-	}
-	return out
+	return conditionFindings(ctx, e)
 }
 
 // awaitingFirstConsumer reports a claim of a WaitForFirstConsumer class

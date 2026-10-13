@@ -42,3 +42,17 @@ func TestRestoredSummarySingularReadsNaturally(t *testing.T) {
 		t.Errorf("Title = %q", msg.Title)
 	}
 }
+
+// Lower-priority problems from before are counted, not named: the next
+// digest lists them.
+func TestRestoredSummaryCountsLowerPriorityProblems(t *testing.T) {
+	msg := Writer{}.RestoredSummaryWith([]incident.Decision{
+		podDecision("loud", incident.Notify)}, 19, time.Time{})
+
+	for _, want := range []string{"19 lower-priority problems",
+		"next digest", "loud"} {
+		if !strings.Contains(msg.Note, want) {
+			t.Errorf("note lacks %q: %q", want, msg.Note)
+		}
+	}
+}

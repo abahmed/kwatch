@@ -80,14 +80,14 @@ func (d Pod) detect(
 	}
 	switch text(e, kube.AttrPhase) {
 	case "Pending":
-		return d.pending(ctx, e)
+		return withPendingBaseline(ctx, e, d.pending(ctx, e))
 	case "Failed":
 		if ownerJobComplete(ctx, e) {
 			return nil
 		}
 		return failed(ctx, e)
 	case "Running":
-		return append(d.notReady(ctx, e), resizeFindings(ctx, e)...)
+		return append(d.notReady(ctx, e), conditionFindings(ctx, e)...)
 	case "Unknown":
 		return []detection.Finding{{
 			Reason:   reasons.PodStatusUnknown,

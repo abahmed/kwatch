@@ -35,6 +35,8 @@ func (e *Engine) restore() error {
 		return fmt.Errorf("pipeline: restore fingerprints: %w", err)
 	}
 	e.storage.saved = saved
+	e.storage.history.checks.restore(e.deps.Store)
+	e.storage.history.unexplained.restore(e.deps.Store)
 	took := e.deps.Clock.Now().Sub(began)
 	klog.InfoS("restored state", "component", "pipeline",
 		"operation", "restore", "incidents", len(records),

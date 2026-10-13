@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"encoding/json"
 	"sync"
 	"time"
 
@@ -30,6 +31,15 @@ type historyWriter struct {
 	mu      sync.Mutex
 	pending []TimelineEntry
 	dropped int
+	// changes and healthy wait for the change and last-healthy writes
+	// (see change_writer.go). Guarded by mu.
+	changes []inventory.Change
+	healthy map[string]healthyRecord
+	// checks waits for the cause self-check write (cause_check_writer.go).
+	checks json.RawMessage
+	// unexplained waits for the unexplained counts write
+	// (unexplained_writer.go).
+	unexplained json.RawMessage
 
 	// now and nextExpiry schedule baseline expiry. Only the writer
 	// goroutine reads them, so expiry deletes and baseline saves never
@@ -143,6 +153,12 @@ func (w *historyWriter) flush() {
 			failed = true
 		}
 	}
+	if !w.flushChanges() || !w.flushHealthy() {
+		failed = true
+	}
+	if !w.flushChecks() || !w.flushUnexplained() {
+		failed = true
+	}
 	if !w.expireBaselines() {
 		failed = true
 	}
@@ -215,18 +231,25 @@ func (w *historyWriter) fillChangeSets(batch []TimelineEntry) {
 	if since.IsZero() {
 		return
 	}
-	ids := make(map[string]string)
-	for _, set := range w.model.RecentChangeSets(since) {
-		for _, change := range set.Changes {
-			ids[changeKey(change.Entity.String(), change.At)] = set.ID
-		}
-	}
+	ids := w.changeSetIDs(since)
 	for i := range batch {
 		if batch[i].Kind == TimelineChange && batch[i].ChangeSet == "" {
 			key := changeKey(batch[i].Entity, batch[i].changeAt)
 			batch[i].ChangeSet = ids[key]
 		}
 	}
+}
+
+// changeSetIDs maps changeKey to the ID of the change set that holds
+// the change, for the sets that ended at or after since.
+func (w *historyWriter) changeSetIDs(since time.Time) map[string]string {
+	ids := make(map[string]string)
+	for _, set := range w.model.RecentChangeSets(since) {
+		for _, change := range set.Changes {
+			ids[changeKey(change.Entity.String(), change.At)] = set.ID
+		}
+	}
+	return ids
 }
 
 func changeKey(entity string, at time.Time) string {

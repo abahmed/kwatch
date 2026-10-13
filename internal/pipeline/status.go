@@ -22,6 +22,8 @@ func (e *Engine) Status() status.Report {
 		ControlPlane: status.ControlPlane(e.deps.Model, findings),
 		Upgrade:      status.Assess(findings, e.deps.Model),
 		Zones:        status.ZoneHealth(e.deps.Model, findings),
+		CauseChecks:  e.storage.history.checks.report(now),
+		Unexplained:  e.storage.history.unexplained.report(now),
 	}
 }
 

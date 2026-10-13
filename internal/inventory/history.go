@@ -27,6 +27,9 @@ type HealthMark struct {
 	// Mode is the failure mode that started or stopped, such as
 	// "CrashLoop".
 	Mode string
+	// Revision is the workload revision a healthy mark was taken at,
+	// when known. Failing marks leave it empty.
+	Revision string `json:",omitempty"`
 }
 
 // history is the model's cluster-wide memory of recent changes. The

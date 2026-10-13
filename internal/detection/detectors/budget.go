@@ -22,10 +22,7 @@ const multipleBudgetsEvent = "MultiplePodDisruptionBudgets"
 func budgetMisconfiguration(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
-	var out []detection.Finding
-	if f, ok := budgetSyncFailed(ctx, e); ok {
-		out = append(out, f)
-	}
+	out := conditionFindings(ctx, e)
 	if ctx.Model == nil || !ctx.Synced(kube.KindPod) {
 		return out
 	}
@@ -37,25 +34,6 @@ func budgetMisconfiguration(
 		out = append(out, f)
 	}
 	return out
-}
-
-func budgetSyncFailed(
-	ctx detection.Context, e inventory.Entity,
-) (detection.Finding, bool) {
-	status, reason, since := condition(e, "DisruptionAllowed")
-	if status != "False" || reason != "SyncFailed" ||
-		!sustained(ctx, "pdb-sync-failed", since, DefaultCustomFailing) {
-		return detection.Finding{}, false
-	}
-	return detection.Finding{
-		Reason: reasons.PdbSyncFailed, Severity: detection.Warning,
-		Health: detection.Failing, Since: since,
-		Summary: "Disruption controller cannot evaluate the budget; " +
-			"it allows no evictions",
-		Evidence: []detection.Evidence{{
-			Label: "message", Value: conditionMessage(e, "DisruptionAllowed"),
-		}},
-	}, true
 }
 
 func budgetSelectsNothing(

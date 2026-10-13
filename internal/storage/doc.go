@@ -1,6 +1,7 @@
 // Package storage is kwatch's persistent state: one bbolt file on the
 // data volume with one bucket per data class (incidents, changes,
-// baselines, evidence, timeline, audit, fingerprints, state, threads).
+// baselines, evidence, timeline, audit, fingerprints, state, threads,
+// flight).
 //
 // In: writes from the pipeline and app through small typed views, for
 // example IncidentRecords[T] (latest value per key) or ChangeLog[T]

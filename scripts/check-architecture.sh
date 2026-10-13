@@ -162,12 +162,13 @@ report_matches "package other than app imports pipeline" \
 
 # replay sits above the pipeline and below nothing: it never reaches
 # delivery, persistence, configuration or a cluster, and only tests
-# import it.
+# import it, except the flight recorder, which writes the log format and
+# sanitizer replay reads so a recording is what replay loads.
 forbid_imports "replay imports delivery, storage or cluster access" \
 	internal/replay \
 	'app|delivery|alert|health|config|storage|scope|audit|kubeclient|rbac|inventory/kube'
 report_matches "production code imports replay" \
-	"\"$module/internal/replay(/[^\"]*)?\"" '^internal/replay/' internal cmd
+	"\"$module/internal/replay(/[^\"]*)?\"" '^internal/(replay|flight)/' internal cmd
 
 # Shared leaf packages stay below every domain and infrastructure package.
 # notification/compose is a domain package with its own rule above.

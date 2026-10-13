@@ -67,7 +67,8 @@ func (m *Manager) escalationOwed(p *Incident, now time.Time) bool {
 // previous session that fail again now, loudest first by ID order, for
 // the startup listing: a restart announces none of them one by one, so
 // without it nobody would be told they still fail. Digest-tier ones are
-// listed too, after the louder ones, so nothing restored stays silent.
+// included for the caller to count: it names the louder ones and leaves
+// the rest to the next digest.
 // Out-of-scope incidents are left out, and so are those that have spoken
 // for themselves since the restart: the listing would repeat their own
 // message.

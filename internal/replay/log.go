@@ -48,16 +48,44 @@ type Log struct {
 
 // Write encodes a complete log.
 func Write(w io.Writer, log Log) error {
-	encoder := json.NewEncoder(w)
-	if err := encoder.Encode(newHeader(log.Start)); err != nil {
+	encoder, err := NewEncoder(w, log.Start)
+	if err != nil {
 		return err
 	}
 	for _, entry := range log.Entries {
-		if err := encoder.Encode(entry); err != nil {
+		if err := encoder.Entry(entry); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// Encoder writes a log one entry at a time, so a large log never has to
+// fit in memory. Its output is byte for byte what Write produces.
+type Encoder struct {
+	encoder  *json.Encoder
+	previous time.Time
+}
+
+// NewEncoder writes the header and returns an encoder for the entries.
+func NewEncoder(w io.Writer, start time.Time) (*Encoder, error) {
+	encoder := json.NewEncoder(w)
+	if err := encoder.Encode(newHeader(start)); err != nil {
+		return nil, err
+	}
+	return &Encoder{encoder: encoder, previous: start}, nil
+}
+
+// Entry writes one entry. Entries must not go back in time: a log whose
+// entries are out of order cannot be read again.
+func (e *Encoder) Entry(entry Entry) error {
+	if entry.At.Before(e.previous) {
+		return fmt.Errorf("replay: entry at %s is before %s",
+			entry.At.Format(time.RFC3339Nano),
+			e.previous.Format(time.RFC3339Nano))
+	}
+	e.previous = entry.At
+	return e.encoder.Encode(entry)
 }
 
 func newHeader(start time.Time) Header {

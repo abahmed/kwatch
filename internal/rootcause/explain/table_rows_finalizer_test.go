@@ -180,3 +180,38 @@ func TestDifferentFinalizersAreSeparateCauses(t *testing.T) {
 		}
 	}
 }
+
+// Objects held by the same finalizer are one problem. A workload that
+// wrote only one of them (and does not run the finalizer's controller)
+// must not take that one away from the finalizer's own incident.
+func TestSiblingsHeldByOneFinalizerShareOneRoot(t *testing.T) {
+	f := newFixture(t)
+	ctl := f.controller(kube.KindDeployment, "ops", "legacy", 0, 0, "")
+	stuck := f.stuck("ops", 3, widgetFinalizer)
+	f.links[stuck[0]] = []Link{{Type: inventory.ManagedBy, To: ctl}}
+
+	e := f.explain()
+
+	for _, id := range stuck {
+		c := requireCause(t, e, id, "finalizer/ops/"+widgetFinalizer)
+		if c.Mode != ModeFinalizerUnhandled {
+			t.Errorf("mode of %s = %q", id, c.Mode)
+		}
+	}
+}
+
+// When the workload wrote every one of them, it is still blamed for all.
+func TestWorkloadThatWroteAllSiblingsIsStillBlamed(t *testing.T) {
+	f := newFixture(t)
+	ctl := f.controller(kube.KindDeployment, "ops", "legacy", 0, 0, "")
+	stuck := f.stuck("ops", 3, widgetFinalizer)
+	for _, id := range stuck {
+		f.links[id] = []Link{{Type: inventory.ManagedBy, To: ctl}}
+	}
+
+	e := f.explain()
+
+	for _, id := range stuck {
+		requireCause(t, e, id, "deployment/ops/legacy")
+	}
+}

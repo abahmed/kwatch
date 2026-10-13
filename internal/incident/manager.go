@@ -58,6 +58,8 @@ type Manager struct {
 	// fingerprint is still to be replaced by the current one (see
 	// adoptFingerprints).
 	refingerprint []string
+	// churn tracks node churn and the findings held for it.
+	churn nodeChurn
 }
 
 // NewManager builds a manager that explains failures with explainer.
@@ -105,6 +107,7 @@ func (m *Manager) Apply(
 	if history, ok := s.Model.(inventory.HistoryReader); ok {
 		m.model = history
 	}
+	m.churn.observe(s.Model, s.Now)
 	touched := append([]inventory.EntityID(nil), dirty...)
 	for _, t := range transitions {
 		touched = append(touched, t.Finding.Entity)

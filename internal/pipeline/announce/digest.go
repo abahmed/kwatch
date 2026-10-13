@@ -253,7 +253,7 @@ func (c *Collector) flushDigest(ctx context.Context, now time.Time) bool {
 		msg := c.env.Messages.DigestWith(g.Opened, g.Resolved, risks,
 			c.digestExtras(ongoing, unchanged), now)
 		msg.Listed = c.listedInDigest(g, len(risks),
-			append(slices.Clone(ongoing), unchanged...), now)
+			append(slices.Clone(ongoing), unchanged...), now, msg.Listed)
 		c.env.Sink(ctx, incident.Decision{Reason: "digest"}, msg)
 		for _, d := range g.Opened {
 			c.env.Incidents.ReleaseAnnouncement(d.Incident.ID)
@@ -296,13 +296,18 @@ func (c *Collector) digestExtras(
 const MaxAuditItems = 20
 
 // listedInDigest summarises a digest for the audit log: the counts, and
-// the first MaxAuditItems incidents as "id: title".
+// the first MaxAuditItems incidents as "id: title", and what the message
+// rendered: its line count and its grouped, unchanged and wake lines.
 func (c *Collector) listedInDigest(
 	g *LowDigest, risks int, ongoing []ongoingItem, now time.Time,
+	rendered *notification.Listed,
 ) *notification.Listed {
 	listed := &notification.Listed{
 		Opened: opened(g.Opened), Resolved: len(g.Resolved), Risks: risks,
 		Ongoing: len(ongoing) + len(g.Opened) - opened(g.Opened),
+	}
+	if rendered != nil {
+		listed.Lines, listed.Summaries = rendered.Lines, rendered.Summaries
 	}
 	add := func(decisions []incident.Decision, suffix string) {
 		for _, d := range decisions {

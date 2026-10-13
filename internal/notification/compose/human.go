@@ -46,8 +46,9 @@ func plural(n int, unit string) string {
 
 // humanDuration rounds a duration the way a person would say it:
 // "less than a minute", "seven minutes", "about 2 hours", "six days",
-// "three weeks".
+// "three weeks", "five months", "about 2 years".
 func humanDuration(d time.Duration) string {
+	days := d.Hours() / 24
 	switch {
 	case d < time.Minute:
 		return "less than a minute"
@@ -56,11 +57,47 @@ func humanDuration(d time.Duration) string {
 	case d < format.Day:
 		return roughly(d.Hours(), "hour")
 	case d < 2*format.Week:
-		return roughly(d.Hours()/24, "day")
-	default:
+		return roughly(days, "day")
+	case days < 60:
 		// Why: "21 days" reads worse than "three weeks".
-		return roughly(d.Hours()/24/7, "week")
+		return roughly(days/7, "week")
+	case days < 365:
+		return roughly(days/daysPerMonth, "month")
 	}
+	return roughly(days/daysPerYear, "year")
+}
+
+// Average lengths, so a rounded month or year is close enough to say.
+const (
+	daysPerMonth = 30.44
+	daysPerYear  = 365.25
+)
+
+// spokenSpan matches a duration the way humanDuration says it, after
+// "for": " for about two minutes", " for six hours".
+var spokenSpan = regexp.MustCompile(` for (?:about |less than )?` +
+	`(?:a|\w+) (?:minute|hour|day|week|month|year)s?\b`)
+
+// withoutSpan drops the first spoken duration of text. A line written
+// once says how long the failure had lasted then; repeated later that
+// span is stale, so a reminder gives one age of its own instead.
+func withoutSpan(text string) string {
+	loc := spokenSpan.FindStringIndex(text)
+	if loc == nil {
+		return text
+	}
+	return text[:loc[0]] + text[loc[1]:]
+}
+
+// shortDate writes t as "Jan 2" in the year of now and as "Jan 2, 2025"
+// in any other, so an old date never reads as a recent one. Without a
+// now (zero) it is the short form.
+func shortDate(t, now time.Time) string {
+	t = t.UTC()
+	if now.IsZero() || t.Year() == now.UTC().Year() {
+		return t.Format("Jan 2")
+	}
+	return t.Format("Jan 2, 2006")
 }
 
 // roughly rounds value and says "about" when rounding changed it by

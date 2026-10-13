@@ -64,7 +64,7 @@ kubectl annotate deploy/api kwatch.io/ack="looking into it"
 - A new incident (after the window, or another mode) is not pre-acked by
   the old one. If the annotation is still on the object when it is
   announced, the announcement says `The ack annotation is still present on
-  deployment/api, so I won't remind`, and reminders are held for it too.
+  deployment/api, so reminders are held`, and reminders are held for it too.
 - The note is a person's text: kwatch reads it as one line, removes
   credentials, bounds it to 200 bytes and only ever quotes it.
 - `Incident.Ack` is persisted, so a restart does not tell it again. While a

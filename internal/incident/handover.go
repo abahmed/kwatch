@@ -3,7 +3,8 @@ package incident
 import (
 	"time"
 
-	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // handOver supersedes a restored incident whose failures live on in
@@ -35,7 +36,7 @@ func (m *Manager) holderOf(p *Incident) *Incident {
 	var best *Incident
 	for _, id := range m.sortedIDs() {
 		q := m.incidents[id]
-		if q == p || q.State == Resolved || !m.failsFor(q, p.Root) {
+		if q == p || q.State == Resolved || !m.failsFor(q, p) {
 			continue
 		}
 		if wasAnnounced(q) {
@@ -48,8 +49,13 @@ func (m *Manager) holderOf(p *Incident) *Incident {
 	return best
 }
 
-// failsFor reports whether q has a failure of root or of its workload.
-func (m *Manager) failsFor(q *Incident, root inventory.EntityID) bool {
+// failsFor reports whether q has a failure of p's root or of its
+// workload, or holds the stuck deletions that p was about.
+func (m *Manager) failsFor(q, p *Incident) bool {
+	root := p.Root
+	if sameStuckStory(q, p) {
+		return true
+	}
 	for key, f := range q.Members {
 		if f.Advisory {
 			continue
@@ -60,4 +66,16 @@ func (m *Manager) failsFor(q *Incident, root inventory.EntityID) bool {
 		}
 	}
 	return false
+}
+
+// sameStuckStory reports that q is the incident of a finalizer that holds
+// the objects whose deletion p, rooted at a workload, was about: the
+// workload was once blamed for a controller that does not run, and now
+// the finalizer is. The objects are not part of the workload's chain, so
+// the mode and the namespace tell it.
+func sameStuckStory(q, p *Incident) bool {
+	return p.Mode == detection.ModeStuckDeleting &&
+		q.Root.Kind == explain.KindFinalizer &&
+		q.Root.Namespace == p.Root.Namespace &&
+		q.Mode == detection.ModeStuckDeleting
 }

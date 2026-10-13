@@ -118,8 +118,7 @@ func TestAPIServerLoadReportsEtcdNearItsQuota(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, "EtcdDatabaseLarge", got[0].Reason)
 	assert.True(t, got[0].Advisory)
-	assert.Equal(t, "etcd database is 1.8 GiB, close to its default "+
-		"2 GiB limit", got[0].Summary)
+	assert.Equal(t, "etcd database is 1.8 GiB of its 2 GiB quota", got[0].Summary)
 	assert.Contains(t, got[0].Evidence, detection.Evidence{
 		Label: "most objects", Value: "90,000 events"})
 }

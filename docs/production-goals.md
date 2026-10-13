@@ -20,7 +20,7 @@ There are no user commands or APIs. The only endpoints are `/healthz`,
 default).
 
 Kwatch reports failures that happened, never predictions. Findings about
-what could fail later (a certificate close to expiry, a quota near its
+what could fail later (a quota near its
 limit, version skew, a large etcd database, deprecated API use) are
 advisory: they appear only as context inside a real incident and never
 produce a message of their own.

@@ -14,6 +14,7 @@ func (m *Manager) Tick(now time.Time) ([]Decision, time.Duration) {
 	defer m.mu.Unlock()
 	var decisions []Decision
 	m.adoptFingerprints(now)
+	m.releaseChurn(now)
 	// Only live incidents advance; resolved ones only wait to expire.
 	for _, id := range m.liveIDs() {
 		p := m.incidents[id]

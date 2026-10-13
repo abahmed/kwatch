@@ -109,6 +109,13 @@ type Listed struct {
 	// Items name the first incidents as "id: title", at most the bound
 	// the producer chose; Opened+Resolved may be larger.
 	Items []string `json:",omitempty"`
+	// Lines counts the lines the digest rendered, which can be fewer
+	// than the incidents it covers when problems are grouped.
+	Lines int `json:",omitempty"`
+	// Summaries are the rendered lines that stand for several problems
+	// or for the cluster: the wake-up line, grouped lines and the
+	// unchanged line, bounded.
+	Summaries []string `json:",omitempty"`
 }
 
 // IsOpening reports whether the message announces its conversation.

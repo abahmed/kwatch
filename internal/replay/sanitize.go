@@ -99,7 +99,7 @@ func (s *Sanitizer) Observation(o inventory.Observation) inventory.Observation {
 	// The reporting component can be a custom controller named after
 	// the company or product.
 	out.Note.Source = s.optional("source", o.Note.Source)
-	return out
+	return s.hideSecret(out)
 }
 
 func (s *Sanitizer) entity(id inventory.EntityID) inventory.EntityID {

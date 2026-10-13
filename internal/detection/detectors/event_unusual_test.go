@@ -17,17 +17,17 @@ func TestEventUnknownWarningRepeatedIsReported(t *testing.T) {
 	m := newTestModel()
 	id := newID(kube.KindNode, "", "n1")
 	put(m, id, t0, nil)
-	noteEntity(m, id, "SystemOOM", "System OOM encountered, victim "+
+	noteEntity(m, id, "NodeKernelNoise", "System OOM encountered, victim "+
 		"process: java", 3, t0.Add(time.Minute))
 
 	got := Event{}.Detect(
 		testDetectorContext(m, t0.Add(2*time.Minute)), entityOf(m, id))
 
 	require.Len(t, got, 1)
-	assert.Equal(t, "UnusualEvent.SystemOOM", got[0].Reason)
+	assert.Equal(t, "UnusualEvent.NodeKernelNoise", got[0].Reason)
 	assert.Equal(t, detection.Info, got[0].Severity)
 	assert.Equal(t, detection.ModeUnusualEvent, got[0].Mode)
-	assert.Contains(t, got[0].Summary, "SystemOOM 3 times")
+	assert.Contains(t, got[0].Summary, "NodeKernelNoise 3 times")
 	assert.Contains(t, got[0].Evidence, detection.Evidence{
 		Label: "event", Value: "System OOM encountered, victim process: java"})
 }

@@ -14,7 +14,7 @@ import (
 // a controller creates.
 func policyAdmissionScenarios() []scenario {
 	return []scenario{podSecurityRejects(), limitRangeRejects(),
-		admissionPolicyDenies()}
+		limitRangeMemoryRejects(), admissionPolicyDenies()}
 }
 
 // policyDenied runs a Deployment of two pods, lets setup change the

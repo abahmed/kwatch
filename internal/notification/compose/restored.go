@@ -15,6 +15,15 @@ import (
 func (w Writer) RestoredSummary(
 	decisions []incident.Decision, now time.Time,
 ) notification.Message {
+	return w.RestoredSummaryWith(decisions, 0, now)
+}
+
+// RestoredSummaryWith is RestoredSummary that also says how many
+// lower-priority problems from before are still failing without naming
+// them: the next digest lists those.
+func (w Writer) RestoredSummaryWith(
+	decisions []incident.Decision, lower int, now time.Time,
+) notification.Message {
 	decisions = append([]incident.Decision(nil), decisions...)
 	sortByImpact(decisions)
 	mark, status := notification.MarkerLow, notification.StatusLow
@@ -27,6 +36,15 @@ func (w Writer) RestoredSummary(
 		verb(len(decisions), "is", "are") + " still failing."
 	sentences := []sentence{{part: partLead, text: lead}}
 	sentences = append(sentences, digestTitles(decisions, now, "")...)
+	var facts []string
+	facts = append(facts, countFact(len(decisions), "problem")+
+		" from before still failing")
+	if lower > 0 {
+		note := plural(lower, "lower-priority problem")
+		sentences = append(sentences, sentence{part: partProof,
+			text: "Also " + note + ", listed in the next digest"})
+		facts = append(facts, note+" in the next digest")
+	}
 	sentences = append(sentences, sentence{part: partAction,
 		text: eachOwnMessage})
 	msg := notification.Message{
@@ -34,8 +52,6 @@ func (w Writer) RestoredSummary(
 		Route: summaryRoute(decisions, nil),
 	}
 	fill(&msg, mark, sentences)
-	msg.Doc = w.listDoc(mark, "kwatch restarted", []string{countFact(
-		len(decisions), "problem") + " from before still failing"},
-		decisions, now)
+	msg.Doc = w.listDoc(mark, "kwatch restarted", facts, decisions, now)
 	return msg
 }

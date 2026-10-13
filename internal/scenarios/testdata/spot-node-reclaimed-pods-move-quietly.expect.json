@@ -1,0 +1,6 @@
+{
+  "name": "spot-node-reclaimed-pods-move-quietly",
+  "description": "A spot node is reclaimed; the pod that moves to the new node fails its liveness probe while it starts and is ready two minutes later.",
+  "maxMessages": 0,
+  "quiet": true
+}

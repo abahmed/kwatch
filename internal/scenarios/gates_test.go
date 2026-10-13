@@ -27,6 +27,8 @@ type card struct {
 	cases    []scorecard.Case
 	accuracy scorecard.Accuracy
 	heldout  heldoutResult
+	// recorded is scored and reported on its own; it has no gate yet.
+	recorded recordedResult
 	// firstMessages are the labelled scenarios that interrupted people.
 	firstMessages []firstMessage
 	noise         scorecard.Report
@@ -82,6 +84,10 @@ func measure(t *testing.T) card {
 		t.Run("heldout", func(t *testing.T) {
 			t.Parallel()
 			c.heldout = measureHeldOut(t)
+		})
+		t.Run("recorded", func(t *testing.T) {
+			t.Parallel()
+			c.recorded = measureRecorded(t)
 		})
 		t.Run("staging", func(t *testing.T) {
 			t.Parallel()

@@ -10,9 +10,8 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
-// etcdSize reports an etcd database near its default quota. etcd stops
-// accepting writes at the quota, which stops the whole cluster, so the
-// approach is worth a line even when a managed control plane allows more.
+// etcdSize reports an etcd database near its default quota, a line worth
+// having even when a managed control plane allows more.
 func etcdSize(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
@@ -30,12 +29,11 @@ func etcdSize(
 		Advisory: true,
 		Since:    since,
 		Summary: "etcd database is " + gibText(size) +
-			", close to its default 2 GiB limit",
+			" of its 2 GiB quota",
 		Evidence: []detection.Evidence{
 			{Label: "most objects", Value: objectsText(e)},
-			{Label: "what it means", Value: "At the limit etcd " +
-				"refuses writes; compact and defragment it, or " +
-				"remove what fills it"},
+			{Label: "what helps", Value: "compact and defragment " +
+				"it, or remove what fills it"},
 		},
 	}}
 }

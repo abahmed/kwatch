@@ -65,8 +65,7 @@ var missingServiceRows = []Row{
 
 // missingCallFailures are the failures a missing Service can cause: the
 // crashes a failed call causes, and a pod that never becomes ready.
-var missingCallFailures = append(
-	append([]detection.Mode(nil), callerFailures...),
+var missingCallFailures = callerFailuresAnd(
 	detection.ModeNotReady, detection.ModeProbeReadiness)
 
 // missingServiceHops lead from a failing pod to each Service it names
@@ -75,12 +74,12 @@ func (v *view) missingServiceHops(pod inventory.EntityID) []hop {
 	if !v.unitGate(pod) || !v.s.synced(kube.KindService) {
 		return nil
 	}
-	var out []hop
+	var out []inventory.EntityID
 	for _, ref := range v.missingRefs(pod) {
 		v.gate(pod, ref.service)
-		out = append(out, hop{link: LinkCalls, to: ref.service})
+		out = append(out, ref.service)
 	}
-	return out
+	return hopsTo(LinkCalls, out...)
 }
 
 // missingCalledModes is ModeMissing for a Service the effect names and
@@ -97,8 +96,7 @@ func (v *view) missingCalledModes(
 	}
 	for _, ref := range v.missingRefs(unit) {
 		if ref.service == id {
-			return []modeHealth{{mode: ModeMissing,
-				health: detection.Failing, pseudo: true}}
+			return pseudoFailing(ModeMissing)
 		}
 	}
 	return nil
@@ -212,11 +210,10 @@ func (v *view) quotedMissing(pod inventory.EntityID) []missingRef {
 			continue
 		}
 		host := lookedUpHost(lower)
-		ns, name, ok := kube.ClusterServiceName(host, pod.Namespace)
+		service, ok := clusterServiceID(host, pod)
 		if host == "" || !ok {
 			continue
 		}
-		service := inventory.CoreID(kube.KindService, ns, name)
 		if v.namesMissingService(service, pod) && !v.dnsUnwell(pod) {
 			out = append(out, missingRef{service: service, line: line})
 		}
@@ -242,12 +239,7 @@ func (v *view) dnsUnwell(pod inventory.EntityID) bool {
 
 // lookedUpHost is the host a failed name lookup names, or "".
 func lookedUpHost(lower string) string {
-	for _, pattern := range lookupFailures {
-		if m := pattern.FindStringSubmatch(lower); m != nil {
-			return m[1]
-		}
-	}
-	return ""
+	return firstNameIn(lower, lookupFailures...)
 }
 
 // errorLines are the error texts of a failing pod and its containers:
@@ -323,4 +315,37 @@ func (v *view) serviceNames(namespace string) []string {
 		out = append(out, id.Name)
 	}
 	return out
+}
+
+// initWaitRows say that a Service with no ready endpoints explains the
+// init container that is configured to wait for it and has run far
+// longer than usual.
+var initWaitRows = []Row{
+	{
+		Name: "init-waits-on-service",
+		Cause: Side{Kind: kube.KindService,
+			Modes: []detection.Mode{detection.ModeNoEndpoints}},
+		Link: LinkCalls,
+		Effect: Side{Kind: kube.KindContainer,
+			Modes: []detection.Mode{detection.ModeInitWaiting}},
+		Prior: 0.65,
+	},
+}
+
+// initWaitHops lead from an init container to the Services its own
+// command, arguments and environment name. Configuration alone proves
+// nothing for a running application, but a container that has run far
+// longer than usual and names the Service is waiting for it.
+func (v *view) initWaitHops(container inventory.EntityID) []hop {
+	e, ok := v.s.Model.Entity(container)
+	if !ok || !attrBool(e, kube.AttrInit) {
+		return nil
+	}
+	var out []inventory.EntityID
+	for _, ref := range kube.ServiceCalls(e) {
+		if v.s.Model.Exists(ref.Service) {
+			out = append(out, ref.Service)
+		}
+	}
+	return hopsTo(LinkCalls, out...)
 }

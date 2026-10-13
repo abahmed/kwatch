@@ -42,11 +42,12 @@ func kindFindings(
 	if routeKinds[e.ID.Kind] {
 		return routeBackends(ctx, e)
 	}
+	if e.ID.Kind == kindCRD {
+		return conditionFindings(ctx, e)
+	}
 	var f detection.Finding
 	var ok bool
 	switch e.ID.Kind {
-	case "customresourcedefinition":
-		f, ok = crdNotEstablished(ctx, e)
 	case "certificatesigningrequest":
 		f, ok = certificateRequest(ctx, e)
 	case "resourceclaim":
@@ -56,34 +57,6 @@ func kindFindings(
 		return nil
 	}
 	return []detection.Finding{f}
-}
-
-// crdNotEstablished reports a CRD whose API is not served: its names
-// conflict with another CRD (NamesAccepted=False) or it is not yet
-// Established. Its custom resources cannot be created or read.
-func crdNotEstablished(
-	ctx detection.Context, e inventory.Entity,
-) (detection.Finding, bool) {
-	for _, conditionType := range []string{"NamesAccepted", "Established"} {
-		status, reason, since := condition(e, conditionType)
-		if status != "False" || !sustained(ctx, "crd/"+conditionType,
-			since, DefaultCustomFailing) {
-			continue
-		}
-		label := conditionType + "=False"
-		if reason != "" {
-			label += " (" + reason + ")"
-		}
-		return detection.Finding{
-			Reason: reasons.CRDNotEstablished, Severity: detection.Warning,
-			Health: detection.Failing, Since: since,
-			Summary: "Custom resource API is not served: " + label,
-			Evidence: []detection.Evidence{{
-				Label: "message", Value: conditionMessage(e, conditionType),
-			}},
-		}, true
-	}
-	return detection.Finding{}, false
 }
 
 // certificateRequest reports a denied CSR, and one that has no

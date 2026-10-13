@@ -1,0 +1,10 @@
+{
+  "name": "pod-cgroup-create-fails",
+  "description": "The kubelet reports FailedCreatePodContainer while the pod waits in ContainerCreating.",
+  "root": "deployment/shop/search",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

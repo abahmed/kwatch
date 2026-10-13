@@ -23,6 +23,12 @@ type historyRecorder struct {
 	// writer is nil without a HistoryStore, and before start.
 	writer *historyWriter
 	stats  *workerStats
+	// checks counts whether recovery followed a change to the named
+	// cause. Display only (cause_check.go).
+	checks *causeChecker
+	// unexplained counts what kwatch saw and could not explain.
+	// Display only (unexplained.go).
+	unexplained *unexplainedTracker
 }
 
 func newHistoryRecorder(
@@ -35,10 +41,15 @@ func newHistoryRecorder(
 	if deps.Clock != nil {
 		now = deps.Clock.Now
 	}
-	return &historyRecorder{
+	h := &historyRecorder{
 		model: deps.Model, sampler: newBaselineSampler(deps.Model),
 		store: store, timer: deps.Timer, now: now, stats: stats,
+		checks: newCauseChecker(deps.Model),
 	}
+	h.checks.save = h.saveChecks
+	h.unexplained = newUnexplainedTracker(now)
+	h.unexplained.save = h.saveUnexplained
+	return h
 }
 
 // start restores the baselines and starts the writer. It runs before the
@@ -53,6 +64,7 @@ func (h *historyRecorder) start() {
 			"component", "pipeline", "operation", "restore")
 	}
 	h.model.Baselines().Restore(saved, h.now())
+	h.restoreChanges()
 	h.writer = newHistoryWriter(h.store, h.model, h.timer, h.stats)
 	h.writer.expireFrom(h.now)
 	go h.writer.run()
@@ -60,6 +72,7 @@ func (h *historyRecorder) start() {
 
 // askStop asks the writer for its last batch without waiting.
 func (h *historyRecorder) askStop() {
+	h.unexplained.flush()
 	if h.writer != nil {
 		h.writer.askStop()
 	}
@@ -74,6 +87,9 @@ func (h *historyRecorder) stop(deadline <-chan time.Time) bool {
 // observed records one applied observation.
 func (h *historyRecorder) observed(o inventory.Observation) {
 	h.sampler.observe(o)
+	if o.Kind == inventory.Noted {
+		h.unexplained.observeNote(o)
+	}
 	if h.writer == nil {
 		return
 	}
@@ -85,6 +101,7 @@ func (h *historyRecorder) observed(o inventory.Observation) {
 			change.At = o.At
 		}
 		h.writer.add(changeEntry(change))
+		h.writer.addChange(change)
 	case inventory.Noted:
 		if o.Note.Warning {
 			h.writer.add(eventEntry(o.Entity, h.storedNote(o), o.At))
@@ -132,6 +149,9 @@ func (h *historyRecorder) transitions(
 			mode = string(s.Mode)
 		}
 		h.model.MarkHealth(s.Entity, failing, mode, now)
+		if !failing {
+			h.saveHealthy(s.Entity, now)
+		}
 	}
 	if h.writer != nil {
 		h.writer.add(entries...)
@@ -163,6 +183,8 @@ func healthMark(
 func (h *historyRecorder) decided(
 	now time.Time, decisions []incident.Decision,
 ) {
+	h.checks.observe(decisions)
+	h.unexplained.observeDecisions(now, decisions)
 	if h.writer == nil {
 		return
 	}

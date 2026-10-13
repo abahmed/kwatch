@@ -45,33 +45,8 @@ func (Workload) Kinds() []inventory.Kind {
 func (d Workload) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
-	var out []detection.Finding
-	if _, reason, since := condition(e, "Progressing"); reason ==
-		reasons.ProgressDeadlineExceeded {
-		out = append(out, detection.Finding{
-			Reason:   reasons.ProgressDeadlineExceeded,
-			Severity: detection.Critical, Since: since,
-			Summary: "Rollout is stuck: new pods did not become available " +
-				"within the progress deadline",
-		})
-	}
-	if status, reason, since := condition(e, "ReplicaFailure"); status ==
-		"True" {
-		out = append(out, detection.Finding{
-			Reason:   reasons.DeploymentReplicaFailure,
-			Severity: detection.Critical, Since: since,
-			Summary: "Controller cannot create pods (" + reason + ")",
-			Evidence: []detection.Evidence{{
-				Label: "message", Value: conditionMessage(e, "ReplicaFailure"),
-			}},
-		})
-	}
-	// A ReplicaSet's availability is its Deployment's; only its replica
-	// failures (quota, admission) are its own.
+	out := conditionFindings(ctx, e)
 	if e.ID.Kind == kube.KindReplicaSet {
-		for i := range out {
-			out[i].Reason = reasons.ReplicaSetFailure
-		}
 		return out
 	}
 	if s, ok := d.availability(ctx, e); ok {

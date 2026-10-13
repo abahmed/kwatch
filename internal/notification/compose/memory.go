@@ -27,14 +27,15 @@ func memorySentences(f caseFacts) []sentence {
 		}
 		if text := memoryText(m); text != "" {
 			return []sentence{{part: partProof, weight: weightMemory,
-				text: text}}
+				text: text, fact: factMemory}}
 		}
 	}
 	return nil
 }
 
 // memoryText picks the most telling fact: a kill right after starting,
-// else a steady climb, else the peak against the limit.
+// else a jump in the last readings, else a steady climb, else the peak
+// against the limit.
 func memoryText(m detection.Finding) string {
 	limit := evidence(m, detection.EvidenceMemoryLimit)
 	if quick := evidence(m, detection.EvidenceKilledAfter); quick != "" {
@@ -43,6 +44,9 @@ func memoryText(m detection.Finding) string {
 		}
 		return "It hit its " + limit + " memory limit within " + quick +
 			" of starting."
+	}
+	if jump := evidence(m, detection.EvidenceMemoryJump); jump != "" {
+		return "Its memory jumped from " + jump + " before the kill."
 	}
 	if rise := evidence(m, detection.EvidenceMemoryRise); rise != "" {
 		return "Its memory rose steadily from " + humanizeText(rise) +

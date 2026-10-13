@@ -22,7 +22,7 @@ func TestReminderSentencesSayHowLongItHasBeenOpen(t *testing.T) {
 	if len(got) == 0 || got[0].part != partLead {
 		t.Fatalf("want a lead sentence first, got %+v", got)
 	}
-	for _, want := range []string{"is still down", "two weeks now."} {
+	for _, want := range []string{"; still down", "two weeks now."} {
 		if !strings.Contains(got[0].text, want) {
 			t.Fatalf("lead %q lacks %q", got[0].text, want)
 		}

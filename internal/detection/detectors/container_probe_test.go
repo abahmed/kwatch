@@ -21,6 +21,10 @@ type probeFixture struct {
 	started  time.Duration
 	budget   float64
 	deleting bool
+	// nodeAge, when set, runs the pod on a node of that age; the pod is
+	// podAge old and its container restarted restarts times.
+	nodeAge, podAge time.Duration
+	restarts        float64
 }
 
 func detectProbe(t *testing.T, f probeFixture) []detection.Finding {
@@ -33,10 +37,21 @@ func detectProbe(t *testing.T, f probeFixture) []detection.Finding {
 			kube.AttrPhase:    inventory.Text("Running"),
 			kube.AttrDeleting: inventory.Bool(f.deleting),
 		})
+	if f.nodeAge > 0 {
+		node := inventory.EntityID{Kind: kube.KindNode, Name: "n1"}
+		observeEntity(model, node, podNodeNow.Add(-f.nodeAge),
+			map[string]inventory.Value{kube.AttrCreated: inventory.Time(
+				podNodeNow.Add(-f.nodeAge))})
+		observeEntity(model, pod, podNodeNow.Add(-f.podAge),
+			map[string]inventory.Value{kube.AttrCreated: inventory.Time(
+				podNodeNow.Add(-f.podAge))})
+		relateEntity(model, pod, inventory.RunsOn, node)
+	}
 	id := kube.ContainerID("default", "app", "main")
 	attrs := map[string]inventory.Value{
-		kube.AttrState: inventory.Text("running"),
-		kube.AttrReady: inventory.Bool(f.ready),
+		kube.AttrRestarts: inventory.Number(f.restarts),
+		kube.AttrState:    inventory.Text("running"),
+		kube.AttrReady:    inventory.Bool(f.ready),
 		kube.AttrStartedAt: inventory.Time(
 			podNodeNow.Add(-f.started)),
 	}
@@ -113,6 +128,12 @@ func TestContainerProbeFailuresIgnored(t *testing.T) {
 			message: "Readiness probe failed: 503", count: 5,
 			started: time.Hour, deleting: true,
 		}},
+		{"liveness of a pod that just started on a fresh node",
+			probeFixture{
+				message: "Liveness probe failed: connection refused",
+				count:   3, ready: true, started: 3 * time.Minute,
+				nodeAge: 4 * time.Minute, podAge: 3 * time.Minute,
+			}},
 		{"other message", probeFixture{
 			message: "Probe warning", count: 5, started: time.Hour,
 		}},
@@ -200,4 +221,18 @@ func evidenceOf(f detection.Finding, label string) string {
 		}
 	}
 	return ""
+}
+
+// A pod that restarted on a fresh node is failing, not starting; and
+// once the node is old the same events count again.
+func TestProbeFailureOnFreshNodeCountsWhenItIsNotAStart(t *testing.T) {
+	message := "Liveness probe failed: connection refused"
+	restarted := probeFixture{message: message, count: 3, ready: true,
+		started: 3 * time.Minute, nodeAge: 4 * time.Minute,
+		podAge: 3 * time.Minute, restarts: 2}
+	assert.Len(t, detectProbe(t, restarted), 1)
+
+	settled := probeFixture{message: message, count: 3, ready: true,
+		started: time.Hour, nodeAge: time.Hour, podAge: time.Hour}
+	assert.Len(t, detectProbe(t, settled), 1)
 }

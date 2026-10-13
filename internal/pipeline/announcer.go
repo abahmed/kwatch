@@ -46,6 +46,9 @@ type announcer struct {
 	// collect holds the startup summary, digest, outage and roll-up
 	// steps (see the announce package).
 	collect *announce.Collector
+	// joint holds, while one tick is delivered, the resolves that the
+	// resolve of the incident they are keyed by also tells people.
+	joint   map[string][]incident.Decision
 	storage *persistence
 	stats   *workerStats
 }
@@ -96,7 +99,8 @@ func (a *announcer) announce(
 	decisions, grouped := a.collect.CollectOutages(ctx, now, decisions)
 	decisions, rolled := a.collect.CollectRollup(ctx, now, decisions)
 	expired := a.expireHeld(ctx, now)
-	a.deliver(ctx, now, decisions)
+	a.deliver(ctx, now, a.splitRecoveries(decisions))
+	a.joint = nil
 	closed := a.collect.CloseListings(ctx)
 	listed := a.collect.ListRestored(ctx, now)
 	return summarised || digested || grouped || rolled || closed ||

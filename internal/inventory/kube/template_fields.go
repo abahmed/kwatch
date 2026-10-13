@@ -218,7 +218,8 @@ func portsText(ports []corev1.ContainerPort) string {
 }
 
 // probeText is a probe in one short phrase: what it checks and how
-// often. A missing probe is empty.
+// often, with Kubernetes' defaults for what the probe leaves unset. A
+// missing probe is empty.
 func probeText(p *corev1.Probe) string {
 	if p == nil {
 		return ""
@@ -237,9 +238,19 @@ func probeText(p *corev1.Probe) string {
 	if what != "" {
 		what += " "
 	}
-	return what + "every " + strconv.Itoa(int(p.PeriodSeconds)) +
-		"s, timeout " + strconv.Itoa(int(p.TimeoutSeconds)) + "s, " +
-		strconv.Itoa(int(p.FailureThreshold)) + " failures"
+	return what + "every " + probeSetting(p.PeriodSeconds, defaultProbePeriod) +
+		"s, timeout " + probeSetting(p.TimeoutSeconds, defaultProbeTimeout) +
+		"s, " + probeSetting(p.FailureThreshold, defaultProbeFailures) +
+		" failures"
+}
+
+// probeSetting writes a probe setting; one left unset holds the
+// Kubernetes default, which is what the kubelet runs.
+func probeSetting(value, fallback int32) string {
+	if value <= 0 {
+		value = fallback
+	}
+	return strconv.Itoa(int(value))
 }
 
 // volumeChanges reports volumes by name: what each one is backed by.

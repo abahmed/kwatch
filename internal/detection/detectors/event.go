@@ -13,40 +13,6 @@ import (
 // EventWindow is how recent a Warning event must be to count as current.
 const EventWindow = 15 * time.Minute
 
-// eventReasons are Warning event reasons that are failures on their own
-// and are not already detected from object state. Reasons that state
-// already shows (BackOff, Unhealthy, FailedScheduling, Evicted, HPA and
-// Job conditions) stay evidence only, so nothing is reported twice.
-// Webhook failures surface as FailedCreate; cluster-autoscaler's
-// NotTriggerScaleUp is a Normal event, which is never ingested.
-var eventReasons = map[string]detection.Severity{
-	"FailedMount":            detection.Critical,
-	"FailedAttachVolume":     detection.Critical,
-	"FailedCreatePodSandBox": detection.Critical,
-	"FailedCreate":           detection.Critical,
-	"ProvisioningFailed":     detection.Warning,
-	"FailedBinding":          detection.Warning,
-	"VolumeResizeFailed":     detection.Warning,
-	"FailedDaemonPod":        detection.Warning,
-	"NetworkNotReady":        detection.Critical,
-	"FailedKillPod":          detection.Warning,
-	"FailedPreStopHook":      detection.Warning,
-	"FailedPostStartHook":    detection.Critical,
-	// Kubelet node events (disk reclaim): disk reclaim and garbage collection.
-	reasons.EvictionThresholdMet: detection.Warning,
-	// A failed image garbage collection on its own is an early disk
-	// signal, not an outage: it goes to the digest. DiskPressure, which
-	// follows when the disk really fills, is detected from the node's
-	// conditions and still notifies.
-	reasons.ImageGCFailed:       detection.Info,
-	reasons.FreeDiskSpaceFailed: detection.Info,
-	reasons.ContainerGCFailed:   detection.Warning,
-	// Volume and device events (volume mapping): kubelet block-volume mapping and
-	// DRA driver preparation, both on the pod that waits for them.
-	reasons.FailedMapVolume:               detection.Critical,
-	reasons.FailedPrepareDynamicResources: detection.Critical,
-}
-
 // Event turns recent failure-shaped Warning events into findings for any
 // entity kind.
 type Event struct{}
@@ -69,7 +35,7 @@ func (Event) Detect(
 	var order []string
 	byReason := map[string]*eventGroup{}
 	for _, note := range ctx.Model.Notes(e.ID, ctx.Now.Add(-EventWindow)) {
-		severity, failing := eventReasons[note.Reason]
+		severity, failing := detection.EventSeverity(note.Reason)
 		if !note.Warning || !failing || overcomeAtStart(e, note) ||
 			recoveredBefore(e, note) || bootNoise(ctx, e, note) ||
 			daemonNodeNoise(ctx, e, note) {

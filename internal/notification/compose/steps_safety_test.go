@@ -35,6 +35,18 @@ func TestStepsSkipPreviousLogsForContainersThatNeverRan(t *testing.T) {
 	}
 }
 
+func TestStepsDescribePodForUnknownWaitingReasons(t *testing.T) {
+	id := inventory.CoreID(kube.KindContainer, "ns", "p/app")
+	got := stepsFor(id, detection.Finding{
+		Entity: id, Reason: reasons.UnknownWaiting("SomethingNew"),
+		Mode: detection.ModeUnknownWaiting,
+	})
+	if strings.Contains(got, "--previous") ||
+		!strings.Contains(got, "kubectl describe pod p -n ns") {
+		t.Errorf("steps = %q", got)
+	}
+}
+
 func TestStepsNeverPrintSecretValues(t *testing.T) {
 	got := stepsFor(inventory.CoreID(kube.KindSecret, "ns", "db"))
 	if strings.Contains(got, "-o yaml") || strings.Contains(got, "-o json ") {

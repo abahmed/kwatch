@@ -29,6 +29,10 @@ type Facts struct {
 	// Changes are the latest changes in the root's namespace, newest
 	// first, set for an incident without a cause (see RecentChanges).
 	Changes []inventory.Change
+	// Window is the stretch between the root's last healthy mark and the
+	// first failure, with the changes recorded inside it; nil unless
+	// both times are known and something changed (see WindowOf).
+	Window *HealthWindow
 	// KindNames are the API's spellings of the custom kinds in the
 	// incident ("DatadogAgent" for the kind "datadogagent"), read from
 	// the entities' kind.name attribute so a message names a custom

@@ -64,8 +64,8 @@ type Entry struct {
 	// out without the solver's full trace.
 	Considered []string `json:"considered,omitempty"`
 	// Delivery says how the decision reaches people when not as a message
-	// of its own: "digest", "roll-up" or "startup summary" when that
-	// message carries it, "unannounced" when nobody receives it (a
+	// of its own: "digest", "roll-up", "startup summary" or "joint recovery"
+	// when that message carries it, "unannounced" when nobody receives it (a
 	// resolve of an incident that never paged or spoke), "dropped" when
 	// the digest took it in and left it out, "paging" when only
 	// alert-tracking providers receive it, "chat" for a resolve the
@@ -85,6 +85,10 @@ type Entry struct {
 	// Items names the first incidents a digest listed as "id: title",
 	// bounded; the counts above say how many there were in all.
 	Items []string `json:"items,omitempty"`
+	// Lines is how many lines the digest rendered; Summaries are its
+	// grouped, unchanged and wake-up lines, bounded.
+	Lines     int      `json:"lines,omitempty"`
+	Summaries []string `json:"summaries,omitempty"`
 }
 
 // Carried reports whether a Delivery value names a decision that people
@@ -94,7 +98,7 @@ type Entry struct {
 func Carried(delivery string) bool {
 	switch delivery {
 	case "digest", "roll-up", "startup summary", "restored summary",
-		"unannounced", "dropped":
+		"joint recovery", "unannounced", "dropped":
 		return true
 	}
 	return false

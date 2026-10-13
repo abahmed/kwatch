@@ -1,0 +1,36 @@
+package compose
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/abahmed/kwatch/internal/detection"
+)
+
+func TestHowFailedSaysRunLengthAndRhythm(t *testing.T) {
+	got := howFailedText(detection.Finding{Evidence: []detection.Evidence{
+		{Label: detection.EvidenceRanFor, Value: "4s"},
+		{Label: detection.EvidenceRestartSpan, Value: "2h10m"},
+		{Label: "restarts", Value: "14"},
+	}})
+
+	assert.Equal(t, "Its last run lasted 4s; 14 restarts in the 2h10m "+
+		"since its pod was created.", got)
+}
+
+func TestHowFailedSaysNothingWithoutFacts(t *testing.T) {
+	assert.Empty(t, howFailedText(detection.Finding{}))
+}
+
+func TestMemoryJumpIsToldBeforeASteadyRise(t *testing.T) {
+	got := memoryText(detection.Finding{Evidence: []detection.Evidence{
+		{Label: detection.EvidenceMemoryJump,
+			Value: "180Mi to 512Mi within 40s"},
+		{Label: detection.EvidenceMemoryRise,
+			Value: "200Mi to 512Mi over 3h"},
+	}})
+
+	assert.Equal(t, "Its memory jumped from 180Mi to 512Mi within 40s "+
+		"before the kill.", got)
+}

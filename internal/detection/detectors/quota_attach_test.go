@@ -13,7 +13,8 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
-func TestQuotaReportsNearLimit(t *testing.T) {
+// A quota close to its limit is not a failure: nothing was refused.
+func TestQuotaNearLimitSaysNothing(t *testing.T) {
 	m := newTestModel()
 	id := newID(kube.KindQuota, "ns", "compute")
 	put(m, id, t0, map[string]inventory.Value{
@@ -21,14 +22,7 @@ func TestQuotaReportsNearLimit(t *testing.T) {
 		kube.AttrQuotaNearLimit: inventory.Text("cpu=85%,pods=90%"),
 	})
 
-	eval := evaluate(Quota{}, m, t0, id, nil)
-
-	require.Len(t, eval.Findings, 1)
-	f := eval.Findings[0]
-	assert.Equal(t, "Quota.NearLimit", string(f.Mode))
-	assert.Equal(t, detection.Degraded, f.Health)
-	assert.True(t, f.Advisory)
-	assert.Contains(t, f.Summary, "cpu=85%, pods=90%")
+	assert.Empty(t, evaluate(Quota{}, m, t0, id, nil).Findings)
 }
 
 func TestQuotaExhaustedWinsOverNearLimit(t *testing.T) {

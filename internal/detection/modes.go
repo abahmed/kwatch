@@ -81,6 +81,9 @@ var extraModes = []Mode{
 	ModeMemoryEvictionThreshold, ModePIDEvictionThreshold,
 	ModeFailedCreate, ModeTerminating, ModeUnreachable,
 	ModeOOMKilledNode, ModeOOMKilledLimit, ModeNodeCondition,
+	// ModeQuota is the family the quota rows match; no finer quota mode
+	// remains since the near-limit finding was retired.
+	ModeQuota,
 }
 
 // Mode families that tables match as a whole. A family matches each of

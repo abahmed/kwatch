@@ -41,5 +41,5 @@ func ackAnnouncedSentences(f caseFacts) []sentence {
 	}
 	return []sentence{{part: partRecurrence, text: "The ack annotation " +
 		"is still present on " + objectName(ack.On) +
-		", so I won't remind."}}
+		", so reminders are held."}}
 }

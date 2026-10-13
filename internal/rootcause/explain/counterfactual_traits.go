@@ -84,20 +84,6 @@ func shortDigest(imageID string) string {
 	return "sha256:" + hex[:shortDigestLen]
 }
 
-// uniform returns the one value every pod has, or "" when the pods
-// disagree or one has none.
-func uniform(pods []podTraits, get func(podTraits) string) string {
-	out := ""
-	for i, p := range pods {
-		value := get(p)
-		if value == "" || (i > 0 && value != out) {
-			return ""
-		}
-		out = value
-	}
-	return out
-}
-
 // containerSet is a pod's containers as "name image" lines, sorted.
 func (t podTraits) containerSet() string {
 	lines := make([]string, 0, len(t.images))

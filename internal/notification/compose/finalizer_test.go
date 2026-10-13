@@ -66,7 +66,8 @@ func TestFinalizerLeadSaysAControllerWithNoReadyReplica(t *testing.T) {
 
 	got := leadSentences(f)[0].text
 
-	want := "One object in shop (prod-eu-1) has been stuck deleting " +
+	want := "One object (secret old-0) in shop (prod-eu-1) " +
+		"has been stuck deleting " +
 		"since Oct 3: its finalizer widgets.example.com/cleanup is " +
 		"never removed; the controller that handles it, deployment " +
 		"shop/widget-ctl, has no ready replica."
@@ -81,7 +82,8 @@ func TestFinalizerLeadWithNoControllerFound(t *testing.T) {
 
 	got := leadSentences(f)[0].text
 
-	want := "Three objects in shop (prod-eu-1) have been stuck deleting " +
+	want := "Three objects (secret old-0, secret old-1 and secret old-2) " +
+		"in shop (prod-eu-1) have been stuck deleting " +
 		"since Oct 3: their finalizer widgets.example.com/cleanup is " +
 		"never removed; no running controller found for it."
 	if got != want {
@@ -97,7 +99,8 @@ func TestFinalizerLeadWithARunningController(t *testing.T) {
 
 	got := leadSentences(f)[0].text
 
-	want := "Two objects in shop (prod-eu-1) have been stuck deleting " +
+	want := "Two objects (secret old-0 and secret old-1) in shop " +
+		"(prod-eu-1) have been stuck deleting " +
 		"since Oct 3: their finalizer widgets.example.com/cleanup is " +
 		"never removed; a controller that looks like its handler is " +
 		"running, so kwatch cannot say why it does not remove it."
@@ -112,7 +115,8 @@ func TestFinalizerLeadNamesSeveralFinalizers(t *testing.T) {
 
 	got := leadSentences(f)[0].text
 
-	want := "Two objects in shop (prod-eu-1) have been stuck deleting " +
+	want := "Two objects (secret old-0 and secret old-1) in shop " +
+		"(prod-eu-1) have been stuck deleting " +
 		"since Oct 3: their finalizers a.example.com/x and " +
 		"b.example.com/y are never removed; the controller that " +
 		"handles them, deployment shop/widget-ctl, is scaled to 0."

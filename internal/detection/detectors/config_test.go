@@ -32,27 +32,20 @@ func TestCertificateValid(t *testing.T) {
 	assert.Empty(t, findings)
 }
 
-func TestCertificateExpiring(t *testing.T) {
+// A certificate with days left is no finding: kwatch reports it only
+// once it has expired.
+func TestCertificateNotYetExpiredIsNoFinding(t *testing.T) {
 	now := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
-	expiry := now.Add(7 * 24 * time.Hour)
-
 	secret := buildStorage(
 		kube.KindSecret, "tls", "default", now,
 		map[string]inventory.Value{
-			kube.AttrCertExpiry: inventory.Time(expiry),
+			kube.AttrCertExpiry: inventory.Time(now.Add(24 * time.Hour)),
 		},
 	)
 
-	detector := Certificate{}
-	ctx := testDetectorContext(nil, now)
+	findings := Certificate{}.Detect(testDetectorContext(nil, now), secret)
 
-	findings := detector.Detect(ctx, secret)
-
-	require.Len(t, findings, 1)
-	assert.Equal(t, reasons.TLSCertExpiringSoon, findings[0].Reason)
-	assert.True(t, findings[0].Advisory)
-	assert.Equal(t, detection.Warning, findings[0].Severity)
-	assert.Contains(t, findings[0].Summary, "expires in")
+	assert.Empty(t, findings)
 }
 
 func TestCertificateExpired(t *testing.T) {

@@ -75,7 +75,23 @@ func (m *Manager) revisedStep(p *Incident, now time.Time) (Decision, bool) {
 		return Decision{}, true
 	}
 	p.Pending.ClearRevised()
+	if causeWithdrawn(p) {
+		// The thread keeps its words; the fingerprint adopts the new
+		// root so the move is not re-sent as a material change.
+		p.Digest = fingerprint(p)
+		return Decision{}, false
+	}
 	return m.decide(p, Update, ReasonCauseRevised), true
+}
+
+// causeWithdrawn reports a revision that took a known cause away and
+// found none: the evidence aged out while the failure went on, so the
+// incident now stands on its own workload with nothing to add. Saying
+// "cause changed: no ready replicas" would retract the cause the thread
+// still states, and nothing observed contradicts it. A page always
+// speaks.
+func causeWithdrawn(p *Incident) bool {
+	return p.Pending.CauseReplaced() && p.Cause == nil && p.Tier < Page
 }
 
 func (m *Manager) reminderStep(p *Incident, now time.Time) (Decision, bool) {

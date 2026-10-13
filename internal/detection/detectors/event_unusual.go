@@ -15,24 +15,6 @@ import (
 // a look in the digest.
 const unusualEventMin = 3
 
-// shownByState are Warning event reasons whose condition kwatch already
-// reads from the object itself: a container in BackOff, a probe that
-// fails, a pod that cannot be scheduled. Reporting the event too would
-// report the failure twice.
-var shownByState = map[string]bool{
-	"BackOff": true, "Unhealthy": true, "FailedScheduling": true,
-	"Evicted": true, "Failed": true, "Killing": true, "Preempting": true,
-	"Preempted": true, "ErrImagePull": true, "ImagePullBackOff": true,
-	"InspectFailed": true, "NodeNotReady": true, "NodeNotSchedulable": true,
-	"BackoffLimitExceeded": true, "DeadlineExceeded": true,
-	"TooManyMissedTimes": true, "FailedComputeMetricsReplicas": true,
-	"FailedGetResourceMetric": true, "FailedGetScale": true,
-	"FailedToUpdateEndpointSlices": true, "FailedToUpdateEndpoint": true,
-	"OOMKilling": true, "FailedCallingWebhook": true,
-	"FailedValidation": true, "NoPods": true,
-	"CalculateExpectedPodCountFailed": true,
-}
-
 // unusualEvents turns Warning events kwatch knows nothing about into one
 // informational finding per event reason, once they repeat. The event
 // text is quoted, never interpreted: the finding says what Kubernetes
@@ -94,8 +76,8 @@ func unusualEvents(
 // knownEvent reports whether a Warning event reason is already detected,
 // either from the event itself or from the object's state.
 func knownEvent(reason string) bool {
-	_, detected := eventReasons[reason]
-	return detected || shownByState[reason]
+	_, detected := detection.EventSeverity(reason)
+	return detected || detection.ShownByState(reason)
 }
 
 // unusualSummary says what Kubernetes reported. A reason that recurred

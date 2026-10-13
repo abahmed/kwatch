@@ -1,0 +1,10 @@
+{
+  "name": "unknown-waiting-reason",
+  "description": "A container waits in a state kwatch has no name for; once it lasts it is a failure quoting the state.",
+  "root": "deployment/shop/ledger",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

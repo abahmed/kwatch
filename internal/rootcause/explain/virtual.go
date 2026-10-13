@@ -1,6 +1,7 @@
 package explain
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -49,8 +50,7 @@ func (v *view) virtualHops(id inventory.EntityID) []hop {
 		out = append(out, v.initWaitHops(id)...)
 	}
 	if v.hasMode(id, createModes) {
-		out = append(out, v.admitHops(id)...)
-		out = append(out, v.policyAdmitHops()...)
+		out = append(out, v.allAdmitHops(id)...)
 	}
 	if id.Kind == kube.KindService {
 		out = append(out, v.backendHops(id)...)
@@ -151,25 +151,25 @@ func (v *view) hasMode(
 	return false
 }
 
-// admitHops lead from a controller that cannot create objects to the
-// webhooks and quotas that may be rejecting the creates.
-func (v *view) admitHops(id inventory.EntityID) []hop {
+// webhookAdmitHops lead from a controller that cannot create objects to
+// the webhooks that may be rejecting the creates.
+func (v *view) webhookAdmitHops(_ inventory.EntityID) []hop {
 	var out []hop
 	for _, kind := range admitKinds {
-		for _, hook := range v.s.Model.Entities(kind) {
-			out = append(out, hop{link: LinkAdmits, to: hook})
-		}
-	}
-	if id.Namespace == "" {
-		return out
-	}
-	namespace := inventory.CoreID(kube.KindNamespace, "", id.Namespace)
-	for _, quota := range v.s.Model.Related(
-		namespace, inventory.Constrains, inventory.Incoming,
-	) {
-		out = append(out, hop{link: LinkAdmits, to: quota})
+		out = append(out, hopsTo(LinkAdmits, v.s.Model.Entities(kind)...)...)
 	}
 	return out
+}
+
+// quotaAdmitHops lead from a controller that cannot create objects to
+// the quotas of its namespace.
+func (v *view) quotaAdmitHops(id inventory.EntityID) []hop {
+	if id.Namespace == "" {
+		return nil
+	}
+	namespace := inventory.CoreID(kube.KindNamespace, "", id.Namespace)
+	return hopsTo(LinkAdmits, v.s.Model.Related(
+		namespace, inventory.Constrains, inventory.Incoming)...)
 }
 
 // webhookHops lead from a Service to the admission webhooks it serves.
@@ -247,11 +247,7 @@ func (v *view) policyHops(pod inventory.EntityID) []hop {
 
 // backendHops lead from a Service to the pods it selects.
 func (v *view) backendHops(service inventory.EntityID) []hop {
-	var out []hop
-	for _, pod := range sortedKeys(v.selected(service)) {
-		out = append(out, hop{link: LinkBacks, to: pod})
-	}
-	return out
+	return hopsTo(LinkBacks, sortedKeys(v.selected(service))...)
 }
 
 // servicesSelecting lists the Services of the pod's namespace that
@@ -321,4 +317,78 @@ func (v *view) pinnedClaim(claim, effect inventory.EntityID) bool {
 	}
 	reason, ok := v.schedulerVerdict(pod)
 	return ok && volumeConflict(reason) && containsID(v.claimsOf(pod), claim)
+}
+
+// The virtual_*.go files each let a piece of text or an attribute name
+// an object: a webhook, a quota, a Service, an address, a finalizer. They
+// share one shape: extract a name from the text, resolve it to an entity
+// of the model (or a virtual one), then add a hop to it and report a
+// pseudo mode once the effect's own evidence confirms it. These helpers
+// are the shared pieces of that shape.
+
+// pseudoFailing is the single pseudo mode a virtual or absent entity
+// reports while it is the cause of the effect.
+func pseudoFailing(mode detection.Mode) []modeHealth {
+	return []modeHealth{{mode: mode, health: detection.Failing,
+		pseudo: true}}
+}
+
+// hopsTo is one hop of the link to each of the entities.
+func hopsTo(link LinkType, ids ...inventory.EntityID) []hop {
+	var out []hop
+	for _, id := range ids {
+		out = append(out, hop{link: link, to: id})
+	}
+	return out
+}
+
+// namesIn is the text each match of the patterns names: group 1 of
+// every match, patterns in order. The text is lower case.
+func namesIn(text string, patterns ...*regexp.Regexp) []string {
+	var out []string
+	for _, pattern := range patterns {
+		for _, m := range pattern.FindAllStringSubmatch(text, -1) {
+			out = append(out, m[1])
+		}
+	}
+	return out
+}
+
+// firstNameIn is the first name any pattern finds, in pattern order, or
+// "".
+func firstNameIn(text string, patterns ...*regexp.Regexp) string {
+	for _, pattern := range patterns {
+		if m := pattern.FindStringSubmatch(text); m != nil {
+			return m[1]
+		}
+	}
+	return ""
+}
+
+// namesObject reports whether the text names the object, ignoring case.
+func namesObject(text, name string, patterns ...*regexp.Regexp) bool {
+	for _, named := range namesIn(strings.ToLower(text), patterns...) {
+		if strings.EqualFold(named, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// attrList is a comma-separated attribute of an entity as a list.
+func attrList(e inventory.Entity, name string) []string {
+	return strings.Split(attrText(e, name), ",")
+}
+
+// clusterServiceID resolves a host a pod's text names ("redis",
+// "redis.shop", "redis.shop.svc.cluster.local") to the Service it would
+// reach from the pod's namespace, whether or not that Service exists.
+func clusterServiceID(
+	host string, from inventory.EntityID,
+) (inventory.EntityID, bool) {
+	ns, name, ok := kube.ClusterServiceName(host, from.Namespace)
+	if !ok {
+		return inventory.EntityID{}, false
+	}
+	return inventory.CoreID(kube.KindService, ns, name), true
 }

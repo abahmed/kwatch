@@ -22,6 +22,8 @@ func (r Report) Text() string {
 	r.writeUpgrade(&b)
 	r.writeZones(&b)
 	r.writeGaps(&b)
+	r.writeCauseChecks(&b)
+	r.writeUnexplained(&b)
 	return b.String()
 }
 
@@ -157,4 +159,37 @@ func noun(n int, word string) string {
 		return word
 	}
 	return word + "s"
+}
+
+func (r Report) writeCauseChecks(b *strings.Builder) {
+	if len(r.CauseChecks) == 0 {
+		return
+	}
+	line(b, "")
+	line(b, "Cause self-check (display only)")
+	for _, c := range r.CauseChecks {
+		line(b, "  "+c.Rule+": "+c.Text)
+	}
+}
+
+// writeUnexplained shows what kwatch saw and could not explain, so a
+// reason it has no entry for is counted and visible, not silent.
+func (r Report) writeUnexplained(b *strings.Builder) {
+	u := r.Unexplained
+	line(b, "")
+	if u.Events == 0 && u.Incidents == 0 {
+		line(b, "Unexplained (last 7 days): nothing")
+		return
+	}
+	line(b, "Unexplained (last 7 days): "+strconv.Itoa(u.Events)+" unknown "+
+		noun(u.Events, "event")+", "+strconv.Itoa(u.Incidents)+" "+
+		noun(u.Incidents, "incident")+" with no clear cause")
+	for _, row := range u.Top {
+		text := "  " + row.Kind + " " + row.Mode + " " + row.Reason +
+			": " + strconv.Itoa(row.Count)
+		if row.Sample != "" {
+			text += ", e.g. \"" + row.Sample + "\""
+		}
+		line(b, text)
+	}
 }

@@ -86,7 +86,7 @@ var causeWords = map[string]causeWording{
 		words: "serves every pod on that node and is failing"},
 	"node-not-ready":     {words: "is not ready"},
 	"node-overcommitted": {words: "is overcommitted on memory"},
-	"node-pid-pressure":  {words: "is running out of process IDs"},
+	"node-pid-pressure":  {words: "is short of process IDs"},
 	"node-removed":       {words: "was removed"},
 	"node-removed-capacity": {
 		words: "was removed and no other node has room"},

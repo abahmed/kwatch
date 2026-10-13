@@ -55,6 +55,9 @@ func memoryEvidence(e inventory.Entity) []detection.Evidence {
 		add(detection.EvidenceMemoryLimit, quantity(limit))
 	}
 	add(detection.EvidenceMemoryPeak, quantity(peak))
+	if jump, ok := lastJump(e); ok {
+		add(detection.EvidenceMemoryJump, jump)
+	}
 	if rise, ok := steadyRise(e); ok {
 		add(detection.EvidenceMemoryRise, rise)
 	}

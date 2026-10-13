@@ -10,23 +10,6 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
-// waitingReasons are container waiting states that are failures. Creating
-// and initializing are progress, not failures.
-var waitingReasons = map[string]detection.Severity{
-	reasons.CrashLoopBackOff:     detection.Critical,
-	reasons.ImagePullBackOff:     detection.Critical,
-	reasons.ErrImagePull:         detection.Critical,
-	reasons.InvalidImageName:     detection.Critical,
-	reasons.ImageInspectError:    detection.Critical,
-	reasons.CreateConfigError:    detection.Critical,
-	reasons.CreateContainerError: detection.Critical,
-	"RunContainerError":          detection.Critical,
-	reasons.ContainerCannotRun:   detection.Critical,
-	reasons.ErrImageNeverPull:    detection.Critical,
-	reasons.PreStartHookError:    detection.Critical,
-	reasons.PostStartHookError:   detection.Critical,
-}
-
 // Container detects failing containers: crash loops (with their last
 // termination cause), image and configuration errors, and non-zero exits
 // of containers that are not restarted.
@@ -45,7 +28,7 @@ func (c Container) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	return withArchMismatch(ctx, e,
-		withNodeOOM(ctx, e, c.byState(ctx, e)))
+		withNodeOOM(ctx, e, withHowItFailed(ctx, e, c.byState(ctx, e))))
 }
 
 // byState finds what the container's state shows.
@@ -55,7 +38,7 @@ func (Container) byState(
 	switch text(e, kube.AttrState) {
 	case "waiting":
 		return withRestartBaseline(ctx, e,
-			livenessKilledWaiting(ctx, e, waitingFinding(e)))
+			livenessKilledWaiting(ctx, e, waitingFinding(ctx, e)))
 	case "terminated":
 		return terminatedFinding(ctx, e)
 	case "running":
@@ -113,11 +96,13 @@ func restartingFinding(
 	}}
 }
 
-func waitingFinding(e inventory.Entity) []detection.Finding {
+func waitingFinding(
+	ctx detection.Context, e inventory.Entity,
+) []detection.Finding {
 	reason := text(e, kube.AttrStateReason)
-	severity, failing := waitingReasons[reason]
+	severity, failing := detection.WaitingSeverity(reason)
 	if !failing {
-		return nil
+		return unknownWaiting(ctx, e, reason)
 	}
 	s := detection.Finding{
 		Reason: reason, Severity: severity,
@@ -140,12 +125,36 @@ func waitingFinding(e inventory.Entity) []detection.Finding {
 	return []detection.Finding{s}
 }
 
-// Exit codes of containers stopped by a finding: 128+SIGTERM and
-// 128+SIGKILL (after the grace period, when not OOMKilled).
-const (
-	exitSIGTERM = 143
-	exitSIGKILL = 137
-)
+// unknownWaitingGrace is how long a container may wait in a state kwatch
+// has no name for before it is reported. Image pulls and volume setup
+// are ContainerCreating, which is progress; a state that is neither a
+// known failure nor known progress and lasts this long is not assumed
+// healthy.
+const unknownWaitingGrace = 2 * time.Minute
+
+// unknownWaiting reports a container that has waited in a state the
+// registry does not classify. The finding quotes the state's reason and
+// message and interprets neither.
+func unknownWaiting(
+	ctx detection.Context, e inventory.Entity, reason string,
+) []detection.Finding {
+	if !detection.UnknownWaiting(reason) {
+		return nil
+	}
+	since := valueSince(e, kube.AttrStateReason)
+	if !sustained(ctx, "waiting-unknown/"+reason, since,
+		unknownWaitingGrace) {
+		return nil
+	}
+	return []detection.Finding{{
+		Reason: reasons.UnknownWaiting(reason), Severity: detection.Warning,
+		Health:   detection.Failing,
+		Mode:     detection.ModeUnknownWaiting,
+		Since:    since,
+		Summary:  containerRole(e) + " has been waiting in state " + reason,
+		Evidence: containerEvidence(e),
+	}}
+}
 
 func terminatedFinding(
 	ctx detection.Context, e inventory.Entity,
@@ -174,6 +183,15 @@ func terminatedFinding(
 		if exit, ok := terminatedExit(code, reason); ok {
 			findingReason = exit.reason
 			summary = containerRole(e) + " " + exit.summary
+		} else if restarts, _ := number(e, kube.AttrRestarts); restarts > 0 {
+			// A container that was restarted before and exits again
+			// is in the crash loop the kubelet is about to name. It
+			// stays one finding through the seconds it is terminated
+			// and the minutes it backs off, so which of the two the
+			// first message lands on does not change what it says.
+			findingReason = reasons.CrashLoopBackOff
+			summary = containerRole(e) + " " +
+				describeWaiting(findingReason)
 		}
 	}
 	return []detection.Finding{{

@@ -36,7 +36,8 @@ func livenessStartSentences(f caseFacts) []sentence {
 			continue
 		}
 		return []sentence{{part: partProof, weight: weightLivenessStart,
-			text: livenessStartText(m, name, gives)}}
+			text: livenessStartText(m, name, gives),
+			fact: factLiveness}}
 	}
 	return nil
 }

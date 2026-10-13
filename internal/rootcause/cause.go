@@ -74,6 +74,10 @@ type CauseRecord struct {
 	// certificate has already expired, for a webhook whose calls fail
 	// the TLS handshake.
 	ServingCert *ServingCert `json:",omitempty"`
+	// Place is the exact setting the cause is, when the cause is one:
+	// object, container, field path and its current value. Nil when
+	// the cause is not a setting (a node that is down).
+	Place *detection.Place `json:",omitempty"`
 }
 
 // Hop is one step of a failure chain: an entity that failed, a workload,

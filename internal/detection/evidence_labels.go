@@ -14,6 +14,20 @@ const (
 	// EvidenceKilledAfter is how long a run lasted when it was killed
 	// soon after starting, written in words: "30 seconds".
 	EvidenceKilledAfter = "killed after"
+	// EvidenceMemoryJump is a sudden rise in the last readings before
+	// the kill, such as "180Mi to 512Mi within 40s".
+	EvidenceMemoryJump = "memory jump"
+)
+
+// Evidence labels of how a restarting container failed, from facts
+// kwatch already holds about its past runs.
+const (
+	// EvidenceRanFor is how long the last run lasted before it ended,
+	// such as "4s".
+	EvidenceRanFor = "last run lasted"
+	// EvidenceRestartSpan is how long the pod has existed, so that the
+	// restart count reads as a rhythm: "2h10m".
+	EvidenceRestartSpan = "restarts over"
 )
 
 // EvidenceError is the error line a container logged or reported. The

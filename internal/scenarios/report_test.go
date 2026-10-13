@@ -41,6 +41,13 @@ func renderReport(c card, gates []scorecard.Gate) string {
 		"Never used to tune the engine.\n\n", c.heldout.accuracy.Cases,
 		len(c.heldout.verdicts), c.heldout.accuracy.Correct)
 	b.WriteString(scenarioTable(c.heldout.verdicts))
+	b.WriteString("\n## Recorded scenarios\n\n")
+	fmt.Fprintf(&b, "%d recorded root cases in %d scenarios, %d right. "+
+		"Captured from real clusters; never used to tune the engine.\n",
+		c.recorded.accuracy.Cases, len(c.recorded.verdicts),
+		c.recorded.accuracy.Correct)
+	b.WriteString(recordedGateLine(c.recorded) + "\n")
+	b.WriteString(scenarioTable(c.recorded.verdicts))
 	return b.String()
 }
 
