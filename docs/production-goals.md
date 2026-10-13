@@ -79,8 +79,8 @@ recorded in the scorecard.
 kwatch does not learn from user feedback. It reasons from the cluster:
 
 - Causes need evidence, and negative evidence counts against them.
-- A set-cover explanation picks the smallest set of causes that explains
-  all symptoms.
+- A greedy, evidence-weighted set cover picks causes that explain the
+  symptoms; strong evidence can beat a cause that merely covers more.
 - Causes are re-verified continuously, and outcomes are confirmed before
   an incident resolves.
 - Baselines and recurrence memory separate normal from new.

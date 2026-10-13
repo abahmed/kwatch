@@ -147,7 +147,7 @@ never leaves your cluster except as the alerts you configure.
 ```mermaid
 flowchart LR
   A["👀 Watch<br/>every resource<br/>and every change"] --> B["🩺 Detect<br/>what is unhealthy"]
-  B --> C["🎯 Explain<br/>follow failures upstream<br/>to the fewest causes"]
+  B --> C["🎯 Explain<br/>follow failures upstream<br/>to a small set of causes"]
   C --> D["📨 Tell<br/>one message per cause,<br/>update only on news"]
 ```
 
@@ -157,7 +157,8 @@ flowchart LR
    Services with no endpoints, full volumes, failing webhooks and more.
 3. **Explain.** From each failure it walks to what it depends on and keeps
    only suspects that are broken or changed just before. Then it picks the
-   fewest causes that explain everything.
+   causes that explain everything, preferring stronger evidence over
+   covering more failures.
 4. **Tell.** One message per cause, written for people. It is updated only
    when something new is true, and closed once when it is fixed.
 

@@ -227,9 +227,13 @@ func (r *sizeReport) add(
 
 // LogicalSize returns the key and value bytes stored per bucket. It is
 // what the size caps measure: bbolt never shrinks its file, so the file
-// size says little about how much data is live.
-func (s *Store) LogicalSize() (map[Bucket]int64, error) {
-	report, err := s.measure(context.Background())
+// size says little about how much data is live. The caller's context
+// bounds the scan so a huge store cannot pin one long read transaction.
+func (s *Store) LogicalSize(ctx context.Context) (map[Bucket]int64, error) {
+	if ctx == nil {
+		return nil, errMissingContext
+	}
+	report, err := s.measure(ctx)
 	return report.buckets, err
 }
 

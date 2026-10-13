@@ -43,4 +43,7 @@ make alert-quality-gate
 A wrong verdict found in the field becomes a permanent scenario the same way.
 Do not lower a gate or relax a label to make a scenario pass; fix the table,
 weights or detector instead. Results are summarised in
-`internal/scenarios/SCORECARD.md`.
+`internal/scenarios/SCORECARD.md`: its "Current report" block is the output
+of `make alert-quality` pasted between the markers, and
+`make alert-quality-gate` fails when that block has drifted, so refresh it
+in the same change.

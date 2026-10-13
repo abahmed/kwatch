@@ -185,3 +185,13 @@ func TestInitRuntimeFailsForBrokenProviderSettings(t *testing.T) {
 		})
 	}
 }
+
+// A nil lifecycle context is a programming error, never a reason to fall
+// back to an unbounded background context for live delivery.
+func TestManagerRejectsNilLifecycleContext(t *testing.T) {
+	manager := newTestManager()
+	require.ErrorIs(t, manager.Start(nil), errMissingContext)
+	require.ErrorIs(t, manager.Stop(nil), errMissingContext)
+	require.ErrorIs(t, manager.WaitForReconfiguration(nil),
+		errMissingContext)
+}

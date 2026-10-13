@@ -8,8 +8,9 @@ import (
 )
 
 // Explain solves a snapshot: it groups the failures into connected
-// areas and, for each, chooses the fewest causes that cover them with
-// a greedy weighted set cover. It is a pure function of the snapshot.
+// areas and, for each, chooses a set of causes that covers them with a
+// greedy, score-weighted set cover. It is a pure function of the
+// snapshot.
 func Explain(s Snapshot) Explanation {
 	v := newView(s)
 	every := failures(s.Findings)

@@ -33,6 +33,9 @@ var (
 	// ErrRepairPending means the file is unusable and will be reset by
 	// the first Claim; until then nothing can be read.
 	ErrRepairPending = errors.New("store reset pending until claim")
+	// errMissingContext rejects a nil context rather than silently
+	// substituting an unbounded background context for a bounded scan.
+	errMissingContext = errors.New("store scan requires a context")
 )
 
 var (

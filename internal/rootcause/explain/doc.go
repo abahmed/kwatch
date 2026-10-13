@@ -1,12 +1,12 @@
-// Package explain is the root-cause engine: a propagation
-// table, a candidate walk, scorers and a set-cover solver. The incident
-// manager solves through a Solver, which caches areas and solves again
-// only those a change can affect.
+// Package explain is the root-cause engine: a propagation table, a
+// candidate walk, scorers and a greedy weighted set-cover solver. The
+// incident manager solves through a Solver, which caches areas and
+// solves again only those a change can affect.
 //
 // In: a Snapshot of the inventory and its active findings. Out: an
 // Explanation that groups the failing entities into connected areas and
-// names the fewest causes that cover each area, with a confidence, the
-// alternatives and a reasoning trace.
+// names causes that cover each area, chosen greedily by score, with a
+// confidence, the alternatives and a reasoning trace.
 //
 // The steps are small and each lives in its own file:
 //

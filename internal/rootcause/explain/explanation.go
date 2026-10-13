@@ -40,7 +40,7 @@ type Explanation struct {
 type Area struct {
 	// Failures are the failing entities of the area, sorted.
 	Failures []inventory.EntityID
-	// Causes are the fewest causes that cover the failures, best
+	// Causes are the chosen causes that cover the failures, best
 	// first. Empty means the cause is unknown.
 	Causes []Cause
 	// Unexplained are failures no stated cause covers.

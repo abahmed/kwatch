@@ -39,6 +39,12 @@ var ErrNoReconfiguration = errors.New(
 	"no delivery reconfiguration pending",
 )
 
+// errMissingContext rejects a nil lifecycle context rather than silently
+// substituting an unbounded background context for live delivery.
+var errMissingContext = errors.New(
+	"delivery lifecycle requires a context",
+)
+
 // Manager owns the provider generations and delivers notifications.
 type Manager struct {
 	generation   *providerGeneration

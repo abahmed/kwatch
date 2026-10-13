@@ -36,14 +36,14 @@ func (m *Manager) finishReconfiguration(err error) {
 // WaitForReconfiguration waits until an in-progress generation replacement
 // has either started the new workers or failed.
 func (m *Manager) WaitForReconfiguration(ctx context.Context) error {
+	if ctx == nil {
+		return errMissingContext
+	}
 	m.mu.Lock()
 	done := m.reconfigure.done
 	m.mu.Unlock()
 	if done == nil {
 		return ErrNoReconfiguration
-	}
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	select {
 	case <-done:

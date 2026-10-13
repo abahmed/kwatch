@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -119,7 +120,7 @@ func TestOpenDeferredDoesNotCreateMissingFile(t *testing.T) {
 	_, found, err := state(s).Get("k")
 	require.NoError(t, err)
 	assert.False(t, found)
-	sizes, err := s.LogicalSize()
+	sizes, err := s.LogicalSize(context.Background())
 	require.NoError(t, err)
 	assert.Empty(t, sizes)
 	_, err = os.Stat(path)

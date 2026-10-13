@@ -20,7 +20,7 @@ Each line matches the package's `doc.go`.
 | `internal/detection/detectors` | The built-in detectors. Read entity attributes, return findings. |
 | `internal/detection/reasons` | Stable reason codes. A leaf, shared by every layer. |
 | `internal/rootcause` | What the root-cause engine shares with the layers above it: the `Cause` record, confidence levels, scheduler-message helpers. |
-| `internal/rootcause/explain` | The engine: propagation table, candidate walk, scorers, set-cover solver, incremental cache. |
+| `internal/rootcause/explain` | The engine: propagation table, candidate walk, scorers, greedy weighted set-cover solver, incremental cache. |
 | `internal/incident` | Groups findings that share a cause into an incident and decides when people hear about it: announce, update, resolve. |
 | `internal/notification` | The provider-neutral `Message`, severities and rendering helpers. A leaf. |
 | `internal/notification/compose` | Writes the note for an incident decision as a short narrative. |

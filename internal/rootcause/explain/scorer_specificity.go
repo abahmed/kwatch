@@ -35,25 +35,46 @@ func scoreSpecificity(v *view, c *candidate) outcome {
 			"the errors of %d of %d failures name it", named, len(effects))}
 }
 
+// genericKeys are changed-key names too common in failure prose to prove
+// that an error names the object: an error about a "host" does not point
+// at the object whose key is literally named host. Only a key that is
+// exactly one of these is ignored; a compound key such as "db-host" is
+// named only as that whole word, so it stays evidence. Credential and
+// endpoint keys (password, token, url, port, ...) are kept: an
+// authentication or connection error that names one points at it.
+var genericKeys = map[string]bool{
+	"config": true, "configuration": true, "conf": true,
+	"value": true, "values": true, "data": true, "name": true,
+	"key": true, "keys": true, "default": true, "server": true,
+	"host": true, "addr": true, "address": true, "path": true,
+	"file": true, "timeout": true, "retry": true, "mode": true,
+	"type": true, "image": true, "version": true,
+}
+
 // namesOf lists the words that identify id in error text: its name, the
 // keys that changed in it and the names of the Services that serve it,
 // since a webhook error names the webhook's Service rather than its
-// configuration.
+// configuration. A changed key that is a common word is left out.
 func (v *view) namesOf(id inventory.EntityID) []string {
 	var out []string
-	add := func(name string) {
-		if len(name) >= SpecificityMinName {
-			out = append(out, strings.ToLower(name))
+	add := func(name string, isKey bool) {
+		if len(name) < SpecificityMinName {
+			return
 		}
+		name = strings.ToLower(name)
+		if isKey && genericKeys[name] {
+			return
+		}
+		out = append(out, name)
 	}
-	add(id.Name)
+	add(id.Name, false)
 	for _, key := range v.changedKeys(id) {
-		add(key)
+		add(key, true)
 	}
 	for _, service := range v.s.Model.Related(
 		id, inventory.Serves, inventory.Outgoing,
 	) {
-		add(service.Name)
+		add(service.Name, false)
 	}
 	return out
 }
