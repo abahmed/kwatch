@@ -43,14 +43,14 @@ func TestApplyStartupConfigHandlesEmptyAndMultipleObjects(t *testing.T) {
 
 	objects := []runtime.Object{
 		&unstructured.Unstructured{Object: map[string]interface{}{
-			"apiVersion": "kwatch.abahmed.dev/v1alpha1",
+			"apiVersion": "kwatch.abahmed.dev/v1beta1",
 			"kind":       "KwatchConfig",
 			"metadata": map[string]interface{}{
 				"name": "one", "namespace": "kwatch",
 			},
 		}},
 		&unstructured.Unstructured{Object: map[string]interface{}{
-			"apiVersion": "kwatch.abahmed.dev/v1alpha1",
+			"apiVersion": "kwatch.abahmed.dev/v1beta1",
 			"kind":       "KwatchConfig",
 			"metadata": map[string]interface{}{
 				"name": "two", "namespace": "kwatch",

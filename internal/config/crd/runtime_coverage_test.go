@@ -26,7 +26,7 @@ func TestApplyStartupConfigHandlesEmptyAndInvalidLists(t *testing.T) {
 		t.Fatalf("empty CRD list = %v", err)
 	}
 	first := &unstructured.Unstructured{Object: map[string]interface{}{
-		"apiVersion": "kwatch.abahmed.dev/v1alpha1",
+		"apiVersion": "kwatch.abahmed.dev/v1beta1",
 		"kind":       "KwatchConfig",
 		"metadata": map[string]interface{}{
 			"name": "one", "namespace": "default",

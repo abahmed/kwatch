@@ -18,7 +18,7 @@ import (
 
 var gvr = schema.GroupVersionResource{
 	Group:    "kwatch.abahmed.dev",
-	Version:  "v1alpha1",
+	Version:  "v1beta1",
 	Resource: "kwatchconfigs",
 }
 

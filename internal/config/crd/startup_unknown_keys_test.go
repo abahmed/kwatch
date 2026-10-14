@@ -20,7 +20,7 @@ func TestApplyStartupConfigReportsKwatchConfigTypos(t *testing.T) {
 		map[schema.GroupVersionResource]string{gvr: "KwatchConfigList"},
 	)
 	object := &unstructured.Unstructured{Object: map[string]interface{}{
-		"apiVersion": "kwatch.abahmed.dev/v1alpha1",
+		"apiVersion": "kwatch.abahmed.dev/v1beta1",
 		"kind":       "KwatchConfig",
 		"metadata": map[string]interface{}{
 			"name": "one", "namespace": "default",

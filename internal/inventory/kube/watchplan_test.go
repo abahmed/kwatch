@@ -137,7 +137,7 @@ func TestPlanResourceTiersAndModes(t *testing.T) {
 		{"endpoints_excluded", schema.GroupVersionResource{
 			Version: "v1", Resource: "endpoints"}, false, false, 0, ""},
 		{"kwatchconfig_excluded", schema.GroupVersionResource{
-			Group: "kwatch.abahmed.dev", Version: "v1alpha1",
+			Group: "kwatch.abahmed.dev", Version: "v1beta1",
 			Resource: "kwatchconfigs"}, true, false, 0, ""},
 	}
 	for _, tc := range tt {

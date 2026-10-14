@@ -82,7 +82,7 @@ true when extending the system:
 - Any new long-running loop must expose cancellation, completion, progress or
   synchronization state, and a bounded shutdown path. Tests must use event
   completion rather than sleeps.
-- Generated Kubernetes deep-copy code (`api/v1alpha1`) must detach pointers,
+- Generated Kubernetes deep-copy code (`api/v1beta1`) must detach pointers,
   maps, slices, and nested configuration before a CRD object is handed to
   another goroutine.
 
@@ -153,8 +153,9 @@ architecture unless a change explicitly expands its scope.
   the current internal package layout constrain the target design. Persisted
   formats may change before the first stable release only with a schema
   version bump in `internal/storage`: a file with another version is deleted
-  and recreated (reset only: no migration; the old file is kept once as
-  `state.db.corrupt` when it fits a quarter of the volume limit), and the
+  and recreated (reset only: no migration; the old file is kept as
+  `state.db.corrupt.<UTC time>`, newest two copies, when it fits a quarter
+  of the volume limit), and the
   reset is documented.
 
 ### Naming standard
@@ -773,8 +774,8 @@ pre-rename `problem`, `reason`, `signal`, `knowledge`, `core`, `story`, and
 Verify imports with `rg` and run the architecture check after package changes.
 Persisted state changes require a schema version bump in
 `internal/storage`, the reset path (the old file is deleted and a fresh store
-is created and the old one is kept once as `state.db.corrupt`; there is no
-migration), recovery guidance, and tests.
+is created and the old one is kept as `state.db.corrupt.<UTC time>`, newest two
+copies; there is no migration), recovery guidance, and tests.
 
 Do not use a broad mechanical rewrite to conceal domain changes. Preserve
 load-bearing behavior listed above unless a reviewed design change approves
@@ -792,7 +793,7 @@ compatibility constructors, setters, aliases, or wrappers merely to preserve
 old tests or historical call paths. Migrate callers to the canonical contract
 and remove the obsolete seam. Persisted data follows the reset-only policy:
 a schema version bump makes the next start delete the state file and begin
-fresh, with no migration (the old file is kept once as `state.db.corrupt`),
+fresh, with no migration (the old file is kept as `state.db.corrupt.<UTC time>`, newest two copies),
 and the change is documented in the release notes.
 
 Before adding a long-running component, define its owner, required or optional
@@ -882,8 +883,8 @@ and transition-based counters.
 Persisted formats change only with a schema version bump. Any persisted change
 requires the reset path (no migration), recovery guidance, and
 round-trip tests. A state file that bbolt cannot read, or that has another
-schema version (older or newer), is moved to `state.db.corrupt` (one copy,
-kept only when it fits a quarter of the volume limit, else deleted) and
+schema version (older or newer), is moved to `state.db.corrupt.<UTC time>` (newest two
+copies kept, each only when it fits a quarter of the volume limit, else deleted) and
 replaced by a fresh store. The reset is counted in
 `kwatch_storage_resets_total` by reason and shown on `/health` as
 `storage_reset` for the rest of the session.

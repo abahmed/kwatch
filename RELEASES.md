@@ -4,6 +4,12 @@
 
 ### Highlights
 
+- **The `KwatchConfig` API is now `kwatch.abahmed.dev/v1beta1`.** The CRD
+  serves both `v1beta1` (stored) and `v1alpha1` (deprecated) with the same
+  schema, so existing `v1alpha1` objects keep working without any change and
+  are read as `v1beta1`. Update the `apiVersion` in your manifests when
+  convenient; `kubectl` prints a deprecation warning for `v1alpha1`.
+
 - **Messages quote the latest evidence.** When a finding's summary or
   evidence changed after its incident had formed (a restart count, the
   last run), the incident kept the first copy and a later update showed
@@ -2145,7 +2151,7 @@ Versions are always computed from existing tags — maintainers never type a ver
 only choose which part moves.
 
 > **Tag hygiene:** only `-rc.<N>` pre-releases are recognised. The workflow matches
-> `vX.Y.Z` for stable tags and `vX.Y.Z-rc.<N>` for RCs, exactly. A tag like `v1.0.0-rc.1`
+> `vX.Y.Z` for stable tags and `vX.Y.Z-rc.<N>` for RCs, exactly. A tag like `v1.0.0-beta.1` or `v1.0.0-rc1`
 > is ignored by both, so do not create other pre-release forms — the version computation
 > will behave as if it does not exist.
 

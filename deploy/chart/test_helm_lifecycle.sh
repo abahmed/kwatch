@@ -35,7 +35,7 @@ helm install "$release" deploy/chart \
   --wait=false
 
 kubectl apply -f - <<'EOF'
-apiVersion: kwatch.abahmed.dev/v1alpha1
+apiVersion: kwatch.abahmed.dev/v1beta1
 kind: KwatchConfig
 metadata:
   name: lifecycle-check
