@@ -26,7 +26,7 @@ func newFakeKwatchConfigClient(
 
 func kwatchConfigObject(name string) *unstructured.Unstructured {
 	obj := &unstructured.Unstructured{Object: map[string]interface{}{
-		"apiVersion": "kwatch.abahmed.dev/v1alpha1",
+		"apiVersion": "kwatch.abahmed.dev/v1beta1",
 		"kind":       "KwatchConfig",
 	}}
 	obj.SetNamespace("default")

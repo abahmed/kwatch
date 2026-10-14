@@ -268,8 +268,8 @@ hold for the same object and class, made after the snapshot, wins over
 as before. Records carry a version, and one of a newer version is skipped.
 
 Reset: if the file has another schema version or bbolt cannot read it, kwatch
-renames it to `state.db.corrupt` (one copy; a later reset replaces it) and
-starts fresh. Only structural errors reset: a locked or inaccessible file
+renames it to `state.db.corrupt.<UTC time>` (the newest two copies are kept)
+and starts fresh. Only structural errors reset: a locked or inaccessible file
 fails startup instead. The reset is logged and shown in `/health`. A single
 record that does not decode is skipped and counted. There is no migration
 before the first stable release. To reset by hand, stop kwatch and delete

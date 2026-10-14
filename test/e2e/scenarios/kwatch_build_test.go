@@ -29,7 +29,7 @@ const (
 )
 
 var kwatchConfigResource = schema.GroupVersionResource{
-	Group: "kwatch.abahmed.dev", Version: "v1alpha1", Resource: "kwatchconfigs",
+	Group: "kwatch.abahmed.dev", Version: "v1beta1", Resource: "kwatchconfigs",
 }
 
 // DeleteLeader deletes the Pod that holds the Lease and waits for another
@@ -141,7 +141,7 @@ func activeProbeSpec() map[string]any {
 func (s *Scenario) CreateKwatchConfig(name string, spec map[string]any) {
 	s.T.Helper()
 	object := &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion": "kwatch.abahmed.dev/v1alpha1",
+		"apiVersion": "kwatch.abahmed.dev/v1beta1",
 		"kind":       "KwatchConfig",
 		"metadata": map[string]any{
 			"name": name, "namespace": kwatchNamespace,

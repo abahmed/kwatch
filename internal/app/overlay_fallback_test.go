@@ -17,7 +17,7 @@ import (
 )
 
 var kwatchConfigResource = schema.GroupVersionResource{
-	Group: "kwatch.abahmed.dev", Version: "v1alpha1",
+	Group: "kwatch.abahmed.dev", Version: "v1beta1",
 	Resource: "kwatchconfigs",
 }
 
@@ -25,7 +25,7 @@ func overlayClient(
 	spec map[string]interface{},
 ) *dynamicfake.FakeDynamicClient {
 	obj := &unstructured.Unstructured{Object: map[string]interface{}{
-		"apiVersion": "kwatch.abahmed.dev/v1alpha1",
+		"apiVersion": "kwatch.abahmed.dev/v1beta1",
 		"kind":       "KwatchConfig",
 		"metadata": map[string]interface{}{
 			"name": "kwatch", "namespace": "kwatch",

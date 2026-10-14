@@ -15,6 +15,8 @@ implementation-only notes may remain beside code when they are not published.
 
 - [Project README](../README.md) — product overview and quick installation.
 - [`kwatch.sh` manager](./kwatch-sh.md) — installer and day-to-day manager.
+- [Upgrading from v0.10.x to v1.0.0](./upgrading-to-1.0.md) — what to change
+  before the upgrade, what happens on first start, and how to roll back.
 - [Real-cluster scenarios](../test/e2e/README.md) — regression scenarios and
   the contributor workflow.
 - [Configuration catalog](../deploy/config-catalog.tsv) — generated settings

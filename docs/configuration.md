@@ -930,7 +930,7 @@ not affected. An overlay cannot turn Secret watching back on when
 | `crd.enabled` | Watch `KwatchConfig` CRs and restart kwatch when the overlay changes (default: false for the binary; true in Helm and the interactive installer) |
 
 ```yaml
-apiVersion: kwatch.abahmed.dev/v1alpha1
+apiVersion: kwatch.abahmed.dev/v1beta1
 kind: KwatchConfig
 metadata:
   name: kwatch-config
@@ -940,3 +940,5 @@ spec:
   silences:
     - namespaces: ["kube-system"]
 ```
+
+`v1beta1` is the current API version. Objects written as `v1alpha1` keep working and are served as `v1beta1`, but `v1alpha1` is deprecated; change `apiVersion` to `kwatch.abahmed.dev/v1beta1` when convenient.
