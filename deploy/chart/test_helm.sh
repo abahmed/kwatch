@@ -379,11 +379,12 @@ render_notes() {
     --show-only templates/notes-test.yaml "$@" 2>&1
 }
 OUT_NOTES=$(render_notes)
-grep -Fq "can read" <<<"$OUT_NOTES" &&
-  grep -Fq "every Secret" <<<"$OUT_NOTES" &&
-  grep -Fq "watch.secrets=false" <<<"$OUT_NOTES" || {
-  echo "FAIL: default install must warn that Secrets are readable"; exit 1;
-}
+for want in "can read" "every Secret" "watch.secrets=false"; do
+  if ! grep -Fq "$want" <<<"$OUT_NOTES"; then
+    echo "FAIL: default install must warn that Secrets are readable"
+    exit 1
+  fi
+done
 grep -Fq "rbac.mode=least-privilege" <<<"$OUT_NOTES" || {
   echo "FAIL: warning must say how to restrict"; exit 1;
 }
