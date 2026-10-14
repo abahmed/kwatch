@@ -1,0 +1,7 @@
+POST /send_simple
+Content-Type: application/x-www-form-urlencoded
+
+from=*KWATCH1
+secret=<redacted>
+text=🟠 kwatch started and found 2 problems that were there.
+to=ABCD1234

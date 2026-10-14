@@ -292,6 +292,9 @@ func route(
 	if p.Root.Namespace != "" {
 		namespaces[p.Root.Namespace] = true
 	}
+	for _, ns := range p.Spaces {
+		namespaces[ns] = true
+	}
 	for _, s := range members {
 		if s.Entity.Namespace != "" {
 			namespaces[s.Entity.Namespace] = true
@@ -307,16 +310,8 @@ func route(
 	}
 	return notification.Route{
 		Namespaces: sortedSet(namespaces), Reasons: sortedSet(reasons),
-		Severity: severity, Owners: ownerList(p.Owner),
+		Severity: severity, Owners: p.Owners,
 	}
-}
-
-// ownerList is the owner as the list a route carries.
-func ownerList(owner string) []string {
-	if owner == "" {
-		return nil
-	}
-	return []string{owner}
 }
 
 func sortedSet(values map[string]bool) []string {

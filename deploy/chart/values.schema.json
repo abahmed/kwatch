@@ -740,6 +740,14 @@
           "default": [],
           "description": "Node address ranges the kubelet egress rule is limited to; empty allows any address on kubeletPort"
         },
+        "healthIngressFrom": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "default": [],
+          "description": "NetworkPolicy peers (namespaceSelector, podSelector or ipBlock) allowed to reach the health port besides the release namespace, such as a Prometheus namespace"
+        },
         "extraEgressPorts": {
           "type": "array",
           "items": {

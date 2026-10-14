@@ -45,6 +45,14 @@ func TestCausePhraseNeverShowsIdentifiers(t *testing.T) {
 			Root:    inventory.CoreID(kube.KindRegistry, "", "r.example"),
 			Summary: "registry r.example (Auth) explains 3 failures"},
 			cart, "registry r.example rejects the credentials"},
+		"registry rate limit": {rootcause.CauseRecord{
+			Rule: "registry-refuses", Mode: "RateLimit",
+			Root: inventory.CoreID(kube.KindRegistry, "", "r.example")},
+			cart, "registry r.example is rate limiting pulls"},
+		"registry unreachable": {rootcause.CauseRecord{
+			Rule: "registry-refuses", Mode: "Unreachable",
+			Root: inventory.CoreID(kube.KindRegistry, "", "r.example")},
+			cart, "registry r.example cannot be reached"},
 		"scheduling": {rootcause.CauseRecord{Rule: "scheduler-capacity",
 			Root: inventory.CoreID(rootcause.KindScheduling, "",
 				"Insufficient cpu")}, cart, "no node has enough cpu"},

@@ -73,6 +73,13 @@ func TestWorkloadScaledToZeroDaysAgoPerHistoryIsOnlyInformational(
 ) {
 	m, api := zeroShop()
 	scaledAt := t0.Add(-3 * 24 * time.Hour)
+	// The change is older than the model keeps, as in a real cluster;
+	// the spec write time is what tells how long it has been parked.
+	put(m, api, t0.Add(-10*time.Minute), map[string]inventory.Value{
+		kube.AttrReplicas:       inventory.Number(0),
+		kube.AttrTemplateLabels: inventory.Text("app=api"),
+		kube.AttrSpecWritten:    inventory.Time(scaledAt),
+	})
 	m.Apply(inventory.Observation{
 		Kind: inventory.Changed, Source: "test", At: scaledAt, Entity: api,
 		Change: inventory.Change{Entity: api, At: scaledAt,
@@ -269,4 +276,13 @@ func TestWorkloadScaledToZeroWithFewOthersStillWarns(t *testing.T) {
 
 	require.Len(t, got, 1)
 	assert.Equal(t, reasons.ScaledToZeroRouted, got[0].Reason)
+}
+
+// The model keeps changes for inventory.ChangeRetention only, so a wider
+// search would promise a "who scaled it" that is never there.
+func TestScaleChangeWindowMatchesWhatTheModelKeeps(t *testing.T) {
+	if scaleChangeWindow != inventory.ChangeRetention {
+		t.Fatalf("scaleChangeWindow = %v, the model keeps %v",
+			scaleChangeWindow, inventory.ChangeRetention)
+	}
 }

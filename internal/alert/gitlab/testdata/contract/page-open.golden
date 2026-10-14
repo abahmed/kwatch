@@ -1,0 +1,16 @@
+--- request 1 of 2
+GET /projects/group%2Fproject/issues?in=description&search=kwatchkeyd0603fe338e68c0e&state=opened
+Content-Type: application/json
+PRIVATE-TOKEN: <redacted>
+
+(empty body)
+
+--- request 2 of 2
+POST /projects/group%2Fproject/issues
+Content-Type: application/json
+PRIVATE-TOKEN: <redacted>
+
+{
+  "description": "🔴 payments in shop is crash-looping. It ran out of memory 3 times in 10 minutes. Try kubectl -n shop describe pod payments-1.\n\n```\npanic: out of memory\n```\n\nRef: kwatchkeyd0603fe338e68c0e",
+  "title": "🔴 payments in shop is crash-looping."
+}

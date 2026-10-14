@@ -36,16 +36,18 @@ func nodeBackWithPod(c *cluster, n1 *corev1.Node, w *workload) {
 }
 
 // pageFlapsReopens: a node that pages goes down and comes back, then
-// fails again twice more within two hours. Only the first failure pages;
-// each return is an update in the same thread under the same alert.
+// fails again twice more within two hours. The first failure pages, and the
+// last return, which lasts, pages once more; the others do not. Each return
+// is an update in the same thread under the same alert.
 func pageFlapsReopens() scenario {
 	return scenario{
 		expect: expectation{
 			Name: "page-flaps-reopens",
 			Description: "A node that pages fails again twice more " +
 				"within two hours of resolving; the first message " +
-				"pages and the returns do not.",
-			Root: "node//n1", Tier: "page", MaxMessages: 5,
+				"pages, the returns do not, and the last return, " +
+				"which lasts, pages once more.",
+			Root: "node//n1", Tier: "page", MaxMessages: 5, MaxPages: 2,
 			MustNotBlame: []string{"deployment/shop/api"},
 			Tail:         duration(10 * time.Minute),
 		},

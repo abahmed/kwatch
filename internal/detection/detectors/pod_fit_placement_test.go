@@ -1,6 +1,7 @@
 package detectors
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -97,5 +98,44 @@ func TestFitPodSelectorOutsideNamespaceIgnored(t *testing.T) {
 		inventory.EntityID{Kind: kube.KindNode, Name: "n1"})
 	pod := fitPending(m, "p", 1000, kube.SchedulingSpec{
 		Anti: []kube.PodTerm{webTerm}})
+	assert.Empty(t, fitOf(t, m, pod))
+}
+
+// hostPortsOf is how the inventory records a pod's host ports.
+func hostPortsOf(ports ...string) map[string]inventory.Value {
+	return map[string]inventory.Value{
+		kube.AttrHostPorts: inventory.Text(strings.Join(ports, ","))}
+}
+
+func TestFitHostPortConflictNamesThePodHoldingIt(t *testing.T) {
+	m := newTestModel()
+	fitNodeIn(m, "n1", "a", "z", 4000, nil)
+	fitNodeIn(m, "n2", "b", "z", 4000, nil)
+	holder := capPod(m, "proxy", "n1", "Running", 100, 0)
+	observeEntity(m, holder, podNodeNow, hostPortsOf("TCP/0.0.0.0/8080"))
+	other := capPod(m, "proxy2", "n2", "Running", 100, 0)
+	observeEntity(m, other, podNodeNow, hostPortsOf("TCP/10.0.0.1/8080"))
+	pod := fitPending(m, "p", 1000, kube.SchedulingSpec{})
+	observeEntity(m, pod, podNodeNow, hostPortsOf("TCP/0.0.0.0/8080"))
+
+	got := fitLines(fitOf(t, m, pod), detection.EvidenceFit)
+
+	assert.Equal(t, []string{
+		"pool a: the closest node, n1, already runs d/proxy using host " +
+			"port TCP 8080, which the pod needs",
+		"pool b: the closest node, n2, already runs d/proxy2 using host " +
+			"port TCP 10.0.0.1:8080, which the pod needs",
+	}, got)
+}
+
+func TestFitHostPortFreeOnOtherNodeIsNoBlock(t *testing.T) {
+	m := newTestModel()
+	fitNodeIn(m, "n1", "a", "z", 4000, nil)
+	fitNodeIn(m, "n2", "a", "z", 4000, nil)
+	holder := capPod(m, "proxy", "n1", "Running", 100, 0)
+	observeEntity(m, holder, podNodeNow, hostPortsOf("TCP/0.0.0.0/8080"))
+	pod := fitPending(m, "p", 1000, kube.SchedulingSpec{})
+	observeEntity(m, pod, podNodeNow, hostPortsOf("TCP/0.0.0.0/8080"))
+
 	assert.Empty(t, fitOf(t, m, pod))
 }

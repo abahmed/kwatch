@@ -15,6 +15,7 @@ func lifecycleScenarios() []scenario {
 	return []scenario{
 		oomLimitTooLow(), flappingWorkload(), twoIndependentProblems(),
 		causeRevised(), coldStartPreexisting(),
+		startMidOutageMissingSecret(),
 	}
 }
 

@@ -78,7 +78,8 @@ type IncidentStore interface {
 
 // restoreGrace is how long restored incidents wait for their findings to be
 // re-raised before they may recover. It covers the longest detector
-// threshold.
+// threshold, and runs from the restore and again from the source sync
+// (see reconcileDowntime): sustains are counted from what kwatch observed.
 const restoreGrace = 10 * time.Minute
 
 // saveInterval bounds how stale persisted incidents can be when nothing is
@@ -121,6 +122,9 @@ type Engine struct {
 	// storage writes incidents and history to the store.
 	storage *persistence
 	stats   workerStats
+	// started is when Run began: the floor of observation-time
+	// findings (see explain.Snapshot.Started).
+	started time.Time
 }
 
 // NewEngine validates dependencies and builds an engine.
@@ -163,6 +167,7 @@ func (e *Engine) SourcesSynced() {
 // before it returns. Each iteration waits for something to do, then
 // steps: drain, evaluate, tick and announce.
 func (e *Engine) Run(ctx context.Context) error {
+	e.started = e.deps.Clock.Now()
 	if err := e.restore(); err != nil {
 		return err
 	}
@@ -207,6 +212,7 @@ func (e *Engine) reconcileDowntime() {
 	}
 	e.storage.reconciled = true
 	e.announcer.collect.Startup.OpenWindow(e.deps.Clock.Now())
+	e.deps.Incidents.ExtendGrace(e.deps.Clock.Now().Add(restoreGrace))
 	// Split before draining: a kind synced now has submitted its list.
 	compare, carried := splitSaved(e.storage.saved, e.deps.Synced)
 	e.storage.saved, e.storage.carried = nil, carried
@@ -341,6 +347,7 @@ func (e *Engine) evaluate(
 func (e *Engine) solve(now time.Time, transitions []detection.Transition) {
 	snapshot := explain.NewSnapshot(e.deps.Model, e.activeFindings(),
 		e.deps.Synced, now)
+	snapshot.Started = e.started
 	e.deps.Incidents.Apply(snapshot, e.moved.take(), transitions)
 	e.announcer.investigateOpened(now)
 }

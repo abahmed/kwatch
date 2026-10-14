@@ -153,12 +153,12 @@ talks to the outside world.
 
 | Parameter | What it does |
 |:---|---|
-| `app.proxyURL` | 🔗 Proxy for outgoing HTTP requests |
+| `app.proxyURL` | 🔗 Proxy for outgoing HTTP requests. An invalid URL fails startup. A URL with credentials (`http://user:pass@host`) must be an absolute `${file:/path}` reference |
 | `app.clusterName` | 🏷️ Name shown in alerts so you know which cluster |
 | `app.disableStartupMessage` | Silence the "kwatch is alive" welcome message |
 | `app.logFormatter` | Log format: `text` (default) or `json`. `json` writes one JSON object per log line to stderr. Any other value fails startup |
 | `app.insecureSkipTLSVerify` | 🔓 Skip TLS verification on outbound HTTP (default: false) |
-| `app.caBundlePath` | 📜 Path to a PEM CA bundle for outbound HTTP |
+| `app.caBundlePath` | 📜 Path to a PEM CA bundle for outbound HTTP. A missing or invalid bundle fails startup |
 
 The startup message and the upgrade notice are each a single plain sentence
 with one status emoji and no links, for example `🟡 kwatch v1.2.0 started.` and
@@ -461,7 +461,11 @@ In both modes:
 - Secrets are covered by the grant but their values are hashed in the
   informer transform and never stored.
 
-**Secrets: the trade-off.** Watching Secrets is on by default. It lets kwatch
+**Secrets: the trade-off.** Watching Secrets is on by default, so by
+default kwatch's ServiceAccount can read every Secret in the cluster. The
+chart prints a warning after install and kwatch logs one INFO line at
+startup while Secrets are watched. `rbac.mode: least-privilege` alone does
+not remove the access; only `watch.secrets: false` does. It lets kwatch
 notice that a Pod references a missing Secret, that a changed Secret
 (by value hash, never by value) may explain a restart, and that a
 certificate Secret has expired. The cost is RBAC: the default chart
@@ -875,8 +879,11 @@ summary` when the decision was held for that message, `paging` when only
 paging tools and issue trackers receive it, and absent for a message of its
 own.
 
-File output is append-only. Configure rotation and retention in the container
-runtime or log collector; kwatch does not rename or delete audit files.
+The audit log is not kept in the state file, so it has no retention period of
+its own. On `stdout`, retention is whatever your log collector keeps. A file
+output is bounded at 10 MiB: kwatch then renames it to `<path>.1`, replacing
+the previous backup, so at most about 20 MiB of audit history stays on disk.
+Ship the file to a collector if you need longer history.
 
 ### 📋 CRD — configuration overlay with automatic restart
 

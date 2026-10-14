@@ -1,0 +1,8 @@
+POST /api/services/notify/mobile_app_kwatch
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "message": "✅ payments in shop is healthy again.",
+  "title": "kwatch alert"
+}

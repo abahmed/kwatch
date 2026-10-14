@@ -1,0 +1,25 @@
+POST /services/collector/event
+Content-Type: application/json
+Authorization: Splunk <redacted>
+
+{
+  "event": {
+    "cluster": "dev",
+    "incidentKey": "kwatch-dev-p-42",
+    "message": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+    "namespaces": [
+      "shop"
+    ],
+    "reasons": [
+      "OOMKilled"
+    ],
+    "revision": 3,
+    "severity": "critical",
+    "source": "kwatch",
+    "state": "resolved",
+    "status": "resolved",
+    "title": "✅ payments in shop is healthy again."
+  },
+  "index": "k8s",
+  "sourcetype": "kwatch:incident"
+}

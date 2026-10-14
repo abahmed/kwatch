@@ -1,0 +1,10 @@
+POST /v2/send
+Content-Type: application/json
+
+{
+  "message": "🔴 payments in shop is crash-looping.\nIt said boom *x* @channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop",
+  "number": "+12025550199",
+  "recipients": [
+    "+12025550100"
+  ]
+}

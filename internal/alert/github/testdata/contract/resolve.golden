@@ -1,0 +1,19 @@
+--- request 1 of 2
+POST /repos/kwatch/kwatch/issues/42/comments
+Content-Type: application/json
+Authorization: Bearer <redacted>
+Accept: application/vnd.github+json
+
+{
+  "body": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart."
+}
+
+--- request 2 of 2
+PATCH /repos/kwatch/kwatch/issues/42
+Content-Type: application/json
+Authorization: Bearer <redacted>
+Accept: application/vnd.github+json
+
+{
+  "state": "closed"
+}

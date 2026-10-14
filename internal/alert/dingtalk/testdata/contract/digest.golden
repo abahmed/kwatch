@@ -1,0 +1,10 @@
+POST /robot/send?access_token=<redacted>&sign=<redacted>&timestamp=<redacted>
+Content-Type: application/json
+
+{
+  "markdown": {
+    "text": "🟠 kwatch started and found 2 problems that were there.",
+    "title": "🟠 kwatch started and found 2 problems."
+  },
+  "msgtype": "markdown"
+}

@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -81,6 +82,7 @@ func validateSecretReferences(raw string) error {
 		[]string{"heartbeatMonitor", "url"},
 		&errs,
 	)
+	validateProxyCredentials(root, &errs)
 	alert := yamlMapValue(root, "alert")
 	if alert != nil {
 		validateAlertSecrets(alert, &errs)
@@ -229,4 +231,22 @@ func validateFileReference(
 			path,
 		),
 	)
+}
+
+// proxyUserinfoRe finds credentials (user@ or user:pass@) in the authority
+// part of a URL, written literally or built from ${VAR} references.
+var proxyUserinfoRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*://[^/?#]*@`)
+
+// validateProxyCredentials requires a proxy URL that carries credentials to
+// be an absolute ${file:/path} reference, like every other secret. A URL
+// without credentials stays plain text.
+func validateProxyCredentials(root *yaml.Node, errs *[]error) {
+	node := yamlMapValue(yamlMapValue(root, "app"), "proxyURL")
+	if node == nil || node.Kind != yaml.ScalarNode ||
+		!proxyUserinfoRe.MatchString(node.Value) {
+		return
+	}
+	*errs = append(*errs, errors.New(
+		"app.proxyURL carries credentials and must use an absolute "+
+			"${file:/path} reference"))
 }

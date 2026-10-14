@@ -57,7 +57,17 @@ func (Event) Detect(
 	}
 	out := make([]detection.Finding, 0, len(order))
 	for _, key := range order {
-		out = append(out, byReason[key].finding(key))
+		if key == reasons.VolumeMultiAttach && !sustained(ctx,
+			"multi-attach", ctx.Onset("multi-attach", byReason[key].first),
+			DefaultMultiAttachHold) {
+			continue
+		}
+		found := byReason[key].finding(key)
+		if key == reasons.VolumeMultiAttach {
+			found.Evidence = append(found.Evidence, heldEvidence(ctx, e,
+				byReason[key].newest.Message)...)
+		}
+		out = append(out, found)
 	}
 	return append(out, unusualEvents(ctx, e)...)
 }
@@ -66,11 +76,15 @@ func (Event) Detect(
 // but findings are keyed by reason.
 type eventGroup struct {
 	newest   inventory.Note
+	first    time.Time
 	severity detection.Severity
 	count    int
 }
 
 func (g *eventGroup) add(note inventory.Note, severity detection.Severity) {
+	if g.first.IsZero() || note.At.Before(g.first) {
+		g.first = note.At
+	}
 	if note.At.After(g.newest.At) || g.newest.Reason == "" {
 		g.newest = note
 	}

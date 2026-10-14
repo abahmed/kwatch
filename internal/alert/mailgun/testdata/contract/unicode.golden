@@ -1,0 +1,11 @@
+POST /mg.example.com/messages
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic <redacted>
+
+from=kwatch@example.com
+subject=🔴 сервис «платежи» в shop падает — 支付失败 ñandú.
+text=🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).
+
+> паника: нехватка памяти — 内存不足
+to=ops@example.com
+to=oncall@example.com

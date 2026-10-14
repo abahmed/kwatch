@@ -1,0 +1,11 @@
+SMTP /
+Content-Type: text/plain; charset=UTF-8
+From: kwatch@example.com
+To: ops@example.com, oncall@example.com
+Subject: 🟠 kwatch started and found 2 problems.
+Mime-Version: 1.0
+Content-Transfer-Encoding: quoted-printable
+X-Kwatch-Cluster: dev
+X-Kwatch-Alert-Key: <redacted>
+
+🟠 kwatch started and found 2 problems that were there.

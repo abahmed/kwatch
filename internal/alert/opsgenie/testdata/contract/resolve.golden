@@ -1,0 +1,5 @@
+POST /v2/alerts/kwatch-dev-p-42/close?identifierType=alias
+Content-Type: application/json
+Authorization: GenieKey <redacted>
+
+{}

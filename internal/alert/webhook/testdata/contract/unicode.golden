@@ -1,0 +1,32 @@
+POST /
+Content-Type: application/json
+X-Team: ops
+Authorization: Basic <redacted>
+
+{
+  "alertKey": "kwatch-dev-p-uni",
+  "cluster": "dev",
+  "key": "p-uni",
+  "lines": [
+    "payments ran out of memory 3 times."
+  ],
+  "marker": "🔴",
+  "note": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).",
+  "output": [
+    "паника: нехватка памяти — 内存不足"
+  ],
+  "resolved": false,
+  "revision": 1,
+  "route": {
+    "Namespaces": [
+      "shop"
+    ],
+    "Reasons": [
+      "OOMKilled"
+    ],
+    "Severity": "critical"
+  },
+  "short": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú.",
+  "status": "critical",
+  "title": "платежи упали в магазине"
+}

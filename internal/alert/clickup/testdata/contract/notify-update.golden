@@ -1,0 +1,7 @@
+POST /task/t1/comment
+Content-Type: application/json
+Authorization: <redacted>
+
+{
+  "comment_text": "🔴 payments in shop is still crash-looping. It restarted 5 times now.\n\n```\npanic: out of memory\n```"
+}

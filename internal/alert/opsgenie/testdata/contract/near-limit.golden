@@ -1,0 +1,15 @@
+POST /v2/alerts
+Content-Type: application/json
+Authorization: GenieKey <redacted>
+
+{
+  "alias": "kwatch-dev-p-big",
+  "description": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[14995 runes sha256:483fc2dee489fc4757aadf3e]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\npa…",
+  "details": {
+    "Cluster": "dev",
+    "Namespace": "shop",
+    "Reason": "OOMKilled"
+  },
+  "message": "🔴 payments in shop is crash-looping.",
+  "priority": "P1"
+}

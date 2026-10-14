@@ -1,0 +1,10 @@
+PUT /_matrix/client/v3/rooms/%21room:example/send/m.room.message/kwatch-8497c82d7742065ef285dcfa79f933c4
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "body": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+  "format": "org.matrix.custom.html",
+  "formatted_body": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+  "msgtype": "m.text"
+}

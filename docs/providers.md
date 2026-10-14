@@ -790,6 +790,12 @@ dedicated page for — an IRC bot, a home-grown dashboard, a Zapier-style glue j
 | `alert.webhook.basicAuth.username` | 👤 Basic-auth username |
 | `alert.webhook.basicAuth.password` | 🔑 Basic-auth password |
 
+A malformed `headers` entry (not a name and value pair, or a header name or value
+HTTP cannot carry, such as a newline) or a `basicAuth` with only one of
+username and password fails startup, so the provider never runs without its
+credentials. An `http://` URL with headers or basic auth starts with a warning,
+because the credentials travel unencrypted.
+
 > Requests are sent as `POST` with `Content-Type: application/json` unless one of your
 > `headers` sets `Content-Type` itself.
 
@@ -824,3 +830,24 @@ object. Plain operator messages keep their own small shape
 
 The same flag fields (`opens`, `pagingOnly`, `skipPaging`, `carrier`,
 `reopenWithinSeconds`) are added to Splunk events when set.
+
+## Provider contract tests and the opt-in smoke test
+
+Every provider has a contract test (`TestContract` in its package) that
+renders a fixed set of messages (page-tier open, notify update, resolve,
+digest, markdown with code, unicode and a message near the provider's size
+limit) against a recording server and compares the exact request with a
+golden file in `testdata/contract/`. Secrets, signatures and timestamps are
+redacted and JSON keys are sorted. Goldens change only with a scoped
+update, for example
+`go test ./internal/alert/slack -run 'TestContract/resolve$' -update`;
+`KWATCH_UPDATE_ALL=1` is the deliberate full regeneration.
+
+`make provider-smoke` sends one real open and resolve to the accounts you
+configure, for Slack, PagerDuty, Opsgenie, Teams and a generic webhook. It
+reads `KWATCH_SMOKE_SLACK_WEBHOOK`, `KWATCH_SMOKE_PAGERDUTY_KEY`,
+`KWATCH_SMOKE_OPSGENIE_KEY`, `KWATCH_SMOKE_TEAMS_WEBHOOK` and
+`KWATCH_SMOKE_WEBHOOK_URL`, and skips every provider whose variable is
+unset. It is not part of `make verify` or CI, and no CI secrets are
+configured. To run it nightly, export the variables from a scheduler you
+own and run the target there.

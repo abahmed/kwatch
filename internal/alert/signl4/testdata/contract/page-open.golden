@@ -1,0 +1,11 @@
+POST /<secret>
+Content-Type: application/json
+
+{
+  "X-S4-ExternalID": "kwatch-dev-p-42",
+  "X-S4-Status": "new",
+  "message": "🔴 payments in shop is crash-looping. It ran out of memory 3 times in 10 minutes. Try kubectl -n shop describe pod payments-1.\n\nLast output:\npanic: out of memory\n\nCluster: dev",
+  "severity": "critical",
+  "title": "🔴 payments in shop is crash-looping.",
+  "user": "kwatch"
+}

@@ -1,0 +1,26 @@
+POST /
+Content-Type: application/json
+
+{
+  "dedup_key": "kwatch-dev-p-42",
+  "event_action": "trigger",
+  "payload": {
+    "custom_details": {
+      "cluster": "dev",
+      "details": "🔴 payments in shop is crash-looping. It ran out of memory 3 times in 10 minutes. Try kubectl -n shop describe pod payments-1.",
+      "namespaces": [
+        "shop"
+      ],
+      "output": [
+        "panic: out of memory"
+      ],
+      "reasons": [
+        "OOMKilled"
+      ]
+    },
+    "severity": "critical",
+    "source": "dev",
+    "summary": "🔴 payments in shop is crash-looping."
+  },
+  "routing_key": "<secret>"
+}

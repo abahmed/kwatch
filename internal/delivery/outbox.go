@@ -1,7 +1,6 @@
 package delivery
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/safego"
 )
 
 // The outbox persists every queued delivery so a crash or a shutdown that
@@ -65,6 +65,9 @@ type OutboxRecord struct {
 	Incident *notification.Message `json:"incident,omitempty"`
 	// Queued is when the job was first queued.
 	Queued time.Time `json:"queued"`
+	// Attempts counts the sends that began and did not come back: a
+	// crash or a provider panic. Zero for records of older versions.
+	Attempts int `json:"attempts,omitempty"`
 }
 
 // ErrOutboxBusy means the final outbox write did not return in time. The
@@ -83,6 +86,9 @@ type outbox struct {
 	// live is every record on disk or waiting to be written, with the
 	// time its job was queued, for the size and age bounds.
 	live map[string]time.Time
+	// rewritten marks pending puts that replace a record which may
+	// already be on disk, so removing the job must delete that record.
+	rewritten map[string]struct{}
 	// sweepEvery is the age sweep interval; tests shorten it.
 	sweepEvery time.Duration
 	// drainGrace is outboxDrainGrace unless a test shortens it.
@@ -92,6 +98,9 @@ type outbox struct {
 	after func(d time.Duration) <-chan time.Time
 	// failedWrites counts consecutive failed batches, for the backoff.
 	failedWrites int
+	// sick reports that the writer keeps failing (true) or works again
+	// (false); nil when nobody listens.
+	sick func(bool)
 
 	wake    chan struct{}
 	stop    chan struct{}
@@ -105,13 +114,14 @@ type outbox struct {
 func newOutbox(store OutboxStore, now func() time.Time) *outbox {
 	return &outbox{
 		store: store, now: now,
-		puts:    make(map[string]OutboxRecord),
-		removes: make(map[string]struct{}),
-		live:    make(map[string]time.Time),
-		wake:    make(chan struct{}, 1),
-		stop:    make(chan struct{}),
-		done:    make(chan struct{}),
-		after:   time.After,
+		puts:      make(map[string]OutboxRecord),
+		removes:   make(map[string]struct{}),
+		live:      make(map[string]time.Time),
+		rewritten: make(map[string]struct{}),
+		wake:      make(chan struct{}, 1),
+		stop:      make(chan struct{}),
+		done:      make(chan struct{}),
+		after:     time.After,
 	}
 }
 
@@ -177,51 +187,17 @@ func (o *outbox) publishDepthLocked() {
 	metrics.DefaultRegistry().Delivery.OutboxDepth.Store(int64(len(o.live)))
 }
 
-// sweepExpired drops the records whose jobs are older than outboxMaxAge.
-// The jobs themselves are given up by the worker when it reaches them.
-func (o *outbox) sweepExpired(now time.Time) {
-	o.mu.Lock()
-	for id, queued := range o.live {
-		if now.Sub(queued) > outboxMaxAge {
-			o.removeLocked(id)
-			recordOutboxDrop(id, "expired")
-		}
-	}
-	o.publishDepthLocked()
-	o.mu.Unlock()
-	o.signal()
-}
-
 func (o *outbox) removeLocked(id string) {
 	delete(o.live, id)
-	if _, pending := o.puts[id]; pending {
+	_, rewritten := o.rewritten[id]
+	delete(o.rewritten, id)
+	if _, pending := o.puts[id]; pending && !rewritten {
 		// Never written, so there is nothing to delete on disk.
 		delete(o.puts, id)
 		return
 	}
+	delete(o.puts, id)
 	o.removes[id] = struct{}{}
-}
-
-// enforceBoundLocked drops the oldest records over outboxMaxEntries. The
-// job itself stays queued in memory; only its crash protection is lost.
-func (o *outbox) enforceBoundLocked() {
-	for len(o.live) > outboxMaxEntries {
-		oldest := ""
-		for id := range o.live {
-			if oldest == "" || id < oldest {
-				oldest = id
-			}
-		}
-		o.removeLocked(oldest)
-		recordOutboxDrop(oldest, "outbox_full")
-	}
-}
-
-func recordOutboxDrop(id, reason string) {
-	metrics.DefaultRegistry().OutboxDropped.Add(1)
-	klog.V(2).InfoS("outbox record dropped",
-		"component", "delivery", "operation", "outbox",
-		"id", id, "reason", reason)
 }
 
 func (o *outbox) signal() {
@@ -231,96 +207,35 @@ func (o *outbox) signal() {
 	}
 }
 
-// start launches the writer once. Later calls do nothing.
-func (o *outbox) start(ctx context.Context) {
-	if o == nil {
-		return
-	}
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	if o.running {
-		return
-	}
-	o.running = true
-	go o.run(ctx)
-}
-
-// outboxDrainGrace bounds how long the writer keeps writing after its
-// context ended. Delivery drains after that, and every job it delivers
-// removes a record; a crash during the drain must not leave those
-// records behind to be sent again. close ends the writer sooner.
-const outboxDrainGrace = 30 * time.Second
-
-// run writes batches and sweeps expired records until close is called, or
-// until outboxDrainGrace after ctx ended.
-func (o *outbox) run(ctx context.Context) {
-	defer close(o.done)
-	every := o.sweepEvery
-	if every <= 0 {
-		every = outboxSweepInterval
-	}
-	sweep := time.NewTicker(every)
-	defer sweep.Stop()
-	ended := ctx.Done()
-	var grace, retry <-chan time.Time
-	for {
-		select {
-		case <-ended:
-			ended = nil
-			timer := time.NewTimer(o.graceAfterContext())
-			defer timer.Stop()
-			grace = timer.C
-		case <-grace:
-			return
-		case <-o.stop:
-			return
-		case <-sweep.C:
-			o.sweepExpired(o.now())
-		case <-o.wake:
-			retry = o.flushOrRetry(retry)
-		case <-retry:
-			retry = o.flushOrRetry(nil)
-		}
-	}
-}
-
-func (o *outbox) graceAfterContext() time.Duration {
-	if o.drainGrace > 0 {
-		return o.drainGrace
-	}
-	return outboxDrainGrace
-}
-
-// flushOrRetry writes the buffer and, when the batch failed, arms a
-// backed-off retry unless one is already pending, so a failed write is not
-// left waiting for the next change or the age sweep.
-func (o *outbox) flushOrRetry(pending <-chan time.Time) <-chan time.Time {
-	if o.flush() {
-		o.failedWrites = 0
-		return pending
-	}
-	o.failedWrites++
-	if pending != nil {
-		return pending
-	}
-	return o.after(o.retryDelay())
-}
-
 // flush writes every buffered change in one batch and reports whether the
-// write failed. A failed batch is put back, so the next flush retries it.
-func (o *outbox) flush() (ok bool) {
+// write succeeded.
+func (o *outbox) flush() bool {
+	ok, _ := o.flushBatch()
+	return ok
+}
+
+// flushBatch is flush that also reports whether there was a batch to
+// write. A failed batch, or one whose write panicked, is put back before
+// the panic goes on, so the next flush retries it.
+func (o *outbox) flushBatch() (ok, wrote bool) {
 	o.mu.Lock()
 	if o.sealed {
 		o.mu.Unlock()
-		return true
+		return true, false
 	}
 	puts, removes := o.puts, o.removes
 	o.puts = make(map[string]OutboxRecord)
 	o.removes = make(map[string]struct{})
 	o.mu.Unlock()
 	if len(puts) == 0 && len(removes) == 0 {
-		return true
+		return true, false
 	}
+	written := false
+	defer func() {
+		if !written {
+			o.restoreBatch(puts, removes)
+		}
+	}()
 	putList := make([]OutboxRecord, 0, len(puts))
 	for _, record := range puts {
 		putList = append(putList, record)
@@ -333,10 +248,10 @@ func (o *outbox) flush() (ok bool) {
 		metrics.DefaultRegistry().OutboxWriteFailures.Add(1)
 		klog.ErrorS(err, "write delivery outbox",
 			"component", "delivery", "operation", "outbox")
-		o.restoreBatch(puts, removes)
-		return false
+		return false, true
 	}
-	return true
+	written = true
+	return true, true
 }
 
 // restoreBatch puts a failed batch back unless newer changes replaced it.
@@ -381,7 +296,10 @@ func (o *outbox) close(timeout time.Duration) error {
 	final := make(chan struct{})
 	go func() {
 		defer close(final)
-		o.flush()
+		safego.Report(safego.Run("outbox-final", func() error {
+			o.flush()
+			return nil
+		}))
 		o.mu.Lock()
 		o.sealed = true
 		o.mu.Unlock()

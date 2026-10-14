@@ -33,6 +33,7 @@ const maxQuote = 120
 func changeSentences(f caseFacts) []sentence {
 	if f.p.Cause == nil || f.p.Cause.Change == nil ||
 		systemChange(*f.p.Cause.Change) || hasRevisionEdits(f) ||
+		causeRuleIs(f, heldVolumeRules...) ||
 		hasConfigVersion(f) ||
 		policyBlocksCall(f.p.Cause) {
 		return nil
@@ -172,7 +173,7 @@ func actorOr(actor, fallback string) string {
 // causeProofSentences are the cause's supporting proof, such as "Only pods
 // of the new revision fail."
 func causeProofSentences(f caseFacts) []sentence {
-	if f.p.Cause == nil ||
+	if f.p.Cause == nil || causeRuleIs(f, heldVolumeRules...) ||
 		f.p.Cause.Root.Kind == explain.KindFailureSignature {
 		// A shared error has no evidence beyond what its lead says.
 		return nil

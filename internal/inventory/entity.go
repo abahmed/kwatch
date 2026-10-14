@@ -42,29 +42,3 @@ func (e Entity) Attribute(name string) (Attribute, bool) {
 	attribute, ok := e.Attributes[name]
 	return attribute, ok
 }
-
-func (e Entity) clone() Entity {
-	out := e
-	out.Attributes = make(map[string]Attribute, len(e.Attributes))
-	for name, attribute := range e.Attributes {
-		out.Attributes[name] = attribute
-	}
-	return out
-}
-
-// setAttribute records value for name, observed at at. A value that did
-// not change only refreshes Updated; a boolean that did change adds a
-// flip.
-func (r *record) setAttribute(name string, value Value, at time.Time) {
-	current, ok := r.entity.Attributes[name]
-	if ok && current.Value.Equal(value) {
-		current.Updated = at
-		r.entity.Attributes[name] = current
-		return
-	}
-	next := Attribute{Value: value, Since: at, Updated: at}
-	if _, isBool := value.AsBool(); ok && isBool {
-		next.Flips = withFlip(current.Flips, at)
-	}
-	r.entity.Attributes[name] = next
-}

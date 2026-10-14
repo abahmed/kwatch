@@ -135,7 +135,7 @@ func changedSentences(f caseFacts) []sentence {
 
 // spreadSentences say what newly fails, one sentence per condition,
 // led by the incident's subject: "payments in shop is spreading to
-// pods a and b: they have not been ready for three minutes." A cause
+// payments-api and cart: they have not been ready for three minutes." A cause
 // that now shows its own condition is not spreading: "API service m
 // now reports …".
 func spreadSentences(f caseFacts, spread []detection.Finding) []sentence {
@@ -164,7 +164,7 @@ func spreadSentences(f caseFacts, spread []detection.Finding) []sentence {
 		byState[state] = append(byState[state], s.Entity)
 	}
 	for i, state := range order {
-		ids := byState[state]
+		ids := workloadsOf(f, byState[state])
 		text := capitalName(home, f.leadName(home)+" is spreading to ")
 		switch {
 		case i > 0:

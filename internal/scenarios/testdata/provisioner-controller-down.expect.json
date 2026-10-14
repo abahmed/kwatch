@@ -1,0 +1,11 @@
+{
+  "name": "provisioner-controller-down",
+  "description": "A claim stays Pending because the CSI controller that serves its StorageClass's provisioner has no ready pods.",
+  "root": "deployment/kube-system/ebs-csi-controller",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "storageclass//gp"
+  ]
+}

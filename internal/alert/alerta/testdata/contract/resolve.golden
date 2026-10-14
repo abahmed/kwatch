@@ -1,0 +1,20 @@
+POST /api/alert
+Content-Type: application/json
+Authorization: Key <redacted>
+
+{
+  "attributes": {
+    "reason": "OOMKilled",
+    "summary": "✅ payments in shop is healthy again."
+  },
+  "environment": "Staging",
+  "event": "incident",
+  "resource": "dev/kwatch-p-42",
+  "service": [
+    "kwatch"
+  ],
+  "severity": "normal",
+  "status": "closed",
+  "text": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+  "value": "✅ payments in shop is healthy again."
+}

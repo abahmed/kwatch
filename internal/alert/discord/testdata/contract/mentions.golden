@@ -1,0 +1,11 @@
+POST /api/v9/webhooks/123/<secret>
+Content-Type: application/json
+
+{
+  "allowed_mentions": {
+    "parse": [],
+    "replied_user": false
+  },
+  "components": null,
+  "content": "🔴 payments in shop is crash-looping. It said \"@​channel @​everyone \\<​!here\\> @​all \\<​@U123\\> \\<​@W456\\> \\<​\\#C1\\|general\\>\".\nIt said `@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>`\n```\n@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n```\n```\nlog: @​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n```"
+}

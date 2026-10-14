@@ -1,0 +1,15 @@
+POST /v2/alerts
+Content-Type: application/json
+Authorization: GenieKey <redacted>
+
+{
+  "alias": "kwatch-dev-p-uni",
+  "description": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\nпаника: нехватка памяти — 内存不足",
+  "details": {
+    "Cluster": "dev",
+    "Namespace": "shop",
+    "Reason": "OOMKilled"
+  },
+  "message": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú.",
+  "priority": "P1"
+}

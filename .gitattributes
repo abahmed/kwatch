@@ -1,1 +1,4 @@
 internal/scenarios/testdata/messages/*.golden whitespace=-blank-at-eof
+# Provider contract goldens record exact request bytes (CRLF mail
+# lines, spaces before split form fields), so whitespace is content.
+internal/alert/*/testdata/contract/*.golden -whitespace

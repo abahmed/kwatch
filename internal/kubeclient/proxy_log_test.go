@@ -1,53 +1,24 @@
 package kubeclient
 
 import (
-	"bytes"
-	"net/http"
 	"strings"
 	"testing"
-
-	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/config"
 )
 
-func TestNewHTTPClientInvalidProxyLogsNoCredentials(t *testing.T) {
-	var out bytes.Buffer
-	klog.LogToStderr(false)
-	klog.SetOutput(&out)
-	t.Cleanup(func() {
-		klog.Flush()
-		klog.SetOutput(nil)
-		klog.LogToStderr(true)
-	})
-
-	client := NewHTTPClient(config.ApplicationRuntime{
+// An invalid proxy must stop startup, and the error must not quote the
+// credentials in the URL.
+func TestNewHTTPClientInvalidProxyFailsWithoutCredentials(t *testing.T) {
+	client, err := NewHTTPClient(config.ApplicationRuntime{
 		ProxyURL: "http://user:s3cret@proxy:bad-port/",
 	})
-	klog.Flush()
 
-	if client == nil {
-		t.Fatal("client is nil")
+	if err == nil || client != nil {
+		t.Fatalf("want an error and no client, got %v, %v", client, err)
 	}
-	logged := out.String()
-	if !strings.Contains(logged, "invalid outbound proxy URL") {
-		t.Fatalf("missing proxy error log: %q", logged)
-	}
-	if strings.Contains(logged, "s3cret") || strings.Contains(logged, "user:") {
-		t.Fatalf("proxy credentials logged: %q", logged)
-	}
-}
-
-func TestNewHTTPClientInvalidProxyDisablesEnvironmentProxy(t *testing.T) {
-	client := NewHTTPClient(config.ApplicationRuntime{
-		ProxyURL: "http://proxy:bad-port/",
-	})
-
-	transport, ok := client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("unexpected transport %T", client.Transport)
-	}
-	if transport.Proxy != nil {
-		t.Fatal("an invalid proxy must not fall back to the environment")
+	if strings.Contains(err.Error(), "s3cret") ||
+		strings.Contains(err.Error(), "user:") {
+		t.Fatalf("proxy credentials in the error: %v", err)
 	}
 }

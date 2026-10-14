@@ -10,7 +10,8 @@ import (
 // nodeAgentScenarios are node-level agents that live outside
 // kube-system.
 func nodeAgentScenarios() []scenario {
-	return []scenario{agentOutsideKubeSystem()}
+	return append([]scenario{agentOutsideKubeSystem()},
+		nodeAgentSingleScenarios()...)
 }
 
 // agentOutsideKubeSystem: a log shipper DaemonSet of the observability

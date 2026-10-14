@@ -123,8 +123,8 @@ func (f *FeiShu) Name() string {
 func (f *FeiShu) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
-	text := safetext.NoteWithOutput(
-		m.NoteText(), m.Output, "\n\n", feiShuTextLimit)
+	text := safetext.RichWithOutput(m,
+		notification.FeishuDialect(), "\n\n", feiShuTextLimit)
 	body, err := f.buildRequestBodyFeiShu(text)
 	if err != nil {
 		return err
@@ -166,7 +166,8 @@ func (f *FeiShu) sendByFeiShuApi(
 
 // SendMessage sends text message to the provider
 func (f *FeiShu) SendMessage(ctx context.Context, msg string) error {
-	body, err := f.buildRequestBodyFeiShu(msg)
+	body, err := f.buildRequestBodyFeiShu(notification.Truncate(
+		notification.NeutralizeFeishuMentions(msg), feiShuTextLimit))
 	if err != nil {
 		return err
 	}

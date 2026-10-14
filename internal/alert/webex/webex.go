@@ -13,6 +13,10 @@ import (
 
 const webexAPIURL = "https://webexapis.com/v1/messages"
 
+// webexMarkdownLimit is Webex's documented cap on a message's text or
+// markdown, 7439 bytes.
+const webexMarkdownLimit = 7439
+
 type webexPayload struct {
 	RoomID        string `json:"roomId,omitempty"`
 	ToPersonEmail string `json:"toPersonEmail,omitempty"`
@@ -72,9 +76,10 @@ func (w *Webex) Name() string {
 func (w *Webex) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
-	return w.SendMessage(ctx, safetext.RichWithOutput(m,
-		notification.MarkdownDialect(
-			notification.NeutralizeWebexMentions, "\n\n"), "\n\n", 0))
+	d := notification.MarkdownDialect(
+		notification.NeutralizeWebexMentions, "\n\n")
+	return w.SendMessage(ctx,
+		safetext.RichWithOutput(m, d, "\n\n", webexMarkdownLimit))
 }
 
 // SendMessage sends text message to the provider
@@ -82,7 +87,7 @@ func (w *Webex) SendMessage(ctx context.Context, msg string) error {
 	payload := webexPayload{
 		RoomID:        w.roomID,
 		ToPersonEmail: w.toPersonEmail,
-		Markdown:      msg,
+		Markdown:      notification.Truncate(msg, webexMarkdownLimit),
 	}
 
 	body, err := json.Marshal(payload)

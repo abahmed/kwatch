@@ -104,6 +104,8 @@ type DynamicSource struct {
 	// safety timer (retryDue), not on every triggered discovery.
 	refused  map[schema.GroupVersionResource]*refusal
 	retryDue bool
+	// panics counts consecutive informer panics per type, for backoff.
+	panics map[schema.GroupVersionResource]int
 	// parked holds stopped watches of types the budget dropped. Their
 	// entities stay in the model until the type is watched again.
 	parked map[schema.GroupVersionResource]*dynamicWatch

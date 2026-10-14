@@ -95,6 +95,8 @@ func TestHeldRepeatKeepsPageReminder(t *testing.T) {
 	r.raise(at(raiseAt), nodeDown())
 	tickEvery(r, raiseAt, raiseAt+DefaultSettle+time.Minute)
 	start := r.only().Announced
+	wantAction(t, r.tick(start.Add(DefaultPageSettle+DefaultHold)), Update,
+		ReasonMaterialChange)
 	wantAction(t, r.tick(start.Add(PageRemindAfter)), Update, ReasonReminder)
 }
 

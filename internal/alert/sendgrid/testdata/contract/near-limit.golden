@@ -1,0 +1,28 @@
+POST /
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "content": [
+    {
+      "type": "text/plain",
+      "value": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[9974 runes sha256:e3228c66b478bde1c6cf34b3]…xxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\n> panic: out of memory"
+    }
+  ],
+  "from": {
+    "email": "kwatch@example.com"
+  },
+  "personalizations": [
+    {
+      "to": [
+        {
+          "email": "ops@example.com"
+        },
+        {
+          "email": "oncall@example.com"
+        }
+      ]
+    }
+  ],
+  "subject": "🔴 payments in shop is crash-looping."
+}

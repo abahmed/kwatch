@@ -44,6 +44,7 @@ var causeWords = map[string]causeWording{
 		words: "is bound to a volume in a zone with no node for the pod"},
 	"cluster-dns-failing":          {words: "is not resolving names"},
 	"cluster-dns-servers":          {words: "is not resolving names"},
+	"cluster-dns-server-workload":  {words: "is not resolving names"},
 	"config-missing-or-changed":    {words: "does not exist"},
 	"configmap-missing-or-changed": {words: "does not exist"},
 	"controller-failing": {
@@ -83,6 +84,8 @@ var causeWords = map[string]causeWording{
 	"node-memory-pressure-unready": {words: "is low on memory"},
 	"node-network":                 {words: "has lost its network"},
 	"node-agent-failing": {
+		words: "serves every pod on that node and is failing"},
+	"node-agent-named-by-error": {
 		words: "serves every pod on that node and is failing"},
 	"node-not-ready":     {words: "is not ready"},
 	"node-overcommitted": {words: "is overcommitted on memory"},
@@ -124,6 +127,15 @@ var causeWords = map[string]causeWording{
 	// shared-failure-signature is worded by signatureLead.
 	"shared-failure-signature": {
 		words: "is the error several workloads fail with"},
+	"volume-held-by-pod": {words: "still holds the volume"},
+	"volume-held-by-node": {
+		words: "still has the volume attached"},
+	"provisioner-down": {
+		words: "runs the claim's provisioner and has no ready pods"},
+	"provisioner-down-pending": {
+		words: "runs the claim's provisioner and has no ready pods"},
+	"claim-no-storage-class": {
+		words: "sets no storage class and the cluster has no default one"},
 	"storage-class-missing":         {words: "does not exist"},
 	"storage-class-missing-pending": {words: "does not exist"},
 	"startup-budget-too-short": {own: true,
@@ -145,7 +157,11 @@ func ownCause(cause *rootcause.CauseRecord) bool {
 // finding of its own.
 func causeWordsFor(cause *rootcause.CauseRecord) string {
 	if cause.Root.Kind == kube.KindRegistry {
-		if words, ok := pullWords[strings.ToLower(string(cause.Mode))]; ok {
+		class := strings.ToLower(string(cause.Mode))
+		if alias, ok := pullClassOfMode[class]; ok {
+			class = alias
+		}
+		if words, ok := pullWords[class]; ok {
 			return strings.TrimPrefix(words, "the registry ")
 		}
 	}
@@ -166,6 +182,13 @@ func causeWordsFor(cause *rootcause.CauseRecord) string {
 		return wording.words
 	}
 	return "is failing"
+}
+
+// pullClassOfMode names the pull class of the two registry modes whose
+// lowercase name differs from it.
+var pullClassOfMode = map[string]string{
+	"ratelimit":   "rate-limit",
+	"unreachable": "network",
 }
 
 // webhookCallWords say how a webhook the API server could not call

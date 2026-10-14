@@ -1,0 +1,8 @@
+POST /
+Content-Type: application/x-www-form-urlencoded
+
+api_key=<redacted>
+api_secret=<redacted>
+from=kwatch
+text=🔴 сервис «платежи» в shop падает — 支付失败 ñandú.
+to=+12025550100

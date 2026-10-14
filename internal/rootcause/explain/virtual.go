@@ -29,6 +29,7 @@ const metricsAPIMarker = "metrics.k8s.io"
 // objects never fan out to every webhook in the cluster.
 func (v *view) virtualHops(id inventory.EntityID) []hop {
 	var out []hop
+	out = append(out, v.dnsWorkloadHops(id)...)
 	if id.Kind == kube.KindPod && v.dnsServer(id) {
 		out = append(out, hop{link: LinkContains, to: kube.ClusterDNS})
 	} else if id.Kind == kube.KindPod {
@@ -37,6 +38,7 @@ func (v *view) virtualHops(id inventory.EntityID) []hop {
 		out = append(out, v.policyHops(id)...)
 		out = append(out, v.schedulingHops(id)...)
 		out = append(out, v.claimHops(id)...)
+		out = append(out, v.holdHops(id)...)
 		out = append(out, v.accessHops(id)...)
 		out = append(out, v.removedNodeHops(id)...)
 		out = append(out, v.helperHops(id)...)
@@ -45,6 +47,9 @@ func (v *view) virtualHops(id inventory.EntityID) []hop {
 		out = append(out, v.missingServiceHops(id)...)
 		out = append(out, v.agentHops(id)...)
 		out = append(out, v.preemptionHops(id)...)
+	}
+	if id.Kind == kube.KindPVC {
+		out = append(out, v.provisionerHops(id)...)
 	}
 	if id.Kind == kube.KindContainer {
 		out = append(out, v.initWaitHops(id)...)
@@ -72,16 +77,6 @@ func (v *view) virtualHops(id inventory.EntityID) []hop {
 		}
 	}
 	return append(out, v.controlPlaneHops(id)...)
-}
-
-// dnsServer reports whether a pod serves the cluster DNS: it belongs
-// to the coredns or kube-dns Deployment of kube-system.
-func (v *view) dnsServer(pod inventory.EntityID) bool {
-	if pod.Namespace != "kube-system" {
-		return false
-	}
-	top := rootcause.TopOwner(v.s.Model, pod)
-	return top != pod && kube.DNSServerNames[top.Name]
 }
 
 // dnsSignalled reports whether any failure's error text shows name

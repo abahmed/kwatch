@@ -1,0 +1,10 @@
+POST /
+Content-Type: application/json
+
+{
+  "description": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\nпаника: нехватка памяти — 内存不足",
+  "event_id": "kwatch-dev-p-uni",
+  "message": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú.",
+  "severity": "critical",
+  "status": "trigger"
+}

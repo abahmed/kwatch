@@ -1,0 +1,8 @@
+POST /api/v1/messages
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic <redacted>
+
+content=🟠 kwatch started and found 2 problems that were there.
+subject=kwatch alert
+to=alerts
+type=stream

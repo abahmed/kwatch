@@ -1,0 +1,9 @@
+POST /list/abc123/task
+Content-Type: application/json
+Authorization: <redacted>
+
+{
+  "markdown_description": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\n```\nпаника: нехватка памяти — 内存不足\n```",
+  "name": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú.",
+  "priority": 2
+}

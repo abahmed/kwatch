@@ -1,0 +1,8 @@
+POST /trigger/kw/with/key/<secret>
+Content-Type: application/json
+
+{
+  "value1": "✅ payments in shop is healthy again.",
+  "value2": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+  "value3": "resolved"
+}

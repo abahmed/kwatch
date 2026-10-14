@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -73,24 +74,31 @@ func TestComponentSupervisorMarksOptionalFailureDegraded(t *testing.T) {
 	supervisor := newComponentSupervisor(time.Now)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	started := make(chan struct{})
+	reported := make(chan struct{})
 	var gotError error
+	var once sync.Once
 	supervisor.startOptional(
 		ctx,
 		componentSpec{
-			name:    "optional-test-component",
-			onError: func(err error) { gotError = err },
+			name: "optional-test-component",
+			onError: func(err error) {
+				once.Do(func() {
+					gotError = err
+					close(reported)
+				})
+			},
 			run: func(context.Context) error {
-				close(started)
 				return errors.New("optional failure")
 			},
 		},
 	)
 
+	// Cancel only after the failure was reported: a failure that races
+	// with shutdown is a clean stop and is rightly not reported.
 	select {
-	case <-started:
-	case <-time.After(time.Second):
-		t.Fatal("optional component did not start")
+	case <-reported:
+	case <-time.After(5 * time.Second):
+		t.Fatal("optional failure was never reported")
 	}
 	cancel()
 	supervisor.wg.Wait()
@@ -177,4 +185,28 @@ func TestOptionalBackoffResetsAfterHealthyRun(t *testing.T) {
 	if sleep != optionalRestartInitial || next != 2*time.Second {
 		t.Fatalf("sleep=%s next=%s after a healthy run", sleep, next)
 	}
+}
+
+func TestOptionalComponentThatPanicsIsRestarted(t *testing.T) {
+	supervisor := newComponentSupervisor(time.Now)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runs := make(chan struct{}, 4)
+	supervisor.startOptional(ctx, componentSpec{
+		name: "panicky",
+		run: func(context.Context) error {
+			runs <- struct{}{}
+			panic("bad payload")
+		},
+	})
+
+	for i := 0; i < 2; i++ {
+		select {
+		case <-runs:
+		case <-time.After(5 * time.Second):
+			t.Fatal("component was not restarted after a panic")
+		}
+	}
+	cancel()
+	supervisor.wg.Wait()
 }

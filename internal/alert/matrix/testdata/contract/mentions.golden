@@ -1,0 +1,10 @@
+PUT /_matrix/client/v3/rooms/%21room:example/send/m.room.message/kwatch-5210ff7b5f2f6303d9c37ad2d99edce0
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "body": "🔴 payments in shop is crash-looping. It said \"@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\".\nIt said @​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n\nlog: @​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>",
+  "format": "org.matrix.custom.html",
+  "formatted_body": "🔴 payments in shop is crash-looping. It said &#34;@​channel @​everyone &lt;​!here&gt; @​all &lt;​@U1…[495 runes sha256:a8b84808b790fe2c23255ba4]…nnel @​everyone &lt;​!here&gt; @​all &lt;​@U123&gt; &lt;​@W456&gt; &lt;​#C1|general&gt;</code></pre>",
+  "msgtype": "m.text"
+}

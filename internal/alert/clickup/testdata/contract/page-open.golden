@@ -1,0 +1,9 @@
+POST /list/abc123/task
+Content-Type: application/json
+Authorization: <redacted>
+
+{
+  "markdown_description": "🔴 payments in shop is crash-looping. It ran out of memory 3 times in 10 minutes. Try kubectl -n shop describe pod payments-1.\n\n```\npanic: out of memory\n```",
+  "name": "🔴 payments in shop is crash-looping.",
+  "priority": 2
+}

@@ -1,0 +1,19 @@
+POST /api/alert
+Content-Type: application/json
+Authorization: Key <redacted>
+
+{
+  "attributes": {
+    "reason": "OOMKilled",
+    "summary": "🔴 payments in shop is crash-looping."
+  },
+  "environment": "Staging",
+  "event": "incident",
+  "resource": "dev/kwatch-p-big",
+  "service": [
+    "kwatch"
+  ],
+  "severity": "critical",
+  "text": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[3025 runes sha256:3e75606c5354f1855de2209c]…xxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nLast output:\npanic: out of memory",
+  "value": "🔴 payments in shop is crash-looping."
+}

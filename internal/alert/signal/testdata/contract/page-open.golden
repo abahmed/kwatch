@@ -1,0 +1,10 @@
+POST /v2/send
+Content-Type: application/json
+
+{
+  "message": "🔴 payments in shop is crash-looping. It ran out of memory 3 times in 10 minutes. Try kubectl -n shop describe pod payments-1.\n\n> panic: out of memory",
+  "number": "+12025550199",
+  "recipients": [
+    "+12025550100"
+  ]
+}

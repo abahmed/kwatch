@@ -100,7 +100,7 @@ func (a *announcer) announce(
 	decisions, rolled := a.collect.CollectRollup(ctx, now, decisions)
 	expired := a.expireHeld(ctx, now)
 	a.deliver(ctx, now, a.splitRecoveries(decisions))
-	a.joint = nil
+	a.flushJoint(ctx, now)
 	closed := a.collect.CloseListings(ctx)
 	listed := a.collect.ListRestored(ctx, now)
 	return summarised || digested || grouped || rolled || closed ||

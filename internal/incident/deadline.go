@@ -83,7 +83,9 @@ func (m *Manager) openDeadline(
 	esc, escOK := escalationDeadline(p)
 	due, ok = soonest(due, ok, esc, escOK)
 	held, heldOK := heldDeadline(p, now)
-	return soonest(due, ok, held, heldOK)
+	due, ok = soonest(due, ok, held, heldOK)
+	page, pageOK := m.heldPageDeadline(p)
+	return soonest(due, ok, page, pageOK)
 }
 
 // heldDeadline is when a material change held back by MaterialGap may

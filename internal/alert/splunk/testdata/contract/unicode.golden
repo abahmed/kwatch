@@ -1,0 +1,28 @@
+POST /services/collector/event
+Content-Type: application/json
+Authorization: Splunk <redacted>
+
+{
+  "event": {
+    "cluster": "dev",
+    "incidentKey": "kwatch-dev-p-uni",
+    "message": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).",
+    "namespaces": [
+      "shop"
+    ],
+    "output": [
+      "паника: нехватка памяти — 内存不足"
+    ],
+    "reasons": [
+      "OOMKilled"
+    ],
+    "revision": 1,
+    "severity": "critical",
+    "source": "kwatch",
+    "state": "firing",
+    "status": "critical",
+    "title": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú."
+  },
+  "index": "k8s",
+  "sourcetype": "kwatch:incident"
+}

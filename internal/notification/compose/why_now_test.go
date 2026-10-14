@@ -2,6 +2,7 @@ package compose
 
 import (
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -163,4 +164,25 @@ func countOf(text, sub string) int {
 		}
 	}
 	return n
+}
+
+// The joined sentence carries the liveness numbers, so the sentence that
+// said them is dropped; the remedy it also held must survive, and the
+// numbers must still be said once.
+func TestWhyKeepsTheLivenessRemedyWhenItCarriesTheNumbers(t *testing.T) {
+	f := whyCase(reasons.LivenessKilled, []detection.Evidence{
+		ev(detection.EvidenceLivenessGives, "40s"),
+		ev(detection.EvidenceUsualStart, "75s"),
+		ev(detection.EvidenceStartSamples, "5")}, releaseAt(4, ""))
+	f.p.Cause = &rootcause.CauseRecord{Root: placeRoot,
+		Rule: "liveness-shorter-than-start", Score: 0.8}
+
+	var text string
+	for _, s := range arrange(noteSentences(announce(f.p), f)) {
+		text += s.text + "\n"
+	}
+
+	assert.Equal(t, 1, strings.Count(text, "startupProbe"), text)
+	assert.Equal(t, 1, strings.Count(text, "40s"), text)
+	assert.Contains(t, text, "killed before it finishes starting", text)
 }

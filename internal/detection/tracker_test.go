@@ -101,8 +101,9 @@ func TestObserveChangedOnModeChange(t *testing.T) {
 	tr.Observe(id, []Finding{finding})
 
 	finding.Summary = "Pod is still not ready after 5 minutes"
-	assert.Empty(t, tr.Observe(id, []Finding{finding}),
-		"summary text alone is not a change")
+	assert.Equal(t, []TransitionKind{Refreshed},
+		kinds(tr.Observe(id, []Finding{finding})),
+		"summary text alone is a refresh, not a change")
 
 	finding.Mode = "NotReady.Probe"
 	transitions := tr.Observe(id, []Finding{finding})

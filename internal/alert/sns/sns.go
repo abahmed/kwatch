@@ -101,7 +101,7 @@ const maxSubjectBytes = 99
 func (s *Sns) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
-	subject := s.subject
+	subject := asciiSubject(s.subject)
 	if len(subject) == 0 {
 		subject = asciiSubject(m.ShortText())
 	}
@@ -115,17 +115,59 @@ func (s *Sns) SendIncident(
 	return s.publish(ctx, form)
 }
 
-// asciiSubject keeps only what SNS accepts in a subject: printable ASCII
-// without line breaks, under 100 characters. The status emoji is dropped
-// because SNS rejects it; the message body keeps it.
+// subjectReplacer turns the Latin letters and typographic punctuation
+// that have a plain ASCII form into it, so a subject keeps its words.
+// Everything else outside ASCII (other scripts, emoji) has no trivial
+// form and is dropped.
+var subjectReplacer = strings.NewReplacer(
+	"à", "a", "á", "a", "â", "a", "ã", "a", "ä", "a", "å", "a", "ā", "a",
+	"À", "A", "Á", "A", "Â", "A", "Ã", "A", "Ä", "A", "Å", "A", "Ā", "A",
+	"ç", "c", "Ç", "C", "ć", "c", "č", "c", "Č", "C",
+	"è", "e", "é", "e", "ê", "e", "ë", "e", "ē", "e", "ę", "e",
+	"È", "E", "É", "E", "Ê", "E", "Ë", "E", "Ē", "E",
+	"ì", "i", "í", "i", "î", "i", "ï", "i", "ī", "i",
+	"Ì", "I", "Í", "I", "Î", "I", "Ï", "I", "Ī", "I",
+	"ñ", "n", "Ñ", "N", "ń", "n", "ł", "l", "Ł", "L",
+	"ò", "o", "ó", "o", "ô", "o", "õ", "o", "ö", "o", "ø", "o", "ō", "o",
+	"Ò", "O", "Ó", "O", "Ô", "O", "Õ", "O", "Ö", "O", "Ø", "O", "Ō", "O",
+	"ś", "s", "š", "s", "Š", "S", "ß", "ss",
+	"ù", "u", "ú", "u", "û", "u", "ü", "u", "ū", "u",
+	"Ù", "U", "Ú", "U", "Û", "U", "Ü", "U", "Ū", "U",
+	"ý", "y", "ÿ", "y", "Ý", "Y", "ź", "z", "ż", "z", "ž", "z", "Ž", "Z",
+	"æ", "ae", "Æ", "AE", "œ", "oe", "Œ", "OE",
+	"‘", "'", "’", "'", "“", `"`, "”", `"`, "«", `"`, "»", `"`,
+	"–", "-", "—", "-", "…", "...", "\u00a0", " ",
+)
+
+// asciiSubject makes value a subject SNS accepts: printable ASCII on one
+// line, shorter than 100 characters, starting with a letter, number or
+// punctuation mark. The status emoji and other characters with no ASCII
+// form are dropped (the message body keeps them), and the whitespace
+// around a dropped word collapses, so no gap is left.
 func asciiSubject(value string) string {
 	var b strings.Builder
-	for _, r := range value {
-		if r >= 0x20 && r <= 0x7e {
+	// dropped is set when a character was dropped since the last one
+	// written, so a pair of quotes that is empty only because of the
+	// drop can be removed while an empty pair in the subject stays.
+	dropped := false
+	for _, r := range subjectReplacer.Replace(value) {
+		switch {
+		case r == '"' && dropped && strings.HasSuffix(b.String(), `"`):
+			text := strings.TrimSuffix(b.String(), `"`)
+			b.Reset()
+			b.WriteString(text)
+			dropped = false
+		case r >= 0x21 && r <= 0x7e:
 			b.WriteRune(r)
+			dropped = false
+		case r == ' ' || r == '\t' || r == '\n' || r == '\r':
+			b.WriteByte(' ')
+		default:
+			dropped = true
 		}
 	}
-	subject := strings.TrimSpace(b.String())
+	text := b.String()
+	subject := strings.Join(strings.Fields(text), " ")
 	if len(subject) > maxSubjectBytes {
 		subject = strings.TrimSpace(subject[:maxSubjectBytes])
 	}

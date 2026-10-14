@@ -47,6 +47,12 @@ type expectation struct {
 	BootHeld bool `json:"bootHeld,omitempty"`
 	// MaxMessages bounds every message the scenario may produce.
 	MaxMessages int `json:"maxMessages"`
+	// MaxPages bounds the paging alerts the scenario may raise. Zero
+	// takes one per expected root: one page per outage.
+	MaxPages int `json:"maxPages,omitempty"`
+	// Alone marks a multi-node outage studied by itself: the staging day
+	// does not mix it in, as its messages would crowd one hour.
+	Alone bool `json:"alone,omitempty"`
 	// Unrelated lists roots of real incidents about other entities that
 	// may be heard before the failing workload's own (a node under
 	// pressure next to a bad rollout). They are not counted as the
@@ -120,7 +126,8 @@ func library() []scenario {
 		borderlineTrafficScenarios(), storageScenarios(),
 		admissionScenarios(), webhookTLSScenarios(),
 		policyAdmissionScenarios(), nodeDegradedScenarios(),
-		nodeAgentScenarios(), apiThrottlingScenarios(),
+		nodeAgentScenarios(), csiRegistrationScenarios(), kubeletCertScenarios(),
+		apiThrottlingScenarios(),
 		builtinKindScenarios(),
 		loadBalancerScenarios(),
 		trafficBackendScenarios(),
@@ -160,7 +167,7 @@ func library() []scenario {
 		replacedFindingScenarios(), sandboxBlipScenarios(),
 		upstreamReasonScenarios(),
 		crashCycleScenarios(), nodeChurnScenarios(),
-		ambiguousScenarios(),
+		ambiguousScenarios(), reachScenarios(), groupingScenarios(),
 	} {
 		out = append(out, group...)
 	}

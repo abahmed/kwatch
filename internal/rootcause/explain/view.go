@@ -220,7 +220,8 @@ func (v *view) errorText(id inventory.EntityID) string {
 // effectState is how a failing entity is matched as a row's effect.
 func (v *view) effectState(id inventory.EntityID) state {
 	return state{id: id, modes: findingModes(v.s.Findings[id]),
-		text: v.text(id), verdicts: v.containerVerdicts(id)}
+		text: v.text(id), errText: v.errorText(id),
+		verdicts: v.containerVerdicts(id)}
 }
 
 // causeState is how an upstream entity is matched as a row's cause:

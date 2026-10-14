@@ -1,0 +1,21 @@
+POST /services/collector/event
+Content-Type: application/json
+Authorization: Splunk <redacted>
+
+{
+  "event": {
+    "cluster": "dev",
+    "incidentKey": "kwatch-dev-startup/20260102T030405.000Z",
+    "message": "🟠 kwatch started and found 2 problems that were there.",
+    "namespaces": null,
+    "reasons": null,
+    "revision": 1,
+    "severity": "",
+    "source": "kwatch",
+    "state": "firing",
+    "status": "warning",
+    "title": "🟠 kwatch started and found 2 problems."
+  },
+  "index": "k8s",
+  "sourcetype": "kwatch:incident"
+}

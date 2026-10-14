@@ -55,6 +55,10 @@ func (d *Delivery) PageHeld() bool { return d.pageHeld }
 // incident keeps the page's reminders and history.
 func (d *Delivery) HoldAtNotify() { d.pageHeld = true }
 
+// ReleasePageHold ends the suppression of a repeated page that kept
+// failing, so the incident may page again.
+func (d *Delivery) ReleasePageHold() { d.pageHeld = false }
+
 // RolledUp reports an announcement a roll-up or summary carried.
 func (d *Delivery) RolledUp() bool { return d.rolledUp }
 

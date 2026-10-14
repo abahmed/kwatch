@@ -15,7 +15,8 @@ func withReason(t *testing.T, info ReasonInfo, fn func()) {
 	defer func() { reasonTable, modeByReason = saved, savedModes }()
 	reasonTable = buildReasonTable(
 		podReasons, nodeReasons, workloadReasons, serviceReasons,
-		eventOnlyReasons, upstreamReasons, []ReasonInfo{info},
+		eventOnlyReasons, upstreamReasons, admissionReasons,
+		[]ReasonInfo{info},
 	)
 	modeByReason = modesOf(reasonTable)
 	fn()

@@ -50,3 +50,27 @@ func TestNeutralizeMentionsBreaksRoom(t *testing.T) {
 		t.Fatalf("NeutralizeMentions = %q", got)
 	}
 }
+
+func TestNeutralizeMentionsBreaksSlackSpecials(t *testing.T) {
+	got := NeutralizeMentions("<!here> <!channel> <!subteam^S1> a <!-- b")
+	want := "<​!here> <​!channel> <​!subteam^S1> a <!-- b"
+	if got != want {
+		t.Fatalf("NeutralizeMentions = %q, want %q", got, want)
+	}
+}
+
+// User, bot and channel mentions of the Slack syntax are broken too, for
+// the webhooks that expand them without Slack's own escaping.
+func TestNeutralizeMentionsBreaksUserAndChannelRefs(t *testing.T) {
+	const zw = "​"
+	got := NeutralizeMentions("<@U123> <@W456> <#C1|general> <!subteam^S1>")
+	want := "<" + zw + "@U123> <" + zw + "@W456> <" + zw +
+		"#C1|general> <" + zw + "!subteam^S1>"
+	if got != want {
+		t.Fatalf("NeutralizeMentions = %q, want %q", got, want)
+	}
+	if got := NeutralizeMentions("a <#1> <!-- x -->"); got != "a <"+zw+
+		"#1> <!-- x -->" {
+		t.Fatalf("NeutralizeMentions = %q", got)
+	}
+}

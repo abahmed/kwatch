@@ -1,0 +1,10 @@
+{
+  "name": "provisioner-look-alike-workload",
+  "description": "A workload whose name only resembles the provisioner's is not blamed for an unbound claim.",
+  "root": "persistentvolumeclaim/data/orders-db",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/kube-system/ebs-billing-controller"
+  ]
+}

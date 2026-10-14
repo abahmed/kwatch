@@ -12,7 +12,7 @@ import (
 func pullLoginScenarios() []scenario {
 	return []scenario{
 		registryLoginExpired(), registryLoginMissingSecret(),
-		registryNoPullSecret(),
+		registryNoPullSecret(), registryRateLimited(),
 	}
 }
 
@@ -148,6 +148,38 @@ func registryNoPullSecret() scenario {
 				loginApp(c, "shop", "api"), loginApp(c, "shop", "worker"),
 			}
 			loginOutage(c, apps, loginAnswer)
+		},
+	}
+}
+
+// rateLimitAnswer is the registry's own words for a pull quota spent.
+const rateLimitAnswer = "toomanyrequests: You have reached your pull " +
+	"rate limit. You may increase the limit by authenticating and " +
+	"upgrading: https://www.docker.com/increase-rate-limit (429 Too " +
+	"Many Requests)"
+
+// registryRateLimited: two workloads pull with a valid login, and a new
+// node's pulls are all answered "429 Too Many Requests". The registry is
+// the root; no credential, node or workload is at fault.
+func registryRateLimited() scenario {
+	return scenario{
+		expect: expectation{
+			Name: "registry-rate-limited",
+			Description: "A new node's image pulls are all answered " +
+				"\"toomanyrequests\" (429 Too Many Requests) by the " +
+				"registry.",
+			Root: "registry//" + clusterRegistry, Tier: "notify",
+			MaxMessages: 2,
+			MustNotBlame: []string{"node//n3", "deployment/shop/api",
+				"deployment/shop/worker", "secret/shop/regcred"},
+		},
+		build: func(c *cluster) {
+			c.list(loginSecret(c, "shop", "regcred", time.Hour))
+			apps := []*workload{
+				loginApp(c, "shop", "api", "regcred"),
+				loginApp(c, "shop", "worker", "regcred"),
+			}
+			loginOutage(c, apps, rateLimitAnswer)
 		},
 	}
 }

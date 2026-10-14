@@ -1,0 +1,33 @@
+POST /
+Content-Type: application/json
+X-Team: ops
+Authorization: Basic <redacted>
+
+{
+  "alertKey": "kwatch-dev-p-big",
+  "cluster": "dev",
+  "key": "p-big",
+  "lines": [
+    "payments ran out of memory 3 times."
+  ],
+  "markdown": "🔴 payments in shop is crash-looping. Last output:\n\n\n```\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[2999 runes sha256:18780baa5e7cb813d24d1135]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n```",
+  "marker": "🔴",
+  "note": "🔴 payments in shop is crash-looping. Last output:\n```\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[2997 runes sha256:0f43022b1a37e78ef4fa966e]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n```",
+  "output": [
+    "panic: out of memory"
+  ],
+  "resolved": false,
+  "revision": 1,
+  "route": {
+    "Namespaces": [
+      "shop"
+    ],
+    "Reasons": [
+      "OOMKilled"
+    ],
+    "Severity": "critical"
+  },
+  "short": "🔴 payments in shop is crash-looping.",
+  "status": "critical",
+  "title": "payments crashed in shop"
+}

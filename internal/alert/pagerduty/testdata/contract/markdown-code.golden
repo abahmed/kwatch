@@ -1,0 +1,23 @@
+POST /
+Content-Type: application/json
+
+{
+  "dedup_key": "kwatch-dev-p-md",
+  "event_action": "trigger",
+  "payload": {
+    "custom_details": {
+      "cluster": "dev",
+      "details": "🔴 payments in shop is crash-looping.\nIt said boom *x* @channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop",
+      "namespaces": [
+        "shop"
+      ],
+      "reasons": [
+        "OOMKilled"
+      ]
+    },
+    "severity": "critical",
+    "source": "dev",
+    "summary": "🔴 payments in shop is crash-looping."
+  },
+  "routing_key": "<secret>"
+}

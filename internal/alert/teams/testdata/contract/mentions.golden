@@ -1,0 +1,30 @@
+POST /
+Content-Type: application/json
+
+{
+  "attachments": [
+    {
+      "content": {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "body": [
+          {
+            "text": "payments crashed in shop",
+            "type": "TextBlock",
+            "weight": "Bolder",
+            "wrap": true
+          },
+          {
+            "text": "🔴 payments in shop is crash-looping. It said \"@​channel @​everyone \\<​!here\\> @​all \\<​@U123\\> \\<​@W456\\> \\<​\\#C1\\|general\\>\".\n\nIt said `@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>`\n\n```\n@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n```\n\n```\nlog: @​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n```",
+            "type": "TextBlock",
+            "wrap": true
+          }
+        ],
+        "type": "AdaptiveCard",
+        "version": "1.2"
+      },
+      "contentType": "application/vnd.microsoft.card.adaptive"
+    }
+  ],
+  "text": "🔴 payments in shop is crash-looping. It said \"@​channel @​everyone \\<​!here\\> @​all \\<​@U123\\> \\<​@W456\\> \\<​\\#C1\\|general\\>\".\n\nIt said `@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>`\n\n```\n@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n```\n\n```\nlog: @​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n```",
+  "title": "payments crashed in shop"
+}

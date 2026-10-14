@@ -1,0 +1,14 @@
+POST /
+Content-Type: application/x-www-form-urlencoded
+
+Action=Publish
+Message=🟠 kwatch started and found 2 problems that were there.
+MessageAttributes.entry.1.Name=kwatch.key
+MessageAttributes.entry.1.Value.DataType=String
+MessageAttributes.entry.1.Value.StringValue=kwatch-dev-startup/20260102T030405.000Z
+MessageAttributes.entry.2.Name=kwatch.status
+MessageAttributes.entry.2.Value.DataType=String
+MessageAttributes.entry.2.Value.StringValue=warning
+Subject=kwatch started and found 2 problems.
+TopicArn=arn:aws:sns:us-east-1:123456789012:kwatch
+Version=2010-03-31

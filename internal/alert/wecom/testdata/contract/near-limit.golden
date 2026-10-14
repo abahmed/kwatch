@@ -1,0 +1,9 @@
+POST /cgi-bin/webhook/send?key=<redacted>
+Content-Type: application/json
+
+{
+  "markdown": {
+    "content": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[4070 runes sha256:b01c70bce6f1f16fe0b99735]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "msgtype": "markdown"
+}

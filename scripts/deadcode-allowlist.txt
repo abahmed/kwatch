@@ -1,0 +1,5 @@
+# Unreachable functions that must stay. Format: "path: Name" as printed by
+# scripts/check-deadcode.sh. Keep this file empty if possible.
+
+# Satisfies the provider interface; the test never calls it.
+internal/delivery/context_provider_test.go: contextRecordingProvider.Name

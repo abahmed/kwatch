@@ -1,0 +1,10 @@
+{
+  "name": "nodes-lost-same-zone",
+  "description": "Three of twelve nodes in one zone are lost at once: one page for the outage, not one per node.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 6,
+  "maxPages": 1,
+  "alone": true,
+  "tail": "20m0s"
+}

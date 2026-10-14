@@ -96,7 +96,7 @@ func (i ReasonInfo) label(text string) ReasonInfo {
 // lookups below read it, so no attribute is listed anywhere else.
 var reasonTable = buildReasonTable(
 	podReasons, nodeReasons, workloadReasons, serviceReasons,
-	eventOnlyReasons, upstreamReasons,
+	eventOnlyReasons, upstreamReasons, admissionReasons,
 )
 
 // buildReasonTable indexes the entries and fails fast on a reason that

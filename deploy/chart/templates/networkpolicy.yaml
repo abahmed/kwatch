@@ -19,8 +19,23 @@ spec:
     - Egress
   ingress:
     {{- if .Values.networkPolicy.allowDefaults }}
-    # Health port: kubelet probes and metrics scrapes.
-    - ports:
+    # Health port (/health, /metrics, /status): pods in this namespace,
+    # the node ranges in kubeletCIDRs (kubelet probes, when your network
+    # plugin enforces policy on node traffic) and the scrapers listed in
+    # healthIngressFrom. No other pod in the cluster can reach it.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+        {{- range .Values.networkPolicy.kubeletCIDRs }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
+        {{- range .Values.networkPolicy.healthIngressFrom }}
+        -
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      ports:
         - protocol: TCP
           port: {{ $port }}
     {{- end }}

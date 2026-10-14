@@ -36,6 +36,9 @@ const (
 	// SignalAdmissionPolicy is a ValidatingAdmissionPolicy denying a
 	// request.
 	SignalAdmissionPolicy Signal = "admission-policy-error"
+	// SignalNodeAgent is an error naming what a node agent does: the
+	// network plugin (CNI) or a storage driver (CSI) not ready.
+	SignalNodeAgent Signal = "node-agent-error"
 )
 
 // signalPatterns match each signal in lower-case text.
@@ -60,6 +63,12 @@ var signalPatterns = map[Signal]*regexp.Regexp{
 		`unable to handle the request \(get [a-z.]*metrics\.k8s\.io`),
 	SignalForbidden: regexp.MustCompile(`cannot (get|list|watch|create|` +
 		`update|patch|delete|deletecollection) resource`),
+	SignalNodeAgent: regexp.MustCompile(`network plugin is not ready|` +
+		`networkpluginnotready|cni plugin not initialized|` +
+		`failed to set ?up (pod )?network for sandbox|` +
+		`failed to set ?up sandbox container .*network|` +
+		`driver name \S+ not found in the list of registered csi|` +
+		`csinode \S+ does not contain driver`),
 	SignalTLS: regexp.MustCompile(`x509:|certificate has expired|` +
 		`tls: (bad|expired|unknown) certificate|certificate is not ` +
 		`yet valid`),
@@ -160,4 +169,17 @@ func classifyRegistryPull(text string) detection.Mode {
 		return pullUnexplained
 	}
 	return class
+}
+
+// certErrorPattern anchors the certificate errors a client prints when
+// it refuses a peer's certificate. The text is quoted, never read for
+// dates.
+var certErrorPattern = regexp.MustCompile(`(?i)x509: certificate (has ` +
+	`expired or is not yet valid|is not yet valid|has expired|signed by ` +
+	`unknown authority|is expired)[^"]*`)
+
+// CertificateError is the quoted x509 error inside text, from "x509:"
+// to the end of the error, or "" when text holds none.
+func CertificateError(text string) string {
+	return strings.TrimSpace(certErrorPattern.FindString(text))
 }

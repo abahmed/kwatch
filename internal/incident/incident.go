@@ -92,9 +92,13 @@ type Incident struct {
 	Unverified []string
 	// Members are the findings this incident explains, keyed by finding key.
 	Members map[detection.Key]detection.Finding
-	Impact  []inventory.EntityID
-	Tier    Tier
-	State   State
+	// Merged lists the roots of the other node, zone or pool failures
+	// that joined this incident while it settled: one outage, one
+	// incident. Empty for every other incident.
+	Merged []inventory.EntityID
+	Impact []inventory.EntityID
+	Tier   Tier
+	State  State
 
 	Opened          time.Time
 	Announced       time.Time
@@ -184,6 +188,10 @@ type Incident struct {
 	// Owner is who the incident belongs to, as of the latest decision;
 	// see owner.go. Routing reads it. Not persisted: AnnouncedRoute is.
 	Owner string
+	// Owners and Spaces are who a cluster-scoped incident reaches (see
+	// reachOf); Owners is Owner alone when the root is namespaced.
+	// Routing reads them. Not persisted, like Owner.
+	Owners, Spaces []string
 	// Ack is the acknowledgement on the root or a member, nil when there
 	// is none (see ack.go). Persisted.
 	Ack *Ack
@@ -323,40 +331,6 @@ type Event struct {
 	// Entity is the member the event is about: the one that joined or
 	// recovered. Nil for events about the incident itself.
 	Entity *inventory.EntityID `json:",omitempty"`
-}
-
-// Snapshot returns a detached copy safe to hand to writers.
-func (inc *Incident) Snapshot() Incident {
-	out := *inc
-	out.Members = make(map[detection.Key]detection.Finding, len(inc.Members))
-	for key, s := range inc.Members {
-		out.Members[key] = s
-	}
-	out.Impact = append([]inventory.EntityID(nil), inc.Impact...)
-	out.Removed = append([]inventory.EntityID(nil), inc.Removed...)
-	out.Cycles = append([]time.Time(nil), inc.Cycles...)
-	out.Occurrences = append([]time.Time(nil), inc.Occurrences...)
-	out.History = append([]Occurrence(nil), inc.History...)
-	out.Timeline = append([]Event(nil), inc.Timeline...)
-	out.Unverified = append([]string(nil), inc.Unverified...)
-	out.Checked = append([]string(nil), inc.Checked...)
-	out.Considered = append([]string(nil), inc.Considered...)
-	out.AnnouncedRoute = inc.AnnouncedRoute.clone()
-	out.Ack = inc.Ack.clone()
-	out.Reported, out.ReportedKnown = inc.sent.reported(len(inc.Timeline))
-	if inc.Cause != nil {
-		cause := *inc.Cause
-		out.Cause = &cause
-	}
-	if inc.FixedBy != nil {
-		fix := *inc.FixedBy
-		out.FixedBy = &fix
-	}
-	if inc.Attempt != nil {
-		attempt := *inc.Attempt
-		out.Attempt = &attempt
-	}
-	return out
 }
 
 // String names the state for diagnostics.

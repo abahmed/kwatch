@@ -1,0 +1,10 @@
+POST /robot/send?access_token=<redacted>&sign=<redacted>&timestamp=<redacted>
+Content-Type: application/json
+
+{
+  "markdown": {
+    "text": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\n> паника: нехватка памяти — 内存不足",
+    "title": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú."
+  },
+  "msgtype": "markdown"
+}

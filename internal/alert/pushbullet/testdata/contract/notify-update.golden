@@ -1,0 +1,9 @@
+POST /v2/pushes
+Content-Type: application/json
+Access-Token: <redacted>
+
+{
+  "body": "🔴 payments in shop is still crash-looping.",
+  "title": "kwatch alert: dev",
+  "type": "note"
+}

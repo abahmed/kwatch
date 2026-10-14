@@ -141,6 +141,9 @@ func podAttributes(pod *corev1.Pod) map[string]inventory.Value {
 	if frozen := frozenConfig(pod); frozen != "" {
 		attrs[AttrFrozenConfig] = inventory.Text(frozen)
 	}
+	if names := driverNames(pod); names != "" {
+		attrs[AttrDriverNames] = inventory.Text(names)
+	}
 	setPortMatchAttributes(attrs, pod)
 	setSpecAttributes(attrs, pod)
 	setVolumeRefAttributes(attrs, pod)

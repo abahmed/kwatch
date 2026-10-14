@@ -1,0 +1,6 @@
+POST /hooks/<secret>
+Content-Type: application/json
+
+{
+  "text": "🔴 payments in shop is crash-looping. It said \"@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\".\nIt said @​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n\n> log: @​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>"
+}

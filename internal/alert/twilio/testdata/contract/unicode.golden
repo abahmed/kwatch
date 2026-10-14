@@ -1,0 +1,7 @@
+POST /
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic <redacted>
+
+Body=🔴 сервис «платежи» в shop падает — 支付失败 ñandú.
+From=+12025550199
+To=+12025550100

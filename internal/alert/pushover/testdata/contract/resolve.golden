@@ -1,0 +1,14 @@
+--- request 1 of 2
+POST /1/receipts/rcpt1/cancel.json
+Content-Type: application/x-www-form-urlencoded
+
+token=<redacted>
+
+--- request 2 of 2
+POST /1/messages.json
+Content-Type: application/x-www-form-urlencoded
+
+message=✅ payments in shop is healthy again.
+title=kwatch
+token=<redacted>
+user=user123

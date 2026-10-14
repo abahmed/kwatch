@@ -2,10 +2,11 @@ package crd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
@@ -15,6 +16,7 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory/kube/dynamicwatch"
 	"github.com/abahmed/kwatch/internal/kubeclient"
 	"github.com/abahmed/kwatch/internal/metrics"
+	"github.com/abahmed/kwatch/internal/safego"
 )
 
 func (w *Watcher) listCRD(
@@ -150,13 +152,17 @@ func (w *Watcher) checkInstalledCRD(
 }
 
 func isMissingCRD(err error) bool {
-	return errors.IsNotFound(err)
+	return apierrors.IsNotFound(err)
 }
 
-// runInformer runs inf under the watcher's lifecycle wait group. The
-// returned cancel stops it and done closes once it has returned.
+// runInformer runs inf under the watcher's lifecycle wait group. A panic
+// restarts it with a new informer from rebuild, because an informer
+// cannot be run twice; repeated failures show on the watcher's health
+// until a rebuilt informer has synced. The returned cancel stops it and
+// done closes once it has returned.
 func (w *Watcher) runInformer(
 	ctx context.Context, inf cache.SharedIndexInformer,
+	rebuild func() (cache.SharedIndexInformer, error),
 ) (context.CancelFunc, <-chan struct{}, error) {
 	w.mu.Lock()
 	runWG := w.runWG
@@ -171,9 +177,56 @@ func (w *Watcher) runInformer(
 		defer runWG.Done()
 		defer close(informerDone)
 		defer informerCancel()
-		inf.Run(informerCtx.Done())
+		first := true
+		safego.Keep(informerCtx, "crd-informer",
+			func(ready func()) error {
+				current := inf
+				if !first {
+					var err error
+					if current, err = rebuild(); err != nil {
+						return err
+					}
+				}
+				first = false
+				runCtx, stop := context.WithCancel(informerCtx)
+				defer stop()
+				go func() {
+					if cache.WaitForCacheSync(
+						runCtx.Done(), current.HasSynced) {
+						ready()
+					}
+				}()
+				current.Run(runCtx.Done())
+				return nil
+			},
+			func(sick bool) {
+				if sick {
+					w.reportError(errInformerFailing)
+					return
+				}
+				w.reportError(nil)
+			})
 	}()
 	return informerCancel, informerDone, nil
+}
+
+var errInformerFailing = errors.New("crd informer keeps failing")
+
+// newInformer builds an informer for the CRD with the watcher's handler.
+func (w *Watcher) newInformer(
+	dc dynamic.Interface,
+) (cache.SharedIndexInformer, error) {
+	_, inf, err := dynamicwatch.NewInformer(
+		dc, w.resync, w.namespace, gvr, kubeclient.TrimManagedFields,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("crdwatch: create informer: %w", err)
+	}
+	if _, err := inf.AddEventHandler(w.eventHandler()); err != nil {
+		return nil, fmt.Errorf(
+			"crdwatch: failed to register event handler: %w", err)
+	}
+	return inf, nil
 }
 
 // eventHandler wraps the callbacks in SafeEventHandler, which also unwraps
@@ -192,18 +245,14 @@ func (w *Watcher) startInformer(
 	dc dynamic.Interface,
 	restartOnInitial bool,
 ) error {
-	_, inf, err := dynamicwatch.NewInformer(
-		dc, w.resync, w.namespace, gvr, kubeclient.TrimManagedFields,
-	)
+	inf, err := w.newInformer(dc)
 	if err != nil {
-		return fmt.Errorf("crdwatch: create informer: %w", err)
+		return err
 	}
-
-	if _, err := inf.AddEventHandler(w.eventHandler()); err != nil {
-		return fmt.Errorf("crdwatch: failed to register event handler: %w", err)
-	}
-
-	informerCancel, informerDone, err := w.runInformer(ctx, inf)
+	informerCancel, informerDone, err := w.runInformer(ctx, inf,
+		func() (cache.SharedIndexInformer, error) {
+			return w.newInformer(dc)
+		})
 	if err != nil {
 		return err
 	}

@@ -147,3 +147,24 @@ func lowestCount(counts map[string]int, minDomains int) int {
 	sort.Ints(values)
 	return values[0]
 }
+
+// portBlockers checks the pod's host ports against the pods already on
+// the node: the same protocol and port on overlapping addresses cannot
+// share a node, whatever the CPU and memory left.
+func (c *fitCase) portBlockers(n fitNode) []blocker {
+	var out []blocker
+	for _, want := range c.ports {
+		for _, p := range c.peers[n.id.Name] {
+			for _, held := range p.ports {
+				if !want.Conflicts(held) {
+					continue
+				}
+				out = append(out, blocker{kind: blockPort,
+					text: "already runs " + p.namespace + "/" + p.name +
+						" using host port " + held.String() +
+						", which the pod needs"})
+			}
+		}
+	}
+	return out
+}

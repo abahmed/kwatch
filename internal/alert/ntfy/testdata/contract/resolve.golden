@@ -1,0 +1,14 @@
+POST /
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "message": "✅ payments in shop is healthy again.",
+  "priority": 3,
+  "tags": [
+    "kwatch",
+    "status-resolved"
+  ],
+  "title": "kwatch",
+  "topic": "kwatch"
+}

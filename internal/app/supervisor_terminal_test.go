@@ -132,3 +132,14 @@ func TestRunComponentStopsWhenParentIsCanceledWithProgress(t *testing.T) {
 
 	require.ErrorIs(t, <-done, context.Canceled)
 }
+
+func TestRunComponentTurnsPanicIntoError(t *testing.T) {
+	supervisor := newComponentSupervisor(time.Now)
+
+	err := supervisor.runComponent(context.Background(), componentSpec{
+		name: "boom",
+		run:  func(context.Context) error { panic("bad payload") },
+	})
+
+	require.ErrorContains(t, err, "boom panicked: bad payload")
+}

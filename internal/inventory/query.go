@@ -10,7 +10,7 @@ func (m *Model) Entity(id EntityID) (Entity, bool) {
 	if rec == nil || !rec.present {
 		return Entity{}, false
 	}
-	return rec.entity.clone(), true
+	return rec.snapshot(), true
 }
 
 // Exists reports whether the entity is currently present.
@@ -141,10 +141,10 @@ func (m *Model) PruneKeeping(before, keepFrom time.Time) int {
 		rec.changes = kept
 		rec.health = pruneHealth(rec.health, keepFrom)
 		// Records that hold nothing any more are dropped: tombstones
-		// whose history expired, and notes about never-observed objects.
+		// whose history, notes and health marks expired.
 		if !rec.present && len(rec.changes) == 0 &&
 			len(rec.relations) == 0 && len(rec.notes) == 0 &&
-			rec.goneAt.Before(before) {
+			len(rec.health) == 0 && rec.goneAt.Before(before) {
 			delete(m.records, id)
 		}
 	}

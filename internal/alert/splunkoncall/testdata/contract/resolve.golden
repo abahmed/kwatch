@@ -1,0 +1,9 @@
+POST /<secret>/everyone
+Content-Type: application/json
+
+{
+  "entity_display_name": "✅ payments in shop is healthy again.",
+  "entity_id": "kwatch-dev-p-42",
+  "message_type": "RECOVERY",
+  "state_message": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart."
+}

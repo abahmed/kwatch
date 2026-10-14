@@ -31,6 +31,9 @@ type deliverJob struct {
 	// queued is when the job was first queued; zero when unknown. A job
 	// older than outboxMaxAge is given up instead of being sent.
 	queued time.Time
+	// attempts counts sends that began and never returned, kept in the
+	// outbox record so a poison job is given up after a restart too.
+	attempts int
 }
 
 // isResolve reports whether the job closes an incident.

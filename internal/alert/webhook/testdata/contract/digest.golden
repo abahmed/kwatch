@@ -1,0 +1,22 @@
+POST /
+Content-Type: application/json
+X-Team: ops
+Authorization: Basic <redacted>
+
+{
+  "alertKey": "kwatch-dev-startup/20260102T030405.000Z",
+  "cluster": "dev",
+  "key": "startup/20260102T030405.000Z",
+  "marker": "",
+  "note": "🟠 kwatch started and found 2 problems that were there.",
+  "resolved": false,
+  "revision": 1,
+  "route": {
+    "Namespaces": null,
+    "Reasons": null,
+    "Severity": ""
+  },
+  "short": "🟠 kwatch started and found 2 problems.",
+  "status": "warning",
+  "title": "kwatch started and found 2 problems"
+}

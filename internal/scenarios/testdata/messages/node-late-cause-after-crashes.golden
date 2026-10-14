@@ -1,0 +1,21 @@
+10:02:15 settled
+🟠 billing-a in billing (prod-eu-1) keeps crashing; node n1 is what the failing workloads have in common, though it looks healthy, which might be related. It fails with "OCI runtime exec failed: read init-p: connection reset". All of its dependents are failing. media-a in media, search-a in search and shop-a in shop are affected as well. To check the node's conditions and recent events, run kubectl describe node n1
+🟠 billing-a in billing (prod-eu-1) keeps crashing; node n1 is what the failing workloads have in common, though it looks healthy, which might be related.
+| 🟠 **billing-a** in **billing** (**prod-eu-1**) keeps crashing; node n1 is what the failing workloads have in common, though it looks healthy, which might be related.
+| It fails with `OCI runtime exec failed: read init-p: connection reset`.
+| All of its dependents are failing.
+| **media-a** in **media**, **search-a** in **search** and **shop-a** in **shop** are affected as well.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```
+10:06:50 material change
+🔴 Node n1 (prod-eu-1) is getting worse: billing-a in billing, media-a in media, search-a in search and one other now crash-loop. All of its dependents are failing.
+🔴 Node n1 (prod-eu-1) is getting worse: billing-a in billing, media-a in media, search-a in search and one other now crash-loop.
+| 🔴 Node n1 (**prod-eu-1**) is getting worse: **billing-a** in **billing**, **media-a** in **media**, **search-a** in **search** and one other now crash-loop.
+| All of its dependents are failing.
+10:22:00 healthy for 6m0s
+✅ billing-a in billing (prod-eu-1) is healthy again. It was down for 15 minutes because node n1 was failing.
+✅ billing-a in billing (prod-eu-1) is healthy again.
+| ✅ billing-a in billing (**prod-eu-1**) is healthy again.
+| It was down for 15 minutes because node n1 was failing.

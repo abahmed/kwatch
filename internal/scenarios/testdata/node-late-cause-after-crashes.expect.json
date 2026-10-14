@@ -1,0 +1,10 @@
+{
+  "name": "node-late-cause-after-crashes",
+  "description": "Workloads on one node crash first and the node is reported NotReady four minutes later: the workloads join the node incident and it recovers as one.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 4,
+  "maxPages": 1,
+  "alone": true,
+  "tail": "30m0s"
+}

@@ -1,0 +1,29 @@
+POST /
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "alertKey": "kwatch-dev-p-md",
+  "cluster": "dev",
+  "key": "p-md",
+  "lines": [
+    "payments ran out of memory 3 times."
+  ],
+  "markdown": "🔴 **payments** in **shop** is crash-looping.\n\nIt said `boom *x* @​channel`.\n\nService **web** can't serve traffic. Run\n\n```\nkubectl logs payments -n shop\n```",
+  "marker": "🔴",
+  "note": "🔴 payments in shop is crash-looping. It said \"boom *x* @channel\". Service web can't serve traffic. Run kubectl logs payments -n shop",
+  "resolved": false,
+  "revision": 1,
+  "route": {
+    "Namespaces": [
+      "shop"
+    ],
+    "Reasons": [
+      "OOMKilled"
+    ],
+    "Severity": "critical"
+  },
+  "short": "🔴 payments in shop is crash-looping.",
+  "status": "critical",
+  "title": "payments crashed in shop"
+}

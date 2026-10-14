@@ -1,0 +1,21 @@
+10:11:15 roll-up
+🟠 kwatch (prod-eu-1) found two new problems at the same time. ebs-csi-node in kube-system keeps crashing. api in shop is failing: volume cannot be mounted. Each gets its own message when it changes or resolves.
+🟠 kwatch (prod-eu-1) found two new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
+|
+| **Problems**
+| - **ebs-csi-node** in **kube-system** keeps crashing
+| - **api** (**shop**) — volume cannot be mounted
+|
+| *Each gets its own message when it changes or resolves.*
+10:16:00 material change
+🟠 ebs-csi-node in kube-system (prod-eu-1) keeps crashing; pod ebs-csi-node-n1 has not been ready for three minutes, which might be related. It fails with "failed to dial the kubelet registration socket". Its last run lasted 10s; 12 restarts in the 1h13m since its pod was created. api in shop is affected as well. To read the output of the last crash, run kubectl logs ebs-csi-node-n1 -c app -n kube-system --previous
+🟠 ebs-csi-node in kube-system (prod-eu-1) keeps crashing; pod ebs-csi-node-n1 has not been ready for three minutes, which might be related.
+| 🟠 **ebs-csi-node** in **kube-system** (**prod-eu-1**) keeps crashing; pod **ebs-csi-node-n1** has not been ready for three minutes, which might be related.
+| It fails with `failed to dial the kubelet registration socket`.
+| Its last run lasted 10s; 12 restarts in the 1h13m since its pod was created.
+| **api** in **shop** is affected as well.
+| To read the output of the last crash, run
+| ```
+| kubectl logs ebs-csi-node-n1 -c app -n kube-system --previous
+| ```

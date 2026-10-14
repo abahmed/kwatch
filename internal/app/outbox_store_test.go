@@ -9,6 +9,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/storage"
 )
 
 func TestOutboxStoreRoundTripsInOrder(t *testing.T) {
@@ -54,4 +55,22 @@ func TestFinishActiveSessionKeepsStoreOpenForOutboxWrite(t *testing.T) {
 	})
 
 	require.NoError(t, disk.put("probe", true), "store closed under writer")
+}
+
+func TestLoadOutboxDeletesCorruptRecord(t *testing.T) {
+	state := openTestStore(t)
+	store := newOutboxStore(state)
+	good := delivery.OutboxRecord{Version: 1, ID: "1", Provider: "slack"}
+	require.NoError(t, store.WriteOutbox([]delivery.OutboxRecord{good}, nil))
+	require.NoError(t, storage.OutboxValues[string](state).
+		Put("2", "not a record"))
+
+	loaded, err := store.LoadOutbox()
+	require.NoError(t, err)
+	require.Len(t, loaded, 1)
+
+	left, err := storage.OutboxValues[delivery.OutboxRecord](state).
+		PurgeCorrupt()
+	require.NoError(t, err)
+	require.Empty(t, left, "the corrupt record was deleted by the load")
 }

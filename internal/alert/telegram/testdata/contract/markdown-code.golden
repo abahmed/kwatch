@@ -1,0 +1,8 @@
+POST /bot<secret>/sendMessage
+Content-Type: application/json
+
+{
+  "chat_id": "chat",
+  "parse_mode": "HTML",
+  "text": "🔴 <b>payments</b> in <b>shop</b> is crash-looping.\nIt said <code>boom *x* @​channel</code>.\nService <b>web</b> can&#39;t serve traffic. Run\n<pre>kubectl logs payments -n shop</pre>"
+}

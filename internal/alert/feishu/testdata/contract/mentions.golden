@@ -1,0 +1,26 @@
+POST /open-apis/bot/v2/hook/<secret>
+Content-Type: application/json
+
+{
+  "card": {
+    "config": {
+      "wide_screen_mode": true
+    },
+    "elements": [
+      {
+        "content": "🔴 payments in shop is crash-looping. It said \"@​channel @​everyone \\<​!here\\> @​all \\<​@U123\\> \\<​@W456\\> \\<​\\#C1\\|general\\>\".\n\nIt said `@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>`\n\n```\n@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n```\n\n```\nlog: @​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n```",
+        "tag": "markdown"
+      }
+    ],
+    "header": {
+      "template": "blue",
+      "title": {
+        "content": "kwatch",
+        "tag": "plain_text"
+      }
+    }
+  },
+  "msg_type": "interactive",
+  "sign": "qJbt/v6FGJJmxiWuBSnv0V/Ij0UAJAzorbHjGAGoX8c=",
+  "timestamp": "1767323045"
+}

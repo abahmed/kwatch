@@ -1,0 +1,6 @@
+POST /hooks/<secret>
+Content-Type: application/json
+
+{
+  "text": "🔴 payments in shop is crash-looping.\nIt said boom *x* @​channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop"
+}

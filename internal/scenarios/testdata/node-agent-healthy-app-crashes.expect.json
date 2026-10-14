@@ -1,0 +1,11 @@
+{
+  "name": "node-agent-healthy-app-crashes",
+  "description": "One application crash-loops on a node whose log shipper agent is healthy.",
+  "root": "deployment/shop/cart",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "daemonset/observability/logship",
+    "node//n1"
+  ]
+}

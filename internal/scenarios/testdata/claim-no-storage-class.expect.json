@@ -1,0 +1,7 @@
+{
+  "name": "claim-no-storage-class",
+  "description": "A claim that names no StorageClass stays Pending in a cluster with no default class.",
+  "root": "persistentvolumeclaim/data/cache-0",
+  "tier": "notify",
+  "maxMessages": 2
+}

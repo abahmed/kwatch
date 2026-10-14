@@ -1,0 +1,11 @@
+POST /api/v9/webhooks/123/<secret>
+Content-Type: application/json
+
+{
+  "allowed_mentions": {
+    "parse": [],
+    "replied_user": false
+  },
+  "components": null,
+  "content": "🔴 payments in shop is still crash-looping. It restarted 5 times now.\n```\npanic: out of memory\n```"
+}

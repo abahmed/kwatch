@@ -34,7 +34,7 @@ func TestLogBucketsRoundTrip(t *testing.T) {
 		Changes:  ChangeLog[string](s),
 		Evidence: EvidenceLog[string](s),
 		Timeline: TimelineLog[string](s),
-		Audit:    AuditLog[string](s),
+		Flight:   FlightLog[string](s),
 	}
 	for bucket, l := range logs {
 		require.NoError(t, l.Append("pod/a", minute(1), "second"))
@@ -83,7 +83,7 @@ func TestLogRangeBounds(t *testing.T) {
 }
 
 func TestLogSameTimeKeepsAppendOrder(t *testing.T) {
-	l := AuditLog[string](openClaimed(t, newFakeClock()))
+	l := FlightLog[string](openClaimed(t, newFakeClock()))
 	for _, v := range []string{"a", "b", "c"} {
 		require.NoError(t, l.Append("decisions", minute(0), v))
 	}

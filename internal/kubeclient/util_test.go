@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/config"
 )
@@ -21,8 +22,9 @@ func TestGetNamespaceDefault(t *testing.T) {
 }
 
 func TestNewHTTPClient(t *testing.T) {
-	client := NewHTTPClient(config.ApplicationRuntime{})
+	client, err := NewHTTPClient(config.ApplicationRuntime{})
 
+	require.NoError(t, err)
 	assert.NotNil(t, client)
 	assert.Equal(t, DefaultHTTPTimeout, client.Timeout)
 	assert.NotNil(t, client.Transport)

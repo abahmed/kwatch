@@ -1,0 +1,18 @@
+--- request 1 of 2
+GET /search/issues?q=kwatchkeyc241fac44c71dde5 repo:kwatch/kwatch is:issue is:open in:body
+Content-Type: application/json
+Authorization: Bearer <redacted>
+Accept: application/vnd.github+json
+
+(empty body)
+
+--- request 2 of 2
+POST /repos/kwatch/kwatch/issues
+Content-Type: application/json
+Authorization: Bearer <redacted>
+Accept: application/vnd.github+json
+
+{
+  "body": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\n```\nпаника: нехватка памяти — 内存不足\n```\n\nRef: kwatchkeyc241fac44c71dde5",
+  "title": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú."
+}

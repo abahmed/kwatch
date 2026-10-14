@@ -340,8 +340,13 @@ off with `telemetry.enabled: false`.
 
 Read-only access to cluster state. It writes only its own Lease, its
 state file, and SelfSubjectAccessReviews for its permission audit (not
-persisted). It never gets `pods/exec` or `nodes/proxy`. A least-privilege
-mode and a `watch.secrets: false` opt-out are available.
+persisted). It never gets `pods/exec` or `nodes/proxy`. **By default its
+ServiceAccount can read every Secret in the cluster** (kwatch keeps only
+hashes, never values). Set `watch.secrets: false` (Helm: `--set
+watch.secrets=false`) to remove all Secret access; `rbac.mode:
+least-privilege` narrows the other kinds but still lists Secrets unless
+`watch.secrets` is false. Helm prints this warning on install and kwatch logs
+it once at startup.
 </details>
 
 <details>

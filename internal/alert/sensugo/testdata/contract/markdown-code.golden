@@ -1,0 +1,19 @@
+POST /api/core/v2/namespaces/default/events
+Content-Type: application/json
+Authorization: Key <redacted>
+
+{
+  "check": {
+    "issued": 1767323045,
+    "metadata": {
+      "name": "kwatch-dev-p-md"
+    },
+    "output": "🔴 payments in shop is crash-looping.\nIt said boom *x* @channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop",
+    "status": 2
+  },
+  "entity": {
+    "metadata": {
+      "name": "kwatch"
+    }
+  }
+}

@@ -49,6 +49,9 @@ const multiDay = 24 * time.Hour
 func stagingScenarios() []scenario {
 	var out []scenario
 	for _, s := range library() {
+		if s.expect.Alone {
+			continue
+		}
 		log := s.generate(stagingStart, "")
 		if n := len(log.Entries); n > 0 &&
 			log.Entries[n-1].At.Sub(log.Start) > multiDay {

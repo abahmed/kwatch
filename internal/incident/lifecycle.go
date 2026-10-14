@@ -30,6 +30,7 @@ func (m *Manager) Tick(now time.Time) ([]Decision, time.Duration) {
 		}
 	}
 	m.expireResolved(now)
+	m.pruneFormer(now)
 	return decisions, m.nextWake(now)
 }
 
@@ -98,6 +99,7 @@ func (m *Manager) advance(p *Incident, now time.Time) (Decision, bool) {
 	}
 	m.reassess(p, now)
 	m.escalate(p, now)
+	m.releaseHeldPage(p, now)
 	switch p.State {
 	case Settling:
 		return m.settle(p, now)
@@ -135,6 +137,7 @@ func (m *Manager) settle(p *Incident, now time.Time) (Decision, bool) {
 	p.State, p.Announced = Open, now
 	m.adoptAck(p)
 	m.holdRepeatedPage(p, now)
+	m.holdSiblingPage(p, now)
 	if p.AlertKey == "" {
 		p.AlertKey = m.freeAlertKey(p)
 	}
@@ -284,6 +287,7 @@ func (m *Manager) resolveQuietly(p *Incident, now time.Time) {
 
 func (m *Manager) decide(p *Incident, action Action, why Reason) Decision {
 	p.Owner = m.ownerOf(p)
+	p.Owners, p.Spaces = m.reachOf(p)
 	p.Revision++
 	p.prevDigest, p.updateHeld = p.Digest, false
 	p.Digest = fingerprint(p)

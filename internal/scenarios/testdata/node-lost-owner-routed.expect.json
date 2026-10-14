@@ -1,0 +1,8 @@
+{
+  "name": "node-lost-owner-routed",
+  "description": "A node is lost; its pods belong to four namespaces owned by four teams.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 4,
+  "tail": "20m0s"
+}

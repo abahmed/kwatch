@@ -1,0 +1,17 @@
+POST /
+Content-Type: application/json
+
+{
+  "attachments": [
+    {
+      "fields": [
+        {
+          "short": true,
+          "title": "Cluster",
+          "value": "dev"
+        }
+      ]
+    }
+  ],
+  "text": "🔴 payments in shop is crash-looping. It ran out of memory 3 times in 10 minutes. Try kubectl -n shop describe pod payments-1.\n```\npanic: out of memory\n```"
+}

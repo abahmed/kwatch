@@ -34,8 +34,8 @@ func TestOpenStoreResetsUnreadableFileAndReportsHealth(t *testing.T) {
 	require.Equal(t, "unreadable", reset.Reason)
 	leftovers, err := filepath.Glob(path + ".*")
 	require.NoError(t, err)
-	require.Equal(t, []string{path + ".corrupt"}, leftovers,
-		"the old file is kept aside")
+	require.Len(t, leftovers, 1, "the old file is kept aside")
+	require.Contains(t, leftovers[0], path+".corrupt.")
 	status := deps.healthServer.ComponentStatuses()["state-store"]
 	require.Equal(t, "degraded", status.State)
 	require.Equal(t, "storage_reset", status.Reason)

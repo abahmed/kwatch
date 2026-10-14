@@ -174,3 +174,11 @@ func TestIgnoreListsNameSnapshotEntries(t *testing.T) {
 		assert.True(t, conditions[key], key)
 	}
 }
+
+// The HPA failure table is keyed by reasons the controller sets on its
+// conditions; one that the controller never sets would never match.
+func TestHPAFailureKeysAreUpstreamConditionReasons(t *testing.T) {
+	for reason := range hpaFailures {
+		assert.Contains(t, upstream.HPAConditionReasons, reason)
+	}
+}

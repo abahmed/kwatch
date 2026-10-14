@@ -1,0 +1,24 @@
+--- request 1 of 2
+GET /rest/api/2/search?fields=description&jql=project = "OPS" AND description ~ "kwatchkeyd0603fe338e68c0e" AND statusCategory != Done&maxResults=5
+Content-Type: application/json
+Authorization: Basic <redacted>
+
+(empty body)
+
+--- request 2 of 2
+POST /rest/api/2/issue
+Content-Type: application/json
+Authorization: Basic <redacted>
+
+{
+  "fields": {
+    "description": "🔴 payments in shop is crash-looping. It ran out of memory 3 times in 10 minutes. Try kubectl -n shop describe pod payments-1.\n\n{noformat}\npanic: out of memory\n{noformat}\n\nRef: kwatchkeyd0603fe338e68c0e",
+    "issuetype": {
+      "name": "Task"
+    },
+    "project": {
+      "key": "OPS"
+    },
+    "summary": "🔴 payments in shop is crash-looping."
+  }
+}

@@ -1,0 +1,9 @@
+POST /<secret>/
+Content-Type: application/json
+
+{
+  "alert_type": "resolved",
+  "entity_id": "kwatch-dev-p-42",
+  "message": "✅ payments in shop is healthy again.",
+  "summary": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.\n\nCluster: dev"
+}

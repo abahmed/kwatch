@@ -1,0 +1,12 @@
+{
+  "name": "coredns-down-no-probe",
+  "description": "CoreDNS has no ready pods and clients in four namespaces log name-resolution errors; there is no DNS probe signal.",
+  "root": "cluster-dns//cluster-dns",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "15m0s"
+}

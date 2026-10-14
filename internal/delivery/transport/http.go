@@ -15,6 +15,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/ratelimit"
 )
 
@@ -91,15 +93,25 @@ func (c *client) Send(ctx context.Context, r Request) ([]byte, error) {
 	const maxResponseBytes = 1 << 20
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
 	if err != nil {
+		if response.StatusCode < 200 || response.StatusCode > 299 {
+			// The status already says the call failed; classify by it.
+			return classifyResponse(r, response, body, c.now)
+		}
+		// A success whose body did not arrive cannot be checked: many
+		// providers report an API error inside a 200.
 		return nil, fmt.Errorf("%s: read response body: %w", r.Provider, err)
 	}
 	// The bounded read protects memory use. Drain the remainder so the
-	// application-owned HTTP transport can reuse the connection.
-	// The drain is capped too: a hostile endpoint must not hold the worker.
+	// application-owned HTTP transport can reuse the connection. The drain
+	// is capped too: a hostile endpoint must not hold the worker. The
+	// provider already answered, so a drain error never changes the
+	// outcome: a 2xx stays a success, and retrying it would send the same
+	// page twice.
 	const maxDrainBytes = 1 << 20
 	if _, err := io.CopyN(io.Discard, response.Body, maxDrainBytes); err != nil &&
 		!errors.Is(err, io.EOF) {
-		return body, fmt.Errorf("%s: drain response body: %w", r.Provider, err)
+		klog.V(2).InfoS("response body drain failed", "provider",
+			r.Provider, "status", response.StatusCode, "error", err)
 	}
 	return classifyResponse(r, response, body, c.now)
 }
@@ -135,6 +147,9 @@ func buildRequest(ctx context.Context, r Request) (*http.Request, error) {
 			r.Provider, RedactURLError(err)))
 	}
 	for key, value := range r.Headers {
+		if err := ValidateHeader(key, value); err != nil {
+			return nil, Permanent(fmt.Errorf("%s: %w", r.Provider, err))
+		}
 		req.Header.Set(key, value)
 	}
 	if r.ContentType != "" {

@@ -1,0 +1,9 @@
+POST /<secret>/
+Content-Type: application/json
+
+{
+  "alert_type": "critical",
+  "entity_id": "kwatch-dev-p-big",
+  "message": "🔴 payments in shop is crash-looping.",
+  "summary": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[6009 runes sha256:b90b6f3334edf5f970edc9df]…xxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nLa…\n\nCluster: dev"
+}

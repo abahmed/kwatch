@@ -1,0 +1,19 @@
+POST /api/alert
+Content-Type: application/json
+Authorization: Key <redacted>
+
+{
+  "attributes": {
+    "reason": "OOMKilled",
+    "summary": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú."
+  },
+  "environment": "Staging",
+  "event": "incident",
+  "resource": "dev/kwatch-p-uni",
+  "service": [
+    "kwatch"
+  ],
+  "severity": "critical",
+  "text": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\nLast output:\nпаника: нехватка памяти — 内存不足",
+  "value": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú."
+}

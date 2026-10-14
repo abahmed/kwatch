@@ -1,0 +1,14 @@
+POST /mg.example.com/messages
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic <redacted>
+
+from=kwatch@example.com
+subject=🔴 payments in shop is crash-looping.
+text=🔴 payments in shop is crash-looping. Last output:
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[9974 runes sha256:e3228c66b478bde1c6cf34b3]…xxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+> panic: out of memory
+to=ops@example.com
+to=oncall@example.com

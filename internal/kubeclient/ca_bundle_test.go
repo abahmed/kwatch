@@ -47,7 +47,9 @@ func writeTestCA(t *testing.T) (string, []byte) {
 func TestApplyCABundleAddsToSystemRoots(t *testing.T) {
 	path, der := writeTestCA(t)
 	cfg := &tls.Config{}
-	applyCABundle(cfg, path)
+	if err := applyCABundle(cfg, path); err != nil {
+		t.Fatal(err)
+	}
 	if cfg.RootCAs == nil {
 		t.Fatal("RootCAs was not set")
 	}
@@ -64,10 +66,21 @@ func TestApplyCABundleAddsToSystemRoots(t *testing.T) {
 	}
 }
 
-func TestApplyCABundleIgnoresBadFile(t *testing.T) {
-	cfg := &tls.Config{}
-	applyCABundle(cfg, filepath.Join(t.TempDir(), "missing.pem"))
-	if cfg.RootCAs != nil {
-		t.Fatal("a missing bundle must leave RootCAs unset")
+func TestApplyCABundleRejectsBadFile(t *testing.T) {
+	notPEM := filepath.Join(t.TempDir(), "junk.pem")
+	if err := os.WriteFile(notPEM, []byte("junk"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, path := range map[string]string{
+		"missing":   filepath.Join(t.TempDir(), "missing.pem"),
+		"not a PEM": notPEM,
+	} {
+		cfg := &tls.Config{}
+		if err := applyCABundle(cfg, path); err == nil {
+			t.Fatalf("%s: want an error", name)
+		}
+		if cfg.RootCAs != nil {
+			t.Fatalf("%s: RootCAs must stay unset", name)
+		}
 	}
 }

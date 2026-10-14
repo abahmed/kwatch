@@ -140,7 +140,7 @@ func podSide(modes ...detection.Mode) Side {
 // nodeRows cover the node conditions that hurt the pods on the node.
 var nodeRows = []Row{
 	{
-		Name: "node-not-ready",
+		Name: RowNodeNotReady,
 		Cause: Side{Kind: kube.KindNode, Modes: []detection.Mode{
 			detection.ModeNotReady, detection.ModeHeartbeatStale,
 			detection.ModeStuckDeleting}},

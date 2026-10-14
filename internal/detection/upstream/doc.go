@@ -1,18 +1,26 @@
-// Package upstream is a checked-in snapshot of the reasons, phases and
-// condition types Kubernetes itself emits. In: nothing. Out: lists read
-// by the coverage tests of detection and detectors, which fail when a
-// reason in the snapshot is neither classified by kwatch nor listed as
-// deliberately ignored.
+// Package upstream holds the reasons, phases and condition types
+// Kubernetes itself emits. In: nothing. Out: lists read by the coverage
+// tests of detection and detectors, which fail when a reason in the
+// corpus is neither classified by kwatch nor listed as deliberately
+// ignored.
 //
-// Source and version. k8s.io/kubernetes is not a dependency, so the
-// lists are written out by hand from the upstream source files named in
-// each list's comment, as of Kubernetes 1.37 (the release that matches
-// k8s.io/api v0.37.1 in go.mod). The typed constants that k8s.io/api
-// does export (pod phases, pod and node condition types, scheduler and
-// Deployment, Job, HPA and PVC condition constants) are cross-checked
-// against the module by this package's own test, so a rename there
-// fails CI. Reasons that exist only in kubelet, scheduler and
-// controller-manager source cannot be checked that way: when a new
-// Kubernetes release adds one, add it to the list and let the coverage
-// test say what kwatch needs.
+// Generated and curated. states_generated.go and events_generated.go
+// are written by cmd/upstreamreasons from the kubernetes/kubernetes
+// source at the tag in Tag (the release that matches k8s.io/api in
+// go.mod): the event reasons of the kubelet, scheduler and controller
+// manager, the container waiting and terminated reasons, pod status and
+// pod condition reasons, and the reasons of the HPA conditions. The
+// generator resolves event calls with go/ast and reads the files named
+// in cmd/upstreamreasons/sources.go, which says where each list comes
+// from.
+// make upstream-reasons rewrites the files, make upstream-check
+// compares them with the tag (both need network); make verify only uses
+// the committed files, and a test here fails when Tag and go.mod
+// disagree.
+//
+// Curated by hand, because the source has no list of them: PodPhases,
+// the runtime-reported terminated reasons (states.go) and the condition
+// types with the status that means trouble (conditions.go). The typed
+// constants k8s.io/api exports are cross-checked against the module by
+// this package's own test.
 package upstream

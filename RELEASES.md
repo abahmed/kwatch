@@ -4,6 +4,191 @@
 
 ### Highlights
 
+- **Messages quote the latest evidence.** When a finding's summary or
+  evidence changed after its incident had formed (a restart count, the
+  last run), the incident kept the first copy and a later update showed
+  stale lines. The incident now replaces its copy in place. Counts, times
+  and ids alone do not count as new, and a refresh never sends a message
+  on its own.
+
+- **The cluster model uses half the memory per pod.** Attributes,
+  relations and graph edges are stored in compact slices instead of nested
+  maps, so 20,000 realistic pods take about 520 MiB in total (was about
+  880 MiB). The Memory section of the operations guide and the chart now
+  carry a pods-to-memory sizing table; the default 512Mi suits about 8,000
+  pods.
+
+- **A restart no longer reads the nodes already cordoned as a fresh
+  drain.** Nodes that are leaving when kwatch starts are the starting
+  state, not a displacement, so they no longer hold re-failures for up to
+  15 minutes. A node a restored node incident stood on, gone by the first
+  look, counts as removed then. The node check also reads three
+  attributes in bulk instead of copying every node.
+- **A provider that panics no longer takes kwatch down.** A panicking
+  send counts as a failed attempt, and a job that fails three sends in a
+  row is given up, also across restarts. A panic in any optional
+  component restarts that component with a backoff.
+- **The delivery outbox writer, dynamic watches and the CRD watcher come
+  back after a panic.** Each is restarted with the same one second to one
+  minute backoff; an outbox batch is never lost to a panic. After three
+  failures in a row /health shows `delivery-outbox` as degraded
+  (`persistence_write_failed`) or the CRD watcher as failing, and a dead
+  dynamic watch reports its kind as not synced until it is rebuilt.
+- **A node that returns and stays down pages again.** A repeated page is
+  still held for a flap, but one that keeps failing for the page settle
+  plus the base hold pages once more.
+- **Nodes lost together are one incident and one page.** Nodes, zones and
+  pools failing in one settle window share an incident that says how many
+  nodes are down; a roll-up of pages pages once.
+- **Evicted pods left over after node pressure clears are history.** An
+  evicted pod no cause explains, whose workload runs all its replicas,
+  opens no incident.
+- **A node suspected of being the shared cause takes its workloads back
+  when it fails.** They rejoin its incident instead of being announced
+  again beside it, and its recovery says the node is ready again.
+- **The scorecard gates pages per outage, incidents left open after a
+  fold, and recoveries said while members still fail.**
+- **A joint recovery message that fails to compose no longer loses
+  resolves.** When the one message for several recoveries cannot be
+  written, the lead goes alone and each other resolve is sent on its own.
+- **A pod that cannot mount a volume because the CSI driver is not
+  registered on its node now points at the node plugin.** The mount or
+  attach failure quoting "not found in the list of registered CSI
+  drivers" joins the failing node-agent pod on that node, so one
+  incident names the plugin instead of two unrelated problems.
+- **A node whose kubelet reports an x509 certificate error says so.** The
+  node message now quotes the certificate error itself ("Its kubelet
+  reports \"x509: certificate has expired...\"") instead of cutting it
+  off behind a long prefix.
+- **A lost node reaches the teams whose pods run on it, from the first
+  message.** A node has no owner and no namespace, so owner- and
+  namespace-routed providers heard about it only on a later update, or
+  never. An incident rooted at a cluster-scoped object (node, zone) now
+  routes by the owners and namespaces of its members and of the pods on
+  its nodes, from the first announcement; the resolve uses the same route.
+- **A zone failure counts its nodes, not their findings.** "Four nodes have
+  not reported" for two lost nodes counted a node's heartbeat and
+  not-ready findings separately; the lead now counts distinct nodes.
+- **A broken node agent is quoted in the node message.** When the node-level
+  incident's members include a crash-looping kube-system container, its own
+  last error is quoted ("Pod aws-node-x in kube-system fails with ...").
+- **CoreDNS down without kwatch's DNS probe is one incident.** The
+  coredns/kube-dns Deployment that runs but never gets ready now folds under
+  the cluster DNS outage the clients' name-resolution errors show, instead of
+  announcing ten minutes later as a separate incident.
+- **A dial to a Service's ClusterIP is not an "external endpoint".** Addresses
+  that are a Service's ClusterIP or a pod IP in the model are in the cluster;
+  the message names the Service that has no endpoints.
+- **Spread and worsening updates name workloads, not pods.** "spreading to
+  billing-app0 and billing-app1 in billing and five others" replaces lists of
+  pod and container names, with replicas of one workload counted once.
+
+- **A rollout stuck on a ReadWriteOnce volume names what holds it.** A
+  "Multi-Attach error" is now its own failure, held for two minutes so a
+  normal rolling update that detaches in time stays quiet. A persistent
+  one reads "api can't start: its volume pvc-data is still attached to
+  node n1 (used by pod api-6d, terminating)" and blames that pod, or the
+  node when only the attachment is left. Pods that finished or are
+  themselves still waiting for the volume are not named as holders.
+- **A claim Pending because its provisioner is down names the provisioner.**
+  The claim's StorageClass provisioner is matched to the Deployment or
+  StatefulSet that serves it: by the full provisioner name in its
+  arguments, name or image, else by whole words of its name and images
+  (no vendor names built in; generic words such as "csi" or "driver" do
+  not count, and built-in provisioners match nothing). A controller
+  scaled to zero counts as having no ready pods. It is the cause only
+  when one workload matches, or all that match are down; when none is
+  found the note says kwatch sees no workload in the cluster serving it
+  and quotes the provisioning failure.
+- **A claim with no storage class and no default class says so.** "Claim
+  data-0 sets no storage class and the cluster has no default one" is
+  raised only when no StorageClass is the default and no free static
+  volume fits, and never for a claim that selects its volume by labels.
+- **A restart no longer makes the cause look late.** Right after kwatch
+  starts, some findings are stamped with the time kwatch first saw them
+  while pods keep their cluster times. Mixing the two used to read as "it
+  began after the failures" and could name the restart as when the cause
+  began. That comparison is now skipped, and a start that is only the
+  time kwatch noticed is not shown as when the problem began.
+- **A container the kubelet refuses to configure is no longer called
+  "missing something".** "Its configuration references something
+  missing" is said only when the pod really references an object that
+  does not exist. A rejected `runAsNonRoot`, a bad `subPath` or an invalid
+  environment variable name reads "cannot start: the kubelet rejected its
+  configuration", with the kubelet's own message quoted.
+- **A host port taken on every node is explained.** A pod Pending with
+  "didn't have free ports for the requested pod ports" now names, for the
+  closest node of each pool, the pod that already holds the same host
+  port.
+- **One workload names a failing node agent only by its own error.** A
+  single victim is blamed on the agent when its error names the agent's
+  job (the network plugin, a CSI driver). A lone application pod beside
+  a failing agent is not blamed on it without such words.
+- **A registry that is rate limiting pulls is named as such.** The note
+  says "is rate limiting pulls" (and "cannot be reached" for an
+  unreachable registry) instead of the generic "refuses the image pulls".
+- **A node that stays cordoned no longer hides repeat failures.** Only
+  a node that starts leaving (or is removed) counts as a displacement, so
+  a failure that comes back on a node cordoned for days is "failing
+  again" instead of being held and opened as a new incident.
+- **The liveness advice is kept when the why-now sentence says the
+  numbers.** The startupProbe or longer-delay remedy was lost whenever the
+  joined sentence carried the liveness numbers.
+- **Restored health marks live their 24 hours.** The first inventory prune
+  no longer drops marks of an entity that was not observed yet.
+- **"Who scaled it" looks back as far as the model keeps changes (24
+  hours),** not 7 days it never held.
+- **A digest problem that comes back is listed again after its notes age
+  out,** and the per-incident digest bookkeeping of resolved incidents is
+  released.
+- **The flight recorder no longer skips an observation after a failed
+  write.**
+- **Jira code spans escape wiki markup.** `*`, `_`, `[~user]` and the
+  rest of the wiki markup inside `{{...}}` are escaped, so a quoted log
+  line is no longer formatted or turned into a mention. The unused
+  `escapeWiki` helper is removed; the Jira dialect does the escaping.
+- **SNS subjects keep their words.** Accented Latin letters and
+  typographic punctuation are transliterated to ASCII, other characters
+  are dropped, and the gaps collapse, instead of "shop    and.". A
+  configured subject is cleaned the same way.
+- **Feishu and DingTalk render the note in their own markup.** The note
+  was sent as raw Markdown, so code spans arrived as literal `*x*` and
+  backticks. Feishu cards get inline code and code blocks; DingTalk, whose
+  markdown has no code, gets escaped text and block quotes. Feishu `<at>`
+  tags and DingTalk `@phone`/`@all` text are broken so kwatch text can
+  never mention anyone.
+- **Webex and DingTalk cut messages to their size limit.** Webex markdown
+  is held to 7439 bytes and the DingTalk request body to 20000 bytes
+  (assumed from the platform documentation), cut by whole blocks so no
+  code fence is left open.
+- **Quoted cluster text cannot mass-mention on any chat provider.** The
+  shared neutralizer now also breaks Slack's `<!here>`, `<!channel>` and
+  `<!subteam^...>` (which Mattermost and Rocket.Chat webhooks expand too),
+  and Flock sends neutralized text. Every chat provider's contract test
+  has a `mentions` case with `@channel @everyone <!here> @all` and fails
+  on any live mention in the request.
+- **Every alert provider has a contract test against a golden request.**
+  Seven canonical messages (page open, notify update, resolve, digest,
+  markdown with code, unicode, near the size limit) are sent through each
+  provider to a recording server and the exact method, path, query, pinned
+  headers (secrets redacted) and normalized body are compared with a
+  committed golden under testdata/contract, with API-shape checks for keys,
+  severity, resolve and size limits. Goldens change only with a scoped
+  -update. `make provider-smoke` is an opt-in smoke test of Slack,
+  PagerDuty, Opsgenie, Teams and webhook against real accounts, skipped
+  without its KWATCH_SMOKE_* variables.
+- **Short application output is no longer dropped from size-limited
+  messages.** Discord (and any provider using the shared rich renderer with
+  a limit) omitted the output block when the output was under 40 bytes.
+- **Splunk On-Call alerts post to the right URL.** The REST path was built
+  as routing key then API key; it is now API key then routing key.
+- **The Secret access that comes by default is now stated.** With
+  `watch.secrets` on (the default) kwatch's ServiceAccount can read every
+  Secret in the cluster; kwatch keeps only hashes. Helm prints a warning
+  after install, kwatch logs one INFO line at startup while Secrets are
+  watched, and the README and docs say it plainly. Behaviour is unchanged:
+  `watch.secrets=false` removes all Secret access (`rbac.mode=least-privilege`
+  alone does not).
 - **Every reason Kubernetes emits is classified, and the rest is counted.**
   A checked-in snapshot of the container waiting and terminated reasons,
   pod reasons, kubelet, scheduler and controller Warning events and built-in
@@ -14,6 +199,18 @@
   RegistryUnavailable and PreCreateHookError waiting reasons, and the
   ModifyVolumeError claim condition. Warning events that were only digest
   material after three repeats are now findings of their own severity.
+- **The Kubernetes reason corpus is generated from the source, not typed.**
+  `cmd/upstreamreasons` reads the kubernetes/kubernetes tag that matches
+  k8s.io/api (v1.37.1) with go/ast and writes the event, waiting, pod and HPA
+  condition reasons; `make upstream-check` fails when the committed files
+  drift from the tag and `make upstream-reasons` regenerates them (both need
+  network; `make verify` stays offline). Against the old hand-written list it
+  dropped reasons Kubernetes never emits (FailedGetMetrics, FailedConvertHPA,
+  HostPortConflict, FailedCallingWebhook and others), renamed
+  WarnAlreadyMountedVolume to the real AlreadyMountedVolume, and added the
+  admission, certificate, resize, Job, CronJob and CRI image reasons it had
+  missed. FailedUpdateScale stays as an HPA condition reason; its event is
+  FailedRescale.
 - **A container waiting in an unknown state is never assumed healthy.** A
   waiting reason that is neither a known failure nor known progress
   (ContainerCreating, PodInitializing) is reported after two minutes as a
@@ -174,7 +371,9 @@
   finding, so a short spike while a node starts its pods stays quiet. A
   digest-tier problem that opened twice in six hours waits the full
   stability hold before it resolves, so recoveries that do not last are no
-  longer announced as resolved and "failing again".
+  longer announced as resolved and "failing again". The node scan
+  behind this now runs only when a node changed, not on every update and
+  tick, which saves about 1.8 ms each at 2000 nodes.
 - **Expired, unused TLS Secrets are one digest line, not an outage.** Ten
   leftover Secrets no longer read as ten lines: the digest says "9 expired
   TLS Secrets that nothing references: a/x, b/y, c/z +6", in the new and the
@@ -1186,6 +1385,33 @@
   year carry the year; a few stuck objects are named in the lead. A
   flapping update followed at once by an identical "failing again" is
   recorded once. A component degradation is logged with its name and reason.
+- **An upgrade or rollback no longer drops queued pages and thread ids.**
+  When the state file has another schema version, the delivery outbox and
+  the provider thread ids are copied into the fresh file, so queued pages
+  and resolves are still sent and Slack and Jira threads continue. The old
+  file is kept as `state.db.corrupt.<time>`, and the newest two copies stay
+  instead of one being overwritten. An undecodable outbox record is deleted
+  with a log line instead of lingering.
+- **The health port is no longer open to every pod.** With the chart
+  NetworkPolicy on, `/health`, `/metrics` and `/status` accept only the
+  release namespace, `networkPolicy.kubeletCIDRs` and the peers listed in
+  the new `networkPolicy.healthIngressFrom` (for example a Prometheus
+  namespace). `/status` stays off unless `healthCheck.statusEndpoint` is
+  true.
+- **A webhook with broken credentials fails startup.** A malformed
+  `headers` entry, a header HTTP cannot carry, or a `basicAuth` with only a
+  username or only a password is now an error instead of being ignored. An
+  `http://` webhook with credentials logs a warning.
+- **Bad outbound proxy or CA bundle settings fail startup.** An invalid
+  `app.proxyURL` or an unreadable `app.caBundlePath` used to be logged and
+  skipped. A proxy URL with credentials must now be a `${file:/path}`
+  reference.
+- **Delivery edge cases.** A 2xx answer whose body drain fails counts as
+  sent (no duplicate page). A header value with a newline is dead-lettered at
+  once instead of retried for 24 hours. A job stops retrying inline after two
+  minutes of waiting and is requeued, so a long backoff cannot hold a queued
+  resolve. A config type error no longer prints the first characters of a
+  secret read from a file.
 
 ### Breaking changes
 
@@ -1277,6 +1503,13 @@
   `networkPolicy.apiServerPorts`.
 
 ### Upgrade notes
+
+- **The unused audit bucket is gone from the state file.** The bbolt
+  `audit` bucket held nothing kwatch read and the documented 30-day audit
+  retention never applied to the decision log. An older state file that still
+  has the bucket opens normally and the bucket is dropped at start. The
+  decision log is unchanged: `auditLog.output` stdout or a file, rotated at
+  10 MiB to one `<path>.1` backup.
 
 - **Expiring TLS certificates are no longer reported.** kwatch used to
   raise `TLSCertExpiringSoon` (mode `Cert.Expiring`) for a certificate close

@@ -1,0 +1,25 @@
+POST /services/collector/event
+Content-Type: application/json
+Authorization: Splunk <redacted>
+
+{
+  "event": {
+    "cluster": "dev",
+    "incidentKey": "kwatch-dev-p-md",
+    "message": "🔴 payments in shop is crash-looping.\nIt said boom *x* @channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop",
+    "namespaces": [
+      "shop"
+    ],
+    "reasons": [
+      "OOMKilled"
+    ],
+    "revision": 1,
+    "severity": "critical",
+    "source": "kwatch",
+    "state": "firing",
+    "status": "critical",
+    "title": "🔴 payments in shop is crash-looping."
+  },
+  "index": "k8s",
+  "sourcetype": "kwatch:incident"
+}

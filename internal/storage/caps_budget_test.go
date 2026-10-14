@@ -4,8 +4,8 @@ import "testing"
 
 // The per-bucket caps are the most history the compactor keeps. Their sum
 // must leave most of the total cap to what is never evicted (incidents,
-// baselines, fingerprints, state, threads, the outbox) and to the audit
-// log, so the always-on flight recording cannot crowd them out.
+// baselines, fingerprints, state, threads, the outbox), so the always-on flight
+// recording cannot crowd them out.
 func TestHistoryCapsLeaveRoomUnderTheSizeCap(t *testing.T) {
 	p := DefaultPolicy()
 	capped := p.EvidenceCap + p.TimelineCap + p.ChangesCap + p.FlightCap

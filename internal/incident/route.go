@@ -74,6 +74,9 @@ func routeOf(p *Incident) *AnnouncedRoute {
 	if p.Root.Namespace != "" {
 		namespaces[p.Root.Namespace] = true
 	}
+	for _, ns := range p.Spaces {
+		namespaces[ns] = true
+	}
 	for _, s := range p.Members {
 		if s.Entity.Namespace != "" {
 			namespaces[s.Entity.Namespace] = true
@@ -82,7 +85,7 @@ func routeOf(p *Incident) *AnnouncedRoute {
 	}
 	return &AnnouncedRoute{
 		Namespaces: sortedKeys(namespaces), Reasons: sortedKeys(reasons),
-		Severity: severityOfTier(p.Tier), Owners: ownersOf(p.Owner),
+		Severity: severityOfTier(p.Tier), Owners: p.Owners,
 	}
 }
 

@@ -18,13 +18,13 @@ import (
 // after a collection (docs/production-goals.md). The default 512Mi
 // limit sets GOMEMLIMIT at about 90%; the rest of the limit is stacks,
 // runtime overhead and the delivery queues.
-const memBudgetMiB = 250
+const memBudgetMiB = 65
 
 // memPeakMiB bounds the peak heap: the most heap memory the process
 // held from the operating system at any sampled phase, live objects and
 // garbage not yet collected together. It is what counts against the
 // container limit, so it may not pass the default 512Mi.
-const memPeakMiB = 512
+const memPeakMiB = 200
 
 // memKinds are the kinds detection evaluates in the budget test.
 var memKinds = []inventory.Kind{

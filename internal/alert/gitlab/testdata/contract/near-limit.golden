@@ -1,0 +1,16 @@
+--- request 1 of 2
+GET /projects/group%2Fproject/issues?in=description&search=kwatchkey8b2cb844620fe5dc&state=opened
+Content-Type: application/json
+PRIVATE-TOKEN: <redacted>
+
+(empty body)
+
+--- request 2 of 2
+POST /projects/group%2Fproject/issues
+Content-Type: application/json
+PRIVATE-TOKEN: <redacted>
+
+{
+  "description": "🔴 payments in shop is crash-looping. Last output:\n\n\n```\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[3061 runes sha256:57b074c90bc54bbd13587d84]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n```\n\n```\npanic: out of memory\n```\n\nRef: kwatchkey8b2cb844620fe5dc",
+  "title": "🔴 payments in shop is crash-looping."
+}
