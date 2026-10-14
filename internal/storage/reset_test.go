@@ -36,11 +36,12 @@ func leftovers(t *testing.T, path string) []string {
 	return names
 }
 
-// assertKeptAside checks that the replaced file survives as the single
-// path+".corrupt" copy.
+// assertKeptAside checks that the replaced file survives as exactly one
+// timestamped path+".corrupt.<time>" copy.
 func assertKeptAside(t *testing.T, path string) {
 	t.Helper()
-	assert.Equal(t, []string{path + corruptSuffix}, leftovers(t, path))
+	assert.Len(t, leftovers(t, path), 1)
+	assert.Len(t, keptCopiesOf(path), 1)
 }
 
 // seeded creates a claimed file at path holding one state value.
@@ -162,21 +163,6 @@ func TestOpenInaccessibleDirectoryFailsWithoutReset(t *testing.T) {
 		Options{Now: newFakeClock().Now})
 
 	require.Error(t, err)
-}
-
-// A second reset replaces the older quarantined file: only one is kept.
-func TestSecondResetOverwritesQuarantinedFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "state.db")
-	require.NoError(t, os.WriteFile(path, []byte("first bad file"), 0o600))
-	openStoreAt(t, path).Close()
-	require.NoError(t, os.Remove(path))
-	require.NoError(t, os.WriteFile(path, []byte("second bad"), 0o600))
-	openStoreAt(t, path).Close()
-
-	assertKeptAside(t, path)
-	kept, err := os.ReadFile(path + corruptSuffix)
-	require.NoError(t, err)
-	assert.Equal(t, "second bad", string(kept))
 }
 
 // An error that is not structural must never move a file aside.

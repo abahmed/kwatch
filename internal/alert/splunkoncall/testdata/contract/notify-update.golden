@@ -1,0 +1,9 @@
+POST /<secret>/everyone
+Content-Type: application/json
+
+{
+  "entity_display_name": "🔴 payments in shop is still crash-looping.",
+  "entity_id": "kwatch-dev-p-42",
+  "message_type": "CRITICAL",
+  "state_message": "🔴 payments in shop is still crash-looping. It restarted 5 times now.\n\npanic: out of memory"
+}

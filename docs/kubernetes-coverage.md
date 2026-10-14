@@ -243,7 +243,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Scaling.Error | varies | `HPAScalingError` | `hpa` |
 | Scaling.InvalidSelector | varies | `HPAInvalidSelector` | `hpa` |
 | Scaling.MaxedOut | degraded | `HPAMaxedOut` | `hpa` |
-| Scaling.NoMetrics | varies | `FailedComputeMetricsReplicas`, `FailedGetMetrics`, `FailedGetResourceMetric` | `hpa` |
+| Scaling.NoMetrics | varies | `FailedComputeMetricsReplicas`, `FailedGetResourceMetric` | `hpa` |
 | Scaling.TargetMissing | degraded | `FailedGetScale`, `HPATargetMissing` | `hpa`, `hpa_target` |
 | Scaling.UpdateFailed | varies | `FailedUpdateScale` | `hpa` |
 | Schedule.Blocked | degraded | `CronJobBlocked` | `schedule_history` |
@@ -269,6 +269,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Volume.AttachWaiting | varies | `VolumeAttachWaiting` | `event_storage` |
 | Volume.DetachFailed | degraded | `VolumeDetachFailure` | `quota_attach` |
 | Volume.MapFailed | failing | `FailedMapVolume` | `event`, `event_storage` |
+| Volume.MultiAttach | varies | `VolumeMultiAttach` | `event_storage` |
 | Volume.ProvisioningFailed | degraded | `ProvisioningFailed` | `event`, `event_storage` |
 | VolumeFailed | failing | `PersistentVolumeFailure` | `storage` |
 | VolumeFull | varies | `VolumeUsageHigh` | `usage` |

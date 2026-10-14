@@ -3,6 +3,8 @@ package kubeclient
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -36,22 +38,20 @@ func defaultTransport() *http.Transport {
 
 // NewHTTPClient builds the application-owned outbound client from config.
 // Callers pass the returned client to components that perform HTTP requests;
-// no process-wide mutable client is required.
-func NewHTTPClient(cfg config.ApplicationRuntime) *http.Client {
+// no process-wide mutable client is required. A proxy URL that does not
+// parse or a CA bundle that cannot be used is an error: running without
+// them would send provider traffic around the proxy or fail TLS later.
+func NewHTTPClient(cfg config.ApplicationRuntime) (*http.Client, error) {
 	transport := defaultTransport()
 
 	if cfg.ProxyURL != "" {
 		p, err := url.Parse(cfg.ProxyURL)
 		if err != nil || p.Scheme == "" || p.Host == "" {
 			// The parse error quotes the whole URL, which may carry proxy
-			// credentials, so only a fixed message is logged.
-			klog.ErrorS(nil, "invalid outbound proxy URL; proxy disabled")
-			// Disabled means disabled: do not fall back to the
-			// proxy environment variables.
-			transport.Proxy = nil
-		} else {
-			transport.Proxy = http.ProxyURL(p)
+			// credentials, so the message is fixed.
+			return nil, errors.New("app.proxyURL is not a valid URL")
 		}
+		transport.Proxy = http.ProxyURL(p)
 	}
 
 	tlsCfg := &tls.Config{
@@ -65,24 +65,24 @@ func NewHTTPClient(cfg config.ApplicationRuntime) *http.Client {
 	}
 
 	if cfg.CABundlePath != "" {
-		applyCABundle(tlsCfg, cfg.CABundlePath)
+		if err := applyCABundle(tlsCfg, cfg.CABundlePath); err != nil {
+			return nil, err
+		}
 	}
 
 	transport.TLSClientConfig = tlsCfg
 	return &http.Client{
 		Timeout:   DefaultHTTPTimeout,
 		Transport: transport,
-	}
+	}, nil
 }
 
 // applyCABundle trusts the CA certificates in the file at path, in
-// addition to the system roots. A missing or invalid bundle is logged and
-// the system roots stay in use.
-func applyCABundle(tlsCfg *tls.Config, path string) {
+// addition to the system roots. A missing or invalid bundle is an error.
+func applyCABundle(tlsCfg *tls.Config, path string) error {
 	caCert, err := os.ReadFile(path)
 	if err != nil {
-		klog.ErrorS(err, "could not read outbound CA bundle", "path", path)
-		return
+		return fmt.Errorf("app.caBundlePath cannot be read: %w", err)
 	}
 	// Keep the system roots so public endpoints (telemetry, update check,
 	// SaaS providers) still verify next to a private bundle.
@@ -91,9 +91,9 @@ func applyCABundle(tlsCfg *tls.Config, path string) {
 		pool = x509.NewCertPool()
 	}
 	if !pool.AppendCertsFromPEM(caCert) {
-		klog.Warningf(
-			"outbound CA bundle contains no valid certificates: %s", path)
-		return
+		return fmt.Errorf(
+			"app.caBundlePath %s contains no valid certificates", path)
 	}
 	tlsCfg.RootCAs = pool
+	return nil
 }

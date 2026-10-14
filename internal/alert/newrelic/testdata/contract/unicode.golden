@@ -1,0 +1,20 @@
+POST /v1/accounts/1/events
+Content-Type: application/json
+Api-Key: <redacted>
+
+[
+  {
+    "action": "firing",
+    "cluster": "dev",
+    "eventType": "KwatchAlert",
+    "incidentKey": "kwatch-dev-p-uni",
+    "message": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\nLast output:\nпаника: нехватка памяти — 内存不足",
+    "namespace": "shop",
+    "reason": "OOMKilled",
+    "revision": 1,
+    "severity": "critical",
+    "state": "firing",
+    "status": "critical",
+    "title": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú."
+  }
+]

@@ -1,0 +1,19 @@
+POST /api/core/v2/namespaces/default/events
+Content-Type: application/json
+Authorization: Key <redacted>
+
+{
+  "check": {
+    "issued": 1767323045,
+    "metadata": {
+      "name": "kwatch-dev-p-big"
+    },
+    "output": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[5995 runes sha256:b9f92bb928a2178dd8961255]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nLa…",
+    "status": 2
+  },
+  "entity": {
+    "metadata": {
+      "name": "kwatch"
+    }
+  }
+}

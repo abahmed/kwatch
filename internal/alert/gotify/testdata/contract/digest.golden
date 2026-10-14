@@ -1,0 +1,9 @@
+POST /message
+Content-Type: application/json
+X-Gotify-Key: <redacted>
+
+{
+  "message": "🟠 kwatch started and found 2 problems.",
+  "priority": 8,
+  "title": "kwatch"
+}

@@ -21,12 +21,30 @@ func newOutboxStore(s *storage.Store) outboxStore {
 // LoadOutbox returns every saved record in key order, which is the order
 // the jobs were queued in.
 func (o outboxStore) LoadOutbox() ([]delivery.OutboxRecord, error) {
+	o.purgeCorrupt()
 	var records []delivery.OutboxRecord
 	err := o.values.Range("", func(_ string, r delivery.OutboxRecord) error {
 		records = append(records, r)
 		return nil
 	})
 	return records, err
+}
+
+// purgeCorrupt deletes saved records that no longer decode, logging each
+// key once. Such a record can never be sent, and left in the file it would
+// not count toward the outbox bound. A failure is logged, not fatal.
+func (o outboxStore) purgeCorrupt() {
+	removed, err := o.values.PurgeCorrupt()
+	if err != nil {
+		klog.ErrorS(err, "purge corrupt outbox records",
+			"component", "delivery", "operation", "outbox")
+		return
+	}
+	for _, key := range removed {
+		klog.ErrorS(nil, "dropped a corrupt outbox record: its page "+
+			"cannot be sent", "component", "delivery",
+			"operation", "outbox", "key", key)
+	}
 }
 
 // WriteOutbox stores puts in one transaction, then deletes removes in a
@@ -48,6 +66,7 @@ func (o outboxStore) WriteOutbox(
 // when the outbox cannot be read; it only loses crash protection, which
 // /health reports.
 func attachOutbox(deps *serverDeps, state *storage.Store) {
+	deps.deliveryManager.OnOutboxSick(reportOutboxSick(deps))
 	err := deps.deliveryManager.AttachOutbox(newOutboxStore(state))
 	if err == nil {
 		return
@@ -57,5 +76,22 @@ func attachOutbox(deps *serverDeps, state *storage.Store) {
 	if deps.healthServer != nil {
 		deps.healthServer.SetComponentStatus("delivery-outbox",
 			"degraded", "persistence_restore_failed", false)
+	}
+}
+
+// reportOutboxSick shows on /health whether the outbox writer keeps
+// failing. Delivery still works; only crash protection is lost.
+func reportOutboxSick(deps *serverDeps) func(bool) {
+	return func(sick bool) {
+		if deps.healthServer == nil {
+			return
+		}
+		if sick {
+			deps.healthServer.SetComponentStatus("delivery-outbox",
+				"degraded", "persistence_write_failed", true)
+			return
+		}
+		deps.healthServer.SetComponentStatus("delivery-outbox",
+			"running", "", true)
 	}
 }

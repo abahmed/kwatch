@@ -112,11 +112,19 @@ only when `healthCheck.statusEndpoint` is true (default false, 404 otherwise).
 It has no profiling endpoints to protect. `/status` is read-only and lists
 object names (workloads, nodes, budgets, webhooks) to anyone who can reach the
 health port, so do not expose that port outside the cluster; read it with
-`kubectl port-forward`.
+`kubectl port-forward`. With the NetworkPolicy on, the health port (including
+`/metrics` and `/status`) is reachable only from pods in the release namespace,
+from the node ranges in `networkPolicy.kubeletCIDRs`, and from the peers you
+list in `networkPolicy.healthIngressFrom`.
 
 The Helm chart includes an opt-in NetworkPolicy template. With its default
-`networkPolicy.allowDefaults: true` it admits the health port (kubelet probes
-and metrics scrapes) and allows egress to DNS, to TCP
+`networkPolicy.allowDefaults: true` it admits the health port to its own
+namespace, to the `networkPolicy.kubeletCIDRs` nodes and to the scrapers in
+`networkPolicy.healthIngressFrom` (a list of `namespaceSelector`,
+`podSelector` or `ipBlock` peers, for example your Prometheus namespace). Most
+network plugins always let a node reach its own pods, so kubelet probes work
+without more; if yours enforces policy on node traffic, set `kubeletCIDRs`.
+It allows egress to DNS, to TCP
 `networkPolicy.apiServerPorts` (443 and 6443) on any address, which covers the
 Kubernetes API server and HTTPS notification providers, and to the kubelet on
 every node (`networkPolicy.kubeletPort`, default 10250) for node stats. Set
@@ -192,9 +200,31 @@ The default memory limit is 512Mi. kwatch sets the Go soft memory limit
 (`GOMEMLIMIT`) to 90% of the container limit, read from the
 `KWATCH_MEMORY_LIMIT` downward-API variable, so the garbage collector works
 harder before the kernel would kill the Pod. An explicit `GOMEMLIMIT` always
-wins. A model of 5,000 pods and 500 nodes measured about 83 MiB of live heap
-(`TestMemoryBudgetLargeCluster`, which fails above 250 MiB of live heap or
-512 MiB of peak heap). Every 30
+wins. A model of 5,000 simple pods and 500 nodes measured about 50 MiB of
+live heap (`TestMemoryBudgetLargeCluster`, which fails above 65 MiB of live
+heap or 200 MiB of peak heap).
+
+Size the limit from the number of pods. Measured with realistic pods (three
+containers, 45 environment variables, six volumes, probes, managed fields;
+`TestMemoryBudgetTwentyThousandPods`, run with `KWATCH_MEMORY_20K=1`), kwatch
+holds about 26 KB of live heap per pod: about 8 KB in the informer cache and
+18 KB in the model, which keeps one entity per pod and per container. Plan
+for twice the live heap, so the garbage collector has room and a burst of
+events does not reach the limit.
+
+| Pods | Live heap (about) | Memory request and limit |
+|------|-------------------|--------------------------|
+| up to 2,000 | 60 MiB | `512Mi` (chart default) |
+| 5,000 | 140 MiB | `512Mi` (chart default) |
+| 10,000 | 270 MiB | `768Mi` |
+| 20,000 | 520 MiB | `1Gi` (`1280Mi` for pods with larger specs) |
+
+The default 512Mi supports about 8,000 realistic pods; beyond that, raise
+`resources.requests.memory` and `resources.limits.memory` together. Pods
+with many containers, large environment lists or many volumes weigh more,
+so measure with the `self-health` heap line and the Go heap metrics rather
+than trusting the table at the edges.
+Every 30
 minutes kwatch logs a `self-health` line with the Go heap in use, the
 number of goroutines and the sizes of its bounded in-memory maps, so slow
 growth shows in the logs before the limit does.
@@ -274,7 +304,7 @@ reported through health diagnostics.
 ## Storage
 
 The state file `/var/lib/kwatch/state.db` holds one bucket per data class:
-incidents, changes, baselines, evidence, timeline, audit, object
+incidents, changes, baselines, evidence, timeline, object
 fingerprints, lifecycle state, provider thread IDs, the delivery outbox, and
 the flight recording.
 Every write,
@@ -283,9 +313,16 @@ lost the Lease cannot write or delete anything.
 
 **Schema changes reset the store.** There are no migrations. When the file
 has another schema version (older or newer) or bbolt cannot read it, Kwatch
-renames it to `state.db.corrupt` (one copy, replaced by a later reset),
-creates a fresh store, and continues: it starts cold and sends one startup
-summary. A locked or otherwise unknown open error does not reset; startup
+renames it to `state.db.corrupt.<UTC time>` (the newest two copies are kept,
+older ones are deleted; a copy larger than a quarter of the volume limit is
+deleted at once), creates a fresh store, and continues: it starts cold and
+sends one startup summary. After a schema change (not for an unreadable
+file) the delivery outbox and the thread IDs are copied into the fresh file,
+so queued pages and resolves are still sent and chat and ticket threads
+continue. Their records carry their own version: a record in a layout the new
+release does not know is dropped and counted by the outbox drop metric.
+Everything else is rebuilt from the cluster, so open incidents are
+re-announced once. The log line `state store reset` shows `carriedRecords`. A locked or otherwise unknown open error does not reset; startup
 fails instead. The event is logged with the old
 version and reason and appears on `/health` as the degraded `state-store`
 component with reason `storage_reset`; it does not affect readiness. The
@@ -296,7 +333,8 @@ startup fails and is retried by Kubernetes.
 
 A single record that cannot be decoded is skipped, counted
 (`kwatch_storage_corrupt_records_total`), and logged once per bucket per
-start. It never stops startup.
+start. It never stops startup. An undecodable outbox record can never be sent,
+so it is deleted at start and logged with its key.
 
 **Retention.** A background compactor runs every 15 minutes in the active
 session, off the decision path, in transactions of at most 500 entries. It
@@ -304,7 +342,7 @@ stops within one transaction on shutdown or loss of the state lock.
 
 | Data | Retention |
 | --- | --- |
-| Changes, audit | 30 days after the entry time |
+| Changes | 7 days after the entry time, and at most 8 MiB |
 | Timeline | 7 days after the entry time, and at most 32 MiB |
 | Flight recording | 48 hours, and at most 64 MiB (see "Capturing an incident") |
 | Evidence | 30 days, and at most 128 MiB |
@@ -315,7 +353,7 @@ stops within one transaction on shutdown or loss of the state lock.
 
 **Size cap.** The logical size of the store (the bytes of keys and values) is
 capped at 512 MiB by default; evidence may use at most 128 MiB of it. Over the
-cap, the compactor deletes the oldest entries first across evidence, audit,
+cap, the compactor deletes the oldest entries first across evidence,
 timeline, changes, and resolved incidents, but always keeps at least a quarter
 of the cap for history. Open incidents, baselines, fingerprints, state,
 threads and the outbox are never evicted; if they alone keep the store over

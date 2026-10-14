@@ -1,0 +1,28 @@
+POST /services/collector/event
+Content-Type: application/json
+Authorization: Splunk <redacted>
+
+{
+  "event": {
+    "cluster": "dev",
+    "incidentKey": "kwatch-dev-p-42",
+    "message": "🔴 payments in shop is still crash-looping. It restarted 5 times now.",
+    "namespaces": [
+      "shop"
+    ],
+    "output": [
+      "panic: out of memory"
+    ],
+    "reasons": [
+      "OOMKilled"
+    ],
+    "revision": 2,
+    "severity": "critical",
+    "source": "kwatch",
+    "state": "firing",
+    "status": "critical",
+    "title": "🔴 payments in shop is still crash-looping."
+  },
+  "index": "k8s",
+  "sourcetype": "kwatch:incident"
+}

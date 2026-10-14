@@ -1,0 +1,9 @@
+POST /list/abc123/task
+Content-Type: application/json
+Authorization: <redacted>
+
+{
+  "markdown_description": "🔴 payments in shop is crash-looping. Last output:\n\n\n```\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[3029 runes sha256:1db03bb4714fccaf53828e5e]…xxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n```\n\n```\npanic: out of memory\n```",
+  "name": "🔴 payments in shop is crash-looping.",
+  "priority": 2
+}

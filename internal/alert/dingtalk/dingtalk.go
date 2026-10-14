@@ -79,8 +79,23 @@ func (d *DingTalk) Name() string {
 	return "DingTalk"
 }
 
+// dingTalkBodyLimit is DingTalk's documented cap on one robot message,
+// 20000 bytes. It is the assumed limit: the docs name no separate cap for
+// the markdown text, so the whole request body is held to it.
+const dingTalkBodyLimit = 20000
+
+// dingTalkTitleLimit keeps the notification title from using the room
+// the text needs.
+const dingTalkTitleLimit = 500
+
+// minTextLimit is the least text room worth trying before the text is
+// sent as the cut that fits.
+const minTextLimit = 256
+
 // SendIncident sends the incident narrative as a markdown message. The
-// notification title is the configured title or the Short lead.
+// notification title is the configured title or the Short lead. The
+// narrative is written in DingTalk's markdown subset with mentions
+// broken, and cut by whole blocks so the body stays within the limit.
 func (d *DingTalk) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
@@ -88,8 +103,31 @@ func (d *DingTalk) SendIncident(
 	if len(title) == 0 {
 		title = m.ShortText()
 	}
-	text := safetext.NoteWithOutput(m.NoteText(), m.Output, "\n\n", 0)
+	title = notification.Truncate(
+		notification.NeutralizeDingTalkMentions(title), dingTalkTitleLimit)
 
+	// JSON escaping makes the body longer than the text, so the text
+	// limit shrinks by what the body is over until the body fits.
+	limit := dingTalkBodyLimit - len(title) - 512
+	for {
+		text := safetext.RichWithOutput(m,
+			notification.DingTalkDialect(), "\n\n", limit)
+		bodyBytes, err := marshalMarkdown(title, text)
+		if err != nil {
+			return err
+		}
+		over := len(bodyBytes) - dingTalkBodyLimit
+		if over <= 0 || limit <= minTextLimit {
+			return d.sendAPI(ctx, string(bodyBytes))
+		}
+		limit -= over + minTextLimit
+		if limit < minTextLimit {
+			limit = minTextLimit
+		}
+	}
+}
+
+func marshalMarkdown(title, text string) ([]byte, error) {
 	payload := struct {
 		MsgType  string `json:"msgtype"`
 		Markdown struct {
@@ -101,16 +139,11 @@ func (d *DingTalk) SendIncident(
 	}
 	payload.Markdown.Title = title
 	payload.Markdown.Text = text
-
-	bodyBytes, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-
-	return d.sendAPI(ctx, string(bodyBytes))
+	return json.Marshal(payload)
 }
 
-// SendMessage sends text message to the provider
+// SendMessage sends text message to the provider, with mentions broken
+// and the text cut to fit the body limit.
 func (d *DingTalk) SendMessage(ctx context.Context, msg string) error {
 	payload := struct {
 		MsgType string `json:"msgtype"`
@@ -120,7 +153,11 @@ func (d *DingTalk) SendMessage(ctx context.Context, msg string) error {
 	}{
 		MsgType: "text",
 	}
-	payload.Text.Content = msg
+	// Escaping at worst makes a byte six long; the text is cut so it
+	// fits even then.
+	payload.Text.Content = notification.Truncate(
+		notification.NeutralizeDingTalkMentions(msg),
+		(dingTalkBodyLimit-512)/6)
 
 	bodyBytes, err := json.Marshal(payload)
 	if err != nil {

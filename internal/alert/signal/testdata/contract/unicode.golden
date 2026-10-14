@@ -1,0 +1,10 @@
+POST /v2/send
+Content-Type: application/json
+
+{
+  "message": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\n> паника: нехватка памяти — 内存不足",
+  "number": "+12025550199",
+  "recipients": [
+    "+12025550100"
+  ]
+}

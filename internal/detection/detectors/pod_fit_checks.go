@@ -18,6 +18,7 @@ const (
 	blockVolume
 	blockResource
 	blockPlacement
+	blockPort
 )
 
 // blocker is one reason a node cannot take the pod.
@@ -46,6 +47,7 @@ func (c *fitCase) check(n fitNode) []blocker {
 	out = append(out, c.volumeBlockers(n)...)
 	out = append(out, c.resourceBlockers(n)...)
 	out = append(out, c.placementBlockers(n)...)
+	out = append(out, c.portBlockers(n)...)
 	return out
 }
 

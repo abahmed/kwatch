@@ -64,6 +64,8 @@ type Manager struct {
 	// the state store. restored holds the jobs it loaded until Start.
 	outbox   atomic.Pointer[outbox]
 	restored []deliverJob
+	// outboxSick is told when the outbox writer keeps failing.
+	outboxSick func(bool)
 	// handoff holds, per provider, the job a worker was delivering when
 	// its context ended. Stop sends these first.
 	handoff map[string][]deliverJob

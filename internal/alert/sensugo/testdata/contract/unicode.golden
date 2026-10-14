@@ -1,0 +1,19 @@
+POST /api/core/v2/namespaces/default/events
+Content-Type: application/json
+Authorization: Key <redacted>
+
+{
+  "check": {
+    "issued": 1767323045,
+    "metadata": {
+      "name": "kwatch-dev-p-uni"
+    },
+    "output": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\nLast output:\nпаника: нехватка памяти — 内存不足",
+    "status": 2
+  },
+  "entity": {
+    "metadata": {
+      "name": "kwatch"
+    }
+  }
+}

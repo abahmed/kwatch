@@ -1,0 +1,8 @@
+POST /bot<secret>/sendMessage
+Content-Type: application/json
+
+{
+  "chat_id": "chat",
+  "parse_mode": "HTML",
+  "text": "🟠 kwatch started and found 2 problems that were there."
+}

@@ -1,0 +1,8 @@
+POST /
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "markdown": "🔴 payments in shop is crash-looping. Last output:\n\n\n```\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[6989 runes sha256:1a03bf77baab1271d1c7cf16]…xxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n```\n\n```\npanic: out of memory\n```",
+  "roomId": "room-1"
+}

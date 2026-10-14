@@ -1,0 +1,12 @@
+POST /
+Content-Type: application/x-www-form-urlencoded
+
+Action=SendEmail
+Destination.ToAddresses.member.1=ops@example.com
+Destination.ToAddresses.member.2=oncall@example.com
+Message.Body.Text.Charset=UTF-8
+Message.Body.Text.Data=🟠 kwatch started and found 2 problems that were there.
+Message.Subject.Charset=UTF-8
+Message.Subject.Data=🟠 kwatch started and found 2 problems.
+Source=kwatch@example.com
+Version=2010-12-01

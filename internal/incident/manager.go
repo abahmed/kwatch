@@ -33,6 +33,12 @@ type Manager struct {
 	// incident's ID, for retakeFormer. Restore rebuilds it from the
 	// FormerRoot of each record.
 	former map[string]string
+	// groups maps a node, zone or pool root that joined a node outage
+	// to the ID of the incident it joined (see node_group.go).
+	groups map[string]string
+	// left remembers the findings that left an announced node incident,
+	// for retakeSuspect.
+	left map[detection.Key]leftNode
 	// seq numbers new incident IDs; nonce tells IDs of one store
 	// apart from those of an earlier, reset store (see newID).
 	seq   int
@@ -60,6 +66,10 @@ type Manager struct {
 	refingerprint []string
 	// churn tracks node churn and the findings held for it.
 	churn nodeChurn
+	// nodesDirty is set when a node entity changed since churn last
+	// looked at the nodes, so a look is only made when it can find
+	// something new.
+	nodesDirty bool
 }
 
 // NewManager builds a manager that explains failures with explainer.
@@ -80,6 +90,8 @@ func NewManager(cfg Config, explainer Explainer) *Manager {
 		byMember:  make(map[detection.Key]string),
 		byRoot:    make(map[string]string),
 		former:    make(map[string]string),
+		groups:    make(map[string]string),
+		left:      make(map[detection.Key]leftNode),
 		changed:   make(map[string]bool),
 		resolved:  newResolvedIndex(),
 	}
@@ -107,9 +119,14 @@ func (m *Manager) Apply(
 	if history, ok := s.Model.(inventory.HistoryReader); ok {
 		m.model = history
 	}
-	m.churn.observe(s.Model, s.Now)
+	m.nodesDirty = m.nodesDirty || touchesNode(dirty, transitions)
+	m.observeNodes(s.Model, s.Now)
 	touched := append([]inventory.EntityID(nil), dirty...)
 	for _, t := range transitions {
+		if t.Kind == detection.Refreshed {
+			m.refreshMember(t.Finding)
+			continue
+		}
 		touched = append(touched, t.Finding.Entity)
 		if t.Kind == detection.Cleared {
 			m.detach(s.Now, t.Finding)
@@ -120,11 +137,15 @@ func (m *Manager) Apply(
 		m.placeArea(s, area, placed)
 	}
 	for _, t := range transitions {
-		if t.Kind != detection.Cleared && !placed[t.Finding.Key()] {
+		if t.Kind == detection.Refreshed || t.Kind == detection.Cleared {
+			continue
+		}
+		if !placed[t.Finding.Key()] {
 			own := placement{root: defaultRoot(s.Model, t.Finding.Entity)}
 			m.attach(s.Now, t.Finding, own)
 		}
 	}
+	m.recallSuspects(s.Now)
 	m.adoptAdvisories(s)
 	m.refresh(s.Model, s.Now)
 	m.observeAttempts(dirty, s.Now)

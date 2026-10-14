@@ -25,14 +25,17 @@ func RichWithOutput(
 	// The note comes first: when it leaves too little room, the output
 	// is dropped and the note keeps the space.
 	note := m.RenderWithin(d, limit)
-	for len(raw) >= minOutputBudget {
+	for {
 		block := d.Fence(neutral(d, raw))
 		if len(note)+len(sep)+len(block) <= limit {
 			return note + sep + block
 		}
+		// Output below the budget floor is not worth shrinking further.
+		if len(raw) < minOutputBudget {
+			return note
+		}
 		raw = notification.Truncate(raw, len(raw)*3/4)
 	}
-	return note
 }
 
 func neutral(d notification.Dialect, s string) string {

@@ -1,0 +1,7 @@
+{
+  "name": "provisioner-no-workload-found",
+  "description": "A claim cannot be provisioned and no workload of the cluster serves its StorageClass's provisioner.",
+  "root": "persistentvolumeclaim/data/orders-db",
+  "tier": "notify",
+  "maxMessages": 2
+}

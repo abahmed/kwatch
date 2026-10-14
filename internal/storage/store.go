@@ -17,7 +17,8 @@ import (
 // SchemaVersion is the on-disk format version. Any change to a persisted
 // layout must bump it. There are no migrations: a file
 // with another version is moved aside and replaced by a fresh store (see
-// reset.go).
+// reset.go); only the queued deliveries and thread ids are copied across
+// (see reset_carry.go).
 const SchemaVersion = 2
 
 // Errors returned by the store.
@@ -114,8 +115,8 @@ type file struct {
 
 // Open opens or creates the state file at path. The directory is created
 // with owner-only permissions; the file is 0600. A file with another
-// schema version, or one bbolt cannot read, is deleted and a fresh
-// store is created without a backup; Reset reports it. With
+// schema version, or one bbolt cannot read, is moved aside and a fresh
+// store is created; Reset reports it. With
 // Options.DeferRepair the deletion and the oversize rewrite wait for
 // Claim. Open fails only when the file cannot be opened at all, for
 // example while another process holds it.
@@ -172,12 +173,14 @@ func (f *file) repair() error {
 		return err
 	}
 	if f.pending != nil {
-		db, err := resetFile(f.path, f.pending, f.volumeLimit)
+		db, carried, err := resetFile(
+			f.path, f.pending, f.volumeLimit, f.now())
 		if err != nil {
 			return err
 		}
 		f.db, f.reset, f.pending = db, &Reset{
 			Reason: f.pending.reason, OldVersion: f.pending.version,
+			CarriedRecords: carried,
 		}, nil
 	}
 	if f.shrink {

@@ -35,6 +35,7 @@ func worseningSentences(f caseFacts) []sentence {
 	if len(ids) == 0 {
 		return nil
 	}
+	ids = workloadsOf(f, ids)
 	home := leadSubject(f)
 	verb := " now crash-loops"
 	if len(ids) > 1 {

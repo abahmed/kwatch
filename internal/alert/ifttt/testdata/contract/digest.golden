@@ -1,0 +1,8 @@
+POST /trigger/kw/with/key/<secret>
+Content-Type: application/json
+
+{
+  "value1": "🟠 kwatch started and found 2 problems.",
+  "value2": "🟠 kwatch started and found 2 problems that were there.",
+  "value3": "warning"
+}

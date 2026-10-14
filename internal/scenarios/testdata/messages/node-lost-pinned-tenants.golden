@@ -9,6 +9,6 @@
 | kubectl describe node n1
 | ```
 10:04:00 material change
-🔴 Node n1 (prod-eu-1) is spreading to pods tenant-0-3589794e-a, tenant-1-8c453a45-a, tenant-2-77544be4-a and three others in apps: they have not been ready for three minutes.
-🔴 Node n1 (prod-eu-1) is spreading to pods tenant-0-3589794e-a, tenant-1-8c453a45-a, tenant-2-77544be4-a and three others in apps: they have not been ready for three minutes.
-| 🔴 Node n1 (**prod-eu-1**) is spreading to pods **tenant-0-3589794e-a**, **tenant-1-8c453a45-a**, **tenant-2-77544be4-a** and three others in apps: they have not been ready for three minutes.
+🔴 Node n1 (prod-eu-1) is spreading to tenant-0, tenant-1, tenant-2 and three others in apps: they have not been ready for three minutes.
+🔴 Node n1 (prod-eu-1) is spreading to tenant-0, tenant-1, tenant-2 and three others in apps: they have not been ready for three minutes.
+| 🔴 Node n1 (**prod-eu-1**) is spreading to **tenant-0**, **tenant-1**, **tenant-2** and three others in apps: they have not been ready for three minutes.

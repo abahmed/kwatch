@@ -1,0 +1,17 @@
+POST /api/v1/messages
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic <redacted>
+
+content=🔴 payments in shop is crash-looping. Last output:
+
+```
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[9988 runes sha256:6881c1d2426e8cd322a50bb0]…xxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+```
+panic: out of memory
+```
+subject=kwatch alert
+to=alerts
+type=stream

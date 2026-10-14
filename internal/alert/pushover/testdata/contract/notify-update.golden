@@ -1,0 +1,7 @@
+POST /1/messages.json
+Content-Type: application/x-www-form-urlencoded
+
+message=🔴 payments in shop is still crash-looping.
+title=kwatch
+token=<redacted>
+user=user123

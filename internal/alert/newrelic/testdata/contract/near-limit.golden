@@ -1,0 +1,20 @@
+POST /v1/accounts/1/events
+Content-Type: application/json
+Api-Key: <redacted>
+
+[
+  {
+    "action": "firing",
+    "cluster": "dev",
+    "eventType": "KwatchAlert",
+    "incidentKey": "kwatch-dev-p-big",
+    "message": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[4091 runes sha256:d235e9e1328a732a907b9433]…xxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nLast output:\npanic…",
+    "namespace": "shop",
+    "reason": "OOMKilled",
+    "revision": 1,
+    "severity": "critical",
+    "state": "firing",
+    "status": "critical",
+    "title": "🔴 payments in shop is crash-looping."
+  }
+]

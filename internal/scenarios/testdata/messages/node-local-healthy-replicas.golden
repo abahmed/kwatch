@@ -9,6 +9,6 @@
 | kubectl describe node n1
 | ```
 10:04:40 material change
-🔴 Node n1 (prod-eu-1) is spreading to pods api-ed3e6bad-a and api-ed3e6bad-b in shop: they have not been ready for three minutes.
-🔴 Node n1 (prod-eu-1) is spreading to pods api-ed3e6bad-a and api-ed3e6bad-b in shop: they have not been ready for three minutes.
-| 🔴 Node n1 (**prod-eu-1**) is spreading to pods **api-ed3e6bad-a** and **api-ed3e6bad-b** in shop: they have not been ready for three minutes.
+🔴 Node n1 (prod-eu-1) is spreading to api in shop: it has not been ready for three minutes.
+🔴 Node n1 (prod-eu-1) is spreading to api in shop: it has not been ready for three minutes.
+| 🔴 Node n1 (**prod-eu-1**) is spreading to **api** in shop: it has not been ready for three minutes.

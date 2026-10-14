@@ -28,6 +28,12 @@ func leadText(f caseFacts) string {
 	if text, ok := createdLead(f); ok {
 		return text
 	}
+	if text, ok := volumeHeldLead(f); ok {
+		return text
+	}
+	if text, ok := provisionerLead(f); ok {
+		return text
+	}
 	if text, ok := rivalLead(f); ok {
 		return text
 	}
@@ -42,6 +48,8 @@ func leadText(f caseFacts) string {
 		return policyBlockLead(f)
 	case p.Cause != nil && p.Cause.Root.Kind == explain.KindFailureSignature:
 		return signatureLead(f)
+	case leadIsNodes(f):
+		return nodesLead(f)
 	case leadIsGroup(f):
 		return groupLead(f)
 	case selfCause(p.Cause):
@@ -83,17 +91,18 @@ func groupLead(f caseFacts) string {
 	return text + ": " + numberWord(nodes) + " nodes " + pluralPredicate(state)
 }
 
-// failingNodes counts the node members and words the condition of the
-// most severe one as a predicate.
+// failingNodes counts the distinct nodes among the members (one node
+// can have several findings) and words the condition of the most severe
+// one as a predicate.
 func failingNodes(f caseFacts) (int, string) {
-	count := 0
+	nodes := map[inventory.EntityID]bool{}
 	var worst detection.Finding
 	found := false
 	for _, m := range failing(f.members) {
 		if m.Entity.Kind != kube.KindNode {
 			continue
 		}
-		count++
+		nodes[m.Entity] = true
 		if !found || m.Severity > worst.Severity {
 			worst, found = m, true
 		}
@@ -101,7 +110,7 @@ func failingNodes(f caseFacts) (int, string) {
 	if !found {
 		return 0, ""
 	}
-	return count, beforeColon(predicate(worst.Entity, worst.Summary))
+	return len(nodes), beforeColon(predicate(worst.Entity, worst.Summary))
 }
 
 // blamedChange is the change the lead blames, or nil. A change is not

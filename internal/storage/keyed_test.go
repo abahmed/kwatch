@@ -146,3 +146,21 @@ func TestKeyedExpiredValueIsHidden(t *testing.T) {
 	}))
 	assert.Equal(t, []string{"open"}, keys)
 }
+
+func TestPurgeCorruptDeletesOnlyUndecodableValues(t *testing.T) {
+	s := openClaimed(t, newFakeClock())
+	view := OutboxValues[record](s)
+	require.NoError(t, view.Put("good", record{Name: "ok"}))
+	require.NoError(t, OutboxValues[string](s).Put("bad", "not a record"))
+
+	removed, err := view.PurgeCorrupt()
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"bad"}, removed)
+	_, found, err := view.Get("good")
+	require.NoError(t, err)
+	assert.True(t, found, "a valid value stays")
+	again, err := view.PurgeCorrupt()
+	require.NoError(t, err)
+	assert.Empty(t, again, "the bad value is gone for good")
+}

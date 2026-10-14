@@ -1,0 +1,10 @@
+{
+  "name": "nodes-lost-three-zones",
+  "description": "Five nodes across three zones are lost in the same minute: one page, and no zone reported healthy while its nodes are still down.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 6,
+  "maxPages": 1,
+  "alone": true,
+  "tail": "20m0s"
+}

@@ -1,0 +1,6 @@
+POST /
+Content-Type: application/json
+
+{
+  "text": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n```\nпаника: нехватка памяти — 内存不足\n```"
+}

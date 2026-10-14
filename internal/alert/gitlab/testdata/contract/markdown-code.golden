@@ -1,0 +1,16 @@
+--- request 1 of 2
+GET /projects/group%2Fproject/issues?in=description&search=kwatchkey7497924e83b66aac&state=opened
+Content-Type: application/json
+PRIVATE-TOKEN: <redacted>
+
+(empty body)
+
+--- request 2 of 2
+POST /projects/group%2Fproject/issues
+Content-Type: application/json
+PRIVATE-TOKEN: <redacted>
+
+{
+  "description": "🔴 **payments** in **shop** is crash-looping.\n\nIt said `boom *x* @​channel`.\n\nService **web** can't serve traffic. Run\n\n```\nkubectl logs payments -n shop\n```\n\nRef: kwatchkey7497924e83b66aac",
+  "title": "🔴 payments in shop is crash-looping."
+}

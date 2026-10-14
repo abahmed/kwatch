@@ -1,0 +1,30 @@
+POST /
+Content-Type: application/json
+
+{
+  "attachments": [
+    {
+      "content": {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "body": [
+          {
+            "text": "payments crashed in shop",
+            "type": "TextBlock",
+            "weight": "Bolder",
+            "wrap": true
+          },
+          {
+            "text": "🔴 **payments** in **shop** is crash-looping.\n\nIt said `boom *x* @​channel`.\n\nService **web** can't serve traffic. Run\n\n```\nkubectl logs payments -n shop\n```",
+            "type": "TextBlock",
+            "wrap": true
+          }
+        ],
+        "type": "AdaptiveCard",
+        "version": "1.2"
+      },
+      "contentType": "application/vnd.microsoft.card.adaptive"
+    }
+  ],
+  "text": "🔴 **payments** in **shop** is crash-looping.\n\nIt said `boom *x* @​channel`.\n\nService **web** can't serve traffic. Run\n\n```\nkubectl logs payments -n shop\n```",
+  "title": "payments crashed in shop"
+}

@@ -1,0 +1,10 @@
+POST /
+Content-Type: application/json
+
+{
+  "description": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[5995 runes sha256:efe5311fba0148f3b01979a8]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\npa…",
+  "event_id": "kwatch-dev-p-big",
+  "message": "🔴 payments in shop is crash-looping.",
+  "severity": "critical",
+  "status": "trigger"
+}

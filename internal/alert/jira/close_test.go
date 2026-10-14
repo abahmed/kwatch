@@ -103,28 +103,6 @@ func TestEmptyCloseTransitionOnlyComments(t *testing.T) {
 	assert.Len(t, rec.Requests(), 1)
 }
 
-func TestWikiMarkupInTheNoteIsEscaped(t *testing.T) {
-	got := escapeWiki("hi [~accountid:1] {code} !http://x/i.png! ok!")
-	assert.Equal(t,
-		`hi \[~accountid:1] \{code} \!http://x/i.png! ok!`, got)
-}
-
-func TestJSONLikeTextIsLeftAlone(t *testing.T) {
-	in := `{"a": [1, 2], "b": {"c": "d"}} and [x] done!`
-	assert.Equal(t, in, escapeWiki(in))
-}
-
-func TestLinksAndColorMacrosAreEscaped(t *testing.T) {
-	assert.Equal(t, `\[go|http://x] \{color:red}z\{color}`,
-		escapeWiki(`[go|http://x] {color:red}z{color}`))
-}
-
-func TestCompleteCodeBlockIsKept(t *testing.T) {
-	in := `a {code}[~x] {b}{code} b`
-	assert.Equal(t, in, escapeWiki(in))
-	assert.Equal(t, `\{noformat} open`, escapeWiki(`{noformat} open`))
-}
-
 func TestNoDefaultCloseTransition(t *testing.T) {
 	j, rec := closingJira(t, nil, answerTransitions)
 	require.NoError(t, j.Close(context.Background(), "OPS-9", "fixed"))

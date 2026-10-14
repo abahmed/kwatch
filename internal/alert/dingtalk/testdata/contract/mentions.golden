@@ -1,0 +1,10 @@
+POST /robot/send?access_token=<redacted>&sign=<redacted>&timestamp=<redacted>
+Content-Type: application/json
+
+{
+  "markdown": {
+    "text": "🔴 payments in shop is crash-looping. It said \"@​channel @​everyone \\<​!here\\> @​all \\<​@​U123\\> \\<​@​W456\\> \\<​\\#C1\\|general\\>\".\n\nIt said @​channel @​everyone \\<​!here\\> @​all \\<​@​U123\\> \\<​@​W456\\> \\<​\\#C1\\|general\\>\n\n> @​channel @​everyone \\<​!here\\> @​all \\<​@​U123\\> \\<​@​W456\\> \\<​\\#C1\\|general\\>\n\n> log: @​channel @​everyone \\<​!here\\> @​all \\<​@​U123\\> \\<​@​W456\\> \\<​\\#C1\\|general\\>",
+    "title": "🔴 payments in shop is crash-looping. It said \"@​channel @​everyone <​!here> @​all <​@​U123> <​@​W456> <​#C1|general>\"."
+  },
+  "msgtype": "markdown"
+}

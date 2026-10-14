@@ -1,0 +1,9 @@
+POST /<secret>/
+Content-Type: application/json
+
+{
+  "alert_type": "critical",
+  "entity_id": "kwatch-dev-p-42",
+  "message": "🔴 payments in shop is still crash-looping.",
+  "summary": "🔴 payments in shop is still crash-looping. It restarted 5 times now.\n\nLast output:\npanic: out of memory\n\nCluster: dev"
+}

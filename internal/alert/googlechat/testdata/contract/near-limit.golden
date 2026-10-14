@@ -1,0 +1,6 @@
+POST /
+Content-Type: application/json
+
+{
+  "text": "🔴 payments in shop is crash-looping. Last output:\n\n```\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[3987 runes sha256:472a25aeb82344ccf1591213]…xxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n```\n```\npanic: out of memory\n```"
+}

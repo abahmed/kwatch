@@ -1,0 +1,14 @@
+POST /api/v1/events
+Content-Type: application/json
+DD-API-KEY: <redacted>
+DD-APPLICATION-KEY: <redacted>
+
+{
+  "aggregation_key": "kwatch-dev-p-md",
+  "alert_type": "error",
+  "tags": [
+    "cluster:dev"
+  ],
+  "text": "🔴 payments in shop is crash-looping.\nIt said boom *x* @channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop",
+  "title": "🔴 payments in shop is crash-looping."
+}

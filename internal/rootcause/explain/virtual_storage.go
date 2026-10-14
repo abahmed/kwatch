@@ -25,6 +25,12 @@ const claimBound = "Bound"
 func (v *view) storageModes(
 	id, effect inventory.EntityID, link LinkType,
 ) (modes []modeHealth, ok bool) {
+	if modes := v.provisionerModes(id, link); len(modes) > 0 {
+		return modes, true
+	}
+	if link == LinkHoldsVolume {
+		return v.heldModes(id, effect), true
+	}
 	switch id.Kind {
 	case kube.KindPVC:
 		// The usage detector reports VolumeFull when it can read

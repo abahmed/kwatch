@@ -38,6 +38,8 @@ func transitionName(kind detection.TransitionKind) string {
 		return "raised"
 	case detection.Cleared:
 		return "cleared"
+	case detection.Refreshed:
+		return "refreshed"
 	}
 	return "changed"
 }

@@ -1,0 +1,9 @@
+POST /send_simple
+Content-Type: application/x-www-form-urlencoded
+
+from=*KWATCH1
+secret=<redacted>
+text=🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).
+
+> паника: нехватка памяти — 内存不足
+to=ABCD1234

@@ -1,0 +1,20 @@
+POST /
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "deduplication_key": "kwatch-dev-p-42",
+  "description": "🔴 payments in shop is crash-looping. It ran out of memory 3 times in 10 minutes. Try kubectl -n shop describe pod payments-1.\n\npanic: out of memory",
+  "metadata": {
+    "cluster": "dev",
+    "namespaces": [
+      "shop"
+    ],
+    "reasons": [
+      "OOMKilled"
+    ],
+    "severity": "critical"
+  },
+  "status": "firing",
+  "title": "🔴 payments in shop is crash-looping."
+}

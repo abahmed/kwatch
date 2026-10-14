@@ -1,0 +1,7 @@
+POST /projects/group%2Fproject/issues/3/notes
+Content-Type: application/json
+PRIVATE-TOKEN: <redacted>
+
+{
+  "body": "🔴 payments in shop is still crash-looping. It restarted 5 times now.\n\n```\npanic: out of memory\n```"
+}

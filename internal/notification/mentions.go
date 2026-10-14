@@ -13,9 +13,17 @@ const zeroWidthSpace = "\u200b"
 var broadcastMention = regexp.MustCompile(
 	`(?i)@(channel|all|here|everyone|room)\b`)
 
+// slackSpecial matches Slack's <!channel>, <!here>, <!everyone> and
+// <!subteam^ID> forms, and its <@U123> user and <#C1> channel references,
+// which Slack and the Slack-compatible webhooks of Mattermost and
+// Rocket.Chat expand.
+var slackSpecial = regexp.MustCompile(`<(![A-Za-z]|[@#])`)
+
 // NeutralizeMentions breaks broadcast mentions with a zero-width space so
-// workload log text renders "@channel" without notifying a whole channel.
+// workload log text renders "@channel" and "<!here>" without notifying a
+// whole channel.
 func NeutralizeMentions(text string) string {
+	text = slackSpecial.ReplaceAllString(text, "<"+zeroWidthSpace+"$1")
 	return broadcastMention.ReplaceAllString(text, "@"+zeroWidthSpace+"$1")
 }
 

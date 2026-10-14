@@ -1,0 +1,14 @@
+POST /
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "message": "🔴 payments in shop is still crash-looping.",
+  "priority": 5,
+  "tags": [
+    "kwatch",
+    "status-critical"
+  ],
+  "title": "kwatch",
+  "topic": "kwatch"
+}

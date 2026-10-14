@@ -167,3 +167,27 @@ func providerCatalogTestConfig(field ProviderField, value string) string {
 	}
 	return "alert:\n  " + field.Provider + ":\n" + body.String()
 }
+
+func TestProxyURLWithCredentialsMustBeFileReference(t *testing.T) {
+	for name, raw := range map[string]string{
+		"literal":   "app:\n  proxyURL: http://user:pw@proxy:3128\n",
+		"env var":   "app:\n  proxyURL: http://user:${PW}@proxy:3128\n",
+		"user only": "app:\n  proxyURL: http://user@proxy:3128\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := validateSecretReferences(raw)
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "app.proxyURL")
+			assert.NotContains(t, err.Error(), "pw")
+		})
+	}
+	for name, raw := range map[string]string{
+		"no credentials": "app:\n  proxyURL: http://proxy:3128\n",
+		"file reference": "app:\n  proxyURL: ${file:/etc/proxy/url}\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.NoError(t, validateSecretReferences(raw))
+		})
+	}
+}

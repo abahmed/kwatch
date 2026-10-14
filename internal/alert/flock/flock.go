@@ -66,7 +66,7 @@ func (s *Flock) SendIncident(
 // SendMessage sends text message to the provider
 func (s *Flock) SendMessage(ctx context.Context, msg string) error {
 	payload := flockPayload{
-		Text: msg,
+		Text: notification.NeutralizeMentions(msg),
 	}
 
 	body, err := json.Marshal(payload)

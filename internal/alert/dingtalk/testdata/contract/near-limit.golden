@@ -1,0 +1,10 @@
+POST /robot/send?access_token=<redacted>&sign=<redacted>&timestamp=<redacted>
+Content-Type: application/json
+
+{
+  "markdown": {
+    "text": "🔴 payments in shop is crash-looping. Last output:\n\n\n…\n\n> panic: out of memory",
+    "title": "🔴 payments in shop is crash-looping."
+  },
+  "msgtype": "markdown"
+}

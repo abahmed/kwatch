@@ -1,0 +1,26 @@
+POST /
+Content-Type: application/json
+
+{
+  "dedup_key": "kwatch-dev-p-big",
+  "event_action": "trigger",
+  "payload": {
+    "custom_details": {
+      "cluster": "dev",
+      "details": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[19970 runes sha256:019cff79b20d984b3b18e39e]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "namespaces": [
+        "shop"
+      ],
+      "output": [
+        "panic: out of memory"
+      ],
+      "reasons": [
+        "OOMKilled"
+      ]
+    },
+    "severity": "critical",
+    "source": "dev",
+    "summary": "🔴 payments in shop is crash-looping."
+  },
+  "routing_key": "<secret>"
+}

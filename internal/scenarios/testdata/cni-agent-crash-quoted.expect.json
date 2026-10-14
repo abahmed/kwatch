@@ -1,0 +1,8 @@
+{
+  "name": "cni-agent-crash-quoted",
+  "description": "The CNI agent crash-loops on one node and new pods there cannot be networked.",
+  "root": "node//n1",
+  "tier": "notify",
+  "maxMessages": 4,
+  "tail": "20m0s"
+}

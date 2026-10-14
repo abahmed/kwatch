@@ -73,7 +73,7 @@ func (m *Model) AttributeIn(
 	ids := m.byKind[kind][namespace]
 	out := make(map[EntityID]Value, len(ids))
 	for id := range ids {
-		if attr, ok := m.records[id].entity.Attributes[attribute]; ok {
+		if attr, ok := m.records[id].attribute(attribute); ok {
 			out[id] = attr.Value
 		}
 	}

@@ -35,8 +35,6 @@ var hpaFailures = map[string]hpaFailure{
 		reasons.FailedGetResourceMetric, metricsSummary},
 	"FailedGetExternalMetric": {
 		reasons.FailedGetResourceMetric, metricsSummary},
-	"FailedComputeMetricsReplicas": {
-		reasons.FailedGetResourceMetric, metricsSummary},
 	"InvalidMetricSourceType": {
 		reasons.FailedGetResourceMetric, metricsSummary},
 	"FailedGetScale": {
@@ -45,8 +43,7 @@ var hpaFailures = map[string]hpaFailure{
 	"FailedUpdateScale": {
 		reasons.FailedUpdateScale,
 		"Autoscaler cannot update its scale target"},
-	"SelectorRequired": {reasons.HPAInvalidSelector, selectorSummary},
-	"InvalidSelector":  {reasons.HPAInvalidSelector, selectorSummary},
+	"InvalidSelector": {reasons.HPAInvalidSelector, selectorSummary},
 	"AmbiguousSelector": {
 		reasons.HPAInvalidSelector, selectorSummary},
 }

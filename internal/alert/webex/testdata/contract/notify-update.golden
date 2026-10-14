@@ -1,0 +1,8 @@
+POST /
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "markdown": "🔴 payments in shop is still crash-looping. It restarted 5 times now.\n\n```\npanic: out of memory\n```",
+  "roomId": "room-1"
+}

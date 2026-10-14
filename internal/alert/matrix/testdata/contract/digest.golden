@@ -1,0 +1,10 @@
+PUT /_matrix/client/v3/rooms/%21room:example/send/m.room.message/kwatch-2c98934f075ba9e743488fc1e23cdfd3
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "body": "🟠 kwatch started and found 2 problems that were there.",
+  "format": "org.matrix.custom.html",
+  "formatted_body": "🟠 kwatch started and found 2 problems that were there.",
+  "msgtype": "m.text"
+}

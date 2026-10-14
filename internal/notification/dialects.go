@@ -200,7 +200,11 @@ func JiraDialect() Dialect {
 		Bold:       wrapper("*", jiraEscaper.Replace),
 		Italic:     wrapper("_", jiraEscaper.Replace),
 		Code: func(s string) string {
-			return "{{" + stripped(oneLine(s), "{}") + "}}"
+			// Wiki markup still acts inside {{ }}: [~user] mentions,
+			// *bold* and _italic_ all apply, so the text is escaped.
+			// A brace cannot be escaped inside a span, so it is dropped.
+			return "{{" +
+				jiraEscaper.Replace(stripped(oneLine(s), "{}")) + "}}"
 		},
 		Fence: func(s string) string {
 			return "{noformat}\n" +

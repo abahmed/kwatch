@@ -1,0 +1,8 @@
+POST /trigger/kw/with/key/<secret>
+Content-Type: application/json
+
+{
+  "value1": "🔴 payments in shop is crash-looping.",
+  "value2": "🔴 payments in shop is crash-looping. It ran out of memory 3 times in 10 minutes. Try kubectl -n shop describe pod payments-1.",
+  "value3": "critical"
+}

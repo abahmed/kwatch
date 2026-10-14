@@ -1,0 +1,12 @@
+POST /api/v1/messages
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic <redacted>
+
+content=🔴 payments in shop is still crash-looping. It restarted 5 times now.
+
+```
+panic: out of memory
+```
+subject=kwatch alert
+to=alerts
+type=stream

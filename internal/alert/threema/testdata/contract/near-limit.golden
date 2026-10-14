@@ -1,0 +1,12 @@
+POST /send_simple
+Content-Type: application/x-www-form-urlencoded
+
+from=*KWATCH1
+secret=<redacted>
+text=🔴 payments in shop is crash-looping. Last output:
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[3494 runes sha256:3948ee7aaddbf392f874e9f4]…xxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+> panic: out of memory
+to=ABCD1234

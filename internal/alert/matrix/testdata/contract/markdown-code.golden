@@ -1,0 +1,10 @@
+PUT /_matrix/client/v3/rooms/%21room:example/send/m.room.message/kwatch-c1244111be99378a8778c653a8d9e5d7
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "body": "🔴 payments in shop is crash-looping.\nIt said boom *x* @​channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop",
+  "format": "org.matrix.custom.html",
+  "formatted_body": "🔴 <b>payments</b> in <b>shop</b> is crash-looping.<br>\nIt said <code>boom *x* @​channel</code>.<br>\nService <b>web</b> can&#39;t serve traffic. Run<br>\n<pre>kubectl logs payments -n shop</pre>",
+  "msgtype": "m.text"
+}

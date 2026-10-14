@@ -1,0 +1,9 @@
+POST /cgi-bin/webhook/send?key=<redacted>
+Content-Type: application/json
+
+{
+  "markdown": {
+    "content": "🟠 kwatch started and found 2 problems that were there."
+  },
+  "msgtype": "markdown"
+}

@@ -1,0 +1,11 @@
+POST /<secret>
+Content-Type: application/json
+
+{
+  "X-S4-ExternalID": "kwatch-dev-p-42",
+  "X-S4-Status": "resolved",
+  "message": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.\n\nCluster: dev",
+  "severity": "critical",
+  "title": "✅ payments in shop is healthy again.",
+  "user": "kwatch"
+}

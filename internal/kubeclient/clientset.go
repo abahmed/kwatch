@@ -107,7 +107,10 @@ func (c ClientSet) WithRuntime(runtime config.RuntimeConfig) (
 	if err != nil {
 		return ClientSet{}, err
 	}
-	c.HTTP = NewHTTPClient(appConfig)
+	c.HTTP, err = NewHTTPClient(appConfig)
+	if err != nil {
+		return ClientSet{}, err
+	}
 	c.ProbeHTTP = NewProbeHTTPClient(c.restConfig)
 	c.Kubelet = kubeletClient
 	return c, nil
@@ -116,7 +119,9 @@ func (c ClientSet) WithRuntime(runtime config.RuntimeConfig) (
 // NewHTTPClientWithRuntime builds the shared outbound client from the
 // immutable runtime snapshot. Command paths that only need HTTP still use the
 // same application-owned construction boundary as the server.
-func NewHTTPClientWithRuntime(runtime config.RuntimeConfig) *http.Client {
+func NewHTTPClientWithRuntime(
+	runtime config.RuntimeConfig,
+) (*http.Client, error) {
 	appConfig := runtime.Application()
 	return NewHTTPClient(appConfig)
 }

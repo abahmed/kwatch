@@ -133,7 +133,7 @@ func (e *Engine) markDependents(transitions []detection.Transition) {
 	seen := map[inventory.EntityID]bool{}
 	for _, t := range transitions {
 		id := t.Finding.Entity
-		if seen[id] {
+		if t.Kind == detection.Refreshed || seen[id] {
 			continue
 		}
 		seen[id] = true

@@ -1,0 +1,11 @@
+POST /
+Content-Type: application/json
+Authorization: AccessKey <redacted>
+
+{
+  "body": "🟠 kwatch started and found 2 problems.",
+  "originator": "kwatch",
+  "recipients": [
+    "+12025550100"
+  ]
+}

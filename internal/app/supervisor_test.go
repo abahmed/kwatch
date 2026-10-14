@@ -178,3 +178,27 @@ func TestOptionalBackoffResetsAfterHealthyRun(t *testing.T) {
 		t.Fatalf("sleep=%s next=%s after a healthy run", sleep, next)
 	}
 }
+
+func TestOptionalComponentThatPanicsIsRestarted(t *testing.T) {
+	supervisor := newComponentSupervisor(time.Now)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	runs := make(chan struct{}, 4)
+	supervisor.startOptional(ctx, componentSpec{
+		name: "panicky",
+		run: func(context.Context) error {
+			runs <- struct{}{}
+			panic("bad payload")
+		},
+	})
+
+	for i := 0; i < 2; i++ {
+		select {
+		case <-runs:
+		case <-time.After(5 * time.Second):
+			t.Fatal("component was not restarted after a panic")
+		}
+	}
+	cancel()
+	supervisor.wg.Wait()
+}

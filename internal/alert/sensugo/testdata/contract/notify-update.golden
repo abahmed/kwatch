@@ -1,0 +1,19 @@
+POST /api/core/v2/namespaces/default/events
+Content-Type: application/json
+Authorization: Key <redacted>
+
+{
+  "check": {
+    "issued": 1767323045,
+    "metadata": {
+      "name": "kwatch-dev-p-42"
+    },
+    "output": "🔴 payments in shop is still crash-looping. It restarted 5 times now.\n\nLast output:\npanic: out of memory",
+    "status": 2
+  },
+  "entity": {
+    "metadata": {
+      "name": "kwatch"
+    }
+  }
+}

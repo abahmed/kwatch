@@ -1,0 +1,9 @@
+POST /message
+Content-Type: application/json
+X-Gotify-Key: <redacted>
+
+{
+  "message": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú.",
+  "priority": 8,
+  "title": "kwatch"
+}

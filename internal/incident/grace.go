@@ -1,6 +1,11 @@
 package incident
 
-import "time"
+import (
+	"time"
+
+	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
+)
 
 // awaitingEvidence reports whether an incident without members must keep
 // its state: during the restore grace detectors may not have re-raised
@@ -46,6 +51,40 @@ func (m *Manager) afterGrace(
 	return at
 }
 
+// verifiable reports whether kwatch can observe what recovery of p is
+// judged from: the root kind and, for a root that owns pods, the pods.
+// A restored incident has no members until the pods are listed, so a
+// synced Deployment over an unsynced Pod list proves nothing.
 func (m *Manager) verifiable(p *Incident) bool {
-	return m.cfg.Verifiable == nil || m.cfg.Verifiable(p.Root.Kind)
+	if m.cfg.Verifiable == nil {
+		return true
+	}
+	if !m.cfg.Verifiable(p.Root.Kind) {
+		return false
+	}
+	return !ownsPods(p.Root.Kind) || m.cfg.Verifiable(kube.KindPod)
+}
+
+// ownsPods reports a root kind whose members are the pods behind it.
+func ownsPods(kind inventory.Kind) bool {
+	switch kind {
+	case kube.KindDeployment, kube.KindStatefulSet, kube.KindDaemonSet,
+		kube.KindReplicaSet, kube.KindJob, kube.KindCronJob,
+		kube.KindService:
+		return true
+	}
+	return false
+}
+
+// ExtendGrace moves the restore grace to until when that is later.
+// The grace set at restore time starts before the sources synced, and
+// findings gated by a sustain re-raise one sustain after the sync, so
+// the engine extends it when the sync happens. Without a restored live
+// incident there is no grace to extend.
+func (m *Manager) ExtendGrace(until time.Time) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.restoreGrace.IsZero() && until.After(m.restoreGrace) {
+		m.restoreGrace = until
+	}
 }

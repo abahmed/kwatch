@@ -1,0 +1,10 @@
+POST /robot/send?access_token=<redacted>&sign=<redacted>&timestamp=<redacted>
+Content-Type: application/json
+
+{
+  "markdown": {
+    "text": "🔴 **payments** in **shop** is crash-looping.\n\nIt said boom \\*x\\* @​channel.\n\nService **web** can't serve traffic. Run\n\n> kubectl logs payments -n shop",
+    "title": "🔴 payments in shop is crash-looping."
+  },
+  "msgtype": "markdown"
+}

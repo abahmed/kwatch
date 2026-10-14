@@ -111,16 +111,50 @@ func (c *Collector) noteOngoing(now time.Time) {
 		return
 	}
 	c.ongoingChecked = now
+	listed := map[string]bool{}
 	for _, p := range c.openListed() {
+		listed[p.ID] = true
 		count := c.timesSeen(p, ongoingReason(p))
-		mark, known := c.ongoingMarks[p.ID]
-		if !known {
-			c.ongoingMarks[p.ID] = count
-			continue
-		}
-		if count > mark && now.Sub(p.DigestedAt) >= OngoingEvery &&
-			c.Low.Since.IsZero() {
+		if c.cameBack(p.ID, count) &&
+			now.Sub(p.DigestedAt) >= OngoingEvery && c.Low.Since.IsZero() {
 			c.Low.Since = now
+		}
+	}
+	for id := range c.ongoingMarks {
+		if !listed[id] {
+			delete(c.ongoingMarks, id)
+		}
+	}
+	c.forgetFolded()
+}
+
+// cameBack reports that a listed problem was seen more often than at
+// the last check. The mark follows the count down too: notes age out
+// of the model, and a count below a stale mark would hide a problem
+// that really comes back.
+func (c *Collector) cameBack(id string, count int) bool {
+	mark, known := c.ongoingMarks[id]
+	if !known {
+		c.ongoingMarks[id] = count
+		return false
+	}
+	mark = min(mark, count)
+	c.ongoingMarks[id] = mark
+	return count > mark
+}
+
+// forgetFolded drops the folded demotions of incidents that are gone.
+func (c *Collector) forgetFolded() {
+	if len(c.folded) == 0 {
+		return
+	}
+	live := map[string]bool{}
+	for _, p := range c.env.Incidents.Incidents() {
+		live[p.ID] = true
+	}
+	for id := range c.folded {
+		if !live[id] {
+			delete(c.folded, id)
 		}
 	}
 }

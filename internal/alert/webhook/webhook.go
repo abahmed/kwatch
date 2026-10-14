@@ -60,39 +60,17 @@ func NewWebhook(
 			"setting", "url")
 		return nil
 	}
-	rawHeaders, ok := config["headers"]
-	var headers []KeyValue
-	if ok {
-		headerArray, ok := rawHeaders.([]interface{})
-		if ok {
-			for _, header := range headerArray {
-				headerJson, err := json.Marshal(header)
-				if err != nil {
-					klog.InfoS("skipping invalid header", "error", err)
-					continue
-				}
-				var k KeyValue
-				if err := json.Unmarshal(headerJson, &k); err != nil {
-					klog.InfoS("skipping invalid webhook header", "error", err)
-					continue
-				}
-				headers = append(headers, k)
-			}
-		}
-	}
-
-	basicAuth := config["basicAuth"]
-	basicAuthJson, err := json.Marshal(basicAuth)
+	headers, err := parseHeaders(config["headers"])
 	if err != nil {
-		klog.InfoS("invalid basic auth config", "error", err)
-		basicAuthJson = []byte("{}")
+		klog.ErrorS(err, "invalid webhook headers setting")
+		return nil
 	}
-
-	var a Authentication
-	if err := json.Unmarshal(basicAuthJson, &a); err != nil {
-		klog.InfoS("invalid webhook basicAuth, ignoring", "error", err)
-		a = Authentication{}
+	a, err := parseBasicAuth(config["basicAuth"])
+	if err != nil {
+		klog.ErrorS(err, "invalid webhook basicAuth setting")
+		return nil
 	}
+	warnPlainHTTP(url, len(headers) > 0 || a.UserName != "")
 
 	klog.InfoS("initializing webhook with configured authentication")
 
@@ -124,7 +102,7 @@ func (w *Webhook) request(body []byte) transport.Request {
 	for _, header := range w.headers {
 		r.Headers[header.Name] = header.Value
 	}
-	if len(w.username) > 0 && len(w.password) > 0 {
+	if w.username != "" && w.password != "" {
 		r.BasicAuth = &transport.BasicAuth{
 			Username: w.username,
 			Password: w.password,

@@ -1,0 +1,10 @@
+POST /1/messages.json
+Content-Type: application/x-www-form-urlencoded
+
+expire=3600
+message=🔴 сервис «платежи» в shop падает — 支付失败 ñandú.
+priority=2
+retry=60
+title=kwatch
+token=<redacted>
+user=user123

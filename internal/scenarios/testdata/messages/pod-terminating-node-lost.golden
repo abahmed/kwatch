@@ -9,6 +9,6 @@
 | kubectl describe node n1
 | ```
 10:16:00 material change
-🔴 Node n1 (prod-eu-1) is spreading to pod svc-31f12b91-a in apps: it has been terminating for ten minutes.
-🔴 Node n1 (prod-eu-1) is spreading to pod svc-31f12b91-a in apps: it has been terminating for ten minutes.
-| 🔴 Node n1 (**prod-eu-1**) is spreading to pod **svc-31f12b91-a** in apps: it has been terminating for ten minutes.
+🔴 Node n1 (prod-eu-1) is spreading to svc in apps: it has been terminating for ten minutes.
+🔴 Node n1 (prod-eu-1) is spreading to svc in apps: it has been terminating for ten minutes.
+| 🔴 Node n1 (**prod-eu-1**) is spreading to **svc** in apps: it has been terminating for ten minutes.

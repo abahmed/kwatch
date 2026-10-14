@@ -183,3 +183,15 @@ func TestStoreFailureNeverBlocksOrGrowsMemory(t *testing.T) {
 			rec.Pending())
 	}
 }
+
+func TestFailedWriteDoesNotHideTheNextObservation(t *testing.T) {
+	clock := newClock()
+	rec, _, store := newRecorder(t, clock)
+	_ = store.Close() // the write fails
+	submitAll(rec, podObserved("api-1", 1))
+	rec.Flush()
+	if len(rec.seen) != 0 {
+		t.Errorf("a state that was never written is remembered: %d",
+			len(rec.seen))
+	}
+}

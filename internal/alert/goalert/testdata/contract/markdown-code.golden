@@ -1,0 +1,9 @@
+POST /
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "dedup": "kwatch-dev-p-md",
+  "details": "🔴 payments in shop is crash-looping.\nIt said boom *x* @channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop",
+  "summary": "🔴 payments in shop is crash-looping."
+}

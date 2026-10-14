@@ -1,0 +1,8 @@
+{
+  "name": "kubelet-cert-expired",
+  "description": "A node is not ready and its kubelet reports an x509 certificate error.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 3,
+  "tail": "15m0s"
+}

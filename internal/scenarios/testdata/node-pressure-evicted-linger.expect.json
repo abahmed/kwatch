@@ -1,0 +1,12 @@
+{
+  "name": "node-pressure-evicted-linger",
+  "description": "Memory pressure on a node evicts pods of twelve workloads; the pressure clears and the evicted pods stay listed, and nothing new is announced for them.",
+  "root": "node//n1",
+  "tier": "notify",
+  "maxMessages": 2,
+  "alone": true,
+  "mustNotBlame": [
+    "zone//zone-a"
+  ],
+  "tail": "40m0s"
+}

@@ -1,0 +1,13 @@
+{
+  "name": "node-agent-beside-lone-workload",
+  "description": "A log shipper DaemonSet crash-loops on a node whose only application pod, a single workload, times out its probe: two unrelated faults.",
+  "root": "daemonset/observability/logship",
+  "otherRoots": [
+    "deployment/shop/cart"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

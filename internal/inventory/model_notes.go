@@ -96,11 +96,11 @@ func (m *Model) currentAltUID(rec *record) string {
 	if rec.entity.UID != "" {
 		return ""
 	}
-	for key, targets := range rec.relations {
-		if key.relation != PartOf {
+	for _, entry := range rec.relations {
+		if entry.key.relation != PartOf {
 			continue
 		}
-		for _, target := range targets {
+		for _, target := range entry.targets {
 			if parent := m.records[target]; parent != nil &&
 				parent.present && parent.altUID != "" {
 				return parent.altUID
@@ -117,11 +117,11 @@ func (m *Model) currentUID(rec *record) string {
 	if rec.entity.UID != "" {
 		return rec.entity.UID
 	}
-	for key, targets := range rec.relations {
-		if key.relation != PartOf {
+	for _, entry := range rec.relations {
+		if entry.key.relation != PartOf {
 			continue
 		}
-		for _, target := range targets {
+		for _, target := range entry.targets {
 			if parent := m.records[target]; parent != nil &&
 				parent.present && parent.entity.UID != "" {
 				return parent.entity.UID

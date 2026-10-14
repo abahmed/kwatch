@@ -11,6 +11,9 @@ import (
 func ownedPod(owner string) incident.Incident {
 	p := podCrash(incident.Notify)
 	p.Owner = owner
+	if owner != "" {
+		p.Owners = []string{owner}
+	}
 	return p
 }
 

@@ -10,11 +10,12 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/metrics"
+	"github.com/abahmed/kwatch/internal/safego"
 )
 
 const (
-	optionalRestartInitial  = time.Second
-	optionalRestartMaximum  = time.Minute
+	optionalRestartInitial  = safego.RestartInitial
+	optionalRestartMaximum  = safego.RestartMaximum
 	defaultComponentStartup = 2 * leaderRenewDeadline
 	defaultComponentStall   = 2 * leaderRenewDeadline
 )
@@ -199,7 +200,11 @@ func (s *componentSupervisor) runComponent(
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	runDone := make(chan error, 1)
-	go func() { runDone <- component.run(runCtx) }()
+	go func() {
+		runDone <- safego.Run(component.name, func() error {
+			return component.run(runCtx)
+		})
+	}()
 
 	stallTimeout := durationOr(component.stallTimeout, defaultComponentStall)
 	startupTimeout := durationOr(

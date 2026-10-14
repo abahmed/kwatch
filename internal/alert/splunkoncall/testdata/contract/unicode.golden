@@ -1,0 +1,9 @@
+POST /<secret>/everyone
+Content-Type: application/json
+
+{
+  "entity_display_name": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú.",
+  "entity_id": "kwatch-dev-p-uni",
+  "message_type": "CRITICAL",
+  "state_message": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\nпаника: нехватка памяти — 内存不足"
+}

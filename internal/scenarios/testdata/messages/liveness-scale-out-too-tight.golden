@@ -1,9 +1,9 @@
 10:05:15 settled
-🟠 transcoder in media (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. Its last run lasted 10s. To read the output of the last crash, run kubectl logs transcoder-79849f35-c -c app -n media --previous
+🟠 transcoder in media (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. Its last run lasted 10s; 2 restarts in the 1m20s since its pod was created. To read the output of the last crash, run kubectl logs transcoder-79849f35-c -c app -n media --previous
 🟠 transcoder in media (prod-eu-1) keeps crashing.
 | 🟠 **transcoder** in **media** (**prod-eu-1**) keeps crashing.
 | Its node and registry are healthy and unchanged, so nothing outside it explains this.
-| Its last run lasted 10s.
+| Its last run lasted 10s; 2 restarts in the 1m20s since its pod was created.
 | To read the output of the last crash, run
 | ```
 | kubectl logs transcoder-79849f35-c -c app -n media --previous

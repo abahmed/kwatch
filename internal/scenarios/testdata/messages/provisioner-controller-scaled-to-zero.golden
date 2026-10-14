@@ -1,0 +1,9 @@
+11:02:15 settled
+🟠 Volume claim orders-db in data (prod-eu-1) is Pending: its provisioner ebs.csi.example.com runs as deployment kube-system/ebs-csi-controller, which has no ready pods. The error mentions it. To see the object's state and events, run kubectl describe persistentvolumeclaim orders-db -n data
+🟠 Volume claim orders-db in data (prod-eu-1) is Pending: its provisioner ebs.csi.example.com runs as deployment kube-system/ebs-csi-controller, which has no ready pods.
+| 🟠 Volume claim **orders-db** in **data** (**prod-eu-1**) is Pending: its provisioner ebs.csi.example.com runs as deployment kube-system/ebs-csi-controller, which has no ready pods.
+| The error mentions it.
+| To see the object's state and events, run
+| ```
+| kubectl describe persistentvolumeclaim orders-db -n data
+| ```

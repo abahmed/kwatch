@@ -259,7 +259,13 @@ func calibrationGate(
 // labelGates check the per-scenario labels: blame, quiet and budget.
 func labelGates(verdicts []verdict) []scorecard.Gate {
 	blamed, loud, over := 0, 0, 0
+	pages, open, stale := 0, 0, 0
 	for _, v := range verdicts {
+		if v.overPages() {
+			pages++
+		}
+		open += v.leftOpen
+		stale += v.falseRecoveries
 		if len(v.blamed) > 0 {
 			blamed++
 		}
@@ -276,6 +282,12 @@ func labelGates(verdicts []verdict) []scorecard.Gate {
 		scorecard.AtMost("Quiet scenarios that alerted", float64(loud), 0, ""),
 		scorecard.AtMost("Scenarios over their message budget",
 			float64(over), 0, ""),
+		scorecard.AtMost("Scenarios paging more than once per outage",
+			float64(pages), 0, ""),
+		scorecard.AtMost("Incidents left open after their members moved",
+			float64(open), 0, ""),
+		scorecard.AtMost("Recoveries said while members still fail",
+			float64(stale), 0, ""),
 	}
 }
 

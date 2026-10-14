@@ -1,0 +1,10 @@
+10:04:45 settled
+🟠 api in shop (prod-eu-1) can't start: its volume pvc-data is still attached to node n1 (used by pod api-2f82b194-a, terminating). Also changed before it broke: api: image registry.example.com/api:1 → registry.example.com/api:2 at 10:01. It runs a single replica, so this is downtime, not degradation. To see the rollout state, run kubectl rollout status deployment/api -n shop
+🟠 api in shop (prod-eu-1) can't start: its volume pvc-data is still attached to node n1 (used by pod api-2f82b194-a, terminating).
+| 🟠 **api** in **shop** (**prod-eu-1**) can't start: its volume pvc-data is still attached to node n1 (used by pod api-2f82b194-a, terminating).
+| Also changed before it broke: api: image registry.example.com/api:1 → registry.example.com/api:2 at 10:01.
+| It runs a single replica, so this is downtime, not degradation.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/api -n shop
+| ```

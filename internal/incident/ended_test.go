@@ -18,6 +18,7 @@ func (r *rig) remove(id inventory.EntityID, when time.Duration) {
 		Kind: inventory.Gone, Source: "test", At: at(when), Entity: id,
 	})
 	require.NoError(r.t, err)
+	r.markNode(id)
 }
 
 // The hold waits for a recovery to last; the failure ended when it

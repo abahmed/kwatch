@@ -1,0 +1,11 @@
+POST /api/v9/webhooks/123/<secret>
+Content-Type: application/json
+
+{
+  "allowed_mentions": {
+    "parse": [],
+    "replied_user": false
+  },
+  "components": null,
+  "content": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart."
+}

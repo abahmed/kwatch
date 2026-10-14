@@ -8,6 +8,14 @@ import (
 	"time"
 )
 
+// OnOutboxSick registers who hears that the outbox writer keeps failing
+// (true) or works again (false). Call it before AttachOutbox.
+func (m *Manager) OnOutboxSick(report func(sick bool)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.outboxSick = report
+}
+
 // AttachOutbox loads the jobs an earlier session left unsent and persists
 // every job queued from now on. The leader session calls it once, after it
 // claimed the state store and before delivery starts. Restored jobs are
@@ -21,6 +29,9 @@ func (m *Manager) AttachOutbox(store OutboxStore) error {
 		return fmt.Errorf("load delivery outbox: %w", err)
 	}
 	box := newOutbox(store, m.nowTime)
+	m.mu.Lock()
+	box.sick = m.outboxSick
+	m.mu.Unlock()
 	jobs := box.adopt(records, m.nowTime())
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -98,7 +109,7 @@ func restoredJob(record OutboxRecord) deliverJob {
 	job := deliverJob{
 		kind: jobMessage, msg: record.Message,
 		target: record.Provider, outboxID: record.ID,
-		queued: record.Queued,
+		queued: record.Queued, attempts: record.Attempts,
 	}
 	if record.Incident != nil {
 		incident := *record.Incident

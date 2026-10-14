@@ -1,0 +1,24 @@
+--- request 1 of 2
+GET /rest/api/2/search?fields=description&jql=project = "OPS" AND description ~ "kwatchkey8b2cb844620fe5dc" AND statusCategory != Done&maxResults=5
+Content-Type: application/json
+Authorization: Basic <redacted>
+
+(empty body)
+
+--- request 2 of 2
+POST /rest/api/2/issue
+Content-Type: application/json
+Authorization: Basic <redacted>
+
+{
+  "fields": {
+    "description": "🔴 payments in shop is crash-looping. Last output:\n\n{noformat}\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[3088 runes sha256:731d29c8acc71f8c01d49bca]…xxxxxxxxxxxxx\n{noformat}\n\n{noformat}\npanic: out of memory\n{noformat}\n\nRef: kwatchkey8b2cb844620fe5dc",
+    "issuetype": {
+      "name": "Task"
+    },
+    "project": {
+      "key": "OPS"
+    },
+    "summary": "🔴 payments in shop is crash-looping."
+  }
+}

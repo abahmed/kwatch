@@ -46,6 +46,9 @@ CI measures these on synthetic replay and labelled scenarios with
 | Unchanged updates | 0% |
 | Re-created incidents | at most 5% |
 | Repeated recoveries | 0 |
+| Pages per outage | at most one per labelled root (a scenario may label more) |
+| Incidents left open after their members moved | 0 |
+| Recoveries said while members still fail | 0 |
 | Storm of 1,000 failing pods from one cause | at most 3 messages in 2 minutes |
 | Storm of 1,000 failing pods from several causes | at most one message per cause plus 3 in 2 minutes |
 | A healthy node with a crashing app | never blames the node |
@@ -96,8 +99,8 @@ kwatch does not learn from user feedback. It reasons from the cluster:
 
 - 5,000 pods and 500 nodes within the default 512Mi memory limit (the Go
   memory limit is set at 90% of it). Tests assert a live heap of at most
-  250 MiB and a peak of at most 512 MiB; the measured live heap is about
-  83 MiB.
+  65 MiB and a peak of at most 200 MiB; the measured live heap is about
+  50 MiB. Sizing for larger clusters is in docs/production-operations.md.
 - Decisions are fresh: at 5,000 pods, the p99 time from an observation
   being submitted to its decisions being applied is at most 2 seconds
   in-process. Production exports it as

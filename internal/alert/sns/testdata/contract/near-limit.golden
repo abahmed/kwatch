@@ -1,0 +1,20 @@
+POST /
+Content-Type: application/x-www-form-urlencoded
+
+Action=Publish
+Message=🔴 payments in shop is crash-looping. Last output:
+
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[3025 runes sha256:3e75606c5354f1855de2209c]…xxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+Last output:
+panic: out of memory
+MessageAttributes.entry.1.Name=kwatch.key
+MessageAttributes.entry.1.Value.DataType=String
+MessageAttributes.entry.1.Value.StringValue=kwatch-dev-p-big
+MessageAttributes.entry.2.Name=kwatch.status
+MessageAttributes.entry.2.Value.DataType=String
+MessageAttributes.entry.2.Value.StringValue=critical
+Subject=payments in shop is crash-looping.
+TopicArn=arn:aws:sns:us-east-1:123456789012:kwatch
+Version=2010-03-31

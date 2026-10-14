@@ -1,0 +1,19 @@
+POST /api/alert
+Content-Type: application/json
+Authorization: Key <redacted>
+
+{
+  "attributes": {
+    "reason": "OOMKilled",
+    "summary": "🔴 payments in shop is crash-looping."
+  },
+  "environment": "Staging",
+  "event": "incident",
+  "resource": "dev/kwatch-p-42",
+  "service": [
+    "kwatch"
+  ],
+  "severity": "critical",
+  "text": "🔴 payments in shop is crash-looping. It ran out of memory 3 times in 10 minutes. Try kubectl -n shop describe pod payments-1.\n\nLast output:\npanic: out of memory",
+  "value": "🔴 payments in shop is crash-looping."
+}

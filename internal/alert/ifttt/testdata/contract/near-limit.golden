@@ -1,0 +1,8 @@
+POST /trigger/kw/with/key/<secret>
+Content-Type: application/json
+
+{
+  "value1": "🔴 payments in shop is crash-looping.",
+  "value2": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[2990 runes sha256:1a7fd488f410a4625701a518]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "value3": "critical"
+}

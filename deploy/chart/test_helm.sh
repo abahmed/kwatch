@@ -223,6 +223,18 @@ grep -Fq "port: 587" <<<"$OUT_NP_EXTRA" || {
 if grep -Fq "port: 587" <<<"$OUT2"; then
   echo "FAIL: SMTP egress must not be open by default"; exit 1;
 fi
+# The health port is not open to every pod: only the release namespace and
+# the peers in healthIngressFrom.
+INGRESS_DEFAULT=$(sed -n '/^  ingress:/,/^  egress:/p' <<<"$OUT2")
+grep -Fq "kubernetes.io/metadata.name: default" <<<"$INGRESS_DEFAULT" || {
+  echo "FAIL: health ingress is not limited to the release namespace"; exit 1;
+}
+OUT_NP_FROM=$(helm template test-np . --set networkPolicy.enabled=true \
+  --set 'networkPolicy.healthIngressFrom[0].podSelector.matchLabels.app=prom' \
+  2>&1)
+grep -Fq "app: prom" <<<"$OUT_NP_FROM" || {
+  echo "FAIL: network policy ignores healthIngressFrom"; exit 1;
+}
 grep -Fq "port: 9153" <<<"$OUT2" || {
   echo "FAIL: network policy must open the DNS metrics port"; exit 1;
 }
@@ -354,5 +366,30 @@ if grep -Fq 'healthCheck:' ../crd.yaml; then
   echo "FAIL: CRD must not offer healthCheck"; exit 1;
 fi
 echo "PASS: CRD validation"
+
+echo "=== Secret access warning in NOTES.txt ==="
+# helm template never prints NOTES, so render a copy as a manifest.
+NOTES_DIR=$(mktemp -d)
+trap 'rm -rf "$NOTES_DIR"' EXIT
+cp -R . "$NOTES_DIR/chart"
+{ printf 'notes: |\n  #\n'; sed 's/^/  /' templates/NOTES.txt; } \
+  >"$NOTES_DIR/chart/templates/notes-test.yaml"
+render_notes() {
+  helm template test-notes "$NOTES_DIR/chart" \
+    --show-only templates/notes-test.yaml "$@" 2>&1
+}
+OUT_NOTES=$(render_notes)
+grep -Fq "can read" <<<"$OUT_NOTES" &&
+  grep -Fq "every Secret" <<<"$OUT_NOTES" &&
+  grep -Fq "watch.secrets=false" <<<"$OUT_NOTES" || {
+  echo "FAIL: default install must warn that Secrets are readable"; exit 1;
+}
+grep -Fq "rbac.mode=least-privilege" <<<"$OUT_NOTES" || {
+  echo "FAIL: warning must say how to restrict"; exit 1;
+}
+if grep -Fq "every Secret" <<<"$(render_notes --set watch.secrets=false)"; then
+  echo "FAIL: watch.secrets=false must not warn about Secret access"; exit 1;
+fi
+echo "PASS: Secret access warning"
 
 echo "All helm template tests passed."

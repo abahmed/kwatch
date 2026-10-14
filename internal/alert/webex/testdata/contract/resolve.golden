@@ -1,0 +1,8 @@
+POST /
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "markdown": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+  "roomId": "room-1"
+}

@@ -140,3 +140,25 @@ func TestStartupStateReadsEarlierMarkers(t *testing.T) {
 		t.Fatalf("marker = %s", out)
 	}
 }
+
+// A roll-up of several pages pages once: the first stands for the others,
+// which notify instead.
+func TestEngineRollupPagesOnceForSeveralPages(t *testing.T) {
+	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
+	e, seen := rollupHarness(t, now)
+	first, second := announcement("node-1"), announcement("node-2")
+	first.Incident.Tier, second.Incident.Tier = incident.Page, incident.Page
+
+	e.announcer.collect.CollectRollup(context.Background(), now,
+		[]incident.Decision{first, second})
+
+	paging := 0
+	for _, m := range *seen {
+		if m.PagingOnly {
+			paging++
+		}
+	}
+	if paging != 1 {
+		t.Fatalf("want one page for the roll-up, got %d: %+v", paging, *seen)
+	}
+}

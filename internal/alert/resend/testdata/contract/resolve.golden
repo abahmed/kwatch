@@ -1,0 +1,13 @@
+POST /
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "from": "kwatch@example.com",
+  "subject": "✅ payments in shop is healthy again.",
+  "text": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+  "to": [
+    "ops@example.com",
+    "oncall@example.com"
+  ]
+}

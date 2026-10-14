@@ -1,0 +1,11 @@
+POST /
+Content-Type: application/json
+Authorization: AccessKey <redacted>
+
+{
+  "body": "🔴 payments in shop is still crash-looping.",
+  "originator": "kwatch",
+  "recipients": [
+    "+12025550100"
+  ]
+}

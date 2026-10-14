@@ -1,0 +1,9 @@
+POST /mg.example.com/messages
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic <redacted>
+
+from=kwatch@example.com
+subject=🟠 kwatch started and found 2 problems.
+text=🟠 kwatch started and found 2 problems that were there.
+to=ops@example.com
+to=oncall@example.com

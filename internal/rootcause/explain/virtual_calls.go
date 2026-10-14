@@ -1,6 +1,7 @@
 package explain
 
 import (
+	"net"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -232,7 +233,7 @@ func (v *view) unitFindings(pod inventory.EntityID) []detection.Finding {
 // cluster: "localhost", "db.shop.svc", or "db" when the pod's
 // namespace has a Service db.
 func (v *view) inCluster(host string, pod inventory.EntityID) bool {
-	if clusterLocal(host) {
+	if clusterLocal(host) || v.addressInModel(host) {
 		return true
 	}
 	name, namespace, qualified := cutLabel(host)
@@ -241,6 +242,20 @@ func (v *view) inCluster(host string, pod inventory.EntityID) bool {
 	}
 	return v.s.Model.Exists(inventory.CoreID(kube.KindService, namespace,
 		name))
+}
+
+// addressInModel reports an IP address that is the ClusterIP of a
+// Service or the address of a pod the model holds: a call to it stays
+// inside the cluster, whatever the caller's error text spells.
+func (v *view) addressInModel(host string) bool {
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	index := v.addresses()
+	_, service := index.services[ip.String()]
+	_, pod := index.pods[ip.String()]
+	return service || pod
 }
 
 // cutLabel splits "db.shop" into the Service name and namespace. A

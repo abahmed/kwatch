@@ -8,15 +8,19 @@ package reasons
 
 // Container lifecycle and container status reasons.
 const (
-	Completed            = "Completed"
-	Error                = "Error"
-	ErrImagePull         = "ErrImagePull"
-	ImagePullBackOff     = "ImagePullBackOff"
-	ImageInspectError    = "ImageInspectError"
-	InvalidImageName     = "InvalidImageName"
-	CrashLoopBackOff     = "CrashLoopBackOff"
-	OOMKilled            = "OOMKilled"
-	Killed               = "Killed"
+	Completed         = "Completed"
+	Error             = "Error"
+	ErrImagePull      = "ErrImagePull"
+	ImagePullBackOff  = "ImagePullBackOff"
+	ImageInspectError = "ImageInspectError"
+	InvalidImageName  = "InvalidImageName"
+	CrashLoopBackOff  = "CrashLoopBackOff"
+	// OOMKilled is the container termination reason Kubernetes records.
+	OOMKilled = "OOMKilled"
+	Killed    = "Killed"
+	// OOMKILLED is the all-caps spelling some runtimes and event sources
+	// emit for the same kill. Both stay: each is matched literally, and
+	// both map to the same failure mode.
 	OOMKILLED            = "OOMKILLED"
 	HighRestartCount     = "HighRestartCount"
 	ContainerCreating    = "ContainerCreating"
@@ -87,11 +91,12 @@ const (
 	StsUnavailable           = "StsUnavailable"
 	ScalingDisabled          = "ScalingDisabled"
 	FailedGetResourceMetric  = "FailedGetResourceMetric"
-	// FailedComputeMetricsReplicas, FailedGetMetrics and FailedGetScale are
-	// event reasons the HPA controller reports for one missing-metrics
-	// condition; they are folded into FailedGetResourceMetric.
+	// FailedComputeMetricsReplicas is an event reason of the HPA
+	// controller for a missing-metrics failure; it is folded into
+	// FailedGetResourceMetric. FailedGetScale is both an event and a
+	// condition reason; FailedUpdateScale only a condition reason (its
+	// event is FailedRescale).
 	FailedComputeMetricsReplicas = "FailedComputeMetricsReplicas"
-	FailedGetMetrics             = "FailedGetMetrics"
 	FailedGetScale               = "FailedGetScale"
 	FailedUpdateScale            = "FailedUpdateScale"
 	HPAInvalidSelector           = "HPAInvalidSelector"
@@ -336,6 +341,7 @@ const (
 	FailedPrepareDynamicResources = "FailedPrepareDynamicResources"
 	VolumeDetachFailure           = "VolumeDetachFailure"
 	VolumeAttachWaiting           = "VolumeAttachWaiting"
+	VolumeMultiAttach             = "VolumeMultiAttach"
 	ProvisioningFailed            = "ProvisioningFailed"
 	FailedMapVolume               = "FailedMapVolume"
 	CertificateDenied             = "CertificateSigningRequestDenied"

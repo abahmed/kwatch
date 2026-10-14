@@ -1,7 +1,7 @@
 10:02:45 settled
-🔴 Zone zone-a (prod-eu-1) is failing as a whole: four nodes have not reported for about two minutes. One of its nodes reports "Kubelet stopped posting node status". Two failing workloads all depend on it. To see the object's state and events, run kubectl describe node n1
-🔴 Zone zone-a (prod-eu-1) is failing as a whole: four nodes have not reported for about two minutes.
-| 🔴 Zone **zone-a** (**prod-eu-1**) is failing as a whole: four nodes have not reported for about two minutes.
+🔴 Zone zone-a (prod-eu-1) is failing as a whole: two nodes have not reported for about two minutes. One of its nodes reports "Kubelet stopped posting node status". Two failing workloads all depend on it. To see the object's state and events, run kubectl describe node n1
+🔴 Zone zone-a (prod-eu-1) is failing as a whole: two nodes have not reported for about two minutes.
+| 🔴 Zone **zone-a** (**prod-eu-1**) is failing as a whole: two nodes have not reported for about two minutes.
 | One of its nodes reports `Kubelet stopped posting node status`.
 | Two failing workloads all depend on it.
 | To see the object's state and events, run

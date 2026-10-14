@@ -1,0 +1,26 @@
+POST /open-apis/bot/v2/hook/<secret>
+Content-Type: application/json
+
+{
+  "card": {
+    "config": {
+      "wide_screen_mode": true
+    },
+    "elements": [
+      {
+        "content": "🟠 kwatch started and found 2 problems that were there.",
+        "tag": "markdown"
+      }
+    ],
+    "header": {
+      "template": "blue",
+      "title": {
+        "content": "kwatch",
+        "tag": "plain_text"
+      }
+    }
+  },
+  "msg_type": "interactive",
+  "sign": "qJbt/v6FGJJmxiWuBSnv0V/Ij0UAJAzorbHjGAGoX8c=",
+  "timestamp": "1767323045"
+}

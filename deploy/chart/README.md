@@ -139,8 +139,9 @@ kubectl delete namespace kwatch
 | `config.resyncSeconds` | Informer resync, a safety net for lost watch events: `0` (off) or at least `30`; the schema rejects other values | `300` |
 | `config.app.logFormatter` | `text` or `json` | `text` |
 | `config.app.caBundlePath` / `config.app.insecureSkipTLSVerify` | Extra PEM CA bundle for outbound HTTP (added to the system roots) and a switch that skips TLS verification (testing only). Not settable from a `KwatchConfig` | `""` / `false` |
+| `config.healthCheck.statusEndpoint` | Serve the read-only `/status` view (open incident object names, no authentication) on the health port. Off by default; with the NetworkPolicy on it is limited like the rest of the port. Reach it with `kubectl port-forward` | `false` |
 | `config.healthCheck.port` | Health port: container, probe and NetworkPolicy port. The health check cannot be disabled | `8060` |
-| `networkPolicy.enabled` | Render a NetworkPolicy that admits the health port and allows DNS, `networkPolicy.apiServerPorts` and kubelet (`networkPolicy.kubeletPort`, default 10250) egress | `false` |
+| `networkPolicy.enabled` | Render a NetworkPolicy that admits the health port (own namespace, `kubeletCIDRs` and `healthIngressFrom` only) and allows DNS, `networkPolicy.apiServerPorts` and kubelet (`networkPolicy.kubeletPort`, default 10250) egress | `false` |
 | `networkPolicy.allowDefaults` | Admit the health port and open DNS, `apiServerPorts`, kubelet and DNS metrics egress. `false` only when your own rules cover the API server, kubelets and probes | `true` |
 | `networkPolicy.apiServerPorts` | TCP ports open to any address for the API server and HTTPS providers; at least one is required (an empty list would open all egress) | `[443, 6443]` |
 | `networkPolicy.kubeletPort` | Kubelet HTTPS port opened for node stats | `10250` |
@@ -148,7 +149,8 @@ kubectl delete namespace kwatch
 | `networkPolicy.allowProbeEgressAll` | Allow all egress from the pod. Needed for active probes, `autoServices`, `autoDependencies`, a proxy or providers on unusual ports unless you open them one by one; `helm install` warns when these are configured with the policy on | `false` |
 | `networkPolicy.ingress` / `networkPolicy.egress` | Extra full NetworkPolicy rules, for example to limit a port to one address | `[]` |
 | `networkPolicy.extraEgressPorts` | Extra TCP egress ports open to any address, for providers not on 443: SMTP (`25`, `465` or `587`) for email, or a webhook's custom port | `[]` |
-| `networkPolicy.kubeletCIDRs` | Node address ranges the kubelet egress rule is limited to; empty allows any address | `[]` |
+| `networkPolicy.kubeletCIDRs` | Node address ranges the kubelet egress rule is limited to; empty allows any address. Also admitted to the health port, for kubelet probes on a network plugin that enforces policy on node traffic | `[]` |
+| `networkPolicy.healthIngressFrom` | Extra peers (`namespaceSelector`, `podSelector` or `ipBlock`) that may reach the health port (`/health`, `/metrics`, `/status`), such as your Prometheus namespace. Without it only pods in the release namespace (and `kubeletCIDRs`) can | `[]` |
 | `image.repository` / `image.tag` / `image.pullPolicy` | Container image; an empty tag uses the chart's `appVersion` | `ghcr.io/abahmed/kwatch` / `""` / `IfNotPresent` |
 | `crd.install` | Install the shared `KwatchConfig` CRD with this release; skipped automatically when another release owns it. `config.crd.enabled` is separate: it turns the live overlay on | `true` |
 | `rbac.mode` | `full` grants read-only `list`/`watch` on every resource (and `get` only on namespaces, nodes, `nodes/stats`, `nodes/metrics` and `pods/log`); `least-privilege` grants an explicit `list`/`watch` set, and kinds outside it show as `permission_denied` in `/health` coverage | `full` |
@@ -159,7 +161,7 @@ kubectl delete namespace kwatch
 | `persistence.storageDriverTopologyKey` | The driver's topology label to require explicitly (for offline renders), for example `topology.ebs.csi.aws.com/zone` | `""` |
 | `persistence.emptyDirSizeLimit` | `sizeLimit` of the `emptyDir`; also passed to kwatch as `KWATCH_VOLUME_LIMIT` so the startup rewrite checks the real limit | `2Gi` |
 | `watch.secrets` | Watch Secrets; `false` removes all Secret RBAC (in both `rbac.mode` values) and Secret-based checks report that they cannot verify. Secrets are watched by default, which lets the kwatch ServiceAccount list and watch Secrets cluster-wide; set `watch.secrets: false` to remove all Secret RBAC and the Secret watch. | `true` |
-| `resources` | CPU and memory requests/limits; kwatch sets `GOMEMLIMIT` to 90% of the memory limit | `100m` CPU request, `500m` CPU and `512Mi` memory limit |
+| `resources` | CPU and memory requests/limits; kwatch sets `GOMEMLIMIT` to 90% of the memory limit. Live heap is about 26 KB per pod: the default 512Mi suits up to about 8,000 pods, 10,000 pods need `768Mi` and 20,000 need `1Gi` (see docs/production-operations.md, Memory) | `100m` CPU request, `500m` CPU and `512Mi` memory limit |
 | `securityContext.runAsUser` / `securityContext.runAsGroup` | Numeric user and group of the container; they match the image's `kwatch` user | `1000` / `1000` |
 | `podSecurityContext.fsGroup` | Group that owns the state volume | `1000` |
 | `persistence.storageClass` | StorageClass of the state claim; empty uses the cluster default | `""` |

@@ -1,0 +1,8 @@
+POST /
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "markdown": "🔴 **payments** in **shop** is crash-looping.\n\nIt said `boom *x* @​channel`.\n\nService **web** can't serve traffic. Run\n\n```\nkubectl logs payments -n shop\n```",
+  "roomId": "room-1"
+}

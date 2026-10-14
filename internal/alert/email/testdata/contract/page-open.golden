@@ -1,0 +1,13 @@
+SMTP /
+Content-Type: text/plain; charset=UTF-8
+From: kwatch@example.com
+To: ops@example.com, oncall@example.com
+Subject: 🔴 payments in shop is crash-looping.
+Mime-Version: 1.0
+Content-Transfer-Encoding: quoted-printable
+X-Kwatch-Cluster: dev
+X-Kwatch-Alert-Key: <redacted>
+
+🔴 payments in shop is crash-looping. It ran out of memory 3 times in 10 minutes. Try kubectl -n shop describe pod payments-1.
+
+> panic: out of memory

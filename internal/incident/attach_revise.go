@@ -56,6 +56,7 @@ func (m *Manager) revise(
 		return false
 	}
 	delete(old.Members, key)
+	m.noteLeft(now, old, key)
 	logMember("moved out of", old, key)
 	m.changed[old.ID] = true
 	old.noteMoved(root)
@@ -68,16 +69,53 @@ func (m *Manager) revise(
 	if len(old.Members) > 0 || !wasAnnounced(old) {
 		return false
 	}
-	if target := m.lookup(root); target != nil && wasAnnounced(target) {
+	return m.moveEmpty(now, old, root)
+}
+
+// moveEmpty decides what becomes of an announced incident that lost its
+// last member to root. It reports whether the incident moved to root.
+func (m *Manager) moveEmpty(
+	now time.Time, old *Incident, root inventory.EntityID,
+) bool {
+	target := m.lookup(root)
+	told := target != nil && wasAnnounced(target)
+	if told && !leavesOutage(old, target) {
 		old.SupersededBy, old.SupersededRoot = target.ID, target.Root
 		return false
 	}
-	if dispersed(old.movedTo) {
-		old.note(now, "its failures went their own ways; this ends here")
+	if told || dispersed(old.movedTo) {
+		if !m.splitOutage(old) {
+			old.note(now,
+				"its failures went their own ways; this ends here")
+		}
 		return false
 	}
 	m.reroot(now, old, root)
 	return true
+}
+
+// leavesOutage reports a node outage whose failures went to a workload:
+// the nodes stopped explaining them, which is a recovery of the outage,
+// not a move of it.
+func leavesOutage(old, target *Incident) bool {
+	return nodeFamily(old.Root.Kind) && IsWorkload(target.Root.Kind)
+}
+
+// splitOutage supersedes an announced node outage that split into
+// outages of the nodes themselves: the failures are still failing, so
+// it must not close as healthy. It reports whether it did.
+func (m *Manager) splitOutage(old *Incident) bool {
+	if !nodeFamily(old.Root.Kind) || !reachedPaging(old) {
+		return false
+	}
+	for _, root := range old.movedTo {
+		if p := m.lookup(root); p != nil && p.State != Resolved &&
+			nodeFamily(root.Kind) {
+			old.SupersededBy, old.SupersededRoot = p.ID, p.Root
+			return true
+		}
+	}
+	return false
 }
 
 // maxMoved bounds movedTo. Two different roots already mean "dispersed",

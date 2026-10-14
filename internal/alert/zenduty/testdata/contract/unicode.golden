@@ -1,0 +1,9 @@
+POST /<secret>/
+Content-Type: application/json
+
+{
+  "alert_type": "critical",
+  "entity_id": "kwatch-dev-p-uni",
+  "message": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú.",
+  "summary": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\nLast output:\nпаника: нехватка памяти — 内存不足\n\nCluster: dev"
+}

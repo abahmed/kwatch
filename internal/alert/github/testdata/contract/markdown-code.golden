@@ -1,0 +1,18 @@
+--- request 1 of 2
+GET /search/issues?q=kwatchkey7497924e83b66aac repo:kwatch/kwatch is:issue is:open in:body
+Content-Type: application/json
+Authorization: Bearer <redacted>
+Accept: application/vnd.github+json
+
+(empty body)
+
+--- request 2 of 2
+POST /repos/kwatch/kwatch/issues
+Content-Type: application/json
+Authorization: Bearer <redacted>
+Accept: application/vnd.github+json
+
+{
+  "body": "🔴 **payments** in **shop** is crash-looping.\n\nIt said `boom *x* @​channel`.\n\nService **web** can't serve traffic. Run\n\n```\nkubectl logs payments -n shop\n```\n\nRef: kwatchkey7497924e83b66aac",
+  "title": "🔴 payments in shop is crash-looping."
+}

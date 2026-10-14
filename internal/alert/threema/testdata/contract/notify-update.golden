@@ -1,0 +1,9 @@
+POST /send_simple
+Content-Type: application/x-www-form-urlencoded
+
+from=*KWATCH1
+secret=<redacted>
+text=🔴 payments in shop is still crash-looping. It restarted 5 times now.
+
+> panic: out of memory
+to=ABCD1234

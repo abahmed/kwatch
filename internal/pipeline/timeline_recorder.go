@@ -135,6 +135,9 @@ func (h *historyRecorder) transitions(
 	var entries []TimelineEntry
 	marked := map[inventory.EntityID]bool{}
 	for _, t := range transitions {
+		if t.Kind == detection.Refreshed {
+			continue
+		}
 		s := t.Finding
 		entries = append(entries, findingEntry(t, now))
 		if marked[s.Entity] {

@@ -219,3 +219,14 @@ func TestPruneReturnValue(t *testing.T) {
 	removed := m.Prune(t1.Add(2 * time.Second))
 	assert.Equal(t, 2, removed)
 }
+
+// Health marks restored before the sources report must live their full
+// retention, not vanish with the first prune of an unobserved entity.
+func TestPruneKeepsRestoredHealthMarks(t *testing.T) {
+	m := NewModel(Options{})
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	id := CoreID("deployment", "shop", "api")
+	m.RestoreHealth(id, HealthMark{At: now.Add(-time.Hour)})
+	m.PruneKeeping(now.Add(-2*time.Hour), now.Add(-24*time.Hour))
+	assert.Len(t, m.HealthMarks(id, time.Time{}), 1)
+}

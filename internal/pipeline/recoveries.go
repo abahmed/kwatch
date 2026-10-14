@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/incident"
@@ -59,22 +60,59 @@ func (a *announcer) splitRecoveries(
 // and records them as carried by it: the audit log keeps each decision,
 // delivery sends the one message. The lead's own resolve is delivered as
 // usual by send.
+//
+// Nothing is recorded until the joint message is composed. If composing
+// panics, the lead goes alone, the followers stay in a.joint and flushJoint
+// sends each of them on its own, so no resolve is lost.
 func (a *announcer) withRecovered(
 	ctx context.Context, lead incident.Decision, msg notification.Message,
 	at time.Time,
 ) notification.Message {
 	followers := a.joint[lead.Incident.ID]
-	delete(a.joint, lead.Incident.ID)
+	written := make([]incident.Decision, 0, len(followers))
 	others := make([]notification.Message, 0, len(followers))
-	for _, f := range followers {
-		f = a.withKindNames(a.withChanges(f, at))
-		m := a.write(f, at)
-		others = append(others, m)
+	var joint notification.Message
+	ok := contain("compose", "joint", func() {
+		for _, f := range followers {
+			f = a.withKindNames(a.withChanges(f, at))
+			written = append(written, f)
+			others = append(others, a.write(f, at))
+		}
+		joint = compose.Recovered(msg, others)
+	})
+	if !ok {
+		// The lead goes alone; flushJoint sends the followers.
+		return msg
+	}
+	delete(a.joint, lead.Incident.ID)
+	for i, f := range written {
+		m := others[i]
 		m.Carrier = jointRecovery
 		m.SkipPaging = true
 		a.collect.NoteResolveDelivered(f.Incident.ID)
 		a.forgetEvidence(f)
 		a.sink(ctx, f, m)
 	}
-	return compose.Recovered(msg, others)
+	return joint
+}
+
+// flushJoint sends, as resolves of their own, the followers that no lead
+// carried: the lead's message failed to compose, or the lead never reached
+// send. It ends the tick's joint recovery, so a.joint is empty afterwards.
+func (a *announcer) flushJoint(ctx context.Context, at time.Time) {
+	left := a.joint
+	a.joint = nil
+	leads := make([]string, 0, len(left))
+	for lead := range left {
+		leads = append(leads, lead)
+	}
+	sort.Strings(leads)
+	for _, lead := range leads {
+		for _, f := range left[lead] {
+			contain("compose", "write", func() {
+				a.send(ctx, a.withEvidence(f), at)
+			})
+			a.forgetEvidence(f)
+		}
+	}
 }

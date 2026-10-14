@@ -1,0 +1,12 @@
+{
+  "name": "multi-attach-held-by-old-pod",
+  "description": "A rollout's new pod cannot attach the ReadWriteOnce volume the old, still terminating pod holds on another node.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n2",
+    "storageclass//fast"
+  ],
+  "tail": "1m0s"
+}

@@ -62,7 +62,7 @@ func (e *stubExplainer) Solve(
 }
 
 type rig struct {
-	t     *testing.T
+	t     testing.TB
 	model *inventory.Model
 	rule  *stubExplainer
 	// sigs are extra active findings the snapshot holds, such as the
@@ -76,7 +76,7 @@ type rig struct {
 // testNonce makes rig IDs deterministic.
 const testNonce = "7f3a"
 
-func newRig(t *testing.T, cfg Config) *rig {
+func newRig(t testing.TB, cfg Config) *rig {
 	t.Helper()
 	if cfg.IDNonce == "" {
 		cfg.IDNonce = testNonce

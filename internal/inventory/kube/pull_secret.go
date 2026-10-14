@@ -23,10 +23,12 @@ const (
 )
 
 // setSpecAttributes records what the pod's spec says about where and how
-// it runs: its scheduling constraints and its image pull Secrets.
+// it runs: its scheduling constraints, its image pull Secrets and the
+// host ports it claims.
 func setSpecAttributes(attrs map[string]inventory.Value, pod *corev1.Pod) {
 	setSchedulingSpec(attrs, pod)
 	setPullSecrets(attrs, pod)
+	setHostPorts(attrs, pod)
 }
 
 // setPullSecrets records the pod's image pull Secret names.

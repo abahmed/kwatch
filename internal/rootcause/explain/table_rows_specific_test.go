@@ -116,6 +116,15 @@ var clusterRowCases = []rowCase{
 				"lookup db.shop.svc: no such host")
 			return containerOf(servers[0])
 		}},
+	{row: "cluster-dns-server-workload", want: "cluster-dns//cluster-dns",
+		build: func(f *fixture) inventory.EntityID {
+			f.workload("kube-system", "coredns", 2)
+			server := inventory.CoreID(kube.KindDeployment, "kube-system",
+				"coredns")
+			f.fail(kube.ClusterDNS, "Unavailable.CoreDNS", failingH, 1, "")
+			f.fail(server, "NotReady.Never", failingH, 2, "")
+			return server
+		}},
 	{row: "webhook-rejects", want: "validatingwebhookconfiguration//policy",
 		build: func(f *fixture) inventory.EntityID {
 			hook := inventory.CoreID(kube.KindValidatingHook, "", "policy")
@@ -229,7 +238,8 @@ func TestTableRows(t *testing.T) {
 		agentRowCases, serviceCallRowCases, livenessRowCases,
 		leaseRowCases, missingServiceRowCases, preemptionRowCases,
 		initWaitRowCases, finalizerRowCases, storageRowCases,
-		runConfigRowCases, policyAdmitRowCases, claimRowCases}
+		runConfigRowCases, policyAdmitRowCases, claimRowCases,
+		volumeRowCases}
 	tested := map[string]bool{}
 	for _, group := range groups {
 		for _, tc := range group {

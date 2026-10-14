@@ -41,6 +41,7 @@ func (Claim) Detect(
 				Severity: detection.Warning, Since: since,
 				Summary: "Volume claim has been waiting for a volume for " +
 					format.Duration(ctx.Now.Sub(since)),
+				Evidence: provisionerEvidence(ctx, e),
 			})
 		}
 	case "Lost":

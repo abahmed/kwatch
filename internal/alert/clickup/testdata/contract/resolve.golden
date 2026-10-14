@@ -1,0 +1,17 @@
+--- request 1 of 2
+POST /task/t1/comment
+Content-Type: application/json
+Authorization: <redacted>
+
+{
+  "comment_text": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart."
+}
+
+--- request 2 of 2
+PUT /task/t1
+Content-Type: application/json
+Authorization: <redacted>
+
+{
+  "status": "complete"
+}

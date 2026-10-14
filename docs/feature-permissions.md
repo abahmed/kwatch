@@ -31,9 +31,16 @@ single-object resources listed. A KwatchConfig overlay needs only the
 namespaced Role.
 
 Secret read access is on by default because missing Secret references and
-certificate expiry need it. Set `watch.secrets: false` to remove every Secret
-permission; those checks then report that they cannot verify. Any custom RBAC profile must be validated with
-`kubectl auth can-i` in the target cluster.
+certificate expiry need it. **By default kwatch's ServiceAccount can read
+every Secret in the cluster**; kwatch keeps only hashes, but the permission
+exists in both RBAC modes (`rbac.mode: full` also grants every other kind).
+Set `watch.secrets: false` to remove every Secret permission; those checks
+then report that they cannot verify. `rbac.mode: least-privilege` alone does
+not remove it. The chart prints this warning on install and kwatch logs it
+once at startup.
+
+Any custom RBAC profile must be validated with `kubectl auth can-i` in the
+target cluster.
 
 The raw manifest and Helm chart must keep the lock, state volume, probe,
 and security-context settings equivalent. This page is guidance;

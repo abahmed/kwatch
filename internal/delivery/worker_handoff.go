@@ -50,7 +50,15 @@ func (m *Manager) workOne(
 			return false
 		}
 		job = m.newestRevision(entry, job)
-		switch m.deliver(ctx, entry, job) {
+		if job.attempts >= maxUnfinishedSends {
+			m.recordTerminalFailure(entry, job, errProviderPanic)
+			return true
+		}
+		outcome, started := m.guardedDeliver(ctx, entry, job)
+		job = started
+		switch outcome {
+		case outcomePanicked:
+			continue
 		case outcomeInterrupted:
 			m.handOff(entry, job)
 			return false

@@ -1,0 +1,28 @@
+POST /services/collector/event
+Content-Type: application/json
+Authorization: Splunk <redacted>
+
+{
+  "event": {
+    "cluster": "dev",
+    "incidentKey": "kwatch-dev-p-big",
+    "message": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[2990 runes sha256:1a7fd488f410a4625701a518]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "namespaces": [
+      "shop"
+    ],
+    "output": [
+      "panic: out of memory"
+    ],
+    "reasons": [
+      "OOMKilled"
+    ],
+    "revision": 1,
+    "severity": "critical",
+    "source": "kwatch",
+    "state": "firing",
+    "status": "critical",
+    "title": "🔴 payments in shop is crash-looping."
+  },
+  "index": "k8s",
+  "sourcetype": "kwatch:incident"
+}

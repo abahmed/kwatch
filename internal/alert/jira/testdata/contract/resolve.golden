@@ -1,0 +1,26 @@
+--- request 1 of 3
+POST /rest/api/2/issue/OPS-9/comment
+Content-Type: application/json
+Authorization: Basic <redacted>
+
+{
+  "body": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart."
+}
+
+--- request 2 of 3
+GET /rest/api/2/issue/OPS-9/transitions
+Content-Type: application/json
+Authorization: Basic <redacted>
+
+(empty body)
+
+--- request 3 of 3
+POST /rest/api/2/issue/OPS-9/transitions
+Content-Type: application/json
+Authorization: Basic <redacted>
+
+{
+  "transition": {
+    "id": "31"
+  }
+}

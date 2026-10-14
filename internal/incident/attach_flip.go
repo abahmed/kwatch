@@ -73,14 +73,21 @@ func (m *Manager) stayWith(
 // leaveRoot remembers that p is moving away from its root, and drops
 // the memories of moves too old to matter.
 func (m *Manager) leaveRoot(now time.Time, p *Incident) {
+	m.pruneFormer(now)
+	p.formerRoot, p.rerootedAt = p.Root, now
+	m.former[p.Root.String()] = p.ID
+}
+
+// pruneFormer drops the memories of moves too old to matter, or whose
+// incident is gone. Tick calls it too, so the map cannot outlive
+// RepageWindow when no incident moves again.
+func (m *Manager) pruneFormer(now time.Time) {
 	for root, id := range m.former {
 		if moved := m.incidents[id]; moved == nil ||
 			now.Sub(moved.rerootedAt) > RepageWindow {
 			delete(m.former, root)
 		}
 	}
-	p.formerRoot, p.rerootedAt = p.Root, now
-	m.former[p.Root.String()] = p.ID
 }
 
 // restoreFormer rebuilds the memory of the move of a restored incident.

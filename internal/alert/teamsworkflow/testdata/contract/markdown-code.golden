@@ -1,0 +1,22 @@
+POST /
+Content-Type: application/json
+
+{
+  "attachments": [
+    {
+      "content": {
+        "body": [
+          {
+            "text": "🔴 payments in shop is crash-looping.\nIt said boom *x* @​channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop",
+            "type": "TextBlock",
+            "wrap": true
+          }
+        ],
+        "type": "AdaptiveCard",
+        "version": "1.4"
+      },
+      "contentType": "application/vnd.microsoft.card.adaptive"
+    }
+  ],
+  "type": "message"
+}

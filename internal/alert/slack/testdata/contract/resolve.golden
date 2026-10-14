@@ -1,0 +1,20 @@
+--- request 1 of 2
+POST /chat.postMessage
+Content-Type: application/x-www-form-urlencoded
+
+as_user=true
+blocks=[{"type":"section","text":{"type":"mrkdwn","text":"✅ payments in shop is healthy again. It ran for 10 minutes without a restart.","verbatim":true}}]
+channel=C1
+text=✅ payments in shop is healthy again.
+thread_ts=111.1
+token=<redacted>
+
+--- request 2 of 2
+POST /chat.update
+Content-Type: application/x-www-form-urlencoded
+
+blocks=[{"type":"section","text":{"type":"mrkdwn","text":"✅ payments in shop is crash-looping. It ran out of memory 3 times in 10 minutes. Try kubectl -n shop describe pod payments-1.","verbatim":true}},{"type":"section","text":{"type":"mrkdwn","text":"_Its recent output:_","verbatim":true}},{"type":"section","text":{"type":"mrkdwn","text":"```panic: out of memory```","verbatim":true}}]
+channel=C1
+text=✅ payments in shop is crash-looping.
+token=<redacted>
+ts=111.1

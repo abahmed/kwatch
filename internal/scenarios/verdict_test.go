@@ -19,6 +19,18 @@ type verdict struct {
 	blamed []string
 	// tier is the first incident's delivery tier, empty when none.
 	tier string
+	// pages is how many paging alerts the replay opened.
+	pages int
+	// falseRecoveries counts resolves that said "recovered" while a
+	// failure the incident explained still failed elsewhere.
+	falseRecoveries int
+	// leftOpen counts announced incidents still open with no member.
+	leftOpen int
+}
+
+// overPages reports more paging alerts than the label allows.
+func (v verdict) overPages() bool {
+	return v.pages > pageLimit(v.expect)
 }
 
 // overBudget reports more messages than the label allows.
@@ -43,6 +55,9 @@ func judge(e expectation, result replay.Result) verdict {
 	}
 	v.cases = rootCases(e, v.incidents)
 	v.blamed = blamed(e, result)
+	v.pages = pagesRaised(result)
+	v.falseRecoveries = falseRecoveries(result)
+	v.leftOpen = leftOpen(result)
 	return v
 }
 

@@ -38,6 +38,7 @@ type fitNode struct {
 type fitPeer struct {
 	namespace, name string
 	labels          map[string]string
+	ports           []kube.HostPort
 }
 
 // fitClaim is a volume claim of the pod and the node terms it limits
@@ -57,6 +58,7 @@ type fitCase struct {
 	labels map[string]string
 	need   map[string]float64
 	claims []fitClaim
+	ports  []kube.HostPort
 	nodes  []fitNode
 	peers  map[string][]fitPeer
 	total  int
@@ -80,6 +82,7 @@ func newFitCase(model inventory.Reader, pod inventory.Entity) *fitCase {
 		labels: kube.ParseLabels(text(pod, kube.AttrLabels)),
 		need:   podNeeds(model, pod.ID), peers: map[string][]fitPeer{}}
 	c.claims = podClaimTerms(model, pod.ID)
+	c.ports = kube.ParseHostPorts(text(pod, kube.AttrHostPorts))
 	ids := model.Entities(kube.KindNode)
 	sort.Slice(ids, func(i, j int) bool { return ids[i].Name < ids[j].Name })
 	c.total = len(ids)
@@ -246,7 +249,8 @@ func peersOn(model inventory.Reader, node inventory.EntityID) []fitPeer {
 			continue
 		}
 		out = append(out, fitPeer{namespace: id.Namespace, name: id.Name,
-			labels: kube.ParseLabels(text(pod, kube.AttrLabels))})
+			labels: kube.ParseLabels(text(pod, kube.AttrLabels)),
+			ports:  kube.ParseHostPorts(text(pod, kube.AttrHostPorts))})
 	}
 	return out
 }

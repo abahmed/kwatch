@@ -34,9 +34,30 @@ func (c *Collector) CollectRollup(
 	if len(announcements) < rollupMin {
 		return decisions, false
 	}
+	c.holdCoveredPages(announcements)
 	msg := c.env.Messages.Rollup(announcements, now)
 	c.sendListing(ctx, now, announcements, msg, false)
 	return rest, true
+}
+
+// holdCoveredPages lets only the first page-tier member of a roll-up
+// page: its page stands for the problems found at the same time. The
+// others notify, in this roll-up and in their later messages, and page
+// again only if they outlast the hold of a repeated page.
+func (c *Collector) holdCoveredPages(announcements []incident.Decision) {
+	paged := false
+	for i, d := range announcements {
+		if d.Incident.Tier != incident.Page || c.pagedAlready(d) {
+			paged = paged || d.Incident.Tier == incident.Page
+			continue
+		}
+		if !paged {
+			paged = true
+			continue
+		}
+		c.env.Incidents.HoldPage(d.Incident.ID)
+		announcements[i].Incident.Tier = incident.Notify
+	}
 }
 
 // sendListing sends msg, a roll-up or a namespace outage naming the

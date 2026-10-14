@@ -73,8 +73,13 @@ func constructProviders(
 	cfg *config.Config, errOut io.Writer,
 ) (*delivery.Manager, int) {
 	runtime := config.RuntimeConfigFor(cfg)
+	httpClient, err := kubeclient.NewHTTPClientWithRuntime(runtime)
+	if err != nil {
+		_, _ = fmt.Fprintf(errOut, "ERROR: outbound HTTP client: %v\n", err)
+		return nil, 1
+	}
 	am := delivery.NewManagerWithDependencies(delivery.Dependencies{
-		HTTPClient: kubeclient.NewHTTPClientWithRuntime(runtime),
+		HTTPClient: httpClient,
 		Clock:      clock.RealClock{},
 	})
 	if err := am.InitRuntime(runtime, catalog.NewProvider); err != nil {

@@ -30,12 +30,20 @@ const churnStart = 5 * time.Minute
 // after a displacement a failure still counts as its blip.
 const churnMaxHold = 15 * time.Minute
 
-// nodeChurn remembers the nodes seen, when a node last left or was in
-// transition, and the findings held for it.
+// nodeChurn remembers the nodes seen and whether each was leaving, when
+// a node last started leaving or was removed, and the findings held.
 type nodeChurn struct {
-	seen map[inventory.EntityID]bool
+	seen map[inventory.EntityID]bool // value: the node was leaving
 	at   time.Time
 	held map[detection.Key]heldFinding
+	// baselined is set by the first look at a model that has nodes. What
+	// that look finds is the state kwatch started in, not a change.
+	baselined bool
+	// restored lists the nodes that restored incidents stood on.
+	restored []inventory.EntityID
+	// scans counts the looks made, so tests can prove a quiet tick
+	// does not scan the nodes.
+	scans int
 }
 
 // heldFinding is a finding waiting for its pods to settle.
@@ -45,25 +53,113 @@ type heldFinding struct {
 	since   time.Time
 }
 
-// observe records a node that left the model or is leaving it (not
-// ready, cordoned or being deleted) as a displacement now.
+// observe records a node that left the model, or started leaving it
+// (not ready, cordoned or being deleted), as a displacement now. Only
+// the change counts: a node that stays cordoned for days is not a new
+// displacement on every look, and its pods settle after churnMaxHold.
+//
+// The first look at a model that has nodes only sets the baseline: nodes
+// already leaving then began at an unknown time, so they are not fresh.
+// A node that restored incidents stood on and that is gone by then was
+// removed while kwatch was down, and counts as removed now.
 func (c *nodeChurn) observe(model inventory.Reader, now time.Time) {
 	if model == nil {
 		return
 	}
-	current := map[inventory.EntityID]bool{}
-	for _, id := range model.Entities(kube.KindNode) {
-		current[id] = true
-		if node, ok := model.Entity(id); ok && nodeLeaving(node) {
+	c.scans++
+	current := nodesLeaving(model)
+	if !c.baselined {
+		c.baseline(current, now)
+		return
+	}
+	for id, leaving := range current {
+		if leaving && !c.seen[id] {
 			c.at = now
 		}
 	}
 	for id := range c.seen {
-		if !current[id] {
+		if _, still := current[id]; !still {
 			c.at = now
 		}
 	}
 	c.seen = current
+}
+
+// touchesNode reports whether an update names a node entity. The entity
+// an update is about is always in dirty or in a transition.
+func touchesNode(
+	dirty []inventory.EntityID, transitions []detection.Transition,
+) bool {
+	for _, id := range dirty {
+		if id.Kind == kube.KindNode {
+			return true
+		}
+	}
+	for _, t := range transitions {
+		if t.Finding.Entity.Kind == kube.KindNode {
+			return true
+		}
+	}
+	return false
+}
+
+// observeNodes looks at the nodes when one changed since the last look,
+// or when there is no baseline yet. Expiry of a displacement needs no
+// look: it is read from the clock in displacedPods.
+func (m *Manager) observeNodes(model inventory.Reader, now time.Time) {
+	if !m.nodesDirty && m.churn.baselined {
+		return
+	}
+	m.churn.observe(model, now)
+	m.nodesDirty = false
+}
+
+// baseline takes the first look at a model that has nodes.
+func (c *nodeChurn) baseline(
+	current map[inventory.EntityID]bool, now time.Time,
+) {
+	if len(current) == 0 {
+		return // the nodes are not in the model yet
+	}
+	c.baselined = true
+	for _, id := range c.restored {
+		if _, there := current[id]; !there {
+			c.at = now
+		}
+	}
+	c.restored, c.seen = nil, current
+}
+
+// knowNode remembers that a restored incident stood on node id, so its
+// absence at the first look is a removal.
+func (c *nodeChurn) knowNode(id inventory.EntityID) {
+	if id.Kind == kube.KindNode && !c.baselined {
+		c.restored = append(c.restored, id)
+	}
+}
+
+// nodesLeaving maps every node in the model to whether it is leaving. It
+// reads three attributes in bulk instead of copying each node.
+func nodesLeaving(model inventory.Reader) map[inventory.EntityID]bool {
+	ids := model.Entities(kube.KindNode)
+	out := make(map[inventory.EntityID]bool, len(ids))
+	spaces := map[string]bool{}
+	for _, id := range ids {
+		out[id] = false
+		spaces[id.Namespace] = true
+	}
+	for space := range spaces {
+		for _, name := range []string{kube.AttrReady, kube.AttrUnschedulable,
+			kube.AttrDeleting} {
+			for id, v := range model.AttributeIn(kube.KindNode, space, name) {
+				b, isBool := v.AsBool()
+				if isBool && b == (name != kube.AttrReady) {
+					out[id] = true
+				}
+			}
+		}
+	}
+	return out
 }
 
 // nodeLeaving reports a node that is not ready, cordoned or deleted.
@@ -196,7 +292,7 @@ func (m *Manager) reopenRefused(
 // releaseChurn attaches the held findings whose hold is over. A finding
 // that cleared meanwhile was dropped by detach.
 func (m *Manager) releaseChurn(now time.Time) {
-	m.churn.observe(m.model, now)
+	m.observeNodes(m.model, now)
 	keys := make([]detection.Key, 0, len(m.churn.held))
 	for key := range m.churn.held {
 		keys = append(keys, key)

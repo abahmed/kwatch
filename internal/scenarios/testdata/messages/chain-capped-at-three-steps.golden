@@ -32,10 +32,10 @@ Chain: postgres (10:09) → api (10:10) → gateway (10:10) → web (10:10). Bey
 | kubectl describe service edge -n shop
 | ```
 10:13:00 material change
-🟠 postgres in shop (prod-eu-1) is spreading to pods api-bee69fdb-a and api-bee69fdb-b: they have not been ready for three minutes.
-🟠 postgres in shop (prod-eu-1) is spreading to pods api-bee69fdb-a and api-bee69fdb-b: they have not been ready for three minutes.
-| 🟠 **postgres** in **shop** (**prod-eu-1**) is spreading to pods **api-bee69fdb-a** and api-bee69fdb-b: they have not been ready for three minutes.
+🟠 postgres in shop (prod-eu-1) is spreading to api: it has not been ready for three minutes.
+🟠 postgres in shop (prod-eu-1) is spreading to api: it has not been ready for three minutes.
+| 🟠 **postgres** in **shop** (**prod-eu-1**) is spreading to api: it has not been ready for three minutes.
 10:13:15 material change
-🟠 Service web in shop (prod-eu-1) is spreading to pods edge-c95c31d8-a and edge-c95c31d8-b: they have not been ready for three minutes.
-🟠 Service web in shop (prod-eu-1) is spreading to pods edge-c95c31d8-a and edge-c95c31d8-b: they have not been ready for three minutes.
-| 🟠 Service **web** in **shop** (**prod-eu-1**) is spreading to pods **edge-c95c31d8-a** and edge-c95c31d8-b: they have not been ready for three minutes.
+🟠 Service web in shop (prod-eu-1) is spreading to edge: it has not been ready for three minutes.
+🟠 Service web in shop (prod-eu-1) is spreading to edge: it has not been ready for three minutes.
+| 🟠 Service **web** in **shop** (**prod-eu-1**) is spreading to edge: it has not been ready for three minutes.
