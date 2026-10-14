@@ -1,0 +1,13 @@
+{
+  "name": "registry-rate-limited",
+  "description": "A new node's image pulls are all answered \"toomanyrequests\" (429 Too Many Requests) by the registry.",
+  "root": "registry//registry.corp.example",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n3",
+    "deployment/shop/api",
+    "deployment/shop/worker",
+    "secret/shop/regcred"
+  ]
+}

@@ -21,18 +21,25 @@ func (m *Manager) inheritPage(
 	if p.State != Settling || len(p.Members) > 0 || !p.Announced.IsZero() {
 		return
 	}
-	for _, id := range m.sortedIDs() {
-		old := m.incidents[id]
-		if old == p || !m.pagedStory(now, old, s) {
+	// The first match by ID wins. Taking the smallest matching ID is the
+	// same choice as walking the sorted IDs, without sorting every
+	// incident for each new one: a storm opens thousands of them.
+	var first *Incident
+	for id, old := range m.incidents {
+		if old == p || (first != nil && id >= first.ID) ||
+			!m.pagedStory(now, old, s) {
 			continue
 		}
-		o := occurrenceOf(old)
-		if old.State != Resolved {
-			o.Resolved = now
-		}
-		p.History = appendHistory(p.History, o)
+		first = old
+	}
+	if first == nil {
 		return
 	}
+	o := occurrenceOf(first)
+	if first.State != Resolved {
+		o.Resolved = now
+	}
+	p.History = appendHistory(p.History, o)
 }
 
 // pagedStory reports whether old paged for the story of s: it is live or

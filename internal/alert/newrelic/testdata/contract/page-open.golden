@@ -1,0 +1,20 @@
+POST /v1/accounts/1/events
+Content-Type: application/json
+Api-Key: <redacted>
+
+[
+  {
+    "action": "firing",
+    "cluster": "dev",
+    "eventType": "KwatchAlert",
+    "incidentKey": "kwatch-dev-p-42",
+    "message": "🔴 payments in shop is crash-looping. It ran out of memory 3 times in 10 minutes. Try kubectl -n shop describe pod payments-1.\n\nLast output:\npanic: out of memory",
+    "namespace": "shop",
+    "reason": "OOMKilled",
+    "revision": 1,
+    "severity": "critical",
+    "state": "firing",
+    "status": "critical",
+    "title": "🔴 payments in shop is crash-looping."
+  }
+]

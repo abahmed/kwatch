@@ -1,0 +1,28 @@
+POST /
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "content": [
+    {
+      "type": "text/plain",
+      "value": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart."
+    }
+  ],
+  "from": {
+    "email": "kwatch@example.com"
+  },
+  "personalizations": [
+    {
+      "to": [
+        {
+          "email": "ops@example.com"
+        },
+        {
+          "email": "oncall@example.com"
+        }
+      ]
+    }
+  ],
+  "subject": "✅ payments in shop is healthy again."
+}

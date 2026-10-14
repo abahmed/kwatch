@@ -1,0 +1,10 @@
+POST /v2/send
+Content-Type: application/json
+
+{
+  "message": "🟠 kwatch started and found 2 problems that were there.",
+  "number": "+12025550199",
+  "recipients": [
+    "+12025550100"
+  ]
+}

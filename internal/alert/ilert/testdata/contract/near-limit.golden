@@ -1,0 +1,11 @@
+POST /
+Content-Type: application/json
+
+{
+  "alertKey": "kwatch-dev-p-big",
+  "details": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[5995 runes sha256:efe5311fba0148f3b01979a8]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\npa…",
+  "eventType": "ALERT",
+  "message": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[5990 runes sha256:5e5532f656904572db57d5b4]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "priority": "HIGH",
+  "summary": "🔴 payments in shop is crash-looping."
+}

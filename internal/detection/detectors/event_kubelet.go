@@ -23,7 +23,6 @@ var kubeletEventSummaries = map[string]string{
 	reasons.ContainerGCFailed: "Kubelet cannot garbage-collect dead " +
 		"containers",
 	"FailedCreatePodContainer": "Kubelet cannot create the pod's cgroup",
-	"HostPortConflict":         "Pod's host port is already in use on the node",
 	"KubeletSetupFailed":       "Kubelet failed to set itself up on the node",
 	"ClaimLost":                "Volume claim was lost; its volume is gone",
 }

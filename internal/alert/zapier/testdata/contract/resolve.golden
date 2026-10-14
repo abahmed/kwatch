@@ -1,0 +1,27 @@
+POST /
+Content-Type: application/json
+
+{
+  "alertKey": "kwatch-dev-p-42",
+  "cluster": "dev",
+  "key": "p-42",
+  "lines": [
+    "payments ran out of memory 3 times."
+  ],
+  "marker": "✅",
+  "note": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+  "resolved": true,
+  "revision": 3,
+  "route": {
+    "Namespaces": [
+      "shop"
+    ],
+    "Reasons": [
+      "OOMKilled"
+    ],
+    "Severity": "critical"
+  },
+  "short": "✅ payments in shop is healthy again.",
+  "status": "resolved",
+  "title": "payments crashed in shop"
+}

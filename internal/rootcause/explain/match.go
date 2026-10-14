@@ -13,6 +13,9 @@ type state struct {
 	modes []modeHealth
 	// text is the effect's error text, for signals.
 	text string
+	// errText is the quoted error text alone, without kwatch's own
+	// finding summaries, for signals that need the exact wording.
+	errText string
 	// verdicts are modes of the entity's containers that settle how
 	// the entity itself fails; a side with Unless refuses them.
 	verdicts []detection.Mode
@@ -79,7 +82,11 @@ func (s Side) healthMatches(health detection.Health) bool {
 // matches reports whether the side selects the state, and the first
 // mode that made it match.
 func (s Side) matches(st state) (modeHealth, bool) {
-	if !s.kindMatches(st.id) || !hasSignal(s.Signal, st.text) ||
+	text := st.text
+	if s.Signal == SignalNodeAgent {
+		text = st.errText
+	}
+	if !s.kindMatches(st.id) || !hasSignal(s.Signal, text) ||
 		s.refusedBy(st.verdicts) {
 		return modeHealth{}, false
 	}

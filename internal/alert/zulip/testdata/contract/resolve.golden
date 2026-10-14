@@ -1,0 +1,8 @@
+POST /api/v1/messages
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic <redacted>
+
+content=✅ payments in shop is healthy again. It ran for 10 minutes without a restart.
+subject=kwatch alert
+to=alerts
+type=stream

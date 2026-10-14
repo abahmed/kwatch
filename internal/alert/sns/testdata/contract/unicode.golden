@@ -1,0 +1,17 @@
+POST /
+Content-Type: application/x-www-form-urlencoded
+
+Action=Publish
+Message=🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).
+
+Last output:
+паника: нехватка памяти — 内存不足
+MessageAttributes.entry.1.Name=kwatch.key
+MessageAttributes.entry.1.Value.DataType=String
+MessageAttributes.entry.1.Value.StringValue=kwatch-dev-p-uni
+MessageAttributes.entry.2.Name=kwatch.status
+MessageAttributes.entry.2.Value.DataType=String
+MessageAttributes.entry.2.Value.StringValue=critical
+Subject=shop - nandu.
+TopicArn=arn:aws:sns:us-east-1:123456789012:kwatch
+Version=2010-03-31

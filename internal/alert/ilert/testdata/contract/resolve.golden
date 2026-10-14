@@ -1,0 +1,11 @@
+POST /
+Content-Type: application/json
+
+{
+  "alertKey": "kwatch-dev-p-42",
+  "details": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+  "eventType": "RESOLVE",
+  "message": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+  "priority": "HIGH",
+  "summary": "✅ payments in shop is healthy again."
+}

@@ -1,0 +1,19 @@
+POST /api/core/v2/namespaces/default/events
+Content-Type: application/json
+Authorization: Key <redacted>
+
+{
+  "check": {
+    "issued": 1767323045,
+    "metadata": {
+      "name": "kwatch-dev-p-42"
+    },
+    "output": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+    "status": 0
+  },
+  "entity": {
+    "metadata": {
+      "name": "kwatch"
+    }
+  }
+}

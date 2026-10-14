@@ -12,8 +12,10 @@
 	verify-operational verify-scenarios verify-negative-regressions \
 	verify-catalogs \
 	docs-verify line-check diff-check mod-tidy-check architecture-check \
-	test-layout-check hygiene-check lint-actions lint-shell alert-quality \
-	alert-quality-gate docker-build docker-build-latest
+	test-layout-check hygiene-check deadcode-check lint-actions lint-shell \
+	upstream-reasons upstream-check \
+	alert-quality \
+	alert-quality-gate docker-build docker-build-latest provider-smoke
 
 # Binary names
 BINARY_NAME := kwatch
@@ -91,7 +93,10 @@ help:
 	@echo "  make test-short    Run short tests only"
 	@echo "  make vet           Run go vet, including the e2e build tag"
 	@echo "  make lint          Run golangci-lint $(GOLANGCI_VERSION) (pinned)"
+	@echo "  make provider-smoke Opt-in smoke test against real accounts"
 	@echo "  make hygiene-check Forbidden files/words, gofmt, file length"
+	@echo "  make upstream-reasons Regenerate the Kubernetes reason corpus"
+	@echo "  make upstream-check Compare it with the tag (needs network)"
 	@echo "  make verify-fmt    Verify gofmt formatting"
 	@echo "  make coverage      Race tests with coverage into coverage.txt"
 	@echo "  make coverage-check Coverage run plus threshold enforcement"
@@ -99,6 +104,7 @@ help:
 	@echo "  make verify-latency Decision-lag and memory budgets without -race"
 	@echo "  make alert-quality Report the alert-quality gates (never fails)"
 	@echo "  make alert-quality-gate Fail when any alert-quality gate misses"
+	@echo "  make deadcode-check Fail on unreachable functions"
 	@echo "  make verify-catalogs Verify checked-in generated catalogs"
 	@echo "  make docs-verify   Verify code-owned documentation metadata"
 	@echo "  make verify-manifests Helm lint, chart tests, manifest parity"
@@ -160,7 +166,7 @@ coverage-check: coverage
 
 verify: build vet lint coverage-check verify-latency line-check diff-check \
 	architecture-check test-layout-check hygiene-check verify-catalogs \
-	docs-verify verify-manifests verify-negative-regressions
+	docs-verify verify-manifests verify-negative-regressions deadcode-check
 
 ci: verify lint-actions lint-shell mod-tidy-check
 
@@ -277,9 +283,31 @@ architecture-check:
 test-layout-check:
 	@sh scripts/check-test-layout.sh
 
+# Functions nothing reaches (golang.org/x/tools deadcode, tests included).
+# Justified exceptions go in scripts/deadcode-allowlist.txt.
+deadcode-check:
+	@sh scripts/check-deadcode.sh
+
+# The Kubernetes reason corpus (internal/detection/upstream) is generated
+# from the kubernetes/kubernetes tag that matches k8s.io/api in go.mod.
+# Both targets clone that tag, so they need network and are not part of
+# verify, which uses the committed files. Run upstream-check on a k8s.io
+# bump and before a release.
+upstream-reasons:
+	$(GOCMD) run ./cmd/upstreamreasons
+
+upstream-check:
+	$(GOCMD) run ./cmd/upstreamreasons -check
+
 # Forbidden scratch files and words, unformatted or oversized Go files.
 hygiene-check:
 	@$(GOTEST) -count=1 -run 'Hygiene' ./internal/architecture
+
+# Opt-in smoke test of the top providers against real accounts. Credentials
+# come from KWATCH_SMOKE_* environment variables; a provider without its
+# variable is skipped. See docs/providers.md. Never part of verify or ci.
+provider-smoke:
+	$(GOTEST) -count=1 -tags providersmoke -v ./internal/alert/smoke
 
 lint-actions:
 	@$(call tool_gate,actionlint,$(ACTIONLINT)); $(ACTIONLINT)

@@ -36,8 +36,8 @@ func TestCompactorRetentionDeletesOnlyExpired(t *testing.T) {
 	for _, age := range []time.Duration{40 * day, 8 * day, 6 * day, 0} {
 		require.NoError(t, changes.Append("pod", now.Add(-age), "c"))
 	}
-	require.NoError(t, AuditLog[string](s).Append(
-		"decisions", now.Add(-31*day), "a"))
+	require.NoError(t, EvidenceLog[string](s).Append(
+		"inc", now.Add(-31*day), "a"))
 	incidents := IncidentRecords[string](s)
 	require.NoError(t, incidents.PutUntil("gone", "r", now.Add(-time.Hour)))
 	require.NoError(t, incidents.PutUntil("kept", "r", now.Add(time.Hour)))
@@ -51,7 +51,7 @@ func TestCompactorRetentionDeletesOnlyExpired(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 4, result.Expired)
 	assert.Len(t, collect(t, changes, "pod", time.Time{}, time.Time{}), 2)
-	assert.Empty(t, collect(t, AuditLog[string](s), "decisions",
+	assert.Empty(t, collect(t, EvidenceLog[string](s), "inc",
 		time.Time{}, time.Time{}))
 	var left []string
 	require.NoError(t, s.view(func(tx *bolt.Tx) error {
@@ -74,7 +74,7 @@ func TestCompactorSizeCapDeletesOldestFirstInBatches(t *testing.T) {
 	put := func(l Log[string], entity string, at int) {
 		require.NoError(t, l.Append(entity, minute(at), value))
 	}
-	put(AuditLog[string](s), "str", 0)
+	put(FlightLog[string](s), "str", 0)
 	put(ChangeLog[string](s), "pod", 1)
 	put(TimelineLog[string](s), "inc", 2)
 	for i := 3; i < 8; i++ {
@@ -91,7 +91,7 @@ func TestCompactorSizeCapDeletesOldestFirstInBatches(t *testing.T) {
 	assert.Equal(t, 4, result.Evicted)
 	assert.LessOrEqual(t, result.Bytes, policy.SizeCap)
 	for _, l := range []Log[string]{
-		AuditLog[string](s), ChangeLog[string](s), TimelineLog[string](s),
+		FlightLog[string](s), ChangeLog[string](s), TimelineLog[string](s),
 	} {
 		assert.Empty(t, collect(t, l, "str", time.Time{}, time.Time{}))
 	}

@@ -1,0 +1,10 @@
+{
+  "name": "node-blip-then-down",
+  "description": "A node is lost for four minutes, recovers, and fails again within two hours for good: the flap is paged once, the lasting outage once more.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 5,
+  "maxPages": 2,
+  "alone": true,
+  "tail": "1h0m0s"
+}

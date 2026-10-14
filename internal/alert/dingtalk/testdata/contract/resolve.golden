@@ -1,0 +1,10 @@
+POST /robot/send?access_token=<redacted>&sign=<redacted>&timestamp=<redacted>
+Content-Type: application/json
+
+{
+  "markdown": {
+    "text": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+    "title": "✅ payments in shop is healthy again."
+  },
+  "msgtype": "markdown"
+}

@@ -1,0 +1,11 @@
+POST /api/v9/webhooks/123/<secret>
+Content-Type: application/json
+
+{
+  "allowed_mentions": {
+    "parse": [],
+    "replied_user": false
+  },
+  "components": null,
+  "content": "🔴 payments in shop is crash-looping. It ran out of memory 3 times in 10 minutes. Try kubectl -n shop describe pod payments-1.\n```\npanic: out of memory\n```"
+}

@@ -1,0 +1,8 @@
+POST /repos/kwatch/kwatch/issues/42/comments
+Content-Type: application/json
+Authorization: Bearer <redacted>
+Accept: application/vnd.github+json
+
+{
+  "body": "🔴 payments in shop is still crash-looping. It restarted 5 times now.\n\n```\npanic: out of memory\n```"
+}

@@ -34,20 +34,23 @@ func TestSplunkOncall(t *testing.T) {
 	c := NewSplunkOncall(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Equal(c.Name(), "Splunk OnCall")
-	assert.Equal(c.url, "https://alert.victorops.com/integrations/generic/20131114/alert/everyone/test")
+	assert.Equal(c.url, "https://alert.victorops.com"+
+		"/integrations/generic/20131114/alert/test/everyone")
 }
 
 func TestSplunkOncallCustomURL(t *testing.T) {
 	assert := assert.New(t)
 
 	configMap := map[string]interface{}{
-		"url":        "https://alert.example.com/integrations/generic/20131114/alert",
+		"url": "https://alert.example.com" +
+			"/integrations/generic/20131114/alert",
 		"apiKey":     "test",
 		"routingKey": "everyone",
 	}
 	c := NewSplunkOncall(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
-	assert.Equal(c.url, "https://alert.example.com/integrations/generic/20131114/alert/everyone/test")
+	assert.Equal(c.url, "https://alert.example.com"+
+		"/integrations/generic/20131114/alert/test/everyone")
 }
 
 func TestSplunkOncallInvalidConfig(t *testing.T) {

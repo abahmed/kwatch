@@ -12,6 +12,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/safego"
 )
 
 // StatsSource is the observation source name for kubelet statistics.
@@ -155,7 +156,10 @@ func (p *StatsPoller) poll(ctx context.Context) {
 		go func() {
 			defer wg.Done()
 			defer func() { <-slots }()
-			err := p.pollNode(ctx, roundCtx, node, now)
+			// A panic in one node's poll counts as that node's error.
+			err := safego.Run("kubelet-stats", func() error {
+				return p.pollNode(ctx, roundCtx, node, now)
+			})
 			tally.add(node, err)
 			p.recordReach(ctx, node, now, err)
 		}()

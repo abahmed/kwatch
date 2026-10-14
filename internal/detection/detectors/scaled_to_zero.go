@@ -23,8 +23,9 @@ const scaledToZeroGrace = 3 * time.Minute
 const scaledToZeroParked = 24 * time.Hour
 
 // scaleChangeWindow is how far back the history is searched for who
-// scaled the workload.
-const scaleChangeWindow = 7 * 24 * time.Hour
+// scaled the workload: as far as the model keeps changes, since it
+// prunes and reloads no more than that after a restart.
+const scaleChangeWindow = inventory.ChangeRetention
 
 // routeKindNames are the names people use for the kinds of routes.
 var routeKindNames = map[inventory.Kind]string{

@@ -56,6 +56,13 @@ func (r registration) mode() WatchMode {
 	return WatchFull
 }
 
+// InformerTransform is the transform every typed informer applies before
+// it caches an object, keyed for the Secret and ConfigMap digests. The
+// memory tests use it to measure what the cache really holds.
+func InformerTransform(digestKey []byte) cache.TransformFunc {
+	return newTransform(NewDigester(digestKey))
+}
+
 // newTransform keeps informer caches small and free of secret material:
 // Secret and ConfigMap values are replaced by digests keyed with d.
 func newTransform(d Digester) cache.TransformFunc {
@@ -65,7 +72,9 @@ func newTransform(d Digester) cache.TransformFunc {
 			return obj, err
 		}
 		dropLastAppliedTyped(obj)
-		switch obj.(type) {
+		switch o := obj.(type) {
+		case *corev1.Pod:
+			trimPod(o)
 		case *corev1.Secret:
 			return d.HashSecretData(obj)
 		case *corev1.ConfigMap:

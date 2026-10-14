@@ -18,16 +18,45 @@ func TestTrackerIgnoresSummaryOnlyChanges(t *testing.T) {
 		Since: at, Summary: "Node is NotReady for 2m"}
 	tr.Observe(id, []Finding{s})
 
-	for _, summary := range []string{
-		"Node is NotReady for 15m", "Node stopped reporting for 16m",
+	for _, c := range []struct {
+		summary string
+		want    []TransitionKind
+	}{
+		{"Node is NotReady for 15m", nil},
+		{"Node stopped reporting for 16m", []TransitionKind{Refreshed}},
 	} {
-		s.Summary = summary
-		assert.Empty(t, tr.Observe(id, []Finding{s}),
-			"summary text alone is not a change")
+		s.Summary = c.summary
+		assert.Equal(t, c.want, kinds(tr.Observe(id, []Finding{s})),
+			"summary text alone is never Changed")
 		require.Len(t, tr.Active(id), 1)
-		assert.Equal(t, summary, tr.Active(id)[0].Summary,
+		assert.Equal(t, c.summary, tr.Active(id)[0].Summary,
 			"the latest summary is kept")
 	}
+}
+
+func kinds(transitions []Transition) []TransitionKind {
+	var out []TransitionKind
+	for _, t := range transitions {
+		out = append(out, t.Kind)
+	}
+	return out
+}
+
+func TestTrackerRefreshesChangedEvidence(t *testing.T) {
+	tr := NewTracker()
+	id := inventory.EntityID{Kind: "node", Name: "n1"}
+	s := Finding{Entity: id, Reason: "NodeNotReady", Severity: Critical,
+		Evidence: []Evidence{{Label: "kubelet", Value: "last seen 2m ago"}}}
+	tr.Observe(id, []Finding{s})
+
+	s.Evidence = []Evidence{{Label: "kubelet", Value: "last seen 9m ago"}}
+	assert.Empty(t, tr.Observe(id, []Finding{s}), "only a count moved")
+
+	s.Evidence = []Evidence{{Label: "kubelet", Value: "stopped posting"}}
+	got := tr.Observe(id, []Finding{s})
+	require.Len(t, got, 1)
+	assert.Equal(t, Refreshed, got[0].Kind)
+	assert.Equal(t, "stopped posting", got[0].Finding.Evidence[0].Value)
 }
 
 func TestTrackerReportsModeAndHealthChanges(t *testing.T) {
@@ -58,7 +87,9 @@ func TestTrackerReportsModeAndHealthChanges(t *testing.T) {
 			tc.mutate(&next)
 			got := tr.Observe(id, []Finding{next})
 			if !tc.want {
-				assert.Empty(t, got)
+				for _, tr := range got {
+					assert.NotEqual(t, Changed, tr.Kind)
+				}
 				return
 			}
 			require.Len(t, got, 1)

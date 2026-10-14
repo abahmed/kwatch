@@ -1,0 +1,22 @@
+POST /
+Content-Type: application/json
+
+{
+  "attachments": [
+    {
+      "content": {
+        "body": [
+          {
+            "text": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\n```\nпаника: нехватка памяти — 内存不足\n```",
+            "type": "TextBlock",
+            "wrap": true
+          }
+        ],
+        "type": "AdaptiveCard",
+        "version": "1.4"
+      },
+      "contentType": "application/vnd.microsoft.card.adaptive"
+    }
+  ],
+  "type": "message"
+}

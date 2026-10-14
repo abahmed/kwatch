@@ -1,0 +1,6 @@
+POST /
+Content-Type: application/json
+
+{
+  "text": "🔴 payments in shop is still crash-looping. It restarted 5 times now.\n```\npanic: out of memory\n```"
+}

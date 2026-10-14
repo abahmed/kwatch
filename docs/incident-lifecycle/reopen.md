@@ -44,6 +44,18 @@ How paging state works now:
   `Paged` stays false after it. A later reminder or material update of the
   reopened incident, if the outage lasts, reaches the pagers as a notify
   and opens a new alert then.
+- A held repeat that keeps failing is not a flap. When it has failed
+  without a recovery for `PageSettle` plus the base `Hold` (the settle and
+  the hold a first recovery waits, not the doubled holds of a flapper), and
+  nobody acknowledged it, the hold ends (`releaseHeldPage`) and the next
+  update pages once. It does not while another live page of the same
+  story, or one announced with it, is open. A flap that recovers again
+  inside the hold never pages.
+- A roll-up of several pages pages once: the first page-tier member pages
+  and the others are held at notify like a repeat, with the same release.
+  Nodes, zones and pools that fail in one settle window share one incident
+  (`Incident.Merged`), and a node outage that settles beside one that
+  already paged is held the same way.
 - A page held in the startup summary or an outage hold is paged on its own
   when it is announced. If it was held at notify and its update later
   reaches the page tier, the hold pages it then (`risesToPage`) and marks it

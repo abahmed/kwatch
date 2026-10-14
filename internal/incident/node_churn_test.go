@@ -32,6 +32,7 @@ func churnRig(t *testing.T) (*rig, detection.Finding, time.Time) {
 	_, err := r.model.Apply(inventory.Observation{
 		Kind: inventory.Gone, Source: "test", At: gone, Entity: node})
 	require.NoError(t, err)
+	r.markNode(node)
 	r.setAttrs(web.Entity, map[string]inventory.Value{
 		kube.AttrCreated: inventory.Time(gone)})
 	r.tick(gone) // the manager sees the node leave
@@ -82,6 +83,30 @@ func TestSettledRecurrenceStillFailsAgain(t *testing.T) {
 	r.tick(at(2*time.Minute + DefaultHold))
 
 	again := at(20 * time.Minute)
+	r.raise(again, web)
+	wantAction(t, r.tick(again.Add(DefaultReviseSettle)), Update,
+		ReasonFailingAgain)
+}
+
+// A node cordoned long ago is not a fresh displacement: a failure that
+// comes back on it still continues the resolved incident.
+func TestCordonedForDaysNodeIsNotADisplacement(t *testing.T) {
+	r := newRig(t, Config{})
+	web := podSig("web")
+	node := entity(kube.KindNode, "n1")
+	r.setAttrs(node, map[string]inventory.Value{
+		kube.AttrReady:         inventory.Bool(true),
+		kube.AttrUnschedulable: inventory.Bool(true)})
+	r.setAttrs(web.Entity, map[string]inventory.Value{
+		kube.AttrCreated: inventory.Time(at(-48 * time.Hour))})
+	r.relate(web.Entity, inventory.RunsOn, node)
+	announced(t, r, web)
+	r.clear(at(2*time.Minute), web)
+	r.tick(at(2 * time.Minute))
+	r.tick(at(2*time.Minute + DefaultHold))
+
+	again := at(30 * time.Minute)
+	r.tick(again.Add(-time.Second))
 	r.raise(again, web)
 	wantAction(t, r.tick(again.Add(DefaultReviseSettle)), Update,
 		ReasonFailingAgain)

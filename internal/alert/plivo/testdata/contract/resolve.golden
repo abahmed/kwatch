@@ -1,0 +1,7 @@
+POST /
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic <redacted>
+
+dst=+12025550100
+src=kwatch
+text=✅ payments in shop is healthy again.

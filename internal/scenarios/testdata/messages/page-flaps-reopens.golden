@@ -17,3 +17,8 @@
 🟠 Node n1 (prod-eu-1) is failing again: 2nd time in two hours.
 | 🟠 Node n1 (**prod-eu-1**) is failing again: 2nd time in two hours.
 | It reports `container runtime is restarting`.
+10:19:25 material change
+🔴 Node n1 (prod-eu-1) is NotReady for about two minutes. It reports "container runtime is restarting".
+🔴 Node n1 (prod-eu-1) is NotReady for about two minutes.
+| 🔴 Node n1 (**prod-eu-1**) is NotReady for about two minutes.
+| It reports `container runtime is restarting`.

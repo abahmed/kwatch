@@ -39,15 +39,17 @@ type Model struct {
 // entity as a tombstone while it still carries change history, so "this
 // Secret was deleted two minutes ago" remains answerable.
 type record struct {
-	entity     Entity
-	present    bool
-	goneAt     time.Time
-	attrSource map[string]string
-	relations  map[relationKeyBySource][]EntityID
-	changes    []Change
-	notes      []Note
-	noteParts  map[noteKey][]originCount
-	health     []HealthMark
+	// entity holds the identity; its Attributes map stays nil, the
+	// attributes live in attrs (see attr_store.go).
+	entity    Entity
+	present   bool
+	goneAt    time.Time
+	attrs     []attrEntry
+	relations []relationEntry
+	changes   []Change
+	notes     []Note
+	noteParts map[noteKey][]originCount
+	health    []HealthMark
 	// altUID is a second identifier events may use for the object, such
 	// as the config hash of a static pod's mirror.
 	altUID string
@@ -56,6 +58,44 @@ type record struct {
 type relationKeyBySource struct {
 	source   string
 	relation RelationType
+}
+
+// relationEntry is what one source declared for one relation type. A
+// record has only a few, so a slice beats a map.
+type relationEntry struct {
+	key     relationKeyBySource
+	targets []EntityID
+}
+
+func (r *record) relationTargets(key relationKeyBySource) []EntityID {
+	for _, entry := range r.relations {
+		if entry.key == key {
+			return entry.targets
+		}
+	}
+	return nil
+}
+
+// setRelationTargets stores the targets, or forgets the key when there
+// are none.
+func (r *record) setRelationTargets(
+	key relationKeyBySource, targets []EntityID,
+) {
+	for i, entry := range r.relations {
+		if entry.key != key {
+			continue
+		}
+		if len(targets) == 0 {
+			r.relations = append(r.relations[:i], r.relations[i+1:]...)
+		} else {
+			r.relations[i].targets = targets
+		}
+		return
+	}
+	if len(targets) > 0 {
+		r.relations = append(r.relations,
+			relationEntry{key: key, targets: targets})
+	}
 }
 
 // Update reports what an Observation touched. Touched always contains the
@@ -133,11 +173,7 @@ func (m *Model) recordFor(id EntityID) *record {
 	rec := m.records[id]
 	if rec == nil {
 		rec = &record{
-			entity: Entity{
-				ID: id, Attributes: make(map[string]Attribute),
-			},
-			attrSource: make(map[string]string),
-			relations:  make(map[relationKeyBySource][]EntityID),
+			entity: Entity{ID: id},
 		}
 		m.records[id] = rec
 	}
@@ -159,16 +195,12 @@ func (m *Model) observe(observation Observation) Update {
 		m.indexKind(observation.Entity)
 	}
 	rec.adoptUID(observation.UID, observation.AltUID)
-	for name, source := range rec.attrSource {
-		_, still := observation.Attributes[name]
-		if source == observation.Source && !still {
-			delete(rec.entity.Attributes, name)
-			delete(rec.attrSource, name)
-		}
+	rec.dropAttributesFrom(observation.Source, observation.Attributes)
+	if rec.attrs == nil {
+		rec.attrs = make([]attrEntry, 0, len(observation.Attributes))
 	}
 	for name, value := range observation.Attributes {
-		rec.setAttribute(name, value, observation.At)
-		rec.attrSource[name] = observation.Source
+		rec.setAttribute(name, observation.Source, value, observation.At)
 	}
 	return Update{
 		Touched: []EntityID{observation.Entity}, Appeared: appeared,
@@ -180,7 +212,7 @@ func (m *Model) relate(observation Observation) Update {
 	key := relationKeyBySource{
 		source: observation.Source, relation: observation.Relation,
 	}
-	previous := rec.relations[key]
+	previous := rec.relationTargets(key)
 	next := uniqueIDs(observation.Targets)
 	touched := []EntityID{observation.Entity}
 	for _, target := range previous {
@@ -195,11 +227,7 @@ func (m *Model) relate(observation Observation) Update {
 			touched = append(touched, target)
 		}
 	}
-	if len(next) == 0 {
-		delete(rec.relations, key)
-	} else {
-		rec.relations[key] = next
-	}
+	rec.setRelationTargets(key, next)
 	return Update{Touched: touched}
 }
 
@@ -227,15 +255,14 @@ func (m *Model) remove(observation Observation) Update {
 		return Update{}
 	}
 	touched := []EntityID{observation.Entity}
-	for key, targets := range rec.relations {
-		for _, target := range targets {
-			m.edges.remove(observation.Entity, key.relation, target)
+	for _, entry := range rec.relations {
+		for _, target := range entry.targets {
+			m.edges.remove(observation.Entity, entry.key.relation, target)
 			touched = append(touched, target)
 		}
 	}
-	rec.relations = make(map[relationKeyBySource][]EntityID)
-	rec.entity.Attributes = make(map[string]Attribute)
-	rec.attrSource = make(map[string]string)
+	rec.relations = nil
+	rec.attrs = nil
 	rec.present = false
 	rec.goneAt = observation.At
 	m.unindexKind(observation.Entity)

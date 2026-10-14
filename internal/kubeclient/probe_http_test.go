@@ -39,9 +39,10 @@ func TestProbeHTTPClientTrustsClusterCAWithoutProxy(t *testing.T) {
 }
 
 func TestProbeHTTPClientIsNotTheProviderClient(t *testing.T) {
-	provider := NewHTTPClient(config.ApplicationRuntime{
+	provider, err := NewHTTPClient(config.ApplicationRuntime{
 		ProxyURL: "http://proxy.example:8080",
 	})
+	require.NoError(t, err)
 	probe := NewProbeHTTPClient(nil)
 	req := &http.Request{URL: &url.URL{Scheme: "https", Host: "svc"}}
 

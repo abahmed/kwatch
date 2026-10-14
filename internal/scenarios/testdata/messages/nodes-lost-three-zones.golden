@@ -1,0 +1,26 @@
+10:02:30 settled
+🔴 Node n1 (prod-eu-1) has not reported for about two minutes. Nothing outside it explains this. It reports "Kubelet stopped posting node status". kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable. To check the node's conditions and recent events, run kubectl describe node n1
+🔴 Node n1 (prod-eu-1) has not reported for about two minutes.
+| 🔴 Node n1 (**prod-eu-1**) has not reported for about two minutes.
+| Nothing outside it explains this.
+| It reports `Kubelet stopped posting node status`.
+| kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```
+10:02:45 settled
+🟠 Four nodes (prod-eu-1) have not reported for about two minutes: n1, n2, n4 and one more. Nothing outside it explains this. It reports "Kubelet stopped posting node status". kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable. To see the object's state and events, run kubectl describe node n1
+🟠 Four nodes (prod-eu-1) have not reported for about two minutes: n1, n2, n4 and one more.
+| 🟠 Four nodes (**prod-eu-1**) have not reported for about two minutes: n1, n2, n4 and one more.
+| Nothing outside it explains this.
+| It reports `Kubelet stopped posting node status`.
+| kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable.
+| To see the object's state and events, run
+| ```
+| kubectl describe node n1
+| ```
+10:04:40 material change
+🔴 Node n1 (prod-eu-1) is spreading to billing-app0 and billing-app1 in billing, media-app1 in media and four others: they have not been ready for three minutes.
+🔴 Node n1 (prod-eu-1) is spreading to billing-app0 and billing-app1 in billing, media-app1 in media and four others: they have not been ready for three minutes.
+| 🔴 Node n1 (**prod-eu-1**) is spreading to **billing-app0** and **billing-app1** in **billing**, **media-app1** in **media** and four others: they have not been ready for three minutes.

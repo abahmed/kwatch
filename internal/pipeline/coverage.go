@@ -46,6 +46,7 @@ func (e *Engine) checkCoverage(now time.Time) {
 		"component", "pipeline", "workloads", entityNames(lost))
 	snapshot := explain.NewSnapshot(e.deps.Model, e.activeFindings(),
 		e.deps.Synced, now)
+	snapshot.Started = e.started
 	e.deps.Incidents.Apply(snapshot, dirty, nil)
 	e.announcer.investigateOpened(now)
 }

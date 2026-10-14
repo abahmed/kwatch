@@ -15,25 +15,46 @@ import (
 // readiness without any fault of their own.
 const LinkNodeAgent LinkType = "node-agent"
 
+// Event-only modes: a mount or attach the kubelet or the attach-detach
+// controller reported failing, named by the event reason.
+const (
+	modeFailedMount  detection.Mode = "FailedMount"
+	modeFailedAttach detection.Mode = "FailedAttachVolume"
+)
+
+// agentCause and agentEffect are the sides every agent row shares.
+var (
+	agentCause = Side{Kind: kube.KindPod, Modes: []detection.Mode{
+		detection.ModeCrashLoop, detection.ModeNotReady,
+		detection.ModeProbe, detection.ModeRestarting,
+		detection.ModeError, detection.ModeExit, detection.ModeOOMKilled,
+		detection.ModeCreateError, detection.ModeCreating}}
+	agentEffectModes = []detection.Mode{
+		detection.ModeNotReady, detection.ModeProbe,
+		detection.ModeCrashLoop, detection.ModeCreating,
+		detection.ModeCreateError, detection.ModeRestarting,
+		detection.ModeError}
+)
+
 // agentRows blame a failing node agent for the pods on its node.
 var agentRows = []Row{
 	{
-		Name: "node-agent-failing",
-		Cause: Side{Kind: kube.KindPod, Modes: []detection.Mode{
-			detection.ModeCrashLoop, detection.ModeNotReady,
-			detection.ModeProbe, detection.ModeRestarting,
-			detection.ModeError, detection.ModeExit, detection.ModeOOMKilled,
-			detection.ModeCreateError, detection.ModeCreating}},
-		Link: LinkNodeAgent,
-		Effect: podSide(
-			detection.ModeNotReady, detection.ModeProbe,
-			detection.ModeCrashLoop, detection.ModeCreating,
-			detection.ModeCreateError, detection.ModeRestarting,
-			detection.ModeError),
+		Name: "node-agent-failing", Cause: agentCause,
+		Link: LinkNodeAgent, Effect: podSide(agentEffectModes...),
 		Prior: 0.6,
 		// One failing workload beside a failing agent may be a
 		// coincidence; two share the agent.
 		MinWorkloads: 2,
+	},
+	{
+		// One workload is enough when its own error names what the
+		// agent does: the network plugin, a storage driver.
+		Name: "node-agent-named-by-error", Cause: agentCause,
+		Link: LinkNodeAgent,
+		Effect: Side{Kind: kube.KindPod, Signal: SignalNodeAgent,
+			Modes: append([]detection.Mode{modeFailedMount,
+				modeFailedAttach}, agentEffectModes...)},
+		Prior: 0.65,
 	},
 }
 

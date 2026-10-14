@@ -28,6 +28,12 @@ func whySentences(f caseFacts) []sentence {
 	if text == "" {
 		return nil
 	}
+	if kind == whyLiveness && f.p.Cause != nil &&
+		livenessStartRules[f.p.Cause.Rule] {
+		// The sentence that said the numbers also said what they mean
+		// and what fixes it; carrying the numbers must not lose that.
+		text += " " + upperFirst(livenessStartRemedy)
+	}
 	return []sentence{{part: partConsequence, weight: weightWhyNow,
 		text: text, carries: kind.facts()}}
 }

@@ -1,0 +1,16 @@
+POST /api/v1/messages
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic <redacted>
+
+content=🔴 payments in shop is crash-looping. It said "@​channel @​everyone \<​!here\> @​all \<​@U123\> \<​@W456\> \<​\#C1\|general\>".
+It said `@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>`
+```
+@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>
+```
+
+```
+log: @​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>
+```
+subject=kwatch alert
+to=alerts
+type=stream

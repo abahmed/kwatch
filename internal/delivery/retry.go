@@ -23,6 +23,12 @@ const (
 	// A larger shift would overflow time.Duration, so the backoff is
 	// capped at maxBackoff instead.
 	maxBackoffShift = 30
+	// maxInlineRetryTime bounds the time one job may spend waiting between
+	// its own attempts: two default backoff caps. A longer wait would hold
+	// the provider's worker while a resolve queues behind it. When the
+	// next wait would pass it, the job stops retrying inline and the
+	// caller requeues it with the provider backoff.
+	maxInlineRetryTime = 2 * defaultMaxBackoff
 )
 
 type retryConfig struct {
@@ -102,6 +108,7 @@ func sendWithRetry(
 ) error {
 	rc = normalizeRetryConfig(rc)
 	var lastErr error
+	var waited time.Duration
 	for attempt := 1; attempt <= rc.maxAttempts; attempt++ {
 		err := sendFn()
 		if err == nil {
@@ -123,7 +130,15 @@ func sendWithRetry(
 			return err
 		}
 		if attempt < rc.maxAttempts {
-			err := waitBeforeRetry(ctx, err, attempt, rc, providerName)
+			delay := nextDelay(attempt, rc)
+			if waited+delay > maxInlineRetryTime {
+				klog.V(2).InfoS("inline retry time used up; requeueing",
+					"provider", providerName, "attempt", attempt)
+				return lastErr
+			}
+			waited += delay
+			err := waitBeforeRetry(ctx, err, attempt, delay, rc,
+				providerName)
 			if err != nil {
 				return err
 			}
@@ -140,16 +155,9 @@ func sendWithRetry(
 	return lastErr
 }
 
-// waitBeforeRetry counts the retry, picks the jittered backoff and
-// sleeps. It returns ctx's error if the wait was cut short.
-func waitBeforeRetry(
-	ctx context.Context,
-	sendErr error,
-	attempt int,
-	rc retryConfig,
-	providerName string,
-) error {
-	metrics.DefaultRegistry().DeliveryRetries.Add(1)
+// nextDelay is the backoff before the retry that follows attempt, with
+// jitter when it is enabled.
+func nextDelay(attempt int, rc retryConfig) time.Duration {
 	delay := retryDelay(attempt, rc)
 	if rc.jitterEnabled {
 		delay = applyJitter(delay, rc.jitterFactor)
@@ -157,6 +165,20 @@ func waitBeforeRetry(
 			delay = rc.delay
 		}
 	}
+	return delay
+}
+
+// waitBeforeRetry counts the retry and sleeps for delay. It returns ctx's
+// error if the wait was cut short.
+func waitBeforeRetry(
+	ctx context.Context,
+	sendErr error,
+	attempt int,
+	delay time.Duration,
+	rc retryConfig,
+	providerName string,
+) error {
+	metrics.DefaultRegistry().DeliveryRetries.Add(1)
 	klog.V(4).InfoS(
 		"retrying provider delivery", "provider", providerName,
 		"attempt", attempt, "maxAttempts", rc.maxAttempts,

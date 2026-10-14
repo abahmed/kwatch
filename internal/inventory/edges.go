@@ -6,60 +6,71 @@ import "sort"
 // counts, so several sources may declare the same edge and it disappears
 // only when the last source withdraws it.
 type edgeIndex struct {
-	out map[EntityID]map[RelationType]map[EntityID]int
-	in  map[EntityID]map[RelationType]map[EntityID]int
+	out edgeSide
+	in  edgeSide
 	n   int
 }
 
+// edgeSide maps an entity to its neighbours, grouped by relation type.
+// An entity has few relation types, so they sit in a slice.
+type edgeSide map[EntityID][]typedEdges
+
+type typedEdges struct {
+	rel     RelationType
+	targets edgeSet
+}
+
 func newEdgeIndex() edgeIndex {
-	return edgeIndex{
-		out: make(map[EntityID]map[RelationType]map[EntityID]int),
-		in:  make(map[EntityID]map[RelationType]map[EntityID]int),
-	}
+	return edgeIndex{out: make(edgeSide), in: make(edgeSide)}
 }
 
 func (x *edgeIndex) add(from EntityID, rel RelationType, to EntityID) {
-	if increment(x.out, from, rel, to) == 1 {
+	if x.out.increment(from, rel, to) == 1 {
 		x.n++
 	}
-	increment(x.in, to, rel, from)
+	x.in.increment(to, rel, from)
 }
 
 func (x *edgeIndex) remove(from EntityID, rel RelationType, to EntityID) {
-	if decrement(x.out, from, rel, to) == 0 {
+	if x.out.decrement(from, rel, to) == 0 {
 		x.n--
 	}
-	decrement(x.in, to, rel, from)
+	x.in.decrement(to, rel, from)
+}
+
+func (x *edgeIndex) side(dir Direction) edgeSide {
+	if dir == Incoming {
+		return x.in
+	}
+	return x.out
 }
 
 func (x *edgeIndex) neighbors(
 	id EntityID, rel RelationType, dir Direction,
 ) []EntityID {
-	side := x.out
-	if dir == Incoming {
-		side = x.in
+	var out []EntityID
+	for _, typed := range x.side(dir)[id] {
+		if typed.rel == rel {
+			out = typed.targets.ids()
+		}
 	}
-	targets := side[id][rel]
-	out := make([]EntityID, 0, len(targets))
-	for target := range targets {
-		out = append(out, target)
+	if out == nil {
+		out = []EntityID{}
 	}
 	sortIDs(out)
 	return out
 }
 
 func (x *edgeIndex) relations(id EntityID, dir Direction) []Relation {
-	side := x.out
-	if dir == Incoming {
-		side = x.in
-	}
 	var out []Relation
-	for rel, targets := range side[id] {
-		for target := range targets {
+	for _, typed := range x.side(dir)[id] {
+		for _, target := range typed.targets.ids() {
 			if dir == Outgoing {
-				out = append(out, Relation{From: id, Type: rel, To: target})
+				out = append(out,
+					Relation{From: id, Type: typed.rel, To: target})
 			} else {
-				out = append(out, Relation{From: target, Type: rel, To: id})
+				out = append(out,
+					Relation{From: target, Type: typed.rel, To: id})
 			}
 		}
 	}
@@ -71,45 +82,38 @@ func (x *edgeIndex) relations(id EntityID, dir Direction) []Relation {
 	return out
 }
 
-func increment(
-	side map[EntityID]map[RelationType]map[EntityID]int,
-	a EntityID, rel RelationType, b EntityID,
-) int {
-	byType := side[a]
-	if byType == nil {
-		byType = make(map[RelationType]map[EntityID]int)
-		side[a] = byType
+func (s edgeSide) increment(a EntityID, rel RelationType, b EntityID) int {
+	for i := range s[a] {
+		if s[a][i].rel == rel {
+			return s[a][i].targets.inc(b)
+		}
 	}
-	targets := byType[rel]
-	if targets == nil {
-		targets = make(map[EntityID]int)
-		byType[rel] = targets
-	}
-	targets[b]++
-	return targets[b]
+	typed := typedEdges{rel: rel}
+	count := typed.targets.inc(b)
+	s[a] = append(s[a], typed)
+	return count
 }
 
-func decrement(
-	side map[EntityID]map[RelationType]map[EntityID]int,
-	a EntityID, rel RelationType, b EntityID,
-) int {
-	targets := side[a][rel]
-	if targets[b] == 0 {
-		return -1
+// decrement withdraws one source of the edge and returns the sources
+// left, or -1 when the edge was not there. Emptied groups disappear.
+func (s edgeSide) decrement(a EntityID, rel RelationType, b EntityID) int {
+	groups := s[a]
+	for i := range groups {
+		if groups[i].rel != rel {
+			continue
+		}
+		left := groups[i].targets.dec(b)
+		if left == 0 && groups[i].targets.size() == 0 {
+			groups = append(groups[:i], groups[i+1:]...)
+			if len(groups) == 0 {
+				delete(s, a)
+			} else {
+				s[a] = groups
+			}
+		}
+		return left
 	}
-	targets[b]--
-	count := targets[b]
-	if count > 0 {
-		return count
-	}
-	delete(targets, b)
-	if len(targets) == 0 {
-		delete(side[a], rel)
-	}
-	if len(side[a]) == 0 {
-		delete(side, a)
-	}
-	return 0
+	return -1
 }
 
 func relationKey(r Relation) string {

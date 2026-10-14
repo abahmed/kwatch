@@ -42,6 +42,11 @@ type Snapshot struct {
 	// Focus limits the failures to explain. Nil explains every failure
 	// of Findings. The other findings are still read as causes.
 	Focus []inventory.EntityID
+	// Started is when kwatch began observing. A finding first seen in
+	// the startup window after it is stamped with the observation
+	// time, not the cluster time, so its Since says nothing about when
+	// the problem began. Zero means no restart to account for.
+	Started time.Time
 	// Now is the time of the snapshot. Explain never reads a clock.
 	Now time.Time
 	// Window is the causal window. Zero means DefaultWindow.

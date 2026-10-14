@@ -1,0 +1,18 @@
+--- request 1 of 2
+GET /search/issues?q=kwatchkeyd0603fe338e68c0e repo:kwatch/kwatch is:issue is:open in:body
+Content-Type: application/json
+Authorization: Bearer <redacted>
+Accept: application/vnd.github+json
+
+(empty body)
+
+--- request 2 of 2
+POST /repos/kwatch/kwatch/issues
+Content-Type: application/json
+Authorization: Bearer <redacted>
+Accept: application/vnd.github+json
+
+{
+  "body": "🔴 payments in shop is crash-looping. It ran out of memory 3 times in 10 minutes. Try kubectl -n shop describe pod payments-1.\n\n```\npanic: out of memory\n```\n\nRef: kwatchkeyd0603fe338e68c0e",
+  "title": "🔴 payments in shop is crash-looping."
+}

@@ -1,0 +1,26 @@
+POST /
+Content-Type: application/json
+
+{
+  "dedup_key": "kwatch-dev-p-uni",
+  "event_action": "trigger",
+  "payload": {
+    "custom_details": {
+      "cluster": "dev",
+      "details": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).",
+      "namespaces": [
+        "shop"
+      ],
+      "output": [
+        "паника: нехватка памяти — 内存不足"
+      ],
+      "reasons": [
+        "OOMKilled"
+      ]
+    },
+    "severity": "critical",
+    "source": "dev",
+    "summary": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú."
+  },
+  "routing_key": "<secret>"
+}

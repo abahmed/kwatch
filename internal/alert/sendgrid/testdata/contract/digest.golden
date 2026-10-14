@@ -1,0 +1,28 @@
+POST /
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "content": [
+    {
+      "type": "text/plain",
+      "value": "🟠 kwatch started and found 2 problems that were there."
+    }
+  ],
+  "from": {
+    "email": "kwatch@example.com"
+  },
+  "personalizations": [
+    {
+      "to": [
+        {
+          "email": "ops@example.com"
+        },
+        {
+          "email": "oncall@example.com"
+        }
+      ]
+    }
+  ],
+  "subject": "🟠 kwatch started and found 2 problems."
+}

@@ -1,0 +1,9 @@
+POST /<secret>/everyone
+Content-Type: application/json
+
+{
+  "entity_display_name": "🔴 payments in shop is crash-looping.",
+  "entity_id": "kwatch-dev-p-big",
+  "message_type": "CRITICAL",
+  "state_message": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[5995 runes sha256:efe5311fba0148f3b01979a8]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\npa…"
+}

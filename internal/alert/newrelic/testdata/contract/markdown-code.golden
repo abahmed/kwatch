@@ -1,0 +1,20 @@
+POST /v1/accounts/1/events
+Content-Type: application/json
+Api-Key: <redacted>
+
+[
+  {
+    "action": "firing",
+    "cluster": "dev",
+    "eventType": "KwatchAlert",
+    "incidentKey": "kwatch-dev-p-md",
+    "message": "🔴 payments in shop is crash-looping.\nIt said boom *x* @channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop",
+    "namespace": "shop",
+    "reason": "OOMKilled",
+    "revision": 1,
+    "severity": "critical",
+    "state": "firing",
+    "status": "critical",
+    "title": "🔴 payments in shop is crash-looping."
+  }
+]

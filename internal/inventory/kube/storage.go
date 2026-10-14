@@ -15,6 +15,16 @@ const (
 	AttrProvisioner = "provisioner"
 	// AttrBindingMode holds a StorageClass volumeBindingMode.
 	AttrBindingMode = "binding.mode"
+	// AttrDefaultClass is true, and set only then, on the StorageClass
+	// the cluster uses for claims that name none (annotation
+	// is-default-class "true").
+	AttrDefaultClass = "class.default"
+	// AttrClassUnset is true, and set only then, on a claim that sets no
+	// storage class (neither spec.storageClassName nor the annotation).
+	AttrClassUnset = "class.unset"
+	// AttrHasSelector is true, and set only then, on a claim with a
+	// spec.selector: it binds only to a volume whose labels match.
+	AttrHasSelector = "claim.selector"
 )
 
 // PVCSchema describes PersistentVolumeClaims.
@@ -56,9 +66,14 @@ func (PVCSchema) Describe(obj any) (Description, bool) {
 	rel := relations{}
 	rel.add(inventory.References,
 		inventory.CoreID(KindPV, "", pvc.Spec.VolumeName))
-	if pvc.Spec.StorageClassName != nil {
-		rel.add(inventory.References, inventory.CoreID(
-			KindStorageClass, "", *pvc.Spec.StorageClassName))
+	if name, named := claimClass(pvc); named {
+		rel.add(inventory.References,
+			inventory.CoreID(KindStorageClass, "", name))
+	} else {
+		attrs[AttrClassUnset] = inventory.Bool(true)
+	}
+	if pvc.Spec.Selector != nil {
+		attrs[AttrHasSelector] = inventory.Bool(true)
 	}
 	return Description{
 		ID: objectID(KindPVC, pvc), UID: string(pvc.UID),
@@ -146,6 +161,9 @@ func (StorageClassSchema) Describe(obj any) (Description, bool) {
 	attrs := map[string]inventory.Value{
 		AttrProvisioner: inventory.Text(sc.Provisioner),
 		AttrBindingMode: inventory.Text(bindingMode(sc)),
+	}
+	if defaultClass(sc) {
+		attrs[AttrDefaultClass] = inventory.Bool(true)
 	}
 	if terms := classNodeTerms(sc); terms != "" {
 		attrs[AttrNodeTerms] = inventory.Text(terms)

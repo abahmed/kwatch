@@ -11,6 +11,7 @@ import (
 func configScenarios() []scenario {
 	return []scenario{
 		secretKeyRemoved(), missingSecret(), configMapChange(),
+		runAsNonRootRejected(),
 	}
 }
 
@@ -204,5 +205,44 @@ func configWarn(c *cluster, w *workload, from, to int, reason,
 		ev := c.warningEvent(pod, "Pod", reason, message, "kubelet", 3)
 		ev.InvolvedObject.FieldPath = "spec.containers{app}"
 		c.warn(ev)
+	}
+}
+
+// runAsNonRootRejected: a new Deployment asks for runAsNonRoot but its
+// image runs as root. Nothing it references is missing, so the pods'
+// CreateContainerConfigError is the kubelet's own rejection, quoted as
+// it is; the note must not blame a missing object.
+func runAsNonRootRejected() scenario {
+	return scenario{
+		expect: expectation{
+			Name: "config-run-as-non-root-rejected",
+			Description: "New pods fail with CreateContainerConfigError " +
+				"because the image runs as root under runAsNonRoot.",
+			Root: "deployment/billing/ledger", Tier: "notify",
+			MaxMessages:  2,
+			MustNotBlame: []string{"node//n1", "node//n2", "zone//zone-a"},
+		},
+		build: func(c *cluster) {
+			c.list(c.node("n1", "zone-a"), c.node("n2", "zone-a"))
+			c.after(time.Minute)
+			w := c.deployment("billing", "ledger",
+				"registry.example.com/ledger:2.0", 2)
+			configTemplate(w, func(spec *corev1.PodSpec) {
+				spec.Containers[0].SecurityContext = &corev1.SecurityContext{
+					RunAsNonRoot: boolPtr(true),
+				}
+			})
+			w.setReady(0)
+			c.create(w.objects())
+			message := "container has runAsNonRoot and image will run " +
+				"as root (pod: \"ledger_billing\", container: app)"
+			for i := range 2 {
+				c.create(w.pod(i, "n"+itoa(i+1), startedNow,
+					waiting("CreateContainerConfigError", message)))
+			}
+			configWarn(c, w, 0, 2, "Failed", "Error: "+message)
+			c.after(4 * time.Minute)
+			configWarn(c, w, 0, 2, "Failed", "Error: "+message)
+		},
 	}
 }

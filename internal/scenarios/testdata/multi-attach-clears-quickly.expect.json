@@ -1,0 +1,7 @@
+{
+  "name": "multi-attach-clears-quickly",
+  "description": "A rollout's new pod briefly sees a multi-attach error while the old pod stops; the volume moves and the pod starts.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "5m0s"
+}

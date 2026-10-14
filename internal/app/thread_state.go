@@ -11,6 +11,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/safego"
 	"github.com/abahmed/kwatch/internal/storage"
 )
 
@@ -193,7 +194,12 @@ func (t *threadSaver) Flush(parent context.Context) bool {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		t.logSave(ctx)
+		if err := safego.Run("thread-save", func() error {
+			t.logSave(ctx)
+			return nil
+		}); err != nil {
+			klog.ErrorS(err, "save provider threads", "component", "threads")
+		}
 	}()
 	select {
 	case <-done:

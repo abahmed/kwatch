@@ -1,0 +1,14 @@
+POST /api/v1/events
+Content-Type: application/json
+DD-API-KEY: <redacted>
+DD-APPLICATION-KEY: <redacted>
+
+{
+  "aggregation_key": "kwatch-dev-p-42",
+  "alert_type": "success",
+  "tags": [
+    "cluster:dev"
+  ],
+  "text": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+  "title": "✅ payments in shop is healthy again."
+}

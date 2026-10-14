@@ -24,8 +24,6 @@ const (
 	// Timeline: log per entity (health transitions, changes, events and
 	// decisions), 7 days and at most DefaultTimelineCap bytes.
 	Timeline Bucket = "timeline"
-	// Audit: log per decision stream, 30 days.
-	Audit Bucket = "audit"
 	// Fingerprints: key object, value its last seen digest, no expiry.
 	Fingerprints Bucket = "fingerprints"
 	// State: small lifecycle values (cluster identity, version, session,
@@ -60,7 +58,7 @@ type spec struct {
 // specs lists every bucket; Open creates each one.
 var specs = []spec{
 	{Incidents, keyed}, {Changes, logged}, {Baselines, keyed},
-	{Evidence, logged}, {Timeline, logged}, {Audit, logged},
+	{Evidence, logged}, {Timeline, logged},
 	{Fingerprints, keyed}, {State, keyed}, {Threads, keyed},
 	{Outbox, keyed}, {Flight, logged},
 }
@@ -69,8 +67,8 @@ var specs = []spec{
 // rather than configuration: no existing setting carries them, and the
 // defaults fit the default 2Gi volume budget.
 const (
-	// DefaultLogRetention keeps evidence and audit entries for 30 days
-	// after the entry time.
+	// DefaultLogRetention keeps evidence entries for 30 days after the
+	// entry time.
 	DefaultLogRetention = 30 * 24 * time.Hour
 	// DefaultSizeCap is the total logical size (key and value bytes)
 	// the compactor keeps the store under: 512 MiB, a quarter of the
@@ -137,8 +135,8 @@ func DefaultPolicy() Policy {
 	return Policy{
 		Retention: map[Bucket]time.Duration{
 			Changes: DefaultChangeRetention, Evidence: DefaultLogRetention,
-			Timeline: DefaultTimelineRetention, Audit: DefaultLogRetention,
-			Flight: DefaultFlightRetention,
+			Timeline: DefaultTimelineRetention,
+			Flight:   DefaultFlightRetention,
 		},
 		EvidenceCap: DefaultEvidenceCap,
 		TimelineCap: DefaultTimelineCap,
@@ -205,9 +203,4 @@ func TimelineLog[T any](s *Store) Log[T] {
 // batches, under one stream name.
 func FlightLog[T any](s *Store) Log[T] {
 	return Log[T]{store: s, bucket: Flight}
-}
-
-// AuditLog is the audit bucket: decisions, per stream name.
-func AuditLog[T any](s *Store) Log[T] {
-	return Log[T]{store: s, bucket: Audit}
 }

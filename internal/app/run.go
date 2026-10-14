@@ -38,6 +38,7 @@ func RunWithClock(now func() time.Time) int {
 	}
 	// The KwatchConfig overlay may change app.logFormatter.
 	applyLogFormat(boot.runtime.Application().LogFormatter)
+	logSecretsAccess(boot.runtime)
 	deps := newServerDeps(ctx, cancel, boot)
 	if err := deps.healthServer.Open(); err != nil {
 		klog.ErrorS(err, "failed to open health server")

@@ -1,0 +1,10 @@
+PUT /_matrix/client/v3/rooms/%21room:example/send/m.room.message/kwatch-5f08398d14c9e442fd218d974b99e4f0
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "body": "🔴 payments in shop is still crash-looping. It restarted 5 times now.\n\npanic: out of memory",
+  "format": "org.matrix.custom.html",
+  "formatted_body": "🔴 payments in shop is still crash-looping. It restarted 5 times now.<pre><code>panic: out of memory</code></pre>",
+  "msgtype": "m.text"
+}

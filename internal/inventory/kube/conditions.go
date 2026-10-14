@@ -2,6 +2,8 @@ package kube
 
 import (
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -86,9 +88,26 @@ func keepsMessage(c condition) bool {
 // The type is bounded as setConditions bounds it, so a long type finds
 // the attribute that was stored under its shortened name.
 func ConditionKey(conditionType string) string {
-	return AttrConditionPrefix + boundedLabel(
+	if key, ok := conditionKeys.Load(conditionType); ok {
+		return key.(string)
+	}
+	key := AttrConditionPrefix + boundedLabel(
 		conditionType, maxConditionTypeLength)
+	if conditionKeyCount.Add(1) <= maxConditionKeys {
+		conditionKeys.Store(conditionType, key)
+	}
+	return key
 }
+
+// Detectors look conditions up by a few fixed types on every evaluation,
+// and redacting a type is a set of regular expressions. The keys are
+// remembered, up to a cap so odd custom types cannot grow it forever.
+const maxConditionKeys = 1024
+
+var (
+	conditionKeys     sync.Map
+	conditionKeyCount atomic.Int64
+)
 
 // evidenceText is the single ingest point for free text that can carry
 // secrets: credentials are redacted before the value is bounded, so a

@@ -1,0 +1,8 @@
+POST /api/services/notify/mobile_app_kwatch
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "message": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú.",
+  "title": "kwatch alert"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "dependency-clusterip-dial",
+  "description": "Clients crash dialling a Service's ClusterIP while the Service has no ready endpoints.",
+  "root": "deployment/data/postgres",
+  "tier": "notify",
+  "maxMessages": 6,
+  "tail": "15m0s"
+}

@@ -1,0 +1,18 @@
+--- request 1 of 2
+GET /search/issues?q=kwatchkey8b2cb844620fe5dc repo:kwatch/kwatch is:issue is:open in:body
+Content-Type: application/json
+Authorization: Bearer <redacted>
+Accept: application/vnd.github+json
+
+(empty body)
+
+--- request 2 of 2
+POST /repos/kwatch/kwatch/issues
+Content-Type: application/json
+Authorization: Bearer <redacted>
+Accept: application/vnd.github+json
+
+{
+  "body": "🔴 payments in shop is crash-looping. Last output:\n\n\n```\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[3061 runes sha256:57b074c90bc54bbd13587d84]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n```\n\n```\npanic: out of memory\n```\n\nRef: kwatchkey8b2cb844620fe5dc",
+  "title": "🔴 payments in shop is crash-looping."
+}

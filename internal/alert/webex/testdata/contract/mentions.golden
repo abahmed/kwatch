@@ -1,0 +1,8 @@
+POST /
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "markdown": "🔴 payments in shop is crash-looping. It said \"@​channel @​everyone \\<​!here\\> @​all \\<​@U123\\> \\<​@W456\\> \\<​\\#C1\\|general\\>\".\n\nIt said `@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>`\n\n```\n@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n```\n\n```\nlog: @​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n```",
+  "roomId": "room-1"
+}

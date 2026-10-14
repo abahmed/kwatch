@@ -21,6 +21,15 @@ func (r *rig) setAttrs(
 		Attributes: attrs,
 	})
 	require.NoError(r.t, err)
+	r.markNode(id)
+}
+
+// markNode tells the manager a node changed, as an Apply naming the
+// node would. Tests that change the model and then only Tick use it.
+func (r *rig) markNode(id inventory.EntityID) {
+	if id.Kind == kube.KindNode {
+		r.m.nodesDirty = true
+	}
 }
 
 // workloadRig puts a Deployment with the given replica counts and one

@@ -1,0 +1,8 @@
+POST /bot<secret>/sendMessage
+Content-Type: application/json
+
+{
+  "chat_id": "chat",
+  "parse_mode": "HTML",
+  "text": "🔴 payments in shop is crash-looping. Last output:\n\n…\n\n<pre>panic: out of memory</pre>"
+}

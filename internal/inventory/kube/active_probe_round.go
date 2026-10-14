@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/safego"
 )
 
 // KindKwatch is kwatch itself, a virtual entity that carries what kwatch
@@ -39,7 +40,15 @@ func (b *probeBatch) run(probe func() inventory.Observation) {
 	b.wg.Add(1)
 	go func() {
 		defer b.wg.Done()
-		observation := probe()
+		var observation inventory.Observation
+		// A panicking probe adds no observation; the next round retries.
+		if err := safego.Run("active-probe", func() error {
+			observation = probe()
+			return nil
+		}); err != nil {
+			safego.Report(err)
+			return
+		}
 		b.mu.Lock()
 		b.observations = append(b.observations, observation)
 		b.mu.Unlock()

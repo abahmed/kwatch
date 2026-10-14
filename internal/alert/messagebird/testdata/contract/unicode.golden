@@ -1,0 +1,11 @@
+POST /
+Content-Type: application/json
+Authorization: AccessKey <redacted>
+
+{
+  "body": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú.",
+  "originator": "kwatch",
+  "recipients": [
+    "+12025550100"
+  ]
+}

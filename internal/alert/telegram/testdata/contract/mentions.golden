@@ -1,0 +1,8 @@
+POST /bot<secret>/sendMessage
+Content-Type: application/json
+
+{
+  "chat_id": "chat",
+  "parse_mode": "HTML",
+  "text": "🔴 payments in shop is crash-looping. It said &#34;@​channel @​everyone &lt;​!here&gt; @​all &lt;​@U1…[476 runes sha256:52941266a8b1c0dcd383ca20]…: @​channel @​everyone &lt;​!here&gt; @​all &lt;​@U123&gt; &lt;​@W456&gt; &lt;​#C1|general&gt;</pre>"
+}

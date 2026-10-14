@@ -2,6 +2,7 @@ package kube
 
 import (
 	"context"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/metrics"
+	"github.com/abahmed/kwatch/internal/safego"
 )
 
 // Dynamic kind reason codes, in addition to the Reason* codes of
@@ -147,4 +149,47 @@ func (d *DynamicSource) reportGone(
 	if len(observations) > 0 {
 		d.cfg.Submit(ctx, observations...)
 	}
+}
+
+// panicked handles an informer whose goroutine panicked. An informer
+// cannot be run again, so the watch is parked like a refused one: its
+// entities stay in the model, the kind reports not synced, and after a
+// backoff the next discovery pass builds a new informer that takes the
+// old watch over. Consecutive panics of one type back off further; a
+// watch that lived for a full backoff period starts the count again. A
+// panic of a watch that is no longer the running one is ignored.
+func (d *DynamicSource) panicked(
+	gvr schema.GroupVersionResource, w *dynamicWatch, err error,
+	ranFor time.Duration,
+) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.running[gvr] != w {
+		return
+	}
+	if d.panics == nil {
+		d.panics = make(map[schema.GroupVersionResource]int)
+	}
+	if ranFor >= safego.RestartMaximum {
+		d.panics[gvr] = 0
+	}
+	d.panics[gvr]++
+	wait := safego.Backoff(d.panics[gvr])
+	klog.ErrorS(err, "dynamic watch stopped; rebuilding it",
+		"component", "inventory", "operation", "watch",
+		"resource", gvr.String(), "retryIn", wait)
+	metrics.DefaultRegistry().WatcherSyncFailures.Add(1)
+	w.cancel()
+	delete(d.running, gvr)
+	d.refused[gvr] = &refusal{
+		kindIssue: kindIssue{w.kind, ReasonSyncFailed}, kept: w,
+	}
+	d.wg.Add(1)
+	go func() {
+		defer d.wg.Done()
+		if safego.Wait(w.parent, wait) {
+			d.retryRefused()
+			d.requestDiscovery()
+		}
+	}()
 }

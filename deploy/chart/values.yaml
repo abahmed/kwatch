@@ -69,7 +69,9 @@ terminationGracePeriodSeconds: 60
 # address, the kubelet port and every alert provider differ per cluster,
 # and a policy that misses one silently stops monitoring or alerting.
 # Enable it once you know your egress. With allowDefaults the policy admits
-# the health port (kubelet probes, metrics) and lets kwatch reach DNS, TCP
+# the health port to its own namespace, the kubeletCIDRs nodes and the
+# scrapers in healthIngressFrom (not to every pod in the cluster) and lets
+# kwatch reach DNS, TCP
 # apiServerPorts on any address (the Kubernetes API server and HTTPS alert
 # providers) and the kubelet on every node (kubeletPort, for node stats),
 # limited to kubeletCIDRs when set (your node address ranges). Port 443
@@ -103,6 +105,12 @@ networkPolicy:
   dnsMetricsPort: 9153
   kubeletPort: 10250
   kubeletCIDRs: []
+  # -- Who may reach the health port (/health, /metrics and /status), besides
+  # pods in the release namespace and, when set, the kubeletCIDRs nodes. Each
+  # entry is a NetworkPolicy peer: a namespaceSelector, a podSelector or an
+  # ipBlock. List your Prometheus here, for example
+  # [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}}].
+  healthIngressFrom: []
   # -- Extra TCP egress ports open to any address, e.g. [587] for SMTP.
   extraEgressPorts: []
   ingress: []
@@ -110,7 +118,10 @@ networkPolicy:
 
 # -- kwatch sets the Go soft memory limit (GOMEMLIMIT) to 90% of the
 # memory limit, so garbage collection works harder before the kernel would
-# kill the Pod. A 5,000-pod cluster model needs about 83 MiB of live heap.
+# kill the Pod. Live heap is about 26 KB per pod: 140 MiB at 5,000 pods and
+# 520 MiB at 20,000. The default 512Mi suits up to about 8,000 pods; use
+# 768Mi at 10,000 pods and 1Gi at 20,000 (raise the request with the limit).
+# See docs/production-operations.md, section Memory.
 resources:
   limits:
     memory: 512Mi

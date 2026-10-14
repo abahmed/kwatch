@@ -67,8 +67,9 @@ func NewSplunkOncall(
 	klog.InfoS("initializing splunkoncall")
 
 	return &SplunkOncall{
-		sender:      transport.NewSender(dependencies),
-		url:         strings.TrimRight(server, "/") + "/" + routingKey + "/" + apiKey,
+		sender: transport.NewSender(dependencies),
+		url: strings.TrimRight(server, "/") + "/" + apiKey + "/" +
+			routingKey,
 		apiKey:      apiKey,
 		routingKey:  routingKey,
 		clusterName: clusterName,

@@ -83,18 +83,6 @@ func JoinNames(names []string, max int) string {
 	)
 }
 
-// Plural returns "n word" or "n words".
-func Plural(n int, word string) string {
-	if n == 1 {
-		return fmt.Sprintf("1 %s", word)
-	}
-	suffix := "s"
-	if strings.HasSuffix(word, "s") {
-		suffix = ""
-	}
-	return fmt.Sprintf("%d %s%s", n, word, suffix)
-}
-
 // Duration renders d for people: "5s", "2m30s", "2h15m". Sub-second detail is
 // dropped — an alert about a pod that has been stuck for 12 minutes does not
 // need milliseconds.

@@ -48,8 +48,3 @@ func (s Severity) Rank() int {
 		return 0
 	}
 }
-
-// SeverityFromString converts a user-supplied string to a Severity.
-// Config maps (SeverityByReason, SeverityByOwnerKind) are user strings, so
-// they are converted at the boundary when compared to typed severities.
-func SeverityFromString(s string) Severity { return Severity(s) }

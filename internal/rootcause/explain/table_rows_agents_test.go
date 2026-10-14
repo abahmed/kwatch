@@ -33,6 +33,15 @@ func agentCase(f *fixture) inventory.EntityID {
 var agentRowCases = []rowCase{
 	{row: "node-agent-failing", want: "pod/kube-system/cni-n1",
 		build: agentCase},
+	{row: "node-agent-named-by-error", want: "pod/kube-system/cni-n1",
+		build: func(f *fixture) inventory.EntityID {
+			_, nodes := agentOnN1(f)
+			f.workload("shop", "web", 1, nodes[0])
+			pods := f.workload("shop", "api", 1, nodes[0])
+			f.fail(pods[0], detection.ModeCreating, failingH, 2,
+				"failed to setup network for sandbox")
+			return pods[0]
+		}},
 }
 
 // A healthy agent explains nothing, and a failing agent beside one
@@ -47,6 +56,7 @@ func TestNodeAgentNeedsFailingAgentAndTwoWorkloads(t *testing.T) {
 	f.relate(agent, inventory.RunsOn, nodes[0])
 	f.fail(agent, detection.ModeCrashLoop, failingH, 1, "")
 	pods := f.workload("shop", "api", 2, nodes...)
+	f.workload("shop", "web", 1, nodes[0])
 	f.fail(pods[0], detection.ModeProbe, failingH, 2, "")
 
 	if c, ok := f.explain().CauseOf(pods[0]); ok && c.Root == agent {

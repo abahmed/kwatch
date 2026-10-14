@@ -1,0 +1,9 @@
+POST /cgi-bin/webhook/send?key=<redacted>
+Content-Type: application/json
+
+{
+  "markdown": {
+    "content": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\n```\nпаника: нехватка памяти — 内存不足\n```"
+  },
+  "msgtype": "markdown"
+}

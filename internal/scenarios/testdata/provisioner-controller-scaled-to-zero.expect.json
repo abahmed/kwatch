@@ -1,0 +1,10 @@
+{
+  "name": "provisioner-controller-scaled-to-zero",
+  "description": "A claim stays Pending because the controller Deployment that serves its provisioner has no pods.",
+  "root": "deployment/kube-system/ebs-csi-controller",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "storageclass//gp"
+  ]
+}

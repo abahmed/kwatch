@@ -30,7 +30,7 @@ func sample() Message {
 func TestRenderSlack(t *testing.T) {
 	got := sample().Render(SlackDialect())
 	want := "🔴 *payments* is down in *shop*.\n" +
-		"It logged `panic: key &lt;!channel&gt; ˋxˋ *y* _z_ @​here`.\n" +
+		"It logged `panic: key &lt;​!channel&gt; ˋxˋ *y* _z_ @​here`.\n" +
 		"Service *web* can't serve traffic.\n" +
 		"```\nkubectl logs payments -n shop\n```"
 	if got != want {
@@ -41,7 +41,7 @@ func TestRenderSlack(t *testing.T) {
 func TestRenderMarkdownFamily(t *testing.T) {
 	got := sample().Render(MarkdownDialect(nil, "\n\n"))
 	if !strings.Contains(got, "**payments**") ||
-		!strings.Contains(got, "``panic: key <!channel> `x` *y* _z_ @​here``") ||
+		!strings.Contains(got, "``panic: key <​!channel> `x` *y* _z_ @​here``") ||
 		!strings.HasSuffix(got, "```\nkubectl logs payments -n shop\n```") {
 		t.Fatalf("markdown:\n%s", got)
 	}
@@ -51,7 +51,7 @@ func TestRenderTelegramHTMLEscapes(t *testing.T) {
 	got := sample().Render(HTMLDialect(nil, false))
 	for _, want := range []string{
 		"<b>payments</b>",
-		"<code>panic: key &lt;!channel&gt; `x` *y* _z_ @​here</code>",
+		"<code>panic: key &lt;​!channel&gt; `x` *y* _z_ @​here</code>",
 		"<pre>kubectl logs payments -n shop</pre>",
 		"can&#39;t",
 	} {
@@ -66,7 +66,7 @@ func TestRenderJiraWiki(t *testing.T) {
 	m.Doc[1].Spans[1].Text = "bad {code} [~admin] *x*"
 	got := m.Render(JiraDialect())
 	for _, want := range []string{"*payments*",
-		"{{bad code [~admin] *x*}}", "{noformat}\nkubectl"} {
+		"{{bad code \\[\\~admin\\] \\*x\\*}}", "{noformat}\nkubectl"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}
@@ -161,5 +161,21 @@ func TestWithMarkerSwapsBlocksAndNote(t *testing.T) {
 	}
 	if !strings.HasPrefix(m.Plain(), MarkerPage) {
 		t.Fatal("the original message was changed")
+	}
+}
+
+func TestJiraCodeSpanEscapesWikiMarkup(t *testing.T) {
+	got := JiraDialect().Code("a_b_ *c* [~x] {y} !i! +u+ ^s^")
+	want := `{{a\_b\_ \*c\* \[\~x\] y \!i\! \+u\+ \^s\^}}`
+	if got != want {
+		t.Fatalf("Code = %q, want %q", got, want)
+	}
+}
+
+func TestJiraPlainTextEscapesMentionsAndMacros(t *testing.T) {
+	got := JiraDialect().Text("[~accountid:1] {code} *b* _i_")
+	want := `\[\~accountid:1\] \{code\} \*b\* \_i\_`
+	if got != want {
+		t.Fatalf("Text = %q, want %q", got, want)
 	}
 }

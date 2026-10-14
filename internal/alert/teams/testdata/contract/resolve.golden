@@ -1,0 +1,30 @@
+POST /
+Content-Type: application/json
+
+{
+  "attachments": [
+    {
+      "content": {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "body": [
+          {
+            "text": "payments crashed in shop",
+            "type": "TextBlock",
+            "weight": "Bolder",
+            "wrap": true
+          },
+          {
+            "text": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+            "type": "TextBlock",
+            "wrap": true
+          }
+        ],
+        "type": "AdaptiveCard",
+        "version": "1.2"
+      },
+      "contentType": "application/vnd.microsoft.card.adaptive"
+    }
+  ],
+  "text": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+  "title": "payments crashed in shop"
+}

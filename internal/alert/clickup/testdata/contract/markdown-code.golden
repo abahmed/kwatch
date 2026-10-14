@@ -1,0 +1,9 @@
+POST /list/abc123/task
+Content-Type: application/json
+Authorization: <redacted>
+
+{
+  "markdown_description": "🔴 **payments** in **shop** is crash-looping.\n\nIt said `boom *x* @​channel`.\n\nService **web** can't serve traffic. Run\n\n```\nkubectl logs payments -n shop\n```",
+  "name": "🔴 payments in shop is crash-looping.",
+  "priority": 2
+}

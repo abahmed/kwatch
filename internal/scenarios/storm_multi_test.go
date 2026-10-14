@@ -65,6 +65,16 @@ func runMultiCauseStorm(t testing.TB) multiStormResult {
 			stated[r.Root] = true
 		}
 	}
+	// Nodes lost together are one outage: its incident states each of
+	// them as the cause of what failed on it.
+	for _, p := range result.Incidents {
+		if p.Grouped() {
+			stated[p.Root.String()] = true
+			for _, root := range p.Merged {
+				stated[root.String()] = true
+			}
+		}
+	}
 	for _, root := range roots {
 		if stated[root] {
 			out.found++

@@ -542,32 +542,35 @@ here verbatim and checked by `TestScorecardGates`.
 | --- | --- | --- | --- |
 | Correct root cause (labelled) | >= 90% | 99.0% | pass |
 | Correct root cause (held-out) | >= 80% | 100% | pass |
-| Wrong high-confidence root | <= 5% (at least 20 cases) | 0% (0 of 172 high-confidence cases, labelled and held-out) | pass |
-| Calibration: high confidence | 80-100% (at least 10 cases) | 100.0% (160 of 160 right) | pass |
-| Calibration: likely confidence | 50-90% (at least 10 cases) | 89.3% (25 of 28 right) | pass |
+| Wrong high-confidence root | <= 5% (at least 20 cases) | 0% (0 of 189 high-confidence cases, labelled and held-out) | pass |
+| Calibration: high confidence | 80-100% (at least 10 cases) | 100.0% (177 of 177 right) | pass |
+| Calibration: likely confidence | 50-90% (at least 10 cases) | 88.0% (22 of 25 right) | pass |
 | Messages per incident (p95) | <= 3 | 3 | pass |
 | Messages per incident (most) | <= 5 | 5 | pass |
-| Time to first message (page tier) | max <= 2m0s | p95 1m45s, max 1m45s (33 scenarios) | pass |
-| Time to first message (notify tier) | max <= 5m0s | p95 4m15s, max 5m0s (207 scenarios) | pass |
+| Time to first message (page tier) | max <= 2m0s | p95 1m45s, max 1m45s (38 scenarios) | pass |
+| Time to first message (notify tier) | max <= 5m0s | p95 4m15s, max 5m0s (224 scenarios) | pass |
 | Time to first message (boot-held) | max <= 15m0s | p95 12m15s, max 12m15s (2 scenarios) | pass |
 | Notifications from non-events (staging day) | <= 0 | 0 | pass |
-| Notifications per hour (staging day peak) | <= 30/h | 25/h | pass |
+| Notifications per hour (staging day peak) | <= 30/h | 28/h | pass |
 | Unchanged updates | <= 0% | 0% | pass |
-| Re-created incidents | <= 5% | 1.7% | pass |
+| Re-created incidents | <= 5% | 1.8% | pass |
 | Repeated recoveries | <= 0 | 0 | pass |
 | Storm messages in 2 minutes (shared node) | <= 3 | 1 | pass |
 | Storm messages in 2 minutes (shared registry) | <= 3 | 1 | pass |
-| Storm messages in 2 minutes (multi-cause) | <= 13 | 10 | pass |
+| Storm messages in 2 minutes (multi-cause) | <= 13 | 8 | pass |
 | Multi-cause storm causes reported | >= 10 | 10 | pass |
 | Scenarios blaming a must-not-blame entity | <= 0 | 0 | pass |
 | Quiet scenarios that alerted | <= 0 | 0 | pass |
 | Scenarios over their message budget | <= 0 | 0 | pass |
+| Scenarios paging more than once per outage | <= 0 | 0 | pass |
+| Incidents left open after their members moved | <= 0 | 0 | pass |
+| Recoveries said while members still fail | <= 0 | 0 | pass |
 
-22 of 22 gates pass. 286 labelled root cases in 296 scenarios; first-incident tier matches in 296 of 296 scenarios.
-Staging day: 653 notifications in 49h0m0s (13.3/h mean, peak hour 25); 0 from non-events, 0 of them notify or page.
+25 of 25 gates pass. 310 labelled root cases in 320 scenarios; first-incident tier matches in 320 of 320 scenarios.
+Staging day: 706 notifications in 51h15m0s (13.8/h mean, peak hour 28); 0 from non-events, 0 of them notify or page.
 Storm shared node: 1000 pods, 2 messages in total, 1 in the loudest 2 minutes.
 Storm shared registry: 1000 pods, 1 messages in total, 1 in the loudest 2 minutes.
-Storm multi-cause: 1000 pods from 10 causes, 10 of them reported, 14 messages in total, 10 in the loudest 2 minutes.
+Storm multi-cause: 1000 pods from 10 causes, 10 of them reported, 10 messages in total, 8 in the loudest 2 minutes.
 Slowest first messages: boot-endpoints-still-down notify 12m15s, node-replace-sandbox-stuck notify 7m15s, autoscaler-ceiling-cpu notify 5m0s, autoscaler-ceiling-requests notify 5m0s, hpa-at-max notify 5m0s.
 Calibration: the labelled cases put high confidence at 0.65 (committed 0.70).
 
@@ -579,6 +582,7 @@ Calibration: the labelled cases put high confidence at 0.65 (committed 0.70).
 | secret-key-removed | `secret/shop/db-creds` | `secret/shop/db-creds` | high 1.00 | notify/notify | 1 (2) | pass |
 | missing-secret | `secret/billing/stripe-api` | `secret/billing/stripe-api` | likely 0.69 | notify/notify | 1 (2) | pass |
 | configmap-change | `configmap/web/frontend-config` | `configmap/web/frontend-config` | high 1.00 | notify/notify | 1 (2) | pass |
+| config-run-as-non-root-rejected | `deployment/billing/ledger` | `deployment/billing/ledger` | high 1.00 | notify/notify | 1 (2) | pass |
 | node-memory-pressure-eviction | `node//n1` | `node//n1` | high 1.00 | notify/notify | 2 (2) | pass |
 | node-lost-notready | `node//n1` | `node//n1` | high 1.00 | page/page | 2 (2) | pass |
 | healthy-node-app-crash | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
@@ -604,6 +608,7 @@ Calibration: the labelled cases put high confidence at 0.65 (committed 0.70).
 | two-independent-problems | `node//n1`, `deployment/shop/checkout` | `node//n1`, `deployment/shop/checkout` | high 1.00 | notify/notify | 2 (4) | pass |
 | cause-revised | `node//n3` | `node//n3` | high 1.00 | notify/notify | 2 (3) | pass |
 | cold-start-preexisting | `secret/billing/invoicer-creds`, `deployment/shop/api` | `secret/billing/invoicer-creds`, `deployment/shop/api (no cause)` | high 0.85 | notify/notify | 1 (1) | pass |
+| start-mid-outage-missing-secret | `secret/billing/invoicer-creds` | `secret/billing/invoicer-creds` | high 0.85 | notify/notify | 1 (1) | pass |
 | scheduler-down | `scheduler//kube-scheduler` | `scheduler//kube-scheduler` | high 1.00 | page/page | 2 (2) | pass |
 | controller-manager-down | `controller-manager//kube-controller-manager` | `controller-manager//kube-controller-manager` | high 0.95 | page/page | 2 (2) | pass |
 | etcd-down | `etcd//etcd` | `etcd//etcd` | high 0.90 | page/page | 1 (2) | pass |
@@ -632,7 +637,7 @@ Calibration: the labelled cases put high confidence at 0.65 (committed 0.70).
 | operator-down-crs-stuck | `deployment/db-operators/pg-operator` | `deployment/db-operators/pg-operator` | high 0.80 | notify/notify | 2 (2) | pass |
 | probe-port-mismatch | `deployment/shop/api` | `deployment/shop/api` | high 1.00 | notify/notify | 1 (2) | pass |
 | startup-budget-too-short | `deployment/shop/api` | `deployment/shop/api` | high 0.88 | notify/notify | 1 (2) | pass |
-| init-container-fails | `deployment/shop/orders` | `deployment/shop/orders` | likely 0.60 | notify/notify | 1 (2) | pass |
+| init-container-fails | `deployment/shop/orders` | `deployment/shop/orders` | high 0.80 | notify/notify | 1 (2) | pass |
 | sidecar-crash-loops | `deployment/shop/payments` | `deployment/shop/payments` | high 0.90 | notify/notify | 2 (2) | pass |
 | liveness-kill-loop | `deployment/shop/web` | `deployment/shop/web (no cause)` | none | notify/notify | 1 (2) | pass |
 | liveness-single-kill | quiet | - | - | -/- | 0 (0) | pass |
@@ -648,12 +653,20 @@ Calibration: the labelled cases put high confidence at 0.65 (committed 0.70).
 | claim-full-unlisted-volume | `persistentvolumeclaim/messaging/broker-log` | `persistentvolumeclaim/messaging/broker-log` | high 0.70 | notify/notify | 1 (2) | pass |
 | pvc-full | `persistentvolumeclaim/inventory/pgdata` | `persistentvolumeclaim/inventory/pgdata` | high 0.70 | notify/notify | 1 (2) | pass |
 | claim-pins-pod | `persistentvolumeclaim/streaming/data-kafka-0` | `persistentvolumeclaim/streaming/data-kafka-0` | high 0.80 | notify/notify | 1 (2) | pass |
+| multi-attach-held-by-old-pod | `deployment/shop/api` | `deployment/shop/api` | high 1.00 | notify/notify | 1 (2) | pass |
+| multi-attach-clears-quickly | quiet | - | - | -/- | 0 (0) | pass |
+| provisioner-controller-down | `deployment/kube-system/ebs-csi-controller` | `deployment/kube-system/ebs-csi-controller` | high 1.00 | notify/notify | 1 (2) | pass |
+| provisioner-no-workload-found | `persistentvolumeclaim/data/orders-db` | `persistentvolumeclaim/data/orders-db (no cause)` | none | notify/notify | 1 (2) | pass |
+| claim-no-storage-class | `persistentvolumeclaim/data/cache-0` | `persistentvolumeclaim/data/cache-0` | high 1.00 | notify/notify | 1 (2) | pass |
+| provisioner-controller-scaled-to-zero | `deployment/kube-system/ebs-csi-controller` | `deployment/kube-system/ebs-csi-controller` | high 0.95 | notify/notify | 1 (2) | pass |
+| provisioner-look-alike-workload | `persistentvolumeclaim/data/orders-db` | `persistentvolumeclaim/data/orders-db (no cause)` | none | notify/notify | 1 (2) | pass |
 | volume-inodes-full | `persistentvolumeclaim/mail/spool` | `persistentvolumeclaim/mail/spool` | high 0.95 | notify/notify | 1 (2) | pass |
 | volume-full-names-users | `persistentvolumeclaim/inventory/pgdata` | `persistentvolumeclaim/inventory/pgdata` | high 0.80 | notify/notify | 1 (2) | pass |
 | volume-nearly-full-quiet | quiet | - | - | -/- | 0 (0) | pass |
 | registry-login-expired | `registry//registry.corp.example` | `registry//registry.corp.example` | high 1.00 | notify/notify | 1 (2) | pass |
 | registry-login-missing-secret | `secret/shop/regcred` | `secret/shop/regcred` | high 0.93 | notify/notify | 1 (2) | pass |
 | registry-no-pull-secret | `registry//registry.corp.example` | `registry//registry.corp.example` | high 1.00 | notify/notify | 1 (2) | pass |
+| registry-rate-limited | `registry//registry.corp.example` | `registry//registry.corp.example` | high 1.00 | notify/notify | 1 (2) | pass |
 | mutating-webhook-slow-backend | `mutatingwebhookconfiguration//mesh-injector` | `mutatingwebhookconfiguration//mesh-injector` | high 1.00 | page/page | 1 (2) | pass |
 | validating-webhook-deadline | `validatingwebhookconfiguration//label-guard` | `validatingwebhookconfiguration//label-guard` | high 0.95 | page/page | 1 (2) | pass |
 | webhook-timeout | `validatingwebhookconfiguration//image-policy` | `validatingwebhookconfiguration//image-policy` | high 1.00 | page/page | 1 (2) | pass |
@@ -668,6 +681,10 @@ Calibration: the labelled cases put high confidence at 0.65 (committed 0.70).
 | admission-policy-denies-pods | `validatingadmissionpolicy//require-team.example.com` | `validatingadmissionpolicy//require-team.example.com` | high 1.00 | notify/notify | 1 (2) | pass |
 | node-condition-true-pods-unready | `node//n1` | `node//n1` | high 1.00 | notify/notify | 1 (2) | pass |
 | node-agent-outside-kube-system | `daemonset/observability/logship` | `daemonset/observability/logship` | high 1.00 | notify/notify | 2 (2) | pass |
+| node-agent-beside-lone-workload | `daemonset/observability/logship`, `deployment/shop/cart` | `daemonset/observability/logship (no cause)`, `deployment/shop/cart (no cause)` | none | notify/notify | 4 (4) | pass |
+| node-agent-healthy-app-crashes | `deployment/shop/cart` | `deployment/shop/cart (no cause)` | none | notify/notify | 1 (2) | pass |
+| csi-node-plugin-failing | `daemonset/kube-system/ebs-csi-node` | `daemonset/kube-system/ebs-csi-node` | possible 0.45 | notify/notify | 2 (3) | pass |
+| kubelet-cert-expired | `node//n1` | `node//n1 (no cause)` | none | page/page | 1 (3) | pass |
 | apiserver-throttling-stalls-controllers | `apiserver//kube-apiserver` | `apiserver//kube-apiserver` | likely 0.69 | notify/notify | 2 (2) | pass |
 | csr-denied | `certificatesigningrequest//csr-w7k2p` | `certificatesigningrequest//csr-w7k2p (no cause)` | none | notify/notify | 1 (2) | pass |
 | flowschema-dangling-priority-level | `flowschema//batch-jobs` | `flowschema//batch-jobs (no cause)` | none | notify/notify | 1 (2) | pass |
@@ -724,6 +741,7 @@ Calibration: the labelled cases put high confidence at 0.65 (committed 0.70).
 | fit-autoscaler-cannot-scale | `scheduling//Insufficient cpu` | `scheduling//Insufficient cpu` | high 0.85 | notify/notify | 1 (2) | pass |
 | fit-volume-zone-node-full | `scheduling//Insufficient cpu` | `scheduling//Insufficient cpu` | high 0.85 | notify/notify | 1 (2) | pass |
 | fit-local-volume-node-gone | `persistentvolumeclaim/analytics/data-etl` | `persistentvolumeclaim/analytics/data-etl` | high 0.95 | notify/notify | 1 (2) | pass |
+| fit-host-port-taken | `scheduling//didn't have free ports for the requested pod ports` | `scheduling//didn't have free ports for the requested pod ports` | high 1.00 | notify/notify | 1 (2) | pass |
 | ready-never | `deployment/shop/cert-controller` | `deployment/shop/cert-controller (no cause)` | none | notify/notify | 2 (3) | pass |
 | ready-never-since-before-start | `deployment/shop/cert-controller` | `deployment/shop/cert-controller (no cause)` | none | notify/notify | 1 (3) | pass |
 | hpa-target-missing | `horizontalpodautoscaler/istio-system/istiod` | `horizontalpodautoscaler/istio-system/istiod (no cause)` | none | digest/digest | 1 (2) | pass |
@@ -731,7 +749,7 @@ Calibration: the labelled cases put high confidence at 0.65 (committed 0.70).
 | known-never-ready-past-boot | `deployment/external-secrets/cert-controller` | `deployment/external-secrets/cert-controller (no cause)` | none | notify/notify | 8 (8) | pass |
 | namespace-outage-groups | `deployment/shop/app0`, `deployment/shop/app1`, `deployment/shop/app2`, `deployment/shop/app3`, `deployment/shop/app4`, `deployment/shop/app5`, `deployment/shop/app6`, `deployment/shop/app7` | `deployment/shop/app0 (no cause)`, `deployment/shop/app1 (no cause)`, `deployment/shop/app2 (no cause)`, `deployment/shop/app3 (no cause)`, `deployment/shop/app4 (no cause)`, `deployment/shop/app5 (no cause)`, `deployment/shop/app6 (no cause)`, `deployment/shop/app7 (no cause)` | none | notify/notify | 1 (1) | pass |
 | namespace-two-failures-stay-separate | `deployment/shop/app0`, `deployment/shop/app1` | `deployment/shop/app0 (no cause)`, `deployment/shop/app1 (no cause)` | none | notify/notify | 2 (4) | pass |
-| page-flaps-reopens | `node//n1` | `node//n1` | high 0.85 | page/page | 3 (5) | pass |
+| page-flaps-reopens | `node//n1` | `node//n1` | high 0.85 | page/page | 4 (5) | pass |
 | long-page-reminder | `node//n1` | `node//n1` | high 0.85 | page/page | 2 (3) | pass |
 | digest-never-paged-resolve | `horizontalpodautoscaler/shop/orders` | `horizontalpodautoscaler/shop/orders (no cause)` | none | digest/digest | 2 (3) | pass |
 | rollup-chronic-worsens | `deployment/shop/worker`, `deployment/shop/api` | `deployment/shop/worker (no cause)`, `deployment/shop/api (no cause)` | none | notify/notify | 2 (6) | pass |
@@ -826,7 +844,7 @@ Calibration: the labelled cases put high confidence at 0.65 (committed 0.70).
 | liveness-cascade-healthy-dependency | `deployment/shop/api` | `deployment/shop/api` | high 0.80 | notify/notify | 1 (2) | pass |
 | namespace-stuck-terminating | `namespace//old-shop` | `namespace//old-shop (no cause)` | none | notify/notify | 1 (2) | pass |
 | claim-stuck-deleting | `persistentvolumeclaim/shop/data` | `persistentvolumeclaim/shop/data (no cause)` | none | notify/notify | 1 (2) | pass |
-| lease-holder-crash-loops | `deployment/kube-system/ccm` | `deployment/kube-system/ccm` | likely 0.60 | notify/notify | 2 (2) | pass |
+| lease-holder-crash-loops | `deployment/kube-system/ccm` | `deployment/kube-system/ccm` | high 0.80 | notify/notify | 2 (2) | pass |
 | lease-holder-gone | quiet | - | - | -/- | 0 (0) | pass |
 | cronjob-blocked-by-stuck-run | `cronjob/reports/nightly-report` | `cronjob/reports/nightly-report (no cause)` | none | notify/notify | 1 (2) | pass |
 | pod-terminating-node-lost | `node//n1` | `node//n1` | high 0.95 | page/page | 2 (2) | pass |
@@ -850,7 +868,7 @@ Calibration: the labelled cases put high confidence at 0.65 (committed 0.70).
 | spot-node-reclaimed-pods-move-quietly | quiet | - | - | -/- | 0 (0) | pass |
 | spot-reclaim-after-notify | `deployment/shop/mailer` | `deployment/shop/mailer (no cause)` | none | notify/notify | 2 (2) | pass |
 | ambiguous-init-secret-edited | `secret/shop/orders-db` | `secret/shop/orders-db` | high 0.85 | notify/notify | 1 (3) | pass |
-| ambiguous-init-no-change | `deployment/shop/orders` | `deployment/shop/orders` | likely 0.60 | notify/notify | 1 (3) | pass |
+| ambiguous-init-no-change | `deployment/shop/orders` | `deployment/shop/orders` | high 0.80 | notify/notify | 1 (3) | pass |
 | ambiguous-cron-secret-edited | `secret/reports/export-creds` | `secret/reports/export-creds` | high 0.80 | notify/notify | 1 (2) | pass |
 | ambiguous-cron-no-change | `cronjob/reports/nightly-export` | `cronjob/reports/nightly-export` | likely 0.55 | notify/notify | 1 (2) | pass |
 | ambiguous-oom-near-limit | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 3 (3) | pass |
@@ -871,6 +889,15 @@ Calibration: the labelled cases put high confidence at 0.65 (committed 0.70).
 | coupled-silent-secret-fault-secret | `secret/post/relay-secret` | `secret/post/relay-secret` | likely 0.69 | notify/notify | 1 (2) | pass |
 | coupled-silent-image-fault-state | `deployment/mail/ledger` | `configmap/mail/ledger-config` | likely 0.69 | notify/notify | 1 (2) | wrong root |
 | coupled-silent-config-fault-state | `configmap/post/ledger-config` | `configmap/post/ledger-config` | likely 0.69 | notify/notify | 1 (2) | pass |
+| node-lost-owner-routed | `node//n1` | `node//n1` | high 1.00 | page/page | 3 (4) | pass |
+| cni-agent-crash-quoted | `node//n1` | `node//n1` | high 1.00 | notify/notify | 3 (4) | pass |
+| coredns-down-no-probe | `cluster-dns//cluster-dns` | `cluster-dns//cluster-dns` | high 0.90 | notify/notify | 1 (3) | pass |
+| dependency-clusterip-dial | `deployment/data/postgres` | `deployment/data/postgres` | high 1.00 | notify/notify | 3 (6) | pass |
+| node-blip-then-down | `node//n1` | `node//n1 (no cause)` | none | page/page | 4 (5) | pass |
+| nodes-lost-same-zone | `node//n1` | `node//n1 (no cause)` | none | page/page | 2 (6) | pass |
+| nodes-lost-three-zones | `node//n1` | `node//n1 (no cause)` | none | page/page | 3 (6) | pass |
+| node-pressure-evicted-linger | `node//n1` | `node//n1` | high 1.00 | notify/notify | 2 (2) | pass |
+| node-late-cause-after-crashes | `node//n1` | `node//n1` | high 1.00 | page/page | 3 (4) | pass |
 
 ## Held-out scenarios
 

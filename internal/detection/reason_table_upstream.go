@@ -11,13 +11,10 @@ var upstreamReasons = []ReasonInfo{
 	// Pod start: the kubelet cannot create the pod's cgroup, bind its
 	// ports or set up its sandbox, so the pod cannot run.
 	eventReason("FailedCreatePodContainer", Critical),
-	eventReason("HostPortConflict", Critical),
-	eventReason("HostNetworkNotSupported", Critical),
 	eventReason("FailedPodSandBoxStatus", Warning),
 	eventReason("FailedSync", Warning),
-	eventReason("UnsupportedMountOption", Warning),
-	eventReason("FailedUnprepareDynamicResources", Warning),
 	eventReason("ExceededGracePeriod", Warning),
+	eventReason("AlreadyMountedVolume", Info),
 	eventReason("ProbeWarning", Info),
 	// Node and kubelet.
 	eventReason("KubeletSetupFailed", Critical),
@@ -32,10 +29,8 @@ var upstreamReasons = []ReasonInfo{
 	stateReason("SystemOOM"),
 	// Controllers.
 	eventReason("FailedDelete", Warning),
-	eventReason("FailedPlacement", Warning),
 	eventReason("SelectingAll", Warning),
 	eventReason("FailedUpdateStatus", Warning),
-	eventReason("FailedNeedsStart", Warning),
 	eventReason("PodFailurePolicy", Info),
 	eventReason("UnexpectedJob", Info),
 	eventReason("MissingJob", Info),
@@ -45,7 +40,7 @@ var upstreamReasons = []ReasonInfo{
 	// The HPA's own conditions carry these reasons, and the autoscaler
 	// detector reads them there.
 	stateReason("InvalidSchedule"),
-	stateReason("FailedRescale"), stateReason("FailedConvertHPA"),
+	stateReason("FailedRescale"),
 	stateReason("FailedGetExternalMetric"),
 	stateReason("FailedGetObjectMetric"),
 	stateReason("FailedGetPodsMetric"),
@@ -54,25 +49,73 @@ var upstreamReasons = []ReasonInfo{
 	stateReason("InvalidSelector"), stateReason("SelectorRequired"),
 	stateReason("AmbiguousSelector"),
 	// Storage.
-	eventReason("FailedDetachVolume", Warning),
 	eventReason("FileSystemResizeFailed", Warning),
 	eventReason("ProvisioningCleanupFailed", Warning),
 	eventReason("VolumeFailedRecycle", Warning),
 	eventReason("VolumeFailedDelete", Warning),
 	eventReason("ClaimLost", Critical),
 	eventReason("VolumeMismatch", Info),
-	eventReason("WarnAlreadyMountedVolume", Info),
 	// Endpoints, load balancers and the rest of the control plane. The
 	// Service detectors read the endpoint and load balancer failures
 	// from the Service itself, the namespace and CSR detectors from
 	// their conditions.
 	stateReason("FailedToCreateEndpoint"),
-	stateReason("FailedToCreateEndpointSlice"),
-	stateReason("FailedToDeleteEndpoint"),
 	stateReason("UpdateLoadBalancerFailed"),
 	stateReason("DeleteLoadBalancerFailed"),
 	stateReason("UnAvailableLoadBalancer"),
 	stateReason("SyncLoadBalancerFailed"),
-	stateReason("NamespaceDeletionContentFailure"),
 	eventReason("FailedToCreateRoute", Warning),
+	// Kubelet notices added since the first snapshot: advisory ones
+	// are Info, a mount, resize or certificate that failed is not.
+	eventReason("CgroupV1", Info),
+	eventReason("CheckLimitsForResolvConf", Warning),
+	eventReason("DNSConfigForming", Warning),
+	eventReason("MissingClusterDNS", Warning),
+	eventReason("FailedMountOnFilesystemMismatch", Critical),
+	eventReason("FailedNodeDeclaredFeaturesCheck", Warning),
+	eventReason("FailedToRetrieveImagePullSecret", Warning),
+	eventReason("HostIPsIPFamilyMismatch", Warning),
+	eventReason("InvalidImageID", Warning),
+	eventReason("LifecycleHTTPFallback", Info),
+	eventReason("PossibleMemoryBackedVolumesOnDisk", Info),
+	eventReason("VolumePermissionChangeInProgress", Info),
+	eventReason("ResizeDeferred", Info),
+	eventReason("ResizeInfeasible", Warning),
+	eventReason("ResizeError", Warning),
+	eventReason("CertificateExpired", Warning),
+	eventReason("CertificateOverdueForRefresh", Warning),
+	eventReason("Denied", Warning),
+	// More controller events. The Job, Deployment and CronJob ones are
+	// the reasons of conditions and specs the workload detectors read.
+	stateReason("FailedIndexes"), stateReason("MaxFailedIndexesExceeded"),
+	stateReason("ReplicaSetCreateError"),
+	// The PodDisruptionBudget detector finds overlapping budgets from
+	// the budgets themselves.
+	stateReason("MultiplePodDisruptionBudgets"),
+	stateReason("UnParseableCronJobSchedule"),
+	stateReason("UnparseableSchedule"), stateReason("UnsupportedSchedule"),
+	eventReason("ClaimMisbound", Warning),
+	eventReason("ConflictingController", Warning),
+	eventReason("DeletingNodeFailed", Warning),
+	eventReason("ExternalExpanding", Info),
+	eventReason("FailedGet", Warning),
+	eventReason("FailedUpdate", Warning),
+	eventReason("FailedResourceClaimCreation", Warning),
+	eventReason("FailedToListEndpointSlices", Warning),
+	eventReason("FailedToListPods", Warning),
+	eventReason("FailedWorkloadCompilation", Warning),
+	eventReason("FailedWorkloadCreate", Warning),
+	eventReason("InvalidIPAddress", Warning),
+	eventReason("KubernetesServiceCIDRError", Warning),
+	eventReason("MissSchedule", Warning),
+	eventReason("MultipleSELinuxLabels", Warning),
+	eventReason("NotDeleted", Warning),
+	eventReason("OwnerRefInvalidNamespace", Warning),
+	eventReason("RecyclerPod", Info),
+	eventReason("TooManyAddressesToMirror", Warning),
+	eventReason("TooManySucceededPods", Warning),
+	eventReason("UnknownCompletionMode", Warning),
+	eventReason("UnknownStrategy", Warning),
+	eventReason("UnknownTimeZone", Warning),
+	eventReason("VolumeUnknownReclaimPolicy", Warning),
 }

@@ -1,0 +1,11 @@
+POST /
+Content-Type: application/json
+
+{
+  "alertKey": "kwatch-dev-p-uni",
+  "details": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\nпаника: нехватка памяти — 内存不足",
+  "eventType": "ALERT",
+  "message": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).",
+  "priority": "HIGH",
+  "summary": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú."
+}

@@ -1,0 +1,11 @@
+POST /<secret>
+Content-Type: application/json
+
+{
+  "X-S4-ExternalID": "kwatch-dev-p-md",
+  "X-S4-Status": "new",
+  "message": "🔴 payments in shop is crash-looping.\nIt said boom *x* @channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop\n\nCluster: dev",
+  "severity": "critical",
+  "title": "🔴 payments in shop is crash-looping.",
+  "user": "kwatch"
+}

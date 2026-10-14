@@ -1,0 +1,8 @@
+POST /chat.postMessage
+Content-Type: application/x-www-form-urlencoded
+
+as_user=true
+blocks=[{"type":"section","text":{"type":"mrkdwn","text":"🔴 payments in shop is crash-looping. Last output:\n\n...","verbatim":true}},{"type":"section","text":{"type":"mrkdwn","text":"_Its recent output:_","verbatim":true}},{"type":"section","text":{"type":"mrkdwn","text":"```panic: out of memory```","verbatim":true}}]
+channel=C1
+text=🔴 payments in shop is crash-looping.
+token=<redacted>

@@ -1,0 +1,10 @@
+POST /
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "action": "close",
+  "dedup": "kwatch-dev-p-42",
+  "details": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+  "summary": "✅ payments in shop is healthy again."
+}

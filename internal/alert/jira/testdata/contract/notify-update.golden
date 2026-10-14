@@ -1,0 +1,7 @@
+POST /rest/api/2/issue/OPS-9/comment
+Content-Type: application/json
+Authorization: Basic <redacted>
+
+{
+  "body": "🔴 payments in shop is still crash-looping. It restarted 5 times now.\n\n{noformat}\npanic: out of memory\n{noformat}"
+}

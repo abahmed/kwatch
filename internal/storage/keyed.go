@@ -132,3 +132,34 @@ func (k Keyed[T]) decode(data []byte) (T, bool) {
 	}
 	return out, !h.expired(k.store.now())
 }
+
+// PurgeCorrupt deletes every value in the bucket that no longer decodes
+// and returns their keys, so the caller can log each one. Range and Get
+// only skip such a value, which leaves it in the file forever. Call it
+// where a lost value is better than a permanent hole, such as the outbox.
+func (k Keyed[T]) PurgeCorrupt() ([]string, error) {
+	var removed []string
+	err := k.store.update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(k.bucket))
+		var bad [][]byte
+		err := bucket.ForEach(func(key, data []byte) error {
+			var out T
+			if _, err := decodeValue(data, &out); err != nil {
+				bad = append(bad, append([]byte(nil), key...))
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		k.store.touch(k.bucket)
+		for _, key := range bad {
+			if err := bucket.Delete(key); err != nil {
+				return err
+			}
+			removed = append(removed, string(key))
+		}
+		return nil
+	})
+	return removed, err
+}

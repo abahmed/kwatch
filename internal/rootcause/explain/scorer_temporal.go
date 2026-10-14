@@ -63,10 +63,27 @@ func (v *view) groupStart(group inventory.EntityID) (start timeValue) {
 // layer; zero when unknown. See startOf.
 func (v *view) began(id inventory.EntityID) time.Time {
 	start := v.startOf(id)
-	if !start.ok {
+	if !start.ok || v.observedAtStart(start.t) {
 		return time.Time{}
 	}
 	return start.t
+}
+
+// observedAtStart reports a start at the moment kwatch began: after a
+// restart, findings first seen in its first sync carry the observation
+// time, so the moment says when kwatch noticed, not when the problem
+// began. Only a start within TemporalSlack of it counts; a later start
+// is a real time, from the cluster or seen live.
+func (v *view) observedAtStart(t time.Time) bool {
+	floor := v.s.Started
+	return !floor.IsZero() && !t.Before(floor.Add(-TemporalSlack)) &&
+		!t.After(floor.Add(TemporalSlack))
+}
+
+// predatesStart reports a time from before kwatch began observing.
+func (v *view) predatesStart(t time.Time) bool {
+	floor := v.s.Started
+	return !floor.IsZero() && t.Before(floor.Add(-TemporalSlack))
 }
 
 // scoreTemporal checks that the cause began before its effects. A
@@ -81,6 +98,13 @@ func scoreTemporal(v *view, c *candidate) outcome {
 	cause := v.candidateStart(c)
 	first := v.earliestSince(effects)
 	if !cause.ok || !first.ok {
+		return outcome{}
+	}
+	// A cause stamped at observation time compared with a failure the
+	// cluster dated before kwatch started mixes two clocks: the cause
+	// only looks late. Later failures were seen live, so the order
+	// holds.
+	if v.observedAtStart(cause.t) && v.predatesStart(first.t) {
 		return outcome{}
 	}
 	if cause.t.After(first.t.Add(TemporalSlack)) {

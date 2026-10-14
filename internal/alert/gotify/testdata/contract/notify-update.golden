@@ -1,0 +1,9 @@
+POST /message
+Content-Type: application/json
+X-Gotify-Key: <redacted>
+
+{
+  "message": "🔴 payments in shop is still crash-looping.",
+  "priority": 8,
+  "title": "kwatch"
+}

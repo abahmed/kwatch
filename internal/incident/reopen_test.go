@@ -76,6 +76,9 @@ func TestReopenedPageKeepsItsReminder(t *testing.T) {
 	resolved := resolvePage(t, r, 5*time.Minute)
 	failAgain(t, r, resolved, 10*time.Minute)
 	start := r.only().Announced
+	// A return that keeps failing pages once more (page_release.go).
+	wantAction(t, r.tick(start.Add(DefaultPageSettle+DefaultHold)), Update,
+		ReasonMaterialChange)
 	wantNone(t, r.tick(start.Add(PageRemindAfter-time.Second)))
 	wantAction(t, r.tick(start.Add(PageRemindAfter)), Update, ReasonReminder)
 }

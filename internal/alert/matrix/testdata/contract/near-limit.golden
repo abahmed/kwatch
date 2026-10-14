@@ -1,0 +1,10 @@
+PUT /_matrix/client/v3/rooms/%21room:example/send/m.room.message/kwatch-75f733e8466e8a5abefd3e5511923ad5
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "body": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[15972 runes sha256:1bbac22c1e6bae4b59d0381d]…xxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\npanic: out of memory",
+  "format": "org.matrix.custom.html",
+  "formatted_body": "🔴 payments in shop is crash-looping. Last output:\n<br>\n<pre>xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[16009 runes sha256:b989512de51205b8f4c33d7f]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</pre><pre><code>panic: out of memory</code></pre>",
+  "msgtype": "m.text"
+}

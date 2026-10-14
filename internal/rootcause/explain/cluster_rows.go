@@ -30,6 +30,18 @@ var clusterRows = []Row{
 		Prior:  0.7,
 	},
 	{
+		// The DNS servers' Deployment that runs but never gets ready
+		// is the same outage seen one level up.
+		Name: "cluster-dns-server-workload",
+		Cause: Side{Kind: kindClusterDNS, Modes: []detection.Mode{
+			detection.ModeUnavailable, detection.ModeActiveProbe,
+			ModeResolution}},
+		Link: LinkContains,
+		Effect: Side{Kind: kube.KindDeployment,
+			Modes: []detection.Mode{detection.ModeNeverReady}},
+		Prior: 0.7,
+	},
+	{
 		Name: "cluster-dns-failing",
 		Cause: Side{Kind: kindClusterDNS, Modes: []detection.Mode{
 			detection.ModeUnavailable, detection.ModeActiveProbe,
@@ -118,7 +130,7 @@ var clusterRows = []Row{
 	{
 		// Several failing nodes of one zone: an outage, not one
 		// broken node.
-		Name: "zone-failing",
+		Name: RowZoneFailing,
 		Cause: Side{Kind: kube.KindZone, Modes: []detection.Mode{
 			ModeMembersFailing}},
 		Link: LinkContains, Effect: anything, Prior: 0.6,
@@ -126,10 +138,21 @@ var clusterRows = []Row{
 	},
 	{
 		// Several failing nodes of one pool: often a bad node image.
-		Name: "nodepool-failing",
+		Name: RowNodePoolFailing,
 		Cause: Side{Kind: kube.KindNodePool,
 			Modes: []detection.Mode{ModeMembersFailing}},
 		Link: LinkContains, Effect: anything, Prior: 0.6,
 		MinCovered: 2,
 	},
 }
+
+// Names of the rows that blame failing nodes, for the incident layer to
+// recognise them.
+const (
+	// RowNodeNotReady blames one node that is not ready.
+	RowNodeNotReady = "node-not-ready"
+	// RowZoneFailing and RowNodePoolFailing blame a zone or a pool
+	// with several failing nodes.
+	RowZoneFailing     = "zone-failing"
+	RowNodePoolFailing = "nodepool-failing"
+)

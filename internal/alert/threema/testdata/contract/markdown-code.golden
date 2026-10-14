@@ -1,0 +1,10 @@
+POST /send_simple
+Content-Type: application/x-www-form-urlencoded
+
+from=*KWATCH1
+secret=<redacted>
+text=🔴 payments in shop is crash-looping.
+It said boom *x* @channel.
+Service web can't serve traffic. Run
+kubectl logs payments -n shop
+to=ABCD1234

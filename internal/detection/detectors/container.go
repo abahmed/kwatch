@@ -1,7 +1,9 @@
 package detectors
 
 import (
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -109,6 +111,9 @@ func waitingFinding(
 		Since:    valueSince(e, kube.AttrStateReason),
 		Summary:  containerRole(e) + " " + describeWaiting(reason),
 		Evidence: containerEvidence(e),
+	}
+	if reason == reasons.CreateConfigError {
+		s.Summary = containerRole(e) + " " + configErrorWords(ctx, e)
 	}
 	// A crash loop caused by the kernel OOM killer is an OOM incident; the
 	// back-off is only its consequence.
@@ -242,9 +247,6 @@ func describeWaiting(reason string) string {
 		return "cannot pull its image"
 	case reasons.InvalidImageName:
 		return "has an invalid image name"
-	case reasons.CreateConfigError:
-		return "cannot start: its configuration references something " +
-			"missing"
 	case reasons.ErrImageNeverPull:
 		return "cannot start: its image is not on the node and the " +
 			"pull policy is Never"
@@ -255,6 +257,33 @@ func describeWaiting(reason string) string {
 	default:
 		return "cannot start (" + reason + ")"
 	}
+}
+
+// missingRefMessage matches the kubelet's own wording for a Secret or
+// ConfigMap that is absent or lacks a referenced key.
+var missingRefMessage = regexp.MustCompile(`couldn't find key|` +
+	`(secret|configmap) "[^"]*" not found`)
+
+// configErrorWords says why a container's configuration failed. A
+// pod that references an object that does not exist is the missing
+// reference; anything else (runAsNonRoot with a root image, a bad
+// subPath, an invalid env var name) is the kubelet's own rejection,
+// whose text the evidence quotes.
+func configErrorWords(ctx detection.Context, e inventory.Entity) string {
+	const missing = "cannot start: its configuration references " +
+		"something missing"
+	if pod, ok := owningPod(ctx, e); ok {
+		if order, _ := missingObjects(ctx, pod); len(order) > 0 {
+			return missing
+		}
+	}
+	// A Secret or ConfigMap that exists without the key, or that the
+	// inventory has not synced yet, is named by the kubelet itself.
+	if missingRefMessage.MatchString(strings.ToLower(
+		text(e, kube.AttrMessage))) {
+		return missing
+	}
+	return "cannot start: the kubelet rejected its configuration"
 }
 
 func containerRole(e inventory.Entity) string {

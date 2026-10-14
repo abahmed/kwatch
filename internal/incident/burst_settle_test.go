@@ -5,7 +5,17 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
+
+// dnsDown is a page-tier failure of one DNS server pod. Each has a root
+// of its own, so a few of them are a burst of pages. (Nodes would not
+// be: nodes that fail together share one incident.)
+func dnsDown(name string) detection.Finding {
+	return sig(entity(kube.KindPod, name), reasons.CoreDNSUnavailable,
+		detection.Critical)
+}
 
 // Three page-tier incidents opening together are a burst: none is
 // announced at the page settle, so the cause they share can surface; all
@@ -13,9 +23,7 @@ import (
 func TestManagerBurstOfPagesTakesTheFullSettle(t *testing.T) {
 	r := newRig(t, Config{})
 	r.raise(at(0),
-		sig(entity("node", "n1"), "NodeNotReady", detection.Critical),
-		sig(entity("node", "n2"), "NodeNotReady", detection.Critical),
-		sig(entity("node", "n3"), "NodeNotReady", detection.Critical))
+		dnsDown("dns-1"), dnsDown("dns-2"), dnsDown("dns-3"))
 
 	wantNone(t, r.tick(at(DefaultPageSettle)))
 	wantNone(t, r.tick(at(DefaultSettle-time.Second)))
@@ -35,8 +43,7 @@ func TestManagerBurstOfPagesTakesTheFullSettle(t *testing.T) {
 func TestManagerTwoPagesStillSettleFast(t *testing.T) {
 	r := newRig(t, Config{})
 	r.raise(at(0),
-		sig(entity("node", "n1"), "NodeNotReady", detection.Critical),
-		sig(entity("node", "n2"), "NodeNotReady", detection.Critical))
+		dnsDown("dns-1"), dnsDown("dns-2"))
 
 	ds := r.tick(at(DefaultPageSettle))
 
@@ -49,13 +56,10 @@ func TestManagerTwoPagesStillSettleFast(t *testing.T) {
 // pages next to it still settle fast.
 func TestManagerSilentIncidentIsNotAPageBurst(t *testing.T) {
 	r := newRig(t, Config{})
-	quiet := entity("node", "n3")
-	r.raise(at(0),
-		sig(entity("node", "n1"), "NodeNotReady", detection.Critical),
-		sig(entity("node", "n2"), "NodeNotReady", detection.Critical),
-		sig(quiet, "NodeNotReady", detection.Critical))
+	quiet := dnsDown("dns-3")
+	r.raise(at(0), dnsDown("dns-1"), dnsDown("dns-2"), quiet)
 	r.m.mu.Lock()
-	r.m.lookup(quiet).Tier = Silent
+	r.m.lookup(quiet.Entity).Tier = Silent
 	r.m.mu.Unlock()
 
 	ds := r.tick(at(DefaultPageSettle))

@@ -1,0 +1,12 @@
+{
+  "name": "config-run-as-non-root-rejected",
+  "description": "New pods fail with CreateContainerConfigError because the image runs as root under runAsNonRoot.",
+  "root": "deployment/billing/ledger",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "zone//zone-a"
+  ]
+}

@@ -1,0 +1,9 @@
+POST /cgi-bin/webhook/send?key=<redacted>
+Content-Type: application/json
+
+{
+  "markdown": {
+    "content": "🔴 payments in shop is crash-looping.\nIt said boom *x* @​channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop"
+  },
+  "msgtype": "markdown"
+}

@@ -54,11 +54,11 @@ func (t *Translator) Added(
 func (t *Translator) Updated(
 	old, new any, at time.Time,
 ) []inventory.Observation {
-	desc, ok := t.schema.Describe(new)
-	if !ok {
+	if sameVersion(old, new) {
 		return nil
 	}
-	if sameVersion(old, new) {
+	desc, ok := t.schema.Describe(new)
+	if !ok {
 		return nil
 	}
 	if oldDesc, ok := t.schema.Describe(old); ok &&

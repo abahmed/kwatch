@@ -1,0 +1,26 @@
+POST /open-apis/bot/v2/hook/<secret>
+Content-Type: application/json
+
+{
+  "card": {
+    "config": {
+      "wide_screen_mode": true
+    },
+    "elements": [
+      {
+        "content": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\n```\nпаника: нехватка памяти — 内存不足\n```",
+        "tag": "markdown"
+      }
+    ],
+    "header": {
+      "template": "blue",
+      "title": {
+        "content": "kwatch",
+        "tag": "plain_text"
+      }
+    }
+  },
+  "msg_type": "interactive",
+  "sign": "qJbt/v6FGJJmxiWuBSnv0V/Ij0UAJAzorbHjGAGoX8c=",
+  "timestamp": "1767323045"
+}

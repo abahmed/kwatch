@@ -15,9 +15,9 @@ var workloadReasons = []ReasonInfo{
 	reason(reasons.ScalingDisabled, ModeScalingDisabled),
 	reason(reasons.FailedGetResourceMetric, ModeScalingNoMetrics).digest().shown(),
 	reason(reasons.FailedComputeMetricsReplicas, ModeScalingNoMetrics).shown(),
-	reason(reasons.FailedGetMetrics, ModeScalingNoMetrics),
 	reason(reasons.FailedGetScale, ModeScalingTargetMissing).shown(),
-	reason(reasons.FailedUpdateScale, ModeScalingUpdateFailed).shown(),
+	// A condition reason only: the matching event is FailedRescale.
+	reason(reasons.FailedUpdateScale, ModeScalingUpdateFailed),
 	reason(reasons.HPAInvalidSelector, ModeScalingInvalidSelector),
 	reason(reasons.HPAMaxedOut, ModeScalingMaxedOut).causeOnly(),
 	reason(reasons.StatefulSetCondition, ModeConditionFailure),
@@ -81,6 +81,7 @@ var workloadReasons = []ReasonInfo{
 		event(Critical),
 	reason(reasons.VolumeDetachFailure, ModeVolumeDetachFailed),
 	reason(reasons.VolumeAttachWaiting, ModeVolumeAttachWaiting),
+	reason(reasons.VolumeMultiAttach, ModeVolumeMultiAttach),
 	reason(reasons.ProvisioningFailed, ModeVolumeProvisioningFailed).
 		event(Warning),
 	reason(reasons.FailedMapVolume, ModeVolumeMapFailed).event(Critical),

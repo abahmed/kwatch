@@ -233,6 +233,7 @@ const (
 	ModeDevicePrepareFailed           Mode = "Device.PrepareFailed"
 	ModeVolumeDetachFailed            Mode = "Volume.DetachFailed"
 	ModeVolumeAttachWaiting           Mode = "Volume.AttachWaiting"
+	ModeVolumeMultiAttach             Mode = "Volume.MultiAttach"
 	ModeVolumeProvisioningFailed      Mode = "Volume.ProvisioningFailed"
 	ModeVolumeMapFailed               Mode = "Volume.MapFailed"
 	ModeCertificateDenied             Mode = "Certificate.Denied"

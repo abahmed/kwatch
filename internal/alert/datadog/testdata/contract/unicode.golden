@@ -1,0 +1,14 @@
+POST /api/v1/events
+Content-Type: application/json
+DD-API-KEY: <redacted>
+DD-APPLICATION-KEY: <redacted>
+
+{
+  "aggregation_key": "kwatch-dev-p-uni",
+  "alert_type": "error",
+  "tags": [
+    "cluster:dev"
+  ],
+  "text": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\nLast output:\nпаника: нехватка памяти — 内存不足",
+  "title": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú."
+}

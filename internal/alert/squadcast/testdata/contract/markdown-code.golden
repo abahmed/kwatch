@@ -1,0 +1,10 @@
+POST /
+Content-Type: application/json
+
+{
+  "description": "🔴 payments in shop is crash-looping.\nIt said boom *x* @channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop",
+  "event_id": "kwatch-dev-p-md",
+  "message": "🔴 payments in shop is crash-looping.",
+  "severity": "critical",
+  "status": "trigger"
+}

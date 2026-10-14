@@ -1,0 +1,6 @@
+POST /hooks/<secret>
+Content-Type: application/json
+
+{
+  "text": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[3014 runes sha256:21503a9ec1ea6a0b9ce6d23c]…xxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\n> panic: out of memory"
+}

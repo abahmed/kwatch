@@ -134,33 +134,6 @@ func TestEntityIDIsZero(t *testing.T) {
 	}
 }
 
-func TestEntityClone(t *testing.T) {
-	original := Entity{
-		ID:  EntityID{Kind: "pod", Namespace: "default", Name: "my-pod"},
-		UID: "uid-12345",
-		Attributes: map[string]Attribute{
-			"status": {Value: Text("running")},
-		},
-	}
-
-	cloned := original.clone()
-
-	// Verify contents match
-	assert.Equal(t, original.ID, cloned.ID)
-	assert.Equal(t, original.UID, cloned.UID)
-	assert.Equal(t, original.Attributes, cloned.Attributes)
-
-	// Verify independence: mutating cloned.Attributes doesn't affect original
-	cloned.Attributes["status"] = Attribute{Value: Text("terminated")}
-	assert.Equal(t, "running", original.Attributes["status"].Value.AsText())
-	assert.Equal(t, "terminated", cloned.Attributes["status"].Value.AsText())
-
-	// Verify new map was created
-	cloned.Attributes["new"] = Attribute{Value: Text("added")}
-	_, exists := original.Attributes["new"]
-	assert.False(t, exists)
-}
-
 func TestAttributeAccess(t *testing.T) {
 	e := Entity{
 		ID: EntityID{Kind: "pod", Namespace: "default", Name: "my-pod"},

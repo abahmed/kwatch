@@ -6,6 +6,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // unknownNodeText says what kwatch cannot know when the kubelet went
@@ -44,6 +45,9 @@ func nodeWhyText(f caseFacts) string {
 	text := ""
 	if said := evidence(f.lead, "error", "message"); said != "" {
 		text = "It reports " + quoted(specificPart(said))
+		if cert := explain.CertificateError(said); cert != "" {
+			text = "Its kubelet reports " + quoted(cert)
+		}
 	}
 	conditions := evidenceAll(f.lead, detection.EvidenceNodeCondition)
 	events := evidenceAll(f.lead, detection.EvidenceNodeEvent)

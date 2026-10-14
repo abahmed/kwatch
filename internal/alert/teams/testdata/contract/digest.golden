@@ -1,0 +1,30 @@
+POST /
+Content-Type: application/json
+
+{
+  "attachments": [
+    {
+      "content": {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "body": [
+          {
+            "text": "kwatch started and found 2 problems",
+            "type": "TextBlock",
+            "weight": "Bolder",
+            "wrap": true
+          },
+          {
+            "text": "🟠 kwatch started and found 2 problems that were there.",
+            "type": "TextBlock",
+            "wrap": true
+          }
+        ],
+        "type": "AdaptiveCard",
+        "version": "1.2"
+      },
+      "contentType": "application/vnd.microsoft.card.adaptive"
+    }
+  ],
+  "text": "🟠 kwatch started and found 2 problems that were there.",
+  "title": "kwatch started and found 2 problems"
+}

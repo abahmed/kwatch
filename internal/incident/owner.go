@@ -16,7 +16,12 @@ func (m *Manager) ownerOf(p *Incident) string {
 	if m.model == nil {
 		return ""
 	}
-	id := p.Root
+	return m.ownerOfEntity(p.Root)
+}
+
+// ownerOfEntity is the owner of one entity by the same walk.
+func (m *Manager) ownerOfEntity(root inventory.EntityID) string {
+	id := root
 	for depth := 0; depth < maxOwnerDepth; depth++ {
 		if owner := m.ownerAttribute(id); owner != "" {
 			return owner
@@ -27,11 +32,46 @@ func (m *Manager) ownerOf(p *Incident) string {
 		}
 		id = owners[0]
 	}
-	if p.Root.Namespace == "" {
+	if root.Namespace == "" {
 		return ""
 	}
 	return m.ownerAttribute(
-		inventory.CoreID(kube.KindNamespace, "", p.Root.Namespace))
+		inventory.CoreID(kube.KindNamespace, "", root.Namespace))
+}
+
+// reachOf is who a cluster-scoped incident (a node, a zone) touches, for
+// routing: the owners and namespaces of its members and of the pods on
+// its nodes. A node has no owner and no namespace, and its pods fail
+// minutes after it does, so without this the first message would reach
+// no team. An incident with a namespaced root keeps the root's owner.
+func (m *Manager) reachOf(p *Incident) (owners, namespaces []string) {
+	if m.model == nil || p.Root.Namespace != "" {
+		return ownersOf(p.Owner), nil
+	}
+	owned, spaces := map[string]bool{}, map[string]bool{}
+	visit := func(id inventory.EntityID) {
+		if id.Namespace != "" {
+			spaces[id.Namespace] = true
+		}
+		if owner := m.ownerOfEntity(id); owner != "" {
+			owned[owner] = true
+		}
+	}
+	nodes := []inventory.EntityID{p.Root}
+	for _, f := range p.Members {
+		visit(f.Entity)
+		nodes = append(nodes, f.Entity)
+	}
+	for _, node := range nodes {
+		if node.Kind != kube.KindNode {
+			continue
+		}
+		for _, pod := range m.model.Related(node, inventory.RunsOn,
+			inventory.Incoming) {
+			visit(pod)
+		}
+	}
+	return sortedKeys(owned), sortedKeys(spaces)
 }
 
 func (m *Manager) ownerAttribute(id inventory.EntityID) string {

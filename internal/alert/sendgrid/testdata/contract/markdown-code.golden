@@ -1,0 +1,28 @@
+POST /
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "content": [
+    {
+      "type": "text/plain",
+      "value": "🔴 payments in shop is crash-looping.\nIt said boom *x* @channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop"
+    }
+  ],
+  "from": {
+    "email": "kwatch@example.com"
+  },
+  "personalizations": [
+    {
+      "to": [
+        {
+          "email": "ops@example.com"
+        },
+        {
+          "email": "oncall@example.com"
+        }
+      ]
+    }
+  ],
+  "subject": "🔴 payments in shop is crash-looping."
+}

@@ -123,21 +123,7 @@ func (Missing) Detect(
 	}
 	running := text(e, kube.AttrPhase) == "Running" &&
 		flag(e, kube.AttrReady)
-	missing := make(map[string][]string)
-	var missingReasons []string
-	for _, id := range ctx.Model.Related(
-		e.ID, inventory.References, inventory.Outgoing,
-	) {
-		reason := missingReason(id.Kind)
-		if reason == "" || !ctx.Synced(id.Kind) || ctx.Model.Exists(id) ||
-			kube.OptionalReference(e, id) {
-			continue
-		}
-		if missing[reason] == nil {
-			missingReasons = append(missingReasons, reason)
-		}
-		missing[reason] = append(missing[reason], id.Name)
-	}
+	missingReasons, missing := missingObjects(ctx, e)
 	out := make([]detection.Finding, 0, len(missingReasons))
 	for _, reason := range missingReasons {
 		names := missing[reason]
@@ -161,6 +147,30 @@ func (Missing) Detect(
 		})
 	}
 	return out
+}
+
+// missingObjects lists what a pod references that does not exist, by
+// finding reason, with the reasons in the order they were met.
+// References marked optional and kinds not yet synced are skipped.
+func missingObjects(
+	ctx detection.Context, pod inventory.Entity,
+) ([]string, map[string][]string) {
+	missing := make(map[string][]string)
+	var order []string
+	for _, id := range ctx.Model.Related(
+		pod.ID, inventory.References, inventory.Outgoing,
+	) {
+		reason := missingReason(id.Kind)
+		if reason == "" || !ctx.Synced(id.Kind) || ctx.Model.Exists(id) ||
+			kube.OptionalReference(pod, id) {
+			continue
+		}
+		if missing[reason] == nil {
+			order = append(order, reason)
+		}
+		missing[reason] = append(missing[reason], id.Name)
+	}
+	return order, missing
 }
 
 func missingReason(kind inventory.Kind) string {

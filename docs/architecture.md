@@ -235,7 +235,6 @@ one bucket per data class:
 | `baselines` | Rolling per-workload statistics over 7 days: restarts, readiness, memory, Warning events | Dropped 7 days after the workload is gone |
 | `evidence` | Log excerpts and termination messages | 30 days, at most 128 MiB |
 | `timeline` | Health transitions, changes, events, decisions | 7 days, at most 32 MiB |
-| `audit` | One entry per incident decision | 30 days |
 | `fingerprints` | Last seen digest per object | No expiry |
 | `state` | Cluster identity, version, startup and telemetry markers (with the pending digest and what digests listed in full today), each workload's last healthy time, the flight recorder's pseudonym salt, and the 7-day counts behind the cause self-check and the unexplained list in `/status` | No expiry; a healthy time lasts 7 days; the counts hold 7 days |
 | `flight` | The flight recorder: sanitized, compressed batches of what the sources observed (names hashed, no messages), exported with `kwatch replay-export` | 48 hours, at most 64 MiB |

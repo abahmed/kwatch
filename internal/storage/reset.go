@@ -6,7 +6,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 
 	bolt "go.etcd.io/bbolt"
 	berrors "go.etcd.io/bbolt/errors"
@@ -29,6 +31,9 @@ type Reset struct {
 	// OldVersion is the schema version found in the file; zero when the
 	// file was unreadable or had no version.
 	OldVersion uint64
+	// CarriedRecords is how many queued deliveries and thread ids were
+	// copied from the old file into the fresh one.
+	CarriedRecords int
 }
 
 // unusableError marks a file that must be reset rather than reported.
@@ -43,46 +48,96 @@ func (e *unusableError) Error() string {
 		e.reason, e.version, e.cause)
 }
 
-// corruptSuffix names the quarantined copy of a state file that Open
-// replaced. Only one copy is kept: a later reset overwrites it.
+// corruptSuffix starts the name of a quarantined copy of a state file that
+// Open replaced. The full name is path + corruptSuffix + "." + a UTC
+// timestamp, so a later reset never overwrites an earlier copy.
 const corruptSuffix = ".corrupt"
+
+// keptCopies is how many quarantined copies stay on the volume. Older ones
+// are deleted when a new reset adds one.
+const keptCopies = 2
 
 // maxKeptShare is the part of a volume limit the quarantined copy may use:
 // one in this many bytes. A larger copy would eat the budget the fresh file
 // and its later rewrite need, so it is deleted instead.
 const maxKeptShare = 4
 
-// resetFile moves the unusable file at path aside to path+".corrupt" and
-// opens a fresh store in its place, so an operator can still inspect it or
-// recover the outbox from it. With a volume limit the copy is kept only
-// when it fits in a quarter of that limit. The fresh open is not retried,
-// so a bad disk fails instead of looping through resets.
+// resetFile moves the unusable file at path aside to a timestamped
+// path+".corrupt.<time>" copy and opens a fresh store in its place, so an
+// operator can still inspect it. After a schema change the queued
+// deliveries and thread ids are copied into the fresh file (see
+// reset_carry.go). With a volume limit the copy is kept only when it fits
+// in a quarter of that limit. The fresh open is not retried, so a bad disk
+// fails instead of looping through resets.
 func resetFile(
-	path string, bad *unusableError, volumeLimit int64,
-) (*bolt.DB, error) {
-	aside := path + corruptSuffix
+	path string, bad *unusableError, volumeLimit int64, now time.Time,
+) (*bolt.DB, int, error) {
+	aside := freeCopyName(path, now)
 	if err := quarantine(path, aside); err != nil {
-		return nil, fmt.Errorf("store: set aside %s: %w", path, err)
+		return nil, 0, fmt.Errorf("store: set aside %s: %w", path, err)
 	}
+	db, err := openChecked(path)
+	if err != nil {
+		return nil, 0, fmt.Errorf("store: open fresh %s: %w", path, err)
+	}
+	carried := 0
+	if bad.reason == ResetSchemaMismatch {
+		carried = carryRecords(aside, db)
+	}
+	pruneCopies(path, aside)
 	kept := trimQuarantine(aside, volumeLimit)
 	if kept {
 		klog.ErrorS(bad.cause, "state store reset: the old file was kept",
 			"component", "state", "operation", "reset",
 			"reason", bad.reason, "oldVersion", bad.version,
-			"supportedVersion", SchemaVersion, "keptAs", aside)
+			"supportedVersion", SchemaVersion, "keptAs", aside,
+			"carriedRecords", carried)
 	} else {
 		klog.ErrorS(bad.cause, "state store reset: the old file was "+
 			"deleted because it would not fit the volume limit",
 			"component", "state", "operation", "reset",
 			"reason", bad.reason, "oldVersion", bad.version,
 			"supportedVersion", SchemaVersion,
-			"volumeLimitBytes", volumeLimit)
+			"volumeLimitBytes", volumeLimit, "carriedRecords", carried)
 	}
-	db, err := openChecked(path)
+	return db, carried, nil
+}
+
+// freeCopyName returns an unused quarantine name for path at time now. A
+// clock that repeats a time gets a counter so no copy is overwritten.
+func freeCopyName(path string, now time.Time) string {
+	base := path + corruptSuffix + "." +
+		now.UTC().Format("20060102T150405.000000Z")
+	name := base
+	for n := 1; ; n++ {
+		if _, err := os.Lstat(name); err != nil {
+			return name
+		}
+		name = fmt.Sprintf("%s%02d", base, n)
+	}
+}
+
+// keptCopiesOf lists the quarantined copies of path, oldest first. The
+// timestamp in the name sorts in time order.
+func keptCopiesOf(path string) []string {
+	names, err := filepath.Glob(path + corruptSuffix + ".*")
 	if err != nil {
-		return nil, fmt.Errorf("store: open fresh %s: %w", path, err)
+		return nil
 	}
-	return db, nil
+	sort.Strings(names)
+	return names
+}
+
+// pruneCopies deletes the oldest quarantined copies beyond keptCopies. The
+// copy just made is the newest, so it is never the one removed.
+func pruneCopies(path, newest string) {
+	copies := keptCopiesOf(path)
+	for len(copies) > keptCopies {
+		if copies[0] != newest {
+			_ = os.Remove(copies[0])
+		}
+		copies = copies[1:]
+	}
 }
 
 // trimQuarantine deletes the quarantined file when a volume limit is set and
@@ -102,8 +157,7 @@ func trimQuarantine(aside string, volumeLimit int64) bool {
 	return os.Remove(aside) != nil
 }
 
-// quarantine renames path to aside, replacing an older quarantined file,
-// and makes the rename durable.
+// quarantine renames path to aside and makes the rename durable.
 func quarantine(path, aside string) error {
 	if err := os.Rename(path, aside); err != nil {
 		return err
@@ -236,9 +290,19 @@ func initialise(db *bolt.DB) error {
 				return err
 			}
 		}
+		// Older releases kept an audit bucket nothing read. Dropping it
+		// frees its pages; a missing bucket is the normal case.
+		if err := tx.DeleteBucket(legacyAuditBucket); err != nil &&
+			!errors.Is(err, berrors.ErrBucketNotFound) {
+			return err
+		}
 		return meta.Put(versionKey, writeUint(SchemaVersion))
 	})
 }
+
+// legacyAuditBucket is the name of the removed audit bucket. Decisions
+// are audited in the file or stdout log (internal/audit), not the store.
+var legacyAuditBucket = []byte("audit")
 
 // checkVersion returns an *unusableError when the file has another
 // schema version. A new, empty file has no version yet and passes.

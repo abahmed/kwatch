@@ -7,9 +7,9 @@ package detection
 // detected from object state has an Event severity. Reasons that state
 // already shows (BackOff, Unhealthy, FailedScheduling, Evicted, HPA and
 // Job conditions) stay evidence only, so nothing is reported twice; they
-// are marked shown. Webhook failures surface as FailedCreate;
-// cluster-autoscaler's NotTriggerScaleUp is a Normal event, which is
-// never ingested.
+// are marked shown. Webhook failures surface as FailedCreate, there is
+// no FailedCallingWebhook event; cluster-autoscaler's NotTriggerScaleUp
+// is a Normal event, which is never ingested.
 var eventOnlyReasons = []ReasonInfo{
 	eventReason("FailedMount", Critical).
 		label("can't mount a volume"),
@@ -31,6 +31,10 @@ var eventOnlyReasons = []ReasonInfo{
 	// A container waiting state that is a failure.
 	{Reason: "RunContainerError", Waiting: Critical},
 	{Reason: "PreCreateHookError", Waiting: Critical},
+	// Passed through from the CRI: the image cannot be used as it is.
+	{Reason: "SignatureValidationFailed", Waiting: Critical},
+	{Reason: "RROUnsupported", Waiting: Critical},
+	{Reason: "ImageVolumeMountFailed", Waiting: Critical},
 	stateReason("BackOff"), stateReason("Unhealthy"),
 	stateReason("Failed"), stateReason("Killing"),
 	stateReason("Preempting"), stateReason("Preempted"),
@@ -38,7 +42,7 @@ var eventOnlyReasons = []ReasonInfo{
 	stateReason("BackoffLimitExceeded"), stateReason("TooManyMissedTimes"),
 	stateReason("FailedToUpdateEndpointSlices"),
 	stateReason("FailedToUpdateEndpoint"),
-	stateReason("OOMKilling"), stateReason("FailedCallingWebhook"),
+	stateReason("OOMKilling"),
 	stateReason("FailedValidation"), stateReason("NoPods"),
 	stateReason("CalculateExpectedPodCountFailed"),
 }

@@ -53,6 +53,10 @@ func livenessStartText(m detection.Finding, name, gives string) string {
 	if n := evidence(m, detection.EvidenceStartSamples); n != "" {
 		text += " (last " + n + " starts)"
 	}
-	return text + ", so it is killed before it finishes starting. " +
-		"A startupProbe or a longer delay would let it start."
+	return text + ", " + livenessStartRemedy
 }
+
+// livenessStartRemedy says what the numbers mean and what would fix it.
+// The joined why-now sentence repeats it when it carries the numbers.
+const livenessStartRemedy = "so it is killed before it finishes " +
+	"starting. A startupProbe or a longer delay would let it start."

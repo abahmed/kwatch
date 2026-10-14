@@ -23,7 +23,7 @@ func TestRichBodyJiraWiki(t *testing.T) {
 	got := RichBody(providertest.Rich(), notification.JiraDialect(),
 		"{noformat}")
 	for _, want := range []string{"🔴 *payments* in *shop*",
-		"{{boom *x* @​channel}}",
+		`{{boom \*x\* @​channel}}`,
 		"{noformat}\nkubectl logs payments -n shop\n{noformat}"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)

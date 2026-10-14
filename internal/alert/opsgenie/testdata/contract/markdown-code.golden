@@ -1,0 +1,15 @@
+POST /v2/alerts
+Content-Type: application/json
+Authorization: GenieKey <redacted>
+
+{
+  "alias": "kwatch-dev-p-md",
+  "description": "🔴 payments in shop is crash-looping.\nIt said boom *x* @channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop",
+  "details": {
+    "Cluster": "dev",
+    "Namespace": "shop",
+    "Reason": "OOMKilled"
+  },
+  "message": "🔴 payments in shop is crash-looping.",
+  "priority": "P1"
+}

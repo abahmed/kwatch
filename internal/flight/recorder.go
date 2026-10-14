@@ -141,15 +141,17 @@ func (r *Recorder) Flush() {
 	batch, dropped := r.pending, r.dropped
 	r.pending = nil
 	r.mu.Unlock()
-	entries := r.withoutRepeats(batch)
+	entries, marks := r.withoutRepeats(batch)
 	for len(entries) > 0 {
 		n := min(len(entries), maxBatchEntries)
 		if err := r.ring.Append(entries[:n]); err != nil {
 			r.failed += n
 			klog.V(1).InfoS("flight: write failed; entries dropped",
 				"component", "flight", "operation", "write", "error", err)
+		} else {
+			r.remember(marks[:n])
 		}
-		entries = entries[n:]
+		entries, marks = entries[n:], marks[n:]
 	}
 	if dropped > 0 || r.failed > 0 {
 		klog.V(2).InfoS("flight: recording is losing entries",
@@ -158,41 +160,73 @@ func (r *Recorder) Flush() {
 	}
 }
 
-// withoutRepeats drops the Observed and Related entries that repeat the
-// state recorded for the same key less than refreshEvery ago.
-func (r *Recorder) withoutRepeats(in []replay.Entry) []replay.Entry {
-	out := in[:0:0]
-	for _, entry := range in {
-		if !r.repeat(entry) {
-			out = append(out, entry)
-		}
-	}
-	return out
+// seenMark is the state to remember for a key once its entry is written.
+type seenMark struct {
+	key   string
+	state seenState
+	ok    bool
 }
 
-func (r *Recorder) repeat(entry replay.Entry) bool {
+// withoutRepeats drops the Observed and Related entries that repeat the
+// state recorded for the same key less than refreshEvery ago. It returns
+// a mark for each kept entry; the state is remembered only after the
+// entry is written, so a failed write never hides the next observation.
+func (r *Recorder) withoutRepeats(
+	in []replay.Entry,
+) ([]replay.Entry, []seenMark) {
+	out := in[:0:0]
+	var marks []seenMark
+	batch := map[string]seenState{}
+	for _, entry := range in {
+		mark, skip := r.repeat(entry, batch)
+		if !skip {
+			out = append(out, entry)
+			marks = append(marks, mark)
+		}
+	}
+	return out, marks
+}
+
+// remember records the written entries' states.
+func (r *Recorder) remember(marks []seenMark) {
+	for _, m := range marks {
+		if !m.ok {
+			continue
+		}
+		if _, known := r.seen[m.key]; !known && len(r.seen) >= maxKeys {
+			r.seen = map[string]seenState{}
+		}
+		r.seen[m.key] = m.state
+	}
+}
+
+// repeat reports an entry that repeats its key's recorded state. Keys
+// already kept in this batch (not yet written) count as recorded.
+func (r *Recorder) repeat(
+	entry replay.Entry, batch map[string]seenState,
+) (seenMark, bool) {
 	o := entry.Observation
 	if o.Kind != inventory.Observed && o.Kind != inventory.Related {
-		return false
+		return seenMark{}, false
 	}
 	key := o.Kind.String() + "|" + o.Source + "|" + o.Entity.String() +
 		"|" + string(o.Relation)
 	o.At = time.Time{}
 	data, err := json.Marshal(o)
 	if err != nil {
-		return false
+		return seenMark{}, false
 	}
 	state := seenState{sum: sha256.Sum256(data), at: entry.At}
-	prev, known := r.seen[key]
+	prev, known := batch[key]
+	if !known {
+		prev, known = r.seen[key]
+	}
 	if known && prev.sum == state.sum &&
 		entry.At.Sub(prev.at) < refreshEvery {
-		return true
+		return seenMark{}, true
 	}
-	if !known && len(r.seen) >= maxKeys {
-		r.seen = map[string]seenState{}
-	}
-	r.seen[key] = state
-	return false
+	batch[key] = state
+	return seenMark{key, state, true}, false
 }
 
 // ErrNoRecording is returned by Export when the window holds nothing.

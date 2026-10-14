@@ -1,0 +1,16 @@
+--- request 1 of 2
+GET /projects/group%2Fproject/issues?in=description&search=kwatchkeyc241fac44c71dde5&state=opened
+Content-Type: application/json
+PRIVATE-TOKEN: <redacted>
+
+(empty body)
+
+--- request 2 of 2
+POST /projects/group%2Fproject/issues
+Content-Type: application/json
+PRIVATE-TOKEN: <redacted>
+
+{
+  "description": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\n```\nпаника: нехватка памяти — 内存不足\n```\n\nRef: kwatchkeyc241fac44c71dde5",
+  "title": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú."
+}

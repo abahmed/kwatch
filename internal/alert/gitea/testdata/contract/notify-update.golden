@@ -1,0 +1,7 @@
+POST /repos/kwatch/kwatch/issues/5/comments
+Content-Type: application/json
+Authorization: token <redacted>
+
+{
+  "body": "🔴 payments in shop is still crash-looping. It restarted 5 times now.\n\n```\npanic: out of memory\n```"
+}

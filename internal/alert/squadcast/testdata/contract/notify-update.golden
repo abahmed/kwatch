@@ -1,0 +1,10 @@
+POST /
+Content-Type: application/json
+
+{
+  "description": "🔴 payments in shop is still crash-looping. It restarted 5 times now.\n\npanic: out of memory",
+  "event_id": "kwatch-dev-p-42",
+  "message": "🔴 payments in shop is still crash-looping.",
+  "severity": "critical",
+  "status": "trigger"
+}

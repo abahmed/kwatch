@@ -1,6 +1,8 @@
 package upstream
 
 import (
+	"os"
+	"regexp"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -63,10 +65,24 @@ func TestSnapshotHoldsTheModuleConstants(t *testing.T) {
 	}
 }
 
+// The generated corpus is for the Kubernetes release k8s.io/api is at;
+// moving one without the other fails here, offline.
+func TestCorpusMatchesTheModuleRelease(t *testing.T) {
+	mod, err := os.ReadFile("../../../go.mod")
+	assert.NoError(t, err)
+	m := regexp.MustCompile(`k8s\.io/api v0\.(\d+\.\d+)`).FindSubmatch(mod)
+	if assert.NotNil(t, m) {
+		assert.Equal(t, "v1."+string(m[1]), Tag,
+			"run make upstream-reasons after bumping k8s.io/api")
+	}
+}
+
 func TestSnapshotHasNoDuplicates(t *testing.T) {
 	for name, list := range map[string][]string{
 		"waiting": WaitingReasons, "terminated": TerminatedReasons,
 		"pod": PodReasons, "podCondition": PodConditionReasons,
+		"kubeletTerminated": KubeletTerminatedReasons,
+		"hpaCondition":      HPAConditionReasons,
 	} {
 		assert.Equal(t, len(list), len(set(list)), name)
 	}

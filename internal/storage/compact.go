@@ -30,7 +30,7 @@ const ctxCheckEvery = 1024
 // outboxMaxAge are dropped at restore), so it cannot grow without limit.
 // Evicting it here would silently lose queued notifications, which is
 // worse than the few megabytes it holds.
-var evictable = []Bucket{Evidence, Audit, Timeline, Changes, Flight}
+var evictable = []Bucket{Evidence, Timeline, Changes, Flight}
 
 // isEvictable reports whether the size cap may delete from b.
 func isEvictable(b Bucket) bool {

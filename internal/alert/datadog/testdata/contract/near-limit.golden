@@ -1,0 +1,14 @@
+POST /api/v1/events
+Content-Type: application/json
+DD-API-KEY: <redacted>
+DD-APPLICATION-KEY: <redacted>
+
+{
+  "aggregation_key": "kwatch-dev-p-big",
+  "alert_type": "error",
+  "tags": [
+    "cluster:dev"
+  ],
+  "text": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[3985 runes sha256:571589efcb0b01b3dd46d393]…xxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nLast output:\npanic: out of memory",
+  "title": "🔴 payments in shop is crash-looping."
+}

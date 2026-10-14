@@ -1,0 +1,20 @@
+POST /
+Content-Type: application/json
+Authorization: Bearer <redacted>
+
+{
+  "deduplication_key": "kwatch-dev-p-42",
+  "description": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+  "metadata": {
+    "cluster": "dev",
+    "namespaces": [
+      "shop"
+    ],
+    "reasons": [
+      "OOMKilled"
+    ],
+    "severity": "critical"
+  },
+  "status": "resolved",
+  "title": "✅ payments in shop is healthy again."
+}

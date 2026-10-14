@@ -17,6 +17,7 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory/kube/dynamicwatch"
 	"github.com/abahmed/kwatch/internal/kubeclient"
 	"github.com/abahmed/kwatch/internal/metrics"
+	"github.com/abahmed/kwatch/internal/safego"
 )
 
 // start runs one informer in the resource's watch mode and reports
@@ -62,22 +63,39 @@ func (d *DynamicSource) start(
 	// API refuses before it synced counts as a failure (see refuse).
 	metrics.DefaultRegistry().WatcherSyncs.Add(1)
 	d.wg.Add(1)
-	go func() {
-		defer d.wg.Done()
-		defer close(w.done)
-		if prev != nil && !stopped(resourceCtx, prev.done) {
-			return
-		}
-		informer.Run(resourceCtx.Done())
-	}()
+	go d.runInformer(resourceCtx, r, informer, w, prev)
 	if prev != nil {
 		d.wg.Add(1)
-		go func() {
-			defer d.wg.Done()
-			d.takeOver(resourceCtx, w)
-		}()
+		go d.takeOverSafely(resourceCtx, w)
 	}
 	return true
+}
+
+// runInformer runs the informer once its predecessor has stopped. A panic
+// parks the watch for a rebuild (see panicked).
+func (d *DynamicSource) runInformer(
+	ctx context.Context, r plannedResource,
+	informer cache.SharedIndexInformer, w, prev *dynamicWatch,
+) {
+	defer d.wg.Done()
+	defer close(w.done)
+	if prev != nil && !stopped(ctx, prev.done) {
+		return
+	}
+	began := d.cfg.Now()
+	err := safego.Run("dynamic-watch", func() error {
+		informer.Run(ctx.Done())
+		return nil
+	})
+	if err != nil {
+		d.panicked(r.gvr, w, err, d.cfg.Now().Sub(began))
+	}
+}
+
+// takeOverSafely runs takeOver; a panic ends only this handover.
+func (d *DynamicSource) takeOverSafely(ctx context.Context, w *dynamicWatch) {
+	defer d.wg.Done()
+	safego.Do("dynamic-takeover", func() { d.takeOver(ctx, w) })
 }
 
 // admissionFor returns the object admission of a new watch: the previous

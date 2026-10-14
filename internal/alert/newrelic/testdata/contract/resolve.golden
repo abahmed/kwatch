@@ -1,0 +1,20 @@
+POST /v1/accounts/1/events
+Content-Type: application/json
+Api-Key: <redacted>
+
+[
+  {
+    "action": "resolved",
+    "cluster": "dev",
+    "eventType": "KwatchAlert",
+    "incidentKey": "kwatch-dev-p-42",
+    "message": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+    "namespace": "shop",
+    "reason": "OOMKilled",
+    "revision": 3,
+    "severity": "critical",
+    "state": "resolved",
+    "status": "resolved",
+    "title": "✅ payments in shop is healthy again."
+  }
+]

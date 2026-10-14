@@ -37,7 +37,7 @@ func LintStrict() error {
 	// reported from the original bytes so line numbers match the file.
 	var tmp Config
 	if err := document.Decode(&tmp); err != nil {
-		return err
+		return scrubDecodeError(err)
 	}
 	return unknownKeysError(raw)
 }
@@ -136,6 +136,25 @@ func expandScalar(node *yaml.Node, unset map[string]bool) error {
 	return nil
 }
 
+// quotedValueRe finds the backtick-quoted value in a YAML type error.
+var quotedValueRe = regexp.MustCompile("`[^`]*`")
+
+// scrubDecodeError hides the offending value of a YAML type error. The
+// document is already expanded, so that value can be a secret read from a
+// ${file:} reference or an environment variable that landed in a field of
+// the wrong type.
+func scrubDecodeError(err error) error {
+	var typeErr *yaml.TypeError
+	if !errors.As(err, &typeErr) {
+		return err
+	}
+	clean := make([]string, len(typeErr.Errors))
+	for i, msg := range typeErr.Errors {
+		clean[i] = quotedValueRe.ReplaceAllString(msg, "<value>")
+	}
+	return &yaml.TypeError{Errors: clean}
+}
+
 // parseConfigFile reads CONFIG_FILE and unmarshals it over a fresh default
 // config. An unset CONFIG_FILE yields the defaults; a set one that does not
 // exist is an error.
@@ -180,6 +199,7 @@ func parseConfigFile() (*Config, error) {
 	}
 	if document != nil {
 		if err = document.Decode(config); err != nil {
+			err = scrubDecodeError(err)
 			klog.InfoS("unable to parse config file", "error", err.Error())
 			return nil, err
 		}

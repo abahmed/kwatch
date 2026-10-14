@@ -1,0 +1,13 @@
+POST /api/v1/messages
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic <redacted>
+
+content=🔴 **payments** in **shop** is crash-looping.
+It said `boom *x* @​channel`.
+Service **web** can't serve traffic. Run
+```
+kubectl logs payments -n shop
+```
+subject=kwatch alert
+to=alerts
+type=stream

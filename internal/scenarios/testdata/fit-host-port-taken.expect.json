@@ -1,0 +1,7 @@
+{
+  "name": "fit-host-port-taken",
+  "description": "A third replica asking for host port 8080 is Pending: both nodes already run a replica that holds the port.",
+  "root": "scheduling//didn't have free ports for the requested pod ports",
+  "tier": "notify",
+  "maxMessages": 2
+}

@@ -1,0 +1,11 @@
+{
+  "name": "csi-node-plugin-failing",
+  "description": "A pod cannot mount its volume because the CSI driver is not registered on its node, whose node plugin pod crash-loops.",
+  "root": "daemonset/kube-system/ebs-csi-node",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "15m0s"
+}

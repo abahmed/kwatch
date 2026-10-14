@@ -1,0 +1,43 @@
+--- request 1 of 4
+POST /v2/alerts
+Content-Type: application/json
+Authorization: GenieKey <redacted>
+
+{
+  "alias": "kwatch-dev-p-42",
+  "description": "🔴 payments in shop is still crash-looping. It restarted 5 times now.\n\npanic: out of memory",
+  "details": {
+    "Cluster": "dev",
+    "Namespace": "shop",
+    "Reason": "OOMKilled"
+  },
+  "message": "🔴 payments in shop is still crash-looping.",
+  "priority": "P1"
+}
+
+--- request 2 of 4
+PUT /v2/alerts/kwatch-dev-p-42/priority?identifierType=alias
+Content-Type: application/json
+Authorization: GenieKey <redacted>
+
+{
+  "priority": "P1"
+}
+
+--- request 3 of 4
+PUT /v2/alerts/kwatch-dev-p-42/message?identifierType=alias
+Content-Type: application/json
+Authorization: GenieKey <redacted>
+
+{
+  "message": "🔴 payments in shop is still crash-looping."
+}
+
+--- request 4 of 4
+PUT /v2/alerts/kwatch-dev-p-42/description?identifierType=alias
+Content-Type: application/json
+Authorization: GenieKey <redacted>
+
+{
+  "description": "🔴 payments in shop is still crash-looping. It restarted 5 times now.\n\npanic: out of memory"
+}

@@ -1,0 +1,16 @@
+POST /chat.postMessage
+Content-Type: application/x-www-form-urlencoded
+
+as_user=true
+blocks=[{"type":"section","text":{"type":"mrkdwn","text":"🔴 payments in shop is crash-looping. It said \"@​…[844 runes sha256:1a6ac9239337d535af007bb7]…026lt;​@U123\u0026gt; \u0026lt;​@W456\u0026gt; \u0026lt;​#C1|general\u0026gt;```","verbatim":true}}]
+channel=C1
+text=🔴 payments in shop is crash-looping. It said "@​channel @​everyone 
+lt;​!here
+gt; @​all 
+lt;​@U123
+gt; 
+lt;​@W456
+gt; 
+lt;​#C1|general
+gt;".
+token=<redacted>

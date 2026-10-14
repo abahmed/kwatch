@@ -1,0 +1,24 @@
+--- request 1 of 2
+GET /rest/api/2/search?fields=description&jql=project = "OPS" AND description ~ "kwatchkeyc241fac44c71dde5" AND statusCategory != Done&maxResults=5
+Content-Type: application/json
+Authorization: Basic <redacted>
+
+(empty body)
+
+--- request 2 of 2
+POST /rest/api/2/issue
+Content-Type: application/json
+Authorization: Basic <redacted>
+
+{
+  "fields": {
+    "description": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\n{noformat}\nпаника: нехватка памяти — 内存不足\n{noformat}\n\nRef: kwatchkeyc241fac44c71dde5",
+    "issuetype": {
+      "name": "Task"
+    },
+    "project": {
+      "key": "OPS"
+    },
+    "summary": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú."
+  }
+}

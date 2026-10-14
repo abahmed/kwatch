@@ -206,3 +206,18 @@ func (m *Manager) ResolvedQuietly(id string) bool {
 	p := m.incidents[id]
 	return p != nil && p.quiet
 }
+
+// HoldPage keeps incident id from paging: a page for the problems it was
+// announced with already went out. It notifies instead and keeps the
+// page's reminders, as a repeated page does; it pages again only when it
+// outlasts the hold (see releaseHeldPage).
+func (m *Manager) HoldPage(id string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if p := m.incidents[id]; p != nil && p.Tier == Page &&
+		!p.Delivery.OpenAtPagers() && !p.Delivery.PageHeld() {
+		p.Delivery.HoldAtNotify()
+		p.Tier = Notify
+		p.note(p.Announced, "announced with a page for the same moment")
+	}
+}
