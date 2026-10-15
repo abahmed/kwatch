@@ -35,7 +35,16 @@ type workerVectors struct {
 	} `json:"lease"`
 }
 
-func TestWorkerInterop(t *testing.T) {
+// interopFixture is the verifier, clock and binding the subtests share.
+type interopFixture struct {
+	vec  workerVectors
+	v    *Verifier
+	now  time.Time
+	want Binding
+}
+
+func loadInterop(t *testing.T) interopFixture {
+	t.Helper()
 	raw, err := os.ReadFile("testdata/worker_vectors.json")
 	if err != nil {
 		t.Fatal(err)
@@ -48,10 +57,31 @@ func TestWorkerInterop(t *testing.T) {
 	if err != nil || len(pub) != ed25519.PublicKeySize {
 		t.Fatalf("bad public key: %v", err)
 	}
-	v := NewVerifier(map[string]ed25519.PublicKey{vec.KID: pub})
-	now := time.Unix(vec.Now, 0).UTC()
+	b := vec.Lease.Binding
+	return interopFixture{
+		vec: vec,
+		v:   NewVerifier(map[string]ed25519.PublicKey{vec.KID: pub}),
+		now: time.Unix(vec.Now, 0).UTC(),
+		want: Binding{
+			LID: b.LID, ClusterUUID: b.ClusterUUID,
+			ClusterProof: b.ClusterProof, InstancePub: b.InstancePub,
+		},
+	}
+}
 
-	key, err := v.VerifyKey(vec.Key.Token, now)
+func TestWorkerInterop(t *testing.T) {
+	f := loadInterop(t)
+	t.Run("key", f.checkKey)
+	t.Run("cluster proof", f.checkClusterProof)
+	t.Run("lease", f.checkLease)
+	t.Run("grace and expiry", f.checkGraceAndExpiry)
+	t.Run("wrong binding", f.checkWrongBinding)
+	t.Run("evaluate", f.checkEvaluate)
+}
+
+func (f interopFixture) checkKey(t *testing.T) {
+	vec := f.vec
+	key, err := f.v.VerifyKey(vec.Key.Token, f.now)
 	if err != nil {
 		t.Fatalf("VerifyKey: %v", err)
 	}
@@ -59,20 +89,22 @@ func TestWorkerInterop(t *testing.T) {
 		key.Exp != vec.Key.Exp {
 		t.Errorf("key fields mismatch: %+v", key)
 	}
-	_, err = v.VerifyKey(vec.Key.Token, time.Unix(vec.Key.Exp, 0))
+	_, err = f.v.VerifyKey(vec.Key.Token, time.Unix(vec.Key.Exp, 0))
 	if !errors.Is(err, ErrExpired) {
 		t.Errorf("key at exp: want ErrExpired, got %v", err)
 	}
+}
 
-	b := vec.Lease.Binding
+func (f interopFixture) checkClusterProof(t *testing.T) {
+	b := f.vec.Lease.Binding
 	if got := ClusterProof(b.KubeSystemUID, b.LID); got != b.ClusterProof {
 		t.Errorf("cluster proof: Go %s != Worker %s", got, b.ClusterProof)
 	}
-	want := Binding{
-		LID: b.LID, ClusterUUID: b.ClusterUUID,
-		ClusterProof: b.ClusterProof, InstancePub: b.InstancePub,
-	}
-	lease, err := v.VerifyLease(vec.Lease.Token, want, now)
+}
+
+func (f interopFixture) checkLease(t *testing.T) {
+	vec := f.vec
+	lease, err := f.v.VerifyLease(vec.Lease.Token, f.want, f.now)
 	if err != nil {
 		t.Fatalf("VerifyLease: %v", err)
 	}
@@ -89,27 +121,35 @@ func TestWorkerInterop(t *testing.T) {
 	if lease.LicExp != vec.Key.Exp {
 		t.Errorf("lic_exp mismatch")
 	}
-	// Grace and hard expiry.
-	l, err := v.VerifyLease(vec.Lease.Token, want, time.Unix(vec.Lease.Exp+60, 0))
+}
+
+func (f interopFixture) checkGraceAndExpiry(t *testing.T) {
+	vec := f.vec
+	l, err := f.v.VerifyLease(
+		vec.Lease.Token, f.want, time.Unix(vec.Lease.Exp+60, 0))
 	if err != nil || !l.InGrace {
 		t.Errorf("expected grace, got %v %+v", err, l)
 	}
-	_, err = v.VerifyLease(vec.Lease.Token, want,
+	_, err = f.v.VerifyLease(vec.Lease.Token, f.want,
 		time.Unix(vec.Lease.Exp, 0).Add(Grace))
 	if !errors.Is(err, ErrLeaseExpired) {
 		t.Errorf("want ErrLeaseExpired, got %v", err)
 	}
-	// Wrong binding must be rejected.
-	bad := want
+}
+
+func (f interopFixture) checkWrongBinding(t *testing.T) {
+	bad := f.want
 	bad.InstancePub = "AAAA"
-	_, err = v.VerifyLease(vec.Lease.Token, bad, now)
+	_, err := f.v.VerifyLease(f.vec.Lease.Token, bad, f.now)
 	if !errors.Is(err, ErrBindingMismatch) {
 		t.Errorf("want ErrBindingMismatch, got %v", err)
 	}
-	// Full pipeline.
+}
+
+func (f interopFixture) checkEvaluate(t *testing.T) {
 	st := Evaluate(Inputs{
-		Verifier: v, KeyString: vec.Key.Token, Lease: vec.Lease.Token,
-		Binding: want, Now: now,
+		Verifier: f.v, KeyString: f.vec.Key.Token,
+		Lease: f.vec.Lease.Token, Binding: f.want, Now: f.now,
 	})
 	if st.State != StateActive {
 		t.Errorf("Evaluate state = %s (%s)", st.State, st.Reason)

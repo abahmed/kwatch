@@ -85,7 +85,25 @@ func TestLintSaysNothingAboutProForAPlainConfig(t *testing.T) {
 	if code := runLint(false, false, &out, &errOut); code != 0 {
 		t.Fatalf("code = %d", code)
 	}
-	if strings.Contains(out.String(), "info:") {
+	if strings.Contains(out.String(), "is a kwatch Pro feature") {
+		t.Fatalf("stdout = %q", out.String())
+	}
+}
+
+func TestLintNamesTheProDetectorsCommunityDoesNotRun(t *testing.T) {
+	path := t.TempDir() + "/config.yaml"
+	if err := os.WriteFile(path, []byte("app:\n  clusterName: dev\n"),
+		0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CONFIG_FILE", path)
+	var out, errOut bytes.Buffer
+
+	if code := runLint(false, false, &out, &errOut); code != 0 {
+		t.Fatalf("code = %d", code)
+	}
+	if !strings.Contains(out.String(),
+		"info: Pro detectors not running: ") {
 		t.Fatalf("stdout = %q", out.String())
 	}
 }

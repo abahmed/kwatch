@@ -35,6 +35,8 @@ type bootstrap struct {
 	// that it does not run.
 	entitlements feature.Entitlements
 	inactivePro  []string
+	// notice is what the edition does not run (detectors, provider cap).
+	notice editionNotice
 	// license is the licensing wiring built from the configuration.
 	license *licenseSetup
 }
@@ -42,7 +44,8 @@ type bootstrap struct {
 func newBootstrap(
 	ctx context.Context,
 	cfg *config.Config,
-	now func() time.Time, entitlements feature.Entitlements,
+	now func() time.Time, processStart time.Time,
+	entitlements feature.Entitlements,
 ) (*bootstrap, error) {
 	clockSource := clock.Func(now)
 	clients, err := kubeclient.NewClusterClientSet(&net.Resolver{}, clockSource)
@@ -58,6 +61,7 @@ func newBootstrap(
 	// reported next to the file's.
 	logConfigWarnings(cfg)
 	// Dropped after the overlay, so a KwatchConfig cannot enable Pro.
+	notice := newEditionNotice(entitlements, cfg)
 	cfg, inactive := applyEdition(cfg, entitlements)
 	// The overlay may change monitor and alert settings, so the snapshot
 	// and the clients that depend on it (outbound HTTP, kubelet) are built
@@ -69,16 +73,10 @@ func newBootstrap(
 	}
 
 	wake := &threadWake{}
-	deliveryManager := delivery.NewManagerWithDependencies(
-		delivery.Dependencies{
-			HTTPClient: clients.HTTP, Clock: clockSource,
-			OnDelivered: wake.Notify, Entitlements: entitlements,
-		},
-	)
-	if err := deliveryManager.InitRuntime(
-		runtime, catalog.NewProvider,
-	); err != nil {
-		return nil, fmt.Errorf("initialize delivery providers: %w", err)
+	deliveryManager, err := newDeliveryManager(
+		runtime, clients, clockSource, wake, entitlements)
+	if err != nil {
+		return nil, err
 	}
 	healthServer := newHealthServer(
 		runtime, clockSource, overlayInvalid, entitlements)
@@ -94,9 +92,29 @@ func newBootstrap(
 		heartbeat: heartbeat.NewHeartbeatMonitorWithRuntime(
 			runtime, clients.HTTP, healthServer.Ready),
 		clock: clockSource, threadWake: wake,
-		entitlements: entitlements, inactivePro: inactive,
-		license: newLicenseSetup(runtime),
+		entitlements: entitlements, inactivePro: inactive, notice: notice,
+		license: newLicenseSetup(runtime, processStart),
 	}, nil
+}
+
+// newDeliveryManager builds the delivery manager and its providers.
+func newDeliveryManager(
+	runtime config.RuntimeConfig, clients kubeclient.ClientSet,
+	clockSource clock.Clock, wake *threadWake,
+	entitlements feature.Entitlements,
+) (*delivery.Manager, error) {
+	manager := delivery.NewManagerWithDependencies(
+		delivery.Dependencies{
+			HTTPClient: clients.HTTP, Clock: clockSource,
+			OnDelivered: wake.Notify, Entitlements: entitlements,
+		},
+	)
+	if err := manager.InitRuntime(
+		runtime, catalog.NewProvider,
+	); err != nil {
+		return nil, fmt.Errorf("initialize delivery providers: %w", err)
+	}
+	return manager, nil
 }
 
 // permissionChecks is every permission the audit verifies. With

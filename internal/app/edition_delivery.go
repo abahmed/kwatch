@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -70,8 +71,10 @@ func isSet(value interface{}) bool {
 }
 
 // capProviders splits the configured providers into those the edition
-// runs and those beyond its cap. The kept ones are the first by sorted
-// name, so the choice does not depend on map order.
+// runs and those beyond its cap. The provider named by
+// app.communityProvider is kept first when it is configured; the rest are
+// kept by sorted name, so the choice does not depend on map order. A name
+// that is not configured is ignored here (config warns about it).
 func capProviders(
 	e feature.Entitlements, cfg *config.Config,
 ) (kept, dropped []string) {
@@ -80,7 +83,27 @@ func capProviders(
 	if limit <= 0 || len(names) <= limit {
 		return names, nil
 	}
+	if preferred := cfg.App.CommunityProvider; slices.Contains(
+		names, preferred) {
+		names = append([]string{preferred}, slices.DeleteFunc(
+			slices.Clone(names), func(n string) bool {
+				return n == preferred
+			})...)
+	}
 	return names[:limit], names[limit:]
+}
+
+// communitySends words the provider the capped edition sends to and the
+// ones it leaves inactive, for /status, the startup log and lint:
+// "slack (inactive: pagerduty)". It is empty when nothing is capped.
+func communitySends(e feature.Entitlements, cfg *config.Config) string {
+	kept, dropped := capProviders(e, cfg)
+	if len(dropped) == 0 {
+		return ""
+	}
+	sort.Strings(dropped)
+	return fmt.Sprintf("%s (inactive: %s)", strings.Join(kept, ", "),
+		strings.Join(dropped, ", "))
 }
 
 // activeProviders is the sorted names of the providers delivery would

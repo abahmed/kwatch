@@ -35,6 +35,9 @@ type serverDeps struct {
 	// is the Pro configuration it does not run, for /status.
 	entitlements feature.Entitlements
 	inactivePro  []string
+	// notice is what the edition does not run, for /status and the
+	// one-time upgrade message.
+	notice editionNotice
 	// edition is the edition the installation runs now. The leader's
 	// license manager updates it; the health server and standby replicas
 	// read it. It starts as the bootstrap edition.
@@ -66,6 +69,7 @@ func newServerDeps(
 		threadWake:       boot.threadWake,
 		entitlements:     boot.entitlements,
 		inactivePro:      boot.inactivePro,
+		notice:           boot.notice,
 		license:          boot.license,
 	}
 	deps.edition.Store(boot.entitlements)

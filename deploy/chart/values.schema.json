@@ -488,6 +488,10 @@
               "type": "boolean",
               "description": "Remove the note that names what kwatch Pro adds from Community messages"
             },
+            "communityProvider": {
+              "type": "string",
+              "description": "Alert provider the Community edition keeps when several are configured; empty keeps the first by name"
+            },
             "logFormatter": {
               "type": "string",
               "enum": [

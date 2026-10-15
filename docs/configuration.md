@@ -160,6 +160,7 @@ talks to the outside world.
 | `app.insecureSkipTLSVerify` | 🔓 Skip TLS verification on outbound HTTP (default: false) |
 | `app.caBundlePath` | 📜 Path to a PEM CA bundle for outbound HTTP. A missing or invalid bundle fails startup |
 | `app.hideProHints` | Remove the one-line note that names what kwatch Pro would add from Community messages (default: false) |
+| `app.communityProvider` | The alert provider the Community edition keeps when more than one is configured (Community sends to one provider; Pro sends to all). Empty keeps the first provider by name. A name that is not a configured provider is warned about and falls back the same way. `/status`, the startup log and `kwatch lint` show which provider is kept, for example `Community sends to: slack (inactive: pagerduty)` |
 
 The startup message and the upgrade notice are each a single plain sentence
 with one status emoji and no links, for example `🟡 kwatch v1.2.0 started.` and

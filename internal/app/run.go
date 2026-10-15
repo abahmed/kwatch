@@ -26,8 +26,11 @@ func Run() int {
 // component is built with the new entitlements and the pod never restarts.
 func RunWithClock(now func() time.Time) int {
 	entitlements := ResolveEntitlements()
+	// The process start is read once, so an in-process rebuild does not
+	// move it.
+	processStart := now()
 	for {
-		code, next, again := runOnce(now, entitlements)
+		code, next, again := runOnce(now, processStart, entitlements)
 		if !again {
 			return code
 		}
@@ -38,7 +41,8 @@ func RunWithClock(now func() time.Time) int {
 // runOnce builds and serves one generation of the application. It reports
 // the entitlements to rebuild with when the license changed the edition.
 func runOnce(
-	now func() time.Time, entitlements feature.Entitlements,
+	now func() time.Time, processStart time.Time,
+	entitlements feature.Entitlements,
 ) (int, feature.Entitlements, bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -52,7 +56,8 @@ func runOnce(
 
 	klog.InfoS(fmt.Sprintf(welcomeMessage, version.Short()))
 
-	boot, err := newBootstrap(ctx, cfg, now, entitlements)
+	boot, err := newBootstrap(
+		ctx, cfg, now, processStart, entitlements)
 	if err != nil {
 		klog.ErrorS(err, "failed to initialize application")
 		return 1, nil, false
@@ -61,6 +66,7 @@ func runOnce(
 	applyLogFormat(boot.runtime.Application().LogFormatter)
 	logSecretsAccess(boot.runtime)
 	logInactivePro(entitlements, boot.inactivePro)
+	logEditionNotice(entitlements, boot.notice)
 	deps := newServerDeps(ctx, cancel, boot)
 	if err := deps.healthServer.Open(); err != nil {
 		klog.ErrorS(err, "failed to open health server")

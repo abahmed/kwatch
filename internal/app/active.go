@@ -43,22 +43,26 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 	if err != nil {
 		return err
 	}
+	// The edition is judged from the state as the last start left it,
+	// before startup marks this one.
+	edition, err := planEdition(activeCtx, disk, deps.entitlements)
+	if err != nil {
+		return failStartup(deps, cancel, lic, state, "edition", err)
+	}
 	session := newSessionStartup(deps, disk)
 	result, err := session.Start(activeCtx)
 	if err != nil {
-		closeEarly(cancel, lic, state)
-		deps.healthServer.SetComponentError("state", err)
-		return fmt.Errorf("state: startup: %w", err)
+		return failStartup(deps, cancel, lic, state, "startup", err)
 	}
 	deps.readiness.setCurrent("state", true)
 	announceStartup(deps, state, session)
+	announceEdition(deps, disk, edition)
 	lic.watch(activeCtx)
 
 	threads := restoreThreads(deps, disk)
 	defer deps.threadWake.detach()
-
-	supervisor := newComponentSupervisor(deps.clients.Clock.Now)
-	guard := &storeGuard{}
+	supervisor, guard := newComponentSupervisor(deps.clients.Clock.Now),
+		&storeGuard{}
 	startActiveComponents(activeCtx, deps, supervisor, activeResources{
 		state: state, disk: disk, result: result, session: session,
 		threads: threads, guard: guard,
@@ -78,6 +82,17 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 		now:            deps.clients.Clock.Now,
 	})
 	return err
+}
+
+// failStartup ends a session that could not finish its startup state work
+// and reports the state component as failed.
+func failStartup(
+	deps *serverDeps, cancel context.CancelFunc, lic *licenseSession,
+	state *storage.Store, stage string, err error,
+) error {
+	closeEarly(cancel, lic, state)
+	deps.healthServer.SetComponentError("state", err)
+	return fmt.Errorf("state: %s: %w", stage, err)
 }
 
 func newSessionStartup(deps *serverDeps, disk diskState) *startupManager {

@@ -105,3 +105,29 @@ func TestReportWithoutALicenseHasNoLicenseSection(t *testing.T) {
 		t.Fatal("no license information, no section")
 	}
 }
+
+func TestCommunityTextNamesTheProDetectorsAndTheKeptProvider(t *testing.T) {
+	r := sampleReport()
+	r.Edition = "Community"
+	r.ProDetectorsOff = []string{"workloads", "storage", "certificates",
+		"network"}
+	r.CommunitySends = "slack (inactive: pagerduty)"
+
+	text := r.Text()
+
+	for _, want := range []string{
+		"Pro detectors not running: 4 (workloads, storage, certificates, …)\n",
+		"Community sends to: slack (inactive: pagerduty)\n",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %q in\n%s", want, text)
+		}
+	}
+}
+
+func TestProDetectorsTextListsAShortListInFull(t *testing.T) {
+	got := ProDetectorsText([]string{"workloads", "storage"})
+	if got != "Pro detectors not running: 2 (workloads, storage)" {
+		t.Fatalf("got %q", got)
+	}
+}

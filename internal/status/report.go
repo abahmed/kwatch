@@ -36,6 +36,12 @@ type Report struct {
 	// ProInactive names the Pro features the configuration sets and the
 	// edition does not run.
 	ProInactive []string `json:"proFeaturesInactive,omitempty"`
+	// ProDetectorsOff names the Pro detector families the edition does
+	// not run.
+	ProDetectorsOff []string `json:"proDetectorsNotRunning,omitempty"`
+	// CommunitySends names the provider a capped edition sends to and the
+	// ones it leaves inactive, such as "slack (inactive: pagerduty)".
+	CommunitySends string `json:"communitySends,omitempty"`
 	// License is the licensing state; nil for a report that does not say.
 	License *License `json:"license,omitempty"`
 	// Brief leaves the self-check and unexplained sections out of the

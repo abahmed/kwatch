@@ -155,3 +155,17 @@ func TestStatusWithoutEntitlementsIsCommunity(t *testing.T) {
 	assert.False(t, e.deps.entitled(feature.Flapping))
 	assert.True(t, e.deps.entitled(feature.PodDetection))
 }
+
+func TestStatusCarriesTheEditionNotice(t *testing.T) {
+	e := newTestEngine(t, &fakeClock{}, (&sinkLog{}).sink,
+		func(d *Dependencies) {
+			d.ProDetectorsOff = []string{"workloads", "storage"}
+			d.CommunitySends = "slack (inactive: pagerduty)"
+		})
+
+	report := e.Status()
+
+	assert.Equal(t, []string{"workloads", "storage"}, report.ProDetectorsOff)
+	assert.Equal(t, "slack (inactive: pagerduty)", report.CommunitySends)
+	assert.Contains(t, report.Text(), "Pro detectors not running: 2")
+}

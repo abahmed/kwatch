@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"io"
@@ -156,9 +157,8 @@ func (c licenseCLI) release(
 		return "", fmt.Errorf("connect to the Kubernetes API (run this "+
 			"inside the kwatch pod): %v", err)
 	}
-	priv, found, err := kubeInstanceStore{
-		client: kube, namespace: c.namespace,
-	}.Load(ctx)
+	store := kubeInstanceStore{client: kube, namespace: c.namespace}
+	priv, found, err := store.Load(ctx)
 	if err != nil {
 		return "", fmt.Errorf("read the instance key: %v", err)
 	}
@@ -166,13 +166,32 @@ func (c licenseCLI) release(
 		return "This cluster was never activated with this license; " +
 			"nothing to deactivate.", nil
 	}
+	if err := c.deactivateRemote(ctx, cfg, kube, key, priv); err != nil {
+		return "", err
+	}
+	msg := fmt.Sprintf("License %s is deactivated for this cluster.",
+		license.MaskLID(key.LID))
+	// Tell the running leader, a separate process, to drop its lease.
+	if err := store.MarkDeactivated(ctx, c.now()); err != nil {
+		msg += fmt.Sprintf("\nWarning: could not tell the running kwatch "+
+			"(%v); restart the pod so it stops using the old lease.", err)
+	}
+	return msg, nil
+}
+
+// deactivateRemote sends the signed deactivation request. A license
+// server that no longer knows the instance (unauthorized) counts as done.
+func (c licenseCLI) deactivateRemote(
+	ctx context.Context, cfg *config.Config, kube kubernetes.Interface,
+	key license.Key, priv ed25519.PrivateKey,
+) error {
 	uid, err := kubeSystemUID(kube)(ctx)
 	if err != nil {
-		return "", fmt.Errorf("read the kube-system namespace: %v", err)
+		return fmt.Errorf("read the kube-system namespace: %v", err)
 	}
 	httpClient, err := c.httpClient(config.RuntimeConfigFor(cfg))
 	if err != nil {
-		return "", fmt.Errorf("outbound HTTP client: %v", err)
+		return fmt.Errorf("outbound HTTP client: %v", err)
 	}
 	client := &license.Client{
 		Endpoint: cfg.License.Endpoint, HTTP: httpClient,
@@ -187,16 +206,7 @@ func (c licenseCLI) release(
 		NodeCount:    nodeCount(kube)(ctx),
 	})
 	if err != nil && !errors.Is(err, license.ErrUnauthorized) {
-		return "", fmt.Errorf("deactivate %s: %v",
-			license.MaskLID(key.LID), err)
+		return fmt.Errorf("deactivate %s: %v", license.MaskLID(key.LID), err)
 	}
-	msg := fmt.Sprintf("License %s is deactivated for this cluster.",
-		license.MaskLID(key.LID))
-	// Tell the running leader, a separate process, to drop its lease.
-	if err := (kubeInstanceStore{client: kube, namespace: c.namespace}).
-		MarkDeactivated(ctx, c.now()); err != nil {
-		msg += fmt.Sprintf("\nWarning: could not tell the running kwatch "+
-			"(%v); restart the pod so it stops using the old lease.", err)
-	}
-	return msg, nil
+	return nil
 }

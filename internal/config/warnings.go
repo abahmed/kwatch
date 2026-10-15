@@ -1,5 +1,7 @@
 package config
 
+import "fmt"
+
 // Warnings reports configuration that is legal but changes how well kwatch
 // works, so it can be logged at startup instead of failing the load.
 //
@@ -33,10 +35,29 @@ func LintWarnings(cfg *Config) []string {
 // providerWarnings flags providers that were removed because their upstream
 // service no longer exists. The section is ignored, not rejected.
 func providerWarnings(cfg *Config) []string {
+	var warnings []string
 	if _, ok := cfg.Alert["line"]; ok {
-		return []string{"LINE Notify was shut down by LINE on " +
-			"2025-03-31 and has been removed; the `line` provider " +
-			"config is ignored."}
+		warnings = append(warnings, "LINE Notify was shut down by LINE on "+
+			"2025-03-31 and has been removed; the `line` provider "+
+			"config is ignored.")
 	}
-	return nil
+	return append(warnings, communityProviderWarnings(cfg)...)
+}
+
+// communityProviderWarnings flags an app.communityProvider that names no
+// configured provider: the Community edition then keeps the first
+// provider by name, as if the setting were empty.
+func communityProviderWarnings(cfg *Config) []string {
+	name := cfg.App.CommunityProvider
+	if name == "" {
+		return nil
+	}
+	for _, p := range CompileRuntimeConfig(cfg).Delivery().Providers() {
+		if p.Name == name {
+			return nil
+		}
+	}
+	return []string{fmt.Sprintf("app.communityProvider %q is not a "+
+		"configured alert provider; the Community edition keeps the "+
+		"first configured provider by name instead", name)}
 }

@@ -95,10 +95,11 @@ helm upgrade kwatch kwatch/kwatch \
 ```
 
 The chart ships the empty Secret `kwatch-license-instance` and kwatch only has
-get and update on that one name (no `create` on Secrets). On upgrade the chart
-uses `lookup` to carry over the data kwatch stored, so the instance key is not
-wiped. `lookup` returns nothing under `helm template` and `--dry-run`, which
-only affects the rendered preview. If you install without this chart's
+get and update on that one name (no `create` on Secrets). The chart never
+renders `data` for it and keeps it on uninstall (`helm.sh/resource-policy:
+keep`). Because neither the previous nor the new manifest has `data`, Helm's
+three-way merge leaves the instance key kwatch wrote alone on upgrade. If you
+install without this chart's
 templates, create that Secret empty (type Opaque) yourself, or the license
 stays pending and Community. Besides the instance key, `kwatch license
 deactivate` writes a `deactivated-at` field to the same Secret so the running
@@ -164,7 +165,7 @@ kubectl delete namespace kwatch
 | `config.healthCheck.statusEndpoint` | Serve the read-only `/status` view (open incident object names, no authentication) on the health port. Off by default; with the NetworkPolicy on it is limited like the rest of the port. Reach it with `kubectl port-forward` | `false` |
 | `config.healthCheck.port` | Health port: container, probe and NetworkPolicy port. The health check cannot be disabled | `8060` |
 | `networkPolicy.enabled` | Render a NetworkPolicy that admits the health port (own namespace, `kubeletCIDRs` and `healthIngressFrom` only) and allows DNS, `networkPolicy.apiServerPorts` and kubelet (`networkPolicy.kubeletPort`, default 10250) egress | `false` |
-| `networkPolicy.allowDefaults` | Admit the health port and open DNS, `apiServerPorts`, kubelet and DNS metrics egress. `false` only when your own rules cover the API server, kubelets and probes | `true` |
+| `networkPolicy.allowDefaults` | Admit the health port and open DNS, `apiServerPorts`, kubelet and DNS metrics egress. `false` only when your own rules cover the API server, kubelets and probes. With `license.key` or `license.existingSecret` set it also opens TCP 443 to any address for license activation and renewal, even if `apiServerPorts` omits 443 | `true` |
 | `networkPolicy.apiServerPorts` | TCP ports open to any address for the API server and HTTPS providers; at least one is required (an empty list would open all egress) | `[443, 6443]` |
 | `networkPolicy.kubeletPort` | Kubelet HTTPS port opened for node stats | `10250` |
 | `networkPolicy.dnsMetricsPort` | Cluster DNS metrics port opened to the DNS pods in `kube-system` (DNS request and SERVFAIL rates); `0` omits it | `9153` |

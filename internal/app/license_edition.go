@@ -70,21 +70,17 @@ type licenseSetup struct {
 	initialSync time.Duration
 	debounce    time.Duration
 	tick        time.Duration
-	// processStart replaces licenseProcessStart; tests only.
+	// processStart is when this process started, taken from the
+	// application clock once and kept across in-process rebuilds. A
+	// deactivation marker older than it was made for a previous run of
+	// the pod.
 	processStart time.Time
 	// now replaces the application clock for licensing; tests only.
 	now func() time.Time
 }
 
-// licenseProcessStart is when this process started. A deactivation marker
-// older than it was made for a previous run of the pod.
-var licenseProcessStart = time.Now()
-
 func (s *licenseSetup) processStartTime() time.Time {
-	if !s.processStart.IsZero() {
-		return s.processStart
-	}
-	return licenseProcessStart
+	return s.processStart
 }
 
 func (s *licenseSetup) syncTimeout() time.Duration {
@@ -109,11 +105,15 @@ func (s *licenseSetup) tickEvery() time.Duration {
 }
 
 // newLicenseSetup reads the license settings from the runtime snapshot.
-func newLicenseSetup(runtime config.RuntimeConfig) *licenseSetup {
+func newLicenseSetup(
+	runtime config.RuntimeConfig, processStart time.Time,
+) *licenseSetup {
 	cfg := runtime.Lifecycle().License()
 	endpoint := cfg.Endpoint
 	if endpoint == "" {
 		endpoint = license.DefaultEndpoint
 	}
-	return &licenseSetup{key: cfg.Key, endpoint: endpoint}
+	return &licenseSetup{
+		key: cfg.Key, endpoint: endpoint, processStart: processStart,
+	}
 }

@@ -1,6 +1,7 @@
 package status
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -198,6 +199,27 @@ func (r Report) writeUnexplained(b *strings.Builder) {
 	}
 }
 
+// proDetectorNamesShown is how many family names the one-line text shows
+// before it ends in an ellipsis.
+const proDetectorNamesShown = 3
+
+// ProDetectorsText words the Pro detector families an edition does not
+// run: the count and the first few names.
+func ProDetectorsText(names []string) string {
+	shown := names
+	suffix := ""
+	if len(names) > proDetectorNamesShown {
+		shown, suffix = names[:proDetectorNamesShown], ", …"
+	}
+	return fmt.Sprintf("Pro detectors not running: %d (%s%s)", len(names),
+		strings.Join(shown, ", "), suffix)
+}
+
+// CommunitySendsText words the provider the Community edition keeps.
+func CommunitySendsText(sends string) string {
+	return "Community sends to: " + sends
+}
+
 // writeEdition names the edition and the Pro features the configuration
 // sets that the edition does not run.
 func (r Report) writeEdition(b *strings.Builder) {
@@ -209,6 +231,12 @@ func (r Report) writeEdition(b *strings.Builder) {
 	if len(r.ProInactive) > 0 {
 		line(b, "Pro features configured but inactive: "+
 			strings.Join(r.ProInactive, ", "))
+	}
+	if len(r.ProDetectorsOff) > 0 {
+		line(b, ProDetectorsText(r.ProDetectorsOff))
+	}
+	if r.CommunitySends != "" {
+		line(b, CommunitySendsText(r.CommunitySends))
 	}
 }
 

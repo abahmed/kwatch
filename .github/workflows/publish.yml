@@ -90,7 +90,13 @@ jobs:
           go-version-file: go.mod
 
       - name: Require the production license key
-        run: ./scripts/check-release-keys.sh
+        run: |
+          # A manual rebuild of a tag from before licensing has no script.
+          if [ -f scripts/check-release-keys.sh ]; then
+            ./scripts/check-release-keys.sh
+          else
+            echo "::notice::scripts/check-release-keys.sh is not in this checkout (a tag from before licensing); skipping the release key check"
+          fi
 
       # github.sha points at the default branch on a manual run, so read the
       # commit we actually checked out.

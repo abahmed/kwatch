@@ -132,6 +132,9 @@ func (p *pipelineBuild) newEngine() (*pipeline.Engine, error) {
 		},
 		Entitlements: deps.entitlements,
 		InactivePro:  deps.inactivePro,
+
+		ProDetectorsOff: deps.notice.detectors,
+		CommunitySends:  deps.notice.sends,
 	})
 }
 

@@ -22,6 +22,14 @@ func validateApp(app App) []error {
 			))
 		}
 	}
+	if app.CommunityProvider != "" &&
+		strings.ContainsFunc(app.CommunityProvider, func(r rune) bool {
+			return unicode.IsSpace(r) || unicode.IsControl(r)
+		}) {
+		errs = append(errs, errors.New(
+			"app.communityProvider must be a provider name such as "+
+				"slack, without spaces"))
+	}
 	if app.CABundlePath == "" {
 		return errs
 	}

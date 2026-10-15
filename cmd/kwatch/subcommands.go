@@ -49,6 +49,13 @@ func runLint(strict, check bool, out, errOut io.Writer) int {
 			return 1
 		}
 	}
+	for _, notice := range app.EditionNotices(cfg) {
+		if _, writeErr := fmt.Fprintf(
+			out, "  info: %s\n", notice,
+		); writeErr != nil {
+			return 1
+		}
+	}
 	if strict {
 		if err := config.LintStrict(); err != nil {
 			if _, writeErr := fmt.Fprintf(

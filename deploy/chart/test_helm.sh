@@ -431,28 +431,44 @@ for mode in full least-privilege; do
     [ -n "$ROLE" ] || {
       echo "FAIL: license Role missing ($mode, secrets=$secrets)"; exit 1;
     }
-    [ "$(grep -c 'resourceNames:' <<<"$ROLE")" = 1 ] &&
+    if ! { [ "$(grep -c 'resourceNames:' <<<"$ROLE")" = 1 ] &&
       [ "$(grep -c -- '- kwatch-license-instance' <<<"$ROLE")" = 1 ] &&
       [ "$(grep -c -- '- get' <<<"$ROLE")" = 1 ] &&
       [ "$(grep -c -- '- update' <<<"$ROLE")" = 1 ] &&
-      ! grep -Eq -- '- (create|delete|list|watch|patch|"\*")' <<<"$ROLE" || {
-      echo "FAIL: license Role must be get/update on one name only ($mode, secrets=$secrets)"; exit 1;
-    }
+      ! grep -Eq -- '- (create|delete|list|watch|patch|"\*")' <<<"$ROLE"; }; then
+      echo "FAIL: license Role must be get/update on one name only ($mode, secrets=$secrets)"; exit 1
+    fi
   done
 done
-# The instance Secret is shipped empty and kept on uninstall.
-OUT_IS=$(helm template test-lic . --show-only templates/license-instance-secret.yaml 2>&1)
-grep -Fq "name: kwatch-license-instance" <<<"$OUT_IS" &&
-  grep -Fq "type: Opaque" <<<"$OUT_IS" &&
-  grep -Fq "helm.sh/resource-policy: keep" <<<"$OUT_IS" &&
-  ! grep -Eq '^(data|stringData):' <<<"$OUT_IS" || {
-  echo "FAIL: instance Secret must be empty, Opaque and kept"; exit 1;
-}
-OUT_LNP=$(helm template test-lnp . --set networkPolicy.enabled=true \
+# The instance Secret is always shipped empty and kept on uninstall, and
+# never carries data, so Helm's three-way merge leaves kwatch's key alone.
+for set_args in "" "--set license.key=KW1-test"; do
+  # shellcheck disable=SC2086
+  OUT_IS=$(helm template test-lic . $set_args \
+    --show-only templates/license-instance-secret.yaml 2>&1)
+  if ! { grep -Fq "name: kwatch-license-instance" <<<"$OUT_IS" &&
+    grep -Fq "type: Opaque" <<<"$OUT_IS" &&
+    grep -Fq "helm.sh/resource-policy: keep" <<<"$OUT_IS" &&
+    ! grep -Eq '^(data|stringData):' <<<"$OUT_IS"; }; then
+    echo "FAIL: instance Secret must be empty, Opaque and kept ($set_args)"; exit 1
+  fi
+done
+# HTTPS egress for the license only with a license configured.
+OUT_NNP=$(helm template test-lnp . --set networkPolicy.enabled=true \
   --set 'networkPolicy.apiServerPorts={6443}' 2>&1)
-grep -A7 -F "License activation" <<<"$OUT_LNP" | grep -Fq "port: 443" || {
-  echo "FAIL: networkPolicy must allow HTTPS egress for the license"; exit 1;
-}
+if grep -Fq "License activation" <<<"$OUT_NNP"; then
+  echo "FAIL: networkPolicy must not open HTTPS egress without a license"; exit 1
+fi
+for set_args in "--set license.key=KW1-test" \
+  "--set license.existingSecret=my-license"; do
+  # shellcheck disable=SC2086
+  OUT_LNP=$(helm template test-lnp . --set networkPolicy.enabled=true \
+    --set 'networkPolicy.apiServerPorts={6443}' $set_args 2>&1)
+  if ! grep -A7 -F "License activation" <<<"$OUT_LNP" |
+    grep -Fq "port: 443"; then
+    echo "FAIL: networkPolicy must allow HTTPS egress for the license ($set_args)"; exit 1
+  fi
+done
 if helm template test-lic . --set license.bogus=1 >/dev/null 2>&1; then
   echo "FAIL: license.bogus must be rejected by the schema"; exit 1;
 fi

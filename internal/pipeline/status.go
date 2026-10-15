@@ -29,6 +29,8 @@ func (e *Engine) Status() status.Report {
 	entitlements := feature.OrCommunity(e.deps.Entitlements)
 	report.Edition = editionName(entitlements.Edition())
 	report.ProInactive = e.deps.InactivePro
+	report.ProDetectorsOff = e.deps.ProDetectorsOff
+	report.CommunitySends = e.deps.CommunitySends
 	if !entitlements.Limits().RootCauseDetail {
 		// The self-check and the unexplained counts are Pro detail.
 		report.Brief = true

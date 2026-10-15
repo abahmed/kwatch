@@ -170,6 +170,12 @@ type App struct {
 	// HideProHints removes the one-line note that names what kwatch Pro
 	// would add from Community messages. Default false.
 	HideProHints bool `yaml:"hideProHints"`
+
+	// CommunityProvider names the alert provider the Community edition
+	// keeps when more than one is configured (it runs one). Empty keeps
+	// the first by name; a name that is not configured is warned about
+	// and falls back the same way. Pro runs every provider.
+	CommunityProvider string `yaml:"communityProvider"`
 }
 
 // Upgrader confing struct

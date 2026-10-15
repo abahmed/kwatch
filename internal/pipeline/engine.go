@@ -72,6 +72,11 @@ type Dependencies struct {
 	// InactivePro names the Pro features the configuration sets but the
 	// edition does not run, for /status.
 	InactivePro []string
+	// ProDetectorsOff names the Pro detector families the edition does
+	// not run, and CommunitySends the provider a capped edition keeps
+	// (with the inactive ones), for /status.
+	ProDetectorsOff []string
+	CommunitySends  string
 }
 
 // IncidentStore loads and saves incident records, object fingerprints and
