@@ -17,7 +17,7 @@
   <a href="#-editions">Editions</a> ·
   <a href="https://kwatch.dev">Website</a> ·
   <a href="https://kwatch.dev/docs/getting-started">Docs</a> ·
-  <a href="https://kwatch.dev/pricing">Pricing</a> ·
+  <a href="https://kwatch.dev/pricing">Editions</a> ·
   <a href="https://discord.gg/kzJszdKmJ7">Discord</a>
 </p>
 
@@ -151,22 +151,22 @@ license key, one per cluster.
 
 | | Community | Pro |
 | --- | --- | --- |
-| Price | Free forever | $29 per cluster per month, 90-day free trial, no card |
+| Price | Free forever | Free during early access: 3 months per license, may be renewed |
 | Detection | Pod crash loops, OOM and Pending; node NotReady | Adds node pressure and draining, readiness, rollouts, Jobs and CronJobs, PDBs, HPAs, storage, network, admission, certificates, quota, custom resources, control plane, probes and unusual events |
 | Analysis | Root-cause headline | Full proof, shared-factor suspects, who changed what, impact, log excerpts |
 | Incidents | Basic dedup and noise control, state in memory | Flapping detection, startup summary, state kept on disk across restarts, changes made while kwatch was down |
 | Delivery | 1 provider (pick with `app.communityProvider`), namespace filters and silences | All providers, routing by scope, threads, text templates, audit log |
 | Ops | RBAC audit, secret redaction, health, metrics, text `/status` | Severity overrides, maintenance holds, runbook links, heartbeat monitor, `/status` JSON, flight recorder and `replay-export`, standby replicas |
 
-When a trial or subscription ends, kwatch falls back to Community.
+When a Pro license ends, kwatch falls back to Community.
 Detection and alerting never stop. The authoritative feature list is the
 catalog in [`internal/feature`](./internal/feature); compare editions on
-[kwatch.dev/pricing](https://kwatch.dev/pricing) and start a trial at
+[kwatch.dev/pricing](https://kwatch.dev/pricing) and get Pro free at
 [kwatch.dev/signup](https://kwatch.dev/signup).
 
 ## 🔑 Activating Pro
 
-[Sign up](https://kwatch.dev/signup), start the trial on your account page
+[Sign up](https://kwatch.dev/signup), get a free Pro license on your account page
 and copy your key. Then give it to kwatch.
 
 With Helm:
@@ -353,7 +353,7 @@ it once at startup.
 <details>
 <summary><b>How much does it cost to run?</b></summary>
 
-The Community edition is free, and Pro has a 90-day free trial (see
+The Community edition is free, and Pro is free during early access (see
 [Editions](#-editions)). kwatch runs as one Pod with a 512 MiB memory limit
 and a 2 GiB volume for its state.
 </details>

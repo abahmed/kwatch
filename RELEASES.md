@@ -1426,7 +1426,7 @@ after `v1.0.0-rc.10` is source available under ELv2 (see
 [`docs/licensing.md`](docs/licensing.md)). Without a license key kwatch runs
 the **Community** edition; a valid key (`license.key` or
 `license.existingSecret` in the chart, `KWATCH_LICENSE_KEY` otherwise)
-enables **Pro**, including a free trial at
+enables **Pro**, free during early access at
 https://kwatch.dev/signup?src=upgrade. A license that lapses or cannot be
 renewed falls back to Community in place, without restarting the pod.
 
@@ -1462,7 +1462,7 @@ renewed falls back to Community in place, without restarting the pod.
   and `kwatch lint` list the Pro detector families Community does not run.
   The first time a cluster runs Community after an earlier version or Pro,
   kwatch also sends one notification to the active provider that explains
-  this and links the trial. A fresh install gets none, and it is not
+  this and links to free Pro. A fresh install gets none, and it is not
   repeated across restarts (the state key is `edition.last`).
 - **Chart.** The `kwatch-license-instance` Secret is always rendered empty
   and kept on uninstall; kwatch writes the instance key into it and `helm

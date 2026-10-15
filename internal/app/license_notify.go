@@ -117,7 +117,7 @@ func trialNotice(
 	default:
 		return "", rec
 	}
-	return notification.MarkerNotify + " the kwatch Pro trial ends in " +
+	return notification.MarkerNotify + " the free kwatch Pro license ends in " +
 		fmt.Sprintf("%d day(s)", days) + " (" +
 		st.ExpiresAt.UTC().Format("2006-01-02") + " UTC).", rec
 }

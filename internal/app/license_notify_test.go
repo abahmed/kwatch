@@ -122,7 +122,7 @@ func TestLicenseTrialWarningsFireOnceEach(t *testing.T) {
 		noticeSession(disk, &log, at(14)).notify(trial)
 	}
 	require.Len(t, log.msgs, 2)
-	require.Contains(t, log.msgs[1], "trial ends in 14 day")
+	require.Contains(t, log.msgs[1], "license ends in 14 day")
 
 	for range 3 {
 		noticeSession(disk, &log, at(9)).notify(trial)
@@ -133,7 +133,7 @@ func TestLicenseTrialWarningsFireOnceEach(t *testing.T) {
 		noticeSession(disk, &log, at(3)).notify(trial)
 	}
 	require.Len(t, log.msgs, 3)
-	require.Contains(t, log.msgs[2], "trial ends in 3 day")
+	require.Contains(t, log.msgs[2], "license ends in 3 day")
 }
 
 func TestLicenseNoticeIsNotSentWhenItCannotBeRecorded(t *testing.T) {
