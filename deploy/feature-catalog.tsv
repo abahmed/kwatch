@@ -1,43 +1,43 @@
-# kwatch feature catalog v1
-core.detection.pods|runtime|Detect pod and container failures|
-core.pods.scheduling|runtime|Detect pod scheduling failures|core.detection.pods
-core.pods.oom|runtime|Detect out-of-memory kills and repeated OOMs|core.detection.pods
-core.pods.readiness|runtime|Detect sustained pod readiness failures|core.detection.pods
-core.pods.restarts|runtime|Detect crash loops and excessive restarts|core.detection.pods
-core.detection.workloads|runtime|Detect workload rollout and execution failures|
-core.workloads.rollouts|runtime|Detect stuck workload rollouts|core.detection.workloads
-core.workloads.jobs|runtime|Detect failed Jobs and failed or missed CronJobs|core.detection.workloads
-core.workloads.pdb|runtime|Detect PodDisruptionBudgets that block disruption|core.detection.workloads
-core.workloads.hpa|runtime|Diagnose HorizontalPodAutoscaler failures|core.detection.workloads
-core.detection.nodes|runtime|Detect node readiness, pressure and draining|
-core.nodes.usage|runtime|Detect node resource pressure from kubelet stats|core.detection.nodes
-core.detection.storage|runtime|Detect claim, volume and attachment failures|
-core.storage.usage|runtime|Detect volumes nearly full|core.detection.storage
-core.detection.network|runtime|Detect Service, Ingress and NetworkPolicy failures|
-core.detection.admission|runtime|Detect admission webhook and policy failures|
-core.detection.certificates|runtime|Detect expiring and invalid TLS certificates|
-core.detection.quota|runtime|Detect exhausted ResourceQuotas and LimitRange rejections|
-core.detection.custom-resources|runtime|Detect failing conditions on custom and built-in resources|
-core.detection.control-plane|runtime|Check API server, etcd, DNS, scheduler and controller-manager|
-core.detection.probes|runtime|Run configured HTTP, TCP and DNS checks|
-core.detection.risks|runtime|Quote configuration risks (no probe, no limit, mutable tag, single replica) when a failure shows their cost|core.detection.workloads
-core.detection.unusual-events|runtime|Report repeated Warning events kwatch has no detector for, quoting the event|
-analysis.root-cause|runtime|Explain each incident by its most likely root cause|
-analysis.shared-factors|runtime|Suspect a node that workloads failing together share when nothing else explains them|analysis.root-cause
-analysis.changes|runtime|Relate incidents to recent changes and who made them|analysis.root-cause
-analysis.impact|runtime|Show which workloads and services an incident affects|analysis.root-cause
-analysis.investigation|runtime|Attach a redacted log excerpt to announcements|
-incidents.noise-control|runtime|Settle, merge symptoms and send only material changes|analysis.root-cause
-incidents.flapping|runtime|Recognise flapping and routine recurring incidents|incidents.noise-control
-incidents.startup-summary|startup|Summarise pre-existing incidents once at cold start|
-incidents.state|startup|Keep incidents and history on disk across restarts|
-incidents.downtime-changes|startup|Report changes made while kwatch was down|incidents.state
-policy.scope|runtime|Filter by namespace, reason, selector and silences|
-policy.severity|runtime|Override severity by reason and owner kind|
-policy.maintenance|runtime|Hold incidents for objects under maintenance|
-policy.runbooks|runtime|Attach reason-aware runbook links|
-delivery.routing|runtime|Route incidents to providers by scope|
-delivery.threads|runtime|Update one message thread per incident where supported|
-delivery.templates|runtime|Render operator-selected text templates|
-delivery.audit-log|runtime|Write a JSON line for every incident decision|
-security.rbac-audit|runtime|Report missing permissions|
+# kwatch feature catalog v2
+core.detection.pods|runtime|Detect pod and container failures||community
+core.pods.scheduling|runtime|Detect pod scheduling failures|core.detection.pods|community
+core.pods.oom|runtime|Detect out-of-memory kills and repeated OOMs|core.detection.pods|community
+core.pods.readiness|runtime|Detect sustained pod readiness failures|core.detection.pods|pro
+core.pods.restarts|runtime|Detect crash loops and excessive restarts|core.detection.pods|community
+core.detection.workloads|runtime|Detect workload rollout and execution failures||pro
+core.workloads.rollouts|runtime|Detect stuck workload rollouts|core.detection.workloads|pro
+core.workloads.jobs|runtime|Detect failed Jobs and failed or missed CronJobs|core.detection.workloads|pro
+core.workloads.pdb|runtime|Detect PodDisruptionBudgets that block disruption|core.detection.workloads|pro
+core.workloads.hpa|runtime|Diagnose HorizontalPodAutoscaler failures|core.detection.workloads|pro
+core.detection.nodes|runtime|Detect node readiness, pressure and draining||community
+core.nodes.usage|runtime|Detect node resource pressure from kubelet stats|core.detection.nodes|pro
+core.detection.storage|runtime|Detect claim, volume and attachment failures||pro
+core.storage.usage|runtime|Detect volumes nearly full|core.detection.storage|pro
+core.detection.network|runtime|Detect Service, Ingress and NetworkPolicy failures||pro
+core.detection.admission|runtime|Detect admission webhook and policy failures||pro
+core.detection.certificates|runtime|Detect expiring and invalid TLS certificates||pro
+core.detection.quota|runtime|Detect exhausted ResourceQuotas and LimitRange rejections||pro
+core.detection.custom-resources|runtime|Detect failing conditions on custom and built-in resources||pro
+core.detection.control-plane|runtime|Check API server, etcd, DNS, scheduler and controller-manager||pro
+core.detection.probes|runtime|Run configured HTTP, TCP and DNS checks||pro
+core.detection.risks|runtime|Quote configuration risks (no probe, no limit, mutable tag, single replica) when a failure shows their cost|core.detection.workloads|pro
+core.detection.unusual-events|runtime|Report repeated Warning events kwatch has no detector for, quoting the event||pro
+analysis.root-cause|runtime|Explain each incident by its most likely root cause||community
+analysis.shared-factors|runtime|Suspect a node that workloads failing together share when nothing else explains them|analysis.root-cause|pro
+analysis.changes|runtime|Relate incidents to recent changes and who made them|analysis.root-cause|pro
+analysis.impact|runtime|Show which workloads and services an incident affects|analysis.root-cause|pro
+analysis.investigation|runtime|Attach a redacted log excerpt to announcements||pro
+incidents.noise-control|runtime|Settle, merge symptoms and send only material changes|analysis.root-cause|community
+incidents.flapping|runtime|Recognise flapping and routine recurring incidents|incidents.noise-control|pro
+incidents.startup-summary|startup|Summarise pre-existing incidents once at cold start||pro
+incidents.state|startup|Keep incidents and history on disk across restarts||pro
+incidents.downtime-changes|startup|Report changes made while kwatch was down|incidents.state|pro
+policy.scope|runtime|Filter by namespace, reason, selector and silences||community
+policy.severity|runtime|Override severity by reason and owner kind||pro
+policy.maintenance|runtime|Hold incidents for objects under maintenance||pro
+policy.runbooks|runtime|Attach reason-aware runbook links||pro
+delivery.routing|runtime|Route incidents to providers by scope||pro
+delivery.threads|runtime|Update one message thread per incident where supported||pro
+delivery.templates|runtime|Render operator-selected text templates||pro
+delivery.audit-log|runtime|Write a JSON line for every incident decision||pro
+security.rbac-audit|runtime|Report missing permissions||community
