@@ -158,7 +158,7 @@ func (w *fakeWorker) serve(rw http.ResponseWriter, r *http.Request) {
 	_ = json.Unmarshal(raw, &b)
 	str := func(k string) string { s, _ := b[k].(string); return s }
 	switch r.URL.Path {
-	case "/v1/license/activate", "/v1/license/move":
+	case "/license/activate", "/license/move":
 		w.lastActive = b
 		if str("nonce") == "" || str("kwatch_version") == "" {
 			reply(400, map[string]any{"error": "invalid_request"}, nil)
@@ -170,7 +170,7 @@ func (w *fakeWorker) serve(rw http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if w.bound && w.cluster != str("cluster_uuid") &&
-			r.URL.Path == "/v1/license/activate" {
+			r.URL.Path == "/license/activate" {
 			reply(409, map[string]any{"error": "bound_to_other_cluster",
 				"bound_since": 1000}, nil)
 			return
@@ -178,7 +178,7 @@ func (w *fakeWorker) serve(rw http.ResponseWriter, r *http.Request) {
 		w.bound, w.cluster, w.proof, w.instance = true, str("cluster_uuid"),
 			str("cluster_proof"), str("instance_pub")
 		reply(200, map[string]any{"lease": w.lease(k.LID)}, nil)
-	case "/v1/license/renew", "/v1/license/deactivate":
+	case "/license/renew", "/license/deactivate":
 		if !w.bound {
 			reply(401, map[string]any{"error": "bad_signature"}, nil)
 			return
@@ -194,7 +194,7 @@ func (w *fakeWorker) serve(rw http.ResponseWriter, r *http.Request) {
 			reply(400, map[string]any{"error": "stale_timestamp"}, nil)
 			return
 		}
-		if r.URL.Path == "/v1/license/deactivate" {
+		if r.URL.Path == "/license/deactivate" {
 			w.bound = false
 			reply(200, map[string]any{"ok": true}, nil)
 			return
@@ -336,12 +336,12 @@ func TestManagerInitialSyncActivatesBeforeStartReturns(t *testing.T) {
 	if st := m.Status(); st.State != StateActive {
 		t.Fatalf("state = %v, want active from Start", st.State)
 	}
-	if n := h.worker.count("/v1/license/activate"); n != 1 {
+	if n := h.worker.count("/license/activate"); n != 1 {
 		t.Fatalf("activations = %d, want 1", n)
 	}
 	cancel()
 	m.Wait()
-	if n := h.worker.count("/v1/license/activate"); n != 1 {
+	if n := h.worker.count("/license/activate"); n != 1 {
 		t.Fatalf("the loop repeated the activation: %d", n)
 	}
 }

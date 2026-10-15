@@ -80,7 +80,7 @@ func TestLicenseMoveCLITakesTheLicenseThroughTheLeader(t *testing.T) {
 	code := cli.move(context.Background(), &out, &errOut)
 
 	require.Zero(t, code, errOut.String())
-	require.Equal(t, 1, w.count("/v1/license/move"))
+	require.Equal(t, 1, w.count("/license/move"))
 	require.Contains(t, out.String(), "is now active on this cluster")
 	require.Contains(t, out.String(), "daily check")
 	require.NotContains(t, out.String()+errOut.String(), key)

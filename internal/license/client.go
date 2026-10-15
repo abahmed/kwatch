@@ -133,7 +133,7 @@ type Result struct {
 	Lease string
 }
 
-// ActivateRequest is the body of POST /v1/license/activate.
+// ActivateRequest is the body of POST /license/activate.
 type ActivateRequest struct {
 	Key          string
 	ClusterUUID  string
@@ -186,7 +186,7 @@ type wireResponse struct {
 func (c *Client) Activate(
 	ctx context.Context, req ActivateRequest,
 ) (Result, error) {
-	return c.activateCall(ctx, "/v1/license/activate", req)
+	return c.activateCall(ctx, "/license/activate", req)
 }
 
 // Move takes the license over from the cluster it is bound to. It has the
@@ -194,7 +194,7 @@ func (c *Client) Activate(
 func (c *Client) Move(
 	ctx context.Context, req ActivateRequest,
 ) (Result, error) {
-	return c.activateCall(ctx, "/v1/license/move", req)
+	return c.activateCall(ctx, "/license/move", req)
 }
 
 func (c *Client) activateCall(
@@ -220,14 +220,14 @@ func (c *Client) activateCall(
 func (c *Client) Renew(
 	ctx context.Context, priv ed25519.PrivateKey, req SignedRequest,
 ) (Result, error) {
-	return c.signed(ctx, "/v1/license/renew", priv, req, true)
+	return c.signed(ctx, "/license/renew", priv, req, true)
 }
 
 // Deactivate releases the cluster binding, authenticated by priv.
 func (c *Client) Deactivate(
 	ctx context.Context, priv ed25519.PrivateKey, req SignedRequest,
 ) (Result, error) {
-	return c.signed(ctx, "/v1/license/deactivate", priv, req, false)
+	return c.signed(ctx, "/license/deactivate", priv, req, false)
 }
 
 func (c *Client) signed(

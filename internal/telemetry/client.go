@@ -12,7 +12,7 @@ import (
 )
 
 // Endpoint is the first-party adoption telemetry endpoint.
-const Endpoint = "https://api.kwatch.dev/v1/telemetry/heartbeat"
+const Endpoint = "https://api.kwatch.dev/telemetry/heartbeat"
 
 // WeeklyInterval is the minimum interval between adoption heartbeats.
 const WeeklyInterval = 7 * 24 * time.Hour

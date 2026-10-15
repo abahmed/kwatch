@@ -1640,7 +1640,7 @@ renewed falls back to Community in place, without restarting the pod.
 - **Telemetry.** Adoption telemetry is on by default in official builds. It
   sends exactly an anonymous installation ID (a salted hash of the
   `kube-system` namespace UID, formatted as a UUID) and the kwatch version to
-  `https://api.kwatch.dev/v1/telemetry/heartbeat`, shortly after startup and
+  `https://api.kwatch.dev/telemetry/heartbeat`, shortly after startup and
   then at most once every 7 days. Disable it with `telemetry.enabled: false`
   or `KWATCH_TELEMETRY=false`. See the configuration reference for the full
   description.

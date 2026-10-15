@@ -40,7 +40,7 @@ func TestManagerConflictRetriesFastThenHourly(t *testing.T) {
 	if d := h.m.cycle(ctx); d != time.Hour {
 		t.Fatalf("hourly delay = %v", d)
 	}
-	if got := h.worker.count("/v1/license/activate"); got != 14 {
+	if got := h.worker.count("/license/activate"); got != 14 {
 		t.Fatalf("activations = %d", got)
 	}
 }

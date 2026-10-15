@@ -62,14 +62,14 @@ func TestManagerBodySrvTimeIsNotTrusted(t *testing.T) {
 	h2.run()
 	h2.clock.Advance(25 * time.Hour)
 	h2.worker.set(func(p string) (int, map[string]any, map[string]string) {
-		if p != "/v1/license/renew" {
+		if p != "/license/renew" {
 			return 0, nil, nil
 		}
 		lease := h2.worker.lease("lic_abcdef1234")
 		return 200, map[string]any{"lease": lease, "srv_time": far}, nil
 	})
 	h2.m.cycle(context.Background())
-	if n := h2.worker.count("/v1/license/renew"); n != 1 {
+	if n := h2.worker.count("/license/renew"); n != 1 {
 		t.Fatalf("renews = %d", n)
 	}
 	if got := h2.m.clock.MaxSeen; got.Unix() >= far {
@@ -102,7 +102,7 @@ func TestManagerKeepsRenewingExpiredKeyWithExtendingLease(t *testing.T) {
 	if st := h.m.Status(); st.State != StateActive {
 		t.Fatalf("status = %+v", st)
 	}
-	if n := h.worker.count("/v1/license/renew"); n < 13 {
+	if n := h.worker.count("/license/renew"); n < 13 {
 		t.Fatalf("renews = %d: stopped renewing at key expiry", n)
 	}
 	if st := h.m.Status(); st.ExpiresAt.Before(h.clock.Now()) {

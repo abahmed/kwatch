@@ -119,10 +119,10 @@ func (w *licenseWorld) serve(rw http.ResponseWriter, r *http.Request) {
 	var req map[string]any
 	_ = json.Unmarshal(raw, &req)
 	str := func(k string) string { s, _ := req[k].(string); return s }
-	if p := r.URL.Path; p == "/v1/license/activate" || p == "/v1/license/move" {
+	if p := r.URL.Path; p == "/license/activate" || p == "/license/move" {
 		w.instance = str("instance_pub")
 	}
-	if r.URL.Path == "/v1/license/deactivate" {
+	if r.URL.Path == "/license/deactivate" {
 		reply(http.StatusOK, map[string]any{"ok": true})
 		return
 	}
@@ -249,7 +249,7 @@ func TestLicenseValidKeyIsProFromTheFirstBuild(t *testing.T) {
 
 	require.True(t, deps.editionRestart.Load())
 	require.Equal(t, feature.ProEdition, deps.edition.Load().Edition())
-	require.Equal(t, 1, w.count("/v1/license/activate"))
+	require.Equal(t, 1, w.count("/license/activate"))
 	secret, found := instanceSecret(t, deps)
 	require.True(t, found)
 	require.Len(t, secret.Data[licenseInstanceKeyField], ed25519.SeedSize)
@@ -269,9 +269,9 @@ func TestLicenseValidKeyIsProFromTheFirstBuild(t *testing.T) {
 		5*time.Millisecond)
 	stop()
 	require.NoError(t, awaitSession(t, done))
-	require.Equal(t, 1, w.count("/v1/license/activate"),
+	require.Equal(t, 1, w.count("/license/activate"),
 		"the cached lease is reused")
-	require.Zero(t, w.count("/v1/license/renew"))
+	require.Zero(t, w.count("/license/renew"))
 }
 
 // activate runs the first generation so a lease is cached, then returns

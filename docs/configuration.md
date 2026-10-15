@@ -602,7 +602,7 @@ configuration, provider setting, log line or incident is sent. As with any
 HTTPS request, the receiving service sees the connection's source address and
 the `User-Agent` `kwatch-telemetry/1`.
 
-**Where and how often.** To `https://api.kwatch.dev/v1/telemetry/heartbeat`,
+**Where and how often.** To `https://api.kwatch.dev/telemetry/heartbeat`,
 from the active replica, using kwatch's configured outbound HTTP client
 (`app.proxyURL`, `app.caBundlePath`). The first heartbeat is sent shortly after
 startup, then at most once every 7 days (the last successful send is stored in

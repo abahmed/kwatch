@@ -100,7 +100,7 @@ func TestLicenseDeactivateCLIReleasesTheBinding(t *testing.T) {
 		context.Background(), &out, &errOut)
 
 	require.Zero(t, code, errOut.String())
-	require.Equal(t, 1, w.count("/v1/license/deactivate"))
+	require.Equal(t, 1, w.count("/license/deactivate"))
 	require.Contains(t, out.String(), "deactivated")
 	require.NotContains(t, out.String()+errOut.String(), key)
 }

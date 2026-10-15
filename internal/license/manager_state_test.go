@@ -91,7 +91,7 @@ func TestManagerDeactivate(t *testing.T) {
 	if err := h.m.Deactivate(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if h.worker.count("/v1/license/deactivate") != 1 ||
+	if h.worker.count("/license/deactivate") != 1 ||
 		h.worker.bound || h.worker.badSigs != 0 {
 		t.Fatal("deactivate not accepted")
 	}
@@ -122,8 +122,8 @@ func TestManagerLoop(t *testing.T) {
 	if len(h.sleeps) != 3 || h.sleeps[0] != 0 || h.sleeps[1] != 24*time.Hour {
 		t.Fatalf("sleeps = %v", h.sleeps)
 	}
-	if h.worker.count("/v1/license/activate") != 1 ||
-		h.worker.count("/v1/license/renew") != 1 {
+	if h.worker.count("/license/activate") != 1 ||
+		h.worker.count("/license/renew") != 1 {
 		t.Fatal("unexpected request counts")
 	}
 }

@@ -140,7 +140,7 @@ func TestClientMove(t *testing.T) {
 	c := &Client{Endpoint: srv.URL, HTTP: srv.Client()}
 	ctx := context.Background()
 	res, err := c.Move(ctx, ActivateRequest{Key: "k"})
-	if err != nil || res.Lease != "L" || path != "/v1/license/move" {
+	if err != nil || res.Lease != "L" || path != "/license/move" {
 		t.Fatalf("move = %+v, %v (path %q)", res, err, path)
 	}
 	status, body = 429, `{"error":"transfer_limit","retry_after":259200}`

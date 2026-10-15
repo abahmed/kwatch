@@ -133,16 +133,7 @@ change settings, manage the license or uninstall.
 /bin/bash -c "$(curl -fsSL https://kwatch.dev/kwatch.sh)"
 ```
 
-**Helm.**
-
-```bash
-helm repo add kwatch https://kwatch.dev/charts
-helm repo update
-```
-
-Then create your `config.yaml` and install with
-`helm install kwatch kwatch/kwatch --namespace kwatch --values values.yaml`.
-The [chart guide](./deploy/chart/README.md) has the full steps.
+For advanced users who prefer Helm, see the [chart guide](./deploy/chart/README.md).
 
 ## 🧩 Editions
 
@@ -169,14 +160,15 @@ catalog in [`internal/feature`](./internal/feature); compare editions on
 [Sign up](https://kwatch.dev/signup), get a free Pro license on your account page
 and copy your key. Then give it to kwatch.
 
-With Helm:
+Run the installer, open its **License / Pro** menu and choose **Add or replace
+key**:
 
 ```bash
-kubectl create secret generic kwatch-license -n kwatch --from-literal=license-key=KW1-...
-helm upgrade --install kwatch kwatch/kwatch --set license.existingSecret=kwatch-license
+/bin/bash -c "$(curl -fsSL https://kwatch.dev/kwatch.sh)"
 ```
 
-Or run the installer and open its **License** menu.
+For a non-interactive install, set `KWATCH_LICENSE_KEY=KW1-...` in the
+environment of the same command.
 
 **How it works**
 

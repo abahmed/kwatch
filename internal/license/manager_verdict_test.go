@@ -56,7 +56,7 @@ func TestManagerInstanceSuperseded(t *testing.T) {
 	h.run()
 	h.clock.Advance(25 * time.Hour)
 	h.worker.set(func(p string) (int, map[string]any, map[string]string) {
-		if p == "/v1/license/renew" {
+		if p == "/license/renew" {
 			return 409, map[string]any{"error": "instance_superseded"}, nil
 		}
 		return 0, nil, nil
@@ -66,11 +66,11 @@ func TestManagerInstanceSuperseded(t *testing.T) {
 		t.Fatalf("status = %+v", st)
 	}
 	// Retry renews (does not re-activate and steal the binding).
-	if n := h.worker.count("/v1/license/activate"); n != 1 {
+	if n := h.worker.count("/license/activate"); n != 1 {
 		t.Fatalf("activates = %d", n)
 	}
 	h.m.cycle(context.Background())
-	if n := h.worker.count("/v1/license/activate"); n != 1 {
+	if n := h.worker.count("/license/activate"); n != 1 {
 		t.Fatalf("activates after retry = %d", n)
 	}
 }
@@ -115,10 +115,10 @@ func TestManagerRenewSigned(t *testing.T) {
 	h.clock.Advance(25 * time.Hour)
 	h.m.cycle(context.Background())
 	w := h.worker
-	if w.count("/v1/license/renew") != 1 || w.badSigs != 0 {
-		t.Fatalf("renews=%d badSigs=%d", w.count("/v1/license/renew"), w.badSigs)
+	if w.count("/license/renew") != 1 || w.badSigs != 0 {
+		t.Fatalf("renews=%d badSigs=%d", w.count("/license/renew"), w.badSigs)
 	}
-	if w.count("/v1/license/activate") != 1 {
+	if w.count("/license/activate") != 1 {
 		t.Fatal("renew should not re-activate")
 	}
 	if h.leases.lease == first {
@@ -141,11 +141,11 @@ func TestManagerRenew401Reactivates(t *testing.T) {
 	h.worker.bound = false // binding transferred away
 	h.worker.mu.Unlock()
 	h.m.cycle(context.Background())
-	if h.worker.count("/v1/license/renew") != 1 ||
-		h.worker.count("/v1/license/activate") != 2 {
+	if h.worker.count("/license/renew") != 1 ||
+		h.worker.count("/license/activate") != 2 {
 		t.Fatalf("renew=%d activate=%d",
-			h.worker.count("/v1/license/renew"),
-			h.worker.count("/v1/license/activate"))
+			h.worker.count("/license/renew"),
+			h.worker.count("/license/activate"))
 	}
 	if st := h.m.Status(); st.State != StateActive {
 		t.Fatalf("status = %+v", st)

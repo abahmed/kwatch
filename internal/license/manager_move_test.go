@@ -43,7 +43,7 @@ func TestManagerMoveTakesTheLicenseAndAdoptsTheLease(t *testing.T) {
 	}
 	ctx := context.Background()
 	r.m.CheckMove(ctx) // no request yet
-	if r.h.worker.count("/v1/license/move") != 0 {
+	if r.h.worker.count("/license/move") != 0 {
 		t.Fatal("moved without a request")
 	}
 	r.h.clock.Advance(time.Minute)
@@ -63,7 +63,7 @@ func TestManagerMoveTakesTheLicenseAndAdoptsTheLease(t *testing.T) {
 	}
 	// The same request is never acted on twice.
 	r.m.CheckMove(ctx)
-	if r.h.worker.count("/v1/license/move") != 1 || len(r.outs) != 1 {
+	if r.h.worker.count("/license/move") != 1 || len(r.outs) != 1 {
 		t.Fatal("request handled twice")
 	}
 }
@@ -104,7 +104,7 @@ func TestManagerMoveReportsServerRefusals(t *testing.T) {
 			r.h.worker.set(func(p string) (int, map[string]any,
 				map[string]string,
 			) {
-				if p == "/v1/license/move" {
+				if p == "/license/move" {
 					return tt.status, tt.body, nil
 				}
 				return 0, nil, nil
@@ -126,7 +126,7 @@ func TestManagerMoveRetriesAfterNetworkFailure(t *testing.T) {
 	r.conflict()
 	fail := true
 	r.h.worker.set(func(p string) (int, map[string]any, map[string]string) {
-		if p == "/v1/license/move" && fail {
+		if p == "/license/move" && fail {
 			return 503, map[string]any{"error": "down"}, nil
 		}
 		return 0, nil, nil
@@ -154,7 +154,7 @@ func TestManagerMoveDropsAStaleRequest(t *testing.T) {
 	if len(r.outs) != 1 || r.outs[0].Result != MoveStale {
 		t.Fatalf("outcomes = %+v", r.outs)
 	}
-	if r.h.worker.count("/v1/license/move") != 0 {
+	if r.h.worker.count("/license/move") != 0 {
 		t.Fatal("a stale request moved the license")
 	}
 }
