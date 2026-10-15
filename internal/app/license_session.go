@@ -138,6 +138,7 @@ func (l *licenseSession) loop(ctx context.Context) {
 			observe(st)
 		case <-tick.C:
 			l.mgr.CheckDeactivated(ctx)
+			l.mgr.CheckMove(ctx)
 			observe(l.mgr.Status())
 		case <-fire:
 			debounce, fire = nil, nil
@@ -360,6 +361,8 @@ func (l *licenseSession) managerConfig(setup *licenseSetup) license.Config {
 		client: kube, namespace: kubeclient.GetNamespace(),
 	}
 	cfg.DeactivatedAt = instances.DeactivatedAt
+	cfg.MoveRequestedAt = instances.MoveRequestedAt
+	cfg.MoveFinished = instances.FinishMove
 	cfg.ProcessStart = setup.processStartTime()
 	return cfg
 }

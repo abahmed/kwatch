@@ -138,16 +138,18 @@ func verifyProviders(am *delivery.Manager, out, errOut io.Writer) int {
 	return 0
 }
 
-// runLicense dispatches `kwatch license status|deactivate`.
+// runLicense dispatches `kwatch license status|deactivate|move`.
 func runLicense(args []string, out, errOut io.Writer) int {
 	if len(args) != 1 {
-		return usageError(errOut, "license", "status|deactivate", args)
+		return usageError(errOut, "license", "status|deactivate|move", args)
 	}
 	switch args[0] {
 	case "status":
 		return app.LicenseStatus(out, errOut)
 	case "deactivate":
 		return app.LicenseDeactivate(out, errOut)
+	case "move":
+		return app.LicenseMove(out, errOut)
 	}
-	return usageError(errOut, "license", "status|deactivate", args)
+	return usageError(errOut, "license", "status|deactivate|move", args)
 }

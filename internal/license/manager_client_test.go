@@ -125,3 +125,43 @@ func TestEnsureInstanceKey(t *testing.T) {
 		t.Fatalf("pub = %q", pub)
 	}
 }
+
+func TestClientMove(t *testing.T) {
+	var path string
+	status, body := 200, `{"lease":"L"}`
+	srv := httptest.NewServer(http.HandlerFunc(func(
+		w http.ResponseWriter, r *http.Request,
+	) {
+		path = r.URL.Path
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer srv.Close()
+	c := &Client{Endpoint: srv.URL, HTTP: srv.Client()}
+	ctx := context.Background()
+	res, err := c.Move(ctx, ActivateRequest{Key: "k"})
+	if err != nil || res.Lease != "L" || path != "/v1/license/move" {
+		t.Fatalf("move = %+v, %v (path %q)", res, err, path)
+	}
+	status, body = 429, `{"error":"transfer_limit","retry_after":259200}`
+	var limit ErrTransferLimit
+	if _, err = c.Move(ctx, ActivateRequest{Key: "k"}); !errors.As(err, &limit) ||
+		limit.RetryAfter != 72*time.Hour || IsTransient(err) {
+		t.Fatalf("limit: %v", err)
+	}
+	status, body = 429, `{"error":"transfer_limit"}`
+	if _, err = c.Move(ctx, ActivateRequest{Key: "k"}); !errors.As(err, &limit) ||
+		limit.RetryAfter != 0 {
+		t.Fatalf("limit without days: %v", err)
+	}
+	// Plain rate limiting stays a transient error.
+	status, body = 429, `{"error":"rate_limited"}`
+	if _, err = c.Move(ctx, ActivateRequest{Key: "k"}); !IsTransient(err) {
+		t.Fatalf("rate limit: %v", err)
+	}
+	status, body = 409, `{"error":"bound_to_other_cluster"}`
+	var conf ErrConflict
+	if _, err = c.Move(ctx, ActivateRequest{Key: "k"}); !errors.As(err, &conf) {
+		t.Fatalf("conflict: %v", err)
+	}
+}

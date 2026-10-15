@@ -56,6 +56,20 @@ func (e ErrConflict) Error() string {
 		"since " + e.BoundSince.UTC().Format(time.RFC3339)
 }
 
+// ErrTransferLimit means the license used up its moves between clusters
+// (the web transfer, deactivate and move share one limit).
+type ErrTransferLimit struct {
+	RetryAfter time.Duration // until a slot frees; zero when unknown
+}
+
+func (e ErrTransferLimit) Error() string {
+	if e.RetryAfter <= 0 {
+		return "license: transfer limit reached"
+	}
+	return "license: transfer limit reached, a slot frees in " +
+		e.RetryAfter.Round(time.Hour).String()
+}
+
 // ErrRateLimited means the server asked the client to slow down.
 type ErrRateLimited struct {
 	RetryAfter time.Duration
@@ -164,11 +178,27 @@ type wireResponse struct {
 	Lease      string `json:"lease"`
 	Error      string `json:"error"`
 	BoundSince int64  `json:"bound_since"`
+	// RetryAfter is seconds until a transfer slot frees (transfer_limit).
+	RetryAfter int64 `json:"retry_after"`
 }
 
 // Activate binds the license to this cluster and instance.
 func (c *Client) Activate(
 	ctx context.Context, req ActivateRequest,
+) (Result, error) {
+	return c.activateCall(ctx, "/v1/license/activate", req)
+}
+
+// Move takes the license over from the cluster it is bound to. It has the
+// body and the responses of Activate, and adds ErrTransferLimit.
+func (c *Client) Move(
+	ctx context.Context, req ActivateRequest,
+) (Result, error) {
+	return c.activateCall(ctx, "/v1/license/move", req)
+}
+
+func (c *Client) activateCall(
+	ctx context.Context, path string, req ActivateRequest,
 ) (Result, error) {
 	nonce := make([]byte, 16)
 	if _, err := rand.Read(nonce); err != nil {
@@ -183,7 +213,7 @@ func (c *Client) Activate(
 	if err != nil {
 		return Result{}, err
 	}
-	return c.call(ctx, "/v1/license/activate", body, "", true)
+	return c.call(ctx, path, body, "", true)
 }
 
 // Renew fetches a fresh lease, authenticated by priv (the instance key).
@@ -283,6 +313,10 @@ func classify(status int, w wireResponse, retryAfter string) error {
 	switch {
 	case status >= 500:
 		return &TransientError{Status: status, Err: fmt.Errorf("status %d", status)}
+	case status == http.StatusTooManyRequests && w.Error == "transfer_limit":
+		return ErrTransferLimit{
+			RetryAfter: time.Duration(max(w.RetryAfter, 0)) * time.Second,
+		}
 	case status == http.StatusTooManyRequests:
 		return ErrRateLimited{RetryAfter: parseRetryAfter(retryAfter)}
 	case status == http.StatusUnauthorized:

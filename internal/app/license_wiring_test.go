@@ -119,7 +119,7 @@ func (w *licenseWorld) serve(rw http.ResponseWriter, r *http.Request) {
 	var req map[string]any
 	_ = json.Unmarshal(raw, &req)
 	str := func(k string) string { s, _ := req[k].(string); return s }
-	if r.URL.Path == "/v1/license/activate" {
+	if p := r.URL.Path; p == "/v1/license/activate" || p == "/v1/license/move" {
 		w.instance = str("instance_pub")
 	}
 	if r.URL.Path == "/v1/license/deactivate" {

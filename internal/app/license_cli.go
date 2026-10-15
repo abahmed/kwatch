@@ -31,6 +31,8 @@ type licenseCLI struct {
 	verifier   *license.Verifier
 	now        func() time.Time
 	namespace  string
+	// sleep waits between polls of `license move`; nil uses a timer.
+	sleep func(context.Context, time.Duration) error
 }
 
 func defaultLicenseCLI() licenseCLI {

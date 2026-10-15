@@ -7,21 +7,26 @@ import (
 )
 
 func TestManagerVerdicts(t *testing.T) {
+	const day = 24 * time.Hour
 	tests := []struct {
 		name   string
 		status int
 		body   map[string]any
 		want   State
+		delay  time.Duration
 	}{
 		{"conflict", 409,
 			map[string]any{"error": "bound_to_other_cluster",
-				"bound_since": 5}, StateConflict},
-		{"revoked", 403, map[string]any{"error": "revoked"}, StateRevoked},
-		{"suspended", 403, map[string]any{"error": "suspended"}, StateRevoked},
-		{"key replaced", 403, map[string]any{"error": "key_replaced"}, StateInvalid},
+				"bound_since": 5}, StateConflict, 5 * time.Minute},
+		{"revoked", 403, map[string]any{"error": "revoked"}, StateRevoked, day},
+		{"suspended", 403,
+			map[string]any{"error": "suspended"}, StateRevoked, day},
+		{"key replaced", 403,
+			map[string]any{"error": "key_replaced"}, StateInvalid, day},
 		{"trial used", 403,
-			map[string]any{"error": "trial_already_used"}, StateInvalid},
-		{"server expired", 403, map[string]any{"error": "expired"}, StateExpired},
+			map[string]any{"error": "trial_already_used"}, StateInvalid, day},
+		{"server expired", 403,
+			map[string]any{"error": "expired"}, StateExpired, day},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -33,7 +38,7 @@ func TestManagerVerdicts(t *testing.T) {
 			if st := h.m.Status(); st.State != tt.want || st.Reason == "" {
 				t.Fatalf("status = %+v", st)
 			}
-			if d != 24*time.Hour {
+			if d != tt.delay {
 				t.Fatalf("delay = %v", d)
 			}
 			// Recovery clears the verdict.

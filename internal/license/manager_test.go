@@ -158,7 +158,7 @@ func (w *fakeWorker) serve(rw http.ResponseWriter, r *http.Request) {
 	_ = json.Unmarshal(raw, &b)
 	str := func(k string) string { s, _ := b[k].(string); return s }
 	switch r.URL.Path {
-	case "/v1/license/activate":
+	case "/v1/license/activate", "/v1/license/move":
 		w.lastActive = b
 		if str("nonce") == "" || str("kwatch_version") == "" {
 			reply(400, map[string]any{"error": "invalid_request"}, nil)
@@ -169,7 +169,8 @@ func (w *fakeWorker) serve(rw http.ResponseWriter, r *http.Request) {
 			reply(400, map[string]any{"error": "invalid_key"}, nil)
 			return
 		}
-		if w.bound && w.cluster != str("cluster_uuid") {
+		if w.bound && w.cluster != str("cluster_uuid") &&
+			r.URL.Path == "/v1/license/activate" {
 			reply(409, map[string]any{"error": "bound_to_other_cluster",
 				"bound_since": 1000}, nil)
 			return

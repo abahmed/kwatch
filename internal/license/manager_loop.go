@@ -109,6 +109,13 @@ func (m *Manager) leaseExtends(ctx context.Context) bool {
 }
 
 func (m *Manager) nextDelay(err error) time.Duration {
+	var conflict ErrConflict
+	if errors.As(err, &conflict) {
+		return m.conflictDelay()
+	}
+	if err == nil || verdictFor(err) != VerdictNone {
+		m.clearConflict()
+	}
 	if err == nil {
 		m.mu.Lock()
 		m.failures = 0

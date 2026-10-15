@@ -158,7 +158,8 @@ func (m *Manager) applyDeactivation(ctx context.Context) bool {
 		m.persistLocked()
 		changed = true
 	}
-	if !at.Before(m.cfg.ProcessStart) && !m.released {
+	if !at.Before(m.cfg.ProcessStart) && at.After(m.movedAt) &&
+		!m.released {
 		m.released, changed = true, true
 	}
 	return changed

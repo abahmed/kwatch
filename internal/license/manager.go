@@ -51,6 +51,11 @@ type Config struct {
 	// it never did. The manager then drops a lease issued before that
 	// moment and stops contacting the server for this process lifetime.
 	DeactivatedAt func(ctx context.Context) (time.Time, error)
+	// MoveRequestedAt, when set, reports when `kwatch license move` asked
+	// this cluster to take the license over; zero when it never did.
+	MoveRequestedAt func(ctx context.Context) (time.Time, error)
+	// MoveFinished records how a request ended, which also answers it.
+	MoveFinished func(ctx context.Context, out MoveOutcome) error
 	// ProcessStart separates a release made while this process ran (stay
 	// released) from an older one (a restart activates again). Zero treats
 	// every release as current.
@@ -96,6 +101,10 @@ type Manager struct {
 	failures int
 	anchor   time.Time // first local reading, for the monotonic cross-check
 	savedMax time.Time // MaxSeen as last written to the LeaseStore
+
+	conflictSince time.Time // start of the current conflict streak
+	moveHandled   time.Time // newest move request already answered
+	movedAt       time.Time // last move here; later releases only count
 
 	done chan struct{}
 }
