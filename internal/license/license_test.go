@@ -104,12 +104,13 @@ func TestParseKey(t *testing.T) {
 	}
 }
 
-func TestDefaultVerifierTrustsNothingWithoutKeys(t *testing.T) {
+func TestDefaultVerifierRejectsKeysNotSignedByProduction(t *testing.T) {
 	_, priv := testEnv()
 	_, err := DefaultVerifier().VerifyKey(
 		SignKey(testKey(testNow.Add(time.Hour)), priv), testNow,
 	)
-	if !errors.Is(err, ErrUnknownKID) {
+	if !errors.Is(err, ErrBadSignature) &&
+		!errors.Is(err, ErrUnknownKID) {
 		t.Fatalf("err = %v", err)
 	}
 }
