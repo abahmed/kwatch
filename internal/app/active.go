@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sync/atomic"
@@ -38,19 +39,20 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 	}
 	reportStoreReset(deps, state)
 	disk := diskState{store: state, client: deps.clients.Kubernetes}
-	session := newStartupManagerWithRuntime(
-		disk, deps.runtime, deps.clients.Clock,
-		newKubernetesRestartEvidence(
-			deps.clients.Kubernetes, kubeclient.GetNamespace()),
-	)
+	lic, err := settleLicense(activeCtx, deps, cancel, disk)
+	if err != nil {
+		return err
+	}
+	session := newSessionStartup(deps, disk)
 	result, err := session.Start(activeCtx)
 	if err != nil {
-		closeStore(state)
+		closeEarly(cancel, lic, state)
 		deps.healthServer.SetComponentError("state", err)
 		return fmt.Errorf("state: startup: %w", err)
 	}
 	deps.readiness.setCurrent("state", true)
 	announceStartup(deps, state, session)
+	lic.watch(activeCtx)
 
 	threads := restoreThreads(deps, disk)
 	defer deps.threadWake.detach()
@@ -61,23 +63,45 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 		state: state, disk: disk, result: result, session: session,
 		threads: threads, guard: guard,
 	})
-	select {
-	case err = <-supervisor.errCh:
-	case <-ctx.Done():
-	}
+	err = awaitSessionEnd(ctx, supervisor, lic)
 	// Readiness goes first: the session is over from this moment, and the
 	// shutdown work below can take many seconds.
 	deps.readiness.withdraw()
 	cancel()
+	lic.stop()
 	finishActiveSession(ctx, activeShutdown{
 		supervisor: supervisor, delivery: deps.deliveryManager,
 		threads: threads, session: session, state: state, guard: guard,
-		failed:         err != nil,
+		failed:         err != nil && !errors.Is(err, errEditionChanged),
 		leadershipLost: leadershipLost(ctx, deps),
 		lastRenewal:    lastRenewalFrom(deps),
 		now:            deps.clients.Clock.Now,
 	})
 	return err
+}
+
+func newSessionStartup(deps *serverDeps, disk diskState) *startupManager {
+	return newStartupManagerWithRuntime(
+		disk, deps.runtime, deps.clients.Clock,
+		newKubernetesRestartEvidence(
+			deps.clients.Kubernetes, kubeclient.GetNamespace()),
+	)
+}
+
+// awaitSessionEnd blocks until a required component fails, leadership
+// ends, or the license asks for a new generation.
+func awaitSessionEnd(
+	ctx context.Context, supervisor *componentSupervisor,
+	lic *licenseSession,
+) error {
+	select {
+	case err := <-supervisor.errCh:
+		return err
+	case <-ctx.Done():
+		return nil
+	case <-lic.restarted():
+		return errEditionChanged
+	}
 }
 
 // announceStartup queues the jobs the last session never sent, then the
@@ -247,11 +271,14 @@ func startActiveComponents(
 			deps.clients.HTTP,
 		).CheckUpdates),
 		selfReportedRun(deps, "rbac", deps.securityMonitor.Start),
-		monitoredComponent(deps, "heartbeat", runHeartbeat),
 		monitoredRun(deps, "alive", aliveRecorder(res.session)),
 		monitoredRun(deps, "threads", runThreadSaver(res.threads)),
 		monitoredRun(deps, "state-compactor",
 			runCompactor(res.state, storeMetrics(deps))),
+	}
+	if deps.has(heartbeatMonitor) {
+		optional = append(optional,
+			monitoredComponent(deps, "heartbeat", runHeartbeat))
 	}
 	if deps.runtime.Lifecycle().CRDEnabled() {
 		optional = append(optional,

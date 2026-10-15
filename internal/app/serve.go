@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -125,10 +126,7 @@ func waitShutdown(
 	case <-sigCh:
 		klog.InfoS("shutting down gracefully...")
 	case err := <-supervisor.errCh:
-		if err != nil {
-			failureErr = err
-			exitCode = 1
-		}
+		failureErr, exitCode = componentExit(err)
 	case <-applicationContext.Done():
 		klog.InfoS("shutting down because the application context was canceled")
 	}
@@ -192,4 +190,18 @@ func releaseLeaseAfterShutdown(deps *serverDeps, parent context.Context) {
 	ctx, cancel := boundedShutdownContext(parent, leaseReleaseTimeout)
 	defer cancel()
 	release(ctx)
+}
+
+// componentExit is the failure and exit code for a component's end. The
+// license's request for a new generation is a planned rebuild, not a
+// failure.
+func componentExit(err error) (error, int) {
+	switch {
+	case err == nil:
+		return nil, 0
+	case errors.Is(err, errEditionChanged):
+		klog.InfoS("rebuilding for the new edition")
+		return nil, 0
+	}
+	return err, 1
 }

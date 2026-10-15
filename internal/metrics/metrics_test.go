@@ -83,3 +83,41 @@ func TestHandlerExposesStableMetricContract(t *testing.T) {
 		}
 	}
 }
+
+func TestLicenseMetricsAreBoundedAndExactlyOneStateIsSet(t *testing.T) {
+	r := &Registry{}
+	text := scrape(t, r)
+	if !strings.Contains(text, `kwatch_license_state{state="community"} 1`) {
+		t.Fatalf("a fresh registry is community:\n%s", text)
+	}
+
+	r.SetLicenseState("grace")
+	r.SetLicenseState("not-a-state") // ignored: labels stay bounded
+	r.LicenseExpiry.Store(1790000000)
+	r.IncLicenseRenewal("success")
+	r.IncLicenseRenewal("success")
+	r.IncLicenseRenewal("rejected")
+	r.IncLicenseRenewal("some error text") // counts as error
+	text = scrape(t, r)
+
+	for _, want := range []string{
+		`kwatch_license_state{state="grace"} 1`,
+		`kwatch_license_state{state="community"} 0`,
+		`kwatch_license_state{state="active"} 0`,
+		`kwatch_license_expiry_timestamp_seconds 1.79e+09`,
+		`kwatch_license_renewals_total{result="success"} 2`,
+		`kwatch_license_renewals_total{result="rejected"} 1`,
+		`kwatch_license_renewals_total{result="error"} 1`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %q in:\n%s", want, text)
+		}
+	}
+	if n := strings.Count(text, "kwatch_license_state{"); n != 8 {
+		t.Fatalf("%d state series, want 8", n)
+	}
+	if strings.Contains(text, "not-a-state") ||
+		strings.Contains(text, "some error text") {
+		t.Fatal("unbounded value became a label")
+	}
+}

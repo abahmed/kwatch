@@ -165,6 +165,46 @@ subjects:
   name: {{ .Release.Name }}
   namespace: {{ .Release.Namespace }}
 ---
+# The license instance key lives in one Secret in this namespace, shipped
+# pre-created and empty by templates/license-instance-secret.yaml. kwatch
+# only reads and updates it, so the grant is limited by resourceNames and
+# there is no create: create cannot be restricted by name in RBAC and would
+# cover every Secret in the namespace. This grant does not depend on
+# rbac.mode or watch.secrets.
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ .Release.Name }}-license
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kwatch.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+    - ""
+  resources:
+    - secrets
+  resourceNames:
+    - kwatch-license-instance
+  verbs:
+    - get
+    - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-license
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kwatch.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Release.Name }}-license
+subjects:
+- kind: ServiceAccount
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+---
 # Restart evidence reads the previous kwatch Pod by name, so get on pods
 # is granted only in kwatch's own namespace.
 kind: Role

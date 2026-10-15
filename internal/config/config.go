@@ -8,6 +8,9 @@ type Config struct {
 	// Telemetry configures the minimal adoption heartbeat.
 	Telemetry Telemetry `yaml:"telemetry"`
 
+	// License holds the kwatch Pro license key.
+	License License `yaml:"license"`
+
 	// Upgrader configuration
 	Upgrader Upgrader `yaml:"upgrader"`
 
@@ -125,6 +128,20 @@ type Telemetry struct {
 	Enabled bool `yaml:"enabled"`
 }
 
+// License configures the kwatch Pro license. The key is a credential:
+// reference it with ${ENV} or ${file:/path}, or set KWATCH_LICENSE_KEY,
+// which wins over this file. It is never logged.
+type License struct {
+	// Key is the license key. Empty runs the Community edition.
+	Key string `yaml:"key"`
+	// Endpoint is the license server. It exists for testing only.
+	Endpoint string `yaml:"endpoint"`
+}
+
+// DefaultLicenseEndpoint is the license server. It matches
+// license.DefaultEndpoint (a test in internal/app keeps them equal).
+const DefaultLicenseEndpoint = "https://api.kwatch.dev"
+
 // App confing struct
 type App struct {
 	// ProxyURL to be used in outgoing http(s) requests except Kubernetes
@@ -149,6 +166,10 @@ type App struct {
 	// CABundlePath is an optional path to a PEM file for custom CA
 	// certificates used in outbound HTTP calls.
 	CABundlePath string `yaml:"caBundlePath"`
+
+	// HideProHints removes the one-line note that names what kwatch Pro
+	// would add from Community messages. Default false.
+	HideProHints bool `yaml:"hideProHints"`
 }
 
 // Upgrader confing struct

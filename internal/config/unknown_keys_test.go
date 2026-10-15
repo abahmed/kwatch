@@ -110,3 +110,64 @@ func TestLintStrictAcceptsKnownKeys(t *testing.T) {
 		t.Fatalf("LintStrict error = %v", err)
 	}
 }
+
+func TestLicenseKeyComesFromTheFileWithEnvExpansion(t *testing.T) {
+	t.Setenv("MY_LICENSE", "KW1-from-expansion")
+	cfg := loadConfigText(t, "license:\n  key: ${MY_LICENSE}\n")
+
+	if cfg.License.Key != "KW1-from-expansion" {
+		t.Fatalf("key = %q", cfg.License.Key)
+	}
+	if cfg.License.Endpoint != DefaultLicenseEndpoint {
+		t.Fatalf("endpoint = %q", cfg.License.Endpoint)
+	}
+	if got := cfg.Runtime.Lifecycle().License(); got != cfg.License {
+		t.Fatalf("runtime license = %+v", got)
+	}
+	if keys := cfg.unknownKeys; len(keys) != 0 {
+		t.Fatalf("license keys reported unknown: %v", keys)
+	}
+}
+
+func TestLicenseKeyEnvironmentWinsOverTheFile(t *testing.T) {
+	t.Setenv("KWATCH_LICENSE_KEY", "  KW1-from-env \n")
+	cfg := loadConfigText(t, "license:\n  key: KW1-from-file\n"+
+		"  endpoint: http://127.0.0.1:9\n")
+
+	if cfg.License.Key != "KW1-from-env" {
+		t.Fatalf("key = %q, want the environment value", cfg.License.Key)
+	}
+	if cfg.License.Endpoint != "http://127.0.0.1:9" {
+		t.Fatalf("endpoint = %q", cfg.License.Endpoint)
+	}
+}
+
+func TestLicenseKeyEnvironmentAloneEnablesTheKey(t *testing.T) {
+	t.Setenv("KWATCH_LICENSE_KEY", "KW1-only-env")
+	cfg := loadConfigText(t, "")
+	if cfg.License.Key != "KW1-only-env" {
+		t.Fatalf("key = %q", cfg.License.Key)
+	}
+}
+
+func TestLicenseSettingsAreValidated(t *testing.T) {
+	for name, license := range map[string]License{
+		"space in key":     {Key: "KW1-a b"},
+		"newline in key":   {Key: "KW1-a\nb"},
+		"relative url":     {Endpoint: "api.kwatch.dev"},
+		"unsupported kind": {Endpoint: "ftp://api.kwatch.dev"},
+	} {
+		errs := validateLicense(license)
+		if len(errs) != 1 {
+			t.Fatalf("%s: errors = %v", name, errs)
+		}
+		if strings.Contains(errs[0].Error(), "KW1-") {
+			t.Fatalf("%s: the key leaked into %q", name, errs[0])
+		}
+	}
+	if errs := validateLicense(License{
+		Key: "KW1-fine", Endpoint: DefaultLicenseEndpoint,
+	}); len(errs) != 0 {
+		t.Fatalf("valid settings rejected: %v", errs)
+	}
+}

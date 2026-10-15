@@ -44,6 +44,13 @@ type Startup struct {
 	// CheckSummary asks the next tick whether every incident a listing
 	// named has resolved.
 	CheckSummary bool
+	// Baseline is the Community start: the failures that exist when
+	// kwatch syncs are the baseline, not news. Nobody hears of them, not
+	// in a summary and not when they change or resolve; only a failure
+	// that begins later is announced.
+	Baseline bool
+	// baselined holds the incidents that existed at start.
+	baselined map[string]bool
 }
 
 // HoldUntilSync starts collecting the startup summary on a cold start,
@@ -75,6 +82,9 @@ func (s *Startup) OpenWindow(now time.Time) {
 func (c *Collector) CollectStartup(
 	ctx context.Context, now time.Time, decisions []incident.Decision,
 ) ([]incident.Decision, bool) {
+	if c.Startup.Baseline {
+		decisions = c.absorbBaselined(ctx, now, decisions)
+	}
 	if c.Startup.Until.IsZero() && !c.Startup.AwaitSync {
 		return c.holdWarm(ctx, now, decisions), false
 	}
@@ -102,6 +112,11 @@ func (c *Collector) holdStartup(
 	id := d.Incident.ID
 	held := s.indexOf(id)
 	switch {
+	case s.Baseline && d.Action == incident.Announce &&
+		s.predatesSync(d.Incident):
+		s.baseline(id)
+		c.recordCarried(ctx, now, d, "baseline")
+		return true
 	case d.Action == incident.Announce && s.predatesSync(d.Incident):
 		if held >= 0 {
 			s.Collected[held] = d
@@ -343,4 +358,38 @@ func (s *Startup) Restore(
 	if restored > 0 {
 		s.WarmAt = grace
 	}
+}
+
+// baseline records that incident id existed at start.
+func (s *Startup) baseline(id string) {
+	if s.baselined == nil {
+		s.baselined = map[string]bool{}
+	}
+	s.baselined[id] = true
+}
+
+// absorbBaselined drops the decisions about incidents that existed at
+// start, for the audit log only, and returns the rest. A resolve ends the
+// incident's place in the baseline.
+func (c *Collector) absorbBaselined(
+	ctx context.Context, now time.Time, decisions []incident.Decision,
+) []incident.Decision {
+	s := &c.Startup
+	if len(s.baselined) == 0 {
+		return decisions
+	}
+	var rest []incident.Decision
+	for _, d := range decisions {
+		id := d.Incident.ID
+		switch {
+		case !s.baselined[id]:
+			rest = append(rest, d)
+		case d.Action == incident.Resolve:
+			delete(s.baselined, id)
+			c.closeUnannounced(ctx, now, d, "baseline")
+		default:
+			c.recordCarried(ctx, now, d, "baseline")
+		}
+	}
+	return rest
 }

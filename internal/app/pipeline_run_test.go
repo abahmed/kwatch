@@ -18,6 +18,7 @@ import (
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/kubeclient"
 )
@@ -48,7 +49,7 @@ func pipelineDeps(t *testing.T, cfg *config.Config) *serverDeps {
 	}
 	server := health.NewHealthServerWithClock(
 		config.HealthCheck{}, clock.RealClock{})
-	deps := &serverDeps{
+	deps := &serverDeps{entitlements: feature.ProEntitlements(),
 		runtime: runtimeWith(cfg),
 		clients: kubeclient.ClientSet{
 			Kubernetes: clientset,

@@ -18,7 +18,32 @@ const maxStatusBytes = 64 << 10
 type statusSource func() status.Report
 
 // statusHolder keeps the current source; the zero value has none.
-type statusHolder struct{ source atomic.Pointer[statusSource] }
+type statusHolder struct {
+	source atomic.Pointer[statusSource]
+	// noJSON refuses ?format=json (see DenyStatusJSON).
+	noJSON atomic.Bool
+	// license supplies the license section; nil leaves it out.
+	license atomic.Pointer[func() *status.License]
+}
+
+// AllowStatusJSON lifts DenyStatusJSON: the edition changed to one that
+// includes the JSON format.
+func (h *HealthServer) AllowStatusJSON() { h.statusHolder.noJSON.Store(false) }
+
+// SetLicenseSource sets where /status gets its license section. The
+// function is called per request and must be cheap and not block.
+func (h *HealthServer) SetLicenseSource(source func() *status.License) {
+	if source == nil {
+		h.statusHolder.license.Store(nil)
+		return
+	}
+	h.statusHolder.license.Store(&source)
+}
+
+// DenyStatusJSON makes /status refuse ?format=json with 402 and
+// {"error":"pro_required"}: the JSON format is not part of the running
+// edition. The text format is unchanged.
+func (h *HealthServer) DenyStatusJSON() { h.statusHolder.noJSON.Store(true) }
 
 // SetStatusSource sets where /status gets its report: the running
 // pipeline. Without one, or after nil, /status answers 503.
@@ -51,8 +76,18 @@ func (h *HealthServer) statusHandler(
 			"monitoring a cluster right now\n"))
 		return
 	}
+	if h.statusHolder.noJSON.Load() &&
+		r.URL.Query().Get("format") == "json" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusPaymentRequired)
+		writeBody(w, []byte("{\"error\":\"pro_required\"}\n"))
+		return
+	}
 	report := (*source)()
 	report.Gaps = h.coverageGaps()
+	if license := h.statusHolder.license.Load(); license != nil {
+		report.License = (*license)()
+	}
 	body, contentType := renderStatus(report, r.URL.Query().Get("format"))
 	w.Header().Set("Content-Type", contentType)
 	w.WriteHeader(http.StatusOK)

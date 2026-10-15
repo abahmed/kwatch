@@ -78,6 +78,9 @@ func TestHelmWatchSecretsFalseGrantsNoSecretAccess(t *testing.T) {
 	for name, documents := range rbacManifests(t, "watch.secrets=false") {
 		grants := manifestGrants(t, documents, "kwatch")
 		for g := range grants {
+			if licenseGrant(g, "kwatch") {
+				continue
+			}
 			if g.resource == "secrets" ||
 				(g.resource == "*" && (g.group == "" || g.group == "*")) {
 				t.Errorf("%s grants %s on %s/%s", name, g.verb, g.group,
@@ -90,6 +93,39 @@ func TestHelmWatchSecretsFalseGrantsNoSecretAccess(t *testing.T) {
 			if !granted(grants, access) {
 				t.Errorf("%s does not grant %+v", name, access)
 			}
+		}
+	}
+}
+
+// The only Secret permissions left without Secret watching are the license
+// instance Secret's: get and update on that one name, and no create.
+func TestSecretGrantsAreOnlyTheLicenseInstanceSecret(t *testing.T) {
+	want := map[grant]bool{
+		{"kwatch", "", "secrets", "", "get", licenseInstanceSecret}:    true,
+		{"kwatch", "", "secrets", "", "update", licenseInstanceSecret}: true,
+	}
+	for name, documents := range rbacManifests(t, "watch.secrets=false") {
+		got := map[grant]bool{}
+		for g := range manifestGrants(t, documents, "kwatch") {
+			if g.resource == "secrets" {
+				got[g] = true
+			}
+		}
+		if len(got) != len(want) {
+			t.Errorf("%s: secret grants %v, want %v", name, got, want)
+		}
+		for g := range want {
+			if !got[g] {
+				t.Errorf("%s: missing %+v", name, g)
+			}
+		}
+	}
+	// The raw manifest grants the same.
+	raw := manifestGrants(t,
+		readManifestFile(t, "../../deploy/deploy.yaml"), "kwatch")
+	for g := range want {
+		if !raw[g] {
+			t.Errorf("raw manifest: missing %+v", g)
 		}
 	}
 }

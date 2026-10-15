@@ -11,6 +11,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/detectors"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/notification/compose"
@@ -46,8 +47,9 @@ func newDependencies(unverifiable ...inventory.Kind) pipeline.Dependencies {
 	policy := config.RuntimeConfigFor(config.DefaultConfig()).Policy()
 	model := inventory.NewModel(inventory.Options{})
 	return pipeline.Dependencies{
-		Model:     model,
-		Detectors: detection.NewRegistry(synced, appDetectors()...),
+		Entitlements: feature.ProEntitlements(),
+		Model:        model,
+		Detectors:    detection.NewRegistry(synced, appDetectors()...),
 		Incidents: incident.NewManager(incident.Config{
 			SeverityByReason:    policy.SeverityByReason(),
 			SeverityByOwnerKind: policy.SeverityByOwnerKind(),

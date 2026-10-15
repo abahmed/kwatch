@@ -14,6 +14,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/kubeclient"
 )
@@ -36,7 +37,7 @@ func (e *fakeElection) Run(ctx context.Context) {
 }
 
 func testServerDeps() *serverDeps {
-	return &serverDeps{
+	return &serverDeps{entitlements: feature.ProEntitlements(),
 		clients: kubeclient.ClientSet{
 			Kubernetes: fake.NewSimpleClientset(),
 			Clock:      clock.RealClock{},

@@ -8,6 +8,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/heartbeat"
 	"github.com/abahmed/kwatch/internal/kubeclient"
@@ -29,6 +30,20 @@ type serverDeps struct {
 	heartbeat        *heartbeat.HeartbeatMonitor
 	pipelineProgress *componentProgress
 	threadWake       *threadWake
+	// entitlements is what the installation may run; nil is the
+	// Community edition. inactivePro
+	// is the Pro configuration it does not run, for /status.
+	entitlements feature.Entitlements
+	inactivePro  []string
+	// edition is the edition the installation runs now. The leader's
+	// license manager updates it; the health server and standby replicas
+	// read it. It starts as the bootstrap edition.
+	edition editionHolder
+	// license is the licensing wiring; nil runs without licensing.
+	license *licenseSetup
+	// editionRestart is set when the leader session ended because the
+	// license changed the edition; RunWithClock then rebuilds.
+	editionRestart atomic.Bool
 
 	// releaseLease is set after a graceful active session so shutdown can
 	// hand over the Lease once delivery has drained.
@@ -39,7 +54,7 @@ type serverDeps struct {
 func newServerDeps(
 	ctx context.Context, cancel context.CancelFunc, boot *bootstrap,
 ) *serverDeps {
-	return &serverDeps{
+	deps := &serverDeps{
 		ctx: ctx, cancel: cancel, runtime: boot.runtime,
 		clients:          boot.clients,
 		healthServer:     boot.healthServer,
@@ -49,7 +64,26 @@ func newServerDeps(
 		heartbeat:        boot.heartbeat,
 		pipelineProgress: newComponentProgress(boot.clock.Now()),
 		threadWake:       boot.threadWake,
+		entitlements:     boot.entitlements,
+		inactivePro:      boot.inactivePro,
+		license:          boot.license,
 	}
+	deps.edition.Store(boot.entitlements)
+	return deps
+}
+
+// setEdition records the edition the license entitles and applies what
+// depends on it before components exist: the /status JSON format.
+func (d *serverDeps) setEdition(e feature.Entitlements) {
+	d.edition.Store(e)
+	if d.healthServer == nil {
+		return
+	}
+	if feature.OrCommunity(e).Limits().StatusJSON {
+		d.healthServer.AllowStatusJSON()
+		return
+	}
+	d.healthServer.DenyStatusJSON()
 }
 
 // componentSpec names a background component and records whether its failure
@@ -109,4 +143,9 @@ func (d *serverDeps) leaseRelease() func(context.Context) {
 	d.leaseMu.Lock()
 	defer d.leaseMu.Unlock()
 	return d.releaseLease
+}
+
+// has reports whether the installation may use id.
+func (d *serverDeps) has(id feature.ID) bool {
+	return entitled(d.entitlements, id)
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -30,6 +31,20 @@ const DefaultNodePressure = time.Minute
 // network unavailability.
 type Node struct {
 	notReady time.Duration
+	// drainDropped is set when the installation does not report drains.
+	// A drain must then not explain a NotReady node away, or the node
+	// would stay hidden for the whole drain envelope.
+	drainDropped bool
+}
+
+// drainFeature is the capability that entitles the drain finding.
+func drainFeature() feature.ID { return nodeGoverns(reasons.NodeDraining) }
+
+// WithDrainDropped returns a detector for an installation that drops the
+// drain finding: NotReady is reported even while the node is draining.
+func (d Node) WithDrainDropped() Node {
+	d.drainDropped = true
+	return d
 }
 
 // NewNode builds the node detector.
@@ -54,6 +69,9 @@ func (d Node) Detect(
 	draining, drain := drainFinding(e)
 	if draining {
 		out = append(out, d.drainOrStuck(ctx, e, drain))
+	}
+	if d.drainDropped {
+		drain = detection.Finding{}
 	}
 	if s, ok := d.readiness(ctx, e); ok &&
 		!expectedNotReady(ctx, drain, s.Since) {

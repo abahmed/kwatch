@@ -38,7 +38,7 @@ type persistence struct {
 
 func newPersistence(deps Dependencies, stats *workerStats) *persistence {
 	p := &persistence{history: newHistoryRecorder(deps, stats)}
-	if deps.Store != nil {
+	if deps.Store != nil && !deps.baselineStart() {
 		p.incidents = newStoreWriter(deps.Store, deps.Timer, stats)
 	}
 	return p

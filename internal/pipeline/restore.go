@@ -14,8 +14,11 @@ import (
 func (e *Engine) restore() error {
 	startup := &e.announcer.collect.Startup
 	began := e.deps.Clock.Now()
-	if e.deps.Store == nil {
+	if e.deps.Store == nil || e.deps.baselineStart() {
 		startup.ColdStart = true
+		if e.deps.baselineStart() {
+			startup.HoldUntilSync()
+		}
 		return nil
 	}
 	records, err := e.deps.Store.LoadIncidents()

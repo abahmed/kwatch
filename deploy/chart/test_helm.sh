@@ -393,4 +393,69 @@ if grep -Fq "every Secret" <<<"$(render_notes --set watch.secrets=false)"; then
 fi
 echo "PASS: Secret access warning"
 
+echo "=== license ==="
+# No key: the env var reads an optional Secret and nothing is created.
+grep -A6 -F "name: KWATCH_LICENSE_KEY" <<<"$OUT1" |
+  grep -Fq "optional: true" || {
+  echo "FAIL: KWATCH_LICENSE_KEY must be an optional secretKeyRef"; exit 1;
+}
+grep -A4 -F "name: KWATCH_LICENSE_KEY" <<<"$OUT1" |
+  grep -Fq "name: test1-license" || {
+  echo "FAIL: the default license Secret is <release>-license"; exit 1;
+}
+if helm template test1 . --show-only templates/license-secret.yaml \
+  >/dev/null 2>&1; then
+  echo "FAIL: no Secret may be created without license.key"; exit 1;
+fi
+OUT_LIC=$(helm template test-lic . --set license.key=KW1-test 2>&1)
+grep -Fq 'license-key: "KW1-test"' <<<"$OUT_LIC" || {
+  echo "FAIL: license.key must create <release>-license"; exit 1;
+}
+OUT_LIC_EX=$(helm template test-lic . --set license.key=KW1-test \
+  --set license.existingSecret=my-license 2>&1)
+grep -A4 -F "name: KWATCH_LICENSE_KEY" <<<"$OUT_LIC_EX" |
+  grep -Fq "name: my-license" || {
+  echo "FAIL: license.existingSecret must be referenced"; exit 1;
+}
+if grep -Fq 'license-key: "KW1-test"' <<<"$OUT_LIC_EX"; then
+  echo "FAIL: existingSecret wins over license.key"; exit 1;
+fi
+# One get/update rule on a single name and no create, in every rbac.mode
+# and with Secret watching on or off.
+for mode in full least-privilege; do
+  for secrets in true false; do
+    OUT_LR=$(helm template test-lic . --set rbac.mode="$mode" \
+      --set watch.secrets="$secrets" --show-only templates/rbac.yaml 2>&1)
+    ROLE=$(awk -v RS='\n---\n' '/kind: Role\n/ && /name: test-lic-license\n/' \
+      <<<"$OUT_LR")
+    [ -n "$ROLE" ] || {
+      echo "FAIL: license Role missing ($mode, secrets=$secrets)"; exit 1;
+    }
+    [ "$(grep -c 'resourceNames:' <<<"$ROLE")" = 1 ] &&
+      [ "$(grep -c -- '- kwatch-license-instance' <<<"$ROLE")" = 1 ] &&
+      [ "$(grep -c -- '- get' <<<"$ROLE")" = 1 ] &&
+      [ "$(grep -c -- '- update' <<<"$ROLE")" = 1 ] &&
+      ! grep -Eq -- '- (create|delete|list|watch|patch|"\*")' <<<"$ROLE" || {
+      echo "FAIL: license Role must be get/update on one name only ($mode, secrets=$secrets)"; exit 1;
+    }
+  done
+done
+# The instance Secret is shipped empty and kept on uninstall.
+OUT_IS=$(helm template test-lic . --show-only templates/license-instance-secret.yaml 2>&1)
+grep -Fq "name: kwatch-license-instance" <<<"$OUT_IS" &&
+  grep -Fq "type: Opaque" <<<"$OUT_IS" &&
+  grep -Fq "helm.sh/resource-policy: keep" <<<"$OUT_IS" &&
+  ! grep -Eq '^(data|stringData):' <<<"$OUT_IS" || {
+  echo "FAIL: instance Secret must be empty, Opaque and kept"; exit 1;
+}
+OUT_LNP=$(helm template test-lnp . --set networkPolicy.enabled=true \
+  --set 'networkPolicy.apiServerPorts={6443}' 2>&1)
+grep -A7 -F "License activation" <<<"$OUT_LNP" | grep -Fq "port: 443" || {
+  echo "FAIL: networkPolicy must allow HTTPS egress for the license"; exit 1;
+}
+if helm template test-lic . --set license.bogus=1 >/dev/null 2>&1; then
+  echo "FAIL: license.bogus must be rejected by the schema"; exit 1;
+fi
+echo "PASS: license"
+
 echo "All helm template tests passed."

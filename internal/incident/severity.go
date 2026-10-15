@@ -27,6 +27,8 @@ func severityTier(severity string) (Tier, bool) {
 type overrides struct {
 	byReason map[string]Tier
 	byKind   map[string]Tier
+	// noPage caps every tier at Notify: paging is off.
+	noPage bool
 }
 
 func newOverrides(byReason, byKind map[string]string) overrides {
@@ -63,6 +65,14 @@ func compileOverrides(in map[string]string) map[string]Tier {
 // kind overrides; among matches the loudest tier wins. An incident without
 // members is never overridden.
 func (o overrides) apply(p *Incident, base Tier) Tier {
+	tier := o.override(p, base)
+	if o.noPage && tier > Notify {
+		return Notify
+	}
+	return tier
+}
+
+func (o overrides) override(p *Incident, base Tier) Tier {
 	if len(p.Members) == 0 {
 		return base
 	}

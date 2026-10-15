@@ -8,6 +8,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/detectors"
+	"github.com/abahmed/kwatch/internal/feature"
 )
 
 // registryLayout lists, per kind, the types of the detectors a registry
@@ -31,7 +32,7 @@ func registryLayout(r *detection.Registry) []string {
 // registries from detectors.Default. Production must too, or a detector
 // added in one place would be scored but never run, or run unscored.
 func TestProductionDetectorsAreDefault(t *testing.T) {
-	got := registryLayout(newDetectorRegistry(nil))
+	got := registryLayout(newDetectorRegistry(nil, feature.ProEntitlements()))
 	want := registryLayout(detection.NewRegistry(nil, detectors.Default()...))
 	if len(want) == 0 {
 		t.Fatal("the default registry holds no detectors")

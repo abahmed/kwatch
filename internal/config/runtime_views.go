@@ -92,6 +92,9 @@ type LifecycleRuntime struct {
 // Telemetry returns the telemetry settings.
 func (o LifecycleRuntime) Telemetry() Telemetry { return o.values.telemetry }
 
+// License returns the license settings.
+func (o LifecycleRuntime) License() License { return o.values.license }
+
 // Upgrader returns the upgrade check settings.
 func (o LifecycleRuntime) Upgrader() Upgrader { return o.values.upgrader }
 

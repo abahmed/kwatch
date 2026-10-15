@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/heartbeat"
 	inventorykube "github.com/abahmed/kwatch/internal/inventory/kube"
@@ -29,12 +30,19 @@ type bootstrap struct {
 	heartbeat       *heartbeat.HeartbeatMonitor
 	clock           clock.Clock
 	threadWake      *threadWake
+	// entitlements is what this installation may run, created once at
+	// startup. inactivePro names the Pro features the configuration sets
+	// that it does not run.
+	entitlements feature.Entitlements
+	inactivePro  []string
+	// license is the licensing wiring built from the configuration.
+	license *licenseSetup
 }
 
 func newBootstrap(
 	ctx context.Context,
 	cfg *config.Config,
-	now func() time.Time,
+	now func() time.Time, entitlements feature.Entitlements,
 ) (*bootstrap, error) {
 	clockSource := clock.Func(now)
 	clients, err := kubeclient.NewClusterClientSet(&net.Resolver{}, clockSource)
@@ -49,6 +57,8 @@ func newBootstrap(
 	// Report warnings once, after the overlay, so KwatchConfig typos are
 	// reported next to the file's.
 	logConfigWarnings(cfg)
+	// Dropped after the overlay, so a KwatchConfig cannot enable Pro.
+	cfg, inactive := applyEdition(cfg, entitlements)
 	// The overlay may change monitor and alert settings, so the snapshot
 	// and the clients that depend on it (outbound HTTP, kubelet) are built
 	// once, here.
@@ -62,7 +72,7 @@ func newBootstrap(
 	deliveryManager := delivery.NewManagerWithDependencies(
 		delivery.Dependencies{
 			HTTPClient: clients.HTTP, Clock: clockSource,
-			OnDelivered: wake.Notify,
+			OnDelivered: wake.Notify, Entitlements: entitlements,
 		},
 	)
 	if err := deliveryManager.InitRuntime(
@@ -70,10 +80,8 @@ func newBootstrap(
 	); err != nil {
 		return nil, fmt.Errorf("initialize delivery providers: %w", err)
 	}
-	healthServer := health.NewHealthServerWithClock(
-		runtime.Lifecycle().HealthCheck(), clockSource,
-	)
-	reportOverlayHealth(healthServer, overlayInvalid)
+	healthServer := newHealthServer(
+		runtime, clockSource, overlayInvalid, entitlements)
 	return &bootstrap{
 		runtime:         runtime,
 		clients:         clients,
@@ -85,8 +93,9 @@ func newBootstrap(
 		// The heartbeat pings only while monitoring is ready.
 		heartbeat: heartbeat.NewHeartbeatMonitorWithRuntime(
 			runtime, clients.HTTP, healthServer.Ready),
-		clock:      clockSource,
-		threadWake: wake,
+		clock: clockSource, threadWake: wake,
+		entitlements: entitlements, inactivePro: inactive,
+		license: newLicenseSetup(runtime),
 	}, nil
 }
 
@@ -101,4 +110,19 @@ func permissionChecks(runtime config.RuntimeConfig) []inventorykube.Access {
 			inventorykube.SecretsResource)
 	}
 	return checks
+}
+
+// newHealthServer builds the health server for the edition: the JSON
+// /status format is a Pro feature.
+func newHealthServer(
+	runtime config.RuntimeConfig, now clock.Clock, overlayInvalid bool,
+	entitlements feature.Entitlements,
+) *health.HealthServer {
+	server := health.NewHealthServerWithClock(
+		runtime.Lifecycle().HealthCheck(), now)
+	reportOverlayHealth(server, overlayInvalid)
+	if !feature.OrCommunity(entitlements).Limits().StatusJSON {
+		server.DenyStatusJSON()
+	}
+	return server
 }

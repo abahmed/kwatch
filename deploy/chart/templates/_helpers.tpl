@@ -235,3 +235,13 @@ chart left it alone.
 true
 {{- end -}}
 {{- end }}
+
+{{/*
+Secret that holds the license key (key license-key). An existing Secret
+wins; otherwise it is the Secret this chart creates when license.key is
+set. The deployment reads it with optional: true, so it may not exist.
+*/}}
+{{- define "kwatch.licenseSecretName" -}}
+{{- $license := default dict .Values.license -}}
+{{- default (printf "%s-license" .Release.Name) $license.existingSecret -}}
+{{- end }}

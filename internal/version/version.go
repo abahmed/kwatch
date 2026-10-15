@@ -23,6 +23,10 @@ type Info struct {
 	Version   string `json:"version"`
 	Commit    string `json:"commit"`
 	BuildDate string `json:"buildDate"`
+	// Edition is the product edition ("community" or "pro"). Current
+	// leaves it empty: the edition is decided at run time, not build
+	// time.
+	Edition string `json:"edition,omitempty"`
 }
 
 func Current() Info {
@@ -31,4 +35,11 @@ func Current() Info {
 
 func JSON() ([]byte, error) {
 	return json.Marshal(Current())
+}
+
+// JSONWithEdition is JSON with the edition the installation runs.
+func JSONWithEdition(edition string) ([]byte, error) {
+	info := Current()
+	info.Edition = edition
+	return json.Marshal(info)
 }

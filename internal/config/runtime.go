@@ -27,6 +27,9 @@ type ApplicationRuntime struct {
 	LogFormatter          string
 	InsecureSkipTLSVerify bool
 	CABundlePath          string
+	// HideProHints removes the Pro note from Community messages
+	// (app.hideProHints).
+	HideProHints bool
 	// KubeletInsecureSkipVerify skips kubelet serving certificate
 	// verification (kubelet.insecureSkipVerify).
 	KubeletInsecureSkipVerify bool
@@ -39,6 +42,7 @@ type ApplicationRuntime struct {
 // maps and slices as public fields. Accessors return defensive copies.
 type runtimeLifecycle struct {
 	telemetry   Telemetry
+	license     License
 	upgrader    Upgrader
 	healthCheck HealthCheck
 	auditLog    AuditLogConfig
@@ -97,11 +101,13 @@ func CompileRuntimeConfig(c *Config) RuntimeConfig {
 			LogFormatter:              c.App.LogFormatter,
 			InsecureSkipTLSVerify:     c.App.InsecureSkipTLSVerify,
 			CABundlePath:              c.App.CABundlePath,
+			HideProHints:              c.App.HideProHints,
 			KubeletInsecureSkipVerify: c.Kubelet.InsecureSkipVerify,
 			WatchSecrets:              c.Watch.Secrets,
 		},
 		lifecycle: runtimeLifecycle{
 			telemetry:   c.Telemetry,
+			license:     c.License,
 			upgrader:    c.Upgrader,
 			healthCheck: c.HealthCheck,
 			auditLog:    c.AuditLog,

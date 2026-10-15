@@ -22,8 +22,12 @@ func (r Report) Text() string {
 	r.writeUpgrade(&b)
 	r.writeZones(&b)
 	r.writeGaps(&b)
-	r.writeCauseChecks(&b)
-	r.writeUnexplained(&b)
+	if !r.Brief {
+		r.writeCauseChecks(&b)
+		r.writeUnexplained(&b)
+	}
+	r.writeEdition(&b)
+	r.writeLicense(&b)
 	return b.String()
 }
 
@@ -191,5 +195,58 @@ func (r Report) writeUnexplained(b *strings.Builder) {
 			text += ", e.g. \"" + row.Sample + "\""
 		}
 		line(b, text)
+	}
+}
+
+// writeEdition names the edition and the Pro features the configuration
+// sets that the edition does not run.
+func (r Report) writeEdition(b *strings.Builder) {
+	if r.Edition == "" {
+		return
+	}
+	line(b, "")
+	line(b, "Edition: "+r.Edition)
+	if len(r.ProInactive) > 0 {
+		line(b, "Pro features configured but inactive: "+
+			strings.Join(r.ProInactive, ", "))
+	}
+}
+
+// writeLicense renders the licensing section.
+func (r Report) writeLicense(b *strings.Builder) {
+	l := r.License
+	if l == nil {
+		return
+	}
+	line(b, "")
+	line(b, "License")
+	line(b, "  Edition: "+l.Edition)
+	line(b, "  State: "+l.State)
+	if l.Plan != "" {
+		line(b, "  Plan: "+l.Plan)
+	}
+	if l.LID != "" {
+		line(b, "  License ID: "+l.LID)
+	}
+	if l.DaysLeft != nil {
+		line(b, "  Days left: "+strconv.Itoa(*l.DaysLeft))
+	}
+	for _, f := range []struct {
+		label string
+		at    *time.Time
+	}{
+		{"Grace until", l.GraceUntil}, {"Last renewed", l.LastRenew},
+		{"Next attempt", l.NextAttempt},
+	} {
+		if f.at != nil {
+			line(b, "  "+f.label+": "+
+				f.at.UTC().Format("2006-01-02 15:04 MST"))
+		}
+	}
+	if l.Reason != "" {
+		line(b, "  Reason: "+l.Reason)
+	}
+	if l.Hint != "" {
+		line(b, "  "+l.Hint)
 	}
 }

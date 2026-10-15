@@ -64,14 +64,19 @@ func runCommand(
 					"[--strict] [--check]", args[1:])
 			}
 			return runLint(strict, check, out, errOut)
+		case "license":
+			return runLicense(args[1:], out, errOut)
 		case "replay-export":
+			if !app.ResolveEntitlements().Has(app.FlightRecorder) {
+				return proRequired(errOut, "replay-export")
+			}
 			return runReplayExport(args[1:], out, errOut, time.Now)
 		default:
 			// A typo must not silently start a full monitoring instance.
 			if _, err := fmt.Fprintf(
 				errOut,
 				"unknown command %q (commands: version, lint, "+
-					"replay-export)\n",
+					"license, replay-export)\n",
 				args[0],
 			); err != nil {
 				return 2
@@ -128,7 +133,8 @@ func runVersion(args []string, out, errOut io.Writer) int {
 		}
 		return 0
 	}
-	data, err := version.JSON()
+	data, err := version.JSONWithEdition(
+		string(app.ResolveEntitlements().Edition()))
 	if err != nil {
 		if _, writeErr := fmt.Fprintf(
 			errOut, "could not encode version: %v\n", err,
@@ -141,4 +147,10 @@ func runVersion(args []string, out, errOut io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+// proRequired is the answer of a command that needs kwatch Pro.
+func proRequired(errOut io.Writer, command string) int {
+	_, _ = fmt.Fprintf(errOut, "%s is a kwatch Pro feature\n", command)
+	return 1
 }

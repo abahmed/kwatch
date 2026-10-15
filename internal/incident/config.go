@@ -38,6 +38,17 @@ type Config struct {
 	// API not served) is never resolved: the absence of findings there
 	// is missing data, not recovery. Nil treats every kind as verifiable.
 	Verifiable func(inventory.Kind) bool
+	// NoFlapping turns flapping off: an incident that fails and recovers
+	// again and again stays an ordinary open incident.
+	NoFlapping bool
+	// NoPaging turns paging rules off: no incident reaches the page
+	// tier, so the loudest message is a notification.
+	NoPaging bool
+	// NoReminders turns off the reminders an open incident repeats.
+	NoReminders bool
+	// NoHandover turns off the hand-over of a restored incident whose
+	// failures another incident took over.
+	NoHandover bool
 	// IDNonce is the nonce new incident IDs carry, 4 hex characters.
 	// Empty draws a random one. Restore adopts the nonce of the newest
 	// restored ID, so the nonce lives as long as the store's incidents:
@@ -98,4 +109,9 @@ func (m *Manager) holdFor(p *Incident, now time.Time) time.Duration {
 		hold = m.cfg.MaxHold
 	}
 	return hold
+}
+
+// flaps reports whether cycles recoveries make an incident flapping.
+func (m *Manager) flaps(cycles int) bool {
+	return !m.cfg.NoFlapping && cycles >= m.cfg.FlapCycles
 }

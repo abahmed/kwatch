@@ -9,6 +9,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/inventory"
 	inventorykube "github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/kubeclient"
@@ -36,7 +37,10 @@ func TestMaintenanceAnnotationsCarryConfiguredNames(t *testing.T) {
 }
 
 func TestNewActiveProberDisabledBuildsNothing(t *testing.T) {
-	deps := &serverDeps{runtime: runtimeWith(&config.Config{})}
+	deps := &serverDeps{
+		entitlements: feature.ProEntitlements(),
+		runtime:      runtimeWith(&config.Config{}),
+	}
 
 	prober, ok := newActiveProber(deps, nil, nil)
 
@@ -45,7 +49,7 @@ func TestNewActiveProberDisabledBuildsNothing(t *testing.T) {
 }
 
 func TestNewActiveProberEnabledBuildsProber(t *testing.T) {
-	deps := &serverDeps{
+	deps := &serverDeps{entitlements: feature.ProEntitlements(),
 		runtime: runtimeWith(&config.Config{
 			ActiveProbeMonitor: config.ActiveProbeMonitor{
 				Enabled:           true,
@@ -100,7 +104,7 @@ func TestPipelineClockDelegatesToApplicationClock(t *testing.T) {
 func TestNewDetectorRegistryUsesSyncPredicate(t *testing.T) {
 	registry := newDetectorRegistry(func(inventory.Kind) bool {
 		return true
-	})
+	}, feature.ProEntitlements())
 	model := inventory.NewModel(inventory.Options{})
 
 	registry.Evaluate(model, time.Now(),

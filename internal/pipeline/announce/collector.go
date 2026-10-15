@@ -118,6 +118,9 @@ func (c *Collector) NoteQuietResolves(ids []string) {
 	}
 	s := &c.Startup
 	s.Collected = slices.DeleteFunc(s.Collected, gone)
+	for _, id := range ids {
+		delete(s.baselined, id)
+	}
 	c.Low.Opened = slices.DeleteFunc(c.Low.Opened, gone)
 	for _, h := range c.Outages {
 		h.Held = slices.DeleteFunc(h.Held, gone)

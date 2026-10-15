@@ -20,6 +20,15 @@ func restoredServiceRig(
 	t *testing.T, graceEnd time.Duration,
 ) (*rig, inventory.EntityID, detection.Finding) {
 	t.Helper()
+	return restoredServiceRigWith(t, Config{}, graceEnd)
+}
+
+// restoredServiceRigWith is restoredServiceRig with the restarted
+// manager configured by cfg.
+func restoredServiceRigWith(
+	t *testing.T, cfg Config, graceEnd time.Duration,
+) (*rig, inventory.EntityID, detection.Finding) {
+	t.Helper()
 	svc := entity(kube.KindService, "warehouse")
 	noEndpoints := sig(svc, reasons.NodeNotReady, detection.Critical)
 	old := newRig(t, Config{})
@@ -27,7 +36,7 @@ func restoredServiceRig(
 	require.Len(t, tickEvery(old, 0, DefaultSettle), 1)
 	records := old.m.Export()
 
-	fresh := newRig(t, Config{})
+	fresh := newRig(t, cfg)
 	fresh.m.Restore(records, at(graceEnd))
 	return fresh, svc, noEndpoints
 }

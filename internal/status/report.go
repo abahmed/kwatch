@@ -30,6 +30,17 @@ type Report struct {
 	// Unexplained counts, over the last seven days, what kwatch saw but
 	// could not explain. It is display only.
 	Unexplained Unexplained `json:"unexplained"`
+	// Edition names the product edition ("Community" or "Pro"); empty
+	// for a report that does not say.
+	Edition string `json:"edition,omitempty"`
+	// ProInactive names the Pro features the configuration sets and the
+	// edition does not run.
+	ProInactive []string `json:"proFeaturesInactive,omitempty"`
+	// License is the licensing state; nil for a report that does not say.
+	License *License `json:"license,omitempty"`
+	// Brief leaves the self-check and unexplained sections out of the
+	// text. Community reports are brief.
+	Brief bool `json:"-"`
 }
 
 // Unexplained is the unexplained counts of the last seven days.
@@ -115,4 +126,27 @@ type Zone struct {
 type Gap struct {
 	What   string `json:"what"`
 	Reason string `json:"reason"`
+}
+
+// ConflictHint tells an operator whose license is bound to another cluster
+// where to move it.
+const ConflictHint = "license is bound to another cluster — transfer it " +
+	"at https://kwatch.dev/account"
+
+// License is the licensing section of /status. It never carries the key,
+// only the masked license ID.
+type License struct {
+	Edition string `json:"edition"`
+	State   string `json:"state"`
+	Plan    string `json:"plan,omitempty"`
+	// LID is the masked license ID.
+	LID string `json:"lid,omitempty"`
+	// DaysLeft counts whole days to the license expiry, never negative.
+	DaysLeft    *int       `json:"daysLeft,omitempty"`
+	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
+	GraceUntil  *time.Time `json:"graceUntil,omitempty"`
+	LastRenew   *time.Time `json:"lastRenew,omitempty"`
+	NextAttempt *time.Time `json:"nextAttempt,omitempty"`
+	Reason      string     `json:"reason,omitempty"`
+	Hint        string     `json:"hint,omitempty"`
 }

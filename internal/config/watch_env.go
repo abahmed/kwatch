@@ -24,6 +24,10 @@ const crdEnabledEnv = "KWATCH_CRD_ENABLED"
 // decide whether to send the heartbeat.
 const telemetryEnv = "KWATCH_TELEMETRY"
 
+// licenseKeyEnv carries the license key, typically from a Secret. It wins
+// over license.key in the file.
+const licenseKeyEnv = "KWATCH_LICENSE_KEY"
+
 // ParseEnvBool reads a boolean environment value. It accepts what
 // strconv.ParseBool accepts plus on/off and yes/no, in any letter case.
 // set is false for an empty (or all-space) value; err is set for any
@@ -57,6 +61,9 @@ func applyEnvironmentOverrides(c *Config) error {
 	errs = append(errs, applyCRDEnvironment(c))
 	_, _, err := ParseEnvBool(telemetryEnv, os.Getenv(telemetryEnv))
 	errs = append(errs, err)
+	if key := strings.TrimSpace(os.Getenv(licenseKeyEnv)); key != "" {
+		c.License.Key = key
+	}
 	return errors.Join(errs...)
 }
 

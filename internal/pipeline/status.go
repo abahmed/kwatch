@@ -4,6 +4,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/redact"
 	"github.com/abahmed/kwatch/internal/status"
@@ -15,7 +16,7 @@ import (
 func (e *Engine) Status() status.Report {
 	now := e.deps.Clock.Now()
 	findings := e.published.all()
-	return status.Report{
+	report := status.Report{
 		At:           now,
 		Cluster:      e.deps.Writer.Cluster,
 		Problems:     e.problems(now),
@@ -25,6 +26,23 @@ func (e *Engine) Status() status.Report {
 		CauseChecks:  e.storage.history.checks.report(now),
 		Unexplained:  e.storage.history.unexplained.report(now),
 	}
+	entitlements := feature.OrCommunity(e.deps.Entitlements)
+	report.Edition = editionName(entitlements.Edition())
+	report.ProInactive = e.deps.InactivePro
+	if !entitlements.Limits().RootCauseDetail {
+		// The self-check and the unexplained counts are Pro detail.
+		report.Brief = true
+		report.CauseChecks, report.Unexplained = nil, status.Unexplained{}
+	}
+	return report
+}
+
+// editionName is the edition as /status names it.
+func editionName(edition feature.Edition) string {
+	if edition == feature.ProEdition {
+		return "Pro"
+	}
+	return "Community"
 }
 
 // Readiness is the upgrade-readiness answer for the digest.

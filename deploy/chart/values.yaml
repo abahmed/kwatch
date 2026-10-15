@@ -38,7 +38,9 @@ rbac:
   # list/watch set matching the built-in sources and skips other kinds.
   # Both modes also grant get on pods in the release namespace only, to
   # explain why the previous kwatch Pod restarted, and get/update only on
-  # kwatch's own state lock Lease.
+  # kwatch's own state lock Lease. The license instance key is the one
+  # Secret exception: get/create/update on the name kwatch-license-instance
+  # in the release namespace, in both modes and even with watch.secrets=false.
   mode: full
 
 watch:
@@ -226,6 +228,21 @@ podLabels: {}
 config:
   crd:
     enabled: true
+
+# kwatch Pro license. Without a key kwatch runs the Community edition and
+# makes no license call. kwatch reads the key from the KWATCH_LICENSE_KEY
+# environment variable, which this chart fills from a Secret key named
+# license-key (optional: the pod starts without the Secret). Prefer
+# existingSecret: a key in values.yaml lands in release history and GitOps
+# repositories. Activation needs HTTPS egress to api.kwatch.dev. kwatch also
+# keeps its instance key in the Secret kwatch-license-instance in the release
+# namespace; the chart grants access to that one name only (see rbac.yaml).
+license:
+  # -- Name of an existing Secret with the key `license-key`.
+  existingSecret: ""
+  # -- The license key itself (discouraged). When set and existingSecret is
+  # empty, the chart creates the Secret <release>-license.
+  key: ""
 
 # -- Use an existing Secret containing config.yaml and credential files.
 # Required for alert providers and heartbeatMonitor.url. The Secret's

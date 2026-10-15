@@ -12,6 +12,7 @@ import (
 func Validate(cfg *Config) []error {
 	var errs []error
 	errs = append(errs, validateApp(cfg.App)...)
+	errs = append(errs, validateLicense(cfg.License)...)
 	errs = append(errs, validateProbes(cfg)...)
 	errs = append(errs, validateSelectors(cfg)...)
 	errs = append(errs, validatePodNamePatterns(cfg)...)

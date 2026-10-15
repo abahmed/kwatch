@@ -38,6 +38,9 @@ func (s *Slack) SendIncident(
 	if m.IsSummary() {
 		return s.sendSummary(ctx, m)
 	}
+	if s.threadsOff() {
+		return s.sendUnthreaded(ctx, m)
+	}
 	lock := s.conversationLock(m.Key)
 	lock.Lock()
 	defer lock.Unlock()

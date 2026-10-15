@@ -7,6 +7,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/detectors"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/pipeline"
@@ -18,7 +19,8 @@ const recordedRollout = "../replay/testdata/bad_rollout.jsonl"
 
 func replayDependencies() pipeline.Dependencies {
 	return pipeline.Dependencies{
-		Model: inventory.NewModel(inventory.Options{}),
+		Entitlements: feature.ProEntitlements(),
+		Model:        inventory.NewModel(inventory.Options{}),
 		Detectors: detection.NewRegistry(nil,
 			detectors.Container{}, detectors.NewPod(detectors.PodThresholds{}),
 			detectors.NewNode(0), detectors.NewWorkload(0),

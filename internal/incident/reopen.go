@@ -70,7 +70,7 @@ func (m *Manager) reopen(p *Incident, now time.Time) {
 	p.Pending.ScheduleReopenUpdate(now)
 	p.RepeatCount = times
 	p.note(now, repeatNote(times))
-	if len(p.Cycles) >= m.cfg.FlapCycles {
+	if m.flaps(len(p.Cycles)) {
 		p.State = Flapping
 	}
 	m.changed[p.ID] = true

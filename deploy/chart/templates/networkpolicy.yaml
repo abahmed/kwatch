@@ -57,6 +57,12 @@ spec:
         - protocol: TCP
           port: {{ . }}
         {{- end }}
+    # License activation and renewal (api.kwatch.dev, behind Cloudflare, so
+    # no fixed address) plus the adoption heartbeat: HTTPS to any address.
+    # Listed on its own because apiServerPorts may omit 443.
+    - ports:
+        - protocol: TCP
+          port: 443
     {{- with .Values.networkPolicy.dnsMetricsPort }}
     # Cluster DNS metrics (CoreDNS or kube-dns pods): DNS request and
     # SERVFAIL rates.

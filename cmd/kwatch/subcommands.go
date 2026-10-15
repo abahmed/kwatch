@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/abahmed/kwatch/internal/alert/catalog"
+	"github.com/abahmed/kwatch/internal/app"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery"
@@ -37,6 +38,14 @@ func runLint(strict, check bool, out, errOut io.Writer) int {
 		if _, writeErr := fmt.Fprintf(
 			out, "  warning: %s\n", warning,
 		); writeErr != nil {
+			return 1
+		}
+	}
+	// Pro configuration is information, never a failure: the edition
+	// ignores it and the file stays valid for an upgrade.
+	for _, name := range app.InactiveProFeatures(cfg) {
+		if _, writeErr := fmt.Fprintf(out, "  info: %s is a kwatch Pro "+
+			"feature and is ignored in this edition\n", name); writeErr != nil {
 			return 1
 		}
 	}
@@ -120,4 +129,18 @@ func verifyProviders(am *delivery.Manager, out, errOut io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+// runLicense dispatches `kwatch license status|deactivate`.
+func runLicense(args []string, out, errOut io.Writer) int {
+	if len(args) != 1 {
+		return usageError(errOut, "license", "status|deactivate", args)
+	}
+	switch args[0] {
+	case "status":
+		return app.LicenseStatus(out, errOut)
+	case "deactivate":
+		return app.LicenseDeactivate(out, errOut)
+	}
+	return usageError(errOut, "license", "status|deactivate", args)
 }

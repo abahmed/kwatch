@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/notification"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -43,8 +44,9 @@ func newHarnessWith(
 	t.Helper()
 	h := &harness{t: t, checks: newRechecks(), now: start}
 	deps := Dependencies{
-		Model:     inventory.NewModel(inventory.Options{}),
-		Detectors: detection.NewRegistry(nil, builtinDetectors()...),
+		Entitlements: feature.ProEntitlements(),
+		Model:        inventory.NewModel(inventory.Options{}),
+		Detectors:    detection.NewRegistry(nil, builtinDetectors()...),
 		// A fixed nonce keeps incident IDs, and so every ordering by
 		// ID, the same on every run.
 		Incidents: incident.NewManager(
