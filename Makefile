@@ -10,7 +10,7 @@
 	coverage coverage-check verify ci verify-focused verify-fast \
 	verify-latency verify-race verify-security verify-manifests \
 	verify-operational verify-scenarios verify-negative-regressions \
-	verify-catalogs \
+	verify-catalogs release-keys-check \
 	docs-verify line-check diff-check mod-tidy-check architecture-check \
 	test-layout-check hygiene-check deadcode-check lint-actions lint-shell \
 	upstream-reasons upstream-check \
@@ -206,6 +206,11 @@ verify-race:
 # A missing scanner fails this target, so a skipped scan never looks clean.
 verify-security:
 	./scripts/security-check.sh
+
+# Fails when no production license key is compiled in. Run by the release
+# and publish workflows; deliberately not part of verify or ci.
+release-keys-check:
+	./scripts/check-release-keys.sh
 
 # Chart lint and template tests need Helm; parity and release consistency
 # are plain text checks. The Kind CRD lifecycle test runs in CI only.
