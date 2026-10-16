@@ -383,7 +383,7 @@ jobs:
           VERSION: ${{ steps.rel.outputs.version }}
         run: |
           set -euo pipefail
-          chart_dir="kwatch.dev/static/charts"
+          chart_dir="kwatch.dev/apps/docs/static/charts"
           mkdir -p "$chart_dir"
           cp "/tmp/kwatch-chart/kwatch-$VERSION.tgz" "$chart_dir/"
 
@@ -417,7 +417,7 @@ jobs:
           git pull --rebase --autostash origin main
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "static/charts/kwatch-$VERSION.tgz" static/charts/index.yaml
+          git add "apps/docs/static/charts/kwatch-$VERSION.tgz" apps/docs/static/charts/index.yaml
           if git diff --cached --quiet; then
             echo "chart $VERSION is already published"
             exit 0
@@ -483,7 +483,7 @@ jobs:
         working-directory: kwatch.dev
         run: |
           set -euo pipefail
-          metadata="src/data/releases.json"
+          metadata="apps/docs/src/data/releases.json"
           test -f "$metadata"
           tmp=$(mktemp)
           if echo "$TAG" | grep -q -- '-rc\.'; then
@@ -507,7 +507,7 @@ jobs:
           set -euo pipefail
           yarn install --frozen-lockfile --ignore-scripts
           yarn typecheck
-          yarn build
+          yarn build:docs
 
       - name: Commit website update
         id: commit
@@ -518,7 +518,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/data/releases.json
+          git add apps/docs/src/data/releases.json
           if git diff --cached --quiet; then
             echo "website metadata already points at $TAG"
             echo "changed=false" >> "$GITHUB_OUTPUT"
