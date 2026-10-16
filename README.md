@@ -1,10 +1,13 @@
 <p align="center">
   <a href="https://kwatch.dev">
-    <img src="./assets/logo.svg" width="220" alt="kwatch" />
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="./assets/logo-dark.svg">
+      <img src="./assets/logo-light.svg" width="260" alt="kwatch">
+    </picture>
   </a>
 </p>
 
-<h2 align="center">See what broke. Understand why. Know what to do next. 👀🧠⚡</h2>
+<h2 align="center">See what broke. Understand why. Know what to do next.</h2>
 
 <p align="center">
   kwatch is the on-call teammate for your Kubernetes cluster. When something
@@ -16,9 +19,8 @@
   <a href="#-quick-start"><b>Quick start</b></a> ·
   <a href="#-editions">Editions</a> ·
   <a href="https://kwatch.dev">Website</a> ·
-  <a href="https://kwatch.dev/docs/getting-started">Docs</a> ·
-  <a href="https://kwatch.dev/pricing">Editions</a> ·
-  <a href="https://discord.gg/kzJszdKmJ7">Discord</a>
+  <a href="https://docs.kwatch.dev">Docs</a> ·
+    <a href="https://discord.gg/kzJszdKmJ7">Discord</a>
 </p>
 
 <p align="center">
