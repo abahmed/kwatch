@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -122,7 +123,12 @@ func TestLicenseTrialWarningsFireOnceEach(t *testing.T) {
 		noticeSession(disk, &log, at(14)).notify(trial)
 	}
 	require.Len(t, log.msgs, 2)
-	require.Contains(t, log.msgs[1], "license ends in 14 day")
+	require.Contains(t, log.msgs[1], "Your kwatch Pro license ends in 14 day"+
+		"(s) (2026-11-01). Renew it at https://kwatch.dev/account")
+	for _, m := range log.msgs {
+		require.NotContains(t, strings.ToLower(m), "trial")
+		require.NotContains(t, m, "trial plan")
+	}
 
 	for range 3 {
 		noticeSession(disk, &log, at(9)).notify(trial)

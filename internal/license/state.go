@@ -123,7 +123,7 @@ func Evaluate(in Inputs) Status {
 		st.State, st.Reason = StateExpired, "license expired"
 		return st
 	case VerdictTrialUsed:
-		st.State, st.Reason = StateInvalid, "trial already used on this cluster"
+		st.State, st.Reason = StateInvalid, "license already used on this cluster"
 		return st
 	}
 	return evaluateLease(in, lease, leaseErr, st)

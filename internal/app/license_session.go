@@ -220,7 +220,7 @@ func (l *licenseSession) view() *status.License {
 	now := l.now()
 	out := &status.License{
 		Edition: editionLabel(l.deps.edition.Load().Edition()),
-		State:   string(st.State), Plan: st.Plan, LID: st.LID,
+		State:   string(st.State), Plan: planLabel(st.Plan), LID: st.LID,
 		Reason: st.Reason,
 	}
 	if !st.ExpiresAt.IsZero() {

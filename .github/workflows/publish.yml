@@ -459,15 +459,10 @@ jobs:
       - name: Require release credentials
         env:
           RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
           set -euo pipefail
           test -n "$RELEASE_TOKEN" || {
             echo "::error::RELEASE_TOKEN is required to update kwatch.dev"
-            exit 1
-          }
-          test -n "$RENDER_DEPLOY_HOOK_URL" || {
-            echo "::error::RENDER_DEPLOY_HOOK_URL is required to deploy kwatch.dev"
             exit 1
           }
 
@@ -532,6 +527,10 @@ jobs:
           git commit -m "chore: publish kwatch $TAG metadata"
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
+      # The website is hosted on Cloudflare Pages and deploys itself from
+      # its own "Deploy website" workflow on every push to main. A push made
+      # with RELEASE_TOKEN (a PAT, unlike GITHUB_TOKEN) does trigger that
+      # workflow, so no deploy hook is called from here.
       - name: Push website update
         if: ${{ steps.commit.outputs.changed == 'true' }}
         env:
@@ -554,15 +553,6 @@ jobs:
             git pull --rebase --autostash origin main
           done
 
-      - name: Trigger Render deploy
-        env:
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --request POST \
-            "$RENDER_DEPLOY_HOOK_URL" >/tmp/render-deploy-response.json
-          echo "Render deploy was triggered"
-
       - name: Summary
         env:
           TAG: ${{ needs.push_to_registry.outputs.tag }}
@@ -571,7 +561,7 @@ jobs:
             echo "## kwatch.dev updated for $TAG"
             echo
             echo "- Release metadata committed to abahmed/kwatch.dev"
-            echo "- Render deploy triggered once"
+            echo "- Deploy runs from the kwatch.dev Deploy website workflow"
           } >> "$GITHUB_STEP_SUMMARY"
 
   publish_release_evidence:
@@ -914,8 +904,8 @@ jobs:
               echo "verified chart $VERSION at $index_url"
               exit 0
             fi
-            echo "waiting for Render to publish chart $VERSION (attempt $attempt/30)"
+            echo "waiting for the kwatch.dev Pages deploy to publish chart $VERSION (attempt $attempt/30)"
             sleep 20
           done
-          echo "::error::chart $VERSION was not reachable from kwatch.dev after Render deployment wait"
+          echo "::error::chart $VERSION was not reachable from kwatch.dev after waiting for the Pages deploy"
           exit 1

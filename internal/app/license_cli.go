@@ -113,7 +113,7 @@ func (c licenseCLI) status(out, errOut io.Writer) int {
 		_, _ = fmt.Fprintln(out, "State:   valid key (activation is not "+
 			"checked here)")
 	}
-	_, _ = fmt.Fprintf(out, "Plan:    %s\n", verified.Plan)
+	_, _ = fmt.Fprintf(out, "Plan:    %s\n", planLabel(verified.Plan))
 	_, _ = fmt.Fprintf(out, "License: %s\n", license.MaskLID(parsed.LID))
 	expires := parsed.ExpiresAt()
 	days := int(expires.Sub(now) / (24 * time.Hour))

@@ -52,7 +52,7 @@ func TestLicenseStatusCLIPrintsTheLocalEvaluation(t *testing.T) {
 	require.Empty(t, errOut.String())
 	text := out.String()
 	require.Contains(t, text, "State:   valid")
-	require.Contains(t, text, "Plan:    pro")
+	require.Contains(t, text, "Plan:    Pro")
 	require.Contains(t, text, "License: lic_…1234")
 	require.Contains(t, text, "30 days left")
 	require.NotContains(t, text, key, "the key is masked")

@@ -31,7 +31,7 @@ var (
 	ErrRevoked       = errors.New("license: revoked by server")
 	ErrSuspended     = errors.New("license: suspended by server")
 	ErrServerExpired = errors.New("license: expired according to server")
-	ErrTrialUsed     = errors.New("license: trial already used " +
+	ErrTrialUsed     = errors.New("license: license already used " +
 		"on this cluster")
 	ErrKeyReplaced        = errors.New("license: key replaced by a newer key")
 	ErrInstanceSuperseded = errors.New("license: another instance " +

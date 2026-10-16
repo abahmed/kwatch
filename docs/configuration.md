@@ -565,7 +565,7 @@ lease, and a key extended on the server keeps working past its own expiry.
 
 kwatch keeps its instance key in the Secret `kwatch-license-instance` in its
 own namespace (the chart's RBAC names that one Secret). `/status` shows a
-License section, notices go to your alert providers once per change (trial
+License section, notices go to your alert providers once per change (license
 ending at 14 and 3 days, grace, Pro disabled with the reason, Pro enabled),
 and the installer's **License / Pro** menu shows the state. Removing the key
 there (and uninstalling) releases the cluster binding so the key can move to

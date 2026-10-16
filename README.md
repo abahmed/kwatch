@@ -142,7 +142,7 @@ license key, one per cluster.
 
 | | Community | Pro |
 | --- | --- | --- |
-| Price | Free forever | Free during early access: 3 months per license, may be renewed |
+| Price | Free forever | See [kwatch.dev/pricing](https://kwatch.dev/pricing) |
 | Detection | Pod crash loops, OOM and Pending; node NotReady | Adds node pressure and draining, readiness, rollouts, Jobs and CronJobs, PDBs, HPAs, storage, network, admission, certificates, quota, custom resources, control plane, probes and unusual events |
 | Analysis | Root-cause headline | Full proof, shared-factor suspects, who changed what, impact, log excerpts |
 | Incidents | Basic dedup and noise control, state in memory | Flapping detection, startup summary, state kept on disk across restarts, changes made while kwatch was down |
@@ -345,8 +345,7 @@ it once at startup.
 <details>
 <summary><b>How much does it cost to run?</b></summary>
 
-The Community edition is free, and Pro is free during early access (see
-[Editions](#-editions)). kwatch runs as one Pod with a 512 MiB memory limit
+The Community edition is free (see [Editions](#-editions)). kwatch runs as one Pod with a 512 MiB memory limit
 and a 2 GiB volume for its state.
 </details>
 
