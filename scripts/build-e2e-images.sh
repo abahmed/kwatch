@@ -4,6 +4,9 @@
 # receiver and the workload. They are built side by side. Names carry the
 # source commit, so a build in one CI job can be loaded in another.
 #
+# The Kwatch image is built with -tags licensetest so the scenarios can run
+# it as Pro with KWATCH_EDITION_OVERRIDE=pro. Release images never are.
+#
 # Usage: build-e2e-images.sh [SAVE_FILE]
 #   SAVE_FILE  also write the images to this gzip tar (docker save).
 #
@@ -26,6 +29,7 @@ workload_image="kwatch-e2e-workload:${source_sha}"
 kwatch_pid=""
 if [ "${BUILD_KWATCH_IMAGE:-true}" = true ]; then
 	docker build --load --tag "$kwatch_image" \
+		--build-arg GO_BUILD_TAGS=licensetest \
 		--build-arg RELEASE_VERSION=e2e \
 		--build-arg GIT_COMMIT="$source_sha" \
 		--build-arg BUILD_DATE="$BUILD_DATE" "$candidate_root" &

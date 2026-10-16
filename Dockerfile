@@ -7,6 +7,10 @@ FROM --platform=$BUILDPLATFORM golang:1.27.2-alpine@sha256:f92b6ef800e499660581e
 ARG RELEASE_VERSION="dev"
 ARG GIT_COMMIT="none"
 ARG BUILD_DATE="unknown"
+# Extra Go build tags. Empty for every release and publish image. Only the
+# e2e image build sets it (to licensetest); scripts/check-release-consistency.sh
+# fails when the default or a release workflow changes that.
+ARG GO_BUILD_TAGS=""
 
 # Supplied by buildx for each requested platform.
 ARG TARGETOS
@@ -41,7 +45,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     : "${TARGETARCH:?empty - buildx did not supply TARGETARCH}"; \
     export CGO_ENABLED=0 GOOS="${TARGETOS}" GOARCH="${TARGETARCH}" SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH}"; \
     if [ "${TARGETARCH}" = "arm" ]; then export GOARM="${TARGETVARIANT#v}"; fi; \
-    go build -trimpath -buildvcs=false \
+    go build -trimpath -buildvcs=false ${GO_BUILD_TAGS:+-tags "${GO_BUILD_TAGS}"} \
       -ldflags "-X github.com/abahmed/kwatch/internal/version.version=${RELEASE_VERSION} -X github.com/abahmed/kwatch/internal/version.gitCommitID=${GIT_COMMIT} -X github.com/abahmed/kwatch/internal/version.buildDate=${BUILD_DATE}" \
       -o kwatch ./cmd/kwatch
 

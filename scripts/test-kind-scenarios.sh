@@ -456,6 +456,10 @@ if ! grep -q "image: $KWATCH_IMAGE\$" "$kwatch_manifest" ||
 	exit 1
 fi
 kubectl apply -f "$kwatch_manifest"
+# The e2e image is a licensetest build; this makes it run as Pro, because the
+# audit log and many detectors the scenarios exercise are Pro features.
+kubectl --namespace kwatch set env deployment/kwatch \
+	KWATCH_EDITION_OVERRIDE=pro
 # KWATCH_VERBOSITY=4 makes Kwatch log every finding and incident membership
 # change, which explains an incident that does not resolve.
 if [ -n "${KWATCH_VERBOSITY:-}" ]; then
