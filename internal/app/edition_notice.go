@@ -186,8 +186,7 @@ func upgradeNoticeText(n editionNotice) string {
 	if len(n.detectors) > 0 {
 		text += ": " + status.ProDetectorsText(n.detectors)
 	}
-	text += ". kwatch Pro is free during early access: " +
-		upgradeTrialURL
+	text += ". Get kwatch Pro at " + upgradeTrialURL
 	return text
 }
 

@@ -166,7 +166,7 @@ func TestEditionIsNotRecordedUntilCommit(t *testing.T) {
 	assert.Len(t, r.sent, 1, "a plan that was never committed sent nothing")
 }
 
-func TestUpgradeNoticeTextExplainsTheEditionsAndLinksTheTrial(t *testing.T) {
+func TestUpgradeNoticeTextExplainsTheEditionsAndLinksSignup(t *testing.T) {
 	text := upgradeNoticeText(newEditionNotice(
 		feature.CommunityEntitlements(), deliveryConfig()))
 

@@ -8,8 +8,9 @@ import (
 	"github.com/abahmed/kwatch/internal/notification"
 )
 
-// Trial warning thresholds, in whole days left.
+// Expiry warning thresholds, in whole days left.
 const (
+	renewURL        = "https://kwatch.dev/account"
 	trialWarnDays   = 14
 	trialUrgentDays = 3
 )
@@ -19,7 +20,8 @@ const (
 type licenseNotified struct {
 	// Pro is true while Pro is enabled and the operator knows it.
 	Pro bool `json:"pro"`
-	// Trial14 and Trial3 hold the license the warning was sent for.
+	// Trial14 and Trial3 (persisted JSON keys, unchanged) hold the
+	// license the warning was sent for.
 	Trial14 string `json:"trial14,omitempty"`
 	Trial3  string `json:"trial3,omitempty"`
 	// Grace holds the end of the grace window the notice was sent for.
@@ -28,7 +30,7 @@ type licenseNotified struct {
 
 // licenseNotices decides which messages a status change calls for and
 // returns the updated record. Each transition yields at most one message:
-// Pro enabled, Pro disabled, grace entered, and the two trial warnings.
+// Pro enabled, Pro disabled, grace entered, and the two expiry warnings.
 func licenseNotices(
 	rec licenseNotified, st license.Status, now time.Time,
 ) ([]string, licenseNotified) {
@@ -69,11 +71,7 @@ func proLostState(s license.State) bool {
 }
 
 func proEnabledNotice(st license.Status) string {
-	text := "kwatch Pro is enabled"
-	if st.Plan != "" {
-		text += " (" + st.Plan + " plan)"
-	}
-	return notification.MarkerLow + " " + text + "."
+	return notification.MarkerLow + " kwatch Pro is enabled."
 }
 
 func proDisabledNotice(st license.Status) string {
@@ -95,7 +93,7 @@ func graceNotice(st license.Status) string {
 		" UTC; Pro features stop then unless it renews."
 }
 
-// trialNotice returns the trial warning that is due, if any.
+// trialNotice returns the expiry warning that is due, if any.
 func trialNotice(
 	rec licenseNotified, st license.Status, now time.Time,
 ) (string, licenseNotified) {
@@ -117,7 +115,8 @@ func trialNotice(
 	default:
 		return "", rec
 	}
-	return notification.MarkerNotify + " the free kwatch Pro license ends in " +
+	return notification.MarkerNotify + " Your kwatch Pro license ends in " +
 		fmt.Sprintf("%d day(s)", days) + " (" +
-		st.ExpiresAt.UTC().Format("2006-01-02") + " UTC).", rec
+		st.ExpiresAt.UTC().Format("2006-01-02") + "). Renew it at " +
+		renewURL, rec
 }
