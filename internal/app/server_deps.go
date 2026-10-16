@@ -13,6 +13,7 @@ import (
 	"github.com/abahmed/kwatch/internal/heartbeat"
 	"github.com/abahmed/kwatch/internal/kubeclient"
 	"github.com/abahmed/kwatch/internal/rbac"
+	"github.com/abahmed/kwatch/internal/storage"
 )
 
 // serverDeps contains the components owned by the application runtime. The
@@ -47,6 +48,14 @@ type serverDeps struct {
 	// editionRestart is set when the leader session ended because the
 	// license changed the edition; RunWithClock then rebuilds.
 	editionRestart atomic.Bool
+	// rebuild paces the retries of a generation built after an edition
+	// change; nil on a first start, which never retries.
+	rebuild *rebuildRetry
+	// openedStore is the state file the leader session opened. A rebuild
+	// waits for its Done before the next generation reopens the file.
+	openedStore atomic.Pointer[storage.Store]
+	// openState opens the state file; nil uses storage.Open.
+	openState stateOpener
 
 	// releaseLease is set after a graceful active session so shutdown can
 	// hand over the Lease once delivery has drained.

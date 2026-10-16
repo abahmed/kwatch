@@ -111,6 +111,9 @@ type file struct {
 
 	writes   map[Bucket]*atomic.Uint64 // see generation in mirror.go
 	counters counters
+
+	done     chan struct{} // closed once Close has returned
+	doneOnce sync.Once
 }
 
 // Open opens or creates the state file at path. The directory is created
@@ -132,6 +135,7 @@ func Open(path string, options Options) (*Store, error) {
 		path: path, now: options.Now,
 		sizeCap: capOrDefault(options.SizeCap), free: freeSpaceOf(options),
 		volumeLimit: options.VolumeLimit, writes: newGenerations(),
+		done: make(chan struct{}),
 	}
 	var db *bolt.DB
 	var err error
@@ -225,6 +229,7 @@ func (f *file) openForWriting() error {
 // Close runs the OnClose functions, then releases the file for every
 // handle of it.
 func (s *Store) Close() error {
+	defer s.doneOnce.Do(func() { close(s.done) })
 	s.mu.Lock()
 	closers := s.closers
 	s.closers = nil
