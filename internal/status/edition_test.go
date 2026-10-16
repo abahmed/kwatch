@@ -93,7 +93,8 @@ func TestLicenseSectionHintsAtTheTransferOnConflict(t *testing.T) {
 		Edition: "Community", State: "conflict", Hint: ConflictHint,
 	}
 	text := r.Text()
-	want := "license is bound to another cluster — transfer it at " +
+	want := "license is bound to another cluster — move it from the " +
+		"installer's License / Pro menu or transfer it at " +
 		"https://kwatch.dev/account"
 	if !strings.Contains(text, want) {
 		t.Fatalf("missing the hint in\n%s", text)

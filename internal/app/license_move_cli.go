@@ -95,7 +95,8 @@ func (c licenseCLI) awaitMove(
 			return moveResult{}, errors.New("no answer from the running " +
 				"kwatch yet. Is kwatch running with this license key? " +
 				"Only its leader answers; the request stays queued for " +
-				"10 minutes. Check `kwatch license status` or retry")
+				"10 minutes. Check the license status in the " +
+				"installer's License / Pro menu, or try again")
 		}
 	}
 }
@@ -124,7 +125,7 @@ func printMoveResult(
 			"https://kwatch.dev/account")
 	case license.MoveStale:
 		_, _ = fmt.Fprintln(errOut, "ERROR: the request waited too long "+
-			"for the running kwatch and was dropped; run it again.")
+			"for the running kwatch and was dropped; try again.")
 	default:
 		_, _ = fmt.Fprintf(errOut, "ERROR: the license could not be "+
 			"moved: %s\n", res.Detail)

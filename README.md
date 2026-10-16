@@ -178,8 +178,8 @@ environment of the same command.
 - You get 3 transfers per 30 days to move a key to another cluster.
 - When a license expires, kwatch falls back to Community and alerting never
   stops.
-- `kwatch license status` prints the local license state without using the
-  network. The same state is in `/status`.
+- The license state is in `/status` and in the installer's **License / Pro**
+  menu (**Show license status**).
 
 **What is sent.** The hashed cluster ID, the kwatch version, the node count
 and the instance public key. Community without a key makes no license calls.

@@ -136,8 +136,9 @@ type Gap struct {
 
 // ConflictHint tells an operator whose license is bound to another cluster
 // where to move it.
-const ConflictHint = "license is bound to another cluster — transfer it " +
-	"at https://kwatch.dev/account"
+const ConflictHint = "license is bound to another cluster — move it " +
+	"from the installer's License / Pro menu or transfer it at " +
+	"https://kwatch.dev/account"
 
 // License is the licensing section of /status. It never carries the key,
 // only the masked license ID.
