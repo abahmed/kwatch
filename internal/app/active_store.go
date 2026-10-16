@@ -34,7 +34,48 @@ func openStore(ctx context.Context, deps *serverDeps) (*storage.Store, error) {
 	}
 	path := filepath.Join(dataDir(), "state.db")
 	steps := newStartupSteps(deps.clients.Clock.Now)
-	s, err := storage.Open(path, storage.Options{
+	var s *storage.Store
+	// A rebuilt generation may find the file lock still held by the
+	// previous one, so the whole open and claim is retried on that.
+	err = deps.rebuild.do(ctx, "state store", func() (err error) {
+		s, err = openAndClaim(ctx, deps, path, limit, identity, steps)
+		return err
+	})
+	if err != nil {
+		if deps.rebuild != nil {
+			_ = failRebuild("state store", err)
+		}
+		return nil, err
+	}
+	deps.openedStore.Store(s)
+	size := int64(0)
+	if info, err := os.Stat(path); err == nil {
+		size = info.Size()
+	}
+	klog.InfoS("claimed state store", "component", "state",
+		"operation", "claim", "epoch", s.Epoch(), "fileBytes", size,
+		"schemaVersion", storage.SchemaVersion,
+		"openMs", steps.took["open"].Milliseconds(),
+		"leaseCheckMs", steps.took["lease check"].Milliseconds(),
+		"claimMs", steps.took["claim"].Milliseconds(),
+		"totalMs", steps.total().Milliseconds())
+	return s, nil
+}
+
+// stateOpener opens the state file; tests replace it.
+type stateOpener func(string, storage.Options) (*storage.Store, error)
+
+// openAndClaim is one attempt to open the state file and claim it. It
+// closes the file again when a later step fails.
+func openAndClaim(
+	ctx context.Context, deps *serverDeps, path string, limit int64,
+	identity string, steps *startupSteps,
+) (*storage.Store, error) {
+	open := storage.Open
+	if deps.openState != nil {
+		open = deps.openState
+	}
+	s, err := open(path, storage.Options{
 		Now:         deps.clients.Clock.Now,
 		DeferRepair: true,
 		VolumeLimit: limit,
@@ -49,23 +90,12 @@ func openStore(ctx context.Context, deps *serverDeps) (*storage.Store, error) {
 		closeStore(s)
 		return nil, err
 	}
-	epoch, err := s.Claim()
+	_, err = s.Claim()
 	steps.done("claim")
 	if err != nil {
 		closeStore(s)
 		return nil, err
 	}
-	size := int64(0)
-	if info, err := os.Stat(path); err == nil {
-		size = info.Size()
-	}
-	klog.InfoS("claimed state store", "component", "state",
-		"operation", "claim", "epoch", epoch, "fileBytes", size,
-		"schemaVersion", storage.SchemaVersion,
-		"openMs", steps.took["open"].Milliseconds(),
-		"leaseCheckMs", steps.took["lease check"].Milliseconds(),
-		"claimMs", steps.took["claim"].Milliseconds(),
-		"totalMs", steps.total().Milliseconds())
 	return s, nil
 }
 

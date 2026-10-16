@@ -121,3 +121,25 @@ func TestLicenseMetricsAreBoundedAndExactlyOneStateIsSet(t *testing.T) {
 		t.Fatal("unbounded value became a label")
 	}
 }
+
+func TestEditionRebuildMetricIsBounded(t *testing.T) {
+	r := &Registry{}
+	r.IncEditionRebuild("retry")
+	r.IncEditionRebuild("retry")
+	r.IncEditionRebuild("success")
+	r.IncEditionRebuild("some error text") // counts as failed
+	text := scrape(t, r)
+
+	for _, want := range []string{
+		`kwatch_edition_rebuilds_total{result="success"} 1`,
+		`kwatch_edition_rebuilds_total{result="retry"} 2`,
+		`kwatch_edition_rebuilds_total{result="failed"} 1`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %q in:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "some error text") {
+		t.Fatal("unbounded value became a label")
+	}
+}

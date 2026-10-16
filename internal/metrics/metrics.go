@@ -63,6 +63,7 @@ type Registry struct {
 	LicenseStateIndex        atomic.Int64
 	LicenseExpiry            atomic.Int64
 	LicenseRenewals          [len(licenseRenewalResults)]atomic.Int64
+	EditionRebuilds          [len(editionRebuildResults)]atomic.Int64
 	DecisionLag              LagHistogram
 	// Delivery holds the per-provider and outbox delivery metrics.
 	Delivery DeliveryMetrics
@@ -320,24 +321,13 @@ func (r *Registry) IncTelemetryFailure(reason string) {
 	r.TelemetryFailures[2].Add(1)
 }
 
-// IncStorageReset records one state file reset using a bounded reason
-// label; an unknown reason counts as unreadable.
-func (r *Registry) IncStorageReset(reason string) {
-	for i, allowed := range storageResetReasons {
-		if reason == allowed {
-			r.StorageResets[i].Add(1)
-			return
-		}
-	}
-	r.StorageResets[1].Add(1)
-}
-
 // Describe implements prometheus.Collector.
 func (r *Registry) Describe(ch chan<- *prometheus.Desc) {
 	ch <- incidentsDesc
 	ch <- telemetryFailuresDesc
 	ch <- storageResetsDesc
 	r.describeLicense(ch)
+	r.describeRebuilds(ch)
 	ch <- investigationsDesc
 	ch <- unexplainedDesc
 	ch <- panicsDesc
@@ -370,6 +360,7 @@ func (r *Registry) Collect(ch chan<- prometheus.Metric) {
 		)
 	}
 	r.collectLicense(ch)
+	r.collectRebuilds(ch)
 	for i, result := range investigationResults {
 		ch <- prometheus.MustNewConstMetric(
 			investigationsDesc, prometheus.CounterValue,

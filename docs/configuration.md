@@ -263,6 +263,7 @@ Endpoints kwatch serves so you can see it's alive and grab Prometheus metrics. T
 | `kwatch_license_state` | gauge | `state` = `community`, `invalid`, `pending`, `active`, `grace`, `expired`, `revoked`, `conflict` | 1 for the current licensing state, 0 for the others (leader only) |
 | `kwatch_license_expiry_timestamp_seconds` | gauge | none | License expiry as a Unix timestamp; 0 without a license |
 | `kwatch_license_renewals_total` | counter | `result` = `success`, `rejected`, `error` | License activation and renewal attempts |
+| `kwatch_edition_rebuilds_total` | counter | `result` = `success`, `retry`, `failed` | In-process rebuilds after a license edition change: success once the new generation serves, retry per transient step retry, failed when a rebuild gave up and the process exits |
 | `kwatch_heartbeat_failures_total` | counter | none | Heartbeat pings that failed or were rejected |
 | `kwatch_kubelet_stats_failures_total` | counter | none | Kubelet stats summary reads that failed, one per node per round |
 | `kwatch_storage_resets_total` | counter | `reason` = `schema_mismatch`, `unreadable` | State files set aside (or deleted) and recreated at open |

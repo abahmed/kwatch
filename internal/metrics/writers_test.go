@@ -25,6 +25,7 @@ var writtenVia = map[string]string{
 	"Panics":            "IncPanic",
 	"LicenseStateIndex": "SetLicenseState",
 	"LicenseRenewals":   "IncLicenseRenewal",
+	"EditionRebuilds":   "IncEditionRebuild",
 }
 
 // productionSelectors returns every selector name used by non-test Go files

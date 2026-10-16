@@ -107,12 +107,16 @@ func (h *HealthServer) Stop(ctx context.Context) error {
 		return err
 	}
 	h.stopped = true
-	server := h.server
+	server, listener := h.server, h.listener
 	h.lifecycleMu.Unlock()
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	err := server.Shutdown(ctx)
+	// Shutdown closes only a listener that Serve already tracks. Closing
+	// it here frees the port even when Serve never ran, which an
+	// in-process rebuild needs before the next generation binds it.
+	_ = listener.Close()
 	h.lifecycleMu.Lock()
 	h.stopErr = err
 	h.lifecycleMu.Unlock()
