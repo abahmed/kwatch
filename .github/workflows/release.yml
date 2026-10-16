@@ -90,6 +90,11 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # A release must verify licenses: stop before tagging when the
+      # production signing key is not compiled in.
+      - name: Require the production license key
+        run: ./scripts/check-release-keys.sh
+
       - name: Compute version
         id: meta
         env:
@@ -510,7 +515,7 @@ jobs:
           test "$catalog_header" = "# kwatch config catalog v1" || {
             echo "::error::release tag has an invalid configuration catalog"; exit 1;
           }
-          test "$feature_catalog_header" = "# kwatch feature catalog v1" || {
+          test "$feature_catalog_header" = "# kwatch feature catalog v2" || {
             echo "::error::release tag has an invalid feature catalog"; exit 1;
           }
           test "$provider_catalog_header" = "# kwatch provider catalog v1" || {

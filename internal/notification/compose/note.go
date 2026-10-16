@@ -83,6 +83,8 @@ const (
 	partAction
 	// partChecked is last so a cut message loses it first.
 	partChecked
+	// partHint is the Community note that names what Pro adds.
+	partHint
 )
 
 // maxProof bounds the proof: one or two facts convince, more is noise.
@@ -242,7 +244,7 @@ func fill(msg *notification.Message, marker string, sentences []sentence) {
 	for i, s := range sentences {
 		texts = append(texts, s.text)
 		note += noteGap(s.part) + s.text
-		if i > 0 && s.part != partAction {
+		if i > 0 && s.part != partAction && s.part != partHint {
 			msg.Lines = append(msg.Lines, s.text)
 		}
 	}
@@ -256,7 +258,7 @@ func fill(msg *notification.Message, marker string, sentences []sentence) {
 // checked line starts a new line so it is not read as part of the
 // command that ends the action.
 func noteGap(p part) string {
-	if p == partChecked {
+	if p == partChecked || p == partHint {
 		return "\n"
 	}
 	return " "

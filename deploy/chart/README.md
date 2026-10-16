@@ -94,6 +94,19 @@ helm upgrade kwatch kwatch/kwatch \
   --values values.yaml
 ```
 
+The chart ships the empty Secret `kwatch-license-instance` and kwatch only has
+get and update on that one name (no `create` on Secrets). The chart never
+renders `data` for it and keeps it on uninstall (`helm.sh/resource-policy:
+keep`). Because neither the previous nor the new manifest has `data`, Helm's
+three-way merge leaves the instance key kwatch wrote alone on upgrade. If you
+install without this chart's
+templates, create that Secret empty (type Opaque) yourself, or the license
+stays pending and Community. Besides the instance key, `kwatch license
+deactivate` writes a `deactivated-at` field to the same Secret so the running
+leader drops its lease and falls back to Community. Licenses use 3 day leases
+with a 4 day grace, so a cluster that cannot reach the license server keeps
+Pro for at most 7 days.
+
 Helm upgrades the `KwatchConfig` CRD automatically. The chart keeps the CRD
 when the release is removed so configuration resources are not deleted by
 surprise.
@@ -124,6 +137,14 @@ can monitor the cluster.
 helm uninstall kwatch --namespace kwatch
 ```
 
+The Secret `kwatch-license-instance` (the license instance identity) is
+annotated `helm.sh/resource-policy: keep`, so uninstall leaves it in place and
+a reinstall keeps the same identity. Delete it yourself to start fresh:
+
+```bash
+kubectl delete secret kwatch-license-instance --namespace kwatch
+```
+
 Delete the namespace only if it contains no other resources you want to keep:
 
 ```bash
@@ -139,10 +160,12 @@ kubectl delete namespace kwatch
 | `config.resyncSeconds` | Informer resync, a safety net for lost watch events: `0` (off) or at least `30`; the schema rejects other values | `300` |
 | `config.app.logFormatter` | `text` or `json` | `text` |
 | `config.app.caBundlePath` / `config.app.insecureSkipTLSVerify` | Extra PEM CA bundle for outbound HTTP (added to the system roots) and a switch that skips TLS verification (testing only). Not settable from a `KwatchConfig` | `""` / `false` |
+| `license.existingSecret` | Existing Secret with the key `license-key`, read as `KWATCH_LICENSE_KEY` (optional: the pod starts as Community without it) | `""` |
+| `license.key` | The license key itself (discouraged: it lands in release history). When set and `existingSecret` is empty, the chart creates the Secret `<release>-license` | `""` |
 | `config.healthCheck.statusEndpoint` | Serve the read-only `/status` view (open incident object names, no authentication) on the health port. Off by default; with the NetworkPolicy on it is limited like the rest of the port. Reach it with `kubectl port-forward` | `false` |
 | `config.healthCheck.port` | Health port: container, probe and NetworkPolicy port. The health check cannot be disabled | `8060` |
 | `networkPolicy.enabled` | Render a NetworkPolicy that admits the health port (own namespace, `kubeletCIDRs` and `healthIngressFrom` only) and allows DNS, `networkPolicy.apiServerPorts` and kubelet (`networkPolicy.kubeletPort`, default 10250) egress | `false` |
-| `networkPolicy.allowDefaults` | Admit the health port and open DNS, `apiServerPorts`, kubelet and DNS metrics egress. `false` only when your own rules cover the API server, kubelets and probes | `true` |
+| `networkPolicy.allowDefaults` | Admit the health port and open DNS, `apiServerPorts`, kubelet and DNS metrics egress. `false` only when your own rules cover the API server, kubelets and probes. With `license.key` or `license.existingSecret` set it also opens TCP 443 to any address for license activation and renewal, even if `apiServerPorts` omits 443 | `true` |
 | `networkPolicy.apiServerPorts` | TCP ports open to any address for the API server and HTTPS providers; at least one is required (an empty list would open all egress) | `[443, 6443]` |
 | `networkPolicy.kubeletPort` | Kubelet HTTPS port opened for node stats | `10250` |
 | `networkPolicy.dnsMetricsPort` | Cluster DNS metrics port opened to the DNS pods in `kube-system` (DNS request and SERVFAIL rates); `0` omits it | `9153` |

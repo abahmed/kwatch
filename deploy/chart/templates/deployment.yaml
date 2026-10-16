@@ -27,6 +27,11 @@ spec:
         {{- else }}
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- end }}
+        {{- with (default dict .Values.license).key }}
+        {{- if not (default dict $.Values.license).existingSecret }}
+        checksum/license: {{ . | sha256sum }}
+        {{- end }}
+        {{- end }}
         {{- with .Values.podAnnotations }}
           {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -99,6 +104,14 @@ spec:
             # and RBAC this chart installs.
             - name: KWATCH_CRD_ENABLED
               value: {{ dig "crd" "enabled" true (default dict .Values.config) | toString | quote }}
+            # The license key. optional: true lets the pod start, as the
+            # Community edition, when the Secret does not exist.
+            - name: KWATCH_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kwatch.licenseSecretName" . }}
+                  key: license-key
+                  optional: true
             {{- if eq (include "kwatch.watchSecrets" .) "false" }}
             # watch.secrets=false: matches the RBAC, which grants no
             # Secret access, even when config.yaml comes from a Secret.

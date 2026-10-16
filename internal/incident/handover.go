@@ -16,8 +16,8 @@ import (
 // the incident that holds the failure now. It waits for the restore
 // grace, so findings still coming back are not mistaken for gone ones.
 func (m *Manager) handOver(p *Incident, now time.Time) {
-	if !p.restored || len(p.Members) > 0 || p.SupersededBy != "" ||
-		!wasAnnounced(p) || m.inGrace(p, now) {
+	if m.cfg.NoHandover || !p.restored || len(p.Members) > 0 ||
+		p.SupersededBy != "" || !wasAnnounced(p) || m.inGrace(p, now) {
 		return
 	}
 	target := m.holderOf(p)

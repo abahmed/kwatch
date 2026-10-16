@@ -141,8 +141,8 @@ func (m *Manager) settle(p *Incident, now time.Time) (Decision, bool) {
 	if p.AlertKey == "" {
 		p.AlertKey = m.freeAlertKey(p)
 	}
-	if cycles := len(recent(p.Cycles, now, m.cfg.FlapWindow)); cycles >=
-		m.cfg.FlapCycles {
+	cycles := len(recent(p.Cycles, now, m.cfg.FlapWindow))
+	if m.flaps(cycles) {
 		m.enterFlapping(p, now, cycles, "recurrences")
 	}
 	return m.decide(p, Announce, ReasonSettled), true
@@ -189,7 +189,7 @@ func (m *Manager) recovering(p *Incident, now time.Time) (Decision, bool) {
 	if len(p.Members) > 0 {
 		// Failed again inside the hold: same incident, no new message.
 		p.Cycles = recent(append(p.Cycles, now), now, m.cfg.FlapWindow)
-		if len(p.Cycles) >= m.cfg.FlapCycles {
+		if m.flaps(len(p.Cycles)) {
 			m.enterFlapping(p, now, len(p.Cycles), "recoveries")
 			return m.decide(p, Update, ReasonFlapping), true
 		}

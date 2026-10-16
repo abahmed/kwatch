@@ -5,6 +5,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
+	"github.com/abahmed/kwatch/internal/feature"
 )
 
 // Dependencies contains the process-owned collaborators used by delivery.
@@ -16,6 +17,9 @@ type Dependencies struct {
 	// application uses it to persist provider thread ids without waiting
 	// for the periodic save. It must not block.
 	OnDelivered func()
+	// Entitlements says whether providers keep native threads. Nil is
+	// the Community edition, which keeps none.
+	Entitlements feature.Entitlements
 }
 
 // NewManagerWithDependencies constructs delivery with explicit dependencies.
@@ -30,8 +34,10 @@ func NewManagerWithDependencies(deps Dependencies) *Manager {
 				Clock:      deps.Clock,
 			}),
 		},
-		now:               now.Now,
-		onDelivered:       deps.OnDelivered,
+		now:         now.Now,
+		onDelivered: deps.OnDelivered,
+		nativeThreads: feature.OrCommunity(deps.Entitlements).
+			Has(feature.NativeThreads),
 		done:              doneSignal{ch: make(chan struct{})},
 		reconfigureEvents: make(chan struct{}, 1),
 	}

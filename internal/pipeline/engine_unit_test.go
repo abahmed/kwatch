@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -39,6 +40,7 @@ func TestNewEngineWithValidDeps(t *testing.T) {
 		Sink:      func(context.Context, incident.Decision, notification.Message) {},
 		Clock:     &fakeClock{now: time.Now()},
 	}
+	deps.Entitlements = feature.ProEntitlements()
 
 	engine, err := NewEngine(deps)
 
@@ -58,6 +60,7 @@ func TestSubmitWakesEngine(t *testing.T) {
 		Sink:      func(context.Context, incident.Decision, notification.Message) {},
 		Clock:     &fakeClock{now: time.Now()},
 	}
+	deps.Entitlements = feature.ProEntitlements()
 
 	engine, _ := NewEngine(deps)
 
@@ -87,6 +90,7 @@ func TestSourcesSyncedFindings(t *testing.T) {
 		Sink:      func(context.Context, incident.Decision, notification.Message) {},
 		Clock:     &fakeClock{now: time.Now()},
 	}
+	deps.Entitlements = feature.ProEntitlements()
 
 	engine, _ := NewEngine(deps)
 

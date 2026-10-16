@@ -104,6 +104,62 @@ subjects:
   name: kwatch
   namespace: kwatch
 ---
+# The license instance key lives in one Secret in this namespace, shipped
+# below pre-created and empty. kwatch only reads and updates it, so the
+# grant is limited by resourceNames and there is no create: create cannot
+# be restricted by name in RBAC and would cover every Secret in the
+# namespace.
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: kwatch-license
+  namespace: kwatch
+  labels:
+    app.kubernetes.io/instance: kwatch
+    app.kubernetes.io/managed-by: kwatch.sh
+rules:
+- apiGroups:
+    - ""
+  resources:
+    - secrets
+  resourceNames:
+    - kwatch-license-instance
+  verbs:
+    - get
+    - update
+---
+# kwatch writes its instance key into this Secret. The manifest has no
+# `data` field on purpose: kubectl apply (client-side) only patches fields
+# present in the manifest or in its last-applied annotation, so re-applying
+# this file does not clear the ed25519 key kwatch stored later. Do not add
+# `data` or `stringData` here, and do not use `kubectl replace`.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kwatch-license-instance
+  namespace: kwatch
+  labels:
+    app.kubernetes.io/instance: kwatch
+    app.kubernetes.io/managed-by: kwatch.sh
+type: Opaque
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kwatch-license
+  namespace: kwatch
+  labels:
+    app.kubernetes.io/instance: kwatch
+    app.kubernetes.io/managed-by: kwatch.sh
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kwatch-license
+subjects:
+- kind: ServiceAccount
+  name: kwatch
+  namespace: kwatch
+---
 # Restart evidence reads the previous kwatch Pod by name, so get on pods
 # is granted only in kwatch's own namespace.
 kind: Role
@@ -247,6 +303,14 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+          # The Pro license key. optional: the pod starts as Community
+          # when the Secret does not exist.
+          - name: KWATCH_LICENSE_KEY
+            valueFrom:
+              secretKeyRef:
+                name: kwatch-license
+                key: license-key
+                optional: true
           - name: POD_NAME
             valueFrom:
               fieldRef:

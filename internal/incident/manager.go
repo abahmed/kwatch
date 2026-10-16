@@ -82,7 +82,7 @@ func NewManager(cfg Config, explainer Explainer) *Manager {
 	if nonce == "" {
 		nonce = randomNonce()
 	}
-	return &Manager{
+	m := &Manager{
 		cfg: cfg.withDefaults(), explainer: explainer, nonce: nonce,
 		override: newOverrides(
 			cfg.SeverityByReason, cfg.SeverityByOwnerKind),
@@ -95,6 +95,8 @@ func NewManager(cfg Config, explainer Explainer) *Manager {
 		changed:   make(map[string]bool),
 		resolved:  newResolvedIndex(),
 	}
+	m.override.noPage = cfg.NoPaging
+	return m
 }
 
 // Apply folds one loop iteration into incidents. Cleared findings are

@@ -60,6 +60,9 @@ type Registry struct {
 	Unexplained              [2]atomic.Int64
 	Panics                   [len(panicStages)]atomic.Int64
 	AuditDropped             atomic.Int64
+	LicenseStateIndex        atomic.Int64
+	LicenseExpiry            atomic.Int64
+	LicenseRenewals          [len(licenseRenewalResults)]atomic.Int64
 	DecisionLag              LagHistogram
 	// Delivery holds the per-provider and outbox delivery metrics.
 	Delivery DeliveryMetrics
@@ -334,6 +337,7 @@ func (r *Registry) Describe(ch chan<- *prometheus.Desc) {
 	ch <- incidentsDesc
 	ch <- telemetryFailuresDesc
 	ch <- storageResetsDesc
+	r.describeLicense(ch)
 	ch <- investigationsDesc
 	ch <- unexplainedDesc
 	ch <- panicsDesc
@@ -365,6 +369,7 @@ func (r *Registry) Collect(ch chan<- prometheus.Metric) {
 			float64(r.StorageResets[i].Load()), reason,
 		)
 	}
+	r.collectLicense(ch)
 	for i, result := range investigationResults {
 		ch <- prometheus.MustNewConstMetric(
 			investigationsDesc, prometheus.CounterValue,

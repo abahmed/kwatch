@@ -102,9 +102,31 @@ func assertGrantsCoverChecks(
 	}
 }
 
-// writeAllowed are the only non-read grants: the Lease kwatch holds and
-// the access reviews the RBAC audit creates.
+// licenseInstanceSecret is the one Secret kwatch writes: its license
+// instance key.
+const licenseInstanceSecret = "kwatch-license-instance"
+
+// licenseGrant is a permission on kwatch's own license instance Secret in
+// its namespace. Only get and update, both limited to that name: the
+// manifests ship the Secret, so there is no create.
+func licenseGrant(g grant, installNS string) bool {
+	if g.group != "" || g.resource != "secrets" ||
+		g.namespace != installNS {
+		return false
+	}
+	switch g.verb {
+	case "get", "update":
+		return g.name == licenseInstanceSecret
+	}
+	return false
+}
+
+// writeAllowed are the only non-read grants: the Lease kwatch holds, the
+// license instance Secret and the access reviews the RBAC audit creates.
 func writeAllowed(g grant, installNS string) bool {
+	if licenseGrant(g, installNS) {
+		return true
+	}
 	if g.group == "authorization.k8s.io" &&
 		g.resource == "selfsubjectaccessreviews" && g.verb == "create" {
 		return true
@@ -145,9 +167,12 @@ func assertFullRBACIsReadOnly(
 }
 
 // extraLeastPrivilege are grants outside SourceAccess: access reviews,
-// KwatchConfig watches and custom status enrichment.
+// KwatchConfig watches, the license instance Secret and custom status
+// enrichment.
 func extraLeastPrivilege(g grant) bool {
 	switch {
+	case licenseGrant(g, "kwatch"):
+		return true
 	case g.url != "":
 		return true
 	case customStatusGroups[g.group]:

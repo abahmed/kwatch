@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -131,11 +132,12 @@ func newTestEngine(
 ) *Engine {
 	t.Helper()
 	deps := Dependencies{
-		Model:     inventory.NewModel(inventory.Options{}),
-		Detectors: detection.NewRegistry(nil, builtinDetectors()...),
-		Incidents: incident.NewManager(incident.Config{}, nil),
-		Sink:      sink,
-		Clock:     clock,
+		Entitlements: feature.ProEntitlements(),
+		Model:        inventory.NewModel(inventory.Options{}),
+		Detectors:    detection.NewRegistry(nil, builtinDetectors()...),
+		Incidents:    incident.NewManager(incident.Config{}, nil),
+		Sink:         sink,
+		Clock:        clock,
 	}
 	if mutate != nil {
 		mutate(&deps)

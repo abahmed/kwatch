@@ -8,6 +8,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/audit"
 	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/flight"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -48,7 +49,9 @@ func newPipelineBuild(
 	deps *serverDeps, state *storage.Store,
 ) (*pipelineBuild, error) {
 	p := &pipelineBuild{deps: deps, state: state, clock: deps.clients.Clock}
-	p.flight = newFlightRecorder(state, p.clock.Now)
+	if deps.has(FlightRecorder) {
+		p.flight = newFlightRecorder(state, p.clock.Now)
+	}
 	p.model = inventory.NewModel(inventory.Options{
 		EnrichmentSources: kube.EnrichmentSources(),
 	})
@@ -61,16 +64,11 @@ func newPipelineBuild(
 	p.scope = findingScope
 	auditCfg := deps.runtime.Lifecycle().AuditLog()
 	p.auditLog = audit.NewLogger(audit.Config{
-		Enabled: auditCfg.Enabled, Output: auditCfg.Output,
+		Enabled: auditCfg.Enabled && deps.has(feature.AuditLog),
+		Output:  auditCfg.Output,
 	})
-	policy := deps.runtime.Policy()
-	p.incidents = incident.NewManager(incident.Config{
-		SeverityByReason:    policy.SeverityByReason(),
-		SeverityByOwnerKind: policy.SeverityByOwnerKind(),
-		Verifiable: func(kind inventory.Kind) bool {
-			return p.source == nil || p.source.Verifiable(kind)
-		},
-	}, explain.NewSolver())
+	p.incidents = incident.NewManager(p.incidentConfig(),
+		explain.NewSolver())
 	// The pipeline marks a page open when it hands the message over;
 	// delivery says when no pager took it after all.
 	deps.deliveryManager.AttachPageObserver(func(key string) {
@@ -79,6 +77,28 @@ func newPipelineBuild(
 	p.decisions = newDecisionLog(
 		p.auditLog.Record, metrics.DefaultRegistry(), p.incidents.Incidents)
 	return p, nil
+}
+
+// incidentConfig is the lifecycle configuration of the edition. Without
+// the Pro lifecycle there are no flapping incidents, paging rules,
+// reminders or hand-overs, and no severity overrides.
+func (p *pipelineBuild) incidentConfig() incident.Config {
+	deps := p.deps
+	cfg := incident.Config{
+		Verifiable: func(kind inventory.Kind) bool {
+			return p.source == nil || p.source.Verifiable(kind)
+		},
+	}
+	if deps.has(feature.SeverityOverrides) {
+		policy := deps.runtime.Policy()
+		cfg.SeverityByReason = policy.SeverityByReason()
+		cfg.SeverityByOwnerKind = policy.SeverityByOwnerKind()
+	}
+	if !deps.has(feature.Flapping) {
+		cfg.NoFlapping, cfg.NoPaging = true, true
+		cfg.NoReminders, cfg.NoHandover = true, true
+	}
+	return cfg
 }
 
 // close stops the decision log, then the audit log it writes to.
@@ -97,29 +117,52 @@ func (p *pipelineBuild) synced(kind inventory.Kind) bool {
 func (p *pipelineBuild) newEngine() (*pipeline.Engine, error) {
 	deps := p.deps
 	return pipeline.NewEngine(pipeline.Dependencies{
-		Model:     p.model,
-		Detectors: newDetectorRegistry(p.synced),
-		Incidents: p.incidents,
-		Synced:    p.synced,
-		Writer: compose.NewWriter(
-			deps.runtime.Application().ClusterName,
-			deps.runtime.Policy().Runbooks()),
-		Sink:  p.recordDecision,
-		Clock: pipelineClock{deps.clients.Clock},
-		Store: pipeline.NewIncidentStore(p.state),
-		Investigator: investigate.NewInvestigator(investigate.Sources{
-			Model: p.model,
-			Logs:  kube.LogReader{Client: deps.clients.Kubernetes}.Lines,
-			CurrentLogs: kube.LogReader{
-				Client: deps.clients.Kubernetes}.CurrentLines,
-			Endpoints: kube.EndpointReader{
-				Client: deps.clients.Kubernetes,
-			}.ReadyEndpoints,
-		}),
-		InScope: pipeline.IncidentScope(p.model, p.scope),
+		Model:        p.model,
+		Detectors:    newDetectorRegistry(p.synced, deps.entitlements),
+		Incidents:    p.incidents,
+		Synced:       p.synced,
+		Writer:       p.newWriter(),
+		Sink:         p.recordDecision,
+		Clock:        pipelineClock{deps.clients.Clock},
+		Store:        pipeline.NewIncidentStore(p.state),
+		Investigator: p.newInvestigator(),
+		InScope:      pipeline.IncidentScope(p.model, p.scope),
 		Progress: func() {
 			deps.pipelineProgress.Touch(p.clock.Now())
 		},
+		Entitlements: deps.entitlements,
+		InactivePro:  deps.inactivePro,
+
+		ProDetectorsOff: deps.notice.detectors,
+		CommunitySends:  deps.notice.sends,
+	})
+}
+
+// newWriter composes messages for the edition: Community writes the
+// one-line cause without proofs, and runbooks need Pro.
+func (p *pipelineBuild) newWriter() compose.Writer {
+	app := p.deps.runtime.Application()
+	var runbooks map[string]string
+	if p.deps.has(feature.Runbooks) {
+		runbooks = p.deps.runtime.Policy().Runbooks()
+	}
+	return compose.NewWriter(app.ClusterName, runbooks).
+		ForEdition(p.deps.entitlements, app.HideProHints)
+}
+
+// newInvestigator reads logs and endpoints for the incidents it
+// investigates. Without investigation nothing is read and no excerpt is
+// collected.
+func (p *pipelineBuild) newInvestigator() investigate.Investigator {
+	if !p.deps.has(feature.Investigation) {
+		return nil
+	}
+	client := p.deps.clients.Kubernetes
+	return investigate.NewInvestigator(investigate.Sources{
+		Model:       p.model,
+		Logs:        kube.LogReader{Client: client}.Lines,
+		CurrentLogs: kube.LogReader{Client: client}.CurrentLines,
+		Endpoints:   kube.EndpointReader{Client: client}.ReadyEndpoints,
 	})
 }
 
@@ -176,7 +219,6 @@ func (p *pipelineBuild) newRunners(
 		Report: newKubeletStatsHealth(
 			healthSink(deps), metrics.DefaultRegistry()).report,
 	})
-	prober := p.newProber(submit)
 	crashLogs := kube.NewCrashLogRound(kube.CrashLogConfig{
 		Logs:   kube.LogReader{Client: deps.clients.Kubernetes},
 		Model:  p.model,
@@ -184,13 +226,20 @@ func (p *pipelineBuild) newRunners(
 		Submit: submit,
 	})
 	runners := []func(context.Context){
-		source.Run, stats.Run, dynamicSource.Run, prober.Run,
-		crashLogs.Run,
+		source.Run, dynamicSource.Run, crashLogs.Run,
 		func(ctx context.Context) {
 			pruneModel(ctx, p.model, p.clock.Now)
 		},
 		p.syncReporter(engine, newPipelineSourceHealth(
 			deps, source, dynamicSource)),
+	}
+	// The kubelet stats and the control plane probes feed detectors
+	// that only Pro runs; Community does not read them.
+	if deps.has(feature.NodeUsage) {
+		runners = append(runners, stats.Run)
+	}
+	if deps.has(feature.ControlPlane) {
+		runners = append(runners, p.newProber(submit).Run)
 	}
 	if p.flight != nil {
 		runners = append(runners, p.flight.Run)

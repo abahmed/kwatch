@@ -8,6 +8,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/detectors"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/kubeclient"
@@ -96,9 +97,12 @@ func startSources(
 
 // newDetectorRegistry builds the production registry from the shared
 // default detector set, so production, replay and scenarios all run the
-// same detectors.
-func newDetectorRegistry(synced func(inventory.Kind) bool) *detection.Registry {
-	return detection.NewRegistry(synced, detectors.Default()...)
+// same detectors. Only the detectors the edition is entitled to are
+// registered; a nil e entitles all.
+func newDetectorRegistry(
+	synced func(inventory.Kind) bool, e feature.Entitlements,
+) *detection.Registry {
+	return detection.NewRegistry(synced, detectors.Entitled(e)...)
 }
 
 // pruneModel drops old change history every modelPruneInterval. Expired
@@ -158,7 +162,7 @@ func newActiveProber(
 	deps *serverDeps, model inventory.Reader, submit kube.Submit,
 ) (*kube.ActiveProber, bool) {
 	cfg := deps.runtime.ActiveProbe()
-	if !cfg.Enabled {
+	if !cfg.Enabled || !deps.has(feature.ActiveProbes) {
 		return nil, false
 	}
 	var targets []kube.ProbeTarget

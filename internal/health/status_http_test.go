@@ -126,3 +126,92 @@ func TestStatusSourceCanChangeWhileServing(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestStatusJSONNeedsProWhenDenied(t *testing.T) {
+	h := newStatusServer()
+	h.SetStatusSource(func() status.Report { return status.Report{} })
+	h.DenyStatusJSON()
+
+	w := getStatus(h, http.MethodGet, "/status?format=json")
+	if w.Code != http.StatusPaymentRequired {
+		t.Fatalf("code = %d, want 402", w.Code)
+	}
+	if got := strings.TrimSpace(w.Body.String()); got !=
+		`{"error":"pro_required"}` {
+		t.Fatalf("body = %q", got)
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("content type %q", ct)
+	}
+}
+
+func TestStatusTextIsUnchangedWhenJSONIsDenied(t *testing.T) {
+	h := newStatusServer()
+	h.SetStatusSource(func() status.Report { return status.Report{} })
+	h.DenyStatusJSON()
+	if w := getStatus(h, http.MethodGet, "/status"); w.Code != 200 {
+		t.Fatalf("text code = %d", w.Code)
+	}
+}
+
+func TestStatusJSONIsServedByDefault(t *testing.T) {
+	h := newStatusServer()
+	h.SetStatusSource(func() status.Report { return status.Report{} })
+	if w := getStatus(h, http.MethodGet, "/status?format=json"); w.Code !=
+		200 {
+		t.Fatalf("code = %d", w.Code)
+	}
+}
+
+func TestStatusServesTheLicenseSectionInTextAndJSON(t *testing.T) {
+	h := newStatusServer()
+	h.SetStatusSource(func() status.Report { return status.Report{} })
+	h.SetLicenseSource(func() *status.License {
+		return &status.License{
+			Edition: "Pro", State: "active", LID: "lic_…abcd",
+		}
+	})
+
+	text := getStatus(h, http.MethodGet, "/status").Body.String()
+	if !strings.Contains(text, "License ID: lic_…abcd") {
+		t.Fatalf("text has no license section\n%s", text)
+	}
+	body := getStatus(h, http.MethodGet, "/status?format=json").Body.String()
+	if !strings.Contains(body, `"license"`) ||
+		!strings.Contains(body, `"state": "active"`) {
+		t.Fatalf("json has no license object\n%s", body)
+	}
+
+	h.SetLicenseSource(nil)
+	body = getStatus(h, http.MethodGet, "/status?format=json").Body.String()
+	if strings.Contains(body, `"license"`) {
+		t.Fatalf("a cleared source must leave the license out\n%s", body)
+	}
+}
+
+func TestStatusJSONStaysDeniedOnCommunityAndReopensOnPro(t *testing.T) {
+	h := newStatusServer()
+	h.SetStatusSource(func() status.Report { return status.Report{} })
+	h.SetLicenseSource(func() *status.License {
+		return &status.License{Edition: "Community", State: "expired"}
+	})
+	h.DenyStatusJSON()
+
+	w := getStatus(h, http.MethodGet, "/status?format=json")
+	if w.Code != http.StatusPaymentRequired {
+		t.Fatalf("code = %d, want 402", w.Code)
+	}
+	if strings.Contains(w.Body.String(), "license") {
+		t.Fatalf("a 402 must not carry the license object: %s", w.Body)
+	}
+	text := getStatus(h, http.MethodGet, "/status").Body.String()
+	if !strings.Contains(text, "State: expired") {
+		t.Fatalf("Community text keeps the license section\n%s", text)
+	}
+
+	h.AllowStatusJSON()
+	if w := getStatus(h, http.MethodGet, "/status?format=json"); w.Code !=
+		http.StatusOK {
+		t.Fatalf("code = %d after the edition became Pro", w.Code)
+	}
+}

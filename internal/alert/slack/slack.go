@@ -40,6 +40,8 @@ type Slack struct {
 	conversations     map[string]conversationState
 	conversationOrder []string
 	mu                sync.Mutex
+	// noThreads sends every message at top level; see DisableThreads.
+	noThreads         bool
 	conversationLocks [conversationLockCount]sync.Mutex
 
 	// maxThreadMapSize bounds the thread and conversation maps. When

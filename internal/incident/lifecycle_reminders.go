@@ -37,7 +37,7 @@ func superseded(p *Incident) bool {
 // reminderDue reports an announced incident open for another
 // RemindEvery since its announcement or its last reminder.
 func (m *Manager) reminderDue(p *Incident, now time.Time) bool {
-	if acked(p) || idleWebhook(p) {
+	if m.cfg.NoReminders || acked(p) || idleWebhook(p) {
 		return false
 	}
 	last := p.Reminded

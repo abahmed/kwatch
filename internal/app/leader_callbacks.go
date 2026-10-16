@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"k8s.io/client-go/tools/leaderelection"
+	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/metrics"
 )
@@ -32,6 +34,8 @@ type leaderCallbacks struct {
 	epoch          atomic.Int64
 	takeovers      atomic.Int64
 	observedLeader atomic.Bool
+	// standbyWarned records that the replica limit warning was logged.
+	standbyWarned atomic.Bool
 	// renewalNanos is the newest Lease write, kept so the "leader" status
 	// starts with the acquire write that came before the callback.
 	renewalNanos atomic.Int64
@@ -102,7 +106,9 @@ func (c *leaderCallbacks) onStoppedLeading() {
 	if !started {
 		return
 	}
-	loss := c.parent.Err() == nil
+	// A session that ended for a license edition change is a planned
+	// rebuild, not a lost Lease.
+	loss := c.parent.Err() == nil && !c.deps.editionRestart.Load()
 	if loss {
 		metrics.DefaultRegistry().LeadershipLosses.Add(1)
 	}
@@ -139,6 +145,7 @@ func (c *leaderCallbacks) onNewLeader(newLeader string) {
 	}
 	if newLeader != "" && newLeader != c.identity {
 		c.observedLeader.Store(true)
+		c.warnStandby(newLeader)
 	}
 	c.deps.healthServer.SetLeadership(health.LeadershipStatus{
 		Role: "starting", Identity: newLeader,
@@ -155,4 +162,19 @@ func (c *leaderCallbacks) lastRenewal() time.Time {
 func (c *leaderCallbacks) recordRenewal(renewal time.Time) {
 	c.renewalNanos.Store(renewal.UnixNano())
 	c.deps.healthServer.SetLeadershipRenewal(renewal)
+}
+
+// warnStandby logs once that this replica waits as a standby when the
+// edition runs one replica. It only warns: the replica keeps waiting to
+// take over.
+func (c *leaderCallbacks) warnStandby(leader string) {
+	e := feature.OrCommunity(c.deps.entitlements)
+	if e.Limits().MaxReplicas == 0 ||
+		!c.standbyWarned.CompareAndSwap(false, true) {
+		return
+	}
+	klog.InfoS("warning: this replica is a standby; the "+
+		string(e.Edition())+" edition supports one "+
+		"replica, and high availability needs kwatch Pro",
+		"identity", c.identity, "leader", leader)
 }

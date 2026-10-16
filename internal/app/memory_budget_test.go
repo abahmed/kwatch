@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/flight"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -96,7 +97,8 @@ func TestMemoryBudgetLargeCluster(t *testing.T) {
 	sampler.sample("load")
 
 	synced := func(inventory.Kind) bool { return true }
-	findings := detectAll(model, newDetectorRegistry(synced), now)
+	registry := newDetectorRegistry(synced, feature.ProEntitlements())
+	findings := detectAll(model, registry, now)
 	sampler.sample("detect")
 
 	snapshot := explain.NewSnapshot(model, findings, synced, now)

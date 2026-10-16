@@ -525,7 +525,7 @@ it is stored or rendered. Provider credentials come from mounted files, never
 from plain configuration.
 
 **Adoption telemetry is on by default.** An official build sends one request
-to `https://api.kwatch.dev/v1/telemetry/heartbeat` shortly after startup and
+to `https://api.kwatch.dev/telemetry/heartbeat` shortly after startup and
 then at most once every 7 days. The body is exactly
 `{"cluster_uuid": "<installation ID>", "kwatch_version": "<version>"}`.
 The installation ID is a UUID derived from a salted SHA-256 hash of the

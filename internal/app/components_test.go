@@ -11,12 +11,13 @@ import (
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/kubeclient"
 )
 
 func componentDeps() *serverDeps {
-	return &serverDeps{
+	return &serverDeps{entitlements: feature.ProEntitlements(),
 		clients: kubeclient.ClientSet{Clock: clock.RealClock{}},
 		healthServer: health.NewHealthServerWithClock(
 			config.HealthCheck{}, clock.RealClock{}),

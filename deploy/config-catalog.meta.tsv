@@ -19,6 +19,7 @@ activeProbeMonitor.http|Monitors|JSON array of HTTP probe targets with optional 
 activeProbeMonitor.tcp|Monitors|JSON array of TCP probe targets.|active|
 activeProbeMonitor.dns|Monitors|JSON array of DNS probe targets.|active|
 upgrader.disableUpdateCheck|Operations|Disable the update notification.|active|
+license.key|Operations|kwatch Pro license key; reference it as ${KWATCH_LICENSE_KEY}. The KWATCH_LICENSE_KEY variable wins over this setting. Empty runs the Community edition.|active|
 telemetry.enabled|Operations|Send the weekly adoption heartbeat.|active|
 maintenance.enabled|Operations|Honor maintenance annotations while preserving cluster-level alerts.|active|
 maintenance.annotation|Operations|Annotation that marks deliberate maintenance on a resource.|active|
@@ -29,6 +30,8 @@ app.disableStartupMessage|Operations|Disable the startup notification.|active|
 app.logFormatter|Operations|Log output format: text or json.|active|
 app.insecureSkipTLSVerify|Security|Skip TLS verification for outbound providers; strongly discouraged.|active|
 app.caBundlePath|Security|Path to a mounted PEM bundle for outbound provider TLS.|active|
+app.hideProHints|Operations|Remove the note that names what kwatch Pro adds from Community messages.|active|
+app.communityProvider|Operations|Alert provider the Community edition keeps when several are configured; empty keeps the first by name.|active|
 healthCheck.enabled|Operations|Expose the built-in health endpoint.|active|
 healthCheck.port|Operations|Port for health and optional diagnostic endpoints.|active|
 healthCheck.statusEndpoint|Security|Serve the read-only /status view (object names, no authentication) on the health port; off by default.|active|

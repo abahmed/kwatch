@@ -44,6 +44,16 @@ type Startup struct {
 	// CheckSummary asks the next tick whether every incident a listing
 	// named has resolved.
 	CheckSummary bool
+	// Baseline is the Community start: the failures that exist when
+	// kwatch syncs are the baseline, not news. Nobody hears of them, not
+	// in a summary and not when they change or resolve; only a failure
+	// that begins later is announced. A baselined incident that gets
+	// worse (a higher severity or more failing members than at start)
+	// is announced once, and is a normal incident from then on.
+	Baseline bool
+	// baselined holds the incidents that existed at start, with what
+	// they looked like then.
+	baselined map[string]baselineMark
 }
 
 // HoldUntilSync starts collecting the startup summary on a cold start,
@@ -75,6 +85,9 @@ func (s *Startup) OpenWindow(now time.Time) {
 func (c *Collector) CollectStartup(
 	ctx context.Context, now time.Time, decisions []incident.Decision,
 ) ([]incident.Decision, bool) {
+	if c.Startup.Baseline {
+		decisions = c.absorbBaselined(ctx, now, decisions)
+	}
 	if c.Startup.Until.IsZero() && !c.Startup.AwaitSync {
 		return c.holdWarm(ctx, now, decisions), false
 	}
@@ -102,6 +115,11 @@ func (c *Collector) holdStartup(
 	id := d.Incident.ID
 	held := s.indexOf(id)
 	switch {
+	case s.Baseline && d.Action == incident.Announce &&
+		s.predatesSync(d.Incident):
+		s.baseline(d.Incident)
+		c.recordCarried(ctx, now, d, "baseline")
+		return true
 	case d.Action == incident.Announce && s.predatesSync(d.Incident):
 		if held >= 0 {
 			s.Collected[held] = d

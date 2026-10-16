@@ -26,6 +26,12 @@ type Writer struct {
 	// Cluster is the configured cluster name. When set, every lead says
 	// it once: "payments is down in shop (prod-eu-1) after …".
 	Cluster string
+	// Community writes the Community message: the one-line cause and
+	// the steps, without proofs, counterfactuals, confidence, changes,
+	// impact or investigation output (see ForEdition).
+	Community bool
+	// ProNote adds the footer line that names what Pro would add.
+	ProNote bool
 }
 
 // NewWriter builds a Writer for the cluster named cluster, which may be
@@ -65,6 +71,11 @@ func (w Writer) WriteResolvedBy(
 func (w Writer) write(
 	d incident.Decision, now time.Time, fix *inventory.Change,
 ) notification.Message {
+	note := ""
+	if w.Community {
+		note = w.noteFor(d)
+		d, fix = communityDecision(d), nil
+	}
 	f := gatherFacts(d, now, fix)
 	f.cluster = w.Cluster
 	p := f.p
@@ -76,7 +87,8 @@ func (w Writer) write(
 	if d.Action == incident.Resolve {
 		msg.Status = notification.StatusResolved
 		mark, sentences := resolveNote(f)
-		fill(&msg, mark, respell(arrange(sentences), d.Facts.KindNames))
+		fill(&msg, mark, w.shape(
+			respell(arrange(sentences), d.Facts.KindNames), ""))
 		boldNames(msg.Doc, incidentNames(p, w.Cluster))
 		msg.Opening = w.opening(d, now)
 		if p.CanReopen() {
@@ -88,9 +100,11 @@ func (w Writer) write(
 	msg.Output = d.Facts.Output
 	msg.Steps = append(nextSteps(p, stepMembers(p, f.members)),
 		w.runbookSteps(f.members)...)
-	msg.Confidence = confidence(p.Cause)
-	fill(&msg, marker(p),
-		respell(arrange(noteSentences(d, f)), d.Facts.KindNames))
+	if !w.Community {
+		msg.Confidence = confidence(p.Cause)
+	}
+	fill(&msg, marker(p), w.shape(
+		respell(arrange(noteSentences(d, f)), d.Facts.KindNames), note))
 	boldNames(msg.Doc, incidentNames(p, w.Cluster))
 	msg.Opens = d.Action == incident.Announce
 	if !msg.Opens {
@@ -328,4 +342,21 @@ func isAcronym(text string) bool {
 	first, size := utf8.DecodeRuneInString(text)
 	second, _ := utf8.DecodeRuneInString(text[size:])
 	return size > 0 && unicode.IsUpper(first) && unicode.IsUpper(second)
+}
+
+// noteFor is the Pro note of d, when this writer adds one and the
+// decision is a message that can carry it.
+func (w Writer) noteFor(d incident.Decision) string {
+	if !w.ProNote || d.Action == incident.Resolve {
+		return ""
+	}
+	return proNote(d)
+}
+
+// shape applies the edition to arranged sentences.
+func (w Writer) shape(sentences []sentence, note string) []sentence {
+	if !w.Community {
+		return sentences
+	}
+	return w.communitySentences(sentences, note)
 }

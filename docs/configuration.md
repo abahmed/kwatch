@@ -159,6 +159,8 @@ talks to the outside world.
 | `app.logFormatter` | Log format: `text` (default) or `json`. `json` writes one JSON object per log line to stderr. Any other value fails startup |
 | `app.insecureSkipTLSVerify` | 🔓 Skip TLS verification on outbound HTTP (default: false) |
 | `app.caBundlePath` | 📜 Path to a PEM CA bundle for outbound HTTP. A missing or invalid bundle fails startup |
+| `app.hideProHints` | Remove the one-line note that names what kwatch Pro would add from Community messages (default: false) |
+| `app.communityProvider` | The alert provider the Community edition keeps when more than one is configured (Community sends to one provider; Pro sends to all). Empty keeps the first provider by name. A name that is not a configured provider is warned about and falls back the same way. `/status`, the startup log and `kwatch lint` show which provider is kept, for example `Community sends to: slack (inactive: pagerduty)` |
 
 The startup message and the upgrade notice are each a single plain sentence
 with one status emoji and no links, for example `🟡 kwatch v1.2.0 started.` and
@@ -213,7 +215,9 @@ Endpoints kwatch serves so you can see it's alive and grab Prometheus metrics. T
   active process to stop so Kubernetes can restart or replace it.
 - `GET /status` — only with `healthCheck.statusEndpoint: true`. Open incidents
   with root object names and cause lines, read-only; plain text, or JSON with
-  `?format=json`. It has no authentication and shows object names to anyone who
+  `?format=json` (the JSON format answers `402` with `{"error":"pro_required"}`
+  in the Community edition; the text format and an "Edition" section stay).
+  It has no authentication and shows object names to anyone who
   can reach the port, so keep it cluster-internal and read it through
   `kubectl port-forward deploy/kwatch 8060:8060`.
 - `GET /availabilityz` — ✅ Deployment availability. A state lock holder,
@@ -256,6 +260,9 @@ Endpoints kwatch serves so you can see it's alive and grab Prometheus metrics. T
 | `kwatch_delivery_outbox_dropped_total` | counter | none | Persisted delivery jobs dropped by the outbox size or age bound |
 | `kwatch_delivery_outbox_write_failures_total` | counter | none | Failed writes of the persisted delivery outbox |
 | `kwatch_audit_dropped_total` | counter | none | Audit entries dropped because the audit queue was full |
+| `kwatch_license_state` | gauge | `state` = `community`, `invalid`, `pending`, `active`, `grace`, `expired`, `revoked`, `conflict` | 1 for the current licensing state, 0 for the others (leader only) |
+| `kwatch_license_expiry_timestamp_seconds` | gauge | none | License expiry as a Unix timestamp; 0 without a license |
+| `kwatch_license_renewals_total` | counter | `result` = `success`, `rejected`, `error` | License activation and renewal attempts |
 | `kwatch_heartbeat_failures_total` | counter | none | Heartbeat pings that failed or were rejected |
 | `kwatch_kubelet_stats_failures_total` | counter | none | Kubelet stats summary reads that failed, one per node per round |
 | `kwatch_storage_resets_total` | counter | `reason` = `schema_mismatch`, `unreadable` | State files set aside (or deleted) and recreated at open |
@@ -528,6 +535,7 @@ letter case; an empty value counts as unset, and any other text fails startup
 | `KWATCH_WATCH_SECRETS` | `false` stops the Secret watch (see Kubernetes permissions); `true` leaves the file's setting alone |
 | `KWATCH_CRD_ENABLED` | Overrides `crd.enabled` in both directions; the chart sets it from `config.crd.enabled` |
 | `KWATCH_TELEMETRY` | `false` turns adoption telemetry off |
+| `KWATCH_LICENSE_KEY` | The kwatch Pro license key. Wins over `license.key`; the chart fills it from a Secret |
 | `SKIP_UPGRADE_CHECK` | A true value turns the update check off, like `upgrader.disableUpdateCheck` |
 | `CI` | Any value except empty, `false`, `0`, `no` or `off` marks a CI environment: telemetry is never sent |
 | `KWATCH_DATA_DIR` | Directory of the state file (default `/var/lib/kwatch`) |
@@ -538,6 +546,32 @@ letter case; an empty value counts as unset, and any other text fails startup
 | `POD_NAME` | The Pod's name, used as the state lock identity (falls back to the host name) and to explain the previous Pod's restart |
 | `POD_NAMESPACE` | The namespace kwatch runs in: its Lease, `KwatchConfig` and own-namespace reads (falls back to `kwatch`) |
 | `POD_UID`, `NODE_NAME` | Recorded in the runtime session, to tell a node disruption or rollout from a crash |
+
+## 🔑 License
+
+Without a key kwatch runs the Community edition and makes no license call.
+With a key, the leader replica activates it against `https://api.kwatch.dev`
+(HTTPS egress, through `app.proxyURL` and `app.caBundlePath` like other
+outbound calls) before it builds its components, then renews it daily. The
+lease is cached in the state file, so a restart or a short outage keeps Pro.
+Leases last 3 days and an expired lease gets a 4 day grace period, so a
+cluster that cannot reach the license server keeps Pro for at most 7 days.
+The local clock is tracked and persisted, so setting it back never extends a
+lease, and a key extended on the server keeps working past its own expiry.
+
+| Parameter | What it does |
+|:---|---|
+| `license.key` | The license key. Use `${KWATCH_LICENSE_KEY}`; the `KWATCH_LICENSE_KEY` variable wins over the file. The key is never logged, only the masked license ID |
+
+kwatch keeps its instance key in the Secret `kwatch-license-instance` in its
+own namespace (the chart's RBAC names that one Secret). `/status` shows a
+License section, notices go to your alert providers once per change (trial
+ending at 14 and 3 days, grace, Pro disabled with the reason, Pro enabled),
+and `kwatch license status` prints the local evaluation without the network.
+`kwatch license deactivate` (run it with `kubectl exec` in the kwatch pod)
+releases the cluster binding so the key can move to another cluster; the
+running leader notices through the `deactivated-at` field of that Secret and
+falls back to Community.
 
 ## 🔄 Upgrader
 
@@ -568,7 +602,7 @@ configuration, provider setting, log line or incident is sent. As with any
 HTTPS request, the receiving service sees the connection's source address and
 the `User-Agent` `kwatch-telemetry/1`.
 
-**Where and how often.** To `https://api.kwatch.dev/v1/telemetry/heartbeat`,
+**Where and how often.** To `https://api.kwatch.dev/telemetry/heartbeat`,
 from the active replica, using kwatch's configured outbound HTTP client
 (`app.proxyURL`, `app.caBundlePath`). The first heartbeat is sent shortly after
 startup, then at most once every 7 days (the last successful send is stored in

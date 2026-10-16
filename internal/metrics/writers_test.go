@@ -23,6 +23,8 @@ var writtenVia = map[string]string{
 	"Unexplained":       "AddUnexplained",
 	"DecisionLag":       "ObserveDecisionLag",
 	"Panics":            "IncPanic",
+	"LicenseStateIndex": "SetLicenseState",
+	"LicenseRenewals":   "IncLicenseRenewal",
 }
 
 // productionSelectors returns every selector name used by non-test Go files

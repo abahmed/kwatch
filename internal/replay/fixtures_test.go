@@ -13,6 +13,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/detectors"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -27,8 +28,9 @@ var rolloutStart = time.Date(2026, 9, 29, 14, 0, 0, 0, time.UTC)
 // and rules, as the application does.
 func newDependencies() pipeline.Dependencies {
 	return pipeline.Dependencies{
-		Model:     inventory.NewModel(inventory.Options{}),
-		Detectors: detection.NewRegistry(nil, detectors.Default()...),
+		Entitlements: feature.ProEntitlements(),
+		Model:        inventory.NewModel(inventory.Options{}),
+		Detectors:    detection.NewRegistry(nil, detectors.Default()...),
 		// A fixed ID nonce keeps replays byte-for-byte comparable.
 		Incidents: incident.NewManager(incident.Config{IDNonce: "0000"},
 			explain.NewSolver()),

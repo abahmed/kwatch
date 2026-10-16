@@ -30,3 +30,30 @@ func TestCatalogLookupAndValidation(t *testing.T) {
 		break
 	}
 }
+
+func TestValidateTiers(t *testing.T) {
+	defs := []Definition{
+		{ID: "a", Lifecycle: Runtime},
+		{ID: "b", Lifecycle: Runtime, Dependencies: []ID{"a"}},
+	}
+	tests := []struct {
+		name    string
+		tiers   map[ID]Tier
+		wantErr bool
+	}{
+		{"community on community",
+			map[ID]Tier{"a": Community, "b": Community}, false},
+		{"pro depends on community", map[ID]Tier{"a": Community}, false},
+		{"community depends on pro", map[ID]Tier{"b": Community}, true},
+		{"unknown id", map[ID]Tier{"zzz": Community}, true},
+		{"invalid tier", map[ID]Tier{"a": Tier("gold")}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validate(defs, tt.tiers)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

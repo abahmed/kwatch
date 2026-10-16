@@ -15,6 +15,8 @@ const catalogHeader = "# kwatch config catalog v1"
 
 var managerHiddenPaths = map[string]bool{
 	"alert": true,
+	// license.endpoint exists for testing only.
+	"license.endpoint": true,
 }
 
 // effectiveDefaults lists fields whose zero value in DefaultConfig means

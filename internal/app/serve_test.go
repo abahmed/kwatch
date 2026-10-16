@@ -9,13 +9,14 @@ import (
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/health"
 )
 
 func shutdownDeps(
 	ctx context.Context, cancel context.CancelFunc,
 ) *serverDeps {
-	return &serverDeps{
+	return &serverDeps{entitlements: feature.ProEntitlements(),
 		ctx:    ctx,
 		cancel: cancel,
 		deliveryManager: delivery.NewManagerWithDependencies(

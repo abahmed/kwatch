@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 )
@@ -138,7 +139,8 @@ func TestHistoryRecorderRecordsTheLoop(t *testing.T) {
 	store := NewIncidentStore(openTempStore(t))
 	model := inventory.NewModel(inventory.Options{})
 	recorder := newHistoryRecorder(Dependencies{
-		Model: model, Store: store, Timer: wallTimer,
+		Entitlements: feature.ProEntitlements(),
+		Model:        model, Store: store, Timer: wallTimer,
 	}, &workerStats{})
 	recorder.start()
 	pod := inventory.CoreID("pod", "shop", "api-1")

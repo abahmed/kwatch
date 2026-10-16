@@ -8,6 +8,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -62,6 +63,20 @@ type Dependencies struct {
 	// batching and shutdown deadlines. It is separate from Clock, which
 	// only the decision loop waits on. Optional; defaults to time.After.
 	Timer func(time.Duration) <-chan time.Time
+	// Entitlements says which Pro behaviour runs. Nil is the Community
+	// edition, so a missed wiring never grants Pro. Without
+	// incidents.state the engine starts from a baseline: it restores and
+	// saves no incidents, and the failures that exist at start are not
+	// announced.
+	Entitlements feature.Entitlements
+	// InactivePro names the Pro features the configuration sets but the
+	// edition does not run, for /status.
+	InactivePro []string
+	// ProDetectorsOff names the Pro detector families the edition does
+	// not run, and CommunitySends the provider a capped edition keeps
+	// (with the inactive ones), for /status.
+	ProDetectorsOff []string
+	CommunitySends  string
 }
 
 // IncidentStore loads and saves incident records, object fingerprints and
@@ -146,6 +161,7 @@ func NewEngine(deps Dependencies) (*Engine, error) {
 	e.announcer = newAnnouncer(deps, e.storage, &e.stats)
 	e.announcer.collect.SetAdvisories(e.activeAdvisories)
 	e.announcer.collect.SetReadiness(e.Readiness)
+	e.announcer.collect.Startup.Baseline = deps.baselineStart()
 	return e, nil
 }
 
@@ -225,7 +241,7 @@ func (e *Engine) reconcileDowntime() {
 func (e *Engine) applyDowntime(
 	saved map[string]string,
 ) []inventory.EntityID {
-	if saved == nil {
+	if saved == nil || !e.deps.entitled(feature.DowntimeChanges) {
 		return nil
 	}
 	observations := withoutRestored(e.deps.Model, DowntimeChanges(

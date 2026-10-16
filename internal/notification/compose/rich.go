@@ -40,7 +40,7 @@ func docOf(
 func sentenceBlocks(
 	s sentence, steps []notification.Step,
 ) []notification.Block {
-	if s.part == partChecked {
+	if s.part == partChecked || s.part == partHint {
 		return []notification.Block{{Kind: notification.Small,
 			Spans: podSpans(s.text)}}
 	}

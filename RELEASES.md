@@ -1419,6 +1419,57 @@
   resolve. A config type error no longer prints the first characters of a
   secret read from a file.
 
+### Editions: Community and Pro
+
+kwatch now ships in two editions from the same image. The first release
+after `v1.0.0-rc.10` is source available under ELv2 (see
+[`docs/licensing.md`](docs/licensing.md)). Without a license key kwatch runs
+the **Community** edition; a valid key (`license.key` or
+`license.existingSecret` in the chart, `KWATCH_LICENSE_KEY` otherwise)
+enables **Pro**, free during early access at
+https://kwatch.dev/signup?src=upgrade. A license that lapses or cannot be
+renewed falls back to Community in place, without restarting the pod.
+
+- **Community keeps pod and node alerts.** Pod failures, scheduling
+  problems, OOM kills, crash loops and restarts, node readiness and
+  pressure, root-cause analysis, noise control, namespace scope and the
+  RBAC audit run in both editions.
+- **What moved to Pro (detectors).** Workload rollouts, Jobs and CronJobs,
+  PodDisruptionBudgets and HorizontalPodAutoscalers; storage and volume
+  usage; Services, Ingresses and NetworkPolicies; admission webhooks and
+  policies; TLS certificates; ResourceQuotas and LimitRanges; custom
+  resource conditions; control plane checks; pod readiness; node usage from
+  kubelet stats; configuration risks; unusual Warning events; and active
+  probes. After an upgrade these stop reporting in Community.
+- **What moved to Pro (everything else).** Shared-factor, change and impact
+  analysis and log investigation; flapping detection; the startup summary,
+  the on-disk incident state and the report of changes made while kwatch
+  was down; severity overrides, maintenance windows, runbooks, the reason
+  filter and namespace selector; routing, native threads and custom
+  templates; the audit log file output; the heartbeat monitor; the JSON
+  `/status` format; and more than one replica.
+- **Community sends to one provider.** When several are configured,
+  `app.communityProvider` names the one to keep (a name that is not
+  configured is warned about); without it the first by name is kept.
+  `/status`, the startup log and `kwatch lint` show it, for example
+  `Community sends to: slack (inactive: pagerduty)`.
+- **Community starts from a baseline.** The failures that exist when kwatch
+  syncs are not announced and nothing is restored from disk. A baseline
+  incident that gets worse (a higher severity, or more failing members than
+  at start) is announced once and behaves like any other incident after.
+- **You are told what stopped running.** The startup log, `/status`
+  ("Pro detectors not running: N (workloads, storage, certificates, ...)")
+  and `kwatch lint` list the Pro detector families Community does not run.
+  The first time a cluster runs Community after an earlier version or Pro,
+  kwatch also sends one notification to the active provider that explains
+  this and links to free Pro. A fresh install gets none, and it is not
+  repeated across restarts (the state key is `edition.last`).
+- **Chart.** The `kwatch-license-instance` Secret is always rendered empty
+  and kept on uninstall; kwatch writes the instance key into it and `helm
+  upgrade` leaves that data alone. The NetworkPolicy opens TCP 443 for the
+  license server only when `license.key` or `license.existingSecret` is
+  set.
+
 ### Breaking changes
 
 - **Endpoints.** kwatch serves only `/healthz`, `/readyz`, `/availabilityz`,
@@ -1589,7 +1640,7 @@
 - **Telemetry.** Adoption telemetry is on by default in official builds. It
   sends exactly an anonymous installation ID (a salted hash of the
   `kube-system` namespace UID, formatted as a UUID) and the kwatch version to
-  `https://api.kwatch.dev/v1/telemetry/heartbeat`, shortly after startup and
+  `https://api.kwatch.dev/telemetry/heartbeat`, shortly after startup and
   then at most once every 7 days. Disable it with `telemetry.enabled: false`
   or `KWATCH_TELEMETRY=false`. See the configuration reference for the full
   description.

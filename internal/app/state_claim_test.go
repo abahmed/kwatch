@@ -15,6 +15,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/kubeclient"
 )
 
@@ -42,9 +43,10 @@ func epochDeps(objects ...*coordinationv1.Lease) *serverDeps {
 		_, _ = clientset.CoordinationV1().Leases("kwatch").Create(
 			context.Background(), lease, metav1.CreateOptions{})
 	}
-	return &serverDeps{clients: kubeclient.ClientSet{
-		Kubernetes: clientset, Clock: clock.RealClock{},
-	}}
+	return &serverDeps{entitlements: feature.ProEntitlements(),
+		clients: kubeclient.ClientSet{
+			Kubernetes: clientset, Clock: clock.RealClock{},
+		}}
 }
 
 func useStateEnv(t *testing.T) string {

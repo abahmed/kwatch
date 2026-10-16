@@ -215,9 +215,14 @@ func Lookup(id ID) (Definition, bool) {
 	return Definition{}, false
 }
 
-// ValidateCatalog rejects duplicate IDs, missing dependencies, and dependency
-// cycles.
+// ValidateCatalog rejects duplicate IDs, missing dependencies, dependency
+// cycles, missing or unknown tiers, and Community features that depend on
+// Pro features.
 func ValidateCatalog() error {
+	return validate(definitions, tiers)
+}
+
+func validate(definitions []Definition, tiers map[ID]Tier) error {
 	known := make(map[ID]Definition, len(definitions))
 	for _, definition := range definitions {
 		if definition.ID == "" {
@@ -253,6 +258,32 @@ func ValidateCatalog() error {
 	for id := range known {
 		if err := visit(id); err != nil {
 			return err
+		}
+	}
+	for id := range tiers {
+		if _, exists := known[id]; !exists {
+			return fmt.Errorf("feature tier set for unknown feature %q", id)
+		}
+		if tiers[id] != Community && tiers[id] != Pro {
+			return fmt.Errorf("feature %q has invalid tier %q", id, tiers[id])
+		}
+	}
+	tierOf := func(id ID) Tier {
+		if tier, ok := tiers[id]; ok {
+			return tier
+		}
+		return Pro
+	}
+	for _, definition := range definitions {
+		if tierOf(definition.ID) != Community {
+			continue
+		}
+		for _, dependency := range definition.Dependencies {
+			if tierOf(dependency) != Community {
+				return fmt.Errorf(
+					"community feature %q depends on pro feature %q",
+					definition.ID, dependency)
+			}
 		}
 	}
 	return nil

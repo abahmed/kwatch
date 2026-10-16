@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/kubeclient"
 )
 
@@ -75,10 +76,11 @@ func TestLeaderIdentityAndLeaseNameUseEnvironment(t *testing.T) {
 func TestRunWithProgressTouchesClockAndRunsFunction(t *testing.T) {
 	now := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
 	progress := newComponentProgress(time.Time{})
-	deps := &serverDeps{clients: kubeclient.ClientSet{
-		Clock: clock.Func(func() time.Time {
-			return now
-		})}}
+	deps := &serverDeps{entitlements: feature.ProEntitlements(),
+		clients: kubeclient.ClientSet{
+			Clock: clock.Func(func() time.Time {
+				return now
+			})}}
 	runErr := errors.New("run failed")
 	if err := runWithProgress(
 		context.Background(), deps, progress,

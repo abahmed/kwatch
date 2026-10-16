@@ -59,6 +59,9 @@ type Manager struct {
 	workers     workerSet
 	pending     []deliverJob
 	onDelivered func()
+	// nativeThreads is whether providers thread an incident's messages.
+	// Without it each message is sent as a new one (see threads_gate.go).
+	nativeThreads bool
 
 	// outbox persists queued jobs; nil until the leader session attaches
 	// the state store. restored holds the jobs it loaded until Start.
@@ -170,6 +173,7 @@ func (m *Manager) initRuntime(
 	if err != nil {
 		return err
 	}
+	m.applyThreadGate(entries)
 	if active {
 		if err := m.drainForReconfiguration(); err != nil {
 			return err
