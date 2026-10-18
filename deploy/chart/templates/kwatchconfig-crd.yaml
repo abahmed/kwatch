@@ -122,6 +122,8 @@ spec:
                     interval:
                       type: integer
                       minimum: 0
+                clusterCheckins:
+                  type: boolean
                 telemetry:
                   type: object
                   properties:
@@ -273,6 +275,8 @@ spec:
                     interval:
                       type: integer
                       minimum: 0
+                clusterCheckins:
+                  type: boolean
                 telemetry:
                   type: object
                   properties:

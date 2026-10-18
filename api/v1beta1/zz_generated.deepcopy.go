@@ -93,6 +93,11 @@ func (in *KwatchConfigList) DeepCopyObject() runtime.Object {
 
 func (in *KwatchConfigSpec) DeepCopyInto(out *KwatchConfigSpec) {
 	*out = *in
+	if in.ClusterCheckins != nil {
+		in, out := &in.ClusterCheckins, &out.ClusterCheckins
+		*out = new(bool)
+		**out = **in
+	}
 	if in.Namespaces != nil {
 		in, out := &in.Namespaces, &out.Namespaces
 		*out = make([]string, len(*in))

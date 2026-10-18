@@ -212,3 +212,19 @@ func TestCRDSchemaOmitsForbiddenFields(t *testing.T) {
 type schemaNode struct {
 	Properties map[string]schemaNode `json:"properties"`
 }
+
+func TestApplyOverlayTurnsClusterCheckinsOff(t *testing.T) {
+	cfg := config.DefaultConfig()
+	if !cfg.ClusterCheckins {
+		t.Fatal("check-ins must default on")
+	}
+	obj := &unstructured.Unstructured{Object: map[string]interface{}{
+		"spec": map[string]interface{}{"clusterCheckins": false},
+	}}
+	if err := ApplyOverlay(cfg, obj); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ClusterCheckins {
+		t.Fatal("clusterCheckins: false must turn check-ins off")
+	}
+}

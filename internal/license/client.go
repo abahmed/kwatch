@@ -293,9 +293,12 @@ func (c *Client) call(
 	if err != nil {
 		return Result{}, &TransientError{Status: resp.StatusCode, Err: err}
 	}
+	res := Result{}
+	if resp.StatusCode == http.StatusNoContent && !wantLease {
+		return res, nil
+	}
 	var w wireResponse
 	parseErr := json.Unmarshal(raw, &w)
-	res := Result{}
 	if resp.StatusCode == http.StatusOK {
 		if parseErr != nil || (wantLease && w.Lease == "") {
 			return res, &TransientError{

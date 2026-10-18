@@ -63,11 +63,16 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 	defer deps.threadWake.detach()
 	supervisor, guard := newComponentSupervisor(deps.clients.Clock.Now),
 		&storeGuard{}
+	checkins := newCheckinRunner(deps, lic, disk)
 	startActiveComponents(activeCtx, deps, supervisor, activeResources{
 		state: state, disk: disk, result: result, session: session,
-		threads: threads, guard: guard,
+		threads: threads, guard: guard, checkins: checkins,
 	})
 	err = awaitSessionEnd(ctx, supervisor, lic)
+	if err == nil && applicationContext(deps).Err() != nil {
+		// A graceful shutdown, not a leadership hand-over.
+		checkins.stopping()
+	}
 	// Readiness goes first: the session is over from this moment, and the
 	// shutdown work below can take many seconds.
 	deps.readiness.withdraw()
@@ -246,6 +251,8 @@ type activeResources struct {
 	threads *threadSaver
 	// guard records whether a component may still write to the store.
 	guard *storeGuard
+	// checkins is nil when Pro cluster check-ins cannot run.
+	checkins *checkinRunner
 }
 
 func startActiveComponents(
@@ -298,6 +305,10 @@ func startActiveComponents(
 	if deps.runtime.Lifecycle().CRDEnabled() {
 		optional = append(optional,
 			monitoredComponent(deps, "crd-watcher", runCRDWatcher))
+	}
+	if res.checkins != nil {
+		optional = append(optional,
+			monitoredRun(deps, "checkins", res.checkins.run))
 	}
 	for _, component := range optional {
 		supervisor.startOptional(ctx, component)

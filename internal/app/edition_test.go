@@ -131,14 +131,14 @@ func TestCommunityRegistersOnlyPodAndNodeDetectors(t *testing.T) {
 	}
 }
 
-func TestStandbyWarnsOnceInCommunityOnly(t *testing.T) {
+func TestStandbyLogsOnceInEveryEdition(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		e    feature.Entitlements
 		want bool
 	}{
 		{"community", feature.CommunityEntitlements(), true},
-		{"pro", feature.ProEntitlements(), false},
+		{"pro", feature.ProEntitlements(), true},
 		{"unset", nil, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

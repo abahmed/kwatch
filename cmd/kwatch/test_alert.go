@@ -89,6 +89,13 @@ func deliverTestAlert(
 			"installer and choose Edit notification providers.\n")
 		return testAlertNoTargets
 	}
+	if only == "?" {
+		// The installer reads this to offer a provider picker.
+		for _, name := range names {
+			_, _ = fmt.Fprintln(out, name)
+		}
+		return 0
+	}
 	if only != "" && !contains(names, only) {
 		_, _ = fmt.Fprintf(errOut, "test-alert: no provider named %q "+
 			"(configured: %s)\n", only, strings.Join(names, ", "))

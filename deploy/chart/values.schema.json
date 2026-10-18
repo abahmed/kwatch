@@ -708,6 +708,10 @@
             }
           },
           "additionalProperties": false
+        },
+        "clusterCheckins": {
+          "type": "boolean",
+          "description": "Pro cluster check-ins to api.kwatch.dev (default true)"
         }
       },
       "additionalProperties": false
