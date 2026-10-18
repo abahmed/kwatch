@@ -165,7 +165,8 @@ The chart defaults to `rbac.mode: least-privilege`, an explicit read set for
 the kinds kwatch watches. To also watch custom resources and kinds added
 later, add `--set rbac.mode=full`. See the
 [chart guide](./deploy/chart/README.md) for the full install, values and
-the Secret-based configuration, and [kwatch.sh](./docs/kwatch-sh.md) for what the installer does.
+the Secret-based configuration, and [kwatch.sh](./docs/kwatch-sh.md) for
+what the installer does.
 
 ## Editions
 
