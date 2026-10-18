@@ -197,11 +197,12 @@ jobs:
       run: ./scripts/scan-image.sh kwatch:ci
 
   # helm lint and the template tests run inside `make ci`; this job adds the
-  # CRD upgrade/uninstall lifecycle, which needs a real API server.
+  # CRD upgrade/uninstall lifecycle and the v0.10.5 upgrade, which need a
+  # real API server.
   chart-lifecycle:
     name: Chart lifecycle
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
       contents: read
       pull-requests: read
@@ -233,3 +234,30 @@ jobs:
     - name: CRD lifecycle integration test
       if: steps.changes.outputs.chart == 'true'
       run: ./deploy/chart/test_helm_lifecycle.sh
+
+    - name: Set up Docker Buildx
+      if: steps.changes.outputs.chart == 'true'
+      uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+    # The current build, for the upgrade test. Read-only cache, as in the
+    # image job.
+    - name: Build linux/amd64 image
+      if: steps.changes.outputs.chart == 'true'
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+      with:
+        context: .
+        platforms: linux/amd64
+        load: true
+        push: false
+        tags: kwatch:ci
+        cache-from: type=gha
+        build-args: |
+          RELEASE_VERSION=ci
+          GIT_COMMIT=${{ github.sha }}
+          BUILD_DATE=ci
+
+    - name: Upgrade a v0.10.5 install to this build
+      if: steps.changes.outputs.chart == 'true'
+      run: |
+        kind load docker-image kwatch:ci --name kwatch-chart
+        ./deploy/chart/test_helm_upgrade.sh
