@@ -47,14 +47,14 @@ license.
 
 <table>
 <tr>
-<td width="33%" valign="top"><b>🔍 One cause</b><br>Fifty symptoms become one incident with the cause named.</td>
-<td width="33%" valign="top"><b>🔕 Quiet</b><br>One message, then silence until something new is true.</td>
-<td width="33%" valign="top"><b>👉 Actionable</b><br>Every message ends with the command to run.</td>
+<td width="33%" valign="top"><b>🔍 Root cause first</b><br>kwatch follows a failure upstream and names the one cause.</td>
+<td width="33%" valign="top"><b>🔕 Quiet by default</b><br>One message, then silence until something new is true.</td>
+<td width="33%" valign="top"><b>🕵️ Who changed what</b><br>See who changed what, and when.</td>
 </tr>
 <tr>
-<td valign="top"><b>🕵️ Accountable</b><br>See who changed what, and when.</td>
-<td valign="top"><b>📣 Where you are</b><br>50+ channels, from Slack to PagerDuty.</td>
-<td valign="top"><b>🔒 Yours</b><br>One pod in your cluster. No kwatch cloud.</td>
+<td valign="top"><b>👉 The next step</b><br>Every message ends with the command to run.</td>
+<td valign="top"><b>📣 50+ channels</b><br>Slack, Teams, PagerDuty, email, webhooks and more.</td>
+<td valign="top"><b>🔒 Your data stays in your cluster</b><br>One pod. No kwatch cloud.</td>
 </tr>
 </table>
 
