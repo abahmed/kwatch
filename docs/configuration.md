@@ -573,6 +573,18 @@ there (and uninstalling) releases the cluster binding so the key can move to
 another cluster; the running leader notices through the `deactivated-at` field of that Secret and
 falls back to Community.
 
+
+### Cluster check-ins
+
+With an active Pro license, kwatch checks in with `api.kwatch.dev` every 30
+minutes while monitoring is ready, so app.kwatch.dev can show when the
+cluster goes silent (no check-in for 60 minutes). A check-in carries a hashed
+cluster ID, the kwatch version, the node count, the namespace kwatch runs in
+and `app.clusterName` if set. A graceful shutdown sends a last check-in that
+says kwatch is stopping. Nothing is sent to you. Turn check-ins off with
+`clusterCheckins: false` (also accepted in KwatchConfig); kwatch then tells
+the server once and stops. The Community edition never checks in.
+
 ## 🔄 Upgrader
 
 At startup kwatch quietly asks "is there a newer version?" and mentions it. Turn it off if

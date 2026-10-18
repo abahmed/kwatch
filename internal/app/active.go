@@ -63,16 +63,10 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 	defer deps.threadWake.detach()
 	supervisor, guard := newComponentSupervisor(deps.clients.Clock.Now),
 		&storeGuard{}
-	checkins := newCheckinRunner(deps, lic, disk)
-	startActiveComponents(activeCtx, deps, supervisor, activeResources{
-		state: state, disk: disk, result: result, session: session,
-		threads: threads, guard: guard, checkins: checkins,
-	})
-	err = awaitSessionEnd(ctx, supervisor, lic)
-	if err == nil && applicationContext(deps).Err() != nil {
-		// A graceful shutdown, not a leadership hand-over.
-		checkins.stopping()
-	}
+	checkins := startActiveComponents(activeCtx, deps, supervisor,
+		activeResources{state: state, disk: disk, result: result,
+			session: session, threads: threads, guard: guard, lic: lic})
+	err = awaitActiveEnd(ctx, deps, supervisor, lic, checkins)
 	// Readiness goes first: the session is over from this moment, and the
 	// shutdown work below can take many seconds.
 	deps.readiness.withdraw()
@@ -106,6 +100,20 @@ func newSessionStartup(deps *serverDeps, disk diskState) *startupManager {
 		newKubernetesRestartEvidence(
 			deps.clients.Kubernetes, kubeclient.GetNamespace()),
 	)
+}
+
+// awaitActiveEnd is awaitSessionEnd plus the shutdown check-in: only a
+// graceful shutdown sends it, never a leadership hand-over.
+func awaitActiveEnd(
+	ctx context.Context, deps *serverDeps,
+	supervisor *componentSupervisor, lic *licenseSession,
+	checkins *checkinRunner,
+) error {
+	err := awaitSessionEnd(ctx, supervisor, lic)
+	if err == nil && applicationContext(deps).Err() != nil {
+		checkins.stopping()
+	}
+	return err
 }
 
 // awaitSessionEnd blocks until a required component fails, leadership
@@ -251,8 +259,7 @@ type activeResources struct {
 	threads *threadSaver
 	// guard records whether a component may still write to the store.
 	guard *storeGuard
-	// checkins is nil when Pro cluster check-ins cannot run.
-	checkins *checkinRunner
+	lic   *licenseSession
 }
 
 func startActiveComponents(
@@ -260,7 +267,7 @@ func startActiveComponents(
 	deps *serverDeps,
 	supervisor *componentSupervisor,
 	res activeResources,
-) {
+) *checkinRunner {
 	// The pipeline's progress clock was stamped when the process booted. A
 	// replica that waited as standby would otherwise look stalled the
 	// moment it starts leading.
@@ -298,6 +305,20 @@ func startActiveComponents(
 		monitoredRun(deps, "state-compactor",
 			runCompactor(res.state, storeMetrics(deps))),
 	}
+	checkins := newCheckinRunner(deps, res.lic, res.disk)
+	optional = append(optional, conditionalComponents(deps, checkins)...)
+	for _, component := range optional {
+		supervisor.startOptional(ctx, component)
+	}
+	return checkins
+}
+
+// conditionalComponents are the optional components that only some
+// configurations or editions run.
+func conditionalComponents(
+	deps *serverDeps, checkins *checkinRunner,
+) []componentSpec {
+	var optional []componentSpec
 	if deps.has(heartbeatMonitor) {
 		optional = append(optional,
 			monitoredComponent(deps, "heartbeat", runHeartbeat))
@@ -306,11 +327,9 @@ func startActiveComponents(
 		optional = append(optional,
 			monitoredComponent(deps, "crd-watcher", runCRDWatcher))
 	}
-	if res.checkins != nil {
+	if checkins != nil {
 		optional = append(optional,
-			monitoredRun(deps, "checkins", res.checkins.run))
+			monitoredRun(deps, "checkins", checkins.run))
 	}
-	for _, component := range optional {
-		supervisor.startOptional(ctx, component)
-	}
+	return optional
 }
