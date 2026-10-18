@@ -10,9 +10,9 @@ import (
 
 // Expiry warning thresholds, in whole days left.
 const (
-	renewURL        = "https://kwatch.dev/account"
-	trialWarnDays   = 14
-	trialUrgentDays = 3
+	renewURL         = "https://kwatch.dev/account"
+	expiryWarnDays   = 14
+	expiryUrgentDays = 3
 )
 
 // licenseNotified is what the operator has already been told. It is kept
@@ -52,7 +52,7 @@ func licenseNotices(
 	} else if st.State == license.StateActive {
 		rec.Grace = ""
 	}
-	if note, updated := trialNotice(rec, st, now); note != "" {
+	if note, updated := expiryNotice(rec, st, now); note != "" {
 		rec = updated
 		msgs = append(msgs, note)
 	}
@@ -93,12 +93,13 @@ func graceNotice(st license.Status) string {
 		" UTC; Pro features stop then unless it renews."
 }
 
-// trialNotice returns the expiry warning that is due, if any.
-func trialNotice(
+// expiryNotice returns the expiry warning that is due, if any. It applies
+// to every plan: the API issues paid licenses as "pro", so gating on a
+// plan name would silence the warnings.
+func expiryNotice(
 	rec licenseNotified, st license.Status, now time.Time,
 ) (string, licenseNotified) {
-	if st.Plan != license.PlanTrial || st.State != license.StateActive ||
-		st.ExpiresAt.IsZero() {
+	if st.State != license.StateActive || st.ExpiresAt.IsZero() {
 		return "", rec
 	}
 	left := st.ExpiresAt.Sub(now)
@@ -107,9 +108,9 @@ func trialNotice(
 	}
 	days := int((left + 24*time.Hour - 1) / (24 * time.Hour))
 	switch {
-	case days <= trialUrgentDays && rec.Trial3 != st.LID:
+	case days <= expiryUrgentDays && rec.Trial3 != st.LID:
 		rec.Trial3, rec.Trial14 = st.LID, st.LID
-	case days <= trialWarnDays && days > trialUrgentDays &&
+	case days <= expiryWarnDays && days > expiryUrgentDays &&
 		rec.Trial14 != st.LID:
 		rec.Trial14 = st.LID
 	default:

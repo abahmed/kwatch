@@ -105,11 +105,18 @@ func TestLicenseNoticesIgnorePendingAndCommunityNeverEnabled(t *testing.T) {
 	require.Empty(t, msgs)
 }
 
-func TestLicenseTrialWarningsFireOnceEach(t *testing.T) {
+func TestLicenseExpiryWarningsFireOnceEachForEveryPlan(t *testing.T) {
+	for _, plan := range []string{license.PlanPro, license.PlanTrial} {
+		t.Run(plan, func(t *testing.T) { checkExpiryWarnings(t, plan) })
+	}
+}
+
+func checkExpiryWarnings(t *testing.T, plan string) {
+	t.Helper()
 	disk := diskState{store: openTestStore(t)}
 	exp := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	trial := license.Status{
-		State: license.StateActive, Plan: license.PlanTrial,
+		State: license.StateActive, Plan: plan,
 		LID: "lic_…9999", ExpiresAt: exp,
 	}
 	var log noticeLog
