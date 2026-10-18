@@ -205,6 +205,10 @@ func (b *blockingThreads) RestoreThreads(map[string]map[string]string) {}
 
 // A Flush that times out leaves its save running. Closing the saver must
 // stop that save from writing, and a concurrent save must not race it.
+//
+// A first save is held inside the snapshot while it owns the lock, so the
+// Flush's own save always waits on the lock and the Flush always times
+// out. The test does not depend on when the Flush goroutine is scheduled.
 func TestThreadSaverFlushTimeoutDoesNotWriteAfterClose(t *testing.T) {
 	disk := threadDisk(t)
 	source := &blockingThreads{
@@ -213,13 +217,16 @@ func TestThreadSaverFlushTimeoutDoesNotWriteAfterClose(t *testing.T) {
 	saver := newThreadSaver(source, disk)
 	saver.flushTimeout = time.Millisecond
 
-	require.False(t, saver.Flush(context.Background()))
+	held := make(chan error, 1)
+	go func() { held <- saver.Save(context.Background()) }()
 	<-source.entered
+	require.False(t, saver.Flush(context.Background()))
 	saver.Close()
 	concurrent := make(chan error, 1)
 	go func() { concurrent <- saver.Save(context.Background()) }()
 	close(source.release)
 
+	require.ErrorIs(t, <-held, errThreadSaverClosed)
 	require.ErrorIs(t, <-concurrent, errThreadSaverClosed)
 	var rec threadRecord
 	found, err := disk.getThreads(&rec)

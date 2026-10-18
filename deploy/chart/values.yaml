@@ -29,19 +29,22 @@ podSecurityContext:
   fsGroup: 1000
 
 rbac:
-  # -- Cluster read access. "full" grants list/watch on every resource so
-  # any API kind can be watched, and get only on namespaces, nodes,
-  # nodes/stats and nodes/metrics (kubelet stats, read from each kubelet
-  # directly) and pods/log (crash output); a wildcard get is avoided
-  # because it would also match pods/exec and similar subresources.
-  # nodes/proxy is never granted. "least-privilege" grants an explicit
-  # list/watch set matching the built-in sources and skips other kinds.
-  # Both modes also grant get on pods in the release namespace only, to
-  # explain why the previous kwatch Pod restarted, and get/update only on
-  # kwatch's own state lock Lease. The license instance key is the one
-  # Secret exception: get/create/update on the name kwatch-license-instance
-  # in the release namespace, in both modes and even with watch.secrets=false.
-  mode: full
+  # -- Cluster read access. "least-privilege" (the default) grants an
+  # explicit list/watch set matching the built-in sources; kinds outside
+  # it, custom resources included, show as permission_denied in /health
+  # coverage. "full" grants list/watch on every resource so any API kind,
+  # including CRDs installed later, can be watched. Both modes grant get
+  # only on namespaces, nodes, nodes/stats and nodes/metrics (kubelet
+  # stats, read from each kubelet directly) and pods/log (crash output);
+  # a wildcard get is avoided because it would also match pods/exec and
+  # similar subresources. nodes/proxy is never granted. Both modes also
+  # grant get on pods in the release namespace only, to explain why the
+  # previous kwatch Pod restarted, and get/update only on kwatch's own
+  # state lock Lease. The license instance key is the one Secret
+  # exception: get/update on the name kwatch-license-instance in the
+  # release namespace, in both modes and even with watch.secrets=false.
+  # Opt back into the wildcard with --set rbac.mode=full.
+  mode: least-privilege
 
 watch:
   # -- Watch Secrets. They feed checks such as missing Secret references
