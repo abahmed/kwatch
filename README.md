@@ -16,6 +16,12 @@
 </p>
 
 <p align="center">
+  <b>When something breaks in your Kubernetes cluster, kwatch tells you what
+  broke, why, and what to do, in Slack, Discord, email and 50+ other
+  channels.</b>
+</p>
+
+<p align="center">
   <a href="https://github.com/abahmed/kwatch/releases"><img alt="Release" src="https://img.shields.io/github/v/release/abahmed/kwatch?sort=semver"></a>
   <a href="https://github.com/abahmed/kwatch/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/abahmed/kwatch/actions/workflows/ci.yml/badge.svg"></a>
   <a href="./LICENSE"><img alt="License: ELv2, source available" src="https://img.shields.io/badge/license-ELv2%20(source%20available)-blue"></a>
@@ -33,8 +39,9 @@
 /bin/bash -c "$(curl -fsSL https://kwatch.dev/kwatch.sh)"
 ```
 
-Paste one line, answer a few questions. Run it again any time to upgrade,
-change settings or manage your license.
+One command, and it walks you through the rest: which cluster, where alerts
+should go. Run it again any time to upgrade, change settings or manage your
+license.
 
 ---
 
@@ -53,7 +60,8 @@ change settings or manage your license.
 
 ## 🎯 One incident instead of fifty alerts
 
-It is 03:07. A release went out, pods are crash looping, a Service has no
+It is 03:07. A release went out, pods (the running copies of your apps) are
+crash looping (starting, failing and restarting over and over), a Service has no
 endpoints, and two other apps fail their health checks. Every alert is true.
 None of them says why.
 
@@ -86,6 +94,35 @@ back fixes it (changes the cluster):
 kubectl rollout undo deployment/api
 -n shop --to-revision=13
 ```
+
+## 🧭 New to Kubernetes?
+
+You do not need to be an expert. kwatch in 30 seconds:
+
+```text
+1. Install    Run one command. It asks a few questions.
+2. It watches kwatch runs as one small pod in your cluster and keeps a
+              live map of what depends on what.
+3. You hear   When something breaks you get one clear message:
+              what broke, why, and what to do.
+```
+
+<details>
+<summary><b>Words you may meet</b></summary>
+
+- **Cluster:** the group of machines that runs your apps.
+- **Node:** one machine in the cluster.
+- **Pod:** a running copy of an app.
+- **Namespace:** a named area of the cluster, often one per team or app.
+- **CrashLoopBackOff:** a pod keeps starting, failing and restarting.
+- **OOMKilled:** a pod used more memory than allowed and was stopped.
+- **RBAC:** Kubernetes permissions. It decides what kwatch may read.
+- **Helm:** a package manager for Kubernetes, an alternative way to install.
+- **CRD:** a custom resource definition, an extra kind of object that a tool
+  adds to the cluster.
+
+More in the [docs](https://docs.kwatch.dev).
+</details>
 
 ## ✨ Why kwatch
 
@@ -243,7 +280,7 @@ nodes; Pro covers everything. The full list is in the
 
 ## 🚀 Install
 
-**Installer (recommended).** It checks your cluster before it changes
+**Installer (recommended).** One command, and it walks you through it. It checks your cluster before it changes
 anything, asks where alerts should go, stores credentials in a Kubernetes
 Secret, installs kwatch and checks that it is running.
 
@@ -251,7 +288,7 @@ Secret, installs kwatch and checks that it is running.
 /bin/bash -c "$(curl -fsSL https://kwatch.dev/kwatch.sh)"
 ```
 
-**Helm.** For GitOps or if you manage the cluster with Helm:
+**Already use Helm?** You can install the chart instead:
 
 ```bash
 helm repo add kwatch https://kwatch.dev/charts
@@ -260,12 +297,16 @@ helm upgrade --install kwatch kwatch/kwatch \
   --namespace kwatch --create-namespace
 ```
 
+<details>
+<summary><b>Helm permissions (RBAC) and more</b></summary>
+
 The chart defaults to `rbac.mode: least-privilege`, an explicit read set for
 the kinds kwatch watches. To also watch custom resources and kinds added
 later, add `--set rbac.mode=full`. See the
 [chart guide](./deploy/chart/README.md) for the full install, values and
 the Secret-based configuration, and [kwatch.sh](./docs/kwatch-sh.md) for
 what the installer does.
+</details>
 
 ## ⭐ Editions
 
@@ -332,7 +373,7 @@ them.
 <details>
 <summary><b>What access does it need?</b></summary>
 
-Read access to the resources it watches. It writes only its own state lock
+Read access to the resources it watches (this is set with RBAC, Kubernetes permissions). It writes only its own state lock
 Lease, its state file, its license instance key Secret in its own namespace,
 and permission self-checks that are not persisted. It never gets `pods/exec`
 or `nodes/proxy`.
