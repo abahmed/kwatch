@@ -222,6 +222,14 @@ func TestRawManifestRBACIsReadOnly(t *testing.T) {
 
 func TestHelmFullRBACIsReadOnly(t *testing.T) {
 	assertFullRBACIsReadOnly(t,
+		renderHelm(t, "../../deploy/chart", "--namespace", "kwatch",
+			"--set", "rbac.mode=full"),
+		"kwatch", helmLease)
+}
+
+// The chart's default install is least-privilege, never the wildcard.
+func TestHelmDefaultRBACIsLeastPrivilege(t *testing.T) {
+	assertLeastPrivilegeRBAC(t,
 		renderHelm(t, "../../deploy/chart", "--namespace", "kwatch"),
 		"kwatch", helmLease)
 }
