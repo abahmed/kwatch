@@ -1,8 +1,8 @@
 name: CI
 
 # The required pull-request checks. `make ci` is the whole source gate
-# (including the -tags licensetest tests), so what runs here is exactly
-# what a contributor can run locally.
+# (including the test-only edition override tests), so what runs here is
+# exactly what a contributor can run locally.
 on:
   push:
     branches: [ main ]
