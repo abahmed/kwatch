@@ -11,6 +11,7 @@ namespace="kwatch-upgrade"
 manifest_ns="kwatch"
 root_dir="$(cd "$(dirname "$0")/../.." && pwd)"
 old_values="$root_dir/deploy/chart/testdata/values-0.10.5.yaml"
+old_config="$root_dir/deploy/chart/testdata/values-0.10.5-config.yaml"
 work="$(mktemp -d)"
 
 # shellcheck source=scripts/require-kind-context.sh
@@ -37,10 +38,10 @@ git -C "$root_dir" archive "$old_tag" deploy | tar -x -C "$work"
 
 echo "=== Helm: $old_tag -> current ==="
 helm install "$release" "$work/deploy/chart" --namespace "$namespace" \
-  --create-namespace -f "$old_values" --set image.tag="$old_tag" --wait \
+  --create-namespace -f "$old_values" -f "$old_config" --set image.tag="$old_tag" --wait \
   --timeout 3m || { dump "$namespace"; exit 1; }
 helm upgrade "$release" "$root_dir/deploy/chart" --namespace "$namespace" \
-  -f "$old_values" --set image.repository=kwatch --set image.tag=ci \
+  -f "$old_values" -f "$old_config" --set image.repository=kwatch --set image.tag=ci \
   --set image.pullPolicy=Never --wait --timeout 5m ||
   { dump "$namespace"; exit 1; }
 kubectl -n "$namespace" rollout status deployment/kwatch --timeout=3m ||
