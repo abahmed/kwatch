@@ -38,7 +38,20 @@ change settings or manage your license.
 
 ---
 
-## One incident instead of fifty alerts
+<table>
+<tr>
+<td width="33%" valign="top"><b>🔍 One cause</b><br>Fifty symptoms become one incident with the cause named.</td>
+<td width="33%" valign="top"><b>🔕 Quiet</b><br>One message, then silence until something new is true.</td>
+<td width="33%" valign="top"><b>👉 Actionable</b><br>Every message ends with the command to run.</td>
+</tr>
+<tr>
+<td valign="top"><b>🕵️ Accountable</b><br>See who changed what, and when.</td>
+<td valign="top"><b>📣 Where you are</b><br>50+ channels, from Slack to PagerDuty.</td>
+<td valign="top"><b>🔒 Yours</b><br>One pod in your cluster. No kwatch cloud.</td>
+</tr>
+</table>
+
+## 🎯 One incident instead of fifty alerts
 
 It is 03:07. A release went out, pods are crash looping, a Service has no
 endpoints, and two other apps fail their health checks. Every alert is true.
@@ -74,29 +87,115 @@ kubectl rollout undo deployment/api
 -n shop --to-revision=13
 ```
 
-## Why kwatch
+## ✨ Why kwatch
 
-- **Root cause first.** kwatch follows a failure upstream through
+- 🔍 **Root cause first.** kwatch follows a failure upstream through
   everything it depends on and names the one cause: a bad release, a full
   node, an expired certificate, a database outside the cluster. Symptoms
   join one incident.
-- **Quiet by default.** No repeats every five minutes and no flapping
+- 🔕 **Quiet by default.** No repeats every five minutes and no flapping
   storms. kwatch waits for failures to settle, merges what belongs together
   and speaks when there is news. Successful rollouts, scaling and node
   drains never wake anyone.
-- **Who changed what.** Rollouts, config edits and image updates sit on a
+- 🕵️ **Who changed what.** Rollouts, config edits and image updates sit on a
   timeline with who made them, so a message can say "after alice's 14:02
   release".
-- **The next step.** A message ends with the command to run: read the crash
+- 👉 **The next step.** A message ends with the command to run: read the crash
   log, describe the node, or roll back.
-- **50+ channels.** Slack, Microsoft Teams, Discord, PagerDuty, Opsgenie,
+- 📣 **50+ channels.** Slack, Microsoft Teams, Discord, PagerDuty, Opsgenie,
   email, Jira, webhooks and more. Paging tools get a stable key, so the same
   problem updates the same page and closes it when it is fixed.
   [All channels](https://kwatch.dev/docs/channels).
-- **Your data stays in your cluster.** One pod and a small volume for state.
+- 🔒 **Your data stays in your cluster.** One pod and a small volume for state.
   There is no kwatch cloud reading your logs.
 
-## How it works
+<details>
+<summary><b>📨 More example messages</b></summary>
+
+One node runs low on memory and starts evicting pods. Instead of one alert
+per pod, you get one message with the cause, then one when it is over.
+
+Messages are written as short lines, with the resource names in bold, text
+from your pods in code and the command in a code block. Slack, Discord,
+Telegram, Jira and the other chat and ticket providers show it as below;
+SMS, push and pager providers get the same lines as plain text.
+
+```text
+🟠 **Node n1** (**prod-eu-1**) is low on memory. All of its dependents are failing.
+Replicas that do not depend on it are healthy.
+**cart**, **orders** and **api** in **shop** are affected as well.
+To check the node's conditions and recent events, run
+    kubectl describe node n1
+```
+
+```text
+✅ **Node n1** (**prod-eu-1**) is ready again. It was failing for ten minutes.
+```
+
+The same goes for the other incidents you care about:
+
+```text
+🟠 **api** is failing in **shop** (**prod-eu-1**) after the 10:01 release of registry.example.com/api:2.3.
+The previous image was registry.example.com/api:2.2.
+It fails with `panic: missing key DB_PASSWORD_V2`.
+To see the rollout state, run
+    kubectl rollout status deployment/api -n shop
+```
+
+Messages that list several problems are short lists, the ones that need
+attention first and what resolved on one line. kwatch reports what is
+happening, not what could happen: advice such as a single replica or a missing
+probe is never listed:
+
+```text
+🟡 **kwatch digest** · staging — 2 problems · 5 resolved
+
+**Problems**
+• Node **ip-10-0-67-211** — failing again
+• Service **ingress-nginx** (**kube-addons**) — Kubernetes reported FailedDeployModel 3 times in the last quarter hour
+
+✅ 5 resolved since last digest: accounts, assets, comms +2
+```
+
+```text
+🟠 **kwatch** · prod-eu-1 — 2 new problems at the same time
+
+**Problems**
+• **ledger** in **billing** keeps crashing
+• **checkout** in **orders** keeps crashing
+
+_Each gets its own message when it changes or resolves._
+```
+
+One message per problem, with its cause and the command to fix or check it.
+Known and low-priority problems stay quiet, and the resolve message tells you
+what happened.
+
+When five apps fail because a database outside the cluster is down, kwatch
+blames the database, not the apps:
+
+```text
+🟠 api in shop (prod-eu-1) keeps crashing because external endpoint
+db.example.com:5432 refuses connections. It fails with "dial tcp
+db.example.com:5432: connect: connection refused". Every error mentions it.
+cart, search, auth and one other are affected as well. To read the output
+of the last crash, run
+kubectl logs api-6d4f-0 -c app -n shop --previous
+```
+
+When a node disappears:
+
+```text
+🔴 Node n1 (prod-eu-1) has not reported for about two minutes. It reports
+"Kubelet stopped posting node status". To check the node's conditions and
+recent events, run kubectl describe node n1
+```
+
+When kwatch is not sure, it says so instead of guessing. One emoji tells you
+how urgent a message is: 🔴 page · 🟠 notify · 🟡 low · ✅ resolved.
+</details>
+
+## ⚙️ How it works
 
 1. **Watch.** kwatch keeps a live map of your cluster: pods, workloads,
    nodes, volumes, configs, services and certificates, how they connect,
@@ -125,7 +224,7 @@ An incident over time:
 03:21  Resolved after 14 minutes
 ```
 
-## What it catches
+## 🔎 What it catches
 
 | | |
 | --- | --- |
@@ -142,7 +241,7 @@ Built in, no rules to write. Community covers pod failures and NotReady
 nodes; Pro covers everything. The full list is in the
 [coverage guide](./docs/kubernetes-coverage.md).
 
-## Install
+## 🚀 Install
 
 **Installer (recommended).** It checks your cluster before it changes
 anything, asks where alerts should go, stores credentials in a Kubernetes
@@ -168,7 +267,7 @@ later, add `--set rbac.mode=full`. See the
 the Secret-based configuration, and [kwatch.sh](./docs/kwatch-sh.md) for
 what the installer does.
 
-## Editions
+## ⭐ Editions
 
 One binary, two editions. Community needs no account and no key. Pro is free
 during early access.
@@ -186,7 +285,7 @@ When a Pro license ends, kwatch falls back to Community. Alerts never stop.
 The authoritative list is the catalog in [`internal/feature`](./internal/feature),
 and the comparison is on [kwatch.dev/pro](https://kwatch.dev/pro).
 
-### Get Pro
+### 🔑 Get Pro
 
 1. Sign in at [app.kwatch.dev](https://app.kwatch.dev) with your email and
    press **Get a free Pro license**. Your key appears right away.
@@ -204,7 +303,7 @@ install, set `KWATCH_LICENSE_KEY` in the environment of the same command.
 
 Details: [licensing](./docs/licensing.md).
 
-## What leaves my cluster
+## 🔒 What leaves my cluster
 
 - **Your alerts**, to the channels you configure. Secrets and tokens are
   redacted before anything is stored or sent.
@@ -220,7 +319,7 @@ per release to your channels; turn that off with
 `upgrader.disableUpdateCheck: true`. Both settings sit under `config:` in
 the chart values.
 
-## FAQ
+## ❓ FAQ
 
 <details>
 <summary><b>Does it replace Prometheus or Grafana?</b></summary>
@@ -271,7 +370,7 @@ account or company. There are no payment details. If that changes, you will
 hear well in advance.
 </details>
 
-## Tested like a product
+## 📏 Tested like a product
 
 Every change is replayed against a library of real failure scenarios, plus a
 hidden set nobody tunes for, and the build fails if it gets worse. CI checks
@@ -279,7 +378,7 @@ that kwatch names the right cause, never alerts on normal operations, and
 stays small. See the
 [latest scorecard](./internal/scenarios/SCORECARD.md).
 
-## Contributing
+## 🤝 Contributing
 
 Report a bug, suggest an idea or send a pull request. Start with
 [CONTRIBUTING.md](./CONTRIBUTING.md) and the
@@ -289,18 +388,23 @@ follow a step-by-step guide to add a
 [propagation rule](./docs/contributing-propagation-rule.md) or a
 [scenario](./docs/contributing-scenario.md).
 
-## Security
+## 🛡️ Security
 
 Report vulnerabilities privately, as described in
 [SECURITY.md](./SECURITY.md).
 
-## Community
+## 💬 Community
 
 [Open an issue](https://github.com/abahmed/kwatch/issues) ·
 [Join Discord](https://discord.gg/kzJszdKmJ7) ·
 [Code of conduct](./CODE_OF_CONDUCT.md)
 
-## License
+## ⭐ Star us
+
+If kwatch saves you a night, star the repo so others can find it, and come
+say hello on [Discord](https://discord.gg/kzJszdKmJ7).
+
+## 📄 License
 
 kwatch is source available under the [Elastic License 2.0](./LICENSE)
 (ELv2) since the release after `v1.0.0-rc.10`. You may use it for free in
