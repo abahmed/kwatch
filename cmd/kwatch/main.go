@@ -66,6 +66,10 @@ func runCommand(
 			return runLint(strict, check, out, errOut)
 		case "license":
 			return runLicense(args[1:], out, errOut)
+		case "test-alert":
+			return runTestAlert(args[1:], out, errOut, time.Now)
+		case "redact":
+			return runRedact(args[1:], os.Stdin, out, errOut)
 		case "replay-export":
 			if !app.ResolveEntitlements().Has(app.FlightRecorder) {
 				return proRequired(errOut, "replay-export")
@@ -76,7 +80,8 @@ func runCommand(
 			if _, err := fmt.Fprintf(
 				errOut,
 				"unknown command %q (commands: version, lint, "+
-					"license, replay-export)\n",
+					"license, redact, replay-export, "+
+					"test-alert)\n",
 				args[0],
 			); err != nil {
 				return 2
