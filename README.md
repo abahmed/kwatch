@@ -144,7 +144,6 @@ license key, one per cluster.
 
 | | Community | Pro |
 | --- | --- | --- |
-| Price | Free forever | See [kwatch.dev/pricing](https://kwatch.dev/pricing) |
 | Detection | Pod crash loops, OOM and Pending; node NotReady | Adds node pressure and draining, readiness, rollouts, Jobs and CronJobs, PDBs, HPAs, storage, network, admission, certificates, quota, custom resources, control plane, probes and unusual events |
 | Analysis | Root-cause headline | Full proof, shared-factor suspects, who changed what, impact, log excerpts |
 | Incidents | Basic dedup and noise control, state in memory | Flapping detection, startup summary, state kept on disk across restarts, changes made while kwatch was down |
@@ -154,7 +153,7 @@ license key, one per cluster.
 When a Pro license ends, kwatch falls back to Community.
 Detection and alerting never stop. The authoritative feature list is the
 catalog in [`internal/feature`](./internal/feature); compare editions on
-[kwatch.dev/pricing](https://kwatch.dev/pricing) and get Pro free at
+[kwatch.dev/pro](https://kwatch.dev/pro) and get Pro free at
 [kwatch.dev/signup](https://kwatch.dev/signup).
 
 ## 🔑 Activating Pro
