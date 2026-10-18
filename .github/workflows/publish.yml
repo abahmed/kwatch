@@ -683,6 +683,14 @@ jobs:
 
           (cd "$output" && sha256sum kwatch-* > "kwatch-${TAG}-SHA256SUMS")
 
+          # Installer checksums: the manifests kwatch.sh fetches from
+          # raw.githubusercontent.com/abahmed/kwatch/<tag>/, named by that
+          # path and hashed from the tagged blobs (the bytes raw serves).
+          for f in deploy/deploy.yaml deploy/crd.yaml; do
+            sum=$(git show "$TAG:$f" | sha256sum | awk '{print $1}')
+            printf '%s  %s\n' "$sum" "$f"
+          done > "$output/SHA256SUMS"
+
       - name: Install Cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
@@ -695,6 +703,8 @@ jobs:
           checksums="$output/kwatch-${TAG}-SHA256SUMS"
           bundle="$output/kwatch-${TAG}-SHA256SUMS.sigstore.json"
           cosign sign-blob --yes --bundle "$bundle" "$checksums"
+          cosign sign-blob --yes \
+            --bundle "$output/SHA256SUMS.sigstore.json" "$output/SHA256SUMS"
 
       - name: Upload evidence to GitHub Release
         env:
@@ -735,7 +745,7 @@ jobs:
           - Source tag: [\`$TAG\`](https://github.com/$GITHUB_REPOSITORY/tree/$TAG)
           - Source commit: \`$(git rev-list -n 1 "$TAG")\`
           - Image: \`$IMAGE@$IMAGE_DIGEST\`
-          - Verification files: [checksums](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/kwatch-${TAG}-SHA256SUMS), [signed checksums](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/kwatch-${TAG}-SHA256SUMS.sigstore.json), [manifest](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/kwatch-${TAG}-release.json)
+          - Verification files: [checksums](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/kwatch-${TAG}-SHA256SUMS), [signed checksums](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/kwatch-${TAG}-SHA256SUMS.sigstore.json), [manifest](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/kwatch-${TAG}-release.json), [installer checksums](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/SHA256SUMS) ([signed](https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/SHA256SUMS.sigstore.json))
           - SBOMs: \`kwatch-${TAG}-source-sbom.cdx.json\` and \`kwatch-${TAG}-image-sbom.cdx.json\`
 
           Verify the image with:
@@ -887,6 +897,29 @@ jobs:
             --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
             --certificate-identity-regexp='^https://github.com/abahmed/kwatch/.github/workflows/publish.yml@' \
             "kwatch-${TAG}-SHA256SUMS"
+
+      - name: Verify signed installer checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.push_to_registry.outputs.tag }}
+        run: |
+          set -euo pipefail
+          dir=$(mktemp -d)
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'SHA256SUMS*' --dir "$dir"
+          cosign verify-blob \
+            --bundle "$dir/SHA256SUMS.sigstore.json" \
+            --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp='^https://github.com/abahmed/kwatch/.github/workflows/publish.yml@' \
+            "$dir/SHA256SUMS"
+          test "$(awk '{print $2}' "$dir/SHA256SUMS" | sort | tr '\n' ' ')" = \
+            "deploy/crd.yaml deploy/deploy.yaml "
+          base="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$TAG"
+          mkdir -p "$dir/deploy"
+          for f in deploy/deploy.yaml deploy/crd.yaml; do
+            curl -fsSL --retry 5 "$base/$f" -o "$dir/$f"
+          done
+          (cd "$dir" && sha256sum -c SHA256SUMS)
 
       - name: Verify public Helm repository
         if: ${{ !contains(needs.push_to_registry.outputs.tag, '-rc.') }}
