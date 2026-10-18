@@ -7,76 +7,80 @@
   </a>
 </p>
 
-<h2 align="center">See what broke. Understand why. Know what to do next.</h2>
+<h1 align="center">Fifty alerts. One cause.</h1>
 
 <p align="center">
-  kwatch is the on-call teammate for your Kubernetes cluster. When something
-  breaks, it finds <b>the one thing that caused it</b> and tells your team in
-  plain words, with the command to fix it.
+  kwatch runs inside your Kubernetes cluster, traces every failure back to
+  what started it, and sends one message: what broke, why, who changed it,
+  and what to do next.
 </p>
 
 <p align="center">
-  <a href="#-quick-start"><b>Quick start</b></a> ·
-  <a href="#-editions">Editions</a> ·
-  <a href="https://kwatch.dev">Website</a> ·
-  <a href="https://docs.kwatch.dev">Docs</a> ·
-    <a href="https://discord.gg/kzJszdKmJ7">Discord</a>
+  <b>When something breaks in your Kubernetes cluster, kwatch tells you what
+  broke, why, and what to do, in Slack, Discord, email and 50+ other
+  channels.</b>
 </p>
 
 <p align="center">
   <a href="https://github.com/abahmed/kwatch/releases"><img alt="Release" src="https://img.shields.io/github/v/release/abahmed/kwatch?sort=semver"></a>
-  <a href="https://github.com/abahmed/kwatch/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/abahmed/kwatch?style=flat"></a>
   <a href="https://github.com/abahmed/kwatch/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/abahmed/kwatch/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-ELv2-blue"></a>
+  <a href="./LICENSE"><img alt="License: ELv2, source available" src="https://img.shields.io/badge/license-ELv2%20(source%20available)-blue"></a>
+  <a href="https://artifacthub.io/packages/helm/kwatch/kwatch"><img alt="Artifact Hub" src="https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/kwatch"></a>
 </p>
 
-## 🎯 Why kwatch
+<p align="center">
+  <a href="https://kwatch.dev">kwatch.dev</a> ·
+  <a href="https://docs.kwatch.dev">Docs</a> ·
+  <a href="https://kwatch.dev/pro">Pro, free during early access</a> ·
+  <a href="https://discord.gg/kzJszdKmJ7">Discord</a>
+</p>
 
-- **Root cause first.** kwatch follows a failure back through everything it
-  depends on and names the one cause: a bad release, a full node, an expired
-  certificate, a database outside the cluster. Twenty symptoms become one
-  incident.
-- **Quiet by default.** Successful rollouts, scaling, node drains and the odd
-  restart never wake anyone. Updates go out only when something new is true,
-  and a storm of 1,000 failing pods from one cause is at most 3 messages.
-- **Who changed what.** Rollouts, config edits and image updates sit on a
-  timeline with who made them, so a message can say *"after alice's 14:02
-  release"*.
-- **The next step.** Each message ends with the command to run: read the
-  crash log, describe the node, or roll back.
-- **Yours, in your cluster.** One small Pod, read-only access, no SaaS.
-  Cluster data leaves only as the alerts you configure.
+```bash
+/bin/bash -c "$(curl -fsSL https://kwatch.dev/kwatch.sh)"
+```
 
-## 😩 2:14 AM. Your phone lights up twenty times.
+One command, and it walks you through the rest: which cluster, where alerts
+should go. Run it again any time to upgrade, change settings or manage your
+license.
 
-A release went out. Now pods are crash looping, a Service has no endpoints,
-the Ingress returns 503s, and two other apps are failing their health checks.
-Every alert is true. **None of them tells you why.** So you open a terminal
-and start digging.
-
-## 😌 With kwatch, you get one message
+---
 
 <table>
 <tr>
-<th width="50%">Typical alerts without kwatch</th>
-<th width="50%">With kwatch</th>
+<td width="33%" valign="top"><b>🔍 Root cause first</b><br>kwatch follows a failure upstream and names the one cause.</td>
+<td width="33%" valign="top"><b>🔕 Quiet by default</b><br>One message, then silence until something new is true.</td>
+<td width="33%" valign="top"><b>🕵️ Who changed what</b><br>See who changed what, and when.</td>
 </tr>
 <tr>
-<td valign="top">
+<td valign="top"><b>👉 The next step</b><br>Every message ends with the command to run.</td>
+<td valign="top"><b>📣 50+ channels</b><br>Slack, Teams, PagerDuty, email, webhooks and more.</td>
+<td valign="top"><b>🔒 Your data stays in your cluster</b><br>One pod. No kwatch cloud.</td>
+</tr>
+</table>
+
+## 🎯 One incident instead of fifty alerts
+
+It is 03:07. A release went out, pods (the running copies of your apps) are
+crash looping (starting, failing and restarting over and over), a Service has no
+endpoints, and two other apps fail their health checks. Every alert is true.
+None of them says why.
+
+kwatch sends this instead (an illustrative message):
 
 ```text
-🔥 Pod api-7d9f-x2k CrashLoopBackOff
-🔥 Pod api-7d9f-q8n CrashLoopBackOff
-🔥 Pod api-7d9f-m4c CrashLoopBackOff
-⚠️ Service api has no endpoints
-⚠️ Ingress storefront 503
-🔥 Pod checkout-5b2c-p1z Readiness failed
-🔥 Pod checkout-5b2c-k7w Readiness failed
-... 13 more
+kwatch · 1 incident                                    ROOT CAUSE FOUND
+
+checkout-api is crash-looping because a ConfigMap changed 4 minutes ago.
+
+Why     DB_HOST points to a host that doesn't resolve
+Who     deploy-bot, via Argo CD
+Impact  payments, cart
+Next    Roll back checkout-config
 ```
 
-</td>
-<td valign="top">
+When it is fixed, you hear about it once, and then it stays quiet.
+
+Messages look like this in your channel. This one is real kwatch output:
 
 ```text
 🔴 api is down in shop (prod-eu-1)
@@ -91,103 +95,60 @@ kubectl rollout undo deployment/api
 -n shop --to-revision=13
 ```
 
-</td>
-</tr>
-</table>
+## 🧭 New to Kubernetes?
 
-**What broke, why, who changed it, what else is hit, and how to fix it**, in
-one message, before you have even opened your laptop. When it is fixed, you
-hear about it once:
+You do not need to be an expert. kwatch in 30 seconds:
 
 ```text
-✅ api in shop (prod-eu-1) is healthy again. It was down for eight
-minutes.
+1. Install    Run one command. It asks a few questions.
+2. It watches kwatch runs as one small pod in your cluster and keeps a
+              live map of what depends on what.
+3. You hear   When something breaks you get one clear message:
+              what broke, why, and what to do.
 ```
 
-## ⚙️ How it works
+<details>
+<summary><b>Words you may meet</b></summary>
 
-```mermaid
-flowchart LR
-  A["👀 Watch<br/>every resource<br/>and every change"] --> B["🩺 Detect<br/>what is unhealthy"]
-  B --> C["🎯 Explain<br/>follow failures upstream<br/>to a small set of causes"]
-  C --> D["📨 Tell<br/>one message per cause,<br/>update only on news"]
-```
+- **Cluster:** the group of machines that runs your apps.
+- **Node:** one machine in the cluster.
+- **Pod:** a running copy of an app.
+- **Namespace:** a named area of the cluster, often one per team or app.
+- **CrashLoopBackOff:** a pod keeps starting, failing and restarting.
+- **OOMKilled:** a pod used more memory than allowed and was stopped.
+- **RBAC:** Kubernetes permissions. It decides what kwatch may read.
+- **Helm:** a package manager for Kubernetes, an alternative way to install.
+- **CRD:** a custom resource definition, an extra kind of object that a tool
+  adds to the cluster.
 
-1. **Watch.** kwatch keeps a live map of your cluster: every object, how they
-   connect, and a timeline of what changed and who changed it.
-2. **Detect.** It spots what is unhealthy: crash loops, unready nodes,
-   Services with no endpoints, full volumes, failing webhooks and more.
-3. **Explain.** From each failure it walks to what it depends on and keeps
-   only suspects that are broken or changed just before. Then it picks the
-   causes that explain everything, preferring stronger evidence over
-   covering more failures.
-4. **Tell.** One message per cause, written for people. It is updated only
-   when something new is true, and closed once when it is fixed.
+More in the [glossary](https://docs.kwatch.dev/glossary) and the
+[docs](https://docs.kwatch.dev).
+</details>
 
-## 🚀 Quick start
+## ✨ Why kwatch
 
-**Installer.** It asks which cluster and which channel (Slack, Teams,
-PagerDuty, ...), stores the credentials in a Kubernetes Secret, installs
-kwatch and checks that it is running. Run it again any time to upgrade,
-change settings, manage the license or uninstall.
+- 🔍 **Root cause first.** kwatch follows a failure upstream through
+  everything it depends on and names the one cause: a bad release, a full
+  node, an expired certificate, a database outside the cluster. Symptoms
+  join one incident.
+- 🔕 **Quiet by default.** No repeats every five minutes and no flapping
+  storms. kwatch waits for failures to settle, merges what belongs together
+  and speaks when there is news. Successful rollouts, scaling and node
+  drains never wake anyone.
+- 🕵️ **Who changed what.** Rollouts, config edits and image updates sit on a
+  timeline with who made them, so a message can say "after alice's 14:02
+  release".
+- 👉 **The next step.** A message ends with the command to run: read the crash
+  log, describe the node, or roll back.
+- 📣 **50+ channels.** Slack, Microsoft Teams, Discord, PagerDuty, Opsgenie,
+  email, Jira, webhooks and more. Paging tools get a stable key, so the same
+  problem updates the same page and closes it when it is fixed.
+  [All channels](https://kwatch.dev/docs/channels).
+- 🔒 **Your data stays in your cluster.** One pod and a small volume for state.
+  There is no kwatch cloud reading your logs.
 
-```bash
-/bin/bash -c "$(curl -fsSL https://kwatch.dev/kwatch.sh)"
-```
-
-For advanced users who prefer Helm, see the [chart guide](./deploy/chart/README.md).
-
-## 🧩 Editions
-
-One binary, two editions. Community needs no account and no key. Pro needs a
-license key, one per cluster.
-
-| | Community | Pro |
-| --- | --- | --- |
-| Detection | Pod crash loops, OOM and Pending; node NotReady | Adds node pressure and draining, readiness, rollouts, Jobs and CronJobs, PDBs, HPAs, storage, network, admission, certificates, quota, custom resources, control plane, probes and unusual events |
-| Analysis | Root-cause headline | Full proof, shared-factor suspects, who changed what, impact, log excerpts |
-| Incidents | Basic dedup and noise control, state in memory | Flapping detection, startup summary, state kept on disk across restarts, changes made while kwatch was down |
-| Delivery | 1 provider (pick with `app.communityProvider`), namespace filters and silences | All providers, routing by scope, threads, text templates, audit log |
-| Ops | RBAC audit, secret redaction, health, metrics, text `/status` | Severity overrides, maintenance holds, runbook links, heartbeat monitor, `/status` JSON, flight recorder and `replay-export`, standby replicas |
-
-When a Pro license ends, kwatch falls back to Community.
-Detection and alerting never stop. The authoritative feature list is the
-catalog in [`internal/feature`](./internal/feature); compare editions on
-[kwatch.dev/pro](https://kwatch.dev/pro) and get Pro free at
-[kwatch.dev/signup](https://kwatch.dev/signup).
-
-## 🔑 Activating Pro
-
-[Sign up](https://kwatch.dev/signup), get a free Pro license on your account page
-and copy your key. Then give it to kwatch.
-
-Run the installer, open its **License / Pro** menu and choose **Add or replace
-key**:
-
-```bash
-/bin/bash -c "$(curl -fsSL https://kwatch.dev/kwatch.sh)"
-```
-
-For a non-interactive install, set `KWATCH_LICENSE_KEY=KW1-...` in the
-environment of the same command.
-
-**How it works**
-
-- One key covers one cluster. The first successful check binds it.
-- kwatch renews daily. Each lease lasts 3 days, followed by a 4-day grace
-  period, so a cluster can be offline for up to 7 days.
-- You get 3 transfers per 30 days to move a key to another cluster.
-- When a license expires, kwatch falls back to Community and alerting never
-  stops.
-- The license state is in `/status` and in the installer's **License / Pro**
-  menu (**Show license status**).
-
-**What is sent.** The hashed cluster ID, the kwatch version, the node count
-and the instance public key. Community without a key makes no license calls.
-Details: [licensing in the configuration guide](./docs/configuration.md) and
-the [license guide](https://kwatch.dev/docs/license).
-
-## 🔁 More messages
+<details>
+<summary><b>📨 More example messages</b></summary>
 
 One node runs low on memory and starts evicting pods. Instead of one alert
 per pod, you get one message with the cause, then one when it is over.
@@ -269,124 +230,221 @@ recent events, run kubectl describe node n1
 ```
 
 When kwatch is not sure, it says so instead of guessing. One emoji tells you
-how urgent it is: 🔴 page · 🟠 notify · 🟡 low · ✅ resolved.
+how urgent a message is: 🔴 page · 🟠 notify · 🟡 low · ✅ resolved.
+</details>
 
-## 📣 Alerts where your team already is
+## ⚙️ How it works
 
-**56 destinations**, including Slack, Microsoft Teams, Discord, Google Chat,
-Mattermost, Telegram, email, PagerDuty, Opsgenie, incident.io, Jira, Datadog
-and plain webhooks. Paging tools get a stable key, so the same problem always
-updates the same page and closes it when it is fixed.
-[See all channels →](https://kwatch.dev/docs/channels)
+1. **Watch.** kwatch keeps a live map of your cluster: pods, workloads,
+   nodes, volumes, configs, services and certificates, how they connect,
+   and every change made to them, with who made it.
+2. **Trace.** When something fails, it follows the links upstream and keeps
+   only suspects that are broken or changed just before. It prefers the
+   cause with stronger evidence over the one that covers more failures.
+3. **Tell.** One message per cause, written for people. It is updated only
+   when something new is true, and closed once when it is resolved.
 
-## 🔍 What it catches
+An example trace, from symptom to cause:
+
+```text
+Pod checkout-api-7f9c          CrashLoopBackOff
+  Deployment checkout-api      healthy before 03:03
+    Node worker-3              healthy
+      ConfigMap checkout-config  changed 03:03   <- cause
+```
+
+An incident over time:
+
+```text
+03:07  Opened: checkout-api crash-looping, cause found
+03:11  Update: cart-svc now affected too
+03:16  Fix detected: checkout-config rolled back
+03:21  Resolved after 14 minutes
+```
+
+## 🔎 What it catches
 
 | | |
 | --- | --- |
-| 📦 **Apps** | Crash loops, OOM kills, bad rollouts, stuck Jobs and CronJobs, missing replicas |
-| 🗓️ **Scheduling** | Pods that cannot be placed, quota limits, affinity and taint mismatches |
-| 🖥️ **Nodes** | Lost or not-ready nodes, memory, disk and PID pressure |
-| 🌐 **Network** | Services without endpoints, broken Ingress and Gateway routes, failing webhooks, unreachable external endpoints |
-| 💾 **Storage** | Nearly full volumes, failed attachments, stuck claims |
-| 🔐 **Config** | Missing or rotated Secrets and ConfigMaps, image pull failures, expired certificates |
-| 🧩 **Your CRDs** | Anything that reports standard status conditions |
+| **Pods** | Crash loops, OOM kills, image pulls, Pending |
+| **Nodes** | NotReady, pressure, draining |
+| **Workloads** | Stuck rollouts, failed Jobs, missed CronJobs |
+| **Storage** | Pending claims, attach failures, full volumes |
+| **Network** | Services with no endpoints, Ingress, policies |
+| **Certificates** | Expiring and invalid TLS |
+| **Control plane** | API server, etcd, DNS, webhooks |
+| **Custom resources** | Failing conditions on CRDs |
 
-Some detectors are Pro; see [Editions](#-editions). [Full coverage list →](./docs/kubernetes-coverage.md)
+Built in, no rules to write. Community covers pod failures and NotReady
+nodes; Pro covers everything. The full list is in the
+[coverage guide](./docs/kubernetes-coverage.md).
 
-## 📏 Tested like a product, not a script
+## 🚀 Install
 
-Every change to kwatch is replayed against a library of real failure
-scenarios, plus a hidden set nobody is allowed to tune for. The build
-**fails** if it gets worse:
+**Installer (recommended).** One command, and it walks you through it. It checks your cluster before it changes
+anything, asks where alerts should go, stores credentials in a Kubernetes
+Secret, installs kwatch and checks that it is running.
 
-| We promise | And CI checks |
-| --- | --- |
-| It names the right cause | ≥ 90% of scenarios, ≥ 80% of the hidden set |
-| It rarely claims a wrong cause with confidence | ≤ 5% |
-| It never alerts on normal operations | 0 alerts |
-| It is fast | page in ≤ 2 min, notify in ≤ 5 min |
-| It stays small | 5,000 pods and 500 nodes in 512 MiB of memory |
+```bash
+/bin/bash -c "$(curl -fsSL https://kwatch.dev/kwatch.sh)"
+```
 
-[Latest scorecard →](./internal/scenarios/SCORECARD.md)
+**Already use Helm?** You can install the chart instead:
+
+```bash
+helm repo add kwatch https://kwatch.dev/charts
+helm repo update
+helm upgrade --install kwatch kwatch/kwatch \
+  --namespace kwatch --create-namespace
+```
+
+<details>
+<summary><b>Helm permissions (RBAC) and more</b></summary>
+
+The chart defaults to `rbac.mode: least-privilege`, an explicit read set for
+the kinds kwatch watches. To also watch custom resources and kinds added
+later, add `--set rbac.mode=full`. See the
+[chart guide](./deploy/chart/README.md) for the full install, values and
+the Secret-based configuration, and [kwatch.sh](./docs/kwatch-sh.md) for
+what the installer does.
+</details>
+
+## ⭐ Editions
+
+One binary, two editions. Community needs no account and no key. Pro is free
+during early access.
+
+| | Community | Pro |
+| --- | --- | --- |
+| Detection | Pod crash loops, OOM kills and Pending pods; node NotReady | Adds node pressure and draining, readiness, rollouts, Jobs and CronJobs, PDBs, HPAs, storage, network, admission, certificates, quota, custom resources, control plane, probes and unusual events |
+| Root cause | One-line headline | Full proof and confidence, shared-factor suspects, recent changes and who made them, affected services, log excerpts |
+| Channels | 1 provider (pick with `app.communityProvider`), namespace filters and silences | All providers, routing by scope, threads, text templates, audit log |
+| Noise control | Dedup and settling, state in memory | Flapping detection, startup summary, state kept on disk across restarts, changes made while kwatch was down |
+| Operations | RBAC audit, secret redaction, health, metrics, text `/status` | Severity overrides, maintenance holds, runbook links, heartbeat monitor, `/status` JSON, flight recorder and `replay-export`, standby replicas |
+| Account | None | Email only |
+
+When a Pro license ends, kwatch falls back to Community. Alerts never stop.
+The authoritative list is the catalog in [`internal/feature`](./internal/feature),
+and the comparison is on [kwatch.dev/pro](https://kwatch.dev/pro).
+
+### 🔑 Get Pro
+
+1. Sign in at [app.kwatch.dev](https://app.kwatch.dev) with your email and
+   press **Get a free Pro license**. Your key appears right away.
+2. Run the installer, open its **License / Pro** menu and choose **Add or
+   replace key**.
+
+Licenses are managed only through the installer. For a non-interactive
+install, set `KWATCH_LICENSE_KEY` in the environment of the same command.
+
+- One key runs one cluster. Move it to another up to 3 times in 30 days.
+- kwatch checks in once a day and keeps Pro for up to 7 days without a
+  connection.
+- The license state is in `/status` and in the installer's **License / Pro**
+  menu.
+
+Details: [licensing](./docs/licensing.md).
+
+## 🔒 What leaves my cluster
+
+- **Your alerts**, to the channels you configure. Secrets and tokens are
+  redacted before anything is stored or sent.
+- **An anonymous weekly ping**: a hashed cluster ID and the kwatch version.
+  It is separate from licensing. Turn it off with `telemetry.enabled: false`.
+- **With Pro**, a daily license check sends a hashed cluster ID, the kwatch
+  version and the node count. Community without a key makes no license
+  calls.
+
+Nothing from your workloads. Separately, kwatch asks the GitHub API at
+startup and then daily whether a newer release exists, and posts one notice
+per release to your channels; turn that off with
+`upgrader.disableUpdateCheck: true`. Both settings sit under `config:` in
+the chart values.
 
 ## ❓ FAQ
 
 <details>
 <summary><b>Does it replace Prometheus or Grafana?</b></summary>
 
-No. kwatch answers *"what just broke and why"*. Keep Prometheus, Grafana and
-Loki for metrics, trends and dashboards; kwatch needs no rules and works
-next to them.
-</details>
-
-<details>
-<summary><b>Does my data leave the cluster?</b></summary>
-
-Only as the alerts you configure. Secrets and tokens are redacted from logs
-and messages. kwatch also sends a weekly anonymous ping (a hashed cluster ID
-and its version, nothing else) so we know how many clusters use it; turn it
-off with `telemetry.enabled: false`. With a Pro key, the license check also
-sends the data listed under [Activating Pro](#-activating-pro).
+No. Keep your metrics. kwatch answers a different question: when something
+breaks, what caused it and what to do. It needs no rules and works next to
+them.
 </details>
 
 <details>
 <summary><b>What access does it need?</b></summary>
 
-Read-only access to cluster state. It writes only its own Lease, its
-state file, and SelfSubjectAccessReviews for its permission audit (not
-persisted). It never gets `pods/exec` or `nodes/proxy`. **By default its
-ServiceAccount can read every Secret in the cluster** (kwatch keeps only
-hashes, never values). Set `watch.secrets: false` (Helm: `--set
-watch.secrets=false`) to remove all Secret access. The chart's default
-`rbac.mode: least-privilege` lists only the kinds kwatch understands but
-still lists Secrets unless `watch.secrets` is false; set `rbac.mode: full`
-to also watch custom resources and kinds added later. Helm prints this warning on install and kwatch logs
-it once at startup.
-</details>
+Read access to the resources it watches (this is set with RBAC, Kubernetes permissions). It writes only its own state lock
+Lease, its state file, its license instance key Secret in its own namespace,
+and permission self-checks that are not persisted. It never gets `pods/exec`
+or `nodes/proxy`.
 
-<details>
-<summary><b>How much does it cost to run?</b></summary>
-
-The Community edition is free (see [Editions](#-editions)). kwatch runs as one Pod with a 512 MiB memory limit
-and a 2 GiB volume for its state.
+By default kwatch can read Secrets, to catch missing references and expiring
+certificates; it keeps only hashes, never values. Set `watch.secrets: false`
+(Helm: `--set watch.secrets=false`) to remove Secret access, except the
+license instance key.
 </details>
 
 <details>
 <summary><b>What happens when kwatch restarts?</b></summary>
 
 With Pro, it picks up where it left off: open incidents are not announced
-again, queued alerts are still sent, and changes made while it was down are
-still used to explain failures. Community keeps state in memory: after a
-restart it quietly takes a fresh baseline, so existing failures are not
-re-sent and only new ones (or ones that get worse) alert. kwatch delivers
-alerts at least once. See [production operations](./docs/production-operations.md).
+again and changes made while it was down still explain failures. Community
+keeps state in memory, so after a restart it takes a fresh baseline and
+alerts on new failures or ones that get worse. See
+[production operations](./docs/production-operations.md).
 </details>
 
 <details>
 <summary><b>Can I tune what it sends?</b></summary>
 
 Yes: namespace filters, silences, maintenance annotations, severity
-overrides, runbook links, an hourly message budget per channel, and
-configuration through a `KwatchConfig` resource (kwatch restarts to apply it).
-See the
+overrides, runbook links and a message budget per channel. See the
 [configuration guide](./docs/configuration.md).
 </details>
 
-## 🤝 Join us
+<details>
+<summary><b>Why is Pro free?</b></summary>
 
-The source is public. Report a bug, suggest an idea, or send a pull
-request. New contributors can start with the
-[plain-English architecture guide](./docs/contributor-architecture.md) and
-step-by-step guides for adding a
-[detector](./docs/contributing-detector.md),
-a [propagation rule](./docs/contributing-propagation-rule.md) or a
+We want kwatch proven on real clusters before we charge anything. Each
+license is free for 3 months and we may renew it, with up to 2 clusters per
+account or company. There are no payment details. If that changes, you will
+hear well in advance.
+</details>
+
+## 📏 Tested like a product
+
+Every change is replayed against a library of real failure scenarios, plus a
+hidden set nobody tunes for, and the build fails if it gets worse. CI checks
+that kwatch names the right cause, never alerts on normal operations, and
+stays small. See the
+[latest scorecard](./internal/scenarios/SCORECARD.md).
+
+## 🤝 Contributing
+
+Report a bug, suggest an idea or send a pull request. Start with
+[CONTRIBUTING.md](./CONTRIBUTING.md) and the
+[plain-English architecture guide](./docs/contributor-architecture.md), then
+follow a step-by-step guide to add a
+[detector](./docs/contributing-detector.md), a
+[propagation rule](./docs/contributing-propagation-rule.md) or a
 [scenario](./docs/contributing-scenario.md).
+
+## 🛡️ Security
+
+Report vulnerabilities privately, as described in
+[SECURITY.md](./SECURITY.md).
+
+## 💬 Community
 
 [Open an issue](https://github.com/abahmed/kwatch/issues) ·
 [Join Discord](https://discord.gg/kzJszdKmJ7) ·
-[CONTRIBUTING.md](./CONTRIBUTING.md)
+[Code of conduct](./CODE_OF_CONDUCT.md)
 
-If kwatch saves you a night, ⭐ the repo so others can find it.
+## ⭐ Star us
+
+If kwatch saves you a night, star the repo so others can find it, and come
+say hello on [Discord](https://discord.gg/kzJszdKmJ7).
 
 ## 📄 License
 
