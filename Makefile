@@ -10,7 +10,7 @@
 	coverage coverage-check verify ci verify-focused verify-fast \
 	verify-latency verify-race verify-security verify-manifests \
 	verify-operational verify-scenarios verify-negative-regressions \
-	verify-catalogs release-keys-check \
+	verify-catalogs release-keys-check test-licensetest \
 	docs-verify line-check diff-check mod-tidy-check architecture-check \
 	test-layout-check hygiene-check deadcode-check lint-actions lint-shell \
 	upstream-reasons upstream-check \
@@ -168,7 +168,7 @@ verify: build vet lint coverage-check verify-latency line-check diff-check \
 	architecture-check test-layout-check hygiene-check verify-catalogs \
 	docs-verify verify-manifests verify-negative-regressions deadcode-check
 
-ci: verify lint-actions lint-shell mod-tidy-check
+ci: verify test-licensetest lint-actions lint-shell mod-tidy-check
 
 # Package-scoped gate for incremental refactors, for example:
 #   make verify-focused PKGS="./internal/incident ./internal/delivery/..."
@@ -277,6 +277,13 @@ diff-check:
 		echo "diff-check: $(BASE) not found; checking uncommitted changes"; \
 		git diff --check HEAD; \
 	fi
+
+# The licensetest build tag compiles the test-only edition override that
+# the e2e image uses to run as Pro. Its unit tests are skipped by the
+# default build, so run them here. Release images never use this tag.
+test-licensetest:
+	$(GOCMD) test -race -count=1 -tags licensetest \
+		./internal/app/ ./internal/license/...
 
 mod-tidy-check:
 	$(GOCMD) mod tidy -diff
