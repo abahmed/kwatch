@@ -384,7 +384,7 @@ jobs:
           fi
 
           TOTAL=$(git rev-list --count "$RANGE")
-          LOG=$(git log --format='* %s (%h)' "$RANGE" | head -100)
+          LOG=$(git log -n 100 --format='* %s (%h)' "$RANGE")
           if [ "$TOTAL" -gt 100 ]; then
             LOG="$LOG
           * ...and $((TOTAL - 100)) more commits."
