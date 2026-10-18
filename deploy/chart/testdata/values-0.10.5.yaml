@@ -1,0 +1,39 @@
+# Default values for kwatch.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+image:
+  repository: ghcr.io/abahmed/kwatch
+  pullPolicy: Always
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  runAsNonRoot: true
+  readOnlyRootFilesystem: true
+
+service:
+  port: 8060
+
+resources:
+  limits:
+    memory: 128Mi
+    cpu: 100m
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+podAnnotations: {}
+
+sacAnnotations: {}
+
+podLabels: {}
+
+# kwatch configuration
+config:
+
+
+

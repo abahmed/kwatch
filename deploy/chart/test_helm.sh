@@ -478,4 +478,18 @@ if helm template test-lic . --set license.bogus=1 >/dev/null 2>&1; then
 fi
 echo "PASS: license"
 
+echo "=== 0.10.5 values file ==="
+# A values file from the 0.10.5 chart (verbatim, with its empty config:
+# and the removed service: block) must still render for helm upgrade.
+OUT_OLD=$(helm template test-old . -f testdata/values-0.10.5.yaml 2>&1) || {
+  echo "FAIL: 0.10.5 values file must render: $OUT_OLD"; exit 1;
+}
+if grep -Fq "port: 8060" <<<"$OUT_OLD"; then
+  echo "FAIL: the deprecated service block must be ignored"; exit 1;
+fi
+if helm template test-old . --set bogusTopLevel=1 >/dev/null 2>&1; then
+  echo "FAIL: unknown top-level keys must still be rejected"; exit 1;
+fi
+echo "PASS: 0.10.5 values file"
+
 echo "All helm template tests passed."
