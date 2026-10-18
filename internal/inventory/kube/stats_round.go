@@ -129,16 +129,27 @@ func (p *StatsPoller) finishRound(
 		p.failing = true
 		if p.lastLog.IsZero() || now.Sub(p.lastLog) >= statsLogEvery {
 			p.lastLog = now
-			klog.InfoS("kubelet stats unavailable",
-				"component", "kubelet-stats", "operation", "poll",
-				"reason", round.Reason, "nodes", round.Nodes,
-				"failed", round.Failed, "skipped", round.Skipped,
-				"exampleNode", tally.firstNode, "error", tally.firstError)
+			p.logUnavailable(tally, round)
 		}
 	}
 	if p.cfg.Report != nil {
 		p.cfg.Report(round)
 	}
+}
+
+// logUnavailable writes the default-level failure line, with a hint
+// when the error has a known fix.
+func (p *StatsPoller) logUnavailable(tally *statsTally, round StatsRound) {
+	fields := []any{
+		"component", "kubelet-stats", "operation", "poll",
+		"reason", round.Reason, "nodes", round.Nodes,
+		"failed", round.Failed, "skipped", round.Skipped,
+		"exampleNode", tally.firstNode, "error", tally.firstError,
+	}
+	if hint := statsHint(tally.firstError); hint != "" {
+		fields = append(fields, "hint", hint)
+	}
+	klog.InfoS("kubelet stats unavailable", fields...)
 }
 
 // reportNoClient tells Report the poller cannot read any kubelet.

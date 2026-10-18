@@ -140,6 +140,7 @@ func (m *Manager) incident(
 	m.incidents[p.ID] = p
 	m.index(p)
 	m.noteOpened(p.ID)
+	m.fresh = append(m.fresh, freshIncident{id: p.ID, reason: s.Reason})
 	return p
 }
 

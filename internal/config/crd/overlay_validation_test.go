@@ -109,12 +109,11 @@ func TestWatcherRejectsInvalidLateKwatchConfig(t *testing.T) {
 		seen:     make(map[string]string),
 		loadBase: freshBase,
 	}
-	if watcher.restartForLateObjects([]interface{}{
-		kwatchConfig("1", mixedNamespaces()),
-	}) {
+	late := kwatchConfig("1", mixedNamespaces())
+	if watcher.restartForLateObjects([]interface{}{late}) {
 		t.Fatal("restart reported for an invalid late config")
 	}
-	if watcher.seen["kwatch/kwatch"] != "1" {
+	if watcher.seen["kwatch/kwatch"] != configFingerprint(late) {
 		t.Fatalf("rejected object was not remembered: %v", watcher.seen)
 	}
 }
