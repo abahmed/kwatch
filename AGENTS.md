@@ -29,7 +29,8 @@ Tooling guards (scoped `-update`, hygiene, pinned linter, golden/registry
 match) are described under "Guards" in `docs/contributing-scenario.md`.
 Regenerate scenario files only with `-run 'Test.../<name>$' -update`.
 
-`make ci` is exactly what the required CI job runs: `make verify` plus
+`make ci` is exactly what the required CI job runs: `make verify`, the
+`licensetest`-tagged tests (`make test-licensetest`), plus
 actionlint, ShellCheck and a `go mod tidy` drift check. Locally a missing
 actionlint, ShellCheck or Helm skips its check with a notice; under `CI=true`
 it fails. `make alert-quality` prints the alert-quality report and
