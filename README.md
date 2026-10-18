@@ -121,7 +121,8 @@ You do not need to be an expert. kwatch in 30 seconds:
 - **CRD:** a custom resource definition, an extra kind of object that a tool
   adds to the cluster.
 
-More in the [docs](https://docs.kwatch.dev).
+More in the [glossary](https://docs.kwatch.dev/glossary) and the
+[docs](https://docs.kwatch.dev).
 </details>
 
 ## ✨ Why kwatch
