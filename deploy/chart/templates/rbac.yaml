@@ -6,7 +6,7 @@ metadata:
     {{- include "kwatch.labels" . | nindent 4 }}
 rules:
 {{- $secrets := eq (include "kwatch.watchSecrets" .) "true" }}
-{{- if and (eq (.Values.rbac.mode | default "full") "full") $secrets }}
+{{- if and (eq (.Values.rbac.mode | default "least-privilege") "full") $secrets }}
 # rbac.mode=full: list and watch on every resource so the dynamic source
 # can watch any API kind. Secret values are hashed in the informer
 # transform and never stored. The only write is the audit's

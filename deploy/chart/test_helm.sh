@@ -254,8 +254,12 @@ grep -Fq -- "- {}" <<<"$OUT_NP_ALL" || {
 echo "PASS: optional network policy"
 
 echo "=== rbac modes ==="
-grep -Fq 'resources: ["*"]' <<<"$OUT1" || {
-  echo "FAIL: default rbac.mode must be full"; exit 1;
+if grep -Fq 'resources: ["*"]' <<<"$OUT1"; then
+  echo "FAIL: default rbac.mode must be least-privilege"; exit 1;
+fi
+OUT_FULL=$(helm template test-full . --set rbac.mode=full 2>&1)
+grep -Fq 'resources: ["*"]' <<<"$OUT_FULL" || {
+  echo "FAIL: rbac.mode=full must use wildcard list access"; exit 1;
 }
 OUT_LP=$(helm template test-lp . --set rbac.mode=least-privilege 2>&1)
 if grep -Fq 'resources: ["*"]' <<<"$OUT_LP"; then
@@ -269,7 +273,7 @@ done
 if helm template test-bad . --set rbac.mode=bogus >/dev/null 2>&1; then
   echo "FAIL: invalid rbac.mode was accepted"; exit 1;
 fi
-for out in "$OUT1" "$OUT_LP"; do
+for out in "$OUT1" "$OUT_FULL" "$OUT_LP"; do
   grep -Fq '"nodes/stats", "nodes/metrics"' <<<"$out" || {
     echo "FAIL: kubelet stats RBAC is missing"; exit 1;
   }

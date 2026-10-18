@@ -337,9 +337,10 @@ state file, and SelfSubjectAccessReviews for its permission audit (not
 persisted). It never gets `pods/exec` or `nodes/proxy`. **By default its
 ServiceAccount can read every Secret in the cluster** (kwatch keeps only
 hashes, never values). Set `watch.secrets: false` (Helm: `--set
-watch.secrets=false`) to remove all Secret access; `rbac.mode:
-least-privilege` narrows the other kinds but still lists Secrets unless
-`watch.secrets` is false. Helm prints this warning on install and kwatch logs
+watch.secrets=false`) to remove all Secret access. The chart's default
+`rbac.mode: least-privilege` lists only the kinds kwatch understands but
+still lists Secrets unless `watch.secrets` is false; set `rbac.mode: full`
+to also watch custom resources and kinds added later. Helm prints this warning on install and kwatch logs
 it once at startup.
 </details>
 

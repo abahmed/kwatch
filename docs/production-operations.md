@@ -553,7 +553,10 @@ delivery failures, and dead letters.
 
 The chart value `rbac.mode` selects the cluster read access:
 
-- `full` (default, and the raw `deploy/deploy.yaml` manifest) grants
+- `least-privilege` is the chart default; see below. Set
+  `rbac.mode=full` to watch custom resources and kinds added later.
+- `full` (the raw `deploy/deploy.yaml` manifest, and the chart with
+  `--set rbac.mode=full`) grants
   `list` and `watch` on every resource in every API group, so the dynamic
   source can watch any built-in or custom kind, including CRDs installed
   later. `get` is granted only on namespaces, nodes, `nodes/stats`,

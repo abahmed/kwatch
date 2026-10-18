@@ -443,8 +443,8 @@ kwatch never needs write access to monitored workloads. The chart value
 
 | Mode | What it grants |
 |:---|---|
-| `full` (default, and the raw `deploy/deploy.yaml`) | `list` and `watch` on every resource in every API group, so any built-in kind and any CRD, including ones installed later, can be watched |
-| `least-privilege` | An explicit `list`/`watch` set for the kinds kwatch understands. Kinds outside it are reported as `permission_denied` in `/health` coverage, detectors that need them stay silent, and custom resources are not covered |
+| `full` (the raw `deploy/deploy.yaml`; opt in with `--set rbac.mode=full`) | `list` and `watch` on every resource in every API group, so any built-in kind and any CRD, including ones installed later, can be watched |
+| `least-privilege` (chart default) | An explicit `list`/`watch` set for the kinds kwatch understands. Kinds outside it are reported as `permission_denied` in `/health` coverage, detectors that need them stay silent, and custom resources are not covered |
 
 In both modes:
 

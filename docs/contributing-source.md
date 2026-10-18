@@ -22,8 +22,8 @@ else reads the model. Real example: `LimitRangeSchema` in
    watches it in `status` or `metadata` mode automatically; change
    `metadataResources` or the coverage entry in `coverage_catalog.go` to
    choose the mode.
-4. **Check RBAC and docs.** The default ClusterRole already allows `list` and
-   `watch` on every resource; the least-privilege role in
+4. **Check RBAC and docs.** The `full` ClusterRole already allows `list` and
+   `watch` on every resource; the least-privilege role (the chart default) in
    `deploy/chart/templates/rbac.yaml` lists kinds by name, so add the new
    one there. Then regenerate the coverage page:
    `go run ./cmd/coveragedocs`.

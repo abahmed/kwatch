@@ -25,8 +25,8 @@
             "full",
             "least-privilege"
           ],
-          "default": "full",
-          "description": "full grants read-only access to every resource; least-privilege grants an explicit list/watch set"
+          "default": "least-privilege",
+          "description": "least-privilege (default) grants an explicit list/watch set; full grants read-only list/watch on every resource"
         }
       },
       "additionalProperties": false

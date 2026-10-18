@@ -140,10 +140,13 @@ list of metrics is in the [configuration reference](./configuration.md).
 
 The chart and `deploy/deploy.yaml` replace the old ClusterRole.
 
-- `rbac.mode` is `full` by default: `list` and `watch` on every resource in
-  every API group, so any built-in or custom kind can be understood.
-  `least-privilege` grants an explicit set; kinds outside it show as
-  `permission_denied` in `/health`.
+- The chart's `rbac.mode` is `least-privilege` by default: an explicit
+  `list`/`watch` set for the kinds kwatch understands. Kinds outside it,
+  custom resources included, show as `permission_denied` in `/health` and
+  their detectors stay silent. To watch custom resources and kinds added
+  later, opt back into the wildcard with `--set rbac.mode=full` (`list`
+  and `watch` on every resource in every API group). The raw
+  `deploy/deploy.yaml` manifest keeps the `full` role.
 - `get` is granted only on `namespaces`, `nodes`, `nodes/stats`,
   `nodes/metrics` and `pods/log`. `nodes/proxy` is no longer granted.
 - Secrets are watched by default, which lets the ServiceAccount read every

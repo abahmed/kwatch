@@ -1,7 +1,7 @@
 {{- if eq (include "kwatch.watchSecrets" .) "true" }}
 
 WARNING: watch.secrets=true (the default). kwatch's ServiceAccount can read
-every Secret in the cluster{{ if eq (.Values.rbac.mode | default "full") "full" }}, and rbac.mode=full grants list and watch on every resource kind{{ end }}.
+every Secret in the cluster{{ if eq (.Values.rbac.mode | default "least-privilege") "full" }}, and rbac.mode=full grants list and watch on every resource kind{{ end }}.
 kwatch keeps only hashes of Secret data, never the values. To remove all
 Secret access set watch.secrets=false (--set watch.secrets=false); checks
 that need Secrets then report that they cannot verify. rbac.mode=least-privilege
