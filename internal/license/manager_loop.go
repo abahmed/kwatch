@@ -89,6 +89,7 @@ func (m *Manager) cycle(ctx context.Context) time.Duration {
 		return m.backoff()
 	}
 	err = m.sync(ctx, b)
+	m.logSync(b, err)
 	m.refresh(ctx)
 	return m.nextDelay(err)
 }

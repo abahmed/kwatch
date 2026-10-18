@@ -58,6 +58,9 @@ type Manager struct {
 	// opened lists the IDs of incidents opened since TakeOpened was last
 	// called.
 	opened []string
+	// fresh lists the incidents opened in the current Apply, logged
+	// once at its end (see logOpened).
+	fresh []freshIncident
 	// resolved orders the resolved incidents for expiry and bounds.
 	resolved resolvedIndex
 	// refingerprint lists restored announced incidents whose stored
@@ -150,6 +153,7 @@ func (m *Manager) Apply(
 	m.recallSuspects(s.Now)
 	m.adoptAdvisories(s)
 	m.refresh(s.Model, s.Now)
+	m.logOpened()
 	m.observeAttempts(dirty, s.Now)
 }
 

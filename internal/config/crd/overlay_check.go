@@ -40,14 +40,14 @@ func (w *Watcher) validateOverlay(obj interface{}, objects int) error {
 }
 
 // rejectOverlay keeps the running configuration after an invalid
-// KwatchConfig change. The object's version is remembered so a resync does
+// KwatchConfig change. The object's spec is remembered so a resync does
 // not report it again; the next edit is checked afresh.
 func (w *Watcher) rejectOverlay(obj interface{}, err error) {
 	name := ""
 	if accessor, accessErr := meta.Accessor(obj); accessErr == nil {
 		name = accessor.GetNamespace() + "/" + accessor.GetName()
 		w.mu.Lock()
-		w.seen[name] = accessor.GetResourceVersion()
+		w.seen[name] = configFingerprint(obj)
 		w.mu.Unlock()
 	}
 	klog.ErrorS(err, "KwatchConfig change rejected; kwatch keeps running "+

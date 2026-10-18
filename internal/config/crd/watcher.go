@@ -313,7 +313,7 @@ func (w *Watcher) seedKnown(objects []interface{}) {
 	for _, obj := range objects {
 		if accessor, err := meta.Accessor(obj); err == nil {
 			key := accessor.GetNamespace() + "/" + accessor.GetName()
-			w.seen[key] = accessor.GetResourceVersion()
+			w.seen[key] = configFingerprint(obj)
 		}
 	}
 	w.ready = true
@@ -325,7 +325,7 @@ func (w *Watcher) changed(obj interface{}) {
 		return
 	}
 	key := accessor.GetNamespace() + "/" + accessor.GetName()
-	version := accessor.GetResourceVersion()
+	version := configFingerprint(obj)
 	w.mu.Lock()
 	previous, known := w.seen[key]
 	if !known {

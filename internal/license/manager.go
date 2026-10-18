@@ -99,6 +99,9 @@ type Manager struct {
 	haveLast bool
 	subs     []chan Status
 	failures int
+	// synced is the outcome of the last server sync as logged by
+	// logSync, so only a change of outcome reaches the default level.
+	synced   string
 	anchor   time.Time // first local reading, for the monotonic cross-check
 	savedMax time.Time // MaxSeen as last written to the LeaseStore
 
