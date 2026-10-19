@@ -37,7 +37,10 @@ git -C "$root_dir" fetch --quiet --depth 1 origin \
 git -C "$root_dir" archive "$old_tag" deploy | tar -x -C "$work"
 
 echo "=== Helm: $old_tag -> current ==="
+# 0.10.x releases were installed with Helm 3 (client-side apply); the
+# upgrade keeps the release's method ("auto").
 helm install "$release" "$work/deploy/chart" --namespace "$namespace" \
+  --server-side=false \
   --create-namespace -f "$old_values" -f "$old_config" --set image.tag="$old_tag" --wait \
   --timeout 3m || { dump "$namespace"; exit 1; }
 helm upgrade "$release" "$root_dir/deploy/chart" --namespace "$namespace" \
