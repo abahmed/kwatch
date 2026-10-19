@@ -48,6 +48,7 @@ chart_values=(
 	--set image.tag="${image##*:}"
 	--set image.pullPolicy=Never
 	--set config.crd.enabled=true
+	--set config.telemetry.enabled=false
 	--set rbac.mode="$rbac_mode"
 	--set watch.secrets="$watch_secrets"
 )

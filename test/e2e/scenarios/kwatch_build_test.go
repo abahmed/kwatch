@@ -247,6 +247,8 @@ func kwatchPod(image, name string) *corev1.Pod {
 					{Name: "POD_NAME", Value: name},
 					{Name: "KWATCH_LEADER_ELECTION_NAME", Value: name},
 					{Name: "KWATCH_EDITION_OVERRIDE", Value: "pro"},
+					// Test runs must not send adoption telemetry.
+					{Name: "KWATCH_TELEMETRY", Value: "false"},
 				},
 				SecurityContext: &corev1.SecurityContext{
 					AllowPrivilegeEscalation: ptr(false),
