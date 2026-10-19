@@ -67,7 +67,10 @@ fi
 grep -Fq "field is immutable" <<<"$out" || {
   echo "FAIL: unexpected apply error: $out"; exit 1;
 }
-# The documented upgrade step: delete the Deployment, then apply.
+# The documented upgrade steps: the configuration moves from the
+# ConfigMap to the Secret kwatch, then delete the Deployment and apply.
+kubectl -n "$manifest_ns" create secret generic kwatch \
+  --from-literal=config.yaml='app: {clusterName: upgrade-test}'
 kubectl -n "$manifest_ns" delete deployment kwatch --wait
 kubectl apply -f "$root_dir/deploy/deploy.yaml" >/dev/null
 container='/spec/template/spec/containers/0'
