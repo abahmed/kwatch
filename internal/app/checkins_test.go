@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"errors"
+	"math/rand/v2"
 	"sync"
 	"testing"
 	"time"
@@ -48,6 +50,46 @@ func testCheckins(t *testing.T, p *fakePinger) *checkinRunner {
 		pinger: p, disk: diskState{store: openTestStore(t)},
 		enabled: true, clusterName: "prod", namespace: "kwatch",
 		ready: func() bool { return true },
+		// The midpoint keeps every wait at exactly checkinInterval.
+		randN: func(n time.Duration) time.Duration { return n / 2 },
+	}
+}
+
+func TestCheckinRunnerJittersTheInterval(t *testing.T) {
+	p := &fakePinger{status: activePro("lic_…1")}
+	c := testCheckins(t, p)
+	ctx := context.Background()
+
+	c.randN = func(time.Duration) time.Duration { return 0 }
+	require.Equal(t, checkinInterval-checkinJitter, c.tick(ctx))
+	c.randN = func(n time.Duration) time.Duration { return n - 1 }
+	require.Equal(t, checkinInterval+checkinJitter, c.tick(ctx))
+
+	p.err = errors.New("network down")
+	require.Equal(t, checkinInterval+checkinJitter, c.tick(ctx),
+		"a failed check-in waits a jittered interval too")
+}
+
+func TestCheckinRunnerDelaysTheFirstCheckin(t *testing.T) {
+	p := &fakePinger{status: activePro("lic_…1")}
+	c := testCheckins(t, p)
+	c.randN = func(n time.Duration) time.Duration { return n - 1 }
+	var first time.Duration
+	c.wait = func(_ context.Context, d time.Duration) bool {
+		first = d
+		return false
+	}
+	require.NoError(t, c.run(context.Background()))
+	require.Equal(t, checkinStartJitter, first)
+	require.Empty(t, p.sent())
+}
+
+func TestCheckinIntervalStaysWithinBounds(t *testing.T) {
+	c := &checkinRunner{randN: rand.N[time.Duration]}
+	for range 1000 {
+		d := c.interval()
+		require.GreaterOrEqual(t, d, checkinInterval-checkinJitter)
+		require.LessOrEqual(t, d, checkinInterval+checkinJitter)
 	}
 }
 

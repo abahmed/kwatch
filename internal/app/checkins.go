@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"math/rand/v2"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -17,9 +18,15 @@ import (
 const clusterCheckins feature.ID = "license.checkins"
 
 const (
-	checkinInterval   = 30 * time.Minute
-	checkinReadyCheck = 15 * time.Second
-	checkinTimeout    = 10 * time.Second
+	checkinInterval = 30 * time.Minute
+	// checkinJitter spreads check-ins to checkinInterval ± checkinJitter
+	// so clusters do not reach the Worker in lockstep.
+	checkinJitter = 2 * time.Minute
+	// checkinStartJitter bounds the random delay before the first
+	// check-in, so clusters restarting together spread out.
+	checkinStartJitter = time.Minute
+	checkinReadyCheck  = 15 * time.Second
+	checkinTimeout     = 10 * time.Second
 	// checkinStopTimeout bounds the shutdown check-in well inside the
 	// termination grace period.
 	checkinStopTimeout = 2 * time.Second
@@ -46,6 +53,8 @@ type checkinRunner struct {
 	namespace   string
 	ready       func() bool
 	wait        func(context.Context, time.Duration) bool
+	// randN returns a uniform duration in [0, n); tests inject it.
+	randN func(time.Duration) time.Duration
 	// blocked is the license the server refused check-ins for; they
 	// resume when the license changes.
 	blocked string
@@ -69,10 +78,12 @@ func newCheckinRunner(
 		clusterName: deps.runtime.Application().ClusterName,
 		namespace:   kubeclient.GetNamespace(),
 		ready:       ready, wait: waitTelemetry,
+		randN: rand.N[time.Duration],
 	}
 }
 
-// run checks in every 30 minutes while monitoring is ready and Pro is on.
+// run checks in about every 30 minutes, after a short random start
+// delay, while monitoring is ready and Pro is on.
 // With check-ins off it tells the server once, then idles.
 func (c *checkinRunner) run(ctx context.Context) error {
 	if !c.enabled {
@@ -84,11 +95,16 @@ func (c *checkinRunner) run(ctx context.Context) error {
 		"hashed cluster ID, the version, the node count, the namespace "+
 		"and the cluster name; set clusterCheckins=false to turn off",
 		"interval", checkinInterval)
-	var delay time.Duration
+	delay := c.randN(checkinStartJitter + 1)
 	for c.wait(ctx, delay) {
 		delay = c.tick(ctx)
 	}
 	return nil
+}
+
+// interval is checkinInterval with uniform jitter of ± checkinJitter.
+func (c *checkinRunner) interval() time.Duration {
+	return checkinInterval - checkinJitter + c.randN(2*checkinJitter+1)
 }
 
 // tick makes one check-in attempt and returns the wait before the next.
@@ -99,7 +115,7 @@ func (c *checkinRunner) tick(ctx context.Context) time.Duration {
 	st := c.pinger.Status()
 	if !st.State.ProEnabled() ||
 		(c.blocked != "" && c.blocked == st.LID) {
-		return checkinInterval
+		return c.interval()
 	}
 	c.blocked = ""
 	err := c.ping(ctx, license.Ping{Checkins: true})
@@ -116,7 +132,7 @@ func (c *checkinRunner) tick(ctx context.Context) time.Duration {
 	case ctx.Err() == nil:
 		klog.V(2).InfoS("cluster check-in failed", "err", err.Error())
 	}
-	return checkinInterval
+	return c.interval()
 }
 
 func (c *checkinRunner) ping(ctx context.Context, p license.Ping) error {
