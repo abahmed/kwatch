@@ -17,7 +17,8 @@ A clear and concise description of what you expected to happen.
 A clear and concise description of what really happens.
 
 **Version/Commit**
-- Kwatch version:
+- Kwatch version (e.g. v1.0.0; shown in the installer or the startup log):
+- Install method (installer / Helm / kubectl):
 - Image tag or digest:
 - Source commit, if known:
 

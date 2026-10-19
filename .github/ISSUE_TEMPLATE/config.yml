@@ -3,3 +3,9 @@ contact_links:
   - name: Report a security vulnerability privately
     url: https://github.com/abahmed/kwatch/security/advisories/new
     about: Do not disclose security vulnerabilities in a public issue.
+  - name: Questions and feedback
+    url: https://github.com/abahmed/kwatch/discussions
+    about: Ask questions and share ideas in GitHub Discussions.
+  - name: Documentation
+    url: https://docs.kwatch.dev
+    about: Install, configure and operate kwatch.

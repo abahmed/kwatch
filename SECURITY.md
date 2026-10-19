@@ -23,9 +23,9 @@ Please include, when safe to share:
 
 ## Supported versions
 
-The latest stable release is the supported security target. The current release
-candidate is handled on a best-effort basis. Older releases may receive a fix when
-the impact is critical, but users should upgrade to the latest stable release.
+The 1.0.x line (latest stable) is supported and receives security fixes. 0.10.x
+and older releases are not supported; upgrade to 1.0. Release candidates are
+handled on a best-effort basis.
 
 ## Response and disclosure
 
