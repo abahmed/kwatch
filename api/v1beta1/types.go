@@ -20,6 +20,9 @@ type KwatchConfigSpec struct {
 	Upgrader         map[string]interface{} `json:"upgrader,omitempty"`
 	HeartbeatMonitor HeartbeatMonitorConfig `json:"heartbeatMonitor,omitempty"`
 	Maintenance      MaintenanceConfig      `json:"maintenance,omitempty"`
+	// ClusterCheckins is a pointer so an explicit false survives
+	// omitempty.
+	ClusterCheckins *bool `json:"clusterCheckins,omitempty"`
 
 	Namespaces        []string `json:"namespaces,omitempty"`
 	Reasons           []string `json:"reasons,omitempty"`

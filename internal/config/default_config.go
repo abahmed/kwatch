@@ -6,8 +6,9 @@ func DefaultConfig() *Config {
 		App: App{LogFormatter: "text"},
 		// Official builds report a small anonymous adoption heartbeat once a
 		// week. Development builds and CI remain suppressed.
-		Telemetry: Telemetry{Enabled: true},
-		License:   License{Endpoint: DefaultLicenseEndpoint},
+		Telemetry:       Telemetry{Enabled: true},
+		License:         License{Endpoint: DefaultLicenseEndpoint},
+		ClusterCheckins: true,
 		// Informers are event-driven; a periodic resync is a cheap safety net
 		// for a watch event lost during an API server disruption.
 		ResyncSeconds: 300,

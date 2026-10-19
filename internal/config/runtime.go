@@ -43,6 +43,7 @@ type ApplicationRuntime struct {
 type runtimeLifecycle struct {
 	telemetry   Telemetry
 	license     License
+	checkins    bool
 	upgrader    Upgrader
 	healthCheck HealthCheck
 	auditLog    AuditLogConfig
@@ -108,6 +109,7 @@ func CompileRuntimeConfig(c *Config) RuntimeConfig {
 		lifecycle: runtimeLifecycle{
 			telemetry:   c.Telemetry,
 			license:     c.License,
+			checkins:    c.ClusterCheckins,
 			upgrader:    c.Upgrader,
 			healthCheck: c.HealthCheck,
 			auditLog:    c.AuditLog,

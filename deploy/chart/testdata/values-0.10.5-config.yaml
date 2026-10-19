@@ -1,0 +1,5 @@
+# The config a 0.10.5 install needed: its schema required config, so a
+# working 0.10.5 values file always set something here.
+config:
+  app:
+    clusterName: upgrade-test

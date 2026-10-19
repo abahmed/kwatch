@@ -92,6 +92,11 @@ type LifecycleRuntime struct {
 // Telemetry returns the telemetry settings.
 func (o LifecycleRuntime) Telemetry() Telemetry { return o.values.telemetry }
 
+// ClusterCheckins reports whether Pro cluster check-ins are on.
+func (o LifecycleRuntime) ClusterCheckins() bool {
+	return o.values.checkins
+}
+
 // License returns the license settings.
 func (o LifecycleRuntime) License() License { return o.values.license }
 

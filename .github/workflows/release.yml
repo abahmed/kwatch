@@ -399,10 +399,18 @@ jobs:
             FOOTER="See the [commit history]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commits/$VERSION)."
           fi
 
+          # A hand-written header for the final version, read at the release
+          # commit and shown on its RCs too, so testers see the same notes.
+          HEADER="docs/release-notes/${VERSION%%-*}.md"
+
           # Built line by line so YAML block indentation can never leak in.
           {
             echo "## $VERSION"
             echo
+            if git cat-file -e "$SHA:$HEADER" 2>/dev/null; then
+              git show "$SHA:$HEADER"
+              echo
+            fi
             echo "$LOG"
             echo
             echo "---"

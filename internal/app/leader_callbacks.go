@@ -9,7 +9,6 @@ import (
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/metrics"
 )
@@ -164,17 +163,13 @@ func (c *leaderCallbacks) recordRenewal(renewal time.Time) {
 	c.deps.healthServer.SetLeadershipRenewal(renewal)
 }
 
-// warnStandby logs once that this replica waits as a standby when the
-// edition runs one replica. It only warns: the replica keeps waiting to
-// take over.
+// warnStandby logs once that this replica waits as an idle standby. Every
+// edition runs one active pod; the replica keeps waiting to take over.
 func (c *leaderCallbacks) warnStandby(leader string) {
-	e := feature.OrCommunity(c.deps.entitlements)
-	if e.Limits().MaxReplicas == 0 ||
-		!c.standbyWarned.CompareAndSwap(false, true) {
+	if !c.standbyWarned.CompareAndSwap(false, true) {
 		return
 	}
-	klog.InfoS("warning: this replica is a standby; the "+
-		string(e.Edition())+" edition supports one "+
-		"replica, and high availability needs kwatch Pro",
+	klog.InfoS("this replica is an idle standby: kwatch runs as one "+
+		"pod, and extra replicas only wait to take over",
 		"identity", c.identity, "leader", leader)
 }

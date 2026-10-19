@@ -11,6 +11,10 @@ spec:
   replicas: 1
   strategy:
     type: Recreate
+    # A 0.10.x release used RollingUpdate, and the API server stored its
+    # rollingUpdate defaults; null removes them on upgrade, which
+    # Recreate requires.
+    rollingUpdate: null
   selector:
     matchLabels:
       {{- include "kwatch.selectorLabels" . | nindent 6 }}

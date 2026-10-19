@@ -1,9 +1,6 @@
 {
   "type": "object",
   "$schema": "http://json-schema.org/draft-07/schema",
-  "required": [
-    "config"
-  ],
   "properties": {
     "nameOverride": {
       "type": "string",
@@ -312,7 +309,10 @@
       ]
     },
     "config": {
-      "type": "object",
+      "type": [
+        "object",
+        "null"
+      ],
       "description": "kwatch configuration (see deploy/config.yaml for full reference)",
       "properties": {
         "resyncSeconds": {
@@ -708,6 +708,10 @@
             }
           },
           "additionalProperties": false
+        },
+        "clusterCheckins": {
+          "type": "boolean",
+          "description": "Pro cluster check-ins to api.kwatch.dev (default true)"
         }
       },
       "additionalProperties": false
@@ -839,6 +843,14 @@
     "global": {
       "type": "object",
       "description": "Helm global values, accepted so the chart works as a subchart"
+    },
+    "service": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "deprecated": true,
+      "description": "Deprecated and ignored: kwatch 0.10.x Service settings, accepted so old values files still upgrade"
     }
   },
   "additionalProperties": false

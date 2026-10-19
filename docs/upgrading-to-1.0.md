@@ -136,6 +136,23 @@ v0.10.x did not expose a `/metrics` endpoint, so there is nothing to rename
 for dashboards you built against it. If you scrape the new endpoint, the
 list of metrics is in the [configuration reference](./configuration.md).
 
+## Upgrading the Deployment
+
+The installer and `helm upgrade` (with your 0.10.x values file; the old
+`service` block is ignored) upgrade in place. `deploy/deploy.yaml` now
+selects pods by `app: kwatch` and `app.kubernetes.io/instance: kwatch`,
+and a Deployment selector cannot change, so `kubectl apply` over a 0.10.x
+install fails. The manifest also reads its configuration from the Secret
+`kwatch` instead of the ConfigMap. Create the Secret, then delete the
+Deployment and apply:
+
+```sh
+kubectl -n kwatch create secret generic kwatch \
+  --from-file=config.yaml=config.yaml
+kubectl delete deployment kwatch -n kwatch
+kubectl apply -f deploy/deploy.yaml
+```
+
 ## RBAC and the CRD
 
 The chart and `deploy/deploy.yaml` replace the old ClusterRole.
