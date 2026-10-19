@@ -32,6 +32,7 @@ helm install "$release" deploy/chart \
   --namespace "$namespace" \
   --create-namespace \
   --set image.tag=ci \
+  --set config.telemetry.enabled=false \
   --wait=false
 
 kubectl apply -f - <<'EOF'
@@ -63,6 +64,7 @@ helm install "$second_release" deploy/chart \
   --namespace "$second_namespace" \
   --create-namespace \
   --set image.tag=ci \
+  --set config.telemetry.enabled=false \
   --wait=false
 test "$(kubectl get crd kwatchconfigs.kwatch.abahmed.dev \
   -o jsonpath='{.metadata.annotations.meta\.helm\.sh/release-name}')" = "$release"

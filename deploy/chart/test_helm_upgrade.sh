@@ -45,6 +45,7 @@ helm install "$release" "$work/deploy/chart" --namespace "$namespace" \
   --timeout 3m || { dump "$namespace"; exit 1; }
 helm upgrade "$release" "$root_dir/deploy/chart" --namespace "$namespace" \
   -f "$old_values" -f "$old_config" --set image.repository=kwatch --set image.tag=ci \
+  --set config.telemetry.enabled=false \
   --set image.pullPolicy=Never --wait --timeout 5m ||
   { dump "$namespace"; exit 1; }
 kubectl -n "$namespace" rollout status deployment/kwatch --timeout=3m ||
@@ -70,7 +71,7 @@ grep -Fq "field is immutable" <<<"$out" || {
 # The documented upgrade steps: the configuration moves from the
 # ConfigMap to the Secret kwatch, then delete the Deployment and apply.
 kubectl -n "$manifest_ns" create secret generic kwatch \
-  --from-literal=config.yaml='app: {clusterName: upgrade-test}'
+  --from-literal=config.yaml='{app: {clusterName: upgrade-test}, telemetry: {enabled: false}}'
 kubectl -n "$manifest_ns" delete deployment kwatch --wait
 kubectl apply -f "$root_dir/deploy/deploy.yaml" >/dev/null
 container='/spec/template/spec/containers/0'
