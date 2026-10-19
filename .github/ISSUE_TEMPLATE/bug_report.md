@@ -17,12 +17,12 @@ A clear and concise description of what you expected to happen.
 A clear and concise description of what really happens.
 
 **Version/Commit**
-- Kwatch version:
+- Kwatch version (e.g. v1.0.0; shown in the installer or the startup log):
 - Image tag or digest:
 - Source commit, if known:
 
 **Installation method**
-Helm, raw manifest, kwatch manager, or another method.
+Installer (kwatch.sh), Helm, raw manifest (kubectl), or another method.
 
 **Reproducibility**
 - Reproduces after restart: yes/no

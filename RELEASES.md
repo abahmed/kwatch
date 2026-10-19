@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v1.0.0 (2026-10-19)
+
 ### Highlights
 
 - **The `KwatchConfig` API is now `kwatch.abahmed.dev/v1beta1`.** The CRD
