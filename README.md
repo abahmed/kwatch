@@ -48,13 +48,13 @@ license.
 <table>
 <tr>
 <td width="33%" valign="top"><b>🔍 Root cause first</b><br>kwatch follows a failure upstream and names the one cause.</td>
+<td width="33%" valign="top"><b>🔒 Your data stays in your cluster</b><br>kwatch analyzes events and logs where they live.</td>
 <td width="33%" valign="top"><b>🔕 Quiet by default</b><br>One message, then silence until something new is true.</td>
-<td width="33%" valign="top"><b>🕵️ Who changed what</b><br>See who changed what, and when.</td>
 </tr>
 <tr>
+<td valign="top"><b>🕵️ Who changed what</b><br>See who changed what, and when.</td>
 <td valign="top"><b>👉 The next step</b><br>Every message ends with the command to run.</td>
 <td valign="top"><b>📣 50+ channels</b><br>Slack, Teams, PagerDuty, email, webhooks and more.</td>
-<td valign="top"><b>🔒 Your data stays in your cluster</b><br>One pod. No kwatch cloud.</td>
 </tr>
 </table>
 
@@ -131,6 +131,8 @@ More in the [glossary](https://docs.kwatch.dev/glossary) and the
   everything it depends on and names the one cause: a bad release, a full
   node, an expired certificate, a database outside the cluster. Symptoms
   join one incident.
+- 🔒 **Your data stays in your cluster.** kwatch analyzes events and logs
+  where they live. One pod and a small volume for state.
 - 🔕 **Quiet by default.** No repeats every five minutes and no flapping
   storms. kwatch waits for failures to settle, merges what belongs together
   and speaks when there is news. Successful rollouts, scaling and node
@@ -144,8 +146,6 @@ More in the [glossary](https://docs.kwatch.dev/glossary) and the
   email, Jira, webhooks and more. Paging tools get a stable key, so the same
   problem updates the same page and closes it when it is fixed.
   [All channels](https://kwatch.dev/docs/channels).
-- 🔒 **Your data stays in your cluster.** One pod and a small volume for state.
-  There is no kwatch cloud reading your logs.
 
 <details>
 <summary><b>📨 More example messages</b></summary>
@@ -366,15 +366,22 @@ Details: [licensing](./docs/licensing.md).
 
 ## 🔒 What leaves my cluster
 
+**Root cause, without your data leaving the cluster.**
+kwatch analyzes events and logs where they live.
+
+Only optional anonymous usage stats and Pro license checks reach kwatch.dev.
+Never cluster names, pod names, logs or events. Alerts go only to the
+channels you set up.
+
 - **Your alerts**, to the channels you configure. Secrets and tokens are
   redacted before anything is stored or sent.
 - **An anonymous weekly ping**: an installation ID and the kwatch version.
   The ID has its own salt, so it cannot be matched to your license. Turn it
   off with `telemetry.enabled: false` or `KWATCH_TELEMETRY=false`.
-- **With Pro**, a license check about once a day sends a hashed cluster ID,
-  the kwatch version and the node count, and **a check-in every 30 minutes**
-  adds the namespace kwatch runs in and your `app.clusterName`, so the app
-  can show when a cluster goes silent. Turn check-ins off with
+- **With Pro**, a license check about once a day and **a check-in every 30
+  minutes** send only a hashed cluster ID, the license ID, the kwatch
+  version and the node count, so the app can show when a cluster goes
+  silent. No cluster name, namespace or resource names. Turn check-ins off with
   `clusterCheckins: false` or `KWATCH_CLUSTER_CHECKINS=false`. Community
   without a key makes no license calls.
 - The license, the telemetry and the update check always verify TLS, even if

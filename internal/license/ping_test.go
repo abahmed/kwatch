@@ -47,8 +47,7 @@ func TestClientPingSendsTheContractBody(t *testing.T) {
 		TS: time.Unix(1_800_000_000, 0), Version: "v1.0.0", NodeCount: 3}
 
 	err := c.Ping(context.Background(), priv, req, Ping{
-		ClusterName: "prod", Namespace: "kwatch", Checkins: true,
-		Stopping: true,
+		Checkins: true, Stopping: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -56,8 +55,7 @@ func TestClientPingSendsTheContractBody(t *testing.T) {
 	want := map[string]any{
 		"lid": "lic_1", "cluster_uuid": "cu", "cluster_proof": "cp",
 		"ts": float64(1_800_000_000), "kwatch_version": "v1.0.0",
-		"node_count": float64(3), "cluster_name": "prod",
-		"namespace": "kwatch", "checkins": true, "state": "stopping",
+		"node_count": float64(3), "checkins": true, "state": "stopping",
 	}
 	for k, v := range want {
 		if got[k] != v {

@@ -14,13 +14,12 @@ const maxPingBody = 1024
 // pingStateStopping marks the last check-in of a graceful shutdown.
 const pingStateStopping = "stopping"
 
-// Ping is one cluster check-in. Checkins false tells the server that the
+// Ping is one cluster check-in. It carries no cluster-identifying data:
+// no cluster name, namespace or resource names. Checkins false tells the server that the
 // operator turned check-ins off; Stopping marks a graceful shutdown.
 type Ping struct {
-	ClusterName string
-	Namespace   string
-	Checkins    bool
-	Stopping    bool
+	Checkins bool
+	Stopping bool
 }
 
 type pingBody struct {
@@ -30,11 +29,8 @@ type pingBody struct {
 	TS           int64  `json:"ts"`
 	Version      string `json:"kwatch_version"`
 	NodeCount    int    `json:"node_count"`
-	// ClusterName is sent on every ping: an absent name clears it.
-	ClusterName string `json:"cluster_name,omitempty"`
-	Namespace   string `json:"namespace"`
-	Checkins    bool   `json:"checkins"`
-	State       string `json:"state,omitempty"`
+	Checkins     bool   `json:"checkins"`
+	State        string `json:"state,omitempty"`
 }
 
 // ErrPingTooLarge means a check-in body would exceed the server limit.
@@ -57,9 +53,7 @@ func (c *Client) Ping(
 		LID: req.LID, ClusterUUID: req.ClusterUUID,
 		ClusterProof: req.ClusterProof, TS: req.TS.Unix(),
 		Version: req.Version, NodeCount: max(req.NodeCount, 0),
-		ClusterName: truncate(ping.ClusterName, 64),
-		Namespace:   truncate(ping.Namespace, 63),
-		Checkins:    ping.Checkins, State: state,
+		Checkins: ping.Checkins, State: state,
 	})
 	if err != nil {
 		return err
@@ -70,13 +64,6 @@ func (c *Client) Ping(
 	sig := base64.RawURLEncoding.EncodeToString(ed25519.Sign(priv, body))
 	_, err = c.call(ctx, "/license/ping", body, sig, false)
 	return err
-}
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n]
 }
 
 // Ping sends a check-in for this cluster's binding. It needs a key and the

@@ -605,8 +605,8 @@ falls back to Community.
 With an active Pro license, kwatch checks in with `api.kwatch.dev` every 30
 minutes while monitoring is ready, so app.kwatch.dev can show when the
 cluster goes silent (no check-in for 60 minutes). A check-in carries a hashed
-cluster ID, the kwatch version, the node count, the namespace kwatch runs in
-and `app.clusterName` if set. A graceful shutdown sends a last check-in that
+cluster ID, the license ID, the kwatch version and the node count. It never
+carries the cluster name, a namespace or resource names. A graceful shutdown sends a last check-in that
 says kwatch is stopping. Nothing is sent to you. Turn check-ins off with
 `clusterCheckins: false` or set `KWATCH_CLUSTER_CHECKINS=false`, which wins
 over the file; kwatch then tells the server once and stops. A `KwatchConfig`

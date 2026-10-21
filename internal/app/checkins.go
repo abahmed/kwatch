@@ -9,7 +9,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/feature"
-	"github.com/abahmed/kwatch/internal/kubeclient"
 	"github.com/abahmed/kwatch/internal/license"
 )
 
@@ -46,13 +45,11 @@ type checkinRecord struct {
 }
 
 type checkinRunner struct {
-	pinger      checkinPinger
-	disk        diskState
-	enabled     bool
-	clusterName string
-	namespace   string
-	ready       func() bool
-	wait        func(context.Context, time.Duration) bool
+	pinger  checkinPinger
+	disk    diskState
+	enabled bool
+	ready   func() bool
+	wait    func(context.Context, time.Duration) bool
 	// randN returns a uniform duration in [0, n); tests inject it.
 	randN func(time.Duration) time.Duration
 	// blocked is the license the server refused check-ins for; they
@@ -74,10 +71,8 @@ func newCheckinRunner(
 	}
 	return &checkinRunner{
 		pinger: lic.mgr, disk: disk,
-		enabled:     deps.runtime.Lifecycle().ClusterCheckins(),
-		clusterName: deps.runtime.Application().ClusterName,
-		namespace:   kubeclient.GetNamespace(),
-		ready:       ready, wait: waitTelemetry,
+		enabled: deps.runtime.Lifecycle().ClusterCheckins(),
+		ready:   ready, wait: waitTelemetry,
 		randN: rand.N[time.Duration],
 	}
 }
@@ -92,8 +87,9 @@ func (c *checkinRunner) run(ctx context.Context) error {
 		return nil
 	}
 	klog.InfoS("cluster check-ins on: every 30 minutes kwatch sends a "+
-		"hashed cluster ID, the version, the node count, the namespace "+
-		"and the cluster name; set clusterCheckins=false to turn off",
+		"hashed cluster ID, the license ID, the version and the node "+
+		"count, never cluster names; set clusterCheckins=false to "+
+		"turn off",
 		"interval", checkinInterval)
 	delay := c.randN(checkinStartJitter + 1)
 	for c.wait(ctx, delay) {
@@ -136,7 +132,6 @@ func (c *checkinRunner) tick(ctx context.Context) time.Duration {
 }
 
 func (c *checkinRunner) ping(ctx context.Context, p license.Ping) error {
-	p.ClusterName, p.Namespace = c.clusterName, c.namespace
 	pingCtx, cancel := context.WithTimeout(ctx, checkinTimeout)
 	defer cancel()
 	return c.pinger.Ping(pingCtx, p)
@@ -182,8 +177,7 @@ func (c *checkinRunner) stopping() {
 	ctx, cancel := context.WithTimeout(
 		context.Background(), checkinStopTimeout)
 	defer cancel()
-	p := license.Ping{Checkins: true, Stopping: true,
-		ClusterName: c.clusterName, Namespace: c.namespace}
+	p := license.Ping{Checkins: true, Stopping: true}
 	if err := c.pinger.Ping(ctx, p); err != nil {
 		klog.V(2).InfoS("shutdown check-in failed", "err", err.Error())
 	}

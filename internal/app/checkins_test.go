@@ -48,8 +48,8 @@ func testCheckins(t *testing.T, p *fakePinger) *checkinRunner {
 	t.Helper()
 	return &checkinRunner{
 		pinger: p, disk: diskState{store: openTestStore(t)},
-		enabled: true, clusterName: "prod", namespace: "kwatch",
-		ready: func() bool { return true },
+		enabled: true,
+		ready:   func() bool { return true },
 		// The midpoint keeps every wait at exactly checkinInterval.
 		randN: func(n time.Duration) time.Duration { return n / 2 },
 	}
@@ -103,8 +103,7 @@ func TestCheckinRunnerPingsOnlyWhileProIsActive(t *testing.T) {
 
 	p.status = activePro("lic_…1")
 	c.tick(context.Background())
-	require.Equal(t, []license.Ping{{ClusterName: "prod",
-		Namespace: "kwatch", Checkins: true}}, p.sent())
+	require.Equal(t, []license.Ping{{Checkins: true}}, p.sent())
 
 	p.status = license.Status{State: license.StateExpired}
 	c.tick(context.Background())
@@ -178,8 +177,8 @@ func TestCheckinRunnerStoppingSendsTheShutdownState(t *testing.T) {
 	p := &fakePinger{status: activePro("lic_…1")}
 	c := testCheckins(t, p)
 	c.stopping()
-	require.Equal(t, []license.Ping{{ClusterName: "prod",
-		Namespace: "kwatch", Checkins: true, Stopping: true}}, p.sent())
+	require.Equal(t, []license.Ping{{Checkins: true,
+		Stopping: true}}, p.sent())
 
 	var none *checkinRunner
 	none.stopping()
