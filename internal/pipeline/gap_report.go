@@ -189,8 +189,8 @@ func unseenLine(nodes int) string {
 	if nodes != 1 {
 		which = fmt.Sprintf("%d nodes that went not-ready", nodes)
 	}
-	return "Crashes on " + which + " during the gap can't be told " +
-		"apart, so they are not listed."
+	return "Crashes on " + which + " during the gap are not listed. " +
+		"A quick reboot may be missed."
 }
 
 func changeItems(changes []inventory.Observation) []string {

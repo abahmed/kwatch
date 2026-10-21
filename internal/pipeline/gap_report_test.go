@@ -121,8 +121,8 @@ func TestGapReportListsChangesThenCrashes(t *testing.T) {
 		"1 restart in total\n"+
 		"- shop/api-2, container app: last stopped with exit code 2, "+
 		"4 restarts in total\n\n"+
-		"Crashes on 2 nodes that went not-ready during the gap can't be "+
-		"told apart, so they are not listed.\n"+
+		"Crashes on 2 nodes that went not-ready during the gap are not "+
+		"listed. A quick reboot may be missed.\n"+
 		"Anything still broken is reported as its own incident.", got)
 }
 
