@@ -5,6 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
 // withReason runs fn with the table extended by one entry, the way a new
@@ -71,5 +73,26 @@ func TestUnlistedReasonHasNoAttributes(t *testing.T) {
 func TestEventIsNeverBothFailureAndShown(t *testing.T) {
 	for name, info := range reasonTable {
 		assert.False(t, info.Event != 0 && info.ShownByState, name)
+	}
+}
+
+// A reason shown by state names the kinds whose state shows it; another
+// kind's event of the same reason is not covered.
+func TestShownByStateOnNamesItsKinds(t *testing.T) {
+	assert.True(t, ShownByStateOn("BackOff", kube.KindPod))
+	assert.True(t, ShownByStateOn("BackOff", kube.KindContainer))
+	assert.False(t, ShownByStateOn("Preempted", kube.KindContainer))
+	assert.False(t, ShownByStateOn("BackOff", "order"))
+	assert.True(t, ShownByStateOn("NodeNotSchedulable", kube.KindNode))
+	assert.False(t, ShownByStateOn("NodeNotSchedulable", kube.KindPod))
+	assert.False(t, ShownByStateOn("Nope", kube.KindPod))
+}
+
+func TestEveryShownReasonNamesItsKinds(t *testing.T) {
+	for name, info := range reasonTable {
+		if info.ShownByState {
+			assert.NotEmpty(t, info.ShownOn,
+				"%s is shown by state of which kinds?", name)
+		}
 	}
 }

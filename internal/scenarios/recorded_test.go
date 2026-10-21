@@ -61,8 +61,8 @@ func measureRecorded(t *testing.T) recordedResult {
 	var r recordedResult
 	var cases []scorecard.Case
 	for _, name := range recordedNames(t) {
-		_, e, result := replayScenario(t, recordedDir, name)
-		v := judge(e, result)
+		log, e, result := replayScenario(t, recordedDir, name)
+		v := judge(e, log, result)
 		r.verdicts = append(r.verdicts, v)
 		cases = append(cases, v.cases...)
 	}

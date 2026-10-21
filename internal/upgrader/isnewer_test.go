@@ -17,13 +17,15 @@ func TestIsNewer(t *testing.T) {
 		{"v1.0.0", "v0.99.99", true},
 		{"0.11.0", "v0.10.5", true}, // prefix optional
 		{"v0.11.1", "v0.11.0", true},
-		{
-			"v0.11.0",
-			"v0.11.0-rc.4",
-			false,
-		}, // pre-release suffix ignored, same core
-		{"nightly", "v0.11.0", false}, // unparsable latest: not a release
-		{"v0.10.5", "e2e", false},     // development build: never announce
+		{"v0.11.0", "v0.11.0-rc.4", true}, // a release follows its candidates
+		{"v0.11.0-rc.4", "v0.11.0", false},
+		{"v0.11.0-rc.5", "v0.11.0-rc.4", true},
+		{"v0.11.0-rc.10", "v0.11.0-rc.9", true}, // numbers by value
+		{"v0.11.0-rc.1", "v0.11.0-beta.9", true},
+		{"v0.11.0-rc", "v0.11.0-rc.1", false},
+		{"v0.11.0+build7", "v0.11.0", false}, // build metadata ignored
+		{"nightly", "v0.11.0", false},        // unparsable latest: not a release
+		{"v0.10.5", "e2e", false},            // development build: never announce
 		{"v0.10.5", "dev", false},
 		{"v0.10.5", "", false},
 		{"v0.11.0", "v0.11.0", false},
@@ -37,6 +39,28 @@ func TestIsNewer(t *testing.T) {
 				got,
 				c.want,
 			)
+		}
+	}
+}
+
+func TestValidReleaseTag(t *testing.T) {
+	for tag, want := range map[string]bool{
+		"v1.0.0":                             true,
+		"1.2.3":                              true,
+		"v1.0.0-rc.1":                        true,
+		"v1.0.0+meta":                        true,
+		"v1.0.0-rc.1+meta.2":                 true,
+		"v1.0":                               false,
+		"v01.0.0":                            false,
+		"v1.0.0\nhttp://evil":                false,
+		"v1.0.0 @channel":                    false,
+		"v1.0.0 [click](http://x)":           false,
+		"<!here>":                            false,
+		"":                                   false,
+		"v1.0.0-" + string(make([]byte, 70)): false,
+	} {
+		if got := validReleaseTag(tag); got != want {
+			t.Errorf("validReleaseTag(%q) = %v, want %v", tag, got, want)
 		}
 	}
 }

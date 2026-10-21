@@ -87,9 +87,12 @@ func (d *DynamicSource) refuse(
 	if d.running[gvr] != w {
 		return
 	}
-	klog.InfoS("resource type unavailable; retried at next rediscovery",
-		"component", "inventory", "operation", "watch",
+	// One summary line per discovery pass names every refused type (see
+	// logRefused); a line per type would repeat at every retry.
+	klog.V(2).InfoS("resource type unavailable; retried at a later "+
+		"rediscovery", "component", "inventory", "operation", "watch",
 		"resource", gvr.String(), "reason", reason)
+	d.noteRefusal(gvr, reason)
 	registry := metrics.DefaultRegistry()
 	registry.OptionalAPIUnavailable.Add(1)
 	if !w.hasSynced() {
@@ -187,7 +190,7 @@ func (d *DynamicSource) panicked(
 	d.wg.Add(1)
 	go func() {
 		defer d.wg.Done()
-		if safego.Wait(w.parent, wait) {
+		if d.cfg.RestartWait(w.parent, wait) {
 			d.retryRefused()
 			d.requestDiscovery()
 		}

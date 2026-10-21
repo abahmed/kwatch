@@ -3,7 +3,6 @@ package kube
 import (
 	"context"
 	"net"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -29,9 +28,6 @@ type serviceTarget struct {
 // left out because of the cap, that is logged.
 func (p *ActiveProber) serviceTargets() []serviceTarget {
 	ids := p.cfg.Model.Entities(KindService)
-	sort.Slice(ids, func(i, j int) bool {
-		return ids[i].String() < ids[j].String()
-	})
 	var out []serviceTarget
 	for _, id := range ids {
 		port, ok := p.probeablePort(id)
@@ -94,7 +90,7 @@ func (p *ActiveProber) checkService(
 	probeCtx, cancel := context.WithTimeout(ctx, p.cfg.Timeout)
 	defer cancel()
 	start := p.cfg.Now()
-	err := p.dial(probeCtx, target.address)
+	err := closeDialed(p.cfg.Dial(probeCtx, "tcp", target.address))
 	observation := probeObservation(target.service, p.cfg.Now(),
 		p.cfg.Now().Sub(start), err)
 	observation.Source = serviceProbeSource

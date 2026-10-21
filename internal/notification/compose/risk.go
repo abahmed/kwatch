@@ -14,10 +14,11 @@ const weightRisk = 0.5
 // maxRiskSentences bounds how many risks one note names.
 const maxRiskSentences = 2
 
-// riskSentences say what a configuration risk cost, when the failure in
-// front of the reader shows it: a crash loop behind a workload with no
-// readiness probe kept receiving traffic. A risk the failure does not
-// touch stays in the digest where the risk detector reported it.
+// riskSentences say what a configuration risk is, when the failure in
+// front of the reader touches it: a probe failing on a workload with no
+// readiness probe. Each says only what is so now, never what the risk
+// will do. A risk the failure does not touch stays in the digest where
+// the risk detector reported it.
 func riskSentences(f caseFacts) []sentence {
 	if onlyAdvisory(f.members) {
 		return nil
@@ -36,33 +37,31 @@ func riskSentences(f caseFacts) []sentence {
 	return out
 }
 
-// riskCost words one risk when the incident shows its cost; "" when it
-// does not.
+// riskCost words one risk when the incident touches it, as a fact about
+// the workload; "" when it does not.
 func riskCost(f caseFacts, risk string) string {
 	switch risk {
 	case reasons.RiskNoReadinessProbe:
 		// A crashed container is unready anyway; the probe matters for
 		// a running one that cannot serve.
 		if anyMemberMode(f, detection.ModeProbe, detection.ModeActiveProbe) {
-			return "It has no readiness probe, so traffic kept reaching " +
-				"it while it failed."
+			return "It has no readiness probe, so Kubernetes sends it " +
+				"traffic while the container runs."
 		}
 	case reasons.RiskNoMemoryLimit:
-		if anyMemberMode(f, detection.ModeOOMKilled, detection.ModeEvicted) ||
+		if anyMemberMode(f, detection.ModeOOMKilled) || memoryEviction(f) ||
 			causeRuleIs(f, "node-memory-pressure", "node-overcommitted") {
 			return "Its containers have no memory limit, so nothing " +
-				"stopped them before the node ran short."
+				"caps their memory use."
 		}
 	case reasons.RiskSingleReplica:
 		if anyMemberMode(f, detection.ModeCrashLoop, detection.ModeNotReady,
 			detection.ModeUnavailable, detection.ModeNoEndpoints) {
-			return "It runs a single replica, so this is downtime, not " +
-				"degradation."
+			return "It runs a single replica."
 		}
 	case reasons.RiskMutableImageTag:
 		if f.p.Cause == nil && anyMemberMode(f, detection.ModeCrashLoop) {
-			return "Its image tag is not fixed, so what runs may have " +
-				"changed without a rollout."
+			return "Its image has no fixed tag."
 		}
 	}
 	return ""
@@ -93,6 +92,22 @@ func causeRuleIs(f caseFacts, rules ...string) bool {
 	}
 	for _, rule := range rules {
 		if f.p.Cause.Rule == rule {
+			return true
+		}
+	}
+	return false
+}
+
+// memoryEviction reports a member evicted because the node was low on
+// memory. An eviction for ephemeral storage or disk says nothing of the
+// workload's memory limit.
+func memoryEviction(f caseFacts) bool {
+	for _, m := range failing(f.members) {
+		if m.Mode != detection.ModeEvicted && m.Reason != reasons.Evicted {
+			continue
+		}
+		if strings.Contains(evidence(m, "message"),
+			"low on resource: memory") {
 			return true
 		}
 	}

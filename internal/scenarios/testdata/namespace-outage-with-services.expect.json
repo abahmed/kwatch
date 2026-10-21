@@ -1,0 +1,20 @@
+{
+  "name": "namespace-outage-with-services",
+  "description": "Six of eight Deployments in one namespace, each behind a Service, crash-loop within seconds of each other with separate errors: one namespace message, not one per workload.",
+  "root": "deployment/shop/app0",
+  "otherRoots": [
+    "deployment/shop/app1",
+    "deployment/shop/app2",
+    "deployment/shop/app3",
+    "deployment/shop/app4",
+    "deployment/shop/app5"
+  ],
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n0",
+    "node//n1",
+    "zone//zone-a"
+  ],
+  "tail": "10m0s"
+}

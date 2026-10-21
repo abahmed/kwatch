@@ -69,12 +69,18 @@ func (h *history) addChange(change Change) {
 	h.recent = h.appendBounded(h.recent, entry, DefaultMaxRecentChanges)
 }
 
+// appendBounded adds entry and evicts the oldest entries beyond limit. It
+// reslices instead of copying, so a full ring costs the same per change as
+// an empty one. The evicted slots stay unused at the front of the backing
+// array until append runs out of room and moves the live entries to a new
+// array, so the array never holds more than 2*limit slots.
 func (h *history) appendBounded(
 	ring []changeEntry, entry changeEntry, limit int,
 ) []changeEntry {
 	ring = append(ring, entry)
 	if over := len(ring) - limit; over > 0 {
-		ring = append(ring[:0:0], ring[over:]...)
+		clear(ring[:over]) // release the evicted changes now
+		ring = ring[over:]
 		h.evictions += uint64(over)
 	}
 	return ring
@@ -103,6 +109,7 @@ func (h *history) pruneRing(
 		}
 	}
 	h.evictions += uint64(len(ring) - len(kept))
+	clear(ring[len(kept):]) // release the pruned changes
 	return kept
 }
 

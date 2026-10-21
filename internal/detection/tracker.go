@@ -38,11 +38,17 @@ type Transition struct {
 type Tracker struct {
 	mu     sync.Mutex
 	active map[inventory.EntityID]map[string]tracked
+	// signer remembers the normalised form of the lines this tracker sees
+	// again on every update; it belongs to this tracker alone.
+	signer *format.Signer
 }
 
 // NewTracker builds an empty tracker.
 func NewTracker() *Tracker {
-	return &Tracker{active: make(map[inventory.EntityID]map[string]tracked)}
+	return &Tracker{
+		active: make(map[inventory.EntityID]map[string]tracked),
+		signer: format.NewSigner(),
+	}
 }
 
 // Observe replaces the entity's active findings with current and returns
@@ -61,7 +67,7 @@ func (t *Tracker) Observe(
 		if existed {
 			s.Since = old.finding.Since
 		}
-		now := newTracked(s, old, existed)
+		now := t.newTracked(s, old, existed)
 		next[s.Reason] = now
 		switch {
 		case !existed:
@@ -107,9 +113,9 @@ func (t *Tracker) Has(id inventory.EntityID) bool {
 	return len(t.active[id]) > 0
 }
 
-// tracked is a finding with its normalised text. format.Signature is
-// costly, so each text is normalised once, when the finding is stored,
-// and again only when the raw text differs from the stored one.
+// tracked is a finding with its normalised text. Normalising is costly,
+// so each text is normalised once, when the finding is stored, and again
+// only when the raw text differs from the stored one.
 type tracked struct {
 	finding Finding
 	summary string // Signature of the summary
@@ -121,24 +127,26 @@ type tracked struct {
 }
 
 // newTracked normalises f, reusing old's work for text that is unchanged.
-func newTracked(f Finding, old tracked, hasOld bool) tracked {
+func (tr *Tracker) newTracked(
+	f Finding, old tracked, hasOld bool,
+) tracked {
 	t := tracked{finding: f}
 	if hasOld && old.finding.Summary == f.Summary {
 		t.summary = old.summary
 	} else {
-		t.summary = format.Signature(f.Summary)
+		t.summary = tr.signer.Signature(f.Summary)
 	}
 	if hasOld && sameEvidence(old.finding, f) {
 		t.extra = old.extra
 	} else {
-		t.extra = evidenceShape(f)
+		t.extra = tr.evidenceShape(f)
 	}
 	oldErr := evidenceValue(old.finding, EvidenceError)
 	newErr := evidenceValue(f, EvidenceError)
 	if hasOld && oldErr == newErr {
 		t.errLine = old.errLine
 	} else {
-		t.errLine = format.Signature(newErr)
+		t.errLine = tr.signer.Signature(newErr)
 	}
 	return t
 }
@@ -195,11 +203,11 @@ func reworded(old, current tracked) bool {
 }
 
 // evidenceShape joins the normalised evidence without the error line.
-func evidenceShape(f Finding) string {
+func (tr *Tracker) evidenceShape(f Finding) string {
 	var out []string
 	for _, e := range f.Evidence {
 		if e.Label != EvidenceError {
-			out = append(out, e.Label+"="+format.Signature(e.Value))
+			out = append(out, e.Label+"="+tr.signer.Signature(e.Value))
 		}
 	}
 	return strings.Join(out, "\n")

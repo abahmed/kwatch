@@ -225,7 +225,7 @@ func (m *Manager) Incidents() []Incident {
 }
 
 // SettlingUnexplained counts the incidents of namespace that are still
-// settling at the notify tier or higher, have no cause and opened at or
+// settling at the notify tier or higher, are standalone and opened at or
 // after since: the ones that may join a namespace outage. It reads the
 // incidents in place, without copying them, because the announcer asks
 // for every candidate announcement of a storm.
@@ -236,7 +236,7 @@ func (m *Manager) SettlingUnexplained(
 	defer m.mu.Unlock()
 	n := 0
 	for _, p := range m.incidents {
-		if p.State == Settling && p.Cause == nil &&
+		if p.State == Settling && p.Standalone() &&
 			p.Root.Namespace == namespace && p.Tier >= Notify &&
 			!p.Opened.Before(since) {
 			n++

@@ -36,12 +36,39 @@ func defaultTransport() *http.Transport {
 	}
 }
 
-// NewHTTPClient builds the application-owned outbound client from config.
-// Callers pass the returned client to components that perform HTTP requests;
-// no process-wide mutable client is required. A proxy URL that does not
-// parse or a CA bundle that cannot be used is an error: running without
-// them would send provider traffic around the proxy or fail TLS later.
+// NewHTTPClient builds the application-owned outbound client for alert
+// providers and other destinations the operator chose, from config.
+// Callers pass the returned client to components that perform HTTP
+// requests; no process-wide mutable client is required. A proxy URL that
+// does not parse or a CA bundle that cannot be used is an error: running
+// without them would send provider traffic around the proxy or fail TLS
+// later. app.insecureSkipTLSVerify applies to this client only.
 func NewHTTPClient(cfg config.ApplicationRuntime) (*http.Client, error) {
+	if cfg.InsecureSkipTLSVerify {
+		klog.Warning(
+			"outbound TLS certificate verification is disabled for " +
+				"alert providers because insecureSkipTLSVerify is " +
+				"enabled",
+		)
+	}
+	return newHTTPClient(cfg, cfg.InsecureSkipTLSVerify)
+}
+
+// NewPlatformHTTPClient builds the client for kwatch's own services: the
+// license server, the adoption telemetry and the update check. It follows
+// the same proxy and CA bundle as the provider client but always verifies
+// TLS: app.insecureSkipTLSVerify exists for the operator's own provider
+// endpoints, and must never expose the license key or those calls to an
+// impersonating server.
+func NewPlatformHTTPClient(
+	cfg config.ApplicationRuntime,
+) (*http.Client, error) {
+	return newHTTPClient(cfg, false)
+}
+
+func newHTTPClient(
+	cfg config.ApplicationRuntime, insecure bool,
+) (*http.Client, error) {
 	transport := defaultTransport()
 
 	if cfg.ProxyURL != "" {
@@ -55,13 +82,7 @@ func NewHTTPClient(cfg config.ApplicationRuntime) (*http.Client, error) {
 	}
 
 	tlsCfg := &tls.Config{
-		InsecureSkipVerify: cfg.InsecureSkipTLSVerify, // #nosec G402
-	}
-	if cfg.InsecureSkipTLSVerify {
-		klog.Warning(
-			"outbound TLS certificate verification is disabled " +
-				"because insecureSkipTLSVerify is enabled",
-		)
+		InsecureSkipVerify: insecure, // #nosec G402
 	}
 
 	if cfg.CABundlePath != "" {

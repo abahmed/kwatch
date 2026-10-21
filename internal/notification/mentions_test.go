@@ -34,6 +34,14 @@ func TestNeutralizeProviderMentions(t *testing.T) {
 			"@_**Ann**", "@" + zw + "_**Ann**"},
 		{"zulip bold text kept", NeutralizeZulipMentions,
 			"**bold** a@b.c", "**bold** a@b.c"},
+		{"telegram username", NeutralizeTelegramMentions,
+			"ping @alice_ops now", "ping @" + zw + "alice_ops now"},
+		{"telegram at start and broadcast", NeutralizeTelegramMentions,
+			"@bobby123 @channel", "@" + zw + "bobby123 @" + zw + "channel"},
+		{"telegram email kept", NeutralizeTelegramMentions,
+			"mail me@example.com", "mail me@example.com"},
+		{"telegram too short to be a name", NeutralizeTelegramMentions,
+			"at @ab ok", "at @ab ok"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

@@ -21,8 +21,13 @@ func (m *Manager) awaitingEvidence(p *Incident, now time.Time) bool {
 // inGrace reports whether p is a restored incident still inside the
 // restore grace. Incidents opened after the restart have no stale
 // model to wait for: their members come from this session's detectors.
+// A node that is ready again has no findings to wait for either.
 func (m *Manager) inGrace(p *Incident, now time.Time) bool {
-	return p.restored && now.Before(m.restoreGrace)
+	if !p.restored || !now.Before(m.restoreGrace) {
+		return false
+	}
+	_, recovered := m.recoveredWhileDown(p)
+	return !recovered
 }
 
 // holdRecovery reports whether a recovering incident without members

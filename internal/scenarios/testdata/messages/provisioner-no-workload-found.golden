@@ -2,7 +2,10 @@
 🟠 Volume claim orders-db in data (prod-eu-1) has been waiting for a volume for two minutes. Claim orders-db is Pending: kwatch sees no workload in the cluster serving its provisioner disk.csi.example.com (it may run outside the cluster); the last provisioning failure says "failed to provision volume with StorageClass "managed": rpc error: code = Internal desc = could not create the disk". To see why the volume claim is not usable, run kubectl describe pvc orders-db -n data
 🟠 Volume claim orders-db in data (prod-eu-1) has been waiting for a volume for two minutes.
 | 🟠 Volume claim **orders-db** in **data** (**prod-eu-1**) has been waiting for a volume for two minutes.
-| Claim **orders-db** is Pending: kwatch sees no workload in the cluster serving its provisioner disk.csi.example.com (it may run outside the cluster); the last provisioning failure says `failed to provision volume with StorageClass`managed`: rpc error: code = Internal desc = could not create the disk`.
+| Claim **orders-db** is Pending: kwatch sees no workload in the cluster serving its provisioner disk.csi.example.com (it may run outside the cluster); the last provisioning failure says
+| ```
+| failed to provision volume with StorageClass "managed": rpc error: code = Internal desc = could not create the disk
+| ```
 | To see why the volume claim is not usable, run
 | ```
 | kubectl describe pvc orders-db -n data

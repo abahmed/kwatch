@@ -1,0 +1,14 @@
+{
+  "name": "adv-oom-two-victims",
+  "description": "Two containers are OOM-killed on one node under memory pressure: one at its own limit, one far below.",
+  "root": "deployment/billing/ledger",
+  "otherRoots": [
+    "node//n1"
+  ],
+  "tier": "notify",
+  "maxMessages": 5,
+  "mustNotBlame": [
+    "deployment/shop/cart"
+  ],
+  "tail": "15m0s"
+}

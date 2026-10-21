@@ -1,0 +1,12 @@
+{
+  "name": "adv-lookalike-redis",
+  "description": "A workload crashes on a refused connection to an external cache named redis-prod while an unused in-cluster redis is scaled to zero.",
+  "root": "deployment/shop/cart",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/redis",
+    "service/shop/redis",
+    "node//n1"
+  ]
+}

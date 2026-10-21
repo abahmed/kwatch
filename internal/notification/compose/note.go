@@ -41,8 +41,9 @@ type caseFacts struct {
 
 func gatherFacts(d incident.Decision, now time.Time, fix *inventory.Change,
 ) caseFacts {
-	f := caseFacts{p: d.Incident, members: sortedMembers(d.Incident),
-		now: now, fix: fix, reason: d.Reason, output: d.Facts.Output,
+	f := caseFacts{p: withoutCircularCause(d.Incident),
+		members: sortedMembers(d.Incident), now: now, fix: fix,
+		reason: d.Reason, output: d.Facts.Output,
 		evidence: d.Facts.Evidence, changes: d.Facts.Changes,
 		window: d.Facts.Window, wake: d.Facts.Wake}
 	if own := rootFinding(f.p, f.members); own != nil {
@@ -111,6 +112,10 @@ type sentence struct {
 	// carries lists the facts this sentence states along with its own
 	// point, so the plainer sentences for them stay silent.
 	carries []factKey
+	// keepCase marks a sentence that starts with a resource's own name,
+	// which keeps its case even when the name is also a kind word
+	// ("storage").
+	keepCase bool
 }
 
 // sentenceWriter turns one type of fact into sentences. It returns
@@ -210,6 +215,7 @@ func arrange(sentences []sentence) []sentence {
 		return sentences[i].weight > sentences[j].weight
 	})
 	seen := map[string]bool{}
+	quotes := map[string]bool{}
 	proof := 0
 	var out []sentence
 	for _, s := range sentences {
@@ -218,13 +224,16 @@ func arrange(sentences []sentence) []sentence {
 			continue
 		}
 		if s.part == partProof {
-			if proof == maxProof {
+			if proof == maxProof || repeatsQuote(quotes, s.text) {
 				continue
 			}
 			proof++
 		}
 		seen[key] = true
-		s.text = capitalKind(strings.TrimSpace(s.text))
+		s.text = strings.TrimSpace(s.text)
+		if !s.keepCase {
+			s.text = capitalKind(s.text)
+		}
 		out = append(out, s)
 	}
 	return out
@@ -242,10 +251,14 @@ func fill(msg *notification.Message, marker string, sentences []sentence) {
 	msg.Lines = nil
 	note := marker
 	for i, s := range sentences {
-		texts = append(texts, s.text)
-		note += noteGap(s.part) + s.text
+		sentences[i].text = settleStop(s.text)
+		// Every plain field writes a quotation with double quotes; only
+		// the rich lines (Doc) keep the quote runes to find its ends.
+		text := plainQuotes(sentences[i].text)
+		texts = append(texts, text)
+		note += noteGap(s.part) + text
 		if i > 0 && s.part != partAction && s.part != partHint {
-			msg.Lines = append(msg.Lines, s.text)
+			msg.Lines = append(msg.Lines, text)
 		}
 	}
 	msg.Title = texts[0]

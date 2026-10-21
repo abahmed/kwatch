@@ -211,3 +211,28 @@ func TestCheckReleaseFromNonReleaseBuildStaysQuiet(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckReleaseIgnoresATagThatIsNotAVersion(t *testing.T) {
+	hostile := "v99.0.0-@channel[x](http://evil.example)"
+	mockGithub := new(MockGitHubClient)
+	mockGithub.On("GetLatestRelease", mock.Anything, "abahmed", "kwatch").
+		Return(&github.RepositoryRelease{TagName: &hostile}, nil, nil)
+	notifier := &collectedNotices{}
+	u := newTestUpgrader(&config.Upgrader{}, &delivery.Manager{}, nil)
+	u.deliveryManager = notifier
+	u.githubClient = mockGithub
+	u.current = "v1.0.0"
+
+	u.checkRelease(context.Background())
+
+	if len(notifier.messages) != 0 {
+		t.Fatalf("a hostile tag reached the providers: %v",
+			notifier.messages)
+	}
+}
+
+type collectedNotices struct{ messages []string }
+
+func (c *collectedNotices) Notify(msg string) {
+	c.messages = append(c.messages, msg)
+}

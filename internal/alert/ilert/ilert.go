@@ -108,13 +108,20 @@ func (i *Ilert) SendIncident(
 	return err
 }
 
-// priorityFor keeps the configured priority for real incidents;
-// informational incidents are LOW so they never page.
+// priorityFor follows the incident severity: only a page-tier incident
+// (critical) gets the configured priority, the one that pages. A notify or
+// low tier incident (warning, info) is LOW, so it never wakes anyone. A
+// message with no route severity is judged by its status.
 func (i *Ilert) priorityFor(m notification.Message) string {
-	if m.Route.Severity == "info" {
-		return "LOW"
+	switch m.Route.Severity {
+	case "critical":
+		return i.priority
+	case "":
+		if m.Status == notification.StatusCritical {
+			return i.priority
+		}
 	}
-	return i.priority
+	return "LOW"
 }
 
 // SendMessage skips plain notices: on a paging service they would open an

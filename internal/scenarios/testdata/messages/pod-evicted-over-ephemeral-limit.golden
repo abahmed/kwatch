@@ -1,9 +1,7 @@
 10:03:15 settled
-🟠 thumbnailer in render (prod-eu-1) is failing because its ephemeral-storage limit is too low for normal use. One of the two errors mentions it. Its containers have no memory limit, so nothing stopped them before the node ran short. To see why the pod was evicted, run kubectl describe pod thumbnailer-b041edc4-b -n render
+🟠 thumbnailer in render (prod-eu-1) is failing because its ephemeral-storage limit is too low for normal use. To see why the pod was evicted, run kubectl describe pod thumbnailer-b041edc4-b -n render
 🟠 thumbnailer in render (prod-eu-1) is failing because its ephemeral-storage limit is too low for normal use.
 | 🟠 **thumbnailer** in **render** (**prod-eu-1**) is failing because its ephemeral-storage limit is too low for normal use.
-| One of the two errors mentions it.
-| Its containers have no memory limit, so nothing stopped them before the node ran short.
 | To see why the pod was evicted, run
 | ```
 | kubectl describe pod thumbnailer-b041edc4-b -n render

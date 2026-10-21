@@ -16,7 +16,7 @@ func TestRunLintWarnsWithoutFailingWhenNoProviderIsConfigured(t *testing.T) {
 	t.Setenv("CONFIG_FILE", path)
 	var out, errOut bytes.Buffer
 
-	code := runLint(false, false, &out, &errOut)
+	code := runLint(false, false, testNow, &out, &errOut)
 
 	if code != 0 {
 		t.Fatalf("exit code = %d, stderr = %s", code, errOut.String())
@@ -35,7 +35,7 @@ func lintConfig(t *testing.T, body string) (int, string, string) {
 	}
 	t.Setenv("CONFIG_FILE", path)
 	var out, errOut bytes.Buffer
-	code := runLint(false, false, &out, &errOut)
+	code := runLint(false, false, testNow, &out, &errOut)
 	return code, out.String(), errOut.String()
 }
 
@@ -62,7 +62,7 @@ func TestRunLintRejectsMissingRequiredProviderField(t *testing.T) {
 func TestRunLintAcceptsShippedConfig(t *testing.T) {
 	t.Setenv("CONFIG_FILE", "../../deploy/config.yaml")
 	var out, errOut bytes.Buffer
-	if code := runLint(false, false, &out, &errOut); code != 0 {
+	if code := runLint(false, false, testNow, &out, &errOut); code != 0 {
 		t.Fatalf("code=%d stderr=%q", code, errOut.String())
 	}
 }

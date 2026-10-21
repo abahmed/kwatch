@@ -65,6 +65,11 @@
           "type": "string",
           "default": "",
           "description": "License key (discouraged; creates the Secret <release>-license)"
+        },
+        "instanceSecret": {
+          "type": "boolean",
+          "default": false,
+          "description": "Render the license instance Secret and its Role even when no key is set through the chart (for a key that reaches kwatch another way)"
         }
       },
       "additionalProperties": false
@@ -819,10 +824,9 @@
         "type": "string"
       },
       "default": {
-        "karpenter.sh/do-not-disrupt": "true",
         "cluster-autoscaler.kubernetes.io/safe-to-evict": "false"
       },
-      "description": "Annotations for the kwatch Pod; the defaults keep node autoscalers from evicting it"
+      "description": "Annotations for the kwatch Pod; the default asks the cluster autoscaler not to scale down its node"
     },
     "podLabels": {
       "type": "object",
@@ -851,6 +855,86 @@
       ],
       "deprecated": true,
       "description": "Deprecated and ignored: kwatch 0.10.x Service settings, accepted so old values files still upgrade"
+    },
+    "priorityClassName": {
+      "type": "string",
+      "default": "",
+      "description": "PriorityClass of the kwatch pod"
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "default": [],
+      "description": "Pull secrets for the kwatch image",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "extraVolumes": {
+      "type": "array",
+      "default": [],
+      "description": "Extra volumes of the kwatch pod",
+      "items": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "not": {
+              "enum": [
+                "config-volume",
+                "data"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "extraVolumeMounts": {
+      "type": "array",
+      "default": [],
+      "description": "Extra volume mounts of the kwatch container",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "mountPath"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "not": {
+              "enum": [
+                "config-volume",
+                "data"
+              ]
+            }
+          },
+          "mountPath": {
+            "type": "string",
+            "minLength": 1,
+            "not": {
+              "enum": [
+                "/config",
+                "/var/lib/kwatch"
+              ]
+            }
+          }
+        }
+      }
     }
   },
   "additionalProperties": false

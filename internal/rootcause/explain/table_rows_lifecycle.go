@@ -169,4 +169,17 @@ var operatorRows = []Row{
 				detection.ModeCondition, detection.ModeNotReconciling}},
 		Link: LinkOwns, Effect: anything, Prior: 0.7, Inside: true,
 	},
+	{
+		// A custom resource reports a failed condition while the
+		// workload that writes it fails too: nobody is reconciling it.
+		Name: "controller-failing-condition",
+		Cause: Side{Group: AnyGroup, Kind: AnyKind,
+			Health: []detection.Health{detection.Failing}},
+		Link: LinkManages,
+		Effect: Side{Group: AnyGroup, Kind: AnyKind, Custom: true,
+			Modes: []detection.Mode{detection.ModeCondition}},
+		// Above own-change: the resource waits for a controller that is
+		// down, which an edit of its own spec does not explain.
+		Prior: 0.8,
+	},
 }

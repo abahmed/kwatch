@@ -47,8 +47,10 @@ fi
 # Get and update only on kwatch's own Lease.
 require '  resourceNames: ["kwatch-leader"]' \
 	"Lease get/update must be limited to the Lease name"
-require 'karpenter.sh/do-not-disrupt: "true"' \
-	"pod must ask node autoscalers not to disrupt it"
+if grep -Fq 'karpenter.sh/do-not-disrupt: "true"' "$manifest"; then
+	echo "manifest parity: do-not-disrupt must not be a default" >&2
+	exit 1
+fi
 require 'cluster-autoscaler.kubernetes.io/safe-to-evict: "false"' \
 	"pod must ask the cluster autoscaler not to evict it"
 require 'memory: "512Mi"' "memory limit must be 512Mi"

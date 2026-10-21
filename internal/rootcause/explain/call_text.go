@@ -242,13 +242,3 @@ func cutRunes(text string, n int) string {
 func signatureName(mode detection.Mode, signature string) string {
 	return string(mode.Family()) + " " + signature
 }
-
-// SignatureText is the error a failure-signature entity stands for,
-// without the mode signatureName puts first.
-func SignatureText(name string) string {
-	_, text, found := strings.Cut(name, " ")
-	if !found {
-		return name
-	}
-	return text
-}

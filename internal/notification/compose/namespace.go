@@ -54,8 +54,8 @@ func (w Writer) NamespaceOutage(
 		mark = marker(decisions[0].Incident)
 		status = tierStatus(decisions[0].Incident.Tier)
 	}
-	sentences := []sentence{{part: partLead, text: outageLead(o,
-		w.clusterTag(), decisions)}}
+	sentences := []sentence{{part: partLead, text: endSentence(
+		outageLead(o, w.clusterTag(), decisions))}}
 	sentences = append(sentences, digestTitles(decisions, now, "")...)
 	sentences = append(sentences, sharedSentences(o.Shared)...)
 	sentences = append(sentences, sentence{part: partAction,

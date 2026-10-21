@@ -10,7 +10,7 @@
 | kubectl describe node n1
 | ```
 10:19:00 healthy for 3m0s
-✅ Node n1 (prod-eu-1) is ready again. It was failing for 15 minutes.
-✅ Node n1 (prod-eu-1) is ready again.
-| ✅ Node n1 (**prod-eu-1**) is ready again.
-| It was failing for 15 minutes.
+✅ Node n1 (prod-eu-1) is no longer low on memory. It was failing for six minutes.
+✅ Node n1 (prod-eu-1) is no longer low on memory.
+| ✅ Node n1 (**prod-eu-1**) is no longer low on memory.
+| It was failing for six minutes.

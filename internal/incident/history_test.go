@@ -19,10 +19,10 @@ func TestOccurrenceDescribe(t *testing.T) {
 		fix  Fix
 		want string
 	}{
-		{FixRollback, "same as Tue 14:02, fixed by rollback"},
-		{FixConfig, "same as Tue 14:02, fixed by config fix"},
-		{FixNone, "same as Tue 14:02, recovered without change"},
-		{"", "same as Tue 14:02"},
+		{FixRollback, "same as Tue 14:02 UTC, fixed by rollback"},
+		{FixConfig, "same as Tue 14:02 UTC, fixed by config fix"},
+		{FixNone, "same as Tue 14:02 UTC, recovered without change"},
+		{"", "same as Tue 14:02 UTC"},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.fix), func(t *testing.T) {

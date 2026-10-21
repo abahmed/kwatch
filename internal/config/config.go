@@ -121,6 +121,12 @@ type Config struct {
 	// unknownKeys are config keys the file sets that no field reads, such
 	// as removed options or typos. They are logged, never fatal.
 	unknownKeys []string
+	// envWarnings are the deployment environment values that were ignored
+	// (an unparsable boolean). Derived state, never serialized.
+	envWarnings []string
+	// fileWarnings are findings about how the file was written, such as a
+	// literal license key. They are known only before expansion.
+	fileWarnings []string
 }
 
 // Telemetry configures the minimal adoption heartbeat. It is enabled

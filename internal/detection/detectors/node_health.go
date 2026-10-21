@@ -36,6 +36,9 @@ func heartbeatFinding(
 		!sustained(ctx, "node-heartbeat", since, nodeHeartbeatGrace) {
 		return detection.Finding{}, false
 	}
+	if holding, _ := joinHold(ctx, e, status, since); holding {
+		return detection.Finding{}, false
+	}
 	return detection.Finding{
 		Reason: reasons.NodeHeartbeatStale, Severity: detection.Warning,
 		Since: since,

@@ -53,55 +53,84 @@ func backendFindings(
 		text(e, kube.AttrServiceType) == "ExternalName" {
 		return nil
 	}
+	if !ctx.Synced(kube.KindEndpointSlice) {
+		return nil
+	}
 	slices := ctx.Model.Related(e.ID, inventory.Backs, inventory.Incoming)
 	if len(slices) == 0 {
 		return nil
 	}
 	endpoints, ready, since := sumEndpoints(ctx, slices)
-	var out []detection.Finding
 	// No endpoints at all means nothing is selected (scaled to zero on
-	// purpose); unready endpoints mean selected pods are failing.
+	// purpose) or the selected pods are all Pending; unready endpoints
+	// mean selected pods are failing.
 	switch {
 	case endpoints == 0:
-		if s, ok := selectsNothing(ctx, e); ok {
-			out = append(out, s)
-		} else if s, ok := unusedService(ctx, since); ok {
-			out = append(out, s)
-		}
-		return out
+		return noEndpoints(ctx, e, since)
 	case ready == 0:
-		since = ctx.Onset("no-ready-backends", since)
-		if backendsAreStarting(ctx, e.ID) {
-			return out
-		}
-		if sustained(ctx, "no-ready-backends", since, DefaultNoEndpoints) {
-			out = append(out, detection.Finding{
-				Reason:   reasons.ServiceNoEndpoints,
-				Severity: detection.Critical, Since: since, Symptom: true,
-				Summary: "Service has no ready backends; traffic to it " +
-					"fails",
-			})
-		}
+		return noReadyBackends(ctx, e, since)
 	case ready < endpoints:
 		// Losing one more backend must not restart the wait.
 		since = ctx.Onset("degraded-backends", since)
 		if sustained(ctx, "degraded-backends", since, DefaultDegradedBackends) {
-			out = append(out, detection.Finding{
+			return []detection.Finding{{
 				Reason:   reasons.ServiceBackendsDegraded,
 				Severity: detection.Warning, Since: since, Symptom: true,
 				Summary: strconv.Itoa(int(ready)) + " of " +
 					strconv.Itoa(int(endpoints)) +
 					" Service backends are ready",
-			})
+			}}
 		}
 	}
-	return out
+	return nil
 }
 
-// sumEndpoints totals endpoints and ready endpoints over the slices and
-// returns the latest time the ready count changed. That is when the
-// current count began, not when the bad state began; callers use it only
-// the first time the bad state is seen.
+// noEndpoints judges a Service whose EndpointSlices list nothing. A
+// selector edit, a selector that no pod or workload can ever match
+// behind an exposure, or selected pods that are all Pending are
+// failures; otherwise the Service is parked and only the digest hears
+// of it after DefaultUnusedAfter.
+func noEndpoints(
+	ctx detection.Context, e inventory.Entity, since time.Time,
+) []detection.Finding {
+	if s, ok := selectsNothing(ctx, e); ok {
+		return []detection.Finding{s}
+	}
+	if s, ok := selectorMatchesNothing(ctx, e); ok {
+		return []detection.Finding{s}
+	}
+	if allSelectedPending(ctx, e) {
+		return noReadyBackends(ctx, e, since)
+	}
+	if s, ok := unusedService(ctx, since); ok {
+		return []detection.Finding{s}
+	}
+	return nil
+}
+
+// noReadyBackends is the Service-level symptom of pods that exist but
+// serve nothing: it is raised once the state has held for
+// DefaultNoEndpoints, unless the pods are still starting.
+func noReadyBackends(
+	ctx detection.Context, e inventory.Entity, since time.Time,
+) []detection.Finding {
+	since = ctx.Onset("no-ready-backends", since)
+	if backendsAreStarting(ctx, e.ID) ||
+		!sustained(ctx, "no-ready-backends", since, DefaultNoEndpoints) {
+		return nil
+	}
+	return []detection.Finding{{
+		Reason:   reasons.ServiceNoEndpoints,
+		Severity: detection.Critical, Since: since, Symptom: true,
+		Summary: "Service has no ready backends; traffic to it fails",
+	}}
+}
+
+// sumEndpoints totals the endpoints that are not terminating and the
+// ready endpoints over the slices, and returns the latest time the
+// ready count changed. That is when the current count began, not when
+// the bad state began; callers use it only the first time the bad
+// state is seen.
 func sumEndpoints(
 	ctx detection.Context, slices []inventory.EntityID,
 ) (endpoints, ready float64, since time.Time) {
@@ -112,7 +141,10 @@ func sumEndpoints(
 		}
 		total, _ := number(slice, kube.AttrEndpoints)
 		up, _ := number(slice, kube.AttrEndpointsReady)
-		endpoints += total
+		leaving, _ := number(slice, kube.AttrEndpointsTerminating)
+		// A terminating endpoint is a pod shutting down on purpose: it
+		// is neither a backend nor a failed one.
+		endpoints += total - leaving
 		ready += up
 		if at := valueSince(slice, kube.AttrEndpointsReady); at.After(since) {
 			since = at

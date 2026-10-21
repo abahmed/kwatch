@@ -32,7 +32,8 @@ func TestChainLineShowsWhatFailedAfterWhat(t *testing.T) {
 
 	msg := Writer{}.Write(announce(p), writerNow)
 
-	want := "Chain: postgres (10:00) → api (10:01) → service api (10:02)."
+	want := "Chain: postgres (10:00 UTC) → api (10:01 UTC) → " +
+		"service api (10:02 UTC)."
 	if !strings.HasSuffix(msg.Note, want) {
 		t.Fatalf("Note should end with %q:\n%s", want, msg.Note)
 	}
@@ -49,7 +50,7 @@ func TestChainLineSaysWhereItWasCut(t *testing.T) {
 
 	msg := Writer{}.Write(announce(p), writerNow)
 
-	want := "Beyond that, web (10:03) also fails; kwatch follows a chain " +
+	want := "Beyond that, web (10:03 UTC) also fails; kwatch follows a chain " +
 		"at most 3 steps, so it is reported on its own."
 	if !strings.Contains(msg.Note, want) {
 		t.Fatalf("Note should contain %q:\n%s", want, msg.Note)
@@ -92,5 +93,20 @@ func TestChainLineComesBeforeTheCheckedLine(t *testing.T) {
 		strings.Index(msg.Note, "Checked:")
 	if chain < 0 || checked < chain {
 		t.Fatalf("want the chain line first:\n%s", msg.Note)
+	}
+}
+
+// The Service of the workload that ends the chain is that workload
+// again: it is not named a second time past the end.
+func TestChainLineDoesNotNameTheLastWorkloadAgainBeyondIt(t *testing.T) {
+	p := secretCause(0.8)
+	p.Cause = chainCause()
+	p.Cause.Beyond = []rootcause.Hop{
+		chainHop(kube.KindService, "api", 3)}
+
+	msg := Writer{}.Write(announce(p), writerNow)
+
+	if strings.Contains(msg.Note, "Beyond that") {
+		t.Fatalf("service api is api again:\n%s", msg.Note)
 	}
 }

@@ -18,7 +18,10 @@ const ExposureWindow = 24 * time.Hour
 // Secret that a failing Job or CronJob run reads reaches back to that
 // run's start less ExposureWindow, but not before the CronJob last
 // succeeded: a run that read the object after the edit and worked shows
-// the edit harmless.
+// the edit harmless. A pull Secret of a pod whose pull was refused with
+// an authentication error reaches back the same way from the pod's
+// creation: running pods never pull again, so the first new pod is the
+// first moment a bad token matters.
 func (v *view) changeFrom(id inventory.EntityID) time.Time {
 	from := v.since
 	if id.Kind != kube.KindConfigMap && id.Kind != kube.KindSecret {
@@ -28,6 +31,9 @@ func (v *view) changeFrom(id inventory.EntityID) time.Time {
 		id, inventory.References, inventory.Incoming,
 	) {
 		start, succeeded, ok := v.runExposure(user)
+		if !ok {
+			start, ok = v.pullExposure(user, id)
+		}
 		if !ok {
 			continue
 		}
@@ -69,4 +75,39 @@ func (v *view) runExposure(
 	}
 	succeeded = attributeTime(cron, kube.AttrLastSuccess)
 	return started, succeeded, !started.IsZero()
+}
+
+// pullExposure reads a pod whose image pull was refused for want of a
+// valid login and that names the Secret as an image pull Secret: when
+// it was created. Healthy peers say nothing here, since they pulled
+// before the edit; the window is only longer, never narrowed.
+func (v *view) pullExposure(
+	user, secret inventory.EntityID,
+) (created time.Time, ok bool) {
+	if user.Kind != kube.KindPod || !v.unitFailing(user) {
+		return created, false
+	}
+	e, found := v.s.Model.Entity(user)
+	if !found || !hasText(kube.PullSecretNames(attrText(e,
+		kube.AttrPullSecrets)), secret.Name) {
+		return created, false
+	}
+	if !v.pullRefused(user) {
+		return created, false
+	}
+	created = attributeTime(e, kube.AttrCreated)
+	return created, !created.IsZero()
+}
+
+// pullRefused reports a pod, or a container of it, whose failed pulls
+// show an authentication answer.
+func (v *view) pullRefused(pod inventory.EntityID) bool {
+	for _, id := range append([]inventory.EntityID{pod},
+		v.s.Model.Related(pod, inventory.PartOf, inventory.Incoming)...) {
+		if text, ok := v.pullText(id); ok &&
+			classifyRegistryPull(text) == pullAuth {
+			return true
+		}
+	}
+	return false
 }

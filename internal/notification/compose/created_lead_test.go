@@ -53,7 +53,7 @@ func TestWriteSaysAWorkloadNeverWorkedSinceItWasCreated(t *testing.T) {
 			msg := Writer{}.Write(announce(p), writerNow)
 
 			assert.Contains(t, msg.Note, "api in shop has never worked "+
-				"since it was created at 09:50.")
+				"since it was created at 09:50 UTC.")
 			assert.NotContains(t, msg.Note, "release")
 			assert.NotContains(t, msg.Note, "soon after it changed")
 		})
@@ -68,7 +68,7 @@ func TestWriteDoesNotSayNeverWorkedForALateFailure(t *testing.T) {
 	msg := Writer{}.Write(announce(p), writerNow)
 
 	assert.NotContains(t, msg.Note, "never worked")
-	assert.Contains(t, msg.Note, "after the 09:50 creation")
+	assert.Contains(t, msg.Note, "after the 09:50 UTC creation")
 	assert.NotContains(t, msg.Note, "release")
 	assert.NotContains(t, msg.Note, "soon after it changed")
 }

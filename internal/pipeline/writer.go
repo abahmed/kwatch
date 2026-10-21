@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/pipeline/announce"
+	"github.com/abahmed/kwatch/internal/safego"
 	"github.com/abahmed/kwatch/internal/storage"
 )
 
@@ -66,6 +67,8 @@ type storeWriter struct {
 	store IncidentStore
 	after func(time.Duration) <-chan time.Time
 	stats *workerStats
+	// streak is only touched by the writer goroutine.
+	streak writeStreak
 
 	mu      sync.Mutex
 	pending storeSnapshot
@@ -144,12 +147,18 @@ func (w *storeWriter) finalFlush() {
 	if !ok || w.isFenced() {
 		return
 	}
-	err := flusher.FlushFingerprints()
+	var err error
+	if perr := safego.Run("storage-writer", func() error {
+		err = flusher.FlushFingerprints()
+		return nil
+	}); perr != nil {
+		err = perr
+	}
 	switch {
 	case isFenced(err):
 		w.stopFenced()
 	case err != nil:
-		logWriteError(err, "fingerprints")
+		w.streak.log(err, "fingerprints")
 		w.stats.writeFailures.Add(1)
 		metrics.DefaultRegistry().StorageWriteFailures.Add(1)
 	}
@@ -188,12 +197,13 @@ func (w *storeWriter) flush() {
 	if batch.empty() {
 		return
 	}
-	failed, fenced := w.write(batch)
+	failed, fenced := w.guardedWrite(batch)
 	w.stats.batches.Add(1)
 	if fenced {
 		w.stopFenced()
 		return
 	}
+	w.streak.end(!failed.empty())
 	if failed.empty() {
 		return
 	}
@@ -203,6 +213,22 @@ func (w *storeWriter) flush() {
 	w.pending.keepOlder(failed)
 	w.mu.Unlock()
 	notify(w.wake)
+}
+
+// guardedWrite is write, with a panic of the store counted as a failed
+// batch: every part is put back and retried, and the writer lives on.
+func (w *storeWriter) guardedWrite(
+	batch storeSnapshot,
+) (failed storeSnapshot, fenced bool) {
+	err := safego.Run("storage-writer", func() error {
+		failed, fenced = w.write(batch)
+		return nil
+	})
+	if err != nil {
+		w.streak.log(err, "panic")
+		return batch, false
+	}
+	return failed, fenced
 }
 
 // write stores each part of batch and returns the parts that failed.
@@ -218,7 +244,7 @@ func (w *storeWriter) write(
 			return storeSnapshot{}, true
 		}
 		if err != nil {
-			logWriteError(err, "startup marker")
+			w.streak.log(err, "startup marker")
 			failed.startup = batch.startup
 		}
 	}
@@ -228,7 +254,7 @@ func (w *storeWriter) write(
 			return storeSnapshot{}, true
 		}
 		if err != nil {
-			logWriteError(err, "incidents")
+			w.streak.log(err, "incidents")
 			failed.incidents, failed.hasIncidents = batch.incidents, true
 		}
 	}
@@ -238,7 +264,7 @@ func (w *storeWriter) write(
 			return storeSnapshot{}, true
 		}
 		if err != nil {
-			logWriteError(err, "fingerprints")
+			w.streak.log(err, "fingerprints")
 			failed.fingerprints = batch.fingerprints
 		}
 	}
@@ -263,9 +289,4 @@ func (w *storeWriter) stopFenced() {
 	klog.InfoS("pipeline: store claimed by a newer leader; "+
 		"storage writer stopped", "component", "pipeline",
 		"operation", "save")
-}
-
-func logWriteError(err error, what string) {
-	klog.ErrorS(err, "pipeline: storage write failed; retrying next batch",
-		"component", "pipeline", "operation", "save", "data", what)
 }

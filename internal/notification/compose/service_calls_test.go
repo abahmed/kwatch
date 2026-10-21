@@ -78,9 +78,9 @@ func TestCalledServiceSentenceQuotesTheCallersLine(t *testing.T) {
 	got := calledServiceSentences(gatherFacts(incident.Decision{Incident: p},
 		callNow, nil))
 
-	if len(got) != 1 || !strings.Contains(got[0].text,
+	if len(got) != 1 || !strings.Contains(plainQuotes(got[0].text),
 		`api fails calling service redis with "`+line+`"`) ||
-		!strings.Contains(got[0].text, "no ready endpoints since 09:58") {
+		!strings.Contains(got[0].text, "no ready endpoints since 09:58 UTC") {
 		t.Fatalf("sentences = %+v", got)
 	}
 }
@@ -105,7 +105,7 @@ func TestPolicyBlockLeadNamesTheCallAndTheChange(t *testing.T) {
 		nil))
 
 	for _, want := range []string{"can't reach postgres:5432",
-		"network policy deny-all (created 10:00 by bob) blocks the call"} {
+		"network policy deny-all (created 10:00 UTC by bob) blocks the call"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("lead = %q, want %q", got, want)
 		}

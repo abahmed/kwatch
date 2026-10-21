@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"k8s.io/klog/v2"
 )
@@ -65,7 +64,7 @@ func (m *Manager) handle(res Result, callErr error, b Binding) error {
 	lease, err := m.v.verifyLeaseSigned(res.Lease, b)
 	if err == nil {
 		if lease.SrvTime > 0 {
-			m.clock.Observe(time.Unix(lease.SrvTime, 0).UTC())
+			m.observeServerTimeLocked(lease)
 		}
 		_, err = checkLeaseWindow(lease, m.clock.Effective(m.cfg.Now()))
 	}

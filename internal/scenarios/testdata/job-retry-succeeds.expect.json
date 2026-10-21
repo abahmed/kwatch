@@ -1,0 +1,7 @@
+{
+  "name": "job-retry-succeeds",
+  "description": "A Job's first pod fails once; the Job controller retries and the second pod completes.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

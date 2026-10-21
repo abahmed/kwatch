@@ -84,9 +84,26 @@ func shortName(id inventory.EntityID) string {
 		pod, container := splitContainer(id.Name)
 		return "container " + container + " in pod " + pod
 	case id.Kind == explain.KindFailureSignature:
-		return "the error \"" + explain.SignatureText(id.Name) + "\""
+		// The entity only holds the normalised words (lower case, no
+		// numbers), which are not what any pod wrote and must never sit
+		// between quotes. The error itself is quoted, as written, by the
+		// lead finding's own sentence.
+		return "the shared error"
 	}
 	return kindWord(id.Kind) + " " + id.Name
+}
+
+// causeRootName names a cause's root relative to the subject. A failure
+// signature is named by the error one of the failing pods wrote, quoted as
+// written (the cause keeps it in SharedError); without it, a generic name.
+func causeRootName(
+	cause *rootcause.CauseRecord, subject inventory.EntityID,
+) string {
+	if cause.Root.Kind == explain.KindFailureSignature &&
+		cause.SharedError != "" {
+		return "the error " + quoted(cause.SharedError)
+	}
+	return nameFrom(subject, cause.Root)
 }
 
 // placedName adds the namespace to shortName ("payments in shop").

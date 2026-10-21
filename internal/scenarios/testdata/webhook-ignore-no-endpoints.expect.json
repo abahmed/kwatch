@@ -1,0 +1,11 @@
+{
+  "name": "webhook-ignore-no-endpoints",
+  "description": "A webhook that ignores failure has no ready endpoints behind it: a digest line, not a notification.",
+  "root": "validatingwebhookconfiguration//widget-operator",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders"
+  ],
+  "tail": "1h0m0s"
+}

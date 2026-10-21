@@ -5,8 +5,6 @@ import (
 	"slices"
 	"time"
 
-	"k8s.io/klog/v2"
-
 	"github.com/abahmed/kwatch/internal/incident"
 )
 
@@ -38,6 +36,17 @@ type Startup struct {
 	// there is nothing to list. A cold start lists nothing here: its
 	// summary names every existing incident.
 	WarmAt time.Time
+	// SyncedAt is when the sources synced, zero before that: the restored
+	// incidents whose findings are back are listed one settle later (see
+	// ListRestored).
+	SyncedAt time.Time
+	// lateUntil is how long after the final listing the restored
+	// incidents whose findings come back late are still listed; zero
+	// when no such watch is on.
+	lateUntil time.Time
+	// earlyDone is set once the early look at the restored incidents was
+	// made, whether or not it listed any.
+	earlyDone bool
 	// Warm are the announcements of old problems found after a restart,
 	// held for the restored-incidents summary (see holdWarm).
 	Warm []incident.Decision
@@ -68,6 +77,7 @@ func (s *Startup) HoldUntilSync() {
 // synced, on a cold start only. Once a summary was sent it stays closed.
 func (s *Startup) OpenWindow(now time.Time) {
 	s.AwaitSync = false
+	s.SyncedAt = now
 	if s.ColdStart && !s.Summary.Complete {
 		s.Until = now.Add(StartupWindow)
 	}
@@ -291,52 +301,10 @@ func containsAll(have, want []string) bool {
 	return true
 }
 
-// ListRestored sends one message naming the incidents restored from the
-// previous session that still fail, once the restore grace is over: a
-// restart announces none of them, so without it nobody would hear that
-// they are still open. It reports whether it sent the message.
-func (c *Collector) ListRestored(ctx context.Context, now time.Time) bool {
-	s := &c.Startup
-	if s.WarmAt.IsZero() || now.Before(s.WarmAt) {
-		return false
-	}
-	s.WarmAt = time.Time{}
-	var listed []incident.Decision
-	lower := 0
-	for _, p := range c.env.Incidents.RestoredFailing() {
-		switch {
-		case c.env.Scope != nil && !c.env.Scope(p):
-		case p.Tier < incident.Notify:
-			// The next digest lists it (see ongoing_compact.go).
-			lower++
-		default:
-			listed = append(listed, incident.Decision{
-				Action: incident.Announce, Incident: p,
-				Reason: "restored"})
-		}
-	}
-	listed = c.takeWarm(listed)
-	if len(listed) == 0 {
-		return false
-	}
-	msg := c.env.Messages.RestoredSummaryWith(listed, lower, now)
-	// The audit entry has no incident of its own: name the restored ones.
-	msg.Listed = restoredListing(listed)
-	klog.InfoS("pipeline: restored incidents still failing",
-		append(restoredTotals(listed), "lowerPriority", lower)...)
-	c.env.Sink(ctx, incident.Decision{Reason: "restored incidents"}, msg)
-	return true
-}
-
 // NextStartup is when the startup window closes and the summary is sent,
 // or zero when none is open.
 func (c *Collector) NextStartup() time.Time {
 	return c.Startup.Until
-}
-
-// NextWarm is when the restored incidents are listed, or zero.
-func (c *Collector) NextWarm() time.Time {
-	return c.Startup.WarmAt
 }
 
 // Restore sets the cold-start state from the previous run. marker is the

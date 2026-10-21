@@ -229,7 +229,9 @@ func normalizeReason(reason string) string {
 		"optional_permission_denied", "storage_reset", "storage_over_cap",
 		"heartbeat_failed", "config_overlay_invalid",
 		"kubelet_unreachable", "kubelet_partially_unreachable",
-		"provider_unavailable", "provider_rejected", "provider_rate_limited":
+		"provider_unavailable", "provider_rejected", "provider_rate_limited",
+		"license_invalid", "license_expired", "license_revoked",
+		"license_conflict", "license_pending", "handler_panics":
 		return reason
 	default:
 		if reason == "" {

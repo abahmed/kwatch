@@ -1,0 +1,11 @@
+10:04:15 roll-up
+🟠 kwatch (prod-eu-1) found three new problems at the same time. api in shop keeps crashing. web in shop keeps crashing. worker in shop keeps crashing. Each gets its own message when it changes or resolves.
+🟠 kwatch (prod-eu-1) found three new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 3 new problems at the same time
+|
+| **Problems**
+| - **api** in **shop** keeps crashing
+| - **web** in **shop** keeps crashing
+| - **worker** in **shop** keeps crashing
+|
+| *Each gets its own message when it changes or resolves.*

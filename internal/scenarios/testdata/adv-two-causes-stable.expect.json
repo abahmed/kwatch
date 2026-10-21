@@ -1,0 +1,14 @@
+{
+  "name": "adv-two-causes-stable",
+  "description": "A ConfigMap edit and a Secret rotation land together before a restart; the crash names neither.",
+  "root": "unknown",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/shop/checkout"
+  ],
+  "ambiguous": true,
+  "tail": "20m0s"
+}

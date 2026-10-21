@@ -106,7 +106,9 @@ func operatorGroup(group string) bool {
 
 // metadataResources are built-in kinds watched for metadata only: their
 // spec is large or churns (Lease renewals) and their status, if any,
-// holds nothing detection reads.
+// holds nothing detection reads. The RBAC kinds stay listed so the audit
+// covers them, but builtinMode watches them in the compact form of
+// rbacResources.
 var metadataResources = map[Resource]bool{
 	{Group: "coordination.k8s.io", Name: "leases"}:                    true,
 	{Group: "apps", Name: "controllerrevisions"}:                      true,
@@ -174,9 +176,10 @@ func planResource(
 }
 
 // builtinMode watches a built-in kind's status when it has a status
-// subresource and is not a metadata kind.
+// subresource and is not a metadata kind. An RBAC kind is watched as a
+// status kind too, with its own compact transform (rbacTransform).
 func builtinMode(r Resource, hasStatus bool) WatchMode {
-	if hasStatus && !metadataResources[r] {
+	if rbacResources[r] || hasStatus && !metadataResources[r] {
 		return WatchStatus
 	}
 	return WatchMetadata
@@ -242,6 +245,14 @@ func auditedDynamicResources() []Resource {
 		{Group: admission, Name: "mutatingadmissionpolicies"},
 		{Group: admission, Name: "mutatingadmissionpolicybindings"},
 		{Group: "resource.k8s.io", Name: "resourceclaims"},
+		// Detectors and root-cause rules read these built-in kinds
+		// through the dynamic source. Without a grant they are never
+		// synced, so a missing PriorityClass or IngressClass would go
+		// unreported with the least-privilege chart rules.
+		{Group: "scheduling.k8s.io", Name: "priorityclasses"},
+		{Group: "node.k8s.io", Name: "runtimeclasses"},
+		{Group: "networking.k8s.io", Name: "ingressclasses"},
+		{Name: "replicationcontrollers"},
 	}
 	metadata := make([]Resource, 0, len(metadataResources))
 	for r := range metadataResources {

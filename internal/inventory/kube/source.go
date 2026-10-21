@@ -64,8 +64,24 @@ func InformerTransform(digestKey []byte) cache.TransformFunc {
 }
 
 // newTransform keeps informer caches small and free of secret material:
-// Secret and ConfigMap values are replaced by digests keyed with d.
+// Secret and ConfigMap values are replaced by digests keyed with d. A
+// panic is contained (see guardTransform).
 func newTransform(d Digester) cache.TransformFunc {
+	return guardTransform("", trimTransform(d))
+}
+
+// guardTransform contains a panic of a transform: the object is cached as
+// a stub that keeps only its identity, the same stub a kind over its
+// object cap gets, and the panic is counted and shown on /health as
+// handler_panics. resource names the kind; empty names it by Go type.
+func guardTransform(
+	resource string, transform cache.TransformFunc,
+) cache.TransformFunc {
+	return kubeclient.SafeTransform(
+		"inventory", resource, transform, newCappedStub)
+}
+
+func trimTransform(d Digester) cache.TransformFunc {
 	return func(obj any) (any, error) {
 		obj, err := TrimToLatestManager(obj)
 		if err != nil {

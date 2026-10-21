@@ -6,6 +6,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/pipeline/announce"
 )
 
@@ -18,6 +19,7 @@ func (e *Engine) restore() error {
 		startup.ColdStart = true
 		if e.deps.baselineStart() {
 			startup.HoldUntilSync()
+			return e.restoreAnnounced()
 		}
 		return nil
 	}
@@ -56,6 +58,46 @@ func (e *Engine) restore() error {
 	return nil
 }
 
+// restoreAnnounced is the restore of a baseline (Community) start: only
+// the incidents announced before the restart and still open come back, so
+// kwatch can send their resolves. The failures that exist now are the
+// baseline, whatever the earlier run knew about them.
+func (e *Engine) restoreAnnounced() error {
+	if e.deps.Store == nil {
+		return nil
+	}
+	records, err := e.deps.Store.LoadIncidents()
+	if err != nil {
+		return fmt.Errorf("pipeline: restore incidents: %w", err)
+	}
+	kept := openAnnounced(records, nil)
+	if len(kept) == 0 {
+		return nil
+	}
+	e.deps.Incidents.Restore(kept, e.deps.Clock.Now().Add(restoreGrace))
+	klog.InfoS("restored announced incidents", "component", "pipeline",
+		"operation", "restore", "incidents", len(kept), "coldStart", true)
+	return nil
+}
+
+// openAnnounced keeps the records a baseline start saves and restores:
+// open incidents that someone was told about. skip names incidents to
+// leave out; the baselined ones are, because nobody heard of them, and a
+// resolve of one would be news from nowhere.
+func openAnnounced(
+	records []incident.Record, skip func(id string) bool,
+) []incident.Record {
+	var kept []incident.Record
+	for _, r := range records {
+		open := r.State == incident.Open || r.State == incident.Recovering
+		if open && !r.Announced.IsZero() && !r.Unheard &&
+			(skip == nil || !skip(r.ID)) {
+			kept = append(kept, r)
+		}
+	}
+	return kept
+}
+
 // save hands the writer a snapshot of the incidents and, once the initial
 // list was compared with the previous run, of the fingerprints. It never
 // waits for the write. It always includes the fingerprints; the loop uses
@@ -74,10 +116,14 @@ func (e *Engine) saveAt(now time.Time, force bool) {
 	if e.storage.incidents == nil {
 		return
 	}
-	snapshot := storeSnapshot{
-		incidents: e.deps.Incidents.Export(), hasIncidents: true,
+	records := e.deps.Incidents.Export()
+	if e.storage.openOnly {
+		records = openAnnounced(records,
+			e.announcer.collect.Startup.Baselined)
 	}
-	if e.storage.reconciled && (force || e.storage.fingerprintsDue(now)) {
+	snapshot := storeSnapshot{incidents: records, hasIncidents: true}
+	if !e.storage.openOnly && e.storage.reconciled &&
+		(force || e.storage.fingerprintsDue(now)) {
 		fingerprints := Fingerprints(e.deps.Model, now)
 		e.storage.carried.keep(fingerprints)
 		snapshot.fingerprints = fingerprints

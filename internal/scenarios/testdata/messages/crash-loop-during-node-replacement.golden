@@ -1,5 +1,5 @@
 10:02:15 settled
-🟠 warehouse in data (prod-eu-1) is failing: aborted with SIGABRT (exit code 134) and is restarting. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "FileNotFoundException: Could not load file or assembly 'Trella.Models.Common, Version=3.1.120.0'". Its last run lasted 10s; 2 restarts in the 1h2m since its pod was created. To read the output of the last crash, run kubectl logs warehouse-c1f19d7b-a -c app -n data --previous
+🟠 warehouse in data (prod-eu-1) is failing: aborted with SIGABRT (exit code 134) and is restarting. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "FileNotFoundException: Could not load file or assembly 'Trella.Models.Common, Version=3.1.120.0'". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs warehouse-c1f19d7b-a -c app -n data --previous
 🟠 warehouse in data (prod-eu-1) is failing: aborted with SIGABRT (exit code 134) and is restarting.
 | 🟠 **warehouse** in **data** (**prod-eu-1**) is failing: aborted with SIGABRT (exit code 134) and is restarting.
 | Its node and registry are healthy and unchanged, so nothing outside it explains this.
@@ -7,7 +7,7 @@
 | ```
 | FileNotFoundException: Could not load file or assembly 'Trella.Models.Common, Version=3.1.120.0'
 | ```
-| Its last run lasted 10s; 2 restarts in the 1h2m since its pod was created.
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
 | To read the output of the last crash, run
 | ```
 | kubectl logs warehouse-c1f19d7b-a -c app -n data --previous
@@ -18,11 +18,11 @@
 | ✅ **warehouse** in **data** (**prod-eu-1**) is healthy again.
 | It was failing for six minutes.
 10:02:15 settled
-🟠 warehouse in data (prod-eu-1) is failing: aborted with SIGABRT (exit code 134) and is restarting. Its node and registry are healthy and unchanged, so nothing outside it explains this. That is unusual for this workload: restarts 1442×/h vs a usual 0.3×/h; restarts 1442×/h vs a usual 0.3×/h. It fails with "FileNotFoundException: Could not load file or assembly 'Trella.Models.Common, Version=3.1.120.0'". This is the second time this week. Last time it recovered on its own. To read the output of the last crash, run kubectl logs warehouse-c1f19d7b-a -c app -n data --previous
+🟠 warehouse in data (prod-eu-1) is failing: aborted with SIGABRT (exit code 134) and is restarting. Its node and registry are healthy and unchanged, so nothing outside it explains this. That is unusual for this workload: restarts 1442×/h vs a usual 0.3×/h. It fails with "FileNotFoundException: Could not load file or assembly 'Trella.Models.Common, Version=3.1.120.0'". This is the second time this week. Last time it recovered on its own. To read the output of the last crash, run kubectl logs warehouse-c1f19d7b-a -c app -n data --previous
 🟠 warehouse in data (prod-eu-1) is failing: aborted with SIGABRT (exit code 134) and is restarting.
 | 🟠 **warehouse** in **data** (**prod-eu-1**) is failing: aborted with SIGABRT (exit code 134) and is restarting.
 | Its node and registry are healthy and unchanged, so nothing outside it explains this.
-| That is unusual for this workload: restarts 1442×/h vs a usual 0.3×/h; restarts 1442×/h vs a usual 0.3×/h.
+| That is unusual for this workload: restarts 1442×/h vs a usual 0.3×/h.
 | It fails with
 | ```
 | FileNotFoundException: Could not load file or assembly 'Trella.Models.Common, Version=3.1.120.0'
@@ -38,7 +38,7 @@
 | ✅ **warehouse** in **data** (**prod-eu-1**) is healthy again.
 | It was failing for six minutes.
 10:32:15 digest
-🟡 kwatch (prod-eu-1) has one earlier one that resolved to report. Resolved: warehouse in data is healthy again. None of them is urgent; one that gets worse gets its own message.
+🟡 kwatch (prod-eu-1) has one earlier one that resolved to report. Resolved: warehouse in data is healthy again.
 🟡 kwatch (prod-eu-1) has one earlier one that resolved to report.
 | 🟡 **kwatch digest** · prod-eu-1 — 1 resolved
 | ✅ 1 resolved since last digest: warehouse

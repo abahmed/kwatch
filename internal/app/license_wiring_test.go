@@ -144,7 +144,7 @@ func licensedDeps(
 	deps := activeDeps(t)
 	useLease(t, deps)
 	deps.entitlements = e
-	deps.clients.HTTP = w.srv.Client()
+	useWorldClients(deps, w)
 	_, err := deps.clients.Kubernetes.CoreV1().Namespaces().Create(
 		context.Background(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
 			Name: "kube-system", UID: types.UID("uid-kube-system"),

@@ -1,0 +1,10 @@
+{
+  "name": "policy-created-before-code-crash",
+  "description": "A NetworkPolicy is created for an app; four minutes later the app panics on a code defect.",
+  "root": "deployment/shop/orders",
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "networkpolicy/shop/default-deny"
+  ]
+}

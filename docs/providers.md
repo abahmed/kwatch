@@ -61,8 +61,8 @@ anyone. Sensu Go records them as a passing (OK) check.
 
 | Group | Providers | What they send |
 |:--|:--|:--|
-| 💬 Chat | Slack, Discord, Microsoft Teams, Teams Workflow, Mattermost, Rocket.Chat, Google Chat, Webex, Matrix, Telegram, Zulip, Feishu, DingTalk, WeCom, Flock, Threema, Signal | The Note as the message text, escaped for the chat's markup, with recent application output as a code or quoted block when there is any. Broadcast mentions such as `@channel` are neutralized. Matrix sends the Note as `body` and HTML-escaped as `formatted_body`. Slack with a bot token announces each incident as one root message holding the whole Note and its output, keeps every update and the resolve in its thread, and edits the root to the same announcement under the new status marker when the status changes (a thread reply that is not a status change leaves the root alone; after a restart the root cannot be rebuilt, so only the thread grows). Application output is fenced with a code fence longer than any run of backticks in it, so it cannot close the block; it is cut before the closing fence is added. WeCom `<@userid>` and Zulip `@*group*` mentions in workload text are neutralized too. |
-| 🚨 Paging | PagerDuty, Opsgenie, Splunk On-Call, GoAlert, ilert, incident.io, Squadcast, Zenduty, SIGNL4, Alerta, Datadog, New Relic, AWS SNS, Splunk HEC, Sensu Go | The Short as the alert title or summary, the Note (plus output) as details, the incident id as the dedup or alert key, and the provider's resolve or close action when the incident resolves. Severity follows the incident severity. |
+| 💬 Chat | Slack, Discord, Microsoft Teams, Teams Workflow, Mattermost, Rocket.Chat, Google Chat, Webex, Matrix, Telegram, Zulip, Feishu, DingTalk, WeCom, Flock, Threema, Signal | The Note as the message text, escaped for the chat's markup, with recent application output as a code or quoted block when there is any. Broadcast mentions such as `@channel` are neutralized. Matrix sends the Note as `body` and HTML-escaped as `formatted_body`. Slack with a bot token announces each incident as one root message holding the whole Note and its output, keeps every update and the resolve in its thread, and edits the root to the same announcement under the new status marker when the status changes (a thread reply that is not a status change leaves the root alone; after a restart the root cannot be rebuilt, so only the thread grows). Application output is fenced with a code fence longer than any run of backticks in it, so it cannot close the block; it is cut before the closing fence is added. WeCom `<@userid>` and Zulip `@*group*` mentions in workload text are neutralized too, and so is Telegram's `@username` (a zero-width space follows the `@`). Microsoft Teams shows the incident title as escaped text, so a title taken from the cluster never becomes a link or a mention. |
+| 🚨 Paging | PagerDuty, Opsgenie, Splunk On-Call, GoAlert, ilert, incident.io, Squadcast, Zenduty, SIGNL4, Alerta, Datadog, New Relic, AWS SNS, Splunk HEC, Sensu Go | The Short as the alert title or summary, the Note (plus output) as details, the incident id as the dedup or alert key, and the provider's resolve or close action when the incident resolves. Severity follows the incident severity: only a page-tier incident gets the priority that pages (for ilert the configured `priority`); a notify or low tier incident is sent at a lower one (ilert `LOW`, Opsgenie P3 or P4). |
 | 📋 Issue trackers | GitHub, GitLab, Gitea, Jira, ClickUp | One issue per incident: the Short as title and the Note (plus output and the cluster name) as body. Updates add a comment. On resolve kwatch comments and closes the issue (GitHub, GitLab, Gitea; Jira moves it through `closeTransition` and ClickUp to `closeStatus` when you set one, otherwise they only comment, because workflows are defined per project or list). A resolved incident that fails again within its reopen window comments on the same issue and reopens it on GitHub, GitLab and Gitea. Jira (`reopenTransition`) and ClickUp (`reopenStatus`) reopen only when you configure both the close and the reopen name; otherwise the mapping is forgotten at resolve and a recurrence opens a new issue. Pod-controlled text in the Note has its `@mentions` neutralized, and Jira wiki markup in it is escaped. A GitHub 403 that says the rate limit was hit is retried like a 429. |
 | 📱 SMS and push | Twilio, Plivo, Vonage, MessageBird, Pushover, Pushbullet, Gotify, ntfy, IFTTT, Home Assistant | The Short. A resolve is sent at normal priority. IFTTT also sends the Note as `value2` and the status as `value3`. |
 | 📧 Email | Email (SMTP), AWS SES, SendGrid, Mailgun, Resend | Subject is the Short on one line; the body is the Note followed by recent output as a `> ` quoted block. |
@@ -70,6 +70,19 @@ anyone. Sensu Go records them as a passing (OK) check.
 
 Long texts are cut at the provider's size limit on a character boundary and end
 in `…`. The cut is deterministic, so a retried delivery sends the same bytes.
+
+Times in a note are UTC and say so (`10:03 UTC`), because the people who read
+one are not all in one zone.
+
+Text a pod or an event wrote is quoted as it was written: kwatch never
+rewrites it, and only credentials are removed from it. Rich chat messages
+show it as a code span, or as a code block when it is long, has several
+lines, a backtick, a run of spaces or a space at either end. A syntax that
+cannot hold such text in a span writes it between double quotes as plain
+text instead. Slack and Google Chat have no escape for their own markers:
+text that holds `_` or `*` is written plain rather than in italics or bold,
+never with the character dropped, and an inline code span there writes a
+backtick as `ˋ` (U+02CB), which is why text with backticks goes in a block.
 
 ## How to pick
 
@@ -236,6 +249,8 @@ Father to get a `token` and a `chatId`.
 |:---|---|
 | `alert.opsgenie.apiKey` | 🔑 API Key |
 | `alert.opsgenie.region` | 🌍 API region: `us` (default) or `eu` |
+
+Opsgenie creates alerts asynchronously, so an update or a close sent right after the create can answer 404. kwatch retries an update a few times (1 s, then 2 s). A close that finds no alert is kept and retried in the background with growing waits for up to 5 minutes, without holding the alerts behind it. A close that is still not found by then, or is rejected, is given up: kwatch logs it and counts it in `kwatch_delivery_resolves_lost_total`, because that alert may stay open.
 
 ### 🏗️ Matrix
 
@@ -485,7 +500,7 @@ alert:
 | Parameter | What it does |
 |:---|---|
 | `alert.ilert.integrationKey` | 🔑 Integration key |
-| `alert.ilert.priority` | 🎚️ Priority (LOW/HIGH/CRITICAL, default: HIGH) |
+| `alert.ilert.priority` | 🎚️ Priority of a page-tier incident (LOW/HIGH/CRITICAL, default: HIGH). Notify and low tier incidents are always sent as LOW, so they never page |
 
 ### 🚨 Incident.io
 

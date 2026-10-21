@@ -48,3 +48,31 @@ of kwatch.
 
 Third-party dependencies keep their own licenses and are listed in
 [`third-party-notices.md`](./third-party-notices.md).
+
+## Pro license keys
+
+A Pro license key is a signed token that kwatch verifies with signing keys
+compiled into the binary, each named by a key id (`kid`). A key signed under
+a key id the binary does not know is reported as invalid; a key rotation ships
+the new key id in a release while keys signed under the old one keep
+verifying. kwatch activates the key against the license server over HTTPS
+(through `app.proxyURL` and `app.caBundlePath`) and always verifies that
+connection's TLS certificate: `app.insecureSkipTLSVerify` never applies to it.
+
+- Spaces and line breaks inside the key are removed when the configuration
+  loads, so a wrapped key still works. A key that is still unusable is
+  reported by the license manager, never as a configuration error, and never
+  stops kwatch from starting.
+- A key that cannot run Pro (invalid, expired, revoked, or in use on another
+  cluster) logs one warning per distinct reason, shows a `degraded` `license`
+  component on `/health`, and sends a "Pro is disabled" notice with the
+  reason, including at the first start when Pro never ran. kwatch runs the
+  Community edition meanwhile.
+- The lease and the local clock mark are kept in the state file. If the clock
+  stepped forward and is corrected, the next renewal's signed server time pulls
+  the mark back and Pro recovers.
+- kwatch keeps an instance key in the Secret `kwatch-license-instance` in its
+  own namespace. The chart renders that Secret and the Role that reads it
+  only when a key is configured (`license.key`, `license.existingSecret` or
+  `license.instanceSecret`). Keep the key out of ConfigMaps: use the
+  `KWATCH_LICENSE_KEY` variable, which the chart fills from a Secret.

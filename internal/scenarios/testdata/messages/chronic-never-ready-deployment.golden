@@ -1,0 +1,9 @@
+10:01:15 settled
+🟠 cert-controller in shop (prod-eu-1) has never become healthy since it was created one day ago. It runs a single replica. To see the object's state and events, run kubectl describe deployment cert-controller -n shop
+🟠 cert-controller in shop (prod-eu-1) has never become healthy since it was created one day ago.
+| 🟠 **cert-controller** in **shop** (**prod-eu-1**) has never become healthy since it was created one day ago.
+| It runs a single replica.
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment cert-controller -n shop
+| ```

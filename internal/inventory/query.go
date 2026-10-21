@@ -13,6 +13,34 @@ func (m *Model) Entity(id EntityID) (Entity, bool) {
 	return rec.snapshot(), true
 }
 
+// Attribute returns one attribute of a present entity without copying the
+// entity: one read lock and one binary search, no allocation. Hot paths
+// that need a single attribute use it instead of Entity.
+func (m *Model) Attribute(id EntityID, name string) (Attribute, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	rec := m.records[id]
+	if rec == nil || !rec.present {
+		return Attribute{}, false
+	}
+	return rec.attribute(name)
+}
+
+// GoneAttribute returns an attribute a source handed over when it deleted
+// the entity, such as the accounts a deleted binding bound. A present
+// entity has none, and neither does one deleted without it (for example
+// while kwatch was down).
+func (m *Model) GoneAttribute(id EntityID, name string) (Value, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	rec := m.records[id]
+	if rec == nil || rec.present {
+		return Value{}, false
+	}
+	value, ok := rec.goneAttrs[name]
+	return value, ok
+}
+
 // Exists reports whether the entity is currently present.
 func (m *Model) Exists(id EntityID) bool {
 	m.mu.RLock()
@@ -39,8 +67,8 @@ func (m *Model) Relations(id EntityID, dir Direction) []Relation {
 	return m.edges.relations(id, dir)
 }
 
-// Entities returns the present entities of one kind in deterministic
-// order.
+// Entities returns the present entities of one kind, sorted by their
+// string form, so callers never need to sort the result again.
 func (m *Model) Entities(kind Kind) []EntityID {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

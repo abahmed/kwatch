@@ -98,12 +98,8 @@ func (s *Scope) namespaceAllowed(
 }
 
 func namespaceLabels(model inventory.Reader, namespace string) labels.Set {
-	entity, ok := model.Entity(
-		inventory.CoreID(kube.KindNamespace, "", namespace))
-	if !ok {
-		return nil
-	}
-	attribute, ok := entity.Attribute(kube.AttrLabels)
+	attribute, ok := model.Attribute(
+		inventory.CoreID(kube.KindNamespace, "", namespace), kube.AttrLabels)
 	if !ok {
 		return nil
 	}

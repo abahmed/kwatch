@@ -1,7 +1,6 @@
 package config
 
 import (
-	"os"
 	"strings"
 	"testing"
 )
@@ -28,25 +27,6 @@ func TestParseEnvBool(t *testing.T) {
 	}
 }
 
-func TestInvalidEnvironmentBooleanFailsLoad(t *testing.T) {
-	for _, name := range []string{
-		watchSecretsEnv, crdEnabledEnv, telemetryEnv,
-	} {
-		t.Run(name, func(t *testing.T) {
-			path := t.TempDir() + "/config.yaml"
-			if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			t.Setenv("CONFIG_FILE", path)
-			t.Setenv(name, "flase")
-			_, err := LoadConfig()
-			if err == nil || !strings.Contains(err.Error(), name) {
-				t.Fatalf("want an error naming %s, got %v", name, err)
-			}
-		})
-	}
-}
-
 func TestEnvironmentAcceptsOnOffYesNo(t *testing.T) {
 	t.Setenv(watchSecretsEnv, "off")
 	t.Setenv(crdEnabledEnv, "yes")
@@ -56,13 +36,6 @@ func TestEnvironmentAcceptsOnOffYesNo(t *testing.T) {
 	}
 	if !cfg.Runtime.Lifecycle().CRDEnabled() {
 		t.Fatal("KWATCH_CRD_ENABLED=yes must enable the overlay")
-	}
-}
-
-func TestRebuildAfterOverlayRejectsInvalidEnvironment(t *testing.T) {
-	t.Setenv(crdEnabledEnv, "maybe")
-	if err := RebuildAfterOverlay(DefaultConfig()); err == nil {
-		t.Fatal("an invalid boolean must fail the rebuild")
 	}
 }
 

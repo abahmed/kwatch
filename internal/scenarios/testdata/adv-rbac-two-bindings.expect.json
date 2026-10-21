@@ -1,0 +1,14 @@
+{
+  "name": "adv-rbac-two-bindings",
+  "description": "Two RoleBindings are deleted together; only the one for the failing ServiceAccount matters, and the error is only in the previous log.",
+  "root": "rolebinding/shop/api-config-reader",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "rolebinding/shop/web-config-reader",
+    "deployment/shop/api",
+    "deployment/shop/web",
+    "node//n1",
+    "node//n2"
+  ]
+}

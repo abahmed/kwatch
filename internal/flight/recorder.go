@@ -12,10 +12,12 @@ import (
 
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/replay"
+	"github.com/abahmed/kwatch/internal/safego"
 )
 
-// Bounds of the recorder. Memory is at most maxPending queued entries and
-// maxKeys remembered states, whatever the cluster does.
+// Bounds of the recorder. Memory is at most 2*maxPending queue slots (the
+// queue holds maxPending entries; see trimPending) and maxKeys remembered
+// states, whatever the cluster does.
 const (
 	// flushEvery is how often the queue is written.
 	flushEvery = 5 * time.Second
@@ -43,6 +45,7 @@ type Recorder struct {
 
 	mu      sync.Mutex
 	pending []replay.Entry
+	skipped int // slots dropped from the front of pending's array
 	last    time.Time
 	dropped int
 
@@ -96,9 +99,27 @@ func (r *Recorder) record(observations []inventory.Observation) {
 	for _, o := range clean {
 		r.pending = append(r.pending, replay.Entry{At: at, Observation: o})
 	}
-	if over := len(r.pending) - maxPending; over > 0 {
-		r.pending = append(r.pending[:0:0], r.pending[over:]...)
-		r.dropped += over
+	r.trimPending()
+}
+
+// trimPending drops the oldest entries beyond maxPending. It reslices the
+// queue instead of copying it, so a full queue costs the same per call as
+// an empty one. The dropped entries stay as unused slots at the front of
+// the backing array; once they are as many as the queue holds, the live
+// entries move to a fresh array, so memory never passes 2*maxPending slots.
+func (r *Recorder) trimPending() {
+	over := len(r.pending) - maxPending
+	if over <= 0 {
+		return
+	}
+	clear(r.pending[:over]) // let the dropped observations be collected
+	r.pending = r.pending[over:]
+	r.dropped += over
+	r.skipped += over
+	if r.skipped >= maxPending {
+		fresh := make([]replay.Entry, len(r.pending), 2*maxPending)
+		copy(fresh, r.pending)
+		r.pending, r.skipped = fresh, 0
 	}
 }
 
@@ -123,12 +144,18 @@ func (r *Recorder) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			r.Flush()
+			r.safeFlush()
 			return
 		case <-ticker.C:
-			r.Flush()
+			r.safeFlush()
 		}
 	}
+}
+
+// safeFlush is Flush with a panic contained: recording is best effort and
+// must never end the process. The batch being written is lost.
+func (r *Recorder) safeFlush() {
+	safego.Do("flight-flush", r.Flush)
 }
 
 // Flush writes the queue now. Repeats of a recorded state are skipped. A
@@ -139,7 +166,7 @@ func (r *Recorder) Flush() {
 	defer r.flushMu.Unlock()
 	r.mu.Lock()
 	batch, dropped := r.pending, r.dropped
-	r.pending = nil
+	r.pending, r.skipped = nil, 0
 	r.mu.Unlock()
 	entries, marks := r.withoutRepeats(batch)
 	for len(entries) > 0 {

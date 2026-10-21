@@ -12,7 +12,7 @@ import (
 	"github.com/abahmed/kwatch/internal/notification"
 )
 
-// A risk on the failing workload is quoted as the cost of the failure,
+// A risk on the failing workload is said as a fact beside the failure,
 // and never leads the message.
 func TestRiskSentencesNameTheCostOfARisk(t *testing.T) {
 	orders := inventory.CoreID(kube.KindDeployment, "shop", "orders")
@@ -35,8 +35,8 @@ func TestRiskSentencesNameTheCostOfARisk(t *testing.T) {
 	if strings.Contains(msg.Title, "readiness probe") {
 		t.Fatalf("the failure leads, not the risk: %q", msg.Title)
 	}
-	if !strings.Contains(text, "It has no readiness probe, so traffic "+
-		"kept reaching it while it failed.") {
+	if !strings.Contains(text, "It has no readiness probe, so Kubernetes "+
+		"sends it traffic while the container runs.") {
 		t.Fatalf("note = %s", text)
 	}
 }

@@ -57,7 +57,7 @@ spec:
         - protocol: TCP
           port: {{ . }}
         {{- end }}
-    {{- if or .Values.license.key .Values.license.existingSecret }}
+    {{- if include "kwatch.licenseConfigured" . }}
     # License activation and renewal (api.kwatch.dev, behind Cloudflare, so
     # no fixed address): HTTPS to any address. Rendered only when a license
     # is configured; listed on its own because apiServerPorts may omit 443.

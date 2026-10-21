@@ -1,0 +1,19 @@
+10:02:45 settled
+🔴 Node n1 (prod-eu-1) is NotReady for about two minutes. It reports "container runtime is restarting". To check the node's conditions and recent events, run kubectl describe node n1
+🔴 Node n1 (prod-eu-1) is NotReady for about two minutes.
+| 🔴 Node n1 (**prod-eu-1**) is NotReady for about two minutes.
+| It reports `container runtime is restarting`.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```
+10:07:10 cause revised
+🔴 Cause changed: cart in shop (prod-eu-1) has not been ready for three minutes. Node n1 has recovered; cart in shop (prod-eu-1) still has two open failures.
+🔴 Cause changed: cart in shop (prod-eu-1) has not been ready for three minutes.
+| 🔴 Cause changed: **cart** in **shop** (**prod-eu-1**) has not been ready for three minutes.
+| Node n1 has recovered; **cart** in **shop** (**prod-eu-1**) still has two open failures.
+10:17:40 healthy for 3m0s
+✅ cart in shop (prod-eu-1) is healthy again. It was failing for ten minutes.
+✅ cart in shop (prod-eu-1) is healthy again.
+| ✅ **cart** in **shop** (**prod-eu-1**) is healthy again.
+| It was failing for ten minutes.

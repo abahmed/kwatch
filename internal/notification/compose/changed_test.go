@@ -30,7 +30,7 @@ func TestNoCauseNamesWhatChangedLately(t *testing.T) {
 	text := notification.Text(Writer{}.Write(d, at(15, 0)))
 
 	want := "In the last 30 minutes in shop: the api rollout started at " +
-		"14:12; bob changed config map app-config at 14:10."
+		"14:12 UTC; bob changed config map app-config at 14:10 UTC."
 	if !strings.Contains(text, want) {
 		t.Fatalf("want %q in:\n%s", want, text)
 	}

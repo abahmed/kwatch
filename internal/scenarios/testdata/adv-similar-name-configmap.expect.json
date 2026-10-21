@@ -1,0 +1,12 @@
+{
+  "name": "adv-similar-name-configmap",
+  "description": "An app crashes on a nil dereference right after a ConfigMap with a similar name, used by another Deployment, was edited.",
+  "root": "deployment/payments/payments",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "configmap/payments/payments-config",
+    "configmap/payments/payments-settings",
+    "deployment/payments/payments-batch"
+  ]
+}

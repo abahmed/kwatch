@@ -65,7 +65,7 @@ func TestServingCertSentenceStatesTheExpiryThatHappened(t *testing.T) {
 
 	assert.Len(t, got, 1)
 	assert.Equal(t, "Its serving certificate in Secret "+
-		"policy-system/policy-tls expired at 2026-10-01 09:00.",
+		"policy-system/policy-tls expired at 2026-10-01 09:00 UTC.",
 		got[0].text)
 	f.p.Cause.ServingCert = nil
 	assert.Empty(t, servingCertSentences(f))

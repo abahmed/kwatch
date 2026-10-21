@@ -1,7 +1,6 @@
 package incident
 
 import (
-	"math"
 	"slices"
 	"strings"
 
@@ -19,7 +18,8 @@ const maxCheckedKept = 3
 func (a *areaPlacer) annotate(record *rootcause.CauseRecord, c explain.Cause) {
 	record.Checked = a.checkedTexts(c.Covers, record.Proof)
 	for _, alt := range a.area.Alternatives {
-		if alt.Root == c.Root || !shareFailure(alt.Covers, c.Covers) ||
+		if alt.Root == c.Root || !isExplanation(alt) ||
+			!shareFailure(alt.Covers, c.Covers) ||
 			(slices.Contains(c.Covers, alt.Root) &&
 				len(alt.Changes) == 0) ||
 			slices.Contains(c.Chain, alt.Root) ||
@@ -28,8 +28,9 @@ func (a *areaPlacer) annotate(record *rootcause.CauseRecord, c explain.Cause) {
 			// at two depths, not a second explanation.
 			continue
 		}
-		if math.Abs(c.Raw-alt.Raw) <=
-			rootcause.RivalMargin+1e-9 {
+		// An alternative that outscores the chosen cause is a rival
+		// however far above it scores; below it, only within the margin.
+		if alt.Raw-c.Raw >= -rootcause.RivalMargin-1e-9 {
 			rival := a.s.Record(alt)
 			record.Rival = &rival
 			// Two answers within the margin are not one answer
@@ -38,6 +39,14 @@ func (a *areaPlacer) annotate(record *rootcause.CauseRecord, c explain.Cause) {
 		}
 		return
 	}
+}
+
+// isExplanation reports an alternative that blames something. A workload
+// failing on its own, or an alternative that no propagation row backs,
+// says no outside cause explains the failures; it is not a second
+// explanation to hedge with.
+func isExplanation(alt explain.Cause) bool {
+	return alt.Row != "" && alt.Row != "self"
 }
 
 // shareFailure reports two causes that explain some failure in common.
@@ -57,9 +66,13 @@ func (a *areaPlacer) checkedTexts(
 	covers []inventory.EntityID, proof []rootcause.Proof,
 ) []string {
 	var own, other []string
+	ambiguous := a.ambiguousChecks(covers)
 	for _, failure := range covers {
 		for _, cmp := range a.area.Trace.Compared[failure] {
 			text := strings.TrimSpace(cmp.Text)
+			if text != "" {
+				text = checkText(text, cmp, ambiguous)
+			}
 			if text == "" || slices.Contains(own, text) ||
 				slices.Contains(other, text) {
 				continue

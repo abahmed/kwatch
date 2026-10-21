@@ -143,7 +143,7 @@ func setCondition(model *inventory.Model, entityID inventory.EntityID,
 	if reason != "" {
 		attrs[key+kube.AttrConditionReason] = inventory.Text(reason)
 	}
-	if message != "" && status != "True" {
+	if message != "" && kube.ConditionFailing(condType, status) {
 		attrs[key+kube.AttrConditionMessage] = inventory.Text(message)
 	}
 	if !since.IsZero() {

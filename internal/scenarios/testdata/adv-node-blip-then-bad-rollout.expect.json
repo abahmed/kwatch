@@ -1,0 +1,16 @@
+{
+  "name": "adv-node-blip-then-bad-rollout",
+  "description": "A node is unreachable for ninety seconds and recovers; right after, a bad release crash-loops.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "unrelated": [
+    "node//n2"
+  ],
+  "mustNotBlame": [
+    "node//n1",
+    "node//n3",
+    "zone//zone-a"
+  ],
+  "tail": "10m0s"
+}

@@ -12,6 +12,8 @@ Each line matches the package's `doc.go`.
 | Package | What it does |
 | --- | --- |
 | `cmd/kwatch` | Thin entrypoint: flags, subcommands, calls `app`. |
+| `cmd/configcatalog`, `cmd/featurecatalog`, `cmd/providercatalog`, `cmd/coveragedocs`, `cmd/upstreamreasons` | Generators: write the configuration, feature and provider references, the Kubernetes coverage page and the upstream reason lists from code. `make verify` checks that the committed output is current. |
+| `cmd/kwatch-scorecard`, `cmd/kwatch-e2e-issue`, `cmd/kwatch-e2e-sanitize` | Offline tools: the notification-quality scorecard of an audit log, and the end-to-end issue skeleton and its sanitizer. |
 | `internal/app` | Assembles kwatch and owns its process lifecycle: clients, Lease, supervision, readiness, shutdown. |
 | `internal/inventory` | The in-memory model of the cluster: entities, relations, attributes and recent changes. Knows nothing about Kubernetes. |
 | `internal/inventory/kube` | Turns Kubernetes objects into observations: one schema per kind, discovery, watch modes, kubelet stats, probes, log reads. |
@@ -19,6 +21,7 @@ Each line matches the package's `doc.go`.
 | `internal/detection` | Finds abnormal conditions (findings with health and mode); the tracker reports raised, changed and cleared. |
 | `internal/detection/detectors` | The built-in detectors. Read entity attributes, return findings. |
 | `internal/detection/reasons` | Stable reason codes. A leaf, shared by every layer. |
+| `internal/detection/upstream` | The reasons, phases and condition types Kubernetes itself emits, generated from its source; coverage tests fail for one kwatch neither classifies nor lists as ignored. |
 | `internal/rootcause` | What the root-cause engine shares with the layers above it: the `Cause` record, confidence levels, scheduler-message helpers. |
 | `internal/rootcause/explain` | The engine: propagation table, candidate walk, scorers, greedy weighted set-cover solver, incremental cache. |
 | `internal/incident` | Groups findings that share a cause into an incident and decides when people hear about it: announce, update, resolve. |
@@ -30,6 +33,7 @@ Each line matches the package's `doc.go`.
 | `internal/pipeline/coverage` | Memory and timings of the coverage backstop; its `doc.go` explains the whole check. |
 | `internal/pipeline/investigate` | Evidence investigators run by the investigation pool. |
 | `internal/storage` | The bbolt state file: one bucket per data class, epoch fencing, retention, reset. |
+| `internal/storage/crashtest` | Kills a child process in the middle of its writes, for tests of what the file holds after a crash. Tests only. |
 | `internal/delivery` | Routing, retries, pacing, fallback and provider dispatch. |
 | `internal/delivery/transport` | The shared outbound HTTP boundary providers use. |
 | `internal/delivery/api` | The small contracts shared by delivery and the provider catalog. |
@@ -46,10 +50,13 @@ Each line matches the package's `doc.go`.
 | `internal/rbac` | Audits the permissions kwatch uses and reports what is missing. |
 | `internal/kubeclient` | Kubernetes client construction and informer helpers. Only `app` constructs clients. |
 | `internal/redact` | Removes secrets from text before kwatch keeps or sends it. A leaf. |
+| `internal/license` | Verifies Pro license keys and activation leases offline; no network I/O. |
+| `internal/safego` | Runs work so that a panic cannot end the process. |
 | `internal/format`, `internal/ratelimit`, `internal/clock` | Pure text helpers, the rate-limit error type, the time dependency. |
 | `internal/audit` | One JSON line per incident decision, for offline scoring. |
 | `internal/replay` | Records and replays observations on a simulated clock. Test tooling; only `internal/flight` imports it in production code, for its log format and sanitizer. |
 | `internal/flight` | The flight recorder: a bounded, sanitized ring of the observation stream in the state file, and `kwatch replay-export`. |
+| `internal/unexplained` | Bounded seven-day counts of Warning events kwatch has no entry for and of incidents whose cause stayed unclear. Display only. |
 | `internal/selfcheck` | Per-rule counts of whether recovery followed a change to the named cause. Display only. |
 | `internal/scenarios` | Labelled scenario library and the scorecard gate. Tests only. |
 | `internal/scorecard` | Measures notification quality against the production goals. |
@@ -100,7 +107,7 @@ The script enforces these rules:
 
 | You want to | Put it in | Guide |
 | --- | --- | --- |
-| Detect a new abnormal state | `detection/detectors`, reason in `detection/reasons`, mode in `detection/health.go`, registered in `app/pipeline.go` | [detector](./contributing-detector.md) |
+| Detect a new abnormal state | `detection/detectors`, reason in `detection/reasons`, mode and tier in a `detection/reason_table_*.go` entry, listed in `Entries()` in `detection/detectors/default.go` | [detector](./contributing-detector.md) |
 | Teach root cause a new way failure spreads | A row in `rootcause/explain/table_rows*.go` | [propagation rule](./contributing-propagation-rule.md) |
 | Watch a new kind or add a source | `inventory/kube` (schema, registration, watch mode) | [source](./contributing-source.md) |
 | Say a new fact in the message | A sentence writer in `notification/compose` | [message fact](./contributing-message-fact.md) |

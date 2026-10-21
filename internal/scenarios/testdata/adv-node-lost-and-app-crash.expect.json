@@ -1,0 +1,19 @@
+{
+  "name": "adv-node-lost-and-app-crash",
+  "description": "A bad release crash-loops while, unrelated, a node that holds one of its old pods stops reporting.",
+  "root": "deployment/shop/api",
+  "otherRoots": [
+    "node//n2"
+  ],
+  "tier": "notify",
+  "maxMessages": 6,
+  "maxPages": 1,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n3",
+    "zone//zone-a",
+    "deployment/shop/cart",
+    "deployment/shop/search"
+  ],
+  "tail": "10m0s"
+}

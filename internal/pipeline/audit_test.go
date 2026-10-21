@@ -138,7 +138,7 @@ func TestAuditEntryOfADigestCarriesTheRenderedSummary(t *testing.T) {
 	at := time.Date(2026, 10, 13, 8, 0, 0, 0, time.UTC)
 	msg := notification.Message{Listed: &notification.Listed{
 		Opened: 2, Lines: 7, Summaries: []string{
-			"11 expired TLS Secrets that nothing references",
+			"11 expired TLS Secrets that no pod or Ingress references",
 			"19 more still failing, unchanged"}}}
 
 	entry := AuditEntry(incident.Decision{Reason: "digest"}, msg, at)

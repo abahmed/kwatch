@@ -170,16 +170,70 @@ func (m *Manager) setHeld(id string, from, to bool) {
 }
 
 // Closed reports whether none of the incidents ids is still live: each is
-// resolved or already forgotten.
+// resolved or already forgotten, and no incident that took over its
+// failures (a superseding one, or the recurrence of a forgotten one) is
+// live either.
 func (m *Manager) Closed(ids []string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	var recurrences map[string]string
 	for _, id := range ids {
-		if p := m.incidents[id]; p != nil && p.State != Resolved {
+		if !m.closedLocked(id, 0, &recurrences) {
 			return false
 		}
 	}
 	return true
+}
+
+// maxFollowHops bounds the walk along superseding incidents and
+// recurrences.
+const maxFollowHops = 8
+
+// closedLocked reports an incident that is over: resolved, or forgotten,
+// and, when it is, no live successor. A superseded incident resolved
+// because its failures moved, not because they stopped; a forgotten one
+// was replaced by the recurrence that carries its history (Previous).
+// recurrences maps a forgotten ID to the incident that recurred from it,
+// built on first use.
+func (m *Manager) closedLocked(
+	id string, hops int, recurrences *map[string]string,
+) bool {
+	next, over := m.successorOf(id, recurrences)
+	if !over {
+		return false
+	}
+	return next == "" || hops >= maxFollowHops ||
+		m.closedLocked(next, hops+1, recurrences)
+}
+
+// successorOf reports whether incident id is over and the incident that
+// carries its story on, empty when none does.
+func (m *Manager) successorOf(
+	id string, recurrences *map[string]string,
+) (next string, over bool) {
+	p := m.incidents[id]
+	switch {
+	case p == nil:
+		if *recurrences == nil {
+			*recurrences = m.recurrenceIndex()
+		}
+		return (*recurrences)[id], true
+	case p.State != Resolved:
+		return "", false
+	}
+	return p.SupersededBy, true
+}
+
+// recurrenceIndex maps the ID of each forgotten incident that has a
+// successor to the ID of that successor.
+func (m *Manager) recurrenceIndex() map[string]string {
+	out := map[string]string{}
+	for id, p := range m.incidents {
+		if p.Previous != "" && m.incidents[p.Previous] == nil {
+			out[p.Previous] = id
+		}
+	}
+	return out
 }
 
 // TakeQuietResolves returns, once, the IDs of the incidents that resolved
@@ -216,8 +270,14 @@ func (m *Manager) HoldPage(id string) {
 	defer m.mu.Unlock()
 	if p := m.incidents[id]; p != nil && p.Tier == Page &&
 		!p.Delivery.OpenAtPagers() && !p.Delivery.PageHeld() {
+		unchanged := p.Digest == fingerprint(p)
 		p.Delivery.HoldAtNotify()
 		p.Tier = Notify
 		p.note(p.Announced, "announced with a page for the same moment")
+		if unchanged {
+			// The hold is no news: the listing already told the
+			// problem, and an update for the tier would repeat it.
+			p.Digest = fingerprint(p)
+		}
 	}
 }

@@ -99,6 +99,8 @@ func causeRevised() scenario {
 	return scenario{
 		expect: expectation{
 			Name: "cause-revised",
+			// The root is revised on purpose: that is the story.
+			RevisesRoot: true,
 			Description: "A pod on node n3 is OOM-killed under a generous " +
 				"limit; then n3 reports MemoryPressure and evicts pods of " +
 				"two workloads whose replicas elsewhere stay healthy.",

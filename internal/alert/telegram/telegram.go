@@ -132,7 +132,8 @@ func (t *Telegram) incidentBody(m notification.Message) string {
 // so a long message can never lose its closing fence and break parsing.
 // The output gets at most half of the limit; the narrative comes first.
 func incidentText(m notification.Message, limit int) string {
-	d := notification.HTMLDialect(nil, false)
+	d := notification.HTMLDialect(notification.NeutralizeTelegramMentions,
+		false)
 	if len(m.Output) == 0 {
 		return m.RenderWithin(d, limit)
 	}
@@ -143,7 +144,7 @@ func incidentText(m notification.Message, limit int) string {
 	budget := min(len(output), limit/2)
 	note := m.RenderWithin(d, limit-budget-len("<pre></pre>")-len(sep))
 	for {
-		block := d.Fence(notification.NeutralizeMentions(
+		block := d.Fence(notification.NeutralizeTelegramMentions(
 			notification.Truncate(output, budget)))
 		if len(note)+len(sep)+len(block) <= limit || budget <= 0 {
 			return note + sep + block

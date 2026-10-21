@@ -1,0 +1,8 @@
+{
+  "name": "finalizer-owned-by-a-workload",
+  "description": "Four objects have been stuck deleting for months; the field manager that owns their finalizer is a scaled-down Deployment of another namespace.",
+  "root": "deployment/tools/gha-finalizer-reaper",
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "40m0s"
+}

@@ -15,9 +15,11 @@ const replayExportUsage = "replay-export --since 2h [--until 30m] " +
 	"[--state path] --out file.jsonl"
 
 // runReplayExport writes a window of the flight recording as a log the
-// scenario library loads. It reads a copy of the state file.
+// scenario library loads. It reads a copy of the state file. allowed says
+// whether the installation that wrote that file may use the command.
 func runReplayExport(
 	args []string, out, errOut io.Writer, now func() time.Time,
+	allowed func(statePath string) bool,
 ) int {
 	fs := flag.NewFlagSet("replay-export", flag.ContinueOnError)
 	fs.SetOutput(errOut)
@@ -28,6 +30,9 @@ func runReplayExport(
 	if err := fs.Parse(args); err != nil || *dest == "" || fs.NArg() > 0 {
 		return usageError(errOut, "replay-export", replayExportUsage,
 			args)
+	}
+	if !allowed(*state) {
+		return proRequired(errOut, "replay-export")
 	}
 	from, to, err := flight.ParseWindow(*since, *until, now())
 	if err != nil {

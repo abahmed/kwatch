@@ -1,0 +1,12 @@
+{
+  "name": "webhook-backend-namespace-gone",
+  "description": "Fail-closed webhooks call Services in a namespace that no longer exists, and one ignores failure: one notification, no page.",
+  "root": "service/policy-gone/policy-svc",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "node//n1"
+  ],
+  "tail": "1h0m0s"
+}

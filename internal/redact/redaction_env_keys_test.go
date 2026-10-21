@@ -15,7 +15,7 @@ func TestRedactEnvironmentStyleKeys(t *testing.T) {
 			"export GITHUB_TOKEN=[redacted]"},
 		{"env api key", "MY_API_KEY: k-123", "MY_API_KEY: [redacted]"},
 		{"env plural", "GITHUB_TOKENS=a,b",
-			"GITHUB_TOKENS=[redacted],b"},
+			"GITHUB_TOKENS=[redacted]"},
 		{"cli flag", "--db-password=s3cr3t", "--db-password=[redacted]"},
 		{"json prefixed key", `{"db_password":"hunter2","user":"a"}`,
 			`{"db_password":"[redacted]","user":"a"}`},

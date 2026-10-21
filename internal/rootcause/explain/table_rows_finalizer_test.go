@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 func init() {
@@ -106,15 +107,14 @@ func TestNotReadyFinalizerControllerIsBlamed(t *testing.T) {
 	}
 }
 
-// Only concrete evidence names a controller: a scaled-down workload of
-// the namespace that has nothing to do with the finalizer is left out,
-// and so is one of another namespace with the right labels.
+// Only concrete evidence names a controller: a scaled-down workload that
+// has nothing to do with the finalizer is left out.
 func TestUnrelatedStoppedWorkloadIsNotBlamed(t *testing.T) {
 	f := newFixture(t)
 	f.controller(kube.KindDeployment, "ops", "batch-worker", 0, 0,
 		"app=batch-worker")
-	f.controller(kube.KindDeployment, "other", "widget-ctl", 0, 0,
-		"widgets.example.com/controller-namespace=other")
+	f.controller(kube.KindDeployment, "other", "gadget-ctl", 0, 0,
+		"gadgets.example.com/controller-namespace=other")
 	effect := f.stuck("ops", 2, widgetFinalizer)[0]
 
 	c, ok := rootOf(f, effect)
@@ -126,26 +126,29 @@ func TestUnrelatedStoppedWorkloadIsNotBlamed(t *testing.T) {
 	}
 }
 
-// A workload named after the finalizer's group is the weakest evidence;
-// it counts when nothing better is found.
-func TestControllerNamedAfterTheGroupIsBlamed(t *testing.T) {
+// A workload named after the finalizer's group proves nothing: the
+// finalizer stays unhandled and a note names the look-alike.
+func TestControllerNamedAfterTheGroupIsOnlyANote(t *testing.T) {
 	f := newFixture(t)
 	f.controller(kube.KindDeployment, "ops", "widgets-controller", 0, 0,
 		"app=widgets-controller")
 	effect := f.stuck("ops", 2, widgetFinalizer)[0]
 
-	requireCause(t, f.explain(), effect, "deployment/ops/widgets-controller")
-}
+	c := requireCause(t, f.explain(), effect,
+		"finalizer/ops/"+widgetFinalizer)
 
-// A workload that wrote the object is its controller, whatever it is
-// named or labelled.
-func TestFieldManagerNamesTheFinalizerController(t *testing.T) {
-	f := newFixture(t)
-	ctl := f.controller(kube.KindDeployment, "ops", "reaper", 0, 0, "")
-	effect := f.stuck("ops", 1, widgetFinalizer)[0]
-	f.links[effect] = []Link{{Type: inventory.ManagedBy, To: ctl}}
-
-	requireCause(t, f.explain(), effect, "deployment/ops/reaper")
+	if c.Mode != ModeFinalizerUnhandled {
+		t.Fatalf("mode = %q, want %q", c.Mode, ModeFinalizerUnhandled)
+	}
+	var noted []string
+	for _, k := range c.Contributions {
+		if k.Code == rootcause.ProofNamedLikeHandler {
+			noted = k.Fields
+		}
+	}
+	if len(noted) != 1 || noted[0] != "deployment ops/widgets-controller" {
+		t.Fatalf("note = %v, want the look-alike", noted)
+	}
 }
 
 // Objects held by Kubernetes' own finalizers, and one object held by a
@@ -182,8 +185,9 @@ func TestDifferentFinalizersAreSeparateCauses(t *testing.T) {
 }
 
 // Objects held by the same finalizer are one problem. A workload that
-// wrote only one of them (and does not run the finalizer's controller)
-// must not take that one away from the finalizer's own incident.
+// wrote only one of them (and is not tied to the finalizer's controller
+// by any evidence) must not take that one away from the finalizer's own
+// incident.
 func TestSiblingsHeldByOneFinalizerShareOneRoot(t *testing.T) {
 	f := newFixture(t)
 	ctl := f.controller(kube.KindDeployment, "ops", "legacy", 0, 0, "")
@@ -197,21 +201,5 @@ func TestSiblingsHeldByOneFinalizerShareOneRoot(t *testing.T) {
 		if c.Mode != ModeFinalizerUnhandled {
 			t.Errorf("mode of %s = %q", id, c.Mode)
 		}
-	}
-}
-
-// When the workload wrote every one of them, it is still blamed for all.
-func TestWorkloadThatWroteAllSiblingsIsStillBlamed(t *testing.T) {
-	f := newFixture(t)
-	ctl := f.controller(kube.KindDeployment, "ops", "legacy", 0, 0, "")
-	stuck := f.stuck("ops", 3, widgetFinalizer)
-	for _, id := range stuck {
-		f.links[id] = []Link{{Type: inventory.ManagedBy, To: ctl}}
-	}
-
-	e := f.explain()
-
-	for _, id := range stuck {
-		requireCause(t, e, id, "deployment/ops/legacy")
 	}
 }

@@ -107,7 +107,7 @@ func TestSourceHealthRunStopsOnCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	tick := make(chan time.Time)
 	done := make(chan struct{})
-	go func() { health.run(ctx, tick); close(done) }()
+	go func() { health.run(ctx, tick, nil); close(done) }()
 	source.set(kube.SourceStatus{
 		Resource: "ingresses", Group: "networking.k8s.io",
 		Reason: kube.ReasonSyncTimeout,

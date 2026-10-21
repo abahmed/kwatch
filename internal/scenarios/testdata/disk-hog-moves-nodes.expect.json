@@ -1,0 +1,16 @@
+{
+  "name": "disk-hog-moves-nodes",
+  "description": "One workload without an ephemeral-storage limit fills the disk of one node, is evicted, and fills the disk of the node it moves to.",
+  "root": "deployment/media/ingest",
+  "tier": "notify",
+  "maxMessages": 4,
+  "maxPages": 1,
+  "mustNotBlame": [
+    "node//n3",
+    "deployment/media/thumbs",
+    "deployment/media/api",
+    "zone//zone-a"
+  ],
+  "revisesRoot": true,
+  "tail": "15m0s"
+}

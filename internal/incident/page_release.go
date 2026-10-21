@@ -27,13 +27,26 @@ func failingSince(p *Incident) bool {
 }
 
 // holdsPage reports a held repeat whose page is still due. Someone who
-// acknowledged the incident knows about it, so it does not page.
+// acknowledged the incident knows about it, so it does not page; nor does
+// one whose alert is open at the pagers already (see pagesFlapper).
 func (m *Manager) holdsPage(p *Incident) bool {
-	if !p.Delivery.PageHeld() || p.Tier == Page || acked(p) {
+	if !p.Delivery.PageHeld() || p.Tier == Page ||
+		p.Delivery.OpenAtPagers() {
 		return false
 	}
+	return !m.pageAcknowledged(p)
+}
+
+// pageAcknowledged reports an incident someone is already on: the thread
+// was told of the acknowledgement, or the annotation is on the root or a
+// member and kwatch has not told yet. Paging it would wake the people who
+// are looking at it.
+func (m *Manager) pageAcknowledged(p *Incident) bool {
+	if acked(p) {
+		return true
+	}
 	_, annotated := m.ackOn(p)
-	return !annotated
+	return annotated
 }
 
 // pagedBeside reports another live incident whose page is open and that
@@ -44,7 +57,8 @@ func (m *Manager) pagedBeside(p *Incident) bool {
 		if q == p || q.State == Resolved || !q.Delivery.OpenAtPagers() {
 			continue
 		}
-		if absGap(p.Announced, q.Announced) <= m.cfg.Settle ||
+		if (p.Root.Namespace == q.Root.Namespace &&
+			absGap(p.Announced, q.Announced) <= m.cfg.Settle) ||
 			m.model != nil && sameChain(m.model, q.Root, p.Root) {
 			return true
 		}

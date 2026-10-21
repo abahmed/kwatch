@@ -9,8 +9,8 @@ core.workloads.rollouts|runtime|Detect stuck workload rollouts|core.detection.wo
 core.workloads.jobs|runtime|Detect failed Jobs and failed or missed CronJobs|core.detection.workloads|pro
 core.workloads.pdb|runtime|Detect PodDisruptionBudgets that block disruption|core.detection.workloads|pro
 core.workloads.hpa|runtime|Diagnose HorizontalPodAutoscaler failures|core.detection.workloads|pro
-core.detection.nodes|runtime|Detect node readiness, pressure and draining||community
-core.nodes.usage|runtime|Detect node resource pressure from kubelet stats|core.detection.nodes|pro
+core.detection.nodes|runtime|Detect nodes that are not ready||community
+core.nodes.usage|runtime|Detect node pressure and draining, and resource pressure from kubelet stats|core.detection.nodes|pro
 core.detection.storage|runtime|Detect claim, volume and attachment failures||pro
 core.storage.usage|runtime|Detect volumes nearly full|core.detection.storage|pro
 core.detection.network|runtime|Detect Service, Ingress and NetworkPolicy failures||pro

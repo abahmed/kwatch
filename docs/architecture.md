@@ -144,6 +144,21 @@ reason for its value. Each contribution carries a code and its numbers
 those fields, never from the solver's trace text. Below the confidence floor the cause is stated as
 unknown. The solver is a pure function of a snapshot: no clock, no I/O.
 
+A change is evidence only when it can have caused the failure, so the
+solver reads three guards before it believes one. A change made after a
+failure began (a fix attempt) is not a cause of that failure; a node's own
+conditions are exempt, since they are written as it breaks. A dependency
+that is blamed only because it changed, with no error naming it and no
+error of the kind it produces, is capped below "likely" when the failures
+quote a defect of the program's own code (a nil dereference, an index out of
+range). Rows that read a setting or a probe also need the failure to be the
+kind that setting causes: a probe-port mismatch needs a probe that cannot
+connect, a NetworkPolicy needs a connection error, an RBAC change needs a
+"forbidden" error naming the pod's own ServiceAccount and is never a
+creation. A workload blamed for its own setting gets no credit for its own
+pods failing, and its own name in its own log lines is not an error that
+"mentions it".
+
 When nothing upstream shows a fault, the engine still has four things to
 say, in this order of strength:
 
@@ -234,7 +249,7 @@ one bucket per data class:
 | `changes` | Full change records (actor, fields, revision, times) of workloads, config, services, policy and nodes, in one time-ordered stream | 7 days, at most 8 MiB; the last 24 hours reload at start |
 | `baselines` | Rolling per-workload statistics over 7 days: restarts, readiness, memory, Warning events | Dropped 7 days after the workload is gone |
 | `evidence` | Log excerpts and termination messages | 30 days, at most 128 MiB |
-| `timeline` | Health transitions, changes, events, decisions | 7 days, at most 32 MiB |
+| `timeline` | Health transitions, changes, events, decisions | 7 days, at most 32 MiB (about 100,000 entries): whichever limit is reached first, so a busy cluster keeps less than 7 days |
 | `fingerprints` | Last seen digest per object | No expiry |
 | `state` | Cluster identity, version, startup and telemetry markers (with the pending digest and what digests listed in full today), each workload's last healthy time, the flight recorder's pseudonym salt, and the 7-day counts behind the cause self-check and the unexplained list in `/status` | No expiry; a healthy time lasts 7 days; the counts hold 7 days |
 | `flight` | The flight recorder: sanitized, compressed batches of what the sources observed (names hashed, no messages), exported with `kwatch replay-export` | 48 hours, at most 64 MiB |

@@ -1,0 +1,8 @@
+{
+  "name": "ingress-to-typo-selector",
+  "description": "An Ingress routes to a Service whose selector has a typo: no pod or workload template carries it.",
+  "root": "service/shop/api",
+  "tier": "page",
+  "maxMessages": 2,
+  "tail": "30m0s"
+}

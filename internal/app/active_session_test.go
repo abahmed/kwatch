@@ -25,6 +25,7 @@ func activeDeps(t *testing.T) *serverDeps {
 	deps.heartbeat = heartbeat.NewHeartbeatMonitorWithRuntime(
 		deps.runtime, http.DefaultClient, deps.healthServer.Ready)
 	deps.clients.HTTP = http.DefaultClient
+	deps.clients.PlatformHTTP = http.DefaultClient
 	return deps
 }
 

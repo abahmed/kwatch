@@ -81,38 +81,15 @@ func (Generic) Detect(
 	return out
 }
 
-// conditionRule names a condition type and the status that means trouble.
-type conditionRule struct {
-	Type   string
-	Bad    string
-	Health detection.Health
-}
-
-// conditionRules are condition types with one meaning across operators,
-// Crossplane, Flux, Argo CD, cert-manager, CRDs and the Gateway API.
-var conditionRules = []conditionRule{
-	{"Ready", "False", detection.Failing},
-	{"Available", "False", detection.Failing},
-	{"Established", "False", detection.Failing},
-	{"Accepted", "False", detection.Failing},
-	{"Programmed", "False", detection.Failing},
-	{"Stalled", "True", detection.Failing},
-	{"Degraded", "True", detection.Degraded},
-	{"Synced", "False", detection.Degraded},
-	{"Reconciled", "False", detection.Degraded},
-	{"ResolvedRefs", "False", detection.Degraded},
-	{"Conflicted", "True", detection.Degraded},
-	{"PartiallyInvalid", "True", detection.Degraded},
-}
-
 func badConditions(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	var out []detection.Finding
-	for _, rule := range conditionRules {
+	for _, rule := range kube.ConditionRules {
 		status, reason, since := condition(e, rule.Type)
+		key := "cond/" + rule.Type + "/" + rule.Bad
 		if status != rule.Bad ||
-			!sustained(ctx, "cond/"+rule.Type, since, DefaultConditionGrace) {
+			!sustained(ctx, key, since, conditionGrace(rule)) {
 			continue
 		}
 		out = append(out, conditionFinding(e, rule, reason, since))
@@ -120,8 +97,19 @@ func badConditions(
 	return out
 }
 
+// conditionGrace is how long a condition must hold. One that says the
+// controller cannot tell yet (Unknown) gets the reconcile window, the
+// same one custom resources use.
+func conditionGrace(rule kube.ConditionRule) time.Duration {
+	if rule.Bad == "Unknown" {
+		return DefaultGenerationGrace
+	}
+	return DefaultConditionGrace
+}
+
 func conditionFinding(
-	e inventory.Entity, rule conditionRule, reason string, since time.Time,
+	e inventory.Entity, rule kube.ConditionRule, reason string,
+	since time.Time,
 ) detection.Finding {
 	summary := rule.Type + " is " + rule.Bad
 	if reason != "" {
@@ -140,9 +128,13 @@ func conditionFinding(
 		evidence = append(evidence,
 			detection.Evidence{Label: "message", Value: message})
 	}
+	health := detection.Degraded
+	if rule.Failing {
+		health = detection.Failing
+	}
 	return detection.Finding{
 		Reason: reasons.Condition(rule.Type), Severity: detection.Warning,
-		Health: rule.Health, Mode: detection.ConditionModeOf(rule.Type),
+		Health: health, Mode: detection.ConditionModeOf(rule.Type),
 		Since: since, Summary: summary, Evidence: evidence,
 	}
 }
@@ -207,6 +199,10 @@ func stuckDeletion(
 		summary += " (still used by " + users + ")"
 		evidence = append(evidence,
 			detection.Evidence{Label: "still used by", Value: users})
+	}
+	if warning, ok := lastWarning(ctx, e); ok {
+		evidence = append(evidence, detection.Evidence{
+			Label: detection.EvidenceLastWarning, Value: warning})
 	}
 	severity := detection.Warning
 	if leftover(ctx, e, since) {

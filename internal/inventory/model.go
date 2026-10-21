@@ -3,6 +3,7 @@ package inventory
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"sync"
 	"time"
 )
@@ -53,6 +54,10 @@ type record struct {
 	// altUID is a second identifier events may use for the object, such
 	// as the config hash of a static pod's mirror.
 	altUID string
+	// goneAttrs are the attributes a source handed over with the
+	// deletion: the few facts about the object that stay readable on its
+	// tombstone, such as who a deleted binding bound. See GoneAttribute.
+	goneAttrs map[string]Value
 }
 
 type relationKeyBySource struct {
@@ -191,6 +196,7 @@ func (m *Model) observe(observation Observation) Update {
 	if appeared {
 		rec.present = true
 		rec.goneAt = time.Time{}
+		rec.goneAttrs = nil
 		rec.entity.FirstSeen = observation.At
 		m.indexKind(observation.Entity)
 	}
@@ -263,6 +269,7 @@ func (m *Model) remove(observation Observation) Update {
 	}
 	rec.relations = nil
 	rec.attrs = nil
+	rec.goneAttrs = maps.Clone(observation.Attributes)
 	rec.present = false
 	rec.goneAt = observation.At
 	m.unindexKind(observation.Entity)

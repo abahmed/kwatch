@@ -4,6 +4,11 @@ import runtime "k8s.io/apimachinery/pkg/runtime"
 
 func (in *AppConfig) DeepCopyInto(out *AppConfig) {
 	*out = *in
+	if in.DisableStartupMessage != nil {
+		in, out := &in.DisableStartupMessage, &out.DisableStartupMessage
+		*out = new(bool)
+		**out = **in
+	}
 }
 
 func (in *AppConfig) DeepCopy() *AppConfig {
@@ -17,6 +22,11 @@ func (in *AppConfig) DeepCopy() *AppConfig {
 
 func (in *MaintenanceConfig) DeepCopyInto(out *MaintenanceConfig) {
 	*out = *in
+	if in.Enabled != nil {
+		in, out := &in.Enabled, &out.Enabled
+		*out = new(bool)
+		**out = **in
+	}
 }
 
 func (in *MaintenanceConfig) DeepCopy() *MaintenanceConfig {
@@ -30,6 +40,11 @@ func (in *MaintenanceConfig) DeepCopy() *MaintenanceConfig {
 
 func (in *HeartbeatMonitorConfig) DeepCopyInto(out *HeartbeatMonitorConfig) {
 	*out = *in
+	if in.Enabled != nil {
+		in, out := &in.Enabled, &out.Enabled
+		*out = new(bool)
+		**out = **in
+	}
 }
 
 func (in *HeartbeatMonitorConfig) DeepCopy() *HeartbeatMonitorConfig {
@@ -155,10 +170,11 @@ func (in *KwatchConfigSpec) DeepCopyInto(out *KwatchConfigSpec) {
 		}
 	}
 	deepCopySpecMaps(in, out)
-	out.Maintenance = in.Maintenance
-	out.Telemetry = in.Telemetry
-	out.HeartbeatMonitor = in.HeartbeatMonitor
-	out.App = in.App
+	in.Maintenance.DeepCopyInto(&out.Maintenance)
+	in.Telemetry.DeepCopyInto(&out.Telemetry)
+	in.HeartbeatMonitor.DeepCopyInto(&out.HeartbeatMonitor)
+	in.App.DeepCopyInto(&out.App)
+	in.AuditLog.DeepCopyInto(&out.AuditLog)
 }
 
 func deepCopySpecMaps(in, out *KwatchConfigSpec) {
@@ -201,6 +217,29 @@ func (in *KwatchConfigSpec) DeepCopy() *KwatchConfigSpec {
 
 func (in *TelemetryConfig) DeepCopyInto(out *TelemetryConfig) {
 	*out = *in
+	if in.Enabled != nil {
+		in, out := &in.Enabled, &out.Enabled
+		*out = new(bool)
+		**out = **in
+	}
+}
+
+func (in *AuditLogConfig) DeepCopyInto(out *AuditLogConfig) {
+	*out = *in
+	if in.Enabled != nil {
+		in, out := &in.Enabled, &out.Enabled
+		*out = new(bool)
+		**out = **in
+	}
+}
+
+func (in *AuditLogConfig) DeepCopy() *AuditLogConfig {
+	if in == nil {
+		return nil
+	}
+	out := new(AuditLogConfig)
+	in.DeepCopyInto(out)
+	return out
 }
 
 func (in *TelemetryConfig) DeepCopy() *TelemetryConfig {

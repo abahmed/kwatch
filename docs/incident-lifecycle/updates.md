@@ -57,6 +57,15 @@ digest, which lists the still-open incident as an ongoing item
 (`announce/ongoing.go`). A real failure that returns raises the tier again,
 told by the usual material change. A user severity override keeps its tier.
 
+**A restart does not swallow a rise.** A restored incident adopts its
+fingerprint during the restore grace so that an upgrade says nothing, but a
+tier that rose since the record was saved (a page above all) stays news. The
+adoption keeps the tier people last heard: the saved one (`restoredTier`)
+until this run decides an update, then the tier of that update (`toldTier`).
+A rise told inside the grace is therefore told once, not again one
+`MaterialGap` later. How a restored incident recovers is in
+[Recovering and the resolve hold](./resolve.md#the-restore-grace).
+
 **A withdrawn cause says nothing.** A `cause revised` that takes a known
 cause away and finds none (`causeWithdrawn`, `open_steps.go`) is not sent
 for a notify or lower incident: the evidence of the cause (an admission

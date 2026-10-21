@@ -38,6 +38,13 @@ func (s *Startup) baseline(p incident.Incident) {
 	s.baselined[p.ID] = markOf(p)
 }
 
+// Baselined reports whether incident id existed at start and nobody was
+// told about it.
+func (s *Startup) Baselined(id string) bool {
+	_, ok := s.baselined[id]
+	return ok
+}
+
 // absorbBaselined drops the decisions about incidents that existed at
 // start, for the audit log only, and returns the rest. A resolve ends the
 // incident's place in the baseline. An update that raises the severity or

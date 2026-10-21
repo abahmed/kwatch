@@ -1,0 +1,12 @@
+{
+  "name": "binding-of-another-account-removed",
+  "description": "An app is forbidden to read a ConfigMap for its own account while only another account's RoleBinding was deleted.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "rolebinding/shop/web-config-reader",
+    "node//n1",
+    "node//n2"
+  ]
+}

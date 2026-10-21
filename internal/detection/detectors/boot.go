@@ -69,14 +69,13 @@ func podNodeBootRemaining(
 func podFailingToRun(ctx detection.Context, pod inventory.EntityID) bool {
 	for _, id := range ctx.Model.Related(pod, inventory.PartOf,
 		inventory.Incoming) {
-		container, ok := ctx.Model.Entity(id)
-		if !ok {
-			continue
-		}
 		// A container that restarted has already crashed or been
-		// killed: it is not slow, it is failing.
-		restarts, _ := number(container, kube.AttrRestarts)
-		reason := text(container, kube.AttrStateReason)
+		// killed: it is not slow, it is failing. Two attribute reads,
+		// not a copy of the whole container.
+		restartsAttr, _ := ctx.Model.Attribute(id, kube.AttrRestarts)
+		restarts, _ := restartsAttr.Value.AsNumber()
+		reasonAttr, _ := ctx.Model.Attribute(id, kube.AttrStateReason)
+		reason := reasonAttr.Value.AsText()
 		if _, failing := detection.WaitingSeverity(reason); failing ||
 			restarts > 0 {
 			return true

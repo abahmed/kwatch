@@ -73,21 +73,24 @@ func Fingerprints(
 	for kind, attrs := range fingerprintAttributes {
 		out[kindTimePrefix+string(kind)] = at
 		for _, id := range model.Entities(kind) {
-			entity, ok := model.Entity(id)
-			if !ok {
+			if !model.Exists(id) {
 				continue
 			}
-			out[id.String()] = fingerprint(entity, attrs)
+			out[id.String()] = fingerprint(model, id, attrs)
 		}
 	}
 	return out
 }
 
-func fingerprint(entity inventory.Entity, attrs []string) string {
+// fingerprint reads the tracked attributes one by one: a snapshot of the
+// whole entity would copy every attribute of every tracked object.
+func fingerprint(
+	model inventory.Reader, id inventory.EntityID, attrs []string,
+) string {
 	parts := make([]string, 0, len(attrs))
 	for _, name := range attrs {
 		value := ""
-		if attribute, ok := entity.Attribute(name); ok {
+		if attribute, ok := model.Attribute(id, name); ok {
 			value = attribute.Value.AsText()
 		}
 		parts = append(parts, name+"="+value)

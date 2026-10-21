@@ -1,7 +1,8 @@
 10:03:15 settled
-🟠 API service v1alpha1.reports.acme.example (prod-eu-1) is not available (service not found) because service report-adapter in reports does not exist. To see the object's state and events, run kubectl describe apiservice v1alpha1.reports.acme.example
+🟠 API service v1alpha1.reports.acme.example (prod-eu-1) is not available (service not found) because service report-adapter in reports does not exist. It reports "service/report-adapter in "reports" is not present". The error mentions it. To see the object's state and events, run kubectl describe apiservice v1alpha1.reports.acme.example
 🟠 API service v1alpha1.reports.acme.example (prod-eu-1) is not available (service not found) because service report-adapter in reports does not exist.
 | 🟠 API service **v1alpha1.reports.acme.example** (**prod-eu-1**) is not available (service not found) because service **report-adapter** in **reports** does not exist.
+| It **reports** `service/report-adapter in "reports" is not present`. The error mentions it.
 | To see the object's state and events, run
 | ```
 | kubectl describe apiservice v1alpha1.reports.acme.example

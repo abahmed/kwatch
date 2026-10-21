@@ -63,6 +63,10 @@ func privateAddress(ip net.IP) bool {
 	return false
 }
 
+// PrivateProbeAddress is privateAddress for callers outside the package:
+// the KwatchConfig guard refuses probe targets that name such an address.
+func PrivateProbeAddress(ip net.IP) bool { return privateAddress(ip) }
+
 // refusePrivate is a net.Dialer.Control: it runs once the name is
 // resolved, for every address the dialer tries, so a name that resolves to
 // a private address (or changes between lookups) cannot get past it.

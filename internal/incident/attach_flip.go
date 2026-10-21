@@ -26,7 +26,8 @@ func (m *Manager) retakeSuperseded(
 ) placement {
 	old := m.lookup(where.root)
 	if old == nil || old.State != Resolved || old.SupersededBy == "" ||
-		now.Sub(old.Resolved) > RepageWindow || !m.ofStory(old, s) {
+		now.Sub(old.Resolved) > RepageWindow ||
+		!m.ofStoryAt(old, s, where.root) {
 		return where
 	}
 	return m.stayWith(m.incidents[old.SupersededBy], where)
@@ -51,7 +52,7 @@ func (m *Manager) retakeFormer(
 		return where
 	}
 	if held := m.lookup(where.root); (held != nil &&
-		held.State != Resolved) || !m.ofStory(moved, s) {
+		held.State != Resolved) || !m.ofStoryAt(moved, s, where.root) {
 		return where
 	}
 	return m.stayWith(moved, where)
@@ -69,6 +70,11 @@ func (m *Manager) stayWith(
 	where.root, where.cause, where.unclear = target.Root, nil, false
 	return where
 }
+
+// FormerRoot is the root the incident was moved away from by its latest
+// cause revision; zero when it was never moved. A writer that tells the
+// revision says what became of it: a node that recovered, say.
+func (p Incident) FormerRoot() inventory.EntityID { return p.formerRoot }
 
 // leaveRoot remembers that p is moving away from its root, and drops
 // the memories of moves too old to matter.
@@ -104,11 +110,22 @@ func (m *Manager) restoreFormer(p *Incident) {
 	m.former[key] = p.ID
 }
 
+// ofStoryAt is ofStory for a failure placed at root: it is also the story
+// when root is a node of the zone or pool p now speaks for, as when the
+// incident of that node was moved to the place.
+func (m *Manager) ofStoryAt(
+	p *Incident, s detection.Finding, root inventory.EntityID,
+) bool {
+	return m.ofStory(p, s) || m.placeOf(root, p.Root)
+}
+
 // ofStory reports whether the object of s is part of the story p
-// tells: p's root is its workload, or the Service in front of it. The
-// timeline cannot say, as it keeps only the latest events.
+// tells: p's root is its workload, or the Service in front of it, or the
+// zone or pool the node of s is in. The timeline cannot say, as it keeps
+// only the latest events.
 func (m *Manager) ofStory(p *Incident, s detection.Finding) bool {
-	return m.model != nil && sameChain(m.model, p.Root, s.Entity)
+	return m.model != nil && (sameChain(m.model, p.Root, s.Entity) ||
+		m.placeOf(s.Entity, p.Root))
 }
 
 // dropStaleSupersede cancels the supersede of p when the incident that

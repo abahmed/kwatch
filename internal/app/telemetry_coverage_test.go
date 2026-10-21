@@ -132,6 +132,12 @@ func TestTelemetrySkipReasonCoversConfigurationGuards(t *testing.T) {
 			envOpt: "FALSE", want: "disabled_env",
 		},
 		{
+			name:  "env typo reads as off",
+			cfg:   config.Telemetry{Enabled: true},
+			store: store, cluster: "cluster", version: "v1",
+			envOpt: "flase", want: "disabled_env",
+		},
+		{
 			name:  "env disabled with spaces",
 			cfg:   config.Telemetry{Enabled: true},
 			store: store, cluster: "cluster", version: "v1",

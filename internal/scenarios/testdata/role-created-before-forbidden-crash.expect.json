@@ -1,0 +1,10 @@
+{
+  "name": "role-created-before-forbidden-crash",
+  "description": "An unrelated Role is created; the api crashes with a forbidden error, a permission it never had.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "role/shop/metrics-reader"
+  ]
+}

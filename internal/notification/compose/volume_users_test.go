@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -44,10 +45,15 @@ func TestFullClaimSaysSizeUsersAndTheCrashItCaused(t *testing.T) {
 
 	text := notification.Text(Writer{}.Write(announce(p), at(10, 0)))
 
-	assert.Contains(t, text, "It is at 96% (about 19 GiB of 20 GiB).")
-	assert.Contains(t, text, "It is used by backup and postgres.")
+	assert.Contains(t, text, "It is at 96% (about 19 GiB of 20 GiB), "+
+		"and it is used by backup and postgres.")
 	assert.Contains(t, text, "fails with \"could not write: No space left "+
 		"on device\".")
+	// "It" is the claim, never the workload whose crash is quoted.
+	assert.Less(t, strings.Index(text, "It is at 96%"),
+		strings.Index(text, "fails with"))
+	assert.NotContains(t, text[strings.Index(text, "fails with"):],
+		"It is used by")
 }
 
 func TestFullClaimIgnoresACrashThatIsNotAboutTheDisk(t *testing.T) {

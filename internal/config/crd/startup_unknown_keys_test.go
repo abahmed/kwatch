@@ -39,7 +39,7 @@ func TestApplyStartupConfigReportsKwatchConfigTypos(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.CrdConfig.Enabled = true
 
-	if err := applyStartupConfig(
+	if _, err := applyStartupConfig(
 		context.Background(), cfg, client, "default",
 	); err != nil {
 		t.Fatal(err)

@@ -1,0 +1,10 @@
+10:04:15 roll-up
+🟠 kwatch (prod-eu-1) found two new problems at the same time. Job in batch cannot pull its image, likely because registry registry-1.docker.io is rate limiting pulls. web in shop cannot pull its image, likely because registry registry.corp.example rejects the credentials. Each gets its own message when it changes or resolves.
+🟠 kwatch (prod-eu-1) found two new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
+|
+| **Problems**
+| - Job in **batch** cannot pull its image, likely because registry **registry-1.docker.io** — rate limiting pulls
+| - **web** in **shop** cannot pull its image, likely because registry **registry.corp.example** rejects the credentials
+|
+| *Each gets its own message when it changes or resolves.*

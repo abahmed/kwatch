@@ -139,7 +139,7 @@ var nodeRowCases = []rowCase{
 	{row: "node-disk-pressure", want: "node//n1",
 		build: nodeCase("DiskPressure", "Evicted")},
 	{row: "node-pid-pressure", want: "node//n1",
-		build: nodeCase("PIDPressure", "CannotRun")},
+		build: nodeCase("PIDPressure", "Failed")},
 	{row: "node-network", want: "node//n1",
 		build: nodeCase("NetworkUnavailable", "Creating")},
 	{row: "node-overcommitted", want: "node//n1",

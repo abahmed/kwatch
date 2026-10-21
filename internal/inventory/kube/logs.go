@@ -167,7 +167,10 @@ func lastBytes(body []byte, n int) []byte {
 // their middle. Lines that are only a long base64 run are dropped too.
 func logLines(body []byte) []string {
 	var lines []string
-	text := redact.Evidence(string(body))
+	// Credentials only: a pod or service address is no secret and helps
+	// whoever debugs the failure, the same as in an event or a
+	// termination message (docs/configuration.md, evidence policy).
+	text := redact.Credentials(string(body))
 	// Split rather than scan: a scanner stops for good at its first line
 	// over its token limit (redaction can lengthen one past the body's
 	// own limit) and would silently drop the rest of the excerpt.

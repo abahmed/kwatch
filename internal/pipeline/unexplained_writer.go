@@ -23,7 +23,7 @@ func (w *historyWriter) flushUnexplained() bool {
 		return true
 	}
 	if err := store.SaveUnexplained(raw); err != nil {
-		logWriteError(err, "unexplained counts")
+		w.failed(err, "unexplained counts")
 		w.mu.Lock()
 		if w.unexplained == nil {
 			w.unexplained = raw

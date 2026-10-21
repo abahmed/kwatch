@@ -1,9 +1,12 @@
 package v1beta1
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"k8s.io/utils/ptr"
 )
 
 func TestSilenceRuleDeepCopyIsNotAliased(t *testing.T) {
@@ -43,11 +46,11 @@ func TestSilenceRuleDeepCopyIsNotAliased(t *testing.T) {
 func TestKwatchConfigSpecDeepCopyCopiesMonitorFields(t *testing.T) {
 	in := &KwatchConfigSpec{
 		Maintenance: MaintenanceConfig{
-			Enabled:         true,
+			Enabled:         ptr.To(true),
 			Annotation:      "kwatch.io/maintenance",
 			UntilAnnotation: "kwatch.io/maintenance-until",
 		},
-		Telemetry: TelemetryConfig{Enabled: true},
+		Telemetry: TelemetryConfig{Enabled: ptr.To(true)},
 		ActiveProbeMonitor: MonitorConfig{
 			"http": []interface{}{"https://example.test"},
 		},
@@ -82,4 +85,54 @@ func TestKwatchConfigSpecDeepCopyDetachesMutableFields(t *testing.T) {
 	assert.Equal(t, true, in.Upgrader["disableUpdateCheck"])
 	assert.Equal(t, "critical", in.SeverityByReason["OOMKilled"])
 	assert.Equal(t, "https://runbook", in.Runbooks["OOMKilled"])
+}
+
+// A switch set to false must survive encoding: a plain bool with omitempty
+// drops it, and the object reads as if the switch were never set.
+func TestSwitchesEncodeAnExplicitFalse(t *testing.T) {
+	spec := KwatchConfigSpec{
+		Telemetry:        TelemetryConfig{Enabled: ptr.To(false)},
+		Maintenance:      MaintenanceConfig{Enabled: ptr.To(false)},
+		AuditLog:         AuditLogConfig{Enabled: ptr.To(false)},
+		HeartbeatMonitor: HeartbeatMonitorConfig{Enabled: ptr.To(false)},
+		App:              AppConfig{DisableStartupMessage: ptr.To(false)},
+	}
+
+	raw, err := json.Marshal(spec)
+	require.NoError(t, err)
+
+	var back map[string]map[string]interface{}
+	require.NoError(t, json.Unmarshal(raw, &back))
+	assert.Equal(t, false, back["telemetry"]["enabled"])
+	assert.Equal(t, false, back["maintenance"]["enabled"])
+	assert.Equal(t, false, back["auditLog"]["enabled"])
+	assert.Equal(t, false, back["heartbeatMonitor"]["enabled"])
+	assert.Equal(t, false, back["app"]["disableStartupMessage"])
+
+	unset, err := json.Marshal(KwatchConfigSpec{})
+	require.NoError(t, err)
+	assert.NotContains(t, string(unset), "enabled", "unset stays absent")
+}
+
+func TestSwitchPointersAreNotAliasedByDeepCopy(t *testing.T) {
+	in := &KwatchConfigSpec{
+		Telemetry:        TelemetryConfig{Enabled: ptr.To(true)},
+		Maintenance:      MaintenanceConfig{Enabled: ptr.To(true)},
+		AuditLog:         AuditLogConfig{Enabled: ptr.To(true)},
+		HeartbeatMonitor: HeartbeatMonitorConfig{Enabled: ptr.To(true)},
+		App:              AppConfig{DisableStartupMessage: ptr.To(true)},
+	}
+
+	out := in.DeepCopy()
+	*out.Telemetry.Enabled = false
+	*out.Maintenance.Enabled = false
+	*out.AuditLog.Enabled = false
+	*out.HeartbeatMonitor.Enabled = false
+	*out.App.DisableStartupMessage = false
+
+	assert.True(t, *in.Telemetry.Enabled)
+	assert.True(t, *in.Maintenance.Enabled)
+	assert.True(t, *in.AuditLog.Enabled)
+	assert.True(t, *in.HeartbeatMonitor.Enabled)
+	assert.True(t, *in.App.DisableStartupMessage)
 }

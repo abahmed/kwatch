@@ -45,6 +45,9 @@ type Collector struct {
 	Low LowDigest
 	// Outages holds each namespace's announcements while an outage opens.
 	Outages map[string]*OutageHold
+	// outages remembers the last outage message of each namespace (see
+	// outage_recent.go).
+	outages map[string]*outageMemo
 
 	// advisories lists the active advisory findings; nil when the
 	// engine has none to offer. The digest names only the ones that
@@ -68,6 +71,9 @@ type Collector struct {
 	// carries (see noteWake).
 	seenAt, wakeDone time.Time
 	wake             *compose.WakeLine
+	// restoredListed are the incidents the early restored summary named
+	// (see ListRestored).
+	restoredListed map[string]bool
 	// folded are the restored incidents whose first demotion to the
 	// digest tier was folded into a digest, not posted (see
 	// carriesThread).

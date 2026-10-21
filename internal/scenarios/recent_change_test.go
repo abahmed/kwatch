@@ -10,7 +10,7 @@ import (
 func TestUnknownCauseNamesOnlyRecentChanges(t *testing.T) {
 	recent := scenarioNotes(t, "unknown-cause-recent-change")
 	if !strings.Contains(recent, "In the last 30 minutes in shop: "+
-		"bob changed config map feature-flags at 10:01.") {
+		"bob changed config map feature-flags at 10:01 UTC.") {
 		t.Errorf("the recent edit is not named:\n%s", recent)
 	}
 	old := scenarioNotes(t, "unknown-cause-old-change")

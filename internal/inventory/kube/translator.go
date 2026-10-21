@@ -61,14 +61,15 @@ func (t *Translator) Updated(
 	if !ok {
 		return nil
 	}
-	if oldDesc, ok := t.schema.Describe(old); ok &&
-		oldDesc.UID != "" && desc.UID != "" && oldDesc.UID != desc.UID {
+	oldDesc, hadOld := t.schema.Describe(old)
+	if hadOld && oldDesc.UID != "" && desc.UID != "" &&
+		oldDesc.UID != desc.UID {
 		return append(t.Deleted(old, at), t.Added(new, false, at)...)
 	}
 	t.annotate(new, &desc)
 	link(new, &desc)
 	var previous *Description
-	if oldDesc, ok := t.schema.Describe(old); ok {
+	if hadOld {
 		previous = &oldDesc
 	}
 	observations := t.describe(desc, previous, at)
@@ -92,7 +93,9 @@ func (t *Translator) Deleted(obj any, at time.Time) []inventory.Observation {
 	for _, child := range desc.Children {
 		observations = append(observations, goneObservation(child.ID, at))
 	}
-	return append(observations, goneObservation(desc.ID, at))
+	gone := goneObservation(desc.ID, at)
+	gone.Attributes = goneAttributes(desc)
+	return append(observations, gone)
 }
 
 func (t *Translator) describe(

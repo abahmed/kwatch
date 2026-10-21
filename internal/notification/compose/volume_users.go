@@ -35,16 +35,17 @@ func usedOfWords(pct string, s detection.Finding) string {
 	return pct + " (" + humanBytes(used) + " of " + humanBytes(capacity) + ")"
 }
 
-// volumeUserSentences name the workloads that mount a nearly full
-// claim, so a person knows who is hurt by it: "It is used by postgres
-// and reporter."
-func volumeUserSentences(s detection.Finding) []sentence {
+// volumeUsersTail names the workloads that mount a nearly full claim, so
+// a person knows who is hurt by it: ", and it is used by postgres and
+// reporter". It ends the usage sentence: said as a sentence of its own
+// it would follow the quote of a crashing workload, and "it" would read
+// as that workload.
+func volumeUsersTail(s detection.Finding) string {
 	users := evidence(s, detection.EvidenceVolumeUsedBy)
 	if users == "" {
-		return nil
+		return ""
 	}
-	return []sentence{{part: partConsequence, weight: 1,
-		text: "It is used by " + andList(users) + "."}}
+	return ", and it is used by " + andList(users)
 }
 
 // volumeInodeSentences say how many inodes a claim has used beside its
@@ -62,8 +63,7 @@ func volumeInodeSentences(f caseFacts) []sentence {
 			text += ", its space " + size
 		}
 		out = append(out, sentence{part: partProof, weight: weightUsage,
-			text: endSentence(text)})
-		out = append(out, volumeUserSentences(s)...)
+			text: endSentence(text + volumeUsersTail(s))})
 	}
 	return out
 }
@@ -98,7 +98,8 @@ func volumeCrashSentences(f caseFacts) []sentence {
 		if s.Entity.Kind == kube.KindPVC || !diskFullText.MatchString(line) {
 			continue
 		}
-		return []sentence{{part: partProof, weight: weightUsage + 0.1,
+		// Below the usage sentence, so "it" in that one is the claim.
+		return []sentence{{part: partProof, weight: weightUsage - 0.05,
 			text: crashSubject(f, s.Entity) + " fails with " +
 				quoted(line) + "."}}
 	}

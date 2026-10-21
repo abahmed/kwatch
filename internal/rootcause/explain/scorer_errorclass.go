@@ -47,16 +47,31 @@ var errorClasses = []errorClass{
 			"strconv.", "invalid character", "failed to parse",
 			"cannot parse", "yaml:"},
 		fits: configKinds},
-	{name: "a defect in the program's own code",
-		markers: []string{"nil pointer dereference", "index out of range",
-			"slice bounds out of range", "runtime error",
-			"segmentation fault"},
-		fits: codeKinds},
+	programDefect,
 	{name: "a connection that does not arrive",
 		markers: []string{"i/o timeout", "connection refused",
 			"no route to host", "connection timed out",
 			"network is unreachable", "dial tcp"},
 		fits: networkKinds, misfits: configKinds, addressKeys: true},
+}
+
+// programDefect is a crash in the program's own code. A setting, a
+// policy, a permission or a node does not write these words; a misfit
+// only lowers the score, since an edit may still trigger a defect.
+var programDefect = errorClass{
+	name: "a defect in the program's own code",
+	markers: []string{"nil pointer dereference", "index out of range",
+		"slice bounds out of range", "runtime error",
+		"segmentation fault"},
+	fits: codeKinds,
+	misfits: slices.Concat(configKinds, rbacKinds,
+		[]inventory.Kind{kube.KindNetworkPolicy, kube.KindNode}),
+}
+
+// quotesProgramDefect reports error text that is a defect of the
+// program's own code.
+func quotesProgramDefect(text string) bool {
+	return hasMarker(text, programDefect.markers)
 }
 
 // addressKeyMarkers mark a config key that holds where to connect.

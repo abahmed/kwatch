@@ -1,10 +1,10 @@
 10:02:45 settled
-🟠 api in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: assignment to entry in nil map". Its last run lasted 10s; 3 restarts in the 1h1m since its pod was created. To read the output of the last crash, run kubectl logs api-ed3e6bad-a -c app -n shop --previous
+🟠 api in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: assignment to entry in nil map". Its last run lasted ten seconds; three restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs api-ed3e6bad-a -c app -n shop --previous
 🟠 api in shop (prod-eu-1) keeps crashing.
 | 🟠 **api** in **shop** (**prod-eu-1**) keeps crashing.
 | Its node and registry are healthy and unchanged, so nothing outside it explains this.
 | It fails with `panic: assignment to entry in nil map`.
-| Its last run lasted 10s; 3 restarts in the 1h1m since its pod was created.
+| Its last run lasted ten seconds; three restarts since its pod was created one hour ago.
 | To read the output of the last crash, run
 | ```
 | kubectl logs api-ed3e6bad-a -c app -n shop --previous

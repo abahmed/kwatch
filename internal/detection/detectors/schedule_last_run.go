@@ -68,12 +68,13 @@ func ageText(now, at time.Time) string {
 const staleRunAge = 24 * time.Hour
 
 // failedJobSeverity is a failed Job's severity: a warning, except for a
-// run of a CronJob that failed more than staleRunAge ago, which is only
-// informational. The failure was news when it happened.
+// Job that failed more than staleRunAge ago, which is only
+// informational. The failure was news when it happened; a CronJob's own
+// last-run finding carries it from then on.
 func failedJobSeverity(
-	ctx detection.Context, job inventory.Entity, failedAt time.Time,
+	ctx detection.Context, failedAt time.Time,
 ) detection.Severity {
-	if failedAt.IsZero() || ctx.Model == nil || !cronOwned(ctx, job) {
+	if failedAt.IsZero() {
 		return detection.Warning
 	}
 	if age := ctx.Now.Sub(failedAt); age < staleRunAge {
@@ -81,14 +82,4 @@ func failedJobSeverity(
 		return detection.Warning
 	}
 	return detection.Info
-}
-
-func cronOwned(ctx detection.Context, job inventory.Entity) bool {
-	for _, owner := range ctx.Model.Related(
-		job.ID, inventory.OwnedBy, inventory.Outgoing) {
-		if owner.Kind == kube.KindCronJob {
-			return true
-		}
-	}
-	return false
 }

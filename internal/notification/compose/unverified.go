@@ -14,8 +14,8 @@ var unverifiedConsequences = map[string]string{
 }
 
 // unverifiedLine states in one sentence what kwatch could not check, as
-// in "I can't see secrets in billing, so a changed secret can't be ruled
-// out." It is empty when nothing was unverified.
+// in "kwatch can't see secrets in billing, so a changed secret can't be
+// ruled out." It is empty when nothing was unverified.
 func unverifiedLine(names []string) string {
 	if len(names) == 0 {
 		return ""
@@ -33,7 +33,7 @@ func unverifiedLine(names []string) string {
 			consequences = append(consequences, consequence)
 		}
 	}
-	return "I can't see " + joinOr(names) + ", so " +
+	return "kwatch can't see " + joinOr(names) + ", so " +
 		joinOr(consequences) + " can't be ruled out."
 }
 

@@ -1,8 +1,8 @@
 10:04:15 settled
-🟠 Service checkout in shop (prod-eu-1) selects no pods. Its selector changed at 10:02 from app=checkout to app=checkuot. Its dependents failed soon after it changed. Fix in: service/checkout → spec.selector (app=checkuot). To see the object's state and events, run kubectl describe service checkout -n shop
+🟠 Service checkout in shop (prod-eu-1) selects no pods. Its selector changed at 10:02 UTC from app=checkout to app=checkuot. Its dependents failed soon after it changed. Fix in: service/checkout → spec.selector (app=checkuot). To see the object's state and events, run kubectl describe service checkout -n shop
 🟠 Service checkout in shop (prod-eu-1) selects no pods.
 | 🟠 Service **checkout** in **shop** (**prod-eu-1**) selects no pods.
-| Its selector changed at 10:02 from app=**checkout** to app=checkuot.
+| Its selector changed at 10:02 UTC from app=**checkout** to app=checkuot.
 | Its dependents failed soon after it changed.
 | Fix in: service/checkout → spec.selector (app=checkuot).
 | To see the object's state and events, run

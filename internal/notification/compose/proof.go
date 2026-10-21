@@ -69,7 +69,7 @@ func changeCauseText(change inventory.Change) string {
 	if change.Cause == "" {
 		return ""
 	}
-	return ", recorded as \"" + clip(change.Cause) + "\""
+	return ", recorded as " + quoted(change.Cause)
 }
 
 // blamedChangeText adds to a lead that already named the change: the
@@ -143,16 +143,48 @@ func fieldList(change inventory.Change) string {
 }
 
 // changeValues is " from a to b" for one readable field, else "".
-// Secret values, hashes and generations are left out.
+// Secret values, hashes, generations and hidden values are left out, and
+// so is the added, changed or removed state of a config key.
 func changeValues(change inventory.Change) string {
 	if len(change.Fields) != 1 || change.Entity.Kind == kube.KindSecret {
 		return ""
 	}
 	field := change.Fields[0]
+	if hiddenEdit(field) {
+		return ""
+	}
+	if field.Before == "" {
+		return setValue(change)
+	}
 	if opaque(field.Before) || opaque(field.After) {
 		return ""
 	}
+	if limitRangeChange(change) {
+		before, after := limitRangeValues(field.Before, field.After)
+		return " from " + before + " to " + after
+	}
 	return " from " + field.Before + " to " + field.After
+}
+
+// setValue is " to enforce=restricted" for a field that was not set
+// before; "" for any other change, which changeValues words itself.
+func setValue(change inventory.Change) string {
+	if len(change.Fields) != 1 || change.Entity.Kind == kube.KindSecret {
+		return ""
+	}
+	field := change.Fields[0]
+	// A config key with no old value only says added, changed or removed.
+	if _, key := dataKey(field.Path); key || field.Before != "" ||
+		opaque(field.After) || hiddenEdit(field) {
+		return ""
+	}
+	return " to " + field.After
+}
+
+// hiddenEdit reports an edit with a value that may not be shown.
+func hiddenEdit(field inventory.FieldChange) bool {
+	return field.Before == inventory.HiddenValue ||
+		field.After == inventory.HiddenValue
 }
 
 // opaqueValue matches values that mean nothing to a reader: a template
@@ -181,26 +213,42 @@ func causeProofSentences(f caseFacts) []sentence {
 	var out []sentence
 	for _, item := range f.p.Cause.Proof {
 		text := proofWords(item)
-		if item.Code == rootcause.ProofFailedAfterChange &&
-			createdBlame(f.p.Cause) {
-			// Failing right after being created says nothing about
-			// the creation.
+		if skipProof(f, item, text) {
 			continue
 		}
-		if !item.Supports || text == "" || (deniedCause(f.p.Cause) &&
-			strings.Contains(text, "mention")) ||
-			(f.p.Cause.Change != nil &&
-				strings.HasSuffix(text, "changed shortly before")) ||
-			(policyBlocksCall(f.p.Cause) &&
-				strings.HasSuffix(text, "shortly before")) {
-			// The change sentence already says what changed.
-			continue
+		next := sentence{part: partProof, weight: item.Weight,
+			text: sentenceCase(humanizeText(text))}
+		if item.Code == rootcause.ProofErrorsName {
+			var ok bool
+			if next, ok = mentionWithError(f, item, next.text); !ok {
+				continue
+			}
 		}
-		out = append(out, sentence{part: partProof,
-			weight: item.Weight,
-			text:   sentenceCase(humanizeText(text))})
+		out = append(out, next)
 	}
 	return out
+}
+
+// skipProof reports a proof item the note leaves out: evidence against
+// the cause, an empty wording, or a fact another sentence already says.
+func skipProof(f caseFacts, item rootcause.Proof, text string) bool {
+	cause := f.p.Cause
+	switch {
+	case !item.Supports || text == "":
+		return true
+	case item.Code == rootcause.ProofFailedAfterChange &&
+		createdBlame(cause):
+		// Failing right after being created says nothing about the
+		// creation.
+		return true
+	case deniedCause(cause) && strings.Contains(text, "mention"):
+		return true
+	}
+	// The change sentence already says what changed.
+	return (cause.Change != nil &&
+		strings.HasSuffix(text, "changed shortly before")) ||
+		(policyBlocksCall(cause) &&
+			strings.HasSuffix(text, "shortly before"))
 }
 
 // createdBlame reports a cause whose blamed change is the creation of
@@ -262,8 +310,7 @@ func usageSentences(f caseFacts) []sentence {
 			text = subject + " is at " + usedOfWords(used, s)
 		}
 		out = append(out, sentence{part: partProof, weight: weightUsage,
-			text: endSentence(text)})
-		out = append(out, volumeUserSentences(s)...)
+			text: endSentence(text + volumeUsersTail(s))})
 	}
 	return out
 }
@@ -287,12 +334,15 @@ func schedulerSentences(f caseFacts) []sentence {
 
 // reasonConsequences say what the lead's own condition breaks.
 var reasonConsequences = map[string]string{
-	reasons.TLSCertExpired: "Clients are rejecting it now.",
-	reasons.WebhookNoEndpoints: "It rejects every create and update " +
-		"it checks.",
-	reasons.WebhookBackendNotFound: "It rejects every create and " +
-		"update it checks.",
+	reasons.TLSCertExpired:         "Clients are rejecting it now.",
+	reasons.WebhookNoEndpoints:     webhookRejected,
+	reasons.WebhookBackendNotFound: webhookRejected,
 }
+
+// webhookRejected says what a webhook with a dead backend did: it
+// fails closed, and the API server rejected requests because of it.
+const webhookRejected = "It fails closed (failurePolicy Fail) and the " +
+	"API server has rejected requests because of it."
 
 // consequenceSentences say what the lead's condition breaks. A webhook
 // blocks requests only when its failurePolicy is Fail: critical once a
@@ -311,8 +361,8 @@ func consequenceSentences(f caseFacts) []sentence {
 	if webhook && f.lead.Severity == detection.Warning {
 		// A fail-closed webhook nothing was refused by yet.
 		return []sentence{{part: partConsequence, weight: 1,
-			text: "No request has been rejected yet; any create it " +
-				"matches is rejected."}}
+			text: "It fails closed (failurePolicy Fail); no request " +
+				"has been rejected so far."}}
 	}
 	if (webhook || expired) && f.lead.Severity != detection.Critical {
 		return nil

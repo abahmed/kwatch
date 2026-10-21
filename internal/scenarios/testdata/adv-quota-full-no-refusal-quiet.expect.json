@@ -1,0 +1,7 @@
+{
+  "name": "adv-quota-full-no-refusal-quiet",
+  "description": "A pod quota is used up exactly; every workload is at its desired size and nothing is refused.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

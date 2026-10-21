@@ -42,6 +42,10 @@ type ProbeTarget struct {
 	LatencyCriticalMs int
 	Address           string
 	Host              string
+	// PublicOnly refuses a name that resolves to a private address (see
+	// PrivateProbeAddress): the target came from a KwatchConfig, not from
+	// the mounted configuration, and must not reach internal services.
+	PublicOnly bool
 }
 
 // ActiveProbeConfig configures user-defined probes.
@@ -80,6 +84,8 @@ type ActiveProber struct {
 	// as cfg.Dial when the caller set one, else a dialer that refuses
 	// private addresses.
 	dependencyDial func(context.Context, string, string) (net.Conn, error)
+	// public reaches the targets a KwatchConfig added (PublicOnly).
+	public publicAccess
 }
 
 // NewActiveProber builds a prober with defaults for unset intervals.
@@ -94,11 +100,13 @@ func NewActiveProber(cfg ActiveProbeConfig) *ActiveProber {
 		cfg.FailureThreshold = 3
 	}
 	dependencyDial := cfg.Dial
+	public := newPublicAccess(cfg.Resolver, cfg.Dial, cfg.HTTPClient)
 	if cfg.Dial == nil {
 		cfg.Dial = (&net.Dialer{}).DialContext
 		dependencyDial = externalDialer()
 	}
-	return &ActiveProber{cfg: cfg, dependencyDial: dependencyDial}
+	return &ActiveProber{cfg: cfg, dependencyDial: dependencyDial,
+		public: public}
 }
 
 // Run probes every interval until ctx ends.
@@ -127,7 +135,7 @@ func (p *ActiveProber) check(
 	case target.URL != "":
 		expiry, err = p.http(probeCtx, target)
 	case target.Address != "":
-		err = p.dial(probeCtx, target.Address)
+		err = p.dial(probeCtx, target)
 	case target.Host != "":
 		_, err = p.cfg.Resolver.LookupHost(probeCtx, target.Host)
 	default:
@@ -163,7 +171,13 @@ func (p *ActiveProber) http(
 	if err != nil {
 		return time.Time{}, err
 	}
-	resp, err := p.cfg.HTTPClient.Do(req)
+	client := p.cfg.HTTPClient
+	if target.PublicOnly {
+		if client = p.public.client; client == nil {
+			return time.Time{}, errUnrestrictedClient
+		}
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -184,8 +198,11 @@ func (p *ActiveProber) http(
 	}
 }
 
-func (p *ActiveProber) dial(ctx context.Context, address string) error {
-	return closeDialed(p.cfg.Dial(ctx, "tcp", address))
+func (p *ActiveProber) dial(ctx context.Context, target ProbeTarget) error {
+	if target.PublicOnly {
+		return closeDialed(p.public.dial(ctx, "tcp", target.Address))
+	}
+	return closeDialed(p.cfg.Dial(ctx, "tcp", target.Address))
 }
 
 func closeDialed(conn net.Conn, err error) error {

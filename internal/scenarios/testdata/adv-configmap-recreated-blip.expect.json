@@ -1,0 +1,7 @@
+{
+  "name": "adv-configmap-recreated-blip",
+  "description": "A ConfigMap is deleted and recreated by a resync; pods created in between fail for forty seconds and recover.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "20m0s"
+}

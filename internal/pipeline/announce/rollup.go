@@ -45,14 +45,17 @@ func (c *Collector) CollectRollup(
 // others notify, in this roll-up and in their later messages, and page
 // again only if they outlast the hold of a repeated page.
 func (c *Collector) holdCoveredPages(announcements []incident.Decision) {
-	paged := false
+	// One page stands for the problems of its own namespace; a page of
+	// another namespace is another team's outage and is never held.
+	paged := map[string]bool{}
 	for i, d := range announcements {
+		ns := d.Incident.Root.Namespace
 		if d.Incident.Tier != incident.Page || c.pagedAlready(d) {
-			paged = paged || d.Incident.Tier == incident.Page
+			paged[ns] = paged[ns] || d.Incident.Tier == incident.Page
 			continue
 		}
-		if !paged {
-			paged = true
+		if !paged[ns] {
+			paged[ns] = true
 			continue
 		}
 		c.env.Incidents.HoldPage(d.Incident.ID)
@@ -84,6 +87,13 @@ func (c *Collector) sendListing(
 			c.pageOnly(ctx, now, d)
 			paged = true
 			continue
+		}
+		if pageOnce && d.Incident.Tier == incident.Page &&
+			!c.pagedAlready(d) {
+			// The listing paged once for the namespace: the others
+			// notify, as the members of a roll-up do (holdCoveredPages).
+			c.env.Incidents.HoldPage(d.Incident.ID)
+			d.Incident.Tier = incident.Notify
 		}
 		c.recordCarried(ctx, now, d, "roll-up")
 	}

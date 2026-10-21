@@ -43,14 +43,15 @@ func cascadeIncident(check ...detection.Evidence) incident.Incident {
 			Rule: "called-service-backends-failing"}}
 }
 
-func TestLivenessCascadeSaysTheRestartsAreASymptom(t *testing.T) {
+func TestLivenessCascadeSaysWhatRestartedWhatAndWhy(t *testing.T) {
 	p := cascadeIncident(sameCheckEvidence)
 
 	text := Writer{}.Write(announce(p), at(10, 0)).Note
 
-	assert.Contains(t, text, "db went down at 14:02; 3 pods of api and "+
+	assert.Contains(t, text, "db went down at 14:02 UTC; 3 pods of api and "+
 		"worker were then restarted by their liveness probe (same "+
-		"check as readiness), so the restarts are a symptom.")
+		"check as readiness).")
+	assert.NotContains(t, text, "symptom")
 }
 
 func TestLivenessCascadeNeedsTheSameCheck(t *testing.T) {

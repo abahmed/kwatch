@@ -25,7 +25,7 @@ func TestRevisionDiffMessagesNameTheChange(t *testing.T) {
 				"registry.example.com/checkout:5.2; env LOG_LEVEL unset " +
 				"→ debug; readiness probe",
 			"Also changed before it broke: bob changed config map " +
-				"checkout-config at 10:02."},
+				"checkout-config at 10:02 UTC."},
 			[]string{"unrelated-flags"}},
 	}
 	for _, tc := range tests {

@@ -97,6 +97,21 @@ func Checks(namespace, lease string, crdEnabled bool) []kube.Access {
 	return checks
 }
 
+// LicenseChecks are the permissions a configured license key needs: get
+// and update on the one Secret that holds the instance key, in the
+// namespace kwatch runs in. The Role grants them by name, so they are
+// checked by name. They are optional: without them the license stays
+// pending and monitoring goes on in the Community edition.
+func LicenseChecks(namespace, secret string) []kube.Access {
+	secrets := kube.Resource{Name: "secrets"}
+	var checks []kube.Access
+	for _, verb := range []string{"get", "update"} {
+		checks = append(checks, kube.Access{Resource: secrets, Verb: verb,
+			Namespace: namespace, Name: secret})
+	}
+	return checks
+}
+
 // Start sweeps at once and then every checkInterval until ctx ends.
 func (m *Monitor) Start(ctx context.Context) error {
 	if m.client == nil {

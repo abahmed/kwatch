@@ -103,7 +103,7 @@ func TestNodeResolveSaysTheFailureThatEnded(t *testing.T) {
 			Summary: "Node is under CPU pressure: workloads stall on CPU"},
 			"is no longer under CPU pressure"},
 		{detection.Finding{Reason: reasons.MemoryPressure},
-			"is no longer under memory pressure"},
+			"is no longer low on memory"},
 		{detection.Finding{Reason: reasons.NodeFilesystemHigh},
 			"is no longer low on disk space"},
 	} {

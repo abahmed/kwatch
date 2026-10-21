@@ -1,0 +1,7 @@
+{
+  "name": "ingress-to-scaled-to-zero-service",
+  "description": "An Ingress routes to the Service of a Deployment an autoscaler has scaled to zero.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

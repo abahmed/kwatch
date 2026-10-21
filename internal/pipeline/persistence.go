@@ -20,6 +20,12 @@ type persistence struct {
 	incidents *storeWriter
 	// history feeds health marks, baselines and the timeline.
 	history *historyRecorder
+	// openOnly marks a baseline (Community) start. It still saves, and
+	// restores, the incidents that were announced and are open, so their
+	// resolves are sent after a restart and a pager alert is not left
+	// open for good. Fingerprints, the startup marker and every other
+	// part of the earlier run stay unsaved: those are Pro.
+	openOnly bool
 	// saved holds fingerprints from the previous run until reconciled is
 	// set. Fingerprint snapshots are not written before, so a restart in
 	// between still compares against the previous run.
@@ -38,8 +44,9 @@ type persistence struct {
 
 func newPersistence(deps Dependencies, stats *workerStats) *persistence {
 	p := &persistence{history: newHistoryRecorder(deps, stats)}
-	if deps.Store != nil && !deps.baselineStart() {
+	if deps.Store != nil {
 		p.incidents = newStoreWriter(deps.Store, deps.Timer, stats)
+		p.openOnly = deps.baselineStart()
 	}
 	return p
 }
@@ -63,7 +70,7 @@ func (p *persistence) startIncidentWriter() {
 // write is retried with the next batch; the worst case is one more
 // startup summary.
 func (p *persistence) saveStartup(state announce.StartupState) {
-	if p.incidents == nil {
+	if p.incidents == nil || p.openOnly {
 		return
 	}
 	// The writer reads the marker on its own goroutine: hand it copies

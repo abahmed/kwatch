@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"slices"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/incident"
@@ -47,17 +48,44 @@ func (a *announcer) investigateOpened(now time.Time) {
 	if a.pool == nil {
 		return
 	}
+	a.investigateAll(opened, now)
+}
+
+// investigateAll starts the investigations of opened, loudest tier first.
+// A storm can open more incidents than the pool has slots; the pages must
+// get them before the digest-tier ones. Within a tier the order is the
+// order of opening.
+func (a *announcer) investigateAll(opened []incident.Incident, now time.Time) {
+	opened = slices.Clone(opened)
+	slices.SortStableFunc(opened, func(x, y incident.Incident) int {
+		return int(y.Tier) - int(x.Tier)
+	})
 	for _, p := range opened {
 		a.investigate(p, now)
 	}
 }
 
-// investigate plans and submits an investigation of p. It reports false
-// when no investigator applies or no worker slot is free.
-func (a *announcer) investigate(p incident.Incident, now time.Time) bool {
+// startResult is what starting an investigation came to.
+type startResult int
+
+const (
+	// noPlan: no investigator applies to the incident.
+	noPlan startResult = iota
+	started
+	// slotBusy: no free slot now; one frees when a running
+	// investigation returns, so the start is worth trying again.
+	slotBusy
+	// refused: the incident's kind left too many stuck reads running;
+	// no slot will free soon.
+	refused
+)
+
+// start plans and submits an investigation of p without counting a
+// failure to find a slot.
+func (a *announcer) start(p incident.Incident, now time.Time) startResult {
 	plan, ok := a.investigator.Plan(p)
 	if !ok {
-		return false
+		return noPlan
 	}
 	a.forgetOldEvidence(now)
 	state := a.evidence[p.ID]
@@ -66,14 +94,31 @@ func (a *announcer) investigate(p incident.Incident, now time.Time) bool {
 	}
 	job := investigationJob{id: p.ID, seq: state.seq + 1, plan: plan}
 	if !a.pool.submit(job) {
-		a.stats.skipped.Add(1)
-		metrics.DefaultRegistry().IncInvestigation("skipped")
-		return false
+		if a.pool.atAbandonLimit(plan.Kind) {
+			return refused
+		}
+		return slotBusy
 	}
 	state.kind, state.seq, state.started = plan.Kind, job.seq, now
 	state.running = true
 	a.evidence[p.ID] = state
-	return true
+	return started
+}
+
+// investigate plans and submits an investigation of p. It reports false
+// when no investigator applies or no worker slot is free.
+func (a *announcer) investigate(p incident.Incident, now time.Time) bool {
+	result := a.start(p, now)
+	if result == slotBusy || result == refused {
+		a.noteSkipped()
+	}
+	return result == started
+}
+
+// noteSkipped counts an announcement that found no investigation slot.
+func (a *announcer) noteSkipped() {
+	a.stats.skipped.Add(1)
+	metrics.DefaultRegistry().IncInvestigation("skipped")
 }
 
 // awaitsEvidence reports whether decision d should wait for an
@@ -81,26 +126,38 @@ func (a *announcer) investigate(p incident.Incident, now time.Time) bool {
 // root kind changed since, or that was never investigated, is
 // investigated now. A material change whose evidence is older than
 // reinvestigateAfter is investigated again, so the update carries the
-// current output.
-func (a *announcer) awaitsEvidence(d incident.Decision, now time.Time) bool {
+// current output. unsent is set when no slot was free: the decision is
+// held anyway and retried as slots free (see retryUnsent).
+func (a *announcer) awaitsEvidence(
+	d incident.Decision, now time.Time,
+) (waits, unsent bool) {
 	if a.pool == nil {
-		return false
+		return false, false
 	}
 	plan, ok := a.investigator.Plan(d.Incident)
 	if !ok {
-		return false
+		return false, false
 	}
 	state := a.evidence[d.Incident.ID]
 	if state != nil && state.kind == plan.Kind {
 		if state.running {
-			return true
+			return true, false
 		}
 		if d.Action != incident.Update ||
 			now.Sub(state.started) < reinvestigateAfter {
-			return false
+			return false, false
 		}
 	}
-	return a.investigate(d.Incident, now)
+	switch a.start(d.Incident, now) {
+	case started:
+		return true, false
+	case slotBusy:
+		a.noteSkipped()
+		return true, true
+	case refused:
+		a.noteSkipped()
+	}
+	return false, false
 }
 
 // storeResult keeps a finished investigation's result. It reports false

@@ -31,17 +31,21 @@ func (s scriptedInformer) Run(stop <-chan struct{}) {
 
 func (s scriptedInformer) HasSynced() bool { return !s.crash }
 
-func TestRunInformerRebuildsAfterPanicsAndReportsHealth(t *testing.T) {
-	old := safego.Wait
-	safego.Wait = func(context.Context, time.Duration) bool { return true }
-	defer func() { safego.Wait = old }()
+// GetStore is an empty cache: the scripted informer holds no objects.
+func (s scriptedInformer) GetStore() cache.Store {
+	return cache.NewStore(cache.MetaNamespaceKeyFunc)
+}
 
+func TestRunInformerRebuildsAfterPanicsAndReportsHealth(t *testing.T) {
 	statuses := make(chan error, 8)
 	watcher := NewWithClient(
 		config.RuntimeConfigFor(&config.Config{}), newFakeKwatchConfigClient(),
 		"default", 0, func() {},
 		func(err error) { statuses <- err }, nil, nil,
 	)
+	watcher.restartWait = func(context.Context, time.Duration) bool {
+		return true
+	}
 	wg := &sync.WaitGroup{}
 	watcher.mu.Lock()
 	watcher.runWG = wg

@@ -1,0 +1,15 @@
+{
+  "name": "adv-readiness-flap-under-load",
+  "description": "Six pods flap readiness for 25 minutes without restarts while an unrelated rollout completes.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "maxPages": 1,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "service/shop/api",
+    "deployment/shop/web"
+  ],
+  "tail": "10m0s"
+}

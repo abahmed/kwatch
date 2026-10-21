@@ -16,7 +16,7 @@ func (v *view) causeOf(s scored) Cause {
 		Confidence: s.confidence, Raw: s.raw, Level: levelOf(s.confidence),
 		Contributions: s.contributions, Changes: v.changesOf(s.c.id),
 		Summary: summaryOf(s.c.id, best.match.causeMode, len(s.c.covers)),
-		Began:   v.began(s.c.id),
+		Began:   v.causeBegan(s.c),
 		Hops:    s.c.chain.hops, Beyond: s.c.chain.beyond,
 	}
 }
@@ -75,7 +75,8 @@ func (v *view) traceOf(
 }
 
 // checkedInArea is the checked map restricted to the area's failures;
-// nil when none of them had anything checked.
+// nil when none of them had anything checked. An entity edited after
+// the failure began is left out: it was not found unchanged.
 func (v *view) checkedInArea(
 	inArea map[inventory.EntityID]bool,
 ) map[inventory.EntityID][]inventory.EntityID {
@@ -84,10 +85,25 @@ func (v *view) checkedInArea(
 		if !inArea[effect] {
 			continue
 		}
-		if out == nil {
-			out = map[inventory.EntityID][]inventory.EntityID{}
+		if kept := v.unchangedLater(ids, effect); len(kept) > 0 {
+			if out == nil {
+				out = map[inventory.EntityID][]inventory.EntityID{}
+			}
+			out[effect] = kept
 		}
-		out[effect] = ids
+	}
+	return out
+}
+
+// unchangedLater drops the entities changed after effect began to fail.
+func (v *view) unchangedLater(
+	ids []inventory.EntityID, effect inventory.EntityID,
+) []inventory.EntityID {
+	var out []inventory.EntityID
+	for _, id := range ids {
+		if !v.changedAfterOnset(id, effect) {
+			out = append(out, id)
+		}
 	}
 	return out
 }

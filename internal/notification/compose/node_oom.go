@@ -41,13 +41,18 @@ func nodeOOMSentences(f caseFacts) []sentence {
 	var out []sentence
 	used := evidence(m, detection.EvidenceMemoryUsed)
 	limit := evidence(m, detection.EvidenceMemoryLimit)
+	who := "It"
+	if !f.aboutLead(m.Entity) {
+		// "It" would read as the node: name the container that used it.
+		who = f.memberName(m.Entity)
+	}
 	switch {
 	case used != "" && limit != "":
 		out = append(out, sentence{part: partProof, weight: weightNodeOOMUse,
-			text: "It used " + used + " of its " + limit + " limit."})
+			text: who + " used " + used + " of its " + limit + " limit."})
 	case used != "":
 		out = append(out, sentence{part: partProof, weight: weightNodeOOMUse,
-			text: "It used " + used + " and has no memory limit."})
+			text: who + " used " + used + " and has no memory limit."})
 	}
 	text := "Node " + node + " ran out of memory"
 	if users := nodeUsers(m); len(users) > 0 {

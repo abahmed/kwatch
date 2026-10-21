@@ -22,6 +22,12 @@ var loginTypes = map[string]bool{
 // a Secret's name, type and change time are said, never its content.
 func pullLoginSentences(f caseFacts) []sentence {
 	cause := f.p.Cause
+	if cause != nil && len(cause.Logins) == 0 && cause.Refused != "" {
+		// A pull Secret that changed: the registry's answer is the
+		// proof that its pulls were refused.
+		return []sentence{{part: partCause, text: endSentence(
+			"The registry answers " + quoted(cause.Refused))}}
+	}
 	if cause == nil || len(cause.Logins) == 0 {
 		return nil
 	}

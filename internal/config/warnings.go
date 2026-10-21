@@ -17,6 +17,8 @@ func Warnings(cfg *Config) []string {
 	warnings = append(warnings, removedOptionWarnings(cfg)...)
 	warnings = append(warnings, unknownProviderOptionWarnings(cfg)...)
 	warnings = append(warnings, routeWarnings(cfg)...)
+	warnings = append(warnings, cfg.envWarnings...)
+	warnings = append(warnings, cfg.fileWarnings...)
 	return append(warnings, unknownKeyWarnings(cfg)...)
 }
 

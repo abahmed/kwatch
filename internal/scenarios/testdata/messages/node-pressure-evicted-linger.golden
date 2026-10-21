@@ -1,16 +1,16 @@
 10:03:15 settled
-🟠 Node n1 (prod-eu-1) is low on memory. All of its dependents are failing. Replicas that do not depend on it are healthy. billing-app0, billing-app1 and billing-app2 in billing and nine others are affected as well. To check the node's conditions and recent events, run kubectl describe node n1
+🟠 Node n1 (prod-eu-1) is low on memory. All of its dependents are failing. Replicas that do not depend on it are healthy. billing-app0, billing-app1 and billing-app2 in billing; and nine others are affected as well. To check the node's conditions and recent events, run kubectl describe node n1
 🟠 Node n1 (prod-eu-1) is low on memory.
 | 🟠 Node n1 (**prod-eu-1**) is low on memory.
 | All of its dependents are failing.
 | Replicas that do not depend on it are healthy.
-| **billing-app0**, **billing-app1** and **billing-app2** in **billing** and nine others are affected as well.
+| **billing-app0**, **billing-app1** and **billing-app2** in **billing**; and nine others are affected as well.
 | To check the node's conditions and recent events, run
 | ```
 | kubectl describe node n1
 | ```
 10:12:40 healthy for 3m0s
-✅ Node n1 (prod-eu-1) is ready again. It was failing for eight minutes.
-✅ Node n1 (prod-eu-1) is ready again.
-| ✅ Node n1 (**prod-eu-1**) is ready again.
+✅ Node n1 (prod-eu-1) is no longer low on memory. It was failing for eight minutes.
+✅ Node n1 (prod-eu-1) is no longer low on memory.
+| ✅ Node n1 (**prod-eu-1**) is no longer low on memory.
 | It was failing for eight minutes.

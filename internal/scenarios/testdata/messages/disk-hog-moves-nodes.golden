@@ -1,0 +1,16 @@
+10:03:15 settled
+🟠 Node n1 (prod-eu-1) is low on disk space. Replicas that do not depend on it are healthy. Its dependents failed soon after it changed. ingest in media is affected as well. To check the node's conditions and recent events, run kubectl describe node n1
+🟠 Node n1 (prod-eu-1) is low on disk space.
+| 🟠 Node n1 (**prod-eu-1**) is low on disk space.
+| Replicas that do not depend on it are healthy.
+| Its dependents failed soon after it changed.
+| **ingest** in **media** is affected as well.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```
+10:10:20 cause revised
+🟠 Cause changed: ingest in media (prod-eu-1) is failing because it fills the disks of the nodes it runs on, so pods on those nodes are evicted. Its pods hold most of the disk in use on two nodes.
+🟠 Cause changed: ingest in media (prod-eu-1) is failing because it fills the disks of the nodes it runs on, so pods on those nodes are evicted.
+| 🟠 Cause changed: **ingest** in **media** (**prod-eu-1**) is failing because it fills the disks of the nodes it runs on, so pods on those nodes are evicted.
+| Its pods hold most of the disk in use on two nodes.

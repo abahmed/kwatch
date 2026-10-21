@@ -150,6 +150,8 @@ func dependencyClusterIPDial() scenario {
 	return scenario{
 		expect: expectation{
 			Name: "dependency-clusterip-dial",
+			// The Service that has no endpoints is named before its workload.
+			RevisesRoot: true,
 			Description: "Clients crash dialling a Service's ClusterIP " +
 				"while the Service has no ready endpoints.",
 			Root: "deployment/data/postgres", Tier: "notify",

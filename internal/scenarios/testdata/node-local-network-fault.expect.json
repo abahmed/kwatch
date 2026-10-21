@@ -1,0 +1,14 @@
+{
+  "name": "node-local-network-fault",
+  "description": "One node's pods time out on every connection while the node reports Ready and replicas of the same workloads on other nodes work.",
+  "root": "node//n3",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "service/shop/cache",
+    "deployment/shop/cache",
+    "cluster-dns//cluster-dns",
+    "zone//zone-a"
+  ],
+  "ambiguous": true
+}

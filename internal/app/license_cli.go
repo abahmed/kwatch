@@ -39,7 +39,7 @@ func defaultLicenseCLI() licenseCLI {
 	return licenseCLI{
 		loadConfig: config.LoadConfig,
 		kube:       inClusterKube,
-		httpClient: kubeclient.NewHTTPClientWithRuntime,
+		httpClient: kubeclient.NewPlatformHTTPClientWithRuntime,
 		now:        clock.RealClock{}.Now,
 		namespace:  kubeclient.GetNamespace(),
 	}

@@ -1,0 +1,12 @@
+{
+  "name": "cr-single-resource-default-manager",
+  "description": "A controller crash-loops; its one custom resource turns Ready=False after an edit.",
+  "root": "deployment/gadget-system/gadget-controller",
+  "tier": "notify",
+  "maxMessages": 3,
+  "maxPages": 1,
+  "mustNotBlame": [
+    "gadget.gadgets.acme.dev/team-a/primary",
+    "gadget.gadgets.acme.dev/team-b/primary"
+  ]
+}

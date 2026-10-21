@@ -35,7 +35,8 @@ func TestWakeUpBlipsAreSummarisedInOneDigestLine(t *testing.T) {
 	digest := digestsOf(result)
 	require.Len(t, digest, 1)
 	assert.Contains(t, digest[0].Note, "Cluster waking up: 6 workloads "+
-		"started between 10:30 and 10:31; 6 had brief startup failures, "+
+		"started between 10:30 UTC and 10:31 UTC; 6 had brief startup "+
+		"failures, "+
 		"all recovered.")
 	assert.Empty(t, result.Decisions[0].Incident.ID,
 		"the digest is the only decision: no incident announced")
@@ -71,5 +72,5 @@ func TestWakeUpCrashLoopMentionsTheWakeUp(t *testing.T) {
 	require.NotEmpty(t, announced)
 	assert.Contains(t, announced[0], "keeps crashing")
 	assert.Regexp(t, "The cluster (is|was) waking up: 6 workloads "+
-		"started between 10:30 and 10:31", strings.Join(announced, "\n"))
+		"started between 10:30 UTC and 10:31 UTC", strings.Join(announced, "\n"))
 }

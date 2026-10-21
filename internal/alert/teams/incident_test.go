@@ -72,3 +72,30 @@ func TestTeamsSendIncidentUsesConfiguredTitle(t *testing.T) {
 		t.Fatalf("mention was not neutralized: %q", payload.Text)
 	}
 }
+
+// The title of an incident is text the cluster supplied: the card shows
+// it as text, never as a link, a heading or a mention.
+func TestTeamsCardTitleIsEscaped(t *testing.T) {
+	rec := providertest.NewRecorder(t)
+	c := NewTeams(map[string]interface{}{"webhook": rec.URL()}, "dev",
+		rec.Dependencies())
+	m := providertest.Announce()
+	m.Title = "[pay](https://evil.example) **now** @channel <b>x</b>"
+	if err := c.SendIncident(context.Background(), m); err != nil {
+		t.Fatalf("SendIncident: %v", err)
+	}
+	var payload teamsFlowPayload
+	if err := json.Unmarshal(rec.Last(t).Body, &payload); err != nil {
+		t.Fatal(err)
+	}
+	content := payload.Attachment[0]["content"].(map[string]any)
+	title := content["body"].([]any)[0].(map[string]any)["text"].(string)
+	for _, bad := range []string{"[pay](", "**now**", "@channel", "<b>"} {
+		if strings.Contains(title, bad) {
+			t.Errorf("title block holds markup %q: %q", bad, title)
+		}
+	}
+	if !strings.Contains(title, `\[pay\]`) {
+		t.Errorf("title block was not escaped: %q", title)
+	}
+}

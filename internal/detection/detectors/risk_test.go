@@ -113,3 +113,30 @@ func TestRiskCountsUnlimitedContainersPerTemplate(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Contains(t, got[0].Summary, "1 of its containers")
 }
+
+// Risk findings are evidence only: each summary states the present
+// configuration and never what it may cost, and none can change a tier.
+func TestRiskSummariesStatePresentFactsOnly(t *testing.T) {
+	m, deploy := riskWorkload(1, []string{"n1"},
+		map[string]inventory.Value{
+			kube.AttrImage: inventory.Text("registry/api:latest"),
+		})
+
+	got := Risk{}.Detect(testDetectorContext(m, t0), entityOf(m, deploy))
+
+	want := map[string]string{
+		reasons.RiskNoReadinessProbe: "Its containers have no " +
+			"readiness probe",
+		reasons.RiskNoMemoryLimit: "1 of its containers have no " +
+			"memory limit",
+		reasons.RiskMutableImageTag: "Its image registry/api:latest " +
+			"has no fixed tag",
+		reasons.RiskSingleReplica: "It runs a single replica",
+	}
+	require.Len(t, got, len(want))
+	for _, f := range got {
+		assert.Equal(t, want[f.Reason], f.Summary, f.Reason)
+		assert.True(t, f.Advisory, f.Reason)
+		assert.Equal(t, detection.Info, f.Severity, f.Reason)
+	}
+}

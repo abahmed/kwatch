@@ -31,10 +31,20 @@ spec:
         {{- else }}
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- end }}
-        {{- with (default dict .Values.license).key }}
-        {{- if not (default dict $.Values.license).existingSecret }}
-        checksum/license: {{ . | sha256sum }}
+        {{- $license := default dict .Values.license }}
+        {{- if $license.existingSecret }}
+        {{- /* Roll the pod when the key in the existing Secret changes: the
+        key is read once, at start. lookup needs a live cluster; an offline
+        render (helm template, Argo CD) hashes the name instead and the pod
+        must be restarted by hand after the key changes. */}}
+        {{- $licenseSecret := lookup "v1" "Secret" .Release.Namespace $license.existingSecret }}
+        {{- if $licenseSecret }}
+        checksum/license-secret: {{ toJson $licenseSecret.data | sha256sum }}
+        {{- else }}
+        checksum/license-secret: {{ $license.existingSecret | sha256sum }}
         {{- end }}
+        {{- else if $license.key }}
+        checksum/license: {{ $license.key | sha256sum }}
         {{- end }}
         {{- with .Values.podAnnotations }}
           {{- toYaml . | nindent 8 }}
@@ -49,6 +59,13 @@ spec:
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       serviceAccountName:  {{ .Release.Name }}
       automountServiceAccountToken: true
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
@@ -67,6 +84,9 @@ spec:
             mountPath: /config
           - name: data
             mountPath: /var/lib/kwatch
+          {{- with .Values.extraVolumeMounts }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
           env:
             - name: CONFIG_FILE
               value: "/config/config.yaml"
@@ -181,3 +201,6 @@ spec:
             name: {{ .Release.Name }}
             defaultMode: 0444
           {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}

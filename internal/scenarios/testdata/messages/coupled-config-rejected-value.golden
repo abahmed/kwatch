@@ -1,13 +1,14 @@
 10:12:25 settled
-🟠 ledger is failing in billing (prod-eu-1) after the 10:10 change to config map ledger-config. bob changed key rates.yaml. It fails with "fatal: failed to parse rates.yaml: yaml: line 1: did not find expected ',' or ']'". To check the object the pods depend on, run kubectl get configmap ledger-config -n billing -o yaml
+🟠 ledger is failing in billing (prod-eu-1) after the 10:10 UTC change to config map ledger-config. bob changed key rates.yaml. It fails with "fatal: failed to parse rates.yaml: yaml: line 1: did not find expected ',' or ']'". Every error mentions it. To check the object the pods depend on, run kubectl get configmap ledger-config -n billing -o yaml
 Checked: both replicas fail, on 2 nodes.
-🟠 ledger is failing in billing (prod-eu-1) after the 10:10 change to config map ledger-config.
-| 🟠 **ledger** is failing in **billing** (**prod-eu-1**) after the 10:10 change to config map **ledger-config**.
+🟠 ledger is failing in billing (prod-eu-1) after the 10:10 UTC change to config map ledger-config.
+| 🟠 **ledger** is failing in **billing** (**prod-eu-1**) after the 10:10 UTC change to config map **ledger-config**.
 | bob changed key rates.yaml.
 | It fails with
 | ```
 | fatal: failed to parse rates.yaml: yaml: line 1: did not find expected ',' or ']'
 | ```
+| Every error mentions it.
 | To check the object the pods depend on, run
 | ```
 | kubectl get configmap ledger-config -n billing -o yaml

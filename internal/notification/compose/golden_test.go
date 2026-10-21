@@ -45,7 +45,7 @@ func TestWriterGoldenNotes(t *testing.T) {
 // labelStart matches the section labels the note must not use.
 var labelStart = regexp.MustCompile(`(?i)(^|\n|\. )(cause|impact|why|` +
 	`evidence|confidence|next steps|timeline|how we know|affected|` +
-	`started|root cause|resolved):`)
+	`started|root cause|resolved|quoted|quoted [a-z ]+):`)
 
 func TestWriterNoteProperties(t *testing.T) {
 	for _, c := range goldenCases() {

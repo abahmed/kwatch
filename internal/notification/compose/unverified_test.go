@@ -19,18 +19,18 @@ func TestUnverifiedLine(t *testing.T) {
 	}{
 		{"none", nil, ""},
 		{"one", []string{"secrets in billing"},
-			"I can't see secrets in billing, so a changed secret " +
+			"kwatch can't see secrets in billing, so a changed secret " +
 				"can't be ruled out."},
 		{"two kinds", []string{"config maps in shop", "secrets in shop"},
-			"I can't see config maps in shop or secrets in shop, so a " +
+			"kwatch can't see config maps in shop or secrets in shop, so a " +
 				"changed config map or a changed secret can't be ruled out."},
 		{"same kind twice", []string{"secrets in a", "secrets in b"},
-			"I can't see secrets in a or secrets in b, so a changed " +
+			"kwatch can't see secrets in a or secrets in b, so a changed " +
 				"secret can't be ruled out."},
 		{"cluster scoped", []string{"nodes"},
-			"I can't see nodes, so a node problem can't be ruled out."},
+			"kwatch can't see nodes, so a node problem can't be ruled out."},
 		{"other kind", []string{"widgets in a"},
-			"I can't see widgets in a, so a problem with widgets " +
+			"kwatch can't see widgets in a, so a problem with widgets " +
 				"can't be ruled out."},
 	}
 	for _, tc := range cases {
@@ -57,7 +57,7 @@ func TestWriteStatesUnverified(t *testing.T) {
 	}
 	msg := Writer{}.Write(
 		incident.Decision{Action: incident.Announce, Incident: p}, now)
-	assert.Contains(t, msg.Lines, "I can't see secrets in billing, so a "+
+	assert.Contains(t, msg.Lines, "kwatch can't see secrets in billing, so a "+
 		"changed secret can't be ruled out.")
 	assert.NotContains(t, msg.Title, "couldn't find")
 

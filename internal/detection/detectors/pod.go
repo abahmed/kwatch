@@ -172,6 +172,10 @@ func (d Pod) pending(
 		// No start time yet: count from when the phase was first seen.
 		started = valueSince(e, kube.AttrPhase)
 	}
+	// A pod cannot have waited before it existed.
+	if created := timestamp(e, kube.AttrCreated); started.Before(created) {
+		started = created
+	}
 	wait := d.thresholds.Pending*startedPendingFactor +
 		bootGraceFor(ctx, e)
 	if !sustained(ctx, "pod-pending", started, wait) {
@@ -200,31 +204,6 @@ func (d Pod) unscheduled(
 		Since: created,
 		Summary: "Pod has not been looked at by the scheduler for " +
 			format.Duration(ctx.Now.Sub(created)),
-	}}
-}
-
-func failed(ctx detection.Context, e inventory.Entity) []detection.Finding {
-	evicted := text(e, kube.AttrReason) == reasons.Evicted
-	if evicted && evictionOver(ctx, valueSince(e, kube.AttrPhase)) {
-		return nil
-	}
-	if disrupted(e) && !(evicted && nodePressureEviction(e)) {
-		return nil
-	}
-	if s, ok := admissionFinding(e); ok {
-		return []detection.Finding{s}
-	}
-	findingReason, summary := reasons.PodFailed, "Pod failed"
-	if evicted {
-		findingReason, summary = reasons.Evicted, "Pod was evicted"
-	}
-	return []detection.Finding{{
-		Reason: findingReason, Severity: detection.Warning,
-		Since:   valueSince(e, kube.AttrPhase),
-		Summary: summary,
-		Evidence: []detection.Evidence{{
-			Label: "message", Value: text(e, kube.AttrMessage),
-		}},
 	}}
 }
 
@@ -265,11 +244,11 @@ func startupBudget(
 	for _, id := range ctx.Model.Related(
 		pod, inventory.PartOf, inventory.Incoming,
 	) {
-		container, ok := ctx.Model.Entity(id)
+		attr, ok := ctx.Model.Attribute(id, kube.AttrProbeBudget)
 		if !ok {
 			continue
 		}
-		if seconds, ok := number(container, kube.AttrProbeBudget); ok {
+		if seconds, ok := attr.Value.AsNumber(); ok {
 			if budget := time.Duration(seconds) * time.Second; budget > longest {
 				longest = budget
 			}
@@ -283,13 +262,18 @@ func conditionMessage(e inventory.Entity, conditionType string) string {
 		kube.AttrConditionMessage)
 }
 
+// nodeShutdownReason is the status reason of a pod the kubelet refused
+// or ended because its node is shutting down.
+const nodeShutdownReason = "NodeShutdown"
+
 // disrupted reports a pod Kubernetes is terminating on purpose: the
 // DisruptionTarget condition marks preemption, API eviction, taint
-// manager deletion, pod GC, graceful node shutdown and scale-down. Such
-// a pod ends Failed without having failed.
+// manager deletion, pod GC, graceful node shutdown and scale-down, and
+// the NodeShutdown status reason marks a pod of a node that is going
+// away. Such a pod ends Failed without having failed.
 func disrupted(e inventory.Entity) bool {
 	status, _, _ := condition(e, "DisruptionTarget")
-	return status == "True"
+	return status == "True" || text(e, kube.AttrReason) == nodeShutdownReason
 }
 
 // nodePressureEviction reports the kubelet evicting a pod for node
@@ -310,22 +294,4 @@ func unschedulableEvidence(
 	out := []detection.Evidence{{Label: "scheduler", Value: message}}
 	out = append(out, capacityEvidence(ctx.Model, e.ID, message)...)
 	return append(out, fitEvidence(ctx, e)...)
-}
-
-// evictionOver reports an eviction older than EventWindow. The evicted
-// pod stays in the API until pod garbage collection, but the eviction
-// happened once: like a Warning event, it stops counting as current when
-// the window has passed, and a healthy replacement has long since taken
-// over. Otherwise old evicted pods would be announced as new problems
-// when the node's own events age out.
-func evictionOver(ctx detection.Context, since time.Time) bool {
-	if since.IsZero() {
-		return false
-	}
-	left := since.Add(EventWindow).Sub(ctx.Now)
-	if left <= 0 {
-		return true
-	}
-	ctx.RecheckAfter(left + time.Nanosecond)
-	return false
 }

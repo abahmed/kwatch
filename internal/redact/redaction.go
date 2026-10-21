@@ -27,7 +27,7 @@ type redactionRule struct {
 // secretNeeds are the fragments every key-name rule needs: each key word
 // of secretKeys and camelSecretKeys contains one of them.
 var secretNeeds = []string{
-	"pass", "pwd", "token", "secret", "key", "credential",
+	"pass", "pwd", "token", "secret", "key", "credential", "sig", "session",
 }
 
 // wanted reports whether the rule can match text, given its lower-case
@@ -44,10 +44,17 @@ func (r redactionRule) wanted(lower string) bool {
 	return false
 }
 
-const secretKeys = `password|passwd|pwd|passphrase|passcode|token|secret|` +
-	`api[_-]?key|access[_-]?token|client[_-]?secret|` +
+const secretKeys = `password|passwd|passwort|sslpassword|pwd|passphrase|` +
+	`passcode|token|secret|api[_-]?key|access[_-]?token|client[_-]?secret|` +
 	`secret[_-]?access[_-]?key|private[_-]?key|credentials?|` +
-	`access[_-]?key|signing[_-]?key|secret[_-]?key`
+	`access[_-]?key|account[_-]?key|signing[_-]?key|secret[_-]?key|` +
+	`signature|session[_-]?id|pass`
+
+// capsSecretKeys are the key words that follow an upper-case run with no
+// separator: PGPASSWORD, DBPASSWORD, GITHUBTOKEN. Only these words, and
+// only in capitals, so that "bypass" and "compass" stay words.
+const capsSecretKeys = `(?-i:[A-Z]{2,})(?:password|passwd|passphrase|token|` +
+	`secret|credentials?)`
 
 // camelSecretKeys are the camelCase forms of key names: authToken,
 // refreshToken, clientSecret, signingKey. The capital letter marks where
@@ -62,25 +69,33 @@ const camelSecretKeys = `[a-z][a-z0-9]*(?-i:Token|Secret|Password|Passwd|` +
 // suffix of a snake_case name must be joined with "_" or "-", so ordinary
 // words like "tokenizer" stay visible. Keys that only describe a secret,
 // such as token_ttl or secret_name, are left alone by skipDescriptiveKey.
-const secretKey = `(?:[a-z0-9_-]*[_-])?(?:` + camelSecretKeys + `|` +
-	secretKeys + `)s?(?:[_-][a-z0-9_-]*)?`
+const secretKey = `(?:(?:[a-z0-9_-]*[_-])?(?:` + camelSecretKeys + `|` +
+	secretKeys + `)s?(?:[_-][a-z0-9_-]*)?|` + capsSecretKeys +
+	`s?(?:[_-][a-z0-9_-]*)?)`
 
-// secretValue is a quoted value, which may contain spaces, or one bare word.
-const secretValue = `(?:"(?:[^"\\]|\\.)*"|'[^']*'|[^\s,;]+)`
+// secretValue is a quoted value, which may contain spaces, or one bare
+// word. A bare word runs to the next space: "a,b;c" is one password, and
+// splitSecret gives back what follows when a "," or ";" ends the value.
+//
+// A quote that is never closed (a truncated log line) takes the rest of
+// its line: the value is secret to its end, not only to the first space.
+const secretValue = `(?:"(?:[^"\\]|\\.)*"|"[^\n]*|'[^']*'|'[^\n]*|[^\s]+)`
 
-// jsonSecretValue is a JSON string, number or boolean.
-const jsonSecretValue = `(?:"(?:[^"\\]|\\.)*"|` +
+// jsonSecretValue is a JSON string, number or boolean. A string cut off
+// before its closing quote runs to the end of its line.
+const jsonSecretValue = `(?:"(?:[^"\\]|\\.)*"|"[^\n]*|` +
 	`-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false)`
 
 var credentialRedactions = []redactionRule{
 	{pattern: regexp.MustCompile(
-		`-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?` +
-			`(?:-----END [A-Z ]*PRIVATE KEY-----|$)`,
+		`-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----[\s\S]*?` +
+			`(?:-----END [A-Z ]*PRIVATE KEY(?: BLOCK)?-----|$)`,
 	), placeholder: "[redacted private key]"},
 	// The value must not start with "[" so an already redacted header is
 	// not counted twice.
-	{pattern: regexp.MustCompile(`(?i)(\bbearer\s+)[^\s,;"\[][^\s,;"]*`),
-		placeholder: "[redacted]"},
+	{pattern: regexp.MustCompile(
+		`(?i)(\bbearer(?:\s*[:=]\s*|\s+))[^\s,;"\[][^\s,;"]*`,
+	), placeholder: "[redacted]"},
 	// A bare "basic" is a common English word, so only a value that is
 	// base64 of "user:password" is treated as a credential.
 	{pattern: regexp.MustCompile(`(?i)(\bbasic\s+)([A-Za-z0-9+/]+={0,2})`),
@@ -96,7 +111,7 @@ var credentialRedactions = []redactionRule{
 	{pattern: regexp.MustCompile(
 		`(?i)(\b` + secretKey + `\s*[:=]\s*)(` + secretValue + `)`,
 	), placeholder: "[redacted]", skip: skipNonSecret,
-		needs: secretNeeds},
+		rebuild: rebuildKeyValue, needs: secretNeeds},
 	// Cookie headers carry session credentials; the whole value goes.
 	{pattern: regexp.MustCompile(
 		`(?i)(\b(?:set-)?cookie\s*:\s*)[^\r\n\[][^\r\n]*`,
@@ -104,7 +119,7 @@ var credentialRedactions = []redactionRule{
 	// A flag whose name ends in a secret word takes its value as the next
 	// word: "--password hunter2".
 	{pattern: regexp.MustCompile(
-		`(?i)(\B--[a-z0-9-]*(?:password|passwd|pwd|passphrase|secret|` +
+		`(?i)(\B--[a-z0-9-]*(?:password|passwd|pwd|pass|passphrase|secret|` +
 			`token|api[_-]?key)\s+)[^\s\[-][^\s]*`,
 	), placeholder: "[redacted]"},
 	// "password hunter2" without a separator is also prose ("password
@@ -144,6 +159,12 @@ var privateAddressRedactions = []redactionRule{
 		`(?i)\bf[cd][0-9a-f]{2}:[0-9a-f:]*[0-9a-f]`,
 	)},
 	{pattern: regexp.MustCompile(`(?i)\bfe80:[0-9a-f:]*[0-9a-f]`)},
+	// Link-local (the cloud metadata address) and shared address space
+	// (100.64.0.0/10, carrier-grade NAT, used by some clusters).
+	{pattern: regexp.MustCompile(`\b169\.254\.\d{1,3}\.\d{1,3}\b`)},
+	{pattern: regexp.MustCompile(
+		`\b100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}\b`,
+	)},
 }
 
 // Evidence removes credentials and private application addresses at

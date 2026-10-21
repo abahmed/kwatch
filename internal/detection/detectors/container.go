@@ -68,7 +68,12 @@ func restartingFinding(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	restarts, _ := number(e, kube.AttrRestarts)
-	if restarts < highRestarts {
+	// A memory kill is reported from the third restart: a leak that
+	// kills the container every quarter of an hour would otherwise take
+	// an hour to be heard.
+	oom := text(e, kube.AttrLastReason) == reasons.OOMKilled &&
+		restarts >= repeatedOOMCount
+	if restarts < highRestarts && !oom {
 		return nil
 	}
 	// The last termination's finish time is when the container last
@@ -80,8 +85,7 @@ func restartingFinding(
 	}
 	ctx.RecheckAfter(lastRestart.Add(restartRecency).Sub(ctx.Now))
 	// The restart count is evidence, not part of the stable summary.
-	if text(e, kube.AttrLastReason) == reasons.OOMKilled &&
-		restarts >= repeatedOOMCount {
+	if oom {
 		return []detection.Finding{{
 			Reason: reasons.OOMKilled, Severity: detection.Critical,
 			Since: lastRestart,
@@ -199,12 +203,42 @@ func terminatedFinding(
 				describeWaiting(findingReason)
 		}
 	}
+	since := terminatedAt(e)
 	return []detection.Finding{{
-		Reason: findingReason, Severity: detection.Critical,
-		Since:    valueSince(e, kube.AttrState),
-		Summary:  summary,
-		Evidence: containerEvidence(e),
+		Reason: findingReason, Severity: terminatedSeverity(ctx, since),
+		Since: since, Summary: summary, Evidence: containerEvidence(e),
+		Advisory: retryingJobContainer(ctx, e),
 	}}
+}
+
+// terminatedAt is when the container's run ended, from the cluster, so
+// a restart of kwatch does not make an old exit look new. Without it the
+// time kwatch first saw the state stands in.
+func terminatedAt(e inventory.Entity) time.Time {
+	if finished := timestamp(e, kube.AttrFinished); !finished.IsZero() {
+		return finished
+	}
+	return valueSince(e, kube.AttrState)
+}
+
+// terminatedSeverity is critical while the exit is news and
+// informational once EventWindow has passed.
+func terminatedSeverity(
+	ctx detection.Context, since time.Time,
+) detection.Severity {
+	if since.IsZero() || ageOut(ctx, since) {
+		return detection.Info
+	}
+	return detection.Critical
+}
+
+// retryingJobContainer reports a container of a pod whose Job is still
+// retrying (see jobRetrying).
+func retryingJobContainer(
+	ctx detection.Context, e inventory.Entity,
+) bool {
+	pod, ok := owningPod(ctx, e)
+	return ok && jobRetrying(ctx, pod)
 }
 
 // stoppedOnPurpose reports a termination Kubernetes caused: any exit of a

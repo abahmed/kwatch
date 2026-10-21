@@ -17,6 +17,27 @@ regression test and part of the quality gate. Real example:
    the tempting wrong answer. A scenario that must stay silent sets
    `Quiet: true` instead of a root. Add a negative twin for every positive
    one (`certificate-expiring-app-crash`).
+
+   `MustNotBlame` is checked against every stated cause, the rival of a
+   hedged cause and the sentence of a message that names an entity as the
+   cause. Beyond it, the first message may only state the label's roots
+   (`Root`, `OtherRoots`, `Unrelated`) or no cause. Three optional fields
+   say when a scenario is allowed to differ:
+
+   - `RevisesRoot: true`: the story is a legitimate revision, so the first
+     message may name a root that a later one replaces (a failing
+     container named before its Deployment, a cause that arrives late).
+     Use it for a story, never to silence a wrong first answer.
+   - `Ambiguous: true`: the evidence cannot separate the root from a
+     rival. A cause that names that rival as a hedge is not a wrong root
+     stated at likely confidence; one that states a wrong root alone is.
+   - `Hidden: [...]`: kinds kwatch never syncs, as when its RBAC lacks the
+     permission. Detectors skip them and the message names the blind spot.
+     (`newDependenciesLosingSight` models a kind that was visible and then
+     lost, which is a different story.)
+
+   With several roots, list them in any order: independent incidents are
+   matched one by one.
 3. **Register it.** Add it to the area's `...Scenarios()` slice, or add a new
    slice to `library()` in `scenario_test.go`.
 4. **Generate the files.** This writes `testdata/<name>.jsonl` (the
@@ -33,13 +54,21 @@ regression test and part of the quality gate. Real example:
    see.
 5. **Run the scorecard.** The gates in
    [production goals](./production-goals.md) must still pass: correct root,
-   no wrong high-confidence root, messages per incident, notifications per
-   hour and the storm.
+   no wrong root stated at likely confidence or higher, a right first
+   message, messages per incident, notifications per hour and the storm.
 
 ```sh
 go test ./internal/scenarios -run 'TestScenario'
 make alert-quality-gate
 ```
+
+`make alert-quality-gate` runs two checks. `TestScorecardGates` fails when a
+gate misses. `TestScorecardGatesSeeRootCauseRegressions` is the mutation
+check: it switches a part of the root-cause engine off (a scorer, the
+vetoes, the counterfactual checks) and fails when no gate notices. A new
+scorer or veto that no scenario depends on shows up there, so add a scenario
+that needs it, or an entry in `ablations`
+(`internal/scenarios/ablation_gates_test.go`).
 
 A wrong verdict found in the field becomes a permanent scenario the same way.
 Do not lower a gate or relax a label to make a scenario pass; fix the table,
@@ -71,3 +100,37 @@ in the same change.
 - **Pinned linter.** `GOLANGCI_VERSION` in the Makefile is the only place the
   golangci-lint version is set; `make lint` builds it with the active Go
   toolchain, locally and in CI.
+
+## The ratchet
+
+The aggregate gates average over hundreds of scenarios, so one scenario that
+stops passing can hide inside the slack.
+`internal/scenarios/testdata/ratchet.txt` lists every labelled scenario that
+passes, with how its root was found
+(`found-high`, `found-likely`, `found-possible`, `self`, `unknown`, `quiet`).
+`TestScenarioRatchetHolds` and the scorecard gate "Scenarios that passed and
+no longer do" fail when a listed scenario fails, is gone, or states its cause
+at a lower confidence level than the list records (a cause that falls back to
+"no cause" still reads as the right root otherwise). A scenario that is not
+listed is not held to anything yet.
+
+The list moves only on purpose. After a change that should alter it,
+regenerate it and read the diff: a removed line is a regression you are
+accepting, an added line pins a new scenario.
+
+```sh
+go test ./internal/scenarios -run TestScenarioRatchetHolds -update-ratchet
+```
+
+A scenario that opts out of the first-message gate with `RevisesRoot` is
+still judged on its final root and still counts for the ratchet.
+
+## Adversarial scenarios
+
+`library_adversarial_*_test.go` holds scenarios written by someone who did
+not build the engine, to find where it is confidently wrong: a recent change
+that is not the cause, look-alike names, a healthy dependency, faults that
+share a node, and states that must stay quiet. Their names start with
+`adv-`, their labels say what a person who knows Kubernetes would conclude,
+and they are ordinary members of the labelled library: fixtures and message
+goldens live in `testdata` and the same gates judge them.

@@ -29,7 +29,8 @@ func TestWindowSentenceNamesBothTimesAndTheChange(t *testing.T) {
 
 	assert.Len(t, got, 1)
 	assert.Contains(t, got[0].text,
-		"Between 10:01:40 (last healthy) and 10:02:10 (first failure): ")
+		"Between 10:01:40 UTC (last healthy) and "+
+			"10:02:10 UTC (first failure): ")
 	assert.Contains(t, got[0].text, "bob")
 }
 
@@ -37,8 +38,8 @@ func TestWindowSentenceNamesTheDayAcrossMidnight(t *testing.T) {
 	healthy := time.Date(2026, 10, 12, 23, 50, 0, 0, time.UTC)
 	got := windowSentences(windowFacts(healthy, healthy.Add(20*time.Minute)))
 
-	assert.Contains(t, got[0].text, "Oct 12 23:50:00 (last healthy)")
-	assert.Contains(t, got[0].text, "Oct 13 00:10:00 (first failure)")
+	assert.Contains(t, got[0].text, "Oct 12 23:50:00 UTC (last healthy)")
+	assert.Contains(t, got[0].text, "Oct 13 00:10:00 UTC (first failure)")
 }
 
 func TestWindowSentenceIsAbsentWithoutBothTimes(t *testing.T) {

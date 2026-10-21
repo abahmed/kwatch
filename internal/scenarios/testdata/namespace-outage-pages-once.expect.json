@@ -1,0 +1,21 @@
+{
+  "name": "namespace-outage-pages-once",
+  "description": "Six of eight user-facing Deployments in one namespace crash-loop together: the namespace is paged once, and the other five stay at notify.",
+  "root": "deployment/shop/app0",
+  "otherRoots": [
+    "deployment/shop/app1",
+    "deployment/shop/app2",
+    "deployment/shop/app3",
+    "deployment/shop/app4",
+    "deployment/shop/app5"
+  ],
+  "tier": "page",
+  "maxMessages": 10,
+  "maxPages": 1,
+  "mustNotBlame": [
+    "node//n0",
+    "node//n1",
+    "zone//zone-a"
+  ],
+  "tail": "7h0m0s"
+}

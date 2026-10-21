@@ -33,6 +33,11 @@ func (m *Manager) nextWake(now time.Time) time.Duration {
 
 // deadline reports when the incident next needs a tick on its own.
 func (m *Manager) deadline(p *Incident, now time.Time) (time.Time, bool) {
+	if superseded(p) {
+		if due, ok := m.takeoverDue(p); ok {
+			return due, true
+		}
+	}
 	if m.reopenPending(p) {
 		return p.Pending.ReopenDueAt(m.cfg.ReviseSettle), true
 	}

@@ -6,7 +6,7 @@
 | ```
 | container runtime network not ready: … Network plugin returns error: cni plugin not initialized
 | ```
-| ; its recent events include ImageGCFailed `failed to get imageFs info: unable to find data in memory cache`.
+| Its recent events include ImageGCFailed "failed to get imageFs info: unable to find data in memory cache".
 | To check the node's conditions and recent events, run
 | ```
 | kubectl describe node n1

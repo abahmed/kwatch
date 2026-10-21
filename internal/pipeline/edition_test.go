@@ -31,8 +31,9 @@ func TestBaselineStartFollowsTheDiskStateEntitlement(t *testing.T) {
 				})
 			assert.Equal(t, tc.want,
 				e.announcer.collect.Startup.Baseline)
-			assert.Equal(t, tc.want, e.storage.incidents == nil,
-				"no incident writer in a baseline")
+			assert.NotNil(t, e.storage.incidents)
+			assert.Equal(t, tc.want, e.storage.openOnly,
+				"a baseline saves only the announced open incidents")
 		})
 	}
 }
@@ -77,7 +78,8 @@ func TestCommunityStartsFromABaselineAndRestoresNothing(t *testing.T) {
 	startup := h.engine.announcer.collect.Startup
 	assert.True(t, startup.ColdStart)
 	assert.True(t, startup.AwaitSync, "existing failures are held")
-	assert.Nil(t, h.engine.storage.incidents, "incidents are not saved")
+	assert.True(t, h.engine.storage.openOnly,
+		"only announced open incidents are saved")
 	assert.Empty(t, h.engine.storage.saved, "no fingerprints are loaded")
 }
 

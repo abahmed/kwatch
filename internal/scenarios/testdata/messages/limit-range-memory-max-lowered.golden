@@ -1,9 +1,9 @@
 10:05:15 settled
-🟠 Limit range limits is failing in shop (prod-eu-1) after the 10:03 change to its limits. LimitRange limits: max memory 1Gi per container; a container asks 2Gi (limit). The limits changed from Container min ; max memory=4Gi; default ; defaultRequest ; ratio  to Container min ; max memory=1Gi; default ; defaultRequest ; ratio. app is affected as well. To see the object's state and events, run kubectl describe replicaset app-77700b0d -n shop
-🟠 Limit range limits is failing in shop (prod-eu-1) after the 10:03 change to its limits.
-| 🟠 Limit range **limits** is failing in **shop** (**prod-eu-1**) after the 10:03 change to its **limits**.
+🟠 Limit range limits is failing in shop (prod-eu-1) after the 10:03 UTC change to its limits. LimitRange limits: max memory 1Gi per container; a container asks 2Gi (limit). The limits changed from Container max memory=4Gi to Container max memory=1Gi. app is affected as well. To see the object's state and events, run kubectl describe replicaset app-77700b0d -n shop
+🟠 Limit range limits is failing in shop (prod-eu-1) after the 10:03 UTC change to its limits.
+| 🟠 Limit range **limits** is failing in **shop** (**prod-eu-1**) after the 10:03 UTC change to its **limits**.
 | LimitRange limits: max memory 1Gi per container; a container asks 2Gi (limit).
-| The **limits** changed from Container min ; max memory=4Gi; default ; defaultRequest ; ratio  to Container min ; max memory=1Gi; default ; defaultRequest ; ratio.
+| The **limits** changed from Container max memory=4Gi to Container max memory=1Gi.
 | **app** is affected as well.
 | To see the object's state and events, run
 | ```

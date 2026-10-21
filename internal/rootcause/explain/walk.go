@@ -144,6 +144,9 @@ func (v *view) managerHops(id inventory.EntityID) []hop {
 			out = append(out, hop{link: LinkManages, to: link.To})
 		}
 	}
+	if len(out) == 0 {
+		return hopsTo(LinkManages, v.grantedControllers(id)...)
+	}
 	return out
 }
 

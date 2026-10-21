@@ -6,5 +6,6 @@
   "maxMessages": 4,
   "maxPages": 1,
   "alone": true,
+  "revisesRoot": true,
   "tail": "30m0s"
 }

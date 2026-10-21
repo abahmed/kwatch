@@ -7,5 +7,6 @@
   "mustNotBlame": [
     "node//n1"
   ],
+  "revisesRoot": true,
   "tail": "10m0s"
 }

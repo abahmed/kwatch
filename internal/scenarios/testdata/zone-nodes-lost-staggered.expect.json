@@ -1,0 +1,14 @@
+{
+  "name": "zone-nodes-lost-staggered",
+  "description": "The three nodes of one zone go down four minutes apart while the other zone stays healthy: one outage, one page.",
+  "root": "zone//zone-a",
+  "tier": "page",
+  "maxMessages": 4,
+  "maxPages": 1,
+  "mustNotBlame": [
+    "zone//zone-b",
+    "node//b1",
+    "node//b2"
+  ],
+  "tail": "20m0s"
+}

@@ -7,6 +7,29 @@ Secret access set watch.secrets=false (--set watch.secrets=false); checks
 that need Secrets then report that they cannot verify. rbac.mode=least-privilege
 alone narrows other kinds but still lists Secrets.
 {{- end }}
+{{- $rbacMode := .Values.rbac.mode | default "least-privilege" }}
+{{- $secretsOn := eq (include "kwatch.watchSecrets" .) "true" }}
+{{- if or (ne $rbacMode "full") (not $secretsOn) }}
+
+NOTE: kwatch has read access to the built-in kinds it understands only. Custom
+resources (cert-manager, Argo CD, operators and any other CRD) are not watched,
+so failures in them are not reported, and /health lists them under coverage as
+permission_denied. To watch custom resources and kinds added later, set
+rbac.mode=full.
+{{- if and (eq $rbacMode "full") (not $secretsOn) }}
+rbac.mode=full is not in effect here: watch.secrets=false renders the same
+explicit list as rbac.mode=least-privilege, because RBAC cannot remove Secrets
+from a wildcard grant. Keep Secrets watched to use rbac.mode=full.
+{{- end }}
+{{- end }}
+{{- if not .Values.configSecretName }}
+
+WARNING: no alert provider is configured, so kwatch watches the cluster but
+sends no notification. Alert providers need credentials, which the chart does
+not accept in values: put a config.yaml with an alert: section in a Secret and
+install with --set configSecretName=<secret> (credentials are referenced as
+${file:/config/<name>}). See the chart README.
+{{- end }}
 {{- if .Values.persistence.emptyDir }}
 
 WARNING: persistence.emptyDir=true. Kwatch state (open incidents, baselines,

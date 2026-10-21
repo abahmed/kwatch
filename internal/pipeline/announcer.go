@@ -86,6 +86,10 @@ func newAnnouncer(
 // reports whether it sent a startup summary, a digest, a roll-up, a
 // listing's resolve or a held announcement: messages of their own that
 // the incidents' decisions did not make, and that change saved state.
+//
+// Each collecting step is contained on its own. One that panics takes
+// nothing: the decisions go on to the next step and are delivered, so a
+// bad digest or listing cannot swallow the pages and updates of the tick.
 func (a *announcer) announce(
 	ctx context.Context, now time.Time, decisions []incident.Decision,
 ) bool {
@@ -94,17 +98,46 @@ func (a *announcer) announce(
 	a.collect.NoteQuietResolves(quiet)
 	a.collect.NoteDecisions(decisions)
 	decisions = a.inScope(decisions)
-	decisions, summarised := a.collect.CollectStartup(ctx, now, decisions)
-	decisions, digested := a.collect.CollectDigest(ctx, now, decisions)
-	decisions, grouped := a.collect.CollectOutages(ctx, now, decisions)
-	decisions, rolled := a.collect.CollectRollup(ctx, now, decisions)
-	expired := a.expireHeld(ctx, now)
+	c := a.collect
+	decisions, summarised := a.collected(ctx, now, "startup", decisions,
+		c.CollectStartup)
+	decisions, digested := a.collected(ctx, now, "digest", decisions,
+		c.CollectDigest)
+	decisions, grouped := a.collected(ctx, now, "outage", decisions,
+		c.CollectOutages)
+	decisions, rolled := a.collected(ctx, now, "rollup", decisions,
+		c.CollectRollup)
+	var expired, closed, listed bool
+	contain("announce", "held", func() { expired = a.expireHeld(ctx, now) })
 	a.deliver(ctx, now, a.splitRecoveries(decisions))
-	a.flushJoint(ctx, now)
-	closed := a.collect.CloseListings(ctx)
-	listed := a.collect.ListRestored(ctx, now)
+	contain("announce", "joint", func() { a.flushJoint(ctx, now) })
+	contain("announce", "close", func() { closed = c.CloseListings(ctx) })
+	contain("announce", "restored",
+		func() { listed = c.ListRestored(ctx, now) })
 	return summarised || digested || grouped || rolled || closed ||
 		listed || expired
+}
+
+// collectingStep is a step of the announce collector: it takes the
+// decisions of the tick and returns the ones that are left for delivery.
+type collectingStep func(
+	context.Context, time.Time, []incident.Decision,
+) ([]incident.Decision, bool)
+
+// collected runs one collecting step, contained. A step that panics is
+// counted and logged, and reports that it did nothing: the decisions it
+// was given are returned unchanged.
+func (a *announcer) collected(
+	ctx context.Context, now time.Time, stage string,
+	decisions []incident.Decision, step collectingStep,
+) (rest []incident.Decision, did bool) {
+	rest = decisions
+	if !contain("announce", stage, func() {
+		rest, did = step(ctx, now, decisions)
+	}) {
+		return decisions, false
+	}
+	return rest, did
 }
 
 // outputs is the channel finished investigations arrive on; nil, which

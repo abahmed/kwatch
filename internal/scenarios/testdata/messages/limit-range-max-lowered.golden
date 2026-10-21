@@ -1,9 +1,9 @@
 10:05:15 settled
-🟠 Limit range container-bounds is failing in billing (prod-eu-1) after the 10:03 change to its limits. LimitRange container-bounds: max cpu 1 per container; a container asks 2 (limit). The limits changed from Container min ; max cpu=4; default ; defaultRequest ; ratio  to Container min ; max cpu=1; default ; defaultRequest ; ratio. api is affected as well. To see the object's state and events, run kubectl describe replicaset api-4f8b75c3 -n billing
-🟠 Limit range container-bounds is failing in billing (prod-eu-1) after the 10:03 change to its limits.
-| 🟠 Limit range **container-bounds** is failing in **billing** (**prod-eu-1**) after the 10:03 change to its limits.
+🟠 Limit range container-bounds is failing in billing (prod-eu-1) after the 10:03 UTC change to its limits. LimitRange container-bounds: max cpu 1 per container; a container asks 2 (limit). The limits changed from Container max cpu=4 to Container max cpu=1. api is affected as well. To see the object's state and events, run kubectl describe replicaset api-4f8b75c3 -n billing
+🟠 Limit range container-bounds is failing in billing (prod-eu-1) after the 10:03 UTC change to its limits.
+| 🟠 Limit range **container-bounds** is failing in **billing** (**prod-eu-1**) after the 10:03 UTC change to its limits.
 | LimitRange container-bounds: max cpu 1 per container; a container asks 2 (limit).
-| The limits changed from Container min ; max cpu=4; default ; defaultRequest ; ratio  to Container min ; max cpu=1; default ; defaultRequest ; ratio.
+| The limits changed from Container max cpu=4 to Container max cpu=1.
 | **api** is affected as well.
 | To see the object's state and events, run
 | ```

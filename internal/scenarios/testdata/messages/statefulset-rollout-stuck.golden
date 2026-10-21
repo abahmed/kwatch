@@ -1,7 +1,7 @@
 10:09:15 settled
-🟠 queue is failing in streaming (prod-eu-1) after the 10:05 release of registry.example.com/queue:5. The previous image was registry.example.com/queue:4. Its dependents failed soon after it changed. Fix in: statefulset/queue → container app → image (registry.example.com/queue:5). To see the rollout state, run kubectl rollout status statefulset/queue -n streaming
-🟠 queue is failing in streaming (prod-eu-1) after the 10:05 release of registry.example.com/queue:5.
-| 🟠 **queue** is failing in **streaming** (**prod-eu-1**) after the 10:05 release of registry.example.com/queue:5.
+🟠 queue is failing in streaming (prod-eu-1) after the 10:05 UTC release of registry.example.com/queue:5. The previous image was registry.example.com/queue:4. Its dependents failed soon after it changed. Fix in: statefulset/queue → container app → image (registry.example.com/queue:5). To see the rollout state, run kubectl rollout status statefulset/queue -n streaming
+🟠 queue is failing in streaming (prod-eu-1) after the 10:05 UTC release of registry.example.com/queue:5.
+| 🟠 **queue** is failing in **streaming** (**prod-eu-1**) after the 10:05 UTC release of registry.example.com/queue:5.
 | The previous image was registry.example.com/queue:4.
 | Its dependents failed soon after it changed.
 | Fix in: statefulset/queue → container app → image (registry.example.com/queue:5).

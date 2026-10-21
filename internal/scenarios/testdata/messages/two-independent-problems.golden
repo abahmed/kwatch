@@ -12,9 +12,9 @@ Checked: 2 failing replicas share node n1 while 1 run healthy on other nodes.
 | ```
 | *Checked: 2 failing replicas share node n1 while 1 run healthy on other nodes.*
 10:05:05 settled
-🟠 checkout is failing in shop (prod-eu-1) after the 10:03 release of registry.example.com/checkout:8.01. The previous image was registry.example.com/checkout:8.0. It fails with "TypeError: cannot read properties of undefined (reading 'currency')". Fix in: deployment/checkout → container app → image (registry.example.com/checkout:8.01). To see the rollout state, run kubectl rollout status deployment/checkout -n shop
-🟠 checkout is failing in shop (prod-eu-1) after the 10:03 release of registry.example.com/checkout:8.01.
-| 🟠 **checkout** is failing in **shop** (**prod-eu-1**) after the 10:03 release of registry.example.com/checkout:8.01.
+🟠 checkout is failing in shop (prod-eu-1) after the 10:03 UTC release of registry.example.com/checkout:8.01. The previous image was registry.example.com/checkout:8.0. It fails with "TypeError: cannot read properties of undefined (reading 'currency')". Fix in: deployment/checkout → container app → image (registry.example.com/checkout:8.01). To see the rollout state, run kubectl rollout status deployment/checkout -n shop
+🟠 checkout is failing in shop (prod-eu-1) after the 10:03 UTC release of registry.example.com/checkout:8.01.
+| 🟠 **checkout** is failing in **shop** (**prod-eu-1**) after the 10:03 UTC release of registry.example.com/checkout:8.01.
 | The previous image was registry.example.com/checkout:8.0.
 | It fails with `TypeError: cannot read properties of undefined (reading 'currency')`.
 | Fix in: deployment/checkout → container app → image (registry.example.com/checkout:8.01).

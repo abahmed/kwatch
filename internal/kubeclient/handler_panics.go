@@ -30,7 +30,8 @@ type panicLedger struct {
 
 var handlerPanics = &panicLedger{counts: map[[2]string]int64{}}
 
-func (l *panicLedger) record(component, resource string) {
+// record counts one panic and returns the resource's count so far.
+func (l *panicLedger) record(component, resource string) int64 {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	key := [2]string{component, resource}
@@ -39,6 +40,7 @@ func (l *panicLedger) record(component, resource string) {
 		key = [2]string{component, overflowResource}
 	}
 	l.counts[key]++
+	return l.counts[key]
 }
 
 func (l *panicLedger) snapshot() []HandlerPanicCount {

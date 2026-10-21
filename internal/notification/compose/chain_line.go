@@ -24,10 +24,28 @@ func chainLineSentences(f caseFacts) []sentence {
 		steps = append(steps, hopWords(hop))
 	}
 	text := "Chain: " + strings.Join(steps, " → ") + "."
-	if len(cause.Beyond) > 0 {
-		text += " " + beyondWords(cause.Beyond)
+	if beyond := newBeyond(cause); len(beyond) > 0 {
+		text += " " + beyondWords(beyond)
 	}
 	return []sentence{{part: partChecked, weight: 1, text: text}}
+}
+
+// newBeyond are the failures past the end of the chain that the chain
+// does not already name: the Service of the workload that ends it is
+// that workload again, so it is no news that "service web" also fails
+// after "web".
+func newBeyond(cause *rootcause.CauseRecord) []rootcause.Hop {
+	named := map[string]bool{}
+	for _, hop := range cause.Hops {
+		named[hop.Entity.Name] = true
+	}
+	var out []rootcause.Hop
+	for _, hop := range cause.Beyond {
+		if !named[hop.Entity.Name] {
+			out = append(out, hop)
+		}
+	}
+	return out
 }
 
 // distinctNames counts the different names along a chain. "payments →

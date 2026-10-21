@@ -85,7 +85,10 @@ func (v *view) score(c *candidate) scored {
 	out := scored{c: c}
 	total := priorOf(c)
 	for _, s := range scorers {
-		o := s.score(v, c)
+		if v.s.Ablation.skips(s.name) {
+			continue
+		}
+		o := v.s.Ablation.without(s.score(v, c))
 		if !o.said() {
 			continue
 		}
@@ -105,7 +108,10 @@ func (v *view) score(c *candidate) scored {
 			abs(out.contributions[j].Weight)
 	})
 	if sharedFactorOnly(c) {
-		total = min(total, SharedFactorMaxConfidence)
+		total = min(total, sharedFactorCap(out.contributions))
+	}
+	if v.changeOnlyDependency(c, out.contributions) {
+		total = min(total, ChangeOnlyMaxConfidence)
 	}
 	out.raw = total
 	out.confidence = min(max(total, 0), 1)

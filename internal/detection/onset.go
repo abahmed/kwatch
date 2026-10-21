@@ -33,10 +33,22 @@ func (o *onsets) begin(id inventory.EntityID) *onsetScope {
 	return &onsetScope{known: o.byEntity[id], kept: map[string]time.Time{}}
 }
 
-// finish keeps only the states the evaluation asked for.
-func (o *onsets) finish(id inventory.EntityID, scope *onsetScope) {
+// finish keeps only the states the evaluation asked for. After an
+// incomplete evaluation (a detector panicked) the states known before
+// stay too: the detector that failed could not ask for its own, and
+// forgetting them would restart its waiting period.
+func (o *onsets) finish(
+	id inventory.EntityID, scope *onsetScope, incomplete bool,
+) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
+	if incomplete {
+		for key, at := range scope.known {
+			if _, asked := scope.kept[key]; !asked {
+				scope.kept[key] = at
+			}
+		}
+	}
 	if len(scope.kept) == 0 {
 		delete(o.byEntity, id)
 		return

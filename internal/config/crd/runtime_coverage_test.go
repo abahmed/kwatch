@@ -20,7 +20,7 @@ func TestApplyStartupConfigHandlesEmptyAndInvalidLists(t *testing.T) {
 	)
 	cfg := config.DefaultConfig()
 	cfg.CrdConfig.Enabled = true
-	if err := applyStartupConfig(
+	if _, err := applyStartupConfig(
 		context.Background(), cfg, client, "default",
 	); err != nil {
 		t.Fatalf("empty CRD list = %v", err)
@@ -37,7 +37,7 @@ func TestApplyStartupConfigHandlesEmptyAndInvalidLists(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	if err := applyStartupConfig(
+	if _, err := applyStartupConfig(
 		context.Background(), cfg, client, "default",
 	); err != nil {
 		t.Fatalf("object without spec = %v", err)
@@ -49,7 +49,7 @@ func TestApplyStartupConfigHandlesEmptyAndInvalidLists(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	if err := applyStartupConfig(
+	if _, err := applyStartupConfig(
 		context.Background(), cfg, client, "default",
 	); err == nil {
 		t.Fatal("multiple KwatchConfig objects were accepted")

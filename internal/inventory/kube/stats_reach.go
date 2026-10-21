@@ -86,17 +86,18 @@ func (l *reachLog) forgetBefore(cutoff time.Time) {
 // running count and its time span for the node, so a detector can see a
 // node that keeps failing. A successful read, or a refusal (HTTP 401 or
 // 403, a permission problem that health already reports), clears the
-// node's count.
+// node's count. It returns the node's failures in a row, this one
+// included.
 func (p *StatsPoller) recordReach(
 	ctx context.Context, node inventory.EntityID, now time.Time, err error,
-) {
+) int {
 	if ctx.Err() != nil {
-		return
+		return 0
 	}
 	failed := err != nil && !refused(err)
 	count, span, changed := p.reach.note(node.Name, now, failed)
 	if !changed {
-		return
+		return count
 	}
 	p.cfg.Submit(ctx, inventory.Observation{
 		Kind: inventory.Observed, Source: reachSource, At: now,
@@ -106,6 +107,7 @@ func (p *StatsPoller) recordReach(
 				span.Seconds()),
 		},
 	})
+	return count
 }
 
 func refused(err error) bool {

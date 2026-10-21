@@ -41,6 +41,9 @@ func overlayClient(
 	)
 }
 
+// noLastGood reads no kept spec, as a first start does.
+func noLastGood() ([]byte, bool) { return nil, false }
+
 func crdBase() *config.Config {
 	cfg := config.DefaultConfig()
 	cfg.CrdConfig.Enabled = true
@@ -60,11 +63,11 @@ func TestApplyStartupCRDFallsBackToBaseOnInvalidOverlay(t *testing.T) {
 		return crdBase(), nil
 	}
 
-	cfg, invalid, err := applyStartupCRD(
-		context.Background(), crdBase(), client, reload)
+	cfg, outcome, err := applyStartupCRD(
+		context.Background(), crdBase(), client, reload, noLastGood)
 
-	if err != nil || !invalid {
-		t.Fatalf("invalid = %v, err = %v; want fallback", invalid, err)
+	if err != nil || !outcome.invalid {
+		t.Fatalf("outcome = %+v, err = %v; want fallback", outcome, err)
 	}
 	if reloads != 1 || cfg.App.ClusterName != "base" {
 		t.Fatalf("reloads = %d, cluster = %q; want the fresh base",
@@ -82,11 +85,11 @@ func TestApplyStartupCRDAppliesValidOverlay(t *testing.T) {
 		return nil, nil
 	}
 
-	cfg, invalid, err := applyStartupCRD(
-		context.Background(), crdBase(), client, reload)
+	cfg, outcome, err := applyStartupCRD(
+		context.Background(), crdBase(), client, reload, noLastGood)
 
-	if err != nil || invalid || cfg.App.ClusterName != "overlay" {
-		t.Fatalf("cfg = %v, invalid = %v, err = %v", cfg, invalid, err)
+	if err != nil || outcome.invalid || cfg.App.ClusterName != "overlay" {
+		t.Fatalf("cfg = %v, outcome = %+v, err = %v", cfg, outcome, err)
 	}
 }
 
@@ -97,12 +100,12 @@ func TestApplyStartupCRDFailsOnAPIError(t *testing.T) {
 			return true, nil, errors.New("api unavailable")
 		})
 
-	_, invalid, err := applyStartupCRD(
-		context.Background(), crdBase(), client, loadConfig)
+	_, outcome, err := applyStartupCRD(
+		context.Background(), crdBase(), client, loadConfig, noLastGood)
 
-	if err == nil || invalid {
-		t.Fatalf("invalid = %v, err = %v; want a startup error",
-			invalid, err)
+	if err == nil || outcome.invalid {
+		t.Fatalf("outcome = %+v, err = %v; want a startup error",
+			outcome, err)
 	}
 }
 

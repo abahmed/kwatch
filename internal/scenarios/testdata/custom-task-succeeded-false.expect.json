@@ -1,0 +1,8 @@
+{
+  "name": "custom-task-succeeded-false",
+  "description": "A custom resource reports Succeeded=False with a message: the failure is reported and the message is quoted.",
+  "root": "taskrun.tekton.example.com/ci/build-image",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "30m0s"
+}

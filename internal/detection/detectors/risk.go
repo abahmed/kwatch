@@ -10,11 +10,12 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
-// Risk reports how a workload is set up to fail worse than it needs
-// to: no readiness probe, no memory limit, an image tag that can
-// change, a single replica. Each is an advisory finding. Nobody is told
-// about it on its own: it is quoted as a consequence only when a
-// failure shows what it cost.
+// Risk reports how a workload is configured: no readiness probe, no
+// memory limit, an image tag that is not fixed, a single replica. Each
+// is an advisory finding whose summary states that fact and nothing
+// about what it may cost. Nobody is told about it on its own, and it
+// never changes a tier: it is quoted as a consequence only when a
+// failure in front of the reader shows what it cost.
 type Risk struct{}
 
 // Name implements detection.Detector.
@@ -47,23 +48,20 @@ func (Risk) Detect(
 		})
 	}
 	if shape.containers > 0 && shape.withReadiness == 0 {
-		add(reasons.RiskNoReadinessProbe, "Its containers have no "+
-			"readiness probe, so traffic reaches them before they can "+
-			"serve and keeps reaching them while they fail")
+		add(reasons.RiskNoReadinessProbe,
+			"Its containers have no readiness probe")
 	}
 	if len(shape.withoutMemoryLimit) > 0 {
 		add(reasons.RiskNoMemoryLimit,
 			strconv.Itoa(len(shape.withoutMemoryLimit))+
-				" of its containers have no memory limit, so one leak can "+
-				"take the node down with it")
+				" of its containers have no memory limit")
 	}
 	if shape.mutableImage != "" {
-		add(reasons.RiskMutableImageTag, "Its image "+shape.mutableImage+
-			" has no fixed tag, so what runs can change without a rollout")
+		add(reasons.RiskMutableImageTag,
+			"Its image "+shape.mutableImage+" has no fixed tag")
 	}
 	if replicas == 1 {
-		add(reasons.RiskSingleReplica, "It runs a single replica, so "+
-			"any restart is downtime")
+		add(reasons.RiskSingleReplica, "It runs a single replica")
 	}
 	return out
 }

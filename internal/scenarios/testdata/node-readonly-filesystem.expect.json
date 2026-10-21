@@ -1,0 +1,11 @@
+{
+  "name": "node-readonly-filesystem",
+  "description": "A node problem reporter sets ReadonlyFilesystem on a node whose pods run: one digest line with the reporter's message.",
+  "root": "node//n1",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/api"
+  ],
+  "tail": "1h0m0s"
+}

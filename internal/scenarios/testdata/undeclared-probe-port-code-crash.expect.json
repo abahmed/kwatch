@@ -1,0 +1,7 @@
+{
+  "name": "undeclared-probe-port-code-crash",
+  "description": "A readiness probe targets an undeclared admin port that works; the app crashes on a database error.",
+  "root": "deployment/shop/orders",
+  "tier": "notify",
+  "maxMessages": 4
+}

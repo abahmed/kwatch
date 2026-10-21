@@ -1,6 +1,7 @@
 package architecture
 
 import (
+	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -97,14 +98,28 @@ func TestHelmWatchSecretsFalseGrantsNoSecretAccess(t *testing.T) {
 	}
 }
 
-// The only Secret permissions left without Secret watching are the license
-// instance Secret's: get and update on that one name, and no create.
+// Without Secret watching and without a license key the chart grants no
+// Secret permission at all.
+func TestKeylessHelmWithoutSecretWatchingGrantsNoSecretAccess(t *testing.T) {
+	for name, documents := range rbacManifests(t, "watch.secrets=false") {
+		for g := range manifestGrants(t, documents, "kwatch") {
+			if g.resource == "secrets" {
+				t.Errorf("%s: unexpected Secret grant %+v", name, g)
+			}
+		}
+	}
+}
+
+// With a license key and without Secret watching, the only Secret
+// permissions left are the license instance Secret's: get and update on
+// that one name, and no create.
 func TestSecretGrantsAreOnlyTheLicenseInstanceSecret(t *testing.T) {
 	want := map[grant]bool{
 		{"kwatch", "", "secrets", "", "get", licenseInstanceSecret}:    true,
 		{"kwatch", "", "secrets", "", "update", licenseInstanceSecret}: true,
 	}
-	for name, documents := range rbacManifests(t, "watch.secrets=false") {
+	for name, documents := range rbacManifests(
+		t, "watch.secrets=false", "license.key=KW1-x") {
 		got := map[grant]bool{}
 		for g := range manifestGrants(t, documents, "kwatch") {
 			if g.resource == "secrets" {
@@ -163,4 +178,52 @@ func hasEnv(
 		}
 	}
 	return false
+}
+
+// A Community install has no license key, so the chart renders neither the
+// license Role nor the instance Secret it reads; any way of configuring a
+// key renders both, and the Role covers what the audit checks for it.
+func TestHelmRendersTheLicenseRoleOnlyWithAKey(t *testing.T) {
+	hasRole := func(docs []unstructured.Unstructured) bool {
+		for _, doc := range docs {
+			if doc.GetKind() == "Role" &&
+				strings.HasSuffix(doc.GetName(), "-license") {
+				return true
+			}
+		}
+		return false
+	}
+	hasSecret := func(docs []unstructured.Unstructured) bool {
+		for _, doc := range docs {
+			if doc.GetKind() == "Secret" &&
+				doc.GetName() == licenseInstanceSecret {
+				return true
+			}
+		}
+		return false
+	}
+	none := renderHelm(t, "../../deploy/chart", "--namespace", "kwatch")
+	if hasRole(none) || hasSecret(none) {
+		t.Error("a keyless install must not render the license Role " +
+			"or the instance Secret")
+	}
+	for _, set := range []string{
+		"license.key=KW1-x", "license.existingSecret=mine",
+		"license.instanceSecret=true",
+	} {
+		docs := renderHelm(t, "../../deploy/chart", "--namespace", "kwatch",
+			"--set", set)
+		if !hasRole(docs) || !hasSecret(docs) {
+			t.Errorf("%s: the license Role and instance Secret are "+
+				"missing", set)
+			continue
+		}
+		grants := manifestGrants(t, docs, "kwatch")
+		for _, access := range rbac.LicenseChecks(
+			"kwatch", licenseInstanceSecret) {
+			if !granted(grants, access) {
+				t.Errorf("%s: the Role does not grant %+v", set, access)
+			}
+		}
+	}
 }

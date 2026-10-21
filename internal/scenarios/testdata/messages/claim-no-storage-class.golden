@@ -1,8 +1,8 @@
 10:03:15 settled
-🟠 Volume claim cache-0 in data (prod-eu-1) has been waiting for a volume for two minutes. It was created at 10:00. Claim cache-0 sets no storage class and the cluster has no default one. To see why the volume claim is not usable, run kubectl describe pvc cache-0 -n data
+🟠 Volume claim cache-0 in data (prod-eu-1) has been waiting for a volume for two minutes. It was created at 10:00 UTC. Claim cache-0 sets no storage class and the cluster has no default one. To see why the volume claim is not usable, run kubectl describe pvc cache-0 -n data
 🟠 Volume claim cache-0 in data (prod-eu-1) has been waiting for a volume for two minutes.
 | 🟠 Volume claim **cache-0** in **data** (**prod-eu-1**) has been waiting for a volume for two minutes.
-| It was created at 10:00.
+| It was created at 10:00 UTC.
 | Claim **cache-0** sets no storage class and the cluster has no default one.
 | To see why the volume claim is not usable, run
 | ```

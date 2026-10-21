@@ -61,6 +61,16 @@ const (
 	// moves the share by more than five points.
 	GoalWrongHighPercent  = 5
 	GoalWrongHighMinCases = 20
+	// GoalWrongStatedRoots is how many labelled scenarios may state a
+	// wrong root at likely confidence or above: none. The percentage
+	// above lets a confident wrong answer hide among right ones; this
+	// count does not.
+	GoalWrongStatedRoots = 0
+	// GoalWrongFirstRoots is how many labelled scenarios may state a
+	// wrong root in their first message, even if a later message
+	// corrects it: people act on the first one. A scenario whose story
+	// is a legitimate revision says so in its label.
+	GoalWrongFirstRoots = 0
 	// GoalNonEventNotifications is how many notifications healthy
 	// changes (rollouts, scaling, drains, finished Jobs) may cause.
 	GoalNonEventNotifications = 0

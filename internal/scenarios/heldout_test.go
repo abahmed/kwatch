@@ -54,8 +54,8 @@ func measureHeldOut(t *testing.T) heldoutResult {
 	var r heldoutResult
 	var cases []scorecard.Case
 	for _, s := range heldoutLibrary() {
-		_, e, result := replayScenario(t, heldoutDir, s.expect.Name)
-		v := judge(e, result)
+		log, e, result := replayScenario(t, heldoutDir, s.expect.Name)
+		v := judge(e, log, result)
 		r.verdicts = append(r.verdicts, v)
 		cases = append(cases, v.cases...)
 	}

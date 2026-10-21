@@ -157,10 +157,10 @@ talks to the outside world.
 | `app.clusterName` | 🏷️ Name shown in alerts so you know which cluster |
 | `app.disableStartupMessage` | Silence the "kwatch is alive" welcome message |
 | `app.logFormatter` | Log format: `text` (default) or `json`. `json` writes one JSON object per log line to stderr. Any other value fails startup |
-| `app.insecureSkipTLSVerify` | 🔓 Skip TLS verification on outbound HTTP (default: false) |
+| `app.insecureSkipTLSVerify` | 🔓 Skip TLS verification on outbound HTTP to **alert providers** (default: false). It never applies to kwatch's own calls: the license server, the adoption telemetry and the update check always verify TLS (they still use `app.proxyURL` and `app.caBundlePath`) |
 | `app.caBundlePath` | 📜 Path to a PEM CA bundle for outbound HTTP. A missing or invalid bundle fails startup |
 | `app.hideProHints` | Remove the one-line note that names what kwatch Pro would add from Community messages (default: false) |
-| `app.communityProvider` | The alert provider the Community edition keeps when more than one is configured (Community sends to one provider; Pro sends to all). Empty keeps the first provider by name. A name that is not a configured provider is warned about and falls back the same way. `/status`, the startup log and `kwatch lint` show which provider is kept, for example `Community sends to: slack (inactive: pagerduty)` |
+| `app.communityProvider` | The alert provider the Community edition keeps when more than one is configured (Community sends to one provider; Pro sends to all). Empty keeps one by class, not by the alphabet: a paging service (PagerDuty, Opsgenie, iLert, GoAlert, incident.io, Splunk On-Call, Squadcast, Zenduty, SIGNL4, Alerta, Sensu Go, Datadog, New Relic, Splunk HEC) first, then chat and everything else, then email, with the name breaking a tie. When the provider cap leaves a paging service inactive, kwatch logs a warning naming it. A name that is not a configured provider is warned about and falls back the same way. `/status`, the startup log and `kwatch lint` show which provider is kept, for example `Community sends to: slack (inactive: pagerduty)` |
 
 The startup message and the upgrade notice are each a single plain sentence
 with one status emoji and no links, for example `🟡 kwatch v1.2.0 started.` and
@@ -241,7 +241,7 @@ Endpoints kwatch serves so you can see it's alive and grab Prometheus metrics. T
 | `kwatch_incidents_open` | gauge | none | Incidents not yet resolved |
 | `kwatch_investigations_total` | counter | `result` = `done`, `skipped`, `late`, `timeout` | Announcement investigations (log excerpts and similar evidence) by outcome |
 | `kwatch_unexplained_total` | counter | `kind` = `event`, `incident` | Failures kwatch could not explain: Warning events whose reason it has no entry for, and incidents whose cause is not clear; the reasons are in /status |
-| `kwatch_panics_recovered_total` | counter | `stage` = `detector`, `incident`, `compose`, `announce` | Panics contained on the decision path; the affected entity or area is skipped for that pass and monitoring continues |
+| `kwatch_panics_recovered_total` | counter | `stage` = `detector`, `incident`, `compose`, `announce`, `background` | Panics contained on the decision path, or in a background worker (storage writers, probes, watchers); the affected entity, area or round is skipped and monitoring continues |
 | `kwatch_delivery_notifications_total` | counter | none | Notification attempts |
 | `kwatch_delivery_dropped_total` | counter | none | Notifications no provider accepted: dead-lettered, failed with no fallback left, dropped by a full queue, or dropped before delivery started |
 | `kwatch_delivery_retries_total` | counter | none | Delivery retry attempts |
@@ -369,14 +369,15 @@ status, resource versions, and deletion metadata remain intact.
   jitter) instead of retrying every few seconds.
 - **Evidence policy.** Text a pod wrote (quoted errors, log lines)
   is shown with credentials removed; there is no switch to show them.
-  Private addresses (`10.x`, `172.16-31.x`, `192.168.x`, `fc00::/7`,
-  `fe80::`) are shown too: a pod or service IP is no secret and helps
-  debugging. When kwatch knows what an IPv4 address belongs to, it adds
-  the owner after it, as in `dial tcp 10.0.3.4:5432 (db/postgres):
-  connection refused`: the Service (ClusterIP), Pod (pod IP) or Node
-  (InternalIP). Credentials are always redacted. Resolves and pages go
-  ahead of routine messages
-  in a provider's queue.
+  Private addresses (`10.x`, `172.16-31.x`, `192.168.x`, `100.64.0.0/10`,
+  `169.254.0.0/16`, `fc00::/7`, `fe80::`) are shown too, in log lines, events
+  and termination messages alike: a pod or service IP is no secret and helps
+  debugging. (Only the read-only `/status` report masks them.) When kwatch
+  knows what an IPv4 address belongs to, it adds the owner after it, as in
+  `dial tcp 10.0.3.4:5432 (db/postgres): connection refused`: the Service
+  (ClusterIP), Pod (pod IP) or Node (InternalIP). Credentials are always
+  redacted. Resolves and pages go ahead of routine messages in a provider's
+  queue.
 - **Digest wording.** The digest says how many notifications were folded,
   counted per reason (the most common reasons first, the rest as
   "+N other kinds"), so a channel never receives a bare update for an
@@ -444,7 +445,7 @@ kwatch never needs write access to monitored workloads. The chart value
 | Mode | What it grants |
 |:---|---|
 | `full` (the raw `deploy/deploy.yaml`; opt in with `--set rbac.mode=full`) | `list` and `watch` on every resource in every API group, so any built-in kind and any CRD, including ones installed later, can be watched |
-| `least-privilege` (chart default) | An explicit `list`/`watch` set for the kinds kwatch understands. Kinds outside it are reported as `permission_denied` in `/health` coverage, detectors that need them stay silent, and custom resources are not covered |
+| `least-privilege` (chart default) | An explicit `list`/`watch` set for the kinds kwatch understands, including the built-in PriorityClass, RuntimeClass, IngressClass and ReplicationController. Kinds outside it are reported as `permission_denied` in `/health` coverage, detectors that need them stay silent, and custom resources are not covered. After the first complete discovery kwatch logs one warning naming them, `/health` shows a degraded-but-available `coverage` component, and the chart notes say so at install |
 
 In both modes:
 
@@ -466,6 +467,12 @@ In both modes:
   cannot limit it by name.
 - `create` on `selfsubjectaccessreviews` lets kwatch audit its own
   permissions.
+- `get` and `update` on the one Secret `kwatch-license-instance` in kwatch's
+  own namespace (a Role named `<release>-license`), where kwatch keeps its
+  license instance key. The chart renders that Role and the Secret only when
+  a license key is configured (`license.key`, `license.existingSecret` or
+  `license.instanceSecret: true`); the permission audit checks it when a key is
+  set. It is independent of `rbac.mode` and `watch.secrets`.
 - Secrets are covered by the grant but their values are hashed in the
   informer transform and never stored.
 
@@ -476,7 +483,10 @@ startup while Secrets are watched. `rbac.mode: least-privilege` alone does
 not remove the access; only `watch.secrets: false` does. It lets kwatch
 notice that a Pod references a missing Secret, that a changed Secret
 (by value hash, never by value) may explain a restart, and that a
-certificate Secret has expired. The cost is RBAC: the default chart
+certificate Secret has expired. The Community edition runs no detector on
+Secrets but keeps the watch for its root-cause engine, which names a Secret a
+failing Pod references that does not exist (the startup log says so). The
+cost is RBAC: the default chart
 grant lets the kwatch ServiceAccount `list` and `watch` Secrets in every
 namespace, so anyone who can run code as that account, or who can read its
 token, can read Secret values through the API. kwatch itself keeps only
@@ -493,7 +503,8 @@ without any Secret permission. kwatch then starts no Secret watch, lists
 health, and checks that need Secrets (missing Secret references, certificate
 expiry) report that they cannot verify. Because RBAC cannot remove one
 resource from a wildcard, the chart uses the explicit least-privilege list in
-that case, even in `full` mode.
+that case, even in `full` mode: `rbac.mode=full` together with
+`watch.secrets: false` is least-privilege, and the chart notes say so.
 
 Optional sources are reported as `optional_api_unavailable` or
 `optional_permission_denied` when an API is not served or a permission is
@@ -536,6 +547,7 @@ letter case; an empty value counts as unset, and any other text fails startup
 | `KWATCH_WATCH_SECRETS` | `false` stops the Secret watch (see Kubernetes permissions); `true` leaves the file's setting alone |
 | `KWATCH_CRD_ENABLED` | Overrides `crd.enabled` in both directions; the chart sets it from `config.crd.enabled` |
 | `KWATCH_TELEMETRY` | `false` turns adoption telemetry off |
+| `KWATCH_CLUSTER_CHECKINS` | `false` turns the Pro cluster check-ins off and wins over `clusterCheckins` in the file; `true` changes nothing |
 | `KWATCH_LICENSE_KEY` | The kwatch Pro license key. Wins over `license.key`; the chart fills it from a Secret |
 | `SKIP_UPGRADE_CHECK` | A true value turns the update check off, like `upgrader.disableUpdateCheck` |
 | `CI` | Any value except empty, `false`, `0`, `no` or `off` marks a CI environment: telemetry is never sent |
@@ -562,7 +574,21 @@ lease, and a key extended on the server keeps working past its own expiry.
 
 | Parameter | What it does |
 |:---|---|
-| `license.key` | The license key. Use `${KWATCH_LICENSE_KEY}`; the `KWATCH_LICENSE_KEY` variable wins over the file. The key is never logged, only the masked license ID |
+| `license.key` | The license key. Use `${KWATCH_LICENSE_KEY}`; the `KWATCH_LICENSE_KEY` variable wins over the file. The key is never logged, only the masked license ID. Spaces and line breaks inside the key are removed when the configuration loads, so a pasted or wrapped key still works. A key written as text in the file (not through `${...}` or the variable) is warned about at startup: a ConfigMap is readable by anyone who can read ConfigMaps. A `KwatchConfig` cannot set it |
+
+A key that cannot run Pro never stops kwatch: it runs the Community edition
+and says why. The license manager logs one warning per distinct reason
+(`invalid`, `expired`, `revoked` or `conflict`, at startup too), `/health`
+shows a `license` component (`degraded` with `license_invalid`,
+`license_expired`, `license_revoked` or `license_conflict`; `waiting` with
+`license_pending` before the first answer), and your alert providers get a
+"kwatch Pro is disabled: ..." notice once per reason, even when Pro never
+ran. If the system clock stepped forward and was corrected, Pro returns at
+the next renewal (within about a day): the license server's signed time in a
+newer lease pulls the local clock guard back. License keys are verified
+against the signing keys compiled into the binary, each named by a key id
+(`kid`); a rotation ships the new key id in a new release while keys signed
+under the old one keep verifying, so there is nothing to configure.
 
 kwatch keeps its instance key in the Secret `kwatch-license-instance` in its
 own namespace (the chart's RBAC names that one Secret). `/status` shows a
@@ -582,8 +608,11 @@ cluster goes silent (no check-in for 60 minutes). A check-in carries a hashed
 cluster ID, the kwatch version, the node count, the namespace kwatch runs in
 and `app.clusterName` if set. A graceful shutdown sends a last check-in that
 says kwatch is stopping. Nothing is sent to you. Turn check-ins off with
-`clusterCheckins: false` (also accepted in KwatchConfig); kwatch then tells
-the server once and stops. The Community edition never checks in.
+`clusterCheckins: false` or set `KWATCH_CLUSTER_CHECKINS=false`, which wins
+over the file; kwatch then tells the server once and stops. A `KwatchConfig`
+can set `clusterCheckins: false` but can never turn check-ins back on after
+the mounted configuration or the environment turned them off. The Community
+edition never checks in.
 
 ## 🔄 Upgrader
 
@@ -608,7 +637,9 @@ pseudonymous heartbeat so the project can estimate adoption.
 The installation ID is a UUID derived once from a salted SHA-256 hash of the
 `kube-system` namespace UID, so the UID itself never leaves the cluster; if
 that namespace cannot be read, kwatch uses a random UUID instead. It is kept in
-kwatch's state file. The field is named `cluster_uuid` for wire
+kwatch's state file. The salt is the telemetry's own, so the ID cannot be
+matched to the license's cluster ID; an install that upgrades from a build
+that shared the salt sends a new ID once. The field is named `cluster_uuid` for wire
 compatibility. No cluster name, namespace, resource name, node count,
 configuration, provider setting, log line or incident is sent. As with any
 HTTPS request, the receiving service sees the connection's source address and
@@ -628,8 +659,8 @@ monitoring.
 
 **How to disable it.** Set `telemetry.enabled: false` in the configuration, or
 set the environment variable `KWATCH_TELEMETRY` to `false`, `0`, `off` or `no`.
-An unrecognized value (a typo such as `flase`) fails startup with a clear
-error instead of being ignored.
+An unrecognized value (a typo such as `flase`) is logged as a warning and
+read as off: a typo never switches telemetry on.
 Development builds, recognized CI environments (`CI` is set) and installs
 without a state store do not send telemetry. At startup kwatch logs one line
 naming the endpoint and either that it is enabled or why it is skipped
@@ -946,12 +977,16 @@ The chart passes `config.crd.enabled` to the container as `KWATCH_CRD_ENABLED`
 (`true` or `false`), which overrides `crd.enabled` in the mounted file, so the
 setting also holds when you bring your own Secret with `configSecretName`.
 
-**Environment booleans.** `KWATCH_WATCH_SECRETS`, `KWATCH_CRD_ENABLED` and
-`KWATCH_TELEMETRY` accept `true`/`false`, `1`/`0`, `on`/`off` and `yes`/`no`
-in any letter case; an empty value counts as unset. Any other text fails
-startup with an error naming the variable, so a typo can never silently leave
-Secret watching on. `KWATCH_WATCH_SECRETS` can only turn watching off: `true`
-leaves `config.yaml`'s setting alone.
+**Environment booleans.** `KWATCH_WATCH_SECRETS`, `KWATCH_CRD_ENABLED`,
+`KWATCH_TELEMETRY` and `KWATCH_CLUSTER_CHECKINS` accept `true`/`false`,
+`1`/`0`, `on`/`off` and `yes`/`no` in any letter case; an empty value counts
+as unset. Any other text does not stop kwatch: startup logs a warning naming
+the variable and the value is ignored, never read as "on". The safe side
+wins: a bad `KWATCH_TELEMETRY` or `KWATCH_CLUSTER_CHECKINS` turns that call
+off, a bad `KWATCH_WATCH_SECRETS` stops the Secret watch, and a bad
+`KWATCH_CRD_ENABLED` keeps the file's `crd.enabled`. `KWATCH_WATCH_SECRETS`,
+`KWATCH_TELEMETRY` and `KWATCH_CLUSTER_CHECKINS` can only turn a setting off:
+`true` leaves `config.yaml`'s setting alone.
 
 The CRD schema rejects values kwatch would reject: `resyncSeconds` must be
 `0` or at least `30`, `app.logFormatter` must be `text` or `json`, and
@@ -961,14 +996,37 @@ the health server, so it is configured in the mounted configuration only. The
 CRD is cluster-wide and shared by every release; see the chart README for
 `crd.install` when you run more than one release.
 
+A `KwatchConfig` may set only the fields of the CRD schema: `namespaces`,
+`reasons`, `namespaceSelector`, the `ignore*` lists, `silences`,
+`resyncSeconds`, `severityByOwnerKind`, `severityByReason`,
+`activeProbeMonitor`, `templates`, `runbooks`, `clusterCheckins`,
+`crd.enabled`, `telemetry.enabled`, `auditLog.enabled`,
+`upgrader.disableUpdateCheck`, `heartbeatMonitor.enabled` and `interval`,
+`maintenance.*` and `app.clusterName`, `disableStartupMessage` and
+`logFormatter`. Anything else kwatch knows (the license, `healthCheck`,
+`watch.secrets`, `app.proxyURL`, the TLS settings, `alert` and the rest) is
+refused and the overlay is treated as invalid, so the rule holds even for an
+object that was not pruned by the CRD schema. An overlay can turn telemetry,
+cluster check-ins and the update check off but never back on, and its
+`activeProbeMonitor` targets may not be literal private, loopback or
+link-local addresses (or `localhost`) unless the mounted configuration lists
+the same target. A DNS name is accepted, but kwatch resolves it when it
+probes and refuses the connection when any answer is a private address, so a
+`http` or `tcp` target added by a `KwatchConfig` cannot reach an in-cluster
+Service by name. List such a target in the mounted configuration instead.
+
 An invalid overlay never crash-loops kwatch. The watcher checks an edited
 `KwatchConfig` against the mounted configuration before it restarts: an
 invalid edit is rejected, logged with reason `config_overlay_invalid`, and
 kwatch keeps running on its current configuration until the next edit. If the
-overlay is already invalid at startup, kwatch logs the error, runs on the
-mounted configuration alone, and `/health` shows the degraded
-`config-overlay` component with reason `config_overlay_invalid`; readiness is
-not affected. An overlay cannot turn Secret watching back on when
+overlay is already invalid at startup, kwatch logs the error and runs on the
+last `KwatchConfig` spec that applied cleanly (kept in the state file; the
+mounted configuration alone when there is none, or when that spec no longer
+passes today's rules). A `KwatchConfig` that was deleted clears the kept spec,
+so a later invalid one never brings an old spec back. `/health` shows the
+degraded `config-overlay` component with reason `config_overlay_invalid`
+(readiness is not affected), and one notice goes to your alert providers per
+refused spec. Every valid edit still restarts kwatch to apply it. An overlay cannot turn Secret watching back on when
 `KWATCH_WATCH_SECRETS=false`.
 
 | Parameter | What it does |

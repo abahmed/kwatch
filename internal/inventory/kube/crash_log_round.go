@@ -2,13 +2,13 @@ package kube
 
 import (
 	"context"
-	"sort"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/safego"
 )
 
 const (
@@ -83,7 +83,8 @@ func (r *CrashLogRound) Run(ctx context.Context) {
 	ticker := time.NewTicker(crashLogInterval)
 	defer ticker.Stop()
 	for {
-		r.Round(ctx)
+		// A panicking round loses that round only; the next one runs.
+		safego.Do("crash-log-round", func() { r.Round(ctx) })
 		select {
 		case <-ctx.Done():
 			return
@@ -94,10 +95,9 @@ func (r *CrashLogRound) Run(ctx context.Context) {
 
 // Round makes one pass over the model's containers.
 func (r *CrashLogRound) Round(ctx context.Context) {
+	// Entities is sorted, so the rotation (r.start) visits the same
+	// containers in the same order every round.
 	containers := r.cfg.Model.Entities(KindContainer)
-	sort.Slice(containers, func(i, j int) bool {
-		return containers[i].String() < containers[j].String()
-	})
 	r.forgetGone(containers)
 	r.rounds++
 	r.logSelfHealth(r.cfg.Now())

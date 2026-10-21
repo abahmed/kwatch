@@ -1,20 +1,20 @@
 10:02:45 settled
-🔴 Zone zone-a (prod-eu-1) is failing as a whole: two nodes have not reported for about two minutes. One of its nodes reports "Kubelet stopped posting node status". Two failing workloads all depend on it. To see the object's state and events, run kubectl describe node n1
+🔴 Zone zone-a (prod-eu-1) is failing as a whole: two nodes have not reported for about two minutes. One of its nodes reports "Kubelet stopped posting node status." Two failing workloads all depend on it. To see the object's state and events, run kubectl describe node n1
 🔴 Zone zone-a (prod-eu-1) is failing as a whole: two nodes have not reported for about two minutes.
 | 🔴 Zone **zone-a** (**prod-eu-1**) is failing as a whole: two nodes have not reported for about two minutes.
-| One of its nodes reports `Kubelet stopped posting node status`.
+| One of its nodes reports `Kubelet stopped posting node status.`
 | Two failing workloads all depend on it.
 | To see the object's state and events, run
 | ```
 | kubectl describe node n1
 | ```
 10:03:55 settled
-🟠 api in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: assignment to entry in nil map". Its last run lasted 10s; 3 restarts in the 1h2m since its pod was created. To read the output of the last crash, run kubectl logs api-ed3e6bad-a -c app -n shop --previous
+🟠 api in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: assignment to entry in nil map". Its last run lasted ten seconds; three restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs api-ed3e6bad-a -c app -n shop --previous
 🟠 api in shop (prod-eu-1) keeps crashing.
 | 🟠 **api** in **shop** (**prod-eu-1**) keeps crashing.
 | Its node and registry are healthy and unchanged, so nothing outside it explains this.
 | It fails with `panic: assignment to entry in nil map`.
-| Its last run lasted 10s; 3 restarts in the 1h2m since its pod was created.
+| Its last run lasted ten seconds; three restarts since its pod was created one hour ago.
 | To read the output of the last crash, run
 | ```
 | kubectl logs api-ed3e6bad-a -c app -n shop --previous

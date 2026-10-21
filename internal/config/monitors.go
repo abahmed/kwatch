@@ -53,12 +53,18 @@ type HTTPProbeTarget struct {
 	ExpectedStatus    int    `yaml:"expectedStatus"`
 	LatencyWarningMs  int    `yaml:"latencyWarningMs"`
 	LatencyCriticalMs int    `yaml:"latencyCriticalMs"`
+	// FromOverlay is set by the KwatchConfig guard on a target the overlay
+	// added; the mounted configuration never sets it. Such a target may
+	// not reach private addresses, whatever its name resolves to.
+	FromOverlay bool `yaml:"-"`
 }
 
 // TCPProbeTarget is one TCP address the probe monitor dials.
 type TCPProbeTarget struct {
 	Name    string `yaml:"name"`
 	Address string `yaml:"address"`
+	// FromOverlay is set like HTTPProbeTarget.FromOverlay.
+	FromOverlay bool `yaml:"-"`
 }
 
 // DNSProbeTarget is one DNS name the probe monitor resolves.

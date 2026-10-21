@@ -129,9 +129,3 @@ func TestClusterLocalHostsAreNeverBlamedByName(t *testing.T) {
 	assert.True(t, clusterLocal("db.shop.svc.cluster.local"))
 	assert.False(t, clusterLocal("api.example.com"))
 }
-
-func TestSignatureTextDropsTheModeFamily(t *testing.T) {
-	name := signatureName(detection.Mode("CrashLoop"), "panic: key rejected")
-	assert.Equal(t, "panic: key rejected", SignatureText(name))
-	assert.Equal(t, "single", SignatureText("single"))
-}

@@ -1,0 +1,11 @@
+{
+  "name": "finalizer-controller-granted-the-group",
+  "description": "Four objects have been stuck deleting for months on a finalizer of one API group; the scaled-down Deployment whose role writes that group is its controller.",
+  "root": "deployment/arc-system/gha-runner-scale-set-controller",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/arc-system/actions-runner-controller"
+  ],
+  "tail": "40m0s"
+}

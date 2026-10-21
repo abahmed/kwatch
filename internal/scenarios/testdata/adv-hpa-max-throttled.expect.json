@@ -1,0 +1,12 @@
+{
+  "name": "adv-hpa-max-throttled",
+  "description": "An HPA is at its maximum while its throttled pods miss readiness deadlines.",
+  "root": "horizontalpodautoscaler/shop/web",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/shop/web"
+  ]
+}

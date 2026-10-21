@@ -63,10 +63,13 @@ func compileOverrides(in map[string]string) map[string]Tier {
 
 // apply returns the tier after overrides. Reason overrides win over owner
 // kind overrides; among matches the loudest tier wins. An incident without
-// members is never overridden.
+// members is never overridden, and one whose repeated page is held never
+// pages again through an override.
 func (o overrides) apply(p *Incident, base Tier) Tier {
 	tier := o.override(p, base)
-	if o.noPage && tier > Notify {
+	if tier > Notify && (o.noPage || p.Delivery.PageHeld()) {
+		// A repeat of a page that just resolved stays held whatever the
+		// override says (see tier): the page of this outage was sent.
 		return Notify
 	}
 	return tier

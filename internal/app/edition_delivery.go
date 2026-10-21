@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"sort"
@@ -73,8 +74,9 @@ func isSet(value interface{}) bool {
 // capProviders splits the configured providers into those the edition
 // runs and those beyond its cap. The provider named by
 // app.communityProvider is kept first when it is configured; the rest are
-// kept by sorted name, so the choice does not depend on map order. A name
-// that is not configured is ignored here (config warns about it).
+// ranked by providerRank (pager, then chat, then email) and by name, so
+// the choice does not depend on map order. A name that is not configured
+// is ignored here (config warns about it).
 func capProviders(
 	e feature.Entitlements, cfg *config.Config,
 ) (kept, dropped []string) {
@@ -83,14 +85,23 @@ func capProviders(
 	if limit <= 0 || len(names) <= limit {
 		return names, nil
 	}
-	if preferred := cfg.App.CommunityProvider; slices.Contains(
-		names, preferred) {
-		names = append([]string{preferred}, slices.DeleteFunc(
-			slices.Clone(names), func(n string) bool {
-				return n == preferred
-			})...)
-	}
+	preferred := cfg.App.CommunityProvider
+	slices.SortStableFunc(names, func(a, b string) int {
+		ra, rb := rankOf(a, preferred), rankOf(b, preferred)
+		if ra != rb {
+			return cmp.Compare(ra, rb)
+		}
+		return strings.Compare(a, b)
+	})
 	return names[:limit], names[limit:]
+}
+
+// rankOf is providerRank with the operator's choice ahead of every class.
+func rankOf(name, preferred string) int {
+	if name == preferred {
+		return -1
+	}
+	return providerRank(name)
 }
 
 // communitySends words the provider the capped edition sends to and the

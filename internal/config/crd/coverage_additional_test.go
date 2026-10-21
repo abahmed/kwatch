@@ -13,12 +13,12 @@ import (
 )
 
 func TestApplyStartupConfigHandlesDisabledAndMissingClients(t *testing.T) {
-	if err := ApplyStartupConfigWithClient(
+	if _, err := ApplyStartupConfigWithClient(
 		context.Background(), &config.Config{}, nil, "kwatch",
 	); err != nil {
 		t.Fatalf("disabled overlay returned error: %v", err)
 	}
-	if err := ApplyStartupConfigWithClient(
+	if _, err := ApplyStartupConfigWithClient(
 		context.Background(), &config.Config{
 			CrdConfig: config.CrdConfig{Enabled: true},
 		}, nil, "kwatch",
@@ -35,7 +35,7 @@ func TestApplyStartupConfigHandlesEmptyAndMultipleObjects(t *testing.T) {
 		},
 	)
 	cfg := &config.Config{CrdConfig: config.CrdConfig{Enabled: true}}
-	if err := ApplyStartupConfigWithClient(
+	if _, err := ApplyStartupConfigWithClient(
 		context.Background(), cfg, runtimeScheme, "kwatch",
 	); err != nil {
 		t.Fatalf("empty overlay returned error: %v", err)
@@ -64,7 +64,7 @@ func TestApplyStartupConfigHandlesEmptyAndMultipleObjects(t *testing.T) {
 		},
 		objects...,
 	)
-	if err := ApplyStartupConfigWithClient(
+	if _, err := ApplyStartupConfigWithClient(
 		context.Background(), &config.Config{
 			CrdConfig: config.CrdConfig{Enabled: true},
 		}, client, "kwatch",

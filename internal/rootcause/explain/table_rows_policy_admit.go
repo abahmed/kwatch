@@ -37,4 +37,15 @@ var policyAdmitRows = []Row{
 			Signal: SignalAdmissionPolicy},
 		Prior: 0.8,
 	},
+	{
+		// The ServiceAccount admission controller refused the pods
+		// because the account their template names is gone.
+		Name: "account-missing-at-create",
+		Cause: Side{Kind: kube.KindAccount,
+			Modes: []detection.Mode{ModeMissing}},
+		Link: LinkUses,
+		Effect: Side{Group: AnyGroup, Kind: AnyKind, Modes: createModes,
+			Signal: SignalNoAccount},
+		Prior: 0.85,
+	},
 }

@@ -7,5 +7,6 @@
   "mustNotBlame": [
     "node//n1",
     "node//n2"
-  ]
+  ],
+  "ambiguous": true
 }

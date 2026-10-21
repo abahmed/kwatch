@@ -25,8 +25,15 @@ grep -Fq "path: /availabilityz" <<<"$OUT1" || {
 grep -Fq "terminationGracePeriodSeconds: 60" <<<"$OUT1" || {
   echo "FAIL: termination grace period is not configured"; exit 1;
 }
-grep -Fq 'karpenter.sh/do-not-disrupt: "true"' <<<"$OUT1" || {
-  echo "FAIL: pod must ask node autoscalers not to disrupt it"; exit 1;
+# Karpenter's do-not-disrupt pins the node for as long as the pod runs
+# (staging showed hundreds of DisruptionBlocked events), so it is opt-in.
+if grep -Fq 'karpenter.sh/do-not-disrupt' <<<"$OUT1"; then
+  echo "FAIL: do-not-disrupt must not be a default"; exit 1;
+fi
+OUT_DND=$(helm template test1 . \
+  --set-string 'podAnnotations.karpenter\.sh/do-not-disrupt=true' 2>&1)
+grep -Fq 'karpenter.sh/do-not-disrupt: "true"' <<<"$OUT_DND" || {
+  echo "FAIL: do-not-disrupt must be settable through podAnnotations"; exit 1;
 }
 grep -Fq 'cluster-autoscaler.kubernetes.io/safe-to-evict: "false"' \
   <<<"$OUT1" || {
@@ -395,6 +402,27 @@ grep -Fq "rbac.mode=least-privilege" <<<"$OUT_NOTES" || {
 if grep -Fq "every Secret" <<<"$(render_notes --set watch.secrets=false)"; then
   echo "FAIL: watch.secrets=false must not warn about Secret access"; exit 1;
 fi
+# Least-privilege hides custom resources; say so, and say when rbac.mode=full
+# is overridden by watch.secrets=false.
+for want in "Custom" "not watched" "permission_denied" "rbac.mode=full"; do
+  grep -Fq "$want" <<<"$OUT_NOTES" || {
+    echo "FAIL: the default install must say custom resources are not watched ($want)"; exit 1;
+  }
+done
+if grep -Fq "permission_denied" <<<"$(render_notes --set rbac.mode=full)"; then
+  echo "FAIL: rbac.mode=full must not say custom resources are hidden"; exit 1;
+fi
+OUT_FULL_NS=$(render_notes --set rbac.mode=full --set watch.secrets=false)
+grep -Fq "rbac.mode=full is not in effect" <<<"$OUT_FULL_NS" || {
+  echo "FAIL: full with watch.secrets=false must say it is least-privilege"; exit 1;
+}
+# Providers need a Secret: without configSecretName none is configured.
+grep -Fq "no alert provider is configured" <<<"$OUT_NOTES" || {
+  echo "FAIL: an install with no providers must say so"; exit 1;
+}
+if grep -Fq "no alert provider" <<<"$(render_notes --set configSecretName=kwatch-config)"; then
+  echo "FAIL: configSecretName holds the providers; do not warn"; exit 1;
+fi
 echo "PASS: Secret access warning"
 
 echo "=== license ==="
@@ -428,7 +456,8 @@ fi
 # and with Secret watching on or off.
 for mode in full least-privilege; do
   for secrets in true false; do
-    OUT_LR=$(helm template test-lic . --set rbac.mode="$mode" \
+    OUT_LR=$(helm template test-lic . --set license.key=KW1-test \
+      --set rbac.mode="$mode" \
       --set watch.secrets="$secrets" --show-only templates/rbac.yaml 2>&1)
     ROLE=$(awk -v RS='\n---\n' '/kind: Role\n/ && /name: test-lic-license\n/' \
       <<<"$OUT_LR")
@@ -444,9 +473,21 @@ for mode in full least-privilege; do
     fi
   done
 done
-# The instance Secret is always shipped empty and kept on uninstall, and
-# never carries data, so Helm's three-way merge leaves kwatch's key alone.
-for set_args in "" "--set license.key=KW1-test"; do
+# Without a key the chart renders neither the instance Secret nor the Role
+# that reads it; with a key (or license.instanceSecret) it ships the Secret
+# empty, kept on uninstall and without data, so Helm's three-way merge
+# leaves kwatch's key alone.
+if helm template test-lic . --show-only templates/license-instance-secret.yaml \
+  >/dev/null 2>&1; then
+  echo "FAIL: no instance Secret may be rendered without a license key"; exit 1
+fi
+if grep -Fq "name: test1-license" <<<"$(helm template test1 . \
+  --show-only templates/rbac.yaml 2>&1)"; then
+  echo "FAIL: no license Role may be rendered without a license key"; exit 1
+fi
+for set_args in "--set license.key=KW1-test" \
+  "--set license.existingSecret=my-license" \
+  "--set license.instanceSecret=true"; do
   # shellcheck disable=SC2086
   OUT_IS=$(helm template test-lic . $set_args \
     --show-only templates/license-instance-secret.yaml 2>&1)
@@ -456,7 +497,18 @@ for set_args in "" "--set license.key=KW1-test"; do
     ! grep -Eq '^(data|stringData):' <<<"$OUT_IS"; }; then
     echo "FAIL: instance Secret must be empty, Opaque and kept ($set_args)"; exit 1
   fi
+  # shellcheck disable=SC2086
+  OUT_ROLE=$(helm template test-lic . $set_args --show-only templates/rbac.yaml 2>&1)
+  grep -Fq "name: test-lic-license" <<<"$OUT_ROLE" || {
+    echo "FAIL: license Role missing ($set_args)"; exit 1;
+  }
 done
+# An existing license Secret rolls the pod when its content changes; an
+# offline render hashes the name, and the key is read once at start.
+OUT_ROLL=$(helm template test-lic . --set license.existingSecret=my-license 2>&1)
+grep -Fq "checksum/license-secret:" <<<"$OUT_ROLL" || {
+  echo "FAIL: existingSecret must set a checksum annotation"; exit 1;
+}
 # HTTPS egress for the license only with a license configured.
 OUT_NNP=$(helm template test-lnp . --set networkPolicy.enabled=true \
   --set 'networkPolicy.apiServerPorts={6443}' 2>&1)
@@ -464,7 +516,8 @@ if grep -Fq "License activation" <<<"$OUT_NNP"; then
   echo "FAIL: networkPolicy must not open HTTPS egress without a license"; exit 1
 fi
 for set_args in "--set license.key=KW1-test" \
-  "--set license.existingSecret=my-license"; do
+  "--set license.existingSecret=my-license" \
+  "--set license.instanceSecret=true"; do
   # shellcheck disable=SC2086
   OUT_LNP=$(helm template test-lnp . --set networkPolicy.enabled=true \
     --set 'networkPolicy.apiServerPorts={6443}' $set_args 2>&1)
@@ -477,6 +530,32 @@ if helm template test-lic . --set license.bogus=1 >/dev/null 2>&1; then
   echo "FAIL: license.bogus must be rejected by the schema"; exit 1;
 fi
 echo "PASS: license"
+
+echo "=== pod scheduling and volumes ==="
+OUT_POD=$(helm template test-pod . --set priorityClassName=kwatch-critical \
+  --set 'imagePullSecrets[0].name=regcred' \
+  --set 'extraVolumes[0].name=ca' --set 'extraVolumes[0].secret.secretName=ca' \
+  --set 'extraVolumeMounts[0].name=ca' \
+  --set 'extraVolumeMounts[0].mountPath=/etc/ca' 2>&1)
+grep -Fq 'priorityClassName: "kwatch-critical"' <<<"$OUT_POD" || {
+  echo "FAIL: priorityClassName must reach the pod"; exit 1;
+}
+grep -A1 -F "imagePullSecrets:" <<<"$OUT_POD" | grep -Fq "name: regcred" || {
+  echo "FAIL: imagePullSecrets must reach the pod"; exit 1;
+}
+grep -Fq "mountPath: /etc/ca" <<<"$OUT_POD" &&
+  grep -Fq "secretName: ca" <<<"$OUT_POD" || {
+  echo "FAIL: extra volumes and mounts must reach the pod"; exit 1;
+}
+if grep -Fq "priorityClassName" <<<"$OUT1" ||
+  grep -Fq "imagePullSecrets" <<<"$OUT1"; then
+  echo "FAIL: scheduling extras must be absent by default"; exit 1
+fi
+if helm template test-pod . --set 'extraVolumes[0].name=data' \
+  --set 'extraVolumes[0].emptyDir={}' >/dev/null 2>&1; then
+  echo "FAIL: extraVolumes must not reuse a chart volume name"; exit 1
+fi
+echo "PASS: pod scheduling and volumes"
 
 echo "=== 0.10.5 values file ==="
 # A values file from the 0.10.5 chart (verbatim, with its empty config:

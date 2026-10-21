@@ -1,0 +1,9 @@
+{
+  "name": "node-join-never-ready",
+  "description": "A new node joins NotReady and is still not Ready when the boot window ends.",
+  "root": "node//n3",
+  "tier": "page",
+  "bootHeld": true,
+  "maxMessages": 2,
+  "tail": "1h0m0s"
+}

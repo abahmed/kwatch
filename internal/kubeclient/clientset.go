@@ -38,7 +38,13 @@ type ClientSet struct {
 	Metadata  metadata.Interface
 	Discovery discovery.DiscoveryInterfaceWithContext
 	REST      rest.Interface
-	HTTP      *http.Client
+	// HTTP is the client for alert providers and the heartbeat URL; the
+	// only one app.insecureSkipTLSVerify applies to.
+	HTTP *http.Client
+	// PlatformHTTP is the client for kwatch's own services (license,
+	// telemetry, update check): same proxy and CA bundle, TLS always
+	// verified.
+	PlatformHTTP *http.Client
 	// ProbeHTTP is the active probes' client: no outbound proxy, system
 	// roots plus the cluster CA.
 	ProbeHTTP *http.Client
@@ -111,6 +117,10 @@ func (c ClientSet) WithRuntime(runtime config.RuntimeConfig) (
 	if err != nil {
 		return ClientSet{}, err
 	}
+	c.PlatformHTTP, err = NewPlatformHTTPClient(appConfig)
+	if err != nil {
+		return ClientSet{}, err
+	}
 	c.ProbeHTTP = NewProbeHTTPClient(c.restConfig)
 	c.Kubelet = kubeletClient
 	return c, nil
@@ -124,6 +134,14 @@ func NewHTTPClientWithRuntime(
 ) (*http.Client, error) {
 	appConfig := runtime.Application()
 	return NewHTTPClient(appConfig)
+}
+
+// NewPlatformHTTPClientWithRuntime builds the client for kwatch's own
+// services from the immutable runtime snapshot (see NewPlatformHTTPClient).
+func NewPlatformHTTPClientWithRuntime(
+	runtime config.RuntimeConfig,
+) (*http.Client, error) {
+	return NewPlatformHTTPClient(runtime.Application())
 }
 
 func newClusterClients(restConfig *rest.Config) (ClientSet, error) {

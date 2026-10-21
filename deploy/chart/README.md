@@ -94,8 +94,16 @@ helm upgrade kwatch kwatch/kwatch \
   --values values.yaml
 ```
 
-The chart ships the empty Secret `kwatch-license-instance` and kwatch only has
-get and update on that one name (no `create` on Secrets). The chart never
+When a license key is configured (`license.key`, `license.existingSecret` or
+`license.instanceSecret: true`), the chart ships the empty Secret
+`kwatch-license-instance` and a Role that gives kwatch get and update on that
+one name (no `create` on Secrets). Without a key neither is rendered. Set
+`license.instanceSecret: true` when the key reaches kwatch another way, for
+example inside the `configSecretName` Secret. When the key lives in
+`license.existingSecret`, the chart rolls the pod when that Secret's content
+changes, but only where Helm `lookup` can read it (a live `helm install` or
+`upgrade`); an offline render (`helm template`, Argo CD) hashes the Secret's
+name, so restart the Deployment yourself after changing the key. The chart never
 renders `data` for it and keeps it on uninstall (`helm.sh/resource-policy:
 keep`). Because neither the previous nor the new manifest has `data`, Helm's
 three-way merge leaves the instance key kwatch wrote alone on upgrade. If you
@@ -162,6 +170,7 @@ kubectl delete namespace kwatch
 | `config.app.caBundlePath` / `config.app.insecureSkipTLSVerify` | Extra PEM CA bundle for outbound HTTP (added to the system roots) and a switch that skips TLS verification (testing only). Not settable from a `KwatchConfig` | `""` / `false` |
 | `license.existingSecret` | Existing Secret with the key `license-key`, read as `KWATCH_LICENSE_KEY` (optional: the pod starts as Community without it) | `""` |
 | `license.key` | The license key itself (discouraged: it lands in release history). When set and `existingSecret` is empty, the chart creates the Secret `<release>-license` | `""` |
+| `license.instanceSecret` | Render the license instance Secret and its Role even though no key is set through the chart (the key reaches kwatch another way). Otherwise they are rendered only with `license.key` or `license.existingSecret` | `false` |
 | `config.healthCheck.statusEndpoint` | Serve the read-only `/status` view (open incident object names, no authentication) on the health port. Off by default; with the NetworkPolicy on it is limited like the rest of the port. Reach it with `kubectl port-forward` | `false` |
 | `config.healthCheck.port` | Health port: container, probe and NetworkPolicy port. The health check cannot be disabled | `8060` |
 | `networkPolicy.enabled` | Render a NetworkPolicy that admits the health port (own namespace, `kubeletCIDRs` and `healthIngressFrom` only) and allows DNS, `networkPolicy.apiServerPorts` and kubelet (`networkPolicy.kubeletPort`, default 10250) egress | `false` |
@@ -176,7 +185,7 @@ kubectl delete namespace kwatch
 | `networkPolicy.healthIngressFrom` | Extra peers (`namespaceSelector`, `podSelector` or `ipBlock`) that may reach the health port (`/health`, `/metrics`, `/status`), such as your Prometheus namespace. Without it only pods in the release namespace (and `kubeletCIDRs`) can | `[]` |
 | `image.repository` / `image.tag` / `image.pullPolicy` | Container image; an empty tag uses the chart's `appVersion` | `ghcr.io/abahmed/kwatch` / `""` / `IfNotPresent` |
 | `crd.install` | Install the shared `KwatchConfig` CRD with this release; skipped automatically when another release owns it. `config.crd.enabled` is separate: it turns the live overlay on | `true` |
-| `rbac.mode` | `least-privilege` grants an explicit read-only `list`/`watch` set, and kinds outside it (custom resources included) show as `permission_denied` in `/health` coverage; `full` grants `list`/`watch` on every resource. Both grant `get` only on namespaces, nodes, `nodes/stats`, `nodes/metrics` and `pods/log`. Set `full` to watch custom resources | `least-privilege` |
+| `rbac.mode` | `least-privilege` grants an explicit read-only `list`/`watch` set, and kinds outside it (custom resources included) show as `permission_denied` in `/health` coverage (kwatch logs one warning about them and the install notes say so); `full` grants `list`/`watch` on every resource, except that `full` with `watch.secrets: false` renders the least-privilege list. Both grant `get` only on namespaces, nodes, `nodes/stats`, `nodes/metrics` and `pods/log`. Set `full` to watch custom resources | `least-privilege` |
 | `persistence.size` | Size of the state volume (PVC). The state file is capped at 512 MiB of logical data (evidence 128 MiB), is rewritten at startup when it grows more than a quarter past that, and no backups are kept; the file and the temporary rewrite copy share the volume | `2Gi` |
 | `persistence.existingClaim` | Reuse an existing PVC for the state file | `""` |
 | `persistence.emptyDir` | Keep state in an `emptyDir` instead of a PVC. All state is lost when the Pod is rescheduled, so use it only for evaluation; installing with it prints a warning | `false` |
@@ -193,7 +202,10 @@ kubectl delete namespace kwatch
 | `securityContext.allowPrivilegeEscalation` | Prevent privilege escalation | `false` |
 | `securityContext.capabilities.drop` | Linux capabilities removed from the container | `[ALL]` |
 | `securityContext.seccompProfile.type` | Seccomp profile | `RuntimeDefault` |
-| `podAnnotations` | Pod annotations; the defaults ask node autoscalers not to evict kwatch (see below), and your keys are merged with them | `karpenter.sh/do-not-disrupt: "true"`, `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` |
+| `podAnnotations` | Pod annotations; the default asks the cluster autoscaler not to scale down kwatch's node (see below), and your keys are merged with it | `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` |
+| `priorityClassName` | PriorityClass of the kwatch pod, so the pod that reports failures is not the first one preempted | `""` |
+| `imagePullSecrets` | Pull secrets for the kwatch image (a private registry mirror); a list of `{name: <secret>}` | `[]` |
+| `extraVolumes` / `extraVolumeMounts` | Extra volumes and mounts of the kwatch container, for example a Secret holding the CA bundle `config.app.caBundlePath` names. The names `config-volume` and `data` and the paths `/config` and `/var/lib/kwatch` are taken | `[]` |
 | `podLabels` | Additional Pod labels | `{}` |
 | `nodeSelector` | Choose nodes by label | `{}` |
 | `tolerations` | Allow configured taints | `[]` |
@@ -207,21 +219,29 @@ kubectl delete namespace kwatch
 | `fullnameOverride` | Override the full resource name prefix | `""` |
 
 Kwatch writes one state file under one lock, so an eviction means a restart
-and a gap in monitoring. The default `podAnnotations` are the plain
-annotations `karpenter.sh/do-not-disrupt: "true"` and
-`cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`. They only ask a
-node autoscaler to leave the pod alone, and they do nothing where none reads
-them. To opt out, remove a key (`--set 'podAnnotations.karpenter\.sh/do-not-disrupt=null'`) or set the
-permissive value: `"false"` for `karpenter.sh/do-not-disrupt`, `"true"` for
-`cluster-autoscaler.kubernetes.io/safe-to-evict`. (`"false"` on `safe-to-evict`
-is the protective value.)
+and a gap in monitoring, but the restart resumes from the volume. The default
+`podAnnotations` carry only `cluster-autoscaler.kubernetes.io/safe-to-evict:
+"false"`, a plain annotation that asks the cluster autoscaler not to scale
+down kwatch's node; remove it (`--set
+'podAnnotations.cluster-autoscaler\.kubernetes\.io/safe-to-evict=null'`) where
+scale-down matters more. The chart does **not** set
+`karpenter.sh/do-not-disrupt`: it pins the node and Karpenter reports it as
+`DisruptionBlocked` for as long as the pod runs. Ask for it yourself with
+`--set-string 'podAnnotations.karpenter\.sh/do-not-disrupt=true'`. The chart
+ships no PodDisruptionBudget: on a single pod `minAvailable: 1` would block
+every drain of its node, and `maxUnavailable: 1` allows the one eviction a
+drain needs. Create your own if you want one.
 
 Delivery is at least once: queued notifications are kept in a persisted outbox
 (at most 2048 jobs, none older than 24 hours), so a restart does not lose them,
 and a send interrupted mid-request may repeat.
 
-Adoption telemetry is on by default: an anonymous installation ID and the kwatch
-version, sent at most once every 7 days. Set `telemetry.enabled: false` in
-`config` (or in the Secret's `config.yaml`) to turn it off (see the [configuration reference](../../docs/configuration.md#-minimal-adoption-telemetry)).
+Adoption telemetry is on by default: an anonymous installation ID (with its
+own salt, not the license's cluster ID) and the kwatch version, sent at most
+once every 7 days. With a Pro license kwatch also checks in every 30 minutes
+with the namespace and `app.clusterName`; set `clusterCheckins: false` in
+`config` or `KWATCH_CLUSTER_CHECKINS=false` to turn that off. Set
+`telemetry.enabled: false` in `config` (or in the Secret's `config.yaml`) to
+turn telemetry off (see the [configuration reference](../../docs/configuration.md#-minimal-adoption-telemetry)).
 
 The full configuration reference is in [`docs/configuration.md`](../../docs/configuration.md).

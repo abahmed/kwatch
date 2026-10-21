@@ -9,7 +9,6 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/incident"
-	"github.com/abahmed/kwatch/internal/notification"
 	"github.com/abahmed/kwatch/internal/notification/compose"
 )
 
@@ -290,43 +289,6 @@ func (c *Collector) digestExtras(
 	extras := compose.DigestExtras{Wake: c.wake}
 	extras.Ongoing, extras.Unchanged = ongoingExtras(ongoing, unchanged)
 	return extras
-}
-
-// MaxAuditItems bounds the incidents a digest's audit entry names.
-const MaxAuditItems = 20
-
-// listedInDigest summarises a digest for the audit log: the counts, and
-// the first MaxAuditItems incidents as "id: title", and what the message
-// rendered: its line count and its grouped, unchanged and wake lines.
-func (c *Collector) listedInDigest(
-	g *LowDigest, risks int, ongoing []ongoingItem, now time.Time,
-	rendered *notification.Listed,
-) *notification.Listed {
-	listed := &notification.Listed{
-		Opened: opened(g.Opened), Resolved: len(g.Resolved), Risks: risks,
-		Ongoing: len(ongoing) + len(g.Opened) - opened(g.Opened),
-	}
-	if rendered != nil {
-		listed.Lines, listed.Summaries = rendered.Lines, rendered.Summaries
-	}
-	add := func(decisions []incident.Decision, suffix string) {
-		for _, d := range decisions {
-			if len(listed.Items) == MaxAuditItems {
-				return
-			}
-			listed.Items = append(listed.Items, d.Incident.ID+": "+
-				c.env.Messages.Write(d, now).Title+suffix)
-		}
-	}
-	add(g.Opened, "")
-	add(g.Resolved, " (resolved)")
-	for _, item := range ongoing {
-		if len(listed.Items) < MaxAuditItems {
-			listed.Items = append(listed.Items,
-				item.p.ID+": "+item.Line(now)+" (ongoing)")
-		}
-	}
-	return listed
 }
 
 // opened counts the decisions that announce an incident in this digest's

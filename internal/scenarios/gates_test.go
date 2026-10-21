@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/abahmed/kwatch/internal/audit"
+	"github.com/abahmed/kwatch/internal/replay"
 	"github.com/abahmed/kwatch/internal/scorecard"
 )
 
@@ -31,10 +32,16 @@ type card struct {
 	recorded recordedResult
 	// firstMessages are the labelled scenarios that interrupted people.
 	firstMessages []firstMessage
-	noise         scorecard.Report
-	staging       stagingResult
-	storms        []stormResult
-	multi         multiStormResult
+	// firstRoots are the labelled scenarios whose expected root some
+	// message stated; neverRoot are those that never stated it.
+	firstRoots []firstRoot
+	neverRoot  []string
+	// ratchet lists the scenarios on the ratchet list that no longer hold.
+	ratchet []string
+	noise   scorecard.Report
+	staging stagingResult
+	storms  []stormResult
+	multi   multiStormResult
 }
 
 // TestScorecardGates replays every labelled scenario, the storms and the
@@ -105,7 +112,13 @@ func measure(t *testing.T) card {
 	c.verdicts = labelled.verdicts
 	c.cases = labelled.cases
 	c.firstMessages = labelled.firstMessages
+	c.firstRoots, c.neverRoot = labelled.firstRoots, labelled.neverRoot
 	c.accuracy = scorecard.ScoreCases(c.cases)
+	listed, err := readRatchet()
+	if err != nil {
+		t.Error(err)
+	}
+	c.ratchet = ratchetFailures(listed, c.verdicts)
 	entries := append(labelled.entries, c.staging.entries...)
 	c.noise = scorecard.Score(sortedEntries(entries))
 	return c
@@ -117,6 +130,8 @@ type labelledResult struct {
 	cases         []scorecard.Case
 	entries       []audit.Entry
 	firstMessages []firstMessage
+	firstRoots    []firstRoot
+	neverRoot     []string
 }
 
 func measureLabelled(t *testing.T) labelledResult {
@@ -124,7 +139,7 @@ func measureLabelled(t *testing.T) labelledResult {
 	var r labelledResult
 	for _, s := range library() {
 		log, e, result := replayScenario(t, labelledDir, s.expect.Name)
-		v := judge(e, result)
+		v := judge(e, log, result)
 		r.verdicts = append(r.verdicts, v)
 		r.cases = append(r.cases, v.cases...)
 		r.entries = append(r.entries, auditEntries(e.Name, result)...)
@@ -134,8 +149,23 @@ func measureLabelled(t *testing.T) labelledResult {
 			m.bootHeld = e.BootHeld
 			r.firstMessages = append(r.firstMessages, m)
 		}
+		r.noteFirstRoot(e, log, result)
 	}
 	return r
+}
+
+// noteFirstRoot measures when the expected root was first stated.
+func (r *labelledResult) noteFirstRoot(
+	e expectation, log replay.Log, result replay.Result,
+) {
+	if e.Quiet || e.SyncAfter > 0 {
+		return
+	}
+	if m, ok := timeToFirstRoot(e, log, result); ok {
+		r.firstRoots = append(r.firstRoots, m)
+	} else {
+		r.neverRoot = append(r.neverRoot, e.Name)
+	}
 }
 
 func buildGates(c card) []scorecard.Gate {
@@ -146,6 +176,7 @@ func buildGates(c card) []scorecard.Gate {
 	}
 	gates = append(gates, heldoutGates(c.heldout)...)
 	gates = append(gates, wrongHighGate(c.cases, c.heldout.cases))
+	gates = append(gates, rootGates(c.verdicts, c.accuracy)...)
 	gates = append(gates, calibrationGates(c.accuracy)...)
 	gates = append(gates,
 		scorecard.AtMost("Messages per incident (p95)",
@@ -177,7 +208,8 @@ func buildGates(c card) []scorecard.Gate {
 			float64(storm.peak), scorecard.GoalStormMessages, ""))
 	}
 	gates = append(gates, multiStormGates(c.multi)...)
-	return append(gates, labelGates(c.verdicts)...)
+	gates = append(gates, labelGates(c.verdicts)...)
+	return append(gates, ratchetGate(c.ratchet))
 }
 
 // wrongHighGate bounds how often a plainly stated cause is wrong, over

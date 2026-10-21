@@ -14,11 +14,12 @@ import (
 // for a finalizer that nothing runs, and attachments to volumes that are
 // gone.
 func finalizerScenarios() []scenario {
-	return []scenario{
+	return append([]scenario{
 		finalizerControllerScaledDown(), finalizerControllerRunning(),
 		finalizerControllerScaledDownFresh(), attachmentVolumeGone(),
 		attachmentNodeGone(),
-	}
+	}, append(finalizerEvidenceScenarios(),
+		finalizerReasonScenarios()...)...)
 }
 
 const (

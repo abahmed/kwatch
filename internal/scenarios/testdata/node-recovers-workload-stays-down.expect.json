@@ -1,0 +1,9 @@
+{
+  "name": "node-recovers-workload-stays-down",
+  "description": "A node that paged recovers while a workload that ran on it stays unready: the update that moves the incident to the workload says the node recovered.",
+  "root": "deployment/shop/cart",
+  "tier": "page",
+  "maxMessages": 3,
+  "maxPages": 1,
+  "tail": "15m0s"
+}

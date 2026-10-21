@@ -53,6 +53,7 @@ func (s workloadSchema[T]) Describe(obj any) (Description, bool) {
 		attrs[AttrTemplateHash] = inventory.Text(TemplateHash(template))
 		attrs[AttrTemplateLabels] = inventory.Text(
 			labelText(template.Labels))
+		setHandlerSignals(attrs, template)
 		rel.add(inventory.References,
 			templateReferences(workload.GetNamespace(), template)...)
 	}

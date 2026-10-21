@@ -32,14 +32,32 @@ func outageFleet(c *cluster, n int) ([]*workload, []string) {
 // must differ by more than a number: names with digits read as one error.
 var outageDependencies = []string{"cache", "queue", "mailer", "vault",
 	"ledger", "geocoder", "scheduler", "indexer", "gateway", "notifier",
-	"renderer", "importer", "exporter", "resolver", "tracker"}
+	"renderer", "importer", "exporter", "resolver", "tracker", "mapper",
+	"archiver", "broker", "sampler", "balancer", "validator", "uploader"}
+
+// Scenarios that share a staging day must not share an error: the same
+// line in two namespaces is one failure signature, a story of its own.
+// Each family therefore takes its own slice of outageDependencies.
+const (
+	// namespaceOutageGroups takes indexes 0 to 7.
+	outageServicesWords  = 8  // namespaceOutageWithServices: 6 apps.
+	outagePagesOnceWords = 14 // namespaceOutagePagesOnce: 6 apps.
+	outageTwoTeamsWords  = 20 // twoTeamsTwoPages: 2 apps.
+)
 
 // outageCrash crash-loops app i of the fleet with its own error.
 func outageCrash(
 	c *cluster, w *workload, node string, i int, restarts int32,
 ) {
+	outageCrashWord(c, w, node, outageDependencies[i], restarts)
+}
+
+// outageCrashWord crash-loops the pod of w, which lost dependency.
+func outageCrashWord(
+	c *cluster, w *workload, node, dependency string, restarts int32,
+) {
 	c.update(w.pod(0, node, crashLoop(1, "Error",
-		"fatal: "+outageDependencies[i]+" lost its own dependency",
+		"fatal: "+dependency+" lost its own dependency",
 		restarts)))
 	w.setReady(0)
 	c.update(w.objects())

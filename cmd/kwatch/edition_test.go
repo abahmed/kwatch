@@ -13,6 +13,7 @@ import (
 func TestVersionJSONNamesTheEdition(t *testing.T) {
 	var out, errOut bytes.Buffer
 	code := runCommand([]string{"version", "--json"}, &out, &errOut,
+		testNow,
 		func() int { return 99 })
 	if code != 0 {
 		t.Fatalf("code=%d err=%q", code, errOut.String())
@@ -34,6 +35,7 @@ func TestReplayExportIsAProFeatureInCommunity(t *testing.T) {
 	called := false
 	code := runCommand([]string{"replay-export", "--since", "2h", "--out",
 		t.TempDir() + "/o.jsonl"}, &out, &errOut,
+		testNow,
 		func() int { called = true; return 0 })
 	if code == 0 || called {
 		t.Fatalf("code=%d called=%v", code, called)
@@ -57,7 +59,7 @@ func TestLintReportsProConfigurationAsInformation(t *testing.T) {
 	t.Setenv("CONFIG_FILE", path)
 	var out, errOut bytes.Buffer
 
-	code := runLint(false, false, &out, &errOut)
+	code := runLint(false, false, testNow, &out, &errOut)
 
 	if code != 0 {
 		t.Fatalf("lint must not fail on Pro config: %d %s", code,
@@ -82,7 +84,7 @@ func TestLintSaysNothingAboutProForAPlainConfig(t *testing.T) {
 	t.Setenv("CONFIG_FILE", path)
 	var out, errOut bytes.Buffer
 
-	if code := runLint(false, false, &out, &errOut); code != 0 {
+	if code := runLint(false, false, testNow, &out, &errOut); code != 0 {
 		t.Fatalf("code = %d", code)
 	}
 	if strings.Contains(out.String(), "is a kwatch Pro feature") {
@@ -99,7 +101,7 @@ func TestLintNamesTheProDetectorsCommunityDoesNotRun(t *testing.T) {
 	t.Setenv("CONFIG_FILE", path)
 	var out, errOut bytes.Buffer
 
-	if code := runLint(false, false, &out, &errOut); code != 0 {
+	if code := runLint(false, false, testNow, &out, &errOut); code != 0 {
 		t.Fatalf("code = %d", code)
 	}
 	if !strings.Contains(out.String(),

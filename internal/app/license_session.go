@@ -175,9 +175,34 @@ func (l *licenseSession) restarted() <-chan struct{} {
 	return l.restart
 }
 
-// record publishes st to metrics and to /status.
+// licenseComponent is the /health entry of a configured license key.
+const licenseComponent = "license"
+
+// reportHealth publishes the license as the "license" component of
+// /health with a bounded reason. Without a key there is no entry: the
+// Community edition by choice is not a degradation. A key that cannot run
+// Pro is degraded, which is what makes a mistyped or lapsed key visible.
+func (l *licenseSession) reportHealth(st license.Status) {
+	server := l.deps.healthServer
+	if server == nil || !l.deps.licenseKeyConfigured() {
+		return
+	}
+	switch {
+	case st.State.ProEnabled():
+		server.SetComponentStatus(licenseComponent, "running", "", true)
+	case unusableMarker(st) != "":
+		server.SetComponentStatus(licenseComponent, "degraded",
+			"license_"+string(st.State), false)
+	default:
+		server.SetComponentStatus(licenseComponent, "waiting",
+			"license_pending", true)
+	}
+}
+
+// record publishes st to metrics, /health and /status.
 func (l *licenseSession) record(st license.Status) {
 	l.cur.Store(&st)
+	l.reportHealth(st)
 	reg := metrics.DefaultRegistry()
 	reg.SetLicenseState(string(st.State))
 	var expiry int64
@@ -345,7 +370,7 @@ func (l *licenseSession) managerConfig(setup *licenseSetup) license.Config {
 	kube := deps.clients.Kubernetes
 	cfg.Client = &license.Client{
 		Endpoint:  setup.endpoint,
-		HTTP:      licenseHTTPClient(deps.clients.HTTP, l.tracker),
+		HTTP:      licenseHTTPClient(deps.clients.PlatformHTTP, l.tracker),
 		UserAgent: "kwatch-license/1",
 	}
 	cfg.InstanceStore = kubeInstanceStore{

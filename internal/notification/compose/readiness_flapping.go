@@ -10,8 +10,8 @@ const weightReadinessFlap = 0.65
 
 // readinessFlapSentences say what readiness flapping does to the Service in
 // front of the pods and quote the kubelet's readiness failure as it
-// wrote it: `Service api's endpoints keep changing. Quoted readiness
-// failure: "Readiness probe failed: ..."`.
+// wrote it: `Service api's endpoints keep changing. The kubelet reports
+// "Readiness probe failed: ..."`.
 func readinessFlapSentences(f caseFacts) []sentence {
 	for _, m := range f.members {
 		if m.Reason != reasons.ReadinessFlapping {
@@ -25,7 +25,7 @@ func readinessFlapSentences(f caseFacts) []sentence {
 			if text != "" {
 				text += " "
 			}
-			text += "Quoted readiness failure: " + quoted(line) + "."
+			text += "The kubelet reports " + quoted(line) + "."
 		}
 		if text == "" {
 			return nil

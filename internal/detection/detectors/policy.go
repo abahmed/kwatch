@@ -190,42 +190,71 @@ func (Webhook) Kinds() []inventory.Kind {
 	return []inventory.Kind{kube.KindMutatingWebhook, kube.KindValidatingHook}
 }
 
-// Detect implements detection.Detector.
+// Detect implements detection.Detector. Each Service is judged by the
+// failure policy of the webhooks that call it: one that only an Ignore
+// webhook calls is skipped by requests, whatever the other webhooks of
+// the configuration are set to.
 func (Webhook) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	if ctx.Model == nil {
 		return nil
 	}
-	blocking := strings.Contains(text(e, kube.AttrFailurePolicy), "Fail")
-	rejected := blocking && webhookRejected(ctx, e)
-	severity := backendSeverity(blocking, rejected)
+	closed := closedBackends(e)
+	rejected := len(closed) > 0 && webhookRejected(ctx, e)
+	var out []detection.Finding
 	for _, service := range ctx.Model.Related(
 		e.ID, inventory.Serves, inventory.Outgoing,
 	) {
 		if !ctx.Synced(kube.KindService) {
 			return nil
 		}
-		if !ctx.Model.Exists(service) {
-			return []detection.Finding{{
-				Reason:   reasons.WebhookBackendNotFound,
-				Severity: severity,
-				Summary: "Admission webhook calls Service " + service.Name +
-					", which does not exist" + effect(blocking, rejected),
-			}}
-		}
-		if ready, known := readyEndpoints(ctx, service); known && ready == 0 {
-			if backendsAreStarting(ctx, service) {
-				return nil
-			}
-			return []detection.Finding{{
-				Reason: reasons.WebhookNoEndpoints, Severity: severity,
-				Summary: "Admission webhook backend " + service.Name +
-					" has no ready pods" + effect(blocking, rejected),
-			}}
+		blocking := closed[service.Namespace+"/"+service.Name]
+		if f, ok := backendFinding(
+			ctx, service, blocking, blocking && rejected); ok {
+			out = append(out, f)
 		}
 	}
-	return nil
+	return out
+}
+
+// closedBackends are the Services, as "namespace/name", that a webhook
+// failing closed calls.
+func closedBackends(e inventory.Entity) map[string]bool {
+	out := map[string]bool{}
+	for _, name := range strings.Split(
+		text(e, kube.AttrWebhookClosedServices), ",") {
+		if name != "" {
+			out[name] = true
+		}
+	}
+	return out
+}
+
+// backendFinding is the finding for a Service whose webhook cannot call
+// it: the Service does not exist, or nothing behind it is ready.
+func backendFinding(
+	ctx detection.Context, service inventory.EntityID,
+	blocking, rejected bool,
+) (detection.Finding, bool) {
+	severity := backendSeverity(blocking, rejected)
+	if !ctx.Model.Exists(service) {
+		return detection.Finding{
+			Reason:   reasons.WebhookBackendNotFound,
+			Severity: severity,
+			Summary: "Admission webhook calls Service " + service.Name +
+				", which does not exist" + effect(blocking, rejected),
+		}, true
+	}
+	ready, known := readyEndpoints(ctx, service)
+	if !known || ready > 0 || backendsAreStarting(ctx, service) {
+		return detection.Finding{}, false
+	}
+	return detection.Finding{
+		Reason: reasons.WebhookNoEndpoints, Severity: severity,
+		Summary: "Admission webhook backend " + service.Name +
+			" has no ready pods" + effect(blocking, rejected),
+	}, true
 }
 
 // backendSeverity is how much a dead webhook backend matters. With
@@ -259,6 +288,9 @@ func effect(blocking, rejected bool) string {
 func readyEndpoints(
 	ctx detection.Context, service inventory.EntityID,
 ) (float64, bool) {
+	if !ctx.Synced(kube.KindEndpointSlice) {
+		return 0, false
+	}
 	slices := ctx.Model.Related(service, inventory.Backs, inventory.Incoming)
 	if len(slices) == 0 {
 		return 0, false

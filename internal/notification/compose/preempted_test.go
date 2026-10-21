@@ -40,7 +40,7 @@ func TestWritePreemptionNamesThePreemptorPriorityAndTime(t *testing.T) {
 	got := preemptionNote(preemptedPod("worker-5f", at))
 
 	assert.Contains(t, got, "worker-5f was preempted by batch/importer-x "+
-		"(priority 1000 > 0) at 10:02.")
+		"(priority 1000 > 0) at 10:02 UTC.")
 }
 
 func TestWritePreemptionCountsManyVictims(t *testing.T) {
@@ -50,7 +50,7 @@ func TestWritePreemptionCountsManyVictims(t *testing.T) {
 		preemptedPod("worker-7h", at))
 
 	assert.Contains(t, got, "3 pods were preempted by batch/importer-x "+
-		"(priority 1000 > 0) at 10:03.")
+		"(priority 1000 > 0) at 10:03 UTC.")
 }
 
 func TestWritePreemptionLinksTheReplacementsThatCannotRun(t *testing.T) {
@@ -66,6 +66,6 @@ func TestWritePreemptionLinksTheReplacementsThatCannotRun(t *testing.T) {
 	got := preemptionNote(preemptedPod("worker-5f", at), stuck)
 
 	assert.Contains(t, got, "worker-5f was preempted by batch/importer-x "+
-		"(priority 1000 > 0) at 10:02, and 1 replacement cannot be "+
-		"scheduled: \"0/2 nodes are available: 2 Insufficient cpu\".")
+		"(priority 1000 > 0) at 10:02 UTC, and 1 replacement cannot be "+
+		"scheduled: \"0/2 nodes are available: 2 Insufficient cpu.\"")
 }

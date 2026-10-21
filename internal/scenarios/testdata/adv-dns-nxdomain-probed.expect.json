@@ -1,0 +1,14 @@
+{
+  "name": "adv-dns-nxdomain-probed",
+  "description": "One workload crashes on NXDOMAIN for the external host in its configuration; the probe of that host fails; CoreDNS and its probe are healthy.",
+  "root": "external-endpoint//sandbox.partner-gateway.example:443",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "cluster-dns//cluster-dns",
+    "deployment/kube-system/coredns",
+    "node//n1",
+    "node//n2",
+    "deployment/shop/checkout"
+  ]
+}

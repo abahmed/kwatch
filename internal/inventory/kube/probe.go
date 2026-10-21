@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/safego"
 )
 
 // Virtual entities for cluster services that are not Kubernetes objects.
@@ -115,19 +116,25 @@ func (p *Prober) Run(ctx context.Context) {
 	ticker := time.NewTicker(probeInterval)
 	defer ticker.Stop()
 	for {
-		observations := append(p.apiServer(ctx), p.dns(ctx))
-		observations = append(observations, p.leaders(ctx)...)
-		if p.rounds%leaseScanEvery == 0 {
-			observations = append(observations, p.leases(ctx)...)
-		}
-		p.rounds++
-		p.cfg.Submit(ctx, observations...)
+		// A panicking round loses that round only; the next one runs.
+		safego.Do("control-plane-probe", func() { p.round(ctx) })
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 		}
 	}
+}
+
+// round makes one pass of every control plane probe and submits it.
+func (p *Prober) round(ctx context.Context) {
+	observations := append(p.apiServer(ctx), p.dns(ctx))
+	observations = append(observations, p.leaders(ctx)...)
+	if p.rounds%leaseScanEvery == 0 {
+		observations = append(observations, p.leases(ctx)...)
+	}
+	p.rounds++
+	p.cfg.Submit(ctx, observations...)
 }
 
 // apiServer checks /readyz?verbose, which also reports etcd.

@@ -40,8 +40,7 @@ func SafeEventHandler(
 func callHandler(component, resource string, callback func()) {
 	defer func() {
 		if recover() != nil {
-			metrics.DefaultRegistry().InformerHandlerPanics.Add(1)
-			handlerPanics.record(component, resource)
+			recordHandlerPanic(component, resource)
 			klog.ErrorS(nil, "informer event handler panic",
 				"component", component, "resource", resource)
 		}
@@ -54,4 +53,12 @@ func unwrapTombstone(obj interface{}) interface{} {
 		return tombstone.Obj
 	}
 	return obj
+}
+
+// recordHandlerPanic counts a contained informer panic in the metric and in
+// the per-resource ledger health reads. It returns how many panics that
+// resource has had.
+func recordHandlerPanic(component, resource string) int64 {
+	metrics.DefaultRegistry().InformerHandlerPanics.Add(1)
+	return handlerPanics.record(component, resource)
 }

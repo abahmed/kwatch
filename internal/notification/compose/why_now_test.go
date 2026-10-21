@@ -59,8 +59,9 @@ func TestWhyJoinsTheMemoryNumbersWithTheReleaseBefore(t *testing.T) {
 
 	assert.Len(t, got, 1)
 	assert.Equal(t, "It was killed at its 256Mi memory limit; it used "+
-		"255Mi at peak in the last 24 hours; it has failed since 10:05, "+
-		"3m after the 10:02 release (revision 14).", got[0].text)
+		"255Mi at peak in the last 24 hours; it has failed since 10:05 UTC, "+
+		"three minutes after the 10:02 UTC release (revision 14).",
+		got[0].text)
 	assert.False(t, predictionWords.MatchString(got[0].text), got[0].text)
 }
 
@@ -74,8 +75,8 @@ func TestWhyJoinsTheLivenessNumbersWithTheChangeBefore(t *testing.T) {
 
 	assert.Len(t, got, 1)
 	assert.Equal(t, "Liveness allows 40s; it normally needs about 75s to "+
-		"become ready (last 5 starts); it has failed since 10:05, 1m after "+
-		"the 10:04 release.", got[0].text)
+		"become ready (last 5 starts); it has failed since 10:05 UTC, one "+
+		"minute after the 10:04 UTC release.", got[0].text)
 }
 
 func TestWhyTakesTheBlamedChangeOfTheCause(t *testing.T) {
@@ -151,8 +152,8 @@ func TestWhyReachesTheNoteOnce(t *testing.T) {
 		Incident: f.p, Facts: incident.Facts{Changes: f.changes}},
 		writerNow).Note
 
-	assert.Contains(t, note, "it has failed since 10:05, 3m after the "+
-		"10:02 release (revision 14).")
+	assert.Contains(t, note, "it has failed since 10:05 UTC, three "+
+		"minutes after the 10:02 UTC release (revision 14).")
 	assert.Equal(t, 1, countOf(note, "memory limit"))
 }
 

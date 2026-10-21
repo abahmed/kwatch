@@ -15,7 +15,11 @@ import (
 
 // State keys in the store's state bucket.
 const (
-	stateClusterID      = "cluster.id"
+	// stateClusterID holds the adoption-telemetry ID. It is a new key: the
+	// earlier "cluster.id" held an ID derived like the license's cluster
+	// ID, so installs that upgrade send a new telemetry ID once and the
+	// two can no longer be joined.
+	stateClusterID      = "telemetry.id"
 	stateInitialized    = "initialized"
 	stateVersion        = "version"
 	stateLastSeen       = "last.seen"
@@ -66,9 +70,10 @@ func putRaw(
 	return values.Put(key, raw)
 }
 
-// EnsureClusterID returns the stored anonymous cluster ID, deriving a new
+// EnsureClusterID returns the stored adoption-telemetry ID, deriving a new
 // one from the kube-system namespace UID on first start so a reinstall
-// keeps the same identity.
+// keeps the same identity. It uses its own salt (telemetryIDFromUID), not
+// the license's.
 func (d diskState) EnsureClusterID(ctx context.Context) (string, error) {
 	var id string
 	if found, err := d.get(stateClusterID, &id); err != nil || found {
@@ -79,16 +84,28 @@ func (d diskState) EnsureClusterID(ctx context.Context) (string, error) {
 		ns, err := d.client.CoreV1().Namespaces().Get(ctx, "kube-system",
 			metav1.GetOptions{})
 		if err == nil && ns.UID != "" {
-			id = clusterIDFromUID(string(ns.UID))
+			id = telemetryIDFromUID(string(ns.UID))
 		}
 	}
 	return id, d.put(stateClusterID, id)
 }
 
-// clusterIDFromUID formats a salted SHA-256 of uid as a version 4 UUID;
-// the UID itself never leaves the cluster.
+// clusterIDFromUID is the license's cluster ID: a salted SHA-256 of uid
+// as a version 4 UUID. The UID itself never leaves the cluster. Changing
+// this salt would rebind every license.
 func clusterIDFromUID(uid string) string {
-	sum := sha256.Sum256([]byte("kwatch-cluster-id:" + uid))
+	return uuidFromUID("kwatch-cluster-id:", uid)
+}
+
+// telemetryIDFromUID is the adoption-telemetry ID. Its salt differs from
+// the license's, so the anonymous weekly ping can never be matched to a
+// license binding.
+func telemetryIDFromUID(uid string) string {
+	return uuidFromUID("kwatch-telemetry-id:", uid)
+}
+
+func uuidFromUID(salt, uid string) string {
+	sum := sha256.Sum256([]byte(salt + uid))
 	id, _ := uuid.FromBytes(sum[:16])
 	id[6] = (id[6] & 0x0f) | 0x40
 	id[8] = (id[8] & 0x3f) | 0x80

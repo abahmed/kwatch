@@ -9,23 +9,23 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/abahmed/kwatch/internal/safego"
 )
 
-// recordWaits makes safego.Wait return at once and records the waits.
-func recordWaits(t *testing.T) func() []time.Duration {
+// recordWaits returns a tune function that makes the rebuild wait of a
+// dynamic source return at once, and a getter for the waits it was asked
+// for.
+func recordWaits() (func(*DynamicConfig), func() []time.Duration) {
 	var mu sync.Mutex
 	var waits []time.Duration
-	old := safego.Wait
-	safego.Wait = func(_ context.Context, d time.Duration) bool {
-		mu.Lock()
-		defer mu.Unlock()
-		waits = append(waits, d)
-		return true
+	tune := func(cfg *DynamicConfig) {
+		cfg.RestartWait = func(_ context.Context, d time.Duration) bool {
+			mu.Lock()
+			defer mu.Unlock()
+			waits = append(waits, d)
+			return true
+		}
 	}
-	t.Cleanup(func() { safego.Wait = old })
-	return func() []time.Duration {
+	return tune, func() []time.Duration {
 		mu.Lock()
 		defer mu.Unlock()
 		return append([]time.Duration(nil), waits...)
@@ -42,8 +42,8 @@ func (f *dynamicFixture) panicWidgets(t *testing.T) {
 }
 
 func TestDynamicSourcePanickedWatchIsRebuilt(t *testing.T) {
-	waits := recordWaits(t)
-	f := newDynamicFixtureWith(nil, widgetCRD(), widget("w"))
+	tune, waits := recordWaits()
+	f := newDynamicFixtureWith(tune, widgetCRD(), widget("w"))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer f.stop(cancel)
 	f.src.reconcile(ctx)
@@ -71,8 +71,8 @@ func TestDynamicSourcePanickedWatchIsRebuilt(t *testing.T) {
 }
 
 func TestDynamicSourceRepeatedPanicsBackOff(t *testing.T) {
-	waits := recordWaits(t)
-	f := newDynamicFixtureWith(nil, widgetCRD(), widget("w"))
+	tune, waits := recordWaits()
+	f := newDynamicFixtureWith(tune, widgetCRD(), widget("w"))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer f.stop(cancel)
 	f.src.reconcile(ctx)

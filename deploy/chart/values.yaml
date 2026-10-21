@@ -189,17 +189,37 @@ defaultTolerations:
 
 affinity: {}
 
-# Kwatch keeps one state file and one lock; evicting its pod to repack or
-# scale down nodes costs a restart and a gap in monitoring. These plain
-# annotations ask the node autoscaler to leave the pod alone. They do
-# nothing where no autoscaler reads them. To opt out, remove a key (set it
-# to null, for example --set 'podAnnotations.karpenter\.sh/do-not-disrupt=null')
-# or set it to the permissive value: "false" for karpenter.sh/do-not-disrupt
-# and "true" for cluster-autoscaler.kubernetes.io/safe-to-evict. ("false" on
-# safe-to-evict is the protective value.)
+# Kwatch keeps one state file and one lock; evicting its pod costs a
+# restart and a gap in monitoring, but a restart resumes from the volume and
+# pinning the pod pins its node: Karpenter reports the node as blocked from
+# consolidation for as long as the pod runs, so the default does not set
+# karpenter.sh/do-not-disrupt. The cluster autoscaler's annotation below is
+# kept: it asks that autoscaler not to scale down the node, which has the
+# same cost, so remove it (set it to null, for example
+# --set 'podAnnotations.cluster-autoscaler\.kubernetes\.io/safe-to-evict=null')
+# on a cluster where node scale-down matters more than an uninterrupted pod.
+# To ask Karpenter to leave the pod alone, set
+# karpenter.sh/do-not-disrupt: "true" here. To limit voluntary disruption
+# in general, add your own PodDisruptionBudget: the chart ships none, since
+# minAvailable: 1 on a one-pod Deployment would block every drain of its
+# node, while maxUnavailable: 1 allows one eviction at a time.
 podAnnotations:
-  karpenter.sh/do-not-disrupt: "true"
   cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+
+# -- PriorityClass of the kwatch pod. Give it a class above your workloads
+# so the pod that reports their failures is not the first one the scheduler
+# preempts under node pressure.
+priorityClassName: ""
+
+# -- Pull secrets for the kwatch image, for a private registry mirror. Each
+# entry is {name: <secret>}.
+imagePullSecrets: []
+
+# -- Extra volumes and volume mounts of the kwatch container, for example a
+# Secret with a CA bundle that app.caBundlePath names. Names may not be
+# config-volume or data.
+extraVolumes: []
+extraVolumeMounts: []
 
 sacAnnotations: {}
 
@@ -246,6 +266,11 @@ license:
   # -- The license key itself (discouraged). When set and existingSecret is
   # empty, the chart creates the Secret <release>-license.
   key: ""
+  # -- The chart renders the license instance Secret and its Role only when
+  # a key is configured here (key or existingSecret). Set true when the key
+  # reaches kwatch another way, for example in the configSecretName Secret
+  # or an extra environment variable, so the license can activate.
+  instanceSecret: false
 
 # -- Use an existing Secret containing config.yaml and credential files.
 # Required for alert providers and heartbeatMonitor.url. The Secret's

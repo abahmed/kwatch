@@ -208,7 +208,9 @@ func (v *view) calledServices(pod inventory.EntityID) []inventory.EntityID {
 		return []inventory.EntityID{call.service}
 	}
 	entity, ok := v.s.Model.Entity(pod)
-	if !ok {
+	if !ok || quotesProgramDefect(v.unitErrorText(pod)) {
+		// Configuration alone does not make a call the cause of a
+		// crash in the caller's own code.
 		return nil
 	}
 	var out []inventory.EntityID

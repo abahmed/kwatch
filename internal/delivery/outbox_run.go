@@ -47,7 +47,7 @@ func (o *outbox) supervise(ctx context.Context) {
 	safego.Keep(keepCtx, "outbox-writer", func(ready func()) error {
 		defer func() { restarted = true }()
 		return o.run(ctx, ready, restarted)
-	}, o.sick)
+	}, safego.Options{Sick: o.sick, Wait: o.restartWait})
 }
 
 // outboxDrainGrace bounds how long the writer keeps writing after its

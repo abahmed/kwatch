@@ -24,9 +24,9 @@ func missingServiceRule(cause *rootcause.CauseRecord) bool {
 // not there, quote the lookup that failed, and name a Service of the
 // namespace whose name is very close:
 //
-//	api calls paymnts:8080, but there is no Service paymnts in shop.
-//	Quoted: "lookup paymnts.shop.svc.cluster.local: no such host". A
-//	Service named payments exists.
+//	api calls paymnts:8080 and fails with "lookup paymnts.shop.svc.
+//	cluster.local: no such host", but there is no Service paymnts in
+//	shop. A Service named payments exists.
 func missingServiceSentences(f caseFacts) []sentence {
 	cause := f.p.Cause
 	if !missingServiceRule(cause) {
@@ -47,11 +47,12 @@ func missingServiceSentences(f caseFacts) []sentence {
 		}
 	}
 	caller, line := missingServiceCaller(f, service)
-	text := caller + " calls " + address + ", but there is no Service " +
-		service.Name + " in " + service.Namespace + "."
+	text := caller + " calls " + address
 	if line != "" {
-		text += " Quoted: " + quoted(line) + "."
+		text += " and fails with " + quoted(line)
 	}
+	text += ", but there is no Service " + service.Name + " in " +
+		service.Namespace + "."
 	if near != "" {
 		text += " A Service named " + near + " exists."
 	}

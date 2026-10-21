@@ -47,6 +47,24 @@ func TestTierDerivation(t *testing.T) {
 				sig(node, reasons.NodePSIHigh, detection.Warning)),
 			Digest,
 		},
+		"healthy throttling alone is silent": {
+			incidentOf(deploy, nil,
+				sig(deploy, reasons.ContainerCPUThrottled,
+					detection.Warning)),
+			Silent,
+		},
+		"a used-up quota nothing was refused by is silent": {
+			incidentOf(deploy, nil,
+				sig(deploy, reasons.ResourceQuotaExhausted,
+					detection.Info)),
+			Silent,
+		},
+		"a quota that refused a create is not silent": {
+			incidentOf(deploy, nil,
+				sig(deploy, reasons.ResourceQuotaExhausted,
+					detection.Warning)),
+			Notify,
+		},
 		"critical throttling alone waits for the digest": {
 			lostTraffic(incidentOf(deploy, []inventory.EntityID{ingress},
 				sig(deploy, reasons.ContainerCPUThrottled,

@@ -5,10 +5,11 @@ import "time"
 // Delivery is what people have been told about an incident and how it
 // reached them. Its fields change only through the methods below, so
 // each flag has one writer to look for. Export and restored
-// (persist.go) keep paged, pageHeld, rolledUp and podPeak. sentTier,
-// sentGrowth and lastMaterial are not kept: after a restart the first
-// material update is not spaced by MaterialGap, and the sent size is
-// adopted again (adoptFingerprints, flapGrew), so that costs no message.
+// (persist.go) keep paged, pageHeld, flapPaged, rolledUp and podPeak.
+// sentTier, sentGrowth and lastMaterial are not kept: after a restart the
+// first material update is not spaced by MaterialGap, and the sent size
+// is adopted again (adoptFingerprints, flapGrew), so that costs no
+// message.
 type Delivery struct {
 	// paged: the alert is open at the paging providers.
 	paged bool
@@ -20,6 +21,12 @@ type Delivery struct {
 	podPeak int
 	// sentTier is the tier of the latest decision.
 	sentTier Tier
+	// priorTier is the tier of the decision before it, when this run
+	// decided one (priorKnown); a restart forgets it.
+	priorTier  Tier
+	priorKnown bool
+	// sentKnown: this run has decided at least once.
+	sentKnown bool
 	// sentGrowth is growthKey at the latest decision.
 	sentGrowth string
 	// lastMaterial is when the last material-change update was decided.
@@ -27,6 +34,10 @@ type Delivery struct {
 	// demoted: the incident fell from the notify tier to the digest
 	// tier while its thread was open (see reassess).
 	demoted bool
+	// flapPaged: the update that told the pagers the held page keeps
+	// coming back was decided (see pagesFlapper). Persisted, so a
+	// restart does not allow a second one.
+	flapPaged bool
 }
 
 // Demoted reports an incident that fell to the digest tier after it was
@@ -84,7 +95,15 @@ func (d *Delivery) SentGrowth() string { return d.sentGrowth }
 // RecordSent remembers what a decision told people, to tell news from
 // churn at the next one.
 func (d *Delivery) RecordSent(tier Tier, growth string) {
-	d.sentTier, d.sentGrowth = tier, growth
+	d.priorTier, d.priorKnown = d.sentTier, d.sentKnown
+	d.sentTier, d.sentGrowth, d.sentKnown = tier, growth, true
+}
+
+// TierRaised reports that the latest decision put the incident in a
+// louder tier than the one before it, so its message can say it got
+// worse. A decision after a restart has nothing to compare with.
+func (d *Delivery) TierRaised() bool {
+	return d.priorKnown && d.sentTier > d.priorTier
 }
 
 // AdoptGrowth sets the remembered size when none is known (a restored

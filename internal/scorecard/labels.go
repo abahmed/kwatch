@@ -34,6 +34,32 @@ type Case struct {
 	// Confidence is the stated confidence of the blamed cause in [0, 1].
 	// Zero means no cause was stated.
 	Confidence float64 `json:"confidence"`
+	// ExpectsRoot is true when the label names an entity as the root,
+	// false when it expects the honest "no cause" answer. A right case
+	// that states no cause is a fallback only when the label names an
+	// entity: the engine found the entity but not why.
+	ExpectsRoot bool `json:"expectsRoot,omitempty"`
+	// Hedged is true when the stated cause names a rival: the message
+	// says "two possible causes" instead of stating one.
+	Hedged bool `json:"hedged,omitempty"`
+	// Ambiguous is true when the label says the evidence cannot
+	// separate the root from a rival, which is the only case a hedge
+	// is tolerated for.
+	Ambiguous bool `json:"ambiguous,omitempty"`
+}
+
+// Stated reports whether the engine stated a cause for the case.
+func (c Case) Stated() bool { return c.Confidence > 0 }
+
+// WrongStated reports a wrong root stated at LikelyConfidence or above:
+// the engine told people a cause it could not support. A hedge on an
+// ambiguous label is not counted, because it names the rival too.
+func (c Case) WrongStated() bool {
+	if c.Correct || (c.Hedged && c.Ambiguous) {
+		return false
+	}
+	level := ConfidenceLevel(c.Confidence)
+	return level == LevelHigh || level == LevelLikely
 }
 
 // Level is the observed accuracy of every case stated at one confidence
@@ -72,8 +98,21 @@ type Accuracy struct {
 	Cases   int `json:"cases"`
 	Correct int `json:"correct"`
 	// WrongHigh counts wrong roots stated with high confidence.
-	WrongHigh int     `json:"wrongHigh"`
-	Levels    []Level `json:"levels"`
+	WrongHigh int `json:"wrongHigh"`
+	// WrongStated counts wrong roots stated at likely confidence or
+	// above (see Case.WrongStated). The goal is none.
+	WrongStated int `json:"wrongStated"`
+	// ToleratedHedges counts the wrong roots at that level that an
+	// ambiguous label tolerates because the cause names its rival.
+	ToleratedHedges int `json:"toleratedHedges"`
+	// CorrectStated, CorrectFallback and CorrectUnknown split Correct
+	// by how the root was found: with a stated cause, by falling back
+	// to the failing entity with no cause for a label that names one,
+	// and by saying no cause for a label that expects none.
+	CorrectStated   int     `json:"correctStated"`
+	CorrectFallback int     `json:"correctFallback"`
+	CorrectUnknown  int     `json:"correctUnknown"`
+	Levels          []Level `json:"levels"`
 }
 
 // CorrectPercent is the share of cases with the expected root.
@@ -137,11 +176,7 @@ func ScoreCases(cases []Case) Accuracy {
 	out := Accuracy{Cases: len(cases)}
 	for _, c := range cases {
 		name := ConfidenceLevel(c.Confidence)
-		if c.Correct {
-			out.Correct++
-		} else if name == LevelHigh {
-			out.WrongHigh++
-		}
+		out.countRoot(c, name)
 		for i := range levels {
 			if levels[i].Name != name {
 				continue
@@ -154,4 +189,28 @@ func ScoreCases(cases []Case) Accuracy {
 	}
 	out.Levels = levels
 	return out
+}
+
+// countRoot adds one case to the correctness counters.
+func (a *Accuracy) countRoot(c Case, level string) {
+	if c.Correct {
+		a.Correct++
+		switch {
+		case c.Stated():
+			a.CorrectStated++
+		case c.ExpectsRoot:
+			a.CorrectFallback++
+		default:
+			a.CorrectUnknown++
+		}
+		return
+	}
+	if level == LevelHigh {
+		a.WrongHigh++
+	}
+	if c.WrongStated() {
+		a.WrongStated++
+	} else if level == LevelHigh || level == LevelLikely {
+		a.ToleratedHedges++
+	}
 }

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -20,8 +19,8 @@ const watchSecretsEnv = "KWATCH_WATCH_SECRETS"
 // both directions.
 const crdEnabledEnv = "KWATCH_CRD_ENABLED"
 
-// telemetryEnv is checked only for syntax here: internal/app reads it to
-// decide whether to send the heartbeat.
+// telemetryEnv turns adoption telemetry off; internal/app also reads it
+// when it decides whether to send the heartbeat.
 const telemetryEnv = "KWATCH_TELEMETRY"
 
 // licenseKeyEnv carries the license key, typically from a Secret. It wins
@@ -51,39 +50,86 @@ func ParseEnvBool(name, raw string) (value, set bool, err error) {
 	return parsed, true, nil
 }
 
+// clusterCheckinsEnv turns the Pro cluster check-ins off. Like
+// KWATCH_TELEMETRY it can only opt out: a true value changes nothing.
+const clusterCheckinsEnv = "KWATCH_CLUSTER_CHECKINS"
+
 // applyEnvironmentOverrides applies the deployment environment. It runs
 // after config.yaml and again after a KwatchConfig overlay, so an overlay
-// can never turn on something the deployment turned off. An invalid
-// boolean is an error, so a typo fails startup.
-func applyEnvironmentOverrides(c *Config) error {
-	var errs []error
-	errs = append(errs, applyWatchEnvironment(c))
-	errs = append(errs, applyCRDEnvironment(c))
-	_, _, err := ParseEnvBool(telemetryEnv, os.Getenv(telemetryEnv))
-	errs = append(errs, err)
-	if key := strings.TrimSpace(os.Getenv(licenseKeyEnv)); key != "" {
+// can never turn on something the deployment turned off.
+//
+// A boolean that does not parse is a warning, never a startup failure: a
+// typo in an environment variable must not stop monitoring. The value is
+// ignored, and it is never read as "on": KWATCH_TELEMETRY and
+// KWATCH_CLUSTER_CHECKINS switch off, KWATCH_WATCH_SECRETS stops the Secret
+// watch, and KWATCH_CRD_ENABLED keeps the file's setting.
+func applyEnvironmentOverrides(c *Config) {
+	c.envWarnings = nil
+	for _, rule := range envRules {
+		value, set, err := ParseEnvBool(rule.name, os.Getenv(rule.name))
+		if err != nil {
+			c.envWarnings = append(c.envWarnings, fmt.Sprintf(
+				"%s=%q is not a boolean (use true/false, on/off, "+
+					"yes/no or 1/0); it is ignored and %s",
+				rule.name, os.Getenv(rule.name), rule.onInvalid))
+			if rule.invalid != nil {
+				rule.invalid(c)
+			}
+			continue
+		}
+		if set {
+			rule.apply(c, value)
+		}
+	}
+	if key := os.Getenv(licenseKeyEnv); strings.TrimSpace(key) != "" {
 		c.License.Key = key
 	}
-	return errors.Join(errs...)
 }
 
-// applyWatchEnvironment applies KWATCH_WATCH_SECRETS=false. A true value
-// changes nothing: the environment can only turn watching off.
-func applyWatchEnvironment(c *Config) error {
-	value, set, err := ParseEnvBool(
-		watchSecretsEnv, os.Getenv(watchSecretsEnv))
-	if set && !value {
-		c.Watch.Secrets = false
-	}
-	return err
+// envRule is one boolean environment variable: what a valid value does
+// and what an invalid one falls back to.
+type envRule struct {
+	name      string
+	apply     func(c *Config, value bool)
+	invalid   func(c *Config)
+	onInvalid string
 }
 
-// applyCRDEnvironment applies KWATCH_CRD_ENABLED. Unset keeps config.yaml's
-// setting.
-func applyCRDEnvironment(c *Config) error {
-	value, set, err := ParseEnvBool(crdEnabledEnv, os.Getenv(crdEnabledEnv))
-	if set {
-		c.CrdConfig.Enabled = value
-	}
-	return err
+var envRules = []envRule{
+	{
+		name: watchSecretsEnv,
+		// The environment can only turn Secret watching off.
+		apply: func(c *Config, value bool) {
+			if !value {
+				c.Watch.Secrets = false
+			}
+		},
+		invalid:   func(c *Config) { c.Watch.Secrets = false },
+		onInvalid: "kwatch does not watch Secrets",
+	},
+	{
+		name:      crdEnabledEnv,
+		apply:     func(c *Config, value bool) { c.CrdConfig.Enabled = value },
+		onInvalid: "the file's crd.enabled setting stays",
+	},
+	{
+		name: telemetryEnv,
+		apply: func(c *Config, value bool) {
+			if !value {
+				c.Telemetry.Enabled = false
+			}
+		},
+		invalid:   func(c *Config) { c.Telemetry.Enabled = false },
+		onInvalid: "adoption telemetry is off",
+	},
+	{
+		name: clusterCheckinsEnv,
+		apply: func(c *Config, value bool) {
+			if !value {
+				c.ClusterCheckins = false
+			}
+		},
+		invalid:   func(c *Config) { c.ClusterCheckins = false },
+		onInvalid: "cluster check-ins are off",
+	},
 }

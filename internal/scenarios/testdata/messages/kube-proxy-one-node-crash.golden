@@ -1,0 +1,33 @@
+10:04:15 settled
+🟠 kube-proxy in kube-system (prod-eu-1) keeps crashing. Its node, registry and services are healthy and unchanged, so nothing outside it explains this. It fails with "E1020 10:03:11.482113 1 proxier.go:1494] "Failed to execute iptables-restore" err="exit status 4 (iptables-restore…". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. api and worker in shop are affected as well. To read the output of the last crash, run kubectl logs kube-proxy-n3 -c app -n kube-system --previous
+🟠 kube-proxy in kube-system (prod-eu-1) keeps crashing.
+| 🟠 **kube-proxy** in **kube-system** (**prod-eu-1**) keeps crashing.
+| Its node, registry and services are healthy and unchanged, so nothing outside it explains this.
+| It fails with
+| ```
+| E1020 10:03:11.482113 1 proxier.go:1494] "Failed to execute iptables-restore" err="exit status 4 (iptables-restore…
+| ```
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| **api** and **worker** in **shop** are affected as well.
+| To read the output of the last crash, run
+| ```
+| kubectl logs kube-proxy-n3 -c app -n kube-system --previous
+| ```
+10:09:15 settled
+🟠 web in shop (prod-eu-1) has only 2 of 3 replicas ready. Nothing outside it explains this. To see the object's state and events, run kubectl describe deployment web -n shop
+🟠 web in shop (prod-eu-1) has only 2 of 3 replicas ready.
+| 🟠 **web** in **shop** (**prod-eu-1**) has only 2 of 3 replicas ready.
+| Nothing outside it explains this.
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment web -n shop
+| ```
+10:10:00 material change
+🟠 kube-proxy in kube-system (prod-eu-1) now has 2 of 3 replicas ready. It is spreading to api, worker and web in shop: they have only 2 of 3 replicas ready.
+🟠 kube-proxy in kube-system (prod-eu-1) now has 2 of 3 replicas ready.
+| 🟠 **kube-proxy** in **kube-system** (**prod-eu-1**) now has 2 of 3 replicas ready.
+| It is spreading to **api**, **worker** and **web** in shop: they have only 2 of 3 replicas ready.
+10:10:00 superseded by revised cause
+🟠 Moved: this is now part of the kube-proxy failure in kube-system (prod-eu-1).
+🟠 Moved: this is now part of the kube-proxy failure in kube-system (prod-eu-1).
+| 🟠 Moved: this is now part of the kube-proxy failure in kube-system (**prod-eu-1**).

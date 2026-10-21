@@ -198,3 +198,16 @@ func TestWorkloadGeneration(t *testing.T) {
 		})
 	}
 }
+
+// The DaemonSet status says how many nodes run its pod although it is not
+// meant to run there.
+func TestDaemonSetSchemaDescribesMisscheduledNodes(t *testing.T) {
+	ds := daemonSet("ds1")
+	ds.Status.NumberMisscheduled = 2
+
+	desc, ok := kube.DaemonSetSchema().Describe(ds)
+
+	assert.True(t, ok)
+	got, _ := desc.Attributes[kube.AttrMisscheduled].AsNumber()
+	assert.Equal(t, 2.0, got)
+}

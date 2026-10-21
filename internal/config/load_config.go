@@ -204,6 +204,7 @@ func parseConfigFile() (*Config, error) {
 			return nil, err
 		}
 		config.unknownKeys = unknownConfigKeys(yamlFile)
+		config.fileWarnings = fileWarnings(yamlFile)
 	}
 
 	return config, nil
@@ -273,6 +274,7 @@ func validateReasonEntries(items []string) []error {
 func prepareConfig(config *Config) []error {
 	var errs []error
 
+	config.License.Key = cleanLicenseKey(config.License.Key)
 	errs = prepareAllowForbidLists(config, errs)
 
 	// Remove synthetic rules from any earlier preparation pass before building
@@ -297,9 +299,7 @@ func LoadConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := applyEnvironmentOverrides(config); err != nil {
-		return nil, err
-	}
+	applyEnvironmentOverrides(config)
 
 	if errs := prepareConfig(config); len(errs) > 0 {
 		return nil, errors.Join(errs...)
@@ -323,9 +323,7 @@ func LoadConfig() (*Config, error) {
 // RebuildAfterOverlay refreshes validation and derived indexes after a
 // startup-only configuration source has overlaid the base file.
 func RebuildAfterOverlay(c *Config) error {
-	if err := applyEnvironmentOverrides(c); err != nil {
-		return err
-	}
+	applyEnvironmentOverrides(c)
 	if errs := prepareConfig(c); len(errs) > 0 {
 		return errors.Join(errs...)
 	}

@@ -21,9 +21,11 @@ import (
 const (
 	// rebuildBackoffInitial is the first wait; each retry doubles it.
 	rebuildBackoffInitial = time.Second
-	// rebuildRetryBudget caps the waits of one step. The health port is
-	// closed during a rebuild, so the budget stays well inside the
-	// liveness probe's tolerance (45s in deploy/deploy.yaml).
+	// rebuildRetryBudget caps the waits of one step. The old health
+	// listener answers liveness until the next generation takes the port
+	// (generationEnv.run), so only the port-binding retries run without
+	// one; the budget keeps them inside the liveness probe's tolerance
+	// (45s in deploy/deploy.yaml).
 	rebuildRetryBudget = 30 * time.Second
 	// storeReleaseWait is how long a rebuild waits for the previous
 	// generation's session to close the state file after the shutdown

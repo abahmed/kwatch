@@ -1,0 +1,17 @@
+{
+  "name": "adv-bad-config-and-stuck-drain",
+  "description": "A bad ConfigMap value breaks a restarted Deployment while, unrelated, a drain of another node is blocked by a PodDisruptionBudget.",
+  "root": "configmap/billing/invoicer-config",
+  "otherRoots": [
+    "poddisruptionbudget/shop/ledger"
+  ],
+  "tier": "notify",
+  "maxMessages": 5,
+  "mustNotBlame": [
+    "node//n2",
+    "deployment/billing/invoicer",
+    "deployment/shop/ledger",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

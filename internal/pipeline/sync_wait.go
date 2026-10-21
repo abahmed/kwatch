@@ -1,6 +1,11 @@
 package pipeline
 
-import "github.com/abahmed/kwatch/internal/inventory"
+import (
+	"slices"
+	"strings"
+
+	"github.com/abahmed/kwatch/internal/inventory"
+)
 
 // syncWaits remembers the entities evaluated while a kind they needed was
 // not synced. A detector must not conclude that an object is missing
@@ -48,5 +53,10 @@ func (w *syncWaits) ready(
 		}
 		delete(w.byKind, kind)
 	}
-	return out
+	// Map order is random; the caller evaluates the entities in this
+	// order, and an entity that waited for several kinds comes once.
+	slices.SortFunc(out, func(a, b inventory.EntityID) int {
+		return strings.Compare(a.String(), b.String())
+	})
+	return slices.Compact(out)
 }

@@ -8,7 +8,12 @@ The settings that can be changed are in [configuration](./configuration.md);
 the package map is in [contributor architecture](./contributor-architecture.md).
 
 The manager is ticked by the pipeline loop. Each tick it moves every live
-incident one step and returns the decisions that deserve a message. A
+incident one step and returns the decisions that deserve a message. Each
+incident is advanced on its own (`tick.go`): a panic is contained, counted
+and logged for that incident, which keeps its state until the next tick,
+and the decisions of the others stand. Incidents that lost their failures
+to another incident are advanced last, so the one that took over speaks
+first. A
 decision is `Announce`, `Update` or `Resolve`; the pipeline gathers the facts
 for it (`Decision.Facts`: output, evidence, recent changes, kind spellings)
 and `internal/notification/compose` writes the text from the decision alone.

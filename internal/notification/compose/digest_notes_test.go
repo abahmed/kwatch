@@ -28,7 +28,7 @@ func TestDigestListsAnOngoingProblemWithItsAge(t *testing.T) {
 
 	assert.Equal(t, "🟡 *kwatch digest* — 1 ongoing\n\n*Problems*\n• "+
 		"Service *internal-ingress-nginx-controller-internal* "+
-		"(*kube-system*) — still failing since 17:14",
+		"(*kube-system*) — still failing since 17:14 UTC",
 		msg.Render(notification.SlackDialect()))
 	assert.Contains(t, msg.Note, "one ongoing problem to report")
 }
@@ -68,17 +68,17 @@ func TestWakeLineSaysWhatRecovered(t *testing.T) {
 		want string
 	}{
 		{WakeLine{Started: 42, From: from, To: to, Blips: 5},
-			"Cluster waking up: 42 workloads started between 06:51 and " +
-				"07:03; 5 had brief startup failures, all recovered."},
+			"Cluster waking up: 42 workloads started between 06:51 UTC and " +
+				"07:03 UTC; 5 had brief startup failures, all recovered."},
 		{WakeLine{Started: 7, From: from, To: from, Blips: 2, Failing: 1},
-			"Cluster waking up: 7 workloads started at 06:51; 2 had " +
+			"Cluster waking up: 7 workloads started at 06:51 UTC; 2 had " +
 				"brief startup failures, 1 recovered, 1 still failing."},
 		{WakeLine{Started: 7, From: from, To: to, Blips: 2, Failing: 2},
-			"Cluster waking up: 7 workloads started between 06:51 and " +
-				"07:03; 2 had brief startup failures, none recovered yet."},
+			"Cluster waking up: 7 workloads started between 06:51 UTC and " +
+				"07:03 UTC; 2 had brief startup failures, none recovered yet."},
 		{WakeLine{Started: 6, From: from, To: to},
-			"Cluster waking up: 6 workloads started between 06:51 and " +
-				"07:03."},
+			"Cluster waking up: 6 workloads started between 06:51 UTC and " +
+				"07:03 UTC."},
 	} {
 		assert.Equal(t, c.want, c.line.Text())
 	}
@@ -93,7 +93,7 @@ func TestDigestCarriesTheWakeLineAlone(t *testing.T) {
 		extrasNow)
 
 	assert.Contains(t, msg.Render(notification.SlackDialect()),
-		"Cluster waking up: 42 workloads started between 06:51 and 07:03")
+		"Cluster waking up: 42 workloads started between 06:51 UTC and 07:03 UTC")
 	assert.Contains(t, msg.Note, "has a cluster wake-up to report")
 }
 
@@ -117,10 +117,10 @@ func TestUnchangedOngoingProblemsAreOneLine(t *testing.T) {
 		DigestExtras{Unchanged: unchanged}, extrasNow)
 
 	assert.Contains(t, msg.Plain(),
-		"- 5 more still failing, unchanged (a, b, c +2)")
+		"- five more still failing, unchanged (a, b, c +2)")
 	assert.Contains(t, msg.Note, "five ongoing problems to report")
 	assert.Contains(t, msg.Note,
-		"5 more still failing, unchanged (a, b, c +2).")
+		"five more still failing, unchanged (a, b, c +2).")
 	assert.False(t, DigestExtras{Unchanged: unchanged}.Empty())
 }
 
@@ -136,5 +136,5 @@ func TestChangedAndUnchangedOngoingProblemsShareADigest(t *testing.T) {
 		extrasNow)
 
 	assert.Contains(t, msg.Plain(), changed.Title)
-	assert.Contains(t, msg.Plain(), "- 1 more still failing, unchanged (db)")
+	assert.Contains(t, msg.Plain(), "- one more still failing, unchanged (db)")
 }

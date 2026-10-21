@@ -85,11 +85,6 @@ func (m *Manager) reopenUpdate(p *Incident, now time.Time) (Decision, bool) {
 		return Decision{}, false
 	}
 	p.Pending.ClearReopen()
-	if p.State == Flapping && p.Digest == fingerprint(p) {
-		// The flapping update of this return already said all this:
-		// recording a second one with the same content is only noise.
-		return Decision{}, false
-	}
 	return m.decide(p, Update, ReasonFailingAgain), true
 }
 
@@ -127,6 +122,10 @@ func (m *Manager) incident(
 	if previous != nil && reopenable(previous, now, s.Mode) &&
 		!m.reopenRefused(now, previous, s, root) {
 		m.reopen(previous, now)
+		return previous
+	}
+	if previous != nil && m.revivable(previous, now) {
+		m.revive(previous, now)
 		return previous
 	}
 	p := &Incident{

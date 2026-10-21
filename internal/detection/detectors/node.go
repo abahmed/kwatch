@@ -132,8 +132,7 @@ func (Node) drainOrStuck(
 	s.Reason, s.Severity = reasons.NodeStuckTerminating,
 		detection.Warning
 	s.Summary = "Node has been deleting for " +
-		format.Duration(ctx.Now.Sub(s.Since)) +
-		"; a finalizer or cloud controller may be stuck"
+		format.Duration(ctx.Now.Sub(s.Since))
 	return s
 }
 
@@ -148,6 +147,10 @@ func (d Node) readiness(
 		holdBlip(ctx, since)
 		return detection.Finding{}, false
 	}
+	holding, neverReady := joinHold(ctx, e, status, since)
+	if holding {
+		return detection.Finding{}, false
+	}
 	// A NotReady that follows a brief Ready blip continues the earlier
 	// one: it keeps its onset, so the wait is not restarted by a flap.
 	since = ctx.Onset(notReadyOnset, since)
@@ -159,6 +162,9 @@ func (d Node) readiness(
 	if status == "Unknown" {
 		summary = "Node stopped reporting (kubelet unreachable) for " +
 			format.Duration(ctx.Now.Sub(since))
+	}
+	if neverReady > 0 {
+		summary = neverReadySummary(neverReady)
 	}
 	return detection.Finding{
 		Reason: reasons.NodeNotReady, Severity: detection.Critical,

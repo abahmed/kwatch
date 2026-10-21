@@ -23,7 +23,9 @@ Kwatch reports failures that happened, never predictions. Findings about
 what could fail later (a quota near its
 limit, version skew, a large etcd database, deprecated API use) are
 advisory: they appear only as context inside a real incident and never
-produce a message of their own.
+produce a message of their own, not even a digest line.
+`docs/architecture.md` and the `Finding.Advisory` comment say the same,
+and the staging day measures it with advisory states among its non-events.
 
 ## Alert-quality gates
 
@@ -36,12 +38,15 @@ CI measures these on synthetic replay and labelled scenarios with
 | Correct root cause, labelled scenarios | at least 90% |
 | Correct root cause, held-out scenarios | at least 80% |
 | Wrong high-confidence root | at most 5% of high-confidence cases, labelled and held-out together, gated once there are at least 20 |
+| Wrong root stated at likely confidence (0.50) or higher, labelled scenarios | 0 (a count, so one wrong answer cannot hide among many right ones) |
+| Wrong root in the first message of a labelled scenario | 0, even when a later message corrects it (a scenario whose story is a revision says so in its label) |
+| A labelled scenario that passed | keeps passing (per-scenario ratchet) |
 | Calibration, high confidence | right 80% to 100% of the time, gated at 10 or more cases |
 | Calibration, likely confidence | right 50% to 90% of the time, gated at 10 or more cases |
 | Messages per incident | p95 at most 3, most at most 5 |
 | Time to first message, page tier | at most 2 minutes from the first failure observation |
 | Time to first message, notify tier | at most 5 minutes from the first failure observation (aim: p95 at most 3 minutes) |
-| Notifications caused by non-events | 0 (successful rollouts, scaling, drains within budget, Jobs completing, a healthy CronJob) |
+| Notifications caused by non-events | 0 (successful rollouts, scaling, drains within budget, Jobs completing, a healthy CronJob, and advisory states: a quota used exactly with nothing refused, pods throttled but ready, a budget that allows no disruption beside nothing that needs one) |
 | Notifications in the busiest hour | at most 30, a sanity ceiling |
 | Unchanged updates | 0% |
 | Re-created incidents | at most 5% |
@@ -52,6 +57,25 @@ CI measures these on synthetic replay and labelled scenarios with
 | Storm of 1,000 failing pods from one cause | at most 3 messages in 2 minutes |
 | Storm of 1,000 failing pods from several causes | at most one message per cause plus 3 in 2 minutes |
 | A healthy node with a crashing app | never blames the node |
+
+A root is judged at every message, not only in the final state. Each
+labelled scenario lists the roots it may state (its root, its other
+roots and the unrelated incidents it names); the first message may state
+one of those or no cause at all, which says the cause is unknown. A hedge
+that names a rival counts as stating the rival too, and so does a message
+sentence that names an entity as the cause, so a label's must-not-blame
+list is checked against the rival and the text as well as the root. Time
+to the first message that states the right root is reported with the
+slowest scenarios. A right root found by falling back to the failing
+entity with no stated cause is counted apart from one found with a
+stated cause, and the ratchet holds a root found with a cause to stating
+one, at its confidence level or higher. The labels and the ratchet are
+described in [add a labelled scenario](./contributing-scenario.md).
+
+The gates must also be able to see the engine get worse. A mutation test
+switches the specificity scorer, every veto and the counterfactual checks
+off in turn (`explain.Ablation`), replays a few scenarios that depend on
+each, and fails unless some gate fails.
 
 Calibration is two-sided: overconfidence and underconfidence both fail
 the gate. The confidence levels are bucket boundaries chosen once from

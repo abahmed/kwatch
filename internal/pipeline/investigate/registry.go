@@ -62,8 +62,7 @@ var (
 		"Missing.ConfigMap"}
 	schedulingModes = []string{"Unschedulable", "Pending", "SchedulingGated"}
 	crashModes      = []string{"CrashLoop", "OOMKilled", "Restarting",
-		"Error", "CannotRun", "InitError", "Failed", "JobFailed",
-		"Probe.Startup"}
+		"Error", "InitError", "Failed", "JobFailed", "Probe.Startup"}
 )
 
 func isAdmissionRoot(p incident.Incident) bool {

@@ -17,12 +17,9 @@ import (
 // without news (detection.CauseOnly) is declared with the reason, in the
 // detection reason tables.
 
-// causeOnlyReason reports a reason that is a cause but no news alone. A
-// node condition kwatch has no detector for is one: the condition says
-// what is wrong with the node only once pods on it fail.
+// causeOnlyReason reports a reason that is a cause but no news alone.
 func causeOnlyReason(reason string) bool {
-	return detection.CauseOnly(reason) ||
-		strings.HasPrefix(reason, reasons.NodeConditionPrefix)
+	return detection.CauseOnly(reason)
 }
 
 // causeOnly reports an incident whose members are cause-only findings
@@ -40,11 +37,39 @@ func causeOnly(p *Incident) bool {
 	return found
 }
 
+// advisoryState reports an incident made only of states that are not
+// failures: CPU throttling, and a quota used up that nothing was refused
+// by (the detector raises Warning once a create is refused). With no
+// traffic lost and nothing left without a ready replica, no one is
+// affected, so it produces no message of its own, not even a digest line
+// (docs/production-goals.md). It stays tracked: a real failure that joins
+// it makes it speak.
+func advisoryState(p *Incident) bool {
+	if p.trafficLost || p.servingDown || len(p.Members) == 0 {
+		return false
+	}
+	found := false
+	for key, s := range p.Members {
+		switch {
+		case key.Reason == reasons.ContainerCPUThrottled,
+			key.Reason == reasons.ResourceQuotaExhausted &&
+				s.Severity <= detection.Info:
+			found = true
+		case !s.Advisory:
+			return false
+		}
+	}
+	return found
+}
+
 // digestReason reports whether a finding reason waits for the digest.
-// Repeated unknown Warning events are worth a look, not an interruption.
+// Repeated unknown Warning events are worth a look, not an interruption,
+// and so is a node condition kwatch has no detector for that has lasted:
+// it is one digest line, and the cause of the pods that fail on the node.
 func digestReason(reason string) bool {
 	return detection.DigestOnly(reason) ||
 		strings.HasPrefix(reason, reasons.UnusualEventPrefix) ||
+		strings.HasPrefix(reason, reasons.NodeConditionPrefix) ||
 		strings.HasPrefix(reason, reasons.RiskPrefix)
 }
 
@@ -77,7 +102,7 @@ func tier(p *Incident) Tier {
 	}
 	worst, digestOnly := interrupting(p)
 	switch {
-	case causeOnly(p):
+	case causeOnly(p) || advisoryState(p):
 		return Silent
 	case routine(p) && !p.persistent && !unusual(p):
 		// Happens at the same time every day and resolves on its own:

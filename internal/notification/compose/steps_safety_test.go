@@ -63,7 +63,6 @@ func TestStepsSkipDescribeForVirtualKinds(t *testing.T) {
 		inventory.CoreID(kube.KindRegistry, "", "reg.io"),
 		inventory.CoreID(kube.KindImage, "", "reg.io/a:1"),
 		inventory.CoreID(kube.KindZone, "", "z1"),
-		kube.ClusterDNS,
 		inventory.CoreID(rootcause.KindScheduling, "", "Insufficient cpu"),
 	} {
 		if got := stepsFor(id, detection.Finding{Entity: id}); got != "" {

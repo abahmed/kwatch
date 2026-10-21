@@ -61,6 +61,19 @@ type expectation struct {
 	Unrelated []string `json:"unrelated,omitempty"`
 	// MustNotBlame lists entities no stated cause may name.
 	MustNotBlame []string `json:"mustNotBlame,omitempty"`
+	// RevisesRoot opts a scenario out of the "right root at every
+	// message" gates: its story is a legitimate revision, so an early
+	// message may state a root that a later one replaces. The final
+	// root is still judged.
+	RevisesRoot bool `json:"revisesRoot,omitempty"`
+	// Ambiguous marks evidence that cannot separate the expected root
+	// from a rival. A wrong root stated at likely confidence is only
+	// tolerated while the cause names that rival, a hedge.
+	Ambiguous bool `json:"ambiguous,omitempty"`
+	// Hidden lists kinds kwatch never syncs, as when its RBAC lacks the
+	// permission. Detectors skip them and the engine names the blind
+	// spot instead of saying an object does not exist.
+	Hidden []string `json:"hidden,omitempty"`
 	// Quiet scenarios must produce no message at all.
 	Quiet bool `json:"quiet,omitempty"`
 	// SyncAfter, when set, signals that every source synced this long
@@ -168,6 +181,12 @@ func library() []scenario {
 		upstreamReasonScenarios(),
 		crashCycleScenarios(), nodeChurnScenarios(),
 		ambiguousScenarios(), reachScenarios(), groupingScenarios(),
+		detectionAScenarios(),
+		detectionBScenarios(),
+		pagingScenarios(),
+		rcaPathScenarios(),
+		rcaEvidenceScenarios(),
+		adversarialScenarios(),
 	} {
 		out = append(out, group...)
 	}

@@ -68,6 +68,10 @@ type Dialect struct {
 	Bold, Italic, Code func(string) string
 	// Fence wraps raw text as a code block.
 	Fence func(string) string
+	// SpanFits reports whether raw text can sit in an inline Code span
+	// exactly as written. Nil means every text can. A code span that does
+	// not fit is lifted out of its line into a Fence block.
+	SpanFits func(string) bool
 	// Bullet starts a list item.
 	Bullet string
 	// Gap separates two paragraphs.
@@ -161,6 +165,9 @@ func separator(prev, next Block, d Dialect) string {
 func renderBlock(b Block, d Dialect) string {
 	if b.Kind == CodeBlock {
 		return d.Fence(d.neutral(b.Text()))
+	}
+	if d.liftsCode(b) {
+		return renderLifted(b, d)
 	}
 	var sb strings.Builder
 	if b.Kind == Bullet {

@@ -43,9 +43,12 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 	if err != nil {
 		return err
 	}
+	// The edition is final for this generation: say what it does not run.
+	deps.logEdition()
 	// The edition is judged from the state as the last start left it,
 	// before startup marks this one.
-	edition, err := planEdition(activeCtx, disk, deps.entitlements)
+	edition, err := planEdition(activeCtx, disk, deps.entitlements,
+		len(deps.notice.inactive) > 0)
 	if err != nil {
 		return failStartup(deps, cancel, lic, state, "edition", err)
 	}
@@ -55,8 +58,7 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 		return failStartup(deps, cancel, lic, state, "startup", err)
 	}
 	deps.readiness.setCurrent("state", true)
-	announceStartup(deps, state, session)
-	announceEdition(deps, disk, edition)
+	announceSession(deps, state, session, disk, edition)
 	lic.watch(activeCtx)
 
 	threads := restoreThreads(deps, disk)
@@ -130,6 +132,19 @@ func awaitSessionEnd(
 	case <-lic.restarted():
 		return errEditionChanged
 	}
+}
+
+// announceSession tells the providers what this start found, once each:
+// the startup message and the unsent jobs, the edition notice and the
+// refused KwatchConfig; then it keeps the spec that applied cleanly.
+func announceSession(
+	deps *serverDeps, state *storage.Store, session *startupManager,
+	disk diskState, edition editionPlan,
+) {
+	announceStartup(deps, state, session)
+	announceEdition(deps, disk, edition)
+	announceOverlay(deps, disk)
+	rememberOverlay(deps, disk)
 }
 
 // announceStartup queues the jobs the last session never sent, then the
@@ -293,11 +308,11 @@ func startActiveComponents(
 		monitoredRun(deps, "telemetry", configureTelemetryRunner(
 			deps.runtime.Lifecycle().Telemetry(), res.disk,
 			res.result.ClusterID, res.result.CurrentVersion,
-			deps.clients.Clock.Now, deps.clients.HTTP,
+			deps.clients.Clock.Now, deps.clients.PlatformHTTP,
 		)),
 		monitoredRun(deps, "upgrader", upgrader.NewUpgrader(
 			&upgraderConfig, deps.deliveryManager, res.disk,
-			deps.clients.HTTP,
+			deps.clients.PlatformHTTP,
 		).CheckUpdates),
 		selfReportedRun(deps, "rbac", deps.securityMonitor.Start),
 		monitoredRun(deps, "alive", aliveRecorder(res.session)),

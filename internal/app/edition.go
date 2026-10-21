@@ -100,21 +100,15 @@ func inactivePro(e feature.Entitlements, cfg *config.Config) []string {
 	return names
 }
 
-// InactiveProFeatures names the Pro features cfg sets that this
-// installation's edition does not run. The lint command reports them.
-func InactiveProFeatures(cfg *config.Config) []string {
-	return inactivePro(ResolveEntitlements(), cfg)
-}
-
 // logInactivePro warns once, in one line, about Pro configuration that
 // is set and not run. Community never fails because of it.
 func logInactivePro(e feature.Entitlements, names []string) {
 	if len(names) == 0 {
 		return
 	}
-	klog.InfoS("warning: configuration sets kwatch Pro features that "+
-		"this edition does not run; they are ignored",
-		"edition", string(e.Edition()), "features", names)
+	klog.Warningf("configuration sets kwatch Pro features that this "+
+		"edition does not run; they are ignored: component=edition "+
+		"edition=%s features=%q", feature.OrCommunity(e).Edition(), names)
 }
 
 // restrictConfig returns cfg without the Pro policy e does not run. The

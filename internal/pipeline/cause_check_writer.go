@@ -23,7 +23,7 @@ func (w *historyWriter) flushChecks() bool {
 		return true
 	}
 	if err := store.SaveCauseChecks(raw); err != nil {
-		logWriteError(err, "cause checks")
+		w.failed(err, "cause checks")
 		w.mu.Lock()
 		if w.checks == nil {
 			w.checks = raw

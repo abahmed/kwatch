@@ -204,9 +204,6 @@ func TestNormalizeSignature(t *testing.T) {
 	if got := normalizeSignature("exit status 1"); got != "" {
 		t.Fatalf("short error made signature %q", got)
 	}
-	if got := SignatureText(signatureName("CrashLoop.Panic", a)); got != a {
-		t.Fatalf("SignatureText = %q, want %q", got, a)
-	}
 }
 
 // redisStorm makes n workloads crash with one connection error that

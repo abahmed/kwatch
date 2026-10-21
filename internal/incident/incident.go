@@ -270,6 +270,10 @@ type Incident struct {
 	// restored marks an incident loaded from the state file; only such
 	// incidents wait out the restore grace.
 	restored bool
+	// restoredTier is the tier of the saved record: a rise above it is
+	// news that adoptedFingerprint must not swallow (toldTier moves the
+	// mark up once this run told a rise).
+	restoredTier Tier
 	// trafficLost records that a Service in the impact, routed to by an
 	// Ingress or route, has no ready backends or mostly failing ones.
 	// It is recomputed with the impact; the traffic-lost page reads it.

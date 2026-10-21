@@ -46,8 +46,9 @@ type CauseRecord struct {
 	// a cause might have been ("secrets in billing").
 	Unverified []string `json:",omitempty"`
 	// Rival is another cause for the same failures whose score is
-	// within RivalMargin of this one's. While it is set the cause is
-	// not stated alone: a message names both. It never has a Rival.
+	// within RivalMargin below this one's, or higher than it. While it
+	// is set the cause is not stated alone: a message names both. It
+	// never has a Rival.
 	Rival *CauseRecord `json:",omitempty"`
 	// Checked says, in explain's words, what counterfactual checks
 	// compared the failures with: "node n3 is healthy for 12 other
@@ -70,6 +71,10 @@ type CauseRecord struct {
 	// Refused is the registry's own answer, as the pull error says it,
 	// when the error holds one: "unauthorized: authentication required".
 	Refused string `json:",omitempty"`
+	// SharedError is the error a failure-signature root stands for, as
+	// one of the failing pods wrote it (not yet redacted or clipped:
+	// writers do that). Empty for any other root.
+	SharedError string `json:",omitempty"`
 	// ServingCert is the TLS Secret a webhook's pods serve when its
 	// certificate has already expired, for a webhook whose calls fail
 	// the TLS handshake.

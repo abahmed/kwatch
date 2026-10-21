@@ -12,6 +12,7 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/kubeclient"
+	"github.com/abahmed/kwatch/internal/safego"
 	"github.com/abahmed/kwatch/internal/storage"
 )
 
@@ -114,14 +115,22 @@ func pruneModel(
 	ticker := time.NewTicker(modelPruneInterval)
 	defer ticker.Stop()
 	var health modelHealthLog
-	health.log(model, now())
+	// A panic loses that pass only; the next tick prunes again.
+	pass := func(prune bool) {
+		safego.Do("model-prune", func() {
+			if prune {
+				pruneOnce(model, now())
+			}
+			health.log(model, now())
+		})
+	}
+	pass(false)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			pruneOnce(model, now())
-			health.log(model, now())
+			pass(true)
 		}
 	}
 }
@@ -165,21 +174,7 @@ func newActiveProber(
 	if !cfg.Enabled || !deps.has(feature.ActiveProbes) {
 		return nil, false
 	}
-	var targets []kube.ProbeTarget
-	for _, t := range cfg.HTTP {
-		targets = append(targets, kube.ProbeTarget{
-			Name: t.Name, URL: t.URL, ExpectedStatus: t.ExpectedStatus,
-			LatencyWarningMs:  t.LatencyWarningMs,
-			LatencyCriticalMs: t.LatencyCriticalMs,
-		})
-	}
-	for _, t := range cfg.TCP {
-		targets = append(targets,
-			kube.ProbeTarget{Name: t.Name, Address: t.Address})
-	}
-	for _, t := range cfg.DNS {
-		targets = append(targets, kube.ProbeTarget{Name: t.Name, Host: t.Host})
-	}
+	targets := probeTargets(cfg)
 	excluded := map[string]bool{}
 	for _, ns := range cfg.ExcludeNamespaces {
 		excluded[ns] = true
@@ -198,6 +193,28 @@ func newActiveProber(
 		Now:        deps.clients.Clock.Now,
 		Submit:     submit,
 	}), true
+}
+
+// probeTargets lists the configured probes. A target the KwatchConfig
+// added is public-only: its name must not lead to an internal address.
+func probeTargets(cfg config.ActiveProbeMonitor) []kube.ProbeTarget {
+	var targets []kube.ProbeTarget
+	for _, t := range cfg.HTTP {
+		targets = append(targets, kube.ProbeTarget{
+			Name: t.Name, URL: t.URL, ExpectedStatus: t.ExpectedStatus,
+			LatencyWarningMs:  t.LatencyWarningMs,
+			LatencyCriticalMs: t.LatencyCriticalMs,
+			PublicOnly:        t.FromOverlay,
+		})
+	}
+	for _, t := range cfg.TCP {
+		targets = append(targets, kube.ProbeTarget{
+			Name: t.Name, Address: t.Address, PublicOnly: t.FromOverlay})
+	}
+	for _, t := range cfg.DNS {
+		targets = append(targets, kube.ProbeTarget{Name: t.Name, Host: t.Host})
+	}
+	return targets
 }
 
 // maintenanceAnnotations is empty when maintenance holds are disabled, so

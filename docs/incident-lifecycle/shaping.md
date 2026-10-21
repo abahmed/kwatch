@@ -44,7 +44,9 @@ another that closed), and then nobody would be told.
 
 - **Namespace outage hold** (`pipeline/announce/outage.go`, thresholds in
   `announce/outage_shared.go` and `announce/timings.go`).
-  Announcements (notify tier or higher) of one namespace that have no cause are held for up to
+  Announcements (notify tier or higher) of one namespace that have no cause,
+  or that blame their own workload (a Service in front of it does that:
+  `Incident.Standalone`), are held for up to
   `outageHoldMax` (30s) so one message can name them all. Five incidents
   (`outageIncidents`) that opened within `outageWindow` (10m) are an outage;
   so are three (`outageMinShare`) when they are at least half the
@@ -54,7 +56,14 @@ another that closed), and then nobody would be told.
   released as not an outage are announced one by one and are no longer held;
   the one the hold already paged goes to chat only (`Decision.PagedAlready`),
   so the pagers are not told twice. A resolve of a held incident drops its
-  announcement (`DropAnnouncement`): it stays "nobody heard of it".
+  announcement (`DropAnnouncement`): it stays "nobody heard of it". The last
+  outage message of a namespace is remembered for `outageWindow`: a failure
+  of that namespace a minute or two later, too few to be an outage alone, is
+  held and sent as one more outage message that names the whole outage
+  (`outage_recent.go`), and, if the outage paged and its alert is still
+  open, every page-tier member of it, the first late one included, is held
+  at notify (`newOutageHold` starts the hold as paged), so one alert stands
+  for the whole outage.
 - **Boot grace.** A node pool scaled up from zero starts every pod at once.
   For `kube.BootWindow` (10m) pods that are pending or not ready on a booting
   node are expected, not failures (`detectors/boot.go`). A digest-tier
@@ -80,10 +89,15 @@ another that closed), and then nobody would be told.
   restored incident without members does not recover, because detectors
   have not re-raised its findings yet (`grace.go`). A restart announces no
   incident, so when the grace is over one summary (`ListRestored` in
-  `pipeline/announce/startup.go`) names the restored incidents that still fail
-  and have not spoken for themselves since the restart, digest-tier ones
-  after the louder ones, within the usual cap, so nothing restored is
-  silent. On a
+  `pipeline/announce/restored_list.go`) names the restored incidents that
+  still fail and have not spoken for themselves since the restart,
+  digest-tier ones after the louder ones, within the usual cap, so nothing
+  restored is silent. A restored incident at the notify tier or higher whose
+  findings are back and still call for that tier does not wait for the whole
+  grace: it is named one settle (`DefaultSettle`) after the sources synced,
+  with the lower-priority ones that are back by then, and the end of the
+  grace names the rest. A tier that may still fall when its findings settle
+  waits for the grace (`currentNews`, `Incident.LiveTier`). On a
   cold start the first `StartupWindow` (2m) collects existing incidents into
   one startup summary; an active page still reaches the pagers at once.
   What a restart keeps: the incident records (with the worst stage reached,
@@ -96,16 +110,27 @@ another that closed), and then nobody would be told.
   `sentGrowth` and `lastMaterial` of `Delivery`, a fix attempt and its late
   flag, and the evidence investigation found (the next update may quote it
   again).
+- **A node removed while kwatch was down** counts as a displacement only
+  for incidents rooted at that node: the saved record keeps no members and
+  no list of the nodes an incident's pods ran on, so the replaced pods of a
+  workload incident are not held as node churn after a restart.
 - **Digest.** An incident a digest listed has not been introduced, so its
   first message of its own (when it rises out of the digest tier) is an
   announcement, as for a startup summary or a roll-up. A decision the digest
   takes in and leaves out (an update with nothing to list, the resolve of a
   blip nobody heard of) is audited as `dropped`, not as carried by the
-  digest.
+  digest. The audit entry words the first `MaxAuditItems` (100) incidents of
+  a digest and ends with "and N more: id, id, ..." naming the others by ID
+  (up to `MaxHiddenIDs`).
 - **Listings and resolves.** A roll-up or summary counts a member as having
   said it resolved only when that resolve reached chat. A resolve sent to
   the pagers alone, or to nobody (`unannounced`), leaves the roll-up to close
   with its own message once everything it named is over.
+- **A panic costs one step.** The manager advances each incident on its own
+  and the announcer runs each collecting step (startup summary, digest,
+  outage hold, roll-up, listings) on its own, contained: a step that panics
+  takes nothing, the decisions of the tick go on to the next step and are
+  delivered, and the panic is counted (`kwatch_panics_recovered_total`).
 - **Saving.** A held announcement that expires or whose investigation
   result arrives is handed to delivery, so the loop saves the incident
   records at once (a crash then does not announce it again). The cold-start

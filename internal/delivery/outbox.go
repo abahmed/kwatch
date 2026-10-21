@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -101,6 +102,9 @@ type outbox struct {
 	// sick reports that the writer keeps failing (true) or works again
 	// (false); nil when nobody listens.
 	sick func(bool)
+	// restartWait sleeps between writer restarts (see supervise); tests
+	// replace it so a restart does not sleep. Nil uses a real timer.
+	restartWait func(context.Context, time.Duration) bool
 
 	wake    chan struct{}
 	stop    chan struct{}

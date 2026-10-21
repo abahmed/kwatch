@@ -14,6 +14,7 @@ func TestRunCommandVersion(t *testing.T) {
 		[]string{"version"},
 		&out,
 		&errOut,
+		testNow,
 		func() int {
 			called = true
 			return 99
@@ -42,6 +43,7 @@ func TestRunCommandRejectsUnknownCommand(t *testing.T) {
 		[]string{"unknown"},
 		&out,
 		&errOut,
+		testNow,
 		func() int {
 			called = true
 			return 7

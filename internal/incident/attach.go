@@ -14,6 +14,13 @@ import (
 // selfRow names the explain row of a workload blamed for itself.
 const selfRow = "self"
 
+// Standalone reports an incident that nothing ties to another failure:
+// no cause was found, or the workload is blamed for itself. Many of them
+// in one namespace at one time are a namespace outage.
+func (p *Incident) Standalone() bool {
+	return p.Cause == nil || p.Cause.Rule == selfRow
+}
+
 // placement is where the findings of one failure belong: the root of
 // their incident, the cause that explains them and what kwatch could
 // not check on the way.
@@ -30,6 +37,9 @@ type placement struct {
 	// unclear is set, with no cause, when candidates outside root's
 	// own workload were considered and dropped.
 	unclear bool
+	// outscored lists the roots of the alternatives that explain the
+	// failures through the same row as cause and score at least as high.
+	outscored []inventory.EntityID
 }
 
 // placeArea moves the findings of every failure of a solved area to
@@ -71,7 +81,7 @@ func (m *Manager) attach(
 	where = m.reroute(now, s, where)
 	revised, rerooted := false, false
 	if previous, ok := m.byMember[key]; ok && !m.holds(previous, where.root) {
-		if m.keepsMember(previous, s, where) {
+		if m.keepsMember(now, previous, s, where) {
 			return
 		}
 		revised = true
@@ -109,10 +119,11 @@ func (m *Manager) attach(
 // A failure whose evidence merely aged out is not a new problem while
 // the incident's root still fails.
 func (m *Manager) keepsMember(
-	previous string, s detection.Finding, where placement,
+	now time.Time, previous string, s detection.Finding, where placement,
 ) bool {
 	key := s.Key()
 	if !m.staysInGroup(previous, where) &&
+		!m.edgesOutIncumbent(now, previous, where) &&
 		!m.beganTooLate(previous, where.cause) &&
 		!m.sameChainFlip(previous, key, where.root) &&
 		!m.explanationLapsed(previous, where) {
@@ -266,13 +277,15 @@ func (m *Manager) leavesAsHistory(
 
 // reroute sends a failure back to the incident whose story it belongs to:
 // one that took over from its root, one it moved away from, the node
-// outage it was suspected of, or the outage its node joined.
+// outage it was suspected of, the node outage whose place it names, or
+// the outage its node joined.
 func (m *Manager) reroute(
 	now time.Time, s detection.Finding, where placement,
 ) placement {
 	where = m.retakeSuperseded(now, s, where)
 	where = m.retakeFormer(now, s, where)
 	where = m.retakeSuspect(now, s, where)
+	where = m.retakeZone(now, where)
 	return m.joinNodeGroup(s, where)
 }
 

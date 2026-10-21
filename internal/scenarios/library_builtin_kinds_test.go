@@ -105,6 +105,8 @@ func resourceClaimUnallocated() scenario {
 	return scenario{
 		expect: expectation{
 			Name: "resourceclaim-unallocated-pod-pending",
+			// The scheduler message is named before the claim it is about.
+			RevisesRoot: true,
 			Description: "A pod waits for a device claim the scheduler " +
 				"could not allocate.",
 			Root: "resourceclaim/ml/gpu-claim",

@@ -39,9 +39,10 @@ func TestMissingServiceSaysWhatIsCalledQuotesAndSuggests(t *testing.T) {
 			Code: rootcause.ProofMissingCall, Count: 8080,
 			Fields: []string{"payments"}}))
 
-	want := "api calls paymnts:8080, but there is no Service paymnts in " +
-		"shop. Quoted: \"" + line + "\". A Service named payments exists."
-	if len(got) != 1 || got[0].text != want {
+	want := "api calls paymnts:8080 and fails with \"" + line + "\", " +
+		"but there is no Service paymnts in shop. A Service named " +
+		"payments exists."
+	if len(got) != 1 || plainQuotes(got[0].text) != want {
 		t.Fatalf("got %+v\nwant %q", got, want)
 	}
 }
@@ -50,7 +51,7 @@ func TestMissingServiceFromConfigurationQuotesNothing(t *testing.T) {
 	got := missingServiceSentences(missingServiceFacts(
 		"missing-service-configured", "panic: configuration invalid"))
 
-	if len(got) != 1 || strings.Contains(got[0].text, "Quoted") ||
+	if len(got) != 1 || strings.Contains(got[0].text, "fails with") ||
 		strings.Contains(got[0].text, "exists") ||
 		!strings.Contains(got[0].text, "api calls paymnts, but there is no") {
 		t.Fatalf("got %+v", got)

@@ -114,7 +114,8 @@ func (v *view) missingRefs(pod inventory.EntityID) []missingRef {
 		quoted := v.crashErrors(pod)
 		for _, call := range kube.ServiceCalls(entity) {
 			if v.namesMissingService(call.Service, pod) &&
-				namedOrSilent(quoted, call.Service) {
+				namedOrSilent(quoted, call.Service) &&
+				!v.lookupUnanswered(pod, quoted) {
 				refs.add(missingRef{service: call.Service, port: call.Port})
 			}
 		}
@@ -123,6 +124,28 @@ func (v *view) missingRefs(pod inventory.EntityID) []missingRef {
 		return refs.list[:maxMissingRefs]
 	}
 	return refs.list
+}
+
+// temporaryLookup matches a lookup that got no answer, in lower-case
+// text: the resolver was unreachable or failed, so it did not say the
+// name does not exist.
+var temporaryLookup = regexp.MustCompile(`eai_again|temporary failure in ` +
+	`name resolution|server misbehaving|i/o timeout`)
+
+// lookupUnanswered reports that a name in the pod's configuration is not
+// shown to be missing: cluster DNS fails, so every lookup fails whether
+// the Service exists or not, or the pod's errors are lookups that got no
+// answer. Only a Service looked up and answered as not found is missing.
+func (v *view) lookupUnanswered(pod inventory.EntityID, quoted []string) bool {
+	if v.dnsUnwell(pod) {
+		return true
+	}
+	for _, line := range append(quoted, v.errorLines(pod)...) {
+		if temporaryLookup.MatchString(strings.ToLower(line)) {
+			return true
+		}
+	}
+	return false
 }
 
 // crashErrors are the errors the pod's containers left as their last
@@ -206,7 +229,8 @@ func (v *view) quotedMissing(pod inventory.EntityID) []missingRef {
 	var out []missingRef
 	for _, line := range v.errorLines(pod) {
 		lower := strings.ToLower(line)
-		if dnsServerFailure.MatchString(lower) {
+		if dnsServerFailure.MatchString(lower) ||
+			temporaryLookup.MatchString(lower) {
 			continue
 		}
 		host := lookedUpHost(lower)

@@ -1,0 +1,10 @@
+{
+  "name": "node-agent-crash-csi-error-names-other-driver",
+  "description": "kube-proxy crash-loops on a node where a pod's volume cannot be mounted because a storage driver is not registered.",
+  "root": "unknown",
+  "tier": "notify",
+  "maxMessages": 4,
+  "unrelated": [
+    "daemonset/kube-system/kube-proxy"
+  ]
+}

@@ -3,6 +3,7 @@ package detectors
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
@@ -118,6 +119,10 @@ func flaggedPods(
 			pod, ctx.Now.Add(-EventWindow),
 		) {
 			if note.Warning && note.Reason == multipleBudgetsEvent {
+				// The flag stops counting when the note leaves the
+				// window, and nothing touches the budget then.
+				ctx.RecheckAfter(
+					note.At.Add(EventWindow).Sub(ctx.Now) + time.Nanosecond)
 				out = append(out, detection.Evidence{
 					Label: pod.Name, Value: note.Message,
 				})

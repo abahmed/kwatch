@@ -42,9 +42,11 @@ var workloadConfigRows = []Row{
 		Cause: Side{Group: AnyGroup, Kind: AnyKind,
 			Modes: []detection.Mode{ModeProbePortMismatch}},
 		Link: LinkSelf,
-		Effect: podSide(
-			detection.ModeProbe, detection.ModeNotReady,
-			detection.ModeCrashLoop, detection.ModeRestarting),
+		// Only a probe that cannot connect says nothing listens there:
+		// an app that crashes for its own reasons is not this row's.
+		Effect: Side{Kind: kube.KindPod, Signal: SignalConnection,
+			Modes: []detection.Mode{detection.ModeProbe,
+				detection.ModeNotReady, detection.ModeCrashLoopLiveness}},
 		Prior: 0.8, Inside: true,
 	},
 	{

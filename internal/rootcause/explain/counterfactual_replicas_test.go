@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/rootcause"
@@ -58,6 +59,19 @@ func TestScoreReplicas(t *testing.T) {
 		if o.code != rootcause.ProofReplicasEverywhere {
 			t.Fatalf("code = %q", o.code)
 		}
+	})
+	t.Run("the comparison names its workload", func(t *testing.T) {
+		f := replicaFixture(t, 0, 1, 2)
+		pod := inventory.CoreID(kube.KindPod, "shop", "api-1-0")
+		for _, area := range f.explain().Areas {
+			for _, cmp := range area.Trace.Compared[pod] {
+				if cmp.Code == rootcause.ProofReplicasEverywhere &&
+					cmp.Subject == dep {
+					return
+				}
+			}
+		}
+		t.Fatal("no replica comparison names the workload api")
 	})
 	t.Run("a node is not judged", func(t *testing.T) {
 		f := replicaFixture(t, 0, 1)
@@ -151,7 +165,10 @@ func TestScorePreviousHealthy(t *testing.T) {
 		f.now = t0.Add(40 * time.Minute)
 		nodes := f.nodes("zone-a", "n1", "n2")
 		pods := f.workload("shop", "api", 2, nodes...)
-		f.crash(pods...)
+		// The change below is at minute 20: the pods crash after it.
+		for _, pod := range pods {
+			f.fail(pod, detection.ModeCrashLoop, failingH, 22, "panic")
+		}
 		old := inventory.CoreID(kube.KindReplicaSet, "shop", "api-0")
 		f.add(old)
 		f.relate(old, inventory.OwnedBy, dep)

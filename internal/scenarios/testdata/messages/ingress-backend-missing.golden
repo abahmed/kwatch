@@ -1,8 +1,8 @@
 10:02:15 settled
-🔴 Ingress shop in shop (prod-eu-1) is down because service web-v2 does not exist. Also changed before it broke: ingress shop: backends web → web-v2 at 10:01. Fix in: ingress/shop → spec.rules[].http.paths[].backend.service.name (web-v2). To see the object's state and events, run kubectl describe ingress shop -n shop
+🔴 Ingress shop in shop (prod-eu-1) is down because service web-v2 does not exist. Also changed before it broke: ingress shop: backends web → web-v2 at 10:01 UTC. Fix in: ingress/shop → spec.rules[].http.paths[].backend.service.name (web-v2). To see the object's state and events, run kubectl describe ingress shop -n shop
 🔴 Ingress shop in shop (prod-eu-1) is down because service web-v2 does not exist.
 | 🔴 Ingress **shop** in **shop** (**prod-eu-1**) is down because service **web-v2** does not exist.
-| Also changed before it broke: ingress shop: backends web → **web-v2** at 10:01.
+| Also changed before it broke: ingress shop: backends web → **web-v2** at 10:01 UTC.
 | Fix in: ingress/shop → spec.rules\[\].http.paths\[\].backend.service.name (**web-v2**).
 | To see the object's state and events, run
 | ```

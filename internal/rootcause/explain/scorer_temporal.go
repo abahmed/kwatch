@@ -69,6 +69,24 @@ func (v *view) began(id inventory.EntityID) time.Time {
 	return start.t
 }
 
+// causeBegan is when the candidate went wrong, as a time for the incident
+// layer; zero when unknown. A pseudo cause, an entity the model does not
+// hold (a finalizer, a scheduling constraint, a shared error), exists only
+// through the failures it explains, so it began when the first of them
+// did. Without a start the incident layer could not refuse it as a late
+// takeover of an incident announced long before.
+func (v *view) causeBegan(c *candidate) time.Time {
+	if began := v.began(c.id); !began.IsZero() ||
+		v.s.Model.Exists(c.id) {
+		return began
+	}
+	first := v.earliestSince(c.others())
+	if !first.ok || v.observedAtStart(first.t) {
+		return time.Time{}
+	}
+	return first.t
+}
+
 // observedAtStart reports a start at the moment kwatch began: after a
 // restart, findings first seen in its first sync carry the observation
 // time, so the moment says when kwatch noticed, not when the problem

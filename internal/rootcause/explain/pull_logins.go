@@ -15,12 +15,16 @@ const maxLoginsShown = 3
 // pullLogins says which registry logins the pods behind a refusing
 // registry pull with, and what the registry answered. It reads only the
 // pods' secret names and each Secret's type and change time. It is
-// empty unless the cause is a registry refusing logins.
+// empty unless the cause is a registry refusing logins; for a pull
+// Secret that is the cause it gives only the registry's answer.
 func (s Snapshot) pullLogins(c Cause) ([]rootcause.PullLogin, string) {
+	v := newView(s)
+	if c.Root.Kind == kube.KindSecret {
+		return nil, v.secretRefusal(c)
+	}
 	if c.Root.Kind != kube.KindRegistry || c.Mode != pullAuth {
 		return nil, ""
 	}
-	v := newView(s)
 	found := map[[2]string]bool{}
 	var refused string
 	for _, id := range c.Covers {
@@ -139,7 +143,8 @@ func (v *view) registryClass(
 		return "", false
 	}
 	class := classifyRegistryPull(text)
-	if class == pullImage || v.pullSecretsMissing(effect, class) {
+	if class == pullImage || v.pullSecretsMissing(effect, class) ||
+		v.anonymousBesideLogins(effect) {
 		return "", false
 	}
 	return class, true
@@ -161,4 +166,22 @@ func (s Snapshot) secretKeys(pod inventory.EntityID) [][2]string {
 		keys = append(keys, [2]string{pod.Namespace, name})
 	}
 	return keys
+}
+
+// secretRefusal is the registry's answer to the pods that pull with the
+// Secret the cause blames, when it refused them: the Secret changed and
+// the registry's own words say what it did next.
+func (v *view) secretRefusal(c Cause) string {
+	for _, id := range c.Covers {
+		pod, ok := v.podOf(id)
+		if !ok || !v.pullRefused(pod) {
+			continue
+		}
+		e, found := v.s.Model.Entity(pod)
+		if found && hasText(kube.PullSecretNames(attrText(e,
+			kube.AttrPullSecrets)), c.Root.Name) {
+			return v.refusalOf(id)
+		}
+	}
+	return ""
 }

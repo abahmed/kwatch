@@ -1,0 +1,11 @@
+{
+  "name": "webhook-ignore-beside-closed",
+  "description": "A configuration with a healthy fail-closed webhook and an ignoring webhook whose Service is gone: a digest line only.",
+  "root": "validatingwebhookconfiguration//mixed-policy",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/guard-system/guard"
+  ],
+  "tail": "1h0m0s"
+}

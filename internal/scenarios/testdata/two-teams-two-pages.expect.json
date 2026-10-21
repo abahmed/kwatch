@@ -1,0 +1,12 @@
+{
+  "name": "two-teams-two-pages",
+  "description": "A user-facing outage in billing and another in shop begin together: each team is paged, because one page does not stand for another team's outage.",
+  "root": "deployment/billing/api",
+  "otherRoots": [
+    "deployment/shop/api"
+  ],
+  "tier": "page",
+  "maxMessages": 4,
+  "maxPages": 2,
+  "tail": "10m0s"
+}

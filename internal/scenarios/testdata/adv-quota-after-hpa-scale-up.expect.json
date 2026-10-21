@@ -1,0 +1,13 @@
+{
+  "name": "adv-quota-after-hpa-scale-up",
+  "description": "An HPA scale-out runs into the namespace's pod quota; the HPA is below its maximum.",
+  "root": "resourcequota/batch/pod-cap",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "horizontalpodautoscaler/batch/worker",
+    "deployment/batch/worker",
+    "node//n1",
+    "node//n2"
+  ]
+}

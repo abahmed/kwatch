@@ -95,7 +95,14 @@ func assertGrantsCoverChecks(
 	t *testing.T, grants map[grant]bool, installNS, lease string,
 ) {
 	t.Helper()
-	for _, access := range rbac.Checks(installNS, lease, true) {
+	checks := rbac.Checks(installNS, lease, true)
+	// The license Role exists only where a key is configured; when it is
+	// there it must cover what the audit checks for it.
+	if hasLicenseGrant(grants, installNS) {
+		checks = append(checks,
+			rbac.LicenseChecks(installNS, licenseInstanceSecret)...)
+	}
+	for _, access := range checks {
 		if !granted(grants, access) {
 			t.Errorf("manifest does not grant %+v", access)
 		}
@@ -117,6 +124,15 @@ func licenseGrant(g grant, installNS string) bool {
 	switch g.verb {
 	case "get", "update":
 		return g.name == licenseInstanceSecret
+	}
+	return false
+}
+
+func hasLicenseGrant(grants map[grant]bool, installNS string) bool {
+	for g := range grants {
+		if licenseGrant(g, installNS) {
+			return true
+		}
 	}
 	return false
 }

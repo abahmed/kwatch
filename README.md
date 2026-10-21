@@ -279,6 +279,11 @@ Built in, no rules to write. Community covers pod failures and NotReady
 nodes; Pro covers everything. The full list is in the
 [coverage guide](./docs/kubernetes-coverage.md).
 
+<sub>The Helm chart's default `rbac.mode: least-privilege` grants read access
+to the built-in kinds only, so **custom resources are not watched** unless you
+install with `--set rbac.mode=full`. kwatch warns once in its log and `/health`
+lists what it cannot watch.</sub>
+
 ## 🚀 Install
 
 **Installer (recommended).** One command, and it walks you through it. It checks your cluster before it changes
@@ -289,13 +294,25 @@ Secret, installs kwatch and checks that it is running.
 /bin/bash -c "$(curl -fsSL https://kwatch.dev/kwatch.sh)"
 ```
 
-**Already use Helm?** You can install the chart instead:
+**Already use Helm?** You can install the chart instead. Alert providers need
+credentials, which the chart does not accept in its values, so put the
+provider in a Secret and point the chart at it (without one, kwatch watches
+the cluster but tells nobody; it warns at start and the install notes say so):
 
 ```bash
 helm repo add kwatch https://kwatch.dev/charts
 helm repo update
+kubectl create namespace kwatch
+cat > config.yaml <<'EOF'
+alert:
+  slack:
+    webhook: ${file:/config/slack-webhook}
+EOF
+kubectl -n kwatch create secret generic kwatch-config \
+  --from-file=config.yaml \
+  --from-literal=slack-webhook='https://hooks.slack.com/services/XXX'
 helm upgrade --install kwatch kwatch/kwatch \
-  --namespace kwatch --create-namespace
+  --namespace kwatch --set configSecretName=kwatch-config
 ```
 
 <details>
@@ -319,7 +336,7 @@ during early access.
 | Detection | Pod crash loops, OOM kills and Pending pods; node NotReady | Adds node pressure and draining, readiness, rollouts, Jobs and CronJobs, PDBs, HPAs, storage, network, admission, certificates, quota, custom resources, control plane, probes and unusual events |
 | Root cause | One-line headline | Full proof and confidence, shared-factor suspects, recent changes and who made them, affected services, log excerpts |
 | Channels | 1 provider (pick with `app.communityProvider`), namespace filters and silences | All providers, routing by scope, threads, text templates, audit log |
-| Noise control | Dedup and settling, state in memory | Flapping detection, startup summary, state kept on disk across restarts, changes made while kwatch was down |
+| Noise control | Dedup and settling; announced incidents survive a restart, so their resolves are still sent | Flapping detection, startup summary, state kept on disk across restarts, changes made while kwatch was down |
 | Operations | RBAC audit, secret redaction, health, metrics, text `/status` | Severity overrides, maintenance holds, runbook links, heartbeat monitor, `/status` JSON, flight recorder and `replay-export` |
 | Account | None | Email only |
 
@@ -338,8 +355,10 @@ Licenses are managed only through the installer. For a non-interactive
 install, set `KWATCH_LICENSE_KEY` in the environment of the same command.
 
 - One key runs one cluster. Move it to another up to 3 times in 30 days.
-- kwatch checks in once a day and keeps Pro for up to 7 days without a
-  connection.
+- kwatch renews the license about once a day, checks in with the license
+  server every 30 minutes while it is running (see
+  [what leaves my cluster](#-what-leaves-my-cluster)), and keeps Pro for up
+  to 7 days without a connection.
 - The license state is in `/status` and in the installer's **License / Pro**
   menu.
 
@@ -349,11 +368,17 @@ Details: [licensing](./docs/licensing.md).
 
 - **Your alerts**, to the channels you configure. Secrets and tokens are
   redacted before anything is stored or sent.
-- **An anonymous weekly ping**: a hashed cluster ID and the kwatch version.
-  It is separate from licensing. Turn it off with `telemetry.enabled: false`.
-- **With Pro**, a daily license check sends a hashed cluster ID, the kwatch
-  version and the node count. Community without a key makes no license
-  calls.
+- **An anonymous weekly ping**: an installation ID and the kwatch version.
+  The ID has its own salt, so it cannot be matched to your license. Turn it
+  off with `telemetry.enabled: false` or `KWATCH_TELEMETRY=false`.
+- **With Pro**, a license check about once a day sends a hashed cluster ID,
+  the kwatch version and the node count, and **a check-in every 30 minutes**
+  adds the namespace kwatch runs in and your `app.clusterName`, so the app
+  can show when a cluster goes silent. Turn check-ins off with
+  `clusterCheckins: false` or `KWATCH_CLUSTER_CHECKINS=false`. Community
+  without a key makes no license calls.
+- The license, the telemetry and the update check always verify TLS, even if
+  `app.insecureSkipTLSVerify` is set for your alert providers.
 
 Nothing from your workloads. Separately, kwatch asks the GitHub API at
 startup and then daily whether a newer release exists, and posts one notice
@@ -375,8 +400,9 @@ them.
 <summary><b>What access does it need?</b></summary>
 
 Read access to the resources it watches (this is set with RBAC, Kubernetes permissions). It writes only its own state lock
-Lease, its state file, its license instance key Secret in its own namespace,
-and permission self-checks that are not persisted. It never gets `pods/exec`
+Lease, its state file, its license instance key Secret in its own namespace
+(only when a license key is configured), and permission self-checks that are
+not persisted. It never gets `pods/exec`
 or `nodes/proxy`.
 
 By default kwatch can read Secrets, to catch missing references and expiring

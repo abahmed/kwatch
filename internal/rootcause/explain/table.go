@@ -155,7 +155,7 @@ func InsideRow(name string) bool {
 // its pods fail.
 var summaryModes = []detection.Mode{
 	detection.ModeUnavailable, detection.ModeRolloutStuck,
-	detection.ModeStatefulSetRolloutStuck, detection.ModeConditionFailure,
+	detection.ModeStatefulSetRolloutStuck,
 	detection.ModeCondition, detection.ModeDisruptionBudget,
 	detection.ModeNoEndpoints, detection.ModeBackendsDegraded}
 

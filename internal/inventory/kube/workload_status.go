@@ -78,6 +78,7 @@ func daemonSetStatus(d *appsv1.DaemonSet, attrs map[string]inventory.Value) {
 	attrs[AttrAvailable] = number(st.NumberAvailable)
 	attrs[AttrUpdatedReplicas] = number(st.UpdatedNumberScheduled)
 	attrs[AttrUnavailable] = number(st.NumberUnavailable)
+	attrs[AttrMisscheduled] = number(st.NumberMisscheduled)
 }
 
 func jobStatus(j *batchv1.Job, attrs map[string]inventory.Value) {

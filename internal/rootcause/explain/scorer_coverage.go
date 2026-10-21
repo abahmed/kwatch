@@ -17,7 +17,9 @@ func scoreCoverage(v *view, c *candidate) outcome {
 	if len(c.others()) == 0 {
 		return outcome{}
 	}
-	dependents := sampleIDs(v.dependents(c.id))
+	// Every dependent is counted: a sample would put "31 of 32" in a
+	// message about a node that runs a hundred pods.
+	dependents := v.dependents(c.id)
 	if len(dependents) < CoverageMinDependents {
 		return outcome{}
 	}
@@ -28,7 +30,13 @@ func scoreCoverage(v *view, c *candidate) outcome {
 		}
 	}
 	share := float64(failing) / float64(len(dependents))
-	return outcome{weight: CoverageWeight * (2*share - 1),
+	weight := CoverageWeight * (2*share - 1)
+	if weight > 0 && c.selfLinked() {
+		// The pods of a workload blamed for its own setting are the
+		// failures themselves: they cannot also be support for it.
+		return outcome{}
+	}
+	return outcome{weight: weight,
 		code: rootcause.ProofDependentsFail, count: failing,
 		total: len(dependents), text: fmt.Sprintf("%d of %d dependents fail", failing,
 			len(dependents))}

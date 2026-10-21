@@ -44,7 +44,7 @@ func EventNote(obj any, now time.Time) (inventory.Observation, bool) {
 		Kind: inventory.Noted, Source: ObservationSource, At: now, Entity: id,
 		Note: inventory.Note{
 			At: eventTime(ev), Source: eventSource(ev), Reason: ev.Reason,
-			Message: evidenceText(ev.Message), Count: count,
+			Message: eventText(ev.Message), Count: count,
 			Warning: ev.Type == corev1.EventTypeWarning,
 			UID:     uid, Origin: eventOrigin(ev),
 			Refusal: PullRefusal(ev.Message),

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -20,6 +21,7 @@ import (
 	"github.com/abahmed/kwatch/internal/pipeline"
 	"github.com/abahmed/kwatch/internal/pipeline/investigate"
 	"github.com/abahmed/kwatch/internal/rootcause/explain"
+	"github.com/abahmed/kwatch/internal/safego"
 	"github.com/abahmed/kwatch/internal/scope"
 	"github.com/abahmed/kwatch/internal/storage"
 )
@@ -193,6 +195,24 @@ func (p *pipelineBuild) newProber(submit kube.Submit) *kube.Prober {
 	})
 }
 
+// newStatsPoller builds the kubelet stats poller of the nodes the model
+// holds. A node that is booting or cordoned does not degrade its health.
+func (p *pipelineBuild) newStatsPoller(submit kube.Submit) *kube.StatsPoller {
+	deps := p.deps
+	return kube.NewStatsPoller(kube.StatsConfig{
+		Kubelet:    kubeletReader(deps),
+		Now:        p.clock.Now,
+		Submit:     submit,
+		Nodes:      entitiesOf(p.model, kube.KindNode),
+		Containers: entitiesOf(p.model, kube.KindContainer),
+		Settling: func(node inventory.EntityID, now time.Time) bool {
+			return kube.NodeSettling(p.model, node, now)
+		},
+		Report: newKubeletStatsHealth(
+			healthSink(deps), metrics.DefaultRegistry()).report,
+	})
+}
+
 // newRunners builds every source and returns the functions that run them.
 func (p *pipelineBuild) newRunners(
 	engine *pipeline.Engine,
@@ -210,15 +230,7 @@ func (p *pipelineBuild) newRunners(
 		return nil, err
 	}
 	p.source = source
-	stats := kube.NewStatsPoller(kube.StatsConfig{
-		Kubelet:    kubeletReader(deps),
-		Now:        p.clock.Now,
-		Submit:     submit,
-		Nodes:      entitiesOf(p.model, kube.KindNode),
-		Containers: entitiesOf(p.model, kube.KindContainer),
-		Report: newKubeletStatsHealth(
-			healthSink(deps), metrics.DefaultRegistry()).report,
-	})
+	stats := p.newStatsPoller(submit)
 	crashLogs := kube.NewCrashLogRound(kube.CrashLogConfig{
 		Logs:   kube.LogReader{Client: deps.clients.Kubernetes},
 		Model:  p.model,
@@ -251,29 +263,50 @@ func (p *pipelineBuild) newRunners(
 	return runners, nil
 }
 
-// syncReporter returns the runner that waits for the caches to sync, then
-// marks the pipeline ready and reports source health until ctx ends.
+// syncReporter returns the runner that reports source health until ctx
+// ends and marks the pipeline ready once the caches have synced.
 func (p *pipelineBuild) syncReporter(
 	engine *pipeline.Engine, health *sourceHealth,
 ) func(context.Context) {
 	return func(ctx context.Context) {
-		// The startup hold ends with the required kinds: a slow or
-		// absent optional kind is carried (see Engine.reconcileDowntime)
-		// and must not delay the first alerts of a cold start.
-		if !p.source.WaitForRequiredSync(ctx) {
-			return
-		}
-		engine.SourcesSynced()
-		if !p.source.WaitForSync(ctx) {
-			return
-		}
-		// The first report sets pipeline readiness from the required
-		// kinds; later reports withdraw or restore it.
-		health.report()
+		// Reports start now, not after the sync: a required kind that is
+		// forbidden or missing never syncs, and /health must say why
+		// while the pipeline waits.
+		synced := make(chan struct{})
+		var waiting sync.WaitGroup
+		waiting.Add(1)
+		go func() {
+			defer waiting.Done()
+			ok := false
+			safego.Do("source-sync-wait", func() {
+				ok = p.waitForSync(ctx, engine)
+			})
+			if ok {
+				close(synced)
+			}
+		}()
+		defer waiting.Wait()
 		ticker := time.NewTicker(sourceHealthInterval)
 		defer ticker.Stop()
-		health.run(ctx, ticker.C)
+		// The first report after the sync sets pipeline readiness from
+		// the required kinds; later reports withdraw or restore it.
+		health.run(ctx, ticker.C, synced)
 	}
+}
+
+// waitForSync ends the startup hold once the required kinds synced, then
+// waits for the optional ones. It reports false when ctx ended first.
+func (p *pipelineBuild) waitForSync(
+	ctx context.Context, engine *pipeline.Engine,
+) bool {
+	// The startup hold ends with the required kinds: a slow or absent
+	// optional kind is carried (see Engine.reconcileDowntime) and must
+	// not delay the first alerts of a cold start.
+	if !p.source.WaitForRequiredSync(ctx) {
+		return false
+	}
+	engine.SourcesSynced()
+	return p.source.WaitForSync(ctx)
 }
 
 // entitiesOf lists the entities of a kind the model has now.

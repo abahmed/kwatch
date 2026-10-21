@@ -42,6 +42,17 @@ var agentRowCases = []rowCase{
 				"failed to setup network for sandbox")
 			return pods[0]
 		}},
+	{row: "node-agent-absent", want: "daemonset/kube-system/csi",
+		build: func(f *fixture) inventory.EntityID {
+			nodes := f.nodes("zone-a", "n1", "n2", "n3")
+			ds := inventory.CoreID(kube.KindDaemonSet, "kube-system", "csi")
+			f.add(ds)
+			driverPod(f, ds, "csi-n1", nodes[0], "ebs.csi.example.com")
+			driverPod(f, ds, "csi-n2", nodes[1], "ebs.csi.example.com")
+			pods := f.workload("shop", "api", 1, nodes[2])
+			f.fail(pods[0], modeFailedMount, failingH, 2, csiMissing)
+			return pods[0]
+		}},
 }
 
 // A healthy agent explains nothing, and a failing agent beside one

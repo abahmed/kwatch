@@ -213,8 +213,8 @@ func (v *view) clusterCallOf(id inventory.EntityID) (clusterCall, bool) {
 	}
 	var found clusterCall
 	for _, f := range v.unitFindings(unit) {
-		for _, e := range f.Evidence {
-			if call, ok := v.serviceIn(e.Value, unit); ok {
+		for _, text := range v.evidenceTexts(f) {
+			if call, ok := v.serviceIn(text, unit); ok {
 				found = call
 				break
 			}
@@ -295,11 +295,19 @@ func (v *view) calledServiceModes(
 		return nil
 	}
 	call, ok := v.clusterCallOf(effect)
-	if !ok || call.service != id || !v.noReadyEndpoints(id) ||
-		v.backendChanged(id) {
+	if !ok || call.service != id || v.aliasService(id) ||
+		!v.noReadyEndpoints(id) || v.backendChanged(id) {
 		return nil
 	}
 	return pseudoFailing(detection.ModeNoEndpoints)
+}
+
+// aliasService reports an ExternalName Service: it names a host outside
+// the cluster and has no endpoints by design, so an empty answer from its
+// EndpointSlices says nothing about a call to it.
+func (v *view) aliasService(id inventory.EntityID) bool {
+	e, ok := v.s.Model.Entity(id)
+	return ok && attrText(e, kube.AttrServiceType) == "ExternalName"
 }
 
 // backendChanged reports a workload behind the Service that changed

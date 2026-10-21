@@ -17,8 +17,8 @@ Watch modes: `full` keeps the whole object, `hashed` keeps a content hash, `stat
 | CSINode | storage.k8s.io | metadata |
 | CSIStorageCapacity | storage.k8s.io | metadata |
 | CertificateSigningRequest | certificates.k8s.io | status |
-| ClusterRole | rbac.authorization.k8s.io | metadata |
-| ClusterRoleBinding | rbac.authorization.k8s.io | metadata |
+| ClusterRole | rbac.authorization.k8s.io | status |
+| ClusterRoleBinding | rbac.authorization.k8s.io | status |
 | ClusterTrustBundle | certificates.k8s.io | metadata |
 | ConfigMap | core | hashed |
 | ControllerRevision | apps | metadata |
@@ -68,8 +68,8 @@ Watch modes: `full` keeps the whole object, `hashed` keeps a content hash, `stat
 | ResourceClaimTemplate | resource.k8s.io | metadata |
 | ResourceQuota | core | full |
 | ResourceSlice | resource.k8s.io | metadata |
-| Role | rbac.authorization.k8s.io | metadata |
-| RoleBinding | rbac.authorization.k8s.io | metadata |
+| Role | rbac.authorization.k8s.io | status |
+| RoleBinding | rbac.authorization.k8s.io | status |
 | RuntimeClass | node.k8s.io | metadata |
 | Secret | core | hashed |
 | Service | core | full |
@@ -115,15 +115,13 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | CPUThrottled | varies | `ContainerCPUThrottled` | `resources` |
 | CRD.NotEstablished | degraded | `CustomResourceDefinitionNotEstablished` | `condition_rules` |
 | CSRFailed | varies | `CertificateSigningRequestFailure` | `custom` |
-| CannotRun | failing | `ContainerCannotRun` | `container` |
-| Cert.Expired | varies | `TLSCertExpired` | `config` |
+| Cert.Expired | degraded | `TLSCertExpired` | `config` |
 | Certificate.Denied | degraded | `CertificateSigningRequestDenied` | `custom_kinds` |
 | Certificate.NotIssued | degraded | `CertificateSigningRequestNotIssued` | `custom_kinds` |
 | ClaimFailed | varies | `PersistentVolumeClaimFailure`, `ResourceClaimFailure` | `condition_rules`, `custom`, `storage` |
 | Cluster.VersionSkew | degraded | `ClusterVersionSkew` | `version_skew` |
 | Completed | varies | `Completed`, `PodCompleted` | - |
 | Condition | varies | `ConditionFailure` | - |
-| ConditionFailure | varies | `DaemonSetConditionFailure`, `StatefulSetConditionFailure` | - |
 | CrashLoop | failing | `CrashLoopBackOff` | `container` |
 | CrashLoop.Liveness | failing | `LivenessKilled` | `container_liveness` |
 | CreateError | failing | `CreateContainerError` | `container` |
@@ -143,7 +141,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | EphemeralStorageHigh | varies | `ContainerEphemeralStorageUsageHigh` | `resources` |
 | Error | varies | `Error` | `container`, `exit_codes` |
 | Etcd.Large | degraded | `EtcdDatabaseLarge` | `control_plane_storage` |
-| Evicted | varies | `Evicted` | `pod` |
+| Evicted | varies | `Evicted` | `pod_failed` |
 | Evicting | degraded | `NodeEvicting` | `kubelet_health` |
 | Exit.Aborted | varies | `ContainerExitAborted` | `exit_codes` |
 | Exit.BusError | varies | `ContainerExitBusError` | `exit_codes` |
@@ -153,7 +151,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Exit.Killed | varies | `ContainerExitKilled` | `exit_codes` |
 | Exit.NotExecutable | varies | `ContainerExitNotExecutable` | `exit_codes` |
 | Exit.Segfault | varies | `ContainerExitSegfault` | `exit_codes` |
-| Failed | degraded | `PhaseFailed`, `PodFailed` | `generic`, `pod` |
+| Failed | degraded | `PhaseFailed`, `PodFailed` | `generic`, `pod_failed` |
 | Filesystem.Usage | varies | `NodeFilesystemUsageCritical`, `NodeFilesystemUsageHigh` | `usage` |
 | FlowControl | varies | `APIPriorityAndFairnessFailure` | `custom` |
 | Heartbeat.Stale | degraded | `NodeHeartbeatStale` | `node_health` |
@@ -181,7 +179,6 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | JobFailed.BackoffLimit | varies | `JobBackoffLimitExceeded` | `workload` |
 | JobFailed.Deadline | varies | `JobDeadlineExceeded` | `workload` |
 | JobRunningLong | degraded | `JobRunningLong` | `job_runtime` |
-| Killed | varies | `Killed` | - |
 | Killed.GracePeriod | degraded | `PodKilledAtGrace` | `pod_grace_kill` |
 | Kubelet.Unreachable | degraded | `KubeletUnreachable` | `kubelet_health` |
 | Kwatch.NetworkRestricted | degraded | `KwatchNetworkRestricted` | `active_probe` |
@@ -194,6 +191,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | MemoryHigh | varies | `ContainerMemoryUsageHigh` | `resources` |
 | MemoryOvercommitted | degraded | `NodeMemoryOvercommitted` | `node_commitment` |
 | MemoryPressure | varies | `MemoryPressure`, `NodeMemoryPressure` | `condition_rules` |
+| Misscheduled | degraded | `DaemonSetMisscheduled` | `daemonset_misscheduled` |
 | Missing.ConfigMap | varies | `ProjectedConfigMapMissing` | `config` |
 | Missing.Secret | varies | `ProjectedSecretMissing` | `config` |
 | Missing.ServiceAccount | varies | `ServiceAccountMissing` | `config` |
@@ -236,7 +234,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Risk.NoReadinessProbe | varies | `Risk.NoReadinessProbe` | `risk` |
 | Risk.SingleReplica | varies | `Risk.SingleReplica` | `risk` |
 | Rollout.Stuck | degraded | `StatefulSetRolloutStuck` | `rollout` |
-| RolloutStuck | varies | `DeploymentProgressingFalse`, `ProgressDeadlineExceeded` | `condition_rules` |
+| RolloutStuck | varies | `ProgressDeadlineExceeded` | `condition_rules` |
 | RuntimeErrors | varies | `NodeRuntimeErrors` | `resources` |
 | ScaledToZero | varies | `ScaledToZeroRouted` | `scaled_to_zero` |
 | Scaling.Disabled | varies | `ScalingDisabled` | - |
@@ -257,7 +255,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Storage.ObjectsHigh | degraded | `StorageObjectsHigh` | `control_plane_storage` |
 | StuckDeleting | degraded | `NamespaceStuckTerminating`, `NodeStuckTerminating`, `PodStuckTerminating`, `StuckDeleting` | `generic`, `namespace_stuck`, `node`, `pod` |
 | Suspended | varies | `CronJobSuspended`, `JobSuspended` | `schedule` |
-| Unavailable | varies | `DaemonSetUnavailable`, `DeploymentAvailableFalse`, `DeploymentUnavailable`, `StsUnavailable` | `workload` |
+| Unavailable | varies | `DaemonSetUnavailable`, `DeploymentUnavailable`, `StsUnavailable` | `workload` |
 | Unavailable.APIServer | varies | `APIServerUnavailable` | `controlplane` |
 | Unavailable.ControllerManager | varies | `ControllerManagerUnavailable` | `controlplane` |
 | Unavailable.CoreDNS | varies | `CoreDNSUnavailable` | `controlplane` |

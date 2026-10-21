@@ -124,6 +124,11 @@ func (m *Manager) forgetID(id string) {
 // forget drops an incident, its root index entry and its place in the
 // resolved index.
 func (m *Manager) forget(p *Incident) {
+	for _, root := range p.Merged {
+		if m.groups[root.String()] == p.ID {
+			delete(m.groups, root.String())
+		}
+	}
 	delete(m.incidents, p.ID)
 	m.unindex(p)
 	m.dropResolved(p.ID, p.Root.String())

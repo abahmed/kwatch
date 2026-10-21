@@ -1,6 +1,7 @@
 package detectors
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -134,8 +135,13 @@ func webhook(policy string, service bool, ready []float64,
 	m := newTestModel()
 	hook := newID(kube.KindValidatingHook, "", "hook")
 	svc := newID(kube.KindService, "default", "hook-svc")
+	closed := ""
+	if strings.Contains(policy, "Fail") {
+		closed = "default/hook-svc"
+	}
 	put(m, hook, t0, map[string]inventory.Value{
-		kube.AttrFailurePolicy: inventory.Text(policy),
+		kube.AttrFailurePolicy:         inventory.Text(policy),
+		kube.AttrWebhookClosedServices: inventory.Text(closed),
 	})
 	link(m, hook, inventory.Serves, svc)
 	if service {
@@ -150,6 +156,41 @@ func webhook(policy string, service bool, ready []float64,
 		link(m, slice, inventory.Backs, svc)
 	}
 	return m, hook
+}
+
+// webhookWithTwoBackends is one configuration that calls two Services
+// with different failure policies: closed fails closed, open ignores.
+func webhookWithTwoBackends() (*inventory.Model, inventory.EntityID) {
+	m := newTestModel()
+	hook := newID(kube.KindValidatingHook, "", "mixed")
+	closed := newID(kube.KindService, "default", "closed")
+	open := newID(kube.KindService, "default", "open")
+	put(m, hook, t0, map[string]inventory.Value{
+		kube.AttrFailurePolicy: inventory.Text("Fail,Ignore"),
+		kube.AttrWebhookClosedServices: inventory.Text(
+			"default/closed"),
+	})
+	m.Apply(inventory.Observation{
+		Kind: inventory.Related, Source: "test", At: t0, Entity: hook,
+		Relation: inventory.Serves,
+		Targets:  []inventory.EntityID{closed, open},
+	})
+	put(m, closed, t0, nil)
+	return m, hook
+}
+
+// An Ignore webhook beside a Fail webhook is tiered by its own policy: a
+// missing Service behind it is a digest line, whatever the others do.
+func TestWebhookTiersEachBackendByItsOwnFailurePolicy(t *testing.T) {
+	m, id := webhookWithTwoBackends()
+
+	got := evaluate(Webhook{}, m, t0, id, nil).Findings
+
+	require.Len(t, got, 1)
+	assert.Equal(t, reasons.WebhookBackendNotFound, got[0].Reason)
+	assert.Equal(t, detection.Info, got[0].Severity)
+	assert.Contains(t, got[0].Summary, "Service open")
+	assert.Contains(t, got[0].Summary, "failurePolicy is Ignore")
 }
 
 func TestWebhookBackendMissing(t *testing.T) {

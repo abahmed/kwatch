@@ -101,7 +101,9 @@ type Manager struct {
 	failures int
 	// synced is the outcome of the last server sync as logged by
 	// logSync, so only a change of outcome reaches the default level.
-	synced   string
+	synced string
+	// warned is the state and reason last logged by warnUnusableLocked.
+	warned   string
 	anchor   time.Time // first local reading, for the monotonic cross-check
 	savedMax time.Time // MaxSeen as last written to the LeaseStore
 
@@ -280,6 +282,7 @@ func (m *Manager) publish(st Status) {
 }
 
 func (m *Manager) publishLocked(st Status) {
+	m.warnUnusableLocked(st)
 	if m.haveLast && m.last.State == st.State && m.last.Plan == st.Plan {
 		m.last = st
 		return

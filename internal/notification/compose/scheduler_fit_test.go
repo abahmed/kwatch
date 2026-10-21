@@ -57,7 +57,7 @@ func TestAutoscalerSentencesQuoteTheEvent(t *testing.T) {
 			pair(detection.EvidenceAutoscaler, state),
 			pair(detection.EvidenceAutoscalerSays,
 				"pod triggered scale-up")))
-		if len(got) != 1 || got[0].text != want {
+		if len(got) != 1 || plainQuotes(got[0].text) != want {
 			t.Errorf("%s: got %+v, want %q", state, got, want)
 		}
 	}

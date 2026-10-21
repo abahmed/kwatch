@@ -80,6 +80,10 @@ type Record struct {
 	RolledUp   bool      `json:",omitempty"`
 	PodPeak    int       `json:",omitempty"`
 	PageHeld   bool      `json:",omitempty"`
+	// FlapPaged was added so the one update that tells the pagers a held
+	// page keeps coming back stays once per incident across a restart.
+	// Older records restore without it.
+	FlapPaged bool `json:",omitempty"`
 	// Modes are every failure mode the incident's members had, so a
 	// restart does not make the same failure of a root look new. Older
 	// records restore without them.
@@ -157,6 +161,7 @@ func (m *Manager) Export() []Record {
 			Paged:       p.Delivery.paged, PagedKnown: true,
 			DigestedAt: p.DigestedAt, RolledUp: p.Delivery.rolledUp,
 			PodPeak: p.Delivery.podPeak, PageHeld: p.Delivery.pageHeld,
+			FlapPaged:  p.Delivery.flapPaged,
 			ReopenedAt: p.Pending.reopenedAt, Modes: p.modeList(),
 			RepeatCount: p.RepeatCount, Unheard: !p.sent.told,
 			ToldKnown: true,
@@ -267,7 +272,7 @@ func restored(r Record) *Incident {
 		Delivery: Delivery{
 			paged: r.Paged, rolledUp: r.RolledUp,
 			podPeak: r.PodPeak, pageHeld: r.PageHeld,
-			demoted: r.Demoted,
+			demoted: r.Demoted, flapPaged: r.FlapPaged,
 		},
 		Pending: Pending{
 			reopenedAt: r.ReopenedAt, revised: r.Revised,
@@ -275,6 +280,7 @@ func restored(r Record) *Incident {
 		},
 	}
 	restoreSets(p, r)
+	p.restoredTier = r.Tier
 	if !r.PagedKnown && wasAnnounced(p) {
 		p.Delivery.MarkPaged()
 	}

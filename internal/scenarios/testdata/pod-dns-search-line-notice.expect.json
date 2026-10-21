@@ -1,0 +1,7 @@
+{
+  "name": "pod-dns-search-line-notice",
+  "description": "The kubelet warns about an over-long DNS search line for each of three healthy pods.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

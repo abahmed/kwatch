@@ -7,7 +7,6 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/rootcause"
-	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // maxNamedFinalizers bounds how many finalizers the lead names.
@@ -24,10 +23,11 @@ func finalizerCause(cause *rootcause.CauseRecord) bool {
 // finalizer that holds them is never removed, and why. "Six objects in
 // shop have been stuck deleting since Dec 4: their finalizer
 // example.com/cleanup is never removed; the controller that handles it,
-// deployment shop/widget-ctl, is scaled to 0."
+// deployment shop/widget-ctl, is scaled to 0." A held object that says
+// why itself is quoted after it (see heldReason).
 func finalizerLead(f caseFacts) (string, bool) {
 	if !finalizerCause(f.p.Cause) {
-		return "", false
+		return stuckObjectLead(f)
 	}
 	held := heldObjects(f.members)
 	if len(held) == 0 {
@@ -48,7 +48,11 @@ func finalizerLead(f caseFacts) (string, bool) {
 		text += their + " finalizers " + joinAnd(names,
 			maxNamedFinalizers) + " are never removed"
 	}
-	return text + "; " + handlerClause(f.p.Cause, len(names) > 1), true
+	text += "; " + handlerClause(f.p.Cause, held, names)
+	if reason := heldReason(held, f.members); reason != "" {
+		text += "; " + reason
+	}
+	return text + ".", true
 }
 
 // heldObjects are the members whose deletion a finalizer holds.
@@ -134,28 +138,6 @@ func heldFinalizers(held []detection.Finding) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-// handlerClause says who should remove the finalizers and why that does
-// not happen; several says there is more than one finalizer.
-func handlerClause(cause *rootcause.CauseRecord, several bool) string {
-	it := "it"
-	if several {
-		it = "them"
-	}
-	switch {
-	case cause.Rule == "finalizer-handler-stopped" &&
-		cause.Mode.Within(explain.ModeHandlerScaledDown):
-		return "the controller that handles " + it + ", " +
-			workloadRef(cause.Root) + ", is scaled to 0."
-	case cause.Rule == "finalizer-handler-stopped":
-		return "the controller that handles " + it + ", " +
-			workloadRef(cause.Root) + ", has no ready replica."
-	case cause.Mode.Within(explain.ModeFinalizerHandlerRuns):
-		return "a controller that looks like its handler is running, " +
-			"so kwatch cannot say why it does not remove " + it + "."
-	}
-	return "no running controller found for " + it + "."
 }
 
 // workloadRef is "deployment shop/widget-ctl".

@@ -45,6 +45,8 @@ type serverDeps struct {
 	edition editionHolder
 	// license is the licensing wiring; nil runs without licensing.
 	license *licenseSetup
+	// overlay is how the startup KwatchConfig turned out.
+	overlay overlayOutcome
 	// editionRestart is set when the leader session ended because the
 	// license changed the edition; RunWithClock then rebuilds.
 	editionRestart atomic.Bool
@@ -56,6 +58,9 @@ type serverDeps struct {
 	openedStore atomic.Pointer[storage.Store]
 	// openState opens the state file; nil uses storage.Open.
 	openState stateOpener
+
+	// editionLogged makes logEdition log once per generation.
+	editionLogged sync.Once
 
 	// releaseLease is set after a graceful active session so shutdown can
 	// hand over the Lease once delivery has drained.
@@ -80,6 +85,7 @@ func newServerDeps(
 		inactivePro:      boot.inactivePro,
 		notice:           boot.notice,
 		license:          boot.license,
+		overlay:          boot.overlay,
 	}
 	deps.edition.Store(boot.entitlements)
 	return deps
@@ -121,7 +127,14 @@ type progressReporter interface {
 	LastProgress() time.Time
 }
 
-type componentProgress struct{ last atomic.Int64 }
+// componentProgress remembers when a component last reported progress. It
+// keeps the time exactly as given, monotonic reading included: the
+// supervisor subtracts it from the clock's now, and a wall-clock step (an
+// NTP correction, a resumed VM) must neither fake nor hide a stall.
+type componentProgress struct {
+	mu   sync.Mutex
+	last time.Time
+}
 
 func newComponentProgress(now time.Time) *componentProgress {
 	progress := &componentProgress{}
@@ -130,20 +143,21 @@ func newComponentProgress(now time.Time) *componentProgress {
 }
 
 func (p *componentProgress) Touch(now time.Time) {
-	if p != nil {
-		p.last.Store(now.UnixNano())
+	if p == nil {
+		return
 	}
+	p.mu.Lock()
+	p.last = now
+	p.mu.Unlock()
 }
 
 func (p *componentProgress) LastProgress() time.Time {
 	if p == nil {
 		return time.Time{}
 	}
-	value := p.last.Load()
-	if value == 0 {
-		return time.Time{}
-	}
-	return time.Unix(0, value)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.last
 }
 
 func (d *serverDeps) setLeaseRelease(release func(context.Context)) {
@@ -156,6 +170,26 @@ func (d *serverDeps) leaseRelease() func(context.Context) {
 	d.leaseMu.Lock()
 	defer d.leaseMu.Unlock()
 	return d.releaseLease
+}
+
+// logEdition logs what the edition does not run: the Pro settings the
+// configuration sets and the Pro detectors. With a license key the edition
+// is not known until the leader settled the license, and a Pro start would
+// otherwise warn for a second about an edition it is about to leave, so
+// the leader session calls it once the edition is resolved. Without a key
+// the bootstrap edition is final and the generation logs it at once.
+func (d *serverDeps) logEdition() {
+	d.editionLogged.Do(func() {
+		logInactivePro(d.entitlements, d.inactivePro)
+		logEditionNotice(d.entitlements, d.notice)
+		logDroppedPagers(d.notice)
+	})
+}
+
+// licenseKeyConfigured reports a configured license key. Until the leader
+// settled it the edition may still change.
+func (d *serverDeps) licenseKeyConfigured() bool {
+	return d.license != nil && d.license.key != ""
 }
 
 // has reports whether the installation may use id.

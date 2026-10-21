@@ -15,6 +15,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/safego"
 )
 
 // DefaultRediscoveryInterval is the safety timer for re-discovery. CRD
@@ -62,6 +63,10 @@ type DynamicConfig struct {
 	// the given time. Over the budget they are watched before kinds
 	// nothing has complained about; nil ranks none.
 	Noted func(since time.Time) map[inventory.Kind]bool
+	// RestartWait sleeps before a panicked watch is rebuilt and reports
+	// false when ctx ended first; nil uses safego.Wait (a real timer).
+	// Tests pass one that returns at once.
+	RestartWait func(ctx context.Context, d time.Duration) bool
 }
 
 // notedWindow is how recent a Warning event must be to pull its kind
@@ -115,6 +120,11 @@ type DynamicSource struct {
 	complete bool
 	// loggedSkipped is the skipped-kind list last written to the log.
 	loggedSkipped string
+	// denials is the retry backoff of types refused for permission, and
+	// loggedRefused the refused-type list last written to the log (see
+	// dynamic_source_denied.go).
+	denials       map[schema.GroupVersionResource]*denial
+	loggedRefused string
 	wg            sync.WaitGroup
 }
 
@@ -177,6 +187,9 @@ func NewDynamicSource(cfg DynamicConfig) *DynamicSource {
 	}
 	if cfg.Rediscovery <= 0 {
 		cfg.Rediscovery = DefaultRediscoveryInterval
+	}
+	if cfg.RestartWait == nil {
+		cfg.RestartWait = safego.Wait
 	}
 	return &DynamicSource{
 		cfg:     cfg,
@@ -293,8 +306,11 @@ func (d *DynamicSource) reconcile(ctx context.Context) {
 		}
 	}
 	retired := d.dropUnwanted(desired, skipped, complete)
+	d.forgetSyncedDenials()
 	status := d.statusLocked()
+	refusedTypes, denied := d.refusedSummaryLocked()
 	d.mu.Unlock()
+	d.logRefused(refusedTypes, denied)
 	if kinds, changed := d.skippedChanged(skipped); changed {
 		klog.InfoS("resource types over the watch budget are skipped",
 			"component", "inventory", "operation", "discover",
@@ -331,7 +347,7 @@ func (d *DynamicSource) watch(
 	ctx context.Context, r plannedResource, retry bool,
 ) {
 	if f, ok := d.refused[r.gvr]; ok {
-		if retry && d.start(ctx, r, f.kept) {
+		if retry && d.denialDue(r.gvr) && d.start(ctx, r, f.kept) {
 			delete(d.refused, r.gvr)
 		}
 		return

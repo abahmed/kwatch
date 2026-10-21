@@ -60,7 +60,7 @@ func TestDigestIsAScannableList(t *testing.T) {
 		"1 workload not ready\n\n" +
 		"*Problems*\n" +
 		"• Node *ip-10-0-67-211* — failing again (2nd time in 2h)\n" +
-		"• Service *ingress-nginx* (*kube-addons*) — can't deploy its " +
+		"• Service *ingress-nginx* (*kube-addons*) — failed to deploy its " +
 		"load balancer: FailedDeployModel ×3 in 15 min\n\n" +
 		"✅ 5 resolved since last digest: accounts, assets, comms +2\n\n" +
 		"*Running but not ready*\n" +
@@ -83,7 +83,7 @@ func TestIncidentLinesAndEmphasis(t *testing.T) {
 		at(5, 0))
 	got := msg.Render(notification.SlackDialect())
 	for _, want := range []string{
-		"🔴 *payments* is down in *shop* (*prod-eu-1*) after the 14:02",
+		"🔴 *payments* is down in *shop* (*prod-eu-1*) after the 14:02 UTC",
 		"\nOnly pods of the new revision fail.\n",
 		"Service *payments* and ingress *storefront* can't serve traffic.",
 		"*checkout* is affected as well.",
@@ -100,14 +100,18 @@ func TestIncidentLinesAndEmphasis(t *testing.T) {
 }
 
 func TestQuotedPodTextBecomesCode(t *testing.T) {
-	spans := podSpans(`It said "panic: *boom* <!channel>" twice.`)
+	spans := podSpans("It said " + quoted("panic: *boom* <!channel>") +
+		" twice.")
 	if len(spans) != 3 || spans[1].Style != notification.Code ||
 		spans[1].Text != "panic: *boom* <!channel>" {
 		t.Fatalf("spans = %+v", spans)
 	}
-	if got := podSpans(`unbalanced " quote`); len(got) != 1 ||
-		got[0].Style != notification.Plain {
-		t.Fatalf("unbalanced quotes stay plain: %+v", got)
+	for _, text := range []string{`unbalanced " quote`,
+		"unbalanced " + quoteOpen + " quote", `plain "quotes" stay`} {
+		if got := podSpans(text); len(got) != 1 ||
+			got[0].Style != notification.Plain {
+			t.Fatalf("%q stays plain: %+v", text, got)
+		}
 	}
 }
 
@@ -142,12 +146,12 @@ func TestStartupSummaryIsAList(t *testing.T) {
 
 func TestLongQuotedPodTextGetsACodeBlock(t *testing.T) {
 	long := strings.Repeat("panic: boom ", 10)
-	blocks := paragraphs(`It fails with "` + long + `".`)
+	blocks := paragraphs("It fails with " + markQuote(long) + ".")
 	if len(blocks) != 2 || blocks[0].Text() != "It fails with" ||
 		blocks[1].Kind != notification.CodeBlock || blocks[1].Text() != long {
 		t.Fatalf("blocks = %+v", blocks)
 	}
-	short := paragraphs(`It fails with "boom".`)
+	short := paragraphs("It fails with " + markQuote("boom") + ".")
 	if len(short) != 1 || short[0].Spans[1].Style != notification.Code {
 		t.Fatalf("short quotes stay inline: %+v", short)
 	}
