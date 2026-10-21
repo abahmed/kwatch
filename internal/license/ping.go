@@ -15,8 +15,9 @@ const maxPingBody = 1024
 const pingStateStopping = "stopping"
 
 // Ping is one cluster check-in. It carries no cluster-identifying data:
-// no cluster name, namespace or resource names. Checkins false tells the server that the
-// operator turned check-ins off; Stopping marks a graceful shutdown.
+// no cluster name, namespace or resource names. Checkins false tells the
+// server that the operator turned check-ins off; Stopping marks a graceful
+// shutdown.
 type Ping struct {
 	Checkins bool
 	Stopping bool
