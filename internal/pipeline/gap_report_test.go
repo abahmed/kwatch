@@ -117,9 +117,11 @@ func TestGapReportListsChangesThenCrashes(t *testing.T) {
 		"- Deployment shop/api: spec.template changed\n"+
 		"- Node n1: taints changed\n\n"+
 		"Crashed:\n"+
-		"- shop/api-1, container app: OOMKilled, 1 time\n"+
-		"- shop/api-2, container app: exit code 2, 4 times\n\n"+
-		"Crashes on 2 nodes that restarted during the gap can't be "+
+		"- shop/api-1, container app: last stopped by OOMKilled, "+
+		"1 restart in total\n"+
+		"- shop/api-2, container app: last stopped with exit code 2, "+
+		"4 restarts in total\n\n"+
+		"Crashes on 2 nodes that went not-ready during the gap can't be "+
 		"told apart, so they are not listed.\n"+
 		"Anything still broken is reported as its own incident.", got)
 }

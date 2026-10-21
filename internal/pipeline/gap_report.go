@@ -185,9 +185,9 @@ func appendBlock(
 }
 
 func unseenLine(nodes int) string {
-	which := "1 node that restarted"
+	which := "1 node that went not-ready"
 	if nodes != 1 {
-		which = fmt.Sprintf("%d nodes that restarted", nodes)
+		which = fmt.Sprintf("%d nodes that went not-ready", nodes)
 	}
 	return "Crashes on " + which + " during the gap can't be told " +
 		"apart, so they are not listed."
@@ -220,16 +220,17 @@ func changeSummary(c inventory.Change) string {
 func crashItems(crashes []gapCrash) []string {
 	out := make([]string, 0, len(crashes))
 	for _, c := range crashes {
-		reason := fmt.Sprintf("exit code %d", c.exitCode)
+		reason := fmt.Sprintf("last stopped with exit code %d", c.exitCode)
 		if c.reason == "OOMKilled" {
-			reason = c.reason
+			reason = "last stopped by OOMKilled"
 		}
-		times := "times"
+		restarts := "restarts"
 		if c.restarts == 1 {
-			times = "time"
+			restarts = "restart"
 		}
-		out = append(out, fmt.Sprintf("- %s, container %s: %s, %d %s",
-			objectName(c.pod), c.container, reason, c.restarts, times))
+		out = append(out, fmt.Sprintf(
+			"- %s, container %s: %s, %d %s in total",
+			objectName(c.pod), c.container, reason, c.restarts, restarts))
 	}
 	return out
 }
