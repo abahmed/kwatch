@@ -156,7 +156,7 @@ func gapReport(
 	gap Gap, changes []inventory.Observation, crashes []gapCrash,
 	rebooted int,
 ) string {
-	start, end := gapTimes(gap)
+	start, end := gap.Times()
 	header := fmt.Sprintf(
 		"kwatch was not running from %s to %s UTC (%s).", start, end,
 		format.Duration(gap.End.Sub(gap.Start).Round(time.Minute)))
@@ -185,10 +185,11 @@ func gapReport(
 	return strings.Join(lines, "\n")
 }
 
-// gapTimes formats the gap ends as "15:04", with the date ("Oct 21
-// 20:00") when they fall on different UTC days.
-func gapTimes(gap Gap) (string, string) {
-	start, end := gap.Start.UTC(), gap.End.UTC()
+// Times formats the gap ends in UTC as "15:04", with the date ("Oct 21
+// 20:00") when they fall on different days. The startup message uses
+// it too.
+func (g Gap) Times() (string, string) {
+	start, end := g.Start.UTC(), g.End.UTC()
 	layout := "15:04"
 	if start.YearDay() != end.YearDay() || start.Year() != end.Year() {
 		layout = "Jan 2 15:04"

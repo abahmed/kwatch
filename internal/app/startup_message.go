@@ -9,6 +9,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/pipeline"
 )
 
 // welcomeMessage is the plain startup sentence, without a marker, for
@@ -115,11 +116,12 @@ const proGapHint = " Pro adds a gap report: what changed and what " +
 // gapClause says the gap went unreported and, unless hints are hidden,
 // what Pro adds.
 func gapClause(f startupFacts) string {
-	gapStart := f.now.Add(-f.downtime)
+	start, end := pipeline.Gap{
+		Start: f.now.Add(-f.downtime), End: f.now,
+	}.Times()
 	clause := fmt.Sprintf("; nothing was monitored from %s to %s UTC "+
 		"(%s), so anything that broke then went unreported",
-		gapStart.UTC().Format("15:04"), f.now.UTC().Format("15:04"),
-		format.Duration(f.downtime.Round(time.Minute)))
+		start, end, format.Duration(f.downtime.Round(time.Minute)))
 	if !f.hideProHints {
 		clause += "." + proGapHint
 	}

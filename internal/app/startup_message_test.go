@@ -39,6 +39,12 @@ func TestStartupSentence(t *testing.T) {
 				"so anything that broke then went unreported. Pro adds " +
 				"a gap report: what changed and what crashed meanwhile. " +
 				"Free during early access."},
+		"after a gap across days": {"", 30 * time.Hour, false,
+			"🟠 kwatch v1.2.0 started; nothing was monitored from " +
+				"Sep 30 06:00 to Oct 1 12:00 UTC (30h), so anything " +
+				"that broke then went unreported. Pro adds a gap " +
+				"report: what changed and what crashed meanwhile. Free " +
+				"during early access."},
 		"after a state reset": {"", 0, true,
 			"🟠 kwatch v1.2.0 started with fresh state: earlier " +
 				"incident history was reset, so open problems will be " +
