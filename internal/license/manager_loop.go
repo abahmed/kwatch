@@ -16,7 +16,7 @@ func (m *Manager) loop(ctx context.Context) {
 // loopFrom waits delay, then runs cycles until ctx ends.
 func (m *Manager) loopFrom(ctx context.Context, delay time.Duration) {
 	for {
-		if err := m.cfg.Sleep(ctx, delay); err != nil || ctx.Err() != nil {
+		if err := m.sleep(ctx, delay); err != nil || ctx.Err() != nil {
 			return
 		}
 		delay = m.cycle(ctx)

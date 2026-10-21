@@ -144,7 +144,8 @@ resources:
 # more. Set
 # existingClaim to reuse a PVC, or emptyDir for evaluation clusters without
 # storage. emptyDir loses all state when the pod is rescheduled or the node
-# fails, so open incidents may be announced again after a restart.
+# fails, so open incidents may be announced again after a restart. The
+# Pro lease is not lost: a signed copy lives in kwatch-license-instance.
 persistence:
   size: 2Gi
   storageClass: ""

@@ -376,6 +376,7 @@ func (l *licenseSession) managerConfig(setup *licenseSetup) license.Config {
 	cfg.InstanceStore = kubeInstanceStore{
 		client: kube, namespace: kubeclient.GetNamespace(),
 	}
+	cfg.LeaseStore = newMirroredLeaseStore(l.disk, kube, setup.verifier)
 	cfg.KubeSystemUID = kubeSystemUID(kube)
 	cfg.NodeCount = nodeCount(kube)
 	// The cluster id is derived from the live kube-system UID on every

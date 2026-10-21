@@ -89,11 +89,7 @@ func (m *Manager) performMove(
 		return MoveOutcome{}, false
 	}
 	here := m.holdsLease(b)
-	res, err := m.cfg.Client.Move(ctx, ActivateRequest{
-		Key: m.cfg.Key, ClusterUUID: b.ClusterUUID,
-		ClusterProof: b.ClusterProof, InstancePub: b.InstancePub,
-		Version: m.cfg.Version, NodeCount: m.nodeCount(ctx),
-	})
+	res, err := m.timedActivate(ctx, b, m.cfg.Client.Move)
 	var limit ErrTransferLimit
 	var se *StatusError
 	switch {
