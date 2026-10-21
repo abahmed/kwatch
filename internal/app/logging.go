@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/funcr"
@@ -35,4 +36,35 @@ func newJSONLogger(out io.Writer) logr.Logger {
 	return funcr.NewJSON(func(obj string) {
 		_, _ = fmt.Fprintln(out, obj)
 	}, funcr.Options{Verbosity: jsonLogVerbosity, LogTimestamp: true})
+}
+
+// logFormat remembers the format applied to klog for the whole process.
+// klog's logger is process global, so an edition rebuild must not reset it
+// while the previous generation's health server still logs through it: the
+// format is changed only when it really changes.
+type logFormat struct {
+	mu      sync.Mutex
+	current string
+	applied bool
+	set     func(string)
+}
+
+func newLogFormat() *logFormat {
+	return &logFormat{set: applyLogFormat}
+}
+
+// apply sets format on klog unless it is already the active format.
+func (l *logFormat) apply(format string) {
+	if l == nil {
+		applyLogFormat(format)
+		return
+	}
+	format = strings.ToLower(strings.TrimSpace(format))
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.applied && l.current == format {
+		return
+	}
+	l.set(format)
+	l.current, l.applied = format, true
 }

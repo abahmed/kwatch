@@ -56,6 +56,7 @@ func (h *genHarness) env() generationEnv {
 	return generationEnv{
 		now: now, processStart: now(), retry: h.sleeps.retry(),
 		after: h.after, load: h.load, boot: h.boot, serve: h.run,
+		logs: newLogFormat(),
 	}
 }
 

@@ -42,6 +42,8 @@ type generationEnv struct {
 		feature.Entitlements,
 	) (*bootstrap, error)
 	serve func(context.Context, *serverDeps) int
+	// logs is the klog format shared by every generation of the process.
+	logs *logFormat
 }
 
 func newGenerationEnv(now func() time.Time) generationEnv {
@@ -51,6 +53,7 @@ func newGenerationEnv(now func() time.Time) generationEnv {
 		now: now, processStart: now(),
 		retry: &rebuildRetry{sleep: sleepContext}, after: time.After,
 		load: loadConfig, boot: newBootstrap, serve: serve,
+		logs: newLogFormat(),
 	}
 }
 
@@ -108,7 +111,7 @@ func (g generationEnv) prepare(
 	if err != nil {
 		return nil, fail(retry, "failed to load config", "config", err)
 	}
-	applyLogFormat(cfg.Runtime.Application().LogFormatter)
+	g.logs.apply(cfg.Runtime.Application().LogFormatter)
 
 	klog.InfoS(fmt.Sprintf(welcomeMessage, version.Short()))
 
@@ -123,7 +126,7 @@ func (g generationEnv) prepare(
 			"bootstrap", err)
 	}
 	// The KwatchConfig overlay may change app.logFormatter.
-	applyLogFormat(boot.runtime.Application().LogFormatter)
+	g.logs.apply(boot.runtime.Application().LogFormatter)
 	logSecretsAccess(boot.runtime, entitlements)
 	logNoProviders(boot.runtime)
 	deps := newServerDeps(ctx, cancel, boot)
