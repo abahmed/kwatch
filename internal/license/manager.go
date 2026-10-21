@@ -110,12 +110,6 @@ type Manager struct {
 	// offset is server time minus local time from the last response,
 	// used only to timestamp signed requests.
 	offset time.Duration
-	// wakeCancel ends the renew loop's current wait; wakePending holds a
-	// wake that arrived while no wait was running.
-	wakeCancel  context.CancelFunc
-	wakePending bool
-	woken       bool
-	lastResync  time.Time
 
 	conflictSince time.Time // start of the current conflict streak
 	moveHandled   time.Time // newest move request already answered

@@ -608,16 +608,12 @@ endpoint and whether telemetry is enabled or skipped, and
 `kwatch_telemetry_*` metrics count attempts, successes, retries and failures.
 Air-gapped clusters should disable it, or the attempts will fail and retry.
 
-**Pro installs make two more calls to `api.kwatch.dev`.** The license check
+**Pro installs make one more call to `api.kwatch.dev`.** The license check
 (activation, then a renewal about daily) sends the hashed license cluster ID,
-the kwatch version and the node count. **Cluster check-ins** run every 30
-minutes while monitoring is ready and send the same hashed ID, the version,
-the node count, the **namespace kwatch runs in and the cluster name**
-(`app.clusterName`), plus one last check-in at a graceful shutdown. Turn
-check-ins off with `clusterCheckins: false` or the environment variable
-`KWATCH_CLUSTER_CHECKINS=false`, which wins over the file and cannot be
-switched back on by a `KwatchConfig`. The Community edition makes neither
-call without a license key. The license, telemetry and update-check calls use
+the license ID, the kwatch version and the node count. Nothing else is sent;
+to know when kwatch stops, use the dead man's switch
+(`heartbeatMonitor.url`). The Community edition makes no license call
+without a key. The license, telemetry and update-check calls use
 the configured proxy and CA bundle but **always verify TLS**:
 `app.insecureSkipTLSVerify` applies to alert providers only.
 

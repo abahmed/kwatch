@@ -768,8 +768,15 @@
   when no provider is active and the chart notes say so.
 
 - Adoption telemetry uses its own ID, separate from the license cluster ID
-  (installs get a new telemetry ID once), and `KWATCH_CLUSTER_CHECKINS=false`
-  turns Pro check-ins off.
+  (installs get a new telemetry ID once).
+
+- Pro cluster check-ins (the 30-minute ping) are removed. `clusterCheckins`
+  and `KWATCH_CLUSTER_CHECKINS` are accepted, ignored and logged once as
+  deprecated. Pro only renews its license daily; a revocation applies at
+  the next renewal. Use `heartbeatMonitor.url` to learn when kwatch stops.
+
+- The Pro lease and clock guard are mirrored to the
+  `kwatch-license-instance` Secret, so offline grace survives `emptyDir`.
 
 - An invalid KwatchConfig at startup now falls back to the last one that
   applied cleanly (kept in the state file), and a notice is sent once per

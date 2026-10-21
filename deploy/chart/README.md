@@ -241,10 +241,10 @@ and a send interrupted mid-request may repeat.
 
 Adoption telemetry is on by default: an anonymous installation ID (with its
 own salt, not the license's cluster ID) and the kwatch version, sent at most
-once every 7 days. With a Pro license kwatch also checks in every 30 minutes
-with a hashed cluster ID, the version and the node count (never cluster
-names); set `clusterCheckins: false` in
-`config` or `KWATCH_CLUSTER_CHECKINS=false` to turn that off. Set
+once every 7 days. With a Pro license kwatch also renews the license daily
+(a hashed cluster ID, the license ID, the version and the node count).
+Nothing else goes to kwatch.dev; to know when kwatch stops, set the dead
+man's switch `heartbeatMonitor.url` to your own monitoring. Set
 `telemetry.enabled: false` in `config` (or in the Secret's `config.yaml`) to
 turn telemetry off (see the [configuration reference](../../docs/configuration.md#-minimal-adoption-telemetry)).
 

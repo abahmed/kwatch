@@ -547,7 +547,7 @@ letter case; an empty value counts as unset, and any other text fails startup
 | `KWATCH_WATCH_SECRETS` | `false` stops the Secret watch (see Kubernetes permissions); `true` leaves the file's setting alone |
 | `KWATCH_CRD_ENABLED` | Overrides `crd.enabled` in both directions; the chart sets it from `config.crd.enabled` |
 | `KWATCH_TELEMETRY` | `false` turns adoption telemetry off |
-| `KWATCH_CLUSTER_CHECKINS` | `false` turns the Pro cluster check-ins off and wins over `clusterCheckins` in the file; `true` changes nothing |
+| `KWATCH_CLUSTER_CHECKINS` | Deprecated and ignored (cluster check-ins were removed); logs a notice when set |
 | `KWATCH_LICENSE_KEY` | The kwatch Pro license key. Wins over `license.key`; the chart fills it from a Secret |
 | `SKIP_UPGRADE_CHECK` | A true value turns the update check off, like `upgrader.disableUpdateCheck` |
 | `CI` | Any value except empty, `false`, `0`, `no` or `off` marks a CI environment: telemetry is never sent |
@@ -600,19 +600,13 @@ another cluster; the running leader notices through the `deactivated-at` field o
 falls back to Community.
 
 
-### Cluster check-ins
+### Removed: cluster check-ins
 
-With an active Pro license, kwatch checks in with `api.kwatch.dev` every 30
-minutes while monitoring is ready, so app.kwatch.dev can show when the
-cluster goes silent (no check-in for 60 minutes). A check-in carries a hashed
-cluster ID, the license ID, the kwatch version and the node count. It never
-carries the cluster name, a namespace or resource names. A graceful shutdown sends a last check-in that
-says kwatch is stopping. Nothing is sent to you. Turn check-ins off with
-`clusterCheckins: false` or set `KWATCH_CLUSTER_CHECKINS=false`, which wins
-over the file; kwatch then tells the server once and stops. A `KwatchConfig`
-can set `clusterCheckins: false` but can never turn check-ins back on after
-the mounted configuration or the environment turned them off. The Community
-edition never checks in.
+kwatch no longer sends cluster check-ins. `clusterCheckins` and
+`KWATCH_CLUSTER_CHECKINS` are still accepted, ignored, and logged once as
+deprecated; remove them. Pro talks to `api.kwatch.dev` only for the daily
+license renewal. To learn when kwatch itself stops, use the dead man's
+switch: `heartbeatMonitor.url` pings your own monitoring on a schedule.
 
 ## 🔄 Upgrader
 
@@ -977,15 +971,15 @@ The chart passes `config.crd.enabled` to the container as `KWATCH_CRD_ENABLED`
 (`true` or `false`), which overrides `crd.enabled` in the mounted file, so the
 setting also holds when you bring your own Secret with `configSecretName`.
 
-**Environment booleans.** `KWATCH_WATCH_SECRETS`, `KWATCH_CRD_ENABLED`,
-`KWATCH_TELEMETRY` and `KWATCH_CLUSTER_CHECKINS` accept `true`/`false`,
+**Environment booleans.** `KWATCH_WATCH_SECRETS`, `KWATCH_CRD_ENABLED`
+and `KWATCH_TELEMETRY` accept `true`/`false`,
 `1`/`0`, `on`/`off` and `yes`/`no` in any letter case; an empty value counts
 as unset. Any other text does not stop kwatch: startup logs a warning naming
 the variable and the value is ignored, never read as "on". The safe side
-wins: a bad `KWATCH_TELEMETRY` or `KWATCH_CLUSTER_CHECKINS` turns that call
+wins: a bad `KWATCH_TELEMETRY` turns telemetry
 off, a bad `KWATCH_WATCH_SECRETS` stops the Secret watch, and a bad
-`KWATCH_CRD_ENABLED` keeps the file's `crd.enabled`. `KWATCH_WATCH_SECRETS`,
-`KWATCH_TELEMETRY` and `KWATCH_CLUSTER_CHECKINS` can only turn a setting off:
+`KWATCH_CRD_ENABLED` keeps the file's `crd.enabled`. `KWATCH_WATCH_SECRETS`
+and `KWATCH_TELEMETRY` can only turn a setting off:
 `true` leaves `config.yaml`'s setting alone.
 
 The CRD schema rejects values kwatch would reject: `resyncSeconds` must be
@@ -999,15 +993,15 @@ CRD is cluster-wide and shared by every release; see the chart README for
 A `KwatchConfig` may set only the fields of the CRD schema: `namespaces`,
 `reasons`, `namespaceSelector`, the `ignore*` lists, `silences`,
 `resyncSeconds`, `severityByOwnerKind`, `severityByReason`,
-`activeProbeMonitor`, `templates`, `runbooks`, `clusterCheckins`,
+`activeProbeMonitor`, `templates`, `runbooks`, `clusterCheckins` (ignored),
 `crd.enabled`, `telemetry.enabled`, `auditLog.enabled`,
 `upgrader.disableUpdateCheck`, `heartbeatMonitor.enabled` and `interval`,
 `maintenance.*` and `app.clusterName`, `disableStartupMessage` and
 `logFormatter`. Anything else kwatch knows (the license, `healthCheck`,
 `watch.secrets`, `app.proxyURL`, the TLS settings, `alert` and the rest) is
 refused and the overlay is treated as invalid, so the rule holds even for an
-object that was not pruned by the CRD schema. An overlay can turn telemetry,
-cluster check-ins and the update check off but never back on, and its
+object that was not pruned by the CRD schema. An overlay can turn telemetry
+and the update check off but never back on, and its
 `activeProbeMonitor` targets may not be literal loopback, link-local
 (including the cloud metadata address 169.254.169.254), unspecified or
 multicast addresses, or `localhost`, unless the mounted configuration lists

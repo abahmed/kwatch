@@ -716,7 +716,7 @@
         },
         "clusterCheckins": {
           "type": "boolean",
-          "description": "Pro cluster check-ins to api.kwatch.dev (default true)"
+          "description": "Deprecated and ignored: kwatch no longer sends cluster check-ins"
         }
       },
       "additionalProperties": false

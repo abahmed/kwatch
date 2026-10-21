@@ -7,7 +7,7 @@ import (
 
 func TestLoadConfigIgnoresInvalidEnvironmentBooleanWithWarning(t *testing.T) {
 	for _, name := range []string{
-		watchSecretsEnv, crdEnabledEnv, telemetryEnv, clusterCheckinsEnv,
+		watchSecretsEnv, crdEnabledEnv, telemetryEnv,
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv(name, "flase")
@@ -27,7 +27,6 @@ func TestLoadConfigIgnoresInvalidEnvironmentBooleanWithWarning(t *testing.T) {
 func TestInvalidEnvironmentBooleanFallsBackToTheSafeSide(t *testing.T) {
 	t.Setenv(watchSecretsEnv, "flase")
 	t.Setenv(telemetryEnv, "ture")
-	t.Setenv(clusterCheckinsEnv, "nope")
 	t.Setenv(crdEnabledEnv, "maybe")
 	cfg := loadConfigText(t, "crd:\n  enabled: true\n")
 
@@ -37,37 +36,35 @@ func TestInvalidEnvironmentBooleanFallsBackToTheSafeSide(t *testing.T) {
 	if cfg.Telemetry.Enabled {
 		t.Error("an invalid KWATCH_TELEMETRY must turn telemetry off")
 	}
-	if cfg.ClusterCheckins {
-		t.Error("an invalid KWATCH_CLUSTER_CHECKINS must turn check-ins off")
-	}
 	if !cfg.Runtime.Lifecycle().CRDEnabled() {
 		t.Error("an invalid KWATCH_CRD_ENABLED must keep the file's value")
 	}
 }
 
-func TestClusterCheckinsEnvironmentCanOnlyOptOut(t *testing.T) {
-	t.Setenv(clusterCheckinsEnv, "false")
-	cfg := loadConfigText(t, "clusterCheckins: true\n")
-	if cfg.ClusterCheckins {
-		t.Fatal("KWATCH_CLUSTER_CHECKINS=false must win over the file")
+func TestRemovedClusterCheckinsLoadWithANotice(t *testing.T) {
+	cfg := loadConfigText(t, "clusterCheckins: false\n")
+	if !hasNoticeOnce(cfg, removedCheckinsNotice) {
+		t.Fatalf("no deprecation notice: %v", Warnings(cfg))
 	}
-	t.Setenv(clusterCheckinsEnv, "true")
-	cfg = loadConfigText(t, "clusterCheckins: false\n")
-	if cfg.ClusterCheckins {
-		t.Fatal("KWATCH_CLUSTER_CHECKINS=true must not turn check-ins on")
+	t.Setenv(clusterCheckinsEnv, "false")
+	cfg = loadConfigText(t, "{}\n")
+	if !hasNoticeOnce(cfg, removedCheckinsNotice) {
+		t.Fatalf("no notice for the environment: %v", Warnings(cfg))
 	}
 }
 
-func TestRebuildAfterOverlayWarnsOnInvalidEnvironmentOnce(t *testing.T) {
-	t.Setenv(crdEnabledEnv, "maybe")
-	cfg := DefaultConfig()
-	if err := RebuildAfterOverlay(cfg); err != nil {
-		t.Fatalf("an invalid boolean must not fail the rebuild: %v", err)
+func TestNoCheckinsNoticeWhenUnset(t *testing.T) {
+	if hasNoticeOnce(loadConfigText(t, "{}\n"), removedCheckinsNotice) {
+		t.Fatal("notice without clusterCheckins")
 	}
-	if err := RebuildAfterOverlay(cfg); err != nil {
-		t.Fatal(err)
+}
+
+func hasNoticeOnce(cfg *Config, want string) bool {
+	n := 0
+	for _, w := range Warnings(cfg) {
+		if w == want {
+			n++
+		}
 	}
-	if n := len(cfg.envWarnings); n != 1 {
-		t.Fatalf("env warnings after two rebuilds = %d, want 1", n)
-	}
+	return n == 1
 }

@@ -240,18 +240,15 @@ func compareToAllowlist(
 	}
 }
 
-func TestApplyOverlayTurnsClusterCheckinsOff(t *testing.T) {
+func TestApplyOverlayAcceptsRemovedClusterCheckins(t *testing.T) {
 	cfg := config.DefaultConfig()
-	if !cfg.ClusterCheckins {
-		t.Fatal("check-ins must default on")
-	}
 	obj := &unstructured.Unstructured{Object: map[string]interface{}{
 		"spec": map[string]interface{}{"clusterCheckins": false},
 	}}
 	if err := ApplyOverlay(cfg, obj); err != nil {
 		t.Fatal(err)
 	}
-	if cfg.ClusterCheckins {
-		t.Fatal("clusterCheckins: false must turn check-ins off")
+	if cfg.ClusterCheckins == nil {
+		t.Fatal("clusterCheckins is still read so its notice is logged")
 	}
 }

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"sort"
 )
 
@@ -19,10 +20,19 @@ var removedProviderOptions = map[string][]string{
 	"googlechat": {"text"},
 }
 
+// removedCheckinsNotice is logged when the removed cluster check-ins are
+// still configured, in the file or the environment.
+const removedCheckinsNotice = "clusterCheckins and " +
+	"KWATCH_CLUSTER_CHECKINS are deprecated and ignored: kwatch no " +
+	"longer sends cluster check-ins. Remove them."
+
 // removedOptionWarnings reports each removed option that is still set, in a
 // stable order. Warnings runs once at startup, so each is logged once.
 func removedOptionWarnings(cfg *Config) []string {
 	var warnings []string
+	if cfg.ClusterCheckins != nil || os.Getenv(clusterCheckinsEnv) != "" {
+		warnings = append(warnings, removedCheckinsNotice)
+	}
 	providers := make([]string, 0, len(removedProviderOptions))
 	for name := range removedProviderOptions {
 		providers = append(providers, name)

@@ -3,7 +3,6 @@ package license
 import (
 	"context"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -68,22 +67,6 @@ func TestManagerRepeatedStaleTimestampKeepsTheState(t *testing.T) {
 	}
 }
 
-func TestClientReadsServerTimeHeaderOn204(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(
-		func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set(srvTimeHeader, "1700000000")
-			w.WriteHeader(http.StatusNoContent)
-		}))
-	defer srv.Close()
-	_, priv := testEnv()
-	c := &Client{Endpoint: srv.URL, HTTP: srv.Client()}
-	res, err := c.Ping(context.Background(), priv,
-		SignedRequest{LID: "lic_1", TS: testNow}, Ping{Checkins: true})
-	if err != nil || !res.SrvTime.Equal(time.Unix(1700000000, 0)) {
-		t.Fatalf("res = %+v, err = %v", res, err)
-	}
-}
-
 func TestClientActivateRetriesAReusedNonce(t *testing.T) {
 	h := newHarness(t)
 	calls := 0
@@ -106,5 +89,24 @@ func TestClientActivateRetriesAReusedNonce(t *testing.T) {
 	if ts, _ := h.worker.lastActive["ts"].(float64); int64(ts) !=
 		testNow.Unix() {
 		t.Fatalf("activate ts = %v, want the corrected time", ts)
+	}
+}
+
+func TestServerTimePrefersBodyThenHeaderThenDate(t *testing.T) {
+	h := http.Header{}
+	h.Set(srvTimeHeader, "1700000000")
+	h.Set("Date", "Mon, 02 Jan 2006 15:04:05 GMT")
+	if got := serverTime(1800000000, h); got.Unix() != 1800000000 {
+		t.Fatalf("body: %v", got)
+	}
+	if got := serverTime(0, h); got.Unix() != 1700000000 {
+		t.Fatalf("header: %v", got)
+	}
+	h.Del(srvTimeHeader)
+	if got := serverTime(0, h); got.Year() != 2006 {
+		t.Fatalf("date: %v", got)
+	}
+	if got := serverTime(0, http.Header{}); !got.IsZero() {
+		t.Fatalf("none: %v", got)
 	}
 }

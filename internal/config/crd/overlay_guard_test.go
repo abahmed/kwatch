@@ -27,35 +27,31 @@ func loadMounted(t *testing.T, body string) *config.Config {
 
 func TestOverlayCannotReenablePrivacyOptOuts(t *testing.T) {
 	cfg := loadMounted(t, "telemetry:\n  enabled: false\n"+
-		"clusterCheckins: false\nupgrader:\n  disableUpdateCheck: true\n")
+		"upgrader:\n  disableUpdateCheck: true\n")
 	err := ApplyOverlay(cfg, overlaySpec(map[string]interface{}{
-		"telemetry":       map[string]interface{}{"enabled": true},
-		"clusterCheckins": true,
-		"upgrader":        map[string]interface{}{"disableUpdateCheck": false},
+		"telemetry": map[string]interface{}{"enabled": true},
+		"upgrader":  map[string]interface{}{"disableUpdateCheck": false},
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Telemetry.Enabled || cfg.ClusterCheckins ||
-		!cfg.Upgrader.DisableUpdateCheck {
+	if cfg.Telemetry.Enabled || !cfg.Upgrader.DisableUpdateCheck {
 		t.Fatalf("overlay re-enabled an opt-out: telemetry=%v "+
-			"checkins=%v disableUpdateCheck=%v", cfg.Telemetry.Enabled,
-			cfg.ClusterCheckins, cfg.Upgrader.DisableUpdateCheck)
+			"disableUpdateCheck=%v", cfg.Telemetry.Enabled,
+			cfg.Upgrader.DisableUpdateCheck)
 	}
 }
 
 func TestOverlayCanTurnPrivacyChoicesOff(t *testing.T) {
 	cfg := loadMounted(t, "{}\n")
 	err := ApplyOverlay(cfg, overlaySpec(map[string]interface{}{
-		"telemetry":       map[string]interface{}{"enabled": false},
-		"clusterCheckins": false,
-		"upgrader":        map[string]interface{}{"disableUpdateCheck": true},
+		"telemetry": map[string]interface{}{"enabled": false},
+		"upgrader":  map[string]interface{}{"disableUpdateCheck": true},
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Telemetry.Enabled || cfg.ClusterCheckins ||
-		!cfg.Upgrader.DisableUpdateCheck {
+	if cfg.Telemetry.Enabled || !cfg.Upgrader.DisableUpdateCheck {
 		t.Fatal("an overlay may tighten the privacy choices")
 	}
 }

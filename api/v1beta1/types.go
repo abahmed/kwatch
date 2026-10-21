@@ -20,8 +20,8 @@ type KwatchConfigSpec struct {
 	Upgrader         map[string]interface{} `json:"upgrader,omitempty"`
 	HeartbeatMonitor HeartbeatMonitorConfig `json:"heartbeatMonitor,omitempty"`
 	Maintenance      MaintenanceConfig      `json:"maintenance,omitempty"`
-	// ClusterCheckins is a pointer so an explicit false survives
-	// omitempty.
+	// ClusterCheckins is deprecated and ignored: kwatch no longer sends
+	// cluster check-ins. It stays so existing KwatchConfig objects load.
 	ClusterCheckins *bool `json:"clusterCheckins,omitempty"`
 
 	Namespaces        []string `json:"namespaces,omitempty"`

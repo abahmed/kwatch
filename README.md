@@ -375,15 +375,15 @@ channels you set up.
 
 - **Your alerts**, to the channels you configure. Secrets and tokens are
   redacted before anything is stored or sent.
-- **An anonymous weekly ping**: an installation ID and the kwatch version.
-  The ID has its own salt, so it cannot be matched to your license. Turn it
-  off with `telemetry.enabled: false` or `KWATCH_TELEMETRY=false`.
-- **With Pro**, a license check about once a day and **a check-in every 30
-  minutes** send only a hashed cluster ID, the license ID, the kwatch
-  version and the node count, so the app can show when a cluster goes
-  silent. No cluster name, namespace or resource names. Turn check-ins off with
-  `clusterCheckins: false` or `KWATCH_CLUSTER_CHECKINS=false`. Community
-  without a key makes no license calls.
+- **Usage stats, weekly (opt-out)**: an installation ID and the kwatch
+  version. The ID has its own salt, so it cannot be matched to your license.
+  Turn it off with `telemetry.enabled: false` or `KWATCH_TELEMETRY=false`.
+- **Pro license renewal, daily**: a hashed cluster ID, the license ID, the
+  kwatch version and the node count. Community without a key makes no
+  license calls.
+- **Nothing else goes to kwatch.dev.** To know when kwatch itself stops,
+  point the dead man's switch (`heartbeatMonitor.url`) at your own
+  monitoring.
 - The license, the telemetry and the update check always verify TLS, even if
   `app.insecureSkipTLSVerify` is set for your alert providers.
 

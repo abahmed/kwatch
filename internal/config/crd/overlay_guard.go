@@ -14,20 +14,18 @@ import (
 // mountedSettings is what the mounted configuration chose before a
 // KwatchConfig was applied. The overlay may narrow it but not widen it.
 type mountedSettings struct {
-	telemetry       bool
-	clusterCheckins bool
-	updateCheckOff  bool
-	probeHTTP       []config.HTTPProbeTarget
-	probeTCP        []config.TCPProbeTarget
+	telemetry      bool
+	updateCheckOff bool
+	probeHTTP      []config.HTTPProbeTarget
+	probeTCP       []config.TCPProbeTarget
 }
 
 func snapshotMounted(cfg *config.Config) mountedSettings {
 	return mountedSettings{
-		telemetry:       cfg.Telemetry.Enabled,
-		clusterCheckins: cfg.ClusterCheckins,
-		updateCheckOff:  cfg.Upgrader.DisableUpdateCheck,
-		probeHTTP:       slices.Clone(cfg.ActiveProbeMonitor.HTTP),
-		probeTCP:        slices.Clone(cfg.ActiveProbeMonitor.TCP),
+		telemetry:      cfg.Telemetry.Enabled,
+		updateCheckOff: cfg.Upgrader.DisableUpdateCheck,
+		probeHTTP:      slices.Clone(cfg.ActiveProbeMonitor.HTTP),
+		probeTCP:       slices.Clone(cfg.ActiveProbeMonitor.TCP),
 	}
 }
 
@@ -38,15 +36,12 @@ func (m mountedSettings) guard(cfg *config.Config) error {
 	return m.checkProbeTargets(cfg)
 }
 
-// keepPrivacyChoices lets a KwatchConfig turn telemetry, check-ins and the
+// keepPrivacyChoices lets a KwatchConfig turn telemetry and the
 // update check off but never back on: whoever mounted the configuration
 // (or set the environment) made that choice for the installation.
 func (m mountedSettings) keepPrivacyChoices(cfg *config.Config) {
 	if !m.telemetry {
 		cfg.Telemetry.Enabled = false
-	}
-	if !m.clusterCheckins {
-		cfg.ClusterCheckins = false
 	}
 	if m.updateCheckOff {
 		cfg.Upgrader.DisableUpdateCheck = true

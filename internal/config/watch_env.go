@@ -50,8 +50,8 @@ func ParseEnvBool(name, raw string) (value, set bool, err error) {
 	return parsed, true, nil
 }
 
-// clusterCheckinsEnv turns the Pro cluster check-ins off. Like
-// KWATCH_TELEMETRY it can only opt out: a true value changes nothing.
+// clusterCheckinsEnv used to turn the removed Pro cluster check-ins off.
+// It is ignored; setting it only logs a deprecation notice.
 const clusterCheckinsEnv = "KWATCH_CLUSTER_CHECKINS"
 
 // applyEnvironmentOverrides applies the deployment environment. It runs
@@ -60,8 +60,8 @@ const clusterCheckinsEnv = "KWATCH_CLUSTER_CHECKINS"
 //
 // A boolean that does not parse is a warning, never a startup failure: a
 // typo in an environment variable must not stop monitoring. The value is
-// ignored, and it is never read as "on": KWATCH_TELEMETRY and
-// KWATCH_CLUSTER_CHECKINS switch off, KWATCH_WATCH_SECRETS stops the Secret
+// ignored, and it is never read as "on": KWATCH_TELEMETRY switches
+// off, KWATCH_WATCH_SECRETS stops the Secret
 // watch, and KWATCH_CRD_ENABLED keeps the file's setting.
 func applyEnvironmentOverrides(c *Config) {
 	c.envWarnings = nil
@@ -121,15 +121,5 @@ var envRules = []envRule{
 		},
 		invalid:   func(c *Config) { c.Telemetry.Enabled = false },
 		onInvalid: "adoption telemetry is off",
-	},
-	{
-		name: clusterCheckinsEnv,
-		apply: func(c *Config, value bool) {
-			if !value {
-				c.ClusterCheckins = false
-			}
-		},
-		invalid:   func(c *Config) { c.ClusterCheckins = false },
-		onInvalid: "cluster check-ins are off",
 	},
 }

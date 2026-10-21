@@ -11,9 +11,10 @@ type Config struct {
 	// License holds the kwatch Pro license key.
 	License License `yaml:"license"`
 
-	// ClusterCheckins turns Pro cluster check-ins to api.kwatch.dev on
-	// (the default) or off. The Community edition never checks in.
-	ClusterCheckins bool `yaml:"clusterCheckins"`
+	// ClusterCheckins is deprecated and ignored: kwatch no longer sends
+	// cluster check-ins. It is still accepted so an older config loads,
+	// and Warnings asks for its removal.
+	ClusterCheckins *bool `yaml:"clusterCheckins,omitempty"`
 
 	// Upgrader configuration
 	Upgrader Upgrader `yaml:"upgrader"`
