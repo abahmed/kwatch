@@ -77,6 +77,10 @@ type Dependencies struct {
 	// (with the inactive ones), for /status.
 	ProDetectorsOff []string
 	CommunitySends  string
+	// Gap is the time nobody was monitoring before this start; the zero
+	// value is none. Notify sends the plain gap report. Both optional.
+	Gap    Gap
+	Notify func(string)
 }
 
 // IncidentStore loads and saves incident records, object fingerprints and
@@ -184,6 +188,7 @@ func (e *Engine) SourcesSynced() {
 // steps: drain, evaluate, tick and announce.
 func (e *Engine) Run(ctx context.Context) error {
 	e.started = e.deps.Clock.Now()
+	e.pauseLearningForGap()
 	if err := e.restore(); err != nil {
 		return err
 	}
@@ -234,25 +239,9 @@ func (e *Engine) reconcileDowntime() {
 	compare, carried := splitSaved(e.storage.saved, e.deps.Synced)
 	e.storage.saved, e.storage.carried = nil, carried
 	e.dirty = append(e.dirty, e.drain()...)
-	e.dirty = append(e.dirty, e.applyDowntime(compare)...)
-}
-
-// applyDowntime applies the changes between saved fingerprints and the
-// model and returns the touched entities.
-func (e *Engine) applyDowntime(
-	saved map[string]string,
-) []inventory.EntityID {
-	if saved == nil || !e.deps.entitled(feature.DowntimeChanges) {
-		return nil
-	}
-	observations := withoutRestored(e.deps.Model, DowntimeChanges(
-		e.deps.Model, saved, e.deps.Synced, e.deps.Clock.Now()))
-	if len(observations) == 0 {
-		return nil
-	}
-	klog.InfoS("pipeline: changes made while kwatch was down",
-		"component", "pipeline", "count", len(observations))
-	return e.apply(observations)
+	changes := e.downtimeChanges(compare)
+	e.dirty = append(e.dirty, e.applyChanges(changes)...)
+	e.reportGap(changes)
 }
 
 // step runs one pipeline iteration at now. It returns the next lifecycle

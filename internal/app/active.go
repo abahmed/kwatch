@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/kubeclient"
 	"github.com/abahmed/kwatch/internal/storage"
 	"github.com/abahmed/kwatch/internal/upgrader"
@@ -68,7 +69,7 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 	startActiveComponents(activeCtx, deps, supervisor,
 		activeResources{state: state, disk: disk, result: result,
 			session: session, threads: threads, guard: guard, lic: lic})
-	err = awaitSessionEnd(ctx, supervisor, lic)
+	err = awaitLiveSession(ctx, deps, supervisor, lic)
 	// Readiness goes first: the session is over from this moment, and the
 	// shutdown work below can take many seconds.
 	deps.readiness.withdraw()
@@ -97,11 +98,25 @@ func failStartup(
 }
 
 func newSessionStartup(deps *serverDeps, disk diskState) *startupManager {
-	return newStartupManagerWithRuntime(
+	session := newStartupManagerWithRuntime(
 		disk, deps.runtime, deps.clients.Clock,
 		newKubernetesRestartEvidence(
 			deps.clients.Kubernetes, kubeclient.GetNamespace()),
 	)
+	session.gapReport = deps.has(feature.GapReport)
+	session.hideProHints = deps.runtime.Application().HideProHints
+	return session
+}
+
+// awaitLiveSession ties liveness to pipeline progress while the session
+// runs. It is armed after the components start: they stamp pipeline
+// progress, which a standby wait would otherwise leave stale.
+func awaitLiveSession(
+	ctx context.Context, deps *serverDeps,
+	supervisor *componentSupervisor, lic *licenseSession,
+) error {
+	defer armLiveness(deps)()
+	return awaitSessionEnd(ctx, supervisor, lic)
 }
 
 // awaitSessionEnd blocks until a required component fails, leadership
@@ -286,7 +301,8 @@ func startActiveComponents(
 		required: true,
 		progress: deps.pipelineProgress,
 		run: func(ctx context.Context) error {
-			return runPipeline(ctx, deps, res.state, res.guard)
+			return runPipeline(ctx, deps, res.state, res.guard,
+				res.session.gap())
 		},
 	})
 	upgraderConfig := deps.runtime.Lifecycle().Upgrader()

@@ -26,12 +26,13 @@ const (
 // ends.
 func runPipeline(
 	ctx context.Context, deps *serverDeps, state *storage.Store,
-	guard *storeGuard,
+	guard *storeGuard, gap gapNotice,
 ) error {
 	p, err := newPipelineBuild(deps, state)
 	if err != nil {
 		return err
 	}
+	p.gap = gap
 	defer p.close()
 	go p.decisions.run()
 	engine, err := p.newEngine()

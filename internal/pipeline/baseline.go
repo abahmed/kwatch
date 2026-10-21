@@ -28,6 +28,14 @@ type baselineSampler struct {
 	warnings map[inventory.EntityID]map[string]int
 	// sweepAt is the warnings size that triggers the next sweep.
 	sweepAt int
+	// pausedUntil stops learning for observations before it: after a
+	// monitoring gap the startup storm is not normal behaviour.
+	pausedUntil time.Time
+}
+
+// pauseUntil stops learning from observations before until.
+func (b *baselineSampler) pauseUntil(until time.Time) {
+	b.pausedUntil = until
 }
 
 func newBaselineSampler(model *inventory.Model) *baselineSampler {
@@ -46,6 +54,9 @@ func newBaselineSampler(model *inventory.Model) *baselineSampler {
 func (b *baselineSampler) observe(o inventory.Observation) {
 	if o.Kind == inventory.Gone {
 		b.forget(o.Entity)
+		return
+	}
+	if o.At.Before(b.pausedUntil) {
 		return
 	}
 	if o.Kind == inventory.Noted {

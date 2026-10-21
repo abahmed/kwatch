@@ -39,6 +39,7 @@ const (
 	StartupSummary       ID = "incidents.startup-summary"
 	DiskState            ID = "incidents.state"
 	DowntimeChanges      ID = "incidents.downtime-changes"
+	GapReport            ID = "incidents.gap-report"
 	Scope                ID = "policy.scope"
 	SeverityOverrides    ID = "policy.severity"
 	Maintenance          ID = "policy.maintenance"

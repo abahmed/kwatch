@@ -77,7 +77,10 @@ func TestRunPipelineBecomesReadyAndStopsOnCancel(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 
-	go func() { done <- runPipeline(ctx, deps, openTestStore(t), nil) }()
+	go func() {
+		done <- runPipeline(ctx, deps, openTestStore(t), nil,
+			gapNotice{})
+	}()
 
 	require.Eventually(t, deps.healthServer.Ready, 10*time.Second,
 		5*time.Millisecond, "pipeline never reported ready")
@@ -100,7 +103,10 @@ func TestRunPipelineRunsActiveProberWhenConfigured(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 
-	go func() { done <- runPipeline(ctx, deps, openTestStore(t), nil) }()
+	go func() {
+		done <- runPipeline(ctx, deps, openTestStore(t), nil,
+			gapNotice{})
+	}()
 	require.Eventually(t, deps.healthServer.Ready, 10*time.Second,
 		5*time.Millisecond)
 	cancel()
@@ -113,7 +119,8 @@ func TestRunPipelineFailsWhenStateStoreIsClosed(t *testing.T) {
 	s := openTestStore(t)
 	require.NoError(t, s.Close())
 
-	err := runPipeline(context.Background(), deps, s, nil)
+	err := runPipeline(context.Background(), deps, s, nil,
+		gapNotice{})
 
 	require.Error(t, err, "restoring from a closed store must fail")
 }

@@ -15,6 +15,10 @@ import (
 
 func (h *HealthServer) healthzHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
+	if err := h.livenessError(); err != nil {
+		writeNotAlive(w, err)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte("OK")); err != nil {
 		klog.ErrorS(err, "health: write healthz response")

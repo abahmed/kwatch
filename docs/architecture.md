@@ -298,7 +298,7 @@ or user-facing API endpoints.
 
 | Endpoint | Meaning |
 | --- | --- |
-| `/healthz` | Liveness: the process is alive. |
+| `/healthz` | Liveness: the process is alive; on the leader it fails after 5 minutes without pipeline loop progress. |
 | `/readyz` | Monitoring readiness: this pod holds the Lease, claimed the state file, finished the initial list of every required source, and delivery is running. |
 | `/availabilityz` | The pod takes part in the application lifecycle; used by Deployment rollouts. Not monitoring readiness. |
 | `/health` | Optional component state and safe reason codes (unwatched kinds, a failed reset, missing permissions). |

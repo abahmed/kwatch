@@ -32,6 +32,7 @@ incidents.flapping|runtime|Recognise flapping and routine recurring incidents|in
 incidents.startup-summary|startup|Summarise pre-existing incidents once at cold start||pro
 incidents.state|startup|Keep incidents and history on disk across restarts||pro
 incidents.downtime-changes|startup|Report changes made while kwatch was down|incidents.state|pro
+incidents.gap-report|startup|Report what changed and crashed while kwatch was down|incidents.downtime-changes|pro
 policy.scope|runtime|Filter by namespace, reason, selector and silences||community
 policy.severity|runtime|Override severity by reason and owner kind||pro
 policy.maintenance|runtime|Hold incidents for objects under maintenance||pro
