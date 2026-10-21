@@ -24,7 +24,8 @@ func (m *Manager) loopFrom(ctx context.Context, delay time.Duration) {
 }
 
 // initialDelay is zero unless a valid lease is cached, in which case the
-// first renewal is due one interval after that lease was issued.
+// first renewal is due one interval after that lease was issued. A new
+// kwatch version renews at once so the server sees it without waiting.
 func (m *Manager) initialDelay(ctx context.Context) time.Duration {
 	b, err := m.binding(ctx)
 	if err != nil {
@@ -38,8 +39,12 @@ func (m *Manager) initialDelay(ctx context.Context) time.Duration {
 	if err != nil {
 		return 0
 	}
-	due := time.Unix(l.Iat, 0).Add(renewInterval).Sub(eff)
-	return max(0, min(due, renewInterval))
+	due := max(0, min(
+		time.Unix(l.Iat, 0).Add(renewInterval).Sub(eff), renewInterval))
+	if due > 0 && m.versionChanged() {
+		return min(due, m.earlyRenewDelay())
+	}
+	return due
 }
 
 func (m *Manager) binding(ctx context.Context) (Binding, error) {
