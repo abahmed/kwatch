@@ -382,8 +382,8 @@ channels you set up.
 - **Pro license renewal, daily**: a hashed cluster ID, the license ID, the
   kwatch version and the node count. Community without a key makes no
   license calls.
-- To know when kwatch itself stops, Pro can ping your own monitoring
-  (`heartbeatMonitor.url`).
+- **Nothing else goes to kwatch.dev.** To know when kwatch itself stops,
+  Pro can ping your own monitoring (`heartbeatMonitor.url`).
 - The license, the telemetry and the update check always verify TLS, even if
   `app.insecureSkipTLSVerify` is set for your alert providers.
 
