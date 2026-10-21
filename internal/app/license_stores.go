@@ -35,6 +35,9 @@ const (
 	// stateLicenseVersion is the kwatch version last reported to the
 	// license server, so an upgrade renews at once.
 	stateLicenseVersion = "license.reported_version"
+	// stateLicenseRenewAttempt is a pending early renewal for a new
+	// version, so restarts respect its retry window.
+	stateLicenseRenewAttempt = "license.renew_attempt"
 )
 
 // kubeInstanceStore keeps the instance key in one Secret that the

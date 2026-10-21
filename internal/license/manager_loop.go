@@ -39,11 +39,12 @@ func (m *Manager) initialDelay(ctx context.Context) time.Duration {
 	if err != nil {
 		return 0
 	}
-	if m.versionChanged() {
-		return 0
+	due := max(0, min(
+		time.Unix(l.Iat, 0).Add(renewInterval).Sub(eff), renewInterval))
+	if due > 0 && m.versionChanged() {
+		return min(due, m.earlyRenewDelay())
 	}
-	due := time.Unix(l.Iat, 0).Add(renewInterval).Sub(eff)
-	return max(0, min(due, renewInterval))
+	return due
 }
 
 func (m *Manager) binding(ctx context.Context) (Binding, error) {

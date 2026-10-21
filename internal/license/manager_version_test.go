@@ -13,6 +13,16 @@ type memVersionLeaseStore struct {
 	version string
 	loadErr error
 	saves   int
+	attempt RenewAttempt
+}
+
+func (s *memVersionLeaseStore) LoadRenewAttempt() (RenewAttempt, error) {
+	return s.attempt, nil
+}
+
+func (s *memVersionLeaseStore) SaveRenewAttempt(a RenewAttempt) error {
+	s.attempt = a
+	return nil
 }
 
 func (s *memVersionLeaseStore) LoadReportedVersion() (string, error) {
@@ -134,5 +144,60 @@ func TestManagerFailedRenewDoesNotRecordTheVersion(t *testing.T) {
 	m.cycle(context.Background())
 	if store.version != "v1.2.3" {
 		t.Fatalf("recorded version = %q after a failed renew", store.version)
+	}
+}
+
+func TestManagerCrashLoopWithServerDownSpacesEarlyRenewals(t *testing.T) {
+	h, store := newVersionHarness(t)
+	down := true
+	h.worker.set(func(string) (int, map[string]any, map[string]string) {
+		if down {
+			return 503, map[string]any{"error": "unavailable"}, nil
+		}
+		return 0, nil, nil
+	})
+	ctx := context.Background()
+	restart := func() time.Duration {
+		m := h.restart(store, "v1.3.0")
+		d := m.initialDelay(ctx)
+		if d == 0 {
+			m.cycle(ctx)
+		}
+		return d
+	}
+	for range 10 {
+		h.clock.Advance(5 * time.Second)
+		if d := restart(); d > earlyRenewBase {
+			t.Fatalf("delay %v exceeds the remaining window", d)
+		}
+	}
+	if n := h.worker.count("/license/renew"); n > 2 {
+		t.Fatalf("renewals = %d across 10 rapid restarts, want <= 2", n)
+	}
+	before := h.worker.count("/license/renew")
+	h.clock.Advance(earlyRenewBase)
+	restart()
+	if n := h.worker.count("/license/renew"); n != before+1 {
+		t.Fatalf("no retry after the window: %d -> %d", before, n)
+	}
+	if store.attempt.Count != 2 {
+		t.Fatalf("attempt count = %d, want 2", store.attempt.Count)
+	}
+	down = false
+	h.clock.Advance(earlyRenewCap)
+	restart()
+	if store.version != "v1.3.0" || store.attempt != (RenewAttempt{}) {
+		t.Fatalf("after success version=%q attempt=%+v",
+			store.version, store.attempt)
+	}
+}
+
+func TestRenewAttemptWindowGrowsToItsCap(t *testing.T) {
+	want := map[int]time.Duration{1: time.Minute, 2: 2 * time.Minute,
+		3: 4 * time.Minute, 6: earlyRenewCap, 40: earlyRenewCap}
+	for n, w := range want {
+		if got := (RenewAttempt{Count: n}).window(); got != w {
+			t.Fatalf("window(%d) = %v, want %v", n, got, w)
+		}
 	}
 }
