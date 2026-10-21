@@ -32,6 +32,9 @@ const (
 	stateLicenseLease    = "license.lease"
 	stateLicenseClock    = "license.clock"
 	stateLicenseNotified = "license.notified"
+	// stateLicenseVersion is the kwatch version last reported to the
+	// license server, so an upgrade renews at once.
+	stateLicenseVersion = "license.reported_version"
 )
 
 // kubeInstanceStore keeps the instance key in one Secret that the

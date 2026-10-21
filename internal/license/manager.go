@@ -115,6 +115,11 @@ type Manager struct {
 	moveHandled   time.Time // newest move request already answered
 	movedAt       time.Time // last move here; later releases only count
 
+	// reported is the kwatch version the server last accepted; known is
+	// false when the LeaseStore keeps none or it could not be read.
+	reported      string
+	reportedKnown bool
+
 	done chan struct{}
 }
 
@@ -201,6 +206,7 @@ func (m *Manager) init(ctx context.Context) {
 			if t, ok := m.v.signedLeaseTime(lease); ok {
 				m.clock.Observe(t)
 			}
+			m.loadReportedLocked()
 			m.mu.Unlock()
 		}
 	}
