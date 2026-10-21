@@ -279,10 +279,10 @@ Built in, no rules to write. Community covers pod failures and NotReady
 nodes; Pro covers everything. The full list is in the
 [coverage guide](./docs/kubernetes-coverage.md).
 
-<sub>The Helm chart's default `rbac.mode: least-privilege` grants read access
-to the built-in kinds only, so **custom resources are not watched** unless you
-install with `--set rbac.mode=full`. kwatch warns once in its log and `/health`
-lists what it cannot watch.</sub>
+<sub>The chart's default `rbac.mode: least-privilege` grants read access to
+the built-in kinds only, so **custom resources are not watched** unless
+`rbac.mode` is `full`. kwatch warns once in its log and `/health` lists what
+it cannot watch.</sub>
 
 ## 🚀 Install
 
@@ -294,37 +294,7 @@ Secret, installs kwatch and checks that it is running.
 /bin/bash -c "$(curl -fsSL https://kwatch.dev/kwatch.sh)"
 ```
 
-**Already use Helm?** You can install the chart instead. Alert providers need
-credentials, which the chart does not accept in its values, so put the
-provider in a Secret and point the chart at it (without one, kwatch watches
-the cluster but tells nobody; it warns at start and the install notes say so):
-
-```bash
-helm repo add kwatch https://kwatch.dev/charts
-helm repo update
-kubectl create namespace kwatch
-cat > config.yaml <<'EOF'
-alert:
-  slack:
-    webhook: ${file:/config/slack-webhook}
-EOF
-kubectl -n kwatch create secret generic kwatch-config \
-  --from-file=config.yaml \
-  --from-literal=slack-webhook='https://hooks.slack.com/services/XXX'
-helm upgrade --install kwatch kwatch/kwatch \
-  --namespace kwatch --set configSecretName=kwatch-config
-```
-
-<details>
-<summary><b>Helm permissions (RBAC) and more</b></summary>
-
-The chart defaults to `rbac.mode: least-privilege`, an explicit read set for
-the kinds kwatch watches. To also watch custom resources and kinds added
-later, add `--set rbac.mode=full`. See the
-[chart guide](./deploy/chart/README.md) for the full install, values and
-the Secret-based configuration, and [kwatch.sh](./docs/kwatch-sh.md) for
-what the installer does.
-</details>
+Prefer Helm? See the [chart guide](./deploy/chart/README.md).
 
 ## ⭐ Editions
 
@@ -414,7 +384,7 @@ or `nodes/proxy`.
 
 By default kwatch can read Secrets, to catch missing references and expiring
 certificates; it keeps only hashes, never values. Set `watch.secrets: false`
-(Helm: `--set watch.secrets=false`) to remove Secret access, except the
+to remove Secret access, except the
 license instance key.
 </details>
 

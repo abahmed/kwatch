@@ -444,7 +444,7 @@ kwatch never needs write access to monitored workloads. The chart value
 
 | Mode | What it grants |
 |:---|---|
-| `full` (the raw `deploy/deploy.yaml`; opt in with `--set rbac.mode=full`) | `list` and `watch` on every resource in every API group, so any built-in kind and any CRD, including ones installed later, can be watched |
+| `full` (the raw `deploy/deploy.yaml`; opt in with the chart value `rbac.mode: full`) | `list` and `watch` on every resource in every API group, so any built-in kind and any CRD, including ones installed later, can be watched |
 | `least-privilege` (chart default) | An explicit `list`/`watch` set for the kinds kwatch understands, including the built-in PriorityClass, RuntimeClass, IngressClass and ReplicationController. Kinds outside it are reported as `permission_denied` in `/health` coverage, detectors that need them stay silent, and custom resources are not covered. After the first complete discovery kwatch logs one warning naming them, `/health` shows a degraded-but-available `coverage` component, and the chart notes say so at install |
 
 In both modes:
@@ -568,7 +568,9 @@ With a key, the leader replica activates it against `https://api.kwatch.dev`
 outbound calls) before it builds its components, then renews it daily. The
 lease is cached in the state file, so a restart or a short outage keeps Pro.
 Leases last 3 days and an expired lease gets a 4 day grace period, so a
-cluster that cannot reach the license server keeps Pro for at most 7 days.
+cluster that cannot reach the license server keeps Pro for up to 7 days
+after the last successful check, then falls back to Community. Monitoring
+continues.
 The local clock is tracked and persisted, so setting it back never extends a
 lease, and a key extended on the server keeps working past its own expiry.
 
@@ -620,7 +622,7 @@ you manage updates yourself (e.g. you pin images).
 ## 📡 Minimal adoption telemetry
 
 Telemetry is **on by default** in official builds. kwatch sends a small
-pseudonymous heartbeat so the project can estimate adoption.
+anonymous heartbeat so the project can estimate adoption.
 
 **What is sent.** One HTTPS `POST` with a JSON body of exactly two fields:
 

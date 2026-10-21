@@ -609,11 +609,12 @@ endpoint and whether telemetry is enabled or skipped, and
 Air-gapped clusters should disable it, or the attempts will fail and retry.
 
 **Pro installs make one more call to `api.kwatch.dev`.** The license check
-(activation, then a renewal about daily) sends the hashed license cluster ID,
+(activation, then a renewal about once a day) sends the hashed license cluster ID,
 the license ID, the kwatch version and the node count. Nothing else is sent;
 to know when kwatch stops, use the dead man's switch
-(`heartbeatMonitor.url`). The Community edition makes no license call
-without a key. The license, telemetry and update-check calls use
+(`heartbeatMonitor.url`). If kwatch.dev can't be reached, Pro keeps working for up to 7 days after
+the last successful check, then falls back to Community; monitoring
+continues. The Community edition makes no license call without a key. The license, telemetry and update-check calls use
 the configured proxy and CA bundle but **always verify TLS**:
 `app.insecureSkipTLSVerify` applies to alert providers only.
 
@@ -631,7 +632,7 @@ The chart value `rbac.mode` selects the cluster read access:
 - `least-privilege` is the chart default; see below. Set
   `rbac.mode=full` to watch custom resources and kinds added later.
 - `full` (the raw `deploy/deploy.yaml` manifest, and the chart with
-  `--set rbac.mode=full`) grants
+  `rbac.mode: full`) grants
   `list` and `watch` on every resource in every API group, so the dynamic
   source can watch any built-in or custom kind, including CRDs installed
   later. `get` is granted only on namespaces, nodes, `nodes/stats`,

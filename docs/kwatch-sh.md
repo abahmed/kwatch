@@ -104,5 +104,5 @@ kubectl get pods -n kwatch
 kubectl logs -n kwatch deployment/kwatch
 ```
 
-Run the manager again and choose **Show status**. For manual installation and
-Helm, see [Installation](https://kwatch.dev/docs/installation).
+Run the manager again and choose **Show status**. For Helm, see the
+[chart guide](../deploy/chart/README.md).
