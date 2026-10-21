@@ -355,10 +355,10 @@ Licenses are managed only through the installer. For a non-interactive
 install, set `KWATCH_LICENSE_KEY` in the environment of the same command.
 
 - One key runs one cluster. Move it to another up to 3 times in 30 days.
-- kwatch renews the license about once a day, checks in with the license
-  server every 30 minutes while it is running (see
-  [what leaves my cluster](#-what-leaves-my-cluster)), and keeps Pro for up
-  to 7 days without a connection.
+- kwatch checks its license about once a day (see
+  [what leaves my cluster](#-what-leaves-my-cluster)). If it can't reach
+  kwatch.dev, Pro keeps working for up to 7 days after the last successful
+  check, then falls back to Community. Monitoring continues.
 - The license state is in `/status` and in the installer's **License / Pro**
   menu.
 
@@ -375,15 +375,15 @@ channels you set up.
 
 - **Your alerts**, to the channels you configure. Secrets and tokens are
   redacted before anything is stored or sent.
-- **Usage stats, weekly (opt-out)**: an installation ID and the kwatch
-  version. The ID has its own salt, so it cannot be matched to your license.
+- **Usage stats, weekly (opt-out)**: an anonymous ID derived from your
+  cluster (a one-way hash that can't be traced back to it or matched to your
+  license) and the kwatch version.
   Turn it off with `telemetry.enabled: false` or `KWATCH_TELEMETRY=false`.
 - **Pro license renewal, daily**: a hashed cluster ID, the license ID, the
   kwatch version and the node count. Community without a key makes no
   license calls.
-- **Nothing else goes to kwatch.dev.** To know when kwatch itself stops,
-  point the dead man's switch (`heartbeatMonitor.url`) at your own
-  monitoring.
+- To know when kwatch itself stops, Pro can ping your own monitoring
+  (`heartbeatMonitor.url`).
 - The license, the telemetry and the update check always verify TLS, even if
   `app.insecureSkipTLSVerify` is set for your alert providers.
 
