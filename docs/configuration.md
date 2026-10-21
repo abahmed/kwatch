@@ -1008,12 +1008,14 @@ A `KwatchConfig` may set only the fields of the CRD schema: `namespaces`,
 refused and the overlay is treated as invalid, so the rule holds even for an
 object that was not pruned by the CRD schema. An overlay can turn telemetry,
 cluster check-ins and the update check off but never back on, and its
-`activeProbeMonitor` targets may not be literal private, loopback or
-link-local addresses (or `localhost`) unless the mounted configuration lists
+`activeProbeMonitor` targets may not be literal loopback, link-local
+(including the cloud metadata address 169.254.169.254), unspecified or
+multicast addresses, or `localhost`, unless the mounted configuration lists
 the same target. A DNS name is accepted, but kwatch resolves it when it
-probes and refuses the connection when any answer is a private address, so a
-`http` or `tcp` target added by a `KwatchConfig` cannot reach an in-cluster
-Service by name. List such a target in the mounted configuration instead.
+probes and refuses the connection when any answer is such an address.
+Ordinary private addresses (`10.x`, `172.16-31.x`, `192.168.x`,
+`100.64.0.0/10`, `fc00::/7`) are allowed, so a `http` or `tcp` target added
+by a `KwatchConfig` can probe an in-cluster Service by name or ClusterIP.
 
 An invalid overlay never crash-loops kwatch. The watcher checks an edited
 `KwatchConfig` against the mounted configuration before it restarts: an

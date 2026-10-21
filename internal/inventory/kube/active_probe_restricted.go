@@ -7,41 +7,43 @@ import (
 	"net/http"
 )
 
-// errUnrestrictedClient is the error of a public-only HTTP probe whose
-// client transport cannot be made to refuse private addresses.
-var errUnrestrictedClient = errors.New(
-	"blocked: probe client cannot refuse private addresses")
+// errUnrestrictableClient is the error of a restricted HTTP probe whose
+// client transport cannot be made to refuse sensitive addresses.
+var errUnrestrictableClient = errors.New(
+	"blocked: probe client cannot refuse sensitive addresses")
 
 type dialFunc = func(context.Context, string, string) (net.Conn, error)
 
-// publicAccess is how the prober reaches a PublicOnly target.
-type publicAccess struct {
+// restrictedAccess is how the prober reaches a Restricted target: any
+// address except the sensitive ones (SensitiveProbeAddress).
+type restrictedAccess struct {
 	dial dialFunc
-	// client is cfg.HTTPClient with connections limited to public
+	// client is cfg.HTTPClient with connections that refuse sensitive
 	// addresses; nil when there is no client or its transport is not an
 	// *http.Transport, so it cannot be restricted.
 	client *http.Client
 }
 
-// newPublicAccess builds the restricted dial and HTTP client. base is the
-// dialer underneath: nil means one that refuses private addresses itself.
-func newPublicAccess(
+// newRestrictedAccess builds the restricted dial and HTTP client. base is the
+// dialer underneath: nil means a plain one that also refuses sensitive
+// addresses itself.
+func newRestrictedAccess(
 	resolver Resolver, base dialFunc, client *http.Client,
-) publicAccess {
+) restrictedAccess {
 	if resolver == nil {
 		resolver = &net.Resolver{}
 	}
 	if base == nil {
-		base = externalDialer()
+		base = (&net.Dialer{Control: refuseSensitive}).DialContext
 	}
-	dial := publicDial(resolver, base)
-	return publicAccess{dial: dial, client: publicClient(client, dial)}
+	dial := restrictedDial(resolver, base)
+	return restrictedAccess{dial: dial, client: restrictedClient(client, dial)}
 }
 
-// publicDial resolves a name here, refuses it when any answer is private,
+// restrictedDial resolves a name here, refuses it when any answer is sensitive,
 // and dials an address it checked, so the name cannot answer differently
 // at connect time. The base dialer is the last guard for a literal IP.
-func publicDial(resolver Resolver, base dialFunc) dialFunc {
+func restrictedDial(resolver Resolver, base dialFunc) dialFunc {
 	return func(
 		ctx context.Context, network, address string,
 	) (net.Conn, error) {
@@ -59,7 +61,7 @@ func publicDial(resolver Resolver, base dialFunc) dialFunc {
 			return nil, errBlockedAddress
 		}
 		for _, answer := range answers {
-			if privateAddress(net.ParseIP(answer)) {
+			if SensitiveProbeAddress(net.ParseIP(answer)) {
 				return nil, errBlockedAddress
 			}
 		}
@@ -67,10 +69,10 @@ func publicDial(resolver Resolver, base dialFunc) dialFunc {
 	}
 }
 
-// publicClient copies base with a transport that dials through dial. It
+// restrictedClient copies base with a transport that dials through dial. It
 // never keeps connections alive, so every probe resolves and checks again,
 // and never uses a proxy, which would dial on kwatch's behalf.
-func publicClient(base *http.Client, dial dialFunc) *http.Client {
+func restrictedClient(base *http.Client, dial dialFunc) *http.Client {
 	if base == nil {
 		return nil
 	}

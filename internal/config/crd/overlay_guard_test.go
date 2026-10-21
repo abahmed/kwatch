@@ -70,13 +70,16 @@ func probeSpec(http, tcp string) map[string]interface{} {
 	}}
 }
 
-func TestOverlayRefusesPrivateProbeTargets(t *testing.T) {
+func TestOverlayRefusesSensitiveProbeTargets(t *testing.T) {
 	for name, spec := range map[string]map[string]interface{}{
 		"metadata http": probeSpec("http://169.254.169.254/latest", "x.test:80"),
 		"loopback http": probeSpec("http://127.0.0.1:8080", "x.test:80"),
 		"localhost":     probeSpec("http://localhost/", "x.test:80"),
-		"private tcp":   probeSpec("https://x.test", "10.0.0.5:5432"),
+		"metadata tcp":  probeSpec("https://x.test", "169.254.169.254:80"),
 		"ipv6 loopback": probeSpec("https://x.test", "[::1]:80"),
+		"ipv6 http":     probeSpec("http://[::1]:8080/", "x.test:80"),
+		"link-local":    probeSpec("http://[fe80::1]/", "x.test:80"),
+		"unspecified":   probeSpec("http://0.0.0.0/", "x.test:80"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := ApplyOverlay(loadMounted(t, "{}\n"), overlaySpec(spec))
@@ -84,6 +87,15 @@ func TestOverlayRefusesPrivateProbeTargets(t *testing.T) {
 				t.Fatalf("err = %v, want ErrInvalidOverlay", err)
 			}
 		})
+	}
+}
+
+// In-cluster Services and pods have private addresses and are the main
+// thing a probe watches.
+func TestOverlayAllowsClusterProbeTargets(t *testing.T) {
+	spec := probeSpec("http://10.96.0.10:8080/webhook", "192.168.1.5:5432")
+	if err := ApplyOverlay(loadMounted(t, "{}\n"), overlaySpec(spec)); err != nil {
+		t.Fatalf("private targets were refused: %v", err)
 	}
 }
 
@@ -112,8 +124,9 @@ func TestOverlayKeepsPrivateTargetsTheMountedConfigListed(t *testing.T) {
 }
 
 // A name can lead anywhere, so the guard lets it pass and marks it: the
-// prober refuses the connection when the name resolves to a private
-// address. Targets the mounted configuration lists stay unmarked.
+// prober refuses the connection when the name resolves to a loopback,
+// link-local or metadata address. Targets the mounted configuration lists
+// stay unmarked.
 func TestOverlayMarksTheProbeTargetsItAdded(t *testing.T) {
 	cfg := loadMounted(t, `activeProbeMonitor:
   enabled: true

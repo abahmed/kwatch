@@ -196,7 +196,8 @@ func newActiveProber(
 }
 
 // probeTargets lists the configured probes. A target the KwatchConfig
-// added is public-only: its name must not lead to an internal address.
+// added is restricted: it must not reach loopback, link-local or
+// metadata addresses, though in-cluster addresses are fine.
 func probeTargets(cfg config.ActiveProbeMonitor) []kube.ProbeTarget {
 	var targets []kube.ProbeTarget
 	for _, t := range cfg.HTTP {
@@ -204,12 +205,12 @@ func probeTargets(cfg config.ActiveProbeMonitor) []kube.ProbeTarget {
 			Name: t.Name, URL: t.URL, ExpectedStatus: t.ExpectedStatus,
 			LatencyWarningMs:  t.LatencyWarningMs,
 			LatencyCriticalMs: t.LatencyCriticalMs,
-			PublicOnly:        t.FromOverlay,
+			Restricted:        t.FromOverlay,
 		})
 	}
 	for _, t := range cfg.TCP {
 		targets = append(targets, kube.ProbeTarget{
-			Name: t.Name, Address: t.Address, PublicOnly: t.FromOverlay})
+			Name: t.Name, Address: t.Address, Restricted: t.FromOverlay})
 	}
 	for _, t := range cfg.DNS {
 		targets = append(targets, kube.ProbeTarget{Name: t.Name, Host: t.Host})

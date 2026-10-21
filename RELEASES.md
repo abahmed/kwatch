@@ -784,7 +784,7 @@
 - A KwatchConfig may now set only the fields of the CRD schema; license,
   status endpoint, Secret watching and other settings are refused. It can turn
   telemetry, check-ins and the update check off but never back on, and cannot
-  add probe targets that name private or loopback addresses.
+  add probe targets that name loopback, link-local or metadata addresses.
 
 - The license clock guard recovers when a wrong clock step is corrected and
   the server signs a newer lease.
@@ -837,8 +837,9 @@
   detection tracker owns its own.
 
 - Probe targets added by a KwatchConfig are refused at connect time when their
-  name resolves to a private, loopback or link-local address; list such
-  targets in the mounted configuration.
+  name resolves to a loopback, link-local (cloud metadata), unspecified or
+  multicast address; in-cluster private addresses such as Service ClusterIPs
+  are allowed, and anything else can be listed in the mounted configuration.
 
 - `make alert-quality-gate` now also runs the check that the scorecard gates
   see root-cause regressions.

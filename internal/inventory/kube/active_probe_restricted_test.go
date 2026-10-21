@@ -52,7 +52,7 @@ func (d *dialLog) dialed() []string {
 	return append([]string(nil), d.addresses...)
 }
 
-func publicProber(
+func restrictedProber(
 	resolver Resolver, dial *dialLog, client *http.Client,
 ) *ActiveProber {
 	return NewActiveProber(ActiveProbeConfig{
@@ -71,55 +71,79 @@ func isHealthy(observation inventory.Observation) bool {
 	return known && ok
 }
 
-// A name the overlay added can resolve to an internal address: the guard
-// at overlay time only sees names, so the dial refuses it.
-func TestPublicOnlyTCPTargetRefusesANameThatResolvesPrivately(t *testing.T) {
+// In-cluster Services and pods have private addresses; probing them is
+// what a KwatchConfig probe is for.
+func TestRestrictedTCPTargetAllowsAClusterAddress(t *testing.T) {
 	dial := &dialLog{}
-	prober := publicProber(namedAnswers{
-		"db.example.com": {"10.1.2.3"},
+	prober := restrictedProber(namedAnswers{
+		"db.apps.svc": {"10.1.2.3"},
 	}, dial, nil)
-	target := ProbeTarget{Name: "db", Address: "db.example.com:5432",
-		PublicOnly: true}
 
-	observation := prober.check(context.Background(), target)
-
-	assert.False(t, isHealthy(observation))
-	assert.Equal(t, "blocked: private address",
-		observation.Attributes[AttrProbeError].AsText())
-	assert.Empty(t, dial.dialed(), "nothing is dialed")
+	for _, address := range []string{"db.apps.svc:5432", "10.1.2.3:5432",
+		"192.168.1.5:80", "172.20.0.9:80", "100.64.1.1:80", "[fd00::1]:80"} {
+		assert.True(t, healthy(t, ProbeTarget{Name: "db",
+			Address: address, Restricted: true}, prober), address)
+	}
+	assert.Equal(t, "10.1.2.3:5432", dial.dialed()[0],
+		"the connection goes to the address that was checked")
 }
 
-func TestPublicOnlyTCPTargetRefusesAMixedAnswer(t *testing.T) {
+// A name can resolve to a sensitive address: the guard at overlay time
+// only sees names, so the dial refuses it.
+func TestRestrictedTCPTargetRefusesANameThatResolvesToASensitiveAddress(
+	t *testing.T,
+) {
+	for _, answer := range []string{"169.254.169.254", "127.0.0.1", "::1",
+		"fe80::1", "0.0.0.0", "224.0.0.1"} {
+		dial := &dialLog{}
+		prober := restrictedProber(namedAnswers{
+			"db.example.com": {answer},
+		}, dial, nil)
+
+		observation := prober.check(context.Background(), ProbeTarget{
+			Name: "db", Address: "db.example.com:5432", Restricted: true})
+
+		assert.False(t, isHealthy(observation), answer)
+		assert.Equal(t, "blocked: private address",
+			observation.Attributes[AttrProbeError].AsText(), answer)
+		assert.Empty(t, dial.dialed(), "nothing is dialed for %s", answer)
+	}
+}
+
+func TestRestrictedTCPTargetRefusesAMixedAnswer(t *testing.T) {
 	dial := &dialLog{}
-	prober := publicProber(namedAnswers{
-		"db.example.com": {"93.184.216.34", "169.254.169.254"},
+	prober := restrictedProber(namedAnswers{
+		"db.example.com": {"10.1.2.3", "169.254.169.254"},
 	}, dial, nil)
 
 	assert.False(t, healthy(t, ProbeTarget{Name: "db",
-		Address: "db.example.com:5432", PublicOnly: true}, prober))
+		Address: "db.example.com:5432", Restricted: true}, prober))
 	assert.Empty(t, dial.dialed())
 }
 
-func TestPublicOnlyTCPTargetDialsTheAddressItChecked(t *testing.T) {
+func TestRestrictedTCPTargetDialsTheAddressItChecked(t *testing.T) {
 	dial := &dialLog{}
-	prober := publicProber(namedAnswers{
+	prober := restrictedProber(namedAnswers{
 		"db.example.com": {"93.184.216.34"},
 	}, dial, nil)
 
 	ok := healthy(t, ProbeTarget{Name: "db",
-		Address: "db.example.com:5432", PublicOnly: true}, prober)
+		Address: "db.example.com:5432", Restricted: true}, prober)
 
 	assert.True(t, ok)
 	assert.Equal(t, []string{"93.184.216.34:5432"}, dial.dialed(),
 		"the connection goes to the address that was checked")
 }
 
-func TestPublicOnlyTCPTargetRefusesAPrivateAddressLiteral(t *testing.T) {
+func TestRestrictedTCPTargetRefusesASensitiveAddressLiteral(t *testing.T) {
 	dial := &dialLog{}
-	prober := publicProber(namedAnswers{}, dial, nil)
+	prober := restrictedProber(namedAnswers{}, dial, nil)
 
-	assert.False(t, healthy(t, ProbeTarget{Name: "db",
-		Address: "10.1.2.3:5432", PublicOnly: true}, prober))
+	for _, address := range []string{"169.254.169.254:80", "127.0.0.1:80",
+		"[::1]:80", "[fe80::1]:80", "0.0.0.0:80"} {
+		assert.False(t, healthy(t, ProbeTarget{Name: "db",
+			Address: address, Restricted: true}, prober), address)
+	}
 	assert.Empty(t, dial.dialed())
 }
 
@@ -127,7 +151,7 @@ func TestPublicOnlyTCPTargetRefusesAPrivateAddressLiteral(t *testing.T) {
 // written, whatever its name resolves to.
 func TestMountedTCPTargetKeepsDialingItsOwnAddress(t *testing.T) {
 	dial := &dialLog{}
-	prober := publicProber(namedAnswers{
+	prober := restrictedProber(namedAnswers{
 		"db.apps.svc": {"10.1.2.3"},
 	}, dial, nil)
 
@@ -139,8 +163,8 @@ func TestMountedTCPTargetKeepsDialingItsOwnAddress(t *testing.T) {
 }
 
 // Without an injected dial the prober's own dialer still refuses a
-// private address when the name resolves to one.
-func TestPublicOnlyTCPTargetRefusesPrivateAtConnectTime(t *testing.T) {
+// sensitive address when the name resolves to one.
+func TestRestrictedTCPTargetRefusesLoopbackAtConnectTime(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	defer func() { _ = listener.Close() }()
@@ -151,14 +175,14 @@ func TestPublicOnlyTCPTargetRefusesPrivateAtConnectTime(t *testing.T) {
 
 	observation := prober.check(context.Background(), ProbeTarget{
 		Name: "local", Address: listener.Addr().String(),
-		PublicOnly: true})
+		Restricted: true})
 
 	assert.False(t, isHealthy(observation))
 	assert.Equal(t, "blocked: private address",
 		observation.Attributes[AttrProbeError].AsText())
 }
 
-func TestPublicOnlyHTTPTargetRefusesANameThatResolvesPrivately(
+func TestRestrictedHTTPTargetRefusesANameThatResolvesToLoopback(
 	t *testing.T,
 ) {
 	hits := 0
@@ -166,19 +190,19 @@ func TestPublicOnlyHTTPTargetRefusesANameThatResolvesPrivately(
 		func(http.ResponseWriter, *http.Request) { hits++ }))
 	defer server.Close()
 	dial := &dialLog{}
-	prober := publicProber(namedAnswers{
+	prober := restrictedProber(namedAnswers{
 		"app.example.com": {"127.0.0.1"},
 	}, dial, &http.Client{Transport: &http.Transport{}})
 
 	ok := healthy(t, ProbeTarget{Name: "app",
-		URL: "http://app.example.com/", PublicOnly: true}, prober)
+		URL: "http://app.example.com/", Restricted: true}, prober)
 
 	assert.False(t, ok)
 	assert.Zero(t, hits)
 	assert.Empty(t, dial.dialed())
 }
 
-func TestPublicOnlyHTTPTargetConnectsToTheAddressItChecked(t *testing.T) {
+func TestRestrictedHTTPTargetConnectsToTheAddressItChecked(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(
 		func(http.ResponseWriter, *http.Request) {}))
 	defer server.Close()
@@ -200,7 +224,7 @@ func TestPublicOnlyHTTPTargetConnectsToTheAddressItChecked(t *testing.T) {
 	})
 
 	ok := healthy(t, ProbeTarget{Name: "app",
-		URL: "http://app.example.com/", PublicOnly: true}, prober)
+		URL: "http://app.example.com/", Restricted: true}, prober)
 
 	assert.True(t, ok)
 	mu.Lock()
@@ -209,20 +233,20 @@ func TestPublicOnlyHTTPTargetConnectsToTheAddressItChecked(t *testing.T) {
 }
 
 // A client whose transport cannot be restricted is never used for a
-// target that must stay public.
-func TestPublicOnlyHTTPTargetFailsClosedOnAnUnknownTransport(t *testing.T) {
+// restricted target.
+func TestRestrictedHTTPTargetFailsClosedOnAnUnknownTransport(t *testing.T) {
 	called := false
 	client := &http.Client{Transport: roundTripFunc(
 		func(*http.Request) (*http.Response, error) {
 			called = true
 			return nil, errors.New("must not be used")
 		})}
-	prober := publicProber(namedAnswers{
+	prober := restrictedProber(namedAnswers{
 		"app.example.com": {"93.184.216.34"},
 	}, &dialLog{}, client)
 
 	ok := healthy(t, ProbeTarget{Name: "app",
-		URL: "http://app.example.com/", PublicOnly: true}, prober)
+		URL: "http://app.example.com/", Restricted: true}, prober)
 
 	assert.False(t, ok)
 	assert.False(t, called)

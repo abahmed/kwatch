@@ -54,14 +54,14 @@ func (m mountedSettings) keepPrivacyChoices(cfg *config.Config) {
 }
 
 // checkProbeTargets refuses a probe target the overlay added that names
-// an address kwatch itself would not dial for an external dependency:
-// loopback, private, link-local (cloud metadata) and similar. Whoever can
-// edit a KwatchConfig could otherwise aim kwatch's pod network position at
-// internal services and read the result in an alert. Targets the mounted
+// a sensitive address (kube.SensitiveProbeAddress): loopback, link-local
+// (cloud metadata), unspecified or multicast, or the name localhost.
+// Ordinary private addresses are allowed, since probing in-cluster
+// Services is what active probes are for. Targets the mounted
 // configuration lists are trusted. A DNS name passes here, since only a
 // lookup says where it leads, so every target the overlay added is marked
 // FromOverlay and the prober refuses, at connect time, a name that
-// resolves to such an address.
+// resolves to a sensitive address.
 func (m mountedSettings) checkProbeTargets(cfg *config.Config) error {
 	probes := cfg.ActiveProbeMonitor
 	for i, t := range probes.HTTP {
@@ -89,17 +89,17 @@ func (m mountedSettings) checkProbeTargets(cfg *config.Config) error {
 
 func blockedTarget(kind, name string) error {
 	return fmt.Errorf("KwatchConfig.spec.activeProbeMonitor.%s target "+
-		"%q names a private or loopback address; list it in the "+
+		"%q names a loopback, link-local or metadata address; list it in the "+
 		"mounted configuration instead", kind, name)
 }
 
-// blockedProbeHost reports a literal IP address kube.PrivateProbeAddress
-// refuses, or the name localhost.
+// blockedProbeHost reports a literal IP address that
+// kube.SensitiveProbeAddress refuses, or the name localhost.
 func blockedProbeHost(host string) bool {
 	host = strings.TrimSuffix(strings.ToLower(host), ".")
 	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
 		return true
 	}
 	ip := net.ParseIP(strings.Trim(host, "[]"))
-	return ip != nil && kube.PrivateProbeAddress(ip)
+	return ip != nil && kube.SensitiveProbeAddress(ip)
 }

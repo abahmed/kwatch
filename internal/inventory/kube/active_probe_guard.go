@@ -63,9 +63,42 @@ func privateAddress(ip net.IP) bool {
 	return false
 }
 
-// PrivateProbeAddress is privateAddress for callers outside the package:
-// the KwatchConfig guard refuses probe targets that name such an address.
-func PrivateProbeAddress(ip net.IP) bool { return privateAddress(ip) }
+// sensitiveNetworks are ranges that are never a probe target for a
+// KwatchConfig: "this network" and the NAT64 prefix, which can map the
+// metadata address into IPv6.
+var sensitiveNetworks = parseNetworks("0.0.0.0/8", "64:ff9b::/96")
+
+// SensitiveProbeAddress reports an address a KwatchConfig-added probe must
+// not dial: loopback, link-local (including cloud metadata 169.254.169.254),
+// unspecified and multicast. Ordinary private ranges (10/8, 172.16/12,
+// 192.168/16, 100.64/10, fc00::/7) are allowed, since in-cluster Services
+// and pods live there. A nil address counts as sensitive.
+func SensitiveProbeAddress(ip net.IP) bool {
+	if ip == nil {
+		return true
+	}
+	if ip.IsLoopback() || ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() || ip.IsMulticast() ||
+		ip.IsUnspecified() {
+		return true
+	}
+	for _, network := range sensitiveNetworks {
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
+// refuseSensitive is a net.Dialer.Control that refuses SensitiveProbeAddress
+// for every address the dialer tries.
+func refuseSensitive(_, address string, _ syscall.RawConn) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil || SensitiveProbeAddress(net.ParseIP(host)) {
+		return errBlockedAddress
+	}
+	return nil
+}
 
 // refusePrivate is a net.Dialer.Control: it runs once the name is
 // resolved, for every address the dialer tries, so a name that resolves to

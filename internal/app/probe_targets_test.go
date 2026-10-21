@@ -9,7 +9,7 @@ import (
 )
 
 // A target the KwatchConfig added must reach the prober marked
-// public-only; one the mounted configuration lists must not.
+// restricted; one the mounted configuration lists must not.
 func TestProbeTargetsCarryTheOverlayMarkToTheProber(t *testing.T) {
 	targets := probeTargets(config.ActiveProbeMonitor{
 		HTTP: []config.HTTPProbeTarget{
@@ -21,10 +21,10 @@ func TestProbeTargetsCarryTheOverlayMarkToTheProber(t *testing.T) {
 		DNS: []config.DNSProbeTarget{{Name: "d", Host: "d.example.com"}},
 	})
 
-	public := map[string]bool{}
+	restricted := map[string]bool{}
 	for _, target := range targets {
-		public[target.Name] = target.PublicOnly
+		restricted[target.Name] = target.Restricted
 	}
 	require.Equal(t, map[string]bool{"m": false, "o": true,
-		"m2": false, "o2": true, "d": false}, public)
+		"m2": false, "o2": true, "d": false}, restricted)
 }

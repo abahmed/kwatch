@@ -42,10 +42,12 @@ type ProbeTarget struct {
 	LatencyCriticalMs int
 	Address           string
 	Host              string
-	// PublicOnly refuses a name that resolves to a private address (see
-	// PrivateProbeAddress): the target came from a KwatchConfig, not from
-	// the mounted configuration, and must not reach internal services.
-	PublicOnly bool
+	// Restricted refuses a name or address that is loopback, link-local
+	// (cloud metadata), unspecified or multicast (see
+	// SensitiveProbeAddress): the target came from a KwatchConfig, not from
+	// the mounted configuration, and must not reach the node or its
+	// metadata service. Ordinary private (in-cluster) addresses are fine.
+	Restricted bool
 }
 
 // ActiveProbeConfig configures user-defined probes.
@@ -84,8 +86,9 @@ type ActiveProber struct {
 	// as cfg.Dial when the caller set one, else a dialer that refuses
 	// private addresses.
 	dependencyDial func(context.Context, string, string) (net.Conn, error)
-	// public reaches the targets a KwatchConfig added (PublicOnly).
-	public publicAccess
+	// restrictedAccess reaches the targets a KwatchConfig added
+	// (Restricted).
+	restrictedAccess restrictedAccess
 }
 
 // NewActiveProber builds a prober with defaults for unset intervals.
@@ -100,13 +103,13 @@ func NewActiveProber(cfg ActiveProbeConfig) *ActiveProber {
 		cfg.FailureThreshold = 3
 	}
 	dependencyDial := cfg.Dial
-	public := newPublicAccess(cfg.Resolver, cfg.Dial, cfg.HTTPClient)
+	restricted := newRestrictedAccess(cfg.Resolver, cfg.Dial, cfg.HTTPClient)
 	if cfg.Dial == nil {
 		cfg.Dial = (&net.Dialer{}).DialContext
 		dependencyDial = externalDialer()
 	}
 	return &ActiveProber{cfg: cfg, dependencyDial: dependencyDial,
-		public: public}
+		restrictedAccess: restricted}
 }
 
 // Run probes every interval until ctx ends.
@@ -172,9 +175,9 @@ func (p *ActiveProber) http(
 		return time.Time{}, err
 	}
 	client := p.cfg.HTTPClient
-	if target.PublicOnly {
-		if client = p.public.client; client == nil {
-			return time.Time{}, errUnrestrictedClient
+	if target.Restricted {
+		if client = p.restrictedAccess.client; client == nil {
+			return time.Time{}, errUnrestrictableClient
 		}
 	}
 	resp, err := client.Do(req)
@@ -199,8 +202,9 @@ func (p *ActiveProber) http(
 }
 
 func (p *ActiveProber) dial(ctx context.Context, target ProbeTarget) error {
-	if target.PublicOnly {
-		return closeDialed(p.public.dial(ctx, "tcp", target.Address))
+	if target.Restricted {
+		return closeDialed(
+			p.restrictedAccess.dial(ctx, "tcp", target.Address))
 	}
 	return closeDialed(p.cfg.Dial(ctx, "tcp", target.Address))
 }
