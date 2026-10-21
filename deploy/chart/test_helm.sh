@@ -543,10 +543,11 @@ grep -Fq 'priorityClassName: "kwatch-critical"' <<<"$OUT_POD" || {
 grep -A1 -F "imagePullSecrets:" <<<"$OUT_POD" | grep -Fq "name: regcred" || {
   echo "FAIL: imagePullSecrets must reach the pod"; exit 1;
 }
-grep -Fq "mountPath: /etc/ca" <<<"$OUT_POD" &&
-  grep -Fq "secretName: ca" <<<"$OUT_POD" || {
-  echo "FAIL: extra volumes and mounts must reach the pod"; exit 1;
-}
+for want in "mountPath: /etc/ca" "secretName: ca"; do
+  if ! grep -Fq "$want" <<<"$OUT_POD"; then
+    echo "FAIL: extra volumes and mounts must reach the pod"; exit 1
+  fi
+done
 if grep -Fq "priorityClassName" <<<"$OUT1" ||
   grep -Fq "imagePullSecrets" <<<"$OUT1"; then
   echo "FAIL: scheduling extras must be absent by default"; exit 1
