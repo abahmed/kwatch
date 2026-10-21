@@ -1,30 +1,34 @@
 package detection
 
-import "github.com/abahmed/kwatch/internal/detection/reasons"
+import (
+	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
+)
 
 // podReasons is the pod, container and scheduling reasons.
 var podReasons = []ReasonInfo{
 	reason(reasons.Completed, ModeCompleted),
 	reason(reasons.Error, ModeError),
-	reason(reasons.ErrImagePull, ModeImagePull).waiting(Critical).shown(),
-	reason(reasons.ImagePullBackOff, ModeImagePull).waiting(Critical).shown(),
+	reason(reasons.ErrImagePull, ModeImagePull).waiting(Critical).
+		shown(podAndContainer...),
+	reason(reasons.ImagePullBackOff, ModeImagePull).waiting(Critical).
+		shown(podAndContainer...),
 	reason(reasons.ImageInspectError, ModeImagePullInspect).waiting(Critical),
 	reason(reasons.InvalidImageName, ModeImagePullInvalidName).waiting(Critical),
 	reason(reasons.CrashLoopBackOff, ModeCrashLoop).waiting(Critical),
 	reason(reasons.OOMKilled, ModeOOMKilled),
-	reason(reasons.Killed, ModeKilled),
 	reason(reasons.OOMKILLED, ModeOOMKilled),
 	reason(reasons.HighRestartCount, ModeRestarting),
 	reason(reasons.ContainerCreating, ModeCreating).progress(),
 	reason(reasons.PodInitializing, ModeInitializing).progress(),
 	reason(reasons.PodCompleted, ModeCompleted),
 	reason(reasons.ContainersNotReady, ModeNotReady),
-	reason(reasons.ContainerCannotRun, ModeCannotRun).waiting(Critical),
 	reason(reasons.CreateContainerError, ModeCreateError).waiting(Critical),
 	reason(reasons.CreateConfigError, ModeCreateErrorConfig).waiting(Critical),
 	reason(reasons.InitContainerError, ModeInitError),
 	reason(reasons.InitContainerWaiting, ModeInitWaiting),
-	reason(reasons.DeadlineExceeded, ModeDeadlineExceeded).shown(),
+	reason(reasons.DeadlineExceeded, ModeDeadlineExceeded).
+		shown(kube.KindPod, kube.KindJob),
 	reason(reasons.PostStartHookError, ModeHookPostStart).waiting(Critical),
 	reason(reasons.StartupProbeFailed, ModeProbeStartup),
 	reason(reasons.Unschedulable, ModeUnschedulable),
@@ -34,9 +38,9 @@ var podReasons = []ReasonInfo{
 	reason(reasons.PodStuckTerminating, ModeStuckDeleting).digest(),
 	reason(reasons.SchedulingGated, ModeSchedulingGated),
 	reason(reasons.FailedScheduling, ModeUnschedulable).
-		shown().
+		shown(kube.KindPod).
 		label("can't be scheduled"),
-	reason(reasons.Evicted, ModeEvicted).shown(),
+	reason(reasons.Evicted, ModeEvicted).shown(kube.KindPod),
 	reason(reasons.RegistryUnavailable, ModeImagePullRegistry).
 		waiting(Critical),
 	reason(reasons.LivenessProbeFailed, ModeProbeLiveness),

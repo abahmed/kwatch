@@ -21,6 +21,7 @@ func zeroShop() (*inventory.Model, inventory.EntityID) {
 	put(m, api, t0.Add(-10*time.Minute), map[string]inventory.Value{
 		kube.AttrReplicas:       inventory.Number(0),
 		kube.AttrTemplateLabels: inventory.Text("app=api"),
+		kube.AttrSpecWritten:    inventory.Time(t0.Add(-10 * time.Minute)),
 	})
 	svc := newID(kube.KindService, "shop", "api")
 	put(m, svc, t0.Add(-time.Hour), map[string]inventory.Value{
@@ -133,6 +134,7 @@ func TestWorkloadReportsAScaledToZeroLoadBalancerService(t *testing.T) {
 	put(m, api, t0.Add(-time.Hour), map[string]inventory.Value{
 		kube.AttrReplicas:       inventory.Number(0),
 		kube.AttrTemplateLabels: inventory.Text("app=api"),
+		kube.AttrSpecWritten:    inventory.Time(t0.Add(-time.Hour)),
 	})
 	put(m, newID(kube.KindService, "shop", "api"), t0,
 		map[string]inventory.Value{

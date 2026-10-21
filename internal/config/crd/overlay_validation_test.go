@@ -153,13 +153,13 @@ func TestStartupOverlayRejectsSecondObjectAsInvalid(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.CrdConfig.Enabled = true
 
-	err := applyStartupConfig(context.Background(), cfg, client, "kwatch")
+	_, err := applyStartupConfig(context.Background(), cfg, client, "kwatch")
 	if !errors.Is(err, ErrInvalidOverlay) {
 		t.Fatalf("err = %v, want ErrInvalidOverlay", err)
 	}
 }
 
-func TestOverlayCannotReenableSecretWatching(t *testing.T) {
+func TestOverlayCannotSetSecretWatching(t *testing.T) {
 	t.Setenv("KWATCH_WATCH_SECRETS", "false")
 	cfg := config.DefaultConfig()
 
@@ -167,11 +167,18 @@ func TestOverlayCannotReenableSecretWatching(t *testing.T) {
 		"watch": map[string]interface{}{"secrets": true},
 	}))
 
-	if err != nil {
+	if !errors.Is(err, ErrInvalidOverlay) {
+		t.Fatalf("err = %v, want the overlay refused", err)
+	}
+	// Defence in depth: even if the key were allowed, the environment
+	// is applied again after the overlay and wins.
+	cfg = config.DefaultConfig()
+	cfg.Watch.Secrets = true
+	if err := config.RebuildAfterOverlay(cfg); err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Watch.Secrets || cfg.Runtime.Application().WatchSecrets {
-		t.Fatal("KWATCH_WATCH_SECRETS=false must win over the overlay")
+	if cfg.Watch.Secrets {
+		t.Fatal("KWATCH_WATCH_SECRETS=false must win after an overlay")
 	}
 }
 
@@ -199,13 +206,7 @@ func TestCRDSchemaOmitsForbiddenFields(t *testing.T) {
 		if _, ok := spec.Properties["alert"]; ok {
 			t.Error("CRD schema offers spec.alert")
 		}
-		for _, path := range forbiddenSpecPaths {
-			section := spec.Properties[path[0]]
-			if _, ok := section.Properties[path[1]]; ok {
-				t.Errorf("CRD schema offers forbidden spec.%s.%s",
-					path[0], path[1])
-			}
-		}
+		compareToAllowlist(t, "spec", overlayKeys, spec)
 	}
 }
 
@@ -213,18 +214,41 @@ type schemaNode struct {
 	Properties map[string]schemaNode `json:"properties"`
 }
 
-func TestApplyOverlayTurnsClusterCheckinsOff(t *testing.T) {
-	cfg := config.DefaultConfig()
-	if !cfg.ClusterCheckins {
-		t.Fatal("check-ins must default on")
+// compareToAllowlist checks that the CRD schema offers exactly the
+// settings the overlay allowlist accepts, so neither can drift: a field
+// added to one without the other fails here.
+func compareToAllowlist(
+	t *testing.T, path string, allowed keyTree, node schemaNode,
+) {
+	t.Helper()
+	for name, child := range node.Properties {
+		sub, ok := allowed[name]
+		if !ok {
+			t.Errorf("CRD schema offers %s.%s, which the overlay "+
+				"allowlist forbids", path, name)
+			continue
+		}
+		if len(sub) > 0 {
+			compareToAllowlist(t, path+"."+name, sub, child)
+		}
 	}
+	for name := range allowed {
+		if _, ok := node.Properties[name]; !ok {
+			t.Errorf("overlay allowlist accepts %s.%s, which the CRD "+
+				"schema does not offer", path, name)
+		}
+	}
+}
+
+func TestApplyOverlayAcceptsRemovedClusterCheckins(t *testing.T) {
+	cfg := config.DefaultConfig()
 	obj := &unstructured.Unstructured{Object: map[string]interface{}{
 		"spec": map[string]interface{}{"clusterCheckins": false},
 	}}
 	if err := ApplyOverlay(cfg, obj); err != nil {
 		t.Fatal(err)
 	}
-	if cfg.ClusterCheckins {
-		t.Fatal("clusterCheckins: false must turn check-ins off")
+	if cfg.ClusterCheckins == nil {
+		t.Fatal("clusterCheckins is still read so its notice is logged")
 	}
 }

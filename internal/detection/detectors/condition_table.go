@@ -41,6 +41,9 @@ type conditionCheck struct {
 	message messageMode
 	// group lists checks of which only the first that fires reports.
 	group string
+	// waitsForYoungNode holds the finding back while the node is
+	// younger than kube.BootWindow: the condition is how a node starts.
+	waitsForYoungNode bool
 }
 
 // kindConditions maps a kind to its condition checks, in report order.
@@ -86,6 +89,9 @@ func (c conditionCheck) evaluate(
 		return detection.Finding{}, false
 	}
 	if c.grace > 0 && !sustained(ctx, c.key, since, c.grace) {
+		return detection.Finding{}, false
+	}
+	if c.waitsForYoungNode && nodeIsYoung(ctx, e) {
 		return detection.Finding{}, false
 	}
 	f := detection.Finding{

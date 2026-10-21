@@ -139,7 +139,7 @@ func TestNearbyChangesAreNamedNextToACause(t *testing.T) {
 	text := notification.Text(Writer{}.Write(d, at(6, 0)))
 
 	want := "Also changed before it broke: payments: env DB_HOST db-old " +
-		"→ db-new at 14:01 by alice; bob changed config map app-config " +
-		"at 14:01; service payments: selector app=a → app=b at 14:01."
+		"→ db-new at 14:01 UTC by alice; bob changed config map app-config " +
+		"at 14:01 UTC; service payments: selector app=a → app=b at 14:01 UTC."
 	assert.Contains(t, text, want)
 }

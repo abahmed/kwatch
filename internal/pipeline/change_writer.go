@@ -58,7 +58,7 @@ func (w *historyWriter) flushChanges() bool {
 			ChangeSet: ids[changeKey(change.Entity.String(), change.At)]})
 	}
 	if err := store.AppendChanges(records); err != nil {
-		logWriteError(err, "changes")
+		w.failed(err, "changes")
 		w.mu.Lock()
 		w.changes = append(batch, w.changes...)
 		w.trimChangesLocked()
@@ -80,7 +80,7 @@ func (w *historyWriter) flushHealthy() bool {
 		return true
 	}
 	if err := store.SaveHealthy(batch); err != nil {
-		logWriteError(err, "healthy")
+		w.failed(err, "healthy")
 		w.mu.Lock()
 		if w.healthy == nil {
 			w.healthy = map[string]healthyRecord{}

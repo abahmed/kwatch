@@ -58,7 +58,7 @@ func TestOutageLeadCountsOneAndNone(t *testing.T) {
 	one := []incident.Decision{{Incident: incident.Incident{
 		Opened: writerNow}}}
 	if got := outageLead(o, "", one); got !=
-		"shop: 1 workload failing since 10:00" {
+		"shop: 1 workload failing since 10:00 UTC" {
 		t.Errorf("one = %q", got)
 	}
 	got := outageLead(o, "", nil)

@@ -37,6 +37,7 @@ func preemptionFindings(
 	) {
 		if pod, ok := ctx.Model.Entity(id); ok && preemptedAt(ctx, pod) {
 			victims++
+			recheckWhenPreemptionAges(ctx, pod)
 		}
 	}
 	if victims < preemptionStorm {
@@ -59,4 +60,16 @@ func preemptedAt(ctx detection.Context, e inventory.Entity) bool {
 	status, reason, since := condition(e, "DisruptionTarget")
 	return status == "True" && reason == preemptionByScheduler &&
 		(since.IsZero() || ctx.Now.Sub(since) <= preemptionWindow)
+}
+
+// recheckWhenPreemptionAges asks to evaluate the entity again just after
+// the pod's preemption leaves the window: nothing else touches the entity
+// then, and a finding that counts it must not outlive it.
+func recheckWhenPreemptionAges(ctx detection.Context, pod inventory.Entity) {
+	_, _, since := condition(pod, "DisruptionTarget")
+	if since.IsZero() {
+		return
+	}
+	ctx.RecheckAfter(
+		since.Add(preemptionWindow).Sub(ctx.Now) + time.Nanosecond)
 }

@@ -44,7 +44,7 @@ rules:
 # single objects. Kept in parity with kube.SourceAccess() by
 # internal/architecture tests.
 - apiGroups: [""]
-  resources: ["events", "nodes", "pods", "persistentvolumeclaims", "persistentvolumes", "configmaps", {{ if $secrets }}"secrets", {{ end }}"serviceaccounts", "resourcequotas", "limitranges", "services"]
+  resources: ["events", "nodes", "pods", "persistentvolumeclaims", "persistentvolumes", "configmaps", {{ if $secrets }}"secrets", {{ end }}"serviceaccounts", "resourcequotas", "limitranges", "services", "replicationcontrollers"]
   verbs: ["list", "watch"]
 - apiGroups: [""]
   resources: ["namespaces"]
@@ -75,7 +75,13 @@ rules:
   resources: ["endpointslices"]
   verbs: ["list", "watch"]
 - apiGroups: ["networking.k8s.io"]
-  resources: ["ingresses", "networkpolicies"]
+  resources: ["ingresses", "ingressclasses", "networkpolicies"]
+  verbs: ["list", "watch"]
+- apiGroups: ["scheduling.k8s.io"]
+  resources: ["priorityclasses"]
+  verbs: ["list", "watch"]
+- apiGroups: ["node.k8s.io"]
+  resources: ["runtimeclasses"]
   verbs: ["list", "watch"]
 - apiGroups: ["storage.k8s.io"]
   resources: ["storageclasses", "volumeattachments"]
@@ -164,6 +170,7 @@ subjects:
 - kind: ServiceAccount
   name: {{ .Release.Name }}
   namespace: {{ .Release.Namespace }}
+{{- if include "kwatch.licenseConfigured" . }}
 ---
 # The license instance key lives in one Secret in this namespace, shipped
 # pre-created and empty by templates/license-instance-secret.yaml. kwatch
@@ -204,6 +211,7 @@ subjects:
 - kind: ServiceAccount
   name: {{ .Release.Name }}
   namespace: {{ .Release.Namespace }}
+{{- end }}
 ---
 # Restart evidence reads the previous kwatch Pod by name, so get on pods
 # is granted only in kwatch's own namespace.

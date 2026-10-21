@@ -31,19 +31,61 @@ const scenarioCluster = "prod-eu-1"
 // application composes it (internal/app/pipeline.go): the production
 // detectors, solver, severity overrides, runbooks, scope and writer with
 // a cluster name, plus a store. Every kind counts as synced: the
-// simulated cluster lists everything it holds. Kinds in unverifiable are
-// reported as not observable, as when kwatch lacks the permission.
+// simulated cluster lists everything it holds. Kinds in unobservable
+// were never synced, as when kwatch lacks the permission to list them:
+// detectors skip them, nothing is verifiable there, and a reference to
+// one reads "I can't see secrets in shop", not "does not exist".
 //
 // One part of production is left out on purpose: the Investigator. Its
 // reads run on worker goroutines, and a replay cannot order their
 // results against the simulated clock, so verdicts would change from
 // run to run. Investigation evidence is covered by the pipeline tests.
-func newDependencies(unverifiable ...inventory.Kind) pipeline.Dependencies {
-	synced := func(inventory.Kind) bool { return true }
-	hidden := map[inventory.Kind]bool{}
-	for _, kind := range unverifiable {
-		hidden[kind] = true
+func newDependencies(unobservable ...inventory.Kind) pipeline.Dependencies {
+	return composeDependencies(kindSet(unobservable), nil,
+		explain.Ablation{})
+}
+
+// newDependenciesLosingSight is newDependencies for kinds that were
+// visible and then lost, as when a permission is revoked mid-run: the
+// kinds stay synced, so observations keep arriving, but kwatch can no
+// longer verify them. A finding that disappears there is missing data,
+// not a recovery.
+func newDependenciesLosingSight(
+	lost ...inventory.Kind,
+) pipeline.Dependencies {
+	return composeDependencies(nil, kindSet(lost), explain.Ablation{})
+}
+
+// newAblatedDependencies is newDependencies with parts of the
+// root-cause scoring switched off, for the scorecard's mutation check.
+func newAblatedDependencies(a explain.Ablation) pipeline.Dependencies {
+	return composeDependencies(nil, nil, a)
+}
+
+// hiddenKinds lists the kinds the label says kwatch never syncs.
+func (e expectation) hiddenKinds() []inventory.Kind {
+	kinds := make([]inventory.Kind, 0, len(e.Hidden))
+	for _, name := range e.Hidden {
+		kinds = append(kinds, inventory.Kind(name))
 	}
+	return kinds
+}
+
+func kindSet(kinds []inventory.Kind) map[inventory.Kind]bool {
+	set := map[inventory.Kind]bool{}
+	for _, kind := range kinds {
+		set[kind] = true
+	}
+	return set
+}
+
+// composeDependencies is the one place the engine is wired for a
+// replay. neverSynced and lost are the unobservable kinds of the two
+// models above; ablation is the zero value outside the mutation check.
+func composeDependencies(
+	neverSynced, lost map[inventory.Kind]bool, ablation explain.Ablation,
+) pipeline.Dependencies {
+	synced := func(kind inventory.Kind) bool { return !neverSynced[kind] }
 	policy := config.RuntimeConfigFor(config.DefaultConfig()).Policy()
 	model := inventory.NewModel(inventory.Options{})
 	return pipeline.Dependencies{
@@ -54,17 +96,31 @@ func newDependencies(unverifiable ...inventory.Kind) pipeline.Dependencies {
 			SeverityByReason:    policy.SeverityByReason(),
 			SeverityByOwnerKind: policy.SeverityByOwnerKind(),
 			Verifiable: func(kind inventory.Kind) bool {
-				return !hidden[kind]
+				return !neverSynced[kind] && !lost[kind]
 			},
 			// A fixed nonce keeps incident IDs, and the order of
 			// incidents announced at the same moment, reproducible.
 			IDNonce: "5c3e",
-		}, explain.NewSolver()),
+		}, ablated{explain.NewSolver(), ablation}),
 		Synced:  synced,
 		Writer:  compose.NewWriter(scenarioCluster, policy.Runbooks()),
 		Store:   &memoryStore{},
 		InScope: pipeline.IncidentScope(model, defaultScope()),
 	}
+}
+
+// ablated solves with the parts of the scoring the mutation check
+// switched off.
+type ablated struct {
+	solver   *explain.Solver
+	ablation explain.Ablation
+}
+
+func (a ablated) Solve(
+	s explain.Snapshot, dirty []inventory.EntityID,
+) []explain.Area {
+	s.Ablation = a.ablation
+	return a.solver.Solve(s, dirty)
 }
 
 // appDetectors is the production detector set.
@@ -173,14 +229,26 @@ func reportedIncidents(result replay.Result) []reported {
 	}
 	first := map[string]time.Time{}
 	loudest := loudestTiers(result)
+	// The earliest time wins: an incident listed in a roll-up was heard
+	// then, not when its first message of its own came later.
 	note := func(id string, at time.Time) {
-		if _, seen := first[id]; !seen && id != "" {
+		if seen, ok := first[id]; id != "" && (!ok || at.Before(seen)) {
 			first[id] = at
 		}
 	}
 	for i, d := range result.Decisions {
 		note(d.Incident.ID, result.Times[i])
 		final[d.Incident.ID] = latest(final[d.Incident.ID], d.Incident)
+	}
+	for _, c := range result.Carried {
+		if c.Carrier != announce.CarrierDropped &&
+			c.Decision.Action == incident.Announce {
+			note(c.Decision.Incident.ID, c.At)
+		}
+		// A listed incident that resolved is no longer tracked, and the
+		// digest that carried it holds no incident of its own.
+		final[c.Decision.Incident.ID] = latest(
+			final[c.Decision.Incident.ID], c.Decision.Incident)
 	}
 	for _, p := range result.Incidents {
 		if !p.Announced.IsZero() {

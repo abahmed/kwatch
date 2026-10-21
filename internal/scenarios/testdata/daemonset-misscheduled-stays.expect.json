@@ -1,0 +1,8 @@
+{
+  "name": "daemonset-misscheduled-stays",
+  "description": "A DaemonSet whose status keeps reporting misscheduled nodes while every wanted pod is ready: one digest line.",
+  "root": "daemonset/monitoring/agent",
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "1h0m0s"
+}

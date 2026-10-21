@@ -3,6 +3,7 @@ package compose
 import (
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/rootcause"
 	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
@@ -92,13 +93,27 @@ func rivalLead(f caseFacts) (string, bool) {
 		return "", false
 	}
 	subject := symptomSubject(f)
-	first := causePhrase(cause, subject)
-	second := causePhrase(cause.Rival, subject)
+	first := rivalPhrase(cause, subject)
+	second := rivalPhrase(cause.Rival, subject)
 	if first == second {
 		return "", false
 	}
 	return symptomState(f, subject) + "; two possible causes: " + first +
 		" or " + second, true
+}
+
+// rivalPhrase words one of two possible causes. When the cause is the
+// subject itself, "claim gpu-claim is failing" would only repeat the
+// lead, so it is told as what the subject lacks: "it has no device
+// allocated".
+func rivalPhrase(cause *rootcause.CauseRecord, subject inventory.EntityID,
+) string {
+	if cause.Root == subject && knownRule(cause) {
+		if words := causeWordsFor(cause); words != "" {
+			return "it " + words
+		}
+	}
+	return causePhrase(cause, subject)
 }
 
 // maxCheckedShown bounds the "Checked:" line.

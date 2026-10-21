@@ -15,11 +15,15 @@ var bareTokenPrefixes = []string{
 	`xox[abpr]-[A-Za-z0-9-]{10,}`,                // Slack tokens
 	`glpat-[A-Za-z0-9_-]{20,}`,                   // GitLab personal tokens
 	`AIza[0-9A-Za-z_-]{35}`,                      // Google API keys
-	`sk_(?:live|test)_[0-9A-Za-z]{16,}`,          // Stripe secret keys
+	`[sr]k_(?:live|test)_[0-9A-Za-z]{16,}`,       // Stripe secret, restricted
 	`sk-[A-Za-z0-9_-]{20,}`,                      // OpenAI-style keys
 	`ya29\.[A-Za-z0-9_-]{20,}`,                   // Google OAuth access tokens
 	`npm_[A-Za-z0-9]{30,}`,                       // npm access tokens
 	`SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}`, // SendGrid keys
+	`glsa_[A-Za-z0-9_]{20,}`,                     // Grafana service accounts
+	`hvs\.[A-Za-z0-9_-]{20,}`,                    // HashiCorp Vault tokens
+	`do[opr]_v1_[A-Za-z0-9]{20,}`,                // DigitalOcean tokens
+	`AGE-SECRET-KEY-1[A-Z0-9]{20,}`,              // age private keys
 }
 
 var bareTokenPattern = regexp.MustCompile(
@@ -49,7 +53,28 @@ func skipDescriptiveKey(groups []string) bool {
 	parts := strings.FieldsFunc(strings.ToLower(key), func(r rune) bool {
 		return r == '_' || r == '-'
 	})
-	return len(parts) > 0 && descriptiveSuffixes[parts[len(parts)-1]]
+	return len(parts) > 0 && (descriptiveSuffixes[parts[len(parts)-1]] ||
+		passIsNotACredential(parts))
+}
+
+// passIsNotACredential reports a key whose only secret-sounding word is a
+// "pass" that means passing something on: proxy_pass, pass_through. A
+// password, token or key word anywhere in the name keeps it a credential.
+func passIsNotACredential(parts []string) bool {
+	harmless := false
+	for i, part := range parts {
+		switch {
+		case part == "pass":
+			harmless = harmless || (i > 0 && parts[i-1] == "proxy") ||
+				(i+1 < len(parts) &&
+					(parts[i+1] == "through" || parts[i+1] == "thru"))
+		case strings.Contains(part, "pass"), strings.Contains(part, "pwd"),
+			strings.Contains(part, "secret"), strings.Contains(part, "token"),
+			strings.Contains(part, "key"), strings.Contains(part, "cred"):
+			return false
+		}
+	}
+	return harmless
 }
 
 func notKeyChar(r rune) bool {
@@ -77,7 +102,8 @@ func skipNonBasicCredential(groups []string) bool {
 // lines ("failed to get secret: not found"). A bare, colon-separated value
 // after them is redacted only when it looks like a credential.
 var proseKeys = map[string]bool{
-	"secret": true, "token": true, "credential": true,
+	"secret": true, "token": true, "credential": true, "pass": true,
+	"signature": true,
 }
 
 // skipNonSecret combines the descriptive-key rule with the prose guards for
@@ -92,6 +118,9 @@ func skipNonSecret(groups []string) bool {
 	}
 	key := strings.ToLower(strings.TrimRight(groups[1], " \t:="))
 	value := groups[2]
+	if isGoTestResult(groups[1], value) {
+		return true
+	}
 	if key == "pwd" {
 		// PWD is the working directory environment variable.
 		return strings.HasPrefix(value, "/") ||
@@ -103,8 +132,21 @@ func skipNonSecret(groups []string) bool {
 	if value == "" || value[0] == '"' || value[0] == '\'' {
 		return false
 	}
-	return proseKeys[strings.TrimSuffix(key, "s")] &&
+	return (proseKeys[key] || proseKeys[strings.TrimSuffix(key, "s")]) &&
 		!looksLikeCredential(value)
+}
+
+// goTestName is the name of a Go test, benchmark, example or fuzz
+// function, as the test runner prints it: TestParse, BenchmarkRead-8.
+var goTestName = regexp.MustCompile(
+	`^(?:Test|Benchmark|Example|Fuzz)[A-Z0-9_]\w*(?:-\d+)?$`)
+
+// isGoTestResult reports Go test output ("PASS: TestParse"), which is not
+// a password. The runner writes PASS in capitals; a lower-case "pass:" is
+// still a key. key is the match prefix with its separator.
+func isGoTestResult(key, value string) bool {
+	return strings.TrimRight(key, " \t:=") == "PASS" &&
+		strings.Contains(key, ":") && goTestName.MatchString(value)
 }
 
 // skipProseWord keeps the word after "password" unless it looks like a

@@ -96,6 +96,7 @@ const (
 	AttrAvailable        = "replicas.available"
 	AttrUpdatedReplicas  = "replicas.updated"
 	AttrUnavailable      = "replicas.unavailable"
+	AttrMisscheduled     = "replicas.misscheduled"
 	AttrGeneration       = "generation"
 	AttrObservedGen      = "generation.observed"
 	AttrTemplateHash     = "template.hash"

@@ -1,0 +1,13 @@
+{
+  "name": "node-agent-with-healthy-peers",
+  "description": "A node agent crash-loops on a node where two of six workloads crash on their own panics and the rest run.",
+  "root": "deployment/shop/api",
+  "otherRoots": [
+    "deployment/shop/web"
+  ],
+  "tier": "notify",
+  "maxMessages": 5,
+  "unrelated": [
+    "daemonset/observability/logship"
+  ]
+}

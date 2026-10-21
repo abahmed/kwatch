@@ -245,10 +245,11 @@ spec:
       app.kubernetes.io/instance: kwatch
   template:
     metadata:
-      # Plain annotations that ask node autoscalers not to evict this
-      # single-writer pod; inert where no autoscaler reads them.
+      # A plain annotation that asks the cluster autoscaler not to scale
+      # down the node of this single-writer pod; inert where it is not
+      # used. karpenter.sh/do-not-disrupt is not set: it would block
+      # Karpenter's consolidation of this pod's node for as long as it runs.
       annotations:
-        karpenter.sh/do-not-disrupt: "true"
         cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
       labels:
         app: kwatch

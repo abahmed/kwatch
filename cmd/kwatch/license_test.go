@@ -10,6 +10,7 @@ func runLicenseCmd(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
 	var out, errOut bytes.Buffer
 	code := runCommand(append([]string{"license"}, args...), &out, &errOut,
+		testNow,
 		func() int { t.Fatal("license must not start the server"); return 0 })
 	return code, out.String(), errOut.String()
 }

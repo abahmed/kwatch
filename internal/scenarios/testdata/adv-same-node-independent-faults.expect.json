@@ -1,0 +1,16 @@
+{
+  "name": "adv-same-node-independent-faults",
+  "description": "Two unrelated workloads fail at the same time on one node that also runs healthy workloads.",
+  "root": "deployment/billing/ledger",
+  "otherRoots": [
+    "deployment/shop/search"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n1",
+    "zone//zone-a",
+    "deployment/shop/cart",
+    "deployment/shop/web"
+  ]
+}

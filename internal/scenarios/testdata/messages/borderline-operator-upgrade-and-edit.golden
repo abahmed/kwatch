@@ -1,9 +1,9 @@
 10:06:15 settled
-🟠 PostgresCluster orders-db in data (prod-eu-1) is not ready (reconcile error). Its spec changed at 10:03. Its dependents failed soon after it changed. To see the object's state and events, run kubectl describe postgrescluster orders-db -n data
+🟠 PostgresCluster orders-db in data (prod-eu-1) is not ready (reconcile error). Its spec changed at 10:03 UTC. It reports "spec.storage.size: cannot shrink volume from 100Gi to 50Gi". To see the object's state and events, run kubectl describe postgrescluster orders-db -n data
 🟠 PostgresCluster orders-db in data (prod-eu-1) is not ready (reconcile error).
 | 🟠 PostgresCluster **orders-db** in **data** (**prod-eu-1**) is not ready (reconcile error).
-| Its spec changed at 10:03.
-| Its dependents failed soon after it changed.
+| Its spec changed at 10:03 UTC.
+| It reports `spec.storage.size: cannot shrink volume from 100Gi to 50Gi`.
 | To see the object's state and events, run
 | ```
 | kubectl describe postgrescluster orders-db -n data

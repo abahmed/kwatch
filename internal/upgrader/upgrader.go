@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -151,6 +150,13 @@ func (u *Upgrader) checkRelease(ctx context.Context) {
 		klog.InfoS("failed to get release tag", "release", r)
 		return
 	}
+	// The tag goes into a message to every provider, so only a strict
+	// version is accepted: text of any other shape is never forwarded.
+	if !validReleaseTag(*r.TagName) {
+		klog.InfoS("ignoring a latest release whose tag is not a version",
+			"component", "upgrader")
+		return
+	}
 
 	if !isNewer(*r.TagName, u.current) {
 		return
@@ -187,44 +193,4 @@ func (u *Upgrader) lastNotified(ctx context.Context) string {
 // that runs current.
 func updateNotice(latest, current string) string {
 	return fmt.Sprintf(updateMessage, latest, current)
-}
-
-// parseSemver reads "v1.2.3" or "1.2.3" (an optional "-pre" suffix is
-// tolerated and ignored). ok is false for anything else.
-func parseSemver(v string) (parts [3]int, ok bool) {
-	v = strings.TrimPrefix(strings.TrimSpace(v), "v")
-	if i := strings.IndexAny(v, "-+"); i >= 0 {
-		v = v[:i]
-	}
-	fields := strings.Split(v, ".")
-	if len(fields) != 3 {
-		return parts, false
-	}
-	for i, f := range fields {
-		n, err := strconv.Atoi(f)
-		if err != nil || n < 0 {
-			return parts, false
-		}
-		parts[i] = n
-	}
-	return parts, true
-}
-
-// isNewer reports whether latest is a strictly newer release than current.
-// A plain string comparison would nag a v0.12.0 install about v0.9.5, and a
-// build running ahead of the latest published release about that release.
-// When either side is not a version (a development or e2e build, an
-// unusual tag) nothing says the release is newer, so nothing is reported.
-func isNewer(latest, current string) bool {
-	l, lok := parseSemver(latest)
-	c, cok := parseSemver(current)
-	if !lok || !cok {
-		return false
-	}
-	for i := 0; i < 3; i++ {
-		if l[i] != c[i] {
-			return l[i] > c[i]
-		}
-	}
-	return false
 }

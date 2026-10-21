@@ -43,9 +43,12 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 	if err != nil {
 		return err
 	}
+	// The edition is final for this generation: say what it does not run.
+	deps.logEdition()
 	// The edition is judged from the state as the last start left it,
 	// before startup marks this one.
-	edition, err := planEdition(activeCtx, disk, deps.entitlements)
+	edition, err := planEdition(activeCtx, disk, deps.entitlements,
+		len(deps.notice.inactive) > 0)
 	if err != nil {
 		return failStartup(deps, cancel, lic, state, "edition", err)
 	}
@@ -55,18 +58,17 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 		return failStartup(deps, cancel, lic, state, "startup", err)
 	}
 	deps.readiness.setCurrent("state", true)
-	announceStartup(deps, state, session)
-	announceEdition(deps, disk, edition)
+	announceSession(deps, state, session, disk, edition)
 	lic.watch(activeCtx)
 
 	threads := restoreThreads(deps, disk)
 	defer deps.threadWake.detach()
 	supervisor, guard := newComponentSupervisor(deps.clients.Clock.Now),
 		&storeGuard{}
-	checkins := startActiveComponents(activeCtx, deps, supervisor,
+	startActiveComponents(activeCtx, deps, supervisor,
 		activeResources{state: state, disk: disk, result: result,
 			session: session, threads: threads, guard: guard, lic: lic})
-	err = awaitActiveEnd(ctx, deps, supervisor, lic, checkins)
+	err = awaitSessionEnd(ctx, supervisor, lic)
 	// Readiness goes first: the session is over from this moment, and the
 	// shutdown work below can take many seconds.
 	deps.readiness.withdraw()
@@ -102,20 +104,6 @@ func newSessionStartup(deps *serverDeps, disk diskState) *startupManager {
 	)
 }
 
-// awaitActiveEnd is awaitSessionEnd plus the shutdown check-in: only a
-// graceful shutdown sends it, never a leadership hand-over.
-func awaitActiveEnd(
-	ctx context.Context, deps *serverDeps,
-	supervisor *componentSupervisor, lic *licenseSession,
-	checkins *checkinRunner,
-) error {
-	err := awaitSessionEnd(ctx, supervisor, lic)
-	if err == nil && applicationContext(deps).Err() != nil {
-		checkins.stopping()
-	}
-	return err
-}
-
 // awaitSessionEnd blocks until a required component fails, leadership
 // ends, or the license asks for a new generation.
 func awaitSessionEnd(
@@ -130,6 +118,19 @@ func awaitSessionEnd(
 	case <-lic.restarted():
 		return errEditionChanged
 	}
+}
+
+// announceSession tells the providers what this start found, once each:
+// the startup message and the unsent jobs, the edition notice and the
+// refused KwatchConfig; then it keeps the spec that applied cleanly.
+func announceSession(
+	deps *serverDeps, state *storage.Store, session *startupManager,
+	disk diskState, edition editionPlan,
+) {
+	announceStartup(deps, state, session)
+	announceEdition(deps, disk, edition)
+	announceOverlay(deps, disk)
+	rememberOverlay(deps, disk)
 }
 
 // announceStartup queues the jobs the last session never sent, then the
@@ -267,7 +268,7 @@ func startActiveComponents(
 	deps *serverDeps,
 	supervisor *componentSupervisor,
 	res activeResources,
-) *checkinRunner {
+) {
 	// The pipeline's progress clock was stamped when the process booted. A
 	// replica that waited as standby would otherwise look stalled the
 	// moment it starts leading.
@@ -293,11 +294,11 @@ func startActiveComponents(
 		monitoredRun(deps, "telemetry", configureTelemetryRunner(
 			deps.runtime.Lifecycle().Telemetry(), res.disk,
 			res.result.ClusterID, res.result.CurrentVersion,
-			deps.clients.Clock.Now, deps.clients.HTTP,
+			deps.clients.Clock.Now, deps.clients.PlatformHTTP,
 		)),
 		monitoredRun(deps, "upgrader", upgrader.NewUpgrader(
 			&upgraderConfig, deps.deliveryManager, res.disk,
-			deps.clients.HTTP,
+			deps.clients.PlatformHTTP,
 		).CheckUpdates),
 		selfReportedRun(deps, "rbac", deps.securityMonitor.Start),
 		monitoredRun(deps, "alive", aliveRecorder(res.session)),
@@ -305,19 +306,15 @@ func startActiveComponents(
 		monitoredRun(deps, "state-compactor",
 			runCompactor(res.state, storeMetrics(deps))),
 	}
-	checkins := newCheckinRunner(deps, res.lic, res.disk)
-	optional = append(optional, conditionalComponents(deps, checkins)...)
+	optional = append(optional, conditionalComponents(deps)...)
 	for _, component := range optional {
 		supervisor.startOptional(ctx, component)
 	}
-	return checkins
 }
 
 // conditionalComponents are the optional components that only some
 // configurations or editions run.
-func conditionalComponents(
-	deps *serverDeps, checkins *checkinRunner,
-) []componentSpec {
+func conditionalComponents(deps *serverDeps) []componentSpec {
 	var optional []componentSpec
 	if deps.has(heartbeatMonitor) {
 		optional = append(optional,
@@ -326,10 +323,6 @@ func conditionalComponents(
 	if deps.runtime.Lifecycle().CRDEnabled() {
 		optional = append(optional,
 			monitoredComponent(deps, "crd-watcher", runCRDWatcher))
-	}
-	if checkins != nil {
-		optional = append(optional,
-			monitoredRun(deps, "checkins", checkins.run))
 	}
 	return optional
 }

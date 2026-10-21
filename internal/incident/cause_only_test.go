@@ -16,8 +16,7 @@ import (
 // not even in the digest, however long it lasts.
 func TestCauseOnlyIncidentIsSilent(t *testing.T) {
 	for _, reason := range []string{reasons.VolumeUsageHigh,
-		reasons.VolumeInodesHigh, reasons.HPAMaxedOut,
-		reasons.NodeConditionPrefix + "KernelDeadlock"} {
+		reasons.VolumeInodesHigh, reasons.HPAMaxedOut} {
 		t.Run(reason, func(t *testing.T) {
 			r := newRig(t, Config{})
 			r.raise(at(0), sig(entity(kube.KindPVC, "data"), reason,
@@ -61,4 +60,20 @@ func TestCauseOnlyDoesNotSilenceOtherReasons(t *testing.T) {
 		sig(entity(kube.KindPod, "db"), reasons.CrashLoopBackOff,
 			detection.Warning))
 	assert.Equal(t, Notify, tier(p))
+}
+
+// A node condition nobody has a detector for is not silent once it has
+// lasted: it is one line in the digest. Pods that fail on the node make
+// it the cause of an ordinary incident.
+func TestNodeConditionIncidentIsOneDigestLine(t *testing.T) {
+	node := entity(kube.KindNode, "worker-4")
+	reason := reasons.NodeConditionPrefix + "ReadonlyFilesystem"
+
+	alone := incidentOf(node, nil, sig(node, reason, detection.Warning))
+	failing := incidentOf(node, nil, sig(node, reason, detection.Warning),
+		sig(entity(kube.KindPod, "db"), reasons.CrashLoopBackOff,
+			detection.Warning))
+
+	assert.Equal(t, Digest, tier(alone))
+	assert.Equal(t, Notify, tier(failing))
 }

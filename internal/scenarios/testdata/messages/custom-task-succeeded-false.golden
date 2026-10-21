@@ -1,0 +1,9 @@
+10:03:15 settled
+🟠 TaskRun build-image in ci (prod-eu-1) reports Succeeded=False (Failed). It reports "step build failed: exit status 2". To see the object's state and events, run kubectl describe taskrun build-image -n ci
+🟠 TaskRun build-image in ci (prod-eu-1) reports Succeeded=False (Failed).
+| 🟠 TaskRun **build-image** in ci (**prod-eu-1**) reports Succeeded=False (Failed).
+| It reports `step build failed: exit status 2`.
+| To see the object's state and events, run
+| ```
+| kubectl describe taskrun build-image -n ci
+| ```

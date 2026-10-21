@@ -86,10 +86,10 @@ func (o Occurrence) Duration() time.Duration {
 	return o.Resolved.Sub(o.Opened)
 }
 
-// Describe renders "same as Tue 14:02, fixed by rollback" or "same as
-// Tue 14:02, recovered without change". Times are UTC.
+// Describe renders "same as Tue 14:02 UTC, fixed by rollback" or "same as
+// Tue 14:02 UTC, recovered without change".
 func (o Occurrence) Describe() string {
-	when := "same as " + o.Opened.UTC().Format("Mon 15:04")
+	when := "same as " + o.Opened.UTC().Format("Mon 15:04") + " UTC"
 	switch o.Fix {
 	case "":
 		return when

@@ -73,8 +73,15 @@ func TestEveryUpstreamTerminatedReasonIsClassified(t *testing.T) {
 	}
 }
 
+// podReasonsOfPlannedEnds are the status reasons of pods Kubernetes
+// ended on purpose: a failed pod with one of them is no finding.
+var podReasonsOfPlannedEnds = map[string]string{
+	"NodeShutdown": "its node is shutting down (the node is the story)",
+}
+
 // A failed pod is a finding whatever its status reason; the reasons
-// that name why get a finding of their own.
+// that name why get a finding of their own. Only a pod ended on purpose
+// raises nothing, and the reason is named above.
 func TestEveryUpstreamPodReasonIsClassified(t *testing.T) {
 	for _, reason := range upstream.PodReasons {
 		pod := buildPod("p", "ns", coverageNow, map[string]inventory.Value{
@@ -83,6 +90,10 @@ func TestEveryUpstreamPodReasonIsClassified(t *testing.T) {
 		})
 		found := NewPod(PodThresholds{}).Detect(
 			testDetectorContext(nil, coverageNow), pod)
+		if _, planned := podReasonsOfPlannedEnds[reason]; planned {
+			assert.Empty(t, found, "failed pod reason %q", reason)
+			continue
+		}
 		assert.NotEmpty(t, found, "failed pod reason %q is ignored", reason)
 	}
 }

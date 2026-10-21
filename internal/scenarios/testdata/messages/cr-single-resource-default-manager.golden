@@ -1,0 +1,15 @@
+10:02:15 settled
+🟠 gadget-controller in gadget-system (prod-eu-1) keeps crashing. Its node, registry and service account are healthy and unchanged, so nothing outside it explains this. It fails with "panic: runtime error: invalid memory address or nil pointer dereference [signal SIGSEGV: segmentation violation]". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs gadget-controller-60e3e4db-a -c app -n gadget-system --previous
+🟠 gadget-controller in gadget-system (prod-eu-1) keeps crashing.
+| 🟠 **gadget-controller** in **gadget-system** (**prod-eu-1**) keeps crashing.
+| Its node, registry and service account are healthy and unchanged, so nothing outside it explains this.
+| It fails with
+| ```
+| panic: runtime error: invalid memory address or nil pointer dereference [signal SIGSEGV: segmentation violation]
+| ```
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs gadget-controller-60e3e4db-a -c app -n gadget-system --previous
+| ```

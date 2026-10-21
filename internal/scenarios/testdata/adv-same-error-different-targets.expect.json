@@ -1,0 +1,16 @@
+{
+  "name": "adv-same-error-different-targets",
+  "description": "Two clients refuse to connect on the same port to two different database Services that fail for unrelated reasons.",
+  "root": "deployment/shop/db-a",
+  "otherRoots": [
+    "service/billing/db-b"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "deployment/shop/api-a",
+    "deployment/billing/api-b",
+    "node//n1",
+    "node//n2"
+  ]
+}

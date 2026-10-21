@@ -13,7 +13,12 @@ import (
 
 // leadSentences writes what broke and why in one sentence.
 func leadSentences(f caseFacts) []sentence {
-	text := capitalName(leadSubject(f), leadText(f))
+	subject := leadSubject(f)
+	text := capitalName(subject, leadText(f))
+	if subject == kube.KwatchSelf {
+		// The product's name is lowercase wherever it starts a sentence.
+		text = leadText(f)
+	}
 	return []sentence{{part: partLead, text: endSentence(text)}}
 }
 
@@ -120,6 +125,11 @@ func failingNodes(f caseFacts) (int, string) {
 func blamedChange(f caseFacts) *inventory.Change {
 	cause := f.p.Cause
 	if cause == nil || cause.Change == nil || systemChange(*cause.Change) {
+		return nil
+	}
+	if cause.Rule == "account-missing-at-create" {
+		// "service account api does not exist" says more than the
+		// deletion that made it so.
 		return nil
 	}
 	change := cause.Change
@@ -262,10 +272,10 @@ func symptomState(f caseFacts, subject inventory.EntityID) string {
 	if f.p.State == incident.Flapping {
 		return name + " keeps failing and recovering"
 	}
-	if !f.ok || f.lead.Entity == f.p.Cause.Root {
+	if !f.ok || f.lead.Entity == f.p.Cause.Root || nodeStateOfWorkload(f) {
 		return name + " " + stateWords(f.p)
 	}
-	state := beforeColon(predicate(f.lead.Entity, f.lead.Summary))
+	state := beforeColon(leadState(f))
 	if f.p.Cause.Root.Name != "" &&
 		strings.Contains(state, f.p.Cause.Root.Name) {
 		return name + " " + stateWords(f.p)
@@ -273,10 +283,19 @@ func symptomState(f caseFacts, subject inventory.EntityID) string {
 	return name + " " + state
 }
 
+// nodeStateOfWorkload reports a lead finding that is a node's while the
+// cause is a workload (one that fills the disks of its nodes): the
+// node's state ("has crossed its eviction threshold") is not the
+// workload's to be told.
+func nodeStateOfWorkload(f caseFacts) bool {
+	return f.lead.Entity.Kind == kube.KindNode &&
+		incident.IsWorkload(f.p.Cause.Root.Kind)
+}
+
 // beforeColon keeps what comes before a colon: "cannot start: its
 // configuration references something missing" becomes "cannot start".
 func beforeColon(text string) string {
-	before, _, _ := strings.Cut(text, ": ")
+	before, _, _ := cutOutsideQuotes(text, ": ")
 	return before
 }
 
@@ -298,7 +317,7 @@ func subjectWithState(f caseFacts, subject inventory.EntityID) string {
 	case !f.ok:
 		return name + " " + stateWords(f.p)
 	}
-	return name + " " + predicate(f.lead.Entity, f.lead.Summary)
+	return name + " " + leadState(f)
 }
 
 // causePhrase states the cause relative to the subject: "node n1 is low
@@ -312,16 +331,16 @@ func causePhrase(cause *rootcause.CauseRecord, subject inventory.EntityID,
 	case root.Kind == kube.KindContainer && len(cause.RootFindings) > 0:
 		return containerPhrase(root, cause.RootFindings[0].Summary)
 	case len(cause.RootFindings) > 0 && root.Name != "":
-		return nameFrom(subject, root) + " " + beforeColon(
-			predicate(root, cause.RootFindings[0].Summary))
+		return causeRootName(cause, subject) + " " + beforeColon(
+			findingState(cause.RootFindings[0]))
 	case ownCause(cause):
 		return causeWordsFor(cause)
 	case !knownRule(cause) && readableSummary(cause):
-		return lowerFirst(humanizeText(firstClause(cause.Summary)))
+		return lowerFirst(clauseText(cause.Summary))
 	case root == subject:
 		return "it " + causeWordsFor(cause)
 	}
-	return nameFrom(subject, root) + " " + causeWordsFor(cause)
+	return causeRootName(cause, subject) + " " + causeWordsFor(cause)
 }
 
 // containerPhrase names a failing container of the subject's pods by

@@ -122,6 +122,9 @@ func serviceState(
 		}
 		return "", false
 	}
+	if !ctx.Synced(kube.KindEndpointSlice) {
+		return "", false
+	}
 	slices := ctx.Model.Related(id, inventory.Backs, inventory.Incoming)
 	if len(slices) == 0 || text(service, kube.AttrSelector) == "" {
 		return "", false

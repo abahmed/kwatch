@@ -42,6 +42,12 @@ type ProbeTarget struct {
 	LatencyCriticalMs int
 	Address           string
 	Host              string
+	// Restricted refuses a name or address that is loopback, link-local
+	// (cloud metadata), unspecified or multicast (see
+	// SensitiveProbeAddress): the target came from a KwatchConfig, not from
+	// the mounted configuration, and must not reach the node or its
+	// metadata service. Ordinary private (in-cluster) addresses are fine.
+	Restricted bool
 }
 
 // ActiveProbeConfig configures user-defined probes.
@@ -80,6 +86,9 @@ type ActiveProber struct {
 	// as cfg.Dial when the caller set one, else a dialer that refuses
 	// private addresses.
 	dependencyDial func(context.Context, string, string) (net.Conn, error)
+	// restrictedAccess reaches the targets a KwatchConfig added
+	// (Restricted).
+	restrictedAccess restrictedAccess
 }
 
 // NewActiveProber builds a prober with defaults for unset intervals.
@@ -94,11 +103,13 @@ func NewActiveProber(cfg ActiveProbeConfig) *ActiveProber {
 		cfg.FailureThreshold = 3
 	}
 	dependencyDial := cfg.Dial
+	restricted := newRestrictedAccess(cfg.Resolver, cfg.Dial, cfg.HTTPClient)
 	if cfg.Dial == nil {
 		cfg.Dial = (&net.Dialer{}).DialContext
 		dependencyDial = externalDialer()
 	}
-	return &ActiveProber{cfg: cfg, dependencyDial: dependencyDial}
+	return &ActiveProber{cfg: cfg, dependencyDial: dependencyDial,
+		restrictedAccess: restricted}
 }
 
 // Run probes every interval until ctx ends.
@@ -127,7 +138,7 @@ func (p *ActiveProber) check(
 	case target.URL != "":
 		expiry, err = p.http(probeCtx, target)
 	case target.Address != "":
-		err = p.dial(probeCtx, target.Address)
+		err = p.dial(probeCtx, target)
 	case target.Host != "":
 		_, err = p.cfg.Resolver.LookupHost(probeCtx, target.Host)
 	default:
@@ -163,7 +174,13 @@ func (p *ActiveProber) http(
 	if err != nil {
 		return time.Time{}, err
 	}
-	resp, err := p.cfg.HTTPClient.Do(req)
+	client := p.cfg.HTTPClient
+	if target.Restricted {
+		if client = p.restrictedAccess.client; client == nil {
+			return time.Time{}, errUnrestrictableClient
+		}
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -184,8 +201,12 @@ func (p *ActiveProber) http(
 	}
 }
 
-func (p *ActiveProber) dial(ctx context.Context, address string) error {
-	return closeDialed(p.cfg.Dial(ctx, "tcp", address))
+func (p *ActiveProber) dial(ctx context.Context, target ProbeTarget) error {
+	if target.Restricted {
+		return closeDialed(
+			p.restrictedAccess.dial(ctx, "tcp", target.Address))
+	}
+	return closeDialed(p.cfg.Dial(ctx, "tcp", target.Address))
 }
 
 func closeDialed(conn net.Conn, err error) error {

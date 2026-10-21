@@ -101,3 +101,19 @@ func TestTelegramSendIncidentRendersNote(t *testing.T) {
 		})
 	}
 }
+
+// A name that starts with @ in text a pod wrote must not notify the
+// person or channel that owns it, in the note or in the output block.
+func TestTelegramIncidentNeutralizesUsernameMentions(t *testing.T) {
+	c, rec := recorderTelegram(t)
+	m := providertest.Announce()
+	m.Note = "🔴 It fails with @alice_ops and mail bob@example.com"
+	m.Output = []string{"cc @charlie99 please"}
+	require.NoError(t, c.SendIncident(context.Background(), m))
+	text, _ := rec.Last(t).JSON(t)["text"].(string)
+	assert.NotContains(t, text, "@alice_ops")
+	assert.NotContains(t, text, "@charlie99")
+	assert.Contains(t, text, "@​alice_ops")
+	assert.Contains(t, text, "@​charlie99")
+	assert.Contains(t, text, "bob@example.com")
+}

@@ -7,14 +7,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-// failingWhenTrue are condition types whose True status is the failure;
-// every other type fails when False. Kept in sync with the custom
-// resource detector.
-var failingWhenTrue = map[string]bool{
-	"Conflicted": true, "Degraded": true, "Failed": true, "Stalled": true,
-	"Dangling": true, "OverlappingTLSConfig": true,
-}
-
 // statusConditions returns an object's status conditions merged with the
 // per-parent and per-listener conditions the Gateway API keeps outside
 // status.conditions: HTTPRoute, GRPCRoute, TLSRoute and TCPRoute report
@@ -87,14 +79,11 @@ func mergeCondition(conditions []condition, c condition) []condition {
 	return append(conditions, c)
 }
 
-// conditionRank orders statuses from healthy (0) to failing (2).
+// conditionRank orders statuses from healthy (0) to failing (2), by the
+// condition table.
 func conditionRank(c condition) int {
-	bad := "False"
-	if failingWhenTrue[c.Type] {
-		bad = "True"
-	}
 	switch c.Status {
-	case bad:
+	case badStatus(c.Type):
 		return 2
 	case "Unknown":
 		return 1

@@ -1,0 +1,10 @@
+10:04:45 roll-up
+🟠 kwatch (prod-eu-1) found two new problems at the same time. invoicer is failing in billing after the 10:02 UTC change to config map invoicer-config. Disruption budget ledger in shop allows no eviction, so the drain of node n2 is blocked. Each gets its own message when it changes or resolves.
+🟠 kwatch (prod-eu-1) found two new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
+|
+| **Problems**
+| - **invoicer** — failing in **billing** after the 10:02 UTC change to config map **invoicer-config**
+| - Disruption budget **ledger** (**shop**) allows no eviction, so the drain of node n2 — blocked
+|
+| *Each gets its own message when it changes or resolves.*

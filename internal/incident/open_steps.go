@@ -59,7 +59,7 @@ func (m *Manager) evidenceStep(p *Incident, now time.Time) (Decision, bool) {
 		return Decision{}, true
 	}
 	if len(p.Members) == 0 {
-		p.State, p.RecoveringSince = Recovering, now
+		p.State, p.RecoveringSince = Recovering, m.recoveryStart(p, now)
 		return Decision{}, true
 	}
 	return Decision{}, false

@@ -61,6 +61,9 @@ func (d Workload) Detect(
 	if s, ok := scaledToZeroRouted(ctx, e); ok {
 		out = append(out, s)
 	}
+	if s, ok := daemonSetMisscheduled(ctx, e, d.unavailable); ok {
+		out = append(out, s)
+	}
 	if e.ID.Kind == kube.KindStatefulSet {
 		if s, ok := statefulSetRollout(ctx, e); ok {
 			out = append(out, s)
@@ -215,7 +218,7 @@ func (Job) Detect(
 	}
 	failed, _ := number(e, kube.AttrFailed)
 	return append(out, detection.Finding{
-		Reason: findingReason, Severity: failedJobSeverity(ctx, e, since),
+		Reason: findingReason, Severity: failedJobSeverity(ctx, since),
 		Since: since,
 		Summary: "Job failed after " + strconv.Itoa(int(failed)) +
 			" failed pod(s)",

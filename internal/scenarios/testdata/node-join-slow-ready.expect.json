@@ -1,0 +1,7 @@
+{
+  "name": "node-join-slow-ready",
+  "description": "A new node joins NotReady while its network plugin starts and turns Ready four minutes later.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

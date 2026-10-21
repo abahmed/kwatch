@@ -43,22 +43,30 @@ func (Certificate) Detect(
 }
 
 // expiredCertificate is the finding for a certificate past its end. One
-// nobody uses breaks nothing: it is a warning that says so, and it
-// waits for the digest. One in use is critical.
+// nothing is known to use breaks nothing: it is a warning that says so,
+// and it waits for the digest. One in use is critical. One whose use
+// cannot be told, because a kind that could use it is not synced, is a
+// warning with the plain fact and no claim about its use: only a known
+// user makes it an outage.
 func expiredCertificate(
 	ctx detection.Context, e inventory.Entity, notAfter time.Time,
 ) detection.Finding {
-	if !certificateInUse(ctx, e) {
+	use := certificateUse(ctx, e)
+	if use == certificateUnused {
 		return detection.Finding{
 			Reason: reasons.TLSCertExpired, Severity: detection.Warning,
 			Since: notAfter,
 			Summary: "TLS certificate expired on " +
 				notAfter.UTC().Format("2006-01-02") +
-				" and nothing in the cluster references it",
+				" and no pod or Ingress mounts or references it",
 		}
 	}
+	severity := detection.Critical
+	if use == certificateUnknown {
+		severity = detection.Warning
+	}
 	return detection.Finding{
-		Reason: reasons.TLSCertExpired, Severity: detection.Critical,
+		Reason: reasons.TLSCertExpired, Severity: severity,
 		Since: notAfter,
 		Summary: "TLS certificate expired " +
 			format.Duration(ctx.Now.Sub(notAfter)) + " ago",
@@ -84,15 +92,41 @@ func certificateUsers(
 	return out
 }
 
-// certificateInUse reports whether something serves or mounts the
+// certUse is what is known about whether a certificate is used.
+type certUse uint8
+
+const (
+	// certificateUsed: a probed endpoint serves it, or something
+	// references the Secret.
+	certificateUsed certUse = iota
+	// certificateUnused: nothing references the Secret, and every kind
+	// that could has been listed.
+	certificateUnused
+	// certificateUnknown: nothing references the Secret in the model,
+	// but a kind that could is not synced, so the model may lack the
+	// referrer.
+	certificateUnknown
+)
+
+// certificateUse tells whether something serves or mounts the
 // certificate: a probed endpoint serves it by definition, and a Secret
-// counts once an Ingress, pod or other object references it.
-func certificateInUse(ctx detection.Context, e inventory.Entity) bool {
+// is used once an Ingress, pod or other object references it. It is
+// unused only when Ingresses and pods are both synced: a Secret read by
+// name through the API is not seen at all, so even then it is the
+// model's claim, worded as such.
+func certificateUse(ctx detection.Context, e inventory.Entity) certUse {
 	if e.ID.Kind != kube.KindSecret {
-		return true
+		return certificateUsed
 	}
-	return ctx.Model != nil && len(ctx.Model.Related(e.ID,
-		inventory.References, inventory.Incoming)) > 0
+	if ctx.Model != nil && len(ctx.Model.Related(e.ID,
+		inventory.References, inventory.Incoming)) > 0 {
+		return certificateUsed
+	}
+	ingresses, pods := ctx.Synced(kube.KindIngress), ctx.Synced(kube.KindPod)
+	if !ingresses || !pods {
+		return certificateUnknown
+	}
+	return certificateUnused
 }
 
 // Missing detects references to objects that do not exist: a pod that
@@ -136,10 +170,10 @@ func (Missing) Detect(
 		summary := "Pod references " + strings.Join(names, ", ") +
 			", which does not exist"
 		if running {
-			// It read the object when it started; only a restart
-			// fails, so nothing has failed yet.
+			// It read the object when it started: it runs, so
+			// nothing has failed.
 			severity = detection.Info
-			summary += "; the pod runs now but will fail on its next restart"
+			summary += "; the pod is running now"
 		}
 		out = append(out, detection.Finding{
 			Reason: reason, Severity: severity, Advisory: running,

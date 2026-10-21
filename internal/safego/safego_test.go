@@ -3,6 +3,7 @@ package safego
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -28,19 +29,18 @@ func TestGoSurvivesPanic(t *testing.T) {
 	<-done
 }
 
-func skipWaits(t *testing.T) *[]time.Duration {
+// skipWaits returns Options whose Wait returns at once and records the
+// waits.
+func skipWaits() (Options, *[]time.Duration) {
 	var waits []time.Duration
-	old := Wait
-	Wait = func(_ context.Context, d time.Duration) bool {
+	return Options{Wait: func(_ context.Context, d time.Duration) bool {
 		waits = append(waits, d)
 		return true
-	}
-	t.Cleanup(func() { Wait = old })
-	return &waits
+	}}, &waits
 }
 
 func TestKeepRestartsAfterPanic(t *testing.T) {
-	skipWaits(t)
+	opts, _ := skipWaits()
 	runs := 0
 	Keep(context.Background(), "demo", func(ready func()) error {
 		runs++
@@ -49,14 +49,15 @@ func TestKeepRestartsAfterPanic(t *testing.T) {
 		}
 		ready()
 		return nil
-	}, nil)
+	}, opts)
 
 	require.Equal(t, 2, runs)
 }
 
 func TestKeepReportsSickThenRecovers(t *testing.T) {
-	waits := skipWaits(t)
+	opts, waits := skipWaits()
 	var states []bool
+	opts.Sick = func(v bool) { states = append(states, v) }
 	runs := 0
 	Keep(context.Background(), "demo", func(ready func()) error {
 		runs++
@@ -68,7 +69,7 @@ func TestKeepReportsSickThenRecovers(t *testing.T) {
 			return errors.New("fails after working")
 		}
 		return nil
-	}, func(v bool) { states = append(states, v) })
+	}, opts)
 
 	require.Equal(t, []bool{true, false}, states)
 	require.Equal(t, []time.Duration{
@@ -77,18 +78,39 @@ func TestKeepReportsSickThenRecovers(t *testing.T) {
 }
 
 func TestKeepStopsWithContext(t *testing.T) {
-	skipWaits(t)
+	opts, _ := skipWaits()
 	ctx, cancel := context.WithCancel(context.Background())
 	runs := 0
 	Keep(ctx, "demo", func(func()) error {
 		runs++
 		cancel()
 		return errors.New("fail")
-	}, nil)
+	}, opts)
 	require.Equal(t, 1, runs)
 }
 
 func TestBackoffCaps(t *testing.T) {
 	require.Equal(t, time.Second, Backoff(1))
 	require.Equal(t, time.Minute, Backoff(20))
+}
+
+func TestKeepWithoutOptionsSleepsOnARealTimer(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var runs atomic.Int32
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		Keep(ctx, "demo", func(func()) error {
+			runs.Add(1)
+			return errors.New("fail")
+		}, Options{})
+	}()
+	require.Eventually(t, func() bool { return runs.Load() >= 1 },
+		time.Second, time.Millisecond)
+	cancel() // ends the one-second backoff sleep at once
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Keep did not stop with its context")
+	}
 }

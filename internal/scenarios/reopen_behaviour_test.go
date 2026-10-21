@@ -39,23 +39,28 @@ func decisionsOf(
 // that already re-opened, so it stays in the open incident and adds no
 // message of its own.
 func TestPageFlapsReopensTheSameIncident(t *testing.T) {
-	assertSamePageReopens(t, replayNamed(t, "page-flaps-reopens"), 1)
+	assertSamePageReopens(t, replayNamed(t, "page-flaps-reopens"), 1, 0)
 }
 
 // Three returns, generated in memory and not part of the scorecard,
-// behave the same: the returns inside a hold are not told again.
-func TestPageFlapsThreeTimesStillPagesOnce(t *testing.T) {
+// behave the same: the returns inside a hold are not told again, and the
+// pagers hear of the flapper exactly once more (the incident package
+// tests it as TestThirdReturnOfAPageTellsThePagersAtThePageTier).
+func TestPageFlapsThreeTimesKeepsOneThread(t *testing.T) {
 	c := newCluster(scenarioStart, "")
 	buildPageFlaps(c, 3)
 	result := replayLog(t, c.log(), replay.Options{Tail: 10 * time.Minute})
-	assertSamePageReopens(t, result, 2)
+	assertSamePageReopens(t, result, 2, 1)
 }
 
 // assertSamePageReopens checks a replay of a page that returned: one
 // announcement and page, times "failing again" updates, all under one
-// incident, key and alert key.
+// incident, key and alert key. Only the update of the third time inside
+// the repage window reaches the pagers, at the page tier, so a flapper
+// has an open alert again (wantPaged says how many of the updates do);
+// the others are chat news.
 func assertSamePageReopens(
-	t *testing.T, result replay.Result, times int,
+	t *testing.T, result replay.Result, times, wantPaged int,
 ) {
 	t.Helper()
 	announced := decisionsOf(result, incident.Announce, "")
@@ -65,9 +70,15 @@ func assertSamePageReopens(
 
 	again := decisionsOf(result, incident.Update, incident.ReasonFailingAgain)
 	assert.Len(t, again, times, "each return is an update")
+	paged := 0
 	for _, d := range again {
-		assert.Equal(t, incident.Notify, d.Incident.Tier, "no extra page")
+		if d.Incident.Tier == incident.Page {
+			paged++
+			assert.GreaterOrEqual(t, d.Incident.RepeatCount, 3,
+				"only a flapper tells the pagers")
+		}
 	}
+	assert.Equal(t, wantPaged, paged, "updates that reach the pagers")
 	for i, d := range result.Decisions {
 		assert.Equal(t, id, d.Incident.ID, "decision %d", i)
 		assert.Equal(t, result.Messages[0].Key, result.Messages[i].Key)
@@ -171,4 +182,15 @@ func TestDigestFlapReopensTheSameIncident(t *testing.T) {
 		"the return is listed as recurring")
 	assert.NotContains(t, digests[1].Note, "resolved",
 		"it came back, so the earlier resolve is not news")
+}
+
+// An incident listed in a digest and resolved before the end is still
+// reported under its own root, never as an incident with no root.
+func TestReportedIncidentsKeepTheRootOfAResolvedDigestMember(t *testing.T) {
+	result := replayNamed(t, "unusual-event-recurs")
+
+	for _, r := range reportedIncidents(result) {
+		assert.NotEmpty(t, r.ID)
+		assert.Equal(t, "service/shop/web", r.Root)
+	}
 }

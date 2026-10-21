@@ -2,6 +2,7 @@ package announce
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"time"
 
@@ -16,9 +17,23 @@ type OutageHold struct {
 	Held  []incident.Decision
 	// Paged is true once one held page-tier incident was paged: the
 	// namespace is paged once, whoever else is page tier. PagedID is
-	// that incident.
+	// that incident. A hold that joins an outage whose page is open starts
+	// paged, with no PagedID: nothing of it pages.
 	Paged   bool
 	PagedID string
+}
+
+// newOutageHold opens the hold of namespace ns. When the namespace had an
+// outage a moment ago whose page is open, it starts as paged: the late
+// failures that join that outage are held at notify from the first one,
+// not from the second (see holdLatePages).
+func (c *Collector) newOutageHold(ns string, now time.Time) *OutageHold {
+	h := &OutageHold{Since: now}
+	if memo := c.recentOutage(ns, now); memo != nil {
+		h.Paged = c.outagePageOpen(memo)
+	}
+	c.Outages[ns] = h
+	return h
 }
 
 func (h *OutageHold) indexOf(id string) int {
@@ -57,10 +72,10 @@ func (c *Collector) HoldOutage(
 ) bool {
 	ns, id := d.Incident.Root.Namespace, d.Incident.ID
 	h := c.Outages[ns]
-	if isOutageCandidate(d) && (h != nil || c.outageForming(d, now)) {
+	if isOutageCandidate(d) && (h != nil || c.outageForming(d, now) ||
+		c.inRecentOutage(ns, now)) {
 		if h == nil {
-			h = &OutageHold{Since: now}
-			c.Outages[ns] = h
+			h = c.newOutageHold(ns, now)
 		}
 		c.absorbAnnounce(ctx, now, h, d)
 		return true
@@ -160,7 +175,8 @@ func (c *Collector) flushOutages(
 		}
 		delete(c.Outages, ns)
 		members := openedTogether(h.Held)
-		if !isOutage(len(members), c.workloadCount(ns)) {
+		memo := c.recentOutage(ns, now)
+		if memo == nil && !isOutage(len(members), c.workloadCount(ns)) {
 			members = nil
 		}
 		for _, d := range h.Held {
@@ -169,7 +185,7 @@ func (c *Collector) flushOutages(
 			}
 		}
 		if len(members) > 0 {
-			c.sendOutage(ctx, now, ns, members)
+			c.sendOutage(ctx, now, ns, members, memo)
 			sent = true
 		}
 	}
@@ -189,16 +205,25 @@ func (c *Collector) release(
 	return d
 }
 
-// sendOutage sends the one message that names the members.
+// sendOutage sends the one message that names the members. When the
+// namespace had an outage a moment ago (memo), the message names the
+// whole outage, the earlier members too, though only the new ones are
+// listed by it (see recentOutage).
 func (c *Collector) sendOutage(
 	ctx context.Context, now time.Time, namespace string,
-	members []incident.Decision,
+	members []incident.Decision, memo *outageMemo,
 ) {
+	named := members
+	if memo != nil {
+		c.holdLatePages(memo, members)
+		named = append(slices.Clone(memo.members), members...)
+	}
 	o := compose.NamespaceOutage{Namespace: namespace,
 		Workloads: c.workloadCount(namespace),
-		Shared:    c.sharedBy(members, now)}
-	msg := c.env.Messages.NamespaceOutage(o, members, now)
+		Shared:    c.sharedBy(named, now)}
+	msg := c.env.Messages.NamespaceOutage(o, named, now)
 	c.sendListing(ctx, now, members, msg, true)
+	c.rememberOutage(namespace, now, named)
 }
 
 // outageNamespaces lists the namespaces with a hold, in order.

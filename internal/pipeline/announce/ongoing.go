@@ -40,7 +40,8 @@ func (c *Collector) ongoingProblems(now time.Time) []ongoingItem {
 		out = append(out, ongoingItem{p: p, Ongoing: compose.Ongoing{
 			Root: p.Root, Since: compose.StartedAt(p),
 			Title:    c.env.Messages.OngoingTitle(p, now),
-			Leftover: compose.LeftoverReason(p)}})
+			Leftover: compose.LeftoverReason(p),
+			Standing: compose.IsStanding(p)}})
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		return out[i].Since.Before(out[j].Since)

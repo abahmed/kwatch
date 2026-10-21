@@ -33,7 +33,7 @@ func unusualEvents(
 	// again this way.
 	recurred := map[string]bool{}
 	for _, note := range ctx.Model.Notes(e.ID, ctx.Now.Add(-EventWindow)) {
-		if !note.Warning || knownEvent(note.Reason) ||
+		if !note.Warning || knownEvent(note.Reason, e.ID.Kind) ||
 			quotedByService(e, note.Reason) {
 			continue
 		}
@@ -74,10 +74,12 @@ func unusualEvents(
 }
 
 // knownEvent reports whether a Warning event reason is already detected,
-// either from the event itself or from the object's state.
-func knownEvent(reason string) bool {
+// either from the event itself or from the state of an object of the
+// kind. The same reason on another kind is unknown: a custom resource's
+// controller may say "Failed" or "BackOff" about something no state shows.
+func knownEvent(reason string, kind inventory.Kind) bool {
 	_, detected := detection.EventSeverity(reason)
-	return detected || detection.ShownByState(reason)
+	return detected || detection.ShownByStateOn(reason, kind)
 }
 
 // unusualSummary says what Kubernetes reported. A reason that recurred

@@ -1,0 +1,12 @@
+{
+  "name": "node-local-unmodelled-address",
+  "description": "One node's pods time out dialing an address kwatch does not know, while replicas on other nodes work.",
+  "root": "node//n3",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "external-endpoint//10.96.40.12:6379",
+    "zone//zone-a"
+  ],
+  "ambiguous": true
+}

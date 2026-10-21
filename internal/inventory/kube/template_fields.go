@@ -66,10 +66,9 @@ func containerDiff(
 	path string, before, after corev1.Container,
 ) []inventory.FieldChange {
 	fields := envChanges(path, before.Env, after.Env)
-	fields = appendText(fields, path+".command",
-		strings.Join(before.Command, " "), strings.Join(after.Command, " "))
-	fields = appendText(fields, path+".args",
-		strings.Join(before.Args, " "), strings.Join(after.Args, " "))
+	fields = appendArgs(fields, path+".command",
+		before.Command, after.Command)
+	fields = appendArgs(fields, path+".args", before.Args, after.Args)
 	fields = appendText(fields, path+".envFrom",
 		envFromText(before.EnvFrom), envFromText(after.EnvFrom))
 	fields = appendText(fields, path+".ports",
@@ -89,6 +88,23 @@ func containerDiff(
 	return fields
 }
 
+// appendArgs reports a changed command line without its secrets (see
+// safeArgs). A change that only touched hidden values says "changed" on
+// both sides, which RevisionDiff keeps (see inventory.HiddenValue).
+func appendArgs(
+	fields []inventory.FieldChange, path string, before, after []string,
+) []inventory.FieldChange {
+	if strings.Join(before, " ") == strings.Join(after, " ") {
+		return fields
+	}
+	b, a := safeArgs(before), safeArgs(after)
+	if b == a {
+		b, a = inventory.HiddenValue, inventory.HiddenValue
+	}
+	return append(fields, inventory.FieldChange{
+		Path: path, Before: b, After: a})
+}
+
 func appendText(
 	fields []inventory.FieldChange, path, before, after string,
 ) []inventory.FieldChange {
@@ -97,97 +113,6 @@ func appendText(
 	}
 	return append(fields, inventory.FieldChange{
 		Path: path, Before: before, After: after})
-}
-
-// envChanges reports each changed variable by name. A literal value is
-// shown, except for names that look like credentials: those only say
-// "changed". References to a Secret or ConfigMap show the object and key,
-// never a value.
-func envChanges(
-	path string, before, after []corev1.EnvVar,
-) []inventory.FieldChange {
-	old, next := envTexts(before), envTexts(after)
-	names := map[string]bool{}
-	for name := range old {
-		names[name] = true
-	}
-	for name := range next {
-		names[name] = true
-	}
-	sorted := make([]string, 0, len(names))
-	for name := range names {
-		sorted = append(sorted, name)
-	}
-	sort.Strings(sorted)
-	var fields []inventory.FieldChange
-	for _, name := range sorted {
-		b, a := old[name], next[name]
-		if b == a {
-			continue
-		}
-		if sensitiveName(name) && !isReference(b) && !isReference(a) {
-			b, a = hidden(b), hidden(a)
-		}
-		fields = append(fields, inventory.FieldChange{
-			Path: path + ".env." + name, Before: b, After: a})
-	}
-	return fields
-}
-
-// hidden keeps whether a value existed, never what it was.
-func hidden(value string) string {
-	if value == "" {
-		return ""
-	}
-	return "changed"
-}
-
-const referencePrefix = "from "
-
-func isReference(value string) bool {
-	return strings.HasPrefix(value, referencePrefix)
-}
-
-func envTexts(vars []corev1.EnvVar) map[string]string {
-	out := make(map[string]string, len(vars))
-	for _, v := range vars {
-		out[v.Name] = envText(v)
-	}
-	return out
-}
-
-func envText(v corev1.EnvVar) string {
-	from := v.ValueFrom
-	switch {
-	case from == nil:
-		return v.Value
-	case from.SecretKeyRef != nil:
-		return referencePrefix + "secret " + from.SecretKeyRef.Name +
-			"/" + from.SecretKeyRef.Key
-	case from.ConfigMapKeyRef != nil:
-		return referencePrefix + "config map " + from.ConfigMapKeyRef.Name +
-			"/" + from.ConfigMapKeyRef.Key
-	case from.FieldRef != nil:
-		return referencePrefix + "field " + from.FieldRef.FieldPath
-	}
-	return referencePrefix + "resource"
-}
-
-// sensitiveWords mark an environment variable whose literal value is
-// probably a credential.
-var sensitiveWords = []string{
-	"password", "passwd", "secret", "token", "key", "credential", "auth",
-	"cert", "dsn",
-}
-
-func sensitiveName(name string) bool {
-	lower := strings.ToLower(name)
-	for _, word := range sensitiveWords {
-		if strings.Contains(lower, word) {
-			return true
-		}
-	}
-	return false
 }
 
 func envFromText(sources []corev1.EnvFromSource) string {
@@ -227,11 +152,12 @@ func probeText(p *corev1.Probe) string {
 	var what string
 	switch {
 	case p.HTTPGet != nil:
-		what = "http " + p.HTTPGet.Path + " :" + p.HTTPGet.Port.String()
+		what = "http " + safePath(p.HTTPGet.Path) + " :" +
+			p.HTTPGet.Port.String()
 	case p.TCPSocket != nil:
 		what = "tcp :" + p.TCPSocket.Port.String()
 	case p.Exec != nil:
-		what = "exec " + strings.Join(p.Exec.Command, " ")
+		what = "exec " + safeArgs(p.Exec.Command)
 	case p.GRPC != nil:
 		what = "grpc :" + strconv.Itoa(int(p.GRPC.Port))
 	}

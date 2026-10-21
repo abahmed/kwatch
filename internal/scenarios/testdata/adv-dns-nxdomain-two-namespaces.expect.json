@@ -1,0 +1,16 @@
+{
+  "name": "adv-dns-nxdomain-two-namespaces",
+  "description": "Two workloads in different namespaces fail on the same vanished vendor host with different resolver messages while cluster DNS is healthy.",
+  "root": "deployment/shop/checkout",
+  "otherRoots": [
+    "deployment/billing/invoicer"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "cluster-dns//cluster-dns",
+    "deployment/kube-system/coredns",
+    "node//n1",
+    "node//n2"
+  ]
+}

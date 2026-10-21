@@ -39,7 +39,8 @@ func rootSteps(
 	switch {
 	case p.Cause != nil && p.Cause.Change != nil &&
 		incident.IsWorkload(root.Kind):
-		return rolloutSteps(root, p.Cause.RollbackRevision)
+		return rolloutSteps(root, p.Cause.RollbackRevision,
+			pullFailure(members))
 	case root.Kind == kube.KindNode && !nodeRemoved(p):
 		return nodeSteps(root)
 	case root.Kind == kube.KindSecret:
@@ -65,6 +66,8 @@ func rootSteps(
 			Command: "kubectl get " + string(root.Kind) + " " +
 				quote(root.Name) + " -o yaml",
 		}}
+	case controlPlaneSteps(root) != nil:
+		return controlPlaneSteps(root)
 	case root.Kind == kube.KindPVC && claimFull(p.Cause):
 		return []notification.Step{{
 			Text: "Check the size and capacity of the full volume claim",
@@ -95,15 +98,20 @@ func nodeRemoved(p incident.Incident) bool {
 }
 
 // rolloutSteps offers an undo only to a known revision: a bare undo goes
-// to whatever revision is previous at the time it runs.
+// to whatever revision is previous at the time it runs. It opens with the
+// rollout state, or with the events of a pod that cannot pull its image
+// (pull is its finding), where the registry's answer is.
 func rolloutSteps(
-	workload inventory.EntityID, revision string,
+	workload inventory.EntityID, revision string, pull *detection.Finding,
 ) []notification.Step {
 	ref := quote(string(workload.Kind) + "/" + workload.Name)
 	ns := namespaceFlag(workload.Namespace)
 	steps := []notification.Step{
 		{Text: "See the rollout state",
 			Command: "kubectl rollout status " + ref + ns},
+	}
+	if pull != nil {
+		steps = containerSteps(*pull)
 	}
 	if revision != "" {
 		steps = append(steps, notification.Step{
@@ -115,6 +123,24 @@ func rolloutSteps(
 		})
 	}
 	return steps
+}
+
+// pullFailure is the first failing member that cannot pull its image.
+func pullFailure(members []detection.Finding) *detection.Finding {
+	for _, m := range failing(members) {
+		if m.Entity.Kind == kube.KindContainer && pullReasons[m.Reason] {
+			return &m
+		}
+	}
+	return nil
+}
+
+// pullReasons are the waiting reasons of a container whose image cannot
+// be used.
+var pullReasons = map[string]bool{
+	reasons.ErrImagePull: true, reasons.ImagePullBackOff: true,
+	reasons.InvalidImageName: true, reasons.ErrImageNeverPull: true,
+	reasons.ImageInspectError: true,
 }
 
 func nodeSteps(node inventory.EntityID) []notification.Step {
@@ -218,11 +244,15 @@ func containerSteps(s detection.Finding) []notification.Step {
 		}}
 	}
 	steps := nodeOOMSteps(s)
-	steps = append(steps, notification.Step{
-		Text: "Read the output of the last crash",
-		Command: "kubectl logs " + quote(pod) + " -c " + quote(container) +
-			ns + " --previous",
-	})
+	if ranBefore(s) {
+		steps = append(steps, notification.Step{
+			Text: "Read the output of the last crash",
+			Command: "kubectl logs " + quote(pod) + " -c " +
+				quote(container) + ns + " --previous",
+		})
+	} else {
+		steps = append(steps, currentRunSteps(pod, container, ns)...)
+	}
 	if s.Reason == reasons.OOMKilled {
 		steps = append(steps, notification.Step{
 			Text: "Compare memory use with the limit",

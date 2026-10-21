@@ -43,6 +43,9 @@ func nonEventCases() []nonEventCase {
 		{"node drain within its budget", calmDrain},
 		{"pod churn from Jobs completing", calmJobs},
 		{"healthy CronJob", calmCronJob},
+		{"quota used exactly, nothing refused", calmQuotaFull},
+		{"healthy pods throttled on CPU", calmThrottled},
+		{"budget allowing no disruption, no drain", calmBudgetFull},
 	}
 }
 

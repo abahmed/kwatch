@@ -2,6 +2,7 @@ package scenarios
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/replay"
@@ -15,8 +16,14 @@ type verdict struct {
 	messages  int
 	// cases are the labelled root cases, one per expected root.
 	cases []scorecard.Case
-	// blamed lists must-not-blame entities that a stated cause named.
+	// blamed lists must-not-blame entities that a stated cause, its
+	// rival or a message named as the cause.
 	blamed []string
+	// firstWrong lists the roots the first message stated that the label
+	// does not allow; announcedWrong lists them over every message (see
+	// announced_test.go). An incident that states no cause is never
+	// wrong: it says the cause is unknown.
+	firstWrong, announcedWrong []string
 	// tier is the first incident's delivery tier, empty when none.
 	tier string
 	// pages is how many paging alerts the replay opened.
@@ -44,7 +51,38 @@ func (v verdict) tierMatches() bool {
 	return v.expect.Quiet || v.tier == v.expect.Tier
 }
 
-func judge(e expectation, result replay.Result) verdict {
+// problems lists every way a scenario missed its label, in the words of
+// the scenario table. A scenario that passes has none.
+func (v verdict) problems() []string {
+	var misses []string
+	add := func(miss bool, text string) {
+		if miss {
+			misses = append(misses, text)
+		}
+	}
+	add(slices.ContainsFunc(v.cases, func(c scorecard.Case) bool {
+		return !c.Correct
+	}), "wrong root")
+	add(slices.ContainsFunc(v.cases, scorecard.Case.WrongStated),
+		"wrong root stated")
+	if len(v.blamed) > 0 {
+		misses = append(misses, "blamed "+strings.Join(v.blamed, ", "))
+	}
+	add(v.wrongFirstRoot(), "wrong root first: "+
+		strings.Join(v.firstWrong, ", "))
+	add(v.loud(), "not quiet")
+	add(v.overBudget(), "over budget")
+	add(!v.tierMatches(), "tier")
+	add(v.overPages(), "over pages")
+	add(v.leftOpen > 0, "left open")
+	add(v.falseRecoveries > 0, "false recovery")
+	return misses
+}
+
+// judge compares a replay with its label. The log is only read for who
+// owns what, so a message about a pod can count as one about its
+// Deployment.
+func judge(e expectation, log replay.Log, result replay.Result) verdict {
 	v := verdict{
 		expect: e, messages: len(result.Messages),
 		incidents: withoutUnrelated(e,
@@ -55,6 +93,8 @@ func judge(e expectation, result replay.Result) verdict {
 	}
 	v.cases = rootCases(e, v.incidents)
 	v.blamed = blamed(e, result)
+	v.firstWrong, v.announcedWrong = wrongRootsAnnounced(
+		e, ownershipOf(log), result)
 	v.pages = pagesRaised(result)
 	v.falseRecoveries = falseRecoveries(result)
 	v.leftOpen = leftOpen(result)
@@ -92,20 +132,22 @@ func heardFirst(incidents []reported) []reported {
 	return out
 }
 
-// rootCases judges each expected root. The first root is judged against
-// the first reported incident; every further root needs an incident of
-// its own among the rest.
+// rootCases judges each expected root. A scenario with one root judges
+// it against the first reported incident. Several roots are independent
+// incidents that may be heard in any order, so each is matched to an
+// incident of its own.
 func rootCases(e expectation, incidents []reported) []scorecard.Case {
 	var cases []scorecard.Case
 	used := map[int]bool{}
 	for i, want := range e.roots() {
 		c := scorecard.Case{
 			Name: e.Name, Expected: want, Actual: "no matching incident",
+			ExpectsRoot: want != rootUnknown, Ambiguous: e.Ambiguous,
 		}
-		match := -1
-		if i == 0 && len(incidents) > 0 {
+		var match int
+		if i == 0 && len(e.roots()) == 1 && len(incidents) > 0 {
 			match = firstIncident(incidents, want)
-		} else if i > 0 {
+		} else {
 			match = findRoot(incidents, want, used)
 		}
 		if match >= 0 {
@@ -113,6 +155,7 @@ func rootCases(e expectation, incidents []reported) []scorecard.Case {
 			got := incidents[match]
 			c.Actual, c.Confidence = actualRoot(got), got.confidence()
 			c.Correct = rootMatches(want, got)
+			c.Hedged = got.Cause != nil && got.Cause.Rival != nil
 		}
 		cases = append(cases, c)
 	}
@@ -159,34 +202,4 @@ func actualRoot(got reported) string {
 		return got.Root + " (no cause)"
 	}
 	return got.Root
-}
-
-// blamed lists the must-not-blame entities any stated cause named, in any
-// decision or in the final state.
-func blamed(e expectation, result replay.Result) []string {
-	forbidden := map[string]bool{}
-	for _, id := range e.MustNotBlame {
-		forbidden[id] = true
-	}
-	hit := map[string]bool{}
-	var out []string
-	check := func(id string) {
-		if forbidden[id] && !hit[id] {
-			hit[id] = true
-			out = append(out, id)
-		}
-	}
-	for _, d := range result.Decisions {
-		if cause := d.Incident.Cause; cause != nil {
-			check(d.Incident.Root.String())
-			check(cause.Root.String())
-		}
-	}
-	for _, p := range result.Incidents {
-		if p.Cause != nil && !p.Announced.IsZero() {
-			check(p.Root.String())
-			check(p.Cause.Root.String())
-		}
-	}
-	return out
 }

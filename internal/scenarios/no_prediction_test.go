@@ -29,9 +29,10 @@ var quoted = regexp.MustCompile("\"[^\"\n]*\"|`[^`\n]*`|“[^”\n]*”")
 
 // presentFacts are phrases that look predictive but describe what
 // already happened: the out-of-memory kill, "soon after" a change and
-// kwatch's own "could not reach" (a probe that failed).
-var presentFacts = regexp.MustCompile(
-	`(?i)running out of memory|soon after|could not|couldn't`)
+// kwatch's own "could not reach" (a probe that failed), and what kwatch
+// itself does next ("kwatch will write again"), not the cluster.
+var presentFacts = regexp.MustCompile(`(?i)running out of memory|` +
+	`soon after|could not|couldn't|kwatch will write again`)
 
 // predictionHits returns every predictive phrase in kwatch's own
 // words. Fenced code blocks (commands) and quoted spans are skipped.

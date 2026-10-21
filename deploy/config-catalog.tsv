@@ -48,4 +48,4 @@ healthCheck.statusEndpoint|boolean|false|Security|Serve the read-only /status vi
 app.hideProHints|boolean|false|Operations|Remove the note that names what kwatch Pro adds from Community messages.|active|
 license.key|string|empty|Operations|kwatch Pro license key; reference it as ${KWATCH_LICENSE_KEY}. The KWATCH_LICENSE_KEY variable wins over this setting. Empty runs the Community edition.|active|
 app.communityProvider|string|empty|Operations|Alert provider the Community edition keeps when several are configured; empty keeps the first by name.|active|
-clusterCheckins|boolean|true|Operations|Pro cluster check-ins: every 30 minutes kwatch tells api.kwatch.dev it is running, so app.kwatch.dev can show when the cluster goes silent. Sent: a hashed cluster ID, the kwatch version, the node count, the namespace and the cluster name if set. Ignored in the Community edition.|active|
+clusterCheckins|boolean|empty|Compatibility|Removed: kwatch no longer sends cluster check-ins. Accepted and ignored with a deprecation notice; use heartbeatMonitor to learn when kwatch stops.|deprecated|heartbeatMonitor

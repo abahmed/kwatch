@@ -1,0 +1,110 @@
+10:03:15 settled
+🔴 app0 in shop (prod-eu-1) keeps crashing. It fails with "fatal: tracker lost its own dependency". Nothing it depends on is failing. Service app0 can't serve traffic. It runs a single replica. To read the output of the last crash, run kubectl logs app0-921c6b1a-a -c app -n shop --previous
+🔴 app0 in shop (prod-eu-1) keeps crashing.
+| 🔴 **app0** in **shop** (**prod-eu-1**) keeps crashing.
+| It fails with `fatal: tracker lost its own dependency`.
+| Nothing it depends on is failing.
+| Service **app0** can't serve traffic.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs app0-921c6b1a-a -c app -n shop --previous
+| ```
+10:03:18 roll-up
+🔴 shop (prod-eu-1): 6 of 8 workloads failing since 10:02 UTC. app0 in shop keeps crashing. app1 in shop keeps crashing. app2 in shop keeps crashing. app3 in shop keeps crashing. app4 in shop keeps crashing. One more is not described here. Each gets its own message when it changes or resolves.
+🔴 shop (prod-eu-1): 6 of 8 workloads failing since 10:02 UTC.
+| 🔴 **shop** · prod-eu-1 — 6 of 8 workloads failing since 10:02 UTC
+|
+| **Problems**
+| - **app0** in **shop** keeps crashing
+| - **app1** in **shop** keeps crashing
+| - **app2** in **shop** keeps crashing
+| - **app3** in **shop** keeps crashing
+| - **app4** in **shop** keeps crashing
+| - +1 more
+|
+| *Each gets its own message when it changes or resolves.*
+10:36:15 digest
+🟡 kwatch (prod-eu-1) has eight low-priority problems to report. Service app0 in shop has been waiting 5 min for a load balancer: no controller has acted on it. Service app1 in shop has been waiting 5 min for a load balancer: no controller has acted on it. Service app2 in shop has been waiting 5 min for a load balancer: no controller has acted on it. Service app3 in shop has been waiting 5 min for a load balancer: no controller has acted on it. Service app4 in shop has been waiting 5 min for a load balancer: no controller has acted on it. Three more are not described here. None of them is urgent; one that gets worse gets its own message.
+🟡 kwatch (prod-eu-1) has eight low-priority problems to report.
+| 🟡 **kwatch digest** · prod-eu-1 — 8 problems
+|
+| **Problems**
+| - Service **app0** in **shop** has been waiting 5 min for a load balancer: no controller has acted on it
+| - Service **app1** in **shop** has been waiting 5 min for a load balancer: no controller has acted on it
+| - Service **app2** in **shop** has been waiting 5 min for a load balancer: no controller has acted on it
+| - Service **app3** in **shop** has been waiting 5 min for a load balancer: no controller has acted on it
+| - Service **app4** in **shop** has been waiting 5 min for a load balancer: no controller has acted on it
+| - +3 more
+16:03:15 still open
+🔴 app0 in shop (prod-eu-1) keeps crashing. It fails with "fatal: tracker lost its own dependency". Nothing it depends on is failing. Service app0 can't serve traffic. It runs a single replica. To read the output of the last crash, run kubectl logs app0-921c6b1a-a -c app -n shop --previous
+🔴 app0 in shop (prod-eu-1) keeps crashing.
+| 🔴 **app0** in **shop** (**prod-eu-1**) keeps crashing.
+| It fails with `fatal: tracker lost its own dependency`.
+| Nothing it depends on is failing.
+| Service **app0** can't serve traffic.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs app0-921c6b1a-a -c app -n shop --previous
+| ```
+16:03:25 still open
+🟠 app1 in shop (prod-eu-1) keeps crashing. It fails with "fatal: mapper lost its own dependency". Nothing it depends on is failing. Service app1 can't serve traffic. It runs a single replica. To read the output of the last crash, run kubectl logs app1-7a4b74f3-a -c app -n shop --previous
+🟠 app1 in shop (prod-eu-1) keeps crashing.
+| 🟠 **app1** in **shop** (**prod-eu-1**) keeps crashing.
+| It fails with `fatal: mapper lost its own dependency`.
+| Nothing it depends on is failing.
+| Service **app1** can't serve traffic.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs app1-7a4b74f3-a -c app -n shop --previous
+| ```
+16:03:25 still open
+🟠 app2 in shop (prod-eu-1) keeps crashing. It fails with "fatal: archiver lost its own dependency". Nothing it depends on is failing. Service app2 can't serve traffic. It runs a single replica. To read the output of the last crash, run kubectl logs app2-7243a635-a -c app -n shop --previous
+🟠 app2 in shop (prod-eu-1) keeps crashing.
+| 🟠 **app2** in **shop** (**prod-eu-1**) keeps crashing.
+| It fails with `fatal: archiver lost its own dependency`.
+| Nothing it depends on is failing.
+| Service **app2** can't serve traffic.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs app2-7243a635-a -c app -n shop --previous
+| ```
+16:03:25 still open
+🟠 app3 in shop (prod-eu-1) keeps crashing. It fails with "fatal: broker lost its own dependency". Nothing it depends on is failing. Service app3 can't serve traffic. It runs a single replica. To read the output of the last crash, run kubectl logs app3-2852687c-a -c app -n shop --previous
+🟠 app3 in shop (prod-eu-1) keeps crashing.
+| 🟠 **app3** in **shop** (**prod-eu-1**) keeps crashing.
+| It fails with `fatal: broker lost its own dependency`.
+| Nothing it depends on is failing.
+| Service **app3** can't serve traffic.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs app3-2852687c-a -c app -n shop --previous
+| ```
+16:03:25 still open
+🟠 app4 in shop (prod-eu-1) keeps crashing. It fails with "fatal: sampler lost its own dependency". Nothing it depends on is failing. Service app4 can't serve traffic. It runs a single replica. To read the output of the last crash, run kubectl logs app4-7e9ea4fb-a -c app -n shop --previous
+🟠 app4 in shop (prod-eu-1) keeps crashing.
+| 🟠 **app4** in **shop** (**prod-eu-1**) keeps crashing.
+| It fails with `fatal: sampler lost its own dependency`.
+| Nothing it depends on is failing.
+| Service **app4** can't serve traffic.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs app4-7e9ea4fb-a -c app -n shop --previous
+| ```
+16:03:25 still open
+🟠 app5 in shop (prod-eu-1) keeps crashing. It fails with "fatal: balancer lost its own dependency". Nothing it depends on is failing. Service app5 can't serve traffic. It runs a single replica. To read the output of the last crash, run kubectl logs app5-81cd14d4-a -c app -n shop --previous
+🟠 app5 in shop (prod-eu-1) keeps crashing.
+| 🟠 **app5** in **shop** (**prod-eu-1**) keeps crashing.
+| It fails with `fatal: balancer lost its own dependency`.
+| Nothing it depends on is failing.
+| Service **app5** can't serve traffic.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs app5-81cd14d4-a -c app -n shop --previous
+| ```

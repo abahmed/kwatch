@@ -47,7 +47,7 @@ func setConditions(attrs map[string]inventory.Value, conditions []condition) {
 			attrs[key+AttrConditionReason] = inventory.Text(
 				boundedLabel(c.Reason, maxConditionReasonLength))
 		}
-		if c.Message != "" && keepsMessage(c) {
+		if c.Message != "" && ConditionFailing(c.Type, c.Status) {
 			attrs[key+AttrConditionMessage] = inventory.Text(
 				evidenceText(c.Message))
 		}
@@ -55,33 +55,6 @@ func setConditions(attrs map[string]inventory.Value, conditions []condition) {
 			attrs[key+AttrConditionSince] = inventory.Time(c.Since)
 		}
 	}
-}
-
-// failureConditionTypes are conditions where Status=True is the problem,
-// so their message is evidence even though the status is True.
-var failureConditionTypes = map[string]bool{
-	"ReplicaFailure":      true,
-	"Failed":              true,
-	"FailureTarget":       true,
-	"MemoryPressure":      true,
-	"DiskPressure":        true,
-	"PIDPressure":         true,
-	"NetworkUnavailable":  true,
-	"PodResizePending":    true,
-	"PodResizeInProgress": true,
-	// DisruptionTarget=True names who preempted or evicted the pod.
-	"DisruptionTarget": true,
-	// A terminating namespace reports what keeps it alive as True.
-	"NamespaceDeletionDiscoveryFailure": true,
-	"NamespaceDeletionContentFailure":   true,
-	"NamespaceContentRemaining":         true,
-	"NamespaceFinalizersRemaining":      true,
-}
-
-// keepsMessage skips the message of healthy conditions ("Available=True")
-// to keep the model small.
-func keepsMessage(c condition) bool {
-	return c.Status != "True" || failureConditionTypes[c.Type]
 }
 
 // ConditionKey returns the attribute name for a condition type.
@@ -116,6 +89,13 @@ func evidenceText(value string) string {
 	return truncate(redact.Credentials(value))
 }
 
+// eventText is evidenceText for the message of an Event. An error ends
+// with its reason, so when the message is too long its middle is cut and
+// its beginning and its end are kept.
+func eventText(value string) string {
+	return clipMiddle(redact.Credentials(value), maxMessageLength)
+}
+
 // boundedLabel redacts credentials, then cuts the value to limit bytes.
 func boundedLabel(value string, limit int) string {
 	return truncateTo(redact.Credentials(value), limit)
@@ -134,4 +114,23 @@ func truncateTo(value string, limit int) string {
 		cut--
 	}
 	return value[:cut] + "…"
+}
+
+// clipMiddle cuts value to about limit bytes by dropping its middle,
+// which it marks with "…". Half of the room goes to the beginning, which
+// names the object an error is about, and half to the end, which gives
+// its reason, on rune boundaries.
+func clipMiddle(value string, limit int) string {
+	if len(value) <= limit {
+		return value
+	}
+	head := limit / 2
+	for head > 0 && value[head]&0xC0 == 0x80 {
+		head--
+	}
+	tail := len(value) - (limit - limit/2)
+	for tail < len(value) && value[tail]&0xC0 == 0x80 {
+		tail++
+	}
+	return value[:head] + "…" + value[tail:]
 }

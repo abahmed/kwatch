@@ -66,13 +66,14 @@ func TestRenderJiraWiki(t *testing.T) {
 	m.Doc[1].Spans[1].Text = "bad {code} [~admin] *x*"
 	got := m.Render(JiraDialect())
 	for _, want := range []string{"*payments*",
-		"{{bad code \\[\\~admin\\] \\*x\\*}}", "{noformat}\nkubectl"} {
+		"{noformat}\nbad {code} [~admin] *x*\n{noformat}",
+		"{noformat}\nkubectl"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}
 	}
-	if strings.Contains(got, "{{bad {code}") {
-		t.Errorf("braces must not survive inside a code span: %s", got)
+	if strings.Contains(got, "{{bad") {
+		t.Errorf("braces must not be written inside a code span: %s", got)
 	}
 }
 

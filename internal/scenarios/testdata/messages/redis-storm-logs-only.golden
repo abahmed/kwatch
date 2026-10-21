@@ -1,16 +1,16 @@
 10:04:15 settled
-🟠 exporter in billing (prod-eu-1) and five other workloads keep crashing with the same error. It fails with "Unhandled exception. StackExchange.Redis.RedisConnectionException: It was not possible to connect to the redis…". Its last run lasted 10s; 2 restarts in the 1h4m since its pod was created. invoicer and ledger, cart in shop and two others are affected as well. To read the output of the last crash, run kubectl logs exporter-69070cef-a -c app -n billing --previous
-Checked: both replicas fail, on 2 nodes.
+🟠 exporter in billing (prod-eu-1) and five other workloads keep crashing with the same error. It fails with "Unhandled exception. StackExchange.Redis.RedisConnectionException: It was not possible to connect to the redis…". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. invoicer and ledger in billing; cart in shop; and two others are affected as well. To read the output of the last crash, run kubectl logs exporter-69070cef-a -c app -n billing --previous
+Checked: both replicas fail, on 2 nodes (exporter); both replicas fail, on 2 nodes (invoicer); both replicas fail, on 2 nodes (ledger).
 🟠 exporter in billing (prod-eu-1) and five other workloads keep crashing with the same error.
 | 🟠 **exporter** in **billing** (**prod-eu-1**) and five other workloads keep crashing with the same error.
 | It fails with
 | ```
 | Unhandled exception. StackExchange.Redis.RedisConnectionException: It was not possible to connect to the redis…
 | ```
-| Its last run lasted 10s; 2 restarts in the 1h4m since its pod was created.
-| **invoicer** and **ledger**, **cart** in **shop** and two others are affected as well.
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| **invoicer** and **ledger** in **billing**; **cart** in **shop**; and two others are affected as well.
 | To read the output of the last crash, run
 | ```
 | kubectl logs exporter-69070cef-a -c app -n billing --previous
 | ```
-| *Checked: both replicas fail, on 2 nodes.*
+| *Checked: both replicas fail, on 2 nodes (exporter); both replicas fail, on 2 nodes (invoicer); both replicas fail, on 2 nodes (ledger).*

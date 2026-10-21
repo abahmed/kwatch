@@ -36,7 +36,9 @@ const statsLogEvery = 10 * time.Minute
 type StatsRound struct {
 	// Nodes is how many nodes the round meant to poll.
 	Nodes int
-	// Failed counts nodes whose summary could not be read or decoded.
+	// Failed counts nodes whose summary could not be read or decoded,
+	// the expected failures of settling nodes and first failures
+	// included. Reason only reflects the failures that count.
 	Failed int
 	// Skipped counts nodes the round ran out of time to start.
 	Skipped int
@@ -52,20 +54,29 @@ type statusCoder interface {
 
 // statsTally collects node results from the round's goroutines.
 type statsTally struct {
-	mu         sync.Mutex
-	failed     int
+	mu     sync.Mutex
+	failed int
+	// counted is the failures that degrade health: not expected ones.
+	counted    int
 	denied     bool
 	firstNode  string
 	firstError error
 }
 
-func (t *statsTally) add(node inventory.EntityID, err error) {
+// add records a node's result. expected marks a failure that says nothing
+// about the kubelet yet (see failureExpected): it is counted in Failed
+// only.
+func (t *statsTally) add(node inventory.EntityID, err error, expected bool) {
 	if err == nil {
 		return
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.failed++
+	if expected {
+		return
+	}
+	t.counted++
 	var coded statusCoder
 	if errors.As(err, &coded) {
 		code := coded.StatusCode()
@@ -81,10 +92,10 @@ func (t *statsTally) add(node inventory.EntityID, err error) {
 func (t *statsTally) round(nodes, started int) StatsRound {
 	r := StatsRound{Nodes: nodes, Failed: t.failed, Skipped: nodes - started}
 	switch {
-	case r.Failed == 0 && r.Skipped == 0:
+	case t.counted == 0 && r.Skipped == 0:
 	case t.denied:
 		r.Reason = StatsReasonPermissionDenied
-	case r.Failed == nodes:
+	case t.counted == nodes:
 		r.Reason = StatsReasonUnreachable
 	default:
 		r.Reason = StatsReasonPartial

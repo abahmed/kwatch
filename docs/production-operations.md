@@ -171,7 +171,11 @@ Reachability is visible as the optional `/health` component `kubelet-stats`:
 `degraded` with `kubelet_unreachable` (no node answered),
 `kubelet_partially_unreachable` (some nodes failed, or the round ran out of
 time), `optional_permission_denied` (a kubelet answered 401 or 403), or
-`source_not_configured`. Failed reads are counted by
+`source_not_configured`. A node's kubelet counts as unreachable only after
+it failed two polls in a row, and never while the node is settling: less
+than ten minutes old (its kubelet may still be starting, for example
+without its serving certificate yet) or cordoned and on its way out. A
+refusal (401 or 403) counts at once. Failed reads are counted by
 `kwatch_kubelet_stats_failures_total` and logged at most once every 10
 minutes, with one log line on recovery. Each round starts at the first node
 the previous round did not reach, so a slow round never starves the same
@@ -187,12 +191,24 @@ row.
 ### Node autoscalers
 
 kwatch holds one state file under one lock, so evicting its Pod to repack
-or scale down nodes costs a restart and a gap in monitoring. The manifest
-and the chart's default `podAnnotations` set the plain annotations
-`karpenter.sh/do-not-disrupt: "true"` and
-`cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`. They only ask a
-node autoscaler to leave the Pod alone, and they do nothing where none reads
-them; kwatch itself uses only the Kubernetes API and the kubelet.
+or scale down nodes costs a restart and a gap in monitoring; the restart
+resumes from the state volume. The chart's default `podAnnotations` and the
+raw manifest set the plain annotation
+`cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`, which asks the
+cluster autoscaler not to scale down the node the Pod runs on. They do
+**not** set `karpenter.sh/do-not-disrupt`: that annotation blocks
+Karpenter's consolidation of the Pod's node for as long as the Pod runs,
+and a long-lived kwatch Pod showed hundreds of `DisruptionBlocked` events on
+a staging cluster. To ask Karpenter to leave the Pod alone anyway, set
+`podAnnotations."karpenter.sh/do-not-disrupt": "true"`; to let the cluster
+autoscaler scale its node down, set the `safe-to-evict` annotation to `null`.
+
+The chart ships no PodDisruptionBudget. On a one-Pod Deployment,
+`minAvailable: 1` would block every drain of the node it runs on, while
+`maxUnavailable: 1` allows the single eviction a drain needs. If you want a
+budget (for example to keep a drain from evicting kwatch together with other
+workloads you protect), create it yourself; kwatch itself uses only the
+Kubernetes API and the kubelet.
 
 ### Memory
 
@@ -218,6 +234,18 @@ events does not reach the limit.
 | 5,000 | 140 MiB | `512Mi` (chart default) |
 | 10,000 | 270 MiB | `768Mi` |
 | 20,000 | 520 MiB | `1Gi` (`1280Mi` for pods with larger specs) |
+
+The table counts pods because they dominate, but kwatch also holds the
+other objects it watches. They add to the live heap on top of the per-pod
+figure: ConfigMaps and Secrets are cached as hashes of their data (a few
+hundred bytes to a few KB each, whatever their size), ReplicaSets and
+EndpointSlices grow with the number of Deployments, Services and endpoints,
+and every other watched kind (Jobs, PersistentVolumeClaims, Ingresses,
+custom resources up to the per-kind and total object caps) costs about the
+same as a small pod entry. A cluster with a few thousand ConfigMaps and
+Secrets and many old ReplicaSets can need noticeably more than its pod count
+suggests, so read the live heap from the `self-health` line after a day on
+the real cluster before trusting the table.
 
 The default 512Mi supports about 8,000 realistic pods; beyond that, raise
 `resources.requests.memory` and `resources.limits.memory` together. Pods
@@ -249,12 +277,25 @@ restart the Deployment yourself after editing it.
 - `/health` reports optional monitor degradation and safe reason codes.
 - `/status` (opt-in, `healthCheck.statusEndpoint`) shows open incidents.
 
+When the license changes the edition, kwatch rebuilds in the same process.
+The old health listener keeps answering `/healthz` (and reports not ready)
+until the new generation has built everything slow and takes the port over,
+so the kubelet's liveness probe (45 seconds of tolerance) never sees a
+closed port for more than the moment of the hand-over. A configured license
+key adds a `license` component to `/health`: `running` while Pro is active,
+`degraded` with `license_invalid`, `license_expired`, `license_revoked` or
+`license_conflict` when the key cannot run Pro (kwatch then runs Community
+and says why in one log warning and one notice), and `waiting` with
+`license_pending` before the first answer.
+
 `/health` reasons come from a fixed vocabulary; raw errors stay in the logs.
 The ones an operator meets most often are `component_stalled` (a required
 component stopped reporting progress), `component_failed` and
 `component_stopped`, `permission_denied` and `optional_permission_denied`,
 `api_unavailable` and `optional_api_unavailable`, `cache_sync_pending`,
-`cache_sync_timeout` and `cache_sync_failed`, `watcher_failed`,
+`cache_sync_timeout` and `cache_sync_failed`, `handler_panics` (the event
+handler of a watched kind keeps panicking, so its objects are not reaching
+the model), `watcher_failed`,
 `persistence_restore_failed`, `storage_reset`, `storage_over_cap`,
 `heartbeat_failed`, `config_overlay_invalid`, and, in the `coverage` object, `disabled_by_config`,
 `sync_timeout` and `budget_exceeded`. The
@@ -268,6 +309,25 @@ running. Readiness is withdrawn again while a required source (Pods, Nodes) is
 unavailable, for example after its permission is revoked, and returns when it
 recovers; this does not restart the Pod. A source counts as listed only once
 kwatch has processed every object of its initial list.
+
+Source health is reported from the start, every 30 seconds, not only after
+the initial list: a required kind that is forbidden or not served never
+finishes listing, and `/health` shows `source-<resource>` as degraded with
+its reason (`permission_denied`, `api_unavailable`, `cache_sync_pending`)
+while `/readyz` stays failing. Once a kind has synced, a watch that keeps
+failing is shown too: when no list or watch got through for two minutes,
+`source-<resource>` degrades with `cache_sync_failed` until a list or watch
+succeeds again. That is a health signal only; readiness does not change.
+
+Readiness waits for the optional kinds as well as the required ones, but
+not without bound: after two minutes (`DefaultOptionalSyncTimeout`, the
+same as the readiness target above) an optional kind that has not listed is
+reported as `cache_sync_timeout` and kwatch becomes ready without it. A
+kind the API refuses (forbidden, not served) does not hold readiness at
+all. The first alerts of a cold start do not wait for the optional kinds
+either: the startup hold ends when Pods and Nodes have listed, and a kind
+that lists later is compared with the saved state when it does. The two
+minutes are not configurable.
 
 ## Shutdown and recovery
 
@@ -343,7 +403,7 @@ stops within one transaction on shutdown or loss of the state lock.
 | Data | Retention |
 | --- | --- |
 | Changes | 7 days after the entry time, and at most 8 MiB |
-| Timeline | 7 days after the entry time, and at most 32 MiB |
+| Timeline | 7 days after the entry time, and at most 32 MiB (about 100,000 entries). The size cap can come first: a cluster that writes an entry every second or two, or that wakes up with hundreds of workloads, keeps hours, not 7 days. Incident records live in their own bucket and are not affected |
 | Flight recording | 48 hours, and at most 64 MiB (see "Capturing an incident") |
 | Evidence | 30 days, and at most 128 MiB |
 | Resolved incidents | 7 days after resolution |
@@ -519,8 +579,12 @@ A file that cannot be read at all is replaced by an empty one (see
 ## Security and data sent out
 
 Kwatch serves no diagnostic endpoints and writes nothing to the cluster except
-its own Lease and SelfSubjectAccessReviews for its permission audit (not
-persisted). Secret values are only hashed, and evidence is redacted before
+its own Lease, the license instance Secret (`kwatch-license-instance`, only
+when a license key is configured: kwatch updates its instance key there, and
+`kwatch license deactivate` writes a `deactivated-at` field) and
+SelfSubjectAccessReviews for its permission audit (not persisted). The
+license Secret grant is `get` and `update` on that one name, and the audit
+checks it when a key is set. Secret values are only hashed, and evidence is redacted before
 it is stored or rendered. Provider credentials come from mounted files, never
 from plain configuration.
 
@@ -530,7 +594,9 @@ then at most once every 7 days. The body is exactly
 `{"cluster_uuid": "<installation ID>", "kwatch_version": "<version>"}`.
 The installation ID is a UUID derived from a salted SHA-256 hash of the
 `kube-system` namespace UID (a random UUID if that cannot be read) and kept in
-the state file; the UID itself is never sent. No cluster name, resource, configuration, log line or
+the state file; the UID itself is never sent. The salt is the telemetry's
+own: the ID cannot be matched to the license's cluster ID. Installs that
+upgraded from a build that shared the salt get a new telemetry ID once. No cluster name, resource, configuration, log line or
 incident is sent. Failures are retried after 1, 5, 15, 30 and then 60 minutes,
 each attempt times out after 3 seconds, and a failure never affects
 monitoring. The request goes through the configured outbound client
@@ -541,6 +607,16 @@ builds and CI environments never send it. Startup logs one line naming the
 endpoint and whether telemetry is enabled or skipped, and
 `kwatch_telemetry_*` metrics count attempts, successes, retries and failures.
 Air-gapped clusters should disable it, or the attempts will fail and retry.
+
+**Pro installs make one more call to `api.kwatch.dev`.** The license check
+(activation, then a renewal about once a day) sends the hashed license cluster ID,
+the license ID, the kwatch version and the node count. Nothing else is sent;
+to know when kwatch stops, use the dead man's switch
+(`heartbeatMonitor.url`). If kwatch.dev can't be reached, Pro keeps working for up to 7 days after
+the last successful check, then falls back to Community; monitoring
+continues. The Community edition makes no license call without a key. The license, telemetry and update-check calls use
+the configured proxy and CA bundle but **always verify TLS**:
+`app.insecureSkipTLSVerify` applies to alert providers only.
 
 ## Outages and capacity
 
@@ -556,7 +632,7 @@ The chart value `rbac.mode` selects the cluster read access:
 - `least-privilege` is the chart default; see below. Set
   `rbac.mode=full` to watch custom resources and kinds added later.
 - `full` (the raw `deploy/deploy.yaml` manifest, and the chart with
-  `--set rbac.mode=full`) grants
+  `rbac.mode: full`) grants
   `list` and `watch` on every resource in every API group, so the dynamic
   source can watch any built-in or custom kind, including CRDs installed
   later. `get` is granted only on namespaces, nodes, `nodes/stats`,
@@ -573,8 +649,20 @@ The chart value `rbac.mode` selects the cluster read access:
   Leases, ControllerRevisions and RBAC objects) plus the optional Gateway
   API and volume snapshot groups. Kinds outside that set are not watched:
   they appear as permission-denied in `/health` coverage, and detectors that
-  need them stay silent. Custom resources are not covered. Both modes can
-  read Secrets (hashed) unless `watch.secrets` is false.
+  need them stay silent. Custom resources are not covered. After the first
+  complete discovery kwatch logs one warning ("N kinds not watched
+  (permission_denied): ...; set rbac.mode=full to watch custom resources")
+  and `/health` shows a `coverage` component that reads degraded while
+  staying available, so the gap is not silent. Both modes can
+  read Secrets (hashed) unless `watch.secrets` is false. The chart notes say
+  the same at install time.
+
+Discovered kinds the API refuses with a permission error are retried at the
+30-minute rediscovery, each retry being one denied LIST in the API audit
+log. A kind refused again waits longer before the next try (the next pass,
+then after 1, 3 and at most 7 skipped passes, so at most four hours), and a
+restart tries at once. The log has one line per discovery pass listing the
+refused kinds, and a new line only when that list changes.
 
 Set the chart value `watch.secrets: false` (or `watch.secrets: false` in
 the configuration) to run without any Secret access. The chart then grants
@@ -587,6 +675,12 @@ that need Secrets (missing Secret references, certificate expiry) report
 that they cannot verify instead of guessing. The chart also passes
 `KWATCH_WATCH_SECRETS=false`, so the setting holds when `config.yaml` comes
 from your own Secret.
+
+The Community edition keeps the Secret watch too: it runs no detector on
+Secrets, but its root-cause engine reads Secrets (and every other typed
+kind) to say that a Secret a failing pod references does not exist. Set
+`watch.secrets: false` to give up that Secret read access and that part of
+the explanation. The startup log says so.
 
 In both modes the state lock Role grants `get` and `update` only on
 kwatch's own Lease (`resourceNames`); `create` cannot be limited by name in

@@ -58,11 +58,7 @@ func (m *Manager) ackOn(p *Incident) (Ack, bool) {
 	}
 	slices.SortFunc(members, compareIDs)
 	for _, id := range append([]inventory.EntityID{p.Root}, members...) {
-		entity, ok := m.model.Entity(id)
-		if !ok {
-			continue
-		}
-		if attr, ok := entity.Attribute(kube.AttrAck); ok {
+		if attr, ok := m.model.Attribute(id, kube.AttrAck); ok {
 			return Ack{On: id, Note: attr.Value.AsText()}, true
 		}
 	}

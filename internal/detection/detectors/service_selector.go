@@ -6,6 +6,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
 // DefaultSelectorChangeWindow is how long after a selector or port edit
@@ -53,4 +54,62 @@ func selectorEdit(
 		}
 	}
 	return inventory.Change{}, false
+}
+
+// selectorMatchesNothing reports an exposed Service whose selector no
+// pod and no workload pod template in its namespace carries. An empty
+// Service is normally a workload scaled to zero, which still has a
+// template carrying the labels; here nothing ever will serve the
+// traffic an Ingress, route, LoadBalancer or NodePort sends it. Every
+// source it reads must be synced: a missing one hides the pods.
+func selectorMatchesNothing(
+	ctx detection.Context, e inventory.Entity,
+) (detection.Finding, bool) {
+	selector := text(e, kube.AttrSelector)
+	if ctx.Model == nil || selector == "<none>" || !labelsSynced(ctx) ||
+		len(kube.SelectedPods(ctx.Model, e)) > 0 ||
+		kube.SelectedByTemplate(ctx.Model, e) ||
+		len(serviceExposures(ctx, e.ID)) == 0 ||
+		!sustained(ctx, "selector-matches-nothing", e.FirstSeen,
+			DefaultNoEndpoints) {
+		return detection.Finding{}, false
+	}
+	return detection.Finding{
+		Reason: reasons.ServiceNoEndpoints, Severity: detection.Critical,
+		Since: e.FirstSeen,
+		Summary: "Service " + e.ID.Name + " selects " + selector +
+			"; no pod or workload template in " + e.ID.Namespace +
+			" has those labels",
+		Evidence: []detection.Evidence{{Label: "selector",
+			Value: selector}},
+	}, true
+}
+
+// labelsSynced reports whether every kind that can carry pod labels is
+// watched. It asks about each kind, so all the missing ones are noted.
+func labelsSynced(ctx detection.Context) bool {
+	synced := ctx.Synced(kube.KindPod)
+	for _, kind := range kube.TemplateKinds() {
+		synced = ctx.Synced(kind) && synced
+	}
+	return synced
+}
+
+// allSelectedPending reports a Service whose selected pods all exist
+// but are all Pending: they have no address, so the EndpointSlice is
+// empty although the Service is not scaled to zero.
+func allSelectedPending(
+	ctx detection.Context, e inventory.Entity,
+) bool {
+	if ctx.Model == nil || !ctx.Synced(kube.KindPod) {
+		return false
+	}
+	pods := kube.SelectedPods(ctx.Model, e)
+	for _, id := range pods {
+		pod, ok := ctx.Model.Entity(id)
+		if !ok || text(pod, kube.AttrPhase) != "Pending" {
+			return false
+		}
+	}
+	return len(pods) > 0
 }

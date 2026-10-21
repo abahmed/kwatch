@@ -34,3 +34,18 @@ func TestScoreCoverageCountsThePodsAPolicySelects(t *testing.T) {
 
 	requireWeight(t, scoreOf(t, f, policy, scoreCoverage), CoverageWeight)
 }
+
+// The proof counts every dependent of the cause, not a sample of them:
+// a node with fifty pods says "49 of 50", never "31 of 32".
+func TestScoreCoverageCountsEveryDependent(t *testing.T) {
+	f := newFixture(t)
+	node, pods := nodeWithPods(f, 50, "api")
+	f.fail(node, "NotReady", failingH, 1, "")
+	for _, pod := range pods[:49] {
+		f.fail(pod, "NotReady", failingH, 2, "")
+	}
+	o := scoreOf(t, f, node, scoreCoverage)
+	if o.count != 49 || o.total != 50 {
+		t.Fatalf("count = %d of %d, want 49 of 50", o.count, o.total)
+	}
+}

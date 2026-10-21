@@ -63,6 +63,11 @@ type Evaluation struct {
 	// Unsynced lists the kinds a detector needed that were not synced.
 	// The entity must be evaluated again once they are.
 	Unsynced []inventory.Kind
+	// Panicked names the detectors that panicked while evaluating the
+	// entity. What they would have said is unknown, so the caller keeps
+	// the findings they raised before (Keeping) and applies the other
+	// detectors' fresh results as usual.
+	Panicked []string
 }
 
 // Detector evaluates entities of the kinds it declares.
@@ -130,7 +135,8 @@ func (r *Registry) Evaluate(
 	var recheck time.Duration
 	var unsynced []inventory.Kind
 	scope := r.onsets.begin(id)
-	defer r.onsets.finish(id, scope)
+	complete := false
+	defer func() { r.onsets.finish(id, scope, !complete) }()
 	ctx := Context{
 		Model: model, Now: now, recheck: &recheck, synced: r.synced,
 		unsynced:    &unsynced,
@@ -141,10 +147,28 @@ func (r *Registry) Evaluate(
 	if present {
 		groups = append(groups, r.byKind[id.Kind])
 	}
-	var out, fallback []Finding
+	out, fallback, panicked := runDetectors(ctx, groups, entity)
+	complete = len(panicked) == 0
+	out = append(out, withoutReportedModes(fallback, out)...)
+	if !complete {
+		ctx.RecheckAfter(incompleteRecheck)
+	}
+	return Evaluation{Findings: collapseReasons(out), RecheckAfter: recheck,
+		Unsynced: unsynced, Panicked: panicked}
+}
+
+// runDetectors runs the detector groups in order and returns the findings
+// of the regular and of the fallback detectors, and the names of the
+// detectors that panicked.
+func runDetectors(
+	ctx Context, groups [][]Detector, entity inventory.Entity,
+) (out, fallback []Finding, panicked []string) {
 	for _, group := range groups {
 		for _, detector := range group {
-			found := detectContained(ctx, detector, entity)
+			found, ok := detectContained(ctx, detector, entity)
+			if !ok {
+				panicked = append(panicked, detector.Name())
+			}
 			if _, ok := detector.(Fallback); ok {
 				fallback = append(fallback, found...)
 			} else {
@@ -152,9 +176,7 @@ func (r *Registry) Evaluate(
 			}
 		}
 	}
-	out = append(out, withoutReportedModes(fallback, out)...)
-	return Evaluation{Findings: collapseReasons(out), RecheckAfter: recheck,
-		Unsynced: unsynced}
+	return out, fallback, panicked
 }
 
 // collapseReasons keeps one finding per reason of an entity, the most
@@ -185,6 +207,7 @@ func detect(
 		s = Classify(s)
 		s.Entity = entity.ID
 		s = withPlace(entity, s)
+		s.Detector = detector.Name()
 		if s.Since.IsZero() {
 			s.Since = ctx.Now
 		}

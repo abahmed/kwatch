@@ -157,7 +157,16 @@ func (t *Teams) buildRequestBodyMessage(msg string) ([]byte, error) {
 	return jsonBytes, nil
 }
 
-// textCardAttachments wraps plain text in one adaptive card.
+// cardTitle escapes a title for an Adaptive Card TextBlock, which renders
+// a Markdown subset: a title taken from the cluster must not become a
+// link, a heading or a mention.
+func cardTitle(title string) string {
+	d := notification.MarkdownDialect(nil, "\n\n")
+	return d.Text(d.Neutralize(title))
+}
+
+// textCardAttachments wraps plain text in one adaptive card. The text is
+// the already escaped narrative; the title is escaped here.
 func textCardAttachments(title, text string) []map[string]interface{} {
 	return []map[string]interface{}{{
 		"contentType": "application/vnd.microsoft.card.adaptive",
@@ -166,8 +175,8 @@ func textCardAttachments(title, text string) []map[string]interface{} {
 			"type":    "AdaptiveCard",
 			"version": "1.2",
 			"body": []map[string]interface{}{
-				{"type": "TextBlock", "text": title, "weight": "Bolder",
-					"wrap": true},
+				{"type": "TextBlock", "text": cardTitle(title),
+					"weight": "Bolder", "wrap": true},
 				{"type": "TextBlock", "text": text, "wrap": true},
 			},
 		},

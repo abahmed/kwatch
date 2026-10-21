@@ -35,7 +35,7 @@ func signatureLead(f caseFacts) string {
 	others := otherWorkloads(f, subject)
 	state := stateWords(f.p)
 	if f.ok {
-		state = beforeColon(predicate(f.lead.Entity, f.lead.Summary))
+		state = beforeColon(leadState(f))
 	}
 	if others == 0 {
 		return f.leadName(subject) + " " + state +

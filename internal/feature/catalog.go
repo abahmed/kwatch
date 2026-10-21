@@ -62,11 +62,12 @@ var definitions = []Definition{
 		Runtime, []ID{WorkloadDetection},
 	},
 	{
-		NodeDetection, "Detect node readiness, pressure and draining",
+		NodeDetection, "Detect nodes that are not ready",
 		Runtime, nil,
 	},
 	{
-		NodeUsage, "Detect node resource pressure from kubelet stats",
+		NodeUsage, "Detect node pressure and draining, and resource " +
+			"pressure from kubelet stats",
 		Runtime, []ID{NodeDetection},
 	},
 	{

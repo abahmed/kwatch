@@ -126,6 +126,10 @@ type Comparison struct {
 	Code rootcause.ProofCode
 	// With is the healthy twin: a workload, a node or a pod.
 	With inventory.EntityID
+	// Subject is the workload the check is about, for a check of its
+	// replicas; zero for any other. Several workloads can fail alike in
+	// one incident, and their checks read the same without it.
+	Subject inventory.EntityID `json:",omitempty"`
 	// Count is the number the code counts, such as the other healthy
 	// pods on a node.
 	Count int `json:",omitempty"`

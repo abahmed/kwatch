@@ -110,3 +110,21 @@ func (l *Listing) closes(incidents *incident.Manager) (over, tell bool) {
 	}
 	return true, !containsAll(l.Resolved, l.Incidents)
 }
+
+// spoke reports whether listed incident id has sent a message of its own
+// since the listing named it.
+func (l *Listing) spoke(id string) bool {
+	return slices.Contains(l.Followed, id)
+}
+
+// SpokeOnItsOwn reports whether incident id, named by a roll-up or the
+// startup summary, has a thread of its own: an earlier message of its own
+// opened one. Ask before Follow, which records the message being sent.
+func (c *Collector) SpokeOnItsOwn(id string) bool {
+	for _, l := range c.Startup.Summary.listings() {
+		if l.spoke(id) {
+			return true
+		}
+	}
+	return false
+}

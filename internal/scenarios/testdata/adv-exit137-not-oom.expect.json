@@ -1,0 +1,11 @@
+{
+  "name": "adv-exit137-not-oom",
+  "description": "Containers exit with code 137 and reason Error while their memory use is a fraction of the limit.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

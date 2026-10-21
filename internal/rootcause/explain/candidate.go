@@ -170,6 +170,7 @@ func (v *view) candidates(failures []inventory.EntityID) *candidateSet {
 	}
 	applyMinCovered(cs)
 	v.applySharedFactorWindow(cs)
+	v.applyAgentGates(cs)
 	v.applySignatureWindow(cs)
 	v.applyMinWorkloads(cs)
 	// After pruning, so a summary is never covered through an effect

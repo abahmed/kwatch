@@ -1,11 +1,11 @@
 10:40:15 settled
-🟠 wake-app2 in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: cannot reach the database". Its last run lasted 10s; 2 restarts in the 8m30s since its pod was created. The cluster is waking up: 6 workloads started between 10:30 and 10:31. To read the output of the last crash, run kubectl logs wake-app2-1326a5b4-a -c app -n shop --previous
+🟠 wake-app2 in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: cannot reach the database". Its last run lasted ten seconds; two restarts since its pod was created nine minutes ago. The cluster is waking up: 6 workloads started between 10:30 UTC and 10:31 UTC. To read the output of the last crash, run kubectl logs wake-app2-1326a5b4-a -c app -n shop --previous
 🟠 wake-app2 in shop (prod-eu-1) keeps crashing.
 | 🟠 **wake-app2** in **shop** (**prod-eu-1**) keeps crashing.
 | Its node and registry are healthy and unchanged, so nothing outside it explains this.
 | It fails with `panic: cannot reach the database`.
-| Its last run lasted 10s; 2 restarts in the 8m30s since its pod was created.
-| The cluster is waking up: 6 workloads started between 10:30 and 10:31.
+| Its last run lasted ten seconds; two restarts since its pod was created nine minutes ago.
+| The cluster is waking up: 6 workloads started between 10:30 UTC and 10:31 UTC.
 | To read the output of the last crash, run
 | ```
 | kubectl logs wake-app2-1326a5b4-a -c app -n shop --previous

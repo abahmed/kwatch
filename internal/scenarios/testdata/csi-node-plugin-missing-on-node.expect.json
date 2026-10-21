@@ -1,0 +1,11 @@
+{
+  "name": "csi-node-plugin-missing-on-node",
+  "description": "A pod cannot mount its volume because the CSI node plugin DaemonSet has no pod on its node.",
+  "root": "daemonset/kube-system/ebs-csi-node",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n3"
+  ],
+  "tail": "15m0s"
+}

@@ -48,15 +48,11 @@ func validateApp(app App) []error {
 	return errs
 }
 
-// validateLicense checks the license settings without echoing the key.
+// validateLicense checks the license settings. The key itself is never
+// validated here: whitespace is stripped at load (cleanLicenseKey) and the
+// license manager reports a key it cannot use.
 func validateLicense(license License) []error {
 	var errs []error
-	if strings.ContainsFunc(license.Key, func(r rune) bool {
-		return unicode.IsSpace(r) || unicode.IsControl(r)
-	}) {
-		errs = append(errs, errors.New(
-			"license.key must not contain spaces or control characters"))
-	}
 	if license.Endpoint != "" {
 		parsed, err := url.Parse(license.Endpoint)
 		if err != nil || parsed.Host == "" ||

@@ -282,3 +282,21 @@ func enc(s string) string {
 }
 
 func base64URL(b []byte) string { return base64.URLEncoding.EncodeToString(b) }
+
+func TestCachedLeaseGraceUntilReadsAnUnverifiedLease(t *testing.T) {
+	_, priv := testEnv()
+	exp := testNow.Add(3 * 24 * time.Hour)
+	lease := SignLease(Lease{KID: "v1", LID: "lic_x", Nbf: testNow.Unix(),
+		Exp: exp.Unix()}, priv)
+
+	got, ok := CachedLeaseGraceUntil(lease)
+
+	if !ok || !got.Equal(exp.Add(Grace)) {
+		t.Fatalf("got %v, %v; want %v", got, ok, exp.Add(Grace))
+	}
+	for _, bad := range []string{"", "KWL1-x.y", "garbage"} {
+		if _, ok := CachedLeaseGraceUntil(bad); ok {
+			t.Errorf("%q read as a lease", bad)
+		}
+	}
+}

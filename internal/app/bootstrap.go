@@ -39,6 +39,8 @@ type bootstrap struct {
 	notice editionNotice
 	// license is the licensing wiring built from the configuration.
 	license *licenseSetup
+	// overlay is how the startup KwatchConfig turned out.
+	overlay overlayOutcome
 }
 
 func newBootstrap(
@@ -52,8 +54,10 @@ func newBootstrap(
 	if err != nil {
 		return nil, fmt.Errorf("create application clients: %w", err)
 	}
-	cfg, overlayInvalid, err := applyStartupCRD(
-		ctx, cfg, clients.Dynamic, loadConfig)
+	cfg, overlay, err := applyStartupCRD(
+		ctx, cfg, clients.Dynamic, loadConfig, func() ([]byte, bool) {
+			return readLastGood(StatePath(), clockSource.Now)
+		})
 	if err != nil {
 		return nil, fmt.Errorf("apply startup CRD configuration: %w", err)
 	}
@@ -79,7 +83,7 @@ func newBootstrap(
 		return nil, err
 	}
 	healthServer := newHealthServer(
-		runtime, clockSource, overlayInvalid, entitlements)
+		runtime, clockSource, overlay.invalid, entitlements)
 	return &bootstrap{
 		runtime:         runtime,
 		clients:         clients,
@@ -94,6 +98,7 @@ func newBootstrap(
 		clock: clockSource, threadWake: wake,
 		entitlements: entitlements, inactivePro: inactive, notice: notice,
 		license: newLicenseSetup(runtime, processStart),
+		overlay: overlay,
 	}, nil
 }
 
@@ -119,13 +124,20 @@ func newDeliveryManager(
 
 // permissionChecks is every permission the audit verifies. With
 // watch.secrets false kwatch is deliberately granted no Secret access, so
-// the audit does not expect it.
+// the audit does not expect it, except the license instance Secret.
 func permissionChecks(runtime config.RuntimeConfig) []inventorykube.Access {
 	checks := rbac.Checks(kubeclient.GetNamespace(), electionLeaseName(),
 		runtime.Lifecycle().CRDEnabled())
 	if !runtime.Application().WatchSecrets {
 		checks = inventorykube.WithoutResource(checks,
 			inventorykube.SecretsResource)
+	}
+	// The license instance Secret is a grant of its own, kept in every
+	// mode, so it is checked whenever a key is configured, even with
+	// watch.secrets false.
+	if runtime.Lifecycle().License().Key != "" {
+		checks = append(checks, rbac.LicenseChecks(
+			kubeclient.GetNamespace(), licenseInstanceSecret)...)
 	}
 	return checks
 }

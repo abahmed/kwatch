@@ -286,6 +286,7 @@ func (w WebhookSchema) Describe(obj any) (Description, bool) {
 		clients  []admissionv1.WebhookClientConfig
 		policies []string
 		hooks    []string
+		rules    []admissionv1.RuleWithOperations
 	)
 	switch config := obj.(type) {
 	case *admissionv1.MutatingWebhookConfiguration:
@@ -297,6 +298,7 @@ func (w WebhookSchema) Describe(obj any) (Description, bool) {
 			clients = append(clients, hook.ClientConfig)
 			policies = append(policies, failurePolicy(hook.FailurePolicy))
 			hooks = append(hooks, hook.Name)
+			rules = append(rules, hook.Rules...)
 		}
 	case *admissionv1.ValidatingWebhookConfiguration:
 		if w.Mutating {
@@ -307,6 +309,7 @@ func (w WebhookSchema) Describe(obj any) (Description, bool) {
 			clients = append(clients, hook.ClientConfig)
 			policies = append(policies, failurePolicy(hook.FailurePolicy))
 			hooks = append(hooks, hook.Name)
+			rules = append(rules, hook.Rules...)
 		}
 	default:
 		return Description{}, false
@@ -320,10 +323,8 @@ func (w WebhookSchema) Describe(obj any) (Description, bool) {
 	}
 	return Description{
 		ID: inventory.CoreID(w.Kind(), "", name), UID: uid,
-		Attributes: map[string]inventory.Value{
-			AttrFailurePolicy: inventory.Text(strings.Join(policies, ",")),
-			AttrWebhookNames:  inventory.Text(strings.Join(hooks, ",")),
-		},
+		Attributes: withClosedServices(
+			configAttributes(policies, hooks, rules), clients, policies),
 		Relations: rel,
 	}, true
 }

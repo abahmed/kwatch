@@ -34,7 +34,7 @@ func windowSentences(f caseFacts) []sentence {
 func windowTime(t, other time.Time) string {
 	t, other = t.UTC(), other.UTC()
 	if t.YearDay() == other.YearDay() && t.Year() == other.Year() {
-		return t.Format("15:04:05")
+		return t.Format("15:04:05") + " UTC"
 	}
-	return t.Format("Jan 2 15:04:05")
+	return t.Format("Jan 2 15:04:05") + " UTC"
 }

@@ -24,11 +24,18 @@ func (m *Manager) RecordSubject(id string, subject inventory.EntityID) {
 // moment its last failure cleared. The resolve hold that follows is
 // waiting, not failing, so it is left out.
 func (p Incident) FailedFor() time.Duration {
+	return p.RecoveredAt().Sub(p.Opened)
+}
+
+// RecoveredAt is the moment the incident's last failure cleared, the
+// moment a fix is measured against: when it began recovering, not when
+// the resolve hold that followed ended.
+func (p Incident) RecoveredAt() time.Time {
 	end := p.Resolved
 	if r := p.RecoveringSince; r.After(p.Opened) && !r.After(end) {
 		end = r
 	}
-	return end.Sub(p.Opened)
+	return end
 }
 
 // noteRemoved records which of the incident's subjects were deleted

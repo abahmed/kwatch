@@ -25,8 +25,11 @@ var rbacKinds = []inventory.Kind{
 var accessRows = []Row{
 	{
 		Name: "rbac-change",
+		// Creating an RBAC object grants access; it cannot be why a
+		// request was refused.
 		Cause: Side{Kind: AnyKind,
-			Modes: []detection.Mode{ModeChanged}},
+			Modes:    []detection.Mode{ModeChanged},
+			NotModes: []detection.Mode{ModeCreated}},
 		Link: LinkAuthorizes,
 		Effect: Side{Kind: kube.KindPod, Signal: SignalForbidden,
 			Modes: append([]detection.Mode{
@@ -46,12 +49,14 @@ type recentChangeSets interface {
 // namespace, and the cluster-wide ones, that changed in the window. The
 // row then asks for a "forbidden" error before it blames one.
 func (v *view) accessHops(pod inventory.EntityID) []hop {
-	if !v.unitGate(pod) {
+	if !v.unitGate(pod) || v.refusedOtherAccount(pod) {
 		return nil
 	}
+	accounts := v.refusedAccounts(pod)
 	var out []inventory.EntityID
 	for _, id := range v.changedRBAC() {
-		if id.Namespace == "" || id.Namespace == pod.Namespace {
+		if (id.Namespace == "" || id.Namespace == pod.Namespace) &&
+			!v.bindsOtherAccounts(id, accounts) {
 			out = append(out, id)
 		}
 	}

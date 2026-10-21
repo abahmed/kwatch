@@ -10,7 +10,8 @@ import (
 )
 
 // A storm of short blips over many roots keeps at most one incident per
-// root: each recurrence takes over its predecessor's history.
+// root: each blip revives the silent incident of its root, which keeps
+// the history of the earlier ones.
 func TestManagerBlipStormStaysBounded(t *testing.T) {
 	r := newRig(t, Config{})
 	const roots, blips = 100, 5
@@ -31,7 +32,7 @@ func TestManagerBlipStormStaysBounded(t *testing.T) {
 		t.Fatalf("kept %d incidents for %d roots", got, roots)
 	}
 	last := r.of(entity(kube.KindPod, "web-0"))
-	if len(last.Occurrences) != blips || last.Previous == "" {
+	if len(last.Occurrences) != blips || len(last.History) == 0 {
 		t.Fatalf("recurrence lost its history: %+v", last)
 	}
 }

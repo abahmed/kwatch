@@ -56,6 +56,9 @@ var admissionChecks = []struct {
 		hops:  (*view).policyAdmitHops,
 		modes: (*view).policyModes,
 	}},
+	{[]inventory.Kind{kube.KindAccount}, admissionCheck{
+		hops: (*view).accountAdmitHops,
+	}},
 }
 
 // admissionCheckFor is the check of an entity kind, if it can refuse

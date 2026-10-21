@@ -6,6 +6,7 @@ import "time"
 // depend on it rather than on *Model, so they can be tested with fixtures.
 type Reader interface {
 	Entity(id EntityID) (Entity, bool)
+	Attribute(id EntityID, name string) (Attribute, bool)
 	Exists(id EntityID) bool
 	Related(id EntityID, relation RelationType, dir Direction) []EntityID
 	Relations(id EntityID, dir Direction) []Relation

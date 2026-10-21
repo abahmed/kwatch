@@ -12,10 +12,15 @@ import (
 // changeModes turns recent changes into pseudo modes. The change of a
 // controller whose owner also changed belongs to the owner's rollout
 // (a Deployment edit creates a ReplicaSet), so only the owner keeps it.
-func (v *view) changeModes(id inventory.EntityID) []modeHealth {
+// A change made after effect began to fail is left out unless the link
+// is the workload's own or id is a node (see changeCutoff).
+func (v *view) changeModes(
+	id, effect inventory.EntityID, link LinkType,
+) []modeHealth {
 	if v.ownerChanged(id) {
 		return nil
 	}
+	cutoff := v.changeCutoff(id, effect, link)
 	var out []modeHealth
 	terminating := v.namespaceTerminating(id.Namespace)
 	for _, change := range v.changesOf(id) {
@@ -23,10 +28,49 @@ func (v *view) changeModes(id inventory.EntityID) []modeHealth {
 			// A namespace deletion removes its objects on purpose.
 			continue
 		}
+		if cutoff.ok && change.At.After(cutoff.t) {
+			continue
+		}
 		out = append(out, modeHealth{mode: changeMode(change),
 			health: detection.Failing, pseudo: true})
 	}
 	return out
+}
+
+// changeCutoff is the latest a change of id may be made and still count
+// as a possible cause of effect: the moment effect began to fail, with
+// the slack for clock skew. A change made after the failures began is a
+// fix attempt, not what broke them. Nothing is cut when the effect has
+// no known start. A node is exempt, since its conditions and taints are
+// written as it breaks, and so is the workload's own link, which
+// selfMatch dates itself.
+func (v *view) changeCutoff(
+	id, effect inventory.EntityID, link LinkType,
+) timeValue {
+	if link == LinkSelf || id.Kind == kube.KindNode ||
+		id.Kind == kube.KindZone || id.Kind == kube.KindNodePool {
+		return timeValue{}
+	}
+	first := v.earliestSince([]inventory.EntityID{effect})
+	if !first.ok {
+		return timeValue{}
+	}
+	return timeValue{t: first.t.Add(TemporalSlack), ok: true}
+}
+
+// changedAfterOnset reports a change of id inside the window that was
+// made after effect began to fail, and so was cut by changeCutoff.
+func (v *view) changedAfterOnset(id, effect inventory.EntityID) bool {
+	cutoff := v.changeCutoff(id, effect, "")
+	if !cutoff.ok {
+		return false
+	}
+	for _, change := range v.changesOf(id) {
+		if change.At.After(cutoff.t) {
+			return true
+		}
+	}
+	return false
 }
 
 // ownerChanged reports whether an owner of id changed in the window.
@@ -70,20 +114,13 @@ func (v *view) virtualModes(
 	if modes := preemptionModes(link); len(modes) > 0 {
 		return modes
 	}
+	if modes := v.failingUnitModes(id, effect, link); len(modes) > 0 {
+		return modes
+	}
+	if modes := v.sharedServiceModes(id, effect, link); len(modes) > 0 {
+		return modes
+	}
 	switch id.Kind {
-	case kube.KindRegistry:
-		if class, ok := v.registryClass(effect); ok {
-			return pseudoFailing(class)
-		}
-	case kindClusterDNS:
-		if v.resolutionFailing(effect, link) {
-			return pseudoFailing(ModeResolution)
-		}
-	case kube.KindAPIService:
-		if link == LinkServedBy && hasSignal(SignalMetricsAPI,
-			v.text(effect)) {
-			return pseudoFailing(ModeMetricsUnserved)
-		}
 	case kube.KindZone, kube.KindNodePool:
 		return v.groupModes(id)
 	case kube.KindPVC:
@@ -103,6 +140,30 @@ func (v *view) virtualModes(
 		return modes
 	}
 	return v.missingModes(id, link)
+}
+
+// sharedServiceModes are the pseudo modes of the cluster services every
+// workload uses, read from the effect's own error: its registry, DNS and
+// metrics API.
+func (v *view) sharedServiceModes(
+	id, effect inventory.EntityID, link LinkType,
+) []modeHealth {
+	switch id.Kind {
+	case kube.KindRegistry:
+		if class, ok := v.registryClass(effect); ok {
+			return pseudoFailing(class)
+		}
+	case kindClusterDNS:
+		if v.resolutionFailing(effect, link) {
+			return pseudoFailing(ModeResolution)
+		}
+	case kube.KindAPIService:
+		if link == LinkServedBy && hasSignal(SignalMetricsAPI,
+			v.text(effect)) {
+			return pseudoFailing(ModeMetricsUnserved)
+		}
+	}
+	return nil
 }
 
 // groupModes is ModeMembersFailing for a zone or pool with several

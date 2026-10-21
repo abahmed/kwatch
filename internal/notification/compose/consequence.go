@@ -29,39 +29,72 @@ func impactSentences(f caseFacts) []sentence {
 			workloads = append(workloads, id)
 		}
 	}
+	workloads = withoutOwnServices(workloads, traffic)
 	var out []sentence
 	if len(traffic) > 0 {
 		out = append(out, sentence{part: partConsequence, weight: 1,
-			text: nameList(subject, traffic) + " can't serve traffic."})
+			text: upperFirst(nameList(subject, traffic)) +
+				" can't serve traffic."})
 	}
 	if len(workloads) > 0 {
-		out = append(out, sentence{part: partConsequence,
+		// The first word is a workload's own name: it keeps its case.
+		out = append(out, sentence{part: partConsequence, keepCase: true,
 			text: nameList(subject, workloads) + " " +
 				verb(len(workloads), "is", "are") + " affected as well."})
 	}
 	return out
 }
 
+// withoutOwnServices drops the workloads whose own Service is among the
+// ones that cannot serve traffic: "services fleet and storage can't
+// serve traffic" already says that fleet and storage are affected.
+func withoutOwnServices(
+	workloads, traffic []inventory.EntityID,
+) []inventory.EntityID {
+	named := map[string]bool{}
+	for _, id := range traffic {
+		named[id.Namespace+"/"+id.Name] = true
+	}
+	var out []inventory.EntityID
+	for _, id := range workloads {
+		if !named[id.Namespace+"/"+id.Name] {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
 // nameList names entities relative to home. When they all live in one
 // other namespace it is said once ("api and web in shop"), and so is a
-// kind they share ("pods a and b").
+// kind they share ("pods a and b"). When they live in several, every
+// group says its own namespace, the lead's included, and the groups are
+// told apart by semicolons: "a in billing; b and c in media".
 func nameList(home inventory.EntityID, ids []inventory.EntityID) string {
-	namespace, shared := sharedNamespace(ids)
-	if !shared {
-		// "pod a in billing and pods b and c in shop"
+	if _, shared := sharedNamespace(ids); !shared {
 		groups := byNamespace(limitIDs(ids, maxNamed))
-		names := make([]string, 0, len(groups))
+		names := make([]string, 0, len(groups)+1)
 		for _, group := range groups {
-			names = append(names, nameList(home, group))
+			// limitIDs already capped the names: say all of a group.
+			names = append(names, nameGroup(group, group[0].Namespace,
+				len(group)))
 		}
 		if rest := len(ids) - maxNamed; rest > 0 {
-			names = append(names, plural(rest, "other"))
+			names = append(names, "and "+plural(rest, "other"))
 		}
-		return joinAnd(names, len(names))
+		return strings.Join(names, "; ")
 	}
 	place := ""
-	if namespace != "" && namespace != home.Namespace {
-		place = " in " + namespace
+	if namespace := ids[0].Namespace; namespace != home.Namespace {
+		place = namespace
+	}
+	return nameGroup(ids, place, maxNamed)
+}
+
+// nameGroup names entities that share a namespace, saying it once at
+// the end when place is not empty, and at most "most" of them by name.
+func nameGroup(ids []inventory.EntityID, place string, most int) string {
+	if place != "" {
+		place = " in " + place
 	}
 	names := make([]string, 0, len(ids))
 	kind, sameKind := sharedKind(ids)
@@ -73,10 +106,10 @@ func nameList(home inventory.EntityID, ids []inventory.EntityID) string {
 		}
 	}
 	if sameKind && len(ids) > 1 {
-		return pluralWord(kindWord(kind)) + " " + joinAnd(names, maxNamed) +
+		return pluralWord(kindWord(kind)) + " " + joinAnd(names, most) +
 			place
 	}
-	return joinAnd(names, maxNamed) + place
+	return joinAnd(names, most) + place
 }
 
 // sharedKind reports the kind of ids when they are all the same plain

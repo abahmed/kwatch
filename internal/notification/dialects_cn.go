@@ -47,7 +47,7 @@ func dingTalkQuote(s string) string {
 func DingTalkDialect() Dialect {
 	d := MarkdownDialect(NeutralizeDingTalkMentions, "\n\n")
 	d.Code = func(s string) string {
-		return markdownEscaper.Replace(oneLine(s))
+		return markdownEscaper.Replace(foldLines(s))
 	}
 	d.Fence = dingTalkQuote
 	return d

@@ -12,8 +12,9 @@ import (
 )
 
 // A leftover is a digest-only problem that is the same thing many times:
-// an expired TLS Secret nothing references. Ten of them are one line,
-// "10 expired TLS Secrets that nothing references: a, b, c +7", not ten.
+// an expired TLS Secret no pod or Ingress references. Ten of them are one
+// line, "10 expired TLS Secrets that no pod or Ingress references: a, b,
+// c +7".
 // A reason opts in by having an entry in leftoverNouns; the audit log
 // still lists each one.
 
@@ -24,8 +25,8 @@ type leftoverNoun struct{ one, many string }
 // the noun phrase of the group.
 var leftoverNouns = map[string]leftoverNoun{
 	reasons.TLSCertExpired: {
-		one:  "expired TLS Secret that nothing references",
-		many: "expired TLS Secrets that nothing references",
+		one:  "expired TLS Secret that no pod or Ingress references",
+		many: "expired TLS Secrets that no pod or Ingress references",
 	},
 }
 
@@ -54,8 +55,9 @@ type leftoverGroup struct {
 	roots  []inventory.EntityID
 }
 
-// line is "9 expired TLS Secrets that nothing references: ns/a, ns/b,
-// ns/c +6", with suffix ("unchanged") after the noun when given.
+// line is "9 expired TLS Secrets that no pod or Ingress references:
+// ns/a, ns/b, ns/c +6", with suffix ("unchanged") after the noun when
+// given.
 func (g leftoverGroup) line(suffix string) string {
 	noun := leftoverNouns[g.reason].many
 	if suffix != "" {

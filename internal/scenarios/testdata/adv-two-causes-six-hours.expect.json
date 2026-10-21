@@ -1,0 +1,14 @@
+{
+  "name": "adv-two-causes-six-hours",
+  "description": "A ConfigMap edit and a Secret rotation land together before a restart; the crash names neither. Watched for six hours.",
+  "root": "unknown",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/shop/checkout"
+  ],
+  "ambiguous": true,
+  "tail": "6h0m0s"
+}

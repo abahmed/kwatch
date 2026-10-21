@@ -34,28 +34,62 @@ of the earlier occurrence (`Attempt`, the unsent attempt and its late flag).
 
 How paging state works now:
 
-- `Delivery.OpenAtPagers()` (`MarkPaged` / `ClosePage`) means the alert is open at the paging and issue-tracker
-  providers. Any message of the incident's own that is not a resolve (an
-  announcement or an update, `scopePaging` in `pipeline/deliver.go`) sets it.
-  The one exception is the `failing again` update of a reopened page
-  (`failingAgainOfPage`: reason `failing again` and `Delivery.pageHeld`). It
-  goes to chat only (`SkipPaging`) and does not set it. The original page
-  is the one page of that outage; its resolve closed the alert, and
-  `Paged` stays false after it. A later reminder or material update of the
-  reopened incident, if the outage lasts, reaches the pagers as a notify
-  and opens a new alert then.
+- `Delivery.OpenAtPagers()` (`MarkPaged` / `ClosePage`) means the alert is
+  open at the paging and issue-tracker providers. Any message of the
+  incident's own that is not a resolve (an announcement or an update,
+  `scopePaging` in `pipeline/deliver.go`) sets it. The exception is every
+  message of an incident held at notify (`Delivery.pageHeld` with a tier
+  below page, `pageHeldBack`): the `failing again` update of a reopened
+  page, its reminders and its material changes go to chat only
+  (`SkipPaging`) and do not set it. The original page is the one page of
+  that outage; its resolve closed the alert, and `Paged` stays false after
+  it. The held incident reaches the pagers again in two ways only: its tier
+  is page again (the hold ends, see below), or it is a flapper (next
+  item). Nothing else it says, however long the outage lasts, opens an
+  alert.
+- A flapper is the exception to the exception (`pagesFlapper`,
+  `flap_page.go`). When a held page becomes `Flapping`, or comes back for
+  the third time within `RepageWindow` (`RepeatCount` at `FlapCycles`), the
+  `flapping` or `failing again` update of that moment goes to the pagers
+  once per incident, at the page tier: its decision carries `Tier` page,
+  though the incident itself stays held at notify. That reopens the alert,
+  so an outage that keeps coming back is not left with no open alert at the
+  pagers after the first resolve closed it. With the alert open nothing
+  more is sent to the pagers, and the hold is not released into a second
+  page (`holdsPage`); the resolve of a stable recovery (`MaxHold` of
+  quiet) closes the alert like any other. It is once per incident for good:
+  `flapPaged` is saved with the incident, so a restart does not allow a
+  second one. An incident someone acknowledged (the thread was told, or the
+  annotation is on the root or a member), paging that is switched off, and
+  a held page that is half of an outage another live incident already paged
+  for (`pagedBeside`, the same test the hold's release uses) never page
+  here: they would open a second alert beside the one that is open.
 - A held repeat that keeps failing is not a flap. When it has failed
   without a recovery for `PageSettle` plus the base `Hold` (the settle and
   the hold a first recovery waits, not the doubled holds of a flapper), and
   nobody acknowledged it, the hold ends (`releaseHeldPage`) and the next
   update pages once. It does not while another live page of the same
-  story, or one announced with it, is open. A flap that recovers again
-  inside the hold never pages.
-- A roll-up of several pages pages once: the first page-tier member pages
-  and the others are held at notify like a repeat, with the same release.
-  Nodes, zones and pools that fail in one settle window share one incident
-  (`Incident.Merged`), and a node outage that settles beside one that
-  already paged is held the same way.
+  story, or one announced with it, is open, nor when the alert is already
+  open at the pagers. A flap that recovers again inside the hold never
+  pages. A severity override (`severityByReason`, owner kind) raises the
+  severity of a repeat but never undoes the hold (`overrides.apply`).
+- A roll-up of several pages pages once per namespace: the first page-tier
+  member of a namespace pages and the others are held at notify like a
+  repeat, with the same release. The hold is not news: the roll-up told
+  the problem, so the held incident sends no "material change" for the tier
+  it lost (`HoldPage` adopts the fingerprint). A namespace outage message
+  holds the page-tier members it did not page for in the same way, so their
+  reminders do not page for an alert nobody opened. Nodes, zones and pools
+  that fail in one settle window share one incident (`Incident.Merged`),
+  and a node outage that settles beside one that already paged is held the
+  same way.
+- A node outage that spreads slowly names itself twice, by the node first
+  and, minutes later, by the zone or pool that now fails as a whole. The
+  announced incident of a node of that place takes the place as its root
+  (`retakeZone`, `attach_zone.go`) instead of a second incident being
+  announced beside it: one thread, one alert, one revised cause. The nodes
+  it merged that the place covers leave `Merged`, and a finding placed at
+  the node it left stays with the moved incident (`ofStoryAt`).
 - A page held in the startup summary or an outage hold is paged on its own
   when it is announced. If it was held at notify and its update later
   reaches the page tier, the hold pages it then (`risesToPage`) and marks it
@@ -116,7 +150,25 @@ roll-up member's, is forgotten at once.
 When a cause revision moves every member of an announced incident to another
 announced incident, the old one is resolved as `superseded`. If its failures
 are the same ones people were just told about and it never paged, that
-resolve is not sent.
+resolve is not sent. Otherwise its "Moved" close waits until the incident
+that took over has sent its own `cause revised` update (`takeoverDue`,
+`supersede_wait.go`): the thread that says "Moved" points at a message that
+exists. A roll-up member that never spoke on its own has no chat thread, so
+its close goes to the pagers only; one that did speak gets the close in chat
+too (`SpokeOnItsOwn`). A listing is over when every incident it named is
+resolved and so is every incident that took over its failures, or the
+recurrence of a forgotten one (`Manager.Closed`, bounded walk).
+
+An incident that is moved to a cause that is not a page keeps the page tier
+(a page is never un-paged). The update says what became of the cause it
+replaced when that recovered: "Node n1 has recovered; cart in shop still has
+two open failures." (`Incident.FormerRoot`, `formerRootSentences`).
+
+A cause that only ties with the root of an announced incident does not move
+it. Once the incident is older than `explain.TemporalExclusion`, a new cause
+whose rival is the incident's root, or one that an alternative of the same
+row explains at least as well, is a re-rank, not news: the finding stays
+(`edgesOutIncumbent`).
 
 ---
 

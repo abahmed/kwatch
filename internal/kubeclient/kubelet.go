@@ -75,6 +75,12 @@ func NewKubeletClient(cfg KubeletClientConfig) (*KubeletClient, error) {
 		nodes: cfg.Nodes,
 		http: &http.Client{
 			Transport: cfg.Transport, Timeout: kubeletHTTPTimeout,
+			// The transport adds the ServiceAccount token. A kubelet
+			// never redirects, so one that does is not followed: the
+			// token must not go to the address it names.
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
 		},
 		now:       cfg.Now,
 		endpoints: map[string]kubeletEndpoint{},

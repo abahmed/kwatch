@@ -13,16 +13,29 @@ import (
 // the api rollout started at 21:12; bob changed config map app-config
 // at 21:10."
 func recentChangeSentence(f caseFacts) []sentence {
-	if len(f.changes) == 0 || f.p.Root.Namespace == "" {
+	if f.p.Root.Namespace == "" {
 		return nil
 	}
-	items := make([]string, 0, len(f.changes))
-	for _, change := range f.changes {
-		items = append(items, changeFact(change))
+	items := changeFacts(f.changes)
+	if len(items) == 0 {
+		return nil
 	}
 	return []sentence{{part: partCause, weight: -1, text: "In the last 30 " +
 		"minutes in " +
 		f.p.Root.Namespace + ": " + strings.Join(items, "; ") + "."}}
+}
+
+// changeFacts are the clauses of the changes somebody made: the node
+// controller's own taints follow the node's conditions and are nobody's
+// change, so a node that only blipped is not "changed before it broke".
+func changeFacts(changes []inventory.Change) []string {
+	var items []string
+	for _, change := range changes {
+		if !systemChange(change) {
+			items = append(items, changeFact(change))
+		}
+	}
+	return items
 }
 
 // changeFact is one change as a clause: who did what to which object, at

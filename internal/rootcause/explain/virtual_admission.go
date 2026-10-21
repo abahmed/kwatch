@@ -2,6 +2,7 @@ package explain
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -238,15 +239,37 @@ func (v *view) podSecurityModes(
 	return nil
 }
 
-// limitRangeModes: a LimitRange whose bounds refused a pod.
+// limitRangeModes: a LimitRange whose bounds refused a pod. When the
+// refusal names one of the namespace's LimitRanges, only that one is
+// blamed; otherwise each of them stays a suspect.
 func (v *view) limitRangeModes(
 	id, effect inventory.EntityID, link LinkType,
 ) []modeHealth {
-	if admitsOrContains(link, id) &&
-		hasSignal(SignalLimitRange, v.text(effect)) {
-		return pseudoFailing(ModeLimitRangeDenied)
+	text := v.text(effect)
+	if !admitsOrContains(link, id) || !hasSignal(SignalLimitRange, text) {
+		return nil
 	}
-	return nil
+	if named := v.namedLimitRanges(id.Namespace, text); len(named) > 0 &&
+		!slices.Contains(named, id) {
+		return nil
+	}
+	return pseudoFailing(ModeLimitRangeDenied)
+}
+
+// namedLimitRanges lists the LimitRanges of a namespace whose names the
+// text quotes.
+func (v *view) namedLimitRanges(
+	namespace, text string,
+) []inventory.EntityID {
+	var out []inventory.EntityID
+	for _, id := range v.s.Model.Entities(kube.KindLimitRange) {
+		word, ok := nameWord(id.Name)
+		if ok && id.Namespace == namespace && mentionsAny(text,
+			[]string{word}) {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // policyModes: a ValidatingAdmissionPolicy that denied a request.

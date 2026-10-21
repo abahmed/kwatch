@@ -22,12 +22,16 @@ const jointMin = 2
 // close, and the chat gets it as a reply under the roll-up. A page, a
 // resolve for the pagers, a handover and the resolve of a superseded
 // incident close something and stay on their own.
-func jointRecoverable(d incident.Decision) bool {
+//
+// A member whose page was held beside the one page that stood for its
+// listing (PageHeld) never opened an alert, so its resolve joins too,
+// unless it has spoken in a thread of its own since the listing named it.
+func (a *announcer) jointRecoverable(d incident.Decision) bool {
 	p := d.Incident
 	return d.Action == incident.Resolve && p.Delivery.RolledUp() &&
 		p.Tier < incident.Page && !p.Delivery.OpenAtPagers() &&
-		!p.Delivery.PageHeld() && p.SupersededBy == "" &&
-		!d.Unannounced && !d.Handover && !d.Thread && !d.PagedAlready
+		p.SupersededBy == "" && !d.Unannounced && !d.Handover &&
+		!d.Thread && !d.PagedAlready && !a.collect.SpokeOnItsOwn(p.ID)
 }
 
 // splitRecoveries takes the follower resolves out of one tick's decisions.
@@ -38,7 +42,7 @@ func (a *announcer) splitRecoveries(
 ) []incident.Decision {
 	var group []incident.Decision
 	for _, d := range decisions {
-		if jointRecoverable(d) {
+		if a.jointRecoverable(d) {
 			group = append(group, d)
 		}
 	}
@@ -49,7 +53,7 @@ func (a *announcer) splitRecoveries(
 	a.joint = map[string][]incident.Decision{lead: group[1:]}
 	rest := make([]incident.Decision, 0, len(decisions)-len(group)+1)
 	for _, d := range decisions {
-		if !jointRecoverable(d) || d.Incident.ID == lead {
+		if !a.jointRecoverable(d) || d.Incident.ID == lead {
 			rest = append(rest, d)
 		}
 	}

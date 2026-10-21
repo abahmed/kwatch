@@ -1,0 +1,12 @@
+{
+  "name": "cr-controller-crash-default-manager",
+  "description": "A controller crash-loops; its custom resources turn Ready=False, and the controller's field manager is the generic name 'manager'.",
+  "root": "deployment/gadget-system/gadget-controller",
+  "tier": "notify",
+  "maxMessages": 3,
+  "maxPages": 1,
+  "mustNotBlame": [
+    "gadget.gadgets.acme.dev/team-a/primary",
+    "gadget.gadgets.acme.dev/team-b/primary"
+  ]
+}

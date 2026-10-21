@@ -47,7 +47,10 @@ func scoreReplicas(v *view, c *candidate) outcome {
 // replicaGroup is the sampled pods of one owner, split by health, with
 // the node each runs on.
 type replicaGroup struct {
-	effect           inventory.EntityID
+	effect inventory.EntityID
+	// workload is the controller that ultimately owns the replicas: the
+	// comparison names it as its Subject.
+	workload         inventory.EntityID
 	failing, healthy []inventory.EntityID
 	onNode           map[inventory.EntityID]inventory.EntityID
 }
@@ -64,7 +67,8 @@ func (v *view) replicaGroups(c *candidate) []replicaGroup {
 		}
 		seen[owner] = true
 		g := replicaGroup{effect: u.effect,
-			onNode: map[inventory.EntityID]inventory.EntityID{}}
+			workload: rootcause.TopOwner(v.s.Model, owner),
+			onNode:   map[inventory.EntityID]inventory.EntityID{}}
 		for _, pod := range sampleIDs(v.ownedPods(owner)) {
 			if v.unitFailing(pod) {
 				g.failing = append(g.failing, pod)
@@ -142,7 +146,7 @@ func (v *view) compareGroup(g replicaGroup, code rootcause.ProofCode,
 		with = g.healthy[0]
 	}
 	v.compare(g.effect, Comparison{Code: code, With: with,
-		Count: len(g.failing), Text: text})
+		Subject: g.workload, Count: len(g.failing), Text: text})
 }
 
 // replicaCount is how many replicas, in words: "both replicas" for two,

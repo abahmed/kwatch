@@ -1,10 +1,13 @@
 package detection
 
-import "github.com/abahmed/kwatch/internal/detection/reasons"
+import (
+	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
+)
 
 // nodeReasons is the node, resource-usage and control-plane reasons.
 var nodeReasons = []ReasonInfo{
-	reason(reasons.NodeNotReady, ModeNotReady).shown(),
+	reason(reasons.NodeNotReady, ModeNotReady).shown(kube.KindNode),
 	reason(reasons.NodeDraining, ModeDraining),
 	reason(reasons.NotReady, ModeNotReady),
 	reason(reasons.MemoryPressure, ModeMemoryPressure),

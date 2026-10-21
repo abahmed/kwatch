@@ -7,7 +7,7 @@ import (
 )
 
 func TestRejectSecretConfigAllowsOrdinarySettings(t *testing.T) {
-	err := rejectSecretConfig(map[string]interface{}{
+	err := rejectForbiddenSettings(map[string]interface{}{
 		"workers": float64(2),
 		"telemetry": map[string]interface{}{
 			"enabled": true,
@@ -18,7 +18,7 @@ func TestRejectSecretConfigAllowsOrdinarySettings(t *testing.T) {
 }
 
 func TestRejectSecretConfigRejectsAlert(t *testing.T) {
-	err := rejectSecretConfig(map[string]interface{}{
+	err := rejectForbiddenSettings(map[string]interface{}{
 		"alert": map[string]interface{}{},
 	})
 
@@ -33,7 +33,7 @@ func TestRejectSecretConfigRejectsGlobalSecretFields(t *testing.T) {
 			},
 		},
 	} {
-		assert.Error(t, rejectSecretConfig(spec))
+		assert.Error(t, rejectForbiddenSettings(spec))
 	}
 }
 
@@ -51,7 +51,7 @@ func TestRejectSecretConfigRejectsTransportFields(t *testing.T) {
 			path[0]: map[string]interface{}{path[1]: "x"},
 		}
 		assert.ErrorContains(
-			t, rejectSecretConfig(spec), path[0]+"."+path[1],
+			t, rejectForbiddenSettings(spec), path[0]+"."+path[1],
 		)
 	}
 }

@@ -3,12 +3,14 @@ package pipeline
 import (
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/metrics"
+	"github.com/abahmed/kwatch/internal/safego"
 )
 
 // maxPendingTimeline bounds timeline entries waiting for the writer. When
@@ -27,6 +29,12 @@ type historyWriter struct {
 	model *inventory.Model
 	after func(time.Duration) <-chan time.Time
 	stats *workerStats
+	// streak is only touched by the writer goroutine.
+	streak writeStreak
+	// fenced is set once a write found the store claimed by a newer
+	// leader. Fencing is terminal, as for the incident writer: the
+	// writer stops and drops what is pending.
+	fenced atomic.Bool
 
 	mu      sync.Mutex
 	pending []TimelineEntry
@@ -75,7 +83,7 @@ func (w *historyWriter) expireFrom(now func() time.Time) {
 
 // add queues entries for the next batch. It never blocks.
 func (w *historyWriter) add(entries ...TimelineEntry) {
-	if len(entries) == 0 {
+	if len(entries) == 0 || w.fenced.Load() {
 		return
 	}
 	w.mu.Lock()
@@ -98,22 +106,60 @@ func (w *historyWriter) trimLocked() {
 // while anything could be dirty.
 func (w *historyWriter) run() {
 	defer close(w.done)
-	for {
+	for !w.fenced.Load() {
 		select {
 		case <-w.stop:
-			w.flush()
+			w.guardedFlush()
 			return
 		case <-w.wake:
 		case <-w.after(saveInterval):
 		}
 		select {
 		case <-w.stop:
-			w.flush()
+			w.guardedFlush()
 			return
 		case <-w.after(writeBatch):
 		}
-		w.flush()
+		w.guardedFlush()
 	}
+	w.dropPending()
+}
+
+// guardedFlush is flush with a panic of the store contained: the batch
+// that was being written is lost and counted, the writer lives on.
+func (w *historyWriter) guardedFlush() {
+	if err := safego.Run("history-writer", func() error {
+		w.flush()
+		return nil
+	}); err != nil {
+		w.streak.log(err, "panic")
+		w.streak.end(true)
+		w.stats.writeFailures.Add(1)
+		metrics.DefaultRegistry().StorageWriteFailures.Add(1)
+	}
+}
+
+// failed records a failed write of what: it is logged (rarely, see
+// writeStreak), and a store claimed by a newer leader ends the writer.
+func (w *historyWriter) failed(err error, what string) {
+	if isFenced(err) {
+		if w.fenced.CompareAndSwap(false, true) {
+			klog.InfoS("pipeline: store claimed by a newer leader; "+
+				"history writer stopped", "component", "pipeline",
+				"operation", "save")
+		}
+		return
+	}
+	w.streak.log(err, what)
+}
+
+// dropPending forgets everything waiting for a store that no longer
+// accepts writes.
+func (w *historyWriter) dropPending() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.pending, w.changes, w.healthy = nil, nil, nil
+	w.checks, w.unexplained = nil, nil
 }
 
 // close asks for the final write and waits at most for deadline. It
@@ -148,7 +194,7 @@ func (w *historyWriter) flush() {
 	if len(batch) > 0 {
 		w.fillChangeSets(batch)
 		if err := w.store.AppendTimeline(batch); err != nil {
-			logWriteError(err, "timeline")
+			w.failed(err, "timeline")
 			w.requeue(batch)
 			failed = true
 		}
@@ -164,7 +210,7 @@ func (w *historyWriter) flush() {
 	}
 	if dirty := w.model.Baselines().TakeDirty(); len(dirty) > 0 {
 		if err := w.store.SaveBaselines(dirty); err != nil {
-			logWriteError(err, "baselines")
+			w.failed(err, "baselines")
 			w.model.Baselines().MarkDirty(dirty)
 			failed = true
 		}
@@ -172,6 +218,7 @@ func (w *historyWriter) flush() {
 	if len(batch) > 0 || failed {
 		w.stats.batches.Add(1)
 	}
+	w.streak.end(failed)
 	if failed {
 		w.stats.writeFailures.Add(1)
 		metrics.DefaultRegistry().StorageWriteFailures.Add(1)
@@ -204,7 +251,7 @@ func (w *historyWriter) expireBaselines() bool {
 		return true
 	}
 	if err := deleter.DeleteBaselines(expired); err != nil {
-		logWriteError(err, "baseline_expiry")
+		w.failed(err, "baseline_expiry")
 		return false
 	}
 	return true

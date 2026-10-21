@@ -11,10 +11,11 @@ import (
 // predicate turns a detector summary into what follows the subject:
 // "Node is low on memory" becomes "is low on memory".
 func predicate(id inventory.EntityID, summary string) string {
-	summary = humanizeText(firstClause(summary))
+	summary = clauseText(summary)
 	for _, prefix := range subjectWords(id) {
 		if hasPrefixFold(summary, prefix+" ") {
 			summary = summary[len(prefix)+1:]
+			summary = withoutOwnName(summary, id)
 			break
 		}
 	}
@@ -174,11 +175,26 @@ func splitCamel(text string) string {
 	return strings.Join(words, " ")
 }
 
-// firstClause drops what follows a semicolon; detector summaries put
-// commentary there ("low on memory; pods may be evicted").
+// clauseText is the first clause of a detector summary with its machine
+// durations spoken ("expires in 72h0m0s" reads "expires in three
+// days"). What a pod or an event said, between quotes, is never cut or
+// rewritten: it is marked as a quotation here and stays byte-exact.
+func clauseText(summary string) string {
+	summary = firstClause(markDoubleQuotes(summary))
+	return outsideQuotes(summary, func(part string) string {
+		return wholeNumbers(humanizeText(part))
+	})
+}
+
+// firstClause drops what follows a semicolon outside quotes; detector
+// summaries put commentary there ("low on memory; pods may be evicted").
 func firstClause(text string) string {
-	before, _, _ := strings.Cut(text, ";")
-	return strings.TrimSpace(before)
+	before, after, _ := cutOutsideQuotes(text, ";")
+	before = strings.TrimSpace(before)
+	if stated := factClause(after); stated != "" {
+		return before + ", but " + stated
+	}
+	return before
 }
 
 // pluralPredicate turns a predicate about one subject into one about

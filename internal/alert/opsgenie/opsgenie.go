@@ -7,12 +7,10 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -37,10 +35,8 @@ type Opsgenie struct {
 	clusterName string
 	// wait pauses between update attempts; tests replace it.
 	wait func(ctx context.Context, d time.Duration) error
-
-	now func() time.Time
-	// missing records when a close first found no alert, per alias.
-	missing sync.Map
+	// closes are the closes retried in the background.
+	closes closeRetries
 }
 
 type ogPayload struct {
@@ -82,7 +78,6 @@ func NewOpsgenie(
 		url:         apiURL,
 		clusterName: clusterName,
 		wait:        sleepContext,
-		now:         clock.Require(dependencies.Clock).Now,
 	}
 }
 
@@ -130,6 +125,7 @@ func (o *Opsgenie) SendIncident(
 	if m.Resolved() {
 		return o.closeAlert(ctx, alias)
 	}
+	o.cancelClose(alias)
 	payload := o.buildPayload(m)
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -173,61 +169,55 @@ func (o *Opsgenie) updateAlert(
 	return nil
 }
 
-// closeGrace is how long a close may keep finding no alert before it is
-// taken as already closed. Opsgenie creates alerts asynchronously, so a
-// close that follows the create at once (a flapping incident, or an outbox
-// replay of announce and resolve) can answer 404 for a short while.
-const closeGrace = 5 * time.Minute
-
-// closeAlert closes the alert. An early 404 is returned without the
-// permanent marker so delivery retries it with its own backoff; once the
-// alert has stayed unknown for closeGrace it is already closed, or was
-// never opened, and there is nothing left to close.
+// closeAlert closes the alert. Opsgenie creates alerts asynchronously, so
+// a close that follows the create at once can answer 404 for a while. That
+// close is not dropped and does not hold the provider's queue, which would
+// delay the alerts behind it: it is kept and retried in the background
+// with growing waits for a few minutes, then given up, logged and counted
+// (see keepClose).
 func (o *Opsgenie) closeAlert(ctx context.Context, alias string) error {
 	err := o.send(ctx, "POST", o.actionURL(alias, "close"), []byte(`{}`))
-	if !transport.IsNotFound(err) {
-		o.missing.Delete(alias)
-		return err
-	}
-	now := o.now()
-	first, _ := o.missing.LoadOrStore(alias, now)
-	if now.Sub(first.(time.Time)) >= closeGrace {
-		o.missing.Delete(alias)
+	if transport.IsNotFound(err) {
+		klog.V(2).InfoS("opsgenie alert to close is not there yet",
+			"component", "delivery", "provider", o.Name())
+		o.keepClose(ctx, alias)
 		return nil
 	}
-	o.pruneMissing(now)
-	return errors.New(err.Error() + " (alert not visible yet, will retry)")
+	return err
 }
 
-// pruneMissing forgets aliases nobody retried for twice the grace period,
-// so the record stays small.
-func (o *Opsgenie) pruneMissing(now time.Time) {
-	o.missing.Range(func(alias, first any) bool {
-		if now.Sub(first.(time.Time)) >= 2*closeGrace {
-			o.missing.Delete(alias)
-		}
-		return true
-	})
-}
-
-// updateAttempts and updateRetryDelay bound how long an update waits for
-// an alert that Opsgenie is still creating.
+// updateAttempts and updateRetryDelay bound how long an update or a close
+// waits for an alert that Opsgenie is still creating.
 const (
 	updateAttempts   = 3
 	updateRetryDelay = time.Second
 )
 
-// sendUpdate sends one PUT. Opsgenie creates alerts asynchronously, so an
-// update that follows the create at once can answer 404 for a moment. That
-// is retried a few times; if the alert is still unknown the error is
-// returned as retryable, so delivery tries again later instead of
-// treating the 404 as permanent.
+// sendUpdate sends one PUT. An update that is still answered 404 after
+// the retries is returned as retryable, so delivery tries again later
+// instead of treating the 404 as permanent.
 func (o *Opsgenie) sendUpdate(
 	ctx context.Context, target string, body []byte,
 ) error {
+	err := o.sendWhileCreating(ctx, "PUT", target, body)
+	if !transport.IsNotFound(err) {
+		return err
+	}
+	// A new error without the permanent marker: the alert is probably
+	// still being created.
+	return errors.New(err.Error() + " (alert not visible yet, will retry)")
+}
+
+// sendWhileCreating sends one request. Opsgenie creates alerts
+// asynchronously, so a request that follows the create at once can answer
+// 404 for a moment: that is retried a few times. The last 404 is returned
+// when the alert is still unknown.
+func (o *Opsgenie) sendWhileCreating(
+	ctx context.Context, method, target string, body []byte,
+) error {
 	var err error
 	for attempt := 1; attempt <= updateAttempts; attempt++ {
-		err = o.send(ctx, "PUT", target, body)
+		err = o.send(ctx, method, target, body)
 		if err == nil || !transport.IsNotFound(err) {
 			return err
 		}
@@ -239,9 +229,7 @@ func (o *Opsgenie) sendUpdate(
 			return waitErr
 		}
 	}
-	// A new error without the permanent marker: the alert is probably
-	// still being created.
-	return errors.New(err.Error() + " (alert not visible yet, will retry)")
+	return err
 }
 
 // actionURL addresses one alert by its alias, e.g. .../{alias}/close.

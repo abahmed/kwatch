@@ -16,7 +16,7 @@ func TestRunCommandRejectsUnknownSubcommandArguments(t *testing.T) {
 	for _, args := range tests {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			var out, errOut bytes.Buffer
-			code := runCommand(args, &out, &errOut, func() int {
+			code := runCommand(args, &out, &errOut, testNow, func() int {
 				t.Fatal("server must not start")
 				return 0
 			})
@@ -47,6 +47,7 @@ func TestParseLintArgsAcceptsDocumentedSpellings(t *testing.T) {
 func TestRunCommandVersionJSONStillAccepted(t *testing.T) {
 	var out, errOut bytes.Buffer
 	code := runCommand([]string{"version", "--json"}, &out, &errOut,
+		testNow,
 		func() int { return 99 })
 	if code != 0 || !strings.HasPrefix(out.String(), "{") {
 		t.Fatalf("code=%d out=%q err=%q", code, out.String(),

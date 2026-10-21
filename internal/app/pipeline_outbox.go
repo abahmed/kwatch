@@ -10,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/audit"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/metrics"
+	"github.com/abahmed/kwatch/internal/safego"
 )
 
 // decisionLogQueue bounds audit entries waiting for the writer. The
@@ -80,7 +81,7 @@ func (l *decisionLog) run() {
 		case entry := <-l.entries:
 			l.writeEntry(entry)
 		case <-l.refresh:
-			refreshOpenIncidents(l.registry, l.incidents)
+			l.refreshGauge()
 		case <-l.stop:
 			l.drain()
 			return
@@ -94,15 +95,33 @@ func (l *decisionLog) drain() {
 		case entry := <-l.entries:
 			l.writeEntry(entry)
 		default:
-			refreshOpenIncidents(l.registry, l.incidents)
+			l.refreshGauge()
 			return
 		}
 	}
 }
 
+// writeEntry writes one entry. A panic of the audit writer loses that
+// entry, which is counted as dropped, and never ends the worker.
 func (l *decisionLog) writeEntry(entry audit.Entry) {
-	l.write(entry)
+	err := safego.Run("audit-write", func() error {
+		l.write(entry)
+		return nil
+	})
+	if err != nil {
+		l.registry.AuditDropped.Add(1)
+		safego.Report(err)
+		return
+	}
 	l.written.Add(1)
+}
+
+// refreshGauge recomputes the open-incident gauge; a panic skips this
+// refresh only.
+func (l *decisionLog) refreshGauge() {
+	safego.Do("audit-gauge", func() {
+		refreshOpenIncidents(l.registry, l.incidents)
+	})
 }
 
 // closeWithin is close with a deadline of d that starts when closeWithin

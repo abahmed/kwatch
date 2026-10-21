@@ -75,3 +75,18 @@ func TestNodeConditionReportIsBounded(t *testing.T) {
 	assert.Equal(t, detection.Mode("Node.Condition.A"),
 		got.Findings[0].Mode)
 }
+
+// The condition's message says what the reporter saw; it is quoted, not
+// summarised, so a node problem reporter's text reaches the reader.
+func TestNodeConditionQuotesTheMessage(t *testing.T) {
+	m, node := conditionedNode(nil)
+	setCondition(m, node, "ReadonlyFilesystem", "True", "FilesystemIsReadOnly",
+		"Filesystem is read-only", t0)
+	r := detection.NewRegistry(nil, NewNode(0))
+
+	got := r.Evaluate(m, t0.Add(time.Hour), node)
+
+	require.Len(t, got.Findings, 1)
+	assert.Contains(t, got.Findings[0].Evidence, detection.Evidence{
+		Label: "message", Value: "Filesystem is read-only"})
+}

@@ -18,13 +18,14 @@ row in `internal/rootcause/explain/table_rows_traffic.go`.
     Prior: 0.8},
    ```
 
-   `Modes` are detector modes. They are defined, one map per area, in
-   `internal/detection/health.go` (`containerModes`, `serviceModes`, ...,
-   merged into `modeByReason`), each named by a constant in
+   `Modes` are detector modes. Each reason's mode is one `ReasonInfo` entry
+   in the reason tables, `internal/detection/reason_table_*.go` (`modeByReason`
+   is derived from them), and each mode is named by a constant in
    `mode_names.go`; a row can only match a mode a detector reason maps to
    there, or one of explain's pseudo modes such as `ModeChanged`. A mode
    also matches its finer modes: `ImagePull` matches `ImagePull.Registry`.
-   The certificate modes are in `controlPlaneModes`. `TestTableModesAreKnown`
+   The certificate modes are in `reason_table_node.go`
+   (`reason(reasons.TLSCertExpired, ModeCertExpired)`). `TestTableModesAreKnown`
    fails for a mode no finding can carry. `Signal` demands error text
    on the effect, which stops an unrelated crash from being blamed on the
    cause. Generic rows have lower priors (0.5 to 0.7) so a specific row

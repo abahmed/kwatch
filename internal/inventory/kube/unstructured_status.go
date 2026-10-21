@@ -57,6 +57,7 @@ func (s UnstructuredSchema) wellKnownStatus(
 				evidenceText(problems))
 		}
 	case "certificatesigningrequest":
+		setCreated(attrs, u)
 		certificate, _, _ := unstructured.NestedString(
 			u.Object, "status", "certificate")
 		attrs[AttrCertificateIssued] = inventory.Bool(certificate != "")
@@ -64,9 +65,20 @@ func (s UnstructuredSchema) wellKnownStatus(
 			u.Object, "spec", "signerName")
 		attrs[AttrSignerName] = inventory.Text(evidenceText(signer))
 	case "resourceclaim":
+		setCreated(attrs, u)
 		_, allocated, _ := unstructured.NestedMap(
 			u.Object, "status", "allocation")
 		attrs[AttrAllocated] = inventory.Bool(allocated)
+	}
+}
+
+// setCreated records the creation time the cluster gives the object, for
+// waits that must count from it and not from kwatch's first sight.
+func setCreated(
+	attrs map[string]inventory.Value, u *unstructured.Unstructured,
+) {
+	if created := u.GetCreationTimestamp(); !created.IsZero() {
+		attrs[AttrCreated] = inventory.Time(created.Time)
 	}
 }
 

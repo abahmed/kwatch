@@ -1,0 +1,7 @@
+{
+  "name": "adv-quota-full-no-refusal-two-days",
+  "description": "A pod quota is used up exactly; every workload is at its desired size and nothing is refused. Watched for two days.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "48h0m0s"
+}

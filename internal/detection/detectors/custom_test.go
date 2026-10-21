@@ -98,3 +98,47 @@ func TestCustomReasonByKind(t *testing.T) {
 		})
 	}
 }
+
+// A failing condition's message is what the controller says is wrong; it
+// is quoted from the earliest failing condition, whatever its type.
+func TestCustomQuotesTheMessageOfTheEarliestFailingCondition(t *testing.T) {
+	m, id := customResource("widget", true)
+	setCondition(m, id, "Degraded", "True", "PodsCrashing",
+		"2 of 3 pods are crash looping", t0.Add(time.Minute))
+	setCondition(m, id, "Ready", "False", "Failed",
+		"Issuing certificate: order failed: rate limited", t0)
+
+	got := evaluate(Custom{}, m, t0.Add(time.Hour), id, nil).Findings
+
+	require.Len(t, got, 1)
+	assert.Contains(t, got[0].Evidence, detection.Evidence{
+		Label: "message",
+		Value: "Issuing certificate: order failed: rate limited"})
+}
+
+// Conditions that are bad news by their own status are reported once
+// they last, and their message is quoted. Ready=Unknown waits longer
+// (custom_unknown_ready_test.go).
+func TestCustomReportsFailingAndSucceededConditions(t *testing.T) {
+	cases := []struct{ conditionType, status, summary string }{
+		{"Failing", "True", "Reports Failing=True (Why)"},
+		{"Succeeded", "False", "Reports Succeeded=False (Why)"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.conditionType+"="+tc.status, func(t *testing.T) {
+			m, id := customResource("widget", true)
+			setCondition(m, id, tc.conditionType, tc.status, "Why",
+				"what the controller said", t0)
+
+			early := evaluate(Custom{}, m, t0.Add(time.Minute), id, nil)
+			got := evaluate(Custom{}, m, t0.Add(DefaultCustomFailing), id,
+				nil).Findings
+
+			assert.Empty(t, early.Findings)
+			require.Len(t, got, 1)
+			assert.Equal(t, tc.summary, got[0].Summary)
+			assert.Contains(t, got[0].Evidence, detection.Evidence{
+				Label: "message", Value: "what the controller said"})
+		})
+	}
+}

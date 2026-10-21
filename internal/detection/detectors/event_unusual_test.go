@@ -109,3 +109,64 @@ func TestEventUnusualRecheckFallsAfterTheWindowEdge(t *testing.T) {
 		m, t0.Add(time.Minute).Add(first.RecheckAfter), id)
 	assert.Empty(t, again.Findings)
 }
+
+// A reason the object state of a pod shows (BackOff, Failed) says
+// nothing about a custom resource: its controller records it as an
+// unknown Warning event, and a repeat is worth the digest.
+func TestEventUnusualStateReasonOfAnotherKindIsReported(t *testing.T) {
+	for _, reason := range []string{"Failed", "BackOff", "Unhealthy"} {
+		m := newTestModel()
+		id := newID("order", "infra", "web-tls")
+		put(m, id, t0, nil)
+		noteEntity(m, id, reason, "Failed to finalize Order: 429", 5,
+			t0.Add(time.Minute))
+
+		got := Event{}.Detect(
+			testDetectorContext(m, t0.Add(2*time.Minute)), entityOf(m, id))
+
+		require.Len(t, got, 1, reason)
+		assert.Equal(t, "UnusualEvent."+reason, got[0].Reason)
+		assert.Contains(t, got[0].Evidence, detection.Evidence{
+			Label: "event", Value: "Failed to finalize Order: 429"})
+	}
+}
+
+// The endpoint controller's failures are not read from the Service, so
+// a repeat is not hidden as "already shown".
+func TestEventUnusualEndpointFailuresOnServiceAreReported(t *testing.T) {
+	for _, reason := range []string{"FailedToUpdateEndpointSlices",
+		"FailedToUpdateEndpoint", "FailedToCreateEndpoint"} {
+		m := newTestModel()
+		id := newID(kube.KindService, "shop", "web")
+		put(m, id, t0, nil)
+		noteEntity(m, id, reason, "Error updating endpoints", 4,
+			t0.Add(time.Minute))
+
+		got := Event{}.Detect(
+			testDetectorContext(m, t0.Add(2*time.Minute)), entityOf(m, id))
+
+		require.Len(t, got, 1, reason)
+		assert.Equal(t, "UnusualEvent."+reason, got[0].Reason)
+	}
+}
+
+// The kubelet records its container events (back-off, probe failures,
+// kills, image failures) against the container, not the pod. The state
+// of the pod and container already shows them, so a repeat is never an
+// unusual event.
+func TestEventUnusualKubeletContainerEventsAreKnown(t *testing.T) {
+	reasons := []string{"BackOff", "Unhealthy", "Failed", "Killing",
+		"InspectFailed", "ErrImagePull", "ImagePullBackOff"}
+	for _, reason := range reasons {
+		m := newTestModel()
+		id := newID(kube.KindContainer, "shop", "api-1/app")
+		put(m, id, t0, nil)
+		noteEntity(m, id, reason, "Back-off restarting failed container",
+			9, t0.Add(time.Minute))
+
+		got := Event{}.Detect(
+			testDetectorContext(m, t0.Add(2*time.Minute)), entityOf(m, id))
+
+		assert.Empty(t, got, reason)
+	}
+}

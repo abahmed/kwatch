@@ -36,13 +36,14 @@ var ephemeralConfigRow = Row{
 // podConfigModes are the configuration faults a pod's own record
 // shows: its eviction message says its ephemeral-storage limit was hit.
 func (v *view) podConfigModes(pod inventory.EntityID) []detection.Mode {
+	modes := v.pullConfigModes(pod)
 	if pod.Kind != kube.KindPod ||
 		!v.hasMode(pod, []detection.Mode{detection.ModeEvicted,
 			detection.ModeFailed}) {
-		return nil
+		return modes
 	}
 	if ephemeralOverLimit.MatchString(strings.ToLower(v.text(pod))) {
-		return []detection.Mode{ModeEphemeralTooLow}
+		return append(modes, ModeEphemeralTooLow)
 	}
-	return nil
+	return modes
 }

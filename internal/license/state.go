@@ -91,10 +91,12 @@ func Evaluate(in Inputs) Status {
 	want := in.Binding
 	want.LID = key.LID
 	lease, leaseErr := verifiedLease(v, in.Lease, want, eff)
-	// The license ends at the later of the key's expiry and the lease's
-	// lic_exp, so an extension the server delivered outlives the key.
+	// A verified lease's lic_exp is the server's latest word on the
+	// license end, so it wins over the key in both directions: an
+	// extension outlives the key and an early end (a shortened or
+	// cancelled license) applies offline, without waiting for a verdict.
 	end := key.ExpiresAt()
-	if lic := lease.LicenseEnd(); leaseErr == nil && lic.After(end) {
+	if lic := lease.LicenseEnd(); leaseErr == nil && !lic.IsZero() {
 		end = lic
 	}
 	st := Status{Plan: key.Plan, LID: MaskLID(key.LID), ExpiresAt: end}

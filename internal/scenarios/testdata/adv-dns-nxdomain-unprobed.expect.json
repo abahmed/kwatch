@@ -1,0 +1,13 @@
+{
+  "name": "adv-dns-nxdomain-unprobed",
+  "description": "One workload crashes on NXDOMAIN for an external host that only its log names; CoreDNS and its probe are healthy.",
+  "root": "deployment/shop/checkout",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "cluster-dns//cluster-dns",
+    "deployment/kube-system/coredns",
+    "node//n1",
+    "node//n2"
+  ]
+}

@@ -7,12 +7,12 @@ import "strings"
 // already said, these are the neighbours, nearest first. Without a
 // cause, recentChangeSentence says the same under the lead.
 func changesBeforeSentences(f caseFacts) []sentence {
-	if f.p.Cause == nil || len(f.changes) == 0 {
+	if f.p.Cause == nil {
 		return nil
 	}
-	items := make([]string, 0, len(f.changes))
-	for _, change := range f.changes {
-		items = append(items, changeFact(change))
+	items := changeFacts(f.changes)
+	if len(items) == 0 {
+		return nil
 	}
 	return []sentence{{part: partChanges, weight: 0,
 		text: "Also changed before it broke: " +

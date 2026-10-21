@@ -18,6 +18,9 @@ type heldAnnouncement struct {
 	decided time.Time
 	// until is when it is sent without output.
 	until time.Time
+	// unsent is set while its investigation found no free slot and
+	// still has to start (see retryUnsent).
+	unsent bool
 }
 
 // deliver hands decisions to the sink in order, with the evidence
@@ -54,7 +57,8 @@ func investigable(d incident.Decision) bool {
 // hold holds announcement d until its investigation's result arrives or
 // outputWait passes. It reports false when there is nothing to wait for.
 func (a *announcer) hold(d incident.Decision, now time.Time) bool {
-	if !a.awaitsEvidence(d, now) {
+	waits, unsent := a.awaitsEvidence(d, now)
+	if !waits {
 		return false
 	}
 	if d.Action == incident.Announce {
@@ -69,8 +73,42 @@ func (a *announcer) hold(d incident.Decision, now time.Time) bool {
 	}
 	a.held = append(a.held, heldAnnouncement{
 		decision: d, decided: now, until: now.Add(outputWait),
+		unsent: unsent,
 	})
 	return true
+}
+
+// retryUnsent gives the held announcements whose investigation found no
+// free slot another try, loudest tier first. A slot frees when a running
+// investigation returns, and until the output wait ends the announcement
+// can still carry the output. One that can no longer be investigated is
+// sent at once. It reports whether it sent an announcement.
+func (a *announcer) retryUnsent(ctx context.Context, now time.Time) bool {
+	var waiting []heldAnnouncement
+	for _, h := range a.held {
+		if h.unsent {
+			waiting = append(waiting, h)
+		}
+	}
+	slices.SortStableFunc(waiting, func(x, y heldAnnouncement) int {
+		return int(y.decision.Incident.Tier) - int(x.decision.Incident.Tier)
+	})
+	sent := false
+	for _, h := range waiting {
+		i := a.heldIndexOf(h.decision.Incident.ID)
+		if i < 0 {
+			continue
+		}
+		switch a.start(h.decision.Incident, now) {
+		case started:
+			a.held[i].unsent = false
+		case slotBusy:
+			return sent // no slot for the quieter ones either
+		default:
+			sent = a.sendHeld(ctx, a.takeHeld(i)) || sent
+		}
+	}
+	return sent
 }
 
 // attachOutput keeps a finished investigation's result and sends the
@@ -165,8 +203,12 @@ func (a *announcer) send(
 	ctx context.Context, d incident.Decision, at time.Time,
 ) {
 	d = a.withWake(a.withKindNames(a.withChanges(d, at)), at)
+	spoke := a.collect.SpokeOnItsOwn(d.Incident.ID)
 	written := a.collect.Follow(d)
 	msg := a.write(written, at)
+	if movedWithoutThread(written, spoke) {
+		msg.PagingOnly = true
+	}
 	if written.Action == incident.Resolve && a.joint != nil {
 		msg = a.withRecovered(ctx, written, msg, at)
 	}
@@ -232,17 +274,22 @@ func (a *announcer) write(
 		return a.messages.WriteResolvedBy(d, at, *fix)
 	}
 	msg := a.messages.Write(d, at)
-	// An incident whose failures another incident took over closes like
-	// any other: its thread is edited to say "Moved: ...", and the
-	// paging providers close the alert they opened. One a roll-up
-	// carried has no thread of its own, and one nobody heard of has
-	// none at all: those close for the alert-tracking providers alone.
-	if d.Action == incident.Resolve && (d.Unannounced ||
-		(d.Incident.SupersededBy != "" && !d.Handover &&
-			d.Incident.Delivery.RolledUp())) {
+	// One nobody heard of has no thread: it closes for the
+	// alert-tracking providers alone.
+	if d.Action == incident.Resolve && d.Unannounced {
 		msg.PagingOnly = true
 	}
 	return msg
+}
+
+// movedWithoutThread reports the resolve of an incident whose failures
+// another incident took over and that has no chat thread to edit: a
+// roll-up carried its announcement and it never spoke on its own (spoke).
+// It closes for the alert-tracking providers alone. One that did speak
+// has a thread, which is edited to say "Moved: ...", like any other.
+func movedWithoutThread(d incident.Decision, spoke bool) bool {
+	return d.Action == incident.Resolve && d.Incident.SupersededBy != "" &&
+		!d.Handover && d.Incident.Delivery.RolledUp() && !spoke
 }
 
 func (a *announcer) noteLate() {

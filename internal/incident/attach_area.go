@@ -66,7 +66,23 @@ func (a *areaPlacer) placementOf(failure inventory.EntityID) placement {
 	}
 	record := a.record(i)
 	out.root, out.cause = root, &record
+	out.outscored = a.outscoredBy(cause)
 	return out
+}
+
+// outscoredBy lists the roots of the alternatives that explain the
+// failures through the same row as cause and score at least as high.
+// The solver chose cause for how much it covers, not for how well it
+// explains: such a root is no less likely, so an incident already
+// rooted there keeps its failures (see edgesOutIncumbent).
+func (a *areaPlacer) outscoredBy(cause explain.Cause) []inventory.EntityID {
+	var roots []inventory.EntityID
+	for _, alt := range a.area.Alternatives {
+		if alt.Row == cause.Row && alt.Raw >= cause.Raw {
+			roots = append(roots, defaultRoot(a.s.Model, alt.Root))
+		}
+	}
+	return roots
 }
 
 // maxConsidered bounds the alternatives an incident remembers.

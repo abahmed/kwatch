@@ -45,7 +45,12 @@ func TestPageReopensTheSameIncident(t *testing.T) {
 		assert.Equal(t, first.ID, d.Incident.ID, "same Slack thread")
 		assert.Equal(t, first.AlertKey, d.Incident.AlertKey,
 			"same paging alert")
-		assert.Equal(t, Notify, d.Incident.Tier, "no new page")
+		if want == "3rd" {
+			// A flapper tells the pagers once, at the page tier.
+			assert.Equal(t, Page, d.Incident.Tier, "the flapper pages")
+		} else {
+			assert.Equal(t, Notify, d.Incident.Tier, "no new page")
+		}
 		assert.Contains(t, timelineOf(d.Incident),
 			"failing again: "+want+" time in 2h")
 		assert.Equal(t, i+2, d.Incident.RepeatCount, "typed count")

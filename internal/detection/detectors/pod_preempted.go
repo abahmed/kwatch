@@ -32,6 +32,7 @@ func preemptedFindings(
 		return nil
 	}
 	_, _, since := condition(e, "DisruptionTarget")
+	recheckWhenPreemptionAges(ctx, e)
 	var evidence []detection.Evidence
 	name := preemptorName(ctx, e)
 	if name != "" {

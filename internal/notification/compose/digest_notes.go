@@ -22,6 +22,9 @@ type Ongoing struct {
 	// Leftover is the reason that makes it a leftover that groups with
 	// the others of its reason (see LeftoverReason); empty otherwise.
 	Leftover string
+	// Standing is set for a condition that fails nothing (see
+	// IsStanding): the digest says it is still open, not still failing.
+	Standing bool
 }
 
 // WakeLine is the summary of a cluster wake-up that ended: the workloads
@@ -82,8 +85,8 @@ func startedWhen(from, to time.Time) string {
 
 // Line is one bullet: "Service web (shop) is still failing, for two days
 // now." Without a title it says only the subject and when it began:
-// "Service web (shop) — still failing since 17:14". A reason code is never
-// part of it.
+// "Service web (shop) — still failing since 17:14", or "still open" for
+// a condition that fails nothing. A reason code is never part of it.
 func (o Ongoing) Line(now time.Time) string {
 	if o.Title != "" {
 		return o.Title
@@ -95,9 +98,21 @@ func (o Ongoing) Line(now time.Time) string {
 	since := clock(o.Since)
 	if o.Since.UTC().YearDay() != now.UTC().YearDay() ||
 		now.Sub(o.Since) >= 24*time.Hour {
-		since = o.Since.UTC().Format("Jan 2 15:04")
+		since = o.Since.UTC().Format("Jan 2 15:04") + " UTC"
 	}
-	return subject + " — still failing since " + since
+	return subject + " — " + stillWord([]Ongoing{o}) + " since " + since
+}
+
+// stillWord says how problems carry on: "still failing" when every one
+// of them fails something, "still open" when any is a standing condition
+// (see IsStanding), which fails nothing.
+func stillWord(problems []Ongoing) string {
+	for _, o := range problems {
+		if o.Standing {
+			return "still open"
+		}
+	}
+	return "still failing"
 }
 
 // maxUnchangedNamed is how many unchanged problems the summary line
@@ -105,7 +120,8 @@ func (o Ongoing) Line(now time.Time) string {
 const maxUnchangedNamed = 3
 
 // unchangedLine is the one line for the problems that did not change:
-// "2 more still failing, unchanged (web, db +1)". Empty when none.
+// "2 more still failing, unchanged (web, db +1)". Empty when none. Its
+// wording follows stillWord.
 func unchangedLine(unchanged []Ongoing) string {
 	if len(unchanged) == 0 {
 		return ""
@@ -118,8 +134,8 @@ func unchangedLine(unchanged []Ongoing) string {
 	if extra := len(unchanged) - len(names); extra > 0 {
 		list += " +" + strconv.Itoa(extra)
 	}
-	return strconv.Itoa(len(unchanged)) + " more still failing, " +
-		"unchanged (" + list + ")"
+	return numberWord(len(unchanged)) + " more " + stillWord(unchanged) +
+		", unchanged (" + list + ")"
 }
 
 // ongoingSentences are the ongoing problems for the plain note, as many
@@ -131,7 +147,8 @@ func ongoingSentences(extras DigestExtras, now time.Time) []sentence {
 	for i, o := range ongoing {
 		if i == maxSummaryNamed {
 			out = append(out, sentence{part: partProof, text: sentenceCase(
-				numberWord(len(ongoing)-i) + " more still failing")})
+				numberWord(len(ongoing)-i) + " more " +
+					stillWord(ongoing[i:]))})
 			break
 		}
 		out = append(out, sentence{part: partProof,
@@ -152,7 +169,8 @@ func ongoingBullets(extras DigestExtras, now time.Time) []notification.Block {
 		if i == maxSummaryNamed {
 			out = append(out, notification.Block{Kind: notification.Bullet,
 				Spans: []notification.Span{{Text: "+" +
-					strconv.Itoa(len(ongoing)-i) + " more still failing"}}})
+					strconv.Itoa(len(ongoing)-i) + " more " +
+					stillWord(ongoing[i:])}}})
 			break
 		}
 		bullet := []notification.Block{{Kind: notification.Bullet,

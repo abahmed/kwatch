@@ -63,6 +63,8 @@ var signalPatterns = map[Signal]*regexp.Regexp{
 		`unable to handle the request \(get [a-z.]*metrics\.k8s\.io`),
 	SignalForbidden: regexp.MustCompile(`cannot (get|list|watch|create|` +
 		`update|patch|delete|deletecollection) resource`),
+	SignalNoAccount: regexp.MustCompile(`serviceaccount "[^"]+" not ` +
+		`found|error looking up service account`),
 	SignalNodeAgent: regexp.MustCompile(`network plugin is not ready|` +
 		`networkpluginnotready|cni plugin not initialized|` +
 		`failed to set ?up (pod )?network for sandbox|` +

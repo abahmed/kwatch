@@ -1,0 +1,12 @@
+{
+  "name": "cr-controller-crash-manager-is-deployment-name",
+  "description": "A controller crash-loops; its custom resources in two namespaces turn Ready=False after an edit.",
+  "root": "deployment/gadget-system/gadget-controller",
+  "tier": "notify",
+  "maxMessages": 3,
+  "maxPages": 1,
+  "mustNotBlame": [
+    "gadget.gadgets.acme.dev/team-a/primary",
+    "gadget.gadgets.acme.dev/team-b/primary"
+  ]
+}

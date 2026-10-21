@@ -70,6 +70,10 @@ ALERT_QUALITY_REPORT ?= $(OUTPUT_DIR)/alert-quality.md
 ALERT_QUALITY_ENV = KWATCH_SCORECARD_REPORT=$(abspath $(ALERT_QUALITY_REPORT))
 ALERT_QUALITY_TEST := $(GOTEST) -count=1 -timeout 600s ./internal/scenarios \
 	-run '^TestScorecardGates$$' -v
+# The mutation check: the gates must fail when part of the root-cause
+# engine is switched off, so a gate that cannot see a regression is caught.
+ALERT_QUALITY_ABLATION_TEST := $(GOTEST) -count=1 -timeout 600s \
+	./internal/scenarios -run '^TestScorecardGatesSeeRootCauseRegressions$$' -v
 
 # Race tests are slower than the default per-package timeout allows for
 # the scenario replay.
@@ -103,7 +107,7 @@ help:
 	@echo "  make verify-race   Serialized race run (-p 1) for milestones"
 	@echo "  make verify-latency Decision-lag and memory budgets without -race"
 	@echo "  make alert-quality Report the alert-quality gates (never fails)"
-	@echo "  make alert-quality-gate Fail when any alert-quality gate misses"
+	@echo "  make alert-quality-gate Fail when a gate misses or cannot see a regression"
 	@echo "  make deadcode-check Fail on unreachable functions"
 	@echo "  make verify-catalogs Verify checked-in generated catalogs"
 	@echo "  make docs-verify   Verify code-owned documentation metadata"
@@ -340,6 +344,7 @@ alert-quality:
 alert-quality-gate:
 	@mkdir -p $(dir $(ALERT_QUALITY_REPORT))
 	KWATCH_SCORECARD_GATE=1 $(ALERT_QUALITY_ENV) $(ALERT_QUALITY_TEST)
+	$(ALERT_QUALITY_ABLATION_TEST)
 
 clean:
 	@rm -rf $(OUTPUT_DIR)

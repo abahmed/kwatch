@@ -1,27 +1,30 @@
 package detection
 
-import "github.com/abahmed/kwatch/internal/detection/reasons"
+import (
+	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
+)
 
 // workloadReasons lists the workload, autoscaler, job and resource reasons.
 var workloadReasons = []ReasonInfo{
 	reason(reasons.ProgressDeadlineExceeded, ModeRolloutStuck),
 	reason(reasons.DeploymentUnavailable, ModeUnavailable),
-	reason(reasons.DeploymentProgressing, ModeRolloutStuck),
-	reason(reasons.DeploymentAvailable, ModeUnavailable),
 	reason(reasons.DeploymentReplicaFailure, ModeReplicaFailure),
 	reason(reasons.ReplicaSetFailure, ModeReplicaFailure),
 	reason(reasons.DaemonSetUnavailable, ModeUnavailable),
+	reason(reasons.DaemonSetMisscheduled, ModeDaemonSetMisscheduled).
+		digest(),
 	reason(reasons.StsUnavailable, ModeUnavailable),
 	reason(reasons.ScalingDisabled, ModeScalingDisabled),
-	reason(reasons.FailedGetResourceMetric, ModeScalingNoMetrics).digest().shown(),
-	reason(reasons.FailedComputeMetricsReplicas, ModeScalingNoMetrics).shown(),
-	reason(reasons.FailedGetScale, ModeScalingTargetMissing).shown(),
+	reason(reasons.FailedGetResourceMetric, ModeScalingNoMetrics).digest().
+		shown(kube.KindHPA),
+	reason(reasons.FailedComputeMetricsReplicas, ModeScalingNoMetrics).
+		shown(kube.KindHPA),
+	reason(reasons.FailedGetScale, ModeScalingTargetMissing).shown(kube.KindHPA),
 	// A condition reason only: the matching event is FailedRescale.
 	reason(reasons.FailedUpdateScale, ModeScalingUpdateFailed),
 	reason(reasons.HPAInvalidSelector, ModeScalingInvalidSelector),
 	reason(reasons.HPAMaxedOut, ModeScalingMaxedOut).causeOnly(),
-	reason(reasons.StatefulSetCondition, ModeConditionFailure),
-	reason(reasons.DaemonSetCondition, ModeConditionFailure),
 	reason(reasons.HPAScalingError, ModeScalingError),
 	// A scale target that does not exist and a Ready node whose kubelet
 	// kwatch cannot reach are worth a look; whatever fails because of

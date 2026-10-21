@@ -20,8 +20,8 @@ type KwatchConfigSpec struct {
 	Upgrader         map[string]interface{} `json:"upgrader,omitempty"`
 	HeartbeatMonitor HeartbeatMonitorConfig `json:"heartbeatMonitor,omitempty"`
 	Maintenance      MaintenanceConfig      `json:"maintenance,omitempty"`
-	// ClusterCheckins is a pointer so an explicit false survives
-	// omitempty.
+	// ClusterCheckins is deprecated and ignored: kwatch no longer sends
+	// cluster check-ins. It stays so existing KwatchConfig objects load.
 	ClusterCheckins *bool `json:"clusterCheckins,omitempty"`
 
 	Namespaces        []string `json:"namespaces,omitempty"`
@@ -51,27 +51,30 @@ type KwatchConfigSpec struct {
 // validation while typed clients can round-trip newly added options safely.
 type MonitorConfig map[string]interface{}
 
+// The Enabled switches below are pointers so an explicit false survives
+// omitempty: a plain bool would drop `enabled: false` when encoded, and the
+// object would read as "not set".
 type MaintenanceConfig struct {
-	Enabled         bool   `json:"enabled,omitempty"`
+	Enabled         *bool  `json:"enabled,omitempty"`
 	Annotation      string `json:"annotation,omitempty"`
 	UntilAnnotation string `json:"untilAnnotation,omitempty"`
 }
 
 type TelemetryConfig struct {
-	Enabled bool `json:"enabled,omitempty"`
+	Enabled *bool `json:"enabled,omitempty"`
 }
 
 // AuditLogConfig omits the output path: KwatchConfig cannot choose where
 // kwatch writes files.
 type AuditLogConfig struct {
-	Enabled bool `json:"enabled,omitempty"`
+	Enabled *bool `json:"enabled,omitempty"`
 }
 
 // HeartbeatMonitorConfig omits the URL: it can carry a token, so it is
 // only accepted from the mounted configuration file.
 type HeartbeatMonitorConfig struct {
-	Enabled  bool `json:"enabled,omitempty"`
-	Interval int  `json:"interval,omitempty"`
+	Enabled  *bool `json:"enabled,omitempty"`
+	Interval int   `json:"interval,omitempty"`
 }
 
 // AppConfig omits the outbound proxy and TLS trust settings: they decide
@@ -79,7 +82,7 @@ type HeartbeatMonitorConfig struct {
 // sets them.
 type AppConfig struct {
 	ClusterName           string `json:"clusterName,omitempty"`
-	DisableStartupMessage bool   `json:"disableStartupMessage,omitempty"`
+	DisableStartupMessage *bool  `json:"disableStartupMessage,omitempty"`
 	LogFormatter          string `json:"logFormatter,omitempty"`
 }
 

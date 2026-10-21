@@ -2,6 +2,7 @@ package compose
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
@@ -30,7 +31,7 @@ func graceKillSentences(f caseFacts) []sentence {
 	grace := evidence(first, detection.EvidenceGracePeriod)
 	text := graceSubject(f, killed) + " did not stop within " +
 		graceWords(len(killed), grace) + " and " + killedWords(len(killed)) +
-		" killed (exit code 137); work in flight was cut off"
+		" killed (exit code 137)"
 	if evidence(first, detection.EvidenceDuringRollout) == "true" {
 		text = "During the rollout at " + clock(first.Since) + ", " + text
 	} else {
@@ -63,10 +64,26 @@ func graceWords(n int, grace string) string {
 	if grace == "" {
 		return "their grace period"
 	}
+	whose := "their "
 	if n == 1 {
-		return "its " + grace + " grace period"
+		whose = "its "
 	}
-	return "their " + grace + " grace period"
+	return whose + graceLength(grace) + " grace period"
+}
+
+// graceLength says a grace period as an adjective: "30-second",
+// "2-minute". A value that is not a duration is shown as it is.
+func graceLength(grace string) string {
+	d, err := time.ParseDuration(grace)
+	switch {
+	case err != nil:
+		return grace
+	case d < time.Minute:
+		return strconv.Itoa(int(d.Seconds())) + "-second"
+	case d < time.Hour && d%time.Minute == 0:
+		return strconv.Itoa(int(d.Minutes())) + "-minute"
+	}
+	return humanDuration(d)
 }
 
 func killedWords(n int) string {

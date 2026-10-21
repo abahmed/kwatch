@@ -38,11 +38,11 @@ func TestDigestGroupsExpiredUnusedSecrets(t *testing.T) {
 	msg := Writer{}.DigestWith(opened, nil, nil, DigestExtras{}, extrasNow)
 
 	text := msg.Render(notification.SlackDialect())
-	assert.Contains(t, text, "• 5 expired TLS Secrets that nothing "+
-		"references: ns0/tls, ns1/tls, ns2/tls +2")
+	assert.Contains(t, text, "• 5 expired TLS Secrets that no pod or "+
+		"Ingress references: ns0/tls, ns1/tls, ns2/tls +2")
 	assert.NotContains(t, text, "Secret *tls*")
-	assert.Contains(t, msg.Note, "5 expired TLS Secrets that nothing "+
-		"references: ns0/tls, ns1/tls, ns2/tls +2.")
+	assert.Contains(t, msg.Note, "5 expired TLS Secrets that no pod or "+
+		"Ingress references: ns0/tls, ns1/tls, ns2/tls +2.")
 	assert.Contains(t, msg.Note, "five low-priority problems")
 }
 
@@ -69,10 +69,10 @@ func TestDigestGroupsOngoingAndUnchangedLeftovers(t *testing.T) {
 		extrasNow)
 
 	text := msg.Render(notification.SlackDialect())
-	assert.Contains(t, text, "• 3 expired TLS Secrets that nothing "+
-		"references: ns0/tls, old1/tls, old2/tls")
-	assert.Contains(t, text, "• 2 expired TLS Secrets that nothing "+
-		"references, unchanged: old3/tls, old4/tls")
+	assert.Contains(t, text, "• 3 expired TLS Secrets that no pod or "+
+		"Ingress references: ns0/tls, old1/tls, old2/tls")
+	assert.Contains(t, text, "• 2 expired TLS Secrets that no pod or "+
+		"Ingress references, unchanged: old3/tls, old4/tls")
 }
 
 func TestLeftoverNeedsAnOptedInReason(t *testing.T) {

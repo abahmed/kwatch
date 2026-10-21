@@ -1,0 +1,13 @@
+{
+  "name": "adv-dependency-rolled-unrelated-panic",
+  "description": "A dependency finishes a healthy rollout just before an app panics on an unrelated error.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/db",
+    "service/shop/db",
+    "node//n1",
+    "node//n2"
+  ]
+}

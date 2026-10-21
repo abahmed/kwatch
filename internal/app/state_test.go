@@ -50,8 +50,29 @@ func TestDiskStateClusterIDDerivesFromNamespaceUID(t *testing.T) {
 
 	require.Equal(t, a, b, "a reinstall keeps the cluster identity")
 	require.Equal(t, a, again)
-	require.Equal(t, clusterIDFromUID("uid-1"), a)
+	require.Equal(t, telemetryIDFromUID("uid-1"), a)
 	require.NotContains(t, a, "uid-1")
+}
+
+// The anonymous weekly ping must not be joinable to a license binding.
+func TestTelemetryIDDiffersFromTheLicenseClusterID(t *testing.T) {
+	require.NotEqual(t, clusterIDFromUID("uid-1"), telemetryIDFromUID("uid-1"))
+	require.Len(t, telemetryIDFromUID("uid-1"), 36)
+	require.Equal(t, byte('4'), telemetryIDFromUID("uid-1")[14])
+}
+
+// Installs that stored the earlier license-derived ID get a new telemetry
+// ID once; the old record is left alone.
+func TestDiskStateIgnoresTheEarlierClusterIDRecord(t *testing.T) {
+	ctx := context.Background()
+	disk := diskState{store: openTestStore(t),
+		client: fake.NewSimpleClientset(kubeSystem("uid-1"))}
+	require.NoError(t, disk.put("cluster.id", clusterIDFromUID("uid-1")))
+
+	id, err := disk.EnsureClusterID(ctx)
+
+	require.NoError(t, err)
+	require.Equal(t, telemetryIDFromUID("uid-1"), id)
 }
 
 func TestDiskStateClusterIDFallsBackToRandomID(t *testing.T) {

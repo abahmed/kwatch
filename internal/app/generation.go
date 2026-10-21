@@ -21,6 +21,11 @@ type generationResult struct {
 	code  int
 	next  feature.Entitlements
 	again bool
+	// stopHealth frees the health port the generation kept serving while
+	// it ended. The next generation calls it just before it binds the
+	// port, so liveness answers through the whole rebuild. Nil when the
+	// generation did not ask for a rebuild.
+	stopHealth func()
 }
 
 // generationEnv holds the collaborators of the generation loop, so the
@@ -37,6 +42,8 @@ type generationEnv struct {
 		feature.Entitlements,
 	) (*bootstrap, error)
 	serve func(context.Context, *serverDeps) int
+	// logs is the klog format shared by every generation of the process.
+	logs *logFormat
 }
 
 func newGenerationEnv(now func() time.Time) generationEnv {
@@ -46,6 +53,7 @@ func newGenerationEnv(now func() time.Time) generationEnv {
 		now: now, processStart: now(),
 		retry: &rebuildRetry{sleep: sleepContext}, after: time.After,
 		load: loadConfig, boot: newBootstrap, serve: serve,
+		logs: newLogFormat(),
 	}
 }
 
@@ -54,19 +62,23 @@ func newGenerationEnv(now func() time.Time) generationEnv {
 // rebuilds are never in flight.
 func (g generationEnv) runAll(first feature.Entitlements) int {
 	entitlements, rebuilding := first, false
+	var stopHealth func()
 	for {
-		res := g.run(entitlements, rebuilding)
+		res := g.run(entitlements, rebuilding, stopHealth)
 		if !res.again {
 			return res.code
 		}
 		entitlements, rebuilding = res.next, true
+		stopHealth = res.stopHealth
 	}
 }
 
 // run builds and serves one generation of the application. It reports the
 // entitlements to rebuild with when the license changed the edition.
+// stopHealth is the previous generation's health listener, which stayed
+// open; it is closed just before this generation binds the port.
 func (g generationEnv) run(
-	entitlements feature.Entitlements, rebuilding bool,
+	entitlements feature.Entitlements, rebuilding bool, stopHealth func(),
 ) generationResult {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -74,8 +86,11 @@ func (g generationEnv) run(
 	if rebuilding {
 		retry = g.retry
 	}
-	deps, err := g.prepare(ctx, cancel, retry, entitlements)
+	deps, err := g.prepare(ctx, cancel, retry, entitlements, stopHealth)
 	if err != nil {
+		if stopHealth != nil {
+			stopHealth()
+		}
 		return generationResult{code: 1}
 	}
 	if rebuilding {
@@ -90,13 +105,13 @@ func (g generationEnv) run(
 // configuration, fails the same way a first start does.
 func (g generationEnv) prepare(
 	ctx context.Context, cancel context.CancelFunc, retry *rebuildRetry,
-	entitlements feature.Entitlements,
+	entitlements feature.Entitlements, stopHealth func(),
 ) (*serverDeps, error) {
 	cfg, err := g.load()
 	if err != nil {
 		return nil, fail(retry, "failed to load config", "config", err)
 	}
-	applyLogFormat(cfg.Runtime.Application().LogFormatter)
+	g.logs.apply(cfg.Runtime.Application().LogFormatter)
 
 	klog.InfoS(fmt.Sprintf(welcomeMessage, version.Short()))
 
@@ -111,12 +126,19 @@ func (g generationEnv) prepare(
 			"bootstrap", err)
 	}
 	// The KwatchConfig overlay may change app.logFormatter.
-	applyLogFormat(boot.runtime.Application().LogFormatter)
-	logSecretsAccess(boot.runtime)
-	logInactivePro(entitlements, boot.inactivePro)
-	logEditionNotice(entitlements, boot.notice)
+	g.logs.apply(boot.runtime.Application().LogFormatter)
+	logSecretsAccess(boot.runtime, entitlements)
+	logNoProviders(boot.runtime)
 	deps := newServerDeps(ctx, cancel, boot)
+	if !deps.licenseKeyConfigured() {
+		deps.logEdition()
+	}
 	deps.rebuild = retry
+	// Everything slow is built; only now does the previous generation let
+	// go of the port, so the gap with no listener is as short as it can be.
+	if stopHealth != nil {
+		stopHealth()
+	}
 	err = retry.do(ctx, "health listener", deps.healthServer.Open)
 	if err != nil {
 		releaseUnserved(deps)
@@ -148,9 +170,13 @@ func (g generationEnv) finish(
 	closeIdleConnections(deps.clients)
 	if err := awaitRelease(deps, g.after); err != nil {
 		_ = failRebuild("release", err)
+		stopHealthServer(deps)
 		return generationResult{code: 1}
 	}
-	return generationResult{code: code, next: deps.edition.Load(), again: true}
+	return generationResult{
+		code: code, next: deps.edition.Load(), again: true,
+		stopHealth: func() { stopHealthServer(deps) },
+	}
 }
 
 var errStateStoreHeld = errors.New(
@@ -213,6 +239,9 @@ func releaseUnserved(deps *serverDeps) {
 func closeIdleConnections(clients kubeclient.ClientSet) {
 	if clients.HTTP != nil {
 		clients.HTTP.CloseIdleConnections()
+	}
+	if clients.PlatformHTTP != nil {
+		clients.PlatformHTTP.CloseIdleConnections()
 	}
 	if clients.ProbeHTTP != nil {
 		clients.ProbeHTTP.CloseIdleConnections()

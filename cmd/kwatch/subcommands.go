@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/alert/catalog"
 	"github.com/abahmed/kwatch/internal/app"
@@ -14,7 +15,9 @@ import (
 	"github.com/abahmed/kwatch/internal/kubeclient"
 )
 
-func runLint(strict, check bool, out, errOut io.Writer) int {
+func runLint(
+	strict, check bool, now func() time.Time, out, errOut io.Writer,
+) int {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		if _, writeErr := fmt.Fprintf(errOut, "ERROR: %v\n", err); writeErr != nil {
@@ -31,6 +34,9 @@ func runLint(strict, check bool, out, errOut io.Writer) int {
 		}
 		return 1
 	}
+	// The state file is copied to read the edition, so it is read once
+	// and the result passed down.
+	edition := currentEdition(now)
 	// Warnings describe a configuration that works but will mislead. They are
 	// reported, never fatal: a lint that fails on a suboptimal setting is a
 	// lint people stop running.
@@ -43,13 +49,13 @@ func runLint(strict, check bool, out, errOut io.Writer) int {
 	}
 	// Pro configuration is information, never a failure: the edition
 	// ignores it and the file stays valid for an upgrade.
-	for _, name := range app.InactiveProFeatures(cfg) {
+	for _, name := range edition.InactiveProFeatures(cfg) {
 		if _, writeErr := fmt.Fprintf(out, "  info: %s is a kwatch Pro "+
 			"feature and is ignored in this edition\n", name); writeErr != nil {
 			return 1
 		}
 	}
-	for _, notice := range app.EditionNotices(cfg) {
+	for _, notice := range edition.Notices(cfg) {
 		if _, writeErr := fmt.Fprintf(
 			out, "  info: %s\n", notice,
 		); writeErr != nil {
@@ -68,7 +74,7 @@ func runLint(strict, check bool, out, errOut io.Writer) int {
 	}
 	// Construction only validates settings and builds clients; it does no
 	// I/O, so it always runs. Only --check contacts providers.
-	am, code := constructProviders(cfg, errOut)
+	am, code := constructProviders(cfg, edition, errOut)
 	if code != 0 {
 		return 1
 	}
@@ -86,9 +92,12 @@ func runLint(strict, check bool, out, errOut io.Writer) int {
 // constructProviders builds the configured providers exactly as startup
 // does, so a setting a constructor refuses fails lint too.
 func constructProviders(
-	cfg *config.Config, errOut io.Writer,
+	cfg *config.Config, edition app.CLIEdition, errOut io.Writer,
 ) (*delivery.Manager, int) {
-	runtime := config.RuntimeConfigFor(cfg)
+	// Only the providers the edition runs are built: the Community
+	// edition keeps one, and a test or check of another would report
+	// alerts that never go there.
+	runtime := config.RuntimeConfigFor(edition.ConfigFor(cfg))
 	httpClient, err := kubeclient.NewHTTPClientWithRuntime(runtime)
 	if err != nil {
 		_, _ = fmt.Fprintf(errOut, "ERROR: outbound HTTP client: %v\n", err)

@@ -44,3 +44,15 @@ func TestLogLinesDropsBareBase64Runs(t *testing.T) {
 	assert.NotContains(t, strings.Join(lines, "\n"), "MIIEowIBAAKCAQEA")
 	assert.Contains(t, lines, "panic: short token abc123")
 }
+
+// One policy for everything a pod or an event said: credentials go,
+// private addresses stay (docs/configuration.md, evidence policy).
+func TestLogLinesKeepPrivateAddresses(t *testing.T) {
+	body := "dial tcp 10.0.3.9:5432: connection refused password=hunter2\n"
+
+	lines := logLines([]byte(body))
+
+	assert.Equal(t, []string{
+		"dial tcp 10.0.3.9:5432: connection refused password=[redacted]",
+	}, lines)
+}

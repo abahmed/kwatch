@@ -2,18 +2,20 @@ package metrics
 
 import "github.com/prometheus/client_golang/prometheus"
 
-// panicStages are the decision-path stages whose panics are contained.
-// The set is fixed so the label stays bounded.
+// panicStages are the stages whose panics are contained: the decision
+// path, and "background" for everything else that runs under safego
+// (writers, probes, watchers). The set is fixed so the label stays
+// bounded.
 var panicStages = [...]string{
-	"detector", "incident", "compose", "announce",
+	"detector", "incident", "compose", "announce", "background",
 }
 
 var panicsDesc = prometheus.NewDesc("kwatch_panics_recovered_total",
-	"Panics contained on the decision path by stage", []string{"stage"},
+	"Panics contained by stage", []string{"stage"},
 	nil)
 
 // IncPanic records one contained panic using a bounded stage label.
-// An unknown stage counts as the last one.
+// An unknown stage counts as the last one, "background".
 func (r *Registry) IncPanic(stage string) {
 	for i, allowed := range panicStages {
 		if stage == allowed {

@@ -8,5 +8,6 @@
     "node//n1",
     "node//n2",
     "cluster-dns//cluster-dns"
-  ]
+  ],
+  "revisesRoot": true
 }

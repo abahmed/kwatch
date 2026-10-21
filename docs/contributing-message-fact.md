@@ -51,3 +51,25 @@ go test ./internal/notification/compose
 Escaping and redaction happen once, before the writer; evidence you read here
 is already redacted. A provider with a short limit shows `Message.Short`, the
 lead sentence, so keep the most important fact in the lead.
+
+Quote what a pod wrote with `quoted(text)`, never with literal double quotes:
+the text can hold quotes of its own, so `quoted` wraps it in two control
+runes (`quoteOpen`, `quoteClose`, see `quotes.go`) that `clip` removes from
+cluster text. `fill` writes them as double quotes in the plain fields
+(`Note`, `Short`, `Title`, `Lines`) and the rich lines (`Doc`) split on them,
+so the quoted bytes are never changed. Say a time with `clock`, which writes
+it in UTC with the zone ("10:03 UTC").
+
+State facts, never predictions: a sentence says what is so now, not what
+may, will or would happen. `TestComposeTextStatesFactsNotPredictions` scans
+every string literal of the package for words such as "may", "will",
+"would" and "likely". A hedge that is the confidence wording of a diagnosis,
+or the words of kwatch's own behaviour, goes into `factualWording` in that
+test with the reason; anything else is reworded as a fact ("It runs a single
+replica.", not "so this is downtime").
+
+A quotation that is long, has several lines or cannot sit in a code span is
+lifted into a code block in the rich lines, and the words after it start a
+line of their own. Write the words that follow a quote so that they read as a
+sentence on their own: the full stop or semicolon after the quote stays in
+the plain note and is dropped from the rich line (`afterBlock` in `rich.go`).

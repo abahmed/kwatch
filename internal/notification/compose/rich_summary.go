@@ -56,7 +56,7 @@ func (w Writer) problemBullets(
 			break
 		}
 		b := notification.Block{Kind: notification.Bullet,
-			Spans: podSpans(itemLine(Writer{}.Write(d, now).Title,
+			Spans: podSpans(itemLine(markedTitle(Writer{}.Write(d, now)),
 				d.Incident.Root.Namespace) + usualTail(d))}
 		blocks := []notification.Block{b}
 		boldNames(blocks, incidentNames(d.Incident, ""))
@@ -70,11 +70,11 @@ func (w Writer) problemBullets(
 // shortWhat.
 func itemLine(title, namespace string) string {
 	title = strings.TrimSuffix(strings.TrimSpace(title), ".")
-	subject, rest, ok := strings.Cut(title, " is ")
+	subject, rest, ok := cutOutsideQuotes(title, " is ")
 	if !ok {
-		subject, rest, ok = strings.Cut(title, " are ")
+		subject, rest, ok = cutOutsideQuotes(title, " are ")
 	}
-	if !ok || strings.Contains(subject, `"`) {
+	if !ok || strings.ContainsAny(subject, `"`+quoteOpen) {
 		return title
 	}
 	if namespace != "" {

@@ -1,0 +1,13 @@
+{
+  "name": "adv-rollout-then-node-lost",
+  "description": "A healthy rollout of one Deployment ends eight seconds before a node stops reporting; pods of three workloads on the node, including the new revision, go not ready.",
+  "root": "node//n2",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/catalog",
+    "deployment/shop/cart",
+    "deployment/shop/search",
+    "zone//zone-a"
+  ]
+}

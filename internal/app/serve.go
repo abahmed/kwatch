@@ -133,23 +133,19 @@ func waitShutdown(
 	if failureErr != nil {
 		klog.ErrorS(failureErr, "shutting down after a component failure")
 	}
+	rebuild := deps.editionRestart.Load()
 	deps.cancel()
-	stopHealthServer(deps)
-
-	// The leader session stops its components and writes its final state
-	// before the supervisor finishes; wait for it with a hard bound so a
-	// misbehaving dependency cannot prevent the process from terminating.
-	// The bound covers the whole nested session budget (shutdown_context.go).
-	backgroundDone := make(chan struct{})
-	go func() {
-		supervisor.wg.Wait()
-		close(backgroundDone)
-	}()
-	select {
-	case <-backgroundDone:
-	case <-time.After(backgroundShutdownTimeout):
-		recordShutdownTimeout("background-tasks")
+	if rebuild {
+		// An edition rebuild keeps answering liveness: a kubelet that
+		// finds no listener for its whole tolerance restarts the pod, and
+		// the rebuild's own steps can take that long. Readiness is
+		// withdrawn; the next generation closes the listener just before
+		// it binds the port (generationEnv.run).
+		deps.healthServer.SetReady(false)
+	} else {
+		stopHealthServer(deps)
 	}
+	waitBackground(supervisor, rebuild)
 
 	// The leader session already drained delivery (active.go); this
 	// stop finishes a manager no session drained, such as on a standby.
@@ -162,6 +158,29 @@ func waitShutdown(
 	cancel()
 	releaseLeaseAfterShutdown(deps, applicationContext)
 	return exitCode
+}
+
+// waitBackground waits for the leader session to stop its components and
+// write its final state, with a hard bound so a misbehaving dependency
+// cannot prevent the process from terminating. The bound covers the whole
+// nested session budget (shutdown_context.go). On a rebuild the leader
+// session has already ended (it is what asked for the rebuild) and the
+// health server is deliberately still serving, so there is nothing to
+// wait for.
+func waitBackground(supervisor *componentSupervisor, rebuild bool) {
+	if rebuild {
+		return
+	}
+	backgroundDone := make(chan struct{})
+	go func() {
+		supervisor.wg.Wait()
+		close(backgroundDone)
+	}()
+	select {
+	case <-backgroundDone:
+	case <-time.After(backgroundShutdownTimeout):
+		recordShutdownTimeout("background-tasks")
+	}
 }
 
 func stopHealthServer(deps *serverDeps) {

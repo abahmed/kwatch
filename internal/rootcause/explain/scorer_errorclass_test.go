@@ -49,9 +49,9 @@ func TestScoreErrorClassFitsTheKindOfObject(t *testing.T) {
 			"dial tcp 10.0.3.4:5432: i/o timeout", ErrorClassWeight},
 		{"timeout may follow a changed address", kube.KindConfigMap,
 			"data.DB_HOST", "dial tcp 10.0.3.4:5432: i/o timeout", 0},
-		{"nil pointer says nothing of a config", kube.KindConfigMap,
+		{"nil pointer is not what a config causes", kube.KindConfigMap,
 			"data.mode", "panic: runtime error: nil pointer dereference",
-			0},
+			-ErrorClassPenalty},
 		{"unclassified error", kube.KindConfigMap, "data.mode",
 			"fatal: cannot start", 0},
 	} {

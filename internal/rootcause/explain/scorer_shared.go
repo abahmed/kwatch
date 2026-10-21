@@ -28,6 +28,9 @@ func scoreShared(v *view, c *candidate) outcome {
 	if len(effects) == 0 || holdsFinalizers(c) {
 		return outcome{}
 	}
+	if fillsDisks(c) {
+		return diskHogOutcome(effects)
+	}
 	workloads := v.workloadsOf(effects)
 	switch {
 	case workloads >= SharedMinWorkloads:

@@ -1,0 +1,14 @@
+{
+  "name": "adv-bad-config-clean-drain",
+  "description": "A bad ConfigMap value breaks a restarted Deployment while a drain of another node completes within its budget.",
+  "root": "configmap/billing/invoicer-config",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n2",
+    "deployment/billing/invoicer",
+    "deployment/shop/ledger",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

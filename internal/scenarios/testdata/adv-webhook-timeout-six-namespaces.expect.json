@@ -1,0 +1,18 @@
+{
+  "name": "adv-webhook-timeout-six-namespaces",
+  "description": "A fail-closed validating webhook with ready endpoints times out; ReplicaSets in six namespaces cannot create pods.",
+  "root": "validatingwebhookconfiguration//image-policy",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/policy-system/image-policy",
+    "service/policy-system/image-policy",
+    "node//n1",
+    "deployment/payments/app",
+    "deployment/search/app",
+    "deployment/billing/app",
+    "deployment/shipping/app",
+    "deployment/identity/app",
+    "deployment/reports/app"
+  ]
+}

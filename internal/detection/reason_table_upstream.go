@@ -1,5 +1,7 @@
 package detection
 
+import "github.com/abahmed/kwatch/internal/inventory/kube"
+
 // upstreamReasons are the Kubernetes Warning event reasons that have no
 // finding of their own beyond the event: the kubelet, node, controller
 // and storage events the upstream snapshot lists (detection/upstream).
@@ -18,15 +20,19 @@ var upstreamReasons = []ReasonInfo{
 	eventReason("ProbeWarning", Info),
 	// Node and kubelet.
 	eventReason("KubeletSetupFailed", Critical),
-	eventReason("Rebooted", Warning),
-	eventReason("InvalidDiskCapacity", Warning),
+	// The kubelet writes these notices on healthy starts: a node that
+	// booted (Rebooted), cadvisor not yet ready (InvalidDiskCapacity),
+	// a long DNS search line (DNSConfigForming, CheckLimitsForResolvConf).
+	// Pods run fine, so they reach the digest at most.
+	eventReason("Rebooted", Info),
+	eventReason("InvalidDiskCapacity", Info),
 	eventReason("FailedNodeAllocatableEnforcement", Warning),
 	// The node conditions and the OOM-killed container already show
 	// these.
-	stateReason("NodeHasInsufficientMemory"),
-	stateReason("NodeHasDiskPressure"),
-	stateReason("NodeHasInsufficientPID"),
-	stateReason("SystemOOM"),
+	stateReason("NodeHasInsufficientMemory", kube.KindNode),
+	stateReason("NodeHasDiskPressure", kube.KindNode),
+	stateReason("NodeHasInsufficientPID", kube.KindNode),
+	stateReason("SystemOOM", kube.KindNode),
 	// Controllers.
 	eventReason("FailedDelete", Warning),
 	eventReason("SelectingAll", Warning),
@@ -39,15 +45,16 @@ var upstreamReasons = []ReasonInfo{
 	eventReason("DeploymentRollbackTemplateUnchanged", Info),
 	// The HPA's own conditions carry these reasons, and the autoscaler
 	// detector reads them there.
-	stateReason("InvalidSchedule"),
-	stateReason("FailedRescale"),
-	stateReason("FailedGetExternalMetric"),
-	stateReason("FailedGetObjectMetric"),
-	stateReason("FailedGetPodsMetric"),
-	stateReason("FailedGetContainerResourceMetric"),
-	stateReason("InvalidMetricSourceType"),
-	stateReason("InvalidSelector"), stateReason("SelectorRequired"),
-	stateReason("AmbiguousSelector"),
+	stateReason("InvalidSchedule", kube.KindCronJob),
+	stateReason("FailedRescale", kube.KindHPA),
+	stateReason("FailedGetExternalMetric", kube.KindHPA),
+	stateReason("FailedGetObjectMetric", kube.KindHPA),
+	stateReason("FailedGetPodsMetric", kube.KindHPA),
+	stateReason("FailedGetContainerResourceMetric", kube.KindHPA),
+	stateReason("InvalidMetricSourceType", kube.KindHPA),
+	stateReason("InvalidSelector", kube.KindHPA),
+	stateReason("SelectorRequired", kube.KindHPA),
+	stateReason("AmbiguousSelector", kube.KindHPA),
 	// Storage.
 	eventReason("FileSystemResizeFailed", Warning),
 	eventReason("ProvisioningCleanupFailed", Warning),
@@ -59,17 +66,17 @@ var upstreamReasons = []ReasonInfo{
 	// Service detectors read the endpoint and load balancer failures
 	// from the Service itself, the namespace and CSR detectors from
 	// their conditions.
-	stateReason("FailedToCreateEndpoint"),
-	stateReason("UpdateLoadBalancerFailed"),
-	stateReason("DeleteLoadBalancerFailed"),
-	stateReason("UnAvailableLoadBalancer"),
-	stateReason("SyncLoadBalancerFailed"),
+	{Reason: "FailedToCreateEndpoint"},
+	stateReason("UpdateLoadBalancerFailed", kube.KindService),
+	stateReason("DeleteLoadBalancerFailed", kube.KindService),
+	stateReason("UnAvailableLoadBalancer", kube.KindService),
+	stateReason("SyncLoadBalancerFailed", kube.KindService),
 	eventReason("FailedToCreateRoute", Warning),
 	// Kubelet notices added since the first snapshot: advisory ones
 	// are Info, a mount, resize or certificate that failed is not.
 	eventReason("CgroupV1", Info),
-	eventReason("CheckLimitsForResolvConf", Warning),
-	eventReason("DNSConfigForming", Warning),
+	eventReason("CheckLimitsForResolvConf", Info),
+	eventReason("DNSConfigForming", Info),
 	eventReason("MissingClusterDNS", Warning),
 	eventReason("FailedMountOnFilesystemMismatch", Critical),
 	eventReason("FailedNodeDeclaredFeaturesCheck", Warning),
@@ -87,13 +94,15 @@ var upstreamReasons = []ReasonInfo{
 	eventReason("Denied", Warning),
 	// More controller events. The Job, Deployment and CronJob ones are
 	// the reasons of conditions and specs the workload detectors read.
-	stateReason("FailedIndexes"), stateReason("MaxFailedIndexesExceeded"),
-	stateReason("ReplicaSetCreateError"),
+	stateReason("FailedIndexes", kube.KindJob),
+	stateReason("MaxFailedIndexesExceeded", kube.KindJob),
+	stateReason("ReplicaSetCreateError", kube.KindDeployment),
 	// The PodDisruptionBudget detector finds overlapping budgets from
 	// the budgets themselves.
-	stateReason("MultiplePodDisruptionBudgets"),
-	stateReason("UnParseableCronJobSchedule"),
-	stateReason("UnparseableSchedule"), stateReason("UnsupportedSchedule"),
+	stateReason("MultiplePodDisruptionBudgets", kube.KindPod),
+	stateReason("UnParseableCronJobSchedule", kube.KindCronJob),
+	stateReason("UnparseableSchedule", kube.KindCronJob),
+	stateReason("UnsupportedSchedule", kube.KindCronJob),
 	eventReason("ClaimMisbound", Warning),
 	eventReason("ConflictingController", Warning),
 	eventReason("DeletingNodeFailed", Warning),

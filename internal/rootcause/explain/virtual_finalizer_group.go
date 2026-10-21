@@ -10,10 +10,14 @@ import (
 )
 
 // stuckGroups memoises, per view, which stuck objects share their
-// finalizers and which handlers all of them share.
+// finalizers, which handlers all of them share and what the handler
+// evidence reads from the cluster.
 type stuckGroups struct {
 	members  map[string][]inventory.EntityID
 	handlers map[string][]inventory.EntityID
+	// accounts holds, once built, the custom groups each ServiceAccount
+	// may write; see accountGroups.
+	accounts map[inventory.EntityID][]string
 }
 
 // groupKey names the objects held by the same finalizers in one
@@ -28,30 +32,23 @@ func (v *view) groupKey(id inventory.EntityID) string {
 	return id.Namespace + "/" + strings.Join(slices.Compact(names), ",")
 }
 
-// sharedHandlers are the handlers that the evidence names for every
-// object of id's group. A workload that wrote only some of the stuck
-// objects does not run their finalizer: taking those away from the
-// finalizer's incident would make one problem two.
+// sharedHandlers are the handlers of every object of id's group: the
+// objects are held by the same finalizers, so one answer serves them
+// all and the group stays one problem.
 func (v *view) sharedHandlers(id inventory.EntityID) []inventory.EntityID {
 	key := v.groupKey(id)
 	if key == "" {
-		return v.ownHandlersOf(id)
+		return nil
 	}
 	g := v.stuck()
 	if shared, ok := g.handlers[key]; ok {
 		return shared
 	}
-	var shared []inventory.EntityID
-	for i, member := range g.members[key] {
-		own := v.ownHandlersOf(member)
-		if i == 0 {
-			shared = slices.Clone(own)
-			continue
-		}
-		shared = slices.DeleteFunc(shared, func(h inventory.EntityID) bool {
-			return !containsID(own, h)
-		})
+	members := g.members[key]
+	if !containsID(members, id) {
+		members = []inventory.EntityID{id}
 	}
+	shared := v.groupHandlers(members)
 	g.handlers[key] = shared
 	return shared
 }

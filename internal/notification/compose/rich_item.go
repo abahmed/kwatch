@@ -27,6 +27,11 @@ var windowWords = strings.NewReplacer(
 // compactWindow shortens the time spans of a title: "two hours" is
 // "2h", "seven minutes" is "7 min".
 func compactWindow(text string) string {
+	return outsideQuotes(text, compactWords)
+}
+
+// compactWords is compactWindow for text that holds no quotation.
+func compactWords(text string) string {
 	text = windowWords.Replace(text)
 	return hoursMins.ReplaceAllStringFunc(text, func(m string) string {
 		parts := hoursMins.FindStringSubmatch(m)
@@ -74,7 +79,7 @@ func shortWhat(rest string) string {
 		}
 		return m[1] + " again"
 	}
-	if head, tail, found := strings.Cut(rest, ": "); found {
+	if head, tail, found := cutOutsideQuotes(rest, ": "); found {
 		return head + " (" + compactWindow(tail) + ")"
 	}
 	return compactWindow(rest)

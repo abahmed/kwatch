@@ -52,6 +52,9 @@ type Watcher struct {
 	loadBase func() (*config.Config, error)
 	// delays overrides the poll and retry waits; zero uses the defaults.
 	delays crdDelays
+	// restartWait sleeps between informer restarts (see runInformer); nil
+	// uses a real timer.
+	restartWait func(context.Context, time.Duration) bool
 }
 
 // NewWithClient constructs the watcher from the application-owned dynamic

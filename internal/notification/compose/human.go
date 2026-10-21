@@ -228,8 +228,9 @@ func roughlyNumber(value float64) string {
 	return fmt.Sprintf("%d", int(rounded))
 }
 
-// clock is the minute of t in UTC, as people read it in a chat ("14:02").
-func clock(t time.Time) string { return t.UTC().Format("15:04") }
+// clock is the minute of t in UTC, as people read it in a chat, with the
+// zone named so nobody reads it in their own ("14:02 UTC").
+func clock(t time.Time) string { return t.UTC().Format("15:04") + " UTC" }
 
 // joinAnd lists values as "a", "a and b", or "a, b and c", naming at
 // most n and counting the rest.
@@ -251,8 +252,11 @@ func clip(text string) string {
 	const n = maxQuote
 	// Everything a pod wrote loses its credentials here, the last step
 	// before a message. Private addresses stay: a pod or service IP is no
-	// secret and helps whoever debugs the failure.
-	runes := []rune(strings.TrimSpace(redact.Credentials(text)))
+	// secret and helps whoever debugs the failure. The quote runes go
+	// first: a rune inside a word ("pass\x1eword=x") would otherwise hide
+	// it from the redactor and rejoin it afterwards.
+	runes := []rune(strings.TrimSpace(
+		redact.Credentials(dropQuoteRunes(text))))
 	if len(runes) <= n {
 		return string(runes)
 	}

@@ -74,11 +74,12 @@ func provisionerFacts(rule, runs string) caseFacts {
 func TestProvisionerSentenceQuotesTheErrorWhenNothingServesIt(t *testing.T) {
 	got := provisionerSentences(provisionerFacts("self", "none found"))
 
-	if len(got) != 1 || !strings.Contains(got[0].text, "kwatch sees no "+
-		"workload in the cluster serving its provisioner "+
-		"disk.csi.example.com (it may run outside the cluster); the last "+
-		"provisioning failure says "+
-		`"rpc error: could not create the disk"`) {
+	if len(got) != 1 || !strings.Contains(plainQuotes(got[0].text),
+		"kwatch sees no "+
+			"workload in the cluster serving its provisioner "+
+			"disk.csi.example.com (it may run outside the cluster); the last "+
+			"provisioning failure says "+
+			`"rpc error: could not create the disk"`) {
 		t.Fatalf("got %+v", got)
 	}
 }

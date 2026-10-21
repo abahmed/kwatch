@@ -1,0 +1,15 @@
+10:03:15 settled
+🟠 Service queue in shop (prod-eu-1) selects no pods. Its selector changed at 10:01 UTC from app=queue to app=queue-v2. Its dependents failed soon after it changed. Fix in: service/queue → spec.selector (app=queue-v2). To see the object's state and events, run kubectl describe service queue -n shop
+🟠 Service queue in shop (prod-eu-1) selects no pods.
+| 🟠 Service **queue** in **shop** (**prod-eu-1**) selects no pods.
+| Its selector changed at 10:01 UTC from app=**queue** to app=queue-v2.
+| Its dependents failed soon after it changed.
+| Fix in: service/queue → spec.selector (app=queue-v2).
+| To see the object's state and events, run
+| ```
+| kubectl describe service queue -n shop
+| ```
+10:04:00 material change
+🟠 Service queue in shop (prod-eu-1) is spreading to api: it is stuck in init: container wait-for-queue has been waiting 3m for queue:5672 (Service queue in shop has no ready endpoints).
+🟠 Service queue in shop (prod-eu-1) is spreading to api: it is stuck in init: container wait-for-queue has been waiting 3m for queue:5672 (Service queue in shop has no ready endpoints).
+| 🟠 Service **queue** in **shop** (**prod-eu-1**) is spreading to api: it is stuck in init: container wait-for-queue has been waiting 3m for queue:5672 (Service **queue** in **shop** has no ready endpoints).

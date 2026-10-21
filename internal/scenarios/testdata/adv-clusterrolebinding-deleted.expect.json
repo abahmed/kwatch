@@ -1,0 +1,12 @@
+{
+  "name": "adv-clusterrolebinding-deleted",
+  "description": "A ClusterRoleBinding is deleted; the pods of the ServiceAccount it bound crash with a forbidden error at the cluster scope.",
+  "root": "clusterrolebinding//ops-pod-reader",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/controller",
+    "node//n1",
+    "node//n2"
+  ]
+}

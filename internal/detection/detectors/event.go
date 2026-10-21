@@ -34,18 +34,19 @@ func (Event) Detect(
 	}
 	var order []string
 	byReason := map[string]*eventGroup{}
-	for _, note := range ctx.Model.Notes(e.ID, ctx.Now.Add(-EventWindow)) {
+	for _, note := range ctx.Model.Notes(e.ID, ctx.Now.Add(-maxNoteLife)) {
 		severity, failing := detection.EventSeverity(note.Reason)
-		if !note.Warning || !failing || overcomeAtStart(e, note) ||
+		deadline := noteDeadline(e, note)
+		if ctx.Now.After(deadline) || !note.Warning || !failing ||
+			overcomeAtStart(e, note) ||
 			recoveredBefore(e, note) || bootNoise(ctx, e, note) ||
-			daemonNodeNoise(ctx, e, note) {
+			daemonNodeNoise(ctx, e, note) || staleNodeNote(e, note) {
 			continue
 		}
-		// The window includes a note exactly EventWindow old, so the
+		// A note exactly as old as its life still counts, so the
 		// recheck falls just after it: the finding must clear when
 		// its last event ages out.
-		ctx.RecheckAfter(
-			note.At.Add(EventWindow).Sub(ctx.Now) + time.Nanosecond)
+		ctx.RecheckAfter(deadline.Sub(ctx.Now) + time.Nanosecond)
 		key := eventReason(note)
 		group, seen := byReason[key]
 		if !seen {

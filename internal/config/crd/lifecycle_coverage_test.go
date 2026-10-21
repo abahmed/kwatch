@@ -39,17 +39,17 @@ func TestWatcherStartsInformerAndStops(t *testing.T) {
 }
 
 func TestWatcherConfigurationValidationHelpers(t *testing.T) {
-	if err := rejectSecretConfig(map[string]interface{}{
+	if err := rejectForbiddenSettings(map[string]interface{}{
 		"alert": map[string]interface{}{},
 	}); err == nil {
 		t.Fatal("alert credentials were accepted")
 	}
-	if err := rejectSecretConfig(map[string]interface{}{
+	if err := rejectForbiddenSettings(map[string]interface{}{
 		"heartbeatMonitor": map[string]interface{}{"url": "x"},
 	}); err == nil {
 		t.Fatal("heartbeat URL was accepted")
 	}
-	if err := rejectSecretConfig("not a map"); err != nil {
+	if err := rejectForbiddenSettings("not a map"); err != nil {
 		t.Fatal(err)
 	}
 	if !isMissingCRD(apierrors.NewNotFound(schema.GroupResource{

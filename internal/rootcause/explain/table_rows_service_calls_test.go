@@ -197,3 +197,20 @@ func TestServiceInReadsHostsAfterWords(t *testing.T) {
 		}
 	}
 }
+
+// An ExternalName Service names a host outside the cluster and has no
+// endpoints by design: an error that names it says nothing about them.
+func TestServiceCallIgnoresExternalNameService(t *testing.T) {
+	f := newFixture(t)
+	svc, api, _ := redisFixture(f, 0, 0)
+	f.observe(svc, map[string]inventory.Value{
+		kube.AttrServiceType:  inventory.Text("ExternalName"),
+		kube.AttrExternalName: inventory.Text("cache.example.com")})
+	failAPI(f, api, refusedRedis)
+
+	c, ok := f.explain().CauseOf(containerOf(api[0]))
+
+	if ok && c.Root == svc {
+		t.Fatalf("blamed %v, an alias with no endpoints by design", svc)
+	}
+}

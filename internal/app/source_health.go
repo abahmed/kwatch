@@ -9,6 +9,7 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/kubeclient"
 	"github.com/abahmed/kwatch/internal/metrics"
+	"github.com/abahmed/kwatch/internal/safego"
 )
 
 // sourceHealthInterval is how often source availability is re-published
@@ -33,11 +34,15 @@ type sourceHealth struct {
 	source   sourceAvailability
 	reported map[string]string
 	coverage coveragePublisher
+	note     coverageNote
 	ready    func(bool)
 	// panics reads the recovered handler panics; nil skips the check.
 	panics func() []kubeclient.HandlerPanicCount
 	// panicSeen is each resource's panic count at the previous report.
 	panicSeen map[string]int64
+	// syncing is set while the sources are still listing: reports then
+	// leave readiness alone (see run). Only run's goroutine touches it.
+	syncing bool
 }
 
 func newSourceHealth(
@@ -103,46 +108,79 @@ func requiredAvailable(statuses []kube.SourceStatus) bool {
 	return true
 }
 
-// run re-publishes availability on every tick until ctx ends.
-func (h *sourceHealth) run(ctx context.Context, tick <-chan time.Time) {
+// staleSources is a source that can also tell which synced resources have
+// a watch that keeps failing (kube.Source.Stale).
+type staleSources interface {
+	Stale() []kube.SourceStatus
+}
+
+// run re-publishes availability on every tick until ctx ends. Until
+// synced closes, reports only publish what is unavailable: readiness
+// stays with the startup hold, which ends when the sources finished
+// their initial list. The report made as synced closes sets it.
+func (h *sourceHealth) run(
+	ctx context.Context, tick <-chan time.Time, synced <-chan struct{},
+) {
+	h.syncing = synced != nil
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-synced:
+			synced, h.syncing = nil, false
+			h.safeReport()
 		case <-tick:
-			h.report()
+			h.safeReport()
 		}
 	}
+}
+
+// safeReport is report with a panic contained: a failed report is made
+// again at the next tick.
+func (h *sourceHealth) safeReport() {
+	safego.Do("source-health", h.report)
 }
 
 // report publishes transitions only: a newly unavailable resource is
 // degraded (and counted once), a recovered one returns to running.
 func (h *sourceHealth) report() {
-	h.coverage.publish()
+	if summary, ok := h.coverage.publish(); ok {
+		h.note.observe(h.sink, summary)
+	}
 	if h.source == nil {
 		return
 	}
 	statuses := h.source.Unavailable()
-	if h.ready != nil {
+	if h.ready != nil && !h.syncing {
 		h.ready(requiredAvailable(statuses))
 	}
 	if h.sink != nil {
-		h.publish(withPanicking(statuses, h.panicking()))
+		shown := withUnlisted(statuses, h.stale())
+		h.publish(withUnlisted(shown, h.panicking()))
 	}
 }
 
-// withPanicking adds the panicking resources that are not already listed
-// as unavailable for a more basic reason.
-func withPanicking(
-	statuses, panicking []kube.SourceStatus,
+// stale lists the synced resources whose watch keeps failing. They stay
+// available (readiness does not change); health only shows them.
+func (h *sourceHealth) stale() []kube.SourceStatus {
+	if source, ok := h.source.(staleSources); ok {
+		return source.Stale()
+	}
+	return nil
+}
+
+// withUnlisted adds the extra resources that are not already listed as
+// unavailable for a more basic reason.
+func withUnlisted(
+	statuses, extra []kube.SourceStatus,
 ) []kube.SourceStatus {
-	for _, p := range panicking {
+	for _, e := range extra {
 		listed := false
 		for _, s := range statuses {
-			listed = listed || (s.Resource == p.Resource && s.Group == "")
+			listed = listed || (s.Resource == e.Resource && s.Group == e.Group)
 		}
 		if !listed {
-			statuses = append(statuses, p)
+			statuses = append(statuses, e)
 		}
 	}
 	return statuses

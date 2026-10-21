@@ -58,6 +58,10 @@ func scaledToZeroRouted(
 		scalesToZeroByDesign(ctx, e.ID) {
 		return detection.Finding{}, false
 	}
+	// A twin serving the Service shows only in its EndpointSlices.
+	if !ctx.Synced(kube.KindEndpointSlice) {
+		return detection.Finding{}, false
+	}
 	exposed := exposures(ctx, e)
 	if len(exposed) == 0 {
 		return detection.Finding{}, false
@@ -67,39 +71,61 @@ func scaledToZeroRouted(
 		// A planned scale-down put it at zero on purpose.
 		return detection.Finding{}, false
 	}
-	since := valueSince(e, kube.AttrReplicas)
-	if !scaled.At.IsZero() {
-		since = scaled.At
-	}
+	since, known := scaledSince(e, scaled)
 	if !sustained(ctx, "scaled-to-zero", since, scaledToZeroGrace) {
 		return detection.Finding{}, false
 	}
-	severity := detection.Warning
-	if parkedFor(ctx, e, scaled) >= scaledToZeroParked {
-		severity = detection.Info
-	}
 	return detection.Finding{
-		Reason: reasons.ScaledToZeroRouted, Severity: severity,
+		Reason:   reasons.ScaledToZeroRouted,
+		Severity: scaledSeverity(ctx, since, known),
 		Since:    since,
-		Summary:  "Is scaled to 0 but " + exposureText(exposed[0]),
+		Summary:  scaledSummary(exposed[0], known),
 		Evidence: scaleEvidence(exposed, scaled),
 	}, true
 }
 
-// parkedFor is how long the workload has been at zero replicas: from the
-// scale-down kwatch saw, else from the latest spec write the API server
-// recorded (known at the first sight of the object), else unknown (zero).
-func parkedFor(
-	ctx detection.Context, e inventory.Entity, scaled inventory.Change,
-) time.Duration {
-	at := scaled.At
-	if at.IsZero() {
-		at = timestamp(e, kube.AttrSpecWritten)
+// scaledSince is when the workload was scaled to zero, from the cluster
+// when it says: the scale-down kwatch saw, else the latest spec write
+// the API server recorded. Otherwise it is only known to be no later
+// than kwatch's first sight of it, and known is false.
+func scaledSince(
+	e inventory.Entity, scaled inventory.Change,
+) (since time.Time, known bool) {
+	if !scaled.At.IsZero() {
+		return scaled.At, true
 	}
-	if at.IsZero() {
-		return 0
+	if written := timestamp(e, kube.AttrSpecWritten); !written.IsZero() {
+		return written, true
 	}
-	return ctx.Now.Sub(at)
+	return valueSince(e, kube.AttrReplicas), false
+}
+
+// scaledSummary words the finding: a start kwatch cannot date says so,
+// instead of passing its own first sight for the scale-down.
+func scaledSummary(x exposure, known bool) string {
+	if known {
+		return "Is scaled to 0 but " + exposureText(x)
+	}
+	return "Is scaled to 0 (since before kwatch started) but " +
+		exposureText(x)
+}
+
+// scaledSeverity is a warning while the scale-down is news and
+// informational once the workload has been parked for scaledToZeroParked:
+// its routes are then left over. A start kwatch cannot date is news. It
+// asks to be evaluated again when the day is over.
+func scaledSeverity(
+	ctx detection.Context, since time.Time, known bool,
+) detection.Severity {
+	if !known {
+		return detection.Warning
+	}
+	parked := ctx.Now.Sub(since)
+	if parked >= scaledToZeroParked {
+		return detection.Info
+	}
+	ctx.RecheckAfter(scaledToZeroParked - parked)
+	return detection.Warning
 }
 
 // scalesToZeroByDesign is a workload an autoscaler may scale to zero or
@@ -139,25 +165,36 @@ func exposures(
 			// Another workload (a blue/green twin) still serves it.
 			continue
 		}
-		routes := ctx.Model.Related(service, inventory.RoutesTo,
-			inventory.Incoming)
-		for _, route := range routes {
-			out = append(out, exposure{service: service, route: route})
-		}
-		if len(routes) > 0 {
-			continue
-		}
-		if entity, ok := ctx.Model.Entity(service); ok {
-			kind := text(entity, kube.AttrServiceType)
-			if kind == "LoadBalancer" || kind == "NodePort" {
-				out = append(out, exposure{service: service,
-					serviceType: kind})
-			}
-		}
+		out = append(out, serviceExposures(ctx, service)...)
 	}
 	sort.Slice(out, func(i, j int) bool {
 		return exposureKey(out[i]) < exposureKey(out[j])
 	})
+	return out
+}
+
+// serviceExposures are the ways traffic still reaches one Service: each
+// route sending traffic to it, else its own LoadBalancer or NodePort
+// type.
+func serviceExposures(
+	ctx detection.Context, service inventory.EntityID,
+) []exposure {
+	var out []exposure
+	routes := ctx.Model.Related(service, inventory.RoutesTo,
+		inventory.Incoming)
+	for _, route := range routes {
+		out = append(out, exposure{service: service, route: route})
+	}
+	if len(routes) > 0 {
+		return out
+	}
+	if entity, ok := ctx.Model.Entity(service); ok {
+		kind := text(entity, kube.AttrServiceType)
+		if kind == "LoadBalancer" || kind == "NodePort" {
+			out = append(out, exposure{service: service,
+				serviceType: kind})
+		}
+	}
 	return out
 }
 

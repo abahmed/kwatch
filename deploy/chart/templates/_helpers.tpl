@@ -245,3 +245,16 @@ set. The deployment reads it with optional: true, so it may not exist.
 {{- $license := default dict .Values.license -}}
 {{- default (printf "%s-license" .Release.Name) $license.existingSecret -}}
 {{- end }}
+
+{{/*
+True when a license key reaches kwatch through this chart (license.key or
+license.existingSecret) or the operator says it reaches it another way
+(license.instanceSecret). Only then does the chart render the license
+instance Secret, its Role and the HTTPS egress the license needs.
+*/}}
+{{- define "kwatch.licenseConfigured" -}}
+{{- $license := default dict .Values.license -}}
+{{- if or $license.key $license.existingSecret $license.instanceSecret -}}
+true
+{{- end -}}
+{{- end }}

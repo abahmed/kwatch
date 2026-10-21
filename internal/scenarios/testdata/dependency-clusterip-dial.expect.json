@@ -4,5 +4,6 @@
   "root": "deployment/data/postgres",
   "tier": "notify",
   "maxMessages": 6,
+  "revisesRoot": true,
   "tail": "15m0s"
 }

@@ -1,13 +1,11 @@
 package compose
 
 import (
-	"slices"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
-	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
 // maxUpdate bounds an update: only what changed, in one or two
@@ -66,8 +64,26 @@ func changeSentencesFor(f caseFacts) []sentence {
 	if changed := changedSentences(f); len(changed) > 0 {
 		return changed
 	}
-	// Nothing specific is known to have changed: restate the case.
-	return append(leadSentences(f), strongestProof(f)...)
+	// Nothing specific is known to have changed: restate the case, and
+	// say what is news when the tier rose.
+	out := append(leadSentences(f), raisedSentences(f)...)
+	return append(out, strongestProof(f)...)
+}
+
+// raisedSentences say that an incident got louder since the last
+// message: "It is now critical." Without a rise they say nothing, so a
+// restated case never claims news it does not have.
+func raisedSentences(f caseFacts) []sentence {
+	if !f.p.Delivery.TierRaised() {
+		return nil
+	}
+	words := map[incident.Tier]string{incident.Page: "critical",
+		incident.Notify: "a warning"}
+	word, ok := words[f.p.Tier]
+	if !ok {
+		return nil
+	}
+	return []sentence{{part: partLead, text: "It is now " + word + "."}}
 }
 
 // revisedSentences restate the case under its new cause, led by what
@@ -80,7 +96,8 @@ func revisedSentences(f caseFacts) []sentence {
 		label = "Cause changed: "
 	}
 	lead[0].text = label + lead[0].text
-	return append(lead, strongestProof(f)...)
+	lead = append(lead, strongestProof(f)...)
+	return append(lead, formerRootSentences(f)...)
 }
 
 func strongestProof(f caseFacts) []sentence {
@@ -100,7 +117,7 @@ func flappingSentences(f caseFacts) []sentence {
 			f.leadName(leadSubject(f))) +
 			" keeps failing and recovering: it has recovered " +
 			plural(len(f.p.Cycles), "time") + " recently."},
-		{part: partRecurrence, text: "I'll write again when it stays " +
+		{part: partRecurrence, text: "kwatch will write again when it stays " +
 			"healthy or fails differently."},
 	}
 }
@@ -112,8 +129,8 @@ func changedSentences(f caseFacts) []sentence {
 	for _, s := range failing(f.members) {
 		current[s.Entity] = s
 	}
-	var out []sentence
 	var spread []detection.Finding
+	var ended []inventory.EntityID
 	named := map[inventory.EntityID]bool{}
 	for _, e := range newEvents(f.p) {
 		if e.Entity == nil {
@@ -123,105 +140,15 @@ func changedSentences(f caseFacts) []sentence {
 		s, active := current[*e.Entity]
 		switch {
 		case recovered && !active:
-			out = append(out, recoveredSentence(f, *e.Entity))
+			ended = append(ended, *e.Entity)
 		case !recovered && active && !named[s.Entity]:
 			named[s.Entity] = true
 			spread = append(spread, s)
 		}
 	}
+	out := recoveredSentences(f, ended)
 	out = append(out, spreadSentences(f, spread)...)
 	return limitSentences(arrange(out), maxUpdate)
-}
-
-// spreadSentences say what newly fails, one sentence per condition,
-// led by the incident's subject: "payments in shop is spreading to
-// payments-api and cart: they have not been ready for three minutes." A cause
-// that now shows its own condition is not spreading: "API service m
-// now reports …".
-func spreadSentences(f caseFacts, spread []detection.Finding) []sentence {
-	spread = slices.DeleteFunc(slices.Clone(spread),
-		func(s detection.Finding) bool { return partOfRoot(f, s.Entity) })
-	home := leadSubject(f)
-	var order []string
-	byState := map[string][]inventory.EntityID{}
-	var out []sentence
-	// named records that a sentence already led with the subject, so
-	// the spreading sentence says "It" instead of naming it again.
-	named := false
-	for _, s := range spread {
-		state := predicate(s.Entity, s.Summary)
-		if s.Entity == f.p.Root || (f.p.Cause != nil &&
-			s.Entity == f.p.Cause.Root) {
-			out = append(out, sentence{part: partLead,
-				text: endSentence(capitalName(s.Entity,
-					f.leadName(s.Entity)+" "+nowState(state)))})
-			named = named || f.leadName(s.Entity) == f.leadName(home)
-			continue
-		}
-		if _, seen := byState[state]; !seen {
-			order = append(order, state)
-		}
-		byState[state] = append(byState[state], s.Entity)
-	}
-	for i, state := range order {
-		ids := workloadsOf(f, byState[state])
-		text := capitalName(home, f.leadName(home)+" is spreading to ")
-		switch {
-		case i > 0:
-			text = "It is also spreading to "
-		case named:
-			text = "It is spreading to "
-		}
-		text += nameList(home, ids)
-		if len(ids) == 1 {
-			text += ": it " + state
-		} else {
-			text += ": they " + pluralPredicate(state)
-		}
-		out = append(out, sentence{part: partLead, text: endSentence(text)})
-	}
-	return out
-}
-
-// partOfRoot reports a pod or container that belongs to the incident's
-// own root: a container of the root pod, or a pod of the root workload.
-// The root failing through its parts is the root failing, not spreading.
-func partOfRoot(f caseFacts, id inventory.EntityID) bool {
-	root := f.p.Root
-	switch id.Kind {
-	case kube.KindContainer:
-		pod, _ := splitContainer(id.Name)
-		if root.Kind == kube.KindPod && root.Namespace == id.Namespace &&
-			root.Name == pod {
-			return true
-		}
-		id = inventory.CoreID(kube.KindPod, id.Namespace, pod)
-		fallthrough
-	case kube.KindPod:
-		owner, ok := ownerIn(append([]inventory.EntityID{root},
-			f.p.Impact...), id)
-		return ok && owner == root
-	}
-	return false
-}
-
-// recoveredSentence says a member recovered and what is still open,
-// naming the subject: "Service cart has recovered; payments in shop
-// still has one open failure."
-func recoveredSentence(f caseFacts, id inventory.EntityID) sentence {
-	home := leadSubject(f)
-	open := len(failing(f.members))
-	if id == home || open == 0 {
-		text := f.leadName(id) + " has recovered"
-		if open > 0 {
-			text += "; " + plural(open, "other failure") + " " +
-				verb(open, "is", "are") + " still open"
-		}
-		return sentence{part: partLead, text: capitalName(id, text+".")}
-	}
-	text := nameFrom(home, id) + " has recovered; " + f.leadName(home) +
-		" still has " + plural(open, "open failure")
-	return sentence{part: partLead, text: capitalName(id, text+".")}
 }
 
 // newEvents are the timeline entries the last delivered message did not
@@ -257,33 +184,4 @@ func limitSentences(sentences []sentence, n int) []sentence {
 		return sentences[:n]
 	}
 	return sentences
-}
-
-// reminderSentences restate an incident that has stayed open: what
-// fails, in the words of its own lead and with its cause when one is
-// known, then how long, counted from when the problem started:
-// "payments in shop keeps crash looping because secret db does not
-// exist; still failing, for two weeks now."
-func reminderSentences(f caseFacts) []sentence {
-	age := humanDuration(f.now.Sub(StartedAt(f.p)))
-	lead := leadSentences(f)
-	text := strings.TrimSuffix(withoutSpan(lead[0].text), ".")
-	lead[0].text = text + "; still " + downWord(f.p) + ", for " + age +
-		" now."
-	return append(lead, strongestProof(f)...)
-}
-
-// failingAgainSentences tell that a page that had resolved is back,
-// with the count the incident carries (RepeatCount), so consecutive
-// returns do not read alike: "api in shop is failing again: 4th time
-// in two hours."
-func failingAgainSentences(f caseFacts) []sentence {
-	subject := leadSubject(f)
-	text := f.leadName(subject) + " is failing again"
-	if f.p.RepeatCount > 0 {
-		text += ": " + humanizeText(incident.RepeatPhrase(f.p.RepeatCount))
-	}
-	return append([]sentence{{part: partLead,
-		text: capitalName(subject, endSentence(text))}},
-		strongestProof(f)...)
 }

@@ -52,7 +52,13 @@ func TestGenericConditionRules(t *testing.T) {
 		{"conflicted true", "Conflicted", "True", true},
 		{"partially invalid true", "PartiallyInvalid", "True", true},
 		{"partially invalid false", "PartiallyInvalid", "False", false},
-		{"unknown status", "Ready", "Unknown", false},
+		{"ready unknown", "Ready", "Unknown", true},
+		{"failing true", "Failing", "True", true},
+		{"failing false", "Failing", "False", false},
+		{"succeeded false", "Succeeded", "False", true},
+		{"succeeded true", "Succeeded", "True", false},
+		{"failed true", "Failed", "True", true},
+		{"available unknown", "Available", "Unknown", false},
 		{"unlisted type", "Progressing", "False", false},
 	}
 	for _, tc := range cases {

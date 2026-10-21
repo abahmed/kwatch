@@ -58,6 +58,10 @@ func (m *Manager) reachOf(p *Incident) (owners, namespaces []string) {
 		}
 	}
 	nodes := []inventory.EntityID{p.Root}
+	for _, merged := range p.Merged {
+		visit(merged)
+		nodes = append(nodes, merged)
+	}
 	for _, f := range p.Members {
 		visit(f.Entity)
 		nodes = append(nodes, f.Entity)

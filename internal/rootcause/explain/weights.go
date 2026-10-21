@@ -226,6 +226,15 @@ const (
 	ErrorClassPenalty = 0.15
 )
 
+// ChangeOnlyMaxConfidence caps a dependency that is blamed only because
+// it changed shortly before failures that quote a defect of the
+// program's own code (see change_only.go): timing and "its dependents
+// fail" are one fact, and nothing in the words ties the failure to the
+// edit. It is a suspect, worded "possibly", under the confidence of the
+// workload as its own cause, so a bare edit never takes the incident
+// from the workload.
+const ChangeOnlyMaxConfidence = ConfidenceLikely - 0.01
+
 // CorrelatedCap is the most that the timing, change and outcome
 // scorers add together: they all read that something changed before
 // the failures began, so three agreeing readings are not three

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/inventory"
 )
@@ -36,4 +37,18 @@ func TestShortConditionsAreUnchanged(t *testing.T) {
 	assert.Equal(t, "False", attrs["condition.Ready"].AsText())
 	assert.Equal(t, "MinimumReplicasUnavailable",
 		attrs["condition.Ready.reason"].AsText())
+}
+
+func TestEventTextKeepsTheNameOfTheObjectTheEventNames(t *testing.T) {
+	message := `Error creating: Internal error occurred: failed calling ` +
+		`webhook "image-policy.example.com": failed to call webhook: ` +
+		`Post "https://image-policy.policy-system.svc:443/validate?` +
+		`timeout=10s": x509: certificate has expired or is not yet ` +
+		`valid: current time is after the certificate's end date`
+	require.Greater(t, len(message), maxMessageLength)
+
+	got := eventText(message)
+
+	assert.Contains(t, got, `webhook "image-policy.example.com"`)
+	assert.True(t, strings.HasSuffix(got, "certificate's end date"), got)
 }

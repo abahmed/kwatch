@@ -16,8 +16,9 @@ import (
 
 // nodeInTransition reports whether the node is part of node churn: it is
 // gone from the model, not ready, cordoned, being deleted, or younger
-// than kube.BootWindow. A young node asks for a recheck when it turns
-// old, so what still fails then is reported.
+// than kube.BootWindow, or tainted for removal (scale-down, out of
+// service). A young node asks for a recheck when it turns old, so what
+// still fails then is reported.
 func nodeInTransition(ctx detection.Context, id inventory.EntityID) bool {
 	if ctx.Model == nil {
 		return false
@@ -36,7 +37,8 @@ func nodeInTransition(ctx detection.Context, id inventory.EntityID) bool {
 			return true
 		}
 	}
-	return flag(node, kube.AttrUnschedulable) || flag(node, kube.AttrDeleting)
+	return flag(node, kube.AttrUnschedulable) || flag(node, kube.AttrDeleting) ||
+		removalTaint(text(node, kube.AttrTaints)) != ""
 }
 
 // daemonNodeRef finds the node a "FailedDaemonPod" event names: the

@@ -40,6 +40,8 @@ type genHarness struct {
 	bootErr func(gen, attempt int) error
 	health  func(gen int) config.HealthCheck
 	serve   func(gen int, deps *serverDeps) int
+	// tweakBoot changes the bootstrap of every generation.
+	tweakBoot func(*bootstrap)
 	// fired makes every release wait give up at once.
 	fired bool
 }
@@ -54,6 +56,7 @@ func (h *genHarness) env() generationEnv {
 	return generationEnv{
 		now: now, processStart: now(), retry: h.sleeps.retry(),
 		after: h.after, load: h.load, boot: h.boot, serve: h.run,
+		logs: newLogFormat(),
 	}
 }
 
@@ -95,13 +98,17 @@ func (h *genHarness) boot(
 	}
 	clk := clock.Func(time.Now)
 	runtime := cfg.Runtime
-	return &bootstrap{
+	boot := &bootstrap{
 		runtime: runtime, clients: kubeclient.ClientSet{Clock: clk},
 		healthServer: newHealthServer(runtime, clk, false, entitlements),
 		deliveryManager: delivery.NewManagerWithDependencies(
 			delivery.Dependencies{Clock: clk}),
 		clock: clk, threadWake: &threadWake{}, entitlements: entitlements,
-	}, nil
+	}
+	if h.tweakBoot != nil {
+		h.tweakBoot(boot)
+	}
+	return boot, nil
 }
 
 func (h *genHarness) run(_ context.Context, deps *serverDeps) int {
@@ -152,8 +159,9 @@ func holdStateFile(
 	return s, path
 }
 
-// freeHolder takes the port once generation one has released it and keeps
-// it until the returned function runs.
+// freeHolder takes the port once generation one has released it (the
+// rebuild keeps it open until the next generation is built, so the
+// release is forced here) and keeps it until the returned function runs.
 func freeHolder(t *testing.T, port int, h *genHarness) func() {
 	t.Helper()
 	var held net.Listener
@@ -161,6 +169,7 @@ func freeHolder(t *testing.T, port int, h *genHarness) func() {
 	h.serve = func(gen int, deps *serverDeps) int {
 		code := inner(gen, deps)
 		if gen == 1 {
+			stopHealthServer(deps)
 			ln, err := net.Listen("tcp", ":"+strconv.Itoa(port))
 			require.NoError(t, err)
 			held = ln

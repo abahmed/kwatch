@@ -1,0 +1,7 @@
+{
+  "name": "adv-clean-drain-quiet",
+  "description": "A node is cordoned, drained pod by pod with replacements ready in seconds, and removed.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "20m0s"
+}

@@ -1,0 +1,26 @@
+10:04:15 roll-up
+🟠 kwatch (prod-eu-1) found two new problems at the same time. api in shop keeps crashing. worker in shop keeps crashing. Each gets its own message when it changes or resolves.
+🟠 kwatch (prod-eu-1) found two new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
+|
+| **Problems**
+| - **api** in **shop** keeps crashing
+| - **worker** in **shop** keeps crashing
+|
+| *Each gets its own message when it changes or resolves.*
+10:06:30 cause revised
+🟠 api in shop (prod-eu-1) keeps crashing; node n3 is what the failing workloads have in common, though it looks healthy, which might be related. It fails with "dial tcp 10.96.40.12:6379: i/o timeout". All of its dependents are failing. web and worker are affected as well. To check the node's conditions and recent events, run kubectl describe node n3
+🟠 api in shop (prod-eu-1) keeps crashing; node n3 is what the failing workloads have in common, though it looks healthy, which might be related.
+| 🟠 **api** in **shop** (**prod-eu-1**) keeps crashing; node n3 is what the failing workloads have in common, though it looks healthy, which might be related.
+| It fails with `dial tcp 10.96.40.12:6379: i/o timeout`.
+| All of its dependents are failing.
+| **web** and **worker** are affected as well.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n3
+| ```
+10:10:00 material change
+🟠 api in shop (prod-eu-1) is spreading to web and worker: they have only 2 of 3 replicas ready. It is also spreading to api and worker: they have not been ready for three minutes.
+🟠 api in shop (prod-eu-1) is spreading to web and worker: they have only 2 of 3 replicas ready.
+| 🟠 **api** in **shop** (**prod-eu-1**) is spreading to **web** and worker: they have only 2 of 3 replicas ready.
+| It is also spreading to **api** and worker: they have not been ready for three minutes.

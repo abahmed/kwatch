@@ -1,0 +1,14 @@
+{
+  "name": "adv-rollout-in-flight-node-lost",
+  "description": "A node stops reporting while a rollout that has a new pod on it is still in flight.",
+  "root": "node//n2",
+  "tier": "page",
+  "maxMessages": 4,
+  "maxPages": 1,
+  "mustNotBlame": [
+    "deployment/shop/catalog",
+    "deployment/shop/cart",
+    "zone//zone-a"
+  ],
+  "tail": "10m0s"
+}

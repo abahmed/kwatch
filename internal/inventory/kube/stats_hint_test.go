@@ -76,6 +76,7 @@ func TestStatsPollerLogsHintForCertificateWithoutIPSANs(t *testing.T) {
 	})
 
 	p.poll(context.Background())
+	p.poll(context.Background()) // a node must fail two polls in a row
 	klog.Flush()
 
 	assert.Contains(t, out.String(), "kubelet stats unavailable")

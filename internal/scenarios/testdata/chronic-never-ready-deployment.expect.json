@@ -1,0 +1,8 @@
+{
+  "name": "chronic-never-ready-deployment",
+  "description": "kwatch starts while a Deployment has been unavailable for 26 days: its pod runs for hours and never passes its readiness probe.",
+  "root": "deployment/shop/cert-controller",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "30m0s"
+}

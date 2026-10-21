@@ -64,9 +64,11 @@ func roundFor(t *testing.T, failures map[string]error) StatsRound {
 		Nodes:   statsNodes("a", "b", "c"),
 		Report:  func(r StatsRound) { rounds = append(rounds, r) },
 	})
+	// A node must fail two polls in a row before health says so.
 	p.poll(context.Background())
-	require.Len(t, rounds, 1)
-	return rounds[0]
+	p.poll(context.Background())
+	require.Len(t, rounds, 2)
+	return rounds[1]
 }
 
 func fixedNow() time.Time {
@@ -162,6 +164,7 @@ func TestStatsPollerRateLimitsFailureLogs(t *testing.T) {
 		Nodes:  statsNodes("a"),
 	})
 
+	p.poll(context.Background()) // the first failure does not count yet
 	p.poll(context.Background())
 	first := p.lastLog
 	now = now.Add(statsLogEvery - time.Second)
@@ -191,6 +194,7 @@ func TestStatsPollerCountsUndecodableSummary(t *testing.T) {
 	})
 
 	p.poll(context.Background())
+	p.poll(context.Background()) // a node must fail two polls in a row
 
 	assert.Equal(t, StatsRound{
 		Nodes: 1, Failed: 1, Reason: StatsReasonUnreachable,

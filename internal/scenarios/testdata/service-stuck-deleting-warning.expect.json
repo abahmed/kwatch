@@ -1,0 +1,8 @@
+{
+  "name": "service-stuck-deleting-warning",
+  "description": "A Service has been stuck deleting for six months; its load balancer controller keeps writing a Warning event that says why.",
+  "root": "service/kube-addons/ingress-internal",
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "40m0s"
+}

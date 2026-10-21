@@ -1,0 +1,10 @@
+10:02:15 roll-up
+🟠 kwatch (prod-eu-1) found two new problems at the same time. invoicer in billing keeps crashing. checkout in shop keeps crashing. Each gets its own message when it changes or resolves.
+🟠 kwatch (prod-eu-1) found two new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
+|
+| **Problems**
+| - **invoicer** in **billing** keeps crashing
+| - **checkout** in **shop** keeps crashing
+|
+| *Each gets its own message when it changes or resolves.*

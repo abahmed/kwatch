@@ -1,0 +1,12 @@
+{
+  "name": "endpoint-answers-probe-three-workloads",
+  "description": "Three workloads time out on an external database that answers kwatch's probe.",
+  "root": "unknown",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "external-endpoint//ext-db.corp.example:5432",
+    "node//n1",
+    "node//n2"
+  ]
+}

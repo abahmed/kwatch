@@ -26,6 +26,7 @@ type causeWording struct {
 // causeWords are keyed by the explain row that blamed the cause
 // (rootcause.CauseRecord.Rule). A row missing here reads "is failing".
 var causeWords = map[string]causeWording{
+	"account-missing-at-create":       {words: "does not exist"},
 	"apiserver-unavailable":           {words: "is not answering"},
 	"apiservice-backend-missing":      {words: "does not exist"},
 	"apiservice-unavailable":          {words: "is unavailable"},
@@ -48,6 +49,8 @@ var causeWords = map[string]causeWording{
 	"config-missing-or-changed":    {words: "does not exist"},
 	"configmap-missing-or-changed": {words: "does not exist"},
 	"controller-failing": {
+		words: "is down, so nothing processes their changes"},
+	"controller-failing-condition": {
 		words: "is down, so nothing processes their changes"},
 	"custom-resource-failing": {words: "is not ready"},
 	"ephemeral-limit-too-low": {own: true,
@@ -87,6 +90,7 @@ var causeWords = map[string]causeWording{
 		words: "serves every pod on that node and is failing"},
 	"node-agent-named-by-error": {
 		words: "serves every pod on that node and is failing"},
+	"node-agent-absent":  {words: "has no pod on that node"},
 	"node-not-ready":     {words: "is not ready"},
 	"node-overcommitted": {words: "is overcommitted on memory"},
 	"node-pid-pressure":  {words: "is short of process IDs"},
@@ -101,6 +105,14 @@ var causeWords = map[string]causeWording{
 	"policy-blocks-call": {words: "blocks its traffic"},
 	"probe-port-mismatch": {own: true,
 		words: "its probe checks a port the container does not listen on"},
+	"pull-without-secret": {own: true,
+		words: "it names no image pull Secret, though other workloads " +
+			"pull from the same registry with one"},
+	"workload-fills-disks": {
+		words: "fills the disks of the nodes it runs on, so pods on " +
+			"those nodes are evicted"},
+	"account-has-no-grant": {
+		words: "is named by no role binding, so nothing is granted to it"},
 	"quota-exhausted": {words: "is used up"},
 	"resource-claim-unallocated": {
 		words: "has no device allocated, so its pod cannot start"},
@@ -126,7 +138,7 @@ var causeWords = map[string]causeWording{
 	"service-no-endpoints": {words: "has no ready endpoints"},
 	// shared-failure-signature is worded by signatureLead.
 	"shared-failure-signature": {
-		words: "is the error several workloads fail with"},
+		words: "is what several workloads fail with"},
 	"volume-held-by-pod": {words: "still holds the volume"},
 	"volume-held-by-node": {
 		words: "still has the volume attached"},
@@ -176,6 +188,9 @@ func causeWordsFor(cause *rootcause.CauseRecord) string {
 		return "is out of space"
 	}
 	if words, ok := webhookCallWords[cause.Mode]; ok {
+		return words
+	}
+	if words, ok := modalWords(cause); ok {
 		return words
 	}
 	if wording, ok := causeWords[cause.Rule]; ok {
@@ -253,6 +268,10 @@ var proofWriters = map[rootcause.ProofCode]func(rootcause.Proof) string{
 	},
 	rootcause.ProofWorkloadsMeet: func(p rootcause.Proof) string {
 		return numberWord(p.Count) + " failing workloads all depend on it"
+	},
+	rootcause.ProofFillsDisks: func(p rootcause.Proof) string {
+		return "its pods hold most of the disk in use on " +
+			numberWord(p.Count) + " nodes"
 	},
 	rootcause.ProofChanged: func(p rootcause.Proof) string {
 		return changedFieldsWords(p.Fields)

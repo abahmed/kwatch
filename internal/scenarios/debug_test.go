@@ -41,8 +41,8 @@ func TestScenarioReplay(t *testing.T) {
 			if heldout[name] {
 				dir = heldoutDir
 			}
-			_, e, result := replayScenario(t, dir, name)
-			v := judge(e, result)
+			log, e, result := replayScenario(t, dir, name)
+			v := judge(e, log, result)
 			t.Logf("%s: %d messages; %s", outcome(v), v.messages,
 				describeIncidents(v.incidents))
 			if *only == "" {

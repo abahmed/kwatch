@@ -71,17 +71,23 @@ func sentenceBlocks(
 // of its own instead of an inline span.
 const longQuote = 80
 
-// paragraphs is a sentence as a line. Quoted pod text that is long or
-// has several lines is lifted out into a code block after the words
-// that introduce it.
+// spanSafe reports whether text survives as an inline code span in every
+// dialect: no backtick (a span cannot hold one in every syntax), no run
+// of spaces, no space at either edge and no line break (spans are
+// folded onto one line).
+func spanSafe(text string) bool {
+	return !strings.ContainsAny(text, "`\n\r\t") &&
+		!strings.Contains(text, "  ") && text == strings.TrimSpace(text)
+}
+
+// paragraphs is a sentence as a line. Quoted pod text that is long, has
+// several lines or cannot sit in an inline span is lifted out into a
+// code block after the words that introduce it. The words that follow
+// the block start a line of their own (see afterBlock).
 func paragraphs(text string) []notification.Block {
-	parts := strings.Split(text, `"`)
-	if len(parts)%2 == 0 {
-		return []notification.Block{{Kind: notification.Para,
-			Spans: podSpans(text)}}
-	}
 	var out []notification.Block
 	line := ""
+	lifted := false
 	flush := func() {
 		if strings.TrimSpace(strings.Trim(line, " .,;:")) != "" {
 			out = append(out, notification.Block{Kind: notification.Para,
@@ -89,41 +95,70 @@ func paragraphs(text string) []notification.Block {
 		}
 		line = ""
 	}
-	for i, part := range parts {
-		if i%2 == 0 {
-			line += part
+	for _, seg := range segmentsOf(text) {
+		if !seg.quoted {
+			if lifted && line == "" {
+				seg.text = afterBlock(seg.text)
+			}
+			line += seg.text
 			continue
 		}
-		if len([]rune(part)) <= longQuote && !strings.Contains(part, "\n") {
-			line += `"` + part + `"`
+		if len([]rune(seg.text)) <= longQuote && spanSafe(seg.text) {
+			line += markQuote(seg.text)
 			continue
 		}
 		flush()
 		out = append(out, notification.Block{Kind: notification.CodeBlock,
-			Spans: []notification.Span{{Text: part}}})
+			Spans: []notification.Span{{Text: seg.text}}})
+		lifted = true
 	}
 	flush()
 	return out
 }
 
-// podSpans splits text at its double quotes: what a pod wrote sits
-// between them (see outsideQuotes) and becomes a code span, without the
-// quotation marks. Unbalanced quotes leave the text plain.
-func podSpans(text string) []notification.Span {
-	parts := strings.Split(text, `"`)
-	if len(parts)%2 == 0 {
-		return []notification.Span{{Text: text}}
+// clauseStarters are the words a clause that continues a sentence
+// starts with, which begin a sentence of their own with a capital.
+var clauseStarters = map[string]bool{
+	"it": true, "its": true, "they": true, "their": true, "the": true,
+	"this": true, "these": true, "those": true, "every": true,
+	"each": true, "all": true, "none": true, "both": true, "one": true,
+}
+
+// afterBlock is the text that follows a quotation lifted into a code
+// block, as the start of a line of its own. The stop, semicolon or comma
+// that went on after the quoted words would stand alone at the start of
+// the line, so it is dropped: the words become a sentence of their own,
+// and a clause that continued the sentence gets a capital.
+func afterBlock(text string) string {
+	rest := strings.TrimLeft(text, " .,;:")
+	if rest == "" || rest == strings.TrimLeft(text, " ") {
+		return text
 	}
+	first, _, _ := strings.Cut(rest, " ")
+	if clauseStarters[first] {
+		return upperFirst(rest)
+	}
+	return rest
+}
+
+// podSpans splits text at its quote runes: what a pod wrote sits between
+// them (see outsideQuotes) and becomes a code span, without the quotation
+// marks. A quotation that a span cannot carry exactly is written as plain
+// text between double quotes instead, so the bytes are never changed.
+func podSpans(text string) []notification.Span {
 	var spans []notification.Span
-	for i, part := range parts {
-		if part == "" {
-			continue
+	for _, seg := range segmentsOf(text) {
+		switch {
+		case seg.text == "":
+		case !seg.quoted:
+			spans = append(spans, notification.Span{Text: seg.text})
+		case spanSafe(seg.text):
+			spans = append(spans, notification.Span{Text: seg.text,
+				Style: notification.Code})
+		default:
+			spans = append(spans, notification.Span{
+				Text: `"` + seg.text + `"`})
 		}
-		style := notification.Plain
-		if i%2 == 1 {
-			style = notification.Code
-		}
-		spans = append(spans, notification.Span{Text: part, Style: style})
 	}
 	return spans
 }

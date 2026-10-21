@@ -21,8 +21,8 @@ const maxCascadeNames = 3
 // restarted by a liveness probe that runs their readiness check, after
 // the root failed: "db went down at 10:02; 12 pods of api and worker
 // were then restarted by their liveness probe (same check as
-// readiness), so the restarts are a symptom." They say nothing for
-// kills of the root's own pods or of a probe that checks something else.
+// readiness)." They say nothing for kills of the root's own pods or of a
+// probe that checks something else.
 func livenessCascadeSentences(f caseFacts) []sentence {
 	if f.p.Cause == nil {
 		return nil
@@ -39,7 +39,7 @@ func livenessCascadeSentences(f caseFacts) []sentence {
 	text += "; " + countPods(len(pods)) + " of " +
 		joinAnd(owners, maxCascadeNames) + " " + wasWere(len(pods)) +
 		" then restarted by their liveness probe (same check as " +
-		"readiness), so the restarts are a symptom."
+		"readiness)."
 	return []sentence{{part: partProof, weight: weightLivenessCascade,
 		text: text}}
 }

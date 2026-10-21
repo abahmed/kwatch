@@ -1,0 +1,12 @@
+{
+  "name": "finalizer-lookalike-no-rbac-view",
+  "description": "Four objects have been stuck deleting for months on a finalizer of one API group; two scaled-down Deployments are named like its controller and nothing else is known about them.",
+  "root": "finalizer/arc-system/actions.github.com/cleanup-protection",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/arc-system/actions-runner-controller",
+    "deployment/arc-system/actions-runner-controller-github-webhook-server"
+  ],
+  "tail": "40m0s"
+}

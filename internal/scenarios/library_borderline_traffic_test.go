@@ -76,6 +76,8 @@ func borderlineTwoPolicies() scenario {
 	return scenario{
 		expect: expectation{
 			Name: "borderline-two-policies",
+			// The first policy is blamed alone until the second lands.
+			RevisesRoot: true,
 			Description: "Two egress NetworkPolicies for the same pods " +
 				"land a minute apart; the first isolates their egress " +
 				"to the cache port, the second adds DNS; the pods time " +

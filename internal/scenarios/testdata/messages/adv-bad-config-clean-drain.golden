@@ -1,0 +1,10 @@
+10:05:20 settled
+🟠 invoicer is failing in billing (prod-eu-1) after the 10:02 UTC change to config map invoicer-config. Key TAX_RATE changed. It fails with "config: TAX_RATE: strconv.ParseFloat: parsing "n/a": invalid syntax". The error mentions it. To check the object the pods depend on, run kubectl get configmap invoicer-config -n billing -o yaml
+🟠 invoicer is failing in billing (prod-eu-1) after the 10:02 UTC change to config map invoicer-config.
+| 🟠 **invoicer** is failing in **billing** (**prod-eu-1**) after the 10:02 UTC change to config map **invoicer-config**.
+| Key TAX\_RATE changed.
+| It fails with `config: TAX_RATE: strconv.ParseFloat: parsing "n/a": invalid syntax`. The error mentions it.
+| To check the object the pods depend on, run
+| ```
+| kubectl get configmap invoicer-config -n billing -o yaml
+| ```

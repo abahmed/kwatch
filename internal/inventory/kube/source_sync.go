@@ -86,6 +86,12 @@ type watchState struct {
 	// relist moves it, which restores access.
 	lost        bool
 	lostVersion string
+	// now reads the clock for the staleness bound (see source_stale.go);
+	// failingSince and failVersion are when and at which resource
+	// version the current run of failures began.
+	now          func() time.Time
+	failingSince time.Time
+	failVersion  string
 }
 
 func (w *watchState) failure() string {
@@ -100,6 +106,10 @@ func (w *watchState) record(err error) {
 	w.reason = syncFailureReason(err)
 	if w.reason == ReasonPermissionDenied && w.hasSynced() {
 		w.lost, w.lostVersion = true, w.lastVersion()
+		return
+	}
+	if w.hasSynced() {
+		w.noteFailure()
 	}
 }
 
@@ -133,6 +143,7 @@ func (s *Source) track(
 		resource: resource, required: required,
 		hasSynced:   handle.HasSynced,
 		lastVersion: informer.LastSyncResourceVersion,
+		now:         s.cfg.Now,
 	}
 	s.watches = append(s.watches, w)
 	return informer.SetWatchErrorHandlerWithContext(

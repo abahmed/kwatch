@@ -4,6 +4,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 // ModeSharedFactor is the pseudo mode of a healthy, unchanged entity
@@ -29,6 +30,20 @@ func (v *view) sharedFactorState(id inventory.EntityID) state {
 	}
 	return state{id: id, modes: []modeHealth{{
 		mode: ModeSharedFactor, health: detection.Failing, pseudo: true}}}
+}
+
+// sharedFactorCap is SharedFactorMaxConfidence lowered by what the
+// errors say against the node: errors of a kind a node does not cause
+// (a defect in the program's own code) count below the cap, where the
+// cap would otherwise absorb them.
+func sharedFactorCap(got []Contribution) float64 {
+	limit := SharedFactorMaxConfidence
+	for _, c := range got {
+		if c.Code == rootcause.ProofErrorMisfits {
+			limit += c.Weight
+		}
+	}
+	return limit
 }
 
 // applySharedFactorWindow keeps shared-factor coverage only when the

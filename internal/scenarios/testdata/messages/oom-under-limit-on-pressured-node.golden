@@ -1,8 +1,8 @@
 10:01:15 settled
-🟠 Node n3 (prod-eu-1) is low on memory. It used 140Mi of its 512Mi limit. Node n3 ran out of memory; biggest users: search/indexer 3.1Gi. ledger in billing is affected as well. To check the node's conditions and recent events, run kubectl describe node n3
+🟠 Node n3 (prod-eu-1) is low on memory. Container app in pod ledger-c10ffc84-a in billing used 140Mi of its 512Mi limit. Node n3 ran out of memory; biggest users: search/indexer 3.1Gi. ledger in billing is affected as well. To check the node's conditions and recent events, run kubectl describe node n3
 🟠 Node n3 (prod-eu-1) is low on memory.
 | 🟠 Node n3 (**prod-eu-1**) is low on memory.
-| It used 140Mi of its 512Mi limit.
+| Container app in pod ledger-c10ffc84-a in **billing** used 140Mi of its 512Mi limit.
 | Node n3 ran out of memory; biggest users: search/indexer 3.1Gi.
 | **ledger** in **billing** is affected as well.
 | To check the node's conditions and recent events, run
@@ -10,7 +10,7 @@
 | kubectl describe node n3
 | ```
 10:06:00 material change
-🟠 Node n3 (prod-eu-1) is now short on memory and its pods' limits add up to 153% of its memory, so pods that stayed within their own limit are killed. It is spreading to ledger in billing: it has not been ready for three minutes.
+🟠 Node n3 (prod-eu-1) is now short on memory and its pods' limits add up to 153% of its memory, so pods that stayed within their own limit are killed. It is spreading to ledger in billing: it has not been ready for three minutes and has no ready replicas (0 of 1).
 🟠 Node n3 (prod-eu-1) is now short on memory and its pods' limits add up to 153% of its memory, so pods that stayed within their own limit are killed.
 | 🟠 Node n3 (**prod-eu-1**) is now short on memory and its pods' limits add up to 153% of its memory, so pods that stayed within their own limit are killed.
-| It is spreading to **ledger** in billing: it has not been ready for three minutes.
+| It is spreading to **ledger** in billing: it has not been ready for three minutes and has no ready replicas (0 of 1).

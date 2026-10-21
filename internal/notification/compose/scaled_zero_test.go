@@ -40,7 +40,7 @@ func TestWriteScaledToZeroNamesTheRouteWhoAndWhen(t *testing.T) {
 	assert.Contains(t, msg.Note, "api in shop is scaled to 0 "+
 		"but Ingress shop/web still routes traffic to it via Service api.")
 	assert.Contains(t, msg.Note,
-		"It was scaled to 0 by kubectl-scale at 09:10.")
+		"It was scaled to 0 by kubectl-scale at 09:10 UTC.")
 }
 
 func TestWriteScaledToZeroWithoutHistoryAddsNoWho(t *testing.T) {

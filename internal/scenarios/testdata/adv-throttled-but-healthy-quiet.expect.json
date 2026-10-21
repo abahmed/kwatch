@@ -1,0 +1,7 @@
+{
+  "name": "adv-throttled-but-healthy-quiet",
+  "description": "Pods are heavily CPU-throttled and still ready, with no restarts, for two days.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "48h0m0s"
+}

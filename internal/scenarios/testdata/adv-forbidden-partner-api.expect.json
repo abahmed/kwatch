@@ -1,0 +1,12 @@
+{
+  "name": "adv-forbidden-partner-api",
+  "description": "An app crashes on an HTTP 403 Forbidden from a partner API while an unrelated RoleBinding of the namespace was just deleted.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "rolebinding/shop/metrics-reader",
+    "node//n1",
+    "node//n2"
+  ]
+}

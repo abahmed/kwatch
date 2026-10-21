@@ -1,6 +1,7 @@
 package detectors
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -19,8 +20,19 @@ func deadWebhook(policies string) (*inventory.Model, inventory.EntityID) {
 	put(m, id, t0, map[string]inventory.Value{
 		kube.AttrFailurePolicy: inventory.Text(policies),
 		kube.AttrWebhookNames:  inventory.Text("a.example.com,b.example.com"),
+		kube.AttrWebhookClosedServices: inventory.Text(
+			closedServicesOf(policies)),
 	})
 	return m, id
+}
+
+// closedServicesOf is the one backend Service of deadWebhook when any
+// of its webhooks fails closed.
+func closedServicesOf(policies string) string {
+	if strings.Contains(policies, "Fail") {
+		return "default/hook-svc"
+	}
+	return ""
 }
 
 // refuse records the FailedCreate a ReplicaSet gets when the API server
@@ -99,6 +111,8 @@ func TestWebhookClosedCallsAreRefusals(t *testing.T) {
 		kube.AttrFailurePolicy:      inventory.Text("Fail,Fail"),
 		kube.AttrWebhookNames:       inventory.Text("a.example.com"),
 		kube.AttrWebhookClosedShare: inventory.Number(0),
+		kube.AttrWebhookClosedServices: inventory.Text(
+			"default/hook-svc"),
 	})
 	assert.Equal(t, detection.Warning,
 		severityOf(t, m, id, t0.Add(time.Minute)))
@@ -106,6 +120,8 @@ func TestWebhookClosedCallsAreRefusals(t *testing.T) {
 	put(m, id, t0, map[string]inventory.Value{
 		kube.AttrFailurePolicy:      inventory.Text("Fail,Fail"),
 		kube.AttrWebhookClosedShare: inventory.Number(40),
+		kube.AttrWebhookClosedServices: inventory.Text(
+			"default/hook-svc"),
 	})
 	assert.Equal(t, detection.Critical,
 		severityOf(t, m, id, t0.Add(time.Minute)))

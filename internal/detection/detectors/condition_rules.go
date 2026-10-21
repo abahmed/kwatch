@@ -28,19 +28,19 @@ func init() {
 func registerNodeAndWorkload() {
 	addConditions([]inventory.Kind{kube.KindNode},
 		nodePressureCheck("MemoryPressure", reasons.MemoryPressure,
-			"Node is low on memory; pods may be evicted"),
+			"Node is low on memory"),
 		nodePressureCheck("DiskPressure", reasons.DiskPressure,
-			"Node is low on disk space; pods may be evicted"),
+			"Node is low on disk space"),
 		nodePressureCheck("PIDPressure", reasons.PIDPressure,
 			"Node is running out of process IDs"),
 		conditionCheck{cond: "NetworkUnavailable", status: "True",
 			finding: reasons.NetworkUnavailable, severity: detection.Critical,
-			summary: "Node network is not configured ({reason})"},
+			waitsForYoungNode: true,
+			summary:           "Node network is not configured ({reason})"},
 	)
-	workloads := []inventory.Kind{
-		kube.KindDeployment, kube.KindStatefulSet, kube.KindDaemonSet,
-	}
-	addConditions(workloads,
+	// Only a Deployment reports Progressing and ReplicaFailure; a
+	// StatefulSet and a DaemonSet have neither condition.
+	addConditions([]inventory.Kind{kube.KindDeployment},
 		rolloutStuckCheck(reasons.ProgressDeadlineExceeded),
 		replicaFailureCheck(reasons.DeploymentReplicaFailure),
 	)

@@ -1,0 +1,16 @@
+{
+  "name": "adv-two-registries-independent",
+  "description": "Pulls fail with 401 on a private registry and with 429 on a public one at the same time.",
+  "root": "registry//registry.corp.example",
+  "otherRoots": [
+    "registry//registry-1.docker.io"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/shop/web",
+    "deployment/batch/job"
+  ]
+}

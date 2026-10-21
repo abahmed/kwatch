@@ -142,12 +142,13 @@ func telemetrySkipReason(
 	}
 }
 
-// telemetryEnvDisabled lets operators opt out without editing config. An
-// invalid value was already rejected at startup by config.LoadConfig.
+// telemetryEnvDisabled lets operators opt out without editing config. A
+// value that is not a boolean reads as off: config.LoadConfig warned about
+// it, and a typo must never switch telemetry on.
 func telemetryEnvDisabled() bool {
 	value, set, err := config.ParseEnvBool(
 		"KWATCH_TELEMETRY", os.Getenv("KWATCH_TELEMETRY"))
-	return err == nil && set && !value
+	return err != nil || (set && !value)
 }
 
 // sendTelemetry sends at most one heartbeat per interval. sent remembers the

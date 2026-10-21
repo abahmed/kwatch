@@ -7,7 +7,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
-	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
@@ -71,7 +70,7 @@ func (f caseFacts) why() (string, whyKind) {
 		return "", whyNone
 	}
 	text := measure + "; it has failed since " + clock(began) + ", " +
-		format.Duration(began.Sub(change.At)) + " after the " +
+		spokenFor(began.Sub(change.At)) + " after the " +
 		clock(change.At) + " " + triggerNoun(change) +
 		triggerRevision(change)
 	return endSentence(upperFirst(text)), kind

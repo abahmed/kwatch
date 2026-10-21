@@ -28,7 +28,7 @@ func killedPod(name string, rollout bool, more ...detection.Evidence,
 		Entity: inventory.CoreID(kube.KindPod, "shop", name),
 		Reason: reasons.PodKilledAtGrace, Severity: detection.Warning,
 		Since:    at,
-		Summary:  "Pod did not stop within its 30s grace period",
+		Summary:  "Pod did not stop within its 30-second grace period",
 		Evidence: evidence,
 	}
 }
@@ -46,18 +46,18 @@ func TestWriteGraceKillNamesTheRolloutAndTheGracePeriod(t *testing.T) {
 	got := graceNote(killedPod("api-a", true), killedPod("api-b", true),
 		killedPod("api-c", true))
 
-	assert.Contains(t, got, "During the rollout at 10:02, 3 api pods did "+
-		"not stop within their 30s grace period and were killed (exit "+
-		"code 137); work in flight was cut off.")
+	assert.Contains(t, got, "During the rollout at 10:02 UTC, 3 api pods did "+
+		"not stop within their 30-second grace period and were killed "+
+		"(exit code 137).")
+	assert.NotContains(t, got, "work in flight")
 }
 
 func TestWriteGraceKillOutsideARolloutDoesNotSayRollout(t *testing.T) {
 	got := graceNote(killedPod("api-a", false))
 
 	assert.NotContains(t, got, "rollout")
-	assert.Contains(t, got, "At 10:02, 1 api pod did not stop within its "+
-		"30s grace period and was killed (exit code 137); work in "+
-		"flight was cut off.")
+	assert.Contains(t, got, "At 10:02 UTC, 1 api pod did not stop within its "+
+		"30-second grace period and was killed (exit code 137).")
 }
 
 func TestWriteGraceKillQuotesTheKubeletsHookFailure(t *testing.T) {

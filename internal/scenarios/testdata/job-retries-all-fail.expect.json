@@ -1,0 +1,8 @@
+{
+  "name": "job-retries-all-fail",
+  "description": "A Job's pods fail on every attempt until its backoff limit is reached.",
+  "root": "job/batch/report",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "30m0s"
+}

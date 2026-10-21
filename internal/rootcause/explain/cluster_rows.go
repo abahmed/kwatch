@@ -9,6 +9,7 @@ import (
 
 // clusterRows cover shared services every workload depends on.
 var clusterRows = []Row{
+	pullWithoutSecretRow, diskHogRow, accountNoGrantRow,
 	{
 		Name: "registry-refuses",
 		Cause: Side{Kind: kube.KindRegistry, Modes: []detection.Mode{

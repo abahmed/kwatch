@@ -21,7 +21,7 @@ func (m *Manager) settlingCount() int {
 	count := 0
 	for _, p := range m.incidents {
 		if p.State == Settling && len(p.Members) > 0 &&
-			p.Tier != Silent {
+			p.Tier >= Notify {
 			count++
 		}
 	}

@@ -93,7 +93,7 @@ func TestCauseRevisedAfterChangeLeadsWithSubject(t *testing.T) {
 	short := Writer{}.Write(d, at(9, 0)).Short
 
 	want := "🔴 Cause now known: payments is down in shop after the " +
-		"14:02 release of payments:2.3."
+		"14:02 UTC release of payments:2.3."
 	if short != want {
 		t.Fatalf("short = %q, want %q", short, want)
 	}

@@ -1,0 +1,12 @@
+{
+  "name": "adv-netpol-unrelated-crash",
+  "description": "A NetworkPolicy is created for other pods in the namespace while an app panics for its own reasons.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "networkpolicy/shop/batch-egress",
+    "node//n1",
+    "node//n2"
+  ]
+}

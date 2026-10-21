@@ -102,3 +102,18 @@ func TestExecFormatErrorNeedsTheNodeArchitecture(t *testing.T) {
 	f := archFixture(t, "", execFormatLine)
 	assert.NotContains(t, f.Summary, "architecture")
 }
+
+// The summary says where the container crashed and quotes what it
+// printed; whether the image has a build for that architecture is not
+// something kwatch reads, so it is not said.
+func TestExecFormatErrorSummaryStatesOnlyTheNodeAndTheQuote(t *testing.T) {
+	for _, healthy := range [][]string{nil, {"amd64", "amd64"}} {
+		f := archFixture(t, "arm64", execFormatLine, healthy...)
+
+		assert.Contains(t, f.Summary,
+			"crashes on arm64 node n1 with \"exec format error\"")
+		assert.NotContains(t, f.Summary, "build")
+		assert.NotContains(t, f.Summary, "doesn't run")
+		assert.NotContains(t, f.Summary, "image")
+	}
+}

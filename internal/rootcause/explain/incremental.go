@@ -15,7 +15,9 @@ const maxMergeRounds = 64
 // entity the walk went through upstream of the area's failures, or one
 // whose findings decide which links the walk follows (an autoscaler is
 // followed only once it fails), so the failures are exactly the
-// dependents of that input. A new failure is
+// dependents of that input. A walk that searched a whole kind (the
+// handler of a finalizer) has the kind as an input, so a dirty entity of
+// it, even a new one, makes the area stale. A new failure is
 // solved on its own first; when one of its candidates is a candidate
 // or an input of a cached area, both are solved again together,
 // because the areas they form depend on each other.
@@ -137,7 +139,7 @@ func (a solvedArea) stale(dirty, failing map[inventory.EntityID]bool) bool {
 		}
 	}
 	for id := range dirty {
-		if a.inputs[id] {
+		if a.inputs[id] || a.inputs[scanOf(id.Kind)] {
 			return true
 		}
 	}

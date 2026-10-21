@@ -1,0 +1,10 @@
+10:11:15 roll-up
+🟠 kwatch (prod-eu-1) found two new problems at the same time. kube-proxy in kube-system keeps crashing. api in shop is failing: volume cannot be mounted. Each gets its own message when it changes or resolves.
+🟠 kwatch (prod-eu-1) found two new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
+|
+| **Problems**
+| - **kube-proxy** in **kube-system** keeps crashing
+| - **api** (**shop**) — volume cannot be mounted
+|
+| *Each gets its own message when it changes or resolves.*

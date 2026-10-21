@@ -1,13 +1,11 @@
 package explain
 
 import (
-	"sort"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
-	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 // LinkFinalizes is the link from what removes a finalizer to the object it
@@ -30,8 +28,8 @@ const (
 	// ModeHandlerNotReady: it wants replicas and none is ready.
 	ModeHandlerNotReady = ModeHandlerStopped + ".NotReady"
 	// ModeFinalizerUnhandled is a finalizer nothing removes. The finer
-	// mode ".Running" says the controller that looks like its handler
-	// runs, so kwatch cannot say it is down.
+	// mode ".Running" says a controller known to handle it runs, so
+	// kwatch cannot say it is down.
 	ModeFinalizerUnhandled detection.Mode = "FinalizerUnhandled"
 	// ModeFinalizerHandlerRuns is ModeFinalizerUnhandled with a
 	// controller that runs.
@@ -43,10 +41,6 @@ var handlerKinds = []inventory.Kind{
 	kube.KindDeployment, kube.KindStatefulSet, kube.KindDaemonSet,
 }
 
-// minNameToken is the shortest word of a workload's name that may
-// stand for the API group of a finalizer.
-const minNameToken = 4
-
 // finalizerHops lead from an object whose deletion is stuck to what
 // should remove its finalizers: the controller scaled down or not
 // ready, else the finalizer itself.
@@ -55,6 +49,7 @@ func (v *view) finalizerHops(id inventory.EntityID) []hop {
 	if len(names) == 0 {
 		return nil
 	}
+	v.gateHandlerScan(id)
 	handlers := v.handlersOf(id)
 	var out []hop
 	for _, handler := range handlers {
@@ -190,126 +185,27 @@ func (v *view) handlerStopped(id inventory.EntityID) detection.Mode {
 	return ""
 }
 
-// handlersOf are the workloads that probably run the controller of the
+// handlersOf are the workloads known to run the controller of the
 // finalizers holding id. Objects held by the same finalizers in one
-// namespace are one problem, so a workload counts only when the evidence
-// holds for all of them (see sharedHandlers). For one object, the
-// strongest evidence that finds any:
+// namespace are one problem, so the answer is the one of the whole
+// group (see sharedHandlers). A workload is named only with positive
+// evidence that it serves the finalizer's API group, checked in this
+// order, the first that finds any wins (see groupHandlers):
 //
-//  1. the workload wrote the object, or an owner of it (its field
-//     manager is the workload's name);
-//  2. a workload of the object's namespace labels its pods with the
-//     API group of the finalizer or of the object's owners;
-//  3. a workload of the namespace is named after that group.
+//  1. the field manager that owns the finalizer entry itself;
+//  2. a pod label or annotation key in the group's domain, or container
+//     arguments or environment quoting the group or the finalizer;
+//  3. a ServiceAccount bound to a role that writes the group;
+//  4. a webhook that admits, or a conversion webhook of, the group.
+//
+// A name alone is never evidence; see finalizerHint.
 func (v *view) handlersOf(id inventory.EntityID) []inventory.EntityID {
 	return v.sharedHandlers(id)
-}
-
-// ownHandlersOf are the handlers the evidence finds for id alone.
-func (v *view) ownHandlersOf(id inventory.EntityID) []inventory.EntityID {
-	owners := rootcause.OwnerChain(v.s.Model, id)
-	if found := v.managersOf(append([]inventory.EntityID{id},
-		owners...)); len(found) > 0 {
-		return found
-	}
-	groups := v.finalizerGroups(id, owners)
-	var labelled, named []inventory.EntityID
-	for _, kind := range handlerKinds {
-		for _, w := range v.s.Model.EntitiesIn(kind, id.Namespace) {
-			switch {
-			case v.labelledWith(w, groups):
-				labelled = append(labelled, w)
-			case namedAfter(w, groups):
-				named = append(named, w)
-			}
-		}
-	}
-	if len(labelled) > 0 {
-		return sortedIDs(labelled)
-	}
-	return sortedIDs(named)
 }
 
 func sortedIDs(ids []inventory.EntityID) []inventory.EntityID {
 	sortIDs(ids)
 	return ids
-}
-
-// managersOf are the workloads that last wrote any of ids.
-func (v *view) managersOf(ids []inventory.EntityID) []inventory.EntityID {
-	if v.s.Links == nil {
-		return nil
-	}
-	var out []inventory.EntityID
-	for _, id := range ids {
-		for _, link := range v.s.Links.Links(id) {
-			if link.Type == inventory.ManagedBy &&
-				!containsID(out, link.To) {
-				out = append(out, link.To)
-			}
-		}
-	}
-	return out
-}
-
-// finalizerGroups are the API groups a finalizer's controller is known
-// by: the domain of each finalizer and, while three labels remain, the
-// domain without its leading label (the kind: "widget.widgets.example.com"
-// is also "widgets.example.com"), and the groups of the object and its
-// owners.
-func (v *view) finalizerGroups(
-	id inventory.EntityID, owners []inventory.EntityID,
-) []string {
-	var out []string
-	for _, name := range v.finalizersOf(id) {
-		domain, _, _ := strings.Cut(name, "/")
-		for labels := strings.Split(domain, "."); len(labels) >= 2; {
-			out = append(out, strings.Join(labels, "."))
-			if len(labels) <= 3 {
-				break
-			}
-			labels = labels[1:]
-		}
-	}
-	for _, owner := range append([]inventory.EntityID{id}, owners...) {
-		if owner.Group != "" && !builtinDomain(owner.Group) {
-			out = append(out, owner.Group)
-		}
-	}
-	sort.Strings(out)
-	return out
-}
-
-// labelledWith reports whether the pods of workload w carry a label in
-// one of the groups ("widgets.example.com/controller-name").
-func (v *view) labelledWith(w inventory.EntityID, groups []string) bool {
-	e, ok := v.s.Model.Entity(w)
-	if !ok {
-		return false
-	}
-	attribute, _ := e.Attribute(kube.AttrTemplateLabels)
-	for key := range kube.ParseLabels(attribute.Value.AsText()) {
-		if domain, _, ok := strings.Cut(key, "/"); ok &&
-			hasText(groups, domain) {
-			return true
-		}
-	}
-	return false
-}
-
-// namedAfter reports whether a word of the workload's name is the first
-// label of one of the groups: "widgets-controller" for widgets.example.com.
-func namedAfter(w inventory.EntityID, groups []string) bool {
-	words := strings.FieldsFunc(w.Name, func(r rune) bool {
-		return r == '-' || r == '.' || r == '_'
-	})
-	for _, group := range groups {
-		first, _, _ := strings.Cut(group, ".")
-		if len(first) >= minNameToken && hasText(words, first) {
-			return true
-		}
-	}
-	return false
 }
 
 // holdsFinalizers reports a candidate chosen for objects whose deletion

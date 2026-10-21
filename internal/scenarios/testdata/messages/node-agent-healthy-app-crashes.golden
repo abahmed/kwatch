@@ -1,11 +1,11 @@
 10:11:15 settled
-🟠 cart in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: nil pointer dereference". Its last run lasted 10s; 3 restarts in the 1h10m since its pod was created. It runs a single replica, so this is downtime, not degradation. To read the output of the last crash, run kubectl logs cart-d976a8be-a -c app -n shop --previous
+🟠 cart in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: nil pointer dereference". Its last run lasted ten seconds; three restarts since its pod was created about one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs cart-d976a8be-a -c app -n shop --previous
 🟠 cart in shop (prod-eu-1) keeps crashing.
 | 🟠 **cart** in **shop** (**prod-eu-1**) keeps crashing.
 | Its node and registry are healthy and unchanged, so nothing outside it explains this.
 | It fails with `panic: nil pointer dereference`.
-| Its last run lasted 10s; 3 restarts in the 1h10m since its pod was created.
-| It runs a single replica, so this is downtime, not degradation.
+| Its last run lasted ten seconds; three restarts since its pod was created about one hour ago.
+| It runs a single replica.
 | To read the output of the last crash, run
 | ```
 | kubectl logs cart-d976a8be-a -c app -n shop --previous

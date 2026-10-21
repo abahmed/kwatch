@@ -45,9 +45,7 @@ func stuckNamespace(
 	}
 	summary := "Namespace has been terminating for " +
 		format.Duration(ctx.Now.Sub(since))
-	if len(quoted) == 0 {
-		summary += "; a finalizer is likely blocking it"
-	} else {
+	if len(quoted) > 0 {
 		summary += ": " + strings.Join(quoted, "; ")
 	}
 	return detection.Finding{

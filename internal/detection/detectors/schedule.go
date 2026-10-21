@@ -57,7 +57,7 @@ func scheduleFindings(
 		return []detection.Finding{{
 			Reason: reason, Severity: detection.Info,
 			Since:   valueSince(e, kube.AttrSuspended),
-			Summary: "Suspended; it will not run until resumed",
+			Summary: "Suspended; it does not run until resumed",
 		}}
 	}
 	if found, ok := scheduleProblemFinding(e); ok {
@@ -92,8 +92,8 @@ func scheduleFindings(
 // scheduleProblemSummaries explains each problem the inventory records.
 var scheduleProblemSummaries = map[string]string{
 	kube.ScheduleInvalid: "Schedule is not a valid cron expression; " +
-		"the CronJob will never run",
-	kube.ScheduleBadZone: "Time zone is unknown; the CronJob will never run",
+		"the CronJob never runs",
+	kube.ScheduleBadZone: "Time zone is unknown; the CronJob never runs",
 }
 
 func scheduleProblemFinding(e inventory.Entity) (detection.Finding, bool) {

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/delivery/providertest"
-	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
 
@@ -164,35 +163,35 @@ func TestOpsgenieUpdateFailureIsReturned(t *testing.T) {
 	}
 }
 
-// Closing an alias Opsgenie does not know (404) right after the create is
-// retryable, because alerts are created asynchronously. Once the alias has
-// stayed unknown past the grace period the alert is taken as already gone.
-func TestOpsgenieCloseOfUnknownAliasIsRetryableThenSucceeds(t *testing.T) {
+// Closing an alias Opsgenie does not know (404) is retried in the
+// background, because alerts are created asynchronously, and given up
+// after the grace without ever blocking the queue.
+func TestOpsgenieCloseOfUnknownAliasIsRetriedThenGivenUp(t *testing.T) {
 	c, rec := newTestOpsgenie(t)
+	var waits []time.Duration
+	c.wait = func(_ context.Context, d time.Duration) error {
+		waits = append(waits, d)
+		return nil
+	}
+	calls := 0
 	rec.Reply = func(w http.ResponseWriter, _ providertest.Request) {
+		calls++
 		w.WriteHeader(http.StatusNotFound)
 	}
-	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	c.now = func() time.Time { return now }
 
-	err := c.SendIncident(context.Background(), providertest.Resolve())
-	if err == nil || transport.IsPermanent(err) {
-		t.Fatalf("an early 404 on close must be retryable: %v", err)
-	}
-	now = now.Add(closeGrace - time.Second)
-	if err := c.SendIncident(
-		context.Background(), providertest.Resolve()); err == nil {
-		t.Fatal("still inside the grace period, close must keep retrying")
-	}
-	now = now.Add(time.Second)
 	if err := c.SendIncident(
 		context.Background(), providertest.Resolve()); err != nil {
-		t.Fatalf("a long-missing alert counts as closed: %v", err)
+		t.Fatalf("a close of an alert that is not there is done: %v", err)
+	}
+	settle(c)
+	if calls < 5 || len(waits) != calls-1 {
+		t.Fatalf("calls = %d, waits = %v", calls, waits)
 	}
 }
 
 func TestOpsgenieCloseFindsAlertAfterEarly404(t *testing.T) {
 	c, rec := newTestOpsgenie(t)
+	c.wait = noWait()
 	var calls int
 	rec.Reply = func(w http.ResponseWriter, _ providertest.Request) {
 		calls++
@@ -201,13 +200,10 @@ func TestOpsgenieCloseFindsAlertAfterEarly404(t *testing.T) {
 		}
 	}
 	if err := c.SendIncident(
-		context.Background(), providertest.Resolve()); err == nil {
-		t.Fatal("first close must be retried")
-	}
-	if err := c.SendIncident(
 		context.Background(), providertest.Resolve()); err != nil {
 		t.Fatalf("close must succeed once the alert is visible: %v", err)
 	}
+	settle(c)
 	if calls != 2 {
 		t.Fatalf("calls = %d", calls)
 	}

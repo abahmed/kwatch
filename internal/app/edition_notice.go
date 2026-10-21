@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"strings"
 
 	"k8s.io/klog/v2"
 
@@ -64,14 +65,33 @@ func proDetectorsOff(e feature.Entitlements) []string {
 type editionNotice struct {
 	detectors []string
 	sends     string
+	// inactive names the Pro features the configuration sets that the
+	// edition does not run (see inactivePro).
+	inactive []string
+	// droppedPagers are the paging services the provider cap leaves
+	// inactive: nobody is paged through them.
+	droppedPagers []string
 }
 
 func newEditionNotice(
 	e feature.Entitlements, cfg *config.Config,
 ) editionNotice {
+	_, dropped := capProviders(e, cfg)
 	return editionNotice{
 		detectors: proDetectorsOff(e), sends: communitySends(e, cfg),
+		inactive: inactivePro(e, cfg), droppedPagers: pagersOf(dropped),
 	}
+}
+
+// pagersOf keeps the paging services among names.
+func pagersOf(names []string) []string {
+	var pagers []string
+	for _, name := range names {
+		if isPagerProvider(name) {
+			pagers = append(pagers, name)
+		}
+	}
+	return pagers
 }
 
 // lines are the notice as /status and lint word it.
@@ -84,12 +104,6 @@ func (n editionNotice) lines() []string {
 		out = append(out, status.CommunitySendsText(n.sends))
 	}
 	return out
-}
-
-// EditionNotices words what this installation's edition does not run,
-// for `kwatch lint`: the Pro detector families and the provider kept.
-func EditionNotices(cfg *config.Config) []string {
-	return newEditionNotice(ResolveEntitlements(), cfg).lines()
 }
 
 // logEditionNotice logs, in one line, the Pro detector families a
@@ -107,6 +121,20 @@ func logEditionNotice(e feature.Entitlements, n editionNotice) {
 		args...)
 }
 
+// logDroppedPagers warns that the provider cap leaves a paging service
+// inactive: incidents will not page through it, and the one provider the
+// edition runs is named so the operator can change the choice.
+func logDroppedPagers(n editionNotice) {
+	if len(n.droppedPagers) == 0 {
+		return
+	}
+	klog.Warningf("the Community edition runs one alert provider, so "+
+		"nothing is paged through %s: component=edition sends=%q; name "+
+		"the provider to keep with app.communityProvider, or get kwatch "+
+		"Pro to run every provider", strings.Join(n.droppedPagers, ", "),
+		n.sends)
+}
+
 // editionRecord is the value under stateEditionLast.
 type editionRecord struct {
 	// Edition is the edition the last start ran.
@@ -116,19 +144,26 @@ type editionRecord struct {
 }
 
 // editionPlan is the decision of one start: the record to keep and
-// whether the operator is told.
+// whether the operator is told. configOnly marks a notice about the
+// configuration of an installation that never ran Pro: no earlier version
+// and no lapsed license, only Pro settings that this edition ignores.
 type editionPlan struct {
-	record editionRecord
-	notify bool
-	known  bool
+	record     editionRecord
+	notify     bool
+	known      bool
+	configOnly bool
 }
 
 // planEdition decides from the persisted state whether this start runs
-// Community after an earlier version or Pro. It reads the state before the
-// startup bookkeeping marks the installation initialized, and writes
-// nothing: commit does, once the notice can be sent.
+// Community after an earlier version or Pro, or runs Community with a
+// configuration that sets Pro features (usesPro): the operator hears about
+// that once, even on a first start, because those settings do nothing. It
+// reads the state before the startup bookkeeping marks the installation
+// initialized, and writes nothing: commit does, once the notice can be
+// sent.
 func planEdition(
 	ctx context.Context, disk diskState, e feature.Entitlements,
+	usesPro bool,
 ) (editionPlan, error) {
 	edition := feature.OrCommunity(e).Edition()
 	if edition == feature.ProEdition {
@@ -157,6 +192,11 @@ func planEdition(
 		community.Notified = true
 		return editionPlan{record: community, notify: true, known: true}, nil
 	}
+	if usesPro && !community.Notified {
+		community.Notified = true
+		return editionPlan{record: community, notify: true, known: true,
+			configOnly: true}, nil
+	}
 	return editionPlan{record: community, known: true}, nil
 }
 
@@ -178,7 +218,8 @@ func (p editionPlan) commit(
 }
 
 // upgradeNoticeText explains, once, what the Community edition keeps and
-// what it does not run, and how to get it back.
+// what it does not run, what the configuration sets that is now ignored,
+// and how to get it back.
 func upgradeNoticeText(n editionNotice) string {
 	text := notification.MarkerNotify + " kwatch is now running the " +
 		"Community edition. It keeps the pod and node alerts with their " +
@@ -186,16 +227,39 @@ func upgradeNoticeText(n editionNotice) string {
 	if len(n.detectors) > 0 {
 		text += ": " + status.ProDetectorsText(n.detectors)
 	}
-	text += ". Get kwatch Pro at " + upgradeTrialURL
-	return text
+	text += ". " + ignoredSettingsText(n)
+	return text + "Get kwatch Pro at " + upgradeTrialURL
+}
+
+// configNoticeText is the notice of an installation that never ran Pro
+// but whose configuration sets Pro features: they are ignored.
+func configNoticeText(n editionNotice) string {
+	return notification.MarkerNotify + " kwatch is running the " +
+		"Community edition. " + ignoredSettingsText(n) +
+		"Get kwatch Pro at " + upgradeTrialURL
+}
+
+// ignoredSettingsText names the configured Pro features the edition
+// ignores, with the sentence that ends in a space; empty when none.
+func ignoredSettingsText(n editionNotice) string {
+	if len(n.inactive) == 0 {
+		return ""
+	}
+	return "Your configuration sets Pro features that are not running " +
+		"and are ignored: " + strings.Join(n.inactive, "; ") + ". "
 }
 
 // announceEdition sends the edition notice, once, after an earlier
-// version or Pro. A fresh install hears nothing.
+// version or Pro, or for Pro settings a Community install ignores. A fresh
+// install with a Community configuration hears nothing.
 func announceEdition(deps *serverDeps, disk diskState, plan editionPlan) {
 	var send func(string)
 	if deps.deliveryManager != nil {
 		send = deps.deliveryManager.Notify
 	}
-	plan.commit(disk, send, upgradeNoticeText(deps.notice))
+	text := upgradeNoticeText(deps.notice)
+	if plan.configOnly {
+		text = configNoticeText(deps.notice)
+	}
+	plan.commit(disk, send, text)
 }

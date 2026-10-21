@@ -153,9 +153,9 @@ func (w Writer) DigestWith(
 	sentences = append(sentences,
 		digestTitles(resolved, now, "Resolved: ")...)
 	sentences = append(sentences, riskTitles(risks)...)
-	sentences = append(sentences, sentence{part: partAction,
-		text: "None of them is urgent; one that gets worse gets its own " +
-			"message."})
+	sentences = append(sentences, urgencySentences(
+		len(opened)+len(extras.Ongoing)+len(extras.Unchanged)+
+			riskWorkloads(risks))...)
 	msg := notification.Message{
 		Key: DigestKey(now), Revision: 1, Status: notification.StatusLow,
 		Opens: true,
@@ -167,6 +167,25 @@ func (w Writer) DigestWith(
 	msg.Listed = &notification.Listed{Lines: len(msg.Lines),
 		Summaries: summaryLines(extras.Wake, list)}
 	return msg
+}
+
+// urgencySentences close a digest that lists open problems: none of them
+// interrupts, and one that gets worse gets its own message. A digest of
+// one problem says "It", and one with nothing open says nothing.
+func urgencySentences(open int) []sentence {
+	text := ""
+	switch {
+	case open == 1:
+		text = "It is not urgent; if it gets worse it gets its own " +
+			"message."
+	case open > 1:
+		text = "None of them is urgent; one that gets worse gets its " +
+			"own message."
+	}
+	if text == "" {
+		return nil
+	}
+	return []sentence{{part: partAction, text: text}}
 }
 
 // digestCounts are the phrases of the lead sentence: how many problems
@@ -212,7 +231,8 @@ func digestTitles(
 			break
 		}
 		out = append(out, sentence{part: partProof,
-			text: prefix + withUsualTail(Writer{}.Write(d, now).Title, d)})
+			text: prefix + withUsualTail(
+				markedTitle(Writer{}.Write(d, now)), d)})
 	}
 	return out
 }

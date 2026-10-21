@@ -67,7 +67,9 @@ const keptPort = "<ip>:"
 // Signature is the replica-independent form of one error line: the
 // same error from different pods, runs or requests gives the same
 // text. It only replaces what differs (times, IDs, addresses, ports,
-// numbers, pod name hashes); it never interprets the words.
+// numbers, pod name hashes); it never interprets the words. It is a pure
+// function that keeps no state; a caller that signs the same lines over
+// and over owns a Signer.
 func Signature(text string) string {
 	text = strings.ToLower(strings.TrimSpace(text))
 	for _, rule := range signatureRules {

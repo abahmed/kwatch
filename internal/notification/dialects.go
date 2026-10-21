@@ -10,6 +10,16 @@ func oneLine(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
+// foldLines puts text on one line for a code span: a line break becomes
+// a space. Runs of spaces are kept, because a code span shows what a pod
+// wrote and a pod's own spacing is part of it.
+func foldLines(s string) string {
+	if !strings.ContainsAny(s, "\r\n") {
+		return s
+	}
+	return strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ").Replace(s)
+}
+
 // backtickRun is the longest run of backticks in s.
 func backtickRun(s string) int {
 	longest, run := 0, 0
@@ -36,14 +46,22 @@ func fenceOf(body string) string {
 	return f + "\n" + body + "\n" + f
 }
 
-// codeSpanOf is a CommonMark code span longer than any run inside s.
+// codeSpanOf is a CommonMark code span longer than any run inside s. A
+// backtick or a space at either edge is padded with a space, which
+// CommonMark strips again, so the text shows exactly as written.
 func codeSpanOf(s string) string {
-	s = oneLine(s)
+	s = foldLines(s)
 	f := strings.Repeat("`", backtickRun(s)+1)
-	if strings.HasPrefix(s, "`") || strings.HasSuffix(s, "`") {
+	if edgeIs(s, "` ") {
 		s = " " + s + " "
 	}
 	return f + s + f
+}
+
+// edgeIs reports whether s starts or ends with one of chars.
+func edgeIs(s, chars string) bool {
+	return s != "" && (strings.ContainsRune(chars, rune(s[0])) ||
+		strings.ContainsRune(chars, rune(s[len(s)-1])))
 }
 
 // stripped removes characters from s.
@@ -69,7 +87,7 @@ func wrapper(mark string, escape func(string) string) func(string) string {
 // PlainDialect writes the lines with "-" bullets and no markup.
 func PlainDialect() Dialect {
 	return Dialect{Text: identity, Bold: identity, Italic: identity,
-		Code: oneLine, Fence: identity, Bullet: "- ", Gap: "\n"}
+		Code: foldLines, Fence: identity, Bullet: "- ", Gap: "\n"}
 }
 
 // Plain writes the message as plain lines.
@@ -80,10 +98,15 @@ func (m Message) Plain() string { return m.Render(PlainDialect()) }
 var slackEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
 
 // slackMarked writes bold or italic for Slack, which has no escape for
-// its own marker: the marker inside the text is dropped.
+// its own marker: text that holds the marker is written plain, never with
+// the marker dropped, so a name such as my_service stays whole.
 func slackMarked(mark string) func(string) string {
 	return func(s string) string {
-		return mark + slackEscaper.Replace(stripped(oneLine(s), mark)) + mark
+		s = slackEscaper.Replace(oneLine(s))
+		if strings.Contains(s, mark) {
+			return s
+		}
+		return mark + s + mark
 	}
 }
 
@@ -93,8 +116,10 @@ func slackFence(s string) string {
 		strings.ReplaceAll(s, "```", "``\u200b`")) + "\n```"
 }
 
-// SlackDialect writes Slack mrkdwn. Markers inside bold and code are
-// replaced, as Slack cannot escape them.
+// SlackDialect writes Slack mrkdwn. Slack cannot escape its markers:
+// bold or italic text that holds its marker is written plain, and a
+// backtick inside an inline code span becomes ˋ (U+02CB). Text that must
+// carry backticks belongs in a code block, which the composer uses.
 func SlackDialect() Dialect {
 	return Dialect{
 		Neutralize: NeutralizeMentions,
@@ -103,7 +128,7 @@ func SlackDialect() Dialect {
 		Italic:     slackMarked("_"),
 		Code: func(s string) string {
 			return "`" + slackEscaper.Replace(
-				strings.ReplaceAll(oneLine(s), "`", "ˋ")) + "`"
+				strings.ReplaceAll(foldLines(s), "`", "ˋ")) + "`"
 		},
 		Fence:  slackFence,
 		Bullet: "• ", Gap: "\n", Ellipsis: "...",
@@ -134,10 +159,14 @@ func MarkdownDialect(neutralize func(string) string, gap string) Dialect {
 }
 
 // googleChatMarked writes bold or italic for Google Chat, which has no
-// escape for its markers.
+// escape for its markers: text that holds the marker is written plain.
 func googleChatMarked(mark string) func(string) string {
 	return func(s string) string {
-		return mark + stripped(oneLine(s), mark) + mark
+		s = oneLine(s)
+		if strings.Contains(s, mark) {
+			return s
+		}
+		return mark + s + mark
 	}
 }
 
@@ -149,7 +178,7 @@ func GoogleChatDialect() Dialect {
 		Bold:       googleChatMarked("*"),
 		Italic:     googleChatMarked("_"),
 		Code: func(s string) string {
-			return "`" + strings.ReplaceAll(oneLine(s), "`", "ˋ") + "`"
+			return "`" + strings.ReplaceAll(foldLines(s), "`", "ˋ") + "`"
 		},
 		Fence: func(s string) string {
 			return "```\n" + strings.ReplaceAll(s, "```", "``\u200b`") +
@@ -159,10 +188,11 @@ func GoogleChatDialect() Dialect {
 	}
 }
 
-// htmlTag writes text escaped between <name> and </name>.
-func htmlTag(name string) func(string) string {
+// htmlTag writes text escaped between <name> and </name>. fold puts the
+// text on one line.
+func htmlTag(name string, fold func(string) string) func(string) string {
 	return func(s string) string {
-		return "<" + name + ">" + html.EscapeString(oneLine(s)) +
+		return "<" + name + ">" + html.EscapeString(fold(s)) +
 			"</" + name + ">"
 	}
 }
@@ -179,7 +209,8 @@ func HTMLDialect(neutralize func(string) string, br bool) Dialect {
 	}
 	return Dialect{
 		Neutralize: neutralize, Text: html.EscapeString,
-		Bold: htmlTag("b"), Italic: htmlTag("i"), Code: htmlTag("code"),
+		Bold: htmlTag("b", oneLine), Italic: htmlTag("i", oneLine),
+		Code: htmlTag("code", foldLines),
 		Fence: func(s string) string {
 			return "<pre>" + html.EscapeString(s) + "</pre>"
 		},
@@ -199,12 +230,18 @@ func JiraDialect() Dialect {
 		Text:       jiraEscaper.Replace,
 		Bold:       wrapper("*", jiraEscaper.Replace),
 		Italic:     wrapper("_", jiraEscaper.Replace),
+		// A brace cannot be escaped inside a span, so text with one is
+		// written as a block (see SpanFits) and never loses a byte.
+		SpanFits: func(s string) bool {
+			return !strings.ContainsAny(s, "{}")
+		},
 		Code: func(s string) string {
 			// Wiki markup still acts inside {{ }}: [~user] mentions,
 			// *bold* and _italic_ all apply, so the text is escaped.
-			// A brace cannot be escaped inside a span, so it is dropped.
+			// Text with a brace never reaches here through Render; a
+			// caller that asks for a span anyway gets it without them.
 			return "{{" +
-				jiraEscaper.Replace(stripped(oneLine(s), "{}")) + "}}"
+				jiraEscaper.Replace(stripped(foldLines(s), "{}")) + "}}"
 		},
 		Fence: func(s string) string {
 			return "{noformat}\n" +

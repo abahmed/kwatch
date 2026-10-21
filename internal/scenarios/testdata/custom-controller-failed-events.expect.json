@@ -1,0 +1,8 @@
+{
+  "name": "custom-controller-failed-events",
+  "description": "A custom resource's controller repeats a Warning event reasoned Failed: a digest line that quotes it.",
+  "root": "order.acme.example.com/infra/web-tls",
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "1h0m0s"
+}

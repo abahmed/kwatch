@@ -28,7 +28,7 @@ read the header there for how they relate.
 | pipeline `restoreGrace` | 10m | restored incidents wait this long for findings to return |
 | announce `StartupWindow` | 2m | cold-start announcements are collected into one summary |
 | announce `outageHoldMax` (`announce/timings.go`) | 30s | a namespace outage waits this long for its siblings |
-| announce `outageWindow` | 10m | incidents opened this close are one outage |
+| announce `outageWindow` | 10m | incidents opened this close are one outage; a later failure of the namespace within it joins that outage |
 | announce `outageIncidents` / `outageMinShare` | 5 / 3 | incidents that make an outage alone / when at least half the namespace |
 | coverage `Every` / `After` / `Retry` | 5m / 15m / 30m | coverage check cadence, wait before a workload is believed lost, quiet time after a hand-back |
 | explain `SignatureWindow` / `SignatureMinWorkloads` | 30m / 3 | failures sharing one error began this close; this many workloads |

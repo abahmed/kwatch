@@ -1,7 +1,9 @@
 package compose
 
 import (
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
 )
@@ -16,7 +18,11 @@ const weightHowFailed = 0.05
 // They describe the past only.
 func howFailedSentences(f caseFacts) []sentence {
 	for _, m := range f.members {
-		if text := howFailedText(m); text != "" {
+		name := ""
+		if !f.aboutLead(m.Entity) {
+			name = f.memberName(m.Entity)
+		}
+		if text := howFailedText(m, name); text != "" {
 			return []sentence{{part: partProof, weight: weightHowFailed,
 				text: text}}
 		}
@@ -24,23 +30,49 @@ func howFailedSentences(f caseFacts) []sentence {
 	return nil
 }
 
-// howFailedText writes "Its last run lasted 4s; 14 restarts in
-// the 2h10m since the pod was created." from whichever facts exist.
-func howFailedText(m detection.Finding) string {
+// howFailedText writes "Its last run lasted ten seconds; 14 restarts
+// since its pod was created two hours ago." from whichever facts exist.
+// A member that is not the lead's own subject is named instead of "its":
+// "The last run of container app in pod api-7d9f lasted ten seconds".
+func howFailedText(m detection.Finding, name string) string {
 	ran := evidence(m, detection.EvidenceRanFor)
 	span := evidence(m, detection.EvidenceRestartSpan)
 	restarts := evidence(m, "restarts")
 	var parts []string
 	if ran != "" {
-		parts = append(parts, "its last run lasted "+ran)
+		parts = append(parts, lastRunText(name)+" lasted "+
+			spokenSeconds(ran))
 	}
-	if span != "" && restarts != "" {
-		parts = append(parts, restarts+" restarts in the "+span+
-			" since its pod was created")
+	if text := restartsText(restarts, span, name != ""); text != "" {
+		parts = append(parts, text)
 	}
 	if len(parts) == 0 {
 		return ""
 	}
 	text := strings.Join(parts, "; ")
 	return strings.ToUpper(text[:1]) + text[1:] + "."
+}
+
+// lastRunText is "its last run", or "the last run of NAME".
+func lastRunText(name string) string {
+	if name == "" {
+		return "its last run"
+	}
+	return "the last run of " + name
+}
+
+// restartsText is "14 restarts since its pod was created two hours
+// ago", or "" without a count and the span since the pod was created.
+func restartsText(restarts, span string, named bool) string {
+	count, err := strconv.Atoi(restarts)
+	d, spanErr := time.ParseDuration(span)
+	if err != nil || spanErr != nil {
+		return ""
+	}
+	pod := "its pod"
+	if named {
+		pod = "the pod"
+	}
+	return plural(count, "restart") + " since " + pod + " was created " +
+		humanDuration(d) + " ago"
 }

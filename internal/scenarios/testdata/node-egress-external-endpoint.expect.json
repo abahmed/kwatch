@@ -1,0 +1,12 @@
+{
+  "name": "node-egress-external-endpoint",
+  "description": "One node's pods time out on an external database that answers kwatch's probe and the other nodes' pods.",
+  "root": "node//n3",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "external-endpoint//ext-db.corp.example:5432",
+    "zone//zone-a"
+  ],
+  "ambiguous": true
+}

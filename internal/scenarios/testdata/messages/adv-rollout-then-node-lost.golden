@@ -1,0 +1,14 @@
+10:04:38 settled
+🔴 Node n2 (prod-eu-1) has not reported for about two minutes. It reports "Kubelet stopped posting node status." kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable. To check the node's conditions and recent events, run kubectl describe node n2
+🔴 Node n2 (prod-eu-1) has not reported for about two minutes.
+| 🔴 Node n2 (**prod-eu-1**) has not reported for about two minutes.
+| It reports `Kubelet stopped posting node status.`
+| kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n2
+| ```
+10:06:48 material change
+🔴 Node n2 (prod-eu-1) is spreading to cart, catalog and search in shop: they have not been ready for three minutes.
+🔴 Node n2 (prod-eu-1) is spreading to cart, catalog and search in shop: they have not been ready for three minutes.
+| 🔴 Node n2 (**prod-eu-1**) is spreading to **cart**, **catalog** and **search** in shop: they have not been ready for three minutes.

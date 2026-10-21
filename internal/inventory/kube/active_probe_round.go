@@ -29,17 +29,31 @@ const (
 	minGuardedDependencies = 3
 )
 
-// probeBatch runs probes concurrently and collects what they observe.
+// maxProbeConcurrency bounds the probes of one batch in flight, so a
+// cluster with thousands of Services or dependencies does not open
+// thousands of sockets at once.
+const maxProbeConcurrency = 32
+
+// probeBatch runs probes concurrently and collects what they observe. run
+// and wait are called by one goroutine.
 type probeBatch struct {
 	mu           sync.Mutex
 	wg           sync.WaitGroup
+	slots        chan struct{}
 	observations []inventory.Observation
 }
 
+// run starts probe, waiting for a free slot first when
+// maxProbeConcurrency probes are already in flight.
 func (b *probeBatch) run(probe func() inventory.Observation) {
+	if b.slots == nil {
+		b.slots = make(chan struct{}, maxProbeConcurrency)
+	}
 	b.wg.Add(1)
+	b.slots <- struct{}{}
 	go func() {
 		defer b.wg.Done()
+		defer func() { <-b.slots }()
 		var observation inventory.Observation
 		// A panicking probe adds no observation; the next round retries.
 		if err := safego.Run("active-probe", func() error {

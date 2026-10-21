@@ -1,0 +1,8 @@
+11:01:15 settled
+🔴 Service api in shop (prod-eu-1) selects app=apii, but no pod or workload template in shop has those labels. To see the object's state and events, run kubectl describe service api -n shop
+🔴 Service api in shop (prod-eu-1) selects app=apii, but no pod or workload template in shop has those labels.
+| 🔴 Service **api** in **shop** (**prod-eu-1**) selects app=apii, but no pod or workload template in **shop** has those labels.
+| To see the object's state and events, run
+| ```
+| kubectl describe service api -n shop
+| ```

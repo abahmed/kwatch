@@ -162,8 +162,13 @@ func TestDigestAuditEntryCarriesContent(t *testing.T) {
 	require.NotNil(t, listed)
 	assert.Equal(t, announce.MaxAuditItems+5, listed.Opened)
 	assert.Equal(t, 1, listed.Resolved)
-	assert.Len(t, listed.Items, announce.MaxAuditItems, "bounded")
+	require.Len(t, listed.Items, announce.MaxAuditItems+1,
+		"bounded, with one item for the rest")
 	assert.Contains(t, listed.Items[0], "i00: ")
+	hidden := listed.Items[announce.MaxAuditItems]
+	assert.Contains(t, hidden, "and 6 more: ")
+	assert.Contains(t, hidden, "i104", "every hidden incident is named")
+	assert.Contains(t, hidden, "old", "the resolved one too")
 
 	entry := AuditEntry(incident.Decision{Reason: "digest"}, (*sent)[0],
 		scopeNow)

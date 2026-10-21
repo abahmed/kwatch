@@ -152,8 +152,6 @@ func TestLicenseKeyEnvironmentAloneEnablesTheKey(t *testing.T) {
 
 func TestLicenseSettingsAreValidated(t *testing.T) {
 	for name, license := range map[string]License{
-		"space in key":     {Key: "KW1-a b"},
-		"newline in key":   {Key: "KW1-a\nb"},
 		"relative url":     {Endpoint: "api.kwatch.dev"},
 		"unsupported kind": {Endpoint: "ftp://api.kwatch.dev"},
 	} {

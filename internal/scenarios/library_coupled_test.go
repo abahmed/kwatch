@@ -188,7 +188,10 @@ func coupledTwin(
 	return scenario{
 		expect: expectation{
 			Name: name, Description: story, Root: root, Tier: "notify",
-			MaxMessages:  2,
+			MaxMessages: 2,
+			// Nothing in the cluster tells the image from the config:
+			// naming both as possible causes is the honest answer.
+			Ambiguous:    true,
 			MustNotBlame: []string{"node//n1", "node//n2"},
 		},
 		build: func(c *cluster) { coupledChange(c, k, trace) },

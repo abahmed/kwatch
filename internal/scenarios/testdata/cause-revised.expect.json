@@ -7,5 +7,6 @@
   "mustNotBlame": [
     "node//n1",
     "zone//zone-a"
-  ]
+  ],
+  "revisesRoot": true
 }

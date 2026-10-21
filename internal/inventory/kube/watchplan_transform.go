@@ -5,6 +5,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/tools/cache"
 )
 
 // lastAppliedAnnotation holds a full copy of the object; it is dropped
@@ -50,6 +52,15 @@ func statusTransform(obj any) (any, error) {
 		}
 	}
 	return out, nil
+}
+
+// transformFor picks the cache transform of a status watch: the RBAC
+// kinds keep their own compact form, every other kind the status subset.
+func transformFor(gvr schema.GroupVersionResource) cache.TransformFunc {
+	if isRBACResource(gvr) {
+		return rbacTransform
+	}
+	return statusTransform
 }
 
 // metadataTransform trims a metadata-only object.

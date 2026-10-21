@@ -82,7 +82,32 @@ func TestCertificateExpiredButUnreferencedIsAWarning(t *testing.T) {
 	require.Len(t, findings, 1)
 	assert.Equal(t, detection.Warning, findings[0].Severity)
 	assert.Contains(t, findings[0].Summary,
-		"nothing in the cluster references it")
+		"no pod or Ingress mounts or references it")
+}
+
+// A Secret an Ingress would use is not in the model when Ingresses are
+// not synced: the detector cannot say nothing references it, and cannot
+// say something does either. It states the fact it has, as a warning:
+// a critical needs a user that is known.
+func TestCertificateExpiredWithUnsyncedUsersMakesNoClaim(t *testing.T) {
+	for _, kind := range []inventory.Kind{kube.KindIngress, kube.KindPod} {
+		m := newTestModel()
+		secret := newID(kube.KindSecret, "shop", "web-tls")
+		put(m, secret, t0, map[string]inventory.Value{
+			kube.AttrCertExpiry: inventory.Time(t0.Add(-time.Hour))})
+		unsynced := func(k inventory.Kind) bool { return k != kind }
+
+		got := evaluate(Certificate{}, m, t0, secret, unsynced)
+
+		require.Len(t, got.Findings, 1, string(kind))
+		f := got.Findings[0]
+		assert.Equal(t, detection.Warning, f.Severity, string(kind))
+		assert.Equal(t, "TLS certificate expired 1h ago", f.Summary)
+		assert.NotContains(t, f.Summary, "references", string(kind))
+		assert.NotContains(t, f.Summary, "nothing", string(kind))
+		assert.Equal(t, []inventory.Kind{kind}, got.Unsynced,
+			"evaluated again once %s syncs", kind)
+	}
 }
 
 // A pod that mounts the Secret uses the certificate: the finding is
@@ -227,8 +252,8 @@ func TestMissingSkipsFinishedAndDeletingPods(t *testing.T) {
 	}
 }
 
-// A pod that already runs read its Secret at start. The deletion only
-// matters at the next restart, so it is a heads-up, not an outage.
+// A pod that already runs read its Secret at start, so nothing has
+// failed: it is a heads-up with the fact that the pod runs, not an outage.
 func TestMissingDowngradesARunningReadyPod(t *testing.T) {
 	m, pod := podMissingSecret(map[string]inventory.Value{
 		kube.AttrPhase: inventory.Text("Running"),
@@ -240,5 +265,6 @@ func TestMissingDowngradesARunningReadyPod(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, detection.Info, got[0].Severity)
 	assert.True(t, got[0].Advisory)
-	assert.Contains(t, got[0].Summary, "next restart")
+	assert.Contains(t, got[0].Summary, "the pod is running now")
+	assert.NotContains(t, got[0].Summary, "will fail")
 }

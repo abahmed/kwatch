@@ -7,7 +7,8 @@ same root has recovered `FlapCycles` times within `FlapWindow`) and the
 decision is `Announce`. The tier decides the audience: page, notify or
 digest (`policy.go`). A page that follows another page of the same failure
 within `RepageWindow` is held at notify, so one flapping outage does not
-page again and again (`isPage` and `reachedPaging` in `flags.go` say what
+page again and again (a flapper that keeps coming back reaches the pagers once
+more, see [Reopen](./reopen.md)) (`isPage` and `reachedPaging` in `flags.go` say what
 counts as a page). After the announcement the tier only falls when
 nothing but digest findings is left, never from a page (see
 [Updates](./updates.md)).
@@ -35,6 +36,13 @@ feel the failure:
    call metrics; until then it notifies once and waits for the digest,
    see `idle_webhook.go`), or a node, which takes its capacity and
    its network plugin with it (`node-lost`).
+
+One page stands for the problems of its own namespace. A roll-up or an
+outage message of several page-tier incidents pages the first of each
+namespace and holds the others at notify (`holdCoveredPages`); a page of
+another namespace is another team's outage and is never held. A
+node outage page is held only beside a page of the same story, that is the
+same namespace and settle window, or the same chain (`pagedBeside`).
 
 Everything else that is critical notifies; what is only worth knowing waits
 for the digest. The rules live in code and are listed here, so change both

@@ -186,39 +186,6 @@ func TestEngineUpdateReleasesHeldAnnouncementFirst(t *testing.T) {
 	close(g.release)
 }
 
-func TestEngineSendsAtOnceWhenEveryInvestigationSlotIsBusy(t *testing.T) {
-	clock := &fakeClock{now: time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)}
-	g := newGatedInvestigator()
-	sink := &sinkLog{}
-	e := investigatingEngine(t, clock, g, sink)
-	startPool(t, e)
-	var first, rest []incident.Decision
-	for i := range investigationWorkers {
-		first = append(first, announcement(string(rune('a'+i))))
-	}
-	for i := range investigationQueue + 2 {
-		rest = append(rest, announcement(string(rune('A'+i))))
-	}
-	e.announcer.deliver(context.Background(), clock.now, first)
-	for range investigationWorkers {
-		<-g.started
-	}
-
-	e.announcer.deliver(context.Background(), clock.now, rest)
-
-	if got := len(sink.all()); got != 2 {
-		t.Fatalf("sent %d at once, want the 2 without a slot", got)
-	}
-	want := investigationWorkers + investigationQueue
-	if len(e.announcer.held) != want {
-		t.Fatalf("held %d, want %d", len(e.announcer.held), want)
-	}
-	if s := e.Stats(); s.InvestigationsSkipped != 2 {
-		t.Fatalf("skipped = %d, want 2", s.InvestigationsSkipped)
-	}
-	close(g.release)
-}
-
 func TestEngineDeliversWithoutInvestigator(t *testing.T) {
 	sink := &sinkLog{}
 	e := newTestEngine(t, &fakeClock{}, sink.sink, nil)

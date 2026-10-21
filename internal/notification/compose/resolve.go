@@ -28,7 +28,7 @@ func resolveNote(f caseFacts) (string, []sentence) {
 	lead := sentence{part: partLead, text: capitalName(subject,
 		f.leadName(subject)+" "+resolution(f, subject)+".")}
 	lasted := "it was " + downWord(p) + " for " +
-		humanDuration(p.FailedFor()) + resolvedCause(f, subject)
+		humanDuration(failedSpan(p)) + resolvedCause(f, subject)
 	detail := sentenceCase(lasted)
 	if fix := resolveFixer(f, subject); fix != "" {
 		detail = fix + "; " + lasted + "."
@@ -85,8 +85,11 @@ func nodeDeleted(f caseFacts, node inventory.EntityID) bool {
 	return f.fix != nil && f.fix.Deleted && f.fix.Entity == node
 }
 
+// downWord is "down" for an incident that paged, "failing" otherwise. An
+// incident moved to another root was paged for the first one: what the
+// current root did is "failing", which it does not overstate.
 func downWord(p incident.Incident) string {
-	if p.Tier == incident.Page {
+	if p.Tier == incident.Page && !movedAway(p) {
 		return "down"
 	}
 	return "failing"

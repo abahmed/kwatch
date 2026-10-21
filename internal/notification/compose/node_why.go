@@ -10,9 +10,14 @@ import (
 )
 
 // unknownNodeText says what kwatch cannot know when the kubelet went
-// silent: the node's own words are only "stopped posting".
+// silent: the node's own words are only "stopped posting". The plural is
+// for an outage of several nodes.
 const unknownNodeText = "kwatch cannot see why from inside the cluster: " +
 	"the kubelet stopped reporting, so the node may be down or unreachable."
+
+const unknownNodesText = "kwatch cannot see why from inside the cluster: " +
+	"the kubelets stopped reporting, so the nodes may be down or " +
+	"unreachable."
 
 // nodeLead reports a case led by one node that is NotReady or silent.
 func nodeLead(f caseFacts) bool {
@@ -33,37 +38,55 @@ func nodeWhySentences(f caseFacts) []sentence {
 			text: endSentence(text)})
 	}
 	if evidence(f.lead, detection.EvidenceReadyStatus) == "Unknown" {
-		out = append(out, sentence{part: partUnverified,
-			text: unknownNodeText})
+		text := unknownNodeText
+		if leadIsNodes(f) {
+			text = unknownNodesText
+		}
+		out = append(out, sentence{part: partUnverified, text: text})
 	}
 	return out
 }
 
 // nodeWhyText is the one proof sentence: what the node reports, also
-// which conditions are True, and which events it logged.
+// which conditions are True, and which events it logged. An outage of
+// several nodes says "They report" and "Their".
 func nodeWhyText(f caseFacts) string {
+	it, its, reports := "It", "Its", "reports"
+	if leadIsNodes(f) {
+		it, its, reports = "They", "Their", "report"
+	}
 	text := ""
 	if said := evidence(f.lead, "error", "message"); said != "" {
-		text = "It reports " + quoted(specificPart(said))
+		text = it + " " + reports + " " + quoted(specificPart(said))
 		if cert := explain.CertificateError(said); cert != "" {
-			text = "Its kubelet reports " + quoted(cert)
+			text = its + " kubelet" + pluralS(leadIsNodes(f)) + " " +
+				reports + " " + quoted(cert)
 		}
 	}
 	conditions := evidenceAll(f.lead, detection.EvidenceNodeCondition)
 	events := evidenceAll(f.lead, detection.EvidenceNodeEvent)
 	switch {
 	case len(conditions) > 0 && text == "":
-		text = "It reports " + joinAnd(conditions, maxNamed)
+		text = it + " " + reports + " " + joinAnd(conditions, maxNamed)
 	case len(conditions) > 0:
 		text += " and also " + joinAnd(conditions, maxNamed)
 	}
 	switch {
 	case len(events) > 0 && text == "":
-		text = "Its recent events include " + joinAnd(events, maxNamed)
+		text = its + " recent events include " + joinAnd(events, maxNamed)
 	case len(events) > 0:
-		text += "; its recent events include " + joinAnd(events, maxNamed)
+		text += "; " + strings.ToLower(its) + " recent events include " +
+			joinAnd(events, maxNamed)
 	}
 	return text
+}
+
+// pluralS is "s" for a plural noun.
+func pluralS(many bool) string {
+	if many {
+		return "s"
+	}
+	return ""
 }
 
 // evidenceAll is every non-empty value under one label.

@@ -4,9 +4,8 @@
 | 🟠 Autoscaler **thirdparty** in **staging** (**prod-eu-1**) cannot read its scale target.
 | It reports
 | ```
-| the HPA controller was unable to get the target's current scale: deployments.apps
+| the HPA controller was unable to get the target's current scale: deployments.apps "thirdparty" not found
 | ```
-| **thirdparty**`not found`.
 | To see the object's state and events, run
 | ```
 | kubectl describe horizontalpodautoscaler thirdparty -n staging
@@ -17,6 +16,5 @@
 | 🟡 Cause now known: Autoscaler **thirdparty** in **staging** (**prod-eu-1**) targets Deployment **thirdparty**, which does not exist.
 | It reports
 | ```
-| the HPA controller was unable to get the target's current scale: deployments.apps
+| the HPA controller was unable to get the target's current scale: deployments.apps "thirdparty" not found
 | ```
-| **thirdparty**`not found`.

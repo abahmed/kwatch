@@ -57,7 +57,8 @@ func graceKillFindings(
 		Reason: reasons.PodKilledAtGrace, Severity: detection.Warning,
 		Since: last,
 		Summary: "Pod did not stop within its " +
-			strconv.Itoa(int(grace)) + "s grace period and was killed",
+			strconv.Itoa(int(grace)) + "-second grace period and " +
+			"was killed",
 		Evidence: evidence,
 	}}
 }

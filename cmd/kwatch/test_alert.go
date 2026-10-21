@@ -71,9 +71,15 @@ func runTestAlert(
 		_, _ = fmt.Fprintf(errOut, "ERROR: %v\n", err)
 		return testAlertFailed
 	}
-	am, code := constructProviders(cfg, errOut)
+	edition := currentEdition(now)
+	am, code := constructProviders(cfg, edition, errOut)
 	if code != 0 {
 		return testAlertFailed
+	}
+	if sends := edition.CommunitySends(cfg); sends != "" {
+		_, _ = fmt.Fprintf(out, "The Community edition sends to "+
+			"%s; the inactive providers get no alerts and no test.\n\n",
+			sends)
 	}
 	text := testAlertText(cfg.App.ClusterName, parsed.sender, now())
 	return deliverTestAlert(am, parsed.provider, text, out, errOut)

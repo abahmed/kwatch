@@ -17,12 +17,12 @@ import (
 // them all. The thresholds are in timings.go.
 
 // isOutageCandidate reports an announcement that may belong to an
-// outage: worth a message of its own and not explained by a cause, which
-// would already tie it to the other failures.
+// outage: worth a message of its own and not explained by a cause beyond
+// itself, which would already tie it to the other failures.
 func isOutageCandidate(d incident.Decision) bool {
 	p := d.Incident
 	return d.Action == incident.Announce && p.Tier >= incident.Notify &&
-		p.Cause == nil && p.Root.Namespace != ""
+		p.Standalone() && p.Root.Namespace != ""
 }
 
 // isOutage reports whether count incidents in a namespace of total

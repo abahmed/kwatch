@@ -77,6 +77,9 @@ const (
 	// ProofOneWorkload: only one workload fails behind a shared cause
 	// (shared).
 	ProofOneWorkload ProofCode = "one-workload"
+	// ProofFillsDisks: the pods of a workload hold most of the disk in use
+	// on each of Count nodes whose disk is short (shared).
+	ProofFillsDisks ProofCode = "fills-disks"
 	// ProofBaseline: the cause deviates Count percent from its learned
 	// baseline (baseline).
 	ProofBaseline ProofCode = "baseline"
@@ -96,4 +99,9 @@ const (
 	// ProofDoubtfulData: some of the data is doubtful; Text says what
 	// (quality).
 	ProofDoubtfulData ProofCode = "doubtful-data"
+	// ProofNamedLikeHandler: the workloads in Fields ("deployment
+	// ns/name") are named like the controller of a finalizer's API
+	// group, but nothing confirms that they serve it. It is a note, not
+	// evidence: it never changes a score (finalizer).
+	ProofNamedLikeHandler ProofCode = "named-like-handler"
 )

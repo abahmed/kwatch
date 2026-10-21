@@ -84,6 +84,10 @@ type StatsConfig struct {
 	// Report, when set, receives every round's reachability summary. It
 	// runs on the poll goroutine and must not block.
 	Report func(StatsRound)
+	// Settling, when set, reports a node whose kubelet may legitimately
+	// not answer: one still booting, or leaving the cluster (see
+	// NodeSettling). Its failed reads do not degrade health.
+	Settling func(node inventory.EntityID, now time.Time) bool
 }
 
 // StatsPoller reads /stats/summary from every node's kubelet and records
@@ -160,8 +164,8 @@ func (p *StatsPoller) poll(ctx context.Context) {
 			err := safego.Run("kubelet-stats", func() error {
 				return p.pollNode(ctx, roundCtx, node, now)
 			})
-			tally.add(node, err)
-			p.recordReach(ctx, node, now, err)
+			failures := p.recordReach(ctx, node, now, err)
+			tally.add(node, err, p.failureExpected(node, now, err, failures))
 		}()
 	}
 	wg.Wait()

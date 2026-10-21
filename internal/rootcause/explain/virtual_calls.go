@@ -123,7 +123,8 @@ func (v *view) calledModes(
 ) []modeHealth {
 	switch {
 	case id.Kind == KindExternalEndpoint && link == LinkCalls:
-		if call, ok := v.callOf(effect); ok && call.endpoint == id.Name {
+		if call, ok := v.callOf(effect); ok && call.endpoint == id.Name &&
+			!v.endpointAnswers(id, effect) {
 			return pseudoFailing(ModeEndpointFailing + "." + call.class)
 		}
 	case id.Kind == KindFailureSignature && link == LinkSharesError:
@@ -149,11 +150,8 @@ func (v *view) callOf(id inventory.EntityID) (endpointCall, bool) {
 	}
 	var found endpointCall
 	for _, f := range v.unitFindings(unit) {
-		for _, e := range f.Evidence {
-			if e.Label == probeEvidenceLabel {
-				continue
-			}
-			call, ok := endpointIn(e.Value)
+		for _, text := range v.callTexts(f) {
+			call, ok := endpointIn(text)
 			if ok && !v.inCluster(endpointHost(call.endpoint), unit) {
 				found = call
 				break
@@ -165,6 +163,22 @@ func (v *view) callOf(id inventory.EntityID) (endpointCall, bool) {
 	}
 	v.calls[unit] = found
 	return found, found.endpoint != ""
+}
+
+// callTexts are the words of a failing unit that may name a call: the
+// evidence of its finding, except the kubelet's own probe message, and
+// the previous log line the finding does not quote.
+func (v *view) callTexts(f detection.Finding) []string {
+	var out []string
+	for _, e := range f.Evidence {
+		if e.Label != probeEvidenceLabel {
+			out = append(out, e.Value)
+		}
+	}
+	if line := v.previousLogLine(f.Entity); line != "" {
+		out = append(out, line)
+	}
+	return out
 }
 
 // signatureOf is the error signature of the failing pod of id, read
@@ -183,21 +197,33 @@ func (v *view) signatureOf(id inventory.EntityID) (string, bool) {
 	}
 	name := ""
 	for _, f := range v.unitFindings(unit) {
-		for _, e := range f.Evidence {
-			if e.Label != "error" {
-				continue
-			}
-			if signature := normalizeSignature(e.Value); signature != "" {
-				name = signatureName(f.Mode, signature)
-				break
-			}
-		}
+		name = v.findingSignature(f)
 		if name != "" {
 			break
 		}
 	}
 	v.signatures[unit] = name
 	return name, name != ""
+}
+
+// findingSignature names the error of one finding: its "error"
+// evidence, else the previous log line the finding does not quote.
+func (v *view) findingSignature(f detection.Finding) string {
+	texts := []string{}
+	for _, e := range f.Evidence {
+		if e.Label == "error" {
+			texts = append(texts, e.Value)
+		}
+	}
+	if line := v.previousLogLine(f.Entity); line != "" {
+		texts = append(texts, line)
+	}
+	for _, text := range texts {
+		if signature := normalizeSignature(text); signature != "" {
+			return signatureName(f.Mode, signature)
+		}
+	}
+	return ""
 }
 
 // unitOf is the pod that fails for id: the pod itself, or a

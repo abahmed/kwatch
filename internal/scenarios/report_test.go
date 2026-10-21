@@ -34,6 +34,8 @@ func renderReport(c card, gates []scorecard.Gate) string {
 		c.multi.messages, c.multi.peak)
 	b.WriteString(firstMessageLine(c.firstMessages))
 	b.WriteString(calibrationLine(c.cases))
+	b.WriteString(foundLine(c.accuracy, c.verdicts))
+	b.WriteString(firstRootLine(c.firstRoots, c.neverRoot))
 	b.WriteString("\n## Scenarios\n\n")
 	b.WriteString(scenarioTable(c.verdicts))
 	b.WriteString("\n## Held-out scenarios\n\n")
@@ -124,25 +126,7 @@ func joinCases(cases []scorecard.Case) (string, string) {
 
 // outcome summarises every way a scenario missed its label.
 func outcome(v verdict) string {
-	var misses []string
-	for _, c := range v.cases {
-		if !c.Correct {
-			misses = append(misses, "wrong root")
-			break
-		}
-	}
-	if len(v.blamed) > 0 {
-		misses = append(misses, "blamed "+strings.Join(v.blamed, ", "))
-	}
-	if v.loud() {
-		misses = append(misses, "not quiet")
-	}
-	if v.overBudget() {
-		misses = append(misses, "over budget")
-	}
-	if !v.tierMatches() {
-		misses = append(misses, "tier")
-	}
+	misses := v.problems()
 	if len(misses) == 0 {
 		return "pass"
 	}

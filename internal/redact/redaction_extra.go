@@ -8,9 +8,19 @@ import (
 // allCredentialRules is every credential rule in the order it runs. The
 // extra rules go first: they match shapes (headers, escaped JSON, webhook
 // URLs) that the general key/value rules would otherwise only half cover.
-var allCredentialRules = append(
-	append([]redactionRule{}, extraRedactions...), credentialRedactions...,
+var allCredentialRules = joinRules(
+	extraRedactions, commandRedactions(), serviceRedactions,
+	credentialRedactions,
 )
+
+// joinRules is the rule lists one after the other, in order.
+func joinRules(lists ...[]redactionRule) []redactionRule {
+	var out []redactionRule
+	for _, list := range lists {
+		out = append(out, list...)
+	}
+	return out
+}
 
 const redacted = "[redacted]"
 
@@ -51,14 +61,16 @@ var extraRedactions = []redactionRule{
 	{pattern: regexp.MustCompile(
 		`(?i)(\b(?:[a-z0-9]+[_-])*pin(?:code)?"?\s*[:=]\s*["']?)\d{3,}`,
 	), placeholder: redacted, needs: []string{"pin"}},
-	// A bare "key=" is too common to redact blindly, so only a value that
-	// looks like a credential and has six or more characters goes. A
-	// key that continues a word, a dotted name or a snake_case name is
-	// not matched here; secret_key and api_key have their own rules.
+	// A bare "key=", "sig=" or "session=" is too common to redact blindly,
+	// so only a value that looks like a credential and has six or more
+	// characters goes. A key that continues a word, a dotted name or a
+	// snake_case name is not matched here; secret_key and api_key have
+	// their own rules.
 	{pattern: regexp.MustCompile(
-		`(?i)((?:^|[^a-z0-9_.-])key\s*=\s*)(` + secretValue + `)`,
+		`(?i)((?:^|[^a-z0-9_.-])(?:key|sig|session)\s*=\s*)(` +
+			secretValue + `)`,
 	), placeholder: redacted, skip: skipShortOrPlainKeyValue,
-		needs: []string{"key"}},
+		rebuild: rebuildKeyValue, needs: []string{"key", "sig", "session"}},
 	{pattern: regexp.MustCompile(
 		`(?i)(\bhooks\.slack\.com/services/)[A-Za-z0-9/_-]+`,
 	), placeholder: redacted},

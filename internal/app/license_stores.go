@@ -12,8 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
-
-	"github.com/abahmed/kwatch/internal/license"
 )
 
 const (
@@ -145,32 +143,6 @@ func (s kubeInstanceStore) DeactivatedAt(
 		return time.Time{}, nil
 	}
 	return time.Parse(time.RFC3339, string(raw))
-}
-
-// boltLeaseStore keeps the lease and the clock guard in the state file.
-type boltLeaseStore struct{ disk diskState }
-
-// LoadLease implements license.LeaseStore.
-func (s boltLeaseStore) LoadLease() (string, license.ClockGuard, error) {
-	var lease string
-	var clock license.ClockGuard
-	if _, err := s.disk.get(stateLicenseLease, &lease); err != nil {
-		return "", license.ClockGuard{}, err
-	}
-	if _, err := s.disk.get(stateLicenseClock, &clock); err != nil {
-		return "", license.ClockGuard{}, err
-	}
-	return lease, clock, nil
-}
-
-// SaveLease implements license.LeaseStore.
-func (s boltLeaseStore) SaveLease(
-	lease string, clock license.ClockGuard,
-) error {
-	if err := s.disk.put(stateLicenseLease, lease); err != nil {
-		return err
-	}
-	return s.disk.put(stateLicenseClock, clock)
 }
 
 // kubeSystemUID reads the kube-system namespace UID live. It is never

@@ -73,6 +73,7 @@ func (s UnstructuredSchema) Describe(obj any) (Description, bool) {
 		attrs[AttrObservedGen] = inventory.Number(float64(observed))
 	}
 	maps.Copy(attrs, KindNameAttributes(s.spelling))
+	setRBACAttributes(s.group, s.kind, u, attrs)
 	setConditions(attrs, s.conditions(u))
 	s.wellKnownStatus(u, attrs)
 	if ready, found, _ := unstructured.NestedBool(

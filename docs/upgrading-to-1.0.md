@@ -22,6 +22,7 @@ candidates, so they do not affect a v0.10.x install.
 | RBAC | One ClusterRole | Broader read access, Roles for the Lease, restart evidence and `kwatchconfigs` |
 | Memory | 128Mi limit | 512Mi limit, `GOMEMLIMIT` at 90% of it |
 | Custom config | None | `KwatchConfig` resource (`kwatch.abahmed.dev/v1beta1`) |
+| Editions | One feature set | Community (free, no key) and Pro; a v0.10.x install lands on **Community**, see [Editions](#editions) |
 
 ## Before you upgrade
 
@@ -78,12 +79,15 @@ Behaviour that now fails startup or `kwatch lint`, where v0.10.x ran:
 - An invalid `app.proxyURL` or an unreadable `app.caBundlePath`.
 - A route severity other than `critical`, `warning` or `info`.
 - A blank entry in a silence field or an `ignore*` list.
-- A boolean environment variable (`KWATCH_WATCH_SECRETS`,
-  `KWATCH_CRD_ENABLED`, `KWATCH_TELEMETRY`) with a value other than
-  `true`/`false`, `1`/`0`, `on`/`off` or `yes`/`no`.
 - `alert.zulip.url` unset. It is required.
 
 Other changes that can surprise you:
+
+- A boolean environment variable (`KWATCH_WATCH_SECRETS`,
+  `KWATCH_CRD_ENABLED`, `KWATCH_TELEMETRY`, `KWATCH_CLUSTER_CHECKINS`) with a
+  value other than `true`/`false`, `1`/`0`, `on`/`off` or `yes`/`no` no longer
+  stops kwatch: it logs a warning, ignores the value and takes the safe side
+  (telemetry and check-ins off, Secret watching off, `crd.enabled` unchanged).
 
 - `$${NAME}` now yields the literal text `${NAME}`. Before, it produced `$`
   followed by the value of `NAME`.
@@ -96,7 +100,44 @@ Other changes that can surprise you:
   `alert.ntfy.topic`.
 - Adoption telemetry is on by default in official builds. It sends an
   anonymous installation ID and the kwatch version. Turn it off with
-  `telemetry.enabled: false` or `KWATCH_TELEMETRY=false`.
+  `telemetry.enabled: false` or `KWATCH_TELEMETRY=false`. The installation ID
+  is derived with its own salt, separate from the license's cluster ID, so an
+  install that upgrades from a build that shared the salt reports a new ID
+  once.
+
+## Editions
+
+One binary runs two editions. Community needs no account and no key. A
+v0.10.x install has no license key, so v1.0.0 starts it as Community, and
+**Community runs less than v0.10.x did**:
+
+- Detection is pod failures (crash loops, OOM kills, scheduling, Pending) and
+  nodes that are not ready. Workloads, storage, network, admission,
+  certificates, quota, custom resources, the control plane, node pressure and
+  draining, readiness, and unusual events are Pro.
+- **One alert provider** runs. The edition keeps the one named by
+  `app.communityProvider`; without it, a paging service, then chat, then
+  email, with the name breaking a tie. Every other configured provider is
+  inactive, and so are provider routes, fallbacks, hourly budgets and
+  templates. If a paging service is left inactive, the start logs a warning:
+  nothing is paged through it until you name it or get Pro.
+- Pro settings in your configuration stay valid but are ignored:
+  `namespaceSelector`, `reasons` filters, severity overrides, maintenance
+  annotations other than the defaults, runbooks, the heartbeat monitor, active
+  probes, a file audit log. Namespace include/exclude lists and silences keep
+  working. `kwatch lint` lists everything that is ignored.
+- Community keeps the incidents it announced across a restart, so their
+  resolves are still sent, but it does not keep the startup summary, the
+  fingerprints that find changes made while kwatch was down, or flapping
+  and reminder state.
+
+kwatch tells you once: the first start in an edition that ignores part of your
+configuration sends a notice to your alert provider naming the ignored
+settings, and logs a warning. To get Pro back, put the license key in the
+Secret the chart reads (`license.existingSecret`) or in `KWATCH_LICENSE_KEY`;
+the pod rebuilds in place when the key activates. A key that cannot run Pro
+is reported, never ignored silently: one warning per reason in the log, a
+`license` component on `/health` and a "Pro is disabled" notice.
 
 ## Alert keys: close open alerts by hand
 
@@ -171,7 +212,10 @@ The chart and `deploy/deploy.yaml` replace the old ClusterRole.
   `watch.secrets: false` to remove all Secret permissions.
 - Namespaced Roles add `get` on Pods in kwatch's own namespace (to explain a
   restart), Lease access limited by name to kwatch's own Lease, `get` on
-  Leases in `kube-system`, and `list`/`watch` on `kwatchconfigs`.
+  Leases in `kube-system`, `list`/`watch` on `kwatchconfigs`, and, when a
+  license key is configured, `get`/`update` on the one Secret
+  `kwatch-license-instance` (the chart renders that Role and the Secret only
+  with a key; the raw manifest always ships them).
 - If you maintain your own RBAC, compare it with `deploy/deploy.yaml`
   instead of the v0.10.x rules.
 
@@ -234,7 +278,9 @@ your file with `values.yaml` before upgrading.
 | `rbac.mode`, `watch.secrets` | New. See [RBAC and the CRD](#rbac-and-the-crd) |
 | `crd.install` | New, default `true` |
 | `networkPolicy.*` | New and off by default. With it on, `/health`, `/metrics` and `/status` accept only the release namespace, `networkPolicy.kubeletCIDRs` and `networkPolicy.healthIngressFrom` |
-| `podAnnotations` | Defaults now carry `karpenter.sh/do-not-disrupt` and `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`. Setting your own replaces them |
+| `podAnnotations` | The default carries `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"`; `karpenter.sh/do-not-disrupt` is not set (opt in with `podAnnotations`, see [production operations](./production-operations.md#node-autoscalers)). Your keys are merged with the default |
+| `priorityClassName`, `imagePullSecrets`, `extraVolumes`, `extraVolumeMounts` | New, all empty by default |
+| `license.*` | New: `existingSecret`, `key` and `instanceSecret`. The license instance Secret and its Role are rendered only when one of them is set |
 | `tolerations` | Merged with the new `defaultTolerations` (30-second `not-ready` and `unreachable` tolerations) |
 | `terminationGracePeriodSeconds` | New, default 60 |
 

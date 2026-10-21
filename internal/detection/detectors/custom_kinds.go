@@ -89,8 +89,8 @@ func certificateRequest(
 		if signer != kubeletServingSigner {
 			return detection.Finding{}, false
 		}
-		grace, since = DefaultServingApproval, valueSince(e,
-			kube.AttrCertificateIssued)
+		grace, since = DefaultServingApproval, clusterSince(e,
+			valueSince(e, kube.AttrCertificateIssued))
 		summary = "Kubelet serving certificate request is waiting for " +
 			"approval; kube-controller-manager never approves it"
 	}
@@ -102,6 +102,17 @@ func certificateRequest(
 		Health: detection.Failing, Since: since, Summary: summary,
 		Evidence: evidence,
 	}, true
+}
+
+// clusterSince is when the object was created by the cluster's own
+// record, so a wait that began before kwatch looked is not restarted by
+// it. An object without one counts from the fallback, kwatch's first
+// sight of the state.
+func clusterSince(e inventory.Entity, fallback time.Time) time.Time {
+	if created := timestamp(e, kube.AttrCreated); !created.IsZero() {
+		return created
+	}
+	return fallback
 }
 
 // claimUnallocated reports a ResourceClaim without an allocation whose
@@ -127,7 +138,7 @@ func claimUnallocated(
 			waiting = append(waiting, id.Name)
 		}
 	}
-	since := valueSince(e, kube.AttrAllocated)
+	since := clusterSince(e, valueSince(e, kube.AttrAllocated))
 	if len(waiting) == 0 || !sustained(ctx, "claim-unallocated", since,
 		DefaultClaimUnallocated) {
 		return detection.Finding{}, false

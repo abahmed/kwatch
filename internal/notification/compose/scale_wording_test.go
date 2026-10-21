@@ -26,15 +26,15 @@ func TestScaleIsNotWordedAsARelease(t *testing.T) {
 	assert.Equal(t, "scale-up", scaleNoun(up))
 	assert.Equal(t, "scale-down", scaleNoun(down))
 	assert.Equal(t, "scaling", scaleNoun(scaleChange("", "2")))
-	assert.Equal(t, "the replicas were scaled from 2 to 5 at 10:04",
+	assert.Equal(t, "the replicas were scaled from 2 to 5 at 10:04 UTC",
 		scaledText(up))
-	assert.Equal(t, "the 10:04 scale-up",
+	assert.Equal(t, "the 10:04 UTC scale-up",
 		changePhrase(up, up.Entity))
 
 	rollout := up
 	rollout.Fields = append(rollout.Fields, inventory.FieldChange{
 		Path: "spec.template", Before: "a", After: "b"})
 	assert.False(t, scaleOnly(rollout), "a template edit is a release")
-	assert.Equal(t, "the 10:04 release", changePhrase(rollout,
+	assert.Equal(t, "the 10:04 UTC release", changePhrase(rollout,
 		rollout.Entity))
 }

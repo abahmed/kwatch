@@ -101,7 +101,7 @@ func (r *editionRig) start(
 ) {
 	t.Helper()
 	ctx := context.Background()
-	plan, err := planEdition(ctx, r.disk, entitlementsOf(edition))
+	plan, err := planEdition(ctx, r.disk, entitlementsOf(edition), false)
 	require.NoError(t, err)
 	if markInitialized {
 		require.NoError(t, r.disk.MarkAsInitialized(ctx, "cluster", "v1"))
@@ -159,7 +159,7 @@ func TestEditionIsNotRecordedUntilCommit(t *testing.T) {
 		context.Background(), "cluster", "v0"))
 
 	_, err := planEdition(context.Background(), r.disk,
-		feature.CommunityEntitlements())
+		feature.CommunityEntitlements(), false)
 	require.NoError(t, err)
 	r.start(t, feature.CommunityEdition, false)
 

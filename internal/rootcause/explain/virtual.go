@@ -63,6 +63,7 @@ func (v *view) virtualHops(id inventory.EntityID) []hop {
 	}
 	if id.Kind == kube.KindNode {
 		out = append(out, v.drainBlockerHops(id)...)
+		out = append(out, v.diskHogHops(id)...)
 	}
 	out = append(out, v.scalerHops(id)...)
 	out = append(out, v.finalizerHops(id)...)

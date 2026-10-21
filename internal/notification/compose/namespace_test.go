@@ -28,8 +28,10 @@ func TestNamespaceOutageLeadCountsAndDatesTheFailures(t *testing.T) {
 	msg := Writer{}.NamespaceOutage(
 		NamespaceOutage{Namespace: "shop", Workloads: 15}, ds, now)
 
-	if msg.Title != "shop: 5 of 15 workloads failing since 10:02" {
-		t.Fatalf("title = %q", msg.Title)
+	if !strings.HasPrefix(msg.Title,
+		"shop: 5 of 15 workloads failing since 10:02") ||
+		!strings.HasSuffix(msg.Title, ".") {
+		t.Fatalf("title = %q, want a sentence", msg.Title)
 	}
 	if !msg.Opens || !strings.HasPrefix(msg.Key, "rollup/") ||
 		!strings.HasSuffix(msg.Key, "/shop") {
@@ -71,7 +73,7 @@ func TestNamespaceOutageStatesWhatIsShared(t *testing.T) {
 
 	if !strings.Contains(msg.Note, "They all ran on node n1.") ||
 		!strings.Contains(msg.Note, "Shortly before, bob changed") ||
-		!strings.Contains(msg.Note, "at 10:01") {
+		!strings.Contains(msg.Note, "at 10:01 UTC") {
 		t.Fatalf("note = %q", msg.Note)
 	}
 }

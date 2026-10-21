@@ -9,9 +9,12 @@
 // own and never used to tune the engine; see heldout_test.go. It holds
 // only tests; nothing imports it.
 //
-// Regenerate the committed logs after changing a scenario:
+// Regenerate the committed logs after changing a scenario, naming it:
 //
-//	go test ./internal/scenarios -run TestScenarioFixtures -update
+//	go test ./internal/scenarios -run 'TestScenarioFixtures/<name>$' -update
+//
+// testdata/ratchet.txt pins the labelled scenarios that pass, one by one;
+// see ratchet_test.go for how it holds them and how to move it on purpose.
 //
 // Report the gates (never fails) or enforce them:
 //

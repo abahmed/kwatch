@@ -1,8 +1,7 @@
 10:02:15 settled
-🟠 api in shop (prod-eu-1) cannot pull its image because registry registry.corp.example is rate limiting pulls. Every error mentions it. Two failing workloads all depend on it. worker is affected as well. To see why the container cannot start, run kubectl describe pod api-93301245-c -n shop
+🟠 api in shop (prod-eu-1) cannot pull its image because registry registry.corp.example is rate limiting pulls. Two failing workloads all depend on it. worker is affected as well. To see why the container cannot start, run kubectl describe pod api-93301245-c -n shop
 🟠 api in shop (prod-eu-1) cannot pull its image because registry registry.corp.example is rate limiting pulls.
 | 🟠 **api** in **shop** (**prod-eu-1**) cannot pull its image because registry **registry.corp.example** is rate limiting pulls.
-| Every error mentions it.
 | Two failing workloads all depend on it.
 | **worker** is affected as well.
 | To see why the container cannot start, run

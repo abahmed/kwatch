@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
@@ -38,6 +39,10 @@ type view struct {
 	rbac *[]inventory.EntityID
 	// removed memoises removedNodes; nil until it is computed.
 	removed *[]inventory.EntityID
+	// writers memoises groupWriters; nil until it is computed.
+	writers map[string][]inventory.EntityID
+	// logins memoises loggedIn per registry host; nil until computed.
+	logins map[string][]inventory.EntityID
 	// unverified names, per failure, the kinds kwatch could not see
 	// where a cause might have been.
 	unverified map[inventory.EntityID][]string
@@ -199,11 +204,28 @@ func (v *view) text(id inventory.EntityID) string {
 // recent notes. A summary that names a Service ("backend istiod has no
 // ready pods") is kwatch naming it, which proves nothing.
 func (v *view) errorText(id inventory.EntityID) string {
+	return v.errorParts(id, true)
+}
+
+// outsideText is errorText without the program's own last words (the
+// "error" evidence): what the cluster reports about the effect. A
+// program names itself in its own output ("orders: db down"), so those
+// words cannot show that its own workload is the cause.
+func (v *view) outsideText(id inventory.EntityID) string {
+	return v.errorParts(id, false)
+}
+
+func (v *view) errorParts(id inventory.EntityID, output bool) string {
 	var parts []string
 	for _, f := range v.s.Findings[id] {
 		for _, e := range f.Evidence {
-			parts = append(parts, e.Value)
+			if output || e.Label != detection.EvidenceError {
+				parts = append(parts, e.Value)
+			}
 		}
+	}
+	if line := v.previousLogLine(id); output && line != "" {
+		parts = append(parts, line)
 	}
 	sources := []inventory.EntityID{id}
 	if pod, ok := v.podOf(id); ok && pod != id {
@@ -213,6 +235,18 @@ func (v *view) errorText(id inventory.EntityID) string {
 		for _, note := range v.s.Model.Notes(source, v.since) {
 			parts = append(parts, note.Message)
 		}
+	}
+	return strings.Join(parts, " ")
+}
+
+// unitErrorText is errorText for a pod together with its containers,
+// which carry the crash that the pod itself only summarises.
+func (v *view) unitErrorText(pod inventory.EntityID) string {
+	parts := []string{v.errorText(pod)}
+	for _, container := range v.s.Model.Related(
+		pod, inventory.PartOf, inventory.Incoming,
+	) {
+		parts = append(parts, v.errorText(container))
 	}
 	return strings.Join(parts, " ")
 }
@@ -235,12 +269,17 @@ func (v *view) causeState(
 		return state{id: id}
 	}
 	modes := findingModes(v.s.Findings[id])
-	modes = append(modes, v.changeModes(id)...)
+	modes = append(modes, v.changeModes(id, effect, link)...)
 	if link == LinkSelf {
 		// A workload's own faults are read from the failing container.
 		modes = append(modes, v.selfConfigModes(effect)...)
 	} else {
 		modes = append(modes, v.virtualModes(id, effect, link)...)
+	}
+	if link == LinkUses && id.Kind == kube.KindSecret &&
+		v.pullFailing(effect) && !v.isPullLogin(id, effect) {
+		// A failed pull blames a Secret only as the pod's login.
+		modes = withoutPseudo(modes)
 	}
 	return state{id: id, modes: modes}
 }

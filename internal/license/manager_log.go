@@ -66,3 +66,38 @@ func planName(plan string) string {
 	}
 	return "Pro"
 }
+
+// unusable is a state that leaves a configured key without Pro for a reason
+// the operator can act on. Pending (no answer yet) is not one of them.
+func unusable(s State) bool {
+	switch s {
+	case StateInvalid, StateExpired, StateRevoked, StateConflict:
+		return true
+	}
+	return false
+}
+
+// warnUnusableLocked logs a warning once per distinct reason when the
+// status is a key that cannot run Pro, the first status at startup
+// included: a mistyped, expired or revoked key must never fall back to
+// Community without a word. It forgets the reason when Pro runs again, so
+// a later lapse warns again. The key is never logged. The caller holds
+// m.mu.
+func (m *Manager) warnUnusableLocked(st Status) {
+	if st.State.ProEnabled() {
+		m.warned = ""
+		return
+	}
+	if !unusable(st.State) {
+		return
+	}
+	reason := m.redact(st.Reason)
+	marker := string(st.State) + ": " + reason
+	if marker == m.warned {
+		return
+	}
+	m.warned = marker
+	klog.Warningf("the license key cannot run kwatch Pro, so kwatch "+
+		"runs the Community edition: component=license state=%s "+
+		"lid=%s reason=%q", st.State, st.LID, reason)
+}

@@ -32,8 +32,8 @@ func TestFlappingNamesTheServiceAndQuotesTheProbe(t *testing.T) {
 		t.Fatalf("got %d sentences, want 1", len(got))
 	}
 	for _, want := range []string{"Service api's endpoints keep changing",
-		"Quoted readiness failure: \"" + readinessFlapLine[:20]} {
-		if !strings.Contains(got[0].text, want) {
+		"The kubelet reports \"" + readinessFlapLine[:20]} {
+		if !strings.Contains(plainQuotes(got[0].text), want) {
 			t.Errorf("%q does not contain %q", got[0].text, want)
 		}
 	}

@@ -66,6 +66,6 @@ func servingCertSentences(f caseFacts) []sentence {
 	cert := cause.ServingCert
 	text := "Its serving certificate in Secret " + cert.Secret.Namespace +
 		"/" + cert.Secret.Name + " expired at " +
-		cert.Expired.UTC().Format("2006-01-02 15:04")
+		cert.Expired.UTC().Format("2006-01-02 15:04") + " UTC"
 	return []sentence{{part: partCause, text: endSentence(text)}}
 }

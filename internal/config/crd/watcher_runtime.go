@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/dynamic"
@@ -181,36 +184,83 @@ func (w *Watcher) runInformer(
 		safego.Keep(informerCtx, "crd-informer",
 			func(ready func()) error {
 				current := inf
-				if !first {
+				rebuilt := !first
+				if rebuilt {
 					var err error
 					if current, err = rebuild(); err != nil {
 						return err
 					}
 				}
 				first = false
-				runCtx, stop := context.WithCancel(informerCtx)
-				defer stop()
-				go func() {
-					if cache.WaitForCacheSync(
-						runCtx.Done(), current.HasSynced) {
-						ready()
-					}
-				}()
-				current.Run(runCtx.Done())
+				w.runCurrent(informerCtx, current, rebuilt, ready)
 				return nil
 			},
-			func(sick bool) {
-				if sick {
-					w.reportError(errInformerFailing)
-					return
-				}
-				w.reportError(nil)
-			})
+			safego.Options{Wait: w.restartWait, Sick: w.reportInformerSick})
 	}()
 	return informerCancel, informerDone, nil
 }
 
 var errInformerFailing = errors.New("crd informer keeps failing")
+
+// runCurrent runs one informer until ctx ends. Once it has synced it
+// calls ready and, for a rebuilt informer, forgets the configurations it
+// no longer holds (see forgetMissing).
+func (w *Watcher) runCurrent(
+	ctx context.Context, current cache.SharedIndexInformer,
+	rebuilt bool, ready func(),
+) {
+	runCtx, stop := context.WithCancel(ctx)
+	defer stop()
+	go func() {
+		if !cache.WaitForCacheSync(runCtx.Done(), current.HasSynced) {
+			return
+		}
+		if rebuilt {
+			w.forgetMissing(current.GetStore())
+		}
+		ready()
+	}()
+	current.Run(runCtx.Done())
+}
+
+// reportInformerSick publishes the informer's health: degraded after
+// repeated failures, healthy again once a rebuilt informer has synced.
+func (w *Watcher) reportInformerSick(sick bool) {
+	if sick {
+		w.reportError(errInformerFailing)
+		return
+	}
+	w.reportError(nil)
+}
+
+// forgetMissing treats every KwatchConfig the watcher knew that a freshly
+// synced informer no longer holds as deleted. The new informer lists the
+// current objects and sends no delete for one removed while the old
+// informer was down, so without this a removed configuration would stay
+// applied until the next restart.
+func (w *Watcher) forgetMissing(store cache.Store) {
+	present := map[string]bool{}
+	for _, obj := range store.List() {
+		if accessor, err := meta.Accessor(obj); err == nil {
+			present[accessor.GetNamespace()+"/"+accessor.GetName()] = true
+		}
+	}
+	w.mu.Lock()
+	var missing []string
+	for key := range w.seen {
+		if !present[key] {
+			missing = append(missing, key)
+		}
+	}
+	w.mu.Unlock()
+	sort.Strings(missing)
+	for _, key := range missing {
+		namespace, name, _ := strings.Cut(key, "/")
+		w.deleted(&metav1.PartialObjectMetadata{ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace, Name: name,
+		}})
+	}
+}
 
 // newInformer builds an informer for the CRD with the watcher's handler.
 func (w *Watcher) newInformer(

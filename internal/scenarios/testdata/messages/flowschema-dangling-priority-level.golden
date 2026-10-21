@@ -1,7 +1,8 @@
 10:03:15 settled
-🟠 FlowSchema batch-jobs (prod-eu-1) reports Dangling=True (NotFound). To see the object's state and events, run kubectl describe flowschema batch-jobs
+🟠 FlowSchema batch-jobs (prod-eu-1) reports Dangling=True (NotFound). It reports "this FlowSchema references a non-existent PriorityLevelConfiguration". To see the object's state and events, run kubectl describe flowschema batch-jobs
 🟠 FlowSchema batch-jobs (prod-eu-1) reports Dangling=True (NotFound).
 | 🟠 FlowSchema **batch-jobs** (**prod-eu-1**) reports Dangling=True (NotFound).
+| It reports `this FlowSchema references a non-existent PriorityLevelConfiguration`.
 | To see the object's state and events, run
 | ```
 | kubectl describe flowschema batch-jobs

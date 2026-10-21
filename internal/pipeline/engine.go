@@ -209,6 +209,7 @@ func (e *Engine) Run(ctx context.Context) error {
 			released = e.announcer.attachOutput(ctx, result)
 		}
 		now := e.deps.Clock.Now()
+		released = e.announcer.retryUnsent(ctx, now) || released
 		var decided bool
 		nextTick, decided = e.step(ctx, now, checks)
 		// A held announcement handed to delivery changes what the
@@ -345,7 +346,7 @@ func (e *Engine) evaluate(
 			unsynced = nil
 		}
 		e.waits.record(id, unsynced)
-		changed := e.tracker.Observe(id, result.Findings)
+		changed := e.observeResult(id, result)
 		logTransitions(changed)
 		transitions = append(transitions, changed...)
 		e.keepFindings(id)

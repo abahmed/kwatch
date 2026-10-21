@@ -29,6 +29,10 @@ const (
 	endpointServiceName = discoveryv1.LabelServiceName
 )
 
+// AttrEndpointsTerminating counts the endpoints of a slice whose pod is
+// shutting down. They are part of AttrEndpoints.
+const AttrEndpointsTerminating = "endpoints.terminating"
+
 // skipProbeAnnotation opts a Service out of automatic probing.
 const skipProbeAnnotation = "kwatch.io/skip-probe"
 
@@ -115,7 +119,7 @@ func (EndpointSliceSchema) Describe(obj any) (Description, bool) {
 	if !ok {
 		return Description{}, false
 	}
-	ready := 0
+	ready, terminating := 0, 0
 	rel := relations{}
 	rel.add(inventory.Backs, inventory.CoreID(
 		KindService, slice.Namespace, slice.Labels[endpointServiceName]))
@@ -123,19 +127,27 @@ func (EndpointSliceSchema) Describe(obj any) (Description, bool) {
 		if endpoint.Conditions.Ready == nil || *endpoint.Conditions.Ready {
 			ready++
 		}
+		if t := endpoint.Conditions.Terminating; t != nil && *t {
+			terminating++
+		}
 		if ref := endpoint.TargetRef; ref != nil && ref.Kind == "Pod" {
 			rel.add(inventory.RoutesTo,
 				inventory.CoreID(KindPod, ref.Namespace, ref.Name))
 		}
 	}
+	attrs := map[string]inventory.Value{
+		AttrEndpoints:      inventory.Number(float64(len(slice.Endpoints))),
+		AttrEndpointsReady: inventory.Number(float64(ready)),
+		AttrEndpointPorts:  inventory.Text(endpointPorts(slice)),
+	}
+	// Only a slice with a pod shutting down names it, so the many slices
+	// without one are described as before.
+	if terminating > 0 {
+		attrs[AttrEndpointsTerminating] = inventory.Number(float64(terminating))
+	}
 	return Description{
 		ID: objectID(KindEndpointSlice, slice), UID: string(slice.UID),
-		Attributes: map[string]inventory.Value{
-			AttrEndpoints:      inventory.Number(float64(len(slice.Endpoints))),
-			AttrEndpointsReady: inventory.Number(float64(ready)),
-			AttrEndpointPorts:  inventory.Text(endpointPorts(slice)),
-		},
-		Relations: rel,
+		Attributes: attrs, Relations: rel,
 	}, true
 }
 

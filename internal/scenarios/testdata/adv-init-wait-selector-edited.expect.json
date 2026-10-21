@@ -1,0 +1,12 @@
+{
+  "name": "adv-init-wait-selector-edited",
+  "description": "An init container waits for a Service whose selector was edited to match nothing; its backing pods are healthy.",
+  "root": "service/shop/queue",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/queue",
+    "deployment/shop/api",
+    "node//n1"
+  ]
+}

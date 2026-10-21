@@ -1,0 +1,7 @@
+{
+  "name": "adv-pdb-zero-quiet",
+  "description": "A budget that allows no disruption sits beside a cordoned node that holds none of its pods.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "20m0s"
+}

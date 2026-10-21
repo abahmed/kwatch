@@ -14,8 +14,16 @@ import (
 func leadSubject(f caseFacts) inventory.EntityID {
 	p := f.p
 	switch {
-	case !f.ok && p.State == incident.Resolved && !zeroID(p.Subject):
+	case !f.ok && p.State == incident.Resolved && !zeroID(p.Subject) &&
+		!movedAway(p):
 		return p.Subject
+	case policyBlocksCall(p.Cause):
+		// The caller the policy cuts off is the subject; the policy is
+		// the cause it names.
+		return callerWorkload(f)
+	case leadIsGroup(f):
+		// The zone or pool failing as a whole, not its worst node.
+		return p.Cause.Root
 	case ownCause(p.Cause), blamedChange(f) != nil:
 		return affectedWorkload(f)
 	case p.Cause != nil && rootFinding(p, f.members) == nil:
@@ -87,6 +95,16 @@ func ownerIn(
 // configured, the cluster: "payments in shop (prod-eu-1)".
 func (f caseFacts) leadName(id inventory.EntityID) string {
 	return f.objectName(id) + f.clusterTag()
+}
+
+// subjectName names the lead's subject in a sentence that goes on to say
+// what it does, and says whether that is several things: a grouped node
+// outage is "Nodes n1–n5 (prod-eu-1)", everything else its leadName.
+func (f caseFacts) subjectName(id inventory.EntityID) (string, bool) {
+	if leadIsNodes(f) {
+		return upperFirst(nodesLabel(f)) + f.clusterTag(), true
+	}
+	return f.leadName(id), false
 }
 
 // clusterTag is " (prod-eu-1)", or nothing without a cluster name.

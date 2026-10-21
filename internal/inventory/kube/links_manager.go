@@ -1,6 +1,8 @@
 package kube
 
 import (
+	"maps"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -41,18 +43,23 @@ func specWrite(entry metav1.ManagedFieldsEntry) bool {
 }
 
 // link adds the generic link attributes every object carries, typed or
-// unstructured, to desc.
+// unstructured, to desc: its spec manager and, while it is being
+// deleted, the owners of the finalizers that hold it.
 func link(obj any, desc *Description) {
 	accessor, err := meta.Accessor(obj)
 	if err != nil {
 		return
 	}
-	manager := SpecManager(accessor)
-	if manager == "" {
+	attrs := map[string]inventory.Value{}
+	if manager := SpecManager(accessor); manager != "" {
+		attrs[AttrManagedBy] = inventory.Text(manager)
+	}
+	setFinalizerManagers(attrs, accessor)
+	if len(attrs) == 0 {
 		return
 	}
 	if desc.Attributes == nil {
 		desc.Attributes = make(map[string]inventory.Value)
 	}
-	desc.Attributes[AttrManagedBy] = inventory.Text(manager)
+	maps.Copy(desc.Attributes, attrs)
 }

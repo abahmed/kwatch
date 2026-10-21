@@ -1,6 +1,12 @@
 package detection
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+
+	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
+)
 
 // ReasonInfo is everything kwatch knows about one finding reason, in one
 // place: the failure mode it maps to, whether it is a failure by itself
@@ -28,6 +34,11 @@ type ReasonInfo struct {
 	// ShownByState marks a Warning event reason whose condition is
 	// already read from the object itself.
 	ShownByState bool
+	// ShownOn lists the kinds whose own state shows the reason. The same
+	// reason on another kind (a custom resource's controller may reuse
+	// "Failed" or "BackOff") is not covered by that state. Empty means
+	// every kind.
+	ShownOn []inventory.Kind
 	// Label says in a few plain words what the reason means for the
 	// object it is about.
 	Label string
@@ -44,10 +55,10 @@ func eventReason(name string, severity Severity) ReasonInfo {
 	return ReasonInfo{Reason: name, Event: severity}
 }
 
-// stateReason starts an entry for a Warning event reason the object
-// state already shows.
-func stateReason(name string) ReasonInfo {
-	return ReasonInfo{Reason: name, ShownByState: true}
+// stateReason starts an entry for a Warning event reason the state of
+// the given kinds already shows.
+func stateReason(name string, kinds ...inventory.Kind) ReasonInfo {
+	return ReasonInfo{Reason: name, ShownByState: true, ShownOn: kinds}
 }
 
 // waiting marks a container waiting state that is a failure.
@@ -80,9 +91,11 @@ func (i ReasonInfo) causeOnly() ReasonInfo {
 	return i
 }
 
-// shown marks a reason whose condition the object state already shows.
-func (i ReasonInfo) shown() ReasonInfo {
+// shown marks a reason whose condition the state of the given kinds
+// already shows.
+func (i ReasonInfo) shown(kinds ...inventory.Kind) ReasonInfo {
 	i.ShownByState = true
+	i.ShownOn = kinds
 	return i
 }
 
@@ -96,8 +109,20 @@ func (i ReasonInfo) label(text string) ReasonInfo {
 // lookups below read it, so no attribute is listed anywhere else.
 var reasonTable = buildReasonTable(
 	podReasons, nodeReasons, workloadReasons, serviceReasons,
-	eventOnlyReasons, upstreamReasons, admissionReasons,
+	eventOnlyReasons, upstreamReasons,
+	shownOn(admissionReasons, kube.KindPod),
 )
+
+// shownOn gives every entry of group the kinds that show it, for a group
+// whose reasons all concern one kind.
+func shownOn(group []ReasonInfo, kinds ...inventory.Kind) []ReasonInfo {
+	out := make([]ReasonInfo, len(group))
+	for i, info := range group {
+		info.ShownOn = kinds
+		out[i] = info
+	}
+	return out
+}
 
 // buildReasonTable indexes the entries and fails fast on a reason that
 // is listed twice, since the second entry would hide the first.
@@ -146,9 +171,18 @@ func EventSeverity(reason string) (severity Severity, ok bool) {
 }
 
 // ShownByState reports a Warning event reason whose condition kwatch
-// already reads from the object itself.
+// already reads from the object itself, on some kind.
 func ShownByState(reason string) bool {
 	return reasonTable[reason].ShownByState
+}
+
+// ShownByStateOn reports a Warning event reason of an object of kind
+// whose condition kwatch already reads from that object's own state.
+// The same reason on another kind is not shown by anything.
+func ShownByStateOn(reason string, kind inventory.Kind) bool {
+	info := reasonTable[reason]
+	return info.ShownByState &&
+		(len(info.ShownOn) == 0 || slices.Contains(info.ShownOn, kind))
 }
 
 // DigestOnly reports a reason that never interrupts on its own.

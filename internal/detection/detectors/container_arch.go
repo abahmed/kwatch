@@ -19,10 +19,11 @@ const execFormatError = "exec format error"
 const archLabel = "kubernetes.io/arch"
 
 // withArchMismatch words a crash that prints "exec format error" on a
-// node of a known architecture as an image that does not run there. The
-// error line stays quoted in the evidence; nothing is read from a
-// registry, so "no build" is only said when pods of the same workload
-// run fine on nodes of another architecture.
+// node of a known architecture as what is known: the node's
+// architecture and the quoted error. Nothing is read from a registry,
+// so the image is not judged; the pods of the same workload that run
+// fine on nodes of another architecture are evidence, and they are the
+// reader's proof.
 func withArchMismatch(
 	ctx detection.Context, e inventory.Entity, found []detection.Finding,
 ) []detection.Finding {
@@ -53,12 +54,8 @@ func markArchMismatch(
 		return
 	}
 	other := healthyOnOtherArch(ctx, e, arch)
-	verdict := "the image doesn't run on " + arch
-	if len(other) > 0 {
-		verdict = "the image has no " + arch + " build"
-	}
 	f.Summary = containerRole(e) + " crashes on " + arch + " node " +
-		node.ID.Name + " with \"" + execFormatError + "\": " + verdict
+		node.ID.Name + " with \"" + execFormatError + "\""
 	f.Evidence = append(f.Evidence, detection.Evidence{
 		Label: detection.EvidenceArchNode,
 		Value: arch + " node " + node.ID.Name})

@@ -1,11 +1,11 @@
 10:01:45 settled
-🟠 db in shop (prod-eu-1) keeps crashing. It fails with "FATAL: data directory has wrong ownership". Nothing it depends on is failing. Service db can't serve traffic. It runs a single replica, so this is downtime, not degradation. To read the output of the last crash, run kubectl logs db-4f3043ec-a -c app -n shop --previous
+🟠 db in shop (prod-eu-1) keeps crashing. It fails with "FATAL: data directory has wrong ownership". Nothing it depends on is failing. Service db can't serve traffic. It runs a single replica. To read the output of the last crash, run kubectl logs db-4f3043ec-a -c app -n shop --previous
 🟠 db in shop (prod-eu-1) keeps crashing.
 | 🟠 db in **shop** (**prod-eu-1**) keeps crashing.
 | It fails with `FATAL: data directory has wrong ownership`.
 | Nothing it depends on is failing.
 | Service db can't serve traffic.
-| It runs a single replica, so this is downtime, not degradation.
+| It runs a single replica.
 | To read the output of the last crash, run
 | ```
 | kubectl logs db-4f3043ec-a -c app -n shop --previous

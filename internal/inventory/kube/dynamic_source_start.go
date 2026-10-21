@@ -128,12 +128,14 @@ func (d *DynamicSource) informerFor(
 	switch r.mode {
 	case WatchMetadata:
 		informer, err := dynamicwatch.NewMetadataInformer(d.cfg.Metadata,
-			d.cfg.Resync, r.gvr, capTransform(admission, metadataTransform))
+			d.cfg.Resync, r.gvr, guardTransform(r.gvr.Resource,
+				capTransform(admission, metadataTransform)))
 		return informer, NewMetadataSchema(r.gvr.Group, r.kind), err
 	case WatchStatus:
 		_, informer, err := dynamicwatch.NewInformer(d.cfg.Client,
 			d.cfg.Resync, metav1.NamespaceAll, r.gvr,
-			capTransform(admission, statusTransform))
+			guardTransform(r.gvr.Resource,
+				capTransform(admission, transformFor(r.gvr))))
 		return informer, NewUnstructuredSchema(r.gvr.Group, r.kind), err
 	}
 	return nil, nil, fmt.Errorf("watch mode %q is not dynamic", r.mode)

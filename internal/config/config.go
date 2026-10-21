@@ -11,9 +11,10 @@ type Config struct {
 	// License holds the kwatch Pro license key.
 	License License `yaml:"license"`
 
-	// ClusterCheckins turns Pro cluster check-ins to api.kwatch.dev on
-	// (the default) or off. The Community edition never checks in.
-	ClusterCheckins bool `yaml:"clusterCheckins"`
+	// ClusterCheckins is deprecated and ignored: kwatch no longer sends
+	// cluster check-ins. It is still accepted so an older config loads,
+	// and Warnings asks for its removal.
+	ClusterCheckins *bool `yaml:"clusterCheckins,omitempty"`
 
 	// Upgrader configuration
 	Upgrader Upgrader `yaml:"upgrader"`
@@ -121,6 +122,12 @@ type Config struct {
 	// unknownKeys are config keys the file sets that no field reads, such
 	// as removed options or typos. They are logged, never fatal.
 	unknownKeys []string
+	// envWarnings are the deployment environment values that were ignored
+	// (an unparsable boolean). Derived state, never serialized.
+	envWarnings []string
+	// fileWarnings are findings about how the file was written, such as a
+	// literal license key. They are known only before expansion.
+	fileWarnings []string
 }
 
 // Telemetry configures the minimal adoption heartbeat. It is enabled

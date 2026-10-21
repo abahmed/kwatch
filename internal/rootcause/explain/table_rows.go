@@ -26,7 +26,7 @@ var configModes = []detection.Mode{
 var podFailures = []detection.Mode{
 	detection.ModeCrashLoop, detection.ModeNotReady, detection.ModeImagePull,
 	detection.ModeOOMKilled, detection.ModeCreateError, detection.ModeProbe,
-	detection.ModeRestarting, detection.ModeCannotRun, detection.ModeExit,
+	detection.ModeRestarting, detection.ModeExit,
 	detection.ModeFailed, detection.ModeError}
 
 // genericRows cover every kind. They have lower priors than the
@@ -62,7 +62,10 @@ var genericRows = []Row{
 		Link: LinkManages,
 		Effect: Side{Group: AnyGroup, Kind: AnyKind,
 			Modes: []detection.Mode{detection.ModeNotReconciling}},
-		Prior: 0.7,
+		// Above own-change (0.7): an edit of a resource nobody
+		// reconciles looks like its own change while its controller
+		// is down.
+		Prior: 0.8,
 	},
 	{
 		// A Service without endpoints explains what it serves: an
@@ -201,7 +204,7 @@ var nodeRows = []Row{
 		Link: LinkRunsOn,
 		Effect: podSide(
 			detection.ModeEvicted, detection.ModeFailed,
-			detection.ModeCannotRun, detection.ModeCrashLoop),
+			detection.ModeCrashLoop),
 		Prior: 0.6,
 	},
 	{
@@ -276,9 +279,10 @@ var workloadRows = []Row{
 		Cause: Side{Kind: kube.KindNetworkPolicy, Modes: []detection.Mode{
 			ModeChanged}},
 		Link: LinkRestricts,
-		Effect: podSide(
-			detection.ModeCrashLoop, detection.ModeNotReady,
-			detection.ModeProbe),
+		// A policy cuts connections: the failure must say one failed.
+		Effect: Side{Kind: kube.KindPod, Signal: SignalConnection,
+			Modes: []detection.Mode{detection.ModeCrashLoop,
+				detection.ModeNotReady, detection.ModeProbe}},
 		Prior: 0.6,
 	},
 }

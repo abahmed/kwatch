@@ -26,19 +26,15 @@ func (p *panickingOutbox) WriteOutbox(
 	return p.memOutbox.WriteOutbox(puts, removes)
 }
 
-func noBackoff(t *testing.T) {
-	old := safego.Wait
-	safego.Wait = func(context.Context, time.Duration) bool { return true }
-	t.Cleanup(func() { safego.Wait = old })
-}
-
 func startPanicking(
 	t *testing.T, panics int32,
 ) (*outbox, *panickingOutbox, chan bool) {
-	noBackoff(t)
 	store := &panickingOutbox{memOutbox: newMemOutbox()}
 	store.panics.Store(panics)
 	box := newOutbox(store, time.Now)
+	box.restartWait = func(context.Context, time.Duration) bool {
+		return true
+	}
 	sick := make(chan bool, 8)
 	box.sick = func(v bool) { sick <- v }
 	box.add(deliverJob{kind: jobMessage, msg: "m"}, "slack")

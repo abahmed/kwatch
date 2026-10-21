@@ -6,34 +6,6 @@ import (
 	"time"
 )
 
-// Tick advances every incident's lifecycle and returns the decisions that
-// warrant a message, plus the delay until the earliest pending deadline
-// computed from the state after all transitions (zero when none).
-func (m *Manager) Tick(now time.Time) ([]Decision, time.Duration) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	var decisions []Decision
-	m.adoptFingerprints(now)
-	m.releaseChurn(now)
-	// Only live incidents advance; resolved ones only wait to expire.
-	for _, id := range m.liveIDs() {
-		p := m.incidents[id]
-		if p.restored && p.bootedAt.IsZero() {
-			p.bootedAt = now
-		}
-		d, ok := m.advance(p, now)
-		if ok {
-			decisions = append(decisions, d)
-		}
-		if p.State == Resolved && m.incidents[id] == p {
-			m.markResolved(p)
-		}
-	}
-	m.expireResolved(now)
-	m.pruneFormer(now)
-	return decisions, m.nextWake(now)
-}
-
 // adoptFingerprints stores the current fingerprint of each restored
 // announced incident whose members are back, before Tick compares
 // fingerprints. The stored one may come from an older kwatch whose
@@ -70,12 +42,28 @@ func (m *Manager) adoptFingerprints(now time.Time) {
 // are back, so it reopens without a decision, and a digest that kept the
 // recovering state would read as a change on the next tick.
 func adoptedFingerprint(p *Incident) string {
-	if p.State != Recovering {
-		return fingerprint(p)
+	adopted := *p
+	if told := toldTier(p); adopted.Tier > told {
+		// A tier rise since people last heard is news, not a formula
+		// change: the fingerprint keeps the old tier so the next tick
+		// tells the rise (a page above all).
+		adopted.Tier = told
 	}
-	reopened := *p
-	reopened.State = Open
-	return fingerprint(&reopened)
+	if adopted.State == Recovering {
+		adopted.State = Open
+	}
+	return fingerprint(&adopted)
+}
+
+// toldTier is the tier people last heard for a restored incident: the one
+// of the saved record, or of the update this run decided since. Once this
+// run told a rise the clamp moves up with it: clamping to the saved tier
+// again would read the same rise as news one MaterialGap later.
+func toldTier(p *Incident) Tier {
+	if p.Delivery.sentKnown {
+		return p.Delivery.sentTier
+	}
+	return p.restoredTier
 }
 
 // advance moves one live incident through one tick. The order is:
@@ -88,6 +76,9 @@ func (m *Manager) advance(p *Incident, now time.Time) (Decision, bool) {
 	if superseded(p) {
 		if m.quietSupersede(p, now) {
 			m.resolveQuietly(p, now)
+			return Decision{}, false
+		}
+		if m.takeoverPending(p, now) {
 			return Decision{}, false
 		}
 		d := m.resolve(p, now, ReasonSuperseded)
@@ -191,6 +182,9 @@ func (m *Manager) recovering(p *Incident, now time.Time) (Decision, bool) {
 		p.Cycles = recent(append(p.Cycles, now), now, m.cfg.FlapWindow)
 		if m.flaps(len(p.Cycles)) {
 			m.enterFlapping(p, now, len(p.Cycles), "recoveries")
+			// This update says the failure is back, as an owed
+			// "failing again" would: the thread needs only one.
+			p.Pending.ClearReopen()
 			return m.decide(p, Update, ReasonFlapping), true
 		}
 		p.State = Open
@@ -295,12 +289,15 @@ func (m *Manager) decide(p *Incident, action Action, why Reason) Decision {
 	p.decided = failingKeys(p)
 	p.movedTo = nil
 	delivered := p.Scope != ScopeOut && !p.Held
-	p.noteRoute(action, delivered)
+	p.noteRoute(action, p.Scope != ScopeOut)
 	d := Decision{Action: action, Incident: p.Snapshot(), Reason: why,
 		Thread: p.Delivery.Demoted() && p.Tier == Digest && p.sent.told}
 	// An announcement of an incident whose alert is already open (a
 	// restored held page) must not page again.
 	d.PagedAlready = action == Announce && p.Delivery.OpenAtPagers()
+	if m.pagesFlapper(p, action, why) {
+		d.Incident.Tier = Page
+	}
 	p.sent.decided(delivered)
 	return d
 }

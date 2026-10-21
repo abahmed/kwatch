@@ -77,7 +77,9 @@ func nodeLateCauseAfterCrashes() scenario {
 				"is reported NotReady four minutes later: the workloads " +
 				"join the node incident and it recovers as one.",
 			Root: "node//n1", Tier: "page", MaxMessages: 4, MaxPages: 1,
-			Tail: duration(30 * time.Minute),
+			// The workloads are named until the node reports NotReady.
+			RevisesRoot: true,
+			Tail:        duration(30 * time.Minute),
 		},
 		build: func(c *cluster) {
 			n1 := c.node("n1", "zone-a")

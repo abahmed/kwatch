@@ -18,9 +18,9 @@ const (
 	SickAfter = 3
 )
 
-// Wait sleeps for d and reports false when ctx ended first. Tests
-// replace it so a restart does not sleep.
-var Wait = func(ctx context.Context, d time.Duration) bool {
+// Wait sleeps for d and reports false when ctx ended first. It is the
+// default of Options.Wait.
+func Wait(ctx context.Context, d time.Duration) bool {
 	timer := time.NewTimer(d)
 	defer timer.Stop()
 	select {
@@ -40,6 +40,17 @@ func Backoff(n int) time.Duration {
 	return min(delay, RestartMaximum)
 }
 
+// Options tunes Keep; the zero value is the production behaviour.
+type Options struct {
+	// Sick is called with true after SickAfter failures in a row and
+	// with false when the work recovers. It may be nil.
+	Sick func(bool)
+	// Wait sleeps between restarts and reports false when ctx ended
+	// first. Nil sleeps on a real timer; tests pass a Wait that returns
+	// at once.
+	Wait func(ctx context.Context, d time.Duration) bool
+}
+
 // Keep runs fn and runs it again after a panic or an error, with the
 // backoff above, until ctx ends or fn returns nil. It is for goroutines
 // that nothing else restarts.
@@ -47,16 +58,19 @@ func Backoff(n int) time.Duration {
 // fn calls ready after its first successful unit of work. That ends the
 // failure streak, so a long-running fn is reported healthy as soon as it
 // works, not only when it returns. After SickAfter failures in a row
-// Keep calls sick(true); the next ready calls sick(false). sick may be
-// nil.
+// Keep calls opts.Sick(true); the next ready calls opts.Sick(false).
 func Keep(
 	ctx context.Context, name string,
-	fn func(ready func()) error, sick func(bool),
+	fn func(ready func()) error, opts Options,
 ) {
 	report := func(v bool) {
-		if sick != nil {
-			sick(v)
+		if opts.Sick != nil {
+			opts.Sick(v)
 		}
+	}
+	wait := opts.Wait
+	if wait == nil {
+		wait = Wait
 	}
 	var mu sync.Mutex
 	failures, isSick := 0, false
@@ -86,7 +100,7 @@ func Keep(
 		if becameSick {
 			report(true)
 		}
-		if !Wait(ctx, Backoff(n)) {
+		if !wait(ctx, Backoff(n)) {
 			return
 		}
 	}

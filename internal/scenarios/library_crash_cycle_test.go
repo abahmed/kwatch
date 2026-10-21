@@ -22,6 +22,8 @@ func crashLoopForHours() scenario {
 	return scenario{
 		expect: expectation{
 			Name: "crash-loop-for-hours",
+			// The story ends with a cause taken back.
+			RevisesRoot: true,
 			Description: "The only replica of a Deployment crashes on " +
 				"every start for nearly two hours, cycling through " +
 				"running, Error and CrashLoopBackOff; it stays one " +

@@ -47,3 +47,37 @@ func (m *Manager) observeLocalLocked(now time.Time) {
 		m.persistLocked()
 	}
 }
+
+// observeServerTimeLocked folds the signed server time of a verified lease
+// into the guard. Normally that only moves the mark forward. When the mark
+// is more than rollbackTolerance ahead of the server, the local clock
+// stepped forward and was corrected, so a lease newer than the cached one
+// (a replay of an old response cannot be) pulls the mark back to the
+// server's time and Pro recovers at once instead of when real time catches
+// up. The caller holds m.mu.
+func (m *Manager) observeServerTimeLocked(lease Lease) {
+	srv := time.Unix(lease.SrvTime, 0).UTC()
+	if m.clock.MaxSeen.After(srv.Add(rollbackTolerance)) &&
+		m.newerThanCachedLocked(lease) {
+		m.clock.MaxSeen = srv
+	}
+	m.clock.Observe(srv)
+}
+
+// newerThanCachedLocked reports a lease issued after the cached one, or
+// any lease when none is cached.
+func (m *Manager) newerThanCachedLocked(lease Lease) bool {
+	iat, ok := leaseIssuedAt(m.lease)
+	return !ok || lease.Iat > iat
+}
+
+// signedLeaseTime is the latest time a cached lease proves has passed:
+// its signed iat or srv_time. Only a verified signature counts; the
+// binding is not checked, since the time is real for any cluster.
+func (v *Verifier) signedLeaseTime(s string) (time.Time, bool) {
+	l, ok := v.signedLease(s)
+	if !ok {
+		return time.Time{}, false
+	}
+	return time.Unix(max(l.Iat, l.SrvTime), 0).UTC(), true
+}

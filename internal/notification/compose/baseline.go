@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -14,32 +15,40 @@ const weightBaseline = 0.7
 
 // baselineSentences compare a finding with what its workload did over
 // the last week, from the evidence the detectors attached. They only
-// describe the past: "restarts 12×/h vs a usual 0.1×/h".
+// describe the past: "restarts 12×/h vs a usual 0.1×/h". Each figure
+// keeps the verdict of the finding it came from, and a figure two
+// findings share is said once.
 func baselineSentences(f caseFacts) []sentence {
-	var phrases []string
-	unusual, usual := false, false
+	byVerdict := map[detection.Normality][]string{}
 	for _, m := range f.members {
 		for _, e := range m.Evidence {
-			if e.Label == detection.EvidenceBaseline {
-				phrases = append(phrases, e.Value)
+			if e.Label == detection.EvidenceBaseline &&
+				!slices.Contains(byVerdict[m.Normal], e.Value) {
+				byVerdict[m.Normal] = append(byVerdict[m.Normal], e.Value)
 			}
 		}
-		unusual = unusual || m.Normal == detection.NormalUnusual
-		usual = usual || m.Normal == detection.NormalUsual
 	}
-	if len(phrases) == 0 {
-		return nil
+	var out []sentence
+	for i, verdict := range []detection.Normality{detection.NormalUnusual,
+		detection.NormalUsual, detection.NormalUnjudged} {
+		if phrases := byVerdict[verdict]; len(phrases) > 0 {
+			out = append(out, sentence{part: partProof,
+				weight: weightBaseline - float64(i)/100,
+				text: baselineLead[verdict] + strings.Join(phrases, "; ") +
+					"."})
+		}
 	}
-	lead := "Over the last week of this workload: "
-	switch {
-	case unusual:
-		lead = "That is unusual for this workload: "
-	case usual:
-		lead = "That is within what this workload normally does: "
-	}
-	text := lead + strings.Join(phrases, "; ") + "."
-	return []sentence{{part: partProof, weight: weightBaseline, text: text}}
+	return out
 }
+
+// baselineLead introduces the figures of one verdict.
+var baselineLead = map[detection.Normality]string{
+	detection.NormalUnusual:  "That is unusual for this workload: ",
+	detection.NormalUsual:    usualLead,
+	detection.NormalUnjudged: "Over the last week of this workload: ",
+}
+
+const usualLead = "That is within what this workload normally does: "
 
 // usualTail is what a list line adds for an incident the workload's
 // normal excused: "(within its normal: restarts 2×/h vs a usual 2×/h)".

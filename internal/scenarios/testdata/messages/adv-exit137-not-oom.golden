@@ -1,0 +1,10 @@
+10:04:15 settled
+🟠 api in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs api-f04b9c58-a -c app -n shop --previous
+🟠 api in shop (prod-eu-1) keeps crashing.
+| 🟠 **api** in **shop** (**prod-eu-1**) keeps crashing.
+| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| To read the output of the last crash, run
+| ```
+| kubectl logs api-f04b9c58-a -c app -n shop --previous
+| ```

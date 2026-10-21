@@ -102,9 +102,13 @@ type disabledSources interface {
 	Disabled() []kube.SourceStatus
 }
 
-func (p coveragePublisher) publish() {
+// publish sends the summary to the sink and returns it. ok is false when
+// nothing was published.
+func (p coveragePublisher) publish() (
+	summary health.CoverageSummary, ok bool,
+) {
 	if p.sink == nil || p.typed == nil || p.dynamic == nil {
-		return
+		return summary, false
 	}
 	typed := p.typed.Unavailable()
 	// A disabled kind is listed as not watched, with its own reason, but
@@ -112,5 +116,7 @@ func (p coveragePublisher) publish() {
 	if d, ok := p.typed.(disabledSources); ok {
 		typed = append(typed, d.Disabled()...)
 	}
-	p.sink.SetCoverage(buildCoverage(typed, p.dynamic.Status()))
+	summary = buildCoverage(typed, p.dynamic.Status())
+	p.sink.SetCoverage(summary)
+	return summary, true
 }

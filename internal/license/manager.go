@@ -101,9 +101,15 @@ type Manager struct {
 	failures int
 	// synced is the outcome of the last server sync as logged by
 	// logSync, so only a change of outcome reaches the default level.
-	synced   string
+	synced string
+	// warned is the state and reason last logged by warnUnusableLocked.
+	warned   string
 	anchor   time.Time // first local reading, for the monotonic cross-check
 	savedMax time.Time // MaxSeen as last written to the LeaseStore
+
+	// offset is server time minus local time from the last response,
+	// used only to timestamp signed requests.
+	offset time.Duration
 
 	conflictSince time.Time // start of the current conflict streak
 	moveHandled   time.Time // newest move request already answered
@@ -190,6 +196,11 @@ func (m *Manager) init(ctx context.Context) {
 		} else {
 			m.mu.Lock()
 			m.lease, m.clock, m.savedMax = lease, clock, clock.MaxSeen
+			// A deleted or older clock entry must not let the clock
+			// fall before what the cached lease itself proves.
+			if t, ok := m.v.signedLeaseTime(lease); ok {
+				m.clock.Observe(t)
+			}
 			m.mu.Unlock()
 		}
 	}
@@ -280,6 +291,7 @@ func (m *Manager) publish(st Status) {
 }
 
 func (m *Manager) publishLocked(st Status) {
+	m.warnUnusableLocked(st)
 	if m.haveLast && m.last.State == st.State && m.last.Plan == st.Plan {
 		m.last = st
 		return
@@ -342,5 +354,8 @@ func (m *Manager) backoff() time.Duration {
 	defer m.mu.Unlock()
 	i := min(m.failures, len(retryBackoff)-1)
 	m.failures++
-	return retryBackoff[i]
+	// ±20% jitter keeps clusters that failed together from retrying in
+	// lockstep.
+	d := retryBackoff[i]
+	return d + m.cfg.Jitter(d/5)
 }

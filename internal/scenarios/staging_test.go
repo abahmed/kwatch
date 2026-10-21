@@ -45,11 +45,12 @@ func stagingDay() time.Duration {
 const multiDay = 24 * time.Hour
 
 // stagingScenarios are the scenarios that happen in the staging day: the
-// library, without the scenarios that last more than a day.
+// library, without the scenarios that last more than a day and those
+// that need a kind kwatch cannot observe (one engine serves the day).
 func stagingScenarios() []scenario {
 	var out []scenario
 	for _, s := range library() {
-		if s.expect.Alone {
+		if s.expect.Alone || len(s.expect.Hidden) > 0 {
 			continue
 		}
 		log := s.generate(stagingStart, "")

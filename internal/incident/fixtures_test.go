@@ -27,6 +27,8 @@ type stubExplainer struct {
 	checked map[inventory.EntityID][]inventory.EntityID
 	// alternatives are the other causes weighed for a failure.
 	alternatives map[inventory.EntityID][]explain.Cause
+	// compared are the counterfactual checks made for a failure.
+	compared map[inventory.EntityID][]explain.Comparison
 	// last is the snapshot of the latest Solve.
 	last explain.Snapshot
 }
@@ -50,6 +52,10 @@ func (e *stubExplainer) Solve(
 				id: ids}
 		}
 		area.Alternatives = e.alternatives[id]
+		if checks, ok := e.compared[id]; ok {
+			area.Trace.Compared = map[inventory.EntityID][]explain.Comparison{
+				id: checks}
+		}
 		if c, ok := e.causes[id]; ok {
 			c.Covers = []inventory.EntityID{id}
 			area.Causes = []explain.Cause{c}

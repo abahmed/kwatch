@@ -11,26 +11,46 @@ import (
 
 // attemptSentences say that someone changed the incident's workload, or
 // the configuration it uses, while it was open: "Rollout 15 of payments
-// started at 21:30 (alice); watching."
+// started at 21:30 UTC (alice); watching." A change to something other
+// than the failing workload names the workload it is watching, so the
+// Short of the update still says what it is about.
 func attemptSentences(f caseFacts) []sentence {
 	change := f.p.Attempt
 	if change == nil {
 		return nil
 	}
 	return []sentence{{part: partLead, text: attemptStarted(f, *change) +
-		" at " + clock(change.At) + byWho(change.Actor) + "; watching."}}
+		" at " + clock(change.At) + byWho(change.Actor) + "; watching" +
+		watchedWorkload(f, *change) + "."}}
+}
+
+// watchedWorkload is " payments in shop" when the change is to something
+// else than the incident's own subject, and nothing when the sentence
+// already names the subject.
+func watchedWorkload(f caseFacts, change inventory.Change) string {
+	subject := leadSubject(f)
+	if zeroID(subject) || subject == change.Entity {
+		return ""
+	}
+	return " " + placedName(subject)
 }
 
 // stillFailingSentences say, once, that the fix attempt did not end the
-// incident: "Still failing 10 minutes after rollout 15."
+// incident: "payments in shop is still failing 10 minutes after rollout
+// 15." The subject comes first, so the Short names it.
 func stillFailingSentences(f caseFacts) []sentence {
 	change := f.p.Attempt
 	if change == nil {
 		return nil
 	}
-	return []sentence{{part: partLead, text: "Still failing " +
-		minutesWords(f.now.Sub(change.At)) +
-		" after " + attemptName(*change) + f.clusterTag() + "."}}
+	subject := leadSubject(f)
+	if zeroID(subject) {
+		subject = change.Entity
+	}
+	return []sentence{{part: partLead, text: capitalName(subject,
+		f.leadName(subject)+" is still failing "+
+			minutesWords(f.now.Sub(change.At))+" after "+
+			attemptName(*change)+".")}}
 }
 
 // attemptStarted is the news of a change: "Rollout 15 of payments
@@ -74,7 +94,7 @@ func fixedByPhrase(f caseFacts) string {
 	if f.fix == nil || f.p.Attempt == nil {
 		return ""
 	}
-	after := f.p.Resolved.Sub(f.fix.At)
+	after := f.p.RecoveredAt().Sub(f.fix.At)
 	text := "Fixed by " + attemptName(*f.fix) + byWho(f.fix.Actor)
 	if after >= time.Minute {
 		text += " after " + minutesWords(after)

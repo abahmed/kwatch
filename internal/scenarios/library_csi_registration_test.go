@@ -14,12 +14,19 @@ func csiRegistrationScenarios() []scenario {
 	return []scenario{csiNodePluginFailing()}
 }
 
-const csiDriverName = "ebs.csi.example.com"
+// csiDriver is the name of the storage driver of one cluster. It carries
+// the cluster's suffix, so two scenarios of one staging day do not share
+// a driver (an error naming it would then fit both of their plugins).
+func csiDriver(c *cluster) string { return c.n("ebs.csi.example.com") }
 
-const csiNotRegistered = "MountVolume.MountDevice failed for volume " +
-	"\"pvc-1a2b\" : kubernetes.io/csi: attacher.MountDevice failed to " +
-	"create newCsiDriverClient: driver name " + csiDriverName +
-	" not found in the list of registered CSI drivers"
+// csiNotRegistered is the kubelet's mount error for a driver that is not
+// registered on the node.
+func csiNotRegistered(c *cluster) string {
+	return "MountVolume.MountDevice failed for volume " +
+		"\"pvc-1a2b\" : kubernetes.io/csi: attacher.MountDevice failed " +
+		"to create newCsiDriverClient: driver name " + csiDriver(c) +
+		" not found in the list of registered CSI drivers"
+}
 
 // csiNodePlugin is the CSI node plugin DaemonSet, a pod on each of two
 // nodes, and returns it. Its container names the driver it registers.
@@ -34,7 +41,7 @@ func csiNodePlugin(c *cluster) *appsv1.DaemonSet {
 		},
 	}
 	ds.Spec.Template.Spec.Containers[0].Args = []string{
-		"node", "--driver-name=" + csiDriverName}
+		"node", "--driver-name=" + csiDriver(c)}
 	ds.Generation, ds.Status.ObservedGeneration = 1, 1
 	setAgentCounts(ds, 2, 2)
 	return ds
@@ -77,7 +84,7 @@ func csiNodePluginFailing() scenario {
 					c.update(pod)
 				}
 				c.warn(c.warningEvent(pod, "Pod", "FailedMount",
-					csiNotRegistered, "kubelet", round*3))
+					csiNotRegistered(c), "kubelet", round*3))
 				c.after(time.Minute)
 			}
 			c.after(5 * time.Minute)

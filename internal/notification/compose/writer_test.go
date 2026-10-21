@@ -81,11 +81,11 @@ func TestWriteResolvedBySaysWhoFixedIt(t *testing.T) {
 	}{
 		{"rollout", inventory.Change{Entity: deploy, Actor: "bob",
 			Revision: "9", At: writerNow},
-			"bob rolled out revision 9 at 10:00"},
+			"bob rolled out revision 9 at 10:00 UTC"},
 		{"field", inventory.Change{Entity: deploy,
 			Fields: []inventory.FieldChange{{Path: "spec.replicas"}},
 			At:     writerNow},
-			"Someone changed the replicas at 10:00"},
+			"Someone changed the replicas at 10:00 UTC"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

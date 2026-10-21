@@ -42,9 +42,11 @@ type Finding struct {
 	Symptom bool
 	// Advisory marks a configuration risk, not a failure: a workload
 	// with no readiness probe, a single replica, an image tag that can
-	// change. It is reported in the digest, never leads a message about
-	// a failure, is never a failure to explain nor a cause, and only
-	// adds a consequence to a failure it made worse.
+	// change. It never produces a message of its own, not even a digest
+	// line (docs/production-goals.md): it is context inside the
+	// incident of a real failure of the same workload, is never a
+	// failure to explain nor a cause, and only adds a consequence to a
+	// failure it made worse.
 	Advisory bool `json:",omitempty"`
 	// Normal says how the finding compares with the workload's own
 	// learned normal. Zero means it was not compared. The policy layer
@@ -55,6 +57,11 @@ type Finding struct {
 	// (a memory limit a container reached). Nil when the failure is not
 	// a setting. See Place.
 	Place *Place `json:",omitempty"`
+	// Detector is the Name of the detector that raised the finding; the
+	// registry sets it. When that detector panics later, the findings it
+	// raised before are kept (see Evaluation.Keeping). It lives only
+	// in the tracker and is never persisted.
+	Detector string `json:"-"`
 }
 
 // EvidenceUsedBy labels evidence that names an object using the finding's

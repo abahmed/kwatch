@@ -1,0 +1,13 @@
+{
+  "name": "adv-statefulset-zone-without-nodes",
+  "description": "A StatefulSet pod is Pending because its volume lives in a zone with no nodes; the autoscaler reports it will not scale up.",
+  "root": "persistentvolumeclaim/streaming/data-kafka-2",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "statefulset/streaming/kafka",
+    "node//a1",
+    "node//b1",
+    "node//b2"
+  ]
+}

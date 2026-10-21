@@ -40,9 +40,11 @@ func errorVerb(id inventory.EntityID) string {
 	return "It reports"
 }
 
-// quoted puts a clipped error in quotes, without its final full stop.
+// quoted puts a clipped error in quotes. Everything between them is what
+// the pod wrote, full stop included; the quote runes (see quotes.go) tell
+// the renderers where it ends, whatever double quotes it holds.
 func quoted(text string) string {
-	return `"` + strings.TrimSuffix(clip(text), ".") + `"`
+	return markQuote(clip(text))
 }
 
 func lastLine(lines []string) string {

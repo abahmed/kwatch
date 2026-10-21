@@ -51,6 +51,10 @@ type Snapshot struct {
 	Now time.Time
 	// Window is the causal window. Zero means DefaultWindow.
 	Window time.Duration
+	// Ablation switches scorers or vetoes off for the scorecard's
+	// mutation check. The zero value, always used in production,
+	// changes nothing.
+	Ablation Ablation
 }
 
 // window returns the causal window with its default applied.

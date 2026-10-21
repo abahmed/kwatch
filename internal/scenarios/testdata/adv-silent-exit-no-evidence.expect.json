@@ -1,0 +1,12 @@
+{
+  "name": "adv-silent-exit-no-evidence",
+  "description": "A workload exits 1 repeatedly with no message, no log and no change anywhere.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "zone//zone-a"
+  ]
+}

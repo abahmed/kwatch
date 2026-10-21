@@ -65,7 +65,7 @@ func TestActiveProbeAdvisesWhenKwatchReachesNoDependency(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, reasons.KwatchNetworkRestricted, got[0].Reason)
 	assert.Equal(t, "kwatch could not reach any of its 5 probed "+
-		"dependencies; its own network may be restricted", got[0].Summary)
+		"dependencies in the same round", got[0].Summary)
 }
 
 func TestActiveProbeStaysQuietOnceKwatchReachesADependency(t *testing.T) {

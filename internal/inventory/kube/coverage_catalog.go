@@ -141,13 +141,13 @@ func storageCoverage() []CoverageEntry {
 
 func policyCoverage() []CoverageEntry {
 	return []CoverageEntry{
-		metadataEntry("rbac.authorization.k8s.io", "roles", "Role"),
-		metadataEntry("rbac.authorization.k8s.io", "rolebindings",
-			"RoleBinding"),
-		metadataEntry("rbac.authorization.k8s.io", "clusterroles",
-			"ClusterRole"),
-		metadataEntry("rbac.authorization.k8s.io", "clusterrolebindings",
-			"ClusterRoleBinding"),
+		statusEntry("rbac.authorization.k8s.io", "roles", "Role", false),
+		statusEntry("rbac.authorization.k8s.io", "rolebindings",
+			"RoleBinding", false),
+		statusEntry("rbac.authorization.k8s.io", "clusterroles",
+			"ClusterRole", false),
+		statusEntry("rbac.authorization.k8s.io", "clusterrolebindings",
+			"ClusterRoleBinding", false),
 		typedEntry(admission, "mutatingwebhookconfigurations",
 			"MutatingWebhookConfiguration"),
 		typedEntry(admission, "validatingwebhookconfigurations",

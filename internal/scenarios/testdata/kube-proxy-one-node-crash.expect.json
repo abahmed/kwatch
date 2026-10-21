@@ -1,0 +1,16 @@
+{
+  "name": "kube-proxy-one-node-crash",
+  "description": "kube-proxy crash-loops on one node; pods there time out on Service addresses while other nodes work.",
+  "root": "daemonset/kube-system/kube-proxy",
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "service/shop/cache",
+    "deployment/shop/cache",
+    "cluster-dns//cluster-dns",
+    "deployment/shop/web",
+    "deployment/shop/api",
+    "deployment/shop/worker",
+    "node//n3"
+  ]
+}

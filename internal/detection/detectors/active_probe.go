@@ -136,9 +136,9 @@ func failureWords(e inventory.Entity) (string, bool) {
 }
 
 // networkRestricted reports that every dependency kwatch probed failed
-// in the same round. The cause is more likely kwatch's own network
-// (an egress policy, a missing route) than that many dependencies
-// being down at once, so no dependency is blamed. It is informational.
+// in the same round. Which of kwatch's own network or the dependencies
+// is at fault is not known, so no dependency is blamed. It is
+// informational.
 func networkRestricted(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
@@ -156,7 +156,7 @@ func networkRestricted(
 		Reason: reasons.KwatchNetworkRestricted, Severity: detection.Info,
 		Since: since,
 		Summary: "kwatch could not reach any of its " + count +
-			" probed dependencies; its own network may be restricted",
+			" probed dependencies in the same round",
 		Evidence: []detection.Evidence{{
 			Label: "dependencies probed, all failing", Value: count}},
 	}}

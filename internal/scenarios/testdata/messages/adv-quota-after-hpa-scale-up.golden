@@ -1,0 +1,10 @@
+10:03:15 settled
+🟠 Quota pod-cap in batch (prod-eu-1) is used up (pods). ResourceQuota pod-cap: pods 6 of 6 used; this pod asks 1. worker is affected as well. To see the object's state and events, run kubectl describe replicaset worker-ce28f42d -n batch
+🟠 Quota pod-cap in batch (prod-eu-1) is used up (pods).
+| 🟠 Quota **pod-cap** in **batch** (**prod-eu-1**) is used up (pods).
+| ResourceQuota pod-cap: pods 6 of 6 used; this pod asks 1.
+| **worker** is affected as well.
+| To see the object's state and events, run
+| ```
+| kubectl describe replicaset worker-ce28f42d -n batch
+| ```

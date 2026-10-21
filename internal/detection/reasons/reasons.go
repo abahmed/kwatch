@@ -17,7 +17,6 @@ const (
 	CrashLoopBackOff  = "CrashLoopBackOff"
 	// OOMKilled is the container termination reason Kubernetes records.
 	OOMKilled = "OOMKilled"
-	Killed    = "Killed"
 	// OOMKILLED is the all-caps spelling some runtimes and event sources
 	// emit for the same kill. Both stay: each is matched literally, and
 	// both map to the same failure mode.
@@ -27,7 +26,6 @@ const (
 	PodInitializing      = "PodInitializing"
 	PodCompleted         = "PodCompleted"
 	ContainersNotReady   = "ContainersNotReady"
-	ContainerCannotRun   = "ContainerCannotRun"
 	CreateContainerError = "CreateContainerError"
 	CreateConfigError    = "CreateContainerConfigError"
 	InitContainerError   = "InitContainerError"
@@ -83,11 +81,10 @@ const (
 const (
 	ProgressDeadlineExceeded = "ProgressDeadlineExceeded"
 	DeploymentUnavailable    = "DeploymentUnavailable"
-	DeploymentProgressing    = "DeploymentProgressingFalse"
-	DeploymentAvailable      = "DeploymentAvailableFalse"
 	DeploymentReplicaFailure = "DeploymentReplicaFailure"
 	ReplicaSetFailure        = "ReplicaSetFailure"
 	DaemonSetUnavailable     = "DaemonSetUnavailable"
+	DaemonSetMisscheduled    = "DaemonSetMisscheduled"
 	StsUnavailable           = "StsUnavailable"
 	ScalingDisabled          = "ScalingDisabled"
 	FailedGetResourceMetric  = "FailedGetResourceMetric"
@@ -101,8 +98,6 @@ const (
 	FailedUpdateScale            = "FailedUpdateScale"
 	HPAInvalidSelector           = "HPAInvalidSelector"
 	HPAMaxedOut                  = "HPAMaxedOut"
-	StatefulSetCondition         = "StatefulSetConditionFailure"
-	DaemonSetCondition           = "DaemonSetConditionFailure"
 	HPAScalingError              = "HPAScalingError"
 	JobFailed                    = "JobFailed"
 	JobDeadlineExceeded          = "JobDeadlineExceeded"

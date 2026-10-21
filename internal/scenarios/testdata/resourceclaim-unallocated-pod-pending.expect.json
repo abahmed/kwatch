@@ -4,5 +4,6 @@
   "root": "resourceclaim/ml/gpu-claim",
   "tier": "notify",
   "maxMessages": 2,
+  "revisesRoot": true,
   "tail": "10m0s"
 }

@@ -183,3 +183,42 @@ func TestLimitRangeSchemaFlagsContradictoryLimits(t *testing.T) {
 	d, _ = s.Describe(&corev1.LimitRange{})
 	assert.Empty(t, text(d, kube.AttrLimitsInvalid))
 }
+
+// Each webhook has its own failure policy, so the configuration says
+// which Services it calls with a policy that refuses when they are gone.
+func TestWebhookSchemaListsTheServicesThatFailClosed(t *testing.T) {
+	ignore := admissionv1.Ignore
+	call := func(namespace, name string) admissionv1.WebhookClientConfig {
+		return admissionv1.WebhookClientConfig{
+			Service: &admissionv1.ServiceReference{
+				Namespace: namespace, Name: name,
+			},
+		}
+	}
+	mixed := &admissionv1.ValidatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: "mixed"},
+		Webhooks: []admissionv1.ValidatingWebhook{
+			{Name: "closed.example.com", ClientConfig: call("sys", "closed")},
+			{Name: "open.example.com", ClientConfig: call("sys", "open"),
+				FailurePolicy: &ignore},
+			{Name: "url.example.com",
+				ClientConfig: admissionv1.WebhookClientConfig{}},
+		},
+	}
+	allIgnore := &admissionv1.ValidatingWebhookConfiguration{
+		ObjectMeta: metav1.ObjectMeta{Name: "open"},
+		Webhooks: []admissionv1.ValidatingWebhook{{
+			Name: "open.example.com", ClientConfig: call("sys", "open"),
+			FailurePolicy: &ignore}},
+	}
+
+	d, ok := kube.WebhookSchema{}.Describe(mixed)
+	assert.True(t, ok)
+	assert.Equal(t, "sys/closed", text(d, kube.AttrWebhookClosedServices))
+
+	d, ok = kube.WebhookSchema{}.Describe(allIgnore)
+	assert.True(t, ok)
+	value, present := d.Attributes[kube.AttrWebhookClosedServices]
+	assert.True(t, present, "no closed service is a fact, not a gap")
+	assert.Empty(t, value.AsText())
+}

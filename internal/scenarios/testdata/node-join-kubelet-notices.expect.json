@@ -1,0 +1,7 @@
+{
+  "name": "node-join-kubelet-notices",
+  "description": "A node joins; before it turns Ready its kubelet records InvalidDiskCapacity and Rebooted.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}
