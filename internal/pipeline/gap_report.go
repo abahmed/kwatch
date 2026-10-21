@@ -98,7 +98,8 @@ func containerCrash(
 	model inventory.Reader, id inventory.EntityID, gap Gap,
 ) (gapCrash, bool) {
 	finished, ok := model.Attribute(id, kube.AttrLastFinished)
-	if !ok || !gap.within(finished.Value.AsTime()) {
+	if !ok || !gap.within(finished.Value.AsTime()) ||
+		cleanExit(model, id) {
 		return gapCrash{}, false
 	}
 	pod, name, ok := strings.Cut(id.Name, "/")
@@ -113,6 +114,20 @@ func containerCrash(
 		restarts:  attributeInt(model, id, kube.AttrRestarts),
 	}
 	return crash, true
+}
+
+// cleanExit reports a termination that was not a crash: exit code 0 or
+// reason Completed, such as a sidecar or an app that exits normally.
+func cleanExit(model inventory.Reader, id inventory.EntityID) bool {
+	if attributeText(model, id, kube.AttrLastReason) == "Completed" {
+		return true
+	}
+	code, ok := model.Attribute(id, kube.AttrLastExitCode)
+	if !ok {
+		return false
+	}
+	n, ok := code.Value.AsNumber()
+	return ok && n == 0
 }
 
 func attributeText(
@@ -141,9 +156,9 @@ func gapReport(
 	gap Gap, changes []inventory.Observation, crashes []gapCrash,
 	rebooted int,
 ) string {
+	start, end := gapTimes(gap)
 	header := fmt.Sprintf(
-		"kwatch was not running from %s to %s UTC (%s).",
-		gap.Start.UTC().Format("15:04"), gap.End.UTC().Format("15:04"),
+		"kwatch was not running from %s to %s UTC (%s).", start, end,
 		format.Duration(gap.End.Sub(gap.Start).Round(time.Minute)))
 	if len(changes) == 0 && len(crashes) == 0 {
 		text := header +
@@ -168,6 +183,17 @@ func gapReport(
 	lines = append(lines,
 		"Anything still broken is reported as its own incident.")
 	return strings.Join(lines, "\n")
+}
+
+// gapTimes formats the gap ends as "15:04", with the date ("Oct 21
+// 20:00") when they fall on different UTC days.
+func gapTimes(gap Gap) (string, string) {
+	start, end := gap.Start.UTC(), gap.End.UTC()
+	layout := "15:04"
+	if start.YearDay() != end.YearDay() || start.Year() != end.Year() {
+		layout = "Jan 2 15:04"
+	}
+	return start.Format(layout), end.Format(layout)
 }
 
 // appendBlock adds a titled block of at most budget items; an empty

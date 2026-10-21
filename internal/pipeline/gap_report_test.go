@@ -65,10 +65,16 @@ func TestGapCrashesSkipNodesThatRebootedInTheGap(t *testing.T) {
 		"Error", 1)...)
 	obs = append(obs, gapContainer("api-3", "stable",
 		testGap.Start.Add(-time.Minute), "Error", 1)...)
+	obs = append(obs, gapContainer("api-4", "stable", inGap,
+		"Completed", 2)...)
+	clean := gapContainer("api-5", "stable", inGap, "Error", 2)
+	clean[2].Attributes[kube.AttrLastExitCode] = inventory.Number(0)
+	obs = append(obs, clean...)
 
 	crashes, rebooted := gapCrashes(gapModel(t, obs...), testGap)
 
-	require.Len(t, crashes, 1, "only the crash in the gap on a stable node")
+	require.Len(t, crashes, 1, "only the crash in the gap on a stable "+
+		"node; clean exits are not crashes")
 	assert.Equal(t, "api-1", crashes[0].pod.Name)
 	assert.Equal(t, "OOMKilled", crashes[0].reason)
 	assert.Equal(t, 3, crashes[0].restarts)
@@ -155,4 +161,16 @@ func TestBaselineSamplerPausedAfterGapLearnsNothing(t *testing.T) {
 	stat := r.stat(inventory.MetricRestartsPerHour)
 
 	assert.Zero(t, stat.Count, "the startup storm is not learned")
+}
+
+func TestGapReportDatesAGapAcrossDays(t *testing.T) {
+	gap := Gap{
+		Start: time.Date(2026, 10, 20, 20, 0, 0, 0, time.UTC),
+		End:   time.Date(2026, 10, 22, 7, 45, 0, 0, time.UTC),
+	}
+
+	got := gapReport(gap, nil, nil, 0)
+
+	assert.True(t, strings.HasPrefix(got, "kwatch was not running "+
+		"from Oct 20 20:00 to Oct 22 07:45 UTC ("), got)
 }
