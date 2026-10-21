@@ -206,6 +206,7 @@ func (c *Collector) finishStartup(ctx context.Context, now time.Time) {
 	s.Summary = state
 	c.env.SaveStartup(state)
 	s.Collected, s.Until = nil, time.Time{}
+	c.sendProChecks(ctx, now)
 }
 
 // listed builds the listing of the message with key that named the

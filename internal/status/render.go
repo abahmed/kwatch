@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/format"
 )
 
@@ -238,6 +239,23 @@ func (r Report) writeEdition(b *strings.Builder) {
 	if r.CommunitySends != "" {
 		line(b, CommunitySendsText(r.CommunitySends))
 	}
+	if r.ProChecks != nil {
+		line(b, ProChecksText(*r.ProChecks))
+	}
+}
+
+// ProChecksText is the /status line of the withheld Pro findings.
+func ProChecksText(c feature.WithheldCounts) string {
+	total := c.Total()
+	if total == 0 {
+		return "Pro checks: no issues in the last 7 days."
+	}
+	issues := "issues"
+	if total == 1 {
+		issues = "issue"
+	}
+	return fmt.Sprintf("Pro checks: %d %s in the last 7 days (%s). "+
+		"Details are in Pro.", total, issues, c.Text())
 }
 
 // writeLicense renders the licensing section.

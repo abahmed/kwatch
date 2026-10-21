@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"k8s.io/klog/v2"
-
-	"github.com/abahmed/kwatch/internal/metrics"
 )
 
 // Open creates the HTTP listener without starting a goroutine. The application
@@ -90,7 +88,7 @@ func newServeMux(h *HealthServer) *http.ServeMux {
 	if h.statusEnabled {
 		mux.HandleFunc("/status", h.statusHandler)
 	}
-	mux.Handle("/metrics", metrics.DefaultRegistry().Handler())
+	mux.Handle("/metrics", h.metricsHandler())
 	return mux
 }
 

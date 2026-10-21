@@ -24,11 +24,14 @@ type Entry struct {
 // capability that entitles it.
 func Entries() []Entry {
 	return []Entry{
-		{Feature: feature.PodDetection, Detector: Container{}},
+		{Feature: feature.PodDetection, Detector: Container{},
+			Governs: containerGoverns,
+			Also:    []feature.ID{feature.PodReadiness}},
 		{Feature: feature.PodDetection, Detector: InitWait{}},
 		{Feature: feature.CustomResources, Detector: Generic{}},
 		{Feature: feature.PodDetection, Detector: NewPod(PodThresholds{}),
-			Governs: podGoverns, Also: []feature.ID{feature.PodReadiness}},
+			Governs: podGoverns, Also: []feature.ID{
+				feature.PodReadiness, feature.PodAdvanced}},
 		{Feature: feature.NodeDetection, Detector: NewNode(0),
 			Governs: nodeGoverns, Also: []feature.ID{feature.NodeUsage}},
 		{Feature: feature.WorkloadDetection, Detector: NewWorkload(0)},
@@ -69,10 +72,26 @@ func Entries() []Entry {
 	}
 }
 
-// podGoverns assigns the sustained readiness finding of a pod to its own
-// capability; every other pod finding is core pod detection.
+// podGoverns assigns the sustained readiness finding of a pod and the
+// rare pod reasons to their own capabilities; every other pod finding is
+// core pod detection.
 func podGoverns(reason string) feature.ID {
-	if reason == reasons.ContainersNotReady {
+	switch reason {
+	case reasons.ContainersNotReady:
+		return feature.PodReadiness
+	case reasons.PodPreempted, reasons.PodPreemptedRepeatedly,
+		reasons.PodAdmissionRejected, reasons.PodKilledAtGrace,
+		reasons.SchedulingGated:
+		return feature.PodAdvanced
+	}
+	return feature.PodDetection
+}
+
+// containerGoverns assigns a failing readiness probe to pod readiness,
+// with the sustained readiness finding it precedes. Liveness and startup
+// probe failures stay core pod detection.
+func containerGoverns(reason string) feature.ID {
+	if reason == reasons.ReadinessProbeFailed {
 		return feature.PodReadiness
 	}
 	return feature.PodDetection
@@ -105,8 +124,11 @@ func Default() []detection.Detector {
 // Entitled returns the detectors an installation may run. A detector
 // whose capability is not entitled is left out; one whose findings
 // belong to several capabilities is wrapped so only the entitled
-// findings come through. A nil e is the Community edition.
-func Entitled(e feature.Entitlements) []detection.Detector {
+// findings come through, and the withheld ones are counted in withheld
+// (optional). A nil e is the Community edition.
+func Entitled(
+	e feature.Entitlements, withheld *feature.Withheld,
+) []detection.Detector {
 	e = feature.OrCommunity(e)
 	var out []detection.Detector
 	for _, entry := range Entries() {
@@ -121,7 +143,8 @@ func Entitled(e feature.Entitlements) []detection.Detector {
 			out = append(out, det)
 		default:
 			out = append(out, restricted{Detector: det,
-				entitled: e, governs: entry.Governs})
+				entitled: e, governs: entry.Governs,
+				withheld: withheld})
 		}
 	}
 	return out
@@ -141,6 +164,7 @@ type restricted struct {
 	detection.Detector
 	entitled feature.Entitlements
 	governs  func(reason string) feature.ID
+	withheld *feature.Withheld
 }
 
 // Detect implements detection.Detector.
@@ -152,7 +176,27 @@ func (r restricted) Detect(
 	for _, f := range found {
 		if r.entitled.Has(r.governs(f.Reason)) {
 			kept = append(kept, f)
+			continue
+		}
+		if category, ok := withheldCategory(f.Reason); ok {
+			r.withheld.Record(ctx.Now, category,
+				e.ID.String()+"\x00"+f.Reason)
 		}
 	}
 	return kept
+}
+
+// withheldCategory is the category a withheld Community finding is
+// counted under; ok is false for a finding that is not counted.
+func withheldCategory(reason string) (feature.WithheldCategory, bool) {
+	switch reason {
+	case reasons.ContainersNotReady, reasons.ReadinessProbeFailed:
+		return feature.WithheldReadiness, true
+	case reasons.SchedulingGated:
+		return feature.WithheldGates, true
+	case reasons.PodPreempted, reasons.PodPreemptedRepeatedly,
+		reasons.PodAdmissionRejected, reasons.PodKilledAtGrace:
+		return feature.WithheldPreemption, true
+	}
+	return 0, false
 }

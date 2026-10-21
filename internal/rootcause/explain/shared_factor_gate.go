@@ -60,3 +60,34 @@ func claimCovered(
 		}
 	}
 }
+
+// withholdShared removes the shared-factor-only candidates from viable
+// and returns the failures of the area that a chosen one would have
+// explained. Only a shared factor the set cover would pick counts: one
+// that specific causes outrank explains nothing on its own.
+func withholdShared(
+	inArea map[inventory.EntityID]bool, viable []scored,
+) ([]scored, []inventory.EntityID) {
+	chosen, _ := setCover(inArea, viable)
+	withheld := map[inventory.EntityID]bool{}
+	for _, s := range chosen {
+		if !sharedFactorOnly(s.c) {
+			continue
+		}
+		for effect := range s.c.covers {
+			if inArea[effect] {
+				withheld[effect] = true
+			}
+		}
+	}
+	kept := make([]scored, 0, len(viable))
+	for _, s := range viable {
+		if !sharedFactorOnly(s.c) {
+			kept = append(kept, s)
+		}
+	}
+	if len(withheld) == 0 {
+		return kept, nil
+	}
+	return kept, sortedKeys(withheld)
+}

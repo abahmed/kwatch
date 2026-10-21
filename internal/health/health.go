@@ -32,6 +32,7 @@ type HealthServer struct {
 	leadership      LeadershipStatus
 	coverage        *CoverageSummary
 	statusHolder    statusHolder
+	metricsGate     metricsGate
 }
 
 // HealthResponse is the JSON body of the /health endpoint.

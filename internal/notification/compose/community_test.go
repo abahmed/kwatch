@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -60,21 +61,21 @@ func firstSentence(note string) string {
 
 func TestCommunityNamesWhatProWouldAdd(t *testing.T) {
 	p := solvedNodeOutage(t)
+	p.Mode = detection.ModeNotReady
 	_, community, quiet := communityWriters()
 	d := announce(p)
 	require.NotEmpty(t, d.Incident.Impact)
 
 	got := community.Write(d, at(4, 0))
 	hint := noteFooter(got.Note)
-	assert.True(t, strings.HasPrefix(hint, "Pro: "), "%q", got.Note)
-	assert.Contains(t, hint, "affected services")
-	assert.NotContains(t, strings.Join(got.Lines, "\n"), "Pro:",
+	assert.Equal(t, noteNode+proInvite, hint, "%q", got.Note)
+	assert.NotContains(t, strings.Join(got.Lines, "\n"), "Pro would",
 		"the note is not an explanation line")
 	last := got.Doc[len(got.Doc)-1]
 	assert.Equal(t, notification.Small, last.Kind)
 
 	hidden := quiet.Write(d, at(4, 0))
-	assert.NotContains(t, hidden.Note, "Pro:",
+	assert.NotContains(t, hidden.Note, "Pro would",
 		"app.hideProHints removes the note")
 	assert.Equal(t, strings.TrimSuffix(got.Note, "\n"+hint), hidden.Note)
 }

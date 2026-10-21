@@ -78,6 +78,7 @@ func newAnnouncer(
 		Write: a.write, WithChanges: a.withChanges,
 		SaveStartup:  storage.saveStartup,
 		OwnNamespace: os.Getenv("POD_NAMESPACE"),
+		Withheld:     deps.Withheld.Counts,
 	})
 	return a
 }

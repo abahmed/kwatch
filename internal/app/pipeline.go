@@ -99,11 +99,14 @@ func startSources(
 // newDetectorRegistry builds the production registry from the shared
 // default detector set, so production, replay and scenarios all run the
 // same detectors. Only the detectors the edition is entitled to are
-// registered; a nil e entitles all.
+// registered; a nil e is Community. The Pro findings Community
+// withholds are counted in withheld (optional).
 func newDetectorRegistry(
 	synced func(inventory.Kind) bool, e feature.Entitlements,
+	withheld *feature.Withheld,
 ) *detection.Registry {
-	return detection.NewRegistry(synced, detectors.Entitled(e)...)
+	return detection.NewRegistry(synced,
+		detectors.Entitled(e, withheld)...)
 }
 
 // pruneModel drops old change history every modelPruneInterval. Expired
