@@ -70,3 +70,14 @@ func (m *Manager) newerThanCachedLocked(lease Lease) bool {
 	iat, ok := leaseIssuedAt(m.lease)
 	return !ok || lease.Iat > iat
 }
+
+// signedLeaseTime is the latest time a cached lease proves has passed:
+// its signed iat or srv_time. Only a verified signature counts; the
+// binding is not checked, since the time is real for any cluster.
+func (v *Verifier) signedLeaseTime(s string) (time.Time, bool) {
+	l, ok := v.signedLease(s)
+	if !ok {
+		return time.Time{}, false
+	}
+	return time.Unix(max(l.Iat, l.SrvTime), 0).UTC(), true
+}

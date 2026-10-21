@@ -38,13 +38,14 @@ type pingBody struct {
 var ErrPingTooLarge = errors.New("license: check-in body too large")
 
 // Ping sends a check-in to POST /license/ping, signed like a renewal. The
-// server answers 204; errors are classified as for Renew.
+// server answers 204; errors are classified as for Renew. The Result
+// carries only the server time.
 func (c *Client) Ping(
 	ctx context.Context, priv ed25519.PrivateKey, req SignedRequest,
 	ping Ping,
-) error {
+) (Result, error) {
 	if len(priv) != ed25519.PrivateKeySize {
-		return errors.New("license: invalid instance key")
+		return Result{}, errors.New("license: invalid instance key")
 	}
 	state := ""
 	if ping.Stopping {
@@ -57,14 +58,13 @@ func (c *Client) Ping(
 		Checkins: ping.Checkins, State: state,
 	})
 	if err != nil {
-		return err
+		return Result{}, err
 	}
 	if len(body) > maxPingBody {
-		return ErrPingTooLarge
+		return Result{}, ErrPingTooLarge
 	}
 	sig := base64.RawURLEncoding.EncodeToString(ed25519.Sign(priv, body))
-	_, err = c.call(ctx, "/license/ping", body, sig, false)
-	return err
+	return c.call(ctx, "/license/ping", body, sig, false)
 }
 
 // Ping sends a check-in for this cluster's binding. It needs a key and the
@@ -84,7 +84,10 @@ func (m *Manager) Ping(ctx context.Context, ping Ping) error {
 	m.mu.Lock()
 	priv := m.priv
 	m.mu.Unlock()
-	return m.cfg.Client.Ping(ctx, priv, m.signedRequest(ctx, b, 0), ping)
+	_, err = m.signedCall(ctx, b, 0, func(req SignedRequest) (Result, error) {
+		return m.cfg.Client.Ping(ctx, priv, req, ping)
+	})
+	return err
 }
 
 // StopsCheckins reports a ping answer that means the server will not take

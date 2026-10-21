@@ -13,17 +13,13 @@ func (m *Manager) signedRequest(
 ) SignedRequest {
 	return SignedRequest{
 		LID: b.LID, ClusterUUID: b.ClusterUUID, ClusterProof: b.ClusterProof,
-		LeaseIat: leaseIat, TS: m.cfg.Now(),
+		LeaseIat: leaseIat, TS: m.serverNow(),
 		Version: m.cfg.Version, NodeCount: m.nodeCount(ctx),
 	}
 }
 
 func (m *Manager) activate(ctx context.Context, b Binding) error {
-	res, err := m.cfg.Client.Activate(ctx, ActivateRequest{
-		Key: m.cfg.Key, ClusterUUID: b.ClusterUUID, ClusterProof: b.ClusterProof,
-		InstancePub: b.InstancePub,
-		Version:     m.cfg.Version, NodeCount: m.nodeCount(ctx),
-	})
+	res, err := m.timedActivate(ctx, b, m.cfg.Client.Activate)
 	return m.handle(res, err, b)
 }
 
@@ -40,7 +36,10 @@ func (m *Manager) sync(ctx context.Context, b Binding) error {
 	if !renewable {
 		return m.activate(ctx, b)
 	}
-	res, err := m.cfg.Client.Renew(ctx, priv, m.signedRequest(ctx, b, cur.Iat))
+	res, err := m.signedCall(ctx, b, cur.Iat,
+		func(req SignedRequest) (Result, error) {
+			return m.cfg.Client.Renew(ctx, priv, req)
+		})
 	if errors.Is(err, ErrUnauthorized) {
 		// The binding is gone (for example after a transfer): activate once.
 		return m.activate(ctx, b)
@@ -52,6 +51,7 @@ func (m *Manager) sync(ctx context.Context, b Binding) error {
 // verified moves the clock guard; the response body's own srv_time is
 // unsigned and error responses are never trusted for time.
 func (m *Manager) handle(res Result, callErr error, b Binding) error {
+	m.noteServerTime(res.SrvTime)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if callErr != nil {
@@ -111,7 +111,10 @@ func (m *Manager) Deactivate(ctx context.Context) error {
 	if l, err := m.v.VerifyLease(lease, b, m.effective()); err == nil {
 		iat = l.Iat
 	}
-	_, err = m.cfg.Client.Deactivate(ctx, priv, m.signedRequest(ctx, b, iat))
+	_, err = m.signedCall(ctx, b, iat,
+		func(req SignedRequest) (Result, error) {
+			return m.cfg.Client.Deactivate(ctx, priv, req)
+		})
 	if err != nil && !errors.Is(err, ErrUnauthorized) {
 		m.mu.Lock()
 		m.persistLocked()

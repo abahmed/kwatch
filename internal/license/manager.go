@@ -107,6 +107,16 @@ type Manager struct {
 	anchor   time.Time // first local reading, for the monotonic cross-check
 	savedMax time.Time // MaxSeen as last written to the LeaseStore
 
+	// offset is server time minus local time from the last response,
+	// used only to timestamp signed requests.
+	offset time.Duration
+	// wakeCancel ends the renew loop's current wait; wakePending holds a
+	// wake that arrived while no wait was running.
+	wakeCancel  context.CancelFunc
+	wakePending bool
+	woken       bool
+	lastResync  time.Time
+
 	conflictSince time.Time // start of the current conflict streak
 	moveHandled   time.Time // newest move request already answered
 	movedAt       time.Time // last move here; later releases only count
@@ -192,6 +202,11 @@ func (m *Manager) init(ctx context.Context) {
 		} else {
 			m.mu.Lock()
 			m.lease, m.clock, m.savedMax = lease, clock, clock.MaxSeen
+			// A deleted or older clock entry must not let the clock
+			// fall before what the cached lease itself proves.
+			if t, ok := m.v.signedLeaseTime(lease); ok {
+				m.clock.Observe(t)
+			}
 			m.mu.Unlock()
 		}
 	}
@@ -345,5 +360,8 @@ func (m *Manager) backoff() time.Duration {
 	defer m.mu.Unlock()
 	i := min(m.failures, len(retryBackoff)-1)
 	m.failures++
-	return retryBackoff[i]
+	// ±20% jitter keeps clusters that failed together from retrying in
+	// lockstep.
+	d := retryBackoff[i]
+	return d + m.cfg.Jitter(d/5)
 }

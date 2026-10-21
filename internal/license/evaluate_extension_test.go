@@ -17,11 +17,24 @@ func TestEvaluateEndIsLaterOfKeyAndLicExp(t *testing.T) {
 	if !st.ExpiresAt.Equal(time.Unix(l.LicExp, 0)) {
 		t.Fatalf("ExpiresAt = %v, want lic_exp", st.ExpiresAt)
 	}
-	l.LicExp = testNow.Add(24 * time.Hour).Unix() // shorter than the key
-	st = Evaluate(Inputs{Verifier: v, KeyString: SignKey(testKey(keyExp), priv),
-		Lease: SignLease(l, priv), Binding: b, Now: testNow})
-	if !st.ExpiresAt.Equal(keyExp) {
-		t.Fatalf("ExpiresAt = %v, want key exp", st.ExpiresAt)
+}
+
+func TestEvaluateShorterLicExpEndsLicenseOffline(t *testing.T) {
+	v, priv := testEnv()
+	b := testBinding()
+	keyExp := testNow.Add(90 * 24 * time.Hour)
+	l := testLease(b, testNow.Add(24*time.Hour))
+	l.LicExp = testNow.Add(time.Hour).Unix() // shorter than the key
+	in := Inputs{Verifier: v, KeyString: SignKey(testKey(keyExp), priv),
+		Lease: SignLease(l, priv), Binding: b, Now: testNow}
+	st := Evaluate(in)
+	if !st.ExpiresAt.Equal(time.Unix(l.LicExp, 0)) ||
+		st.State != StateActive {
+		t.Fatalf("before lic_exp: %+v, want active until lic_exp", st)
+	}
+	in.Now = testNow.Add(2 * time.Hour)
+	if st = Evaluate(in); st.State != StateExpired {
+		t.Fatalf("after lic_exp: state = %v, want expired", st.State)
 	}
 }
 

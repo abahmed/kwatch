@@ -46,7 +46,7 @@ func TestClientPingSendsTheContractBody(t *testing.T) {
 	req := SignedRequest{LID: "lic_1", ClusterUUID: "cu", ClusterProof: "cp",
 		TS: time.Unix(1_800_000_000, 0), Version: "v1.0.0", NodeCount: 3}
 
-	err := c.Ping(context.Background(), priv, req, Ping{
+	_, err := c.Ping(context.Background(), priv, req, Ping{
 		Checkins: true, Stopping: true,
 	})
 	if err != nil {
@@ -88,7 +88,7 @@ func TestClientPingClassifiesAnswers(t *testing.T) {
 		{http.StatusBadRequest, `{"error":"bad_request"}`, false, false},
 	} {
 		c := pingServer(t, pub, tc.status, tc.body, nil)
-		err := c.Ping(context.Background(), priv,
+		_, err := c.Ping(context.Background(), priv,
 			SignedRequest{TS: time.Unix(1, 0)}, Ping{Checkins: true})
 		if err == nil {
 			t.Fatalf("%d: no error", tc.status)

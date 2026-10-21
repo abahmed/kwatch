@@ -36,6 +36,9 @@ const (
 type checkinPinger interface {
 	Status() license.Status
 	Ping(context.Context, license.Ping) error
+	// ResyncOnVerdict renews at once after an expired, revoked or
+	// suspended answer instead of at the next daily renewal.
+	ResyncOnVerdict(error) bool
 }
 
 // checkinRecord is whether the server last heard check-ins on, so turning
@@ -121,6 +124,7 @@ func (c *checkinRunner) tick(ctx context.Context) time.Duration {
 		c.remember(true)
 	case license.StopsCheckins(err):
 		c.blocked = st.LID
+		c.pinger.ResyncOnVerdict(err)
 		klog.InfoS("cluster check-ins paused until the license changes",
 			"reason", err.Error())
 	case errors.As(err, &limited):

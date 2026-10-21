@@ -147,7 +147,10 @@ helm uninstall kwatch --namespace kwatch
 
 The Secret `kwatch-license-instance` (the license instance identity) is
 annotated `helm.sh/resource-policy: keep`, so uninstall leaves it in place and
-a reinstall keeps the same identity. Delete it yourself to start fresh:
+a reinstall keeps the same identity. kwatch also keeps a copy of its signed
+Pro lease and clock guard there (field `lease-cache`), so Pro offline grace
+survives a lost data volume, including `persistence.emptyDir`. Delete the
+Secret yourself to start fresh:
 
 ```bash
 kubectl delete secret kwatch-license-instance --namespace kwatch

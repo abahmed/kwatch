@@ -18,6 +18,14 @@ type fakePinger struct {
 	status license.Status
 	err    error
 	pings  []license.Ping
+	resync []error
+}
+
+func (f *fakePinger) ResyncOnVerdict(err error) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.resync = append(f.resync, err)
+	return true
 }
 
 func (f *fakePinger) Status() license.Status {
@@ -125,6 +133,8 @@ func TestCheckinRunnerStopsUntilTheLicenseChanges(t *testing.T) {
 	c.tick(context.Background())
 	c.tick(context.Background())
 	require.Len(t, p.sent(), 1, "a refused license is not retried")
+	require.Equal(t, []error{license.ErrRevoked}, p.resync,
+		"the verdict reaches the license manager once")
 
 	p.status, p.err = activePro("lic_…2"), nil
 	c.tick(context.Background())

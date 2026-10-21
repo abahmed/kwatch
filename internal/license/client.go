@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -41,7 +40,14 @@ var (
 		"this binding")
 	ErrStaleTimestamp = errors.New("license: request timestamp " +
 		"rejected by server")
+	// ErrNonceReused means the server saw this activation nonce
+	// recently; Activate and Move retry once with a fresh one.
+	ErrNonceReused = errors.New("license: activation nonce reused")
 )
+
+// srvTimeHeader carries the server clock (unix seconds) on every
+// /license/* response, 204 and errors included.
+const srvTimeHeader = "X-Kwatch-Srv-Time"
 
 // ErrConflict means the license is bound to another cluster.
 type ErrConflict struct {
@@ -127,10 +133,13 @@ type Client struct {
 }
 
 // Result is a successful (or, with an error, a failed) server response.
-// The response body's srv_time is unsigned and deliberately not surfaced:
-// only the srv_time inside a verified lease may move the clock guard.
 type Result struct {
 	Lease string
+	// SrvTime is the server clock from the body's srv_time, or the Date
+	// header when the body has none; zero when neither is present. It is
+	// unsigned, so it only corrects request timestamps: only the srv_time
+	// inside a verified lease may move the clock guard.
+	SrvTime time.Time
 }
 
 // ActivateRequest is the body of POST /license/activate.
@@ -141,6 +150,9 @@ type ActivateRequest struct {
 	InstancePub  string
 	Version      string
 	NodeCount    int
+	// TS, when set, is sent as ts and checked by the server against its
+	// clock (±600s); the manager passes its server-corrected time.
+	TS time.Time
 }
 
 // SignedRequest is the body of the instance-signed renew and deactivate calls.
@@ -162,6 +174,7 @@ type activateBody struct {
 	Nonce        string `json:"nonce"`
 	Version      string `json:"kwatch_version,omitempty"`
 	NodeCount    int    `json:"node_count"`
+	TS           int64  `json:"ts,omitempty"`
 }
 
 type signedBody struct {
@@ -177,6 +190,7 @@ type signedBody struct {
 type wireResponse struct {
 	Lease      string `json:"lease"`
 	Error      string `json:"error"`
+	SrvTime    int64  `json:"srv_time"`
 	BoundSince int64  `json:"bound_since"`
 	// RetryAfter is seconds until a transfer slot frees (transfer_limit).
 	RetryAfter int64 `json:"retry_after"`
@@ -200,6 +214,20 @@ func (c *Client) Move(
 func (c *Client) activateCall(
 	ctx context.Context, path string, req ActivateRequest,
 ) (Result, error) {
+	res, err := c.activateOnce(ctx, path, req)
+	if errors.Is(err, ErrNonceReused) && ctx.Err() == nil {
+		res, err = c.activateOnce(ctx, path, req)
+	}
+	return res, err
+}
+
+func (c *Client) activateOnce(
+	ctx context.Context, path string, req ActivateRequest,
+) (Result, error) {
+	var ts int64
+	if !req.TS.IsZero() {
+		ts = req.TS.Unix()
+	}
 	nonce := make([]byte, 16)
 	if _, err := rand.Read(nonce); err != nil {
 		return Result{}, err
@@ -208,7 +236,7 @@ func (c *Client) activateCall(
 		Key: req.Key, ClusterUUID: req.ClusterUUID, ClusterProof: req.ClusterProof,
 		InstancePub: req.InstancePub,
 		Nonce:       base64.RawURLEncoding.EncodeToString(nonce),
-		Version:     req.Version, NodeCount: req.NodeCount,
+		Version:     req.Version, NodeCount: req.NodeCount, TS: ts,
 	})
 	if err != nil {
 		return Result{}, err
@@ -293,12 +321,12 @@ func (c *Client) call(
 	if err != nil {
 		return Result{}, &TransientError{Status: resp.StatusCode, Err: err}
 	}
-	res := Result{}
+	var w wireResponse
+	parseErr := json.Unmarshal(raw, &w)
+	res := Result{SrvTime: serverTime(w.SrvTime, resp.Header)}
 	if resp.StatusCode == http.StatusNoContent && !wantLease {
 		return res, nil
 	}
-	var w wireResponse
-	parseErr := json.Unmarshal(raw, &w)
 	if resp.StatusCode == http.StatusOK {
 		if parseErr != nil || (wantLease && w.Lease == "") {
 			return res, &TransientError{
@@ -310,60 +338,4 @@ func (c *Client) call(
 		return res, nil
 	}
 	return res, classify(resp.StatusCode, w, resp.Header.Get("Retry-After"))
-}
-
-func classify(status int, w wireResponse, retryAfter string) error {
-	switch {
-	case status >= 500:
-		return &TransientError{Status: status, Err: fmt.Errorf("status %d", status)}
-	case status == http.StatusTooManyRequests && w.Error == "transfer_limit":
-		return ErrTransferLimit{
-			RetryAfter: time.Duration(max(w.RetryAfter, 0)) * time.Second,
-		}
-	case status == http.StatusTooManyRequests:
-		return ErrRateLimited{RetryAfter: parseRetryAfter(retryAfter)}
-	case status == http.StatusUnauthorized:
-		return ErrUnauthorized
-	}
-	switch w.Error {
-	case "bound_to_other_cluster":
-		var since time.Time
-		if w.BoundSince > 0 {
-			since = time.Unix(w.BoundSince, 0).UTC()
-		}
-		return ErrConflict{BoundSince: since}
-	case "instance_superseded":
-		return ErrInstanceSuperseded
-	case "revoked":
-		return ErrRevoked
-	case "suspended":
-		return ErrSuspended
-	case "expired":
-		return ErrServerExpired
-	case "trial_already_used":
-		return ErrTrialUsed
-	case "key_replaced":
-		return ErrKeyReplaced
-	case "cluster_proof_mismatch":
-		return ErrProofMismatch
-	case "stale_timestamp":
-		return ErrStaleTimestamp
-	}
-	return &StatusError{Status: status, Code: w.Error}
-}
-
-// parseRetryAfter accepts delta-seconds or an HTTP date; unparseable values
-// yield a minute.
-func parseRetryAfter(v string) time.Duration {
-	v = strings.TrimSpace(v)
-	d := time.Minute
-	if secs, err := strconv.Atoi(v); err == nil && secs >= 0 {
-		d = time.Duration(secs) * time.Second
-	} else if t, err := http.ParseTime(v); err == nil {
-		d = time.Until(t)
-	}
-	if d < 0 {
-		d = 0
-	}
-	return min(d, maxRetryAfter)
 }
