@@ -34,7 +34,7 @@ const (
 const AttrEndpointsTerminating = "endpoints.terminating"
 
 // skipProbeAnnotation opts a Service out of automatic probing.
-const skipProbeAnnotation = "kwatch.io/skip-probe"
+const skipProbeAnnotation = "kwatch.dev/skip-probe"
 
 // ServiceSchema describes Services. Which pods back a Service comes from
 // its EndpointSlices, not from re-evaluating the selector.

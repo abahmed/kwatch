@@ -95,7 +95,7 @@ func TestAutoServiceProbeHonoursTheSkipAnnotation(t *testing.T) {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "quiet", Namespace: "ns",
-			Annotations: map[string]string{"kwatch.io/skip-probe": "true"},
+			Annotations: map[string]string{"kwatch.dev/skip-probe": "true"},
 		},
 		Spec: corev1.ServiceSpec{Ports: []corev1.ServicePort{{
 			Port: 80, Protocol: corev1.ProtocolTCP}}},

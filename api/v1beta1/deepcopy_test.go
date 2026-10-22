@@ -47,8 +47,8 @@ func TestKwatchConfigSpecDeepCopyCopiesMonitorFields(t *testing.T) {
 	in := &KwatchConfigSpec{
 		Maintenance: MaintenanceConfig{
 			Enabled:         ptr.To(true),
-			Annotation:      "kwatch.io/maintenance",
-			UntilAnnotation: "kwatch.io/maintenance-until",
+			Annotation:      "kwatch.dev/maintenance",
+			UntilAnnotation: "kwatch.dev/maintenance-until",
 		},
 		Telemetry: TelemetryConfig{Enabled: ptr.To(true)},
 		ActiveProbeMonitor: MonitorConfig{

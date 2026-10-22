@@ -9,7 +9,7 @@ import (
 )
 
 // An acknowledgement is a person saying "I am looking at this" with the
-// kwatch.io/ack annotation on the incident's root or on one of its
+// kwatch.dev/ack annotation on the incident's root or on one of its
 // members. While the annotation is there the incident stops reminding:
 // the people it would remind are already on it. Everything else carries
 // on, because it is news, not a repeat: a worse state, a resolve.

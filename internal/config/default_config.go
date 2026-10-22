@@ -13,8 +13,8 @@ func DefaultConfig() *Config {
 		ResyncSeconds: 300,
 		Maintenance: MaintenanceConfig{
 			Enabled:         true,
-			Annotation:      "kwatch.io/maintenance",
-			UntilAnnotation: "kwatch.io/maintenance-until",
+			Annotation:      "kwatch.dev/maintenance",
+			UntilAnnotation: "kwatch.dev/maintenance-until",
 		},
 		ActiveProbeMonitor: ActiveProbeMonitor{
 			IntervalSeconds: 30, TimeoutSeconds: 5,

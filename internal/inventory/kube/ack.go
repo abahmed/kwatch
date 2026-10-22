@@ -10,10 +10,10 @@ import (
 
 // AckAnnotation is the annotation a person puts on an object to say they
 // are looking at its incident: kubectl annotate deploy/api
-// kwatch.io/ack="looking into it". It has the same prefix as the
+// kwatch.dev/ack="looking into it". It has the same prefix as the
 // maintenance annotations, and it is read-only for kwatch: kwatch never
 // writes to the cluster.
-const AckAnnotation = "kwatch.io/ack"
+const AckAnnotation = "kwatch.dev/ack"
 
 // Attributes recording who looks at an object.
 const (
@@ -26,8 +26,8 @@ const (
 )
 
 // OwnerKey is the label or annotation that names an object's owner, such
-// as a team: kwatch.io/owner=payments. Provider routes match on it.
-const OwnerKey = "kwatch.io/owner"
+// as a team: kwatch.dev/owner=payments. Provider routes match on it.
+const OwnerKey = "kwatch.dev/owner"
 
 // maxAckNote bounds the text of an acknowledgement kept in the model.
 const maxAckNote = 200

@@ -139,7 +139,7 @@ type Route struct {
 	Namespaces []string
 	Reasons    []string
 	Severity   string
-	// Owners are the owners of the problem: the kwatch.io/owner value of
+	// Owners are the owners of the problem: the kwatch.dev/owner value of
 	// its workload or namespace, empty when it has none. A summary
 	// lists the owners of all its problems.
 	Owners []string `json:",omitempty"`

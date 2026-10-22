@@ -1742,7 +1742,7 @@
   reading when the old node polls; readings of nodes that left the cluster are
   removed; API server and DNS rates are only computed between samples of the
   same process or pod; automatic Service probing dials the first TCP port,
-  skips ExternalName Services and honours `kwatch.io/skip-probe: "true"`;
+  skips ExternalName Services and honours `kwatch.dev/skip-probe: "true"`;
   scheduler reasons keep dots ("Insufficient nvidia.com/gpu"); a deleting pod
   is no longer described as a config edit; change sets stop growing at 15
   minutes.
@@ -1984,14 +1984,14 @@
   the reverse. Plain volume mounts, which update in place, are never called
   stale.
 - **Acknowledge an incident with an annotation.** `kubectl annotate
-  deploy/api kwatch.io/ack="looking into it"` posts one update in the
+  deploy/api kwatch.dev/ack="looking into it"` posts one update in the
   incident's thread and stops its reminders, including the page reminder,
   until the annotation is removed (which is told once too). Resolves and real
   news still go out. A reopen inside the repage window stays acknowledged; a
   new incident is not pre-acknowledged but says when the annotation is still
   on the object. The note is quoted, bounded and stripped of credentials.
 - **Route incidents by owner.** A provider route can list `owners`. An
-  incident's owner is the `kwatch.io/owner` label or annotation of its root,
+  incident's owner is the `kwatch.dev/owner` label or annotation of its root,
   else of what owns the root, else of its namespace; with none it goes to the
   routes that ask for no owner. Provider routes did not look at labels before.
 - **A cluster waking up is not a storm.** When five or more workloads start
@@ -3015,7 +3015,7 @@ renewed falls back to Community in place, without restarting the pod.
   constructs providers as startup does, so a config that startup refuses
   fails lint; `--check` still contacts providers.
 - **Maintenance annotations.** Only `true`, `1`, `yes` or `on` hold an
-  object; a valid `kwatch.io/maintenance-until` in the past ends the hold
+  object; a valid `kwatch.dev/maintenance-until` in the past ends the hold
   even when the annotation is still set.
 - **Redaction.** Credentials in URLs are redacted up to the last `@` of the
   user info; camelCase keys (`secretAccessKey`, `privateKey`),

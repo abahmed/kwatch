@@ -39,10 +39,10 @@ never goes away (`announce/ongoing.go`).
 ## Acknowledged incidents
 
 A person acknowledges an incident by annotating its root, or one of its
-members, with `kwatch.io/ack` (see `ack.go`):
+members, with `kwatch.dev/ack` (see `ack.go`):
 
 ```text
-kubectl annotate deploy/api kwatch.io/ack="looking into it"
+kubectl annotate deploy/api kwatch.dev/ack="looking into it"
 ```
 
 - While the annotation is there, `reminderDue` is false, so the incident
