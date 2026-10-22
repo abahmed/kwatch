@@ -29,8 +29,8 @@
 </p>
 
 <p align="center">
-  <a href="https://kwatch.dev">kwatch.dev</a> ·
-  <a href="https://docs.kwatch.dev">Docs</a> ·
+  <b>Website:</b> <a href="https://kwatch.dev">kwatch.dev</a> ·
+  <b>Docs:</b> <a href="https://docs.kwatch.dev">docs.kwatch.dev</a> ·
   <a href="https://kwatch.dev/pro">Pro, free during early access</a> ·
   <a href="https://discord.gg/kzJszdKmJ7">Discord</a>
 </p>
