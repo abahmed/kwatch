@@ -64,8 +64,8 @@ narrowing the watch list and turning off the noisy reasons.
 | `runbooks` | 📚 Map a reason to a URL; it is added to the next steps of every matching incident |
 | `severityByReason` / `severityByOwnerKind` | 🎯 Change how loudly an incident is delivered (see [Severity](#-severity)). Keys match case-insensitively |
 | `maintenance.enabled` | ✅ Honor maintenance annotations (default: true) |
-| `maintenance.annotation` | Annotation used to mark deliberate maintenance (default: `kwatch.io/maintenance`) |
-| `maintenance.untilAnnotation` | Optional RFC3339 expiry annotation (default: `kwatch.io/maintenance-until`) |
+| `maintenance.annotation` | Annotation used to mark deliberate maintenance (default: `kwatch.dev/maintenance`) |
+| `maintenance.untilAnnotation` | Optional RFC3339 expiry annotation (default: `kwatch.dev/maintenance-until`) |
 | `ignore*` fields | 🔕 Deprecated filters (`ignoreContainerNames`, `ignorePodNames`, `ignoreContainerMessages`, `ignoreNodeReasons`, `ignoreNodeMessages`) — each becomes one silence rule; use `silences` below |
 
 kwatch always watches every supported resource. `namespaces`, `namespaceSelector`,
@@ -109,11 +109,11 @@ Annotate an object (or a namespace) when a deliberate change should not notify:
 ```yaml
 maintenance:
   enabled: true
-  annotation: kwatch.io/maintenance
-  untilAnnotation: kwatch.io/maintenance-until
+  annotation: kwatch.dev/maintenance
+  untilAnnotation: kwatch.dev/maintenance-until
 ```
 
-Use `kwatch.io/maintenance: "true"` (`true`, `1`, `yes` or `on`, case
+Use `kwatch.dev/maintenance: "true"` (`true`, `1`, `yes` or `on`, case
 insensitive; any other value such as `false`, `0`, `no` or `off` does not hold),
 or set the until annotation to an RFC3339 time such as `2026-08-31T23:00:00Z`.
 When both are set, the until time bounds the hold: after it passes the object
@@ -127,15 +127,15 @@ Invalid expiry values are ignored rather than suppressing incidents.
 Tell the thread you are on it, from the terminal:
 
 ```sh
-kubectl annotate deploy/api kwatch.io/ack="looking into it"
+kubectl annotate deploy/api kwatch.dev/ack="looking into it"
 ```
 
-Put `kwatch.io/ack` on the incident's root object or on any object that
+Put `kwatch.dev/ack` on the incident's root object or on any object that
 fails in it. kwatch posts one update in the incident's thread,
 `Acknowledged on deployment/api: "looking into it"`, and stops reminding
 (including the page reminder) while the annotation is there. News still
 goes out, and so does the resolve. Remove the annotation
-(`kubectl annotate deploy/api kwatch.io/ack-`) and kwatch posts
+(`kubectl annotate deploy/api kwatch.dev/ack-`) and kwatch posts
 `Acknowledgement removed` and resumes its reminders.
 
 - An incident that comes back within the repage window is the same
@@ -331,7 +331,7 @@ status, resource versions, and deletion metadata remain intact.
   name. The closing messages of those carry no problems and follow the
   summary they close. Plain notices go to every provider.
 - **Routing by owner.** Label or annotate a workload, or its namespace,
-  with `kwatch.io/owner: payments`, and give a provider a route for it:
+  with `kwatch.dev/owner: payments`, and give a provider a route for it:
 
   ```yaml
   alert:
@@ -716,7 +716,7 @@ inventory, so it adds no API requests.
 > Service there is reported as `ActiveProbeFailure` while being perfectly
 > healthy. Two escape hatches: list the namespace in
 > `activeProbeMonitor.excludeNamespaces`, or annotate the individual Service
-> with `kwatch.io/skip-probe: "true"`. Explicitly configured `http`, `tcp` and
+> with `kwatch.dev/skip-probe: "true"`. Explicitly configured `http`, `tcp` and
 > `dns` targets are never filtered by either — you asked for those by name.
 
 > ⚠️ **Outbound NetworkPolicy.** Probes, `autoServices`, `autoDependencies`,

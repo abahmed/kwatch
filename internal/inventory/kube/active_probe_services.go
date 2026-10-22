@@ -11,7 +11,7 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory"
 )
 
-// AttrSkipProbe is set on a Service annotated kwatch.io/skip-probe: "true".
+// AttrSkipProbe is set on a Service annotated kwatch.dev/skip-probe: "true".
 // Automatic probing leaves such a Service alone.
 const AttrSkipProbe = "probe.skip"
 

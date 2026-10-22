@@ -55,8 +55,8 @@ stringData:
     #   <reason>: "<url>"         # added to the steps of matching incidents
     maintenance:
       enabled: <boolean>          # default true
-      # annotation: kwatch.io/maintenance
-      # untilAnnotation: kwatch.io/maintenance-until
+      # annotation: kwatch.dev/maintenance
+      # untilAnnotation: kwatch.dev/maintenance-until
 
     # ── Active probes (opt-in) ────────────────────────────
     # activeProbeMonitor:

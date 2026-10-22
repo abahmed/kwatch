@@ -19,8 +19,8 @@ activeProbeMonitor.dns|json|[]|Monitors|JSON array of DNS probe targets.|active|
 upgrader.disableUpdateCheck|boolean|false|Operations|Disable the update notification.|active|
 telemetry.enabled|boolean|true|Operations|Send the weekly adoption heartbeat.|active|
 maintenance.enabled|boolean|true|Operations|Honor maintenance annotations while preserving cluster-level alerts.|active|
-maintenance.annotation|string|kwatch.io/maintenance|Operations|Annotation that marks deliberate maintenance on a resource.|active|
-maintenance.untilAnnotation|string|kwatch.io/maintenance-until|Operations|Optional annotation containing the maintenance expiry timestamp.|active|
+maintenance.annotation|string|kwatch.dev/maintenance|Operations|Annotation that marks deliberate maintenance on a resource.|active|
+maintenance.untilAnnotation|string|kwatch.dev/maintenance-until|Operations|Optional annotation containing the maintenance expiry timestamp.|active|
 app.clusterName|string|empty|Operations|Cluster name shown in notifications.|active|
 app.proxyURL|string|empty|Operations|Optional proxy for outbound provider requests.|active|
 app.disableStartupMessage|boolean|false|Operations|Disable the startup notification.|active|

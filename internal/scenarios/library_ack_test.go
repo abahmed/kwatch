@@ -59,7 +59,7 @@ func annotate(c *cluster, w *workload, key, value string, remove bool) {
 }
 
 // ackAnnotation: someone annotates the failing Deployment with
-// kwatch.io/ack. The thread hears it once, no reminder follows in the
+// kwatch.dev/ack. The thread hears it once, no reminder follows in the
 // week the incident stays open, and removing the annotation is told once.
 func ackAnnotation() scenario {
 	return scenario{
@@ -102,7 +102,7 @@ func ackAtAnnounce() scenario {
 }
 
 // ownerRouted: the Deployment has no owner of its own but its namespace
-// is labelled kwatch.io/owner, so the incident is routed to that team.
+// is labelled kwatch.dev/owner, so the incident is routed to that team.
 func ownerRouted() scenario {
 	return scenario{
 		expect: expectation{

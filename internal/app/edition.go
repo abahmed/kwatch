@@ -27,8 +27,8 @@ const (
 // annotations the built-in configuration uses. Maintenance is on by
 // default, so only different annotations show that someone set it up.
 const (
-	defaultMaintenanceAnnotation = "kwatch.io/maintenance"
-	defaultMaintenanceUntil      = "kwatch.io/maintenance-until"
+	defaultMaintenanceAnnotation = "kwatch.dev/maintenance"
+	defaultMaintenanceUntil      = "kwatch.dev/maintenance-until"
 )
 
 // ResolveEntitlements is what this installation may use. Until licenses
