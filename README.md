@@ -381,8 +381,7 @@ them.
 <details>
 <summary><b>What does Pro support include?</b></summary>
 
-Community questions go to GitHub issues and Discussions, answered on a
-best-effort basis. Pro includes dedicated support: installation help, and
+Community questions go to GitHub issues and Discussions. Pro includes dedicated support: installation help, and
 your feature requests and kwatch fixes come first.
 </details>
 
