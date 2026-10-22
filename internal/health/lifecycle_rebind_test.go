@@ -34,3 +34,15 @@ func TestStopFreesThePortForTheNextGeneration(t *testing.T) {
 	require.NoError(t, second.Open())
 	require.NoError(t, second.Stop(context.Background()))
 }
+
+// On a rebuild nobody waits for the old Serve goroutine, and the next
+// generation resets the logger once Stop returns: a Serve that starts
+// after Stop must return at once without logging or serving.
+func TestServeAfterStopReturnsAtOnce(t *testing.T) {
+	cfg := config.HealthCheck{Port: freePort(t), Enabled: true}
+	server := NewHealthServerWithClock(cfg, clock.RealClock{})
+	require.NoError(t, server.Open())
+	require.NoError(t, server.Stop(context.Background()))
+
+	require.NoError(t, server.Serve(context.Background()))
+}
