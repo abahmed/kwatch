@@ -33,17 +33,17 @@ func TestEveryEntryHasAFeature(t *testing.T) {
 
 func TestProRunsEveryDetector(t *testing.T) {
 	assert.Equal(t, names(Default()),
-		names(Entitled(feature.ProEntitlements())))
+		names(Entitled(feature.ProEntitlements(), nil)))
 }
 
 func TestNilEntitlementsRunCommunityDetectors(t *testing.T) {
-	assert.Equal(t, names(Entitled(feature.CommunityEntitlements())),
-		names(Entitled(nil)))
-	assert.NotEqual(t, names(Default()), names(Entitled(nil)))
+	assert.Equal(t, names(Entitled(feature.CommunityEntitlements(), nil)),
+		names(Entitled(nil, nil)))
+	assert.NotEqual(t, names(Default()), names(Entitled(nil, nil)))
 }
 
 func TestCommunityRunsOnlyPodAndNodeDetectors(t *testing.T) {
-	got := names(Entitled(feature.CommunityEntitlements()))
+	got := names(Entitled(feature.CommunityEntitlements(), nil))
 	assert.Equal(t, []string{"container", "init-wait", "pod", "node"}, got)
 }
 

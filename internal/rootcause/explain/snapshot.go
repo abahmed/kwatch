@@ -51,6 +51,10 @@ type Snapshot struct {
 	Now time.Time
 	// Window is the causal window. Zero means DefaultWindow.
 	Window time.Duration
+	// NoSharedFactors withholds shared-factor-only causes: the edition
+	// does not include them. The failures one would have explained are
+	// listed in Area.Withheld instead.
+	NoSharedFactors bool
 	// Ablation switches scorers or vetoes off for the scorecard's
 	// mutation check. The zero value, always used in production,
 	// changes nothing.

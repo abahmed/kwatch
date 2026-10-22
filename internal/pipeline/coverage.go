@@ -7,7 +7,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/rootcause"
-	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // The coverage check is explained in coverage/doc.go. This file is its
@@ -44,9 +43,7 @@ func (e *Engine) checkCoverage(now time.Time) {
 	klog.InfoS("pipeline: coverage check found failing workloads no "+
 		"incident covers; an incident was lost, opening one",
 		"component", "pipeline", "workloads", entityNames(lost))
-	snapshot := explain.NewSnapshot(e.deps.Model, e.activeFindings(),
-		e.deps.Synced, now)
-	snapshot.Started = e.started
+	snapshot := e.snapshot(now)
 	e.deps.Incidents.Apply(snapshot, dirty, nil)
 	e.announcer.investigateOpened(now)
 }

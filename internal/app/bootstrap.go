@@ -6,6 +6,8 @@ import (
 	"net"
 	"time"
 
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/alert/catalog"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
@@ -143,7 +145,7 @@ func permissionChecks(runtime config.RuntimeConfig) []inventorykube.Access {
 }
 
 // newHealthServer builds the health server for the edition: the JSON
-// /status format is a Pro feature.
+// /status format and /metrics are Pro features.
 func newHealthServer(
 	runtime config.RuntimeConfig, now clock.Clock, overlayInvalid bool,
 	entitlements feature.Entitlements,
@@ -151,8 +153,29 @@ func newHealthServer(
 	server := health.NewHealthServerWithClock(
 		runtime.Lifecycle().HealthCheck(), now)
 	reportOverlayHealth(server, overlayInvalid)
-	if !feature.OrCommunity(entitlements).Limits().StatusJSON {
-		server.DenyStatusJSON()
+	applyEditionEndpoints(server, entitlements)
+	if !feature.OrCommunity(entitlements).Limits().Metrics {
+		klog.InfoS(health.MetricsProText, "component", "health",
+			"operation", "start")
 	}
 	return server
+}
+
+// applyEditionEndpoints opens or closes the Pro endpoints of the health
+// server for e: the JSON /status format and /metrics. A nil e is
+// Community.
+func applyEditionEndpoints(
+	server *health.HealthServer, e feature.Entitlements,
+) {
+	limits := feature.OrCommunity(e).Limits()
+	if limits.StatusJSON {
+		server.AllowStatusJSON()
+	} else {
+		server.DenyStatusJSON()
+	}
+	if limits.Metrics {
+		server.AllowMetrics()
+	} else {
+		server.DenyMetrics()
+	}
 }

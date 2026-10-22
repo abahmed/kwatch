@@ -90,6 +90,10 @@ type Incident struct {
 	// kwatch cannot see that kind ("secrets in billing"). It is kept for
 	// the incident's life so every message states the gap.
 	Unverified []string
+	// ProCause is set when an analysis the edition withholds (a shared
+	// factor) would explain the incident: a Community message says Pro
+	// found a likely cause. It is not persisted.
+	ProCause bool
 	// Members are the findings this incident explains, keyed by finding key.
 	Members map[detection.Key]detection.Finding
 	// Merged lists the roots of the other node, zone or pool failures

@@ -319,12 +319,25 @@ wait_http() {
 start_port_forward "$leader_pod"
 wait_http /healthz
 wait_http /readyz
-# kwatch_delivery_queue_depth is exported even with no provider configured
-# (provider="none"), so its absence means the metrics endpoint is broken.
-metrics=$(curl --fail --silent "http://127.0.0.1:$port/metrics")
-if ! grep -Eq '^kwatch_delivery_queue_depth([ {]|$)' <<<"$metrics"; then
-	echo "metrics endpoint does not export kwatch_delivery_queue_depth" >&2
-	exit 1
+# /metrics is part of Pro. The release image runs Community, where it
+# answers 404; set KWATCH_EDITION=pro for an image built with the
+# licensetest tag. In Pro, kwatch_delivery_queue_depth is exported even
+# with no provider configured (provider="none"), so its absence means the
+# metrics endpoint is broken.
+metrics_url="http://127.0.0.1:$port/metrics"
+if [ "${KWATCH_EDITION:-community}" = pro ]; then
+	metrics=$(curl --fail --silent "$metrics_url")
+	if ! grep -Eq '^kwatch_delivery_queue_depth([ {]|$)' <<<"$metrics"; then
+		echo "metrics endpoint does not export kwatch_delivery_queue_depth" >&2
+		exit 1
+	fi
+else
+	metrics_code=$(curl --silent --output /dev/null \
+		--write-out '%{http_code}' "$metrics_url")
+	if [ "$metrics_code" != 404 ]; then
+		echo "Community /metrics answered $metrics_code, want 404" >&2
+		exit 1
+	fi
 fi
 
 echo "Generating $load_count pod events"

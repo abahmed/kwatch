@@ -42,6 +42,7 @@ var proDetectorFamilies = []detectorFamily{
 	{"control plane", []feature.ID{feature.ControlPlane}},
 	{"node usage", []feature.ID{feature.NodeUsage}},
 	{"pod readiness", []feature.ID{feature.PodReadiness}},
+	{"preemption and admission", []feature.ID{feature.PodAdvanced}},
 	{"configuration risks", []feature.ID{feature.ConfigurationRisks}},
 	{"unusual events", []feature.ID{feature.UnusualEvents}},
 }

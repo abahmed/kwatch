@@ -41,6 +41,9 @@ var factualWording = map[string]string{
 	"kwatch will write again": "kwatch's own behaviour",
 	// The fix named for a failure that is happening.
 	"would let it start": "names what ends the present failure",
+	// The Community Pro line names what Pro shows for this alert now.
+	"Pro would show ":          "names what Pro shows for this alert",
+	"Pro found a likely cause": "a Pro analysis found a cause now",
 	// States a LimitRange rule that is in force now.
 	"limit may be at most": "the rule the namespace sets",
 }

@@ -16,7 +16,6 @@ import (
 	"github.com/abahmed/kwatch/internal/pipeline/announce"
 	"github.com/abahmed/kwatch/internal/pipeline/coverage"
 	"github.com/abahmed/kwatch/internal/pipeline/investigate"
-	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // Sink receives every decision with its message. It is called from the
@@ -77,6 +76,9 @@ type Dependencies struct {
 	// (with the inactive ones), for /status.
 	ProDetectorsOff []string
 	CommunitySends  string
+	// Withheld counts the Pro findings a Community edition found and
+	// does not show, for /status and the Pro checks message. Optional.
+	Withheld *feature.Withheld
 }
 
 // IncidentStore loads and saves incident records, object fingerprints and
@@ -362,9 +364,7 @@ func (e *Engine) evaluate(
 // solve explains the active findings once per iteration: a storm of
 // transitions is explained once.
 func (e *Engine) solve(now time.Time, transitions []detection.Transition) {
-	snapshot := explain.NewSnapshot(e.deps.Model, e.activeFindings(),
-		e.deps.Synced, now)
-	snapshot.Started = e.started
+	snapshot := e.snapshot(now)
 	e.deps.Incidents.Apply(snapshot, e.moved.take(), transitions)
 	e.announcer.investigateOpened(now)
 }
@@ -383,6 +383,7 @@ func (e *Engine) tick(
 		return time.Time{}, false
 	}
 	e.storage.history.decided(now, decisions)
+	e.countWithheld(now, decisions)
 	var announced bool
 	contain("announce", "announce", func() {
 		announced = e.announcer.announce(ctx, now, decisions)

@@ -11,6 +11,7 @@ const (
 	PodOOM               ID = "core.pods.oom"
 	PodReadiness         ID = "core.pods.readiness"
 	PodRestarts          ID = "core.pods.restarts"
+	PodAdvanced          ID = "core.pods.advanced"
 	WorkloadDetection    ID = "core.detection.workloads"
 	WorkloadRollouts     ID = "core.workloads.rollouts"
 	JobFailures          ID = "core.workloads.jobs"

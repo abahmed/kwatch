@@ -18,6 +18,7 @@ type Limits struct {
 	MaxReplicas     int
 	RetentionDays   int
 	StatusJSON      bool
+	Metrics         bool
 	ProHints        bool
 }
 
@@ -54,6 +55,7 @@ func CommunityEntitlements() Entitlements {
 func ProEntitlements() Entitlements {
 	return entitlements{ProEdition, Limits{
 		RootCauseDetail: true, RetentionDays: 90, StatusJSON: true,
+		Metrics: true,
 	}}
 }
 

@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Editions
+
+- These leave Community and are now Pro: the `/metrics` endpoint (Community
+  answers 404 and logs one line at start), readiness probe failures,
+  shared-factor causes ("node X explains N failures"), and the pod reasons
+  PodPreempted, PodPreemptedRepeatedly, PodAdmissionRejected,
+  PodKilledAtGrace and SchedulingGated (new capability core.pods.advanced).
+  Pro is free during early access. Liveness and startup probe failures stay
+  in Community.
+
+- Community counts, in memory and only in the cluster, the Pro findings it
+  does not show, and reports them in a startup notice and a "Pro checks"
+  line of /status. Alerts carry one Pro line chosen by alert type, or a
+  teaser when Pro found a likely cause. app.hideProHints hides the alert
+  line, the teaser and the startup notice; /status still counts.
+
 ### Detection
 
 - A node that has not been Ready since it joined is now given the ten-minute

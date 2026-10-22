@@ -1,6 +1,10 @@
 package status
 
-import "time"
+import (
+	"time"
+
+	"github.com/abahmed/kwatch/internal/feature"
+)
 
 // Bounds keep /status small however big the cluster is.
 const (
@@ -42,6 +46,11 @@ type Report struct {
 	// CommunitySends names the provider a capped edition sends to and the
 	// ones it leaves inactive, such as "slack (inactive: pagerduty)".
 	CommunitySends string `json:"communitySends,omitempty"`
+	// ProChecks counts the Pro findings a Community edition found over
+	// the last seven days and does not show; nil for Pro or when Pro
+	// hints are off. The installer's License / Pro screen reads its
+	// line.
+	ProChecks *feature.WithheldCounts `json:"-"`
 	// License is the licensing state; nil for a report that does not say.
 	License *License `json:"license,omitempty"`
 	// Brief leaves the self-check and unexplained sections out of the

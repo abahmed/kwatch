@@ -104,7 +104,7 @@ func TestPipelineClockDelegatesToApplicationClock(t *testing.T) {
 func TestNewDetectorRegistryUsesSyncPredicate(t *testing.T) {
 	registry := newDetectorRegistry(func(inventory.Kind) bool {
 		return true
-	}, feature.ProEntitlements())
+	}, feature.ProEntitlements(), nil)
 	model := inventory.NewModel(inventory.Options{})
 
 	registry.Evaluate(model, time.Now(),

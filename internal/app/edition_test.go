@@ -116,15 +116,16 @@ func TestCommunityStartupIsNeverAnError(t *testing.T) {
 
 func TestCommunityRegistersOnlyPodAndNodeDetectors(t *testing.T) {
 	community := registryLayout(
-		newDetectorRegistry(nil, feature.CommunityEntitlements()))
+		newDetectorRegistry(nil, feature.CommunityEntitlements(), nil))
 	pro := registryLayout(
-		newDetectorRegistry(nil, feature.ProEntitlements()))
+		newDetectorRegistry(nil, feature.ProEntitlements(), nil))
 	assert.Less(t, len(community), len(pro))
 	assert.NotEmpty(t, community, "pods and nodes are Community")
 	joined := strings.Join(community, "\n")
 	assert.Contains(t, joined, "node 0 detectors.restricted",
 		"node detection is limited to NotReady")
-	assert.Contains(t, joined, "container 0 detectors.Container")
+	assert.Contains(t, joined, "container 0 detectors.restricted",
+		"readiness probe failures are Pro")
 	for _, pro := range []string{"Workload", "Service", "Claim", "HPA",
 		"Certificate", "ClusterService", "NodeUsage", "ActiveProbe"} {
 		assert.NotContains(t, joined, "detectors."+pro)
