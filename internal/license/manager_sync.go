@@ -74,6 +74,7 @@ func (m *Manager) handle(res Result, callErr error, b Binding) error {
 	}
 	m.lease, m.verdict = res.Lease, VerdictNone
 	m.persistLocked()
+	m.recordReportedLocked()
 	return nil
 }
 

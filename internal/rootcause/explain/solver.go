@@ -99,6 +99,9 @@ func (v *view) solveArea(
 	for _, f := range failures {
 		inArea[f] = true
 	}
+	if v.s.NoSharedFactors {
+		viable, area.Withheld = withholdShared(inArea, viable)
+	}
 	chosen, uncovered := setCover(inArea, viable)
 	isChosen := map[inventory.EntityID]bool{}
 	for _, s := range chosen {

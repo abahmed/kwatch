@@ -55,6 +55,9 @@ type Area struct {
 	Inputs []inventory.EntityID
 	// Trace is the reasoning behind the choice.
 	Trace Trace
+	// Withheld are the failures a shared factor would have explained
+	// when Snapshot.NoSharedFactors withheld it, sorted.
+	Withheld []inventory.EntityID
 }
 
 // Unknown reports whether no cause reached the confidence floor.

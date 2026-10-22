@@ -115,6 +115,7 @@ networkPolicy:
   # entry is a NetworkPolicy peer: a namespaceSelector, a podSelector or an
   # ipBlock. List your Prometheus here, for example
   # [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}}].
+  # /metrics is part of Pro; Community answers it with 404.
   healthIngressFrom: []
   # -- Extra TCP egress ports open to any address, e.g. [587] for SMTP.
   extraEgressPorts: []

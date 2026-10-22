@@ -14,7 +14,7 @@ import (
 
 func entitledNode(t *testing.T, e feature.Entitlements) detection.Detector {
 	t.Helper()
-	for _, d := range Entitled(e) {
+	for _, d := range Entitled(e, nil) {
 		if d.Name() == "node" {
 			return d
 		}

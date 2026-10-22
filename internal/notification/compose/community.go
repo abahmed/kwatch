@@ -1,12 +1,8 @@
 package compose
 
 import (
-	"strings"
-
 	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/incident"
-	"github.com/abahmed/kwatch/internal/inventory"
-	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
@@ -75,32 +71,4 @@ func (w Writer) communitySentences(
 		out = append(out, sentence{part: partHint, text: note})
 	}
 	return out
-}
-
-// proNote is the one line naming what Pro would add to this message,
-// from what the engine found for d. It is empty when the engine found
-// nothing Pro would show.
-func proNote(d incident.Decision) string {
-	var found []string
-	cause := d.Incident.Cause
-	if (cause != nil && cause.Change != nil) || len(d.Facts.Changes) > 0 ||
-		d.Facts.Window != nil {
-		found = append(found, "the recent change behind this")
-	}
-	if len(d.Incident.Impact) > 0 ||
-		(cause != nil && len(cause.Hops) > 0) {
-		found = append(found, "affected services")
-	}
-	if hasLogs(d.Incident.Root.Kind) {
-		found = append(found, "logs")
-	}
-	if len(found) == 0 {
-		return ""
-	}
-	return "Pro: " + strings.Join(found, ", ")
-}
-
-// hasLogs reports a root whose container output Pro would quote.
-func hasLogs(kind inventory.Kind) bool {
-	return kind == kube.KindPod || kind == kube.KindContainer
 }

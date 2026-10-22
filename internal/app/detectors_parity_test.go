@@ -32,7 +32,7 @@ func registryLayout(r *detection.Registry) []string {
 // registries from detectors.Default. Production must too, or a detector
 // added in one place would be scored but never run, or run unscored.
 func TestProductionDetectorsAreDefault(t *testing.T) {
-	got := registryLayout(newDetectorRegistry(nil, feature.ProEntitlements()))
+	got := registryLayout(newDetectorRegistry(nil, feature.ProEntitlements(), nil))
 	want := registryLayout(detection.NewRegistry(nil, detectors.Default()...))
 	if len(want) == 0 {
 		t.Fatal("the default registry holds no detectors")

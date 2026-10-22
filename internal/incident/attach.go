@@ -40,6 +40,9 @@ type placement struct {
 	// outscored lists the roots of the alternatives that explain the
 	// failures through the same row as cause and score at least as high.
 	outscored []inventory.EntityID
+	// proCause is set when a Pro analysis the edition withholds (a
+	// shared factor) would have explained the failure.
+	proCause bool
 }
 
 // placeArea moves the findings of every failure of a solved area to
@@ -292,6 +295,7 @@ func (m *Manager) reroute(
 // takeCause adopts the cause of a placement. A grouped incident speaks for
 // several nodes and keeps none.
 func (p *Incident) takeCause(where placement) {
+	p.ProCause = p.ProCause || where.proCause
 	switch {
 	case p.Grouped():
 	case where.cause != nil:

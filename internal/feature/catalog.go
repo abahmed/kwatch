@@ -34,7 +34,13 @@ var definitions = []Definition{
 		Runtime, []ID{PodDetection},
 	},
 	{
-		PodReadiness, "Detect sustained pod readiness failures",
+		PodReadiness, "Detect sustained pod readiness and readiness " +
+			"probe failures",
+		Runtime, []ID{PodDetection},
+	},
+	{
+		PodAdvanced, "Detect preemption, admission rejection, " +
+			"grace-period kills and scheduling gates",
 		Runtime, []ID{PodDetection},
 	},
 	{

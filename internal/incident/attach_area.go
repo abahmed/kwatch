@@ -22,6 +22,8 @@ type areaPlacer struct {
 	// outside caches, per own root, whether a rejected candidate lies
 	// outside that workload.
 	outside map[inventory.EntityID]bool
+	// withheld are the failures a withheld Pro cause would explain.
+	withheld map[inventory.EntityID]bool
 }
 
 func newAreaPlacer(s explain.Snapshot, area explain.Area) *areaPlacer {
@@ -35,7 +37,8 @@ func newAreaPlacer(s explain.Snapshot, area explain.Area) *areaPlacer {
 	}
 	return &areaPlacer{s: s, area: area, covering: covering,
 		records: map[int]rootcause.CauseRecord{}, blamed: map[int]bool{},
-		outside: map[inventory.EntityID]bool{}}
+		outside:  map[inventory.EntityID]bool{},
+		withheld: idSet(area.Withheld)}
 }
 
 // placementOf finds the incident a failure of the area belongs to. A
@@ -51,7 +54,8 @@ func (a *areaPlacer) placementOf(failure inventory.EntityID) placement {
 	own := defaultRoot(a.s.Model, failure)
 	out := placement{root: own, unverified: a.area.Unverified,
 		checked:    checkedKinds(a.area.Trace.Checked[failure]),
-		considered: consideredCauses(a.area.Alternatives)}
+		considered: consideredCauses(a.area.Alternatives),
+		proCause:   a.withheld[failure]}
 	i, ok := a.covering[failure]
 	if !ok {
 		out.unclear = a.rejectedOutside(own)
@@ -162,4 +166,13 @@ func (a *areaPlacer) record(i int) rootcause.CauseRecord {
 		a.records[i] = record
 	}
 	return record
+}
+
+// idSet is the set of ids.
+func idSet(ids []inventory.EntityID) map[inventory.EntityID]bool {
+	out := make(map[inventory.EntityID]bool, len(ids))
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out
 }

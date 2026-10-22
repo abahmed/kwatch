@@ -33,6 +33,7 @@ type HealthServer struct {
 	coverage        *CoverageSummary
 	statusHolder    statusHolder
 	liveness        atomic.Pointer[livenessCheck]
+	metricsGate     metricsGate
 }
 
 // HealthResponse is the JSON body of the /health endpoint.

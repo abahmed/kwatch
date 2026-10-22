@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -30,6 +31,10 @@ type Env struct {
 	WithChanges func(incident.Decision, time.Time) incident.Decision
 	// SaveStartup hands the startup marker to the incident writer.
 	SaveStartup func(StartupState)
+	// Withheld counts the Pro findings a Community edition did not
+	// show; the startup sends their count when Messages.ProNote is set.
+	// Optional.
+	Withheld func(time.Time) feature.WithheldCounts
 	// OwnNamespace is the namespace kwatch runs in, when known: its own
 	// risks are left out of the digest.
 	OwnNamespace string

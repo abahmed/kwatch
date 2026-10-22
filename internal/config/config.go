@@ -178,8 +178,9 @@ type App struct {
 	// certificates used in outbound HTTP calls.
 	CABundlePath string `yaml:"caBundlePath"`
 
-	// HideProHints removes the one-line note that names what kwatch Pro
-	// would add from Community messages. Default false.
+	// HideProHints removes the one-line Pro note or teaser from
+	// Community messages and the startup count of Pro findings. /status
+	// still counts them. Default false.
 	HideProHints bool `yaml:"hideProHints"`
 
 	// CommunityProvider names the alert provider the Community edition

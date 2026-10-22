@@ -45,6 +45,8 @@ type pipelineBuild struct {
 	flight *flight.Recorder
 	// gap is the unmonitored time before this start, for the gap report.
 	gap gapNotice
+	// withheld counts the Pro findings Community does not show.
+	withheld *feature.Withheld
 }
 
 // newPipelineBuild builds the model, scope, audit log, incident manager
@@ -52,7 +54,8 @@ type pipelineBuild struct {
 func newPipelineBuild(
 	deps *serverDeps, state *storage.Store,
 ) (*pipelineBuild, error) {
-	p := &pipelineBuild{deps: deps, state: state, clock: deps.clients.Clock}
+	p := &pipelineBuild{deps: deps, state: state,
+		clock: deps.clients.Clock, withheld: feature.NewWithheld()}
 	if deps.has(FlightRecorder) {
 		p.flight = newFlightRecorder(state, p.clock.Now)
 	}
@@ -121,8 +124,10 @@ func (p *pipelineBuild) synced(kind inventory.Kind) bool {
 func (p *pipelineBuild) newEngine() (*pipeline.Engine, error) {
 	deps := p.deps
 	return pipeline.NewEngine(pipeline.Dependencies{
-		Model:        p.model,
-		Detectors:    newDetectorRegistry(p.synced, deps.entitlements),
+		Model: p.model,
+		Detectors: newDetectorRegistry(p.synced, deps.entitlements,
+			p.withheld),
+		Withheld:     p.withheld,
 		Incidents:    p.incidents,
 		Synced:       p.synced,
 		Writer:       p.newWriter(),

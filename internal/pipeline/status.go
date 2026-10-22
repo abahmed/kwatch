@@ -31,6 +31,10 @@ func (e *Engine) Status() status.Report {
 	report.ProInactive = e.deps.InactivePro
 	report.ProDetectorsOff = e.deps.ProDetectorsOff
 	report.CommunitySends = e.deps.CommunitySends
+	if e.deps.Writer.Community {
+		counts := e.deps.Withheld.Counts(now)
+		report.ProChecks = &counts
+	}
 	if !entitlements.Limits().RootCauseDetail {
 		// The self-check and the unexplained counts are Pro detail.
 		report.Brief = true
