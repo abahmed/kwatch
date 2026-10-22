@@ -309,7 +309,7 @@ during early access.
 | Noise control | Dedup and settling; announced incidents survive a restart, so their resolves are still sent | Flapping detection, startup summary, state kept on disk across restarts, changes made while kwatch was down, gap report |
 | Operations | RBAC audit, secret redaction, health, metrics, text `/status` | Severity overrides, maintenance holds, runbook links, heartbeat monitor, `/status` JSON, flight recorder and `replay-export` |
 | Account | None | Email only |
-| Support | GitHub issues and Discussions, best effort | Dedicated support: installation help, and your feature requests and fixes come first |
+| Support | GitHub issues and Discussions | Dedicated support: installation help, and your feature requests and fixes come first |
 
 Pro includes dedicated support. Go to [**Get help**](https://app.kwatch.dev/help).
 Community support is on
@@ -383,8 +383,7 @@ them.
 
 Community questions go to GitHub issues and Discussions, answered on a
 best-effort basis. Pro includes dedicated support: installation help, and
-your feature requests and kwatch fixes come first. Security reports are
-always first.
+your feature requests and kwatch fixes come first.
 </details>
 
 <details>
