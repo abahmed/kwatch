@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/pipeline"
 	"github.com/abahmed/kwatch/internal/version"
 )
 
@@ -76,6 +78,37 @@ type startupManager struct {
 	// stateReset records that the state file was replaced at open, so
 	// the startup message can say why old problems are announced again.
 	stateReset bool
+	// gapReport is true when the edition sends the gap report after the
+	// sources sync: the startup message then leaves the gap to it.
+	gapReport bool
+	// hideProHints drops the Pro sentence from the Community message.
+	hideProHints bool
+	// gapEnd is when the gap was measured; zero without a gap.
+	gapEnd time.Time
+	// gapSent makes the gap message one-shot: a restarted pipeline
+	// reports the gap again.
+	gapSent atomic.Bool
+}
+
+// gap is the unmonitored time before this start, with the sender of
+// the gap message; the zero gap without one.
+func (s *startupManager) gap() gapNotice {
+	if s.downtime <= 0 {
+		return gapNotice{}
+	}
+	return gapNotice{
+		gap: pipeline.Gap{
+			Start: s.gapEnd.Add(-s.downtime), End: s.gapEnd,
+		},
+		message: s.GapMessage,
+	}
+}
+
+// gapNotice is what the pipeline needs to report a gap: the gap and
+// the startup message that wraps the report.
+type gapNotice struct {
+	gap     pipeline.Gap
+	message func(report string) (string, bool)
 }
 
 // startupResult is what application composition needs from the startup
@@ -290,7 +323,8 @@ func (s *startupManager) measureDowntime(
 	if last.IsZero() {
 		return 0, nil
 	}
-	gap := s.now().Sub(last)
+	s.gapEnd = s.now()
+	gap := s.gapEnd.Sub(last)
 	if gap < minReportableDowntime {
 		return 0, nil
 	}

@@ -43,6 +43,8 @@ type pipelineBuild struct {
 	source *kube.Source
 	// flight records the observations the sources submit (flight.go).
 	flight *flight.Recorder
+	// gap is the unmonitored time before this start, for the gap report.
+	gap gapNotice
 	// withheld counts the Pro findings Community does not show.
 	withheld *feature.Withheld
 }
@@ -142,7 +144,20 @@ func (p *pipelineBuild) newEngine() (*pipeline.Engine, error) {
 
 		ProDetectorsOff: deps.notice.detectors,
 		CommunitySends:  deps.notice.sends,
+		Gap:             p.gap.gap,
+		Notify:          p.notify,
 	})
+}
+
+// notify queues the startup message with the gap report; delivery
+// never blocks the caller.
+func (p *pipelineBuild) notify(report string) {
+	if p.gap.message == nil || p.deps.deliveryManager == nil {
+		return
+	}
+	if text, ok := p.gap.message(report); ok {
+		p.deps.deliveryManager.Notify(text)
+	}
 }
 
 // newWriter composes messages for the edition: Community writes the

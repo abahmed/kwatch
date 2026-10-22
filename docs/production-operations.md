@@ -269,7 +269,9 @@ restart the Deployment yourself after editing it.
 
 ## Health and readiness
 
-- `/healthz` reports process liveness.
+- `/healthz` reports process liveness. On the leader it fails once the
+  pipeline loop made no progress for 5 minutes, so the kubelet restarts a
+  hung process.
 - `/readyz` reports whether required monitoring infrastructure is ready.
 - `/availabilityz` reports whether the Pod is participating in the application
   lifecycle and is used for Deployment rollouts. It is not monitoring

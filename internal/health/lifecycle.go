@@ -55,14 +55,19 @@ func (h *HealthServer) Open() error {
 // Serve runs the already-open listener. It is intended to be called by the
 // application supervisor. Stop closes the listener during shutdown.
 func (h *HealthServer) Serve(_ context.Context) error {
+	// The log line is written under the lifecycle lock and skipped once
+	// Stop ran: on an in-process rebuild nobody waits for this
+	// goroutine, and the next generation resets the logger as soon as
+	// Stop returns.
 	h.lifecycleMu.Lock()
 	server := h.server
 	listener := h.listener
-	h.lifecycleMu.Unlock()
-	if server == nil || listener == nil {
+	if server == nil || listener == nil || h.stopped {
+		h.lifecycleMu.Unlock()
 		return nil
 	}
 	klog.InfoS("starting health check server", "port", h.port)
+	h.lifecycleMu.Unlock()
 	if err := server.Serve(listener); err != nil &&
 		err != http.ErrServerClosed {
 		h.lifecycleMu.Lock()

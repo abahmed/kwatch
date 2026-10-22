@@ -32,7 +32,8 @@ func TestStartupManagerAnnouncesUpgradeAfterDowntime(t *testing.T) {
 	}
 	msg, ok := manager.StartupMessage()
 	want := "🟠 kwatch dev started; nothing was monitored from 11:50 to " +
-		"12:00 UTC (10m), so anything that broke then went unreported."
+		"12:00 UTC (10m), so anything that broke then went unreported." +
+		proGapHint + "."
 	if !ok || msg != want {
 		t.Fatalf("startup message = %q (%v), want %q", msg, ok, want)
 	}

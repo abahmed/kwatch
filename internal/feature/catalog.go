@@ -165,6 +165,11 @@ var definitions = []Definition{
 		StartupOnly, []ID{DiskState},
 	},
 	{
+		GapReport,
+		"Report what changed and crashed while kwatch was down",
+		StartupOnly, []ID{DowntimeChanges},
+	},
+	{
 		Scope, "Filter by namespace, reason, selector and silences",
 		Runtime, nil,
 	},

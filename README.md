@@ -306,7 +306,7 @@ during early access.
 | Detection | Pod crash loops, OOM kills and Pending pods; node NotReady | Adds node pressure and draining, readiness, rollouts, Jobs and CronJobs, PDBs, HPAs, storage, network, admission, certificates, quota, custom resources, control plane, probes and unusual events |
 | Root cause | One-line headline | Full proof and confidence, shared-factor suspects, recent changes and who made them, affected services, log excerpts |
 | Channels | 1 provider (pick with `app.communityProvider`), namespace filters and silences | All providers, routing by scope, threads, text templates, audit log |
-| Noise control | Dedup and settling; announced incidents survive a restart, so their resolves are still sent | Flapping detection, startup summary, state kept on disk across restarts, changes made while kwatch was down |
+| Noise control | Dedup and settling; announced incidents survive a restart, so their resolves are still sent | Flapping detection, startup summary, state kept on disk across restarts, changes made while kwatch was down, gap report |
 | Operations | RBAC audit, secret redaction, health, metrics, text `/status` | Severity overrides, maintenance holds, runbook links, heartbeat monitor, `/status` JSON, flight recorder and `replay-export` |
 | Account | None | Email only |
 
@@ -392,7 +392,9 @@ license instance key.
 <summary><b>What happens when kwatch restarts?</b></summary>
 
 With Pro, it picks up where it left off: open incidents are not announced
-again and changes made while it was down still explain failures. Community
+again and changes made while it was down still explain failures. After a
+gap of 5 minutes or more it sends a gap report: what changed and what
+crashed while it was down, compared with before. Community
 keeps state in memory, so after a restart it takes a fresh baseline and
 alerts on new failures or ones that get worse. See
 [production operations](./docs/production-operations.md).

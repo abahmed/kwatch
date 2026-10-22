@@ -178,7 +178,9 @@ tolerations: []
 
 # -- Move off a failed node after 30s; the Lease stops the old pod writing.
 # Merged with tolerations above (a user entry with the same key and effect
-# wins).
+# wins). Change tolerationSeconds here to fail over sooner or later. With
+# a ReadWriteOnce volume the new pod still waits for the volume to detach
+# from the failed node, which the storage driver may take minutes to do.
 defaultTolerations:
   - key: node.kubernetes.io/not-ready
     operator: Exists

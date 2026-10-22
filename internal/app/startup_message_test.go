@@ -29,12 +29,22 @@ func TestStartupSentence(t *testing.T) {
 		"after a gap": {"", 12 * time.Minute, false,
 			"🟠 kwatch v1.2.0 started; nothing was monitored from " +
 				"11:48 to 12:00 UTC (12m), so anything that broke " +
-				"then went unreported."},
+				"then went unreported. Pro adds a gap report: what " +
+				"changed and what crashed meanwhile. Free during early " +
+				"access."},
 		"after a node disruption with a gap": {"node_disruption",
 			time.Hour, false,
 			"🟠 kwatch v1.2.0 started again after a node disruption; " +
 				"nothing was monitored from 11:00 to 12:00 UTC (1h), " +
-				"so anything that broke then went unreported."},
+				"so anything that broke then went unreported. Pro adds " +
+				"a gap report: what changed and what crashed meanwhile. " +
+				"Free during early access."},
+		"after a gap across days": {"", 30 * time.Hour, false,
+			"🟠 kwatch v1.2.0 started; nothing was monitored from " +
+				"Sep 30 06:00 to Oct 1 12:00 UTC (30h), so anything " +
+				"that broke then went unreported. Pro adds a gap " +
+				"report: what changed and what crashed meanwhile. Free " +
+				"during early access."},
 		"after a state reset": {"", 0, true,
 			"🟠 kwatch v1.2.0 started with fresh state: earlier " +
 				"incident history was reset, so open problems will be " +
@@ -71,6 +81,8 @@ func assertPlainSentence(t *testing.T, text string) {
 			t.Fatalf("message contains %q: %q", bad, text)
 		}
 	}
+	// The Community Pro hint is the one sentence allowed after it.
+	text = strings.Replace(text, "."+proGapHint, "", 1)
 	if strings.Count(strings.TrimSuffix(text, "."), ". ") > 0 ||
 		!strings.HasSuffix(text, ".") {
 		t.Fatalf("want one sentence: %q", text)
