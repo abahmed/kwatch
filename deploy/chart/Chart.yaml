@@ -10,6 +10,7 @@ type: application
 home: https://kwatch.dev
 icon: https://kwatch.dev/favicon.svg
 sources:
+  - https://kwatch.dev
   - https://github.com/abahmed/kwatch
 keywords:
   - kwatch
@@ -26,8 +27,10 @@ maintainers:
     url: github.com/yaskinny
 annotations:
   artifacthub.io/links: |
-    - name: Documentation
+    - name: Website
       url: https://kwatch.dev
+    - name: Documentation
+      url: https://docs.kwatch.dev
     - name: Source
       url: https://github.com/abahmed/kwatch
   artifacthub.io/license: Elastic-2.0
