@@ -42,6 +42,7 @@ built_images=""
 sanitize_bin=""
 metrics_manifest=""
 kubeconfig_file=""
+kwatch_manifest=""
 cluster_created=false
 kind_pid=""
 warm_pid=""
@@ -296,6 +297,9 @@ cleanup() {
 	if [ -n "$kubeconfig_file" ]; then
 		rm -f "$kubeconfig_file"
 	fi
+	if [ -n "$kwatch_manifest" ]; then
+		rm -f "$kwatch_manifest"
+	fi
 	exit "$status"
 }
 
@@ -444,7 +448,9 @@ kubectl create secret generic kwatch \
 	--from-literal=webhook-url="$receiver_url" \
 	--dry-run=client -o yaml | kubectl apply -f -
 # Rewrite the image before the first apply so the released image never starts.
-kwatch_manifest="$ARTIFACTS/kwatch-deploy.yaml"
+# Keep the rewritten manifest out of $ARTIFACTS: it ships the data-less
+# license Secret, whose "kind: Secret" line the artifact safety check rejects.
+kwatch_manifest=$(mktemp)
 image_expr="s#^\([[:space:]]*image:\) ghcr.io/abahmed/kwatch:.*#\1 $KWATCH_IMAGE#"
 pull_expr='s#^\([[:space:]]*imagePullPolicy:\) IfNotPresent#\1 Never#'
 mkdir -p "$ARTIFACTS"
