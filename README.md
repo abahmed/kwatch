@@ -311,8 +311,8 @@ during early access.
 | Account | None | Email only |
 | Support | GitHub issues and Discussions, best effort | Dedicated support: installation help, and your feature requests and fixes come first |
 
-Pro includes dedicated support. There is no guaranteed reply time. Go to
-[**Get help**](https://app.kwatch.dev/help). Community support is on
+Pro includes dedicated support. Go to [**Get help**](https://app.kwatch.dev/help).
+Community support is on
 [GitHub](https://github.com/abahmed/kwatch/issues).
 
 When a Pro license ends, kwatch falls back to Community. Alerts never stop.
@@ -384,7 +384,7 @@ them.
 Community questions go to GitHub issues and Discussions, answered on a
 best-effort basis. Pro includes dedicated support: installation help, and
 your feature requests and kwatch fixes come first. Security reports are
-always first. There is no guaranteed reply time.
+always first.
 </details>
 
 <details>
