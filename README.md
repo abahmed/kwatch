@@ -309,6 +309,11 @@ during early access.
 | Noise control | Dedup and settling; announced incidents survive a restart, so their resolves are still sent | Flapping detection, startup summary, state kept on disk across restarts, changes made while kwatch was down, gap report |
 | Operations | RBAC audit, secret redaction, health, metrics, text `/status` | Severity overrides, maintenance holds, runbook links, heartbeat monitor, `/status` JSON, flight recorder and `replay-export` |
 | Account | None | Email only |
+| Support | GitHub issues and Discussions, best effort | Dedicated support: installation help, and your feature requests and fixes come first |
+
+Pro includes dedicated support. There is no guaranteed reply time. Go to
+[**Get help**](https://app.kwatch.dev/help). Community support is on
+[GitHub](https://github.com/abahmed/kwatch/issues).
 
 When a Pro license ends, kwatch falls back to Community. Alerts never stop.
 The authoritative list is the catalog in [`internal/feature`](./internal/feature),
@@ -371,6 +376,15 @@ the chart values.
 No. Keep your metrics. kwatch answers a different question: when something
 breaks, what caused it and what to do. It needs no rules and works next to
 them.
+</details>
+
+<details>
+<summary><b>What does Pro support include?</b></summary>
+
+Community questions go to GitHub issues and Discussions, answered on a
+best-effort basis. Pro includes dedicated support: installation help, and
+your feature requests and kwatch fixes come first. Security reports are
+always first. There is no guaranteed reply time.
 </details>
 
 <details>
