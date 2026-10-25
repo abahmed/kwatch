@@ -307,7 +307,7 @@ during early access.
 | Root cause | One-line headline | Full proof and confidence, shared-factor suspects, recent changes and who made them, affected services, log excerpts |
 | Channels | 1 provider (pick with `app.communityProvider`), namespace filters and silences | All providers, routing by scope, threads, text templates, audit log |
 | Noise control | Dedup and settling; announced incidents survive a restart, so their resolves are still sent | Flapping detection, startup summary, state kept on disk across restarts, changes made while kwatch was down, gap report |
-| Operations | RBAC audit, secret redaction, health, metrics, text `/status` | Severity overrides, maintenance holds, runbook links, heartbeat monitor, `/status` JSON, flight recorder and `replay-export` |
+| Operations | RBAC audit, secret redaction, health, text `/status` | Prometheus `/metrics`, severity overrides, maintenance holds, runbook links, heartbeat monitor, `/status` JSON, flight recorder and `replay-export` |
 | Account | None | Email only |
 | Support | GitHub issues and Discussions | Dedicated support: installation help, and your feature requests and fixes come first |
 

@@ -232,8 +232,7 @@ Endpoints kwatch serves so you can see it's alive and grab Prometheus metrics. T
   inside the cluster; the chart's NetworkPolicy admits it from any source by
   default, so narrow it with a policy of your own. It never shows
   Secret values.
-- `GET /metrics` — 📊 Prometheus-format metrics. It does not require Prometheus to be
-  installed. Every series has a production writer; labels are a fixed, bounded set.
+- `GET /metrics` — 📊 Prometheus-format metrics (Pro only; Community answers empty `404`). It does not require Prometheus to be installed. Every series has a production writer; labels are a fixed, bounded set.
 
 | Metric | Type | Labels | Meaning |
 |:---|:---|:---|:---|
