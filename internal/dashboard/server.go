@@ -24,21 +24,25 @@ type incidentReader interface {
 // statusSource builds the /api/status report.
 type statusSource func() status.Report
 
+// deliveryHealthSource returns per-channel delivery health.
+type deliveryHealthSource func() []ChannelHealth
+
 // Server serves the dashboard API on its own listener.
 type Server struct {
-	server      *http.Server
-	listener    net.Listener
-	port        int
-	enabled     bool
-	edition     string
-	auth        *Auth
-	incidents   incidentReader
-	status      statusSource
-	started     bool
-	stopped     bool
-	stopErr     error
-	lifecycleMu sync.Mutex
-	serveErrors chan error
+	server            *http.Server
+	listener          net.Listener
+	port              int
+	enabled           bool
+	edition           string
+	auth              *Auth
+	incidents         incidentReader
+	status            statusSource
+	deliveryHealth    deliveryHealthSource
+	started           bool
+	stopped           bool
+	stopErr           error
+	lifecycleMu       sync.Mutex
+	serveErrors       chan error
 }
 
 // NewServer builds a dashboard API server. When enabled is false, Open is
@@ -47,15 +51,17 @@ type Server struct {
 func NewServer(
 	enabled bool, port int, token, edition string,
 	incidents incidentReader, status statusSource,
+	deliveryHealth deliveryHealthSource,
 ) *Server {
 	s := &Server{
-		port:        port,
-		enabled:     enabled,
-		edition:     edition,
-		auth:        NewAuth(token),
-		incidents:   incidents,
-		status:      status,
-		serveErrors: make(chan error, 1),
+		port:            port,
+		enabled:         enabled,
+		edition:         edition,
+		auth:            NewAuth(token),
+		incidents:       incidents,
+		status:          status,
+		deliveryHealth:  deliveryHealth,
+		serveErrors:     make(chan error, 1),
 	}
 	return s
 }
@@ -68,6 +74,11 @@ func (s *Server) SetIncidents(r incidentReader) {
 // SetStatus replaces the status source (called once the pipeline is up).
 func (s *Server) SetStatus(src statusSource) {
 	s.status = src
+}
+
+// SetDeliveryHealth replaces the delivery health source.
+func (s *Server) SetDeliveryHealth(src deliveryHealthSource) {
+	s.deliveryHealth = src
 }
 
 // Open creates the HTTP listener without starting a goroutine. The

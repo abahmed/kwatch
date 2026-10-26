@@ -109,6 +109,8 @@ type Manager struct {
 
 	healthMu        sync.Mutex
 	providerReasons map[string]string
+	providerLastSuccess map[string]time.Time
+	providerLastError   map[string]time.Time
 	healthEvents    chan struct{}
 }
 

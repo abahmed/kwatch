@@ -207,6 +207,6 @@ func newDashboardServer(
 	}
 	return dashboard.NewServer(
 		true, dc.Port, token, edition,
-		nil, nil, // incidents and status set later by the pipeline
+		nil, nil, nil, // incidents, status, delivery health set later
 	)
 }

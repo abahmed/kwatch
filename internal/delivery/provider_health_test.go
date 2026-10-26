@@ -40,8 +40,11 @@ func TestProviderHealthReportsLastOutcomeWithBoundedReasons(t *testing.T) {
 				deliverJob{kind: jobMessage, msg: "x"})
 
 			assertHealthEvent(t, manager)
-			assert.Equal(t, []ProviderHealth{{"slack", tc.want}},
-				manager.ProviderHealth())
+			got := manager.ProviderHealth()
+			require.Len(t, got, 1)
+			assert.Equal(t, "slack", got[0].Name)
+			assert.Equal(t, tc.want, got[0].Reason)
+			assert.True(t, !got[0].LastError.IsZero(), "last error should be set")
 
 			provider.fail = nil
 			manager.pacer = sendPacer{}
@@ -49,8 +52,12 @@ func TestProviderHealthReportsLastOutcomeWithBoundedReasons(t *testing.T) {
 				deliverJob{kind: jobMessage, msg: "x"})
 
 			assertHealthEvent(t, manager)
-			assert.Equal(t, []ProviderHealth{{"slack", ""}},
-				manager.ProviderHealth(), "success clears the reason")
+			got = manager.ProviderHealth()
+			require.Len(t, got, 1)
+			assert.Equal(t, "slack", got[0].Name)
+			assert.Equal(t, "", got[0].Reason)
+			assert.True(t, !got[0].LastSuccess.IsZero(), "last success should be set")
+			assert.True(t, got[0].LastError.IsZero(), "last error should be cleared")
 		})
 	}
 }

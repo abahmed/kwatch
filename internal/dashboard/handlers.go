@@ -92,7 +92,7 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 		Edition:           s.edition,
 		LastScan:          report.At,
 		WatchedNamespaces: nil,
-		PerChannelHealth:  nil,
+		PerChannelHealth:  s.deliveryHealth(),
 	}
 	body, err := json.MarshalIndent(resp, "", "  ")
 	if err != nil {
@@ -159,7 +159,7 @@ func toDetail(p incident.Incident) IncidentDetail {
 		ResolvedAt:       p.Resolved,
 		Timeline:         toTimeline(p.Timeline),
 		KubernetesEvents: nil,
-		CapturedLogLines: nil,
+		CapturedLogLines: p.Facts,
 		DeliveryAttempts: nil,
 		DocsLink:         "",
 	}

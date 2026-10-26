@@ -9,6 +9,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/audit"
 	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/dashboard"
 	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/flight"
 	"github.com/abahmed/kwatch/internal/incident"
@@ -83,6 +84,20 @@ func newPipelineBuild(
 	})
 	p.decisions = newDecisionLog(
 		p.auditLog.Record, metrics.DefaultRegistry(), p.incidents.Incidents)
+	if deps.dashboardServer != nil {
+		deps.dashboardServer.SetDeliveryHealth(
+			func() []dashboard.ChannelHealth {
+				out := make([]dashboard.ChannelHealth, 0)
+				for _, h := range deps.deliveryManager.ProviderHealth() {
+					out = append(out, dashboard.ChannelHealth{
+						Channel:     h.Name,
+						LastSuccess: h.LastSuccess,
+						LastError:   h.LastError,
+					})
+				}
+				return out
+			})
+	}
 	return p, nil
 }
 

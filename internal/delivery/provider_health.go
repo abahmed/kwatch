@@ -1,6 +1,10 @@
 package delivery
 
-import "github.com/abahmed/kwatch/internal/metrics"
+import (
+	"time"
+
+	"github.com/abahmed/kwatch/internal/metrics"
+)
 
 // Provider health reasons. They are a fixed vocabulary so /health never
 // carries a provider's error text.
@@ -14,20 +18,36 @@ const (
 // empty when its last delivery succeeded (or none was tried yet), else
 // one of provider_unavailable, provider_rejected, provider_rate_limited.
 type ProviderHealth struct {
-	Name   string
-	Reason string
+	Name        string    `json:"name"`
+	Reason      string    `json:"reason,omitempty"`
+	LastSuccess time.Time `json:"lastSuccess,omitempty"`
+	LastError   time.Time `json:"lastError,omitempty"`
 }
 
 // setProviderHealth records a provider's last outcome and wakes the
 // health publisher when it changed.
 func (m *Manager) setProviderHealth(entry *providerEntry, reason string) {
 	name := entry.lookupName()
+	now := time.Now()
 	m.healthMu.Lock()
 	if m.providerReasons == nil {
 		m.providerReasons = make(map[string]string)
 	}
+	if m.providerLastSuccess == nil {
+		m.providerLastSuccess = make(map[string]time.Time)
+	}
+	if m.providerLastError == nil {
+		m.providerLastError = make(map[string]time.Time)
+	}
 	changed := m.providerReasons[name] != reason
 	m.providerReasons[name] = reason
+	if reason == "" {
+		m.providerLastSuccess[name] = now
+		delete(m.providerLastError, name)
+	} else {
+		m.providerLastError[name] = now
+		delete(m.providerLastSuccess, name)
+	}
 	m.healthMu.Unlock()
 	if changed {
 		m.signalProviderHealth()
@@ -71,7 +91,10 @@ func (m *Manager) ProviderHealth() []ProviderHealth {
 	out := make([]ProviderHealth, 0, len(names))
 	for _, name := range names {
 		out = append(out, ProviderHealth{
-			Name: name, Reason: m.providerReasons[name],
+			Name:        name,
+			Reason:      m.providerReasons[name],
+			LastSuccess: m.providerLastSuccess[name],
+			LastError:   m.providerLastError[name],
 		})
 	}
 	return out
@@ -101,12 +124,22 @@ func (m *Manager) configureProviderMetrics(names []string) {
 	metrics.DefaultRegistry().Delivery.ConfigureQueueProviders(names)
 	m.healthMu.Lock()
 	kept := make(map[string]string, len(names))
+	keptSuccess := make(map[string]time.Time, len(names))
+	keptError := make(map[string]time.Time, len(names))
 	for _, name := range names {
 		if reason, ok := m.providerReasons[name]; ok {
 			kept[name] = reason
 		}
+		if t, ok := m.providerLastSuccess[name]; ok {
+			keptSuccess[name] = t
+		}
+		if t, ok := m.providerLastError[name]; ok {
+			keptError[name] = t
+		}
 	}
 	m.providerReasons = kept
+	m.providerLastSuccess = keptSuccess
+	m.providerLastError = keptError
 	m.healthMu.Unlock()
 	m.signalProviderHealth()
 }

@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/inventory"
 )
 
 func TestAuthValidToken(t *testing.T) {
@@ -140,3 +143,42 @@ func TestStatusResponseJSON(t *testing.T) {
 		t.Errorf("missing channel field: %s", s)
 	}
 }
+
+func TestRedactedSecretNeverAppearsInAPIOutput(t *testing.T) {
+	// Secrets are redacted at ingest time, before they reach Facts.
+	// The API passes through already-redacted data. This test verifies
+	// that a redacted secret placeholder appears in the API output
+	// instead of the plaintext secret.
+	redacted := "[REDACTED]"
+
+	inc := incident.Incident{
+		ID:     "inc-20261001-0001",
+		Root:   inventory.EntityID{Kind: "Deployment", Namespace: "default", Name: "my-app"},
+		Opened: time.Unix(100, 0),
+		Facts: []string{
+			"connecting to database with " + redacted,
+			"error: " + redacted,
+			"normal log line without secrets",
+		},
+	}
+
+	detail := toDetail(inc)
+	body, err := json.Marshal(detail)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(body)
+	if strings.Contains(s, "sk-live-") {
+		t.Errorf("unredacted secret leaked into API output")
+	}
+	if strings.Contains(s, "DB_PASSWORD=") {
+		t.Errorf("unredacted secret leaked into API output")
+	}
+	if !strings.Contains(s, redacted) {
+		t.Errorf("redacted secret placeholder missing from API output")
+	}
+	if !strings.Contains(s, "normal log line without secrets") {
+		t.Errorf("non-secret log line missing from API output")
+	}
+}
+
