@@ -3,13 +3,12 @@ package dashboard
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
+	"strconv"
 	"strings"
-	"time"
 
 	"k8s.io/klog/v2"
 
-	"github.com/abahmed/kwatch/internal/incident"
-	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/version"
 )
 
@@ -17,214 +16,175 @@ import (
 // maxStatusBytes on /status.
 const maxResponseBytes = 64 << 10
 
-// writeJSON writes a JSON response, bounding its size. It never writes
-// more than maxResponseBytes; if the body exceeds it, a 500 is returned
-// instead of a truncated payload.
-func writeJSON(w http.ResponseWriter, v any) error {
-	body, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return err
-	}
-	body = append(body, '\n')
-	if len(body) > maxResponseBytes {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return nil
-	}
-	if _, err := w.Write(body); err != nil {
-		klog.ErrorS(err, "dashboard: write response")
-		return err
-	}
-	return nil
-}
+// List limits: the default and the largest page of /api/incidents.
+const (
+	defaultListLimit = 100
+	maxListLimit     = 500
+)
 
-// incidentsHandler serves GET /api/incidents?state=active|resolved&namespace=.
-func (s *Server) incidentsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", "GET")
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+// listEnvelopeBytes is room kept for the list's envelope around items.
+const listEnvelopeBytes = 128
+
+// writeJSON writes v as JSON. A body over maxResponseBytes is refused
+// with 500 rather than cut; callers bound what they pass.
+func writeJSON(w http.ResponseWriter, v any) {
+	body, err := json.Marshal(v)
+	if err != nil || len(body) > maxResponseBytes {
+		klog.ErrorS(err, "dashboard: response not written",
+			"bytes", len(body))
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(append(body, '\n'))
+}
 
-	state := r.URL.Query().Get("state")
-	namespace := r.URL.Query().Get("namespace")
+// writeError writes {"error": msg} with code.
+func writeError(w http.ResponseWriter, code int, msg string) {
+	body, _ := json.Marshal(map[string]string{"error": msg})
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_, _ = w.Write(append(body, '\n'))
+}
 
-	items := s.incidents.Incidents()
-	list := make([]IncidentListItem, 0, len(items))
-	for _, p := range items {
-		if !matches(p, state, namespace) {
-			continue
+// onlyGet answers 405 to anything but GET and reports whether to go on.
+func onlyGet(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method == http.MethodGet {
+		return true
+	}
+	w.Header().Set("Allow", http.MethodGet)
+	writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+	return false
+}
+
+// unavailable answers 503: the pipeline is not running.
+func unavailable(w http.ResponseWriter) {
+	writeError(w, http.StatusServiceUnavailable, "unavailable")
+}
+
+// incidentsHandler serves
+// GET /api/incidents?state=active|resolved&namespace=&limit=, newest
+// first.
+func (s *Server) incidentsHandler(w http.ResponseWriter, r *http.Request) {
+	if !onlyGet(w, r) {
+		return
+	}
+	q := r.URL.Query()
+	f := filter{state: q.Get("state"), namespace: q.Get("namespace")}
+	if !f.validState() {
+		writeError(w, http.StatusBadRequest, "invalid state")
+		return
+	}
+	limit, ok := parseLimit(q.Get("limit"))
+	if !ok {
+		writeError(w, http.StatusBadRequest, "invalid limit")
+		return
+	}
+	reader := s.sources.incidents.Load()
+	if reader == nil {
+		unavailable(w)
+		return
+	}
+	items := make([]IncidentListItem, 0)
+	for _, p := range (*reader).Incidents() {
+		if f.matches(p) {
+			items = append(items, toListItem(p))
 		}
-		list = append(list, toListItem(p))
 	}
-	if err := writeJSON(w, list); err != nil {
-		klog.ErrorS(err, "dashboard: write incidents response",
-			"remote", r.RemoteAddr, "state", state, "namespace", namespace)
+	slices.SortFunc(items, newestFirst)
+	writeJSON(w, boundList(items, limit))
+}
+
+// parseLimit reads ?limit=: empty is the default, larger than the
+// maximum is the maximum, anything not a positive number is invalid.
+func parseLimit(raw string) (int, bool) {
+	if raw == "" {
+		return defaultListLimit, true
 	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 {
+		return 0, false
+	}
+	return min(n, maxListLimit), true
+}
+
+// boundList keeps at most limit items and as many as fit the response
+// size, newest first; Truncated says some were left out.
+func boundList(items []IncidentListItem, limit int) ListResponse {
+	out := ListResponse{Incidents: make([]IncidentListItem, 0),
+		Total: len(items)}
+	budget := maxResponseBytes - listEnvelopeBytes
+	for _, item := range items {
+		if len(out.Incidents) == limit {
+			break
+		}
+		body, err := json.Marshal(item)
+		if err != nil || len(body)+1 > budget {
+			break
+		}
+		budget -= len(body) + 1
+		out.Incidents = append(out.Incidents, item)
+	}
+	out.Truncated = len(out.Incidents) < len(items)
+	return out
 }
 
 // incidentDetailHandler serves GET /api/incidents/{id}.
-func (s *Server) incidentDetailHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", "GET")
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+func (s *Server) incidentDetailHandler(
+	w http.ResponseWriter, r *http.Request,
+) {
+	if !onlyGet(w, r) {
 		return
 	}
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Type", "application/json")
-
 	id := strings.TrimPrefix(r.URL.Path, "/api/incidents/")
-	if id == "" || id == "/" {
-		http.Error(w, "not found", http.StatusNotFound)
+	if id == "" || strings.Contains(id, "/") {
+		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	p := s.incidents.Incident(id)
+	reader := s.sources.incidents.Load()
+	if reader == nil {
+		unavailable(w)
+		return
+	}
+	p := (*reader).Incident(id)
 	if p == nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	if err := writeJSON(w, toDetail(*p)); err != nil {
-		klog.ErrorS(err, "dashboard: write incident detail response",
-			"remote", r.RemoteAddr, "incident", id)
-	}
+	writeJSON(w, toDetail(*p))
 }
 
 // statusHandler serves GET /api/status.
 func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", "GET")
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	if !onlyGet(w, r) {
 		return
 	}
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Content-Type", "application/json")
-
-	report := s.status()
-	resp := StatusResponse{
-		Version:           version.Short(),
-		Edition:           s.edition,
-		LastScan:          report.At,
-		WatchedNamespaces: nil,
-		PerChannelHealth:  s.deliveryHealth(),
+	src := s.sources.status.Load()
+	if src == nil {
+		unavailable(w)
+		return
 	}
-	if err := writeJSON(w, resp); err != nil {
-		klog.ErrorS(err, "dashboard: write status response",
-			"remote", r.RemoteAddr)
+	health := make([]ChannelHealth, 0)
+	if h := s.sources.health.Load(); h != nil {
+		health = append(health, (*h)()...)
 	}
+	writeJSON(w, StatusResponse{
+		Version:            version.Short(),
+		Edition:            s.edition,
+		LastScan:           (*src)().At,
+		WatchedNamespaces:  watched(s.scope.Watched),
+		ExcludedNamespaces: s.scope.Excluded,
+		PerChannelHealth:   health,
+	})
 }
 
-func matches(p incident.Incident, state, namespace string) bool {
-	if state != "" {
-		isResolved := p.State == incident.Resolved
-		switch state {
-		case "active":
-			if isResolved {
-				return false
-			}
-		case "resolved":
-			if !isResolved {
-				return false
-			}
-		default:
-			return false
-		}
-	}
-	if namespace != "" && p.Root.Namespace != namespace {
-		return false
-	}
-	return true
-}
+// allNamespaces is what watchedNamespaces says when every namespace is
+// watched. "*" is never a valid namespace name.
+const allNamespaces = "*"
 
-func toListItem(p incident.Incident) IncidentListItem {
-	return IncidentListItem{
-		ID:          p.ID,
-		Title:       titleFor(p),
-		Severity:    p.Tier.String(),
-		State:       p.State.String(),
-		Namespace:   p.Root.Namespace,
-		Workload:    p.Root.Name,
-		FirstSeen:   p.Opened,
-		LastSeen:    lastSeen(p),
-		RepeatCount: p.RepeatCount,
-		AckedBy:     ackedBy(p),
-		ResolvedAt:  p.Resolved,
+func watched(names []string) []string {
+	if len(names) == 0 {
+		return []string{allNamespaces}
 	}
-}
-
-func toDetail(p incident.Incident) IncidentDetail {
-	return IncidentDetail{
-		ID:               p.ID,
-		Title:            titleFor(p),
-		Severity:         p.Tier.String(),
-		State:            p.State.String(),
-		Namespace:        p.Root.Namespace,
-		Workload:         p.Root.Name,
-		RootCause:        causeText(p),
-		SuggestedFix:     fixText(p),
-		FirstSeen:        p.Opened,
-		LastSeen:         lastSeen(p),
-		RepeatCount:      p.RepeatCount,
-		ResolvedAt:       p.Resolved,
-		Timeline:         toTimeline(p.Timeline),
-		KubernetesEvents: nil,
-		CapturedLogLines: p.Facts,
-		DeliveryAttempts: nil,
-		DocsLink:         "",
-	}
-}
-
-func titleFor(p incident.Incident) string {
-	if p.Root.Name != "" {
-		return p.Root.String()
-	}
-	return p.ID
-}
-
-func lastSeen(p incident.Incident) time.Time {
-	if !p.Resolved.IsZero() {
-		return p.Resolved
-	}
-	if !p.Announced.IsZero() {
-		return p.Announced
-	}
-	return p.Opened
-}
-
-func ackedBy(p incident.Incident) string {
-	if p.Ack != nil {
-		return p.Ack.On.String()
-	}
-	return ""
-}
-
-func causeText(p incident.Incident) string {
-	if p.Cause != nil {
-		return p.Cause.Summary
-	}
-	return ""
-}
-
-func fixText(p incident.Incident) string {
-	return string(p.Fix)
-}
-
-func toTimeline(events []incident.Event) []Event {
-	out := make([]Event, 0, len(events))
-	for _, e := range events {
-		out = append(out, Event{
-			At:     e.At,
-			Text:   e.Text,
-			Entity: entityIDString(e.Entity),
-		})
-	}
-	return out
-}
-
-func entityIDString(e *inventory.EntityID) string {
-	if e == nil {
-		return ""
-	}
-	return e.String()
+	return names
 }

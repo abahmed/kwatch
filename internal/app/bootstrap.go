@@ -204,27 +204,32 @@ func applyEditionEndpoints(
 }
 
 // newDashboardServer builds the optional dashboard API server. It is Pro
-// only and off by default; the listener is opened later by the generation.
-// The bearer token comes from KWATCH_DASHBOARD_TOKEN (populated by the
-// installer/chart from the kwatch-dashboard Secret).
+// only and off by default, so Community never opens its port. The
+// listener is opened later by the generation. The bearer token comes
+// from KWATCH_DASHBOARD_TOKEN (set by the chart from its Secret).
 func newDashboardServer(
 	runtime config.RuntimeConfig, now clock.Clock, e feature.Entitlements,
 ) *dashboard.Server {
-	limits := feature.OrCommunity(e).Limits()
-	if !limits.Dashboard {
+	if !feature.OrCommunity(e).Limits().Dashboard {
 		return nil
 	}
 	dc := runtime.Lifecycle().Dashboard()
 	if !dc.Enabled {
 		return nil
 	}
-	token := os.Getenv("KWATCH_DASHBOARD_TOKEN")
-	edition := string(feature.CommunityEdition)
-	if e != nil {
-		edition = string(e.Edition())
+	token := os.Getenv(dashboardTokenEnv)
+	if token == "" {
+		klog.InfoS("WARNING: dashboard is enabled but "+dashboardTokenEnv+
+			" is empty; every dashboard request is refused with 401",
+			"component", "dashboard-server")
 	}
-	return dashboard.NewServer(
-		true, dc.Port, token, edition, now,
-		nil, nil, nil, // incidents, status, delivery health set later
-	)
+	scope := runtime.Scope()
+	return dashboard.NewServer(dc.Port, token,
+		string(feature.OrCommunity(e).Edition()), dashboard.Scope{
+			Watched:  scope.AllowedNamespaces(),
+			Excluded: scope.ForbiddenNamespaces(),
+		}, now)
 }
+
+// dashboardTokenEnv names the dashboard bearer token variable.
+const dashboardTokenEnv = "KWATCH_DASHBOARD_TOKEN"

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -16,7 +17,8 @@ import (
 	"github.com/abahmed/kwatch/internal/status"
 )
 
-// incidentReader lists and looks up incidents. incident.Manager satisfies it.
+// incidentReader lists and looks up incidents. incident.Manager satisfies
+// it.
 type incidentReader interface {
 	Incidents() []incident.Incident
 	Incident(id string) *incident.Incident
@@ -28,81 +30,96 @@ type statusSource func() status.Report
 // deliveryHealthSource returns per-channel delivery health.
 type deliveryHealthSource func() []ChannelHealth
 
+// Scope is the namespace scope /api/status reports. An empty Watched
+// list means every namespace.
+type Scope struct {
+	Watched  []string
+	Excluded []string
+}
+
+// sources holds what the running pipeline provides. The listener serves
+// before the pipeline is up and after it stops, so every source may be
+// missing; handlers answer 503 then. The zero value has none.
+type sources struct {
+	incidents atomic.Pointer[incidentReader]
+	status    atomic.Pointer[statusSource]
+	health    atomic.Pointer[deliveryHealthSource]
+}
+
 // Server serves the dashboard API on its own listener.
 type Server struct {
-	server         *http.Server
-	listener       net.Listener
-	port           int
-	enabled        bool
-	edition        string
-	auth           *Auth
-	incidents      incidentReader
-	status         statusSource
-	deliveryHealth deliveryHealthSource
-	started        bool
-	stopped        bool
-	stopErr        error
-	lifecycleMu    sync.Mutex
-	serveErrors    chan error
+	server      *http.Server
+	listener    net.Listener
+	port        int
+	edition     string
+	scope       Scope
+	auth        *Auth
+	sources     sources
+	started     bool
+	stopped     bool
+	stopErr     error
+	lifecycleMu sync.Mutex
 }
 
-// NewServer builds a dashboard API server. When enabled is false, Open is
-// a no-op. The token is the bearer token required on every /api/* call.
-// edition is the product edition name reported in /api/status.
-// now is the clock used for auth rate-limit window rotation.
+// NewServer builds a dashboard API server. The token is the bearer token
+// required on every call; an empty token rejects every call. edition is
+// reported in /api/status, scope is the configured namespace scope and
+// now is the clock of the auth rate limiter.
 func NewServer(
-	enabled bool, port int, token, edition string, now clock.Clock,
-	incidents incidentReader, status statusSource,
-	deliveryHealth deliveryHealthSource,
+	port int, token, edition string, scope Scope, now clock.Clock,
 ) *Server {
-	s := &Server{
-		port:           port,
-		enabled:        enabled,
-		edition:        edition,
-		auth:           NewAuth(token, now),
-		incidents:      incidents,
-		status:         status,
-		deliveryHealth: deliveryHealth,
-		serveErrors:    make(chan error, 1),
+	return &Server{
+		port:    port,
+		edition: edition,
+		scope:   scope,
+		auth:    NewAuth(token, now),
 	}
-	return s
 }
 
-// SetIncidents replaces the incident reader (called once the pipeline is up).
+// SetIncidents sets the incident reader; nil removes it (503).
 func (s *Server) SetIncidents(r incidentReader) {
-	s.incidents = r
+	if r == nil {
+		s.sources.incidents.Store(nil)
+		return
+	}
+	s.sources.incidents.Store(&r)
 }
 
-// SetStatus replaces the status source (called once the pipeline is up).
-func (s *Server) SetStatus(src statusSource) {
-	s.status = src
+// SetStatus sets the status source; nil removes it (503).
+func (s *Server) SetStatus(src func() status.Report) {
+	if src == nil {
+		s.sources.status.Store(nil)
+		return
+	}
+	v := statusSource(src)
+	s.sources.status.Store(&v)
 }
 
-// SetDeliveryHealth replaces the delivery health source.
-func (s *Server) SetDeliveryHealth(src deliveryHealthSource) {
-	s.deliveryHealth = src
+// SetDeliveryHealth sets the delivery health source; nil reports no
+// channels.
+func (s *Server) SetDeliveryHealth(src func() []ChannelHealth) {
+	if src == nil {
+		s.sources.health.Store(nil)
+		return
+	}
+	v := deliveryHealthSource(src)
+	s.sources.health.Store(&v)
 }
 
 // Open creates the HTTP listener without starting a goroutine. The
 // application supervisor owns the serving goroutine.
 func (s *Server) Open() error {
-	if !s.enabled {
-		klog.V(4).InfoS("dashboard is disabled")
-		return nil
-	}
 	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	if s.started {
-		stopped := s.stopped
-		s.lifecycleMu.Unlock()
-		if stopped {
+		if s.stopped {
 			return fmt.Errorf("dashboard server cannot be restarted")
 		}
 		return nil
 	}
-	mux := s.newServeMux()
 	s.server = &http.Server{
 		Addr:              ":" + strconv.Itoa(s.port),
-		Handler:           mux,
+		Handler:           s.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       5 * time.Second,
 		WriteTimeout:      10 * time.Second,
@@ -112,49 +129,39 @@ func (s *Server) Open() error {
 	ln, err := listenConfig.Listen(
 		context.Background(), "tcp", s.server.Addr)
 	if err != nil {
-		s.lifecycleMu.Unlock()
 		return err
 	}
 	s.listener = ln
 	s.started = true
-	s.lifecycleMu.Unlock()
 	return nil
 }
 
 // Serve runs the already-open listener.
 func (s *Server) Serve(_ context.Context) error {
 	s.lifecycleMu.Lock()
-	server := s.server
-	listener := s.listener
+	server, listener := s.server, s.listener
 	if server == nil || listener == nil || s.stopped {
 		s.lifecycleMu.Unlock()
 		return nil
 	}
-	klog.InfoS("starting dashboard API server", "port", s.port)
 	s.lifecycleMu.Unlock()
-	if err := server.Serve(listener); err != nil &&
-		err != http.ErrServerClosed {
-		s.lifecycleMu.Lock()
-		s.stopErr = err
-		s.lifecycleMu.Unlock()
-		klog.ErrorS(err, "dashboard server stopped", "component", "dashboard-server")
-		select {
-		case s.serveErrors <- err:
-		default:
-		}
-		return err
+	klog.InfoS("starting dashboard API server", "port", s.port)
+	err := server.Serve(listener)
+	if err == nil || err == http.ErrServerClosed {
+		return nil
 	}
-	return nil
+	s.lifecycleMu.Lock()
+	s.stopErr = err
+	s.lifecycleMu.Unlock()
+	klog.ErrorS(err, "dashboard server stopped",
+		"component", "dashboard-server")
+	return err
 }
 
 // Stop shuts the HTTP server down within ctx.
 func (s *Server) Stop(ctx context.Context) error {
 	s.lifecycleMu.Lock()
-	if !s.started {
-		s.lifecycleMu.Unlock()
-		return nil
-	}
-	if s.stopped {
+	if !s.started || s.stopped {
 		err := s.stopErr
 		s.lifecycleMu.Unlock()
 		return err
@@ -162,25 +169,23 @@ func (s *Server) Stop(ctx context.Context) error {
 	s.stopped = true
 	server, listener := s.server, s.listener
 	s.lifecycleMu.Unlock()
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	err := server.Shutdown(ctx)
 	_ = listener.Close()
 	s.lifecycleMu.Lock()
-	s.stopped = true
 	s.stopErr = err
 	s.lifecycleMu.Unlock()
 	return err
 }
 
-func (s *Server) newServeMux() *http.ServeMux {
+// Handler is the whole API: security headers and the access log on every
+// response, then auth, then the routes.
+func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	incidents := s.auth.Middleware(http.HandlerFunc(s.incidentsHandler))
-	detail := s.auth.Middleware(http.HandlerFunc(s.incidentDetailHandler))
-	status := s.auth.Middleware(http.HandlerFunc(s.statusHandler))
-	mux.Handle("/api/incidents", incidents)
-	mux.Handle("/api/incidents/", detail)
-	mux.Handle("/api/status", status)
-	return mux
+	mux.HandleFunc("/api/incidents", s.incidentsHandler)
+	mux.HandleFunc("/api/incidents/", s.incidentDetailHandler)
+	mux.HandleFunc("/api/status", s.statusHandler)
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		writeError(w, http.StatusNotFound, "not found")
+	})
+	return securityHeaders(accessLog(s.auth.Middleware(mux)))
 }

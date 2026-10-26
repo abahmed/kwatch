@@ -9,7 +9,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/audit"
 	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/dashboard"
 	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/flight"
 	"github.com/abahmed/kwatch/internal/incident"
@@ -84,20 +83,6 @@ func newPipelineBuild(
 	})
 	p.decisions = newDecisionLog(
 		p.auditLog.Record, metrics.DefaultRegistry(), p.incidents.Incidents)
-	if deps.dashboardServer != nil {
-		deps.dashboardServer.SetDeliveryHealth(
-			func() []dashboard.ChannelHealth {
-				out := make([]dashboard.ChannelHealth, 0)
-				for _, h := range deps.deliveryManager.ProviderHealth() {
-					out = append(out, dashboard.ChannelHealth{
-						Channel:     h.Name,
-						LastSuccess: h.LastSuccess,
-						LastError:   h.LastError,
-					})
-				}
-				return out
-			})
-	}
 	return p, nil
 }
 
@@ -206,19 +191,7 @@ func (p *pipelineBuild) newInvestigator() investigate.Investigator {
 func (p *pipelineBuild) recordDecision(
 	_ context.Context, d incident.Decision, m notification.Message,
 ) {
-	// Store captured log lines on the incident so the dashboard detail
-	// page can show them after a restart.
-	if len(d.Facts.Evidence) > 0 {
-		facts := make([]string, 0, len(d.Facts.Evidence))
-		for _, f := range d.Facts.Evidence {
-			if f.Text != "" {
-				facts = append(facts, f.Text)
-			}
-		}
-		if len(facts) > 0 {
-			p.incidents.StoreFacts(d.Incident.ID, facts)
-		}
-	}
+	p.incidents.StoreDetail(d.Incident.ID, dashboardDetail(d, m))
 	klog.V(1).InfoS("pipeline decision", "component", "pipeline",
 		"incident", d.Incident.ID, "reason", d.Reason)
 	counted := countDecision(metrics.DefaultRegistry(), d)

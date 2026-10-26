@@ -4,7 +4,6 @@ import (
 	"crypto/subtle"
 	"net/http"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/clock"
@@ -12,7 +11,7 @@ import (
 
 // Auth validates bearer tokens for dashboard API access.
 type Auth struct {
-	token    atomic.Value // holds string
+	token    string
 	failRate *rateLimiter
 }
 
@@ -20,28 +19,22 @@ type Auth struct {
 // token means every request is rejected with 401. now is the clock used
 // for rate-limit window rotation; nil is rejected.
 func NewAuth(token string, now clock.Clock) *Auth {
-	a := &Auth{}
-	a.token.Store(token)
-	a.failRate = newRateLimiter(now)
-	return a
+	return &Auth{token: token, failRate: newRateLimiter(now)}
 }
 
-// Middleware wraps an http.Handler with bearer token auth and per-IP
+// Middleware wraps an http.Handler with bearer token auth and per-host
 // rate limiting on failures.
 func (a *Auth) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !a.failRate.allowed(r.RemoteAddr) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte(`{"error":"too many requests"}`))
+		host := remoteHost(r)
+		if !a.failRate.allowed(host) {
+			writeError(w, http.StatusTooManyRequests, "too many requests")
 			return
 		}
 		token, ok := bearerToken(r)
 		if !ok || !a.valid(token) {
-			a.failRate.record(r.RemoteAddr)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			_, _ = w.Write([]byte(`{"error":"unauthorized"}`))
+			a.failRate.record(host)
+			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -51,7 +44,7 @@ func (a *Auth) Middleware(next http.Handler) http.Handler {
 // valid reports whether token matches the configured bearer token using
 // constant-time comparison.
 func (a *Auth) valid(token string) bool {
-	expected, _ := a.token.Load().(string)
+	expected := a.token
 	if expected == "" {
 		return false
 	}

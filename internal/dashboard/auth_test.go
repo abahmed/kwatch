@@ -1,16 +1,12 @@
 package dashboard
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
+	"strconv"
 	"testing"
-	"time"
 
 	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/incident"
-	"github.com/abahmed/kwatch/internal/inventory"
 )
 
 func TestAuthValidToken(t *testing.T) {
@@ -95,94 +91,31 @@ func TestAuthEmptyTokenRejectsAll(t *testing.T) {
 	}
 }
 
-func TestIncidentListItemJSON(t *testing.T) {
-	item := IncidentListItem{
-		ID:          "inc-20261001-0001",
-		Title:       "Deployment my-app is crash-looping",
-		Severity:    "page",
-		State:       "open",
-		Namespace:   "default",
-		Workload:    "my-app",
-		FirstSeen:   time.Unix(100, 0),
-		LastSeen:    time.Unix(200, 0),
-		RepeatCount: 3,
-		AckedBy:     "alice",
-		ResolvedAt:  time.Unix(300, 0),
-	}
-	body, err := json.Marshal(item)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := string(body)
-	if !strings.Contains(s, `"id":"inc-20261001-0001"`) {
-		t.Errorf("missing id field: %s", s)
-	}
-	if !strings.Contains(s, `"repeatCount":3`) {
-		t.Errorf("missing repeatCount field: %s", s)
-	}
-}
-
-func TestStatusResponseJSON(t *testing.T) {
-	resp := StatusResponse{
-		Version:           "v1.2.0",
-		Edition:           "Pro",
-		LastScan:          time.Unix(100, 0),
-		WatchedNamespaces: []string{"default", "kube-system"},
-		PerChannelHealth: []ChannelHealth{
-			{Channel: "slack", LastSuccess: time.Unix(200, 0)},
-		},
-	}
-	body, err := json.Marshal(resp)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := string(body)
-	if !strings.Contains(s, `"edition":"Pro"`) {
-		t.Errorf("missing edition field: %s", s)
-	}
-	if !strings.Contains(s, `"slack"`) {
-		t.Errorf("missing channel field: %s", s)
-	}
-}
-
-func TestRedactedSecretNeverAppearsInAPIOutput(t *testing.T) {
-	// Secrets are redacted at ingest time, before they reach Facts.
-	// The API passes through already-redacted data. This test verifies
-	// that a redacted secret placeholder appears in the API output
-	// instead of the plaintext secret.
-	redacted := "[REDACTED]"
-
-	inc := incident.Incident{
-		ID: "inc-20261001-0001",
-		Root: inventory.EntityID{
-			Kind:      "Deployment",
-			Namespace: "default",
-			Name:      "my-app",
-		},
-		Opened: time.Unix(100, 0),
-		Facts: []string{
-			"connecting to database with " + redacted,
-			"error: " + redacted,
-			"normal log line without secrets",
-		},
+func TestAuthRateLimitFollowsTheHostAcrossConnections(t *testing.T) {
+	handler := NewAuth("secret-token", clock.RealClock{}).Middleware(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte("ok"))
+		}))
+	for port := range 10 {
+		req := httptest.NewRequest("GET", "/api/incidents", nil)
+		req.RemoteAddr = "10.1.2.3:" + strconv.Itoa(40000+port)
+		handler.ServeHTTP(httptest.NewRecorder(), req)
 	}
 
-	detail := toDetail(inc)
-	body, err := json.Marshal(detail)
-	if err != nil {
-		t.Fatal(err)
+	limited := httptest.NewRequest("GET", "/api/incidents", nil)
+	limited.RemoteAddr = "10.1.2.3:50000"
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, limited)
+	other := httptest.NewRequest("GET", "/api/incidents", nil)
+	other.RemoteAddr = "10.9.9.9:40000"
+	other.Header.Set("Authorization", "Bearer secret-token")
+	ok := httptest.NewRecorder()
+	handler.ServeHTTP(ok, other)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("same host, new port: status = %d, want 429", w.Code)
 	}
-	s := string(body)
-	if strings.Contains(s, "sk-live-") {
-		t.Errorf("unredacted secret leaked into API output")
-	}
-	if strings.Contains(s, "DB_PASSWORD=") {
-		t.Errorf("unredacted secret leaked into API output")
-	}
-	if !strings.Contains(s, redacted) {
-		t.Errorf("redacted secret placeholder missing from API output")
-	}
-	if !strings.Contains(s, "normal log line without secrets") {
-		t.Errorf("non-secret log line missing from API output")
+	if ok.Code != http.StatusOK {
+		t.Errorf("other host: status = %d, want 200", ok.Code)
 	}
 }
