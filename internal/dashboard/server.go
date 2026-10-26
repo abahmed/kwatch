@@ -168,16 +168,10 @@ func (s *Server) Stop(ctx context.Context) error {
 	err := server.Shutdown(ctx)
 	_ = listener.Close()
 	s.lifecycleMu.Lock()
+	s.stopped = true
 	s.stopErr = err
 	s.lifecycleMu.Unlock()
 	return err
-}
-
-// ServeError returns the error that ended Serve, if any.
-func (s *Server) ServeError() error {
-	s.lifecycleMu.Lock()
-	defer s.lifecycleMu.Unlock()
-	return s.stopErr
 }
 
 func (s *Server) newServeMux() *http.ServeMux {

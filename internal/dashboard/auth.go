@@ -26,11 +26,6 @@ func NewAuth(token string, now clock.Clock) *Auth {
 	return a
 }
 
-// SetToken replaces the bearer token (for rotation).
-func (a *Auth) SetToken(token string) {
-	a.token.Store(token)
-}
-
 // Middleware wraps an http.Handler with bearer token auth and per-IP
 // rate limiting on failures.
 func (a *Auth) Middleware(next http.Handler) http.Handler {
