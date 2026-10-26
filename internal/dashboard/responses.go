@@ -2,8 +2,6 @@ package dashboard
 
 import (
 	"time"
-
-	"github.com/abahmed/kwatch/internal/feature"
 )
 
 // IncidentListItem is one incident in the /api/incidents list.
@@ -71,12 +69,4 @@ type ChannelHealth struct {
 	LastSuccess      time.Time `json:"lastSuccess,omitempty"`
 	LastError        time.Time `json:"lastError,omitempty"`
 	LastErrorMessage string    `json:"lastErrorMessage,omitempty"`
-}
-
-// editionString returns the human-readable edition name for API responses.
-func editionString(e feature.Entitlements) string {
-	if e == nil {
-		return string(feature.CommunityEdition)
-	}
-	return string(e.Edition())
 }
