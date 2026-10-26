@@ -185,6 +185,18 @@ type signedBody struct {
 	TS           int64  `json:"ts"`
 	Version      string `json:"kwatch_version,omitempty"`
 	NodeCount    int    `json:"node_count,omitempty"`
+	// Nonce is fresh per call and signed with the body; the server
+	// accepts it once, so a captured request cannot be replayed.
+	Nonce string `json:"nonce"`
+}
+
+// newNonce returns 16 random bytes, base64url without padding.
+func newNonce() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 type wireResponse struct {
@@ -228,14 +240,14 @@ func (c *Client) activateOnce(
 	if !req.TS.IsZero() {
 		ts = req.TS.Unix()
 	}
-	nonce := make([]byte, 16)
-	if _, err := rand.Read(nonce); err != nil {
+	nonce, err := newNonce()
+	if err != nil {
 		return Result{}, err
 	}
 	body, err := json.Marshal(activateBody{
 		Key: req.Key, ClusterUUID: req.ClusterUUID, ClusterProof: req.ClusterProof,
 		InstancePub: req.InstancePub,
-		Nonce:       base64.RawURLEncoding.EncodeToString(nonce),
+		Nonce:       nonce,
 		Version:     req.Version, NodeCount: req.NodeCount, TS: ts,
 	})
 	if err != nil {
@@ -265,10 +277,14 @@ func (c *Client) signed(
 	if len(priv) != ed25519.PrivateKeySize {
 		return Result{}, errors.New("license: invalid instance key")
 	}
+	nonce, err := newNonce()
+	if err != nil {
+		return Result{}, err
+	}
 	body, err := json.Marshal(signedBody{
 		LID: req.LID, ClusterUUID: req.ClusterUUID, ClusterProof: req.ClusterProof,
 		LeaseIat: req.LeaseIat, TS: req.TS.Unix(),
-		Version: req.Version, NodeCount: req.NodeCount,
+		Version: req.Version, NodeCount: req.NodeCount, Nonce: nonce,
 	})
 	if err != nil {
 		return Result{}, err
