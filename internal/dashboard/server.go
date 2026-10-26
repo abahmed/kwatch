@@ -11,6 +11,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/status"
 )
@@ -48,8 +49,9 @@ type Server struct {
 // NewServer builds a dashboard API server. When enabled is false, Open is
 // a no-op. The token is the bearer token required on every /api/* call.
 // edition is the product edition name reported in /api/status.
+// now is the clock used for auth rate-limit window rotation.
 func NewServer(
-	enabled bool, port int, token, edition string,
+	enabled bool, port int, token, edition string, now clock.Clock,
 	incidents incidentReader, status statusSource,
 	deliveryHealth deliveryHealthSource,
 ) *Server {
@@ -57,7 +59,7 @@ func NewServer(
 		port:           port,
 		enabled:        enabled,
 		edition:        edition,
-		auth:           NewAuth(token),
+		auth:           NewAuth(token, now),
 		incidents:      incidents,
 		status:         status,
 		deliveryHealth: deliveryHealth,

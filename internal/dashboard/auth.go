@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/abahmed/kwatch/internal/clock"
 )
 
 // Auth validates bearer tokens for dashboard API access.
@@ -15,11 +17,12 @@ type Auth struct {
 }
 
 // NewAuth builds an auth checker with the given bearer token. An empty
-// token means every request is rejected with 401.
-func NewAuth(token string) *Auth {
+// token means every request is rejected with 401. now is the clock used
+// for rate-limit window rotation; nil is rejected.
+func NewAuth(token string, now clock.Clock) *Auth {
 	a := &Auth{}
 	a.token.Store(token)
-	a.failRate = newRateLimiter()
+	a.failRate = newRateLimiter(now)
 	return a
 }
 
@@ -79,13 +82,15 @@ type rateLimiter struct {
 	mu      sync.Mutex
 	counts  map[string]int
 	window  time.Time
+	now     func() time.Time
 	maxFail int
 }
 
-func newRateLimiter() *rateLimiter {
+func newRateLimiter(now clock.Clock) *rateLimiter {
 	return &rateLimiter{
 		counts:  make(map[string]int),
-		window:  time.Now(),
+		window:  now.Now(),
+		now:     now.Now,
 		maxFail: 10,
 	}
 }
@@ -105,8 +110,8 @@ func (r *rateLimiter) allowed(ip string) bool {
 }
 
 func (r *rateLimiter) rotate() {
-	if time.Since(r.window) > time.Minute {
-		r.window = time.Now()
+	if r.now().Sub(r.window) > time.Minute {
+		r.window = r.now()
 		r.counts = make(map[string]int)
 	}
 }

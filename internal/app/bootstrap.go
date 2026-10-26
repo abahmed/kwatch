@@ -89,7 +89,7 @@ func newBootstrap(
 	}
 	healthServer := newHealthServer(
 		runtime, clockSource, overlay.invalid, entitlements)
-	dashboardServer := newDashboardServer(runtime, entitlements)
+	dashboardServer := newDashboardServer(runtime, clockSource, entitlements)
 	return &bootstrap{
 		runtime:         runtime,
 		clients:         clients,
@@ -190,7 +190,7 @@ func applyEditionEndpoints(
 // The bearer token comes from KWATCH_DASHBOARD_TOKEN (populated by the
 // installer/chart from the kwatch-dashboard Secret).
 func newDashboardServer(
-	runtime config.RuntimeConfig, e feature.Entitlements,
+	runtime config.RuntimeConfig, now clock.Clock, e feature.Entitlements,
 ) *dashboard.Server {
 	limits := feature.OrCommunity(e).Limits()
 	if !limits.Dashboard {
@@ -206,7 +206,7 @@ func newDashboardServer(
 		edition = string(e.Edition())
 	}
 	return dashboard.NewServer(
-		true, dc.Port, token, edition,
+		true, dc.Port, token, edition, now,
 		nil, nil, nil, // incidents, status, delivery health set later
 	)
 }

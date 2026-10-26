@@ -28,7 +28,7 @@ type ProviderHealth struct {
 // health publisher when it changed.
 func (m *Manager) setProviderHealth(entry *providerEntry, reason string) {
 	name := entry.lookupName()
-	now := time.Now()
+	now := m.now()
 	m.healthMu.Lock()
 	if m.providerReasons == nil {
 		m.providerReasons = make(map[string]string)

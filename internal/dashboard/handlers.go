@@ -13,6 +13,31 @@ import (
 	"github.com/abahmed/kwatch/internal/version"
 )
 
+// maxResponseBytes bounds a dashboard API response, mirroring
+// maxStatusBytes on /status.
+const maxResponseBytes = 64 << 10
+
+// writeJSON writes a JSON response, bounding its size. It never writes
+// more than maxResponseBytes; if the body exceeds it, a 500 is returned
+// instead of a truncated payload.
+func writeJSON(w http.ResponseWriter, v any) error {
+	body, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return err
+	}
+	body = append(body, '\n')
+	if len(body) > maxResponseBytes {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return nil
+	}
+	if _, err := w.Write(body); err != nil {
+		klog.ErrorS(err, "dashboard: write response")
+		return err
+	}
+	return nil
+}
+
 // incidentsHandler serves GET /api/incidents?state=active|resolved&namespace=.
 func (s *Server) incidentsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -34,14 +59,9 @@ func (s *Server) incidentsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		list = append(list, toListItem(p))
 	}
-	body, err := json.MarshalIndent(list, "", "  ")
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	body = append(body, '\n')
-	if _, err := w.Write(body); err != nil {
-		klog.ErrorS(err, "dashboard: write incidents response")
+	if err := writeJSON(w, list); err != nil {
+		klog.ErrorS(err, "dashboard: write incidents response",
+			"remote", r.RemoteAddr, "state", state, "namespace", namespace)
 	}
 }
 
@@ -65,14 +85,9 @@ func (s *Server) incidentDetailHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
-	body, err := json.MarshalIndent(toDetail(*p), "", "  ")
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	body = append(body, '\n')
-	if _, err := w.Write(body); err != nil {
-		klog.ErrorS(err, "dashboard: write incident detail response")
+	if err := writeJSON(w, toDetail(*p)); err != nil {
+		klog.ErrorS(err, "dashboard: write incident detail response",
+			"remote", r.RemoteAddr, "incident", id)
 	}
 }
 
@@ -94,14 +109,9 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 		WatchedNamespaces: nil,
 		PerChannelHealth:  s.deliveryHealth(),
 	}
-	body, err := json.MarshalIndent(resp, "", "  ")
-	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	body = append(body, '\n')
-	if _, err := w.Write(body); err != nil {
-		klog.ErrorS(err, "dashboard: write status response")
+	if err := writeJSON(w, resp); err != nil {
+		klog.ErrorS(err, "dashboard: write status response",
+			"remote", r.RemoteAddr)
 	}
 }
 

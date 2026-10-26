@@ -8,12 +8,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 )
 
 func TestAuthValidToken(t *testing.T) {
-	auth := NewAuth("secret-token")
+	auth := NewAuth("secret-token", clock.RealClock{})
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
@@ -28,7 +29,7 @@ func TestAuthValidToken(t *testing.T) {
 }
 
 func TestAuthMissingToken(t *testing.T) {
-	auth := NewAuth("secret-token")
+	auth := NewAuth("secret-token", clock.RealClock{})
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
@@ -42,7 +43,7 @@ func TestAuthMissingToken(t *testing.T) {
 }
 
 func TestAuthInvalidToken(t *testing.T) {
-	auth := NewAuth("secret-token")
+	auth := NewAuth("secret-token", clock.RealClock{})
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
@@ -57,7 +58,7 @@ func TestAuthInvalidToken(t *testing.T) {
 }
 
 func TestAuthRateLimit(t *testing.T) {
-	auth := NewAuth("secret-token")
+	auth := NewAuth("secret-token", clock.RealClock{})
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
@@ -80,7 +81,7 @@ func TestAuthRateLimit(t *testing.T) {
 }
 
 func TestAuthEmptyTokenRejectsAll(t *testing.T) {
-	auth := NewAuth("")
+	auth := NewAuth("", clock.RealClock{})
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
