@@ -74,6 +74,28 @@
       },
       "additionalProperties": false
     },
+    "dashboard": {
+      "type": "object",
+      "description": "Read-only incident dashboard API. Pro only, off by default.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable the dashboard API listener and Service"
+        },
+        "port": {
+          "type": "integer",
+          "default": 8061,
+          "description": "Port for the dashboard API listener; must not equal healthCheck.port"
+        },
+        "existingSecret": {
+          "type": "string",
+          "default": "",
+          "description": "Existing Secret with the key token"
+        }
+      },
+      "additionalProperties": false
+    },
     "persistence": {
       "type": "object",
       "description": "State store volume",

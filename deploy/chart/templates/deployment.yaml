@@ -79,6 +79,11 @@ spec:
           ports:
             - name: health
               containerPort: {{ include "kwatch.healthPort" . }}
+            {{- $dash := default dict .Values.dashboard -}}
+            {{- if $dash.enabled }}
+            - name: dashboard
+              containerPort: {{ $dash.port | default 8061 }}
+            {{- end }}
           volumeMounts:
           - name: config-volume
             mountPath: /config
@@ -135,6 +140,14 @@ spec:
                 secretKeyRef:
                   name: {{ include "kwatch.licenseSecretName" . }}
                   key: license-key
+                  optional: true
+            # The dashboard bearer token. optional: true lets the pod start
+            # without the dashboard (Community, or dashboard disabled).
+            - name: KWATCH_DASHBOARD_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kwatch.dashboardSecretName" . }}
+                  key: token
                   optional: true
             {{- if eq (include "kwatch.watchSecrets" .) "false" }}
             # watch.secrets=false: matches the RBAC, which grants no

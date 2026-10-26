@@ -276,6 +276,19 @@ license:
   # or an extra environment variable, so the license can activate.
   instanceSecret: false
 
+# -- Dashboard read-only API. Pro only, off by default. Runs on its own
+# listener and ClusterIP Service. The bearer token lives in the
+# kwatch-dashboard Secret (key token); the chart auto-generates one when
+# dashboard.enabled is true and no existingSecret is set.
+dashboard:
+  # -- Enable the dashboard API listener and Service.
+  enabled: false
+  # -- Port for the dashboard API listener (must not equal healthCheck.port).
+  port: 8061
+  # -- Name of an existing Secret with the key `token`. When empty and
+  # enabled is true, the chart creates a Secret with an auto-generated token.
+  existingSecret: ""
+
 # -- Use an existing Secret containing config.yaml and credential files.
 # Required for alert providers and heartbeatMonitor.url. The Secret's
 # config.yaml replaces `config` above; it is not merged.
