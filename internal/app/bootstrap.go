@@ -90,6 +90,24 @@ func newBootstrap(
 	healthServer := newHealthServer(
 		runtime, clockSource, overlay.invalid, entitlements)
 	dashboardServer := newDashboardServer(runtime, clockSource, entitlements)
+	return newBootstrapDeps(
+		runtime, clients, healthServer, dashboardServer, deliveryManager,
+		clockSource, wake, entitlements, inactive, notice, overlay,
+		processStart,
+	), nil
+}
+
+// newBootstrapDeps assembles the bootstrap struct once the servers,
+// delivery manager, and clients are built. Keeping it separate bounds
+// newBootstrap's line count.
+func newBootstrapDeps(
+	runtime config.RuntimeConfig, clients kubeclient.ClientSet,
+	healthServer *health.HealthServer, dashboardServer *dashboard.Server,
+	deliveryManager *delivery.Manager, clockSource clock.Clock,
+	threadWake *threadWake, entitlements feature.Entitlements,
+	inactive []string, notice editionNotice, overlay overlayOutcome,
+	processStart time.Time,
+) *bootstrap {
 	return &bootstrap{
 		runtime:         runtime,
 		clients:         clients,
@@ -102,11 +120,11 @@ func newBootstrap(
 		// The heartbeat pings only while monitoring is ready.
 		heartbeat: heartbeat.NewHeartbeatMonitorWithRuntime(
 			runtime, clients.HTTP, healthServer.Ready),
-		clock: clockSource, threadWake: wake,
+		clock: clockSource, threadWake: threadWake,
 		entitlements: entitlements, inactivePro: inactive, notice: notice,
 		license: newLicenseSetup(runtime, processStart),
 		overlay: overlay,
-	}, nil
+	}
 }
 
 // newDeliveryManager builds the delivery manager and its providers.
