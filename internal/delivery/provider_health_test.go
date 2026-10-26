@@ -44,7 +44,8 @@ func TestProviderHealthReportsLastOutcomeWithBoundedReasons(t *testing.T) {
 			require.Len(t, got, 1)
 			assert.Equal(t, "slack", got[0].Name)
 			assert.Equal(t, tc.want, got[0].Reason)
-			assert.True(t, !got[0].LastError.IsZero(), "last error should be set")
+			assert.False(t, got[0].LastError.IsZero(), "last error is set")
+			assert.Contains(t, got[0].LastErrorMessage, tc.want)
 
 			provider.fail = nil
 			manager.pacer = sendPacer{}
@@ -56,10 +57,32 @@ func TestProviderHealthReportsLastOutcomeWithBoundedReasons(t *testing.T) {
 			require.Len(t, got, 1)
 			assert.Equal(t, "slack", got[0].Name)
 			assert.Equal(t, "", got[0].Reason)
-			assert.True(t, !got[0].LastSuccess.IsZero(), "last success should be set")
-			assert.True(t, got[0].LastError.IsZero(), "last error should be cleared")
+			assert.False(t, got[0].LastSuccess.IsZero(),
+				"last success is set")
+			assert.False(t, got[0].LastError.IsZero(),
+				"a success keeps the last error time")
 		})
 	}
+}
+
+func TestProviderHealthErrorMessageHidesWebhookURLAndToken(t *testing.T) {
+	const hook = "https://hooks.slack.com/services/T000/B000/XYZsecret"
+	clk := newFakeClock()
+	provider := newMessageProvider(func(int, notification.Message) error {
+		return errors.New("Post \"" + hook +
+			"\": dial tcp: refused; Authorization: Bearer abc123token")
+	})
+	manager := fakeClockManager(t, clk, provider, nil)
+	entry := manager.generation.entries["slack"]
+
+	manager.deliver(context.Background(), &entry,
+		deliverJob{kind: jobMessage, msg: "x"})
+
+	got := manager.ProviderHealth()[0].LastErrorMessage
+	assert.Contains(t, got, reasonUnavailable)
+	assert.NotContains(t, got, "hooks.slack.com")
+	assert.NotContains(t, got, "XYZsecret")
+	assert.NotContains(t, got, "abc123token")
 }
 
 func drainHealthEvents(manager *Manager) {
