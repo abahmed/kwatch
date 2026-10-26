@@ -17,7 +17,7 @@ func TestEntitlements(t *testing.T) {
 			Limits{MaxProviders: 1, MaxReplicas: 1, ProHints: true}, false},
 		{"pro", ProEntitlements(), ProEdition,
 			Limits{RootCauseDetail: true, RetentionDays: 90, StatusJSON: true,
-				Metrics: true}, true},
+				Metrics: true, Dashboard: true}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

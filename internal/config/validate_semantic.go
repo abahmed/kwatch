@@ -68,6 +68,17 @@ func validateLifecycleSettings(cfg *Config) []error {
 			"healthCheck.statusEndpoint requires healthCheck.enabled",
 		))
 	}
+	if cfg.Dashboard.Enabled && !validPort(cfg.Dashboard.Port) {
+		errs = append(errs, errors.New(
+			"dashboard.port must be between 1 and 65535 when "+
+				"dashboard.enabled is true",
+		))
+	}
+	if cfg.Dashboard.Enabled && cfg.Dashboard.Port == cfg.HealthCheck.Port {
+		errs = append(errs, errors.New(
+			"dashboard.port must not equal healthCheck.port",
+		))
+	}
 	if cfg.AuditLog.Enabled && cfg.AuditLog.Output == "" {
 		errs = append(
 			errs,

@@ -103,6 +103,11 @@ func (o LifecycleRuntime) HealthCheck() HealthCheck {
 	return o.values.healthCheck
 }
 
+// Dashboard returns the dashboard API settings.
+func (o LifecycleRuntime) Dashboard() Dashboard {
+	return o.values.dashboard
+}
+
 // AuditLog returns the audit log settings.
 func (o LifecycleRuntime) AuditLog() AuditLogConfig {
 	return o.values.auditLog
