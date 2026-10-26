@@ -146,6 +146,12 @@ type Incident struct {
 	// redacted, that the detail page quotes. Persisted so a restart does
 	// not lose them. Bounded in size and count by the saver.
 	Facts []string
+	// Headline is the plain-language title of the last message sent
+	// about the incident, in the composer's wording. Empty until then.
+	Headline string
+	// DocsLink is the configured runbook link the last message named,
+	// empty when none was configured.
+	DocsLink string
 	// AnnouncedRoute is how the first announcement was routed to
 	// providers; nil until then, and for incidents announced by an older
 	// kwatch. Persisted. Delivery routes the resolve with it (see

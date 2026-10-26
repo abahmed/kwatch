@@ -237,33 +237,6 @@ func (m *Manager) Incident(id string) *Incident {
 	return &snap
 }
 
-// maxFacts bounds how many captured log lines an incident keeps.
-const maxFacts = 25
-
-// maxFactLength bounds how many bytes each captured log line may occupy.
-const maxFactLength = 512
-
-// StoreFacts appends captured log lines (already redacted) to an incident,
-// bounded in count and length. No-op for an unknown incident.
-func (m *Manager) StoreFacts(id string, facts []string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	p, ok := m.incidents[id]
-	if !ok {
-		return
-	}
-	for _, f := range facts {
-		if len(f) > maxFactLength {
-			f = f[:maxFactLength]
-		}
-		p.Facts = append(p.Facts, f)
-	}
-	// Bound the total: keep the most recent.
-	if len(p.Facts) > maxFacts {
-		p.Facts = p.Facts[len(p.Facts)-maxFacts:]
-	}
-}
-
 // SettlingUnexplained counts the incidents of namespace that are still
 // settling at the notify tier or higher, are standalone and opened at or
 // after since: the ones that may join a namespace outage. It reads the
