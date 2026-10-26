@@ -145,6 +145,15 @@ func (g generationEnv) prepare(
 		return nil, fail(retry, "failed to open health server",
 			"health listener", err)
 	}
+	// The dashboard API is optional: a failure to open its listener does
+	// not stop kwatch. It is not required for readiness.
+	if deps.dashboardServer != nil {
+		if err := deps.dashboardServer.Open(); err != nil {
+			klog.ErrorS(err, "failed to open dashboard listener",
+				"component", "dashboard-server")
+			deps.dashboardServer = nil
+		}
+	}
 	return deps, nil
 }
 

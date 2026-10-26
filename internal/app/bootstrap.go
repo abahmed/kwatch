@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -11,6 +12,7 @@ import (
 	"github.com/abahmed/kwatch/internal/alert/catalog"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/dashboard"
 	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/health"
@@ -27,6 +29,7 @@ type bootstrap struct {
 	runtime         config.RuntimeConfig
 	clients         kubeclient.ClientSet
 	healthServer    *health.HealthServer
+	dashboardServer *dashboard.Server
 	deliveryManager *delivery.Manager
 	securityMonitor *rbac.Monitor
 	heartbeat       *heartbeat.HeartbeatMonitor
@@ -86,10 +89,12 @@ func newBootstrap(
 	}
 	healthServer := newHealthServer(
 		runtime, clockSource, overlay.invalid, entitlements)
+	dashboardServer := newDashboardServer(runtime, entitlements)
 	return &bootstrap{
 		runtime:         runtime,
 		clients:         clients,
 		healthServer:    healthServer,
+		dashboardServer: dashboardServer,
 		deliveryManager: deliveryManager,
 		securityMonitor: rbac.NewMonitor(clients.Kubernetes,
 			permissionChecks(runtime), clockSource,
@@ -178,4 +183,30 @@ func applyEditionEndpoints(
 	} else {
 		server.DenyMetrics()
 	}
+}
+
+// newDashboardServer builds the optional dashboard API server. It is Pro
+// only and off by default; the listener is opened later by the generation.
+// The bearer token comes from KWATCH_DASHBOARD_TOKEN (populated by the
+// installer/chart from the kwatch-dashboard Secret).
+func newDashboardServer(
+	runtime config.RuntimeConfig, e feature.Entitlements,
+) *dashboard.Server {
+	limits := feature.OrCommunity(e).Limits()
+	if !limits.Dashboard {
+		return nil
+	}
+	dc := runtime.Lifecycle().Dashboard()
+	if !dc.Enabled {
+		return nil
+	}
+	token := os.Getenv("KWATCH_DASHBOARD_TOKEN")
+	edition := string(feature.CommunityEdition)
+	if e != nil {
+		edition = string(e.Edition())
+	}
+	return dashboard.NewServer(
+		true, dc.Port, token, edition,
+		nil, nil, // incidents and status set later by the pipeline
+	)
 }

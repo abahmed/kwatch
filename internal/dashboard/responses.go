@@ -23,23 +23,23 @@ type IncidentListItem struct {
 
 // IncidentDetail is one incident's full detail for /api/incidents/{id}.
 type IncidentDetail struct {
-	ID               string    `json:"id"`
-	Title            string    `json:"title"`
-	Severity         string    `json:"severity"`
-	State            string    `json:"state"`
-	Namespace        string    `json:"namespace"`
-	Workload         string    `json:"workload"`
-	RootCause        string    `json:"rootCause"`
-	SuggestedFix     string    `json:"suggestedFix,omitempty"`
-	FirstSeen        time.Time `json:"firstSeen"`
-	LastSeen         time.Time `json:"lastSeen"`
-	RepeatCount      int       `json:"repeatCount"`
-	ResolvedAt       time.Time `json:"resolvedAt,omitempty"`
-	Timeline         []Event   `json:"timeline,omitempty"`
-	KubernetesEvents []string  `json:"kubernetesEvents,omitempty"`
-	CapturedLogLines []string  `json:"capturedLogLines,omitempty"`
+	ID               string            `json:"id"`
+	Title            string            `json:"title"`
+	Severity         string            `json:"severity"`
+	State            string            `json:"state"`
+	Namespace        string            `json:"namespace"`
+	Workload         string            `json:"workload"`
+	RootCause        string            `json:"rootCause"`
+	SuggestedFix     string            `json:"suggestedFix,omitempty"`
+	FirstSeen        time.Time         `json:"firstSeen"`
+	LastSeen         time.Time         `json:"lastSeen"`
+	RepeatCount      int               `json:"repeatCount"`
+	ResolvedAt       time.Time         `json:"resolvedAt,omitempty"`
+	Timeline         []Event           `json:"timeline,omitempty"`
+	KubernetesEvents []string          `json:"kubernetesEvents,omitempty"`
+	CapturedLogLines []string          `json:"capturedLogLines,omitempty"`
 	DeliveryAttempts []DeliveryAttempt `json:"deliveryAttempts,omitempty"`
-	DocsLink         string    `json:"docsLink,omitempty"`
+	DocsLink         string            `json:"docsLink,omitempty"`
 }
 
 // Event is one timeline entry.
@@ -67,10 +67,10 @@ type StatusResponse struct {
 
 // ChannelHealth is one alert channel's delivery health.
 type ChannelHealth struct {
-	Channel           string    `json:"channel"`
-	LastSuccess       time.Time `json:"lastSuccess,omitempty"`
-	LastError         time.Time `json:"lastError,omitempty"`
-	LastErrorMessage  string    `json:"lastErrorMessage,omitempty"`
+	Channel          string    `json:"channel"`
+	LastSuccess      time.Time `json:"lastSuccess,omitempty"`
+	LastError        time.Time `json:"lastError,omitempty"`
+	LastErrorMessage string    `json:"lastErrorMessage,omitempty"`
 }
 
 // editionString returns the human-readable edition name for API responses.

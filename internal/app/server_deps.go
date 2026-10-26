@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/dashboard"
 	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/health"
@@ -25,6 +26,7 @@ type serverDeps struct {
 	runtime          config.RuntimeConfig
 	clients          kubeclient.ClientSet
 	healthServer     *health.HealthServer
+	dashboardServer  *dashboard.Server
 	readiness        *readinessCoordinator
 	deliveryManager  *delivery.Manager
 	securityMonitor  *rbac.Monitor
@@ -75,6 +77,7 @@ func newServerDeps(
 		ctx: ctx, cancel: cancel, runtime: boot.runtime,
 		clients:          boot.clients,
 		healthServer:     boot.healthServer,
+		dashboardServer:  boot.dashboardServer,
 		readiness:        newReadinessCoordinator(boot.healthServer),
 		deliveryManager:  boot.deliveryManager,
 		securityMonitor:  boot.securityMonitor,

@@ -43,6 +43,12 @@ func runPipeline(
 		deps.healthServer.SetStatusSource(engine.Status)
 		defer deps.healthServer.SetStatusSource(nil)
 	}
+	if deps.dashboardServer != nil {
+		deps.dashboardServer.SetIncidents(p.incidents)
+		deps.dashboardServer.SetStatus(engine.Status)
+		defer deps.dashboardServer.SetIncidents(nil)
+		defer deps.dashboardServer.SetStatus(nil)
+	}
 	runners, err := p.newRunners(engine)
 	if err != nil {
 		return err

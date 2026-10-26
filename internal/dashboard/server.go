@@ -11,75 +11,14 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/status"
 )
 
-// incidentReader is anything that can list and look up incidents. The
-// incident.Manager satisfies it.
+// incidentReader lists and looks up incidents. incident.Manager satisfies it.
 type incidentReader interface {
-	Incidents() []IncidentSnapshot
-	Incident(id string) *IncidentSnapshot
-}
-
-// IncidentSnapshot is a detached copy of incident data safe to hand to
-// API writers. It mirrors the fields of incident.Incident that the API
-// exposes.
-type IncidentSnapshot struct {
-	ID                string
-	Root              string
-	Previous          string
-	CauseText         string
-	Tier              string
-	State             string
-	Opened            time.Time
-	Announced         time.Time
-	RecoveringSince   time.Time
-	Resolved          time.Time
-	Cycles            []time.Time
-	Occurrences       []time.Time
-	Revision          int
-	Digest            string
-	Timeline          []TimelineEvent
-	Ack               *Ack
-	RepeatCount       int
-	Modes             []string
-	RootReasons       []string
-	Checked           []string
-	Considered        []string
-	Unverified        []string
-	Fix               Fix
-	History           []Occurrence
-	Subject           string
-	Merged            []string
-	Impact            []string
-	AlertKey          string
-}
-
-// TimelineEvent is one line of the incident timeline.
-type TimelineEvent struct {
-	At     time.Time
-	Text   string
-	Entity string
-}
-
-// Ack is an acknowledgement on the incident.
-type Ack struct {
-	By      string    `json:"by"`
-	At      time.Time `json:"at"`
-	Message string    `json:"message,omitempty"`
-}
-
-// Fix is how the incident ended.
-type Fix struct {
-	Change   string `json:"change,omitempty"`
-	Resolved bool   `json:"resolved"`
-}
-
-// Occurrence is one earlier resolved occurrence of this root.
-type Occurrence struct {
-	At      time.Time `json:"at"`
-	Reason  string    `json:"reason"`
-	Resolved bool     `json:"resolved"`
+	Incidents() []incident.Incident
+	Incident(id string) *incident.Incident
 }
 
 // statusSource builds the /api/status report.
@@ -87,19 +26,19 @@ type statusSource func() status.Report
 
 // Server serves the dashboard API on its own listener.
 type Server struct {
-	server          *http.Server
-	listener        net.Listener
-	port            int
-	enabled         bool
-	edition         string
-	auth            *Auth
-	incidents       incidentReader
-	status          statusSource
-	started         bool
-	stopped         bool
-	stopErr         error
-	lifecycleMu     sync.Mutex
-	serveErrors     chan error
+	server      *http.Server
+	listener    net.Listener
+	port        int
+	enabled     bool
+	edition     string
+	auth        *Auth
+	incidents   incidentReader
+	status      statusSource
+	started     bool
+	stopped     bool
+	stopErr     error
+	lifecycleMu sync.Mutex
+	serveErrors chan error
 }
 
 // NewServer builds a dashboard API server. When enabled is false, Open is
@@ -110,15 +49,25 @@ func NewServer(
 	incidents incidentReader, status statusSource,
 ) *Server {
 	s := &Server{
-		port:     port,
-		enabled:  enabled,
-		edition:  edition,
-		auth:     NewAuth(token),
-		incidents: incidents,
-		status:   status,
+		port:        port,
+		enabled:     enabled,
+		edition:     edition,
+		auth:        NewAuth(token),
+		incidents:   incidents,
+		status:      status,
 		serveErrors: make(chan error, 1),
 	}
 	return s
+}
+
+// SetIncidents replaces the incident reader (called once the pipeline is up).
+func (s *Server) SetIncidents(r incidentReader) {
+	s.incidents = r
+}
+
+// SetStatus replaces the status source (called once the pipeline is up).
+func (s *Server) SetStatus(src statusSource) {
+	s.status = src
 }
 
 // Open creates the HTTP listener without starting a goroutine. The
@@ -159,8 +108,7 @@ func (s *Server) Open() error {
 	return nil
 }
 
-// Serve runs the already-open listener. It is intended to be called by the
-// application supervisor. Stop closes the listener during shutdown.
+// Serve runs the already-open listener.
 func (s *Server) Serve(_ context.Context) error {
 	s.lifecycleMu.Lock()
 	server := s.server
@@ -221,8 +169,11 @@ func (s *Server) ServeError() error {
 
 func (s *Server) newServeMux() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.Handle("/api/incidents", s.auth.Middleware(http.HandlerFunc(s.incidentsHandler)))
-	mux.Handle("/api/incidents/", s.auth.Middleware(http.HandlerFunc(s.incidentDetailHandler)))
-	mux.Handle("/api/status", s.auth.Middleware(http.HandlerFunc(s.statusHandler)))
+	incidents := s.auth.Middleware(http.HandlerFunc(s.incidentsHandler))
+	detail := s.auth.Middleware(http.HandlerFunc(s.incidentDetailHandler))
+	status := s.auth.Middleware(http.HandlerFunc(s.statusHandler))
+	mux.Handle("/api/incidents", incidents)
+	mux.Handle("/api/incidents/", detail)
+	mux.Handle("/api/status", status)
 	return mux
 }

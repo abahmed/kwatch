@@ -8,6 +8,8 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/version"
 )
 
@@ -103,9 +105,9 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func matches(p IncidentSnapshot, state, namespace string) bool {
+func matches(p incident.Incident, state, namespace string) bool {
 	if state != "" {
-		isResolved := p.State == "resolved"
+		isResolved := p.State == incident.Resolved
 		switch state {
 		case "active":
 			if isResolved {
@@ -119,20 +121,20 @@ func matches(p IncidentSnapshot, state, namespace string) bool {
 			return false
 		}
 	}
-	if namespace != "" && p.Root != namespace {
+	if namespace != "" && p.Root.Namespace != namespace {
 		return false
 	}
 	return true
 }
 
-func toListItem(p IncidentSnapshot) IncidentListItem {
+func toListItem(p incident.Incident) IncidentListItem {
 	return IncidentListItem{
 		ID:          p.ID,
 		Title:       titleFor(p),
-		Severity:    p.Tier,
-		State:       p.State,
-		Namespace:   namespaceFor(p.Root),
-		Workload:    nameFor(p.Root),
+		Severity:    p.Tier.String(),
+		State:       p.State.String(),
+		Namespace:   p.Root.Namespace,
+		Workload:    p.Root.Name,
 		FirstSeen:   p.Opened,
 		LastSeen:    lastSeen(p),
 		RepeatCount: p.RepeatCount,
@@ -141,16 +143,16 @@ func toListItem(p IncidentSnapshot) IncidentListItem {
 	}
 }
 
-func toDetail(p IncidentSnapshot) IncidentDetail {
+func toDetail(p incident.Incident) IncidentDetail {
 	return IncidentDetail{
 		ID:               p.ID,
 		Title:            titleFor(p),
-		Severity:         p.Tier,
-		State:            p.State,
-		Namespace:        namespaceFor(p.Root),
-		Workload:         nameFor(p.Root),
-		RootCause:        p.CauseText,
-		SuggestedFix:     fixFor(p),
+		Severity:         p.Tier.String(),
+		State:            p.State.String(),
+		Namespace:        p.Root.Namespace,
+		Workload:         p.Root.Name,
+		RootCause:        causeText(p),
+		SuggestedFix:     fixText(p),
 		FirstSeen:        p.Opened,
 		LastSeen:         lastSeen(p),
 		RepeatCount:      p.RepeatCount,
@@ -163,30 +165,14 @@ func toDetail(p IncidentSnapshot) IncidentDetail {
 	}
 }
 
-func titleFor(p IncidentSnapshot) string {
-	if p.Root != "" {
-		return p.Root
+func titleFor(p incident.Incident) string {
+	if p.Root.Name != "" {
+		return p.Root.String()
 	}
 	return p.ID
 }
 
-func namespaceFor(root string) string {
-	parts := strings.Split(root, "/")
-	if len(parts) == 2 {
-		return parts[0]
-	}
-	return ""
-}
-
-func nameFor(root string) string {
-	parts := strings.Split(root, "/")
-	if len(parts) == 2 {
-		return parts[1]
-	}
-	return root
-}
-
-func lastSeen(p IncidentSnapshot) time.Time {
+func lastSeen(p incident.Incident) time.Time {
 	if !p.Resolved.IsZero() {
 		return p.Resolved
 	}
@@ -196,28 +182,39 @@ func lastSeen(p IncidentSnapshot) time.Time {
 	return p.Opened
 }
 
-func ackedBy(p IncidentSnapshot) string {
+func ackedBy(p incident.Incident) string {
 	if p.Ack != nil {
-		return p.Ack.By
+		return p.Ack.On.String()
 	}
 	return ""
 }
 
-func fixFor(p IncidentSnapshot) string {
-	if p.Fix.Change != "" {
-		return p.Fix.Change
+func causeText(p incident.Incident) string {
+	if p.Cause != nil {
+		return p.Cause.Summary
 	}
 	return ""
 }
 
-func toTimeline(events []TimelineEvent) []Event {
+func fixText(p incident.Incident) string {
+	return string(p.Fix)
+}
+
+func toTimeline(events []incident.Event) []Event {
 	out := make([]Event, 0, len(events))
 	for _, e := range events {
 		out = append(out, Event{
 			At:     e.At,
 			Text:   e.Text,
-			Entity: e.Entity,
+			Entity: entityIDString(e.Entity),
 		})
 	}
 	return out
+}
+
+func entityIDString(e *inventory.EntityID) string {
+	if e == nil {
+		return ""
+	}
+	return e.String()
 }

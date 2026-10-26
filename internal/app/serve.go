@@ -34,6 +34,13 @@ func serve(ctx context.Context, deps *serverDeps) int {
 			run:      deps.healthServer.Serve,
 		})
 	}
+	if deps.dashboardServer != nil {
+		supervisor.startOwned(ctx, componentSpec{
+			name:     "dashboard-server",
+			required: false,
+			run:      deps.dashboardServer.Serve,
+		})
+	}
 	supervisor.startOwned(ctx, componentSpec{
 		name:     "leader-election",
 		required: true,
@@ -144,6 +151,7 @@ func waitShutdown(
 		deps.healthServer.SetReady(false)
 	} else {
 		stopHealthServer(deps)
+		stopDashboardServer(deps)
 	}
 	waitBackground(supervisor, rebuild)
 
@@ -191,6 +199,19 @@ func stopHealthServer(deps *serverDeps) {
 	if err := deps.healthServer.Stop(shutdownCtx); err != nil {
 		recordShutdownTimeout("health-server")
 		klog.ErrorS(err, "failed to stop health check server")
+	}
+}
+
+func stopDashboardServer(deps *serverDeps) {
+	if deps.dashboardServer == nil {
+		return
+	}
+	shutdownCtx, cancel := boundedShutdownContext(
+		deps.ctx, healthStopTimeout)
+	defer cancel()
+	if err := deps.dashboardServer.Stop(shutdownCtx); err != nil {
+		recordShutdownTimeout("dashboard-server")
+		klog.ErrorS(err, "failed to stop dashboard server")
 	}
 }
 

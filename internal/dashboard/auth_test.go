@@ -11,9 +11,10 @@ import (
 
 func TestAuthValidToken(t *testing.T) {
 	auth := NewAuth("secret-token")
-	handler := auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
-	}))
+	})
+	handler := auth.Middleware(next)
 	req := httptest.NewRequest("GET", "/api/incidents", nil)
 	req.Header.Set("Authorization", "Bearer secret-token")
 	w := httptest.NewRecorder()
@@ -25,9 +26,10 @@ func TestAuthValidToken(t *testing.T) {
 
 func TestAuthMissingToken(t *testing.T) {
 	auth := NewAuth("secret-token")
-	handler := auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
-	}))
+	})
+	handler := auth.Middleware(next)
 	req := httptest.NewRequest("GET", "/api/incidents", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -38,9 +40,10 @@ func TestAuthMissingToken(t *testing.T) {
 
 func TestAuthInvalidToken(t *testing.T) {
 	auth := NewAuth("secret-token")
-	handler := auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
-	}))
+	})
+	handler := auth.Middleware(next)
 	req := httptest.NewRequest("GET", "/api/incidents", nil)
 	req.Header.Set("Authorization", "Bearer wrong-token")
 	w := httptest.NewRecorder()
@@ -52,19 +55,18 @@ func TestAuthInvalidToken(t *testing.T) {
 
 func TestAuthRateLimit(t *testing.T) {
 	auth := NewAuth("secret-token")
-	handler := auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
-	}))
-	// Exhaust the rate limiter with failed attempts
+	})
+	handler := auth.Middleware(next)
 	for i := 0; i < 10; i++ {
 		req := httptest.NewRequest("GET", "/api/incidents", nil)
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
 		if w.Code != http.StatusUnauthorized {
-			t.Errorf("attempt %d: status = %d, want %d", i, w.Code, http.StatusUnauthorized)
+			t.Errorf("attempt %d: status = %d", i, w.Code)
 		}
 	}
-	// Now even a valid token should be rate limited
 	req := httptest.NewRequest("GET", "/api/incidents", nil)
 	req.Header.Set("Authorization", "Bearer secret-token")
 	w := httptest.NewRecorder()
@@ -76,9 +78,10 @@ func TestAuthRateLimit(t *testing.T) {
 
 func TestAuthEmptyTokenRejectsAll(t *testing.T) {
 	auth := NewAuth("")
-	handler := auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
-	}))
+	})
+	handler := auth.Middleware(next)
 	req := httptest.NewRequest("GET", "/api/incidents", nil)
 	req.Header.Set("Authorization", "Bearer anything")
 	w := httptest.NewRecorder()
