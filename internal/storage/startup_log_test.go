@@ -48,7 +48,7 @@ func TestOpenLogsTheFileSizeVersionAndDuration(t *testing.T) {
 	logged := out.String()
 	assert.Contains(t, logged, `"state file opened"`)
 	assert.Contains(t, logged, "fileBytes=")
-	assert.Contains(t, logged, "schemaVersion=3")
+	assert.Contains(t, logged, "schemaVersion=2")
 	assert.Contains(t, logged, "durationMs=")
 }
 

@@ -19,7 +19,7 @@ import (
 // with another version is moved aside and replaced by a fresh store (see
 // reset.go); only the queued deliveries and thread ids are copied across
 // (see reset_carry.go).
-const SchemaVersion = 3
+const SchemaVersion = 2
 
 // Errors returned by the store.
 var (
