@@ -29,20 +29,20 @@ type deliveryHealthSource func() []ChannelHealth
 
 // Server serves the dashboard API on its own listener.
 type Server struct {
-	server            *http.Server
-	listener          net.Listener
-	port              int
-	enabled           bool
-	edition           string
-	auth              *Auth
-	incidents         incidentReader
-	status            statusSource
-	deliveryHealth    deliveryHealthSource
-	started           bool
-	stopped           bool
-	stopErr           error
-	lifecycleMu       sync.Mutex
-	serveErrors       chan error
+	server         *http.Server
+	listener       net.Listener
+	port           int
+	enabled        bool
+	edition        string
+	auth           *Auth
+	incidents      incidentReader
+	status         statusSource
+	deliveryHealth deliveryHealthSource
+	started        bool
+	stopped        bool
+	stopErr        error
+	lifecycleMu    sync.Mutex
+	serveErrors    chan error
 }
 
 // NewServer builds a dashboard API server. When enabled is false, Open is
@@ -54,14 +54,14 @@ func NewServer(
 	deliveryHealth deliveryHealthSource,
 ) *Server {
 	s := &Server{
-		port:            port,
-		enabled:         enabled,
-		edition:         edition,
-		auth:            NewAuth(token),
-		incidents:       incidents,
-		status:          status,
-		deliveryHealth:  deliveryHealth,
-		serveErrors:     make(chan error, 1),
+		port:           port,
+		enabled:        enabled,
+		edition:        edition,
+		auth:           NewAuth(token),
+		incidents:      incidents,
+		status:         status,
+		deliveryHealth: deliveryHealth,
+		serveErrors:    make(chan error, 1),
 	}
 	return s
 }

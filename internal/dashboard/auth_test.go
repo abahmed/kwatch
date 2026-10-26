@@ -152,8 +152,12 @@ func TestRedactedSecretNeverAppearsInAPIOutput(t *testing.T) {
 	redacted := "[REDACTED]"
 
 	inc := incident.Incident{
-		ID:     "inc-20261001-0001",
-		Root:   inventory.EntityID{Kind: "Deployment", Namespace: "default", Name: "my-app"},
+		ID: "inc-20261001-0001",
+		Root: inventory.EntityID{
+			Kind:      "Deployment",
+			Namespace: "default",
+			Name:      "my-app",
+		},
 		Opened: time.Unix(100, 0),
 		Facts: []string{
 			"connecting to database with " + redacted,
@@ -181,4 +185,3 @@ func TestRedactedSecretNeverAppearsInAPIOutput(t *testing.T) {
 		t.Errorf("non-secret log line missing from API output")
 	}
 }
-

@@ -107,11 +107,11 @@ type Manager struct {
 	opens   map[string]map[string]openEntry
 	openSeq uint64
 
-	healthMu        sync.Mutex
-	providerReasons map[string]string
+	healthMu            sync.Mutex
+	providerReasons     map[string]string
 	providerLastSuccess map[string]time.Time
 	providerLastError   map[string]time.Time
-	healthEvents    chan struct{}
+	healthEvents        chan struct{}
 }
 
 func (m *Manager) globalTemplates() map[string]*template.Template {
