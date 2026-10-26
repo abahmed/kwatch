@@ -191,6 +191,19 @@ func (p *pipelineBuild) newInvestigator() investigate.Investigator {
 func (p *pipelineBuild) recordDecision(
 	_ context.Context, d incident.Decision, m notification.Message,
 ) {
+	// Store captured log lines on the incident so the dashboard detail
+	// page can show them after a restart.
+	if len(d.Facts.Evidence) > 0 {
+		facts := make([]string, 0, len(d.Facts.Evidence))
+		for _, f := range d.Facts.Evidence {
+			if f.Text != "" {
+				facts = append(facts, f.Text)
+			}
+		}
+		if len(facts) > 0 {
+			p.incidents.StoreFacts(d.Incident.ID, facts)
+		}
+	}
 	klog.V(1).InfoS("pipeline decision", "component", "pipeline",
 		"incident", d.Incident.ID, "reason", d.Reason)
 	counted := countDecision(metrics.DefaultRegistry(), d)

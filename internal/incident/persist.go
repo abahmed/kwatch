@@ -133,6 +133,9 @@ type Record struct {
 	// Merged are the roots of the node outage this incident speaks for,
 	// so a restart keeps their failures in it.
 	Merged []inventory.EntityID `json:",omitempty"`
+	// Facts are captured log lines and investigation output, already
+	// redacted, that the detail page quotes. Bounded in size and count.
+	Facts []string `json:",omitempty"`
 }
 
 // Export returns every incident as a record, for persistence.
@@ -169,6 +172,7 @@ func (m *Manager) Export() []Record {
 			Ack: p.Ack, Demoted: p.Delivery.demoted, Subject: p.Subject,
 			FormerRoot: p.formerRoot, RerootedAt: p.rerootedAt,
 			RejectionSeenAt: p.rejectionAt, Merged: p.Merged,
+			Facts: p.Facts,
 		})
 	}
 	return out
@@ -269,6 +273,7 @@ func restored(r Record) *Incident {
 		Ack: r.Ack, Subject: r.Subject, formerRoot: r.FormerRoot,
 		rerootedAt: r.RerootedAt, rejectionAt: r.RejectionSeenAt,
 		rejectionSeen: !r.RejectionSeenAt.IsZero(), Merged: r.Merged,
+		Facts: r.Facts,
 		Delivery: Delivery{
 			paged: r.Paged, rolledUp: r.RolledUp,
 			podPeak: r.PodPeak, pageHeld: r.PageHeld,

@@ -142,6 +142,10 @@ type Incident struct {
 	// revised, so one alert follows the incident to its resolve.
 	AlertKey string
 	Timeline []Event
+	// Facts are captured log lines and investigation output, already
+	// redacted, that the detail page quotes. Persisted so a restart does
+	// not lose them. Bounded in size and count by the saver.
+	Facts []string
 	// AnnouncedRoute is how the first announcement was routed to
 	// providers; nil until then, and for incidents announced by an older
 	// kwatch. Persisted. Delivery routes the resolve with it (see

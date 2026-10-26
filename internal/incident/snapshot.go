@@ -24,6 +24,7 @@ func (inc *Incident) Snapshot() Incident {
 	out.Unverified = append([]string(nil), inc.Unverified...)
 	out.Checked = append([]string(nil), inc.Checked...)
 	out.Considered = append([]string(nil), inc.Considered...)
+	out.Facts = append([]string(nil), inc.Facts...)
 	out.AnnouncedRoute = inc.AnnouncedRoute.clone()
 	out.Ack = inc.Ack.clone()
 	out.Reported, out.ReportedKnown = inc.sent.reported(len(inc.Timeline))
