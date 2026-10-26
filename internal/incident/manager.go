@@ -224,6 +224,19 @@ func (m *Manager) Incidents() []Incident {
 	return out
 }
 
+// Incident returns a detached copy of the incident with the given ID, or nil
+// when no such incident exists. Safe for concurrent use.
+func (m *Manager) Incident(id string) *Incident {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	p, ok := m.incidents[id]
+	if !ok {
+		return nil
+	}
+	snap := p.Snapshot()
+	return &snap
+}
+
 // SettlingUnexplained counts the incidents of namespace that are still
 // settling at the notify tier or higher, are standalone and opened at or
 // after since: the ones that may join a namespace outage. It reads the
