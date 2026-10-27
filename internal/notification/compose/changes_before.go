@@ -10,7 +10,7 @@ func changesBeforeSentences(f caseFacts) []sentence {
 	if f.p.Cause == nil {
 		return nil
 	}
-	items := changeFacts(f.changes)
+	items := changeFacts(withoutOwnPredecessor(f, f.changes))
 	if len(items) == 0 {
 		return nil
 	}

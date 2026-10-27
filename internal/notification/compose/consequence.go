@@ -168,10 +168,12 @@ func verb(n int, one, many string) string {
 	return many
 }
 
-// unverifiedSentences name what kwatch could not check.
+// unverifiedSentences name what kwatch could not check. A workload
+// that never worked and whose crash log says why it stopped is already
+// explained: what kwatch cannot see does not leave it open.
 func unverifiedSentences(f caseFacts) []sentence {
 	line := unverifiedLine(f.p.Unverified)
-	if line == "" {
+	if line == "" || neverWorked(f) && crashLogExplains(f) {
 		return nil
 	}
 	return []sentence{{part: partUnverified, text: line}}

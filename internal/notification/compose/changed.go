@@ -16,7 +16,7 @@ func recentChangeSentence(f caseFacts) []sentence {
 	if f.p.Root.Namespace == "" {
 		return nil
 	}
-	items := changeFacts(f.changes)
+	items := changeFacts(withoutOwnPredecessor(f, f.changes))
 	if len(items) == 0 {
 		return nil
 	}
