@@ -49,3 +49,5 @@ app.hideProHints|boolean|false|Operations|Remove the note that names what kwatch
 license.key|string|empty|Operations|kwatch Pro license key; reference it as ${KWATCH_LICENSE_KEY}. The KWATCH_LICENSE_KEY variable wins over this setting. Empty runs the Community edition.|active|
 app.communityProvider|string|empty|Operations|Alert provider the Community edition keeps when several are configured; empty keeps the first by name.|active|
 clusterCheckins|boolean|empty|Compatibility|Removed: kwatch no longer sends cluster check-ins. Accepted and ignored with a deprecation notice; use heartbeatMonitor to learn when kwatch stops.|deprecated|heartbeatMonitor
+dashboard.enabled|boolean|false|Operations|Serve the read-only incident dashboard API on a separate listener; Pro only, off by default.|active|
+dashboard.port|integer|8061|Operations|Port for the dashboard API listener; must not equal healthCheck.port.|active|

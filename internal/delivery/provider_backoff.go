@@ -88,19 +88,19 @@ func (m *Manager) recordProviderFailure(entry *providerEntry, err error) {
 				maxProviderBackoff)
 		}
 		m.pacer.block(name, now.Add(wait))
-		m.setProviderHealth(entry, reasonRateLimited)
+		m.setProviderHealth(entry, reasonRateLimited, err)
 		klog.InfoS("provider rate limited delivery; waiting",
 			"component", "delivery", "operation", "rate_limit",
 			"provider", name, "wait", wait)
 		return
 	}
 	if transport.IsPermanent(err) {
-		m.setProviderHealth(entry, reasonRejected)
+		m.setProviderHealth(entry, reasonRejected, err)
 		return
 	}
 	wait := m.pacer.recordOutage(name)
 	m.pacer.block(name, now.Add(wait))
-	m.setProviderHealth(entry, reasonUnavailable)
+	m.setProviderHealth(entry, reasonUnavailable, err)
 	klog.InfoS("provider unavailable; keeping its queue",
 		"component", "delivery", "operation", "backoff",
 		"provider", name, "wait", wait)
@@ -109,7 +109,7 @@ func (m *Manager) recordProviderFailure(entry *providerEntry, err error) {
 // recordProviderSuccess ends an outage.
 func (m *Manager) recordProviderSuccess(entry *providerEntry) {
 	m.pacer.recordRecovery(entry.provider.Name())
-	m.setProviderHealth(entry, "")
+	m.setProviderHealth(entry, "", nil)
 }
 
 // sleep waits for d unless ctx ends first. Tests replace it to move a

@@ -3,6 +3,8 @@
 {{- fail "networkPolicy.apiServerPorts must list at least one port: an empty list would open all egress" }}
 {{- end }}
 {{- $port := include "kwatch.healthPort" . | int }}
+{{- $dash := default dict .Values.dashboard }}
+{{- $dashPort := $dash.port | default 8061 }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -39,6 +41,25 @@ spec:
       ports:
         - protocol: TCP
           port: {{ $port }}
+    {{- if $dash.enabled }}
+    # Dashboard API (/api/*): bearer-token protected, ClusterIP only.
+    # Reachable from this namespace and healthIngressFrom sources.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+        {{- range .Values.networkPolicy.kubeletCIDRs }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
+        {{- range .Values.networkPolicy.healthIngressFrom }}
+        -
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ $dashPort }}
+    {{- end }}
     {{- end }}
     {{- with .Values.networkPolicy.ingress }}
     {{- toYaml . | nindent 4 }}

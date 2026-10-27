@@ -20,6 +20,7 @@ type Limits struct {
 	StatusJSON      bool
 	Metrics         bool
 	ProHints        bool
+	Dashboard       bool
 }
 
 // Entitlements answers what an installation may use.
@@ -55,7 +56,7 @@ func CommunityEntitlements() Entitlements {
 func ProEntitlements() Entitlements {
 	return entitlements{ProEdition, Limits{
 		RootCauseDetail: true, RetentionDays: 90, StatusJSON: true,
-		Metrics: true,
+		Metrics: true, Dashboard: true,
 	}}
 }
 

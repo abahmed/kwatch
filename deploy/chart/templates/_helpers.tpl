@@ -258,3 +258,14 @@ instance Secret, its Role and the HTTPS egress the license needs.
 true
 {{- end -}}
 {{- end }}
+
+{{/*
+Secret that holds the dashboard bearer token (key token). An existing
+Secret wins; otherwise it is the Secret this chart creates when
+dashboard.enabled is true. The deployment reads it with optional: true,
+so the pod starts without the dashboard when the Secret is missing.
+*/}}
+{{- define "kwatch.dashboardSecretName" -}}
+{{- $dash := default dict .Values.dashboard -}}
+{{- default (printf "%s-dashboard" .Release.Name) $dash.existingSecret -}}
+{{- end }}

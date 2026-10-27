@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -11,6 +12,7 @@ import (
 	"github.com/abahmed/kwatch/internal/alert/catalog"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/dashboard"
 	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/health"
@@ -27,6 +29,7 @@ type bootstrap struct {
 	runtime         config.RuntimeConfig
 	clients         kubeclient.ClientSet
 	healthServer    *health.HealthServer
+	dashboardServer *dashboard.Server
 	deliveryManager *delivery.Manager
 	securityMonitor *rbac.Monitor
 	heartbeat       *heartbeat.HeartbeatMonitor
@@ -86,10 +89,30 @@ func newBootstrap(
 	}
 	healthServer := newHealthServer(
 		runtime, clockSource, overlay.invalid, entitlements)
+	dashboardServer := newDashboardServer(runtime, clockSource, entitlements)
+	return newBootstrapDeps(
+		runtime, clients, healthServer, dashboardServer, deliveryManager,
+		clockSource, wake, entitlements, inactive, notice, overlay,
+		processStart,
+	), nil
+}
+
+// newBootstrapDeps assembles the bootstrap struct once the servers,
+// delivery manager, and clients are built. Keeping it separate bounds
+// newBootstrap's line count.
+func newBootstrapDeps(
+	runtime config.RuntimeConfig, clients kubeclient.ClientSet,
+	healthServer *health.HealthServer, dashboardServer *dashboard.Server,
+	deliveryManager *delivery.Manager, clockSource clock.Clock,
+	threadWake *threadWake, entitlements feature.Entitlements,
+	inactive []string, notice editionNotice, overlay overlayOutcome,
+	processStart time.Time,
+) *bootstrap {
 	return &bootstrap{
 		runtime:         runtime,
 		clients:         clients,
 		healthServer:    healthServer,
+		dashboardServer: dashboardServer,
 		deliveryManager: deliveryManager,
 		securityMonitor: rbac.NewMonitor(clients.Kubernetes,
 			permissionChecks(runtime), clockSource,
@@ -97,11 +120,11 @@ func newBootstrap(
 		// The heartbeat pings only while monitoring is ready.
 		heartbeat: heartbeat.NewHeartbeatMonitorWithRuntime(
 			runtime, clients.HTTP, healthServer.Ready),
-		clock: clockSource, threadWake: wake,
+		clock: clockSource, threadWake: threadWake,
 		entitlements: entitlements, inactivePro: inactive, notice: notice,
 		license: newLicenseSetup(runtime, processStart),
 		overlay: overlay,
-	}, nil
+	}
 }
 
 // newDeliveryManager builds the delivery manager and its providers.
@@ -179,3 +202,34 @@ func applyEditionEndpoints(
 		server.DenyMetrics()
 	}
 }
+
+// newDashboardServer builds the optional dashboard API server. It is Pro
+// only and off by default, so Community never opens its port. The
+// listener is opened later by the generation. The bearer token comes
+// from KWATCH_DASHBOARD_TOKEN (set by the chart from its Secret).
+func newDashboardServer(
+	runtime config.RuntimeConfig, now clock.Clock, e feature.Entitlements,
+) *dashboard.Server {
+	if !feature.OrCommunity(e).Limits().Dashboard {
+		return nil
+	}
+	dc := runtime.Lifecycle().Dashboard()
+	if !dc.Enabled {
+		return nil
+	}
+	token := os.Getenv(dashboardTokenEnv)
+	if token == "" {
+		klog.InfoS("WARNING: dashboard is enabled but "+dashboardTokenEnv+
+			" is empty; every dashboard request is refused with 401",
+			"component", "dashboard-server")
+	}
+	scope := runtime.Scope()
+	return dashboard.NewServer(dc.Port, token,
+		string(feature.OrCommunity(e).Edition()), dashboard.Scope{
+			Watched:  scope.AllowedNamespaces(),
+			Excluded: scope.ForbiddenNamespaces(),
+		}, now)
+}
+
+// dashboardTokenEnv names the dashboard bearer token variable.
+const dashboardTokenEnv = "KWATCH_DASHBOARD_TOKEN"

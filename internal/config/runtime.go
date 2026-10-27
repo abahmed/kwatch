@@ -45,6 +45,7 @@ type runtimeLifecycle struct {
 	license     License
 	upgrader    Upgrader
 	healthCheck HealthCheck
+	dashboard   Dashboard
 	auditLog    AuditLogConfig
 	heartbeat   HeartbeatMonitor
 	crdEnabled  bool
@@ -110,6 +111,7 @@ func CompileRuntimeConfig(c *Config) RuntimeConfig {
 			license:     c.License,
 			upgrader:    c.Upgrader,
 			healthCheck: c.HealthCheck,
+			dashboard:   c.Dashboard,
 			auditLog:    c.AuditLog,
 			heartbeat:   c.HeartbeatMonitor,
 			crdEnabled:  c.CrdConfig.Enabled,

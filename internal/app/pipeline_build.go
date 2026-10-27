@@ -191,6 +191,7 @@ func (p *pipelineBuild) newInvestigator() investigate.Investigator {
 func (p *pipelineBuild) recordDecision(
 	_ context.Context, d incident.Decision, m notification.Message,
 ) {
+	p.incidents.StoreDetail(d.Incident.ID, dashboardDetail(d, m))
 	klog.V(1).InfoS("pipeline decision", "component", "pipeline",
 		"incident", d.Incident.ID, "reason", d.Reason)
 	counted := countDecision(metrics.DefaultRegistry(), d)

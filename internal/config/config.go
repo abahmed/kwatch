@@ -25,6 +25,10 @@ type Config struct {
 	// HealthCheck configuration
 	HealthCheck HealthCheck `yaml:"healthCheck"`
 
+	// Dashboard configures the read-only incident dashboard API. Pro only,
+	// off by default.
+	Dashboard Dashboard `yaml:"dashboard"`
+
 	// Maintenance names the annotations that mark deliberate maintenance.
 	// Incidents whose objects are under maintenance are not delivered.
 	Maintenance MaintenanceConfig `yaml:"maintenance"`
@@ -217,6 +221,19 @@ type HealthCheck struct {
 	// diagnostics view (open incidents with object names) on the health
 	// port, without authentication. By default, this value is false.
 	StatusEndpoint bool `yaml:"statusEndpoint"`
+}
+
+// Dashboard configures the read-only incident dashboard API. It is Pro
+// only and off by default. The dashboard runs on its own listener, never
+// on the health port.
+type Dashboard struct {
+	// Enabled serves the read-only dashboard API on a separate listener.
+	// By default, this value is false.
+	Enabled bool `yaml:"enabled"`
+
+	// Port is the port to listen on for dashboard requests.
+	// By default, this value is 8061.
+	Port int `yaml:"port"`
 }
 
 // AlertRoute defines routing filters for a provider. An incident matching at

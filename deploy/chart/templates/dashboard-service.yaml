@@ -1,0 +1,25 @@
+{{- $dash := default dict .Values.dashboard -}}
+{{- if $dash.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kwatch.fullname" . }}-dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kwatch.labels" . | nindent 4 }}
+  annotations:
+    # Read-only dashboard API. No write endpoints. Access is bearer-token
+    # protected; do not expose without TLS.
+    {{- if .Values.networkPolicy.enabled }}
+    networking.k8s.io/policy: "true"
+    {{- end }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "kwatch.selectorLabels" . | nindent 6 }}
+  ports:
+    - name: dashboard
+      port: {{ $dash.port | default 8061 }}
+      targetPort: {{ $dash.port | default 8061 }}
+      protocol: TCP
+{{- end }}
