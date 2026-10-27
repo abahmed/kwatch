@@ -36,7 +36,7 @@
 </p>
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://kwatch.dev/kwatch.sh)"
+bash <(curl -fsSL https://kwatch.dev/kwatch.sh)
 ```
 
 One command, and it walks you through the rest: which cluster, where alerts
@@ -291,7 +291,7 @@ anything, asks where alerts should go, stores credentials in a Kubernetes
 Secret, installs kwatch and checks that it is running.
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://kwatch.dev/kwatch.sh)"
+bash <(curl -fsSL https://kwatch.dev/kwatch.sh)
 ```
 
 Prefer Helm? See the [chart guide](./deploy/chart/README.md).

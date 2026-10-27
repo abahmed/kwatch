@@ -27,6 +27,10 @@ type errorClass struct {
 	// addressKeys lets a misfit kind off when a changed key names an
 	// address: a changed DB_HOST can explain a timeout.
 	addressKeys bool
+	// newMisfits are kinds the class rules out while their only
+	// change is their creation: a first rollout has no previous
+	// template to blame for a refused connection.
+	newMisfits []inventory.Kind
 }
 
 var (
@@ -52,7 +56,8 @@ var errorClasses = []errorClass{
 		markers: []string{"i/o timeout", "connection refused",
 			"no route to host", "connection timed out",
 			"network is unreachable", "dial tcp"},
-		fits: networkKinds, misfits: configKinds, addressKeys: true},
+		fits: networkKinds, misfits: configKinds, addressKeys: true,
+		newMisfits: codeKinds},
 }
 
 // programDefect is a crash in the program's own code. A setting, a
@@ -113,8 +118,30 @@ func (v *view) classOutcome(class errorClass, c *candidate) outcome {
 			code: rootcause.ProofErrorMisfits,
 			text: "the errors describe " + class.name +
 				", which a " + string(c.id.Kind) + " does not cause"}
+	case slices.Contains(class.newMisfits, c.id.Kind) &&
+		v.onlyCreated(c.id):
+		return outcome{code: rootcause.ProofErrorMisfits,
+			veto: "the errors describe " + class.name +
+				", which the first rollout of a new " +
+				string(c.id.Kind) + " does not cause"}
 	}
 	return outcome{}
+}
+
+// onlyCreated reports an object whose last change in the window is its
+// creation, with nothing but the deletion of an earlier object of the
+// same name before it: it has no earlier version to differ from.
+func (v *view) onlyCreated(id inventory.EntityID) bool {
+	changes := v.changesOf(id)
+	if len(changes) == 0 || !changes[len(changes)-1].Created {
+		return false
+	}
+	for _, change := range changes {
+		if !change.Created && !change.Deleted {
+			return false
+		}
+	}
+	return true
 }
 
 // changesAddress reports a changed key that holds an address.
