@@ -43,6 +43,10 @@ One command, and it walks you through the rest: which cluster, where alerts
 should go. Run it again any time to upgrade, change settings or manage your
 license.
 
+<p align="center">
+  <a href="https://kwatch.dev"><img src="./assets/kwatch-demo.gif" width="900" alt="kwatch demo: one-command install, Discord alerts and Pro set up, then a crashing app triggers a kwatch alert in Discord with its root cause"></a>
+</p>
+
 ---
 
 <table>
