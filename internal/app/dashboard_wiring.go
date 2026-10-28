@@ -7,6 +7,7 @@ import (
 	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/redact"
 )
 
 // runbookStepPrefix starts the step compose writes for a configured
@@ -23,6 +24,23 @@ func dashboardDetail(
 	out.Facts = append(out.Facts, d.Facts.Output...)
 	for _, f := range d.Facts.Evidence {
 		out.Facts = append(out.Facts, f.Text)
+	}
+	out.Steps = fixSteps(m)
+	return out
+}
+
+// fixSteps are the message's steps without the runbook step, which the
+// dashboard shows as its link, redacted like everything it serves.
+func fixSteps(m notification.Message) []incident.FixStep {
+	var out []incident.FixStep
+	for _, s := range m.Steps {
+		if strings.HasPrefix(s.Text, runbookStepPrefix) && s.Command == "" {
+			continue
+		}
+		out = append(out, incident.FixStep{
+			Text:    redact.Evidence(s.Text),
+			Command: redact.Evidence(s.Command),
+		})
 	}
 	return out
 }
@@ -51,6 +69,7 @@ func dashboardHealth(
 		for _, h := range m.ProviderHealth() {
 			out = append(out, dashboard.ChannelHealth{
 				Channel:          h.Name,
+				Type:             h.Name,
 				LastSuccess:      h.LastSuccess,
 				LastError:        h.LastError,
 				LastErrorMessage: h.LastErrorMessage,

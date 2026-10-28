@@ -323,6 +323,13 @@ jobs:
           KWATCH_WATCH_SECRETS: ${{ matrix.secrets }}
         run: ./scripts/test-kind-production.sh
 
+      # The dashboard as the chart installs it: password sign-in, the
+      # session cookie on /api/*, and shared mode refusing plain http.
+      # One matrix cell is enough; it does not depend on RBAC or Secrets.
+      - name: Run dashboard test
+        if: matrix.rbac == 'full' && matrix.secrets
+        run: ./scripts/test-kind-dashboard.sh
+
       - name: Collect cluster diagnostics
         if: always()
         run: |

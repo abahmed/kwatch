@@ -41,9 +41,22 @@ spec:
       ports:
         - protocol: TCP
           port: {{ $port }}
+    {{- if and $dash.enabled (eq (default "local" $dash.mode) "shared") }}
+    # Shared dashboard: the ingress controller forwards to it. Sign-in
+    # needs the password and https. dashboard.ingress.networkPolicyFrom
+    # narrows the sources; empty allows any.
+    {{- $ingFrom := (default dict $dash.ingress).networkPolicyFrom }}
+    - {{- with $ingFrom }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ $dashPort }}
+    {{- end }}
     {{- if $dash.enabled }}
-    # Dashboard API (/api/*): bearer-token protected, ClusterIP only.
-    # Reachable from this namespace and healthIngressFrom sources.
+    # Dashboard (web UI and /api/*): password or bearer token. Reachable
+    # from this namespace (port-forward) and healthIngressFrom sources.
     - from:
         - namespaceSelector:
             matchLabels:

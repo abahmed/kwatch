@@ -28,6 +28,7 @@ func DefaultConfig() *Config {
 		Dashboard: Dashboard{
 			Enabled: false,
 			Port:    8061,
+			Mode:    DashboardLocal,
 		},
 		AuditLog: AuditLogConfig{Enabled: true, Output: "stdout"},
 		Watch:    WatchConfig{Secrets: true},

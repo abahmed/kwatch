@@ -76,7 +76,7 @@
     },
     "dashboard": {
       "type": "object",
-      "description": "Read-only incident dashboard API. Pro only, off by default.",
+      "description": "Read-only incident dashboard: web UI and API. Pro only, off by default.",
       "properties": {
         "enabled": {
           "type": "boolean",
@@ -91,7 +91,59 @@
         "existingSecret": {
           "type": "string",
           "default": "",
-          "description": "Existing Secret with the key token"
+          "description": "Existing Secret with the keys password and token"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "local",
+            "shared"
+          ],
+          "default": "local",
+          "description": "local: reached through kubectl port-forward. shared: through the dashboard Ingress, https only"
+        },
+        "ingress": {
+          "type": "object",
+          "description": "Ingress for shared mode; host and tlsSecretName are required then",
+          "properties": {
+            "host": {
+              "type": "string",
+              "default": "",
+              "description": "Address people open, for example kwatch.example.com"
+            },
+            "className": {
+              "type": "string",
+              "default": "",
+              "description": "IngressClass; empty uses the cluster default"
+            },
+            "tlsSecretName": {
+              "type": "string",
+              "default": "",
+              "description": "Secret for the certificate of host"
+            },
+            "clusterIssuer": {
+              "type": "string",
+              "default": "",
+              "description": "cert-manager ClusterIssuer that issues the certificate"
+            },
+            "annotations": {
+              "type": "object",
+              "default": {},
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Extra Ingress annotations"
+            },
+            "networkPolicyFrom": {
+              "type": "array",
+              "default": [],
+              "items": {
+                "type": "object"
+              },
+              "description": "NetworkPolicy peers allowed to reach the dashboard in shared mode; empty allows any"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

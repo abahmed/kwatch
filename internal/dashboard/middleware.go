@@ -7,8 +7,15 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// contentSecurityPolicy allows only same-origin scripts, styles, fonts,
+// images and requests: no inline script or style, no framing.
+const contentSecurityPolicy = "default-src 'none'; script-src 'self'; " +
+	"style-src 'self'; img-src 'self' data:; font-src 'self'; " +
+	"connect-src 'self'; form-action 'self'; base-uri 'none'; " +
+	"frame-ancestors 'none'"
+
 // securityHeaders sets the headers every dashboard response carries,
-// errors included.
+// errors included. Cache-Control is no-store; hashed assets replace it.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
@@ -16,6 +23,9 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Cache-Control", "no-store")
 		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("Content-Security-Policy", contentSecurityPolicy)
+		h.Set("Cross-Origin-Opener-Policy", "same-origin")
+		h.Set("Cross-Origin-Resource-Policy", "same-origin")
 		next.ServeHTTP(w, r)
 	})
 }

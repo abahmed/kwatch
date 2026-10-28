@@ -234,7 +234,19 @@ type Dashboard struct {
 	// Port is the port to listen on for dashboard requests.
 	// By default, this value is 8061.
 	Port int `yaml:"port"`
+
+	// Mode is how people reach the dashboard: "local" through a
+	// port-forward, or "shared" through an Ingress with TLS. Shared mode
+	// marks the session cookie Secure and refuses sign-in over plain
+	// HTTP. By default, this value is "local".
+	Mode string `yaml:"mode"`
 }
+
+// Dashboard modes.
+const (
+	DashboardLocal  = "local"
+	DashboardShared = "shared"
+)
 
 // AlertRoute defines routing filters for a provider. An incident matching at
 // least one route is delivered; without routes everything is delivered.

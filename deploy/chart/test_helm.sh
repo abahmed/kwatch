@@ -572,4 +572,63 @@ if helm template test-old . --set bogusTopLevel=1 >/dev/null 2>&1; then
 fi
 echo "PASS: 0.10.5 values file"
 
+echo "=== dashboard ==="
+for kind in "kind: Ingress" "KWATCH_DASHBOARD_ENABLED" "port: 8061"; do
+  if grep -Fq "$kind" <<<"$OUT1"; then
+    echo "FAIL: the dashboard must be off by default ($kind)"; exit 1
+  fi
+done
+OUT_DASH=$(helm template kwatch . --set dashboard.enabled=true 2>&1)
+for want in 'name: KWATCH_DASHBOARD_PASSWORD' 'key: password' \
+  'name: KWATCH_DASHBOARD_MODE' 'value: "local"' \
+  'name: KWATCH_DEPLOYMENT_NAME' '  password: ' '  token: '; do
+  grep -Fq -- "$want" <<<"$OUT_DASH" || {
+    echo "FAIL: dashboard render lacks $want"; exit 1;
+  }
+done
+if grep -Fq "kind: Ingress" <<<"$OUT_DASH"; then
+  echo "FAIL: local mode must not render an Ingress"; exit 1
+fi
+PW=$(grep -E '^  password: ' <<<"$OUT_DASH" | awk '{print $2}' |
+  base64 --decode)
+grep -Eq '^([A-HJ-NP-Z2-9]{4}-){3}[A-HJ-NP-Z2-9]{4}$' <<<"$PW" || {
+  echo "FAIL: generated password has the wrong shape: $PW"; exit 1;
+}
+if helm template kwatch . --set dashboard.enabled=true \
+  --set dashboard.mode=shared >/dev/null 2>&1; then
+  echo "FAIL: shared mode must need an ingress host"; exit 1
+fi
+if helm template kwatch . --set dashboard.enabled=true \
+  --set dashboard.mode=shared \
+  --set dashboard.ingress.host=kwatch.example.com >/dev/null 2>&1; then
+  echo "FAIL: shared mode must refuse to render without TLS"; exit 1
+fi
+if helm template kwatch . --set dashboard.enabled=true \
+  --set dashboard.mode=public >/dev/null 2>&1; then
+  echo "FAIL: an unknown dashboard mode must be rejected"; exit 1
+fi
+OUT_SHARED=$(helm template kwatch . --set dashboard.enabled=true \
+  --set dashboard.mode=shared \
+  --set dashboard.ingress.host=kwatch.example.com \
+  --set dashboard.ingress.tlsSecretName=kwatch-dashboard-tls \
+  --set dashboard.ingress.clusterIssuer=letsencrypt-prod \
+  --set dashboard.ingress.className=nginx 2>&1)
+for want in "kind: Ingress" "secretName: kwatch-dashboard-tls" \
+  'cert-manager.io/cluster-issuer: "letsencrypt-prod"' \
+  "ingressClassName: nginx" 'value: "shared"' \
+  'host: "kwatch.example.com"'; do
+  grep -Fq -- "$want" <<<"$OUT_SHARED" || {
+    echo "FAIL: shared render lacks $want"; exit 1;
+  }
+done
+OUT_EXIST=$(helm template kwatch . --set dashboard.enabled=true \
+  --set dashboard.existingSecret=mine 2>&1)
+if grep -Eq '^  password: ' <<<"$OUT_EXIST"; then
+  echo "FAIL: existingSecret must not render a password Secret"; exit 1
+fi
+grep -Fq "name: mine" <<<"$OUT_EXIST" || {
+  echo "FAIL: existingSecret must feed the dashboard env"; exit 1;
+}
+echo "PASS: dashboard"
+
 echo "All helm template tests passed."

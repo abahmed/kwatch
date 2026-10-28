@@ -141,13 +141,31 @@ spec:
                   name: {{ include "kwatch.licenseSecretName" . }}
                   key: license-key
                   optional: true
-            # The dashboard bearer token. optional: true lets the pod start
-            # without the dashboard (Community, or dashboard disabled).
+            # The dashboard settings and its Secret. optional: true lets
+            # the pod start without the dashboard (Community, or the
+            # dashboard disabled).
+            {{- $dashEnv := default dict .Values.dashboard }}
+            {{- if $dashEnv.enabled }}
+            - name: KWATCH_DASHBOARD_ENABLED
+              value: "true"
+            - name: KWATCH_DASHBOARD_PORT
+              value: {{ $dashEnv.port | default 8061 | quote }}
+            - name: KWATCH_DASHBOARD_MODE
+              value: {{ $dashEnv.mode | default "local" | quote }}
+            - name: KWATCH_DEPLOYMENT_NAME
+              value: {{ include "kwatch.fullname" . | quote }}
+            {{- end }}
             - name: KWATCH_DASHBOARD_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ include "kwatch.dashboardSecretName" . }}
                   key: token
+                  optional: true
+            - name: KWATCH_DASHBOARD_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kwatch.dashboardSecretName" . }}
+                  key: password
                   optional: true
             {{- if eq (include "kwatch.watchSecrets" .) "false" }}
             # watch.secrets=false: matches the RBAC, which grants no

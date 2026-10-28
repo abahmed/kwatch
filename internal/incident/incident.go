@@ -152,6 +152,9 @@ type Incident struct {
 	// DocsLink is the configured runbook link the last message named,
 	// empty when none was configured.
 	DocsLink string
+	// Steps are what the last message told the reader to do, already
+	// redacted. Persisted.
+	Steps []FixStep
 	// AnnouncedRoute is how the first announcement was routed to
 	// providers; nil until then, and for incidents announced by an older
 	// kwatch. Persisted. Delivery routes the resolve with it (see

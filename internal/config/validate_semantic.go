@@ -68,17 +68,7 @@ func validateLifecycleSettings(cfg *Config) []error {
 			"healthCheck.statusEndpoint requires healthCheck.enabled",
 		))
 	}
-	if cfg.Dashboard.Enabled && !validPort(cfg.Dashboard.Port) {
-		errs = append(errs, errors.New(
-			"dashboard.port must be between 1 and 65535 when "+
-				"dashboard.enabled is true",
-		))
-	}
-	if cfg.Dashboard.Enabled && cfg.Dashboard.Port == cfg.HealthCheck.Port {
-		errs = append(errs, errors.New(
-			"dashboard.port must not equal healthCheck.port",
-		))
-	}
+	errs = append(errs, validateDashboard(cfg)...)
 	if cfg.AuditLog.Enabled && cfg.AuditLog.Output == "" {
 		errs = append(
 			errs,
@@ -160,4 +150,31 @@ func validLogFormatter(format string) bool {
 		return true
 	}
 	return false
+}
+
+// validateDashboard checks the dashboard listener settings.
+func validateDashboard(cfg *Config) []error {
+	if !cfg.Dashboard.Enabled {
+		return nil
+	}
+	var errs []error
+	if !validPort(cfg.Dashboard.Port) {
+		errs = append(errs, errors.New(
+			"dashboard.port must be between 1 and 65535 when "+
+				"dashboard.enabled is true",
+		))
+	}
+	if cfg.Dashboard.Port == cfg.HealthCheck.Port {
+		errs = append(errs, errors.New(
+			"dashboard.port must not equal healthCheck.port",
+		))
+	}
+	switch cfg.Dashboard.Mode {
+	case "", DashboardLocal, DashboardShared:
+	default:
+		errs = append(errs, errors.New(
+			"dashboard.mode must be local or shared",
+		))
+	}
+	return errs
 }

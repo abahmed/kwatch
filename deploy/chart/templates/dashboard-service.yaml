@@ -8,8 +8,9 @@ metadata:
   labels:
     {{- include "kwatch.labels" . | nindent 4 }}
   annotations:
-    # Read-only dashboard API. No write endpoints. Access is bearer-token
-    # protected; do not expose without TLS.
+    # Read-only dashboard: web UI and API. No write endpoints. Sign-in
+    # with the password, or the bearer token for API clients. Shared
+    # mode exposes it through the dashboard Ingress, with TLS only.
     {{- if .Values.networkPolicy.enabled }}
     networking.k8s.io/policy: "true"
     {{- end }}

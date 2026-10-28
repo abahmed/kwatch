@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>kwatch</title>
+<link rel="icon" type="image/svg+xml" id="favicon" href="{{asset:favicon.svg}}" data-alert="{{asset:favicon-alert.svg}}">
+<link rel="stylesheet" href="{{asset:app.css}}">
+<script defer src="{{asset:js/core.js}}"></script>
+<script defer src="{{asset:js/lists.js}}"></script>
+<script defer src="{{asset:js/detail.js}}"></script>
+<script defer src="{{asset:js/status.js}}"></script>
+<script defer src="{{asset:js/main.js}}"></script>
+</head>
+<body>
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="M2.5 8.5 6.5 12.5 13.5 4"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M3 3 13 13M13 3 3 13"/></symbol>
+  <symbol id="i-dash" viewBox="0 0 16 16"><path d="M3 8h10"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 16 16"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5Z"/><circle cx="8" cy="8" r="2"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 16 16"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5Z"/><circle cx="8" cy="8" r="2"/><path d="M2 2 14 14"/></symbol>
+  <symbol id="i-back" viewBox="0 0 16 16"><path d="M13 8H3M7.5 3.5 3 8l4.5 4.5"/></symbol>
+  <symbol id="i-mark" viewBox="0 0 64 64"><path d="M17 5.5v53" stroke-width="8.5"/><path d="M47.5 6.5 32.2 27.6" stroke-width="7.5"/><path d="M33.4 36.8 48.5 57.5" stroke-width="8"/></symbol>
+</svg>
+<a class="skip" href="#main">Skip to content</a>
+<div id="app"></div>
+<p class="sr-only" id="announce" aria-live="polite"></p>
+
+<template id="tpl-shell">
+  <div class="shell">
+    <header class="side">
+      <a class="brand" href="/" data-link aria-label="kwatch, active issues">
+        <svg class="mark" width="26" height="26" viewBox="0 0 64 64" aria-hidden="true"><use href="#i-mark"/><circle class="mark-dot" cx="28.6" cy="32.2" r="8.6" stroke-width="3.2"/></svg>
+        <span class="wordmark">kwatch</span>
+      </a>
+      <nav class="nav" aria-label="Dashboard">
+        <a href="/" data-link data-nav="active">Active issues<span class="count" data-badge hidden></span></a>
+        <a href="/resolved" data-link data-nav="resolved">Resolved</a>
+        <a href="/status" data-link data-nav="status">kwatch status</a>
+      </nav>
+      <div class="who"><span>Read-only dashboard</span><button class="link" type="button" data-signout>Sign out</button></div>
+    </header>
+    <div class="main">
+      <main class="content" id="main" tabindex="-1"></main>
+    </div>
+  </div>
+</template>
+
+<template id="tpl-signin">
+  <div class="center">
+    <div class="signin" data-form>
+      <svg class="mark" width="44" height="44" viewBox="0 0 64 64" aria-hidden="true"><use href="#i-mark"/><circle class="mark-dot" cx="28.6" cy="32.2" r="8.6" stroke-width="3.2"/></svg>
+      <h1>Sign in to kwatch</h1>
+      <div class="notice" data-expired hidden><p>Your session ended. Sign in again.</p></div>
+      <form novalidate>
+        <input class="sr-only" type="text" name="username" value="kwatch" autocomplete="username" tabindex="-1" aria-hidden="true">
+        <label for="pw">Password</label>
+        <div class="pw">
+          <input id="pw" name="password" type="password" autocomplete="current-password" autofocus aria-describedby="pwerr">
+          <button type="button" class="link eye" aria-pressed="false" aria-label="Show password" title="Show password" data-eye><svg class="icon" aria-hidden="true"><use href="#i-eye"/></svg></button>
+        </div>
+        <p class="field-error" id="pwerr" role="alert" data-error hidden></p>
+        <button class="btn btn-primary btn-block" type="submit" data-submit>Sign in</button>
+      </form>
+      <div class="help">
+        <p>Forgot it? Open the installer, choose Dashboard, then "Show my access link and password".</p>
+        <div class="cmd"><code tabindex="0">bash &lt;(curl -fsSL https://kwatch.dev/kwatch.sh)</code><button class="btn" type="button" data-copy>Copy</button></div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="tpl-https">
+  <div class="center">
+    <div class="signin">
+      <svg class="mark" width="44" height="44" viewBox="0 0 64 64" aria-hidden="true"><use href="#i-mark"/><circle class="mark-dot" cx="28.6" cy="32.2" r="8.6" stroke-width="3.2"/></svg>
+      <h1>This address must use https</h1>
+      <p class="lead">kwatch only signs you in over https. Open <a class="ulink" data-https-link></a> instead.</p>
+    </div>
+  </div>
+</template>
+
+<template id="tpl-panel">
+  <div class="panel" role="status">
+    <h2 data-heading></h2>
+    <p data-body></p>
+    <div class="cmd" data-cmd hidden><code tabindex="0"></code><button class="btn" type="button" data-copy>Copy</button></div>
+    <p class="mono small" data-code hidden></p>
+    <button class="btn btn-primary btn-sm" type="button" data-retry hidden></button>
+  </div>
+</template>
+
+<template id="tpl-list">
+  <div class="page-head">
+    <div><h1 data-h1></h1><p class="sub" data-sub></p></div>
+  </div>
+  <div data-filterbox hidden>
+    <div class="filters">
+      <label class="f f-search"><span>Search</span><input type="search" data-f="q" placeholder="Name, namespace or text" autocomplete="off"></label>
+      <div class="f"><span data-sevlabel>Severity</span><div class="fchips" role="group">
+        <button class="fchip" type="button" data-sev="page" aria-pressed="false"><span class="dot page"></span>Urgent</button>
+        <button class="fchip" type="button" data-sev="notify" aria-pressed="false"><span class="dot notify"></span>Needs attention</button>
+        <button class="fchip" type="button" data-sev="digest" aria-pressed="false"><span class="dot low"></span>Low</button></div></div>
+      <button class="btn btn-sm more-btn" type="button" data-more aria-expanded="false">More filters</button>
+      <div class="more-f" data-more-box hidden>
+        <label class="f f-ns"><span>Namespace</span><select data-f="namespace"><option value="">All namespaces</option></select></label>
+        <label class="f" data-only="active"><span>State</span><select data-f="state"><option value="">Any state</option><option value="open">Happening now</option><option value="settling">Looking into it</option><option value="flapping">Keeps coming back</option><option value="recovering">Looks better</option></select></label>
+        <label class="f" data-only="resolved"><span>Resolved</span><select data-f="since"><option value="">Last 7 days</option><option value="24h">Last 24 hours</option><option value="72h">Last 3 days</option></select></label>
+      </div>
+    </div>
+    <div class="factive" data-factive hidden><span data-fsummary></span><button class="link" type="button" data-fclear>Clear filters</button></div>
+  </div>
+  <div data-alert></div>
+  <ul class="list" data-list hidden></ul>
+  <div class="notice" data-trunc hidden><p></p></div>
+  <div data-empty></div>
+  <div class="updated" data-updated hidden></div>
+</template>
+
+<template id="tpl-row">
+  <li><a class="issue" data-link>
+    <div><span data-chips></span>
+      <p class="i-title"></p>
+      <p class="i-sub" hidden></p></div>
+    <div class="i-where"></div>
+    <div class="i-when"><time></time><small></small></div>
+  </a></li>
+</template>
+
+<template id="tpl-detail">
+  <p class="back"><a data-link data-back><svg class="icon" aria-hidden="true"><use href="#i-back"/></svg><span></span></a></p>
+  <div class="detail">
+    <div class="d-head">
+      <div class="notice d-banner" data-banner hidden><b></b><p></p></div>
+      <div class="chips" data-chips></div>
+      <h1 data-title></h1>
+    </div>
+    <div class="d-story">
+      <section class="sec" data-why hidden><h2>Why it happened</h2><p></p></section>
+      <section class="sec" data-fix hidden><h2>What to do</h2><div data-steps></div><p class="runbook" data-runbook hidden></p></section>
+      <section class="sec"><h2>What kwatch saw</h2>
+        <div class="logs" tabindex="0" role="region" aria-label="Captured log lines" data-logs hidden></div>
+        <div class="cap"><span data-logcap></span><button class="btn btn-sm" type="button" data-copy-logs hidden>Copy all</button></div></section>
+      <section class="sec"><h2>What happened, in order</h2><ol class="tl" data-timeline></ol></section>
+    </div>
+    <aside class="d-side">
+      <div class="facts-card"><h2>Facts</h2><dl class="facts" data-facts></dl></div>
+      <p class="ro">This page is read-only. To change anything, use kubectl.</p>
+    </aside>
+  </div>
+</template>
+
+<template id="tpl-status">
+  <h1>kwatch status</h1>
+  <div class="notice sum" data-summary hidden><b></b></div>
+  <div data-alert></div>
+  <div data-body hidden>
+    <div class="cards">
+      <div class="card"><h2>About this kwatch</h2><dl class="facts" data-about></dl></div>
+      <div class="card"><h2>Where alerts go</h2><div data-channels></div></div>
+    </div>
+    <div class="card wide"><h2>Namespaces</h2><div data-namespaces></div></div>
+  </div>
+  <div class="updated" data-updated hidden></div>
+</template>
+</body>
+</html>

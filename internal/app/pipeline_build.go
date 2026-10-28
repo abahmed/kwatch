@@ -138,6 +138,9 @@ func (p *pipelineBuild) newEngine() (*pipeline.Engine, error) {
 		InScope:      pipeline.IncidentScope(p.model, p.scope),
 		Progress: func() {
 			deps.pipelineProgress.Touch(p.clock.Now())
+			if deps.dashboardServer != nil {
+				deps.dashboardServer.NoteScan()
+			}
 		},
 		Entitlements: deps.entitlements,
 		InactivePro:  deps.inactivePro,

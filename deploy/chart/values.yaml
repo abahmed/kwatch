@@ -276,18 +276,39 @@ license:
   # or an extra environment variable, so the license can activate.
   instanceSecret: false
 
-# -- Dashboard read-only API. Pro only, off by default. Runs on its own
-# listener and ClusterIP Service. The bearer token lives in the
-# kwatch-dashboard Secret (key token); the chart auto-generates one when
-# dashboard.enabled is true and no existingSecret is set.
+# -- Read-only dashboard: web UI and API. Pro only, off by default. Runs
+# on its own listener and ClusterIP Service. The <release>-dashboard
+# Secret holds the sign-in password (key password) and the API bearer
+# token (key token); the chart generates both when dashboard.enabled is
+# true and no existingSecret is set, and keeps them across upgrades.
 dashboard:
-  # -- Enable the dashboard API listener and Service.
+  # -- Enable the dashboard listener and Service.
   enabled: false
-  # -- Port for the dashboard API listener (must not equal healthCheck.port).
+  # -- Port for the dashboard listener (must not equal healthCheck.port).
   port: 8061
-  # -- Name of an existing Secret with the key `token`. When empty and
-  # enabled is true, the chart creates a Secret with an auto-generated token.
+  # -- How people reach it. local: through kubectl port-forward (the
+  # session cookie works over http://localhost). shared: through the
+  # Ingress below, https only; kwatch refuses sign-in over plain http.
+  mode: local
+  # -- Name of an existing Secret with the keys `password` and `token`.
+  # When empty and enabled is true, the chart creates the Secret.
   existingSecret: ""
+  # -- Ingress for shared mode. host and tlsSecretName are required.
+  ingress:
+    # -- Address people open, for example kwatch.example.com.
+    host: ""
+    # -- IngressClass to use; empty uses the cluster default.
+    className: ""
+    # -- Secret that holds (or, with clusterIssuer, receives) the
+    # certificate for host.
+    tlsSecretName: ""
+    # -- cert-manager ClusterIssuer that issues the certificate.
+    clusterIssuer: ""
+    # -- Extra Ingress annotations.
+    annotations: {}
+    # -- NetworkPolicy peers allowed to reach the dashboard in shared
+    # mode (your ingress controller). Empty allows any source.
+    networkPolicyFrom: []
 
 # -- Use an existing Secret containing config.yaml and credential files.
 # Required for alert providers and heartbeatMonitor.url. The Secret's

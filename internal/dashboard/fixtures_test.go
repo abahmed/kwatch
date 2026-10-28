@@ -13,7 +13,10 @@ import (
 	"github.com/abahmed/kwatch/internal/status"
 )
 
-const testToken = "secret-token"
+const (
+	testToken    = "secret-token"
+	testPassword = "7K4M-QX9P-2HVD-T6RE"
+)
 
 var testEpoch = time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 
@@ -49,13 +52,16 @@ func testIncident(
 		Root: inventory.EntityID{Kind: "Deployment",
 			Namespace: namespace, Name: "app-" + id},
 		State:  incident.Open,
+		Tier:   incident.Notify,
 		Opened: testEpoch.Add(opened),
 	}
 }
 
 // newTestServer is a server with every source set.
 func newTestServer(items ...incident.Incident) *Server {
-	s := NewServer(0, testToken, "Pro", Scope{},
+	s := NewServer(Options{Token: testToken, Password: testPassword,
+		Edition: "Pro", Self: Self{Namespace: "kwatch",
+			Deployment: "kwatch"}},
 		clock.Func(func() time.Time { return testEpoch }))
 	s.SetIncidents(&fakeIncidents{items: items})
 	s.SetStatus(func() status.Report { return status.Report{At: testEpoch} })

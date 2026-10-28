@@ -1,0 +1,46 @@
+{{- $dash := default dict .Values.dashboard -}}
+{{- $ing := default dict $dash.ingress -}}
+{{- if and $dash.enabled (eq (default "local" $dash.mode) "shared") }}
+{{- if not $ing.host }}
+{{- fail "dashboard.mode=shared needs dashboard.ingress.host" }}
+{{- end }}
+{{- if not $ing.tlsSecretName }}
+{{- fail "dashboard.mode=shared needs TLS: set dashboard.ingress.tlsSecretName (with dashboard.ingress.clusterIssuer for cert-manager, or an existing certificate Secret)" }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "kwatch.fullname" . }}-dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kwatch.labels" . | nindent 4 }}
+  annotations:
+    {{- with $ing.clusterIssuer }}
+    cert-manager.io/cluster-issuer: {{ . | quote }}
+    {{- end }}
+    # Plain http is redirected; kwatch also refuses sign-in without https.
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    {{- with $ing.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- with $ing.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  tls:
+    - hosts:
+        - {{ $ing.host | quote }}
+      secretName: {{ $ing.tlsSecretName }}
+  rules:
+    - host: {{ $ing.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "kwatch.fullname" . }}-dashboard
+                port:
+                  name: dashboard
+{{- end }}

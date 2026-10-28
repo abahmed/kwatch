@@ -81,6 +81,7 @@ func applyEnvironmentOverrides(c *Config) {
 			rule.apply(c, value)
 		}
 	}
+	applyDashboardEnv(c)
 	if key := os.Getenv(licenseKeyEnv); strings.TrimSpace(key) != "" {
 		c.License.Key = key
 	}
@@ -111,6 +112,13 @@ var envRules = []envRule{
 		name:      crdEnabledEnv,
 		apply:     func(c *Config, value bool) { c.CrdConfig.Enabled = value },
 		onInvalid: "the file's crd.enabled setting stays",
+	},
+	{
+		name: dashboardEnabledEnv,
+		apply: func(c *Config, value bool) {
+			c.Dashboard.Enabled = value
+		},
+		onInvalid: "the file's dashboard.enabled setting stays",
 	},
 	{
 		name: telemetryEnv,
