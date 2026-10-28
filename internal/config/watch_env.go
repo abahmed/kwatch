@@ -121,6 +121,13 @@ var envRules = []envRule{
 		onInvalid: "the file's dashboard.enabled setting stays",
 	},
 	{
+		name: dashboardTrustEnv,
+		apply: func(c *Config, value bool) {
+			c.Dashboard.TrustProxy = value
+		},
+		onInvalid: "the file's dashboard.trustProxy setting stays",
+	},
+	{
 		name: telemetryEnv,
 		apply: func(c *Config, value bool) {
 			if !value {

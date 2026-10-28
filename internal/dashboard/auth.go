@@ -17,8 +17,11 @@ type Auth struct {
 	token    string
 	password string
 	shared   bool
-	sessions *sessions
-	failRate *rateLimiter
+	// trustProxy honours X-Forwarded-Proto and X-Forwarded-For from a
+	// proxy that terminates TLS. Set by NewServer from Options.
+	trustProxy bool
+	sessions   *sessions
+	failRate   *rateLimiter
 }
 
 // NewAuth builds the access checker. An empty token refuses bearer

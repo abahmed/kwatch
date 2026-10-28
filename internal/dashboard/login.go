@@ -73,7 +73,7 @@ func sessionHandler(w http.ResponseWriter, r *http.Request) {
 // to use the https address. In local mode it lets everything through.
 func (a *Auth) requireHTTPS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if a.shared && !isHTTPS(r) {
+		if a.shared && !a.isHTTPS(r) {
 			writeError(w, http.StatusForbidden, "https_required")
 			return
 		}
@@ -89,7 +89,7 @@ func (a *Auth) formChecks(w http.ResponseWriter, r *http.Request) bool {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return false
 	}
-	if a.shared && !isHTTPS(r) {
+	if a.shared && !a.isHTTPS(r) {
 		writeError(w, http.StatusForbidden, "https_required")
 		return false
 	}
@@ -153,26 +153,26 @@ func sameOrigin(r *http.Request) bool {
 	return err == nil && u.Host != "" && strings.EqualFold(u.Host, r.Host)
 }
 
-// isHTTPS reports whether the browser reached kwatch over https: a TLS
-// connection, or X-Forwarded-Proto https set by a proxy. The header is
-// trusted only from a remote that is not loopback, so a port-forward,
-// which always arrives from loopback, can never claim https.
-func isHTTPS(r *http.Request) bool {
+// isHTTPS reports whether the browser reached kwatch over https: kwatch
+// served TLS itself, or a trusted proxy that terminated TLS said so in
+// X-Forwarded-Proto. The header counts only with trustProxy and never
+// from loopback, so a port-forward can never claim https.
+func (a *Auth) isHTTPS(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
 	}
-	if loopback(r) {
+	if !a.trustProxy || loopback(r) {
 		return false
 	}
 	return strings.EqualFold(lastHeaderValue(r, "X-Forwarded-Proto"),
 		"https")
 }
 
-// clientKey is who failures are counted against. Behind the Ingress in
-// shared mode every request comes from the controller, so the client is
-// the last X-Forwarded-For hop, the one the controller added.
+// clientKey is who failures are counted against. Behind a trusted
+// proxy every request comes from the proxy, so the client is the last
+// X-Forwarded-For hop, the one the proxy added.
 func (a *Auth) clientKey(r *http.Request) string {
-	if a.shared && !loopback(r) {
+	if a.trustProxy && !loopback(r) {
 		if hop := lastHeaderValue(r, "X-Forwarded-For"); hop != "" {
 			return hop
 		}

@@ -1,0 +1,82 @@
+{{- $d := default dict .Values.dashboard -}}
+{{- $e := include "kwatch.dashboardExpose" . -}}
+{{- $name := printf "%s-dashboard" (include "kwatch.fullname" .) -}}
+{{- $port := $d.port | default 8061 -}}
+{{- if and $d.enabled (eq $e "gateway") }}
+{{- include "kwatch.dashboardCheck" . }}
+{{- $gw := default dict $d.gateway }}
+# Gateway API route. TLS ends at the Gateway's https listener; kwatch
+# refuses sign-in when the Gateway reports plain http.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kwatch.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - name: {{ $gw.name }}
+      {{- with $gw.namespace }}
+      namespace: {{ . }}
+      {{- end }}
+      {{- with $gw.sectionName }}
+      sectionName: {{ . }}
+      {{- end }}
+  hostnames:
+    - {{ $d.host | quote }}
+  rules:
+    - backendRefs:
+        - name: {{ $name }}
+          port: {{ $port }}
+{{- end }}
+{{- if and $d.enabled (eq $e "istio") }}
+{{- include "kwatch.dashboardCheck" . }}
+# Istio route. TLS ends at the Istio Gateway's https server.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kwatch.labels" . | nindent 4 }}
+spec:
+  hosts:
+    - {{ $d.host | quote }}
+  gateways:
+    - {{ (default dict $d.istio).gateway }}
+  http:
+    - route:
+        - destination:
+            host: {{ printf "%s.%s.svc.cluster.local" $name .Release.Namespace }}
+            port:
+              number: {{ $port }}
+{{- end }}
+{{- if and $d.enabled (eq $e "route") }}
+{{- include "kwatch.dashboardCheck" . }}
+{{- $ranges := default list $d.allowedSourceRanges }}
+# OpenShift Route, TLS at the router (edge); http redirects to https.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kwatch.labels" . | nindent 4 }}
+  {{- with $ranges }}
+  annotations:
+    haproxy.router.openshift.io/ip_whitelist: {{ join " " . | quote }}
+  {{- end }}
+spec:
+  {{- with $d.host }}
+  host: {{ . | quote }}
+  {{- end }}
+  to:
+    kind: Service
+    name: {{ $name }}
+  port:
+    targetPort: dashboard
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+{{- end }}

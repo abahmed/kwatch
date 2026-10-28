@@ -93,38 +93,76 @@
           "default": "",
           "description": "Existing Secret with the keys password and token"
         },
-        "mode": {
+        "expose": {
           "type": "string",
+          "default": "local",
           "enum": [
             "local",
-            "shared"
+            "service",
+            "ingress",
+            "gateway",
+            "istio",
+            "route",
+            "loadBalancer",
+            "nodePort",
+            "external"
           ],
-          "default": "local",
-          "description": "local: reached through kubectl port-forward. shared: through the dashboard Ingress, https only"
+          "description": "How people reach the dashboard; every way but local and service is https only"
+        },
+        "host": {
+          "type": "string",
+          "default": "",
+          "description": "Address people open, for example kwatch.example.com"
+        },
+        "allowedSourceRanges": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F:.]+/[0-9]{1,3}$"
+          },
+          "description": "Client CIDRs allowed to connect, where the platform can enforce it"
+        },
+        "networkPolicyFrom": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "object"
+          },
+          "description": "NetworkPolicy peers allowed to reach a shared dashboard; empty allows any"
         },
         "ingress": {
           "type": "object",
-          "description": "Ingress for shared mode; host and tlsSecretName are required then",
+          "description": "expose: ingress",
           "properties": {
-            "host": {
+            "provider": {
               "type": "string",
               "default": "",
-              "description": "Address people open, for example kwatch.example.com"
+              "enum": [
+                "",
+                "nginx",
+                "alb",
+                "gce",
+                "agic",
+                "tailscale",
+                "ngrok"
+              ],
+              "description": "Controller helpers"
             },
             "className": {
               "type": "string",
               "default": "",
-              "description": "IngressClass; empty uses the cluster default"
-            },
-            "tlsSecretName": {
-              "type": "string",
-              "default": "",
-              "description": "Secret for the certificate of host"
+              "description": "IngressClass"
             },
             "clusterIssuer": {
               "type": "string",
               "default": "",
-              "description": "cert-manager ClusterIssuer that issues the certificate"
+              "description": "cert-manager ClusterIssuer"
+            },
+            "tlsSecretName": {
+              "type": "string",
+              "default": "",
+              "description": "Existing certificate Secret"
             },
             "annotations": {
               "type": "object",
@@ -132,15 +170,172 @@
               "additionalProperties": {
                 "type": "string"
               },
-              "description": "Extra Ingress annotations"
+              "description": "Extra annotations"
             },
-            "networkPolicyFrom": {
-              "type": "array",
-              "default": [],
-              "items": {
-                "type": "object"
+            "alb": {
+              "type": "object",
+              "description": "AWS Load Balancer Controller",
+              "properties": {
+                "scheme": {
+                  "type": "string",
+                  "default": "internet-facing",
+                  "enum": [
+                    "internet-facing",
+                    "internal"
+                  ],
+                  "description": "ALB scheme"
+                },
+                "certificateArn": {
+                  "type": "string",
+                  "default": "",
+                  "description": "ACM certificate ARN"
+                }
               },
-              "description": "NetworkPolicy peers allowed to reach the dashboard in shared mode; empty allows any"
+              "additionalProperties": false
+            },
+            "gce": {
+              "type": "object",
+              "description": "GKE",
+              "properties": {
+                "managedCertificate": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Create a ManagedCertificate"
+                },
+                "staticIpName": {
+                  "type": "string",
+                  "default": "",
+                  "description": "Global static IP name"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "gateway": {
+          "type": "object",
+          "description": "expose: gateway",
+          "properties": {
+            "name": {
+              "type": "string",
+              "default": "",
+              "description": "Gateway name"
+            },
+            "namespace": {
+              "type": "string",
+              "default": "",
+              "description": "Gateway namespace"
+            },
+            "sectionName": {
+              "type": "string",
+              "default": "",
+              "description": "Listener name"
+            }
+          },
+          "additionalProperties": false
+        },
+        "istio": {
+          "type": "object",
+          "description": "expose: istio",
+          "properties": {
+            "gateway": {
+              "type": "string",
+              "default": "",
+              "description": "namespace/name of the Istio Gateway"
+            }
+          },
+          "additionalProperties": false
+        },
+        "loadBalancer": {
+          "type": "object",
+          "description": "expose: loadBalancer",
+          "properties": {
+            "internal": {
+              "type": "boolean",
+              "default": false,
+              "description": "Internal load balancer"
+            },
+            "provider": {
+              "type": "string",
+              "default": "",
+              "enum": [
+                "",
+                "aws",
+                "gcp",
+                "azure"
+              ],
+              "description": "Cloud for the internal annotation"
+            },
+            "loadBalancerClass": {
+              "type": "string",
+              "default": "",
+              "description": "loadBalancerClass"
+            },
+            "annotations": {
+              "type": "object",
+              "default": {},
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Extra Service annotations"
+            }
+          },
+          "additionalProperties": false
+        },
+        "nodePort": {
+          "type": "object",
+          "description": "expose: nodePort",
+          "properties": {
+            "port": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0,
+              "maximum": 65535,
+              "description": "Fixed node port; 0 picks one"
+            }
+          },
+          "additionalProperties": false
+        },
+        "tls": {
+          "type": "object",
+          "description": "Certificate kwatch serves for loadBalancer and nodePort",
+          "properties": {
+            "secretName": {
+              "type": "string",
+              "default": "",
+              "description": "Existing kubernetes.io/tls Secret"
+            },
+            "issuer": {
+              "type": "string",
+              "default": "",
+              "description": "cert-manager issuer"
+            },
+            "issuerKind": {
+              "type": "string",
+              "default": "ClusterIssuer",
+              "enum": [
+                "ClusterIssuer",
+                "Issuer"
+              ],
+              "description": "Issuer kind"
+            },
+            "selfSigned": {
+              "type": "boolean",
+              "default": false,
+              "description": "Generate a self-signed certificate, kept across upgrades"
+            }
+          },
+          "additionalProperties": false
+        },
+        "external": {
+          "type": "object",
+          "description": "expose: external",
+          "properties": {
+            "trustProxy": {
+              "type": "boolean",
+              "default": false,
+              "description": "Confirm a proxy you control terminates TLS and sets X-Forwarded-Proto"
             }
           },
           "additionalProperties": false

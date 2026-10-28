@@ -1,16 +1,24 @@
-{{- $dash := default dict .Values.dashboard -}}
-{{- $ing := default dict $dash.ingress -}}
-{{- if and $dash.enabled (eq (default "local" $dash.mode) "shared") }}
-{{- if not $ing.host }}
-{{- fail "dashboard.mode=shared needs dashboard.ingress.host" }}
+{{- $d := default dict .Values.dashboard -}}
+{{- if and $d.enabled (eq (include "kwatch.dashboardExpose" .) "ingress") }}
+{{- include "kwatch.dashboardCheck" . }}
+{{- $ing := default dict $d.ingress }}
+{{- $p := default "" $ing.provider }}
+{{- $alb := default dict $ing.alb }}
+{{- $gce := default dict $ing.gce }}
+{{- $ranges := default list $d.allowedSourceRanges }}
+{{- $name := printf "%s-dashboard" (include "kwatch.fullname" .) }}
+{{- $class := $ing.className }}
+{{- if not $class }}
+{{- $class = get (dict "alb" "alb" "gce" "gce" "agic" "azure-application-gateway" "tailscale" "tailscale" "ngrok" "ngrok") $p }}
 {{- end }}
-{{- if not $ing.tlsSecretName }}
-{{- fail "dashboard.mode=shared needs TLS: set dashboard.ingress.tlsSecretName (with dashboard.ingress.clusterIssuer for cert-manager, or an existing certificate Secret)" }}
+{{- $secret := $ing.tlsSecretName }}
+{{- if and $ing.clusterIssuer (not $secret) }}
+{{- $secret = printf "%s-tls" $name }}
 {{- end }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "kwatch.fullname" . }}-dashboard
+  name: {{ $name }}
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "kwatch.labels" . | nindent 4 }}
@@ -18,29 +26,86 @@ metadata:
     {{- with $ing.clusterIssuer }}
     cert-manager.io/cluster-issuer: {{ . | quote }}
     {{- end }}
+    {{- if has $p (list "" "nginx") }}
     # Plain http is redirected; kwatch also refuses sign-in without https.
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    {{- with $ranges }}
+    nginx.ingress.kubernetes.io/whitelist-source-range: {{ join "," . | quote }}
+    {{- end }}
+    {{- end }}
+    {{- if eq $p "alb" }}
+    alb.ingress.kubernetes.io/scheme: {{ default "internet-facing" $alb.scheme | quote }}
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/certificate-arn: {{ $alb.certificateArn | quote }}
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    {{- with $ranges }}
+    alb.ingress.kubernetes.io/inbound-cidrs: {{ join "," . | quote }}
+    {{- end }}
+    {{- end }}
+    {{- if eq $p "gce" }}
+    kubernetes.io/ingress.allow-http: "false"
+    {{- if $gce.managedCertificate }}
+    networking.gke.io/managed-certificates: {{ printf "%s-cert" $name | quote }}
+    {{- end }}
+    {{- with $gce.staticIpName }}
+    kubernetes.io/ingress.global-static-ip-name: {{ . | quote }}
+    {{- end }}
+    {{- end }}
+    {{- if eq $p "agic" }}
+    appgw.ingress.kubernetes.io/ssl-redirect: "true"
+    {{- end }}
     {{- with $ing.annotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
-  {{- with $ing.className }}
+  {{- with $class }}
   ingressClassName: {{ . }}
   {{- end }}
+  {{- if eq $p "tailscale" }}
+  defaultBackend:
+    service:
+      name: {{ $name }}
+      port:
+        name: dashboard
   tls:
     - hosts:
-        - {{ $ing.host | quote }}
-      secretName: {{ $ing.tlsSecretName }}
+        - {{ default "kwatch" $d.host | quote }}
+  {{- else }}
+  {{- if $secret }}
+  tls:
+    - hosts:
+        - {{ $d.host | quote }}
+      secretName: {{ $secret }}
+  {{- else if eq $p "ngrok" }}
+  tls:
+    - hosts:
+        - {{ $d.host | quote }}
+  {{- end }}
   rules:
-    - host: {{ $ing.host | quote }}
+    - host: {{ $d.host | quote }}
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: {{ include "kwatch.fullname" . }}-dashboard
+                name: {{ $name }}
                 port:
                   name: dashboard
+  {{- end }}
+{{- if and (eq $p "gce") $gce.managedCertificate }}
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: {{ $name }}-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kwatch.labels" . | nindent 4 }}
+spec:
+  domains:
+    - {{ $d.host | quote }}
+{{- end }}
 {{- end }}

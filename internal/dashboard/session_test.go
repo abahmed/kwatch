@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,7 +20,7 @@ type sessionServer struct {
 func newSessionServer(shared bool, password string) *sessionServer {
 	s := &sessionServer{now: testEpoch}
 	s.Server = NewServer(Options{Token: testToken, Password: password,
-		Shared: shared, Edition: "Pro"},
+		Shared: shared, TrustProxy: shared, Edition: "Pro"},
 		clock.Func(func() time.Time { return s.now }))
 	s.SetIncidents(&fakeIncidents{})
 	return s
@@ -257,4 +258,22 @@ func TestSessionMissingCredentialsDoNotCountAsFailures(t *testing.T) {
 		s.getWith("/api/session", nil)
 	}
 	s.signIn(t, testPassword)
+}
+
+func TestSessionForwardedProtoNeedsTrustProxy(t *testing.T) {
+	s := newSessionServer(true, testPassword)
+	s.Server = NewServer(Options{Token: testToken, Password: testPassword,
+		Shared: true, Edition: "Pro"},
+		clock.Func(func() time.Time { return s.now }))
+	claimed := loginRequest(testPassword)
+	claimed.RemoteAddr = "10.0.0.5:1234"
+	claimed.Header.Set("X-Forwarded-Proto", "https")
+	if w := s.do(claimed); w.Code != 403 {
+		t.Errorf("untrusted X-Forwarded-Proto: %d, want 403", w.Code)
+	}
+	direct := loginRequest(testPassword)
+	direct.TLS = &tls.ConnectionState{}
+	if w := s.do(direct); w.Code != 204 {
+		t.Errorf("kwatch's own TLS: %d, want 204", w.Code)
+	}
 }

@@ -169,12 +169,30 @@ func validateDashboard(cfg *Config) []error {
 			"dashboard.port must not equal healthCheck.port",
 		))
 	}
+	errs = append(errs, validateDashboardTLS(cfg.Dashboard)...)
 	switch cfg.Dashboard.Mode {
 	case "", DashboardLocal, DashboardShared:
 	default:
 		errs = append(errs, errors.New(
 			"dashboard.mode must be local or shared",
 		))
+	}
+	return errs
+}
+
+// validateDashboardTLS keeps plain http out of shared mode: https must
+// come from kwatch's own TLS or from a trusted proxy.
+func validateDashboardTLS(d Dashboard) []error {
+	var errs []error
+	if (d.TLSCertFile == "") != (d.TLSKeyFile == "") {
+		errs = append(errs, errors.New(
+			"dashboard.tlsCertFile and dashboard.tlsKeyFile go together"))
+	}
+	if d.Mode == DashboardShared && !d.TrustProxy && d.TLSCertFile == "" {
+		errs = append(errs, errors.New(
+			"dashboard.mode shared needs dashboard.trustProxy (TLS "+
+				"ends at a proxy) or dashboard.tlsCertFile (kwatch "+
+				"serves TLS)"))
 	}
 	return errs
 }

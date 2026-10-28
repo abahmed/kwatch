@@ -124,8 +124,8 @@ grep -q "\"kwatchNamespace\":\"$namespace\"" "$work/body" ||
 
 echo "Switching to shared mode: sign-in over plain http is refused"
 helm upgrade "$release" deploy/chart --namespace "$namespace" \
-	"${chart_values[@]}" --set dashboard.mode=shared \
-	--set dashboard.ingress.host=kwatch.example.test \
+	"${chart_values[@]}" --set dashboard.expose=ingress \
+	--set dashboard.host=kwatch.example.test \
 	--set dashboard.ingress.tlsSecretName=kwatch-dashboard-tls \
 	--wait=false
 rollout

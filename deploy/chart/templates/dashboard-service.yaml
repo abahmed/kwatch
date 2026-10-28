@@ -1,5 +1,14 @@
 {{- $dash := default dict .Values.dashboard -}}
 {{- if $dash.enabled }}
+{{- include "kwatch.dashboardCheck" . }}
+{{- $e := include "kwatch.dashboardExpose" . }}
+{{- $lb := default dict $dash.loadBalancer }}
+{{- $np := default dict $dash.nodePort }}
+{{- $port := $dash.port | default 8061 }}
+{{- $internal := dict "aws" (dict "service.beta.kubernetes.io/aws-load-balancer-scheme" "internal" "service.beta.kubernetes.io/aws-load-balancer-internal" "true") "gcp" (dict "networking.gke.io/load-balancer-type" "Internal") "azure" (dict "service.beta.kubernetes.io/azure-load-balancer-internal" "true") }}
+{{- if and (eq $e "loadBalancer") $lb.internal (not (hasKey $internal (default "" $lb.provider))) }}
+{{- fail "dashboard.loadBalancer.internal needs dashboard.loadBalancer.provider: aws, gcp or azure (or set the annotations yourself and leave internal false)" }}
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -9,18 +18,47 @@ metadata:
     {{- include "kwatch.labels" . | nindent 4 }}
   annotations:
     # Read-only dashboard: web UI and API. No write endpoints. Sign-in
-    # with the password, or the bearer token for API clients. Shared
-    # mode exposes it through the dashboard Ingress, with TLS only.
+    # with the password, or the bearer token for API clients. Every
+    # shared way to reach it is https only (dashboard.expose).
     {{- if .Values.networkPolicy.enabled }}
     networking.k8s.io/policy: "true"
     {{- end }}
+    {{- if and (eq $e "loadBalancer") $lb.internal }}
+    {{- toYaml (get $internal $lb.provider) | nindent 4 }}
+    {{- end }}
+    {{- if eq $e "loadBalancer" }}
+    {{- with $lb.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- end }}
 spec:
+  {{- if eq $e "loadBalancer" }}
+  type: LoadBalancer
+  {{- with $lb.loadBalancerClass }}
+  loadBalancerClass: {{ . }}
+  {{- end }}
+  {{- with $dash.allowedSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- else if eq $e "nodePort" }}
+  type: NodePort
+  {{- else }}
   type: ClusterIP
+  {{- end }}
   selector:
     {{- include "kwatch.selectorLabels" . | nindent 6 }}
   ports:
     - name: dashboard
-      port: {{ $dash.port | default 8061 }}
-      targetPort: {{ $dash.port | default 8061 }}
+      {{- if eq $e "loadBalancer" }}
+      # https: kwatch serves TLS on the dashboard port.
+      port: 443
+      {{- else }}
+      port: {{ $port }}
+      {{- end }}
+      targetPort: {{ $port }}
       protocol: TCP
+      {{- if and (eq $e "nodePort") $np.port }}
+      nodePort: {{ $np.port }}
+      {{- end }}
 {{- end }}

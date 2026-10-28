@@ -54,10 +54,19 @@ type Options struct {
 	Password string
 	// Shared is true when people reach the dashboard through an Ingress:
 	// the cookie is Secure and sign-in over plain HTTP is refused.
-	Shared  bool
-	Edition string
-	Scope   Scope
-	Self    Self
+	Shared bool
+	// TrustProxy honours X-Forwarded-Proto/For from the proxy in front
+	// (Ingress, Gateway, Route or an outside load balancer). Without it
+	// only TLS that kwatch serves itself counts as https.
+	TrustProxy bool
+	// TLSCertFile and TLSKeyFile make kwatch serve TLS itself; the files
+	// are read again when they change, so a renewed certificate is used
+	// without a restart.
+	TLSCertFile string
+	TLSKeyFile  string
+	Edition     string
+	Scope       Scope
+	Self        Self
 }
 
 // sources holds what the running pipeline provides. The listener serves
@@ -93,9 +102,15 @@ func NewServer(opts Options, now clock.Clock) *Server {
 	return &Server{
 		opts:   opts,
 		now:    now,
-		auth:   NewAuth(opts.Token, opts.Password, opts.Shared, now),
+		auth:   newServerAuth(opts, now),
 		assets: mustAssets(),
 	}
+}
+
+func newServerAuth(opts Options, now clock.Clock) *Auth {
+	a := NewAuth(opts.Token, opts.Password, opts.Shared, now)
+	a.trustProxy = opts.TrustProxy
+	return a
 }
 
 // NoteScan records that the engine finished a loop iteration now.
@@ -174,7 +189,7 @@ func (s *Server) Serve(_ context.Context) error {
 	s.lifecycleMu.Unlock()
 	klog.InfoS("starting dashboard server", "port", s.opts.Port,
 		"shared", s.opts.Shared)
-	err := server.Serve(listener)
+	err := s.serve(server, listener)
 	if err == nil || err == http.ErrServerClosed {
 		return nil
 	}

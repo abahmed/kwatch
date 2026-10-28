@@ -15,6 +15,9 @@ const (
 	dashboardEnabledEnv = "KWATCH_DASHBOARD_ENABLED"
 	dashboardPortEnv    = "KWATCH_DASHBOARD_PORT"
 	dashboardModeEnv    = "KWATCH_DASHBOARD_MODE"
+	dashboardTrustEnv   = "KWATCH_DASHBOARD_TRUST_PROXY"
+	dashboardCertEnv    = "KWATCH_DASHBOARD_TLS_CERT"
+	dashboardKeyEnv     = "KWATCH_DASHBOARD_TLS_KEY"
 )
 
 // applyDashboardEnv applies the dashboard port and mode. A value that
@@ -30,6 +33,12 @@ func applyDashboardEnv(c *Config) {
 		} else {
 			c.Dashboard.Port = port
 		}
+	}
+	if v := strings.TrimSpace(os.Getenv(dashboardCertEnv)); v != "" {
+		c.Dashboard.TLSCertFile = v
+	}
+	if v := strings.TrimSpace(os.Getenv(dashboardKeyEnv)); v != "" {
+		c.Dashboard.TLSKeyFile = v
 	}
 	raw := strings.ToLower(strings.TrimSpace(os.Getenv(dashboardModeEnv)))
 	switch raw {

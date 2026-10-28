@@ -227,11 +227,14 @@ func newDashboardServer(
 	}
 	scope := runtime.Scope()
 	return dashboard.NewServer(dashboard.Options{
-		Port:     dc.Port,
-		Token:    token,
-		Password: password,
-		Shared:   dc.Mode == config.DashboardShared,
-		Edition:  string(feature.OrCommunity(e).Edition()),
+		Port:        dc.Port,
+		Token:       token,
+		Password:    password,
+		Shared:      dc.Mode == config.DashboardShared,
+		TrustProxy:  dc.TrustProxy,
+		TLSCertFile: dc.TLSCertFile,
+		TLSKeyFile:  dc.TLSKeyFile,
+		Edition:     string(feature.OrCommunity(e).Edition()),
 		Scope: dashboard.Scope{
 			Watched:  scope.AllowedNamespaces(),
 			Excluded: scope.ForbiddenNamespaces(),

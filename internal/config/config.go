@@ -240,6 +240,18 @@ type Dashboard struct {
 	// marks the session cookie Secure and refuses sign-in over plain
 	// HTTP. By default, this value is "local".
 	Mode string `yaml:"mode"`
+
+	// TrustProxy honours X-Forwarded-Proto and X-Forwarded-For from the
+	// proxy that terminates TLS in front of kwatch (Ingress, Gateway,
+	// Route, or an outside load balancer). By default, this value is
+	// false.
+	TrustProxy bool `yaml:"trustProxy"`
+
+	// TLSCertFile and TLSKeyFile make kwatch serve TLS on the dashboard
+	// port itself, for a load balancer or node port that passes TCP
+	// through. Both or neither.
+	TLSCertFile string `yaml:"tlsCertFile"`
+	TLSKeyFile  string `yaml:"tlsKeyFile"`
 }
 
 // Dashboard modes.

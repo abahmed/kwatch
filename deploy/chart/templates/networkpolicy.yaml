@@ -41,12 +41,19 @@ spec:
       ports:
         - protocol: TCP
           port: {{ $port }}
-    {{- if and $dash.enabled (eq (default "local" $dash.mode) "shared") }}
-    # Shared dashboard: the ingress controller forwards to it. Sign-in
-    # needs the password and https. dashboard.ingress.networkPolicyFrom
-    # narrows the sources; empty allows any.
-    {{- $ingFrom := (default dict $dash.ingress).networkPolicyFrom }}
-    - {{- with $ingFrom }}
+    {{- $expose := include "kwatch.dashboardExpose" . }}
+    {{- if and $dash.enabled (not (has $expose (list "local" "service"))) }}
+    # Shared dashboard: the proxy, load balancer or nodes forward to it.
+    # Sign-in needs the password and https. dashboard.networkPolicyFrom
+    # and, for loadBalancer and nodePort, dashboard.allowedSourceRanges
+    # narrow the sources; with neither, any source may connect.
+    {{- $peers := default list $dash.networkPolicyFrom }}
+    {{- if has $expose (list "loadBalancer" "nodePort") }}
+    {{- range (default list $dash.allowedSourceRanges) }}
+    {{- $peers = append $peers (dict "ipBlock" (dict "cidr" .)) }}
+    {{- end }}
+    {{- end }}
+    - {{- with $peers }}
       from:
         {{- toYaml . | nindent 8 }}
       {{- end }}
