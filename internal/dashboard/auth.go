@@ -21,7 +21,10 @@ type Auth struct {
 	// proxy that terminates TLS. Set by NewServer from Options.
 	trustProxy bool
 	sessions   *sessions
+	// failRate limits failures per connecting peer; clientRate per
+	// client a trusted proxy names.
 	failRate   *rateLimiter
+	clientRate *rateLimiter
 }
 
 // NewAuth builds the access checker. An empty token refuses bearer
@@ -30,11 +33,12 @@ type Auth struct {
 // sessions and of the rate-limit window; nil is rejected.
 func NewAuth(token, password string, shared bool, now clock.Clock) *Auth {
 	return &Auth{
-		token:    token,
-		password: normalizePassword(password),
-		shared:   shared,
-		sessions: newSessions(normalizePassword(password), token, now),
-		failRate: newRateLimiter(now),
+		token:      token,
+		password:   normalizePassword(password),
+		shared:     shared,
+		sessions:   newSessions(normalizePassword(password), token, now),
+		failRate:   newRateLimiter(now, maxFailures),
+		clientRate: newRateLimiter(now, maxFailures),
 	}
 }
 
@@ -44,15 +48,14 @@ func NewAuth(token, password string, shared bool, now clock.Clock) *Auth {
 // so a signed-out browser asking whether it is signed in is not a guess.
 func (a *Auth) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		client := a.clientKey(r)
-		if !a.failRate.allowed(client) {
+		if !a.allowed(r) {
 			writeError(w, http.StatusTooManyRequests, "too many requests")
 			return
 		}
 		ok, presented := a.check(r)
 		if !ok {
 			if presented {
-				a.failRate.record(client)
+				a.recordFailure(r)
 			}
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -130,12 +133,19 @@ type rateLimiter struct {
 	maxFail int
 }
 
-func newRateLimiter(now clock.Clock) *rateLimiter {
+// Failures allowed per minute: per client, and per connecting peer when
+// a trusted proxy carries many clients.
+const (
+	maxFailures      = 10
+	maxProxyFailures = 100
+)
+
+func newRateLimiter(now clock.Clock, maxFail int) *rateLimiter {
 	return &rateLimiter{
 		counts:  make(map[string]int),
 		window:  now.Now(),
 		now:     now.Now,
-		maxFail: 10,
+		maxFail: maxFail,
 	}
 }
 

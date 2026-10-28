@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -98,7 +99,7 @@ func TestSessionPasswordAcceptsTheGroupedFormInAnyCase(t *testing.T) {
 	}
 }
 
-func TestSessionEndsAfterTwelveHoursAndOnPasswordReset(t *testing.T) {
+func TestSessionEndsAfterTwelveHoursOnResetAndOnRestart(t *testing.T) {
 	s := newSessionServer(false, testPassword)
 	c := s.signIn(t, testPassword)
 
@@ -117,8 +118,8 @@ func TestSessionEndsAfterTwelveHoursAndOnPasswordReset(t *testing.T) {
 		t.Errorf("after reset: %d, want 401", code)
 	}
 	again := newSessionServer(false, testPassword)
-	if code := again.getWith("/api/session", c); code != 204 {
-		t.Errorf("restart, same password: %d, want 204", code)
+	if code := again.getWith("/api/session", c); code != 401 {
+		t.Errorf("restart, same password: %d, want 401", code)
 	}
 }
 
@@ -275,5 +276,44 @@ func TestSessionForwardedProtoNeedsTrustProxy(t *testing.T) {
 	direct.TLS = &tls.ConnectionState{}
 	if w := s.do(direct); w.Code != 204 {
 		t.Errorf("kwatch's own TLS: %d, want 204", w.Code)
+	}
+}
+
+func TestSessionRevokedSetEvictsTheOldestWhenFull(t *testing.T) {
+	now := testEpoch
+	s := newSessions("pw", "tok", clock.Func(func() time.Time { return now }))
+	first, _, _ := s.issue()
+	s.revoke(first)
+	for i := 1; i < maxRevoked; i++ {
+		now = testEpoch.Add(time.Duration(i) * time.Millisecond * 10)
+		v, _, _ := s.issue()
+		s.revoke(v)
+	}
+	now = testEpoch.Add(time.Minute)
+	last, _, _ := s.issue()
+	s.revoke(last)
+	if s.valid(last) {
+		t.Error("a sign-out at a full revoked set was dropped")
+	}
+	if len(s.revoked) > maxRevoked {
+		t.Errorf("revoked set grew to %d", len(s.revoked))
+	}
+}
+
+func TestSessionPeerLimitCatchesARotatedForwardedFor(t *testing.T) {
+	s := newSessionServer(true, testPassword)
+	try := func(client string) int {
+		req := loginRequest("wrong")
+		req.RemoteAddr = "10.0.0.5:1234"
+		req.Header.Set("X-Forwarded-Proto", "https")
+		req.Header.Set("X-Forwarded-For", client)
+		return s.do(req).Code
+	}
+	for i := range maxProxyFailures {
+		try("203.0.113." + strconv.Itoa(i%250))
+	}
+	if code := try("198.51.100.9"); code != 429 {
+		t.Errorf("after %d failures from one peer: %d, want 429",
+			maxProxyFailures, code)
 	}
 }

@@ -194,6 +194,22 @@ kubectl delete namespace kwatch
 | `dashboard.existingSecret` | Existing Secret with the keys `password` (sign-in) and `token` (API bearer token). Without it the chart creates `<release>-dashboard` with a generated password (`XXXX-XXXX-XXXX-XXXX`) and token, and keeps both across upgrades. Changing the password signs everyone out | `""` |
 | `dashboard.networkPolicyFrom` | With `networkPolicy.enabled`: extra peers (your ingress controller, `ipBlock`s for load balancer clients) allowed to reach the dashboard port. The release namespace and `healthIngressFrom` always may | `[]` |
 
+Sign-ins last 12 hours. A password change or a kwatch restart (upgrade,
+rollout, rescheduling) signs everyone out. Behind an Ingress, set
+`dashboard.trustProxy`: without it every client shares the Ingress's
+address, and ten wrong passwords in a minute from anyone lock everyone
+out of sign-in for that minute.
+
+The generated `<release>-dashboard` Secret carries
+`helm.sh/resource-policy: keep`: uninstalling or turning the dashboard off
+leaves it, so a reinstall keeps the saved password. Delete it to forget the
+password. The password and token are kept across upgrades through Helm
+`lookup`, which offline renders (`helm template`, Argo CD, Flux with
+post-rendering) cannot do: each sync would make a new password and sign
+everyone out. With GitOps, create the Secret yourself (keys `password` and
+`token`, for example with a sealed or external secret) and set
+`dashboard.existingSecret`.
+
 The chart does not expose the dashboard outside the cluster. To expose it,
 run the kwatch.sh Dashboard menu or create your own Ingress or route
 pointing at Service `<release>-dashboard` (port name `dashboard`).

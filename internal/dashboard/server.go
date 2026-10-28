@@ -110,6 +110,9 @@ func NewServer(opts Options, now clock.Clock) *Server {
 func newServerAuth(opts Options, now clock.Clock) *Auth {
 	a := NewAuth(opts.Token, opts.Password, opts.Shared, now)
 	a.trustProxy = opts.TrustProxy
+	if opts.TrustProxy {
+		a.failRate = newRateLimiter(now, maxProxyFailures)
+	}
 	return a
 }
 
@@ -148,9 +151,9 @@ func (s *Server) SetDeliveryHealth(src func() []ChannelHealth) {
 	s.sources.health.Store(&v)
 }
 
-// Open creates the HTTP listener without starting a goroutine. The
-// application supervisor owns the serving goroutine.
-func (s *Server) Open() error {
+// Open creates the HTTP listener within ctx without starting a goroutine.
+// The application supervisor owns the serving goroutine.
+func (s *Server) Open(ctx context.Context) error {
 	s.lifecycleMu.Lock()
 	defer s.lifecycleMu.Unlock()
 	if s.started {
@@ -168,8 +171,7 @@ func (s *Server) Open() error {
 		IdleTimeout:       60 * time.Second,
 	}
 	var listenConfig net.ListenConfig
-	ln, err := listenConfig.Listen(
-		context.Background(), "tcp", s.server.Addr)
+	ln, err := listenConfig.Listen(ctx, "tcp", s.server.Addr)
 	if err != nil {
 		return err
 	}

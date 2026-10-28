@@ -25,23 +25,34 @@ const sessionCookie = "kwatch_session"
 
 // sessions issues and checks signed session cookies. A cookie is the
 // sign-in time and a random nonce, signed with a key derived from the
-// password and the token: a new password signs everyone out, and a
-// restart with the same password keeps people signed in. Nothing is
+// password, the token and a random value drawn at each start: a new
+// password and a kwatch restart both sign everyone out. Nothing is
 // stored per session except the nonces of sessions signed out early.
+// That revocation is best-effort and in memory: it is bounded by
+// maxRevoked, evicting the oldest, and a restart clears it, which is
+// safe only because a restart also changes the key.
 type sessions struct {
-	key []byte
-	now clock.Clock
+	key      []byte
+	now      clock.Clock
+	disabled bool
 
 	mu      sync.Mutex
 	revoked map[string]time.Time
 }
 
 func newSessions(password, token string, now clock.Clock) *sessions {
+	boot := make([]byte, 32)
+	if _, err := rand.Read(boot); err != nil {
+		// crypto/rand does not fail on supported platforms; refuse
+		// every cookie rather than sign with a guessable key.
+		boot = nil
+	}
 	mac := hmac.New(sha256.New, []byte("kwatch-dashboard-session"))
+	mac.Write(boot)
 	mac.Write([]byte(token))
 	mac.Write([]byte{0})
 	mac.Write([]byte(password))
-	return &sessions{key: mac.Sum(nil), now: now,
+	return &sessions{key: mac.Sum(nil), now: now, disabled: boot == nil,
 		revoked: make(map[string]time.Time)}
 }
 
@@ -96,7 +107,7 @@ func (s *sessions) parse(value string) ([]byte, bool) {
 // signed out.
 func (s *sessions) valid(value string) bool {
 	payload, ok := s.parse(value)
-	if !ok {
+	if !ok || s.disabled {
 		return false
 	}
 	issued := time.Unix(int64(binary.BigEndian.Uint64(payload)), 0)
@@ -127,7 +138,19 @@ func (s *sessions) revoke(value string) {
 		}
 	}
 	if len(s.revoked) >= maxRevoked {
-		return
+		s.evictOldest()
 	}
 	s.revoked[string(payload[8:])] = issued.Add(sessionLifetime)
+}
+
+// evictOldest forgets the revoked session that expires first. The
+// caller holds s.mu.
+func (s *sessions) evictOldest() {
+	oldest, first := "", time.Time{}
+	for nonce, until := range s.revoked {
+		if oldest == "" || until.Before(first) {
+			oldest, first = nonce, until
+		}
+	}
+	delete(s.revoked, oldest)
 }

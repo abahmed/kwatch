@@ -21,8 +21,7 @@ func (a *Auth) loginHandler(w http.ResponseWriter, r *http.Request) {
 	if !a.formChecks(w, r) {
 		return
 	}
-	client := a.clientKey(r)
-	if !a.failRate.allowed(client) {
+	if !a.allowed(r) {
 		a.tooMany(w)
 		return
 	}
@@ -32,7 +31,7 @@ func (a *Auth) loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !a.validPassword(password) {
-		a.failRate.record(client)
+		a.recordFailure(r)
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
@@ -168,16 +167,36 @@ func (a *Auth) isHTTPS(r *http.Request) bool {
 		"https")
 }
 
-// clientKey is who failures are counted against. Behind a trusted
-// proxy every request comes from the proxy, so the client is the last
-// X-Forwarded-For hop, the one the proxy added.
-func (a *Auth) clientKey(r *http.Request) string {
-	if a.trustProxy && !loopback(r) {
-		if hop := lastHeaderValue(r, "X-Forwarded-For"); hop != "" {
-			return hop
-		}
+// forwardedClient is the client a trusted proxy named: the last
+// X-Forwarded-For hop, the one the proxy added. Empty without trustProxy
+// or from loopback.
+func (a *Auth) forwardedClient(r *http.Request) string {
+	if !a.trustProxy || loopback(r) {
+		return ""
 	}
-	return remoteHost(r)
+	return lastHeaderValue(r, "X-Forwarded-For")
+}
+
+// allowed reports whether r may try a credential. Failures count against
+// the connecting peer always, and also against the forwarded client
+// behind a trusted proxy. The peer limit stops a client that varies
+// X-Forwarded-For; behind a proxy it is higher, because every client
+// shares the proxy's address. Without trustProxy behind an Ingress, all
+// clients share the one peer limit, so one guesser can lock everyone out
+// for a minute: set trustProxy there.
+func (a *Auth) allowed(r *http.Request) bool {
+	if !a.failRate.allowed(remoteHost(r)) {
+		return false
+	}
+	client := a.forwardedClient(r)
+	return client == "" || a.clientRate.allowed(client)
+}
+
+func (a *Auth) recordFailure(r *http.Request) {
+	a.failRate.record(remoteHost(r))
+	if client := a.forwardedClient(r); client != "" {
+		a.clientRate.record(client)
+	}
 }
 
 func loopback(r *http.Request) bool {

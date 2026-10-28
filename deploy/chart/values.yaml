@@ -302,7 +302,10 @@ dashboard:
   tls:
     secretName: ""
   # -- Name of an existing Secret with the keys `password` and `token`.
-  # When empty and enabled is true, the chart creates the Secret.
+  # When empty and enabled is true, the chart creates the Secret and keeps
+  # it across upgrades with Helm lookup. Argo CD, Flux and other offline
+  # renders cannot look it up and would make a new password on every
+  # sync: create the Secret yourself and name it here.
   existingSecret: ""
   # -- With networkPolicy.enabled: extra NetworkPolicy peers (your
   # ingress controller, ipBlocks for load balancer clients) allowed to
