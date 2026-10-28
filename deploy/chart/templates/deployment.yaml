@@ -89,7 +89,7 @@ spec:
             mountPath: /config
           - name: data
             mountPath: /var/lib/kwatch
-          {{- if and (default dict .Values.dashboard).enabled (include "kwatch.dashboardOwnTLS" .) }}
+          {{- if and (default dict .Values.dashboard).enabled (default dict (default dict .Values.dashboard).tls).secretName }}
           - name: dashboard-tls
             mountPath: /etc/kwatch/dashboard-tls
             readOnly: true
@@ -156,12 +156,12 @@ spec:
             - name: KWATCH_DASHBOARD_PORT
               value: {{ $dashEnv.port | default 8061 | quote }}
             - name: KWATCH_DASHBOARD_MODE
-              value: {{ include "kwatch.dashboardMode" . | quote }}
-            {{- if include "kwatch.dashboardProxied" . }}
+              value: {{ $dashEnv.mode | default "local" | quote }}
+            {{- if $dashEnv.trustProxy }}
             - name: KWATCH_DASHBOARD_TRUST_PROXY
               value: "true"
             {{- end }}
-            {{- if include "kwatch.dashboardOwnTLS" . }}
+            {{- if (default dict $dashEnv.tls).secretName }}
             - name: KWATCH_DASHBOARD_TLS_CERT
               value: /etc/kwatch/dashboard-tls/tls.crt
             - name: KWATCH_DASHBOARD_TLS_KEY
@@ -229,10 +229,10 @@ spec:
         {{- . | nindent 8 }}
       {{- end }}
       volumes:
-        {{- if and (default dict .Values.dashboard).enabled (include "kwatch.dashboardOwnTLS" .) }}
+        {{- if and (default dict .Values.dashboard).enabled (default dict (default dict .Values.dashboard).tls).secretName }}
         - name: dashboard-tls
           secret:
-            secretName: {{ include "kwatch.dashboardTLSSecret" . }}
+            secretName: {{ .Values.dashboard.tls.secretName }}
         {{- end }}
         - name: data
           {{- if .Values.persistence.emptyDir }}

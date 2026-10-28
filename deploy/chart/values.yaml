@@ -286,90 +286,29 @@ dashboard:
   enabled: false
   # -- Port for the dashboard listener (must not equal healthCheck.port).
   port: 8061
-  # -- How people reach it: local (kubectl port-forward only), service
-  # (the ClusterIP Service only), ingress, gateway (Gateway API
-  # HTTPRoute), istio (VirtualService), route (OpenShift), loadBalancer,
-  # nodePort, or external (TLS ends at a proxy outside the cluster).
-  # Every way but local and service is https only; kwatch refuses
-  # sign-in over plain http and marks its cookie Secure.
-  expose: local
+  # -- local: reached through kubectl port-forward (the cookie works on
+  # http://localhost). shared: https only; kwatch refuses sign-in over
+  # plain http and marks the cookie Secure. Shared needs trustProxy or
+  # tls.secretName. The chart never exposes the dashboard: run the
+  # kwatch.sh Dashboard menu, or point your own Ingress, route or
+  # Service at the ClusterIP Service <release>-dashboard.
+  mode: local
+  # -- Trust X-Forwarded-Proto/For from the Ingress or proxy that
+  # terminates TLS in front of kwatch. Only then does that header count.
+  trustProxy: false
+  # -- kwatch serves https itself from this kubernetes.io/tls Secret
+  # (keys tls.crt, tls.key), for a LoadBalancer or NodePort with nothing
+  # in front. Renewals are picked up without a restart.
+  tls:
+    secretName: ""
   # -- Name of an existing Secret with the keys `password` and `token`.
   # When empty and enabled is true, the chart creates the Secret.
   existingSecret: ""
-  # -- Address people open (kwatch.example.com). Required for ingress,
-  # gateway and istio; optional for route (the router picks one),
-  # tailscale (the tailnet machine name) and loadBalancer (certificate
-  # name).
-  host: ""
-  # -- Client CIDRs allowed to connect. Applied as an nginx or ALB
-  # annotation, an OpenShift Route annotation, loadBalancerSourceRanges,
-  # or NetworkPolicy ipBlocks (loadBalancer, nodePort). The render fails
-  # where the platform cannot enforce it.
-  allowedSourceRanges: []
-  # -- NetworkPolicy peers (your ingress controller, gateway or mesh)
-  # allowed to reach the dashboard port when it is shared. Empty allows
-  # any source.
+  # -- With networkPolicy.enabled: extra NetworkPolicy peers (your
+  # ingress controller, ipBlocks for load balancer clients) allowed to
+  # reach the dashboard port. The release namespace and
+  # healthIngressFrom always may.
   networkPolicyFrom: []
-  # -- expose: ingress.
-  ingress:
-    # -- Helpers for one controller: "" or nginx (generic), alb (AWS
-    # Load Balancer Controller), gce (GKE), agic (Azure Application
-    # Gateway), tailscale, ngrok.
-    provider: ""
-    # -- IngressClass; empty uses the provider's usual class, else the
-    # cluster default.
-    className: ""
-    # -- cert-manager ClusterIssuer; the certificate lands in
-    # tlsSecretName or <release>-dashboard-tls.
-    clusterIssuer: ""
-    # -- Existing certificate Secret for host.
-    tlsSecretName: ""
-    # -- Extra Ingress annotations.
-    annotations: {}
-    alb:
-      # -- internet-facing or internal.
-      scheme: internet-facing
-      # -- ACM certificate ARN (required with provider alb).
-      certificateArn: ""
-    gce:
-      # -- Create a GKE ManagedCertificate for host.
-      managedCertificate: false
-      # -- Reserved global static IP name.
-      staticIpName: ""
-  # -- expose: gateway. The Gateway needs an https listener for host.
-  gateway:
-    name: ""
-    namespace: ""
-    sectionName: ""
-  # -- expose: istio. namespace/name of an Istio Gateway with an https
-  # server for host.
-  istio:
-    gateway: ""
-  # -- expose: loadBalancer. kwatch serves TLS itself (see tls) on 443.
-  loadBalancer:
-    # -- Ask for an internal load balancer; needs provider.
-    internal: false
-    # -- aws, gcp or azure: picks the internal annotation.
-    provider: ""
-    loadBalancerClass: ""
-    annotations: {}
-  # -- expose: nodePort. kwatch serves TLS itself (see tls).
-  nodePort:
-    # -- Fixed node port; 0 lets Kubernetes pick.
-    port: 0
-  # -- Certificate kwatch serves itself for loadBalancer and nodePort.
-  # Set exactly one: secretName (existing kubernetes.io/tls Secret),
-  # issuer (cert-manager issues it), or selfSigned (generated once and
-  # kept across upgrades; browsers warn).
-  tls:
-    secretName: ""
-    issuer: ""
-    issuerKind: ClusterIssuer
-    selfSigned: false
-  # -- expose: external. Set trustProxy to true to confirm that a proxy
-  # you control terminates TLS and sets X-Forwarded-Proto.
-  external:
-    trustProxy: false
 
 # -- Use an existing Secret containing config.yaml and credential files.
 # Required for alert providers and heartbeatMonitor.url. The Secret's

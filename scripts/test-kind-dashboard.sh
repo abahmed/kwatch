@@ -124,13 +124,9 @@ grep -q "\"kwatchNamespace\":\"$namespace\"" "$work/body" ||
 
 echo "Switching to shared mode: sign-in over plain http is refused"
 helm upgrade "$release" deploy/chart --namespace "$namespace" \
-	"${chart_values[@]}" --set dashboard.expose=ingress \
-	--set dashboard.host=kwatch.example.test \
-	--set dashboard.ingress.tlsSecretName=kwatch-dashboard-tls \
-	--wait=false
+	"${chart_values[@]}" --set dashboard.mode=shared \
+	--set dashboard.trustProxy=true --wait=false
 rollout
-kubectl --namespace "$namespace" get ingress "$release-dashboard" \
-	>/dev/null || fail "shared mode did not create the Ingress"
 start_forward
 if [ "$(login "$password")" != 403 ] ||
 	! grep -q https_required "$work/body"; then

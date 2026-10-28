@@ -621,104 +621,25 @@ expose_fail() {
     echo "FAIL: $label: message lacks '$want': $out"; exit 1;
   }
 }
-H=(--set dashboard.host=kwatch.example.com)
-expose_fail "unknown expose" "must be one of" --set dashboard.expose=public
-expose_ok "service" --set dashboard.expose=service -- \
-  "type: ClusterIP" 'value: "local"'
-expose_fail "ingress without host" "needs dashboard.host" \
-  --set dashboard.expose=ingress
-expose_fail "ingress without TLS" "needs TLS" \
-  --set dashboard.expose=ingress "${H[@]}"
-expose_ok "ingress nginx" --set dashboard.expose=ingress "${H[@]}" \
-  --set dashboard.ingress.clusterIssuer=letsencrypt-prod \
-  --set dashboard.ingress.className=nginx \
-  --set 'dashboard.allowedSourceRanges={10.0.0.0/8}' -- \
-  "kind: Ingress" 'cert-manager.io/cluster-issuer: "letsencrypt-prod"' \
-  "secretName: kwatch-dashboard-tls" "ingressClassName: nginx" \
-  'whitelist-source-range: "10.0.0.0/8"' 'value: "shared"' \
-  'name: KWATCH_DASHBOARD_TRUST_PROXY'
-expose_fail "alb without certificate" "certificateArn" \
-  --set dashboard.expose=ingress "${H[@]}" \
-  --set dashboard.ingress.provider=alb
-expose_ok "ingress alb" --set dashboard.expose=ingress "${H[@]}" \
-  --set dashboard.ingress.provider=alb \
-  --set dashboard.ingress.alb.scheme=internal \
-  --set dashboard.ingress.alb.certificateArn=arn:aws:acm:x \
-  --set 'dashboard.allowedSourceRanges={10.0.0.0/8}' -- \
-  'alb.ingress.kubernetes.io/scheme: "internal"' \
-  "alb.ingress.kubernetes.io/target-type: ip" \
-  'alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:x"' \
-  'inbound-cidrs: "10.0.0.0/8"' "ingressClassName: alb"
-expose_ok "ingress gce" --set dashboard.expose=ingress "${H[@]}" \
-  --set dashboard.ingress.provider=gce \
-  --set dashboard.ingress.gce.managedCertificate=true -- \
-  "kind: ManagedCertificate" "ingressClassName: gce" \
-  'kubernetes.io/ingress.allow-http: "false"'
-expose_ok "ingress agic" --set dashboard.expose=ingress "${H[@]}" \
-  --set dashboard.ingress.provider=agic \
-  --set dashboard.ingress.tlsSecretName=t -- \
-  "ingressClassName: azure-application-gateway" "secretName: t"
-expose_ok "ingress tailscale" --set dashboard.expose=ingress \
-  --set dashboard.ingress.provider=tailscale -- \
-  "ingressClassName: tailscale" "defaultBackend:"
-expose_ok "ingress ngrok" --set dashboard.expose=ingress "${H[@]}" \
-  --set dashboard.ingress.provider=ngrok -- "ingressClassName: ngrok"
-expose_fail "ranges on gce" "not supported" \
-  --set dashboard.expose=ingress "${H[@]}" \
-  --set dashboard.ingress.provider=gce \
-  --set dashboard.ingress.gce.managedCertificate=true \
-  --set 'dashboard.allowedSourceRanges={10.0.0.0/8}'
-expose_fail "gateway without name" "dashboard.gateway.name" \
-  --set dashboard.expose=gateway "${H[@]}"
-expose_ok "gateway" --set dashboard.expose=gateway "${H[@]}" \
-  --set dashboard.gateway.name=public \
-  --set dashboard.gateway.namespace=gw -- \
-  "kind: HTTPRoute" "namespace: gw" 'hostnames:'
-expose_fail "istio without gateway" "dashboard.istio.gateway" \
-  --set dashboard.expose=istio "${H[@]}"
-expose_ok "istio" --set dashboard.expose=istio "${H[@]}" \
-  --set dashboard.istio.gateway=istio-system/public -- \
-  "kind: VirtualService" "istio-system/public"
-expose_ok "route" --set dashboard.expose=route \
-  --set 'dashboard.allowedSourceRanges={10.0.0.0/8}' -- \
-  "kind: Route" "termination: edge" \
-  "insecureEdgeTerminationPolicy: Redirect" "ip_whitelist"
-expose_fail "loadBalancer without TLS" "exactly one of" \
-  --set dashboard.expose=loadBalancer
-expose_fail "internal LB without provider" "loadBalancer.provider" \
-  --set dashboard.expose=loadBalancer --set dashboard.tls.selfSigned=true \
-  --set dashboard.loadBalancer.internal=true
-expose_ok "loadBalancer" --set dashboard.expose=loadBalancer \
-  --set dashboard.tls.selfSigned=true \
-  --set dashboard.loadBalancer.internal=true \
-  --set dashboard.loadBalancer.provider=aws \
-  --set dashboard.loadBalancer.loadBalancerClass=service.k8s.aws/nlb \
-  --set 'dashboard.allowedSourceRanges={10.0.0.0/8}' -- \
-  "type: LoadBalancer" "port: 443" "type: kubernetes.io/tls" \
-  'aws-load-balancer-scheme: internal' "loadBalancerSourceRanges:" \
-  "loadBalancerClass: service.k8s.aws/nlb" \
-  "name: KWATCH_DASHBOARD_TLS_CERT" "mountPath: /etc/kwatch/dashboard-tls"
-expose_ok "loadBalancer gcp internal" --set dashboard.expose=loadBalancer \
-  --set dashboard.tls.secretName=mine \
-  --set dashboard.loadBalancer.internal=true \
-  --set dashboard.loadBalancer.provider=gcp -- \
-  'networking.gke.io/load-balancer-type: Internal' "secretName: mine"
-expose_ok "nodePort" --set dashboard.expose=nodePort \
-  --set dashboard.tls.issuer=letsencrypt-prod \
-  --set dashboard.nodePort.port=30443 -- \
-  "type: NodePort" "nodePort: 30443" "kind: Certificate" \
-  "name: letsencrypt-prod"
-expose_fail "external without trust" "trustProxy=true" \
-  --set dashboard.expose=external
-expose_ok "external" --set dashboard.expose=external \
-  --set dashboard.external.trustProxy=true -- \
-  'value: "shared"' 'name: KWATCH_DASHBOARD_TRUST_PROXY'
-expose_fail "ranges on external" "not supported" \
-  --set dashboard.expose=external --set dashboard.external.trustProxy=true \
-  --set 'dashboard.allowedSourceRanges={10.0.0.0/8}'
-expose_ok "networkPolicy loadBalancer" --set networkPolicy.enabled=true \
-  --set dashboard.expose=loadBalancer --set dashboard.tls.selfSigned=true \
-  --set 'dashboard.allowedSourceRanges={10.0.0.0/8}' -- "cidr: 10.0.0.0/8"
+expose_fail "unknown mode" "must be one of" --set dashboard.mode=public
+expose_fail "shared without https" "https only" --set dashboard.mode=shared
+expose_ok "shared behind a proxy" --set dashboard.mode=shared \
+  --set dashboard.trustProxy=true -- \
+  'value: "shared"' 'name: KWATCH_DASHBOARD_TRUST_PROXY' "type: ClusterIP"
+expose_ok "shared with own TLS" --set dashboard.mode=shared \
+  --set dashboard.tls.secretName=kwatch-tls -- \
+  "name: KWATCH_DASHBOARD_TLS_CERT" "secretName: kwatch-tls" \
+  "mountPath: /etc/kwatch/dashboard-tls"
+expose_ok "networkPolicyFrom" --set networkPolicy.enabled=true \
+  --set 'dashboard.networkPolicyFrom[0].ipBlock.cidr=10.0.0.0/8' -- \
+  "cidr: 10.0.0.0/8" "port: 8061"
+for kind in "kind: Ingress" "kind: HTTPRoute" "kind: Route" \
+  "kind: VirtualService" "type: LoadBalancer" "type: NodePort"; do
+  if grep -Fq "$kind" <<<"$(helm template kwatch . \
+    --set dashboard.enabled=true)"; then
+    echo "FAIL: the chart must not expose the dashboard ($kind)"; exit 1
+  fi
+done
 OUT_EXIST=$(helm template kwatch . --set dashboard.enabled=true \
   --set dashboard.existingSecret=mine 2>&1)
 if grep -Eq '^  password: ' <<<"$OUT_EXIST"; then

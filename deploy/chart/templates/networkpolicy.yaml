@@ -41,22 +41,12 @@ spec:
       ports:
         - protocol: TCP
           port: {{ $port }}
-    {{- $expose := include "kwatch.dashboardExpose" . }}
-    {{- if and $dash.enabled (not (has $expose (list "local" "service"))) }}
-    # Shared dashboard: the proxy, load balancer or nodes forward to it.
-    # Sign-in needs the password and https. dashboard.networkPolicyFrom
-    # and, for loadBalancer and nodePort, dashboard.allowedSourceRanges
-    # narrow the sources; with neither, any source may connect.
-    {{- $peers := default list $dash.networkPolicyFrom }}
-    {{- if has $expose (list "loadBalancer" "nodePort") }}
-    {{- range (default list $dash.allowedSourceRanges) }}
-    {{- $peers = append $peers (dict "ipBlock" (dict "cidr" .)) }}
-    {{- end }}
-    {{- end }}
-    - {{- with $peers }}
-      from:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+    {{- if and $dash.enabled $dash.networkPolicyFrom }}
+    # Dashboard from outside the namespace: the peers in
+    # dashboard.networkPolicyFrom (your ingress controller, gateway or
+    # load balancer source ranges as ipBlocks).
+    - from:
+        {{- toYaml $dash.networkPolicyFrom | nindent 8 }}
       ports:
         - protocol: TCP
           port: {{ $dashPort }}
