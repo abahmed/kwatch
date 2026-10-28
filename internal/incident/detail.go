@@ -15,7 +15,20 @@ type Detail struct {
 	Headline string
 	DocsLink string
 	Facts    []string
+	// Steps are what the last message told the reader to do. Empty
+	// keeps the earlier steps.
+	Steps []FixStep
 }
+
+// FixStep is one suggested step: a sentence, and the exact command when
+// the step is one.
+type FixStep struct {
+	Text    string `json:",omitempty"`
+	Command string `json:",omitempty"`
+}
+
+// maxSteps bounds the steps an incident keeps.
+const maxSteps = 8
 
 // StoreDetail records d on the incident. Empty headline or link keep the
 // earlier value. Facts are appended once each, cut on a rune boundary and
@@ -34,6 +47,21 @@ func (m *Manager) StoreDetail(id string, d Detail) {
 		p.DocsLink = d.DocsLink
 	}
 	p.Facts = mergeFacts(p.Facts, d.Facts)
+	if len(d.Steps) > 0 {
+		p.Steps = boundSteps(d.Steps)
+	}
+}
+
+// boundSteps keeps at most maxSteps steps, each cut to maxFactLength.
+func boundSteps(steps []FixStep) []FixStep {
+	out := make([]FixStep, 0, min(len(steps), maxSteps))
+	for _, s := range steps[:min(len(steps), maxSteps)] {
+		out = append(out, FixStep{
+			Text:    truncateRunes(s.Text, maxFactLength),
+			Command: truncateRunes(s.Command, maxFactLength),
+		})
+	}
+	return out
 }
 
 // mergeFacts appends the new lines that are not already held, keeping

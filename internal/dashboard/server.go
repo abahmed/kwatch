@@ -37,6 +37,38 @@ type Scope struct {
 	Excluded []string
 }
 
+// Self names kwatch's own Deployment, so the dashboard can show the
+// command that reads kwatch's logs.
+type Self struct {
+	Namespace  string
+	Deployment string
+}
+
+// Options configure a dashboard server.
+type Options struct {
+	Port int
+	// Token is the bearer token every /api call may carry; empty refuses
+	// bearer access.
+	Token string
+	// Password is the shared sign-in password; empty refuses sign-in.
+	Password string
+	// Shared is true when people reach the dashboard through an Ingress:
+	// the cookie is Secure and sign-in over plain HTTP is refused.
+	Shared bool
+	// TrustProxy honours X-Forwarded-Proto/For from the proxy in front
+	// (Ingress, Gateway, Route or an outside load balancer). Without it
+	// only TLS that kwatch serves itself counts as https.
+	TrustProxy bool
+	// TLSCertFile and TLSKeyFile make kwatch serve TLS itself; the files
+	// are read again when they change, so a renewed certificate is used
+	// without a restart.
+	TLSCertFile string
+	TLSKeyFile  string
+	Edition     string
+	Scope       Scope
+	Self        Self
+}
+
 // sources holds what the running pipeline provides. The listener serves
 // before the pipeline is up and after it stops, so every source may be
 // missing; handlers answer 503 then. The zero value has none.
@@ -44,16 +76,19 @@ type sources struct {
 	incidents atomic.Pointer[incidentReader]
 	status    atomic.Pointer[statusSource]
 	health    atomic.Pointer[deliveryHealthSource]
+	// lastScan is the Unix nanosecond time of the engine's latest loop
+	// iteration; zero until the first.
+	lastScan atomic.Int64
 }
 
-// Server serves the dashboard API on its own listener.
+// Server serves the dashboard API and its web UI on its own listener.
 type Server struct {
 	server      *http.Server
 	listener    net.Listener
-	port        int
-	edition     string
-	scope       Scope
+	opts        Options
+	now         clock.Clock
 	auth        *Auth
+	assets      *assets
 	sources     sources
 	started     bool
 	stopped     bool
@@ -61,19 +96,29 @@ type Server struct {
 	lifecycleMu sync.Mutex
 }
 
-// NewServer builds a dashboard API server. The token is the bearer token
-// required on every call; an empty token rejects every call. edition is
-// reported in /api/status, scope is the configured namespace scope and
-// now is the clock of the auth rate limiter.
-func NewServer(
-	port int, token, edition string, scope Scope, now clock.Clock,
-) *Server {
+// NewServer builds a dashboard server. now is the clock of sessions, the
+// auth rate limiter and the scan-health check.
+func NewServer(opts Options, now clock.Clock) *Server {
 	return &Server{
-		port:    port,
-		edition: edition,
-		scope:   scope,
-		auth:    NewAuth(token, now),
+		opts:   opts,
+		now:    now,
+		auth:   newServerAuth(opts, now),
+		assets: mustAssets(),
 	}
+}
+
+func newServerAuth(opts Options, now clock.Clock) *Auth {
+	a := NewAuth(opts.Token, opts.Password, opts.Shared, now)
+	a.trustProxy = opts.TrustProxy
+	if opts.TrustProxy {
+		a.failRate = newRateLimiter(now, maxProxyFailures)
+	}
+	return a
+}
+
+// NoteScan records that the engine finished a loop iteration now.
+func (s *Server) NoteScan() {
+	s.sources.lastScan.Store(s.now.Now().UnixNano())
 }
 
 // SetIncidents sets the incident reader; nil removes it (503).
@@ -106,9 +151,9 @@ func (s *Server) SetDeliveryHealth(src func() []ChannelHealth) {
 	s.sources.health.Store(&v)
 }
 
-// Open creates the HTTP listener without starting a goroutine. The
-// application supervisor owns the serving goroutine.
-func (s *Server) Open() error {
+// Open creates the HTTP listener within ctx without starting a goroutine.
+// The application supervisor owns the serving goroutine.
+func (s *Server) Open(ctx context.Context) error {
 	s.lifecycleMu.Lock()
 	defer s.lifecycleMu.Unlock()
 	if s.started {
@@ -118,7 +163,7 @@ func (s *Server) Open() error {
 		return nil
 	}
 	s.server = &http.Server{
-		Addr:              ":" + strconv.Itoa(s.port),
+		Addr:              ":" + strconv.Itoa(s.opts.Port),
 		Handler:           s.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       5 * time.Second,
@@ -126,8 +171,7 @@ func (s *Server) Open() error {
 		IdleTimeout:       60 * time.Second,
 	}
 	var listenConfig net.ListenConfig
-	ln, err := listenConfig.Listen(
-		context.Background(), "tcp", s.server.Addr)
+	ln, err := listenConfig.Listen(ctx, "tcp", s.server.Addr)
 	if err != nil {
 		return err
 	}
@@ -145,8 +189,9 @@ func (s *Server) Serve(_ context.Context) error {
 		return nil
 	}
 	s.lifecycleMu.Unlock()
-	klog.InfoS("starting dashboard API server", "port", s.port)
-	err := server.Serve(listener)
+	klog.InfoS("starting dashboard server", "port", s.opts.Port,
+		"shared", s.opts.Shared)
+	err := s.serve(server, listener)
 	if err == nil || err == http.ErrServerClosed {
 		return nil
 	}
@@ -177,15 +222,24 @@ func (s *Server) Stop(ctx context.Context) error {
 	return err
 }
 
-// Handler is the whole API: security headers and the access log on every
-// response, then auth, then the routes.
+// Handler is the whole dashboard: security headers and the access log
+// on every response; /api/* needs a session cookie or the bearer token;
+// sign-in, sign-out and the web UI do not.
 func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/incidents", s.incidentsHandler)
-	mux.HandleFunc("/api/incidents/", s.incidentDetailHandler)
-	mux.HandleFunc("/api/status", s.statusHandler)
-	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+	api := http.NewServeMux()
+	api.HandleFunc("/api/incidents", s.incidentsHandler)
+	api.HandleFunc("/api/incidents/", s.incidentDetailHandler)
+	api.HandleFunc("/api/namespaces", s.namespacesHandler)
+	api.HandleFunc("/api/status", s.statusHandler)
+	api.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})
-	return securityHeaders(accessLog(s.auth.Middleware(mux)))
+	mux := http.NewServeMux()
+	mux.Handle("/api/", s.auth.Middleware(api))
+	mux.Handle("/api/session", s.auth.requireHTTPS(
+		s.auth.Middleware(http.HandlerFunc(sessionHandler))))
+	mux.HandleFunc("/login", s.auth.loginHandler)
+	mux.HandleFunc("/logout", s.auth.logoutHandler)
+	mux.Handle("/", s.assets)
+	return securityHeaders(accessLog(mux))
 }

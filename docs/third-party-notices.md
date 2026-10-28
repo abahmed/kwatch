@@ -83,3 +83,12 @@ listed where a dependency contains a separately licensed fork or subpackage.
 The full license text for each dependency is available at its linked source
 location. When a dependency is upgraded, the release owner must refresh this
 file and verify any newly introduced license before publishing the release.
+
+## Fonts (SIL Open Font License 1.1)
+
+The dashboard web UI embeds the latin subsets of these fonts. Their license
+texts ship with them in `internal/dashboard/web/fonts/LICENSES.txt`.
+
+- Bricolage Grotesque, from `@fontsource-variable/bricolage-grotesque`
+- Instrument Sans, from `@fontsource-variable/instrument-sans`
+- Geist Mono, from `@fontsource-variable/geist-mono`

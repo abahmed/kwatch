@@ -10,7 +10,7 @@ import (
 )
 
 func TestAuthValidToken(t *testing.T) {
-	auth := NewAuth("secret-token", clock.RealClock{})
+	auth := NewAuth("secret-token", "", false, clock.RealClock{})
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
@@ -25,7 +25,7 @@ func TestAuthValidToken(t *testing.T) {
 }
 
 func TestAuthMissingToken(t *testing.T) {
-	auth := NewAuth("secret-token", clock.RealClock{})
+	auth := NewAuth("secret-token", "", false, clock.RealClock{})
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
@@ -39,7 +39,7 @@ func TestAuthMissingToken(t *testing.T) {
 }
 
 func TestAuthInvalidToken(t *testing.T) {
-	auth := NewAuth("secret-token", clock.RealClock{})
+	auth := NewAuth("secret-token", "", false, clock.RealClock{})
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
@@ -54,13 +54,14 @@ func TestAuthInvalidToken(t *testing.T) {
 }
 
 func TestAuthRateLimit(t *testing.T) {
-	auth := NewAuth("secret-token", clock.RealClock{})
+	auth := NewAuth("secret-token", "", false, clock.RealClock{})
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
 	handler := auth.Middleware(next)
 	for i := 0; i < 10; i++ {
 		req := httptest.NewRequest("GET", "/api/incidents", nil)
+		req.Header.Set("Authorization", "Bearer wrong-token")
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
 		if w.Code != http.StatusUnauthorized {
@@ -77,7 +78,7 @@ func TestAuthRateLimit(t *testing.T) {
 }
 
 func TestAuthEmptyTokenRejectsAll(t *testing.T) {
-	auth := NewAuth("", clock.RealClock{})
+	auth := NewAuth("", "", false, clock.RealClock{})
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	})
@@ -92,13 +93,14 @@ func TestAuthEmptyTokenRejectsAll(t *testing.T) {
 }
 
 func TestAuthRateLimitFollowsTheHostAcrossConnections(t *testing.T) {
-	handler := NewAuth("secret-token", clock.RealClock{}).Middleware(
+	handler := NewAuth("secret-token", "", false, clock.RealClock{}).Middleware(
 		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			_, _ = w.Write([]byte("ok"))
 		}))
 	for port := range 10 {
 		req := httptest.NewRequest("GET", "/api/incidents", nil)
 		req.RemoteAddr = "10.1.2.3:" + strconv.Itoa(40000+port)
+		req.Header.Set("Authorization", "Bearer wrong-token")
 		handler.ServeHTTP(httptest.NewRecorder(), req)
 	}
 

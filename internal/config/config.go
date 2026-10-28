@@ -234,7 +234,31 @@ type Dashboard struct {
 	// Port is the port to listen on for dashboard requests.
 	// By default, this value is 8061.
 	Port int `yaml:"port"`
+
+	// Mode is how people reach the dashboard: "local" through a
+	// port-forward, or "shared" through an Ingress with TLS. Shared mode
+	// marks the session cookie Secure and refuses sign-in over plain
+	// HTTP. By default, this value is "local".
+	Mode string `yaml:"mode"`
+
+	// TrustProxy honours X-Forwarded-Proto and X-Forwarded-For from the
+	// proxy that terminates TLS in front of kwatch (Ingress, Gateway,
+	// Route, or an outside load balancer). By default, this value is
+	// false.
+	TrustProxy bool `yaml:"trustProxy"`
+
+	// TLSCertFile and TLSKeyFile make kwatch serve TLS on the dashboard
+	// port itself, for a load balancer or node port that passes TCP
+	// through. Both or neither.
+	TLSCertFile string `yaml:"tlsCertFile"`
+	TLSKeyFile  string `yaml:"tlsKeyFile"`
 }
+
+// Dashboard modes.
+const (
+	DashboardLocal  = "local"
+	DashboardShared = "shared"
+)
 
 // AlertRoute defines routing filters for a provider. An incident matching at
 // least one route is delivered; without routes everything is delivered.

@@ -572,4 +572,82 @@ if helm template test-old . --set bogusTopLevel=1 >/dev/null 2>&1; then
 fi
 echo "PASS: 0.10.5 values file"
 
+echo "=== dashboard ==="
+for kind in "kind: Ingress" "KWATCH_DASHBOARD_ENABLED" "port: 8061"; do
+  if grep -Fq "$kind" <<<"$OUT1"; then
+    echo "FAIL: the dashboard must be off by default ($kind)"; exit 1
+  fi
+done
+OUT_DASH=$(helm template kwatch . --set dashboard.enabled=true 2>&1)
+for want in 'name: KWATCH_DASHBOARD_PASSWORD' 'key: password' \
+  'name: KWATCH_DASHBOARD_MODE' 'value: "local"' \
+  'name: KWATCH_DEPLOYMENT_NAME' '  password: ' '  token: '; do
+  grep -Fq -- "$want" <<<"$OUT_DASH" || {
+    echo "FAIL: dashboard render lacks $want"; exit 1;
+  }
+done
+if grep -Fq "kind: Ingress" <<<"$OUT_DASH"; then
+  echo "FAIL: local mode must not render an Ingress"; exit 1
+fi
+PW=$(grep -E '^  password: ' <<<"$OUT_DASH" | awk '{print $2}' |
+  base64 --decode)
+grep -Eq '^([A-HJ-NP-Z2-9]{4}-){3}[A-HJ-NP-Z2-9]{4}$' <<<"$PW" || {
+  echo "FAIL: generated password has the wrong shape: $PW"; exit 1;
+}
+# expose_ok renders with dashboard.enabled and the given flags and checks
+# every following string is present; expose_fail checks the render fails
+# and names the given text.
+expose_ok() {
+  local label=$1; shift
+  local args=()
+  while [ "$1" != "--" ]; do args+=("$1"); shift; done; shift
+  local out
+  out=$(helm template kwatch . --set dashboard.enabled=true "${args[@]}" \
+    2>&1) || { echo "FAIL: $label must render: $out"; exit 1; }
+  for want in "$@"; do
+    grep -Fq -- "$want" <<<"$out" || {
+      echo "FAIL: $label lacks $want"; exit 1;
+    }
+  done
+}
+expose_fail() {
+  local label=$1 want=$2; shift 2
+  local out
+  if out=$(helm template kwatch . --set dashboard.enabled=true "$@" 2>&1)
+  then
+    echo "FAIL: $label must not render"; exit 1
+  fi
+  grep -Fq -- "$want" <<<"$out" || {
+    echo "FAIL: $label: message lacks '$want': $out"; exit 1;
+  }
+}
+expose_fail "unknown mode" "must be one of" --set dashboard.mode=public
+expose_fail "shared without https" "https only" --set dashboard.mode=shared
+expose_ok "shared behind a proxy" --set dashboard.mode=shared \
+  --set dashboard.trustProxy=true -- \
+  'value: "shared"' 'name: KWATCH_DASHBOARD_TRUST_PROXY' "type: ClusterIP"
+expose_ok "shared with own TLS" --set dashboard.mode=shared \
+  --set dashboard.tls.secretName=kwatch-tls -- \
+  "name: KWATCH_DASHBOARD_TLS_CERT" "secretName: kwatch-tls" \
+  "mountPath: /etc/kwatch/dashboard-tls"
+expose_ok "networkPolicyFrom" --set networkPolicy.enabled=true \
+  --set 'dashboard.networkPolicyFrom[0].ipBlock.cidr=10.0.0.0/8' -- \
+  "cidr: 10.0.0.0/8" "port: 8061"
+for kind in "kind: Ingress" "kind: HTTPRoute" "kind: Route" \
+  "kind: VirtualService" "type: LoadBalancer" "type: NodePort"; do
+  if grep -Fq "$kind" <<<"$(helm template kwatch . \
+    --set dashboard.enabled=true)"; then
+    echo "FAIL: the chart must not expose the dashboard ($kind)"; exit 1
+  fi
+done
+OUT_EXIST=$(helm template kwatch . --set dashboard.enabled=true \
+  --set dashboard.existingSecret=mine 2>&1)
+if grep -Eq '^  password: ' <<<"$OUT_EXIST"; then
+  echo "FAIL: existingSecret must not render a password Secret"; exit 1
+fi
+grep -Fq "name: mine" <<<"$OUT_EXIST" || {
+  echo "FAIL: existingSecret must feed the dashboard env"; exit 1;
+}
+echo "PASS: dashboard"
+
 echo "All helm template tests passed."

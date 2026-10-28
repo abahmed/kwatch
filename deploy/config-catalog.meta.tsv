@@ -36,8 +36,12 @@ app.communityProvider|Operations|Alert provider the Community edition keeps when
 healthCheck.enabled|Operations|Expose the built-in health endpoint.|active|
 healthCheck.port|Operations|Port for health and optional diagnostic endpoints.|active|
 healthCheck.statusEndpoint|Security|Serve the read-only /status view (object names, no authentication) on the health port; off by default.|active|
-dashboard.enabled|Operations|Serve the read-only incident dashboard API on a separate listener; Pro only, off by default.|active|
+dashboard.enabled|Operations|Serve the read-only incident dashboard (web UI and API) on a separate listener; Pro only, off by default.|active|
 dashboard.port|Operations|Port for the dashboard API listener; must not equal healthCheck.port.|active|
+dashboard.mode|Security|How people reach the dashboard: local (port-forward) or shared (Ingress, https only; sign-in over plain http is refused).|active|
+dashboard.trustProxy|Security|Honour X-Forwarded-Proto and X-Forwarded-For from the proxy that terminates TLS in front of the dashboard.|active|
+dashboard.tlsCertFile|Security|Certificate file kwatch serves on the dashboard port itself (with tlsKeyFile); reloaded when it changes.|active|
+dashboard.tlsKeyFile|Security|Key file for dashboard.tlsCertFile.|active|
 crd.enabled|Operations|Watch KwatchConfig and supported CRD status conditions; restart kwatch when configuration changes; enabled by the interactive installer after installing the CRD.|active|
 auditLog.enabled|Operations|Write structured incident lifecycle records to the configured audit sink.|active|
 auditLog.output|Operations|Audit output: stdout or a supported output sink.|active|

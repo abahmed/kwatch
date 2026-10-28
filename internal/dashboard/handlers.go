@@ -1,11 +1,13 @@
 package dashboard
 
 import (
+	"cmp"
 	"encoding/json"
 	"net/http"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"k8s.io/klog/v2"
 
@@ -62,17 +64,16 @@ func unavailable(w http.ResponseWriter) {
 	writeError(w, http.StatusServiceUnavailable, "unavailable")
 }
 
-// incidentsHandler serves
-// GET /api/incidents?state=active|resolved&namespace=&limit=, newest
-// first.
+// incidentsHandler serves GET /api/incidents with the filters of
+// parseFilter and limit=, ordered by filter.order.
 func (s *Server) incidentsHandler(w http.ResponseWriter, r *http.Request) {
 	if !onlyGet(w, r) {
 		return
 	}
 	q := r.URL.Query()
-	f := filter{state: q.Get("state"), namespace: q.Get("namespace")}
-	if !f.validState() {
-		writeError(w, http.StatusBadRequest, "invalid state")
+	f, err := parseFilter(q, s.now.Now())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	limit, ok := parseLimit(q.Get("limit"))
@@ -86,13 +87,54 @@ func (s *Server) incidentsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	items := make([]IncidentListItem, 0)
+	counts := map[string]int{"page": 0, "notify": 0, "digest": 0}
 	for _, p := range (*reader).Incidents() {
-		if f.matches(p) {
-			items = append(items, toListItem(p))
+		if !f.inList(p) {
+			continue
+		}
+		item := toListItem(p)
+		counts[item.Severity]++
+		if f.matches(p, item) {
+			items = append(items, item)
 		}
 	}
-	slices.SortFunc(items, newestFirst)
-	writeJSON(w, boundList(items, limit))
+	slices.SortFunc(items, f.order)
+	out := boundList(items, limit)
+	out.Counts = counts
+	writeJSON(w, out)
+}
+
+// namespacesHandler serves GET /api/namespaces?state=: the namespaces
+// that have incidents in that list, A to Z, for the namespace filter.
+func (s *Server) namespacesHandler(
+	w http.ResponseWriter, r *http.Request,
+) {
+	if !onlyGet(w, r) {
+		return
+	}
+	state, _, err := parseStates(r.URL.Query()["state"])
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	reader := s.sources.incidents.Load()
+	if reader == nil {
+		unavailable(w)
+		return
+	}
+	f := filter{state: state}
+	seen := map[string]bool{}
+	names := make([]string, 0)
+	for _, p := range (*reader).Incidents() {
+		ns := p.Root.Namespace
+		if ns == "" || seen[ns] || !f.inList(p) {
+			continue
+		}
+		seen[ns] = true
+		names = append(names, ns)
+	}
+	slices.Sort(names)
+	writeJSON(w, NamespacesResponse{Namespaces: names})
 }
 
 // parseLimit reads ?limit=: empty is the default, larger than the
@@ -159,23 +201,46 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 	if !onlyGet(w, r) {
 		return
 	}
-	src := s.sources.status.Load()
-	if src == nil {
+	if s.sources.status.Load() == nil {
 		unavailable(w)
 		return
 	}
 	health := make([]ChannelHealth, 0)
 	if h := s.sources.health.Load(); h != nil {
-		health = append(health, (*h)()...)
+		for _, c := range (*h)() {
+			c.Type = cmp.Or(c.Type, c.Channel)
+			c.Name = channelName(c.Type)
+			health = append(health, c)
+		}
 	}
+	last := s.lastScan()
 	writeJSON(w, StatusResponse{
 		Version:            version.Short(),
-		Edition:            s.edition,
-		LastScan:           (*src)().At,
-		WatchedNamespaces:  watched(s.scope.Watched),
-		ExcludedNamespaces: s.scope.Excluded,
+		Edition:            s.opts.Edition,
+		LastScan:           last,
+		LastScanLate:       !last.IsZero() && s.now.Now().Sub(last) > scanLate,
+		ScanEverySeconds:   int(scanEvery / time.Second),
+		KwatchNamespace:    s.opts.Self.Namespace,
+		KwatchDeployment:   s.opts.Self.Deployment,
+		WatchedNamespaces:  watched(s.opts.Scope.Watched),
+		ExcludedNamespaces: s.opts.Scope.Excluded,
 		PerChannelHealth:   health,
 	})
+}
+
+// The engine reports a loop iteration at least every scanEvery; a scan
+// older than scanLate means kwatch is not checking.
+const (
+	scanEvery = 10 * time.Second
+	scanLate  = 2 * time.Minute
+)
+
+func (s *Server) lastScan() time.Time {
+	n := s.sources.lastScan.Load()
+	if n == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, n).UTC()
 }
 
 // allNamespaces is what watchedNamespaces says when every namespace is

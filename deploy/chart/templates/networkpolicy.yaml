@@ -41,9 +41,19 @@ spec:
       ports:
         - protocol: TCP
           port: {{ $port }}
+    {{- if and $dash.enabled $dash.networkPolicyFrom }}
+    # Dashboard from outside the namespace: the peers in
+    # dashboard.networkPolicyFrom (your ingress controller, gateway or
+    # load balancer source ranges as ipBlocks).
+    - from:
+        {{- toYaml $dash.networkPolicyFrom | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $dashPort }}
+    {{- end }}
     {{- if $dash.enabled }}
-    # Dashboard API (/api/*): bearer-token protected, ClusterIP only.
-    # Reachable from this namespace and healthIngressFrom sources.
+    # Dashboard (web UI and /api/*): password or bearer token. Reachable
+    # from this namespace (port-forward) and healthIngressFrom sources.
     - from:
         - namespaceSelector:
             matchLabels:

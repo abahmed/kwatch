@@ -288,6 +288,7 @@ enforces, are in `docs/contributor-architecture.md`.
 | `internal/config/crd` | KwatchConfig resource watcher, including late install and restart |
 | `internal/rbac` | Permission audit derived from `kube.SourceAccess`; reports capability gaps, never incidents |
 | `internal/status` | The read-only "what is wrong now" report behind the opt-in `/status` endpoint; reads state kwatch already holds, runs no loop |
+| `internal/dashboard` | The opt-in, Pro-only read-only dashboard on its own port: `/api/*` (bearer token or session cookie), password sign-in, and the embedded web UI (`web/`, plain HTML/CSS/JS, no build step, hashed asset names, strict CSP, no outside requests) |
 | `cmd/kwatch-scorecard` | Offline tool that prints the noise scorecard from an audit log |
 | `internal/audit`, `internal/scorecard` | Decision log and its offline noise scorecard |
 | `internal/replay`, `internal/scenarios` | Test tooling only: observation record/replay on a simulated clock, and the labelled scenario library with the scorecard gate; nothing in production imports them |
@@ -976,10 +977,12 @@ Dynamic discovery dependencies must implement client-go's context-aware
 discovery interface. Do not add a fallback to an unbounded, contextless
 discovery call; discovery must stop with its watcher generation.
 
-Kwatch exposes no user API. Liveness, readiness, availability, health, and
-metrics are the only HTTP endpoints, plus the opt-in read-only `/status`
-(`healthCheck.statusEndpoint`); do not add other diagnostics, debug, or
-action endpoints until the core reaches its production goals
+Kwatch exposes no write API. Liveness, readiness, availability, health, and
+metrics are the only health-port endpoints, plus the opt-in read-only
+`/status` (`healthCheck.statusEndpoint`). The opt-in dashboard
+(`dashboard.enabled`, Pro) is read-only on its own port; its only POSTs are
+sign-in and sign-out. Do not add other diagnostics, debug, or action
+endpoints until the core reaches its production goals
 (`docs/production-goals.md`).
 
 Required components report progress even when their input is idle (the

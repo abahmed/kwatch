@@ -260,7 +260,8 @@ true
 {{- end }}
 
 {{/*
-Secret that holds the dashboard bearer token (key token). An existing
+Secret that holds the dashboard bearer token (key token) and sign-in
+password (key password). An existing
 Secret wins; otherwise it is the Secret this chart creates when
 dashboard.enabled is true. The deployment reads it with optional: true,
 so the pod starts without the dashboard when the Secret is missing.

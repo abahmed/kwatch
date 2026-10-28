@@ -76,7 +76,7 @@
     },
     "dashboard": {
       "type": "object",
-      "description": "Read-only incident dashboard API. Pro only, off by default.",
+      "description": "Read-only incident dashboard: web UI and API. Pro only, off by default.",
       "properties": {
         "enabled": {
           "type": "boolean",
@@ -91,7 +91,41 @@
         "existingSecret": {
           "type": "string",
           "default": "",
-          "description": "Existing Secret with the key token"
+          "description": "Existing Secret with the keys password and token"
+        },
+        "networkPolicyFrom": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "object"
+          },
+          "description": "Extra NetworkPolicy peers allowed to reach the dashboard port"
+        },
+        "tls": {
+          "type": "object",
+          "description": "kwatch serves https itself",
+          "properties": {
+            "secretName": {
+              "type": "string",
+              "default": "",
+              "description": "kubernetes.io/tls Secret kwatch serves"
+            }
+          },
+          "additionalProperties": false
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "local",
+            "shared"
+          ],
+          "default": "local",
+          "description": "local: port-forward. shared: https only (needs trustProxy or tls.secretName)"
+        },
+        "trustProxy": {
+          "type": "boolean",
+          "default": false,
+          "description": "Trust X-Forwarded-Proto/For from the Ingress or proxy that terminates TLS"
         }
       },
       "additionalProperties": false

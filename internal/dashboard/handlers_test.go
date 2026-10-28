@@ -55,7 +55,7 @@ func TestListIsNewestFirstAndFiltersByStateAndNamespace(t *testing.T) {
 
 func TestListRejectsAnUnknownStateAndABadLimit(t *testing.T) {
 	s := newTestServer()
-	for _, path := range []string{"/api/incidents?state=open",
+	for _, path := range []string{"/api/incidents?state=bogus",
 		"/api/incidents?limit=0", "/api/incidents?limit=x"} {
 		if w := get(t, s, path); w.Code != http.StatusBadRequest {
 			t.Errorf("%s: status %d, want 400", path, w.Code)
@@ -132,7 +132,7 @@ func TestDetailServesTheIncidentAndAnswers404ForUnknownIDs(t *testing.T) {
 func TestStatusReportsScopeAndChannelHealth(t *testing.T) {
 	s := newTestServer()
 	scoped := newTestServer()
-	scoped.scope = Scope{Watched: []string{"shop"}}
+	scoped.opts.Scope = Scope{Watched: []string{"shop"}}
 
 	var all, some StatusResponse
 	_ = json.Unmarshal(get(t, s, "/api/status").Body.Bytes(), &all)
@@ -145,7 +145,8 @@ func TestStatusReportsScopeAndChannelHealth(t *testing.T) {
 		t.Errorf("scoped = %q", some.WatchedNamespaces)
 	}
 	if all.Edition != "Pro" || len(all.PerChannelHealth) != 1 ||
-		!all.LastScan.Equal(testEpoch) {
+		all.PerChannelHealth[0].Name != "Slack" ||
+		all.KwatchNamespace != "kwatch" || !all.LastScan.IsZero() {
 		t.Errorf("status = %+v", all)
 	}
 }

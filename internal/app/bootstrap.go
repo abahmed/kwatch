@@ -203,10 +203,11 @@ func applyEditionEndpoints(
 	}
 }
 
-// newDashboardServer builds the optional dashboard API server. It is Pro
+// newDashboardServer builds the optional dashboard server. It is Pro
 // only and off by default, so Community never opens its port. The
-// listener is opened later by the generation. The bearer token comes
-// from KWATCH_DASHBOARD_TOKEN (set by the chart from its Secret).
+// listener is opened later by the generation. The bearer token and the
+// sign-in password come from KWATCH_DASHBOARD_TOKEN and
+// KWATCH_DASHBOARD_PASSWORD (set by the chart from its Secret).
 func newDashboardServer(
 	runtime config.RuntimeConfig, now clock.Clock, e feature.Entitlements,
 ) *dashboard.Server {
@@ -218,18 +219,47 @@ func newDashboardServer(
 		return nil
 	}
 	token := os.Getenv(dashboardTokenEnv)
-	if token == "" {
+	password := os.Getenv(dashboardPasswordEnv)
+	if token == "" && password == "" {
 		klog.InfoS("WARNING: dashboard is enabled but "+dashboardTokenEnv+
-			" is empty; every dashboard request is refused with 401",
-			"component", "dashboard-server")
+			" and "+dashboardPasswordEnv+" are empty; every dashboard "+
+			"request is refused with 401", "component", "dashboard-server")
 	}
 	scope := runtime.Scope()
-	return dashboard.NewServer(dc.Port, token,
-		string(feature.OrCommunity(e).Edition()), dashboard.Scope{
+	return dashboard.NewServer(dashboard.Options{
+		Port:        dc.Port,
+		Token:       token,
+		Password:    password,
+		Shared:      dc.Mode == config.DashboardShared,
+		TrustProxy:  dc.TrustProxy,
+		TLSCertFile: dc.TLSCertFile,
+		TLSKeyFile:  dc.TLSKeyFile,
+		Edition:     string(feature.OrCommunity(e).Edition()),
+		Scope: dashboard.Scope{
 			Watched:  scope.AllowedNamespaces(),
 			Excluded: scope.ForbiddenNamespaces(),
-		}, now)
+		},
+		Self: dashboard.Self{
+			Namespace:  envOr("POD_NAMESPACE", "kwatch"),
+			Deployment: envOr(dashboardDeploymentEnv, "kwatch"),
+		},
+	}, now)
 }
+
+// envOr is the environment value of name, or fallback when it is empty.
+func envOr(name, fallback string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
+	}
+	return fallback
+}
+
+// Dashboard environment: the bearer token, the sign-in password and the
+// name of kwatch's own Deployment, all set by the chart.
+const (
+	dashboardPasswordEnv   = "KWATCH_DASHBOARD_PASSWORD"
+	dashboardDeploymentEnv = "KWATCH_DEPLOYMENT_NAME"
+)
 
 // dashboardTokenEnv names the dashboard bearer token variable.
 const dashboardTokenEnv = "KWATCH_DASHBOARD_TOKEN"

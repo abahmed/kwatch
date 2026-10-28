@@ -276,18 +276,42 @@ license:
   # or an extra environment variable, so the license can activate.
   instanceSecret: false
 
-# -- Dashboard read-only API. Pro only, off by default. Runs on its own
-# listener and ClusterIP Service. The bearer token lives in the
-# kwatch-dashboard Secret (key token); the chart auto-generates one when
-# dashboard.enabled is true and no existingSecret is set.
+# -- Read-only dashboard: web UI and API. Pro only, off by default. Runs
+# on its own listener and ClusterIP Service. The <release>-dashboard
+# Secret holds the sign-in password (key password) and the API bearer
+# token (key token); the chart generates both when dashboard.enabled is
+# true and no existingSecret is set, and keeps them across upgrades.
 dashboard:
-  # -- Enable the dashboard API listener and Service.
+  # -- Enable the dashboard listener and Service.
   enabled: false
-  # -- Port for the dashboard API listener (must not equal healthCheck.port).
+  # -- Port for the dashboard listener (must not equal healthCheck.port).
   port: 8061
-  # -- Name of an existing Secret with the key `token`. When empty and
-  # enabled is true, the chart creates a Secret with an auto-generated token.
+  # -- local: reached through kubectl port-forward (the cookie works on
+  # http://localhost). shared: https only; kwatch refuses sign-in over
+  # plain http and marks the cookie Secure. Shared needs trustProxy or
+  # tls.secretName. The chart never exposes the dashboard: run the
+  # kwatch.sh Dashboard menu, or point your own Ingress, route or
+  # Service at the ClusterIP Service <release>-dashboard.
+  mode: local
+  # -- Trust X-Forwarded-Proto/For from the Ingress or proxy that
+  # terminates TLS in front of kwatch. Only then does that header count.
+  trustProxy: false
+  # -- kwatch serves https itself from this kubernetes.io/tls Secret
+  # (keys tls.crt, tls.key), for a LoadBalancer or NodePort with nothing
+  # in front. Renewals are picked up without a restart.
+  tls:
+    secretName: ""
+  # -- Name of an existing Secret with the keys `password` and `token`.
+  # When empty and enabled is true, the chart creates the Secret and keeps
+  # it across upgrades with Helm lookup. Argo CD, Flux and other offline
+  # renders cannot look it up and would make a new password on every
+  # sync: create the Secret yourself and name it here.
   existingSecret: ""
+  # -- With networkPolicy.enabled: extra NetworkPolicy peers (your
+  # ingress controller, ipBlocks for load balancer clients) allowed to
+  # reach the dashboard port. The release namespace and
+  # healthIngressFrom always may.
+  networkPolicyFrom: []
 
 # -- Use an existing Secret containing config.yaml and credential files.
 # Required for alert providers and heartbeatMonitor.url. The Secret's

@@ -1,7 +1,7 @@
 package dashboard
 
 import (
-	"cmp"
+	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/incident"
@@ -13,58 +13,55 @@ import (
 // recent entries.
 const maxTimeline = 100
 
-// filter is the /api/incidents query.
-type filter struct {
-	state     string
-	namespace string
-}
-
-func (f filter) validState() bool {
-	return f.state == "" || f.state == "active" || f.state == "resolved"
-}
-
-func (f filter) matches(p incident.Incident) bool {
-	resolved := p.State == incident.Resolved
-	if f.state == "active" && resolved ||
-		f.state == "resolved" && !resolved {
-		return false
-	}
-	return f.namespace == "" || p.Root.Namespace == f.namespace
-}
-
-// newestFirst orders by first seen, newest first, then by ID.
-func newestFirst(a, b IncidentListItem) int {
-	if c := b.FirstSeen.Compare(a.FirstSeen); c != 0 {
-		return c
-	}
-	return cmp.Compare(b.ID, a.ID)
-}
-
 func toListItem(p incident.Incident) IncidentListItem {
 	return IncidentListItem{
-		ID:          p.ID,
-		Title:       titleFor(p),
-		Severity:    p.Tier.String(),
-		State:       p.State.String(),
-		Namespace:   p.Root.Namespace,
-		Workload:    p.Root.Name,
-		FirstSeen:   p.Opened,
-		LastSeen:    lastSeen(p),
-		RepeatCount: p.RepeatCount,
-		AckedBy:     ackedBy(p),
-		ResolvedAt:  p.Resolved,
+		ID:           p.ID,
+		Title:        titleFor(p),
+		Severity:     p.Tier.String(),
+		State:        p.State.String(),
+		Namespace:    p.Root.Namespace,
+		Workload:     p.Root.Name,
+		WorkloadKind: string(p.Root.Kind),
+		FirstSeen:    p.Opened,
+		LastSeen:     lastSeen(p),
+		RepeatCount:  p.RepeatCount,
+		AckedBy:      ackedBy(p),
+		ResolvedAt:   p.Resolved,
 	}
 }
 
 func toDetail(p incident.Incident) IncidentDetail {
+	steps, commands, text := toSteps(p.Steps)
 	return IncidentDetail{
 		IncidentListItem: toListItem(p),
 		RootCause:        redact.Evidence(causeText(p)),
-		SuggestedFix:     string(p.Fix),
+		SuggestedFix:     text,
+		FixSteps:         steps,
+		FixCommands:      commands,
 		Timeline:         toTimeline(p.Timeline),
 		CapturedLogLines: redactAll(p.Facts),
 		DocsLink:         p.DocsLink,
 	}
+}
+
+// toSteps returns the steps, their commands alone and their sentences
+// joined, all redacted again.
+func toSteps(in []incident.FixStep) ([]FixStep, []string, string) {
+	steps := make([]FixStep, 0, len(in))
+	commands := make([]string, 0, len(in))
+	var text []string
+	for _, s := range in {
+		step := FixStep{Text: redact.Evidence(s.Text),
+			Command: redact.Evidence(s.Command)}
+		steps = append(steps, step)
+		if step.Command != "" {
+			commands = append(commands, step.Command)
+		}
+		if step.Text != "" {
+			text = append(text, step.Text)
+		}
+	}
+	return steps, commands, strings.Join(text, "\n")
 }
 
 // titleFor is the composer's headline of the last message, else the
@@ -120,8 +117,11 @@ func toTimeline(events []incident.Event) []Event {
 	}
 	out := make([]Event, 0, len(events))
 	for _, e := range events {
+		kind, reason := classifyEvent(e.Text)
 		out = append(out, Event{
 			At:     e.At,
+			Kind:   kind,
+			Reason: reason,
 			Text:   redact.Evidence(e.Text),
 			Entity: entityIDString(e.Entity),
 		})

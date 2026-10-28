@@ -95,14 +95,40 @@ func TestExportKeepsTheDetailAcrossARestart(t *testing.T) {
 	announced(t, old, podSig("web"))
 	id := old.only().ID
 	old.m.StoreDetail(id, Detail{Headline: "h", DocsLink: "https://x",
-		Facts: []string{"log line"}})
+		Facts: []string{"log line"},
+		Steps: []FixStep{{Text: "Roll back:", Command: "kubectl rollout"}}})
 
 	fresh := newRig(t, Config{})
 	fresh.m.Restore(old.m.Export(), at(10*time.Minute))
 
 	got := fresh.only()
 	if got.Headline != "h" || got.DocsLink != "https://x" ||
-		len(got.Facts) != 1 {
+		len(got.Facts) != 1 || len(got.Steps) != 1 ||
+		got.Steps[0].Command != "kubectl rollout" {
 		t.Fatalf("detail lost on restore: %+v", got)
+	}
+}
+
+func TestStoreDetailReplacesStepsAndBoundsThem(t *testing.T) {
+	r := newRig(t, Config{})
+	announced(t, r, podSig("web"))
+	id := r.only().ID
+	many := make([]FixStep, 0, maxSteps+3)
+	for i := range maxSteps + 3 {
+		many = append(many, FixStep{Text: strings.Repeat("s", i+1),
+			Command: strings.Repeat("c", maxFactLength+10)})
+	}
+
+	r.m.StoreDetail(id, Detail{Steps: many})
+	r.m.StoreDetail(id, Detail{Headline: "no steps keeps the old ones"})
+
+	got := r.m.Incident(id).Steps
+	if len(got) != maxSteps || len(got[0].Command) > maxFactLength {
+		t.Fatalf("steps = %d, first command %d bytes", len(got),
+			len(got[0].Command))
+	}
+	r.m.StoreDetail(id, Detail{Steps: []FixStep{{Text: "new"}}})
+	if got := r.m.Incident(id).Steps; len(got) != 1 || got[0].Text != "new" {
+		t.Fatalf("newer steps did not replace the old: %+v", got)
 	}
 }

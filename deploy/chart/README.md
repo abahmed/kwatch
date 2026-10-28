@@ -186,6 +186,34 @@ kubectl delete namespace kwatch
 | `networkPolicy.extraEgressPorts` | Extra TCP egress ports open to any address, for providers not on 443: SMTP (`25`, `465` or `587`) for email, or a webhook's custom port | `[]` |
 | `networkPolicy.kubeletCIDRs` | Node address ranges the kubelet egress rule is limited to; empty allows any address. Also admitted to the health port, for kubelet probes on a network plugin that enforces policy on node traffic | `[]` |
 | `networkPolicy.healthIngressFrom` | Extra peers (`namespaceSelector`, `podSelector` or `ipBlock`) that may reach the health port (`/health`, `/metrics`, `/status`), such as your Prometheus namespace. Without it only pods in the release namespace (and `kubeletCIDRs`) can | `[]` |
+| `dashboard.enabled` | Serve the read-only dashboard (web UI and `/api/*`) on its own port and ClusterIP Service `<release>-dashboard`. Pro only; Community never opens the port | `false` |
+| `dashboard.port` | Dashboard port; must not equal the health port | `8061` |
+| `dashboard.mode` | `local`: reached through `kubectl port-forward`; the cookie works on `http://localhost`. `shared`: https only; kwatch refuses sign-in over plain http and marks the cookie `Secure`. Needs `dashboard.trustProxy` or `dashboard.tls.secretName`, or the render fails | `local` |
+| `dashboard.trustProxy` | Trust `X-Forwarded-Proto`/`X-Forwarded-For` from the Ingress or proxy that terminates TLS in front of kwatch. Without it the header is ignored | `false` |
+| `dashboard.tls.secretName` | `kubernetes.io/tls` Secret kwatch serves https from itself, for a LoadBalancer or NodePort with nothing in front. Renewals are picked up without a restart | `""` |
+| `dashboard.existingSecret` | Existing Secret with the keys `password` (sign-in) and `token` (API bearer token). Without it the chart creates `<release>-dashboard` with a generated password (`XXXX-XXXX-XXXX-XXXX`) and token, and keeps both across upgrades. Changing the password signs everyone out | `""` |
+| `dashboard.networkPolicyFrom` | With `networkPolicy.enabled`: extra peers (your ingress controller, `ipBlock`s for load balancer clients) allowed to reach the dashboard port. The release namespace and `healthIngressFrom` always may | `[]` |
+
+Sign-ins last 12 hours. A password change or a kwatch restart (upgrade,
+rollout, rescheduling) signs everyone out. Behind an Ingress, set
+`dashboard.trustProxy`: without it every client shares the Ingress's
+address, and ten wrong passwords in a minute from anyone lock everyone
+out of sign-in for that minute.
+
+The generated `<release>-dashboard` Secret carries
+`helm.sh/resource-policy: keep`: uninstalling or turning the dashboard off
+leaves it, so a reinstall keeps the saved password. Delete it to forget the
+password. The password and token are kept across upgrades through Helm
+`lookup`, which offline renders (`helm template`, Argo CD, Flux with
+post-rendering) cannot do: each sync would make a new password and sign
+everyone out. With GitOps, create the Secret yourself (keys `password` and
+`token`, for example with a sealed or external secret) and set
+`dashboard.existingSecret`.
+
+The chart does not expose the dashboard outside the cluster. To expose it,
+run the kwatch.sh Dashboard menu or create your own Ingress or route
+pointing at Service `<release>-dashboard` (port name `dashboard`).
+
 | `image.repository` / `image.tag` / `image.pullPolicy` | Container image; an empty tag uses the chart's `appVersion` | `ghcr.io/abahmed/kwatch` / `""` / `IfNotPresent` |
 | `crd.install` | Install the shared `KwatchConfig` CRD with this release; skipped automatically when another release owns it. `config.crd.enabled` is separate: it turns the live overlay on | `true` |
 | `rbac.mode` | `least-privilege` grants an explicit read-only `list`/`watch` set, and kinds outside it (custom resources included) show as `permission_denied` in `/health` coverage (kwatch logs one warning about them and the install notes say so); `full` grants `list`/`watch` on every resource, except that `full` with `watch.secrets: false` renders the least-privilege list. Both grant `get` only on namespaces, nodes, `nodes/stats`, `nodes/metrics` and `pods/log`. Set `full` to watch custom resources | `least-privilege` |

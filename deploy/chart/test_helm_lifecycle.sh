@@ -33,7 +33,16 @@ helm install "$release" deploy/chart \
   --create-namespace \
   --set image.tag=ci \
   --set config.telemetry.enabled=false \
+  --set dashboard.enabled=true \
   --wait=false
+
+# The dashboard password and token must survive an upgrade (lookup).
+dashboard_secret() {
+  kubectl get secret "$release-dashboard" --namespace "$namespace" \
+    -o jsonpath='{.data.password}{"/"}{.data.token}'
+}
+dashboard_before="$(dashboard_secret)"
+test -n "$dashboard_before"
 
 kubectl apply -f - <<'EOF'
 apiVersion: kwatch.abahmed.dev/v1beta1
@@ -53,7 +62,13 @@ awk '{ print } /helm.sh\/resource-policy: keep/ { print "    lifecycle-test: upg
   "$crd_template" >"$crd_template.new"
 mv "$crd_template.new" "$crd_template"
 
-helm upgrade "$release" "$tmp_chart/chart" --namespace "$namespace" --wait=false
+helm upgrade "$release" "$tmp_chart/chart" --namespace "$namespace" \
+  --set image.tag=ci --set config.telemetry.enabled=false \
+  --set dashboard.enabled=true --wait=false
+test "$(dashboard_secret)" = "$dashboard_before" || {
+  echo "FAIL: helm upgrade replaced the dashboard password or token"
+  exit 1
+}
 
 test "$(kubectl get crd kwatchconfigs.kwatch.abahmed.dev -o jsonpath='{.metadata.annotations.lifecycle-test}')" = upgraded
 kubectl get kwatchconfig lifecycle-check --namespace "$namespace" >/dev/null
