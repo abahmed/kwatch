@@ -235,8 +235,11 @@ func TestEngineInvestigationCarriesDeadline(t *testing.T) {
 	if !<-deadlines {
 		t.Fatal("investigation must carry a deadline")
 	}
-	if outputWait > investigate.MaxBudget {
-		t.Fatal("an investigation must be allowed the whole output wait")
+	// The announcement waits out the whole plan budget and the grace a
+	// worker gives a late check, so evidence that is read in time is
+	// never left behind.
+	if outputWait < investigate.MaxBudget+abandonGrace {
+		t.Fatal("an announcement must wait for the whole investigation")
 	}
 }
 

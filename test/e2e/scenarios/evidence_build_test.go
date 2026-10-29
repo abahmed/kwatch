@@ -4,6 +4,7 @@ package scenarios
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -24,26 +25,26 @@ func (s *Scenario) ExpectGatheredEvidence(namespace, resource string) {
 	ctx, cancel := context.WithTimeout(s.Ctx, evidenceWait)
 	defer cancel()
 	match := harness.AuditMatch{Namespace: namespace, Resource: resource}
-	var last harness.AuditEntry
+	var seen []string
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	for {
 		entries, err := s.Env.Audit.Matching(ctx, match)
 		if err == nil {
+			seen = seen[:0]
 			for _, e := range entries {
-				if len(e.Evidence) > 0 && e.Delivery == "" {
-					last = e
-					if gathered(e) {
-						return
-					}
+				// A roll-up or digest carries the incident's own message,
+				// so its entry counts the same as a message of its own.
+				if gathered(e) {
+					return
 				}
+				seen = append(seen, describeEntry(e))
 			}
 		}
 		select {
 		case <-ctx.Done():
 			s.T.Fatalf("no message about %s with gathered evidence; "+
-				"last: confidence %q, readSteps %d, evidence %v",
-				resource, last.Confidence, last.ReadSteps, last.Evidence)
+				"entries: %v", resource, seen)
 		case <-ticker.C:
 		}
 	}
@@ -57,4 +58,11 @@ func gathered(e harness.AuditEntry) bool {
 		ok = ok || strings.HasSuffix(check, ":ok")
 	}
 	return ok && e.ReadSteps == 0 && e.Confidence == "confirmed"
+}
+
+// describeEntry is what a failure shows of one audit entry.
+func describeEntry(e harness.AuditEntry) string {
+	return fmt.Sprintf("{action %s delivery %q confidence %q readSteps %d "+
+		"evidence %v}", e.Action, e.Delivery, e.Confidence, e.ReadSteps,
+		e.Evidence)
 }
