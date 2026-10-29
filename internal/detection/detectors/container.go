@@ -83,6 +83,9 @@ func restartingFinding(
 	if lastRestart.IsZero() || ctx.Now.Sub(lastRestart) > restartRecency {
 		return nil
 	}
+	if sparseRestarts(ctx, e, restarts, lastRestart) {
+		return nil
+	}
 	ctx.RecheckAfter(lastRestart.Add(restartRecency).Sub(ctx.Now))
 	// The restart count is evidence, not part of the stable summary.
 	if oom {

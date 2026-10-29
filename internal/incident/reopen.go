@@ -70,6 +70,7 @@ func (m *Manager) reopen(p *Incident, now time.Time) {
 	p.Pending.ScheduleReopenUpdate(now)
 	p.RepeatCount = times
 	p.note(now, repeatNote(times))
+	logLifecycle(p, "reopen", "incident reopened", "times", times)
 	if m.flaps(len(p.Cycles)) {
 		p.State = Flapping
 	}

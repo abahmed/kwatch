@@ -39,6 +39,9 @@ type IncidentListItem struct {
 	RepeatCount  int       `json:"repeatCount"`
 	AckedBy      string    `json:"ackedBy,omitempty"`
 	ResolvedAt   time.Time `json:"resolvedAt,omitzero"`
+	// RootCause is the one-line cause, so a list row can say why
+	// without opening the issue. Empty while kwatch has none.
+	RootCause string `json:"rootCause"`
 }
 
 // IncidentDetail is one incident's full detail for /api/incidents/{id}.
@@ -50,7 +53,6 @@ type IncidentListItem struct {
 // commands alone, for copy buttons.
 type IncidentDetail struct {
 	IncidentListItem
-	RootCause        string    `json:"rootCause"`
 	SuggestedFix     string    `json:"suggestedFix,omitempty"`
 	FixSteps         []FixStep `json:"fixSteps"`
 	FixCommands      []string  `json:"fixCommands"`
@@ -74,6 +76,9 @@ type Event struct {
 	Reason string    `json:"reason,omitempty"`
 	Text   string    `json:"text"`
 	Entity string    `json:"entity,omitempty"`
+	// Repeats counts earlier events that said the same and were folded
+	// into this one, so a long-running incident keeps its whole story.
+	Repeats int `json:"repeats,omitempty"`
 }
 
 // StatusResponse is the /api/status response. WatchedNamespaces is ["*"]

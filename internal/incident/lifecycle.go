@@ -167,6 +167,8 @@ func (m *Manager) holdRepeatedPage(p *Incident, now time.Time) {
 	p.Delivery.HoldAtNotify()
 	p.Tier = Notify
 	p.note(now, repeatNote(times))
+	logLifecycle(p, "hold", "incident page held: failing again",
+		"times", times)
 }
 
 func (m *Manager) recovering(p *Incident, now time.Time) (Decision, bool) {
@@ -215,6 +217,8 @@ func (m *Manager) enterFlapping(
 	p.State = Flapping
 	p.note(now, "flapping: "+strconv.Itoa(cycles)+" "+what+" in "+
 		m.cfg.FlapWindow.String())
+	logLifecycle(p, "flap", "incident flapping",
+		"cycles", cycles, "what", what)
 }
 
 func (m *Manager) flapping(p *Incident, now time.Time) (Decision, bool) {
@@ -230,6 +234,12 @@ func (m *Manager) flapping(p *Incident, now time.Time) (Decision, bool) {
 	}
 	if due := p.RecoveringSince.Add(m.cfg.MaxHold); now.Before(due) ||
 		m.stillBroken(p, now) {
+		return Decision{}, false
+	}
+	if p.Pending.ReopenOwed() {
+		// As in recovering: the thread never heard it was back, so a
+		// second resolve would follow the first with nothing between.
+		m.closeUnheardReopen(p, now)
 		return Decision{}, false
 	}
 	stable := Reason("stable for " + m.cfg.MaxHold.String())
@@ -256,12 +266,17 @@ func (m *Manager) resolve(p *Incident, now time.Time, why Reason) Decision {
 	p.State, p.Resolved = Resolved, now
 	p.Pending.ClearReopen()
 	p.Pending.ClearRevised()
-	p.Fix = fixOf(m.model, p, now)
+	// Only a change made before the failure ended can have fixed it: the
+	// resolve waits out a hold after the recovery, and a deploy landing
+	// during that hold must not be credited with the fix.
+	recovered := p.RecoveredAt()
+	p.Fix = fixOf(m.model, p, recovered)
 	if why != ReasonSuperseded {
-		p.FixedBy = fixingChange(m.model, p, now)
+		p.FixedBy = fixingChange(m.model, p, recovered)
 		m.noteRemoved(p)
 	}
 	p.note(now, "resolved: "+string(why))
+	logResolved(p, now, why, false)
 	d := m.decide(p, Resolve, why)
 	m.reform(p, now)
 	return d
@@ -277,6 +292,7 @@ func (m *Manager) resolveQuietly(p *Incident, now time.Time) {
 	m.quietIDs = append(m.quietIDs, p.ID)
 	p.Fix = fixOf(m.model, p, now)
 	p.note(now, "resolved: "+string(ReasonSuperseded))
+	logResolved(p, now, ReasonSuperseded, true)
 }
 
 func (m *Manager) decide(p *Incident, action Action, why Reason) Decision {

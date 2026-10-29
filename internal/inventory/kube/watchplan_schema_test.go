@@ -130,3 +130,30 @@ func TestMetadataSchemaDiffsOnGeneration(t *testing.T) {
 		s.RelationTypes())
 	assert.Equal(t, inventory.Kind("controllerrevision"), s.Kind())
 }
+
+// A run-like custom kind records when its run ended; the time becomes
+// the finished attribute, whichever of the usual fields carries it.
+func TestGenericAttributesRecordWhenARunFinished(t *testing.T) {
+	for _, field := range []string{"finishedAt", "completionTime"} {
+		w := &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": "example.com/v1", "kind": "Run",
+			"metadata": map[string]any{"name": "r", "namespace": "ns"},
+			"status": map[string]any{"phase": "Failed",
+				field: "2025-05-15T12:55:21Z"},
+		}}
+		desc := describeWith(t,
+			NewUnstructuredSchema("example.com", "Run"), WatchStatus, w)
+		want := time.Date(2025, 5, 15, 12, 55, 21, 0, time.UTC)
+		assert.Equal(t, inventory.Time(want),
+			desc.Attributes[AttrFinished], field)
+	}
+	w := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "example.com/v1", "kind": "Run",
+		"metadata": map[string]any{"name": "r", "namespace": "ns"},
+		"status":   map[string]any{"phase": "Failed", "finishedAt": "?"},
+	}}
+	desc := describeWith(t,
+		NewUnstructuredSchema("example.com", "Run"), WatchStatus, w)
+	assert.NotContains(t, desc.Attributes, AttrFinished,
+		"an unparseable time is not recorded")
+}

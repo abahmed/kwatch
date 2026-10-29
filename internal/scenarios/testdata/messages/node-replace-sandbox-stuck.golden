@@ -9,7 +9,8 @@
 | kubectl describe pod fleet-2deb324e-b -n shop
 | ```
 10:20:00 material change
-🔴 Node n3 (prod-eu-1) is spreading to fleet, storage and support in shop: they have no ready replicas (0 of 1) and have been Pending since it was scheduled. It is also spreading to services fleet, storage and support in shop: they have no ready backends.
+🔴 Node n3 (prod-eu-1) is spreading to fleet, storage and support in shop: they have no ready replicas (0 of 1) and have been Pending since it was scheduled. It is also spreading to services fleet, storage and support in shop: they have no ready backends. It is now critical.
 🔴 Node n3 (prod-eu-1) is spreading to fleet, storage and support in shop: they have no ready replicas (0 of 1) and have been Pending since it was scheduled.
 | 🔴 Node n3 (**prod-eu-1**) is spreading to **fleet**, **storage** and **support** in shop: they have no ready replicas (0 of 1) and have been Pending since it was scheduled.
 | It is also spreading to services **fleet**, **storage** and **support** in shop: they have no ready backends.
+| It is now critical.

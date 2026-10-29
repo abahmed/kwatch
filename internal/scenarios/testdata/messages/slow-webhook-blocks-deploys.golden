@@ -7,6 +7,7 @@
 | kubectl get validatingwebhookconfiguration policy-check -o yaml
 | ```
 10:03:00 material change
-🔴 Validating webhook policy-check (prod-eu-1) is spreading to replica set cart-a3db1c95 in shop: it cannot create pods.
+🔴 Validating webhook policy-check (prod-eu-1) is spreading to replica set cart-a3db1c95 in shop: it cannot create pods. It is now critical.
 🔴 Validating webhook policy-check (prod-eu-1) is spreading to replica set cart-a3db1c95 in shop: it cannot create pods.
 | 🔴 Validating webhook **policy-check** (**prod-eu-1**) is spreading to replica set **cart-a3db1c95** in shop: it cannot create pods.
+| It is now critical.

@@ -221,7 +221,11 @@ var failedPhases = map[string]bool{
 }
 
 // badPhase reports a failed phase at once and Pending after
-// DefaultPendingGrace.
+// DefaultPendingGrace. A run that finished failed (a Workflow, a
+// PipelineRun: the object records when its run ended) is news when it
+// fails; once it finished staleRunAge ago it will not change by itself
+// and goes to the digest, the way a failed Job does. A long-lived object
+// in a failed phase has no finish time and stays a warning.
 func badPhase(
 	ctx detection.Context, e inventory.Entity,
 ) (detection.Finding, bool) {
@@ -234,8 +238,12 @@ func badPhase(
 	}
 	switch {
 	case failedPhases[phase]:
+		severity := detection.Warning
+		if finished := timestamp(e, kube.AttrFinished); !finished.IsZero() {
+			severity = failedJobSeverity(ctx, finished)
+		}
 		return detection.Finding{
-			Reason: reasons.PhaseFailed, Severity: detection.Warning,
+			Reason: reasons.PhaseFailed, Severity: severity,
 			Health: detection.Failing, Since: since,
 			Summary: "Reports phase " + phase, Evidence: evidence,
 		}, true

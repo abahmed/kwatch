@@ -98,7 +98,10 @@ func (m *Manager) recordProviderFailure(entry *providerEntry, err error) {
 		m.setProviderHealth(entry, reasonRejected, err)
 		return
 	}
-	wait := m.pacer.recordOutage(name)
+	// Jittered like the rate-limit backoff, so the pods of several
+	// clusters sharing one provider do not all come back at once.
+	wait := min(applyJitter(m.pacer.recordOutage(name), rateLimitJitter),
+		maxProviderBackoff)
 	m.pacer.block(name, now.Add(wait))
 	m.setProviderHealth(entry, reasonUnavailable, err)
 	klog.InfoS("provider unavailable; keeping its queue",

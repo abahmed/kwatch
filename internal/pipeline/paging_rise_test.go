@@ -159,6 +159,9 @@ func TestQuietResolvePurgesHeldAnnouncements(t *testing.T) {
 		decisionOf(e, "a", incident.Announce),
 		decisionOf(e, "b", incident.Announce)}
 	c.Low.Opened = []incident.Decision{decisionOf(e, "a", incident.Announce)}
+	c.Startup.Warm = []incident.Decision{
+		decisionOf(e, "a", incident.Announce),
+		decisionOf(e, "b", incident.Announce)}
 	c.Outages["shop"] = &announce.OutageHold{Since: holdsNow,
 		Held: []incident.Decision{decisionOf(e, "a", incident.Announce)}}
 	e.announcer.held = []heldAnnouncement{
@@ -173,6 +176,8 @@ func TestQuietResolvePurgesHeldAnnouncements(t *testing.T) {
 	require.Len(t, c.Startup.Collected, 1)
 	assert.Equal(t, "b", c.Startup.Collected[0].Incident.ID)
 	assert.Empty(t, c.Low.Opened)
+	require.Len(t, c.Startup.Warm, 1, "the restored summary drops it too")
+	assert.Equal(t, "b", c.Startup.Warm[0].Incident.ID)
 	assert.Empty(t, c.Outages["shop"].Held)
 	assert.True(t, c.Startup.CheckSummary)
 	assert.Empty(t, *seen)

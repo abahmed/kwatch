@@ -72,3 +72,29 @@ func TestServiceUnavailableRetryAfterIsHonoured(t *testing.T) {
 	assert.Equal(t, 45*time.Second,
 		waitAfterFailure(manager, entry, clk, busy))
 }
+
+// An outage backs off like a rate limit that names no wait: growing,
+// jittered (several clusters sharing a provider must not all come back
+// in the same second) and capped.
+func TestOutageBackoffIsJitteredAndCapped(t *testing.T) {
+	clk := newFakeClock()
+	manager := fakeClockManager(t, clk, newMessageProvider(nil), nil)
+	entry := manager.generation.entries["slack"]
+	down := errors.New("connection refused")
+
+	seen := map[time.Duration]bool{}
+	for i := 0; i < 4; i++ {
+		// A block only ever extends: let the last one pass first.
+		manager.recordProviderSuccess(&entry)
+		clk.Advance(2 * maxProviderBackoff)
+		got := waitAfterFailure(manager, entry, clk, down)
+		assert.GreaterOrEqual(t, got, initialProviderBackoff*8/10)
+		assert.LessOrEqual(t, got, initialProviderBackoff*12/10)
+		seen[got] = true
+	}
+	assert.Greater(t, len(seen), 1, "the first wait is not jittered")
+	for i := 0; i < 20; i++ {
+		require.LessOrEqual(t,
+			waitAfterFailure(manager, entry, clk, down), maxProviderBackoff)
+	}
+}

@@ -3,6 +3,7 @@ package kube
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -75,6 +76,29 @@ func setStatusAttributes(
 		u.Object, "status", "observedGeneration"); ok {
 		setDefault(attrs, AttrObservedGen, inventory.Number(float64(observed)))
 	}
+	if finished, ok := finishedAt(u); ok {
+		setDefault(attrs, AttrFinished, inventory.Time(finished))
+	}
+}
+
+// runFinishFields are where run-like custom kinds record that a run
+// ended: Argo Workflows write finishedAt, Tekton runs and other
+// Job-style kinds completionTime.
+var runFinishFields = []string{"finishedAt", "completionTime"}
+
+// finishedAt is when a run-like object's run ended. An object without
+// such a field is long-lived: a failed phase on it is a live failure.
+func finishedAt(u *unstructured.Unstructured) (time.Time, bool) {
+	for _, field := range runFinishFields {
+		raw, ok, _ := unstructured.NestedString(u.Object, "status", field)
+		if !ok || raw == "" {
+			continue
+		}
+		if at, err := time.Parse(time.RFC3339, raw); err == nil {
+			return at, true
+		}
+	}
+	return time.Time{}, false
 }
 
 func setDefault(

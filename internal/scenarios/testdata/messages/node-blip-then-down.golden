@@ -18,6 +18,7 @@
 🟠 Node n1 (prod-eu-1) is failing again: 2nd time in two hours.
 | 🟠 Node n1 (**prod-eu-1**) is failing again: 2nd time in two hours.
 10:18:55 material change
-🔴 Node n1 (prod-eu-1) is now failing: heartbeat is stale: the kubelet stopped renewing its lease.
+🔴 Node n1 (prod-eu-1) is now failing: heartbeat is stale: the kubelet stopped renewing its lease. It is now critical.
 🔴 Node n1 (prod-eu-1) is now failing: heartbeat is stale: the kubelet stopped renewing its lease.
 | 🔴 Node n1 (**prod-eu-1**) is now failing: heartbeat is stale: the kubelet stopped renewing its lease.
+| It is now critical.

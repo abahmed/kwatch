@@ -51,16 +51,24 @@ func TestSecurityHeadersAreOnEveryResponse(t *testing.T) {
 	}
 }
 
+// A failed request is logged at the default level with host, path and
+// status; a successful read (a page polling) is not, so it cannot drown
+// the rest of the log. The token is never logged.
 func TestAccessLogNamesHostPathAndStatusButNotTheToken(t *testing.T) {
 	out := captureLog(t)
 	s := newTestServer()
 
 	get(t, s, "/api/status")
+	call(t, s, http.MethodGet, "/api/status", "wrong-token")
 	klog.Flush()
 
 	logged := out.String()
+	if strings.Contains(logged, "status=200") {
+		t.Errorf("a successful read is logged at the default level: %s",
+			logged)
+	}
 	for _, want := range []string{`"dashboard request"`,
-		`path="/api/status"`, "status=200", `remote="192.0.2.1"`} {
+		`path="/api/status"`, "status=401", `remote="192.0.2.1"`} {
 		if !strings.Contains(logged, want) {
 			t.Errorf("log missing %s: %s", want, logged)
 		}

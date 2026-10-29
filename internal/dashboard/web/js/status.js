@@ -145,10 +145,12 @@
     var body = KW.$("[data-body]", main);
     var alertBox = KW.$("[data-alert]", main);
     var footer = KW.$("[data-updated]", main);
-    var lastOk = 0, failing = false, attempt = 0;
+    var lastOk = 0, failing = false, attempt = 0, stopped = false;
+    var scrollBack = KW.takeScroll();
     function load() {
       KW.refreshBadge();
       return KW.api("/api/status").then(function (res) {
+        if (stopped) return 0;
         if (KW.authFailed(res)) return 0;
         alertBox.textContent = "";
         if (res.status !== 200 || !res.data) {
@@ -168,6 +170,10 @@
         body.hidden = false;
         fill(main, res.data);
         KW.footer(footer, lastOk, false);
+        if (scrollBack) {
+          window.scrollTo(0, scrollBack);
+          scrollBack = 0;
+        }
         return 0;
       });
     }
@@ -175,6 +181,6 @@
     var tick = window.setInterval(function () {
       if (!failing) KW.footer(footer, lastOk, false);
     }, 5000);
-    return { stop: function () { poll.stop(); window.clearInterval(tick); } };
+    return { stop: function () { stopped = true; poll.stop(); window.clearInterval(tick); } };
   };
 })();

@@ -164,3 +164,17 @@ func TestEvaluationKeepingAddsOnlyThePanickedDetectorsFindings(t *testing.T) {
 		Evaluation{Findings: ev.Findings[:1]}.Keeping(previous),
 		"without a panic the fresh findings stand alone")
 }
+
+// A detector that needed a kind not synced is as unsure as one that
+// panicked: its earlier findings are kept, the others' results apply.
+func TestEvaluationKeepingKeepsTheUnsyncedDetectorsFindings(t *testing.T) {
+	previous := []Finding{
+		{Reason: "A-old", Detector: "a"}, {Reason: "B-old", Detector: "b"},
+	}
+	ev := Evaluation{UnsyncedBy: []string{"a"}}
+
+	got := ev.Keeping(previous)
+
+	require.Equal(t, []Finding{previous[0]}, got,
+		"a's finding is kept while it could not look; b's cleared")
+}

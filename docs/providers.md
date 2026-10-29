@@ -140,7 +140,8 @@ In plain words: the same options work for all providers, not just Slack.
   revoked token — is given up on immediately and goes straight to the dead-letter queue, so
   it cannot hold up the alerts queued behind it. The retry options are
   `maxAttempts` (default 3, 1 to 20), `delay` (default `1s`), `maxBackoff`
-  (cap on the growing wait, default `30s`), `jitterEnabled` (default `false`)
+  (cap on the growing wait, default `30s`), `jitterEnabled` (default `true`,
+  so many clusters alerting into one provider do not retry in lockstep)
   and `jitterFactor` (0 to 1, default `0.25`, used only when jitter is on).
   Durations are strings such as `5s`.
 - **`fallback`** — if this provider fails for good, hand the alert to another provider

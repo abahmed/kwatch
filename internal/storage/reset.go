@@ -34,6 +34,9 @@ type Reset struct {
 	// CarriedRecords is how many queued deliveries and thread ids were
 	// copied from the old file into the fresh one.
 	CarriedRecords int
+	// SkippedRecords is how many of them could not be read and were lost;
+	// they also count in kwatch_storage_corrupt_records_total.
+	SkippedRecords int
 }
 
 // unusableError marks a file that must be reset rather than reported.
@@ -64,26 +67,24 @@ const maxKeptShare = 4
 
 // resetFile moves the unusable file at path aside to a timestamped
 // path+".corrupt.<time>" copy and opens a fresh store in its place, so an
-// operator can still inspect it. After a schema change the queued
-// deliveries and thread ids are copied into the fresh file (see
-// reset_carry.go). With a volume limit the copy is kept only when it fits
-// in a quarter of that limit. The fresh open is not retried, so a bad disk
-// fails instead of looping through resets.
+// operator can still inspect it. Whatever the reason, the queued
+// deliveries and thread ids still readable in it are copied into the
+// fresh file, best effort, without ever failing the reset (see
+// reset_carry.go). With a volume limit the copy is kept only when it
+// fits in a quarter of that limit. The fresh open is not retried, so a
+// bad disk fails instead of looping through resets.
 func resetFile(
 	path string, bad *unusableError, volumeLimit int64, now time.Time,
-) (*bolt.DB, int, error) {
+) (*bolt.DB, int, int, error) {
 	aside := freeCopyName(path, now)
 	if err := quarantine(path, aside); err != nil {
-		return nil, 0, fmt.Errorf("store: set aside %s: %w", path, err)
+		return nil, 0, 0, fmt.Errorf("store: set aside %s: %w", path, err)
 	}
 	db, err := openChecked(path)
 	if err != nil {
-		return nil, 0, fmt.Errorf("store: open fresh %s: %w", path, err)
+		return nil, 0, 0, fmt.Errorf("store: open fresh %s: %w", path, err)
 	}
-	carried := 0
-	if bad.reason == ResetSchemaMismatch {
-		carried = carryRecords(aside, db)
-	}
+	carried, skipped := carryRecords(aside, db)
 	pruneCopies(path, aside)
 	kept := trimQuarantine(aside, volumeLimit)
 	if kept {
@@ -91,16 +92,17 @@ func resetFile(
 			"component", "state", "operation", "reset",
 			"reason", bad.reason, "oldVersion", bad.version,
 			"supportedVersion", SchemaVersion, "keptAs", aside,
-			"carriedRecords", carried)
+			"carriedRecords", carried, "skippedRecords", skipped)
 	} else {
 		klog.ErrorS(bad.cause, "state store reset: the old file was "+
 			"deleted because it would not fit the volume limit",
 			"component", "state", "operation", "reset",
 			"reason", bad.reason, "oldVersion", bad.version,
 			"supportedVersion", SchemaVersion,
-			"volumeLimitBytes", volumeLimit, "carriedRecords", carried)
+			"volumeLimitBytes", volumeLimit, "carriedRecords", carried,
+			"skippedRecords", skipped)
 	}
-	return db, carried, nil
+	return db, carried, skipped, nil
 }
 
 // freeCopyName returns an unused quarantine name for path at time now. A

@@ -1,9 +1,11 @@
 package pipeline
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/incident"
@@ -69,4 +71,31 @@ func TestEngineRecordsAnnouncementScope(t *testing.T) {
 	kept := e.announcer.inScope([]incident.Decision{resolve, dropped})
 
 	assert.Len(t, kept, 1)
+}
+
+// An announcement the scope drops is logged once, so a filtered-out
+// failure leaves a trace; an in-scope one is not.
+func TestEngineLogsAnAnnouncementTheScopeDrops(t *testing.T) {
+	var out bytes.Buffer
+	klog.LogToStderr(false)
+	klog.SetOutput(&out)
+	t.Cleanup(func() {
+		klog.Flush()
+		klog.SetOutput(nil)
+		klog.LogToStderr(true)
+	})
+	a := &announcer{scope: IncidentScope(nil, namespaceScope("shop"))}
+	kept, dropped := scopedIncident("shop", ""), scopedIncident("dev", "")
+	kept.ID, dropped.ID = "inc-kept", "inc-dropped"
+
+	a.inScope([]incident.Decision{
+		{Action: incident.Announce, Incident: kept},
+		{Action: incident.Announce, Incident: dropped},
+	})
+	klog.Flush()
+
+	logged := out.String()
+	assert.Contains(t, logged, `"incident not announced: out of scope"`)
+	assert.Contains(t, logged, `incident="inc-dropped"`)
+	assert.NotContains(t, logged, `incident="inc-kept"`)
 }

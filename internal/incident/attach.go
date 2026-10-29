@@ -167,7 +167,13 @@ func (m *Manager) refresh(model inventory.Reader, now time.Time) {
 			p.noteModes()
 			p.notePodPeak()
 			p.causeChain = m.inChain(p)
+			was := p.Tier
 			p.Tier = m.ratchetTier(p, m.override.apply(p, tier(p)))
+			if p.Tier != was && p.State != Settling {
+				// A settling incident's tier is in its "opened" line.
+				logLifecycle(p, "tier", "incident tier changed",
+					"from", was.String())
+			}
 		}
 	}
 	clear(m.changed)

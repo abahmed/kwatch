@@ -308,7 +308,7 @@ func TestExtractRetryDefaults(t *testing.T) {
 	assert.Equal(t, 3, rc.maxAttempts)
 	assert.Equal(t, time.Second, rc.delay)
 	assert.Equal(t, defaultMaxBackoff, rc.maxBackoff)
-	assert.False(t, rc.jitterEnabled)
+	assert.True(t, rc.jitterEnabled, "jitter is on by default")
 	assert.Equal(t, 0.25, rc.jitterFactor)
 }
 

@@ -174,7 +174,7 @@ func (inc *Incident) noteAbout(
 		Event{At: at, Text: text, Entity: about})
 	inc.sent.noted++
 	if over := len(inc.Timeline) - maxTimeline; over > 0 {
-		inc.Timeline = append(inc.Timeline[:0:0], inc.Timeline[over:]...)
+		inc.trimTimeline(over)
 	}
 }
 

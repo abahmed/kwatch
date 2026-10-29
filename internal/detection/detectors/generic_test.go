@@ -185,6 +185,31 @@ func TestGenericPhase(t *testing.T) {
 		evaluate(Generic{}, healthy, t0.Add(time.Hour), id, nil).Findings)
 }
 
+// A run that finished failed goes to the digest a day after it ended;
+// until then it is a warning that is checked again when it turns a day
+// old. A long-lived object in a failed phase stays a warning.
+func TestGenericFailedPhaseOfAFinishedRunAgesOut(t *testing.T) {
+	finished, id := genericEntity(map[string]inventory.Value{
+		kube.AttrPhase:    inventory.Text("Error"),
+		kube.AttrFinished: inventory.Time(t0),
+	})
+	fresh := evaluate(Generic{}, finished, t0.Add(time.Hour), id, nil)
+	require.Len(t, fresh.Findings, 1)
+	assert.Equal(t, detection.Warning, fresh.Findings[0].Severity)
+	assert.Equal(t, staleRunAge-time.Hour, fresh.RecheckAfter)
+
+	old := evaluate(Generic{}, finished, t0.Add(staleRunAge), id, nil)
+	require.Len(t, old.Findings, 1)
+	assert.Equal(t, detection.Info, old.Findings[0].Severity)
+
+	live, id := genericEntity(map[string]inventory.Value{
+		kube.AttrPhase: inventory.Text("Failed"),
+	})
+	got := evaluate(Generic{}, live, t0.Add(30*24*time.Hour), id, nil)
+	require.Len(t, got.Findings, 1)
+	assert.Equal(t, detection.Warning, got.Findings[0].Severity)
+}
+
 func TestGenericAbsentEntityIsQuiet(t *testing.T) {
 	m := newTestModel()
 	got := evaluate(Generic{}, m, t0, newID("widget", "a", "gone"), nil)

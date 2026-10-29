@@ -177,14 +177,17 @@ func (f *file) repair() error {
 		return err
 	}
 	if f.pending != nil {
-		db, carried, err := resetFile(
+		db, carried, skipped, err := resetFile(
 			f.path, f.pending, f.volumeLimit, f.now())
 		if err != nil {
 			return err
 		}
+		// Records the reset could not carry are lost like any value that
+		// does not decode, and counted with them.
+		f.counters.corrupt.Add(uint64(skipped))
 		f.db, f.reset, f.pending = db, &Reset{
 			Reason: f.pending.reason, OldVersion: f.pending.version,
-			CarriedRecords: carried,
+			CarriedRecords: carried, SkippedRecords: skipped,
 		}, nil
 	}
 	if f.shrink {
