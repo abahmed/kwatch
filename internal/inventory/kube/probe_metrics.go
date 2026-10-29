@@ -32,9 +32,6 @@ const (
 	maxProbeMetricsBytes = 32 << 20
 )
 
-// DNSServerNames are the Deployments that serve the cluster DNS.
-var DNSServerNames = map[string]bool{"coredns": true, "kube-dns": true}
-
 // metricsKeepFor is how long a counter sample of the API server or a DNS
 // pod is kept. Several API servers may answer one Service in turn, so a
 // sample is compared with the previous sample of the same process, which
@@ -154,12 +151,9 @@ func (p *Prober) dnsRates(
 // dnsPodIPs lists the IPs of the pods that serve the cluster DNS.
 func (p *Prober) dnsPodIPs() []string {
 	var out []string
-	for _, pod := range p.cfg.Model.Entities(KindPod) {
-		if pod.Namespace != "kube-system" {
-			continue
-		}
+	for _, pod := range DNSServerPods(p.cfg.Model) {
 		entity, ok := p.cfg.Model.Entity(pod)
-		if !ok || !DNSServerNames[ownerName(p.cfg.Model, pod)] {
+		if !ok {
 			continue
 		}
 		if ip, ok := entity.Attribute(AttrPodIP); ok &&
@@ -168,20 +162,6 @@ func (p *Prober) dnsPodIPs() []string {
 		}
 	}
 	return out
-}
-
-// ownerName is the name of the pod's top owner: the Deployment behind
-// its ReplicaSet, or the pod itself.
-func ownerName(model inventory.Reader, pod inventory.EntityID) string {
-	id := pod
-	for range 3 {
-		owners := model.Related(id, inventory.OwnedBy, inventory.Outgoing)
-		if len(owners) == 0 {
-			break
-		}
-		id = owners[0]
-	}
-	return id.Name
 }
 
 // fetch reads one metrics page, bounded.

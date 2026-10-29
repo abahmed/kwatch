@@ -58,6 +58,16 @@
 - The dashboard shows when each check read its section.
 - Community messages are unchanged, except on Discord (below).
 
+### Cluster DNS
+
+- The cluster DNS servers are found through the DNS Service
+  (`kube-system/kube-dns`, `openshift-dns/dns-default`, or a kube-system
+  Service named for CoreDNS or selecting `k8s-app=kube-dns`), then its
+  pods and their owners of any kind. OpenShift's DaemonSet, RKE2's
+  `rke2-coredns-rke2-coredns` and Helm installs with a release prefix are
+  now recognised for DNS metrics and DNS outages; the coredns and kube-dns
+  names remain the fallback.
+
 ### Delivery
 
 - Discord incidents are an embed again: the headline as the title, the
