@@ -18,6 +18,34 @@
   teaser when Pro found a likely cause. app.hideProHints hides the alert
   line, the teaser and the startup notice; /status still counts.
 
+### Evidence (Pro)
+
+- kwatch now runs the read-only look a message used to suggest and shows
+  the result: pod state, logs (previous and current run, per container),
+  events, memory use, node and the pods on it, volume claims, Secrets and
+  ConfigMaps (key names only), Service and Ingress chains, webhooks,
+  rollouts, control plane readiness, finalizers, images and pull secrets,
+  certificates, quotas, autoscalers, Jobs and probes. Every applicable
+  check runs in parallel when an incident opens and on re-investigation,
+  under a 10-second budget with at most four API reads at once.
+- A Pro message keeps only the steps that change the cluster; a read-only
+  step stays when its read was not allowed or timed out. When the gathered
+  evidence proves the cause, the message says so and the confidence is
+  "confirmed". When a provider's length limit cuts a message, it cuts the
+  proof and keeps the fix whole.
+- The dashboard's issue page has an Evidence tab with one section per
+  check, a log viewer, the related objects and the correlation (the
+  failure signature and what it points to, the nearest change, the spread
+  and what a rollout changed). `GET /api/incidents/{id}` adds `evidence`
+  and `correlation`. The report is kept in memory only, not in the state
+  file.
+- New settings: `investigation.logs` (default true; false reads no log),
+  and the Helm values `rbac.readyz` and `rbac.metricsApi` (both default
+  true). The ClusterRole now grants get on `pods` in `metrics.k8s.io`. A
+  read that is not allowed shows as such and never fails the
+  investigation. Audit entries add `evidence` and `readSteps`.
+- Community messages are unchanged.
+
 ### Detection
 
 - A node that has not been Ready since it joined is now given the ten-minute

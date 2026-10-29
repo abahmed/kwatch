@@ -347,6 +347,7 @@
 
     timeline(KW.$("[data-timeline]", root), KW.$("[data-tl-more]", root), inc);
     facts(KW.$("[data-facts]", root), inc);
+    KW.evidence(root, inc);
   }
 
   function notFound(main) {

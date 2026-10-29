@@ -279,7 +279,7 @@ enforces, are in `docs/contributor-architecture.md`.
 | `internal/pipeline` | Engine loop: observation queue, model update, detectors, incident manager, scope, investigation, downtime reconciliation, audit entries; the only producer of incident decisions |
 | `internal/pipeline/announce` | Collecting steps: startup summary, digest, roll-up, namespace outage hold, listings; the pipeline wires it and it never imports the pipeline |
 | `internal/pipeline/coverage` | Memory of the coverage backstop (failing workloads, hand-backs) and its timings |
-| `internal/pipeline/investigate` | Evidence investigators (crash, node, scheduling, config, admission, registry) and the `Investigator` contract |
+| `internal/pipeline/investigate` | Pro evidence: a registry of read-only checks run in parallel per incident (the root-kind investigators lead the bounded channel summary), the dashboard report sections, correlation (`correlate.go`) and the `Investigator` contract |
 | `internal/delivery/*` | Delivery manager for notification messages: routing, retries, fallback, pacing, queue coalescing, transport, provider dispatch |
 | `internal/delivery/api` | Neutral provider contract shared by delivery and the static catalog |
 | `internal/alert/*` | Provider adapters; one subpackage per provider |

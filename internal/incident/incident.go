@@ -155,6 +155,12 @@ type Incident struct {
 	// Steps are what the last message told the reader to do, already
 	// redacted. Persisted.
 	Steps []FixStep
+	// Evidence is the full report of the last investigation, for the
+	// dashboard, and Correlation what kwatch concluded from it. Both are
+	// redacted and bounded by investigate's report caps. They are kept
+	// in memory only, never persisted: a restart investigates again.
+	Evidence    []Section
+	Correlation *Correlation
 	// AnnouncedRoute is how the first announcement was routed to
 	// providers; nil until then, and for incidents announced by an older
 	// kwatch. Persisted. Delivery routes the resolve with it (see

@@ -56,6 +56,8 @@ func toDetail(p incident.Incident) IncidentDetail {
 		Timeline:         toTimeline(p.Timeline),
 		CapturedLogLines: redactAll(p.Facts),
 		DocsLink:         p.DocsLink,
+		Evidence:         toEvidence(p.Evidence),
+		Correlation:      toCorrelation(p.Correlation),
 	}
 }
 

@@ -14,6 +14,7 @@ func TestScenarioPodOOMKilled(t *testing.T) {
 		s.CreatePod(podOverMemoryLimit("oom"))
 		s.WaitForPodReason(5*time.Minute, 1, "OOMKilled")
 		s.ExpectIncident("oom", "OOMKilled", 0)
+		s.ExpectGatheredEvidence(s.Namespace, "oom")
 		s.ExpectKwatchHealthy()
 	})
 }

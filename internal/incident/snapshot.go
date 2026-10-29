@@ -26,6 +26,13 @@ func (inc *Incident) Snapshot() Incident {
 	out.Considered = append([]string(nil), inc.Considered...)
 	out.Facts = append([]string(nil), inc.Facts...)
 	out.Steps = append([]FixStep(nil), inc.Steps...)
+	// Sections are replaced whole, never edited, so sharing their
+	// contents is safe.
+	out.Evidence = append([]Section(nil), inc.Evidence...)
+	if inc.Correlation != nil {
+		c := *inc.Correlation
+		out.Correlation = &c
+	}
 	out.AnnouncedRoute = inc.AnnouncedRoute.clone()
 	out.Ack = inc.Ack.clone()
 	out.Reported, out.ReportedKnown = inc.sent.reported(len(inc.Timeline))

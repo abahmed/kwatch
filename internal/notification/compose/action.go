@@ -24,7 +24,8 @@ var rollbackWords = map[certainty]string{
 // rollback when the blamed change is known, otherwise the first
 // read-only command. Commands end the sentence so they copy cleanly.
 func actionSentences(f caseFacts) []sentence {
-	steps := nextSteps(f.p, stepMembers(f.p, f.members))
+	steps := gatheredSteps(nextSteps(f.p, stepMembers(f.p, f.members)),
+		f.gathered)
 	if step, ok := rollbackStep(steps); ok {
 		if words, sure := rollbackWords[certaintyOf(f.p.Cause)]; sure {
 			return []sentence{{part: partAction,

@@ -12,6 +12,7 @@ func TestScenarioPodCrashLoop(t *testing.T) {
 		s.CreateDeployment("crashloop", "crash")
 		s.WaitForPodReason(5*time.Minute, 1, "CrashLoopBackOff")
 		s.ExpectWorkloadRoot("deployment", "crashloop")
+		s.ExpectGatheredEvidence(s.Namespace, "crashloop")
 		s.ExpectKwatchHealthy()
 	})
 }

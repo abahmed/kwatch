@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -19,11 +20,42 @@ var pressureConditions = []string{
 	"MemoryPressure", "DiskPressure", "PIDPressure", "NetworkUnavailable",
 }
 
-// readNode reads the root node's failing conditions and its heaviest
-// pods by memory and CPU from the latest kubelet stats in the model. It
-// makes no API call.
+// nodeCheck reads the root node, or the node that killed a member for
+// memory. Only a node root leads the summary.
+func nodeCheck() check {
+	return check{name: incident.CheckNode, title: "Node",
+		budget: modelReadBudget,
+		applies: func(p incident.Incident, _ inventory.Reader) bool {
+			return isNodeRoot(p) || killingNode(p) != ""
+		}, leads: isNodeRoot, summary: readNode}
+}
+
+// killingNode is the node a member's memory kill names, if any.
+func killingNode(p incident.Incident) string {
+	for _, m := range sortedMembers(p) {
+		if node := evidenceValue(m,
+			detection.EvidenceKilledByNode); node != "" {
+			return node
+		}
+	}
+	return ""
+}
+
+// targetNode is the node the node checks read: the root when it is one,
+// else the node that killed a member.
+func targetNode(p incident.Incident) inventory.EntityID {
+	if isNodeRoot(p) {
+		return p.Root
+	}
+	return inventory.CoreID(kube.KindNode, "", killingNode(p))
+}
+
+// readNode reads the node's failing conditions and its heaviest pods by
+// memory and CPU from the latest kubelet stats in the model. It makes no
+// API call.
 func readNode(_ context.Context, s Sources, p incident.Incident) Result {
-	node, ok := s.Model.Entity(p.Root)
+	id := targetNode(p)
+	node, ok := s.Model.Entity(id)
 	if !ok {
 		return Result{}
 	}
@@ -32,7 +64,7 @@ func readNode(_ context.Context, s Sources, p incident.Incident) Result {
 		r.Evidence = append(r.Evidence,
 			incident.Fact{Kind: incident.FactNode, Text: failing})
 	}
-	usage := podUsageOn(s.Model, p.Root)
+	usage := podUsageOn(s.Model, id)
 	if top := topPods(usage, func(u podUsage) float64 { return u.memory },
 		humanMemory); top != "" {
 		r.Evidence = append(r.Evidence,

@@ -51,11 +51,12 @@ func TestSourceAccessGetsNodesButNotPods(t *testing.T) {
 	gets := map[string]bool{}
 	for _, access := range SourceAccess() {
 		if access.Verb == "get" {
-			gets[access.Resource.Name] = true
+			gets[access.Resource.Group+"/"+access.Resource.Name] = true
 		}
 	}
-	assert.True(t, gets["nodes"])
-	assert.False(t, gets["pods"], "pod get is namespaced, see InstallAccess")
+	assert.True(t, gets["/nodes"])
+	assert.False(t, gets["/pods"], "pod get is namespaced, see InstallAccess")
+	assert.True(t, gets["metrics.k8s.io/pods"], "evidence reads pod usage")
 }
 
 func TestInstallAccessScopesPodGetToOwnNamespace(t *testing.T) {

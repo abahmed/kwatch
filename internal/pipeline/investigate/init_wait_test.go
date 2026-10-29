@@ -39,7 +39,7 @@ func TestInvestigateInitWaitQuotesTheLastLines(t *testing.T) {
 
 	plan, r := planAndRun(t, sources, p)
 
-	if plan.Kind != kindInitWait {
+	if plan.Kind != incident.CheckInitWait {
 		t.Fatalf("kind = %q, want init-wait", plan.Kind)
 	}
 	if len(r.Output) != 1 || r.Output[0] != "waiting for db:5432..." {

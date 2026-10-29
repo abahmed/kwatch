@@ -98,14 +98,21 @@ func (w Writer) write(
 	}
 	msg.Status = status(p)
 	msg.Output = d.Facts.Output
-	msg.Steps = append(nextSteps(p, stepMembers(p, f.members)),
+	msg.Steps = append(gatheredSteps(nextSteps(p,
+		stepMembers(p, f.members)), f.gathered),
 		w.runbookSteps(f.members)...)
 	if !w.Community {
 		msg.Confidence = confidence(p.Cause)
+		if f.confirmed != "" {
+			msg.Confidence = confirmedWord
+		}
 	}
 	fill(&msg, marker(p), w.shape(
 		respell(arrange(noteSentences(d, f)), d.Facts.KindNames), note))
 	boldNames(msg.Doc, incidentNames(p, w.Cluster))
+	if !w.Community {
+		pinFix(msg.Doc, msg.Steps)
+	}
 	msg.Opens = d.Action == incident.Announce
 	if !msg.Opens {
 		msg.Opening = w.opening(d, now)
@@ -135,8 +142,8 @@ func noteSentences(d incident.Decision, f caseFacts) []sentence {
 	if d.Action == incident.Update {
 		return append(updateSentences(f), freshEvidenceSentences(f)...)
 	}
-	return append(append(leadSentences(f), writeAll(f, noteWriters)...),
-		ackAnnouncedSentences(f)...)
+	return append(append(append(leadSentences(f), confirmedSentences(f)...),
+		writeAll(f, noteWriters)...), ackAnnouncedSentences(f)...)
 }
 
 // status is the machine-readable status of an incident's message. It
@@ -181,6 +188,9 @@ func nonEmpty(value string) []string {
 	}
 	return []string{value}
 }
+
+// confirmedWord is the confidence of a cause gathered evidence proves.
+const confirmedWord = "confirmed"
 
 func confidence(cause *rootcause.CauseRecord) string {
 	return certaintyOf(cause).word()

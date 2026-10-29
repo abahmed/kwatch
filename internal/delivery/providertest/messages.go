@@ -1,6 +1,10 @@
 package providertest
 
-import "github.com/abahmed/kwatch/internal/notification"
+import (
+	"strings"
+
+	"github.com/abahmed/kwatch/internal/notification"
+)
 
 // Key is the incident key of every fixture message.
 const Key = "p-42"
@@ -110,5 +114,34 @@ func Rich() notification.Message {
 			{Text: "kubectl logs payments -n shop"}}},
 	}
 	m.Output = nil
+	return m
+}
+
+// FixCommand is the command of ProFix's fix.
+const FixCommand = "kubectl set resources deployment/payments -n shop " +
+	"-c app --limits=memory=384Mi"
+
+// ProFix is a Pro announcement whose proof is longer than any chat
+// limit and that ends with a pinned fix: every provider with a length
+// limit must keep the cause and the fix whole and cut the proof.
+func ProFix() notification.Message {
+	m := Announce()
+	doc := []notification.Block{{Kind: notification.Para,
+		Spans: []notification.Span{{Text: m.Short}}}}
+	for i := 0; i < 60; i++ {
+		doc = append(doc, notification.Block{Kind: notification.Bullet,
+			Spans: []notification.Span{{Text: "Memory climbed from " +
+				"118Mi to 255Mi before kill " + strings.Repeat("·", 60)}}})
+	}
+	doc = append(doc,
+		notification.Block{Kind: notification.Para, Pinned: true,
+			Spans: []notification.Span{{Text: "Raise the limit above " +
+				"the observed peak (changes the cluster):"}}},
+		notification.Block{Kind: notification.CodeBlock, Pinned: true,
+			Spans: []notification.Span{{Text: FixCommand}}})
+	m.Doc = doc
+	m.Steps = []notification.Step{{Text: "Raise the limit",
+		Command: FixCommand, Mutating: true}}
+	m.Output = []string{strings.Repeat("cache warm: 41882 entries ", 40)}
 	return m
 }

@@ -116,6 +116,8 @@ type Config struct {
 
 	// Watch turns optional watched resources on or off.
 	Watch WatchConfig `yaml:"watch"`
+	// Investigation tunes what Pro reads to gather evidence.
+	Investigation InvestigationConfig `yaml:"investigation"`
 
 	// Runtime is the defensive snapshot of derived configuration used by
 	// composition and runtime components. It is never decoded from YAML.
@@ -294,6 +296,14 @@ type KubeletConfig struct {
 	// signed by the cluster CA; set it only for clusters whose kubelets
 	// use self-signed certificates. Default false.
 	InsecureSkipVerify bool `yaml:"insecureSkipVerify"`
+}
+
+// InvestigationConfig tunes the evidence Pro gathers for an incident.
+type InvestigationConfig struct {
+	// Logs reads container logs for evidence (redacted, bounded). When
+	// false no log is read at all and the dashboard shows the log
+	// section as turned off. Default true.
+	Logs bool `yaml:"logs"`
 }
 
 // WatchConfig turns optional watched resources on or off.

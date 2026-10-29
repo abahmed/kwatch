@@ -55,3 +55,4 @@ dashboard.mode|string|local|Security|How people reach the dashboard: local (port
 dashboard.trustProxy|boolean|false|Security|Honour X-Forwarded-Proto and X-Forwarded-For from the proxy that terminates TLS in front of the dashboard.|active|
 dashboard.tlsCertFile|string|empty|Security|Certificate file kwatch serves on the dashboard port itself (with tlsKeyFile); reloaded when it changes.|active|
 dashboard.tlsKeyFile|string|empty|Security|Key file for dashboard.tlsCertFile.|active|
+investigation.logs|boolean|true|Scope|Read container logs for Pro evidence (redacted, bounded); false reads no log and shows the log section as turned off.|active|

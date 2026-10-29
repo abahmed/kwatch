@@ -181,6 +181,10 @@ func (a *announcer) withEvidence(d incident.Decision) incident.Decision {
 		d.Action != incident.Update) {
 		return d
 	}
+	// The report is the dashboard's whole picture, so every message
+	// carries the latest one; it is never news by itself.
+	d.Facts.Report = state.result.Report
+	d.Facts.Correlation = state.result.Correlation
 	var fresh []incident.Fact
 	for _, ev := range state.result.Evidence {
 		key := evidenceKey{kind: ev.Kind, subject: ev.Subject, text: ev.Text}

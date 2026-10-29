@@ -37,6 +37,7 @@ var communityParts = map[part]bool{
 // the audit log read it whole.
 func communityDecision(d incident.Decision) incident.Decision {
 	d.Facts.Output, d.Facts.Evidence = nil, nil
+	d.Facts.Report, d.Facts.Correlation = nil, nil
 	d.Facts.Changes, d.Facts.Window, d.Facts.Wake = nil, nil, nil
 	d.Incident.Cause = communityCause(d.Incident.Cause)
 	return d

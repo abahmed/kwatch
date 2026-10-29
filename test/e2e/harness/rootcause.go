@@ -22,7 +22,13 @@ type AuditEntry struct {
 	// Delivery is set when a digest, roll-up or startup summary carried
 	// the decision; such an entry is not a message of its own.
 	Delivery string `json:"delivery,omitempty"`
-	Name     string `json:"-"`
+	// Confidence, Evidence and ReadSteps are what Pro gathered: the
+	// confidence of the cause, the checks run as "check:status" and the
+	// read-only commands the message still asks for.
+	Confidence string   `json:"confidence,omitempty"`
+	Evidence   []string `json:"evidence,omitempty"`
+	ReadSteps  int      `json:"readSteps,omitempty"`
+	Name       string   `json:"-"`
 }
 
 // RootExpectation is the root-cause contract of one scenario. It has the

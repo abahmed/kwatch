@@ -97,7 +97,15 @@ func ownerName(id inventory.EntityID) string {
 // annotateResult names the addresses in a result's quoted text.
 func annotateResult(r Result, model inventory.Reader) Result {
 	lookup := addressOwners(model)
-	out := Result{}
+	out := Result{Correlation: r.Correlation}
+	for _, sec := range r.Report {
+		lines := make([]string, 0, len(sec.Lines))
+		for _, line := range sec.Lines {
+			lines = append(lines, annotateAddresses(line, lookup))
+		}
+		sec.Lines = lines
+		out.Report = append(out.Report, sec)
+	}
 	for _, line := range r.Output {
 		out.Output = append(out.Output, annotateAddresses(line, lookup))
 	}

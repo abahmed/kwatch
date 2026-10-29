@@ -42,6 +42,8 @@ func AuditEntry(
 		Delivery:       m.Carrier,
 		DeliveryNote:   m.CarrierNote,
 		Considered:     p.Considered,
+		Evidence:       evidenceChecks(d.Facts.Report),
+		ReadSteps:      readSteps(d.Facts.Report, m.Steps),
 	}
 	switch {
 	case m.PagingOnly:
@@ -112,4 +114,35 @@ func causeState(p incident.Incident) string {
 		}
 	}
 	return audit.CauseSelf
+}
+
+// evidenceChecks names each section of the report as "check:status",
+// each once.
+func evidenceChecks(report []incident.Section) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, s := range report {
+		name := s.Check + ":" + s.Status
+		if !seen[name] {
+			seen[name] = true
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// readSteps counts the steps that are commands which change nothing,
+// for an investigated decision only: without a report there was nothing
+// to run instead.
+func readSteps(report []incident.Section, steps []notification.Step) int {
+	if len(report) == 0 {
+		return 0
+	}
+	n := 0
+	for _, s := range steps {
+		if !s.Mutating && s.Command != "" {
+			n++
+		}
+	}
+	return n
 }

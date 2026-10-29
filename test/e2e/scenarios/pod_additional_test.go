@@ -15,6 +15,7 @@ func TestScenarioPodStartupFailureProfiles(t *testing.T) {
 		// PullNever makes the kubelet wait with ErrImageNeverPull, not
 		// ImagePullBackOff.
 		s.ExpectIncident("image-pull", "ErrImageNeverPull", 0)
+		s.ExpectGatheredEvidence(s.Namespace, "image-pull")
 		s.ExpectIncident("init-container", "CrashLoopBackOff", 0)
 		s.ExpectKwatchHealthy()
 	})

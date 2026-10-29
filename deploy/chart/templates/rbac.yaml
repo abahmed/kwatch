@@ -26,8 +26,22 @@ rules:
 - apiGroups: [""]
   resources: ["nodes/stats", "nodes/metrics", "pods/log"]
   verbs: ["get"]
+{{- if ne .Values.rbac.readyz false }}
+# /readyz: the prober and Pro evidence read the API server's readiness
+# checks (rbac.readyz).
 - nonResourceURLs: ["/readyz", "/metrics"]
+{{- else }}
+- nonResourceURLs: ["/metrics"]
+{{- end }}
   verbs: ["get"]
+{{- if ne .Values.rbac.metricsApi false }}
+# Pro evidence reads current container usage from the metrics API
+# (rbac.metricsApi). Without it the usage check falls back to kubelet
+# stats and says so.
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods"]
+  verbs: ["get"]
+{{- end }}
 - apiGroups: ["authorization.k8s.io"]
   resources: ["selfsubjectaccessreviews"]
   verbs: ["create"]
@@ -57,8 +71,22 @@ rules:
 - apiGroups: [""]
   resources: ["nodes/stats", "nodes/metrics", "pods/log"]
   verbs: ["get"]
+{{- if ne .Values.rbac.readyz false }}
+# /readyz: the prober and Pro evidence read the API server's readiness
+# checks (rbac.readyz).
 - nonResourceURLs: ["/readyz", "/metrics"]
+{{- else }}
+- nonResourceURLs: ["/metrics"]
+{{- end }}
   verbs: ["get"]
+{{- if ne .Values.rbac.metricsApi false }}
+# Pro evidence reads current container usage from the metrics API
+# (rbac.metricsApi). Without it the usage check falls back to kubelet
+# stats and says so.
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods"]
+  verbs: ["get"]
+{{- end }}
 - apiGroups: ["apps"]
   resources: ["deployments", "replicasets", "statefulsets", "daemonsets", "controllerrevisions"]
   verbs: ["list", "watch"]
