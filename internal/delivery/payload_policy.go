@@ -13,10 +13,11 @@ const (
 )
 
 var boundedPayloadPolicies = map[string]payloadPolicy{
-	"telegram":    {maxBytes: 4096, mode: payloadBounded},
-	"teams":       {maxBytes: 28000, mode: payloadBounded},
-	"slack":       {maxBytes: 40000, mode: payloadBounded},
-	"discord":     {maxBytes: 2000, mode: payloadBounded},
+	"telegram": {maxBytes: 4096, mode: payloadBounded},
+	"teams":    {maxBytes: 28000, mode: payloadBounded},
+	"slack":    {maxBytes: 40000, mode: payloadBounded},
+	// One embed: description 4096, the whole embed 6000.
+	"discord":     {maxBytes: 6000, mode: payloadBounded},
 	"pushover":    {maxBytes: 1024, mode: payloadBounded},
 	"vonage":      {maxBytes: 1600, mode: payloadBounded},
 	"plivo":       {maxBytes: 1600, mode: payloadBounded},

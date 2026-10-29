@@ -76,6 +76,9 @@ type Sources struct {
 	// PodUsage reads a pod's usage from the metrics API.
 	PodUsage func(context.Context, inventory.EntityID) (
 		[]kube.ContainerUsage, error)
+	// Now stamps when each check returned; nil leaves sections
+	// unstamped.
+	Now func() time.Time
 	// LogsOff is set when log capture is turned off
 	// (investigation.logs: false): no log is read at all.
 	LogsOff bool

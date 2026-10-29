@@ -32,6 +32,20 @@
   var FROM = { "Signature": "logs", "Spread": "logs", "Matches": "service",
     "Change": "rollout", "Before and after": "rollout" };
 
+  /* readAt is the "Read at 13:44:02" footer of a section, or null. */
+  function readAt(list) {
+    var iso = list.map(function (s) { return s.readAt; }).filter(Boolean).sort().pop();
+    if (!iso || !KW.valid(iso)) return null;
+    var d = new Date(iso);
+    var t = KW.el("time", "", "");
+    t.dateTime = iso;
+    t.textContent = KW.hhmm(d) + ":" + ("0" + (KW.utc ? d.getUTCSeconds() : d.getSeconds())).slice(-2) +
+      (KW.utc ? " UTC" : "");
+    var p = KW.el("p", "ev-cap", "Read at ");
+    p.appendChild(t);
+    return p;
+  }
+
   function badge(s) {
     if (s.status === "denied" && s.reason === "off") return ["Turned off", "b-warn"];
     return BADGE[s.status] || BADGE.absent;
@@ -130,6 +144,8 @@
         g[1].appendChild(lineView(s.lines, s.matched, first.title + " of " + (s.subject || "this object")));
       }
     });
+    var at = readAt(list);
+    if (at) g[1].appendChild(at);
     return g[0];
   }
 
@@ -180,6 +196,8 @@
     g[1].appendChild(controls);
     g[1].appendChild(view);
     g[1].appendChild(KW.el("p", "ev-cap", "Credentials are hidden in these lines."));
+    var at = readAt(list);
+    if (at) g[1].appendChild(at);
     show();
     return g[0];
   }

@@ -1,0 +1,79 @@
+[
+  {
+    "content": {
+      "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+      "body": [
+        {
+          "text": "payments",
+          "type": "TextBlock",
+          "weight": "Bolder",
+          "wrap": true
+        },
+        {
+          "text": "🔴 payments in shop is crash-looping.",
+          "type": "TextBlock",
+          "weight": "Bolder",
+          "wrap": true
+        },
+        {
+          "spacing": "Medium",
+          "text": "What kwatch found",
+          "type": "TextBlock",
+          "weight": "Bolder",
+          "wrap": true
+        },
+        {
+          "spacing": "None",
+          "text": "- The last run of payments-1/app ended OOMKilled, exit code 137.",
+          "type": "TextBlock",
+          "wrap": true
+        },
+        {
+          "spacing": "None",
+          "text": "- Memory climbed from 118Mi to 255Mi in 9 minutes.",
+          "type": "TextBlock",
+          "wrap": true
+        },
+        {
+          "items": [
+            {
+              "isSubtle": true,
+              "text": "Log, container app, previous run",
+              "type": "TextBlock",
+              "wrap": true
+            },
+            {
+              "fontType": "Monospace",
+              "maxLines": 5,
+              "text": "cache warm: 41882 entries\ncache warm: 96310 entries \\\u003c​@​everyone\\\u003e",
+              "type": "TextBlock",
+              "wrap": false
+            }
+          ],
+          "type": "Container"
+        },
+        {
+          "spacing": "Medium",
+          "text": "Fix (changes the cluster)",
+          "type": "TextBlock",
+          "weight": "Bolder",
+          "wrap": true
+        },
+        {
+          "text": "Raise the memory limit to 384Mi, half again above the observed peak of 255Mi (changes the cluster)",
+          "type": "TextBlock",
+          "wrap": true
+        },
+        {
+          "fontType": "Monospace",
+          "text": "kubectl set resources deployment/payments -n shop -c app --limits=memory=384Mi",
+          "type": "TextBlock",
+          "wrap": true
+        }
+      ],
+      "type": "AdaptiveCard",
+      "version": "1.2"
+    },
+    "contentType": "application/vnd.microsoft.card.adaptive"
+  }
+]

@@ -98,9 +98,7 @@ func (w Writer) write(
 	}
 	msg.Status = status(p)
 	msg.Output = d.Facts.Output
-	msg.Steps = append(gatheredSteps(nextSteps(p,
-		stepMembers(p, f.members)), f.gathered),
-		w.runbookSteps(f.members)...)
+	msg.Steps = append(proSteps(f), w.runbookSteps(f.members)...)
 	if !w.Community {
 		msg.Confidence = confidence(p.Cause)
 		if f.confirmed != "" {
@@ -112,6 +110,7 @@ func (w Writer) write(
 	boldNames(msg.Doc, incidentNames(p, w.Cluster))
 	if !w.Community {
 		pinFix(msg.Doc, msg.Steps)
+		msg.Evidence = evidenceSummary(d, msg.Steps)
 	}
 	msg.Opens = d.Action == incident.Announce
 	if !msg.Opens {

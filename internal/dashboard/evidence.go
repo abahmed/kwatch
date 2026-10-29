@@ -1,6 +1,8 @@
 package dashboard
 
 import (
+	"time"
+
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/redact"
 )
@@ -19,6 +21,7 @@ func toEvidence(report []incident.Section) []EvidenceSection {
 			Subject: redact.Evidence(s.Subject), Run: s.Run,
 			Facts: toFacts(s.Facts), Lines: redactAll(s.Lines),
 			Matched: append([]int{}, s.Matched...),
+			ReadAt:  readAt(s.At),
 		})
 	}
 	return out
@@ -39,4 +42,11 @@ func toFacts(facts []incident.SectionFact) []EvidenceFact {
 			Value: redact.Evidence(f.Value)})
 	}
 	return out
+}
+
+func readAt(at time.Time) *time.Time {
+	if at.IsZero() {
+		return nil
+	}
+	return &at
 }

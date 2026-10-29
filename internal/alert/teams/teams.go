@@ -124,9 +124,12 @@ func (t *Teams) buildRequestBodyTeams(
 	}
 	text := safetext.RichWithOutput(m,
 		notification.MarkdownDialect(nil, "\n\n"), "\n\n", 0)
+	attachment := textCardAttachments(title, text)
+	if m.Evidence != nil {
+		attachment = evidenceCardAttachments(title, m)
+	}
 	payload := &teamsFlowPayload{
-		Title: title, Text: text,
-		Attachment: textCardAttachments(title, text),
+		Title: title, Text: text, Attachment: attachment,
 	}
 	jsonBytes, err := json.Marshal(payload)
 	if err != nil {

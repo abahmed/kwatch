@@ -1,0 +1,13 @@
+🔴 payments in shop is crash-looping.
+
+What kwatch found
+- The last run of payments-1/app ended OOMKilled, exit code 137.
+- Memory climbed from 118Mi to 255Mi in 9 minutes.
+
+Log, container app, previous run
+  cache warm: 41882 entries
+  cache warm: 96310 entries <@everyone>
+
+Fix (changes the cluster)
+Raise the memory limit to 384Mi, half again above the observed peak of 255Mi (changes the cluster)
+  kubectl set resources deployment/payments -n shop -c app --limits=memory=384Mi

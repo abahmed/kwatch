@@ -7,5 +7,15 @@ Content-Type: application/json
     "replied_user": false
   },
   "components": null,
-  "content": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n```\nпаника: нехватка памяти — 内存不足\n```"
+  "embeds": [
+    {
+      "color": 11805464,
+      "description": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n```\nпаника: нехватка памяти — 内存不足\n```",
+      "footer": {
+        "text": "kwatch · dev"
+      },
+      "timestamp": "<time>",
+      "title": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú."
+    }
+  ]
 }

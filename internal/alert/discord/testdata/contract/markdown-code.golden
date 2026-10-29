@@ -7,5 +7,15 @@ Content-Type: application/json
     "replied_user": false
   },
   "components": null,
-  "content": "🔴 **payments** in **shop** is crash-looping.\nIt said `boom *x* @​channel`.\nService **web** can't serve traffic. Run\n```\nkubectl logs payments -n shop\n```"
+  "embeds": [
+    {
+      "color": 11805464,
+      "description": "It said `boom *x* @​channel`.\nService **web** can't serve traffic. Run\n```\nkubectl logs payments -n shop\n```",
+      "footer": {
+        "text": "kwatch · dev"
+      },
+      "timestamp": "<time>",
+      "title": "🔴 payments in shop is crash-looping."
+    }
+  ]
 }

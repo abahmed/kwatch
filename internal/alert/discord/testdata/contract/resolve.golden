@@ -7,5 +7,15 @@ Content-Type: application/json
     "replied_user": false
   },
   "components": null,
-  "content": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart."
+  "embeds": [
+    {
+      "color": 1993530,
+      "description": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
+      "footer": {
+        "text": "kwatch · dev"
+      },
+      "timestamp": "<time>",
+      "title": "✅ payments in shop is healthy again."
+    }
+  ]
 }

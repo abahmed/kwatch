@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -194,5 +195,16 @@ func TestBoundedCapsReportAndRedactsIt(t *testing.T) {
 	}
 	if !slices.Equal(got.Matched, []int{maxSectionLines - 1}) {
 		t.Fatalf("matched = %v", got.Matched)
+	}
+}
+
+func TestInvestigateStampsWhenEachCheckRead(t *testing.T) {
+	s := Sources{Model: crashModel(t), Tail: tailOf(refusedLines, nil),
+		Now: func() time.Time { return investigatedAt }}
+	_, r := planAndRun(t, s, crashIncident())
+	for _, sec := range r.Report {
+		if !sec.At.Equal(investigatedAt) {
+			t.Fatalf("%s read at %v", sec.Check, sec.At)
+		}
 	}
 }

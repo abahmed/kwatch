@@ -1,5 +1,7 @@
 package incident
 
+import "time"
+
 // Section statuses. A check that read what it needed is ok; one the API
 // refused is denied, one that ran out of time is timeout, and one whose
 // object is not there is absent. A denied read never fails the
@@ -84,6 +86,8 @@ type Section struct {
 	Lines []string      `json:"lines,omitempty"`
 	// Matched indexes the Lines that carry the failure's signature.
 	Matched []int `json:"matched,omitempty"`
+	// At is when the check returned, from the investigator's clock.
+	At time.Time `json:"at,omitempty"`
 }
 
 // Correlation is what kwatch concluded across sections: the classified

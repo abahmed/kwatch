@@ -44,7 +44,29 @@
   true). The ClusterRole now grants get on `pods` in `metrics.k8s.io`. A
   read that is not allowed shows as such and never fails the
   investigation. Audit entries add `evidence` and `readSteps`.
-- Community messages are unchanged.
+- A Pro message for a workload whose container was killed at its memory
+  limit suggests a new limit: half again above the observed peak (or the
+  limit, when higher), rounded up to 64Mi, as a step that changes the
+  cluster.
+- Teams cards and email lay a Pro message out as cause, what kwatch found,
+  the log quote and the fix; email adds an HTML part next to the plain
+  text. The webhook, n8n and Zapier payloads add an `evidence` object
+  (confirmed, checks, facts, quote, fix); every other field is unchanged.
+- When a provider's limit cuts a Pro message, the log quote loses lines
+  first, then the proof, then the quote; the cause and the fix stay.
+- The dashboard shows when each check read its section.
+- Community messages are unchanged, except on Discord (below).
+
+### Delivery
+
+- Discord incidents are an embed again: the headline as the title, the
+  cause, proof, log quote and fix in the description, colour by status,
+  and kwatch, the cluster and the time in the footer. The embed stays
+  within Discord's limits (description 4096, embed 6000) by cutting the
+  proof, never the fix, and without one field per section, which broke
+  long messages before (#194, #416). Mentions are neutralized, thread_id
+  still works, and plain notices stay message content of at most 2000
+  characters. This changes Discord output in both editions.
 
 ### Detection
 

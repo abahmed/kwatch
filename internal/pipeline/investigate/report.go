@@ -31,7 +31,7 @@ func boundReport(report []incident.Section) []incident.Section {
 		}
 		bounded := incident.Section{Check: s.Check, Title: s.Title,
 			Status: s.Status, Reason: s.Reason,
-			Subject: clipReport(s.Subject), Run: s.Run}
+			Subject: clipReport(s.Subject), Run: s.Run, At: s.At}
 		for _, f := range s.Facts {
 			if len(bounded.Facts) == maxSectionFacts || budget <= 0 {
 				break

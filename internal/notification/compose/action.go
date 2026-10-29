@@ -24,14 +24,17 @@ var rollbackWords = map[certainty]string{
 // rollback when the blamed change is known, otherwise the first
 // read-only command. Commands end the sentence so they copy cleanly.
 func actionSentences(f caseFacts) []sentence {
-	steps := gatheredSteps(nextSteps(f.p, stepMembers(f.p, f.members)),
-		f.gathered)
+	steps := proSteps(f)
 	if step, ok := rollbackStep(steps); ok {
 		if words, sure := rollbackWords[certaintyOf(f.p.Cause)]; sure {
 			return []sentence{{part: partAction,
 				text: fmt.Sprintf(words, f.p.Cause.RollbackRevision) +
 					step.Command}}
 		}
+	}
+	if step, ok := evidenceFix(steps); ok {
+		return []sentence{{part: partAction,
+			text: "To " + lowerFirst(step.Text) + ", run " + step.Command}}
 	}
 	for _, step := range steps {
 		if !step.Mutating && step.Command != "" {
@@ -46,6 +49,18 @@ func actionSentences(f caseFacts) []sentence {
 func rollbackStep(steps []notification.Step) (notification.Step, bool) {
 	for _, step := range steps {
 		if step.Mutating && strings.Contains(step.Command, "rollout undo") {
+			return step, true
+		}
+	}
+	return notification.Step{}, false
+}
+
+// evidenceFix is a fix the gathered evidence made concrete. It only
+// exists in Pro, so Community never reaches it.
+func evidenceFix(steps []notification.Step) (notification.Step, bool) {
+	for _, step := range steps {
+		if step.Mutating && strings.HasPrefix(step.Command,
+			"kubectl set resources ") {
 			return step, true
 		}
 	}

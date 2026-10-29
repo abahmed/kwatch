@@ -9,11 +9,11 @@ import (
 	"github.com/abahmed/kwatch/internal/delivery/providertest"
 )
 
-func TestIncidentContentFenceSurvivesTruncation(t *testing.T) {
+func TestEmbedDescriptionFenceSurvivesTruncation(t *testing.T) {
 	m := providertest.Announce()
-	m.Output = []string{"```@everyone", strings.Repeat("x", maxContent)}
-	content := incidentContent(m)
-	assert.LessOrEqual(t, len(content), maxContent)
-	assert.True(t, strings.HasSuffix(content, "\n````"), content[len(content)-20:])
-	assert.NotContains(t, content, "@everyone")
+	m.Output = []string{"```@everyone", strings.Repeat("x", maxEmbedTotal)}
+	got := description(m, maxEmbedDescription)
+	assert.LessOrEqual(t, len(got), maxEmbedDescription)
+	assert.True(t, strings.HasSuffix(got, "\n````"), got[len(got)-20:])
+	assert.NotContains(t, got, "@everyone")
 }

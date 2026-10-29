@@ -3,6 +3,7 @@ package investigate
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"k8s.io/klog/v2"
 
@@ -35,6 +36,7 @@ func runChecks(
 			checkCtx, cancel := context.WithTimeout(ctx, c.budget)
 			defer cancel()
 			out.summary, out.sections = c.run(checkCtx, s, p)
+			stamp(out.sections, s.Now)
 		}()
 	}
 	outputs := make([]*checkOutput, len(planned))
@@ -200,4 +202,15 @@ func (r *RootInvestigator) gate(ctx context.Context, read func() error) error {
 	}
 	defer func() { <-r.slots }()
 	return read()
+}
+
+// stamp sets when the sections were read.
+func stamp(sections []incident.Section, now func() time.Time) {
+	if now == nil {
+		return
+	}
+	at := now()
+	for i := range sections {
+		sections[i].At = at
+	}
 }

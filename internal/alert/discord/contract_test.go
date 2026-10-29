@@ -40,14 +40,14 @@ func TestContract(t *testing.T) {
 	}
 	providertest.RunContract(t, providertest.Contract{
 		Chat: true,
-		Send: c.SendIncident, Rec: rec, LimitBytes: maxContent,
+		Send: c.SendIncident, Rec: rec, LimitBytes: maxEmbedTotal,
 		Secrets: []string{"wh-secret"},
 		Check:   checkShape,
 	})
 }
 
-// checkShape asserts the execute-webhook body: content within the 2000
-// character limit, balanced fences, and mentions disabled.
+// checkShape asserts the execute-webhook body: one embed within
+// Discord's limits, balanced fences, and mentions disabled.
 func checkShape(
 	t *testing.T, name string, reqs []providertest.Request,
 ) {
@@ -56,14 +56,21 @@ func checkShape(
 		t.Fatalf("requests = %+v", reqs)
 	}
 	body := reqs[0].JSON(t)
-	content, _ := body["content"].(string)
-	if strings.TrimSpace(content) == "" {
-		t.Fatalf("content is empty: %s", reqs[0].Body)
+	embeds, _ := body["embeds"].([]any)
+	if len(embeds) != 1 {
+		t.Fatalf("want one embed: %s", reqs[0].Body)
 	}
-	if n := utf8.RuneCountInString(content); n > maxContent {
-		t.Fatalf("content is %d characters, limit %d", n, maxContent)
+	embed, _ := embeds[0].(map[string]any)
+	title, _ := embed["title"].(string)
+	desc, _ := embed["description"].(string)
+	if strings.TrimSpace(title) == "" {
+		t.Fatalf("title is empty: %s", reqs[0].Body)
 	}
-	providertest.AssertFencesBalanced(t, content)
+	if n := utf8.RuneCountInString(desc); n > maxEmbedDescription {
+		t.Fatalf("description is %d characters, limit %d", n,
+			maxEmbedDescription)
+	}
+	providertest.AssertFencesBalanced(t, desc)
 	am, _ := body["allowed_mentions"].(map[string]any)
 	if parse, ok := am["parse"].([]any); !ok || len(parse) != 0 {
 		t.Fatalf("mentions must be disabled: %s", reqs[0].Body)

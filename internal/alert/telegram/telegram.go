@@ -9,6 +9,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -134,10 +135,13 @@ func (t *Telegram) incidentBody(m notification.Message) string {
 func incidentText(m notification.Message, limit int) string {
 	d := notification.HTMLDialect(notification.NeutralizeTelegramMentions,
 		false)
+	const sep = "\n\n"
+	if safetext.Pinned(m.Doc) {
+		return safetext.FitPinned(m, d, sep, limit)
+	}
 	if len(m.Output) == 0 {
 		return m.RenderWithin(d, limit)
 	}
-	const sep = "\n\n"
 	output := strings.Join(m.Output, "\n")
 	// The output gets at most half of the limit; the narrative comes
 	// first and is cut by whole lines, so no tag is ever cut open.

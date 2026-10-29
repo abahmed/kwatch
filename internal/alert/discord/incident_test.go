@@ -4,74 +4,115 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 
+	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/providertest"
 	"github.com/abahmed/kwatch/internal/notification"
 )
 
+var sentAt = time.Date(2026, 10, 29, 13, 44, 0, 0, time.UTC)
+
 // capturingDiscord records the webhook parameters instead of calling the
 // Discord API.
 func capturingDiscord(captured *[]*discordgo.WebhookParams) *Discord {
-	return &Discord{send: func(
-		_, _ string, _ bool, data *discordgo.WebhookParams,
-		_ ...discordgo.RequestOption,
-	) (*discordgo.Message, error) {
-		*captured = append(*captured, data)
-		return nil, nil
-	}}
+	return &Discord{clusterName: "prod-eu-1",
+		clockSource: clock.Func(func() time.Time { return sentAt }),
+		send: func(
+			_, _ string, _ bool, data *discordgo.WebhookParams,
+			_ ...discordgo.RequestOption,
+		) (*discordgo.Message, error) {
+			*captured = append(*captured, data)
+			return nil, nil
+		}}
 }
 
-func TestDiscordSendIncidentPostsNote(t *testing.T) {
+func sendOne(t *testing.T, m notification.Message) *discordgo.MessageEmbed {
+	t.Helper()
 	var captured []*discordgo.WebhookParams
-	d := capturingDiscord(&captured)
+	if err := capturingDiscord(&captured).SendIncident(
+		context.Background(), m); err != nil {
+		t.Fatalf("SendIncident: %v", err)
+	}
+	params := captured[0]
+	if params.Content != "" || len(params.Embeds) != 1 ||
+		params.AllowedMentions == nil {
+		t.Fatalf("unexpected params: %+v", params)
+	}
+	return params.Embeds[0]
+}
+
+// embedSize is what Discord counts toward the 6000 limit.
+func embedSize(e *discordgo.MessageEmbed) int {
+	return len(e.Title) + len(e.Description) + len(e.Footer.Text)
+}
+
+func TestDiscordSendIncidentPostsOneEmbed(t *testing.T) {
 	for _, tc := range providertest.Lifecycle() {
 		t.Run(tc.Name, func(t *testing.T) {
-			if err := d.SendIncident(
-				context.Background(), tc.Message,
-			); err != nil {
-				t.Fatalf("SendIncident: %v", err)
+			e := sendOne(t, tc.Message)
+			if e.Title != tc.Message.ShortText() {
+				t.Fatalf("title = %q", e.Title)
 			}
-			params := captured[len(captured)-1]
-			if !strings.HasPrefix(params.Content, tc.Message.Note) {
-				t.Fatalf("content = %q", params.Content)
-			}
-			providertest.AssertOneLeadingEmoji(t, params.Content)
-			if len(params.Embeds) != 0 || params.AllowedMentions == nil {
-				t.Fatalf("unexpected params: %+v", params)
+			if e.Color != statusColor(tc.Message.Status) ||
+				e.Footer.Text != "kwatch · prod-eu-1" ||
+				e.Timestamp != "2026-10-29T13:44:00Z" {
+				t.Fatalf("embed = %+v", e)
 			}
 		})
 	}
 }
 
-func TestDiscordSendIncidentNeutralizesMentions(t *testing.T) {
-	var captured []*discordgo.WebhookParams
-	d := capturingDiscord(&captured)
-	if err := d.SendIncident(
-		context.Background(), providertest.Hostile(),
-	); err != nil {
-		t.Fatalf("SendIncident: %v", err)
+func TestDiscordStatusColors(t *testing.T) {
+	want := map[notification.Status]int{
+		notification.StatusCritical: colorCritical,
+		notification.StatusWarning:  colorWarning,
+		notification.StatusFlapping: colorWarning,
+		notification.StatusResolved: colorResolved,
+		notification.StatusLow:      colorInfo,
 	}
-	if strings.Contains(captured[0].Content, "@channel") {
-		t.Fatalf("mention was not neutralized: %q", captured[0].Content)
+	for status, color := range want {
+		if got := statusColor(status); got != color {
+			t.Errorf("%v: color %x, want %x", status, got, color)
+		}
 	}
 }
 
-func TestDiscordSendIncidentTruncatesContent(t *testing.T) {
-	var captured []*discordgo.WebhookParams
-	d := capturingDiscord(&captured)
+func TestDiscordSendIncidentNeutralizesMentions(t *testing.T) {
+	e := sendOne(t, providertest.Hostile())
+	if strings.Contains(e.Title+e.Description, "@channel") ||
+		strings.Contains(e.Title+e.Description, "@everyone") {
+		t.Fatalf("mention was not neutralized: %q %q", e.Title,
+			e.Description)
+	}
+}
+
+func TestDiscordEmbedStaysWithinLimits(t *testing.T) {
 	m := providertest.Announce()
 	m.Note = notification.MarkerPage + " " + strings.Repeat("é", 3000)
-	if err := d.SendIncident(context.Background(), m); err != nil {
-		t.Fatalf("SendIncident: %v", err)
+	m.Output = []string{strings.Repeat("x", 9000)}
+	e := sendOne(t, m)
+	if len(e.Description) > maxEmbedDescription ||
+		embedSize(e) > maxEmbedTotal || len(e.Title) > maxEmbedTitle {
+		t.Fatalf("embed sizes: title %d, description %d, total %d",
+			len(e.Title), len(e.Description), embedSize(e))
 	}
-	content := captured[0].Content
-	if len(content) > maxContent || !strings.HasSuffix(content, "…") {
-		t.Fatalf("content is %d bytes", len(content))
-	}
-	if again := incidentContent(m); again != content {
+	if again := sendOne(t, m); again.Description != e.Description {
 		t.Fatal("truncation is not deterministic")
 	}
-	providertest.AssertOneLeadingEmoji(t, content)
+}
+
+func TestDiscordSendMessageStaysPlainAndBounded(t *testing.T) {
+	var captured []*discordgo.WebhookParams
+	d := capturingDiscord(&captured)
+	if err := d.SendMessage(context.Background(),
+		strings.Repeat("digest ", 1000)); err != nil {
+		t.Fatal(err)
+	}
+	if len(captured[0].Embeds) != 0 ||
+		len(captured[0].Content) > maxContent {
+		t.Fatalf("digest params = %+v", captured[0])
+	}
 }

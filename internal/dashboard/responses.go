@@ -78,6 +78,8 @@ type EvidenceSection struct {
 	Facts   []EvidenceFact `json:"facts"`
 	Lines   []string       `json:"lines"`
 	Matched []int          `json:"matched"`
+	// ReadAt is when the check read this, omitted when unknown.
+	ReadAt *time.Time `json:"readAt,omitempty"`
 }
 
 // EvidenceFact is one labelled value.

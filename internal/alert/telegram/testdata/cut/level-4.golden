@@ -1,0 +1,6 @@
+🔴 api in shop was killed for using more memory than its 256Mi limit. Confirmed.
+• Last exit: OOMKilled, exit code 137, 4 restarts in 40 minutes.
+• The limit is 256Mi and the request is 128Mi.
+
+Raise the memory limit to 384Mi, half again above the observed peak of 255Mi (changes the cluster):
+<pre>kubectl set resources deployment/payments -n shop -c app --limits=memory=384Mi</pre>

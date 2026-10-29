@@ -125,7 +125,12 @@ func (e *Email) SendIncident(
 	if msg.Key != "" {
 		m.SetHeader("X-Kwatch-Alert-Key", msg.AlertKey(e.clusterName))
 	}
-	m.SetBody("text/plain", msg.MailBody())
+	if msg.Evidence != nil {
+		m.SetBody("text/plain", evidenceText(msg))
+		m.AddAlternative("text/html", evidenceHTML(msg))
+	} else {
+		m.SetBody("text/plain", msg.MailBody())
+	}
 
 	if e.send != nil {
 		return e.send(m)

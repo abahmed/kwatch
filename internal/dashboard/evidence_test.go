@@ -15,7 +15,7 @@ func TestDetailCarriesEvidenceRedacted(t *testing.T) {
 		Status: incident.SectionOK, Subject: "app-a-1/app",
 		Run:     "previous",
 		Lines:   []string{"connecting", "password=hunter2 refused"},
-		Matched: []int{1},
+		Matched: []int{1}, At: testEpoch,
 	}, {
 		Check: incident.CheckUsage, Title: "Memory use",
 		Status: incident.SectionDenied, Reason: incident.ReasonRBAC,
@@ -32,6 +32,11 @@ func TestDetailCarriesEvidenceRedacted(t *testing.T) {
 	if len(d.Evidence) != 2 || d.Evidence[1].Status != "denied" ||
 		d.Evidence[1].Reason != "rbac" || d.Evidence[0].Matched[0] != 1 {
 		t.Fatalf("evidence = %+v", d.Evidence)
+	}
+	if d.Evidence[0].ReadAt == nil || !d.Evidence[0].ReadAt.Equal(testEpoch) ||
+		d.Evidence[1].ReadAt != nil {
+		t.Fatalf("read times = %v, %v", d.Evidence[0].ReadAt,
+			d.Evidence[1].ReadAt)
 	}
 	if strings.Contains(string(body), "hunter2") {
 		t.Fatal("a secret in evidence was served unredacted")

@@ -38,6 +38,8 @@ type Message struct {
 	Steps []Step
 	// Confidence describes how sure the cause is, when there is one.
 	Confidence string
+	// Evidence is what Pro gathered, nil otherwise (see Evidence).
+	Evidence *Evidence `json:",omitempty"`
 	// Route is what provider routing rules match on.
 	Route Route
 

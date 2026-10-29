@@ -145,3 +145,23 @@ func ProFix() notification.Message {
 	m.Output = []string{strings.Repeat("cache warm: 41882 entries ", 40)}
 	return m
 }
+
+// ProEvidence is a Pro announcement with the evidence summary that
+// Teams, email and the webhook lay out themselves.
+func ProEvidence() notification.Message {
+	m := ProFix()
+	m.Output = []string{"cache warm: 41882 entries",
+		"cache warm: 96310 entries <@everyone>"}
+	m.Evidence = &notification.Evidence{Confirmed: true, Checks: 5,
+		Facts: []string{
+			"The last run of payments-1/app ended OOMKilled, exit code 137.",
+			"Memory climbed from 118Mi to 255Mi in 9 minutes.",
+		},
+		Quote: &notification.Quote{Container: "app", Run: "previous",
+			Lines: m.Output},
+		Fix: []notification.EvidenceStep{{Text: "Raise the memory limit " +
+			"to 384Mi, half again above the observed peak of 255Mi " +
+			"(changes the cluster)", Command: FixCommand, Mutating: true}},
+	}
+	return m
+}

@@ -198,6 +198,7 @@ func (p *pipelineBuild) newInvestigator() investigate.Investigator {
 		Readyz:      kube.ReadyzReader{Client: client}.Checks,
 		PodUsage:    kube.PodMetricsReader{Client: client}.Usage,
 		LogsOff:     !p.deps.runtime.Application().InvestigationLogs,
+		Now:         p.clock.Now,
 	})
 }
 
