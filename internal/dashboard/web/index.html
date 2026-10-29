@@ -20,6 +20,7 @@
   <symbol id="i-dash" viewBox="0 0 16 16"><path d="M3 8h10"/></symbol>
   <symbol id="i-eye" viewBox="0 0 16 16"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5Z"/><circle cx="8" cy="8" r="2"/></symbol>
   <symbol id="i-eye-off" viewBox="0 0 16 16"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5Z"/><circle cx="8" cy="8" r="2"/><path d="M2 2 14 14"/></symbol>
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></symbol>
   <symbol id="i-back" viewBox="0 0 16 16"><path d="M13 8H3M7.5 3.5 3 8l4.5 4.5"/></symbol>
   <symbol id="i-mark" viewBox="0 0 64 64"><path d="M17 5.5v53" stroke-width="8.5"/><path d="M47.5 6.5 32.2 27.6" stroke-width="7.5"/><path d="M33.4 36.8 48.5 57.5" stroke-width="8"/></symbol>
 </svg>
@@ -39,7 +40,10 @@
         <a href="/resolved" data-link data-nav="resolved">Resolved</a>
         <a href="/status" data-link data-nav="status">kwatch status</a>
       </nav>
-      <div class="who"><span>Read-only dashboard</span><button class="link" type="button" data-signout>Sign out</button></div>
+      <div class="who">
+        <div class="tz" role="group" aria-label="Show times in"><span>Times</span><button class="tz-b" type="button" data-tz="local" aria-pressed="true">Local</button><button class="tz-b" type="button" data-tz="utc" aria-pressed="false">UTC</button></div>
+        <div><span>Read-only dashboard</span><button class="link" type="button" data-signout>Sign out</button></div>
+      </div>
     </header>
     <div class="main">
       <main class="content" id="main" tabindex="-1"></main>
@@ -94,28 +98,28 @@
 <template id="tpl-list">
   <div class="page-head">
     <div><h1 data-h1></h1><p class="sub" data-sub></p></div>
+    <div class="updated" data-updated hidden></div>
   </div>
-  <div data-filterbox hidden>
+  <div class="filterbox" data-filterbox role="search" aria-label="Filter issues" hidden>
     <div class="filters">
-      <label class="f f-search"><span>Search</span><input type="search" data-f="q" placeholder="Name, namespace or text" autocomplete="off"></label>
-      <div class="f"><span data-sevlabel>Severity</span><div class="fchips" role="group">
-        <button class="fchip" type="button" data-sev="page" aria-pressed="false"><span class="dot page"></span>Urgent</button>
-        <button class="fchip" type="button" data-sev="notify" aria-pressed="false"><span class="dot notify"></span>Needs attention</button>
-        <button class="fchip" type="button" data-sev="digest" aria-pressed="false"><span class="dot low"></span>Low</button></div></div>
-      <button class="btn btn-sm more-btn" type="button" data-more aria-expanded="false">More filters</button>
-      <div class="more-f" data-more-box hidden>
-        <label class="f f-ns"><span>Namespace</span><select data-f="namespace"><option value="">All namespaces</option></select></label>
-        <label class="f" data-only="active"><span>State</span><select data-f="state"><option value="">Any state</option><option value="open">Happening now</option><option value="settling">Looking into it</option><option value="flapping">Keeps coming back</option><option value="recovering">Looks better</option></select></label>
-        <label class="f" data-only="resolved"><span>Resolved</span><select data-f="since"><option value="">Last 7 days</option><option value="24h">Last 24 hours</option><option value="72h">Last 3 days</option></select></label>
-      </div>
+      <label class="f f-search"><span class="sr-only">Search</span><svg class="icon f-icon" aria-hidden="true"><use href="#i-search"/></svg><input type="search" data-f="q" placeholder="Search issues" autocomplete="off" aria-keyshortcuts="/"><kbd class="f-kbd" aria-hidden="true" title="Press / to search">/</kbd></label>
+      <label class="f f-ns"><span class="sr-only">Namespace</span><select data-f="namespace"><option value="">All namespaces</option></select></label>
+      <label class="f" data-only="active"><span class="sr-only">State</span><select data-f="state"><option value="">Any state</option><option value="open">Happening now</option><option value="settling">Looking into it</option><option value="flapping">Keeps coming back</option><option value="recovering">Looks better</option></select></label>
+      <label class="f" data-only="resolved"><span class="sr-only">Resolved</span><select data-f="since"><option value="">Last 7 days</option><option value="24h">Last 24 hours</option><option value="72h">Last 3 days</option></select></label>
+      <label class="f f-sort"><span class="sr-only">Sort</span><select data-f="sort"><option value="" data-sort-default>Urgent first</option><option value="severity">By severity</option><option value="recent">Recently seen</option></select></label>
     </div>
-    <div class="factive" data-factive hidden><span data-fsummary></span><button class="link" type="button" data-fclear>Clear filters</button></div>
+    <div class="frow">
+      <div class="fchips" role="group" aria-labelledby="sevlabel"><span class="f-lbl" id="sevlabel" data-sevlabel>Severity</span>
+        <button class="fchip" type="button" data-sev="page" aria-pressed="false"><span class="dot page"></span>Urgent<span class="fc-n" data-n></span></button>
+        <button class="fchip" type="button" data-sev="notify" aria-pressed="false"><span class="dot notify"></span>Needs attention<span class="fc-n" data-n></span></button>
+        <button class="fchip" type="button" data-sev="digest" aria-pressed="false"><span class="dot low"></span>Low<span class="fc-n" data-n></span></button></div>
+      <div class="factive" data-factive hidden><span data-fsummary></span><button class="link" type="button" data-fclear>Clear filters</button></div>
+    </div>
   </div>
   <div data-alert></div>
   <ul class="list" data-list hidden></ul>
   <div class="notice" data-trunc hidden><p></p></div>
   <div data-empty></div>
-  <div class="updated" data-updated hidden></div>
 </template>
 
 <template id="tpl-row">
@@ -129,30 +133,39 @@
 </template>
 
 <template id="tpl-detail">
-  <p class="back"><a data-link data-back><svg class="icon" aria-hidden="true"><use href="#i-back"/></svg><span></span></a></p>
+  <div class="d-nav">
+    <p class="back"><a data-link data-back><svg class="icon" aria-hidden="true"><use href="#i-back"/></svg><span></span></a></p>
+    <nav class="pager" aria-label="Other issues" data-pager hidden>
+      <a class="btn btn-sm" data-link data-prev aria-keyshortcuts="k">Previous</a>
+      <span class="pager-pos" data-pos></span>
+      <a class="btn btn-sm" data-link data-next aria-keyshortcuts="j">Next</a>
+    </nav>
+  </div>
   <div class="detail">
     <div class="d-head">
       <div class="notice d-banner" data-banner hidden><b></b><p></p></div>
-      <div class="chips" data-chips></div>
+      <div class="d-meta"><div class="chips" data-chips></div><button class="btn btn-sm" type="button" data-copy-link>Copy link</button></div>
       <h1 data-title></h1>
     </div>
     <div class="d-story">
       <section class="sec" data-why hidden><h2>Why it happened</h2><p></p></section>
       <section class="sec" data-fix hidden><h2>What to do</h2><div data-steps></div><p class="runbook" data-runbook hidden></p></section>
-      <section class="sec"><h2>What kwatch saw</h2>
+      <section class="sec" data-logs-sec><h2>What kwatch saw</h2>
         <div class="logs" tabindex="0" role="region" aria-label="Captured log lines" data-logs hidden></div>
-        <div class="cap"><span data-logcap></span><button class="btn btn-sm" type="button" data-copy-logs hidden>Copy all</button></div></section>
-      <section class="sec"><h2>What happened, in order</h2><ol class="tl" data-timeline></ol></section>
+        <div class="cap"><span data-logcap></span><span class="cap-actions"><button class="btn btn-sm" type="button" data-wrap-logs aria-pressed="false" hidden>Wrap lines</button><button class="btn btn-sm" type="button" data-copy-logs hidden>Copy all</button></span></div></section>
+      <section class="sec"><h2>What happened, newest first</h2><ol class="tl" data-timeline></ol><button class="btn btn-sm tl-more" type="button" data-tl-more aria-expanded="false" hidden></button></section>
     </div>
     <aside class="d-side">
       <div class="facts-card"><h2>Facts</h2><dl class="facts" data-facts></dl></div>
-      <p class="ro">This page is read-only. To change anything, use kubectl.</p>
     </aside>
   </div>
 </template>
 
 <template id="tpl-status">
-  <h1>kwatch status</h1>
+  <div class="page-head">
+    <div><h1>kwatch status</h1></div>
+    <div class="updated" data-updated hidden></div>
+  </div>
   <div class="notice sum" data-summary hidden><b></b></div>
   <div data-alert></div>
   <div data-body hidden>
@@ -162,7 +175,6 @@
     </div>
     <div class="card wide"><h2>Namespaces</h2><div data-namespaces></div></div>
   </div>
-  <div class="updated" data-updated hidden></div>
 </template>
 </body>
 </html>

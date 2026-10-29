@@ -79,12 +79,16 @@ func IsPermanent(err error) bool {
 
 // IsPermanentHTTPStatus reports whether an HTTP status means the request
 // itself is wrong rather than the server being briefly unavailable. Client
-// errors are permanent except 408 (request timeout) and 429 (rate limited),
-// which explicitly ask for another attempt.
+// errors are permanent except 408 (request timeout), 425 (too early) and
+// 429 (rate limited), which explicitly ask for another attempt. A 401,
+// 403 or 404 stays permanent: kwatch cannot tell a token being rotated
+// from a revoked one, and retrying a revoked one would hold up every
+// alert queued behind it; a provider's fallback covers that case.
 func IsPermanentHTTPStatus(code int) bool {
 	if code < 400 || code >= 500 {
 		return false
 	}
 	return code != http.StatusRequestTimeout &&
+		code != http.StatusTooEarly &&
 		code != http.StatusTooManyRequests
 }

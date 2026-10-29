@@ -10,9 +10,10 @@
 | kubectl describe node n1
 | ```
 10:06:50 material change
-🔴 Node n1 (prod-eu-1) is getting worse: billing-a in billing; media-a in media; search-a in search; and one other now crash-loop. All of its dependents are failing.
+🔴 Node n1 (prod-eu-1) is getting worse: billing-a in billing; media-a in media; search-a in search; and one other now crash-loop. It is now critical. All of its dependents are failing.
 🔴 Node n1 (prod-eu-1) is getting worse: billing-a in billing; media-a in media; search-a in search; and one other now crash-loop.
 | 🔴 Node n1 (**prod-eu-1**) is getting worse: **billing-a** in **billing**; **media-a** in **media**; **search-a** in **search**; and one other now crash-loop.
+| It is now critical.
 | All of its dependents are failing.
 10:22:00 healthy for 6m0s
 ✅ billing-a in billing (prod-eu-1) is healthy again. It was down for 15 minutes because node n1 was failing.

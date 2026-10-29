@@ -118,9 +118,11 @@ func runtimeStringList(value interface{}) []string {
 }
 
 func compileRetry(settings map[string]interface{}) RetryPolicy {
+	// Jitter is on by default: many kwatch instances alerting into one
+	// shared provider would otherwise retry in lockstep after a blip.
 	policy := RetryPolicy{
 		MaxAttempts: 3, Delay: time.Second,
-		MaxBackoff: 30 * time.Second, JitterFactor: 0.25,
+		MaxBackoff: 30 * time.Second, JitterEnabled: true, JitterFactor: 0.25,
 	}
 	values, ok := settings["retry"].(map[string]interface{})
 	if !ok {

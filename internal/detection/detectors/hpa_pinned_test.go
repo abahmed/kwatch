@@ -38,7 +38,7 @@ func TestHPAMaxedOutSkipsPinnedAutoscaler(t *testing.T) {
 
 func TestHPAMaxedOutKeepsRealSaturation(t *testing.T) {
 	model, id := limitedHPA(1, 2)
-	got := evaluate(HPA{}, model, t0.Add(time.Minute), id, nil)
+	got := evaluate(HPA{}, model, t0.Add(DefaultHPAMaxedFor), id, nil)
 	require.Len(t, got.Findings, 1)
 	assert.Equal(t, reasons.HPAMaxedOut, got.Findings[0].Reason)
 }

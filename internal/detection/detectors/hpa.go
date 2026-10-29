@@ -63,6 +63,13 @@ func hpaFailureFor(reason, fallbackSummary string) hpaFailure {
 // by itself is not news.
 const HPAMetricsGrace = 10 * time.Minute
 
+// DefaultHPAMaxedFor is how long an autoscaler must stay at its maximum
+// before it is a warning. A brief peak at the ceiling is what the
+// maximum is for, so until then the finding is only informational (the
+// digest), yet present at once: it is what explains the slow or
+// failing workloads behind it.
+const DefaultHPAMaxedFor = 10 * time.Minute
+
 // HPA detects autoscalers that cannot compute or apply a scale.
 type HPA struct{}
 
@@ -93,10 +100,14 @@ func (HPA) Detect(
 	}
 	pinned := floor >= maximum
 	if ok && !pinned && current >= maximum && desired >= maximum {
-		if status, _, since := condition(e, "ScalingLimited"); status ==
-			"True" {
+		status, _, since := condition(e, "ScalingLimited")
+		if status == "True" {
+			severity := detection.Info
+			if sustained(ctx, "hpa-maxed", since, DefaultHPAMaxedFor) {
+				severity = detection.Warning
+			}
 			out = append(out, detection.Finding{
-				Reason: reasons.HPAMaxedOut, Severity: detection.Warning,
+				Reason: reasons.HPAMaxedOut, Severity: severity,
 				Since: since,
 				Summary: "Autoscaler is at its maximum of " +
 					strconv.Itoa(int(maximum)) + " replicas and wants more",

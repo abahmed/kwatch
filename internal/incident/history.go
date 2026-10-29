@@ -197,7 +197,7 @@ func fixOf(model inventory.HistoryReader, p *Incident, now time.Time) Fix {
 	if nodeReplaced(model, p) {
 		return FixNodeReplaced
 	}
-	return fixByChanges(outcomes, p.Opened)
+	return fixByChanges(outcomes, p.Opened, now)
 }
 
 // fixingChange is the latest change around p's root made while it was
@@ -235,11 +235,14 @@ func scaleOnly(change inventory.Change) bool {
 }
 
 // fixByChanges names the fix from changes made after the incident opened.
-func fixByChanges(outcomes []inventory.ChangeOutcome, opened time.Time) Fix {
+func fixByChanges(
+	outcomes []inventory.ChangeOutcome, opened, until time.Time,
+) Fix {
 	fix := FixNone
 	for _, outcome := range outcomes {
 		for _, change := range outcome.Set.Changes {
-			if change.At.Before(opened) || scaleOnly(change) {
+			if change.At.Before(opened) || change.At.After(until) ||
+				scaleOnly(change) {
 				continue
 			}
 			if change.Classify() == inventory.ClassConfig {

@@ -8,6 +8,7 @@
 | kubectl describe validatingwebhookconfiguration widget-operator
 | ```
 11:01:00 material change
-🔴 Validating webhook widget-operator (prod-eu-1) is spreading to replica set orders-a7a44c05 in shop: it cannot create pods.
+🔴 Validating webhook widget-operator (prod-eu-1) is spreading to replica set orders-a7a44c05 in shop: it cannot create pods. It is now critical.
 🔴 Validating webhook widget-operator (prod-eu-1) is spreading to replica set orders-a7a44c05 in shop: it cannot create pods.
 | 🔴 Validating webhook **widget-operator** (**prod-eu-1**) is spreading to replica set **orders-a7a44c05** in shop: it cannot create pods.
+| It is now critical.

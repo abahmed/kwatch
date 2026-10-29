@@ -1,6 +1,8 @@
 package pipeline
 
 import (
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -60,9 +62,23 @@ func (a *announcer) inScope(
 		if d.Action == incident.Announce && a.incidents != nil {
 			a.incidents.RecordScope(d.Incident.ID, in)
 		}
+		if d.Action == incident.Announce && !in {
+			logWithheld(d.Incident)
+		}
 		if in {
 			kept = append(kept, d)
 		}
 	}
 	return kept
+}
+
+// logWithheld says, once per incident, that an announcement was dropped
+// by the configured scope (namespaces, reasons, silences): without it a
+// real failure people filtered out leaves no trace at all.
+func logWithheld(p incident.Incident) {
+	klog.InfoS("incident not announced: out of scope",
+		"component", "pipeline", "operation", "scope",
+		"incident", p.ID, "namespace", p.Root.Namespace,
+		"kind", string(p.Root.Kind), "name", p.Root.Name,
+		"tier", p.Tier.String())
 }

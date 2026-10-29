@@ -378,13 +378,14 @@ has another schema version (older or newer) or bbolt cannot read it, Kwatch
 renames it to `state.db.corrupt.<UTC time>` (the newest two copies are kept,
 older ones are deleted; a copy larger than a quarter of the volume limit is
 deleted at once), creates a fresh store, and continues: it starts cold and
-sends one startup summary. After a schema change (not for an unreadable
-file) the delivery outbox and the thread IDs are copied into the fresh file,
-so queued pages and resolves are still sent and chat and ticket threads
-continue. Their records carry their own version: a record in a layout the new
+sends one startup summary. The delivery outbox and the thread IDs are copied into the
+fresh file after a schema change and, best effort, after an unreadable or
+corrupt file too (records and buckets that still read are carried, the
+rest are skipped; a file bbolt cannot open carries nothing), so queued
+pages and resolves are still sent and chat and ticket threads continue. Their records carry their own version: a record in a layout the new
 release does not know is dropped and counted by the outbox drop metric.
 Everything else is rebuilt from the cluster, so open incidents are
-re-announced once. The log line `state store reset` shows `carriedRecords`. A locked or otherwise unknown open error does not reset; startup
+re-announced once. The log line `state store reset` shows `carriedRecords` and `skippedRecords`. A locked or otherwise unknown open error does not reset; startup
 fails instead. The event is logged with the old
 version and reason and appears on `/health` as the degraded `state-store`
 component with reason `storage_reset`; it does not affect readiness. The
@@ -529,6 +530,44 @@ rules, a few kilobytes) in the state file, and `/status` shows, per rule,
 (`causeChecks` in the JSON). It is display only: it never changes a
 confidence, a tier or a message. Incidents superseded by a revised cause
 are not counted.
+
+## Auditing incidents from the logs
+
+Every lifecycle step is one default-level log line with
+`component="incident"`, the incident ID, its root and its tier, so what
+kwatch decided can be followed from the logs alone:
+
+| Line | `operation` | Extra fields |
+|:--|:--|:--|
+| `incident opened` | `open` | `reason`, `sendsAt` |
+| `incident resolved` | `resolve` | `reason`, `lasted`, `quiet` |
+| `incident reopened` | `reopen` | `times` |
+| `incident flapping` | `flap` | `cycles`, `what` |
+| `incident page held: failing again` | `hold` | `times` |
+| `incident tier changed` | `tier` | `from` |
+
+Each incident keeps its last 50 timeline events. Past that, an event
+already reported that a later event repeats (same text, same member) is
+folded into the later one, which counts it (`repeats` in the dashboard
+API), so a failure that keeps coming back cannot push out the start of
+the story; only without such repeats do the oldest events go.
+
+An announcement the configured scope drops (namespaces, reasons,
+silences) is logged once as `incident not announced: out of scope`
+(`component="pipeline"`), so a filtered-out failure leaves a trace.
+
+The dashboard logs sign-in, sign-out and every failed request (`401`,
+`403`, `429`, `5xx`) at the default level; successful reads, which an
+open page makes every few seconds, only at `-v=2`.
+
+A kind counts as synced for the detectors only once its first list is
+in the model, so the first seconds after a start do not report listed
+objects as missing. A detector that needs a kind not synced yet keeps
+its earlier findings instead of clearing them. A custom-kind run that
+finished failed (one recording `status.finishedAt` or
+`status.completionTime`, such as an Argo Workflow) goes to the digest a
+day after it ended; a long-lived object in a failed phase stays a
+warning.
 
 ## Delivery guarantee
 

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/redact"
 )
 
 // maxQueryLength bounds the search text.
@@ -182,8 +183,11 @@ func (h haystack) contains(needle string) bool {
 // searchable is what q looks in: the title, where it is, the ID and the
 // cause sentence.
 func searchable(p incident.Incident, item IncidentListItem) haystack {
+	// The cause is searched as shown, redacted: matching the raw text
+	// would let a search tell what a redacted secret contains.
 	return haystack{item.Title, item.Namespace, item.Workload, item.ID,
-		item.Namespace + " / " + item.Workload, causeText(p)}
+		item.Namespace + " / " + item.Workload,
+		redact.Evidence(causeText(p))}
 }
 
 // order sorts a list: urgent first, then newest, on the active list

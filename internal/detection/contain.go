@@ -38,13 +38,14 @@ func detectContained(
 }
 
 // Keeping returns the findings to track for the entity after this
-// evaluation. Without a panic that is the fresh findings. After one it is
-// the fresh findings of every detector plus the previous findings
-// (the tracker's active ones) that a panicked detector raised and no
-// fresh finding replaces: a panic says nothing about those, so they
-// neither clear nor change, while the other detectors keep working.
+// evaluation. Without a panic or an unsynced kind that is the fresh
+// findings. Otherwise it is the fresh findings of every detector plus the
+// previous findings (the tracker's active ones) that an unsure detector
+// (one that panicked or needed a kind not synced) raised and no fresh
+// finding replaces: its result says nothing about those, so they neither
+// clear nor change, while the other detectors keep working.
 func (ev Evaluation) Keeping(previous []Finding) []Finding {
-	if len(ev.Panicked) == 0 {
+	if len(ev.Panicked) == 0 && len(ev.UnsyncedBy) == 0 {
 		return ev.Findings
 	}
 	out := slices.Clone(ev.Findings)
@@ -53,9 +54,16 @@ func (ev Evaluation) Keeping(previous []Finding) []Finding {
 		fresh[f.Reason] = true
 	}
 	for _, f := range previous {
-		if !fresh[f.Reason] && slices.Contains(ev.Panicked, f.Detector) {
+		if !fresh[f.Reason] && ev.unsure(f) {
 			out = append(out, f)
 		}
 	}
 	return out
+}
+
+// unsure reports whether the detector that raised f could not say this
+// time whether it still holds.
+func (ev Evaluation) unsure(f Finding) bool {
+	return slices.Contains(ev.Panicked, f.Detector) ||
+		slices.Contains(ev.UnsyncedBy, f.Detector)
 }

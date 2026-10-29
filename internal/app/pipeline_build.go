@@ -123,13 +123,18 @@ func (p *pipelineBuild) synced(kind inventory.Kind) bool {
 // message and the audit entry goes to the decision log's worker.
 func (p *pipelineBuild) newEngine() (*pipeline.Engine, error) {
 	deps := p.deps
+	// Detectors and the engine read sync through the gate: a kind is
+	// synced for them once its first list is in the model, not as soon
+	// as the source has handed it over.
+	gate := pipeline.NewSyncGate(p.synced)
 	return pipeline.NewEngine(pipeline.Dependencies{
 		Model: p.model,
-		Detectors: newDetectorRegistry(p.synced, deps.entitlements,
+		Detectors: newDetectorRegistry(gate.Synced, deps.entitlements,
 			p.withheld),
 		Withheld:     p.withheld,
 		Incidents:    p.incidents,
-		Synced:       p.synced,
+		Synced:       gate.Synced,
+		SyncGate:     gate,
 		Writer:       p.newWriter(),
 		Sink:         p.recordDecision,
 		Clock:        pipelineClock{deps.clients.Clock},

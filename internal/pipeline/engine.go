@@ -58,6 +58,10 @@ type Dependencies struct {
 	// Synced reports whether a kind is fully watched, so rules conclude
 	// that an object is missing only when its kind is known. Optional.
 	Synced func(inventory.Kind) bool
+	// SyncGate, when set, is advanced before every drain; Synced and
+	// the detectors then read its Synced, so a kind counts as synced
+	// only once its first list is in the model. Optional.
+	SyncGate *SyncGate
 	// Timer is the wall-clock timer of the background workers: storage
 	// batching and shutdown deadlines. It is separate from Clock, which
 	// only the decision loop waits on. Optional; defaults to time.After.
@@ -254,6 +258,9 @@ func (e *Engine) step(
 	dirty := e.dirty
 	e.dirty = nil
 	late := e.storage.carried.due(e.deps.Synced)
+	if e.deps.SyncGate != nil {
+		e.deps.SyncGate.Advance()
+	}
 	dirty = append(dirty, e.drain()...)
 	dirty = append(dirty, e.applyDowntime(late)...)
 	dirty = append(dirty, e.waits.ready(e.deps.Synced)...)

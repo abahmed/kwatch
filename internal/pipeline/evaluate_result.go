@@ -13,7 +13,12 @@ func (e *Engine) observeResult(
 	id inventory.EntityID, result detection.Evaluation,
 ) []detection.Transition {
 	current := result.Findings
-	if len(result.Panicked) > 0 {
+	// An evaluation that could not run fully proves nothing cleared: a
+	// detector panicked, or one needed a kind not synced yet. A gone
+	// entity's findings still clear.
+	incomplete := len(result.Panicked) > 0 ||
+		(len(result.UnsyncedBy) > 0 && e.deps.Model.Exists(id))
+	if incomplete {
 		current = result.Keeping(e.tracker.Active(id))
 	}
 	return e.tracker.Observe(id, current)

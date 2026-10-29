@@ -129,6 +129,8 @@ func (c *Collector) NoteQuietResolves(ids []string) {
 	}
 	s := &c.Startup
 	s.Collected = slices.DeleteFunc(s.Collected, gone)
+	// The restored summary must not list it as still failing either.
+	s.Warm = slices.DeleteFunc(s.Warm, gone)
 	for _, id := range ids {
 		delete(s.baselined, id)
 	}

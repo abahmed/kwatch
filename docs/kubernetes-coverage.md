@@ -151,7 +151,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Exit.Killed | varies | `ContainerExitKilled` | `exit_codes` |
 | Exit.NotExecutable | varies | `ContainerExitNotExecutable` | `exit_codes` |
 | Exit.Segfault | varies | `ContainerExitSegfault` | `exit_codes` |
-| Failed | degraded | `PhaseFailed`, `PodFailed` | `generic`, `pod_failed` |
+| Failed | varies | `PhaseFailed`, `PodFailed` | `generic`, `pod_failed` |
 | Filesystem.Usage | varies | `NodeFilesystemUsageCritical`, `NodeFilesystemUsageHigh` | `usage` |
 | FlowControl | varies | `APIPriorityAndFairnessFailure` | `custom` |
 | Heartbeat.Stale | degraded | `NodeHeartbeatStale` | `node_health` |
@@ -240,7 +240,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Scaling.Disabled | varies | `ScalingDisabled` | - |
 | Scaling.Error | varies | `HPAScalingError` | `hpa` |
 | Scaling.InvalidSelector | varies | `HPAInvalidSelector` | `hpa` |
-| Scaling.MaxedOut | degraded | `HPAMaxedOut` | `hpa` |
+| Scaling.MaxedOut | varies | `HPAMaxedOut` | `hpa` |
 | Scaling.NoMetrics | varies | `FailedComputeMetricsReplicas`, `FailedGetResourceMetric` | `hpa` |
 | Scaling.TargetMissing | degraded | `FailedGetScale`, `HPATargetMissing` | `hpa`, `hpa_target` |
 | Scaling.UpdateFailed | varies | `FailedUpdateScale` | `hpa` |

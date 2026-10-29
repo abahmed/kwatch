@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/rootcause"
 	"github.com/abahmed/kwatch/internal/status"
 )
 
@@ -119,5 +120,48 @@ func TestChannelNamesUseTheProductSpelling(t *testing.T) {
 		if got := channelName(key); got != want {
 			t.Errorf("channelName(%q) = %q, want %q", key, got, want)
 		}
+	}
+}
+
+func TestListAndDetailCarryTheRedactedCause(t *testing.T) {
+	p := testIncident("a", "shop", 0)
+	p.Cause = &rootcause.CauseRecord{
+		Summary: "the database is down, password=hunter2"}
+	var list ListResponse
+	body := get(t, newTestServer(p), "/api/incidents?state=active").Body.Bytes()
+	if err := json.Unmarshal(body, &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Incidents) != 1 {
+		t.Fatalf("incidents = %+v", list.Incidents)
+	}
+	cause := list.Incidents[0].RootCause
+	if cause == "" || cause == p.Cause.Summary {
+		t.Errorf("list rootCause = %q, want the redacted cause", cause)
+	}
+	var d IncidentDetail
+	body = get(t, newTestServer(p), "/api/incidents/a").Body.Bytes()
+	if err := json.Unmarshal(body, &d); err != nil {
+		t.Fatal(err)
+	}
+	if d.RootCause != cause {
+		t.Errorf("detail rootCause = %q, list has %q", d.RootCause, cause)
+	}
+}
+
+// Repeats kwatch folded into one timeline event reach the API, so the
+// dashboard counts every occurrence.
+func TestDetailTimelineCarriesFoldedRepeats(t *testing.T) {
+	p := testIncident("a", "shop", 0)
+	p.Timeline = []incident.Event{{At: testEpoch.Add(time.Minute),
+		Text: "failing again: 3 times in the last hour", Repeats: 4}}
+	var d IncidentDetail
+	body := get(t, newTestServer(p), "/api/incidents/a").Body.Bytes()
+	if err := json.Unmarshal(body, &d); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Timeline) != 1 || d.Timeline[0].Repeats != 4 {
+		t.Errorf("timeline = %+v, want one event with 4 repeats",
+			d.Timeline)
 	}
 }

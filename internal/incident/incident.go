@@ -352,6 +352,9 @@ type Event struct {
 	// Entity is the member the event is about: the one that joined or
 	// recovered. Nil for events about the incident itself.
 	Entity *inventory.EntityID `json:",omitempty"`
+	// Repeats counts earlier entries that said the same thing and were
+	// folded into this one to keep the timeline within its bound.
+	Repeats int `json:",omitempty"`
 }
 
 // String names the state for diagnostics.

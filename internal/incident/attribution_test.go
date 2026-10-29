@@ -76,3 +76,27 @@ func TestManagerCauseNamingTheAnnouncedRootIsNotNews(t *testing.T) {
 	require.NotNil(t, got.Cause, "the victim brings the cause")
 	wantNone(t, r.tick(at(3*time.Minute)))
 }
+
+// The resolve waits out a hold after the recovery. A change that lands
+// during the hold came after the failure ended: it is not named as the
+// fix. One made while it was failing is.
+func TestResolveNamesOnlyAChangeMadeBeforeTheRecovery(t *testing.T) {
+	r := newRig(t, Config{})
+	web := podSig("web")
+	r.observe(web.Entity)
+	r.change(web.Entity, 5*time.Minute, image("web:v2", "web:v3"))
+	failOnce(r, web, 0, 4*time.Minute)
+
+	got := r.of(web.Entity)
+	require.Equal(t, Resolved, got.State)
+	assert.Nil(t, got.FixedBy, "a deploy after the recovery is no fix")
+	assert.Equal(t, FixNone, got.Fix)
+
+	fixed := newRig(t, Config{})
+	fixed.observe(web.Entity)
+	fixed.change(web.Entity, 2*time.Minute, image("web:v2", "web:v3"))
+	failOnce(fixed, web, 0, 4*time.Minute)
+
+	require.NotNil(t, fixed.of(web.Entity).FixedBy,
+		"a deploy while it failed is named")
+}

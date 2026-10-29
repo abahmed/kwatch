@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/json"
+	"fmt"
 
 	bolt "go.etcd.io/bbolt"
 	"k8s.io/klog/v2"
@@ -16,56 +17,76 @@ import (
 var carriedBuckets = []Bucket{Outbox, Threads}
 
 // carryRecords copies the carried buckets of the old file at aside into
-// db and returns how many records it copied. It is best effort: a file
-// that cannot be read, or a record that is not valid, is skipped and
-// logged, because a failed copy must never stop the fresh start.
-func carryRecords(aside string, db *bolt.DB) int {
+// db and returns how many records it copied and how many it skipped. It
+// is best effort and never fails the reset: a file that cannot be opened,
+// a bucket that cannot be read (bbolt panics on a damaged page, which is
+// recovered here) and a record that is not valid are skipped and logged.
+// Each bucket is copied in its own transaction, so one damaged bucket
+// does not lose the others.
+func carryRecords(aside string, db *bolt.DB) (carried, skipped int) {
 	old, err := bolt.Open(aside, 0o600, &bolt.Options{
 		Timeout: openTimeout, ReadOnly: true,
 	})
 	if err != nil {
 		klog.ErrorS(err, "state store reset: cannot read the old file",
 			"component", "state", "operation", "carry")
-		return 0
+		return 0, 0
 	}
 	defer func() { _ = old.Close() }()
-	carried := 0
-	err = old.View(func(from *bolt.Tx) error {
+	for _, name := range carriedBuckets {
+		n, bad := carryBucket(old, db, name)
+		carried += n
+		skipped += bad
+	}
+	return carried, skipped
+}
+
+// carryBucket copies one bucket in its own transactions. A panic or error
+// leaves the bucket partly or wholly uncopied and is logged, not returned.
+func carryBucket(old, db *bolt.DB, name Bucket) (copied, skipped int) {
+	defer func() {
+		if r := recover(); r != nil {
+			klog.ErrorS(fmt.Errorf("%v", r),
+				"state store reset: bucket unreadable",
+				"component", "state", "operation", "carry",
+				"bucket", string(name))
+			copied, skipped = 0, 0
+		}
+	}()
+	err := old.View(func(from *bolt.Tx) error {
 		return db.Update(func(to *bolt.Tx) error {
-			for _, name := range carriedBuckets {
-				n, err := copyBucket(from, to, name)
-				if err != nil {
-					return err
-				}
-				carried += n
-			}
-			return nil
+			var err error
+			copied, skipped, err = copyBucket(from, to, name)
+			return err
 		})
 	})
 	if err != nil {
 		klog.ErrorS(err, "state store reset: copy failed",
-			"component", "state", "operation", "carry")
-		return 0
+			"component", "state", "operation", "carry",
+			"bucket", string(name))
+		return 0, 0
 	}
-	return carried
+	return copied, skipped
 }
 
-// copyBucket copies the valid values of one bucket and returns the count.
-func copyBucket(from, to *bolt.Tx, name Bucket) (int, error) {
+// copyBucket copies the valid values of one bucket and returns the
+// copied and skipped counts.
+func copyBucket(from, to *bolt.Tx, name Bucket) (int, int, error) {
 	source := from.Bucket([]byte(name))
 	target := to.Bucket([]byte(name))
 	if source == nil || target == nil {
-		return 0, nil
+		return 0, 0, nil
 	}
-	copied := 0
+	copied, skipped := 0, 0
 	err := source.ForEach(func(key, value []byte) error {
 		if _, ok := readHeader(value); !ok ||
 			!json.Valid(value[headerSize:]) {
+			skipped++
 			return nil
 		}
 		copied++
 		return target.Put(append([]byte(nil), key...),
 			append([]byte(nil), value...))
 	})
-	return copied, err
+	return copied, skipped, err
 }

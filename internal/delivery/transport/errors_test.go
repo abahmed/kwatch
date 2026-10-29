@@ -36,6 +36,8 @@ func TestIsPermanentHTTPStatus(t *testing.T) {
 		http.StatusOK: false, http.StatusBadRequest: true,
 		http.StatusUnauthorized: true, http.StatusRequestTimeout: false,
 		http.StatusTooManyRequests: false, http.StatusBadGateway: false,
+		http.StatusTooEarly: false, http.StatusForbidden: true,
+		http.StatusNotFound: true,
 	}
 	for code, want := range cases {
 		if got := IsPermanentHTTPStatus(code); got != want {

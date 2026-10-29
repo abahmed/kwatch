@@ -39,7 +39,7 @@ var progressReasons = map[string]bool{
 	"FoundNewReplicaSet":   true,
 }
 
-// rolloutProgressing reports a Deployment or StatefulSet whose rollout
+// rolloutProgressing reports a workload whose rollout
 // is moving and within its deadline. It asks to be looked at again when
 // the hold can end.
 func rolloutProgressing(
@@ -50,6 +50,8 @@ func rolloutProgressing(
 		return deploymentProgressing(ctx, e)
 	case kube.KindStatefulSet:
 		return statefulSetProgressing(ctx, e)
+	case kube.KindDaemonSet:
+		return daemonSetProgressing(ctx, e)
 	}
 	return false
 }
@@ -106,6 +108,33 @@ func statefulSetProgressing(
 	}
 	moved := latest(valueSince(e, kube.AttrRevision),
 		valueSince(e, kube.AttrUpdatedReplicas))
+	remaining := DefaultRolloutStuck - ctx.Now.Sub(moved)
+	if remaining <= 0 {
+		return false
+	}
+	ctx.RecheckAfter(remaining)
+	return true
+}
+
+// daemonSetProgressing is a rolling update that moved within
+// DefaultRolloutStuck: the controller has not seen the latest spec, or
+// pods are not all on it yet, and every newly updated pod renews the
+// hold. With maxUnavailable pods down for the whole rollout, the ready
+// count alone cannot tell it from an outage. The strategy is not
+// recorded, so an OnDelete rollout is held only until it stops moving.
+func daemonSetProgressing(
+	ctx detection.Context, e inventory.Entity,
+) bool {
+	desired, _ := number(e, kube.AttrDesiredReplicas)
+	updated, _ := number(e, kube.AttrUpdatedReplicas)
+	generation, _ := number(e, kube.AttrGeneration)
+	observed, _ := number(e, kube.AttrObservedGen)
+	if updated >= desired && observed >= generation {
+		return false
+	}
+	moved := latest(latest(valueSince(e, kube.AttrUpdatedReplicas),
+		valueSince(e, kube.AttrObservedGen)),
+		valueSince(e, kube.AttrGeneration))
 	remaining := DefaultRolloutStuck - ctx.Now.Sub(moved)
 	if remaining <= 0 {
 		return false

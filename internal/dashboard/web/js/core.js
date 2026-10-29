@@ -44,17 +44,28 @@
   var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug",
     "Sep", "Oct", "Nov", "Dec"];
   function pad(n) { return n < 10 ? "0" + n : "" + n; }
-  KW.hhmm = function (d) { return pad(d.getHours()) + ":" + pad(d.getMinutes()); };
-  KW.dayMonth = function (d) { return d.getDate() + " " + MONTHS[d.getMonth()]; };
+
+  /* Clock times show in local time or UTC; on-call teams often talk in
+     UTC. The choice is remembered on this browser only. */
+  KW.utc = false;
+  try { KW.utc = window.localStorage.getItem("kwatch.tz") === "utc"; } catch (e) { KW.utc = false; }
+  KW.setUTC = function (on) {
+    KW.utc = !!on;
+    try { window.localStorage.setItem("kwatch.tz", on ? "utc" : "local"); } catch (e) { /* private mode */ }
+  };
+  function H(d) { return KW.utc ? d.getUTCHours() : d.getHours(); }
+  function M(d) { return KW.utc ? d.getUTCMinutes() : d.getMinutes(); }
+  function D(d) { return KW.utc ? d.getUTCDate() : d.getDate(); }
+  function Mo(d) { return KW.utc ? d.getUTCMonth() : d.getMonth(); }
+  function Y(d) { return KW.utc ? d.getUTCFullYear() : d.getFullYear(); }
+  KW.hhmm = function (d) { return pad(H(d)) + ":" + pad(M(d)); };
+  KW.dayMonth = function (d) { return D(d) + " " + MONTHS[Mo(d)]; };
   function sameDay(a, b) {
-    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate();
+    return Y(a) === Y(b) && Mo(a) === Mo(b) && D(a) === D(b);
   }
   KW.isToday = function (d) { return sameDay(d, new Date(KW.now())); };
   KW.isYesterday = function (d) {
-    var y = new Date(KW.now());
-    y.setDate(y.getDate() - 1);
-    return sameDay(d, y);
+    return sameDay(d, new Date(KW.now() - 24 * 3600 * 1000));
   };
   KW.valid = function (iso) {
     return !!iso && !isNaN(Date.parse(iso)) && Date.parse(iso) > 0;
@@ -75,17 +86,38 @@
     return KW.dayMonth(d) + ", " + KW.hhmm(d);
   };
 
+  /* full: the exact time in both zones, each with its date (they can
+     fall on different days), the zone shown on the page first. */
   KW.full = function (iso) {
     var d = new Date(iso);
-    var utc = pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":" +
-      pad(d.getUTCSeconds());
-    return KW.dayMonth(d) + ", " + KW.hhmm(d) + ":" + pad(d.getSeconds()) +
-      " local · " + utc + " UTC";
+    var utc = d.getUTCDate() + " " + MONTHS[d.getUTCMonth()] + ", " +
+      pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":" + pad(d.getUTCSeconds()) + " UTC";
+    var local = d.getDate() + " " + MONTHS[d.getMonth()] + ", " + pad(d.getHours()) + ":" +
+      pad(d.getMinutes()) + ":" + pad(d.getSeconds()) + " local";
+    return KW.utc ? utc + " · " + local : local + " · " + utc;
+  };
+
+  /* takeScroll returns, once, a scroll position a redraw should go back
+     to (after a time zone switch), or 0. */
+  KW.pendingScroll = 0;
+  KW.takeScroll = function () {
+    var y = KW.pendingScroll;
+    KW.pendingScroll = 0;
+    return y;
   };
 
   KW.stamp = function (iso) {
     var d = new Date(iso);
     return KW.dayMonth(d) + ", " + KW.hhmm(d);
+  };
+
+  /* when: a clock time that says which day when it isn't today:
+     "14:02", "yesterday 14:02", "12 Oct, 14:02". */
+  KW.when = function (iso) {
+    var d = new Date(iso);
+    if (KW.isToday(d)) return KW.hhmm(d);
+    if (KW.isYesterday(d)) return "yesterday " + KW.hhmm(d);
+    return KW.stamp(iso);
   };
 
   /* lasted: "12 min", "3 h 10 min", "2 days". */
@@ -159,11 +191,19 @@
     return KW.chip(s.chip, s.label, s.title);
   };
 
-  KW.where = function (item, node) {
+  /* where: namespace / workload. stacked puts them on two lines, so a
+     long workload name wraps on its own line instead of mid-word. */
+  KW.where = function (item, node, stacked) {
     if (!item.namespace) {
       node.classList.add("cluster");
       node.textContent = "whole cluster";
       if (item.workload) node.textContent += " · " + item.workload;
+      return;
+    }
+    if (stacked && item.workload) {
+      node.textContent = "";
+      node.appendChild(KW.el("span", "w-ns", item.namespace));
+      node.appendChild(KW.el("span", "w-wl", item.workload));
       return;
     }
     node.textContent = item.namespace + (item.workload ? " / " + item.workload : "");

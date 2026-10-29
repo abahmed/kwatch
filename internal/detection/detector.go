@@ -18,6 +18,7 @@ type Context struct {
 	recheck     *time.Duration
 	synced      func(inventory.Kind) bool
 	unsynced    *[]inventory.Kind
+	misses      *int
 	specialised bool
 	onsets      *onsetScope
 }
@@ -40,6 +41,9 @@ func (c Context) Synced(kind inventory.Kind) bool {
 	}
 	if c.unsynced != nil && !slices.Contains(*c.unsynced, kind) {
 		*c.unsynced = append(*c.unsynced, kind)
+	}
+	if c.misses != nil {
+		*c.misses++
 	}
 	return false
 }
@@ -68,6 +72,10 @@ type Evaluation struct {
 	// the findings they raised before (Keeping) and applies the other
 	// detectors' fresh results as usual.
 	Panicked []string
+	// UnsyncedBy names the detectors that needed a kind not synced. Like
+	// a panic, that leaves what they would say unknown, so Keeping keeps
+	// their earlier findings rather than clearing them.
+	UnsyncedBy []string
 }
 
 // Detector evaluates entities of the kinds it declares.
@@ -134,12 +142,13 @@ func (r *Registry) Evaluate(
 	}
 	var recheck time.Duration
 	var unsynced []inventory.Kind
+	var misses int
 	scope := r.onsets.begin(id)
 	complete := false
 	defer func() { r.onsets.finish(id, scope, !complete) }()
 	ctx := Context{
 		Model: model, Now: now, recheck: &recheck, synced: r.synced,
-		unsynced:    &unsynced,
+		unsynced: &unsynced, misses: &misses,
 		specialised: present && len(r.byKind[id.Kind]) > 0,
 		onsets:      scope,
 	}
@@ -147,27 +156,36 @@ func (r *Registry) Evaluate(
 	if present {
 		groups = append(groups, r.byKind[id.Kind])
 	}
-	out, fallback, panicked := runDetectors(ctx, groups, entity)
+	out, fallback, run := runDetectors(ctx, groups, entity)
+	panicked := run.panicked
 	complete = len(panicked) == 0
 	out = append(out, withoutReportedModes(fallback, out)...)
 	if !complete {
 		ctx.RecheckAfter(incompleteRecheck)
 	}
 	return Evaluation{Findings: collapseReasons(out), RecheckAfter: recheck,
-		Unsynced: unsynced, Panicked: panicked}
+		Unsynced: unsynced, Panicked: panicked, UnsyncedBy: run.unsynced}
 }
 
 // runDetectors runs the detector groups in order and returns the findings
 // of the regular and of the fallback detectors, and the names of the
 // detectors that panicked.
+// unsure names the detectors whose result says nothing about their
+// earlier findings: they panicked, or needed a kind not synced.
+type unsure struct{ panicked, unsynced []string }
+
 func runDetectors(
 	ctx Context, groups [][]Detector, entity inventory.Entity,
-) (out, fallback []Finding, panicked []string) {
+) (out, fallback []Finding, run unsure) {
 	for _, group := range groups {
 		for _, detector := range group {
+			missed := ctx.missCount()
 			found, ok := detectContained(ctx, detector, entity)
 			if !ok {
-				panicked = append(panicked, detector.Name())
+				run.panicked = append(run.panicked, detector.Name())
+			}
+			if ctx.missCount() > missed {
+				run.unsynced = append(run.unsynced, detector.Name())
 			}
 			if _, ok := detector.(Fallback); ok {
 				fallback = append(fallback, found...)
@@ -176,7 +194,14 @@ func runDetectors(
 			}
 		}
 	}
-	return out, fallback, panicked
+	return out, fallback, run
+}
+
+func (c Context) missCount() int {
+	if c.misses == nil {
+		return 0
+	}
+	return *c.misses
 }
 
 // collapseReasons keeps one finding per reason of an entity, the most

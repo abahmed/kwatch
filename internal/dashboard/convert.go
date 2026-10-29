@@ -27,14 +27,29 @@ func toListItem(p incident.Incident) IncidentListItem {
 		RepeatCount:  p.RepeatCount,
 		AckedBy:      ackedBy(p),
 		ResolvedAt:   p.Resolved,
+		RootCause:    shortCause(redact.Evidence(causeText(p))),
 	}
+}
+
+// maxListCause bounds the cause a list item carries: one line on a row,
+// and a long cause must not push incidents out of the list's response
+// budget. The detail carries it whole.
+const maxListCause = 200
+
+func shortCause(cause string) string {
+	runes := []rune(cause)
+	if len(runes) <= maxListCause {
+		return cause
+	}
+	return strings.TrimSpace(string(runes[:maxListCause-1])) + "…"
 }
 
 func toDetail(p incident.Incident) IncidentDetail {
 	steps, commands, text := toSteps(p.Steps)
+	item := toListItem(p)
+	item.RootCause = redact.Evidence(causeText(p))
 	return IncidentDetail{
-		IncidentListItem: toListItem(p),
-		RootCause:        redact.Evidence(causeText(p)),
+		IncidentListItem: item,
 		SuggestedFix:     text,
 		FixSteps:         steps,
 		FixCommands:      commands,
@@ -119,11 +134,12 @@ func toTimeline(events []incident.Event) []Event {
 	for _, e := range events {
 		kind, reason := classifyEvent(e.Text)
 		out = append(out, Event{
-			At:     e.At,
-			Kind:   kind,
-			Reason: reason,
-			Text:   redact.Evidence(e.Text),
-			Entity: entityIDString(e.Entity),
+			At:      e.At,
+			Kind:    kind,
+			Reason:  reason,
+			Text:    redact.Evidence(e.Text),
+			Entity:  entityIDString(e.Entity),
+			Repeats: e.Repeats,
 		})
 	}
 	return out

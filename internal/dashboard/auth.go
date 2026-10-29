@@ -43,18 +43,27 @@ func NewAuth(token, password string, shared bool, now clock.Clock) *Auth {
 }
 
 // Middleware lets a request through with a valid bearer token or
-// session cookie. A request that presented a wrong credential counts
-// against the client's failure limit; one that presented none does not,
-// so a signed-out browser asking whether it is signed in is not a guess.
+// session cookie. A bearer token can be guessed: a wrong one counts
+// against the client's failure limit, and past the limit even a right
+// one is refused, so a guess that happens to be right cannot get in. A
+// session cookie cannot be guessed (its ID is random and only a sign-in
+// makes one): a valid one is let through even while the address is
+// limited, so guesses from a shared address do not lock out people
+// already signed in, and an invalid one does not count, because after a
+// restart every open tab presents one on each poll.
 func (a *Auth) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ok, guess := a.check(r)
+		if ok && !guess {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if !a.allowed(r) {
 			writeError(w, http.StatusTooManyRequests, "too many requests")
 			return
 		}
-		ok, presented := a.check(r)
 		if !ok {
-			if presented {
+			if guess {
 				a.recordFailure(r)
 			}
 			writeError(w, http.StatusUnauthorized, "unauthorized")
@@ -64,17 +73,18 @@ func (a *Auth) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-// check reports whether r carries a valid credential and whether it
-// carried one at all.
-func (a *Auth) check(r *http.Request) (ok, presented bool) {
+// check reports whether r carries a valid credential and whether a
+// failed one counts as a guess: a bearer token does, a session cookie
+// (random, so never guessed) and no credential at all do not.
+func (a *Auth) check(r *http.Request) (ok, guess bool) {
 	if token, has := bearerToken(r); has {
 		return a.validToken(token), true
 	}
 	if c, err := r.Cookie(sessionCookie); err == nil && c.Value != "" {
 		if a.password == "" {
-			return false, true
+			return false, false
 		}
-		return a.sessions.valid(c.Value), true
+		return a.sessions.valid(c.Value), false
 	}
 	return false, false
 }

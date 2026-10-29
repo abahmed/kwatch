@@ -52,17 +52,19 @@ func sentencesFor(
 }
 
 // changeSentencesFor says what changed: worsening, a rollout, a changed
-// fact, or else the case restated.
+// fact, or else the case restated. A rise in tier is said whatever else
+// changed: an escalation that arrives with other news must not read as
+// routine churn.
 func changeSentencesFor(f caseFacts) []sentence {
 	if worse := worseningSentences(f); len(worse) > 0 {
-		return worse
+		return append(worse, raisedSentences(f)...)
 	}
 	if text, ok := firstRolloutLead(f); ok {
-		return []sentence{{part: partLead, text: capitalName(
-			leadSubject(f), endSentence(text))}}
+		return append([]sentence{{part: partLead, text: capitalName(
+			leadSubject(f), endSentence(text))}}, raisedSentences(f)...)
 	}
 	if changed := changedSentences(f); len(changed) > 0 {
-		return changed
+		return append(changed, raisedSentences(f)...)
 	}
 	// Nothing specific is known to have changed: restate the case, and
 	// say what is news when the tier rose.

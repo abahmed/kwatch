@@ -71,6 +71,9 @@ narrowing the watch list and turning off the noisy reasons.
 kwatch always watches every supported resource. `namespaces`, `namespaceSelector`,
 `reasons` and `silences` only filter what is **delivered**: an incident is
 delivered while at least one finding it explains is in scope and not silenced.
+Objects without a namespace (Nodes, PersistentVolumes, webhooks, CRDs,
+PriorityClasses) are always inside the namespace filters, because their
+failure reaches every namespace; use `reasons` or `silences` to quiet them.
 State lives on a small disk (a PVC), not in ConfigMaps.
 
 #### 🔽 Filter by namespace
