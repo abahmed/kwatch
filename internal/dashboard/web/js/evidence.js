@@ -6,7 +6,8 @@
 
   var BADGE = {
     ok: ["Read", "b-read"], denied: ["Not allowed", "b-warn"],
-    timeout: ["Timed out", "b-warn"], absent: ["Nothing to read", "b-read"]
+    timeout: ["Timed out", "b-warn"], absent: ["Nothing to read", "b-read"],
+    error: ["Couldn't read", "b-warn"]
   };
 
   var DENIED = {
@@ -54,6 +55,8 @@
   function bodyText(s) {
     if (s.status === "denied") return s.reason === "off" ? OFF : (DENIED[s.check] || DENIED_OTHER);
     if (s.status === "timeout") return TIMEOUT;
+    if (s.status === "error") return "kwatch couldn't read this right now. The other checks are shown. " +
+      "kwatch looks again at the next update.";
     if (s.status !== "absent") return "";
     if (s.check === "logs") {
       return s.run === "previous" ? "No previous run. This container has not restarted." :
@@ -70,14 +73,14 @@
       n += 1;
       if (s.status === "ok" || s.status === "absent") read += 1;
       if (s.status === "denied") denied += 1;
-      if (s.status === "timeout") slow += 1;
+      if (s.status === "timeout" || s.status === "error") slow += 1;
     });
     var text = KW.plural(n, "check", "checks") + " ran.";
     if (read === n) return [n, text + " All read."];
     var parts = [];
     if (read) parts.push(read + " read");
     if (denied) parts.push(denied + " not allowed");
-    if (slow) parts.push(slow + " timed out");
+    if (slow) parts.push(slow + " timed out or could not be read");
     return [n, text + " " + parts.join(", ") + "."];
   }
 
@@ -132,7 +135,7 @@
   function checkSection(list) {
     var first = list[0];
     var worst = list.filter(function (s) { return s.status !== "ok"; })[0] || first;
-    var open = worst.status === "denied" || worst.status === "timeout" ||
+    var open = worst.status === "denied" || worst.status === "timeout" || worst.status === "error" ||
       list.some(function (s) { return s.matched && s.matched.length; });
     var g = group(first.check, first.title, badge(worst), open);
     list.forEach(function (s) {

@@ -208,3 +208,40 @@ func TestInvestigateStampsWhenEachCheckRead(t *testing.T) {
 		}
 	}
 }
+
+func TestInvestigateClassifiesFailedReads(t *testing.T) {
+	notFound := apierrors.NewNotFound(
+		schema.GroupResource{Resource: "pods/log"}, "api-1")
+	tests := []struct {
+		err  error
+		want string
+	}{
+		{notFound, incident.SectionAbsent},
+		{errors.New("connection reset"), incident.SectionError},
+	}
+	for _, tt := range tests {
+		s := Sources{Model: crashModel(t), Tail: tailOf(nil, tt.err)}
+		_, r := planAndRun(t, s, crashIncident())
+		if got := sectionsOf(r, incident.CheckLogs)[0].Status; got != tt.want {
+			t.Errorf("%v: status %q, want %q", tt.err, got, tt.want)
+		}
+	}
+}
+
+func TestUsageFallsBackToTheModelWithoutMetricsServer(t *testing.T) {
+	model := testModel(t,
+		observed(crashPod, nil),
+		observed(crashContainer, map[string]inventory.Value{
+			kube.AttrMemoryLimit: text("256Mi")}),
+		related(crashContainer, inventory.PartOf, crashPod))
+	s := Sources{Model: model, PodUsage: func(context.Context,
+		inventory.EntityID) ([]kube.ContainerUsage, error) {
+		return nil, errors.New("the server could not find the resource")
+	}}
+	p := incidentOf(crashContainer, finding(crashContainer, "OOMKilled"))
+	_, r := planAndRun(t, s, p)
+	usage := sectionsOf(r, incident.CheckUsage)
+	if len(usage) == 0 || usage[0].Status != incident.SectionOK {
+		t.Fatalf("usage = %+v", usage)
+	}
+}

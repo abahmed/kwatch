@@ -165,6 +165,7 @@ func readEvents(
 	ids := []inventory.EntityID{p.Root}
 	for _, pod := range incidentPods(s.Model, p) {
 		ids = append(ids, pod)
+		ids = append(ids, containersOf(s.Model, pod)...)
 		ids = append(ids, s.Model.Related(pod, inventory.OwnedBy,
 			inventory.Outgoing)...)
 		ids = append(ids, s.Model.Related(pod, inventory.RunsOn,
@@ -198,9 +199,8 @@ func readUsage(
 		live := map[string]kube.ContainerUsage{}
 		if s.PodUsage != nil {
 			usage, err := s.PodUsage(ctx, pod)
-			if err != nil && kube.IsDenied(err) {
-				sec.fact("Metrics API",
-					"not allowed; showing kubelet stats")
+			if err != nil {
+				sec.fact("Metrics API", metricsNote(err))
 			}
 			for _, u := range usage {
 				live[u.Name] = u
@@ -235,6 +235,11 @@ func addUsage(
 	}
 	if cpu > 0 {
 		sec.fact(name+": CPU", humanCPU(cpu)+limitOf(e, kube.AttrCPULimit))
+	}
+	sec.fact(name+": memory request", textOf(e, kube.AttrMemoryReq))
+	sec.fact(name+": memory limit", textOf(e, kube.AttrMemoryLimit))
+	if peak := number(e, kube.AttrMemoryPeak24h); peak > 0 {
+		sec.fact(name+": memory peak, last 24h", humanMemory(peak))
 	}
 	if peak := number(e, kube.AttrMemoryPrevPeak); peak > 0 {
 		sec.fact(name+": memory before the last kill",
@@ -288,4 +293,14 @@ func readProbes(
 		out = append(out, sec.done())
 	}
 	return out
+}
+
+// metricsNote says why the metrics API gave no usage: kubelet stats
+// stand in either way.
+func metricsNote(err error) string {
+	if kube.IsDenied(err) {
+		return "not allowed; showing kubelet stats"
+	}
+	return "not available (is metrics-server installed?); " +
+		"showing kubelet stats"
 }

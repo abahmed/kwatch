@@ -11,6 +11,9 @@ const (
 	SectionDenied  = "denied"
 	SectionTimeout = "timeout"
 	SectionAbsent  = "absent"
+	// SectionError: the read failed for another reason (the API was
+	// unavailable, not a refusal or a timeout).
+	SectionError = "error"
 )
 
 // Section reasons say why a section is denied.
@@ -59,7 +62,7 @@ const (
 var StepChecks = []string{
 	CheckPodState, CheckLogs, CheckUsage, CheckNode, CheckNodePods,
 	CheckVolume, CheckConfig, CheckIngress, CheckAdmission, CheckRollout,
-	CheckControlPlane, CheckFinalizer, CheckObject,
+	CheckControlPlane, CheckFinalizer, CheckObject, CheckService,
 }
 
 // SectionFact is one labelled value of a section, such as "Phase" and
@@ -110,11 +113,14 @@ const (
 	CorrelationDiff      = "Before and after"
 )
 
-// GatheredChecks are the checks of report whose read came back ok.
+// GatheredChecks are the checks of report that read an answer: ok, or
+// absent (kwatch looked and nothing was there, so running the command
+// would show the reader nothing more). A denied, timed out or failed
+// read is not gathered.
 func GatheredChecks(report []Section) map[string]bool {
 	out := map[string]bool{}
 	for _, s := range report {
-		if s.Status == SectionOK {
+		if s.Status == SectionOK || s.Status == SectionAbsent {
 			out[s.Check] = true
 		}
 	}

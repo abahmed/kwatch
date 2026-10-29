@@ -81,3 +81,20 @@ func TestWriteCommunityIgnoresTheReport(t *testing.T) {
 			with.Note, plain.Note)
 	}
 }
+
+// A read that found nothing was still taken: running the command would
+// show the reader nothing more, so the step goes.
+func TestWriteProDropsStepsWhoseReadFoundNothing(t *testing.T) {
+	absent := []incident.Section{{Check: incident.CheckLogs,
+		Status: incident.SectionAbsent}}
+	m := NewWriter("", nil).Write(crashDecision(absent), evidenceAt)
+	if strings.Contains(commandsOf(m), "kubectl logs") {
+		t.Fatalf("an absent read kept its step:\n%s", commandsOf(m))
+	}
+	failed := []incident.Section{{Check: incident.CheckLogs,
+		Status: incident.SectionError}}
+	m = NewWriter("", nil).Write(crashDecision(failed), evidenceAt)
+	if !strings.Contains(commandsOf(m), "kubectl logs") {
+		t.Fatalf("a failed read lost its step:\n%s", commandsOf(m))
+	}
+}

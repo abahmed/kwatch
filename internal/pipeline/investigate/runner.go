@@ -148,8 +148,10 @@ func readStatus(ctx context.Context, err error) (status, reason string) {
 		return incident.SectionDenied, incident.ReasonRBAC
 	case ctx.Err() != nil:
 		return incident.SectionTimeout, ""
-	default:
+	case kube.IsAbsent(err):
 		return incident.SectionAbsent, ""
+	default:
+		return incident.SectionError, ""
 	}
 }
 

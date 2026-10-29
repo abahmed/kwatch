@@ -25,6 +25,7 @@ var stepChecks = []struct{ prefix, check string }{
 	{"kubectl describe node ", incident.CheckNode},
 	{"kubectl describe pvc ", incident.CheckVolume},
 	{"kubectl describe secret ", incident.CheckConfig},
+	{"kubectl describe service ", incident.CheckService},
 	{"kubectl describe ", incident.CheckObject},
 	{"kubectl logs ", incident.CheckLogs},
 	{"kubectl top pod ", incident.CheckUsage},

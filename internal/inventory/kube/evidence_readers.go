@@ -30,6 +30,12 @@ func IsDenied(err error) bool {
 	return apierrors.IsForbidden(err) || apierrors.IsUnauthorized(err)
 }
 
+// IsAbsent reports a read of something that is not there: a previous
+// run of a container that never restarted, or a missing object.
+func IsAbsent(err error) bool {
+	return apierrors.IsNotFound(err) || apierrors.IsBadRequest(err)
+}
+
 // Tail returns one run of a container's output for the evidence report:
 // the previous run when previous is set, else the current one, oldest
 // first, redacted and bounded to reportTailLines lines. The error says
