@@ -66,7 +66,10 @@ func TestUnreadablePageResetSalvagesIntactOutbox(t *testing.T) {
 	require.NoError(t, s.Close())
 	pageSize, pages := seedPages(t, path)
 	require.Greater(t, pages, int64(8))
-	damagePage(t, path, pageSize, pages/2)
+	// Damage a page only the filler State bucket uses: which page sits in
+	// the middle of the file depends on the OS page size, and on Linux it
+	// can hold the outbox or the root of every bucket.
+	damagePage(t, path, pageSize, bucketRoot(t, path, State))
 
 	s = openStoreAt(t, path)
 	defer s.Close()
@@ -120,4 +123,20 @@ func TestResetCountsTheRecordsItCouldNotCarry(t *testing.T) {
 	assert.Equal(t, 2, reset.CarriedRecords)
 	assert.Equal(t, 1, reset.SkippedRecords)
 	assert.Equal(t, uint64(1), s.Stats().CorruptRecords)
+}
+
+// bucketRoot is the page the bucket's tree starts at. The bucket must
+// hold enough to have pages of its own rather than live inline.
+func bucketRoot(t *testing.T, path string, name Bucket) int64 {
+	t.Helper()
+	db, err := bolt.Open(path, 0o600, &bolt.Options{ReadOnly: true})
+	require.NoError(t, err)
+	defer db.Close()
+	var root int64
+	require.NoError(t, db.View(func(tx *bolt.Tx) error {
+		root = int64(tx.Bucket([]byte(name)).Root())
+		return nil
+	}))
+	require.NotZero(t, root, "the bucket is inline, not on its own pages")
+	return root
 }
