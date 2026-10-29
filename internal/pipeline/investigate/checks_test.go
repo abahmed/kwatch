@@ -242,3 +242,23 @@ func TestUsageReadsKubeletStatsFromTheModel(t *testing.T) {
 		t.Fatalf("usage = %+v", usage)
 	}
 }
+
+// A container that crashed once has no last termination yet: the
+// kubelet reports the exit as its current state, and that confirms the
+// crash as well.
+func TestCorrelationConfirmsAFirstCrashFromItsCurrentState(t *testing.T) {
+	model := testModel(t,
+		observed(crashPod, nil),
+		observed(crashContainer, map[string]inventory.Value{
+			kube.AttrState: text("terminated"), kube.AttrExitCode: num(42)}),
+		related(crashContainer, inventory.PartOf, crashPod))
+	p := incidentOf(crashContainer, finding(crashContainer, "Error"))
+	p.Root = inventory.CoreID(kube.KindDeployment, "shop", "api")
+	p.Cause = &rootcause.CauseRecord{Root: p.Root}
+	_, r := planAndRun(t, Sources{Model: model,
+		Tail: tailOf(nil, nil)}, p)
+	if r.Correlation == nil ||
+		!strings.Contains(r.Correlation.Confirmed, "exited with code 42") {
+		t.Fatalf("correlation = %+v", r.Correlation)
+	}
+}

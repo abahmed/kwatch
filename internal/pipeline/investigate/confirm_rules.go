@@ -46,7 +46,7 @@ func confirmCrashExit(
 	for _, pod := range incidentPods(model, p) {
 		for _, c := range containersOf(model, pod) {
 			e, _ := model.Entity(c)
-			code := textOf(e, kube.AttrLastExitCode)
+			code := exitCodeOf(e)
 			if code == "" || code == "0" {
 				continue
 			}
@@ -74,4 +74,15 @@ func firstErrorOf(report []incident.Section, sig signature) string {
 		}
 	}
 	return ""
+}
+
+// exitCodeOf is the exit code of the run that ended last: the last
+// termination once the container restarted, else its current state. A
+// container that just crashed for the first time has no last
+// termination yet; the kubelet reports that exit as its current state.
+func exitCodeOf(e inventory.Entity) string {
+	if code := textOf(e, kube.AttrLastExitCode); code != "" {
+		return code
+	}
+	return textOf(e, kube.AttrExitCode)
 }
