@@ -45,6 +45,10 @@ rbac:
   # release namespace, in both modes and even with watch.secrets=false.
   # Opt back into the wildcard with --set rbac.mode=full.
   mode: least-privilege
+  # -- Grant get on the API server's /readyz. The prober and Pro evidence
+  # read its readiness checks; false removes the grant and the control
+  # plane evidence shows that kwatch isn't allowed to read it.
+  readyz: true
 
 watch:
   # -- Watch Secrets. They feed checks such as missing Secret references

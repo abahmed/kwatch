@@ -22,6 +22,9 @@ func RichWithOutput(
 	if limit <= 0 {
 		return m.Render(d) + sep + d.Fence(neutral(d, raw))
 	}
+	if Pinned(m.Doc) {
+		return FitPinned(m, d, sep, limit)
+	}
 	// The note comes first: when it leaves too little room, the output
 	// is dropped and the note keeps the space.
 	note := m.RenderWithin(d, limit)

@@ -20,21 +20,21 @@ func TestInvestigatorPicksKindByRoot(t *testing.T) {
 		want string
 	}{
 		{"crash", incidentOf(pod, finding(container, "CrashLoop")),
-			kindCrash},
+			incident.CheckCrash},
 		{"node beats crash", incidentOf(
 			inventory.CoreID(kube.KindNode, "", "n1"),
-			finding(container, "CrashLoop")), kindNode},
+			finding(container, "CrashLoop")), incident.CheckNode},
 		{"scheduling", incidentOf(pod, finding(pod, "Unschedulable")),
-			kindScheduling},
+			incident.CheckScheduling},
 		{"config", incidentOf(
 			inventory.CoreID(kube.KindConfigMap, "shop", "app"),
-			finding(container, "CreateError.Config")), kindConfig},
+			finding(container, "CreateError.Config")), incident.CheckConfig},
 		{"admission", incidentOf(
 			inventory.CoreID(kube.KindValidatingHook, "", "policy"),
 			finding(inventory.CoreID(kube.KindValidatingHook, "", "policy"),
-				"Webhook.NoEndpoints")), kindAdmission},
+				"Webhook.NoEndpoints")), incident.CheckAdmission},
 		{"registry", incidentOf(pod, finding(container, "ImagePull")),
-			kindRegistry},
+			incident.CheckRegistry},
 	}
 	r := NewInvestigator(Sources{Model: testModel(t)})
 	for _, tt := range tests {

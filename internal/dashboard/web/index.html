@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="{{asset:app.css}}">
 <script defer src="{{asset:js/core.js}}"></script>
 <script defer src="{{asset:js/lists.js}}"></script>
+<script defer src="{{asset:js/evidence.js}}"></script>
 <script defer src="{{asset:js/detail.js}}"></script>
 <script defer src="{{asset:js/status.js}}"></script>
 <script defer src="{{asset:js/main.js}}"></script>
@@ -146,8 +147,13 @@
       <div class="notice d-banner" data-banner hidden><b></b><p></p></div>
       <div class="d-meta"><div class="chips" data-chips></div><button class="btn btn-sm" type="button" data-copy-link>Copy link</button></div>
       <h1 data-title></h1>
+      <div class="tabs" role="tablist" aria-label="Issue views" data-tabs hidden>
+        <a href="?" role="tab" data-tab="summary" aria-selected="true">Summary</a>
+        <a href="?tab=evidence" role="tab" data-tab="evidence" data-tab-evidence aria-selected="false" tabindex="-1">Evidence <span class="tab-count"></span></a>
+      </div>
     </div>
-    <div class="d-story">
+    <div class="ev-host" role="tabpanel" data-evidence hidden></div>
+    <div class="d-story" data-story>
       <section class="sec" data-why hidden><h2>Why it happened</h2><p></p></section>
       <section class="sec" data-fix hidden><h2>What to do</h2><div data-steps></div><p class="runbook" data-runbook hidden></p></section>
       <section class="sec" data-logs-sec><h2>What kwatch saw</h2>

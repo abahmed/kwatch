@@ -188,11 +188,16 @@ func (p *pipelineBuild) newInvestigator() investigate.Investigator {
 		return nil
 	}
 	client := p.deps.clients.Kubernetes
+	logs := kube.LogReader{Client: client}
 	return investigate.NewInvestigator(investigate.Sources{
 		Model:       p.model,
-		Logs:        kube.LogReader{Client: client}.Lines,
-		CurrentLogs: kube.LogReader{Client: client}.CurrentLines,
+		Logs:        logs.Lines,
+		CurrentLogs: logs.CurrentLines,
+		Tail:        logs.Tail,
 		Endpoints:   kube.EndpointReader{Client: client}.ReadyEndpoints,
+		Readyz:      kube.ReadyzReader{Client: client}.Checks,
+		LogsOff:     !p.deps.runtime.Application().InvestigationLogs,
+		Now:         p.clock.Now,
 	})
 }
 

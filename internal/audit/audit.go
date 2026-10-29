@@ -52,6 +52,11 @@ type Entry struct {
 	CauseState    string `json:"causeState,omitempty"`
 	RootCause     string `json:"rootCause,omitempty"`
 	Confidence    string `json:"confidence,omitempty"`
+	// Evidence lists the checks the investigation ran as "check:status"
+	// (Pro), and ReadSteps counts the message's read-only commands, so a
+	// reader can see that kwatch ran a read instead of asking for it.
+	Evidence  []string `json:"evidence,omitempty"`
+	ReadSteps int      `json:"readSteps,omitempty"`
 	// DecisionReason explains why the manager sent this message.
 	DecisionReason string `json:"decisionReason,omitempty"`
 	// ContentHash fingerprints the announced content; an update with the

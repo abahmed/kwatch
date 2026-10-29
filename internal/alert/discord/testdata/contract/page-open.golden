@@ -7,5 +7,15 @@ Content-Type: application/json
     "replied_user": false
   },
   "components": null,
-  "content": "🔴 payments in shop is crash-looping. It ran out of memory 3 times in 10 minutes. Try kubectl -n shop describe pod payments-1.\n```\npanic: out of memory\n```"
+  "embeds": [
+    {
+      "color": 11805464,
+      "description": "🔴 payments in shop is crash-looping. It ran out of memory 3 times in 10 minutes. Try kubectl -n shop describe pod payments-1.\n```\npanic: out of memory\n```",
+      "footer": {
+        "text": "kwatch · dev"
+      },
+      "timestamp": "<time>",
+      "title": "🔴 payments in shop is crash-looping."
+    }
+  ]
 }

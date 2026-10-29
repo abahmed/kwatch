@@ -86,7 +86,7 @@ func (r LogReader) Lines(
 	ctx context.Context, container inventory.EntityID,
 ) []string {
 	for _, previous := range []bool{true, false} {
-		body, err := r.read(ctx, container, previous, logTailLines, logFetchBytes)
+		body, err := r.read(ctx, container, previous, logTailLines)
 		if err == nil && len(bytes.TrimSpace(body)) > 0 {
 			return logLines(lastBytes(body, logLimitBytes))
 		}
@@ -100,7 +100,7 @@ func (r LogReader) Lines(
 func (r LogReader) CurrentLines(
 	ctx context.Context, container inventory.EntityID,
 ) []string {
-	body, err := r.read(ctx, container, false, crashTailLines, logFetchBytes)
+	body, err := r.read(ctx, container, false, crashTailLines)
 	if err != nil {
 		return nil
 	}
@@ -114,7 +114,7 @@ func (r LogReader) CurrentLines(
 func (r LogReader) PreviousLines(
 	ctx context.Context, container inventory.EntityID,
 ) ([]string, error) {
-	body, err := r.read(ctx, container, true, crashTailLines, logFetchBytes)
+	body, err := r.read(ctx, container, true, crashTailLines)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func (r LogReader) PreviousLines(
 // read fetches one run's log tail within logFetchBudget.
 func (r LogReader) read(
 	ctx context.Context, container inventory.EntityID, previous bool,
-	lines, fetch int64,
+	lines int64,
 ) ([]byte, error) {
 	pod, name, ok := strings.Cut(container.Name, "/")
 	if !ok || r.Client == nil {
@@ -132,7 +132,7 @@ func (r LogReader) read(
 	}
 	fetchCtx, cancel := context.WithTimeout(ctx, logFetchBudget)
 	defer cancel()
-	tail, limit := lines, fetch
+	tail, limit := lines, int64(logFetchBytes)
 	return r.Client.CoreV1().Pods(container.Namespace).GetLogs(
 		pod, &corev1.PodLogOptions{
 			Container: name, Previous: previous,

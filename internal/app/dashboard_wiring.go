@@ -26,6 +26,7 @@ func dashboardDetail(
 		out.Facts = append(out.Facts, f.Text)
 	}
 	out.Steps = fixSteps(m)
+	out.Evidence, out.Correlation = d.Facts.Report, d.Facts.Correlation
 	return out
 }
 

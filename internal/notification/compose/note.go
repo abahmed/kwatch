@@ -37,6 +37,12 @@ type caseFacts struct {
 	// wake is the cluster wake-up the problem began in, set by the
 	// pipeline.
 	wake *incident.WakeContext
+	// gathered are the checks whose read came back ok, and confirmed
+	// says why gathered evidence proves the cause (investigate confirms
+	// only an incident with a cause or a failing root); both empty in
+	// Community.
+	gathered  map[string]bool
+	confirmed string
 }
 
 func gatherFacts(d incident.Decision, now time.Time, fix *inventory.Change,
@@ -45,7 +51,11 @@ func gatherFacts(d incident.Decision, now time.Time, fix *inventory.Change,
 		members: sortedMembers(d.Incident), now: now, fix: fix,
 		reason: d.Reason, output: d.Facts.Output,
 		evidence: d.Facts.Evidence, changes: d.Facts.Changes,
-		window: d.Facts.Window, wake: d.Facts.Wake}
+		window: d.Facts.Window, wake: d.Facts.Wake,
+		gathered: incident.GatheredChecks(d.Facts.Report)}
+	if c := d.Facts.Correlation; c != nil {
+		f.confirmed = c.Confirmed
+	}
 	if own := rootFinding(f.p, f.members); own != nil {
 		f.lead, f.ok = *own, true
 	} else if failures := failing(f.members); len(failures) > 0 {

@@ -90,7 +90,7 @@ func TestInvestigateCrashShowsReplicaSignatureOnce(t *testing.T) {
 
 	plan, r := planAndRun(t, Sources{Model: model, Logs: read}, p)
 
-	if plan.Kind != kindCrash {
+	if plan.Kind != incident.CheckCrash {
 		t.Fatalf("kind = %q, want crash", plan.Kind)
 	}
 	// Containers are read in name order; a known address is named.

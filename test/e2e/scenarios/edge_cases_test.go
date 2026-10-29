@@ -37,6 +37,7 @@ func TestScenarioMissingRequiredReferences(t *testing.T) {
 			MaxMessages:  2,
 			MustNotBlame: []string{blamed},
 		})
+		s.ExpectGatheredEvidence(s.Namespace, "missing-secret")
 	})
 }
 

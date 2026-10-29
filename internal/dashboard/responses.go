@@ -59,6 +59,39 @@ type IncidentDetail struct {
 	Timeline         []Event   `json:"timeline"`
 	CapturedLogLines []string  `json:"capturedLogLines"`
 	DocsLink         string    `json:"docsLink,omitempty"`
+	// Evidence is one section per check the last investigation ran (Pro
+	// only; absent otherwise), and Correlation what kwatch concluded
+	// across them.
+	Evidence    []EvidenceSection `json:"evidence,omitempty"`
+	Correlation *Correlation      `json:"correlation,omitempty"`
+}
+
+// EvidenceSection is what one check read. Status is ok, denied,
+// timeout or absent; Reason says why a denied one is (rbac, off).
+type EvidenceSection struct {
+	Check   string         `json:"check"`
+	Title   string         `json:"title"`
+	Status  string         `json:"status"`
+	Reason  string         `json:"reason,omitempty"`
+	Subject string         `json:"subject,omitempty"`
+	Run     string         `json:"run,omitempty"`
+	Facts   []EvidenceFact `json:"facts"`
+	Lines   []string       `json:"lines"`
+	Matched []int          `json:"matched"`
+	// ReadAt is when the check read this, omitted when unknown.
+	ReadAt *time.Time `json:"readAt,omitempty"`
+}
+
+// EvidenceFact is one labelled value.
+type EvidenceFact struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
+// Correlation is the cross-section conclusion.
+type Correlation struct {
+	Confirmed string         `json:"confirmed,omitempty"`
+	Facts     []EvidenceFact `json:"facts"`
 }
 
 // FixStep is one suggested step: a sentence and, when the step is a

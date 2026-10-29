@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/abahmed/kwatch/internal/alert/safetext"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -172,9 +171,8 @@ func (d *Discord) verifyURL() string {
 	return target
 }
 
-// SendIncident posts the incident narrative as the message content, with
-// the workload's last output as a code block. The content is cut to
-// Discord's 2000-character limit; bytes never undercount characters.
+// SendIncident posts the incident as one embed (see incidentEmbed).
+// Plain notices and the digest go through SendMessage as content.
 func (d *Discord) SendIncident(
 	ctx context.Context,
 	m notification.Message,
@@ -184,18 +182,13 @@ func (d *Discord) SendIncident(
 	err := d.execute(
 		&discordgo.WebhookParams{
 			AllowedMentions: noMentions(),
-			Content:         incidentContent(m),
+			Embeds: []*discordgo.MessageEmbed{
+				incidentEmbed(m, d.clusterName, d.clockSource.Now()),
+			},
 		},
 		discordgo.WithContext(ctx),
 	)
 	return wrapDiscordRateLimit(err)
-}
-
-// incidentContent is the Note plus the last output, mention-neutralized
-// and bounded.
-func incidentContent(m notification.Message) string {
-	return safetext.RichWithOutput(m,
-		notification.MarkdownDialect(nil, "\n"), "\n", maxContent)
 }
 
 // SendMessage sends text using the caller's cancellation context.
@@ -207,7 +200,9 @@ func (d *Discord) SendMessage(
 	err := d.execute(
 		&discordgo.WebhookParams{
 			AllowedMentions: noMentions(),
-			Content:         msg,
+			// The delivery bound is the embed's; plain content has its
+			// own, smaller limit.
+			Content: notification.Truncate(msg, maxContent),
 		},
 		discordgo.WithContext(ctx),
 	)

@@ -36,6 +36,9 @@ type ApplicationRuntime struct {
 	// WatchSecrets is false when Secrets must not be watched
 	// (watch.secrets).
 	WatchSecrets bool
+	// InvestigationLogs is false when evidence must not read logs
+	// (investigation.logs).
+	InvestigationLogs bool
 }
 
 // These private views keep the snapshot navigable without exposing mutable
@@ -105,6 +108,7 @@ func CompileRuntimeConfig(c *Config) RuntimeConfig {
 			HideProHints:              c.App.HideProHints,
 			KubeletInsecureSkipVerify: c.Kubelet.InsecureSkipVerify,
 			WatchSecrets:              c.Watch.Secrets,
+			InvestigationLogs:         c.Investigation.Logs,
 		},
 		lifecycle: runtimeLifecycle{
 			telemetry:   c.Telemetry,

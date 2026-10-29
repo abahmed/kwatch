@@ -18,6 +18,7 @@ func TestScenarioNodePressureSignals(t *testing.T) {
 			Root:        "node//" + node,
 			MaxMessages: 4,
 		})
+		s.ExpectGatheredEvidence("", node)
 
 		s.StartNode(node)
 		s.ExpectKwatchHealthy()

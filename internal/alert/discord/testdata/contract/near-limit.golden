@@ -7,5 +7,15 @@ Content-Type: application/json
     "replied_user": false
   },
   "components": null,
-  "content": "🔴 payments in shop is crash-looping. Last output:\n\n```\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[1978 runes sha256:34b70cec4ad24b8633a177bb]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n```"
+  "embeds": [
+    {
+      "color": 11805464,
+      "description": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[4094 runes sha256:7a128101f6dd8477637fcd6a]…xxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxx…",
+      "footer": {
+        "text": "kwatch · dev"
+      },
+      "timestamp": "<time>",
+      "title": "🔴 payments in shop is crash-looping."
+    }
+  ]
 }

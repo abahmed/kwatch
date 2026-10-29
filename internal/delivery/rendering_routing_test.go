@@ -12,7 +12,7 @@ import (
 )
 
 func TestDefaultMaxBytes(t *testing.T) {
-	assert.Equal(t, 2000, defaultMaxBytes("discord"))
+	assert.Equal(t, 6000, defaultMaxBytes("discord"))
 	assert.Equal(t, 4096, defaultMaxBytes("telegram"))
 	assert.Equal(t, 28000, defaultMaxBytes("teams"))
 	assert.Equal(t, 40000, defaultMaxBytes("slack"))

@@ -18,6 +18,10 @@ type Detail struct {
 	// Steps are what the last message told the reader to do. Empty
 	// keeps the earlier steps.
 	Steps []FixStep
+	// Evidence and Correlation replace the earlier report when Evidence
+	// is not empty.
+	Evidence    []Section
+	Correlation *Correlation
 }
 
 // FixStep is one suggested step: a sentence, and the exact command when
@@ -49,6 +53,9 @@ func (m *Manager) StoreDetail(id string, d Detail) {
 	p.Facts = mergeFacts(p.Facts, d.Facts)
 	if len(d.Steps) > 0 {
 		p.Steps = boundSteps(d.Steps)
+	}
+	if len(d.Evidence) > 0 {
+		p.Evidence, p.Correlation = d.Evidence, d.Correlation
 	}
 }
 

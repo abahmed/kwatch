@@ -46,6 +46,10 @@ const (
 type Block struct {
 	Kind  BlockKind
 	Spans []Span
+	// Pinned marks the fix (a command that changes the cluster and its
+	// sentence): a bounded render cuts the blocks before it, never it.
+	// It is a rendering hint and is not part of any payload.
+	Pinned bool `json:"-"`
 }
 
 // Text is the block's text without any markup.
@@ -109,7 +113,45 @@ func RenderBlocks(blocks []Block, d Dialect) string {
 }
 
 // RenderBlocksWithin is RenderBlocks bounded to limit bytes (0: none).
+// When the blocks do not fit and end with pinned blocks, those are kept
+// whole and the blocks before them are cut from the bottom.
 func RenderBlocksWithin(blocks []Block, d Dialect, limit int) string {
+	if limit > 0 {
+		if out, ok := renderPinned(blocks, d, limit); ok {
+			return out
+		}
+	}
+	return renderWithin(blocks, d, limit)
+}
+
+// renderPinned keeps the trailing pinned blocks of an overflowing
+// message. ok is false when nothing is pinned, everything fits or the
+// pinned blocks alone leave no room for the headline.
+func renderPinned(blocks []Block, d Dialect, limit int) (string, bool) {
+	at := len(blocks)
+	for at > 1 && blocks[at-1].Pinned {
+		at--
+	}
+	if at == len(blocks) || at == 0 {
+		return "", false
+	}
+	if len(renderWithin(blocks, d, 0)) <= limit {
+		return "", false
+	}
+	tail := renderWithin(blocks[at:], d, 0)
+	sep := separator(blocks[at-1], blocks[at], d)
+	room := limit - len(tail) - len(sep)
+	if room < minHeadRoom {
+		return "", false
+	}
+	return renderWithin(blocks[:at], d, room) + sep + tail, true
+}
+
+// minHeadRoom is the least room the blocks before a pinned fix need:
+// the headline must still say what broke.
+const minHeadRoom = 120
+
+func renderWithin(blocks []Block, d Dialect, limit int) string {
 	var sb strings.Builder
 	prev := Block{Kind: Heading}
 	for i, b := range blocks {

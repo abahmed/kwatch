@@ -18,6 +18,7 @@ func TestScenarioServiceWithoutEndpoints(t *testing.T) {
 		s.ChangeServiceSelector("empty-service", "renamed")
 		s.ExpectIncident("empty-service", "ServiceNoEndpoints",
 			detectors.DefaultNoEndpoints)
+		s.ExpectGatheredEvidence(s.Namespace, "empty-service")
 	})
 }
 
@@ -33,5 +34,6 @@ func TestScenarioPersistentVolumeClaimFailure(t *testing.T) {
 			Tier:        "notify",
 			MaxMessages: 2,
 		})
+		s.ExpectGatheredEvidence("", missingStorageClass)
 	})
 }

@@ -31,13 +31,12 @@ var readyzSteps = map[inventory.EntityID]string{
 // component; nil for any other root.
 func controlPlaneSteps(root inventory.EntityID) []notification.Step {
 	if pods, ok := controlPlanePods[root]; ok {
-		selector := " -n kube-system"
 		return []notification.Step{
 			{Text: "See the " + pods.text + " pods",
-				Command: "kubectl" + selector + " get pods -l " +
+				Command: "kubectl -n kube-system get pods -l " +
 					pods.label},
 			{Text: "Read what the " + pods.text + " pods logged recently",
-				Command: "kubectl" + selector + " logs -l " + pods.label +
+				Command: "kubectl -n kube-system logs -l " + pods.label +
 					" --tail=50"},
 		}
 	}

@@ -26,6 +26,10 @@ type Incident struct {
 	Steps      []notification.Step `json:"steps,omitempty"`
 	Confidence string              `json:"confidence,omitempty"`
 	Route      notification.Route  `json:"route"`
+	// Evidence is what Pro gathered: confirmed, the check count, key
+	// facts, the log quote and the fix. Absent otherwise, so existing
+	// receivers see the same payload.
+	Evidence *notification.Evidence `json:"evidence,omitempty"`
 
 	// Flags tell the receiver how delivery treated the message.
 	Flags
@@ -75,7 +79,8 @@ func NewIncident(cluster string, m notification.Message) Incident {
 		Markdown: markdown(m), Title: m.Title,
 		Lines: m.Lines, Timeline: m.Timeline, Output: m.Output,
 		Steps: m.Steps, Confidence: m.Confidence, Route: m.Route,
-		Flags: FlagsOf(m),
+		Evidence: m.Evidence,
+		Flags:    FlagsOf(m),
 	}
 }
 

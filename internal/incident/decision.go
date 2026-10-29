@@ -26,6 +26,12 @@ type Facts struct {
 	// Evidence holds the facts investigation found, already redacted.
 	// Writers quote them as proof. Empty when none were found.
 	Evidence []Fact
+	// Report is every section investigation read, for the dashboard,
+	// and Correlation what kwatch concluded across them. Compose reads
+	// Report only to know which read-only steps were already taken and
+	// Correlation to confirm the cause; neither is quoted whole.
+	Report      []Section
+	Correlation *Correlation
 	// Changes are the latest changes in the root's namespace, newest
 	// first, set for an incident without a cause (see RecentChanges).
 	Changes []inventory.Change

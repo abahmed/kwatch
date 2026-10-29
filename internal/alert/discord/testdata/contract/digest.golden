@@ -7,5 +7,15 @@ Content-Type: application/json
     "replied_user": false
   },
   "components": null,
-  "content": "🟠 kwatch started and found 2 problems that were there."
+  "embeds": [
+    {
+      "color": 9065216,
+      "description": "🟠 kwatch started and found 2 problems that were there.",
+      "footer": {
+        "text": "kwatch · dev"
+      },
+      "timestamp": "<time>",
+      "title": "🟠 kwatch started and found 2 problems."
+    }
+  ]
 }

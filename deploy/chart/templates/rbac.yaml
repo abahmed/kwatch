@@ -26,7 +26,13 @@ rules:
 - apiGroups: [""]
   resources: ["nodes/stats", "nodes/metrics", "pods/log"]
   verbs: ["get"]
+{{- if ne .Values.rbac.readyz false }}
+# /readyz: the prober and Pro evidence read the API server's readiness
+# checks (rbac.readyz).
 - nonResourceURLs: ["/readyz", "/metrics"]
+{{- else }}
+- nonResourceURLs: ["/metrics"]
+{{- end }}
   verbs: ["get"]
 - apiGroups: ["authorization.k8s.io"]
   resources: ["selfsubjectaccessreviews"]
@@ -57,7 +63,13 @@ rules:
 - apiGroups: [""]
   resources: ["nodes/stats", "nodes/metrics", "pods/log"]
   verbs: ["get"]
+{{- if ne .Values.rbac.readyz false }}
+# /readyz: the prober and Pro evidence read the API server's readiness
+# checks (rbac.readyz).
 - nonResourceURLs: ["/readyz", "/metrics"]
+{{- else }}
+- nonResourceURLs: ["/metrics"]
+{{- end }}
   verbs: ["get"]
 - apiGroups: ["apps"]
   resources: ["deployments", "replicasets", "statefulsets", "daemonsets", "controllerrevisions"]

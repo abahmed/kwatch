@@ -21,16 +21,23 @@ type Investigation struct {
 	Run    func(context.Context) Result
 }
 
-// Result is what an investigation found. Both parts are redacted.
+// Result is what an investigation found. Output and Evidence are the
+// bounded summary channel messages quote; Report is every section the
+// checks read, for the dashboard, and Correlation what kwatch concluded
+// across them. Everything is redacted.
 type Result struct {
 	// Output is the application's own recent output, shown as a quote.
 	Output []string
 	// Evidence holds the facts writers quote as proof.
 	Evidence []incident.Fact
+	// Report holds one section per check, in priority order.
+	Report []incident.Section
+	// Correlation is nil when nothing could be correlated.
+	Correlation *incident.Correlation
 }
 
 // Investigator plans the investigation of an incident. Plan reports
-// false when no investigator applies to it.
+// false when no check applies to it.
 type Investigator interface {
 	Plan(p incident.Incident) (Investigation, bool)
 }
@@ -39,15 +46,21 @@ type Investigator interface {
 // oldest first.
 type ContainerOutput func(context.Context, inventory.EntityID) []string
 
+// LogTail reads one run of a container's output for the report; the
+// error says why a read failed.
+type LogTail func(
+	ctx context.Context, container inventory.EntityID, previous bool,
+) ([]string, error)
+
 // ServiceEndpoints counts the ready endpoints of a Service. ok is false
 // when the count could not be read.
 type ServiceEndpoints func(
 	ctx context.Context, service inventory.EntityID,
 ) (ready int, ok bool)
 
-// Sources are what investigators read. Model is the live model; it is
-// safe to read from pool workers. Logs and Endpoints do API reads and
-// are optional.
+// Sources are what checks read. Model is the live model; it is safe to
+// read from pool workers. Every other source does API reads and is
+// optional: a missing one leaves its section denied or out.
 type Sources struct {
 	Model inventory.Reader
 	Logs  ContainerOutput
@@ -55,38 +68,63 @@ type Sources struct {
 	// is still running.
 	CurrentLogs ContainerOutput
 	Endpoints   ServiceEndpoints
+	// Tail reads the long log tails of the report.
+	Tail LogTail
+	// Readyz reads the API server's /readyz?verbose lines.
+	Readyz func(context.Context) ([]string, error)
+	// Now stamps when each check returned; nil leaves sections
+	// unstamped.
+	Now func() time.Time
+	// LogsOff is set when log capture is turned off
+	// (investigation.logs: false): no log is read at all.
+	LogsOff bool
 }
 
-// RootInvestigator picks the investigator of an incident by the kind of
-// its root: crashes read logs, nodes read conditions and usage, and so
-// on (see investigators).
+// RootInvestigator runs every check that applies to an incident, in
+// parallel, under the plan's budget. The first applicable check that
+// can lead (the root-kind investigators, in priority order) gives the
+// channel summary; every check adds its sections to the report.
 type RootInvestigator struct {
 	sources Sources
+	// slots bounds the API reads in flight across all investigations.
+	slots chan struct{}
 }
 
-// NewInvestigator returns the root-kind investigator over sources.
+// maxAPIReads bounds the API reads checks make at once, across all
+// investigations, so a storm of incidents cannot flood the API server.
+const maxAPIReads = 4
+
+// NewInvestigator returns the investigator over sources. With LogsOff
+// the log sources are dropped, so no code path can read a log.
 func NewInvestigator(sources Sources) *RootInvestigator {
-	return &RootInvestigator{sources: sources}
+	if sources.LogsOff {
+		sources.Logs, sources.CurrentLogs, sources.Tail = nil, nil, nil
+	}
+	return &RootInvestigator{sources: sources,
+		slots: make(chan struct{}, maxAPIReads)}
 }
 
-// Plan implements Investigator: the first investigator whose kind
-// matches p plans the reads.
+// Plan implements Investigator.
 func (r *RootInvestigator) Plan(p incident.Incident) (Investigation, bool) {
 	if r.sources.Model == nil {
 		return Investigation{}, false
 	}
-	for _, inv := range investigators {
-		if !inv.matches(p) {
-			continue
-		}
-		sources, read := r.sources, inv.read
-		return Investigation{Kind: inv.kind, Budget: inv.budget,
-			Run: func(ctx context.Context) Result {
-				return annotateResult(read(ctx, sources, p),
-					sources.Model)
-			}}, true
+	checks := applicable(p, r.sources.Model)
+	if len(checks) == 0 {
+		return Investigation{}, false
 	}
-	return Investigation{}, false
+	lead := leadOf(p, checks)
+	kind := checks[0].name
+	if lead >= 0 {
+		kind = checks[lead].name
+	}
+	sources := r.gated()
+	return Investigation{Kind: kind, Budget: MaxBudget,
+		Run: func(ctx context.Context) Result {
+			out := runChecks(ctx, sources, p, checks, lead)
+			out.Correlation = correlate(sources.Model, p, out.Report)
+			return annotateResult(out, sources.Model)
+		}}, true
 }
 
 // Evidence bounds. A message quotes one or two facts; the rest is noise.
@@ -97,10 +135,12 @@ const (
 )
 
 // Bounded caps a result's size and redacts credentials once more, so a
-// buggy investigator can never leak a secret or flood a message.
-// Private addresses stay: they are no secret and help whoever debugs.
+// buggy check can never leak a secret or flood a message. The summary
+// gets the message caps and the report the larger report caps. Private
+// addresses stay: they are no secret and help whoever debugs.
 func Bounded(r Result) Result {
-	out := Result{}
+	out := Result{Report: boundReport(r.Report),
+		Correlation: boundCorrelation(r.Correlation)}
 	for _, line := range r.Output {
 		if len(out.Output) == maxOutputLines {
 			break

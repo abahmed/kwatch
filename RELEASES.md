@@ -18,6 +18,67 @@
   teaser when Pro found a likely cause. app.hideProHints hides the alert
   line, the teaser and the startup notice; /status still counts.
 
+### Evidence (Pro)
+
+- kwatch now runs the read-only look a message used to suggest and shows
+  the result: pod state, logs (previous and current run, per container),
+  events, memory use, node and the pods on it, volume claims, Secrets and
+  ConfigMaps (key names only), Service and Ingress chains, webhooks,
+  rollouts, control plane readiness, finalizers, images and pull secrets,
+  certificates, quotas, autoscalers, Jobs and probes. Every applicable
+  check runs in parallel when an incident opens and on re-investigation,
+  under a 10-second budget with at most four API reads at once.
+- A Pro message keeps only the steps that change the cluster; a read-only
+  step stays when its read was not allowed or timed out. When the gathered
+  evidence proves the cause, the message says so and the confidence is
+  "confirmed". When a provider's length limit cuts a message, it cuts the
+  proof and keeps the fix whole.
+- The dashboard's issue page has an Evidence tab with one section per
+  check, a log viewer, the related objects and the correlation (the
+  failure signature and what it points to, the nearest change, the spread
+  and what a rollout changed). `GET /api/incidents/{id}` adds `evidence`
+  and `correlation`. The report is kept in memory only, not in the state
+  file.
+- New settings: `investigation.logs` (default true; false reads no log)
+  and the Helm value `rbac.readyz` (default true). Memory and CPU use come
+  from the kubelet stats kwatch already reads (nodes/stats), so no add-on
+  such as metrics-server is needed. A read that is not allowed shows as
+  such and never fails the investigation. Audit entries add `evidence`
+  and `readSteps`.
+- A Pro message for a workload whose container was killed at its memory
+  limit suggests a new limit: half again above the observed peak (or the
+  limit, when higher), rounded up to 64Mi, as a step that changes the
+  cluster.
+- Teams cards and email lay a Pro message out as cause, what kwatch found,
+  the log quote and the fix; email adds an HTML part next to the plain
+  text. The webhook, n8n and Zapier payloads add an `evidence` object
+  (confirmed, checks, facts, quote, fix); every other field is unchanged.
+- When a provider's limit cuts a Pro message, the log quote loses lines
+  first, then the proof, then the quote; the cause and the fix stay.
+- The dashboard shows when each check read its section.
+- Community messages are unchanged, except on Discord (below).
+
+### Cluster DNS
+
+- The cluster DNS servers are found through the DNS Service
+  (`kube-system/kube-dns`, `openshift-dns/dns-default`, or a kube-system
+  Service named for CoreDNS or selecting `k8s-app=kube-dns`), then its
+  pods and their owners of any kind. OpenShift's DaemonSet, RKE2's
+  `rke2-coredns-rke2-coredns` and Helm installs with a release prefix are
+  now recognised for DNS metrics and DNS outages; the coredns and kube-dns
+  names remain the fallback.
+
+### Delivery
+
+- Discord incidents are an embed again: the headline as the title, the
+  cause, proof, log quote and fix in the description, colour by status,
+  and kwatch, the cluster and the time in the footer. The embed stays
+  within Discord's limits (description 4096, embed 6000) by cutting the
+  proof, never the fix, and without one field per section, which broke
+  long messages before (#194, #416). Mentions are neutralized, thread_id
+  still works, and plain notices stay message content of at most 2000
+  characters. This changes Discord output in both editions.
+
 ### Detection
 
 - A node that has not been Ready since it joined is now given the ten-minute

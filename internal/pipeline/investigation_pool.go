@@ -19,8 +19,10 @@ const (
 	investigationWorkers = 3
 	investigationQueue   = 16
 	// outputWait is how long an announcement waits for its output on the
-	// engine clock. After it the message goes without output.
-	outputWait = 5 * time.Second
+	// engine clock: the whole plan budget and the grace a worker gives a
+	// late check, so a result that runs to its deadline still joins the
+	// message. After it the message goes without output.
+	outputWait = investigate.MaxBudget + abandonGrace
 	// abandonGrace is how long a worker waits, after a job's budget
 	// ended, for an investigator to return. After it the worker takes
 	// the next job and the stuck one is left to finish alone.
