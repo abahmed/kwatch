@@ -228,16 +228,13 @@ func TestInvestigateClassifiesFailedReads(t *testing.T) {
 	}
 }
 
-func TestUsageFallsBackToTheModelWithoutMetricsServer(t *testing.T) {
+func TestUsageReadsKubeletStatsFromTheModel(t *testing.T) {
 	model := testModel(t,
 		observed(crashPod, nil),
 		observed(crashContainer, map[string]inventory.Value{
 			kube.AttrMemoryLimit: text("256Mi")}),
 		related(crashContainer, inventory.PartOf, crashPod))
-	s := Sources{Model: model, PodUsage: func(context.Context,
-		inventory.EntityID) ([]kube.ContainerUsage, error) {
-		return nil, errors.New("the server could not find the resource")
-	}}
+	s := Sources{Model: model}
 	p := incidentOf(crashContainer, finding(crashContainer, "OOMKilled"))
 	_, r := planAndRun(t, s, p)
 	usage := sectionsOf(r, incident.CheckUsage)

@@ -49,10 +49,6 @@ rbac:
   # read its readiness checks; false removes the grant and the control
   # plane evidence shows that kwatch isn't allowed to read it.
   readyz: true
-  # -- Grant get on pods in the metrics API (metrics.k8s.io), which Pro
-  # evidence reads for current container usage; false falls back to
-  # kubelet stats.
-  metricsApi: true
 
 watch:
   # -- Watch Secrets. They feed checks such as missing Secret references

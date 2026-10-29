@@ -56,7 +56,6 @@ func TestSourceAccessGetsNodesButNotPods(t *testing.T) {
 	}
 	assert.True(t, gets["/nodes"])
 	assert.False(t, gets["/pods"], "pod get is namespaced, see InstallAccess")
-	assert.True(t, gets["metrics.k8s.io/pods"], "evidence reads pod usage")
 }
 
 func TestInstallAccessScopesPodGetToOwnNamespace(t *testing.T) {

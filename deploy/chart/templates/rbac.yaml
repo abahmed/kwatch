@@ -34,14 +34,6 @@ rules:
 - nonResourceURLs: ["/metrics"]
 {{- end }}
   verbs: ["get"]
-{{- if ne .Values.rbac.metricsApi false }}
-# Pro evidence reads current container usage from the metrics API
-# (rbac.metricsApi). Without it the usage check falls back to kubelet
-# stats and says so.
-- apiGroups: ["metrics.k8s.io"]
-  resources: ["pods"]
-  verbs: ["get"]
-{{- end }}
 - apiGroups: ["authorization.k8s.io"]
   resources: ["selfsubjectaccessreviews"]
   verbs: ["create"]
@@ -79,14 +71,6 @@ rules:
 - nonResourceURLs: ["/metrics"]
 {{- end }}
   verbs: ["get"]
-{{- if ne .Values.rbac.metricsApi false }}
-# Pro evidence reads current container usage from the metrics API
-# (rbac.metricsApi). Without it the usage check falls back to kubelet
-# stats and says so.
-- apiGroups: ["metrics.k8s.io"]
-  resources: ["pods"]
-  verbs: ["get"]
-{{- end }}
 - apiGroups: ["apps"]
   resources: ["deployments", "replicasets", "statefulsets", "daemonsets", "controllerrevisions"]
   verbs: ["list", "watch"]

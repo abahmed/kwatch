@@ -181,17 +181,6 @@ func (r *RootInvestigator) gated() Sources {
 			return lines, err
 		}
 	}
-	if usage := s.PodUsage; usage != nil {
-		s.PodUsage = func(ctx context.Context, pod inventory.EntityID) (
-			[]kube.ContainerUsage, error) {
-			var out []kube.ContainerUsage
-			err := r.gate(ctx, func() (err error) {
-				out, err = usage(ctx, pod)
-				return err
-			})
-			return out, err
-		}
-	}
 	return s
 }
 

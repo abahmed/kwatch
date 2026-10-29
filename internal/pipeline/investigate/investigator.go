@@ -7,7 +7,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
-	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/redact"
 )
 
@@ -73,9 +72,6 @@ type Sources struct {
 	Tail LogTail
 	// Readyz reads the API server's /readyz?verbose lines.
 	Readyz func(context.Context) ([]string, error)
-	// PodUsage reads a pod's usage from the metrics API.
-	PodUsage func(context.Context, inventory.EntityID) (
-		[]kube.ContainerUsage, error)
 	// Now stamps when each check returned; nil leaves sections
 	// unstamped.
 	Now func() time.Time

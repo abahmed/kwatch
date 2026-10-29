@@ -1,15 +1,12 @@
 package kube
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"strings"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -18,11 +15,10 @@ import (
 // Evidence read bounds. A report log tail is longer than the message
 // excerpt: the dashboard shows it whole.
 const (
-	reportTailLines  = 500
-	reportKeepBytes  = 128 << 10
-	readyzBudget     = 2 * time.Second
-	podMetricsBudget = 2 * time.Second
-	maxReadyzLines   = 60
+	reportTailLines = 500
+	reportKeepBytes = 128 << 10
+	readyzBudget    = 2 * time.Second
+	maxReadyzLines  = 60
 )
 
 // IsDenied reports an API read refused for lack of permission.
@@ -76,64 +72,6 @@ func (r ReadyzReader) Checks(ctx context.Context) ([]string, error) {
 		if line != "" && len(out) < maxReadyzLines {
 			out = append(out, truncate(line))
 		}
-	}
-	return out, nil
-}
-
-// ContainerUsage is one container's current usage from the metrics API.
-type ContainerUsage struct {
-	Name        string
-	CPUMilli    float64
-	MemoryBytes float64
-}
-
-// PodMetricsReader reads pod usage from the metrics API
-// (metrics.k8s.io), which metrics-server serves.
-type PodMetricsReader struct {
-	Client kubernetes.Interface
-}
-
-// podMetrics is the part of a metrics.k8s.io PodMetrics kwatch reads.
-type podMetrics struct {
-	Containers []struct {
-		Name  string            `json:"name"`
-		Usage map[string]string `json:"usage"`
-	} `json:"containers"`
-}
-
-// Usage returns the current usage of every container of pod.
-func (r PodMetricsReader) Usage(
-	ctx context.Context, pod inventory.EntityID,
-) ([]ContainerUsage, error) {
-	if r.Client == nil || pod.Kind != KindPod {
-		return nil, errors.New("no client or not a pod")
-	}
-	readCtx, cancel := context.WithTimeout(ctx, podMetricsBudget)
-	defer cancel()
-	body, err := r.Client.Discovery().RESTClient().Get().
-		AbsPath("/apis/metrics.k8s.io/v1beta1/namespaces/" +
-			pod.Namespace + "/pods/" + pod.Name).DoRaw(readCtx)
-	if err != nil {
-		return nil, err
-	}
-	return parsePodMetrics(body)
-}
-
-func parsePodMetrics(body []byte) ([]ContainerUsage, error) {
-	var m podMetrics
-	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&m); err != nil {
-		return nil, err
-	}
-	out := make([]ContainerUsage, 0, len(m.Containers))
-	for _, c := range m.Containers {
-		u := ContainerUsage{Name: c.Name}
-		if q, err := resource.ParseQuantity(c.Usage["cpu"]); err == nil {
-			u.CPUMilli = float64(q.MilliValue())
-		}
-		if q, err := resource.ParseQuantity(c.Usage["memory"]); err == nil {
-			u.MemoryBytes = float64(q.Value())
-		}
-		out = append(out, u)
 	}
 	return out, nil
 }

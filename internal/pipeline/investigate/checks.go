@@ -17,7 +17,7 @@ func reportChecks() []check {
 		report(incident.CheckLogs, "Logs", MaxBudget, hasPods, readLogs),
 		report(incident.CheckEvents, "Events", modelReadBudget,
 			hasObjects, readEvents),
-		report(incident.CheckUsage, "Memory use", apiReadBudget,
+		report(incident.CheckUsage, "Memory use", modelReadBudget,
 			usesMemoryOrCPU, readUsage),
 		report(incident.CheckNodePods, "Pods on this node",
 			modelReadBudget, readsNode, readNodePods),

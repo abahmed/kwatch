@@ -56,9 +56,6 @@ func SourceAccess() []Access {
 		// Investigation reads a short log excerpt for announcements.
 		Access{Resource: Resource{Name: "pods/log"}, Verb: "get"},
 		Access{NonResourceURL: "/readyz", Verb: "get"},
-		// Pro evidence reads current container usage; optional.
-		Access{Resource: Resource{Group: "metrics.k8s.io", Name: "pods"},
-			Verb: "get"},
 		// The prober reads the API server's own metrics; optional.
 		Access{NonResourceURL: "/metrics", Verb: "get"},
 		// The grant is limited to the two leader Leases by name.

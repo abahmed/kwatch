@@ -29,11 +29,6 @@
           "type": "boolean",
           "default": true,
           "description": "Grant get on the API server's /readyz (prober and Pro evidence)"
-        },
-        "metricsApi": {
-          "type": "boolean",
-          "default": true,
-          "description": "Grant get on pods in the metrics API for Pro evidence"
         }
       },
       "additionalProperties": false

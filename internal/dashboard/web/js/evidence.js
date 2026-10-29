@@ -16,9 +16,7 @@
     config: "kwatch isn't allowed to read Secret names here. Other checks are shown. " +
       "To allow it, set watch.secrets: true in your Helm values.",
     "control-plane": "kwatch isn't allowed to read the control plane's readiness endpoint. " +
-      "To allow it, set rbac.readyz: true in your Helm values.",
-    usage: "kwatch isn't allowed to read the metrics API, so memory use over time isn't shown. " +
-      "To allow it, set rbac.metricsApi: true in your Helm values."
+      "To allow it, set rbac.readyz: true in your Helm values."
   };
   var DENIED_OTHER = "kwatch isn't allowed to read this. To allow it, set rbac.mode: full " +
     "in your Helm values, or grant get on it in your Role.";

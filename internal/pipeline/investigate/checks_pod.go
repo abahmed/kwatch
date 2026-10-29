@@ -187,27 +187,18 @@ func usesMemoryOrCPU(p incident.Incident, model inventory.Reader) bool {
 		"Restarting"}) && hasPods(p, model)
 }
 
-// readUsage compares each container's use with its request and limit:
-// the metrics API's current use when it answers, the kubelet stats in
-// the model otherwise, and the memory of the run before the last kill.
+// readUsage compares each container's use with its request and limit,
+// from the kubelet stats kwatch already polls (nodes/stats): the current
+// working set and CPU, the 24h peak and the run before the last kill. It
+// needs no add-on such as metrics-server.
 func readUsage(
-	ctx context.Context, s Sources, p incident.Incident,
+	_ context.Context, s Sources, p incident.Incident,
 ) []incident.Section {
 	var out []incident.Section
 	for _, pod := range incidentPods(s.Model, p) {
 		sec := newSection(pod.Name)
-		live := map[string]kube.ContainerUsage{}
-		if s.PodUsage != nil {
-			usage, err := s.PodUsage(ctx, pod)
-			if err != nil {
-				sec.fact("Metrics API", metricsNote(err))
-			}
-			for _, u := range usage {
-				live[u.Name] = u
-			}
-		}
 		for _, c := range containersOf(s.Model, pod) {
-			addUsage(sec, s.Model, c, live)
+			addUsage(sec, s.Model, c)
 		}
 		out = append(out, sec.done())
 	}
@@ -215,10 +206,7 @@ func readUsage(
 }
 
 // addUsage adds one container's use and limits.
-func addUsage(
-	sec *section, model inventory.Reader, c inventory.EntityID,
-	live map[string]kube.ContainerUsage,
-) {
+func addUsage(sec *section, model inventory.Reader, c inventory.EntityID) {
 	e, ok := model.Entity(c)
 	if !ok {
 		return
@@ -226,9 +214,6 @@ func addUsage(
 	_, name := splitName(c.Name)
 	memory, cpu := number(e, kube.AttrMemoryWorking),
 		number(e, kube.AttrCPUUsageMilli)
-	if u, ok := live[name]; ok {
-		memory, cpu = u.MemoryBytes, u.CPUMilli
-	}
 	if memory > 0 {
 		sec.fact(name+": memory", humanMemory(memory)+limitOf(e,
 			kube.AttrMemoryLimit))
@@ -293,14 +278,4 @@ func readProbes(
 		out = append(out, sec.done())
 	}
 	return out
-}
-
-// metricsNote says why the metrics API gave no usage: kubelet stats
-// stand in either way.
-func metricsNote(err error) string {
-	if kube.IsDenied(err) {
-		return "not allowed; showing kubelet stats"
-	}
-	return "not available (is metrics-server installed?); " +
-		"showing kubelet stats"
 }

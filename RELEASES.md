@@ -39,11 +39,12 @@
   and what a rollout changed). `GET /api/incidents/{id}` adds `evidence`
   and `correlation`. The report is kept in memory only, not in the state
   file.
-- New settings: `investigation.logs` (default true; false reads no log),
-  and the Helm values `rbac.readyz` and `rbac.metricsApi` (both default
-  true). The ClusterRole now grants get on `pods` in `metrics.k8s.io`. A
-  read that is not allowed shows as such and never fails the
-  investigation. Audit entries add `evidence` and `readSteps`.
+- New settings: `investigation.logs` (default true; false reads no log)
+  and the Helm value `rbac.readyz` (default true). Memory and CPU use come
+  from the kubelet stats kwatch already reads (nodes/stats), so no add-on
+  such as metrics-server is needed. A read that is not allowed shows as
+  such and never fails the investigation. Audit entries add `evidence`
+  and `readSteps`.
 - A Pro message for a workload whose container was killed at its memory
   limit suggests a new limit: half again above the observed peak (or the
   limit, when higher), rounded up to 64Mi, as a step that changes the

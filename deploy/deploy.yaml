@@ -37,10 +37,6 @@ rules:
   verbs: ["get"]
 - nonResourceURLs: ["/readyz", "/metrics"]
   verbs: ["get"]
-# Pro evidence reads current container usage from the metrics API.
-- apiGroups: ["metrics.k8s.io"]
-  resources: ["pods"]
-  verbs: ["get"]
 - apiGroups: ["authorization.k8s.io"]
   resources: ["selfsubjectaccessreviews"]
   verbs: ["create"]
