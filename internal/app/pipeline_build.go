@@ -95,6 +95,9 @@ func (p *pipelineBuild) incidentConfig() incident.Config {
 		Verifiable: func(kind inventory.Kind) bool {
 			return p.source == nil || p.source.Verifiable(kind)
 		},
+		VerifiableObject: func(id inventory.EntityID) bool {
+			return p.source == nil || p.source.VerifiableObject(id)
+		},
 	}
 	if deps.has(feature.SeverityOverrides) {
 		policy := deps.runtime.Policy()

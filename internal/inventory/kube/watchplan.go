@@ -92,10 +92,18 @@ var preferredGroups = map[string]bool{
 // matches itself and its subgroups ("source.toolkit.fluxcd.io").
 var operatorGroups = []string{
 	"cert-manager.io", "argoproj.io", "fluxcd.io", "keda.sh",
-	"karpenter.sh", "external-secrets.io",
+	"karpenter.sh", "external-secrets.io", "kyverno.io",
 }
 
+// operatorReportGroups are subgroups of operatorGroups that hold generated
+// reports: many objects, no health of their own. They rank with other
+// custom APIs, after the policies they report on.
+var operatorReportGroups = map[string]bool{"reports.kyverno.io": true}
+
 func operatorGroup(group string) bool {
+	if operatorReportGroups[group] {
+		return false
+	}
 	for _, g := range operatorGroups {
 		if group == g || strings.HasSuffix(group, "."+g) {
 			return true

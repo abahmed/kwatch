@@ -17,7 +17,7 @@ import (
 func stuckScenarios() []scenario {
 	return append([]scenario{
 		namespaceStuckTerminating(), claimStuckDeleting(),
-		leaseHolderCrashLoops(), leaseHolderGone(),
+		leaseHolderCrashLoops(), leaseHolderGone(), leaseTakenOnce(),
 		cronJobBlockedByStuckRun(), podTerminatingOnLostNode(),
 	}, finalizerScenarios()...)
 }
@@ -145,6 +145,32 @@ func leaseHolderCrashLoops() scenario {
 				c.emit(leaseObservation(c, "cloud-controller",
 					pod.Name+"_1a2b", renewed, pod)...)
 				c.after(2 * time.Minute)
+			}
+		},
+	}
+}
+
+// leaseTakenOnce: a healthy program took its Lease at startup and renews
+// it only when it restarts. Nothing was seen to stop, so nothing is wrong.
+func leaseTakenOnce() scenario {
+	return scenario{
+		expect: expectation{
+			Name: "lease-taken-once-healthy-holder",
+			Description: "A Lease taken once at startup, never seen " +
+				"renewing, with a running and ready holder.",
+			Quiet: true, Tail: duration(10 * time.Minute),
+		},
+		build: func(c *cluster) {
+			c.list(c.node("n1", "zone-a"))
+			w := c.deployment("kube-system", "one-shot",
+				"registry.example.com/one-shot:1", 1)
+			pod := w.pod(0, "n1")
+			c.list(w.deployment, w.replicaSet, pod)
+			taken := c.now.Add(-48 * time.Hour)
+			for range 12 {
+				c.emit(leaseObservation(c, "one-shot",
+					pod.Name+"_1a2b", taken, pod)...)
+				c.after(5 * time.Minute)
 			}
 		},
 	}
