@@ -20,7 +20,8 @@ func recoveredBefore(e inventory.Entity, note inventory.Note) bool {
 
 // readySince says whether e is fully ready, and since when: for a
 // workload, since its ready count took the value it has; for a pod,
-// since it became ready.
+// since it became ready; for a custom resource, since its Ready condition
+// turned True, provided no other condition reports a failure.
 func readySince(e inventory.Entity) (time.Time, bool) {
 	switch e.ID.Kind {
 	case kube.KindDaemonSet:
@@ -43,5 +44,19 @@ func readySince(e inventory.Entity) (time.Time, bool) {
 		}
 		return valueSince(e, kube.AttrReady), true
 	}
+	if flag(e, kube.AttrCustom) {
+		return customReadySince(e)
+	}
 	return time.Time{}, false
+}
+
+func customReadySince(e inventory.Entity) (time.Time, bool) {
+	status, _, since := condition(e, "Ready")
+	if status != "True" || len(failingConditions(e)) > 0 {
+		return time.Time{}, false
+	}
+	if since.IsZero() {
+		since = valueSince(e, kube.ConditionKey("Ready"))
+	}
+	return since, true
 }

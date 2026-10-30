@@ -31,6 +31,10 @@ const (
 // that crash loops or is stuck says why, and its own incident explains
 // the Lease. A Lease whose holder is gone is left alone; it is what an
 // uninstalled controller leaves behind.
+//
+// Some programs take a Lease once at startup and renew it only when they
+// restart, so a healthy holder counts only once kwatch saw it renew: an
+// old renew time alone says nothing about that holder.
 type Lease struct{}
 
 // Name implements detection.Detector.
@@ -50,6 +54,7 @@ func (Lease) Detect(
 	if renewed.IsZero() || holder == "" {
 		return nil
 	}
+	renews := renewalSeen(ctx, holder, renewed)
 	seconds, _ := number(e, kube.AttrLeaseDuration)
 	stale := max(time.Duration(seconds*leaseStaleFactor)*time.Second,
 		leaseStaleMin)
@@ -59,7 +64,7 @@ func (Lease) Detect(
 		return nil
 	}
 	pod, state, ok := holderPod(ctx.Model, e.ID.Namespace, holder)
-	if !ok {
+	if !ok || (state == "" && !renews) {
 		return nil
 	}
 	summary := "Lease held by pod " + pod.Name + " has not been renewed " +
@@ -75,6 +80,15 @@ func (Lease) Detect(
 		Since: renewed.Add(stale), Summary: summary,
 		Evidence: []detection.Evidence{{Label: "holder", Value: holder}},
 	}}
+}
+
+// renewalSeen reports whether holder renewed the Lease since kwatch first
+// saw it hold it: the first renew time is kept for as long as the holder
+// stays, and a later one proves it renews.
+func renewalSeen(
+	ctx detection.Context, holder string, renewed time.Time,
+) bool {
+	return renewed.After(ctx.Onset("lease-renewal/"+holder, renewed))
 }
 
 // holderPod finds the pod a holder identity names. state is what is

@@ -7,7 +7,10 @@ import (
 )
 
 func detectionBCustomScenarios() []scenario {
-	return []scenario{customTaskFailed(), customControllerFailedEvents()}
+	return []scenario{
+		customTaskFailed(), customControllerFailedEvents(),
+		customWarningsBeforeRecovery(),
+	}
 }
 
 // taskRun is a pipeline task custom resource whose controller reports
@@ -74,6 +77,32 @@ func customControllerFailedEvents() scenario {
 					"acme-controller", int32(n+1)))
 				c.after(4 * time.Minute)
 			}
+		},
+	}
+}
+
+// customWarningsBeforeRecovery: a controller's retries failed while its
+// resource was not ready, then it became ready. The old Warnings are
+// history; the resource is healthy.
+func customWarningsBeforeRecovery() scenario {
+	return scenario{
+		expect: expectation{
+			Name: "custom-warnings-before-recovery",
+			Description: "A custom resource turned Ready=True after " +
+				"repeated Warning events: they do not count.",
+			Quiet: true, Tail: duration(30 * time.Minute),
+		},
+		build: func(c *cluster) {
+			c.list(c.node("n1", "zone-a"))
+			order := acmeOrder(c)
+			c.list(order)
+			c.warn(c.warningEvent(order, "Order", "UpdateFailed",
+				"the object has been modified", "acme-controller", 3))
+			c.after(time.Minute)
+			clusterCondition(order, "Ready", "True", "Reconciled", "ok",
+				c.now)
+			c.update(order)
+			c.after(time.Minute)
 		},
 	}
 }

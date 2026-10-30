@@ -46,6 +46,8 @@ type SourceConfig struct {
 // DynamicKinds reports the state of dynamically watched kinds.
 type DynamicKinds interface {
 	KindState(kind inventory.Kind) (KindState, bool)
+	// ObjectRefused reports an existing object an object cap left out.
+	ObjectRefused(id inventory.EntityID) bool
 }
 
 // mode is the watch mode of a typed registration.
@@ -274,6 +276,20 @@ func (s *Source) Verifiable(kind inventory.Kind) bool {
 	}
 	state, ok := s.dynamicState(kind)
 	return !ok || state.Synced
+}
+
+// VerifiableObject reports whether the source can currently observe id.
+// A kind that is only over an object cap still reports every object it
+// admitted, and one it neither admitted nor refused does not exist; only
+// the refused objects are out of sight. Every other reason a kind is not
+// verifiable covers all its objects.
+func (s *Source) VerifiableObject(id inventory.EntityID) bool {
+	if s.Verifiable(id.Kind) {
+		return true
+	}
+	state, ok := s.dynamicState(id.Kind)
+	return ok && state.Reason == ReasonObjectCap &&
+		!s.cfg.Dynamic.ObjectRefused(id)
 }
 
 // isDisabled reports whether configuration turned kind's watch off.

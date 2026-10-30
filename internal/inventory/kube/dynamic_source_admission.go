@@ -120,6 +120,13 @@ func (a *objectAdmission) capped() bool {
 	return len(a.left) > 0
 }
 
+// leftOut reports whether a cap refused the object with this key.
+func (a *objectAdmission) leftOut(key string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.left[key]
+}
+
 // dropMissing forgets every admitted object that present does not
 // report and returns their last admitted versions.
 func (a *objectAdmission) dropMissing(present func(key string) bool) []any {
