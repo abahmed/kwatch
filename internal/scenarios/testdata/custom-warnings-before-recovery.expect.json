@@ -1,7 +1,0 @@
-{
-  "name": "custom-warnings-before-recovery",
-  "description": "A custom resource turned Ready=True after repeated Warning events: they do not count.",
-  "maxMessages": 0,
-  "quiet": true,
-  "tail": "30m0s"
-}

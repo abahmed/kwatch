@@ -1,0 +1,8 @@
+{
+  "name": "custom-warnings-then-recovery",
+  "description": "A custom resource's Warnings open an incident; once it is Ready=True the incident resolves although Warnings continue.",
+  "root": "order.acme.example.com/infra/web-tls",
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "10m0s"
+}

@@ -63,14 +63,81 @@ func TestUnusualEventsIgnoresWarningsOlderThanCustomRecovery(t *testing.T) {
 	}
 }
 
-func TestUnusualEventsCountsWarningsNewerThanCustomRecovery(t *testing.T) {
-	ready := t0.Add(-time.Minute)
-	m, id := customModel("ops", "True", ready)
-	noteUpdateFailed(m, id, t0, 3)
+func TestUnusualEventsIgnoresNewWarningStreamOnHealthyCustomResource(
+	t *testing.T,
+) {
+	for name, namespace := range map[string]string{
+		"namespaced": "ops", "cluster-scoped": "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			m, id := customModel(namespace, "True", t0.Add(-time.Hour))
+			noteUpdateFailed(m, id, t0, 12)
 
-	found := eventFindings(m, id, t0.Add(time.Minute))
-	require.Len(t, found, 1)
-	assert.Equal(t, detection.Info, found[0].Severity)
+			assert.Empty(t, eventFindings(m, id, t0.Add(time.Minute)))
+		})
+	}
+}
+
+func TestUnusualEventsClearAsCustomResourceTurnsHealthy(t *testing.T) {
+	m, id := customModel("ops", "False", t0)
+	noteUpdateFailed(m, id, t0, 3)
+	r := detection.NewRegistry(nil, Event{})
+	require.Len(t, r.Evaluate(m, t0, id).Findings, 1)
+
+	ready := kube.ConditionKey("Ready")
+	later := t0.Add(time.Minute)
+	put(m, id, later, map[string]inventory.Value{
+		kube.AttrCustom:                 inventory.Bool(true),
+		ready:                           inventory.Text("True"),
+		ready + kube.AttrConditionSince: inventory.Time(later),
+	})
+	noteUpdateFailed(m, id, later.Add(time.Second), 3)
+
+	assert.Empty(t, r.Evaluate(m, later.Add(time.Minute), id).Findings)
+}
+
+// noStatusCustom is a custom resource that reports no health at all.
+func noStatusCustom(namespace string) (*inventory.Model, inventory.EntityID) {
+	m := newTestModel()
+	id := inventory.NewEntityID("example.com", "order", namespace, "o")
+	put(m, id, t0, map[string]inventory.Value{
+		kube.AttrCustom: inventory.Bool(true),
+	})
+	return m, id
+}
+
+func TestUnusualEventsSingleLaterEventIsNoRecurrenceOnCustomResource(
+	t *testing.T,
+) {
+	for name, namespace := range map[string]string{
+		"namespaced": "ops", "cluster-scoped": "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			m, id := noStatusCustom(namespace)
+			noteUpdateFailed(m, id, t0, 1)
+			later := t0.Add(EventWindow + time.Minute)
+			noteUpdateFailed(m, id, later, 1)
+
+			assert.Empty(t, eventFindings(m, id, later))
+		})
+	}
+}
+
+func TestUnusualEventsReportsThreeInWindowOnNoStatusCustomResource(
+	t *testing.T,
+) {
+	for name, namespace := range map[string]string{
+		"namespaced": "ops", "cluster-scoped": "",
+	} {
+		t.Run(name, func(t *testing.T) {
+			m, id := noStatusCustom(namespace)
+			noteUpdateFailed(m, id, t0, 3)
+
+			found := eventFindings(m, id, t0.Add(time.Minute))
+			require.Len(t, found, 1)
+			assert.Equal(t, detection.Info, found[0].Severity)
+		})
+	}
 }
 
 func TestUnusualEventsCountsWarningsWhileCustomReadyIsNotTrue(t *testing.T) {
