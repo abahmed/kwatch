@@ -9,7 +9,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/slack-go/slack v0.30.1
+	github.com/slack-go/slack v0.31.0
 	github.com/stretchr/testify v1.12.1
 	go.etcd.io/bbolt v1.5.0
 	gopkg.in/mail.v2 v2.3.1
