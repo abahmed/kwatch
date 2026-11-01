@@ -109,8 +109,12 @@ func occurrences(parts []originCount) []Occurrence {
 }
 
 // sighted returns recent with one more sighting, in a new slice: readers
-// of the model hold the old one.
+// of the model hold the old one. A higher count than the latest sighting
+// is that same Event counting up, so it takes the latest one's place.
 func sighted(recent []Occurrence, seen Occurrence) []Occurrence {
+	if n := len(recent); n > 0 && seen.Count > recent[n-1].Count {
+		recent = recent[:n-1]
+	}
 	if over := len(recent) + 1 - maxNoteOrigins; over > 0 {
 		recent = recent[over:]
 	}
