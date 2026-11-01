@@ -193,3 +193,69 @@ func TestCustomFindingClearsWhenReadyUnknownTurnsTrue(t *testing.T) {
 	})
 	assert.Empty(t, r.Evaluate(m, t0.Add(time.Minute), id).Findings)
 }
+
+// noteEvent records one Event object, identified by its origin.
+func noteEvent(
+	m *inventory.Model, id inventory.EntityID, origin string, at time.Time,
+) {
+	m.Apply(inventory.Observation{
+		Kind: inventory.Noted, Source: "test", At: at, Entity: id,
+		Note: inventory.Note{
+			At: at, Source: "operator", Reason: "SyncFailed", Message: "failed",
+			Count: 1, Warning: true, Origin: origin,
+		},
+	})
+}
+
+func TestUnusualEventsReportsDistinctEventsOnNoStatusCustomResource(
+	t *testing.T,
+) {
+	m, id := noStatusCustom("ops")
+	for i, origin := range []string{"a", "b", "c"} {
+		noteEvent(m, id, origin, t0.Add(time.Duration(i)*time.Minute))
+	}
+
+	got := Event{}.Detect(
+		testDetectorContext(m, t0.Add(3*time.Minute)), entityOf(m, id))
+
+	require.Len(t, got, 1)
+	assert.Contains(t, got[0].Summary, "SyncFailed 3 times")
+}
+
+func TestUnusualEventsCountsOnlyDistinctEventsInsideTheWindow(t *testing.T) {
+	m, id := noStatusCustom("ops")
+	noteEvent(m, id, "a", t0)
+	noteEvent(m, id, "b", t0.Add(time.Hour))
+	last := t0.Add(2 * time.Hour)
+	noteEvent(m, id, "c", last)
+
+	got := Event{}.Detect(
+		testDetectorContext(m, last.Add(time.Minute)), entityOf(m, id))
+
+	assert.Empty(t, got, "three events hours apart are no pattern")
+}
+
+func TestUnusualEventsAddsUpSightingsWithoutOrigin(t *testing.T) {
+	m, id := noStatusCustom("ops")
+	for i := range unusualEventMin {
+		noteEntity(m, id, "SyncFailed", "failed", 1,
+			t0.Add(time.Duration(i)*time.Minute))
+	}
+
+	got := Event{}.Detect(
+		testDetectorContext(m, t0.Add(5*time.Minute)), entityOf(m, id))
+
+	require.Len(t, got, 1)
+}
+
+func TestUnusualEventsStaySilentOnHealthyCustomResourceWithDistinctEvents(
+	t *testing.T,
+) {
+	m, id := customModel("ops", "True", t0.Add(-time.Hour))
+	for i, origin := range []string{"a", "b", "c"} {
+		noteEvent(m, id, origin, t0.Add(time.Duration(i)*time.Minute))
+	}
+
+	assert.Empty(t, Event{}.Detect(
+		testDetectorContext(m, t0.Add(3*time.Minute)), entityOf(m, id)))
+}

@@ -33,15 +33,18 @@ func unusualEvents(
 	}
 	var order []string
 	byReason := map[string]*eventGroup{}
+	since := ctx.Now.Add(-EventWindow)
+	// recent counts each reason's occurrences inside the window: a note's
+	// own count also holds Events of hours ago.
+	recent := map[string]int{}
 	// recurred marks a reason seen again in a later quarter hour than
 	// its first sighting. It counts as repeating even when each sighting
-	// came as a fresh Event with a count of one (the model keeps one
-	// note per source and reason, so such counts do not add up). A
-	// failure that recurs after its first finding cleared is reported
-	// again this way. A custom resource needs unusualEventMin in the
+	// came as a fresh Event with a count of one, too few to reach
+	// unusualEventMin. A failure that recurs after its first finding
+	// cleared is reported again this way. A custom resource needs unusualEventMin in the
 	// window: controllers there write one fresh event per item.
 	recurred := map[string]bool{}
-	for _, note := range ctx.Model.Notes(e.ID, ctx.Now.Add(-EventWindow)) {
+	for _, note := range ctx.Model.Notes(e.ID, since) {
 		if !note.Warning || knownEvent(note.Reason, e.ID.Kind) ||
 			quotedByService(e, note.Reason) || recoveredBefore(e, note) {
 			continue
@@ -58,6 +61,7 @@ func unusualEvents(
 			order = append(order, note.Reason)
 		}
 		group.add(note, detection.Info)
+		recent[note.Reason] += note.CountSince(since)
 		if !custom && note.At.Sub(note.FirstSeen) > EventWindow {
 			recurred[note.Reason] = true
 		}
@@ -65,17 +69,17 @@ func unusualEvents(
 	var out []detection.Finding
 	for _, reason := range order {
 		group := byReason[reason]
-		if group.count < unusualEventMin && !recurred[reason] {
+		if recent[reason] < unusualEventMin && !recurred[reason] {
 			continue
 		}
 		out = append(out, detection.Finding{
 			Reason:   reasons.UnusualEvent(reason),
 			Severity: detection.Info, Mode: detection.ModeUnusualEvent,
 			Since:   group.newest.At,
-			Summary: unusualSummary(reason, group.count),
+			Summary: unusualSummary(reason, recent[reason]),
 			Evidence: []detection.Evidence{
 				{Label: "event", Value: group.newest.Message},
-				{Label: "occurrences", Value: strconv.Itoa(group.count)},
+				{Label: "occurrences", Value: strconv.Itoa(recent[reason])},
 			},
 		})
 	}

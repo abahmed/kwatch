@@ -289,12 +289,8 @@ func (p *Prober) leases(ctx context.Context) []inventory.Observation {
 		seen[id] = true
 		out = append(out, inventory.Observation{
 			Kind: inventory.Observed, Source: ProbeSource, At: now,
-			Entity: id,
-			Attributes: map[string]inventory.Value{
-				AttrLeaseHolder:   inventory.Text(*lease.Spec.HolderIdentity),
-				AttrLeaseRenewed:  inventory.Time(lease.Spec.RenewTime.Time),
-				AttrLeaseDuration: inventory.Number(seconds),
-			},
+			Entity:     id,
+			Attributes: leaseAttributes(lease, seconds),
 		})
 		if related, ok := p.holderRelation(id, *lease.Spec.HolderIdentity); ok {
 			out = append(out, related)

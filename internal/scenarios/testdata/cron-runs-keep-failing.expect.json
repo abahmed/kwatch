@@ -1,0 +1,10 @@
+{
+  "name": "cron-runs-keep-failing",
+  "description": "Three consecutive runs of a half-hourly CronJob fail the same way; each run is a new Job.",
+  "root": "cronjob/ops/stats-rollup",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

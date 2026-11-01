@@ -131,10 +131,24 @@ func (m *Manager) explanationLapsed(
 	return false
 }
 
-// inChain reports that p's cause blames, without a change, an object of
-// the root's own workload chain other than the root itself.
+// inChain reports that p's cause blames an object of the root's own
+// workload chain other than the root itself, either without a change or
+// for the creation of one more run of the root: a schedule starting a
+// Job is what the root does, not an edit, and each run would otherwise
+// read as a new cause of the same failures. For the same reason a CronJob
+// blamed on itself stays in the chain: the blame moves between the
+// CronJob and its runs from one run to the next.
 func (m *Manager) inChain(p *Incident) bool {
 	c := p.Cause
-	return c != nil && c.Root != p.Root && c.Change == nil &&
-		m.model != nil && sameChain(m.model, p.Root, c.Root)
+	if c == nil || m.model == nil {
+		return false
+	}
+	if c.Root == p.Root {
+		return c.Change == nil && p.Root.Kind == kube.KindCronJob
+	}
+	if c.Change == nil {
+		return sameChain(m.model, p.Root, c.Root)
+	}
+	return c.Root.Kind == kube.KindJob && c.Change.Entity == c.Root &&
+		causeRoot(m.model, c.Root) == p.Root
 }

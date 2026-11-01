@@ -33,8 +33,10 @@ const (
 // uninstalled controller leaves behind.
 //
 // Some programs take a Lease once at startup and renew it only when they
-// restart, so a healthy holder counts only once kwatch saw it renew: an
-// old renew time alone says nothing about that holder.
+// restart, so a healthy holder counts only once it is known to renew: an
+// old renew time alone says nothing about that holder. The Lease itself
+// tells (see leaseRenews), which survives a restart of kwatch and is not
+// fooled by a holder of a stable identity taking the Lease again.
 type Lease struct{}
 
 // Name implements detection.Detector.
@@ -54,7 +56,7 @@ func (Lease) Detect(
 	if renewed.IsZero() || holder == "" {
 		return nil
 	}
-	renews := renewalSeen(ctx, holder, renewed)
+	renews := leaseRenews(ctx, e, holder, renewed)
 	seconds, _ := number(e, kube.AttrLeaseDuration)
 	stale := max(time.Duration(seconds*leaseStaleFactor)*time.Second,
 		leaseStaleMin)
@@ -80,6 +82,25 @@ func (Lease) Detect(
 		Since: renewed.Add(stale), Summary: summary,
 		Evidence: []detection.Evidence{{Label: "holder", Value: holder}},
 	}}
+}
+
+// leaseRenewMargin is how far apart acquire and renew times must be to
+// be two writes: a program may stamp them separately in one acquire.
+const leaseRenewMargin = time.Second
+
+// leaseRenews reports whether the holder renews its Lease. Taking a Lease
+// sets the acquire time, also for an identity taking it again after a
+// restart, so a renew time past it is a renewal. A Lease without an
+// acquire time falls back on what this process saw.
+func leaseRenews(
+	ctx detection.Context, e inventory.Entity, holder string,
+	renewed time.Time,
+) bool {
+	acquired := timestamp(e, kube.AttrLeaseAcquired)
+	if acquired.IsZero() {
+		return renewalSeen(ctx, holder, renewed)
+	}
+	return renewed.Sub(acquired) > leaseRenewMargin
 }
 
 // renewalSeen reports whether holder renewed the Lease since kwatch first

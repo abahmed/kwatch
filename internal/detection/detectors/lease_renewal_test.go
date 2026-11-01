@@ -80,3 +80,41 @@ func TestLeaseNeverSeenRenewingIsReportedWhileHolderIsUnhealthy(
 	require.Len(t, found, 1)
 	assert.Contains(t, found[0].Summary, "not ready")
 }
+
+// scanAcquiredLease records a Lease scan that carries its acquire time.
+func scanAcquiredLease(
+	r *detection.Registry, m *inventory.Model, lease inventory.EntityID,
+	acquired, renewed, now time.Time,
+) []detection.Finding {
+	put(m, lease, now, map[string]inventory.Value{
+		kube.AttrLeaseHolder:   inventory.Text(leaseHolderName),
+		kube.AttrLeaseRenewed:  inventory.Time(renewed),
+		kube.AttrLeaseAcquired: inventory.Time(acquired),
+		kube.AttrLeaseDuration: inventory.Number(15),
+	})
+	return r.Evaluate(m, now, lease).Findings
+}
+
+func TestLeaseReportedAfterKwatchRestartWithoutSeeingARenewal(t *testing.T) {
+	m, lease := leaseModel(time.Hour, leaseHolderName, "Running")
+	r := detection.NewRegistry(nil, Lease{})
+	acquired := t0.Add(-2 * time.Hour)
+
+	found := scanAcquiredLease(r, m, lease, acquired, t0.Add(-time.Hour), t0)
+
+	require.Len(t, found, 1, "the Lease itself shows it was renewed")
+	assert.Equal(t, "LeaseStale", found[0].Reason)
+}
+
+func TestLeaseRetakenByStableIdentityIsNoRenewal(t *testing.T) {
+	m, lease := leaseModel(time.Hour, leaseHolderName, "Running")
+	r := detection.NewRegistry(nil, Lease{})
+	first := t0.Add(-time.Hour)
+	scanAcquiredLease(r, m, lease, first, first, t0)
+
+	retaken := t0.Add(time.Minute)
+	assert.Empty(t, scanAcquiredLease(r, m, lease, retaken, retaken, retaken))
+	assert.Empty(t, scanAcquiredLease(r, m, lease, retaken, retaken,
+		retaken.Add(24*time.Hour)),
+		"taking the Lease again after a container restart is no renewal")
+}

@@ -1,0 +1,20 @@
+10:31:56 settled
+🟠 Cron job stats-rollup is failing in ops (prod-eu-1) after the 10:30 UTC creation of job stats-rollup-292510. It fails with "panic: rollup table is locked". All of its dependents are failing. To see the pod's state and events, run kubectl describe pod stats-rollup-292510-a -n ops
+🟠 Cron job stats-rollup is failing in ops (prod-eu-1) after the 10:30 UTC creation of job stats-rollup-292510.
+| 🟠 Cron job **stats-rollup** is failing in **ops** (**prod-eu-1**) after the 10:30 UTC creation of job stats-rollup-292510.
+| It fails with `panic: rollup table is locked`.
+| All of its dependents are failing.
+| To see the pod's state and events, run
+| ```
+| kubectl describe pod stats-rollup-292510-a -n ops
+| ```
+10:32:01 material change
+🟠 Cron job stats-rollup in ops (prod-eu-1) now has a last run that failed less than a minute ago (BackoffLimitExceeded). Job stats-rollup-292510 in ops (prod-eu-1) is now failing: failed after 3 failed pod(s).
+🟠 Cron job stats-rollup in ops (prod-eu-1) now has a last run that failed less than a minute ago (BackoffLimitExceeded).
+| 🟠 Cron job **stats-rollup** in **ops** (**prod-eu-1**) now has a last run that failed less than a minute ago (BackoffLimitExceeded).
+| Job **stats-rollup-292510** in **ops** (**prod-eu-1**) is now failing: failed after 3 failed pod(s).
+11:30:01 material change
+🟠 Cron job stats-rollup in ops (prod-eu-1) is now failing: the last 3 scheduled runs failed. It is spreading to pods stats-rollup-292511-a, stats-rollup-292511-b and stats-rollup-292511-c: they are failing: failed.
+🟠 Cron job stats-rollup in ops (prod-eu-1) is now failing: the last 3 scheduled runs failed.
+| 🟠 Cron job **stats-rollup** in **ops** (**prod-eu-1**) is now failing: the last 3 scheduled runs failed.
+| It is spreading to pods **stats-rollup-292511-a**, **stats-rollup-292511-b** and stats-rollup-292511-c: they are failing: failed.

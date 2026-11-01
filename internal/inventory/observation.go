@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"reflect"
 	"time"
 )
 
@@ -166,7 +167,7 @@ func (o Observation) MarshalJSON() ([]byte, error) {
 	if !isZeroChange(o.Change) {
 		wire.Change = toChangeWire(o.Change)
 	}
-	if o.Note != (Note{}) {
+	if !reflect.ValueOf(o.Note).IsZero() {
 		wire.Note = &noteWire{
 			At: wireTime(o.Note.At), FirstSeen: wireTime(o.Note.FirstSeen),
 			Source: o.Note.Source,

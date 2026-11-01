@@ -20,6 +20,19 @@ func defaultRoot(
 	return id
 }
 
+// causeRoot maps a blamed entity to the root its incident is keyed by. A
+// run or revision of a workload is blamed on the workload: runs come and
+// go under it, so a Job created by each schedule would otherwise open an
+// incident of its own beside the one of its CronJob.
+func causeRoot(
+	model inventory.Reader, id inventory.EntityID,
+) inventory.EntityID {
+	if id.Kind == kube.KindJob || id.Kind == kube.KindReplicaSet {
+		return rootcause.TopOwner(model, id)
+	}
+	return defaultRoot(model, id)
+}
+
 // impact walks downstream from the incident's failing members to what
 // users feel: the workloads that own them, and the Services and Ingresses
 // routing to them. A member that is not a pod counts as its top owner.

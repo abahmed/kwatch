@@ -44,6 +44,39 @@ func TestObjectAdmissionSharesGlobalBudget(t *testing.T) {
 	assert.Equal(t, int64(2), budget.used.Load())
 }
 
+func TestObjectAdmissionHighVolumeKindCannotStarveSmallKind(t *testing.T) {
+	budget := &objectBudget{limit: 2, floor: 1}
+	big := newAdmission(widgetGVR, 10, budget)
+	small := newAdmission(crdResource, 10, budget)
+
+	for _, name := range []string{"a", "b", "c"} {
+		assert.True(t, big.admit(widget(name)))
+	}
+	assert.False(t, big.admit(widget("d")), "the shared budget is spent")
+	assert.True(t, small.admit(widget("first")),
+		"a small kind keeps its floor")
+	assert.False(t, small.admit(widget("second")))
+}
+
+func TestObjectAdmissionReleasesOnlyWhatItCharged(t *testing.T) {
+	budget := &objectBudget{limit: 10, floor: 1}
+	a := newAdmission(widgetGVR, 10, budget)
+	for _, name := range []string{"a", "b", "c"} {
+		assert.True(t, a.admit(widget(name)))
+	}
+	assert.Equal(t, int64(2), budget.used.Load())
+
+	assert.True(t, a.forget(widget("a")))
+	assert.Equal(t, int64(1), budget.used.Load())
+	a.dropMissing(func(key string) bool { return key == "ns/b" })
+	assert.Len(t, a.objects, 1)
+	assert.Zero(t, budget.used.Load())
+
+	assert.True(t, a.admit(widget("c")))
+	a.releaseAll()
+	assert.Zero(t, budget.used.Load())
+}
+
 func TestObjectAdmissionTombstones(t *testing.T) {
 	a := newAdmission(widgetGVR, 10, &objectBudget{limit: 10})
 	assert.True(t, a.admit(widget("a")))

@@ -32,6 +32,28 @@ type Note struct {
 	// authentication required". Message is cut to a bounded length and
 	// the refusal comes last, so it is kept apart.
 	Refusal string
+	// Recent lists the reports behind Count with when each was last
+	// seen, oldest first and bounded by maxNoteOrigins, so a reader can
+	// count what happened inside a window. Treat it as read-only.
+	Recent []Occurrence
+}
+
+// Occurrence is one report behind a note: one Event object, or one
+// sighting of a note without an origin.
+type Occurrence struct {
+	At    time.Time
+	Count int
+}
+
+// CountSince adds up the occurrences seen at or after since.
+func (n Note) CountSince(since time.Time) int {
+	total := 0
+	for _, seen := range n.Recent {
+		if !seen.At.Before(since) {
+			total += max(seen.Count, 1)
+		}
+	}
+	return total
 }
 
 // maxNoteOrigins bounds the origins remembered for one note.
@@ -44,12 +66,13 @@ type noteKey struct{ source, reason, uid string }
 type originCount struct {
 	origin string
 	count  int
+	at     time.Time
 }
 
 // addOrigin records the count of origin among parts, newest last, and
 // returns the new parts and their total.
 func addOrigin(
-	parts []originCount, origin string, count int,
+	parts []originCount, origin string, count int, at time.Time,
 ) ([]originCount, int) {
 	kept := parts[:0:0]
 	for _, part := range parts {
@@ -57,7 +80,7 @@ func addOrigin(
 			kept = append(kept, part)
 		}
 	}
-	kept = append(kept, originCount{origin, count})
+	kept = append(kept, originCount{origin, count, at})
 	if over := len(kept) - maxNoteOrigins; over > 0 {
 		kept = kept[over:]
 	}
@@ -74,4 +97,22 @@ func earliest(a, b time.Time) time.Time {
 		return b
 	}
 	return a
+}
+
+// occurrences lists the parts as a note's Recent.
+func occurrences(parts []originCount) []Occurrence {
+	out := make([]Occurrence, 0, len(parts))
+	for _, part := range parts {
+		out = append(out, Occurrence{At: part.at, Count: part.count})
+	}
+	return out
+}
+
+// sighted returns recent with one more sighting, in a new slice: readers
+// of the model hold the old one.
+func sighted(recent []Occurrence, seen Occurrence) []Occurrence {
+	if over := len(recent) + 1 - maxNoteOrigins; over > 0 {
+		recent = recent[over:]
+	}
+	return append(recent[:len(recent):len(recent)], seen)
 }

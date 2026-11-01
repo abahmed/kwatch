@@ -10,9 +10,11 @@ import (
 )
 
 // objectBudget counts the objects every dynamic watch reports, against
-// the global DefaultObjectBudget.
+// the global DefaultObjectBudget. The first floor objects of each type
+// are not counted.
 type objectBudget struct {
 	limit int64
+	floor int
 	used  atomic.Int64
 }
 
@@ -26,9 +28,12 @@ func (b *objectBudget) take() bool {
 
 func (b *objectBudget) release(n int) { b.used.Add(int64(-n)) }
 
+// charged is how many of the n objects of one type draw on the budget.
+func (b *objectBudget) charged(n int) int { return max(n-b.floor, 0) }
+
 // objectAdmission decides which objects of one watched type produce
-// observations: at most perKind, within the shared budget. An object
-// refused once is admitted by a later update when room has freed.
+// observations: at most perKind, and past the floor only within the
+// shared budget. An object refused once is admitted by a later update when room has freed.
 //
 // It remembers the last admitted version of every object, so a watch
 // restarted after a refusal can report the objects that disappeared
@@ -67,7 +72,7 @@ func (a *objectAdmission) admit(obj any) bool {
 		a.objects[key] = obj
 		return true
 	}
-	if len(a.objects) < a.perKind && a.budget.take() {
+	if len(a.objects) < a.perKind && a.room() {
 		a.objects[key] = obj
 		delete(a.left, key)
 		return true
@@ -84,6 +89,12 @@ func (a *objectAdmission) admit(obj any) bool {
 	return false
 }
 
+// room reports whether one more object fits, drawing on the shared
+// budget past the floor. Call it with mu held.
+func (a *objectAdmission) room() bool {
+	return len(a.objects) < a.budget.floor || a.budget.take()
+}
+
 // forget releases a deleted object and reports whether it was admitted.
 func (a *objectAdmission) forget(obj any) bool {
 	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
@@ -96,8 +107,9 @@ func (a *objectAdmission) forget(obj any) bool {
 	if _, ok := a.objects[key]; !ok {
 		return false
 	}
+	before := len(a.objects)
 	delete(a.objects, key)
-	a.budget.release(1)
+	a.budget.release(a.budget.charged(before) - a.budget.charged(before-1))
 	return true
 }
 
@@ -133,6 +145,7 @@ func (a *objectAdmission) dropMissing(present func(key string) bool) []any {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	var missing []any
+	before := len(a.objects)
 	for key, obj := range a.objects {
 		if !present(key) {
 			missing = append(missing, obj)
@@ -144,7 +157,8 @@ func (a *objectAdmission) dropMissing(present func(key string) bool) []any {
 			delete(a.left, key)
 		}
 	}
-	a.budget.release(len(missing))
+	a.budget.release(a.budget.charged(before) -
+		a.budget.charged(len(a.objects)))
 	return missing
 }
 
@@ -153,7 +167,7 @@ func (a *objectAdmission) dropMissing(present func(key string) bool) []any {
 func (a *objectAdmission) releaseAll() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.budget.release(len(a.objects))
+	a.budget.release(a.budget.charged(len(a.objects)))
 	a.objects = map[string]any{}
 	a.left = map[string]bool{}
 }

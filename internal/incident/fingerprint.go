@@ -109,15 +109,16 @@ func causeIdentity(p *Incident) string {
 		return ""
 	}
 	change := changeIdentity(c.Change)
+	if p.causeChain {
+		// The cause flips between a pod, a Service and the workload, or
+		// moves to the next run, for the same failures. Only a reason
+		// never seen before in this incident is news, whichever object
+		// carries it.
+		return "chain:" + strings.Join(
+			notOfRoot(p, seenReasons(p.seenCauseFindings(c))), ",")
+	}
 	if c.Root == p.Root && change == "" {
 		return strings.Join(rootFindingReasons(c, p.Members), ",")
-	}
-	if p.causeChain && change == "" {
-		// The cause flips between a pod, a Service and the workload
-		// for the same failures. Only a reason never seen before in
-		// this incident is news, whichever object carries it.
-		return "chain:" + strings.Join(seenReasons(p.seenCauseFindings(c)),
-			",")
 	}
 	return strings.Join([]string{
 		c.Rule, c.Root.String(),
@@ -161,6 +162,18 @@ func seenReasons(pairs []string) []string {
 	}
 	sort.Strings(out)
 	return uniq(out)
+}
+
+// notOfRoot drops the reasons the root's own conditions already put in
+// the fingerprint: the blame reaching them adds nothing.
+func notOfRoot(p *Incident, names []string) []string {
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		if _, own := p.rootReasons[name]; !own {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 // rootFindingReasons lists the cause's root findings as sorted, unique
