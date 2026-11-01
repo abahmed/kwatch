@@ -131,10 +131,23 @@ func (m *Manager) explanationLapsed(
 	return false
 }
 
+// scheduledRun reports the creation of a Job by the CronJob root.
+func scheduledRun(root inventory.EntityID, change *inventory.Change) bool {
+	return change != nil && change.Created &&
+		change.Entity.Kind == kube.KindJob && root.Kind == kube.KindCronJob
+}
+
 // inChain reports that p's cause blames, without a change, an object of
-// the root's own workload chain other than the root itself.
+// the root's own workload chain other than the root itself. A CronJob
+// blamed on itself stays in the chain too: the blame moves between it and
+// its runs from one run to the next.
 func (m *Manager) inChain(p *Incident) bool {
 	c := p.Cause
-	return c != nil && c.Root != p.Root && c.Change == nil &&
-		m.model != nil && sameChain(m.model, p.Root, c.Root)
+	if c == nil || m.model == nil {
+		return false
+	}
+	if c.Root == p.Root {
+		return c.Change == nil && p.Root.Kind == kube.KindCronJob
+	}
+	return c.Change == nil && sameChain(m.model, p.Root, c.Root)
 }

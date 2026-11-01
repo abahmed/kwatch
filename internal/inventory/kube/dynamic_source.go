@@ -192,8 +192,9 @@ func NewDynamicSource(cfg DynamicConfig) *DynamicSource {
 		cfg.RestartWait = safego.Wait
 	}
 	return &DynamicSource{
-		cfg:     cfg,
-		budget:  &objectBudget{limit: int64(cfg.ObjectBudget)},
+		cfg: cfg,
+		budget: &objectBudget{limit: int64(cfg.ObjectBudget),
+			floor: DefaultObjectFloor},
 		trigger: make(chan struct{}, 1),
 		running: make(map[schema.GroupVersionResource]*dynamicWatch),
 		refused: make(map[schema.GroupVersionResource]*refusal),

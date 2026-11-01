@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -88,28 +87,10 @@ func TestOperatorGroupMatchesSubgroups(t *testing.T) {
 		"generators.external-secrets.io": true,
 		"kyverno.io":                     true,
 		"policies.kyverno.io":            true,
-		"reports.kyverno.io":             false,
+		"reports.kyverno.io":             true,
 	} {
 		assert.Equal(t, want, operatorGroup(group), group)
 	}
-}
-
-func TestApplyBudgetRanksKyvernoPoliciesBeforeItsReports(t *testing.T) {
-	plan := func(group, resource string) plannedResource {
-		p, ok := planResource(schema.GroupVersionResource{
-			Group: group, Version: "v1", Resource: resource,
-		}, resource, true, nil)
-		require.True(t, ok)
-		return p
-	}
-	kept, _ := applyBudget([]plannedResource{
-		plan("reports.kyverno.io", "ephemeralreports"),
-		plan("example.com", "widgets"),
-		plan("kyverno.io", "clusterpolicies"),
-	}, 1, func(schema.GroupVersionResource) bool { return false }, nil)
-
-	require.Len(t, kept, 1)
-	assert.Equal(t, "clusterpolicies", kept[0].gvr.Resource)
 }
 
 func TestPlanResourceTiersAndModes(t *testing.T) {

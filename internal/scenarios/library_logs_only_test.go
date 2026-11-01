@@ -110,7 +110,7 @@ func logsOnlyCrash(c *cluster, fleet []*workload, lag time.Duration) {
 // (or the owned Jobs) carry, not the termination message.
 func logsOnlyScenarios() []scenario {
 	return []scenario{redisStormLogsOnly(), redisStormLogsLate(),
-		cronLastRunFailed()}
+		cronLastRunFailed(), cronRunsKeepFailing()}
 }
 
 // cronLastRunFailed: the weekly export's run three days ago hit its

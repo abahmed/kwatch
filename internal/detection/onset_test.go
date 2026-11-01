@@ -63,3 +63,43 @@ func TestContextOnsetWithoutRegistryReturnsFirstSeen(t *testing.T) {
 		t.Fatalf("zero first sighting = %v, want now", got)
 	}
 }
+
+// trackDetector tracks one value and records what it got back.
+type trackDetector struct {
+	found *[]bool
+	got   *[]time.Time
+}
+
+func (trackDetector) Name() string            { return "track" }
+func (trackDetector) Kinds() []inventory.Kind { return []inventory.Kind{"Pod"} }
+func (d trackDetector) Detect(ctx Context, _ inventory.Entity) []Finding {
+	previous, ok := ctx.Track("renewed", ctx.Now)
+	*d.found, *d.got = append(*d.found, ok), append(*d.got, previous)
+	return nil
+}
+
+func TestRegistryTrackReturnsThePreviousEvaluationsValue(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	model := inventory.NewModel(inventory.Options{})
+	id := inventory.EntityID{Kind: "Pod", Namespace: "ns", Name: "p"}
+	_, _ = model.Apply(inventory.Observation{Kind: inventory.Observed,
+		Source: "test", At: start, Entity: id})
+	var found []bool
+	var got []time.Time
+	r := NewRegistry(nil, trackDetector{&found, &got})
+
+	r.Evaluate(model, start, id)
+	r.Evaluate(model, start.Add(time.Minute), id)
+
+	if len(found) != 2 || found[0] || !found[1] || !got[1].Equal(start) {
+		t.Fatalf("found %v, got %v; want the first evaluation's value", found,
+			got)
+	}
+}
+
+func TestContextTrackWithoutRegistryRemembersNothing(t *testing.T) {
+	now := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	if _, found := (Context{Now: now}).Track("renewed", now); found {
+		t.Fatal("a context without a registry remembers nothing")
+	}
+}

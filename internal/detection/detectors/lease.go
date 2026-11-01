@@ -19,10 +19,16 @@ import (
 // a younger limit would flag a healthy holder whose latest renewal is
 // simply not read yet. It is two scans plus a margin, taken from the scan
 // period itself so the two cannot drift apart.
+//
+// leaseGapMin is the least gap between two observed renewals that still
+// counts as a rhythm: scans are far apart, so a Lease of a few seconds is
+// seen to renew one scan later at best, and the allowance has room for one
+// scan missed.
 const (
 	leaseStaleFactor = 3
 	leaseStaleMargin = time.Minute
 	leaseStaleMin    = 2*kube.LeaseScanPeriod + leaseStaleMargin
+	leaseGapMin      = 2 * kube.LeaseScanPeriod
 )
 
 // Lease detects a controller or operator that holds its leader Lease but
@@ -33,8 +39,10 @@ const (
 // uninstalled controller leaves behind.
 //
 // Some programs take a Lease once at startup and renew it only when they
-// restart, so a healthy holder counts only once kwatch saw it renew: an
-// old renew time alone says nothing about that holder.
+// restart, so a healthy holder counts only once kwatch saw it renew in a
+// rhythm (see leaseRenews): an old renew time alone says nothing about
+// that holder. A restart of kwatch forgets the rhythm, and a healthy
+// holder is then left alone until it is seen to renew again.
 type Lease struct{}
 
 // Name implements detection.Detector.
@@ -54,10 +62,10 @@ func (Lease) Detect(
 	if renewed.IsZero() || holder == "" {
 		return nil
 	}
-	renews := renewalSeen(ctx, holder, renewed)
 	seconds, _ := number(e, kube.AttrLeaseDuration)
 	stale := max(time.Duration(seconds*leaseStaleFactor)*time.Second,
 		leaseStaleMin)
+	renews := leaseRenews(ctx, holder, renewed, seconds)
 	age := ctx.Now.Sub(renewed)
 	if age < stale {
 		ctx.RecheckAfter(stale - age)
@@ -82,13 +90,28 @@ func (Lease) Detect(
 	}}
 }
 
-// renewalSeen reports whether holder renewed the Lease since kwatch first
-// saw it hold it: the first renew time is kept for as long as the holder
-// stays, and a later one proves it renews.
-func renewalSeen(
-	ctx detection.Context, holder string, renewed time.Time,
+// leaseRenews reports whether kwatch saw holder renew its Lease in a
+// rhythm: two renew times in a row, read by two evaluations, no further
+// apart than three durations (at least leaseGapMin). One slow bump, such
+// as a program taking the Lease again when it restarts, sets nothing.
+//
+// The rhythm is kept for as long as the holder stays, in memory per holder.
+// A late renewal after a long stall does not undo it: the holder renewed
+// before and stalled, which is what is reported. A new holder starts over,
+// and the state of the one before is forgotten with it.
+func leaseRenews(
+	ctx detection.Context, holder string, renewed time.Time, seconds float64,
 ) bool {
-	return renewed.After(ctx.Onset("lease-renewal/"+holder, renewed))
+	allowed := max(time.Duration(seconds*leaseStaleFactor)*time.Second,
+		leaseGapMin)
+	before, seen := ctx.Track("lease-renewed/"+holder, renewed)
+	gap := renewed.Sub(before)
+	const proven = "lease-rhythm/"
+	if ctx.Ongoing(proven+holder) || (seen && gap > 0 && gap <= allowed) {
+		ctx.Onset(proven+holder, renewed)
+		return true
+	}
+	return false
 }
 
 // holderPod finds the pod a holder identity names. state is what is
