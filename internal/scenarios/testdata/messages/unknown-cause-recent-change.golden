@@ -1,8 +1,8 @@
 10:06:15 settled
-🟠 reports in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. In the last 30 minutes in shop: bob changed config map feature-flags at 10:01 UTC. It fails with "panic: nil pointer dereference in render()". Its last run lasted ten seconds. To read the output of the last crash, run kubectl logs reports-c3027a87-a -c app -n shop --previous
+🟠 reports in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. In the last 30 minutes in shop: bob changed config map feature-flags at 10:01 UTC. It fails with "panic: nil pointer dereference in render()". Its last run lasted ten seconds. To read the output of the last crash, run kubectl logs reports-c3027a87-a -c app -n shop --previous
 🟠 reports in shop (prod-eu-1) keeps crashing.
 | 🟠 **reports** in **shop** (**prod-eu-1**) keeps crashing.
-| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
 | In the last 30 minutes in shop: bob changed config map feature-flags at 10:01 UTC.
 | It fails with `panic: nil pointer dereference in render()`.
 | Its last run lasted ten seconds.

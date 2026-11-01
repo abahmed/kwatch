@@ -88,6 +88,11 @@ func spreadGroupSentences(
 	homeName, many := f.subjectName(home)
 	var out []sentence
 	for i, g := range groups {
+		if run, ok := lastRunSentence(home, homeName, named || i > 0,
+			g); ok {
+			out = append(out, sentence{part: partLead, text: run})
+			continue
+		}
 		text := capitalName(home, homeName+" "+beWord(many)+
 			" spreading to ")
 		switch {

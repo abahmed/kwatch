@@ -1,8 +1,8 @@
 10:02:50 settled
-🟠 cert-controller in external-secrets (prod-eu-1) keeps failing its readiness probe. Its node and registry are healthy and unchanged, so nothing outside it explains this. Service cert-controller can't serve traffic. To see the pod's state and events, run kubectl describe pod cert-controller-0d9addc3-a -n external-secrets
+🟠 cert-controller in external-secrets (prod-eu-1) keeps failing its readiness probe. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. Service cert-controller can't serve traffic. To see the pod's state and events, run kubectl describe pod cert-controller-0d9addc3-a -n external-secrets
 🟠 cert-controller in external-secrets (prod-eu-1) keeps failing its readiness probe.
 | 🟠 **cert-controller** in **external-secrets** (**prod-eu-1**) keeps failing its readiness probe.
-| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
 | Service **cert-controller** can't serve traffic.
 | To see the pod's state and events, run
 | ```

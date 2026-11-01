@@ -1,8 +1,8 @@
 10:05:15 settled
-🟠 warehouse in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: warehouse: stock service answered 503". Its last run lasted ten seconds; six restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs warehouse-bda8df4e-a -c app -n shop --previous
+🟠 warehouse in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. It fails with "panic: warehouse: stock service answered 503". Its last run lasted ten seconds; six restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs warehouse-bda8df4e-a -c app -n shop --previous
 🟠 warehouse in shop (prod-eu-1) keeps crashing.
 | 🟠 **warehouse** in **shop** (**prod-eu-1**) keeps crashing.
-| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
 | It fails with `panic: warehouse: stock service answered 503`.
 | Its last run lasted ten seconds; six restarts since its pod was created one hour ago.
 | To read the output of the last crash, run

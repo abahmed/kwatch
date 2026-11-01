@@ -41,7 +41,7 @@ func TestEngineAppCrashHasNoInventedCause(t *testing.T) {
 		t.Fatalf("root = %s, want deployment reports", p.Root)
 	}
 	text := notification.Text(h.messages[0])
-	if !strings.Contains(text, "nothing outside it explains this") ||
+	if !strings.Contains(text, "nothing outside it points to a cause") ||
 		!strings.Contains(text, "kubectl logs") {
 		t.Fatalf("message should rule out the outside and show logs:\n%s",
 			text)

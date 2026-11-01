@@ -1,8 +1,8 @@
 10:02:15 settled
-🟠 checkout in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "dial tcp: lookup sandbox.partner-gateway.example on 10.96.0.10:53: no such host". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs checkout-50cd6817-a -c app -n shop --previous
+🟠 checkout in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. It fails with "dial tcp: lookup sandbox.partner-gateway.example on 10.96.0.10:53: no such host". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs checkout-50cd6817-a -c app -n shop --previous
 🟠 checkout in shop (prod-eu-1) keeps crashing.
 | 🟠 **checkout** in **shop** (**prod-eu-1**) keeps crashing.
-| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
 | It fails with `dial tcp: lookup sandbox.partner-gateway.example on 10.96.0.10:53: no such host`.
 | Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
 | To read the output of the last crash, run
