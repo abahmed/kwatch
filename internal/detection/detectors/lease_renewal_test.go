@@ -118,3 +118,21 @@ func TestLeaseRetakenByStableIdentityIsNoRenewal(t *testing.T) {
 		retaken.Add(24*time.Hour)),
 		"taking the Lease again after a container restart is no renewal")
 }
+
+func TestLeaseHeldBrieflyAtStartupByHealthyHolderStaysQuiet(t *testing.T) {
+	m, lease := leaseModel(time.Hour, leaseHolderName, "Running")
+	r := detection.NewRegistry(nil, Lease{})
+	acquired := t0.Add(-24 * time.Hour)
+
+	assert.Empty(t, scanAcquiredLease(r, m, lease, acquired,
+		acquired.Add(leaseStaleMin-time.Second), t0))
+}
+
+func TestLeaseRenewedPastTheStaleSpanThenStoppedIsReported(t *testing.T) {
+	m, lease := leaseModel(time.Hour, leaseHolderName, "Running")
+	r := detection.NewRegistry(nil, Lease{})
+	acquired := t0.Add(-24 * time.Hour)
+
+	assert.Len(t, scanAcquiredLease(r, m, lease, acquired,
+		acquired.Add(leaseStaleMin+time.Second), t0), 1)
+}

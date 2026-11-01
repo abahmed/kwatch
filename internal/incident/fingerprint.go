@@ -111,9 +111,8 @@ func causeIdentity(p *Incident) string {
 	change := changeIdentity(c.Change)
 	if p.causeChain {
 		// The cause flips between a pod, a Service and the workload, or
-		// moves to the next run, for the same failures. Only a reason
-		// never seen before in this incident is news, whichever object
-		// carries it.
+		// between runs, for the same failures. Only a reason never seen
+		// before in this incident is news, whichever object carries it.
 		return "chain:" + strings.Join(
 			notOfRoot(p, seenReasons(p.seenCauseFindings(c))), ",")
 	}

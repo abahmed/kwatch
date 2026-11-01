@@ -927,7 +927,7 @@ Time to first correct root: p95 5m0s, max 12m15s over 353 scenarios; slowest: bo
 | custom-task-succeeded-false | `taskrun.tekton.example.com/ci/build-image` | `taskrun.tekton.example.com/ci/build-image (no cause)` | none | notify/notify | 1 (2) | pass |
 | custom-controller-failed-events | `order.acme.example.com/infra/web-tls` | `order.acme.example.com/infra/web-tls (no cause)` | none | digest/digest | 2 (2) | pass |
 | custom-healthy-warning-stream | quiet | - | - | -/- | 0 (0) | pass |
-| custom-warnings-then-recovery | `order.acme.example.com/infra/web-tls` | `order.acme.example.com/infra/web-tls (no cause)` | none | digest/digest | 2 (2) | pass |
+| custom-warnings-then-recovery | `order.acme.example.com/infra/web-tls` | `order.acme.example.com/infra/web-tls (no cause)` | none | digest/digest | 0 (2) | pass |
 | namespace-outage-with-services | `deployment/shop/app0`, `deployment/shop/app1`, `deployment/shop/app2`, `deployment/shop/app3`, `deployment/shop/app4`, `deployment/shop/app5` | `deployment/shop/app0`, `deployment/shop/app1`, `deployment/shop/app2`, `deployment/shop/app3`, `deployment/shop/app4`, `deployment/shop/app5` | likely 0.55 | notify/notify | 1 (2) | pass |
 | namespace-outage-pages-once | `deployment/shop/app0`, `deployment/shop/app1`, `deployment/shop/app2`, `deployment/shop/app3`, `deployment/shop/app4`, `deployment/shop/app5` | `deployment/shop/app0`, `deployment/shop/app1`, `deployment/shop/app2`, `deployment/shop/app3`, `deployment/shop/app4`, `deployment/shop/app5` | likely 0.55 | page/page | 9 (10) | pass |
 | two-teams-two-pages | `deployment/billing/api`, `deployment/shop/api` | `deployment/billing/api (no cause)`, `deployment/shop/api (no cause)` | none | page/page | 3 (4) | pass |

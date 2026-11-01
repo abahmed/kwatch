@@ -69,6 +69,13 @@ func (a *areaPlacer) placementOf(failure inventory.EntityID) placement {
 		return out
 	}
 	record := a.record(i)
+	if scheduledRun(root, record.Change) {
+		// The schedule starting a run is what the root does: no one made
+		// a change, and no cause is left to name but the root itself.
+		out.unclear = a.rejectedOutside(root)
+		out.root = root
+		return out
+	}
 	out.root, out.cause = root, &record
 	out.outscored = a.outscoredBy(cause)
 	return out
