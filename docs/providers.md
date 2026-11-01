@@ -64,7 +64,7 @@ anyone. Sensu Go records them as a passing (OK) check.
 | 💬 Chat | Slack, Discord, Microsoft Teams, Teams Workflow, Mattermost, Rocket.Chat, Google Chat, Webex, Matrix, Telegram, Zulip, Feishu, DingTalk, WeCom, Flock, Threema, Signal | The Note as the message text, escaped for the chat's markup, with recent application output as a code or quoted block when there is any. Broadcast mentions such as `@channel` are neutralized. Matrix sends the Note as `body` and HTML-escaped as `formatted_body`. Slack with a bot token announces each incident as one root message holding the whole Note and its output, keeps every update and the resolve in its thread, and edits the root to the same announcement under the new status marker when the status changes (a thread reply that is not a status change leaves the root alone; after a restart the root cannot be rebuilt, so only the thread grows). Application output is fenced with a code fence longer than any run of backticks in it, so it cannot close the block; it is cut before the closing fence is added. WeCom `<@userid>` and Zulip `@*group*` mentions in workload text are neutralized too, and so is Telegram's `@username` (a zero-width space follows the `@`). Microsoft Teams shows the incident title as escaped text, so a title taken from the cluster never becomes a link or a mention. |
 | 🚨 Paging | PagerDuty, Opsgenie, Splunk On-Call, GoAlert, ilert, incident.io, Squadcast, Zenduty, SIGNL4, Alerta, Datadog, New Relic, AWS SNS, Splunk HEC, Sensu Go | The Short as the alert title or summary, the Note (plus output) as details, the incident id as the dedup or alert key, and the provider's resolve or close action when the incident resolves. Severity follows the incident severity: only a page-tier incident gets the priority that pages (for ilert the configured `priority`); a notify or low tier incident is sent at a lower one (ilert `LOW`, Opsgenie P3 or P4). |
 | 📋 Issue trackers | GitHub, GitLab, Gitea, Jira, ClickUp | One issue per incident: the Short as title and the Note (plus output and the cluster name) as body. Updates add a comment. On resolve kwatch comments and closes the issue (GitHub, GitLab, Gitea; Jira moves it through `closeTransition` and ClickUp to `closeStatus` when you set one, otherwise they only comment, because workflows are defined per project or list). A resolved incident that fails again within its reopen window comments on the same issue and reopens it on GitHub, GitLab and Gitea. Jira (`reopenTransition`) and ClickUp (`reopenStatus`) reopen only when you configure both the close and the reopen name; otherwise the mapping is forgotten at resolve and a recurrence opens a new issue. Pod-controlled text in the Note has its `@mentions` neutralized, and Jira wiki markup in it is escaped. A GitHub 403 that says the rate limit was hit is retried like a 429. |
-| 📱 SMS and push | Twilio, Plivo, Vonage, MessageBird, Pushover, Pushbullet, Gotify, ntfy, IFTTT, Home Assistant | The Short. A resolve is sent at normal priority. IFTTT also sends the Note as `value2` and the status as `value3`. |
+| 📱 SMS and push | Twilio, Plivo, Vonage, MessageBird, Pushover, Pushbullet, Gotify, ntfy, IFTTT, Home Assistant | The Short. A resolve is never louder than the incident: for Pushover, Gotify and ntfy it is sent at the configured priority capped at normal, or at `resolvedPriority` when set. IFTTT also sends the Note as `value2` and the status as `value3`. |
 | 📧 Email | Email (SMTP), AWS SES, SendGrid, Mailgun, Resend | Subject is the Short on one line; the body is the Note followed by recent output as a `> ` quoted block. |
 | 🔗 Structured | Custom Webhook, n8n, Zapier | The whole message as JSON (fields below). |
 
@@ -297,6 +297,7 @@ Opsgenie creates alerts asynchronously, so an update or a close sent right after
 | `alert.gotify.url` | 🔗 Gotify server URL |
 | `alert.gotify.token` | 🔑 App token |
 | `alert.gotify.priority` | 🎚️ Priority (optional) |
+| `alert.gotify.resolvedPriority` | 🔕 Priority 0-10 of a resolve (optional). Default: the priority, capped at 5; with no priority the server default applies |
 | `alert.gotify.title` | ✏️ Custom title |
 
 ```yaml
@@ -313,7 +314,8 @@ alert:
 | `alert.ntfy.topic` | 📢 Topic to publish to. kwatch publishes JSON to the server root with the topic in the body, as ntfy documents |
 | `alert.ntfy.url` | 🔗 Server URL (default: `https://ntfy.sh`) |
 | `alert.ntfy.token` | 🔑 Optional auth token |
-| `alert.ntfy.priority` | 🎚️ Priority 1-5 (default: 4) |
+| `alert.ntfy.priority` | 🎚️ Priority 1-5 (optional; ntfy uses 3 when unset) |
+| `alert.ntfy.resolvedPriority` | 🔕 Priority 1-5 of a resolve (optional). Default: the priority, capped at 3 |
 | `alert.ntfy.title` | ✏️ Custom title |
 
 ```yaml
@@ -328,7 +330,8 @@ alert:
 |:---|---|
 | `alert.pushover.token` | 🔑 Application token |
 | `alert.pushover.user` | 👤 User or group key |
-| `alert.pushover.priority` | 🎚️ Priority from -2 to 2 (optional). It applies to the announcement of an incident only; priority 2 (emergency) only to a page-tier announcement, other tiers are held at 1. Updates, summaries, digests, startup and plain messages are normal priority. A resolve cancels the emergency receipt first, so the alarm stops repeating, and then sends the normal-priority "resolved" push; if the cancel fails transiently nothing is sent and the whole resolve is retried |
+| `alert.pushover.priority` | 🎚️ Priority from -2 to 2 (optional). It applies to the announcement of an incident only; priority 2 (emergency) only to a page-tier announcement, other tiers are held at 1. Updates, summaries, digests, startup and plain messages are normal priority. A resolve cancels the emergency receipt first, so the alarm stops repeating, and then sends the "resolved" push at the priority capped at normal; if the cancel fails transiently nothing is sent and the whole resolve is retried |
+| `alert.pushover.resolvedPriority` | 🔕 Priority from -2 to 1 of the "resolved" push (optional); 2 is not allowed. Default: the priority, capped at 0 |
 | `alert.pushover.retry` | ⏱️ Emergency retry interval in seconds |
 | `alert.pushover.expire` | ⌛ Emergency expiration in seconds |
 | `alert.pushover.title` | ✏️ Custom title |

@@ -61,15 +61,7 @@ func NewClickup(
 		return nil
 	}
 
-	priority := 0
-	switch v := config["priority"].(type) {
-	case float64:
-		priority = int(v)
-	case int:
-		priority = v
-	case int64:
-		priority = int(v)
-	}
+	priority, _ := transport.IntSetting(config["priority"])
 
 	// Status names are defined per list, so there is no safe default:
 	// without closeStatus a resolve only comments.

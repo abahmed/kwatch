@@ -21,6 +21,9 @@ type Pushover struct {
 	user     string
 	title    string
 	priority int
+	// resolved is the explicit resolve priority (-2 to 1); nil derives
+	// it from priority.
+	resolved *int
 	retry    int
 	expire   int
 
@@ -53,22 +56,20 @@ func NewPushover(
 
 	title, _ := config["title"].(string)
 
-	priority := 0
-	switch v := config["priority"].(type) {
-	case float64:
-		priority = int(v)
-	case int:
-		priority = v
-	case int64:
-		priority = int(v)
-	}
+	priority, _ := transport.IntSetting(config["priority"])
 	if priority < -2 || priority > 2 {
 		klog.InfoS("initializing pushover with invalid priority",
 			"priority", priority)
 		return nil
 	}
-	retry := integerSetting(config["retry"])
-	expire := integerSetting(config["expire"])
+	resolved := transport.IntSettingPtr(config["resolvedPriority"])
+	if resolved != nil && (*resolved < -2 || *resolved > 1) {
+		klog.InfoS("initializing pushover with invalid resolvedPriority",
+			"resolvedPriority", *resolved)
+		return nil
+	}
+	retry, _ := transport.IntSetting(config["retry"])
+	expire, _ := transport.IntSetting(config["expire"])
 	if priority == 2 && (retry < 30 || expire < 1 || expire > 10800) {
 		klog.InfoS(
 			"pushover emergency priority requires valid retry and expire",
@@ -86,6 +87,7 @@ func NewPushover(
 		user:        user,
 		title:       title,
 		priority:    priority,
+		resolved:    resolved,
 		retry:       retry,
 		expire:      expire,
 		clusterName: clusterName,
@@ -113,10 +115,17 @@ func (p *Pushover) SendIncident(
 		if err := p.cancelReceipt(ctx, m.Key); err != nil {
 			return err
 		}
-		return p.send(ctx, m.ShortText(), 0, "")
+		return p.send(ctx, m.ShortText(), p.resolvePriority(), "")
 	}
 	priority := p.priorityFor(m)
 	return p.send(ctx, m.ShortText(), priority, m.Key)
+}
+
+// resolvePriority is the priority of the "resolved" push: the configured
+// priority capped at normal (0), or resolvedPriority when set. It never
+// reaches emergency (2), so a resolve starts no alarm.
+func (p *Pushover) resolvePriority() int {
+	return transport.ResolvePriority(&p.priority, p.resolved, 0)
 }
 
 // priorityFor picks the priority of a live (not resolved) message.
@@ -167,17 +176,4 @@ func (p *Pushover) send(
 		p.rememberReceipt(key, body)
 	}
 	return err
-}
-
-func integerSetting(value interface{}) int {
-	switch v := value.(type) {
-	case int:
-		return v
-	case int64:
-		return int(v)
-	case float64:
-		return int(v)
-	default:
-		return 0
-	}
 }

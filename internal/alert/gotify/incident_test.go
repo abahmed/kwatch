@@ -28,10 +28,12 @@ func TestSendIncidentSendsShortWithStatusPriority(t *testing.T) {
 				t.Fatalf("payload = %v", body)
 			}
 			providertest.AssertOneLeadingEmoji(t, message)
-			_, hasPriority := body["priority"]
-			if tc.Message.Resolved() == hasPriority {
-				t.Fatalf("priority = %v, resolved = %v",
-					body["priority"], tc.Message.Resolved())
+			want := 8.0
+			if tc.Message.Resolved() {
+				want = gotifyNormalPriority
+			}
+			if body["priority"] != want {
+				t.Fatalf("priority = %v, want %v", body["priority"], want)
 			}
 		})
 	}

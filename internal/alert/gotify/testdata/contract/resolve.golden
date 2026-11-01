@@ -4,5 +4,6 @@ X-Gotify-Key: <redacted>
 
 {
   "message": "✅ payments in shop is healthy again.",
+  "priority": 5,
   "title": "kwatch"
 }
