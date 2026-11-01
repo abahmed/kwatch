@@ -182,7 +182,7 @@ say, in this order of strength:
 4. **What was checked.** The solver records the upstream objects it reached
    that showed nothing wrong (`Trace.Checked`), and the message says "Its
    node, image and configuration are healthy and unchanged, so nothing
-   outside it explains this", followed by the quoted crash output.
+   outside it points to a cause", followed by the quoted crash output.
 
 Two kinds of finding are not failures. A *symptom* (a Deployment below its
 replicas) restates its pods' failures and never leads a message. An

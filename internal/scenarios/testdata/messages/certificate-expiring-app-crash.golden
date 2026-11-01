@@ -1,8 +1,8 @@
 10:02:15 settled
-🟠 payments in shop (prod-eu-1) keeps crashing. Its node, registry and configuration are healthy and unchanged, so nothing outside it explains this. It fails with "panic: assignment to entry in nil map". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs payments-10be2a67-a -c app -n shop --previous
+🟠 payments in shop (prod-eu-1) keeps crashing. Its node, registry and configuration are healthy and unchanged, so nothing outside it points to a cause. It fails with "panic: assignment to entry in nil map". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs payments-10be2a67-a -c app -n shop --previous
 🟠 payments in shop (prod-eu-1) keeps crashing.
 | 🟠 **payments** in **shop** (**prod-eu-1**) keeps crashing.
-| Its node, registry and configuration are healthy and unchanged, so nothing outside it explains this.
+| Its node, registry and configuration are healthy and unchanged, so nothing outside it points to a cause.
 | It fails with `panic: assignment to entry in nil map`.
 | Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
 | To read the output of the last crash, run

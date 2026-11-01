@@ -9,10 +9,10 @@
 |
 | *Each gets its own message when it changes or resolves.*
 10:02:15 settled
-🔴 api in billing (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "fatal: validator lost its own dependency". Its last run lasted ten seconds. It runs a single replica. To read the output of the last crash, run kubectl logs api-4dffe2cd-a -c app -n billing --previous
+🔴 api in billing (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. It fails with "fatal: validator lost its own dependency". Its last run lasted ten seconds. It runs a single replica. To read the output of the last crash, run kubectl logs api-4dffe2cd-a -c app -n billing --previous
 🔴 api in billing (prod-eu-1) keeps crashing.
 | 🔴 **api** in **billing** (**prod-eu-1**) keeps crashing.
-| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
 | It fails with `fatal: validator lost its own dependency`.
 | Its last run lasted ten seconds.
 | It runs a single replica.
@@ -21,10 +21,10 @@
 | kubectl logs api-4dffe2cd-a -c app -n billing --previous
 | ```
 10:02:15 settled
-🔴 api in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "fatal: uploader lost its own dependency". Its last run lasted ten seconds. It runs a single replica. To read the output of the last crash, run kubectl logs api-4dffe2cd-a -c app -n shop --previous
+🔴 api in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. It fails with "fatal: uploader lost its own dependency". Its last run lasted ten seconds. It runs a single replica. To read the output of the last crash, run kubectl logs api-4dffe2cd-a -c app -n shop --previous
 🔴 api in shop (prod-eu-1) keeps crashing.
 | 🔴 **api** in **shop** (**prod-eu-1**) keeps crashing.
-| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
 | It fails with `fatal: uploader lost its own dependency`.
 | Its last run lasted ten seconds.
 | It runs a single replica.

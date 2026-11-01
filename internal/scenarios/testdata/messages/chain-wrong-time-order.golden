@@ -1,8 +1,8 @@
 10:10:15 settled
-🔴 api in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "panic: runtime error: index out of range". Its last run lasted ten seconds. Ingress shop and service api can't serve traffic. To read the output of the last crash, run kubectl logs api-bee69fdb-a -c app -n shop --previous
+🔴 api in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. It fails with "panic: runtime error: index out of range". Its last run lasted ten seconds. Ingress shop and service api can't serve traffic. To read the output of the last crash, run kubectl logs api-bee69fdb-a -c app -n shop --previous
 🔴 api in shop (prod-eu-1) keeps crashing.
 | 🔴 **api** in **shop** (**prod-eu-1**) keeps crashing.
-| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
 | It fails with `panic: runtime error: index out of range`.
 | Its last run lasted ten seconds.
 | Ingress **shop** and service **api** can't serve traffic.

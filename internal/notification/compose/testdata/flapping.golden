@@ -1,3 +1,3 @@
-🟠 search in shop keeps failing and recovering. Nothing outside it explains this. It has recovered and failed again three times recently. To see the pod's state and events, run kubectl describe pod search-9b -n shop
+🟠 search in shop keeps failing and recovering. Nothing outside it points to a cause. It has recovered and failed again three times recently. To see the pod's state and events, run kubectl describe pod search-9b -n shop
 
 🟠 search in shop keeps failing and recovering.

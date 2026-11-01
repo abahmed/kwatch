@@ -1,8 +1,8 @@
 10:01:15 settled
-🟠 mailer in preview-4 (prod-eu-1) keeps crashing. Its configuration, node, registry and service account are healthy and unchanged, so nothing outside it explains this. It fails with "fatal: cannot reach the relay". Its last run lasted ten seconds; five restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs mailer-99844257-a -c app -n preview-4 --previous
+🟠 mailer in preview-4 (prod-eu-1) keeps crashing. Its configuration, node, registry and service account are healthy and unchanged, so nothing outside it points to a cause. It fails with "fatal: cannot reach the relay". Its last run lasted ten seconds; five restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs mailer-99844257-a -c app -n preview-4 --previous
 🟠 mailer in preview-4 (prod-eu-1) keeps crashing.
 | 🟠 **mailer** in **preview-4** (**prod-eu-1**) keeps crashing.
-| Its configuration, node, registry and service account are healthy and unchanged, so nothing outside it explains this.
+| Its configuration, node, registry and service account are healthy and unchanged, so nothing outside it points to a cause.
 | It fails with `fatal: cannot reach the relay`.
 | Its last run lasted ten seconds; five restarts since its pod was created one hour ago.
 | To read the output of the last crash, run

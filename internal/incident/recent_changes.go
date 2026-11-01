@@ -7,6 +7,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 // Recent changes are what a message says when it can name no cause:
@@ -86,6 +87,9 @@ func rankedBetween(
 	ranks := map[inventory.EntityID]int{}
 	var out []inventory.Change
 	for id, change := range newestPerObject(model, from, to) {
+		if ownScheduledRun(model, root, change) {
+			continue
+		}
 		if rank := near.rank(id); rank < below {
 			ranks[id] = rank
 			out = append(out, change)
@@ -105,6 +109,16 @@ func rankedBetween(
 		out = out[:MaxRecentChanges]
 	}
 	return out
+}
+
+// ownScheduledRun reports the creation of a Job by the schedule of the
+// CronJob root: what the root does on its own, which no one changed and
+// which says nothing next to its failure.
+func ownScheduledRun(
+	model inventory.Reader, root inventory.EntityID, change inventory.Change,
+) bool {
+	return scheduledRun(root, &change) &&
+		rootcause.TopOwner(model, change.Entity) == root
 }
 
 // worthNaming reports a change a person made from from to to: not
