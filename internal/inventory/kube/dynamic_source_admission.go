@@ -33,7 +33,8 @@ func (b *objectBudget) charged(n int) int { return max(n-b.floor, 0) }
 
 // objectAdmission decides which objects of one watched type produce
 // observations: at most perKind, and past the floor only within the
-// shared budget. An object refused once is admitted by a later update when room has freed.
+// shared budget. An object refused once is admitted by a later update
+// when room has freed.
 //
 // It remembers the last admitted version of every object, so a watch
 // restarted after a refusal can report the objects that disappeared

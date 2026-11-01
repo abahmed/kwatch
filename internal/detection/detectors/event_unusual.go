@@ -41,8 +41,9 @@ func unusualEvents(
 	// its first sighting. It counts as repeating even when each sighting
 	// came as a fresh Event with a count of one, too few to reach
 	// unusualEventMin. A failure that recurs after its first finding
-	// cleared is reported again this way. A custom resource needs unusualEventMin in the
-	// window: controllers there write one fresh event per item.
+	// cleared is reported again this way. A custom resource needs
+	// unusualEventMin in the window: controllers there write one fresh
+	// event per item.
 	recurred := map[string]bool{}
 	for _, note := range ctx.Model.Notes(e.ID, since) {
 		if !note.Warning || knownEvent(note.Reason, e.ID.Kind) ||
