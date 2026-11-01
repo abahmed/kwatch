@@ -37,9 +37,13 @@ func checkShape(
 	if s, _ := body["message"].(string); s == "" {
 		t.Fatalf("%s: message is empty", name)
 	}
-	// Resolves use the server default (priority omitted).
-	_, has := body["priority"]
-	if (name == "resolve") == has {
-		t.Fatalf("%s: priority = %v", name, body["priority"])
+	// A resolve is capped at the normal level (5).
+	want := 8.0
+	if name == "resolve" {
+		want = gotifyNormalPriority
+	}
+	if body["priority"] != want {
+		t.Fatalf("%s: priority = %v, want %v", name,
+			body["priority"], want)
 	}
 }

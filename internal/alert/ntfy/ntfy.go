@@ -28,6 +28,8 @@ type Ntfy struct {
 	token    string
 	title    string
 	priority int
+	// resolved is the explicit resolve priority; nil derives it.
+	resolved *int
 
 	clusterName string
 }
@@ -58,15 +60,8 @@ func NewNtfy(
 	token, _ := config["token"].(string)
 	title, _ := config["title"].(string)
 
-	priority := 0
-	switch v := config["priority"].(type) {
-	case float64:
-		priority = int(v)
-	case int:
-		priority = v
-	case int64:
-		priority = int(v)
-	}
+	priority, _ := transport.IntSetting(config["priority"])
+	resolved := resolvedPriority(config["resolvedPriority"])
 
 	klog.InfoS("initializing ntfy",
 		"url", transport.LogURL(server),
@@ -82,6 +77,7 @@ func NewNtfy(
 		token:       token,
 		title:       title,
 		priority:    priority,
+		resolved:    resolved,
 		clusterName: clusterName,
 	}
 }
@@ -91,19 +87,42 @@ func (n *Ntfy) Name() string {
 	return "Ntfy"
 }
 
-// ntfyDefaultPriority is ntfy's normal priority, used for resolves.
+// ntfyDefaultPriority is ntfy's normal priority, the most a resolve
+// uses unless resolvedPriority says otherwise.
 const ntfyDefaultPriority = 3
+
+// configured returns the alert priority, or nil when unset.
+func (n *Ntfy) configured() *int {
+	if n.priority == 0 {
+		return nil
+	}
+	return &n.priority
+}
+
+// resolvedPriority reads resolvedPriority; a value outside ntfy's 1-5
+// range is ignored with a log line.
+func resolvedPriority(value interface{}) *int {
+	p := transport.IntSettingPtr(value)
+	if p != nil && (*p < 1 || *p > 5) {
+		klog.InfoS("ignoring ntfy resolvedPriority outside 1-5",
+			"resolvedPriority", *p)
+		return nil
+	}
+	return p
+}
 
 // SendIncident sends the incident's one-line lead as the message. Tags
 // are plain words, never ntfy emoji shortcodes, so the status marker at
 // the start of the lead stays the only emoji. A resolve is sent at the
-// normal priority.
+// normal priority, or lower when the configured priority is lower, unless
+// resolvedPriority is set.
 func (n *Ntfy) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
 	priority := n.priority
 	if m.Resolved() {
-		priority = ntfyDefaultPriority
+		priority = transport.ResolvePriority(
+			n.configured(), n.resolved, ntfyDefaultPriority)
 	}
 	return n.send(ctx, ntfyPayload{
 		Title: n.title, Message: m.ShortText(), Priority: priority,
