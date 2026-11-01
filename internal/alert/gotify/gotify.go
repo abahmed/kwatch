@@ -16,7 +16,7 @@ const gotifyAPIURL = "/message"
 type gotifyPayload struct {
 	Title    string `json:"title,omitempty"`
 	Message  string `json:"message"`
-	Priority int    `json:"priority,omitempty"`
+	Priority *int   `json:"priority,omitempty"`
 }
 
 type Gotify struct {
@@ -88,7 +88,7 @@ func (g *Gotify) Name() string {
 func (g *Gotify) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
-	priority := g.priority
+	priority := nonZero(g.priority)
 	if m.Resolved() {
 		priority = g.resolvePriority()
 	}
@@ -99,12 +99,23 @@ func (g *Gotify) SendIncident(
 // resolvedPriority says otherwise.
 const gotifyNormalPriority = 5
 
-func (g *Gotify) resolvePriority() int {
+// resolvePriority returns nil (omitted, server default) only when
+// neither priority nor resolvedPriority is set; an explicit 0 is sent.
+func (g *Gotify) resolvePriority() *int {
 	if g.priority == 0 && g.resolved == nil {
-		return 0
+		return nil
 	}
-	return transport.ResolvePriority(
+	v := transport.ResolvePriority(
 		&g.priority, g.resolved, gotifyNormalPriority)
+	return &v
+}
+
+// nonZero maps an unset (zero) priority to nil so it stays omitted.
+func nonZero(v int) *int {
+	if v == 0 {
+		return nil
+	}
+	return &v
 }
 
 // resolvedPriority reads resolvedPriority; a value outside Gotify's
@@ -121,10 +132,12 @@ func resolvedPriority(value interface{}) *int {
 
 // SendMessage sends text message to the provider
 func (g *Gotify) SendMessage(ctx context.Context, msg string) error {
-	return g.send(ctx, msg, g.priority)
+	return g.send(ctx, msg, nonZero(g.priority))
 }
 
-func (g *Gotify) send(ctx context.Context, msg string, priority int) error {
+func (g *Gotify) send(
+	ctx context.Context, msg string, priority *int,
+) error {
 	payload := gotifyPayload{
 		Title:    g.title,
 		Message:  msg,

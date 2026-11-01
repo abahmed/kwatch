@@ -22,6 +22,10 @@ func TestResolvePriorityRules(t *testing.T) {
 			"priority": 2, "resolvedPriority": 4}, 4.0},
 		{"override without priority", map[string]interface{}{
 			"resolvedPriority": 3}, 3.0},
+		{"explicit zero is sent", map[string]interface{}{
+			"priority": 8, "resolvedPriority": 0}, 0.0},
+		{"explicit zero without priority", map[string]interface{}{
+			"resolvedPriority": 0}, 0.0},
 		{"invalid override ignored", map[string]interface{}{
 			"priority": 8, "resolvedPriority": 11}, 5.0},
 	}
