@@ -3,8 +3,6 @@ package kube
 import (
 	"strings"
 
-	coordinationv1 "k8s.io/api/coordination/v1"
-
 	"github.com/abahmed/kwatch/internal/inventory"
 )
 
@@ -14,22 +12,6 @@ import (
 func HolderPodName(holder string) string {
 	name, _, _ := strings.Cut(holder, "_")
 	return name
-}
-
-// leaseAttributes are what a scan records of one held Lease. The acquire
-// time is optional in the API.
-func leaseAttributes(
-	lease coordinationv1.Lease, seconds float64,
-) map[string]inventory.Value {
-	attrs := map[string]inventory.Value{
-		AttrLeaseHolder:   inventory.Text(*lease.Spec.HolderIdentity),
-		AttrLeaseRenewed:  inventory.Time(lease.Spec.RenewTime.Time),
-		AttrLeaseDuration: inventory.Number(seconds),
-	}
-	if lease.Spec.AcquireTime != nil {
-		attrs[AttrLeaseAcquired] = inventory.Time(lease.Spec.AcquireTime.Time)
-	}
-	return attrs
 }
 
 // holderRelation links a Lease to the pod that holds it, when that pod

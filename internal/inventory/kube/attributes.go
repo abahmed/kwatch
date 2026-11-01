@@ -56,7 +56,6 @@ const (
 	// Lease attributes, written by the prober's Lease scan.
 	AttrLeaseHolder   = "lease.holder"
 	AttrLeaseRenewed  = "lease.renewed"
-	AttrLeaseAcquired = "lease.acquired"
 	AttrLeaseDuration = "lease.duration.seconds"
 	// AttrImageID is the image the container actually runs, by digest,
 	// as the kubelet reports it; two pods with the same image tag and
