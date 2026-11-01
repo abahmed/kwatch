@@ -553,7 +553,7 @@ here verbatim and checked by `TestScorecardGates`.
 | Time to first message (notify tier) | max <= 5m0s | p95 4m15s, max 5m0s (278 scenarios) | pass |
 | Time to first message (boot-held) | max <= 15m0s | p95 12m15s, max 12m15s (3 scenarios) | pass |
 | Notifications from non-events (staging day) | <= 0 | 0 | pass |
-| Notifications per hour (staging day peak) | <= 30/h | 29/h | pass |
+| Notifications per hour (staging day peak) | <= 30/h | 28/h | pass |
 | Unchanged updates | <= 0% | 0% | pass |
 | Re-created incidents | <= 5% | 1.2% | pass |
 | Repeated recoveries | <= 0 | 0 | pass |
@@ -569,15 +569,15 @@ here verbatim and checked by `TestScorecardGates`.
 | Recoveries said while members still fail | <= 0 | 0 | pass |
 | Scenarios that passed and no longer do (ratchet) | <= 0 | 0 | pass |
 
-28 of 28 gates pass. 404 labelled root cases in 406 scenarios; first-incident tier matches in 406 of 406 scenarios.
-Staging day: 893 notifications in 61h9m0s (14.6/h mean, peak hour 29); 0 from non-events, 0 of them notify or page.
+28 of 28 gates pass. 405 labelled root cases in 409 scenarios; first-incident tier matches in 409 of 409 scenarios.
+Staging day: 894 notifications in 61h36m0s (14.5/h mean, peak hour 28); 0 from non-events, 0 of them notify or page.
 Storm shared node: 1000 pods, 2 messages in total, 1 in the loudest 2 minutes.
 Storm shared registry: 1000 pods, 1 messages in total, 1 in the loudest 2 minutes.
 Storm multi-cause: 1000 pods from 10 causes, 10 of them reported, 10 messages in total, 8 in the loudest 2 minutes.
 Slowest first messages: boot-endpoints-still-down notify 12m15s, node-join-never-ready page 10m15s, node-replace-sandbox-stuck notify 7m15s, autoscaler-ceiling-cpu notify 5m0s, autoscaler-ceiling-requests notify 5m0s.
 Calibration: the labelled cases put high confidence at 0.55 (committed 0.70).
-Right roots: 254 with a stated cause, 141 by falling back to the failing entity with no stated cause, 4 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 11 scenarios, 7 of them labelled as legitimate revisions.
-Time to first correct root: p95 5m0s, max 12m15s over 351 scenarios; slowest: boot-endpoints-still-down 12m15s, one-hpa-bad-target 11m15s, metrics-blip-long 11m15s, node-join-never-ready 10m15s, disk-hog-moves-nodes 8m20s. Never stated: crash-loop-for-hours, coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
+Right roots: 254 with a stated cause, 142 by falling back to the failing entity with no stated cause, 4 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 11 scenarios, 7 of them labelled as legitimate revisions.
+Time to first correct root: p95 5m0s, max 12m15s over 352 scenarios; slowest: boot-endpoints-still-down 12m15s, one-hpa-bad-target 11m15s, metrics-blip-long 11m15s, node-join-never-ready 10m15s, disk-hog-moves-nodes 8m20s. Never stated: crash-loop-for-hours, coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
 
 ## Scenarios
 
@@ -851,6 +851,7 @@ Time to first correct root: p95 5m0s, max 12m15s over 351 scenarios; slowest: bo
 | claim-stuck-deleting | `persistentvolumeclaim/shop/data` | `persistentvolumeclaim/shop/data (no cause)` | none | notify/notify | 1 (2) | pass |
 | lease-holder-crash-loops | `deployment/kube-system/ccm` | `deployment/kube-system/ccm` | high 0.80 | notify/notify | 2 (2) | pass |
 | lease-holder-gone | quiet | - | - | -/- | 0 (0) | pass |
+| lease-taken-once-healthy-holder | quiet | - | - | -/- | 0 (0) | pass |
 | cronjob-blocked-by-stuck-run | `cronjob/reports/nightly-report` | `cronjob/reports/nightly-report (no cause)` | none | notify/notify | 1 (2) | pass |
 | pod-terminating-node-lost | `node//n1` | `node//n1` | high 0.95 | page/page | 2 (2) | pass |
 | finalizer-controller-scaled-down | `deployment/widget-system/widget-controller` | `deployment/widget-system/widget-controller` | high 0.75 | digest/digest | 0 (2) | pass |
@@ -924,6 +925,8 @@ Time to first correct root: p95 5m0s, max 12m15s over 351 scenarios; slowest: bo
 | daemonset-misscheduled-stays | `daemonset/monitoring/agent` | `daemonset/monitoring/agent (no cause)` | none | digest/digest | 1 (2) | pass |
 | custom-task-succeeded-false | `taskrun.tekton.example.com/ci/build-image` | `taskrun.tekton.example.com/ci/build-image (no cause)` | none | notify/notify | 1 (2) | pass |
 | custom-controller-failed-events | `order.acme.example.com/infra/web-tls` | `order.acme.example.com/infra/web-tls (no cause)` | none | digest/digest | 2 (2) | pass |
+| custom-healthy-warning-stream | quiet | - | - | -/- | 0 (0) | pass |
+| custom-warnings-then-recovery | `order.acme.example.com/infra/web-tls` | `order.acme.example.com/infra/web-tls (no cause)` | none | digest/digest | 0 (2) | pass |
 | namespace-outage-with-services | `deployment/shop/app0`, `deployment/shop/app1`, `deployment/shop/app2`, `deployment/shop/app3`, `deployment/shop/app4`, `deployment/shop/app5` | `deployment/shop/app0`, `deployment/shop/app1`, `deployment/shop/app2`, `deployment/shop/app3`, `deployment/shop/app4`, `deployment/shop/app5` | likely 0.55 | notify/notify | 1 (2) | pass |
 | namespace-outage-pages-once | `deployment/shop/app0`, `deployment/shop/app1`, `deployment/shop/app2`, `deployment/shop/app3`, `deployment/shop/app4`, `deployment/shop/app5` | `deployment/shop/app0`, `deployment/shop/app1`, `deployment/shop/app2`, `deployment/shop/app3`, `deployment/shop/app4`, `deployment/shop/app5` | likely 0.55 | page/page | 9 (10) | pass |
 | two-teams-two-pages | `deployment/billing/api`, `deployment/shop/api` | `deployment/billing/api (no cause)`, `deployment/shop/api (no cause)` | none | page/page | 3 (4) | pass |

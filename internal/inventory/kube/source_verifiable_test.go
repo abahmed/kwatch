@@ -44,6 +44,10 @@ func (f fakeDynamicKinds) KindState(kind inventory.Kind) (KindState, bool) {
 	return state, ok
 }
 
+func (f fakeDynamicKinds) ObjectRefused(id inventory.EntityID) bool {
+	return id.Name == "refused"
+}
+
 func TestSourceAsksDynamicKindsForUntypedKinds(t *testing.T) {
 	s := &Source{
 		synced: map[inventory.Kind]cache.InformerSynced{

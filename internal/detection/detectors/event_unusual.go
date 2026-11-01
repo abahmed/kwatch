@@ -7,6 +7,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
 // unusualEventMin is how many times a Warning event kwatch has no
@@ -23,6 +24,13 @@ const unusualEventMin = 3
 func unusualEvents(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
+	custom := flag(e, kube.AttrCustom)
+	if _, healthy := readySince(e); custom && healthy {
+		// Operators write Warnings about what they process onto their
+		// own object. A resource that reports itself healthy is not what
+		// is wrong, however many there are.
+		return nil
+	}
 	var order []string
 	byReason := map[string]*eventGroup{}
 	// recurred marks a reason seen again in a later quarter hour than
@@ -30,11 +38,12 @@ func unusualEvents(
 	// came as a fresh Event with a count of one (the model keeps one
 	// note per source and reason, so such counts do not add up). A
 	// failure that recurs after its first finding cleared is reported
-	// again this way.
+	// again this way. A custom resource needs unusualEventMin in the
+	// window: controllers there write one fresh event per item.
 	recurred := map[string]bool{}
 	for _, note := range ctx.Model.Notes(e.ID, ctx.Now.Add(-EventWindow)) {
 		if !note.Warning || knownEvent(note.Reason, e.ID.Kind) ||
-			quotedByService(e, note.Reason) {
+			quotedByService(e, note.Reason) || recoveredBefore(e, note) {
 			continue
 		}
 		// The window includes a note exactly EventWindow old, so the
@@ -49,7 +58,7 @@ func unusualEvents(
 			order = append(order, note.Reason)
 		}
 		group.add(note, detection.Info)
-		if note.At.Sub(note.FirstSeen) > EventWindow {
+		if !custom && note.At.Sub(note.FirstSeen) > EventWindow {
 			recurred[note.Reason] = true
 		}
 	}

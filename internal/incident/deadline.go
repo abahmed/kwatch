@@ -137,5 +137,11 @@ func earliest(a, b time.Time) time.Time {
 func (m *Manager) graceDeadline(
 	p *Incident, now time.Time,
 ) (time.Time, bool) {
-	return m.restoreGrace, m.inGrace(p, now)
+	if m.inGrace(p, now) {
+		return m.restoreGrace, true
+	}
+	if p.heldForData {
+		return now.Add(heldRecheck), true
+	}
+	return time.Time{}, false
 }
