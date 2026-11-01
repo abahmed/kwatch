@@ -1,337 +1,127 @@
 name: E2E
 
-# Real-cluster validation in disposable Kind clusters:
-#   - scenarios: the semantic regression suite from source manifests
-#     (test/e2e), optionally comparing a reported ref with main;
-#   - operational: the Helm production smoke test (install, RBAC, Lease
-#     handover, restart, upgrade, rollback, control-plane node restart)
-#     across the RBAC and Secret-watching chart modes.
-#
-# Runs nightly on main, on demand, and on pull requests labelled `e2e`.
-# Pull-request runs use the pull_request event, so a fork receives no
-# secrets and a read-only token.
-#
-# The release workflow requires a successful "E2E full" run on the commit it
-# tags; run-name marks filtered and compare runs so they never satisfy it.
-run-name: >-
-  ${{ github.event_name == 'pull_request' && 'E2E (pull request)'
-  || inputs.compare_with_main && 'E2E compare'
-  || (inputs.scenario != '' || inputs.family != '' || inputs.shard != ''
-  || (inputs.suite != '' && inputs.suite != 'all')) && 'E2E filtered'
-  || 'E2E full' }}
+# One-off real-install check. Lives only on a throwaway branch: it borrows
+# this file name because a dispatchable workflow must already exist on the
+# default branch. No secrets.
+run-name: Real install check
 
 on:
-  schedule:
-    - cron: "23 2 * * *"
-  pull_request:
-    branches: [ main ]
-    types: [ labeled, opened, synchronize, reopened ]
   workflow_dispatch:
-    inputs:
-      suite:
-        description: "Which suites to run"
-        required: false
-        default: all
-        type: choice
-        options:
-          - all
-          - scenarios
-          - operational
-      scenario:
-        description: "Optional scenario test regex (not with family)"
-        required: false
-        default: ""
-        type: string
-      family:
-        description: >-
-          Optional scenario family from test/e2e/coverage/coverage.yaml
-          (not with scenario)
-        required: false
-        default: ""
-        type: string
-      shard:
-        description: "Optional shard value"
-        required: false
-        default: ""
-        type: string
-      keep_cluster:
-        description: "Keep the Kind cluster after failure"
-        required: false
-        default: false
-        type: boolean
-      suite_timeout:
-        description: "Maximum Go test duration"
-        required: false
-        default: "60m"
-        type: string
-      reported_ref:
-        description: "Release tag or commit to compare with main"
-        required: false
-        default: ""
-        type: string
-      reported_version:
-        description: "Optional human-readable reported Kwatch version"
-        required: false
-        default: ""
-        type: string
-      compare_with_main:
-        description: >-
-          Run the reported ref and latest main in separate Kind clusters
-        required: false
-        default: false
-        type: boolean
-      load_count:
-        description: "Disposable Pods used by the operational event burst"
-        required: false
-        default: "50"
-        type: string
 
 permissions:
   contents: read
 
-# A new push to a pull request cancels the older run of that push. Label
-# events get their own group and never cancel anything: adding an unrelated
-# label to a pull request must not kill an in-flight run.
-concurrency:
-  group: e2e-${{ github.event_name }}-${{ github.event.action }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'labeled' }}
-
 env:
-  KIND_VERSION: v0.30.0
+  KYVERNO_CHART: "3.9.2"
+  ESO_CHART: "2.14.0"
 
 jobs:
-  # The images are built once here and loaded by every job below, instead of
-  # being rebuilt in each of them. Compare mode builds its own images from
-  # two different sources, so it does not use them.
-  build:
-    name: Build e2e images
-    if: >-
-      (github.event_name != 'pull_request'
-      || contains(github.event.pull_request.labels.*.name, 'e2e'))
-      && !inputs.compare_with_main
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    permissions:
-      contents: read
+  real-install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
         with:
-          persist-credentials: false
-
-      - name: Build and save images
-        run: ./scripts/build-e2e-images.sh "${RUNNER_TEMP}/e2e-images.tar.gz"
-
-      - name: Upload images
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: kwatch-e2e-images-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/e2e-images.tar.gz
-          retention-days: 1
-          compression-level: 0
-          if-no-files-found: error
-
-  scenarios:
-    needs: build
-    name: >-
-      Kind regression scenarios${{ matrix.shard != '' && format(' ({0})', matrix.shard) || '' }}
-    if: >-
-      !cancelled() && (needs.build.result == 'success'
-      || inputs.compare_with_main)
-      && (github.event_name != 'pull_request'
-      || contains(github.event.pull_request.labels.*.name, 'e2e'))
-      && (github.event_name != 'workflow_dispatch'
-      || inputs.suite == 'all' || inputs.suite == 'scenarios')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 150
-    permissions:
-      contents: read
-    # The full suite is split over ten Kind clusters that run in parallel.
-    # The shard count is only this list: scenarios are dealt to shards by
-    # test/e2e/scenarios/sharding_test.go, so any count works. The slowest
-    # scenarios (the ten-minute PDB one and the cluster DNS outage) get a
-    # cluster each. Extra clusters are free on a public repository, but a
-    # run should stay under the 20 concurrent jobs GitHub allows. A
-    # filtered or compare run keeps one cluster, since its own filter
-    # already picks the scenarios.
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: >-
-          ${{ fromJSON(
-          (inputs.scenario != '' || inputs.family != '' || inputs.shard != ''
-          || inputs.compare_with_main) && '[""]'
-          || '["1/10","2/10","3/10","4/10","5/10","6/10","7/10","8/10","9/10","10/10"]') }}
-    env:
-      SOURCE_REF: >-
-        ${{ inputs.compare_with_main && 'main' || github.ref_name }}
-    steps:
-      - name: Validate inputs
-        env:
-          SCENARIO: ${{ inputs.scenario }}
-          FAMILY: ${{ inputs.family }}
-          COMPARE_WITH_MAIN: ${{ inputs.compare_with_main }}
-          REPORTED_REF: ${{ inputs.reported_ref }}
+          cluster_name: real
+      - name: Install Kyverno and External Secrets
         run: |
-          set -euo pipefail
-          if [ -n "$SCENARIO" ] && [ -n "$FAMILY" ]; then
-            echo "::error::set either scenario or family, not both"
-            exit 2
-          fi
-          if [ "$COMPARE_WITH_MAIN" = true ] && [ -z "$REPORTED_REF" ]; then
-            echo "::error::reported_ref is required in compare mode"
-            exit 2
-          fi
-
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ inputs.compare_with_main && 'main' || '' }}
-          # Compare mode fetches the reported ref itself.
-          fetch-depth: ${{ inputs.compare_with_main && '0' || '1' }}
-          persist-credentials: false
-
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-
-      # go install verifies the module against the Go checksum database, so
-      # the kind binary is authenticated without a hand-maintained hash.
-      - name: Install Kind
+          helm repo add kyverno https://kyverno.github.io/kyverno/
+          helm repo add external-secrets https://charts.external-secrets.io
+          helm repo update
+          helm search repo kyverno/kyverno --versions | head -5
+          helm search repo external-secrets/external-secrets --versions | head -5
+          helm install kyverno kyverno/kyverno --version "$KYVERNO_CHART" -n kyverno --create-namespace \
+            --wait --timeout 8m
+          helm install eso external-secrets/external-secrets --version "$ESO_CHART" \
+            -n external-secrets --create-namespace --wait --timeout 8m
+          helm list -A
+      - name: Build and install kwatch
         run: |
-          set -euo pipefail
-          go install "sigs.k8s.io/kind@${KIND_VERSION}"
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
-          "$(go env GOPATH)/bin/kind" version
-
-      - name: Resolve source commit
+          docker build -t kwatch:real --build-arg GO_BUILD_TAGS=licensetest .
+          kind load docker-image kwatch:real --name real
+          python3 - <<'E'
+          import re
+          s=open("deploy/deploy.yaml").read()
+          s=re.sub(r"image: \S*kwatch\S*", "image: kwatch:real", s)
+          open("/tmp/deploy.yaml","w").write(s)
+          E
+          kubectl apply -f deploy/crd.yaml || true
+          kubectl apply -f /tmp/deploy.yaml
+          kubectl -n kwatch create secret generic kwatch \
+            --from-literal=config.yaml="$(printf 'healthCheck:\n  enabled: true\n  statusEndpoint: true\n')" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n kwatch rollout restart deployment
+          sleep 90
+          kubectl -n kwatch get pods -o wide
+      - name: Create the workload
         run: |
-          set -euo pipefail
-          SOURCE_SHA="$(git rev-parse HEAD)"
-          test -n "$SOURCE_SHA"
-          {
-            echo "SOURCE_SHA=$SOURCE_SHA"
-            echo "REQUESTED_REF=$SOURCE_REF"
-          } >> "$GITHUB_ENV"
-          {
-            echo "requested_ref=$SOURCE_REF"
-            echo "resolved_sha=$SOURCE_SHA"
-          } > "${RUNNER_TEMP}/kwatch-source.txt"
-
-      - name: Download e2e images
-        if: ${{ !inputs.compare_with_main }}
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: kwatch-e2e-images-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/e2e-images
-
-      - name: Run Kind scenarios
-        env:
-          KWATCH_PREBUILT_IMAGES: "${{ !inputs.compare_with_main }}"
-          # The script loads the images while the Kind cluster is created.
-          KWATCH_IMAGES_ARCHIVE: >-
-            ${{ !inputs.compare_with_main
-            && format('{0}/e2e-images/e2e-images.tar.gz', runner.temp)
-            || '' }}
-          ARTIFACTS: "${{ runner.temp }}/kwatch-e2e"
-          KIND_CLUSTER_NAME: "kwatch-e2e-${{ github.run_id }}"
-          KEEP_CLUSTER: "${{ inputs.keep_cluster || false }}"
-          SCENARIO_REGEX: "${{ inputs.scenario }}"
-          SCENARIO_FAMILY: "${{ inputs.family }}"
-          SCENARIO_SHARD: "${{ inputs.shard || matrix.shard }}"
-          SUITE_TIMEOUT: "${{ inputs.suite_timeout || '60m' }}"
-          # A run filtered to some scenarios is a debugging run: log every
-          # finding and incident membership change.
-          KWATCH_VERBOSITY: "${{ inputs.scenario != '' && '4' || '' }}"
-          KWATCH_E2E_RUN_KNOWN_GAPS: "${{ inputs.scenario != '' }}"
-          REPORTED_REF: "${{ inputs.reported_ref }}"
-          REPORTED_VERSION: "${{ inputs.reported_version }}"
-          COMPARE_WITH_MAIN: "${{ inputs.compare_with_main || false }}"
+          kubectl create namespace demo
+          kubectl -n demo create secret generic store-token --from-literal=token=t
+          kubectl apply -f - <<'E'
+          apiVersion: kyverno.io/v1
+          kind: ClusterPolicy
+          metadata: {name: require-team}
+          spec:
+            validationFailureAction: Audit
+            background: true
+            rules:
+              - name: team-label
+                match: {any: [{resources: {kinds: [Pod]}}]}
+                validate:
+                  message: team label is required
+                  pattern: {metadata: {labels: {team: "?*"}}}
+          ---
+          apiVersion: external-secrets.io/v1
+          kind: ClusterSecretStore
+          metadata: {name: fake}
+          spec:
+            provider:
+              fake:
+                data:
+                  - {key: present, value: hello}
+          ---
+          apiVersion: external-secrets.io/v1
+          kind: ExternalSecret
+          metadata: {name: flaky, namespace: demo}
+          spec:
+            refreshInterval: 30s
+            secretStoreRef: {name: fake, kind: ClusterSecretStore}
+            target: {name: flaky}
+            data:
+              - secretKey: v
+                remoteRef: {key: late}
+          E
+          kubectl -n demo run unlabelled --image=registry.k8s.io/pause:3.10
+      - name: Let it fail, then fix it
         run: |
-          set -euo pipefail
-          if [ "$COMPARE_WITH_MAIN" = true ]; then
-            ./scripts/test-kind-scenarios-compare.sh
-          else
-            ./scripts/test-kind-scenarios.sh
-          fi
-
-      - name: Upload scenario diagnostics
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: kwatch-e2e-${{ github.run_id }}-${{ strategy.job-index }}
-          path: |
-            ${{ runner.temp }}/kwatch-e2e
-            ${{ runner.temp }}/kwatch-source.txt
-          if-no-files-found: warn
-
-  operational:
-    needs: build
-    name: Operational smoke (${{ matrix.rbac }}, secrets=${{ matrix.secrets }})
-    if: >-
-      (github.event_name != 'pull_request'
-      || contains(github.event.pull_request.labels.*.name, 'e2e'))
-      && (github.event_name != 'workflow_dispatch'
-      || ((inputs.suite == 'all' || inputs.suite == 'operational')
-      && !inputs.compare_with_main))
-    runs-on: ubuntu-24.04
-    timeout-minutes: 40
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        rbac: [ full, least-privilege ]
-        secrets: [ true, false ]
-    env:
-      # One name for the cluster kind-action creates and the script loads
-      # the image into.
-      KIND_CLUSTER_NAME: kwatch-ops
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-
-      - name: Install Helm
-        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
-
-      - name: Create disposable Kubernetes cluster
-        uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
-        with:
-          cluster_name: ${{ env.KIND_CLUSTER_NAME }}
-
-      # The scenarios' Kwatch image, which the smoke test only needs under
-      # another name.
-      - name: Download e2e images
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: kwatch-e2e-images-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/e2e-images
-
-      - name: Tag image
-        run: |
-          set -euo pipefail
-          docker load --input "${RUNNER_TEMP}/e2e-images/e2e-images.tar.gz"
-          docker tag "kwatch:e2e-$(git rev-parse HEAD)" kwatch:ci
-
-      - name: Run production smoke test
-        env:
-          KWATCH_LOAD_COUNT: ${{ inputs.load_count || '50' }}
-          KWATCH_RBAC_MODE: ${{ matrix.rbac }}
-          KWATCH_WATCH_SECRETS: ${{ matrix.secrets }}
-        run: ./scripts/test-kind-production.sh
-
-      # The dashboard as the chart installs it: password sign-in, the
-      # session cookie on /api/*, and shared mode refusing plain http.
-      # One matrix cell is enough; it does not depend on RBAC or Secrets.
-      - name: Run dashboard test
-        if: matrix.rbac == 'full' && matrix.secrets
-        run: ./scripts/test-kind-dashboard.sh
-
-      - name: Collect cluster diagnostics
+          mkdir -p out
+          sleep 420
+          kubectl get clusterpolicy require-team -o yaml > out/clusterpolicy-failing-phase.yaml
+          kubectl -n demo get externalsecret flaky -o yaml > out/externalsecret-failing.yaml
+          kubectl get pods -n kwatch -o name | head -1 | xargs -I{} kubectl -n kwatch port-forward {} 8060:8060 &
+          sleep 5; curl -s localhost:8060/status > out/status-failing.json || true
+          kubectl patch clustersecretstore fake --type=json -p \
+            '[{"op":"add","path":"/spec/provider/fake/data/-","value":{"key":"late","value":"now"}}]'
+          sleep 600
+          curl -s localhost:8060/status > out/status-after.json || true
+      - name: Collect
         if: always()
         run: |
-          kubectl get pods --all-namespaces -o wide || true
-          kubectl get events --all-namespaces --sort-by=.lastTimestamp || true
+          mkdir -p out
+          kubectl get clusterpolicy -o yaml > out/clusterpolicy.yaml || true
+          kubectl get externalsecret -A -o yaml > out/externalsecret.yaml || true
+          kubectl get clustersecretstore -o yaml > out/secretstore.yaml || true
+          kubectl get events -A --field-selector type=Warning -o wide > out/warnings.txt || true
+          kubectl get policyreport,ephemeralreport -A > out/reports.txt 2>&1 || true
+          kubectl get pods -A > out/pods.txt
+          kubectl -n kwatch logs -l app.kubernetes.io/name=kwatch --tail=-1 > out/kwatch.log 2>&1 || true
+          kubectl -n kwatch logs deploy/kwatch --tail=-1 >> out/kwatch.log 2>&1 || true
+          kubectl -n kwatch logs sts/kwatch --tail=-1 >> out/kwatch.log 2>&1 || true
+          grep -E 'incident (opened|resolved)' out/kwatch.log > out/incidents.txt || true
+          cat out/incidents.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: real-install
+          path: out
