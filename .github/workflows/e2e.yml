@@ -51,7 +51,7 @@ jobs:
           kubectl -n kwatch create secret generic kwatch \
             --from-literal=config.yaml="$(printf 'healthCheck:\n  enabled: true\n  statusEndpoint: true\n')" \
             --dry-run=client -o yaml | kubectl apply -f -
-          kubectl -n kwatch rollout restart deployment
+          kubectl -n kwatch set env deployment/kwatch KWATCH_EDITION_OVERRIDE=pro
           sleep 90
           kubectl -n kwatch get pods -o wide
       - name: Create the workload
