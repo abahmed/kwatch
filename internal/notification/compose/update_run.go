@@ -25,13 +25,14 @@ func lastRunSentence(
 	if len(g.ids) != 1 || len(g.states) != 1 || !runOf(home, g.ids[0]) {
 		return "", false
 	}
+	why, failing := strings.CutPrefix(g.states[0], "is failing: ")
+	if !failing {
+		return "", false
+	}
 	text := "Its last run, "
 	if !named {
 		text = "The last run of " + homeName + ", "
 	}
-	text += nameList(home, g.ids) + ", failed"
-	if why, ok := strings.CutPrefix(g.states[0], "is failing: "); ok {
-		text += ": " + why
-	}
+	text += nameList(home, g.ids) + ", failed: " + why
 	return endSentence(text), true
 }
