@@ -1199,8 +1199,9 @@
 
 ### Helm chart
 
-- The memory request is 256Mi (the limit stays 512Mi), and the pod has a
-  `startupProbe`.
+- The pod has a `startupProbe`. The memory request stays 128Mi (limit 512Mi),
+  so upgrades with an older 128Mi limit keep working; set it to 256Mi or more
+  on large clusters.
 
 - Changing the dashboard password restarts the pod.
 
@@ -1225,8 +1226,6 @@
 
 - **New state buckets.** `trails` and `usage` are added to an existing state
   file when kwatch opens it; there is nothing to migrate.
-
-- **Memory request.** The chart's memory request is now 256Mi.
 
 - **Removed alert reasons.** A rule that names one of the removed reasons still
   loads and matches nothing; `kwatch lint` now warns, and `--strict` fails.

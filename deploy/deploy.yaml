@@ -367,7 +367,7 @@ spec:
             memory: "512Mi"
             cpu: "500m"
           requests:
-            memory: "256Mi"
+            memory: "128Mi"
             cpu: "100m"
       volumes:
       - name: config-volume

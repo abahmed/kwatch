@@ -337,7 +337,7 @@
                 "string",
                 "number"
               ],
-              "default": "256Mi"
+              "default": "128Mi"
             },
             "cpu": {
               "type": [

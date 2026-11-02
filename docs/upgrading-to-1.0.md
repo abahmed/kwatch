@@ -20,7 +20,7 @@ candidates, so they do not affect a v0.10.x install.
 | Credentials | Inline in the config | `${file:/absolute/path}` references only |
 | Endpoints | `/healthz`, `/health` | Adds `/readyz`, `/availabilityz`, `/metrics` (Pro) and an opt-in `/status` (Pro) |
 | RBAC | One ClusterRole | Broader read access, Roles for the Lease, restart evidence and `kwatchconfigs` |
-| Memory | 128Mi limit | 256Mi request, 512Mi limit, `GOMEMLIMIT` at 90% of it |
+| Memory | 128Mi limit | 128Mi request, 512Mi limit, `GOMEMLIMIT` at 90% of it |
 | Custom config | None | `KwatchConfig` resource (`kwatch.abahmed.dev/v1beta1`) |
 | Editions | One feature set | Community (free, no key) and Pro; a v0.10.x install lands on **Community**, see [Editions](#editions) |
 
@@ -290,7 +290,7 @@ your file with `values.yaml` before upgrading.
 | --- | --- |
 | `service.port` | Removed. The container and probe port come from `config.healthCheck.port` |
 | `image.pullPolicy` | Default is now `IfNotPresent` (was `Always`) |
-| `resources` | Limits are now 512Mi memory and 500m CPU; requests 256Mi and 100m. Raising memory above the default is covered by the sizing table in [production operations](./production-operations.md) |
+| `resources` | Limits are now 512Mi memory and 500m CPU; requests 128Mi and 100m (set the memory request to 256Mi or more on large clusters). Raising memory above the default is covered by the sizing table in [production operations](./production-operations.md) |
 | `config.alert.*` | Needs `configSecretName`; the Secret's `config.yaml` replaces `.Values.config` |
 | `persistence.*` | New: `size`, `storageClass`, `existingClaim`, `emptyDir`, `emptyDirSizeLimit`, `pinToStorageDriverNodes`, `storageDriverTopologyKey`. `emptyDir` and `existingClaim` cannot both be set |
 | `rbac.mode`, `watch.secrets` | New. See [RBAC and the CRD](#rbac-and-the-crd) |

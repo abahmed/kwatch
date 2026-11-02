@@ -131,13 +131,15 @@ networkPolicy:
 # kill the Pod. Live heap is about 26 KB per pod: 140 MiB at 5,000 pods and
 # 520 MiB at 20,000. The default 512Mi suits up to about 8,000 pods; use
 # 768Mi at 10,000 pods and 1Gi at 20,000 (raise the request with the limit).
+# The request stays 128Mi so upgrades with an older 128Mi limit still work;
+# set it to 256Mi or more on large clusters so the node keeps room for kwatch.
 # See docs/production-operations.md, section Memory.
 resources:
   limits:
     memory: 512Mi
     cpu: 500m
   requests:
-    memory: 256Mi
+    memory: 128Mi
     cpu: 100m
 
 # -- State store volume. Kwatch keeps incidents, changes,
