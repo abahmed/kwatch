@@ -1,12 +1,9 @@
 10:01:15 settled
-🟠 Validating webhook policy-cleanup (prod-eu-1) is failing because service policy-svc in policy-gone does not exist. Five failing workloads all depend on it. It fails closed (failurePolicy Fail); no request has been rejected so far.
-Also grouped: 4 webhook alerts
-To see the object's state and events, run kubectl describe validatingwebhookconfiguration policy-cleanup
+🟠 Validating webhook policy-cleanup (prod-eu-1) is failing because service policy-svc in policy-gone does not exist. Five failing workloads all depend on it. It fails closed (failurePolicy Fail); no request has been rejected so far. To see the object's state and events, run kubectl describe validatingwebhookconfiguration policy-cleanup
 🟠 Validating webhook policy-cleanup (prod-eu-1) is failing because service policy-svc in policy-gone does not exist.
 | 🟠 Validating webhook **policy-cleanup** (**prod-eu-1**) is failing because service **policy-svc** in **policy-gone** does not exist.
 | Five failing workloads all depend on it.
 | It fails closed (failurePolicy Fail); no request has been rejected so far.
-| Also grouped: 4 webhook alerts
 | To see the object's state and events, run
 | ```
 | kubectl describe validatingwebhookconfiguration policy-cleanup

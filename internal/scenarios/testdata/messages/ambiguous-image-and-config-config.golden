@@ -1,13 +1,10 @@
 10:12:25 settled
-🟠 checkout is failing in shop (prod-eu-1) after the 10:10 UTC change to config map checkout-config. bob changed key tax. It fails with "panic: strconv.ParseInt: parsing "0.14": invalid syntax at config.Load".
-Also grouped: 1 crash loop
-To check the object the pods depend on, run kubectl get configmap checkout-config -n shop -o yaml
+🟠 checkout is failing in shop (prod-eu-1) after the 10:10 UTC change to config map checkout-config. bob changed key tax. It fails with "panic: strconv.ParseInt: parsing "0.14": invalid syntax at config.Load". To check the object the pods depend on, run kubectl get configmap checkout-config -n shop -o yaml
 Checked: both replicas fail, on 2 nodes.
 🟠 checkout is failing in shop (prod-eu-1) after the 10:10 UTC change to config map checkout-config.
 | 🟠 **checkout** is failing in **shop** (**prod-eu-1**) after the 10:10 UTC change to config map **checkout-config**.
 | bob changed key tax.
 | It fails with `panic: strconv.ParseInt: parsing "0.14": invalid syntax at config.Load`.
-| Also grouped: 1 crash loop
 | To check the object the pods depend on, run
 | ```
 | kubectl get configmap checkout-config -n shop -o yaml

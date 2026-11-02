@@ -1,7 +1,5 @@
 10:02:15 settled
-🟠 redis in shop (prod-eu-1) keeps crashing. api fails calling service redis with "dial tcp redis:6379: connect: connection refused", and the service has had no ready endpoints since 10:01 UTC. It fails with "FATAL: cannot open the append only file: No space left on device". Every error mentions it. Service redis can't serve traffic. It runs a single replica. api is affected as well.
-Also grouped: 2 crash loops, 1 no endpoints alert
-To read the output of the last crash, run kubectl logs redis-83b624aa-a -c app -n shop --previous
+🟠 redis in shop (prod-eu-1) keeps crashing. api fails calling service redis with "dial tcp redis:6379: connect: connection refused", and the service has had no ready endpoints since 10:01 UTC. It fails with "FATAL: cannot open the append only file: No space left on device". Every error mentions it. Service redis can't serve traffic. It runs a single replica. api is affected as well. To read the output of the last crash, run kubectl logs redis-83b624aa-a -c app -n shop --previous
 🟠 redis in shop (prod-eu-1) keeps crashing.
 | 🟠 **redis** in **shop** (**prod-eu-1**) keeps crashing.
 | **api** fails calling service **redis** with `dial tcp redis:6379: connect: connection refused`, and the service has had no ready endpoints since 10:01 UTC.
@@ -9,7 +7,6 @@ To read the output of the last crash, run kubectl logs redis-83b624aa-a -c app -
 | Service **redis** can't serve traffic.
 | It runs a single replica.
 | **api** is affected as well.
-| Also grouped: 2 crash loops, 1 no endpoints alert
 | To read the output of the last crash, run
 | ```
 | kubectl logs redis-83b624aa-a -c app -n shop --previous

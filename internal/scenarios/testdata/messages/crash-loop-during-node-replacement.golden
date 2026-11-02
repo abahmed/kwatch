@@ -43,9 +43,7 @@
 | 🟡 **kwatch digest** · prod-eu-1 — 1 resolved
 | ✅ 1 resolved since last digest: warehouse
 10:11:00 material change
-🟠 warehouse in data (prod-eu-1) is failing: aborted with SIGABRT (exit code 134) and is restarting. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. That is unusual for this workload: restarts 8×/h vs a usual 60×/h; restarts 10×/h vs a usual 60×/h. It fails with "FileNotFoundException: Could not load file or assembly 'Trella.Models.Common, Version=3.1.120.0'". This is the fourth time this week. Last time it recovered on its own.
-Also grouped: 1 unavailable alert
-To read the output of the last crash, run kubectl logs warehouse-c1f19d7b-b -c app -n data --previous
+🟠 warehouse in data (prod-eu-1) is failing: aborted with SIGABRT (exit code 134) and is restarting. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. That is unusual for this workload: restarts 8×/h vs a usual 60×/h; restarts 10×/h vs a usual 60×/h. It fails with "FileNotFoundException: Could not load file or assembly 'Trella.Models.Common, Version=3.1.120.0'". This is the fourth time this week. Last time it recovered on its own. To read the output of the last crash, run kubectl logs warehouse-c1f19d7b-b -c app -n data --previous
 🟠 warehouse in data (prod-eu-1) is failing: aborted with SIGABRT (exit code 134) and is restarting.
 | 🟠 **warehouse** in **data** (**prod-eu-1**) is failing: aborted with SIGABRT (exit code 134) and is restarting.
 | Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
@@ -55,7 +53,6 @@ To read the output of the last crash, run kubectl logs warehouse-c1f19d7b-b -c a
 | FileNotFoundException: Could not load file or assembly 'Trella.Models.Common, Version=3.1.120.0'
 | ```
 | This is the fourth time this week. Last time it recovered on its own.
-| Also grouped: 1 unavailable alert
 | To read the output of the last crash, run
 | ```
 | kubectl logs warehouse-c1f19d7b-b -c app -n data --previous

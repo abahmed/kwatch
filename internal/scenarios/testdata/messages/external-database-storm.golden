@@ -1,14 +1,11 @@
 10:04:15 settled
-🟠 exporter in billing (prod-eu-1) keeps crashing because external endpoint db.example.com:5432 refuses connections. It fails with "dial tcp db.example.com:5432: connect: connection refused". Every error mentions it. Six failing workloads all depend on it. invoicer and ledger in billing; api in orders; and two others are affected as well.
-Also grouped: 11 crash loops
-To read the output of the last crash, run kubectl logs exporter-69070cef-a -c app -n billing --previous
+🟠 exporter in billing (prod-eu-1) keeps crashing because external endpoint db.example.com:5432 refuses connections. It fails with "dial tcp db.example.com:5432: connect: connection refused". Every error mentions it. Six failing workloads all depend on it. invoicer and ledger in billing; api in orders; and two others are affected as well. To read the output of the last crash, run kubectl logs exporter-69070cef-a -c app -n billing --previous
 Checked: both replicas fail, on 2 nodes (exporter); both replicas fail, on 2 nodes (invoicer); both replicas fail, on 2 nodes (ledger).
 🟠 exporter in billing (prod-eu-1) keeps crashing because external endpoint db.example.com:5432 refuses connections.
 | 🟠 **exporter** in **billing** (**prod-eu-1**) keeps crashing because external endpoint **db.example.com:5432** refuses connections.
 | It fails with `dial tcp db.example.com:5432: connect: connection refused`. Every error mentions it.
 | Six failing workloads all depend on it.
 | **invoicer** and **ledger** in **billing**; **api** in **orders**; and two others are affected as well.
-| Also grouped: 11 crash loops
 | To read the output of the last crash, run
 | ```
 | kubectl logs exporter-69070cef-a -c app -n billing --previous

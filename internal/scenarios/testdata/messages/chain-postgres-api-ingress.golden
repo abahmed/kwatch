@@ -1,6 +1,6 @@
 10:11:05 settled
 🔴 postgres in shop (prod-eu-1) keeps running out of memory because its memory limit is too low for normal use. It was killed within 10 seconds of starting. Services api and postgres can't serve traffic. Its containers have no memory limit, so nothing caps their memory use. It runs a single replica.
-Also grouped: 2 no endpoints alerts
+Also grouped: 2 services without endpoints
 To read the output of the last crash, run kubectl logs postgres-1ff9723b-a -c app -n shop --previous
 Chain: postgres (10:09 UTC) → api (10:10 UTC) → service api (10:10 UTC).
 🔴 postgres in shop (prod-eu-1) keeps running out of memory because its memory limit is too low for normal use.
@@ -9,7 +9,7 @@ Chain: postgres (10:09 UTC) → api (10:10 UTC) → service api (10:10 UTC).
 | Services **api** and **postgres** can't serve traffic.
 | Its containers have no memory limit, so nothing caps their memory use.
 | It runs a single replica.
-| Also grouped: 2 no endpoints alerts
+| Also grouped: 2 services without endpoints
 | To read the output of the last crash, run
 | ```
 | kubectl logs postgres-1ff9723b-a -c app -n shop --previous

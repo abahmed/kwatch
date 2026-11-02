@@ -37,13 +37,13 @@
 | It was failing for 11 minutes.
 08:36:00 material change
 🟠 cert-controller in external-secrets (prod-eu-1) has pods that run without restarting but are not ready. It runs a single replica. This is the third time this week. Last time it recovered on its own.
-Also grouped: 1 probe failure, 1 unavailable alert
+Also grouped: 1 probe failure, 1 unavailable workload
 To see the object's state and events, run kubectl describe deployment cert-controller -n external-secrets
 🟠 cert-controller in external-secrets (prod-eu-1) has pods that run without restarting but are not ready.
 | 🟠 **cert-controller** in **external-secrets** (**prod-eu-1**) has pods that run without restarting but are not ready.
 | It runs a single replica.
 | This is the third time this week. Last time it recovered on its own.
-| Also grouped: 1 probe failure, 1 unavailable alert
+| Also grouped: 1 probe failure, 1 unavailable workload
 | To see the object's state and events, run
 | ```
 | kubectl describe deployment cert-controller -n external-secrets

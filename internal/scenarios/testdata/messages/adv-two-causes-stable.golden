@@ -1,13 +1,10 @@
 10:04:15 settled
-🟠 checkout in shop (prod-eu-1) keeps crashing; two possible causes: config map checkout-flags changed shortly before or secret checkout-keys changed shortly before. Key FLAG_NEW_TAX changed. It fails with "fatal: initialization failed (exit 1)".
-Also grouped: 1 crash loop
-To check the object the pods depend on, run kubectl get configmap checkout-flags -n shop -o yaml
+🟠 checkout in shop (prod-eu-1) keeps crashing; two possible causes: config map checkout-flags changed shortly before or secret checkout-keys changed shortly before. Key FLAG_NEW_TAX changed. It fails with "fatal: initialization failed (exit 1)". To check the object the pods depend on, run kubectl get configmap checkout-flags -n shop -o yaml
 Checked: both replicas fail, on 2 nodes.
 🟠 checkout in shop (prod-eu-1) keeps crashing; two possible causes: config map checkout-flags changed shortly before or secret checkout-keys changed shortly before.
 | 🟠 **checkout** in **shop** (**prod-eu-1**) keeps crashing; two possible causes: config map **checkout-flags** changed shortly before or secret checkout-keys changed shortly before.
 | Key FLAG\_NEW\_TAX changed.
 | It fails with `fatal: initialization failed (exit 1)`.
-| Also grouped: 1 crash loop
 | To check the object the pods depend on, run
 | ```
 | kubectl get configmap checkout-flags -n shop -o yaml

@@ -33,14 +33,38 @@ var (
 	labelSchedule = groupedLabel{"scheduling failure", "scheduling failures"}
 	labelPull     = groupedLabel{"image pull failure", "image pull failures"}
 	labelNode     = groupedLabel{"node problem", "node problems"}
+	labelMissing  = groupedLabel{"missing reference", "missing references"}
+	labelCreate   = groupedLabel{"failed pod creation", "failed pod creations"}
+	labelNoEnds   = groupedLabel{"service without endpoints",
+		"services without endpoints"}
+	labelDown = groupedLabel{"unavailable workload",
+		"unavailable workloads"}
+	labelPending  = groupedLabel{"pending pod", "pending pods"}
+	labelThrottle = groupedLabel{"CPU throttling alert",
+		"CPU throttling alerts"}
+	labelNotReady = groupedLabel{"not-ready pod", "not-ready pods"}
+	labelEvicted  = groupedLabel{"eviction", "evictions"}
+	labelNetwork  = groupedLabel{"network problem", "network problems"}
 )
+
+// groupedExact label a mode as a whole. These modes share a family with
+// others that mean something else (Unavailable.APIServer is not an
+// unavailable workload).
+var groupedExact = map[detection.Mode]groupedLabel{
+	detection.ModeUnavailable:             labelDown,
+	detection.ModeNoEndpoints:             labelNoEnds,
+	detection.ModeFailedCreate:            labelCreate,
+	detection.ModeEvicted:                 labelEvicted,
+	detection.ModeCPUThrottled:            labelThrottle,
+	detection.ModeNetworkErrors:           labelNetwork,
+	detection.ModeStatefulSetRolloutStuck: labelRollout,
+}
 
 // groupedLabels name the failure families that have a label of their
 // own. A family not listed reads as "<words> alert".
 var groupedLabels = map[detection.Mode]groupedLabel{
 	detection.ModeProbe:                       labelProbe,
 	detection.ModeRolloutStuck:                labelRollout,
-	detection.ModeStatefulSetRolloutStuck:     labelRollout,
 	detection.ModeCrashLoop:                   labelCrash,
 	detection.ModeOOMKilled:                   labelOOM,
 	detection.ModeUnschedulable:               labelSchedule,
@@ -54,20 +78,31 @@ var groupedLabels = map[detection.Mode]groupedLabel{
 	detection.ModeKubeletUnreachable.Family(): labelNode,
 	detection.ModeHeartbeatStale.Family():     labelNode,
 	detection.ModeNodeCondition.Family():      labelNode,
+	detection.ModeNetwork:                     labelNetwork,
+}
+
+func modeOf(f detection.Finding) detection.Mode {
+	if f.Mode != "" {
+		return f.Mode
+	}
+	return detection.ModeFor(f.Reason)
 }
 
 // groupedLabelOf is the label of a finding: by its kind when it is a
-// node's, else by its failure family.
+// node's, else by its mode, else by its failure family.
 func groupedLabelOf(f detection.Finding) groupedLabel {
 	if f.Entity.Kind == kube.KindNode {
 		return labelNode
 	}
-	mode := f.Mode
-	if mode == "" {
-		mode = detection.ModeFor(f.Reason)
+	mode := modeOf(f)
+	if l, ok := groupedExact[mode]; ok {
+		return l
 	}
-	if mode == detection.ModeStatefulSetRolloutStuck {
-		return labelRollout
+	if mode.Family() == "Missing" || strings.HasSuffix(string(mode), "Missing") {
+		return labelMissing
+	}
+	if l, ok := podMode(f, mode); ok {
+		return l
 	}
 	if l, ok := groupedLabels[mode.Family()]; ok {
 		return l
@@ -76,12 +111,29 @@ func groupedLabelOf(f detection.Finding) groupedLabel {
 	return groupedLabel{words + " alert", words + " alerts"}
 }
 
+// podMode labels the modes whose noun depends on what the finding is
+// about: a Pending phase is also reported for other objects, and only a
+// pod or container is a "not-ready pod".
+func podMode(f detection.Finding, mode detection.Mode) (groupedLabel, bool) {
+	isPod := f.Entity.Kind == kube.KindPod ||
+		f.Entity.Kind == kube.KindContainer
+	switch {
+	case mode == detection.ModePending && isPod:
+		return labelPending, true
+	case mode == detection.ModeNotReady && isPod:
+		return labelNotReady, true
+	}
+	return groupedLabel{}, false
+}
+
 // modeWords spells a mode family as lowercase words: "NoEndpoints" is
-// "no endpoints". A raw identifier is never shown.
+// "no endpoints" and "CPUThrottled" is "cpu throttled". A run of
+// capitals is one word. A raw identifier is never shown.
 func modeWords(m detection.Mode) string {
+	runes := []rune(string(m))
 	var b strings.Builder
-	for i, r := range string(m) {
-		if i > 0 && unicode.IsUpper(r) {
+	for i, r := range runes {
+		if i > 0 && unicode.IsUpper(r) && wordStart(runes, i) {
 			b.WriteRune(' ')
 		}
 		b.WriteRune(unicode.ToLower(r))
@@ -89,25 +141,53 @@ func modeWords(m detection.Mode) string {
 	return b.String()
 }
 
-// groupedSentences is the line that counts the other findings grouped
-// under the incident, by type. The lead's own finding and advisories are
-// not counted; nothing grouped writes nothing.
-func groupedSentences(f caseFacts) []sentence {
-	counts := map[groupedLabel]int{}
-	for _, m := range f.members {
-		if m.Advisory || (f.ok && m.Key() == f.lead.Key()) {
-			continue
-		}
-		label := groupedLabelOf(m)
-		if f.ok && label == groupedLabelOf(f.lead) && ownedBy(f.p.Root, m) {
-			continue
-		}
-		counts[label]++
+// wordStart reports a capital at i that begins a new word: after a
+// lowercase letter, or the last capital of a run that a lowercase
+// letter follows ("CPUThrottled" splits before the T).
+func wordStart(runes []rune, i int) bool {
+	if unicode.IsLower(runes[i-1]) {
+		return true
 	}
-	if len(counts) == 0 {
+	return unicode.IsUpper(runes[i-1]) && i+1 < len(runes) &&
+		unicode.IsLower(runes[i+1])
+}
+
+// groupedSentences is the line that counts the other findings grouped
+// under the incident, by type. Not counted: the lead's own finding,
+// advisories, and findings of the lead's failure family, which the lead
+// (or a storm sentence, which names the lead's state) already says.
+// Two or more others are shown; one alone is shown unless it is only a
+// symptom of the lead's own workload.
+func groupedSentences(f caseFacts) []sentence {
+	others := groupedOthers(f)
+	if len(others) == 0 ||
+		(len(others) == 1 && ownSymptom(f.p.Root, others[0])) {
 		return nil
 	}
+	counts := map[groupedLabel]int{}
+	for _, m := range others {
+		counts[groupedLabelOf(m)]++
+	}
 	return []sentence{{part: partGrouped, text: groupedText(counts)}}
+}
+
+// groupedOthers are the members the line may count.
+func groupedOthers(f caseFacts) []detection.Finding {
+	var out []detection.Finding
+	for _, m := range f.members {
+		if m.Advisory || (f.ok && (m.Key() == f.lead.Key() ||
+			modeOf(m).Family() == modeOf(f.lead).Family())) {
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+// ownSymptom reports a symptom on the root's own workload, such as its
+// Service without endpoints: it restates the failure, it adds none.
+func ownSymptom(root inventory.EntityID, f detection.Finding) bool {
+	return f.Symptom && ownedBy(root, f)
 }
 
 func groupedText(counts map[groupedLabel]int) string {
@@ -146,14 +226,14 @@ func countedLabel(n int, l groupedLabel) string {
 	return fmt.Sprintf("%d %s", n, l.many)
 }
 
-// ownedBy reports a finding of the root's own pod or container: the
-// root's failure seen one level down, which the lead already says.
+// ownedBy reports a finding of the root's own workload: its pod or
+// container, or a Service of the same name.
 func ownedBy(root inventory.EntityID, f detection.Finding) bool {
 	e := f.Entity
 	if e == root {
 		return true
 	}
 	return e.Namespace == root.Namespace && root.Name != "" &&
-		(strings.HasPrefix(e.Name, root.Name+"-") ||
+		(e.Name == root.Name || strings.HasPrefix(e.Name, root.Name+"-") ||
 			strings.HasPrefix(e.Name, root.Name+"/"))
 }

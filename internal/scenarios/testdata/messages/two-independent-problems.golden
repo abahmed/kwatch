@@ -1,6 +1,6 @@
 10:04:15 settled
 🟠 Node n1 (prod-eu-1) is low on memory. All of its dependents are failing. Replicas that do not depend on it are healthy. indexer in batch is affected as well.
-Also grouped: 2 error alerts, 2 evicted alerts
+Also grouped: 2 error alerts, 2 evictions
 To check the node's conditions and recent events, run kubectl describe node n1
 Checked: 2 failing replicas share node n1 while 1 run healthy on other nodes.
 🟠 Node n1 (prod-eu-1) is low on memory.
@@ -8,7 +8,7 @@ Checked: 2 failing replicas share node n1 while 1 run healthy on other nodes.
 | All of its dependents are failing.
 | Replicas that do not depend on it are healthy.
 | **indexer** in **batch** is affected as well.
-| Also grouped: 2 error alerts, 2 evicted alerts
+| Also grouped: 2 error alerts, 2 evictions
 | To check the node's conditions and recent events, run
 | ```
 | kubectl describe node n1

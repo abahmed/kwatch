@@ -12,11 +12,14 @@ Checked: both replicas fail, on 2 nodes.
 | ```
 | *Checked: both replicas fail, on 2 nodes.*
 10:06:30 settled
-🔴 Node n2 (prod-eu-1) has not reported for about two minutes. It reports "Kubelet stopped posting node status." kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable. To check the node's conditions and recent events, run kubectl describe node n2
+🔴 Node n2 (prod-eu-1) has not reported for about two minutes. It reports "Kubelet stopped posting node status." kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable.
+Also grouped: 1 node problem
+To check the node's conditions and recent events, run kubectl describe node n2
 🔴 Node n2 (prod-eu-1) has not reported for about two minutes.
 | 🔴 Node n2 (**prod-eu-1**) has not reported for about two minutes.
 | It reports `Kubelet stopped posting node status.`
 | kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable.
+| Also grouped: 1 node problem
 | To check the node's conditions and recent events, run
 | ```
 | kubectl describe node n2

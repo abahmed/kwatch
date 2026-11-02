@@ -1,13 +1,10 @@
 10:12:25 settled
-🟠 intake in post (prod-eu-1) keeps crashing; two possible causes: config map intake-config changed shortly before or it rolled out a change shortly before. bob changed key mode. It fails with "fatal: startup failed (exit status 1)".
-Also grouped: 1 crash loop
-To check the object the pods depend on, run kubectl get configmap intake-config -n post -o yaml
+🟠 intake in post (prod-eu-1) keeps crashing; two possible causes: config map intake-config changed shortly before or it rolled out a change shortly before. bob changed key mode. It fails with "fatal: startup failed (exit status 1)". To check the object the pods depend on, run kubectl get configmap intake-config -n post -o yaml
 Checked: both replicas fail, on 2 nodes.
 🟠 intake in post (prod-eu-1) keeps crashing; two possible causes: config map intake-config changed shortly before or it rolled out a change shortly before.
 | 🟠 **intake** in **post** (**prod-eu-1**) keeps crashing; two possible causes: config map **intake-config** changed shortly before or it rolled out a change shortly before.
 | bob changed key mode.
 | It fails with `fatal: startup failed (exit status 1)`.
-| Also grouped: 1 crash loop
 | To check the object the pods depend on, run
 | ```
 | kubectl get configmap intake-config -n post -o yaml

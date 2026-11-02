@@ -1,14 +1,11 @@
 10:02:15 settled
-🟠 metrics-server in kube-system (prod-eu-1) keeps crashing. It fails with "Error: tls: failed to load serving certificate". All of its dependents are failing. Service metrics-server can't serve traffic.
-Also grouped: 1 no endpoints alert
-To read the output of the last crash, run kubectl logs metrics-server-efcd4397-a -c app -n kube-system --previous
+🟠 metrics-server in kube-system (prod-eu-1) keeps crashing. It fails with "Error: tls: failed to load serving certificate". All of its dependents are failing. Service metrics-server can't serve traffic. To read the output of the last crash, run kubectl logs metrics-server-efcd4397-a -c app -n kube-system --previous
 Checked: node n1 is healthy for 8 other pods.
 🟠 metrics-server in kube-system (prod-eu-1) keeps crashing.
 | 🟠 **metrics-server** in **kube-system** (**prod-eu-1**) keeps crashing.
 | It fails with `Error: tls: failed to load serving certificate`.
 | All of its dependents are failing.
 | Service **metrics-server** can't serve traffic.
-| Also grouped: 1 no endpoints alert
 | To read the output of the last crash, run
 | ```
 | kubectl logs metrics-server-efcd4397-a -c app -n kube-system --previous

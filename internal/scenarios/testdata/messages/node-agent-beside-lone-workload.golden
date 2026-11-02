@@ -10,14 +10,11 @@
 | kubectl logs logship-n1 -c app -n observability --previous
 | ```
 10:16:15 settled
-🟠 cart in shop (prod-eu-1) has not been ready for three minutes. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. It runs a single replica.
-Also grouped: 1 unavailable alert
-To see the object's state and events, run kubectl describe deployment cart -n shop
+🟠 cart in shop (prod-eu-1) has not been ready for three minutes. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. It runs a single replica. To see the object's state and events, run kubectl describe deployment cart -n shop
 🟠 cart in shop (prod-eu-1) has not been ready for three minutes.
 | 🟠 **cart** in **shop** (**prod-eu-1**) has not been ready for three minutes.
 | Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
 | It runs a single replica.
-| Also grouped: 1 unavailable alert
 | To see the object's state and events, run
 | ```
 | kubectl describe deployment cart -n shop

@@ -1,12 +1,12 @@
 10:01:30 settled
 🔴 Validating webhook policy-validator (prod-eu-1) has no ready pods behind service policy-webhook. It fails closed (failurePolicy Fail) and the API server has rejected requests because of it. orders in shop is affected as well.
-Also grouped: 1 failed create alert
+Also grouped: 1 failed pod creation
 To check the webhook's backend and timeout, run kubectl get validatingwebhookconfiguration policy-validator -o yaml
 🔴 Validating webhook policy-validator (prod-eu-1) has no ready pods behind service policy-webhook.
 | 🔴 Validating webhook **policy-validator** (**prod-eu-1**) has no ready pods behind service policy-webhook.
 | It fails closed (failurePolicy Fail) and the API server has rejected requests because of it.
 | **orders** in **shop** is affected as well.
-| Also grouped: 1 failed create alert
+| Also grouped: 1 failed pod creation
 | To check the webhook's backend and timeout, run
 | ```
 | kubectl get validatingwebhookconfiguration policy-validator -o yaml

@@ -1,12 +1,9 @@
 10:02:45 settled
-🟠 invoicer in shop (prod-eu-1) can't reach ledger:5432: network policy dns-only-egress (created 10:01 UTC) blocks the call. invoicer fails with "FATAL: could not connect to server: dial tcp 10.96.31.8:5432: i/o timeout". All of its dependents are failing.
-Also grouped: 1 crash loop
-To read the output of the last crash, run kubectl logs invoicer-23e6bf2b-a -c app -n shop --previous
+🟠 invoicer in shop (prod-eu-1) can't reach ledger:5432: network policy dns-only-egress (created 10:01 UTC) blocks the call. invoicer fails with "FATAL: could not connect to server: dial tcp 10.96.31.8:5432: i/o timeout". All of its dependents are failing. To read the output of the last crash, run kubectl logs invoicer-23e6bf2b-a -c app -n shop --previous
 🟠 invoicer in shop (prod-eu-1) can't reach ledger:5432: network policy dns-only-egress (created 10:01 UTC) blocks the call.
 | 🟠 **invoicer** in **shop** (**prod-eu-1**) can't reach ledger:5432: network policy **dns-only-egress** (created 10:01 UTC) blocks the call.
 | **invoicer** fails with `FATAL: could not connect to server: dial tcp 10.96.31.8:5432: i/o timeout`.
 | All of its dependents are failing.
-| Also grouped: 1 crash loop
 | To read the output of the last crash, run
 | ```
 | kubectl logs invoicer-23e6bf2b-a -c app -n shop --previous

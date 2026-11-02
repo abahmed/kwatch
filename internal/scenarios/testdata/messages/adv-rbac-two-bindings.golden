@@ -1,7 +1,5 @@
 10:05:15 settled
-🟠 api is failing in shop (prod-eu-1) after the 10:01 UTC deletion of role binding api-config-reader. It fails with "level=fatal msg="configmaps \"api-settings\" is forbidden: User \"system:serviceaccount:shop:api\" cannot get resource…". Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
-Also grouped: 1 crash loop
-To read the output of the last crash, run kubectl logs api-626da116-a -c app -n shop --previous
+🟠 api is failing in shop (prod-eu-1) after the 10:01 UTC deletion of role binding api-config-reader. It fails with "level=fatal msg="configmaps \"api-settings\" is forbidden: User \"system:serviceaccount:shop:api\" cannot get resource…". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs api-626da116-a -c app -n shop --previous
 Checked: both replicas fail, on 2 nodes.
 🟠 api is failing in shop (prod-eu-1) after the 10:01 UTC deletion of role binding api-config-reader.
 | 🟠 **api** is failing in **shop** (**prod-eu-1**) after the 10:01 UTC deletion of role binding **api-config-reader**.
@@ -10,7 +8,6 @@ Checked: both replicas fail, on 2 nodes.
 | level=fatal msg="configmaps \"api-settings\" is forbidden: User \"system:serviceaccount:shop:api\" cannot get resource…
 | ```
 | Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
-| Also grouped: 1 crash loop
 | To read the output of the last crash, run
 | ```
 | kubectl logs api-626da116-a -c app -n shop --previous

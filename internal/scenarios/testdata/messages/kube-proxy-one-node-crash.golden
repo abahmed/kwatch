@@ -1,7 +1,5 @@
 10:04:15 settled
-🟠 kube-proxy in kube-system (prod-eu-1) keeps crashing. Its node, registry and services are healthy and unchanged, so nothing outside it points to a cause. It fails with "E1020 10:03:11.482113 1 proxier.go:1494] "Failed to execute iptables-restore" err="exit status 4 (iptables-restore…". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. api and worker in shop are affected as well.
-Also grouped: 2 crash loops
-To read the output of the last crash, run kubectl logs kube-proxy-n3 -c app -n kube-system --previous
+🟠 kube-proxy in kube-system (prod-eu-1) keeps crashing. Its node, registry and services are healthy and unchanged, so nothing outside it points to a cause. It fails with "E1020 10:03:11.482113 1 proxier.go:1494] "Failed to execute iptables-restore" err="exit status 4 (iptables-restore…". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. api and worker in shop are affected as well. To read the output of the last crash, run kubectl logs kube-proxy-n3 -c app -n kube-system --previous
 🟠 kube-proxy in kube-system (prod-eu-1) keeps crashing.
 | 🟠 **kube-proxy** in **kube-system** (**prod-eu-1**) keeps crashing.
 | Its node, registry and services are healthy and unchanged, so nothing outside it points to a cause.
@@ -11,7 +9,6 @@ To read the output of the last crash, run kubectl logs kube-proxy-n3 -c app -n k
 | ```
 | Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
 | **api** and **worker** in **shop** are affected as well.
-| Also grouped: 2 crash loops
 | To read the output of the last crash, run
 | ```
 | kubectl logs kube-proxy-n3 -c app -n kube-system --previous
