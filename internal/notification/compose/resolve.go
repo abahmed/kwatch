@@ -33,8 +33,34 @@ func resolveNote(f caseFacts) (string, []sentence) {
 	if fix := resolveFixer(f, subject); fix != "" {
 		detail = fix + "; " + lasted + "."
 	}
-	return notification.MarkerResolved, []sentence{lead,
-		{part: partProof, text: detail}}
+	out := []sentence{lead, {part: partProof, text: detail}}
+	if affected := affectedSentence(p); affected != "" {
+		out = append(out, sentence{part: partConsequence, text: affected})
+	}
+	if last := lastAffected(f, subject); last != "" {
+		out = append(out, sentence{part: partProof, text: last})
+	}
+	return notification.MarkerResolved, out
+}
+
+// lastAffected names the root an incident ended on when its resolve
+// speaks of the subject a listing announced and the root moved since:
+// "Last affected: deployment draftor in staging."
+func lastAffected(f caseFacts, subject inventory.EntityID) string {
+	if !f.asAnnounced || zeroID(f.p.Root) || f.p.Root == subject {
+		return ""
+	}
+	return "Last affected: " + describe(f.p.Root) + "."
+}
+
+// affectedSentence says how many pods failed at the widest: "Three
+// pods were affected." One pod is the subject itself, so it says
+// nothing.
+func affectedSentence(p incident.Incident) string {
+	if n := p.Journal.Widest.Pods; n > 1 {
+		return upperFirst(plural(n, "pod")) + " were affected."
+	}
+	return ""
 }
 
 // resolveFixer names who fixed it; nobody fixed a deletion.

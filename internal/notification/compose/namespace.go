@@ -67,7 +67,7 @@ func (w Writer) NamespaceOutage(
 	}
 	fill(&msg, mark, sentences)
 	msg.Doc = w.outageDoc(o, decisions, now, mark)
-	return msg
+	return w.linkedList(msg)
 }
 
 // outageLead is "shop: 12 of 15 workloads failing since 10:02".

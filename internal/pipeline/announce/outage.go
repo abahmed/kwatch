@@ -109,7 +109,7 @@ func (c *Collector) absorbAnnounce(
 		h.Held = append(h.Held, d)
 	}
 	if d.Incident.Tier == incident.Page && !h.Paged {
-		c.pageOnly(ctx, now, d)
+		c.pageOnly(ctx, now, d, "roll-up")
 		h.Paged, h.PagedID = true, d.Incident.ID
 	}
 }
@@ -123,7 +123,7 @@ func (c *Collector) absorbUpdate(
 	h.Held[i].Incident = d.Incident
 	if !h.Paged && c.risesToPage(d) {
 		// The namespace is paged once: this incident stands for it.
-		c.pageOnly(ctx, now, d)
+		c.pageOnly(ctx, now, d, "roll-up")
 		h.Paged, h.PagedID = true, d.Incident.ID
 		return
 	}

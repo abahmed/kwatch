@@ -51,7 +51,44 @@ follows these rules (`grace.go`, `restored_recovered.go`):
   grace. A record from before the reasons were saved has none to read and
   keeps the grace too.
 - A rise of tier since the record was saved is news inside the grace; see
-  [Updates](./updates.md).
+  [Updates](./updates.md). Until the reasons saved with the record are all
+  back, though, the tier is provisional (`restore_reasons.go`).
+- A restored incident with no members after the grace is handed over to the
+  incident that holds its root's failures or any of the entities that were
+  its failing members when it was saved (`Record.Members`, `handover.go`).
+  The second covers a root that is not made again after a restart, such as
+  a virtual or deleted one: its failures come back under another root, and
+  the incident is closed as moved, not as healthy. One whose
+  workload is still broken does not resolve as healthy
+  (`workload_ready.go`). For a Service root, the pods behind it are those
+  its endpoint slices name or, when no slice names any, those its own
+  selector matches (`workloadsBehind`), so a missing slice cannot turn a
+  still-failing Service into a "healthy" resolve.
+
+## Resolves of listed incidents
+
+An incident that only a listing (the startup summary, the restored
+summary, a roll-up) announced, and that never spoke on its own, is known
+to people by what the listing named. The listing records that as the
+incident's `Subject`, and its resolve carries `Decision.AsAnnounced`: it
+names that subject even when the root moved since, adds "Last affected:"
+with the root it ended on, and the audit entry adds `subject` beside
+`root`. The message carries `ChatCarrier`: the startup and restored
+summaries keep no thread for their items, so the resolve stands alone in
+chat (`placement="standalone"` in the send log), while a roll-up's item
+replies in the roll-up's thread (`placement="thread"`). A paging-only
+message that no paging provider takes is logged as `result="carried"`
+with the listing as `carrier`, not as `not routed`.
+
+## What a resolve says
+
+`compose.resolveNote` leads with how the subject ended ("payments in shop
+is healthy again."), then who fixed it when the fixing change is known,
+how long it was failing and what it was blamed on. When more than one pod
+failed at the incident's widest it adds "Three pods were affected.": the
+count is `Journal.Widest.Pods`, the most failing pods the incident held at
+once (`radius.go`), recomputed with the impact and persisted, so it
+survives the members leaving and a restart.
 
 ## Resolves of one tick
 

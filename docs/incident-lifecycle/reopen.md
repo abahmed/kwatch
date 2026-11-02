@@ -31,6 +31,10 @@ update was ever sent, it closes without a second resolve message
 After the window, or for another mode, the failure is a new
 incident that remembers the old one. A reopen also forgets the fix attempt
 of the earlier occurrence (`Attempt`, the unsent attempt and its late flag).
+What an incident remembers of the earlier ones is bounded: the 30 most
+recent resolved occurrences with how each ended (`History`, `HistoryKept`)
+and the 30 most recent open times (`Occurrences`), which routines,
+rhythms and the weekly count read.
 
 How paging state works now:
 

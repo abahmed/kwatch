@@ -5,20 +5,35 @@
   var view = null;
   var shellEl = null;
   var current = "";
-  KW.lastList = { active: "/", resolved: "/resolved" };
-  /* Scroll positions of the lists, so coming back from an issue lands
-     where you left instead of at the top. */
-  KW.scrollMemo = {};
-  KW.cameFrom = "";
-  /* Issue IDs in the order each list shows them, for Previous / Next. */
-  KW.listIds = { active: [], resolved: [] };
+  /* The Issues table's address last shown, for "Back" on an issue. */
+  KW.lastList = "/issues";
 
   /* ---- routing ---- */
+  /* The list filters of the old Active issues page at "/". */
+  var LIST_KEYS = ["q", "severity", "namespace", "state", "age", "since",
+    "sort", "dir", "group", "kind", "acked", "status", "offset", "limit",
+    "page", "pageSize"];
+
+  /* moved is the new address of an old one (the server redirects them
+     too; this covers Back to an old history entry), or "". */
+  function moved(path, search) {
+    var p = new URLSearchParams(search);
+    if (path === "/status") return "/";
+    if (path === "/resolved") {
+      p.delete("status");
+      var rest = p.toString();
+      return "/issues?status=resolved" + (rest ? "&" + rest : "");
+    }
+    if (path === "/" && LIST_KEYS.some(function (k) { return p.has(k); })) {
+      return "/issues" + search;
+    }
+    return "";
+  }
+
   function route(path) {
     if (path === "/signin") return { name: "signin" };
-    if (path === "/") return { name: "active" };
-    if (path === "/resolved") return { name: "resolved" };
-    if (path === "/status") return { name: "status" };
+    if (path === "/") return { name: "status" };
+    if (path === "/issues") return { name: "issues" };
     var m = /^\/issues\/([^/]+)$/.exec(path);
     if (m) {
       // A malformed escape (%E0) is an ID no issue has: show "not found".
@@ -26,7 +41,7 @@
         return { name: "detail", id: m[1] };
       }
     }
-    return { name: "active" };
+    return { name: "status" };
   }
 
   KW.go = function (url, replace) {
@@ -64,6 +79,7 @@
     }
     if (res.status === 401 || res.status === 403) {
       var next = here();
+      KW.live.stop();
       KW.go("/signin?reason=expired&next=" + encodeURIComponent(next), true);
       return true;
     }
@@ -76,25 +92,23 @@
   }
 
   function render() {
+    var to = moved(location.pathname, location.search);
+    if (to) history.replaceState(null, "", to);
     KW.rendered = here();
-    if (current === "active" || current === "resolved") {
-      KW.scrollMemo[KW.lastList[current]] = window.scrollY;
-    }
     stopView();
     var r = route(location.pathname);
-    KW.cameFrom = current;
+    if (r.name === "detail") KW.visits.opened(r.id);
     current = r.name;
     if (r.name === "signin") {
       shellEl = null;
+      KW.notify.stop();
+      KW.live.stop();
       return showSignin();
     }
-    var main = shell(r.name === "detail" ? "active" : r.name);
-    var views = { active: KW.listView, resolved: KW.listView,
-      detail: KW.detailView, status: KW.statusView };
+    var main = shell(r.name === "detail" ? "issues" : r.name);
+    var views = { issues: KW.issuesView, detail: KW.detailView,
+      status: KW.statusView };
     view = views[r.name](main, r);
-    if (r.name === "active" || r.name === "resolved") {
-      KW.lastList[r.name] = here();
-    }
   }
 
   /* ---- shell ---- */
@@ -115,13 +129,37 @@
         });
       });
       markTZ();
+      legendStates(shellEl);
+      whoMenu(shellEl);
       KW.updateBadge(KW.badge);
+      KW.notify.start(shellEl);
     }
     KW.setNav(current);
     var main = KW.$("#main", shellEl);
     main.textContent = "";
     window.scrollTo(0, 0);
     return main;
+  }
+
+  /* legendStates lists the states in the help, in KW.STATE's words. */
+  function legendStates(root) {
+    var ul = KW.$("[data-legend-states]", root);
+    ["open", "settling", "flapping", "recovering", "resolved"].forEach(function (k) {
+      var li = KW.el("li");
+      li.appendChild(KW.el("b", "", KW.STATE[k].label));
+      li.appendChild(document.createTextNode(": " + KW.STATE[k].title));
+      ul.appendChild(li);
+    });
+  }
+
+  /* whoMenu: under 700px wide, notifications, times and sign out fold
+     behind one "Settings" button (plain.css). */
+  function whoMenu(root) {
+    var b = KW.$("[data-who-toggle]", root), side = KW.$(".side", root);
+    b.addEventListener("click", function () {
+      var open = side.classList.toggle("who-open");
+      b.setAttribute("aria-expanded", open ? "true" : "false");
+    });
   }
 
   function markTZ() {
@@ -143,93 +181,6 @@
       KW.go("/signin", true);
     });
   }
-
-  /* ---- active count: nav badge, tab title, favicon ---- */
-  KW.badge = null;
-  KW.updateBadge = function (counts) {
-    KW.badge = counts;
-    if (!counts) return;
-    var total = 0;
-    Object.keys(counts).forEach(function (k) {
-      if (k !== "silent") total += counts[k];
-    });
-    var urgent = (counts.page || 0) > 0;
-    var b = shellEl && KW.$("[data-badge]", shellEl);
-    if (b) {
-      b.hidden = total === 0;
-      b.textContent = total;
-      b.className = "count" + (urgent ? " urgent" : "");
-      b.setAttribute("aria-label", KW.plural(total, "active issue", "active issues"));
-    }
-    var fav = document.getElementById("favicon");
-    if (!fav.dataset.plain) fav.dataset.plain = fav.getAttribute("href");
-    fav.setAttribute("href", urgent ? fav.dataset.alert : fav.dataset.plain);
-    KW.activeTotal = total;
-  };
-  KW.refreshBadge = function () {
-    return KW.api("/api/incidents?state=active&limit=1").then(function (res) {
-      if (res.status === 200 && res.data) KW.updateBadge(res.data.counts);
-    });
-  };
-  KW.title = function (text) { document.title = text + " · kwatch"; };
-
-  /* ---- live refresh ---- */
-  /* poller runs load now and every `every` ms while the tab is visible,
-     at once when it becomes visible again. load returns a promise of a
-     delay override (ms) or nothing. */
-  KW.poller = function (load, every) {
-    var timer = 0, stopped = false;
-    function schedule(ms) {
-      window.clearTimeout(timer);
-      if (!stopped && !document.hidden) timer = window.setTimeout(run, ms);
-    }
-    function run() {
-      window.clearTimeout(timer);
-      if (stopped) return;
-      Promise.resolve(load()).then(function (delay) {
-        schedule(delay || every);
-      });
-    }
-    function onVisible() {
-      if (document.hidden) window.clearTimeout(timer);
-      else run();
-    }
-    document.addEventListener("visibilitychange", onVisible);
-    run();
-    return {
-      now: run,
-      stop: function () {
-        stopped = true;
-        window.clearTimeout(timer);
-        document.removeEventListener("visibilitychange", onVisible);
-      }
-    };
-  };
-
-  /* footer: the freshness line at the top of a page. "Live · updated
-     just now" while the page refreshes by itself, or after a failure
-     "Last updated 4 min ago" with Try now. */
-  KW.footer = function (node, lastOk, failing, onTry) {
-    node.hidden = !lastOk;
-    if (!lastOk) return;
-    node.textContent = "";
-    node.classList.toggle("stale", !!failing);
-    var ago = Math.max(0, Math.round((Date.now() - lastOk) / 1000));
-    if (failing) {
-      node.appendChild(KW.el("span", "", "Last updated " +
-        KW.rel(new Date(lastOk + (KW.now() - Date.now())).toISOString())));
-      var b = KW.el("button", "btn btn-sm upd-try", "Try now");
-      b.type = "button";
-      b.addEventListener("click", onTry);
-      node.appendChild(b);
-      return;
-    }
-    var live = KW.el("span", "live", "Live");
-    live.title = "This page updates by itself.";
-    node.appendChild(live);
-    node.appendChild(KW.el("span", "", "updated " +
-      (ago < 5 ? "just now" : ago < 60 ? ago + " s ago" : Math.floor(ago / 60) + " min ago")));
-  };
 
   /* ---- sign in ---- */
   function showSignin() {
@@ -255,9 +206,10 @@
       eye.setAttribute("title", label);
       eye.setAttribute("aria-pressed", show ? "true" : "false");
     });
-    function fail(text) {
+    function fail(text, clear) {
       err.hidden = false;
       err.textContent = text;
+      if (clear) input.value = "";
       input.setAttribute("aria-invalid", "true");
       input.focus();
     }
@@ -288,7 +240,7 @@
           if (res.status === 403 && res.data && res.data.error === "https_required") {
             return showHTTPS();
           }
-          if (res.status === 401) return fail("That password isn't right. Check it and try again.");
+          if (res.status === 401) return fail("That password isn't right. Check it and try again.", true);
           if (res.status === 429) {
             fail("Too many tries. Wait a minute, then try again.");
             return countdown(res.retryAfter || 60);
@@ -303,6 +255,8 @@
   function showHTTPS() {
     stopView();
     shellEl = null;
+    KW.notify.stop();
+    KW.live.stop();
     KW.title("Use https");
     var app = document.getElementById("app");
     app.textContent = "";
@@ -325,9 +279,10 @@
       KW.go(a.getAttribute("href"));
     });
     // A fragment link ("Skip to content") also fires popstate; only a
-    // change of page re-renders.
+    // change of page re-renders. A view with pop() may take the change
+    // itself (the Issues table opening or closing its preview).
     window.addEventListener("popstate", function () {
-      if (here() !== KW.rendered) render();
+      if (here() !== KW.rendered && !(view && view.pop && view.pop())) render();
     });
     /* Keys: "/" jumps to search; j / k move down and up the list, or to
        the next and previous issue on an issue page. */
@@ -345,12 +300,7 @@
       }
       if (e.key !== "j" && e.key !== "k") return;
       var step = e.key === "j" ? 1 : -1;
-      var pageLink = document.querySelector(step > 0 ? "[data-next]" : "[data-prev]");
-      if (pageLink) {
-        if (pageLink.offsetParent !== null && pageLink.getAttribute("href")) KW.go(pageLink.getAttribute("href"));
-        return;
-      }
-      var rows = KW.$$(".list a.issue");
+      var rows = KW.$$("#main [data-rowlink]");
       if (!rows.length) return;
       var at = rows.indexOf(document.activeElement);
       var next = rows[Math.max(0, Math.min(rows.length - 1, at < 0 ? 0 : at + step))];

@@ -162,6 +162,9 @@ func TestEngineStartupHoldsPageTierAndPagesSeparately(t *testing.T) {
 		t.Fatalf("want one paging-only announcement of the page, got %+v",
 			sent)
 	}
+	if sent[0].ChatCarrier != "startup summary" {
+		t.Fatalf("the page names what tells chat: %q", sent[0].ChatCarrier)
+	}
 	// The second time the same announcement is held, nothing is sent.
 	e.announcer.collect.CollectStartup(context.Background(), now,
 		[]incident.Decision{page})

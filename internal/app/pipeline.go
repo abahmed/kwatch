@@ -48,6 +48,11 @@ func runPipeline(
 		deps.dashboardServer.SetStatus(engine.Status)
 		deps.dashboardServer.SetDeliveryHealth(
 			dashboardHealth(deps.deliveryManager))
+		deps.dashboardServer.SetModel(p.model)
+		deps.dashboardServer.SetDeliveryTrail(
+			dashboardTrail(deps.deliveryManager))
+		defer deps.dashboardServer.SetDeliveryTrail(nil)
+		defer deps.dashboardServer.SetModel(nil)
 		defer deps.dashboardServer.SetDeliveryHealth(nil)
 		defer deps.dashboardServer.SetStatus(nil)
 		defer deps.dashboardServer.SetIncidents(nil)
@@ -55,6 +60,14 @@ func runPipeline(
 	runners, err := p.newRunners(engine)
 	if err != nil {
 		return err
+	}
+	if deps.dashboardServer != nil {
+		deps.dashboardServer.SetCoverage(p.dashboardCoverage())
+		defer deps.dashboardServer.SetCoverage(nil)
+		if p.stats != nil {
+			deps.dashboardServer.SetUsageHours(p.stats.UsageHours)
+			defer deps.dashboardServer.SetUsageHours(nil)
+		}
 	}
 	defer startSources(ctx, runners)()
 	err = engine.Run(ctx)

@@ -98,8 +98,23 @@ func rivalLead(f caseFacts) (string, bool) {
 	if first == second {
 		return "", false
 	}
-	return symptomState(f, subject) + "; two possible causes: " + first +
-		" or " + second, true
+	return symptomState(f, subject) + "; two possible causes: " +
+		rivalChoice(first, second, causeWordsFor(cause),
+			causeWordsFor(cause.Rival)), true
+}
+
+// rivalChoice joins the two possible causes. Two that say the same of
+// different objects name both once, so the words that follow cannot be
+// read as part of the first: "it or deployment arc/ctl is not running,
+// so it removes no finalizers", not "it is not running, so it removes
+// no finalizers or deployment arc/ctl is not running, so ...".
+func rivalChoice(first, second, words, rivalWords string) string {
+	tail := " " + words
+	if words == "" || words != rivalWords ||
+		!strings.HasSuffix(first, tail) || !strings.HasSuffix(second, tail) {
+		return first + " or " + second
+	}
+	return strings.TrimSuffix(first, tail) + " or " + second
 }
 
 // rivalPhrase words one of two possible causes. When the cause is the

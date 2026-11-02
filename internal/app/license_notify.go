@@ -155,7 +155,15 @@ func expiryNotice(
 		return "", rec
 	}
 	return notification.MarkerNotify + " Your kwatch Pro license ends in " +
-		fmt.Sprintf("%d day(s)", days) + " (" +
+		daysWord(days) + " (" +
 		st.ExpiresAt.UTC().Format("2006-01-02") + "). Renew it at " +
 		renewURL, rec
+}
+
+// daysWord is "1 day" or "3 days".
+func daysWord(days int) string {
+	if days == 1 {
+		return "1 day"
+	}
+	return fmt.Sprintf("%d days", days)
 }

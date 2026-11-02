@@ -1,0 +1,49 @@
+/* kwatch dashboard: the Overview's insight cards (js/ovinsights.js),
+   the namespace map and "What kwatch is watching" (js/ovcoverage.js).
+   Colors are the tokens of app.css, so light, dark and high contrast
+   follow by themselves. */
+.ov-today { margin: 10px 0 0; font-size: 1.0625rem; }
+.ov-quiet { margin: 10px 0 0; color: var(--text-muted); }
+.in { margin-top: 24px; }
+.in-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.in-card { border: 1px solid var(--line); border-radius: var(--radius-card); padding: 16px 20px; min-width: 0; }
+.in-h { font-family: var(--font-body); font-weight: 600; font-size: 0.9375rem; letter-spacing: 0; color: var(--text-muted); margin: 0 0 10px; }
+.in-n { font-weight: 400; }
+.in-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.in-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.in-row { flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.in-link { font-weight: 600; overflow-wrap: break-word; width: fit-content; max-width: 100%; }
+.in-meta { font-size: 0.875rem; color: var(--text-muted); overflow-wrap: break-word; }
+.in-card.in-wide { grid-column: 1 / -1; }
+.in-top { font-size: 0.875rem; }
+.in-err { font-family: var(--font-mono); font-size: 0.8125rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.in-sev { display: inline-flex; align-items: center; gap: 5px; }
+.in-sev .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+.in-more { display: block; margin-top: 10px; font-size: 0.875rem; }
+
+.nsmap { margin-top: 28px; }
+.nsmap .muted { margin: 2px 0 10px; }
+.ns-tiles { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); gap: 8px; }
+.ns-tile { display: flex; flex-direction: column; gap: 2px; min-height: var(--hit); padding: 8px 12px; border: 1px solid var(--line); border-left: 5px solid var(--control-border); border-radius: var(--radius-input); color: var(--text); text-decoration: none; min-width: 0; }
+.ns-tile:hover { border-color: var(--text); }
+.ns-tile.page { border-left-color: var(--failing); background: var(--failing-bg); }
+.ns-tile.notify { border-left-color: var(--degraded); background: var(--degraded-bg); }
+.ns-name { font-size: 0.875rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ns-meta { font-size: 0.8125rem; color: var(--text-muted); }
+.ns-more { margin: 10px 0 0; font-size: 0.875rem; }
+
+.cov { margin-top: 0; }
+.cov-lead { margin: 0 0 12px; }
+.cov-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.cov-part { min-width: 0; }
+.cov-h { font-family: var(--font-body); font-weight: 600; font-size: 0.875rem; letter-spacing: 0; color: var(--text-muted); margin: 0 0 4px; }
+.cov-part p { margin: 0; }
+.cov-sub { margin-top: 8px !important; font-size: 0.875rem; color: var(--text-muted); }
+.cov-gaps { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 0.9375rem; overflow-wrap: anywhere; }
+.cov-more { font-family: var(--font-body); color: var(--text-muted); }
+
+@media (max-width: 700px) {
+  .in-grid, .cov-grid { grid-template-columns: minmax(0, 1fr); }
+  .in-card { padding: 14px 16px; }
+  .ns-tiles { grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); }
+}

@@ -24,6 +24,19 @@ func (r Readiness) Short() bool {
 	return r.Desired > 0 && r.Ready < r.Desired
 }
 
+// IsApplicationKind reports the kinds that run an application's own
+// code: a pod, a container, or a workload that owns pods. Proof about
+// one of their runs speaks of the application, not of the
+// infrastructure under it.
+func IsApplicationKind(kind inventory.Kind) bool {
+	switch kind {
+	case kube.KindPod, kube.KindContainer, kube.KindReplicaSet,
+		kube.KindJob, kube.KindCronJob:
+		return true
+	}
+	return IsWorkload(kind)
+}
+
 // IsWorkload reports the kinds that have desired and ready replicas.
 func IsWorkload(kind inventory.Kind) bool {
 	return kind == kube.KindDeployment || kind == kube.KindStatefulSet ||
@@ -129,7 +142,7 @@ func (m *Manager) workloadBroken(p *Incident) bool {
 		return false
 	}
 	// A Service is as broken as the workloads behind it.
-	for _, w := range workloadsOf(m.model, workloadFor(m.model, p.Root)) {
+	for _, w := range workloadsBehind(m.model, workloadFor(m.model, p.Root)) {
 		if r, ok := ReadinessOf(m.model, w); ok && r.Short() && r.Failing {
 			return true
 		}

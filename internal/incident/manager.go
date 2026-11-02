@@ -186,7 +186,7 @@ func describe(id inventory.EntityID) string {
 }
 
 // maxOccurrences bounds the recurrence history kept per incident.
-const maxOccurrences = 20
+const maxOccurrences = 30
 
 // appendOccurrence returns a new slice with at appended, keeping the
 // most recent maxOccurrences.
@@ -218,8 +218,11 @@ func (m *Manager) Incidents() []Incident {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := make([]Incident, 0, len(m.incidents))
+	index := m.indexLive()
 	for _, id := range m.sortedIDs() {
-		out = append(out, m.incidents[id].Snapshot())
+		snap := m.incidents[id].Snapshot()
+		m.relateAmong(&snap, index)
+		out = append(out, snap)
 	}
 	return out
 }
@@ -234,6 +237,7 @@ func (m *Manager) Incident(id string) *Incident {
 		return nil
 	}
 	snap := p.Snapshot()
+	m.relate(&snap)
 	return &snap
 }
 

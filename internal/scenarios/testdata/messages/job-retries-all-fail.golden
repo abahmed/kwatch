@@ -9,7 +9,7 @@
 | kubectl describe pod report-a -n batch
 | ```
 10:10:00 material change
-🟠 Job report in batch (prod-eu-1) is now failing: failed after 5 failed pod(s). It is spreading to container app in pod report-c, container app in pod report-d and container app in pod report-e: they are failing: exited with code 1.
-🟠 Job report in batch (prod-eu-1) is now failing: failed after 5 failed pod(s).
-| 🟠 Job **report** in **batch** (**prod-eu-1**) is now failing: failed after 5 failed pod(s).
+🟠 Job report in batch (prod-eu-1) is now failing: failed after 5 pod failures. It is spreading to container app in pod report-c, container app in pod report-d and container app in pod report-e: they are failing: exited with code 1.
+🟠 Job report in batch (prod-eu-1) is now failing: failed after 5 pod failures.
+| 🟠 Job **report** in **batch** (**prod-eu-1**) is now failing: failed after 5 pod failures.
 | It is spreading to container app in pod **report-c**, container app in pod **report-d** and container app in pod report-e: they are failing: exited with code 1.

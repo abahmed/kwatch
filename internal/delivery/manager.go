@@ -96,6 +96,9 @@ type Manager struct {
 
 	// told remembers which providers each conversation was routed to.
 	told routeLedger
+	// trail remembers what became of each incident's messages, for the
+	// dashboard (see send_trail.go).
+	trail sendTrail
 	// pagerLanded remembers which pagers accepted a message of each
 	// conversation; pageObserver hears what became of the alerts.
 	pagerLanded  routeLedger

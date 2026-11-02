@@ -51,10 +51,14 @@ func capBlocks(blocks []slackClient.Block) []slackClient.Block {
 	kept := blocks[:maxBlocksPerMessage-1]
 	omitted := len(blocks) - len(kept)
 	metrics.DefaultRegistry().RenderedDetailsOmitted.Add(int64(omitted))
+	noun := "blocks"
+	if omitted == 1 {
+		noun = "block"
+	}
 	return append(kept, markdownSection(
 		fmt.Sprintf(
-			"_%d more block(s) omitted to stay within Slack's limit._",
-			omitted,
+			"_%d more %s omitted to stay within Slack's limit._",
+			omitted, noun,
 		),
 	))
 }

@@ -219,11 +219,22 @@ func (Job) Detect(
 	failed, _ := number(e, kube.AttrFailed)
 	return append(out, detection.Finding{
 		Reason: findingReason, Severity: failedJobSeverity(ctx, since),
-		Since: since,
-		Summary: "Job failed after " + strconv.Itoa(int(failed)) +
-			" failed pod(s)",
+		Since:   since,
+		Summary: jobFailedSummary(int(failed)),
 		Evidence: []detection.Evidence{{
 			Label: "message", Value: conditionMessage(e, "Failed"),
 		}},
 	})
+}
+
+// jobFailedSummary says how a Job failed: "Job failed after 3 pod
+// failures", or "Job failed" when no pod failed (a deadline ran out).
+func jobFailedSummary(failed int) string {
+	switch {
+	case failed <= 0:
+		return "Job failed"
+	case failed == 1:
+		return "Job failed after 1 pod failure"
+	}
+	return "Job failed after " + strconv.Itoa(failed) + " pod failures"
 }

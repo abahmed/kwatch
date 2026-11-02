@@ -79,6 +79,14 @@ func rankedBetween(
 	model inventory.HistoryReader, root inventory.EntityID,
 	from, to time.Time, below int,
 ) []inventory.Change {
+	return rankedUpTo(model, root, from, to, below, MaxRecentChanges)
+}
+
+// rankedUpTo is rankedBetween keeping at most limit changes.
+func rankedUpTo(
+	model inventory.HistoryReader, root inventory.EntityID,
+	from, to time.Time, below, limit int,
+) []inventory.Change {
 	if model == nil || root.Namespace == "" {
 		return nil
 	}
@@ -101,8 +109,8 @@ func rankedBetween(
 		}
 		return a.Entity.String() < b.Entity.String()
 	})
-	if len(out) > MaxRecentChanges {
-		out = out[:MaxRecentChanges]
+	if len(out) > limit {
+		out = out[:limit]
 	}
 	return out
 }

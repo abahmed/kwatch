@@ -88,6 +88,13 @@ type StatsConfig struct {
 	// not answer: one still booting, or leaving the cluster (see
 	// NodeSettling). Its failed reads do not degrade health.
 	Settling func(node inventory.EntityID, now time.Time) bool
+	// Synced, when set, reports whether the model holds every container
+	// yet. Until it does, Containers is not used to drop history.
+	Synced func() bool
+	// History, when set, keeps the memory and CPU history across
+	// restarts: it is loaded when Run starts, saved at most every
+	// usageSaveEvery and once more when Run ends.
+	History UsageStore
 }
 
 // StatsPoller reads /stats/summary from every node's kubelet and records
@@ -103,6 +110,10 @@ type StatsPoller struct {
 	next    int
 	failing bool
 	lastLog time.Time
+	// saved and saving belong to the poll goroutine too (see
+	// stats_usage_save.go).
+	saved  time.Time
+	saving bool
 }
 
 // NewStatsPoller builds a poller.
@@ -123,12 +134,15 @@ func (p *StatsPoller) Run(ctx context.Context) {
 		<-ctx.Done()
 		return
 	}
+	p.loadUsage()
 	ticker := time.NewTicker(p.cfg.Interval)
 	defer ticker.Stop()
 	for {
 		p.poll(ctx)
+		p.saveUsage(false)
 		select {
 		case <-ctx.Done():
+			p.saveUsage(true)
 			return
 		case <-ticker.C:
 		}

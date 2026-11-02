@@ -161,7 +161,8 @@ func ongoingSentences(extras DigestExtras, now time.Time) []sentence {
 	return out
 }
 
-// ongoingBullets are the same lines as bullets of the Problems list.
+// ongoingBullets are the same lines as bullets of the Ongoing list,
+// without a closing period, like every other bullet of a digest.
 func ongoingBullets(extras DigestExtras, now time.Time) []notification.Block {
 	ongoing := extras.Ongoing
 	var out []notification.Block
@@ -173,8 +174,9 @@ func ongoingBullets(extras DigestExtras, now time.Time) []notification.Block {
 					stillWord(ongoing[i:])}}})
 			break
 		}
+		line := strings.TrimSuffix(strings.TrimSpace(o.Line(now)), ".")
 		bullet := []notification.Block{{Kind: notification.Bullet,
-			Spans: podSpans(o.Line(now))}}
+			Spans: podSpans(line)}}
 		boldNames(bullet, []string{o.Root.Name, o.Root.Namespace})
 		out = append(out, bullet[0])
 	}

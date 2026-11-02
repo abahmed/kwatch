@@ -14,11 +14,21 @@ const contentSecurityPolicy = "default-src 'none'; script-src 'self'; " +
 	"connect-src 'self'; form-action 'self'; base-uri 'none'; " +
 	"frame-ancestors 'none'"
 
+// hstsValue tells browsers to use https for the dashboard's host for a
+// year. It leaves subdomains alone: they are not kwatch's to decide.
+const hstsValue = "max-age=31536000"
+
 // securityHeaders sets the headers every dashboard response carries,
 // errors included. Cache-Control is no-store; hashed assets replace it.
-func securityHeaders(next http.Handler) http.Handler {
+// Strict-Transport-Security is added when hsts says so.
+func securityHeaders(
+	next http.Handler, hsts func(*http.Request) bool,
+) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
+		if hsts(r) {
+			h.Set("Strict-Transport-Security", hstsValue)
+		}
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Cache-Control", "no-store")
@@ -43,6 +53,12 @@ func (r *statusRecorder) WriteHeader(code int) {
 	r.ResponseWriter.WriteHeader(code)
 }
 
+// Unwrap lets http.ResponseController reach the connection: live
+// streams flush and set deadlines through it.
+func (r *statusRecorder) Unwrap() http.ResponseWriter {
+	return r.ResponseWriter
+}
+
 func (r *statusRecorder) Write(b []byte) (int, error) {
 	if r.status == 0 {
 		r.status = http.StatusOK
@@ -53,8 +69,9 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 // accessLog logs one line per request: remote host, method, path and
 // status. It never logs headers, so the token never reaches the log.
 // An open page polls every few seconds, so a successful read is logged
-// only at verbosity 2; sign-in, sign-out and every failure (401, 403,
-// 429, 5xx) stay at the default level, where an operator needs them.
+// only at verbosity 2. A 401 or 404 is something anyone can cause at
+// will, so it is logged at verbosity 1; sign-in, sign-out and the other
+// failures (403, 429, 5xx) stay at the default level.
 func accessLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rec := &statusRecorder{ResponseWriter: w}
@@ -65,6 +82,10 @@ func accessLog(next http.Handler) http.Handler {
 		verbosity := klog.Level(0)
 		if r.Method == http.MethodGet && rec.status < http.StatusBadRequest {
 			verbosity = 2
+		}
+		if rec.status == http.StatusUnauthorized ||
+			rec.status == http.StatusNotFound {
+			verbosity = max(verbosity, 1)
 		}
 		klog.V(verbosity).InfoS("dashboard request",
 			"component", "dashboard-server",

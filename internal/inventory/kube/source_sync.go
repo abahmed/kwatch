@@ -195,6 +195,7 @@ func (s *Source) WaitForSync(ctx context.Context) bool {
 	defer poll.Stop()
 	for {
 		if s.syncComplete() {
+			s.syncedAt.CompareAndSwap(0, s.cfg.Now().UnixNano())
 			return true
 		}
 		select {

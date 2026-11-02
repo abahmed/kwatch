@@ -6,13 +6,67 @@
 <meta name="color-scheme" content="light dark">
 <title>kwatch</title>
 <link rel="icon" type="image/svg+xml" id="favicon" href="{{asset:favicon.svg}}" data-alert="{{asset:favicon-alert.svg}}">
+<script src="{{asset:js/look.js}}"></script>
 <link rel="stylesheet" href="{{asset:app.css}}">
+<link rel="stylesheet" href="{{asset:plain.css}}">
+<link rel="stylesheet" href="{{asset:incident.css}}">
+<link rel="stylesheet" href="{{asset:insight.css}}">
+<link rel="stylesheet" href="{{asset:incview.css}}">
+<link rel="stylesheet" href="{{asset:listtools.css}}">
+<link rel="stylesheet" href="{{asset:trends.css}}">
+<link rel="stylesheet" href="{{asset:issues.css}}">
+<link rel="stylesheet" href="{{asset:viewopts.css}}">
+<link rel="stylesheet" href="{{asset:dropdown.css}}">
+<link rel="stylesheet" href="{{asset:columns.css}}">
+<link rel="stylesheet" href="{{asset:drawer.css}}">
+<link rel="stylesheet" href="{{asset:activity.css}}">
+<link rel="stylesheet" href="{{asset:overview.css}}">
+<link rel="stylesheet" href="{{asset:look.css}}">
 <script defer src="{{asset:js/core.js}}"></script>
-<script defer src="{{asset:js/lists.js}}"></script>
+<script defer src="{{asset:js/api.js}}"></script>
+<script defer src="{{asset:js/rows.js}}"></script>
+<script defer src="{{asset:js/searchq.js}}"></script>
+<script defer src="{{asset:js/highlight.js}}"></script>
+<script defer src="{{asset:js/listquery.js}}"></script>
+<script defer src="{{asset:js/prefs.js}}"></script>
+<script defer src="{{asset:js/visits.js}}"></script>
+<script defer src="{{asset:js/dropdown.js}}"></script>
+<script defer src="{{asset:js/selectmenu.js}}"></script>
+<script defer src="{{asset:js/quickviews.js}}"></script>
+<script defer src="{{asset:js/colmenu.js}}"></script>
+<script defer src="{{asset:js/columns.js}}"></script>
+<script defer src="{{asset:js/issuetable.js}}"></script>
+<script defer src="{{asset:js/filterchips.js}}"></script>
+<script defer src="{{asset:js/issuesfilters.js}}"></script>
+<script defer src="{{asset:js/issueslive.js}}"></script>
+<script defer src="{{asset:js/viewopts.js}}"></script>
+<script defer src="{{asset:js/pager.js}}"></script>
+<script defer src="{{asset:js/place.js}}"></script>
+<script defer src="{{asset:js/drawer.js}}"></script>
+<script defer src="{{asset:js/issues.js}}"></script>
 <script defer src="{{asset:js/evidence.js}}"></script>
+<script defer src="{{asset:js/transitions.js}}"></script>
+<script defer src="{{asset:js/timeline.js}}"></script>
+<script defer src="{{asset:js/context.js}}"></script>
+<script defer src="{{asset:js/objects.js}}"></script>
+<script defer src="{{asset:js/insight.js}}"></script>
+<script defer src="{{asset:js/share.js}}"></script>
+<script defer src="{{asset:js/lastlook.js}}"></script>
+<script defer src="{{asset:js/incwhy.js}}"></script>
+<script defer src="{{asset:js/inclinks.js}}"></script>
+<script defer src="{{asset:js/usagechart.js}}"></script>
 <script defer src="{{asset:js/detail.js}}"></script>
+<script defer src="{{asset:js/incpanel.js}}"></script>
+<script defer src="{{asset:js/incnav.js}}"></script>
+<script defer src="{{asset:js/trends.js}}"></script>
+<script defer src="{{asset:js/activity.js}}"></script>
+<script defer src="{{asset:js/ovinsights.js}}"></script>
+<script defer src="{{asset:js/ovcoverage.js}}"></script>
 <script defer src="{{asset:js/status.js}}"></script>
+<script defer src="{{asset:js/notify.js}}"></script>
+<script defer src="{{asset:js/refresh.js}}"></script>
 <script defer src="{{asset:js/main.js}}"></script>
+<script defer src="{{asset:js/keys.js}}"></script>
 </head>
 <body>
 <svg class="sprite" aria-hidden="true" focusable="false">
@@ -22,7 +76,14 @@
   <symbol id="i-eye" viewBox="0 0 16 16"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5Z"/><circle cx="8" cy="8" r="2"/></symbol>
   <symbol id="i-eye-off" viewBox="0 0 16 16"><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5Z"/><circle cx="8" cy="8" r="2"/><path d="M2 2 14 14"/></symbol>
   <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 16 16"><path d="M4 11.5V7a4 4 0 0 1 8 0v4.5l1.5 1.5h-11Z"/><path d="M6.5 15h3"/></symbol>
   <symbol id="i-back" viewBox="0 0 16 16"><path d="M13 8H3M7.5 3.5 3 8l4.5 4.5"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></symbol>
+  <symbol id="i-up" viewBox="0 0 16 16"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5"/></symbol>
+  <symbol id="i-down" viewBox="0 0 16 16"><path d="M8 3v10M3.5 8.5 8 13l4.5-4.5"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 16 16"><path d="M6 3.5h.01M10 3.5h.01M6 8h.01M10 8h.01M6 12.5h.01M10 12.5h.01" stroke-width="2.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-more" viewBox="0 0 16 16"><path d="M8 3.5h.01M8 8h.01M8 12.5h.01" stroke-width="2.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-columns" viewBox="0 0 16 16"><path d="M2.5 3h11v10h-11zM6.2 3v10M9.8 3v10"/></symbol>
   <symbol id="i-mark" viewBox="0 0 64 64"><path d="M17 5.5v53" stroke-width="8.5"/><path d="M47.5 6.5 32.2 27.6" stroke-width="7.5"/><path d="M33.4 36.8 48.5 57.5" stroke-width="8"/></symbol>
 </svg>
 <a class="skip" href="#main">Skip to content</a>
@@ -32,21 +93,57 @@
 <template id="tpl-shell">
   <div class="shell">
     <header class="side">
-      <a class="brand" href="/" data-link aria-label="kwatch, active issues">
-        <svg class="mark" width="26" height="26" viewBox="0 0 64 64" aria-hidden="true"><use href="#i-mark"/><circle class="mark-dot" cx="28.6" cy="32.2" r="8.6" stroke-width="3.2"/></svg>
-        <span class="wordmark">kwatch</span>
-      </a>
+      <div class="side-top">
+        <a class="brand" href="/" data-link aria-label="kwatch, overview">
+          <svg class="mark" width="26" height="26" viewBox="0 0 64 64" aria-hidden="true"><use href="#i-mark"/><circle class="mark-dot" cx="28.6" cy="32.2" r="8.6" stroke-width="3.2"/></svg>
+          <span class="wordmark">kwatch</span>
+        </a>
+        <details class="legend">
+          <summary title="What the colors mean, and keyboard keys (press ?)" aria-label="Help: what the colors mean and keyboard keys" aria-keyshortcuts="?">?</summary>
+          <div class="legend-pop">
+            <p class="legend-h">Colours and words</p>
+            <ul>
+              <li><span class="dot page"></span><b>Urgent</b>: kwatch alerted the on-call person. Look now.</li>
+              <li><span class="dot notify"></span><b>Needs attention</b>: kwatch sent a message. Look soon.</li>
+              <li><span class="dot low"></span><b>Low</b>: only in the daily summary. No rush.</li>
+              <li><span class="dot quiet"></span><b>Quiet</b>: kwatch keeps track but sends nothing.</li>
+            </ul>
+            <p>The alert level is how kwatch told your team. Open an issue and start with "What to do first".</p>
+            <p class="legend-sub">States</p>
+                        <ul data-legend-states></ul>
+            <p class="legend-h legend-keys">Keyboard</p>
+            <ul class="keys">
+              <li><kbd>/</kbd> Search the issues</li>
+              <li><kbd>j</kbd> <kbd>k</kbd> Next / previous row, or issue when one is open beside the table</li>
+              <li><kbd>Enter</kbd> Open the issue beside the table (Cmd or Ctrl and click: its own page in a new tab)</li>
+              <li><kbd>[</kbd> <kbd>]</kbd> Previous / next issue in your list, on an issue page or beside the table</li>
+              <li><kbd>?</kbd> Show or hide this help · <kbd>Esc</kbd> close it, or the issue open beside the table</li>
+            </ul>
+          </div>
+        </details>
+        <button class="who-b btn btn-sm" type="button" data-who-toggle aria-expanded="false" aria-controls="who">Settings</button>
+      </div>
       <nav class="nav" aria-label="Dashboard">
-        <a href="/" data-link data-nav="active">Active issues<span class="count" data-badge hidden></span></a>
-        <a href="/resolved" data-link data-nav="resolved">Resolved</a>
-        <a href="/status" data-link data-nav="status">kwatch status</a>
+        <a href="/" data-link data-nav="status">Overview</a>
+        <a href="/issues" data-link data-nav="issues">Issues<span class="count" data-badge hidden></span></a>
       </nav>
-      <div class="who">
+      <div class="who" id="who">
+        <div class="ntf" data-ntf>
+          <button class="ntf-b" type="button" data-ntf-toggle aria-pressed="false" aria-describedby="ntf-hint"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg><span>Notifications</span><span class="ntf-state" data-ntf-state>Off</span></button>
+          <p class="ntf-hint" id="ntf-hint" data-ntf-hint hidden></p>
+          <div class="ntf-opts" data-ntf-opts hidden>
+            <label class="ntf-l">Tell me about<select data-ntf-min><option value="page">Urgent only</option><option value="notify">Urgent and needs attention</option><option value="digest">Everything</option></select></label>
+            <label class="ntf-c"><input type="checkbox" data-ntf-resolved>Also when resolved</label>
+            <label class="ntf-c"><input type="checkbox" data-ntf-open>Even when this tab is open</label>
+          </div>
+        </div>
         <div class="tz" role="group" aria-label="Show times in"><span>Times</span><button class="tz-b" type="button" data-tz="local" aria-pressed="true">Local</button><button class="tz-b" type="button" data-tz="utc" aria-pressed="false">UTC</button></div>
         <div><span>Read-only dashboard</span><button class="link" type="button" data-signout>Sign out</button></div>
       </div>
     </header>
     <div class="main">
+      <div class="offline" data-offline role="status" aria-live="polite" hidden><span data-offline-text></span><button class="btn btn-sm" type="button" data-offline-try>Try now</button></div>
+      <nav class="incnav" aria-label="Issues in your list" data-incnav hidden><a class="btn btn-sm" data-link data-incnav-prev aria-keyshortcuts="[" title="Previous issue in your list (press [)">← Previous</a><span class="pager-pos" data-incnav-pos></span><a class="btn btn-sm" data-link data-incnav-next aria-keyshortcuts="]" title="Next issue in your list (press ])">Next →</a></nav>
       <main class="content" id="main" tabindex="-1"></main>
     </div>
   </div>
@@ -87,7 +184,7 @@
 </template>
 
 <template id="tpl-panel">
-  <div class="panel" role="status">
+  <div class="panel" role="alert">
     <h2 data-heading></h2>
     <p data-body></p>
     <div class="cmd" data-cmd hidden><code tabindex="0"></code><button class="btn" type="button" data-copy>Copy</button></div>
@@ -96,91 +193,197 @@
   </div>
 </template>
 
-<template id="tpl-list">
+<template id="tpl-issues">
   <div class="page-head">
-    <div><h1 data-h1></h1><p class="sub" data-sub></p></div>
+    <div><h1>Issues</h1><p class="sub" data-sub></p></div>
     <div class="updated" data-updated hidden></div>
   </div>
-  <div class="filterbox" data-filterbox role="search" aria-label="Filter issues" hidden>
+  <a class="skip" href="#issues-table" data-skip>Skip to issues</a>
+  <div class="qvbox" data-qv></div>
+  <div class="filterbox" data-filterbox role="search" aria-label="Filter issues">
+    <div class="stsw" role="group" aria-label="Status">
+      <button class="stsw-b" type="button" data-status="active" aria-pressed="true" title="Issues going on now">Active<span class="fc-n" data-n></span></button><button class="stsw-b" type="button" data-status="resolved" aria-pressed="false" title="Issues that stopped failing (kwatch keeps them 7 days)">Resolved<span class="fc-n" data-n></span></button><button class="stsw-b" type="button" data-status="all" aria-pressed="false" title="Active and resolved together">All<span class="fc-n" data-n></span></button>
+    </div>
+    <button class="btn btn-sm ftoggle" type="button" data-ftoggle aria-expanded="false">Filters</button>
     <div class="filters">
       <label class="f f-search"><span class="sr-only">Search</span><svg class="icon f-icon" aria-hidden="true"><use href="#i-search"/></svg><input type="search" data-f="q" placeholder="Search issues" autocomplete="off" aria-keyshortcuts="/"><kbd class="f-kbd" aria-hidden="true" title="Press / to search">/</kbd></label>
-      <label class="f f-ns"><span class="sr-only">Namespace</span><select data-f="namespace"><option value="">All namespaces</option></select></label>
-      <label class="f" data-only="active"><span class="sr-only">State</span><select data-f="state"><option value="">Any state</option><option value="open">Happening now</option><option value="settling">Looking into it</option><option value="flapping">Keeps coming back</option><option value="recovering">Looks better</option></select></label>
-      <label class="f" data-only="resolved"><span class="sr-only">Resolved</span><select data-f="since"><option value="">Last 7 days</option><option value="24h">Last 24 hours</option><option value="72h">Last 3 days</option></select></label>
-      <label class="f f-sort"><span class="sr-only">Sort</span><select data-f="sort"><option value="" data-sort-default>Urgent first</option><option value="severity">By severity</option><option value="recent">Recently seen</option></select></label>
+      <div class="fpicks">
+      <div class="f f-pick" data-ms="namespace"></div>
+      <div class="f f-pick" data-ms="kind"></div>
+      <div class="f f-pick" data-ms="state"></div>
+      <div class="f f-pick" data-ms="acked"></div>
+      <label class="f f-pick"><span class="sr-only">Started</span><select data-f="age" data-dd-mark><option value="">Any start time</option><option value="today">Started today</option><option value="day">Going on over a day</option></select></label>
+      <label class="f f-pick"><span class="sr-only">Resolved within</span><select data-f="since" data-dd-mark><option value="">Resolved in 7 days</option><option value="24h">Resolved in 24 hours</option><option value="72h">Resolved in 3 days</option></select></label>
+      <label class="f f-sort"><span class="sr-only">Sort</span><select data-f="sort"><option value="">Most urgent, then newest</option><option value="severity">Severity</option><option value="last">Last seen</option><option value="started">Started</option><option value="duration">Duration</option><option value="repeats">Times repeated</option><option value="status">Status</option><option value="namespace">Namespace</option><option value="title">Title</option></select></label>
+      <button class="btn btn-sm f-dir" type="button" data-f-dir hidden></button>
+      </div>
     </div>
+    <details class="shint" data-shint><summary>Search tips</summary><ul>
+      <li><code>ns:staging</code> one namespace · <code>is:urgent</code> one alert level · <code>-is:acked</code> not acknowledged yet</li>
+      <li><code>state:open</code> <code>state:flapping</code> one state · <code>age:&lt;2h</code> started in the last 2 hours</li>
+      <li><code>"out of memory"</code> these words together · <code>-word</code> leave out issues that mention it</li>
+    </ul></details>
     <div class="frow">
-      <div class="fchips" role="group" aria-labelledby="sevlabel"><span class="f-lbl" id="sevlabel" data-sevlabel>Severity</span>
-        <button class="fchip" type="button" data-sev="page" aria-pressed="false"><span class="dot page"></span>Urgent<span class="fc-n" data-n></span></button>
-        <button class="fchip" type="button" data-sev="notify" aria-pressed="false"><span class="dot notify"></span>Needs attention<span class="fc-n" data-n></span></button>
-        <button class="fchip" type="button" data-sev="digest" aria-pressed="false"><span class="dot low"></span>Low<span class="fc-n" data-n></span></button></div>
-      <div class="factive" data-factive hidden><span data-fsummary></span><button class="link" type="button" data-fclear>Clear filters</button></div>
+      <div class="fchips" role="group" aria-labelledby="sevlabel"><span class="f-lbl" id="sevlabel">Severity</span>
+        <button class="fchip" type="button" data-sev="page" aria-pressed="false"><svg class="icon fchip-on" aria-hidden="true"><use href="#i-check"/></svg><span class="dot page"></span>Urgent<span class="fc-n" data-n></span></button>
+        <button class="fchip" type="button" data-sev="notify" aria-pressed="false"><svg class="icon fchip-on" aria-hidden="true"><use href="#i-check"/></svg><span class="dot notify"></span>Needs attention<span class="fc-n" data-n></span></button>
+        <button class="fchip" type="button" data-sev="digest" aria-pressed="false"><svg class="icon fchip-on" aria-hidden="true"><use href="#i-check"/></svg><span class="dot low"></span>Low<span class="fc-n" data-n></span></button>
+        <button class="fchip" type="button" data-sev="silent" aria-pressed="false" hidden><svg class="icon fchip-on" aria-hidden="true"><use href="#i-check"/></svg><span class="dot quiet"></span>Quiet<span class="fc-n" data-n></span></button></div>
+    </div>
+    <div class="factive" data-factive role="group" hidden></div>
+  </div>
+  <div class="livebar" data-livebar role="status" hidden><span data-livebar-text></span><button class="btn btn-sm" type="button" data-livebar-show>Show</button></div>
+  <div data-alert></div>
+  <p class="muted small pagenote" data-pagenote hidden>is:new and is:changed are checked on this page only: your browser remembers what you saw, the server doesn't.</p>
+  <div class="ttools">
+    <details class="vopts" data-vopts>
+      <summary class="btn btn-sm">View options</summary>
+      <div class="vopts-pop">
+        <div class="vo-grid">
+          <label>Density<select data-vo-density><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label>
+          <label>Rows per page<select data-vo-size><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
+          <label>Issues opens with<select data-vo-status><option value="active">Active</option><option value="resolved">Resolved</option><option value="all">All</option></select></label>
+          <label>Order<select data-vo-sort></select></label>
+          <label>Text size<select data-vo-text><option value="s">Small</option><option value="m">Normal</option><option value="l">Large</option><option value="xl">Extra large</option></select></label>
+          <label class="vo-check"><input type="checkbox" data-vo-contrast>High contrast</label>
+        </div>
+        <p class="vo-colsnote">Which columns show, their order and width: <button class="link" type="button" data-vo-cols>Columns</button></p>
+        <h3 class="vo-h">Saved views</h3>
+        <form class="vo-save" data-vo-save><input type="text" maxlength="40" placeholder="Name this view" aria-label="Name for this view" autocomplete="off"><button class="btn btn-sm" type="submit">Save this view</button></form>
+        <p class="muted small" data-vo-none>No saved views yet. A saved view keeps the filters, order and columns.</p>
+        <ul class="vo-views" data-vo-views></ul>
+        <p class="vo-foot"><button class="link" type="button" data-vo-reset>Reset to defaults</button><span class="muted small">Kept in this browser only.</span></p>
+      </div>
+    </details>
+    <div class="cols" data-cols>
+      <button class="btn btn-sm cols-btn" type="button" data-cols-btn aria-haspopup="dialog"><svg class="icon" aria-hidden="true"><use href="#i-columns"/></svg>Columns</button>
+      <div class="cols-pop" data-cols-pop role="dialog" aria-label="Columns">
+        <p class="cols-h">Columns</p>
+        <div class="cols-presets" role="group" aria-label="Column presets" data-cols-presets></div>
+        <ul class="cols-list" data-cols-list></ul>
+        <p class="cols-foot"><button class="link" type="button" data-cols-reset>Reset columns</button><span class="muted small">Drag a heading's edge to resize; double-click it to fit.</span></p>
+      </div>
     </div>
   </div>
-  <div data-alert></div>
-  <ul class="list" data-list hidden></ul>
-  <div class="notice" data-trunc hidden><p></p></div>
+  <div class="tablewrap" data-tablewrap>
+    <table class="itable" id="issues-table" tabindex="-1" data-table><caption class="sr-only">Issues</caption><thead></thead><tbody></tbody></table>
+  </div>
   <div data-empty></div>
-</template>
-
-<template id="tpl-row">
-  <li><a class="issue" data-link>
-    <div><span data-chips></span>
-      <p class="i-title"></p>
-      <p class="i-sub" hidden></p></div>
-    <div class="i-where"></div>
-    <div class="i-when"><time></time><small></small></div>
-  </a></li>
+  <nav class="pager" data-pager aria-label="Pages" hidden>
+    <span class="pager-range" data-range></span>
+    <span class="pager-btns" data-pages></span>
+    <label class="pager-size">Rows per page<select data-size><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
+  </nav>
 </template>
 
 <template id="tpl-detail">
   <div class="d-nav">
     <p class="back"><a data-link data-back><svg class="icon" aria-hidden="true"><use href="#i-back"/></svg><span></span></a></p>
-    <nav class="pager" aria-label="Other issues" data-pager hidden>
-      <a class="btn btn-sm" data-link data-prev aria-keyshortcuts="k">Previous</a>
-      <span class="pager-pos" data-pos></span>
-      <a class="btn btn-sm" data-link data-next aria-keyshortcuts="j">Next</a>
-    </nav>
   </div>
   <div class="detail">
-    <div class="d-head">
-      <div class="notice d-banner" data-banner hidden><b></b><p></p></div>
-      <div class="d-meta"><div class="chips" data-chips></div><button class="btn btn-sm" type="button" data-copy-link>Copy link</button></div>
-      <h1 data-title></h1>
-      <div class="tabs" role="tablist" aria-label="Issue views" data-tabs hidden>
-        <a href="?" role="tab" data-tab="summary" aria-selected="true">Summary</a>
-        <a href="?tab=evidence" role="tab" data-tab="evidence" data-tab-evidence aria-selected="false" tabindex="-1">Evidence <span class="tab-count"></span></a>
+    <div class="notice d-banner" data-banner hidden><b></b><p></p></div>
+    <section class="d-sum" aria-labelledby="d-title">
+      <div class="d-meta"><h2 class="d-kicker">What's happening</h2><span class="d-acts"><button class="btn btn-sm" type="button" data-copy-summary title="Copy a short summary for chat or a ticket">Copy summary</button><button class="btn btn-sm" type="button" data-copy-link>Copy link</button></span></div>
+      <div class="chips" data-chips></div>
+      <h1 id="d-title" data-title></h1>
+      <p class="d-likely" data-likely hidden><b>Likely cause:</b> <span data-likely-text></span></p>
+      <dl class="d-facts">
+        <div><dt>Where</dt><dd data-where></dd></div>
+        <div><dt data-since-label>Since</dt><dd data-since></dd></div>
+      </dl>
+      <p class="d-caused" data-caused hidden></p>
+      <p class="d-blast" data-blast hidden></p>
+      <p class="d-similar" data-similar hidden><a class="ulink" data-link></a></p>
+      <p class="d-looked" data-looked hidden></p>
+      <ul class="d-ctx" data-ctx hidden></ul>
+      <div class="d-first" data-first hidden><h2>What to do first</h2><div data-first-step></div></div>
+    </section>
+    <section class="d-alert" data-alert-box aria-labelledby="d-alert-h" hidden>
+      <h2 class="d-kicker" id="d-alert-h">What's going on with this alert</h2>
+      <div class="al-open" data-why-open hidden><p data-why-text></p><div class="al-bar" data-why-bar hidden><span class="al-fill" data-why-fill></span></div></div>
+      <p class="al-line" data-why-level hidden></p>
+      <p class="al-line al-timing" data-timing hidden></p>
+      <div class="al-ack" data-ack hidden></div>
+    </section>
+    <details class="fold" data-fold="why"><summary>Why kwatch thinks this</summary><div class="fold-body">
+      <h3 class="fold-h" title="kwatch's best guess at what started this. Check it against the evidence below.">Likely cause</h3>
+      <p class="d-cause" data-cause></p>
+      <div data-evidence hidden></div>
+    </div></details>
+    <details class="fold" data-fold="others" hidden><summary>Other issues <span class="fold-n" data-others-n></span></summary><div class="fold-body"><div data-causing></div><div data-sametime></div></div></details>
+    <details class="fold" data-fold="fix" hidden><summary>All steps to fix <span class="fold-n" data-fix-n></span></summary><div class="fold-body"><div data-steps></div><p class="runbook" data-runbook hidden></p></div></details>
+    <details class="fold" data-fold="changes" hidden><summary>What changed just before <span class="fold-n" data-changes-n></span></summary><div class="fold-body" data-changes></div></details>
+    <details class="fold" data-fold="seen" hidden><summary>Seen before</summary><div class="fold-body" data-seen></div></details>
+    <details class="fold" data-fold="waiting" hidden><summary>Why it's waiting to start</summary><div class="fold-body" data-waiting></div></details>
+    <details class="fold" data-fold="probes" hidden><summary>Failing probe</summary><div class="fold-body" data-probes></div></details>
+    <details class="fold" data-fold="warnings" hidden><summary>Recent warnings <span class="fold-n" data-warnings-n></span></summary><div class="fold-body" data-warnings></div></details>
+    <details class="fold" data-fold="traffic" hidden><summary>Traffic impact</summary><div class="fold-body" data-traffic></div></details>
+    <details class="fold" data-fold="node" hidden><summary data-node-h>Node</summary><div class="fold-body" data-node></div></details>
+    <details class="fold" data-fold="timeline"><summary>What happened, step by step</summary><div class="fold-body"><div class="strip" data-strip hidden></div><ol class="tl" data-timeline></ol><button class="btn btn-sm tl-more" type="button" data-tl-more aria-expanded="false" hidden></button></div></details>
+    <details class="fold" data-fold="logs" hidden><summary>Logs</summary><div class="fold-body">
+      <div class="lg-ctl" data-log-ctl hidden><label>Show <select data-log-pick></select></label><span class="muted small" data-log-n></span></div><p class="ev-note" data-log-note hidden></p>
+      <div class="logs" tabindex="0" role="region" aria-label="Log lines" data-logs></div>
+      <div class="cap"><span data-logcap></span><span class="cap-actions"><button class="btn btn-sm" type="button" data-wrap-logs aria-pressed="false">Wrap lines</button><button class="btn btn-sm" type="button" data-copy-logs>Copy all</button></span></div>
+    </div></details>
+    <details class="fold" data-fold="containers" hidden><summary>Containers</summary><div class="fold-body"><div data-containers></div><div class="ct-part" data-resources></div><div class="ct-part" data-usage></div></div></details>
+    <details class="fold" data-fold="related" hidden><summary>Affected objects</summary><div class="fold-body"><div data-affected></div><div data-related></div></div></details>
+    <details class="fold" data-fold="told" hidden><summary>Who was told</summary><div class="fold-body" data-told></div></details>
+    <details class="fold" data-fold="more"><summary>More details</summary><div class="fold-body"><dl class="facts" data-facts></dl></div></details>
+  </div>
+</template>
+
+<template id="tpl-drawer">
+  <div class="drw" data-drawer hidden>
+    <div class="drw-shade" data-drw-shade></div>
+    <section class="drw-panel" role="dialog" aria-modal="true" aria-label="Issue preview" tabindex="-1" data-drw-panel>
+      <div class="drw-bar">
+        <span class="drw-nav"><button class="btn btn-sm" type="button" data-drw-prev aria-keyshortcuts="k [" title="Previous issue in the table (k or [)">← Previous</button><span class="pager-pos" data-drw-pos></span><button class="btn btn-sm" type="button" data-drw-next aria-keyshortcuts="j ]" title="Next issue in the table (j or ])">Next →</button></span>
+        <span class="drw-acts"><a class="btn btn-sm drw-full" data-link data-drw-full>Open full page</a><button class="btn btn-sm drw-x" type="button" data-drw-close aria-label="Close the preview" title="Close (Esc)" aria-keyshortcuts="Escape"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button></span>
       </div>
-    </div>
-    <div class="ev-host" role="tabpanel" data-evidence hidden></div>
-    <div class="d-story" data-story>
-      <section class="sec" data-why hidden><h2>Why it happened</h2><p></p></section>
-      <section class="sec" data-fix hidden><h2>What to do</h2><div data-steps></div><p class="runbook" data-runbook hidden></p></section>
-      <section class="sec" data-logs-sec><h2>What kwatch saw</h2>
-        <div class="logs" tabindex="0" role="region" aria-label="Captured log lines" data-logs hidden></div>
-        <div class="cap"><span data-logcap></span><span class="cap-actions"><button class="btn btn-sm" type="button" data-wrap-logs aria-pressed="false" hidden>Wrap lines</button><button class="btn btn-sm" type="button" data-copy-logs hidden>Copy all</button></span></div></section>
-      <section class="sec"><h2>What happened, newest first</h2><ol class="tl" data-timeline></ol><button class="btn btn-sm tl-more" type="button" data-tl-more aria-expanded="false" hidden></button></section>
-    </div>
-    <aside class="d-side">
-      <div class="facts-card"><h2>Facts</h2><dl class="facts" data-facts></dl></div>
-    </aside>
+      <div class="drw-body" data-drw-body></div>
+    </section>
   </div>
 </template>
 
 <template id="tpl-status">
   <div class="page-head">
-    <div><h1>kwatch status</h1></div>
+    <div><h1>Overview</h1></div>
     <div class="updated" data-updated hidden></div>
   </div>
-  <div class="notice sum" data-summary hidden><b></b></div>
   <div data-alert></div>
-  <div data-body hidden>
+  <section class="ov" data-overview hidden>
+    <h2 class="ov-h" data-headline></h2>
+    <p class="ov-today" data-today hidden></p>
+    <p class="ov-quiet" data-quiet hidden><span data-quiet-text></span> · <a class="ulink" href="#cov" data-cov-open>What kwatch is watching</a></p>
+    <div class="ov-counts" data-counts></div>
+  </section>
+  <section class="in" data-ins hidden aria-label="Insights">
+    <div class="in-grid" data-ins-grid></div>
+  </section>
+  <section class="nsmap" data-nsmap hidden aria-labelledby="nsmap-h">
+    <h2 class="ovl-h" id="nsmap-h">Namespaces with active issues</h2>
+    <p class="muted small">Most urgent first. Each opens its issues.</p>
+    <ul class="ns-tiles" data-nsmap-list></ul>
+    <p class="ns-more"><a class="ulink" href="/issues?status=active" data-link data-nsmap-more hidden></a></p>
+  </section>
+  <section class="act" data-activity hidden aria-labelledby="act-h">
+    <div class="act-head">
+      <h2 class="ovl-h" id="act-h">What changed recently</h2>
+      <div class="tz act-sw" role="group" aria-label="Show changes from"><button class="tz-b" type="button" data-act-since="1h" aria-pressed="true">Last hour</button><button class="tz-b" type="button" data-act-since="24h" aria-pressed="false">Last 24 hours</button></div>
+    </div>
+    <ul class="act-list" data-act-list></ul>
+    <p class="act-none" data-act-none hidden></p>
+    <p class="act-more" data-act-more hidden></p>
+  </section>
+  <details class="fold tr" data-trends hidden><summary>This week</summary><div class="fold-body"><div class="tr-grid" data-trends-body></div><div class="tr-grid" data-causes></div></div></details>
+  <div class="notice sum" data-summary hidden><b></b></div>
+  <details class="fold" data-body hidden><summary>kwatch health details</summary><div class="fold-body">
     <div class="cards">
       <div class="card"><h2>About this kwatch</h2><dl class="facts" data-about></dl></div>
       <div class="card"><h2>Where alerts go</h2><div data-channels></div></div>
     </div>
-    <div class="card wide"><h2>Namespaces</h2><div data-namespaces></div></div>
-  </div>
+  </div></details>
+  <details class="fold cov" id="cov" data-cov><summary>What kwatch is watching</summary><div class="fold-body" data-cov-body><p class="muted">Loading…</p></div></details>
 </template>
 </body>
 </html>

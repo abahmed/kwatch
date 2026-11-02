@@ -1,6 +1,8 @@
 package app
 
 import (
+	"encoding/json"
+
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/delivery"
@@ -10,12 +12,20 @@ import (
 // outboxStore keeps the delivery outbox in the state store's outbox
 // bucket, one value per record keyed by its ID. Writes are fenced by the
 // store epoch like every other session write.
+//
+// It also keeps the send trail in the trails bucket (trail_store.go).
 type outboxStore struct {
-	values storage.Keyed[delivery.OutboxRecord]
+	values    storage.Keyed[delivery.OutboxRecord]
+	trails    storage.Keyed[delivery.TrailRecord]
+	incidents storage.Keyed[json.RawMessage]
 }
 
 func newOutboxStore(s *storage.Store) outboxStore {
-	return outboxStore{values: storage.OutboxValues[delivery.OutboxRecord](s)}
+	return outboxStore{
+		values:    storage.OutboxValues[delivery.OutboxRecord](s),
+		trails:    storage.TrailValues[delivery.TrailRecord](s),
+		incidents: storage.IncidentRecords[json.RawMessage](s),
+	}
 }
 
 // LoadOutbox returns every saved record in key order, which is the order

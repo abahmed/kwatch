@@ -23,6 +23,8 @@ func TestKeyedBucketsRoundTrip(t *testing.T) {
 		State:        StateValues[record](s),
 		Threads:      ThreadValues[record](s),
 		Outbox:       OutboxValues[record](s),
+		Trails:       TrailValues[record](s),
+		Usage:        UsageValues[record](s),
 	}
 	for bucket, view := range views {
 		want := record{Name: string(bucket), Num: len(bucket)}

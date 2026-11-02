@@ -106,7 +106,9 @@ func (m *Manager) reminderStep(p *Incident, now time.Time) (Decision, bool) {
 }
 
 func (m *Manager) materialStep(p *Incident, now time.Time) (Decision, bool) {
-	if materialHeld(p, now) {
+	if materialHeld(p, now) || m.provisional(p, now) {
+		// A provisional rise waits for the saved reasons or the end
+		// of the restore grace (restore_reasons.go).
 		return Decision{}, true
 	}
 	p.Delivery.MarkMaterial(now)

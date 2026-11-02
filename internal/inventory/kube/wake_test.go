@@ -142,16 +142,69 @@ func TestPodWakeRemainingOnlyForPodsTheWakeCreated(t *testing.T) {
 		wakeNow.Add(time.Hour)), "the wake-up is over")
 }
 
+// own records pod as owned by the Deployment named workload.
+func (w wakeModel) own(pod inventory.EntityID, workload string) {
+	w.t.Helper()
+	owner := inventory.EntityID{Kind: KindDeployment, Namespace: "shop",
+		Name: workload}
+	w.apply(inventory.Observation{Kind: inventory.Related, At: wakeNow,
+		Entity: pod, Relation: inventory.OwnedBy,
+		Targets: []inventory.EntityID{owner}})
+}
+
 func TestReportWakeCountsBlipsAndWhatIsStillFailing(t *testing.T) {
 	m := newWakeModel(t)
 	m.start(6, wakeNow)
 	at := wakeNow.Add(2 * time.Minute)
-	m.pod("a", at, true, true)
-	m.pod("b", at, false, true)
-	m.pod("c", at, true, false)
+	m.own(m.pod("a", at, true, true), "app0")
+	m.own(m.pod("b", at, false, true), "app1")
+	m.own(m.pod("c", at, true, false), "app2")
 	w, _ := LatestWake(m.m, wakeNow.Add(time.Minute))
 	report := ReportWake(m.m, w)
 	assert.Equal(t, 2, report.Blips)
+	assert.Equal(t, 1, report.Failing)
+}
+
+// Pods of a workload that was already running, or of none, failed at
+// startup during the wake-up but are not among the workloads it
+// started, so the wake line does not count them.
+func TestReportWakeCountsOnlyTheWorkloadsItStarted(t *testing.T) {
+	m := newWakeModel(t)
+	m.start(6, wakeNow)
+	m.scale("running", "2", "3", wakeNow)
+	at := wakeNow.Add(2 * time.Minute)
+	m.own(m.pod("a", at, false, true), "app0")
+	m.own(m.pod("r", at, false, true), "running")
+	m.pod("bare", at, false, true)
+	w, _ := LatestWake(m.m, wakeNow.Add(time.Minute))
+	report := ReportWake(m.m, w)
+	assert.Equal(t, 1, report.Blips)
+	assert.Equal(t, 1, report.Failing)
+}
+
+// A workload the wake-up started counts even when something owns it in
+// turn: an operator's resource above the Deployment the wake-up saw.
+func TestReportWakeMatchesAnyOwnerInTheChain(t *testing.T) {
+	m := newWakeModel(t)
+	m.start(6, wakeNow)
+	at := wakeNow.Add(2 * time.Minute)
+	pod := m.pod("a", at, false, true)
+	rs := inventory.EntityID{Kind: KindReplicaSet, Namespace: "shop",
+		Name: "app0-7d9"}
+	deploy := inventory.EntityID{Kind: KindDeployment, Namespace: "shop",
+		Name: "app0"}
+	operator := inventory.NewEntityID("example.com", "webapp", "shop",
+		"app0")
+	for _, link := range [][2]inventory.EntityID{
+		{pod, rs}, {rs, deploy}, {deploy, operator},
+	} {
+		m.apply(inventory.Observation{Kind: inventory.Related, At: wakeNow,
+			Entity: link[0], Relation: inventory.OwnedBy,
+			Targets: []inventory.EntityID{link[1]}})
+	}
+	w, _ := LatestWake(m.m, wakeNow.Add(time.Minute))
+	report := ReportWake(m.m, w)
+	assert.Equal(t, 1, report.Blips)
 	assert.Equal(t, 1, report.Failing)
 }
 

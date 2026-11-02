@@ -235,23 +235,26 @@ func newDashboardServer(
 		TLSCertFile: dc.TLSCertFile,
 		TLSKeyFile:  dc.TLSKeyFile,
 		Edition:     string(feature.OrCommunity(e).Edition()),
+		ChangeHistory: feature.OrCommunity(e).Has(
+			feature.ChangeCorrelation),
 		Scope: dashboard.Scope{
 			Watched:  scope.AllowedNamespaces(),
 			Excluded: scope.ForbiddenNamespaces(),
 		},
 		Self: dashboard.Self{
-			Namespace:  envOr("POD_NAMESPACE", "kwatch"),
-			Deployment: envOr(dashboardDeploymentEnv, "kwatch"),
+			Namespace:  envOrKwatch("POD_NAMESPACE"),
+			Deployment: envOrKwatch(dashboardDeploymentEnv),
 		},
 	}, now)
 }
 
-// envOr is the environment value of name, or fallback when it is empty.
-func envOr(name, fallback string) string {
+// envOrKwatch is the environment value of name, or "kwatch" (the
+// default namespace and release name) when it is empty.
+func envOrKwatch(name string) string {
 	if v := os.Getenv(name); v != "" {
 		return v
 	}
-	return fallback
+	return "kwatch"
 }
 
 // Dashboard environment: the bearer token, the sign-in password and the

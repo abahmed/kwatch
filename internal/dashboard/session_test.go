@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/clock"
 )
 
@@ -300,20 +302,34 @@ func TestSessionRevokedSetEvictsTheOldestWhenFull(t *testing.T) {
 	}
 }
 
-func TestSessionPeerLimitCatchesARotatedForwardedFor(t *testing.T) {
+// Behind a trusted proxy only the client it names is limited: failures
+// from many clients fill no shared counter, so a valid bearer token and
+// a right password from another client still work. Many failures
+// through one proxy are logged instead.
+func TestSessionProxyFailuresDoNotLockOutOtherClients(t *testing.T) {
+	out := captureLog(t)
 	s := newSessionServer(true, testPassword)
-	try := func(client string) int {
-		req := loginRequest("wrong")
+	viaProxy := func(req *http.Request, client string) int {
 		req.RemoteAddr = "10.0.0.5:1234"
 		req.Header.Set("X-Forwarded-Proto", "https")
 		req.Header.Set("X-Forwarded-For", client)
 		return s.do(req).Code
 	}
-	for i := range maxProxyFailures {
-		try("203.0.113." + strconv.Itoa(i%250))
+	for i := range 2 * maxProxyFailures {
+		viaProxy(loginRequest("wrong"), "203.0.113."+strconv.Itoa(i%250))
 	}
-	if code := try("198.51.100.9"); code != 429 {
-		t.Errorf("after %d failures from one peer: %d, want 429",
-			maxProxyFailures, code)
+	bearer := httptest.NewRequest(http.MethodGet, "/api/incidents", nil)
+	bearer.Header.Set("Authorization", "Bearer "+testToken)
+
+	if code := viaProxy(bearer, "198.51.100.9"); code != 200 {
+		t.Errorf("valid token from another client: %d, want 200", code)
+	}
+	if code := viaProxy(loginRequest(testPassword),
+		"198.51.100.9"); code != 204 {
+		t.Errorf("right password from another client: %d, want 204", code)
+	}
+	klog.Flush()
+	if n := strings.Count(out.String(), "many dashboard sign-in"); n != 1 {
+		t.Errorf("proxy warning logged %d times, want 1:\n%s", n, out)
 	}
 }

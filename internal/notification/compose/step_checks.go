@@ -62,18 +62,6 @@ func gatheredSteps(
 	return out
 }
 
-// confirmedSentences state why gathered evidence proves the cause.
-func confirmedSentences(f caseFacts) []sentence {
-	if f.confirmed == "" {
-		return nil
-	}
-	return []sentence{{part: partProof, weight: weightConfirmed,
-		text: endSentence(upperFirst(f.confirmed)) + " Confirmed."}}
-}
-
-// weightConfirmed puts the proof first among the proofs.
-const weightConfirmed = 1.0
-
 // pinFix marks the trailing fix of a Pro message, a command that
 // changes the cluster and the sentence before it, so a provider's
 // length limit cuts the proof above it and never the fix.

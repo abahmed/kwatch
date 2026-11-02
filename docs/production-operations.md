@@ -181,6 +181,22 @@ minutes, with one log line on recovery. Each round starts at the first node
 the previous round did not reach, so a slow round never starves the same
 nodes.
 
+The poller keeps each container's usage history: the memory working set
+and CPU use (millicores) peak of every clock hour of the last 24 hours,
+and the memory of the run before the last restart. The container carries
+the peaks as `memory.peak.24h.bytes` and `cpu.peak.24h.milli`. The
+history is saved in the state file's `usage` bucket at most every 5
+minutes and when kwatch stops, and loaded when the poller starts, so a
+restart of kwatch does not lose the peaks that explain an OOM kill. At
+most 5000 containers are saved, the most recently read first; a record
+expires 24 hours after the container's last reading, and a container
+that left the cluster is dropped once the inventory has synced. A file
+written before this bucket existed opens normally with no history. When
+the stored history cannot be read, the session neither restores nor
+saves it, so a read error never replaces it with an empty one. It is
+part of the kubelet stats poller, so it runs only where that does
+(`core.nodes.usage`, Pro).
+
 ### CPU and probes
 
 The default CPU request is 100m with a 500m limit, so a burst of events
@@ -367,8 +383,9 @@ reported through health diagnostics.
 
 The state file `/var/lib/kwatch/state.db` holds one bucket per data class:
 incidents, changes, baselines, evidence, timeline, object
-fingerprints, lifecycle state, provider thread IDs, the delivery outbox, and
-the flight recording.
+fingerprints, lifecycle state, provider thread IDs, the delivery outbox, the
+send trail behind the dashboard's "Who was told", the flight recording,
+and the container usage history (see "Kubelet stats").
 Every write,
 including compaction, first checks the store's claim epoch, so a process that
 lost the Lease cannot write or delete anything.
@@ -412,6 +429,8 @@ stops within one transaction on shutdown or loss of the state lock.
 | Resolved incidents | 7 days after resolution |
 | Baselines | Dropped 7 days after their workload is gone (checked every 10 minutes) |
 | Delivery outbox | Until a provider accepts the job; at most 2048 jobs, none older than 24 hours at restore |
+| Send trail | The 512 incidents told most recently, 16 delivery attempts each (the newest, plus the first one a channel accepted); the trail of an incident whose record is gone is deleted at the next start |
+| Usage history | 24 hours after the container's last reading; at most 5000 containers, the most recently read |
 | Open incidents, fingerprints, state, threads | No expiry |
 
 **Size cap.** The logical size of the store (the bytes of keys and values) is
@@ -558,7 +577,12 @@ silences) is logged once as `incident not announced: out of scope`
 
 The dashboard logs sign-in, sign-out and every failed request (`401`,
 `403`, `429`, `5xx`) at the default level; successful reads, which an
-open page makes every few seconds, only at `-v=2`.
+open page makes every few seconds, only at `-v=2`. Wrong passwords and
+tokens are limited per client (10 a minute); behind a trusted proxy
+only the client the proxy names is limited, and 100 failures through
+one proxy in a minute log `many dashboard sign-in failures through one
+proxy` once, without refusing anyone (`docs/dashboard.md`, "Access and
+limits").
 
 A kind counts as synced for the detectors only once its first list is
 in the model, so the first seconds after a start do not report listed
@@ -585,6 +609,16 @@ reason `persistence_restore_failed`. Watch
 `kwatch_delivery_outbox_dropped_total`,
 `kwatch_delivery_outbox_write_failures_total` and
 `kwatch_delivery_dropped_total`.
+
+The send trail (what became of each incident's messages, shown as "Who
+was told" on the dashboard) is saved by the outbox writer with its own
+batches and loaded at the next start, so a restart keeps it. It is
+bounded like the in-memory trail (512 incidents, 16 attempts each), and
+a trail whose incident is no longer in the state file is deleted at
+load. A file written before this bucket existed opens normally and
+starts with an empty trail; the bucket is not carried across a store
+reset. A failed trail write is logged (`write delivery trail`) and
+retried with the next batch; it never affects delivery.
 
 Startup summaries and plain notices (startup, upgrade, test) are information:
 paging providers (PagerDuty, Opsgenie, Squadcast, GoAlert, Zenduty,
@@ -628,6 +662,14 @@ license Secret grant is `get` and `update` on that one name, and the audit
 checks it when a key is set. Secret values are only hashed, and evidence is redacted before
 it is stored or rendered. Provider credentials come from mounted files, never
 from plain configuration.
+
+**Dashboard link.** With the Pro dashboard on and exposed by an Ingress or
+HTTPRoute in kwatch's namespace, alert messages link to it (see "Link to
+the dashboard" in [providers](providers.md)), so the dashboard's host name
+reaches every provider that receives a message. The link carries no token;
+opening it still needs a dashboard sign-in. To keep the host name out of
+alerts, expose the dashboard some other way (port-forward, a
+LoadBalancer Service) or from another namespace.
 
 **Adoption telemetry is on by default.** An official build sends one request
 to `https://api.kwatch.dev/telemetry/heartbeat` shortly after startup and
@@ -737,6 +779,10 @@ budget, the unavailable count, at most 50 unavailable kinds with a reason
 `budget_exceeded`, `object_cap_reached`, `disabled_by_config`), a `reasons`
 count per reason, and whether the last discovery was complete. Dynamic kinds
 that are skipped, unavailable, or over their object cap are listed too.
+The dashboard's `GET /api/coverage` gives the same state with names: the
+namespaces in and out of the namespace scope, every typed watch and
+whether it synced, the kinds kwatch cannot read and why, and when the
+sources first synced (see "Watch coverage" in `dashboard.md`).
 
 A dynamic kind over its object cap stays watched, but objects beyond the cap
 are cached only as a small stub (name, namespace, UID, resource version), so

@@ -116,12 +116,15 @@ func (s groupSet) lines(suffix string) []string {
 }
 
 // folded is a digest's problems with the leftovers taken out, and the
-// lines that say them instead: full for the ones listed in full, same
-// for the ones already listed today that did not change.
+// lines that say them instead: full for the new ones, ongoing for the
+// ones an earlier digest listed that are listed in full again, and same
+// for the ones already listed today that did not change. Each line
+// stays in the section of the problems it stands for, so a section's
+// lines add up to the count the headline gives it.
 type folded struct {
-	opened     []incident.Decision
-	extras     DigestExtras
-	full, same []string
+	opened              []incident.Decision
+	extras              DigestExtras
+	full, ongoing, same []string
 }
 
 // foldLeftovers groups the leftovers among the opened and ongoing
@@ -135,37 +138,39 @@ func foldLeftovers(
 	for _, d := range opened {
 		reasonOf = append(reasonOf, LeftoverReason(d.Incident))
 	}
-	for _, o := range extras.Ongoing {
-		reasonOf = append(reasonOf, o.Leftover)
-	}
-	fullOK := groupable(reasonOf)
+	newOK := groupable(reasonOf)
+	ongoingOK := groupable(leftoverOf(extras.Ongoing))
 	sameOK := groupable(leftoverOf(extras.Unchanged))
 
-	var full, same groupSet
+	var full, ongoing, same groupSet
 	for _, d := range opened {
-		if r := LeftoverReason(d.Incident); fullOK[r] {
+		if r := LeftoverReason(d.Incident); newOK[r] {
 			full.add(r, d.Incident.Root)
 		} else {
 			out.opened = append(out.opened, d)
 		}
 	}
-	out.extras.Ongoing, out.extras.Unchanged = nil, nil
-	for _, o := range extras.Ongoing {
-		if fullOK[o.Leftover] {
-			full.add(o.Leftover, o.Root)
-		} else {
-			out.extras.Ongoing = append(out.extras.Ongoing, o)
-		}
-	}
-	for _, o := range extras.Unchanged {
-		if sameOK[o.Leftover] {
-			same.add(o.Leftover, o.Root)
-		} else {
-			out.extras.Unchanged = append(out.extras.Unchanged, o)
-		}
-	}
-	out.full, out.same = full.lines(""), same.lines("unchanged")
+	out.extras.Ongoing = foldInto(&ongoing, extras.Ongoing, ongoingOK)
+	out.extras.Unchanged = foldInto(&same, extras.Unchanged, sameOK)
+	out.full, out.ongoing = full.lines(""), ongoing.lines("")
+	out.same = same.lines("unchanged")
 	return out
+}
+
+// foldInto adds the problems whose reason groups to set and returns the
+// others.
+func foldInto(
+	set *groupSet, problems []Ongoing, groups map[string]bool,
+) []Ongoing {
+	var rest []Ongoing
+	for _, o := range problems {
+		if groups[o.Leftover] {
+			set.add(o.Leftover, o.Root)
+		} else {
+			rest = append(rest, o)
+		}
+	}
+	return rest
 }
 
 func leftoverOf(ongoing []Ongoing) []string {

@@ -51,24 +51,32 @@ func TestSecurityHeadersAreOnEveryResponse(t *testing.T) {
 	}
 }
 
-// A failed request is logged at the default level with host, path and
-// status; a successful read (a page polling) is not, so it cannot drown
-// the rest of the log. The token is never logged.
+// A refused request is logged at the default level with host, path and
+// status; a successful read (a page polling) and a 401 or 404 anyone can
+// cause at will are not, so they cannot drown the rest of the log. The
+// token is never logged.
 func TestAccessLogNamesHostPathAndStatusButNotTheToken(t *testing.T) {
 	out := captureLog(t)
 	s := newTestServer()
 
 	get(t, s, "/api/status")
+	get(t, s, "/nope")
+	for range maxFailures {
+		call(t, s, http.MethodGet, "/api/status", "wrong-token")
+	}
 	call(t, s, http.MethodGet, "/api/status", "wrong-token")
 	klog.Flush()
 
 	logged := out.String()
-	if strings.Contains(logged, "status=200") {
-		t.Errorf("a successful read is logged at the default level: %s",
-			logged)
+	for _, quiet := range []string{"status=200", "status=401",
+		"status=404"} {
+		if strings.Contains(logged, quiet) {
+			t.Errorf("%s is logged at the default level: %s", quiet,
+				logged)
+		}
 	}
 	for _, want := range []string{`"dashboard request"`,
-		`path="/api/status"`, "status=401", `remote="192.0.2.1"`} {
+		`path="/api/status"`, "status=429", `remote="192.0.2.1"`} {
 		if !strings.Contains(logged, want) {
 			t.Errorf("log missing %s: %s", want, logged)
 		}

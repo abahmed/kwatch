@@ -53,5 +53,5 @@ func (w Writer) RestoredSummaryWith(
 	}
 	fill(&msg, mark, sentences)
 	msg.Doc = w.listDoc(mark, "kwatch restarted", facts, decisions, now)
-	return msg
+	return w.linkedList(msg)
 }

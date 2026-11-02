@@ -187,6 +187,7 @@ func (IngressSchema) Describe(obj any) (Description, bool) {
 			len(ing.Status.LoadBalancer.Ingress) > 0),
 	}
 	setPortMatchAttributes(attrs, ing)
+	setPublicAddresses(attrs, ingressAddresses(ing))
 	if name := ing.Spec.IngressClassName; name != nil && *name != "" {
 		attrs[AttrIngressClass] = inventory.Text(*name)
 		// A reference, so the Ingress is judged again when its class

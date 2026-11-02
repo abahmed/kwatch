@@ -18,6 +18,16 @@ decision is `Announce`, `Update` or `Resolve`; the pipeline gathers the facts
 for it (`Decision.Facts`: output, evidence, recent changes, kind spellings)
 and `internal/notification/compose` writes the text from the decision alone.
 
+Two more things ride on the copies the manager hands out, and neither
+decides anything. `CausedBy` and `Causing` are the other live incidents
+the reasoning ties this one to (`relations.go`: a failure chain that goes
+on past its limit, `Cause.Beyond`, or a hop of it, into the other's
+failures; or a cause rooted at the other's root or merged roots), at most
+five each. `Radius` counts the Services, Ingresses and workloads of the
+impact and the failing pods (`radius.go`), and `Journal.Widest` keeps the
+widest it reached. Messages say "Caused by: …" and "N pods were affected"
+from them; the dashboard serves `causedBy`, `causing` and `blastRadius`.
+
 ## The states
 
 ```text

@@ -41,12 +41,17 @@ type pipelineBuild struct {
 	// incident manager read it through closures, so it may be nil while
 	// they are built.
 	source *kube.Source
+	// dynamic is set with source; the dashboard coverage reads it.
+	dynamic *kube.DynamicSource
 	// flight records the observations the sources submit (flight.go).
 	flight *flight.Recorder
 	// gap is the unmonitored time before this start, for the gap report.
 	gap gapNotice
 	// withheld counts the Pro findings Community does not show.
 	withheld *feature.Withheld
+	// stats is the kubelet stats poller once it runs (Pro); the
+	// dashboard reads its usage history.
+	stats *kube.StatsPoller
 }
 
 // newPipelineBuild builds the model, scope, audit log, incident manager
@@ -169,15 +174,26 @@ func (p *pipelineBuild) notify(report string) {
 }
 
 // newWriter composes messages for the edition: Community writes the
-// one-line cause without proofs, and runbooks need Pro.
+// one-line cause without proofs, and runbooks need Pro. While the Pro
+// dashboard is served, messages link to it at the address found in the
+// model (dashboard_address.go).
 func (p *pipelineBuild) newWriter() compose.Writer {
 	app := p.deps.runtime.Application()
 	var runbooks map[string]string
 	if p.deps.has(feature.Runbooks) {
 		runbooks = p.deps.runtime.Policy().Runbooks()
 	}
-	return compose.NewWriter(app.ClusterName, runbooks).
+	w := compose.NewWriter(app.ClusterName, runbooks).
 		ForEdition(p.deps.entitlements, app.HideProHints)
+	if p.deps.dashboardServer != nil {
+		target := newDashboardTarget(
+			p.deps.runtime.Lifecycle().Dashboard().Port)
+		model, seen := p.model, p.deps.dashboardServer
+		w.Dashboard = func() string {
+			return target.address(model, seen)
+		}
+	}
+	return w
 }
 
 // newInvestigator reads logs and endpoints for the incidents it
@@ -239,6 +255,9 @@ func (p *pipelineBuild) newStatsPoller(submit kube.Submit) *kube.StatsPoller {
 		Submit:     submit,
 		Nodes:      entitiesOf(p.model, kube.KindNode),
 		Containers: entitiesOf(p.model, kube.KindContainer),
+		// The source exists before the poller (see newRunners).
+		Synced:  func() bool { return p.source.Synced(kube.KindContainer) },
+		History: newUsageStore(p.state),
 		Settling: func(node inventory.EntityID, now time.Time) bool {
 			return kube.NodeSettling(p.model, node, now)
 		},
@@ -263,7 +282,7 @@ func (p *pipelineBuild) newRunners(
 	if err != nil {
 		return nil, err
 	}
-	p.source = source
+	p.source, p.dynamic = source, dynamicSource
 	stats := p.newStatsPoller(submit)
 	crashLogs := kube.NewCrashLogRound(kube.CrashLogConfig{
 		Logs:   kube.LogReader{Client: deps.clients.Kubernetes},
@@ -283,6 +302,7 @@ func (p *pipelineBuild) newRunners(
 	// that only Pro runs; Community does not read them.
 	if deps.has(feature.NodeUsage) {
 		runners = append(runners, stats.Run)
+		p.stats = stats
 	}
 	if deps.has(feature.ControlPlane) {
 		runners = append(runners, p.newProber(submit).Run)

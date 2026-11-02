@@ -51,7 +51,9 @@ func (m *Manager) dispatch(
 	} else {
 		err = m.dispatchMessage(ctx, entry, job, opts)
 	}
-	logSend(newSendRecord(entry.provider.Name(), job, opts, attempts, err))
+	record := newSendRecord(entry.provider.Name(), job, opts, attempts, err)
+	logSend(record)
+	m.noteSent(record, job)
 	return err
 }
 

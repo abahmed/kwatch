@@ -70,7 +70,7 @@ func TestSearchDoesNotMatchRedactedText(t *testing.T) {
 	s := newTestServer(p)
 
 	var list ListResponse
-	body := get(t, s, "/api/incidents?state=active&q=hunter2").Body.Bytes()
+	body := get(t, s, "/api/incidents?q=hunter2").Body.Bytes()
 	if err := json.Unmarshal(body, &list); err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestListCauseIsShortAndDetailCauseWhole(t *testing.T) {
 
 	var list ListResponse
 	if err := json.Unmarshal(
-		get(t, s, "/api/incidents?state=active").Body.Bytes(), &list); err != nil {
+		get(t, s, "/api/incidents").Body.Bytes(), &list); err != nil {
 		t.Fatal(err)
 	}
 	var d IncidentDetail

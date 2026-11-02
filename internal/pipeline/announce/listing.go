@@ -128,3 +128,22 @@ func (c *Collector) SpokeOnItsOwn(id string) bool {
 	}
 	return false
 }
+
+// ListedBy names the listing that announced incident id in chat: the
+// startup summary, the restored summary or a roll-up; empty when none
+// did. A resolve of such an incident that never spoke on its own has no
+// thread of its own to edit (a roll-up's thread aside).
+func (c *Collector) ListedBy(id string) string {
+	if slices.Contains(c.Startup.Summary.Incidents, id) {
+		return "startup summary"
+	}
+	for _, l := range c.Startup.Summary.Rollups {
+		if slices.Contains(l.Incidents, id) {
+			return "roll-up"
+		}
+	}
+	if c.restoredListed[id] {
+		return restoredSummary
+	}
+	return ""
+}

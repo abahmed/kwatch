@@ -28,6 +28,14 @@ func TestServiceCallInReadsClusterNames(t *testing.T) {
 		{"CACHE", "localhost:6379", ""},
 		{"CACHE", "a:1,b:2", ""},
 		{"CACHE", "", ""},
+		// The pod's own name for its telemetry, not a call.
+		{"OTEL_SERVICE_NAME", "api", ""},
+		{"DD_SERVICE", "api", ""},
+		{"SERVICE_NAME", "api", ""},
+		// Words Kubernetes refuses as a Service or namespace name.
+		{"API_HOST", "owner=api", ""},
+		{"API_HOST", "my_api", ""},
+		{"API_HOST", "api.bad_ns", ""},
 	}
 	for _, c := range cases {
 		call, ok := serviceCallIn(c.name, c.value, "shop")
@@ -62,4 +70,34 @@ func TestPodServiceCallsKeepsServicesAndAttribute(t *testing.T) {
 	refs := ServiceCalls(inventory.Entity{Attributes: map[string]inventory.
 		Attribute{AttrServiceCalls: {Value: desc.Attributes[AttrServiceCalls]}}})
 	assert.Equal(t, 5432, refs[0].Port)
+}
+
+func TestServiceCallsSkipsInvalidServiceNames(t *testing.T) {
+	pod := inventory.Entity{Attributes: map[string]inventory.Attribute{
+		AttrServiceCalls: {Value: inventory.Text(
+			"shop/owner=api,shop/redis:6379,bad_ns/db")}}}
+
+	refs := ServiceCalls(pod)
+
+	assert.Equal(t, []ServiceRef{{Service: inventory.CoreID(KindService,
+		"shop", "redis"), Port: 6379}}, refs)
+}
+
+func TestPodServiceCallsSkipsCredentialNamedVariables(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "shop"},
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{
+			Env: []corev1.EnvVar{
+				{Name: "CACHE_PASSWORD_HOST", Value: "redis:6379"},
+				{Name: "API_TOKEN_URL", Value: "http://api.shop.svc:8080"},
+				{Name: "DB_HOST", Value: "db:5432"},
+			},
+		}}},
+	}
+
+	calls := podServiceCalls(pod)
+
+	if assert.Len(t, calls, 1) {
+		assert.Equal(t, "shop/db:5432", calls[0].String())
+	}
 }

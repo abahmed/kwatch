@@ -79,3 +79,23 @@ func dashboardHealth(
 		return out
 	}
 }
+
+// dashboardTrail reports what became of each incident's messages to the
+// dashboard's incident page.
+func dashboardTrail(
+	m *delivery.Manager,
+) func(id string) []dashboard.DeliveryAttempt {
+	return func(id string) []dashboard.DeliveryAttempt {
+		trail := m.SendTrail(id)
+		out := make([]dashboard.DeliveryAttempt, 0, len(trail))
+		for _, a := range trail {
+			out = append(out, dashboard.DeliveryAttempt{
+				At: a.At, Channel: a.Provider, Kind: a.Kind,
+				Placement: a.Placement, Result: a.Result,
+				Retries: a.Retries, Carrier: a.Carrier,
+				Fallback: a.Fallback, Error: a.Error,
+			})
+		}
+		return out
+	}
+}

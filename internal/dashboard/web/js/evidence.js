@@ -1,5 +1,8 @@
-/* kwatch dashboard: the Evidence tab of an issue (Pro). Every string from
-   the API is set with textContent; log text is never interpreted. */
+/* kwatch dashboard: the evidence of an issue (Pro), under "Why kwatch
+   thinks this", its Ingress-to-pods chain under "Affected objects", and
+   "Logs": the lines kept when it started and the logs the checks read.
+   Every string from the API is set with textContent; log text is never
+   interpreted. */
 (function () {
   "use strict";
   var KW = window.KW;
@@ -31,17 +34,19 @@
   var FROM = { "Signature": "logs", "Spread": "logs", "Matches": "service",
     "Change": "rollout", "Before and after": "rollout" };
 
-  /* readAt is the "Read at 13:44:02" footer of a section, or null. */
-  function readAt(list) {
+  /* newest: the latest readAt of list, or "". */
+  function newest(list) {
     var iso = list.map(function (s) { return s.readAt; }).filter(Boolean).sort().pop();
-    if (!iso || !KW.valid(iso)) return null;
-    var d = new Date(iso);
-    var t = KW.el("time", "", "");
-    t.dateTime = iso;
-    t.textContent = KW.hhmm(d) + ":" + ("0" + (KW.utc ? d.getUTCSeconds() : d.getSeconds())).slice(-2) +
-      (KW.utc ? " UTC" : "");
+    return iso && KW.valid(iso) ? iso : "";
+  }
+
+  /* readAt is the "Read at 13:44" footer of a section (the seconds are
+     in its tooltip), or null. */
+  function readAt(list) {
+    var iso = newest(list);
+    if (!iso) return null;
     var p = KW.el("p", "ev-cap", "Read at ");
-    p.appendChild(t);
+    p.appendChild(KW.hm(iso));
     return p;
   }
 
@@ -63,6 +68,8 @@
     return ABSENT[s.check] || "Nothing to read here.";
   }
 
+  /* summary: what the checks managed, in plain words: "kwatch checked
+     3 things: it read 2 and it isn't allowed to read 1." */
   function summary(sections) {
     var checks = {}, n = 0, read = 0, denied = 0, slow = 0;
     sections.forEach(function (s) {
@@ -73,13 +80,14 @@
       if (s.status === "denied") denied += 1;
       if (s.status === "timeout" || s.status === "error") slow += 1;
     });
-    var text = KW.plural(n, "check", "checks") + " ran.";
-    if (read === n) return [n, text + " All read."];
+    var text = "kwatch checked " + KW.plural(n, "thing", "things");
+    if (read === n) return [n, text + (n === 1 ? " and could read it." : " and could read them all.")];
     var parts = [];
-    if (read) parts.push(read + " read");
-    if (denied) parts.push(denied + " not allowed");
-    if (slow) parts.push(slow + " timed out or could not be read");
-    return [n, text + " " + parts.join(", ") + "."];
+    if (read) parts.push("it read " + read);
+    if (denied) parts.push("it isn't allowed to read " + denied);
+    if (slow) parts.push(slow + " took too long or failed");
+    var last = parts.pop();
+    return [n, text + ": " + (parts.length ? parts.join(", ") + " and " : "") + last + "."];
   }
 
   function factList(facts) {
@@ -150,69 +158,24 @@
     return g[0];
   }
 
-  /* logSection shows one container and run at a time. */
-  function logSection(list) {
-    var worst = list.filter(function (s) { return s.status !== "ok"; })[0] || list[0];
-    var g = group("logs", "Logs", badge(worst), true);
-    var containers = [];
-    list.forEach(function (s) { if (containers.indexOf(s.subject) < 0) containers.push(s.subject); });
-    var controls = KW.el("div", "ev-controls");
-    var pick = KW.el("select");
-    pick.setAttribute("aria-label", "Container");
-    containers.forEach(function (c) { var o = KW.el("option", "", c); o.value = c; pick.appendChild(o); });
-    var runs = KW.el("div", "ev-runs");
-    runs.setAttribute("role", "radiogroup");
-    runs.setAttribute("aria-label", "Run");
-    var run = list.some(function (s) { return s.run === "previous"; }) ? "previous" : "current";
-    var count = KW.el("span", "ev-count");
-    var copy = KW.el("button", "btn btn-sm", "Copy all");
-    copy.type = "button";
-    var view = KW.el("div");
-    function show() {
-      var s = list.filter(function (x) { return x.subject === pick.value && x.run === run; })[0];
-      view.textContent = "";
-      var lines = (s && s.lines) || [];
-      if (!s || lines.length === 0) {
-        view.appendChild(KW.el("p", "ev-note", s ? bodyText(s) ||
-          "This container has written nothing yet." : "No " + run + " run read."));
-      } else {
-        view.appendChild(lineView(lines, s.matched, "Log of container " + s.subject + ", " + run + " run"));
-      }
-      count.textContent = "Showing " + KW.plural(lines.length, "line", "lines");
-      copy.onclick = function () { KW.copy(copy, lines.join("\n"), "Copy all"); };
-      KW.$$("button", runs).forEach(function (b) {
-        b.setAttribute("aria-checked", b.dataset.run === run ? "true" : "false");
-      });
-    }
-    [["previous", "Previous run"], ["current", "Current run"]].forEach(function (r) {
-      var b = KW.el("button", "btn btn-sm", r[1]);
-      b.type = "button";
-      b.dataset.run = r[0];
-      b.setAttribute("role", "radio");
-      b.onclick = function () { run = r[0]; show(); };
-      runs.appendChild(b);
-    });
-    pick.onchange = show;
-    [pick, runs, count, copy].forEach(function (e) { controls.appendChild(e); });
-    g[1].appendChild(controls);
-    g[1].appendChild(view);
-    g[1].appendChild(KW.el("p", "ev-cap", "Credentials are hidden in these lines."));
-    var at = readAt(list);
-    if (at) g[1].appendChild(at);
-    show();
-    return g[0];
-  }
-
-  function correlation(c, titles) {
+  function correlation(root, c, titles) {
     var card = KW.el("section", "ev-card");
-    card.appendChild(KW.el("h2", "", "Correlation"));
+    var h = card.appendChild(KW.el("h3", "", "What the checks agree on"));
+    h.title = "kwatch compared what each check read and kept what matches.";
     if (c.confirmed) card.appendChild(KW.el("p", "ev-confirmed", "Confirmed: " + c.confirmed + "."));
     var dl = KW.el("dl", "ev-facts");
     (c.facts || []).forEach(function (f) {
       dl.appendChild(KW.el("dt", "", f.label));
       var dd = KW.el("dd", "mono", f.value);
       var from = FROM[f.label];
-      if (from && titles[from]) {
+      if (from === "logs" && titles.logs) {
+        // The logs are in their own section, "Logs".
+        var b = KW.el("button", "link ev-from", "Read from the logs");
+        b.type = "button";
+        b.onclick = function () { KW.openFold(root, "logs"); };
+        dd.appendChild(document.createTextNode(" "));
+        dd.appendChild(b);
+      } else if (from && titles[from]) {
         var a = KW.el("a", "ev-from", "Read from " + titles[from]);
         a.href = "#check-" + from;
         dd.appendChild(document.createTextNode(" "));
@@ -240,9 +203,7 @@
       }
     });
     if (!rows.length) return null;
-    var box = KW.el("aside", "ev-chain");
-    box.setAttribute("aria-label", "Related objects");
-    box.appendChild(KW.el("h2", "", "Related"));
+    var box = KW.el("div", "ev-chain");
     var broke = false;
     rows.forEach(function (r) {
       var row = KW.el("div", "ev-node");
@@ -258,80 +219,147 @@
     return box;
   }
 
-  function panel(inc) {
+  function panel(root, inc) {
     var sections = inc.evidence;
-    var root = KW.el("div", "ev");
+    var box = KW.el("div", "ev");
     var sum = summary(sections);
-    root.appendChild(KW.el("p", "ev-summary", sum[1]));
+    box.appendChild(KW.el("p", "ev-summary", sum[1]));
     var titles = {}, order = [], by = {};
     sections.forEach(function (s) {
       titles[s.check] = s.title;
       if (!by[s.check]) { by[s.check] = []; order.push(s.check); }
       by[s.check].push(s);
     });
-    var cols = KW.el("div", "ev-cols");
-    var main = KW.el("div", "ev-main");
-    if (inc.correlation) main.appendChild(correlation(inc.correlation, titles));
-    var side = chain(sections);
-    order.forEach(function (k) { main.appendChild(k === "logs" ? logSection(by[k]) : checkSection(by[k])); });
-    var fix = KW.el("section", "ev-sec");
-    fix.appendChild(KW.el("h2", "", "Fix"));
-    (inc.fixSteps || []).forEach(function (s) {
-      if (s.text) fix.appendChild(KW.el("p", "", s.text));
-      if (s.command) fix.appendChild(KW.el("pre", "logs mono", s.command));
+    if (inc.correlation) box.appendChild(correlation(root, inc.correlation, titles));
+    order.forEach(function (k) {
+      // The logs a check read are shown in "Logs" (logs.js).
+      if (k !== "logs") box.appendChild(checkSection(by[k]));
     });
-    fix.appendChild(KW.el("p", "ev-cap", "This page is read-only. To change anything, use the commands under Fix."));
-    main.appendChild(fix);
-    if (side) cols.appendChild(side);
-    cols.appendChild(main);
-    root.appendChild(cols);
-    return [sum[0], root];
+    var cut = KW.cutCount(inc, "evidenceLines") + KW.cutCount(inc, "evidenceFacts") +
+      KW.cutCount(inc, "evidenceSections");
+    if (cut) {
+      box.appendChild(KW.el("p", "ev-cap", "This evidence is too long to show in full: " +
+        KW.plural(cut, "entry", "entries") + " not shown."));
+    }
+    return box;
   }
 
-  function wantEvidence() {
-    return new URLSearchParams(location.search).get("tab") === "evidence";
+  function logClass(line) {
+    var l = line.toLowerCase();
+    if (/(fatal|panic|error|exception|failed|oomkilled)/.test(l)) return "e";
+    if (/(warn|timeout|retry)/.test(l)) return "w";
+    return "r";
   }
 
-  /* KW.evidence fills the tab strip and the Evidence panel. Without
-     evidence (Community) the strip stays hidden and the page is as
-     before. */
-  KW.evidence = function (root, inc) {
-    var strip = KW.$("[data-tabs]", root);
-    var story = KW.$("[data-story]", root);
-    var host = KW.$("[data-evidence]", root);
-    var has = inc.evidence && inc.evidence.length;
-    strip.hidden = !has;
-    if (!has) { host.hidden = true; story.hidden = false; return; }
-    var built = panel(inc);
-    host.textContent = "";
-    host.appendChild(KW.el("h2", "sr-only", "Evidence"));
-    host.appendChild(built[1]);
-    var tab = KW.$("[data-tab-evidence]", root);
-    KW.$("span", tab).textContent = String(built[0]);
-    tab.setAttribute("aria-label", "Evidence, " + KW.plural(built[0], "check", "checks"));
-    function select(evidence) {
-      host.hidden = !evidence;
-      story.hidden = evidence;
-      KW.$$("[role=tab]", strip).forEach(function (t) {
-        var on = (t.dataset.tab === "evidence") === evidence;
-        t.setAttribute("aria-selected", on ? "true" : "false");
-        t.tabIndex = on ? 0 : -1;
+  /* logSources: what "Logs" can show. The lines kept when the issue
+     started, then each container run a check read (Pro). */
+  function logSources(inc) {
+    var out = [], kept = inc.capturedLogLines || [];
+    if (kept.length) {
+      var cut = KW.cutCount(inc, "logLines");
+      out.push({ key: "kept", label: "When it started", lines: kept, matched: [],
+        cap: "Kept when this started. Secrets are removed." +
+          (cut ? " " + KW.plural(cut, "earlier line", "earlier lines") + " not shown." : "") });
+    }
+    (inc.evidence || []).forEach(function (s) {
+      if (s.check !== "logs") return;
+      var lines = s.lines || [];
+      out.push({ key: "run|" + s.subject + "|" + s.run, lines: lines, matched: s.matched || [],
+        label: (s.subject || "Container") + ", " + (s.run === "previous" ?
+          "run before the last restart" : "current run"),
+        note: lines.length ? "" : bodyText(s) || "This container has written nothing yet.",
+        cap: "Read from the container. Credentials are hidden.", at: s.readAt });
+    });
+    return out;
+  }
+
+  /* KW.logs fills "Logs": one view with one set of controls. "Show"
+     picks the source (kept on redraws); a line the checks matched is
+     marked. */
+  KW.logs = function (root, inc) {
+    var fold = KW.$('[data-fold="logs"]', root), box = KW.$("[data-logs]", root);
+    var list = logSources(inc);
+    var keep = box.scrollTop, keepX = box.scrollLeft, was = fold.dataset.pick;
+    box.textContent = "";
+    fold.hidden = !list.length;
+    if (fold.hidden) return;
+    var src = list.filter(function (x) { return x.key === was; })[0] ||
+      list.filter(function (x) { return x.matched.length; })[0] || list[0];
+    fold.dataset.pick = src.key;
+    var pick = KW.$("[data-log-pick]", root);
+    var keys = list.map(function (x) { return x.key; }).join("\n");
+    if (pick.dataset.keys !== keys) {
+      pick.dataset.keys = keys;
+      pick.textContent = "";
+      list.forEach(function (x) {
+        var o = pick.appendChild(KW.el("option", "", x.label));
+        o.value = x.key;
       });
     }
-    KW.$$("[role=tab]", strip).forEach(function (t) {
-      t.onclick = function (e) {
-        e.preventDefault();
-        var evidence = t.dataset.tab === "evidence";
-        history.replaceState(null, "", evidence ? "?tab=evidence" : location.pathname);
-        select(evidence);
-      };
-      t.onkeydown = function (e) {
-        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-        var other = KW.$("[role=tab]:not([data-tab=" + t.dataset.tab + "])", strip);
-        other.focus();
-        other.click();
-      };
+    pick.value = src.key;
+    pick.onchange = function () {
+      fold.dataset.pick = pick.value;
+      KW.logs(root, inc);
+    };
+    KW.$("[data-log-ctl]", root).hidden = list.length < 2;
+    KW.$("[data-log-n]", root).textContent = KW.plural(src.lines.length, "line", "lines");
+    var hit = {};
+    src.matched.forEach(function (i) { hit[i] = true; });
+    src.lines.forEach(function (l, i) {
+      var row = box.appendChild(KW.el("div", logClass(l) + (hit[i] ? " ev-hit" : ""), l));
+      if (hit[i]) row.title = "The line kwatch matched";
     });
-    select(wantEvidence());
+    box.hidden = !src.lines.length;
+    var note = KW.$("[data-log-note]", root);
+    note.hidden = !src.note;
+    note.textContent = src.note || "";
+    if (was === src.key) {
+      box.scrollTop = keep;
+      box.scrollLeft = keepX;
+    }
+    var cap = KW.$("[data-logcap]", root);
+    cap.textContent = src.cap;
+    if (src.at && KW.valid(src.at)) {
+      cap.appendChild(document.createTextNode(" Read at "));
+      cap.appendChild(KW.hm(src.at));
+      cap.appendChild(document.createTextNode("."));
+    }
+    var copy = KW.$("[data-copy-logs]", root);
+    copy.hidden = !src.lines.length;
+    copy.onclick = function () { KW.copy(copy, src.lines.join("\n"), "Copy all"); };
+    // Long lines scroll sideways by default; wrapping reads easier.
+    var wrap = KW.$("[data-wrap-logs]", root);
+    wrap.hidden = !src.lines.length;
+    wrap.onclick = function () {
+      var on = box.classList.toggle("wrap");
+      wrap.setAttribute("aria-pressed", on ? "true" : "false");
+    };
+  };
+
+  /* KW.evidence fills the evidence under "Why kwatch thinks this" and
+     the chain in "Affected objects". Without evidence (Community) both
+     stay out; KW.objects shows the section for its own table. ?tab=evidence, the old link to the evidence, opens
+     "Why kwatch thinks this". */
+  KW.evidence = function (root, inc) {
+    var host = KW.$("[data-evidence]", root);
+    var related = KW.$('[data-fold="related"]', root);
+    var has = !!(inc.evidence && inc.evidence.length);
+    var box = KW.$("[data-related]", root);
+    host.hidden = !has;
+    host.textContent = "";
+    box.textContent = "";
+    related.hidden = true;
+    if (!has) return;
+    host.appendChild(panel(root, inc));
+    var side = chain(inc.evidence);
+    if (side) {
+      box.appendChild(side);
+      related.hidden = false;
+    }
+    if (!root.dataset.opened &&
+        new URLSearchParams(location.search).get("tab") === "evidence") {
+      KW.$('[data-fold="why"]', root).open = true;
+    }
+    root.dataset.opened = "1";
   };
 })();

@@ -76,6 +76,7 @@ func newAnnouncer(
 		Incidents: deps.Incidents, Messages: deps.Writer,
 		History: a.history, Scope: deps.InScope, Sink: deps.Sink,
 		Write: a.write, WithChanges: a.withChanges,
+		KindNames:    a.kindNames,
 		SaveStartup:  storage.saveStartup,
 		OwnNamespace: os.Getenv("POD_NAMESPACE"),
 		Withheld:     deps.Withheld.Counts,

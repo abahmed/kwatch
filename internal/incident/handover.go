@@ -1,9 +1,12 @@
 package incident
 
 import (
+	"slices"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/rootcause"
 	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
@@ -60,8 +63,8 @@ func (m *Manager) failsFor(q, p *Incident) bool {
 		if f.Advisory {
 			continue
 		}
-		if key.Entity == root ||
-			(m.model != nil && sameChain(m.model, root, key.Entity)) {
+		if key.Entity == root || m.wasMember(p, key.Entity) ||
+			(m.model != nil && sameChainBehind(m.model, root, key.Entity)) {
 			return true
 		}
 	}
@@ -78,4 +81,24 @@ func sameStuckStory(q, p *Incident) bool {
 		q.Root.Kind == explain.KindFinalizer &&
 		q.Root.Namespace == p.Root.Namespace &&
 		q.Mode == detection.ModeStuckDeleting
+}
+
+// wasMember reports whether entity, or the pod it belongs to, failed in p
+// when p was saved. The root may not tell: a virtual or deleted root
+// (a Service that does not exist, say) is not recreated after a restart,
+// so the failures that were p's come back under another root while p
+// gets no member again. Those failures still go on, so p is handed over
+// to the incident that holds one of them, never resolved as healthy.
+func (m *Manager) wasMember(p *Incident, entity inventory.EntityID) bool {
+	if len(p.formerMembers) == 0 {
+		return false
+	}
+	if slices.Contains(p.formerMembers, entity) {
+		return true
+	}
+	if m.model == nil {
+		return false
+	}
+	pod, ok := rootcause.PodOf(m.model, entity)
+	return ok && slices.Contains(p.formerMembers, pod)
 }

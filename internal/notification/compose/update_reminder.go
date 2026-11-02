@@ -30,9 +30,11 @@ func failingAgainSentences(f caseFacts) []sentence {
 	if f.p.RepeatCount > 0 {
 		text += ": " + humanizeText(incident.RepeatPhrase(f.p.RepeatCount))
 	}
-	return append([]sentence{{part: partLead,
+	out := append([]sentence{{part: partLead,
 		text: capitalName(subject, endSentence(text))}},
-		strongestProof(f)...)
+		causedBySentences(f)...)
+	return append(append(out, strongestProof(f)...),
+		repeatSentences(f)...)
 }
 
 // stillWords say what is still so: "still failing", "still down", or,

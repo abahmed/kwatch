@@ -92,24 +92,78 @@ func nameList(home inventory.EntityID, ids []inventory.EntityID) string {
 
 // nameGroup names entities that share a namespace, saying it once at
 // the end when place is not empty, and at most "most" of them by name.
+// Entities of one plain kind say the kind once: "ingresses a, b and c",
+// and a mixed list says each kind once: "ingresses a, b, c and 7
+// others, and eight services".
 func nameGroup(ids []inventory.EntityID, place string, most int) string {
 	if place != "" {
 		place = " in " + place
 	}
-	names := make([]string, 0, len(ids))
-	kind, sameKind := sharedKind(ids)
-	for _, id := range ids {
-		if sameKind && len(ids) > 1 {
-			names = append(names, id.Name)
-		} else {
+	groups := byKind(ids)
+	texts := make([]string, 0, len(groups))
+	nested := false
+	for _, group := range groups {
+		shown := min(most, len(group))
+		most -= shown
+		text := kindGroup(group, shown)
+		nested = nested || strings.Contains(text, " and ")
+		texts = append(texts, text)
+	}
+	if len(texts) < 2 || !nested {
+		return joinAnd(texts, len(texts)) + place
+	}
+	// A group that has its own "and" needs a comma before the last
+	// group, or the list would read as one.
+	last := len(texts) - 1
+	return strings.Join(texts[:last], ", ") + ", and " + texts[last] +
+		place
+}
+
+// kindGroup names one group of byKind, the first shown by name: "service
+// a", "ingresses a, b and 3 others", or "eight services" when none is
+// shown.
+func kindGroup(group []inventory.EntityID, shown int) string {
+	kind, plain := sharedKind(group)
+	if !plain {
+		names := make([]string, 0, len(group))
+		for _, id := range group {
 			names = append(names, shortName(id))
 		}
+		return joinAnd(names, max(shown, 1))
 	}
-	if sameKind && len(ids) > 1 {
-		return pluralWord(kindWord(kind)) + " " + joinAnd(names, most) +
-			place
+	if len(group) == 1 {
+		return shortName(group[0])
 	}
-	return joinAnd(names, most) + place
+	if shown == 0 {
+		return numberWord(len(group)) + " " + pluralWord(kindWord(kind))
+	}
+	names := make([]string, 0, len(group))
+	for _, id := range group {
+		names = append(names, id.Name)
+	}
+	return pluralWord(kindWord(kind)) + " " + joinAnd(names, shown)
+}
+
+// byKind groups ids by plain kind, in the order kinds first appear.
+// Workloads, containers and named singletons are named by their own
+// names and share one group.
+func byKind(ids []inventory.EntityID) [][]inventory.EntityID {
+	index := map[inventory.Kind]int{}
+	var groups [][]inventory.EntityID
+	for _, id := range ids {
+		kind := id.Kind
+		if _, plain := sharedKind([]inventory.EntityID{id}); !plain {
+			kind = ""
+		}
+		i, ok := index[kind]
+		if !ok {
+			i = len(groups)
+			index[kind] = i
+			groups = append(groups, nil)
+		}
+		groups[i] = append(groups[i], id)
+	}
+	return groups
 }
 
 // sharedKind reports the kind of ids when they are all the same plain
@@ -205,6 +259,11 @@ func recurrenceSentences(f caseFacts) []sentence {
 		return nil
 	}
 	text := "This is the " + ordinalWord(times) + " time this week"
+	if times >= repeatOffender {
+		// A repeat offender: the object is named, so the line reads
+		// alone in a digest or a forwarded alert.
+		text += " on " + objectName(f.p.Root)
+	}
 	if words, ok := triggerWords[trigger]; ok && shared {
 		// Every time people heard about followed the same kind of
 		// cause: that is the shape of the problem.

@@ -71,6 +71,86 @@ anyone. Sensu Go records them as a passing (OK) check.
 Long texts are cut at the provider's size limit on a character boundary and end
 in `…`. The cut is deterministic, so a retried delivery sends the same bytes.
 
+### Link to the dashboard
+
+When the Pro dashboard is on (`dashboard.enabled`) and something exposes it,
+every message about one incident ends with a plain line
+`Open in dashboard: https://<host><path>/issues/<incident id>`, and a message
+that lists several (digest, roll-up, startup and restart summaries, namespace
+outage) ends with `Open dashboard: https://<host><path>/issues`. Chat
+messages, mail, paging details and issue bodies carry it; SMS and push
+texts (the Short) and the `Note` field of the structured providers do
+not. Without
+the dashboard, or with no address found, messages are unchanged.
+
+An announcement, or a `failing again` update, can carry two more link
+lines before that one. `Cause in dashboard: …/issues/<id>` links the
+incident named by its `Caused by: …` line (below), and `Earlier times:
+…/issues?status=all&like=<incident id>` lists the earlier incidents with
+the same error when the root failed for the fourth time or more this
+week.
+
+### Lines that tie an alert to what you already know
+
+These are written by `compose` from what the incident already holds; none
+of them changes whether, when or how loudly kwatch alerts.
+
+- `Caused by: <title>.` An announcement or a `failing again` update names
+  the open incident this one is caused by, when people already heard about
+  it (it was announced in scope and a message about it was written). Two
+  incidents are tied only when the reasoning ties them: the failure chain
+  of one goes on past its limit into the other's failures, or one is
+  blamed on the root of the other (`incident.Related`, `relations.go`).
+- `This is the fourth time this week on deployment/api.` The recurrence
+  line names the object once the root failed four times or more in seven
+  days (announced occurrences only, this one included); a `failing again`
+  update adds it when that count is higher than its own "Nth time in 2h".
+- `Three pods were affected.` A resolve says how many pods failed at the
+  incident's widest, when that is more than one. Its duration and who
+  fixed it are said already ("It was failing for 42 minutes"; "alice
+  rolled back to revision 13 at 14:09").
+
+The other parts of a blast radius (Services, Ingresses, workloads) are
+already named by the alert ("service cart can't serve traffic", "checkout
+is affected as well"), so the one-line summary is only shown by the
+dashboard (`blastRadius`).
+
+There is nothing to configure: kwatch finds the address itself, from the
+Ingresses and Gateway API HTTPRoutes in its own namespace (`POD_NAMESPACE`)
+that send traffic to its dashboard Service. That Service is
+`<deployment>-dashboard` (`kwatch-dashboard` for the default release; the
+chart and `kwatch.sh` both name it so), and a backend matches when it uses
+the port named `dashboard`, the dashboard port number (`dashboard.port`,
+8061), or any other port of that Service that leads to it. The link is
+`https://<host><path>` or `http://<host><path>`; the scheme is chosen in
+this order, the first that applies wins:
+
+1. https when the Ingress has a TLS entry for the host, or for an
+   HTTPRoute, since TLS ends at its Gateway;
+2. https when the latest dashboard request for that host came over https:
+   kwatch served TLS itself, or, with `dashboard.trustProxy`, the proxy in
+   front said so in `X-Forwarded-Proto` (a load balancer that ends TLS
+   before an Ingress without a `tls:` block, as in the installer's
+   upstream mode). Without `trustProxy` the header is ignored;
+3. https in shared mode (`dashboard.mode: shared`), which refuses sign-in
+   over plain http, so an http link could not be used;
+4. otherwise http.
+
+kwatch remembers the scheme of the latest request for up to 16 hosts, in
+memory only, so after a restart step 2 applies again from the first visit.
+Wildcard hosts, rules without a host and regular-expression paths name no
+address and are skipped. With several matches, one with https wins, then
+the first by host, path and object name. The address is read from kwatch's live
+model each time a message is written, so adding, editing or deleting the
+Ingress or route changes the link from the next message on.
+
+To get the link, expose the dashboard the usual way: let `kwatch.sh` set
+up the dashboard, or point your own Ingress or HTTPRoute in kwatch's
+namespace at the `<release>-dashboard` Service, port `dashboard`, with a
+host (and TLS). A dashboard reached only through `kubectl port-forward`,
+a LoadBalancer or NodePort Service, or a route in another namespace has
+no address kwatch can name, so messages carry no link.
+
 Times in a note are UTC and say so (`10:03 UTC`), because the people who read
 one are not all in one zone.
 

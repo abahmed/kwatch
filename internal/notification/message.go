@@ -90,6 +90,12 @@ type Message struct {
 	// CarrierNote says why a decision was dropped (Carrier "dropped"),
 	// for the audit log.
 	CarrierNote string `json:",omitempty"`
+	// ChatCarrier names the message that told chat about a PagingOnly
+	// one ("startup summary", "roll-up"), so a message that no paging
+	// provider takes is logged as carried, not as lost. On the resolve
+	// of an incident only a listing announced, it names that listing:
+	// chat has no thread of the incident's own to edit.
+	ChatCarrier string `json:",omitempty"`
 	// ReopenWithin is set on the resolve of an incident that may reopen:
 	// a failure within this long of the resolve continues the same
 	// conversation. A threading provider keeps the thread that long, so

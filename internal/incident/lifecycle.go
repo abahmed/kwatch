@@ -126,7 +126,7 @@ func (m *Manager) settle(p *Incident, now time.Time) (Decision, bool) {
 		return Decision{}, false
 	}
 	p.State, p.Announced = Open, now
-	m.adoptAck(p)
+	m.adoptAck(p, now)
 	m.holdRepeatedPage(p, now)
 	m.holdSiblingPage(p, now)
 	if p.AlertKey == "" {

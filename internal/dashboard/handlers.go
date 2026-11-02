@@ -3,14 +3,14 @@ package dashboard
 import (
 	"cmp"
 	"encoding/json"
+	"fmt"
 	"net/http"
-	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/version"
 )
 
@@ -18,27 +18,32 @@ import (
 // maxStatusBytes on /status.
 const maxResponseBytes = 64 << 10
 
-// List limits: the default and the largest page of /api/incidents.
-const (
-	defaultListLimit = 100
-	maxListLimit     = 500
-)
-
-// listEnvelopeBytes is room kept for the list's envelope around items.
-const listEnvelopeBytes = 128
-
 // writeJSON writes v as JSON. A body over maxResponseBytes is refused
-// with 500 rather than cut; callers bound what they pass.
-func writeJSON(w http.ResponseWriter, v any) {
-	body, err := json.Marshal(v)
-	if err != nil || len(body) > maxResponseBytes {
+// with 500 rather than cut; callers bound what they pass. The log names
+// the request path so a refusal can be traced to its endpoint.
+func writeJSON(w http.ResponseWriter, r *http.Request, v any) {
+	body, err := encodeBody(v)
+	if err != nil {
 		klog.ErrorS(err, "dashboard: response not written",
-			"bytes", len(body))
+			"path", r.URL.Path, "bytes", len(body))
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(append(body, '\n'))
+}
+
+// encodeBody marshals v and fails when the body is over the limit.
+func encodeBody(v any) ([]byte, error) {
+	body, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("encode response: %w", err)
+	}
+	if len(body)+1 > maxResponseBytes {
+		return body, fmt.Errorf("response body of %d bytes is over "+
+			"the %d byte limit", len(body)+1, maxResponseBytes)
+	}
+	return body, nil
 }
 
 // writeError writes {"error": msg} with code.
@@ -64,55 +69,15 @@ func unavailable(w http.ResponseWriter) {
 	writeError(w, http.StatusServiceUnavailable, "unavailable")
 }
 
-// incidentsHandler serves GET /api/incidents with the filters of
-// parseFilter and limit=, ordered by filter.order.
+// incidentsHandler serves GET /api/incidents: one page of the list
+// parseListRequest describes. The answer carries an ETag; a poll that
+// sends it back in If-None-Match while nothing changed gets 304.
 func (s *Server) incidentsHandler(w http.ResponseWriter, r *http.Request) {
 	if !onlyGet(w, r) {
 		return
 	}
-	q := r.URL.Query()
-	f, err := parseFilter(q, s.now.Now())
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	limit, ok := parseLimit(q.Get("limit"))
-	if !ok {
-		writeError(w, http.StatusBadRequest, "invalid limit")
-		return
-	}
-	reader := s.sources.incidents.Load()
-	if reader == nil {
-		unavailable(w)
-		return
-	}
-	items := make([]IncidentListItem, 0)
-	counts := map[string]int{"page": 0, "notify": 0, "digest": 0}
-	for _, p := range (*reader).Incidents() {
-		if !f.inList(p) {
-			continue
-		}
-		item := toListItem(p)
-		counts[item.Severity]++
-		if f.matches(p, item) {
-			items = append(items, item)
-		}
-	}
-	slices.SortFunc(items, f.order)
-	out := boundList(items, limit)
-	out.Counts = counts
-	writeJSON(w, out)
-}
-
-// namespacesHandler serves GET /api/namespaces?state=: the namespaces
-// that have incidents in that list, A to Z, for the namespace filter.
-func (s *Server) namespacesHandler(
-	w http.ResponseWriter, r *http.Request,
-) {
-	if !onlyGet(w, r) {
-		return
-	}
-	state, _, err := parseStates(r.URL.Query()["state"])
+	now := s.now.Now()
+	req, err := parseListRequest(r.URL.Query(), now)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -122,53 +87,35 @@ func (s *Server) namespacesHandler(
 		unavailable(w)
 		return
 	}
-	f := filter{state: state}
-	seen := map[string]bool{}
-	names := make([]string, 0)
-	for _, p := range (*reader).Incidents() {
-		ns := p.Root.Namespace
-		if ns == "" || seen[ns] || !f.inList(p) {
-			continue
+	items := (*reader).Incidents()
+	if req.filter.nodes != nil {
+		var model inventory.Reader
+		if m := s.sources.model.Load(); m != nil {
+			model = *m
 		}
-		seen[ns] = true
-		names = append(names, ns)
+		req.filter.onNodes = onNodes(model, items, req.filter.nodes)
 	}
-	slices.Sort(names)
-	writeJSON(w, NamespacesResponse{Namespaces: names})
+	writeTagged(w, r, buildList(req, items, now, s.texts.redact))
 }
 
-// parseLimit reads ?limit=: empty is the default, larger than the
-// maximum is the maximum, anything not a positive number is invalid.
-func parseLimit(raw string) (int, bool) {
-	if raw == "" {
-		return defaultListLimit, true
+// writeTagged writes v as JSON with an ETag of its body, or 304 when
+// the request already holds that body.
+func writeTagged(w http.ResponseWriter, r *http.Request, v any) {
+	body, err := encodeBody(v)
+	if err != nil {
+		klog.ErrorS(err, "dashboard: response not written",
+			"path", r.URL.Path, "bytes", len(body))
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
 	}
-	n, err := strconv.Atoi(raw)
-	if err != nil || n < 1 {
-		return 0, false
+	tag := bodyETag(body)
+	w.Header().Set("ETag", tag)
+	if etagMatches(r.Header.Get("If-None-Match"), tag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
 	}
-	return min(n, maxListLimit), true
-}
-
-// boundList keeps at most limit items and as many as fit the response
-// size, newest first; Truncated says some were left out.
-func boundList(items []IncidentListItem, limit int) ListResponse {
-	out := ListResponse{Incidents: make([]IncidentListItem, 0),
-		Total: len(items)}
-	budget := maxResponseBytes - listEnvelopeBytes
-	for _, item := range items {
-		if len(out.Incidents) == limit {
-			break
-		}
-		body, err := json.Marshal(item)
-		if err != nil || len(body)+1 > budget {
-			break
-		}
-		budget -= len(body) + 1
-		out.Incidents = append(out.Incidents, item)
-	}
-	out.Truncated = len(out.Incidents) < len(items)
-	return out
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(append(body, '\n'))
 }
 
 // incidentDetailHandler serves GET /api/incidents/{id}.
@@ -193,7 +140,7 @@ func (s *Server) incidentDetailHandler(
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	writeJSON(w, toDetail(*p))
+	writeJSON(w, r, s.detailOf(*p))
 }
 
 // statusHandler serves GET /api/status.
@@ -214,7 +161,7 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	last := s.lastScan()
-	writeJSON(w, StatusResponse{
+	writeJSON(w, r, StatusResponse{
 		Version:            version.Short(),
 		Edition:            s.opts.Edition,
 		LastScan:           last,

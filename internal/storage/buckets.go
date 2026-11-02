@@ -39,6 +39,16 @@ const (
 	// flight recorder (internal/flight). 48 hours and at most
 	// DefaultFlightCap bytes, oldest first.
 	Flight Bucket = "flight"
+	// Trails: key incident ID, value what became of that incident's
+	// messages (the dashboard's "who was told"). Delivery bounds it to
+	// the incidents it remembers; a trail whose incident is gone is
+	// dropped at the next load. No expiry here. Older files without
+	// this bucket get it on open, empty.
+	Trails Bucket = "trails"
+	// Usage: key container, value its memory and CPU history of the
+	// last 24 hours. Its writer bounds the entry count and sets each
+	// expiry (last reading plus 24 hours).
+	Usage Bucket = "usage"
 )
 
 // shape is how a bucket lays out its keys.
@@ -60,7 +70,8 @@ var specs = []spec{
 	{Incidents, keyed}, {Changes, logged}, {Baselines, keyed},
 	{Evidence, logged}, {Timeline, logged},
 	{Fingerprints, keyed}, {State, keyed}, {Threads, keyed},
-	{Outbox, keyed}, {Flight, logged},
+	{Outbox, keyed}, {Flight, logged}, {Trails, keyed},
+	{Usage, keyed},
 }
 
 // Retention and size defaults. They are constants
@@ -182,6 +193,16 @@ func ThreadValues[T any](s *Store) Keyed[T] {
 // OutboxValues is the outbox bucket: delivery jobs not yet accepted.
 func OutboxValues[T any](s *Store) Keyed[T] {
 	return Keyed[T]{store: s, bucket: Outbox}
+}
+
+// TrailValues is the trails bucket: delivery attempts per incident.
+func TrailValues[T any](s *Store) Keyed[T] {
+	return Keyed[T]{store: s, bucket: Trails}
+}
+
+// UsageValues is the usage bucket: container usage history.
+func UsageValues[T any](s *Store) Keyed[T] {
+	return Keyed[T]{store: s, bucket: Usage}
 }
 
 // ChangeLog is the changes bucket: what changed, per object key.

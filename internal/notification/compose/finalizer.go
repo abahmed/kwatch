@@ -33,9 +33,11 @@ func finalizerLead(f caseFacts) (string, bool) {
 	if len(held) == 0 {
 		return "", false
 	}
-	text := upperFirst(plural(len(held), "object")) +
-		heldNames(held) + " " + heldPlace(f, held) +
-		" " + verb(len(held), "has", "have") + " been stuck deleting" +
+	text := upperFirst(plural(len(held), "object")) + heldNames(held)
+	if place := heldPlace(f, held); place != "" {
+		text += " " + place
+	}
+	text += " " + verb(len(held), "has", "have") + " been stuck deleting" +
 		heldSince(f, held) + ": "
 	names := heldFinalizers(held)
 	their := "their"
@@ -87,7 +89,8 @@ func heldNames(held []detection.Finding) string {
 }
 
 // heldPlace is "in shop" for objects of one namespace and "in 3
-// namespaces" for more; objects with no namespace are not placed.
+// namespaces" for more; objects with no namespace are not placed (only
+// the cluster tag, when there is one, follows them).
 func heldPlace(f caseFacts, held []detection.Finding) string {
 	spaces := map[string]bool{}
 	for _, m := range held {
@@ -97,7 +100,7 @@ func heldPlace(f caseFacts, held []detection.Finding) string {
 	}
 	switch len(spaces) {
 	case 0:
-		return "of the cluster" + f.clusterTag()
+		return strings.TrimPrefix(f.clusterTag(), " ")
 	case 1:
 		for name := range spaces {
 			return "in " + name + f.clusterTag()

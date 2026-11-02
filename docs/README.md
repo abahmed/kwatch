@@ -48,6 +48,8 @@ implementation-only notes may remain beside code when they are not published.
   endpoint notes; the published reference remains on `kwatch.dev`.
 - [Provider notes](./providers.md) — offline provider behavior and transport
   notes; the published reference remains on `kwatch.dev`.
+- [Dashboard UI notes](./dashboard.md) — how the dashboard pages read and
+  how its browser notifications work, with their limits.
 - [Kubernetes coverage](./kubernetes-coverage.md) — monitored resources and
   graceful degradation boundaries.
 - [Permission matrix](./feature-permissions.md) — feature-to-RBAC guidance.

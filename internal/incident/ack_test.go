@@ -221,3 +221,24 @@ func TestRestoredAckIsNotRemovedWhileTheModelIsRebuilt(t *testing.T) {
 	wantNone(t, dst.tick(start.Add(3*time.Minute)))
 	assert.NotNil(t, dst.only().Ack, "the annotation is not seen yet")
 }
+
+func TestAckKeptSilentlyWhenItsPodIsReplaced(t *testing.T) {
+	r := newRig(t, Config{})
+	root, member := entity(kube.KindNode, "n1"), entity(kube.KindPod, "web")
+	r.cause(member, root, "node n1 is down")
+	r.raise(at(0), podSig("web"))
+	wantAction(t, r.tick(at(DefaultSettle)), Announce, "settled")
+	setAck(t, r, member, "on it")
+	wantAction(t, r.tick(at(DefaultSettle+time.Minute)), Update,
+		ReasonAcknowledged)
+
+	_, err := r.model.Apply(inventory.Observation{
+		Kind: inventory.Gone, Source: kube.ObservationSource,
+		At: t0, Entity: member,
+	})
+	require.NoError(t, err)
+
+	wantNone(t, r.tick(at(DefaultSettle+2*time.Minute)))
+	require.NotNil(t, r.only().Ack, "a replaced pod is not a removal")
+	assert.Equal(t, member, r.only().Ack.On)
+}

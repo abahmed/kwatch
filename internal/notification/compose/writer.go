@@ -32,6 +32,10 @@ type Writer struct {
 	Community bool
 	// ProNote adds the footer line that names what Pro would add.
 	ProNote bool
+	// Dashboard returns the dashboard's public address, such as
+	// https://kwatch.example.com, or "" when it has none. When it has
+	// one, messages link to it (see dashboard_link.go). Nil: no links.
+	Dashboard func() string
 }
 
 // NewWriter builds a Writer for the cluster named cluster, which may be
@@ -51,7 +55,7 @@ func (w Writer) clusterTag() string {
 
 // Write composes the message for one decision.
 func (w Writer) Write(d incident.Decision, now time.Time) notification.Message {
-	return w.write(d, now, nil)
+	return w.linked(w.write(d, now, nil))
 }
 
 // Subject is the entity the message of d leads with. The incident keeps
@@ -65,7 +69,7 @@ func (w Writer) Subject(d incident.Decision) inventory.EntityID {
 func (w Writer) WriteResolvedBy(
 	d incident.Decision, now time.Time, fix inventory.Change,
 ) notification.Message {
-	return w.write(d, now, &fix)
+	return w.linked(w.write(d, now, &fix))
 }
 
 func (w Writer) write(
@@ -100,10 +104,7 @@ func (w Writer) write(
 	msg.Output = d.Facts.Output
 	msg.Steps = append(proSteps(f), w.runbookSteps(f.members)...)
 	if !w.Community {
-		msg.Confidence = confidence(p.Cause)
-		if f.confirmed != "" {
-			msg.Confidence = confirmedWord
-		}
+		msg.Confidence = confidenceOf(f)
 	}
 	fill(&msg, marker(p), w.shape(
 		respell(arrange(noteSentences(d, f)), d.Facts.KindNames), note))
@@ -116,7 +117,7 @@ func (w Writer) write(
 	if !msg.Opens {
 		msg.Opening = w.opening(d, now)
 	}
-	return msg
+	return w.withRelatedLinks(d, now, msg)
 }
 
 // opening is the announcement of d's incident as it would be written
@@ -141,7 +142,8 @@ func noteSentences(d incident.Decision, f caseFacts) []sentence {
 	if d.Action == incident.Update {
 		return append(updateSentences(f), freshEvidenceSentences(f)...)
 	}
-	return append(append(append(leadSentences(f), confirmedSentences(f)...),
+	return append(append(append(append(leadSentences(f),
+		causedBySentences(f)...), confirmedSentences(f)...),
 		writeAll(f, noteWriters)...), ackAnnouncedSentences(f)...)
 }
 
@@ -193,6 +195,22 @@ const confirmedWord = "confirmed"
 
 func confidence(cause *rootcause.CauseRecord) string {
 	return certaintyOf(cause).word()
+}
+
+// confidenceOf is the confidence a message states. Gathered proof makes
+// it confirmed, but only while the root itself was seen: a root kwatch
+// could not read (a node not yet in its model) caps it at high.
+func confidenceOf(f caseFacts) string {
+	if f.confirmed == "" {
+		return confidence(f.p.Cause)
+	}
+	if !f.rootUnseen {
+		return confirmedWord
+	}
+	if level := confidence(f.p.Cause); level != "" {
+		return level
+	}
+	return certaintyHigh.word()
 }
 
 func sortedMembers(p incident.Incident) []detection.Finding {

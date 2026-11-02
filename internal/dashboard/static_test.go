@@ -59,7 +59,14 @@ func TestStaticShellHasNoInlineScriptOrStyle(t *testing.T) {
 	if strings.Contains(shell, "{{asset:") {
 		t.Error("shell has an unresolved asset reference")
 	}
-	for _, js := range []string{"core", "lists", "detail", "status", "main"} {
+	for _, js := range []string{"look", "core", "rows", "searchq",
+		"highlight", "listquery", "prefs", "visits", "dropdown",
+		"selectmenu", "quickviews", "colmenu", "columns", "issuetable",
+		"filterchips", "issuesfilters", "pager", "issueslive", "viewopts",
+		"place", "drawer", "issues", "evidence", "timeline", "context",
+		"objects", "insight", "share", "detail", "incpanel", "incnav",
+		"trends", "api", "activity", "status", "notify", "refresh",
+		"main", "keys"} {
 		if !regexp.MustCompile(`src="/assets/js/` + js +
 			`\.[0-9a-f]{12}\.js"`).MatchString(shell) {
 			t.Errorf("shell does not load the hashed %s.js", js)
@@ -67,10 +74,27 @@ func TestStaticShellHasNoInlineScriptOrStyle(t *testing.T) {
 	}
 }
 
+// The text size and contrast must apply before the page draws: look.js
+// is the first script, loaded without defer, before any stylesheet.
+func TestStaticShellAppliesTheLookBeforeTheFirstPaint(t *testing.T) {
+	shell := string(mustAssets().shell)
+	look := regexp.MustCompile(
+		`<script src="/assets/js/look\.[0-9a-f]{12}\.js"></script>`).
+		FindStringIndex(shell)
+	if look == nil {
+		t.Fatal("look.js is not loaded as a blocking script")
+	}
+	for _, first := range []string{"<script", "<link rel=\"stylesheet\""} {
+		if at := strings.Index(shell, first); at < look[0] {
+			t.Errorf("%s comes before look.js", first)
+		}
+	}
+}
+
 func TestStaticShellRoutesAndHashedAssets(t *testing.T) {
 	s := newTestServer()
-	for _, path := range []string{"/", "/signin", "/resolved", "/status",
-		"/issues/inc-1"} {
+	for _, path := range []string{"/", "/signin", "/issues",
+		"/issues?status=resolved", "/issues/inc-1"} {
 		w := call(t, s, http.MethodGet, path, "")
 		if w.Code != 200 ||
 			!strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") ||
@@ -102,6 +126,28 @@ func TestStaticShellRoutesAndHashedAssets(t *testing.T) {
 	}
 }
 
+func TestStaticOldAddressesRedirectToTheNewOnes(t *testing.T) {
+	s := newTestServer()
+	cases := map[string]string{
+		"/status":                     "/",
+		"/resolved":                   "/issues?status=resolved",
+		"/resolved?since=24h&q=a+b":   "/issues?status=resolved&q=a+b&since=24h",
+		"/?severity=page&age=today":   "/issues?severity=page&age=today",
+		"/?q=ns%3Ashop&group=off":     "/issues?q=ns%3Ashop&group=off",
+		"/resolved?status=active&x=1": "/issues?status=resolved&x=1",
+	}
+	for path, want := range cases {
+		w := call(t, s, http.MethodGet, path, "")
+		if w.Code != http.StatusFound || w.Header().Get("Location") != want {
+			t.Errorf("%s: %d to %q, want %q", path, w.Code,
+				w.Header().Get("Location"), want)
+		}
+	}
+	if w := call(t, s, http.MethodGet, "/?utm=x", ""); w.Code != 200 {
+		t.Errorf("/ without list filters: %d, want the Overview", w.Code)
+	}
+}
+
 func TestStaticEveryResponseCarriesTheCSP(t *testing.T) {
 	s := newTestServer()
 	for _, path := range []string{"/", "/api/status", "/nope"} {
@@ -130,5 +176,25 @@ func TestStaticBuildRefusesAMissingReference(t *testing.T) {
 	root["web/gone.css"] = &fstest.MapFile{Data: []byte("body{}")}
 	if _, err := buildAssets(root); err != nil {
 		t.Errorf("complete set: %v", err)
+	}
+}
+
+// An address the dashboard does not have shows a small HTML page with
+// a way back to the Overview; a missing asset and an unknown API path
+// keep the JSON error.
+func TestStaticUnknownAddressShowsANotFoundPage(t *testing.T) {
+	s := newTestServer()
+	w := call(t, s, http.MethodGet, "/nope", "")
+	if w.Code != 404 ||
+		!strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") ||
+		!strings.Contains(w.Body.String(), `<a href="/">`) {
+		t.Errorf("/nope: %d %v %s", w.Code, w.Header(), w.Body.String())
+	}
+	for _, path := range []string{"/assets/nope.css", "/api/nope"} {
+		w := get(t, s, path)
+		if w.Code != 404 || !strings.HasPrefix(
+			w.Header().Get("Content-Type"), "application/json") {
+			t.Errorf("%s: %d %v", path, w.Code, w.Header())
+		}
 	}
 }

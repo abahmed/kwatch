@@ -1,0 +1,37 @@
+/* kwatch dashboard: Overview trends (js/trends.js). Bars are plain
+   boxes sized from script; colors are the severity tokens of app.css. */
+.tr { margin-top: 28px; }
+.tr-grid + .tr-grid:not(:empty) { margin-top: 16px; }
+.tr-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 12px; }
+.tr-card { border: 1px solid var(--line); border-radius: var(--radius-card); padding: 18px 20px; min-width: 0; }
+.tr-ch { font-family: var(--font-body); font-weight: 600; font-size: 0.9375rem; letter-spacing: 0; color: var(--text-muted); margin: 0 0 8px; }
+.tr-sum { margin: 0 0 12px; }
+.tr-bars { display: flex; align-items: stretch; gap: 6px; height: 150px; }
+.tr-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: default; }
+.tr-n { font-size: 0.8125rem; font-variant-numeric: tabular-nums; min-height: 18px; }
+.tr-track { flex: 1 1 auto; width: 100%; max-width: 40px; display: flex; flex-direction: column; justify-content: flex-end; border-bottom: 1px solid var(--line); }
+.tr-stack { display: flex; flex-direction: column-reverse; border-radius: 4px 4px 0 0; overflow: hidden; min-height: 0; }
+.tr-seg { flex: 1 1 0; min-height: 3px; }
+.tr-seg + .tr-seg { border-bottom: 1px solid var(--bg); }
+.tr-seg.page { background: var(--failing); }
+.tr-seg.notify { background: var(--degraded); }
+.tr-seg.low { background: var(--control-border); }
+.tr-col:hover .tr-stack { opacity: .8; }
+.tr-day { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
+.tr-key { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 12px 0 4px; font-size: 0.8125rem; color: var(--text-muted); }
+.tr-key > span { display: inline-flex; align-items: center; gap: 6px; }
+.tr-key .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+.tr-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.tr-list li { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tr-link { font-weight: 600; overflow-wrap: break-word; width: fit-content; max-width: 100%; }
+.tr-meta { font-size: 0.875rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.tr-meter { display: block; height: 6px; margin-top: 4px; background: var(--surface); border-radius: var(--radius-pill); overflow: hidden; }
+.tr-fill { display: block; height: 100%; background: var(--text-muted); border-radius: var(--radius-pill); }
+.tr-facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; font-size: 1rem; }
+.tr-facts dt { color: var(--text-muted); }
+.tr-facts dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+@media (max-width: 700px) {
+  .tr-grid { grid-template-columns: minmax(0, 1fr); }
+  .tr-card { padding: 16px; }
+  .tr-bars { gap: 4px; height: 130px; }
+}

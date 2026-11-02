@@ -176,20 +176,53 @@ func TestCarriedMessageLogsItsCarrier(t *testing.T) {
 	assert.Contains(t, line, `carrier="digest"`)
 }
 
-// A paging-only message with no paging provider reaches nobody; the log
-// says so instead of staying silent.
-func TestUnroutedMessageLogsThatNobodyGotIt(t *testing.T) {
+// A paging-only message with no paging provider is not a lost page:
+// chat heard of it through its carrier (the startup summary that stands
+// in for it), and the log names that carrier.
+func TestUnroutedPagingOnlyMessageLogsItsChatCarrier(t *testing.T) {
 	out := captureKlog(t)
 	chat := providerEntry{provider: &errorRecorderProvider{name: "Chat"}}
 	m := managerWithEntries([]providerEntry{chat})
 	job := incidentJob("inc-2", "default")
 	job.incident.PagingOnly = true
+	job.incident.ChatCarrier = "startup summary"
 
 	m.fanOut(job)
 	klog.Flush()
 
 	line := sendLine(out.String())
 	assert.Contains(t, line, `key="inc-2"`)
-	assert.Contains(t, line, `result="not routed"`)
+	assert.Contains(t, line, `result="carried"`)
+	assert.Contains(t, line, `carrier="startup summary"`)
 	assert.Contains(t, line, `provider="none"`)
+}
+
+// What the send log says of a job no provider took: only a message
+// meant for chat is "not routed".
+func TestUnroutedResultNamesWhyNobodyGotIt(t *testing.T) {
+	plain := incidentJob("inc-3", "default")
+	result, carrier := unroutedResult(plain)
+	assert.Equal(t, "not routed", result)
+	assert.Empty(t, carrier)
+
+	paging := incidentJob("inc-3", "default")
+	paging.incident.PagingOnly = true
+	result, carrier = unroutedResult(paging)
+	assert.Equal(t, "paging only", result)
+	assert.Empty(t, carrier)
+}
+
+// A resolve edits its own thread, unless only a listing announced the
+// incident: a roll-up keeps a thread for it, the startup summary none.
+func TestResolvePlacementFollowsWhatAnnouncedIt(t *testing.T) {
+	for carrier, want := range map[string]string{
+		"": "edit", "roll-up": "thread",
+		"startup summary": "standalone", "restored summary": "standalone",
+	} {
+		m := &notification.Message{ChatCarrier: carrier}
+		assert.Equal(t, want, resolvePlacement(m), carrier)
+	}
+	paging := &notification.Message{PagingOnly: true,
+		ChatCarrier: "startup summary"}
+	assert.Equal(t, "edit", resolvePlacement(paging))
 }

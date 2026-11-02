@@ -16,7 +16,8 @@
 | It is now critical.
 | All of its dependents are failing.
 10:22:00 healthy for 6m0s
-✅ billing-a in billing (prod-eu-1) is healthy again. It was down for 15 minutes because node n1 was failing.
+✅ billing-a in billing (prod-eu-1) is healthy again. It was down for 15 minutes because node n1 was failing. Four pods were affected.
 ✅ billing-a in billing (prod-eu-1) is healthy again.
 | ✅ billing-a in billing (**prod-eu-1**) is healthy again.
 | It was down for 15 minutes because node n1 was failing.
+| Four pods were affected.

@@ -67,14 +67,18 @@ func (w Writer) problemBullets(
 
 // itemLine shortens an incident's title for a list: the subject, a dash
 // and what is wrong in a few words, with the namespace in brackets. See
-// shortWhat.
+// shortWhat. A title whose first "is" comes after a clause break (": "
+// or "; ") has a verb of its own before it ("Two objects have been stuck
+// deleting since …: their finalizer is never removed"); it is kept
+// whole, as cutting there would leave a dash inside a sentence.
 func itemLine(title, namespace string) string {
 	title = strings.TrimSuffix(strings.TrimSpace(title), ".")
 	subject, rest, ok := cutOutsideQuotes(title, " is ")
 	if !ok {
 		subject, rest, ok = cutOutsideQuotes(title, " are ")
 	}
-	if !ok || strings.ContainsAny(subject, `"`+quoteOpen) {
+	if !ok || strings.ContainsAny(subject, `"`+quoteOpen) ||
+		strings.Contains(subject, ": ") || strings.Contains(subject, "; ") {
 		return title
 	}
 	if namespace != "" {
@@ -165,11 +169,15 @@ func (w Writer) digestDoc(
 		doc = append(doc, notification.Block{Kind: notification.Para,
 			Spans: []notification.Span{{Text: extras.Wake.Text()}}})
 	}
-	if len(opened)+len(extras.Ongoing)+len(extras.Unchanged) > 0 {
+	list := foldLeftovers(opened, extras)
+	if len(opened) > 0 {
 		doc = append(doc, headingBlock("Problems"))
-		list := foldLeftovers(opened, extras)
 		doc = append(doc, w.problemBullets(list.opened, now)...)
 		doc = append(doc, lineBullets(list.full)...)
+	}
+	if len(extras.Ongoing)+len(extras.Unchanged) > 0 {
+		doc = append(doc, headingBlock("Ongoing"))
+		doc = append(doc, lineBullets(list.ongoing)...)
 		doc = append(doc, ongoingBullets(list.extras, now)...)
 		doc = append(doc, lineBullets(list.same)...)
 	}

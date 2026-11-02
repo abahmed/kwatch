@@ -56,7 +56,7 @@ func (w Writer) StartupSummary(
 	msg.Doc = w.listDoc(mark, "kwatch started", []string{countFact(
 		len(decisions), "problem") + " began before it was watching"},
 		decisions, now)
-	return msg
+	return w.linkedList(msg)
 }
 
 // eachOwnMessage closes a message that lists several incidents.
@@ -96,7 +96,7 @@ func (w Writer) Rollup(
 	msg.Doc = w.listDoc(mark, "kwatch roll-up", []string{countFact(
 		len(decisions), "new problem") + " at the same time"},
 		decisions, now)
-	return msg
+	return w.linkedList(msg)
 }
 
 // RollupResolved closes the roll-up with key once every incident it
@@ -148,6 +148,7 @@ func (w Writer) DigestWith(
 	list := foldLeftovers(opened, extras)
 	sentences = append(sentences, digestTitles(list.opened, now, "")...)
 	sentences = append(sentences, lineSentences(list.full)...)
+	sentences = append(sentences, lineSentences(list.ongoing)...)
 	sentences = append(sentences, ongoingSentences(list.extras, now)...)
 	sentences = append(sentences, lineSentences(list.same)...)
 	sentences = append(sentences,
@@ -166,7 +167,7 @@ func (w Writer) DigestWith(
 	msg.Doc = w.digestDoc(opened, resolved, risks, extras, now)
 	msg.Listed = &notification.Listed{Lines: len(msg.Lines),
 		Summaries: summaryLines(extras.Wake, list)}
-	return msg
+	return w.linkedList(msg)
 }
 
 // urgencySentences close a digest that lists open problems: none of them

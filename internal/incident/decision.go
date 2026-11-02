@@ -84,4 +84,10 @@ type Decision struct {
 	// louder tier after people were told in its own thread. The cause
 	// update and the resolve belong to that thread, not to a digest.
 	Thread bool
+	// AsAnnounced marks the resolve of an incident that only a listing
+	// (the startup summary, a roll-up) announced and that never spoke
+	// on its own. People know it by the subject the listing named, so
+	// the resolve names that subject even if the root moved since, and
+	// the root it ended on only as the last one affected.
+	AsAnnounced bool
 }

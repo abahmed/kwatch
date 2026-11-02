@@ -222,6 +222,19 @@ type Incident struct {
 	// flags.go). Pending is follow-up work the thread is owed.
 	Delivery Delivery
 	Pending  Pending
+	// Journal is what the dashboard shows of the incident's life: its
+	// containers when it broke, the changes around it, its state
+	// changes and the timers it waits on (see journal.go).
+	Journal Journal
+	// CausedBy are the live incidents this one is caused by, and
+	// Causing the ones it causes (see relations.go); at most
+	// maxRelated each. The manager fills them on the copies it hands
+	// out; they are not persisted.
+	CausedBy, Causing []Related
+	// Radius is how far the incident reaches now (see radius.go). It is
+	// recomputed with the impact and not persisted; the journal keeps
+	// its widest.
+	Radius Radius
 
 	// decided is the set of failure findings at the latest decision, so
 	// a later re-blaming of the same failures can be told from news.
@@ -294,9 +307,12 @@ type Incident struct {
 	// incidents wait out the restore grace.
 	restored bool
 	// restoredTier is the tier of the saved record: a rise above it is
-	// news that adoptedFingerprint must not swallow (toldTier moves the
-	// mark up once this run told a rise).
+	// news adoptedFingerprint must not swallow (see toldTier).
 	restoredTier Tier
+	// awaited and formerMembers come from the saved record (see
+	// restore_reasons.go and handover.go).
+	awaited       []string
+	formerMembers []inventory.EntityID
 	// trafficLost records that a Service in the impact, routed to by an
 	// Ingress or route, has no ready backends or mostly failing ones.
 	// It is recomputed with the impact; the traffic-lost page reads it.
@@ -361,36 +377,4 @@ type Event struct {
 	// Repeats counts earlier entries that said the same thing and were
 	// folded into this one to keep the timeline within its bound.
 	Repeats int `json:",omitempty"`
-}
-
-// String names the state for diagnostics.
-func (s State) String() string {
-	switch s {
-	case Settling:
-		return "settling"
-	case Open:
-		return "open"
-	case Recovering:
-		return "recovering"
-	case Flapping:
-		return "flapping"
-	case Resolved:
-		return "resolved"
-	}
-	return "unknown"
-}
-
-// String names the tier for diagnostics.
-func (t Tier) String() string {
-	switch t {
-	case Silent:
-		return "silent"
-	case Digest:
-		return "digest"
-	case Notify:
-		return "notify"
-	case Page:
-		return "page"
-	}
-	return "unknown"
 }

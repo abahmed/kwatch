@@ -29,6 +29,10 @@ type Env struct {
 	// WithChanges adds the latest changes to a decision of an incident
 	// without a cause.
 	WithChanges func(incident.Decision, time.Time) incident.Decision
+	// KindNames is the API's spelling of the custom kinds a message
+	// about an incident may name; nil or empty when none is known.
+	// Optional.
+	KindNames func(incident.Incident) map[inventory.Kind]string
 	// SaveStartup hands the startup marker to the incident writer.
 	SaveStartup func(StartupState)
 	// Withheld counts the Pro findings a Community edition did not
@@ -185,12 +189,13 @@ func (c *Collector) risesToPage(d incident.Decision) bool {
 }
 
 // pageOnly sends d to the paging providers alone and remembers that the
-// incident paged, so its resolve reaches them too.
+// incident paged, so its resolve reaches them too. carrier names the
+// message that tells chat about it instead.
 func (c *Collector) pageOnly(
-	ctx context.Context, now time.Time, d incident.Decision,
+	ctx context.Context, now time.Time, d incident.Decision, carrier string,
 ) {
 	msg := c.env.Write(d, now)
-	msg.PagingOnly = true
+	msg.PagingOnly, msg.ChatCarrier = true, carrier
 	c.env.Incidents.RecordPaged(d.Incident.ID, true)
 	c.env.Sink(ctx, d, msg)
 }
@@ -210,7 +215,7 @@ func (c *Collector) closeUnannounced(
 		return
 	}
 	msg := c.env.Write(d, now)
-	msg.PagingOnly = true
+	msg.PagingOnly, msg.ChatCarrier = true, carrier
 	c.env.Incidents.RecordPaged(d.Incident.ID, false)
 	c.env.Sink(ctx, d, msg)
 }

@@ -1,7 +1,9 @@
 package kube
 
 import (
+	"path"
 	"strconv"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -19,7 +21,9 @@ const defaultProbeTimeout = 1
 // ProbeAttr("readiness", "period") for "probe.readiness.period".
 // Settings: "check", "handler" (the field that holds the check:
 // "httpGet", "tcpSocket", "grpc", "exec"), "port", "delay", "period",
-// "timeout", "failures".
+// "timeout", "failures", and "command" for an exec probe: the base
+// name of the program it runs, never its arguments, which may hold
+// secrets.
 func ProbeAttr(kind, setting string) string {
 	return "probe." + kind + "." + setting
 }
@@ -89,7 +93,33 @@ func setProbeHandler(
 	if handler != "" {
 		attrs[ProbeAttr(kind, "handler")] = inventory.Text(handler)
 	}
+	if p.Exec != nil {
+		if name := execProgram(p.Exec.Command); name != "" {
+			attrs[ProbeAttr(kind, "command")] = inventory.Text(name)
+		}
+	}
 	if port != "" {
 		attrs[ProbeAttr(kind, "port")] = inventory.Text(port)
 	}
+}
+
+// maxProgramName bounds the program name an exec probe records.
+const maxProgramName = 64
+
+// execProgram is the base name of the program an exec probe runs: the
+// first word of its first element, so arguments written into one
+// element are left out too. Empty when there is none.
+func execProgram(command []string) string {
+	if len(command) == 0 {
+		return ""
+	}
+	fields := strings.Fields(command[0])
+	if len(fields) == 0 {
+		return ""
+	}
+	name := path.Base(fields[0])
+	if name == "." || name == "/" {
+		return ""
+	}
+	return boundedLabel(name, maxProgramName)
 }

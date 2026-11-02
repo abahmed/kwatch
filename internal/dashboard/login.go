@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"k8s.io/klog/v2"
 )
 
 // maxLoginBody bounds the sign-in request body.
@@ -21,20 +23,25 @@ func (a *Auth) loginHandler(w http.ResponseWriter, r *http.Request) {
 	if !a.formChecks(w, r) {
 		return
 	}
-	if !a.allowed(r) {
-		a.tooMany(w)
+	// The attempt is counted before the body is read, so many slow
+	// requests at once cannot all pass the limit.
+	attempt, reserved := a.reserve(r)
+	if !reserved {
+		a.tooMany(w, r)
 		return
 	}
 	password, ok := readPassword(r)
 	if !ok {
+		attempt.forgive()
 		writeError(w, http.StatusBadRequest, "bad request")
 		return
 	}
 	if !a.validPassword(password) {
-		a.recordFailure(r)
+		a.noteProxyFailure(r)
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
+	attempt.forgive()
 	value, expires, err := a.sessions.issue()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
@@ -99,8 +106,9 @@ func (a *Auth) formChecks(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-func (a *Auth) tooMany(w http.ResponseWriter) {
-	secs := int(a.failRate.retryAfter().Seconds())
+func (a *Auth) tooMany(w http.ResponseWriter, r *http.Request) {
+	limiter, _ := a.limiterFor(r)
+	secs := int(limiter.retryAfter().Seconds())
 	w.Header().Set("Retry-After", strconv.Itoa(secs))
 	writeError(w, http.StatusTooManyRequests, "too many requests")
 }
@@ -168,34 +176,58 @@ func (a *Auth) isHTTPS(r *http.Request) bool {
 }
 
 // forwardedClient is the client a trusted proxy named: the last
-// X-Forwarded-For hop, the one the proxy added. Empty without trustProxy
-// or from loopback.
+// X-Forwarded-For hop, the one the proxy added, as a canonical IP
+// address. Empty without trustProxy, from loopback or when the hop is
+// not an IP address, so a made-up value falls back to the peer.
 func (a *Auth) forwardedClient(r *http.Request) string {
 	if !a.trustProxy || loopback(r) {
 		return ""
 	}
-	return lastHeaderValue(r, "X-Forwarded-For")
-}
-
-// allowed reports whether r may try a credential. Failures count against
-// the connecting peer always, and also against the forwarded client
-// behind a trusted proxy. The peer limit stops a client that varies
-// X-Forwarded-For; behind a proxy it is higher, because every client
-// shares the proxy's address. Without trustProxy behind an Ingress, all
-// clients share the one peer limit, so one guesser can lock everyone out
-// for a minute: set trustProxy there.
-func (a *Auth) allowed(r *http.Request) bool {
-	if !a.failRate.allowed(remoteHost(r)) {
-		return false
+	ip := net.ParseIP(lastHeaderValue(r, "X-Forwarded-For"))
+	if ip == nil {
+		return ""
 	}
-	client := a.forwardedClient(r)
-	return client == "" || a.clientRate.allowed(client)
+	return ip.String()
 }
 
-func (a *Auth) recordFailure(r *http.Request) {
-	a.failRate.record(remoteHost(r))
+// limiterFor is the limit r counts against and its key: the client a
+// trusted proxy names, else the connecting peer. Behind a trusted proxy
+// only the named client is limited: the proxy appends the address it
+// saw, so a client cannot rotate it, and one client's guesses never
+// lock out the others. Without trustProxy behind an Ingress, all
+// clients share the one peer limit, so one guesser can lock everyone
+// out for a minute: set trustProxy there.
+func (a *Auth) limiterFor(r *http.Request) (*rateLimiter, string) {
 	if client := a.forwardedClient(r); client != "" {
-		a.clientRate.record(client)
+		return a.clientRate, client
+	}
+	return a.failRate, remoteHost(r)
+}
+
+// allowed reports whether r's client is under its failure limit.
+func (a *Auth) allowed(r *http.Request) bool {
+	limiter, key := a.limiterFor(r)
+	return limiter.allowed(key)
+}
+
+// reserve counts one attempt for r's client; false past the limit.
+func (a *Auth) reserve(r *http.Request) (attempt, bool) {
+	limiter, key := a.limiterFor(r)
+	return limiter.reserve(key)
+}
+
+// noteProxyFailure counts a failure that came through a trusted proxy
+// against the proxy and logs once a minute when there are many: many
+// clients behind it are guessing. It never refuses a request.
+func (a *Auth) noteProxyFailure(r *http.Request) {
+	if a.forwardedClient(r) == "" {
+		return
+	}
+	peer := remoteHost(r)
+	if a.proxyRate.record(peer) == maxProxyFailures {
+		klog.InfoS("many dashboard sign-in failures through one proxy",
+			"component", "dashboard-server", "proxy", peer,
+			"failures", maxProxyFailures, "window", "1m")
 	}
 }
 

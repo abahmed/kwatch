@@ -141,7 +141,7 @@ func TestCapBlocksAnnouncesWhatItDropped(t *testing.T) {
 	assert.Contains(
 		t,
 		last.Text.Text,
-		"21 more block(s) omitted",
+		"21 more blocks omitted",
 		"a trimmed alert must say so",
 	)
 }

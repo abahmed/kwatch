@@ -1,0 +1,155 @@
+/* kwatch dashboard: talking to the server (KW.api), copying text, and
+   the shared error and starting panels. core.js loads first. */
+(function () {
+  "use strict";
+  var KW = window.KW;
+
+  /* ---- API ---- */
+  /* api returns {status, data, retryAfter, etag}; status 0 is a network
+     failure (or opts.signal aborted it). opts.etag is sent as
+     If-None-Match: an unchanged list answers 304 with no data. The Date
+     header corrects the browser clock. */
+  KW.api = function (path, opts) {
+    opts = opts || {};
+    var init = { method: opts.method || "GET", credentials: "same-origin",
+      cache: "no-store", headers: { Accept: "application/json" } };
+    if (opts.body !== undefined) {
+      init.headers["Content-Type"] = "application/json";
+      init.body = JSON.stringify(opts.body);
+    }
+    if (opts.etag) init.headers["If-None-Match"] = opts.etag;
+    var ctl = window.AbortController ? new AbortController() : null;
+    var timer = 0, onAbort = null;
+    // settle frees the timer and the caller's listener once we are done.
+    function settle() {
+      window.clearTimeout(timer);
+      if (onAbort) opts.signal.removeEventListener("abort", onAbort);
+    }
+    if (ctl) {
+      init.signal = ctl.signal;
+      timer = window.setTimeout(function () { ctl.abort(); }, 15000);
+      if (opts.signal) {
+        onAbort = function () { ctl.abort(); };
+        opts.signal.addEventListener("abort", onAbort, { once: true });
+      }
+    }
+    return fetch(path, init).then(function (res) {
+      var date = Date.parse(res.headers.get("Date") || "");
+      if (!isNaN(date)) KW.skew = date - Date.now();
+      var retry = parseInt(res.headers.get("Retry-After") || "", 10);
+      var etag = res.headers.get("ETag") || "";
+      return res.text().then(function (text) {
+        var data = null;
+        try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+        settle();
+        return { status: res.status, data: data, etag: etag,
+          retryAfter: isNaN(retry) ? 0 : retry };
+      });
+    }, function () {
+      settle();
+      return { status: 0, data: null, retryAfter: 0, etag: "" };
+    });
+  };
+
+  /* ---- copy ---- */
+  KW.copy = function (button, text, label) {
+    function done() {
+      button.textContent = "Copied";
+      KW.announce("Copied");
+      window.setTimeout(function () { button.textContent = label || "Copy"; }, 2000);
+    }
+    function fallback() {
+      var target = button.parentNode.querySelector("code, .logs");
+      if (!target) return;
+      var range = document.createRange();
+      range.selectNodeContents(target);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else {
+      fallback();
+    }
+  };
+
+  /* cmd is a command box: one line, scrolls inside, Copy copies it. */
+  KW.cmd = function (command) {
+    var box = KW.el("div", "cmd");
+    var code = KW.el("code", "", command);
+    code.tabIndex = 0;
+    var b = KW.el("button", "btn", "Copy");
+    b.type = "button";
+    b.addEventListener("click", function () { KW.copy(b, command); });
+    box.appendChild(code);
+    box.appendChild(b);
+    return box;
+  };
+
+  KW.wireCopy = function (root) {
+    KW.$$("[data-copy]", root).forEach(function (b) {
+      b.addEventListener("click", function () {
+        KW.copy(b, b.parentNode.querySelector("code").textContent);
+      });
+    });
+  };
+
+  /* ---- shared states ---- */
+  KW.self = { namespace: "kwatch", deployment: "kwatch" };
+
+  /* panel renders one of the shared error or starting panels.
+     kind: starting | network | limit | error. */
+  KW.panel = function (kind, status, onRetry) {
+    var frag = KW.clone("tpl-panel");
+    var p = frag.firstElementChild;
+    // Starting is news, not a failure: read politely.
+    if (kind === "starting") p.setAttribute("role", "status");
+    var retry = KW.$("[data-retry]", p);
+    var texts = {
+      starting: ["kwatch is starting",
+        "It is still loading. This page refreshes by itself.",
+        "Try now"],
+      network: ["Can't reach kwatch",
+        "Check your connection. We'll keep trying.", "Try now"],
+      limit: ["Too many tries", "Wait a minute, then try again.", ""],
+      error: ["The dashboard hit an error",
+        "Your cluster is not affected. kwatch's own logs say why:",
+        "Try again"]
+    }[kind];
+    KW.$("[data-heading]", p).textContent = texts[0];
+    KW.$("[data-body]", p).textContent = texts[1];
+    if (kind === "error") {
+      var cmd = KW.$("[data-cmd]", p);
+      cmd.hidden = false;
+      KW.$("code", cmd).textContent = "kubectl -n " + KW.self.namespace +
+        " logs deploy/" + KW.self.deployment + " --tail=50";
+      KW.wireCopy(p);
+      var code = KW.$("[data-code]", p);
+      code.hidden = false;
+      code.textContent = "Error " + status;
+    }
+    if (texts[2] && onRetry) {
+      retry.hidden = false;
+      retry.textContent = texts[2];
+      retry.addEventListener("click", onRetry);
+    }
+    return p;
+  };
+
+  /* kindOf sorts a failed API status into a shared state. */
+  KW.kindOf = function (status) {
+    if (status === 0) return "network";
+    if (status === 503) return "starting";
+    if (status === 429) return "limit";
+    return "error";
+  };
+
+  /* retryDelay: 5 s for the first tries while starting, then 15 s;
+     60 s after 429. */
+  KW.retryDelay = function (kind, attempt) {
+    if (kind === "limit") return 60000;
+    if (kind === "starting") return attempt < 6 ? 5000 : 15000;
+    return 15000;
+  };
+})();

@@ -255,6 +255,7 @@ one bucket per data class:
 | `flight` | The flight recorder: sanitized, compressed batches of what the sources observed (names hashed, no messages), exported with `kwatch replay-export` | 48 hours, at most 64 MiB |
 | `threads` | Provider thread IDs, so updates stay in one conversation | No expiry |
 | `outbox` | Delivery jobs not yet accepted by a provider | Until accepted; at most 2048 jobs, none older than 24 hours |
+| `trails` | Per incident, what became of its messages at each provider (the dashboard's "Who was told") | The 512 incidents told most recently, 16 attempts each (the newest, plus the first one a channel accepted); a trail whose incident record is gone is deleted at the next start |
 
 A compactor off the decision loop enforces retention and a total size cap of
 512 MiB of logical data (keys and values), of which evidence may use 128 MiB,

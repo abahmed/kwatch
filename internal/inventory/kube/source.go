@@ -131,6 +131,9 @@ type Source struct {
 	lifecycle atomic.Pointer[context.Context]
 	// syncExpired is set once the optional sync wait has elapsed.
 	syncExpired atomic.Bool
+	// syncedAt is when WaitForSync first saw every kind settle, in Unix
+	// nanoseconds; zero before (see SyncedAt).
+	syncedAt atomic.Int64
 }
 
 // NewSource registers an informer and handler for every schema.

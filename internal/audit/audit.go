@@ -44,6 +44,10 @@ type Entry struct {
 	Reason    string    `json:"reason,omitempty"`
 	Severity  string    `json:"severity,omitempty"`
 	Root      string    `json:"root,omitempty"`
+	// Subject is what people were told the incident is about, when it
+	// is not the root: a root that moved since the announcement keeps
+	// Root as it is now, and Subject says what the messages name.
+	Subject string `json:"subject,omitempty"`
 	// Tier is how loudly the message was delivered: page, notify or
 	// digest.
 	Tier          string `json:"tier,omitempty"`

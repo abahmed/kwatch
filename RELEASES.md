@@ -56,6 +56,13 @@
 - When a provider's limit cuts a Pro message, the log quote loses lines
   first, then the proof, then the quote; the cause and the fix stay.
 - The dashboard shows when each check read its section.
+- `GET /api/incidents/{id}` no longer fails with 500 for a very large
+  incident: past the 64 KiB response limit it drops the oldest timeline
+  events, log lines and evidence lines first, then shortens long text,
+  and says what it left out in a new `truncated` object (`timeline`,
+  `logLines`, `evidenceLines`, `evidenceFacts`, `evidenceSections`,
+  `texts`; absent when nothing was cut). The issue page says how many
+  entries are not shown. A refused response now logs its path and size.
 - Community messages are unchanged, except on Discord (below).
 
 ### Cluster DNS

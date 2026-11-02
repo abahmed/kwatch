@@ -139,7 +139,7 @@ func (c *Collector) holdStartup(
 		c.env.Incidents.HoldAnnouncement(id)
 		c.env.Incidents.RecordRolledUp(id)
 		if held < 0 && d.Incident.Tier == incident.Page {
-			c.pageOnly(ctx, now, d)
+			c.pageOnly(ctx, now, d, "startup summary")
 			return true
 		}
 		c.recordCarried(ctx, now, d, "startup summary")
@@ -148,7 +148,7 @@ func (c *Collector) holdStartup(
 		s.Collected[held].Incident = d.Incident
 		if c.risesToPage(d) {
 			// The summary goes to chat only: the page is not delayed.
-			c.pageOnly(ctx, now, d)
+			c.pageOnly(ctx, now, d, "startup summary")
 			return true
 		}
 		c.recordCarried(ctx, now, d, "startup summary")
@@ -211,7 +211,8 @@ func (c *Collector) finishStartup(ctx context.Context, now time.Time) {
 
 // listed builds the listing of the message with key that named the
 // announcements, and releases their held announcements: delivery has the
-// message now.
+// message now. What the listing named each incident is its subject: its
+// resolve names it too, whatever its root becomes.
 func (c *Collector) listed(
 	key string, announcements []incident.Decision,
 ) Listing {
@@ -219,6 +220,8 @@ func (c *Collector) listed(
 	for _, d := range announcements {
 		l.Incidents = append(l.Incidents, d.Incident.ID)
 		c.env.Incidents.ReleaseAnnouncement(d.Incident.ID)
+		c.env.Incidents.RecordSubject(d.Incident.ID,
+			c.env.Messages.Subject(d))
 	}
 	return l
 }

@@ -128,7 +128,7 @@ func TestListAndDetailCarryTheRedactedCause(t *testing.T) {
 	p.Cause = &rootcause.CauseRecord{
 		Summary: "the database is down, password=hunter2"}
 	var list ListResponse
-	body := get(t, newTestServer(p), "/api/incidents?state=active").Body.Bytes()
+	body := get(t, newTestServer(p), "/api/incidents").Body.Bytes()
 	if err := json.Unmarshal(body, &list); err != nil {
 		t.Fatal(err)
 	}

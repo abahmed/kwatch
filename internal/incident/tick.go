@@ -26,6 +26,10 @@ func (m *Manager) Tick(now time.Time) ([]Decision, time.Duration) {
 	}
 	m.expireResolved(now)
 	m.pruneFormer(now)
+	index := m.indexLive()
+	for i := range decisions {
+		m.relateAmong(&decisions[i].Incident, index)
+	}
 	return decisions, m.nextWake(now)
 }
 
@@ -57,6 +61,7 @@ func (m *Manager) tickOne(id string, now time.Time) (d Decision, ok bool) {
 			p.bootedAt = now
 		}
 		d, ok = m.advance(p, now)
+		m.observe(p, now)
 		if p.State == Resolved && m.incidents[id] == p {
 			m.markResolved(p)
 		}

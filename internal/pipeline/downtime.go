@@ -82,6 +82,11 @@ func Fingerprints(
 	return out
 }
 
+// fingerprintEscaper protects the separator inside a value: ";" and the
+// escape character itself get a backslash. A fingerprint saved before
+// this has neither in a value that mattered, and reads the same way.
+var fingerprintEscaper = strings.NewReplacer(`\`, `\\`, ";", `\;`)
+
 // fingerprint reads the tracked attributes one by one: a snapshot of the
 // whole entity would copy every attribute of every tracked object.
 func fingerprint(
@@ -93,7 +98,7 @@ func fingerprint(
 		if attribute, ok := model.Attribute(id, name); ok {
 			value = attribute.Value.AsText()
 		}
-		parts = append(parts, name+"="+value)
+		parts = append(parts, name+"="+fingerprintEscaper.Replace(value))
 	}
 	return strings.Join(parts, ";")
 }
@@ -144,8 +149,12 @@ func downtimeChange(
 	after, present := current[key].(string)
 	switch {
 	case known && present && before != after:
-		return inventory.Change{
-			Fields: fingerprintFields(before, after)}, true
+		fields := fingerprintFields(before, after)
+		if len(fields) == 0 {
+			// Only the spelling differs (an older escape): no edit.
+			return inventory.Change{}, false
+		}
+		return inventory.Change{Fields: fields}, true
 	case known && !present:
 		return inventory.Change{Deleted: true}, true
 	case !known && present && saved[kindTimePrefix+string(kind)] != "":
@@ -195,15 +204,32 @@ func changeTime(
 func fingerprintFields(before, after string) []inventory.FieldChange {
 	old := parseFingerprint(before)
 	var fields []inventory.FieldChange
-	for _, part := range strings.Split(after, ";") {
+	for _, part := range splitFingerprint(after) {
 		name, value, _ := strings.Cut(part, "=")
 		if old[name] != value {
-			fields = append(fields, inventory.FieldChange{
-				Path: downtimePath(name), Before: old[name], After: value,
-			})
+			fields = append(fields, fingerprintField(name, old[name], value))
 		}
 	}
 	return fields
+}
+
+// fingerprintField is one attribute that changed. The digest of a
+// Secret's or ConfigMap's values names no key and must not be shown:
+// the change is told as "data" with the edit word a live diff writes.
+func fingerprintField(name, before, after string) inventory.FieldChange {
+	if name != kube.AttrDataDigest {
+		return inventory.FieldChange{
+			Path: downtimePath(name), Before: before, After: after,
+		}
+	}
+	edit := "changed"
+	switch {
+	case before == "":
+		edit = "added"
+	case after == "":
+		edit = "removed"
+	}
+	return inventory.FieldChange{Path: "data", After: edit}
 }
 
 // downtimePath maps an attribute to the path the live diff would use;
@@ -217,9 +243,31 @@ func downtimePath(attribute string) string {
 
 func parseFingerprint(value string) map[string]string {
 	out := map[string]string{}
-	for _, part := range strings.Split(value, ";") {
+	for _, part := range splitFingerprint(value) {
 		name, v, _ := strings.Cut(part, "=")
 		out[name] = v
 	}
 	return out
+}
+
+// splitFingerprint cuts a fingerprint at its unescaped ";" and undoes
+// the escapes of each part. A backslash before any other character is
+// kept as it is, so older fingerprints read as they always did.
+func splitFingerprint(value string) []string {
+	var parts []string
+	var cur strings.Builder
+	for i := 0; i < len(value); i++ {
+		switch c := value[i]; {
+		case c == '\\' && i+1 < len(value) &&
+			(value[i+1] == '\\' || value[i+1] == ';'):
+			i++
+			cur.WriteByte(value[i])
+		case c == ';':
+			parts = append(parts, cur.String())
+			cur.Reset()
+		default:
+			cur.WriteByte(c)
+		}
+	}
+	return append(parts, cur.String())
 }

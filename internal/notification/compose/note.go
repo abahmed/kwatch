@@ -43,6 +43,12 @@ type caseFacts struct {
 	// Community.
 	gathered  map[string]bool
 	confirmed string
+	// rootUnseen is set when the check that reads the root itself came
+	// back absent: a proof then cannot confirm the cause.
+	rootUnseen bool
+	// asAnnounced names the subject people were told about in a resolve
+	// (see incident.Decision.AsAnnounced).
+	asAnnounced bool
 }
 
 func gatherFacts(d incident.Decision, now time.Time, fix *inventory.Change,
@@ -56,6 +62,8 @@ func gatherFacts(d incident.Decision, now time.Time, fix *inventory.Change,
 	if c := d.Facts.Correlation; c != nil {
 		f.confirmed = c.Confirmed
 	}
+	f.rootUnseen = rootUnseen(f.p, d.Facts.Report)
+	f.asAnnounced = d.AsAnnounced
 	if own := rootFinding(f.p, f.members); own != nil {
 		f.lead, f.ok = *own, true
 	} else if failures := failing(f.members); len(failures) > 0 {

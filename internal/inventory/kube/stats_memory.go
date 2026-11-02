@@ -27,6 +27,9 @@ const (
 	AttrMemoryPrevLast    = "memory.prev.last.bytes"
 	AttrMemoryPrevBefore  = "memory.prev.before.bytes"
 	AttrMemoryPrevGapSecs = "memory.prev.gap.seconds"
+	// AttrCPUPeak24h is the highest CPU use, in millicores, seen in the
+	// last 24 hours, across restarts.
+	AttrCPUPeak24h = "cpu.peak.24h.milli"
 
 	// memoryWindowHours is how far back the peak looks. One slot per
 	// hour keeps the history small for a whole cluster of containers.
@@ -65,20 +68,33 @@ func (r *memoryRun) add(at time.Time, bytes float64) {
 	r.lastAt = at
 }
 
-// hourPeak is the highest working set of one clock hour.
+// hourPeak is the highest working set and CPU use of one clock hour.
 type hourPeak struct {
 	hour  int64
 	bytes float64
+	milli float64
 }
 
-// memoryHistory is one container's peak by hour and its last two runs.
+// memoryHistory is one container's memory and CPU peak by hour and its
+// last two runs.
 type memoryHistory struct {
-	// node is where the container was last read.
+	// node is where the container was last read, seen when.
 	node    string
+	seen    time.Time
 	started time.Time
 	run     memoryRun
 	prev    memoryRun
 	hours   [memoryWindowHours]hourPeak
+}
+
+// slot returns the hour slot of at, emptied when it held an older hour.
+func (h *memoryHistory) slot(at time.Time) *hourPeak {
+	hour := at.Unix() / 3600
+	slot := &h.hours[hour%memoryWindowHours]
+	if slot.hour != hour {
+		*slot = hourPeak{hour: hour}
+	}
+	return slot
 }
 
 func (h *memoryHistory) observe(
@@ -90,31 +106,38 @@ func (h *memoryHistory) observe(
 	}
 	h.started = started
 	h.run.add(at, bytes)
-	hour := at.Unix() / 3600
-	slot := &h.hours[hour%memoryWindowHours]
-	if slot.hour != hour {
-		*slot = hourPeak{hour: hour}
-	}
+	slot := h.slot(at)
 	slot.bytes = max(slot.bytes, bytes)
 }
 
-func (h *memoryHistory) peak24h(now time.Time) float64 {
+// observeCPU records one CPU reading, in millicores.
+func (h *memoryHistory) observeCPU(at time.Time, milli float64) {
+	slot := h.slot(at)
+	slot.milli = max(slot.milli, milli)
+}
+
+// peak24h is the highest working set and CPU use of the window.
+func (h *memoryHistory) peak24h(now time.Time) (bytes, milli float64) {
 	oldest := now.Unix()/3600 - memoryWindowHours
-	peak := 0.0
 	for _, slot := range h.hours {
 		if slot.hour > oldest {
-			peak = max(peak, slot.bytes)
+			bytes = max(bytes, slot.bytes)
+			milli = max(milli, slot.milli)
 		}
 	}
-	return peak
+	return bytes, milli
 }
 
 // attributes are the history as container attributes.
 func (h *memoryHistory) attributes(
 	now time.Time,
 ) map[string]inventory.Value {
+	bytes, milli := h.peak24h(now)
 	attrs := map[string]inventory.Value{
-		AttrMemoryPeak24h: inventory.Number(h.peak24h(now)),
+		AttrMemoryPeak24h: inventory.Number(bytes),
+	}
+	if milli > 0 {
+		attrs[AttrCPUPeak24h] = inventory.Number(milli)
 	}
 	if h.prev.samples == 0 {
 		return attrs
@@ -134,8 +157,8 @@ func (h *memoryHistory) attributes(
 	return attrs
 }
 
-// memoryLog keeps the memory history of every container the kubelets
-// report.
+// memoryLog keeps the memory and CPU history of every container the
+// kubelets report.
 //
 // The history is published under its own source (memorySource), apart from
 // the live reading. A container that is crashing or waiting leaves the
@@ -160,13 +183,33 @@ func (l *memoryLog) note(
 ) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.history(id, node, at).observe(started, at, bytes)
+}
+
+// noteCPU records one CPU reading of a container on node, in millicores.
+func (l *memoryLog) noteCPU(
+	id inventory.EntityID, node string, at time.Time, milli float64,
+) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.history(id, node, at).observeCPU(at, milli)
+}
+
+// history returns the history of id, created when new, as read on node
+// at at. The caller holds mu.
+func (l *memoryLog) history(
+	id inventory.EntityID, node string, at time.Time,
+) *memoryHistory {
 	history := l.containers[id]
 	if history == nil {
 		history = &memoryHistory{}
 		l.containers[id] = history
 	}
 	history.node = node
-	history.observe(started, at, bytes)
+	if at.After(history.seen) {
+		history.seen = at
+	}
+	return history
 }
 
 // observations publishes the history of every container last read on
@@ -200,7 +243,7 @@ func (l *memoryLog) forgetBefore(
 	var dropped []inventory.EntityID
 	for id, history := range l.containers {
 		gone := live != nil && !live[id]
-		if gone || history.run.lastAt.Before(cutoff) {
+		if gone || history.seen.Before(cutoff) {
 			delete(l.containers, id)
 			dropped = append(dropped, id)
 		}
@@ -209,10 +252,13 @@ func (l *memoryLog) forgetBefore(
 }
 
 // clearMemory forgets containers not read for the whole window, or gone
-// from the model, and removes their history from the model.
+// from the model, and removes their history from the model. Until the
+// model has synced (see StatsConfig.Synced) its container list is
+// partial, and a history restored from the state file is kept.
 func (p *StatsPoller) clearMemory(ctx context.Context, now time.Time) {
 	var live map[inventory.EntityID]bool
-	if p.cfg.Containers != nil {
+	if p.cfg.Containers != nil &&
+		(p.cfg.Synced == nil || p.cfg.Synced()) {
 		live = map[inventory.EntityID]bool{}
 		for _, id := range p.cfg.Containers() {
 			live[id] = true

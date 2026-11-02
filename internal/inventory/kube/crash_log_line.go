@@ -18,11 +18,14 @@ var stackFrame = regexp.MustCompile(`^(at \S+|File ".*", line \d+|` +
 // interpreted. internal/pipeline calls this function too, so the log
 // line a message quotes is chosen in one place.
 func FirstErrorLine(lines []string) string {
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if IsErrorLine(line) && !stackFrame.MatchString(line) {
-			return line
-		}
+	if i := firstTroubleIndex(lines); i >= 0 {
+		return strings.TrimSpace(lines[i])
 	}
 	return ""
+}
+
+// isTroubleLine reports a line that names a failure and is not a stack
+// frame.
+func isTroubleLine(line string) bool {
+	return IsErrorLine(line) && !stackFrame.MatchString(line)
 }

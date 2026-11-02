@@ -15,7 +15,7 @@ func leadSubject(f caseFacts) inventory.EntityID {
 	p := f.p
 	switch {
 	case !f.ok && p.State == incident.Resolved && !zeroID(p.Subject) &&
-		!movedAway(p):
+		(!movedAway(p) || f.asAnnounced):
 		return p.Subject
 	case policyBlocksCall(p.Cause):
 		// The caller the policy cuts off is the subject; the policy is

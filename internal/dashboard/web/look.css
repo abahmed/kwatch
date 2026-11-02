@@ -1,0 +1,41 @@
+/* kwatch dashboard: text size and high contrast, from View options.
+   look.js sets data-text and data-contrast on <html> before the page
+   draws. Every font size is in rem, so the root size scales the text
+   and what is sized around it. The high-contrast colors pass WCAG AA
+   (most pass AAA): text at least 7:1 on the page and the surfaces,
+   borders at least 5:1. */
+html { font-size: 100%; }
+html[data-text="s"] { font-size: 87.5%; }
+html[data-text="l"] { font-size: 112.5%; }
+html[data-text="xl"] { font-size: 125%; }
+
+:root[data-contrast="more"] {
+  --text: #0E1116; --text-muted: #2A2F38; --text-soft: #1F242C;
+  --line: #5B6270; --control-border: #0E1116;
+  --failing: #8F1C13; --degraded: #6B4100; --resolved: #164A9A; --success: #165A30;
+  --ink-muted: #C3C7CE; --focus-width: 4px;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-contrast="more"] {
+    --bg: #0B0C0E; --surface: #17191D;
+    --text: #FFFFFF; --text-muted: #DADDE2; --text-soft: #E8EAED;
+    --line: #8A919C; --control-border: #C3C7CE;
+    --failing: #FFB4A9; --degraded: #FFD27F; --resolved: #B5D1FF; --success: #A6EBBA;
+    --failing-bg: #3A1F1E; --degraded-bg: #3A2C14; --resolved-bg: #1B2A44;
+  }
+}
+/* No faded text: what is dimmed elsewhere stays readable. */
+:root[data-contrast="more"] .muted,
+:root[data-contrast="more"] .fchip.is-zero:not([aria-pressed="true"]) { color: var(--text-soft); }
+:root[data-contrast="more"] .tablewrap.loading,
+:root[data-contrast="more"] .itable.stale,
+:root[data-contrast="more"] .it-row.is-gone td { opacity: .75; }
+:root[data-contrast="more"] a, :root[data-contrast="more"] .link { text-decoration-thickness: 2px; }
+:root[data-contrast="more"] .chip { border-color: currentColor; }
+:root[data-contrast="more"] :focus-visible { outline-color: var(--text); box-shadow: 0 0 0 calc(var(--focus-width) + 2px) var(--bg); }
+:root[data-contrast="more"].kw-stale .itable, :root[data-contrast="more"].kw-stale .detail,
+:root[data-contrast="more"].kw-stale .updated { opacity: 1; }
+/* Touch screens: bigger targets for the small controls. */
+@media (pointer: coarse) {
+  .tz-b, .fchip, .pager .btn, .ttools .btn, .updated .upd-try, .who .link, .dd-opt { min-height: 40px; }
+}

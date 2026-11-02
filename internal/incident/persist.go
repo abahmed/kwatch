@@ -143,6 +143,27 @@ type Record struct {
 	// Steps are the suggested steps of the last message; older records
 	// restore without them.
 	Steps []FixStep `json:",omitempty"`
+	// Reasons are the reasons of the failing members when the record
+	// was saved. Until all of them are seen again after a restart, the
+	// incident's tier is provisional (see provisional). Older records
+	// restore with RootReasons in their place.
+	Reasons []string `json:",omitempty"`
+	// Members are the entities of the failing members when the record
+	// was saved, bounded by maxSavedMembers. A restored incident whose
+	// members do not come back is handed over to the incident that holds
+	// any of them (handover.go), even when its root no longer exists.
+	// Older records restore without them.
+	Members []inventory.EntityID `json:",omitempty"`
+	// Breaks, LinkedChanges, Transitions, ErrorKey and Level are the
+	// incident's journal (journal.go), each bounded. Older records
+	// restore without them: the journal starts at the restart.
+	Breaks        []BreakSnapshot    `json:",omitempty"`
+	LinkedChanges []inventory.Change `json:",omitempty"`
+	Transitions   []Transition       `json:",omitempty"`
+	ErrorKey      string             `json:",omitempty"`
+	Level         string             `json:",omitempty"`
+	// Widest is the journal's widest radius (radius.go).
+	Widest Radius `json:",omitzero"`
 }
 
 // Export returns every incident as a record, for persistence.
@@ -180,7 +201,12 @@ func (m *Manager) Export() []Record {
 			FormerRoot: p.formerRoot, RerootedAt: p.rerootedAt,
 			RejectionSeenAt: p.rejectionAt, Merged: p.Merged,
 			Facts: p.Facts, Headline: p.Headline, DocsLink: p.DocsLink,
-			Steps: p.Steps,
+			Steps: p.Steps, Reasons: savedReasons(&p),
+			Members: savedMembers(&p), Breaks: p.Journal.Breaks,
+			LinkedChanges: p.Journal.Changes,
+			Transitions:   p.Journal.Transitions,
+			ErrorKey:      p.Journal.ErrorKey, Level: p.Journal.Level,
+			Widest: p.Journal.Widest,
 		})
 	}
 	return out
@@ -295,6 +321,8 @@ func restored(r Record) *Incident {
 	}
 	restoreSets(p, r)
 	p.restoredTier = r.Tier
+	p.awaited = awaitedReasons(r)
+	p.formerMembers = r.Members
 	if !r.PagedKnown && wasAnnounced(p) {
 		p.Delivery.MarkPaged()
 	}
@@ -308,5 +336,6 @@ func restored(r Record) *Incident {
 	if p.Scope == ScopeUnknown && wasAnnounced(p) {
 		p.Scope = ScopeIn
 	}
+	restoreJournal(p, r)
 	return p
 }

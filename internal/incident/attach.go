@@ -140,8 +140,15 @@ func (m *Manager) keepsMember(
 // Members of a crash loop come and go within seconds, and a tier that
 // followed them would flip between page and notify, each flip a
 // "material change". Escalation is news; de-escalation is told by the
-// recovery. Before the first message the tier still follows the members.
-func (m *Manager) ratchetTier(p *Incident, computed Tier) Tier {
+// recovery. Before the first message the tier still follows the members,
+// and so does the provisional tier of a restored incident
+// (restore_reasons.go).
+func (m *Manager) ratchetTier(
+	p *Incident, computed Tier, now time.Time,
+) Tier {
+	if m.provisional(p, now) && !unpaged(p) {
+		return m.provisionalTier(p, computed)
+	}
 	if p.Announced.IsZero() || computed >= p.Tier || unpaged(p) {
 		return computed
 	}
@@ -162,18 +169,23 @@ func (m *Manager) refresh(model inventory.Reader, now time.Time) {
 			p.noteRejection(now)
 			p.routedMissing = routedMissing(model, p)
 			p.impactPeak = max(p.impactPeak, impactSize(p))
+			p.noteRadius(model)
 			p.rememberRootReasons()
 			p.noteStage()
 			p.noteModes()
 			p.notePodPeak()
 			p.causeChain = m.inChain(p)
 			was := p.Tier
-			p.Tier = m.ratchetTier(p, m.override.apply(p, tier(p)))
+			base, why := tierWhy(p)
+			computed := m.override.apply(p, base)
+			p.Tier = m.ratchetTier(p, computed, now)
+			p.noteLevel(m.levelFor(p, base, why, computed))
 			if p.Tier != was && p.State != Settling {
 				// A settling incident's tier is in its "opened" line.
 				logLifecycle(p, "tier", "incident tier changed",
 					"from", was.String())
 			}
+			m.observe(p, now)
 		}
 	}
 	clear(m.changed)

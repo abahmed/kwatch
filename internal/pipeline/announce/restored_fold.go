@@ -78,7 +78,7 @@ func (c *Collector) holdWarmOne(
 		s.Warm[held].Incident = d.Incident
 		if c.risesToPage(d) {
 			// The summary goes to chat only: the page is not delayed.
-			c.pageOnly(ctx, now, d)
+			c.pageOnly(ctx, now, d, restoredSummary)
 			return true
 		}
 		c.recordCarried(ctx, now, d, restoredSummary)
