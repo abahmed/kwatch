@@ -81,3 +81,9 @@
   .cx-fields { grid-template-columns: 1fr; gap: 0 0; }
   .cx-fields dd { margin-bottom: 6px; }
 }
+
+/* Alert status: the pager's lines and the "can't see it" note. Issues
+   moved into or out of this one. */
+.al-extra { display: grid; gap: 4px; margin-top: 8px; }
+.d-moved { display: grid; gap: 2px; margin-top: 10px; font-size: 0.9375rem; overflow-wrap: anywhere; max-width: var(--measure); }
+.d-short { margin-top: 16px; }

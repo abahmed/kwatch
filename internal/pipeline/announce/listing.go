@@ -38,6 +38,10 @@ type StartupState struct {
 	Rollups []Listing `json:",omitempty"`
 	// Digest is the part of the pending digest no incident record keeps.
 	Digest DigestState `json:",omitempty"`
+	// Restored remembers the last restored listing, so a restart soon
+	// after does not list the same incidents again (restart_note.go).
+	// Absent in files written before it.
+	Restored *RestoredMark `json:",omitempty"`
 }
 
 // listings returns the startup summary and every open roll-up.
@@ -54,6 +58,10 @@ func (s StartupState) Clone() StartupState {
 	s.Listing = s.Listing.clone()
 	s.Digest = s.Digest.clone()
 	s.Rollups = slices.Clone(s.Rollups)
+	if s.Restored != nil {
+		mark := s.Restored.clone()
+		s.Restored = &mark
+	}
 	for i := range s.Rollups {
 		s.Rollups[i] = s.Rollups[i].clone()
 	}

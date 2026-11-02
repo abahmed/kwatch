@@ -3,6 +3,8 @@ package kube
 import (
 	"sort"
 	"time"
+
+	"github.com/abahmed/kwatch/internal/inventory"
 )
 
 // noteFailure starts, or restarts, the run of failures of a synced watch.
@@ -55,4 +57,29 @@ func (s *Source) Stale() []SourceStatus {
 		return out[i].Resource < out[j].Resource
 	})
 	return out
+}
+
+// Fresh reports whether kind can be observed now and its watch still
+// gets through: it is verifiable and not stale (see Stale). The detection
+// registry reads it (Registry.SetFresh) so a detector that would raise
+// from the passage of time alone stays undecided over a cache that
+// stopped moving. Kinds no watch lists are fresh.
+func (s *Source) Fresh(kind inventory.Kind) bool {
+	if !s.Verifiable(kind) {
+		return false
+	}
+	if kind == KindContainer {
+		kind = KindPod
+	}
+	resource, ok := resourceOfKind()[kind]
+	if !ok {
+		return true
+	}
+	now := s.cfg.Now()
+	for _, w := range s.watches {
+		if w.resource == resource && w.hasSynced() {
+			return !w.stale(now, s.cfg.OptionalSyncTimeout)
+		}
+	}
+	return true
 }

@@ -70,14 +70,15 @@ func activeIssue(p incident.Incident) bool {
 	return p.State != incident.Resolved && p.Tier != incident.Silent
 }
 
-// insightsHandler serves GET /api/insights?tz=, tz as on /api/trends.
+// insightsHandler serves GET /api/insights?tzName=&tz=, the zone as on
+// /api/trends.
 func (s *Server) insightsHandler(w http.ResponseWriter, r *http.Request) {
 	if !onlyGet(w, r) {
 		return
 	}
-	tz, ok := parseTZ(r.URL.Query().Get("tz"))
-	if !ok {
-		writeError(w, http.StatusBadRequest, "invalid tz")
+	zone, err := parseZone(r.URL.Query())
+	if err != nil {
+		writeBadQuery(w, err)
 		return
 	}
 	reader := s.sources.incidents.Load()
@@ -89,7 +90,7 @@ func (s *Server) insightsHandler(w http.ResponseWriter, r *http.Request) {
 	if len(items) > maxInsightScan {
 		items = items[:maxInsightScan]
 	}
-	in := insightInput{items: items, now: s.now.Now(), tz: tz,
+	in := insightInput{items: items, now: s.now.Now(), zone: zone,
 		red: s.texts.redact}
 	if m := s.sources.model.Load(); m != nil {
 		in.model = *m
@@ -108,7 +109,7 @@ func (s *Server) insightsHandler(w http.ResponseWriter, r *http.Request) {
 type insightInput struct {
 	items []incident.Incident
 	now   time.Time
-	tz    int
+	zone  *time.Location
 	red   func(string) string
 	model inventory.Reader
 	trail deliveryTrailSource
@@ -117,6 +118,9 @@ type insightInput struct {
 // buildInsights computes every card; the quiet line is only set up
 // here (explainQuiet fills it from the server's sources).
 func buildInsights(in insightInput) InsightsResponse {
+	if in.zone == nil {
+		in.zone = time.UTC
+	}
 	if in.red == nil {
 		in.red = func(s string) string { return s }
 	}
@@ -128,7 +132,7 @@ func buildInsights(in insightInput) InsightsResponse {
 	}
 	slices.SortFunc(live, olderFirst)
 	out := InsightsResponse{
-		Today:       today(in.items, live, in.now, in.tz),
+		Today:       today(in.items, live, in.now, in.zone),
 		Unacked:     unackedUrgent(live, in.red),
 		Nodes:       busyNodes(in.model, live),
 		AfterChange: afterChange(live, in.red),
@@ -147,12 +151,12 @@ func olderFirst(a, b incident.Incident) int {
 	return cmp.Or(a.Opened.Compare(b.Opened), cmp.Compare(a.ID, b.ID))
 }
 
-// today counts openings and resolves within today in the tz zone, and
+// today counts openings and resolves within today in zone, and
 // the urgent issues active now.
 func today(
-	items, live []incident.Incident, now time.Time, tz int,
+	items, live []incident.Incident, now time.Time, zone *time.Location,
 ) InsightToday {
-	w := newTrendWeek(now, tz)
+	w := newTrendWeek(now, zone)
 	start := w.end.AddDate(0, 0, -1)
 	in := func(t time.Time) bool {
 		return !t.Before(start) && !t.After(now)

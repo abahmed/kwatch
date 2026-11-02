@@ -169,6 +169,12 @@
     });
     es.addEventListener("ping", liveSeen);
     es.addEventListener("changed", liveChanged);
+    // The server's sign-in check failed: show the sign-in page at once and
+    // do not reconnect (stop closes the stream and forgets the back-off).
+    es.addEventListener("signedout", function () {
+      KW.live.stop();
+      KW.authFailed({ status: 401 });
+    });
     es.onerror = function () {
       liveOff();
       if (es.readyState !== 2) return; // the browser reconnects itself
@@ -260,7 +266,7 @@
   /* KW.down: kwatch can't be reached (or the data is old): what the
      page shows is from KW.lastOk() (ms, browser clock), 0 when never.
      A "kw:conn" event on document says it changed. */
-  var wasDown = false;
+  var wasDown = false, foot = null;
   KW.down = function () { return !!bannerText(); };
   KW.lastOk = function () { return conn.lastOk; };
 
@@ -271,6 +277,8 @@
     if (wasDown !== !!text) {
       wasDown = !!text;
       document.dispatchEvent(new Event("kw:conn"));
+      // The freshness line says "Offline" at once, not at its next tick.
+      if (foot && foot.node.isConnected) KW.footer(foot.node, foot.lastOk, foot.failing);
     }
     if (!box) return;
     box.hidden = !text;
@@ -301,9 +309,10 @@
   /* footer: the freshness line at the top of a page. "Live · updated
      just now" while the page refreshes by itself; while kwatch can't
      be reached (the view's own read failed, or the banner shows)
-     "Last updated 4 min ago", ticking, and never "Live": the banner
+     "Offline · last updated 4 min ago", ticking, and never "Live": the banner
      above has "Try now". */
   KW.footer = function (node, lastOk, failing) {
+    foot = { node: node, lastOk: lastOk, failing: failing };
     node.hidden = !lastOk;
     if (!lastOk) return;
     failing = failing || KW.down();
@@ -312,7 +321,10 @@
     node.textContent = "";
     node.classList.toggle("stale", !!failing);
     if (failing) {
-      node.appendChild(KW.el("span", "", "Last updated " + ago(lastOk)));
+      var off = KW.el("span", "live", "Offline");
+      off.title = "kwatch can't be reached. What you see may be old.";
+      node.appendChild(off);
+      node.appendChild(KW.el("span", "", "last updated " + ago(lastOk)));
       return;
     }
     var tag = KW.el("span", "live", "Live");

@@ -209,8 +209,16 @@ func (m *Manager) deliverViaFallback(
 		m.recordTerminalFailure(entry, job, err)
 		return outcomeFailed
 	}
+	// The primary gave the job up for good. A chat fallback opens no
+	// alert, so the pager's loss is reported now: if the fallback fails
+	// too, the loss would otherwise be judged against a chat entry and
+	// never reach the pipeline. A paging fallback reports its own outcome.
+	if !isPager(&fallback) {
+		m.pageLost(entry, job)
+	}
 	fbErr := m.deliverFallback(ctx, &fallback, p.Name(), job)
 	if fbErr == nil {
+		m.pageLanded(&fallback, job)
 		m.accepted(job)
 		return outcomeDelivered
 	}

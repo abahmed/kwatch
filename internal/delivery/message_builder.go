@@ -58,7 +58,8 @@ func truncateMsg(s string, maxLen int) string {
 	suffix := "\n…(truncated)"
 	cut := maxLen - len(suffix)
 	if cut <= 0 {
-		return suffix
+		// No room for the marker: never send more than maxLen.
+		return notification.Truncate(s, maxLen)
 	}
 	for cut > 0 && !utf8.RuneStart(s[cut]) {
 		cut--

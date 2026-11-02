@@ -97,7 +97,10 @@ helm upgrade kwatch kwatch/kwatch \
 When a license key is configured (`license.key`, `license.existingSecret` or
 `license.instanceSecret: true`), the chart ships the empty Secret
 `kwatch-license-instance` and a Role that gives kwatch get and update on that
-one name (no `create` on Secrets). Without a key neither is rendered. Set
+one name (no `create` on Secrets). The Secret name `kwatch-license-instance`
+is fixed, not derived from the release name: a second release (or a reinstall
+under another release name) in the same namespace finds a Secret owned by the
+first release and the install fails. Delete the Secret, or use a new namespace. Without a key neither is rendered. Set
 `license.instanceSecret: true` when the key reaches kwatch another way, for
 example inside the `configSecretName` Secret. When the key lives in
 `license.existingSecret`, the chart rolls the pod when that Secret's content
@@ -164,6 +167,19 @@ kubectl delete namespace kwatch
 
 ## ⚙️ Values
 
+Object names: the ServiceAccount, ConfigMap and Roles use the release name,
+while the Deployment, PVC, Services and NetworkPolicy use the chart's full name
+(release name plus `kwatch`, or `fullnameOverride`). They differ unless the
+release is named `kwatch`. This is kept as is so `helm upgrade` of existing
+releases does not recreate them.
+
+The pod rolls when the config, license or dashboard Secret changes
+(`checksum/dashboard-secret`), where Helm `lookup` can read the Secret. The
+container has a `startupProbe` on `/healthz` (30 tries, 10 s apart) so a slow
+cold start is not killed by the liveness probe. Pass numbers as given:
+`--set image.tag=123` and `--set persistence.size=5` are accepted. Pass the
+Karpenter annotation with `--set-string`.
+
 | Value | Purpose | Default |
 | --- | --- | --- |
 | `config` | Non-sensitive kwatch configuration | `{crd: {enabled: true}}` |
@@ -177,7 +193,7 @@ kubectl delete namespace kwatch
 | `config.healthCheck.statusEndpoint` | Serve the read-only `/status` view (open incident object names, no authentication) on the health port. Off by default; with the NetworkPolicy on it is limited like the rest of the port. Reach it with `kubectl port-forward` | `false` |
 | `config.healthCheck.port` | Health port: container, probe and NetworkPolicy port. The health check cannot be disabled | `8060` |
 | `networkPolicy.enabled` | Render a NetworkPolicy that admits the health port (own namespace, `kubeletCIDRs` and `healthIngressFrom` only) and allows DNS, `networkPolicy.apiServerPorts` and kubelet (`networkPolicy.kubeletPort`, default 10250) egress | `false` |
-| `networkPolicy.allowDefaults` | Admit the health port and open DNS, `apiServerPorts`, kubelet and DNS metrics egress. `false` only when your own rules cover the API server, kubelets and probes. With `license.key` or `license.existingSecret` set it also opens TCP 443 to any address for license activation and renewal, even if `apiServerPorts` omits 443 | `true` |
+| `networkPolicy.allowDefaults` | The dashboard ingress rules render whenever `networkPolicy.enabled` and `dashboard.enabled` are set, whatever this value is. With `false` you must give `ingress`/`egress`, `extraEgressPorts` or `allowProbeEgressAll`, or the render fails (an empty policy would deny all traffic and kwatch could not start). Admit the health port and open DNS, `apiServerPorts`, kubelet and DNS metrics egress. `false` only when your own rules cover the API server, kubelets and probes. With `license.key` or `license.existingSecret` set it also opens TCP 443 to any address for license activation and renewal, even if `apiServerPorts` omits 443 | `true` |
 | `networkPolicy.apiServerPorts` | TCP ports open to any address for the API server and HTTPS providers; at least one is required (an empty list would open all egress) | `[443, 6443]` |
 | `networkPolicy.kubeletPort` | Kubelet HTTPS port opened for node stats | `10250` |
 | `networkPolicy.dnsMetricsPort` | Cluster DNS metrics port opened to the DNS pods in `kube-system` (DNS request and SERVFAIL rates); `0` omits it | `9153` |
@@ -187,11 +203,12 @@ kubectl delete namespace kwatch
 | `networkPolicy.kubeletCIDRs` | Node address ranges the kubelet egress rule is limited to; empty allows any address. Also admitted to the health port, for kubelet probes on a network plugin that enforces policy on node traffic | `[]` |
 | `networkPolicy.healthIngressFrom` | Extra peers (`namespaceSelector`, `podSelector` or `ipBlock`) that may reach the health port (`/health`, `/metrics`, `/status`), such as your Prometheus namespace. Without it only pods in the release namespace (and `kubeletCIDRs`) can | `[]` |
 | `dashboard.enabled` | Serve the read-only dashboard (web UI and `/api/*`) on its own port and ClusterIP Service `<release>-dashboard`. Pro only; Community never opens the port | `false` |
-| `dashboard.port` | Dashboard port; must not equal the health port | `8061` |
+| `dashboard.port` | Dashboard port; must not equal the health port `config.healthCheck.port` (the render fails when they are equal) | `8061` |
 | `dashboard.mode` | `local`: reached through `kubectl port-forward`; the cookie works on `http://localhost`. `shared`: https only; kwatch refuses sign-in over plain http and marks the cookie `Secure`. Needs `dashboard.trustProxy` or `dashboard.tls.secretName`, or the render fails | `local` |
 | `dashboard.trustProxy` | Trust `X-Forwarded-Proto`/`X-Forwarded-For` from the Ingress or proxy that terminates TLS in front of kwatch. Without it the header is ignored | `false` |
 | `dashboard.tls.secretName` | `kubernetes.io/tls` Secret kwatch serves https from itself, for a LoadBalancer or NodePort with nothing in front. Renewals are picked up without a restart | `""` |
 | `dashboard.existingSecret` | Existing Secret with the keys `password` (sign-in) and `token` (API bearer token). Without it the chart creates `<release>-dashboard` with a generated password (`XXXX-XXXX-XXXX-XXXX`) and token, and keeps both across upgrades. Changing the password signs everyone out | `""` |
+| `config.investigation.logs` | Pro evidence reads container logs (redacted, bounded). `false` reads none and the dashboard shows the log section as turned off | `true` |
 | `dashboard.networkPolicyFrom` | With `networkPolicy.enabled`: extra peers (your ingress controller, `ipBlock`s for load balancer clients) allowed to reach the dashboard port. The release namespace and `healthIngressFrom` always may | `[]` |
 
 Sign-ins last 12 hours. A password change or a kwatch restart (upgrade,
@@ -215,6 +232,7 @@ run the kwatch.sh Dashboard menu or create your own Ingress or route
 pointing at Service `<release>-dashboard` (port name `dashboard`).
 
 | `image.repository` / `image.tag` / `image.pullPolicy` | Container image; an empty tag uses the chart's `appVersion` | `ghcr.io/abahmed/kwatch` / `""` / `IfNotPresent` |
+| `rbac.readyz` | Grant `get` on the API server's `/readyz`, which the prober and Pro evidence read. `false` removes the grant and the control plane evidence then shows that kwatch may not read it | `true` |
 | `crd.install` | Install the shared `KwatchConfig` CRD with this release; skipped automatically when another release owns it. `config.crd.enabled` is separate: it turns the live overlay on | `true` |
 | `rbac.mode` | `least-privilege` grants an explicit read-only `list`/`watch` set, and kinds outside it (custom resources included) show as `permission_denied` in `/health` coverage (kwatch logs one warning about them and the install notes say so); `full` grants `list`/`watch` on every resource, except that `full` with `watch.secrets: false` renders the least-privilege list. Both grant `get` only on namespaces, nodes, `nodes/stats`, `nodes/metrics` and `pods/log`. Set `full` to watch custom resources | `least-privilege` |
 | `persistence.size` | Size of the state volume (PVC). The state file is capped at 512 MiB of logical data (evidence 128 MiB), is rewritten at startup when it grows more than a quarter past that, and no backups are kept; the file and the temporary rewrite copy share the volume | `2Gi` |
@@ -224,7 +242,7 @@ pointing at Service `<release>-dashboard` (port name `dashboard`).
 | `persistence.storageDriverTopologyKey` | The driver's topology label to require explicitly (for offline renders), for example `topology.ebs.csi.aws.com/zone` | `""` |
 | `persistence.emptyDirSizeLimit` | `sizeLimit` of the `emptyDir`; also passed to kwatch as `KWATCH_VOLUME_LIMIT` so the startup rewrite checks the real limit | `2Gi` |
 | `watch.secrets` | Watch Secrets; `false` removes all Secret RBAC (in both `rbac.mode` values) and Secret-based checks report that they cannot verify. Secrets are watched by default, which lets the kwatch ServiceAccount list and watch Secrets cluster-wide; set `watch.secrets: false` to remove all Secret RBAC and the Secret watch. | `true` |
-| `resources` | CPU and memory requests/limits; kwatch sets `GOMEMLIMIT` to 90% of the memory limit. Live heap is about 26 KB per pod: the default 512Mi suits up to about 8,000 pods, 10,000 pods need `768Mi` and 20,000 need `1Gi` (see docs/production-operations.md, Memory) | `100m` CPU request, `500m` CPU and `512Mi` memory limit |
+| `resources` | CPU and memory requests/limits; kwatch sets `GOMEMLIMIT` to 90% of the memory limit. Live heap is about 26 KB per pod: the default 512Mi suits up to about 8,000 pods, 10,000 pods need `768Mi` and 20,000 need `1Gi` (see docs/production-operations.md, Memory) | `100m` CPU and `256Mi` memory request, `500m` CPU and `512Mi` memory limit |
 | `securityContext.runAsUser` / `securityContext.runAsGroup` | Numeric user and group of the container; they match the image's `kwatch` user | `1000` / `1000` |
 | `podSecurityContext.fsGroup` | Group that owns the state volume | `1000` |
 | `persistence.storageClass` | StorageClass of the state claim; empty uses the cluster default | `""` |

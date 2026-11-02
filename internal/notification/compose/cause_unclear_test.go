@@ -93,3 +93,46 @@ func TestCheckedSentencesNameWhatWasHealthy(t *testing.T) {
 		t.Fatalf("note = %s\nwant %q", text, want)
 	}
 }
+
+// A caused-by line names a likely cause, so the note never says beside
+// it that the cause is not clear or that nothing points to one.
+func TestCausedByLineSilencesNoCauseSentences(t *testing.T) {
+	for name, own := range map[string]bool{
+		"unclear": true, "checked": false,
+	} {
+		p := unclearIncident(own)
+		p.CausedBy = []incident.Related{nodeCause}
+
+		text := notification.Text(Writer{}.Write(announce(p), at(6, 0)))
+
+		for _, no := range []string{unclearText, "points to a cause",
+			"Caused by: "} {
+			if strings.Contains(text, no) {
+				t.Errorf("%s: said %q:\n%s", name, no, text)
+			}
+		}
+		want := "Likely caused by: Node n1 (prod-eu-1) is not ready; " +
+			"kwatch is still checking."
+		if !strings.Contains(text, want) {
+			t.Errorf("%s: want %q:\n%s", name, want, text)
+		}
+	}
+}
+
+// With a cause of its own the caused-by line keeps its plain wording.
+func TestCausedByLineIsPlainWithACause(t *testing.T) {
+	p := unclearIncident(true)
+	p.CausedBy = []incident.Related{nodeCause}
+	p.Cause = &rootcause.CauseRecord{
+		Root: inventory.CoreID(kube.KindNode, "", "n1"), Score: 0.9,
+		RootFindings: []detection.Finding{{Reason: "NodeNotReady",
+			Summary: "Node is not ready"}},
+	}
+
+	text := notification.Text(Writer{}.Write(announce(p), at(6, 0)))
+
+	if !strings.Contains(text, "Caused by: Node n1 (prod-eu-1) is "+
+		"not ready.") || strings.Contains(text, "Likely caused") {
+		t.Fatalf("want the plain caused-by line:\n%s", text)
+	}
+}

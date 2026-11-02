@@ -1,7 +1,6 @@
 package dashboard
 
 import (
-	"errors"
 	"net/url"
 	"slices"
 	"strconv"
@@ -52,7 +51,8 @@ func parseListRequest(q url.Values, now time.Time) (listRequest, error) {
 func parseSort(field, dir string) (string, bool, error) {
 	spec, ok := sortFields[field]
 	if field != "" && !ok {
-		return "", false, errors.New("invalid sort")
+		return "", false, badQuery("sort", field,
+			"Unknown sort: %q.", field)
 	}
 	switch dir {
 	case "":
@@ -60,7 +60,8 @@ func parseSort(field, dir string) (string, bool, error) {
 	case "asc", "desc":
 		return field, dir == "desc", nil
 	}
-	return "", false, errors.New("invalid dir")
+	return "", false, badQuery("dir", dir,
+		"Unknown sort direction: %q. Use asc or desc.", dir)
 }
 
 // parsePage reads ?page=: empty is the first page.
@@ -70,7 +71,8 @@ func parsePage(raw string) (int, error) {
 	}
 	n, err := strconv.Atoi(raw)
 	if err != nil || n < 1 || n > maxPage {
-		return 0, errors.New("invalid page")
+		return 0, badQuery("page", raw,
+			"Page must be a number from 1 to %d, not %q.", maxPage, raw)
 	}
 	return n, nil
 }
@@ -83,7 +85,8 @@ func parsePageSize(raw string) (int, error) {
 	}
 	n, err := strconv.Atoi(raw)
 	if err != nil || !slices.Contains(pageSizes, n) {
-		return 0, errors.New("invalid pageSize")
+		return 0, badQuery("pageSize", raw,
+			"Page size must be 25, 50 or 100, not %q.", raw)
 	}
 	return n, nil
 }

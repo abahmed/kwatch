@@ -10,6 +10,18 @@
       "It looks fixed. kwatch waits a little to be sure."]
   };
 
+  /* stopped: the sentence for an issue kwatch stopped tracking: it is
+     not fixed. A workload also says what was still wrong. */
+  function stopped(inc) {
+    var text = "kwatch stopped tracking this after " +
+      KW.lasted(inc.firstSeen, inc.resolvedAt) + "; it is still not healthy, so check it yourself.";
+    if (inc.workloadKind && inc.workload) {
+      text += inc.stillCrashing ? " A container still keeps crashing." :
+        " It is still short of replicas.";
+    }
+    return text;
+  }
+
   function stepNode(s) {
     var div = KW.el("div", "step");
     if (s.text) div.appendChild(KW.el("p", "", s.text));
@@ -49,8 +61,22 @@
     list.forEach(function (s) { box.appendChild(stepNode(s)); });
     runbook(KW.$("[data-runbook]", root), inc.docsLink);
     KW.$("[data-fix-n]", root).textContent = "(" + list.length + ")";
-    KW.$('[data-fold="fix"]', root).hidden = list.length < 2 &&
+    var cut = KW.cutCount(inc, "fixSteps");
+    if (cut) box.appendChild(KW.el("p", "ev-cap", KW.plural(cut, "more step", "more steps") + " not shown."));
+    KW.$('[data-fold="fix"]', root).hidden = list.length < 2 && !cut &&
       !(list.length && inc.docsLink);
+  }
+
+  /* shortNote: one line at the end of the page when the server
+     shortened any long text to keep the response small. */
+  function shortNote(root, inc) {
+    var p = KW.$("[data-short]", root);
+    if (!p) {
+      p = KW.el("p", "ev-cap d-short", "Some long text was shortened.");
+      p.dataset.short = "";
+      KW.$(".detail", root).appendChild(p);
+    }
+    p.hidden = !KW.cutCount(inc, "texts");
   }
 
   /* oneLine: "1 Nov, 18:50" (with UTC when the page shows UTC) on one
@@ -80,7 +106,7 @@
     add("Last seen", KW.timeEl(inc.lastSeen));
     if (inc.repeatCount > 0) add("Failed again", KW.plural(inc.repeatCount, "time", "times"));
     if (inc.state === "resolved" && KW.valid(inc.resolvedAt)) {
-      add("Resolved", KW.stamp(inc.resolvedAt) + " (lasted " +
+      add(inc.stoppedTracking ? "Stopped tracking" : "Resolved", KW.stamp(inc.resolvedAt) + " (lasted " +
         KW.lasted(inc.firstSeen, inc.resolvedAt) + ")");
     }
     if (inc.ackedBy) {
@@ -97,7 +123,9 @@
     var chips = KW.$("[data-chips]", root);
     chips.textContent = "";
     if (resolved) {
-      chips.appendChild(KW.chip("c-resolved", "Resolved"));
+      chips.appendChild(inc.stoppedTracking ?
+        KW.chip("c-notify", "Stopped tracking", "kwatch gave up following this; it was not fixed.") :
+        KW.chip("c-resolved", "Resolved"));
       chips.appendChild(KW.severityChip(inc.severity, "Was "));
     } else {
       chips.appendChild(KW.severityChip(inc.severity));
@@ -109,7 +137,7 @@
     }
     KW.$("[data-title]", root).textContent = inc.title;
     // The likely cause, right under the title: the one-line answer.
-    var cause = inc.rootCause || inc.cause || "";
+    var cause = inc.rootCause || "";
     KW.$("[data-likely]", root).hidden = !cause;
     KW.$("[data-likely-text]", root).textContent = cause;
     var where = KW.$("[data-where]", root);
@@ -125,7 +153,8 @@
     var lbl = KW.$("[data-since-label]", root);
     if (resolved && KW.valid(inc.resolvedAt)) {
       lbl.textContent = "Lasted";
-      since.textContent = KW.lasted(inc.firstSeen, inc.resolvedAt) + " · resolved ";
+      since.textContent = KW.lasted(inc.firstSeen, inc.resolvedAt) +
+        (inc.stoppedTracking ? " · stopped tracking " : " · resolved ");
       since.appendChild(KW.timeEl(inc.resolvedAt));
       return;
     }
@@ -190,7 +219,12 @@
     var banner = KW.$("[data-banner]", root);
     var b = BANNERS[inc.state];
     if (resolved && KW.valid(inc.resolvedAt)) {
-      b = ["n-success", "Resolved", "It stopped failing " + KW.stamp(inc.resolvedAt) + "."];
+      b = inc.stoppedTracking ? ["n-degraded", "Stopped tracking", stopped(inc)] :
+        ["n-success", "Resolved", "It stopped failing " + KW.stamp(inc.resolvedAt) + "."];
+    }
+    // Recovering but unseen: the alert box says so; "looks fixed" would not.
+    if (b && !resolved && inc.why && inc.why.cannotSee && inc.state === "recovering") {
+      b = [b[0], b[1], "kwatch can't see this right now, so it stays open until it can check again."];
     }
     banner.hidden = !b;
     if (b) {
@@ -219,6 +253,7 @@
     KW.links(root, inc);
     KW.usageChart(root, inc);
     autoOpen(root, inc);
+    shortNote(root, inc);
   };
 
   function notFound(main) {

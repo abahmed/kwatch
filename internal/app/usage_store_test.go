@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -51,4 +52,45 @@ func TestUsageStoreSkipsAHistoryPastItsWindow(t *testing.T) {
 
 func TestUsageStoreWithoutStateFileIsNil(t *testing.T) {
 	assert.Nil(t, newUsageStore(nil))
+}
+
+type failingUsage struct{ load, save error }
+
+func (f failingUsage) LoadUsage() (
+	map[inventory.EntityID]kube.UsageRecord, error,
+) {
+	return nil, f.load
+}
+
+func (f failingUsage) SaveUsage(map[inventory.EntityID]kube.UsageRecord) error {
+	return f.save
+}
+
+// A usage history that cannot be read or written degrades /health:
+// the poller itself only logs it.
+func TestReportedUsageStoreDegradesHealthOnFailure(t *testing.T) {
+	sink := &fakeStatusSink{}
+	broken := errors.New("disk")
+	store := reportUsage(failingUsage{load: broken}, sink)
+
+	_, err := store.LoadUsage()
+
+	require.ErrorIs(t, err, broken)
+	require.Equal(t,
+		recordedStatus{"degraded", "persistence_restore_failed", false},
+		sink.statuses[usageHistoryComponent])
+
+	store = reportUsage(failingUsage{save: broken}, sink)
+	require.Error(t, store.SaveUsage(nil))
+	require.Equal(t,
+		recordedStatus{"degraded", "persistence_write_failed", false},
+		sink.statuses[usageHistoryComponent])
+
+	require.NoError(t, reportUsage(failingUsage{}, sink).SaveUsage(nil))
+	require.Equal(t, recordedStatus{"running", "", true},
+		sink.statuses[usageHistoryComponent])
+}
+
+func TestReportUsageKeepsANilStoreNil(t *testing.T) {
+	require.Nil(t, reportUsage(nil, &fakeStatusSink{}))
 }

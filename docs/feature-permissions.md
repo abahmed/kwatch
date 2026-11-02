@@ -28,6 +28,12 @@ Use this matrix when disabling features for a least-privilege deployment.
 | Restart evidence | Pods in the kwatch namespace | get |
 | Control-plane health | scheduler and controller-manager Leases in `kube-system` | get |
 
+The chart value `rbac.readyz` (default `true`) controls the `/readyz` part of
+the non-resource URL grant. Set it to `false` to remove that one grant (the
+`/metrics` grant stays): the prober and Pro evidence then cannot read the API
+server's readiness checks, and the control-plane evidence says kwatch is not
+allowed to read them.
+
 Roles, RoleBindings, ClusterRoles and ClusterRoleBindings are watched as full
 objects (the API server sends their rules), but kwatch keeps only the custom
 API groups a role may update or patch and the ServiceAccounts a binding grants
@@ -36,9 +42,18 @@ group; it never keeps resource names, other subjects or Secret data. Without
 the permission, a stuck finalizer is still reported, but no workload is named
 as its controller by the roles it runs with.
 
-Endpoints and CSI drivers are not in the least-privilege list: kwatch reads
-EndpointSlices instead of Endpoints, and CSI drivers are covered only where
-the wildcard grant of `rbac.mode: full` applies.
+Endpoints are not in the least-privilege list: kwatch reads EndpointSlices
+instead. Some kinds are reached only through dynamic discovery, so they need
+`rbac.mode: full` and are not covered in the least-privilege mode: ServiceCIDRs,
+IPAddresses, Workloads, PodGroups, PodTemplates, CSIDrivers, CSINodes,
+CSIStorageCapacities, VolumeAttributesClasses, ClusterTrustBundles,
+LeaseCandidates, ResourceClaimTemplates, ResourceSlices, DeviceClasses,
+DeviceTaintRules and StorageVersionMigrations. In the least-privilege mode
+`/health` coverage shows them as `permission_denied`; that is expected, not a
+fault. The Gateway API kinds UDPRoute, BackendTLSPolicy and ListenerSet are in
+the least-privilege role. An architecture test keeps the chart's
+least-privilege role equal to what the source code reads. The list of every
+kind and its watch mode is in [Kubernetes coverage](./kubernetes-coverage.md).
 The chart's default `rbac.mode` is `least-privilege`: it grants `list` and
 `watch` on the per-kind rows above only, so custom resources are not watched
 and show as `permission_denied` in the `/health` coverage (kwatch logs one

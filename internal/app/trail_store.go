@@ -10,8 +10,17 @@ import (
 // LoadTrails returns the saved send trails of the incidents the state
 // file still holds. The trail of an incident that was forgotten (its
 // record expired or was dropped) is deleted, as are records that no
-// longer decode.
+// longer decode. A failure is reported (trailFailed): delivery only
+// logs it, and the dashboard then shows no earlier sends.
 func (o outboxStore) LoadTrails() ([]delivery.TrailRecord, error) {
+	records, err := o.loadTrails()
+	if err != nil && o.trailFailed != nil {
+		o.trailFailed(err)
+	}
+	return records, err
+}
+
+func (o outboxStore) loadTrails() ([]delivery.TrailRecord, error) {
 	if _, err := o.trails.PurgeCorrupt(); err != nil {
 		klog.ErrorS(err, "purge corrupt delivery trails",
 			"component", "delivery", "operation", "trail")

@@ -31,25 +31,21 @@ func (m *Manager) handOver(p *Incident, now time.Time) {
 	p.note(now, "cause revised: its failures moved to "+describe(target.Root))
 }
 
-// holderOf finds the live incident, other than p, with a failing member
-// that is p's root or belongs to the same workload. An announced
-// incident is preferred over one still settling; ties go to the lowest
-// ID, so the choice does not depend on map order.
+// holderOf finds the announced incident, other than p, with a failing
+// member that is p's root or belongs to the same workload. Ties go to the
+// lowest ID, so the choice does not depend on map order. One still
+// settling is never the holder: the closed thread says "Moved" and points
+// at the holder's message, which a settling incident may never send (it
+// recovers unheard, or its tier is digest or silent). p waits instead and
+// is handed over once the holder is announced, or goes on by itself.
 func (m *Manager) holderOf(p *Incident) *Incident {
-	var best *Incident
 	for _, id := range m.sortedIDs() {
 		q := m.incidents[id]
-		if q == p || q.State == Resolved || !m.failsFor(q, p) {
-			continue
-		}
-		if wasAnnounced(q) {
+		if q != p && wasAnnounced(q) && m.failsFor(q, p) {
 			return q
 		}
-		if best == nil {
-			best = q
-		}
 	}
-	return best
+	return nil
 }
 
 // failsFor reports whether q has a failure of p's root or of its

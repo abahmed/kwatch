@@ -12,9 +12,6 @@ metadata:
     # Read-only dashboard: web UI and API. No write endpoints. Sign-in
     # with the password, or the bearer token for API clients. To expose
     # it, point your own Ingress, route or Service at this one.
-    {{- if .Values.networkPolicy.enabled }}
-    networking.k8s.io/policy: "true"
-    {{- end }}
 spec:
   type: ClusterIP
   selector:

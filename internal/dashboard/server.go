@@ -92,6 +92,11 @@ type sources struct {
 	coverage atomic.Pointer[coverageSource]
 	// usage is the kubelet usage history (detail_usage.go).
 	usage atomic.Pointer[usageSource]
+	// self, failed and delivery are kwatch's view of itself, its failed
+	// sends and what the pagers and channels hold (self_status.go).
+	self     atomic.Pointer[selfSource]
+	failed   atomic.Pointer[failedSource]
+	delivery atomic.Pointer[deliveryDetailSource]
 	// lastScan is the Unix nanosecond time of the engine's latest loop
 	// iteration; zero until the first.
 	lastScan atomic.Int64

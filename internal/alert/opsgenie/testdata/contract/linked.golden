@@ -1,0 +1,15 @@
+POST /v2/alerts
+Content-Type: application/json
+Authorization: GenieKey <redacted>
+
+{
+  "alias": "kwatch-dev-p-link",
+  "description": "🔴 payments in shop is crash-looping.\nCaused by: Node n1 is not ready.\nCause in dashboard: https://kwatch.example/issues/p-cause\nEarlier times: https://kwatch.example/issues?status=all&like=p-link\nOpen in dashboard: https://kwatch.example/issues/p-link\n\npanic: out of memory",
+  "details": {
+    "Cluster": "dev",
+    "Namespace": "shop",
+    "Reason": "OOMKilled"
+  },
+  "message": "🔴 payments in shop is crash-looping.",
+  "priority": "P1"
+}

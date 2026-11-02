@@ -79,12 +79,16 @@ func TestRunPipelineBecomesReadyAndStopsOnCancel(t *testing.T) {
 
 	go func() {
 		done <- runPipeline(ctx, deps, openTestStore(t), nil,
-			gapNotice{})
+			startNotice{})
 	}()
 
 	require.Eventually(t, deps.healthServer.Ready, 10*time.Second,
 		5*time.Millisecond, "pipeline never reported ready")
 	require.False(t, deps.pipelineProgress.LastProgress().IsZero())
+	self, ok := deps.self.Report()
+	require.True(t, ok, "the session publishes its self report")
+	require.NotNil(t, self.Startup)
+	require.Positive(t, self.Startup.Kinds)
 	cancel()
 	select {
 	case err := <-done:
@@ -92,6 +96,8 @@ func TestRunPipelineBecomesReadyAndStopsOnCancel(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("runPipeline did not stop sources after cancellation")
 	}
+	_, ok = deps.self.Report()
+	require.False(t, ok, "withdrawn when the session ends")
 }
 
 func TestRunPipelineRunsActiveProberWhenConfigured(t *testing.T) {
@@ -105,7 +111,7 @@ func TestRunPipelineRunsActiveProberWhenConfigured(t *testing.T) {
 
 	go func() {
 		done <- runPipeline(ctx, deps, openTestStore(t), nil,
-			gapNotice{})
+			startNotice{})
 	}()
 	require.Eventually(t, deps.healthServer.Ready, 10*time.Second,
 		5*time.Millisecond)
@@ -120,7 +126,7 @@ func TestRunPipelineFailsWhenStateStoreIsClosed(t *testing.T) {
 	require.NoError(t, s.Close())
 
 	err := runPipeline(context.Background(), deps, s, nil,
-		gapNotice{})
+		startNotice{})
 
 	require.Error(t, err, "restoring from a closed store must fail")
 }

@@ -1,7 +1,6 @@
 package dashboard
 
 import (
-	"errors"
 	"net/url"
 	"slices"
 	"strconv"
@@ -14,11 +13,13 @@ import (
 
 // maxQueryLength bounds the search text, maxSearchTerms the number of
 // q and exclude terms together (each one is looked for in every
-// incident), maxLikeLength the incident ID of ?like=.
+// incident), maxLikeLength the incident ID of ?like= and maxModes the
+// failure types of ?mode=.
 const (
 	maxQueryLength = 200
 	maxSearchTerms = 10
 	maxLikeLength  = 128
+	maxModes       = 20
 )
 
 // List states: an incident is active until it resolves.
@@ -71,6 +72,9 @@ type filter struct {
 	onNodes map[string]bool
 	// modes are failure families (?mode=, insights_causes.go).
 	modes map[string]bool
+	// stopped narrows to resolved issues kwatch stopped tracking at
+	// their still-broken cap ("true") or not ("false").
+	stopped map[string]bool
 }
 
 // parseFilter reads the query. status is active (the default), resolved
@@ -79,40 +83,59 @@ type filter struct {
 // since, startedAfter and startedBefore are Go durations back from now
 // ("24h"). q and exclude are repeatable search terms, at most
 // maxSearchTerms of them and maxQueryLength characters together. like
-// is one incident ID.
+// is one incident ID. stopped (true, false) is repeatable like acked.
+// Every error is a queryError.
 func parseFilter(q url.Values, now time.Time) (filter, error) {
 	f := filter{namespaces: anySet(q["namespace"]),
 		kinds:    anySet(lowerTerms(q["kind"])),
 		texts:    lowerTerms(q["q"]),
 		excludes: lowerTerms(q["exclude"])}
-	if len(f.texts)+len(f.excludes) > maxSearchTerms {
-		return f, errors.New("too many search words")
+	err := parseSearch(q, &f)
+	if err != nil {
+		return f, err
 	}
-	if termsLength(f.texts)+termsLength(f.excludes) > maxQueryLength {
-		return f, errors.New("invalid q")
-	}
-	if len(q["like"]) > 1 || len(q.Get("like")) > maxLikeLength {
-		return f, errors.New("invalid like")
-	}
-	f.like = q.Get("like")
-	var err error
 	if f.nodes, f.modes, err = parseNodesModes(q); err != nil {
 		return f, err
 	}
 	if f.status, err = parseStatus(q.Get("status")); err != nil {
 		return f, err
 	}
-	if f.states, err = parseSet(q["state"], knownStates); err != nil {
-		return f, errors.New("invalid state")
+	sets := []struct {
+		key   string
+		known []string
+		into  *map[string]bool
+	}{
+		{"state", knownStates, &f.states},
+		{"acked", ackedValues, &f.acked},
+		{"stopped", ackedValues, &f.stopped},
+		{"severity", knownSeverities, &f.severities},
 	}
-	if f.acked, err = parseSet(q["acked"], ackedValues); err != nil {
-		return f, errors.New("invalid acked")
-	}
-	if f.severities, err = parseSet(q["severity"],
-		knownSeverities); err != nil {
-		return f, errors.New("invalid severity")
+	for _, s := range sets {
+		if *s.into, err = parseSet(s.key, q[s.key], s.known); err != nil {
+			return f, err
+		}
 	}
 	return parseTimes(q, now, f)
+}
+
+// parseSearch reads the search terms and like into f.
+func parseSearch(q url.Values, f *filter) error {
+	words := append(slices.Clone(f.texts), f.excludes...)
+	if len(words) > maxSearchTerms {
+		return badQuery("q", words[maxSearchTerms],
+			"Too many search words: %d is the limit.", maxSearchTerms)
+	}
+	if termsLength(words) > maxQueryLength {
+		return badQuery("q", "",
+			"The search is too long: %d characters is the limit.",
+			maxQueryLength)
+	}
+	if len(q["like"]) > 1 || len(q.Get("like")) > maxLikeLength {
+		return badQuery("like", q.Get("like"),
+			"The similar issues link names no issue.")
+	}
+	f.like = q.Get("like")
+	return nil
 }
 
 // maxNodeName bounds a ?node= value: a Kubernetes object name.
@@ -123,15 +146,22 @@ func parseNodesModes(q url.Values) (nodes, modes map[string]bool,
 	err error) {
 	for _, n := range q["node"] {
 		if n == "" || len(n) > maxNodeName {
-			return nil, nil, errors.New("invalid node")
+			return nil, nil, badQuery("node", n,
+				"Not a node name: %q.", n)
 		}
 	}
 	for _, m := range q["mode"] {
 		if !validMode(m) {
-			return nil, nil, errors.New("invalid mode")
+			return nil, nil, badQuery("mode", m,
+				"Unknown failure type: %s.", m)
 		}
 	}
-	return anySet(q["node"]), anySet(q["mode"]), nil
+	modes = anySet(q["mode"])
+	if len(modes) > maxModes {
+		return nil, nil, badQuery("mode", "",
+			"Too many failure types: %d is the limit.", maxModes)
+	}
+	return anySet(q["node"]), modes, nil
 }
 
 // parseStatus reads status: active (the default), resolved or all.
@@ -144,33 +174,34 @@ func parseStatus(raw string) (string, error) {
 	case "all":
 		return "", nil
 	}
-	return "", errors.New("invalid status")
+	return "", badQuery("status", raw,
+		"Unknown status: %s. Use active, resolved or all.", raw)
 }
 
 // parseTimes reads since, startedAfter and startedBefore.
 func parseTimes(q url.Values, now time.Time, f filter) (filter, error) {
 	var err error
-	if f.since, err = parseAgo(q.Get("since"), now); err != nil {
-		return f, errors.New("invalid since")
+	if f.since, err = parseAgo("since", q.Get("since"), now); err != nil {
+		return f, err
 	}
-	if f.startedAfter, err = parseAgo(q.Get("startedAfter"),
-		now); err != nil {
-		return f, errors.New("invalid startedAfter")
+	if f.startedAfter, err = parseAgo("startedAfter",
+		q.Get("startedAfter"), now); err != nil {
+		return f, err
 	}
-	if f.startedBefore, err = parseAgo(q.Get("startedBefore"),
-		now); err != nil {
-		return f, errors.New("invalid startedBefore")
-	}
-	return f, nil
+	f.startedBefore, err = parseAgo("startedBefore",
+		q.Get("startedBefore"), now)
+	return f, err
 }
 
-// parseSet reads repeated values, each one of known; nil when there
-// are none.
-func parseSet(values, known []string) (map[string]bool, error) {
+// parseSet reads the repeated values of key, each one of known; nil
+// when there are none.
+func parseSet(key string, values, known []string) (map[string]bool,
+	error) {
 	var out map[string]bool
 	for _, v := range values {
 		if !slices.Contains(known, v) {
-			return nil, errors.New("unknown value")
+			return nil, badQuery(key, v, "Unknown %s: %q. Use %s.",
+				key, v, strings.Join(known, ", "))
 		}
 		if out == nil {
 			out = map[string]bool{}
@@ -211,14 +242,21 @@ func termsLength(terms []string) int {
 	return n
 }
 
-// parseAgo reads a positive Go duration as that long before now.
-func parseAgo(raw string, now time.Time) (time.Time, error) {
+// parseAgo reads the positive Go duration of key as that long before
+// now.
+func parseAgo(key, raw string, now time.Time) (time.Time, error) {
 	if raw == "" {
 		return time.Time{}, nil
 	}
 	d, err := time.ParseDuration(raw)
-	if err != nil || d <= 0 {
-		return time.Time{}, errors.New("invalid duration")
+	if err != nil {
+		return time.Time{}, badQuery(key, raw,
+			"Not a length of time: %q. Use a number and a unit, "+
+				"like 24h.", raw)
+	}
+	if d <= 0 {
+		return time.Time{}, badQuery(key, raw,
+			"%s must be more than zero.", raw)
 	}
 	return now.Add(-d), nil
 }
@@ -255,6 +293,11 @@ func (f filter) kindOK(item IncidentListItem) bool {
 
 func (f filter) ackedOK(item IncidentListItem) bool {
 	return f.acked == nil || f.acked[strconv.FormatBool(item.AckedBy != "")]
+}
+
+func (f filter) stoppedOK(item IncidentListItem) bool {
+	return f.stopped == nil ||
+		f.stopped[strconv.FormatBool(item.StoppedTracking)]
 }
 
 // restOK applies the filters that are not facets: time, like and the

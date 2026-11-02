@@ -24,6 +24,12 @@ type detailContext struct {
 	peers []incident.Incident
 	// usage is the containers' hourly usage peaks; nil without.
 	usage usageSource
+	// lookup finds an incident kwatch still keeps, for moved links.
+	lookup func(id string) *incident.Incident
+	// delivery is what the pagers and channels hold of the incident.
+	delivery DeliveryDetail
+	// logsForbidden says kwatch may not read pod logs now.
+	logsForbidden bool
 }
 
 // detailOf is the detail of p with everything the server can add.
@@ -35,9 +41,16 @@ func (s *Server) detailOf(p incident.Incident) IncidentDetail {
 	if t := s.sources.trail.Load(); t != nil {
 		c.trail = (*t)(p.ID)
 	}
+	if src := s.sources.delivery.Load(); src != nil {
+		c.delivery = (*src)(p.ID)
+	}
+	if self, ok := s.selfReport(); ok {
+		c.logsForbidden = self.PodLogsForbidden
+	}
 	if r := s.sources.incidents.Load(); r != nil {
 		reader := *r
 		c.known = func(id string) bool { return reader.Incident(id) != nil }
+		c.lookup = reader.Incident
 		c.peers = reader.Incidents()
 		c.similar = countSimilar(p, c.peers)
 	}
@@ -56,6 +69,7 @@ func (c detailContext) addContext(d *IncidentDetail, p incident.Incident) {
 	d.Phases = phasesOf(p, c.now)
 	addJournal(d, p, c.now)
 	addRelations(d, p)
+	c.addEnd(d, p)
 	var cut int
 	d.Deliveries, cut = toDeliveries(c.trail)
 	countCut(d, func(t *DetailTruncation) { t.Deliveries += cut })

@@ -81,15 +81,18 @@ func (e *Engine) restoreAnnounced() error {
 }
 
 // openAnnounced keeps the records a baseline start saves and restores:
-// open incidents that someone was told about. skip names incidents to
-// leave out; the baselined ones are, because nobody heard of them, and a
+// open incidents that someone was told about, flapping ones included (a
+// Pro run whose licence lapsed starts as a baseline, and their resolves
+// still close their threads and alerts). skip names incidents to leave
+// out; the baselined ones are, because nobody heard of them, and a
 // resolve of one would be news from nowhere.
 func openAnnounced(
 	records []incident.Record, skip func(id string) bool,
 ) []incident.Record {
 	var kept []incident.Record
 	for _, r := range records {
-		open := r.State == incident.Open || r.State == incident.Recovering
+		open := r.State == incident.Open ||
+			r.State == incident.Recovering || r.State == incident.Flapping
 		if open && !r.Announced.IsZero() && !r.Unheard &&
 			(skip == nil || !skip(r.ID)) {
 			kept = append(kept, r)

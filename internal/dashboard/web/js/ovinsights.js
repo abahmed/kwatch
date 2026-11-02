@@ -14,6 +14,14 @@
     return KW.utc ? 0 : -new Date(KW.now()).getTimezoneOffset();
   }
 
+  /* zone: the time zone query: the offset and the zone's name (so
+     daylight saving is right); "UTC" while the page shows UTC. */
+  function zone(z) {
+    var name = "UTC";
+    try { if (!KW.utc) name = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { name = ""; }
+    return "tz=" + z + (name ? "&tzName=" + encodeURIComponent(name) : "");
+  }
+
   function nowISO() { return new Date(KW.now()).toISOString(); }
 
   var num = function (n) { return KW.num(n); };
@@ -61,7 +69,13 @@
     return li;
   }
 
-  function failingFor(i) { return "Failing for " + KW.lasted(i.since, nowISO()); }
+  /* failingFor: "Failing for 3 h", or "" when its start time is
+     missing or not in the past. */
+  function failingFor(i) {
+    var t = Date.parse(i.since);
+    if (!KW.valid(i.since) || !(t < KW.now())) return "";
+    return "Failing for " + KW.lasted(i.since, nowISO());
+  }
 
   function todayLine(t) {
     if (!t || !(t.new || t.resolved || t.urgent)) return "";
@@ -205,13 +219,13 @@
   /* insightsView fills the Overview's insight boxes; the Overview
      calls load on its own refresh. A failed load keeps what is shown. */
   KW.insightsView = function (main) {
-    var etag = "", stopped = false, zone = null, last = null, status = null;
+    var etag = "", stopped = false, zoneNow = null, last = null, status = null;
     return {
       load: function () {
         var z = tz();
-        if (z !== zone) etag = "";
-        zone = z;
-        return KW.api("/api/insights?tz=" + z, { etag: etag }).then(function (res) {
+        if (z !== zoneNow) etag = "";
+        zoneNow = z;
+        return KW.api("/api/insights?" + zone(z), { etag: etag }).then(function (res) {
           if (stopped || res.status !== 200 || !res.data) return;
           etag = res.etag;
           last = res.data;

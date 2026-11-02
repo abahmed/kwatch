@@ -197,7 +197,7 @@ func (s *Startup) indexOf(id string) int {
 func (c *Collector) finishStartup(ctx context.Context, now time.Time) {
 	s := &c.Startup
 	state := StartupState{Complete: true, Rollups: s.Summary.Rollups,
-		Digest: s.Summary.Digest}
+		Digest: s.Summary.Digest, Restored: s.Summary.Restored}
 	if len(s.Collected) > 0 {
 		msg := c.env.Messages.StartupSummary(s.Collected, now)
 		c.env.Sink(ctx, incident.Decision{Reason: "startup summary"}, msg)

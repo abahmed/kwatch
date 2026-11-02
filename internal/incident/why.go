@@ -24,6 +24,10 @@ type Timers struct {
 	// Grace marks a restored incident waiting for the cluster to be
 	// read again before it judges recovery.
 	Grace bool
+	// Held marks an incident with no failure left that stays open
+	// because kwatch cannot observe its root now (see awaitingEvidence):
+	// no hold runs until it can check again.
+	Held bool
 }
 
 // noteTimers stores p's timers as of now. next is its deadline when ok;
@@ -32,7 +36,8 @@ type Timers struct {
 func (m *Manager) noteTimers(
 	p *Incident, now, next time.Time, ok, burst bool,
 ) {
-	t := Timers{At: now, Grace: m.inGrace(p, now)}
+	t := Timers{At: now, Grace: m.inGrace(p, now),
+		Held: p.heldForData && len(p.Members) == 0}
 	if ok {
 		t.Next = next
 	}
@@ -58,6 +63,9 @@ type Why struct {
 	HoldTotal   time.Duration
 	HoldElapsed time.Duration
 	NextCheckAt time.Time
+	// CannotSee says kwatch cannot observe the root right now, so the
+	// incident stays open with no hold running until it can check again.
+	CannotSee bool
 }
 
 // WhyOf explains p as of now from its journal: the level code and the
@@ -72,7 +80,8 @@ func WhyOf(p Incident, now time.Time) Why {
 	if t.Next.After(now) {
 		w.NextCheckAt = t.Next
 	}
-	if t.Hold > 0 && p.State != Settling {
+	w.CannotSee = t.Held && !t.Grace
+	if t.Hold > 0 && p.State != Settling && !w.CannotSee {
 		w.HoldTotal = t.Hold
 		if p.State != Open && !p.RecoveringSince.IsZero() &&
 			len(p.Members) == 0 {
@@ -89,6 +98,9 @@ func stillOpen(p Incident, t Timers, now time.Time, w Why) string {
 	case t.Grace:
 		return "kwatch just restarted, so it is double-checking the " +
 			"cluster before deciding whether it recovered"
+	case w.CannotSee:
+		return "kwatch can't see " + describe(p.Root) +
+			" right now, so it stays open until it can check again"
 	case p.State == Settling:
 		return settlingText(p, t, now)
 	case p.State == Flapping && len(p.Members) > 0:

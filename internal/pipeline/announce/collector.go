@@ -42,6 +42,9 @@ type Env struct {
 	// OwnNamespace is the namespace kwatch runs in, when known: its own
 	// risks are left out of the digest.
 	OwnNamespace string
+	// Restart is how this start followed the previous session, for the
+	// restart note (restart_note.go). Optional.
+	Restart Restart
 }
 
 // Collector holds the state of the collecting steps. Its exported

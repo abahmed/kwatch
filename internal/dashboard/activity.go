@@ -70,7 +70,8 @@ func (s *Server) activityHandler(w http.ResponseWriter, r *http.Request) {
 	since := r.URL.Query().Get("since")
 	window, ok := activityWindows[since]
 	if !ok || len(r.URL.Query()["since"]) > 1 {
-		writeError(w, http.StatusBadRequest, "invalid since")
+		writeBadQuery(w, badQuery("since", since,
+			"Unknown activity window: %q. Use 1h or 24h.", since))
 		return
 	}
 	reader := s.sources.incidents.Load()

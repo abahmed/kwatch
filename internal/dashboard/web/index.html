@@ -39,6 +39,7 @@
 <script defer src="{{asset:js/filterchips.js}}"></script>
 <script defer src="{{asset:js/issuesfilters.js}}"></script>
 <script defer src="{{asset:js/issueslive.js}}"></script>
+<script defer src="{{asset:js/issuesnotes.js}}"></script>
 <script defer src="{{asset:js/viewopts.js}}"></script>
 <script defer src="{{asset:js/pager.js}}"></script>
 <script defer src="{{asset:js/place.js}}"></script>
@@ -101,7 +102,7 @@
         <details class="legend">
           <summary title="What the colors mean, and keyboard keys (press ?)" aria-label="Help: what the colors mean and keyboard keys" aria-keyshortcuts="?">?</summary>
           <div class="legend-pop">
-            <p class="legend-h">Colours and words</p>
+            <p class="legend-h">Colors and words</p>
             <ul>
               <li><span class="dot page"></span><b>Urgent</b>: kwatch alerted the on-call person. Look now.</li>
               <li><span class="dot notify"></span><b>Needs attention</b>: kwatch sent a message. Look soon.</li>
@@ -112,7 +113,7 @@
             <p class="legend-sub">States</p>
                         <ul data-legend-states></ul>
             <p class="legend-h legend-keys">Keyboard</p>
-            <ul class="keys">
+            <ul class="keys legend-keys-list">
               <li><kbd>/</kbd> Search the issues</li>
               <li><kbd>j</kbd> <kbd>k</kbd> Next / previous row, or issue when one is open beside the table</li>
               <li><kbd>Enter</kbd> Open the issue beside the table (Cmd or Ctrl and click: its own page in a new tab)</li>
@@ -142,7 +143,7 @@
       </div>
     </header>
     <div class="main">
-      <div class="offline" data-offline role="status" aria-live="polite" hidden><span data-offline-text></span><button class="btn btn-sm" type="button" data-offline-try>Try now</button></div>
+      <div class="offline-pin"><div class="offline" data-offline role="status" aria-live="polite" hidden><span data-offline-text></span><button class="btn btn-sm" type="button" data-offline-try>Try now</button></div></div>
       <nav class="incnav" aria-label="Issues in your list" data-incnav hidden><a class="btn btn-sm" data-link data-incnav-prev aria-keyshortcuts="[" title="Previous issue in your list (press [)">← Previous</a><span class="pager-pos" data-incnav-pos></span><a class="btn btn-sm" data-link data-incnav-next aria-keyshortcuts="]" title="Next issue in your list (press ])">Next →</a></nav>
       <main class="content" id="main" tabindex="-1"></main>
     </div>
@@ -212,6 +213,7 @@
       <div class="f f-pick" data-ms="kind"></div>
       <div class="f f-pick" data-ms="state"></div>
       <div class="f f-pick" data-ms="acked"></div>
+      <div class="f f-pick" data-ms="stopped"></div>
       <label class="f f-pick"><span class="sr-only">Started</span><select data-f="age" data-dd-mark><option value="">Any start time</option><option value="today">Started today</option><option value="day">Going on over a day</option></select></label>
       <label class="f f-pick"><span class="sr-only">Resolved within</span><select data-f="since" data-dd-mark><option value="">Resolved in 7 days</option><option value="24h">Resolved in 24 hours</option><option value="72h">Resolved in 3 days</option></select></label>
       <label class="f f-sort"><span class="sr-only">Sort</span><select data-f="sort"><option value="">Most urgent, then newest</option><option value="severity">Severity</option><option value="last">Last seen</option><option value="started">Started</option><option value="duration">Duration</option><option value="repeats">Times repeated</option><option value="status">Status</option><option value="namespace">Namespace</option><option value="title">Title</option></select></label>
@@ -219,10 +221,14 @@
       </div>
     </div>
     <details class="shint" data-shint><summary>Search tips</summary><ul>
-      <li><code>ns:staging</code> one namespace · <code>is:urgent</code> one alert level · <code>-is:acked</code> not acknowledged yet</li>
-      <li><code>state:open</code> <code>state:flapping</code> one state · <code>age:&lt;2h</code> started in the last 2 hours</li>
-      <li><code>"out of memory"</code> these words together · <code>-word</code> leave out issues that mention it</li>
-    </ul></details>
+      <li><code>ns:staging</code> one namespace</li>
+      <li><code>is:urgent</code> one alert level</li>
+      <li><code>"out of memory"</code> these words together</li>
+    </ul><ul data-shint-rest hidden>
+      <li><code>-is:acked</code> not acknowledged yet · <code>-word</code> leave out issues that mention it</li>
+      <li><code>state:open</code> <code>state:flapping</code> one state · <code>is:stopped</code> stopped tracking</li>
+      <li><code>age:&lt;2h</code> started in the last 2 hours · <code>age:&gt;1d</code> going on over a day</li>
+    </ul><button class="link shint-more" type="button" data-shint-more aria-expanded="false">More</button></details>
     <div class="frow">
       <div class="fchips" role="group" aria-labelledby="sevlabel"><span class="f-lbl" id="sevlabel">Severity</span>
         <button class="fchip" type="button" data-sev="page" aria-pressed="false"><svg class="icon fchip-on" aria-hidden="true"><use href="#i-check"/></svg><span class="dot page"></span>Urgent<span class="fc-n" data-n></span></button>

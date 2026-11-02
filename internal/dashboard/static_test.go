@@ -134,6 +134,7 @@ func TestStaticOldAddressesRedirectToTheNewOnes(t *testing.T) {
 		"/resolved?since=24h&q=a+b":   "/issues?status=resolved&q=a+b&since=24h",
 		"/?severity=page&age=today":   "/issues?severity=page&age=today",
 		"/?q=ns%3Ashop&group=off":     "/issues?q=ns%3Ashop&group=off",
+		"/?acked=false":               "/issues?acked=false",
 		"/resolved?status=active&x=1": "/issues?status=resolved&x=1",
 	}
 	for path, want := range cases {

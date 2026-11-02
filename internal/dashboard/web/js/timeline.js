@@ -7,6 +7,20 @@
   /* The newest events show first; older ones wait behind a button. */
   var TIMELINE_SHOWN = 8;
 
+  /* KW.hideMarks puts text into node as text nodes, with each place
+     kwatch hid a secret ("[redacted]") as a small "hidden" tag. */
+  KW.hideMarks = function (node, text) {
+    var parts = String(text).split(/(\[redacted(?: private key)?\])/);
+    parts.forEach(function (part, i) {
+      if (i % 2 === 0) {
+        if (part) node.appendChild(document.createTextNode(part));
+        return;
+      }
+      var tag = node.appendChild(KW.el("span", "hid-tag", "hidden"));
+      tag.title = "kwatch hid a secret here";
+    });
+  };
+
   /* upperFirst starts a sentence with a capital, unless it starts with
      an object's name ("payments-api-7d9f… was OOMKilled"): a name is
      never changed. */
@@ -187,7 +201,7 @@
       li.appendChild(t);
       li.appendChild(KW.el("span", "node"));
       var tx = KW.el("span", "tx");
-      tx.appendChild(KW.el("span", "tx-text", w[0]));
+      KW.hideMarks(tx.appendChild(KW.el("span", "tx-text")), w[0]);
       var count = row.all.length + row.folded;
       if (count > 1) tx.appendChild(KW.el("span", "tl-count", "× " + count));
       if (n === 0) tx.appendChild(KW.el("span", "tl-latest", "Latest"));
@@ -217,6 +231,8 @@
       li.appendChild(tx);
       ol.appendChild(li);
     });
+    var tCut = KW.cutCount(inc, "transitions");
+    if (tCut) ol.appendChild(KW.el("li", "earlier", KW.plural(tCut, "state change", "state changes") + " not shown."));
     var hidden = rows.length - shown.length;
     if (cut && (open || hidden === 0)) {
       ol.appendChild(KW.el("li", "earlier", dropped ?

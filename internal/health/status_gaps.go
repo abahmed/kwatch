@@ -11,10 +11,14 @@ import (
 var gapReasons = map[string]string{
 	CoveragePermissionDenied: "forbidden, kwatch cannot read it",
 	CoverageAPIUnavailable:   "the API does not serve it",
+	CoverageSyncFailed:       "kwatch's watch failed, it retries",
 	CoverageSyncTimeout:      "did not finish syncing",
+	CoverageSyncPending:      "still being listed",
+	CoverageHandlerPanics:    "kwatch's event handler failed",
 	CoverageBudgetExceeded:   "over the watch budget",
 	CoverageDisabledByConfig: "turned off in the configuration",
 	CoverageObjectCapReached: "partly watched, more objects than the cap",
+	CoverageUnknown:          "not watched, reason unknown",
 }
 
 // gapComponents are the components whose failure leaves part of the
@@ -22,6 +26,8 @@ var gapReasons = map[string]string{
 var gapComponents = map[string]string{
 	"kubelet-stats": "node stats from the kubelets",
 	"rbac":          "permissions kwatch needs",
+	PodLogsComponent: "crash output from pod logs, " +
+		"kwatch cannot read them",
 }
 
 // coverageGaps lists what kwatch cannot see: kinds it does not watch,

@@ -29,6 +29,9 @@ type TrailRecord struct {
 	Key string `json:"key"`
 	// Attempts are the newest attempts, oldest first.
 	Attempts []SendAttempt `json:"attempts"`
+	// Sent is the text of the latest message each provider accepted,
+	// by provider name. Records saved before it existed have none.
+	Sent map[string]SentText `json:"sent,omitempty"`
 }
 
 // last is when the record's newest attempt was made.
@@ -74,6 +77,7 @@ func (t *sendTrail) restore(records []TrailRecord) {
 		}
 		t.byKey[r.Key] = keepNewest(append(
 			append([]SendAttempt(nil), r.Attempts...), newer...))
+		t.restoreTextLocked(r.Key, r.Sent)
 	}
 	t.order = append(order, t.order...)
 	t.boundLocked()
@@ -96,7 +100,8 @@ func (t *sendTrail) take() (puts []TrailRecord, removes []string) {
 			continue
 		}
 		puts = append(puts, TrailRecord{Version: trailRecordVersion,
-			Key: key, Attempts: append([]SendAttempt(nil), list...)})
+			Key: key, Attempts: append([]SendAttempt(nil), list...),
+			Sent: t.textsLocked(key)})
 	}
 	t.dirty = nil
 	return puts, removes

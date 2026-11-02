@@ -85,6 +85,9 @@ func (h *HealthServer) statusHandler(
 	}
 	report := (*source)()
 	report.Gaps = h.coverageGaps()
+	if gap, ok := h.linkGap(); ok && len(report.Gaps) < status.MaxGaps {
+		report.Gaps = append(report.Gaps, gap)
+	}
 	if license := h.statusHolder.license.Load(); license != nil {
 		report.License = (*license)()
 	}

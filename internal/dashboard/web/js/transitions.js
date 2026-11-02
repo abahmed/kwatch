@@ -159,5 +159,7 @@
       item.appendChild(document.createTextNode(w[0]));
     });
     box.appendChild(legend);
+    var cut = KW.cutCount(inc, "phases");
+    if (cut) box.appendChild(KW.el("p", "ev-cap", KW.plural(cut, "more phase", "more phases") + " not shown."));
   };
 })();

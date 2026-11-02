@@ -59,3 +59,54 @@ func (u usageStore) SaveUsage(
 	_, err := u.mirror.Replace(items)
 	return err
 }
+
+// usageHistoryComponent is the health component of the stored usage
+// history. Losing it costs the node usage peaks across a restart, never
+// an alert, so it only degrades /health.
+const usageHistoryComponent = "usage-history"
+
+// reportedUsageStore reports the usage history's loads and saves to
+// /health: the poller only logs a failure, and a failed load keeps it
+// from saving for the whole session.
+type reportedUsageStore struct {
+	kube.UsageStore
+	sink sourceStatusSink
+}
+
+// reportUsage wraps store; nil stays nil, so the poller still knows
+// there is no store.
+func reportUsage(
+	store kube.UsageStore, sink sourceStatusSink,
+) kube.UsageStore {
+	if store == nil || sink == nil {
+		return store
+	}
+	return reportedUsageStore{UsageStore: store, sink: sink}
+}
+
+// LoadUsage implements kube.UsageStore.
+func (r reportedUsageStore) LoadUsage() (
+	map[inventory.EntityID]kube.UsageRecord, error,
+) {
+	records, err := r.UsageStore.LoadUsage()
+	r.report(err, "persistence_restore_failed")
+	return records, err
+}
+
+// SaveUsage implements kube.UsageStore.
+func (r reportedUsageStore) SaveUsage(
+	records map[inventory.EntityID]kube.UsageRecord,
+) error {
+	err := r.UsageStore.SaveUsage(records)
+	r.report(err, "persistence_write_failed")
+	return err
+}
+
+func (r reportedUsageStore) report(err error, reason string) {
+	if err != nil {
+		r.sink.SetComponentStatus(
+			usageHistoryComponent, "degraded", reason, false)
+		return
+	}
+	r.sink.SetComponentStatus(usageHistoryComponent, "running", "", true)
+}

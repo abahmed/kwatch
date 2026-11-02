@@ -5,19 +5,40 @@ import "sort"
 // MaxCoverageKinds caps the unavailable kinds listed in /health.
 const MaxCoverageKinds = 50
 
-// Coverage reason codes are the complete bounded vocabulary.
+// Coverage reason codes are the complete bounded vocabulary. They are
+// the source's own codes (inventory/kube), so /health and the
+// dashboard's /api/coverage name a gap the same way.
 const (
 	CoveragePermissionDenied = "permission_denied"
-	CoverageAPIUnavailable   = "api_unavailable"
-	CoverageSyncTimeout      = "sync_timeout"
-	CoverageBudgetExceeded   = "budget_exceeded"
+	// CoverageAPIUnavailable is a kind the API does not serve, or one
+	// kwatch cannot watch.
+	CoverageAPIUnavailable = "api_unavailable"
+	// CoverageSyncFailed, CoverageSyncTimeout and CoverageSyncPending
+	// are kinds whose first list failed, took too long, or still runs:
+	// kwatch's watch, not the cluster.
+	CoverageSyncFailed  = "cache_sync_failed"
+	CoverageSyncTimeout = "cache_sync_timeout"
+	CoverageSyncPending = "cache_sync_pending"
+	// CoverageHandlerPanics is a kind whose event handler panicked.
+	CoverageHandlerPanics = "handler_panics"
+	// CoverageBudgetExceeded is a kind left out by the watch budget.
+	CoverageBudgetExceeded = "watch_budget_exceeded"
 	// CoverageDisabledByConfig marks a kind configuration turned off,
 	// such as Secrets with watch.secrets: false.
 	CoverageDisabledByConfig = "disabled_by_config"
 	// CoverageObjectCapReached marks a watched kind with more objects than
 	// its cap; the extra objects are not observed.
 	CoverageObjectCapReached = "object_cap_reached"
+	// CoverageUnknown is a reason outside this vocabulary.
+	CoverageUnknown = "unknown"
 )
+
+// legacyCoverageReasons are the names /health used before it shared
+// the source's codes; they are still read, and written in the new name.
+var legacyCoverageReasons = map[string]string{
+	"sync_timeout":    CoverageSyncTimeout,
+	"budget_exceeded": CoverageBudgetExceeded,
+}
 
 // CoverageKind is one resource type that is not being watched, or, with
 // reason object_cap_reached, only partly observed.
@@ -41,12 +62,15 @@ type CoverageSummary struct {
 	// Reasons counts every unavailable, skipped and capped kind by
 	// reason, including the ones the bounded list leaves out.
 	Reasons map[string]int `json:"reasons,omitempty"`
-	// Complete is false when the last discovery was partial.
+	// Complete is false when the last discovery was partial; it is true
+	// before a discovery ran, when nothing partial is known.
 	Complete bool `json:"complete"`
+	// Ran is set once a discovery finished. It is not published.
+	Ran bool `json:"-"`
 }
 
 // SetCoverage publishes a detached, bounded copy of the summary. Unknown
-// reasons collapse to api_unavailable and kind names are not free text.
+// reasons collapse to unknown and kind names are not free text.
 func (h *HealthServer) SetCoverage(summary CoverageSummary) {
 	bounded := boundCoverage(summary)
 	h.componentMu.Lock()
@@ -69,7 +93,7 @@ func (h *HealthServer) Coverage() *CoverageSummary {
 func boundCoverage(in CoverageSummary) CoverageSummary {
 	out := CoverageSummary{
 		Skipped: in.Skipped, Unavailable: in.Unavailable,
-		Complete: in.Complete, Truncated: in.Truncated,
+		Complete: in.Complete, Truncated: in.Truncated, Ran: in.Ran,
 	}
 	if len(in.Watched) > 0 {
 		out.Watched = make(map[string]int, len(in.Watched))
@@ -99,9 +123,14 @@ func boundCoverage(in CoverageSummary) CoverageSummary {
 func coverageReason(reason string) string {
 	switch reason {
 	case CoveragePermissionDenied, CoverageAPIUnavailable,
-		CoverageSyncTimeout, CoverageBudgetExceeded,
-		CoverageDisabledByConfig, CoverageObjectCapReached:
+		CoverageSyncFailed, CoverageSyncTimeout, CoverageSyncPending,
+		CoverageHandlerPanics, CoverageBudgetExceeded,
+		CoverageDisabledByConfig, CoverageObjectCapReached,
+		CoverageUnknown:
 		return reason
 	}
-	return CoverageAPIUnavailable
+	if current, ok := legacyCoverageReasons[reason]; ok {
+		return current
+	}
+	return CoverageUnknown
 }

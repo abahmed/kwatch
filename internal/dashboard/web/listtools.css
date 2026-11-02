@@ -11,6 +11,8 @@
 .shint ul { margin: 4px 0 4px; padding: 0 0 0 18px; display: grid; gap: 4px; }
 .shint code { font-size: 0.75rem; padding: 0 5px; border: 1px solid var(--line); border-radius: var(--radius-chip); background: var(--surface); color: var(--text); white-space: nowrap; }
 
+.shint-more { margin: 0 0 0 18px; min-height: 28px; font-size: 0.8125rem; color: var(--text-muted); }
+
 /* Previous / Next through the list an issue was opened from. */
 .incnav { display: flex; align-items: center; gap: 8px; padding: var(--space-5) var(--space-6) 0; max-width: var(--max-app); width: 100%; }
 .incnav:not([hidden]) + .content { padding-top: 14px; }

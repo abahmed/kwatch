@@ -101,21 +101,42 @@ func leavesOutage(old, target *Incident) bool {
 	return nodeFamily(old.Root.Kind) && IsWorkload(target.Root.Kind)
 }
 
-// splitOutage supersedes an announced node outage that split into
-// outages of the nodes themselves: the failures are still failing, so
-// it must not close as healthy. It reports whether it did.
+// splitOutage reports an announced node outage that split into outages
+// of the nodes themselves: the failures are still failing, so it must
+// not close as healthy. It is superseded by the first of those that was
+// announced. One still settling is never the target: the closed thread
+// says "Moved" and points at its message, which it may never send (it
+// recovers unheard, or its tier is silent). The outage waits instead
+// and splitOver moves it once a node outage is announced; if none ever
+// is, it recovers and resolves on its own.
 func (m *Manager) splitOutage(old *Incident) bool {
 	if !nodeFamily(old.Root.Kind) || !reachedPaging(old) {
 		return false
 	}
+	split := false
 	for _, root := range old.movedTo {
-		if p := m.lookup(root); p != nil && p.State != Resolved &&
-			nodeFamily(root.Kind) {
+		p := m.lookup(root)
+		if p == nil || p.State == Resolved || !nodeFamily(root.Kind) {
+			continue
+		}
+		if wasAnnounced(p) {
 			old.SupersededBy, old.SupersededRoot = p.ID, p.Root
 			return true
 		}
+		split = true
 	}
-	return false
+	return split
+}
+
+// splitOver supersedes an empty node outage that waits for one of the
+// node outages it split into to be announced (see splitOutage).
+func (m *Manager) splitOver(p *Incident, now time.Time) {
+	if p.SupersededBy != "" || len(p.Members) > 0 || !wasAnnounced(p) ||
+		len(p.movedTo) == 0 || !m.splitOutage(p) || p.SupersededBy == "" {
+		return
+	}
+	p.note(now, "cause revised: its failures moved to "+
+		describe(p.SupersededRoot))
 }
 
 // maxMoved bounds movedTo. Two different roots already mean "dispersed",

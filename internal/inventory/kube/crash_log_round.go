@@ -2,6 +2,7 @@ package kube
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -68,7 +69,10 @@ type CrashLogRound struct {
 	start  int
 	health selfHealthClock
 	// denied is whether the last read was refused (no pods/log access).
-	denied bool
+	// It is read by other goroutines through PodLogsForbidden.
+	denied atomic.Bool
+	// hold is the backoff after a refused read (see crash_log_denied.go).
+	hold deniedHold
 }
 
 // NewCrashLogRound builds the round.
@@ -101,6 +105,7 @@ func (r *CrashLogRound) Round(ctx context.Context) {
 	r.forgetGone(containers)
 	r.rounds++
 	r.logSelfHealth(r.cfg.Now())
+	holding := r.holding(containers)
 	var observations []inventory.Observation
 	reads := 0
 	next := 0
@@ -112,7 +117,7 @@ func (r *CrashLogRound) Round(ctx context.Context) {
 			observations = append(observations, r.forgetRun(id)...)
 			continue
 		}
-		if r.read[id] == run || r.retryAt[id] > r.rounds {
+		if holding || r.read[id] == run || r.retryAt[id] > r.rounds {
 			continue
 		}
 		if reads == maxCrashLogReads || ctx.Err() != nil {
@@ -124,13 +129,14 @@ func (r *CrashLogRound) Round(ctx context.Context) {
 		if err != nil {
 			r.noteError(err)
 			if apierrors.IsForbidden(err) {
+				r.holdAfterDenial(containers)
 				break
 			}
 			observations = append(observations,
 				r.afterError(id, run, err)...)
 			continue
 		}
-		r.denied = false
+		r.denied.Store(false)
 		r.read[id] = run
 		observations = append(observations,
 			CrashLogObservation(id, r.cfg.Now(), lines))
@@ -233,10 +239,11 @@ func (r *CrashLogRound) forgetGone(live []inventory.EntityID) {
 
 // noteError logs a refused or failed read once per streak.
 func (r *CrashLogRound) noteError(err error) {
-	if r.denied {
+	if r.denied.Load() {
 		return
 	}
-	r.denied = apierrors.IsForbidden(err)
+	forbidden := apierrors.IsForbidden(err)
+	r.denied.Store(forbidden)
 	klog.V(1).InfoS("crash log unavailable", "component", "crash-log",
-		"forbidden", r.denied, "error", err)
+		"forbidden", forbidden, "error", err)
 }

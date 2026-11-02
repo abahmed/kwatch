@@ -66,12 +66,18 @@
 .itable td.c-title { display: flex; align-items: center; gap: 0; }
 .itable td.c-title .it-link { flex: 0 1 auto; min-width: 0; }
 .itable td.c-title .chip, .itable td.c-title .i-rep, .i-why { flex: none; }
+.i-stopped { flex: none; margin-left: 6px; font-size: 0.6875rem; font-weight: 600; color: var(--text-muted); border: 1px solid var(--control-border); border-radius: var(--radius-chip); padding: 0 6px; white-space: nowrap; }
 .i-why { margin-left: 6px; font-size: 0.6875rem; color: var(--text-muted); border: 1px dashed var(--line); border-radius: var(--radius-chip); padding: 0 6px; }
 @media (max-width: 1100px) and (min-width: 901px) {
   .itable .c-obj { display: none; }
   .shell { grid-template-columns: 11.5rem 1fr; }
   .content.wide { padding-left: var(--space-5); padding-right: var(--space-5); }
 }
+
+/* A refused search: the reason, in words, beside the filters. */
+.badreq { margin-top: 12px; padding: 12px 16px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; border: 1px solid var(--degraded); border-radius: var(--radius-card); background: var(--degraded-bg); color: var(--text); }
+.badreq p { margin: 0; font-weight: 500; }
+.badreq .btn { border-color: var(--text); }
 
 /* Pager. */
 .pager { margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; font-size: 0.875rem; color: var(--text-muted); }
@@ -98,6 +104,9 @@
   .itable td.c-sev { border: 0; }
   .itable td.c-title { grid-column: 1 / -1; width: auto; max-width: none; display: block; }
   .it-link { white-space: normal; display: inline; }
+  /* The whole card is the title's link, so it is one big tap target. */
+  .itable tr { position: relative; }
+  .it-link::after { content: ""; position: absolute; inset: 0; }
   .itable td:not(.c-sev):not(.c-title)::before { content: attr(data-label); display: block; color: var(--text-muted); font-size: 0.75rem; }
   .itable td:empty, .itable td.none { display: none; }
   .itable tbody tr:hover td { background: transparent; }

@@ -22,8 +22,10 @@ type shrinkStage struct {
 
 // shrinkStages is the fixed order a detail too large for the response
 // is cut in: the oldest of each list first, keeping a useful amount,
-// then long strings, then everything that remains optional. The fixed
-// order keeps the result the same for the same incident.
+// then long strings, then everything that remains optional, then the
+// strings again, shorter. Every list of the detail has a stage, so a
+// detail fits whatever it holds. The fixed order keeps the result the
+// same for the same incident.
 var shrinkStages = []shrinkStage{
 	{trimTimeline, 20},
 	{trimLogLines, 20},
@@ -33,6 +35,12 @@ var shrinkStages = []shrinkStage{
 	{trimLogLines, 0},
 	{trimEvidenceLines, 0},
 	{shortenTexts, 100},
+	{trimTransitions, 10},
+	{trimSnapshotRows, 3},
+	{trimSnapshots, 1},
+	{trimPhases, 10},
+	{trimSent, 2},
+	{trimMovedFrom, 3},
 	{trimOccurrences, 3},
 	{trimDeliveries, 5},
 	{trimChanges, 3},
@@ -45,6 +53,10 @@ var shrinkStages = []shrinkStage{
 	{trimWaitReasons, 3},
 	{trimUsageHours, 1},
 	{trimSameTime, 3},
+	{trimPager, 2},
+	{trimRelated, 2},
+	{trimFixSteps, 3},
+	{trimChangedBefore, 1},
 	{trimFacts, 0},
 	{trimOccurrences, 0},
 	{trimDeliveries, 0},
@@ -59,6 +71,17 @@ var shrinkStages = []shrinkStage{
 	{trimUsageHours, 0},
 	{trimSameTime, 0},
 	{trimSections, 0},
+	{trimTransitions, 0},
+	{trimSnapshotRows, 0},
+	{trimSnapshots, 0},
+	{trimPhases, 0},
+	{trimSent, 0},
+	{trimMovedFrom, 0},
+	{trimPager, 0},
+	{trimRelated, 0},
+	{trimFixSteps, 0},
+	{trimChangedBefore, 0},
+	{shortenTexts, 40},
 }
 
 // fitDetail cuts d until its JSON fits budget and sets d.Truncated to
@@ -226,16 +249,18 @@ func trimSections(d *IncidentDetail, t *DetailTruncation, floor int) bool {
 	return true
 }
 
-// shortenTexts cuts every long line, event, fact value and context
-// text to limit runes. Commands are never cut: a cut command would be
-// wrong to copy.
+// shortenTexts cuts every long line, event, fact value, context,
+// record and sent text to limit runes. Commands are never cut: a cut
+// command would be wrong to copy; a step goes whole instead.
 func shortenTexts(d *IncidentDetail, t *DetailTruncation, limit int) bool {
 	n := 0
-	short := func(s *string) {
-		if cut, ok := shortText(*s, limit); ok {
+	short := func(s *string) bool {
+		cut, ok := shortText(*s, limit)
+		if ok {
 			*s = cut
 			n++
 		}
+		return ok
 	}
 	for i := range d.Timeline {
 		short(&d.Timeline[i].Text)
@@ -259,6 +284,7 @@ func shortenTexts(d *IncidentDetail, t *DetailTruncation, limit int) bool {
 	}
 	shortenContext(d, short)
 	shortenInsight(d, short)
+	shortenJournal(d, short)
 	t.Texts += n
 	return n > 0
 }

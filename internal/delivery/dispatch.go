@@ -23,6 +23,9 @@ type deliverOpts struct {
 	// attempts, when set, counts the provider calls the send made, so
 	// the send log can say how many retries it took.
 	attempts *int
+	// sent, when set, receives the text of an incident message as it
+	// was prepared for the provider, for the send trail.
+	sent *string
 }
 
 // counted wraps one provider call so opts.attempts counts it.
@@ -43,8 +46,8 @@ func (m *Manager) dispatch(
 	job deliverJob,
 	opts deliverOpts,
 ) error {
-	attempts := 0
-	opts.attempts = &attempts
+	attempts, sent := 0, ""
+	opts.attempts, opts.sent = &attempts, &sent
 	var err error
 	if job.kind == jobIncident && job.incident != nil {
 		err = m.dispatchIncident(ctx, entry, job, opts)
@@ -52,8 +55,12 @@ func (m *Manager) dispatch(
 		err = m.dispatchMessage(ctx, entry, job, opts)
 	}
 	record := newSendRecord(entry.provider.Name(), job, opts, attempts, err)
+	record.pager, record.text = isPager(entry), sent
 	logSend(record)
 	m.noteSent(record, job)
+	if err != nil {
+		m.failures.add(m.nowTime())
+	}
 	return err
 }
 

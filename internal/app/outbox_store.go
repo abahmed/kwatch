@@ -18,6 +18,8 @@ type outboxStore struct {
 	values    storage.Keyed[delivery.OutboxRecord]
 	trails    storage.Keyed[delivery.TrailRecord]
 	incidents storage.Keyed[json.RawMessage]
+	// trailFailed hears a failed trail load; nil ignores it.
+	trailFailed func(error)
 }
 
 func newOutboxStore(s *storage.Store) outboxStore {
@@ -77,7 +79,9 @@ func (o outboxStore) WriteOutbox(
 // /health reports.
 func attachOutbox(deps *serverDeps, state *storage.Store) {
 	deps.deliveryManager.OnOutboxSick(reportOutboxSick(deps))
-	err := deps.deliveryManager.AttachOutbox(newOutboxStore(state))
+	store := newOutboxStore(state)
+	store.trailFailed = reportTrailFailed(deps)
+	err := deps.deliveryManager.AttachOutbox(store)
 	if err == nil {
 		return
 	}
@@ -103,5 +107,16 @@ func reportOutboxSick(deps *serverDeps) func(bool) {
 		}
 		deps.healthServer.SetComponentStatus("delivery-outbox",
 			"running", "", true)
+	}
+}
+
+// reportTrailFailed shows on /health that the send trail was not
+// restored: the dashboard lacks the earlier sends; delivery still works.
+func reportTrailFailed(deps *serverDeps) func(error) {
+	return func(error) {
+		if deps.healthServer != nil {
+			deps.healthServer.SetComponentStatus("delivery-outbox",
+				"degraded", "trail_restore_failed", true)
+		}
 	}
 }

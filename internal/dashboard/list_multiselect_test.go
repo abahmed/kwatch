@@ -73,10 +73,10 @@ func TestListRepeatableFiltersAreOredWithinAndAndedAcross(t *testing.T) {
 func TestListRepeatableFiltersRefuseUnknownValues(t *testing.T) {
 	s := multiFixture()
 	cases := map[string]string{
-		"/api/incidents?acked=true&acked=maybe": "invalid acked",
-		"/api/incidents?acked=true,false":       "invalid acked",
-		"/api/incidents?kind=node&status=done":  "invalid status",
-		"/api/incidents?state=open&state=bogus": "invalid state",
+		"/api/incidents?acked=true&acked=maybe": `"term":"maybe"`,
+		"/api/incidents?acked=true,false":       `"term":"true,false"`,
+		"/api/incidents?kind=node&status=done":  `"param":"status"`,
+		"/api/incidents?state=open&state=bogus": `"term":"bogus"`,
 	}
 	for path, want := range cases {
 		w := get(t, s, path)

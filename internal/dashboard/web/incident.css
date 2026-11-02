@@ -47,6 +47,18 @@
 .told-body .ch-msg { margin-top: 6px; }
 .told-body [title] { cursor: help; }
 
+/* Changed just before it recovered: plain rows, no Before/During tag. */
+.cx-plain { display: block; }
+
+/* What we sent: the exact text, wrapped. */
+.sent-h { margin-top: 12px; }
+.sent-h:first-child { margin-top: 0; }
+.sent-text { margin: 4px 0 0; padding: 10px 12px; font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-input); }
+
+/* Hidden for safety: where kwatch hid a secret in text. */
+.hid-tag { display: inline-block; margin: 0 2px; padding: 0 5px; font-family: var(--font-body); font-size: 0.6875rem; line-height: 1.5; border: 1px dashed currentColor; border-radius: var(--radius-chip); cursor: help; }
+:root[data-contrast="more"] .hid-tag { border-style: solid; border-width: 2px; }
+
 /* Tables: containers and affected objects. */
 .kt-wrap { overflow-x: auto; }
 .kt { width: 100%; border-collapse: collapse; font-size: 0.875rem; }

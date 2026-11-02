@@ -23,6 +23,9 @@ func TestContract(t *testing.T) {
 	}, "dev", rec.Dependencies())
 	c.url = rec.URL() + "/1/messages.json"
 	providertest.RunContract(t, providertest.Contract{
+		// Push and SMS send only the Short.
+		NoDashboardLink: true,
+
 		Send: c.SendIncident, Rec: rec,
 		Secrets: []string{"po-secret"}, LimitBytes: 1024,
 		Check: checkShape,
@@ -58,7 +61,8 @@ func checkShape(
 		t.Fatalf("%s: message is %d bytes", name, len(f["message"]))
 	}
 	switch name {
-	case "page-open", "markdown-code", "unicode", "near-limit":
+	case "page-open", "markdown-code", "unicode", "near-limit",
+		"linked":
 		if f["priority"] != "2" || f["retry"] != "60" ||
 			f["expire"] != "3600" {
 			t.Fatalf("%s: emergency needs retry/expire: %v", name, f)

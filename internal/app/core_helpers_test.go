@@ -104,11 +104,43 @@ func TestPipelineClockDelegatesToApplicationClock(t *testing.T) {
 func TestNewDetectorRegistryUsesSyncPredicate(t *testing.T) {
 	registry := newDetectorRegistry(func(inventory.Kind) bool {
 		return true
-	}, feature.ProEntitlements(), nil)
+	}, nil, feature.ProEntitlements(), nil)
 	model := inventory.NewModel(inventory.Options{})
 
 	registry.Evaluate(model, time.Now(),
 		inventory.CoreID(inventorykube.KindNode, "", "n1"))
 
 	require.NotNil(t, registry)
+}
+
+// The registry reads the source's freshness: a CronJob whose watch went
+// stale is undecided instead of overdue, and raises once it is fresh.
+func TestNewDetectorRegistryHoldsScheduleWhileTheWatchIsStale(
+	t *testing.T,
+) {
+	fresh := false
+	registry := newDetectorRegistry(nil, func(inventory.Kind) bool {
+		return fresh
+	}, feature.ProEntitlements(), nil)
+	model := inventory.NewModel(inventory.Options{})
+	id := inventory.CoreID(inventorykube.KindCronJob, "default", "nightly")
+	next := time.Date(2026, 9, 30, 1, 0, 0, 0, time.UTC)
+	model.Apply(inventory.Observation{
+		Kind: inventory.Observed, Source: "test",
+		At: next.Add(-time.Hour), Entity: id,
+		Attributes: map[string]inventory.Value{
+			inventorykube.AttrNextRun: inventory.Time(next),
+		},
+	})
+	late := next.Add(10 * time.Minute)
+
+	require.Empty(t, registry.Evaluate(model, late, id).Findings)
+	fresh = true
+	require.NotEmpty(t, registry.Evaluate(model, late, id).Findings)
+}
+
+func TestPipelineBuildFreshBeforeTheSourceExists(t *testing.T) {
+	p := &pipelineBuild{}
+
+	require.True(t, p.fresh(inventorykube.KindCronJob))
 }

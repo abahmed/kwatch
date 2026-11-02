@@ -193,7 +193,7 @@ func better(a, b scored) bool {
 	if a.raw != b.raw {
 		return a.raw > b.raw
 	}
-	return a.c.id.String() < b.c.id.String()
+	return inventory.CompareIDs(a.c.id, b.c.id) < 0
 }
 
 func countCovered(s scored, uncovered map[inventory.EntityID]bool) int {

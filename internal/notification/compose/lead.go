@@ -140,19 +140,10 @@ func blamedChange(f caseFacts) *inventory.Change {
 	return change
 }
 
-// systemChange reports a change Kubernetes made by itself: a node's
-// taints follow its conditions.
+// systemChange reports a change Kubernetes made by itself
+// (incident.SystemChange).
 func systemChange(change inventory.Change) bool {
-	if change.Entity.Kind != kube.KindNode || change.Deleted ||
-		len(change.Fields) == 0 {
-		return false
-	}
-	for _, field := range change.Fields {
-		if lastSegment(field.Path) != "taints" {
-			return false
-		}
-	}
-	return true
+	return incident.SystemChange(change)
 }
 
 // changeLead blames a change: "payments is down in shop after the

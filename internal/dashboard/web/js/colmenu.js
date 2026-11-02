@@ -13,7 +13,7 @@
   var menu = null, opener = null, sized = null;
   /* Widths, in rem, of the columns nobody dragged; namespace and
      object take a share of the table (at least LEAST rem). */
-  var BASE = { sev: 8, status: 8.75, last: 7, started: 7, dur: 6.5,
+  var BASE = { sev: 9.5, status: 10.5, last: 7, started: 7, dur: 6.5,
     ack: 6.5 };
   var SHARE = { ns: "12%", obj: "15%" };
   var LEAST = { ns: 5, obj: 7, title: 14 };

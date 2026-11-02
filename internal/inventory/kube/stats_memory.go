@@ -85,6 +85,8 @@ type memoryHistory struct {
 	run     memoryRun
 	prev    memoryRun
 	hours   [memoryWindowHours]hourPeak
+	// stored is the record last handed to the store (see stableRecord).
+	stored *UsageRecord
 }
 
 // slot returns the hour slot of at, emptied when it held an older hour.

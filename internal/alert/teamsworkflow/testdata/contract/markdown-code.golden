@@ -7,7 +7,7 @@ Content-Type: application/json
       "content": {
         "body": [
           {
-            "text": "🔴 payments in shop is crash-looping.\nIt said boom *x* @​channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop",
+            "text": "🔴 **payments** in **shop** is crash-looping.\n\nIt said `boom *x* @​channel`.\n\nService **web** can't serve traffic. Run\n\n```\nkubectl logs payments -n shop\n```",
             "type": "TextBlock",
             "wrap": true
           }

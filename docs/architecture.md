@@ -256,6 +256,7 @@ one bucket per data class:
 | `threads` | Provider thread IDs, so updates stay in one conversation | No expiry |
 | `outbox` | Delivery jobs not yet accepted by a provider | Until accepted; at most 2048 jobs, none older than 24 hours |
 | `trails` | Per incident, what became of its messages at each provider (the dashboard's "Who was told") | The 512 incidents told most recently, 16 attempts each (the newest, plus the first one a channel accepted); a trail whose incident record is gone is deleted at the next start |
+| `usage` | Per container, its memory and CPU history of the last 24 hours (for the dashboard) | 24 hours after the container's last reading; the writer bounds the entry count |
 
 A compactor off the decision loop enforces retention and a total size cap of
 512 MiB of logical data (keys and values), of which evidence may use 128 MiB,
@@ -264,7 +265,7 @@ most of the file is free pages, the compactor rewrites the file while running
 (a copy of the live data renamed over the original; writes wait about a
 second), so the file follows its content down.
 Only history is evicted, oldest first; open incidents, baselines, fingerprints,
-state, threads and the outbox are never evicted. The file itself is larger than
+state, threads and the outbox are never evicted. Usage history is not evicted by size either: it expires 24 hours after the last reading. The file itself is larger than
 its logical data, because bbolt keeps freed pages. When the file is more than a
 quarter past the cap, the compactor lowers its target by the excess, and the
 next start rewrites the file by copying the live data, if the volume has room
@@ -294,8 +295,9 @@ repeats the startup summary and relearns baselines.
 
 ## Endpoints
 
-kwatch serves five endpoints and no others. There are no diagnostic, profiling
-or user-facing API endpoints.
+kwatch serves six endpoints and no others on its health port. There are no
+diagnostic or profiling endpoints. The optional read-only dashboard is served
+on its own port (off by default); see [Dashboard](./dashboard.md).
 
 | Endpoint | Meaning |
 | --- | --- |

@@ -23,7 +23,7 @@ func (s Snapshot) sharedError(c Cause) string {
 		}
 	}
 	sort.Slice(ids, func(i, j int) bool {
-		return ids[i].String() < ids[j].String()
+		return inventory.CompareIDs(ids[i], ids[j]) < 0
 	})
 	for _, id := range ids {
 		for _, f := range s.Findings[id] {

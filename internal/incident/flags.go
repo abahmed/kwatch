@@ -5,11 +5,12 @@ import "time"
 // Delivery is what people have been told about an incident and how it
 // reached them. Its fields change only through the methods below, so
 // each flag has one writer to look for. Export and restored
-// (persist.go) keep paged, pageHeld, flapPaged, rolledUp and podPeak.
-// sentTier, sentGrowth and lastMaterial are not kept: after a restart the
-// first material update is not spaced by MaterialGap, and the sent size
-// is adopted again (adoptFingerprints, flapGrew), so that costs no
-// message.
+// (persist.go) keep paged, pageHeld, flapPaged, rolledUp and podPeak;
+// a restored announced incident takes sentTier from its saved tier, so
+// a rise is still news. sentGrowth and lastMaterial are not kept: after
+// a restart the first material update is not spaced by MaterialGap, and
+// the sent size is adopted again (adoptFingerprints, flapGrew), so that
+// costs no message.
 type Delivery struct {
 	// paged: the alert is open at the paging providers.
 	paged bool
@@ -25,7 +26,8 @@ type Delivery struct {
 	// decided one (priorKnown); a restart forgets it.
 	priorTier  Tier
 	priorKnown bool
-	// sentKnown: this run has decided at least once.
+	// sentKnown: this run has decided at least once, or the incident
+	// was restored as told.
 	sentKnown bool
 	// sentGrowth is growthKey at the latest decision.
 	sentGrowth string

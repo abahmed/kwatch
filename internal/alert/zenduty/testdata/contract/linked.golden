@@ -1,0 +1,9 @@
+POST /<secret>/
+Content-Type: application/json
+
+{
+  "alert_type": "critical",
+  "entity_id": "kwatch-dev-p-link",
+  "message": "🔴 payments in shop is crash-looping.",
+  "summary": "🔴 payments in shop is crash-looping.\nCaused by: Node n1 is not ready.\nCause in dashboard: https://kwatch.example/issues/p-cause\nEarlier times: https://kwatch.example/issues?status=all&like=p-link\nOpen in dashboard: https://kwatch.example/issues/p-link\n\nLast output:\npanic: out of memory\n\nCluster: dev"
+}

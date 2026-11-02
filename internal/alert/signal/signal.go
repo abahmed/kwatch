@@ -83,10 +83,15 @@ func (s *Signal) SendIncident(
 	return s.SendMessage(ctx, plainNote(m))
 }
 
+// signalTextLimit is the 2000-byte body Signal sends inline. A longer one
+// needs a long-text attachment, which not every signal-cli version makes,
+// so the text is cut there.
+const signalTextLimit = 2000
+
 // SendMessage sends text message to the provider
 func (s *Signal) SendMessage(ctx context.Context, msg string) error {
 	payload := signalPayload{
-		Message:    msg,
+		Message:    notification.Truncate(msg, signalTextLimit),
 		Number:     s.number,
 		Recipients: []string{s.to},
 	}

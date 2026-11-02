@@ -34,8 +34,9 @@ const (
 	passNamespace
 	passKind
 	passAcked
+	passStopped
 	passAll = passStatus | passSeverity | passNamespace | passKind |
-		passAcked
+		passAcked | passStopped
 )
 
 // listRowOf is an incident as a list row with the facet filters it
@@ -63,7 +64,7 @@ func buildList(req listRequest, incidents []incident.Incident,
 		rows = append(rows, listRowOf{item: item, pass: f.passes(item)})
 	}
 	out := ListResponse{Page: req.page, PageSize: req.pageSize,
-		Facets: newFacets()}
+		Facets: newFacets(), ModeLabels: modeLabelsOf(f.modes)}
 	matched := addFacets(&out.Facets, rows)
 	slices.SortFunc(matched, listOrder(req.sort, req.desc, f.status, now))
 	out.Total = len(matched)
@@ -120,7 +121,8 @@ func (f filter) passes(item IncidentListItem) int {
 		bitIf(f.severityOK(item), passSeverity) |
 		bitIf(f.namespaceOK(item), passNamespace) |
 		bitIf(f.kindOK(item), passKind) |
-		bitIf(f.ackedOK(item), passAcked)
+		bitIf(f.ackedOK(item), passAcked) |
+		bitIf(f.stoppedOK(item), passStopped)
 }
 
 func bitIf(ok bool, bit int) int {
@@ -144,6 +146,7 @@ func newFacets() ListFacets {
 		Namespace: map[string]int{},
 		Kind:      map[string]int{},
 		Acked:     map[string]int{"true": 0, "false": 0},
+		Stopped:   map[string]int{"true": 0, "false": 0},
 	}
 }
 
@@ -174,6 +177,9 @@ func addFacets(fc *ListFacets, rows []listRowOf) []IncidentListItem {
 		}
 		if r.passesBut(passAcked) {
 			fc.Acked[strconv.FormatBool(item.AckedBy != "")]++
+		}
+		if r.passesBut(passStopped) {
+			fc.Stopped[strconv.FormatBool(item.StoppedTracking)]++
 		}
 		if r.pass == passAll {
 			matched = append(matched, item)

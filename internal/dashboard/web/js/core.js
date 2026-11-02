@@ -61,10 +61,17 @@
       return viewMemo;
     },
     get: function (k) { return KW.store.all()[k]; },
+    /* set returns false when the browser could not keep it (private
+       mode, storage full): the option then lasts until a reload. */
     set: function (k, value) {
       var v = KW.store.all();
       if (value === undefined) delete v[k]; else v[k] = value;
-      try { window.localStorage.setItem(VIEW, JSON.stringify(v)); } catch (e) { /* private mode */ }
+      try {
+        window.localStorage.setItem(VIEW, JSON.stringify(v));
+        return true;
+      } catch (e) {
+        return false;
+      }
     }
   };
 
@@ -158,6 +165,8 @@
 
   /* lasted: "12 min", "3 h 10 min", "2 days". */
   KW.lasted = function (fromIso, toIso) {
+    // A zero or missing time would read as thousands of days.
+    if (!KW.valid(fromIso) || !KW.valid(toIso)) return "";
     var m = Math.max(1, Math.round((Date.parse(toIso) - Date.parse(fromIso)) / 60000));
     if (m < 60) return m + " min";
     if (m < 1440) {
@@ -228,15 +237,15 @@
   KW.RANK = { page: 0, notify: 1, digest: 2, silent: 3 };
   KW.STATE = {
     settling: { label: "Confirming", chip: "c-state",
-      title: "kwatch is checking before it alerts." },
+      title: "kwatch is checking it's real before alerting." },
     open: { label: "Happening now", chip: "c-state c-open",
-      title: "This is failing right now." },
+      title: "Failing right now." },
     recovering: { label: "Looks better", chip: "c-state c-better",
-      title: "It stopped failing. kwatch is waiting a little to be sure." },
+      title: "Recovered. kwatch is waiting to be sure." },
     flapping: { label: "Keeps coming back", chip: "c-state c-flap",
-      title: "It keeps failing and recovering." },
+      title: "It recovers and fails again." },
     resolved: { label: "Resolved", chip: "c-resolved",
-      title: "It stopped failing and stayed fixed." }
+      title: "Recovered, or kwatch stopped tracking it." }
   };
 
   KW.chip = function (cls, text, title) {
@@ -281,6 +290,7 @@
   /* forLong: "for 3 h", how long an issue has been going on; "now"
      under a minute. */
   KW.forLong = function (fromIso) {
+    if (!KW.valid(fromIso)) return "";
     var ms = KW.now() - Date.parse(fromIso);
     if (!(ms >= 60000)) return "now";
     return "for " + KW.lasted(fromIso, new Date(KW.now()).toISOString());

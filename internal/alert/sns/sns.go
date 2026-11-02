@@ -91,6 +91,10 @@ func (s *Sns) Name() string {
 	return "SNS"
 }
 
+// maxMessageBytes keeps a message under SNS's Publish limit of 256 KB
+// (262144 bytes), with room for the attributes and form encoding.
+const maxMessageBytes = 200000
+
 // maxSubjectBytes is SNS's limit: the subject must be shorter than 100
 // characters.
 const maxSubjectBytes = 99
@@ -195,7 +199,7 @@ func (s *Sns) publishForm(message, subject string) url.Values {
 	} else {
 		form.Set("TopicArn", s.topicArn)
 	}
-	form.Set("Message", message)
+	form.Set("Message", notification.Truncate(message, maxMessageBytes))
 	if len(subject) > 0 {
 		form.Set("Subject", subject)
 	}
@@ -223,3 +227,8 @@ func (s *Sns) publish(ctx context.Context, form url.Values) error {
 	})
 	return err
 }
+
+// ReceivesPagingOnly implements api.PagingOnlyReceiver: every message
+// carries the incident key, so subscribers that page on it must also get
+// the paging-only announcements.
+func (s *Sns) ReceivesPagingOnly() bool { return true }

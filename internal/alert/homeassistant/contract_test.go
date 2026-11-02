@@ -16,6 +16,9 @@ func TestContract(t *testing.T) {
 	}, "dev", rec.Dependencies())
 	c.url = rec.URL() + "/api/services/notify/mobile_app_kwatch"
 	providertest.RunContract(t, providertest.Contract{
+		// Push and SMS send only the Short.
+		NoDashboardLink: true,
+
 		Send: c.SendIncident, Rec: rec,
 		Headers: []string{"Authorization"},
 		Secrets: []string{"ha-secret"}, LimitBytes: 3000,

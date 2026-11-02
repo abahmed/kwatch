@@ -1,0 +1,10 @@
+POST /v2/send
+Content-Type: application/json
+
+{
+  "message": "🔴 payments in shop is crash-looping.\nCaused by: Node n1 is not ready.\nCause in dashboard: https://kwatch.example/issues/p-cause\nEarlier times: https://kwatch.example/issues?status=all&like=p-link\nOpen in dashboard: https://kwatch.example/issues/p-link\n\n> panic: out of memory",
+  "number": "+12025550199",
+  "recipients": [
+    "+12025550100"
+  ]
+}

@@ -27,6 +27,7 @@ func toDeliveries(trail []DeliveryAttempt) ([]DeliveryAttempt, int) {
 			a.Fallback = channelName(a.Fallback)
 		}
 		a.Error = redact.Evidence(a.Error)
+		a.Reason = redact.Evidence(a.Reason)
 		out = append(out, a)
 	}
 	return out, cut

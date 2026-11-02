@@ -1,0 +1,26 @@
+POST /open-apis/bot/v2/hook/<secret>
+Content-Type: application/json
+
+{
+  "card": {
+    "config": {
+      "wide_screen_mode": true
+    },
+    "elements": [
+      {
+        "content": "🔴 payments in shop is crash-looping.\n\nCaused by: Node n1 is not ready.\n\nCause in dashboard: https://kwatch.example/issues/p-cause\n\nEarlier times: https://kwatch.example/issues?status=all&like=p-link\n\nOpen in dashboard: https://kwatch.example/issues/p-link\n\n```\npanic: out of memory\n```",
+        "tag": "markdown"
+      }
+    ],
+    "header": {
+      "template": "blue",
+      "title": {
+        "content": "kwatch",
+        "tag": "plain_text"
+      }
+    }
+  },
+  "msg_type": "interactive",
+  "sign": "qJbt/v6FGJJmxiWuBSnv0V/Ij0UAJAzorbHjGAGoX8c=",
+  "timestamp": "1767323045"
+}

@@ -55,6 +55,8 @@ func TestRestoreGraceDoesNotSwallowARiseToPage(t *testing.T) {
 			require.Len(t, told, 1, "the rise is told once")
 			assert.Equal(t, Update, told[0].Action)
 			assert.Equal(t, Page, told[0].Incident.Tier)
+			assert.True(t, told[0].Incident.Delivery.TierRaised(),
+				"the update can say it is now critical")
 		})
 	}
 }

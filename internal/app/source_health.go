@@ -43,6 +43,9 @@ type sourceHealth struct {
 	// syncing is set while the sources are still listing: reports then
 	// leave readiness alone (see run). Only run's goroutine touches it.
 	syncing bool
+	// checks run on every report: other coverage facts (pod logs,
+	// dashboard links) published at the same pace.
+	checks []func()
 }
 
 func newSourceHealth(
@@ -57,6 +60,13 @@ func newSourceHealth(
 // It is applied once before the first report.
 func (h *sourceHealth) withCoverage(p coveragePublisher) *sourceHealth {
 	h.coverage = p
+	return h
+}
+
+// withCheck also runs check on every report. It is applied before the
+// first report.
+func (h *sourceHealth) withCheck(check func()) *sourceHealth {
+	h.checks = append(h.checks, check)
 	return h
 }
 
@@ -146,6 +156,9 @@ func (h *sourceHealth) safeReport() {
 func (h *sourceHealth) report() {
 	if summary, ok := h.coverage.publish(); ok {
 		h.note.observe(h.sink, summary)
+	}
+	for _, check := range h.checks {
+		check()
 	}
 	if h.source == nil {
 		return

@@ -112,6 +112,11 @@ func (t *Teams) sendAPI(ctx context.Context, payload []byte) error {
 	return err
 }
 
+// teamsTextLimit bounds the narrative so the payload stays under the
+// Teams message limit of about 28 KB: the text is sent twice, as the
+// text and in the card, beside the card markup.
+const teamsTextLimit = 12000
+
 // buildRequestBodyTeams builds the incident payload: the configured or
 // incident title, and the narrative as the text and as one card. The
 // title carries no marker, so the narrative's marker is the only emoji.
@@ -123,7 +128,8 @@ func (t *Teams) buildRequestBodyTeams(
 		title = format.OrDefault(m.Title, defaultTeamsTitle)
 	}
 	text := safetext.RichWithOutput(m,
-		notification.MarkdownDialect(nil, "\n\n"), "\n\n", 0)
+		notification.MarkdownDialect(nil, "\n\n"), "\n\n",
+		teamsTextLimit)
 	attachment := textCardAttachments(title, text)
 	if m.Evidence != nil {
 		attachment = evidenceCardAttachments(title, m)

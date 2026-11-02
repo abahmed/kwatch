@@ -171,7 +171,9 @@ func TestMemoryHistoryOutlivesTheContainerInTheSummary(t *testing.T) {
 
 	// A crashing container is missing from the summary.
 	h.kubelet.set("a/stats/summary", podWithoutContainer)
-	h.poll()
+	for range statsFailuresBeforeClear {
+		h.poll()
+	}
 	assert.False(t, h.has(container, AttrMemoryWorking),
 		"the live reading is gone")
 	assert.True(t, h.has(container, AttrMemoryPeak24h),

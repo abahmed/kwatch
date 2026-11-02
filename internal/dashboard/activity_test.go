@@ -111,7 +111,7 @@ func TestActivityHandlerValidatesSinceAndTagsTheBody(t *testing.T) {
 		"/api/activity?since=1h&since=24h", "/api/activity?since=1d"} {
 		w := get(t, s, path)
 		if w.Code != http.StatusBadRequest ||
-			!strings.Contains(w.Body.String(), `"invalid since"`) {
+			!strings.Contains(w.Body.String(), `"param":"since"`) {
 			t.Errorf("%s: %d %s", path, w.Code, w.Body.String())
 		}
 	}

@@ -42,7 +42,8 @@ func channelName(key string) string {
 	if name, ok := channelNames[strings.ToLower(key)]; ok {
 		return name
 	}
-	r := []rune(key)
+	// Unknown keys read as words: grafana_oncall is Grafana oncall.
+	r := []rune(strings.NewReplacer("_", " ", "-", " ").Replace(key))
 	if len(r) == 0 {
 		return key
 	}

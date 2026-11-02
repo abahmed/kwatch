@@ -12,7 +12,7 @@ import (
 // serve runs the listener, over TLS when certificate files are set.
 func (s *Server) serve(server *http.Server, ln net.Listener) error {
 	if s.opts.TLSCertFile == "" {
-		return server.Serve(ln)
+		return server.Serve(pageListener{ln})
 	}
 	certs := &certReloader{cert: s.opts.TLSCertFile, key: s.opts.TLSKeyFile}
 	if _, err := certs.get(nil); err != nil {
@@ -21,8 +21,14 @@ func (s *Server) serve(server *http.Server, ln net.Listener) error {
 	server.TLSConfig = &tls.Config{
 		MinVersion:     tls.VersionTLS12,
 		GetCertificate: certs.get,
+		// ServeTLS would add these itself. Serve configures HTTP/2 only
+		// when "h2" is listed here.
+		NextProtos: []string{"h2", "http/1.1"},
 	}
-	return server.ServeTLS(ln, "", "")
+	// TLS sits below pageListener, so a pageConn sees the plaintext
+	// reply and can swap net/http's bare 400 for the page.
+	tlsLn := tls.NewListener(ln, server.TLSConfig)
+	return server.Serve(pageListener{tlsLn})
 }
 
 // certReloader loads the key pair again when either file changes, so a

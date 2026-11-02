@@ -106,6 +106,11 @@
       return showSignin();
     }
     var main = shell(r.name === "detail" ? "issues" : r.name);
+    // Read once so every page knows kwatch's own namespace (api.js).
+    if (!KW.selfRead) {
+      KW.selfRead = true;
+      KW.api("/api/status");
+    }
     var views = { issues: KW.issuesView, detail: KW.detailView,
       status: KW.statusView };
     view = views[r.name](main, r);

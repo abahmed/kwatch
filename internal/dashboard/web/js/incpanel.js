@@ -18,7 +18,8 @@
       if (k !== "containers" && k !== "usageHours" && k !== "why") copy[k] = data[k];
     });
     var w = data.why;
-    if (w) copy.why = [w.alertLevelReason, w.holdTotal, (w.stillOpenReason || "").split(/[,;]/)[0]];
+    if (w) copy.why = [w.alertLevelReason, w.holdTotal, !!w.cannotSee,
+      (w.stillOpenReason || "").split(/[,;]/)[0]];
     return JSON.stringify(copy);
   }
 

@@ -9,7 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/delivery"
+	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/storage"
 )
 
@@ -79,4 +81,22 @@ func TestTrailStoreWriteRemovesNamedTrails(t *testing.T) {
 	records, err := store.LoadTrails()
 	require.NoError(t, err)
 	assert.Empty(t, records)
+}
+
+// A trail that cannot be read is reported to /health as the outbox's
+// trail_restore_failed: delivery only logs it.
+func TestTrailStoreReportsAFailedLoad(t *testing.T) {
+	s := openTrailStore(t, filepath.Join(t.TempDir(), "state.db"))
+	require.NoError(t, s.Close())
+	server := health.NewHealthServerWithClock(
+		config.HealthCheck{}, clock.RealClock{})
+	store := newOutboxStore(s)
+	store.trailFailed = reportTrailFailed(&serverDeps{healthServer: server})
+
+	_, err := store.LoadTrails()
+
+	require.Error(t, err)
+	got := server.ComponentStatuses()["delivery-outbox"]
+	assert.Equal(t, "degraded", got.State)
+	assert.Equal(t, "trail_restore_failed", got.Reason)
 }

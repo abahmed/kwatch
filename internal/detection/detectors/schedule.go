@@ -78,6 +78,12 @@ func scheduleFindings(
 		ctx.RecheckAfter(deadline.Sub(ctx.Now))
 		return nil
 	}
+	// A run that did not start is read from a next-run time that only a
+	// working watch moves on: a stale watch keeps what it had.
+	if !ctx.Fresh(kube.KindCronJob) {
+		ctx.RecheckAfter(DefaultMissedRun)
+		return nil
+	}
 	if found, ok := blockedRun(ctx, e, next); ok {
 		return []detection.Finding{found}
 	}

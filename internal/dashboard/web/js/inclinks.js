@@ -55,7 +55,36 @@
       if (i) p.appendChild(document.createTextNode(", "));
       p.appendChild(link(r));
     });
+    var cut = KW.cutCount(inc, "causedBy");
+    if (cut) p.appendChild(document.createTextNode(" (" + KW.num(cut) + " more not shown)"));
     p.title = "kwatch thinks this issue is a result of that one. Fix that first.";
+  }
+
+  /* moved: when kwatch folded this issue into another one, or folded
+     others into this one. Only issues still kept are named. */
+  function moved(root, inc) {
+    var box = KW.$("[data-moved]", root), m = inc.moved || {};
+    if (!box) {
+      box = KW.el("div", "d-moved");
+      box.dataset.moved = "";
+      KW.$("[data-blast]", root).insertAdjacentElement("afterend", box);
+    }
+    box.textContent = "";
+    var from = refs(m.from), cut = KW.cutCount(inc, "movedFrom");
+    box.hidden = !m.into && !from.length;
+    if (m.into) {
+      var p = box.appendChild(KW.el("p"));
+      p.appendChild(KW.el("b", "", "Moved into: "));
+      p.appendChild(link(m.into));
+    }
+    if (!from.length) return;
+    var q = box.appendChild(KW.el("p"));
+    q.appendChild(KW.el("b", "", "Includes earlier issues: "));
+    from.forEach(function (r, i) {
+      if (i) q.appendChild(document.createTextNode(", "));
+      q.appendChild(link(r));
+    });
+    if (cut) q.appendChild(document.createTextNode(" (" + KW.num(cut) + " more not shown)"));
   }
 
   function blast(root, inc) {
@@ -77,13 +106,15 @@
     return li;
   }
 
-  function causing(box, list) {
+  function causing(box, list, inc) {
     box.textContent = "";
     if (!list.length) return "";
     box.appendChild(KW.el("h3", "fold-h", "Also causing"));
     box.appendChild(KW.el("p", "", "kwatch thinks these issues are a result of this one. They may clear once it is fixed."));
     var ul = box.appendChild(KW.el("ul", "rel-list"));
     list.forEach(function (r) { ul.appendChild(row(r, r.namespace || "")); });
+    var cut = KW.cutCount(inc, "causing");
+    if (cut) box.appendChild(KW.el("p", "ev-cap", KW.plural(cut, "more issue", "more issues") + " not shown."));
     return "Also causing: " + KW.plural(list.length, "issue", "issues");
   }
 
@@ -118,9 +149,9 @@
   function others(root, inc) {
     var list = refs(inc.causing), known = {};
     list.concat(refs(inc.causedBy)).forEach(function (r) { if (r.id) known[r.id] = true; });
-    var c = causing(KW.$("[data-causing]", root), list);
+    var c = causing(KW.$("[data-causing]", root), list, inc);
     var s = sameTime(KW.$("[data-sametime]", root), inc, known);
-    var n = list.length + s[1];
+    var n = list.length + KW.cutCount(inc, "causing") + s[1];
     KW.$('[data-fold="others"]', root).hidden = !n;
     KW.$("[data-others-n]", root).textContent = n ? "(" + KW.num(n) + ")" : "";
     return [c, s[0]];
@@ -141,6 +172,7 @@
   KW.links = function (root, inc) {
     causedBy(root, inc);
     blast(root, inc);
+    moved(root, inc);
     var lines = others(root, inc);
     hint(root, lines[0], "others", "Other issues kwatch thinks this one causes.");
     hint(root, lines[1], "others", "Other issues that started within 5 minutes of this one.");

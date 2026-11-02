@@ -111,7 +111,7 @@
       var gutter = KW.el("span", "ev-gutter", hit[i] ? "matched" : String(i + 1));
       gutter.setAttribute("aria-hidden", hit[i] ? "false" : "true");
       row.appendChild(gutter);
-      row.appendChild(KW.el("span", "", l));
+      KW.hideMarks(row.appendChild(KW.el("span")), l);
       view.appendChild(row);
     });
     return view;
@@ -273,6 +273,22 @@
     return out;
   }
 
+  /* unreadable: "Logs" with nothing to show because kwatch may not read
+     pod logs; the fix is in the Overview's coverage panel. */
+  function unreadable(root, fold, box) {
+    box.hidden = true;
+    KW.$("[data-log-ctl]", root).hidden = true;
+    KW.$("[data-copy-logs]", root).hidden = true;
+    KW.$("[data-wrap-logs]", root).hidden = true;
+    KW.$("[data-logcap]", root).textContent = "";
+    var note = KW.$("[data-log-note]", root);
+    note.hidden = false;
+    note.textContent = "Crash output not shown: kwatch isn't allowed to read pod logs. ";
+    var a = note.appendChild(KW.el("a", "ulink", "How to allow it"));
+    a.href = "/#cov";
+    a.dataset.link = "";
+  }
+
   /* KW.logs fills "Logs": one view with one set of controls. "Show"
      picks the source (kept on redraws); a line the checks matched is
      marked. */
@@ -281,8 +297,9 @@
     var list = logSources(inc);
     var keep = box.scrollTop, keepX = box.scrollLeft, was = fold.dataset.pick;
     box.textContent = "";
-    fold.hidden = !list.length;
+    fold.hidden = !list.length && !inc.logsNotReadable;
     if (fold.hidden) return;
+    if (!list.length) return unreadable(root, fold, box);
     var src = list.filter(function (x) { return x.key === was; })[0] ||
       list.filter(function (x) { return x.matched.length; })[0] || list[0];
     fold.dataset.pick = src.key;
@@ -306,7 +323,8 @@
     var hit = {};
     src.matched.forEach(function (i) { hit[i] = true; });
     src.lines.forEach(function (l, i) {
-      var row = box.appendChild(KW.el("div", logClass(l) + (hit[i] ? " ev-hit" : ""), l));
+      var row = box.appendChild(KW.el("div", logClass(l) + (hit[i] ? " ev-hit" : "")));
+      KW.hideMarks(row, l);
       if (hit[i]) row.title = "The line kwatch matched";
     });
     box.hidden = !src.lines.length;

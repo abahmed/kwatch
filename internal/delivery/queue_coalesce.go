@@ -53,9 +53,10 @@ func (j deliverJob) urgent() bool {
 
 // moveAheadOfRoutine moves the job to the end of the urgent jobs at the
 // front of the queue, ahead of every routine one. Urgent jobs keep their
-// order among themselves, and a conversation's own messages never swap:
-// the arriving job either replaced the conversation's queued message or
-// is the only queued message of it.
+// order among themselves. The job never passes an earlier queued job of
+// the same conversation or paging identity: a backlog refill can queue a
+// restored resolve without reordering, and a new trigger sent before it
+// would let that old resolve close the live alert.
 func moveAheadOfRoutine(queued []deliverJob, job deliverJob) []deliverJob {
 	at := -1
 	for i, q := range queued {
@@ -71,10 +72,29 @@ func moveAheadOfRoutine(queued []deliverJob, job deliverJob) []deliverJob {
 	for front < at && queued[front].urgent() {
 		front++
 	}
+	for i := at - 1; i >= front; i-- {
+		if sharesIdentity(queued[i], job) {
+			front = i + 1
+			break
+		}
+	}
 	moved := queued[at]
 	copy(queued[front+1:at+1], queued[front:at])
 	queued[front] = moved
 	return queued
+}
+
+// sharesIdentity reports whether two incident jobs are messages of the
+// same conversation or the same paging identity (a recurrence has a new
+// key but shares its DedupKey).
+func sharesIdentity(a, b deliverJob) bool {
+	if a.kind != jobIncident || a.incident == nil ||
+		b.kind != jobIncident || b.incident == nil {
+		return false
+	}
+	return a.incident.Key == b.incident.Key ||
+		(b.incident.DedupKey != "" &&
+			a.incident.DedupKey == b.incident.DedupKey)
 }
 
 // coalesce applies the full-queue rules to the drained jobs and returns

@@ -5,6 +5,9 @@
 {{- $port := include "kwatch.healthPort" . | int }}
 {{- $dash := default dict .Values.dashboard }}
 {{- $dashPort := $dash.port | default 8061 }}
+{{- if and (not .Values.networkPolicy.allowDefaults) (not .Values.networkPolicy.ingress) (not .Values.networkPolicy.egress) (not .Values.networkPolicy.allowProbeEgressAll) (not .Values.networkPolicy.extraEgressPorts) }}
+{{- fail "networkPolicy.enabled=true with allowDefaults=false and no ingress, egress, extraEgressPorts or allowProbeEgressAll renders a deny-all policy: kwatch could not reach DNS or the API server and would restart in a loop. Set allowDefaults=true, or supply networkPolicy.ingress and networkPolicy.egress rules that cover DNS, the API server, the kubelet and the health port" }}
+{{- end }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -41,6 +44,7 @@ spec:
       ports:
         - protocol: TCP
           port: {{ $port }}
+    {{- end }}
     {{- if and $dash.enabled $dash.networkPolicyFrom }}
     # Dashboard from outside the namespace: the peers in
     # dashboard.networkPolicyFrom (your ingress controller, gateway or
@@ -69,7 +73,6 @@ spec:
       ports:
         - protocol: TCP
           port: {{ $dashPort }}
-    {{- end }}
     {{- end }}
     {{- with .Values.networkPolicy.ingress }}
     {{- toYaml . | nindent 4 }}

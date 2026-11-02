@@ -128,14 +128,23 @@
       P.set("size", size);
       hooks.open(LQ.search(Object.assign({}, hooks.view(), { pageSize: size, page: 1 })));
     });
+    var saveErr = KW.el("p", "vo-err");
+    saveErr.hidden = true;
+    $("[data-vo-save]").after(saveErr);
     $("[data-vo-save]").addEventListener("submit", function (e) {
       e.preventDefault();
       var input = KW.$("input", e.target);
       var f = Object.assign({}, hooks.view(), { page: 1 });
-      if (!P.saveView(input.value, LQ.search(f))) {
+      var ok = P.saveView(input.value, LQ.search(f));
+      if (ok !== true) {
         input.setAttribute("aria-invalid", "true");
-        return KW.announce("Give the view a name (up to 20 views).");
+        saveErr.textContent = ok === "full" ?
+          "Couldn't save: browser storage is full." :
+          "Give the view a name (up to 20 views).";
+        saveErr.hidden = false;
+        return KW.announce(saveErr.textContent);
       }
+      saveErr.hidden = true;
       input.removeAttribute("aria-invalid");
       KW.announce("Saved the view " + input.value.trim() + ".");
       input.value = "";

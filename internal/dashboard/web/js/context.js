@@ -14,28 +14,29 @@
     "recovered without change": "recovered on its own"
   };
 
-  /* RESULT: what became of a message, as the word after it ("update
-     sent"), its class and tooltip. */
-  var RESULT = {
-    ok: ["sent", "", "The channel accepted the message."],
-    failed: ["failed", "x-bad", "The channel refused it. kwatch tried its fallback, if one is set."],
-    retrying: ["will be sent again", "x-warn", "The channel did not answer. kwatch sends it again later."],
-    carried: ["listed in a summary", "", "Not sent on its own: a summary message listed it."],
-    "not routed": ["not sent", "", "No channel is set up to receive this kind of alert."],
-    "paging only": ["not sent", "", "Meant only for paging tools, and none is set up."]
-  };
-
-  var WHAT = {
-    root: "first alert", thread: "update", edit: "resolved (edited the alert)",
-    standalone: "resolved message"
-  };
-
   /* openFold opens a folded section of the issue and scrolls to it. */
   KW.openFold = function (root, name) {
     var fold = KW.$('[data-fold="' + name + '"]', root);
     if (!fold || fold.hidden) return;
     fold.open = true;
     fold.scrollIntoView({ block: "start" });
+  };
+
+  /* KW.extraFold: a folded section the template has no place for,
+     made once and put after the section named after. It returns the
+     fold and its body; the caller fills the body and sets hidden. */
+  KW.extraFold = function (root, name, title, after) {
+    var fold = KW.$('[data-fold="' + name + '"]', root);
+    if (!fold) {
+      fold = KW.el("details", "fold");
+      fold.dataset.fold = name;
+      fold.hidden = true;
+      fold.appendChild(KW.el("summary", "", title));
+      fold.appendChild(KW.el("div", "fold-body"));
+      var prev = KW.$('[data-fold="' + after + '"]', root);
+      prev.parentNode.insertBefore(fold, prev.nextSibling);
+    }
+    return { fold: fold, body: KW.$(".fold-body", fold) };
   };
 
   /* ago: how long before or after the issue started, in words. */
@@ -161,6 +162,30 @@
       (cut ? " " + KW.plural(cut, "more change", "more changes") + " not shown." : "")));
   }
 
+  /* recovered: "Changed just before it recovered", on a resolved issue.
+     It only says what changed; it never says that was the fix. */
+  function recovered(root, inc) {
+    var x = KW.extraFold(root, "recovered", "Changed just before it recovered", "changes");
+    var list = inc.state === "resolved" ? inc.changedBeforeRecovery || [] : [];
+    x.fold.hidden = !list.length;
+    x.body.textContent = "";
+    if (!list.length) return;
+    x.body.appendChild(KW.el("p", "ev-cap", "Made shortly before it stopped failing. " +
+      "This may not be the reason it recovered."));
+    var ul = x.body.appendChild(KW.el("ul", "cx-list"));
+    list.forEach(function (c) {
+      var li = ul.appendChild(KW.el("li", "cx-row cx-plain"));
+      var line = li.appendChild(KW.el("p", "cx-line"));
+      line.appendChild(KW.el("span", "mono", objName(c)));
+      line.appendChild(document.createTextNode(": " + c.summary));
+      var meta = li.appendChild(KW.el("small", "cx-meta"));
+      meta.appendChild(KW.hm(c.at));
+      if (who(c)) meta.appendChild(document.createTextNode(" · " + who(c)));
+    });
+    var cut = KW.cutCount(inc, "changedBeforeRecovery");
+    if (cut) x.body.appendChild(KW.el("p", "ev-cap", KW.plural(cut, "more change", "more changes") + " not shown."));
+  }
+
   function fixWords(fix) { return FIX[fix] || ""; }
 
   function seen(root, inc) {
@@ -196,93 +221,6 @@
       a.dataset.link = "";
       box.appendChild(KW.el("p", "seen-prev")).appendChild(a);
     }
-  }
-
-  /* toldRow: "18:51  Slack · first alert sent". */
-  function toldRow(d) {
-    var li = KW.el("li", "told-row");
-    li.appendChild(KW.hm(d.at)).className = "mono";
-    var body = KW.el("div", "told-body");
-    var head = KW.el("p");
-    var r = RESULT[d.result] || [d.result, "", ""];
-    head.appendChild(KW.el("b", "", d.name || (d.carrier ? "The " + d.carrier : "No channel")));
-    head.appendChild(document.createTextNode(" · " + (d.kind === "resolve" ? "resolved message" :
-      d.kind === "summary" ? "summary" : WHAT[d.placement] || "message") + " "));
-    var res = head.appendChild(KW.el("span", r[1], r[0]));
-    if (r[2]) res.title = r[2];
-    body.appendChild(head);
-    var meta = [];
-    if (d.retries) meta.push("after " + KW.plural(d.retries, "retry", "retries"));
-    if (d.fallbackFor) meta.push("fallback for " + d.fallbackFor);
-    if (meta.length) body.appendChild(KW.el("small", "cx-meta", meta.join(" · ")));
-    if (d.error) body.appendChild(KW.el("p", "ch-msg", d.error));
-    li.appendChild(body);
-    return li;
-  }
-
-  /* told fills "Who was told". Whether someone acknowledged it is said
-     once, in "What's going on with this alert" (incwhy.js). */
-  function told(root, inc) {
-    var fold = KW.$('[data-fold="told"]', root);
-    var box = KW.$("[data-told]", root);
-    var list = inc.deliveries || [];
-    box.textContent = "";
-    fold.hidden = !list.length;
-    if (fold.hidden) return;
-    var ul = KW.el("ul", "told-list");
-    list.slice().reverse().forEach(function (d) { ul.appendChild(toldRow(d)); });
-    box.appendChild(ul);
-    var cut = KW.cutCount(inc, "deliveries");
-    box.appendChild(KW.el("p", "ev-cap", "What kwatch remembers since it last started." +
-      (cut ? " " + KW.plural(cut, "older message", "older messages") + " not shown." : "")));
-  }
-
-  /* code: the HTTP status in a channel's error ("401"), or "". */
-  function code(err) {
-    var m = /\b([45]\d\d)\b/.exec(err || "");
-    return m ? m[1] : "";
-  }
-
-  /* toldText: who was told, failures first, each channel with the
-     time it first took a message: "PagerDuty failed (401) · fell back
-     to Opsgenie 19:06 · Slack 18:51 · not acknowledged". */
-  function toldText(inc) {
-    var list = inc.deliveries || [], by = {}, order = [];
-    list.forEach(function (d) {
-      var name = d.name || "";
-      if (!name) return;
-      if (!by[name]) { by[name] = {}; order.push(name); }
-      var c = by[name];
-      if (d.result === "ok" && !c.ok) c.ok = d;
-      if (d.result === "failed") c.failed = d;
-      if (d.result === "retrying") c.retrying = d;
-    });
-    var bad = [], fell = [], fine = [];
-    order.forEach(function (name) {
-      var c = by[name];
-      if (c.ok) {
-        var at = name + " " + KW.when(c.ok.at);
-        if (c.ok.fallbackFor) fell.push("fell back to " + at);
-        else fine.push(at);
-      } else if (c.failed) {
-        var n = code(c.failed.error);
-        bad.push(name + " failed" + (n ? " (" + n + ")" : ""));
-      } else if (c.retrying) {
-        bad.push("still trying " + name);
-      }
-    });
-    // Nothing went wrong: "Sent to Slack 18:51 · …".
-    if (!bad.length && !fell.length && fine.length) fine[0] = "sent to " + fine[0];
-    var parts = bad.concat(fell, fine);
-    if (!parts.length) {
-      var d = list.filter(function (x) { return x.result === "carried"; })[0];
-      if (!list.length) return "";
-      parts.push(d ? "Listed in the " + (d.carrier || "summary") + " " + KW.when(d.at) :
-        "Not sent to any channel");
-    }
-    parts.push(inc.ackedBy ? "acknowledged" : "not acknowledged");
-    var text = parts.join(" · ");
-    return text.charAt(0).toUpperCase() + text.slice(1);
   }
 
   /* blamed: the change the likely cause names: the one the API marks,
@@ -332,7 +270,7 @@
     ul.textContent = "";
     [[changedText(inc), "changes", "What changed around it, nearest first."],
       [seenText(inc), "seen", "Earlier times the same object failed the same way."],
-      [toldText(inc), "told", "Which alert channels kwatch told, and whether someone acknowledged it."]
+      [KW.toldText(inc), "told", "Which alert channels kwatch told, and whether someone acknowledged it."]
     ].forEach(function (h) {
       if (!h[0]) return;
       var b = KW.el("button", "link d-ctx-b", h[0]);
@@ -383,8 +321,10 @@
   KW.context = function (root, inc) {
     captions(root);
     changes(root, inc);
+    recovered(root, inc);
     seen(root, inc);
-    told(root, inc);
+    KW.told(root, inc);
+    KW.sent(root, inc);
     hints(root, inc);
     // What the cluster says now, and sharing (insight.js, share.js).
     if (KW.insight) KW.insight(root, inc);

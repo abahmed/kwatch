@@ -70,15 +70,15 @@ func (s *Wecom) Name() string {
 	return "WeCom"
 }
 
-// SendIncident sends the incident narrative as markdown, with the
+// SendIncident sends the incident narrative as markdown, escaped so pod
+// and log text cannot render as formatting or a link, with the
 // application output in a code block, within WeCom's content limit.
 func (s *Wecom) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
-	return s.SendMessage(ctx, safetext.NoteWithOutput(
-		safetext.WeCom(m.NoteText()),
-		safetext.Lines(m.Output, safetext.WeCom),
-		"\n\n", wecomTextLimit))
+	return s.SendMessage(ctx, safetext.RichWithOutput(m,
+		notification.MarkdownDialect(safetext.WeCom, "\n\n"), "\n\n",
+		wecomTextLimit))
 }
 
 // SendMessage sends text message to the provider

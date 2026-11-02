@@ -25,6 +25,13 @@ type SendAttempt struct {
 	Carrier  string `json:"carrier,omitempty"`
 	Fallback string `json:"fallback,omitempty"`
 	Error    string `json:"error,omitempty"`
+	// Reason is a short plain-language reason a send failed, such as
+	// "token refused (401)" (see failureReason); empty when it worked.
+	Reason string `json:"reason,omitempty"`
+	// Pager marks a send to a provider that holds alerts by key (a
+	// pager), so the dashboard can tell whether the alert is open there
+	// (see PagerStates).
+	Pager bool `json:"pager,omitempty"`
 }
 
 // Send trail bounds: the incidents remembered, the least recently told
@@ -40,8 +47,11 @@ const (
 // keys changed (true) or forgotten (false) since the last write, and
 // changed wakes the writer. The zero value is ready to use.
 type sendTrail struct {
-	mu      sync.Mutex
-	byKey   map[string][]SendAttempt
+	mu    sync.Mutex
+	byKey map[string][]SendAttempt
+	// sent is the text of the latest message each provider accepted,
+	// per incident (see send_trail_text.go).
+	sent    map[string]map[string]SentText
 	order   []string
 	dirty   map[string]bool
 	changed func()
@@ -95,6 +105,7 @@ func keepNewest(list []SendAttempt) []SendAttempt {
 func (t *sendTrail) boundLocked() {
 	for len(t.order) > maxTrailKeys {
 		delete(t.byKey, t.order[0])
+		delete(t.sent, t.order[0])
 		t.markLocked(t.order[0], false)
 		t.order = t.order[1:]
 	}
@@ -128,9 +139,13 @@ func (m *Manager) noteSent(r sendRecord, job deliverJob) {
 	}
 	a := SendAttempt{At: m.nowTime(), Provider: r.provider,
 		Kind: r.kind, Placement: r.placement, Result: sendResult(r.err),
-		Retries: r.retries, Fallback: r.fallback}
+		Retries: r.retries, Fallback: r.fallback, Pager: r.pager}
 	if r.err != nil {
 		a.Error = loggedError(r.err)
+		a.Reason = failureReason(r.err)
+	} else if r.text != "" {
+		m.trail.noteText(job.key(), r.provider,
+			newSentText(a.At, r.kind, r.text))
 	}
 	m.trail.add(job.key(), a)
 }

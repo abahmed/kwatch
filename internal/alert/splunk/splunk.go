@@ -101,21 +101,44 @@ func (s *Splunk) SendIncident(
 		"status":      m.Status.String(),
 		"severity":    m.Route.Severity,
 		"title":       m.ShortText(),
-		"message":     m.NoteText(),
+		"message":     notification.Truncate(m.NoteText(), splunkFieldLimit),
 		"namespaces":  m.Route.Namespaces,
 		"reasons":     m.Route.Reasons,
 	}
 	if len(m.Output) > 0 {
-		event["output"] = m.Output
+		event["output"] = boundLines(m.Output, splunkFieldLimit)
 	}
 	addFlags(event, structured.FlagsOf(m))
 	return s.send(ctx, event)
 }
 
+// splunkFieldLimit bounds the message and the output of an event. The
+// HTTP Event Collector rejects a request over max_content_length (1 MB
+// by default in older Splunk releases), so the two stay far below it.
+const splunkFieldLimit = 100000
+
+// boundLines keeps the leading lines that fit in limit bytes, cutting
+// the last one that does not fit.
+func boundLines(lines []string, limit int) []string {
+	out := make([]string, 0, len(lines))
+	room := limit
+	for _, line := range lines {
+		if len(line) > room {
+			if cut := notification.Truncate(line, room); cut != "" {
+				out = append(out, cut)
+			}
+			break
+		}
+		out = append(out, line)
+		room -= len(line)
+	}
+	return out
+}
+
 // SendMessage sends text message to the provider
 func (s *Splunk) SendMessage(ctx context.Context, msg string) error {
 	return s.send(ctx, map[string]interface{}{
-		"message": msg,
+		"message": notification.Truncate(msg, splunkFieldLimit),
 		"source":  "kwatch",
 	})
 }

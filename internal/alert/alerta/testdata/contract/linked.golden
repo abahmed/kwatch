@@ -1,0 +1,19 @@
+POST /api/alert
+Content-Type: application/json
+Authorization: Key <redacted>
+
+{
+  "attributes": {
+    "reason": "OOMKilled",
+    "summary": "🔴 payments in shop is crash-looping."
+  },
+  "environment": "Staging",
+  "event": "incident",
+  "resource": "dev/kwatch-p-link",
+  "service": [
+    "kwatch"
+  ],
+  "severity": "critical",
+  "text": "🔴 payments in shop is crash-looping.\nCaused by: Node n1 is not ready.\nCause in dashboard: https://kwatch.example/issues/p-cause\nEarlier times: https://kwatch.example/issues?status=all&like=p-link\nOpen in dashboard: https://kwatch.example/issues/p-link\n\nLast output:\npanic: out of memory",
+  "value": "🔴 payments in shop is crash-looping."
+}

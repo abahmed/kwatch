@@ -74,19 +74,27 @@ func trimOccurrences(
 }
 
 // shortenContext cuts the long texts of the context parts with short.
-func shortenContext(d *IncidentDetail, short func(*string)) {
+func shortenContext(d *IncidentDetail, short func(*string) bool) {
 	for i := range d.Changes {
-		short(&d.Changes[i].Summary)
-		short(&d.Changes[i].Note)
+		shortenChange(&d.Changes[i], short)
 	}
 	if d.FixedBy != nil {
-		short(&d.FixedBy.Summary)
-		short(&d.FixedBy.Note)
+		shortenChange(d.FixedBy, short)
 	}
 	for i := range d.Deliveries {
 		short(&d.Deliveries[i].Error)
 	}
 	for i := range d.Containers {
 		short(&d.Containers[i].Image)
+	}
+}
+
+// shortenChange cuts a change's texts and field values with short.
+func shortenChange(c *ChangeItem, short func(*string) bool) {
+	short(&c.Summary)
+	short(&c.Note)
+	for j := range c.Fields {
+		short(&c.Fields[j].Before)
+		short(&c.Fields[j].After)
 	}
 }

@@ -96,7 +96,7 @@ func trimSameTime(d *IncidentDetail, t *DetailTruncation, floor int) bool {
 }
 
 // shortenInsight cuts the long texts of the insight parts with short.
-func shortenInsight(d *IncidentDetail, short func(*string)) {
+func shortenInsight(d *IncidentDetail, short func(*string) bool) {
 	for i := range d.Warnings {
 		short(&d.Warnings[i].Message)
 	}

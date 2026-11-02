@@ -1,0 +1,30 @@
+POST /
+Content-Type: application/json
+
+{
+  "attachments": [
+    {
+      "content": {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "body": [
+          {
+            "text": "payments crashed in shop",
+            "type": "TextBlock",
+            "weight": "Bolder",
+            "wrap": true
+          },
+          {
+            "text": "🔴 payments in shop is crash-looping.\n\nCaused by: Node n1 is not ready.\n\nCause in dashboard: https://kwatch.example/issues/p-cause\n\nEarlier times: https://kwatch.example/issues?status=all&like=p-link\n\nOpen in dashboard: https://kwatch.example/issues/p-link\n\n```\npanic: out of memory\n```",
+            "type": "TextBlock",
+            "wrap": true
+          }
+        ],
+        "type": "AdaptiveCard",
+        "version": "1.2"
+      },
+      "contentType": "application/vnd.microsoft.card.adaptive"
+    }
+  ],
+  "text": "🔴 payments in shop is crash-looping.\n\nCaused by: Node n1 is not ready.\n\nCause in dashboard: https://kwatch.example/issues/p-cause\n\nEarlier times: https://kwatch.example/issues?status=all&like=p-link\n\nOpen in dashboard: https://kwatch.example/issues/p-link\n\n```\npanic: out of memory\n```",
+  "title": "payments crashed in shop"
+}

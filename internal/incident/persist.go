@@ -164,6 +164,10 @@ type Record struct {
 	Level         string             `json:",omitempty"`
 	// Widest is the journal's widest radius (radius.go).
 	Widest Radius `json:",omitzero"`
+	// MovedInto and MovedFrom are Incident.Moved; older records restore
+	// without links.
+	MovedInto string   `json:",omitempty"`
+	MovedFrom []string `json:",omitempty"`
 }
 
 // Export returns every incident as a record, for persistence.
@@ -206,7 +210,8 @@ func (m *Manager) Export() []Record {
 			LinkedChanges: p.Journal.Changes,
 			Transitions:   p.Journal.Transitions,
 			ErrorKey:      p.Journal.ErrorKey, Level: p.Journal.Level,
-			Widest: p.Journal.Widest,
+			Widest:    p.Journal.Widest,
+			MovedInto: p.Moved.Into, MovedFrom: p.Moved.From,
 		})
 	}
 	return out
@@ -248,8 +253,10 @@ func (m *Manager) Restore(records []Record, graceUntil time.Time) {
 	m.indexResolvedRestored()
 }
 
-// restoreSets rebuilds the failure modes and the root's own reasons.
+// restoreSets rebuilds the failure modes, the root's own reasons and
+// the moved links.
 func restoreSets(p *Incident, r Record) {
+	p.Moved = Moved{Into: r.MovedInto, From: r.MovedFrom}
 	for _, mode := range r.Modes {
 		if p.modes == nil {
 			p.modes = map[detection.Mode]struct{}{}
@@ -320,7 +327,6 @@ func restored(r Record) *Incident {
 		},
 	}
 	restoreSets(p, r)
-	p.restoredTier = r.Tier
 	p.awaited = awaitedReasons(r)
 	p.formerMembers = r.Members
 	if !r.PagedKnown && wasAnnounced(p) {
@@ -336,6 +342,17 @@ func restored(r Record) *Incident {
 	if p.Scope == ScopeUnknown && wasAnnounced(p) {
 		p.Scope = ScopeIn
 	}
+	restoreTiers(p, r)
 	restoreJournal(p, r)
 	return p
+}
+
+// restoreTiers keeps the saved tier as the one of the record and, for an
+// announced incident, as the one people last heard, so a rise after the
+// restart is still told as one (TierRaised).
+func restoreTiers(p *Incident, r Record) {
+	p.restoredTier = r.Tier
+	if r.heard() && wasAnnounced(p) {
+		p.Delivery.sentTier, p.Delivery.sentKnown = r.Tier, true
+	}
 }

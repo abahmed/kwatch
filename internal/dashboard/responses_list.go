@@ -6,9 +6,10 @@ package dashboard
 // Total is how many incidents match every filter and TotalPages how
 // many pages of PageSize they fill; Page and PageSize echo the page
 // asked for. A page past the last is empty. Facets count the filtered
-// set by severity, state, namespace, kind and acknowledgement, each
-// ignoring its own filter, so a choice shows what picking it would
-// show.
+// set by severity, state, namespace, kind, acknowledgement and
+// stopped tracking, each ignoring its own filter, so a choice shows
+// what picking it would show. ModeLabels name each failure type of the
+// request's ?mode= in plain words, as the Overview's causes card does.
 type ListResponse struct {
 	Incidents  []IncidentListItem `json:"incidents"`
 	Total      int                `json:"total"`
@@ -16,17 +17,21 @@ type ListResponse struct {
 	PageSize   int                `json:"pageSize"`
 	TotalPages int                `json:"totalPages"`
 	Facets     ListFacets         `json:"facets"`
+	ModeLabels map[string]string  `json:"modeLabels,omitempty"`
 }
 
 // ListFacets are the counts behind the filter chips and pickers, each
 // a value and how many issues have it. State ignores status as well,
 // so it counts the active and the resolved issues. Namespace and Kind
 // hold the 50 and 20 with the most issues; Acked counts acknowledged
-// ("true") and not acknowledged ("false") issues.
+// ("true") and not acknowledged ("false") issues, and Stopped the
+// resolved issues kwatch stopped tracking at their still-broken cap
+// ("true") and the others ("false").
 type ListFacets struct {
 	Severity  map[string]int `json:"severity"`
 	State     map[string]int `json:"state"`
 	Namespace map[string]int `json:"namespace"`
 	Kind      map[string]int `json:"kind"`
 	Acked     map[string]int `json:"acked"`
+	Stopped   map[string]int `json:"stopped"`
 }

@@ -121,6 +121,9 @@
     var list = views(inc);
     box.textContent = "";
     if (list.length) table(box, list, inc, function () { containers(root, inc); });
+    var snap = KW.cutCount(inc, "snapshots"), rows = KW.cutCount(inc, "snapshotRows");
+    if (snap) box.appendChild(KW.el("p", "ev-cap", KW.plural(snap, "more snapshot", "more snapshots") + " not shown."));
+    if (rows) box.appendChild(KW.el("p", "ev-cap", KW.plural(rows, "more container row", "more container rows") + " not shown."));
     KW.containersFold(root);
   }
 

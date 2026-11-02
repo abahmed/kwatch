@@ -40,12 +40,13 @@
      are lists: values of one are OR-ed, filters are AND-ed. */
   function blank() {
     return { q: "", severity: [], namespace: [], kind: [], state: [],
-      acked: [], node: [], mode: [], status: "active", since: "", age: "", sort: "", dir: "",
+      acked: [], stopped: [], node: [], mode: [], status: "active", since: "", age: "", sort: "", dir: "",
       page: 1, pageSize: 50, like: "" };
   }
 
   /* MULTI: the list filters, as they are named in the address. */
-  var MULTI = ["severity", "namespace", "kind", "state", "acked", "node", "mode"];
+  var MULTI = ["severity", "namespace", "kind", "state", "acked", "stopped", "node",
+    "mode"];
 
   /* values reads a repeatable key (namespace=a&namespace=b, or an old
      link's namespace=a,b): the values ok accepts, each once. */
@@ -87,6 +88,7 @@
     f.status = pick(p.get("status"), STATUSES) || "active";
     f.state = f.status === "resolved" ? [] : values(p, "state", stateOK(f.status));
     f.acked = values(p, "acked", function (v) { return ACKED.indexOf(v) >= 0; });
+    f.stopped = values(p, "stopped", function (v) { return ACKED.indexOf(v) >= 0; });
     f.node = values(p, "node", function (v) { return NODE.test(v); });
     f.mode = values(p, "mode", function (v) { return MODE.test(v); });
     f.age = pick(p.get("age"), AGES);
@@ -167,12 +169,15 @@
   var PRESETS = [
     { id: "today", label: "New today",
       title: "Active issues that started today.", set: { age: "today" } },
-    { id: "long", label: "Ongoing over 1 day",
+    { id: "long", label: "Going on over a day",
       title: "Active issues that started more than a day ago.",
       set: { age: "day" } },
     { id: "resolved", label: "Recently resolved",
       title: "Issues resolved in the last 24 hours.",
-      set: { status: "resolved", since: "24h" } }
+      set: { status: "resolved", since: "24h" } },
+    { id: "stopped", label: "Stopped tracking",
+      title: "Resolved issues kwatch stopped tracking while they were still failing.",
+      set: { status: "resolved", stopped: ["true"] } }
   ];
 
   /* presetState: the preset's filters, keeping the order and page size
@@ -212,17 +217,9 @@
     return "";
   }
 
-  /* modeLabel: a failure family in words ("ImagePull" is "Image
-     pull"); the Overview's cards carry the server's own label. */
-  KW.modeLabel = function (mode) {
-    if (mode === "OOMKilled") return "Out of memory";
-    var words = mode.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
-    return words.charAt(0) + words.slice(1).toLowerCase();
-  };
-
   KW.listQuery = { blank: blank, parse: parse, search: search, used: used, ID: ID,
     api: api, PRESETS: PRESETS,
     presetState: presetState, matchPreset: matchPreset,
     sameFilters: sameFilters, copy: copy, MULTI: MULTI,
-    SIZES: SIZES, STATUSES: STATUSES };
+    SIZES: SIZES, STATUSES: STATUSES, SORTS: SORTS };
 })();

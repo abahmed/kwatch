@@ -26,6 +26,13 @@ interactive installer stores the files in a Kubernetes Secret.
 > "webhook"?`). `kwatch lint` also warns, without failing, when no alert
 > provider is configured.
 >
+> Alert reasons that nothing raises any more (`ContainerCannotRun`, `Killed`,
+> `DeploymentProgressingFalse`, `DeploymentAvailableFalse`,
+> `StatefulSetConditionFailure`, `DaemonSetConditionFailure`, `ResourceHigh`
+> and `ResourceCritical`) still load, but a rule that names one matches
+> nothing. kwatch warns about each at startup and in `kwatch lint`, and
+> `kwatch lint --strict` fails.
+>
 > LINE Notify was removed: LINE shut the service down on 2025-03-31. An
 > `alert.line` section is ignored, and kwatch logs a warning at startup.
 
@@ -414,11 +421,13 @@ reported as `component_failed`.
 | `cache_sync_pending`, `cache_sync_timeout`, `cache_sync_failed` | An informer cache is still syncing, did not sync in time, or failed to sync |
 | `source_not_configured` | A source was not configured before it was needed |
 | `permission_denied` | A required permission is missing |
-| `optional_permission_denied` | An optional permission is missing; readiness is not affected |
+| `optional_permission_denied` | An optional permission is missing; readiness is not affected. The `pod-logs` component reports it while the API refuses `pods/log`, so crash output is not shown |
 | `api_unavailable` | A required API is not available |
 | `optional_api_unavailable` | An optional API (for example Gateway API or the `KwatchConfig` CRD) is not installed |
 | `watcher_failed` | A dynamic watcher failed |
 | `persistence_restore_failed` | Saved state could not be read back, for example the delivery outbox |
+| `persistence_write_failed` | Saved state could not be written; reported by the `usage-history` component (the container usage history) and the delivery outbox |
+| `trail_restore_failed` | The saved send trail ("Who was told") could not be read back; reported by the `delivery-outbox` component |
 | `storage_reset` | The state file had another schema version or was unreadable and was set aside as `state.db.corrupt` and recreated |
 | `storage_over_cap` | Data that is never evicted keeps the state store over its size cap |
 | `provider_unavailable` | The `provider-<name>` component could not reach its provider (transient failures; the job stays queued) |
@@ -430,14 +439,17 @@ reported as `component_failed`.
 | `leadership_lost`, `shutdown` | Why the state lock was lost or the process ended |
 
 The vocabulary also allows `source_configuration_failed`, `discovery_failed`,
-`persistence_write_failed`, `provider_shutdown_timeout` and `rate_limited`.
+`provider_shutdown_timeout` and `rate_limited`.
 
 The `coverage` object in `/health` lists resource kinds that are not watched,
-each with one of `permission_denied`, `api_unavailable`, `sync_timeout`,
-`budget_exceeded`, `object_cap_reached` or `disabled_by_config` (for
-example Secrets with `watch.secrets: false`). Its `reasons` field counts
-kinds per reason, so the counts stay complete when the kind list is cut at
-50.
+each with one of `permission_denied`, `api_unavailable`, `cache_sync_failed`,
+`cache_sync_timeout`, `cache_sync_pending`, `handler_panics`,
+`disabled_by_config` (for example Secrets with `watch.secrets: false`),
+`watch_budget_exceeded`, `object_cap_reached` or `unknown`. The names
+`sync_timeout` and `budget_exceeded` of earlier versions are still accepted
+on input and shown as `cache_sync_timeout` and `watch_budget_exceeded`. Its
+`reasons` field counts kinds per reason, so the counts stay complete when the
+kind list is cut at 50.
 
 ## 🔐 Kubernetes permissions and graceful degradation
 
@@ -535,6 +547,27 @@ Missing optional endpoints and permissions are visible on `/health` as
 degraded components or in its `coverage` object, without becoming fabricated
 incidents.
 
+## 🖥️ Dashboard and investigation
+
+The read-only dashboard is Pro only and off by default. It runs on its own
+listener, never on the health port. Everything about reaching it from outside
+(Ingress, sign-in, links in alerts) is in [providers](./providers.md) and
+[production operations](./production-operations.md).
+
+| Option | Default | What it does |
+|:---|:---|:---|
+| `dashboard.enabled` | `false` | Serves the dashboard |
+| `dashboard.port` | `8061` | The dashboard port |
+| `dashboard.mode` | `local` | `local` for a port-forward, `shared` for an Ingress with TLS. Shared mode marks the session cookie Secure and refuses sign-in over plain HTTP |
+| `dashboard.trustProxy` | `false` | Believes `X-Forwarded-Proto` and `X-Forwarded-For` from the proxy that ends TLS in front of kwatch |
+| `dashboard.tlsCertFile`, `dashboard.tlsKeyFile` | empty | Make kwatch serve TLS on the dashboard port itself. Set both or neither |
+| `investigation.logs` | `true` | Reads container logs as evidence (redacted, bounded). `false` reads no log at all, and the dashboard shows the log section as turned off |
+
+The bearer token and the sign-in password are not in the file: they come
+from `KWATCH_DASHBOARD_TOKEN` and `KWATCH_DASHBOARD_PASSWORD`. With both
+empty and the dashboard enabled, kwatch logs a warning and refuses every
+dashboard request with 401.
+
 ## 🌱 Environment variables
 
 kwatch reads these variables. The chart and `deploy/deploy.yaml` set the ones
@@ -550,6 +583,14 @@ letter case; an empty value counts as unset, and any other text fails startup
 | `KWATCH_CRD_ENABLED` | Overrides `crd.enabled` in both directions; the chart sets it from `config.crd.enabled` |
 | `KWATCH_TELEMETRY` | `false` turns adoption telemetry off |
 | `KWATCH_CLUSTER_CHECKINS` | Deprecated and ignored (cluster check-ins were removed); logs a notice when set |
+| `KWATCH_DASHBOARD_ENABLED` | Overrides `dashboard.enabled` in both directions; the chart always sets it |
+| `KWATCH_DASHBOARD_TRUST_PROXY` | Overrides `dashboard.trustProxy` in both directions; the chart always sets it |
+| `KWATCH_DASHBOARD_PORT` | Overrides `dashboard.port`; a value that is not a port is warned about and the file's setting stays |
+| `KWATCH_DASHBOARD_MODE` | `local` or `shared`; overrides `dashboard.mode`. Any other value is warned about and the file's setting stays |
+| `KWATCH_DASHBOARD_TLS_CERT`, `KWATCH_DASHBOARD_TLS_KEY` | Override `dashboard.tlsCertFile` and `dashboard.tlsKeyFile` |
+| `KWATCH_DASHBOARD_TOKEN` | The dashboard bearer token (API requests); the chart fills it from a Secret |
+| `KWATCH_DASHBOARD_PASSWORD` | The dashboard sign-in password; the chart fills it from a Secret |
+| `KWATCH_DEPLOYMENT_NAME` | The name of kwatch's own Deployment (default `kwatch`); the dashboard Service is `<name>-dashboard`, which is how kwatch finds the Ingress or HTTPRoute that exposes it. The chart sets it |
 | `KWATCH_LICENSE_KEY` | The kwatch Pro license key. Wins over `license.key`; the chart fills it from a Secret |
 | `SKIP_UPGRADE_CHECK` | A true value turns the update check off, like `upgrader.disableUpdateCheck` |
 | `CI` | Any value except empty, `false`, `0`, `no` or `off` marks a CI environment: telemetry is never sent |

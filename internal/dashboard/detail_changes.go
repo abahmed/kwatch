@@ -111,7 +111,6 @@ func toChangeItem(change inventory.Change, onset time.Time) ChangeItem {
 		Kind:      string(change.Entity.Kind),
 		Namespace: change.Entity.Namespace,
 		Name:      change.Entity.Name,
-		Class:     string(change.Classify()),
 		Summary:   redact.Evidence(changeSummary(change)),
 		Actor:     redact.Evidence(change.Actor),
 		App:       redact.Evidence(change.App),

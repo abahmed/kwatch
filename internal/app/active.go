@@ -231,16 +231,28 @@ func finishActiveSession(parent context.Context, s activeShutdown) {
 	}
 	flushed := s.threads.Flush(parent)
 	s.threads.Close()
-	reason := "graceful_shutdown"
-	if s.failed {
-		reason = "internal_failure"
-	}
-	ended := endSession(parent, s.session, reason, sessionEndTimeout)
+	ended := endSession(parent, s.session, s.endReason(),
+		sessionEndTimeout)
 	if !stopped || !flushed || !ended || s.guard.busy() {
 		recordShutdownTimeout("state-store")
 		return
 	}
 	closeStore(s.state)
+}
+
+// endReason is the stop record of the session: internal_failure when a
+// required component failed, leader_handoff when the Lease was lost,
+// else graceful_shutdown (a signal, as in a rollout). A crash writes
+// none, which the next start reads as an unclean stop.
+func (s activeShutdown) endReason() string {
+	switch {
+	case s.failed:
+		return "internal_failure"
+	case s.leadershipLost:
+		return "leader_handoff"
+	default:
+		return "graceful_shutdown"
+	}
 }
 
 // endSession writes the session end marker within timeout and reports

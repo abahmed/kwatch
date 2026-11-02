@@ -35,3 +35,4 @@
 }
 .vo-grid .vo-check { display: flex; align-items: center; gap: 8px; align-self: end; min-height: 36px; color: var(--text); }
 .vo-check input { width: 16px; height: 16px; margin: 0; min-height: 0; flex: none; }
+.vo-err { margin-top: 6px; font-size: 0.8125rem; font-weight: 600; color: var(--failing); }

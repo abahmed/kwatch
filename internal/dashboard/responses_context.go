@@ -5,8 +5,7 @@ import "time"
 // ChangeItem is one change people made to the incident's root or an
 // object near it (what it uses, routes to it, its node). When is
 // "before" for a change made before the failure began and "during"
-// after; Class is the change class (image, config, scale, rollout,
-// created, deleted …). Actor is the tool that wrote it (a field
+// after. Actor is the tool that wrote it (a field
 // manager), App the GitOps app that owns it, Note the change-cause it
 // was recorded with; each is empty when unknown.
 type ChangeItem struct {
@@ -15,7 +14,6 @@ type ChangeItem struct {
 	Kind      string    `json:"kind"`
 	Namespace string    `json:"namespace,omitempty"`
 	Name      string    `json:"name"`
-	Class     string    `json:"class"`
 	Summary   string    `json:"summary"`
 	Actor     string    `json:"actor,omitempty"`
 	App       string    `json:"app,omitempty"`
@@ -79,7 +77,9 @@ type ContainerRow struct {
 
 // DeliveryAttempt is what became of one message about the incident at
 // one alert channel. Channel is empty when no channel received it;
-// Result is ok, failed, retrying, carried, not routed or paging only.
+// Result is ok, failed, retrying, carried, not routed or paging only;
+// Reason says in a few plain words why a send failed ("token refused
+// (401)"), absent when it worked.
 type DeliveryAttempt struct {
 	At        time.Time `json:"at"`
 	Channel   string    `json:"channel,omitempty"`
@@ -91,6 +91,7 @@ type DeliveryAttempt struct {
 	Carrier   string    `json:"carrier,omitempty"`
 	Fallback  string    `json:"fallbackFor,omitempty"`
 	Error     string    `json:"error,omitempty"`
+	Reason    string    `json:"reason,omitempty"`
 }
 
 // AffectedObject is one object the incident is about. Status is

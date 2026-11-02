@@ -46,12 +46,18 @@ type pipelineBuild struct {
 	// flight records the observations the sources submit (flight.go).
 	flight *flight.Recorder
 	// gap is the unmonitored time before this start, for the gap report.
-	gap gapNotice
+	gap startNotice
 	// withheld counts the Pro findings Community does not show.
 	withheld *feature.Withheld
 	// stats is the kubelet stats poller once it runs (Pro); the
 	// dashboard reads its usage history.
 	stats *kube.StatsPoller
+	// crashLogs reads crashed containers' previous logs; nil when
+	// investigation or its log reads are off (crashLogsEnabled).
+	crashLogs *kube.CrashLogRound
+	// links is the state of the dashboard links in messages; nil
+	// without the dashboard.
+	links *dashboardLinks
 }
 
 // newPipelineBuild builds the model, scope, audit log, incident manager
@@ -126,6 +132,13 @@ func (p *pipelineBuild) synced(kind inventory.Kind) bool {
 	return p.source != nil && p.source.Synced(kind)
 }
 
+// fresh is whether kind's watch still gets through, for the detectors
+// that raise from the passage of time alone (Registry.SetFresh). Before
+// the source exists nothing is synced, so nothing is evaluated.
+func (p *pipelineBuild) fresh(kind inventory.Kind) bool {
+	return p.source == nil || p.source.Fresh(kind)
+}
+
 // newEngine builds the decision engine. Its sink runs on the decision
 // loop, so every step hands off without waiting: delivery queues the
 // message and the audit entry goes to the decision log's worker.
@@ -137,8 +150,8 @@ func (p *pipelineBuild) newEngine() (*pipeline.Engine, error) {
 	gate := pipeline.NewSyncGate(p.synced)
 	return pipeline.NewEngine(pipeline.Dependencies{
 		Model: p.model,
-		Detectors: newDetectorRegistry(gate.Synced, deps.entitlements,
-			p.withheld),
+		Detectors: newDetectorRegistry(gate.Synced, p.fresh,
+			deps.entitlements, p.withheld),
 		Withheld:     p.withheld,
 		Incidents:    p.incidents,
 		Synced:       gate.Synced,
@@ -162,6 +175,7 @@ func (p *pipelineBuild) newEngine() (*pipeline.Engine, error) {
 		CommunitySends:  deps.notice.sends,
 		Gap:             p.gap.gap,
 		Notify:          p.notify,
+		Restart:         p.gap.restart,
 	})
 }
 
@@ -189,12 +203,13 @@ func (p *pipelineBuild) newWriter() compose.Writer {
 	w := compose.NewWriter(app.ClusterName, runbooks).
 		ForEdition(p.deps.entitlements, app.HideProHints)
 	if p.deps.dashboardServer != nil {
-		target := newDashboardTarget(
-			p.deps.runtime.Lifecycle().Dashboard().Port)
-		model, seen := p.model, p.deps.dashboardServer
-		w.Dashboard = func() string {
-			return target.address(model, seen)
+		p.links = &dashboardLinks{
+			target: newDashboardTarget(
+				p.deps.runtime.Lifecycle().Dashboard().Port),
+			model: p.model, seen: p.deps.dashboardServer,
+			forbidden: p.routesForbidden, sink: linkSinkOf(p.deps),
 		}
+		w.Dashboard = p.links.address
 	}
 	return w
 }
@@ -260,7 +275,7 @@ func (p *pipelineBuild) newStatsPoller(submit kube.Submit) *kube.StatsPoller {
 		Containers: entitiesOf(p.model, kube.KindContainer),
 		// The source exists before the poller (see newRunners).
 		Synced:  func() bool { return p.source.Synced(kube.KindContainer) },
-		History: newUsageStore(p.state),
+		History: reportUsage(newUsageStore(p.state), healthSink(deps)),
 		Settling: func(node inventory.EntityID, now time.Time) bool {
 			return kube.NodeSettling(p.model, node, now)
 		},
@@ -287,19 +302,22 @@ func (p *pipelineBuild) newRunners(
 	}
 	p.source, p.dynamic = source, dynamicSource
 	stats := p.newStatsPoller(submit)
-	crashLogs := kube.NewCrashLogRound(kube.CrashLogConfig{
-		Logs:   kube.LogReader{Client: deps.clients.Kubernetes},
-		Model:  p.model,
-		Now:    p.clock.Now,
-		Submit: submit,
-	})
 	runners := []func(context.Context){
-		source.Run, dynamicSource.Run, crashLogs.Run,
+		source.Run, dynamicSource.Run,
 		func(ctx context.Context) {
 			pruneModel(ctx, p.model, p.clock.Now)
 		},
-		p.syncReporter(engine, newPipelineSourceHealth(
-			deps, source, dynamicSource)),
+		p.syncReporter(engine, p.withSelfChecks(newPipelineSourceHealth(
+			deps, source, dynamicSource))),
+	}
+	if crashLogsEnabled(deps) {
+		p.crashLogs = kube.NewCrashLogRound(kube.CrashLogConfig{
+			Logs:   kube.LogReader{Client: deps.clients.Kubernetes},
+			Model:  p.model,
+			Now:    p.clock.Now,
+			Submit: submit,
+		})
+		runners = append(runners, p.crashLogs.Run)
 	}
 	// The kubelet stats and the control plane probes feed detectors
 	// that only Pro runs; Community does not read them.

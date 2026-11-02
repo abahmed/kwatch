@@ -62,14 +62,13 @@ func TestDetailServesTheJournal(t *testing.T) {
 	assert.Equal(t, 60, d.Why.HoldElapsed)
 	assert.Equal(t, "Looks better; closes after 3m healthy, 1m so far",
 		d.Why.StillOpenReason)
-	assert.True(t, d.Why.NextCheckAt.Equal(testEpoch.Add(2*time.Minute)))
+	assert.False(t, d.Why.CannotSee)
 
 	require.NotNil(t, d.Ack)
 	assert.Equal(t, AckDetail{Note: "on it",
 		Since: testEpoch.Add(-3 * time.Minute), By: "kubectl-annotate",
 		On: "Deployment/shop/app-j"}, *d.Ack)
 	assert.True(t, d.Acked)
-	assert.True(t, d.AckedSince.Equal(testEpoch.Add(-3*time.Minute)))
 }
 
 func TestDetailOfAnOlderIncidentHasNoJournal(t *testing.T) {

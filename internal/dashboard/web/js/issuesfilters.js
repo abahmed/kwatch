@@ -1,6 +1,6 @@
 /* kwatch dashboard: the filter bar of the Issues table. The status
    switch (Active, Resolved, All), the search box, the multi-select
-   pickers (namespace, kind, state, acknowledged: dropdown.js), the
+   pickers (namespace, kind, state, acknowledged, stopped tracking: dropdown.js), the
    start time and "resolved within" pickers and the severity chips with
    their counts. It puts a view (listquery.js)
    into the controls, reads it back, and paints the counts the API
@@ -24,6 +24,8 @@
     kind: { name: "Kind", all: "All kinds", noun: "kind of object" },
     state: { name: "State", all: "Any state" },
     acked: { name: "Acknowledged", all: "Acknowledged or not",
+      noun: "value" },
+    stopped: { name: "Stopped tracking", all: "Stopped tracking or not",
       noun: "value" }
   };
 
@@ -37,11 +39,18 @@
     var statusBtns = KW.$$("[data-status]", box);
     var chips = KW.$$(".fchip", box);
     var f = LQ().blank();
-    var debounce = 0, facets = {};
+    var debounce = 0, facets = {}, modes = {};
     var chipsRow = KW.filterChips($("[data-factive]"), function (next) {
       change(next);
     });
     var page = box.closest(".content"), toggle = $("[data-ftoggle]");
+    // The search tips show three; "More" shows the rest.
+    var moreTips = $("[data-shint-more]"), restTips = $("[data-shint-rest]");
+    moreTips.addEventListener("click", function () {
+      restTips.hidden = !restTips.hidden;
+      moreTips.textContent = restTips.hidden ? "More" : "Fewer";
+      moreTips.setAttribute("aria-expanded", restTips.hidden ? "false" : "true");
+    });
     toggle.addEventListener("click", function () {
       var open = !page.classList.contains("f-open");
       page.classList.toggle("f-open", open);
@@ -105,6 +114,10 @@
       pick.acked.items(["true", "false"].map(function (v) {
         return { value: v, label: ACKED[v], count: ack[v] || 0 };
       }));
+      var stp = facets.stopped || {};
+      pick.stopped.items(["true", "false"].map(function (v) {
+        return { value: v, label: ACKED[v], count: stp[v] || 0 };
+      }));
     }
 
     function lowerKeys(by) {
@@ -133,6 +146,8 @@
       });
       Object.keys(pick).forEach(function (k) { pick[k].set(v[k]); });
       pick.state.el.parentNode.hidden = v.status === "resolved";
+      // Only resolved issues stop being tracked.
+      pick.stopped.el.parentNode.hidden = v.status === "active" && !v.stopped.length;
       since.closest(".f").hidden = v.status === "active";
       items();
       chipsRow.show(v, kindLabels());
@@ -199,10 +214,15 @@
         (byStatus.flapping || 0) + (byStatus.recovering || 0);
       var counts = { active: active, resolved: byStatus.resolved || 0,
         all: active + (byStatus.resolved || 0) };
+      // The counts follow the search and filters, so while any is on they
+      // would read 0 for issues that exist: they are left out then.
+      var narrowed = LQ().used(f);
       statusBtns.forEach(function (b) {
         var k = b.dataset.status;
+        KW.$("[data-n]", b).hidden = narrowed;
         KW.$("[data-n]", b).textContent = n(counts[k]);
-        b.setAttribute("aria-label", STATUS_WORDS[k] + ", " + KW.plural(counts[k], "issue", "issues"));
+        if (narrowed) b.setAttribute("aria-label", STATUS_WORDS[k]);
+        else b.setAttribute("aria-label", STATUS_WORDS[k] + ", " + KW.plural(counts[k], "issue", "issues"));
       });
       chips.forEach(function (b) {
         var c = (facets.severity || {})[b.dataset.sev] || 0;
@@ -214,7 +234,8 @@
       });
       $(".fchips").hidden = chips.every(function (b) { return b.hidden; });
       items();
-      chipsRow.show(f, kindLabels(), data.total);
+      modes = data.modeLabels || {};
+      chipsRow.show(f, kindLabels(), data.total, modes);
     }
 
     return { show: show, paint: paint,

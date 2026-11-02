@@ -50,8 +50,8 @@
     return at > LEAD * 2 ? "…" + title.slice(at - LEAD) : title;
   }
 
-  /* marks: after the title, how often it failed again (× 3) and New
-     or Changed since the last visit; "in the cause" when the search
+  /* marks: after the title, how often it failed again (× 3), New
+     or Changed since the last visit, "Stopped tracking"; "in the cause" when the search
      matched only the likely cause. */
   function marks(td, item, ctx) {
     if (item.repeatCount > 0) {
@@ -60,6 +60,10 @@
     }
     var m = ctx.marks[item.id];
     if (m) td.appendChild(KW.visitChip(m));
+    if (item.stoppedTracking) {
+      var stop = td.appendChild(KW.el("span", "i-stopped", "Stopped tracking"));
+      stop.title = "kwatch stopped tracking this issue while it was still failing.";
+    }
     if (ctx.terms.length && !found(item.title + " " + item.namespace + " " +
         objectText(item), ctx.terms) && found(item.rootCause, ctx.terms)) {
       var why = td.appendChild(KW.el("span", "i-why", "in the cause"));
@@ -104,6 +108,7 @@
         td.dataset.label = "Resolved";
         return;
       }
+      if (!KW.valid(item.firstSeen)) return td.appendChild(dash(td));
       td.textContent = KW.forLong(item.firstSeen);
       td.dataset.since = item.firstSeen;
       td.dataset.tick = "last";
@@ -111,6 +116,7 @@
       td.title = "Started " + KW.full(item.firstSeen);
     },
     dur: function (td, item) {
+      if (!KW.valid(item.firstSeen)) return td.appendChild(dash(td));
       var done = item.state === "resolved" && KW.valid(item.resolvedAt);
       var end = done ? item.resolvedAt : new Date(KW.now()).toISOString();
       if (!done) {
@@ -221,7 +227,7 @@
         var text = key === "last" ? WHEN[f.status] : c.short || c.label;
         if (c.sort) sortButton(th, c.sort, text, f);
         else th.appendChild(KW.el("span", "it-th", text));
-        th.title = text;
+        th.title = c.short ? c.label : text;
         KW.columnHead.head(th, c, table, cols, headHooks);
         tr.appendChild(th);
       });
@@ -233,12 +239,16 @@
        KW.tickTimes only knows <time> elements, so they tick here; the
        timer ends once the table has left the page. */
     var ticker = window.setInterval(function () {
-      if (!table.isConnected) return window.clearInterval(ticker);
+      if (!table.isConnected) return stop();
       KW.$$("td[data-tick]", body).forEach(function (td) {
         td.textContent = td.dataset.tick === "last" ? KW.forLong(td.dataset.since) :
           KW.lasted(td.dataset.since, new Date(KW.now()).toISOString());
       });
     }, 30000);
+
+    /* stop ends the timer: each visit to the page makes a table, and the
+       timer would keep all of it alive. */
+    function stop() { window.clearInterval(ticker); }
 
     /* draw replaces every row with page (a list response) and returns
        the issue IDs in the order shown. The Resolved list has no
@@ -303,7 +313,7 @@
       window.open(href(tr.dataset.id), "_blank", "noopener");
     });
 
-    return { draw: draw, patch: patch };
+    return { draw: draw, patch: patch, stop: stop };
   };
 
   /* DESCENDS: the direction a column starts in (as the API's). */

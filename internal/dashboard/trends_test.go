@@ -42,7 +42,7 @@ func TestTrendsBucketsDaysInUTCAndInTheGivenZone(t *testing.T) {
 		opened("b", "shop", incident.Notify, ago(6*24*time.Hour)),
 		opened("c", "web", incident.Digest, ago(7*24*time.Hour)),
 	}
-	utc := buildTrends(items, trendNow, 0, 0)
+	utc := buildTrends(items, trendNow, time.UTC, 0)
 	want := "10-22=1 10-23=0 10-24=0 10-25=0 10-26=0 10-27=1 10-28=0 "
 	if got := dayTotals(utc); got != want {
 		t.Errorf("UTC days = %q, want %q", got, want)
@@ -50,21 +50,21 @@ func TestTrendsBucketsDaysInUTCAndInTheGivenZone(t *testing.T) {
 	if utc.Opened != 2 || utc.Days[5].Page != 1 || utc.Days[0].Notify != 1 {
 		t.Errorf("UTC = %+v", utc)
 	}
-	plus := buildTrends(items, trendNow, 60, 0)
+	plus := buildTrends(items, trendNow, offsetZone(60), 0)
 	want = "10-22=1 10-23=0 10-24=0 10-25=0 10-26=0 10-27=0 10-28=1 "
 	if got := dayTotals(plus); got != want {
 		t.Errorf("UTC+1 days = %q, want %q", got, want)
 	}
 	// In UTC-13 it is 27 Oct 23:00: c (21 Oct 12:00 UTC) is
 	// 20 Oct there, before the week of 21 to 27 Oct.
-	minus := buildTrends(items, trendNow, -13*60, 0)
+	minus := buildTrends(items, trendNow, offsetZone(-13*60), 0)
 	if minus.Days[0].Date != "2026-10-21" || minus.Opened != 2 {
 		t.Errorf("UTC-13 = %q, %d opened", dayTotals(minus), minus.Opened)
 	}
 }
 
 func TestTrendsEmptyDataIsSevenZeroDaysAndNotEnough(t *testing.T) {
-	got := buildTrends(nil, trendNow, 0, twoWeeks)
+	got := buildTrends(nil, trendNow, time.UTC, twoWeeks)
 	if len(got.Days) != trendDays || got.Opened != 0 || got.Enough ||
 		got.PreviousWeek != nil || len(got.Namespaces) != 0 ||
 		len(got.Noisiest) != 0 || got.Resolve.Count != 0 {
@@ -84,7 +84,7 @@ func TestTrendsEmptyDataIsSevenZeroDaysAndNotEnough(t *testing.T) {
 func TestTrendsLeavesOutSilentIssues(t *testing.T) {
 	got := buildTrends([]incident.Incident{
 		opened("q", "shop", incident.Silent, ago(time.Hour), ago(0)),
-	}, trendNow, 0, 0)
+	}, trendNow, time.UTC, 0)
 	if got.Opened != 0 || len(got.Noisiest) != 0 {
 		t.Errorf("silent counted: %+v", got)
 	}
@@ -96,17 +96,17 @@ func TestTrendsPreviousWeekOnlyWhenKeptLongEnough(t *testing.T) {
 			ago(time.Hour)),
 		opened("b", "shop", incident.Notify, ago(15*24*time.Hour)),
 	}
-	if got := buildTrends(items, trendNow, 0,
+	if got := buildTrends(items, trendNow, time.UTC,
 		incident.DefaultRemember); got.PreviousWeek != nil {
 		t.Errorf("a week of retention compared with %d",
 			*got.PreviousWeek)
 	}
-	got := buildTrends(items, trendNow, 0, twoWeeks)
+	got := buildTrends(items, trendNow, time.UTC, twoWeeks)
 	if got.PreviousWeek == nil || *got.PreviousWeek != 1 {
 		t.Fatalf("previous week = %v, want 1", got.PreviousWeek)
 	}
 	// Nothing kept from before last week: kwatch may not have run then.
-	got = buildTrends(items[:1], trendNow, 0, twoWeeks)
+	got = buildTrends(items[:1], trendNow, time.UTC, twoWeeks)
 	if got.PreviousWeek != nil {
 		t.Errorf("uncovered week compared with %d", *got.PreviousWeek)
 	}
@@ -124,7 +124,7 @@ func TestTrendsNamespacesAreTopFiveByOpenings(t *testing.T) {
 	done := opened("g", "a", incident.Notify, ago(time.Hour))
 	done.State = incident.Resolved
 	cluster := opened("n", "", incident.Page, ago(time.Hour))
-	got := buildTrends(append(items, done, cluster), trendNow, 0, 0)
+	got := buildTrends(append(items, done, cluster), trendNow, time.UTC, 0)
 	want := "f6/1 e5/1 d4/1 c3/1 a2/1 "
 	s := ""
 	for _, n := range got.Namespaces {
@@ -155,7 +155,7 @@ func TestTrendsNoisiestOrdersRepeatsThenFlappingAndIsBounded(
 			incident.Page, ago(3*time.Hour), ago(2*time.Hour),
 			ago(time.Hour)))
 	}
-	got := buildTrends(items[:5], trendNow, 0, 0)
+	got := buildTrends(items[:5], trendNow, time.UTC, 0)
 	ids := ""
 	for _, n := range got.Noisiest {
 		ids += fmt.Sprintf("%s:%d ", n.ID, n.Opened)
@@ -163,7 +163,7 @@ func TestTrendsNoisiestOrdersRepeatsThenFlappingAndIsBounded(
 	if want := "twice-flap:2 twice:2 flap:1 "; ids != want {
 		t.Errorf("noisiest = %q, want %q", ids, want)
 	}
-	if got = buildTrends(items, trendNow, 0, 0); len(got.Noisiest) !=
+	if got = buildTrends(items, trendNow, time.UTC, 0); len(got.Noisiest) !=
 		trendTop || got.Noisiest[0].ID != "z0" {
 		t.Errorf("bounded noisiest = %+v", got.Noisiest)
 	}
@@ -182,13 +182,13 @@ func TestTrendsTimeToResolveMedianAndLongest(t *testing.T) {
 	q.History = []incident.Occurrence{
 		{Opened: ago(3 * time.Hour), Resolved: ago(150 * time.Minute)},
 	}
-	got := buildTrends([]incident.Incident{p, q}, trendNow, 0, 0)
+	got := buildTrends([]incident.Incident{p, q}, trendNow, time.UTC, 0)
 	want := TrendResolve{Count: 3, MedianSeconds: 3600,
 		LongestSeconds: 36000, LongestID: "a"}
 	if got.Resolve != want {
 		t.Errorf("resolve = %+v, want %+v", got.Resolve, want)
 	}
-	two := buildTrends([]incident.Incident{p}, trendNow, 0, 0)
+	two := buildTrends([]incident.Incident{p}, trendNow, time.UTC, 0)
 	if two.Resolve.MedianSeconds != (3600+36000)/2 {
 		t.Errorf("even median = %d", two.Resolve.MedianSeconds)
 	}

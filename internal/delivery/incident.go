@@ -53,6 +53,9 @@ func (m *Manager) dispatchIncident(
 	}
 	msg := m.makeUpForLostOpen(entry, *job.incident)
 	msg = prepareIncident(msg, templates, opts.fallbackFrom, entry.maxBytes)
+	if opts.sent != nil {
+		*opts.sent = sentTextOf(msg)
+	}
 	requestCtx := m.requestContext(ctx)
 	return sendWithRetry(ctx, opts.counted(func() error {
 		return p.SendIncident(requestCtx, msg)

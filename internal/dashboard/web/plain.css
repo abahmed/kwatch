@@ -110,14 +110,20 @@
 .c-seen-changed { color: var(--degraded); background: var(--degraded-bg); }
 .also .chip { margin: 0 0 0 6px; font-size: 0.6875rem; padding: 0 6px; }
 .legend-keys { margin-top: 12px; }
+/* A phone has no keyboard: the keys are left out of the help. */
+@media (max-width: 700px), (pointer: coarse) {
+  .legend-h.legend-keys, .legend ul.legend-keys-list { display: none; }
+}
 .legend kbd { display: inline-block; min-width: 22px; padding: 0 6px; margin-right: 4px; border: 1px solid var(--line); border-radius: var(--radius-chip); font-family: var(--font-mono); font-size: 0.75rem; line-height: 1.25rem; text-align: center; color: var(--text); }
 
-/* Can't reach kwatch: a bar at the top of every page (js/refresh.js).
+/* Can't reach kwatch: a bar over the top of every page (js/refresh.js),
+   pinned in a zero-height box so showing it never moves the page.
    What is shown stays, dimmed a little, with a muted freshness line. */
-.offline { position: sticky; top: 0; z-index: 35; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 16px 8px var(--space-6); background: var(--degraded-bg); color: var(--text); border-bottom: 1px solid var(--degraded); font-size: 0.9375rem; font-weight: 500; }
+.offline-pin { position: sticky; top: 0; z-index: 35; height: 0; }
+.offline { position: absolute; top: 0; left: 0; right: 0; box-shadow: 0 4px 14px rgba(0, 0, 0, .15); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 16px 8px var(--space-6); background: var(--degraded-bg); color: var(--text); border-bottom: 1px solid var(--degraded); font-size: 0.9375rem; font-weight: 500; }
 .offline .btn { min-height: 34px; border-color: var(--text); }
 html.kw-stale .updated { opacity: .6; }
-html.kw-stale .live { color: var(--text-muted); }
-html.kw-stale .live::before { background: var(--text-muted); animation: none; }
+html.kw-stale .live, .updated.stale .live { color: var(--text-muted); }
+html.kw-stale .live::before, .updated.stale .live::before { background: var(--text-muted); animation: none; }
 html.kw-stale .ov, html.kw-stale .act, html.kw-stale .itable, html.kw-stale .detail { opacity: .8; }
 @media (max-width: 700px) { .offline { padding-left: var(--space-4); } }

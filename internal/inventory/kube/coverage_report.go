@@ -53,6 +53,10 @@ type KindCoverage struct {
 	// NotWatched lists kinds turned off by configuration, missing from
 	// the API, over the watch budget, or over their object cap.
 	NotWatched []KindGap `json:"notWatched"`
+	// MissingRules is the ClusterRole fix for every kind refused to
+	// kwatch: one rule per API group with get, list and watch on its
+	// refused resources. Nil when nothing is refused.
+	MissingRules []RBACRule `json:"missingRules,omitempty"`
 	// Reasons counts every gap by reason, the ones the lists leave out
 	// included.
 	Reasons   map[string]int `json:"reasons,omitempty"`
@@ -69,12 +73,14 @@ type WatchedKind struct {
 }
 
 // KindGap is one kind kwatch does not fully read, with the reason code
-// and a short explanation.
+// and a short explanation. Rule, set only for a kind refused by RBAC
+// (ReasonPermissionDenied), is the ClusterRole rule that grants it.
 type KindGap struct {
-	Kind     string `json:"kind"`
-	Reason   string `json:"reason"`
-	Detail   string `json:"detail"`
-	Required bool   `json:"required,omitempty"`
+	Kind     string    `json:"kind"`
+	Reason   string    `json:"reason"`
+	Detail   string    `json:"detail"`
+	Required bool      `json:"required,omitempty"`
+	Rule     *RBACRule `json:"rule,omitempty"`
 }
 
 // CoverageInput is what BuildCoverage summarises.
@@ -186,9 +192,11 @@ func kindCoverage(in CoverageInput) KindCoverage {
 		out.ByMode[string(mode)] += n
 	}
 	out.Synced += in.Dynamic.Synced
-	for _, gap := range kindGaps(in) {
+	gaps := kindGaps(in)
+	for _, gap := range gaps {
 		out.add(gap)
 	}
+	out.MissingRules = missingRules(gaps)
 	for _, s := range in.Unavailable {
 		out.Reasons[s.Reason]++
 	}
@@ -234,6 +242,11 @@ func kindGaps(in CoverageInput) []KindGap {
 		gaps = append(gaps, KindGap{
 			Kind: k.Resource, Reason: k.Reason, Detail: gapDetail(k.Reason),
 		})
+	}
+	for i := range gaps {
+		if gaps[i].Reason == ReasonPermissionDenied {
+			gaps[i].Rule = ruleFor(gaps[i].Kind)
+		}
 	}
 	sort.Slice(gaps, func(i, j int) bool {
 		if gaps[i].Kind != gaps[j].Kind {

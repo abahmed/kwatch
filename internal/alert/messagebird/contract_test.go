@@ -19,6 +19,9 @@ func TestContract(t *testing.T) {
 	}, "dev", rec.Dependencies())
 	c.url = rec.URL()
 	providertest.RunContract(t, providertest.Contract{
+		// Push and SMS send only the Short.
+		NoDashboardLink: true,
+
 		Send: c.SendIncident, Rec: rec,
 		Headers:    []string{"Authorization"},
 		Secrets:    []string{"tok-secret"},

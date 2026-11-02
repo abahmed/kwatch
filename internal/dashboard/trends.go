@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"net/http"
 	"slices"
-	"strconv"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/incident"
@@ -79,15 +78,16 @@ type TrendResolve struct {
 	LongestID      string `json:"longestId,omitempty"`
 }
 
-// trendsHandler serves GET /api/trends?tz=, tz being the minutes east
-// of UTC that days are counted in (default 0, UTC).
+// trendsHandler serves GET /api/trends?tzName=&tz=: days are counted in
+// the IANA zone tzName, else tz minutes east of UTC (default UTC); see
+// parseZone.
 func (s *Server) trendsHandler(w http.ResponseWriter, r *http.Request) {
 	if !onlyGet(w, r) {
 		return
 	}
-	tz, ok := parseTZ(r.URL.Query().Get("tz"))
-	if !ok {
-		writeError(w, http.StatusBadRequest, "invalid tz")
+	zone, err := parseZone(r.URL.Query())
+	if err != nil {
+		writeBadQuery(w, err)
 		return
 	}
 	reader := s.sources.incidents.Load()
@@ -95,21 +95,8 @@ func (s *Server) trendsHandler(w http.ResponseWriter, r *http.Request) {
 		unavailable(w)
 		return
 	}
-	writeTagged(w, r, buildTrends((*reader).Incidents(), s.now.Now(), tz,
-		incident.DefaultRemember))
-}
-
-// parseTZ reads ?tz=: empty is UTC, anything else must be whole minutes
-// within maxTZOffset of UTC.
-func parseTZ(raw string) (int, bool) {
-	if raw == "" {
-		return 0, true
-	}
-	n, err := strconv.Atoi(raw)
-	if err != nil || n < -maxTZOffset || n > maxTZOffset {
-		return 0, false
-	}
-	return n, true
+	writeTagged(w, r, buildTrends((*reader).Incidents(), s.now.Now(),
+		zone, incident.DefaultRemember))
 }
 
 // trendWeek is the week trends count in: trendDays calendar days of
@@ -122,8 +109,7 @@ type trendWeek struct {
 	now       time.Time
 }
 
-func newTrendWeek(now time.Time, tz int) trendWeek {
-	zone := time.FixedZone("", tz*60)
+func newTrendWeek(now time.Time, zone *time.Location) trendWeek {
 	local := now.In(zone)
 	today := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0,
 		0, zone)
@@ -133,11 +119,19 @@ func newTrendWeek(now time.Time, tz int) trendWeek {
 }
 
 // day is the index of t's day in the week, or -1 when t is outside.
+// Days are counted by date, so a day of a daylight saving change, 23
+// or 25 hours long, is still one day.
 func (w trendWeek) day(t time.Time) int {
 	if t.Before(w.start) || !t.Before(w.end) {
 		return -1
 	}
-	return int(t.Sub(w.start) / (24 * time.Hour))
+	return int(dateOf(t.In(w.zone)).Sub(dateOf(w.start)) /
+		(24 * time.Hour))
+}
+
+// dateOf is t's calendar date as midnight UTC.
+func dateOf(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 // openings are the times p opened: every occurrence kwatch kept across
@@ -152,15 +146,15 @@ func openings(p incident.Incident) []time.Time {
 	return []time.Time{p.Opened}
 }
 
-// buildTrends aggregates items as of now, counting days tz minutes east
-// of UTC. remember is how long resolved incidents are kept: the week
+// buildTrends aggregates items as of now, counting days in zone.
+// remember is how long resolved incidents are kept: the week
 // before this one is compared only when that covers it. Silent
 // incidents are left out, as on the active list.
 func buildTrends(
-	items []incident.Incident, now time.Time, tz int,
+	items []incident.Incident, now time.Time, zone *time.Location,
 	remember time.Duration,
 ) TrendsResponse {
-	w := newTrendWeek(now, tz)
+	w := newTrendWeek(now, zone)
 	out := TrendsResponse{Days: make([]TrendDay, trendDays),
 		Namespaces: make([]TrendNamespace, 0),
 		Noisiest:   make([]TrendIssue, 0)}

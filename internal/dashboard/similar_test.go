@@ -87,7 +87,7 @@ func TestListLikeRejectsTwoIDsOrALongOne(t *testing.T) {
 		"/api/incidents?like=" + strings.Repeat("x", maxLikeLength+1)} {
 		w := get(t, s, path)
 		if w.Code != http.StatusBadRequest ||
-			!strings.Contains(w.Body.String(), `"invalid like"`) {
+			!strings.Contains(w.Body.String(), `"param":"like"`) {
 			t.Errorf("%s: %d %s", path, w.Code, w.Body.String())
 		}
 	}

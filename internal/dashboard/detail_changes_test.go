@@ -68,7 +68,7 @@ func TestDetailChangesListsNearChangesBeforeAndDuring(t *testing.T) {
 		t.Errorf("change before = %+v", before)
 	}
 	if root.Name != "api" || root.When != "during" || !root.Fixing ||
-		root.Summary != "image api:2 → api:1" || root.Class != "image" ||
+		root.Summary != "image api:2 → api:1" ||
 		root.Actor != "kubectl-set" {
 		t.Errorf("root change = %+v", root)
 	}

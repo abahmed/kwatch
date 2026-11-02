@@ -73,7 +73,8 @@ func (i *Ifttt) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
 	return i.send(ctx, iftttPayload{
-		Value1: m.ShortText(), Value2: m.NoteText(),
+		Value1: notification.Truncate(m.ShortText(), iftttValueLimit),
+		Value2: notification.Truncate(m.NoteText(), iftttValueLimit),
 		Value3: m.Status.String(),
 	})
 }
@@ -82,9 +83,14 @@ func (i *Ifttt) SendIncident(
 func (i *Ifttt) SendMessage(ctx context.Context, msg string) error {
 	return i.send(ctx, iftttPayload{
 		Value1: "kwatch",
-		Value2: msg,
+		Value2: notification.Truncate(msg, iftttValueLimit),
 	})
 }
+
+// iftttValueLimit bounds each ingredient. IFTTT documents no limit, and
+// the actions an applet feeds (notifications, SMS, e-mail) show far less,
+// so the value is kept to a size every action takes.
+const iftttValueLimit = 4000
 
 func (i *Ifttt) send(ctx context.Context, payload iftttPayload) error {
 	body, err := json.Marshal(payload)

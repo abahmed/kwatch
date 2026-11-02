@@ -62,7 +62,7 @@ func TestInsightsTodayFollowsTheZone(t *testing.T) {
 	utc := buildInsights(insightInput{items: []incident.Incident{p},
 		now: testEpoch})
 	west := buildInsights(insightInput{items: []incident.Incident{p},
-		now: testEpoch, tz: -13 * 60})
+		now: testEpoch, zone: offsetZone(-13 * 60)})
 
 	assert.Equal(t, 0, utc.Today.New)
 	assert.Equal(t, 1, west.Today.New)

@@ -79,7 +79,7 @@ func (s *Server) incidentsHandler(w http.ResponseWriter, r *http.Request) {
 	now := s.now.Now()
 	req, err := parseListRequest(r.URL.Query(), now)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeBadQuery(w, err)
 		return
 	}
 	reader := s.sources.incidents.Load()
@@ -166,21 +166,19 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 		Edition:            s.opts.Edition,
 		LastScan:           last,
 		LastScanLate:       !last.IsZero() && s.now.Now().Sub(last) > scanLate,
-		ScanEverySeconds:   int(scanEvery / time.Second),
 		KwatchNamespace:    s.opts.Self.Namespace,
 		KwatchDeployment:   s.opts.Self.Deployment,
 		WatchedNamespaces:  watched(s.opts.Scope.Watched),
 		ExcludedNamespaces: s.opts.Scope.Excluded,
 		PerChannelHealth:   health,
+		Self:               s.selfStatus(),
+		FailedLastHour:     s.failedLastHour(),
 	})
 }
 
-// The engine reports a loop iteration at least every scanEvery; a scan
-// older than scanLate means kwatch is not checking.
-const (
-	scanEvery = 10 * time.Second
-	scanLate  = 2 * time.Minute
-)
+// A scan older than scanLate means kwatch is not checking: the engine
+// reports a loop iteration at least every 10 seconds.
+const scanLate = 2 * time.Minute
 
 func (s *Server) lastScan() time.Time {
 	n := s.sources.lastScan.Load()

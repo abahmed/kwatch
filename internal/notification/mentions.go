@@ -10,8 +10,14 @@ import (
 const zeroWidthSpace = "\u200b"
 
 // broadcastMention matches the channel-wide mentions chat servers expand.
+// The @ must not follow a word character, so an e-mail address, a URL's
+// user part or a DSN such as "app@everyone-db" is left whole.
 var broadcastMention = regexp.MustCompile(
-	`(?i)@(channel|all|here|everyone|room)\b`)
+	`(?i)(^|[^A-Za-z0-9_])@(channel|all|here|everyone|room)\b`)
+
+// userMention matches any @name mention; as above, an @ inside a word is
+// not one.
+var userMention = regexp.MustCompile(`(^|[^A-Za-z0-9_])@([A-Za-z0-9_])`)
 
 // slackSpecial matches Slack's <!channel>, <!here>, <!everyone> and
 // <!subteam^ID> forms, and its <@U123> user and <#C1> channel references,
@@ -24,7 +30,18 @@ var slackSpecial = regexp.MustCompile(`<(![A-Za-z]|[@#])`)
 // whole channel.
 func NeutralizeMentions(text string) string {
 	text = slackSpecial.ReplaceAllString(text, "<"+zeroWidthSpace+"$1")
-	return broadcastMention.ReplaceAllString(text, "@"+zeroWidthSpace+"$1")
+	return broadcastMention.ReplaceAllString(text,
+		"${1}@"+zeroWidthSpace+"${2}")
+}
+
+// NeutralizeUserMentions breaks every @name mention as well as the
+// broadcast and Slack forms. Mattermost and Rocket.Chat notify the user
+// or group of any @name, so "paged @alice and @devops-team" in workload
+// text must not reach them.
+func NeutralizeUserMentions(text string) string {
+	text = slackSpecial.ReplaceAllString(text, "<"+zeroWidthSpace+"$1")
+	return userMention.ReplaceAllString(text,
+		"${1}@"+zeroWidthSpace+"${2}")
 }
 
 // Each chat service has its own mention syntax on top of the plain

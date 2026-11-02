@@ -48,7 +48,7 @@ type announcer struct {
 	collect *announce.Collector
 	// joint holds, while one tick is delivered, the resolves that the
 	// resolve of the incident they are keyed by also tells people.
-	joint   map[string][]incident.Decision
+	joint   map[string]jointGroup
 	storage *persistence
 	stats   *workerStats
 }
@@ -80,6 +80,7 @@ func newAnnouncer(
 		SaveStartup:  storage.saveStartup,
 		OwnNamespace: os.Getenv("POD_NAMESPACE"),
 		Withheld:     deps.Withheld.Counts,
+		Restart:      deps.Restart,
 	})
 	return a
 }

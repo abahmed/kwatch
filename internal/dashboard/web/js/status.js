@@ -1,5 +1,6 @@
-/* kwatch dashboard: Overview, the landing page: an incident view. First
-   what is broken now in plain words, today in one line and the insight
+/* kwatch dashboard: Overview, the landing page: an incident view. At the
+   top, while kwatch is starting or its alert links are off, a notice
+   (ovcoverage.js). Then what is broken now in plain words, today in one line and the insight
    cards (ovinsights.js: urgent issues nobody acknowledged first), the
    namespaces with active issues, what changed recently (activity.js),
    then "This week" folded (trends.js), then whether kwatch itself is
@@ -133,7 +134,9 @@
     } else if (chans.some(failingNow)) {
       row = ["n-degraded", "kwatch is running, but some alerts aren't getting out."];
     } else if (!KW.valid(s.lastScan)) {
-      row = ["", "kwatch is starting and hasn't finished its first check."];
+      // The notice at the top of the page says it (KW.selfTop).
+      node.hidden = true;
+      return false;
     } else if (s.lastScanLate) {
       row = ["n-degraded", "kwatch hasn't checked your cluster in a while."];
     } else {
@@ -149,10 +152,26 @@
     return bad;
   }
 
-  function fill(root, s, first, cov) {
-    if (summary(KW.$("[data-summary]", root), s, cov) && first) {
-      KW.$("[data-body]", root).open = true;
+  /* selfCard: the "kwatch itself" card, the third in the health
+     details (made once). */
+  function selfCard(root, s) {
+    var card = KW.$("[data-self]", root);
+    if (!card) {
+      card = KW.el("div", "card");
+      card.dataset.self = "";
+      card.appendChild(KW.el("h2", "", "kwatch itself"));
+      card.appendChild(KW.el("dl", "facts"));
+      KW.$(".cards", root).appendChild(card);
     }
+    KW.selfCard(card, s);
+  }
+
+  function fill(root, s, first, cov) {
+    var top = KW.$("[data-self-top]", root);
+    KW.selfTop(top, s, !KW.valid(s.lastScan) && !KW.down());
+    var bad = summary(KW.$("[data-summary]", root), s, cov);
+    if ((bad || s.failedLastHour > 0) && first) KW.$("[data-body]", root).open = true;
+    selfCard(root, s);
     var about = KW.$("[data-about]", root);
     about.textContent = "";
     function add(label, value, cls) {
@@ -190,6 +209,11 @@
   KW.statusView = function (main) {
     KW.title("Overview");
     main.appendChild(KW.clone("tpl-status"));
+    // The top of the page: kwatch is starting, alert links are off.
+    var top = KW.el("div", "ov-top");
+    top.dataset.selfTop = "";
+    top.hidden = true;
+    main.insertBefore(top, KW.$("[data-alert]", main));
     var body = KW.$("[data-body]", main);
     var alertBox = KW.$("[data-alert]", main);
     var footer = KW.$("[data-updated]", main);

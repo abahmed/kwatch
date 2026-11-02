@@ -33,6 +33,7 @@ var factualWording = map[string]string{
 	", likely caused by": "confidence wording of a diagnosis",
 	"might be related":   "confidence wording of a diagnosis",
 	"the likely cause":   "confidence wording of a diagnosis",
+	"Likely caused by: ": "a related incident blamed without a cause",
 	// A hypothesis about a state kwatch cannot observe now.
 	"may be down or unreachable":        "a node that stopped reporting",
 	"nodes may be down or ":             "nodes that stopped reporting",

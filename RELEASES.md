@@ -540,6 +540,13 @@
 
 ### Messages and providers
 
+- Fixed: a deleted object is no longer listed under "Recovered at the same
+  moment", and a resolve that stopped tracking an incident that is still
+  failing is never listed there either. Deleted objects that only a roll-up
+  named and that end in the same tick now share one message under "Deleted
+  at the same moment", so cleaning up a namespace is one message, not one per
+  workload.
+
 - Fixed: text a pod or an event wrote is now quoted byte for byte in every
   message. A double quote, a backtick, a run of spaces or a final full stop
   inside a quoted error no longer cuts it short or changes it in Slack,
@@ -973,6 +980,199 @@
 - 38 adversarial scenarios (look-alike names, unrelated recent changes,
   independent faults sharing a node, states that must stay quiet) joined the
   labelled library as permanent regression tests.
+### Dashboard
+
+- The dashboard is rebuilt as an incident view. The Overview is first, at
+  `/`: insights, the namespace map, top causes, a quiet-cluster line, the
+  coverage panel, weekly trends and a "kwatch itself" card.
+
+- One Issues table at `/issues` shows Active, Resolved or All, and the server
+  filters, sorts and pages it, so thousands of issues stay fast. It has
+  multi-select filters with chips, saved views, columns you choose, density,
+  page size, Local or UTC times, a "N new or changed" bar, a preview drawer,
+  similar issues, search highlight and a return to the place you left.
+
+- The issue page shows why the issue is open, a journal and timeline, a state
+  strip, evidence, containers with their usage history, caused-by and causing
+  issues, the blast radius, the delivery trail with reasons, the pager status,
+  what kwatch sent, moved links and the changes made before it recovered.
+
+- New: an Activity feed, browser notifications, live push (`/api/events`), an
+  offline and stale banner, text size and high contrast, and keyboard
+  shortcuts. The UI is described in `docs/dashboard.md`.
+
+- Every `400` from the dashboard API has the same body (`error`, `param`,
+  `term`), and the Issues page shows the sentence with the bad word marked.
+  `/api/incidents` adds `modeLabels`, the `stopped` filter and facet, and
+  `/api/trends` and `/api/insights` take `tzName`. `/api/status` adds `self`
+  and `failedLastHour`, and `/api/coverage` adds `kindTotals`, `rule` and
+  `missingRules`.
+
+- Resolved issues kwatch stopped tracking have a Stopped tracking filter,
+  quick view and `is:stopped`, and a banner on the issue page.
+
+- The live stream sends `signedout` when the sign-in stops being valid
+  (checked every 2 seconds), and the page shows the sign-in at once.
+
+- An address that cannot be parsed gets the not-found page instead of a bare
+  `400`, also when kwatch serves TLS itself (HTTP/2 still works there).
+  A `401` or `404` is logged at verbosity 1.
+
+- `failedLastHour` is now exact: it counts every failed or retried provider
+  send of the last hour, summaries, roll-ups and digests included, however
+  many one incident had, instead of what the send trail still held.
+
+### Incident journal and messages
+
+- The dashboard address in "Open in dashboard" links is found by kwatch itself.
+  When there is none, the Overview shows an "Alert links are off" notice and
+  the log says why.
+
+- The delivery trail and the container usage history are kept in the state
+  file (new buckets `trails` and `usage`), so they survive a restart.
+
+- Crash logs are captured more carefully: kwatch backs off for a while when the
+  API refuses pod logs, and the dashboard says crash output is not shown.
+
+- New `/api/coverage` answers what kwatch watches and what it cannot read.
+
+- Each incident keeps a journal: snapshots of the failing containers, the
+  changes linked to it and its state transitions.
+
+- A resolve message says how many pods were affected, a repeat offender gets a
+  note, and an acknowledgement names who made it.
+
+- After a restart kwatch sends one short message that says why it stopped,
+  instead of listing the open incidents again.
+
+- When the cause is not known yet, a message says "Likely caused by: X; kwatch
+  is still checking." A resolve may add "Changed just before it recovered",
+  which never says the change was the fix. A resolve of an issue kwatch stopped
+  tracking says it is not fixed.
+
+### Alerting fixes
+
+- Fixed: a new page could be closed by an older queued resolve.
+
+- Fixed: "Moved" could point to an incident that was never announced, after a
+  restart handover or a split node outage.
+
+- Fixed: false `LeaseStale` and `CronJobNotScheduled` incidents when the
+  Lease or CronJob data was stale.
+
+- Fixed: two lines of one message that gave contradicting causes.
+
+- Fixed: a tier rise after a restart was not called out.
+
+- Fixed: flapping incidents were dropped on a restart caused by a licence
+  lapse.
+
+- Fixed: a lost page was not detected when the pager and its fallback both
+  failed.
+
+- Fixed: the outbox retry count was inflated.
+
+- Fixed: a grouped recovery could list problems that had not recovered.
+
+### Security
+
+- Secrets hidden behind terminal colour or control codes in logs are now
+  redacted.
+
+- Mattermost and Rocket.Chat no longer ping users named in workload text, and
+  emails and URLs in it are no longer mangled.
+
+- WeCom and Teams Workflow escape Markdown in workload text.
+
+- The Slack SDK client no longer follows redirects and reads a bounded
+  response.
+
+- Provider sends to a cloud metadata address are refused for good, checked
+  on the URL and again on every resolved address: 169.254.169.254 and all
+  of 169.254.0.0/16 and fe80::/10, fd00:ec2::254, 100.100.100.200,
+  metadata.google.internal and metadata.goog. The send trail says "blocked:
+  cloud metadata address". Private and in-cluster addresses still work.
+
+- The image build context leaves out key and credential files (`*.pem`,
+  `*.key`, `*.crt`, `*.p12`, `*.pfx`, `*.jks`, `.env*`, kubeconfigs,
+  `id_rsa*`) at any depth.
+
+- Dashboard sign-in is hardened: `X-Forwarded-For` counts only when it is a
+  valid IP address, the failure limiter tracks at most 10,000 clients, only an
+  `Authorization: Bearer` header is a token (the scheme in any case) and tokens
+  are compared in constant time.
+
+### Providers
+
+- Messages now stay within the length limit of Alerta, Flock, Google Chat,
+  IFTTT, Mattermost, Rocket.Chat, Signal, SNS, Splunk, Teams, Teams Workflow,
+  WeCom and Zulip.
+
+- Pushover keeps cancelling the newest alarms beyond 1000: past that it
+  forgets the oldest receipt, not the new one.
+
+- SNS receives the paging-only messages.
+
+- SES, SendGrid, Mailgun and Resend send the HTML layout beside the text.
+
+### Performance
+
+- Cold start on large clusters is about four times faster.
+
+- The state file is written less often for usage history: unchanged records
+  are not written again.
+
+### Health and operations
+
+- `/health` and `/api/coverage` use one set of coverage reason codes. The
+  names `/health` used before are still accepted on input.
+
+- New health components `pod-logs` and `usage-history`, and a new reason
+  `trail_restore_failed` for the delivery outbox.
+
+- `kwatch lint` warns when a rule names an alert reason that was removed
+  (`ContainerCannotRun`, `Killed`, `DeploymentProgressingFalse`,
+  `DeploymentAvailableFalse`, `StatefulSetConditionFailure`,
+  `DaemonSetConditionFailure`, `ResourceHigh`, `ResourceCritical`); with
+  `--strict` it fails.
+
+### Helm chart
+
+- The memory request is 256Mi (the limit stays 512Mi), and the pod has a
+  `startupProbe`.
+
+- Changing the dashboard password restarts the pod.
+
+- `KWATCH_DASHBOARD_ENABLED` and `KWATCH_DASHBOARD_TRUST_PROXY` are always set,
+  true or false.
+
+- Rendering fails when `dashboard.port` equals the health port, or when the
+  NetworkPolicy would deny everything.
+
+- The dashboard NetworkPolicy rules no longer depend on
+  `networkPolicy.allowDefaults`.
+
+- `config.investigation` is accepted.
+
+- The least-privilege RBAC covers the Gateway API `udproutes`,
+  `backendtlspolicies` and `listenersets`.
+
+- The install notes say how to open the dashboard and recommend the
+  heartbeat.
+
+### Upgrade notes (unreleased)
+
+- **New state buckets.** `trails` and `usage` are added to an existing state
+  file when kwatch opens it; there is nothing to migrate.
+
+- **Memory request.** The chart's memory request is now 256Mi.
+
+- **Removed alert reasons.** A rule that names one of the removed reasons still
+  loads and matches nothing; `kwatch lint` now warns, and `--strict` fails.
+
+- **Coverage reason names.** `/health` shows the shared reason codes; the old
+  names are still read.
+
 ## v1.0.0 (2026-10-19)
 
 ### Highlights

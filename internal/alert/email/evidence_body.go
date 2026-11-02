@@ -14,6 +14,16 @@ const (
 	fogColor = "#F2F3F0"
 )
 
+// Bodies is the mail of m as plain text and, for a Pro message with
+// evidence, the HTML alternative; html is "" otherwise. SMTP and every
+// mail API provider send the same bodies.
+func Bodies(m notification.Message) (text, html string) {
+	if m.Evidence == nil {
+		return m.MailBody(), ""
+	}
+	return evidenceText(m), evidenceHTML(m)
+}
+
 // evidenceText is a Pro message as plain text in the spec's order: the
 // cause, what kwatch found, the log quote and the fix.
 func evidenceText(m notification.Message) string {

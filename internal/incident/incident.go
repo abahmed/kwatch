@@ -204,6 +204,8 @@ type Incident struct {
 	// SupersededRoot is the root of that incident, so the closing message
 	// can name it. It is not persisted: the message is written at once.
 	SupersededRoot inventory.EntityID
+	// Moved links the incidents moved into one another (moved.go).
+	Moved Moved
 	// Reminded is when the last weekly "still open" update was sent;
 	// zero until the first.
 	Reminded time.Time

@@ -29,13 +29,15 @@ type Transition struct {
 // WhyDetail says why the incident is at its alert level and why it is
 // still open. HoldTotal is how long it must stay healthy (stable, when
 // it flaps) before it closes and HoldElapsed how long it has, both in
-// seconds; NextCheckAt is when kwatch next looks at it on its own.
+// seconds. CannotSee says kwatch cannot observe the root right now, so
+// the incident stays open with no hold running until it can check
+// again.
 type WhyDetail struct {
-	AlertLevelReason string    `json:"alertLevelReason,omitempty"`
-	StillOpenReason  string    `json:"stillOpenReason,omitempty"`
-	HoldTotal        int       `json:"holdTotal,omitempty"`
-	HoldElapsed      int       `json:"holdElapsed,omitempty"`
-	NextCheckAt      time.Time `json:"nextCheckAt,omitzero"`
+	AlertLevelReason string `json:"alertLevelReason,omitempty"`
+	StillOpenReason  string `json:"stillOpenReason,omitempty"`
+	HoldTotal        int    `json:"holdTotal,omitempty"`
+	HoldElapsed      int    `json:"holdElapsed,omitempty"`
+	CannotSee        bool   `json:"cannotSee,omitempty"`
 }
 
 // AckDetail is the acknowledgement of the incident: the person's note,

@@ -42,6 +42,12 @@
         var data = null;
         try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
         settle();
+        // The page that shows kwatch's own error panels needs its name.
+        if (res.status === 200 && data && data.kwatchNamespace &&
+            /^\/api\/status(\?|$)/.test(path)) {
+          KW.self = { namespace: data.kwatchNamespace,
+            deployment: data.kwatchDeployment || "kwatch" };
+        }
         return { status: res.status, data: data, etag: etag,
           retryAfter: isNaN(retry) ? 0 : retry };
       });
@@ -60,7 +66,7 @@
     }
     function fallback() {
       var target = button.parentNode.querySelector("code, .logs");
-      if (!target) return;
+      if (!target || !target.isConnected) return;
       var range = document.createRange();
       range.selectNodeContents(target);
       var sel = window.getSelection();

@@ -31,5 +31,43 @@ func (s *Server) coverageHandler(w http.ResponseWriter, r *http.Request) {
 		unavailable(w)
 		return
 	}
-	writeTagged(w, r, (*src)())
+	writeTagged(w, r, withTotals((*src)()))
+}
+
+// CoverageResponse is kube.Coverage with the full size of each kind
+// list, which keeps at most kube.MaxCoverageNames entries: the page
+// says "+N more" from KindTotals. The namespace lists have theirs in
+// namespaces.watched and namespaces.excluded.
+type CoverageResponse struct {
+	kube.Coverage
+	KindTotals KindTotals `json:"kindTotals"`
+}
+
+// KindTotals count every kind kwatch cannot read, has not read yet and
+// does not watch, the ones the lists leave out included.
+type KindTotals struct {
+	Unreadable int `json:"unreadable"`
+	Unsynced   int `json:"unsynced"`
+	NotWatched int `json:"notWatched"`
+}
+
+// withTotals adds the list totals from the counts by reason, filed the
+// way kube files each gap; a list never counts less than it holds.
+func withTotals(c kube.Coverage) CoverageResponse {
+	var t KindTotals
+	for reason, n := range c.Kinds.Reasons {
+		switch reason {
+		case kube.ReasonPermissionDenied:
+			t.Unreadable += n
+		case kube.ReasonSyncPending, kube.ReasonSyncTimeout,
+			kube.ReasonSyncFailed:
+			t.Unsynced += n
+		default:
+			t.NotWatched += n
+		}
+	}
+	t.Unreadable = max(t.Unreadable, len(c.Kinds.Unreadable))
+	t.Unsynced = max(t.Unsynced, len(c.Kinds.Unsynced))
+	t.NotWatched = max(t.NotWatched, len(c.Kinds.NotWatched))
+	return CoverageResponse{Coverage: c, KindTotals: t}
 }

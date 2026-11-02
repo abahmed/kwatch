@@ -22,8 +22,9 @@ type LiveEvent struct {
 // "ready" first, "changed" whenever incidents change and "ping" every
 // liveHeartbeat. At most maxLiveConns streams are open at once, and
 // maxClientLive from one client; a stream ends after liveMaxBeats
-// heartbeats, when its sign-in stops being valid, when the client
-// leaves or the server shuts down.
+// heartbeats, when its sign-in stops being valid (checked every
+// liveCheck, after a last "signedout" event), when the client leaves or
+// the server shuts down.
 func (s *Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 	if !onlyGet(w, r) {
 		return
@@ -129,12 +130,15 @@ func (s *Server) streamEvents(r *http.Request, st liveStream) {
 		case <-s.live.done:
 			return
 		case <-poll.C:
+			if !s.stillSignedIn(r, st) {
+				return
+			}
 			s.checkLive()
 		case <-cur.wake:
 			cur, err = s.sendChanged(st, cur.seq)
 		case <-beat.C:
 			beats++
-			if ok, _ := s.auth.check(r); !ok || beats >= liveMaxBeats {
+			if !s.stillSignedIn(r, st) || beats >= liveMaxBeats {
 				return
 			}
 			err = st.send("ping", struct{}{})
@@ -143,6 +147,17 @@ func (s *Server) streamEvents(r *http.Request, st liveStream) {
 			return
 		}
 	}
+}
+
+// stillSignedIn reports whether the stream's sign-in is still valid.
+// When it is not, it sends "signedout" first, so the page asks for
+// sign-in at once instead of reconnecting into a 401.
+func (s *Server) stillSignedIn(r *http.Request, st liveStream) bool {
+	if ok, _ := s.auth.check(r); ok {
+		return true
+	}
+	_ = st.send("signedout", struct{}{})
+	return false
 }
 
 // sendChanged sends what changed after seq and returns the new state.

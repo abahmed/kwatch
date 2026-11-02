@@ -3,6 +3,7 @@ package delivery
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -99,4 +100,14 @@ func TestProviderPayloadPolicyCoversEveryProviderIdentity(t *testing.T) {
 		}
 	}
 	assert.Equal(t, 28000, defaultMaxBytes("teamsworkflow"))
+}
+
+// A limit too small for the "(truncated)" marker still bounds the text:
+// the result never exceeds maxLen.
+func TestTruncateMsgNeverExceedsTinyLimit(t *testing.T) {
+	for limit := 1; limit <= 20; limit++ {
+		got := truncateMsg("a long operator message ✅", limit)
+		assert.LessOrEqual(t, len(got), limit, "limit %d", limit)
+		assert.True(t, utf8.ValidString(got), "limit %d", limit)
+	}
 }

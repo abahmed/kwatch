@@ -1,0 +1,17 @@
+POST /api/v1/messages
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic <redacted>
+
+content=🔴 payments in shop is crash-looping.
+Caused by: Node n1 is not ready.
+Cause in dashboard: https://kwatch.example/issues/p-cause
+Earlier times: https://kwatch.example/issues?status=all
+like=p-link
+Open in dashboard: https://kwatch.example/issues/p-link
+
+```
+panic: out of memory
+```
+subject=kwatch alert
+to=alerts
+type=stream

@@ -83,7 +83,7 @@ func (v *view) dropSharedCoverage(
 	reason string,
 ) {
 	for _, effect := range effects {
-		delete(c.covers, effect)
+		c.dropCover(effect)
 		cs.rejectInsufficient(c.id, effect, reason)
 	}
 	if len(effects) > 0 && len(c.direct()) == 0 {

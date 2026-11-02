@@ -96,8 +96,9 @@ func TestFilterSearchCapsTheNumberOfWords(t *testing.T) {
 		t.Errorf("%d words: %d, want 200", maxSearchTerms, w.Code)
 	}
 	w := get(t, s, ten+"&q=k")
-	if w.Code != http.StatusBadRequest ||
-		!strings.Contains(w.Body.String(), "too many search words") {
+	if w.Code != http.StatusBadRequest || !strings.Contains(
+		w.Body.String(), `"error":"Too many search words: 10 is the `+
+			`limit.","param":"q","term":"j"`) {
 		t.Errorf("11 words: %d %s", w.Code, w.Body.String())
 	}
 }

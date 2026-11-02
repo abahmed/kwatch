@@ -9,8 +9,8 @@ import (
 // A link to "/" carrying one of them is a list link and moves to
 // /issues with the same query.
 var listParams = []string{"q", "severity", "namespace", "state", "age",
-	"since", "sort", "dir", "group", "kind", "status", "offset", "limit",
-	"page", "pageSize"}
+	"since", "sort", "dir", "group", "kind", "acked", "status", "offset",
+	"limit", "page", "pageSize"}
 
 // oldRoute is where an address of the old two-list layout lives now:
 // "/status" (the Overview) is "/", "/resolved?…" is

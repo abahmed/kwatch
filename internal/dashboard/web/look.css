@@ -35,7 +35,21 @@ html[data-text="xl"] { font-size: 125%; }
 :root[data-contrast="more"] :focus-visible { outline-color: var(--text); box-shadow: 0 0 0 calc(var(--focus-width) + 2px) var(--bg); }
 :root[data-contrast="more"].kw-stale .itable, :root[data-contrast="more"].kw-stale .detail,
 :root[data-contrast="more"].kw-stale .updated { opacity: 1; }
-/* Touch screens: bigger targets for the small controls. */
+/* Touch screens: every control is at least 44px tall. */
 @media (pointer: coarse) {
-  .tz-b, .fchip, .pager .btn, .ttools .btn, .updated .upd-try, .who .link, .dd-opt { min-height: 40px; }
+  .tz-b, .fchip, .pager .btn, .ttools .btn, .updated .upd-try, .who .link, .dd-opt,
+  .stsw .stsw-b, .qv, .ttools .vopts > summary, .side-top .who-b, .offline .btn,
+  .incnav .btn, .shint > summary, .shint .shint-more, .badreq .btn { min-height: 44px; }
+  .legend > summary { width: 44px; height: 44px; }
+  .pager .btn { min-width: 44px; }
+  .brand, .btn, .btn-sm, details > summary, .back a, .link, .fpill, .fpill-clear,
+  .dd-btn, .vopts-pop .dd-btn, .pager .dd-btn, .pager-size .dd-btn,
+  .lg-ctl .dd-btn, .ntf-opts .dd-btn, .d-ctx-b, .in-link, .tr-link {
+    min-height: 44px;
+  }
+  .brand, .btn, .btn-sm, .back a { min-width: 44px; }
+  .brand, .back a, .link, .in-link, .tr-link { display: inline-flex; align-items: center; }
+  /* A checkbox keeps its size; the label around it is the hit area. */
+  .cols-c { min-height: 44px; padding: 0 6px; }
+  .cols-mv { width: 44px; height: 44px; }
 }

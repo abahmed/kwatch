@@ -99,7 +99,7 @@ func (l *memoryLog) snapshot(now time.Time) map[inventory.EntityID]UsageRecord {
 	})
 	out := make(map[inventory.EntityID]UsageRecord, len(ids))
 	for _, id := range ids {
-		out[id] = l.containers[id].record(now)
+		out[id] = l.containers[id].stableRecord(now)
 	}
 	return out
 }

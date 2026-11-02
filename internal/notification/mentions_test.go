@@ -82,3 +82,41 @@ func TestNeutralizeMentionsBreaksUserAndChannelRefs(t *testing.T) {
 		t.Fatalf("NeutralizeMentions = %q", got)
 	}
 }
+
+// An @ inside a word is an e-mail address, a URL's user part or a DSN,
+// never a mention, and must reach the reader byte for byte.
+func TestNeutralizeMentionsKeepsAddressesWhole(t *testing.T) {
+	for _, in := range []string{
+		"ops@all-hands.io",
+		"postgres://app@everyone-db:5432/x",
+		"git@here.example.com",
+		"me@channel.dev",
+	} {
+		if got := NeutralizeMentions(in); got != in {
+			t.Errorf("NeutralizeMentions(%q) = %q", in, got)
+		}
+		if got := NeutralizeUserMentions(in); got != in {
+			t.Errorf("NeutralizeUserMentions(%q) = %q", in, got)
+		}
+	}
+}
+
+func TestNeutralizeUserMentionsBreaksEveryName(t *testing.T) {
+	const zw = "​"
+	tests := []struct{ in, want string }{
+		{"paged @alice and @devops-team",
+			"paged @" + zw + "alice and @" + zw + "devops-team"},
+		{"@here now", "@" + zw + "here now"},
+		{"(@bob)", "(@" + zw + "bob)"},
+		{"<!channel> <@U1>",
+			"<" + zw + "!channel> <" + zw + "@" + zw + "U1>"},
+		{"mail ops@all-hands.io", "mail ops@all-hands.io"},
+		{"lone @ sign", "lone @ sign"},
+	}
+	for _, tc := range tests {
+		if got := NeutralizeUserMentions(tc.in); got != tc.want {
+			t.Errorf("NeutralizeUserMentions(%q) = %q, want %q",
+				tc.in, got, tc.want)
+		}
+	}
+}

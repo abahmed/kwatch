@@ -13,7 +13,9 @@
   var LEVELS = { urgent: "page", attention: "notify", low: "digest",
     quiet: "silent", page: "page", notify: "notify", digest: "digest",
     silent: "silent" };
-  var MARKS = ["new", "changed", "acked"];
+  var MARKS = ["new", "changed", "acked", "stopped"];
+  /* The most words (plain and -excluded together) the API takes. */
+  var MAX_WORDS = 10;
   var STATES = ["open", "settling", "flapping", "recovering", "resolved"];
   var UNITS = { m: 60000, h: 3600000, d: 86400000, w: 604800000 };
   var NAMESPACE = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
@@ -61,6 +63,8 @@
     if (prefix === "is" && LEVELS[v]) return add(s.severity, LEVELS[v]);
     if (prefix === "state") return STATES.indexOf(v) >= 0 && add(s.state, v);
     var age = prefix === "age" && /^([<>])(\d{1,4})([mhdw])$/.exec(v);
+    // age:>0d means nothing, and the API refuses it: ignore it.
+    if (age && Number(age[2]) === 0) return true;
     if (age) {
       s.age[age[1] === ">" ? "over" : "under"] = Number(age[2]) * UNITS[age[3]];
       return true;
@@ -71,7 +75,7 @@
   /* parse reads the search text into
      { terms, exclude, namespace, kind, severity, state, is, age }:
      terms must all be found, exclude must not be; is holds
-     new / changed / acked as true or false; age.over and age.under
+     new / changed / acked / stopped as true or false; age.over and age.under
      are how long ago, in ms, the issue started. */
   function parse(text) {
     var s = blank();
@@ -80,6 +84,9 @@
       if (m && shortcut(s, m[1].toLowerCase(), m[2], t.neg)) return;
       (t.neg ? s.exclude : s.terms).push(t.text);
     });
+    // Words past the limit are left out, so the API never refuses it.
+    s.terms = s.terms.slice(0, MAX_WORDS);
+    s.exclude = s.exclude.slice(0, MAX_WORDS - s.terms.length);
     return s;
   }
 
@@ -106,6 +113,8 @@
     merge(f.state, s.state).forEach(function (v) { p.append("state", v); });
     var acked = s.is.acked === undefined ? [] : [s.is.acked ? "true" : "false"];
     merge(f.acked, acked).forEach(function (v) { p.append("acked", v); });
+    var stopped = s.is.stopped === undefined ? [] : [s.is.stopped ? "true" : "false"];
+    merge(f.stopped, stopped).forEach(function (v) { p.append("stopped", v); });
     if (!f.age && s.age.over) p.set("startedBefore", seconds(s.age.over));
     if (!f.age && s.age.under) p.set("startedAfter", seconds(s.age.under));
     return p;
@@ -123,6 +132,7 @@
       lacks(s.kind, (item.workloadKind || "").toLowerCase()) ||
       lacks(s.severity, item.severity) || lacks(s.state, item.state) ||
       (is.acked !== undefined && is.acked !== !!item.ackedBy) ||
+      (is.stopped !== undefined && is.stopped !== !!item.stoppedTracking) ||
       (is.new !== undefined && is.new !== !!(mark && mark.what === "new")) ||
       (is.changed !== undefined &&
         is.changed !== !!(mark && mark.what !== "new")) ||

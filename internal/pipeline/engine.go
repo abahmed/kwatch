@@ -87,6 +87,9 @@ type Dependencies struct {
 	// Withheld counts the Pro findings a Community edition found and
 	// does not show, for /status and the Pro checks message. Optional.
 	Withheld *feature.Withheld
+	// Restart is how this start followed the previous session, for the
+	// note that replaces a repeated restored listing. Optional.
+	Restart announce.Restart
 }
 
 // IncidentStore loads and saves incident records, object fingerprints and

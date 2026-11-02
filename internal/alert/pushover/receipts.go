@@ -10,8 +10,9 @@ import (
 )
 
 // maxReceipts bounds the remembered receipts. Pushover expires an
-// emergency by itself (at most three hours), so an old receipt is
-// worthless; the bound only stops a long-running process from growing.
+// emergency by itself (at most three hours), so the oldest receipt is
+// the least useful; the bound evicts it and keeps every newer alarm
+// cancellable, and only stops a long-running process from growing.
 const maxReceipts = 1000
 
 // rememberReceipt stores the receipt of an emergency message, if the
@@ -25,10 +26,34 @@ func (p *Pushover) rememberReceipt(key string, body []byte) {
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if len(p.receipts) >= maxReceipts {
-		p.receipts = map[string]string{}
+	p.storeReceiptLocked(key, answer.Receipt)
+}
+
+// storeReceiptLocked remembers a receipt as the newest, evicting the
+// oldest ones over maxReceipts. The caller holds p.mu.
+func (p *Pushover) storeReceiptLocked(key, receipt string) {
+	p.forgetReceiptLocked(key)
+	for len(p.receiptOrder) >= maxReceipts {
+		delete(p.receipts, p.receiptOrder[0])
+		p.receiptOrder = p.receiptOrder[1:]
 	}
-	p.receipts[key] = answer.Receipt
+	p.receipts[key] = receipt
+	p.receiptOrder = append(p.receiptOrder, key)
+}
+
+// forgetReceiptLocked drops the receipt of key. The caller holds p.mu.
+func (p *Pushover) forgetReceiptLocked(key string) {
+	if _, ok := p.receipts[key]; !ok {
+		return
+	}
+	delete(p.receipts, key)
+	for i, k := range p.receiptOrder {
+		if k == key {
+			p.receiptOrder = append(p.receiptOrder[:i:i],
+				p.receiptOrder[i+1:]...)
+			return
+		}
+	}
 }
 
 // cancelReceipt stops the emergency alarm started for key. Nothing is
@@ -54,7 +79,7 @@ func (p *Pushover) cancelReceipt(ctx context.Context, key string) error {
 	}
 	// Success, or a permanent refusal such as an expired receipt.
 	p.mu.Lock()
-	delete(p.receipts, key)
+	p.forgetReceiptLocked(key)
 	p.mu.Unlock()
 	return nil
 }
@@ -91,7 +116,7 @@ func (p *Pushover) RestoreThreads(saved map[string]string) {
 	defer p.mu.Unlock()
 	for key, receipt := range saved {
 		if key != "" && receipt != "" && len(p.receipts) < maxReceipts {
-			p.receipts[key] = receipt
+			p.storeReceiptLocked(key, receipt)
 		}
 	}
 }

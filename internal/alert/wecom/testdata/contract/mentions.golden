@@ -3,7 +3,7 @@ Content-Type: application/json
 
 {
   "markdown": {
-    "content": "🔴 payments in shop is crash-looping. It said \"@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\".\nIt said @​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n\n```\nlog: @​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n```"
+    "content": "🔴 payments in shop is crash-looping. It said \"@​channel @​everyone \\<​!here\\> @​all \\<​@U123\\> \\<​@W456\\> \\<​\\#C1\\|general\\>\".\n\nIt said `@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>`\n\n```\n@​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n```\n\n```\nlog: @​channel @​everyone <​!here> @​all <​@U123> <​@W456> <​#C1|general>\n```"
   },
   "msgtype": "markdown"
 }

@@ -87,3 +87,28 @@ func containsAll(s string, parts ...string) bool {
 	}
 	return true
 }
+
+// A resolve at the still-broken cap did not recover, and one of a
+// deleted object did not either: neither is named as "Recovered at the
+// same moment", and a lone deletion has nothing to share a message with.
+func TestEngineJointRecoveryLeavesNonRecoveriesAlone(t *testing.T) {
+	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
+	e, seen := rollupHarness(t, now)
+	capped := resolved("capped", true)
+	capped.Reason = incident.Reason(incident.StoppedTrackingPrefix +
+		"2h; coverage check continues")
+	deleted := resolved("deleted", true)
+	deleted.Incident.Removed = []inventory.EntityID{deleted.Incident.Root}
+
+	e.announcer.announce(context.Background(), now, []incident.Decision{
+		resolved("a", true), capped, deleted})
+
+	if len(*seen) != 3 {
+		t.Fatalf("want three separate messages, got %d", len(*seen))
+	}
+	for _, m := range *seen {
+		if m.Carrier != "" || strings.Contains(m.Note, "same moment") {
+			t.Fatalf("nothing is carried: %+v", m)
+		}
+	}
+}

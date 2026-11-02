@@ -16,7 +16,8 @@ type ContractCase struct {
 
 // Canonical returns the fixed messages every provider contract renders:
 // the page-tier open, a notify update and the resolve of one incident,
-// a digest, markdown with code, unicode, and a message near limit bytes.
+// a digest, markdown with code, unicode, a message near limit bytes, and
+// one that ends with the dashboard link lines.
 func Canonical(limit int) []ContractCase {
 	if limit <= 0 {
 		limit = 3000
@@ -29,6 +30,7 @@ func Canonical(limit int) []ContractCase {
 		{Name: "markdown-code", Message: withKey(Rich(), "p-md")},
 		{Name: "unicode", Message: unicode()},
 		{Name: "near-limit", Message: nearLimit(limit)},
+		{Name: "linked", Message: Linked()},
 	}
 }
 

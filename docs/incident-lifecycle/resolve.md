@@ -6,15 +6,20 @@ When the last member is gone the incident is `Recovering`. It resolves only
 after the hold: `Hold` (3m) doubled for each recovery in the last
 `FlapWindow`, at most `MaxHold` (30m), and multiplied by `ChronicFactor` when
 it reopened within `ChronicWindow`. A workload that is still below its
-desired replicas with failing pods does not resolve on the timer alone
-(`stillBroken`), but only for `StillBrokenMax` (2h, the `RepageWindow`)
-after the last member left. Then it resolves anyway, with a timer armed for
-that moment: one pod no detector flags must not keep an incident and its
-paging alert open for ever. The reason of that resolve does not say
-`healthy`: it is `stopped tracking after 2h; coverage check continues`
-(`StoppedTrackingPrefix`, `resolveReason`). A workload that is really down
-is handed back by the coverage check, and a failure inside `RepageWindow`
-reopens the same incident.
+desired replicas with failing pods, or that has a container that is
+crashing, does not resolve on the timer alone (`stillBroken`, `crashing`),
+but only for `StillBrokenMax` (2h, the `RepageWindow`) after the last member
+left. A container counts as crashed when it is in CrashLoopBackOff or its
+last run ended with a non-zero exit within the hold; a clean exit, such as a
+normal init container end, does not hold an incident open. At the cap the
+incident resolves anyway, with a timer armed for that moment: one pod no
+detector flags must not keep an incident and its paging alert open for ever.
+The reason of that resolve does not say `healthy`: it is `stopped tracking
+after 2h; coverage check continues` (`StoppedTrackingPrefix`,
+`resolveReason`), with `; container still crashing` added when only a
+crashing container held it. A workload that is really down is handed back by
+the coverage check, and a failure inside `RepageWindow` reopens the same
+incident.
 
 A failure inside the hold returns the incident to `Open` and the manager says
 nothing. There is one exception. Each such failure is a recovery that counts
@@ -54,8 +59,12 @@ follows these rules (`grace.go`, `restored_recovered.go`):
   [Updates](./updates.md). Until the reasons saved with the record are all
   back, though, the tier is provisional (`restore_reasons.go`).
 - A restored incident with no members after the grace is handed over to the
-  incident that holds its root's failures or any of the entities that were
-  its failing members when it was saved (`Record.Members`, `handover.go`).
+  announced incident that holds its root's failures or any of the entities
+  that were its failing members when it was saved (`Record.Members`,
+  `handover.go`). An incident that is still settling is never the target: it
+  may never send a message, and the "Moved" close would point at nothing. The
+  old incident waits until the holder is announced; if none ever is, it
+  resolves on its own.
   The second covers a root that is not made again after a restart, such as
   a virtual or deleted one: its failures come back under another root, and
   the incident is closed as moved, not as healthy. One whose
@@ -84,11 +93,22 @@ with the listing as `carrier`, not as `not routed`.
 
 `compose.resolveNote` leads with how the subject ended ("payments in shop
 is healthy again."), then who fixed it when the fixing change is known,
-how long it was failing and what it was blamed on. When more than one pod
+how long it was failing and what it was blamed on. When something changed
+in the 15 minutes before it recovered (and after its failures began), it adds
+"Changed just before it recovered: ..." with at most two changes, newest
+first; the fixing change is not repeated there (`changed_before_recovery.go`).
+When more than one pod
 failed at the incident's widest it adds "Three pods were affected.": the
 count is `Journal.Widest.Pods`, the most failing pods the incident held at
 once (`radius.go`), recomputed with the impact and persisted, so it
 survives the members leaving and a restart.
+
+A resolve at the `StillBrokenMax` cap does not say the incident is healthy.
+Its lead says what is still wrong: "X still has a container that keeps
+crashing.", "X is still short of replicas." or, for a subject without
+replicas, "X has not recovered.". Then it says "kwatch stopped tracking this
+after 2h; it is still not healthy, so check it yourself." (`stoppedTracking`
+in `compose/resolve.go`).
 
 ## Resolves of one tick
 
@@ -97,8 +117,18 @@ spoke on their own, so they have no thread to close. When two or more of
 them resolve in the same tick, the first resolve is one message that also
 lists the others (`compose.Recovered`), and the other decisions are
 recorded in the audit log as carried by it (`joint recovery`,
-`jointRecoverable` and `splitRecoveries` in `pipeline/recoveries.go`).
+`jointKind` and `splitRecoveries` in `pipeline/recoveries.go`).
 They still count as delivered for the roll-up listing's own close.
+
+Only resolves that ended the same way share a message (`endOf`). A
+recovery is listed under "Recovered at the same moment". The end of a
+deleted object or namespace did not recover, so such resolves share their
+own message under "Deleted at the same moment" (`compose.Deleted`), routed
+and recorded like the recoveries: the object the message speaks of (the
+listed subject when a listing named it, else the root) must be the one
+deleted, and a node, which "is gone" rather than deleted, is never one.
+A resolve at the `StillBrokenMax` cap, and one where only something else
+was deleted (a member, say), fits neither heading and stays on its own.
 
 Members whose page was held beside the one page that stood for their
 listing (`PageHeld`, see [Announce](./announce.md)) never opened an alert

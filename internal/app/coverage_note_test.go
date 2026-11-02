@@ -13,7 +13,7 @@ import (
 
 func deniedDynamic(complete bool) fakeDynamic {
 	return fakeDynamic{kube.DynamicStatus{
-		Complete: complete, Unavailable: 3,
+		Ran: true, Complete: complete, Unavailable: 3,
 		Reasons: map[string]int{kube.ReasonPermissionDenied: 3},
 		Kinds: []kube.DynamicKind{
 			{Resource: "certificates.cert-manager.io",

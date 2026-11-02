@@ -46,6 +46,17 @@ spec:
         {{- else if $license.key }}
         checksum/license: {{ $license.key | sha256sum }}
         {{- end }}
+        {{- /* Roll the pod when the dashboard Secret changes (password and
+        token are read at start). Same lookup limits as the license Secret:
+        an offline render hashes the name only. */}}
+        {{- if (default dict .Values.dashboard).enabled }}
+        {{- $dashSecret := lookup "v1" "Secret" .Release.Namespace (include "kwatch.dashboardSecretName" .) }}
+        {{- if $dashSecret }}
+        checksum/dashboard-secret: {{ toJson $dashSecret.data | sha256sum }}
+        {{- else }}
+        checksum/dashboard-secret: {{ include "kwatch.dashboardSecretName" . | sha256sum }}
+        {{- end }}
+        {{- end }}
         {{- with .Values.podAnnotations }}
           {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -150,17 +161,18 @@ spec:
             # the pod start without the dashboard (Community, or the
             # dashboard disabled).
             {{- $dashEnv := default dict .Values.dashboard }}
-            {{- if $dashEnv.enabled }}
+            # ENABLED and TRUST_PROXY are always set, true or false: the
+            # environment wins over the config file, so the chart values
+            # decide both ways.
             - name: KWATCH_DASHBOARD_ENABLED
-              value: "true"
+              value: {{ if $dashEnv.enabled }}"true"{{ else }}"false"{{ end }}
+            - name: KWATCH_DASHBOARD_TRUST_PROXY
+              value: {{ if and $dashEnv.enabled $dashEnv.trustProxy }}"true"{{ else }}"false"{{ end }}
+            {{- if $dashEnv.enabled }}
             - name: KWATCH_DASHBOARD_PORT
               value: {{ $dashEnv.port | default 8061 | quote }}
             - name: KWATCH_DASHBOARD_MODE
               value: {{ $dashEnv.mode | default "local" | quote }}
-            {{- if $dashEnv.trustProxy }}
-            - name: KWATCH_DASHBOARD_TRUST_PROXY
-              value: "true"
-            {{- end }}
             {{- if (default dict $dashEnv.tls).secretName }}
             - name: KWATCH_DASHBOARD_TLS_CERT
               value: /etc/kwatch/dashboard-tls/tls.crt
@@ -188,6 +200,15 @@ spec:
             - name: KWATCH_WATCH_SECRETS
               value: "false"
             {{- end }}
+          # A slow cold start (large cluster, first sync) must not be
+          # killed by liveness: up to 30 x 10s before liveness begins.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 30
           livenessProbe:
             httpGet:
               path: /healthz

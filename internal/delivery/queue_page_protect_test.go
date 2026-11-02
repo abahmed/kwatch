@@ -61,3 +61,37 @@ func TestDeadLetteredResolveIsCountedAsLost(t *testing.T) {
 	m.recordDeadLetter("Pager", resolve, errJobExpired)
 	assert.Equal(t, before+1, lost.Load())
 }
+
+// A backlog refill can queue a restored resolve behind a routine job
+// without reordering. A new page of the same paging identity must not
+// pass that resolve, or the old resolve would close the new alert.
+func TestOfferQueuedJobPageNeverPassesQueuedResolveOfSameAlert(t *testing.T) {
+	queue := make(chan deliverJob, 4)
+	queue <- incidentJob("routine", "ns")
+	resolve := resolveJob("x")
+	resolve.incident.DedupKey = "alert-d"
+	queue <- resolve
+
+	page := pageAnnounce("y")
+	page.incident.DedupKey = "alert-d"
+	require.True(t, offerQueuedJob(queue, page).accepted)
+
+	assert.Equal(t, []string{"routine", "x", "y"}, queuedKeys(queue))
+}
+
+// The same holds for a queued job of the same conversation key.
+func TestOfferQueuedJobUrgentNeverPassesSameConversation(t *testing.T) {
+	queue := make(chan deliverJob, 4)
+	queue <- incidentJob("routine", "ns")
+	queue <- resolveJob("x")
+
+	page := pageAnnounce("x")
+	page.incident.Revision = 7
+	require.True(t, offerQueuedJob(queue, page).accepted)
+
+	jobs := drainQueuedJobs(queue)
+	require.Len(t, jobs, 3)
+	assert.Equal(t, "routine", jobs[0].key())
+	assert.True(t, jobs[1].isResolve(), "the resolve is sent first")
+	assert.False(t, jobs[2].isResolve())
+}

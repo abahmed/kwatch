@@ -90,8 +90,13 @@ func (z *Zulip) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
 	return z.SendMessage(ctx, safetext.RichWithOutput(m,
-		notification.MarkdownDialect(safetext.Zulip, "\n"), "\n\n", 0))
+		notification.MarkdownDialect(safetext.Zulip, "\n"), "\n\n",
+		zulipTextLimit))
 }
+
+// zulipTextLimit is Zulip's default max_message_length of 10000
+// characters; bytes never undercount them.
+const zulipTextLimit = 10000
 
 // SendMessage sends text message to the provider
 func (z *Zulip) SendMessage(ctx context.Context, msg string) error {

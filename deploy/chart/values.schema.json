@@ -140,7 +140,10 @@
       "description": "State store volume",
       "properties": {
         "size": {
-          "type": "string",
+          "type": [
+            "string",
+            "number"
+          ],
           "default": "2Gi"
         },
         "storageClass": {
@@ -185,7 +188,10 @@
           "default": "ghcr.io/abahmed/kwatch"
         },
         "tag": {
-          "type": "string",
+          "type": [
+            "string",
+            "number"
+          ],
           "default": "",
           "description": "Overrides the image tag (defaults to .Chart.AppVersion)"
         },
@@ -331,7 +337,7 @@
                 "string",
                 "number"
               ],
-              "default": "128Mi"
+              "default": "256Mi"
             },
             "cpu": {
               "type": [
@@ -778,6 +784,17 @@
         "clusterCheckins": {
           "type": "boolean",
           "description": "Deprecated and ignored: kwatch no longer sends cluster check-ins"
+        },
+        "investigation": {
+          "type": "object",
+          "description": "What Pro reads to gather evidence",
+          "properties": {
+            "logs": {
+              "type": "boolean",
+              "default": true,
+              "description": "Read container logs for evidence; false reads none"
+            }
+          }
         }
       },
       "additionalProperties": false

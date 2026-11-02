@@ -1,8 +1,9 @@
-/* kwatch dashboard: "What's going on with this alert", under the
+/* kwatch dashboard: "Alert status", under the
    summary card. Why it is still open (with a bar that fills each second
    while kwatch waits for it to stay healthy), why it alerted at its
    level, how fast kwatch saw and told, and the acknowledgement, or the
-   command that sets it: the dashboard itself only reads. */
+   command that sets it, and the pager's side: the dashboard itself only
+   reads. */
 (function () {
   "use strict";
   var KW = window.KW;
@@ -36,6 +37,16 @@
       });
   }
 
+  /* lead drops the state word the summary card already shows ("Happening
+     now; closes after 3 min healthy" reads "Closes after 3 min healthy"),
+     so the card does not say it twice. */
+  function lead(text, inc) {
+    var st = KW.STATE[inc.state];
+    if (!st || text.indexOf(st.label) !== 0) return text;
+    var rest = text.slice(st.label.length).replace(/^\s*[:;,·]?\s*/, "");
+    return rest.charAt(0).toUpperCase() + rest.slice(1);
+  }
+
   /* hold works out the live part of why it is open: counting up while
      kwatch waits for it to stay healthy (or stable), down while it
      confirms before alerting. null when nothing moves. */
@@ -43,15 +54,15 @@
     var text = why.stillOpenReason || "", total = why.holdTotal || 0, done = why.holdElapsed || 0;
     if (total > 0 && done < total && inc.state === "recovering") {
       return { mode: "up", total: total, base: done,
-        pre: "Looks better · closes after " + words(total) + " healthy · " };
+        pre: "Closes after " + words(total) + " healthy · " };
     }
     if (total > 0 && done < total && /^Flapping: waiting/.test(text)) {
       return { mode: "up", total: total, base: done,
-        pre: "Keeps coming back · closes after " + words(total) + " stable · " };
+        pre: "Closes after " + words(total) + " stable · " };
     }
     var m = /^(.*, )(\S+) left$/.exec(text);
     if (m && !isNaN(goSeconds(m[2]))) {
-      return { mode: "down", total: 0, base: goSeconds(m[2]), pre: plain(m[1]) };
+      return { mode: "down", total: 0, base: goSeconds(m[2]), pre: lead(plain(m[1]), inc) };
     }
     return null;
   }
@@ -61,7 +72,7 @@
     var p = KW.$("[data-why-text]", box);
     if (d.hold === "up") {
       var total = Number(d.total), e = Math.min(total, Number(d.base) + gone);
-      p.textContent = e >= total ? d.pre.replace(/ · $/, "") + " · it can close at the next check" :
+      p.textContent = e >= total ? "Healthy long enough · it can close at the next check" :
         d.pre + words(e) + " so far";
       var bar = KW.$("[data-why-bar]", box);
       bar.setAttribute("aria-valuenow", String(Math.round(e)));
@@ -88,12 +99,12 @@
     var box = KW.$("[data-why-open]", root);
     var bar = KW.$("[data-why-bar]", root);
     var text = why.stillOpenReason || "";
-    box.hidden = !text || inc.state === "resolved";
+    box.hidden = !text || inc.state === "resolved" || !!why.cannotSee;
     box.removeAttribute("data-hold");
     bar.hidden = true;
     if (box.hidden) return;
     var h = hold(inc, why);
-    KW.$("[data-why-text]", box).textContent = plain(text);
+    KW.$("[data-why-text]", box).textContent = lead(plain(text), inc);
     box.title = "Why kwatch keeps this issue open. It closes on its own; nobody needs to close it.";
     if (!h) return;
     box.dataset.hold = h.mode;
@@ -146,6 +157,47 @@
         "When an alert channel first accepted a message about it:");
     }
     p.hidden = !p.firstChild;
+  }
+
+  /* extra: lines the template has no place for, in the alert box: that
+     kwatch can't see the object, and the pager. Rebuilt on every draw. */
+  var PAGER = {
+    open: ["still open on the pager", ""], closed: ["closed", "closedAt"],
+    pending: ["page pending", ""], failed: ["page failed", ""]
+  };
+
+  function pagerLine(g) {
+    var name = g.name || g.provider || "the pager";
+    var p = KW.el("p", "al-line al-pager");
+    if (g.state === "failed" || g.state === "pending") {
+      p.textContent = name + ": " + PAGER[g.state][0] + (g.state === "failed" && g.reason ? ": " + g.reason : "");
+      return p;
+    }
+    var bits = [];
+    if (KW.valid(g.pagedAt)) bits.push(" at " + KW.when(g.pagedAt));
+    var tail = g.state === "closed" && KW.valid(g.closedAt) ? "closed at " + KW.when(g.closedAt) :
+      (PAGER[g.state] || ["", ""])[0];
+    p.textContent = "Paged " + name + bits.join("") + (tail ? " · " + tail : "");
+    if (KW.valid(g.pagedAt)) p.title = KW.full(g.pagedAt);
+    return p;
+  }
+
+  function extra(root, inc, why) {
+    var box = KW.$("[data-extra]", root);
+    if (!box) {
+      box = KW.el("div", "al-extra");
+      box.dataset.extra = "";
+      KW.$("[data-alert-box]", root).appendChild(box);
+    }
+    box.textContent = "";
+    if (why.cannotSee && inc.state !== "resolved") {
+      box.appendChild(KW.el("p", "al-line muted",
+        "kwatch can't see this right now, so it stays open until it can check again."));
+    }
+    (inc.pager || []).forEach(function (g) { box.appendChild(pagerLine(g)); });
+    var cut = KW.cutCount(inc, "pager");
+    if (cut) box.appendChild(KW.el("p", "ev-cap", KW.plural(cut, "more page", "more pages") + " not shown."));
+    box.hidden = !box.firstChild;
   }
 
   /* target: kind/name and namespace flag for kubectl, from the object
@@ -205,10 +257,12 @@
     stillOpen(root, inc, why);
     // A live reading only moves the timer; the rest waits for a redraw.
     if (live) return;
+    KW.$("#d-alert-h", root).textContent = "Alert status";
     level(root, inc, why);
     timing(root, inc);
     ack(root, inc);
+    extra(root, inc, why);
     KW.$("[data-alert-box]", root).hidden = ["[data-why-open]", "[data-why-level]", "[data-timing]",
-      "[data-ack]"].every(function (s) { return KW.$(s, root).hidden; });
+      "[data-ack]", "[data-extra]"].every(function (s) { return KW.$(s, root).hidden; });
   };
 })();

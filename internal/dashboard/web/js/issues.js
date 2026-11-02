@@ -23,7 +23,7 @@
     var sub = $("[data-sub]"), wrap = $("[data-tablewrap]");
     var last = null, pending = null, shown = [], lastOk = 0, failing = false;
     var attempt = 0, seq = 0, stopped = false, ctl = null, busy = false;
-    var etag = "", etagQuery = "", lastStatus = null, slow = 0;
+    var etag = "", etagQuery = "", lastStatus = null, slow = 0, tried = "";
     // The issue open beside the table (?open=), and the row last
     // focused or opened, for coming back to the same place.
     var openId = LQ.ID.test(new URLSearchParams(location.search).get("open") || "") ?
@@ -143,6 +143,7 @@
       if (ctl) ctl.abort();
       ctl = window.AbortController ? new AbortController() : null;
       var mine = ++seq, q = query();
+      tried = q;
       busy = true;
       window.clearTimeout(slow);
       if (!last) slow = window.setTimeout(function () { wrap.classList.add("loading"); }, 300);
@@ -168,6 +169,9 @@
     }
 
     function fresh() {
+      tableEl.classList.remove("stale");
+      unrefuse();
+      alertBox.textContent = "";
       lastOk = Date.now();
       failing = false;
       attempt = 0;
@@ -179,8 +183,6 @@
        of issueslive.js. */
     function receive(data, user) {
       fresh();
-      alertBox.textContent = "";
-      tableEl.classList.remove("stale");
       header(data);
       var still = drawer.id() || KW.selecting(tableEl);
       if (user || !last || (!still && !KW.columnHead.isOpen() &&
@@ -217,9 +219,7 @@
       }
       var active = KW.activeTotal || 0;
       KW.setTitle(active ? "(" + KW.num(active) + ") Issues · kwatch" : "Issues · kwatch");
-      sub.textContent = KW.plural(data.total, "issue", "issues") +
-        (f.status === "active" ? " going on" : f.status === "resolved" ?
-          " resolved · kwatch keeps them for 7 days" : " in the last 7 days");
+      sub.textContent = KW.issueNotes.subtitle(f, data);
       pager.paint(data, f.page, f.pageSize);
       // A chip removed hands the focus to the one before it, else to
       // the search box; a pager button gone to the current page.
@@ -259,6 +259,13 @@
       }
     }
 
+    /* cleared: the view without its filters; the status, order and
+       page size stay. */
+    function cleared() {
+      return LQ.copy(LQ.blank(), { status: f.status, sort: f.sort, dir: f.dir,
+        pageSize: f.pageSize });
+    }
+
     function emptyState(page, ids) {
       empty.textContent = "";
       wrap.hidden = ids.length === 0;
@@ -271,7 +278,7 @@
         b.type = "button";
         b.addEventListener("click", function () {
           if (later) setView(Object.assign({}, f, { page: 1 }));
-          else KW.$("[data-fclear]", main).click();
+          else setView(cleared());
         });
         p.appendChild(b);
         return empty.appendChild(p);
@@ -286,7 +293,33 @@
       });
     }
 
+    var NEVER = 2147000000;
+    var refused = null, pagerBox = $("[data-pager]");
+
+    /* badRequest: the server refused the search or a filter (400); asking
+       again would get the same answer, so nothing is retried. */
+    function badRequest(res) {
+      alertBox.textContent = "";
+      alertBox.appendChild(KW.issueNotes.badRequest(res, function () { setView(cleared()); }));
+      // The rows and pager are of another view: hide them, so they do
+      // not read as this filter's answer.
+      if (!refused) refused = { pager: pagerBox.hidden };
+      wrap.hidden = true;
+      pagerBox.hidden = true;
+      return NEVER;
+    }
+
+    /* unrefuse shows the rows and pager again after a refused search,
+       when the next read is good. */
+    function unrefuse() {
+      if (!refused) return;
+      pagerBox.hidden = refused.pager;
+      wrap.hidden = !last || !shown || !shown.length;
+      refused = null;
+    }
+
     function showFailure(res) {
+      if (res.status === 400) return badRequest(res);
       failing = true;
       var k = KW.kindOf(res.status);
       alertBox.textContent = "";
@@ -295,6 +328,10 @@
       // (refresh.js) says they may be old.
       if (last) {
         tableEl.classList.add("stale");
+        // The reader just changed the view: these rows are the old one.
+        if (tried !== etagQuery) {
+          alertBox.appendChild(KW.issueNotes.stale());
+        }
       } else {
         wrap.hidden = true;
         empty.textContent = "";
@@ -345,6 +382,7 @@
       stop: function () {
         KW.place.save(KW.lastList, window.scrollY, lastRow);
         drawer.stop();
+        table.stop();
         keep.stop();
         stopped = true;
         if (ctl) ctl.abort();

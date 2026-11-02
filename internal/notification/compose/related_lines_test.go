@@ -30,7 +30,8 @@ func TestWriterSaysWhatCausedAnAnnouncement(t *testing.T) {
 
 	msg := linkWriter(linkBase).Write(d, d.Incident.Opened)
 
-	assert.Contains(t, msg.Note, "Caused by: Node n1 (prod-eu-1) is not ready.")
+	assert.Contains(t, msg.Note, "Likely caused by: Node n1 "+
+		"(prod-eu-1) is not ready; kwatch is still checking.")
 	assert.Contains(t, blockTexts(msg),
 		"Cause in dashboard: "+linkBase+"/issues/node-1")
 	assert.Equal(t, "Open in dashboard: "+linkBase+"/issues/rb",
@@ -108,7 +109,7 @@ func TestWriterCountsTheWeekWhenFailingAgain(t *testing.T) {
 
 	assert.Contains(t, msg.Note,
 		"This is the fifth time this week on pod/api-1.")
-	assert.Contains(t, msg.Note, "Caused by: Node n1")
+	assert.Contains(t, msg.Note, "Likely caused by: Node n1")
 }
 
 func TestWriterSaysHowManyPodsAResolveAffected(t *testing.T) {

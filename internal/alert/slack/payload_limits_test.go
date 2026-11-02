@@ -145,3 +145,14 @@ func TestCapBlocksAnnouncesWhatItDropped(t *testing.T) {
 		"a trimmed alert must say so",
 	)
 }
+
+// A limit of three characters or fewer has no room for the ellipsis, and
+// the cut must still never leave half an escape such as "&a".
+func TestTruncateMrkdwnTinyLimitKeepsEntitiesWhole(t *testing.T) {
+	for limit := 0; limit <= 3; limit++ {
+		out := truncateMrkdwn("&amp;&lt;", limit)
+		assert.NotContains(t, out, "&", "limit %d: %q", limit, out)
+		assert.LessOrEqual(t, utf8.RuneCountInString(out), limit)
+	}
+	assert.Equal(t, "ab", truncateMrkdwn("abcdef", 2))
+}

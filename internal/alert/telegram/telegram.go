@@ -99,9 +99,9 @@ func (t *Telegram) Verify(ctx context.Context) error {
 	return err
 }
 
-// SendIncident sends the incident narrative in Telegram's Markdown parse
-// mode. Every event-derived character is escaped; the application output
-// follows in a code block.
+// SendIncident sends the incident narrative in Telegram's HTML parse
+// mode. Every event-derived character is HTML-escaped; the application
+// output follows in a code block.
 func (t *Telegram) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {

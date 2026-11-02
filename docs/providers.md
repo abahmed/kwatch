@@ -36,6 +36,15 @@ plain credentials and `${ENV_VAR}` substitutions for sensitive fields.
   retried (the payload will not get better), and a `5xx` or network error always is. A
   provider cannot have its own idea of what a status code means — the linter rejects raw
   `net/http` calls under `internal/alert/`.
+- **No cloud metadata.** A send to a cloud instance-metadata address is
+  refused and never retried: 169.254.169.254 and the rest of
+  169.254.0.0/16 and fe80::/10, fd00:ec2::254, 100.100.100.200,
+  `metadata.google.internal` and `metadata.goog`. kwatch checks the URL and
+  every address the name resolves to, so a name pointing there is refused
+  too, and the send trail says "blocked: cloud metadata address". Private,
+  loopback and in-cluster addresses (an in-cluster Mattermost, ntfy or
+  Gotify) work as before. Behind `app.proxyURL` the proxy resolves the
+  name, so only the URL is checked.
 
 ## What each provider receives
 
@@ -61,11 +70,11 @@ anyone. Sensu Go records them as a passing (OK) check.
 
 | Group | Providers | What they send |
 |:--|:--|:--|
-| 💬 Chat | Slack, Discord, Microsoft Teams, Teams Workflow, Mattermost, Rocket.Chat, Google Chat, Webex, Matrix, Telegram, Zulip, Feishu, DingTalk, WeCom, Flock, Threema, Signal | The Note as the message text, escaped for the chat's markup, with recent application output as a code or quoted block when there is any. Broadcast mentions such as `@channel` are neutralized. Matrix sends the Note as `body` and HTML-escaped as `formatted_body`. Slack with a bot token announces each incident as one root message holding the whole Note and its output, keeps every update and the resolve in its thread, and edits the root to the same announcement under the new status marker when the status changes (a thread reply that is not a status change leaves the root alone; after a restart the root cannot be rebuilt, so only the thread grows). Application output is fenced with a code fence longer than any run of backticks in it, so it cannot close the block; it is cut before the closing fence is added. WeCom `<@userid>` and Zulip `@*group*` mentions in workload text are neutralized too, and so is Telegram's `@username` (a zero-width space follows the `@`). Microsoft Teams shows the incident title as escaped text, so a title taken from the cluster never becomes a link or a mention. |
-| 🚨 Paging | PagerDuty, Opsgenie, Splunk On-Call, GoAlert, ilert, incident.io, Squadcast, Zenduty, SIGNL4, Alerta, Datadog, New Relic, AWS SNS, Splunk HEC, Sensu Go | The Short as the alert title or summary, the Note (plus output) as details, the incident id as the dedup or alert key, and the provider's resolve or close action when the incident resolves. Severity follows the incident severity: only a page-tier incident gets the priority that pages (for ilert the configured `priority`); a notify or low tier incident is sent at a lower one (ilert `LOW`, Opsgenie P3 or P4). |
+| 💬 Chat | Slack, Discord, Microsoft Teams, Teams Workflow, Mattermost, Rocket.Chat, Google Chat, Webex, Matrix, Telegram, Zulip, Feishu, DingTalk, WeCom, Flock, Threema, Signal | The Note as the message text, escaped for the chat's markup, with recent application output as a code or quoted block when there is any. Broadcast mentions such as `@channel` are neutralized, and only where they stand alone: an `@` inside an email address or a URL is left as it is. Mattermost and Rocket.Chat neutralize every `@name`, because both notify the user or group of any name. WeCom and Teams Workflow escape Markdown in the narrative. Matrix sends the Note as `body` and HTML-escaped as `formatted_body`. Slack with a bot token announces each incident as one root message holding the whole Note and its output, keeps every update and the resolve in its thread, and edits the root to the same announcement under the new status marker when the status changes (a thread reply that is not a status change leaves the root alone; after a restart the root cannot be rebuilt, so only the thread grows). Application output is fenced with a code fence longer than any run of backticks in it, so it cannot close the block; it is cut before the closing fence is added. WeCom `<@userid>` and Zulip `@*group*` mentions in workload text are neutralized too, and so is Telegram's `@username` (a zero-width space follows the `@`). Microsoft Teams shows the incident title as escaped text, so a title taken from the cluster never becomes a link or a mention. |
+| 🚨 Paging | PagerDuty, Opsgenie, Splunk On-Call, GoAlert, ilert, incident.io, Squadcast, Zenduty, SIGNL4, Alerta, Datadog, New Relic, AWS SNS, Splunk HEC, Sensu Go | The Short as the alert title or summary, the Note (plus output) as details, the incident id as the dedup or alert key, and the provider's resolve or close action when the incident resolves. Severity follows the incident severity: only a page-tier incident gets the priority that pages (for ilert the configured `priority`); a notify or low tier incident is sent at a lower one (ilert `LOW`, Opsgenie P3 or P4). AWS SNS also receives the paging-only messages (the close of an incident another one took over), because its subscribers page on the incident key. |
 | 📋 Issue trackers | GitHub, GitLab, Gitea, Jira, ClickUp | One issue per incident: the Short as title and the Note (plus output and the cluster name) as body. Updates add a comment. On resolve kwatch comments and closes the issue (GitHub, GitLab, Gitea; Jira moves it through `closeTransition` and ClickUp to `closeStatus` when you set one, otherwise they only comment, because workflows are defined per project or list). A resolved incident that fails again within its reopen window comments on the same issue and reopens it on GitHub, GitLab and Gitea. Jira (`reopenTransition`) and ClickUp (`reopenStatus`) reopen only when you configure both the close and the reopen name; otherwise the mapping is forgotten at resolve and a recurrence opens a new issue. Pod-controlled text in the Note has its `@mentions` neutralized, and Jira wiki markup in it is escaped. A GitHub 403 that says the rate limit was hit is retried like a 429. |
 | 📱 SMS and push | Twilio, Plivo, Vonage, MessageBird, Pushover, Pushbullet, Gotify, ntfy, IFTTT, Home Assistant | The Short. A resolve is never louder than the incident: for Pushover, Gotify and ntfy it is sent at the configured priority capped at normal, or at `resolvedPriority` when set. IFTTT also sends the Note as `value2` and the status as `value3`. |
-| 📧 Email | Email (SMTP), AWS SES, SendGrid, Mailgun, Resend | Subject is the Short on one line; the body is the Note followed by recent output as a `> ` quoted block. |
+| 📧 Email | Email (SMTP), AWS SES, SendGrid, Mailgun, Resend | Subject is the Short on one line; the body is the Note followed by recent output as a `> ` quoted block. A Pro message with evidence is sent as the same plain text plus an HTML alternative, by all five (SMTP, SES, SendGrid, Mailgun and Resend). |
 | 🔗 Structured | Custom Webhook, n8n, Zapier | The whole message as JSON (fields below). |
 
 Long texts are cut at the provider's size limit on a character boundary and end
@@ -101,6 +110,10 @@ of them changes whether, when or how loudly kwatch alerts.
   incidents are tied only when the reasoning ties them: the failure chain
   of one goes on past its limit into the other's failures, or one is
   blamed on the root of the other (`incident.Related`, `relations.go`).
+  When the incident has no cause of its own and the tie is only the other
+  incident's chain reaching it, the line says `Likely caused by: <title>;
+  kwatch is still checking.`, and the lines that say the cause is unclear or
+  what was checked are dropped.
 - `This is the fourth time this week on deployment/api.` The recurrence
   line names the object once the root failed four times or more in seven
   days (announced occurrences only, this one included); a `failing again`

@@ -150,15 +150,26 @@ func (m *Manager) workloadBroken(p *Incident) bool {
 	return false
 }
 
+// StillCrashingNote ends the reason of a resolve at the StillBrokenMax
+// cap that held only because a container kept crashing, the workload
+// being at its replicas. Without it the cap held on a workload short of
+// replicas. Messages word their lead from it.
+const StillCrashingNote = "; container still crashing"
+
 // resolveReason is why a recovering or flapping incident ends now. It
 // says what held, unless the workload is still broken: the cap ended the
-// hold and not a recovery, so the reason must not claim health.
+// hold and not a recovery, so the reason must not claim health. It
+// carries which condition held at the cap.
 func (m *Manager) resolveReason(
 	p *Incident, now time.Time, healthy Reason,
 ) Reason {
-	if m.workloadBroken(p) || m.crashing(p, now) {
-		return Reason(StoppedTrackingPrefix + format.Duration(StillBrokenMax) +
-			"; coverage check continues")
+	stopped := StoppedTrackingPrefix + format.Duration(StillBrokenMax) +
+		"; coverage check continues"
+	switch {
+	case m.workloadBroken(p):
+		return Reason(stopped)
+	case m.crashing(p, now):
+		return Reason(stopped + StillCrashingNote)
 	}
 	return healthy
 }

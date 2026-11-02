@@ -80,3 +80,25 @@ func TestDashboardCoverageWithoutDynamicDiscoveryIsNotPartial(t *testing.T) {
 
 	assert.True(t, c.build().DiscoveryComplete)
 }
+
+// /api/coverage carries the ClusterRole fix of a refused kind: the rule
+// on the kind and the merged rules of every refused kind.
+func TestDashboardCoverageCarriesTheMissingRBACRules(t *testing.T) {
+	findingScope, err := scope.New(
+		config.RuntimeConfigFor(&config.Config{}).Scope(), nil, false, nil)
+	require.NoError(t, err)
+	c := coverageSources{
+		typed: fakeTypedCoverage{synced: usageNow},
+		model: inventory.NewModel(inventory.Options{}), scope: findingScope,
+	}
+
+	got := c.build().Kinds
+
+	want := kube.RBACRule{APIGroups: []string{""},
+		Resources: []string{"secrets"},
+		Verbs:     []string{"get", "list", "watch"}}
+	require.Len(t, got.Unreadable, 1)
+	require.NotNil(t, got.Unreadable[0].Rule)
+	assert.Equal(t, want, *got.Unreadable[0].Rule)
+	assert.Equal(t, []kube.RBACRule{want}, got.MissingRules)
+}

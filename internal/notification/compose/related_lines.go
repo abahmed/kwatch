@@ -23,13 +23,28 @@ const (
 
 // causedBySentences name the open incident this one is caused by when
 // people already heard about it: "Caused by: Node n1 is not ready."
+// Without a cause of its own the tie is only the other incident's chain
+// reaching this one, so the line says so instead of standing beside a
+// sentence that no cause is known: "Likely caused by: Node n1 is not
+// ready; kwatch is still checking."
 func causedBySentences(f caseFacts) []sentence {
 	cause, ok := f.p.CauseTold()
 	if !ok {
 		return nil
 	}
 	title := strings.TrimSpace(strings.TrimSuffix(cause.Title, "."))
+	if f.p.Cause == nil {
+		return []sentence{{part: partCause, text: "Likely caused by: " +
+			title + "; kwatch is still checking."}}
+	}
 	return []sentence{{part: partCause, text: "Caused by: " + title + "."}}
+}
+
+// toldCause reports an incident whose caused-by line speaks, so the
+// sentences that say no cause is known stay silent.
+func toldCause(f caseFacts) bool {
+	_, ok := f.p.CauseTold()
+	return ok
 }
 
 // weekTimes is how many times people heard of the incident's root

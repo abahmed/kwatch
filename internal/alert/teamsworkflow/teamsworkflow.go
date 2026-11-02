@@ -73,15 +73,19 @@ func (t *TeamsWorkflow) Name() string {
 	return "Teams Workflow"
 }
 
+// teamsWorkflowTextLimit bounds the card text so the payload stays well
+// under the Teams message limit of about 28 KB, card markup included.
+const teamsWorkflowTextLimit = 20000
+
 // SendIncident posts the incident narrative as one card text block, with
-// the workload's last output as a Markdown code block.
+// the workload's last output as a Markdown code block. The TextBlock
+// renders Markdown, so the narrative is escaped as Markdown.
 func (t *TeamsWorkflow) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
-	return t.SendMessage(ctx, safetext.NoteWithOutput(
-		notification.NeutralizeMentions(m.NoteText()),
-		safetext.Lines(m.Output, notification.NeutralizeMentions),
-		"\n\n", 0))
+	return t.SendMessage(ctx, safetext.RichWithOutput(m,
+		notification.MarkdownDialect(nil, "\n\n"), "\n\n",
+		teamsWorkflowTextLimit))
 }
 
 // SendMessage sends text message to the provider

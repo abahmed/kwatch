@@ -7,6 +7,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/email"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -82,7 +83,8 @@ func (s *Resend) Name() string {
 func (s *Resend) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
-	return s.send(ctx, m.MailSubject(), m.MailBody())
+	text, page := email.Bodies(m)
+	return s.send(ctx, m.MailSubject(), text, page)
 }
 
 // SendMessage mails a plain operator message under the configured subject.
@@ -91,15 +93,21 @@ func (s *Resend) SendMessage(ctx context.Context, msg string) error {
 	if len(subject) == 0 {
 		subject = "kwatch alert"
 	}
-	return s.send(ctx, subject, msg)
+	return s.send(ctx, subject, msg, "")
 }
 
-func (s *Resend) send(ctx context.Context, subject, msg string) error {
+// send mails text, with page as the HTML alternative when it is set.
+func (s *Resend) send(
+	ctx context.Context, subject, msg, page string,
+) error {
 	payload := map[string]interface{}{
 		"from":    s.from,
 		"to":      s.to,
 		"subject": subject,
 		"text":    msg,
+	}
+	if page != "" {
+		payload["html"] = page
 	}
 
 	body, err := json.Marshal(payload)

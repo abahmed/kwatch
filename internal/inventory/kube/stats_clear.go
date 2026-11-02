@@ -44,16 +44,12 @@ func newPublishLog() *publishLog {
 	}
 }
 
-// optionalSource reports sources read from endpoints that may fail on
-// their own (cAdvisor, the kubelet's /metrics). Their readings get the
-// same grace as a failed summary before they are cleared.
-func optionalSource(source string) bool {
-	return source == throttleSource || source == runtimeSource
-}
-
 // answered stores what a successful poll of node published and returns
 // empty observations for what the previous poll published and this one
-// did not.
+// did not. A reading missing from an answer gets the same grace as a
+// failed poll: a kubelet that answers with an empty or partial summary
+// (it is restarting, or an optional endpoint failed on its own) must not
+// clear readings at once, which would read as a recovery and flap.
 func (l *publishLog) answered(
 	node string, observations []inventory.Observation, now time.Time,
 ) []inventory.Observation {
@@ -73,7 +69,7 @@ func (l *publishLog) answered(
 		if _, still := current[key]; still {
 			continue
 		}
-		if optionalSource(key.source) && misses+1 < statsFailuresBeforeClear {
+		if misses+1 < statsFailuresBeforeClear {
 			current[key] = misses + 1
 			continue
 		}
@@ -91,12 +87,20 @@ func (l *publishLog) answered(
 }
 
 // release forgets that node published key and reports whether node was
-// the one that may clear it.
+// the one that may clear it. While another node still holds the key, that
+// node becomes its owner and nothing is cleared: the entity is still
+// reported there.
 func (l *publishLog) release(key published, node string) bool {
 	if owner, ok := l.owners[key]; ok && owner != node {
 		return false
 	}
 	delete(l.owners, key)
+	for other, keys := range l.nodes {
+		if _, held := keys[key]; held && other != node {
+			l.owners[key] = other
+			return false
+		}
+	}
 	return true
 }
 

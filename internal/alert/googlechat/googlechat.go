@@ -100,9 +100,13 @@ func (g *GoogleChat) buildRequestBody(text string) ([]byte, error) {
 	return jsonBytes, nil
 }
 
+// googleChatTextLimit keeps a message under Google Chat's limit of 4096
+// characters for message text.
+const googleChatTextLimit = 4000
+
 // incidentText is the Note with the last output as a code block. Mentions
 // are neutralized so log text cannot notify a whole space.
 func incidentText(m notification.Message) string {
 	return safetext.RichWithOutput(m, notification.GoogleChatDialect(),
-		"\n", 0)
+		"\n", googleChatTextLimit)
 }

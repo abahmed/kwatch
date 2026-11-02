@@ -63,7 +63,8 @@ tier that rose since the record was saved (a page above all) stays news. The
 adoption keeps the tier people last heard: the saved one (`restoredTier`)
 until this run decides an update, then the tier of that update (`toldTier`).
 A rise told inside the grace is therefore told once, not again one
-`MaterialGap` later.
+`MaterialGap` later. The update says "It is now critical." (page) or "It is
+now a warning." (notify) (`raisedSentences`).
 
 **A partial view is not a rise.** Right after a restart some kinds have
 not synced, and a detector may describe a failure in poorer words: an

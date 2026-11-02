@@ -72,7 +72,7 @@ func (v *view) serviceAtAddress(
 	v.gate(caller, pod)
 	services := v.servicesSelecting(pod)
 	sort.Slice(services, func(i, j int) bool {
-		return services[i].String() < services[j].String()
+		return inventory.CompareIDs(services[i], services[j]) < 0
 	})
 	for _, service := range services {
 		if v.servesPort(service, port) {

@@ -53,20 +53,54 @@ func modeFamily(p incident.Incident) string {
 	return string(p.Mode.Family())
 }
 
-// modeLabel is the plain name of a failure family.
+// modeLabel is the plain name of a failure family: its own label, or
+// its name split into words, an acronym kept whole ("APIServer" is
+// "API server", "PLEGSlow" is "PLEG slow").
 func modeLabel(family string) string {
 	if l, ok := modeLabels[family]; ok {
 		return l
 	}
-	var b strings.Builder
-	for i, r := range family {
-		if i > 0 && unicode.IsUpper(r) {
-			b.WriteByte(' ')
-			r = unicode.ToLower(r)
+	words := splitWords(family)
+	for i, w := range words {
+		if i > 0 && !isAcronym(w) {
+			words[i] = strings.ToLower(w)
 		}
-		b.WriteRune(r)
 	}
-	return b.String()
+	return strings.Join(words, " ")
+}
+
+// splitWords splits a CamelCase name into its words: a word starts at
+// a capital after a small letter or a digit, or at the last capital of
+// a run followed by a small letter.
+func splitWords(name string) []string {
+	runes := []rune(name)
+	var out []string
+	start := 0
+	for i := 1; i < len(runes); i++ {
+		r, prev := runes[i], runes[i-1]
+		if !unicode.IsUpper(r) {
+			continue
+		}
+		endsRun := unicode.IsUpper(prev) && i+1 < len(runes) &&
+			unicode.IsLower(runes[i+1])
+		if unicode.IsLower(prev) || unicode.IsDigit(prev) || endsRun {
+			out = append(out, string(runes[start:i]))
+			start = i
+		}
+	}
+	return append(out, string(runes[start:]))
+}
+
+// isAcronym reports a word of two or more capitals (or digits).
+func isAcronym(w string) bool {
+	n := 0
+	for _, r := range w {
+		if !unicode.IsUpper(r) && !unicode.IsDigit(r) {
+			return false
+		}
+		n++
+	}
+	return n >= 2
 }
 
 // validMode reports whether a ?mode= value can name a family: a short
@@ -155,5 +189,18 @@ func namespaceMap(live []incident.Incident) InsightNamespaces {
 	})
 	out := InsightNamespaces{More: max(0, len(tiles)-maxInsightTiles)}
 	out.Tiles = tiles[:min(len(tiles), maxInsightTiles)]
+	return out
+}
+
+// modeLabelsOf names each family of modes in plain words; nil without
+// any.
+func modeLabelsOf(modes map[string]bool) map[string]string {
+	if len(modes) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(modes))
+	for m := range modes {
+		out[m] = modeLabel(m)
+	}
 	return out
 }

@@ -145,7 +145,7 @@ input, select { display: block; width: 100%; margin-top: 6px; padding: 12px 14px
 .sev-low { border-left-color: var(--control-border); }
 .sev-resolved { border-left-color: var(--success); }
 .i-rep { display: inline-block; margin-left: 8px; font-size: 0.75rem; font-weight: 700; padding: 0 8px; border-radius: var(--radius-pill); background: var(--degraded-bg); color: var(--degraded); vertical-align: 2px; }
-.nomatch { padding: 28px 20px; color: var(--text-muted); }
+.nomatch { padding: 28px 0; color: var(--text-muted); }
 .skel { padding: 18px 20px; }
 .skel span { display: block; height: 14px; border-radius: var(--radius-chip); background: var(--surface); }
 .skel span + span { margin-top: 10px; width: 60%; }
@@ -323,7 +323,7 @@ input, select { display: block; width: 100%; margin-top: 6px; padding: 12px 14px
 .links-404 { margin-top: 14px; }
 .ch-detail + .link, .ch-msg + .link { margin-top: 4px; min-height: 28px; }
 
-/* Evidence (Pro), under "Why kwatch thinks this". Mono blocks stay on --ink in both modes; colour
+/* Evidence (Pro), under "Why kwatch thinks this". Mono blocks stay on --ink in both modes; color
    only inside badges and the chain's break chip. */
 .ev-summary { color: var(--text-muted); margin: 16px 0 12px; }
 .ev-card { margin-bottom: 12px; }

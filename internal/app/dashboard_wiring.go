@@ -93,7 +93,31 @@ func dashboardTrail(
 				At: a.At, Channel: a.Provider, Kind: a.Kind,
 				Placement: a.Placement, Result: a.Result,
 				Retries: a.Retries, Carrier: a.Carrier,
-				Fallback: a.Fallback, Error: a.Error,
+				Fallback: a.Fallback, Error: a.Error, Reason: a.Reason,
+			})
+		}
+		return out
+	}
+}
+
+// dashboardDeliveryDetail reports each incident's pager states and the
+// texts its channels accepted to the dashboard's incident page.
+func dashboardDeliveryDetail(
+	m *delivery.Manager,
+) func(id string) dashboard.DeliveryDetail {
+	return func(id string) dashboard.DeliveryDetail {
+		var out dashboard.DeliveryDetail
+		for _, p := range m.PagerStatus(id) {
+			out.Pager = append(out.Pager, dashboard.PagerRow{
+				Provider: p.Provider, State: p.State,
+				PagedAt: p.PagedAt, ClosedAt: p.ClosedAt,
+				Reason: p.Reason,
+			})
+		}
+		for provider, s := range m.SentTexts(id) {
+			out.Sent = append(out.Sent, dashboard.SentMessage{
+				Provider: provider, At: s.At, Kind: s.Kind,
+				Text: s.Text, Cut: s.Cut,
 			})
 		}
 		return out

@@ -10,7 +10,7 @@
     "new": ["New", "c-state", "It started failing."],
     urgent: ["More urgent", "c-page", "It kept failing, so kwatch alerted the on-call person."],
     reopened: ["Came back", "c-state c-flap", "It failed again after it was resolved."],
-    resolved: ["Resolved", "c-resolved", "It stopped failing."]
+    resolved: [KW.STATE.resolved.label, "c-resolved", "It stopped failing."]
   };
   var WINDOWS = { "1h": "the last hour", "24h": "the last 24 hours" };
 

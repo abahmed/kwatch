@@ -293,7 +293,10 @@ restart the Deployment yourself after editing it.
   lifecycle and is used for Deployment rollouts. It is not monitoring
   readiness.
 - `/health` reports optional monitor degradation and safe reason codes.
-- `/status` (opt-in, `healthCheck.statusEndpoint`) shows open incidents.
+- `/status` (opt-in, `healthCheck.statusEndpoint`) shows open incidents and
+  what kwatch cannot see. Its gaps include crash output from pod logs (when
+  `pods/log` is refused) and `dashboard links in alerts` with `off: <reason>`
+  when alerts carry no dashboard link.
 
 When the license changes the edition, kwatch rebuilds in the same process.
 The old health listener keeps answering `/healthz` (and reports not ready)
@@ -315,8 +318,19 @@ component stopped reporting progress), `component_failed` and
 handler of a watched kind keeps panicking, so its objects are not reaching
 the model), `watcher_failed`,
 `persistence_restore_failed`, `storage_reset`, `storage_over_cap`,
-`heartbeat_failed`, `config_overlay_invalid`, and, in the `coverage` object, `disabled_by_config`,
-`sync_timeout` and `budget_exceeded`. The
+`trail_restore_failed`, `persistence_write_failed`,
+`heartbeat_failed`, `config_overlay_invalid`, and, in the `coverage` object,
+`permission_denied`, `api_unavailable`, `cache_sync_failed`,
+`cache_sync_timeout`, `cache_sync_pending`, `handler_panics`,
+`disabled_by_config`, `watch_budget_exceeded`, `object_cap_reached` and
+`unknown`. The earlier names `sync_timeout` and `budget_exceeded` are still
+read on input and shown under the new ones. Two optional components are
+easy to meet: `pod-logs` (`optional_permission_denied` while the API refuses
+`pods/log`, so crash output is not shown) and `usage-history`
+(`persistence_restore_failed` or `persistence_write_failed` when the saved
+container usage history cannot be read or written; nothing is lost but the
+usage peaks across a restart). The `delivery-outbox` component also reports
+`trail_restore_failed` when the saved send trail could not be read back. The
 [configuration reference](./configuration.md#-health-reasons) lists all of
 them with their meaning.
 
@@ -374,6 +388,24 @@ has finished its initial list, Kwatch compares the saved object fingerprints wit
 the live cluster and records changes made while it was down, so root-cause
 analysis can still find a rollout that happened during the gap. Kubernetes
 Events that expired while Kwatch was unavailable cannot be reconstructed.
+
+**The restart note.** After a restart, kwatch does not list every restored
+incident again. Once every restored incident that is still failing was listed
+after a recent restart, it sends one short message instead: that kwatch
+restarted, why, how long it was down, and how many problems from before are
+still open, with the dashboard address when there is one. A restored incident
+that was listed is not listed again for an hour (`RestoredRelist`), and the
+same note (same reason, same incidents) is not sent twice within that hour.
+The reason is one of `graceful_shutdown`, `leader_handoff`,
+`internal_failure`, `oom_killed`, `eviction`, `node_disruption`,
+`deployment_rollout`, `api_unavailable` or `unknown`.
+
+Crash-log reads (the previous run's output of a crashed container) back off
+for 5 minutes after the API refuses `pods/log`, and a refusal never becomes
+an incident: `/health` shows `pod-logs` degraded and `/status` lists the gap.
+Detectors keep a stale Lease or a CronJob that did not run as it was (they
+neither raise nor resolve `LeaseStale` or `CronJobNotScheduled`) while the
+data they read is stale.
 
 The state file is created with owner-only permissions and can be removed to
 reset Kwatch: it then starts cold and sends one startup summary. Store failures are
@@ -663,6 +695,14 @@ checks it when a key is set. Secret values are only hashed, and evidence is reda
 it is stored or rendered. Provider credentials come from mounted files, never
 from plain configuration.
 
+**Provider destinations.** Alert providers never send to a cloud
+instance-metadata address (169.254.169.254, the link-local ranges,
+fd00:ec2::254, 100.100.100.200, `metadata.google.internal`), checked on
+the URL and on every resolved address, so a mistyped or hostile webhook
+URL cannot read the node's cloud credentials. Private and in-cluster
+addresses are allowed; see "How providers work" in
+[providers](providers.md).
+
 **Dashboard link.** With the Pro dashboard on and exposed by an Ingress or
 HTTPRoute in kwatch's namespace, alert messages link to it (see "Link to
 the dashboard" in [providers](providers.md)), so the dashboard's host name
@@ -703,7 +743,21 @@ the configured proxy and CA bundle but **always verify TLS**:
 
 ## Outages and capacity
 
-Kubernetes API and provider outages are handled through bounded retries and
+### API server outage
+
+kwatch holds a state lock (a Lease) and must renew it through the API
+server. When the API server is out long enough that the lock cannot be
+renewed, kwatch deliberately stops sending and restarts: with the lock lost,
+another process could hold the state file, and only one writer may send.
+Alerts that were queued stay in the outbox and are sent once the API server
+is back and kwatch holds the lock again. During the outage kwatch cannot tell
+you about it, so the heartbeat (the dead man's switch,
+`heartbeatMonitor`) is the only alarm. Configure it; see
+[Heartbeat Monitor](./configuration.md#-heartbeat-monitor-dead-mans-switch).
+The restart is reported after the fact as `api_unavailable` in the restart
+note.
+
+Kubernetes API and provider outages are otherwise handled through bounded retries and
 degraded status. Delivery queues are bounded; sustained saturation coalesces or
 summarises notifications and can drop them, so operators should alert on queue saturation, terminal
 delivery failures, and dead letters.
@@ -775,8 +829,10 @@ and assert that `full` is read-only.
 `/health` publishes a bounded `coverage` object: watches by mode (`full`,
 `hashed`, `status`, `metadata`), the number of kinds skipped by the watch
 budget, the unavailable count, at most 50 unavailable kinds with a reason
-(`permission_denied`, `api_unavailable`, `sync_timeout`,
-`budget_exceeded`, `object_cap_reached`, `disabled_by_config`), a `reasons`
+(`permission_denied`, `api_unavailable`, `cache_sync_failed`,
+`cache_sync_timeout`, `cache_sync_pending`, `handler_panics`,
+`watch_budget_exceeded`, `object_cap_reached`, `disabled_by_config`,
+`unknown`), a `reasons`
 count per reason, and whether the last discovery was complete. Dynamic kinds
 that are skipped, unavailable, or over their object cap are listed too.
 The dashboard's `GET /api/coverage` gives the same state with names: the

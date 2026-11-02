@@ -42,6 +42,15 @@
 .cov-gaps { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 0.9375rem; overflow-wrap: anywhere; }
 .cov-more { font-family: var(--font-body); color: var(--text-muted); }
 
+/* The top of the Overview: still starting, alert links off. */
+.ov-top { display: grid; gap: 8px; margin: 12px 0 4px; }
+
+/* The permission to add: rules to copy. */
+.cov-rbac { margin-top: 16px; }
+.cov-yaml { position: relative; margin-top: 8px; }
+.cov-yaml pre { margin: 0; padding: 10px 12px; padding-right: 5.5rem; overflow-x: auto; font-size: 0.8125rem; line-height: 1.5; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-input); }
+.cov-yaml .btn { position: absolute; top: 6px; right: 6px; }
+
 @media (max-width: 700px) {
   .in-grid, .cov-grid { grid-template-columns: minmax(0, 1fr); }
   .in-card { padding: 14px 16px; }

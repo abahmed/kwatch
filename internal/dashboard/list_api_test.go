@@ -76,23 +76,34 @@ func TestListSortAcceptsOnlyKnownFieldsBothWays(t *testing.T) {
 
 func TestListRejectsInvalidParamsWithAPlainMessage(t *testing.T) {
 	s := filterFixture()
-	cases := map[string]string{
-		"/api/incidents?sort=password":      "invalid sort",
-		"/api/incidents?sort=recent":        "invalid sort",
-		"/api/incidents?sort=title&dir=up":  "invalid dir",
-		"/api/incidents?status=gone":        "invalid status",
-		"/api/incidents?page=-1":            "invalid page",
-		"/api/incidents?page=x":             "invalid page",
-		"/api/incidents?pageSize=1000":      "invalid pageSize",
-		"/api/incidents?acked=maybe":        "invalid acked",
-		"/api/incidents?since=1d":           "invalid since",
-		"/api/incidents?startedBefore=soon": "invalid startedBefore",
+	cases := map[string]queryErrorBody{
+		"/api/incidents?sort=password": {Param: "sort", Term: "password",
+			Error: `Unknown sort: "password".`},
+		"/api/incidents?sort=recent":       {Param: "sort", Term: "recent"},
+		"/api/incidents?sort=title&dir=up": {Param: "dir", Term: "up"},
+		"/api/incidents?status=gone": {Param: "status", Term: "gone",
+			Error: "Unknown status: gone. Use active, resolved or all."},
+		"/api/incidents?page=-1":       {Param: "page", Term: "-1"},
+		"/api/incidents?page=x":        {Param: "page", Term: "x"},
+		"/api/incidents?pageSize=1000": {Param: "pageSize", Term: "1000"},
+		"/api/incidents?acked=maybe":   {Param: "acked", Term: "maybe"},
+		"/api/incidents?since=1d":      {Param: "since", Term: "1d"},
+		"/api/incidents?startedBefore=soon": {Param: "startedBefore",
+			Term: "soon"},
+		"/api/incidents?startedBefore=0s": {Param: "startedBefore",
+			Term: "0s", Error: "0s must be more than zero."},
+		"/api/incidents?mode=Bogus.Thing": {Param: "mode",
+			Term: "Bogus.Thing", Error: "Unknown failure type: " +
+				"Bogus.Thing."},
+		"/api/incidents?stopped=yes": {Param: "stopped", Term: "yes"},
 	}
 	for path, want := range cases {
 		w := get(t, s, path)
-		if w.Code != http.StatusBadRequest ||
-			!strings.Contains(w.Body.String(), `"error":"`+want+`"`) {
-			t.Errorf("%s: %d %s, want 400 %q", path, w.Code,
+		got := decodeBadQuery(t, w)
+		if w.Code != http.StatusBadRequest || got.Param != want.Param ||
+			got.Term != want.Term || got.Error == "" ||
+			(want.Error != "" && got.Error != want.Error) {
+			t.Errorf("%s: %d %s, want 400 %+v", path, w.Code,
 				w.Body.String(), want)
 		}
 	}

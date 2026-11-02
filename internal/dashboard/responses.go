@@ -19,11 +19,12 @@ type IncidentListItem struct {
 	RepeatCount  int       `json:"repeatCount"`
 	AckedBy      string    `json:"ackedBy,omitempty"`
 	ResolvedAt   time.Time `json:"resolvedAt,omitzero"`
-	// Acked says someone acknowledged the incident, since AckedSince
-	// (omitted when an older kwatch saved it); the detail's Ack says
-	// more.
-	Acked      bool      `json:"acked,omitempty"`
-	AckedSince time.Time `json:"ackedSince,omitzero"`
+	// Acked says someone acknowledged the incident; the detail's Ack
+	// says more.
+	Acked bool `json:"acked,omitempty"`
+	// StoppedTracking marks a resolved incident kwatch stopped tracking
+	// at its still-broken cap rather than one that recovered.
+	StoppedTracking bool `json:"stoppedTracking,omitempty"`
 	// RootCause is the one-line cause, so a list row can say why
 	// without opening the issue. Empty while kwatch has none.
 	RootCause string `json:"rootCause"`
@@ -36,14 +37,10 @@ type IncidentListItem struct {
 // Kubernetes events are not held per incident, so the detail does not
 // carry them.
 //
-// SuggestedFix is the sentences of the last message's steps; FixSteps
-// are the same steps with their exact commands, and FixCommands the
-// commands alone, for copy buttons.
+// FixSteps are the last message's steps with their exact commands.
 type IncidentDetail struct {
 	IncidentListItem
-	SuggestedFix     string    `json:"suggestedFix,omitempty"`
 	FixSteps         []FixStep `json:"fixSteps"`
-	FixCommands      []string  `json:"fixCommands"`
 	Timeline         []Event   `json:"timeline"`
 	CapturedLogLines []string  `json:"capturedLogLines"`
 	DocsLink         string    `json:"docsLink,omitempty"`
@@ -95,6 +92,10 @@ type IncidentDetail struct {
 	// IncidentRelations are its cause and effect incidents and its
 	// blast radius (detail_relations.go).
 	IncidentRelations
+	// What became of the incident's messages, how it ended and what
+	// the page cannot show (responses_ended.go).
+	DeliveryOutcome
+	IncidentEnd
 	// Truncated counts what was left out to keep the response within
 	// its size limit; absent when nothing was.
 	Truncated *DetailTruncation `json:"truncated,omitempty"`
@@ -130,6 +131,21 @@ type DetailTruncation struct {
 	// histories left out.
 	SameTime   int `json:"sameTime,omitempty"`
 	UsageHours int `json:"usageHours,omitempty"`
+	// The incident's own record and its ties: the oldest transitions,
+	// break snapshots and phases, the containers of each snapshot,
+	// the last steps, related incidents, pagers, sent texts, the
+	// earliest moved-in incidents and the changes before recovery.
+	Transitions           int `json:"transitions,omitempty"`
+	Snapshots             int `json:"snapshots,omitempty"`
+	SnapshotRows          int `json:"snapshotRows,omitempty"`
+	Phases                int `json:"phases,omitempty"`
+	FixSteps              int `json:"fixSteps,omitempty"`
+	CausedBy              int `json:"causedBy,omitempty"`
+	Causing               int `json:"causing,omitempty"`
+	Pager                 int `json:"pager,omitempty"`
+	Sent                  int `json:"sent,omitempty"`
+	MovedFrom             int `json:"movedFrom,omitempty"`
+	ChangedBeforeRecovery int `json:"changedBeforeRecovery,omitempty"`
 }
 
 // EvidenceSection is what one check read. Status is ok, denied,
@@ -184,18 +200,22 @@ type Event struct {
 // when every namespace is watched. LastScan is the engine's latest loop
 // iteration, zero before the first; LastScanLate says it is older than
 // kwatch allows. KwatchNamespace and KwatchDeployment name kwatch's own
-// Deployment, for the command that reads its logs.
+// Deployment, for the command that reads its logs. Self is kwatch's view
+// of itself, absent while no session runs a pipeline, and
+// FailedLastHour the message sends that failed in the last hour, absent
+// without delivery (responses_self.go).
 type StatusResponse struct {
 	Version            string          `json:"version"`
 	Edition            string          `json:"edition"`
 	LastScan           time.Time       `json:"lastScan,omitzero"`
 	LastScanLate       bool            `json:"lastScanLate"`
-	ScanEverySeconds   int             `json:"scanEverySeconds"`
 	KwatchNamespace    string          `json:"kwatchNamespace"`
 	KwatchDeployment   string          `json:"kwatchDeployment"`
 	WatchedNamespaces  []string        `json:"watchedNamespaces"`
 	ExcludedNamespaces []string        `json:"excludedNamespaces,omitempty"`
 	PerChannelHealth   []ChannelHealth `json:"perChannelHealth"`
+	Self               *SelfStatus     `json:"self,omitempty"`
+	FailedLastHour     *int            `json:"failedLastHour,omitempty"`
 }
 
 // ChannelHealth is one alert channel's delivery health. LastErrorMessage

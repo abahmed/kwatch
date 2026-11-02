@@ -19,7 +19,7 @@
     { key: "obj", label: "Object", sort: "object" },
     { key: "status", label: "Status", sort: "status" },
     { key: "last", label: "When (going on or resolved)", sort: "last" },
-    { key: "ack", label: "Acknowledged", sort: "acked" },
+    { key: "ack", label: "Acknowledged", short: "Acked", sort: "acked" },
     { key: "started", label: "Start time", sort: "started" },
     { key: "dur", label: "Duration", sort: "duration" }
   ];
@@ -104,12 +104,15 @@
   /* options: every view option, with the defaults filled in. */
   function options() {
     var s = KW.store;
+    // A stored sort the page no longer knows would make every list
+    // read fail with 400: unknown values are dropped.
     var sort = String(s.get("sort") || "").split(":");
+    var key = oneOf(sort[0], LQ().SORTS, "");
     return { cols: columns(),
       density: oneOf(s.get("density"), ["comfortable", "compact"], "comfortable"),
       size: oneOf(s.get("size"), LQ().SIZES, 50),
       status: oneOf(s.get("status"), LQ().STATUSES, "active"),
-      sort: sort[0] || "", dir: sort[1] || "",
+      sort: key, dir: key ? oneOf(sort[1], ["asc", "desc"], "") : "",
       text: oneOf(s.get("text"), KW.TEXT_SIZES, "m"),
       contrast: s.get("contrast") === "more" };
   }
@@ -167,7 +170,8 @@
   }
 
   /* saveView stores (or replaces) a view under name, with the
-     columns shown now. */
+     columns shown now. It returns true, false (no name, or 20 views)
+     or "full" when this browser could not keep it. */
   function saveView(name, query) {
     name = String(name || "").trim().slice(0, 40);
     if (!name) return false;
@@ -177,7 +181,12 @@
     if (at >= 0) list[at] = v;
     else if (list.length < MAX_VIEWS) list.push(v);
     else return false;
-    KW.store.set("views", list);
+    var before = views();
+    if (!KW.store.set("views", list)) {
+      // Not kept: leave it out of the list too, or it would vanish on reload.
+      KW.store.set("views", before);
+      return "full";
+    }
     return true;
   }
 

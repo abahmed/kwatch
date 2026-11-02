@@ -20,7 +20,7 @@ candidates, so they do not affect a v0.10.x install.
 | Credentials | Inline in the config | `${file:/absolute/path}` references only |
 | Endpoints | `/healthz`, `/health` | Adds `/readyz`, `/availabilityz`, `/metrics` and an opt-in `/status` |
 | RBAC | One ClusterRole | Broader read access, Roles for the Lease, restart evidence and `kwatchconfigs` |
-| Memory | 128Mi limit | 512Mi limit, `GOMEMLIMIT` at 90% of it |
+| Memory | 128Mi limit | 256Mi request, 512Mi limit, `GOMEMLIMIT` at 90% of it |
 | Custom config | None | `KwatchConfig` resource (`kwatch.abahmed.dev/v1beta1`) |
 | Editions | One feature set | Community (free, no key) and Pro; a v0.10.x install lands on **Community**, see [Editions](#editions) |
 
@@ -272,7 +272,7 @@ your file with `values.yaml` before upgrading.
 | --- | --- |
 | `service.port` | Removed. The container and probe port come from `config.healthCheck.port` |
 | `image.pullPolicy` | Default is now `IfNotPresent` (was `Always`) |
-| `resources` | Limits are now 512Mi memory and 500m CPU; requests 128Mi and 100m. Raising memory above the default is covered by the sizing table in [production operations](./production-operations.md) |
+| `resources` | Limits are now 512Mi memory and 500m CPU; requests 256Mi and 100m. Raising memory above the default is covered by the sizing table in [production operations](./production-operations.md) |
 | `config.alert.*` | Needs `configSecretName`; the Secret's `config.yaml` replaces `.Values.config` |
 | `persistence.*` | New: `size`, `storageClass`, `existingClaim`, `emptyDir`, `emptyDirSizeLimit`, `pinToStorageDriverNodes`, `storageDriverTopologyKey`. `emptyDir` and `existingClaim` cannot both be set |
 | `rbac.mode`, `watch.secrets` | New. See [RBAC and the CRD](#rbac-and-the-crd) |
@@ -283,6 +283,10 @@ your file with `values.yaml` before upgrading.
 | `license.*` | New: `existingSecret`, `key` and `instanceSecret`. The license instance Secret and its Role are rendered only when one of them is set |
 | `tolerations` | Merged with the new `defaultTolerations` (30-second `not-ready` and `unreachable` tolerations) |
 | `terminationGracePeriodSeconds` | New, default 60 |
+| Startup probe | New: `/healthz` every 10 seconds, up to 30 failures, so a slow first start is not killed by the liveness probe |
+| Dashboard environment | The chart always sets `KWATCH_DASHBOARD_ENABLED` and `KWATCH_DASHBOARD_TRUST_PROXY` (`true` or `false`), so the chart values win over the config file in both directions. A `checksum/dashboard-secret` annotation restarts the Pod when the dashboard Secret changes |
+| `dashboard.port` | The render fails when it equals `config.healthCheck.port` with the dashboard enabled, because kwatch refuses to start with both ports equal |
+| `networkPolicy.*` dashboard rules | The dashboard ingress rules follow `dashboard.enabled` and `dashboard.networkPolicyFrom`, not `allowDefaults`. With `allowDefaults: false` and no `ingress`, `egress`, `extraEgressPorts` or `allowProbeEgressAll`, the render fails instead of producing a deny-all policy |
 
 The Pod also runs with a `RuntimeDefault` seccomp profile, no privilege
 escalation, all capabilities dropped and `fsGroup: 1000`. Namespaces that
@@ -327,6 +331,9 @@ helm rollback kwatch --namespace kwatch
   chart does not know the `persistence`, `rbac` or `crd` values.
 - Alerts opened under the new `kwatch-<cluster>-<key>` keys are not known to
   v0.10.x. Close any that stay open by hand.
+- The `trails` and `usage` buckets of the state file are additive. An older
+  1.0 build keeps the file and its data, but does not size or expire these
+  two buckets, so they stay until you remove them with the state file.
 - Between 1.0 builds, a state file with another schema version is moved aside
   and the outbox and thread IDs are carried over, so a rollback inside the
   1.0 line does not drop queued pages. Issue trackers save a resolved issue

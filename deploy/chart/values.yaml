@@ -137,7 +137,7 @@ resources:
     memory: 512Mi
     cpu: 500m
   requests:
-    memory: 128Mi
+    memory: 256Mi
     cpu: 100m
 
 # -- State store volume. Kwatch keeps incidents, changes,
@@ -207,7 +207,9 @@ affinity: {}
 # --set 'podAnnotations.cluster-autoscaler\.kubernetes\.io/safe-to-evict=null')
 # on a cluster where node scale-down matters more than an uninterrupted pod.
 # To ask Karpenter to leave the pod alone, set
-# karpenter.sh/do-not-disrupt: "true" here. To limit voluntary disruption
+# karpenter.sh/do-not-disrupt: "true" here (on the command line use
+# --set-string 'podAnnotations.karpenter\.sh/do-not-disrupt=true', since
+# --set turns true into a boolean, which Kubernetes rejects). To limit voluntary disruption
 # in general, add your own PodDisruptionBudget: the chart ships none, since
 # minAvailable: 1 on a one-pod Deployment would block every drain of its
 # node, while maxUnavailable: 1 allows one eviction at a time.

@@ -38,7 +38,7 @@ func TestOpenAnnouncedKeepsOnlyWhatSomeoneWasToldAndIsOpen(t *testing.T) {
 	for _, r := range got {
 		ids = append(ids, r.ID)
 	}
-	assert.Equal(t, []string{"open", "recovering"}, ids)
+	assert.Equal(t, []string{"open", "recovering", "flapping"}, ids)
 }
 
 // communityHarness is an engine in the Community edition over store.
@@ -59,6 +59,26 @@ func communityHarness(
 // open for good after a restart. A failure that was already there when
 // kwatch started was never announced, and is never saved or resolved.
 func TestCommunityResolvesAnIncidentItAnnouncedBeforeARestart(t *testing.T) {
+	saved, now := announcedBeforeRestart(t)
+	assert.Equal(t, 1, resolvesAfterRestart(t, saved, now))
+}
+
+// A Pro run whose licence lapsed restarts as a baseline. An incident it
+// announced that was flapping is restored like an open one, so its
+// resolve still closes the thread and the alert.
+func TestCommunityResolvesAFlappingIncidentAfterARestart(t *testing.T) {
+	saved, now := announcedBeforeRestart(t)
+	saved[0].State = incident.Flapping
+	saved[0].RecoveringSince = now
+	kept := openAnnounced(saved, nil)
+	require.Len(t, kept, 1, "the flapping incident is kept")
+	assert.Equal(t, 1, resolvesAfterRestart(t, kept, now))
+}
+
+// announcedBeforeRestart runs a Community engine over a baselined failure
+// and a new one, and returns what it saves and the time it stopped.
+func announcedBeforeRestart(t *testing.T) ([]incident.Record, time.Time) {
+	t.Helper()
 	start := time.Date(2026, 9, 29, 9, 0, 0, 0, time.UTC)
 	first := communityHarness(t, start, &memStore{})
 	first.add(kube.NodeSchema{}, node("n1", time.Time{}))
@@ -84,9 +104,16 @@ func TestCommunityResolvesAnIncidentItAnnouncedBeforeARestart(t *testing.T) {
 	saved := openAnnounced(first.engine.deps.Incidents.Export(),
 		first.engine.announcer.collect.Startup.Baselined)
 	require.Len(t, saved, 1, "only the announced incident is saved")
+	return saved, first.now
+}
 
-	// The process restarts; the failure is gone by then.
-	later := first.now.Add(time.Hour)
+// resolvesAfterRestart restarts a Community engine over saved an hour
+// after stopped, with the failure gone, and counts the resolves it sends.
+func resolvesAfterRestart(
+	t *testing.T, saved []incident.Record, stopped time.Time,
+) int {
+	t.Helper()
+	later := stopped.Add(time.Hour)
 	second := communityHarness(t, later, &memStore{records: saved})
 	require.Len(t, second.engine.deps.Incidents.Incidents(), 1,
 		"the announced incident comes back")
@@ -96,7 +123,7 @@ func TestCommunityResolvesAnIncidentItAnnouncedBeforeARestart(t *testing.T) {
 	second.add(kube.DeploymentSchema(), d)
 	second.add(kube.ReplicaSetSchema(), rs)
 	second.engine.reconcileDowntime()
-	second.run(later.Add(20*time.Minute), 10*time.Second)
+	second.run(later.Add(time.Hour), 10*time.Second)
 
 	var resolved int
 	for _, m := range second.messages {
@@ -104,6 +131,5 @@ func TestCommunityResolvesAnIncidentItAnnouncedBeforeARestart(t *testing.T) {
 			resolved++
 		}
 	}
-	assert.Equal(t, 1, resolved, "the open alert is closed: %v",
-		messageKeys(second))
+	return resolved
 }

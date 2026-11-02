@@ -35,6 +35,7 @@ func (inc *Incident) Snapshot() Incident {
 	}
 	out.AnnouncedRoute = inc.AnnouncedRoute.clone()
 	out.Ack = inc.Ack.clone()
+	out.Moved = inc.Moved.clone()
 	out.Journal = inc.Journal.clone()
 	out.CausedBy = append([]Related(nil), inc.CausedBy...)
 	out.Causing = append([]Related(nil), inc.Causing...)

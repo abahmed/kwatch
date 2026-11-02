@@ -16,6 +16,14 @@
     return KW.utc ? 0 : -new Date(KW.now()).getTimezoneOffset();
   }
 
+  /* zone: the time zone query: the offset and the zone's name (so
+     daylight saving is right); "UTC" while the page shows UTC. */
+  function zone(z) {
+    var name = "UTC";
+    try { if (!KW.utc) name = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { name = ""; }
+    return "tz=" + z + (name ? "&tzName=" + encodeURIComponent(name) : "");
+  }
+
   function weekday(date, last) {
     if (last) return "Today";
     var p = date.split("-");
@@ -184,14 +192,14 @@
      the Overview reports errors itself. */
   KW.trendsView = function (main) {
     var box = KW.$("[data-trends]", main);
-    var stopped = false, etag = "", zone = null;
+    var stopped = false, etag = "", zoneNow = null;
     return {
       load: function () {
         if (!box) return Promise.resolve();
         var z = tz();
-        if (z !== zone) etag = "";
-        zone = z;
-        return KW.api("/api/trends?tz=" + z, { etag: etag }).then(function (res) {
+        if (z !== zoneNow) etag = "";
+        zoneNow = z;
+        return KW.api("/api/trends?" + zone(z), { etag: etag }).then(function (res) {
           if (stopped || res.status !== 200 || !res.data) return;
           etag = res.etag;
           draw(box, res.data);

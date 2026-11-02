@@ -3,6 +3,7 @@ package dashboard
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -55,4 +56,26 @@ func TestCoverageNeedsAuthAndGet(t *testing.T) {
 		call(t, s, http.MethodGet, "/api/coverage", "").Code)
 	assert.Equal(t, http.StatusMethodNotAllowed,
 		call(t, s, http.MethodPost, "/api/coverage", testToken).Code)
+}
+
+func TestCoverageCountsEveryKindListInFull(t *testing.T) {
+	gap := kube.KindGap{Kind: "widgets.example.com",
+		Reason: kube.ReasonPermissionDenied}
+	got := withTotals(kube.Coverage{Kinds: kube.KindCoverage{
+		Unreadable: []kube.KindGap{gap},
+		Reasons: map[string]int{kube.ReasonPermissionDenied: 70,
+			kube.ReasonSyncPending: 2, kube.ReasonSyncFailed: 1,
+			kube.ReasonWatchBudget: 5, kube.ReasonDisabledByConfig: 1},
+	}})
+	want := KindTotals{Unreadable: 70, Unsynced: 3, NotWatched: 6}
+	if got.KindTotals != want {
+		t.Errorf("totals = %+v, want %+v", got.KindTotals, want)
+	}
+	body, _ := json.Marshal(got)
+	for _, key := range []string{`"kindTotals":{"unreadable":70`,
+		`"unreadable":[{"kind":"widgets.example.com"`} {
+		if !strings.Contains(string(body), key) {
+			t.Errorf("body lacks %s: %s", key, body)
+		}
+	}
 }

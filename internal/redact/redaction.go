@@ -179,6 +179,9 @@ func Evidence(value string) string {
 func EvidenceWithPolicy(
 	value string, includePrivateAddresses bool,
 ) string {
+	// Escapes and control characters first: one between a key and its
+	// value would hide the pair from every rule below.
+	value = StripControl(value)
 	lower := strings.ToLower(value)
 	for _, rule := range allCredentialRules {
 		if rule.wanted(lower) {

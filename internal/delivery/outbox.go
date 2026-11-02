@@ -271,12 +271,17 @@ func (o *outbox) flushJobs() (ok, wrote bool) {
 }
 
 // restoreBatch puts a failed batch back unless newer changes replaced it.
+// A record rewritten while the batch was failing (such as by setAttempts)
+// keeps its newer put; the old one would undo the newer send count.
 func (o *outbox) restoreBatch(
 	puts map[string]OutboxRecord, removes map[string]struct{},
 ) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	for id, record := range puts {
+		if _, newer := o.puts[id]; newer {
+			continue
+		}
 		if _, live := o.live[id]; live {
 			o.puts[id] = record
 		} else {
