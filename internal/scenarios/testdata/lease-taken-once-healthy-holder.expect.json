@@ -1,0 +1,7 @@
+{
+  "name": "lease-taken-once-healthy-holder",
+  "description": "A Lease taken once at startup, never seen renewing, with a running and ready holder.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "10m0s"
+}

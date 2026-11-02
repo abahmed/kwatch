@@ -180,6 +180,9 @@ type Incident struct {
 	// Scope remembers whether the announcement reached people, so its
 	// updates and resolve follow it even when no finding is left to judge.
 	Scope Scope
+	// heldForData says the latest tick held a resolve because kwatch
+	// cannot observe the root. Not persisted.
+	heldForData bool
 	// Held marks an announcement collected for the startup summary and
 	// not yet handed to delivery.
 	Held bool

@@ -58,6 +58,14 @@ const (
 // informer memory stays bounded, and produce no observations. The type is
 // reported with reason object_cap_reached and a warning is logged once.
 //
+// The first DefaultObjectFloor objects of every type do not draw on
+// DefaultObjectBudget, so a kind with very many objects, whatever it is,
+// spends only the shared budget and cannot starve a small one that
+// starts after it. Admission is used rather than ranking by object
+// count because the count is only known once a list has run, and the
+// watches start together. The worst case is DefaultObjectBudget plus
+// DefaultObjectFloor for each of the DefaultResourceBudget types.
+//
 // Why 300 types: a mid-size cluster with a service mesh, an ingress
 // controller, cert-manager, a GitOps tool, an autoscaler and a secrets
 // operator discovers 200-250 types beyond the typed kinds, and at 200
@@ -70,6 +78,7 @@ const (
 	DefaultResourceBudget    = 300
 	DefaultMaxObjectsPerKind = 5000
 	DefaultObjectBudget      = 50000
+	DefaultObjectFloor       = 100
 )
 
 // Watch tiers, see DefaultResourceBudget.
@@ -92,7 +101,7 @@ var preferredGroups = map[string]bool{
 // matches itself and its subgroups ("source.toolkit.fluxcd.io").
 var operatorGroups = []string{
 	"cert-manager.io", "argoproj.io", "fluxcd.io", "keda.sh",
-	"karpenter.sh", "external-secrets.io",
+	"karpenter.sh", "external-secrets.io", "kyverno.io",
 }
 
 func operatorGroup(group string) bool {

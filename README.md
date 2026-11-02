@@ -303,14 +303,14 @@ Prefer Helm? See the [chart guide](./deploy/chart/README.md).
 ## ⭐ Editions
 
 One binary, two editions. Community needs no account and no key. Pro is free
-during early access.
+during early access. No credit card required.
 
 | | Community | Pro |
 | --- | --- | --- |
 | Detection | Pod crash loops, OOM kills and Pending pods; node NotReady | Adds node pressure and draining, readiness, rollouts, Jobs and CronJobs, PDBs, HPAs, storage, network, admission, certificates, quota, custom resources, control plane, probes and unusual events |
 | Root cause | One-line headline | Full proof and confidence, shared-factor suspects, recent changes and who made them, affected services, log excerpts |
 | Channels | 1 provider (pick with `app.communityProvider`), namespace filters and silences | All providers, routing by scope, threads, text templates, audit log |
-| Noise control | Dedup and settling; announced incidents survive a restart, so their resolves are still sent | Flapping detection, startup summary, state kept on disk across restarts, changes made while kwatch was down, gap report |
+| Noise control | Related alerts arrive as one incident, in Community and Pro. Dedup and settling; announced incidents survive a restart, so their resolves are still sent | Flapping detection, startup summary, state kept on disk across restarts, changes made while kwatch was down, gap report |
 | Operations | RBAC audit, secret redaction, health, text `/status` | Prometheus `/metrics`, severity overrides, maintenance holds, runbook links, heartbeat monitor, `/status` JSON, flight recorder and `replay-export` |
 | Account | None | Email only |
 | Support | GitHub issues and Discussions | Dedicated support: installation help, and your feature requests and fixes come first |

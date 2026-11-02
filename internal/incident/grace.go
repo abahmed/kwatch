@@ -12,10 +12,37 @@ import (
 // its findings yet, and a root kind kwatch cannot observe says nothing
 // about recovery.
 func (m *Manager) awaitingEvidence(p *Incident, now time.Time) bool {
+	p.heldForData = false
 	if len(p.Members) > 0 {
 		return false
 	}
-	return m.inGrace(p, now) || !m.verifiable(p)
+	if m.inGrace(p, now) {
+		return true
+	}
+	if m.verifiable(p) {
+		return false
+	}
+	p.heldForData = true
+	p.noteHeld(now)
+	return true
+}
+
+// heldNote says on the timeline why an incident with no failure left
+// stays open.
+const heldNote = "resolve held: kwatch cannot observe this object now"
+
+// heldRecheck is how often an incident held for missing data looks again.
+// Sight can come back without any finding changing, so nothing else would
+// wake it.
+const heldRecheck = time.Minute
+
+// noteHeld adds heldNote once per hold, also across a restart: the
+// timeline is persisted.
+func (p *Incident) noteHeld(now time.Time) {
+	if n := len(p.Timeline); n > 0 && p.Timeline[n-1].Text == heldNote {
+		return
+	}
+	p.note(now, heldNote)
 }
 
 // inGrace reports whether p is a restored incident still inside the
@@ -57,17 +84,22 @@ func (m *Manager) afterGrace(
 }
 
 // verifiable reports whether kwatch can observe what recovery of p is
-// judged from: the root kind and, for a root that owns pods, the pods.
+// judged from: the root and, for a root that owns pods, the pods.
 // A restored incident has no members until the pods are listed, so a
 // synced Deployment over an unsynced Pod list proves nothing.
 func (m *Manager) verifiable(p *Incident) bool {
-	if m.cfg.Verifiable == nil {
-		return true
-	}
-	if !m.cfg.Verifiable(p.Root.Kind) {
+	if !m.rootVerifiable(p.Root) {
 		return false
 	}
-	return !ownsPods(p.Root.Kind) || m.cfg.Verifiable(kube.KindPod)
+	return m.cfg.Verifiable == nil || !ownsPods(p.Root.Kind) ||
+		m.cfg.Verifiable(kube.KindPod)
+}
+
+func (m *Manager) rootVerifiable(root inventory.EntityID) bool {
+	if m.cfg.VerifiableObject != nil {
+		return m.cfg.VerifiableObject(root)
+	}
+	return m.cfg.Verifiable == nil || m.cfg.Verifiable(root.Kind)
 }
 
 // ownsPods reports a root kind whose members are the pods behind it.

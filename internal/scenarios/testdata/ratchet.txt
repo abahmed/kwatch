@@ -116,6 +116,7 @@ crash-loop-for-hours self
 crash-on-arm64-node-other-error self
 crash-quotes-other-error self
 crashloop-after-announce self
+cron-runs-keep-failing found-likely
 cron-secret-edited-hours-before found-high
 cron-secret-edited-then-succeeded found-likely
 cronjob-blocked-by-stuck-run self
@@ -125,7 +126,9 @@ csi-node-plugin-failing found-possible
 csi-node-plugin-missing-on-node found-possible
 csr-denied self
 custom-controller-failed-events self
+custom-healthy-warning-stream quiet
 custom-task-succeeded-false self
+custom-warnings-then-recovery self
 daemonset-misscheduled-stays self
 daemonset-node-replaced quiet
 daemonset-settled-node-fails self
@@ -195,6 +198,7 @@ kubelet-unreachable-window self
 kwatch-network-restricted self
 lease-holder-crash-loops found-high
 lease-holder-gone quiet
+lease-taken-once-healthy-holder quiet
 limit-range-max-lowered found-high
 limit-range-memory-max-lowered found-high
 limits-overcommitted-quiet quiet

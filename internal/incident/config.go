@@ -38,6 +38,10 @@ type Config struct {
 	// API not served) is never resolved: the absence of findings there
 	// is missing data, not recovery. Nil treats every kind as verifiable.
 	Verifiable func(inventory.Kind) bool
+	// VerifiableObject reports whether kwatch can observe one object. A
+	// kind can be unverifiable as a whole while most of its objects are
+	// still observed. Nil judges a root by its kind.
+	VerifiableObject func(inventory.EntityID) bool
 	// NoFlapping turns flapping off: an incident that fails and recovers
 	// again and again stays an ordinary open incident.
 	NoFlapping bool

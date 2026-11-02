@@ -41,7 +41,11 @@ var checkedWords = map[inventory.Kind]string{
 // the root's own: a workload failing without anything outside it to
 // blame. Instead of leaving the reader with no cause, they say what was
 // checked and found healthy and unchanged. The quoted output and the
-// exit facts that follow are then the strongest leads.
+// exit facts that follow are then the strongest leads. They say what
+// points to a cause, not that nothing explains the failure: the checks
+// cover the upstream kinds the solver reached, and a candidate it weighed
+// and dropped (CauseUnclear) or could not see (Unverified) is not ruled
+// out.
 func checkedSentences(f caseFacts) []sentence {
 	p := f.p
 	if p.Cause != nil || rootFinding(p, f.members) != nil ||
@@ -52,11 +56,11 @@ func checkedSentences(f caseFacts) []sentence {
 		// The node is named as the cause by the sentences that follow.
 		return recentChangeSentence(f)
 	}
-	text := "Nothing outside it explains this."
+	text := "Nothing outside it points to a cause."
 	if words := checkedWordsFor(p.Checked); len(words) > 0 {
 		text = "Its " + joinWords(words) + " " +
 			verb(len(words), "is", "are") + " healthy and unchanged, " +
-			"so nothing outside it explains this."
+			"so nothing outside it points to a cause."
 	}
 	return append([]sentence{{part: partCause, text: text}},
 		recentChangeSentence(f)...)

@@ -2,7 +2,7 @@
 # Without --platform=$BUILDPLATFORM this stage runs under QEMU for arm64,
 # arm/v7 and arm/v6, which is what made a release build take over an hour.
 # Go cross-compiles fine and CGO is off, so emulation buys nothing.
-FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS builder
 
 ARG RELEASE_VERSION="dev"
 ARG GIT_COMMIT="none"
@@ -49,7 +49,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
       -ldflags "-X github.com/abahmed/kwatch/internal/version.version=${RELEASE_VERSION} -X github.com/abahmed/kwatch/internal/version.gitCommitID=${GIT_COMMIT} -X github.com/abahmed/kwatch/internal/version.buildDate=${BUILD_DATE}" \
       -o kwatch ./cmd/kwatch
 
-FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
 LABEL maintainer="Abdelrahman Ahmed <a.ahmed1026@gmail.com>"
 
 # Keep the release identity in the image itself. The publish workflow supplies

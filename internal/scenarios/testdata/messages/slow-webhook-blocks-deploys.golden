@@ -1,7 +1,10 @@
 10:02:15 settled
-🟠 Validating webhook policy-check (prod-eu-1) is failing: check.policy.example.com fails 40% of its calls and fails closed: those requests are refused. To check the webhook's backend and timeout, run kubectl get validatingwebhookconfiguration policy-check -o yaml
+🟠 Validating webhook policy-check (prod-eu-1) is failing: check.policy.example.com fails 40% of its calls and fails closed: those requests are refused.
+Also grouped: 1 latency alert
+To check the webhook's backend and timeout, run kubectl get validatingwebhookconfiguration policy-check -o yaml
 🟠 Validating webhook policy-check (prod-eu-1) is failing: check.policy.example.com fails 40% of its calls and fails closed: those requests are refused.
 | 🟠 Validating webhook **policy-check** (**prod-eu-1**) is failing: check.policy.example.com fails 40% of its calls and fails closed: those requests are refused.
+| Also grouped: 1 latency alert
 | To check the webhook's backend and timeout, run
 | ```
 | kubectl get validatingwebhookconfiguration policy-check -o yaml

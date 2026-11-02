@@ -28,7 +28,7 @@ analysis.shared-factors|runtime|Suspect a node that workloads failing together s
 analysis.changes|runtime|Relate incidents to recent changes and who made them|analysis.root-cause|pro
 analysis.impact|runtime|Show which workloads and services an incident affects|analysis.root-cause|pro
 analysis.investigation|runtime|Attach a redacted log excerpt to announcements||pro
-incidents.noise-control|runtime|Settle, merge symptoms and send only material changes|analysis.root-cause|community
+incidents.noise-control|runtime|Settle, group related alerts into one incident and send only material changes|analysis.root-cause|community
 incidents.flapping|runtime|Recognise flapping and routine recurring incidents|incidents.noise-control|pro
 incidents.startup-summary|startup|Summarise pre-existing incidents once at cold start||pro
 incidents.state|startup|Keep incidents and history on disk across restarts||pro

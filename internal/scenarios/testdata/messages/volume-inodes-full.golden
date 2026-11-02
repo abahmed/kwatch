@@ -1,5 +1,7 @@
 10:04:15 settled
-🟠 Volume claim spool in mail (prod-eu-1) is failing: volume has used over 95% of its inodes. Its inodes are 99% used, its space 12 GiB of 100 GiB, and it is used by relay. relay fails with "queue: cannot create /var/spool/relay/new/1760000000.M1P7: No space left on device". relay is affected as well. To check the size and capacity of the full volume claim, run kubectl describe pvc spool -n mail
+🟠 Volume claim spool in mail (prod-eu-1) is failing: volume has used over 95% of its inodes. Its inodes are 99% used, its space 12 GiB of 100 GiB, and it is used by relay. relay fails with "queue: cannot create /var/spool/relay/new/1760000000.M1P7: No space left on device". relay is affected as well.
+Also grouped: 1 crash loop
+To check the size and capacity of the full volume claim, run kubectl describe pvc spool -n mail
 🟠 Volume claim spool in mail (prod-eu-1) is failing: volume has used over 95% of its inodes.
 | 🟠 Volume claim **spool** in **mail** (**prod-eu-1**) is failing: volume has used over 95% of its inodes.
 | Its inodes are 99% used, its space 12 GiB of 100 GiB, and it is used by **relay**.
@@ -8,6 +10,7 @@
 | queue: cannot create /var/spool/relay/new/1760000000.M1P7: No space left on device
 | ```
 | **relay** is affected as well.
+| Also grouped: 1 crash loop
 | To check the size and capacity of the full volume claim, run
 | ```
 | kubectl describe pvc spool -n mail

@@ -35,9 +35,13 @@ func leaseModel(
 }
 
 func TestLeaseStaleWhileHolderRuns(t *testing.T) {
-	m, lease := leaseModel(leaseStaleMin, "operator-7d9f_1a2b", "Running")
+	m, lease := leaseModel(leaseStaleMin+time.Minute, "operator-7d9f_1a2b",
+		"Running")
+	r := detection.NewRegistry(nil, Lease{})
+	r.Evaluate(m, t0, lease)
 
-	got := Lease{}.Detect(testDetectorContext(m, t0), entityOf(m, lease))
+	got := scanLease(r, m, lease, "operator-7d9f_1a2b",
+		t0.Add(-leaseStaleMin), t0)
 
 	require.Len(t, got, 1)
 	assert.Equal(t, "LeaseStale", got[0].Reason)

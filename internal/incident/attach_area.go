@@ -62,13 +62,20 @@ func (a *areaPlacer) placementOf(failure inventory.EntityID) placement {
 		return out
 	}
 	cause := a.area.Causes[i]
-	root := defaultRoot(a.s.Model, cause.Root)
+	root := causeRoot(a.s.Model, cause.Root)
 	if root == own && (cause.Row == selfRow || (!a.blamesChange(i) &&
 		!explain.InsideRow(cause.Row))) {
 		out.unclear = a.rejectedOutside(own)
 		return out
 	}
 	record := a.record(i)
+	if scheduledRun(root, record.Change) {
+		// The schedule starting a run is what the root does: no one made
+		// a change, and no cause is left to name but the root itself.
+		out.unclear = a.rejectedOutside(root)
+		out.root = root
+		return out
+	}
 	out.root, out.cause = root, &record
 	out.outscored = a.outscoredBy(cause)
 	return out
@@ -83,7 +90,7 @@ func (a *areaPlacer) outscoredBy(cause explain.Cause) []inventory.EntityID {
 	var roots []inventory.EntityID
 	for _, alt := range a.area.Alternatives {
 		if alt.Row == cause.Row && alt.Raw >= cause.Raw {
-			roots = append(roots, defaultRoot(a.s.Model, alt.Root))
+			roots = append(roots, causeRoot(a.s.Model, alt.Root))
 		}
 	}
 	return roots

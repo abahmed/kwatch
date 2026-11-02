@@ -16,17 +16,20 @@ func (m *Model) note(observation Observation) Update {
 		note.FirstSeen = note.At
 	}
 	key := noteKey{note.Source, note.Reason, note.UID}
+	seen := Occurrence{At: note.At, Count: note.Count}
 	rec.takeSame(&note)
 	if note.Origin != "" {
 		if rec.noteParts == nil {
 			rec.noteParts = make(map[noteKey][]originCount)
 		}
 		rec.noteParts[key], note.Count = addOrigin(
-			rec.noteParts[key], note.Origin, note.Count)
+			rec.noteParts[key], note.Origin, note.Count, seen.At)
+		note.Recent = occurrences(rec.noteParts[key])
 	} else {
 		// A note without an origin replaces the counted one; its old
 		// parts must not be added to if an origin returns later.
 		delete(rec.noteParts, key)
+		note.Recent = sighted(note.Recent, seen)
 	}
 	rec.notes = append(rec.notes, note)
 	if over := len(rec.notes) - DefaultMaxNotesPerEntity; over > 0 {
@@ -46,6 +49,7 @@ func (r *record) takeSame(note *Note) {
 			if existing.At.After(note.At) {
 				note.At = existing.At
 			}
+			note.Recent = existing.Recent
 			r.notes = append(r.notes[:i], r.notes[i+1:]...)
 			return
 		}

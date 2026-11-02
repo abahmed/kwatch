@@ -1,8 +1,8 @@
 10:03:15 settled
-🟠 app0 in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "fatal: cache lost its own dependency". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs app0-921c6b1a-a -c app -n shop --previous
+🟠 app0 in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. It fails with "fatal: cache lost its own dependency". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs app0-921c6b1a-a -c app -n shop --previous
 🟠 app0 in shop (prod-eu-1) keeps crashing.
 | 🟠 **app0** in **shop** (**prod-eu-1**) keeps crashing.
-| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
 | It fails with `fatal: cache lost its own dependency`.
 | Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
 | It runs a single replica.
@@ -11,10 +11,10 @@
 | kubectl logs app0-921c6b1a-a -c app -n shop --previous
 | ```
 10:07:55 settled
-🟠 app1 in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. It fails with "fatal: queue lost its own dependency". Its last run lasted ten seconds; two restarts since its pod was created about one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs app1-7a4b74f3-a -c app -n shop --previous
+🟠 app1 in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. It fails with "fatal: queue lost its own dependency". Its last run lasted ten seconds; two restarts since its pod was created about one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs app1-7a4b74f3-a -c app -n shop --previous
 🟠 app1 in shop (prod-eu-1) keeps crashing.
 | 🟠 **app1** in **shop** (**prod-eu-1**) keeps crashing.
-| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
 | It fails with `fatal: queue lost its own dependency`.
 | Its last run lasted ten seconds; two restarts since its pod was created about one hour ago.
 | It runs a single replica.

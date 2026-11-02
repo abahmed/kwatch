@@ -6,6 +6,8 @@ import (
 	robfig "github.com/robfig/cron/v3"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/abahmed/kwatch/internal/inventory"
 )
@@ -50,6 +52,10 @@ func (CronJobSchema) Describe(obj any) (Description, bool) {
 	rel := relations{}
 	rel.add(inventory.References,
 		templateReferences(cron.Namespace, template)...)
+	rel.add(inventory.References, podClaims(&corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Namespace: cron.Namespace},
+		Spec:       template.Spec,
+	})...)
 	return Description{
 		ID: objectID(KindCronJob, cron), UID: string(cron.UID),
 		Attributes: attrs, Relations: rel,

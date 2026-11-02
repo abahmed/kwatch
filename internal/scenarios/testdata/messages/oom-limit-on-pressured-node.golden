@@ -1,8 +1,8 @@
 10:02:15 settled
-🟠 ledger in billing (prod-eu-1) keeps running out of memory. Its node and registry are healthy and unchanged, so nothing outside it explains this. It was killed at its 512Mi memory limit; it used 489Mi at peak in the last 24 hours. Its last run lasted two hours; four restarts since its pod was created one hour ago. Fix in: deployment/ledger → container app → resources.limits.memory (512Mi). To read the output of the last crash, run kubectl logs ledger-c10ffc84-a -c app -n billing --previous
+🟠 ledger in billing (prod-eu-1) keeps running out of memory. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. It was killed at its 512Mi memory limit; it used 489Mi at peak in the last 24 hours. Its last run lasted two hours; four restarts since its pod was created one hour ago. Fix in: deployment/ledger → container app → resources.limits.memory (512Mi). To read the output of the last crash, run kubectl logs ledger-c10ffc84-a -c app -n billing --previous
 🟠 ledger in billing (prod-eu-1) keeps running out of memory.
 | 🟠 **ledger** in **billing** (**prod-eu-1**) keeps running out of memory.
-| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
 | It was killed at its 512Mi memory limit; it used 489Mi at peak in the last 24 hours.
 | Its last run lasted two hours; four restarts since its pod was created one hour ago.
 | Fix in: deployment/ledger → container app → resources.limits.memory (512Mi).

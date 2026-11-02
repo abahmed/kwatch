@@ -55,8 +55,9 @@ func TestCommunityMessageKeepsTheHeadlineAndDropsTheDetail(t *testing.T) {
 }
 
 func firstSentence(note string) string {
-	first, _, _ := strings.Cut(note, ". ")
-	return first
+	line, _, _ := strings.Cut(note, "\n")
+	first, _, _ := strings.Cut(line, ". ")
+	return strings.TrimSuffix(first, ".")
 }
 
 func TestCommunityNamesWhatProWouldAdd(t *testing.T) {
@@ -106,8 +107,8 @@ func TestCommunityResolveHasNoProNote(t *testing.T) {
 }
 
 func noteFooter(note string) string {
-	_, last, _ := strings.Cut(note, "\n")
-	return last
+	lines := strings.Split(note, "\n")
+	return lines[len(lines)-1]
 }
 
 func TestCommunityOmitsInvestigationOutput(t *testing.T) {

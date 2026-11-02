@@ -1,8 +1,8 @@
 10:02:15 settled
-🟠 api in shop (prod-eu-1) keeps being killed by its liveness probe. Its node and registry are healthy and unchanged, so nothing outside it explains this. Its last run lasted two minutes; three restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs api-8ab26137-a -c app -n shop --previous
+🟠 api in shop (prod-eu-1) keeps being killed by its liveness probe. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. Its last run lasted two minutes; three restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs api-8ab26137-a -c app -n shop --previous
 🟠 api in shop (prod-eu-1) keeps being killed by its liveness probe.
 | 🟠 **api** in **shop** (**prod-eu-1**) keeps being killed by its liveness probe.
-| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
 | Its last run lasted two minutes; three restarts since its pod was created one hour ago.
 | To read the output of the last crash, run
 | ```

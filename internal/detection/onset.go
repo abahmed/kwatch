@@ -83,6 +83,23 @@ func (c Context) Onset(key string, firstSeen time.Time) time.Time {
 	return at
 }
 
+// Track records value under key for the evaluated entity and returns the
+// value the previous evaluation recorded, false when there was none. It
+// lets a detector compare what it reads now with what it read before. Like
+// an onset, a tracked value is kept only while every evaluation keeps
+// asking for it, and without a registry nothing is remembered. Keep keys
+// of tracked values apart from those of onsets.
+func (c Context) Track(
+	key string, value time.Time,
+) (previous time.Time, found bool) {
+	if c.onsets == nil {
+		return time.Time{}, false
+	}
+	previous, found = c.onsets.known[key]
+	c.onsets.kept[key] = value
+	return previous, found
+}
+
 // Ongoing reports whether the previous evaluation of the entity asked
 // for the state named key, that is, whether the state held then. It does
 // not keep the state; call Onset for that. Detectors use it for

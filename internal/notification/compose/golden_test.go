@@ -59,7 +59,7 @@ func TestWriterNoteProperties(t *testing.T) {
 			if labelStart.MatchString(m.Note) {
 				t.Errorf("note uses a label: %q", m.Note)
 			}
-			if strings.Contains(m.Note, "\n") ||
+			if strings.Contains(withoutGrouped(m.Note), "\n") ||
 				strings.Contains(m.Note, "• ") {
 				t.Errorf("note has lines or bullets: %q", m.Note)
 			}
@@ -112,4 +112,16 @@ func assertSentences(t *testing.T, note string) {
 	if strings.Contains(note, "..") || strings.Contains(note, " .") {
 		t.Errorf("broken punctuation in %q", note)
 	}
+}
+
+// withoutGrouped is the note without its "Also grouped" line, which sits
+// on a line of its own.
+func withoutGrouped(note string) string {
+	var out []string
+	for _, l := range strings.Split(note, "\n") {
+		if !strings.HasPrefix(l, groupedPrefix) {
+			out = append(out, l)
+		}
+	}
+	return strings.Join(out, " ")
 }

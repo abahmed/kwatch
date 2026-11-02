@@ -1,11 +1,14 @@
 10:02:15 settled
-🟠 External endpoint sandbox.partner-gateway.example:443 (prod-eu-1) has a name that does not resolve. It reports "dial tcp: lookup sandbox.partner-gateway.example on 10.96.0.10:53: no such host". All of its dependents are failing. checkout in shop is affected as well. To read the output of the last crash, run kubectl logs checkout-d14b7a57-a -c app -n shop --previous
+🟠 External endpoint sandbox.partner-gateway.example:443 (prod-eu-1) has a name that does not resolve. It reports "dial tcp: lookup sandbox.partner-gateway.example on 10.96.0.10:53: no such host". All of its dependents are failing. checkout in shop is affected as well.
+Also grouped: 2 crash loops
+To read the output of the last crash, run kubectl logs checkout-d14b7a57-a -c app -n shop --previous
 Checked: both replicas fail, on 2 nodes.
 🟠 External endpoint sandbox.partner-gateway.example:443 (prod-eu-1) has a name that does not resolve.
 | 🟠 External endpoint **sandbox.partner-gateway.example:443** (**prod-eu-1**) has a name that does not resolve.
 | It reports `dial tcp: lookup sandbox.partner-gateway.example on 10.96.0.10:53: no such host`.
 | All of its dependents are failing.
 | **checkout** in **shop** is affected as well.
+| Also grouped: 2 crash loops
 | To read the output of the last crash, run
 | ```
 | kubectl logs checkout-d14b7a57-a -c app -n shop --previous

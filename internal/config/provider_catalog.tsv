@@ -35,15 +35,18 @@ googlechat|Google Chat|webhook|string|true|true|url||Webhook URL
 gotify|Gotify|url|string|true|false|url||Gotify server URL
 gotify|Gotify|token|string|true|true|||App token
 gotify|Gotify|priority|integer|false|false|integer||Priority (optional)
+gotify|Gotify|resolvedPriority|integer|false|false|integer||Priority 0-10 of a resolve (optional, default: the priority, capped at 5)
 gotify|Gotify|title|string|false|false|||Custom title
 ntfy|ntfy|topic|string|true|true|||Topic to publish to
 ntfy|ntfy|url|string|false|false|url|https://ntfy.sh|Server URL (default: https://ntfy.sh)
 ntfy|ntfy|token|string|false|true|||Optional auth token
 ntfy|ntfy|title|string|false|false|||Custom title
-ntfy|ntfy|priority|integer|false|false|integer|4|Priority 1-5 (default: 4)
+ntfy|ntfy|priority|integer|false|false|integer||Priority 1-5 (optional, ntfy uses 3 when unset)
+ntfy|ntfy|resolvedPriority|integer|false|false|integer||Priority 1-5 of a resolve (optional, default: the priority, capped at 3)
 pushover|Pushover|token|string|true|true|||Application token
 pushover|Pushover|user|string|true|true|||User or group key
 pushover|Pushover|priority|integer|false|false|integer||Priority from -2 to 2 (optional)
+pushover|Pushover|resolvedPriority|integer|false|false|integer||Priority from -2 to 1 of a resolve (optional, default: the priority, capped at 0)
 pushover|Pushover|retry|integer|false|false|integer||Emergency retry interval in seconds
 pushover|Pushover|expire|integer|false|false|integer||Emergency expiration in seconds
 pushover|Pushover|title|string|false|false|||Custom title

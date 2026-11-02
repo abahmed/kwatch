@@ -1,8 +1,8 @@
 10:02:35 settled
-🟠 api in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it explains this. In the last 30 minutes in shop: role metrics-reader was created at 10:01 UTC. It fails with "panic: configmaps is forbidden: User "system:serviceaccount:shop:default" cannot list resource "configmaps" in API…". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs api-626da116-a -c app -n shop --previous
+🟠 api in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. In the last 30 minutes in shop: role metrics-reader was created at 10:01 UTC. It fails with "panic: configmaps is forbidden: User "system:serviceaccount:shop:default" cannot list resource "configmaps" in API…". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs api-626da116-a -c app -n shop --previous
 🟠 api in shop (prod-eu-1) keeps crashing.
 | 🟠 **api** in **shop** (**prod-eu-1**) keeps crashing.
-| Its node and registry are healthy and unchanged, so nothing outside it explains this.
+| Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
 | In the last 30 minutes in shop: role metrics-reader was created at 10:01 UTC.
 | It fails with
 | ```

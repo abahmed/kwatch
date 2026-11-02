@@ -72,7 +72,7 @@ func TestUnclearCauseIsNotRepeatedOrContradicted(t *testing.T) {
 	}
 	text := notification.Text(Writer{}.Write(announce(noRootFinding),
 		at(6, 0)))
-	if !strings.Contains(text, "Nothing outside it explains this.") {
+	if !strings.Contains(text, "Nothing outside it points to a cause.") {
 		t.Errorf("the note must still say nothing outside explains it:\n%s",
 			text)
 	}
@@ -88,7 +88,7 @@ func TestCheckedSentencesNameWhatWasHealthy(t *testing.T) {
 	text := notification.Text(Writer{}.Write(announce(p), at(6, 0)))
 
 	want := "Its configuration, image and node are healthy and " +
-		"unchanged, so nothing outside it explains this."
+		"unchanged, so nothing outside it points to a cause."
 	if !strings.Contains(text, want) {
 		t.Fatalf("note = %s\nwant %q", text, want)
 	}

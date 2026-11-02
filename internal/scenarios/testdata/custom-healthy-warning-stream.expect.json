@@ -1,0 +1,7 @@
+{
+  "name": "custom-healthy-warning-stream",
+  "description": "A cluster-scoped Ready=True custom resource receives single Warning events past the event window: nothing is reported.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

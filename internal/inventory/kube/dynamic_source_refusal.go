@@ -30,6 +30,7 @@ type KindState struct {
 	// every object, so an object missing from the model does not exist.
 	Synced bool
 	// Reason is a bounded code for why the kind is not synced.
+	// ReasonObjectCap means nothing else is wrong with it.
 	Reason string
 }
 
@@ -41,9 +42,7 @@ func (d *DynamicSource) KindState(kind inventory.Kind) (KindState, bool) {
 	found, reason := false, ""
 	note := func(r string) {
 		found = true
-		if reason == "" {
-			reason = r
-		}
+		reason = kindReason(reason, r)
 	}
 	for _, w := range d.running {
 		if w.kind != kind {
@@ -69,6 +68,32 @@ func (d *DynamicSource) KindState(kind inventory.Kind) (KindState, bool) {
 		}
 	}
 	return KindState{Synced: found && reason == "", Reason: reason}, found
+}
+
+// kindReason keeps the first reason a kind is not synced, except that any
+// other reason replaces ReasonObjectCap.
+func kindReason(current, next string) string {
+	if current == "" || current == ReasonObjectCap {
+		return next
+	}
+	return current
+}
+
+// ObjectRefused reports whether an object cap left id out of a running
+// watch of its kind, so the model does not follow it.
+func (d *DynamicSource) ObjectRefused(id inventory.EntityID) bool {
+	key := id.Name
+	if id.Namespace != "" {
+		key = id.Namespace + "/" + id.Name
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, w := range d.running {
+		if w.kind == id.Kind && w.admission.leftOut(key) {
+			return true
+		}
+	}
+	return false
 }
 
 // refuse stops a watch the API refused, so its reflector does not retry

@@ -85,6 +85,9 @@ func TestOperatorGroupMatchesSubgroups(t *testing.T) {
 		"notcert-manager.io":             false,
 		"example.com":                    false,
 		"generators.external-secrets.io": true,
+		"kyverno.io":                     true,
+		"policies.kyverno.io":            true,
+		"reports.kyverno.io":             true,
 	} {
 		assert.Equal(t, want, operatorGroup(group), group)
 	}

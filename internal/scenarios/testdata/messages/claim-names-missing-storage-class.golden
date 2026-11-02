@@ -1,11 +1,14 @@
 10:02:15 settled
-🟠 Volume claim journal in ledger (prod-eu-1) has been waiting for a volume for two minutes because storage class nvme-archive does not exist. The provisioner says "storageclass.storage.k8s.io "nvme-archive" not found". The scheduler says "0/2 nodes are available: pod has unbound immediate PersistentVolumeClaims." journal-db is affected as well. Fix in: persistentvolumeclaim/journal → spec.storageClassName (nvme-archive). To see the object's state and events, run kubectl describe persistentvolumeclaim journal -n ledger
+🟠 Volume claim journal in ledger (prod-eu-1) has been waiting for a volume for two minutes because storage class nvme-archive does not exist. The provisioner says "storageclass.storage.k8s.io "nvme-archive" not found". The scheduler says "0/2 nodes are available: pod has unbound immediate PersistentVolumeClaims." journal-db is affected as well. Fix in: persistentvolumeclaim/journal → spec.storageClassName (nvme-archive).
+Also grouped: 1 scheduling failure, 1 volume alert
+To see the object's state and events, run kubectl describe persistentvolumeclaim journal -n ledger
 🟠 Volume claim journal in ledger (prod-eu-1) has been waiting for a volume for two minutes because storage class nvme-archive does not exist.
 | 🟠 Volume claim **journal** in **ledger** (**prod-eu-1**) has been waiting for a volume for two minutes because storage class **nvme-archive** does not exist.
 | The provisioner says `storageclass.storage.k8s.io "nvme-archive" not found`.
 | The scheduler says `0/2 nodes are available: pod has unbound immediate PersistentVolumeClaims.`
 | **journal-db** is affected as well.
 | Fix in: persistentvolumeclaim/journal → spec.storageClassName (**nvme-archive**).
+| Also grouped: 1 scheduling failure, 1 volume alert
 | To see the object's state and events, run
 | ```
 | kubectl describe persistentvolumeclaim journal -n ledger

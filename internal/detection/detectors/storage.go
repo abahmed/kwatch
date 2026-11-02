@@ -142,14 +142,17 @@ func reclaimEvents(
 
 // unusedClaim reports a bound claim no pod has mounted for a day: a
 // volume that costs money and serves nothing. It waits for the digest.
+// The day starts when kwatch first sees the claim without a mount, either
+// when the last one goes or at a restart: how long it has been bound says
+// nothing about its last use. A claim a CronJob's pods use is idle between
+// runs by design.
 func unusedClaim(
 	ctx detection.Context, e inventory.Entity,
 ) (detection.Finding, bool) {
-	if ctx.Model == nil || !ctx.Synced(kube.KindPod) || len(ctx.Model.Related(
-		e.ID, inventory.Mounts, inventory.Incoming)) > 0 {
+	if ctx.Model == nil || !ctx.Synced(kube.KindPod) || claimInUse(ctx, e) {
 		return detection.Finding{}, false
 	}
-	since := ctx.Onset("unused", valueSince(e, kube.AttrPhase))
+	since := ctx.Onset("unused", ctx.Now)
 	if !sustained(ctx, "unused", since, DefaultUnusedAfter) {
 		return detection.Finding{}, false
 	}
@@ -158,4 +161,20 @@ func unusedClaim(
 		Summary: "Volume claim is bound but no pod has mounted it for " +
 			format.Duration(ctx.Now.Sub(since)),
 	}, true
+}
+
+// claimInUse reports a claim a pod mounts or a CronJob's template names.
+func claimInUse(ctx detection.Context, e inventory.Entity) bool {
+	if len(ctx.Model.Related(
+		e.ID, inventory.Mounts, inventory.Incoming)) > 0 {
+		return true
+	}
+	for _, id := range ctx.Model.Related(
+		e.ID, inventory.References, inventory.Incoming,
+	) {
+		if id.Kind == kube.KindCronJob {
+			return true
+		}
+	}
+	return false
 }

@@ -40,14 +40,16 @@ func TestSourceHealthReportsBeforeTheSourcesSync(t *testing.T) {
 
 	source.set()
 	close(synced)
-	tick <- time.Time{} // accepted only after the sync report finished
+	// A tick here could win the select and cancel could then end the
+	// loop before synced is seen, so wait for the sync report itself.
+	require.Eventually(t, func() bool { return readyCalls.Load() > 0 },
+		5*time.Second, time.Millisecond,
+		"the report after the sync sets readiness")
 	cancel()
 	<-done
 
 	require.Equal(t, recordedStatus{"running", "", true},
 		sink.get("source-pods"))
-	require.Positive(t, readyCalls.Load(),
-		"the report after the sync sets readiness")
 }
 
 func TestSourceHealthRunSurvivesAPanickingReport(t *testing.T) {
