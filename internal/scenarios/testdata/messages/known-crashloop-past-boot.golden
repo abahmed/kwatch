@@ -34,7 +34,9 @@
 | ✅ **sync** in **shop** (**prod-eu-1**) is healthy again.
 | It was failing for 12 minutes.
 08:36:00 material change
-🟠 sync in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. That is unusual for this workload: restarts 6×/h vs a usual 0.3×/h. It fails with "panic: sync: batch window is closed". It runs a single replica. This is the third time this week. Last time it recovered on its own. To read the output of the last crash, run kubectl logs sync-d4ad54cc-a -c app -n shop --previous
+🟠 sync in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. That is unusual for this workload: restarts 6×/h vs a usual 0.3×/h. It fails with "panic: sync: batch window is closed". It runs a single replica. This is the third time this week. Last time it recovered on its own.
+Also grouped: 1 not-ready pod, 1 unavailable workload
+To read the output of the last crash, run kubectl logs sync-d4ad54cc-a -c app -n shop --previous
 🟠 sync in shop (prod-eu-1) keeps crashing.
 | 🟠 **sync** in **shop** (**prod-eu-1**) keeps crashing.
 | Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
@@ -42,6 +44,7 @@
 | It fails with `panic: sync: batch window is closed`.
 | It runs a single replica.
 | This is the third time this week. Last time it recovered on its own.
+| Also grouped: 1 not-ready pod, 1 unavailable workload
 | To read the output of the last crash, run
 | ```
 | kubectl logs sync-d4ad54cc-a -c app -n shop --previous

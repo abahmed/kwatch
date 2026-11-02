@@ -1,5 +1,7 @@
 10:02:15 settled
-🟠 Volume claim orders-db in data (prod-eu-1) has been waiting for a volume for two minutes. It was created at 10:00 UTC. Claim orders-db is Pending: kwatch sees no workload in the cluster serving its provisioner pd.csi.storage.gke.io (it may run outside the cluster); the last provisioning failure says "failed to provision volume with StorageClass "fast-ssd": rpc error: code = ResourceExhausted desc = Quota…". orders-db is affected as well. To see why the volume claim is not usable, run kubectl describe pvc orders-db -n data
+🟠 Volume claim orders-db in data (prod-eu-1) has been waiting for a volume for two minutes. It was created at 10:00 UTC. Claim orders-db is Pending: kwatch sees no workload in the cluster serving its provisioner pd.csi.storage.gke.io (it may run outside the cluster); the last provisioning failure says "failed to provision volume with StorageClass "fast-ssd": rpc error: code = ResourceExhausted desc = Quota…". orders-db is affected as well.
+Also grouped: 1 scheduling failure, 1 volume alert
+To see why the volume claim is not usable, run kubectl describe pvc orders-db -n data
 🟠 Volume claim orders-db in data (prod-eu-1) has been waiting for a volume for two minutes.
 | 🟠 Volume claim **orders-db** in **data** (**prod-eu-1**) has been waiting for a volume for two minutes.
 | It was created at 10:00 UTC.
@@ -8,6 +10,7 @@
 | failed to provision volume with StorageClass "fast-ssd": rpc error: code = ResourceExhausted desc = Quota…
 | ```
 | **orders-db** is affected as well.
+| Also grouped: 1 scheduling failure, 1 volume alert
 | To see why the volume claim is not usable, run
 | ```
 | kubectl describe pvc orders-db -n data

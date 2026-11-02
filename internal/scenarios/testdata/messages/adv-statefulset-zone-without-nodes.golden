@@ -1,5 +1,7 @@
 10:03:15 settled
-🟠 kafka in streaming (prod-eu-1) has waited three minutes for a node because volume claim data-kafka-2 is bound to a volume in a zone with no node for the pod. No node fits: claim data-kafka-2 (volume pv-kafka-2) can only attach where topology.kubernetes.io/zone=zone-c, and no node is there. The scheduler says "0/3 nodes are available: 3 node(s) had volume node affinity conflict. preemption: 0/3 nodes are available: 3 Preemption…". The autoscaler can't add a node for it: "pod didn't trigger scale-up: 3 node(s) had volume node affinity conflict". To see why the volume claim is not usable, run kubectl describe pvc data-kafka-2 -n streaming
+🟠 kafka in streaming (prod-eu-1) has waited three minutes for a node because volume claim data-kafka-2 is bound to a volume in a zone with no node for the pod. No node fits: claim data-kafka-2 (volume pv-kafka-2) can only attach where topology.kubernetes.io/zone=zone-c, and no node is there. The scheduler says "0/3 nodes are available: 3 node(s) had volume node affinity conflict. preemption: 0/3 nodes are available: 3 Preemption…". The autoscaler can't add a node for it: "pod didn't trigger scale-up: 3 node(s) had volume node affinity conflict".
+Also grouped: 1 unusual event alert
+To see why the volume claim is not usable, run kubectl describe pvc data-kafka-2 -n streaming
 🟠 kafka in streaming (prod-eu-1) has waited three minutes for a node because volume claim data-kafka-2 is bound to a volume in a zone with no node for the pod.
 | 🟠 **kafka** in **streaming** (**prod-eu-1**) has waited three minutes for a node because volume claim **data-kafka-2** is bound to a volume in a zone with no node for the pod.
 | No node fits: claim **data-kafka-2** (volume pv-kafka-2) can only attach where topology.kubernetes.io/zone=zone-c, and no node is there.
@@ -8,6 +10,7 @@
 | 0/3 nodes are available: 3 node(s) had volume node affinity conflict. preemption: 0/3 nodes are available: 3 Preemption…
 | ```
 | The autoscaler can't add a node for it: `pod didn't trigger scale-up: 3 node(s) had volume node affinity conflict`.
+| Also grouped: 1 unusual event alert
 | To see why the volume claim is not usable, run
 | ```
 | kubectl describe pvc data-kafka-2 -n streaming

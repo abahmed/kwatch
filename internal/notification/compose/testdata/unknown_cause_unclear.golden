@@ -1,3 +1,5 @@
-🟠 reports in shop is failing: rollout is stuck: new pods did not become available within the progress deadline. The cause is not clear yet. To see the object's state and events, run kubectl describe deployment reports -n shop
+🟠 reports in shop is failing: rollout is stuck: new pods did not become available within the progress deadline. The cause is not clear yet.
+Also grouped: 1 crash loop
+To see the object's state and events, run kubectl describe deployment reports -n shop
 
 🟠 reports in shop is failing: rollout is stuck: new pods did not become available within the progress deadline.

@@ -1,5 +1,7 @@
 11:02:15 settled
-🟠 Volume claim orders-db in data (prod-eu-1) is Pending: its provisioner ebs.csi.example.com runs as deployment kube-system/ebs-csi-controller, which has no ready pods. The scheduler says "0/2 nodes are available: pod has unbound immediate PersistentVolumeClaims. preemption: 0/2 nodes are available: 2…". All of its dependents are failing. orders-db in data is affected as well. To read the output of the last crash, run kubectl logs ebs-csi-controller-6239e367-a -c app -n kube-system --previous
+🟠 Volume claim orders-db in data (prod-eu-1) is Pending: its provisioner ebs.csi.example.com runs as deployment kube-system/ebs-csi-controller, which has no ready pods. The scheduler says "0/2 nodes are available: pod has unbound immediate PersistentVolumeClaims. preemption: 0/2 nodes are available: 2…". All of its dependents are failing. orders-db in data is affected as well.
+Also grouped: 1 claim failed alert, 1 scheduling failure
+To read the output of the last crash, run kubectl logs ebs-csi-controller-6239e367-a -c app -n kube-system --previous
 Checked: both replicas fail, on 2 nodes.
 🟠 Volume claim orders-db in data (prod-eu-1) is Pending: its provisioner ebs.csi.example.com runs as deployment kube-system/ebs-csi-controller, which has no ready pods.
 | 🟠 Volume claim **orders-db** in **data** (**prod-eu-1**) is Pending: its provisioner ebs.csi.example.com runs as deployment kube-system/ebs-csi-controller, which has no ready pods.
@@ -9,6 +11,7 @@ Checked: both replicas fail, on 2 nodes.
 | ```
 | All of its dependents are failing.
 | **orders-db** in **data** is affected as well.
+| Also grouped: 1 claim failed alert, 1 scheduling failure
 | To read the output of the last crash, run
 | ```
 | kubectl logs ebs-csi-controller-6239e367-a -c app -n kube-system --previous

@@ -1,10 +1,13 @@
 10:02:15 settled
-🟠 orders in shop (prod-eu-1) is failing because its init container migrate keeps crashing. It fails with "migrate: authentication failed for user orders". Its last run lasted five seconds; two restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs orders-8dbe284e-a -c migrate -n shop --previous
+🟠 orders in shop (prod-eu-1) is failing because its init container migrate keeps crashing. It fails with "migrate: authentication failed for user orders". Its last run lasted five seconds; two restarts since its pod was created one hour ago. It runs a single replica.
+Also grouped: 1 pending pod
+To read the output of the last crash, run kubectl logs orders-8dbe284e-a -c migrate -n shop --previous
 🟠 orders in shop (prod-eu-1) is failing because its init container migrate keeps crashing.
 | 🟠 **orders** in **shop** (**prod-eu-1**) is failing because its init container migrate keeps crashing.
 | It fails with `migrate: authentication failed for user orders`.
 | Its last run lasted five seconds; two restarts since its pod was created one hour ago.
 | It runs a single replica.
+| Also grouped: 1 pending pod
 | To read the output of the last crash, run
 | ```
 | kubectl logs orders-8dbe284e-a -c migrate -n shop --previous

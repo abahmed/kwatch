@@ -1,8 +1,11 @@
 10:03:15 settled
-🟠 Disruption budget ledger in shop (prod-eu-1) allows no eviction, so the drain of node n2 is blocked. Fix in: poddisruptionbudget/ledger → spec.minAvailable (1). To see the object's state and events, run kubectl describe poddisruptionbudget ledger -n shop
+🟠 Disruption budget ledger in shop (prod-eu-1) allows no eviction, so the drain of node n2 is blocked. Fix in: poddisruptionbudget/ledger → spec.minAvailable (1).
+Also grouped: 1 node problem
+To see the object's state and events, run kubectl describe poddisruptionbudget ledger -n shop
 🟠 Disruption budget ledger in shop (prod-eu-1) allows no eviction, so the drain of node n2 is blocked.
 | 🟠 Disruption budget **ledger** in **shop** (**prod-eu-1**) allows no eviction, so the drain of node n2 is blocked.
 | Fix in: poddisruptionbudget/ledger → spec.minAvailable (1).
+| Also grouped: 1 node problem
 | To see the object's state and events, run
 | ```
 | kubectl describe poddisruptionbudget ledger -n shop

@@ -1,9 +1,12 @@
 10:05:15 settled
-🟠 Job report in batch (prod-eu-1) is failing: exited with code 1. Its registry is healthy and unchanged, so nothing outside it points to a cause. It fails with "relation "users" does not exist". To see the pod's state and events, run kubectl describe pod report-a -n batch
+🟠 Job report in batch (prod-eu-1) is failing: exited with code 1. Its registry is healthy and unchanged, so nothing outside it points to a cause. It fails with "relation "users" does not exist".
+Also grouped: 2 failed alerts
+To see the pod's state and events, run kubectl describe pod report-a -n batch
 🟠 Job report in batch (prod-eu-1) is failing: exited with code 1.
 | 🟠 Job **report** in **batch** (**prod-eu-1**) is failing: exited with code 1.
 | Its registry is healthy and unchanged, so nothing outside it points to a cause.
 | It fails with `relation "users" does not exist`.
+| Also grouped: 2 failed alerts
 | To see the pod's state and events, run
 | ```
 | kubectl describe pod report-a -n batch

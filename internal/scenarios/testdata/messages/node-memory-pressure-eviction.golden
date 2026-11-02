@@ -1,10 +1,13 @@
 10:02:15 settled
-🟠 Node n1 (prod-eu-1) is low on memory. All of its dependents are failing. Replicas that do not depend on it are healthy. cart, orders and payments in shop are affected as well. To check the node's conditions and recent events, run kubectl describe node n1
+🟠 Node n1 (prod-eu-1) is low on memory. All of its dependents are failing. Replicas that do not depend on it are healthy. cart, orders and payments in shop are affected as well.
+Also grouped: 3 evictions, 1 node problem
+To check the node's conditions and recent events, run kubectl describe node n1
 🟠 Node n1 (prod-eu-1) is low on memory.
 | 🟠 Node n1 (**prod-eu-1**) is low on memory.
 | All of its dependents are failing.
 | Replicas that do not depend on it are healthy.
 | **cart**, **orders** and **payments** in **shop** are affected as well.
+| Also grouped: 3 evictions, 1 node problem
 | To check the node's conditions and recent events, run
 | ```
 | kubectl describe node n1

@@ -145,7 +145,8 @@ var definitions = []Definition{
 		Runtime, nil,
 	},
 	{
-		NoiseControl, "Settle, merge symptoms and send only material changes",
+		NoiseControl, "Settle, group related alerts into one incident and " +
+			"send only material changes",
 		Runtime, []ID{RootCause},
 	},
 	{

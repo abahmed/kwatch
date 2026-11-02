@@ -1,10 +1,13 @@
 10:03:00 material change
-🟠 Node n1 (prod-eu-1) is failing: condition FilesystemReadOnly is True (FilesystemIsReadOnly). It reports "filesystem is read-only". All of its dependents are failing. cart and search in shop are affected as well. To check the node's conditions and recent events, run kubectl describe node n1
+🟠 Node n1 (prod-eu-1) is failing: condition FilesystemReadOnly is True (FilesystemIsReadOnly). It reports "filesystem is read-only". All of its dependents are failing. cart and search in shop are affected as well.
+Also grouped: 2 not-ready pods
+To check the node's conditions and recent events, run kubectl describe node n1
 🟠 Node n1 (prod-eu-1) is failing: condition FilesystemReadOnly is True (FilesystemIsReadOnly).
 | 🟠 Node n1 (**prod-eu-1**) is failing: condition FilesystemReadOnly is True (FilesystemIsReadOnly).
 | It reports `filesystem is read-only`.
 | All of its dependents are failing.
 | **cart** and **search** in **shop** are affected as well.
+| Also grouped: 2 not-ready pods
 | To check the node's conditions and recent events, run
 | ```
 | kubectl describe node n1

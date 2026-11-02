@@ -1,21 +1,27 @@
 10:02:30 settled
-🔴 Node n1 (prod-eu-1) has not reported for about two minutes. Nothing outside it points to a cause. It reports "Kubelet stopped posting node status." kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable. To check the node's conditions and recent events, run kubectl describe node n1
+🔴 Node n1 (prod-eu-1) has not reported for about two minutes. Nothing outside it points to a cause. It reports "Kubelet stopped posting node status." kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable.
+Also grouped: 1 node problem
+To check the node's conditions and recent events, run kubectl describe node n1
 🔴 Node n1 (prod-eu-1) has not reported for about two minutes.
 | 🔴 Node n1 (**prod-eu-1**) has not reported for about two minutes.
 | Nothing outside it points to a cause.
 | It reports `Kubelet stopped posting node status.`
 | kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable.
+| Also grouped: 1 node problem
 | To check the node's conditions and recent events, run
 | ```
 | kubectl describe node n1
 | ```
 10:02:45 settled
-🟠 Four nodes (prod-eu-1) have not reported for about two minutes: n1, n2, n4 and one more. Nothing outside it points to a cause. They report "Kubelet stopped posting node status." kwatch cannot see why from inside the cluster: the kubelets stopped reporting, so the nodes may be down or unreachable. To see the object's state and events, run kubectl describe node n1
+🟠 Four nodes (prod-eu-1) have not reported for about two minutes: n1, n2, n4 and one more. Nothing outside it points to a cause. They report "Kubelet stopped posting node status." kwatch cannot see why from inside the cluster: the kubelets stopped reporting, so the nodes may be down or unreachable.
+Also grouped: 4 node problems
+To see the object's state and events, run kubectl describe node n1
 🟠 Four nodes (prod-eu-1) have not reported for about two minutes: n1, n2, n4 and one more.
 | 🟠 Four nodes (**prod-eu-1**) have not reported for about two minutes: n1, n2, n4 and one more.
 | Nothing outside it points to a cause.
 | They report `Kubelet stopped posting node status.`
 | kwatch cannot see why from inside the cluster: the kubelets stopped reporting, so the nodes may be down or unreachable.
+| Also grouped: 4 node problems
 | To see the object's state and events, run
 | ```
 | kubectl describe node n1
