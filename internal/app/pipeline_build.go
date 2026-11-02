@@ -41,12 +41,23 @@ type pipelineBuild struct {
 	// incident manager read it through closures, so it may be nil while
 	// they are built.
 	source *kube.Source
+	// dynamic is set with source; the dashboard coverage reads it.
+	dynamic *kube.DynamicSource
 	// flight records the observations the sources submit (flight.go).
 	flight *flight.Recorder
 	// gap is the unmonitored time before this start, for the gap report.
-	gap gapNotice
+	gap startNotice
 	// withheld counts the Pro findings Community does not show.
 	withheld *feature.Withheld
+	// stats is the kubelet stats poller once it runs (Pro); the
+	// dashboard reads its usage history.
+	stats *kube.StatsPoller
+	// crashLogs reads crashed containers' previous logs; nil when
+	// investigation or its log reads are off (crashLogsEnabled).
+	crashLogs *kube.CrashLogRound
+	// links is the state of the dashboard links in messages; nil
+	// without the dashboard.
+	links *dashboardLinks
 }
 
 // newPipelineBuild builds the model, scope, audit log, incident manager
@@ -88,7 +99,8 @@ func newPipelineBuild(
 
 // incidentConfig is the lifecycle configuration of the edition. Without
 // the Pro lifecycle there are no flapping incidents, paging rules,
-// reminders or hand-overs, and no severity overrides.
+// reminders or hand-overs, and no severity overrides; without change
+// correlation the journal links no changes and takes no snapshots.
 func (p *pipelineBuild) incidentConfig() incident.Config {
 	deps := p.deps
 	cfg := incident.Config{
@@ -108,6 +120,7 @@ func (p *pipelineBuild) incidentConfig() incident.Config {
 		cfg.NoFlapping, cfg.NoPaging = true, true
 		cfg.NoReminders, cfg.NoHandover = true, true
 	}
+	cfg.NoJournalDetail = !deps.has(feature.ChangeCorrelation)
 	return cfg
 }
 
@@ -121,6 +134,13 @@ func (p *pipelineBuild) synced(kind inventory.Kind) bool {
 	return p.source != nil && p.source.Synced(kind)
 }
 
+// fresh is whether kind's watch still gets through, for the detectors
+// that raise from the passage of time alone (Registry.SetFresh). Before
+// the source exists nothing is synced, so nothing is evaluated.
+func (p *pipelineBuild) fresh(kind inventory.Kind) bool {
+	return p.source == nil || p.source.Fresh(kind)
+}
+
 // newEngine builds the decision engine. Its sink runs on the decision
 // loop, so every step hands off without waiting: delivery queues the
 // message and the audit entry goes to the decision log's worker.
@@ -132,8 +152,8 @@ func (p *pipelineBuild) newEngine() (*pipeline.Engine, error) {
 	gate := pipeline.NewSyncGate(p.synced)
 	return pipeline.NewEngine(pipeline.Dependencies{
 		Model: p.model,
-		Detectors: newDetectorRegistry(gate.Synced, deps.entitlements,
-			p.withheld),
+		Detectors: newDetectorRegistry(gate.Synced, p.fresh,
+			deps.entitlements, p.withheld),
 		Withheld:     p.withheld,
 		Incidents:    p.incidents,
 		Synced:       gate.Synced,
@@ -157,6 +177,7 @@ func (p *pipelineBuild) newEngine() (*pipeline.Engine, error) {
 		CommunitySends:  deps.notice.sends,
 		Gap:             p.gap.gap,
 		Notify:          p.notify,
+		Restart:         p.gap.restart,
 	})
 }
 
@@ -172,15 +193,28 @@ func (p *pipelineBuild) notify(report string) {
 }
 
 // newWriter composes messages for the edition: Community writes the
-// one-line cause without proofs, and runbooks need Pro.
+// category of the cause without its object or proofs, and runbooks
+// need Pro. While the Pro
+// dashboard is served, messages link to it at the address found in the
+// model (dashboard_address.go).
 func (p *pipelineBuild) newWriter() compose.Writer {
 	app := p.deps.runtime.Application()
 	var runbooks map[string]string
 	if p.deps.has(feature.Runbooks) {
 		runbooks = p.deps.runtime.Policy().Runbooks()
 	}
-	return compose.NewWriter(app.ClusterName, runbooks).
+	w := compose.NewWriter(app.ClusterName, runbooks).
 		ForEdition(p.deps.entitlements, app.HideProHints)
+	if p.deps.dashboardServer != nil {
+		p.links = &dashboardLinks{
+			target: newDashboardTarget(
+				p.deps.runtime.Lifecycle().Dashboard().Port),
+			model: p.model, seen: p.deps.dashboardServer,
+			forbidden: p.routesForbidden, sink: linkSinkOf(p.deps),
+		}
+		w.Dashboard = p.links.address
+	}
+	return w
 }
 
 // newInvestigator reads logs and endpoints for the incidents it
@@ -242,6 +276,9 @@ func (p *pipelineBuild) newStatsPoller(submit kube.Submit) *kube.StatsPoller {
 		Submit:     submit,
 		Nodes:      entitiesOf(p.model, kube.KindNode),
 		Containers: entitiesOf(p.model, kube.KindContainer),
+		// The source exists before the poller (see newRunners).
+		Synced:  func() bool { return p.source.Synced(kube.KindContainer) },
+		History: reportUsage(newUsageStore(p.state), healthSink(deps)),
 		Settling: func(node inventory.EntityID, now time.Time) bool {
 			return kube.NodeSettling(p.model, node, now)
 		},
@@ -266,26 +303,30 @@ func (p *pipelineBuild) newRunners(
 	if err != nil {
 		return nil, err
 	}
-	p.source = source
+	p.source, p.dynamic = source, dynamicSource
 	stats := p.newStatsPoller(submit)
-	crashLogs := kube.NewCrashLogRound(kube.CrashLogConfig{
-		Logs:   kube.LogReader{Client: deps.clients.Kubernetes},
-		Model:  p.model,
-		Now:    p.clock.Now,
-		Submit: submit,
-	})
 	runners := []func(context.Context){
-		source.Run, dynamicSource.Run, crashLogs.Run,
+		source.Run, dynamicSource.Run,
 		func(ctx context.Context) {
 			pruneModel(ctx, p.model, p.clock.Now)
 		},
-		p.syncReporter(engine, newPipelineSourceHealth(
-			deps, source, dynamicSource)),
+		p.syncReporter(engine, p.withSelfChecks(newPipelineSourceHealth(
+			deps, source, dynamicSource))),
+	}
+	if crashLogsEnabled(deps) {
+		p.crashLogs = kube.NewCrashLogRound(kube.CrashLogConfig{
+			Logs:   kube.LogReader{Client: deps.clients.Kubernetes},
+			Model:  p.model,
+			Now:    p.clock.Now,
+			Submit: submit,
+		})
+		runners = append(runners, p.crashLogs.Run)
 	}
 	// The kubelet stats and the control plane probes feed detectors
 	// that only Pro runs; Community does not read them.
 	if deps.has(feature.NodeUsage) {
 		runners = append(runners, stats.Run)
+		p.stats = stats
 	}
 	if deps.has(feature.ControlPlane) {
 		runners = append(runners, p.newProber(submit).Run)

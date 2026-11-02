@@ -113,6 +113,10 @@ type outbox struct {
 	stopped sync.Once
 	// sealed is set after the final write; the store may be closed then.
 	sealed bool
+	// trails saves trail, the send trail, with every batch; both are
+	// nil when the store keeps no trail (see attachTrailLocked).
+	trails TrailStore
+	trail  *sendTrail
 }
 
 func newOutbox(store OutboxStore, now func() time.Time) *outbox {
@@ -219,9 +223,17 @@ func (o *outbox) flush() bool {
 }
 
 // flushBatch is flush that also reports whether there was a batch to
-// write. A failed batch, or one whose write panicked, is put back before
-// the panic goes on, so the next flush retries it.
+// write: the queued jobs, then the send trail.
 func (o *outbox) flushBatch() (ok, wrote bool) {
+	ok, wrote = o.flushJobs()
+	trailOK, trailWrote := o.flushTrail()
+	return ok && trailOK, wrote || trailWrote
+}
+
+// flushJobs writes the job changes. A failed batch, or one whose write
+// panicked, is put back before the panic goes on, so the next flush
+// retries it.
+func (o *outbox) flushJobs() (ok, wrote bool) {
 	o.mu.Lock()
 	if o.sealed {
 		o.mu.Unlock()
@@ -259,12 +271,17 @@ func (o *outbox) flushBatch() (ok, wrote bool) {
 }
 
 // restoreBatch puts a failed batch back unless newer changes replaced it.
+// A record rewritten while the batch was failing (such as by setAttempts)
+// keeps its newer put; the old one would undo the newer send count.
 func (o *outbox) restoreBatch(
 	puts map[string]OutboxRecord, removes map[string]struct{},
 ) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	for id, record := range puts {
+		if _, newer := o.puts[id]; newer {
+			continue
+		}
 		if _, live := o.live[id]; live {
 			o.puts[id] = record
 		} else {

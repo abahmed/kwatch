@@ -77,7 +77,7 @@ func boundCorrelation(c *incident.Correlation) *incident.Correlation {
 		return nil
 	}
 	out := &incident.Correlation{
-		Confirmed: clip(redact.Credentials(c.Confirmed))}
+		Confirmed: clipQuoted(redact.Credentials(c.Confirmed))}
 	for _, f := range c.Facts {
 		if len(out.Facts) == maxCorrelationFacts {
 			break
@@ -86,6 +86,38 @@ func boundCorrelation(c *incident.Correlation) *incident.Correlation {
 			Value: clipReport(redact.Credentials(f.Value))})
 	}
 	return out
+}
+
+// clipQuoted is clip, closing a quotation the cut left open: a proof
+// that quotes a log line ("after logging \"panic: …") must not leave it
+// open. The closing quote takes the place of the last byte kept, so the
+// result is never longer than clip's. Escaped quotes (\") inside the
+// quoted line are not counted.
+func clipQuoted(text string) string {
+	if len(text) <= maxEvidenceText {
+		return text
+	}
+	cut := maxEvidenceText - 1
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	head := text[:cut]
+	if openQuotes(head)%2 == 1 {
+		return head + "…\""
+	}
+	return clip(text)
+}
+
+// openQuotes counts the double quotes in text not escaped by a
+// backslash.
+func openQuotes(text string) int {
+	n := 0
+	for i := range len(text) {
+		if text[i] == '"' && (i == 0 || text[i-1] != '\\') {
+			n++
+		}
+	}
+	return n
 }
 
 // clipReport cuts text to maxReportText bytes on a rune boundary.

@@ -40,7 +40,7 @@ func TestDefaultConfigurationSetsNoProFeature(t *testing.T) {
 
 func TestConfiguredProListsEveryProFeatureTheFileSets(t *testing.T) {
 	assert.Equal(t, []feature.ID{
-		feature.ActiveProbes, feature.AuditLog, "delivery.heartbeat",
+		feature.ActiveProbes, feature.AuditLog, feature.Heartbeat,
 		feature.Maintenance, "policy.namespace-selector",
 		"policy.reason-filter", feature.Runbooks,
 		feature.SeverityOverrides,
@@ -85,11 +85,12 @@ func TestCommunityIgnoresProPolicyButKeepsScope(t *testing.T) {
 	assert.Empty(t, rt.Scope().NamespaceSelector())
 	assert.False(t, rt.ActiveProbe().Enabled)
 	assert.False(t, rt.Lifecycle().AuditLog().Enabled)
-	assert.False(t, rt.Lifecycle().Heartbeat().Enabled)
 
 	assert.Equal(t, []string{"shop"}, rt.Scope().AllowedNamespaces())
 	assert.Equal(t, []string{"kube-system"}, rt.Scope().ForbiddenNamespaces())
 	assert.Len(t, rt.Scope().Silences(), 1, "silences still work")
+	assert.False(t, rt.Lifecycle().Heartbeat().Enabled,
+		"the heartbeat is Pro")
 	assert.NotEmpty(t, cfg.SeverityByReason, "the original is untouched")
 }
 
@@ -116,9 +117,9 @@ func TestCommunityStartupIsNeverAnError(t *testing.T) {
 
 func TestCommunityRegistersOnlyPodAndNodeDetectors(t *testing.T) {
 	community := registryLayout(
-		newDetectorRegistry(nil, feature.CommunityEntitlements(), nil))
+		newDetectorRegistry(nil, nil, feature.CommunityEntitlements(), nil))
 	pro := registryLayout(
-		newDetectorRegistry(nil, feature.ProEntitlements(), nil))
+		newDetectorRegistry(nil, nil, feature.ProEntitlements(), nil))
 	assert.Less(t, len(community), len(pro))
 	assert.NotEmpty(t, community, "pods and nodes are Community")
 	joined := strings.Join(community, "\n")
@@ -192,4 +193,56 @@ func TestIncidentConfigWithoutEntitlementsIsCommunity(t *testing.T) {
 		runtime:      config.RuntimeConfigFor(config.DefaultConfig()),
 	}}).incidentConfig()
 	assert.False(t, pro.NoFlapping)
+}
+
+// dashboard.enabled, from the file or KWATCH_DASHBOARD_ENABLED, is a
+// Pro setting: Community names it as ignored, Pro runs it.
+func TestInactiveProNamesTheDashboard(t *testing.T) {
+	file := config.DefaultConfig()
+	file.Dashboard.Enabled = true
+	t.Setenv("KWATCH_DASHBOARD_ENABLED", "true")
+	env := config.DefaultConfig()
+	if err := config.RebuildAfterOverlay(env); err != nil {
+		t.Fatal(err)
+	}
+	for name, cfg := range map[string]*config.Config{
+		"file": file, "environment": env,
+	} {
+		assert.Contains(t, inactivePro(feature.CommunityEntitlements(),
+			cfg), "ui.dashboard", name)
+		assert.Empty(t, inactivePro(feature.ProEntitlements(), cfg), name)
+	}
+}
+
+// healthCheck.statusEndpoint is a Pro setting: Community answers /status
+// with 402 and names it as ignored, Pro serves it.
+func TestInactiveProNamesTheStatusPage(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.HealthCheck.Enabled, cfg.HealthCheck.StatusEndpoint = true, true
+	assert.Contains(t, inactivePro(feature.CommunityEntitlements(), cfg),
+		"ui.status")
+	assert.Empty(t, inactivePro(feature.ProEntitlements(), cfg))
+	assert.NotContains(t, inactivePro(feature.CommunityEntitlements(),
+		config.DefaultConfig()), "ui.status")
+}
+
+func TestConditionalComponentsRunTheHeartbeatOnlyInPro(t *testing.T) {
+	for name, e := range map[string]feature.Entitlements{
+		"community": feature.CommunityEntitlements(),
+		"pro":       feature.ProEntitlements(),
+		"unset":     nil,
+	} {
+		deps := componentDeps()
+		deps.entitlements = e
+		deps.runtime = config.RuntimeConfigFor(config.DefaultConfig())
+		var names []string
+		for _, spec := range conditionalComponents(deps) {
+			names = append(names, spec.name)
+		}
+		if name == "pro" {
+			assert.Contains(t, names, "heartbeat", name)
+		} else {
+			assert.NotContains(t, names, "heartbeat", name)
+		}
+	}
 }

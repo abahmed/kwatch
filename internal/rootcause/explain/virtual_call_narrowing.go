@@ -27,7 +27,7 @@ func (v *view) applyMinWorkloads(cs *candidateSet) {
 				continue
 			}
 			for _, effect := range group.effects {
-				delete(c.covers, effect)
+				c.dropCover(effect)
 				cs.rejectInsufficient(c.id, effect, "row "+group.row+
 					" needs failures in more workloads")
 			}
@@ -114,7 +114,7 @@ func (v *view) applySignatureWindow(cs *candidateSet) {
 			if keep[effect] {
 				continue
 			}
-			delete(c.covers, effect)
+			c.dropCover(effect)
 			cs.rejectInsufficient(c.id, effect, "the failures sharing "+
 				"this error did not begin together")
 		}

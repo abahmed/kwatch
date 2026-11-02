@@ -17,6 +17,7 @@ type Context struct {
 
 	recheck     *time.Duration
 	synced      func(inventory.Kind) bool
+	fresh       func(inventory.Kind) bool
 	unsynced    *[]inventory.Kind
 	misses      *int
 	specialised bool
@@ -46,6 +47,29 @@ func (c Context) Synced(kind inventory.Kind) bool {
 		*c.misses++
 	}
 	return false
+}
+
+// Fresh reports whether the watch of kind still gets through. A synced
+// kind whose watch keeps failing holds what was true when it broke, so a
+// detector that would raise from the passage of time alone (a run that
+// did not start) asks first; when it is not fresh the detector is
+// Undecided and neither raises nor clears.
+func (c Context) Fresh(kind inventory.Kind) bool {
+	if c.fresh == nil || c.fresh(kind) {
+		return true
+	}
+	c.Undecided()
+	return false
+}
+
+// Undecided says the detector cannot judge the entity now: a source it
+// reads is stale (a scan that failed, an API server that does not
+// answer). Like a kind that is not synced, its earlier findings and onsets
+// are kept, neither raised anew nor cleared, until it can judge again.
+func (c Context) Undecided() {
+	if c.misses != nil {
+		*c.misses++
+	}
 }
 
 // RecheckAfter asks for another evaluation of this entity after delay. The
@@ -110,6 +134,7 @@ const AnyKind inventory.Kind = "*"
 type Registry struct {
 	byKind map[inventory.Kind][]Detector
 	synced func(inventory.Kind) bool
+	fresh  func(inventory.Kind) bool
 	onsets *onsets
 }
 
@@ -130,6 +155,13 @@ func NewRegistry(
 	return r
 }
 
+// SetFresh sets what Context.Fresh reads: whether a synced kind's watch
+// still gets through. It is set once at composition, before the first
+// Evaluate; nil, the default, treats every kind as fresh.
+func (r *Registry) SetFresh(fresh func(inventory.Kind) bool) {
+	r.fresh = fresh
+}
+
 // Evaluate runs every detector for the entity's kind. An absent entity is
 // evaluated only by AnyKind detectors, which read notes (events) that can
 // concern objects kwatch does not model.
@@ -144,11 +176,12 @@ func (r *Registry) Evaluate(
 	var unsynced []inventory.Kind
 	var misses int
 	scope := r.onsets.begin(id)
-	complete := false
-	defer func() { r.onsets.finish(id, scope, !complete) }()
+	var unsure []string
+	done := false
+	defer func() { r.onsets.finish(id, scope, unsure, done) }()
 	ctx := Context{
 		Model: model, Now: now, recheck: &recheck, synced: r.synced,
-		unsynced: &unsynced, misses: &misses,
+		fresh: r.fresh, unsynced: &unsynced, misses: &misses,
 		specialised: present && len(r.byKind[id.Kind]) > 0,
 		onsets:      scope,
 	}
@@ -158,9 +191,12 @@ func (r *Registry) Evaluate(
 	}
 	out, fallback, run := runDetectors(ctx, groups, entity)
 	panicked := run.panicked
-	complete = len(panicked) == 0
+	// A detector that panicked, or returned early for an unsynced kind
+	// or a stale source, could not ask for its onsets: they are kept.
+	unsure = append(slices.Clone(panicked), run.unsynced...)
+	done = true
 	out = append(out, withoutReportedModes(fallback, out)...)
-	if !complete {
+	if len(panicked) > 0 {
 		ctx.RecheckAfter(incompleteRecheck)
 	}
 	return Evaluation{Findings: collapseReasons(out), RecheckAfter: recheck,
@@ -179,6 +215,7 @@ func runDetectors(
 ) (out, fallback []Finding, run unsure) {
 	for _, group := range groups {
 		for _, detector := range group {
+			ctx.onsets.running(detector.Name())
 			missed := ctx.missCount()
 			found, ok := detectContained(ctx, detector, entity)
 			if !ok {

@@ -1,6 +1,7 @@
 package incident
 
 import (
+	"slices"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -78,6 +79,60 @@ func workloadsOf(
 		}
 	}
 	return out
+}
+
+// workloadsBehind is workloadsOf for a question about who still fails
+// for a Service, not about grouping: when no endpoint slice names its
+// pods (not listed yet after a restart, not readable, or holding no
+// endpoints), its own selector does. A Service whose pods all fail must
+// still be known as theirs, or its restored incident is not handed over
+// to the one that holds their failures and resolves as healthy while
+// they go on failing. Grouping keeps the slices alone: a selector also
+// names pods that no traffic reaches.
+func workloadsBehind(
+	model inventory.Reader, id inventory.EntityID,
+) []inventory.EntityID {
+	out := workloadsOf(model, id)
+	if id.Kind != kube.KindService || len(out) > 0 {
+		return out
+	}
+	for _, pod := range selectedPods(model, id) {
+		out = append(out, rootcause.TopOwner(model, pod))
+	}
+	return out
+}
+
+// sameChainBehind is sameChain with a Service's pods found by
+// workloadsBehind.
+func sameChainBehind(
+	model inventory.Reader, a, b inventory.EntityID,
+) bool {
+	mine := workloadsBehind(model, a)
+	for _, id := range workloadsBehind(model, b) {
+		if slices.Contains(mine, id) {
+			return true
+		}
+	}
+	return false
+}
+
+// selectedPods are the pods a Service's own selector matches. A Service
+// without a selector, or with the empty one, names no pods.
+func selectedPods(
+	model inventory.Reader, id inventory.EntityID,
+) []inventory.EntityID {
+	selector, ok := model.Attribute(id, kube.AttrSelector)
+	if !ok {
+		return nil
+	}
+	if text := selector.Value.AsText(); text == "" || text == "<none>" {
+		return nil
+	}
+	service, ok := model.Entity(id)
+	if !ok {
+		return nil
+	}
+	return kube.SelectedPods(model, service)
 }
 
 // sameFailures reports whether every failure of target is one that

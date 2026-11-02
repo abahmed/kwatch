@@ -70,6 +70,17 @@ kubectl annotate deploy/api kwatch.dev/ack="looking into it"
 - `Incident.Ack` is persisted, so a restart does not tell it again. While a
   restored incident is inside the restore grace the model is still being
   rebuilt, so a missing annotation is not read as removed.
+- For the dashboard the acknowledgement also records `Since`, when kwatch
+  saw it appear or its note change, and `By`, the field manager that wrote
+  the annotation (`kubectl-annotate`). The informer transform reads it from
+  the managed fields before it trims them (the latest manager whose field
+  set holds `f:kwatch.dev/ack`) and stamps it on the cached object, and the
+  translator turns it into the `ack.by` attribute (`kube.AttrAckBy`,
+  `ack_manager.go`). It is an attribute, not a change: an edit of an
+  annotation is not a change to the object, and the change history feeds
+  the root-cause reasoning, fix attempts and resolves. `By` is empty when
+  the managed fields name no writer. Neither is told to the thread, and
+  older records restore without them.
 
 ---
 

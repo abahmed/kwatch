@@ -103,7 +103,7 @@ func TestResolveAtStillBrokenCapDoesNotClaimHealth(t *testing.T) {
 
 	msg := Writer{}.Write(d, writerNow)
 
-	if strings.Contains(msg.Note, "healthy") ||
+	if strings.Contains(msg.Note, "healthy again") ||
 		!strings.Contains(msg.Note, "stopped tracking") ||
 		!strings.Contains(msg.Note, "still") {
 		t.Errorf("note = %q", msg.Note)

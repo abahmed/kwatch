@@ -43,6 +43,15 @@ type caseFacts struct {
 	// Community.
 	gathered  map[string]bool
 	confirmed string
+	// rootUnseen is set when the check that reads the root itself came
+	// back absent: a proof then cannot confirm the cause.
+	rootUnseen bool
+	// asAnnounced names the subject people were told about in a resolve
+	// (see incident.Decision.AsAnnounced).
+	asAnnounced bool
+	// community writes the Community message: the lead stops before the
+	// cause and causeTeaser tells only its category.
+	community bool
 }
 
 func gatherFacts(d incident.Decision, now time.Time, fix *inventory.Change,
@@ -56,6 +65,8 @@ func gatherFacts(d incident.Decision, now time.Time, fix *inventory.Change,
 	if c := d.Facts.Correlation; c != nil {
 		f.confirmed = c.Confirmed
 	}
+	f.rootUnseen = rootUnseen(f.p, d.Facts.Report)
+	f.asAnnounced = d.AsAnnounced
 	if own := rootFinding(f.p, f.members); own != nil {
 		f.lead, f.ok = *own, true
 	} else if failures := failing(f.members); len(failures) > 0 {
@@ -89,6 +100,9 @@ const (
 	partConsequence
 	partUnverified
 	partRecurrence
+	// partFollowUp says what kwatch does next: reminders held by an
+	// ack, the next message of a flapping incident.
+	partFollowUp
 	// partPlace is the line that names the setting to change.
 	partPlace
 	// partGrouped counts the other findings grouped in the incident.
@@ -111,6 +125,9 @@ type factKey string
 const (
 	factMemory   factKey = "memory"
 	factLiveness factKey = "liveness"
+	// factCauseTeaser marks the Community sentence that tells only the
+	// category of the cause (causeTeaser).
+	factCauseTeaser factKey = "cause teaser"
 )
 
 // sentence is one finished sentence of a note.

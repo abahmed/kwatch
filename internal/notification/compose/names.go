@@ -79,7 +79,7 @@ func shortName(id inventory.EntityID) string {
 	}
 	switch {
 	case incident.IsWorkload(id.Kind):
-		return id.Name
+		return proseName(id.Name)
 	case id.Kind == kube.KindContainer:
 		pod, container := splitContainer(id.Name)
 		return "container " + container + " in pod " + pod
@@ -90,7 +90,7 @@ func shortName(id inventory.EntityID) string {
 		// lead finding's own sentence.
 		return "the shared error"
 	}
-	return kindWord(id.Kind) + " " + id.Name
+	return kindWord(id.Kind) + " " + proseName(id.Name)
 }
 
 // causeRootName names a cause's root relative to the subject. A failure

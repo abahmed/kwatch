@@ -28,7 +28,8 @@ func ongoingState(health detection.Health) incident.Incident {
 func TestReminderOfAStandingConditionDoesNotSayFailing(t *testing.T) {
 	now := at(0, 0).Add(24 * time.Hour)
 
-	title := Writer{}.OngoingTitle(ongoingState(detection.Degraded), now)
+	title := Writer{}.OngoingTitle(
+		ongoingState(detection.Degraded), nil, now)
 
 	assert.Contains(t, title, "still the case, for one day now.")
 	assert.NotContains(t, title, "failing")
@@ -37,7 +38,8 @@ func TestReminderOfAStandingConditionDoesNotSayFailing(t *testing.T) {
 func TestReminderOfAFailureSaysItIsStillFailing(t *testing.T) {
 	now := at(0, 0).Add(24 * time.Hour)
 
-	title := Writer{}.OngoingTitle(ongoingState(detection.Failing), now)
+	title := Writer{}.OngoingTitle(
+		ongoingState(detection.Failing), nil, now)
 
 	assert.Contains(t, title, "still failing, for one day now.")
 }

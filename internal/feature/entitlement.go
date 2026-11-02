@@ -11,16 +11,17 @@ const (
 )
 
 // Limits are the quantitative entitlements of an edition. Zero means
-// unlimited for MaxProviders and MaxReplicas.
+// unlimited for MaxProviders.
 type Limits struct {
 	MaxProviders    int
 	RootCauseDetail bool
-	MaxReplicas     int
-	RetentionDays   int
 	StatusJSON      bool
 	Metrics         bool
 	ProHints        bool
 	Dashboard       bool
+	// StatusText serves the text /status page; /health is in every
+	// edition.
+	StatusText bool
 }
 
 // Entitlements answers what an installation may use.
@@ -48,14 +49,14 @@ func (e entitlements) Limits() Limits   { return e.limits }
 // CommunityEntitlements grants only Community-tier capabilities.
 func CommunityEntitlements() Entitlements {
 	return entitlements{CommunityEdition, Limits{
-		MaxProviders: 1, MaxReplicas: 1, ProHints: true,
+		MaxProviders: 1, ProHints: true,
 	}}
 }
 
 // ProEntitlements grants every capability.
 func ProEntitlements() Entitlements {
 	return entitlements{ProEdition, Limits{
-		RootCauseDetail: true, RetentionDays: 90, StatusJSON: true,
+		RootCauseDetail: true, StatusJSON: true, StatusText: true,
 		Metrics: true, Dashboard: true,
 	}}
 }

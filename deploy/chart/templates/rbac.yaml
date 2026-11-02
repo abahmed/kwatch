@@ -126,7 +126,7 @@ rules:
   resources: ["volumesnapshots", "volumesnapshotcontents", "volumesnapshotclasses"]
   verbs: ["list", "watch"]
 - apiGroups: ["gateway.networking.k8s.io"]
-  resources: ["gatewayclasses", "gateways", "httproutes", "grpcroutes", "tcproutes", "tlsroutes", "referencegrants"]
+  resources: ["gatewayclasses", "gateways", "httproutes", "grpcroutes", "tcproutes", "tlsroutes", "referencegrants", "udproutes", "backendtlspolicies", "listenersets"]
   verbs: ["list", "watch"]
 - apiGroups: ["authorization.k8s.io"]
   resources: ["selfsubjectaccessreviews"]

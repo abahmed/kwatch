@@ -42,4 +42,5 @@ delivery.routing|runtime|Route incidents to providers by scope||pro
 delivery.threads|runtime|Update one message thread per incident where supported||pro
 delivery.templates|runtime|Render operator-selected text templates||pro
 delivery.audit-log|runtime|Write a JSON line for every incident decision||pro
+delivery.heartbeat|runtime|Ping an external monitor so it notices when kwatch stops||pro
 security.rbac-audit|runtime|Report missing permissions||community

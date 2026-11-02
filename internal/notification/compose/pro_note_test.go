@@ -38,7 +38,7 @@ func TestProNoteNamesTheAlertType(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.Equal(t, tc.want+proInvite,
-				proNote(modeDecision(tc.mode)))
+				proNote(modeDecision(tc.mode), false))
 		})
 	}
 }
@@ -46,24 +46,24 @@ func TestProNoteNamesTheAlertType(t *testing.T) {
 func TestProNoteTeasesAWithheldCause(t *testing.T) {
 	d := modeDecision(detection.ModeCrashLoop)
 	d.Incident.Cause, d.Incident.ProCause = nil, true
-	assert.Equal(t, proTeaser+proInvite, proNote(d))
+	assert.Equal(t, proTeaser+proInvite, proNote(d, false))
 
 	changed := modeDecision(detection.ModeCrashLoop)
 	changed.Incident.Cause = nil
 	changed.Facts.Changes = []inventory.Change{{}}
-	assert.Equal(t, proTeaser+proInvite, proNote(changed))
+	assert.Equal(t, proTeaser+proInvite, proNote(changed, false))
 }
 
 func TestProNoteSkipsTheTeaserWhenTheCauseIsNamed(t *testing.T) {
 	d := modeDecision(detection.ModeCrashLoop)
 	d.Incident.ProCause = true
-	assert.Equal(t, noteCrash+proInvite, proNote(d))
+	assert.Equal(t, noteCrash+proInvite, proNote(d, false))
 }
 
 func TestProNoteIsEmptyWhenProShowsNothing(t *testing.T) {
 	d := modeDecision(detection.ModeEvicted)
 	d.Incident.Root = inventory.CoreID(kube.KindDeployment, "shop", "api")
-	assert.Empty(t, proNote(d))
+	assert.Empty(t, proNote(d, false))
 }
 
 func TestProNoteFollowsHideProHints(t *testing.T) {
@@ -73,11 +73,25 @@ func TestProNoteFollowsHideProHints(t *testing.T) {
 	quiet := Writer{}.ForEdition(feature.CommunityEntitlements(), true)
 	pro := Writer{}.ForEdition(feature.ProEntitlements(), false)
 
-	assert.Equal(t, proTeaser+proInvite, community.noteFor(d))
-	assert.Empty(t, quiet.noteFor(d))
-	assert.Empty(t, pro.noteFor(d))
+	assert.Equal(t, proTeaser+proInvite, community.noteFor(d, d, at(4, 0)))
+	assert.Empty(t, quiet.noteFor(d, d, at(4, 0)))
+	assert.Empty(t, pro.noteFor(d, d, at(4, 0)))
 	d.Action = incident.Resolve
-	assert.Empty(t, community.noteFor(d), "a resolve gets no Pro line")
+	assert.Empty(t, community.noteFor(d, d, at(4, 0)),
+		"a resolve gets no Pro line")
+}
+
+func TestProNoteJoinsTheFixHintInOneLine(t *testing.T) {
+	d := modeDecision(detection.ModeCrashLoop)
+	assert.Equal(t, noteCrash+" "+proFix+proInvite, proNote(d, true))
+	d.Incident.Cause, d.Incident.ProCause = nil, true
+	assert.Equal(t, proTeaser+" "+proFix+proInvite, proNote(d, true))
+
+	alone := modeDecision(detection.ModeEvicted)
+	alone.Incident.Root = inventory.CoreID(kube.KindDeployment, "shop",
+		"api")
+	assert.Equal(t, "Pro shows how to fix it."+proInvite,
+		proNote(alone, true))
 }
 
 func TestProNoteIsAtMostOneLine(t *testing.T) {
@@ -97,4 +111,12 @@ func TestProChecksTextCountsSinceStart(t *testing.T) {
 		"kwatch.dev/pro", got)
 	assert.Contains(t, ProChecksText(feature.WithheldCounts{0, 0, 0, 1}),
 		"found 1 issue since kwatch started: 1 scheduling gate.")
+}
+
+func TestProChecksTodayTextCountsToday(t *testing.T) {
+	assert.Empty(t, ProChecksTodayText(feature.WithheldCounts{}))
+	got := ProChecksTodayText(feature.WithheldCounts{1, 0, 0, 2})
+	assert.Equal(t, "Pro checks found 3 issues today: 1 readiness probe, "+
+		"2 scheduling gates. Get Pro free during early access to see "+
+		"them: kwatch.dev/pro", got)
 }

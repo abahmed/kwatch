@@ -60,3 +60,24 @@ func TestWithheldNilCountsNothing(t *testing.T) {
 		t.Errorf("zero text = %q", text)
 	}
 }
+
+func TestWithheldTodayCountsOnlyTheCurrentDay(t *testing.T) {
+	w := NewWithheld()
+	w.Record(withheldStart, WithheldReadiness, "pod-a")
+	next := withheldStart.Add(24 * time.Hour)
+	w.Record(next, WithheldReadiness, "pod-a")
+	w.Record(next, WithheldGates, "pod-b")
+	if got := w.Today(withheldStart); got != (WithheldCounts{1, 0, 0, 0}) {
+		t.Errorf("first day = %v", got)
+	}
+	if got := w.Today(next); got != (WithheldCounts{0, 0, 0, 1}) {
+		t.Errorf("next day = %v, want only the new finding", got)
+	}
+	if got := w.Today(next.Add(24 * time.Hour)).Total(); got != 0 {
+		t.Errorf("a day without findings = %d", got)
+	}
+	var none *Withheld
+	if got := none.Today(next).Total(); got != 0 {
+		t.Errorf("nil today = %d", got)
+	}
+}

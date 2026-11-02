@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/replay"
 )
 
 // messagesPath is where a scenario's delivered notes are kept.
@@ -20,6 +21,12 @@ func messagesPath(name string) string {
 func scenarioNotes(t *testing.T, name string) string {
 	t.Helper()
 	_, _, result := replayScenario(t, labelledDir, name)
+	return renderNotes(result)
+}
+
+// renderNotes renders every message of a replay, one note per
+// paragraph, with the time and the decision that sent it.
+func renderNotes(result replay.Result) string {
 	var b strings.Builder
 	for i, m := range result.Messages {
 		b.WriteString(result.Times[i].Format("15:04:05") + " " +

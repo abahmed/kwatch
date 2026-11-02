@@ -1,0 +1,123 @@
+/* kwatch dashboard: the Issues table, its status switch, the live
+   updates bar and the pager. Tokens come from app.css. Under 1100px
+   wide the Object column hides; under 900px the table becomes stacked
+   cards, so the page never scrolls sideways; under 700px the filters
+   fold behind one "Filters" button. */
+
+.content.wide { max-width: 90rem; }
+/* The filters are tall here: they scroll away with the page. */
+.content.wide .filterbox { position: static; }
+
+/* Status: one pressed choice of three, with counts. */
+.stsw { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; padding: 3px; border: 1px solid var(--line); border-radius: var(--radius-pill); }
+.stsw-b { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 14px; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--text); font-weight: 600; font-size: 0.875rem; }
+.stsw-b:hover { background: var(--surface); }
+.stsw-b[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+.stsw-b[aria-pressed="true"] .fc-n { background: var(--bg); color: var(--text); }
+.filters .f-sort, .f-dir, .ftoggle { display: none; }
+
+/* New or changed issues waiting: at the bottom of the screen, so it
+   never covers the table's heading. */
+.livebar { position: sticky; bottom: 12px; z-index: 4; width: fit-content; margin-left: auto; margin-right: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 6px 6px 6px 16px; border-radius: var(--radius-pill); background: var(--text); color: var(--bg); font-weight: 600; font-size: 0.875rem; box-shadow: 0 4px 14px rgba(0, 0, 0, .18); }
+.livebar .btn { color: var(--bg); border-color: var(--bg); min-height: 32px; }
+.livebar .btn:hover:not(:disabled) { background: var(--bg); color: var(--text); }
+.pagenote { margin-top: 10px; }
+
+/* The table: fixed columns (colmenu.js gives them their widths), the
+   title takes the room left and ends in "…". The heading stays on
+   screen while the rows scroll; the frame scrolls sideways only when
+   the columns can't fit. */
+.tablewrap { margin-top: 16px; border: 1px solid var(--line); border-radius: var(--radius-card); overflow: clip; }
+.tablewrap.scrollx { overflow-x: auto; }
+.tablewrap.loading { opacity: .7; }
+.itable { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.875rem; table-layout: fixed; }
+.itable.stale { opacity: .6; }
+.itable th { text-align: left; font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); background: var(--surface); padding-left: 8px; height: 40px; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.it-sort { background: none; border: 0; padding: 0; color: inherit; font: inherit; line-height: 2rem; display: inline-block; white-space: nowrap; }
+.it-sort:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.itable th[aria-sort] { color: var(--text); }
+.itable th[aria-sort="ascending"] .it-sort::after { content: "↑"; margin-left: 4px; }
+.itable th[aria-sort="descending"] .it-sort::after { content: "↓"; margin-left: 4px; }
+.itable td { padding: 0 8px; height: 44px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-soft); }
+.itable tbody tr:last-child td { border-bottom: 0; }
+.itable.compact td { height: 34px; }
+.itable.compact .chip { padding-top: 0; padding-bottom: 0; }
+.itable tbody tr { cursor: pointer; }
+.itable tbody tr:hover td { background: var(--surface); }
+.itable td.c-sev { border-left: 4px solid transparent; padding-left: 8px; }
+.itable th.c-sev { padding-left: 12px; }
+.it-row.sev-page td.c-sev { border-left-color: var(--failing); }
+.it-row.sev-notify td.c-sev { border-left-color: var(--degraded); }
+.it-row.sev-low td.c-sev { border-left-color: var(--control-border); }
+.it-row.sev-resolved td.c-sev { border-left-color: var(--success); }
+.it-link { font-weight: 600; color: var(--text); text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; }
+.it-link:hover { text-decoration: underline; }
+.itable td.c-ns .mono, .itable td.c-obj .mono { font-size: 0.8125rem; }
+.itable td.c-started, .itable td.c-last, .itable td.c-dur, .itable td.c-rep { font-variant-numeric: tabular-nums; }
+.itable td.ok { color: var(--success); }
+.itable .chip { font-size: 0.75rem; }
+.it-row.is-gone td { opacity: .7; text-decoration: line-through; text-decoration-color: var(--text-muted); }
+/* Not only faded: a word says the row has left the list. */
+.it-row.is-gone td.c-title::after { content: "Gone"; margin-left: 8px; font-size: 0.75rem; font-weight: 600; text-decoration: none; display: inline-block; color: var(--text-muted); }
+.it-row.is-updated td.c-title { box-shadow: inset 3px 0 0 var(--signal); }
+/* The row with the keyboard focus is marked as a whole. */
+.itable tbody tr:focus-within td { background: var(--surface); box-shadow: inset 0 2px 0 var(--text), inset 0 -2px 0 var(--text); }
+.itable tbody tr:focus-within .it-link:focus-visible { outline: none; text-decoration: underline; }
+.itable td.c-title { display: flex; align-items: center; gap: 0; }
+.itable td.c-title .it-link { flex: 0 1 auto; min-width: 0; }
+.itable td.c-title .chip, .itable td.c-title .i-rep, .i-why { flex: none; }
+.i-stopped { flex: none; margin-left: 6px; font-size: 0.6875rem; font-weight: 600; color: var(--text-muted); border: 1px solid var(--control-border); border-radius: var(--radius-chip); padding: 0 6px; white-space: nowrap; }
+.i-why { margin-left: 6px; font-size: 0.6875rem; color: var(--text-muted); border: 1px dashed var(--line); border-radius: var(--radius-chip); padding: 0 6px; }
+@media (max-width: 1100px) and (min-width: 901px) {
+  .itable .c-obj { display: none; }
+  .shell { grid-template-columns: 11.5rem 1fr; }
+  .content.wide { padding-left: var(--space-5); padding-right: var(--space-5); }
+}
+
+/* A refused search: the reason, in words, beside the filters. */
+.badreq { margin-top: 12px; padding: 12px 16px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; border: 1px solid var(--degraded); border-radius: var(--radius-card); background: var(--degraded-bg); color: var(--text); }
+.badreq p { margin: 0; font-weight: 500; }
+.badreq .btn { border-color: var(--text); }
+
+/* Pager. */
+.pager { margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; font-size: 0.875rem; color: var(--text-muted); }
+.pager-btns { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.pager .btn { min-height: 32px; min-width: 32px; padding: 0 10px; white-space: nowrap; }
+.pager .btn[aria-current="page"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+.pager-gap { align-self: center; padding: 0 2px; }
+.pager-range { font-variant-numeric: tabular-nums; }
+.pager-size { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-weight: 400; }
+.pager-size .dd-btn { min-height: 32px; min-width: 72px; }
+
+@media (max-width: 900px) {
+  .filters .f-sort { display: block; flex: 0 1 auto; }
+  .filters .f-sort .dd { display: block; }
+  .f-dir:not([hidden]) { display: inline-flex; align-items: center; }
+  .tablewrap { border: 0; overflow: visible; }
+  .itable, .itable tbody { display: block; min-width: 0 !important; }
+  .itable thead { display: none; }
+  .itable tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; padding: 12px 14px; border: 1px solid var(--line); border-left-width: 4px; border-radius: var(--radius-card); margin-bottom: 10px; }
+  .it-row.sev-page { border-left-color: var(--failing); }
+  .it-row.sev-notify { border-left-color: var(--degraded); }
+  .it-row.sev-resolved { border-left-color: var(--success); }
+  .itable td { display: block; height: auto; padding: 0; border: 0; max-width: none; white-space: normal; overflow-wrap: break-word; background: transparent !important; box-shadow: none !important; }
+  .itable td.c-sev { border: 0; }
+  .itable td.c-title { grid-column: 1 / -1; width: auto; max-width: none; display: block; }
+  .it-link { white-space: normal; display: inline; }
+  /* The whole card is the title's link, so it is one big tap target. */
+  .itable tr { position: relative; }
+  .it-link::after { content: ""; position: absolute; inset: 0; }
+  .itable td:not(.c-sev):not(.c-title)::before { content: attr(data-label); display: block; color: var(--text-muted); font-size: 0.75rem; }
+  .itable td:empty, .itable td.none { display: none; }
+  .itable tbody tr:hover td { background: transparent; }
+  .itable tbody tr:focus-within { outline: 2px solid var(--text); outline-offset: 1px; }
+}
+@media (max-width: 700px) {
+  .ftoggle { display: inline-flex; align-items: center; margin: 0 0 8px; }
+  .content:not(.f-open) .filters, .content:not(.f-open) .shint,
+  .content:not(.f-open) .frow, .content:not(.f-open) .qvbox { display: none; }
+  .stsw { display: flex; }
+  .stsw-b { flex: 1; justify-content: center; padding: 0 8px; }
+  .pager { flex-direction: column; align-items: stretch; }
+  .pager-btns .btn { flex: 1 0 auto; }
+}

@@ -35,7 +35,7 @@ func (w Writer) RestoredSummaryWith(
 		plural(len(decisions), "problem") + " from before " +
 		verb(len(decisions), "is", "are") + " still failing."
 	sentences := []sentence{{part: partLead, text: lead}}
-	sentences = append(sentences, digestTitles(decisions, now, "")...)
+	sentences = append(sentences, w.digestTitles(decisions, now, "")...)
 	var facts []string
 	facts = append(facts, countFact(len(decisions), "problem")+
 		" from before still failing")
@@ -53,5 +53,5 @@ func (w Writer) RestoredSummaryWith(
 	}
 	fill(&msg, mark, sentences)
 	msg.Doc = w.listDoc(mark, "kwatch restarted", facts, decisions, now)
-	return msg
+	return w.linkedList(msg)
 }

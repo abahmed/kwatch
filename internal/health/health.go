@@ -34,6 +34,9 @@ type HealthServer struct {
 	statusHolder    statusHolder
 	liveness        atomic.Pointer[livenessCheck]
 	metricsGate     metricsGate
+	// links is the state of the dashboard links in messages; nil
+	// while no dashboard reports one (SetDashboardLinks).
+	links atomic.Pointer[LinkStatus]
 }
 
 // HealthResponse is the JSON body of the /health endpoint.

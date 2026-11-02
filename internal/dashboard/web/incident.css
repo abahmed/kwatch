@@ -1,0 +1,122 @@
+/* kwatch dashboard: the incident page's context. The likely cause and
+   hint lines of the summary card, logs, what changed, seen before, who
+   was told, "Containers" (table, usage now) and affected objects, and
+   the states strip. Tokens
+   come from app.css, so light and dark follow it. */
+
+/* The likely cause under the title, and one-line times. */
+.d-likely { margin-top: 8px; font-size: 1rem; max-width: var(--measure); overflow-wrap: anywhere; }
+.d-nowrap { white-space: nowrap; }
+
+/* Logs: one set of controls. */
+.lg-ctl { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 8px; }
+.lg-ctl label { display: inline-flex; align-items: center; gap: 8px; }
+.lg-ctl .dd-btn { min-height: 36px; }
+.lg-ctl [data-log-n] { margin: 0; }
+
+/* Hint lines in "What's happening": each opens its section. */
+.d-ctx { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 2px; font-size: 0.9375rem; }
+.d-ctx-b { font: inherit; text-align: left; color: var(--text-soft); text-decoration-color: var(--line); min-height: 28px; overflow-wrap: anywhere; }
+.d-ctx-b:hover { color: var(--text); text-decoration-color: currentColor; }
+
+/* What changed just before. */
+.cx-fixed { margin: 4px 0 10px; }
+.cx-list { list-style: none; margin: 4px 0 0; padding: 0; }
+.cx-row { display: grid; grid-template-columns: 5.5em minmax(0, 1fr); gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.cx-row:first-child { border-top: 0; }
+.cx-when { align-self: start; font-size: 0.75rem; font-weight: 600; text-align: center; padding: 2px 8px; border-radius: var(--radius-chip); cursor: help; }
+.cx-before { color: var(--degraded); background: var(--degraded-bg); }
+.cx-during { color: var(--resolved); background: var(--resolved-bg); }
+.cx-line { overflow-wrap: anywhere; }
+.cx-line .mono { font-size: 0.875rem; }
+.cx-line .chip { margin-left: 8px; vertical-align: 1px; }
+.cx-meta { display: block; margin-top: 2px; font-size: 0.8125rem; color: var(--text-muted); overflow-wrap: anywhere; }
+
+/* Seen before. */
+.seen-list { margin: 8px 0 0; padding-left: 18px; }
+.seen-list li { padding: 2px 0; }
+.seen-list .mono { font-size: 0.875rem; }
+.seen-prev { margin-top: 10px; }
+
+/* Who was told. */
+.told-list { list-style: none; margin: 4px 0 0; padding: 0; }
+.told-row { display: grid; grid-template-columns: 8em minmax(0, 1fr); gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.told-row:first-child { border-top: 0; }
+.told-row time { font-size: 0.8125rem; color: var(--text-muted); padding-top: 2px; }
+.told-body p { overflow-wrap: anywhere; }
+.told-body .ch-msg { margin-top: 6px; }
+.told-body [title] { cursor: help; }
+
+/* Changed just before it recovered: plain rows, no Before/During tag. */
+.cx-plain { display: block; }
+
+/* What we sent: the exact text, wrapped. */
+.sent-h { margin-top: 12px; }
+.sent-h:first-child { margin-top: 0; }
+.sent-text { margin: 4px 0 0; padding: 10px 12px; font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-input); }
+
+/* Hidden for safety: where kwatch hid a secret in text. */
+.hid-tag { display: inline-block; margin: 0 2px; padding: 0 5px; font-family: var(--font-body); font-size: 0.6875rem; line-height: 1.5; border: 1px dashed currentColor; border-radius: var(--radius-chip); cursor: help; }
+:root[data-contrast="more"] .hid-tag { border-style: solid; border-width: 2px; }
+
+/* Tables: containers and affected objects. */
+.kt-wrap { overflow-x: auto; }
+.kt { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.kt th { text-align: left; font-weight: 600; color: var(--text-muted); font-size: 0.8125rem; padding: 6px 12px 6px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.kt th[title] { cursor: help; }
+.kt td { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.kt .mono { font-size: 0.8125rem; }
+.kt-name, .kt-img { overflow-wrap: anywhere; }
+.x-num { font-variant-numeric: tabular-nums; }
+.x-bad { color: var(--failing); }
+.x-warn { color: var(--degraded); font-weight: 600; }
+.ao-status { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; cursor: help; }
+.ao-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--control-border); }
+.ao-dot.s-failing { background: var(--failing); }
+.ao-dot.s-cause { background: var(--degraded); }
+.ao-dot.s-recovered { background: var(--success); }
+.ao-dot.s-gone { background: transparent; border: 1.5px dashed var(--control-border); }
+.ao-cmds { display: flex; flex-wrap: wrap; gap: 6px; }
+.ao-cmds .btn { min-height: 32px; padding: 0 10px; font-size: 0.8125rem; white-space: nowrap; }
+[data-affected] + [data-related]:not(:empty) { margin-top: 16px; }
+
+.ao-main { display: block; font-size: 0.75rem; color: var(--text-muted); }
+
+/* Containers: the table, then usage now, then the chart. */
+.ct-part:not(:empty) { margin-top: 18px; }
+.ct-part > .fold-h { cursor: default; }
+.ct-part > .fold-h + .use, .ct-part > .fold-h + .uc { border-top: 0; }
+
+/* Usage now: used against the limit (or request). */
+.use { padding: 10px 0; border-top: 1px solid var(--line); }
+.use:first-child { border-top: 0; }
+.use-name { font-size: 0.8125rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.use-row { margin-top: 6px; }
+.use-bar { height: 8px; max-width: 420px; margin-top: 4px; border-radius: var(--radius-pill); background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
+.use-fill { display: block; width: 0; height: 100%; background: var(--resolved); }
+.use-fill.warm { background: var(--degraded); }
+.use-fill.hot { background: var(--failing); }
+
+/* States strip above the step-by-step list. */
+.strip { margin: 4px 0 18px; }
+.strip-h { font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
+.strip-bar { display: flex; gap: 2px; height: 14px; border-radius: var(--radius-chip); overflow: hidden; background: var(--surface); }
+.seg { flex: 1 1 0; min-width: 3px; cursor: help; }
+.seg-failing { background: var(--failing); }
+.seg-recovering { background: var(--resolved); }
+.seg-quiet { background: var(--control-border); opacity: .45; }
+.strip-ends { display: flex; justify-content: space-between; margin-top: 4px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); }
+.strip-key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 4px; font-size: 0.8125rem; color: var(--text-muted); }
+.strip-key > span { display: inline-flex; align-items: center; gap: 6px; }
+.seg-dot { width: 10px; height: 10px; border-radius: 2px; }
+
+/* Narrow screens: table rows become labelled stacks. */
+@media (max-width: 600px) {
+  .kt-stack thead { display: none; }
+  .kt-stack, .kt-stack tbody, .kt-stack tr { display: block; width: 100%; }
+  .kt-stack tr { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .kt-stack td { display: grid; grid-template-columns: 8.5em minmax(0, 1fr); gap: 8px; padding: 2px 0; border: 0; }
+  .kt-stack td::before { content: attr(data-label); color: var(--text-muted); font-size: 0.8125rem; font-weight: 400; }
+  .cx-row, .told-row { grid-template-columns: 1fr; gap: 4px; }
+  .cx-when { justify-self: start; }
+}

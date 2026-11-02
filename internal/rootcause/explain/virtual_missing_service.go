@@ -114,6 +114,7 @@ func (v *view) missingRefs(pod inventory.EntityID) []missingRef {
 		quoted := v.crashErrors(pod)
 		for _, call := range kube.ServiceCalls(entity) {
 			if v.namesMissingService(call.Service, pod) &&
+				!v.ownName(pod, call.Service) &&
 				namedOrSilent(quoted, call.Service) &&
 				!v.lookupUnanswered(pod, quoted) {
 				refs.add(missingRef{service: call.Service, port: call.Port})

@@ -19,3 +19,17 @@ deploy/
 .dockerignore
 Dockerfile
 LICENSE
+
+# Credentials must never reach the build context, at any depth. Nothing
+# the build compiles or embeds matches these.
+**/*.pem
+**/*.key
+**/*.crt
+**/*.p12
+**/*.pfx
+**/*.jks
+**/.env
+**/.env.*
+**/*.kubeconfig
+**/kubeconfig
+**/id_rsa*

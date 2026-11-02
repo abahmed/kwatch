@@ -43,7 +43,7 @@ func TestCoverageBoundsKindsAndReasons(t *testing.T) {
 		t.Fatalf("total unavailable = %d", got.Unavailable)
 	}
 	for _, kind := range got.UnavailableKinds {
-		if kind.Reason != CoverageAPIUnavailable {
+		if kind.Reason != CoverageUnknown {
 			t.Fatalf("reason %q not bounded", kind.Reason)
 		}
 	}
@@ -89,7 +89,7 @@ func TestCoverageReasonCountsStayInVocabulary(t *testing.T) {
 	got := server.Coverage().Reasons
 	want := map[string]int{
 		CoverageObjectCapReached: 2, CoverageBudgetExceeded: 3,
-		CoverageAPIUnavailable: 2,
+		CoverageAPIUnavailable: 1, CoverageUnknown: 1,
 	}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("reasons = %v, want %v", got, want)
@@ -97,5 +97,27 @@ func TestCoverageReasonCountsStayInVocabulary(t *testing.T) {
 	got[CoverageBudgetExceeded] = 99
 	if server.Coverage().Reasons[CoverageBudgetExceeded] != 3 {
 		t.Fatal("reasons are not detached")
+	}
+}
+
+// The older /health names still read, written in the source's codes.
+func TestCoverageReadsLegacyReasonNames(t *testing.T) {
+	server := newCoverageServer()
+	server.SetCoverage(CoverageSummary{
+		Reasons: map[string]int{"sync_timeout": 1, "budget_exceeded": 2},
+		UnavailableKinds: []CoverageKind{
+			{Kind: "a", Reason: "sync_timeout"},
+			{Kind: "b", Reason: CoverageSyncFailed},
+		},
+	})
+
+	got := server.Coverage()
+	if got.Reasons[CoverageSyncTimeout] != 1 ||
+		got.Reasons[CoverageBudgetExceeded] != 2 {
+		t.Fatalf("reasons = %v", got.Reasons)
+	}
+	if got.UnavailableKinds[0].Reason != CoverageSyncTimeout ||
+		got.UnavailableKinds[1].Reason != CoverageSyncFailed {
+		t.Fatalf("kinds = %v", got.UnavailableKinds)
 	}
 }

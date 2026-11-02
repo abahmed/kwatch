@@ -64,7 +64,7 @@ func TestOngoingTitleSaysTheReminderWordsNoReasonCode(t *testing.T) {
 	since := ongoingNow.Add(-4 * 24 * time.Hour)
 	for _, code := range reasonCodes(t) {
 		title := Writer{}.OngoingTitle(ongoingIncident(code, since),
-			ongoingNow)
+			nil, ongoingNow)
 
 		assert.Contains(t, title, "still failing, for four days now",
 			code)

@@ -63,7 +63,23 @@ tier that rose since the record was saved (a page above all) stays news. The
 adoption keeps the tier people last heard: the saved one (`restoredTier`)
 until this run decides an update, then the tier of that update (`toldTier`).
 A rise told inside the grace is therefore told once, not again one
-`MaterialGap` later. How a restored incident recovers is in
+`MaterialGap` later. The update says "It is now critical." (page) or "It is
+now a warning." (notify) (`raisedSentences`).
+
+**A partial view is not a rise.** Right after a restart some kinds have
+not synced, and a detector may describe a failure in poorer words: an
+autoscaler whose target Deployment is not listed yet shows the event
+`FailedGetScale` (notify) instead of `HPATargetMissing` (digest). The
+record saves the reasons of its failing members (`Record.Reasons`; an
+older record falls back to `RootReasons`). Until all of them are back
+inside the grace, the incident is provisional (`restore_reasons.go`): its
+tier follows the members, never below the tier people were told, and a
+material change is held. When the saved reasons return, the tier ratchets
+again from what they give, and a rise on top of them is told at once, a
+page included. A rise that still holds when the grace ends is told then
+(`provisionalDeadline` wakes it). A page waiting only on other findings is
+held too: before the saved reasons are back it rests on the same partial
+view, and the hold lasts at most the grace. How a restored incident recovers is in
 [Recovering and the resolve hold](./resolve.md#the-restore-grace).
 
 **A withdrawn cause says nothing.** A `cause revised` that takes a known

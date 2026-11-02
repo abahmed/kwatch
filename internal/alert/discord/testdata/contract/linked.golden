@@ -1,0 +1,21 @@
+POST /api/v9/webhooks/123/<secret>
+Content-Type: application/json
+
+{
+  "allowed_mentions": {
+    "parse": [],
+    "replied_user": false
+  },
+  "components": null,
+  "embeds": [
+    {
+      "color": 11805464,
+      "description": "Caused by: Node n1 is not ready.\nCause in dashboard: https://kwatch.example/issues/p-cause\nEarlier times: https://kwatch.example/issues?status=all&like=p-link\nOpen in dashboard: https://kwatch.example/issues/p-link\n```\npanic: out of memory\n```",
+      "footer": {
+        "text": "kwatch · dev"
+      },
+      "timestamp": "<time>",
+      "title": "🔴 payments in shop is crash-looping."
+    }
+  ]
+}

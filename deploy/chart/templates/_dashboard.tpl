@@ -13,4 +13,11 @@ or Service at the ClusterIP Service <release>-dashboard.
 {{- if and (eq (default "local" $d.mode) "shared") (not $d.trustProxy) (not $tls.secretName) }}
 {{- fail "dashboard.mode=shared is https only: set dashboard.trustProxy=true (TLS ends at your Ingress or proxy) or dashboard.tls.secretName (kwatch serves https itself)" }}
 {{- end }}
+{{- if $d.enabled }}
+{{- $hp := include "kwatch.healthPort" . | int }}
+{{- $dp := $d.port | default 8061 | int }}
+{{- if eq $dp $hp }}
+{{- fail (printf "dashboard.port (%d) must differ from config.healthCheck.port (%d): kwatch refuses to start when both are equal" $dp $hp) }}
+{{- end }}
+{{- end }}
 {{- end }}

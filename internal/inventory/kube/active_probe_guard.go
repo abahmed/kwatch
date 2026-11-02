@@ -6,6 +6,7 @@ import (
 	"net"
 	"syscall"
 
+	"github.com/abahmed/kwatch/internal/cloudmeta"
 	"github.com/abahmed/kwatch/internal/inventory"
 )
 
@@ -69,15 +70,17 @@ func privateAddress(ip net.IP) bool {
 var sensitiveNetworks = parseNetworks("0.0.0.0/8", "64:ff9b::/96")
 
 // SensitiveProbeAddress reports an address a KwatchConfig-added probe must
-// not dial: loopback, link-local (including cloud metadata 169.254.169.254),
-// unspecified and multicast. Ordinary private ranges (10/8, 172.16/12,
-// 192.168/16, 100.64/10, fc00::/7) are allowed, since in-cluster Services
-// and pods live there. A nil address counts as sensitive.
+// not dial: loopback, link-local, unspecified, multicast and every cloud
+// metadata address the delivery transport refuses (cloudmeta.Address:
+// 169.254.169.254, fd00:ec2::254, 100.100.100.200). Other private ranges
+// (10/8, 172.16/12, 192.168/16, 100.64/10, fc00::/7) are allowed, since
+// in-cluster Services and pods live there. A nil address counts as
+// sensitive.
 func SensitiveProbeAddress(ip net.IP) bool {
 	if ip == nil {
 		return true
 	}
-	if ip.IsLoopback() || ip.IsLinkLocalUnicast() ||
+	if cloudmeta.Address(ip) || ip.IsLoopback() || ip.IsLinkLocalUnicast() ||
 		ip.IsLinkLocalMulticast() || ip.IsMulticast() ||
 		ip.IsUnspecified() {
 		return true

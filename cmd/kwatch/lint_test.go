@@ -66,3 +66,22 @@ func TestRunLintAcceptsShippedConfig(t *testing.T) {
 		t.Fatalf("code=%d stderr=%q", code, errOut.String())
 	}
 }
+
+// A rule naming a removed reason is a warning, and fails --strict.
+func TestRunLintFlagsRemovedReasons(t *testing.T) {
+	body := "reasons:\n  - ResourceHigh\nrunbooks:\n" +
+		"  killed: https://example.com/k\n"
+	code, out, errOut := lintConfig(t, body)
+	if code != 0 || !strings.Contains(out,
+		"reason `ResourceHigh` in reasons was removed in this release") ||
+		!strings.Contains(out, "reason `Killed` in runbooks") {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, out, errOut)
+	}
+
+	var strictOut, strictErr bytes.Buffer
+	code = runLint(true, false, testNow, &strictOut, &strictErr)
+	if code != 1 || !strings.Contains(strictErr.String(),
+		"STRICT ERROR: reason `ResourceHigh`") {
+		t.Fatalf("code=%d stderr=%q", code, strictErr.String())
+	}
+}

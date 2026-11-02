@@ -18,6 +18,7 @@ func summaryLines(wake *WakeLine, list folded) []string {
 		out = append(out, wake.Text())
 	}
 	out = append(out, list.full...)
+	out = append(out, list.ongoing...)
 	out = append(out, list.same...)
 	for i, line := range out {
 		if r := []rune(strings.TrimSpace(line)); len(r) > maxSummaryRunes {

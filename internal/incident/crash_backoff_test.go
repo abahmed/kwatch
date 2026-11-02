@@ -56,6 +56,7 @@ func TestRecentCrashDoesNotCountAsHealthy(t *testing.T) {
 	r, container := backoffRig(t)
 	r.setAttrs(container, map[string]inventory.Value{
 		kube.AttrLastFinished: inventory.Time(at(5*time.Minute + 30*time.Second)),
+		kube.AttrLastExitCode: inventory.Number(1),
 	})
 	wantNone(t, r.tick(at(5*time.Minute+DefaultHold)))
 	wantNone(t, r.tick(at(5*time.Minute+30*time.Second+DefaultHold-
@@ -64,4 +65,72 @@ func TestRecentCrashDoesNotCountAsHealthy(t *testing.T) {
 		time.Second))
 	require.Len(t, ds, 1)
 	assert.Equal(t, Resolve, ds[0].Action)
+}
+
+// A run that ended cleanly, such as an init container's, is no crash.
+func TestCleanExitDoesNotHoldTheResolve(t *testing.T) {
+	r, container := backoffRig(t)
+	r.setAttrs(container, map[string]inventory.Value{
+		kube.AttrLastFinished: inventory.Time(
+			at(5*time.Minute + 30*time.Second)),
+		kube.AttrLastExitCode: inventory.Number(0),
+	})
+	ds := r.tick(at(5*time.Minute + DefaultHold + time.Second))
+	require.Len(t, ds, 1)
+	assert.Equal(t, Resolve, ds[0].Action)
+}
+
+// nodeTimelineRig is a node incident whose timeline names the api
+// Deployment, whose one pod waits in back-off. onNode puts that pod on
+// the node.
+func nodeTimelineRig(t *testing.T, onNode bool) (*rig, *Incident) {
+	t.Helper()
+	r := newRig(t, Config{})
+	r.m.model = r.model
+	deploy, pod := r.workloadRig(t, 1, 1, 6)
+	r.setAttrs(entity(kube.KindContainer, "api-1.app"),
+		map[string]inventory.Value{kube.AttrStateReason: inventory.Text(
+			reasons.CrashLoopBackOff)})
+	node := inventory.CoreID(kube.KindNode, "", "n1")
+	r.setAttrs(node, map[string]inventory.Value{
+		kube.AttrReady: inventory.Bool(true)})
+	if onNode {
+		r.relate(pod, inventory.RunsOn, node)
+	}
+	return r, &Incident{Root: node, Timeline: []Event{
+		{At: at(0), Text: "joined", Entity: &deploy}}}
+}
+
+// A node incident is held only by a crash loop on that node: a workload
+// its timeline names that crashes elsewhere is not the node's failure.
+func TestNodeIncidentIgnoresCrashLoopsOffTheNode(t *testing.T) {
+	r, p := nodeTimelineRig(t, false)
+	assert.False(t, r.m.crashing(p, at(time.Hour)))
+
+	r, p = nodeTimelineRig(t, true)
+	assert.True(t, r.m.crashing(p, at(time.Hour)))
+}
+
+// A root with pods of its own is judged by them, not by the other
+// workloads its timeline names.
+func TestOwnPodsDecideOverTimelineWorkloads(t *testing.T) {
+	r, p := nodeTimelineRig(t, true)
+	web, webPod := entity(kube.KindDeployment, "web"),
+		entity(kube.KindPod, "web-1")
+	r.relate(webPod, inventory.OwnedBy, web)
+	p.Root = web
+	assert.False(t, r.m.crashing(p, at(time.Hour)))
+}
+
+// At the cap, a workload at its replicas held only by a crash loop is
+// said to be crashing, not short of replicas.
+func TestCappedResolveSaysWhichConditionHeld(t *testing.T) {
+	r, container := backoffRig(t)
+	r.setAttrs(container, map[string]inventory.Value{
+		kube.AttrStateReason: inventory.Text(reasons.CrashLoopBackOff)})
+	ds := tickEvery(r, 6*time.Minute, 5*time.Minute+StillBrokenMax)
+	require.Len(t, ds, 1)
+	assert.Equal(t, Resolve, ds[0].Action)
+	assert.Equal(t, Reason(StoppedTrackingPrefix+
+		"2h; coverage check continues"+StillCrashingNote), ds[0].Reason)
 }

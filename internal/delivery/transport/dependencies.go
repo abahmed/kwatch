@@ -50,7 +50,11 @@ func (d Dependencies) TLSConfig() *tls.Config {
 	if d.HTTPClient == nil {
 		return nil
 	}
-	base, ok := d.HTTPClient.Transport.(*http.Transport)
+	rt := d.HTTPClient.Transport
+	if guarded, ok := rt.(metadataTransport); ok {
+		rt = guarded.base
+	}
+	base, ok := rt.(*http.Transport)
 	if !ok || base.TLSClientConfig == nil {
 		return nil
 	}

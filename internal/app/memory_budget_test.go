@@ -97,7 +97,8 @@ func TestMemoryBudgetLargeCluster(t *testing.T) {
 	sampler.sample("load")
 
 	synced := func(inventory.Kind) bool { return true }
-	registry := newDetectorRegistry(synced, feature.ProEntitlements(), nil)
+	registry := newDetectorRegistry(
+		synced, nil, feature.ProEntitlements(), nil)
 	findings := detectAll(model, registry, now)
 	sampler.sample("detect")
 

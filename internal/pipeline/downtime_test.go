@@ -206,6 +206,25 @@ func TestFingerprintFieldsListsChangedAttributes(t *testing.T) {
 	}
 }
 
+// The values digest of a Secret or ConfigMap found changed after a
+// downtime is told as a data edit, never as the digest or as a key.
+func TestFingerprintFieldsTellDataDigestAsAnEdit(t *testing.T) {
+	cases := map[string]struct{ before, after, want string }{
+		"changed": {"data.digest=aa", "data.digest=bb", "changed"},
+		"added":   {"x=1", "x=1;data.digest=bb", "added"},
+		"removed": {"data.digest=aa", "data.digest=", "removed"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			fields := fingerprintFields(tc.before, tc.after)
+			if len(fields) != 1 || fields[0] != (inventory.FieldChange{
+				Path: "data", After: tc.want}) {
+				t.Fatalf("fields = %+v", fields)
+			}
+		})
+	}
+}
+
 func TestEngineReconcileDowntimeAppliesChangesDirectly(t *testing.T) {
 	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
 	e := newTestEngine(t, &fakeClock{now: now}, (&sinkLog{}).sink,
@@ -220,5 +239,27 @@ func TestEngineReconcileDowntimeAppliesChangesDirectly(t *testing.T) {
 	if len(e.inbox.pending) != 0 || len(e.dirty) == 0 || e.storage.saved != nil {
 		t.Fatalf("pending = %d dirty = %d saved = %v",
 			len(e.inbox.pending), len(e.dirty), e.storage.saved)
+	}
+}
+
+// A value that holds the separator or the escape character is one
+// value, and an older fingerprint without escapes reads as before.
+func TestFingerprintEscapesSeparatorsInValues(t *testing.T) {
+	value := `a;b=c\d`
+	escaped := "x=" + fingerprintEscaper.Replace(value) + ";y=2"
+
+	got := parseFingerprint(escaped)
+
+	if got["x"] != value || got["y"] != "2" || len(got) != 2 {
+		t.Fatalf("parsed = %q", got)
+	}
+	fields := fingerprintFields(escaped, "x=other;y=2")
+	if len(fields) != 1 || fields[0].Path != "x" ||
+		fields[0].Before != value {
+		t.Fatalf("fields = %+v", fields)
+	}
+	old := parseFingerprint(`p=C:\temp\x;q=1`)
+	if old["p"] != `C:\temp\x` || old["q"] != "1" {
+		t.Fatalf("old = %q", old)
 	}
 }

@@ -39,7 +39,7 @@ func ackAnnouncedSentences(f caseFacts) []sentence {
 	if ack == nil || !ack.AtAnnounce {
 		return nil
 	}
-	return []sentence{{part: partRecurrence, text: "The ack annotation " +
+	return []sentence{{part: partFollowUp, text: "The ack annotation " +
 		"is still present on " + objectName(ack.On) +
 		", so reminders are held."}}
 }

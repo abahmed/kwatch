@@ -106,3 +106,28 @@ func TestRecurrenceAfterResolveIsJudgedFresh(t *testing.T) {
 
 	assert.Equal(t, []string{"a"}, lost)
 }
+
+// A pager that rejects the page for good leaves no alert open even when
+// its chat fallback fails too: the loss is judged against the pager,
+// not the fallback, so the pipeline is told.
+func TestPagerLossReportedWhenChatFallbackFails(t *testing.T) {
+	rejected := transport.Permanent(errors.New("rejected"))
+	pager := &skippingProvider{errorRecorderProvider{name: "Pager",
+		err: rejected}}
+	chat := &errorRecorderProvider{name: "Chat", err: rejected}
+	m := newTestManager()
+	var lost []string
+	m.AttachPageObserver(func(key string) { lost = append(lost, key) })
+	setManagerEntries(m, []providerEntry{
+		{provider: pager, fallbackName: "Chat",
+			retry: retryConfig{maxAttempts: 1, delay: time.Millisecond}},
+		{provider: chat,
+			retry: retryConfig{maxAttempts: 1, delay: time.Millisecond}},
+	})
+	entries := managerEntries(m)
+
+	m.deliverOne(context.Background(), &entries[0], incidentJob("a", "ns"))
+
+	assert.Equal(t, 1, chat.callCount, "the fallback was tried")
+	assert.Equal(t, []string{"a"}, lost)
+}

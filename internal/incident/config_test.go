@@ -61,7 +61,7 @@ func TestIncidentTimelineIsBounded(t *testing.T) {
 
 func TestOccurrencesAreBounded(t *testing.T) {
 	var times []time.Time
-	for i := 0; i < 25; i++ {
+	for i := 0; i < maxOccurrences+5; i++ {
 		times = appendOccurrence(times, at(time.Duration(i)*time.Hour))
 	}
 	if len(times) != maxOccurrences ||

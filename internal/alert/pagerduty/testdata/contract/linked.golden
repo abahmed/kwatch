@@ -1,0 +1,26 @@
+POST /
+Content-Type: application/json
+
+{
+  "dedup_key": "kwatch-dev-p-link",
+  "event_action": "trigger",
+  "payload": {
+    "custom_details": {
+      "cluster": "dev",
+      "details": "🔴 payments in shop is crash-looping.\nCaused by: Node n1 is not ready.\nCause in dashboard: https://kwatch.example/issues/p-cause\nEarlier times: https://kwatch.example/issues?status=all&like=p-link\nOpen in dashboard: https://kwatch.example/issues/p-link",
+      "namespaces": [
+        "shop"
+      ],
+      "output": [
+        "panic: out of memory"
+      ],
+      "reasons": [
+        "OOMKilled"
+      ]
+    },
+    "severity": "critical",
+    "source": "dev",
+    "summary": "🔴 payments in shop is crash-looping."
+  },
+  "routing_key": "<secret>"
+}

@@ -126,3 +126,43 @@ func TestEscalatedBaselineIncidentBehavesNormallyAfterwards(t *testing.T) {
 	require.Len(t, rest, 1)
 	assert.Equal(t, incident.Update, rest[0].Action)
 }
+
+// closeWindow opens the startup window at the rig's time and ticks past
+// its end, returning what the closing tick released.
+func (r *baselineRig) closeWindow() []incident.Decision {
+	r.c.env.SaveStartup = func(StartupState) {}
+	r.c.Startup.ColdStart = true
+	r.c.Startup.OpenWindow(r.now)
+	r.now = r.now.Add(StartupWindow)
+	rest, done := r.c.CollectStartup(context.Background(), r.now, nil)
+	if !done {
+		panic("the startup window did not close")
+	}
+	return rest
+}
+
+func TestBaselineReleasesAStillFailingIncidentWhenTheWindowCloses(
+	t *testing.T,
+) {
+	open := baselineIncident(incident.Notify, detection.Warning, 1)
+	open.State = incident.Open
+	r := baselined(t, open)
+
+	rest := r.closeWindow()
+
+	require.Len(t, rest, 1)
+	assert.Equal(t, incident.Announce, rest[0].Action)
+	assert.Equal(t, open.ID, rest[0].Incident.ID)
+	assert.False(t, r.c.Startup.Baselined(open.ID),
+		"a normal incident from then on")
+}
+
+func TestBaselineKeepsARecoveringIncidentQuiet(t *testing.T) {
+	recovering := baselineIncident(incident.Notify, detection.Warning, 1)
+	recovering.State = incident.Recovering
+	r := baselined(t, recovering)
+
+	assert.Empty(t, r.closeWindow())
+	assert.True(t, r.c.Startup.Baselined(recovering.ID),
+		"its resolve stays quiet: nobody heard of it")
+}

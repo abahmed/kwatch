@@ -7,11 +7,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/pipeline/announce"
 )
 
 func TestBaselineStartFollowsTheDiskStateEntitlement(t *testing.T) {
@@ -91,11 +93,10 @@ func messageKeys(h *harness) []string {
 	return keys
 }
 
-// A failure that exists when kwatch starts is the baseline: nobody is
-// told about it, not when it starts, changes or ends. A failure that
-// begins later is announced.
-func TestCommunityOnlyAnnouncesFailuresThatBeginAfterStart(t *testing.T) {
-	start := time.Date(2026, 9, 29, 9, 0, 0, 0, time.UTC)
+// communityStart is a Community engine whose queue workload is already
+// crashing when it starts.
+func communityStart(t *testing.T, start time.Time) (*harness, *corev1.Pod) {
+	t.Helper()
 	h := newHarnessWith(t, start, func(d *Dependencies) {
 		d.Entitlements = feature.CommunityEntitlements()
 	})
@@ -108,20 +109,68 @@ func TestCommunityOnlyAnnouncesFailuresThatBeginAfterStart(t *testing.T) {
 	crashing := crashingPod("queue-a", rs.Name, "n1", start)
 	h.add(kube.PodSchema{}, crashing)
 	h.engine.reconcileDowntime()
+	return h, crashing
+}
 
-	h.run(start.Add(5*time.Minute), 10*time.Second)
-	existing := h.engine.deps.Incidents.Incidents()
-	require.Len(t, existing, 1, "the incident is tracked")
-	assert.Empty(t, h.messages,
-		"an existing failure is baselined, not announced: %v",
-		messageKeys(h))
-
-	healthy := pod("queue-a", rs.Name, "n1", true, h.now)
+// heal makes the crashing pod healthy at the harness's time.
+func heal(h *harness, crashing *corev1.Pod) {
+	healthy := pod("queue-a", crashing.OwnerReferences[0].Name, "n1",
+		true, h.now)
 	healthy.ResourceVersion = "next"
 	h.engine.Submit(context.Background(), kube.NewTranslator(
 		kube.PodSchema{}).Updated(crashing, healthy, h.now)...)
+}
+
+// announcements are the announcements h sent, resolves left out.
+func announcements(h *harness) []incident.Decision {
+	var out []incident.Decision
+	for i, decision := range h.decisions {
+		if decision.Action == incident.Announce &&
+			h.messages[i].Status != notification.StatusResolved {
+			out = append(out, decision)
+		}
+	}
+	return out
+}
+
+// A failure that exists when Community starts is held while the startup
+// window is open, then announced on its own, once, as a new failure is:
+// no startup summary. From then on it is a normal incident.
+func TestCommunityAnnouncesAFailureStillFailingAfterTheWindow(t *testing.T) {
+	start := time.Date(2026, 9, 29, 9, 0, 0, 0, time.UTC)
+	h, crashing := communityStart(t, start)
+
+	h.run(start.Add(announce.StartupWindow-10*time.Second),
+		10*time.Second)
+	require.Len(t, h.engine.deps.Incidents.Incidents(), 1)
+	assert.Empty(t, h.messages, "held while the window is open: %v",
+		messageKeys(h))
+
+	h.run(start.Add(5*time.Minute), 10*time.Second)
+	sent := announcements(h)
+	require.Len(t, sent, 1, "announced once after the window")
+	for _, m := range h.messages {
+		assert.NotContains(t, m.Note, "already",
+			"a single announcement, not a startup summary")
+	}
+	heal(h, crashing)
 	h.run(h.now.Add(10*time.Minute), 10*time.Second)
-	assert.Empty(t, h.messages, "its recovery is silent too")
+	last := h.messages[len(h.messages)-1]
+	assert.Equal(t, notification.StatusResolved, last.Status,
+		"its recovery is announced too")
+	assert.Len(t, announcements(h), 1)
+}
+
+// A failure that exists at start and recovers inside the startup window
+// is never heard of, not when it fails and not when it resolves.
+func TestCommunityStaysSilentAboutAFailureGoneInTheWindow(t *testing.T) {
+	start := time.Date(2026, 9, 29, 9, 0, 0, 0, time.UTC)
+	h, crashing := communityStart(t, start)
+
+	h.run(start.Add(90*time.Second), 10*time.Second)
+	heal(h, crashing)
+	h.run(start.Add(15*time.Minute), 10*time.Second)
+	assert.Empty(t, h.messages, "nothing about it: %v", messageKeys(h))
 
 	d2, rs2 := deployment("web")
 	d2.Status.ReadyReplicas = *d2.Spec.Replicas
@@ -129,16 +178,7 @@ func TestCommunityOnlyAnnouncesFailuresThatBeginAfterStart(t *testing.T) {
 	h.add(kube.ReplicaSetSchema(), rs2)
 	h.add(kube.PodSchema{}, crashingPod("web-a", rs2.Name, "n1", h.now))
 	h.run(h.now.Add(3*time.Minute), 10*time.Second)
-
-	var announced []incident.Decision
-	for i, decision := range h.decisions {
-		if decision.Action == incident.Announce &&
-			h.messages[i].Status != notification.StatusResolved {
-			announced = append(announced, decision)
-		}
-	}
-	require.NotEmpty(t, announced, "a new failure alerts")
-	assert.NotEqual(t, existing[0].ID, announced[0].Incident.ID)
+	require.NotEmpty(t, announcements(h), "a new failure alerts")
 }
 
 func TestCommunityDoesNotReportChangesMadeWhileDown(t *testing.T) {

@@ -46,8 +46,12 @@ func noticeOverlay(disk diskState, o overlayOutcome, send func(string)) {
 		return
 	}
 	if !o.invalid {
-		if told != "" {
-			_ = disk.put(stateOverlayRejected, "")
+		if told == "" {
+			return
+		}
+		if err := disk.put(stateOverlayRejected, ""); err != nil {
+			klog.ErrorS(err, "clear the KwatchConfig notice",
+				"component", "crd-watcher")
 		}
 		return
 	}

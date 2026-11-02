@@ -19,11 +19,13 @@ func (m *Manager) nextWake(now time.Time) time.Duration {
 	if p := m.oldestResolved(); p != nil {
 		consider(p.Resolved.Add(m.cfg.Remember + time.Nanosecond))
 	}
+	burst := m.settlingCount() >= m.cfg.BurstIncidents
 	for _, p := range m.incidents {
 		if p.State == Resolved {
 			continue
 		}
 		at, ok := m.deadline(p, now)
+		m.noteTimers(p, now, at, ok, burst)
 		if ok {
 			consider(at)
 		}
@@ -90,7 +92,9 @@ func (m *Manager) openDeadline(
 	held, heldOK := heldDeadline(p, now)
 	due, ok = soonest(due, ok, held, heldOK)
 	page, pageOK := m.heldPageDeadline(p)
-	return soonest(due, ok, page, pageOK)
+	due, ok = soonest(due, ok, page, pageOK)
+	grace, graceOK := m.provisionalDeadline(p, now)
+	return soonest(due, ok, grace, graceOK)
 }
 
 // heldDeadline is when a material change held back by MaterialGap may

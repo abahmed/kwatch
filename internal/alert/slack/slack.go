@@ -99,7 +99,10 @@ func NewSlack(
 			clockSource: clock.Require(dependencies.Clock),
 			apiClient: slackClient.New(
 				token,
-				slackClient.OptionHTTPClient(httpClient),
+				// slack-go runs its own requests: the client must not
+				// follow redirects or read an unbounded answer.
+				slackClient.OptionHTTPClient(
+					transport.SDKClient(httpClient)),
 			),
 			maxThreadMapSize: 1000,
 			conversations:    make(map[string]conversationState),

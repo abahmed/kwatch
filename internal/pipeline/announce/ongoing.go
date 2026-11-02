@@ -1,6 +1,8 @@
 package announce
 
 import (
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -8,6 +10,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/notification/compose"
 )
 
@@ -39,13 +42,44 @@ func (c *Collector) ongoingProblems(now time.Time) []ongoingItem {
 		}
 		out = append(out, ongoingItem{p: p, Ongoing: compose.Ongoing{
 			Root: p.Root, Since: compose.StartedAt(p),
-			Title:    c.env.Messages.OngoingTitle(p, now),
+			Title: c.env.Messages.OngoingTitle(p, c.kindNames(p),
+				now),
 			Leftover: compose.LeftoverReason(p),
 			Standing: compose.IsStanding(p)}})
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		return out[i].Since.Before(out[j].Since)
 	})
+	return out
+}
+
+// kindNames is env.KindNames, or nil without one.
+func (c *Collector) kindNames(
+	p incident.Incident,
+) map[inventory.Kind]string {
+	if c.env.KindNames == nil {
+		return nil
+	}
+	return c.env.KindNames(p)
+}
+
+// named gives copies of the decisions the API's spelling of their
+// custom kinds (see Env.KindNames), so a digest line says
+// "AutoscalingListener", as the incident's own message does.
+func (c *Collector) named(ds []incident.Decision) []incident.Decision {
+	out := slices.Clone(ds)
+	for i := range out {
+		names := c.kindNames(out[i].Incident)
+		if len(names) == 0 {
+			continue
+		}
+		merged := maps.Clone(out[i].Facts.KindNames)
+		if merged == nil {
+			merged = map[inventory.Kind]string{}
+		}
+		maps.Copy(merged, names)
+		out[i].Facts.KindNames = merged
+	}
 	return out
 }
 

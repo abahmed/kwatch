@@ -3,7 +3,7 @@ Content-Type: application/json
 
 {
   "markdown": {
-    "content": "🔴 payments in shop is crash-looping.\nIt said boom *x* @​channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop"
+    "content": "🔴 **payments** in **shop** is crash-looping.\n\nIt said `boom *x* @​channel`.\n\nService **web** can't serve traffic. Run\n\n```\nkubectl logs payments -n shop\n```"
   },
   "msgtype": "markdown"
 }

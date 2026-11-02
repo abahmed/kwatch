@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -35,16 +36,20 @@ func TestDetailCarriesStepsKindsAndWorkloadKind(t *testing.T) {
 	if d.WorkloadKind != "Deployment" {
 		t.Errorf("workloadKind = %q", d.WorkloadKind)
 	}
-	if len(d.FixSteps) != 3 || len(d.FixCommands) != 2 ||
-		d.FixCommands[0] != p.Steps[1].Command {
-		t.Errorf("steps %+v commands %+v", d.FixSteps, d.FixCommands)
+	if len(d.FixSteps) != 3 ||
+		d.FixSteps[1].Command != p.Steps[1].Command {
+		t.Errorf("steps %+v", d.FixSteps)
 	}
-	if d.SuggestedFix != "Give it more memory.\nRaise the limit:" {
-		t.Errorf("suggestedFix = %q", d.SuggestedFix)
-	}
-	if d.FixCommands[1] == p.Steps[2].Command {
+	if d.FixSteps[2].Command == p.Steps[2].Command {
 		t.Errorf("a command with a secret was not redacted: %q",
-			d.FixCommands[1])
+			d.FixSteps[2].Command)
+	}
+	body = get(t, newTestServer(p), "/api/incidents/a").Body.Bytes()
+	for _, gone := range []string{`"suggestedFix"`, `"fixCommands"`,
+		`"ackedSince"`} {
+		if bytes.Contains(body, []byte(gone)) {
+			t.Errorf("detail still carries %s", gone)
+		}
 	}
 	kinds := []string{d.Timeline[0].Kind, d.Timeline[1].Kind,
 		d.Timeline[1].Reason, d.Timeline[2].Kind}
@@ -103,8 +108,7 @@ func TestStatusScanHealthFollowsTheEngineLoop(t *testing.T) {
 		t.Errorf("before the first loop: %+v", r)
 	}
 	s.NoteScan()
-	if r := read(); !r.LastScan.Equal(testEpoch) || r.LastScanLate ||
-		r.ScanEverySeconds != 10 {
+	if r := read(); !r.LastScan.Equal(testEpoch) || r.LastScanLate {
 		t.Errorf("fresh scan: %+v", r)
 	}
 	s.now = testEpoch.Add(3 * time.Minute)
@@ -115,7 +119,8 @@ func TestStatusScanHealthFollowsTheEngineLoop(t *testing.T) {
 
 func TestChannelNamesUseTheProductSpelling(t *testing.T) {
 	cases := map[string]string{"slack": "Slack", "teams": "Microsoft Teams",
-		"pagerduty": "PagerDuty", "email": "Email", "": ""}
+		"pagerduty": "PagerDuty", "email": "Email", "": "",
+		"grafana_oncall": "Grafana oncall", "my-hook": "My hook"}
 	for key, want := range cases {
 		if got := channelName(key); got != want {
 			t.Errorf("channelName(%q) = %q, want %q", key, got, want)
@@ -128,7 +133,7 @@ func TestListAndDetailCarryTheRedactedCause(t *testing.T) {
 	p.Cause = &rootcause.CauseRecord{
 		Summary: "the database is down, password=hunter2"}
 	var list ListResponse
-	body := get(t, newTestServer(p), "/api/incidents?state=active").Body.Bytes()
+	body := get(t, newTestServer(p), "/api/incidents").Body.Bytes()
 	if err := json.Unmarshal(body, &list); err != nil {
 		t.Fatal(err)
 	}

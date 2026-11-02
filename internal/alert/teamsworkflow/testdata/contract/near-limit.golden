@@ -7,7 +7,7 @@ Content-Type: application/json
       "content": {
         "body": [
           {
-            "text": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[3980 runes sha256:88faee91e975a330176dc5b3]…xxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\n```\npanic: out of memory\n```",
+            "text": "🔴 payments in shop is crash-looping. Last output:\n\n\n```\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[3989 runes sha256:d2412a78718eb7ff4a2042d4]…xxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n```\n\n```\npanic: out of memory\n```",
             "type": "TextBlock",
             "wrap": true
           }

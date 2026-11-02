@@ -32,7 +32,7 @@ type coverageNote struct {
 func (n *coverageNote) observe(
 	sink sourceStatusSink, coverage health.CoverageSummary,
 ) {
-	if n.done || !coverage.Complete {
+	if n.done || !coverage.Ran || !coverage.Complete {
 		return
 	}
 	n.done = true

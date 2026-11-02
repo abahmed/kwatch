@@ -179,7 +179,7 @@ func sampleHops(hops []hop) []hop {
 		if hops[i].link != hops[j].link {
 			return hops[i].link < hops[j].link
 		}
-		return hops[i].to.String() < hops[j].to.String()
+		return inventory.CompareIDs(hops[i].to, hops[j].to) < 0
 	})
 	if len(hops) <= MaxFanIn {
 		return hops
@@ -195,7 +195,7 @@ func sampleHops(hops []hop) []hop {
 func sampleIDs(ids []inventory.EntityID) []inventory.EntityID {
 	sorted := append([]inventory.EntityID(nil), ids...)
 	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].String() < sorted[j].String()
+		return inventory.CompareIDs(sorted[i], sorted[j]) < 0
 	})
 	if len(sorted) <= MaxFanIn {
 		return sorted

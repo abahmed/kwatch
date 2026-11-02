@@ -98,6 +98,11 @@ func TestStatsClearsVolumeWhenItLeavesTheNodeSummary(t *testing.T) {
 	require.True(t, h.volumePct())
 
 	h.summary = summaryWithoutPod
+	for i := 0; i < statsFailuresBeforeClear-1; i++ {
+		h.pollAfter(time.Minute)
+		assert.True(t, h.volumePct(),
+			"a partial answer is a blip, like a failed poll")
+	}
 	h.pollAfter(time.Minute)
 	assert.False(t, h.volumePct(), "a PVC whose pod is gone has no usage")
 }

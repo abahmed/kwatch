@@ -34,6 +34,10 @@ type Contract struct {
 	Chat bool
 	// Dir holds the goldens; empty means testdata/contract.
 	Dir string
+	// NoDashboardLink marks a provider that sends only the Short (SMS,
+	// push) or a structured payload whose Note has no link lines; every
+	// other provider must carry the dashboard links of the linked case.
+	NoDashboardLink bool
 }
 
 // RunContract sends every canonical message through the provider, in
@@ -81,6 +85,9 @@ func (c Contract) runCase(
 		snapshotAll(reqs, opts))
 	if c.Check != nil {
 		c.Check(t, tc.Name, reqs)
+	}
+	if tc.Name == "linked" {
+		AssertDashboardLinks(t, reqs, !c.NoDashboardLink)
 	}
 	return reqs
 }

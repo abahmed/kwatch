@@ -1,0 +1,11 @@
+POST /<secret>
+Content-Type: application/json
+
+{
+  "X-S4-ExternalID": "kwatch-dev-p-link",
+  "X-S4-Status": "new",
+  "message": "🔴 payments in shop is crash-looping.\nCaused by: Node n1 is not ready.\nCause in dashboard: https://kwatch.example/issues/p-cause\nEarlier times: https://kwatch.example/issues?status=all&like=p-link\nOpen in dashboard: https://kwatch.example/issues/p-link\n\nLast output:\npanic: out of memory\n\nCluster: dev",
+  "severity": "critical",
+  "title": "🔴 payments in shop is crash-looping.",
+  "user": "kwatch"
+}

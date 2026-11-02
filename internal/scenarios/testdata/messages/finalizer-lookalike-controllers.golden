@@ -4,4 +4,4 @@
 | 🟡 **kwatch digest** · prod-eu-1 — 1 problem
 |
 | **Problems**
-| - Four objects (**arc-system**) have been stuck deleting since Dec 3, 2025: their finalizer **actions.github.com/cleanup-protection** — never removed; no controller in the cluster is known to handle it (API group actions.github.com); deployment arc-system/actions-runner-controller and deployment arc-system/actions-runner-controller-github-webhook-server are named like it, but nothing confirms they serve group actions.github.com
+| - Four objects in **arc-system** have been stuck deleting since Dec 3, 2025: their finalizer **actions.github.com/cleanup-protection** is never removed; no controller in the cluster is known to handle it (API group actions.github.com); deployment arc-system/actions-runner-controller and deployment arc-system/actions-runner-controller-github-webhook-server are named like it, but nothing confirms they serve group actions.github.com

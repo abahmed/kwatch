@@ -27,7 +27,7 @@ func TestOngoingLineSaysWhatIsFailing(t *testing.T) {
 	p := incident.Incident{ID: "inc-1", Root: svc, Tier: incident.Digest,
 		State: incident.Open, Opened: ongoingNow, Members: members(finding)}
 
-	got := Writer{}.OngoingTitle(p, ongoingNow)
+	got := Writer{}.OngoingTitle(p, nil, ongoingNow)
 
 	assert.Contains(t, got, "stuck deleting", "what is failing")
 	assert.Contains(t, got, "for five months now.", "age")

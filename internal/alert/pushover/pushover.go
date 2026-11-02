@@ -33,6 +33,9 @@ type Pushover struct {
 	// announcement started, so the resolve can cancel the alarm.
 	mu       sync.Mutex
 	receipts map[string]string
+	// receiptOrder is the keys of receipts, oldest first, so the bound
+	// evicts the oldest alarm instead of every one.
+	receiptOrder []string
 }
 
 // NewPushover returns a new Pushover object

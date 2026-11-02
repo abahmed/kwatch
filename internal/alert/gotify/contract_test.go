@@ -16,6 +16,9 @@ func TestContract(t *testing.T) {
 		"priority": 8,
 	}, "dev", rec.Dependencies())
 	providertest.RunContract(t, providertest.Contract{
+		// Push and SMS send only the Short.
+		NoDashboardLink: true,
+
 		Send: c.SendIncident, Rec: rec,
 		Headers: []string{"X-Gotify-Key"},
 		Secrets: []string{"gt-secret"}, LimitBytes: 3000,

@@ -33,6 +33,9 @@ func (e *Engine) restore() error {
 	}
 	grace := e.deps.Clock.Now().Add(restoreGrace)
 	startup.Restore(marker, found, len(records), grace)
+	if !e.deps.summarisesStartup() {
+		startup.WarmAt = time.Time{}
+	}
 	e.deps.Incidents.Restore(records, grace)
 	e.announcer.collect.RestoreDigest()
 	saved, err := e.deps.Store.LoadFingerprints()
@@ -58,6 +61,16 @@ func (e *Engine) restore() error {
 	return nil
 }
 
+// startHistory restores the baselines and the change history and starts
+// the history writer. A baseline (Community) start keeps nothing from
+// disk, so it neither restores them nor writes a timeline to restore.
+func (e *Engine) startHistory() {
+	if e.deps.baselineStart() {
+		return
+	}
+	e.storage.history.start()
+}
+
 // restoreAnnounced is the restore of a baseline (Community) start: only
 // the incidents announced before the restart and still open come back, so
 // kwatch can send their resolves. The failures that exist now are the
@@ -81,15 +94,18 @@ func (e *Engine) restoreAnnounced() error {
 }
 
 // openAnnounced keeps the records a baseline start saves and restores:
-// open incidents that someone was told about. skip names incidents to
-// leave out; the baselined ones are, because nobody heard of them, and a
+// open incidents that someone was told about, flapping ones included (a
+// Pro run whose licence lapsed starts as a baseline, and their resolves
+// still close their threads and alerts). skip names incidents to leave
+// out; the baselined ones are, because nobody heard of them, and a
 // resolve of one would be news from nowhere.
 func openAnnounced(
 	records []incident.Record, skip func(id string) bool,
 ) []incident.Record {
 	var kept []incident.Record
 	for _, r := range records {
-		open := r.State == incident.Open || r.State == incident.Recovering
+		open := r.State == incident.Open ||
+			r.State == incident.Recovering || r.State == incident.Flapping
 		if open && !r.Announced.IsZero() && !r.Unheard &&
 			(skip == nil || !skip(r.ID)) {
 			kept = append(kept, r)

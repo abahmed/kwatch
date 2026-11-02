@@ -249,8 +249,8 @@ func (cx *chainCtx) cover(
 			cx.takenElsewhere(failure, s.c.id, seen) {
 			continue
 		}
-		s.c.covers[failure] = coverage{derived: true,
-			match: rowMatch{row: chainRow}, chain: path}
+		s.c.setCover(failure, coverage{derived: true,
+			match: rowMatch{row: chainRow}, chain: path})
 		cx.claimed[failure] = true
 		taken = true
 	}
@@ -313,7 +313,7 @@ func (cx *chainCtx) withoutClaimed(viable []scored) []scored {
 			for effect := range cx.claimed {
 				if how, ok := s.c.covers[effect]; ok &&
 					how.match.row.Name != chainRow.Name {
-					delete(s.c.covers, effect)
+					s.c.dropCover(effect)
 				}
 			}
 			if len(s.c.covers) == 0 {

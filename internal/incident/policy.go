@@ -97,39 +97,63 @@ const (
 // incident's impact. A critical incident that matches one of pageRules
 // pages; an incident made only of digest findings waits for the digest.
 func tier(p *Incident) Tier {
+	t, _ := tierWhy(p)
+	return t
+}
+
+// tierWhy is tier with the code of why (see level.go). A fixed tier of
+// an incident without members has no code: the earlier one stands.
+func tierWhy(p *Incident) (Tier, string) {
 	if fixed, ok := fixedTier(p); ok {
-		return fixed
+		return fixed, fixedLevel(p)
+	}
+	if quiet, why, ok := quietTier(p); ok {
+		return quiet, why
 	}
 	worst, digestOnly := interrupting(p)
+	if digestOnly || worst <= detection.Info {
+		// Planned disruption or informational only.
+		return Digest, levelDigestOnly
+	}
+	if worst == detection.Critical || p.criticalRoot() {
+		if rule := pageRuleOf(p); rule != "" {
+			if p.Delivery.PageHeld() {
+				// A repeat of a page that just resolved: no new page.
+				return Notify, levelPageHeld
+			}
+			return Page, levelPagePrefix + rule
+		}
+	}
+	return Notify, levelNotify
+}
+
+// quietTier is the tier of an incident nobody needs to hear of now,
+// with its code: a cause or a state that affects no one is silent, and
+// a failure people know well waits for the digest.
+func quietTier(p *Incident) (Tier, string, bool) {
 	switch {
-	case causeOnly(p) || advisoryState(p):
-		return Silent
+	case causeOnly(p):
+		return Silent, levelCauseOnly, true
+	case advisoryState(p):
+		return Silent, levelAdvisory, true
 	case routine(p) && !p.persistent && !unusual(p):
 		// Happens at the same time every day and resolves on its own:
 		// learned normal, reported in the digest. One that outlasts
 		// the boot window with a crash loop or nothing ready does not
 		// resolve on its own (see escalate).
-		return Digest
-	case !reachedPaging(p) && !p.persistent && !unusual(p) &&
-		(Known(*p, p.Opened) || hasRhythm(p)):
+		return Digest, levelRoutine, true
+	case reachedPaging(p) || p.persistent || unusual(p):
+		return 0, "", false
+	case Known(*p, p.Opened):
 		// Heard about for a day, or failing on a regular rhythm: not
 		// news any more. The digest keeps counting it, unless it
 		// crash-loops or has nothing ready past the boot window:
 		// that is not routine boot noise (see escalate).
-		return Digest
-	case digestOnly || worst <= detection.Info:
-		// Planned disruption or informational only.
-		return Digest
-	case (worst == detection.Critical || p.criticalRoot()) &&
-		pageRuleOf(p) != "":
-		if p.Delivery.PageHeld() {
-			// A repeat of a page that just resolved: no new page.
-			return Notify
-		}
-		return Page
-	default:
-		return Notify
+		return Digest, levelKnown, true
+	case hasRhythm(p):
+		return Digest, levelRhythm, true
 	}
+	return 0, "", false
 }
 
 // interrupting is the worst severity among the members that may

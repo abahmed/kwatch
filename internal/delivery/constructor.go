@@ -25,12 +25,15 @@ type Dependencies struct {
 // NewManagerWithDependencies constructs delivery with explicit dependencies.
 func NewManagerWithDependencies(deps Dependencies) *Manager {
 	now := clock.Require(deps.Clock)
+	// Every provider, its SDK included, sends through this client, so
+	// none can reach a cloud metadata address.
+	client := transport.GuardMetadata(deps.HTTPClient)
 	return &Manager{
 		providerDeps: transport.Dependencies{
-			HTTPClient: deps.HTTPClient,
+			HTTPClient: client,
 			Clock:      deps.Clock,
 			Sender: transport.NewSender(transport.Dependencies{
-				HTTPClient: deps.HTTPClient,
+				HTTPClient: client,
 				Clock:      deps.Clock,
 			}),
 		},

@@ -121,6 +121,11 @@ func (s *Alerta) SendIncident(
 	return err
 }
 
+// alertaTextLimit bounds the text fields. Alerta documents no limit, but
+// its API usually sits behind a proxy whose default body limit is 1 MB
+// (nginx), so the text is kept far below that.
+const alertaTextLimit = 32000
+
 func (s *Alerta) buildPayload(m notification.Message) alertaPayload {
 	// The resource is the stable dedup key, so an alert opened before a
 	// state reset is still the one a later resolve closes.
@@ -138,13 +143,14 @@ func (s *Alerta) buildPayload(m notification.Message) alertaPayload {
 	if len(m.Output) > 0 {
 		text += "\n\nLast output:\n" + strings.Join(m.Output, "\n")
 	}
+	text = notification.Truncate(text, alertaTextLimit)
 	payload := alertaPayload{
 		Resource:    resource,
 		Event:       eventName,
 		Environment: s.environment,
 		Severity:    alertaSeverity(m),
 		Service:     []string{s.service},
-		Value:       m.ShortText(),
+		Value:       notification.Truncate(m.ShortText(), alertaTextLimit),
 		Text:        text,
 		Attributes:  map[string]string{"summary": m.ShortText()},
 	}

@@ -6,6 +6,8 @@ import (
 	"unicode/utf8"
 
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 // maxLoggedError bounds the error text of a send log line.
@@ -25,6 +27,11 @@ type sendRecord struct {
 	retries   int
 	err       error
 	fallback  string
+	// pager marks a provider that holds alerts by key.
+	pager bool
+	// text is the provider-neutral text of an incident message, as
+	// prepared for the provider's renderer.
+	text string
 }
 
 // logSend writes the outcome of one provider delivery: provider, incident
@@ -101,7 +108,7 @@ func describeJob(job deliverJob) (kind, placement string) {
 	case m.IsSummary():
 		return "summary", "root"
 	case m.Resolved():
-		return "resolve", "edit"
+		return "resolve", resolvePlacement(m)
 	case m.Opens || m.Revision <= 1:
 		return "incident", "root"
 	}
@@ -119,4 +126,18 @@ func newSendRecord(
 		placement: placement, retries: max(attempts-1, 0), err: err,
 		fallback: opts.fallbackFrom,
 	}
+}
+
+// resolvePlacement is where a resolve lands in chat: it edits the
+// incident's own thread, unless only a listing announced the incident.
+// A roll-up keeps a thread for each incident it named; the startup and
+// restored summaries do not, so the resolve stands on its own.
+func resolvePlacement(m *notification.Message) string {
+	switch {
+	case m.PagingOnly || m.ChatCarrier == "":
+		return "edit"
+	case m.ChatCarrier == "roll-up":
+		return "thread"
+	}
+	return "standalone"
 }

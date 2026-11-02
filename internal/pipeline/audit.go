@@ -63,6 +63,9 @@ func AuditEntry(
 	if p.Cause != nil {
 		entry.RootCause = p.Cause.Summary
 	}
+	if !p.Subject.IsZero() && p.Subject != p.Root {
+		entry.Subject = p.Subject.String()
+	}
 	return entry
 }
 

@@ -1,0 +1,8 @@
+POST /trigger/kw/with/key/<secret>
+Content-Type: application/json
+
+{
+  "value1": "🔴 payments in shop is crash-looping.",
+  "value2": "🔴 payments in shop is crash-looping.\nCaused by: Node n1 is not ready.\nCause in dashboard: https://kwatch.example/issues/p-cause\nEarlier times: https://kwatch.example/issues?status=all&like=p-link\nOpen in dashboard: https://kwatch.example/issues/p-link",
+  "value3": "critical"
+}

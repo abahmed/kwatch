@@ -33,14 +33,17 @@ func Actor(meta metav1.Object) string {
 // is a different entry, without their field sets. It preserves the actor
 // for change attribution and the spec manager for managed-by links at a
 // fraction of the memory. An object being deleted first gets the owners
-// of its finalizers stamped on it (see stampFinalizerManagers), because
-// the field sets that name them are dropped here.
+// of its finalizers stamped on it (see stampFinalizerManagers), and an
+// acknowledged object the writer of its ack annotation (see
+// stampAckManager), because the field sets that name them are dropped
+// here.
 func TrimToLatestManager(obj any) (any, error) {
 	meta, ok := obj.(metav1.Object)
 	if !ok {
 		return obj, nil
 	}
 	stampFinalizerManagers(meta)
+	stampAckManager(meta)
 	entries := meta.GetManagedFields()
 	if len(entries) == 0 {
 		return obj, nil

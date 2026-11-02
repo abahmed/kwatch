@@ -63,10 +63,15 @@ func (s *Flock) SendIncident(
 	return s.SendMessage(ctx, plainNote(m))
 }
 
+// flockTextLimit keeps a message under the 4000-character limit of a
+// Flock incoming webhook's text; bytes never undercount characters.
+const flockTextLimit = 4000
+
 // SendMessage sends text message to the provider
 func (s *Flock) SendMessage(ctx context.Context, msg string) error {
 	payload := flockPayload{
-		Text: notification.NeutralizeMentions(msg),
+		Text: notification.Truncate(
+			notification.NeutralizeMentions(msg), flockTextLimit),
 	}
 
 	body, err := json.Marshal(payload)

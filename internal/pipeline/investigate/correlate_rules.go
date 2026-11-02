@@ -198,7 +198,8 @@ func confirmOOM(
 	for _, pod := range incidentPods(model, p) {
 		for _, c := range containersOf(model, pod) {
 			e, _ := model.Entity(c)
-			if textOf(e, kube.AttrLastReason) == "OOMKilled" {
+			if textOf(e, kube.AttrLastReason) == "OOMKilled" &&
+				runSupports(model, p, pod, c) {
 				return "the last run of " + c.Name + " ended OOMKilled" +
 					exitCode(e)
 			}

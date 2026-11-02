@@ -138,6 +138,21 @@ test "$(grep -c 'tolerationSeconds: 30' <<<"$OUT_TOL_EFFECT")" = 2 || {
 }
 echo "PASS: custom tolerations"
 
+echo "=== dashboard and network policy guards ==="
+if helm template t . --set dashboard.enabled=true --set dashboard.port=9000 \
+  --set config.healthCheck.port=9000 >/dev/null 2>&1; then
+  echo "FAIL: equal dashboard and health ports must fail"; exit 1
+fi
+if helm template t . --set networkPolicy.enabled=true \
+  --set networkPolicy.allowDefaults=false >/dev/null 2>&1; then
+  echo "FAIL: deny-all network policy must fail"; exit 1
+fi
+helm template t . --set config.investigation.logs=false --set image.tag=123 \
+  --set persistence.size=5 >/dev/null 2>&1 || {
+  echo "FAIL: investigation.logs, numeric image.tag and size must pass"; exit 1
+}
+echo "PASS: dashboard and network policy guards"
+
 echo "=== health port drives container and probe ports ==="
 grep -Fq "containerPort: 8060" <<<"$OUT1" || {
   echo "FAIL: default health port is not 8060"; exit 1;
@@ -146,7 +161,7 @@ OUT_PORT=$(helm template test-port . --set config.healthCheck.port=9090 2>&1)
 grep -Fq "containerPort: 9090" <<<"$OUT_PORT" || {
   echo "FAIL: container port does not follow config.healthCheck.port"; exit 1;
 }
-test "$(grep -c 'port: health' <<<"$OUT_PORT")" = 2 || {
+test "$(grep -c 'port: health' <<<"$OUT_PORT")" = 3 || {
   echo "FAIL: probes must use the named health port"; exit 1;
 }
 if helm template test-nohealth . \
@@ -573,11 +588,15 @@ fi
 echo "PASS: 0.10.5 values file"
 
 echo "=== dashboard ==="
-for kind in "kind: Ingress" "KWATCH_DASHBOARD_ENABLED" "port: 8061"; do
+for kind in "kind: Ingress" "port: 8061"; do
   if grep -Fq "$kind" <<<"$OUT1"; then
     echo "FAIL: the dashboard must be off by default ($kind)"; exit 1
   fi
 done
+# The env is always set, so the chart wins over the config file both ways.
+grep -A1 'name: KWATCH_DASHBOARD_ENABLED' <<<"$OUT1" | grep -Fq 'value: "false"' || {
+  echo "FAIL: KWATCH_DASHBOARD_ENABLED must be false by default"; exit 1
+}
 OUT_DASH=$(helm template kwatch . --set dashboard.enabled=true 2>&1)
 for want in 'name: KWATCH_DASHBOARD_PASSWORD' 'key: password' \
   'name: KWATCH_DASHBOARD_MODE' 'value: "local"' \

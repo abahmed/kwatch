@@ -62,15 +62,8 @@ func runLint(
 			return 1
 		}
 	}
-	if strict {
-		if err := config.LintStrict(); err != nil {
-			if _, writeErr := fmt.Fprintf(
-				errOut, "STRICT ERROR: %v\n", err,
-			); writeErr != nil {
-				return 1
-			}
-			return 1
-		}
+	if strict && !lintStrict(cfg, errOut) {
+		return 1
 	}
 	// Construction only validates settings and builds clients; it does no
 	// I/O, so it always runs. Only --check contacts providers.
@@ -161,4 +154,19 @@ func runLicense(args []string, out, errOut io.Writer) int {
 		return app.LicenseMove(out, errOut)
 	}
 	return usageError(errOut, "license", "status|deactivate|move", args)
+}
+
+// lintStrict runs the --strict checks: unknown keys, and rules that
+// name a removed reason (a warning without --strict). It reports
+// whether they passed.
+func lintStrict(cfg *config.Config, errOut io.Writer) bool {
+	err := config.LintStrict()
+	if err == nil {
+		err = config.RemovedReasonsError(cfg)
+	}
+	if err == nil {
+		return true
+	}
+	_, _ = fmt.Fprintf(errOut, "STRICT ERROR: %v\n", err)
+	return false
 }

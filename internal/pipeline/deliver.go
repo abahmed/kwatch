@@ -205,9 +205,13 @@ func (a *announcer) send(
 	d = a.withWake(a.withKindNames(a.withChanges(d, at)), at)
 	spoke := a.collect.SpokeOnItsOwn(d.Incident.ID)
 	written := a.collect.Follow(d)
+	listedBy := a.listedOnly(written, spoke)
+	written.AsAnnounced = listedBy != ""
+	d.AsAnnounced = written.AsAnnounced
 	msg := a.write(written, at)
+	msg.ChatCarrier = listedBy
 	if movedWithoutThread(written, spoke) {
-		msg.PagingOnly = true
+		msg.PagingOnly, msg.ChatCarrier = true, "roll-up"
 	}
 	if written.Action == incident.Resolve && a.joint != nil {
 		msg = a.withRecovered(ctx, written, msg, at)
@@ -223,6 +227,17 @@ func (a *announcer) send(
 		a.collect.NoteResolveDelivered(d.Incident.ID)
 	}
 	a.sink(ctx, d, msg)
+}
+
+// listedOnly names the listing that alone announced the incident d
+// resolves, when it never spoke on its own (spoke): people know it only
+// from that listing, so the resolve speaks of what it named. Empty for
+// any other decision.
+func (a *announcer) listedOnly(d incident.Decision, spoke bool) string {
+	if d.Action != incident.Resolve || spoke {
+		return ""
+	}
+	return a.collect.ListedBy(d.Incident.ID)
 }
 
 // scopePaging keeps the paging providers' view of an incident whole: any

@@ -9,6 +9,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/email"
 	"github.com/abahmed/kwatch/internal/delivery/signing"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -110,7 +111,8 @@ func (s *Ses) Name() string {
 func (s *Ses) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
-	return s.send(ctx, m.MailSubject(), m.MailBody())
+	text, page := email.Bodies(m)
+	return s.send(ctx, m.MailSubject(), text, page)
 }
 
 // SendMessage mails a plain operator message under the configured subject.
@@ -119,10 +121,11 @@ func (s *Ses) SendMessage(ctx context.Context, msg string) error {
 	if len(subject) == 0 {
 		subject = "kwatch alert"
 	}
-	return s.send(ctx, subject, msg)
+	return s.send(ctx, subject, msg, "")
 }
 
-func (s *Ses) send(ctx context.Context, subject, msg string) error {
+// send mails text, with page as the HTML alternative when it is set.
+func (s *Ses) send(ctx context.Context, subject, msg, page string) error {
 	form := url.Values{}
 	form.Set("Action", "SendEmail")
 	form.Set("Version", "2010-12-01")
@@ -134,6 +137,10 @@ func (s *Ses) send(ctx context.Context, subject, msg string) error {
 	form.Set("Message.Subject.Charset", "UTF-8")
 	form.Set("Message.Body.Text.Data", msg)
 	form.Set("Message.Body.Text.Charset", "UTF-8")
+	if page != "" {
+		form.Set("Message.Body.Html.Data", page)
+		form.Set("Message.Body.Html.Charset", "UTF-8")
+	}
 
 	body := []byte(form.Encode())
 	contentType := "application/x-www-form-urlencoded"

@@ -18,9 +18,9 @@ candidates, so they do not affect a v0.10.x install.
 | State | In memory; lost on every restart | bbolt file on a PVC mounted at `/var/lib/kwatch` |
 | Replicas | Deployment default strategy | One replica, `Recreate` strategy, a Lease as the state lock |
 | Credentials | Inline in the config | `${file:/absolute/path}` references only |
-| Endpoints | `/healthz`, `/health` | Adds `/readyz`, `/availabilityz`, `/metrics` and an opt-in `/status` |
+| Endpoints | `/healthz`, `/health` | Adds `/readyz`, `/availabilityz`, `/metrics` (Pro) and an opt-in `/status` (Pro) |
 | RBAC | One ClusterRole | Broader read access, Roles for the Lease, restart evidence and `kwatchconfigs` |
-| Memory | 128Mi limit | 512Mi limit, `GOMEMLIMIT` at 90% of it |
+| Memory | 128Mi limit | 128Mi request, 512Mi limit, `GOMEMLIMIT` at 90% of it |
 | Custom config | None | `KwatchConfig` resource (`kwatch.abahmed.dev/v1beta1`) |
 | Editions | One feature set | Community (free, no key) and Pro; a v0.10.x install lands on **Community**, see [Editions](#editions) |
 
@@ -67,7 +67,7 @@ The silence rules (`silences`) take `containerNames`, `containerMessages`,
 `eventMessages`, `nodeReasons` and `nodeMessages`; see the
 [configuration reference](./configuration.md).
 
-Behaviour that now fails startup or `kwatch lint`, where v0.10.x ran:
+Behavior that now fails startup or `kwatch lint`, where v0.10.x ran:
 
 - A `CONFIG_FILE` that is set but missing. Before, kwatch ran on defaults.
 - A plain credential in a provider option or heartbeat URL (see above).
@@ -123,13 +123,27 @@ v0.10.x install has no license key, so v1.0.0 starts it as Community, and
   nothing is paged through it until you name it or get Pro.
 - Pro settings in your configuration stay valid but are ignored:
   `namespaceSelector`, `reasons` filters, severity overrides, maintenance
-  annotations other than the defaults, runbooks, the heartbeat monitor, active
-  probes, a file audit log. Namespace include/exclude lists and silences keep
-  working. `kwatch lint` lists everything that is ignored.
+  annotations other than the defaults, runbooks, active probes, a file audit
+  log, the heartbeat monitor, `healthCheck.statusEndpoint`. Namespace
+  include/exclude lists and silences keep working. `kwatch lint` lists
+  everything that is ignored.
+- A Community alert says what broke and the type of cause, never which
+  object, change, image or version it is: "payments in shop keeps
+  crashing. Cause found: a config change." The exact cause and its proof,
+  the commands to run, the setting to change ("Fix in: ...") and how often
+  it happened before ("This is the third time this week") are Pro; the
+  alert's one Pro line says what Pro adds, such as "Pro shows which one
+  and how to fix it." (`app.hideProHints` removes that line; the "Cause
+  found:" sentence stays).
+- The text `/status` page is Pro: Community answers it with `402`.
+  `/metrics` is Pro too: Community answers it with `404`. `/health` stays
+  available in both editions.
 - Community keeps the incidents it announced across a restart, so their
-  resolves are still sent, but it does not keep the startup summary, the
-  fingerprints that find changes made while kwatch was down, or flapping
-  and reminder state.
+  resolves are still sent, but it does not keep the startup summary or the
+  fingerprints that find changes made while kwatch was down. Flapping and
+  reminders are Pro, so Community has no such state to keep. Instead of a startup summary, each failure already
+  present at start that is still failing when the two-minute startup
+  window ends is announced on its own.
 
 kwatch tells you once: the first start in an edition that ignores part of your
 configuration sends a notice to your alert provider naming the ignored
@@ -163,8 +177,8 @@ kwatch serves these endpoints and no others:
 | `/health` | Component state and reason codes. Existed in v0.10.x. |
 | `/readyz` | New. Monitoring readiness. |
 | `/availabilityz` | New. Used by the chart's Deployment probes. |
-| `/metrics` | New. Prometheus metrics. |
-| `/status` | New and off by default. Set `healthCheck.statusEndpoint: true`. |
+| `/metrics` | New. Prometheus metrics. Pro only; Community answers `404`. |
+| `/status` | New and off by default. Set `healthCheck.statusEndpoint: true`. Pro only; Community answers `402`. |
 
 The health server cannot be turned off in the chart: it fails to render when
 `config.healthCheck.enabled` is false. The port is still `8060` by default.
@@ -174,8 +188,10 @@ with `kubectl port-forward` and never expose the port.
 ## Metrics
 
 v0.10.x did not expose a `/metrics` endpoint, so there is nothing to rename
-for dashboards you built against it. If you scrape the new endpoint, the
-list of metrics is in the [configuration reference](./configuration.md).
+for dashboards you built against it. `/metrics` is Pro: Community answers
+it with `404`, so a v0.10.x install that lands on Community has nothing to
+scrape. On Pro, the list of metrics is in the
+[configuration reference](./configuration.md).
 
 ## Upgrading the Deployment
 
@@ -242,9 +258,11 @@ the first start behaves like a cold start:
 - The chart creates the claim `<release>-data` (2Gi by default), with
   `helm.sh/resource-policy: keep` so it survives uninstall. The Pod stays
   `Pending` until the claim binds.
-- There is no state to migrate. kwatch learns baselines from scratch and sends
-  one startup summary. Problems that already exist when it starts are listed
-  in that summary instead of being announced one by one to chat channels.
+- There is no state to migrate. kwatch learns baselines from scratch and, on
+  Pro, sends one startup summary. Problems that already exist when it starts
+  are listed in that summary instead of being announced one by one to chat
+  channels. Community announces each one still failing when the startup
+  window ends.
 - A file from a later v1.0 build with another schema version is moved aside
   as `state.db.corrupt.<UTC time>` and a fresh store is created. The delivery
   outbox and provider thread IDs are carried over after a schema change; the
@@ -272,7 +290,7 @@ your file with `values.yaml` before upgrading.
 | --- | --- |
 | `service.port` | Removed. The container and probe port come from `config.healthCheck.port` |
 | `image.pullPolicy` | Default is now `IfNotPresent` (was `Always`) |
-| `resources` | Limits are now 512Mi memory and 500m CPU; requests 128Mi and 100m. Raising memory above the default is covered by the sizing table in [production operations](./production-operations.md) |
+| `resources` | Limits are now 512Mi memory and 500m CPU; requests 128Mi and 100m (set the memory request to 256Mi or more on large clusters). Raising memory above the default is covered by the sizing table in [production operations](./production-operations.md) |
 | `config.alert.*` | Needs `configSecretName`; the Secret's `config.yaml` replaces `.Values.config` |
 | `persistence.*` | New: `size`, `storageClass`, `existingClaim`, `emptyDir`, `emptyDirSizeLimit`, `pinToStorageDriverNodes`, `storageDriverTopologyKey`. `emptyDir` and `existingClaim` cannot both be set |
 | `rbac.mode`, `watch.secrets` | New. See [RBAC and the CRD](#rbac-and-the-crd) |
@@ -283,6 +301,10 @@ your file with `values.yaml` before upgrading.
 | `license.*` | New: `existingSecret`, `key` and `instanceSecret`. The license instance Secret and its Role are rendered only when one of them is set |
 | `tolerations` | Merged with the new `defaultTolerations` (30-second `not-ready` and `unreachable` tolerations) |
 | `terminationGracePeriodSeconds` | New, default 60 |
+| Startup probe | New: `/healthz` every 10 seconds, up to 30 failures, so a slow first start is not killed by the liveness probe |
+| Dashboard environment | The chart always sets `KWATCH_DASHBOARD_ENABLED` and `KWATCH_DASHBOARD_TRUST_PROXY` (`true` or `false`), so the chart values win over the config file in both directions. A `checksum/dashboard-secret` annotation restarts the Pod when the dashboard Secret changes |
+| `dashboard.port` | The render fails when it equals `config.healthCheck.port` with the dashboard enabled, because kwatch refuses to start with both ports equal |
+| `networkPolicy.*` dashboard rules | The dashboard ingress rules follow `dashboard.enabled` and `dashboard.networkPolicyFrom`, not `allowDefaults`. With `allowDefaults: false` and no `ingress`, `egress`, `extraEgressPorts` or `allowProbeEgressAll`, the render fails instead of producing a deny-all policy |
 
 The Pod also runs with a `RuntimeDefault` seccomp profile, no privilege
 escalation, all capabilities dropped and `fsGroup: 1000`. Namespaces that
@@ -310,7 +332,10 @@ After the upgrade:
 3. `/health` has no `permission_denied` or `kubelet_unreachable` entries you
    did not expect.
 4. The startup log has no `not recognized` configuration warnings.
-5. The first startup summary arrives in your channels.
+5. On Pro, the first startup summary arrives in your channels. On
+   Community, the notice naming the ignored settings arrives when your
+   configuration sets any, and, if any, the Pro-checks notice ("Pro checks
+   found ...").
 
 ## Rolling back
 
@@ -327,6 +352,9 @@ helm rollback kwatch --namespace kwatch
   chart does not know the `persistence`, `rbac` or `crd` values.
 - Alerts opened under the new `kwatch-<cluster>-<key>` keys are not known to
   v0.10.x. Close any that stay open by hand.
+- The `trails` and `usage` buckets of the state file are additive. An older
+  1.0 build keeps the file and its data, but does not size or expire these
+  two buckets, so they stay until you remove them with the state file.
 - Between 1.0 builds, a state file with another schema version is moved aside
   and the outbox and thread IDs are carried over, so a rollback inside the
   1.0 line does not drop queued pages. Issue trackers save a resolved issue

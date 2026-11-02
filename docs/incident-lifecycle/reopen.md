@@ -31,6 +31,10 @@ update was ever sent, it closes without a second resolve message
 After the window, or for another mode, the failure is a new
 incident that remembers the old one. A reopen also forgets the fix attempt
 of the earlier occurrence (`Attempt`, the unsent attempt and its late flag).
+What an incident remembers of the earlier ones is bounded: the 30 most
+recent resolved occurrences with how each ended (`History`, `HistoryKept`)
+and the 30 most recent open times (`Occurrences`), which routines,
+rhythms and the weekly count read.
 
 How paging state works now:
 
@@ -90,6 +94,13 @@ How paging state works now:
   announced beside it: one thread, one alert, one revised cause. The nodes
   it merged that the place covers leave `Merged`, and a finding placed at
   the node it left stays with the moved incident (`ofStoryAt`).
+- A paged node outage whose failures split over outages of the nodes
+  themselves is not closed as healthy, because they are still failing. It is
+  closed as moved into the first of those that was announced
+  (`splitOutage`, `attach_revise.go`). While they are all still settling it
+  waits, since a settling outage may never send a message for the "Moved"
+  close to point at. If none is ever announced, it recovers and resolves on
+  its own.
 - A page held in the startup summary or an outage hold is paged on its own
   when it is announced. If it was held at notify and its update later
   reaches the page tier, the hold pages it then (`risesToPage`) and marks it
@@ -146,6 +157,9 @@ a new root), and the kept thread, with its end time, is saved with the other
 threads, so a restart does not break it. The kept threads count toward the
 same size bound as the open ones. A resolve that cannot reopen, or a
 roll-up member's, is forgotten at once.
+
+On restore, an announced incident that was `Flapping` is kept like an open or
+recovering one (`openAnnounced` in `pipeline/restore.go`).
 
 When a cause revision moves every member of an announced incident to another
 announced incident, the old one is resolved as `superseded`. If its failures

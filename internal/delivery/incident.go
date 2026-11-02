@@ -14,9 +14,13 @@ import (
 func (m *Manager) NotifyIncident(msg notification.Message) {
 	if msg.Carrier != "" {
 		// Recorded for the audit log; the digest or summary carries it.
-		if !bulkCarrier(msg.Carrier) {
-			logUnsent(deliverJob{kind: jobIncident, incident: &msg},
-				"carried", msg.Carrier)
+		// A bulk carrier gets no log line per decision, but the trail
+		// (bounded) still says who told people about the incident.
+		job := deliverJob{kind: jobIncident, incident: &msg}
+		if bulkCarrier(msg.Carrier) {
+			m.trailUnsent(job, "carried", msg.Carrier)
+		} else {
+			m.noteUnsent(job, "carried", msg.Carrier)
 		}
 		return
 	}
@@ -49,6 +53,9 @@ func (m *Manager) dispatchIncident(
 	}
 	msg := m.makeUpForLostOpen(entry, *job.incident)
 	msg = prepareIncident(msg, templates, opts.fallbackFrom, entry.maxBytes)
+	if opts.sent != nil {
+		*opts.sent = sentTextOf(msg)
+	}
 	requestCtx := m.requestContext(ctx)
 	return sendWithRetry(ctx, opts.counted(func() error {
 		return p.SendIncident(requestCtx, msg)

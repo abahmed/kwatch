@@ -1,0 +1,24 @@
+--- request 1 of 2
+GET /rest/api/2/search?fields=description&jql=project = "OPS" AND description ~ "kwatchkey3789c0f3c9b01dc5" AND statusCategory != Done&maxResults=5
+Content-Type: application/json
+Authorization: Basic <redacted>
+
+(empty body)
+
+--- request 2 of 2
+POST /rest/api/2/issue
+Content-Type: application/json
+Authorization: Basic <redacted>
+
+{
+  "fields": {
+    "description": "🔴 payments in shop is crash-looping.\nCaused by: Node n1 is not ready.\nCause in dashboard: https://kwatch.example/issues/p-cause\nEarlier times: https://kwatch.example/issues?status=all&like=p-link\nOpen in dashboard: https://kwatch.example/issues/p-link\n\n{noformat}\npanic: out of memory\n{noformat}\n\nRef: kwatchkey3789c0f3c9b01dc5",
+    "issuetype": {
+      "name": "Task"
+    },
+    "project": {
+      "key": "OPS"
+    },
+    "summary": "🔴 payments in shop is crash-looping."
+  }
+}

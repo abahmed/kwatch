@@ -76,6 +76,7 @@ func (s UnstructuredSchema) Describe(obj any) (Description, bool) {
 	setRBACAttributes(s.group, s.kind, u, attrs)
 	setConditions(attrs, s.conditions(u))
 	s.wellKnownStatus(u, attrs)
+	s.setAddressAttributes(u, attrs)
 	if ready, found, _ := unstructured.NestedBool(
 		u.Object, "status", "readyToUse"); found {
 		attrs[AttrReady] = inventory.Bool(ready)

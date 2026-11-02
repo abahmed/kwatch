@@ -2,7 +2,8 @@
    step. API text is always set with textContent, never parsed as HTML. */
 (function () {
   "use strict";
-  var KW = (window.KW = {});
+  /* look.js, loaded first, already put KW.look here. */
+  var KW = (window.KW = window.KW || {});
   var SVG = "http://www.w3.org/2000/svg";
 
   KW.$ = function (sel, root) { return (root || document).querySelector(sel); };
@@ -39,19 +40,51 @@
   };
 
   /* ---- time ---- */
-  var skew = 0;
-  KW.now = function () { return Date.now() + skew; };
+  /* skew corrects this browser's clock by the server's (api.js). */
+  KW.skew = 0;
+  KW.now = function () { return Date.now() + KW.skew; };
   var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug",
     "Sep", "Oct", "Nov", "Dec"];
   function pad(n) { return n < 10 ? "0" + n : "" + n; }
 
+  /* KW.store reads and writes this browser's view options (localStorage
+     key kwatch.view: time zone, columns, page size, saved views...).
+     Every access may throw (private mode, blocked storage); then the
+     options last until the page is reloaded. */
+  var VIEW = "kwatch.view", viewMemo = null;
+  KW.store = {
+    all: function () {
+      if (viewMemo) return viewMemo;
+      var v = null;
+      try { v = JSON.parse(window.localStorage.getItem(VIEW) || "null"); } catch (e) { v = null; }
+      viewMemo = v && typeof v === "object" && !Array.isArray(v) ? v : {};
+      return viewMemo;
+    },
+    get: function (k) { return KW.store.all()[k]; },
+    /* set returns false when the browser could not keep it (private
+       mode, storage full): the option then lasts until a reload. */
+    set: function (k, value) {
+      var v = KW.store.all();
+      if (value === undefined) delete v[k]; else v[k] = value;
+      try {
+        window.localStorage.setItem(VIEW, JSON.stringify(v));
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+  };
+
   /* Clock times show in local time or UTC; on-call teams often talk in
-     UTC. The choice is remembered on this browser only. */
-  KW.utc = false;
-  try { KW.utc = window.localStorage.getItem("kwatch.tz") === "utc"; } catch (e) { KW.utc = false; }
+     UTC. The choice is a view option of this browser (the old key
+     kwatch.tz is still read). */
+  KW.utc = KW.store.get("tz") === "utc";
+  if (KW.store.get("tz") === undefined) {
+    try { KW.utc = window.localStorage.getItem("kwatch.tz") === "utc"; } catch (e) { KW.utc = false; }
+  }
   KW.setUTC = function (on) {
     KW.utc = !!on;
-    try { window.localStorage.setItem("kwatch.tz", on ? "utc" : "local"); } catch (e) { /* private mode */ }
+    KW.store.set("tz", on ? "utc" : "local");
   };
   function H(d) { return KW.utc ? d.getUTCHours() : d.getHours(); }
   function M(d) { return KW.utc ? d.getUTCMinutes() : d.getMinutes(); }
@@ -106,6 +139,16 @@
     return y;
   };
 
+  /* hm: a <time> with the clock time ("14:02"; "yesterday 14:02" or
+     "12 Oct, 14:02" when it isn't today) and the exact time, seconds
+     included, in its tooltip. The one clock format of the dashboard. */
+  KW.hm = function (iso) {
+    var t = KW.el("time", "", KW.when(iso));
+    t.setAttribute("datetime", iso);
+    t.title = KW.full(iso);
+    return t;
+  };
+
   KW.stamp = function (iso) {
     var d = new Date(iso);
     return KW.dayMonth(d) + ", " + KW.hhmm(d);
@@ -122,6 +165,8 @@
 
   /* lasted: "12 min", "3 h 10 min", "2 days". */
   KW.lasted = function (fromIso, toIso) {
+    // A zero or missing time would read as thousands of days.
+    if (!KW.valid(fromIso) || !KW.valid(toIso)) return "";
     var m = Math.max(1, Math.round((Date.parse(toIso) - Date.parse(fromIso)) / 60000));
     if (m < 60) return m + " min";
     if (m < 1440) {
@@ -149,30 +194,58 @@
     });
   };
 
-  KW.plural = function (n, one, many) { return n + " " + (n === 1 ? one : many); };
+  /* num: a count with thousands separators: "4,812". The one number
+     format of the dashboard. */
+  KW.num = function (n) { return Number(n || 0).toLocaleString("en-US"); };
+  KW.plural = function (n, one, many) {
+    return KW.num(n) + " " + (n === 1 ? one : many);
+  };
+
+  /* obj: an object as "deployment/payments-api" (the kind in lower
+     case). The namespace is never part of it: it is shown on its own
+     ("payments", or "whole cluster" without one). With no name the
+     object is the namespace itself, or the whole cluster: "". */
+  KW.obj = function (kind, ns, name) {
+    if (!name) return "";
+    return (kind ? String(kind).toLowerCase() + "/" : "") + name;
+  };
+  /* KW.cutCount: how many entries of a part the server left out to keep
+     the response within its size limit (inc.truncated), else 0. */
+  KW.cutCount = function (inc, part) {
+    return (inc.truncated && inc.truncated[part]) || 0;
+  };
 
   /* ---- words ---- */
+  /* Severity is kwatch's alert level (the API's severity: page,
+     notify, digest, silent). label is the badge; level says how the
+     team was told, in plain words, for tooltips and the legend. */
   KW.SEVERITY = {
     page: { label: "Urgent", chip: "c-page", stripe: "sev-page",
-      title: "kwatch sent this as a page. Someone should look now." },
+      level: "Alerted the on-call person",
+      title: "Alert level: alerted the on-call person. Look now." },
     notify: { label: "Needs attention", chip: "c-notify", stripe: "sev-notify",
-      title: "kwatch notified your channels. Look at it soon." },
+      level: "Sent a message",
+      title: "Alert level: sent a message to your channels. Look soon." },
     digest: { label: "Low", chip: "c-low", stripe: "sev-low",
-      title: "Not urgent. It goes into the digest, not a page." },
+      level: "In the daily summary",
+      title: "Alert level: in the daily summary only. No rush." },
     silent: { label: "Quiet", chip: "c-quiet", stripe: "sev-low",
-      title: "kwatch is tracking this but is not sending it." }
+      level: "Not sent",
+      title: "Alert level: not sent. kwatch only keeps track of it." }
   };
+  /* RANK orders severities, most urgent first. */
+  KW.RANK = { page: 0, notify: 1, digest: 2, silent: 3 };
   KW.STATE = {
-    settling: { label: "Looking into it", chip: "c-state",
-      title: "kwatch is still collecting what failed around this, so the cause may change." },
-    open: { label: "Happening now", chip: "c-state",
-      title: "This is failing right now." },
+    settling: { label: "Confirming", chip: "c-state",
+      title: "kwatch is checking it's real before alerting." },
+    open: { label: "Happening now", chip: "c-state c-open",
+      title: "Failing right now." },
     recovering: { label: "Looks better", chip: "c-state c-better",
-      title: "It stopped failing. kwatch is waiting a little to be sure." },
+      title: "Recovered. kwatch is waiting to be sure." },
     flapping: { label: "Keeps coming back", chip: "c-state c-flap",
-      title: "It keeps failing and recovering." },
+      title: "It recovers and fails again." },
     resolved: { label: "Resolved", chip: "c-resolved",
-      title: "It stopped failing and stayed fixed." }
+      title: "Recovered, or kwatch stopped tracking it." }
   };
 
   KW.chip = function (cls, text, title) {
@@ -191,153 +264,40 @@
     return KW.chip(s.chip, s.label, s.title);
   };
 
-  /* where: namespace / workload. stacked puts them on two lines, so a
-     long workload name wraps on its own line instead of mid-word. */
+  /* whereText: "payments · deployment/api" or "whole cluster ·
+     node/ip-10-0-4-7": the namespace, then the object (KW.obj). */
+  KW.whereText = function (item) {
+    var o = KW.obj(item.workloadKind || item.kind, item.namespace,
+      item.workload);
+    return (item.namespace || "whole cluster") + (o ? " · " + o : "");
+  };
+
+  /* where puts KW.whereText in node. stacked puts the namespace and the
+     object on two lines, so a long name wraps on its own line. */
   KW.where = function (item, node, stacked) {
-    if (!item.namespace) {
-      node.classList.add("cluster");
-      node.textContent = "whole cluster";
-      if (item.workload) node.textContent += " · " + item.workload;
-      return;
-    }
-    if (stacked && item.workload) {
+    node.classList.toggle("cluster", !item.namespace);
+    var o = KW.obj(item.workloadKind || item.kind, item.namespace,
+      item.workload);
+    if (stacked && o) {
       node.textContent = "";
-      node.appendChild(KW.el("span", "w-ns", item.namespace));
-      node.appendChild(KW.el("span", "w-wl", item.workload));
+      node.appendChild(KW.el("span", "w-ns", item.namespace || "whole cluster"));
+      node.appendChild(KW.el("span", "w-wl", o));
       return;
     }
-    node.textContent = item.namespace + (item.workload ? " / " + item.workload : "");
+    node.textContent = KW.whereText(item);
+  };
+
+  /* forLong: "for 3 h", how long an issue has been going on; "now"
+     under a minute. */
+  KW.forLong = function (fromIso) {
+    if (!KW.valid(fromIso)) return "";
+    var ms = KW.now() - Date.parse(fromIso);
+    if (!(ms >= 60000)) return "now";
+    return "for " + KW.lasted(fromIso, new Date(KW.now()).toISOString());
   };
 
   KW.failedAgain = function (n) {
     return "Failed again " + KW.plural(n, "time", "times");
   };
 
-  /* ---- API ---- */
-  /* api returns {status, data, retryAfter}; status 0 is a network
-     failure. The Date header corrects the browser clock. */
-  KW.api = function (path, opts) {
-    opts = opts || {};
-    var init = { method: opts.method || "GET", credentials: "same-origin",
-      cache: "no-store", headers: { Accept: "application/json" } };
-    if (opts.body !== undefined) {
-      init.headers["Content-Type"] = "application/json";
-      init.body = JSON.stringify(opts.body);
-    }
-    var ctl = window.AbortController ? new AbortController() : null;
-    if (ctl) {
-      init.signal = ctl.signal;
-      window.setTimeout(function () { ctl.abort(); }, 15000);
-    }
-    return fetch(path, init).then(function (res) {
-      var date = Date.parse(res.headers.get("Date") || "");
-      if (!isNaN(date)) skew = date - Date.now();
-      var retry = parseInt(res.headers.get("Retry-After") || "", 10);
-      return res.text().then(function (text) {
-        var data = null;
-        try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
-        return { status: res.status, data: data, retryAfter: isNaN(retry) ? 0 : retry };
-      });
-    }, function () {
-      return { status: 0, data: null, retryAfter: 0 };
-    });
-  };
-
-  /* ---- copy ---- */
-  KW.copy = function (button, text, label) {
-    function done() {
-      button.textContent = "Copied";
-      KW.announce("Copied");
-      window.setTimeout(function () { button.textContent = label || "Copy"; }, 2000);
-    }
-    function fallback() {
-      var target = button.parentNode.querySelector("code, .logs");
-      if (!target) return;
-      var range = document.createRange();
-      range.selectNodeContents(target);
-      var sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(range);
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done, fallback);
-    } else {
-      fallback();
-    }
-  };
-
-  /* cmd is a command box: one line, scrolls inside, Copy copies it. */
-  KW.cmd = function (command) {
-    var box = KW.el("div", "cmd");
-    var code = KW.el("code", "", command);
-    code.tabIndex = 0;
-    var b = KW.el("button", "btn", "Copy");
-    b.type = "button";
-    b.addEventListener("click", function () { KW.copy(b, command); });
-    box.appendChild(code);
-    box.appendChild(b);
-    return box;
-  };
-
-  KW.wireCopy = function (root) {
-    KW.$$("[data-copy]", root).forEach(function (b) {
-      b.addEventListener("click", function () {
-        KW.copy(b, b.parentNode.querySelector("code").textContent);
-      });
-    });
-  };
-
-  /* ---- shared states ---- */
-  KW.self = { namespace: "kwatch", deployment: "kwatch" };
-
-  /* panel renders one of the shared error or starting panels.
-     kind: starting | network | limit | error. */
-  KW.panel = function (kind, status, onRetry) {
-    var frag = KW.clone("tpl-panel");
-    var p = frag.firstElementChild;
-    var retry = KW.$("[data-retry]", p);
-    var texts = {
-      starting: ["kwatch is starting",
-        "kwatch has just started and is still loading what it knows. This page refreshes by itself.",
-        "Try now"],
-      network: ["Can't reach kwatch", "The connection dropped. We'll keep trying.", "Try now"],
-      limit: ["Too many tries", "Wait a minute, then try again.", ""],
-      error: ["Something went wrong inside kwatch",
-        "This is not your cluster. Check kwatch's own logs for the reason:", "Try again"]
-    }[kind];
-    KW.$("[data-heading]", p).textContent = texts[0];
-    KW.$("[data-body]", p).textContent = texts[1];
-    if (kind === "error") {
-      var cmd = KW.$("[data-cmd]", p);
-      cmd.hidden = false;
-      KW.$("code", cmd).textContent = "kubectl -n " + KW.self.namespace +
-        " logs deploy/" + KW.self.deployment + " --tail=50";
-      KW.wireCopy(p);
-      var code = KW.$("[data-code]", p);
-      code.hidden = false;
-      code.textContent = "Error " + status;
-    }
-    if (texts[2] && onRetry) {
-      retry.hidden = false;
-      retry.textContent = texts[2];
-      retry.addEventListener("click", onRetry);
-    }
-    return p;
-  };
-
-  /* kindOf sorts a failed API status into a shared state. */
-  KW.kindOf = function (status) {
-    if (status === 0) return "network";
-    if (status === 503) return "starting";
-    if (status === 429) return "limit";
-    return "error";
-  };
-
-  /* retryDelay: 5 s for the first tries while starting, then 15 s;
-     60 s after 429. */
-  KW.retryDelay = function (kind, attempt) {
-    if (kind === "limit") return 60000;
-    if (kind === "starting") return attempt < 6 ? 5000 : 15000;
-    return 15000;
-  };
 })();

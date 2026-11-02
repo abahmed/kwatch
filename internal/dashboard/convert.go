@@ -14,20 +14,30 @@ import (
 const maxTimeline = 100
 
 func toListItem(p incident.Incident) IncidentListItem {
+	return toListItemWith(p, redact.Evidence)
+}
+
+// toListItemWith is toListItem with a given redaction, so a list can
+// reuse what it redacted on the last read.
+func toListItemWith(
+	p incident.Incident, red func(string) string,
+) IncidentListItem {
 	return IncidentListItem{
-		ID:           p.ID,
-		Title:        titleFor(p),
-		Severity:     p.Tier.String(),
-		State:        p.State.String(),
-		Namespace:    p.Root.Namespace,
-		Workload:     p.Root.Name,
-		WorkloadKind: string(p.Root.Kind),
-		FirstSeen:    p.Opened,
-		LastSeen:     lastSeen(p),
-		RepeatCount:  p.RepeatCount,
-		AckedBy:      ackedBy(p),
-		ResolvedAt:   p.Resolved,
-		RootCause:    shortCause(redact.Evidence(causeText(p))),
+		ID:              p.ID,
+		Title:           titleFor(p, red),
+		Severity:        p.Tier.String(),
+		State:           p.State.String(),
+		Namespace:       p.Root.Namespace,
+		Workload:        p.Root.Name,
+		WorkloadKind:    string(p.Root.Kind),
+		FirstSeen:       p.Opened,
+		LastSeen:        lastSeen(p),
+		RepeatCount:     p.RepeatCount,
+		AckedBy:         ackedBy(p),
+		Acked:           p.Ack != nil,
+		StoppedTracking: stoppedTracking(p),
+		ResolvedAt:      p.Resolved,
+		RootCause:       shortCause(red(causeText(p))),
 	}
 }
 
@@ -44,49 +54,50 @@ func shortCause(cause string) string {
 	return strings.TrimSpace(string(runes[:maxListCause-1])) + "…"
 }
 
+// toDetail is the detail of p alone, without the server's context.
 func toDetail(p incident.Incident) IncidentDetail {
-	steps, commands, text := toSteps(p.Steps)
+	return buildDetail(p, detailContext{})
+}
+
+// buildDetail converts p, adds the context c and fits the result to
+// the response limit.
+func buildDetail(p incident.Incident, c detailContext) IncidentDetail {
+	steps := toSteps(p.Steps)
 	item := toListItem(p)
 	item.RootCause = redact.Evidence(causeText(p))
-	return IncidentDetail{
+	d := IncidentDetail{
 		IncidentListItem: item,
-		SuggestedFix:     text,
 		FixSteps:         steps,
-		FixCommands:      commands,
 		Timeline:         toTimeline(p.Timeline),
 		CapturedLogLines: redactAll(p.Facts),
 		DocsLink:         p.DocsLink,
 		Evidence:         toEvidence(p.Evidence),
 		Correlation:      toCorrelation(p.Correlation),
 	}
+	if cut := len(p.Timeline) - len(d.Timeline); cut > 0 {
+		d.Truncated = &DetailTruncation{Timeline: cut}
+	}
+	c.addContext(&d, p)
+	fitDetail(&d, detailBudget)
+	return d
 }
 
-// toSteps returns the steps, their commands alone and their sentences
-// joined, all redacted again.
-func toSteps(in []incident.FixStep) ([]FixStep, []string, string) {
+// toSteps returns the steps, redacted again.
+func toSteps(in []incident.FixStep) []FixStep {
 	steps := make([]FixStep, 0, len(in))
-	commands := make([]string, 0, len(in))
-	var text []string
 	for _, s := range in {
-		step := FixStep{Text: redact.Evidence(s.Text),
-			Command: redact.Evidence(s.Command)}
-		steps = append(steps, step)
-		if step.Command != "" {
-			commands = append(commands, step.Command)
-		}
-		if step.Text != "" {
-			text = append(text, step.Text)
-		}
+		steps = append(steps, FixStep{Text: redact.Evidence(s.Text),
+			Command: redact.Evidence(s.Command)})
 	}
-	return steps, commands, strings.Join(text, "\n")
+	return steps
 }
 
 // titleFor is the composer's headline of the last message, else the
 // root's name.
-func titleFor(p incident.Incident) string {
+func titleFor(p incident.Incident, red func(string) string) string {
 	switch {
 	case p.Headline != "":
-		return redact.Evidence(p.Headline)
+		return red(p.Headline)
 	case p.Root.Name != "":
 		return p.Root.String()
 	default:

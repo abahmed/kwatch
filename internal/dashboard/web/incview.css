@@ -1,0 +1,89 @@
+/* kwatch dashboard: the incident page's time and relations. "What's
+   going on with this alert", caused by / causing, at the same time, the
+   "New since your last visit" marks, change diffs, the containers' break
+   snapshots, the states strip's extra states and the usage chart.
+   Tokens come from app.css, so light and dark follow it. */
+
+/* Summary card lines. */
+.d-caused, .d-blast { margin-top: 10px; font-size: 0.9375rem; overflow-wrap: anywhere; max-width: var(--measure); }
+.d-caused { padding: 6px 10px; border-radius: var(--radius-input); background: var(--degraded-bg); }
+.d-looked { margin-top: 10px; font-size: 0.875rem; font-weight: 600; color: var(--resolved); cursor: help; }
+
+/* What's going on with this alert. */
+.d-alert { margin-top: 12px; border: 1px solid var(--line); border-radius: var(--radius-card); padding: 14px 22px 16px; background: var(--bg); display: grid; gap: 8px; }
+.d-alert .d-kicker { margin-bottom: 2px; }
+.d-sum ~ details.fold:first-of-type { margin-top: 18px; border-top: 1px solid var(--line); }
+.al-open p { font-weight: 600; overflow-wrap: anywhere; }
+.al-open[title] { cursor: help; }
+.al-bar { height: 8px; max-width: 420px; margin-top: 6px; border-radius: var(--radius-pill); background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
+.al-fill { display: block; width: 0; height: 100%; background: var(--success); transition: width 900ms linear; }
+.al-line { font-size: 0.9375rem; color: var(--text-soft); overflow-wrap: anywhere; max-width: var(--measure); }
+.al-line b { color: var(--text); }
+.al-timing { font-size: 0.875rem; }
+.al-t { cursor: help; white-space: nowrap; }
+.al-t time { font-size: 0.8125rem; color: var(--text); }
+.al-how { margin-top: 4px; font-size: 0.875rem; }
+.al-how summary { cursor: pointer; color: var(--text-soft); text-decoration: underline; text-decoration-color: var(--line); min-height: 28px; display: inline-flex; align-items: center; }
+.al-how > p { margin-top: 6px; max-width: var(--measure); }
+.al-how .cmd { margin-top: 6px; }
+@media (prefers-reduced-motion: reduce) { .al-fill { transition: none; } }
+
+/* New since your last visit. */
+.c-new { color: var(--resolved); background: var(--resolved-bg); font-size: 0.75rem; padding: 0 7px; margin-left: 8px; vertical-align: 1px; }
+.tl .ev.is-new .tx-text { font-weight: 600; }
+.cx-row.is-new, .in-warn.is-new { box-shadow: inset 3px 0 0 var(--resolved); padding-left: 10px; }
+
+/* Before and after of a change. */
+.cx-diff { margin-top: 6px; font-size: 0.8125rem; }
+.cx-diff summary { cursor: pointer; color: var(--text-soft); min-height: 28px; display: inline-flex; align-items: center; }
+.cx-fields { display: grid; grid-template-columns: minmax(0, 14em) minmax(0, 1fr); gap: 4px 12px; margin: 6px 0 0; padding: 8px 10px; border-radius: var(--radius-input); background: var(--surface); }
+.cx-fields dt { overflow-wrap: anywhere; color: var(--text-muted); }
+.cx-fields dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.cx-old { color: var(--failing); text-decoration: line-through; }
+.cx-new { color: var(--success); text-decoration: none; }
+.cx-key { color: var(--text-soft); }
+
+/* Caused by, also causing, at the same time. */
+.rel-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.rel-row { display: flex; align-items: baseline; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+.rel-row:first-child { border-top: 0; }
+.rel-row[title] { cursor: help; }
+.rel-body { min-width: 0; overflow-wrap: anywhere; }
+.rel-row .chip { flex: none; font-size: 0.75rem; }
+
+/* Containers: at first break, when it got worse, now. */
+.snap-sw { flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.snap-sw .tz-b, .snap-sw .tz-b:first-of-type, .snap-sw .tz-b:last-of-type { border-radius: var(--radius-pill); border-left: 1px solid var(--line); min-height: 32px; }
+.snap-sw .tz-b[aria-pressed="true"] { border-color: var(--text); }
+
+/* States strip: the states transitions add, and alert level marks. */
+.seg-settling { background: var(--control-border); }
+.seg-flapping { background: var(--degraded); }
+.strip-wrap { position: relative; }
+.strip-mark { position: absolute; top: -7px; width: 0; height: 0; margin-left: -5px; border: 5px solid transparent; border-top: 6px solid var(--text); cursor: help; }
+
+/* Memory or CPU over the last day. */
+.uc { padding: 10px 0; border-top: 1px solid var(--line); }
+.uc:first-child { border-top: 0; }
+.uc-fig { margin: 6px 0 0; max-width: 520px; }
+.uc-svg { display: block; width: 100%; height: 96px; background: var(--surface); border-radius: var(--radius-chip); }
+.uc-col { fill: var(--resolved); }
+.uc-col.hot { fill: var(--failing); }
+.uc-limit { stroke: var(--failing); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.uc-base { stroke: var(--line); stroke-width: 1; }
+.uc-axis { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); }
+.uc-key { display: inline-flex; align-items: center; gap: 6px; }
+.uc-dash { width: 18px; border-top: 2px dashed var(--failing); }
+.uc-sum { margin-top: 6px; font-size: 0.875rem; max-width: var(--measure); }
+
+@media (max-width: 600px) {
+  .d-alert { padding: 14px 16px; }
+  .cx-fields { grid-template-columns: 1fr; gap: 0 0; }
+  .cx-fields dd { margin-bottom: 6px; }
+}
+
+/* Alert status: the pager's lines and the "can't see it" note. Issues
+   moved into or out of this one. */
+.al-extra { display: grid; gap: 4px; margin-top: 8px; }
+.d-moved { display: grid; gap: 2px; margin-top: 10px; font-size: 0.9375rem; overflow-wrap: anywhere; max-width: var(--measure); }
+.d-short { margin-top: 16px; }

@@ -143,6 +143,31 @@ type Record struct {
 	// Steps are the suggested steps of the last message; older records
 	// restore without them.
 	Steps []FixStep `json:",omitempty"`
+	// Reasons are the reasons of the failing members when the record
+	// was saved. Until all of them are seen again after a restart, the
+	// incident's tier is provisional (see provisional). Older records
+	// restore with RootReasons in their place.
+	Reasons []string `json:",omitempty"`
+	// Members are the entities of the failing members when the record
+	// was saved, bounded by maxSavedMembers. A restored incident whose
+	// members do not come back is handed over to the incident that holds
+	// any of them (handover.go), even when its root no longer exists.
+	// Older records restore without them.
+	Members []inventory.EntityID `json:",omitempty"`
+	// Breaks, LinkedChanges, Transitions, ErrorKey and Level are the
+	// incident's journal (journal.go), each bounded. Older records
+	// restore without them: the journal starts at the restart.
+	Breaks        []BreakSnapshot    `json:",omitempty"`
+	LinkedChanges []inventory.Change `json:",omitempty"`
+	Transitions   []Transition       `json:",omitempty"`
+	ErrorKey      string             `json:",omitempty"`
+	Level         string             `json:",omitempty"`
+	// Widest is the journal's widest radius (radius.go).
+	Widest Radius `json:",omitzero"`
+	// MovedInto and MovedFrom are Incident.Moved; older records restore
+	// without links.
+	MovedInto string   `json:",omitempty"`
+	MovedFrom []string `json:",omitempty"`
 }
 
 // Export returns every incident as a record, for persistence.
@@ -180,7 +205,13 @@ func (m *Manager) Export() []Record {
 			FormerRoot: p.formerRoot, RerootedAt: p.rerootedAt,
 			RejectionSeenAt: p.rejectionAt, Merged: p.Merged,
 			Facts: p.Facts, Headline: p.Headline, DocsLink: p.DocsLink,
-			Steps: p.Steps,
+			Steps: p.Steps, Reasons: savedReasons(&p),
+			Members: savedMembers(&p), Breaks: p.Journal.Breaks,
+			LinkedChanges: p.Journal.Changes,
+			Transitions:   p.Journal.Transitions,
+			ErrorKey:      p.Journal.ErrorKey, Level: p.Journal.Level,
+			Widest:    p.Journal.Widest,
+			MovedInto: p.Moved.Into, MovedFrom: p.Moved.From,
 		})
 	}
 	return out
@@ -222,8 +253,10 @@ func (m *Manager) Restore(records []Record, graceUntil time.Time) {
 	m.indexResolvedRestored()
 }
 
-// restoreSets rebuilds the failure modes and the root's own reasons.
+// restoreSets rebuilds the failure modes, the root's own reasons and
+// the moved links.
 func restoreSets(p *Incident, r Record) {
+	p.Moved = Moved{Into: r.MovedInto, From: r.MovedFrom}
 	for _, mode := range r.Modes {
 		if p.modes == nil {
 			p.modes = map[detection.Mode]struct{}{}
@@ -294,7 +327,8 @@ func restored(r Record) *Incident {
 		},
 	}
 	restoreSets(p, r)
-	p.restoredTier = r.Tier
+	p.awaited = awaitedReasons(r)
+	p.formerMembers = r.Members
 	if !r.PagedKnown && wasAnnounced(p) {
 		p.Delivery.MarkPaged()
 	}
@@ -308,5 +342,17 @@ func restored(r Record) *Incident {
 	if p.Scope == ScopeUnknown && wasAnnounced(p) {
 		p.Scope = ScopeIn
 	}
+	restoreTiers(p, r)
+	restoreJournal(p, r)
 	return p
+}
+
+// restoreTiers keeps the saved tier as the one of the record and, for an
+// announced incident, as the one people last heard, so a rise after the
+// restart is still told as one (TierRaised).
+func restoreTiers(p *Incident, r Record) {
+	p.restoredTier = r.Tier
+	if r.heard() && wasAnnounced(p) {
+		p.Delivery.sentTier, p.Delivery.sentKnown = r.Tier, true
+	}
 }

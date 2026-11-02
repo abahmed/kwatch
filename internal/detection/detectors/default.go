@@ -173,16 +173,15 @@ func (r restricted) Detect(
 ) []detection.Finding {
 	found := r.Detector.Detect(ctx, e)
 	kept := found[:0:0]
+	var withheld []detection.Finding
 	for _, f := range found {
 		if r.entitled.Has(r.governs(f.Reason)) {
 			kept = append(kept, f)
 			continue
 		}
-		if category, ok := withheldCategory(f.Reason); ok {
-			r.withheld.Record(ctx.Now, category,
-				e.ID.String()+"\x00"+f.Reason)
-		}
+		withheld = append(withheld, f)
 	}
+	r.recordWithheld(ctx, e, withheld, kept)
 	return kept
 }
 

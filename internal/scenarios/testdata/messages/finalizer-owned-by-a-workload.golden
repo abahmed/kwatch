@@ -4,4 +4,4 @@
 | 🟡 **kwatch digest** · prod-eu-1 — 1 problem
 |
 | **Problems**
-| - Four objects in **arc-system** have been stuck deleting since Dec 3, 2025: their finalizer actions.github.com/cleanup-protection — never removed; the controller that handles it, deployment tools/gha-finalizer-reaper, is scaled to 0
+| - Four objects in **arc-system** have been stuck deleting since Dec 3, 2025: their finalizer actions.github.com/cleanup-protection is never removed; the controller that handles it, deployment tools/gha-finalizer-reaper, is scaled to 0

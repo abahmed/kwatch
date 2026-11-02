@@ -71,6 +71,11 @@ func (Lease) Detect(
 		ctx.RecheckAfter(stale - age)
 		return nil
 	}
+	if leaseUnread(ctx, e) {
+		ctx.Undecided()
+		ctx.RecheckAfter(kube.LeaseScanPeriod)
+		return nil
+	}
 	pod, state, ok := holderPod(ctx.Model, e.ID.Namespace, holder)
 	if !ok || (state == "" && !renews) {
 		return nil
@@ -88,6 +93,38 @@ func (Lease) Detect(
 		Since: renewed.Add(stale), Summary: summary,
 		Evidence: []detection.Evidence{{Label: "holder", Value: holder}},
 	}}
+}
+
+// leaseUnreadAfter is how old the last scan that read a Lease may be
+// before its renew time says nothing: a scan that failed (throttled, timed
+// out) leaves the old renew time in the model, and every holder would look
+// stuck at once.
+const leaseUnreadAfter = 2 * kube.LeaseScanPeriod
+
+// leaseUnread reports whether the Lease was not read recently enough to
+// judge, or the API server does not answer. The detector then neither
+// raises nor clears (Undecided).
+func leaseUnread(ctx detection.Context, e inventory.Entity) bool {
+	if apiServerDown(ctx.Model) {
+		return true
+	}
+	renewed, ok := e.Attribute(kube.AttrLeaseRenewed)
+	return ok && !renewed.Updated.IsZero() &&
+		ctx.Now.Sub(renewed.Updated) > leaseUnreadAfter
+}
+
+// apiServerDown reports an API server whose last probe failed.
+func apiServerDown(model inventory.Reader) bool {
+	api, ok := model.Entity(kube.APIServer)
+	if !ok {
+		return false
+	}
+	healthy, known := api.Attribute(kube.AttrHealthy)
+	if !known {
+		return false
+	}
+	up, _ := healthy.Value.AsBool()
+	return !up
 }
 
 // leaseRenews reports whether kwatch saw holder renew its Lease in a

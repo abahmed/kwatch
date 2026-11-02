@@ -13,7 +13,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
-	"github.com/abahmed/kwatch/internal/pipeline"
+	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/version"
 )
 
@@ -88,27 +88,13 @@ type startupManager struct {
 	// gapSent makes the gap message one-shot: a restarted pipeline
 	// reports the gap again.
 	gapSent atomic.Bool
-}
-
-// gap is the unmonitored time before this start, with the sender of
-// the gap message; the zero gap without one.
-func (s *startupManager) gap() gapNotice {
-	if s.downtime <= 0 {
-		return gapNotice{}
-	}
-	return gapNotice{
-		gap: pipeline.Gap{
-			Start: s.gapEnd.Add(-s.downtime), End: s.gapEnd,
-		},
-		message: s.GapMessage,
-	}
-}
-
-// gapNotice is what the pipeline needs to report a gap: the gap and
-// the startup message that wraps the report.
-type gapNotice struct {
-	gap     pipeline.Gap
-	message func(report string) (string, bool)
+	// lastGap is the time since the last liveness stamp, however
+	// short; zero on a first run.
+	lastGap time.Duration
+	// lastStop is how the previous session ended and restarts the
+	// recent starts (restart_history.go); both are set by Start.
+	lastStop *health.SelfStop
+	restarts []health.SelfStop
 }
 
 // startupResult is what application composition needs from the startup
@@ -267,6 +253,7 @@ func (s *startupManager) loadRuntimeSession(ctx context.Context) error {
 			)
 		}
 	}
+	s.recordRestart(ctx, previous)
 	s.sessionMu.Lock()
 	defer s.sessionMu.Unlock()
 	s.session = runtimeSession{
@@ -325,6 +312,7 @@ func (s *startupManager) measureDowntime(
 	}
 	s.gapEnd = s.now()
 	gap := s.gapEnd.Sub(last)
+	s.lastGap = max(gap, 0)
 	if gap < minReportableDowntime {
 		return 0, nil
 	}

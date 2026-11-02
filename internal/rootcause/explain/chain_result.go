@@ -37,7 +37,7 @@ func (cx *chainCtx) result(
 	}
 	hops[0].Link = ""
 	sort.SliceStable(beyond, func(i, j int) bool {
-		return beyond[i].Entity.String() < beyond[j].Entity.String()
+		return inventory.CompareIDs(beyond[i].Entity, beyond[j].Entity) < 0
 	})
 	return chainResult{hops: hops, beyond: beyond}
 }
@@ -49,7 +49,7 @@ func (cx *chainCtx) earlier(a, b inventory.EntityID) bool {
 	if !ta.Equal(tb) {
 		return ta.Before(tb)
 	}
-	return a.String() < b.String()
+	return inventory.CompareIDs(a, b) < 0
 }
 
 // hop builds one hop for an entity.

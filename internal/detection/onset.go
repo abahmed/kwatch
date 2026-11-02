@@ -1,6 +1,7 @@
 package detection
 
 import (
+	"slices"
 	"sync"
 	"time"
 
@@ -19,34 +20,45 @@ import (
 // are forgotten too.
 type onsets struct {
 	mu       sync.Mutex
-	byEntity map[inventory.EntityID]map[string]time.Time
+	byEntity map[inventory.EntityID]map[string]onsetEntry
+}
+
+// onsetEntry is one remembered state and the detector that asked for it
+// last, so an evaluation that could not run that detector keeps only its
+// states.
+type onsetEntry struct {
+	at    time.Time
+	owner string
 }
 
 func newOnsets() *onsets {
-	return &onsets{byEntity: map[inventory.EntityID]map[string]time.Time{}}
+	return &onsets{byEntity: map[inventory.EntityID]map[string]onsetEntry{}}
 }
 
 // begin starts one evaluation of id: it returns the states known so far.
 func (o *onsets) begin(id inventory.EntityID) *onsetScope {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	return &onsetScope{known: o.byEntity[id], kept: map[string]time.Time{}}
+	return &onsetScope{known: o.byEntity[id], kept: map[string]onsetEntry{}}
 }
 
-// finish keeps only the states the evaluation asked for. After an
-// incomplete evaluation (a detector panicked) the states known before
-// stay too: the detector that failed could not ask for its own, and
-// forgetting them would restart its waiting period.
+// finish keeps only the states the evaluation asked for. The states of a
+// detector that could not run fully (it panicked, needed a kind not
+// synced or found a source stale) stay too: it could not ask for them,
+// and forgetting them would restart its waiting period. Every other
+// detector's unasked states are forgotten as usual. An evaluation that
+// did not finish (done false) keeps every state.
 func (o *onsets) finish(
-	id inventory.EntityID, scope *onsetScope, incomplete bool,
+	id inventory.EntityID, scope *onsetScope, unsure []string, done bool,
 ) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	if incomplete {
-		for key, at := range scope.known {
-			if _, asked := scope.kept[key]; !asked {
-				scope.kept[key] = at
-			}
+	for key, entry := range scope.known {
+		if _, asked := scope.kept[key]; asked {
+			continue
+		}
+		if !done || slices.Contains(unsure, entry.owner) {
+			scope.kept[key] = entry
 		}
 	}
 	if len(scope.kept) == 0 {
@@ -56,10 +68,23 @@ func (o *onsets) finish(
 	o.byEntity[id] = scope.kept
 }
 
-// onsetScope is the onset state of one evaluation of one entity.
+// onsetScope is the onset state of one evaluation of one entity. detector
+// names the detector running now, the owner of the states it asks for.
 type onsetScope struct {
-	known map[string]time.Time
-	kept  map[string]time.Time
+	known    map[string]onsetEntry
+	kept     map[string]onsetEntry
+	detector string
+}
+
+// running names the detector whose states the next asks belong to.
+func (s *onsetScope) running(detector string) {
+	if s != nil {
+		s.detector = detector
+	}
+}
+
+func (s *onsetScope) ask(key string, at time.Time) {
+	s.kept[key] = onsetEntry{at: at, owner: s.detector}
 }
 
 // Onset returns when the bad state named key of the evaluated entity
@@ -75,11 +100,11 @@ func (c Context) Onset(key string, firstSeen time.Time) time.Time {
 	if c.onsets == nil {
 		return firstSeen
 	}
-	at, ok := c.onsets.known[key]
-	if !ok {
-		at = firstSeen
+	at := firstSeen
+	if entry, ok := c.onsets.known[key]; ok {
+		at = entry.at
 	}
-	c.onsets.kept[key] = at
+	c.onsets.ask(key, at)
 	return at
 }
 
@@ -95,9 +120,9 @@ func (c Context) Track(
 	if c.onsets == nil {
 		return time.Time{}, false
 	}
-	previous, found = c.onsets.known[key]
-	c.onsets.kept[key] = value
-	return previous, found
+	entry, found := c.onsets.known[key]
+	c.onsets.ask(key, value)
+	return entry.at, found
 }
 
 // Ongoing reports whether the previous evaluation of the entity asked

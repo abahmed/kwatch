@@ -131,6 +131,8 @@ networkPolicy:
 # kill the Pod. Live heap is about 26 KB per pod: 140 MiB at 5,000 pods and
 # 520 MiB at 20,000. The default 512Mi suits up to about 8,000 pods; use
 # 768Mi at 10,000 pods and 1Gi at 20,000 (raise the request with the limit).
+# The request stays 128Mi so upgrades with an older 128Mi limit still work;
+# set it to 256Mi or more on large clusters so the node keeps room for kwatch.
 # See docs/production-operations.md, section Memory.
 resources:
   limits:
@@ -207,7 +209,9 @@ affinity: {}
 # --set 'podAnnotations.cluster-autoscaler\.kubernetes\.io/safe-to-evict=null')
 # on a cluster where node scale-down matters more than an uninterrupted pod.
 # To ask Karpenter to leave the pod alone, set
-# karpenter.sh/do-not-disrupt: "true" here. To limit voluntary disruption
+# karpenter.sh/do-not-disrupt: "true" here (on the command line use
+# --set-string 'podAnnotations.karpenter\.sh/do-not-disrupt=true', since
+# --set turns true into a boolean, which Kubernetes rejects). To limit voluntary disruption
 # in general, add your own PodDisruptionBudget: the chart ships none, since
 # minAvailable: 1 on a one-pod Deployment would block every drain of its
 # node, while maxUnavailable: 1 allows one eviction at a time.
@@ -234,13 +238,15 @@ sacAnnotations: {}
 podLabels: {}
 
 # kwatch configuration. kwatch watches every supported resource; use
-# namespaces, reasons, namespaceSelector and silences to narrow what is
-# delivered. The chart installs the KwatchConfig CRD and enables live
-# configuration overlay by default.
+# namespaces (include and exclude), silences and the ignore filters
+# (ignorePodNames, ignoreContainerNames and the like) to narrow what is
+# delivered. reasons and namespaceSelector narrow it further in Pro. The
+# chart installs the KwatchConfig CRD and enables live configuration
+# overlay by default.
 #
 # config.healthCheck.port sets the container port and the probe port. The
 # health server cannot be disabled: the probes need it.
-# config.healthCheck.statusEndpoint: true serves the read-only /status view
+# config.healthCheck.statusEndpoint (Pro): true serves the read-only /status view
 # (open incidents with object names, no authentication) on that port; it is
 # off by default. Reach it with kubectl port-forward, never expose the port.
 #

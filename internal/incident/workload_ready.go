@@ -24,6 +24,19 @@ func (r Readiness) Short() bool {
 	return r.Desired > 0 && r.Ready < r.Desired
 }
 
+// IsApplicationKind reports the kinds that run an application's own
+// code: a pod, a container, or a workload that owns pods. Proof about
+// one of their runs speaks of the application, not of the
+// infrastructure under it.
+func IsApplicationKind(kind inventory.Kind) bool {
+	switch kind {
+	case kube.KindPod, kube.KindContainer, kube.KindReplicaSet,
+		kube.KindJob, kube.KindCronJob:
+		return true
+	}
+	return IsWorkload(kind)
+}
+
 // IsWorkload reports the kinds that have desired and ready replicas.
 func IsWorkload(kind inventory.Kind) bool {
 	return kind == kube.KindDeployment || kind == kube.KindStatefulSet ||
@@ -129,7 +142,7 @@ func (m *Manager) workloadBroken(p *Incident) bool {
 		return false
 	}
 	// A Service is as broken as the workloads behind it.
-	for _, w := range workloadsOf(m.model, workloadFor(m.model, p.Root)) {
+	for _, w := range workloadsBehind(m.model, workloadFor(m.model, p.Root)) {
 		if r, ok := ReadinessOf(m.model, w); ok && r.Short() && r.Failing {
 			return true
 		}
@@ -137,15 +150,26 @@ func (m *Manager) workloadBroken(p *Incident) bool {
 	return false
 }
 
+// StillCrashingNote ends the reason of a resolve at the StillBrokenMax
+// cap that held only because a container kept crashing, the workload
+// being at its replicas. Without it the cap held on a workload short of
+// replicas. Messages word their lead from it.
+const StillCrashingNote = "; container still crashing"
+
 // resolveReason is why a recovering or flapping incident ends now. It
 // says what held, unless the workload is still broken: the cap ended the
-// hold and not a recovery, so the reason must not claim health.
+// hold and not a recovery, so the reason must not claim health. It
+// carries which condition held at the cap.
 func (m *Manager) resolveReason(
 	p *Incident, now time.Time, healthy Reason,
 ) Reason {
-	if m.workloadBroken(p) || m.crashing(p, now) {
-		return Reason(StoppedTrackingPrefix + format.Duration(StillBrokenMax) +
-			"; coverage check continues")
+	stopped := StoppedTrackingPrefix + format.Duration(StillBrokenMax) +
+		"; coverage check continues"
+	switch {
+	case m.workloadBroken(p):
+		return Reason(stopped)
+	case m.crashing(p, now):
+		return Reason(stopped + StillCrashingNote)
 	}
 	return healthy
 }

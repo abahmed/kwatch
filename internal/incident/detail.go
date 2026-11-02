@@ -1,6 +1,10 @@
 package incident
 
-import "unicode/utf8"
+import (
+	"unicode/utf8"
+
+	"github.com/abahmed/kwatch/internal/inventory/kube"
+)
 
 // maxFacts bounds how many captured lines an incident keeps.
 const maxFacts = 25
@@ -36,7 +40,7 @@ const maxSteps = 8
 
 // StoreDetail records d on the incident. Empty headline or link keep the
 // earlier value. Facts are appended once each, cut on a rune boundary and
-// bounded to the most recent maxFacts. No-op for an unknown incident.
+// bounded to maxFacts (see mergeFacts). No-op for an unknown incident.
 func (m *Manager) StoreDetail(id string, d Detail) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -71,8 +75,9 @@ func boundSteps(steps []FixStep) []FixStep {
 	return out
 }
 
-// mergeFacts appends the new lines that are not already held, keeping
-// the most recent maxFacts.
+// mergeFacts appends the new lines that are not already held, bounded
+// to maxFacts: the start of the trouble and the most recent lines (see
+// kube.CapturedLines).
 func mergeFacts(held, fresh []string) []string {
 	seen := make(map[string]bool, len(held)+len(fresh))
 	for _, f := range held {
@@ -86,10 +91,7 @@ func mergeFacts(held, fresh []string) []string {
 		seen[f] = true
 		held = append(held, f)
 	}
-	if len(held) > maxFacts {
-		held = append([]string(nil), held[len(held)-maxFacts:]...)
-	}
-	return held
+	return append([]string(nil), kube.CapturedLines(held, maxFacts)...)
 }
 
 // truncateRunes cuts s to at most limit bytes without splitting a rune.

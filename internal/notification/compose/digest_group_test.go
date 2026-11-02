@@ -2,9 +2,11 @@ package compose
 
 import (
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
@@ -69,9 +71,12 @@ func TestDigestGroupsOngoingAndUnchangedLeftovers(t *testing.T) {
 		extrasNow)
 
 	text := msg.Render(notification.SlackDialect())
-	assert.Contains(t, text, "• 3 expired TLS Secrets that no pod or "+
-		"Ingress references: ns0/tls, old1/tls, old2/tls")
-	assert.Contains(t, text, "• 2 expired TLS Secrets that no pod or "+
+	_, ongoing, ok := strings.Cut(text, "*Ongoing*")
+	require.True(t, ok, text)
+	assert.NotContains(t, ongoing, "ns0", "a new one stays under Problems")
+	assert.Contains(t, ongoing, "• 2 expired TLS Secrets that no pod or "+
+		"Ingress references: old1/tls, old2/tls")
+	assert.Contains(t, ongoing, "• 2 expired TLS Secrets that no pod or "+
 		"Ingress references, unchanged: old3/tls, old4/tls")
 }
 

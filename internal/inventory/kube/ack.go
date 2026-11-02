@@ -44,6 +44,7 @@ func annotateAck(obj metav1.Object, desc *Description) {
 		return
 	}
 	setAttribute(desc, AttrAck, inventory.Text(ackNote(note)))
+	setAckBy(obj, desc)
 }
 
 // ackNote makes an annotation value safe to quote in a message.

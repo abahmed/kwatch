@@ -48,7 +48,7 @@ type announcer struct {
 	collect *announce.Collector
 	// joint holds, while one tick is delivered, the resolves that the
 	// resolve of the incident they are keyed by also tells people.
-	joint   map[string][]incident.Decision
+	joint   map[string]jointGroup
 	storage *persistence
 	stats   *workerStats
 }
@@ -76,9 +76,12 @@ func newAnnouncer(
 		Incidents: deps.Incidents, Messages: deps.Writer,
 		History: a.history, Scope: deps.InScope, Sink: deps.Sink,
 		Write: a.write, WithChanges: a.withChanges,
-		SaveStartup:  storage.saveStartup,
-		OwnNamespace: os.Getenv("POD_NAMESPACE"),
-		Withheld:     deps.Withheld.Counts,
+		KindNames:     a.kindNames,
+		SaveStartup:   storage.saveStartup,
+		OwnNamespace:  os.Getenv("POD_NAMESPACE"),
+		Withheld:      deps.Withheld.Counts,
+		WithheldToday: deps.Withheld.Today,
+		Restart:       deps.Restart,
 	})
 	return a
 }
@@ -115,6 +118,8 @@ func (a *announcer) announce(
 	contain("announce", "close", func() { closed = c.CloseListings(ctx) })
 	contain("announce", "restored",
 		func() { listed = c.ListRestored(ctx, now) })
+	contain("announce", "pro checks",
+		func() { c.SendDailyProChecks(ctx, now) })
 	return summarised || digested || grouped || rolled || closed ||
 		listed || expired
 }

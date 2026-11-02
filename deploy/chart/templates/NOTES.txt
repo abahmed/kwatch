@@ -67,3 +67,25 @@ Open them with networkPolicy.extraEgressPorts or networkPolicy.egress, or set
 networkPolicy.allowProbeEgressAll=true. Alert providers or heartbeat URLs on a
 port other than 443 need the same.
 {{- end }}
+{{- $dashN := default dict .Values.dashboard }}
+{{- if $dashN.enabled }}
+{{- $dp := $dashN.port | default 8061 }}
+
+DASHBOARD (Pro): reach it with a port-forward, then open the URL:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "kwatch.fullname" . }}-dashboard {{ $dp }}:{{ $dp }}
+  {{ if (default dict $dashN.tls).secretName }}https{{ else }}http{{ end }}://localhost:{{ $dp }}
+{{- if $dashN.existingSecret }}
+The sign-in password (key password) and the API bearer token (key token) are
+in the Secret {{ $dashN.existingSecret }}.
+{{- else }}
+The sign-in password (key password) and the API bearer token (key token) are
+in the Secret {{ .Release.Name }}-dashboard:
+  kubectl -n {{ .Release.Namespace }} get secret {{ .Release.Name }}-dashboard -o jsonpath='{.data.password}' | base64 -d
+{{- end }}
+{{- end }}
+
+RECOMMENDED (Pro): configure the heartbeat (config.heartbeatMonitor, a dead
+man's switch). kwatch runs as a single pod, so when kwatch itself or the
+Kubernetes API server is down nothing inside the cluster can alert you; the heartbeat,
+checked from outside, is the only alarm for that. The URL is a credential: put
+it in the configSecretName Secret.

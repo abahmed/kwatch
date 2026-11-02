@@ -133,6 +133,12 @@ type Source struct {
 	lifecycle atomic.Pointer[context.Context]
 	// syncExpired is set once the optional sync wait has elapsed.
 	syncExpired atomic.Bool
+	// syncedAt is when WaitForSync first saw every kind settle, in Unix
+	// nanoseconds; zero before (see SyncedAt).
+	syncedAt atomic.Int64
+	// listed counts the objects of initial lists handed to the model
+	// (see SyncProgress).
+	listed atomic.Int64
 }
 
 // NewSource registers an informer and handler for every schema.
@@ -161,7 +167,7 @@ func NewSource(cfg SourceConfig) (*Source, error) {
 		// A panicking translator must not stop the informer from
 		// delivering later updates; SafeEventHandler counts and logs it.
 		handler := kubeclient.SafeEventHandler("inventory", r.resource.Name,
-			translatorHandler(s.context,
+			translatorHandler(s.context, &s.listed,
 				NewTranslator(withGenericAttributes(r.schema, r.mode())).
 					WithMaintenance(cfg.Maintenance),
 				cfg.Submit, cfg.Now))
@@ -319,7 +325,7 @@ func (s *Source) Disabled() []SourceStatus {
 // translatorHandler submits the observations a translator produces for informer
 // notifications, with the context lifecycle returns at submit time.
 func translatorHandler(
-	lifecycle func() context.Context,
+	lifecycle func() context.Context, listed *atomic.Int64,
 	t *Translator, submit Submit, now func() time.Time,
 ) cache.ResourceEventHandler {
 	send := func(observations []inventory.Observation) {
@@ -330,6 +336,9 @@ func translatorHandler(
 	return cache.ResourceEventHandlerDetailedFuncs{
 		AddFunc: func(obj any, initialList bool) {
 			send(t.Added(obj, initialList, now()))
+			if initialList {
+				listed.Add(1)
+			}
 		},
 		UpdateFunc: func(old, new any) {
 			send(t.Updated(old, new, now()))

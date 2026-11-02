@@ -34,7 +34,7 @@ var assetTypes = map[string]string{
 }
 
 // shellRoutes are the UI's own paths; each serves the HTML shell.
-var shellRoutes = []string{"/", "/signin", "/resolved", "/status"}
+var shellRoutes = []string{"/", "/signin", "/issues"}
 
 // asset is one file ready to serve.
 type asset struct {
@@ -137,6 +137,9 @@ func (a *assets) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
+	if redirectOld(w, r) {
+		return
+	}
 	if isShellRoute(r.URL.Path) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(a.shell)
@@ -144,12 +147,40 @@ func (a *assets) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	file, ok := a.byPath[r.URL.Path]
 	if !ok {
-		writeError(w, http.StatusNotFound, "not found")
+		notFound(w, r)
 		return
 	}
 	w.Header().Set("Content-Type", file.contentType)
 	w.Header().Set("Cache-Control", assetCache)
 	_, _ = w.Write(file.body)
+}
+
+// notFoundPage is what a browser shows for an address the dashboard
+// does not have: plain HTML, no script or style, and a way back.
+const notFoundPage = `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Not found - kwatch</title></head>
+<body>
+<h1>Page not found</h1>
+<p>The dashboard has no page at this address.</p>
+<p><a href="/">Go to the Overview</a></p>
+</body>
+</html>
+`
+
+// notFound answers 404: a small HTML page for an address a person
+// typed or followed, and the JSON error for a missing asset, which a
+// page asked for, not a person.
+func notFound(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/assets/") {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusNotFound)
+	if r.Method != http.MethodHead {
+		_, _ = w.Write([]byte(notFoundPage))
+	}
 }
 
 func isShellRoute(p string) bool {

@@ -36,11 +36,11 @@ func TestListIsNewestFirstAndFiltersByStateAndNamespace(t *testing.T) {
 		testIncident("b", "web", time.Minute), done)
 
 	cases := map[string]string{
-		"/api/incidents":                            "c,b,a",
-		"/api/incidents?state=active":               "b,a",
-		"/api/incidents?state=resolved":             "c",
-		"/api/incidents?namespace=shop":             "c,a",
-		"/api/incidents?state=active&namespace=web": "b",
+		"/api/incidents":                           "b,a",
+		"/api/incidents?status=all":                "c,b,a",
+		"/api/incidents?status=resolved":           "c",
+		"/api/incidents?status=all&namespace=shop": "c,a",
+		"/api/incidents?namespace=web":             "b",
 	}
 	for path, want := range cases {
 		w := get(t, s, path)
@@ -53,17 +53,18 @@ func TestListIsNewestFirstAndFiltersByStateAndNamespace(t *testing.T) {
 	}
 }
 
-func TestListRejectsAnUnknownStateAndABadLimit(t *testing.T) {
+func TestListRejectsAnUnknownStateAndABadPage(t *testing.T) {
 	s := newTestServer()
 	for _, path := range []string{"/api/incidents?state=bogus",
-		"/api/incidents?limit=0", "/api/incidents?limit=x"} {
+		"/api/incidents?pageSize=0", "/api/incidents?pageSize=x",
+		"/api/incidents?pageSize=10", "/api/incidents?page=0"} {
 		if w := get(t, s, path); w.Code != http.StatusBadRequest {
 			t.Errorf("%s: status %d, want 400", path, w.Code)
 		}
 	}
 }
 
-func TestListLimitKeepsTheNewestAndSaysItTruncated(t *testing.T) {
+func TestListPageSizeKeepsTheNewestAndCountsThePages(t *testing.T) {
 	items := make([]incident.Incident, 0, 120)
 	for i := range 120 {
 		items = append(items, testIncident("i"+strconv.Itoa(i), "ns",
@@ -72,36 +73,18 @@ func TestListLimitKeepsTheNewestAndSaysItTruncated(t *testing.T) {
 	s := newTestServer(items...)
 
 	def := decodeList(t, get(t, s, "/api/incidents").Body.String())
-	two := decodeList(t, get(t, s, "/api/incidents?limit=2").Body.String())
+	small := decodeList(t, get(t, s,
+		"/api/incidents?pageSize=25").Body.String())
 
-	if len(def.Incidents) != defaultListLimit || !def.Truncated ||
-		def.Total != 120 {
-		t.Errorf("default: %d items, truncated=%v, total=%d",
-			len(def.Incidents), def.Truncated, def.Total)
+	if len(def.Incidents) != defaultPageSize || def.Total != 120 ||
+		def.Page != 1 || def.TotalPages != 3 {
+		t.Errorf("default: %d items, page %d of %d, total %d",
+			len(def.Incidents), def.Page, def.TotalPages, def.Total)
 	}
-	if listIDs(two) != "i119,i118" || !two.Truncated {
-		t.Errorf("limit=2: %s truncated=%v", listIDs(two), two.Truncated)
-	}
-}
-
-func TestListOverTheSizeBoundIsCutNotRefused(t *testing.T) {
-	items := make([]incident.Incident, 0, maxListLimit)
-	for i := range maxListLimit {
-		p := testIncident("i"+strconv.Itoa(i), "ns", time.Duration(i))
-		p.Headline = strings.Repeat("long title ", 30)
-		items = append(items, p)
-	}
-	s := newTestServer(items...)
-
-	w := get(t, s, "/api/incidents?limit=9999")
-
-	if w.Code != http.StatusOK || w.Body.Len() > maxResponseBytes {
-		t.Fatalf("status %d, %d bytes", w.Code, w.Body.Len())
-	}
-	got := decodeList(t, w.Body.String())
-	if !got.Truncated || len(got.Incidents) == 0 ||
-		got.Incidents[0].ID != "i499" {
-		t.Errorf("truncated=%v items=%d", got.Truncated, len(got.Incidents))
+	if !strings.HasPrefix(listIDs(small), "i119,i118,") ||
+		small.PageSize != 25 || small.TotalPages != 5 {
+		t.Errorf("pageSize=25: %s, %d pages", listIDs(small)[:20],
+			small.TotalPages)
 	}
 }
 

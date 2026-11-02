@@ -226,6 +226,7 @@ func normalizeReason(reason string) string {
 		"source_not_configured", "source_configuration_failed",
 		"optional_api_unavailable", "discovery_failed", "component_stalled",
 		"persistence_restore_failed", "persistence_write_failed",
+		"trail_restore_failed",
 		"provider_shutdown_timeout", "component_failed", "component_stopped",
 		"timeout", "canceled", "rate_limited", "shutdown",
 		"leadership_lost", "cache_sync_pending", "watcher_failed",

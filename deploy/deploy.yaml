@@ -1,3 +1,7 @@
+# Plain manifest: the core install only. The read-only dashboard (Service,
+# KWATCH_DASHBOARD_* settings and Secret) and the live KwatchConfig overlay
+# (CRD, config-overlay Role, KWATCH_CRD_ENABLED) need the Helm chart in
+# deploy/chart. Hand-edit this file only if you accept those gaps.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -335,6 +339,13 @@ spec:
               resourceFieldRef:
                 resource: limits.memory
                 divisor: "1"
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: health
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 30
         livenessProbe:
           httpGet:
             path: /healthz

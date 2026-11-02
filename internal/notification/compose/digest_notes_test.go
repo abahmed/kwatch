@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -26,7 +27,7 @@ func TestDigestListsAnOngoingProblemWithItsAge(t *testing.T) {
 	msg := Writer{}.DigestWith(nil, nil, nil,
 		DigestExtras{Ongoing: []Ongoing{lbOngoing()}}, extrasNow)
 
-	assert.Equal(t, "🟡 *kwatch digest* — 1 ongoing\n\n*Problems*\n• "+
+	assert.Equal(t, "🟡 *kwatch digest* — 1 ongoing\n\n*Ongoing*\n• "+
 		"Service *internal-ingress-nginx-controller-internal* "+
 		"(*kube-system*) — still failing since 17:14 UTC",
 		msg.Render(notification.SlackDialect()))
@@ -135,6 +136,7 @@ func TestChangedAndUnchangedOngoingProblemsShareADigest(t *testing.T) {
 		Ongoing: []Ongoing{changed}, Unchanged: []Ongoing{other}},
 		extrasNow)
 
-	assert.Contains(t, msg.Plain(), changed.Title)
+	assert.Contains(t, msg.Plain(), "- "+strings.TrimSuffix(changed.Title,
+		".")+"\n", "a digest bullet has no closing period")
 	assert.Contains(t, msg.Plain(), "- one more still failing, unchanged (db)")
 }

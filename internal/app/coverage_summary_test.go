@@ -40,8 +40,9 @@ func TestBuildCoverageMergesTypedAndDynamic(t *testing.T) {
 	require.Equal(t, 5, got.Unavailable)
 	require.True(t, got.Complete)
 	require.Equal(t, []health.CoverageKind{
-		{Kind: "ingresses.networking.k8s.io", Reason: "sync_timeout"},
-		{Kind: "nodes", Reason: "api_unavailable"},
+		{Kind: "ingresses.networking.k8s.io",
+			Reason: "cache_sync_timeout"},
+		{Kind: "nodes", Reason: "cache_sync_failed"},
 		{Kind: "secrets", Reason: "permission_denied"},
 	}, got.UnavailableKinds)
 	require.Equal(t, 1, got.Watched["hashed"], "secrets is down")
@@ -108,4 +109,41 @@ func TestCoverageListsSecretsDisabledByConfig(t *testing.T) {
 	}}, coverage.got[0].UnavailableKinds)
 	require.Zero(t, coverage.got[0].Watched["hashed"]-1,
 		"only ConfigMaps are watched hashed")
+}
+
+// Every source code keeps its own name: a watch kwatch could not sync
+// is never reported as a kind the API does not serve.
+func TestCoverageReasonMapsEverySourceCode(t *testing.T) {
+	for _, code := range []string{
+		kube.ReasonPermissionDenied, kube.ReasonAPIUnavailable,
+		kube.ReasonSyncFailed, kube.ReasonSyncTimeout,
+		kube.ReasonSyncPending, kube.ReasonHandlerPanics,
+		kube.ReasonDisabledByConfig, kube.ReasonWatchBudget,
+		kube.ReasonObjectCap,
+	} {
+		require.Equal(t, code, coverageReason(code))
+	}
+	require.Equal(t, health.CoverageUnknown, coverageReason("raw: x"))
+}
+
+// Before a discovery ran there is nothing partial to report, as in
+// the dashboard's coverage.
+func TestBuildCoverageCompleteBeforeDiscoveryRan(t *testing.T) {
+	cases := []struct {
+		name   string
+		status kube.DynamicStatus
+		want   bool
+	}{
+		{"never ran", kube.DynamicStatus{}, true},
+		{"ran and complete",
+			kube.DynamicStatus{Ran: true, Complete: true}, true},
+		{"ran and partial", kube.DynamicStatus{Ran: true}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := buildCoverage(nil, c.status)
+			require.Equal(t, c.want, got.Complete)
+			require.Equal(t, c.status.Ran, got.Ran)
+		})
+	}
 }

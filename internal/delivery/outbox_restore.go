@@ -31,13 +31,19 @@ func (m *Manager) AttachOutbox(store OutboxStore) error {
 	box := newOutbox(store, m.nowTime)
 	m.mu.Lock()
 	box.sick = m.outboxSick
+	attached := m.outbox.Load() != nil
 	m.mu.Unlock()
+	if attached {
+		return errors.New("delivery outbox already attached")
+	}
 	jobs := box.adopt(records, m.nowTime())
+	trails, saved := loadTrail(store)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.outbox.Load() != nil {
 		return errors.New("delivery outbox already attached")
 	}
+	m.attachTrailLocked(trails, saved, box)
 	m.outbox.Store(box)
 	m.recordPendingLocked(box)
 	if m.state.accepting() {

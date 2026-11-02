@@ -38,6 +38,10 @@ type StartupState struct {
 	Rollups []Listing `json:",omitempty"`
 	// Digest is the part of the pending digest no incident record keeps.
 	Digest DigestState `json:",omitempty"`
+	// Restored remembers the last restored listing, so a restart soon
+	// after does not list the same incidents again (restart_note.go).
+	// Absent in files written before it.
+	Restored *RestoredMark `json:",omitempty"`
 }
 
 // listings returns the startup summary and every open roll-up.
@@ -54,6 +58,10 @@ func (s StartupState) Clone() StartupState {
 	s.Listing = s.Listing.clone()
 	s.Digest = s.Digest.clone()
 	s.Rollups = slices.Clone(s.Rollups)
+	if s.Restored != nil {
+		mark := s.Restored.clone()
+		s.Restored = &mark
+	}
 	for i := range s.Rollups {
 		s.Rollups[i] = s.Rollups[i].clone()
 	}
@@ -127,4 +135,23 @@ func (c *Collector) SpokeOnItsOwn(id string) bool {
 		}
 	}
 	return false
+}
+
+// ListedBy names the listing that announced incident id in chat: the
+// startup summary, the restored summary or a roll-up; empty when none
+// did. A resolve of such an incident that never spoke on its own has no
+// thread of its own to edit (a roll-up's thread aside).
+func (c *Collector) ListedBy(id string) string {
+	if slices.Contains(c.Startup.Summary.Incidents, id) {
+		return "startup summary"
+	}
+	for _, l := range c.Startup.Summary.Rollups {
+		if slices.Contains(l.Incidents, id) {
+			return "roll-up"
+		}
+	}
+	if c.restoredListed[id] {
+		return restoredSummary
+	}
+	return ""
 }

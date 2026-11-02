@@ -140,7 +140,10 @@
       "description": "State store volume",
       "properties": {
         "size": {
-          "type": "string",
+          "type": [
+            "string",
+            "number"
+          ],
           "default": "2Gi"
         },
         "storageClass": {
@@ -185,7 +188,10 @@
           "default": "ghcr.io/abahmed/kwatch"
         },
         "tag": {
-          "type": "string",
+          "type": [
+            "string",
+            "number"
+          ],
           "default": "",
           "description": "Overrides the image tag (defaults to .Chart.AppVersion)"
         },
@@ -552,11 +558,11 @@
             },
             "hideProHints": {
               "type": "boolean",
-              "description": "Remove the note that names what kwatch Pro adds from Community messages"
+              "description": "Remove every Pro hint from Community messages: the note that names what kwatch Pro adds, the teaser (\"Pro shows which one…\"), \"Pro shows how to fix it.\" and the Pro-checks notes; the \"Cause found: …\" sentence stays"
             },
             "communityProvider": {
               "type": "string",
-              "description": "Alert provider the Community edition keeps when several are configured; empty keeps the first by name"
+              "description": "Alert provider the Community edition keeps when several are configured; empty keeps a pager first, then chat and the rest, then email, with the name breaking a tie"
             },
             "logFormatter": {
               "type": "string",
@@ -778,6 +784,17 @@
         "clusterCheckins": {
           "type": "boolean",
           "description": "Deprecated and ignored: kwatch no longer sends cluster check-ins"
+        },
+        "investigation": {
+          "type": "object",
+          "description": "What Pro reads to gather evidence",
+          "properties": {
+            "logs": {
+              "type": "boolean",
+              "default": true,
+              "description": "Read container logs for evidence; false reads none"
+            }
+          }
         }
       },
       "additionalProperties": false

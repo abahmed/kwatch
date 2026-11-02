@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"k8s.io/klog/v2"
 )
 
 func TestOverlayNoticeTextIsFixedAndNamesWhatRuns(t *testing.T) {
@@ -44,4 +45,22 @@ func TestOverlayNoticeSaysNothingWhenTheOverlayApplied(t *testing.T) {
 	var log noticeLog
 	noticeOverlay(disk, overlayOutcome{}, log.send)
 	require.Empty(t, log.msgs)
+}
+
+// A failed clear of the notice record is logged, like a failed record.
+func TestOverlayNoticeLogsAFailedClear(t *testing.T) {
+	out := captureKlog(t)
+	state := openTestStore(t)
+	disk := diskState{store: state}
+	var log noticeLog
+	noticeOverlay(disk, overlayOutcome{invalid: true, rejected: "abc"},
+		log.send)
+	next, err := state.ClaimNew()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = next.Close() })
+
+	noticeOverlay(disk, overlayOutcome{}, log.send)
+	klog.Flush()
+
+	require.Contains(t, out.String(), "clear the KwatchConfig notice")
 }

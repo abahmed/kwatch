@@ -36,15 +36,16 @@ func (p *StatsPoller) podUsageObservations(
 }
 
 // containerUsage records one container's CPU and memory, if reported,
-// and notes the reading in the memory history.
+// and notes the readings in the usage history.
 func (p *StatsPoller) containerUsage(
 	node, ns, pod string, c statsContainer, now time.Time,
 ) (inventory.Observation, bool) {
 	attrs := map[string]inventory.Value{}
 	id := ContainerID(ns, pod, c.Name)
 	if cpu := c.CPU.UsageNanoCores; cpu != nil {
-		attrs[AttrCPUUsageMilli] = inventory.Number(
-			float64(*cpu) / 1e6)
+		milli := float64(*cpu) / 1e6
+		attrs[AttrCPUUsageMilli] = inventory.Number(milli)
+		p.memory.noteCPU(id, node, now, milli)
 	}
 	if memory := c.Memory.WorkingSetBytes; memory != nil {
 		attrs[AttrMemoryWorking] = inventory.Number(

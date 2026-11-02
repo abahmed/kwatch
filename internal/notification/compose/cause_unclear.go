@@ -14,7 +14,7 @@ import (
 // a cause, however hedged, is a cause.
 func unclearSentences(f caseFacts) []sentence {
 	p := f.p
-	if p.Cause != nil || !p.CauseUnclear ||
+	if p.Cause != nil || !p.CauseUnclear || toldCause(f) ||
 		rootFinding(p, f.members) == nil {
 		return nil
 	}
@@ -54,6 +54,10 @@ func checkedSentences(f caseFacts) []sentence {
 	}
 	if _, _, byNode := nodeKill(f.members); byNode {
 		// The node is named as the cause by the sentences that follow.
+		return recentChangeSentence(f)
+	}
+	if toldCause(f) {
+		// The caused-by line names a likely cause already.
 		return recentChangeSentence(f)
 	}
 	text := "Nothing outside it points to a cause."

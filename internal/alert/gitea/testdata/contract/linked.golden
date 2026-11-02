@@ -1,0 +1,16 @@
+--- request 1 of 2
+GET /repos/kwatch/kwatch/issues?q=kwatchkey3789c0f3c9b01dc5&state=open&type=issues
+Content-Type: application/json
+Authorization: token <redacted>
+
+(empty body)
+
+--- request 2 of 2
+POST /repos/kwatch/kwatch/issues
+Content-Type: application/json
+Authorization: token <redacted>
+
+{
+  "body": "🔴 payments in shop is crash-looping.\n\nCaused by: Node n1 is not ready.\n\nCause in dashboard: https://kwatch.example/issues/p-cause\n\nEarlier times: https://kwatch.example/issues?status=all&like=p-link\n\nOpen in dashboard: https://kwatch.example/issues/p-link\n\n```\npanic: out of memory\n```\n\nRef: kwatchkey3789c0f3c9b01dc5",
+  "title": "🔴 payments in shop is crash-looping."
+}

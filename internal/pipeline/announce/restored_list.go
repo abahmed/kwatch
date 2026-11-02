@@ -18,8 +18,10 @@ import (
 // back at the notify tier or higher does not wait for the rest: it is
 // listed one settle after the sources synced, with the lower-priority
 // ones that are back by then. Whatever comes back later is listed when the
-// grace is over, if it is not named already. It reports whether it sent a
-// message.
+// grace is over, if it is not named already. An incident a listing named
+// within RestoredRelist is not listed again: when nothing else is, one
+// short restart note says how many are still open (restart_note.go). It
+// reports whether it sent a message.
 func (c *Collector) ListRestored(ctx context.Context, now time.Time) bool {
 	s := &c.Startup
 	if s.WarmAt.IsZero() {
@@ -30,26 +32,7 @@ func (c *Collector) ListRestored(ctx context.Context, now time.Time) bool {
 		return false
 	}
 	s.earlyDone = true
-	var listed []incident.Decision
-	lower := 0
-	for _, p := range c.env.Incidents.RestoredFailing() {
-		switch {
-		case c.env.Scope != nil && !c.env.Scope(p):
-		case c.restoredListed[p.ID]:
-		case p.Tier < incident.Notify:
-			// The next digest lists it (see ongoing_compact.go).
-			lower++
-			c.markRestoredListed(p.ID)
-		case !final && !currentNews(p):
-			// Its tier may still fall when its findings settle: it
-			// waits for the end of the grace.
-		default:
-			listed = append(listed, incident.Decision{
-				Action: incident.Announce, Incident: p,
-				Reason: "restored"})
-			c.markRestoredListed(p.ID)
-		}
-	}
+	listed, repeated, lower := c.restoredNews(now, final)
 	listed = c.takeWarm(listed)
 	if final {
 		// Findings held by a wake-up or a fresh pod's grace come back
@@ -57,7 +40,43 @@ func (c *Collector) ListRestored(ctx context.Context, now time.Time) bool {
 		s.lateUntil = s.WarmAt.Add(kube.WakeMax)
 		s.WarmAt = time.Time{}
 	}
+	if len(listed) == 0 && len(repeated) > 0 {
+		return c.sendRestartNote(ctx, now, repeated)
+	}
 	return c.sendRestored(ctx, now, listed, lower)
+}
+
+// restoredNews sorts the restored incidents still failing: listed are
+// the ones to list now, repeated the ones a recent listing named (only
+// gathered when final), and lower counts the lower-priority ones the
+// digest lists.
+func (c *Collector) restoredNews(now time.Time, final bool) (
+	listed, repeated []incident.Decision, lower int,
+) {
+	for _, p := range c.env.Incidents.RestoredFailing() {
+		d := incident.Decision{Action: incident.Announce, Incident: p,
+			Reason: "restored"}
+		switch {
+		case c.env.Scope != nil && !c.env.Scope(p):
+		case c.restoredListed[p.ID]:
+		case p.Tier < incident.Notify:
+			// The next digest lists it (see ongoing_compact.go).
+			lower++
+			c.markRestoredListed(p.ID)
+		case c.recentlyListed(p.ID, now):
+			if final {
+				repeated = append(repeated, d)
+				c.markRestoredListed(p.ID)
+			}
+		case !final && !currentNews(p):
+			// Its tier may still fall when its findings settle: it
+			// waits for the end of the grace.
+		default:
+			listed = append(listed, d)
+			c.markRestoredListed(p.ID)
+		}
+	}
+	return listed, repeated, lower
 }
 
 // listLateRestored names the restored incidents whose findings came back
@@ -80,6 +99,7 @@ func (c *Collector) listLateRestored(
 	var listed []incident.Decision
 	for _, p := range c.env.Incidents.RestoredFailing() {
 		if c.restoredListed[p.ID] || !currentNews(p) ||
+			c.recentlyListed(p.ID, now) ||
 			(c.env.Scope != nil && !c.env.Scope(p)) {
 			continue
 		}
@@ -104,6 +124,7 @@ func (c *Collector) sendRestored(
 	klog.InfoS("pipeline: restored incidents still failing",
 		append(restoredTotals(listed), "lowerPriority", lower)...)
 	c.env.Sink(ctx, incident.Decision{Reason: "restored incidents"}, msg)
+	c.rememberListed(listed, now)
 	return true
 }
 

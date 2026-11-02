@@ -63,7 +63,8 @@ func TestCommunityContainerDropsOnlyReadinessProbes(t *testing.T) {
 	assert.Equal(t, []string{reasons.LivenessProbeFailed,
 		reasons.StartupProbeFailed, reasons.CrashLoopBackOff},
 		findingReasons(community.Detect(ctx, inventory.Entity{})))
-	assert.Equal(t, 1, withheld.Counts(movedAt)[feature.WithheldReadiness])
+	assert.Zero(t, withheld.Counts(movedAt)[feature.WithheldReadiness],
+		"a crash loop is alerted; its readiness is not counted")
 	assert.Len(t, pro.Detect(ctx, inventory.Entity{}), 4)
 }
 

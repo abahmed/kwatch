@@ -84,7 +84,7 @@ func (c *Collector) sendListing(
 	for _, d := range announcements {
 		if d.Incident.Tier == incident.Page && !(pageOnce && paged) &&
 			!c.pagedAlready(d) {
-			c.pageOnly(ctx, now, d)
+			c.pageOnly(ctx, now, d, "roll-up")
 			paged = true
 			continue
 		}

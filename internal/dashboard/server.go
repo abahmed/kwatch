@@ -14,6 +14,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/status"
 )
 
@@ -29,6 +30,10 @@ type statusSource func() status.Report
 
 // deliveryHealthSource returns per-channel delivery health.
 type deliveryHealthSource func() []ChannelHealth
+
+// deliveryTrailSource returns what became of an incident's messages,
+// oldest first.
+type deliveryTrailSource func(id string) []DeliveryAttempt
 
 // Scope is the namespace scope /api/status reports. An empty Watched
 // list means every namespace.
@@ -65,8 +70,11 @@ type Options struct {
 	TLSCertFile string
 	TLSKeyFile  string
 	Edition     string
-	Scope       Scope
-	Self        Self
+	// ChangeHistory shows what people changed around an incident on its
+	// page: the change analysis (analysis.changes) is Pro.
+	ChangeHistory bool
+	Scope         Scope
+	Self          Self
 }
 
 // sources holds what the running pipeline provides. The listener serves
@@ -76,6 +84,19 @@ type sources struct {
 	incidents atomic.Pointer[incidentReader]
 	status    atomic.Pointer[statusSource]
 	health    atomic.Pointer[deliveryHealthSource]
+	// model is the live inventory the incident page reads containers,
+	// usage and changes from; trail is the delivery trail.
+	model atomic.Pointer[inventory.HistoryReader]
+	trail atomic.Pointer[deliveryTrailSource]
+	// coverage is what kwatch watches (coverage.go).
+	coverage atomic.Pointer[coverageSource]
+	// usage is the kubelet usage history (detail_usage.go).
+	usage atomic.Pointer[usageSource]
+	// self, failed and delivery are kwatch's view of itself, its failed
+	// sends and what the pagers and channels hold (self_status.go).
+	self     atomic.Pointer[selfSource]
+	failed   atomic.Pointer[failedSource]
+	delivery atomic.Pointer[deliveryDetailSource]
 	// lastScan is the Unix nanosecond time of the engine's latest loop
 	// iteration; zero until the first.
 	lastScan atomic.Int64
@@ -90,6 +111,9 @@ type Server struct {
 	auth        *Auth
 	assets      *assets
 	sources     sources
+	texts       textCache
+	schemes     schemeLog
+	live        *liveHub
 	started     bool
 	stopped     bool
 	stopErr     error
@@ -104,15 +128,13 @@ func NewServer(opts Options, now clock.Clock) *Server {
 		now:    now,
 		auth:   newServerAuth(opts, now),
 		assets: mustAssets(),
+		live:   newLiveHub(),
 	}
 }
 
 func newServerAuth(opts Options, now clock.Clock) *Auth {
 	a := NewAuth(opts.Token, opts.Password, opts.Shared, now)
 	a.trustProxy = opts.TrustProxy
-	if opts.TrustProxy {
-		a.failRate = newRateLimiter(now, maxProxyFailures)
-	}
 	return a
 }
 
@@ -151,6 +173,27 @@ func (s *Server) SetDeliveryHealth(src func() []ChannelHealth) {
 	s.sources.health.Store(&v)
 }
 
+// SetModel sets the inventory the incident page reads; nil removes it,
+// and the page leaves out what only the inventory knows.
+func (s *Server) SetModel(m inventory.HistoryReader) {
+	if m == nil {
+		s.sources.model.Store(nil)
+		return
+	}
+	s.sources.model.Store(&m)
+}
+
+// SetDeliveryTrail sets the delivery trail source; nil leaves "who was
+// told" out of the incident page.
+func (s *Server) SetDeliveryTrail(src func(id string) []DeliveryAttempt) {
+	if src == nil {
+		s.sources.trail.Store(nil)
+		return
+	}
+	v := deliveryTrailSource(src)
+	s.sources.trail.Store(&v)
+}
+
 // Open creates the HTTP listener within ctx without starting a goroutine.
 // The application supervisor owns the serving goroutine.
 func (s *Server) Open(ctx context.Context) error {
@@ -170,6 +213,8 @@ func (s *Server) Open(ctx context.Context) error {
 		WriteTimeout:      10 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
+	// Shutdown waits for idle connections; live streams never idle.
+	s.server.RegisterOnShutdown(s.live.close)
 	var listenConfig net.ListenConfig
 	ln, err := listenConfig.Listen(ctx, "tcp", s.server.Addr)
 	if err != nil {
@@ -224,22 +269,34 @@ func (s *Server) Stop(ctx context.Context) error {
 
 // Handler is the whole dashboard: security headers and the access log
 // on every response; /api/* needs a session cookie or the bearer token;
-// sign-in, sign-out and the web UI do not.
+// sign-in, sign-out and the web UI do not. Signed-in requests record
+// the scheme their host was reached with (scheme.go).
 func (s *Server) Handler() http.Handler {
 	api := http.NewServeMux()
 	api.HandleFunc("/api/incidents", s.incidentsHandler)
 	api.HandleFunc("/api/incidents/", s.incidentDetailHandler)
-	api.HandleFunc("/api/namespaces", s.namespacesHandler)
 	api.HandleFunc("/api/status", s.statusHandler)
+	api.HandleFunc("/api/trends", s.trendsHandler)
+	api.HandleFunc("/api/activity", s.activityHandler)
+	api.HandleFunc("/api/coverage", s.coverageHandler)
+	api.HandleFunc("/api/insights", s.insightsHandler)
+	api.HandleFunc("/api/events", s.eventsHandler)
 	api.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})
 	mux := http.NewServeMux()
-	mux.Handle("/api/", s.auth.Middleware(api))
+	mux.Handle("/api/", s.auth.Middleware(s.recordScheme(api)))
 	mux.Handle("/api/session", s.auth.requireHTTPS(
-		s.auth.Middleware(http.HandlerFunc(sessionHandler))))
+		s.auth.Middleware(s.recordScheme(
+			http.HandlerFunc(sessionHandler)))))
 	mux.HandleFunc("/login", s.auth.loginHandler)
 	mux.HandleFunc("/logout", s.auth.logoutHandler)
 	mux.Handle("/", s.assets)
-	return securityHeaders(accessLog(mux))
+	return securityHeaders(accessLog(mux), s.sendHSTS)
+}
+
+// sendHSTS reports whether a response carries Strict-Transport-Security:
+// in shared mode, over https.
+func (s *Server) sendHSTS(r *http.Request) bool {
+	return s.opts.Shared && s.auth.isHTTPS(r)
 }

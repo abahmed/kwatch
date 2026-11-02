@@ -28,7 +28,11 @@ const (
 )
 
 // maxHistory bounds the earlier occurrences kept per incident.
-const maxHistory = 10
+const maxHistory = 30
+
+// HistoryKept is how many earlier occurrences an incident keeps, so a
+// reader of History can tell a full list from a complete one.
+const HistoryKept = maxHistory
 
 // Occurrence is one earlier, resolved occurrence of the same root.
 type Occurrence struct {

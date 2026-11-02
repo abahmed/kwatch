@@ -93,7 +93,7 @@ func (r *RocketChat) SendMessage(ctx context.Context, msg string) error {
 
 func (r *RocketChat) buildRequestBodyRocketChat(text string) ([]byte, error) {
 	msgPayload := &rocketChatWebhookPayload{
-		Text: notification.NeutralizeMentions(text),
+		Text: notification.NeutralizeUserMentions(text),
 	}
 
 	jsonBytes, err := json.Marshal(msgPayload)
@@ -103,8 +103,14 @@ func (r *RocketChat) buildRequestBodyRocketChat(text string) ([]byte, error) {
 	return jsonBytes, nil
 }
 
+// rocketChatTextLimit keeps a message under Rocket.Chat's default
+// Message_MaxAllowedSize of 5000 characters, with room to spare.
+const rocketChatTextLimit = 4000
+
 // incidentText is the Note with the last output as a Markdown code block.
 func incidentText(m notification.Message) string {
 	return safetext.RichWithOutput(m,
-		notification.MarkdownDialect(nil, "\n"), "\n", 0)
+		notification.MarkdownDialect(
+			notification.NeutralizeUserMentions, "\n"),
+		"\n", rocketChatTextLimit)
 }

@@ -48,7 +48,7 @@ Everything else that is critical notifies; what is only worth knowing waits
 for the digest. The rules live in code and are listed here, so change both
 together. A repeat of a page that just resolved is held at notify.
 
-## Behaviour against the workload's own normal
+## Behavior against the workload's own normal
 
 The inventory keeps a rolling baseline for each workload (its top owner)
 over the last seven days (`inventory/baseline*.go`, stored in the
@@ -61,7 +61,7 @@ memory statistic again, because new code has new memory; the restart and
 readiness statistics carry on so a bad release is judged against what came
 before it. Baselines describe the past only; kwatch never forecasts.
 
-Detectors compare current behaviour with that normal and set
+Detectors compare current behavior with that normal and set
 `Finding.Normal`:
 
 - `Unusual`: far above the normal range. The message quotes it ("That is

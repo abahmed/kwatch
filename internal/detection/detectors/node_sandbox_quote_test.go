@@ -8,6 +8,8 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
 const awsIPMessage = "Failed to create pod sandbox: rpc error: code = " +
@@ -41,4 +43,28 @@ func TestNodeIPFindingQuotesTheEvent(t *testing.T) {
 		}
 	}
 	assert.Equal(t, "failed to assign an IP address to container", quoted)
+}
+
+// A pod that failed to get an address and is ready since is still one
+// of the affected pods, but not one that cannot start.
+func TestNodeIPFindingCountsPodsNotStartedApart(t *testing.T) {
+	model := newTestModel()
+	sandboxPods(model, awsIPMessage, awsIPMessage, awsIPMessage)
+	observeEntity(model, inventory.EntityID{Kind: kube.KindPod,
+		Namespace: "default", Name: "app-0"}, podNodeNow,
+		map[string]inventory.Value{
+			kube.AttrPhase: inventory.Text("Running"),
+			kube.AttrReady: inventory.Bool(true),
+		})
+	values := map[string]string{}
+	for _, f := range detectNode(model) {
+		if f.Reason != reasons.NodePodIPExhausted {
+			continue
+		}
+		for _, e := range f.Evidence {
+			values[e.Label] = e.Value
+		}
+	}
+	assert.Equal(t, "3", values["affected pods"])
+	assert.Equal(t, "2", values[detection.EvidenceStuckPods])
 }

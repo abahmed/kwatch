@@ -2,6 +2,7 @@ package pushover
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -103,4 +104,21 @@ func TestFailedCancelSendsNoResolvedPushUntilItSucceeds(t *testing.T) {
 	failCancel = false
 	assert.NoError(t, c.SendIncident(ctx, providertest.Resolve()))
 	assert.Len(t, rec.Requests(), 4, "cancel again, then one resolve push")
+}
+
+// At the bound only the oldest receipt is evicted: every newer alarm
+// keeps its receipt and can still be cancelled on resolve.
+func TestReceiptBoundEvictsOnlyTheOldest(t *testing.T) {
+	c := emergencyPushover(providertest.NewRecorder(t))
+	for i := 0; i < maxReceipts; i++ {
+		c.rememberReceipt(fmt.Sprintf("k%d", i),
+			[]byte(fmt.Sprintf(`{"receipt":"r%d"}`, i)))
+	}
+	c.rememberReceipt("newest", []byte(`{"receipt":"rn"}`))
+
+	assert.Len(t, c.receipts, maxReceipts)
+	assert.NotContains(t, c.receipts, "k0", "the oldest is evicted")
+	assert.Equal(t, "r1", c.receipts["k1"])
+	assert.Equal(t, "rn", c.receipts["newest"])
+	assert.Len(t, c.receiptOrder, maxReceipts)
 }

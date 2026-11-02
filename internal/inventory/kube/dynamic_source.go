@@ -75,8 +75,10 @@ const notedWindow = time.Hour
 
 // DynamicStatus summarises the dynamic watch plan.
 type DynamicStatus struct {
-	// Watched counts running watches by mode.
+	// Watched counts running watches by mode; Synced those whose cache
+	// holds the whole list.
 	Watched map[WatchMode]int
+	Synced  int
 	// Skipped counts discovered types left out by the budget.
 	Skipped int
 	// Unavailable counts types that could not be watched: refused by
@@ -92,7 +94,11 @@ type DynamicStatus struct {
 	// KindsTruncated is set when more were left out.
 	Kinds          []DynamicKind
 	KindsTruncated bool
-	// Complete is false when the last discovery was partial.
+	// Ran is set once a discovery has finished; before that, or when
+	// dynamic discovery is off, there is no partial discovery to report.
+	Ran bool
+	// Complete is false when the last discovery was partial; it only
+	// means something when Ran is set.
 	Complete bool
 }
 
@@ -118,6 +124,7 @@ type DynamicSource struct {
 	// over the budget, or with no client for their mode.
 	left     map[schema.GroupVersionResource]kindIssue
 	complete bool
+	ran      bool
 	// loggedSkipped is the skipped-kind list last written to the log.
 	loggedSkipped string
 	// denials is the retry backoff of types refused for permission, and
@@ -235,6 +242,7 @@ func (d *DynamicSource) statusLocked() DynamicStatus {
 		Watched:  map[WatchMode]int{},
 		Reasons:  map[string]int{},
 		Complete: d.complete,
+		Ran:      d.ran,
 	}
 	var kinds []DynamicKind
 	note := func(gvr schema.GroupVersionResource, reason string) {
@@ -245,6 +253,9 @@ func (d *DynamicSource) statusLocked() DynamicStatus {
 	}
 	for gvr, w := range d.running {
 		out.Watched[w.mode]++
+		if w.hasSynced() && !w.takingOver() {
+			out.Synced++
+		}
 		if w.admission.capped() {
 			out.Capped++
 			note(gvr, ReasonObjectCap)
@@ -296,7 +307,7 @@ func (d *DynamicSource) reconcile(ctx context.Context) {
 		}, d.notedKinds())
 	retry := d.retryDue
 	d.retryDue = false
-	d.complete = complete
+	d.complete, d.ran = complete, true
 	d.left = make(map[schema.GroupVersionResource]kindIssue)
 	for _, r := range skipped {
 		d.left[r.gvr] = kindIssue{KindFor(r.kind), ReasonWatchBudget}

@@ -100,3 +100,18 @@ func TestSourceStaleIgnoresAnUnsyncedWatchAndRefusedAccess(t *testing.T) {
 	assert.Empty(t, f.source.Stale(), "refused access is accessLost")
 	assert.Len(t, f.source.Unavailable(), 1)
 }
+
+func TestSourceFreshIsFalseWhileTheWatchIsStale(t *testing.T) {
+	f := newStaleFixture()
+	f.watch.resource = resourceOfKind()[KindPod]
+	assert.True(t, f.source.Fresh(KindPod))
+
+	f.watch.record(errConnection)
+	f.now = f.now.Add(f.source.cfg.OptionalSyncTimeout)
+	assert.False(t, f.source.Fresh(KindPod))
+	assert.False(t, f.source.Fresh(KindContainer))
+	assert.True(t, f.source.Fresh(KindCronJob), "other kinds are fresh")
+
+	f.version = "101"
+	assert.True(t, f.source.Fresh(KindPod))
+}

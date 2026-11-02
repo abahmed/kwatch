@@ -2,7 +2,7 @@ POST /v2/send
 Content-Type: application/json
 
 {
-  "message": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[3014 runes sha256:21503a9ec1ea6a0b9ce6d23c]…xxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\n> panic: out of memory",
+  "message": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[1995 runes sha256:6f7be28388a828d1196d6372]…xxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxx…",
   "number": "+12025550199",
   "recipients": [
     "+12025550100"

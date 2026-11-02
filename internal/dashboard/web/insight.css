@@ -1,0 +1,39 @@
+/* kwatch dashboard: what the cluster says now about an issue (why it
+   waits to start, failing probes, recent warnings, traffic, nodes) and
+   the summary card's share buttons. Tokens come from app.css, so light
+   and dark follow it. */
+
+/* Summary card: Copy summary / Copy link. */
+.d-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Sections. */
+.in-lead { margin-top: 10px; }
+.in-list { margin: 6px 0 0; padding-left: 18px; }
+.in-list li { padding: 2px 0; overflow-wrap: anywhere; }
+.in-list li[title] { cursor: help; }
+.in-n { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.in-raw { overflow-wrap: anywhere; white-space: pre-wrap; }
+[data-waiting] .fold-h { margin-top: 14px; cursor: default; }
+p.in-raw { margin: 4px 0 6px; padding: 10px 12px; font-size: 0.8125rem; background: var(--surface); border-radius: var(--radius-card); }
+.in-item { padding: 10px 0; border-top: 1px solid var(--line); }
+.in-item:first-child { border-top: 0; padding-top: 4px; }
+.in-head { overflow-wrap: anywhere; }
+.in-head .mono { font-size: 0.875rem; }
+.in-head .chip { margin-left: 8px; vertical-align: 1px; }
+.in-facts { display: grid; grid-template-columns: 10em minmax(0, 1fr); gap: 4px 12px; margin: 8px 0 0; font-size: 0.875rem; }
+.in-facts dt { color: var(--text-muted); }
+.in-facts dt[title] { cursor: help; }
+.in-facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.in-facts .mono { font-size: 0.8125rem; }
+.in-facts .in-list { margin: 0; }
+.in-warn { padding: 8px 0; border-top: 1px solid var(--line); }
+.in-warn:first-child { border-top: 0; }
+.in-rows { list-style: none; margin: 4px 0 0; padding: 0; }
+.in-row { display: flex; align-items: baseline; gap: 10px; padding: 6px 0; overflow-wrap: anywhere; }
+.in-row .ao-dot { position: relative; top: 1px; }
+.in-row .mono { font-size: 0.875rem; }
+
+@media (max-width: 600px) {
+  .in-facts { grid-template-columns: 1fr; gap: 0; }
+  .in-facts dd { margin-bottom: 6px; }
+}

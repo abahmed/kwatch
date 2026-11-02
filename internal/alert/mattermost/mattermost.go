@@ -109,13 +109,19 @@ func (m *Mattermost) sendAPI(ctx context.Context, content []byte) error {
 
 func (m *Mattermost) buildMessage(msg string) ([]byte, error) {
 	return marshalPayload(mmPayload{
-		Text: notification.NeutralizeMentions(msg),
+		Text: notification.NeutralizeUserMentions(msg),
 	})
 }
 
+// mattermostTextLimit keeps a post under Mattermost's limit of 16383
+// characters (the server's MaxPostSize); bytes never undercount them.
+const mattermostTextLimit = 16000
+
 func (m *Mattermost) buildIncident(msg notification.Message) ([]byte, error) {
 	text := safetext.RichWithOutput(msg,
-		notification.MarkdownDialect(nil, "\n"), "\n", 0)
+		notification.MarkdownDialect(
+			notification.NeutralizeUserMentions, "\n"),
+		"\n", mattermostTextLimit)
 	payload := mmPayload{Text: text}
 	if m.clusterName != "" {
 		payload.Attachments = []mmAttachment{{Fields: []mmField{{

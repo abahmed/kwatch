@@ -79,31 +79,51 @@ func sandboxFindings(
 	if ctx.Model == nil {
 		return nil
 	}
-	pods := make(map[detection.Mode]int)
-	first := make(map[detection.Mode]time.Time)
-	newest := make(map[detection.Mode]inventory.Note)
-	pending := false
+	t := sandboxTally{pods: map[detection.Mode]int{},
+		stuck:  map[detection.Mode]int{},
+		first:  map[detection.Mode]time.Time{},
+		newest: map[detection.Mode]inventory.Note{}}
+	anyPending := false
 	for _, id := range ctx.Model.Related(
 		e.ID, inventory.RunsOn, inventory.Incoming,
 	) {
-		if pod, ok := ctx.Model.Entity(id); ok &&
-			text(pod, kube.AttrPhase) == "Pending" {
-			pending = true
-		}
+		pod, ok := ctx.Model.Entity(id)
+		anyPending = anyPending ||
+			ok && text(pod, kube.AttrPhase) == "Pending"
+		// A pod that got its address since is ready, or done.
+		stuck := ok && !podFinished(pod) && !flag(pod, kube.AttrReady)
 		for mode, note := range podSandboxFailures(ctx, id) {
-			pods[mode]++
-			if first[mode].IsZero() || note.At.Before(first[mode]) {
-				first[mode] = note.At
-			}
-			if note.At.After(newest[mode].At) {
-				newest[mode] = note
-			}
+			t.add(mode, note, stuck)
 		}
 	}
-	if pending {
+	if anyPending {
 		ctx.RecheckAfter(sandboxRecheck)
 	}
-	return buildSandboxFindings(ctx, pods, first, newest)
+	return buildSandboxFindings(ctx, t)
+}
+
+// sandboxTally counts, per failure class, the pods that failed within
+// the event window and the ones of them that have not started since,
+// with the first and the newest event.
+type sandboxTally struct {
+	pods, stuck map[detection.Mode]int
+	first       map[detection.Mode]time.Time
+	newest      map[detection.Mode]inventory.Note
+}
+
+func (t sandboxTally) add(
+	mode detection.Mode, note inventory.Note, stuck bool,
+) {
+	t.pods[mode]++
+	if stuck {
+		t.stuck[mode]++
+	}
+	if t.first[mode].IsZero() || note.At.Before(t.first[mode]) {
+		t.first[mode] = note.At
+	}
+	if note.At.After(t.newest[mode].At) {
+		t.newest[mode] = note
+	}
 }
 
 // podSandboxFailures returns the latest event of each classified network
@@ -122,12 +142,10 @@ func podSandboxFailures(
 }
 
 func buildSandboxFindings(
-	ctx detection.Context, pods map[detection.Mode]int,
-	first map[detection.Mode]time.Time,
-	newest map[detection.Mode]inventory.Note,
+	ctx detection.Context, t sandboxTally,
 ) []detection.Finding {
-	modes := make([]detection.Mode, 0, len(pods))
-	for mode, count := range pods {
+	modes := make([]detection.Mode, 0, len(t.pods))
+	for mode, count := range t.pods {
 		if count >= nodeSandboxPods {
 			modes = append(modes, mode)
 		}
@@ -136,15 +154,18 @@ func buildSandboxFindings(
 	out := make([]detection.Finding, 0, len(modes))
 	for _, mode := range modes {
 		spec := nodeSandboxReasons[mode]
-		ctx.RecheckAfter(first[mode].Add(EventWindow).Sub(ctx.Now))
+		ctx.RecheckAfter(t.first[mode].Add(EventWindow).Sub(ctx.Now))
 		out = append(out, detection.Finding{
 			Reason: spec.reason, Severity: detection.Critical,
-			Since: first[mode], Summary: spec.summary,
+			Since: t.first[mode], Summary: spec.summary,
 			Evidence: []detection.Evidence{{
-				Label: "affected pods", Value: strconv.Itoa(pods[mode]),
+				Label: "affected pods", Value: strconv.Itoa(t.pods[mode]),
+			}, {
+				Label: detection.EvidenceStuckPods,
+				Value: strconv.Itoa(t.stuck[mode]),
 			}, {
 				Label: detection.EvidenceSandboxEvent,
-				Value: sandboxQuote(newest[mode].Message),
+				Value: sandboxQuote(t.newest[mode].Message),
 			}},
 		})
 	}

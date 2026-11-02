@@ -72,6 +72,7 @@ func toldTier(p *Incident) Tier {
 // without a message), then the handler of its state.
 func (m *Manager) advance(p *Incident, now time.Time) (Decision, bool) {
 	m.handOver(p, now)
+	m.splitOver(p, now)
 	m.dropStaleSupersede(p)
 	if superseded(p) {
 		if m.quietSupersede(p, now) {
@@ -81,6 +82,7 @@ func (m *Manager) advance(p *Incident, now time.Time) (Decision, bool) {
 		if m.takeoverPending(p, now) {
 			return Decision{}, false
 		}
+		m.recordMove(p)
 		d := m.resolve(p, now, ReasonSuperseded)
 		d.Handover = p.restored
 		return d, true
@@ -126,7 +128,7 @@ func (m *Manager) settle(p *Incident, now time.Time) (Decision, bool) {
 		return Decision{}, false
 	}
 	p.State, p.Announced = Open, now
-	m.adoptAck(p)
+	m.adoptAck(p, now)
 	m.holdRepeatedPage(p, now)
 	m.holdSiblingPage(p, now)
 	if p.AlertKey == "" {

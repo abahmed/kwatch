@@ -151,12 +151,44 @@ func (m *Model) Prune(before time.Time) int {
 // marks: notes older than before go, changes and marks older than
 // keepFrom go. A restart reloads a day of changes, so the owner keeps
 // that day while notes stay short-lived.
+//
+// The records are pruned in chunks of pruneChunk, and the lock is released
+// between chunks so a large model does not stall every reader and the
+// pipeline for the whole pass. Each chunk looks its records up again:
+// pruning by time is idempotent, and a record changed in between is
+// judged as it is then.
 func (m *Model) PruneKeeping(before, keepFrom time.Time) int {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.history.prune(keepFrom)
+	ids := make([]EntityID, 0, len(m.records))
+	for id := range m.records {
+		ids = append(ids, id)
+	}
+	m.mu.Unlock()
 	removed := 0
-	for id, rec := range m.records {
+	for start := 0; start < len(ids); start += pruneChunk {
+		chunk := ids[start:min(start+pruneChunk, len(ids))]
+		removed += m.pruneRecords(chunk, before, keepFrom)
+	}
+	return removed
+}
+
+// pruneChunk is how many records one hold of the model lock prunes.
+const pruneChunk = 2048
+
+// pruneRecords prunes the named records under the lock and returns the
+// changes it removed.
+func (m *Model) pruneRecords(
+	ids []EntityID, before, keepFrom time.Time,
+) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	removed := 0
+	for _, id := range ids {
+		rec := m.records[id]
+		if rec == nil {
+			continue
+		}
 		rec.notes = pruneNotes(rec.notes, before)
 		rec.dropOrphanParts()
 		kept := rec.changes[:0]

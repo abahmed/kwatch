@@ -99,7 +99,9 @@ another that closed), and then nobody would be told.
   grace names the rest. A tier that may still fall when its findings settle
   waits for the grace (`currentNews`, `Incident.LiveTier`). On a
   cold start the first `StartupWindow` (2m) collects existing incidents into
-  one startup summary; an active page still reaches the pagers at once.
+  one startup summary, and an active page still reaches the pagers at once
+  (Pro; Community announces each still-failing one after the startup
+  window).
   What a restart keeps: the incident records (with the worst stage reached,
   `stagePeak`, so a crash loop told once is not told again, and the
   announced route), the startup marker with its open roll-ups (also those
@@ -146,6 +148,42 @@ another that closed), and then nobody would be told.
   A material-change update held for its investigation is saved with the
   fingerprint from before it (`Record.HeldUpdate`), so a restart that loses
   it decides it again.
+
+## The journal: what the dashboard keeps
+
+`Incident.Journal` (`journal.go`) is the incident's own record of its life,
+for the dashboard. Nothing that decides a message reads it: no fingerprint,
+tier or timer does, so it never changes what anyone hears. Every list is
+bounded and, but for the timers, persisted with the record; an older record
+restores with an empty journal.
+
+- **Transitions** (50 newest): each state change (opened, announced,
+  recovering, failing again, flapping, reopened, resolved) and each tier
+  change of a live, announced incident (tier raised / lowered, from and
+  to). `observe` compares state and tier with the last observation, at the
+  end of every Apply for the incidents it changed and after every tick; a
+  restart is no transition.
+- **Breaks** (2 × 10 containers, `breaks.go`): the failing containers of
+  the incident's pods (ready, restarts, state and last exit reasons, exit
+  code, image, requests, limits and usage) when it opened, and again,
+  replacing the second, each time it got worse: its tier rose or it
+  reopened.
+- **Changes** (12, `linked_changes.go`): the changes `ChangesBetween`
+  finds around the root from `RecentWindow` before the onset until now,
+  looked for once a minute while the incident is live and not silent, so
+  they outlive the two-hour change history. `SafeChange` keeps at most 6
+  fields per change, redacts and cuts values to 160 bytes, and names the
+  data of a Secret or ConfigMap by its key only.
+- **ErrorKey**: the same-error key (`SameErrorKey`: mode and cause rule),
+  stored when the incident is announced so a later cause does not regroup
+  it.
+- **Level**: the code of why the incident is at its tier (`tierWhy` beside
+  `tier`, plus the overrides, the ratchet and lowering; `level.go`).
+  `AlertLevelText` turns it into plain words.
+- **Timers**: the settle, the resolve hold and the next deadline as of the
+  latest tick, noted with the deadlines in `nextWake`. `WhyOf` turns them
+  into "Looks better; closes after 3m healthy, 1m20s so far". Not
+  persisted.
 
 ## Where the flags live
 

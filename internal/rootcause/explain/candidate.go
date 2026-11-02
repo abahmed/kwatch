@@ -1,7 +1,7 @@
 package explain
 
 import (
-	"sort"
+	"slices"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -33,11 +33,20 @@ type candidate struct {
 	findings []detection.Finding
 	// chain is the failure chain the candidate was extended along.
 	chain chainResult
+	// directIDs caches direct(); setCover and dropCover reset it. Every
+	// change to covers goes through them.
+	directIDs []inventory.EntityID
+	directSet bool
 }
 
 // direct returns the effects the candidate explains through a row,
-// sorted, without derived summaries.
+// sorted, without derived summaries. It is computed once per change of
+// covers; callers must not modify the slice (its capacity is clipped, so
+// an append copies).
 func (c *candidate) direct() []inventory.EntityID {
+	if c.directSet {
+		return c.directIDs
+	}
 	var out []inventory.EntityID
 	for effect, how := range c.covers {
 		if !how.derived {
@@ -45,7 +54,20 @@ func (c *candidate) direct() []inventory.EntityID {
 		}
 	}
 	sortIDs(out)
-	return out
+	c.directIDs, c.directSet = out[:len(out):len(out)], true
+	return c.directIDs
+}
+
+// setCover records how the candidate explains effect.
+func (c *candidate) setCover(effect inventory.EntityID, how coverage) {
+	c.covers[effect] = how
+	c.directIDs, c.directSet = nil, false
+}
+
+// dropCover removes effect from what the candidate explains.
+func (c *candidate) dropCover(effect inventory.EntityID) {
+	delete(c.covers, effect)
+	c.directIDs, c.directSet = nil, false
 }
 
 // others returns the direct effects other than the candidate itself.
@@ -135,7 +157,7 @@ func (cs *candidateSet) add(
 	old, ok := c.covers[effect]
 	if !ok || old.derived ||
 		(!how.derived && how.match.row.Prior > old.match.row.Prior) {
-		c.covers[effect] = how
+		c.setCover(effect, how)
 	}
 }
 
@@ -330,7 +352,7 @@ func applyMinCovered(cs *candidateSet) {
 			how := c.covers[effect]
 			if need := how.match.row.MinCovered; need > 0 &&
 				counts[how.match.row.Name] < need {
-				delete(c.covers, effect)
+				c.dropCover(effect)
 				cs.rejectInsufficient(c.id, effect, "row "+
 					how.match.row.Name+" needs more failures than it explains")
 			}
@@ -343,9 +365,7 @@ func applyMinCovered(cs *candidateSet) {
 
 // sortIDs sorts ids by their canonical key.
 func sortIDs(ids []inventory.EntityID) {
-	sort.Slice(ids, func(i, j int) bool {
-		return ids[i].String() < ids[j].String()
-	})
+	slices.SortFunc(ids, inventory.CompareIDs)
 }
 
 // failures lists the entities with a Failing or Degraded finding.

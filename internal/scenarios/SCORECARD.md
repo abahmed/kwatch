@@ -570,7 +570,7 @@ here verbatim and checked by `TestScorecardGates`.
 | Scenarios that passed and no longer do (ratchet) | <= 0 | 0 | pass |
 
 28 of 28 gates pass. 406 labelled root cases in 410 scenarios; first-incident tier matches in 410 of 410 scenarios.
-Staging day: 899 notifications in 61h45m0s (14.6/h mean, peak hour 28); 0 from non-events, 0 of them notify or page.
+Staging day: 898 notifications in 61h45m0s (14.5/h mean, peak hour 28); 0 from non-events, 0 of them notify or page.
 Storm shared node: 1000 pods, 2 messages in total, 1 in the loudest 2 minutes.
 Storm shared registry: 1000 pods, 1 messages in total, 1 in the loudest 2 minutes.
 Storm multi-cause: 1000 pods from 10 causes, 10 of them reported, 10 messages in total, 8 in the loudest 2 minutes.

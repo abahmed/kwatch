@@ -1,6 +1,7 @@
 package kube
 
 import (
+	"slices"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -28,6 +29,9 @@ type WakeReport struct {
 
 // ReportWake counts the workloads of the wake-up whose pods had startup
 // warnings, and how many of those still have a pod that is not ready.
+// Only the workloads the wake-up started from zero count: a pod created
+// meanwhile by a workload that was already running, or by none, is not
+// part of what the wake-up line reports.
 func ReportWake(r inventory.Reader, w Wake) WakeReport {
 	report := WakeReport{Wake: w}
 	seen := map[inventory.EntityID]bool{}
@@ -37,7 +41,10 @@ func ReportWake(r inventory.Reader, w Wake) WakeReport {
 		if !ok || !podStartedInWake(pod, w) || !hadStartupWarning(r, id, w) {
 			continue
 		}
-		owner := inventory.TopOwner(r, id)
+		owner, ok := wakeWorkload(r, id, w)
+		if !ok {
+			continue
+		}
 		seen[owner] = true
 		if ready, _ := pod.Attribute(AttrReady); !isTrue(ready.Value) {
 			failing[owner] = true
@@ -45,6 +52,34 @@ func ReportWake(r inventory.Reader, w Wake) WakeReport {
 	}
 	report.Blips, report.Failing = len(seen), len(failing)
 	return report
+}
+
+// maxWakeOwnerHops bounds the owner chain wakeWorkload follows: pod,
+// ReplicaSet, Deployment, and an operator's resource above it.
+const maxWakeOwnerHops = 4
+
+// wakeWorkload is the owner of pod, at any level of its owner chain,
+// that the wake-up started from zero. The chain can go on past it: an
+// operator's resource or an Argo Rollout above the Deployment or
+// ReplicaSet the wake-up saw scale.
+func wakeWorkload(
+	r inventory.Reader, pod inventory.EntityID, w Wake,
+) (inventory.EntityID, bool) {
+	level := []inventory.EntityID{pod}
+	for range maxWakeOwnerHops {
+		var next []inventory.EntityID
+		for _, id := range level {
+			next = append(next,
+				r.Related(id, inventory.OwnedBy, inventory.Outgoing)...)
+		}
+		for _, owner := range next {
+			if slices.Contains(w.Workloads, owner) {
+				return owner, true
+			}
+		}
+		level = next
+	}
+	return inventory.EntityID{}, false
 }
 
 func podStartedInWake(pod inventory.Entity, w Wake) bool {

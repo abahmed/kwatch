@@ -47,9 +47,25 @@ func (m *Manager) fanOut(job deliverJob) {
 		m.offer(entry, copied)
 	}
 	if len(routed) == 0 {
-		logUnsent(job, "not routed", "")
+		result, carrier := unroutedResult(job)
+		m.noteUnsent(job, result, carrier)
 	}
 	m.noteRouted(job, routed...)
+}
+
+// unroutedResult is what the send log says of a job no provider took. A
+// PagingOnly message is for the paging providers alone: chat heard of it
+// through its carrier (the startup summary, a roll-up), or never was
+// meant to, so without a paging provider nothing was lost.
+func unroutedResult(job deliverJob) (result, carrier string) {
+	if job.kind != jobIncident || job.incident == nil ||
+		!job.incident.PagingOnly {
+		return "not routed", ""
+	}
+	if c := job.incident.ChatCarrier; c != "" {
+		return "carried", c
+	}
+	return "paging only", ""
 }
 
 // acceptsPagingOnly reports whether a provider may receive job. A

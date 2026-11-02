@@ -19,9 +19,11 @@ func evidenceSummary(
 	out := &notification.Evidence{Checks: checksRead(d.Facts.Report),
 		Quote: quoteOf(d.Facts.Report)}
 	if c := d.Facts.Correlation; c != nil {
-		out.Confirmed = c.Confirmed != ""
-		if out.Confirmed {
-			out.Facts = append(out.Facts, endSentence(upperFirst(c.Confirmed)))
+		out.Confirmed = c.Confirmed != "" &&
+			!rootUnseen(d.Incident, d.Facts.Report)
+		if c.Confirmed != "" {
+			out.Facts = append(out.Facts, plainQuotes(endSentence(
+				upperFirst(confirmedText(c.Confirmed)))))
 		}
 	}
 	for _, f := range d.Facts.Evidence {

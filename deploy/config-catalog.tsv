@@ -1,26 +1,26 @@
 # kwatch config catalog v1
 resyncSeconds|integer|300|Performance|Periodic safety resync interval in seconds; zero keeps event-driven mode, otherwise at least 30.|active|
 namespaces|list|all|Scope|Comma-separated namespaces to watch; leave empty to watch every namespace.|active|
-namespaceSelector|string|empty|Scope|Kubernetes label selector used to choose namespaces.|active|
-reasons|list|all|Scope|Comma-separated event reasons to allow or exclude with a leading !.|active|
-severityByOwnerKind|json|{}|Alerts|JSON map overriding severity by workload owner kind.|active|
-severityByReason|json|{}|Alerts|JSON map overriding severity by detected reason.|active|
-heartbeatMonitor.enabled|boolean|false|Monitors|Send a periodic external dead-man heartbeat.|active|
-heartbeatMonitor.interval|integer|300|Monitors|Seconds between heartbeat notifications.|active|
-activeProbeMonitor.enabled|boolean|false|Monitors|Run explicitly configured application probes.|active|
-activeProbeMonitor.intervalSeconds|integer|30|Monitors|Seconds between active probe rounds.|active|
-activeProbeMonitor.timeoutSeconds|integer|5|Monitors|Timeout for each active probe.|active|
-activeProbeMonitor.failureThreshold|integer|3|Monitors|Consecutive probe failures before alerting.|active|
-activeProbeMonitor.autoServices|boolean|false|Monitors|Probe discoverable Service ports automatically; opt in to avoid unexpected traffic.|active|
-activeProbeMonitor.excludeNamespaces|list|[]|Monitors|Namespaces automatic Service probing skips, for default-deny ingress that does not admit kwatch.|active|
-activeProbeMonitor.http|json|[]|Monitors|JSON array of HTTP probe targets with optional paths, headers, and latency limits.|active|
-activeProbeMonitor.tcp|json|[]|Monitors|JSON array of TCP probe targets.|active|
-activeProbeMonitor.dns|json|[]|Monitors|JSON array of DNS probe targets.|active|
+namespaceSelector|string|empty|Scope|Pro only. Kubernetes label selector used to choose namespaces.|active|
+reasons|list|all|Scope|Pro only. Comma-separated event reasons to allow or exclude with a leading !.|active|
+severityByOwnerKind|json|{}|Alerts|Pro only. JSON map overriding severity by workload owner kind.|active|
+severityByReason|json|{}|Alerts|Pro only. JSON map overriding severity by detected reason.|active|
+heartbeatMonitor.enabled|boolean|false|Monitors|Pro only. Send a periodic external dead-man heartbeat.|active|
+heartbeatMonitor.interval|integer|300|Monitors|Pro only. Seconds between heartbeat notifications.|active|
+activeProbeMonitor.enabled|boolean|false|Monitors|Pro only. Run explicitly configured application probes.|active|
+activeProbeMonitor.intervalSeconds|integer|30|Monitors|Pro only. Seconds between active probe rounds.|active|
+activeProbeMonitor.timeoutSeconds|integer|5|Monitors|Pro only. Timeout for each active probe.|active|
+activeProbeMonitor.failureThreshold|integer|3|Monitors|Pro only. Consecutive probe failures before alerting.|active|
+activeProbeMonitor.autoServices|boolean|false|Monitors|Pro only. Probe discoverable Service ports automatically; opt in to avoid unexpected traffic.|active|
+activeProbeMonitor.excludeNamespaces|list|[]|Monitors|Pro only. Namespaces automatic Service probing skips, for default-deny ingress that does not admit kwatch.|active|
+activeProbeMonitor.http|json|[]|Monitors|Pro only. JSON array of HTTP probe targets with optional paths, headers, and latency limits.|active|
+activeProbeMonitor.tcp|json|[]|Monitors|Pro only. JSON array of TCP probe targets.|active|
+activeProbeMonitor.dns|json|[]|Monitors|Pro only. JSON array of DNS probe targets.|active|
 upgrader.disableUpdateCheck|boolean|false|Operations|Disable the update notification.|active|
 telemetry.enabled|boolean|true|Operations|Send the weekly adoption heartbeat.|active|
-maintenance.enabled|boolean|true|Operations|Honor maintenance annotations while preserving cluster-level alerts.|active|
-maintenance.annotation|string|kwatch.dev/maintenance|Operations|Annotation that marks deliberate maintenance on a resource.|active|
-maintenance.untilAnnotation|string|kwatch.dev/maintenance-until|Operations|Optional annotation containing the maintenance expiry timestamp.|active|
+maintenance.enabled|boolean|true|Operations|Pro only. Honor maintenance annotations while preserving cluster-level alerts.|active|
+maintenance.annotation|string|kwatch.dev/maintenance|Operations|Pro only. Annotation that marks deliberate maintenance on a resource.|active|
+maintenance.untilAnnotation|string|kwatch.dev/maintenance-until|Operations|Pro only. Optional annotation containing the maintenance expiry timestamp.|active|
 app.clusterName|string|empty|Operations|Cluster name shown in notifications.|active|
 app.proxyURL|string|empty|Operations|Optional proxy for outbound provider requests.|active|
 app.disableStartupMessage|boolean|false|Operations|Disable the startup notification.|active|
@@ -30,29 +30,29 @@ app.caBundlePath|string|empty|Security|Path to a mounted PEM bundle for outbound
 healthCheck.enabled|boolean|true|Operations|Expose the built-in health endpoint.|active|
 healthCheck.port|integer|8060|Operations|Port for health and optional diagnostic endpoints.|active|
 crd.enabled|boolean|false|Operations|Watch KwatchConfig and supported CRD status conditions; restart kwatch when configuration changes; enabled by the interactive installer after installing the CRD.|active|
-auditLog.enabled|boolean|true|Operations|Write structured incident lifecycle records to the configured audit sink.|active|
-auditLog.output|string|stdout|Operations|Audit output: stdout or a supported output sink.|active|
-templates|json|{}|Operations|JSON map of optional reason-specific message templates.|active|
-runbooks|json|{}|Operations|JSON map of reason-to-runbook URLs.|active|
+auditLog.enabled|boolean|true|Operations|Pro only. Write structured incident lifecycle records to the configured audit sink.|active|
+auditLog.output|string|stdout|Operations|Pro only. Audit output: stdout or a supported output sink.|active|
+templates|json|{}|Operations|Pro only. JSON map of optional reason-specific message templates.|active|
+runbooks|json|{}|Operations|Pro only. JSON map of reason-to-runbook URLs.|active|
 silences|json|[]|Noise reduction|JSON array of scoped silence rules, including eventMessages substring matches for attached Kubernetes Events.|active|
 ignoreContainerNames|list|legacy|Compatibility|Legacy container suppression field.|deprecated|silences
 ignorePodNames|list|legacy|Compatibility|Legacy pod-name suppression field.|deprecated|silences
 ignoreContainerMessages|list|legacy|Compatibility|Legacy container-message suppression field.|deprecated|silences
 ignoreNodeReasons|list|legacy|Compatibility|Legacy node-reason suppression field.|deprecated|silences
 ignoreNodeMessages|list|legacy|Compatibility|Legacy node-message suppression field.|deprecated|silences
-heartbeatMonitor.url|string|empty|Security|External dead-man heartbeat URL; stored only through a mounted Secret.|secret|
+heartbeatMonitor.url|string|empty|Security|Pro only. External dead-man heartbeat URL; stored only through a mounted Secret.|secret|
 kubelet.insecureSkipVerify|boolean|false|Security|Skip kubelet serving certificate verification for direct node stats reads; only for self-signed kubelet certificates.|active|
 watch.secrets|boolean|true|Scope|Watch Secrets (values hashed, never stored); false removes Secret RBAC and Secret-based checks report that they cannot verify.|active|
-activeProbeMonitor.autoDependencies|boolean|false|Monitors|Probe the endpoints outside the cluster that pod environments name, over TCP; a refused dependency explains its callers.|active|
-healthCheck.statusEndpoint|boolean|false|Security|Serve the read-only /status view (object names, no authentication) on the health port; off by default.|active|
-app.hideProHints|boolean|false|Operations|Remove the note that names what kwatch Pro adds from Community messages.|active|
+activeProbeMonitor.autoDependencies|boolean|false|Monitors|Pro only. Probe the endpoints outside the cluster that pod environments name, over TCP; a refused dependency explains its callers.|active|
+healthCheck.statusEndpoint|boolean|false|Security|Pro only. Serve the read-only /status view (object names, no authentication) on the health port; off by default.|active|
+app.hideProHints|boolean|false|Operations|Remove every Pro hint from Community messages: the note that names what kwatch Pro adds, the teaser ("Pro shows which one…"), "Pro shows how to fix it." and the Pro-checks notes; the "Cause found: …" sentence stays.|active|
 license.key|string|empty|Operations|kwatch Pro license key; reference it as ${KWATCH_LICENSE_KEY}. The KWATCH_LICENSE_KEY variable wins over this setting. Empty runs the Community edition.|active|
-app.communityProvider|string|empty|Operations|Alert provider the Community edition keeps when several are configured; empty keeps the first by name.|active|
-clusterCheckins|boolean|empty|Compatibility|Removed: kwatch no longer sends cluster check-ins. Accepted and ignored with a deprecation notice; use heartbeatMonitor to learn when kwatch stops.|deprecated|heartbeatMonitor
+app.communityProvider|string|empty|Operations|Alert provider the Community edition keeps when several are configured; empty keeps a pager first, then chat and the rest, then email, with the name breaking a tie.|active|
+clusterCheckins|boolean|empty|Compatibility|Removed: kwatch no longer sends cluster check-ins. Accepted and ignored with a deprecation notice; use heartbeatMonitor (Pro) to learn when kwatch stops.|deprecated|heartbeatMonitor
 dashboard.enabled|boolean|false|Operations|Serve the read-only incident dashboard API on a separate listener; Pro only, off by default.|active|
 dashboard.port|integer|8061|Operations|Port for the dashboard API listener; must not equal healthCheck.port.|active|
 dashboard.mode|string|local|Security|How people reach the dashboard: local (port-forward) or shared (Ingress, https only; sign-in over plain http is refused).|active|
-dashboard.trustProxy|boolean|false|Security|Honour X-Forwarded-Proto and X-Forwarded-For from the proxy that terminates TLS in front of the dashboard.|active|
+dashboard.trustProxy|boolean|false|Security|Honor X-Forwarded-Proto and X-Forwarded-For from the proxy that terminates TLS in front of the dashboard.|active|
 dashboard.tlsCertFile|string|empty|Security|Certificate file kwatch serves on the dashboard port itself (with tlsKeyFile); reloaded when it changes.|active|
 dashboard.tlsKeyFile|string|empty|Security|Key file for dashboard.tlsCertFile.|active|
 investigation.logs|boolean|true|Scope|Read container logs for Pro evidence (redacted, bounded); false reads no log and shows the log section as turned off.|active|

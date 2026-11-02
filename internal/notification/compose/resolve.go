@@ -33,8 +33,41 @@ func resolveNote(f caseFacts) (string, []sentence) {
 	if fix := resolveFixer(f, subject); fix != "" {
 		detail = fix + "; " + lasted + "."
 	}
-	return notification.MarkerResolved, []sentence{lead,
-		{part: partProof, text: detail}}
+	out := []sentence{lead, {part: partProof, text: detail}}
+	if affected := affectedSentence(p); affected != "" {
+		out = append(out, sentence{part: partConsequence, text: affected})
+	}
+	if !removed(f, subject) {
+		out = append(out, changedBeforeRecoverySentences(f)...)
+	}
+	if last := lastAffected(f, subject); last != "" {
+		out = append(out, sentence{part: partProof, text: last})
+	}
+	return notification.MarkerResolved, out
+}
+
+// lastAffected names the root an incident ended on when its resolve
+// speaks of the subject a listing announced and the root moved since:
+// "Last affected: deployment draftor in staging."
+func lastAffected(f caseFacts, subject inventory.EntityID) string {
+	if !f.asAnnounced || zeroID(f.p.Root) || f.p.Root == subject {
+		return ""
+	}
+	return lastAffectedLead + describe(f.p.Root) + "."
+}
+
+// lastAffectedLead starts the line naming the root a listed incident
+// ended on; Recovered keeps that line beside a carried lead.
+const lastAffectedLead = "Last affected: "
+
+// affectedSentence says how many pods failed at the widest: "Three
+// pods were affected." One pod is the subject itself, so it says
+// nothing.
+func affectedSentence(p incident.Incident) string {
+	if n := p.Journal.Widest.Pods; n > 1 {
+		return upperFirst(plural(n, "pod")) + " were affected."
+	}
+	return ""
 }
 
 // resolveFixer names who fixed it; nobody fixed a deletion.
@@ -149,19 +182,30 @@ func pastTense(text string) string {
 	return text
 }
 
-// stoppedTracking closes an incident that ended at its still-broken cap:
-// the workload is still short of replicas, so the message must not say it
-// is healthy. rest is the reason after its prefix, "2h; coverage check
-// continues".
+// stoppedTracking closes an incident that ended at its still-broken cap,
+// so the message must not say it is healthy. Its lead names the
+// condition that held: the workload short of replicas, or, with
+// incident.StillCrashingNote, a container that keeps crashing; a
+// subject that has no replicas "has not recovered". rest is
+// the reason after its prefix, "2h; coverage check continues". The
+// warning that it is still not healthy is a follow-up, not proof, so
+// a Community message keeps it.
 func stoppedTracking(
 	f caseFacts, subject inventory.EntityID, rest string,
 ) []sentence {
 	span, _, _ := strings.Cut(rest, ";")
+	state := " has not recovered."
+	switch {
+	case strings.HasSuffix(rest, incident.StillCrashingNote):
+		state = " still has a container that keeps crashing."
+	case incident.IsWorkload(subject.Kind):
+		state = " is still short of replicas."
+	}
 	return []sentence{
-		{part: partLead, text: capitalName(subject, f.leadName(subject)+
-			" is still short of replicas.")},
-		{part: partProof, text: "kwatch stopped tracking this incident " +
-			"after " + strings.TrimSpace(span) + "; the coverage check " +
-			"keeps watching it."},
+		{part: partLead, text: capitalName(subject,
+			f.leadName(subject)+state)},
+		{part: partFollowUp, text: "kwatch stopped tracking this " +
+			"after " + strings.TrimSpace(span) + "; it is still not " +
+			"healthy, so check it yourself."},
 	}
 }

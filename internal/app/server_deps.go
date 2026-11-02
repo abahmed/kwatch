@@ -49,6 +49,9 @@ type serverDeps struct {
 	license *licenseSetup
 	// overlay is how the startup KwatchConfig turned out.
 	overlay overlayOutcome
+	// self is kwatch's view of itself while a pipeline runs, for the
+	// dashboard overview (self_report.go).
+	self selfHolder
 	// editionRestart is set when the leader session ended because the
 	// license changed the edition; RunWithClock then rebuilds.
 	editionRestart atomic.Bool
@@ -91,12 +94,19 @@ func newServerDeps(
 		overlay:          boot.overlay,
 	}
 	deps.edition.Store(boot.entitlements)
+	if deps.dashboardServer != nil {
+		deps.dashboardServer.SetSelf(deps.self.Report)
+		if deps.deliveryManager != nil {
+			deps.dashboardServer.SetFailedSince(
+				deps.deliveryManager.FailedSince)
+		}
+	}
 	return deps
 }
 
 // setEdition records the edition the license entitles and applies what
-// depends on it before components exist: the /status JSON format and
-// /metrics.
+// depends on it before components exist: the /status page, its JSON
+// format and /metrics.
 func (d *serverDeps) setEdition(e feature.Entitlements) {
 	d.edition.Store(e)
 	if d.healthServer == nil {

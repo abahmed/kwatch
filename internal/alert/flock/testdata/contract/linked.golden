@@ -1,0 +1,6 @@
+POST /hooks/<secret>
+Content-Type: application/json
+
+{
+  "text": "🔴 payments in shop is crash-looping.\nCaused by: Node n1 is not ready.\nCause in dashboard: https://kwatch.example/issues/p-cause\nEarlier times: https://kwatch.example/issues?status=all&like=p-link\nOpen in dashboard: https://kwatch.example/issues/p-link\n\n> panic: out of memory"
+}

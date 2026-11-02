@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/abahmed/kwatch/internal/inventory"
 )
@@ -20,8 +21,10 @@ const AttrServiceCalls = "calls.services"
 
 // envHints are the words in an environment variable name that make a
 // bare value such as "redis" an address rather than a mode or a flag.
+// SERVICE is not one: SERVICE_NAME, DD_SERVICE and OTEL_SERVICE_NAME
+// hold the pod's own name for its telemetry, not a Service it calls.
 var envHints = []string{"HOST", "ADDR", "SERVER", "ENDPOINT", "URL", "URI",
-	"DSN", "BROKER", "SERVICE"}
+	"DSN", "BROKER"}
 
 // serviceCall is one in-cluster Service a pod's environment names.
 type serviceCall struct {
@@ -40,13 +43,17 @@ func (c serviceCall) String() string {
 // podServiceCalls lists the in-cluster Services the pod's containers are
 // configured to call, read from environment values: "redis:6379",
 // "http://api.shop.svc:8080", or a bare "redis" in a variable named like
-// REDIS_HOST. Values from Secrets and ConfigMaps are never read. The
+// REDIS_HOST. Values from Secrets and ConfigMaps, and from variables named
+// like a credential, are never read. The
 // first maxPodDependencies by name are kept.
 func podServiceCalls(pod *corev1.Pod) []serviceCall {
 	seen := map[string]bool{}
 	var out []serviceCall
 	forEachContainer(pod, func(c corev1.Container, _ bool) {
 		for _, env := range c.Env {
+			if secretNamed(env.Name) {
+				continue
+			}
 			call, ok := serviceCallIn(env.Name, env.Value, pod.Namespace)
 			if ok && !seen[call.String()] {
 				seen[call.String()] = true
@@ -117,7 +124,9 @@ func hintedName(name string) bool {
 // ClusterServiceName reads a host as an in-cluster Service name: "svc",
 // "svc.ns", "svc.ns.svc" or "svc.ns.svc.<cluster domain>". A bare name
 // belongs to namespace. Whether the Service exists is for the caller to
-// check. IP addresses and "localhost" are never Services.
+// check. IP addresses and "localhost" are never Services, and neither
+// is a word Kubernetes would refuse as a Service or namespace name
+// ("owner=api", "a_b"): such a word is not an address at all.
 func ClusterServiceName(host, namespace string) (ns, name string, ok bool) {
 	host = strings.TrimSuffix(strings.ToLower(host), ".")
 	if host == "" || host == "localhost" || net.ParseIP(host) != nil {
@@ -126,13 +135,20 @@ func ClusterServiceName(host, namespace string) (ns, name string, ok bool) {
 	labels := strings.Split(host, ".")
 	switch {
 	case len(labels) == 1:
-		return namespace, labels[0], namespace != ""
-	case len(labels) == 2:
-		return labels[1], labels[0], true
-	case len(labels) >= 3 && labels[2] == "svc":
-		return labels[1], labels[0], true
+		ns, name = namespace, labels[0]
+	case len(labels) == 2, len(labels) >= 3 && labels[2] == "svc":
+		ns, name = labels[1], labels[0]
+	default:
+		return "", "", false
 	}
-	return "", "", false
+	return ns, name, validServiceName(ns, name)
+}
+
+// validServiceName reports a name Kubernetes accepts for a Service in a
+// namespace it accepts.
+func validServiceName(namespace, name string) bool {
+	return len(validation.IsDNS1035Label(name)) == 0 &&
+		len(validation.IsDNS1123Label(namespace)) == 0
 }
 
 // serviceCallIDs are the Services of the calls, for the relation.
@@ -161,14 +177,15 @@ type ServiceRef struct {
 }
 
 // ServiceCalls reads the Services a pod entity is configured to call
-// from its AttrServiceCalls attribute.
+// from its AttrServiceCalls attribute. An entry that is not a valid
+// Service name is skipped, whatever wrote it.
 func ServiceCalls(pod inventory.Entity) []ServiceRef {
 	var out []ServiceRef
 	for _, entry := range strings.Split(entityText(pod, AttrServiceCalls),
 		",") {
 		name, port, _ := strings.Cut(entry, ":")
 		ns, svc, ok := strings.Cut(name, "/")
-		if !ok {
+		if !ok || !validServiceName(ns, svc) {
 			continue
 		}
 		number, _ := strconv.Atoi(port)

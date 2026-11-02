@@ -41,13 +41,15 @@ implementation-only notes may remain beside code when they are not published.
   [add a propagation rule](./contributing-propagation-rule.md),
   [add a source or kind schema](./contributing-source.md),
   [add a message fact](./contributing-message-fact.md),
-  [add a labelled scenario](./contributing-scenario.md).
+  [add a labeled scenario](./contributing-scenario.md).
 - [Production operations](./production-operations.md) — readiness, restarts,
   recovery, outage handling, and release operations.
 - [Configuration notes](./configuration.md) — offline configuration and
   endpoint notes; the published reference remains on `kwatch.dev`.
 - [Provider notes](./providers.md) — offline provider behavior and transport
   notes; the published reference remains on `kwatch.dev`.
+- [Dashboard UI notes](./dashboard.md) — how the dashboard pages read and
+  how its browser notifications work, with their limits.
 - [Kubernetes coverage](./kubernetes-coverage.md) — monitored resources and
   graceful degradation boundaries.
 - [Permission matrix](./feature-permissions.md) — feature-to-RBAC guidance.

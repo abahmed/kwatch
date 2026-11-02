@@ -16,6 +16,9 @@ func TestContract(t *testing.T) {
 		"token": "tk-secret", "title": "kwatch",
 	}, "dev", rec.Dependencies())
 	providertest.RunContract(t, providertest.Contract{
+		// Push and SMS send only the Short.
+		NoDashboardLink: true,
+
 		Send: c.SendIncident, Rec: rec,
 		Headers: []string{"Authorization"},
 		Secrets: []string{"tk-secret"}, LimitBytes: 3000,

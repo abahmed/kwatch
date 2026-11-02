@@ -93,7 +93,8 @@ func TestReminderOfAnAdvisoryOnlyIncidentDoesNotSayFailing(t *testing.T) {
 	p := advisoryIncident(web, riskFinding(web))
 	p.Tier = incident.Digest
 
-	title := Writer{}.OngoingTitle(p, advisoryNow.Add(48*time.Hour))
+	title := Writer{}.OngoingTitle(p, nil,
+		advisoryNow.Add(48*time.Hour))
 
 	assert.NotContains(t, title, "still failing")
 }

@@ -26,7 +26,7 @@ const (
 // ends.
 func runPipeline(
 	ctx context.Context, deps *serverDeps, state *storage.Store,
-	guard *storeGuard, gap gapNotice,
+	guard *storeGuard, gap startNotice,
 ) error {
 	p, err := newPipelineBuild(deps, state)
 	if err != nil {
@@ -48,6 +48,14 @@ func runPipeline(
 		deps.dashboardServer.SetStatus(engine.Status)
 		deps.dashboardServer.SetDeliveryHealth(
 			dashboardHealth(deps.deliveryManager))
+		deps.dashboardServer.SetModel(p.model)
+		deps.dashboardServer.SetDeliveryTrail(
+			dashboardTrail(deps.deliveryManager))
+		deps.dashboardServer.SetDeliveryDetail(
+			dashboardDeliveryDetail(deps.deliveryManager))
+		defer deps.dashboardServer.SetDeliveryDetail(nil)
+		defer deps.dashboardServer.SetDeliveryTrail(nil)
+		defer deps.dashboardServer.SetModel(nil)
 		defer deps.dashboardServer.SetDeliveryHealth(nil)
 		defer deps.dashboardServer.SetStatus(nil)
 		defer deps.dashboardServer.SetIncidents(nil)
@@ -56,12 +64,35 @@ func runPipeline(
 	if err != nil {
 		return err
 	}
+	defer p.publishSources()()
 	defer startSources(ctx, runners)()
 	err = engine.Run(ctx)
 	if !engine.WriterStopped() {
 		guard.abandon()
 	}
 	return err
+}
+
+// publishSources hands what the sources know to the readers outside the
+// session (the dashboard and kwatch's self report) and returns the
+// function that withdraws it. It runs after newRunners.
+func (p *pipelineBuild) publishSources() (withdraw func()) {
+	deps := p.deps
+	deps.self.set(p.selfReport)
+	dash := deps.dashboardServer
+	if dash != nil {
+		dash.SetCoverage(p.dashboardCoverage())
+		if p.stats != nil {
+			dash.SetUsageHours(p.stats.UsageHours)
+		}
+	}
+	return func() {
+		if dash != nil {
+			dash.SetUsageHours(nil)
+			dash.SetCoverage(nil)
+		}
+		deps.self.set(nil)
+	}
 }
 
 // newPipelineSourceHealth reports source diagnostics to /health when the
@@ -110,13 +141,17 @@ func startSources(
 // default detector set, so production, replay and scenarios all run the
 // same detectors. Only the detectors the edition is entitled to are
 // registered; a nil e is Community. The Pro findings Community
-// withholds are counted in withheld (optional).
+// withholds are counted in withheld (optional). fresh is whether a
+// synced kind's watch still gets through (kube.Source.Fresh); nil
+// treats every kind as fresh.
 func newDetectorRegistry(
-	synced func(inventory.Kind) bool, e feature.Entitlements,
+	synced, fresh func(inventory.Kind) bool, e feature.Entitlements,
 	withheld *feature.Withheld,
 ) *detection.Registry {
-	return detection.NewRegistry(synced,
+	r := detection.NewRegistry(synced,
 		detectors.Entitled(e, withheld)...)
+	r.SetFresh(fresh)
+	return r
 }
 
 // pruneModel drops old change history every modelPruneInterval. Expired

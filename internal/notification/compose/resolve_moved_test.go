@@ -90,3 +90,17 @@ func TestResolveKeepsTheAnnouncedSubjectWhenNothingMoved(t *testing.T) {
 
 	assert.True(t, strings.HasPrefix(got[0].text, "Node n1 is"), got[0].text)
 }
+
+// When only a listing announced the incident, people never heard of the
+// move: the resolve names the subject the listing named, and the root it
+// ended on only as the last one affected.
+func TestResolveOfAListedIncidentNamesTheAnnouncedSubject(t *testing.T) {
+	p := movedIncident(t, incident.Page)
+
+	_, got := resolveNote(caseFacts{p: p, now: p.Resolved,
+		asAnnounced: true})
+
+	require.Len(t, got, 3)
+	assert.True(t, strings.HasPrefix(got[0].text, "Node n1 "), got[0].text)
+	assert.Equal(t, "Last affected: deployment shop/cart.", got[2].text)
+}

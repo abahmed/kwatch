@@ -106,7 +106,7 @@ grep -i '^set-cookie: kwatch_session=' "$work/headers" |
 status=""
 for _ in $(seq 1 60); do
 	status=$(code --cookie "$work/jar" \
-		"http://127.0.0.1:$port/api/incidents?state=active")
+		"http://127.0.0.1:$port/api/incidents?status=active")
 	[ "$status" = 200 ] && break
 	sleep 3
 done

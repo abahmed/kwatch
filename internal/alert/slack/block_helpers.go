@@ -31,14 +31,18 @@ func truncateMrkdwn(s string, maxChars int) string {
 	}
 	const ellipsis = "..."
 	if maxChars <= len(ellipsis) {
-		return string(r[:maxChars])
+		return wholeEntities(string(r[:max(maxChars, 0)]))
 	}
-	kept := string(r[:maxChars-len(ellipsis)])
+	return wholeEntities(string(r[:maxChars-len(ellipsis)])) + ellipsis
+}
+
+// wholeEntities drops an escape such as "&amp;" that a cut left open.
+func wholeEntities(kept string) string {
 	if amp := strings.LastIndexByte(kept, '&'); amp >= 0 &&
 		!strings.Contains(kept[amp:], ";") {
-		kept = kept[:amp]
+		return kept[:amp]
 	}
-	return kept + ellipsis
+	return kept
 }
 
 // capBlocks keeps a message within Slack's block limit, reserving the last
@@ -51,10 +55,14 @@ func capBlocks(blocks []slackClient.Block) []slackClient.Block {
 	kept := blocks[:maxBlocksPerMessage-1]
 	omitted := len(blocks) - len(kept)
 	metrics.DefaultRegistry().RenderedDetailsOmitted.Add(int64(omitted))
+	noun := "blocks"
+	if omitted == 1 {
+		noun = "block"
+	}
 	return append(kept, markdownSection(
 		fmt.Sprintf(
-			"_%d more block(s) omitted to stay within Slack's limit._",
-			omitted,
+			"_%d more %s omitted to stay within Slack's limit._",
+			omitted, noun,
 		),
 	))
 }

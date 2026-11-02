@@ -8,6 +8,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/alert/email"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
 )
@@ -101,7 +102,8 @@ func (s *Mailgun) Name() string {
 func (s *Mailgun) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
-	return s.send(ctx, m.MailSubject(), m.MailBody())
+	text, page := email.Bodies(m)
+	return s.send(ctx, m.MailSubject(), text, page)
 }
 
 // SendMessage mails a plain operator message under the configured subject.
@@ -110,10 +112,13 @@ func (s *Mailgun) SendMessage(ctx context.Context, msg string) error {
 	if len(subject) == 0 {
 		subject = "kwatch alert"
 	}
-	return s.send(ctx, subject, msg)
+	return s.send(ctx, subject, msg, "")
 }
 
-func (s *Mailgun) send(ctx context.Context, subject, msg string) error {
+// send mails text, with page as the HTML alternative when it is set.
+func (s *Mailgun) send(
+	ctx context.Context, subject, msg, page string,
+) error {
 	form := url.Values{}
 	form.Set("from", s.from)
 	for _, t := range s.to {
@@ -121,6 +126,9 @@ func (s *Mailgun) send(ctx context.Context, subject, msg string) error {
 	}
 	form.Set("subject", subject)
 	form.Set("text", msg)
+	if page != "" {
+		form.Set("html", page)
+	}
 
 	body := []byte(form.Encode())
 

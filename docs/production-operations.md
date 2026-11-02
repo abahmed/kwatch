@@ -11,7 +11,9 @@ a lock: it stops two processes from writing the volume at once. Only the Lease
 holder claims the state file, with an epoch counter kept in the file itself,
 so a process whose claim was superseded cannot overwrite newer state. There
 is no second Pod and no Kwatch self-failover; if the Pod or its node fails,
-Kubernetes restarts it and Kwatch resumes from the volume.
+Kubernetes restarts it and Kwatch resumes from the volume. Kwatch runs one
+replica in every edition; scaling it up does not add failover, because the
+extra Pods only wait for the lock or the volume.
 
 The lock matters even with one replica because two Kwatch processes can
 still exist for a short time: a node cut off from the network keeps its old
@@ -43,7 +45,7 @@ Kwatch, decides when the Pod may start elsewhere:
 3. **Startup**, then readiness within the targets above.
 
 Plan for up to about 7 to 8 minutes without monitoring after a hard node
-failure. An external dead man's switch (the heartbeat integration) is the
+failure. An external dead man's switch (the Pro heartbeat integration) is the
 only signal during that window.
 
 To shorten the gap once you know the node is really down (powered off, not
@@ -107,8 +109,10 @@ worker counts remain the authority for memory and delivery capacity.
 
 Use the published image digest for production deployments. Version tags and
 chart versions must refer to the same release. Kwatch serves only `/healthz`,
-`/readyz`, `/availabilityz`, `/health`, and `/metrics`; `/status` is added
-only when `healthCheck.statusEndpoint` is true (default false, 404 otherwise).
+`/readyz`, `/availabilityz`, `/health`, and `/metrics` (Pro: Community
+answers it with an empty `404`); `/status` is added
+only when `healthCheck.statusEndpoint` is true (default false, 404 otherwise)
+and is Pro: Community answers it with `402`, and `/health` stays available.
 It has no profiling endpoints to protect. `/status` is read-only and lists
 object names (workloads, nodes, budgets, webhooks) to anyone who can reach the
 health port, so do not expose that port outside the cluster; read it with
@@ -180,6 +184,22 @@ refusal (401 or 403) counts at once. Failed reads are counted by
 minutes, with one log line on recovery. Each round starts at the first node
 the previous round did not reach, so a slow round never starves the same
 nodes.
+
+The poller keeps each container's usage history: the memory working set
+and CPU use (millicores) peak of every clock hour of the last 24 hours,
+and the memory of the run before the last restart. The container carries
+the peaks as `memory.peak.24h.bytes` and `cpu.peak.24h.milli`. The
+history is saved in the state file's `usage` bucket at most every 5
+minutes and when kwatch stops, and loaded when the poller starts, so a
+restart of kwatch does not lose the peaks that explain an OOM kill. At
+most 5000 containers are saved, the most recently read first; a record
+expires 24 hours after the container's last reading, and a container
+that left the cluster is dropped once the inventory has synced. A file
+written before this bucket existed opens normally with no history. When
+the stored history cannot be read, the session neither restores nor
+saves it, so a read error never replaces it with an empty one. It is
+part of the kubelet stats poller, so it runs only where that does
+(`core.nodes.usage`, Pro).
 
 ### CPU and probes
 
@@ -277,7 +297,10 @@ restart the Deployment yourself after editing it.
   lifecycle and is used for Deployment rollouts. It is not monitoring
   readiness.
 - `/health` reports optional monitor degradation and safe reason codes.
-- `/status` (opt-in, `healthCheck.statusEndpoint`) shows open incidents.
+- `/status` (Pro, opt-in, `healthCheck.statusEndpoint`) shows open incidents and
+  what kwatch cannot see. Its gaps include crash output from pod logs (when
+  `pods/log` is refused) and `dashboard links in alerts` with `off: <reason>`
+  when alerts carry no dashboard link.
 
 When the license changes the edition, kwatch rebuilds in the same process.
 The old health listener keeps answering `/healthz` (and reports not ready)
@@ -299,8 +322,19 @@ component stopped reporting progress), `component_failed` and
 handler of a watched kind keeps panicking, so its objects are not reaching
 the model), `watcher_failed`,
 `persistence_restore_failed`, `storage_reset`, `storage_over_cap`,
-`heartbeat_failed`, `config_overlay_invalid`, and, in the `coverage` object, `disabled_by_config`,
-`sync_timeout` and `budget_exceeded`. The
+`trail_restore_failed`, `persistence_write_failed`,
+`heartbeat_failed`, `config_overlay_invalid`, and, in the `coverage` object,
+`permission_denied`, `api_unavailable`, `cache_sync_failed`,
+`cache_sync_timeout`, `cache_sync_pending`, `handler_panics`,
+`disabled_by_config`, `watch_budget_exceeded`, `object_cap_reached` and
+`unknown`. The earlier names `sync_timeout` and `budget_exceeded` are still
+read on input and shown under the new ones. Two optional components are
+easy to meet: `pod-logs` (`optional_permission_denied` while the API refuses
+`pods/log`, so crash output is not shown) and `usage-history`
+(`persistence_restore_failed` or `persistence_write_failed` when the saved
+container usage history cannot be read or written; nothing is lost but the
+usage peaks across a restart). The `delivery-outbox` component also reports
+`trail_restore_failed` when the saved send trail could not be read back. The
 [configuration reference](./configuration.md#-health-reasons) lists all of
 them with their meaning.
 
@@ -351,13 +385,34 @@ that is up but not monitoring.
 Optional component failures remain visible as bounded degraded health states and use
 bounded restart backoff; they do not create synthetic incidents.
 
-After a restart the pipeline restores open incidents from the state file, so
-they are not announced again, and waits ten minutes before it may recover a
+On Pro, after a restart the pipeline restores open incidents from the
+state file, so they are not announced again, and waits ten minutes before it may recover a
 restored incident so detectors can re-raise their findings. Once every source
 has finished its initial list, Kwatch compares the saved object fingerprints with
 the live cluster and records changes made while it was down, so root-cause
 analysis can still find a rollout that happened during the gap. Kubernetes
 Events that expired while Kwatch was unavailable cannot be reconstructed.
+The saved history, the fingerprints and the changes made while kwatch was
+down are Pro: Community restores only the incidents it announced and starts
+from a fresh baseline.
+
+**The restart note (Pro).** After a restart, kwatch does not list every restored
+incident again. Once every restored incident that is still failing was listed
+after a recent restart, it sends one short message instead: that kwatch
+restarted, why, how long it was down, and how many problems from before are
+still open, with the dashboard address when there is one. A restored incident
+that was listed is not listed again for an hour (`RestoredRelist`), and the
+same note (same reason, same incidents) is not sent twice within that hour.
+The reason is one of `graceful_shutdown`, `leader_handoff`,
+`internal_failure`, `oom_killed`, `eviction`, `node_disruption`,
+`deployment_rollout`, `api_unavailable` or `unknown`.
+
+Crash-log reads (the previous run's output of a crashed container) back off
+for 5 minutes after the API refuses `pods/log`, and a refusal never becomes
+an incident: `/health` shows `pod-logs` degraded and `/status` lists the gap.
+Detectors keep a stale Lease or a CronJob that did not run as it was (they
+neither raise nor resolve `LeaseStale` or `CronJobNotScheduled`) while the
+data they read is stale.
 
 The state file is created with owner-only permissions and can be removed to
 reset Kwatch: it then starts cold and sends one startup summary. Store failures are
@@ -367,8 +422,9 @@ reported through health diagnostics.
 
 The state file `/var/lib/kwatch/state.db` holds one bucket per data class:
 incidents, changes, baselines, evidence, timeline, object
-fingerprints, lifecycle state, provider thread IDs, the delivery outbox, and
-the flight recording.
+fingerprints, lifecycle state, provider thread IDs, the delivery outbox, the
+send trail behind the dashboard's "Who was told", the flight recording,
+and the container usage history (see "Kubelet stats").
 Every write,
 including compaction, first checks the store's claim epoch, so a process that
 lost the Lease cannot write or delete anything.
@@ -412,6 +468,8 @@ stops within one transaction on shutdown or loss of the state lock.
 | Resolved incidents | 7 days after resolution |
 | Baselines | Dropped 7 days after their workload is gone (checked every 10 minutes) |
 | Delivery outbox | Until a provider accepts the job; at most 2048 jobs, none older than 24 hours at restore |
+| Send trail | The 512 incidents told most recently, 16 delivery attempts each (the newest, plus the first one a channel accepted); the trail of an incident whose record is gone is deleted at the next start |
+| Usage history | 24 hours after the container's last reading; at most 5000 containers, the most recently read |
 | Open incidents, fingerprints, state, threads | No expiry |
 
 **Size cap.** The logical size of the store (the bytes of keys and values) is
@@ -558,7 +616,12 @@ silences) is logged once as `incident not announced: out of scope`
 
 The dashboard logs sign-in, sign-out and every failed request (`401`,
 `403`, `429`, `5xx`) at the default level; successful reads, which an
-open page makes every few seconds, only at `-v=2`.
+open page makes every few seconds, only at `-v=2`. Wrong passwords and
+tokens are limited per client (10 a minute); behind a trusted proxy
+only the client the proxy names is limited, and 100 failures through
+one proxy in a minute log `many dashboard sign-in failures through one
+proxy` once, without refusing anyone (`docs/dashboard.md`, "Access and
+limits").
 
 A kind counts as synced for the detectors only once its first list is
 in the model, so the first seconds after a start do not report listed
@@ -585,6 +648,18 @@ reason `persistence_restore_failed`. Watch
 `kwatch_delivery_outbox_dropped_total`,
 `kwatch_delivery_outbox_write_failures_total` and
 `kwatch_delivery_dropped_total`.
+
+The send trail (what became of each incident's messages, shown as "Who
+was told" on the dashboard) is saved, while the dashboard runs (Pro with
+`dashboard.enabled`), by the outbox writer with its own batches and
+loaded at the next start, so a restart keeps it; without the dashboard
+nothing reads it and it stays in memory only. It is
+bounded like the in-memory trail (512 incidents, 16 attempts each), and
+a trail whose incident is no longer in the state file is deleted at
+load. A file written before this bucket existed opens normally and
+starts with an empty trail; the bucket is not carried across a store
+reset. A failed trail write is logged (`write delivery trail`) and
+retried with the next batch; it never affects delivery.
 
 Startup summaries and plain notices (startup, upgrade, test) are information:
 paging providers (PagerDuty, Opsgenie, Squadcast, GoAlert, Zenduty,
@@ -629,6 +704,29 @@ checks it when a key is set. Secret values are only hashed, and evidence is reda
 it is stored or rendered. Provider credentials come from mounted files, never
 from plain configuration.
 
+**Provider destinations.** Alert providers never send to a cloud
+instance-metadata address. The check runs on the URL host before any
+I/O and again, at dial time, on the address being connected, so a name
+that resolves (or later rebinds) to one is refused too; the connection
+to a configured proxy is not checked. The list is shared
+(`internal/cloudmeta`): the link-local ranges 169.254.0.0/16 (which
+holds 169.254.169.254) and fe80::/10, fd00:ec2::254, 100.100.100.200,
+the names `metadata.google.internal` and `metadata.goog`, and any of
+these addresses in IPv4-mapped or NAT64 (`64:ff9b::/96`) form. The
+addresses are the same ones `KwatchConfig` probe targets refuse. A
+mistyped or hostile webhook URL therefore cannot read the node's cloud
+credentials. Private and in-cluster
+addresses are allowed; see "How providers work" in
+[providers](providers.md).
+
+**Dashboard link.** With the Pro dashboard on and exposed by an Ingress or
+HTTPRoute in kwatch's namespace, alert messages link to it (see "Link to
+the dashboard" in [providers](providers.md)), so the dashboard's host name
+reaches every provider that receives a message. The link carries no token;
+opening it still needs a dashboard sign-in. To keep the host name out of
+alerts, expose the dashboard some other way (port-forward, a
+LoadBalancer Service) or from another namespace.
+
 **Adoption telemetry is on by default.** An official build sends one request
 to `https://api.kwatch.dev/telemetry/heartbeat` shortly after startup and
 then at most once every 7 days. The body is exactly
@@ -661,9 +759,23 @@ the configured proxy and CA bundle but **always verify TLS**:
 
 ## Outages and capacity
 
-Kubernetes API and provider outages are handled through bounded retries and
+### API server outage
+
+kwatch holds a state lock (a Lease) and must renew it through the API
+server. When the API server is out long enough that the lock cannot be
+renewed, kwatch deliberately stops sending and restarts: with the lock lost,
+another process could hold the state file, and only one writer may send.
+Alerts that were queued stay in the outbox and are sent once the API server
+is back and kwatch holds the lock again. During the outage kwatch cannot tell
+you about it, so the heartbeat (Pro; the dead man's switch,
+`heartbeatMonitor`) is the only alarm. Configure it; see
+[Heartbeat Monitor](./configuration.md#-heartbeat-monitor-dead-mans-switch).
+The restart is reported after the fact as `api_unavailable` in the restart
+note.
+
+Kubernetes API and provider outages are otherwise handled through bounded retries and
 degraded status. Delivery queues are bounded; sustained saturation coalesces or
-summarises notifications and can drop them, so operators should alert on queue saturation, terminal
+summarizes notifications and can drop them, so operators should alert on queue saturation, terminal
 delivery failures, and dead letters.
 
 ## RBAC mode and watch coverage
@@ -733,10 +845,16 @@ and assert that `full` is read-only.
 `/health` publishes a bounded `coverage` object: watches by mode (`full`,
 `hashed`, `status`, `metadata`), the number of kinds skipped by the watch
 budget, the unavailable count, at most 50 unavailable kinds with a reason
-(`permission_denied`, `api_unavailable`, `sync_timeout`,
-`budget_exceeded`, `object_cap_reached`, `disabled_by_config`), a `reasons`
+(`permission_denied`, `api_unavailable`, `cache_sync_failed`,
+`cache_sync_timeout`, `cache_sync_pending`, `handler_panics`,
+`watch_budget_exceeded`, `object_cap_reached`, `disabled_by_config`,
+`unknown`), a `reasons`
 count per reason, and whether the last discovery was complete. Dynamic kinds
 that are skipped, unavailable, or over their object cap are listed too.
+The dashboard's `GET /api/coverage` gives the same state with names: the
+namespaces in and out of the namespace scope, every typed watch and
+whether it synced, the kinds kwatch cannot read and why, and when the
+sources first synced (see "Watch coverage" in `dashboard.md`).
 
 A dynamic kind over its object cap stays watched, but objects beyond the cap
 are cached only as a small stub (name, namespace, UID, resource version), so
@@ -764,7 +882,7 @@ local unit-test pass does not prove RBAC, API outage, provider outage, or
 upgrade recovery behavior.
 
 The `E2E` workflow (`.github/workflows/e2e.yml`) runs nightly on `main`, on
-manual dispatch, and on pull requests labelled `e2e`. Its operational job runs
+manual dispatch, and on pull requests labeled `e2e`. Its operational job runs
 a disposable Kind cluster for each combination of `rbac.mode` (`full`,
 `least-privilege`) and `watch.secrets` (`true`, `false`). It verifies chart
 installation, effective ServiceAccount permissions, health probes and

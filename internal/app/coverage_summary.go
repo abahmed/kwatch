@@ -59,7 +59,10 @@ func buildCoverage(
 		Unavailable:      len(typed) + dynamic.Unavailable,
 		UnavailableKinds: kinds,
 		Truncated:        dynamic.KindsTruncated,
-		Complete:         dynamic.Complete,
+		// Before a discovery ran (or with discovery off) there is no
+		// partial discovery to report, as in kube.BuildCoverage.
+		Complete: !dynamic.Ran || dynamic.Complete,
+		Ran:      dynamic.Ran,
 	}
 	if len(reasons) > 0 {
 		summary.Reasons = reasons
@@ -71,22 +74,28 @@ func buildCoverage(
 	return summary
 }
 
-// coverageReason maps source reason codes onto the coverage vocabulary.
+// coverageReasons map every source reason code onto the coverage
+// vocabulary, which uses the same names. A code missing here reads as
+// unknown, never as a kind the API does not serve.
+var coverageReasons = map[string]string{
+	kube.ReasonPermissionDenied: health.CoveragePermissionDenied,
+	kube.ReasonAPIUnavailable:   health.CoverageAPIUnavailable,
+	kube.ReasonSyncFailed:       health.CoverageSyncFailed,
+	kube.ReasonSyncTimeout:      health.CoverageSyncTimeout,
+	kube.ReasonSyncPending:      health.CoverageSyncPending,
+	kube.ReasonHandlerPanics:    health.CoverageHandlerPanics,
+	kube.ReasonDisabledByConfig: health.CoverageDisabledByConfig,
+	kube.ReasonWatchBudget:      health.CoverageBudgetExceeded,
+	kube.ReasonObjectCap:        health.CoverageObjectCapReached,
+}
+
+// coverageReason maps a source reason code onto the coverage
+// vocabulary.
 func coverageReason(reason string) string {
-	switch reason {
-	case kube.ReasonPermissionDenied:
-		return health.CoveragePermissionDenied
-	case kube.ReasonSyncTimeout, kube.ReasonSyncPending:
-		return health.CoverageSyncTimeout
-	case kube.ReasonDisabledByConfig:
-		return health.CoverageDisabledByConfig
-	case kube.ReasonWatchBudget:
-		return health.CoverageBudgetExceeded
-	case kube.ReasonObjectCap:
-		return health.CoverageObjectCapReached
-	default:
-		return health.CoverageAPIUnavailable
+	if mapped, ok := coverageReasons[reason]; ok {
+		return mapped
 	}
+	return health.CoverageUnknown
 }
 
 // coveragePublisher publishes the summary from typed and dynamic sources.

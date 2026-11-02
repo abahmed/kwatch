@@ -245,11 +245,13 @@ func (c *Collector) flushDigest(ctx context.Context, now time.Time) bool {
 		return false
 	}
 	sent := false
+	c.wake = freshWake(c.wake, now)
 	ongoing, unchanged := c.splitOngoing(c.ongoingProblems(now), now)
 	if len(g.Opened)+len(g.Resolved)+len(ongoing)+len(unchanged) > 0 ||
 		c.wake != nil {
 		risks := c.PendingRisks()
-		msg := c.env.Messages.DigestWith(g.Opened, g.Resolved, risks,
+		msg := c.env.Messages.DigestWith(c.named(g.Opened),
+			c.named(g.Resolved), risks,
 			c.digestExtras(ongoing, unchanged), now)
 		msg.Listed = c.listedInDigest(g, len(risks),
 			append(slices.Clone(ongoing), unchanged...), now, msg.Listed)

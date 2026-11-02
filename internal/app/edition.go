@@ -15,7 +15,11 @@ import (
 const (
 	reasonFilters     feature.ID = "policy.reason-filter"
 	namespaceSelector feature.ID = "policy.namespace-selector"
-	heartbeatMonitor  feature.ID = "delivery.heartbeat"
+	// dashboardUI is the dashboard; Limits().Dashboard runs it.
+	dashboardUI feature.ID = "ui.dashboard"
+	// statusPage is the text /status page; Limits().StatusText serves
+	// it. /health is in every edition.
+	statusPage feature.ID = "ui.status"
 	// extraProviders stands for alert providers beyond the edition's
 	// cap; inactivePro reports it by name, not by this ID.
 	extraProviders feature.ID = "delivery.providers"
@@ -62,14 +66,15 @@ func configuredPro(cfg *config.Config) []feature.ID {
 	// The audit log is on by default; a file output is a choice.
 	add(cfg.AuditLog.Output != "" && cfg.AuditLog.Output != "stdout",
 		feature.AuditLog)
-	add(cfg.HeartbeatMonitor.Enabled || cfg.HeartbeatMonitor.URL != "",
-		heartbeatMonitor)
+	add(cfg.HeartbeatMonitor.Enabled, feature.Heartbeat)
 	add(len(cfg.SeverityByReason)+len(cfg.SeverityByOwnerKind) > 0,
 		feature.SeverityOverrides)
 	add(customMaintenance(cfg.Maintenance), feature.Maintenance)
 	add(len(cfg.Runbooks) > 0, feature.Runbooks)
 	add(len(cfg.Reasons) > 0, reasonFilters)
 	add(cfg.NamespaceSelector != "", namespaceSelector)
+	add(cfg.Dashboard.Enabled, dashboardUI)
+	add(cfg.HealthCheck.StatusEndpoint, statusPage)
 	for _, id := range deliveryPro(cfg) {
 		add(true, id)
 	}
@@ -112,8 +117,8 @@ func logInactivePro(e feature.Entitlements, names []string) {
 }
 
 // restrictConfig returns cfg without the Pro policy e does not run. The
-// result is a copy; cfg is untouched. Namespace include and exclude and
-// silences stay: they are Community scope.
+// result is a copy; cfg is untouched. Namespace include and exclude,
+// and silences stay: they are Community.
 func restrictConfig(cfg *config.Config, e feature.Entitlements) *config.Config {
 	if cfg == nil {
 		return cfg
@@ -140,7 +145,7 @@ func restrictConfig(cfg *config.Config, e feature.Entitlements) *config.Config {
 	if !e.Has(feature.AuditLog) {
 		out.AuditLog.Enabled = false
 	}
-	if !e.Has(heartbeatMonitor) {
+	if !e.Has(feature.Heartbeat) {
 		out.HeartbeatMonitor.Enabled = false
 	}
 	if !e.Has(feature.ActiveProbes) {

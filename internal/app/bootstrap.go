@@ -167,8 +167,8 @@ func permissionChecks(runtime config.RuntimeConfig) []inventorykube.Access {
 	return checks
 }
 
-// newHealthServer builds the health server for the edition: the JSON
-// /status format and /metrics are Pro features.
+// newHealthServer builds the health server for the edition: /status
+// (text and JSON) and /metrics are Pro features.
 func newHealthServer(
 	runtime config.RuntimeConfig, now clock.Clock, overlayInvalid bool,
 	entitlements feature.Entitlements,
@@ -185,8 +185,8 @@ func newHealthServer(
 }
 
 // applyEditionEndpoints opens or closes the Pro endpoints of the health
-// server for e: the JSON /status format and /metrics. A nil e is
-// Community.
+// server for e: the text /status page, its JSON format and /metrics.
+// /health is in every edition. A nil e is Community.
 func applyEditionEndpoints(
 	server *health.HealthServer, e feature.Entitlements,
 ) {
@@ -195,6 +195,11 @@ func applyEditionEndpoints(
 		server.AllowStatusJSON()
 	} else {
 		server.DenyStatusJSON()
+	}
+	if limits.StatusText {
+		server.AllowStatusText()
+	} else {
+		server.DenyStatusText()
 	}
 	if limits.Metrics {
 		server.AllowMetrics()
@@ -235,23 +240,26 @@ func newDashboardServer(
 		TLSCertFile: dc.TLSCertFile,
 		TLSKeyFile:  dc.TLSKeyFile,
 		Edition:     string(feature.OrCommunity(e).Edition()),
+		ChangeHistory: feature.OrCommunity(e).Has(
+			feature.ChangeCorrelation),
 		Scope: dashboard.Scope{
 			Watched:  scope.AllowedNamespaces(),
 			Excluded: scope.ForbiddenNamespaces(),
 		},
 		Self: dashboard.Self{
-			Namespace:  envOr("POD_NAMESPACE", "kwatch"),
-			Deployment: envOr(dashboardDeploymentEnv, "kwatch"),
+			Namespace:  envOrKwatch("POD_NAMESPACE"),
+			Deployment: envOrKwatch(dashboardDeploymentEnv),
 		},
 	}, now)
 }
 
-// envOr is the environment value of name, or fallback when it is empty.
-func envOr(name, fallback string) string {
+// envOrKwatch is the environment value of name, or "kwatch" (the
+// default namespace and release name) when it is empty.
+func envOrKwatch(name string) string {
 	if v := os.Getenv(name); v != "" {
 		return v
 	}
-	return fallback
+	return "kwatch"
 }
 
 // Dashboard environment: the bearer token, the sign-in password and the

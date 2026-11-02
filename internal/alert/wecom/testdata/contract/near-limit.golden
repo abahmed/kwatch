@@ -3,7 +3,7 @@ Content-Type: application/json
 
 {
   "markdown": {
-    "content": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[4070 runes sha256:b01c70bce6f1f16fe0b99735]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    "content": "🔴 payments in shop is crash-looping. Last output:\n\n\n```\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[4079 runes sha256:615604e3dc7de38a42f9a02a]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n```"
   },
   "msgtype": "markdown"
 }

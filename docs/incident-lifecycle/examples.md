@@ -69,7 +69,7 @@ Ten workloads crash with the same line, `license key rejected for tenant
    `api in shop and nine other workloads keep crashing with the same
    error.` and then quotes one pod's own line: `It fails with "ERROR license
    key rejected for tenant 4812".` The quoted tenant number is that pod's,
-   not the normalised `#`. With no other workload it says `api in shop
+   not the normalized `#`. With no other workload it says `api in shop
    keeps crashing with an error other workloads share`.
 
 Worked example, from the first crash to the message:

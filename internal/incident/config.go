@@ -53,6 +53,10 @@ type Config struct {
 	// NoHandover turns off the hand-over of a restored incident whose
 	// failures another incident took over.
 	NoHandover bool
+	// NoJournalDetail keeps the journal to what every edition reads:
+	// no break snapshots and no linked changes, which only Pro change
+	// correlation and the dashboard show.
+	NoJournalDetail bool
 	// IDNonce is the nonce new incident IDs carry, 4 hex characters.
 	// Empty draws a random one. Restore adopts the nonce of the newest
 	// restored ID, so the nonce lives as long as the store's incidents:
