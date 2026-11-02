@@ -1,5 +1,7 @@
 10:06:15 settled
-🟠 orders in shop (prod-eu-1) can't reach postgres:5432: network policy deny-all (created 10:05 UTC by bob) blocks the call. orders fails with "FATAL: could not connect to server: Connection timed out; dial tcp 10.96.14.3:5432: i/o timeout". Two of its three dependents are failing. To read the output of the last crash, run kubectl logs orders-f2dc792c-a -c app -n shop --previous
+🟠 orders in shop (prod-eu-1) can't reach postgres:5432: network policy deny-all (created 10:05 UTC by bob) blocks the call. orders fails with "FATAL: could not connect to server: Connection timed out; dial tcp 10.96.14.3:5432: i/o timeout". Two of its three dependents are failing.
+Also grouped: 2 crash loops
+To read the output of the last crash, run kubectl logs orders-f2dc792c-a -c app -n shop --previous
 🟠 orders in shop (prod-eu-1) can't reach postgres:5432: network policy deny-all (created 10:05 UTC by bob) blocks the call.
 | 🟠 **orders** in **shop** (**prod-eu-1**) can't reach postgres:5432: network policy **deny-all** (created 10:05 UTC by bob) blocks the call.
 | **orders** fails with
@@ -7,6 +9,7 @@
 | FATAL: could not connect to server: Connection timed out; dial tcp 10.96.14.3:5432: i/o timeout
 | ```
 | Two of its three dependents are failing.
+| Also grouped: 2 crash loops
 | To read the output of the last crash, run
 | ```
 | kubectl logs orders-f2dc792c-a -c app -n shop --previous

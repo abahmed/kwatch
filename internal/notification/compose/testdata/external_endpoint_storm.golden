@@ -1,3 +1,5 @@
-🔴 api in shop is crash looping because external endpoint db.example.com:5432 refuses connections. It fails with "dial tcp db.example.com:5432: connect: connection refused". Every error mentions it. Five failing workloads all depend on it. cart, search, auth and one other are affected as well. To read the output of the last crash, run kubectl logs api-6d4f-0 -c app -n shop --previous
+🔴 api in shop is crash looping because external endpoint db.example.com:5432 refuses connections. It fails with "dial tcp db.example.com:5432: connect: connection refused". Every error mentions it. Five failing workloads all depend on it. cart, search, auth and one other are affected as well.
+Also grouped: 4 crash loops
+To read the output of the last crash, run kubectl logs api-6d4f-0 -c app -n shop --previous
 
 🔴 api in shop is crash looping because external endpoint db.example.com:5432 refuses connections.

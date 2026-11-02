@@ -91,6 +91,8 @@ const (
 	partRecurrence
 	// partPlace is the line that names the setting to change.
 	partPlace
+	// partGrouped counts the other findings grouped in the incident.
+	partGrouped
 	partAction
 	// partChecked is last so a cut message loses it first.
 	partChecked
@@ -183,6 +185,7 @@ var noteWriters = []sentenceWriter{
 	unverifiedSentences,
 	recurrenceSentences,
 	placeSentences,
+	groupedSentences,
 	actionSentences,
 	chainLineSentences,
 	checkedLineSentences,
@@ -266,7 +269,7 @@ func fill(msg *notification.Message, marker string, sentences []sentence) {
 		// the rich lines (Doc) keep the quote runes to find its ends.
 		text := plainQuotes(sentences[i].text)
 		texts = append(texts, text)
-		note += noteGap(s.part) + text
+		note += noteGap(s.part, previousPart(sentences, i)) + text
 		if i > 0 && s.part != partAction && s.part != partHint {
 			msg.Lines = append(msg.Lines, text)
 		}
@@ -277,11 +280,20 @@ func fill(msg *notification.Message, marker string, sentences []sentence) {
 	msg.Doc = docOf(*msg, marker, sentences)
 }
 
+// previousPart is the part of the sentence before i, or the lead.
+func previousPart(sentences []sentence, i int) part {
+	if i == 0 {
+		return partLead
+	}
+	return sentences[i-1].part
+}
+
 // noteGap separates a sentence from the one before it in Note. The
 // checked line starts a new line so it is not read as part of the
 // command that ends the action.
-func noteGap(p part) string {
-	if p == partChecked || p == partHint {
+func noteGap(p, before part) string {
+	if p == partChecked || p == partHint || p == partGrouped ||
+		before == partGrouped {
 		return "\n"
 	}
 	return " "

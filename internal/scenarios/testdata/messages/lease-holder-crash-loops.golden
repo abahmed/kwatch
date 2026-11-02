@@ -9,13 +9,16 @@
 |
 | *Each gets its own message when it changes or resolves.*
 10:03:00 material change
-🟠 ccm in kube-system (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. It fails with "fatal: cannot reach the cloud API". Its last run lasted ten seconds; six restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs ccm-e465b17e-a -c app -n kube-system --previous
+🟠 ccm in kube-system (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. It fails with "fatal: cannot reach the cloud API". Its last run lasted ten seconds; six restarts since its pod was created one hour ago. It runs a single replica.
+Also grouped: 1 lease stale alert, 1 not ready alert
+To read the output of the last crash, run kubectl logs ccm-e465b17e-a -c app -n kube-system --previous
 🟠 ccm in kube-system (prod-eu-1) keeps crashing.
 | 🟠 **ccm** in **kube-system** (**prod-eu-1**) keeps crashing.
 | Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
 | It fails with `fatal: cannot reach the cloud API`.
 | Its last run lasted ten seconds; six restarts since its pod was created one hour ago.
 | It runs a single replica.
+| Also grouped: 1 lease stale alert, 1 not ready alert
 | To read the output of the last crash, run
 | ```
 | kubectl logs ccm-e465b17e-a -c app -n kube-system --previous

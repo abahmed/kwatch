@@ -1,11 +1,14 @@
 10:11:15 settled
-🟠 ebs-csi-node in kube-system (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. It fails with "failed to dial the kubelet registration socket". Its last run lasted ten seconds; three restarts since its pod was created about one hour ago. api in shop is affected as well. To read the output of the last crash, run kubectl logs ebs-csi-node-n1 -c app -n kube-system --previous
+🟠 ebs-csi-node in kube-system (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. It fails with "failed to dial the kubelet registration socket". Its last run lasted ten seconds; three restarts since its pod was created about one hour ago. api in shop is affected as well.
+Also grouped: 1 failed mount alert
+To read the output of the last crash, run kubectl logs ebs-csi-node-n1 -c app -n kube-system --previous
 🟠 ebs-csi-node in kube-system (prod-eu-1) keeps crashing.
 | 🟠 **ebs-csi-node** in **kube-system** (**prod-eu-1**) keeps crashing.
 | Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
 | It fails with `failed to dial the kubelet registration socket`.
 | Its last run lasted ten seconds; three restarts since its pod was created about one hour ago.
 | **api** in **shop** is affected as well.
+| Also grouped: 1 failed mount alert
 | To read the output of the last crash, run
 | ```
 | kubectl logs ebs-csi-node-n1 -c app -n kube-system --previous

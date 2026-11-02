@@ -1,10 +1,13 @@
 10:02:15 settled
-🟠 cart in shop (prod-eu-1) keeps crashing. It fails with "panic: cart cache is full". All of its dependents are failing. Service cart can't serve traffic. To read the output of the last crash, run kubectl logs cart-79887286-a -c app -n shop --previous
+🟠 cart in shop (prod-eu-1) keeps crashing. It fails with "panic: cart cache is full". All of its dependents are failing. Service cart can't serve traffic.
+Also grouped: 1 no endpoints alert
+To read the output of the last crash, run kubectl logs cart-79887286-a -c app -n shop --previous
 🟠 cart in shop (prod-eu-1) keeps crashing.
 | 🟠 **cart** in **shop** (**prod-eu-1**) keeps crashing.
 | It fails with `panic: cart cache is full`.
 | All of its dependents are failing.
 | Service **cart** can't serve traffic.
+| Also grouped: 1 no endpoints alert
 | To read the output of the last crash, run
 | ```
 | kubectl logs cart-79887286-a -c app -n shop --previous

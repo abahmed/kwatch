@@ -13,12 +13,15 @@
 |
 | *Each gets its own message when it changes or resolves.*
 10:08:30 material change
-🟠 Node n1 (prod-eu-1) has run out of pod IP addresses. 8 pods can't start on 1 node: no free pod IPs. Their events say "failed to assign an IP address to container". Pod aws-node-n1 in kube-system fails with "failed to initialize ipamd: no IP addresses available". aws-node in kube-system; billing-app0 and billing-app1 in billing; and six others are affected as well. To check the node's conditions and recent events, run kubectl describe node n1
+🟠 Node n1 (prod-eu-1) has run out of pod IP addresses. 8 pods can't start on 1 node: no free pod IPs. Their events say "failed to assign an IP address to container". Pod aws-node-n1 in kube-system fails with "failed to initialize ipamd: no IP addresses available". aws-node in kube-system; billing-app0 and billing-app1 in billing; and six others are affected as well.
+Also grouped: 9 not ready alerts, 8 network alerts, 1 crash loop
+To check the node's conditions and recent events, run kubectl describe node n1
 🟠 Node n1 (prod-eu-1) has run out of pod IP addresses.
 | 🟠 Node n1 (**prod-eu-1**) has run out of pod IP addresses.
 | 8 pods can't start on 1 node: no free pod IPs. Their events say `failed to assign an IP address to container`.
 | Pod **aws-node-n1** in **kube-system** fails with `failed to initialize ipamd: no IP addresses available`.
 | **aws-node** in **kube-system**; **billing-app0** and **billing-app1** in **billing**; and six others are affected as well.
+| Also grouped: 9 not ready alerts, 8 network alerts, 1 crash loop
 | To check the node's conditions and recent events, run
 | ```
 | kubectl describe node n1

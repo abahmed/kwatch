@@ -1,5 +1,7 @@
 10:04:15 settled
-🟠 Controller is failing in shop (prod-eu-1) after the 10:01 UTC deletion of cluster role binding ops-pod-reader. It fails with "level=fatal msg="pods is forbidden: User \"system:serviceaccount:shop:controller\" cannot list resource \"pods\" in API…". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs controller-adb70153-a -c app -n shop --previous
+🟠 Controller is failing in shop (prod-eu-1) after the 10:01 UTC deletion of cluster role binding ops-pod-reader. It fails with "level=fatal msg="pods is forbidden: User \"system:serviceaccount:shop:controller\" cannot list resource \"pods\" in API…". Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+Also grouped: 1 crash loop
+To read the output of the last crash, run kubectl logs controller-adb70153-a -c app -n shop --previous
 Checked: both replicas fail, on 2 nodes.
 🟠 Controller is failing in shop (prod-eu-1) after the 10:01 UTC deletion of cluster role binding ops-pod-reader.
 | 🟠 Controller is failing in **shop** (**prod-eu-1**) after the 10:01 UTC deletion of cluster role binding **ops-pod-reader**.
@@ -8,6 +10,7 @@ Checked: both replicas fail, on 2 nodes.
 | level=fatal msg="pods is forbidden: User \"system:serviceaccount:shop:controller\" cannot list resource \"pods\" in API…
 | ```
 | Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| Also grouped: 1 crash loop
 | To read the output of the last crash, run
 | ```
 | kubectl logs controller-adb70153-a -c app -n shop --previous

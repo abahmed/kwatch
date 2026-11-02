@@ -1,9 +1,12 @@
 10:17:15 settled
-🟠 fleet is failing in shop (prod-eu-1) after the 10:10 UTC removal of node n3. Three failing workloads all depend on it. Services fleet, storage and support can't serve traffic. To see the object's state and events, run kubectl describe pod fleet-2deb324e-b -n shop
+🟠 fleet is failing in shop (prod-eu-1) after the 10:10 UTC removal of node n3. Three failing workloads all depend on it. Services fleet, storage and support can't serve traffic.
+Also grouped: 2 pending alerts
+To see the object's state and events, run kubectl describe pod fleet-2deb324e-b -n shop
 🟠 fleet is failing in shop (prod-eu-1) after the 10:10 UTC removal of node n3.
 | 🟠 **fleet** is failing in **shop** (**prod-eu-1**) after the 10:10 UTC removal of node n3.
 | Three failing workloads all depend on it.
 | Services **fleet**, **storage** and **support** can't serve traffic.
+| Also grouped: 2 pending alerts
 | To see the object's state and events, run
 | ```
 | kubectl describe pod fleet-2deb324e-b -n shop
