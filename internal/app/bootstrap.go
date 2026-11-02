@@ -167,8 +167,8 @@ func permissionChecks(runtime config.RuntimeConfig) []inventorykube.Access {
 	return checks
 }
 
-// newHealthServer builds the health server for the edition: the JSON
-// /status format and /metrics are Pro features.
+// newHealthServer builds the health server for the edition: /status
+// (text and JSON) and /metrics are Pro features.
 func newHealthServer(
 	runtime config.RuntimeConfig, now clock.Clock, overlayInvalid bool,
 	entitlements feature.Entitlements,
@@ -185,8 +185,8 @@ func newHealthServer(
 }
 
 // applyEditionEndpoints opens or closes the Pro endpoints of the health
-// server for e: the JSON /status format and /metrics. A nil e is
-// Community.
+// server for e: the text /status page, its JSON format and /metrics.
+// /health is in every edition. A nil e is Community.
 func applyEditionEndpoints(
 	server *health.HealthServer, e feature.Entitlements,
 ) {
@@ -195,6 +195,11 @@ func applyEditionEndpoints(
 		server.AllowStatusJSON()
 	} else {
 		server.DenyStatusJSON()
+	}
+	if limits.StatusText {
+		server.AllowStatusText()
+	} else {
+		server.DenyStatusText()
 	}
 	if limits.Metrics {
 		server.AllowMetrics()

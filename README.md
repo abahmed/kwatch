@@ -11,7 +11,7 @@
 
 <p align="center">
   kwatch runs inside your Kubernetes cluster, traces every failure back to
-  what started it, and sends one message: what broke, why, who changed it,
+  what started it, and sends one message: what broke, why, what changed it,
   and what to do next.
 </p>
 
@@ -56,9 +56,9 @@ license.
 <td width="33%" valign="top"><b>🔕 Quiet by default</b><br>One message, then silence until something new is true.</td>
 </tr>
 <tr>
-<td valign="top"><b>🕵️ Who changed what</b><br>See who changed what, and when.</td>
-<td valign="top"><b>👉 The next step</b><br>Every message ends with the command to run.</td>
-<td valign="top"><b>📣 50+ channels</b><br>Slack, Teams, PagerDuty, email, webhooks and more.</td>
+<td valign="top"><b>🕵️ What changed</b><br>See what changed, when, and which tool did it (Pro).</td>
+<td valign="top"><b>👉 The next step</b><br>Every message ends with the command to run (Pro).</td>
+<td valign="top"><b>📣 50+ channels</b><br>Slack, Teams, PagerDuty, email, webhooks and more (one on Community, all on Pro).</td>
 </tr>
 </table>
 
@@ -68,6 +68,8 @@ It is 03:07. A release went out, pods (the running copies of your apps) are
 crash looping (starting, failing and restarting over and over), a Service has no
 endpoints, and two other apps fail their health checks. Every alert is true.
 None of them says why.
+
+These samples show Pro. Community says what is failing and the type of cause.
 
 kwatch sends this instead (an illustrative message):
 
@@ -141,9 +143,9 @@ More in the [glossary](https://docs.kwatch.dev/glossary) and the
   storms. kwatch waits for failures to settle, merges what belongs together
   and speaks when there is news. Successful rollouts, scaling and node
   drains never wake anyone.
-- 🕵️ **Who changed what.** Rollouts, config edits and image updates sit on a
-  timeline with who made them, so a message can say "after alice's 14:02
-  release".
+- 🕵️ **What changed.** Rollouts, config edits and image updates sit on a
+  timeline with the tool or GitOps app that made them, so a message can say
+  "after the 14:02 release by argocd-controller".
 - 👉 **The next step.** A message ends with the command to run: read the crash
   log, describe the node, or roll back.
 - 📣 **50+ channels.** Slack, Microsoft Teams, Discord, PagerDuty, Opsgenie,
@@ -241,7 +243,7 @@ how urgent a message is: 🔴 page · 🟠 notify · 🟡 low · ✅ resolved.
 
 1. **Watch.** kwatch keeps a live map of your cluster: pods, workloads,
    nodes, volumes, configs, services and certificates, how they connect,
-   and every change made to them, with who made it.
+   and every change made to them, with the tool or GitOps app that made it.
 2. **Trace.** When something fails, it follows the links upstream and keeps
    only suspects that are broken or changed just before. It prefers the
    cause with stronger evidence over the one that covers more failures.
@@ -307,11 +309,12 @@ during early access. No credit card required.
 
 | | Community | Pro |
 | --- | --- | --- |
-| Detection | Pod crash loops, OOM kills and Pending pods; node NotReady | Adds node pressure and draining, readiness, rollouts, Jobs and CronJobs, PDBs, HPAs, storage, network, admission, certificates, quota, custom resources, control plane, probes and unusual events |
-| Root cause | One-line headline | Full proof and confidence, shared-factor suspects, recent changes and who made them, affected services, log excerpts |
+| Detection | Pods: crash loops, OOM kills, Pending and unschedulable pods, image pull errors, config errors, evictions, init-container failures, liveness and startup probe failures; node NotReady | Adds node pressure and draining, readiness, rollouts, Jobs and CronJobs, PDBs, HPAs, storage, network, admission, certificates, quota, custom resources, control plane, probes and unusual events |
+| Root cause | What is failing and the type of cause ("Cause found: a config change.") | The exact cause (which object or change), full proof and confidence, shared-factor suspects, recent changes and the tool or GitOps app that made them, affected services, log excerpts, fix commands and the setting to change, recurrence ("This is the third time this week") |
 | Channels | 1 provider (pick with `app.communityProvider`), namespace filters and silences | All providers, routing by scope, threads, text templates, audit log |
-| Noise control | Related alerts arrive as one incident, in Community and Pro. Dedup and settling; announced incidents survive a restart, so their resolves are still sent | Flapping detection, startup summary, state kept on disk across restarts, changes made while kwatch was down, gap report |
-| Operations | RBAC audit, secret redaction, health, text `/status` | Prometheus `/metrics`, severity overrides, maintenance holds, runbook links, heartbeat monitor, `/status` JSON, flight recorder and `replay-export` |
+| Noise control | Related alerts arrive as one incident, in Community and Pro. Dedup and settling; failures already present at start are announced one by one if still failing after the startup window; announced incidents survive a restart, so their resolves are still sent | Flapping detection, startup summary, state kept on disk across restarts, changes made while kwatch was down, gap report |
+| Operations | RBAC audit, secret redaction, health (`/health`) | Heartbeat monitor (dead man's switch), Prometheus `/metrics`, severity overrides, maintenance holds, runbook links, `/status` (text and JSON), flight recorder and `replay-export` |
+| Dashboard | None | Read-only web dashboard: active and resolved issues, who was told, and an overview of the cluster and of kwatch itself (`dashboard.enabled`) |
 | Account | None | Email only |
 | Support | GitHub issues and Discussions | Dedicated support: installation help, and your feature requests and fixes come first |
 
@@ -338,8 +341,8 @@ install, set `KWATCH_LICENSE_KEY` in the environment of the same command.
   [what leaves my cluster](#-what-leaves-my-cluster)). If it can't reach
   kwatch.dev, Pro keeps working for up to 7 days after the last successful
   check, then falls back to Community. Monitoring continues.
-- The license state is in `/status` and in the installer's **License / Pro**
-  menu.
+- The license state is in the startup log, in `/status` (Pro) and in the
+  installer's **License / Pro** menu.
 
 Details: [licensing](./docs/licensing.md).
 
@@ -362,7 +365,7 @@ channels you set up.
   kwatch version and the node count. Community without a key makes no
   license calls.
 - **Nothing else goes to kwatch.dev.** To know when kwatch itself stops,
-  Pro can ping your own monitoring (`heartbeatMonitor.url`).
+  kwatch Pro can ping your own monitoring (`heartbeatMonitor.url`).
 - The license, the telemetry and the update check always verify TLS, even if
   `app.insecureSkipTLSVerify` is set for your alert providers.
 
@@ -410,9 +413,13 @@ license instance key.
 With Pro, it picks up where it left off: open incidents are not announced
 again and changes made while it was down still explain failures. After a
 gap of 5 minutes or more it sends a gap report: what changed and what
-crashed while it was down, compared with before. Community
-keeps state in memory, so after a restart it takes a fresh baseline and
-alerts on new failures or ones that get worse. See
+crashed while it was down, compared with before. Community saves
+only the incidents it announced that are still open, and restores them
+so their resolves are still sent; history and baselines start fresh. Any
+other failure already present is announced on its own if it is still
+failing once the two-minute startup window ends (Pro sends one startup
+summary instead), and one that recovers inside the window is never
+mentioned. See
 [production operations](./docs/production-operations.md).
 </details>
 

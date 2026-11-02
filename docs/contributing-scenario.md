@@ -1,4 +1,4 @@
-# Add a labelled scenario
+# Add a labeled scenario
 
 A scenario is a recorded cluster story plus a label that says what kwatch must
 conclude. The scorecard replays all of them, so a new scenario is both a
@@ -72,7 +72,7 @@ that needs it, or an entry in `ablations`
 
 A wrong verdict found in the field becomes a permanent scenario the same way.
 Do not lower a gate or relax a label to make a scenario pass; fix the table,
-weights or detector instead. Results are summarised in
+weights or detector instead. Results are summarized in
 `internal/scenarios/SCORECARD.md`: its "Current report" block is the output
 of `make alert-quality` pasted between the markers, and
 `make alert-quality-gate` fails when that block has drifted, so refresh it
@@ -105,7 +105,7 @@ in the same change.
 
 The aggregate gates average over hundreds of scenarios, so one scenario that
 stops passing can hide inside the slack.
-`internal/scenarios/testdata/ratchet.txt` lists every labelled scenario that
+`internal/scenarios/testdata/ratchet.txt` lists every labeled scenario that
 passes, with how its root was found
 (`found-high`, `found-likely`, `found-possible`, `self`, `unknown`, `quiet`).
 `TestScenarioRatchetHolds` and the scorecard gate "Scenarios that passed and
@@ -132,5 +132,5 @@ not build the engine, to find where it is confidently wrong: a recent change
 that is not the cause, look-alike names, a healthy dependency, faults that
 share a node, and states that must stay quiet. Their names start with
 `adv-`, their labels say what a person who knows Kubernetes would conclude,
-and they are ordinary members of the labelled library: fixtures and message
+and they are ordinary members of the labeled library: fixtures and message
 goldens live in `testdata` and the same gates judge them.

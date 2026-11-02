@@ -99,7 +99,8 @@ func newPipelineBuild(
 
 // incidentConfig is the lifecycle configuration of the edition. Without
 // the Pro lifecycle there are no flapping incidents, paging rules,
-// reminders or hand-overs, and no severity overrides.
+// reminders or hand-overs, and no severity overrides; without change
+// correlation the journal links no changes and takes no snapshots.
 func (p *pipelineBuild) incidentConfig() incident.Config {
 	deps := p.deps
 	cfg := incident.Config{
@@ -119,6 +120,7 @@ func (p *pipelineBuild) incidentConfig() incident.Config {
 		cfg.NoFlapping, cfg.NoPaging = true, true
 		cfg.NoReminders, cfg.NoHandover = true, true
 	}
+	cfg.NoJournalDetail = !deps.has(feature.ChangeCorrelation)
 	return cfg
 }
 
@@ -191,7 +193,8 @@ func (p *pipelineBuild) notify(report string) {
 }
 
 // newWriter composes messages for the edition: Community writes the
-// one-line cause without proofs, and runbooks need Pro. While the Pro
+// category of the cause without its object or proofs, and runbooks
+// need Pro. While the Pro
 // dashboard is served, messages link to it at the address found in the
 // model (dashboard_address.go).
 func (p *pipelineBuild) newWriter() compose.Writer {

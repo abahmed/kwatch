@@ -56,7 +56,7 @@ func (w Writer) problemBullets(
 			break
 		}
 		b := notification.Block{Kind: notification.Bullet,
-			Spans: podSpans(itemLine(markedTitle(Writer{}.Write(d, now)),
+			Spans: podSpans(itemLine(markedTitle(w.listWriter().Write(d, now)),
 				d.Incident.Root.Namespace) + usualTail(d))}
 		blocks := []notification.Block{b}
 		boldNames(blocks, incidentNames(d.Incident, ""))

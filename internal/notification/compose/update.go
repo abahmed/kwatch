@@ -91,13 +91,20 @@ func raisedSentences(f caseFacts) []sentence {
 // revisedSentences restate the case under its new cause, led by what
 // the thread now learns: "Cause now known: Node n3 is low on memory."
 // A cause that replaces one already told says "Cause changed:" instead.
+// The Community message puts the label on its category: "payments
+// keeps crashing. Cause changed: a config change."
 func revisedSentences(f caseFacts) []sentence {
 	lead := leadSentences(f)
 	label := "Cause now known: "
 	if f.p.Pending.CauseReplaced() {
 		label = "Cause changed: "
 	}
-	lead[0].text = label + lead[0].text
+	labeled := &lead[0]
+	if last := &lead[len(lead)-1]; last.fact == factCauseTeaser {
+		labeled = last
+		last.text = strings.TrimPrefix(last.text, teaserLabel)
+	}
+	labeled.text = label + labeled.text
 	lead = append(lead, strongestProof(f)...)
 	return append(lead, formerRootSentences(f)...)
 }
@@ -119,7 +126,7 @@ func flappingSentences(f caseFacts) []sentence {
 			f.leadName(leadSubject(f))) +
 			" keeps failing and recovering: it has recovered " +
 			plural(len(f.p.Cycles), "time") + " recently."},
-		{part: partRecurrence, text: "kwatch will write again when it stays " +
+		{part: partFollowUp, text: "kwatch will write again when it stays " +
 			"healthy or fails differently."},
 	}
 }

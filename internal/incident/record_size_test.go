@@ -45,7 +45,7 @@ func fullJournal(p *Incident) {
 	for i := 0; i < maxBreaks; i++ {
 		p.Journal.Breaks = append(p.Journal.Breaks, BreakSnapshot{
 			At: at(0), Reason: BreakWorse,
-			Containers: failingContainers(rows)})
+			Containers: failingContainers(rows, at(0))})
 	}
 	for i := 0; i < 2*maxTransitions; i++ {
 		p.Journal.add(Transition{At: at(0),

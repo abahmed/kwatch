@@ -165,6 +165,7 @@ func TestSendTrailFailedWriteIsRetried(t *testing.T) {
 	box := newOutbox(store, time.Now)
 	var trail sendTrail
 	box.trails, box.trail = store, &trail
+	trail.restore(nil)
 	trail.add("inc-1", SendAttempt{Result: "ok"})
 
 	ok, wrote := box.flushBatch()
@@ -259,4 +260,37 @@ func TestSendTrailOnChangeWakesForWaitingDeletions(t *testing.T) {
 	trail.onChange(func() { wakes++ })
 
 	assert.Equal(t, 1, wakes)
+}
+
+// Without a trail store nothing ever takes the changes, so none are
+// noted: the trail stays bounded and so does what waits to be written.
+func TestSendTrailWithoutTrailStoreNotesNoChanges(t *testing.T) {
+	manager := outboxManager(t, newScriptedProvider(nil), newMemOutbox())
+	for i := range 20000 {
+		manager.NotifyIncident(notification.Message{
+			Key: fmt.Sprint("inc-", i), Carrier: "digest"})
+	}
+	manager.trail.mu.Lock()
+	defer manager.trail.mu.Unlock()
+	assert.Empty(t, manager.trail.dirty)
+	assert.Len(t, manager.trail.byKey, maxTrailKeys)
+}
+
+// Incidents told before the trail store is attached are written once it
+// is, as are the changes after it.
+func TestSendTrailAttachWritesWhatWasToldBefore(t *testing.T) {
+	var trail sendTrail
+	for i := range 3 {
+		trail.add(fmt.Sprint("inc-", i), SendAttempt{})
+	}
+	trail.mu.Lock()
+	require.Empty(t, trail.dirty, "no store yet")
+	trail.mu.Unlock()
+
+	trail.restore(nil)
+	trail.add("inc-3", SendAttempt{})
+	puts, removes := trail.take()
+
+	assert.Len(t, puts, 4)
+	assert.Empty(t, removes)
 }

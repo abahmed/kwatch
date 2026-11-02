@@ -4,7 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 // stoppedAtCap is a resolve at the still-broken cap with the given
@@ -48,5 +50,29 @@ func TestStoppedTrackingWorkloadIsShortOfReplicas(t *testing.T) {
 	note := Writer{}.Write(d, writerNow).Note
 	if !strings.Contains(note, "is still short of replicas.") {
 		t.Errorf("note = %q", note)
+	}
+}
+
+// Both editions warn that a resolve at the cap is still not healthy,
+// under the resolved marker, so Community never reads as fixed.
+func TestStoppedTrackingWarnsOnBothEditions(t *testing.T) {
+	want := "kwatch stopped tracking this after 2h; it is still not " +
+		"healthy, so check it yourself."
+	for name, e := range map[string]feature.Entitlements{
+		"community": feature.CommunityEntitlements(),
+		"pro":       feature.ProEntitlements(),
+	} {
+		m := Writer{}.ForEdition(e, false).Write(
+			stoppedAtCap(incident.StillCrashingNote), writerNow)
+		if !strings.Contains(m.Note, want) {
+			t.Errorf("%s: note = %q", name, m.Note)
+		}
+		if !strings.Contains(m.Note, "still has a container that "+
+			"keeps crashing.") {
+			t.Errorf("%s: lead missing: %q", name, m.Note)
+		}
+		if m.Marker != notification.MarkerResolved {
+			t.Errorf("%s: marker = %q", name, m.Marker)
+		}
 	}
 }

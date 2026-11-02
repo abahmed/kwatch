@@ -3,6 +3,7 @@ package incident
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -34,18 +35,37 @@ func TestPodsOfKeepsMemberPodsBeforeOwnedPods(t *testing.T) {
 
 func TestFailingContainersNeedsMoreThanARestart(t *testing.T) {
 	yes, no := true, false
+	cutoff := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	rows := []ContainerState{
 		{Container: "healthy", Ready: &yes, Restarts: 5},
 		{Container: "unknown", Restarts: 5},
 		{Container: "unready", Ready: &no},
 		{Container: "waiting", Ready: &yes, StateReason: "Waiting"},
 		{Container: "fine", Ready: &yes},
+		{Container: "old-oom", Ready: &yes, Restarts: 1,
+			LastReason: "OOMKilled", LastFinished: cutoff.Add(-time.Hour)},
+		{Container: "old-untimed", Ready: &yes, LastReason: "Error"},
+		{Container: "recent-oom", Ready: &yes, Restarts: 1,
+			LastReason: "OOMKilled", LastFinished: cutoff.Add(time.Minute)},
 	}
 
 	var got []string
-	for _, row := range failingContainers(rows) {
+	for _, row := range failingContainers(rows, cutoff) {
 		got = append(got, row.Container)
 	}
 
-	assert.Equal(t, []string{"unknown", "unready", "waiting"}, got)
+	assert.Equal(t, []string{"unknown", "unready", "waiting",
+		"recent-oom"}, got)
+}
+
+// A Ready container's last termination counts from the incident's
+// onset or RecentWindow ago, whichever is earlier.
+func TestBreakCutoffUsesEarlierOfOnsetAndWindow(t *testing.T) {
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	old := &Incident{Opened: now.Add(-2 * time.Hour)}
+	fresh := &Incident{Opened: now.Add(-time.Minute)}
+
+	assert.Equal(t, old.Opened, breakCutoff(old, now))
+	assert.Equal(t, now.Add(-RecentWindow), breakCutoff(fresh, now))
+	assert.Equal(t, now.Add(-RecentWindow), breakCutoff(&Incident{}, now))
 }

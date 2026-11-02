@@ -187,7 +187,9 @@ func pastTense(text string) string {
 // condition that held: the workload short of replicas, or, with
 // incident.StillCrashingNote, a container that keeps crashing; a
 // subject that has no replicas "has not recovered". rest is
-// the reason after its prefix, "2h; coverage check continues".
+// the reason after its prefix, "2h; coverage check continues". The
+// warning that it is still not healthy is a follow-up, not proof, so
+// a Community message keeps it.
 func stoppedTracking(
 	f caseFacts, subject inventory.EntityID, rest string,
 ) []sentence {
@@ -202,8 +204,8 @@ func stoppedTracking(
 	return []sentence{
 		{part: partLead, text: capitalName(subject,
 			f.leadName(subject)+state)},
-		{part: partProof, text: "kwatch stopped tracking this after " +
-			strings.TrimSpace(span) + "; it is still not healthy, so " +
-			"check it yourself."},
+		{part: partFollowUp, text: "kwatch stopped tracking this " +
+			"after " + strings.TrimSpace(span) + "; it is still not " +
+			"healthy, so check it yourself."},
 	}
 }

@@ -25,8 +25,8 @@ on past its limit, `Cause.Beyond`, or a hop of it, into the other's
 failures; or a cause rooted at the other's root or merged roots), at most
 five each. `Radius` counts the Services, Ingresses and workloads of the
 impact and the failing pods (`radius.go`), and `Journal.Widest` keeps the
-widest it reached. Messages say "Caused by: …" and "N pods were affected"
-from them; the dashboard serves `causedBy`, `causing` and `blastRadius`.
+widest it reached. Pro messages say "Caused by: …" and "N pods were
+affected" from them; the dashboard serves `causedBy`, `causing` and `blastRadius`.
 
 ## The states
 

@@ -45,7 +45,7 @@ func (w Writer) StartupSummary(
 		plural(len(decisions), "problem") + " that " +
 		"began before it was watching."}}
 	// The lead named the cluster; the listed titles do not repeat it.
-	sentences = append(sentences, digestTitles(decisions, now, "")...)
+	sentences = append(sentences, w.digestTitles(decisions, now, "")...)
 	sentences = append(sentences, sentence{part: partAction,
 		text: eachOwnMessage})
 	msg := notification.Message{
@@ -85,7 +85,7 @@ func (w Writer) Rollup(
 	sentences := []sentence{{part: partLead, text: "kwatch" +
 		w.clusterTag() + " found " + plural(len(decisions), "new problem") +
 		" at the same time."}}
-	sentences = append(sentences, digestTitles(decisions, now, "")...)
+	sentences = append(sentences, w.digestTitles(decisions, now, "")...)
 	sentences = append(sentences, sentence{part: partAction,
 		text: eachOwnMessage})
 	msg := notification.Message{
@@ -146,13 +146,13 @@ func (w Writer) DigestWith(
 			text: extras.Wake.Text()})
 	}
 	list := foldLeftovers(opened, extras)
-	sentences = append(sentences, digestTitles(list.opened, now, "")...)
+	sentences = append(sentences, w.digestTitles(list.opened, now, "")...)
 	sentences = append(sentences, lineSentences(list.full)...)
 	sentences = append(sentences, lineSentences(list.ongoing)...)
 	sentences = append(sentences, ongoingSentences(list.extras, now)...)
 	sentences = append(sentences, lineSentences(list.same)...)
 	sentences = append(sentences,
-		digestTitles(resolved, now, "Resolved: ")...)
+		w.digestTitles(resolved, now, "Resolved: ")...)
 	sentences = append(sentences, riskTitles(risks)...)
 	sentences = append(sentences, urgencySentences(
 		len(opened)+len(extras.Ongoing)+len(extras.Unchanged)+
@@ -216,8 +216,9 @@ func digestCounts(
 	return counts
 }
 
-// digestTitles lists up to maxSummaryNamed incidents by their title.
-func digestTitles(
+// digestTitles lists up to maxSummaryNamed incidents by their title,
+// as the edition's message leads with it (listWriter).
+func (w Writer) digestTitles(
 	decisions []incident.Decision, now time.Time, prefix string,
 ) []sentence {
 	var out []sentence
@@ -233,7 +234,7 @@ func digestTitles(
 		}
 		out = append(out, sentence{part: partProof,
 			text: prefix + withUsualTail(
-				markedTitle(Writer{}.Write(d, now)), d)})
+				markedTitle(w.listWriter().Write(d, now)), d)})
 	}
 	return out
 }

@@ -105,8 +105,8 @@ func newServerDeps(
 }
 
 // setEdition records the edition the license entitles and applies what
-// depends on it before components exist: the /status JSON format and
-// /metrics.
+// depends on it before components exist: the /status page, its JSON
+// format and /metrics.
 func (d *serverDeps) setEdition(e feature.Entitlements) {
 	d.edition.Store(e)
 	if d.healthServer == nil {

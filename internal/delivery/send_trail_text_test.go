@@ -67,6 +67,7 @@ func TestSendTrailSentTextSurvivesRestart(t *testing.T) {
 	trail.noteText("k", "chat", SentText{Text: "old"})
 	trail.noteText("k", "mail", SentText{Text: "mail"})
 	trail.add("k", SendAttempt{Result: resultOK})
+	trail.restore(nil)
 	puts, _ := trail.take()
 	require.Len(t, puts, 1)
 

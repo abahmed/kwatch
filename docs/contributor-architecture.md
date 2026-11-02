@@ -50,6 +50,7 @@ Each line matches the package's `doc.go`.
 | `internal/rbac` | Audits the permissions kwatch uses and reports what is missing. |
 | `internal/kubeclient` | Kubernetes client construction and informer helpers. Only `app` constructs clients. |
 | `internal/redact` | Removes secrets from text before kwatch keeps or sends it. A leaf. |
+| `internal/cloudmeta` | The cloud metadata addresses that delivery and KwatchConfig probes both refuse. A leaf. |
 | `internal/license` | Verifies Pro license keys and activation leases offline; no network I/O. |
 | `internal/safego` | Runs work so that a panic cannot end the process. |
 | `internal/format`, `internal/ratelimit`, `internal/clock` | Pure text helpers, the rate-limit error type, the time dependency. |
@@ -58,7 +59,7 @@ Each line matches the package's `doc.go`.
 | `internal/flight` | The flight recorder: a bounded, sanitized ring of the observation stream in the state file, and `kwatch replay-export`. |
 | `internal/unexplained` | Bounded seven-day counts of Warning events kwatch has no entry for and of incidents whose cause stayed unclear. Display only. |
 | `internal/selfcheck` | Per-rule counts of whether recovery followed a change to the named cause. Display only. |
-| `internal/scenarios` | Labelled scenario library and the scorecard gate. Tests only. |
+| `internal/scenarios` | Labeled scenario library and the scorecard gate. Tests only. |
 | `internal/scorecard` | Measures notification quality against the production goals. |
 | `internal/feature`, `internal/heartbeat`, `internal/telemetry`, `internal/upgrader`, `internal/version` | Feature identifiers, the external heartbeat ping, adoption telemetry, release check, build version. |
 | `internal/architecture` | Tests that enforce repository layout. No production code. |
@@ -89,7 +90,7 @@ The script enforces these rules:
   subpackages `announce`, `coverage` and `investigate` never import
   `pipeline` or each other; the pipeline wires them.
 - Leaf packages (`notification`, `format`, `redact`, `ratelimit`,
-  `detection/reasons`) import no upper layer.
+  `cloudmeta`, `detection/reasons`) import no upper layer.
 - `alert/*` and `delivery` import no domain package, no `kube`, no
   Kubernetes client library and not `app`. Providers never use `net/http`
   directly; they call `delivery/transport`, which decides status
@@ -111,7 +112,7 @@ The script enforces these rules:
 | Teach root cause a new way failure spreads | A row in `rootcause/explain/table_rows*.go` | [propagation rule](./contributing-propagation-rule.md) |
 | Watch a new kind or add a source | `inventory/kube` (schema, registration, watch mode) | [source](./contributing-source.md) |
 | Say a new fact in the message | A sentence writer in `notification/compose` | [message fact](./contributing-message-fact.md) |
-| Prove a behavior end to end | A labelled scenario in `internal/scenarios` | [scenario](./contributing-scenario.md) |
+| Prove a behavior end to end | A labeled scenario in `internal/scenarios` | [scenario](./contributing-scenario.md) |
 | Add a provider | `internal/alert/<provider>`, catalog metadata, transport tests | below |
 | Change the state file | `internal/storage`, bump `SchemaVersion` | below |
 
@@ -152,7 +153,7 @@ drift check. Locally, a check whose tool is not installed is skipped with a
 notice; in CI it fails. `make alert-quality` prints the alert-quality report
 without failing, and `make alert-quality-gate` runs only those gates.
 Real-cluster suites run in the `E2E` workflow: nightly, on demand, or on a
-pull request labelled `e2e`.
+pull request labeled `e2e`.
 
 During work use the cheaper package-scoped gates:
 

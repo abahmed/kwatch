@@ -6,6 +6,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -134,5 +135,37 @@ func TestCausedByLineIsPlainWithACause(t *testing.T) {
 	if !strings.Contains(text, "Caused by: Node n1 (prod-eu-1) is "+
 		"not ready.") || strings.Contains(text, "Likely caused") {
 		t.Fatalf("want the plain caused-by line:\n%s", text)
+	}
+}
+
+// The tie to another incident comes from that incident's failure
+// chain, which is Pro detail: a Community message never names it, and
+// the sentences that say no cause is known speak as without the tie.
+func TestCommunityWriterDropsTheCausedByLine(t *testing.T) {
+	community := Writer{}.ForEdition(feature.CommunityEntitlements(), true)
+	wants := map[string]string{
+		"unclear": unclearText, "checked": "points to a cause",
+	}
+	for name, own := range map[string]bool{
+		"unclear": true, "checked": false,
+	} {
+		tied := unclearIncident(own)
+		tied.CausedBy = []incident.Related{nodeCause}
+		tied.Causing = []incident.Related{nodeCause}
+
+		text := notification.Text(community.Write(announce(tied), at(6, 0)))
+		alone := notification.Text(community.Write(
+			announce(unclearIncident(own)), at(6, 0)))
+
+		if strings.Contains(text, "aused by") {
+			t.Errorf("%s: named the tie:\n%s", name, text)
+		}
+		if text != alone {
+			t.Errorf("%s: tie changed the message:\n%s\nwant\n%s",
+				name, text, alone)
+		}
+		if !strings.Contains(text, wants[name]) {
+			t.Errorf("%s: want %q:\n%s", name, wants[name], text)
+		}
 	}
 }

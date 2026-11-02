@@ -56,8 +56,8 @@ func (w Writer) NamespaceOutage(
 	}
 	sentences := []sentence{{part: partLead, text: endSentence(
 		outageLead(o, w.clusterTag(), decisions))}}
-	sentences = append(sentences, digestTitles(decisions, now, "")...)
-	sentences = append(sentences, sharedSentences(o.Shared)...)
+	sentences = append(sentences, w.digestTitles(decisions, now, "")...)
+	sentences = append(sentences, w.sharedSentences(o.Shared)...)
 	sentences = append(sentences, sentence{part: partAction,
 		text: eachOwnMessage})
 	msg := notification.Message{
@@ -99,14 +99,15 @@ func outageSince(ds []incident.Decision) time.Time {
 }
 
 // sharedSentences states what the workloads have in common, without
-// saying it is the cause.
-func sharedSentences(s OutageShared) []sentence {
+// saying it is the cause. The shared change is Pro detail: a Community
+// message does not name it.
+func (w Writer) sharedSentences(s OutageShared) []sentence {
 	var out []sentence
 	if s.Node != "" {
 		out = append(out, sentence{part: partProof,
 			text: "They all ran on node " + s.Node + "."})
 	}
-	if s.Change != nil {
+	if s.Change != nil && !w.Community {
 		out = append(out, sentence{part: partProof,
 			text: "Shortly before, " + changeFact(*s.Change) + "."})
 	}
@@ -122,7 +123,7 @@ func (w Writer) outageDoc(
 	lead := strings.TrimPrefix(outageLead(o, "", ds), o.Namespace+": ")
 	doc := w.listDoc(mark, o.Namespace, []string{lead}, ds, now)
 	var shared []notification.Block
-	for _, s := range sharedSentences(o.Shared) {
+	for _, s := range w.sharedSentences(o.Shared) {
 		shared = append(shared, notification.Block{Kind: notification.Para,
 			Spans: podSpans(s.text)})
 	}

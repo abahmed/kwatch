@@ -22,6 +22,8 @@ type statusHolder struct {
 	source atomic.Pointer[statusSource]
 	// noJSON refuses ?format=json (see DenyStatusJSON).
 	noJSON atomic.Bool
+	// noText refuses the text page (see DenyStatusText).
+	noText atomic.Bool
 	// license supplies the license section; nil leaves it out.
 	license atomic.Pointer[func() *status.License]
 }
@@ -29,6 +31,21 @@ type statusHolder struct {
 // AllowStatusJSON lifts DenyStatusJSON: the edition changed to one that
 // includes the JSON format.
 func (h *HealthServer) AllowStatusJSON() { h.statusHolder.noJSON.Store(false) }
+
+// StatusProText is the body of a /status request the edition refuses.
+const StatusProText = "The /status page is part of kwatch Pro. " +
+	"/health stays available."
+
+// DenyStatusText makes /status refuse the text page with 402 and
+// StatusProText: the page is not part of the running edition. A
+// refused ?format=json keeps its JSON answer (see DenyStatusJSON).
+func (h *HealthServer) DenyStatusText() { h.statusHolder.noText.Store(true) }
+
+// AllowStatusText lifts DenyStatusText: the edition changed to one that
+// includes the page.
+func (h *HealthServer) AllowStatusText() {
+	h.statusHolder.noText.Store(false)
+}
 
 // SetLicenseSource sets where /status gets its license section. The
 // function is called per request and must be cheap and not block.
@@ -81,6 +98,13 @@ func (h *HealthServer) statusHandler(
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusPaymentRequired)
 		writeBody(w, []byte("{\"error\":\"pro_required\"}\n"))
+		return
+	}
+	if h.statusHolder.noText.Load() &&
+		r.URL.Query().Get("format") != "json" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusPaymentRequired)
+		writeBody(w, []byte(StatusProText+"\n"))
 		return
 	}
 	report := (*source)()

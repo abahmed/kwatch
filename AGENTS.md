@@ -296,6 +296,7 @@ enforces, are in `docs/contributor-architecture.md`.
 | `internal/clock`, `internal/format`, `internal/metrics`, `internal/feature` | Time dependency, pure text helpers, the bounded-label Prometheus registry, feature identifiers |
 | `internal/redact` | Secret and private-address redaction at ingest and in the e2e sanitizer (leaf) |
 | `internal/ratelimit` | Provider rate-limit errors and Retry-After parsing; a leaf because SDK providers and delivery both use it |
+| `internal/cloudmeta` | Cloud metadata addresses and host names; a leaf because the delivery transport and KwatchConfig probes both refuse them |
 | `internal/health`, `internal/upgrader`, `internal/telemetry`, `internal/heartbeat` | Diagnostics server, upgrade check, telemetry, heartbeat |
 | `internal/kubeclient` | Kubernetes access: the application-owned `ClientSet`, HTTP client, informer trimming, and panic-safe handlers |
 
@@ -333,8 +334,9 @@ Every background saver, watcher, ticker, source, and worker has an owner,
 cancellation path, bounded shutdown, and observable failure.
 
 The health server serves `/healthz`, `/readyz`, `/availabilityz`,
-`/health` and `/metrics`, plus `/status` only when `healthCheck.statusEndpoint`
-is true (default false; otherwise 404). `/status` is the read-only view of
+`/health` and `/metrics` (Pro: Community answers it with `404`), plus
+`/status` only when `healthCheck.statusEndpoint` is true (default false;
+otherwise 404). `/status` is the read-only view of
 open incidents with object names, built by `internal/status`; it has no
 authentication, so reach it with `kubectl port-forward`. A component returning to the running state clears
 its previous safe degradation reason.
@@ -346,9 +348,9 @@ informer, or REST-client implementation.
 Rules of thumb:
 
 - `inventory` / `storage` / `notification` / `detection/reasons` /
-  `redact` / `ratelimit` / `format` must stay free of orchestration,
-  provider, and Kubernetes client imports. Only `inventory/kube` imports
-  Kubernetes clients for the model.
+  `redact` / `ratelimit` / `cloudmeta` / `format` must stay free of
+  orchestration, provider, and Kubernetes client imports. Only
+  `inventory/kube` imports Kubernetes clients for the model.
 - The domain layers import downward only: `inventory` <- `detection` <-
   `rootcause` <- `incident` <- `notification/compose`. `pipeline`
   orchestrates them, and only `internal/app` imports `pipeline`.

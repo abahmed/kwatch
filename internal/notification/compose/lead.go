@@ -11,7 +11,9 @@ import (
 	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
-// leadSentences writes what broke and why in one sentence.
+// leadSentences writes what broke and why in one sentence. The
+// Community message stops before the cause and tells its category in
+// a sentence of its own (causeTeaser).
 func leadSentences(f caseFacts) []sentence {
 	subject := leadSubject(f)
 	text := capitalName(subject, leadText(f))
@@ -19,11 +21,15 @@ func leadSentences(f caseFacts) []sentence {
 		// The product's name is lowercase wherever it starts a sentence.
 		text = leadText(f)
 	}
-	return []sentence{{part: partLead, text: endSentence(text)}}
+	return append([]sentence{{part: partLead, text: endSentence(text)}},
+		causeTeaser(f)...)
 }
 
 func leadText(f caseFacts) string {
 	p := f.p
+	if len(causeTeaser(f)) > 0 {
+		return communityLead(f)
+	}
 	if own := releaseRegression(f); own != nil {
 		return releaseLead(f, *own)
 	}

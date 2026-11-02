@@ -1,6 +1,8 @@
 package compose
 
 import (
+	"strings"
+
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -9,15 +11,21 @@ import (
 
 // The Pro line of a Community message: one line at most, either the
 // teaser (a Pro analysis would explain an incident Community leaves
-// without a cause) or the note for the alert's type. Copy is fixed by
-// kwatch.dev/packages/brand/specs/community-pro-teasers.md: no names,
-// no interpolation.
+// without a cause) or the note for the alert's type, then the fix hint
+// when Pro says how to fix it. A message that tells its cause's
+// category has the line of causeNote instead (cause_category.go). Copy
+// is fixed by kwatch.dev/packages/brand/specs/community-pro-teasers.md:
+// no names, no interpolation.
 
 // proInvite closes every Pro line.
 const proInvite = " Get Pro free during early access: kwatch.dev/pro"
 
 // proTeaser replaces the note when Pro found a likely cause.
 const proTeaser = "Pro found a likely cause for this."
+
+// proFix says that Pro has the steps and the setting Community leaves
+// out. It joins the note or teaser in its one line.
+const proFix = "Pro shows how to fix it."
 
 // Notes by alert type.
 const (
@@ -32,20 +40,27 @@ const (
 )
 
 // proNote is the one Pro line of d, or "" when the engine found nothing
-// Pro would show.
-func proNote(d incident.Decision) string {
-	if proTeaserFits(d) {
-		return proTeaser + proInvite
+// Pro would show. fixable adds the fix hint: Pro says how to fix it.
+func proNote(d incident.Decision, fixable bool) string {
+	var line []string
+	switch {
+	case proTeaserFits(d):
+		line = append(line, proTeaser)
+	case proFound(d):
+		line = append(line, noteByType(d.Incident))
 	}
-	if !proFound(d) {
+	if fixable {
+		line = append(line, proFix)
+	}
+	if len(line) == 0 {
 		return ""
 	}
-	return noteByType(d.Incident) + proInvite
+	return strings.Join(line, " ") + proInvite
 }
 
 // proTeaserFits reports an incident without a cause that a withheld
 // analysis would explain: a shared factor, or a recent change. With a
-// cause the one-line cause already names it.
+// cause the message tells its category already.
 func proTeaserFits(d incident.Decision) bool {
 	if d.Incident.Cause != nil {
 		return false

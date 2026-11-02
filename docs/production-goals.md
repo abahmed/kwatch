@@ -12,7 +12,7 @@ sends one clear, correct, narrative message per real incident:
 - why, with the evidence;
 - the impact;
 - the next step, with read-only `kubectl` suggestions. Anything that
-  changes the cluster is labelled as a change.
+  changes the cluster is labeled as a change.
 
 There are no user commands or APIs. The only endpoints are `/healthz`,
 `/readyz`, `/availabilityz`, `/health`, and `/metrics`, plus the read-only
@@ -29,18 +29,18 @@ and the staging day measures it with advisory states among its non-events.
 
 ## Alert-quality gates
 
-CI measures these on synthetic replay and labelled scenarios with
+CI measures these on synthetic replay and labeled scenarios with
 `make alert-quality-gate`, part of `make verify`. Current numbers are in
 [internal/scenarios/SCORECARD.md](../internal/scenarios/SCORECARD.md).
 
 | Goal | Target |
 | --- | --- |
-| Correct root cause, labelled scenarios | at least 90% |
+| Correct root cause, labeled scenarios | at least 90% |
 | Correct root cause, held-out scenarios | at least 80% |
-| Wrong high-confidence root | at most 5% of high-confidence cases, labelled and held-out together, gated once there are at least 20 |
-| Wrong root stated at likely confidence (0.50) or higher, labelled scenarios | 0 (a count, so one wrong answer cannot hide among many right ones) |
-| Wrong root in the first message of a labelled scenario | 0, even when a later message corrects it (a scenario whose story is a revision says so in its label) |
-| A labelled scenario that passed | keeps passing (per-scenario ratchet) |
+| Wrong high-confidence root | at most 5% of high-confidence cases, labeled and held-out together, gated once there are at least 20 |
+| Wrong root stated at likely confidence (0.50) or higher, labeled scenarios | 0 (a count, so one wrong answer cannot hide among many right ones) |
+| Wrong root in the first message of a labeled scenario | 0, even when a later message corrects it (a scenario whose story is a revision says so in its label) |
+| A labeled scenario that passed | keeps passing (per-scenario ratchet) |
 | Calibration, high confidence | right 80% to 100% of the time, gated at 10 or more cases |
 | Calibration, likely confidence | right 50% to 90% of the time, gated at 10 or more cases |
 | Messages per incident | p95 at most 3, most at most 5 |
@@ -51,7 +51,7 @@ CI measures these on synthetic replay and labelled scenarios with
 | Unchanged updates | 0% |
 | Re-created incidents | at most 5% |
 | Repeated recoveries | 0 |
-| Pages per outage | at most one per labelled root (a scenario may label more) |
+| Pages per outage | at most one per labeled root (a scenario may label more) |
 | Incidents left open after their members moved | 0 |
 | Recoveries said while members still fail | 0 |
 | Storm of 1,000 failing pods from one cause | at most 3 messages in 2 minutes |
@@ -59,7 +59,7 @@ CI measures these on synthetic replay and labelled scenarios with
 | A healthy node with a crashing app | never blames the node |
 
 A root is judged at every message, not only in the final state. Each
-labelled scenario lists the roots it may state (its root, its other
+labeled scenario lists the roots it may state (its root, its other
 roots and the unrelated incidents it names); the first message may state
 one of those or no cause at all, which says the cause is unknown. A hedge
 that names a rival counts as stating the rival too, and so does a message
@@ -70,7 +70,7 @@ slowest scenarios. A right root found by falling back to the failing
 entity with no stated cause is counted apart from one found with a
 stated cause, and the ratchet holds a root found with a cause to stating
 one, at its confidence level or higher. The labels and the ratchet are
-described in [add a labelled scenario](./contributing-scenario.md).
+described in [add a labeled scenario](./contributing-scenario.md).
 
 The gates must also be able to see the engine get worse. A mutation test
 switches the specificity scorer, every veto and the counterfactual checks
@@ -79,10 +79,10 @@ each, and fails unless some gate fails.
 
 Calibration is two-sided: overconfidence and underconfidence both fail
 the gate. The confidence levels are bucket boundaries chosen once from
-the labelled scenarios only (`scorecard.CalibratedHigh`) and committed as
+the labeled scenarios only (`scorecard.CalibratedHigh`) and committed as
 constants; the scorecard prints what the method gives for the current
-labelled set next to the committed value. Time to first message is
-measured on the simulated clock of the replay, for each labelled
+labeled set next to the committed value. Time to first message is
+measured on the simulated clock of the replay, for each labeled
 scenario that notifies or pages. The latency targets were set to two
 minutes (page) and five minutes (notify) on 2026-10-01 by the
 maintainers' decision; they leave room for the detectors' grace periods
@@ -91,11 +91,11 @@ plus the settle.
 The held-out scenarios are written from descriptions of Kubernetes
 failures and are never used to tune the engine. A held-out miss is
 reported, not fixed by changing rules, weights, tiers or labels to fit
-it; fixing the failure needs its own labelled scenario first. Held-out
-results are scored and reported separately from the labelled set.
+it; fixing the failure needs its own labeled scenario first. Held-out
+results are scored and reported separately from the labeled set.
 
 Once held-out scenarios have been looked at to find the generic gap
-behind a miss, they are no longer held out. They move into the labelled
+behind a miss, they are no longer held out. They move into the labeled
 set under their own names, and the same number of fresh held-out
 scenarios, for other failures, are written with their labels fixed
 before they are first replayed. The first rotation, on 2026-10-01, is

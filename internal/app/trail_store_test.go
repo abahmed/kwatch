@@ -10,6 +10,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/dashboard"
 	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/storage"
@@ -99,4 +100,25 @@ func TestTrailStoreReportsAFailedLoad(t *testing.T) {
 	got := server.ComponentStatuses()["delivery-outbox"]
 	assert.Equal(t, "degraded", got.State)
 	assert.Equal(t, "trail_restore_failed", got.Reason)
+}
+
+// Only the dashboard reads the send trail, so the outbox keeps it only
+// while the dashboard runs; the outbox itself is kept either way.
+func TestDeliveryOutboxKeepsTrailOnlyWithDashboard(t *testing.T) {
+	now := clock.Func(func() time.Time { return time.Unix(100, 0) })
+	dash := dashboard.NewServer(dashboard.Options{Token: "tok"}, now)
+	for name, deps := range map[string]*serverDeps{
+		"without dashboard": {},
+		"with dashboard":    {dashboardServer: dash},
+	} {
+		store := deliveryOutbox(deps, openTestStore(t))
+
+		_, keeps := store.(delivery.TrailStore)
+		assert.Equal(t, deps.dashboardServer != nil, keeps, name)
+		require.NoError(t, store.WriteOutbox(
+			[]delivery.OutboxRecord{{Version: 1, ID: "1"}}, nil), name)
+		records, err := store.LoadOutbox()
+		require.NoError(t, err, name)
+		assert.Len(t, records, 1, name)
+	}
 }

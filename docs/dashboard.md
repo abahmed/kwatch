@@ -927,7 +927,7 @@ true while the stream is quiet.
   ("many dashboard sign-in failures through one proxy") when 100 come
   in a minute. Without `trustProxy` behind an Ingress every client
   shares the proxy's address and its one limit.
-- **Shared mode** (`dashboard.shared`) refuses sign-in over plain http
+- **Shared mode** (`dashboard.mode: shared`) refuses sign-in over plain http
   (`403 https_required`) and refuses the bearer token over plain http
   too (`403`, "the token must be sent over https"), except from
   loopback, which is how a `kubectl port-forward` arrives. Over https
@@ -974,7 +974,7 @@ instead of "All clear" or the counts' sentence, and its health line
 says it can't tell whether alerts are getting out. The next answer
 that works hides the bar.
 `401` is not a failure: it goes to sign-in as before. A request the
-page cancelled itself (a newer search) counts for nothing.
+page canceled itself (a newer search) counts for nothing.
 
 ## Browser notifications
 

@@ -12,13 +12,30 @@ import (
 const PodLogsComponent = "pod-logs"
 
 // LinkStatus is whether messages link to the dashboard. Reason, set
-// when they do not, is one of no_route, port_mismatch,
-// unusable_address and routes_forbidden.
+// when they do not, is one of the Links* reasons.
 type LinkStatus struct {
 	On      bool   `json:"on"`
 	Address string `json:"address,omitempty"`
 	Reason  string `json:"reason,omitempty"`
 }
+
+// Why messages carry no dashboard link (LinkStatus.Reason), closest
+// miss first. Values are stable: /api/status and the log serve them.
+const (
+	// LinksNoRoute: no Ingress or HTTPRoute in kwatch's namespace sends
+	// to the dashboard Service (none exists, or the Service name, from
+	// KWATCH_DEPLOYMENT_NAME, is not the one they name).
+	LinksNoRoute = "no_route"
+	// LinksPortMismatch: a route sends to the Service, but not to the
+	// port named "dashboard" or the dashboard port.
+	LinksPortMismatch = "port_mismatch"
+	// LinksUnusableAddress: a route reaches the dashboard, but with a
+	// wildcard or empty host, or a regular-expression path.
+	LinksUnusableAddress = "unusable_address"
+	// LinksRoutesForbidden: kwatch may not read Ingresses or
+	// HTTPRoutes, so it cannot find the address.
+	LinksRoutesForbidden = "routes_forbidden"
+)
 
 // SelfStop is how one kwatch session ended: when the next one started
 // (At) and why the previous one stopped (Reason, a restart reason code:
@@ -100,17 +117,28 @@ func (h *HealthServer) linkGap() (status.Gap, bool) {
 	if !ok || links.On {
 		return status.Gap{}, false
 	}
+	reason := "off"
+	if text := LinkReasonText(links.Reason); text != "" {
+		reason += ": " + text
+	}
 	return status.Gap{What: "dashboard links in alerts",
-		Reason: "off: " + linkReasons[links.Reason]}, true
+		Reason: reason}, true
 }
 
 // linkReasons word the reasons dashboard links are off.
 var linkReasons = map[string]string{
-	"no_route": "no Ingress or HTTPRoute in kwatch's namespace " +
+	LinksNoRoute: "no Ingress or HTTPRoute in kwatch's namespace " +
 		"sends to its dashboard Service",
-	"port_mismatch": "a route reaches the dashboard Service but " +
+	LinksPortMismatch: "a route reaches the dashboard Service but " +
 		"not its \"dashboard\" port",
-	"unusable_address": "the route's host is a wildcard or empty, " +
+	LinksUnusableAddress: "the route's host is a wildcard or empty, " +
 		"or its path is a pattern",
-	"routes_forbidden": "kwatch may not read Ingresses or HTTPRoutes",
+	LinksRoutesForbidden: "kwatch may not read Ingresses or HTTPRoutes",
+}
+
+// LinkReasonText words why dashboard links are off, lower case and
+// without a full stop, for a LinkStatus reason; "" for any other.
+// /status and the dashboard both use it, so they say the same thing.
+func LinkReasonText(reason string) string {
+	return linkReasons[reason]
 }

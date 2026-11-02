@@ -76,11 +76,12 @@ func newAnnouncer(
 		Incidents: deps.Incidents, Messages: deps.Writer,
 		History: a.history, Scope: deps.InScope, Sink: deps.Sink,
 		Write: a.write, WithChanges: a.withChanges,
-		KindNames:    a.kindNames,
-		SaveStartup:  storage.saveStartup,
-		OwnNamespace: os.Getenv("POD_NAMESPACE"),
-		Withheld:     deps.Withheld.Counts,
-		Restart:      deps.Restart,
+		KindNames:     a.kindNames,
+		SaveStartup:   storage.saveStartup,
+		OwnNamespace:  os.Getenv("POD_NAMESPACE"),
+		Withheld:      deps.Withheld.Counts,
+		WithheldToday: deps.Withheld.Today,
+		Restart:       deps.Restart,
 	})
 	return a
 }
@@ -117,6 +118,8 @@ func (a *announcer) announce(
 	contain("announce", "close", func() { closed = c.CloseListings(ctx) })
 	contain("announce", "restored",
 		func() { listed = c.ListRestored(ctx, now) })
+	contain("announce", "pro checks",
+		func() { c.SendDailyProChecks(ctx, now) })
 	return summarised || digested || grouped || rolled || closed ||
 		listed || expired
 }

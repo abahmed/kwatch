@@ -44,7 +44,7 @@ func (l *dashboardLinks) address() string {
 func (l *dashboardLinks) Status() health.LinkStatus {
 	address, reason := l.target.lookup(l.model, l.seen)
 	if address == "" && l.forbidden != nil && l.forbidden() {
-		reason = linksRoutesForbidden
+		reason = health.LinksRoutesForbidden
 	}
 	now := health.LinkStatus{
 		On: address != "", Address: address, Reason: reason,

@@ -14,7 +14,7 @@ interactive installer stores the files in a Kubernetes Secret.
 > you. After editing your `config.yaml`, run `kwatch lint` (add `--check` to also verify
 > credentials for providers that support checks).
 >
-> A key kwatch does not recognise — a typo or an option removed in this release — does
+> A key kwatch does not recognize — a typo or an option removed in this release — does
 > not stop startup. kwatch logs one warning per such key, naming the line in your file
 > and the full path of the key (for example `line 4: app.clusterNmae`), so check the
 > startup log after an upgrade. `kwatch lint --strict` rejects them instead.
@@ -66,11 +66,11 @@ narrowing the watch list and turning off the noisy reasons.
 |:---|---|
 | `resyncSeconds` | How often informers re-list everything (default: 300). It is a safety net for lost watch events, not the detection path; `0` turns it off, and any other value must be at least 30 so a typo cannot re-list every object every second |
 | `namespaces` | 🔽 Deliver only incidents in these namespaces — or use `!kube-system` to deliver *everything except* it |
-| `namespaceSelector` | 🏷️ Pick namespaces by K8s label selector (use *instead of* `namespaces`, not with it) |
-| `reasons` | 🔽 Deliver only these reasons — or exclude some with `!` (e.g. `reasons: ["!Started"]`) |
-| `runbooks` | 📚 Map a reason to a URL; it is added to the next steps of every matching incident |
-| `severityByReason` / `severityByOwnerKind` | 🎯 Change how loudly an incident is delivered (see [Severity](#-severity)). Keys match case-insensitively |
-| `maintenance.enabled` | ✅ Honor maintenance annotations (default: true) |
+| `namespaceSelector` | 🏷️ Pick namespaces by K8s label selector (use *instead of* `namespaces`, not with it). Pro; ignored on Community and listed at startup |
+| `reasons` | 🔽 Deliver only these reasons — or exclude some with `!` (e.g. `reasons: ["!Started"]`). Pro; ignored on Community and listed at startup |
+| `runbooks` | 📚 Map a reason to a URL; it is added to the next steps of every matching incident. Pro; ignored on Community and listed at startup |
+| `severityByReason` / `severityByOwnerKind` | 🎯 Change how loudly an incident is delivered (see [Severity](#-severity)). Keys match case-insensitively. Pro; ignored on Community and listed at startup |
+| `maintenance.enabled` | ✅ Honor maintenance annotations (default: true). Pro: Community holds nothing, even with the default annotations; annotations changed from the defaults are listed at startup as ignored |
 | `maintenance.annotation` | Annotation used to mark deliberate maintenance (default: `kwatch.dev/maintenance`) |
 | `maintenance.untilAnnotation` | Optional RFC3339 expiry annotation (default: `kwatch.dev/maintenance-until`) |
 | `ignore*` fields | 🔕 Deprecated filters (`ignoreContainerNames`, `ignorePodNames`, `ignoreContainerMessages`, `ignoreNodeReasons`, `ignoreNodeMessages`) — each becomes one silence rule; use `silences` below |
@@ -169,7 +169,7 @@ talks to the outside world.
 | `app.logFormatter` | Log format: `text` (default) or `json`. `json` writes one JSON object per log line to stderr. Any other value fails startup |
 | `app.insecureSkipTLSVerify` | 🔓 Skip TLS verification on outbound HTTP to **alert providers** (default: false). It never applies to kwatch's own calls: the license server, the adoption telemetry and the update check always verify TLS (they still use `app.proxyURL` and `app.caBundlePath`) |
 | `app.caBundlePath` | 📜 Path to a PEM CA bundle for outbound HTTP. A missing or invalid bundle fails startup |
-| `app.hideProHints` | Remove the one-line note that names what kwatch Pro would add from Community messages (default: false) |
+| `app.hideProHints` | Remove every Pro hint from Community messages (default: false): the one-line note that names what kwatch Pro would add, the "Pro found a likely cause for this." teaser that replaces it, "Pro shows how to fix it." where a Pro message would say how to fix the problem, the "Pro shows which one and the proof." line after a "Cause found: <type of cause>." sentence (the sentence itself stays), the Pro sentence after a monitoring gap in the startup message, and the startup and daily "Pro checks found ..." notes |
 | `app.communityProvider` | The alert provider the Community edition keeps when more than one is configured (Community sends to one provider; Pro sends to all). Empty keeps one by class, not by the alphabet: a paging service (PagerDuty, Opsgenie, iLert, GoAlert, incident.io, Splunk On-Call, Squadcast, Zenduty, SIGNL4, Alerta, Sensu Go, Datadog, New Relic, Splunk HEC) first, then chat and everything else, then email, with the name breaking a tie. When the provider cap leaves a paging service inactive, kwatch logs a warning naming it. A name that is not a configured provider is warned about and falls back the same way. `/status`, the startup log and `kwatch lint` show which provider is kept, for example `Community sends to: slack (inactive: pagerduty)` |
 
 The startup message and the upgrade notice are each a single plain sentence
@@ -214,7 +214,7 @@ Endpoints kwatch serves so you can see it's alive and grab Prometheus metrics. T
 |:---|---|
 | `healthCheck.enabled` | ✅ Health endpoints (default: true) |
 | `healthCheck.port` | Port to serve health on (default: 8060) |
-| `healthCheck.statusEndpoint` | Serve the read-only `/status` view (default: false; `/status` is 404 otherwise). Needs `healthCheck.enabled`. Not available in `KwatchConfig` |
+| `healthCheck.statusEndpoint` | Serve the read-only `/status` view (default: false; `/status` is 404 otherwise). Needs `healthCheck.enabled`. Not available in `KwatchConfig`. Pro: Community answers `/status` with `402` and lists the setting as ignored (`ui.status`) at startup; `/health` stays available |
 
 **Endpoints:**
 - `GET /healthz` — ✅ Liveness
@@ -223,10 +223,12 @@ Endpoints kwatch serves so you can see it's alive and grab Prometheus metrics. T
   required informer caches. Optional API absence remains degraded and does not
   fail readiness. An unrecoverable required startup or cache failure causes the
   active process to stop so Kubernetes can restart or replace it.
-- `GET /status` — only with `healthCheck.statusEndpoint: true`. Open incidents
-  with root object names and cause lines, read-only; plain text, or JSON with
-  `?format=json` (the JSON format answers `402` with `{"error":"pro_required"}`
-  in the Community edition; the text format and an "Edition" section stay).
+- `GET /status` — only with `healthCheck.statusEndpoint: true`, and Pro
+  only. Open incidents with root object names and cause lines, read-only;
+  plain text, or JSON with `?format=json`. In the Community edition the text
+  page answers `402` with "The /status page is part of kwatch Pro. /health
+  stays available." and the JSON format answers `402` with
+  `{"error":"pro_required"}`.
   It has no authentication and shows object names to anyone who
   can reach the port, so keep it cluster-internal and read it through
   `kubectl port-forward deploy/kwatch 8060:8060`.
@@ -234,7 +236,7 @@ Endpoints kwatch serves so you can see it's alive and grab Prometheus metrics. T
   or a Pod still waiting for the state lock, can pass the rolling-update probe.
 - `GET /health` — JSON containing overall status, state lock status, component
   states, and bounded degradation reasons.
-- `GET /status` — 🔎 What is wrong right now, read-only: open incidents,
+- `GET /status` — 🔎 (Pro) What is wrong right now, read-only: open incidents,
   control plane, upgrade readiness, zone health and what
   kwatch cannot see. Plain text; add `?format=json` for JSON. It uses no new
   RBAC and writes nothing. It shows object names (workloads, nodes, PDBs,
@@ -300,9 +302,9 @@ The process also exposes the standard Go runtime and process collectors.
 Informer caches trim Kubernetes `managedFields` metadata at ingestion time to
 reduce memory on apply-heavy clusters: only the entry of the most recent
 writer is kept (plus the most recent spec writer when that is a different
-entry), without its field sets. kwatch uses it to name who made a change
-(for example `argocd-controller` or `kubectl-client-side-apply`) and to link
-an object to the manager that owns its spec. Labels, annotations, spec,
+entry), without its field sets. kwatch uses it to name the tool that made a
+change (for example `argocd-controller` or `kubectl-client-side-apply`) and
+to link an object to the manager that owns its spec. Labels, annotations, spec,
 status, resource versions, and deletion metadata remain intact.
 
 > **Know when alerts are being lost.** A notification that no provider accepted is
@@ -311,7 +313,7 @@ status, resource versions, and deletion metadata remain intact.
 > persisted outbox (at most 2048 jobs, none older than 24 hours); the two
 > `kwatch_delivery_outbox_*` counters show when it drops a job or cannot write.
 
-### 📬 Delivery behaviour
+### 📬 Delivery behavior
 
 - **Retries.** A transient failure (network error, timeout, 5xx, rate
   limit) is retried with the provider's backoff for up to 24 hours through
@@ -373,7 +375,7 @@ status, resource versions, and deletion metadata remain intact.
   a pager or issue tracker keeps being retried for the opening and
   resolve of an alert, and a paging provider is never the fallback for a
   plain notice or summary, which it would silently skip.
-- **Rate limits and waits.** A `Retry-After` on a 429 or 503 is honoured.
+- **Rate limits and waits.** A `Retry-After` on a 429 or 503 is honored.
   A 429 without one backs off exponentially (5 s doubling to 5 min, with
   jitter) instead of retrying every few seconds.
 - **Evidence policy.** Text a pod wrote (quoted errors, log lines)
@@ -651,7 +653,7 @@ kwatch no longer sends cluster check-ins. `clusterCheckins` and
 `KWATCH_CLUSTER_CHECKINS` are still accepted, ignored, and logged once as
 deprecated; remove them. Pro talks to `api.kwatch.dev` only for the daily
 license renewal. To learn when kwatch itself stops, use the dead man's
-switch: `heartbeatMonitor.url` pings your own monitoring on a schedule.
+switch (Pro): `heartbeatMonitor.url` pings your own monitoring on a schedule.
 
 ## 🔄 Upgrader
 
@@ -716,6 +718,8 @@ switches. Two optional checks have their own settings: active probes and the
 heartbeat.
 
 ### 🌐 Active Probes
+
+`activeProbeMonitor` is Pro; ignored on Community and listed at startup.
 
 Besides your own probes, kwatch reads the API server's `/metrics` and the
 cluster DNS pods' metrics port (9153). Both are optional: without access to
@@ -793,6 +797,9 @@ activeProbeMonitor:
 
 ### 💓 Heartbeat Monitor (dead man's switch)
 
+Pro only. Community ignores `heartbeatMonitor`, and kwatch lists it as an
+ignored Pro setting.
+
 | Parameter | What it does |
 |:---|---|
 | `heartbeatMonitor.enabled` | Send pings to a health-check URL (default: false) |
@@ -803,7 +810,10 @@ If kwatch stops or crashes, the external monitor stops getting pings and pages y
 
 ### 🎯 Severity
 
-Every incident carries a severity, shown as the colour of its headline, and you control it.
+`severityByReason` and `severityByOwnerKind` are Pro; ignored on Community and listed at startup.
+Community keeps the built-in severity.
+
+Every incident carries a severity, shown as the color of its headline, and you control it.
 Severity decides how loudly it is delivered. The values `severityByReason` and
 `severityByOwnerKind` accept are `critical`, `high`, `medium`, `warning` and
 `normal`, compared case-insensitively; any other value fails startup.
@@ -874,6 +884,8 @@ silences the finding backed by that Event.
 
 ### 📝 Custom message templates
 
+`templates` and `alert.<provider>.templates` are Pro; ignored on Community and listed at startup.
+
 In plain words: if the default alert text isn't yours, write your own. `templates` maps a
 reason to a Go `text/template` used by plain-text providers. The template receives
 `.Message` and `.Text`; rich providers ignore it.
@@ -888,6 +900,8 @@ A provider can override the global `templates` for itself with
 not parse is a configuration error: startup and `kwatch lint` both report it.
 
 ### 📚 Runbooks
+
+Pro; ignored on Community and listed at startup.
 
 `runbooks` maps a reason to a URL that is added to the next steps of every incident with that reason.
 Each value must be an absolute `http` or `https` URL; startup and `kwatch lint` reject anything else.
@@ -970,6 +984,9 @@ searchable history of everything it decided. `kwatch-scorecard` reads this log.
 | `auditLog.enabled` | Write one structured JSON entry per incident decision (default: true) |
 | `auditLog.output` | Destination: `stdout` (default) or a file path |
 
+The audit log is Pro: Community writes no audit log, and a file `output`
+is listed at startup as an ignored setting.
+
 kwatch reports what is happening, not what could happen. A workload with no
 readiness probe or memory limit, an image tag that can change or a single
 replica is never listed in the digest or `/status`, and is never an incident
@@ -982,7 +999,7 @@ kwatch also remembers what people have already heard:
 - A problem you were told about at least twice over a day (the same failure)
   goes to the digest when it recurs. Page-tier problems are still paged.
 - A failure that recurs on a regular rhythm (three or more times in a day at
-  steady intervals) is recognised, stated once ("fails every ~40 minutes")
+  steady intervals) is recognized, stated once ("fails every ~40 minutes")
   and then goes to the digest.
 - An incident that stays open gets one "still open" update per week.
 - A resolve message names what the incident was blamed on.
@@ -1047,11 +1064,17 @@ A `KwatchConfig` may set only the fields of the CRD schema: `namespaces`,
 refused and the overlay is treated as invalid, so the rule holds even for an
 object that was not pruned by the CRD schema. An overlay can turn telemetry
 and the update check off but never back on, and its
-`activeProbeMonitor` targets may not be literal loopback, link-local
-(including the cloud metadata address 169.254.169.254), unspecified or
-multicast addresses, or `localhost`, unless the mounted configuration lists
-the same target. A DNS name is accepted, but kwatch resolves it when it
-probes and refuses the connection when any answer is such an address.
+`activeProbeMonitor` targets may not be literal loopback, link-local,
+cloud metadata, unspecified or multicast addresses, or `localhost`, unless
+the mounted configuration lists the same target. The metadata addresses
+are the shared list the delivery transport refuses (`internal/cloudmeta`):
+169.254.0.0/16 (which holds 169.254.169.254), fe80::/10, fd00:ec2::254,
+100.100.100.200, and any of them in IPv4-mapped or NAT64 (`64:ff9b::/96`)
+form. A DNS name is accepted, but kwatch resolves it when it probes and
+refuses the connection when any answer is such an address. (Alert
+providers check the same list, plus the names `metadata.google.internal`
+and `metadata.goog`, on the URL host and on the address being connected
+at dial time; the connection to a configured proxy is exempt.)
 Ordinary private addresses (`10.x`, `172.16-31.x`, `192.168.x`,
 `100.64.0.0/10`, `fc00::/7`) are allowed, so a `http` or `tcp` target added
 by a `KwatchConfig` can probe an in-cluster Service by name or ClusterIP.

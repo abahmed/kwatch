@@ -1,0 +1,13 @@
+10:03:45 settled
+🟠 Node n1 (prod-eu-1) has not reported for about two minutes. kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable.
+Pro shows how to fix it. Get Pro free during early access: kwatch.dev/pro
+🟠 Node n1 (prod-eu-1) has not reported for about two minutes.
+| 🟠 Node n1 (**prod-eu-1**) has not reported for about two minutes.
+| kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable.
+| *Pro shows how to fix it. Get Pro free during early access: kwatch.dev/pro*
+10:16:40 material change
+🟠 Node n1 (prod-eu-1) is spreading to svc-0, svc-1, svc-2 and five others in apps: they have been terminating for ten minutes.
+Pro would show which pods this node took down. Pro shows how to fix it. Get Pro free during early access: kwatch.dev/pro
+🟠 Node n1 (prod-eu-1) is spreading to svc-0, svc-1, svc-2 and five others in apps: they have been terminating for ten minutes.
+| 🟠 Node n1 (**prod-eu-1**) is spreading to **svc-0**, **svc-1**, **svc-2** and five others in apps: they have been terminating for ten minutes.
+| *Pro would show which pods this node took down. Pro shows how to fix it. Get Pro free during early access: kwatch.dev/pro*

@@ -137,6 +137,26 @@ func (w *Withheld) Counts(now time.Time) WithheldCounts {
 	return out
 }
 
+// Today returns the counts of the UTC day of now alone: the findings
+// first counted that day. A finding already counted on an earlier day
+// of the window is not counted again.
+func (w *Withheld) Today(now time.Time) WithheldCounts {
+	var out WithheldCounts
+	if w == nil {
+		return out
+	}
+	today := dayOf(now)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if today < 0 {
+		return out
+	}
+	if d := w.days[today%WithheldDays]; d.seen != nil && d.day == today {
+		out = d.counts
+	}
+	return out
+}
+
 func dayOf(t time.Time) int64 {
 	return t.UTC().Unix() / int64(24*time.Hour/time.Second)
 }

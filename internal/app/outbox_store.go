@@ -79,9 +79,7 @@ func (o outboxStore) WriteOutbox(
 // /health reports.
 func attachOutbox(deps *serverDeps, state *storage.Store) {
 	deps.deliveryManager.OnOutboxSick(reportOutboxSick(deps))
-	store := newOutboxStore(state)
-	store.trailFailed = reportTrailFailed(deps)
-	err := deps.deliveryManager.AttachOutbox(store)
+	err := deps.deliveryManager.AttachOutbox(deliveryOutbox(deps, state))
 	if err == nil {
 		return
 	}
@@ -91,6 +89,39 @@ func attachOutbox(deps *serverDeps, state *storage.Store) {
 		deps.healthServer.SetComponentStatus("delivery-outbox",
 			"degraded", "persistence_restore_failed", false)
 	}
+}
+
+// deliveryOutbox is the outbox delivery keeps in state. Only the
+// dashboard reads the send trail, so the trail is saved only while the
+// dashboard runs (Pro, enabled); otherwise the store hides it and
+// delivery keeps the trail in memory alone.
+func deliveryOutbox(
+	deps *serverDeps, state *storage.Store,
+) delivery.OutboxStore {
+	store := newOutboxStore(state)
+	if deps.dashboardServer == nil {
+		return outboxOnly{store: store}
+	}
+	store.trailFailed = reportTrailFailed(deps)
+	return store
+}
+
+// outboxOnly is an outbox store without the send trail: it does not
+// implement delivery.TrailStore.
+type outboxOnly struct {
+	store outboxStore
+}
+
+// LoadOutbox implements delivery.OutboxStore.
+func (o outboxOnly) LoadOutbox() ([]delivery.OutboxRecord, error) {
+	return o.store.LoadOutbox()
+}
+
+// WriteOutbox implements delivery.OutboxStore.
+func (o outboxOnly) WriteOutbox(
+	puts []delivery.OutboxRecord, removes []string,
+) error {
+	return o.store.WriteOutbox(puts, removes)
 }
 
 // reportOutboxSick shows on /health whether the outbox writer keeps

@@ -56,7 +56,8 @@ func TestDigestTitlesLeaveCallerOrderAlone(t *testing.T) {
 	list := []incident.Decision{
 		orderCase("a", incident.Digest), orderCase("b", incident.Notify),
 	}
-	titles := digestTitles(list, time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC), "")
+	titles := Writer{}.digestTitles(list,
+		time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC), "")
 	if len(titles) != 2 || list[0].Incident.Root.Name != "a" {
 		t.Fatalf("caller slice reordered or titles lost: %+v", titles)
 	}

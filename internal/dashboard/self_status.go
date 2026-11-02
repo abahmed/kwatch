@@ -35,26 +35,14 @@ type SelfLinks struct {
 	Text string `json:"text,omitempty"`
 }
 
-// linkTexts say why messages carry no dashboard link, by the reason of
-// health.LinkStatus.
-var linkTexts = map[string]string{
-	"no_route": "No Ingress or HTTPRoute in kwatch's namespace sends " +
-		"to its dashboard Service, so alerts carry no dashboard link.",
-	"port_mismatch": "A route reaches the dashboard Service but not " +
-		"its \"dashboard\" port, so alerts carry no dashboard link.",
-	"unusable_address": "The route's host is a wildcard or empty, or " +
-		"its path is a pattern, so alerts carry no dashboard link.",
-	"routes_forbidden": "kwatch may not read Ingresses or HTTPRoutes, " +
-		"so alerts carry no dashboard link.",
-}
-
-// linksOffText is the sentence for links that are off for reason.
+// linksOffText is the sentence for links that are off for reason,
+// in the words /status uses (health.LinkReasonText).
 func linksOffText(links health.LinkStatus) string {
 	if links.On {
 		return ""
 	}
-	if text, ok := linkTexts[links.Reason]; ok {
-		return text
+	if text := health.LinkReasonText(links.Reason); text != "" {
+		return "Alerts carry no dashboard link: " + text + "."
 	}
 	return "Alerts carry no dashboard link."
 }

@@ -32,7 +32,7 @@ func TestStatusServesSelfAndFailedSendsOfTheLastHour(t *testing.T) {
 		return health.SelfReport{StartedAt: testEpoch,
 			Restarts:       []health.SelfStop{},
 			OutboxPending:  2,
-			DashboardLinks: health.LinkStatus{Reason: "port_mismatch"},
+			DashboardLinks: health.LinkStatus{Reason: health.LinksPortMismatch},
 			Startup: &health.StartupProgress{Kinds: 30, Synced: 12,
 				Required: 4, RequiredSynced: 4}}, true
 	})
@@ -66,11 +66,19 @@ func TestStatusLeavesSelfOutWithoutASession(t *testing.T) {
 	assert.NotContains(t, body, `"self"`)
 }
 
+// The dashboard words each reason as /status does, from health's one
+// table, and still says links are off for a reason it does not know.
 func TestLinksOffTextNamesEveryReason(t *testing.T) {
-	for _, reason := range []string{"no_route", "port_mismatch",
-		"unusable_address", "routes_forbidden", "other"} {
+	for _, reason := range []string{health.LinksNoRoute,
+		health.LinksPortMismatch, health.LinksUnusableAddress,
+		health.LinksRoutesForbidden} {
 		text := linksOffText(health.LinkStatus{Reason: reason})
-		assert.True(t, strings.HasSuffix(text, "."), reason)
+		phrase := health.LinkReasonText(reason)
+		require.NotEmpty(t, phrase, reason)
+		assert.Equal(t,
+			"Alerts carry no dashboard link: "+phrase+".", text)
 	}
+	assert.Equal(t, "Alerts carry no dashboard link.",
+		linksOffText(health.LinkStatus{Reason: "other"}))
 	assert.Empty(t, linksOffText(health.LinkStatus{On: true}))
 }

@@ -38,7 +38,7 @@ func TestSelfReportReadsTheSessionAndTheStateFile(t *testing.T) {
 		"only the last day")
 	assert.Equal(t, 2, got.OutboxPending)
 	assert.Positive(t, got.StateFileBytes)
-	assert.Equal(t, health.LinkStatus{Reason: linksNoRoute},
+	assert.Equal(t, health.LinkStatus{Reason: health.LinksNoRoute},
 		got.DashboardLinks)
 	assert.False(t, got.PodLogsForbidden)
 	assert.Nil(t, got.Startup, "no source yet")

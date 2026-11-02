@@ -26,17 +26,17 @@ func TestDashboardAddressLookupSaysWhyThereIsNone(t *testing.T) {
 		lines []string
 		want  string
 	}{
-		"nothing": {nil, linksNoRoute},
+		"nothing": {nil, health.LinksNoRoute},
 		"other": {[]string{"https k.example.com / grafana 80"},
-			linksNoRoute},
+			health.LinksNoRoute},
 		"bad port": {[]string{"https k.example.com /" + dash + "9999"},
-			linksPortMismatch},
+			health.LinksPortMismatch},
 		"wildcard": {[]string{"https *.example.com /" + dash + "8061"},
-			linksUnusableAddress},
+			health.LinksUnusableAddress},
 		"regex": {[]string{
 			"https k.example.com /kw(/|$)(.*)" + dash + "dashboard",
 			"https k.example.com /" + dash + "9999",
-		}, linksUnusableAddress},
+		}, health.LinksUnusableAddress},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -68,7 +68,7 @@ func TestDashboardLinksReportsEachChangeOnce(t *testing.T) {
 	klog.Flush()
 
 	require.Equal(t, []health.LinkStatus{
-		{Reason: linksNoRoute},
+		{Reason: health.LinksNoRoute},
 		{On: true, Address: "https://k.example.com"},
 	}, sink.got)
 	assert.Contains(t, out.String(), `reason="no_route"`)
@@ -83,7 +83,7 @@ func TestDashboardLinksNamesForbiddenRoutes(t *testing.T) {
 	got := links.Status()
 
 	assert.False(t, got.On)
-	assert.Equal(t, linksRoutesForbidden, got.Reason)
+	assert.Equal(t, health.LinksRoutesForbidden, got.Reason)
 }
 
 func TestRoutesForbiddenReadsTypedAndDiscoveredKinds(t *testing.T) {

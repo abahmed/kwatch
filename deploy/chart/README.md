@@ -190,7 +190,7 @@ Karpenter annotation with `--set-string`.
 | `license.existingSecret` | Existing Secret with the key `license-key`, read as `KWATCH_LICENSE_KEY` (optional: the pod starts as Community without it) | `""` |
 | `license.key` | The license key itself (discouraged: it lands in release history). When set and `existingSecret` is empty, the chart creates the Secret `<release>-license` | `""` |
 | `license.instanceSecret` | Render the license instance Secret and its Role even though no key is set through the chart (the key reaches kwatch another way). Otherwise they are rendered only with `license.key` or `license.existingSecret` | `false` |
-| `config.healthCheck.statusEndpoint` | Serve the read-only `/status` view (open incident object names, no authentication) on the health port. Off by default; with the NetworkPolicy on it is limited like the rest of the port. Reach it with `kubectl port-forward` | `false` |
+| `config.healthCheck.statusEndpoint` | Pro only. Serve the read-only `/status` view (open incident object names, no authentication) on the health port. Off by default; with the NetworkPolicy on it is limited like the rest of the port. Reach it with `kubectl port-forward` | `false` |
 | `config.healthCheck.port` | Health port: container, probe and NetworkPolicy port. The health check cannot be disabled | `8060` |
 | `networkPolicy.enabled` | Render a NetworkPolicy that admits the health port (own namespace, `kubeletCIDRs` and `healthIngressFrom` only) and allows DNS, `networkPolicy.apiServerPorts` and kubelet (`networkPolicy.kubeletPort`, default 10250) egress | `false` |
 | `networkPolicy.allowDefaults` | The dashboard ingress rules render whenever `networkPolicy.enabled` and `dashboard.enabled` are set, whatever this value is. With `false` you must give `ingress`/`egress`, `extraEgressPorts` or `allowProbeEgressAll`, or the render fails (an empty policy would deny all traffic and kwatch could not start). Admit the health port and open DNS, `apiServerPorts`, kubelet and DNS metrics egress. `false` only when your own rules cover the API server, kubelets and probes. With `license.key` or `license.existingSecret` set it also opens TCP 443 to any address for license activation and renewal, even if `apiServerPorts` omits 443 | `true` |
@@ -279,7 +279,9 @@ scale-down matters more. The chart does **not** set
 `--set-string 'podAnnotations.karpenter\.sh/do-not-disrupt=true'`. The chart
 ships no PodDisruptionBudget: on a single pod `minAvailable: 1` would block
 every drain of its node, and `maxUnavailable: 1` allows the one eviction a
-drain needs. Create your own if you want one.
+drain needs. Create your own if you want one. kwatch runs one replica in
+every edition; scaling it up does not add failover, because the extra pods
+only wait for the lock or the volume.
 
 Delivery is at least once: queued notifications are kept in a persisted outbox
 (at most 2048 jobs, none older than 24 hours), so a restart does not lose them,
@@ -290,7 +292,7 @@ own salt, not the license's cluster ID) and the kwatch version, sent at most
 once every 7 days. With a Pro license kwatch also renews the license daily
 (a hashed cluster ID, the license ID, the version and the node count).
 Nothing else goes to kwatch.dev; to know when kwatch stops, set the dead
-man's switch `heartbeatMonitor.url` to your own monitoring. Set
+man's switch (Pro) `heartbeatMonitor.url` to your own monitoring. Set
 `telemetry.enabled: false` in `config` (or in the Secret's `config.yaml`) to
 turn telemetry off (see the [configuration reference](../../docs/configuration.md#-minimal-adoption-telemetry)).
 

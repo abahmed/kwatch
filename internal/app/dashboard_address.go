@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
@@ -53,24 +54,6 @@ func (d dashboardTarget) address(
 	return address
 }
 
-// Why no dashboard address was found (lookup), closest miss first.
-const (
-	// linksNoRoute: no Ingress or HTTPRoute in kwatch's namespace sends
-	// to the dashboard Service (none exists, or the Service name, from
-	// KWATCH_DEPLOYMENT_NAME, is not the one they name).
-	linksNoRoute = "no_route"
-	// linksPortMismatch: a route sends to the Service, but not to the
-	// port named "dashboard" or the dashboard port.
-	linksPortMismatch = "port_mismatch"
-	// linksUnusableAddress: a route reaches the dashboard, but with a
-	// wildcard or empty host, or a regular-expression path.
-	linksUnusableAddress = "unusable_address"
-	// linksRoutesForbidden: kwatch may not read Ingresses or
-	// HTTPRoutes, so it cannot find the address (set by
-	// dashboardLinks).
-	linksRoutesForbidden = "routes_forbidden"
-)
-
 // lookup is address with, when it is "", the reason: the closest miss
 // among the routes of kwatch's namespace.
 func (d dashboardTarget) lookup(
@@ -78,16 +61,16 @@ func (d dashboardTarget) lookup(
 ) (string, string) {
 	ports := d.servicePorts(r)
 	var found []kube.PublicAddress
-	reason := linksNoRoute
+	reason := health.LinksNoRoute
 	for _, a := range kube.PublicAddresses(r, d.namespace) {
 		switch {
 		case a.Service != d.service:
 		case !ports[a.Port]:
-			if reason == linksNoRoute {
-				reason = linksPortMismatch
+			if reason == health.LinksNoRoute {
+				reason = health.LinksPortMismatch
 			}
 		case !usableHost(a.Host) || !usablePath(a.Path):
-			reason = linksUnusableAddress
+			reason = health.LinksUnusableAddress
 		default:
 			a.Scheme = linkScheme(a, seen)
 			found = append(found, a)

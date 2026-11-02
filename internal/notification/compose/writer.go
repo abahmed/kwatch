@@ -26,12 +26,16 @@ type Writer struct {
 	// Cluster is the configured cluster name. When set, every lead says
 	// it once: "payments is down in shop (prod-eu-1) after …".
 	Cluster string
-	// Community writes the Community message: the one-line cause and
-	// the steps, without proofs, counterfactuals, confidence, changes,
-	// impact or investigation output (see ForEdition).
+	// Community writes the Community message: what is failing and the
+	// category of its cause, without the cause's object, steps, proofs,
+	// counterfactuals, confidence, changes, impact or investigation
+	// output (see ForEdition).
 	Community bool
 	// ProNote adds the footer line that names what Pro would add.
 	ProNote bool
+	// NoImpact drops the sentences that say what else a failure
+	// affects (partConsequence); the Impact capability keeps them.
+	NoImpact bool
 	// Dashboard returns the dashboard's public address, such as
 	// https://kwatch.example.com, or "" when it has none. When it has
 	// one, messages link to it (see dashboard_link.go). Nil: no links.
@@ -75,13 +79,14 @@ func (w Writer) WriteResolvedBy(
 func (w Writer) write(
 	d incident.Decision, now time.Time, fix *inventory.Change,
 ) notification.Message {
-	note := ""
+	var note proLine
 	if w.Community {
-		note = w.noteFor(d)
-		d, fix = communityDecision(d), nil
+		d, note = w.communityOf(d, now)
+		fix = nil
 	}
 	f := gatherFacts(d, now, fix)
 	f.cluster = w.Cluster
+	f.community = w.Community
 	p := f.p
 	msg := notification.Message{
 		Key: p.ID, DedupKey: p.AlertKey, Revision: p.Revision,
@@ -92,7 +97,7 @@ func (w Writer) write(
 		msg.Status = notification.StatusResolved
 		mark, sentences := resolveNote(f)
 		fill(&msg, mark, w.shape(
-			respell(arrange(sentences), d.Facts.KindNames), ""))
+			respell(arrange(sentences), d.Facts.KindNames), proLine{}))
 		boldNames(msg.Doc, incidentNames(p, w.Cluster))
 		msg.Opening = w.opening(d, now)
 		if p.CanReopen() {
@@ -102,8 +107,8 @@ func (w Writer) write(
 	}
 	msg.Status = status(p)
 	msg.Output = d.Facts.Output
-	msg.Steps = append(proSteps(f), w.runbookSteps(f.members)...)
 	if !w.Community {
+		msg.Steps = append(proSteps(f), w.runbookSteps(f.members)...)
 		msg.Confidence = confidenceOf(f)
 	}
 	fill(&msg, marker(p), w.shape(
@@ -371,17 +376,11 @@ func isAcronym(text string) bool {
 	return size > 0 && unicode.IsUpper(first) && unicode.IsUpper(second)
 }
 
-// noteFor is the Pro note of d, when this writer adds one and the
-// decision is a message that can carry it.
-func (w Writer) noteFor(d incident.Decision) string {
-	if !w.ProNote || d.Action == incident.Resolve {
-		return ""
-	}
-	return proNote(d)
-}
-
 // shape applies the edition to arranged sentences.
-func (w Writer) shape(sentences []sentence, note string) []sentence {
+func (w Writer) shape(sentences []sentence, note proLine) []sentence {
+	if w.NoImpact {
+		sentences = withoutPart(sentences, partConsequence)
+	}
 	if !w.Community {
 		return sentences
 	}

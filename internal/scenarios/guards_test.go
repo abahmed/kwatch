@@ -105,6 +105,8 @@ func TestScenarioFilesMatchRegistry(t *testing.T) {
 			[]string{".jsonl", ".expect.json"}},
 		{filepath.Join("testdata", "messages"), labelled,
 			[]string{".golden"}},
+		{filepath.Join("testdata", "messages-community"),
+			communityScenarios, []string{".golden"}},
 	}
 	for _, c := range cases {
 		for _, p := range orphanFiles(c.dir, c.names, c.suffixes...) {

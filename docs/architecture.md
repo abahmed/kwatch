@@ -60,7 +60,7 @@ through settle, announce, updates, reminders, resolve and reopen.
 | Object | Anything with identity: every Kubernetes object, plus virtual ones such as a registry, cluster DNS, a zone, a node pool or the API server. Identity is group, kind, namespace and name. | `inventory.Entity`, `inventory.EntityID` |
 | Link | A typed, directed relation between objects: owned-by, runs-on, selects, references, mounts, routes-to, serves, pulls and a few more. Links say how failure can travel. | `inventory.RelationType`, `explain.LinkType` |
 | Health | The state a detector computes for an object: healthy, degraded, failing or unknown, plus a short failure mode such as `CrashLoop` or `MemoryPressure`, and when it started. | `detection.Finding` (`Health`, `Mode`, `Since`) |
-| Change | A recorded edit to an object: what changed, who changed it, when. Status churn is not a change. | `inventory.Change` |
+| Change | A recorded edit to an object: what changed, which tool or GitOps app changed it, when. Status churn is not a change. | `inventory.Change` |
 
 Unknown is a real state. An object kwatch cannot observe (no permission, API
 not served, cache not synced) is unknown. Unknown never causes a blame and
@@ -102,10 +102,11 @@ the `bad-rollout` scenario in `internal/scenarios`.
    log excerpt, redacted. If it arrives within a short wait it is attached;
    otherwise the message goes without it.
 8. **The note is written.** `compose.Writer` turns the facts into sentences:
-   what broke and why, who changed what, the one or two facts that prove it,
-   who is affected, and one `kubectl` suggestion. A read-only suggestion
-   stands as it is; one that changes the cluster, such as a rollback, is
-   marked "(changes the cluster)". The result is one
+   what broke and why, what changed and which tool made the change, the one
+   or two facts that prove it, who is affected, and one `kubectl`
+   suggestion. A read-only suggestion stands as it is; one that changes the
+   cluster, such as a rollback, is marked "(changes the cluster)". The
+   result is one
    `notification.Message`.
 9. **Delivery sends it.** The sink in `internal/app` records an audit entry
    and calls `NotifyIncident`. The delivery manager queues the message per
@@ -168,7 +169,7 @@ say, in this order of strength:
    kept). With `autoDependencies` on, kwatch dials them, and a dependency
    that refuses connections is the cause of the pods that call it.
 2. **The same error.** Three or more workloads that began failing within
-   thirty minutes with the same normalised error line (times, IDs, addresses
+   thirty minutes with the same normalized error line (times, IDs, addresses
    and numbers replaced; see `docs/incident-lifecycle/examples.md`) share a
    virtual `failure-signature` cause (`shared-failure-signature` row, prior
    0.55). It is the weakest named row, so a probed dependency or any better
@@ -255,7 +256,7 @@ one bucket per data class:
 | `flight` | The flight recorder: sanitized, compressed batches of what the sources observed (names hashed, no messages), exported with `kwatch replay-export` | 48 hours, at most 64 MiB |
 | `threads` | Provider thread IDs, so updates stay in one conversation | No expiry |
 | `outbox` | Delivery jobs not yet accepted by a provider | Until accepted; at most 2048 jobs, none older than 24 hours |
-| `trails` | Per incident, what became of its messages at each provider (the dashboard's "Who was told") | The 512 incidents told most recently, 16 attempts each (the newest, plus the first one a channel accepted); a trail whose incident record is gone is deleted at the next start |
+| `trails` | Per incident, what became of its messages at each provider (the dashboard's "Who was told"). Written only while the dashboard runs (Pro with `dashboard.enabled`) | The 512 incidents told most recently, 16 attempts each (the newest, plus the first one a channel accepted); a trail whose incident record is gone is deleted at the next start |
 | `usage` | Per container, its memory and CPU history of the last 24 hours (for the dashboard) | 24 hours after the container's last reading; the writer bounds the entry count |
 
 A compactor off the decision loop enforces retention and a total size cap of
@@ -276,13 +277,16 @@ the temporary copy. Only the Lease holder opens the file for writing, and every
 write checks a claim epoch, so a process that lost the Lease cannot overwrite
 newer state.
 
-A restart reloads the last 24 hours of change records (the newest 1024) and
+On Pro, a restart reloads the last 24 hours of change records (the newest 1024) and
 each workload's last healthy time into the model, before the sources report,
 with the original actors and times. The comparison of fingerprints with the
 cluster then adds only what the records do not explain: a change the records
 hold for the same object and class, made after the snapshot, wins over
 "changed while kwatch was down". A state file without these records restores
 as before. Records carry a version, and one of a newer version is skipped.
+The history, the fingerprints and the changes made while kwatch was down
+are Pro: Community restores only the incidents it announced and starts
+from a fresh baseline.
 
 Reset: if the file has another schema version or bbolt cannot read it, kwatch
 renames it to `state.db.corrupt.<UTC time>` (the newest two copies are kept)

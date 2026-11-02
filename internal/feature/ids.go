@@ -49,5 +49,6 @@ const (
 	NativeThreads        ID = "delivery.threads"
 	CustomTemplates      ID = "delivery.templates"
 	AuditLog             ID = "delivery.audit-log"
+	Heartbeat            ID = "delivery.heartbeat"
 	RBACAudit            ID = "security.rbac-audit"
 )

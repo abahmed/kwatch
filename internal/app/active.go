@@ -344,7 +344,7 @@ func startActiveComponents(
 // configurations or editions run.
 func conditionalComponents(deps *serverDeps) []componentSpec {
 	var optional []componentSpec
-	if deps.has(heartbeatMonitor) {
+	if deps.has(feature.Heartbeat) {
 		optional = append(optional,
 			monitoredComponent(deps, "heartbeat", runHeartbeat))
 	}

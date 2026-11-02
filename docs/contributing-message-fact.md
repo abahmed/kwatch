@@ -64,7 +64,7 @@ State facts, never predictions: a sentence says what is so now, not what
 may, will or would happen. `TestComposeTextStatesFactsNotPredictions` scans
 every string literal of the package for words such as "may", "will",
 "would" and "likely". A hedge that is the confidence wording of a diagnosis,
-or the words of kwatch's own behaviour, goes into `factualWording` in that
+or the words of kwatch's own behavior, goes into `factualWording` in that
 test with the reason; anything else is reworded as a fact ("It runs a single
 replica.", not "so this is downtime").
 

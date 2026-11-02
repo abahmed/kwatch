@@ -236,13 +236,15 @@ sacAnnotations: {}
 podLabels: {}
 
 # kwatch configuration. kwatch watches every supported resource; use
-# namespaces, reasons, namespaceSelector and silences to narrow what is
-# delivered. The chart installs the KwatchConfig CRD and enables live
-# configuration overlay by default.
+# namespaces (include and exclude), silences and the ignore filters
+# (ignorePodNames, ignoreContainerNames and the like) to narrow what is
+# delivered. reasons and namespaceSelector narrow it further in Pro. The
+# chart installs the KwatchConfig CRD and enables live configuration
+# overlay by default.
 #
 # config.healthCheck.port sets the container port and the probe port. The
 # health server cannot be disabled: the probes need it.
-# config.healthCheck.statusEndpoint: true serves the read-only /status view
+# config.healthCheck.statusEndpoint (Pro): true serves the read-only /status view
 # (open incidents with object names, no authentication) on that port; it is
 # off by default. Reach it with kubectl port-forward, never expose the port.
 #

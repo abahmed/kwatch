@@ -13,14 +13,14 @@ import (
 // now."), so one problem reads the same in every digest and never shows a
 // reason code. names is the declared spelling of custom kinds (see
 // Decision.Facts.KindNames); nil when none is known.
-func (Writer) OngoingTitle(
+func (w Writer) OngoingTitle(
 	p incident.Incident, names map[inventory.Kind]string, now time.Time,
 ) string {
 	d := incident.Decision{Action: incident.Update, Incident: p,
 		Reason: incident.ReasonReminder}
 	d.Facts.KindNames = names
 	// Like the other digest lines, it leaves the cluster tag to the header.
-	return withUsualTail(Writer{}.Write(d, now).Title, d)
+	return withUsualTail(w.listWriter().Write(d, now).Title, d)
 }
 
 // StartedAt is when the problem began: the earlier of the incident's

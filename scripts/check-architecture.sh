@@ -175,7 +175,8 @@ report_matches "production code imports replay" \
 leaf_forbidden='app|pipeline|incident|rootcause|detection|inventory|storage'
 leaf_forbidden="$leaf_forbidden|notification/compose|scope|delivery|alert"
 leaf_forbidden="$leaf_forbidden|config|kubeclient"
-for leaf in notification format redact ratelimit detection/reasons
+for leaf in notification format redact ratelimit cloudmeta \
+	detection/reasons
 do
 	forbid_imports "leaf package imports an upper layer" \
 		"internal/$leaf" "$leaf_forbidden" '^internal/notification/compose/'

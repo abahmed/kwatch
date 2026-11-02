@@ -116,8 +116,9 @@ func (inc Incident) ErrorKey() string {
 
 // observe records what changed about p since it was last observed: its
 // transitions, why it is at its tier, a snapshot when it broke or got
-// worse, its error key and the changes around it. Apply observes the
-// incidents it changed and Tick every live one. It decides nothing.
+// worse, its error key and the changes around it; with NoJournalDetail
+// neither the snapshot nor the changes. Apply observes the incidents it
+// changed and Tick every live one. It decides nothing.
 func (m *Manager) observe(p *Incident, now time.Time) {
 	j := &p.Journal
 	if p.State != Resolved && (j.Level == "" || j.seenTier != p.Tier) {
@@ -129,6 +130,9 @@ func (m *Manager) observe(p *Incident, now time.Time) {
 	}
 	if p.State != Settling && j.ErrorKey == "" {
 		j.ErrorKey = p.ErrorKey()
+	}
+	if m.cfg.NoJournalDetail {
+		return
 	}
 	if worse != "" {
 		m.takeBreak(p, now, worse)

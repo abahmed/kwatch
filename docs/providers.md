@@ -16,7 +16,8 @@ plain credentials and `${ENV_VAR}` substitutions for sensitive fields.
 
 - **One config block per provider.** Every provider is configured under `alert.<name>`,
   e.g. `alert.slack`, `alert.discord`, `alert.email`. You can enable as many as you like —
-  kwatch sends every alert to all of them.
+  Pro sends every alert to all of them; Community sends to one provider
+  (pick it with `app.communityProvider`).
 - **Two flavors.** Most providers need a **webhook URL** (a URL you copy from the provider's
   settings — the provider does the authentication). A few need a **token or key** (an API
   credential you create for kwatch). The tables below say which, and always tell you exactly
@@ -32,7 +33,7 @@ plain credentials and `${ENV_VAR}` substitutions for sensitive fields.
 - **Reliability is built in.** Every provider shares the same routing, retry, and fallback
   controls (shown at the top under Slack — they apply to all providers).
 - **One HTTP path.** Every provider that talks HTTP sends through the same helper
-  (`delivery/transport`), so a `429` is always honoured with its `Retry-After`, a `4xx` is never
+  (`delivery/transport`), so a `429` is always honored with its `Retry-After`, a `4xx` is never
   retried (the payload will not get better), and a `5xx` or network error always is. A
   provider cannot have its own idea of what a status code means — the linter rejects raw
   `net/http` calls under `internal/alert/`.
@@ -40,18 +41,19 @@ plain credentials and `${ENV_VAR}` substitutions for sensitive fields.
   refused and never retried: 169.254.169.254 and the rest of
   169.254.0.0/16 and fe80::/10, fd00:ec2::254, 100.100.100.200,
   `metadata.google.internal` and `metadata.goog`. kwatch checks the URL and
-  every address the name resolves to, so a name pointing there is refused
+  the address it connects to, so a name pointing there is refused
   too, and the send trail says "blocked: cloud metadata address". Private,
   loopback and in-cluster addresses (an in-cluster Mattermost, ntfy or
   Gotify) work as before. Behind `app.proxyURL` the proxy resolves the
-  name, so only the URL is checked.
+  name, so only the URL is checked; the proxy's own address is never
+  checked, so a link-local proxy works.
 
 ## What each provider receives
 
 kwatch writes one message per incident update. It has two texts:
 
-- **Note** is the full narrative in a few plain sentences: what is wrong, the
-  proof, the consequence and one suggested command.
+- **Note** is the full narrative in a few plain sentences: what is wrong
+  and, on Pro, the proof, the consequence and one suggested command.
 - **Short** is the first sentence on its own, for places with little room.
 
 Both start with exactly one status marker and carry no other emoji:
@@ -71,7 +73,7 @@ anyone. Sensu Go records them as a passing (OK) check.
 | Group | Providers | What they send |
 |:--|:--|:--|
 | 💬 Chat | Slack, Discord, Microsoft Teams, Teams Workflow, Mattermost, Rocket.Chat, Google Chat, Webex, Matrix, Telegram, Zulip, Feishu, DingTalk, WeCom, Flock, Threema, Signal | The Note as the message text, escaped for the chat's markup, with recent application output as a code or quoted block when there is any. Broadcast mentions such as `@channel` are neutralized, and only where they stand alone: an `@` inside an email address or a URL is left as it is. Mattermost and Rocket.Chat neutralize every `@name`, because both notify the user or group of any name. WeCom and Teams Workflow escape Markdown in the narrative. Matrix sends the Note as `body` and HTML-escaped as `formatted_body`. Slack with a bot token announces each incident as one root message holding the whole Note and its output, keeps every update and the resolve in its thread, and edits the root to the same announcement under the new status marker when the status changes (a thread reply that is not a status change leaves the root alone; after a restart the root cannot be rebuilt, so only the thread grows). Application output is fenced with a code fence longer than any run of backticks in it, so it cannot close the block; it is cut before the closing fence is added. WeCom `<@userid>` and Zulip `@*group*` mentions in workload text are neutralized too, and so is Telegram's `@username` (a zero-width space follows the `@`). Microsoft Teams shows the incident title as escaped text, so a title taken from the cluster never becomes a link or a mention. |
-| 🚨 Paging | PagerDuty, Opsgenie, Splunk On-Call, GoAlert, ilert, incident.io, Squadcast, Zenduty, SIGNL4, Alerta, Datadog, New Relic, AWS SNS, Splunk HEC, Sensu Go | The Short as the alert title or summary, the Note (plus output) as details, the incident id as the dedup or alert key, and the provider's resolve or close action when the incident resolves. Severity follows the incident severity: only a page-tier incident gets the priority that pages (for ilert the configured `priority`); a notify or low tier incident is sent at a lower one (ilert `LOW`, Opsgenie P3 or P4). AWS SNS also receives the paging-only messages (the close of an incident another one took over), because its subscribers page on the incident key. |
+| 🚨 Paging | PagerDuty, Opsgenie, Splunk On-Call, GoAlert, ilert, incident.io, Squadcast, Zenduty, SIGNL4, Alerta, Datadog, New Relic, AWS SNS, Splunk HEC, Sensu Go | The Short as the alert title or summary, the Note (plus output) as details, the incident id as the dedup or alert key, and the provider's resolve or close action when the incident resolves. Severity follows the incident severity: only a page-tier incident gets the priority that pages (for ilert the configured `priority`); a notify or low tier incident is sent at a lower one (ilert `LOW`, Opsgenie P3 or P4). AWS SNS and Splunk HEC also receive the paging-only messages (the close of an incident another one took over), because their subscribers track the incident key; so do the keyed structured receivers (Custom Webhook, n8n, Zapier). When Community picks its one provider, AWS SNS ranks with chat, not with the paging services. |
 | 📋 Issue trackers | GitHub, GitLab, Gitea, Jira, ClickUp | One issue per incident: the Short as title and the Note (plus output and the cluster name) as body. Updates add a comment. On resolve kwatch comments and closes the issue (GitHub, GitLab, Gitea; Jira moves it through `closeTransition` and ClickUp to `closeStatus` when you set one, otherwise they only comment, because workflows are defined per project or list). A resolved incident that fails again within its reopen window comments on the same issue and reopens it on GitHub, GitLab and Gitea. Jira (`reopenTransition`) and ClickUp (`reopenStatus`) reopen only when you configure both the close and the reopen name; otherwise the mapping is forgotten at resolve and a recurrence opens a new issue. Pod-controlled text in the Note has its `@mentions` neutralized, and Jira wiki markup in it is escaped. A GitHub 403 that says the rate limit was hit is retried like a 429. |
 | 📱 SMS and push | Twilio, Plivo, Vonage, MessageBird, Pushover, Pushbullet, Gotify, ntfy, IFTTT, Home Assistant | The Short. A resolve is never louder than the incident: for Pushover, Gotify and ntfy it is sent at the configured priority capped at normal, or at `resolvedPriority` when set. IFTTT also sends the Note as `value2` and the status as `value3`. |
 | 📧 Email | Email (SMTP), AWS SES, SendGrid, Mailgun, Resend | Subject is the Short on one line; the body is the Note followed by recent output as a `> ` quoted block. A Pro message with evidence is sent as the same plain text plus an HTML alternative, by all five (SMTP, SES, SendGrid, Mailgun and Resend). |
@@ -92,8 +94,8 @@ texts (the Short) and the `Note` field of the structured providers do
 not. Without
 the dashboard, or with no address found, messages are unchanged.
 
-An announcement, or a `failing again` update, can carry two more link
-lines before that one. `Cause in dashboard: …/issues/<id>` links the
+On Pro, an announcement or a `failing again` update can carry two more
+link lines before that one. `Cause in dashboard: …/issues/<id>` links the
 incident named by its `Caused by: …` line (below), and `Earlier times:
 …/issues?status=all&like=<incident id>` lists the earlier incidents with
 the same error when the root failed for the fourth time or more this
@@ -102,9 +104,11 @@ week.
 ### Lines that tie an alert to what you already know
 
 These are written by `compose` from what the incident already holds; none
-of them changes whether, when or how loudly kwatch alerts.
+of them changes whether, when or how loudly kwatch alerts. All of them are
+Pro: a Community message says neither `Caused by` nor `Likely caused by`,
+names no recurrence, pod count or fixer.
 
-- `Caused by: <title>.` An announcement or a `failing again` update names
+- `Caused by: <title>.` (Pro) An announcement or a `failing again` update names
   the open incident this one is caused by, when people already heard about
   it (it was announced in scope and a message about it was written). Two
   incidents are tied only when the reasoning ties them: the failure chain
@@ -114,13 +118,13 @@ of them changes whether, when or how loudly kwatch alerts.
   incident's chain reaching it, the line says `Likely caused by: <title>;
   kwatch is still checking.`, and the lines that say the cause is unclear or
   what was checked are dropped.
-- `This is the fourth time this week on deployment/api.` The recurrence
+- `This is the fourth time this week on deployment/api.` (Pro) The recurrence
   line names the object once the root failed four times or more in seven
   days (announced occurrences only, this one included); a `failing again`
   update adds it when that count is higher than its own "Nth time in 2h".
-- `Three pods were affected.` A resolve says how many pods failed at the
-  incident's widest, when that is more than one. Its duration and who
-  fixed it are said already ("It was failing for 42 minutes"; "alice
+- `Three pods were affected.` (Pro) A resolve says how many pods failed
+  at the incident's widest, when that is more than one. Its duration and
+  who fixed it are said already ("It was failing for 42 minutes"; "alice
   rolled back to revision 13 at 14:09").
 
 The other parts of a blast radius (Services, Ingresses, workloads) are

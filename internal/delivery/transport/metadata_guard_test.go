@@ -4,30 +4,22 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 
 	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/cloudmeta"
 )
 
-type fakeResolver map[string][]string
-
-func (r fakeResolver) LookupHost(
-	_ context.Context, host string,
-) ([]string, error) {
-	if answers, ok := r[host]; ok {
-		return answers, nil
-	}
-	return nil, &net.DNSError{Err: "no such host", Name: host,
-		IsNotFound: true}
-}
-
-// dialLog records the addresses a dial reached and refuses them all, so
-// no test leaves the machine.
+// dialLog records the addresses a guarded dialer was about to connect to
+// and refuses them all, before any packet is sent, so no test leaves the
+// machine. It runs after the metadata check.
 type dialLog struct {
 	mu   sync.Mutex
 	seen []string
@@ -35,39 +27,37 @@ type dialLog struct {
 
 var errTestDial = errors.New("test dial")
 
-func (d *dialLog) dial(
-	_ context.Context, _, address string,
-) (net.Conn, error) {
+func (d *dialLog) control(
+	_ context.Context, _, address string, _ syscall.RawConn,
+) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.seen = append(d.seen, address)
-	return nil, errTestDial
+	return errTestDial
 }
 
-func TestMetadataAddressBlocksOnlyMetadataRanges(t *testing.T) {
-	cases := map[string]bool{
-		"169.254.169.254":        true,
-		"169.254.10.1":           true,
-		"fd00:ec2::254":          true,
-		"100.100.100.200":        true,
-		"fe80::1":                true,
-		"::ffff:169.254.169.254": true,
-		"64:ff9b::a9fe:a9fe":     true,
-		"10.0.0.5":               false,
-		"192.168.1.10":           false,
-		"172.16.0.1":             false,
-		"127.0.0.1":              false,
-		"::1":                    false,
-		"100.100.100.201":        false,
-		"fd00:ec2::253":          false,
-		"8.8.8.8":                false,
-		"2001:db8::1":            false,
-		"not-an-address":         false,
+// Every metadata address the shared list names is refused before any
+// dial, by literal URL and by a name that resolves to it.
+func TestGuardMetadataRefusesEverySharedMetadataAddress(t *testing.T) {
+	log := &dialLog{}
+	names := fakeResolver{}
+	for i, ip := range cloudmeta.Addresses() {
+		names[fmt.Sprintf("meta%d.example.test", i)] = []string{ip.String()}
 	}
-	for raw, want := range cases {
-		if got := MetadataAddress(net.ParseIP(raw)); got != want {
-			t.Errorf("MetadataAddress(%s) = %v, want %v", raw, got, want)
+	client := guardWith(log, names)
+	for i, ip := range cloudmeta.Addresses() {
+		for _, raw := range []string{
+			"http://" + net.JoinHostPort(ip.String(), "80") + "/x",
+			fmt.Sprintf("http://meta%d.example.test/x", i),
+		} {
+			_, err := client.Get(raw)
+			if !errors.Is(err, ErrMetadataAddress) || !IsPermanent(err) {
+				t.Errorf("%s: err = %v", raw, err)
+			}
 		}
+	}
+	if len(log.seen) != 0 {
+		t.Errorf("dialed %v", log.seen)
 	}
 }
 
@@ -92,10 +82,14 @@ func TestGuardMetadataRefusesMetadataURLs(t *testing.T) {
 	}
 }
 
+// The check runs on the address being connected: a name that resolves
+// to a metadata address is refused there, and a metadata answer next to
+// another one is never connected to.
 func TestGuardMetadataRefusesANameResolvingToMetadata(t *testing.T) {
 	log := &dialLog{}
 	client := guardWith(log, fakeResolver{
-		"hooks.example.test": {"10.0.0.9", "169.254.169.254"},
+		"hooks.example.test": {"169.254.169.254"},
+		"mixed.example.test": {"10.0.0.9", "169.254.169.254"},
 	})
 	_, err := client.Post("http://hooks.example.test/x", "text/plain",
 		strings.NewReader("hi"))
@@ -104,6 +98,10 @@ func TestGuardMetadataRefusesANameResolvingToMetadata(t *testing.T) {
 	}
 	if len(log.seen) != 0 {
 		t.Errorf("dialed %v", log.seen)
+	}
+	_, _ = client.Get("http://mixed.example.test/x")
+	if strings.Join(log.seen, " ") != "10.0.0.9:80" {
+		t.Errorf("dialed %v, want only 10.0.0.9:80", log.seen)
 	}
 }
 
@@ -174,8 +172,8 @@ func TestGuardMetadataKeepsSDKClientAndTLSConfig(t *testing.T) {
 	}
 }
 
-func guardWith(log *dialLog, resolver Resolver) *http.Client {
-	base := &http.Client{Transport: &http.Transport{
-		DialContext: log.dial, Proxy: nil}}
-	return guardMetadata(base, resolver)
+func guardWith(log *dialLog, names fakeResolver) *http.Client {
+	base := &http.Client{Transport: &http.Transport{Proxy: nil}}
+	return guardMetadata(base, &net.Dialer{Resolver: names.resolver(),
+		ControlContext: log.control})
 }

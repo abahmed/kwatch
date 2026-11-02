@@ -203,6 +203,10 @@ var definitions = []Definition{
 		Runtime, nil,
 	},
 	{
+		Heartbeat, "Ping an external monitor so it notices when kwatch stops",
+		Runtime, nil,
+	},
+	{
 		RBACAudit, "Report missing permissions",
 		Runtime, nil,
 	},

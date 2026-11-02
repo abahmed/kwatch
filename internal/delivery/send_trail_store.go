@@ -42,16 +42,18 @@ func (r TrailRecord) last() int64 {
 	return r.Attempts[len(r.Attempts)-1].At.UnixNano()
 }
 
-// restore puts saved records, least recently told first, behind what
-// this session already noted: they are older. Records of another
-// layout, and of summaries, are deleted by the next write, which is
-// woken at once. The bounds
-// apply to the merged trail.
+// restore attaches the trail store: from now on changes are noted for
+// the writer, starting with every incident this session already told.
+// It puts saved records, least recently told first, behind what this
+// session already noted: they are older. Records of another layout, and
+// of summaries, are deleted by the next write, which is woken at once.
+// The bounds apply to the merged trail.
 func (t *sendTrail) restore(records []TrailRecord) {
 	sort.SliceStable(records, func(i, j int) bool {
 		return records[i].last() < records[j].last()
 	})
 	t.mu.Lock()
+	t.startSavingLocked()
 	if t.byKey == nil {
 		t.byKey = map[string][]SendAttempt{}
 	}
@@ -86,6 +88,19 @@ func (t *sendTrail) restore(records []TrailRecord) {
 	// Deletions found here are written now, not at the next send.
 	if dirty && changed != nil {
 		changed()
+	}
+}
+
+// startSavingLocked turns on noting changes for the writer, once, and
+// marks every incident already told: none of them was ever written. The
+// caller holds t.mu.
+func (t *sendTrail) startSavingLocked() {
+	if t.saving {
+		return
+	}
+	t.saving = true
+	for _, key := range t.order {
+		t.markLocked(key, true)
 	}
 }
 

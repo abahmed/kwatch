@@ -42,8 +42,8 @@ const (
 	maxTrailAttempts = 16
 )
 
-// sendTrail keeps the latest attempts per incident. Once the outbox is
-// attached it is also saved (see send_trail_store.go): dirty names the
+// sendTrail keeps the latest attempts per incident. Once a trail store
+// is attached it is also saved (see send_trail_store.go): dirty names the
 // keys changed (true) or forgotten (false) since the last write, and
 // changed wakes the writer. The zero value is ready to use.
 type sendTrail struct {
@@ -51,9 +51,13 @@ type sendTrail struct {
 	byKey map[string][]SendAttempt
 	// sent is the text of the latest message each provider accepted,
 	// per incident (see send_trail_text.go).
-	sent    map[string]map[string]SentText
-	order   []string
-	dirty   map[string]bool
+	sent  map[string]map[string]SentText
+	order []string
+	dirty map[string]bool
+	// saving is set when a trail store is attached (see restore). Until
+	// then no change is noted in dirty: without a store nothing would
+	// ever take it, and dirty would grow with every incident told.
+	saving  bool
 	changed func()
 }
 
@@ -111,9 +115,12 @@ func (t *sendTrail) boundLocked() {
 	}
 }
 
-// markLocked notes that key must be written (live) or deleted. The
-// caller holds t.mu.
+// markLocked notes that key must be written (live) or deleted, once a
+// trail store is attached. The caller holds t.mu.
 func (t *sendTrail) markLocked(key string, live bool) {
+	if !t.saving {
+		return
+	}
 	if t.dirty == nil {
 		t.dirty = map[string]bool{}
 	}

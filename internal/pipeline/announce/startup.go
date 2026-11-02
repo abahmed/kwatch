@@ -54,15 +54,20 @@ type Startup struct {
 	// named has resolved.
 	CheckSummary bool
 	// Baseline is the Community start: the failures that exist when
-	// kwatch syncs are the baseline, not news. Nobody hears of them, not
-	// in a summary and not when they change or resolve; only a failure
-	// that begins later is announced. A baselined incident that gets
-	// worse (a higher severity or more failing members than at start)
-	// is announced once, and is a normal incident from then on.
+	// kwatch syncs are held as the baseline while the startup window is
+	// open. There is no summary: one that recovers inside the window is
+	// never heard of, and one still failing when the window closes is
+	// announced on its own, as a new failure is. A baselined incident
+	// that gets worse inside the window (a higher severity or more
+	// failing members than at start) is announced at once, and is a
+	// normal incident from then on.
 	Baseline bool
 	// baselined holds the incidents that existed at start, with what
 	// they looked like then.
-	baselined map[string]baselineMark
+	baselined map[string]baselineEntry
+	// baselineOver is set when the startup window closed and the
+	// baseline was released.
+	baselineOver bool
 }
 
 // HoldUntilSync starts collecting the startup summary on a cold start,
@@ -97,6 +102,9 @@ func (c *Collector) CollectStartup(
 ) ([]incident.Decision, bool) {
 	if c.Startup.Baseline {
 		decisions = c.absorbBaselined(ctx, now, decisions)
+		if c.Startup.baselineOver {
+			decisions = append(decisions, c.sweepBaselined()...)
+		}
 	}
 	if c.Startup.Until.IsZero() && !c.Startup.AwaitSync {
 		return c.holdWarm(ctx, now, decisions), false
@@ -111,6 +119,9 @@ func (c *Collector) CollectStartup(
 		return rest, false
 	}
 	c.finishStartup(ctx, now)
+	if c.Startup.Baseline {
+		rest = append(rest, c.releaseBaselined()...)
+	}
 	return rest, true
 }
 
@@ -127,7 +138,7 @@ func (c *Collector) holdStartup(
 	switch {
 	case s.Baseline && d.Action == incident.Announce &&
 		s.predatesSync(d.Incident):
-		s.baseline(d.Incident)
+		s.baseline(d)
 		c.recordCarried(ctx, now, d, "baseline")
 		return true
 	case d.Action == incident.Announce && s.predatesSync(d.Incident):

@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/abahmed/kwatch/internal/cloudmeta"
 	"github.com/abahmed/kwatch/internal/inventory"
 )
 
@@ -118,12 +119,25 @@ func TestActiveProberKeepsCalledEndpointsOutsideTheCap(t *testing.T) {
 func TestSensitiveProbeAddressRanges(t *testing.T) {
 	for _, text := range []string{"127.0.0.1", "::1", "169.254.169.254",
 		"fe80::1", "0.0.0.0", "::", "224.0.0.1", "ff02::1", "0.1.2.3",
-		"::ffff:127.0.0.1", "64:ff9b::a9fe:a9fe"} {
+		"::ffff:127.0.0.1", "64:ff9b::a9fe:a9fe", "fd00:ec2::254",
+		"100.100.100.200"} {
 		assert.True(t, SensitiveProbeAddress(net.ParseIP(text)), text)
 	}
 	assert.True(t, SensitiveProbeAddress(nil))
 	for _, text := range []string{"10.1.2.3", "172.16.0.1", "192.168.1.1",
-		"100.64.0.1", "fd00::1", "93.184.216.34", "2606:4700::1111"} {
+		"100.64.0.1", "fd00::1", "93.184.216.34", "2606:4700::1111",
+		"fd00:ec2::253", "100.100.100.201"} {
 		assert.False(t, SensitiveProbeAddress(net.ParseIP(text)), text)
+	}
+}
+
+// A KwatchConfig probe refuses every metadata address the delivery
+// transport refuses, from the same shared list.
+func TestSensitiveProbeAddressRefusesEveryMetadataAddress(t *testing.T) {
+	for _, ip := range cloudmeta.Addresses() {
+		assert.True(t, SensitiveProbeAddress(ip), ip.String())
+		address := net.JoinHostPort(ip.String(), "443")
+		assert.ErrorIs(t, refuseSensitive("tcp", address, nil),
+			errBlockedAddress, address)
 	}
 }

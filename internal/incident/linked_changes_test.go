@@ -112,3 +112,30 @@ func TestSafeChangeBoundsFields(t *testing.T) {
 	assert.Len(t, got.Fields[0].After, maxChangeValue)
 	assert.Len(t, change.Fields, maxChangeFields+3, "input untouched")
 }
+
+// Without change correlation (Community) the journal links no changes
+// and takes no snapshots; the lifecycle is the same.
+func TestNoJournalDetailLinksNoChanges(t *testing.T) {
+	run := func(cfg Config) Incident {
+		r := newRig(t, cfg)
+		web := entity(kube.KindPod, "web")
+		deploy := entity(kube.KindDeployment, "web")
+		r.observe(deploy)
+		r.observe(web)
+		r.relate(web, inventory.OwnedBy, deploy)
+		r.change(deploy, -5*time.Minute, image("web:1", "web:2"))
+		r.raise(at(0), sig(web, "CrashLoopBackOff", 2))
+		r.tick(at(2 * time.Minute))
+		return r.only()
+	}
+	full := run(Config{})
+	plain := run(Config{NoJournalDetail: true})
+
+	assert.NotEmpty(t, full.Journal.Changes)
+	assert.Empty(t, plain.Journal.Changes)
+	assert.Empty(t, plain.Journal.Breaks)
+	assert.Equal(t, full.State, plain.State)
+	assert.Equal(t, full.Tier, plain.Tier)
+	assert.Equal(t, full.Journal.Transitions, plain.Journal.Transitions)
+	assert.Equal(t, full.Journal.ErrorKey, plain.Journal.ErrorKey)
+}

@@ -62,6 +62,10 @@ func TestFailureReasonWordsEachFailure(t *testing.T) {
 		{"metadata address", &url.Error{Op: "Post", URL: "https://x",
 			Err: transport.Permanent(transport.ErrMetadataAddress)},
 			"blocked: cloud metadata address"},
+		{"metadata address at connect", &url.Error{Op: "Post",
+			URL: "https://x", Err: &net.OpError{Op: "dial",
+				Err: transport.Permanent(transport.ErrMetadataAddress)}},
+			"blocked: cloud metadata address"},
 		{"other transient", errors.New("boom"), "failed, retrying"},
 	}
 	for _, tc := range tests {

@@ -37,7 +37,7 @@ func (m *Manager) takeBreak(p *Incident, now time.Time, why string) {
 		return
 	}
 	rows := failingContainers(readContainers(m.model, p.Root,
-		failingMembers(p)))
+		failingMembers(p)), breakCutoff(p, now))
 	if len(rows) == 0 {
 		return
 	}
@@ -53,26 +53,54 @@ func (m *Manager) takeBreak(p *Incident, now time.Time, why string) {
 	p.Journal.Breaks = breaks
 }
 
+// breakCutoff is when a last termination stops counting as part of
+// p's break: the earlier of its onset and RecentWindow before now.
+func breakCutoff(p *Incident, now time.Time) time.Time {
+	cutoff := now.Add(-RecentWindow)
+	if !p.Opened.IsZero() && p.Opened.Before(cutoff) {
+		cutoff = p.Opened
+	}
+	return cutoff
+}
+
 // failingContainers keeps the containers that fail: not ready,
-// restarted with readiness unknown, or waiting or ended for a reason; at most
-// maxBreakContainers, most restarted first.
-func failingContainers(rows []ContainerState) []ContainerState {
+// restarted with readiness unknown, waiting or ended for a reason now,
+// or ended for a reason at or after cutoff; at most maxBreakContainers,
+// most restarted first.
+func failingContainers(
+	rows []ContainerState, cutoff time.Time,
+) []ContainerState {
 	var out []ContainerState
 	for _, row := range rows {
 		if len(out) == maxBreakContainers {
 			break
 		}
-		notReady := row.Ready != nil && !*row.Ready
-		// A restart alone does not fail a container that is Ready with
-		// nothing waiting or ended; it counts only when readiness is
-		// unknown.
-		unknown := row.Ready == nil && row.Restarts > 0
-		if notReady || unknown || row.StateReason != "" ||
-			row.LastReason != "" {
+		if containerFailing(row, cutoff) {
 			out = append(out, row)
 		}
 	}
 	return out
+}
+
+// containerFailing reports whether row fails. A restart alone does not
+// fail a container that is Ready with nothing waiting or ended; it
+// counts only when readiness is unknown. A Ready container keeps the
+// reason of its last termination after it recovers, so that reason
+// counts only when the termination ended at or after cutoff.
+func containerFailing(row ContainerState, cutoff time.Time) bool {
+	if row.Ready != nil && !*row.Ready {
+		return true
+	}
+	if (row.Ready == nil && row.Restarts > 0) || row.StateReason != "" {
+		return true
+	}
+	if row.LastReason == "" {
+		return false
+	}
+	if row.Ready == nil {
+		return true
+	}
+	return !row.LastFinished.IsZero() && !row.LastFinished.Before(cutoff)
 }
 
 // failingMembers are the objects of p's failure findings, by name.

@@ -1,0 +1,17 @@
+10:02:25 settled
+🟠 payments in shop (prod-eu-1) keeps crashing. Cause found: a rollout.
+Pro shows which one and how to fix it. Get Pro free during early access: kwatch.dev/pro
+🟠 payments in shop (prod-eu-1) keeps crashing.
+| 🟠 **payments** in **shop** (**prod-eu-1**) keeps crashing.
+| Cause found: a rollout.
+| *Pro shows which one and how to fix it. Get Pro free during early access: kwatch.dev/pro*
+10:06:10 fix attempt
+🟠 Rollout 15 of payments in shop (prod-eu-1) started at 10:06 UTC; watching.
+Pro would show the change that caused this crash. Pro shows how to fix it. Get Pro free during early access: kwatch.dev/pro
+🟠 Rollout 15 of payments in shop (prod-eu-1) started at 10:06 UTC; watching.
+| 🟠 Rollout 15 of **payments** in **shop** (**prod-eu-1**) started at 10:06 UTC; watching.
+| *Pro would show the change that caused this crash. Pro shows how to fix it. Get Pro free during early access: kwatch.dev/pro*
+10:11:10 healthy for 3m0s
+✅ payments in shop (prod-eu-1) is healthy again.
+✅ payments in shop (prod-eu-1) is healthy again.
+| ✅ **payments** in **shop** (**prod-eu-1**) is healthy again.

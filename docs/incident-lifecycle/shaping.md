@@ -99,7 +99,9 @@ another that closed), and then nobody would be told.
   grace names the rest. A tier that may still fall when its findings settle
   waits for the grace (`currentNews`, `Incident.LiveTier`). On a
   cold start the first `StartupWindow` (2m) collects existing incidents into
-  one startup summary; an active page still reaches the pagers at once.
+  one startup summary, and an active page still reaches the pagers at once
+  (Pro; Community announces each still-failing one after the startup
+  window).
   What a restart keeps: the incident records (with the worst stage reached,
   `stagePeak`, so a crash loop told once is not told again, and the
   announced route), the startup marker with its open roll-ups (also those

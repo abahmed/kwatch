@@ -174,7 +174,7 @@ func NewEngine(deps Dependencies) (*Engine, error) {
 	e.announcer = newAnnouncer(deps, e.storage, &e.stats)
 	e.announcer.collect.SetAdvisories(e.activeAdvisories)
 	e.announcer.collect.SetReadiness(e.Readiness)
-	e.announcer.collect.Startup.Baseline = deps.baselineStart()
+	e.announcer.collect.Startup.Baseline = !deps.summarisesStartup()
 	return e, nil
 }
 
@@ -201,7 +201,7 @@ func (e *Engine) Run(ctx context.Context) error {
 	if err := e.restore(); err != nil {
 		return err
 	}
-	e.storage.history.start()
+	e.startHistory()
 	stopWorkers := e.startWorkers(ctx)
 	defer stopWorkers()
 	checks := newRechecks()

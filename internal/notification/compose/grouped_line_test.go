@@ -179,8 +179,9 @@ func TestGroupedLineIsPlainText(t *testing.T) {
 	}
 }
 
-// The line is kept in Community and Pro alike and sits above the
-// command, so the message still ends on what to run.
+// The line is kept in Community and Pro alike. In Pro it sits above
+// the command, so the message still ends on what to run; Community has
+// no command, and the Pro line follows it.
 func TestGroupedLineShowsInCommunityAndPro(t *testing.T) {
 	p := groupedWith(badRollout(), 2, detection.ModeProbe, false)
 	full, community, _ := communityWriters()
@@ -195,6 +196,10 @@ func TestGroupedLineShowsInCommunityAndPro(t *testing.T) {
 			return strings.HasPrefix(l, groupedPrefix)
 		})
 		require.Greater(t, at, 0, name)
+		if name == "community" {
+			assert.Contains(t, lines[at+1], proFixTail)
+			continue
+		}
 		assert.Contains(t, lines[at+1], "kubectl", name)
 		at = slices.IndexFunc(msg.Doc, func(b notification.Block) bool {
 			return strings.HasPrefix(b.Text(), groupedPrefix)

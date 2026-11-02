@@ -33,6 +33,9 @@ func (e *Engine) restore() error {
 	}
 	grace := e.deps.Clock.Now().Add(restoreGrace)
 	startup.Restore(marker, found, len(records), grace)
+	if !e.deps.summarisesStartup() {
+		startup.WarmAt = time.Time{}
+	}
 	e.deps.Incidents.Restore(records, grace)
 	e.announcer.collect.RestoreDigest()
 	saved, err := e.deps.Store.LoadFingerprints()
@@ -56,6 +59,16 @@ func (e *Engine) restore() error {
 		}
 	}
 	return nil
+}
+
+// startHistory restores the baselines and the change history and starts
+// the history writer. A baseline (Community) start keeps nothing from
+// disk, so it neither restores them nor writes a timeline to restore.
+func (e *Engine) startHistory() {
+	if e.deps.baselineStart() {
+		return
+	}
+	e.storage.history.start()
 }
 
 // restoreAnnounced is the restore of a baseline (Community) start: only

@@ -41,7 +41,7 @@ implementation-only notes may remain beside code when they are not published.
   [add a propagation rule](./contributing-propagation-rule.md),
   [add a source or kind schema](./contributing-source.md),
   [add a message fact](./contributing-message-fact.md),
-  [add a labelled scenario](./contributing-scenario.md).
+  [add a labeled scenario](./contributing-scenario.md).
 - [Production operations](./production-operations.md) — readiness, restarts,
   recovery, outage handling, and release operations.
 - [Configuration notes](./configuration.md) — offline configuration and

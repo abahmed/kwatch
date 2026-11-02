@@ -16,7 +16,7 @@ func TestStatusNamesDashboardLinksThatAreOff(t *testing.T) {
 		t.Fatal("no link state before one is published")
 	}
 
-	h.SetDashboardLinks(LinkStatus{Reason: "port_mismatch"})
+	h.SetDashboardLinks(LinkStatus{Reason: LinksPortMismatch})
 	body := getStatus(h, http.MethodGet, "/status").Body.String()
 	if !strings.Contains(body, "dashboard links in alerts") ||
 		!strings.Contains(body, `not its "dashboard" port`) {
@@ -52,5 +52,26 @@ func TestSetComponentStatusKeepsTrailRestoreFailed(t *testing.T) {
 	if got := h.ComponentStatuses()["delivery-outbox"].Reason; got !=
 		"trail_restore_failed" {
 		t.Fatalf("reason = %q", got)
+	}
+}
+
+// Every reason a dashboard link can be off has words, and /status says
+// "off" without a reason it does not know.
+func TestLinkReasonTextWordsEveryReason(t *testing.T) {
+	for _, reason := range []string{LinksNoRoute, LinksPortMismatch,
+		LinksUnusableAddress, LinksRoutesForbidden} {
+		if LinkReasonText(reason) == "" {
+			t.Errorf("no words for %s", reason)
+		}
+	}
+	if got := LinkReasonText("other"); got != "" {
+		t.Errorf("LinkReasonText(other) = %q", got)
+	}
+
+	h := newStatusServer()
+	h.SetDashboardLinks(LinkStatus{Reason: "other"})
+	gap, ok := h.linkGap()
+	if !ok || gap.Reason != "off" {
+		t.Fatalf("gap = %+v, %v", gap, ok)
 	}
 }

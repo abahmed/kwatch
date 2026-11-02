@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -75,6 +76,39 @@ func TestNamespaceOutageStatesWhatIsShared(t *testing.T) {
 		!strings.Contains(msg.Note, "Shortly before, bob changed") ||
 		!strings.Contains(msg.Note, "at 10:01 UTC") {
 		t.Fatalf("note = %q", msg.Note)
+	}
+}
+
+// The shared change is Pro detail: Community keeps the shared node,
+// names no change and adds no line about it.
+func TestNamespaceOutageCommunityNamesNoSharedChange(t *testing.T) {
+	now := time.Date(2026, 9, 29, 10, 5, 0, 0, time.UTC)
+	change := inventory.Change{
+		Entity: inventory.EntityID{Kind: kube.KindConfigMap,
+			Namespace: "shop", Name: "app-config"},
+		At: time.Date(2026, 9, 29, 10, 1, 0, 0, time.UTC), Actor: "bob",
+	}
+	o := NamespaceOutage{Namespace: "shop",
+		Shared: OutageShared{Node: "n1", Change: &change}}
+	w := Writer{}.ForEdition(feature.CommunityEntitlements(), false)
+
+	msg := w.NamespaceOutage(o, outageCases(5, now), now)
+
+	if !strings.Contains(msg.Note, "They all ran on node n1.") {
+		t.Fatalf("note = %q", msg.Note)
+	}
+	for _, word := range []string{"Shortly before", "app-config", "bob",
+		"Pro"} {
+		if strings.Contains(msg.Note, word) {
+			t.Errorf("community note says %q: %q", word, msg.Note)
+		}
+	}
+	for _, b := range msg.Doc {
+		for _, sp := range b.Spans {
+			if strings.Contains(sp.Text, "app-config") {
+				t.Errorf("community doc names the change: %q", sp.Text)
+			}
+		}
 	}
 }
 

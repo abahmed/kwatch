@@ -39,6 +39,9 @@ type Env struct {
 	// show; the startup sends their count when Messages.ProNote is set.
 	// Optional.
 	Withheld func(time.Time) feature.WithheldCounts
+	// WithheldToday counts the Pro findings first withheld on the UTC
+	// day of a time, for the daily Pro checks note. Optional.
+	WithheldToday func(time.Time) feature.WithheldCounts
 	// OwnNamespace is the namespace kwatch runs in, when known: its own
 	// risks are left out of the digest.
 	OwnNamespace string
@@ -92,6 +95,8 @@ type Collector struct {
 	folded map[string]bool
 	// readiness is the daily upgrade-readiness line of the digest.
 	readiness readinessItem
+	// proChecks is the last Pro checks note (see pro_checks.go).
+	proChecks proChecks
 }
 
 // New returns a Collector over env.

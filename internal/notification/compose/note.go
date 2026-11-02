@@ -49,6 +49,9 @@ type caseFacts struct {
 	// asAnnounced names the subject people were told about in a resolve
 	// (see incident.Decision.AsAnnounced).
 	asAnnounced bool
+	// community writes the Community message: the lead stops before the
+	// cause and causeTeaser tells only its category.
+	community bool
 }
 
 func gatherFacts(d incident.Decision, now time.Time, fix *inventory.Change,
@@ -97,6 +100,9 @@ const (
 	partConsequence
 	partUnverified
 	partRecurrence
+	// partFollowUp says what kwatch does next: reminders held by an
+	// ack, the next message of a flapping incident.
+	partFollowUp
 	// partPlace is the line that names the setting to change.
 	partPlace
 	// partGrouped counts the other findings grouped in the incident.
@@ -119,6 +125,9 @@ type factKey string
 const (
 	factMemory   factKey = "memory"
 	factLiveness factKey = "liveness"
+	// factCauseTeaser marks the Community sentence that tells only the
+	// category of the cause (causeTeaser).
+	factCauseTeaser factKey = "cause teaser"
 )
 
 // sentence is one finished sentence of a note.

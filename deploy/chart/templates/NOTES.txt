@@ -71,7 +71,7 @@ port other than 443 need the same.
 {{- if $dashN.enabled }}
 {{- $dp := $dashN.port | default 8061 }}
 
-DASHBOARD: reach it with a port-forward, then open the URL:
+DASHBOARD (Pro): reach it with a port-forward, then open the URL:
   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "kwatch.fullname" . }}-dashboard {{ $dp }}:{{ $dp }}
   {{ if (default dict $dashN.tls).secretName }}https{{ else }}http{{ end }}://localhost:{{ $dp }}
 {{- if $dashN.existingSecret }}
@@ -84,8 +84,8 @@ in the Secret {{ .Release.Name }}-dashboard:
 {{- end }}
 {{- end }}
 
-RECOMMENDED: configure the heartbeat (config.heartbeatMonitor, a dead man's
-switch). kwatch runs as a single pod, so when kwatch itself or the Kubernetes
-API server is down nothing inside the cluster can alert you; the heartbeat,
+RECOMMENDED (Pro): configure the heartbeat (config.heartbeatMonitor, a dead
+man's switch). kwatch runs as a single pod, so when kwatch itself or the
+Kubernetes API server is down nothing inside the cluster can alert you; the heartbeat,
 checked from outside, is the only alarm for that. The URL is a credential: put
 it in the configSecretName Secret.
