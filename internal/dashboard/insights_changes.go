@@ -11,9 +11,10 @@ import (
 )
 
 // InsightChanges counts the active issues that started right after a
-// change, and lists the newest of them.
+// change, out of Total active issues, and lists the newest of them.
 type InsightChanges struct {
 	Count  int                  `json:"count"`
+	Total  int                  `json:"total"`
 	Issues []InsightChangeIssue `json:"issues"`
 }
 
@@ -49,7 +50,8 @@ func changeBefore(p incident.Incident) (inventory.Change, bool) {
 func afterChange(
 	live []incident.Incident, red func(string) string,
 ) InsightChanges {
-	out := InsightChanges{Issues: make([]InsightChangeIssue, 0)}
+	out := InsightChanges{Total: len(live),
+		Issues: make([]InsightChangeIssue, 0)}
 	var hits []InsightChangeIssue
 	for _, p := range live {
 		c, ok := changeBefore(p)

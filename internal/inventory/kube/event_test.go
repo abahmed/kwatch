@@ -107,3 +107,26 @@ func TestEventNoteWithoutAnEventUIDHasNoOrigin(t *testing.T) {
 	observation, _ := kube.EventNote(ev, fixedTime())
 	assert.Empty(t, observation.Note.Origin)
 }
+
+// The kubelet's Unhealthy events get the topic of the probe they name,
+// so one container's readiness and liveness failures stay apart.
+func TestEventNoteTopicNamesTheProbe(t *testing.T) {
+	cases := map[string]string{
+		"Readiness probe failed: connect: connection refused": "readiness",
+		"Liveness probe failed: HTTP probe failed with statuscode: 500": "" +
+			"liveness",
+		"Startup probe errored: rpc error": "startup",
+		"something else":                   "",
+	}
+	for message, topic := range cases {
+		ev := warningEvent("Pod", "spec.containers{app}")
+		ev.Reason, ev.Message = "Unhealthy", message
+		observation, ok := kube.EventNote(ev, fixedTime())
+		assert.True(t, ok)
+		assert.Equal(t, topic, observation.Note.Topic, message)
+	}
+	ev := warningEvent("Pod", "")
+	ev.Message = "Readiness probe failed: refused"
+	observation, _ := kube.EventNote(ev, fixedTime())
+	assert.Empty(t, observation.Note.Topic, "only Unhealthy has topics")
+}

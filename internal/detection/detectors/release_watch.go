@@ -80,6 +80,7 @@ func (ReleaseWatch) Detect(
 	if after < releaseWorseFactor*before {
 		return nil
 	}
+	ctx.Onset(releaseReported, release.started())
 	return []detection.Finding{{
 		Reason: reasons.ReleaseRegression, Severity: detection.Warning,
 		Since:    release.started(),
@@ -87,6 +88,9 @@ func (ReleaseWatch) Detect(
 		Evidence: releaseEvidence(release, count, before, after),
 	}}
 }
+
+// releaseReported is the state key of a release reported as worse.
+const releaseReported = "release-reported"
 
 // watched reports whether the release is still judged. Inside the window
 // it always is; after it, only while its containers keep restarting, so
@@ -97,6 +101,11 @@ func watched(ctx detection.Context, r release, age time.Duration) bool {
 	if age < releaseWatchWindow {
 		ctx.RecheckAfter(min(releaseRecheck, releaseWatchWindow-age))
 		return true
+	}
+	// Only a release already reported inside its window is followed
+	// past it: an old revision whose pods were recreated is no release.
+	if !ctx.Ongoing(releaseReported) {
+		return false
 	}
 	last := r.lastRestart()
 	if last.IsZero() || ctx.Now.Sub(last) >= releaseQuietAfter {

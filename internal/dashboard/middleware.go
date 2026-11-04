@@ -8,18 +8,32 @@ import (
 )
 
 // contentSecurityPolicy allows only same-origin scripts, styles, fonts,
-// images and requests: no inline script or style, no framing.
+// images, requests and the service worker: no inline script or style,
+// no framing.
 const contentSecurityPolicy = "default-src 'none'; script-src 'self'; " +
 	"style-src 'self'; img-src 'self' data:; font-src 'self'; " +
-	"connect-src 'self'; form-action 'self'; base-uri 'none'; " +
+	"connect-src 'self'; worker-src 'self'; form-action 'self'; " +
+	"base-uri 'none'; " +
 	"frame-ancestors 'none'"
 
 // hstsValue tells browsers to use https for the dashboard's host for a
 // year. It leaves subdomains alone: they are not kwatch's to decide.
 const hstsValue = "max-age=31536000"
 
-// securityHeaders sets the headers every dashboard response carries,
-// errors included. Cache-Control is no-store; hashed assets replace it.
+// pageHeaders are the headers every dashboard response carries, errors
+// and the raw 400 of an unparsable request (badRequestReply) included.
+var pageHeaders = [][2]string{
+	{"X-Content-Type-Options", "nosniff"},
+	{"X-Frame-Options", "DENY"},
+	{"Cache-Control", "no-store"},
+	{"Referrer-Policy", "no-referrer"},
+	{"Content-Security-Policy", contentSecurityPolicy},
+	{"Cross-Origin-Opener-Policy", "same-origin"},
+	{"Cross-Origin-Resource-Policy", "same-origin"},
+}
+
+// securityHeaders sets pageHeaders on every dashboard response.
+// Cache-Control is no-store; hashed assets replace it.
 // Strict-Transport-Security is added when hsts says so.
 func securityHeaders(
 	next http.Handler, hsts func(*http.Request) bool,
@@ -29,13 +43,9 @@ func securityHeaders(
 		if hsts(r) {
 			h.Set("Strict-Transport-Security", hstsValue)
 		}
-		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("X-Frame-Options", "DENY")
-		h.Set("Cache-Control", "no-store")
-		h.Set("Referrer-Policy", "no-referrer")
-		h.Set("Content-Security-Policy", contentSecurityPolicy)
-		h.Set("Cross-Origin-Opener-Policy", "same-origin")
-		h.Set("Cross-Origin-Resource-Policy", "same-origin")
+		for _, kv := range pageHeaders {
+			h.Set(kv[0], kv[1])
+		}
 		next.ServeHTTP(w, r)
 	})
 }

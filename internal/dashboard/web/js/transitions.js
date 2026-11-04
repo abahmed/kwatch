@@ -2,7 +2,8 @@
    (transitions). They become entries of "What happened, step by step"
    and the states strip above it, one segment per state, so every flap
    shows. Without transitions (an issue saved by an older kwatch) the
-   strip is drawn from the phases. Sizes are set with CSSOM. */
+   strip is drawn from the phases. The strip is an SVG built with DOM
+   calls, placed by percent. */
 (function () {
   "use strict";
   var KW = window.KW;
@@ -13,10 +14,12 @@
   function word(key, fallback) {
     return KW.STATE[key] ? KW.STATE[key].label : fallback;
   }
+  /* Failing is a past red band; only the band still going now is
+     "Happening now" (segWord). */
   var SEG = {
     settling: [word("settling", "Confirming"), "seg-settling"],
-    open: [word("open", "Happening now"), "seg-failing"],
-    failing: [word("open", "Happening now"), "seg-failing"],
+    open: ["Failing", "seg-failing"],
+    failing: ["Failing", "seg-failing"],
     flapping: [word("flapping", "Keeps coming back"), "seg-flapping"],
     recovering: [word("recovering", "Looks better"), "seg-recovering"],
     resolved: [word("resolved", "Resolved"), "seg-quiet"],
@@ -107,57 +110,101 @@
     };
   }
 
+  /* segWord: the band's label and class; the last band of an issue
+     still open is the current state. */
+  function segWord(p, last, inc) {
+    var w = SEG[p.state] || [p.state, "seg-quiet"];
+    if (last && w[1] === "seg-failing" && inc.state !== "resolved") return [word("open", "Happening now"), w[1]];
+    return w;
+  }
+
   function span(fromIso, toIso) { return KW.when(fromIso) + "–" + KW.when(toIso) + " (" + KW.lasted(fromIso, toIso) + ")"; }
 
+  var NS = "http://www.w3.org/2000/svg", H = 40, TOP = 12;
+  /* TALL: each state's band height, so states differ by more than color. */
+  var TALL = { "seg-failing": 1, "seg-flapping": 0.75, "seg-recovering": 0.5, "seg-settling": 0.3, "seg-quiet": 0.2 };
+
+  function svg(tag, attrs, cls, tip) {
+    var n = document.createElementNS(NS, tag);
+    Object.keys(attrs).forEach(function (k) { n.setAttribute(k, String(attrs[k])); });
+    if (cls) n.setAttribute("class", cls);
+    if (tip) n.appendChild(document.createElementNS(NS, "title")).textContent = tip;
+    return n;
+  }
+
+  /* pin: a mark at a moment, drawn in a nested svg placed by percent so
+     the mark keeps its shape at any width. */
+  function pin(x, shape, cls, tip) {
+    var g = svg("svg", { x: x, y: 0, width: 1, height: H, overflow: "visible" });
+    g.appendChild(svg("line", { x1: 0, x2: 0, y1: 6, y2: H }, cls + "-l"));
+    g.appendChild(svg("polygon", { points: shape }, cls, tip));
+    return g;
+  }
+
+  function changes(inc) {
+    var list = (inc.changes || []).concat(inc.state === "resolved" ? inc.changedBeforeRecovery || [] : []);
+    return list.filter(function (c) { return KW.valid(c.at); });
+  }
+
+  /* KW.strip draws the mini timeline above the step-by-step list: the
+     states as bands (taller is worse), changes people made as ▼ and
+     alert level changes as ◆, with the same in words for screen readers. */
   KW.strip = function (root, inc) {
     var box = KW.$("[data-strip]", root);
     var nowIso = new Date(KW.now()).toISOString();
     var data = fromTransitions(inc, nowIso);
     if (!data.segs.length) data = fromPhases(inc, nowIso);
-    var segs = data.segs;
+    var segs = data.segs, chg = changes(inc);
     box.textContent = "";
     box.hidden = !segs.length;
     if (box.hidden) return;
     var start = Date.parse(segs[0].from), stop = Date.parse(segs[segs.length - 1].to);
+    chg.forEach(function (c) {
+      start = Math.min(start, Date.parse(c.at));
+      stop = Math.max(stop, Date.parse(c.at));
+    });
     var total = Math.max(1, stop - start);
-    var bar = KW.el("div", "strip-bar");
-    bar.setAttribute("role", "img");
+    function x(at) { return ((Date.parse(at) - start) / total * 100).toFixed(2) + "%"; }
+    var s = svg("svg", { width: "100%", height: H, focusable: "false" }, "mt-svg");
+    s.setAttribute("role", "img");
+    s.appendChild(svg("rect", { x: 0, y: TOP, width: "100%", height: H - TOP }, "mt-bg"));
     var words = [];
-    segs.forEach(function (p) {
-      var ms = Math.max(1, Date.parse(p.to) - Date.parse(p.from));
-      var w = SEG[p.state] || [p.state, "seg-quiet"];
-      var seg = bar.appendChild(KW.el("span", "seg " + w[1]));
-      seg.style.flexGrow = String(ms);
-      seg.title = w[0] + ": " + span(p.from, p.to);
+    segs.forEach(function (p, i) {
+      var w = segWord(p, i === segs.length - 1, inc), h = (H - TOP) * (TALL[w[1]] || 0.2);
+      var width = Math.max(0.4, (Date.parse(p.to) - Date.parse(p.from)) / total * 100);
+      s.appendChild(svg("rect", { x: x(p.from), y: H - h, width: width.toFixed(2) + "%", height: h },
+        "mt-band " + w[1], w[0] + ": " + span(p.from, p.to)));
       words.push(w[0] + " " + KW.lasted(p.from, p.to));
     });
-    var wrap = KW.el("div", "strip-wrap");
-    wrap.appendChild(bar);
+    chg.forEach(function (c) {
+      var text = KW.when(c.at) + " · " + KW.obj(c.kind, c.namespace, c.name) + ": " + c.summary;
+      s.appendChild(pin(x(c.at), "-5,0 5,0 0,7", c.cause ? "mt-chg is-cause" : "mt-chg",
+        text + (c.cause ? " (likely cause)" : "")));
+      words.push("change at " + KW.when(c.at) + ": " + c.summary);
+    });
     data.marks.forEach(function (m) {
-      var at = Date.parse(m.at);
-      if (at < start || at > stop) return;
-      var mk = wrap.appendChild(KW.el("span", "strip-mark"));
-      mk.style.left = ((at - start) / total * 100).toFixed(2) + "%";
-      mk.title = KW.when(m.at) + " · " + m.text;
+      s.appendChild(pin(x(m.at), "0,0 4,4 0,8 -4,4", "mt-tier", KW.when(m.at) + " · " + m.text));
       words.push(m.text + " at " + KW.when(m.at));
     });
-    bar.setAttribute("aria-label", "States over time: " + words.join(", "));
-    var resolved = inc.state === "resolved";
-    box.appendChild(KW.el("p", "strip-h", "Over its lifetime" + (data.marks.length ? " · ▲ alert level changed" : "")));
-    box.appendChild(wrap);
+    s.setAttribute("aria-label", "Over its lifetime: " + words.join(", "));
+    box.appendChild(KW.el("p", "strip-h", "Over its lifetime" +
+      (chg.length ? " · " + KW.plural(chg.length, "change", "changes") + " people made" : "")));
+    box.appendChild(s);
     var ends = KW.el("div", "strip-ends");
-    ends.appendChild(KW.el("span", "", KW.when(segs[0].from)));
-    ends.appendChild(KW.el("span", "", resolved ? KW.when(segs[segs.length - 1].to) : "now"));
+    ends.appendChild(KW.el("span", "", KW.when(new Date(start).toISOString())));
+    ends.appendChild(KW.el("span", "", inc.state === "resolved" ? KW.when(new Date(stop).toISOString()) : "now"));
     box.appendChild(ends);
     var legend = KW.el("p", "strip-key"), seen = {};
-    segs.forEach(function (p) {
-      var w = SEG[p.state] || [p.state, "seg-quiet"];
+    segs.forEach(function (p, i) {
+      var w = segWord(p, i === segs.length - 1, inc);
       if (seen[w[0]]) return;
       seen[w[0]] = true;
       var item = legend.appendChild(KW.el("span"));
       item.appendChild(KW.el("span", "seg-dot " + w[1]));
       item.appendChild(document.createTextNode(w[0]));
     });
+    if (chg.length) legend.appendChild(KW.el("span", "mt-key-chg", "▼ change"));
+    if (data.marks.length) legend.appendChild(KW.el("span", "mt-key-tier", "◆ alert level changed"));
     box.appendChild(legend);
     var cut = KW.cutCount(inc, "phases");
     if (cut) box.appendChild(KW.el("p", "ev-cap", KW.plural(cut, "more phase", "more phases") + " not shown."));

@@ -1,0 +1,7 @@
+{
+  "name": "lb-delete-throttled-once",
+  "description": "A load balancer controller's delete is throttled once and then succeeds.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "20m0s"
+}

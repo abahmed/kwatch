@@ -9,7 +9,7 @@
 | kubectl logs transcoder-79849f35-c -c app -n media --previous
 | ```
 10:05:20 material change
-🟠 transcoder in media (prod-eu-1) keeps being killed by its liveness probe because its containers get too little time to start. The replicas were scaled from 2 to 5 at 10:04 UTC.
-🟠 transcoder in media (prod-eu-1) keeps being killed by its liveness probe because its containers get too little time to start.
-| 🟠 **transcoder** in **media** (**prod-eu-1**) keeps being killed by its liveness probe because its containers get too little time to start.
+🟠 transcoder in media (prod-eu-1) keeps failing its liveness check (connection refused), so the kubelet keeps restarting it because its containers get too little time to start. The replicas were scaled from 2 to 5 at 10:04 UTC.
+🟠 transcoder in media (prod-eu-1) keeps failing its liveness check (connection refused), so the kubelet keeps restarting it because its containers get too little time to start.
+| 🟠 **transcoder** in **media** (**prod-eu-1**) keeps failing its liveness check (connection refused), so the kubelet keeps restarting it because its containers get too little time to start.
 | The replicas were scaled from 2 to 5 at 10:04 UTC.

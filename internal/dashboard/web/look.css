@@ -53,3 +53,27 @@ html[data-text="xl"] { font-size: 125%; }
   .cols-c { min-height: 44px; padding: 0 6px; }
   .cols-mv { width: 44px; height: 44px; }
 }
+/* Touch screens, the rest: controls that set a smaller size of their
+   own still get a 44px hit area (!important wins over each one's own
+   size). A bar or a dot keeps its look: the extra room is transparent
+   padding around it. */
+@media (pointer: coarse) {
+  html .btn, html .btn-sm, html .ds-copy.btn, html .cmd .btn,
+  html .tz-b, html .link, html .brand, html .ds-raw-t,
+  html details > summary, html .vo-colsnote .link { min-height: 44px !important; }
+  html .btn, html .btn-sm, html .tz-b { min-width: 44px !important; }
+  html .link { display: inline-flex; align-items: center; }
+  html .ds-raw-t, html details > summary { align-content: center; }
+  /* Links inside a sentence: inline padding widens the hit area
+     without moving the lines. */
+  html a.ulink { padding-block: 12px; }
+  html .ds-more a.ulink { display: inline-flex; align-items: center; min-height: 44px; padding-block: 0; }
+  html .viz-track:has(a.viz-seg) { overflow: visible; }
+  html a.viz-seg { box-sizing: content-box; padding: 17px 0; margin: -17px 0; background-clip: content-box; }
+  html .viz-dot { box-sizing: content-box; width: 18px; height: 18px; padding: 13px; margin-left: -22px; bottom: -22px; border: 0; background-clip: content-box; }
+}
+/* A wide touch screen shows the table: each title link is a full
+   44px row (a phone card is one big link already). */
+@media (pointer: coarse) and (min-width: 701px) {
+  html .itable td.c-title .it-link { min-height: 44px; }
+}

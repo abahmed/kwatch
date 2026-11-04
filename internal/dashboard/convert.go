@@ -2,10 +2,12 @@ package dashboard
 
 import (
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/redact"
 )
 
@@ -36,6 +38,7 @@ func toListItemWith(
 		AckedBy:         ackedBy(p),
 		Acked:           p.Ack != nil,
 		StoppedTracking: stoppedTracking(p),
+		Untold:          p.Untold(),
 		ResolvedAt:      p.Resolved,
 		RootCause:       shortCause(red(causeText(p))),
 	}
@@ -78,6 +81,7 @@ func buildDetail(p incident.Incident, c detailContext) IncidentDetail {
 		d.Truncated = &DetailTruncation{Timeline: cut}
 	}
 	c.addContext(&d, p)
+	d.Summary = summaryOf(&d, p)
 	fitDetail(&d, detailBudget)
 	return d
 }
@@ -92,17 +96,54 @@ func toSteps(in []incident.FixStep) []FixStep {
 	return steps
 }
 
-// titleFor is the composer's headline of the last message, else the
-// root's name.
+// titleFor is the incident's problem title, the composer's lead of
+// what fails (incident.Incident.Title), else, as a last resort for a
+// record that has none, the root in words: "Service api in shop".
 func titleFor(p incident.Incident, red func(string) string) string {
-	switch {
-	case p.Headline != "":
-		return red(p.Headline)
+	switch title := p.Title(); {
+	case title != "":
+		return red(title)
 	case p.Root.Name != "":
-		return p.Root.String()
+		return rootWords(p.Root)
 	default:
 		return p.ID
 	}
+}
+
+// rootWords names an object as a reader says it: its Kind as
+// Kubernetes spells it, its name and, when it has one, its namespace
+// ("Deployment api in shop", "MutatingWebhookConfiguration hook").
+func rootWords(id inventory.EntityID) string {
+	out := kindDisplay(id) + " " + id.Name
+	if id.Namespace != "" {
+		out += " in " + id.Namespace
+	}
+	return out
+}
+
+// kindSpellings maps an entity's qualified kind to the Kind as the API
+// spells it, from the coverage catalog.
+var kindSpellings = sync.OnceValue(func() map[string]string {
+	out := map[string]string{}
+	for _, e := range kube.CoverageCatalog() {
+		id := inventory.EntityID{Group: kube.GroupFor(e.Group),
+			Kind: kube.KindFor(e.Kind)}
+		out[id.QualifiedKind()] = e.Kind
+	}
+	return out
+})
+
+// kindDisplay is the Kind as Kubernetes spells it, else the kind with
+// a capital first letter ("Cluster-dns").
+func kindDisplay(id inventory.EntityID) string {
+	if k, ok := kindSpellings()[id.QualifiedKind()]; ok {
+		return k
+	}
+	k := string(id.Kind)
+	if k == "" {
+		return "Object"
+	}
+	return strings.ToUpper(k[:1]) + k[1:]
 }
 
 func lastSeen(p incident.Incident) time.Time {

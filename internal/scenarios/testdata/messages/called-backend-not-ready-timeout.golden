@@ -1,0 +1,20 @@
+10:12:15 settled
+🟠 ledger in shop (prod-eu-1) has no ready backends. Its node, registry and services are healthy and unchanged, so nothing outside it points to a cause. The last run of container app in pod orders-d4346e95-a lasted ten seconds; two restarts since the pod was created about one hour ago. Service ledger can't serve traffic. orders is affected as well.
+Also grouped: 2 crash loops
+To see the object's state and events, run kubectl describe service ledger -n shop
+🟠 ledger in shop (prod-eu-1) has no ready backends.
+| 🟠 **ledger** in **shop** (**prod-eu-1**) has no ready backends.
+| Its node, registry and services are healthy and unchanged, so nothing outside it points to a cause.
+| The last run of container app in pod orders-d4346e95-a lasted ten seconds; two restarts since the pod was created about one hour ago.
+| Service **ledger** can't serve traffic.
+| **orders** is affected as well.
+| Also grouped: 2 crash loops
+| To see the object's state and events, run
+| ```
+| kubectl describe service ledger -n shop
+| ```
+10:13:00 material change
+🟠 ledger in shop (prod-eu-1) has not been ready for three minutes. orders fails calling service ledger with "dial tcp ledger:9000: i/o timeout", and the service has had no ready endpoints since 10:10 UTC.
+🟠 ledger in shop (prod-eu-1) has not been ready for three minutes.
+| 🟠 **ledger** in **shop** (**prod-eu-1**) has not been ready for three minutes.
+| **orders** fails calling service **ledger** with `dial tcp ledger:9000: i/o timeout`, and the service has had no ready endpoints since 10:10 UTC.

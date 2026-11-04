@@ -1,8 +1,9 @@
 /* kwatch dashboard: browser notifications and the "(3)" in the tab
-   title. While a kwatch tab is open (even in the background) it checks
-   the issue lists every 30 s and tells you what changed since the last
-   check. No service worker and no server push: close every kwatch tab
-   and nothing arrives. The Notification API needs no CSP change. */
+   title. Where the browser can, kwatch pushes each change itself
+   (push.js), even with every kwatch tab closed. Otherwise an open tab
+   (even in the background) checks the issue lists every 30 s and
+   shows what changed since the last check. Either way the rules are
+   the same (push_changes.go follows these). */
 (function () {
   "use strict";
   var KW = window.KW;
@@ -140,20 +141,6 @@
     if (r && r.then) r.then(reply, function () { reply("denied"); });
   }
 
-  function show(n) {
-    var note;
-    try {
-      note = new window.Notification(n.title, { body: n.body, tag: n.tag });
-    } catch (e) {
-      return; // e.g. a browser that only allows them from a service worker
-    }
-    note.onclick = function () {
-      window.focus();
-      if (KW.go && location.pathname !== n.url) KW.go(n.url);
-      note.close();
-    };
-  }
-
   /* ---- the watcher ---- */
   var prefs = load();
   var prev = null, timer = 0, ui = null, busy = false;
@@ -170,9 +157,10 @@
       KW.unseen += list.length;
       KW.setTitle(KW.baseTitle);
     }
-    if (!prefs.enabled || !allowed()) return;
+    // kwatch pushes them itself; this tab only counts.
+    if (!prefs.enabled || !allowed() || KW.push.active()) return;
     if (looking() && !prefs.whenOpen) return;
-    plan(list).forEach(show);
+    plan(list).forEach(KW.push.show);
   }
 
   /* The latest activity first, so what just changed is always in the
@@ -202,8 +190,29 @@
       var next = snapshot(out[0], resolved, KW.now());
       // Never tell about what was already there when the page opened.
       report(changes(prev, next, prefs));
+      KW.push.close(ended(prev, next));
       prev = next;
+      KW.push.check().then(function (lost) {
+        if (lost === "lost" && prefs.enabled && allowed()) connect(true);
+        paint();
+      });
     });
+  }
+
+  /* ended: the issues that resolved since the last check, whose
+     notifications are done with. */
+  function ended(before, now) {
+    if (!before) return [];
+    return Object.keys(now.items).filter(function (id) {
+      return now.items[id].state === "resolved" && before.items[id] &&
+        before.items[id].state === "active";
+    });
+  }
+
+  /* connect has kwatch push to this browser, or keeps the tab
+     showing them when it can't. */
+  function connect(fresh) {
+    KW.push.subscribe(prefs, fresh).then(paint);
   }
 
   function seen() {
@@ -224,6 +233,13 @@
     KW.$("[data-ntf-min]", ui).value = prefs.min;
     KW.$("[data-ntf-resolved]", ui).checked = prefs.resolved;
     KW.$("[data-ntf-open]", ui).checked = prefs.whenOpen;
+    // Pushed ones arrive whether or not a tab is open.
+    KW.$("[data-ntf-open-l]", ui).hidden = KW.push.on();
+    var failing = KW.push.failing();
+    KW.$("[data-ntf-mode]", ui).textContent = !KW.push.on() ?
+      "They arrive while a kwatch tab is open." : failing ?
+      failing + " Until then they arrive while a kwatch tab is open." :
+      "They arrive even when kwatch is closed.";
   }
 
   function hint(text) {
@@ -236,16 +252,46 @@
     prefs[key] = value;
     save(prefs);
     paint();
+    // kwatch decides what to push, so it hears of every change.
+    if (key !== "enabled" && key !== "whenOpen" && KW.push.on()) {
+      connect();
+    }
+  }
+
+  function turnOn() {
+    set("enabled", true);
+    connect();
+  }
+
+  /* test sends one notification the way real ones come. */
+  function test() {
+    hint("");
+    if (!KW.push.on()) {
+      KW.push.show({ title: "kwatch notifications work",
+        body: "You'll get one like this when an issue needs you.",
+        tag: "kwatch-test", url: "/" });
+      return;
+    }
+    KW.push.test().then(function (why) {
+      if (why) return hint(why);
+      if (ui) {
+        KW.$("[data-ntf-mode]", ui).textContent =
+          "Sent. It should appear in a few seconds.";
+      }
+    });
   }
 
   function toggle() {
     hint("");
-    if (prefs.enabled && allowed()) return set("enabled", false);
+    if (prefs.enabled && allowed()) {
+      KW.push.unsubscribe().then(paint);
+      return set("enabled", false);
+    }
     var why = blocked();
     if (why) return hint(why);
-    if (allowed()) return set("enabled", true);
+    if (allowed()) return turnOn();
     ask(function (yes) {
-      if (yes) return set("enabled", true);
+      if (yes) return turnOn();
       hint(blocked() || "Your browser didn't allow notifications. " +
         "Try again and choose Allow.");
     });
@@ -263,6 +309,7 @@
     KW.$("[data-ntf-open]", ui).addEventListener("change", function (e) {
       set("whenOpen", e.target.checked);
     });
+    KW.$("[data-ntf-test]", ui).addEventListener("click", test);
     // Turned on earlier but no longer allowed: say so.
     if (prefs.enabled && !allowed()) {
       hint(blocked() || "Turn notifications on again to allow them.");
@@ -274,6 +321,8 @@
     /* start runs with each new shell (after sign-in). */
     start: function (shell) {
       wire(shell);
+      // Subscribing again keeps this browser known to kwatch.
+      if (prefs.enabled && allowed()) connect();
       if (timer) return;
       prev = null;
       // An interval, not KW.poller: it must keep running while the
@@ -292,6 +341,13 @@
         });
       }
     },
+    /* opened: the issue is open here; its notification is done. */
+    opened: function (id) { KW.push.close([id]); },
+    /* signOut stops pushes to this browser before the session ends. */
+    signOut: function () { return KW.push.unsubscribe(); },
+    /* signedOut: the sign-in ended without Sign out (it expired);
+       pushes to this browser stop until it signs in again. */
+    signedOut: function () { KW.push.forget(); },
     stop: function () {
       window.clearInterval(timer);
       timer = 0;

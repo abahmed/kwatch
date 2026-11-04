@@ -219,7 +219,7 @@
       }
       var active = KW.activeTotal || 0;
       KW.setTitle(active ? "(" + KW.num(active) + ") Issues · kwatch" : "Issues · kwatch");
-      sub.textContent = KW.issueNotes.subtitle(f, data);
+      sub.textContent = KW.listNotes.subtitle(f, data);
       pager.paint(data, f.page, f.pageSize);
       // A chip removed hands the focus to the one before it, else to
       // the search box; a pager button gone to the current page.
@@ -300,7 +300,7 @@
        again would get the same answer, so nothing is retried. */
     function badRequest(res) {
       alertBox.textContent = "";
-      alertBox.appendChild(KW.issueNotes.badRequest(res, function () { setView(cleared()); }));
+      alertBox.appendChild(KW.listNotes.badRequest(res, function () { setView(cleared()); }));
       // The rows and pager are of another view: hide them, so they do
       // not read as this filter's answer.
       if (!refused) refused = { pager: pagerBox.hidden };
@@ -330,7 +330,7 @@
         tableEl.classList.add("stale");
         // The reader just changed the view: these rows are the old one.
         if (tried !== etagQuery) {
-          alertBox.appendChild(KW.issueNotes.stale());
+          alertBox.appendChild(KW.listNotes.stale());
         }
       } else {
         wrap.hidden = true;

@@ -6,11 +6,11 @@ import (
 	"github.com/abahmed/kwatch/internal/notification"
 )
 
-// Link lines. A message about one incident links its page; a message
+// Link labels. A message about one incident links its page; a message
 // that lists several links the list of issues.
 const (
-	incidentLinkLead = "Open in dashboard: "
-	listLinkLead     = "Open dashboard: "
+	incidentLinkLabel = "Open in dashboard"
+	listLinkLabel     = "Open dashboard"
 )
 
 // dashboardBase is the dashboard's public address, or "" when it has
@@ -28,8 +28,8 @@ func (w Writer) linked(msg notification.Message) notification.Message {
 	if base == "" || msg.Key == "" {
 		return msg
 	}
-	return withLink(msg, incidentLinkLead+base+"/issues/"+
-		url.PathEscape(msg.Key))
+	return withLink(msg, incidentLinkLabel,
+		base+"/issues/"+url.PathEscape(msg.Key))
 }
 
 // linkedList is msg with a link to the dashboard's list of issues.
@@ -38,21 +38,25 @@ func (w Writer) linkedList(msg notification.Message) notification.Message {
 	if base == "" {
 		return msg
 	}
-	return withLink(msg, listLinkLead+base+"/issues")
+	return withLink(msg, listLinkLabel, base+"/issues")
 }
 
-// withLink adds line as the last block. It is plain text: every
-// provider shows a bare address as a link. After a pinned fix the line
-// is pinned too, so a cut message keeps the fix and its link together;
-// otherwise a cut drops it first. A message without blocks is left
-// alone, so the plain note never carries a link.
-func withLink(msg notification.Message, line string) notification.Message {
+// withLink adds a line that shows label and links to address as the
+// last block. A provider with links shows the label as one; plain text
+// reads "label: address". After a pinned fix the line is pinned too, so
+// a cut message keeps the fix and its link together; otherwise a cut
+// drops it first. A message without blocks is left alone, so the plain
+// note never carries a link.
+func withLink(
+	msg notification.Message, label, address string,
+) notification.Message {
 	n := len(msg.Doc)
 	if n == 0 {
 		return msg
 	}
 	block := notification.Block{Kind: notification.Para,
-		Spans:  []notification.Span{{Text: line}},
+		Spans: []notification.Span{
+			notification.LinkSpan(label, address)},
 		Pinned: msg.Doc[n-1].Pinned}
 	msg.Doc = append(append([]notification.Block(nil), msg.Doc...), block)
 	return msg

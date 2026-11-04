@@ -10,7 +10,9 @@ Updates come from four places (the same list is at the top of
    update of a reopened incident, before the steps.
 3. The `recovering` and `flapping` handlers (`lifecycle.go`): the `flapping`
    update when recoveries reach `FlapCycles`, and what a flapping incident
-   says (`flappingNews`).
+   says (`flappingNews`). A flapping workload whose readiness check fails
+   or whose Service has no ready endpoint is said to be "not serving" first
+   (`notServingState`, compose); the state stays `Flapping`.
 4. `escalate` (`worsen.go`, called from `advance`): raises a digest incident
    to notify once it has lasted past `kube.BootWindow`. It sends nothing
    itself; the next step sees the changed fingerprint.
@@ -49,13 +51,32 @@ tier stood on is gone and only digest findings are left, as when a restart
 brings an old `FailedGetScale` back as the clearer `HPATargetMissing`. A
 `Notify` incident then falls to `Digest` (after the restore grace, and not
 within `MaterialGap` of its last update) and owes its thread one `cause
-revised` update, sent through step 2 above. A page never falls: it is not
-un-paged and nothing new is paged. The update and the resolve of such an
+revised` update, sent through step 2 above. A page falls the same way once
+every failure that paged has cleared and only digest findings are left (a
+pressure stall that outlived a crash loop): nothing new is paged, its open
+alert closes with the resolve, and an idle webhook page keeps its own rule.
+A held page never falls. The update and the resolve of such an
 incident carry `Decision.Thread` and go to the thread people were told in
 (`threadNews` in `digest.go`); reminders and other updates ride in the
 digest, which lists the still-open incident as an ongoing item
 (`announce/ongoing.go`). A real failure that returns raises the tier again,
 told by the usual material change. A user severity override keeps its tier.
+
+**A restart does not flip the tier.** While a restored incident's findings
+come back inside the restore grace, its tier can move with the partial
+view: a target not listed yet reads as missing, a member back before its
+sibling reads alone. Such moves are neither logged as "incident tier
+changed" nor recorded as journal transitions (`tierUnsettled`); where the
+tier stands once the grace is over is. A detector that words the same
+failure differently once every source is listed is not noted as a
+recovery either.
+
+**Cause swings are damped.** A finding whose cause returns to the root it
+left less than `flipDamping` (2 minutes) ago stays where it is: the
+solver swinging between two candidates for the same failure is not a
+revision. A return to the finding's own object, or to a root that now
+fails by itself, is. A finding that becomes its own root writes no
+"X is now explained by X" note.
 
 **A restart does not swallow a rise.** A restored incident adopts its
 fingerprint during the restore grace so that an upgrade says nothing, but a
@@ -90,6 +111,25 @@ observed contradicts what the thread says. The fingerprint adopts the new
 root so the move does not come back as a material change, and a different
 cause, a rise to page, or the resolve still speak. A page always sends
 it.
+
+**A tie with a listed cause says nothing.** An incident that only a
+listing (a roll-up, the startup summary) announced, and that has sent
+nothing of its own since, may be revised to a new cause whose rival is
+the cause the listing stated (`hedgesTold`, `open_steps.go`). The update
+would only say "two possible causes: X or what you were told", as the
+incident's first message of its own: a new conversation, and later a
+resolve of its own, for a solver that re-ranked two answers within the
+margin (the told one often still scoring higher). Nothing observed
+contradicts the listing, so for a notify or lower incident it is not
+sent; the incident still moves to the new root and the fingerprint
+adopts it, as for a withdrawn cause. It stays a listed item, so its
+resolve can join the grouped "Recovered (or Deleted) at the same moment"
+message. An incident with a thread of its own still hears the tie
+there, and a page always sends it. The told roots are the incident's
+root and its cause's root when the first revision since the last
+message was owed (`Pending.KeepTold`), so a second move before the
+update goes out does not make an unsent root look told. They are kept
+in memory only: after a restart an owed revision is sent.
 
 A reopened incident's `failing again` update comes before all of these. If
 the reopened incident recovered before the update was due, it is sent when

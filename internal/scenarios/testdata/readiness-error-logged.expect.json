@@ -1,0 +1,12 @@
+{
+  "name": "readiness-error-logged",
+  "description": "Both replicas of a Deployment run, answer their readiness probe with HTTP 503 and log why; the Pro message quotes the line.",
+  "root": "deployment/shop/catalog",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "30m0s"
+}

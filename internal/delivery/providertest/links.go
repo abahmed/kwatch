@@ -7,22 +7,35 @@ import (
 	"github.com/abahmed/kwatch/internal/notification"
 )
 
-// The dashboard link lines of Linked, as compose writes them.
+// The dashboard links of Linked, as compose writes them: each label
+// links its address, and plain text reads the line "label: address".
 const (
-	CauseLink   = "Cause in dashboard: https://kwatch.example/issues/p-cause"
-	EarlierLink = "Earlier times: " +
-		"https://kwatch.example/issues?status=all&like=p-link"
-	IncidentLink = "Open in dashboard: https://kwatch.example/issues/p-link"
+	CauseLabel    = "Cause in dashboard"
+	CauseURL      = "https://kwatch.example/issues/p-cause"
+	EarlierLabel  = "Earlier times"
+	EarlierURL    = "https://kwatch.example/issues?status=all&like=p-link"
+	IncidentLabel = "Open in dashboard"
+	IncidentURL   = "https://kwatch.example/issues/p-link"
 )
 
-// linkLeads are the parts of the link lines every rendering keeps: the
-// lead words, and the incident address, which has no character any
-// markup escapes.
-var linkLeads = []string{"Cause in dashboard:", "Earlier times:",
-	"Open in dashboard:", "kwatch.example/issues/p-link"}
+// LinkSpans are the link spans of Linked, in order.
+func LinkSpans() []notification.Span {
+	return []notification.Span{
+		notification.LinkSpan(CauseLabel, CauseURL),
+		notification.LinkSpan(EarlierLabel, EarlierURL),
+		notification.LinkSpan(IncidentLabel, IncidentURL),
+	}
+}
+
+// linkLeads are the parts of the links every rendering keeps: the
+// labels, and the two addresses that have no character any markup
+// escapes.
+var linkLeads = []string{CauseLabel, EarlierLabel, IncidentLabel,
+	"kwatch.example/issues/p-cause", "kwatch.example/issues/p-link"}
 
 // Linked is an announcement whose blocks end with the three dashboard
-// link lines, as a message reads when the Pro dashboard is exposed.
+// links, one per line, as a message reads when the Pro dashboard is
+// exposed.
 func Linked() notification.Message {
 	m := withKey(Announce(), "p-link")
 	m.Doc = []notification.Block{
@@ -34,16 +47,16 @@ func Linked() notification.Message {
 	// The plain Note is written before the links are added, so it never
 	// carries one.
 	m.Note = m.NoteText()
-	for _, line := range []string{CauseLink, EarlierLink, IncidentLink} {
+	for _, link := range LinkSpans() {
 		m.Doc = append(m.Doc, notification.Block{Kind: notification.Para,
-			Spans: []notification.Span{{Text: line}}})
+			Spans: []notification.Span{link}})
 	}
 	return m
 }
 
 // AssertDashboardLinks checks the requests of the linked case: chat, mail,
-// paging details and issue bodies carry every link line, while SMS and
-// push texts (the Short) and the structured Note carry none.
+// paging details and issue bodies carry every link, while SMS and push
+// texts (the Short) and the structured Note carry none.
 func AssertDashboardLinks(t *testing.T, reqs []Request, want bool) {
 	t.Helper()
 	if len(reqs) == 0 {

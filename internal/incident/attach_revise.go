@@ -60,12 +60,16 @@ func (m *Manager) revise(
 	logMember("moved out of", old, key)
 	m.changed[old.ID] = true
 	old.noteMoved(root)
+	m.flips[key] = flip{from: old.Root, at: now}
 	if !hasFailingMember(old) {
 		// Only configuration risks are left: they go with the failure.
 		m.dropAdvisories(old)
 	}
-	old.note(now, "cause revised: "+describe(s.Entity)+
-		" is now explained by "+describe(root))
+	if s.Entity != root {
+		// A finding that became its own root explains nothing new.
+		old.note(now, "cause revised: "+describe(s.Entity)+
+			" is now explained by "+describe(root))
+	}
 	if len(old.Members) > 0 || !wasAnnounced(old) {
 		return false
 	}
@@ -172,6 +176,10 @@ func (m *Manager) reroot(
 	// The old root's cause does not explain the new root: the members
 	// that move here bring the new one.
 	hadCause := p.Cause != nil && !p.CauseUnclear
+	var told []inventory.EntityID
+	if hadCause {
+		told = []inventory.EntityID{p.Root, p.Cause.Root}
+	}
 	p.Cause, p.CauseUnclear = nil, false
 	if target := m.lookup(root); target != nil && target.State == Settling {
 		for key, s := range target.Members {
@@ -189,6 +197,7 @@ func (m *Manager) reroot(
 	m.index(p)
 	p.movedTo = nil
 	p.Pending.MarkRevised(now)
+	p.Pending.KeepTold(told...)
 	if hadCause {
 		p.Pending.MarkReplaced()
 	}

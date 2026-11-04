@@ -1,0 +1,11 @@
+{
+  "name": "webhook-closed-on-gone-crds-backend-gone",
+  "description": "A fail-closed webhook whose Service is gone covers only custom resources that no longer exist: a digest line, no notification.",
+  "root": "validatingwebhookconfiguration//widget-guard",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders"
+  ],
+  "tail": "1h0m0s"
+}

@@ -15,7 +15,7 @@ func (m *Model) note(observation Observation) Update {
 	if note.FirstSeen.IsZero() || note.FirstSeen.After(note.At) {
 		note.FirstSeen = note.At
 	}
-	key := noteKey{note.Source, note.Reason, note.UID}
+	key := noteKey{note.Source, note.Reason, note.Topic, note.UID}
 	seen := Occurrence{At: note.At, Count: note.Count}
 	rec.takeSame(&note)
 	if note.Origin != "" {
@@ -39,12 +39,12 @@ func (m *Model) note(observation Observation) Update {
 	return Update{Touched: []EntityID{observation.Entity}}
 }
 
-// takeSame removes the note that note replaces (same source, reason and
-// UID) and carries its first and last times over.
+// takeSame removes the note that note replaces (same source, reason,
+// topic and UID) and carries its first and last times over.
 func (r *record) takeSame(note *Note) {
 	for i, existing := range r.notes {
 		if existing.Source == note.Source && existing.Reason == note.Reason &&
-			existing.UID == note.UID {
+			existing.Topic == note.Topic && existing.UID == note.UID {
 			note.FirstSeen = earliest(existing.FirstSeen, note.FirstSeen)
 			if existing.At.After(note.At) {
 				note.At = existing.At
@@ -161,7 +161,8 @@ func (r *record) dropOrphanParts() {
 	for key := range r.noteParts {
 		found := false
 		for _, note := range r.notes {
-			if (noteKey{note.Source, note.Reason, note.UID}) == key {
+			if (noteKey{note.Source, note.Reason, note.Topic,
+				note.UID}) == key {
 				found = true
 				break
 			}

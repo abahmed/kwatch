@@ -33,8 +33,12 @@ incident that remembers the old one. A reopen also forgets the fix attempt
 of the earlier occurrence (`Attempt`, the unsent attempt and its late flag).
 What an incident remembers of the earlier ones is bounded: the 30 most
 recent resolved occurrences with how each ended (`History`, `HistoryKept`)
-and the 30 most recent open times (`Occurrences`), which routines,
-rhythms and the weekly count read.
+and the 30 most recent open times (`Occurrences`), which routines and
+rhythms read. The weekly count of the "happened again (3rd time this
+week, last time Mon 14:02 UTC)" note is `History` (`weekCount`), the
+count the dashboard shows: an opening whose failures moved to another
+incident is no time of its own. The note names when the last time was,
+never the ID of the incident the recurrence replaces and forgets.
 
 How paging state works now:
 

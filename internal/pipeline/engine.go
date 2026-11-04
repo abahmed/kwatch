@@ -365,6 +365,7 @@ func (e *Engine) evaluate(
 func (e *Engine) solve(now time.Time, transitions []detection.Transition) {
 	snapshot := e.snapshot(now)
 	e.deps.Incidents.Apply(snapshot, e.moved.take(), transitions)
+	e.announcer.titleProblems(now)
 	e.announcer.investigateOpened(now)
 }
 

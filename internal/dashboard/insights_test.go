@@ -185,9 +185,11 @@ func TestInsightsNamespaceMapOrdersBySeverityAndIsBounded(t *testing.T) {
 	}
 	got := insightsOf(items...).Namespaces
 	assert.Equal(t, []NamespaceTile{
-		{Namespace: "hot", Severity: "page", Count: 2},
-		{Namespace: "warm", Severity: "notify", Count: 1},
-		{Namespace: "low", Severity: "digest", Count: 3}}, got.Tiles)
+		{Namespace: "hot", Severity: "page", Count: 2, Urgent: 1,
+			Low: 1},
+		{Namespace: "warm", Severity: "notify", Count: 1, Attention: 1},
+		{Namespace: "low", Severity: "digest", Count: 3, Low: 3}},
+		got.Tiles)
 	assert.Zero(t, got.More)
 
 	items = nil

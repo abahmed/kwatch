@@ -22,9 +22,10 @@ import (
 // communityScenarios is the subset of the library replayed as the
 // Community edition: crash loops, OOM, Pending pods, node loss, a storm
 // grouped under one node, a missing Secret, a start mid-outage,
-// resolves, grouped recoveries, close rival causes, and scenarios only
-// Pro detectors see. The full library runs as Pro; this run catches a
-// Community regression without doubling the suite's time.
+// resolves, grouped recoveries, close rival causes, a log line only Pro
+// quotes, and scenarios only Pro detectors see. The full library runs
+// as Pro; this run catches a Community regression without doubling the
+// suite's time.
 var communityScenarios = []string{
 	"crash-loop-for-hours",
 	"bad-rollout",
@@ -42,6 +43,8 @@ var communityScenarios = []string{
 	"hpa-at-max",
 	"certificate-expired-unused",
 	"ready-never",
+	"cache-unreachable-at-start",
+	"readiness-error-logged",
 }
 
 // proDetectorOnly are the community scenarios whose failure only a Pro
@@ -49,21 +52,22 @@ var communityScenarios = []string{
 // checks note says how many issues it withheld.
 var proDetectorOnly = map[string]bool{
 	"hpa-at-max": true, "certificate-expired-unused": true,
-	"ready-never": true,
+	"ready-never": true, "readiness-error-logged": true,
 }
 
 // withheldReason is the decision reason of the Pro checks note.
 const withheldReason = "pro checks"
 
 // proOnlyParts are words only a Pro message carries: incident ties,
-// recent changes, impact, investigation output, the dashboard, the
-// close rival cause, the fix (the command and the setting) and how
-// often it happened before.
+// recent changes, impact, investigation output, quotes of a log, the
+// dashboard, the close rival cause, the fix (the command and the
+// setting) and how often it happened before.
 var proOnlyParts = []string{
 	"Caused by", "Likely caused by", "Changed just before it recovered",
 	"pods were affected", "Evidence", "Logs:", "Last log", "dashboard",
 	"two possible causes", "Checked:", "Confidence", "Fix in:",
 	", run kubectl", "time this week", "It fails every",
+	"from its log",
 }
 
 // communityCauseLeaks are, for each scenario whose Pro run names a
@@ -83,6 +87,8 @@ var communityCauseLeaks = map[string][]string{
 	"start-mid-outage-missing-secret": {"invoicer-creds"},
 	"spot-node-removed":               {"node n3", "was removed"},
 	"adv-two-causes-stable":           {"checkout-flags", "checkout-keys"},
+	"cache-unreachable-at-start": {"cannot connect", "Redis address",
+		"from its log"},
 }
 
 // causeTeaser starts the Community sentence that tells the category.

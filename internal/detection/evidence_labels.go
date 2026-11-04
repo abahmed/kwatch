@@ -118,3 +118,19 @@ const (
 	// the same check as the readiness probe.
 	EvidenceLivenessSameCheck = "liveness same check"
 )
+
+// EvidenceProbeResult is how a kubelet probe failed, in a few words
+// read from its message: "HTTP 500", "timed out", "connection refused".
+// An HTTP status means the application answered: its own check failed.
+const EvidenceProbeResult = "probe result"
+
+// EvidenceProbeLog is the last line naming a failure in the current log
+// of a running container whose probe the application answers with an
+// HTTP error status: the application's own words on why. It is quoted,
+// never interpreted, and only Pro reads it (the crash-log round).
+const EvidenceProbeLog = "probe log"
+
+// EvidenceWebhookIntercepts lists the resources ("pods, services") a
+// fail-closed webhook with a dead backend intercepts that have objects
+// now: their creates and updates are refused.
+const EvidenceWebhookIntercepts = "intercepts"

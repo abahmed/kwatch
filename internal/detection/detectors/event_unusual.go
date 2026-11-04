@@ -69,22 +69,38 @@ func unusualEvents(
 	}
 	var out []detection.Finding
 	for _, reason := range order {
-		group := byReason[reason]
-		if recent[reason] < unusualEventMin && !recurred[reason] {
-			continue
+		if f, ok := unusualFinding(e, reason, byReason[reason],
+			recent[reason], recurred[reason]); ok {
+			out = append(out, f)
 		}
-		out = append(out, detection.Finding{
-			Reason:   reasons.UnusualEvent(reason),
-			Severity: detection.Info, Mode: detection.ModeUnusualEvent,
-			Since:   group.newest.At,
-			Summary: unusualSummary(reason, recent[reason]),
-			Evidence: []detection.Evidence{
-				{Label: "event", Value: group.newest.Message},
-				{Label: "occurrences", Value: strconv.Itoa(recent[reason])},
-			},
-		})
 	}
 	return out
+}
+
+// unusualFinding is the finding of one unknown Warning event reason: a
+// failed delete of a resource in use at once, any other once it
+// repeats.
+func unusualFinding(
+	e inventory.Entity, reason string, group *eventGroup, recent int,
+	recurred bool,
+) (detection.Finding, bool) {
+	if inUseDeleteFailure(group.newest.Message) &&
+		!flag(e, kube.AttrDeleting) {
+		return inUseDeleteFinding(reason, group), true
+	}
+	if recent < unusualEventMin && !recurred {
+		return detection.Finding{}, false
+	}
+	return detection.Finding{
+		Reason:   reasons.UnusualEvent(reason),
+		Severity: detection.Info, Mode: detection.ModeUnusualEvent,
+		Since:   group.newest.At,
+		Summary: unusualSummary(reason, recent),
+		Evidence: []detection.Evidence{
+			{Label: "event", Value: group.newest.Message},
+			{Label: "occurrences", Value: strconv.Itoa(recent)},
+		},
+	}, true
 }
 
 // knownEvent reports whether a Warning event reason is already detected,

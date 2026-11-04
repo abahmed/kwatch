@@ -1,0 +1,11 @@
+{
+  "name": "lb-delete-resource-in-use",
+  "description": "A load balancer controller keeps failing to delete a balancer that another service still uses.",
+  "root": "service/shop/web",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

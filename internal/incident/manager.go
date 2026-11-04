@@ -39,6 +39,12 @@ type Manager struct {
 	// left remembers the findings that left an announced node incident,
 	// for retakeSuspect.
 	left map[detection.Key]leftNode
+	// flips remembers the root each finding last left, for damping a
+	// cause that swings back (see attach_damp.go).
+	flips map[detection.Key]flip
+	// untitled are the incidents whose problem title is due (see
+	// problem.go).
+	untitled map[string]bool
 	// seq numbers new incident IDs; nonce tells IDs of one store
 	// apart from those of an earlier, reset store (see newID).
 	seq   int
@@ -95,6 +101,7 @@ func NewManager(cfg Config, explainer Explainer) *Manager {
 		former:    make(map[string]string),
 		groups:    make(map[string]string),
 		left:      make(map[detection.Key]leftNode),
+		flips:     make(map[detection.Key]flip),
 		changed:   make(map[string]bool),
 		resolved:  newResolvedIndex(),
 	}
@@ -134,7 +141,8 @@ func (m *Manager) Apply(
 		}
 		touched = append(touched, t.Finding.Entity)
 		if t.Kind == detection.Cleared {
-			m.detach(s.Now, t.Finding)
+			m.detach(s.Now, t.Finding,
+				failingFinding(s.Findings[t.Finding.Entity]))
 		}
 	}
 	placed := map[detection.Key]bool{}

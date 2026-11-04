@@ -56,6 +56,9 @@ func TestScenarioReplay(t *testing.T) {
 			for _, p := range result.Incidents {
 				t.Logf("incident %s %s %s members: %s", p.ID, p.Root,
 					p.Tier, describeMembers(p))
+				for _, e := range p.Timeline {
+					t.Logf("  %s %s", e.At.Format("15:04:05"), e.Text)
+				}
 			}
 		})
 	}

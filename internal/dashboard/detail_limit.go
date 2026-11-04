@@ -23,9 +23,9 @@ type shrinkStage struct {
 // shrinkStages is the fixed order a detail too large for the response
 // is cut in: the oldest of each list first, keeping a useful amount,
 // then long strings, then everything that remains optional, then the
-// strings again, shorter. Every list of the detail has a stage, so a
-// detail fits whatever it holds. The fixed order keeps the result the
-// same for the same incident.
+// strings again, shorter; the summary is cut last. Every list of the
+// detail has a stage, so a detail fits whatever it holds. The fixed
+// order keeps the result the same for the same incident.
 var shrinkStages = []shrinkStage{
 	{trimTimeline, 20},
 	{trimLogLines, 20},
@@ -81,7 +81,14 @@ var shrinkStages = []shrinkStage{
 	{trimRelated, 0},
 	{trimFixSteps, 0},
 	{trimChangedBefore, 0},
+	{trimSummaryTold, 3},
+	{shortenSummary, 100},
+	{trimSummaryProof, 1},
+	{trimSummaryTold, 0},
+	{trimSummaryNext, 0},
+	{trimSummaryProof, 0},
 	{shortenTexts, 40},
+	{shortenSummary, 40},
 }
 
 // fitDetail cuts d until its JSON fits budget and sets d.Truncated to

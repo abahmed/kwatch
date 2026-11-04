@@ -34,6 +34,9 @@
     if (path === "/signin") return { name: "signin" };
     if (path === "/") return { name: "status" };
     if (path === "/issues") return { name: "issues" };
+    if (path === "/insights") return { name: "insights" };
+    if (path === "/kwatch") return { name: "kwatch" };
+    if (path === "/activity") return { name: "activity" };
     var m = /^\/issues\/([^/]+)$/.exec(path);
     if (m) {
       // A malformed escape (%E0) is an ID no issue has: show "not found".
@@ -97,22 +100,26 @@
     KW.rendered = here();
     stopView();
     var r = route(location.pathname);
-    if (r.name === "detail") KW.visits.opened(r.id);
+    if (r.name === "detail") {
+      KW.visits.opened(r.id);
+      KW.notify.opened(r.id);
+    }
     current = r.name;
     if (r.name === "signin") {
       shellEl = null;
       KW.notify.stop();
+      KW.notify.signedOut();
+      KW.stopDot();
       KW.live.stop();
       return showSignin();
     }
     var main = shell(r.name === "detail" ? "issues" : r.name);
-    // Read once so every page knows kwatch's own namespace (api.js).
-    if (!KW.selfRead) {
-      KW.selfRead = true;
-      KW.api("/api/status");
-    }
+    // Reads /api/status (every page then knows kwatch's own namespace,
+    // api.js) and /api/kwatch every minute, for the dot on "kwatch".
+    KW.startDot();
     var views = { issues: KW.issuesView, detail: KW.detailView,
-      status: KW.statusView };
+      status: KW.statusView, insights: KW.insightsView, kwatch: KW.kwatchView,
+      activity: KW.activityView };
     view = views[r.name](main, r);
   }
 
@@ -182,7 +189,10 @@
   };
 
   function signOut() {
-    KW.api("/logout", { method: "POST" }).then(function () {
+    // Pushes stop first: signing out needs the session.
+    KW.notify.signOut().then(function () {
+      return KW.api("/logout", { method: "POST" });
+    }).then(function () {
       KW.go("/signin", true);
     });
   }
@@ -261,6 +271,7 @@
     stopView();
     shellEl = null;
     KW.notify.stop();
+    KW.stopDot();
     KW.live.stop();
     KW.title("Use https");
     var app = document.getElementById("app");

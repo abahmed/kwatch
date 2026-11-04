@@ -25,6 +25,9 @@ const (
 	// FactDependency is the Service a stuck init container's output
 	// names, with what is wrong with it, if anything.
 	FactDependency = "dependency"
+	// FactProbeLog is the last line naming a failure in the current log
+	// of a running container whose probe gets an HTTP error status.
+	FactProbeLog = "probe.log"
 )
 
 // Fact is one fact an investigation found about an incident, such

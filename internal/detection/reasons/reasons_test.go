@@ -32,3 +32,22 @@ func TestDerivedReasons(t *testing.T) {
 		})
 	}
 }
+
+// Only an error exit of the program itself is a crash: a stop by
+// signal and a memory kill are not.
+func TestCrashExitLeavesOutKillsAndOOM(t *testing.T) {
+	cases := []struct {
+		code   int
+		reason string
+		want   bool
+	}{
+		{1, Error, true}, {2, "", true}, {0, Completed, false},
+		{137, Error, false}, {143, Error, false},
+		{1, OOMKilled, false}, {1, OOMKILLED, false},
+	}
+	for _, c := range cases {
+		if got := CrashExit(c.code, c.reason); got != c.want {
+			t.Errorf("CrashExit(%d, %q) = %v", c.code, c.reason, got)
+		}
+	}
+}

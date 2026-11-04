@@ -206,7 +206,8 @@ part of the kubelet stats poller, so it runs only where that does
 The default CPU request is 100m with a 500m limit, so a burst of events
 (for example a nightly node scale-up) is not throttled. The liveness and
 readiness probes wait 3 seconds for an answer and tolerate 3 failures in a
-row.
+row. A `startupProbe` on `/healthz` (every 10 seconds, 30 failures allowed)
+gives a cold start up to 300 seconds before the liveness probe begins.
 
 ### Node autoscalers
 
@@ -248,12 +249,15 @@ holds about 26 KB of live heap per pod: about 8 KB in the informer cache and
 for twice the live heap, so the garbage collector has room and a burst of
 events does not reach the limit.
 
-| Pods | Live heap (about) | Memory request and limit |
-|------|-------------------|--------------------------|
+| Pods | Live heap (about) | Memory limit (raise the request with it) |
+|------|-------------------|------------------------------------------|
 | up to 2,000 | 60 MiB | `512Mi` (chart default) |
 | 5,000 | 140 MiB | `512Mi` (chart default) |
 | 10,000 | 270 MiB | `768Mi` |
 | 20,000 | 520 MiB | `1Gi` (`1280Mi` for pods with larger specs) |
+
+The chart's default request is 128Mi; set `requests.memory` to 256Mi or more
+on large clusters.
 
 The table counts pods because they dominate, but kwatch also holds the
 other objects it watches. They add to the live heap on top of the per-pod
@@ -305,7 +309,8 @@ restart the Deployment yourself after editing it.
 When the license changes the edition, kwatch rebuilds in the same process.
 The old health listener keeps answering `/healthz` (and reports not ready)
 until the new generation has built everything slow and takes the port over,
-so the kubelet's liveness probe (45 seconds of tolerance) never sees a
+so the kubelet's liveness probe (45 seconds of tolerance once the startup
+probe has passed) never sees a
 closed port for more than the moment of the hand-over. A configured license
 key adds a `license` component to `/health`: `running` while Pro is active,
 `degraded` with `license_invalid`, `license_expired`, `license_revoked` or
@@ -407,9 +412,11 @@ The reason is one of `graceful_shutdown`, `leader_handoff`,
 `internal_failure`, `oom_killed`, `eviction`, `node_disruption`,
 `deployment_rollout`, `api_unavailable` or `unknown`.
 
-Crash-log reads (the previous run's output of a crashed container) back off
-for 5 minutes after the API refuses `pods/log`, and a refusal never becomes
-an incident: `/health` shows `pod-logs` degraded and `/status` lists the gap.
+Crash-log reads (the previous run's output of a crashed container, and the
+current output of a running container whose probe gets an HTTP error
+status) back off for 5 minutes after the API refuses `pods/log`, and a
+refusal never becomes an incident: `/health` shows `pod-logs` degraded and
+`/status` lists the gap.
 Detectors keep a stale Lease or a CronJob that did not run as it was (they
 neither raise nor resolve `LeaseStale` or `CronJobNotScheduled`) while the
 data they read is stale.

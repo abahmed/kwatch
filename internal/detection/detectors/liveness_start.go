@@ -32,7 +32,8 @@ const (
 func withStartFacts(
 	ctx detection.Context, e inventory.Entity, found detection.Finding,
 ) detection.Finding {
-	found.Evidence = append(found.Evidence, startEvidence(ctx, e)...)
+	found.Evidence = append(found.Evidence,
+		startEvidence(ctx, e, refusedAtKill(found))...)
 	found.Evidence = append(found.Evidence, sameCheckEvidence(e)...)
 	return found
 }
@@ -47,8 +48,24 @@ func sameCheckEvidence(e inventory.Entity) []detection.Evidence {
 		Label: detection.EvidenceLivenessSameCheck, Value: "true"}}
 }
 
+// refusedAtKill reports a liveness kill whose probe was refused: nothing
+// listened on the probed port yet.
+func refusedAtKill(found detection.Finding) bool {
+	for _, e := range found.Evidence {
+		if e.Label == detection.EvidenceProbeResult {
+			return e.Value == "connection refused"
+		}
+	}
+	return false
+}
+
+// startEvidence says what liveness allows and how long starts take. With
+// no start seen, a kill at the end of what liveness allows is a kill
+// before the start finished when a readiness probe said the container
+// was not ready, or, without one, when the probe was refused: the
+// application had not opened its port yet.
 func startEvidence(
-	ctx detection.Context, e inventory.Entity,
+	ctx detection.Context, e inventory.Entity, refused bool,
 ) []detection.Evidence {
 	grace, parts, ok := livenessGrace(e)
 	run, known := lastRun(e)
@@ -67,8 +84,8 @@ func startEvidence(
 			{Label: detection.EvidenceStartSamples,
 				Value: strconv.Itoa(count)}}
 	}
-	if !strings.Contains(text(e, kube.AttrProbes), "readiness") ||
-		run > grace+killSlack {
+	readiness := strings.Contains(text(e, kube.AttrProbes), "readiness")
+	if !(readiness || refused) || run > grace+killSlack {
 		return nil
 	}
 	return []detection.Evidence{gives, {

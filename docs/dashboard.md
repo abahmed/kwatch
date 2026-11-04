@@ -5,106 +5,55 @@ Implementation notes for the embedded dashboard UI in
 strict CSP, nothing loaded from elsewhere). The published user guide stays
 on [kwatch.dev](https://kwatch.dev/docs).
 
-## Reading order
+## Layout and reading order
 
-The UI is written for someone new to kwatch: the first thing on each page
-says what is wrong in one sentence, and the rest waits behind a click.
+The UI is written for a junior engineer on call and a busy SRE alike:
+the first thing on each page says what is wrong in one sentence, the key
+details sit right under it, and the rest waits behind a click or a tab.
 
-- **Navigation**: the sidebar has **Overview** (`/`, the landing page)
-  and **Issues** (`/issues`, with the count of active issues). Old
-  addresses keep working: the server (and the page, for Back to an old
-  history entry) sends `/status` to `/`, `/resolved?…` to
+- **Sidebar**: **Overview** (`/`, the landing page), **Issues**
+  (`/issues`, with the count of active issues), **Insights**
+  (`/insights`), **Activity** (`/activity`) and **kwatch** (`/kwatch`).
+  The **sidebar dot** beside "kwatch" (`js/pages.js`, `KW.selfDot`)
+  shows when kwatch itself needs a look: alerts failed to send in the
+  last hour, alert links are off, it is still starting, it can't read
+  pod logs or some kinds, or its last check is late. Every page reads
+  `/api/status` and `/api/kwatch` once a minute for it; the tooltip and
+  the screen-reader text list the reasons. Under the links: browser
+  notifications, the Local / UTC switch and sign out.
+- **Old addresses** keep working: the server (and the page, for Back to
+  an old history entry) sends `/status` to `/`, `/resolved?…` to
   `/issues?status=resolved&…`, and `/` with list filters (`q`,
   `severity`, `namespace`, `state`, `age`, `since`, `sort`, `dir`,
   `group`, `kind`, `acked`, `status`, `offset`, `limit`, `page`,
-  `pageSize`) to `/issues?…`
-  with the
-  same query, so bookmarks and links pasted in chat open the same list.
-  An issue stays at `/issues/<id>`.
-- **Issues**: one table for active and resolved issues (see "Issues
-  table" below), showing the active ones first.
-- **Issue page**: a "What's happening" card (severity, state, title,
-  "Likely cause: …" right under the title (from `rootCause`), where,
-  since when, up to five hint lines, and "What to do first" with the
-  first fix step and its copyable command). The hint lines are
-  "Changed 4 min before: …" (the change the cause names: the one the
-  API marks `cause`, else the one the checks' "Change" names, else
-  the nearest before it started), "Seen 3 times before in 30 days", who
-  was told ("PagerDuty failed (401) · fell back to Opsgenie 19:06 ·
-  Slack 18:51 · not acknowledged": failures first, each channel with
-  the time it first took a message), "Also causing: 2 issues" and "3
-  other issues started within 5 minutes of this one"; each opens its
-  section. Everything else is in closed sections: "Why kwatch thinks
-  this" (likely cause and, with Pro, the evidence), "Other issues"
-  ("Also causing", then "Started at the same time", leaving out issues
-  already named as caused by or causing this one), "All steps to fix",
-  "What changed just before", "Seen before", "Why it's waiting to
-  start", "Failing probe", "Recent warnings", "Traffic impact", "Node",
-  "What happened, step by step" (a states strip, then the list; events
-  in the same minute share one line), "Logs" (one view with one "Show"
-  picker: the lines kept when it started and, with Pro, each container
-  run a check read, the matched line marked), "Containers" (the table,
-  then memory and CPU now, then the memory or CPU of the last 24 hours
-  when it is evidence), "Affected objects", "Who was told" and "More
-  details" (alert level, start time, acknowledgement, ID). A section
-  with no data is left out. The section that is the explanation opens
-  by itself on the first draw: "Failing probe" for a probe failure,
-  "Why it's waiting to start" for a pod that can't be placed, and
-  "Containers" when the memory chart is evidence; it does not stop the
-  issue from redrawing until the reader clicks it. Whether someone
-  acknowledged it is said in "Alert status", with
-  the command that does it. Times are hh:mm; the seconds are in the
-  tooltips. The old `?tab=evidence` link opens "Why kwatch thinks
-  this". Under the facts, "14 other issues have the same error → see
-  them" (see "Similar issues") when there are any. More on this page:
-  the card "Alert status" (see below, with one line per pager), "Moved
-  into" and "Includes earlier issues" links, "Changed just before it
-  recovered" on a resolved issue, "What we sent" (the text of each
-  message, folded), and a banner when kwatch stopped tracking the issue
-  while it was still failing (see "Issue page context").
-- **Overview** (`/`), an incident view: what is broken now, why,
-  what to do and who was told. One headline ("1 urgent problem needs
-  attention." or "All clear. Nothing is failing."; while kwatch can't
-  be reached "Can't reach kwatch — last known at 19:44" instead, see
-  "When kwatch can't be reached"), today in one line ("Today: 18 new,
-  22 resolved, 3 still urgent."), or on a quiet cluster what kwatch
-  watches (in the same words as the Issues page's empty state:
-  "Watching every namespace (14 namespaces now) · 2,841 objects") and
-  when it last looked, counts by severity that link to the Issues
-  table filtered to them (`/issues?status=active&severity=page`), the
-  insight cards with the one urgent list, "Urgent and not
-  acknowledged" (newest first, with "See all" and "Oldest first"), and
-  the namespace map (see "Overview insights"), "What changed recently"
-  (see below), "This week", folded (see "Overview trends"), one line
-  on whether kwatch itself works and alerts get out (it also says when
-  kwatch isn't allowed to read some kinds: "kwatch isn't allowed to
-  read secrets and configmaps, so it can't see problems there"),
-  "kwatch health details" (version, alert channels and the "kwatch
-  itself" card), which opens by itself when a channel fails, a check is
-  late or a send failed in the last hour, and "What kwatch is
-  watching" (see "Watch coverage"), which opens by itself, once, when
-  kwatch isn't allowed to read some kinds.
-  At the top of the page two notices can show: "kwatch is starting: 40
-  of 60 kinds read, 2,100 objects" while the first read of the cluster
-  runs (from `self.startup` of `/api/status`; it goes away when
-  `startup.done`), and "Alert links are off: …" when alerts can't link
-  to this dashboard (see "kwatch itself"). Both come from the `self`
-  part of the status.
-- The **?** beside the logo explains the colors and alert levels, the
-  states (Happening now, Confirming, Keeps coming back, Looks better,
-  Resolved, in `KW.STATE`'s words) and lists the keyboard keys (press
-  `?` to open it). It opens above the page, the table heading
-  included, and scrolls inside when the window is short.
+  `pageSize`) to `/issues?…` with the same query, so bookmarks and links
+  pasted in chat open the same list. An issue stays at `/issues/<id>`.
+- **Every page** has the same head: the page name as the heading (the
+  sidebar's word), one muted line of what it answers, and on the
+  live pages "Live · updated just now" (see "Live push").
 - **Phones** (under 700 px wide): the sidebar's notifications, times
   and sign out fold behind one "Settings" button, and the Issues
   filters (quick views, search, pickers, severity chips) behind one
-  "Filters (2)" button, so rows show on the first screen.
-- **Formats** (`js/core.js`): one number format (`KW.num`: "4,812"),
-  one object format (`KW.obj`: "deployment/payments-api", the
-  namespace shown on its own, "whole cluster" without one) and one
-  clock format (`KW.hm`: "14:02", "yesterday 14:02" or "12 Oct,
-  14:02", the exact time with seconds in the tooltip) on every page
-  and in notifications.
+  "Filters (2)" button, so rows show on the first screen. No page
+  scrolls sideways at 390 px.
+- **Formats** (`js/core.js`), the same on every page and in
+  notifications: one number format (`KW.num`: "4,812"; numbers in
+  tables are right-aligned, `.num`), one object format (`KW.obj`:
+  "deployment/payments-api", the namespace shown on its own, "whole
+  cluster" without one), one clock format (`KW.hm`: "14:02",
+  "yesterday 14:02" or "12 Oct, 14:02", the exact time in both zones
+  with seconds in the tooltip), one duration format (`KW.lasted`:
+  "12 min", "3 h 10 min", "2 days"; "for 3 h" while it goes on) and one
+  way to cut a long issue title (`KW.clampTitle`: two lines, the whole
+  title in the tooltip; the issue page shows it whole).
+- **Chips**: severity is a filled chip (`KW.severityChip`), state an
+  outlined one (`KW.stateChip`), "Acknowledged" an outlined muted one.
+  "Settled before alerting" and "Stopped tracking" are small muted
+  labels, never a severity color.
+- **Empty states** read plainly, in one muted sentence inside the card
+  or box that would hold the data ("No node has an active issue.",
+  "Nothing changed in the last hour.", "A quiet week: nothing opened
+  or resolved."); a chart with nothing to draw is not drawn.
 
 Visible words replace internal terms; the JSON field names do not change:
 
@@ -114,9 +63,222 @@ Visible words replace internal terms; the JSON field names do not change:
 | `severity: notify` | Needs attention | Alert level: sent a message |
 | `severity: digest` | Low | Alert level: in the daily summary |
 | `severity: silent` | Quiet | Alert level: not sent |
-| `rootCause` | Likely cause | kwatch's best guess |
+| `state` | Confirming, Happening now, Keeps coming back, Looks better, Resolved (`KW.STATE`, see "Issues table") | |
+| `untold` on a settled issue | Settled before alerting | It recovered while kwatch was still confirming it, so no alert went out |
+| `stoppedTracking` | Stopped tracking | kwatch stopped tracking this issue while it was still failing |
+| `rootCause`, `summary.why` | Why (on the issue page), Likely cause | kwatch's best guess |
 | `ackedBy`, `acked` | Acknowledged | acknowledged with the annotation: the object that carries it (the detail's `ack.since` says since when kwatch saw it) |
 | correlation | What the checks agree on | |
+
+**Settled before alerting** (`KW.UNTOLD`, `KW.isUntold`): an issue
+whose `untold` is set and that is no longer confirming or failing
+(resolved or looking better) recovered before kwatch told anyone. It
+shows as a small muted label after the title on Issues rows and in
+Activity, beside the severity on the issue page and in the drawer, as
+the stepper's line "Settled before alerting — nobody was told." (the
+steps between Confirming and Resolved are marked skipped, not passed),
+and in "Who was told": "Nobody was told: it settled before alerting."
+A confirming issue carries `untold` too (nobody was told yet); it reads
+as Confirming, not as settled. The Overview and Insights never count
+these as pages: their numbers come from the server, which leaves untold
+openings out of `paged` and of the urgent counts.
+
+## Overview
+
+`/` (`js/status.js`, from `/api/overview` and `/api/status`) answers
+"is anything broken right now, and what do I look at first", top to
+bottom:
+
+1. **Notices**, only when someone must act (`KW.selfNotices`, shared
+   with the kwatch page): "kwatch is starting" with a bar of the kinds
+   read (from `self.startup`, until `startup.done`), "kwatch hasn't
+   checked your cluster in a while", "Alert links are off" with
+   `dashboardLinks.text`, and "2 alerts failed to send in the last
+   hour" (`failedSendsLastHour`). Each links to the kwatch page.
+2. **Status tile**: one sentence: "37 issues happening now · 2 urgent",
+   "All clear · nothing is failing", "kwatch is starting · nothing found
+   yet", or while kwatch can't be reached "Can't reach kwatch · last
+   known at 19:44" (see "When kwatch can't be reached"); red with an
+   urgent issue, amber with others, green when clear, with the
+   freshness line.
+3. **Severity bar**: the active issues by alert level (`counts`) as one
+   bar that starts at 0 and spans their total, with a key that gives
+   each level's word and number ("Urgent 2 · Needs attention 9 · Low
+   26", Quiet only when there are some). A segment or key opens the
+   Issues table at that level (`/issues?status=active&severity=page`).
+4. **Look at these first**: up to five issues (`lookFirst`: urgent and
+   not acknowledged first, then the newest), each with its severity and
+   state chips, the title (two lines at most), where, and how long it
+   has been going on ("for 40 min", with a bar against the longest of
+   the five), "Acknowledged" when someone did. "See all 37 issues →"
+   opens the Issues table, and a link opens Activity.
+
+Trends live on Insights, kwatch's own health on the kwatch page and the
+change feed on Activity.
+
+## Issue page
+
+`/issues/<id>` (`js/detail.js`, `incpanel.js`, `incwhy.js`,
+`share.js`, `inclinks.js`, `lastlook.js`, and the section modules) puts
+the summary card on top, always shown, and everything else in five
+tabs. Times are hh:mm; the seconds are in the tooltips.
+
+**The header**: the severity chip ("Was Urgent" once resolved), the
+"Settled before alerting" label when it applies, Copy summary and Copy
+link, the title, then one line: "shop · deployment/payments-api · for
+40 min (since 03:28) · failed again 2 times", or "lasted 12 min,
+resolved 14:02" on a resolved issue. When kwatch stopped tracking an
+issue while it was still failing, a prominent "Stopped tracking: not
+fixed" banner sits above the card and says whether a container still
+crashed or it was short of replicas.
+
+**The stepper** (`summary.stage`): Confirming → Happening now → Looks
+better → Resolved, the current step marked with "since 03:29"; it says
+"Keeps coming back" on a flapping issue and "Stopped tracking" in place
+of Resolved. One line under it says what that means ("kwatch is
+checking it's real before it alerts anyone.", "It stopped failing 2 Nov,
+18:50.", "Settled before alerting — nobody was told."), and while a
+timer runs, why it is still open ("Closes after 3 min healthy").
+
+**The notes row**: one muted line of short notes, each at most one line
+with an icon and its full text in the tooltip: Caused by (a link to the
+issue that causes this one) and "Can't see it right now" (`why.cannotSee`)
+come first and stay in full ink; then "Acknowledged 04:00 by
+kubectl-annotate" (the note in the tooltip), "Secrets hidden" (a part
+shows `[redacted]`), "Moved into" / "Includes earlier issues" links,
+"3 things changed since you last looked (12:05)" and "Some text
+shortened" (`truncated.texts`). The row hides when there is no note.
+
+**The five summary rows** (from `summary`, see "Issue summary"):
+
+| Row | Shows |
+|:--|:--|
+| What's wrong | `what`, one plain sentence |
+| Why | `why.text`, with the **confidence meter**: three steps and a word, never color alone (High confidence 3 of 3, Likely 2, Possible 1; the tooltip says what it means). Without a cause: "Cause not found yet." and what kwatch checked |
+| Proof | up to three pieces of `proof`, strongest first, each with an icon, its kind ("Health check", "Log", "Exit", "Scheduler", "Endpoints", "Change", "Node", "Event"), the short text, "×41" when repeated and the time, then the raw value in monospace with its own Copy (click or Enter shows it all) |
+| What to do | the first fix step and its copyable command, then "2 more steps →" (opens them in Details) or the runbook link |
+| Who was told | one line per channel, pagers first, each with a mark and a word ("paged · still open", "page failed", "sent", "sending, will retry") and the time; "Every message and why it failed →" opens it in Alerts. Without a message: why nobody was told ("Nobody was told: it settled before alerting.", "Low issues wait for the daily summary." …) |
+
+A row with nothing to say is left out, except What's wrong, Why and Who
+was told.
+
+**Tabs** (`KW.ISSUE_TABS`): **Timeline** (what happened, step by step,
+with the states strip, and what changed just before), **Evidence**
+(failing probe, why it's waiting to start, logs, containers, recent
+warnings, node), **Impact** (who it hits, affected objects, traffic,
+other issues), **Alerts** (alert status, who was told and what we sent)
+and **Details** (why kwatch thinks this, all steps to fix, same error
+elsewhere, seen before, more details). Each tab names its count, and an
+empty tab says so in one sentence. Keys: `t` `e` `i` `a` `d` pick a tab
+from anywhere on the page, `←` `→` (and Home, End) move between tabs
+when one is focused. The tab is in the address as a deep link
+(`/issues/<id>#evidence`), so a pasted link opens that tab; without one
+the page opens the tab last picked in this browser (`localStorage` key
+`kwatch.issueTab`), else Timeline. The old `?tab=evidence` link opens
+Details.
+
+**The drawer** (see "The preview drawer"): a click on a row of the
+Issues table opens the same summary card in a panel beside the table,
+with "On the full page: Timeline (1) · Impact (3) …" links instead of
+the tabs.
+
+## Insights
+
+`/insights` (`js/ovinsights.js`, `js/trends.js`, `js/viz.js`, from
+`/api/insights` and `/api/trends`) is how the last 7 days went and where
+the trouble is:
+
+- **Today** in one line: "Today: 1 new, 6 resolved, 2 still urgent."
+  (`today`, untold issues not counted as urgent), or "Nothing new today."
+- **This week**: one line ("1,019 issues opened in the last 7 days. 973
+  resolved; 225 paged the on-call person; 20 settled before alerting.",
+  the last part only when there are untold openings: `untold` of the
+  `/api/insights` day when it carries one, else of the `/api/trends`
+  day with the same date), then a column
+  chart per day: opened (its paged part at the bottom) and resolved,
+  each column labeled with its number, 0 included, all from 0 on one
+  scale, with a key (Opened, Of those, paged the on-call person,
+  Resolved) whose colors match the columns. "Show as a table" has the
+  same numbers, right-aligned, with a "Settled before alerting" column
+  when there are any. A quiet week says "A quiet week: nothing opened or
+  resolved." and draws no chart.
+- **Top causes this week** (`causes`), **Namespaces with active issues**
+  (`namespaces`, bars by level with their counts in words and a key),
+  **Nodes with the most issues** (`nodes`), **Started right after a
+  change** (`afterChange`: "3 of 37 active issues" and the newest
+  ones), and from `/api/trends`: **Busiest namespaces**, **Kept coming
+  back** and **Time to resolve** (median and longest). Every bar has its
+  label and number beside it; a card with nothing to show says so in one
+  sentence. Issue titles are cut at two lines.
+
+## Activity
+
+`/activity` (`js/activity.js`, see "Activity API")
+lists what changed recently, newest first: one row per change with the
+time, what happened (New, More urgent, Came back, Resolved), the
+severity, "Settled before alerting" on a resolve that reached nobody,
+the title (two lines at most) and where. "Last hour" / "Last 24 hours"
+pick the window (`?since=24h`); one line counts the changes by kind
+("6 changes in the last hour: 1 came back, 5 resolved."). With none it
+says "Nothing changed in the last hour." in an empty box.
+
+## kwatch page
+
+`/kwatch` (`js/kwatchpage.js`, `ovcoverage.js`, from `/api/kwatch`,
+`/api/status` and `/api/coverage`) answers "is kwatch itself working,
+can it see the cluster, and do alerts get out": the same notices as the
+Overview plus "kwatch can't read pod logs", one verdict line ("kwatch is
+running, but some alerts aren't getting out"), and the cards **kwatch
+itself** (running since, last restart and why, last API contact,
+messages waiting, restarts in the last 24 hours on a time line), **State
+file** (a gauge of `stateFile.bytes` against `capBytes`, "180 MB of 512
+MB compaction cap"), **What kwatch is watching** (`coverage`: "233 of
+236 kinds of objects watched" with a bar and counts that can't be read,
+not read yet and not watched; folded, the gaps and the "Permission to
+add" YAML, see "Watch coverage"), **Where alerts go** (`delivery`, per
+channel: kind, the last failure or "delivering", a bar of sent, failed
+and retrying with the numbers in words, the last error) and **About this
+kwatch** (version, plan, last check, scope).
+
+## Keyboard
+
+The **?** beside the logo opens the help: the colors and alert levels,
+the states in `KW.STATE`'s words, "Settled before alerting", and the
+keys. It opens above the page and scrolls inside when the window is
+short.
+
+| Keys | Does |
+|:--|:--|
+| `g` then `o` / `i` / `n` / `a` / `k` | Overview / Issues / Insights / Activity / kwatch |
+| `/` | search the issues |
+| `j` `k` | next / previous row, or issue while one is open beside the table |
+| `Enter` | open the issue beside the table (Cmd or Ctrl and click: its own page in a new tab) |
+| `t` `e` `i` `a` `d` | on an issue page: Timeline / Evidence / Impact / Alerts / Details |
+| `←` `→` | move between the issue page's tabs |
+| `[` `]` | previous / next issue in your list, on an issue page or beside the table |
+| `?`, `Esc` | show or hide the help; `Esc` also closes the issue beside the table |
+
+## Issue summary
+
+`/api/incidents/{id}` carries `summary`, the top of the issue page in
+five lines, computed by the server from the other parts of the same
+response (before they are cut to the size limit), so the page never
+stitches it from twenty fields. Every text is redacted.
+
+| Field | Data |
+|:--|:--|
+| `what` | one plain sentence of what is wrong, the visible symptom first: a Service of the issue with endpoints and none ready ("Deployment api in shop is not serving traffic: Service api has 0 of 3 endpoints ready."), else a failing probe, readiness first ("… is failing its readiness check, so it gets no traffic."; a liveness probe only when the kubelet killed the container for it, not after the container crashed by itself), else the failure family ("keeps crashing (12 restarts)", "is stuck pending: no node can run it (3 pods waiting)", "can't pull its image" …), else the headline. A resolved issue is in the past tense ("was stuck pending."). At most 500 characters |
+| `why` | `text`, the cause sentence (empty without a cause), `confidence` (`high` at a score of 0.70 or more with no rival cause, `likely` from 0.50, else `possible`; empty without a cause) and `causeKnown` |
+| `proof` | up to 3 pieces of evidence, at most one per `kind`, in this order of strength: `probe` (the most often failing probe with the kubelet's message), `log` (the last captured log line that reports an error, panic, failure, refusal or timeout, or that says the application is unhealthy, not ready or answered a 5xx status; this includes the line a running container logged while its probe got an HTTP error status, which investigation captures), `exit` (how the most restarted container last ended: reason and exit code, from the live containers or else the latest break), `scheduler` (why pods wait for a node), `endpoints` (the Service or Ingress that lost the most ready endpoints), `change` (the change the likely cause blames), `node` (a node not ready or with an unhealthy condition) and `event` (the Warning event repeated most). Each item is `{kind, text, detail, count, at}`: `text` short and plain, `detail` the raw value (the log line, the probe message), at most 300 characters. An item whose raw value (case and spacing aside) an earlier one already showed is skipped for the next of its kind: a probe message repeated as a Warning event is shown once. A container that exited by itself with an error code ranks `log` and `exit` above a liveness probe (readiness keeps its place): the probe failing while it restarts is a symptom. When the kubelet killed it for the probe (a Warning event "failed liveness probe, will be restarted"), the liveness probe leads and an exit 137 or 143 reads "restarted by kubelet after failing its liveness check" |
+| `next` | the first fix step, `{text, command, more}`, `more` counting the steps after it; absent without steps |
+| `told` | per channel the incident's messages reached, `{name, provider, kind, state, at}`: `kind` is `pager` (the send trail marks it, or a pager row exists), `chat`, `email` or `other`; `state` is the pager's own alert state for a pager (`open`, `closed`, `failed`, `pending`), else the latest send's (`sent`, `failed`, `pending` while it is retried); pagers first, then by name |
+| `stage` | for a stepper: `step` is `confirming` (settling), `happening` (open or flapping), `recovering` or `resolved`, `since` the latest transition into that state (else the opened, recovering-since or resolved time), `flapping` and `stoppedTracking` |
+
+The summary is cut last when the detail is over the size limit: first
+channels down to 3, its texts to 100 characters, proof down to 1, then
+`told`, `next` and `proof` go (`truncated.summaryTold`,
+`summaryNext`, `summaryProof`) and the texts are cut to 40. The step's
+command is never cut.
 
 ## Issue page context
 
@@ -129,7 +291,7 @@ count for every list above (`transitions`, `snapshots`, `snapshotRows`,
 `movedFrom`, `changedBeforeRecovery`, `changes`, `containers` ...) and
 `texts`, how many long texts were shortened (titles, cause, fix steps,
 reasons, sent texts, change values ...). When `texts` is more than 0 the
-page shows one hint, "Some long text was shortened."
+notes row of the summary card says "Some text shortened".
 
 | Field | Section | Source | Bound |
 |:--|:--|:--|:--|
@@ -157,26 +319,25 @@ page shows one hint, "Some long text was shortened."
 | `moved` | "Moved into", "Includes earlier issues" | `into`, the issue this one was moved into, and `from`, the earlier issues moved into it (each `id` and `title`); only issues kwatch still keeps | |
 | `logsNotReadable` | "Crash output not shown" | true when the log section is empty because kwatch may not read pod logs | |
 | `changedBeforeRecovery` | Changed just before it recovered | on a resolved issue only: the changes made shortly before it stopped failing, newest first, same shape as `changes`. It never says they were the fix | 2 |
+| `title`, `untold` | the issue's title and its "Settled before alerting" mark | `title` (also on list items) is the incident's problem title: the lead of its announcement, written when it opens and when the problem changes, never an update's, a recovery's or a move's wording, at most 140 characters; the root's key only when there is none. `untold` (also on list items, and part of the row's `rev`) marks an issue no message reached: it settled, recovered or moved before alerting | |
 | `stoppedTracking`, `stillCrashing` | the "Stopped tracking" banner | `stoppedTracking` (also on list items, and part of the row's `rev`) is set on a resolved issue that kwatch stopped following while it was still failing; `stillCrashing` says a container still crashed (else it was short of replicas) | |
 | `waiting` | Why it's waiting to start | the incident's pods that are Pending with `PodScheduled=False`: the newest `FailedScheduling` event, else the condition message (redacted), parsed into plain-words reasons with node counts, plus the raw message | 1 message, 8 reasons |
 
 Fields another part of kwatch may add are drawn when present and
 ignored when absent: `causedBy` (one issue or a list, each an `id` and
-`title`) as "Caused by: …" in the summary card, `causing` as "Also
-causing: 3 issues" (a hint line and a section listing them), and
-`blastRadius` (a sentence, or counts) as "Who it hits: …".
+`title`) as "Caused by: …" first in the notes row of the summary card,
+`causing` as "Also causing" in Impact's "Other issues", and
+`blastRadius` (a sentence, or counts) as "Who it hits" in Impact.
 
-**Alert status** (`js/incwhy.js`; the card was called "What's going on
-with this alert") sits under the summary card: why it is still open in plain words ("Looks better ·
+**Alert status** (`js/incwhy.js`) is the first section of the Alerts
+tab; why it is still open also shows under the stepper. It says why it is still open in plain words ("Looks better ·
 closes after 3 min healthy · 1 min 20 s so far") with a bar that fills
 each second between reads while `holdTotal` and `holdElapsed` run (a
 settling issue counts its "40 s left" down); "Why you got this alert:"
 with `alertLevelReason`; "Started 12:30 · kwatch noticed 12:30 ·
 told Slack 12:31" from `timing` (each with a tooltip that has the
 seconds); one line for each pager in `pager` ("Paged PagerDuty at 12:31 ·
-still open on the pager", or "page failed: token refused (401)"); "kwatch
-can't see this right now, so it stays open until it can check again."
-when `why.cannotSee` is set; and the
+still open on the pager", or "page failed: token refused (401)"); and the
 acknowledgement, "Acknowledged 12:40 by kubectl-annotate · “note”", or,
 when nobody has, the command that sets it
 (`kubectl -n <ns> annotate <kind>/<name> kwatch.dev/ack="looking into
@@ -185,7 +346,13 @@ only reads. The timers are left out of the comparison that decides
 whether the issue changed, so a ticking timer never shows "This issue
 changed"; a new read moves only the timer.
 
-The states strip (`js/transitions.js`) is drawn from `transitions` when
+When `why.cannotSee` is set, the notes row says "Can't see it right
+now" (the tooltip: "kwatch can't see this right now, so it stays open
+until it can check again.") and no countdown runs; an acknowledgement
+is also a note there, "Acknowledged 12:40 by kubectl-annotate", with the
+note in its tooltip.
+
+The states strip (`js/transitions.js`, in the Timeline tab) is drawn from `transitions` when
 there are any (one segment per state, so every flap shows; alert level
 changes are marks above it), else from `phases`. Transitions are also
 entries of "What happened, step by step", except the opening and those a
@@ -198,12 +365,12 @@ was added, changed or removed.
 **Changed since you last looked** (`js/lastlook.js`, `localStorage`
 key `kwatch.looked`, this browser only, at most 200 issues, forgotten
 after 8 days): the browser keeps when it last showed each issue. On the
-next visit the summary card says "3 things changed since you last
+next visit the notes row says "3 things changed since you last
 looked (12:05)" and the newer timeline entries, transitions, changes and
 warnings carry a "New" mark. The first visit marks nothing; without
 `localStorage` nothing is marked.
 
-The summary card's **Copy summary** button copies, built in the browser
+The header's **Copy summary** button copies, built in the browser
 from this response: the title, severity in plain words, state when not
 "happening now", where, since (UTC), likely cause, the first fix step and
 its command, and a link to the page.
@@ -264,10 +431,12 @@ with ten issues or ten thousand.
 (last 24 hours, 3 days, or 7 days: kwatch keeps resolved issues a
 week); it narrows resolved issues only, never active ones.
 
-**Columns.** By default: severity badge, the issue's title (one line,
-cut with "…"; the tooltip has the whole title and the likely cause;
-after it, small marks for how often it failed again, `× 3`, and New /
-Changed since your last visit), namespace ("whole cluster" when there
+**Columns.** By default: severity badge, the issue's title (two lines
+at most, cut with "…"; the tooltip has the whole title and the likely
+cause; after it, small marks for how often it failed again, `× 3`, New /
+Changed since your last visit, the muted labels "Settled before
+alerting" (see "Layout and reading order") and "Stopped tracking"),
+namespace ("whole cluster" when there
 is none), object (`deployment/payments-api`), status, when (on Active
 "Going on": "for 3 h", or "now" under a minute, the exact start in
 the tooltip; on Resolved "Resolved": "3 h ago"; "Going on or
@@ -445,9 +614,11 @@ seen and *Mark all seen* marks the page. The first visit
 marks nothing, and issues gone for 8 days are forgotten.
 
 **The preview drawer** (`js/drawer.js`, `js/incpanel.js`). The drawer
-shows the same content as the issue page: `detail.js` has one renderer
-(`KW.renderIncident`) and `incpanel.js` loads and refreshes an issue
-for both, so the page and the drawer never differ. Its bar has
+shows the issue page's summary card (header, stepper, notes row and the
+five summary rows): `detail.js` has one renderer (`KW.renderIncident`)
+and `incpanel.js` loads and refreshes an issue for both, so the page and
+the drawer never differ. In place of the tabs it has "On the full page:
+Timeline (1) · Impact (3) …", each opening the issue page at that tab. Its bar has
 Previous / Next (also `j` / `k` and `[` / `]`) through the rows of the
 table page shown ("3 of 50 on this page"; at the end of the page they
 stop, the pager moves on), "Open full page" (a real link to
@@ -506,10 +677,10 @@ issue in it, or moving to one, marks it seen like opening its page
 newer one.
 
 **Keyboard.** `/` searches, `j` / `k` move down and up the rows (or to
-the next and previous issue on an issue page or in the open drawer),
-`[` / `]` do the same on an issue page and in the drawer, Enter opens
-the issue in the drawer and Esc closes it. `?` opens the help
-beside the logo, which lists these keys; Esc closes it.
+the next and previous issue in the open drawer), `[` / `]` move through
+your list on an issue page and in the drawer, Enter opens the issue in
+the drawer and Esc closes it. `?` opens the help beside the logo, which
+lists every key (see "Keyboard" above); Esc closes it.
 
 ### The address
 
@@ -533,8 +704,8 @@ defaults and saved views.
 | `sort`, `dir` | order | `severity`, `title`, `namespace`, `object`, `status`, `started`, `last`, `duration`, `repeats`, `acked`; `asc` / `desc` (the old `sort=recent` is `last`) |
 | `page`, `pageSize` | the page | from 1; `25`, `50` (default), `100` |
 | `like` | issues with the same error as this one (a chip "Similar to: <title> ×") | an issue ID |
-| `node` | issues on that node, repeatable (a chip "Node: <name> ×"; the Overview's "Nodes with the most issues" links here) | a node name |
-| `mode` | issues of that kind of failure, repeatable (a chip "Failure: Image pull ×"; the Overview's "Top causes" links here) | a failure family: `ImagePull`, `CrashLoop`, `OOMKilled` ... |
+| `node` | issues on that node, repeatable (a chip "Node: <name> ×"; Insights' "Nodes with the most issues" links here) | a node name |
+| `mode` | issues of that kind of failure, repeatable (a chip "Failure: Image pull ×"; Insights' "Top causes" links here) | a failure family: `ImagePull`, `CrashLoop`, `OOMKilled` ... |
 | `open` | the issue shown in the drawer; not a filter, never sent to the API | an issue ID |
 
 A repeatable filter is written once per value
@@ -653,7 +824,9 @@ the real `total`. `modeLabels` maps each requested `mode` to its plain label
 chip. `facets` has `severity`, `state`, `namespace`, `kind`,
 `acked` and `stopped` (`true` / `false`), each a map of value to how many issues
 of the filtered list have it, counted without its own filter (`state`
-also without `status`, so it gives the size of each list); `namespace`
+also without `status`, so it gives the size of each list; `severity`
+leaves out the active quiet issues the list hides without a severity
+filter, so it adds up to `total`); `namespace`
 and `kind` hold the 50 and 20 busiest. Each item carries `rev`, a hash
 of what its row shows. A list item never passes 590 bytes: its title
 and cause are cut to 200 characters (the issue page has them whole),
@@ -699,11 +872,11 @@ the key, counted as `/api/incidents?status=all&like=<id>` lists them
 filter), from at most 20,000 incidents read. The issue page and drawer
 link "14 other issues have the same error → see them" to that list.
 
-## What changed recently
+## Activity API
 
-On the Overview, "What changed recently" (`js/activity.js`, from
+The Activity page (`js/activity.js`, see "Activity", from
 `GET /api/activity?since=1h|24h`, default `1h`; Last hour / Last 24
-hours) lists, newest first, at most 20 changes, each a line like
+hours) lists, newest first, at most 20 changes, each a row like
 "12:31 · New · Urgent · svc-204 cannot pull its image · team-6" linking
 to the issue page. With none it says "Nothing changed in the last
 hour." The server derives the events from the incidents it holds, with
@@ -720,24 +893,27 @@ A recurrence carries the opens and resolves of the incident it repeats;
 the same moment of the same root is listed once. Other changes of alert
 level are not timestamped by kwatch, so they don't appear. The response
 is `{since, events, total}` (each event: `at`, `kind`, `id`, `title`,
-`severity`, `state`, `namespace`, `workload`; the fields are the
+`severity`, `state`, `namespace`, `workload` and `workloadKind`, the root
+object's kind as the list shows it, left out when unknown; the fields are the
 incident as it is now), `total` counting every event in the window;
 ties are ordered by ID, so an unchanged set gives the same body, which
 carries an `ETag` like the list. Another `since` answers `400` ("Unknown activity window: \"2h\". Use 1h or
 24h.", see "Errors").
 
-## Overview trends
+## Trends API
 
-"This week", a folded section of the Overview (`js/trends.js`, from
-`GET /api/trends?tzName=&tz=`, read with its `ETag`), shows four read-only
-cards, and the top causes of the week (see "Overview insights"). The server computes
+The Insights page (`js/trends.js`, from `GET /api/trends?tzName=&tz=`,
+read with its `ETag`) adds three read-only cards after the
+`/api/insights` ones: Busiest namespaces, Kept coming back and Time to
+resolve; its week chart comes from `/api/insights` `days` (see "Insights
+API"). The server computes
 them from the incidents the dashboard already holds (active ones and
 those resolved within the last week), with its own clock; quiet
 (`silent`) issues are left out, as on the active list.
 
 | Card | Data |
 |:--|:--|
-| Issues opened per day | each incident's kept open times (`Occurrences`: first open, reopens and recurrences, at most 30 per incident), bucketed into the 7 calendar days ending today; colored by the issue's alert level now |
+| Issues opened per day | each incident's kept open times (`Occurrences`: first open, reopens and recurrences, at most 30 per incident), bucketed into the 7 calendar days ending today; colored by the issue's alert level now. An opening no message reached (the incident settled, recovered or moved before alerting, or an earlier occurrence that was not heard) is counted as `untold` (in `total`, in no level), never as a page or a notification |
 | Busiest namespaces | open times per namespace in those days, top 5; each links to `/issues?status=active&namespace=` when the namespace has an active issue, else `/issues?status=resolved&namespace=` |
 | Kept coming back | issues opened twice or more in those days, or flapping now; top 5 by openings, then flapping, then repeat count; each links to its issue and names its namespace and object (`workloadKind` as on list items) |
 | Time to resolve | median and longest time from open to resolve of every occurrence (the incident's `History` and the incident itself) resolved in those days; the longest links to its issue |
@@ -748,9 +924,9 @@ while the page shows UTC), so days start at midnight where the reader is
 and a daylight-saving change within the week is counted right. When
 `tzName` is missing, `Local` or a name kwatch doesn't know, `tz` is used:
 the zone in minutes east of UTC (a whole number from -840 to 840), else
-UTC. The page sends both. A name that can't be a zone name answers `400`. The section is hidden until at least 2
-issues opened or resolved in the week, and a card with nothing to show
-is left out. It refreshes with the Overview (on each live change, else every 20 s).
+UTC. The page sends both. A name that can't be a zone name answers `400`. These cards are left out until at least 2
+issues opened or resolved in the week (`enough`), and a card with nothing to show
+is left out. They refresh with the Insights page (on each live change, else every 20 s).
 The response carries an `ETag` of its body; `If-None-Match` with it
 answers `304`.
 
@@ -768,11 +944,10 @@ many different issues.
 
 `GET /api/coverage` answers what kwatch watches, from the sources it
 already runs (no API call per request), `503` while the pipeline is not
-running; the body carries an `ETag` like the list. On the Overview,
-"What kwatch is watching" (`js/ovcoverage.js`, folded; read with the
-Overview and its `ETag`, since the health line says when kwatch isn't
-allowed to read some kinds, and then it opens by itself once; the
-quiet line links to it) says when kwatch finished reading the
+running; the body carries an `ETag` like the list. On the kwatch page,
+"What kwatch is watching" (`js/ovcoverage.js`; the totals from
+`/api/kwatch` `coverage`, and folded under them, read with its `ETag`,
+"What it can't read, and the permission to add") says when kwatch finished reading the
 cluster, the namespaces watched and left out (20 names shown, then
 "+N more"), how many kinds it watches and has fully read, and the kinds
 it can't read, hasn't read yet or doesn't watch, each with a plain
@@ -821,36 +996,60 @@ while no pipeline session runs) has:
 Beside it, `failedLastHour` (left out without alert delivery) counts the
 provider sends that failed or are being retried in the last hour, counted
 by the minute: incident messages, summaries, roll-ups, digests and plain
-messages alike, however many one incident had. On the Overview, the "kwatch itself" card in "kwatch health
-details" shows running since, last restart and why ("normal restart",
-"ran out of memory", "its node went away" ...), restarts in 24 h, last API
-contact, messages waiting, failed in the last hour (in the warning color
-when above 0) and the state file's size. The top of the page shows "kwatch
-is starting: 40 of 60 kinds read, 2,100 objects." until the first read
-is done, and "Alert links are off: …" with `dashboardLinks.text` when
-alerts carry no link to this page.
+messages alike, however many one incident had. On the kwatch page, the
+"kwatch itself" card shows running since, last restart and why ("normal
+restart", "ran out of memory", "its node went away" ...), last API
+contact, messages waiting and the restarts of the last 24 hours on a
+time line; failed sends show as a notice. The Overview and the kwatch
+page show "kwatch is starting" with "19 of 27 kinds read · 1,180
+objects" until the first read is done, and "Alert links are off" with
+`dashboardLinks.text` when alerts carry no link to this page.
 
-## Overview insights
+`GET /api/kwatch` is kwatch's own status page in one read, with an
+`ETag`. Each part is absent while its source is:
 
-Under the headline, short cards from `GET /api/insights?tzName=&tz=` (both
-as on `/api/trends`; `js/ovinsights.js`). Each card is left out when it
-has nothing to say. The server computes everything from the incidents
+| Field | Data |
+|:--|:--|
+| `coverage` | totals of `/api/coverage`: `watched` (running watches), `synced`, `unreadable`, `unsynced` (first list not finished; these are among `watched`), `notWatched`, `total` (`watched` + `unreadable` + `notWatched`), `allNamespaces`, `namespaces`, `excludedNamespaces`, `syncedAt`; absent while the pipeline is not running |
+| `delivery` | per alert channel, by name: `{name, provider, kind, sent, failed, retrying, lastSuccess, lastError}`. The counts are the incident messages of the last `deliveryWindowHours` (24) from the send trail kwatch keeps per incident (the 512 incidents told last, 16 attempts each, so a busy day can count less); `failed` were given up or handed to the fallback. `lastSuccess` and `lastError` are the channel's own health, summaries and digests included. Every channel the delivery health knows is listed, even without sends |
+| `stateFile` | `bytes` (the state file's size), `capBytes` (the size cap the compactor keeps the stored data under: 512 MiB by default) and `capKnown`; while no session runs it is absent |
+| `restarts24h`, `outboxPending` | the restarts of the last 24 hours and the messages waiting, as in `self` |
+| `failedSendsLastHour` | as `failedLastHour` |
+
+## Overview API
+
+`GET /api/overview` is the top of the Overview in one read, with an
+`ETag` (`304` on `If-None-Match`), `503` while the pipeline is not
+running. It reads the incidents the dashboard holds (at most 20,000).
+
+| Field | Data |
+|:--|:--|
+| `counts` | the issues not resolved by severity: `urgent` (page), `attention` (notify), `low` (digest), `quiet` (silent) |
+| `lookFirst` | at most 5 active issues (not resolved, not quiet): the urgent ones nobody acknowledged first, then the newest started, then by ID; each `{id, title, namespace, kind, name, severity, state, since, acked}` (`kind`/`name` are the root object's, `title` at most 200 characters) |
+| `failedSendsLastHour` | the provider sends that failed or are being retried in the last hour, as `failedLastHour` on `/api/status`; absent without delivery |
+
+## Insights API
+
+The Insights page's cards come from `GET /api/insights?tzName=&tz=` (both
+as on `/api/trends`; `js/ovinsights.js`, see "Insights"). A card with
+nothing to show says so in one sentence. The server computes everything from the incidents
 it holds (at most 20,000 read) with its own clock; "active" means not
 resolved and not quiet.
 
 | Field | Card | Data |
 |:--|:--|:--|
-| `today` | the line under the headline | `new` (openings today, reopens included), `resolved` (resolves today, earlier occurrences included, a superseded incident not), `urgent` (urgent issues active now); quiet issues left out; hidden when all three are 0 |
-| `unacked` | Urgent and not acknowledged, the Overview's one urgent list | `count` and the 5 newest urgent active issues with no acknowledgement; "See all" opens `/issues?status=active&severity=page&acked=false&sort=started` and "Oldest first" the same with `dir=asc` |
-| `afterChange` | Started right after a change | active issues with a change they stored (`Journal.Changes`) within 30 minutes before they started: `count`, and the 5 newest with the changed object and what changed ("After: deployment/api image api:1.2 → api:1.3 (4 min before)"); values redacted, a data key named only |
-| `undelivered` | Alerts that didn't get out | from the persisted send trail of every incident held: per incident, provider and message kind, the latest attempt of the last 24 hours when it `failed` (gave up) or is `retrying`; `count` and the 5 newest with provider, issue and the scrubbed error (redacted, 200 characters) |
+| `today` | the "Today:" line | `new` (openings today, reopens included), `resolved` (resolves today, earlier occurrences included, a superseded incident not), `urgent` (urgent issues active now); quiet issues left out; hidden when all three are 0 |
+| `unacked` | not drawn now (the Overview's "Look at these first" uses `/api/overview`) | `count` and the 5 newest urgent active issues with no acknowledgement; "See all" opens `/issues?status=active&severity=page&acked=false&sort=started` and "Oldest first" the same with `dir=asc` |
+| `afterChange` | Started right after a change | active issues with a change they stored (`Journal.Changes`) within 30 minutes before they started: `count`, `total` (every active issue, for "3 of 8"), and the 5 newest with the changed object and what changed ("After: deployment/api image api:1.2 → api:1.3 (4 min before)"); values redacted, a data key named only |
+| `undelivered` | not drawn now (failed sends show on the kwatch page) | from the persisted send trail of every incident held: per incident, provider and message kind, the latest attempt of the last 24 hours when it `failed` (gave up) or is `retrying`; `count` and the 5 newest with provider, issue and the scrubbed error (redacted, 200 characters) |
 | `nodes` | Nodes with the most issues | the 5 nodes with the most active issues (the issue is about the node, or its pods run there, from the live inventory), with how many are urgent; each links to `/issues?status=active&node=` |
-| `causes` | Top causes this week, in "This week" | the 5 failure families with the most issues kwatch holds (it keeps a week), counted as `/issues?status=all&mode=` lists them (active quiet issues left out), with a plain label ("Image pull failures", "Out of memory"; other families split into words) and how many are still active |
-| `namespaces` | Namespaces with active issues | one tile per namespace with active issues: its most urgent severity and count, most urgent first, then most issues, then A to Z; at most 60 (`more` counts the rest). Each tile is a link to `/issues?status=active&namespace=`, in a list, with the count and severity in words, not color alone. Cluster-wide issues have no tile |
-| `quiet` | the quiet line | only when nothing is active: `objects` (the inventory's size), `namespaces` and `kinds` watched (coverage) and `lastScan`, with the scope from `/api/status` in the Issues page's words: "Watching every namespace (34 namespaces now) · 2,841 objects · last checked 10 s ago · What kwatch is watching" |
+| `causes` | Top causes this week | the 5 failure families with the most issues kwatch holds (it keeps a week), counted as `/issues?status=all&mode=` lists them (active quiet issues left out), with a plain label ("Image pull failures", "Out of memory"; other families split into words) and how many are still active |
+| `namespaces` | Namespaces with active issues | one tile per namespace with active issues: its most urgent severity and count, with `urgent`, `attention` and `low` counts, most urgent first, then most issues, then A to Z; at most 60 (`more` counts the rest). Each tile is a link to `/issues?status=active&namespace=`, in a list, with the count and severity in words, not color alone. Cluster-wide issues have no tile |
+| `days` | the week chart | the 7 calendar days ending today in the requested zone (`tzName`, else `tz`, as on `/api/trends`, so a daylight-saving change is counted right): `{date, opened, resolved, paged, untold}`; `opened` counts every kept opening (reopens included), `resolved` every resolve (earlier occurrences included, a superseded incident not), `paged` the openings that paged (an earlier occurrence that paged, or the current one while the issue is urgent and a message of it went out), `untold` the openings no message reached (settled, recovered or moved before alerting, or an earlier occurrence that was not heard; counted as `untold` on `/api/trends`, and also in `opened`, always present, 0 when none); quiet issues left out |
+| `quiet` | not drawn now | only when nothing is active: `objects` (the inventory's size), `namespaces` and `kinds` watched (coverage) and `lastScan`, with the scope from `/api/status` in the Issues page's words: "Watching every namespace (34 namespaces now) · 2,841 objects · last checked 10 s ago · What kwatch is watching" |
 
 The body is bounded (5 entries per list, 60 tiles, texts cut to 200
-characters) and carries an `ETag`; it refreshes with the Overview.
+characters) and carries an `ETag`; it refreshes with Insights.
 
 ## Live push
 
@@ -891,7 +1090,7 @@ stream. The Content Security Policy needs no change: `connect-src
 The page (`js/refresh.js`) opens one stream per tab, closes it while
 the tab is hidden and opens it again when it is shown. On `changed`,
 every view's reader runs (at most once per 5 s; changes that come
-faster are read together): the table page, the Overview's cards and
+faster are read together): the table page, the Overview and Insights cards and
 the open issue, each with its `ETag` where it has one. A reader may
 pass `wants(ids)` to `KW.poller` to run only for the incidents it
 shows. While the stream is connected the readers run on their own only
@@ -919,6 +1118,17 @@ true while the stream is quiet.
   counts. Only an `Authorization: Bearer` header (the scheme in any
   case) is a bearer token; any other scheme is ignored. The limiter
   remembers at most 10,000 clients a minute; more share one bucket.
+- **Asking whether you are signed in.** `GET /api/session` is the one
+  `/api/*` route that does not answer `401` to a visitor with no
+  credentials: the sign-in page asks it on every load, and a `401`
+  would show as a console error. With no bearer token and no valid
+  session cookie (none, expired, signed out or made up) it answers
+  `200` with `{"signedIn": false}` and nothing else, and it does not
+  count against the failure limit. A valid session answers `204`. A
+  request that carries an `Authorization: Bearer` header goes through
+  the usual check, so a wrong token still gets `401` and counts. Every
+  other `/api/*` route still answers `401` when signed out. The answer
+  is `Cache-Control: no-store` like every other.
 - **Behind a trusted proxy** (`dashboard.trustProxy`), the client is
   the address the proxy appended to `X-Forwarded-For` (a value that is
   not an IP address is ignored and the peer is limited instead), and
@@ -939,8 +1149,10 @@ true while the stream is quiet.
   remembers, and once a host was reached over https a later plain
   request does not turn it back to http.
 - **Unknown addresses.** A path outside `/api/` and `/assets/` that the
-  UI does not have answers `404` with a small HTML page linking to the
-  Overview; `/api/*` and missing assets keep the JSON error. A path
+  UI does not have answers `404` with a small page in the dashboard's
+  own look, titled "Not found · kwatch" (the shared stylesheet and
+  brand by their hashed asset links, no script or inline style), linking
+  to the Overview; `/api/*` and missing assets keep the JSON error. A path
   that can't be parsed at all (a broken escape such as `%E0%A4%A`) gets
   the same page, still with status `400`, on plain http and when kwatch
   serves TLS itself (`dashboard.tlsCertFile`).
@@ -980,37 +1192,122 @@ page canceled itself (a newer search) counts for nothing.
 
 The **Notifications** switch in the sidebar (`js/notify.js`) asks the
 browser for permission and, once allowed, shows a system notification when
-an issue changes. The settings live in this browser only (`localStorage`
-key `kwatch.notify`):
+an issue changes, **even with every kwatch tab closed** (Web Push). The
+settings live in this browser (`localStorage` key `kwatch.notify`), and
+kwatch keeps a copy of the first two to decide what to push:
 
 - **Tell me about**: Urgent only, Urgent and needs attention (default) or
   Everything. Quiet issues never notify.
 - **Also when resolved**: off by default.
-- **Even when this tab is open**: off by default; otherwise a notification
-  shows only while the tab is hidden or the window is not focused.
+- **Even when this tab is open**: only without Web Push (below), off by
+  default; otherwise a notification shows only while the tab is hidden or
+  the window is not focused.
+- **Send a test notification** sends one the way real ones come; a line
+  under it says whether they arrive with kwatch closed or only while a tab
+  is open, and why.
 
-How it works: while a signed-in kwatch tab is open, it reads
-`/api/incidents?status=active&sort=last&pageSize=100` and
-`/api/incidents?status=resolved&since=24h&sort=last&pageSize=100` (latest
-activity first, so what just changed is always among the 100 read, on
-any size of cluster) every 30 s, also in the background (browsers slow
-a background tab's timer to about once a minute). Each read sends the
-list's `ETag`; an unchanged list answers `304` and the last copy is
-used again. Each check is compared with the previous one
-(`KW.notifyLogic`, pure functions):
+Every notification stays on screen until it is closed
+(`requireInteraction`): on some computers, macOS among them, a
+notification that leaves on its own is never shown. Each one is tagged
+with the issue ID, so a later one for the same issue replaces it; its
+title is "Urgent: <title>" and its body "namespace · kind/object · what
+changed". More than three changes in one check become a single "5 issues
+changed" notification. Clicking a notification opens the issue (or the
+Issues table for the summary) in the kwatch tab already open, else in a
+new one. An open tab closes the notifications of issues that resolved
+and of the issue it opens.
+
+What changed (the same rules in `KW.notifyLogic` and
+`push_changes.go`):
 
 - **new**: an issue that was not listed before;
 - **reopened**: an issue that was resolved and is active again;
 - **escalated**: the same issue at a more urgent severity;
 - **resolved**: an active issue that is now resolved (only when asked for).
 
-Nothing is notified for what was already there when the page opened. Each
-notification is tagged with the issue ID, so a later one for the same
-issue replaces it; its title is "Urgent: <title>" and its body
-"namespace/object · what changed". More than three changes in one check
-become a single "5 issues changed" notification. Clicking a notification
-focuses the tab and opens the issue (or the Issues table for the
-summary).
+Nothing is notified for what was already there when kwatch started or the
+page opened.
+
+### Web Push: notifications with kwatch closed
+
+When the browser has a service worker and a push service (Chrome, Edge,
+Firefox, Safari 16.4+), turning notifications on:
+
+1. registers the service worker `/sw.js` (never hashed, `Cache-Control:
+   no-cache`, scope `/`), which shows pushed notifications and handles
+   clicks; it caches nothing;
+2. reads `GET /api/push` (kwatch's public VAPID key), subscribes with the
+   browser's push service, and sends the subscription and the two
+   settings to `POST /api/push`.
+
+kwatch then compares every issue every 10 s (`push_run.go`, running with
+the pipeline) and sends each subscribed browser what changed at its level,
+encrypted for that browser alone (RFC 8291) and signed with kwatch's VAPID
+key (RFC 8292), with a one-hour TTL. The open tab then only keeps the
+"(3)" in its title. Every page load subscribes again with the current
+settings; turning notifications off or **Sign out** calls
+`POST /api/push/remove` first. When the browser renews a subscription on
+its own, the service worker hands the new one to kwatch
+(`pushsubscriptionchange`). When a sign-in expires, the next kwatch page
+the browser opens drops its subscription; its push service then refuses
+kwatch's next message and kwatch forgets it. Signing in again subscribes
+again.
+
+The API, behind the same sign-in as the rest:
+
+| Call | Answer |
+|---|---|
+| `GET /api/push` | `{publicKey}` |
+| `POST /api/push/status` `{endpoint}` | `{subscribed, failing}`: `failing` says in plain words why the last send to that browser failed. The push address is a secret of the browser's, so it travels in a body, never in a URL a proxy might log |
+| `POST /api/push` `{subscription, min, resolved, replaces}` | `204`; `400` for a level other than `page`, `notify` or `digest`, keys that don't parse, or an address that is not a push service. `replaces` is the address a renewed subscription replaces: with it and no `min`, the old settings carry over and the old address is forgotten |
+| `POST /api/push/remove` `{endpoint}` | `204`, also for a browser kwatch doesn't know |
+| `POST /api/push/test` `{endpoint}` | `204` once the push service took it; `404` not subscribed; `502` with the reason |
+
+Every call answers `503` while the pipeline is not running. The POSTs take
+only JSON from the dashboard's own origin (at most 4 KiB), which no form on
+another site can send; the session cookie is `SameSite=Strict` as well.
+
+What kwatch keeps, in its state file (`state` bucket, key
+`dashboard.push`): the VAPID key pair, made on the first start, and at most
+100 browsers (each its push address, keys, the two settings and when it was
+last seen). A browser is forgotten when its push service says the
+subscription ended (`404`/`410`), after 30 days without the dashboard being
+opened in it, when the sign-in password or token changes, or, at the
+limit, to make room for a new one (one whose last notification failed
+first, then the one seen longest ago). With
+`persistence.emptyDir`, a restart on another node loses the key; browsers
+subscribe again the next time the dashboard is opened in them.
+
+Network and security:
+
+- Pushes go to the browser's push service over HTTPS: `fcm.googleapis.com`
+  (Chrome and browsers built on it), `updates.push.services.mozilla.com`
+  (Firefox), `*.push.apple.com` (Safari) and `*.notify.windows.com`
+  (Edge). kwatch sends only to these, so a subscription can't make kwatch
+  call anything else, and through the same client as the alert providers
+  (proxy, trusted CAs, no cloud metadata address). The chart's
+  NetworkPolicy already allows port 443.
+- The push service sees only the browser's address, the time and an
+  encrypted payload; it can't read issue names.
+- If a push service can't be reached (a cluster without internet access),
+  kwatch logs it once per browser, tries that service once per check, and
+  the switch says so; an open tab then shows the notifications itself, as
+  below.
+- If the state file can't be read at start, kwatch tries again every
+  10 s; `/api/push` answers `503` meanwhile.
+
+### Without Web Push
+
+In a browser without a service worker or push service, or when kwatch
+can't push, a signed-in kwatch tab that is open (also in the background)
+reads `/api/incidents?status=active&sort=last&pageSize=100` and
+`/api/incidents?status=resolved&since=24h&sort=last&pageSize=100` (latest
+activity first, so what just changed is always among the 100 read, on any
+size of cluster) every 30 s (browsers slow a background tab's timer to
+about once a minute). Each read sends the list's `ETag`; an unchanged list
+answers `304` and the last copy is used again. The live stream (see "Live
+push") makes a check happen sooner (at most every 10 s) while the tab is
+shown. Close every kwatch tab and nothing arrives.
 
 While the tab is hidden, the tab title counts the changes not seen yet,
 "(3) Issues · kwatch"; the count clears when the tab is shown. The
@@ -1019,15 +1316,16 @@ on.
 
 Limits:
 
-- It works only while a kwatch tab is open. There is no service worker;
-  the live stream (see "Live push") only makes a check happen sooner
-  (at most every 10 s), and only while the tab is shown. Close every
-  kwatch tab and nothing arrives. Use the alert
-  channels for anything that must reach someone.
+- Browser notifications are a convenience; use the alert channels for
+  anything that must reach someone.
 - Browsers allow notifications only on a secure origin (https or
   `localhost`); over plain http the switch says so.
 - If the browser blocks notifications for the site, the switch explains
   how to allow them; a browser without the Notification API says so.
 - An issue that fails and recovers between two checks is not seen.
-- The Notification API needs no Content Security Policy change: the page
+- Signing out stops the pushes. A sign-in that expires stops them the next
+  time a kwatch page is opened in that browser; until then, and if it is
+  never opened again, the browser stays subscribed until it is unseen for
+  30 days or the password changes.
+- The Content Security Policy gains only `worker-src 'self'`: the page
   still loads nothing from elsewhere and connects only to its own origin.

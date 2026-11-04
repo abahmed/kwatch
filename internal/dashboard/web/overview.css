@@ -1,38 +1,121 @@
-/* kwatch dashboard: the Overview's insight cards (js/ovinsights.js),
-   the namespace map and "What kwatch is watching" (js/ovcoverage.js).
-   Colors are the tokens of app.css, so light, dark and high contrast
-   follow by themselves. */
-.ov-today { margin: 10px 0 0; font-size: 1.0625rem; }
-.ov-quiet { margin: 10px 0 0; color: var(--text-muted); }
-.in { margin-top: 24px; }
-.in-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.in-card { border: 1px solid var(--line); border-radius: var(--radius-card); padding: 16px 20px; min-width: 0; }
-.in-h { font-family: var(--font-body); font-weight: 600; font-size: 0.9375rem; letter-spacing: 0; color: var(--text-muted); margin: 0 0 10px; }
-.in-n { font-weight: 400; }
-.in-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.in-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.in-row { flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
-.in-link { font-weight: 600; overflow-wrap: break-word; width: fit-content; max-width: 100%; }
-.in-meta { font-size: 0.875rem; color: var(--text-muted); overflow-wrap: break-word; }
-.in-card.in-wide { grid-column: 1 / -1; }
-.in-top { font-size: 0.875rem; }
-.in-err { font-family: var(--font-mono); font-size: 0.8125rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.in-sev { display: inline-flex; align-items: center; gap: 5px; }
-.in-sev .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
-.in-more { display: block; margin-top: 10px; font-size: 0.875rem; }
+/* kwatch dashboard: the Overview (js/status.js), the small charts every
+   page shares (js/viz.js), the card grid of the Insights and kwatch
+   pages, the kwatch page (js/kwatchpage.js) and what kwatch watches
+   (js/ovcoverage.js). Colors are the tokens of app.css, so light, dark
+   and high contrast follow by themselves. */
 
-.nsmap { margin-top: 28px; }
-.nsmap .muted { margin: 2px 0 10px; }
-.ns-tiles { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); gap: 8px; }
-.ns-tile { display: flex; flex-direction: column; gap: 2px; min-height: var(--hit); padding: 8px 12px; border: 1px solid var(--line); border-left: 5px solid var(--control-border); border-radius: var(--radius-input); color: var(--text); text-decoration: none; min-width: 0; }
-.ns-tile:hover { border-color: var(--text); }
-.ns-tile.page { border-left-color: var(--failing); background: var(--failing-bg); }
-.ns-tile.notify { border-left-color: var(--degraded); background: var(--degraded-bg); }
-.ns-name { font-size: 0.875rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ns-meta { font-size: 0.8125rem; color: var(--text-muted); }
-.ns-more { margin: 10px 0 0; font-size: 0.875rem; }
+/* Chart colors: each class names what a mark means. */
+:root { --s-page: var(--failing); --s-notify: var(--degraded); --s-low: var(--control-border);
+  --s-ok: var(--success); --s-open: var(--text-muted); --s-done: var(--line); }
+.s-page { --c: var(--s-page); } .s-notify { --c: var(--s-notify); } .s-low { --c: var(--s-low); }
+.s-ok { --c: var(--s-ok); } .s-open { --c: var(--s-open); } .s-done { --c: var(--s-done); }
+.s-quiet { --c: transparent; }
 
-.cov { margin-top: 0; }
+/* ---- Overview ---- */
+.ov-notes { display: grid; gap: 8px; margin-top: 16px; }
+.ov-note { margin-top: 0; }
+.ov-note p { margin-top: 2px; }
+.ov-note .viz-meter { margin: 8px 0 4px; max-width: 28rem; }
+.n-failing { background: var(--failing-bg); } .n-failing b { color: var(--failing); }
+.ov-tile { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 20px; padding: 18px 20px; border: 1px solid var(--line); border-left-width: 6px; border-radius: var(--radius-card); }
+.ov-tile.ok { border-left-color: var(--success); }
+.ov-tile.warn { border-left-color: var(--degraded); }
+.ov-tile.bad { border-left-color: var(--failing); background: var(--failing-bg); }
+.ov-tile.stale, .ov-tile.wait { border-left-color: var(--control-border); }
+.ov-mark { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; flex: none; background: var(--control-border); color: var(--bg); }
+.ov-tile.ok .ov-mark { background: var(--success); }
+.ov-tile.warn .ov-mark { background: var(--degraded); }
+.ov-tile.bad .ov-mark { background: var(--failing); }
+.ov-mark .icon { width: 16px; height: 16px; stroke-width: 2.6; }
+.ov-say { flex: 1 1 16rem; font-size: clamp(1.375rem, 1.4vw + 1rem, 1.875rem); letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.ov-tile.bad .ov-say { color: var(--failing); }
+.ov-tile .updated { margin-left: auto; }
+.ov-sev { margin-top: 16px; }
+.ov-sev .viz-track { height: 14px; }
+.ov-h2 { font-family: var(--font-body); font-size: 1rem; font-weight: 700; letter-spacing: 0; margin: 28px 0 8px; }
+.ov-look { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; }
+.ov-look > li + li { border-top: 1px solid var(--line); }
+.ov-row { display: grid; grid-template-columns: 15rem minmax(0, 1fr) 9rem; gap: 6px 16px; align-items: center; padding: 12px 16px; min-height: var(--hit); color: var(--text); text-decoration: none; }
+.ov-row:hover { background: var(--surface); }
+.ov-row:hover .ov-title { text-decoration: underline; }
+.ov-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.ov-chips .chip + .chip { margin-left: 0; }
+.ov-what { display: flex; flex-direction: column; min-width: 0; }
+.ov-title { font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ov-where { font-size: 0.8125rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.ov-dur { display: flex; flex-direction: column; gap: 4px; }
+.ov-dtext { font-size: 0.8125rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.ov-more, .ov-calm { margin-top: 12px; }
+
+/* ---- shared charts ---- */
+.viz-track { display: block; height: 10px; border-radius: var(--radius-pill); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
+.viz-fill { display: flex; height: 100%; gap: 2px; }
+.viz-seg { display: block; min-width: 4px; height: 100%; background: var(--c); }
+a.viz-seg:hover { opacity: .8; }
+.viz-legend { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 0.875rem; }
+.viz-key { display: inline-flex; align-items: center; gap: 6px; color: var(--text); text-decoration: none; min-height: 28px; }
+a.viz-key:hover span:not(.viz-sw) { text-decoration: underline; }
+.viz-sw { width: 10px; height: 10px; border-radius: 3px; background: var(--c); flex: none; }
+.viz-sw.s-quiet { border: 1.5px dashed var(--control-border); }
+.viz-kn { font-variant-numeric: tabular-nums; }
+.viz-meter { display: block; height: 10px; border-radius: var(--radius-pill); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
+.viz-mfill { display: block; height: 100%; background: var(--text-muted); border-radius: var(--radius-pill); }
+.viz-meter.ok .viz-mfill { background: var(--success); }
+.viz-meter.warn .viz-mfill { background: var(--degraded); }
+.viz-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.viz-rtop { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 12px; margin-bottom: 4px; }
+.viz-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.viz-name.mono { font-size: 0.875rem; }
+.viz-val { font-size: 0.8125rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.viz-cols { display: block; width: 100%; max-width: 40rem; height: auto; overflow: visible; }
+.viz-cols .viz-axis { stroke: var(--line); }
+.viz-cols .viz-hit { fill: transparent; }
+.viz-cols .viz-day:hover .viz-hit { fill: var(--surface); }
+.viz-cols .viz-open { fill: var(--s-open); }
+.viz-cols .viz-paged { fill: var(--s-page); }
+.viz-cols .viz-res { fill: var(--s-ok); }
+.viz-cols text { font-family: var(--font-body); font-size: 12px; fill: var(--text-muted); }
+.viz-cols .viz-cnum { fill: var(--text); font-variant-numeric: tabular-nums; }
+.viz-tl { margin-top: 8px; }
+.viz-tltrack { position: relative; height: 22px; border-bottom: 2px solid var(--line); margin: 0 7px; }
+.viz-dot { position: absolute; bottom: -8px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: var(--control-border); border: 2px solid var(--bg); cursor: help; }
+.viz-dot.bad { background: var(--failing); }
+.viz-tlends { display: flex; justify-content: space-between; margin-top: 10px; font-size: 0.75rem; color: var(--text-muted); }
+.viz-gauge { width: 9rem; height: auto; flex: none; }
+.viz-gtrack, .viz-gfill { fill: none; stroke-width: 12; stroke-linecap: round; }
+.viz-gtrack { stroke: var(--surface); }
+.viz-gfill { stroke: var(--success); } .viz-gfill.warn { stroke: var(--degraded); } .viz-gfill.bad { stroke: var(--failing); }
+.viz-gtext { font-family: var(--font-body); font-size: 18px; font-weight: 700; fill: var(--text); }
+
+/* ---- page cards (Insights, kwatch) ---- */
+.pgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
+.pcard { border: 1px solid var(--line); border-radius: var(--radius-card); padding: 18px 20px; min-width: 0; }
+.pcard.pwide { grid-column: 1 / -1; }
+.pcard-h { font-family: var(--font-body); font-size: 1rem; font-weight: 700; letter-spacing: 0; margin: 0 0 4px; }
+.pcard-note { font-size: 0.875rem; color: var(--text-muted); margin: 0 0 12px; }
+.pcard-more { margin-top: 12px; font-size: 0.875rem; }
+.pempty { color: var(--text-muted); margin: 4px 0 0; }
+
+/* ---- kwatch page ---- */
+.kp-facts { grid-template-columns: 8.5rem 1fr; }
+.kp-sub { font-family: var(--font-body); font-size: 0.875rem; font-weight: 600; letter-spacing: 0; color: var(--text-muted); margin: 16px 0 0; }
+.kp-gauge { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+.kp-gtext, .kp-big { font-size: 1.125rem; font-weight: 600; }
+.kp-mline { font-weight: 600; margin-bottom: 6px; }
+.kp-stats { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.kp-stats li { padding: 4px 12px; border: 1px solid var(--line); border-radius: var(--radius-pill); font-size: 0.875rem; }
+.kp-stats li.bad { border-color: var(--failing); color: var(--failing); }
+.kp-stats li.warn { border-color: var(--degraded); color: var(--degraded); }
+.kp-ns { margin-top: 10px; font-size: 0.9375rem; }
+.kp-fold { margin-top: 12px; border-top: 1px solid var(--line); border-bottom: 0; }
+.kp-chans { list-style: none; margin: 0; padding: 0; }
+.kp-ch { padding: 14px 0; border-top: 1px solid var(--line); }
+.kp-ch:first-child { border-top: 0; padding-top: 4px; }
+.kp-chtop { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-bottom: 8px; }
+.kp-counts { margin-top: 6px; font-size: 0.875rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.nav-dot { width: 8px; height: 8px; margin-left: 8px; border-radius: 50%; background: var(--degraded); box-shadow: 0 0 0 2px var(--degraded-bg); }
+
+/* ---- what kwatch watches ---- */
 .cov-lead { margin: 0 0 12px; }
 .cov-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .cov-part { min-width: 0; }
@@ -41,18 +124,31 @@
 .cov-sub { margin-top: 8px !important; font-size: 0.875rem; color: var(--text-muted); }
 .cov-gaps { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 0.9375rem; overflow-wrap: anywhere; }
 .cov-more { font-family: var(--font-body); color: var(--text-muted); }
-
-/* The top of the Overview: still starting, alert links off. */
-.ov-top { display: grid; gap: 8px; margin: 12px 0 4px; }
-
-/* The permission to add: rules to copy. */
 .cov-rbac { margin-top: 16px; }
 .cov-yaml { position: relative; margin-top: 8px; }
 .cov-yaml pre { margin: 0; padding: 10px 12px; padding-right: 5.5rem; overflow-x: auto; font-size: 0.8125rem; line-height: 1.5; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-input); }
 .cov-yaml .btn { position: absolute; top: 6px; right: 6px; }
 
-@media (max-width: 700px) {
-  .in-grid, .cov-grid { grid-template-columns: minmax(0, 1fr); }
-  .in-card { padding: 14px 16px; }
-  .ns-tiles { grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); }
+/* High contrast: marks get an outline so they stand apart from the track. */
+:root[data-contrast="more"] .viz-seg, :root[data-contrast="more"] .viz-mfill { box-shadow: inset 0 0 0 1px var(--text); }
+:root[data-contrast="more"] .viz-track, :root[data-contrast="more"] .viz-meter { box-shadow: inset 0 0 0 1px var(--control-border); }
+:root[data-contrast="more"] { --s-done: var(--control-border); }
+@media (pointer: coarse) {
+  .viz-key, .viz-name, .ov-more a, .ov-calm a, .pcard-more a { display: inline-flex; align-items: center; min-height: 44px; }
+  .viz-dot { width: 20px; height: 20px; margin-left: -10px; bottom: -11px; }
 }
+@media (max-width: 900px) {
+  .ov-row { grid-template-columns: minmax(0, 1fr) 8rem; }
+  .ov-chips { grid-column: 1 / -1; }
+}
+@media (max-width: 700px) {
+  .pgrid, .cov-grid { grid-template-columns: minmax(0, 1fr); }
+  .pcard { padding: 16px; }
+  .ov-tile { padding: 14px 16px; }
+  .ov-tile .updated { margin-left: 0; }
+  .ov-row { grid-template-columns: minmax(0, 1fr); padding: 12px 14px; }
+  .ov-dur { flex-direction: row; align-items: center; gap: 10px; }
+  .kp-facts { grid-template-columns: 7rem 1fr; }
+}
+.ov-ack { width: fit-content; }
+@media (max-width: 700px) { .viz-cols text { font-size: 14px; } }

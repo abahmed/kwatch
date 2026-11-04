@@ -1,0 +1,12 @@
+{
+  "name": "webhook-closed-on-pods-backend-gone",
+  "description": "A fail-closed webhook covering pods calls a Service that does not exist while pods exist: one notification that pod writes are rejected.",
+  "root": "validatingwebhookconfiguration//guard-pods",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "node//n1"
+  ],
+  "tail": "1h0m0s"
+}

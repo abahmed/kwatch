@@ -38,7 +38,15 @@ Ten workloads crash with the same line, `license key rejected for tenant
    first (`AttrLastMessage`). If it is empty, the crash-log round
    (`inventory/kube/crash_log_round.go`, every 30s, at most 20 reads) reads
    the previous run's log and stores the first error line that is not a stack
-   frame as `AttrLastErrorLine` (`FirstErrorLine`).
+   frame as `AttrLastErrorLine` (`FirstErrorLine`). The same round, within
+   the same 20 reads and the same backoff after a refused read, also reads
+   the current log of a running container whose newest failed probe the
+   application answered with an HTTP error status (not one that got no
+   answer, such as "connection refused": nothing listens to log why), at
+   most once every 5 minutes, and stores the last line that names a
+   failure as `AttrProbeLogLine` (`LastFailureLine`). A Pro message quotes
+   it next to the probe result ("Its readiness check answers HTTP 503
+   (from its log: ...)"); a Community message never does.
 2. `detectors/container.go` puts that text in the finding as `error`
    evidence, quoted as it is.
 3. `explain` reads only that `error` evidence (`signatureOf`). It runs

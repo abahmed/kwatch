@@ -64,10 +64,11 @@
 .itable tbody tr:focus-within td { background: var(--surface); box-shadow: inset 0 2px 0 var(--text), inset 0 -2px 0 var(--text); }
 .itable tbody tr:focus-within .it-link:focus-visible { outline: none; text-decoration: underline; }
 .itable td.c-title { display: flex; align-items: center; gap: 0; }
-.itable td.c-title .it-link { flex: 0 1 auto; min-width: 0; }
-.itable td.c-title .chip, .itable td.c-title .i-rep, .i-why { flex: none; }
-.i-stopped { flex: none; margin-left: 6px; font-size: 0.6875rem; font-weight: 600; color: var(--text-muted); border: 1px solid var(--control-border); border-radius: var(--radius-chip); padding: 0 6px; white-space: nowrap; }
-.i-why { margin-left: 6px; font-size: 0.6875rem; color: var(--text-muted); border: 1px dashed var(--line); border-radius: var(--radius-chip); padding: 0 6px; }
+.itable td.c-title .it-link { flex: 0 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.itable td.c-title { padding-top: 6px; padding-bottom: 6px; }
+.itable td.c-title .chip, .itable td.c-title .i-rep, .itable td.c-title .m-untold, .i-why { flex: none; }
+.i-stopped { flex: none; margin-left: 6px; font-size: 0.75rem; line-height: 1.4; font-weight: 600; color: var(--text-muted); border: 1px solid var(--control-border); border-radius: var(--radius-chip); padding: 0 6px; white-space: nowrap; }
+.i-why { margin-left: 6px; font-size: 0.75rem; line-height: 1.4; color: var(--text-muted); border: 1px dashed var(--line); border-radius: var(--radius-chip); padding: 0 6px; }
 @media (max-width: 1100px) and (min-width: 901px) {
   .itable .c-obj { display: none; }
   .shell { grid-template-columns: 11.5rem 1fr; }
@@ -104,11 +105,14 @@
   .itable td.c-sev { border: 0; }
   .itable td.c-title { grid-column: 1 / -1; width: auto; max-width: none; display: block; }
   .it-link { white-space: normal; display: inline; }
+  /* A long title takes two lines at most; the issue page has it all. */
+  .itable td.c-title .it-link { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   /* The whole card is the title's link, so it is one big tap target. */
   .itable tr { position: relative; }
   .it-link::after { content: ""; position: absolute; inset: 0; }
   .itable td:not(.c-sev):not(.c-title)::before { content: attr(data-label); display: block; color: var(--text-muted); font-size: 0.75rem; }
-  .itable td:empty, .itable td.none { display: none; }
+  .itable td:empty, .itable td.none, .itable td.c-obj.in-title { display: none; }
+  .itable td.c-obj .mono { overflow-wrap: break-word; word-break: normal; }
   .itable tbody tr:hover td { background: transparent; }
   .itable tbody tr:focus-within { outline: 2px solid var(--text); outline-offset: 1px; }
 }

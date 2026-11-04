@@ -1,5 +1,5 @@
 /* kwatch dashboard: the short notes of the Issues page: the line under
-   the title ("23 issues going on · 0 match"), what a refused search
+   the title ("23 issues happening now · 0 match"), what a refused search
    says (a 400 with its reason and the word it choked on) and the note
    that the rows shown are of the last list. issues.js uses them. */
 (function () {
@@ -8,18 +8,18 @@
   var LQ = function () { return KW.listQuery; };
 
   /* subtitle: how many issues there are. While filters hide some, it
-     still says how many are going on, then how many match. */
+     still says how many are happening now, then how many match. */
   function subtitle(f, data) {
     var rest = f.status === "resolved" ? " · kwatch keeps resolved issues for 7 days" : "";
     if (LQ().used(f)) {
       if (f.status === "active" && KW.activeTotal !== undefined) {
-        return KW.plural(KW.activeTotal, "issue", "issues") + " going on · " +
+        return KW.plural(KW.activeTotal, "issue", "issues") + " happening now · " +
           KW.num(data.total) + " match";
       }
       return KW.plural(data.total, "issue", "issues") + " match" + rest;
     }
     return KW.plural(data.total, "issue", "issues") +
-      (f.status === "active" ? " going on" : f.status === "resolved" ?
+      (f.status === "active" ? " happening now" : f.status === "resolved" ?
         " resolved · kwatch keeps them for 7 days" : " in the last 7 days");
   }
 
@@ -52,5 +52,5 @@
     return n;
   }
 
-  KW.issueNotes = { subtitle: subtitle, badRequest: badRequest, stale: stale };
+  KW.listNotes = { subtitle: subtitle, badRequest: badRequest, stale: stale };
 })();

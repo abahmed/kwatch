@@ -66,6 +66,17 @@
     return text;
   }
 
+  /* restarts: the count and a bar against the most restarted
+     container shown (KW.viz.meter). */
+  function restarts(n, top) {
+    var box = KW.el("span", "rs");
+    box.appendChild(KW.el("span", "rs-n", KW.num(n)));
+    if (top && KW.viz) {
+      box.appendChild(KW.viz.meter(n, top, KW.plural(n, "restart", "restarts") + " (most here: " + KW.num(top) + ")", "warn"));
+    }
+    return box;
+  }
+
   /* views: the container sets to choose from: the snapshots kwatch
      kept when it broke and got worse, then the live rows. */
   function views(inc) {
@@ -135,13 +146,14 @@
     var t = grid([["Container"], ["Ready", "Whether Kubernetes sends it traffic."],
       ["Restarts"], ["Last exit", "How its last run ended, and the exit code."],
       ["Last died"], ["Image", "The image tag it runs now."]], "kt-stack");
-    var body = KW.$("tbody", t);
+    var body = KW.$("tbody", t), top = 0;
+    pick.rows.forEach(function (c) { top = Math.max(top, c.restarts || 0); });
     pick.rows.forEach(function (c) {
       var tr = body.appendChild(KW.el("tr"));
       var name = KW.el("span", "mono", c.pod + " / " + c.container);
       cell(tr, "Container", name, "kt-name");
       cell(tr, "Ready", readyText(c), c.ready === false ? "x-bad" : "");
-      cell(tr, "Restarts", String(c.restarts || 0), c.restarts ? "x-num x-warn" : "x-num");
+      cell(tr, "Restarts", restarts(c.restarts || 0, top), c.restarts ? "x-num x-warn" : "x-num");
       cell(tr, "Last exit", lastExit(c));
       cell(tr, "Last died", KW.valid(c.lastFinished) ? KW.timeEl(c.lastFinished) : unknown());
       var img = KW.el("span", "mono", tagOf(c.image));

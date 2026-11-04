@@ -105,7 +105,8 @@ func TestIngressWithMissingClassLeavesItToIngressClassMissing(t *testing.T) {
 		kube.AttrIngressClass: inventory.Text("gone"),
 	})
 
-	got := ingressFindings(m, id, t0.Add(time.Hour))
+	got := evaluateAfterGrace(Ingress{}, m, t0.Add(time.Hour),
+		DefaultClassGrace, id, nil).Findings
 	require.Len(t, got, 1)
 	assert.Equal(t, reasons.IngressClassMissing, got[0].Reason)
 }

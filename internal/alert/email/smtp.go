@@ -14,6 +14,7 @@ import (
 	gomail "gopkg.in/mail.v2"
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/cloudmeta"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 )
 
@@ -34,6 +35,24 @@ type smtpConfig struct {
 	tlsMode  string
 	// tlsConfig is the application's TLS policy; nil means defaults.
 	tlsConfig *tls.Config
+	// dialer is the dialer to guard; nil means one with smtpTimeout.
+	dialer *net.Dialer
+}
+
+// dial connects to the SMTP server. Like the HTTP providers it never
+// reaches a cloud metadata service: a host that names one is refused
+// before any I/O, and the guarded dialer refuses a name that resolves
+// to one.
+func (c smtpConfig) dial(ctx context.Context) (net.Conn, error) {
+	if cloudmeta.Host(c.host) {
+		return nil, transport.Permanent(transport.ErrMetadataAddress)
+	}
+	base := c.dialer
+	if base == nil {
+		base = &net.Dialer{Timeout: smtpTimeout}
+	}
+	return transport.GuardDialer(base).DialContext(ctx, "tcp",
+		net.JoinHostPort(c.host, fmt.Sprint(c.port)))
 }
 
 // clientTLS returns a TLS config for host, never sharing mutable state.
@@ -59,10 +78,7 @@ func sendSMTP(
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	dialer := net.Dialer{Timeout: smtpTimeout}
-	conn, err := dialer.DialContext(
-		ctx, "tcp", net.JoinHostPort(config.host, fmt.Sprint(config.port)),
-	)
+	conn, err := config.dial(ctx)
 	if err != nil {
 		return err
 	}

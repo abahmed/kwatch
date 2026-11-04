@@ -1,0 +1,8 @@
+10:01:15 settled
+🟠 Validating webhook guard-pods (prod-eu-1) rejects creates and updates of pods right now: it fails closed and its backend Service guard-svc is gone. To see the object's state and events, run kubectl describe validatingwebhookconfiguration guard-pods
+🟠 Validating webhook guard-pods (prod-eu-1) rejects creates and updates of pods right now: it fails closed and its backend Service guard-svc is gone.
+| 🟠 Validating webhook **guard-pods** (**prod-eu-1**) rejects creates and updates of pods right now: it fails closed and its backend Service guard-svc is gone.
+| To see the object's state and events, run
+| ```
+| kubectl describe validatingwebhookconfiguration guard-pods
+| ```

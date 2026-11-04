@@ -36,6 +36,12 @@ func actionSentences(f caseFacts) []sentence {
 		return []sentence{{part: partAction,
 			text: "To " + lowerFirst(step.Text) + ", run " + step.Command}}
 	}
+	if len(steps) > 0 && steps[0].Command == "" &&
+		dependencyLogCause(f.p.Cause) {
+		// The dependency's address is in the workload's configuration,
+		// which may hold credentials: the step says where to look.
+		return []sentence{{part: partAction, text: steps[0].Text + "."}}
+	}
 	for _, step := range steps {
 		if !step.Mutating && step.Command != "" {
 			return []sentence{{part: partAction,

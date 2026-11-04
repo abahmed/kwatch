@@ -23,6 +23,11 @@ type Note struct {
 	// differs from its entity's current UID belongs to an older object
 	// that had the same name, and is not evidence about this one.
 	UID string
+	// Topic tells apart notes of one source and reason that report
+	// different things about the same object, such as its readiness
+	// and liveness probes: each topic keeps its own message and count.
+	// Empty for a reason that has one topic.
+	Topic string
 	// Origin names the report the note came from, such as the Event
 	// object. Notes of one source, reason and UID with different origins
 	// add their counts; the same origin again replaces its own count.
@@ -60,7 +65,7 @@ func (n Note) CountSince(since time.Time) int {
 const maxNoteOrigins = 32
 
 // noteKey identifies the notes that merge into one.
-type noteKey struct{ source, reason, uid string }
+type noteKey struct{ source, reason, topic, uid string }
 
 // originCount is the count one origin contributed to a note.
 type originCount struct {

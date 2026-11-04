@@ -1,301 +1,195 @@
-/* kwatch dashboard: Overview, the landing page: an incident view. At the
-   top, while kwatch is starting or its alert links are off, a notice
-   (ovcoverage.js). Then what is broken now in plain words, today in one line and the insight
-   cards (ovinsights.js: urgent issues nobody acknowledged first), the
-   namespaces with active issues, what changed recently (activity.js),
-   then "This week" folded (trends.js), then whether kwatch itself is
-   working and alerts get out, with the details of that and of what it
-   watches (ovcoverage.js) folded away. While kwatch can't be reached it
-   says so instead of "All clear". */
+/* kwatch dashboard: the Overview, the landing page. It answers "is
+   anything broken right now, and what do I look at first" and nothing
+   else: notices only when someone must act (kwatch is starting, alert
+   links are off, alerts failed to send), one status tile, the active
+   issues by alert level as one bar, and up to five issues to look at
+   first. Trends live on Insights (ovinsights.js, trends.js), kwatch's
+   own health on the kwatch page (kwatchpage.js), the change feed on
+   Activity (activity.js). Data: /api/overview and /api/status. */
 (function () {
   "use strict";
   var KW = window.KW;
-  var EVERY = 20000;
-  var DAY = 24 * 3600 * 1000;
-  var HINT = "Check the provider settings in the installer: \"Edit notification providers\".";
+  var LEVELS = [["urgent", "page", "s-page"], ["attention", "notify", "s-notify"],
+    ["low", "digest", "s-low"]];
 
-  function failingNow(c) {
-    if (!KW.valid(c.lastError)) return false;
-    return !KW.valid(c.lastSuccess) || Date.parse(c.lastError) > Date.parse(c.lastSuccess);
+  function link(href, text, cls) {
+    var a = KW.el("a", cls || "ulink", text);
+    a.href = href;
+    a.dataset.link = "";
+    return a;
   }
 
-  function stateLine(cls, icon, text) {
-    var s = KW.el("span", "ch-state " + cls);
-    s.appendChild(KW.icon(icon));
-    s.appendChild(KW.el("span", "", text));
-    return s;
+  /* notice: an actionable line at the top; more is a link. */
+  function notice(box, cls, title, text, more, role) {
+    var n = box.appendChild(KW.el("div", "notice ov-note " + cls));
+    if (role) n.setAttribute("role", role);
+    n.appendChild(KW.el("b", "", title));
+    var p = KW.el("p", "", text || "");
+    if (more) {
+      if (text) p.appendChild(document.createTextNode(" "));
+      p.appendChild(more);
+    }
+    if (text || more) n.appendChild(p);
+    return n;
   }
 
-  function channel(c) {
-    var row = KW.el("div", "ch");
-    var top = KW.el("div", "ch-top");
-    top.appendChild(KW.el("span", "ch-name", c.name || c.channel));
-    row.appendChild(top);
-    if (failingNow(c)) {
-      top.appendChild(stateLine("bad", "x", "last failed " + KW.rel(c.lastError)));
-      if (c.lastErrorMessage) {
-        var msg = KW.el("p", "ch-msg clamp", c.lastErrorMessage);
-        row.appendChild(msg);
-        if (c.lastErrorMessage.length > 160) {
-          var more = KW.el("button", "link small", "Show more");
-          more.type = "button";
-          more.addEventListener("click", function () {
-            var open = msg.classList.toggle("clamp");
-            more.textContent = open ? "Show more" : "Show less";
-          });
-          row.appendChild(more);
-        }
-      }
-      var detail = KW.valid(c.lastSuccess) ?
-        "Last delivered " + KW.rel(c.lastSuccess) + ". " : "It has not delivered yet. ";
-      row.appendChild(KW.el("p", "ch-detail", detail + HINT));
-      return row;
+  /* KW.selfNotices fills box with what about kwatch itself needs acting
+     on now; the kwatch page uses it too (onKwatch leaves out the links
+     that point at the kwatch page). */
+  KW.selfNotices = function (box, s, failed, onKwatch, readDone) {
+    box.textContent = "";
+    var self = (s && s.self) || {}, st = self.startup, links = self.dashboardLinks;
+    var here = function (text) { return onKwatch ? null : link("/kwatch", text); };
+    // readDone: the coverage says the first read of the cluster finished.
+    var started = readDone || !!(st && st.done);
+    if (st && !started) {
+      var n = notice(box, "", "kwatch is starting", "", null, "status");
+      var text = KW.num(st.synced) + " of " + KW.plural(st.kinds, "kind", "kinds") +
+        " read · " + KW.plural(st.objects, "object", "objects");
+      n.appendChild(KW.viz.meter(st.synced, st.kinds, "Kinds read: " + text));
+      n.appendChild(KW.el("p", "small", text + ". Problems show up once it has read the cluster."));
+    } else if (s && !KW.valid(s.lastScan) && !KW.down() && !started) {
+      notice(box, "", "kwatch is starting", "It hasn't finished its first check yet.", null, "status");
+    } else if (s && s.lastScanLate) {
+      notice(box, "n-degraded", "kwatch hasn't checked your cluster in a while",
+        "Last check " + KW.rel(s.lastScan) + ".", here("See kwatch status"));
     }
-    if (KW.valid(c.lastSuccess)) {
-      top.appendChild(stateLine("ok", "check", "delivering"));
-      var d = KW.el("p", "ch-detail", "Last sent " + KW.rel(c.lastSuccess));
-      if (KW.valid(c.lastError) && KW.now() - Date.parse(c.lastError) < DAY) {
-        d.appendChild(document.createTextNode(" · Failed once " + KW.rel(c.lastError)));
-      }
-      row.appendChild(d);
-      return row;
+    if (links && links.on === false) {
+      notice(box, "n-degraded", "Alert links are off",
+        links.text || "Alerts can't link to this page.", here("Details"));
     }
-    top.appendChild(stateLine("none", "dash", "nothing sent yet"));
-    return row;
+    if (failed > 0) {
+      notice(box, "n-failing", KW.plural(failed, "alert", "alerts") +
+        " failed to send in the last hour", "", here("See alert delivery"), "alert");
+    }
+    box.hidden = !box.firstChild;
+  };
+
+  function totalOf(c) { return (c.urgent || 0) + (c.attention || 0) + (c.low || 0); }
+
+  /* tile: the one sentence of the page, with the freshness line. */
+  function tile(box, c, s, updated, lastOk) {
+    box.textContent = "";
+    var total = totalOf(c), cls, text;
+    var starting = s && ((s.self && s.self.startup && !s.self.startup.done) || !KW.valid(s.lastScan));
+    if (KW.down() && lastOk) {
+      cls = "stale";
+      text = "Can't reach kwatch · last known at " + KW.hhmm(new Date(lastOk + KW.skew));
+    } else if (!total && starting) {
+      cls = "wait";
+      text = "kwatch is starting · nothing found yet";
+    } else if (!total) {
+      cls = "ok";
+      text = "All clear · nothing is failing";
+    } else {
+      cls = c.urgent ? "bad" : "warn";
+      text = KW.plural(total, "issue", "issues") + " happening now · " +
+        (c.urgent ? KW.num(c.urgent) + " urgent" : "none urgent");
+    }
+    box.className = "ov-tile " + cls;
+    var mark = box.appendChild(KW.el("span", "ov-mark"));
+    mark.setAttribute("aria-hidden", "true");
+    if (cls === "ok") mark.appendChild(KW.icon("check"));
+    var h = box.appendChild(KW.el("h2", "ov-say", text));
+    h.id = "ov-say";
+    box.appendChild(updated);
   }
 
-  /* headline: one plain sentence about the cluster. */
-  function headline(counts) {
-    var urgent = counts.page || 0;
-    var other = (counts.notify || 0) + (counts.digest || 0);
-    if (urgent) {
-      return KW.plural(urgent, "urgent problem needs", "urgent problems need") +
-        " attention";
-    }
-    if (counts.notify) {
-      return KW.plural(counts.notify, "problem needs", "problems need") +
-        " attention";
-    }
-    if (other) return "Nothing urgent. " + KW.plural(other, "low problem", "low problems") + " to look at";
-    return "All clear. Nothing is failing";
-  }
-
-  /* overview draws the headline and the counts. While kwatch can't be
-     reached the headline says so, with the time of the last answer:
-     the counts below are from then. */
-  function overview(root, counts) {
-    var box = KW.$("[data-overview]", root);
-    box.hidden = !counts;
-    if (!counts) return;
-    var h = KW.$("[data-headline]", root);
-    h.textContent = headline(counts) + ".";
-    h.className = "ov-h" + (counts.page ? " urgent" : "");
-    if (KW.down() && KW.lastOk()) {
-      h.textContent = "Can't reach kwatch — last known at " +
-        KW.hhmm(new Date(KW.lastOk() + KW.skew));
-      h.className = "ov-h stale";
-    }
-    var row = KW.$("[data-counts]", root);
-    row.textContent = "";
-    ["page", "notify", "digest"].forEach(function (sev) {
-      var a = KW.el("a", "ov-n");
-      a.href = "/issues?status=active&severity=" + sev;
-      a.dataset.link = "";
-      a.title = KW.SEVERITY[sev].title;
-      a.appendChild(KW.el("span", "dot " + (sev === "digest" ? "low" : sev)));
-      a.appendChild(KW.el("b", "", KW.num(counts[sev])));
-      a.appendChild(KW.el("span", "", KW.SEVERITY[sev].label));
-      row.appendChild(a);
+  /* bar: the active issues by alert level; segments and keys link to
+     the Issues table with that level. Quiet issues are a small count. */
+  function bar(box, c) {
+    box.textContent = "";
+    var parts = LEVELS.map(function (l) {
+      var sev = KW.SEVERITY[l[1]];
+      return { n: c[l[0]] || 0, cls: l[2], label: sev.label, title: sev.title,
+        href: "/issues?status=active&severity=" + l[1] };
     });
+    var total = totalOf(c);
+    box.appendChild(KW.el("h2", "sr-only", "Active issues by alert level"));
+    box.appendChild(KW.viz.stack(parts, "Active issues by alert level", total || 1));
+    var keys = parts.map(function (p) {
+      return { cls: p.cls, label: p.label, n: p.n, href: p.href, title: p.title };
+    });
+    if (c.quiet) {
+      keys.push({ cls: "s-quiet", label: "Quiet", n: c.quiet, title: KW.SEVERITY.silent.title,
+        href: "/issues?status=active&severity=silent" });
+    }
+    box.appendChild(KW.viz.legend(keys));
   }
 
-  /* gapLine: the kinds kwatch isn't allowed to read (its role lacks
-     permission), from /api/coverage, or "". */
-  function gapLine(cov) {
-    var kinds = ((cov && cov.kinds && cov.kinds.unreadable) || [])
-      .filter(function (g) { return g.reason === "permission_denied"; })
-      .map(function (g) { return g.kind; });
-    if (!kinds.length) return "";
-    var list = kinds.length <= 3 ? kinds.slice(0, -1).join(", ") +
-      (kinds.length > 1 ? " and " : "") + kinds[kinds.length - 1] :
-      kinds.slice(0, 3).join(", ") + " and " + KW.num(kinds.length - 3) + " more kinds";
-    return "kwatch isn't allowed to read " + list +
-      ", so it can't see problems there. Its role needs permission.";
+  /* row: one issue to look at first. */
+  function row(i) {
+    var li = KW.el("li");
+    var a = li.appendChild(link("/issues/" + encodeURIComponent(i.id), "", "ov-row"));
+    a.dataset.rowlink = "";
+    var chips = a.appendChild(KW.el("span", "ov-chips"));
+    chips.appendChild(KW.severityChip(i.severity));
+    chips.appendChild(KW.stateChip(i.state));
+    var mid = a.appendChild(KW.el("span", "ov-what"));
+    KW.clampTitle(mid.appendChild(KW.el("span", "ov-title", i.title || i.id)));
+    mid.appendChild(KW.el("span", "ov-where mono", KW.whereText({ namespace: i.namespace,
+      kind: i.kind, workload: i.name })));
+    var dur = a.appendChild(KW.el("span", "ov-dur"));
+    var t = dur.appendChild(KW.el("span", "ov-dtext", KW.forLong(i.since)));
+    if (KW.valid(i.since)) t.title = "Started " + KW.full(i.since);
+    if (i.acked) dur.appendChild(KW.chip("c-acked ov-ack", "Acknowledged", "Someone acknowledged it."));
+    return li;
   }
 
-  /* summary: is kwatch itself working and are alerts getting out, in
-     one line (and a second for what it can't read). Details open by
-     themselves when something is wrong. */
-  function summary(node, s, cov) {
-    var chans = s.perChannelHealth || [];
-    var row, gap = gapLine(cov);
-    if (KW.down()) {
-      row = ["n-degraded", "Can't reach kwatch, so this page can't say whether alerts are getting out."];
-    } else if (chans.some(failingNow)) {
-      row = ["n-degraded", "kwatch is running, but some alerts aren't getting out."];
-    } else if (!KW.valid(s.lastScan)) {
-      // The notice at the top of the page says it (KW.selfTop).
-      node.hidden = true;
-      return false;
-    } else if (s.lastScanLate) {
-      row = ["n-degraded", "kwatch hasn't checked your cluster in a while."];
-    } else {
-      row = ["n-success", "kwatch is working and your alerts are getting out."];
-    }
-    var bad = row[0] === "n-degraded" && !KW.down();
-    if (gap && row[0] === "n-success") row = ["n-degraded", "kwatch is working and your alerts are getting out, but it can't see everything."];
-    node.hidden = false;
-    node.className = "notice sum " + row[0];
-    node.textContent = "";
-    node.appendChild(KW.el("b", "", row[1]));
-    if (gap && !KW.down()) node.appendChild(KW.el("p", "", gap));
-    return bad;
-  }
-
-  /* selfCard: the "kwatch itself" card, the third in the health
-     details (made once). */
-  function selfCard(root, s) {
-    var card = KW.$("[data-self]", root);
-    if (!card) {
-      card = KW.el("div", "card");
-      card.dataset.self = "";
-      card.appendChild(KW.el("h2", "", "kwatch itself"));
-      card.appendChild(KW.el("dl", "facts"));
-      KW.$(".cards", root).appendChild(card);
-    }
-    KW.selfCard(card, s);
-  }
-
-  function fill(root, s, first, cov) {
-    var top = KW.$("[data-self-top]", root);
-    KW.selfTop(top, s, !KW.valid(s.lastScan) && !KW.down());
-    var bad = summary(KW.$("[data-summary]", root), s, cov);
-    if ((bad || s.failedLastHour > 0) && first) KW.$("[data-body]", root).open = true;
-    selfCard(root, s);
-    var about = KW.$("[data-about]", root);
-    about.textContent = "";
-    function add(label, value, cls) {
-      about.appendChild(KW.el("dt", "", label));
-      var dd = KW.el("dd", cls || "");
-      if (typeof value === "string") dd.textContent = value;
-      else dd.appendChild(value);
-      about.appendChild(dd);
-    }
-    add("Version", s.version || "unknown", "mono");
-    var ed = (s.edition || "").toLowerCase();
-    add("Plan", ed === "pro" ? "Pro" : ed === "community" ? "Community" : s.edition || "unknown");
-    if (KW.valid(s.lastScan)) {
-      var last = KW.el("span");
-      last.appendChild(KW.timeEl(s.lastScan, "", true));
-      last.appendChild(KW.el("br"));
-      last.appendChild(KW.el("span", "muted small", KW.full(s.lastScan)));
-      add("Last check", last);
-    } else {
-      add("Last check", "Not yet");
-    }
-    var ch = KW.$("[data-channels]", root);
-    ch.textContent = "";
-    var list = s.perChannelHealth || [];
-    if (!list.length) {
-      ch.appendChild(KW.el("p", "nochan", "No alert channels are set up yet."));
-      ch.appendChild(KW.el("p", "muted small",
-        "Add one in the installer: choose \"Edit notification providers\"."));
-    }
-    var wrap = KW.el("div");
-    list.forEach(function (c) { wrap.appendChild(channel(c)); });
-    ch.appendChild(wrap);
+  function look(box, d) {
+    box.textContent = "";
+    var list = d.lookFirst || [], total = totalOf(d.counts || {});
+    box.hidden = !list.length;
+    if (!list.length) return;
+    box.appendChild(KW.el("h2", "ov-h2", "Look at these first"));
+    var ul = box.appendChild(KW.el("ul", "ov-look"));
+    list.forEach(function (i) { ul.appendChild(row(i)); });
+    var more = box.appendChild(KW.el("p", "ov-more"));
+    more.appendChild(link("/issues?status=active", "See all " + KW.plural(total, "issue", "issues") + " →"));
   }
 
   KW.statusView = function (main) {
-    KW.title("Overview");
-    main.appendChild(KW.clone("tpl-status"));
-    // The top of the page: kwatch is starting, alert links are off.
-    var top = KW.el("div", "ov-top");
-    top.dataset.selfTop = "";
-    top.hidden = true;
-    main.insertBefore(top, KW.$("[data-alert]", main));
-    var body = KW.$("[data-body]", main);
-    var alertBox = KW.$("[data-alert]", main);
-    var footer = KW.$("[data-updated]", main);
-    var lastOk = 0, failing = false, attempt = 0, stopped = false;
-    var counts = null, countsTag = "", last = null;
-    var scrollBack = KW.takeScroll();
-    var trends = KW.trendsView(main);
-    var activity = KW.activityFeed(main);
-    var insights = KW.insightsView(main);
-    var coverage = KW.coverageView(main);
+    var etag = "", data = null, status = null, kw = null;
+    var pg = KW.pageView(main, { title: "Overview", read: read, conn: draw });
+    var notes = pg.body.appendChild(KW.el("div", "ov-notes"));
+    var tileBox = pg.body.appendChild(KW.el("section"));
+    tileBox.setAttribute("aria-labelledby", "ov-say");
+    var barBox = pg.body.appendChild(KW.el("section", "ov-sev"));
+    var lookBox = pg.body.appendChild(KW.el("section", "ov-first"));
+    var calm = pg.body.appendChild(KW.el("p", "ov-calm"));
+    calm.appendChild(link("/activity", "What changed recently"));
+    pg.body.hidden = true;
 
-    /* paint draws what depends on whether kwatch can be reached. */
-    function paint() {
-      overview(main, counts);
-      if (last) fill(main, last, false, coverage.data());
-      KW.footer(footer, lastOk, failing);
+    function draw() {
+      if (!data) return;
+      var c = data.counts || {};
+      var failed = typeof data.failedSendsLastHour === "number" ? data.failedSendsLastHour :
+        (status && status.failedLastHour) || 0;
+      KW.selfNotices(notes, status, failed);
+      tile(tileBox, c, status, pg.updated, pg.lastOk());
+      bar(barBox, c);
+      look(lookBox, data);
+      calm.hidden = totalOf(c) > 0;
     }
 
-    function readCounts() {
-      return KW.api("/api/incidents?status=active&pageSize=25", { etag: countsTag })
-        .then(function (res) {
-          if (res.status !== 200 || !res.data || !res.data.facets) return;
-          countsTag = res.etag;
-          counts = res.data.facets.severity || {};
-          KW.updateBadge(counts);
-        });
-    }
-
-    function load() {
-      insights.load();
-      trends.load();
-      activity.load();
-      return Promise.all([KW.api("/api/status"), readCounts(),
-        coverage.load()]).then(function (out) {
-        var res = out[0];
-        if (stopped) return 0;
-        // Without an answer the last counts stay (refresh.js says so).
-        if (counts || !lastOk) overview(main, counts);
-        if (KW.authFailed(res)) return 0;
-        alertBox.textContent = "";
-        if (res.status !== 200 || !res.data) {
-          failing = true;
-          var k = KW.kindOf(res.status);
-          // What was shown stays; the banner (refresh.js) says it is old.
-          if (!lastOk) {
-            body.hidden = true;
-            alertBox.appendChild(KW.panel(k, res.status, function () { poll.now(); }));
-          }
-          paint();
-          attempt += 1;
-          return KW.retryDelay(k, attempt);
+    function read() {
+      return Promise.all([KW.api("/api/overview", { etag: etag }), KW.api("/api/status"),
+        kw ? null : KW.api("/api/kwatch")]).then(function (out) {
+        var r = out[0];
+        if (out[1].status === 200 && out[1].data) status = out[1].data;
+        if (out[2] && out[2].status === 200) kw = out[2].data;
+        KW.selfDot(status, kw);
+        if (r.status === 200 && r.data) {
+          etag = r.etag;
+          data = r.data;
+          var c = data.counts || {};
+          KW.updateBadge({ page: c.urgent || 0, notify: c.attention || 0,
+            digest: c.low || 0, silent: c.quiet || 0 });
         }
-        failing = false;
-        attempt = 0;
-        var first = !lastOk;
-        lastOk = Date.now();
-        last = res.data;
-        KW.self = { namespace: res.data.kwatchNamespace || "kwatch",
-          deployment: res.data.kwatchDeployment || "kwatch" };
-        body.hidden = false;
-        fill(main, res.data, first, coverage.data());
-        insights.scope(res.data);
-        KW.footer(footer, lastOk, false);
-        if (scrollBack) {
-          window.scrollTo(0, scrollBack);
-          scrollBack = 0;
-        }
-        return 0;
+        draw();
+        return r;
       });
     }
-    var poll = KW.poller(load, EVERY);
-    var tick = window.setInterval(function () { KW.footer(footer, lastOk, failing); }, 5000);
-    document.addEventListener("kw:conn", paint);
-    return { stop: function () {
-      stopped = true;
-      insights.stop();
-      coverage.stop();
-      trends.stop();
-      activity.stop();
-      poll.stop();
-      window.clearInterval(tick);
-      document.removeEventListener("kw:conn", paint);
-    } };
+    return { stop: pg.stop };
   };
 })();

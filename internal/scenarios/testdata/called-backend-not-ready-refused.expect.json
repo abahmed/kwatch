@@ -1,0 +1,11 @@
+{
+  "name": "called-backend-not-ready-refused",
+  "description": "A Service's backends run but are not ready and its callers crash with an error naming it.",
+  "root": "deployment/shop/ledger",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "node//n1"
+  ]
+}

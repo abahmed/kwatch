@@ -28,5 +28,5 @@ func (m *Manager) leaveHistory(now time.Time, s detection.Finding) {
 	if id, ok := m.byMember[s.Key()]; ok {
 		m.changed[id] = true
 	}
-	m.detach(now, s)
+	m.detach(now, s, false)
 }

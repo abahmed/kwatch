@@ -25,6 +25,10 @@ type IncidentListItem struct {
 	// StoppedTracking marks a resolved incident kwatch stopped tracking
 	// at its still-broken cap rather than one that recovered.
 	StoppedTracking bool `json:"stoppedTracking,omitempty"`
+	// Untold marks an incident no message reached: it settled,
+	// recovered or moved before alerting. A page shows it as "Settled
+	// before alerting"; counts of pages and notifications leave it out.
+	Untold bool `json:"untold,omitempty"`
 	// RootCause is the one-line cause, so a list row can say why
 	// without opening the issue. Empty while kwatch has none.
 	RootCause string `json:"rootCause"`
@@ -40,10 +44,13 @@ type IncidentListItem struct {
 // FixSteps are the last message's steps with their exact commands.
 type IncidentDetail struct {
 	IncidentListItem
-	FixSteps         []FixStep `json:"fixSteps"`
-	Timeline         []Event   `json:"timeline"`
-	CapturedLogLines []string  `json:"capturedLogLines"`
-	DocsLink         string    `json:"docsLink,omitempty"`
+	// Summary is the page's five-line top (summary.go); absent only
+	// when the size limit left it out.
+	Summary          *IncidentSummary `json:"summary,omitempty"`
+	FixSteps         []FixStep        `json:"fixSteps"`
+	Timeline         []Event          `json:"timeline"`
+	CapturedLogLines []string         `json:"capturedLogLines"`
+	DocsLink         string           `json:"docsLink,omitempty"`
 	// Evidence is one section per check the last investigation ran (Pro
 	// only; absent otherwise), and Correlation what kwatch concluded
 	// across them.
@@ -146,6 +153,11 @@ type DetailTruncation struct {
 	Sent                  int `json:"sent,omitempty"`
 	MovedFrom             int `json:"movedFrom,omitempty"`
 	ChangedBeforeRecovery int `json:"changedBeforeRecovery,omitempty"`
+	// SummaryProof and SummaryTold count the summary's proof items and
+	// channels left out; SummaryNext is 1 when its step was.
+	SummaryProof int `json:"summaryProof,omitempty"`
+	SummaryTold  int `json:"summaryTold,omitempty"`
+	SummaryNext  int `json:"summaryNext,omitempty"`
 }
 
 // EvidenceSection is what one check read. Status is ok, denied,

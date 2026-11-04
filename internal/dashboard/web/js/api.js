@@ -42,6 +42,7 @@
         var data = null;
         try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
         settle();
+        if (data && typeof data === "object") fixTitles(data, 0);
         // The page that shows kwatch's own error panels needs its name.
         if (res.status === 200 && data && data.kwatchNamespace &&
             /^\/api\/status(\?|$)/.test(path)) {
@@ -56,6 +57,20 @@
       return { status: 0, data: null, retryAfter: 0, etag: "" };
     });
   };
+
+  /* fixTitles puts every title of an answer through KW.problemTitle,
+     a few levels deep (lists of issues and their links). */
+  function fixTitles(o, depth) {
+    if (depth > 4 || !o || typeof o !== "object") return;
+    if (Array.isArray(o)) {
+      o.forEach(function (x) { fixTitles(x, depth + 1); });
+      return;
+    }
+    if (typeof o.title === "string") o.title = KW.problemTitle(o.title, o);
+    Object.keys(o).forEach(function (k) {
+      if (o[k] && typeof o[k] === "object") fixTitles(o[k], depth + 1);
+    });
+  }
 
   /* ---- copy ---- */
   KW.copy = function (button, text, label) {

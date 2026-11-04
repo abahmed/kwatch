@@ -149,4 +149,20 @@
   });
 
   KW.incNav = { remember: remember, recall: recall };
+
+  /* KW.issueNotFound: the issue page of an issue the API no longer
+     has, with links back to the lists. */
+  KW.issueNotFound = function (main) {
+    KW.title("Issue not found");
+    main.textContent = "";
+    main.appendChild(KW.el("h1", "", "We can't find that issue"));
+    main.appendChild(KW.el("p", "lead-404", "It may have been resolved more than 7 days ago, or the link is wrong."));
+    var links = main.appendChild(KW.el("p", "links-404"));
+    [["/issues", "Active issues"], ["/issues?status=resolved", "Resolved"]].forEach(function (l, i) {
+      if (i) links.appendChild(document.createTextNode(" · "));
+      var a = links.appendChild(KW.el("a", "ulink", l[1]));
+      a.href = l[0];
+      a.dataset.link = "";
+    });
+  };
 })();

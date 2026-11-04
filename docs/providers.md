@@ -85,21 +85,40 @@ in `…`. The cut is deterministic, so a retried delivery sends the same bytes.
 ### Link to the dashboard
 
 When the Pro dashboard is on (`dashboard.enabled`) and something exposes it,
-every message about one incident ends with a plain line
-`Open in dashboard: https://<host><path>/issues/<incident id>`, and a message
-that lists several (digest, roll-up, startup and restart summaries, namespace
-outage) ends with `Open dashboard: https://<host><path>/issues`. Chat
+every message about one incident ends with an `Open in dashboard` link to
+`https://<host><path>/issues/<incident id>`, and a message that lists
+several (digest, roll-up, startup and restart summaries, namespace outage)
+ends with an `Open dashboard` link to `https://<host><path>/issues`. Chat
 messages, mail, paging details and issue bodies carry it; SMS and push
 texts (the Short) and the `Note` field of the structured providers do
 not. Without
 the dashboard, or with no address found, messages are unchanged.
 
 On Pro, an announcement or a `failing again` update can carry two more
-link lines before that one. `Cause in dashboard: …/issues/<id>` links the
-incident named by its `Caused by: …` line (below), and `Earlier times:
-…/issues?status=all&like=<incident id>` lists the earlier incidents with
+links before that one. `Cause in dashboard` links `…/issues/<id>`, the
+incident named by its `Caused by: …` line (below), and `Earlier times`
+links `…/issues?status=all&like=<incident id>`, the earlier incidents with
 the same error when the root failed for the fourth time or more this
 week.
+
+Each link is on its own line, and the label is the link where the
+provider has link markup:
+
+| Providers | Link |
+|:--|:--|
+| Slack, Google Chat | `<address\|label>` |
+| Discord, Microsoft Teams, Teams Workflow, Mattermost, Rocket.Chat, Webex, Zulip, Feishu, DingTalk, WeCom, GitHub, GitLab, Gitea, ClickUp, the `markdown` field of the structured providers | `[label](address)` |
+| Telegram, Matrix (`formatted_body`) | `<a href="address">label</a>` |
+| Jira | `[label\|address]` |
+| Every other provider (mail, paging, SMS-style text, Matrix `body`) | `label: address` |
+
+The label is escaped like any other text of that provider. Only an
+`http` or `https` address becomes a link; in the address, spaces, quotes,
+parentheses, brackets, angle brackets, `|`, `\` and non-ASCII bytes are
+percent-encoded, so it cannot end the markup around it. Any other
+address is written as the plain `label: address` text. A message cut to
+fit its provider's size limit drops a link line whole, never part of its
+markup; after a pinned fix the links are kept with the fix.
 
 ### Lines that tie an alert to what you already know
 

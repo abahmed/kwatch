@@ -119,6 +119,8 @@ func (m *Manager) settle(p *Incident, now time.Time) (Decision, bool) {
 		if p.Delivery.OpenAtPagers() {
 			return m.closeUnheardPage(p, now), true
 		}
+		m.keepLevel(p)
+		m.closeUntold(p, now)
 		return Decision{}, false
 	}
 	if now.Before(p.Opened.Add(m.settleFor(p))) {
@@ -278,6 +280,7 @@ func (m *Manager) resolve(p *Incident, now time.Time, why Reason) Decision {
 		m.noteRemoved(p)
 	}
 	p.note(now, "resolved: "+string(why))
+	m.keepLevel(p)
 	logResolved(p, now, why, false)
 	d := m.decide(p, Resolve, why)
 	m.reform(p, now)
@@ -294,6 +297,7 @@ func (m *Manager) resolveQuietly(p *Incident, now time.Time) {
 	m.quietIDs = append(m.quietIDs, p.ID)
 	p.Fix = fixOf(m.model, p, now)
 	p.note(now, "resolved: "+string(ReasonSuperseded))
+	m.keepLevel(p)
 	logResolved(p, now, ReasonSuperseded, true)
 }
 

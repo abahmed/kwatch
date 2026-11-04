@@ -127,6 +127,14 @@ own message under "Deleted at the same moment" (`compose.Deleted`), routed
 and recorded like the recoveries: the object the message speaks of (the
 listed subject when a listing named it, else the root) must be the one
 deleted, and a node, which "is gone" rather than deleted, is never one.
+A restored incident whose root failed by itself (it has root reasons, so
+it existed) and that a fully listed model no longer holds was deleted
+while kwatch was down: its resolve says it was removed even when no
+deletion dated after its opening was seen (`goneUnseen` in `ended.go`).
+A root without a reason of its own, which may never have existed (a
+Service an Ingress routes to), is not claimed removed. A resolved
+incident keeps the code of why it was at its level (`keepLevel`), so the
+dashboard still explains it.
 A resolve at the `StillBrokenMax` cap, and one where only something else
 was deleted (a member, say), fits neither heading and stays on its own.
 

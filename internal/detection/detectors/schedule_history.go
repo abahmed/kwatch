@@ -115,11 +115,18 @@ func repeatedFailure(
 		}
 		streak++
 	}
+	// The failure began with the streak's first failed run.
+	began := streakStart(jobs[streak-1])
 	// Slots counted across a suspension never became Jobs, so after a
 	// resume only the Jobs that ran since count.
 	runs, ok := scheduledSinceSuccess(ctx, e)
 	if ok && resume.IsZero() && int(runs) > streak {
 		streak = int(runs)
+		// The Jobs of the first failures are gone: the streak began
+		// after the last success, when that is known.
+		if success := timestamp(e, kube.AttrLastSuccess); !success.IsZero() {
+			began = success
+		}
 	}
 	if streak < DefaultRepeatedFailures {
 		return detection.Finding{}, false
@@ -127,7 +134,7 @@ func repeatedFailure(
 	return detection.Finding{
 		Reason:   reasons.CronJobRepeatedFailure,
 		Severity: detection.Warning, Health: detection.Failing,
-		Since: jobs[0].since,
+		Since: began,
 		Summary: "The last " + countText(float64(streak)) +
 			" scheduled runs failed",
 		Evidence: []detection.Evidence{
@@ -135,6 +142,15 @@ func repeatedFailure(
 			{Label: "failed in a row", Value: countText(float64(streak))},
 		},
 	}, true
+}
+
+// streakStart is when a failed run of a streak began: when its Job
+// started, else when it failed.
+func streakStart(job finishedJob) time.Time {
+	if !job.started.IsZero() {
+		return job.started
+	}
+	return job.since
 }
 
 // resumedAfterSuccess is when kwatch saw the CronJob resume from a

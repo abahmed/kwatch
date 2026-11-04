@@ -54,6 +54,8 @@ type ActivityEvent struct {
 	State     string    `json:"state"`
 	Namespace string    `json:"namespace"`
 	Workload  string    `json:"workload"`
+	// WorkloadKind is the root object's kind, as the list shows it.
+	WorkloadKind string `json:"workloadKind,omitempty"`
 	// root and own find the copies of one event: a recurrence carries
 	// the opens and resolves of the incident it repeats. own marks the
 	// copy of the incident the event happened to.
@@ -129,7 +131,8 @@ func appendActivity(events []ActivityEvent, p incident.Incident,
 		events = append(events, ActivityEvent{At: at, Kind: kind,
 			ID: item.ID, Title: item.Title, Severity: item.Severity,
 			State: item.State, Namespace: item.Namespace,
-			Workload: item.Workload, root: p.Root.String(), own: own})
+			Workload: item.Workload, WorkloadKind: item.WorkloadKind,
+			root: p.Root.String(), own: own})
 	}
 	for i, at := range openings(p) {
 		add(at, openingKind(p, i, at), !at.Before(p.Opened))

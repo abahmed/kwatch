@@ -27,7 +27,9 @@ func nodeCheck() check {
 		budget: modelReadBudget,
 		applies: func(p incident.Incident, _ inventory.Reader) bool {
 			return isNodeRoot(p) || killingNode(p) != ""
-		}, leads: isNodeRoot, summary: readNode}
+		}, leads: func(p incident.Incident, _ inventory.Reader) bool {
+			return isNodeRoot(p)
+		}, summary: readNode}
 }
 
 // killingNode is the node a member's memory kill names, if any.

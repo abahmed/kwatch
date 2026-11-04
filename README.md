@@ -86,19 +86,16 @@ Next    Roll back checkout-config
 
 When it is fixed, you hear about it once, and then it stays quiet.
 
-Messages look like this in your channel. This one is real kwatch output:
+Messages look like this in your channel. This one is real kwatch output
+(from the release-regression scenario, as a chat shows it):
 
 ```text
-🔴 api is down in shop (prod-eu-1)
-after the 14:02 release of api:2.3. alice
-released it; the previous image was
-api:2.2. Only pods of the new
-revision fail. Service api and
-ingress storefront can't serve traffic.
-checkout is affected as well. Rolling
-back fixes it (changes the cluster):
-kubectl rollout undo deployment/api
--n shop --to-revision=13
+🟠 **checkout** in **shop** (**prod-eu-1**): rollout 14 restarted 4 times in its first 2 minutes; rollout 13 did not restart.
+Only change in revision 14: image registry.example.com/checkout:5.1 → registry.example.com/checkout:5.2; pods restarting more than before since.
+Its dependents failed soon after it changed.
+Fix in: deployment/checkout → container app → image (registry.example.com/checkout:5.2).
+Rolling back to revision 13, the one before this release, undoes it (changes the cluster):
+    kubectl rollout undo deployment/checkout -n shop --to-revision=13
 ```
 
 ## 🧭 New to Kubernetes?
@@ -143,10 +140,10 @@ More in the [glossary](https://docs.kwatch.dev/glossary) and the
   storms. kwatch waits for failures to settle, merges what belongs together
   and speaks when there is news. Successful rollouts, scaling and node
   drains never wake anyone.
-- 🕵️ **What changed.** Rollouts, config edits and image updates sit on a
+- 🕵️ **What changed (Pro).** Rollouts, config edits and image updates sit on a
   timeline with the tool or GitOps app that made them, so a message can say
   "after the 14:02 release by argocd-controller".
-- 👉 **The next step.** A message ends with the command to run: read the crash
+- 👉 **The next step (Pro).** A message ends with the command to run: read the crash
   log, describe the node, or roll back.
 - 📣 **50+ channels.** Slack, Microsoft Teams, Discord, PagerDuty, Opsgenie,
   email, Jira, webhooks and more. Paging tools get a stable key, so the same
@@ -155,6 +152,8 @@ More in the [glossary](https://docs.kwatch.dev/glossary) and the
 
 <details>
 <summary><b>📨 More example messages</b></summary>
+
+Samples show Pro.
 
 One node runs low on memory and starts evicting pods. Instead of one alert
 per pod, you get one message with the cause, then one when it is over.
@@ -192,23 +191,20 @@ happening, not what could happen: advice such as a single replica or a missing
 probe is never listed:
 
 ```text
-🟡 **kwatch digest** · staging — 2 problems · 5 resolved
+🟡 **kwatch digest** · prod-eu-1 — 1 problem
 
 **Problems**
-• Node **ip-10-0-67-211** — failing again
-• Service **ingress-nginx** (**kube-addons**) — Kubernetes reported FailedDeployModel 3 times in the last quarter hour
-
-✅ 5 resolved since last digest: accounts, assets, comms +2
+- Service **web** (**shop**) — failed to deploy its load balancer: FailedDeployModel ×5 in 15 min
 ```
 
 ```text
-🟠 **kwatch** · prod-eu-1 — 2 new problems at the same time
+🔴 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
 
 **Problems**
-• **ledger** in **billing** keeps crashing
-• **checkout** in **orders** keeps crashing
+- **api** in **billing** keeps crashing
+- **api** in **shop** keeps crashing
 
-_Each gets its own message when it changes or resolves._
+*Each gets its own message when it changes or resolves.*
 ```
 
 One message per problem, with its cause and the command to fix or check it.

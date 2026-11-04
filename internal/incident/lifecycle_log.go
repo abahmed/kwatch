@@ -27,3 +27,32 @@ func logResolved(p *Incident, now time.Time, why Reason, quiet bool) {
 		"reason", string(why), "quiet", quiet,
 		"lasted", now.Sub(p.Opened).Round(time.Second).String())
 }
+
+// reasonUntold is the logged reason of an incident that ended before
+// anyone was told about it.
+const reasonUntold = "settled before alerting"
+
+// reasonMovedUntold is the logged reason of one whose failures all
+// moved to another incident before anyone was told: it was the same
+// failure seen through an object whose owner was not listed yet, or
+// blamed on another cause a moment later.
+const reasonMovedUntold = "moved before alerting"
+
+// closeUntold ends a settling incident that lost its failures. One
+// whose failures all went to other incidents was a duplicate nobody
+// heard of: it is dropped, so it never shows as a problem of its own.
+// One with a failure that recovered while a member settled before
+// alerting, even when its other failures moved: it is kept as that.
+// Either way the close is logged, like every resolve.
+func (m *Manager) closeUntold(p *Incident, now time.Time) {
+	moved := len(p.movedTo) > 0 && !p.recoveredHere &&
+		p.SupersededBy == "" && len(p.History) == 0
+	why := reasonUntold
+	if moved {
+		why = reasonMovedUntold
+	}
+	logResolved(p, now, Reason(why), true)
+	if moved {
+		m.forget(p)
+	}
+}

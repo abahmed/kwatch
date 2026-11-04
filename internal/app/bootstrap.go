@@ -20,6 +20,7 @@ import (
 	inventorykube "github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/kubeclient"
 	"github.com/abahmed/kwatch/internal/rbac"
+	"github.com/abahmed/kwatch/internal/storage"
 )
 
 // bootstrap is the infrastructure every replica builds before the Lease is
@@ -250,6 +251,8 @@ func newDashboardServer(
 			Namespace:  envOrKwatch("POD_NAMESPACE"),
 			Deployment: envOrKwatch(dashboardDeploymentEnv),
 		},
+		// The active session compacts with the default policy.
+		StateCapBytes: storage.DefaultPolicy().SizeCap,
 	}, now)
 }
 

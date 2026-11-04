@@ -1,9 +1,9 @@
-/* kwatch dashboard: "Alert status", under the
-   summary card. Why it is still open (with a bar that fills each second
-   while kwatch waits for it to stay healthy), why it alerted at its
-   level, how fast kwatch saw and told, and the acknowledgement, or the
-   command that sets it, and the pager's side: the dashboard itself only
-   reads. */
+/* kwatch dashboard: "Alert status" in the Alerts tab, and the notes
+   at the top of the summary card. Why it is still open (shown in the
+   summary, with a bar that fills each second while kwatch waits for it
+   to stay healthy), why it alerted at its level, how fast kwatch saw
+   and told, the acknowledgement or the command that sets it, and the
+   pager's side: the dashboard itself only reads. */
 (function () {
   "use strict";
   var KW = window.KW;
@@ -159,8 +159,8 @@
     p.hidden = !p.firstChild;
   }
 
-  /* extra: lines the template has no place for, in the alert box: that
-     kwatch can't see the object, and the pager. Rebuilt on every draw. */
+  /* extra: the pager lines the template has no place for, in the
+     alert box. Rebuilt on every draw. */
   var PAGER = {
     open: ["still open on the pager", ""], closed: ["closed", "closedAt"],
     pending: ["page pending", ""], failed: ["page failed", ""]
@@ -182,7 +182,7 @@
     return p;
   }
 
-  function extra(root, inc, why) {
+  function extra(root, inc) {
     var box = KW.$("[data-extra]", root);
     if (!box) {
       box = KW.el("div", "al-extra");
@@ -190,10 +190,6 @@
       KW.$("[data-alert-box]", root).appendChild(box);
     }
     box.textContent = "";
-    if (why.cannotSee && inc.state !== "resolved") {
-      box.appendChild(KW.el("p", "al-line muted",
-        "kwatch can't see this right now, so it stays open until it can check again."));
-    }
     (inc.pager || []).forEach(function (g) { box.appendChild(pagerLine(g)); });
     var cut = KW.cutCount(inc, "pager");
     if (cut) box.appendChild(KW.el("p", "ev-cap", KW.plural(cut, "more page", "more pages") + " not shown."));
@@ -261,8 +257,71 @@
     level(root, inc, why);
     timing(root, inc);
     ack(root, inc);
-    extra(root, inc, why);
-    KW.$("[data-alert-box]", root).hidden = ["[data-why-open]", "[data-why-level]", "[data-timing]",
+    extra(root, inc);
+    KW.$("[data-alert-box]", root).hidden = ["[data-why-level]", "[data-timing]",
       "[data-ack]", "[data-extra]"].every(function (s) { return KW.$(s, root).hidden; });
+  };
+
+  /* Notes icons: small line drawings, one per kind of note. */
+  var NOTE_ICON = { warn: "M8 2l7 12H1zM8 6v4M8 11.5v.5", ok: "M3 8.5l3 3 7-7",
+    lock: "M4 7h8v7H4zM6 7V5a2 2 0 0 1 4 0v2", caused: "M3 2v7h9M9 6l3 3-3 3",
+    moved: "M2 5h10M9 2l3 3-3 3M14 11H4M7 8l-3 3 3 3", short: "M2 8h12M5 5l-3 3 3 3M11 5l3 3-3 3",
+    looked: "M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5zM8 6.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3" };
+  function noteIcon(kind) {
+    var s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    s.setAttribute("class", "ds-note-ico");
+    s.setAttribute("viewBox", "0 0 16 16");
+    s.setAttribute("aria-hidden", "true");
+    var p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", NOTE_ICON[kind]);
+    s.appendChild(p);
+    return s;
+  }
+
+  /* KW.summaryNotes: the one muted line of notes under the stepper,
+     each at most one line with its full text in its tooltip: kwatch
+     can't see it, who acknowledged it, that secrets are hidden. */
+  KW.summaryNotes = function (root, inc) {
+    var ul = KW.$("[data-ds-dyn]", root), a = inc.ack, why = inc.why || {};
+    ul.textContent = "";
+    function note(cls, kind, text, tip) {
+      var li = ul.appendChild(KW.el("li", "ds-note " + cls));
+      li.appendChild(noteIcon(kind));
+      li.appendChild(KW.el("span", "", text));
+      li.title = tip || text;
+    }
+    if (why.cannotSee && inc.state !== "resolved") {
+      note("n-warn", "warn", "Can't see it right now",
+        "kwatch can't see this right now, so it stays open until it can check again.");
+    }
+    var when = a && KW.valid(a.since) ? " " + KW.when(a.since) : "";
+    if (a && inc.state !== "resolved") {
+      note("n-ok", "ok", "Acknowledged" + when + (a.by ? " by " + a.by : ""),
+        (a.note ? "\u201c" + a.note + "\u201d\n" : "") + "kwatch stops reminding while the annotation is there.");
+    } else if (inc.ackedBy && inc.state !== "resolved") {
+      note("n-ok", "ok", "Acknowledged on " + inc.ackedBy);
+    }
+    if (/\[redacted/.test(JSON.stringify(inc.summary || {}))) {
+      note("", "lock", "Secrets hidden", "Parts marked hidden are secrets kwatch removed for safety.");
+    }
+    ul.hidden = !ul.firstChild;
+  };
+
+  /* KW.notesRow, once every module filled its note: an icon and a
+     tooltip on caused by, moved, changed since last look and shortened
+     text; the row hides when it has nothing. */
+  KW.notesRow = function (root) {
+    var box = KW.$(".ds-notes", root);
+    if (!box) return;
+    [["[data-caused]", "caused"], ["[data-moved] > p", "moved"], ["[data-looked]", "looked"],
+      ["[data-short]", "short"]].forEach(function (k) {
+      KW.$$(k[0], box).forEach(function (n) {
+        if (n.hidden || !n.firstChild || n.querySelector(".ds-note-ico")) return;
+        n.insertBefore(noteIcon(k[1]), n.firstChild);
+        n.title = n.textContent + (n.title && n.title !== n.textContent ? "\n" + n.title : "");
+      });
+    });
+    box.hidden = KW.$$("[data-ds-dyn] > li, [data-caused], [data-moved] > p, [data-looked], [data-short]", box)
+      .every(function (n) { return n.hidden || !n.isConnected || n.closest("[hidden]"); });
   };
 })();

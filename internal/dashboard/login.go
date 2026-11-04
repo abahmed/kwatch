@@ -74,6 +74,28 @@ func sessionHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// sessionCheck wraps sessionHandler for the sign-in page's question
+// "am I signed in?". A request with no bearer token and no valid
+// session cookie is not an attack, just a visitor: it gets 200
+// {"signedIn": false} (so the browser logs no error), says nothing else
+// and is not counted by the failure limiter. Any request that carries
+// a bearer token, or a valid cookie, goes through the middleware as
+// before, so a guessed token still counts and still gets 401.
+func (a *Auth) sessionCheck(next http.Handler) http.Handler {
+	checked := a.Middleware(next)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, bearer := bearerToken(r); bearer || a.validCookie(r) {
+			checked.ServeHTTP(w, r)
+			return
+		}
+		if !onlyGet(w, r) {
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{\"signedIn\":false}\n"))
+	})
+}
+
 // requireHTTPS answers 403 https_required in shared mode when the
 // request did not come over https, so the browser can tell the person
 // to use the https address. In local mode it lets everything through.

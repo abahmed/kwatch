@@ -1,0 +1,12 @@
+{
+  "name": "cache-unreachable-at-start",
+  "description": "A single-replica Deployment exits 139 at start with an unhandled Redis connection exception in its previous log, fails readiness while down, and flaps.",
+  "root": "deployment/web/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "service/web/api"
+  ],
+  "tail": "10m0s"
+}

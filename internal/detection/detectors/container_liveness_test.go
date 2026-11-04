@@ -22,10 +22,21 @@ type killFixture struct {
 	message  string
 	// noteAge is how long ago the event was last seen; default 1m.
 	noteAge time.Duration
+	// stop is the kubelet's Killing note, at stopAt, when set.
+	stop   string
+	stopAt time.Time
+	// threshold is the liveness probe's failureThreshold, when set.
+	threshold float64
 }
 
 func detectKill(t *testing.T, f killFixture) []detection.Finding {
 	t.Helper()
+	ctx, e := killContext(f)
+	return classified(Container{}.Detect(ctx, e))
+}
+
+// killContext is the detector context and the container of f.
+func killContext(f killFixture) (detection.Context, inventory.Entity) {
 	model := newTestModel()
 	id := kube.ContainerID("default", "app", "main")
 	attrs := map[string]inventory.Value{
@@ -39,6 +50,10 @@ func detectKill(t *testing.T, f killFixture) []detection.Finding {
 	if f.waiting != "" {
 		attrs[kube.AttrStateReason] = inventory.Text(f.waiting)
 	}
+	if f.threshold > 0 {
+		attrs[kube.ProbeAttr("liveness", "failures")] =
+			inventory.Number(f.threshold)
+	}
 	observeEntity(model, id, podNodeNow.Add(-10*time.Minute), attrs)
 	if f.message != "" {
 		if f.noteAge == 0 {
@@ -47,8 +62,10 @@ func detectKill(t *testing.T, f killFixture) []detection.Finding {
 		noteEntity(model, id, "Unhealthy", f.message, 3,
 			podNodeNow.Add(-f.noteAge))
 	}
-	return classified(Container{}.Detect(
-		testDetectorContext(model, podNodeNow), entityOf(model, id)))
+	if f.stop != "" {
+		noteEntity(model, id, "Killing", f.stop, 1, f.stopAt)
+	}
+	return testDetectorContext(model, podNodeNow), entityOf(model, id)
 }
 
 const livenessMessage = "Liveness probe failed: HTTP probe failed with " +
@@ -70,7 +87,8 @@ func TestLivenessKillsReadAsACrashLoop(t *testing.T) {
 			assert.Equal(t, reasons.LivenessKilled, found[0].Reason)
 			assert.True(t, found[0].Mode.Within(detection.ModeCrashLoop))
 			assert.Contains(t, found[0].Summary,
-				"keeps being killed by its liveness probe")
+				"keeps failing its liveness check (HTTP 500), "+
+					"so the kubelet keeps restarting it")
 		})
 	}
 }
@@ -79,8 +97,10 @@ func TestLivenessKillNeedsALoopOfKills(t *testing.T) {
 	cases := map[string]killFixture{
 		"one kill": {state: "running", restarts: 1, exit: 143,
 			finished: 20 * time.Second, message: livenessMessage},
+		// The probe fails only after the run ended: not its cause.
 		"not SIGTERM": {state: "running", restarts: 4, exit: 1,
-			finished: 20 * time.Second, message: livenessMessage},
+			finished: 20 * time.Second, message: livenessMessage,
+			noteAge: 10 * time.Second},
 		"readiness only": {state: "running", restarts: 4, exit: 143,
 			finished: 20 * time.Second,
 			message:  "Readiness probe failed: refused"},

@@ -17,12 +17,21 @@ type release struct {
 	pods                 []inventory.Entity
 	podContainers        [][]inventory.Entity
 	revisionAge          time.Duration
+	// born is when the newest revision began (see revisionBorn).
+	born time.Time
 	// edits are what the new revision changed in the pod template.
 	edits []inventory.FieldChange
 }
 
-// started is when the revision's first pod was created.
+// started is when the revision began: its ReplicaSet's creation, or
+// the revision change kwatch saw on it (a rollback reuses an old
+// ReplicaSet). Only when neither is known is it the revision's first
+// pod: pods that a node rotation or an eviction recreated are new pods
+// of an old revision, not a rollout.
 func (r release) started() time.Time {
+	if !r.born.IsZero() {
+		return r.born
+	}
 	var first time.Time
 	for _, pod := range r.pods {
 		created := timestamp(pod, kube.AttrCreated)
@@ -111,6 +120,7 @@ func latestRelease(
 	out := release{
 		revision: strconv.Itoa(newest.revision),
 		previous: strconv.Itoa(older.revision),
+		born:     revisionBorn(newest.entity),
 	}
 	for _, id := range model.Related(newest.id, inventory.OwnedBy,
 		inventory.Incoming) {
@@ -125,6 +135,20 @@ func latestRelease(
 	out.previousImage, out.image = imageChange(model, deployment, since)
 	out.edits = inventory.RevisionDiff(model.Changes(deployment, since))
 	return out, true
+}
+
+// revisionBorn is when a ReplicaSet became the newest revision: when it
+// was created, or later when kwatch saw its revision number change while
+// it watched (a rollback). Zero when its creation is not known.
+func revisionBorn(rs inventory.Entity) time.Time {
+	born := timestamp(rs, kube.AttrCreated)
+	if born.IsZero() {
+		return born
+	}
+	if at := valueSince(rs, kube.AttrRevision); at.After(rs.FirstSeen) {
+		born = latest(born, at)
+	}
+	return born
 }
 
 func podContainers(

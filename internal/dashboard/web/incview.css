@@ -1,18 +1,45 @@
-/* kwatch dashboard: the incident page's time and relations. "What's
-   going on with this alert", caused by / causing, at the same time, the
-   "New since your last visit" marks, change diffs, the containers' break
-   snapshots, the states strip's extra states and the usage chart.
-   Tokens come from app.css, so light and dark follow it. */
+/* kwatch dashboard: the issue page's tabs and what they hold. The tab
+   bar (a select menu on phones), the sections, "Alert status", caused
+   by / causing, at the same time, who it hits, the "New since your last
+   visit" marks, change diffs, the containers' break snapshots, the
+   mini timeline and the usage chart. Tokens come from app.css, so
+   light, dark and high contrast follow it. */
 
-/* Summary card lines. */
-.d-caused, .d-blast { margin-top: 10px; font-size: 0.9375rem; overflow-wrap: anywhere; max-width: var(--measure); }
+/* Tabs. */
+.d-tabbar { margin-top: 22px; border-bottom: 1px solid var(--line); }
+.d-tabs { display: flex; gap: 2px; overflow-x: auto; }
+.d-tab { display: inline-flex; align-items: center; gap: 8px; min-height: var(--hit); padding: 0 14px; background: none; border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px; color: var(--text-muted); font-weight: 600; font-size: 0.9375rem; white-space: nowrap; }
+.d-tab:hover { color: var(--text); }
+.d-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--text); }
+.d-badge { min-width: 1.5rem; padding: 0 7px; font-size: 0.75rem; font-weight: 700; line-height: 1.5; text-align: center; border-radius: var(--radius-pill); background: var(--surface); color: var(--text-soft); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.d-tabsel { display: none; align-items: center; gap: 10px; margin: 0 0 12px; }
+.d-tabsel select { flex: 1; width: auto; margin: 0; }
+.d-panel { padding-top: 4px; }
+.d-panel:focus { outline: none; }
+.d-panel:focus-visible { outline: var(--focus-width) solid var(--text); outline-offset: 2px; }
+.tab-empty { margin: 18px 0; padding: 14px 16px; border-radius: var(--radius-card); background: var(--surface); color: var(--text-soft); max-width: var(--measure); }
+.sec { padding: 16px 0 6px; border-bottom: 1px solid var(--line); }
+.sec-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 1.125rem; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 4px; }
+.sec > .fold-cap { margin: 0 0 8px; }
+.sec > .fold-body { padding: 4px 0 12px; }
+.d-panel > .d-alert { margin-top: 16px; }
+.bl-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.bl-chips .chip + .chip { margin-left: 0; }
+.step-n { display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); }
+@media (max-width: 700px) {
+  .d-tabs { display: none; }
+  .d-tabsel { display: flex; }
+  .d-tabbar { border-bottom: 0; }
+}
+
+/* Summary card notes. */
+.d-caused, .d-blast { font-size: 0.9375rem; overflow-wrap: anywhere; max-width: var(--measure); }
 .d-caused { padding: 6px 10px; border-radius: var(--radius-input); background: var(--degraded-bg); }
 .d-looked { margin-top: 10px; font-size: 0.875rem; font-weight: 600; color: var(--resolved); cursor: help; }
 
 /* What's going on with this alert. */
 .d-alert { margin-top: 12px; border: 1px solid var(--line); border-radius: var(--radius-card); padding: 14px 22px 16px; background: var(--bg); display: grid; gap: 8px; }
 .d-alert .d-kicker { margin-bottom: 2px; }
-.d-sum ~ details.fold:first-of-type { margin-top: 18px; border-top: 1px solid var(--line); }
 .al-open p { font-weight: 600; overflow-wrap: anywhere; }
 .al-open[title] { cursor: help; }
 .al-bar { height: 8px; max-width: 420px; margin-top: 6px; border-radius: var(--radius-pill); background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
@@ -59,8 +86,21 @@
 /* States strip: the states transitions add, and alert level marks. */
 .seg-settling { background: var(--control-border); }
 .seg-flapping { background: var(--degraded); }
-.strip-wrap { position: relative; }
-.strip-mark { position: absolute; top: -7px; width: 0; height: 0; margin-left: -5px; border: 5px solid transparent; border-top: 6px solid var(--text); cursor: help; }
+.mt-svg { display: block; width: 100%; overflow: visible; }
+.mt-bg { fill: var(--surface); }
+.mt-band { cursor: help; }
+.mt-band.seg-failing { fill: var(--failing); }
+.mt-band.seg-flapping { fill: var(--degraded); }
+.mt-band.seg-recovering { fill: var(--resolved); }
+.mt-band.seg-settling { fill: var(--control-border); }
+.mt-band.seg-quiet { fill: var(--control-border); opacity: .45; }
+.mt-chg, .mt-tier { cursor: help; }
+.mt-chg { fill: var(--text); }
+.mt-chg.is-cause { fill: var(--failing); }
+.mt-chg-l, .is-cause-l { stroke: var(--text); stroke-width: 1; stroke-dasharray: 2 2; }
+.mt-tier { fill: var(--resolved); }
+.mt-tier-l { stroke: var(--resolved); stroke-width: 1; stroke-dasharray: 1 3; }
+.mt-key-chg, .mt-key-tier { white-space: nowrap; }
 
 /* Memory or CPU over the last day. */
 .uc { padding: 10px 0; border-top: 1px solid var(--line); }

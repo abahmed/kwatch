@@ -36,6 +36,20 @@
     return text.indexOf(prefix) === 0 ? text.slice(prefix.length) : text;
   }
 
+  /* lastTime: an older kwatch named the earlier issue by its ID ("last
+     time inc-20261029-5c97-13940"); the ID's date says when, in words.
+     The ID's date is a UTC day, so it is counted against today's UTC
+     day, and shown at noon UTC so either clock names the same day. */
+  function lastTime(t) {
+    return t.replace(/last time inc-(\d{4})(\d\d)(\d\d)-[0-9a-z]+-\d+/g, function (all, y, m, d) {
+      var day = Date.UTC(+y, +m - 1, +d), now = new Date(KW.now());
+      var today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+      var n = Math.round((today - day) / 86400000);
+      if (isNaN(n) || n < 0) return "last time on " + KW.dayMonth(new Date(day + 43200000));
+      return "last time " + (n === 0 ? "today" : n === 1 ? "yesterday" : n + " days ago");
+    });
+  }
+
   var RESOLVED = {
     recovered: "It stayed healthy.",
     recovered_unheard: "It recovered before kwatch had to alert anyone.",
@@ -49,7 +63,7 @@
     switch (ev.kind) {
       case "repeated":
         if (t.indexOf("failing again: ") === 0) return ["Failed again: " + after(t, "failing again: "), "k-warn"];
-        return [upperFirst(t, ev), "k-warn"];
+        return [upperFirst(lastTime(t), ev), "k-warn"];
       case "cause_revised":
         return [causeWords(after(after(t, "cause revised"), ": ")), ""];
       case "same_outage":
@@ -113,38 +127,11 @@
     return e;
   }
 
-  var RANK = { "k-warn": 3, "k-done": 2, "k-start": 1 };
-
-  /* sameMinute folds rows of one event each that fall in the same
-     minute ("kwatch noticed this", "Confirmed …") into one row whose
-     text joins theirs, oldest first. A counted row stays alone. */
-  function sameMinute(rows) {
-    var out = [];
-    rows.forEach(function (r) {
-      var last = out[out.length - 1];
-      var single = r.all.length + r.folded === 1;
-      if (last && single && last.single &&
-          Math.floor(Date.parse(r.e.ev.at) / 60000) === Math.floor(Date.parse(last.e.ev.at) / 60000)) {
-        last.parts.unshift(r);
-        return;
-      }
-      out.push({ key: r.key, e: r.e, all: r.all, folded: r.folded, single: single, parts: [r] });
-    });
-    out.forEach(function (r) {
-      if (r.parts.length < 2) return;
-      var cls = "";
-      r.parts.forEach(function (p) {
-        if ((RANK[p.e.w[1]] || 0) > (RANK[cls] || 0)) cls = p.e.w[1];
-      });
-      r.e = { ev: r.e.ev, w: [r.parts.map(function (p) { return p.e.w[0]; }).join(" · "), cls], i: r.e.i };
-      r.ats = r.parts.map(function (p) { return p.e.ev.at; });
-    });
-    return out;
-  }
-
   /* timeline: newest first, grouped by day. Back-to-back events that say
      the same thing collapse into one row with a count; a different event
-     in between still splits them, so the order stays true. The newest
+     in between still splits them, so the order stays true. Each event
+     is its own line; lines in the same minute as the one above share
+     its time label (shown once). The newest
      TIMELINE_SHOWN rows show; "Show N older events" opens the rest and
      stays open across refreshes (ol.dataset.open). */
   function timeline(ol, more, inc) {
@@ -176,10 +163,10 @@
         rows.push({ key: key, e: e, all: [e.ev.at], folded: folded });
       }
     });
-    rows = sameMinute(rows);
+    ol.dataset.rows = String(rows.length);
     var open = ol.dataset.open === "1";
     var shown = open ? rows : rows.slice(0, TIMELINE_SHOWN);
-    var lastDay = "";
+    var lastDay = "", lastHM = "";
     shown.forEach(function (row, n) {
       var ev = row.e.ev, w = row.e.w;
       var d = new Date(ev.at);
@@ -189,12 +176,15 @@
         dl.setAttribute("aria-hidden", "true");
         ol.appendChild(dl);
         lastDay = day;
+        lastHM = "";
       }
-      var fresh = (row.ats || row.all).some(function (at) { return KW.isNew(at); });
+      var hm = KW.hhmm(d), sameT = hm === lastHM;
+      lastHM = hm;
+      var fresh = row.all.some(function (at) { return KW.isNew(at); });
       var li = KW.el("li", "ev" + (w[1] ? " " + w[1] : "") + (n === 0 ? " latest" : "") +
-        (fresh ? " is-new" : ""));
+        (fresh ? " is-new" : "") + (sameT ? " same-t" : ""));
       var t = KW.el("span", "t");
-      var te = KW.el("time", "", KW.hhmm(d));
+      var te = KW.el("time", "", hm);
       te.setAttribute("datetime", ev.at);
       te.title = KW.full(ev.at);
       t.appendChild(te);
@@ -203,7 +193,10 @@
       var tx = KW.el("span", "tx");
       KW.hideMarks(tx.appendChild(KW.el("span", "tx-text")), w[0]);
       var count = row.all.length + row.folded;
-      if (count > 1) tx.appendChild(KW.el("span", "tl-count", "× " + count));
+      if (count > 1) {
+        tx.appendChild(KW.el("span", "tl-count", KW.plural(count, "time", "times"))).title =
+          "Happened " + KW.plural(count, "time", "times") + " in a row";
+      }
       if (n === 0) tx.appendChild(KW.el("span", "tl-latest", "Latest"));
       if (fresh) tx.appendChild(KW.newMark());
       // "2 h ago" helps today; on earlier days the day and time say it.
@@ -214,9 +207,7 @@
       } else if (KW.isToday(d)) {
         meta.appendChild(KW.timeEl(ev.at));
       }
-      var entity = row.parts.map(function (p) {
-        return entityShown(p.e.ev, w[0], inc);
-      }).filter(function (x, i, all) { return x && all.indexOf(x) === i; }).join(", ");
+      var entity = entityShown(ev, w[0], inc);
       if (entity) { sep(); meta.appendChild(KW.el("span", "mono", entity)); }
       if (meta.firstChild) tx.appendChild(meta);
       if (count > 1) {

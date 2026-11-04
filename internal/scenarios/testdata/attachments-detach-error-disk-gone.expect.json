@@ -1,0 +1,14 @@
+{
+  "name": "attachments-detach-error-disk-gone",
+  "description": "Two VolumeAttachments are stuck deleting; their driver keeps failing to detach disks that no longer exist.",
+  "root": "volumeattachment//csi-7a7a7a",
+  "otherRoots": [
+    "volumeattachment//csi-8b8b8b"
+  ],
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "finalizer//external-attacher/disk-csi-example-com"
+  ],
+  "tail": "30m0s"
+}

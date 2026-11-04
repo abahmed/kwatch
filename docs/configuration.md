@@ -169,7 +169,7 @@ talks to the outside world.
 | `app.logFormatter` | Log format: `text` (default) or `json`. `json` writes one JSON object per log line to stderr. Any other value fails startup |
 | `app.insecureSkipTLSVerify` | 🔓 Skip TLS verification on outbound HTTP to **alert providers** (default: false). It never applies to kwatch's own calls: the license server, the adoption telemetry and the update check always verify TLS (they still use `app.proxyURL` and `app.caBundlePath`) |
 | `app.caBundlePath` | 📜 Path to a PEM CA bundle for outbound HTTP. A missing or invalid bundle fails startup |
-| `app.hideProHints` | Remove every Pro hint from Community messages (default: false): the one-line note that names what kwatch Pro would add, the "Pro found a likely cause for this." teaser that replaces it, "Pro shows how to fix it." where a Pro message would say how to fix the problem, the "Pro shows which one and the proof." line after a "Cause found: <type of cause>." sentence (the sentence itself stays), the Pro sentence after a monitoring gap in the startup message, and the startup and daily "Pro checks found ..." notes |
+| `app.hideProHints` | Remove every Pro hint from Community messages (default: false): the one-line note that names what kwatch Pro would add, the "Pro found a likely cause for this." teaser that replaces it, "Pro shows how to fix it." where a Pro message would say how to fix the problem, the one Pro line after a "Cause found: <type of cause>." sentence (the sentence itself stays): "Pro shows which one and the proof." or "Pro shows the exact cause and the proof.", and with the fix "... and how to fix it." in place of "the proof."; every Pro line ends with the early-access invite ("Get Pro free during early access: kwatch.dev/pro"), the Pro sentence after a monitoring gap in the startup message, and the startup and daily "Pro checks found ..." notes |
 | `app.communityProvider` | The alert provider the Community edition keeps when more than one is configured (Community sends to one provider; Pro sends to all). Empty keeps one by class, not by the alphabet: a paging service (PagerDuty, Opsgenie, iLert, GoAlert, incident.io, Splunk On-Call, Squadcast, Zenduty, SIGNL4, Alerta, Sensu Go, Datadog, New Relic, Splunk HEC) first, then chat and everything else, then email, with the name breaking a tie. When the provider cap leaves a paging service inactive, kwatch logs a warning naming it. A name that is not a configured provider is warned about and falls back the same way. `/status`, the startup log and `kwatch lint` show which provider is kept, for example `Community sends to: slack (inactive: pagerduty)` |
 
 The startup message and the upgrade notice are each a single plain sentence
@@ -224,26 +224,22 @@ Endpoints kwatch serves so you can see it's alive and grab Prometheus metrics. T
   fail readiness. An unrecoverable required startup or cache failure causes the
   active process to stop so Kubernetes can restart or replace it.
 - `GET /status` — only with `healthCheck.statusEndpoint: true`, and Pro
-  only. Open incidents with root object names and cause lines, read-only;
-  plain text, or JSON with `?format=json`. In the Community edition the text
+  only. Read-only; plain text, or JSON with `?format=json`. In the Community edition the text
   page answers `402` with "The /status page is part of kwatch Pro. /health
   stays available." and the JSON format answers `402` with
   `{"error":"pro_required"}`.
-  It has no authentication and shows object names to anyone who
-  can reach the port, so keep it cluster-internal and read it through
+  It lists open incidents with root object names and cause lines, control
+  plane, upgrade readiness, zone health and what kwatch cannot see. It uses no
+  new RBAC, writes nothing and never shows Secret values. It has no
+  authentication and shows object names (workloads, nodes, PDBs, webhooks) to
+  anyone who can reach the health port, so keep that port cluster-internal
+  (the chart's NetworkPolicy admits it from any source by default, so narrow
+  it with a policy of your own) and read it through
   `kubectl port-forward deploy/kwatch 8060:8060`.
 - `GET /availabilityz` — ✅ Deployment availability. A state lock holder,
   or a Pod still waiting for the state lock, can pass the rolling-update probe.
 - `GET /health` — JSON containing overall status, state lock status, component
   states, and bounded degradation reasons.
-- `GET /status` — 🔎 (Pro) What is wrong right now, read-only: open incidents,
-  control plane, upgrade readiness, zone health and what
-  kwatch cannot see. Plain text; add `?format=json` for JSON. It uses no new
-  RBAC and writes nothing. It shows object names (workloads, nodes, PDBs,
-  webhooks) to anyone who can reach the health port, so keep that port
-  inside the cluster; the chart's NetworkPolicy admits it from any source by
-  default, so narrow it with a policy of your own. It never shows
-  Secret values.
 - `GET /metrics` — 📊 Prometheus-format metrics (Pro only; Community answers empty `404`). It does not require Prometheus to be installed. Every series has a production writer; labels are a fixed, bounded set.
 
 | Metric | Type | Labels | Meaning |
@@ -558,7 +554,7 @@ listener, never on the health port. Everything about reaching it from outside
 
 | Option | Default | What it does |
 |:---|:---|:---|
-| `dashboard.enabled` | `false` | Serves the dashboard |
+| `dashboard.enabled` | `false` | Serves the dashboard. Pro only. Community reports it as an ignored setting (`ui.dashboard`) at start and in /status |
 | `dashboard.port` | `8061` | The dashboard port |
 | `dashboard.mode` | `local` | `local` for a port-forward, `shared` for an Ingress with TLS. Shared mode marks the session cookie Secure and refuses sign-in over plain HTTP |
 | `dashboard.trustProxy` | `false` | Believes `X-Forwarded-Proto` and `X-Forwarded-For` from the proxy that ends TLS in front of kwatch |
@@ -569,6 +565,14 @@ The bearer token and the sign-in password are not in the file: they come
 from `KWATCH_DASHBOARD_TOKEN` and `KWATCH_DASHBOARD_PASSWORD`. With both
 empty and the dashboard enabled, kwatch logs a warning and refuses every
 dashboard request with 401.
+
+Browser notifications need no setting. When someone turns them on in the
+dashboard, kwatch sends them through the browser's push service over HTTPS
+(`fcm.googleapis.com`, `updates.push.services.mozilla.com`,
+`*.push.apple.com`, `*.notify.windows.com`), through the configured proxy,
+so they arrive with every dashboard tab closed. In a cluster without that
+access they arrive only while a dashboard tab is open. See
+[dashboard notes](./dashboard.md#browser-notifications).
 
 ## 🌱 Environment variables
 

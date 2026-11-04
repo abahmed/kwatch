@@ -72,6 +72,9 @@ var causeWords = map[string]causeWording{
 		words: "its pods run different builds of the same image tag"},
 	"liveness-shorter-than-start": {own: true,
 		words: "its containers get too little time to start"},
+	// log-names-dependency is worded by dependencyWords.
+	"log-names-dependency": {own: true,
+		words: "it cannot connect to a service it depends on"},
 	"liveness-kills-before-ready": {own: true,
 		words: "its containers are not ready when liveness gives up"},
 	"memory-limit-too-low": {own: true,
@@ -158,6 +161,12 @@ var causeWords = map[string]causeWording{
 	"webhook-rejects":         {words: "is rejecting requests"},
 	"webhook-slows-api":       {words: "is slowing the API server"},
 	"zone-failing":            {words: "is failing as a whole"},
+
+	// Rows that blame a workload whose pods run but are not ready.
+	"backends-not-ready": {
+		words: "has pods that run but are not ready"},
+	"called-service-backends-not-ready": {
+		words: "has pods that run but are not ready"},
 }
 
 // ownCause reports a cause worded as a clause about the subject.
@@ -189,6 +198,9 @@ func causeWordsFor(cause *rootcause.CauseRecord) string {
 	}
 	if words, ok := webhookCallWords[cause.Mode]; ok {
 		return words
+	}
+	if dependencyLogCause(cause) {
+		return dependencyWords(cause)
 	}
 	if words, ok := modalWords(cause); ok {
 		return words

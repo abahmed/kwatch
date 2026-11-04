@@ -35,7 +35,18 @@ feel the failure:
    a `failed calling webhook` event or the API server's fail-closed
    call metrics; until then it notifies once and waits for the digest,
    see `idle_webhook.go`), or a node, which takes its capacity and
-   its network plugin with it (`node-lost`).
+   its network plugin with it (`node-lost`). Before a refusal the
+   webhook's rules decide what that one notification says
+   (`detectors/webhook_reach.go`, `kube.ClosedRuleReach`): when they
+   cover create or update of a resource with an object that exists now
+   (scope, namespace selector and object selector applied as far as the
+   model holds labels), it says those creates and updates are rejected
+   right now; when every rule covers only resources with no object, such
+   as custom resources whose definition is gone, it makes no notification
+   and is a digest line; when kwatch cannot tell (a resource it does not
+   watch, a selector on labels it does not hold, a rule for other
+   operations), it says so. A webhook that ignores failure stays a digest
+   line whatever its rules cover.
 
 One page stands for the problems of its own namespace. A roll-up or an
 outage message of several page-tier incidents pages the first of each

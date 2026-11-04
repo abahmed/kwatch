@@ -9,7 +9,7 @@ Authorization: Bearer <redacted>
   "lines": [
     "payments ran out of memory 3 times."
   ],
-  "markdown": "🔴 payments in shop is crash-looping.\n\nCaused by: Node n1 is not ready.\n\nCause in dashboard: https://kwatch.example/issues/p-cause\n\nEarlier times: https://kwatch.example/issues?status=all&like=p-link\n\nOpen in dashboard: https://kwatch.example/issues/p-link",
+  "markdown": "🔴 payments in shop is crash-looping.\n\nCaused by: Node n1 is not ready.\n\n[Cause in dashboard](https://kwatch.example/issues/p-cause)\n\n[Earlier times](https://kwatch.example/issues?status=all&like=p-link)\n\n[Open in dashboard](https://kwatch.example/issues/p-link)",
   "marker": "🔴",
   "note": "🔴 payments in shop is crash-looping.\nCaused by: Node n1 is not ready.",
   "output": [

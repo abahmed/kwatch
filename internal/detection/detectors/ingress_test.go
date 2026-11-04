@@ -42,7 +42,10 @@ func TestIngressReportsMissingClass(t *testing.T) {
 		kube.AttrIngressClass: inventory.Text("nginx"),
 	})
 
-	eval := evaluate(Ingress{}, m, t0, ing, nil)
+	assert.Empty(t, evaluate(Ingress{}, m, t0, ing, nil).Findings,
+		"a class absent for a moment may be on its way")
+	eval := evaluateAfterGrace(Ingress{}, m, t0, DefaultClassGrace, ing,
+		nil)
 
 	require.Len(t, eval.Findings, 1)
 	assert.Equal(t, "Ingress.ClassMissing", string(eval.Findings[0].Mode))

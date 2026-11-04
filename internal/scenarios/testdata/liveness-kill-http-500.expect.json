@@ -1,0 +1,10 @@
+{
+  "name": "liveness-kill-http-500",
+  "description": "The kubelet restarts a container whose liveness check answers HTTP 500; each kill ends in SIGKILL after the grace period.",
+  "root": "deployment/shop/catalog",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

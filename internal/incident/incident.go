@@ -149,6 +149,12 @@ type Incident struct {
 	// Headline is the plain-language title of the last message sent
 	// about the incident, in the composer's wording. Empty until then.
 	Headline string
+	// Problem is the stable headline of what is failing (problem.go),
+	// written when the incident opens and when the problem changes,
+	// never from an update, a recovery or a move. Persisted.
+	Problem string
+	// problemKey is what Problem was written for; see problemKey.
+	problemKey string
 	// DocsLink is the configured runbook link the last message named,
 	// empty when none was configured.
 	DocsLink string
@@ -262,6 +268,9 @@ type Incident struct {
 	// about the incident. When they all went to one place the story
 	// moved there; when they dispersed, the story is over.
 	movedTo []inventory.EntityID
+	// recoveredHere records that a failure recovered while a member,
+	// not by moving: an untold incident with one settled on its own.
+	recoveredHere bool
 	// formerRoot is the root the incident was moved away from by its
 	// latest cause revision, and rerootedAt is when; see retakeFormer.
 	formerRoot inventory.EntityID

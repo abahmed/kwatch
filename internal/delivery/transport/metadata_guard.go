@@ -129,6 +129,15 @@ func (t metadataTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 type controlFunc = func(context.Context, string, string,
 	syscall.RawConn) error
 
+// GuardDialer returns a copy of base that refuses, before connecting, a
+// cloud metadata address (ErrMetadataAddress, permanent), checked on the
+// resolved address as guarded HTTP clients are. Providers that dial
+// another protocol (SMTP) use it; base's own Control hooks run after the
+// check, and its timeouts are kept.
+func GuardDialer(base *net.Dialer) *net.Dialer {
+	return metadataDialer(base)
+}
+
 // metadataDialer is a copy of base that refuses, before connecting, an
 // address that is a metadata address.
 func metadataDialer(base *net.Dialer) *net.Dialer {

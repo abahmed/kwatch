@@ -1,0 +1,10 @@
+10:01:15 roll-up
+🟠 kwatch (prod-eu-1) found two new problems at the same time. Volume attachment csi-7a7a7a is failing: volume cannot be detached from its node. Volume attachment csi-8b8b8b is failing: volume cannot be detached from its node. Each gets its own message when it changes or resolves.
+🟠 kwatch (prod-eu-1) found two new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
+|
+| **Problems**
+| - Volume attachment **csi-7a7a7a** — volume cannot be detached from its node
+| - Volume attachment **csi-8b8b8b** — volume cannot be detached from its node
+|
+| *Each gets its own message when it changes or resolves.*

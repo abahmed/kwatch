@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Highlights
+
+- **Evidence (Pro).** kwatch runs the read-only look a message used to suggest and shows the result: pod state, logs, events, memory, node, Services, rollouts and more.
+
+- **The dashboard is rebuilt as an incident view** with five pages: Overview, Issues, Insights, Activity and kwatch.
+
+- **Community and Pro are split more clearly.** `/metrics`, readiness probe failures, shared-factor causes, some pod reasons, fix commands, recurrence lines and the text `/status` page are Pro; a Community message names the category of a cause, never its object. Pro is free during early access.
+
+- **Stable problem titles, and settled before alerting.** Every incident has a title written when it opens, and an incident that recovered or moved before anyone was told counts as no page.
+
+- **Real links in messages.** `Open in dashboard` and the other dashboard labels are clickable links in every provider with link markup.
+
+- **A cause from a dependency named in the log.** A workload whose own last words say it could not connect to a dependency is explained by that dependency (new `log-names-dependency` row).
+
+- **Liveness and readiness failures are worded apart.** A liveness kill says the kubelet keeps restarting the container; a failing readiness check says so while the container runs.
+
+- **Discord incidents are an embed again**, in both editions.
+
+- **Browser notifications with the dashboard closed.** Turning notifications on in the dashboard subscribes the browser to Web Push: kwatch sends each change itself, encrypted for that browser, and every notification stays on screen until closed, so macOS shows it.
+
 ### Editions
 
 - These leave Community and are now Pro: the `/metrics` endpoint (Community
@@ -86,7 +106,143 @@
   failover. The unused replica and retention limits were removed from
   the edition entitlements.
 
+- A Community install whose configuration sets Pro features is now told once,
+  at its first start, which settings are ignored, and the start logs a real
+  warning.
+
+- A license key with a space or newline no longer stops kwatch from starting:
+  whitespace is stripped and a key that is still unusable is reported as an
+  invalid license.
+
+- A mistyped, expired, revoked or conflicting license key now logs one warning
+  per reason, shows a `license` component on /health and sends a "Pro is
+  disabled: reason" notice, even when Pro never ran.
+
+- Community now keeps the incidents it announced across a restart, so their
+  resolves are still sent and a pager alert is not left open; when the
+  provider cap leaves a paging service inactive kwatch warns, and the provider
+  Community keeps is chosen pager first, then chat, then email.
+
+- Adoption telemetry uses its own ID, separate from the license cluster ID
+  (installs get a new telemetry ID once).
+
+- Pro cluster check-ins (the 30-minute ping) are removed. `clusterCheckins`
+  and `KWATCH_CLUSTER_CHECKINS` are accepted, ignored and logged once as
+  deprecated. Pro only renews its license daily; a revocation applies at
+  the next renewal. Use `heartbeatMonitor.url` to learn when kwatch stops.
+
+- The Pro lease and clock guard are mirrored to the
+  `kwatch-license-instance` Secret, so offline grace survives `emptyDir`.
+
+- The license clock guard recovers when a wrong clock step is corrected and
+  the server signs a newer lease.
+
+- A Pro start no longer logs the Community warnings for a second while the
+  license is settling.
+
+### Dashboard
+
+- The dashboard is rebuilt as an incident view with five pages. Overview (`/`) shows what is wrong now: the top five issues. Issues lists them all. Insights shows weekly trends, top causes, namespaces and nodes. Activity is the feed. kwatch shows whether kwatch itself is working: restarts, coverage, where alerts go and the state disk.
+
+- New pages and API reads: the kwatch page (`/kwatch`, from `/api/kwatch`) and `/api/overview`, which carries the top of the Overview in one read.
+
+- The issue summary agrees with the alert about liveness: exit 137/143 and
+  OOMKilled are not "crashed on its own", and only the failing probe's own
+  container, crashing around the failure, turns a liveness failure into a
+  crash symptom.
+
+- A flapping issue's title keeps the alert's wording ("is not serving: its
+  readiness check fails …").
+
+- "Last time N days ago" in the timeline counts in UTC, so it shows the
+  right day in every time zone.
+
+- `GET /api/session` answers `200` with `{"signedIn":false}` when nobody is signed in, so the sign-in page logs no console error and the request is not counted by the failure limiter. Every other `/api/*` route still answers `401`.
+
+- The severity facets of the Issues list add up to its total: an active
+  quiet issue the list hides without a severity filter is not counted.
+
+- The issue summary ranks a container's own crash (its error exit and log
+  line) above a liveness probe that fails while it restarts, and "what"
+  leads with the crash; when the kubelet killed the container for the
+  probe, the probe leads and the exit reads "restarted by kubelet after
+  failing its liveness check".
+
+- One Issues table at `/issues` shows Active, Resolved or All, and the server
+  filters, sorts and pages it, so thousands of issues stay fast. It has
+  multi-select filters with chips, saved views, columns you choose, density,
+  page size, Local or UTC times, a "N new or changed" bar, a preview drawer,
+  similar issues, search highlight and a return to the place you left.
+
+- The issue page shows why the issue is open, a journal and timeline, a state
+  strip, evidence, containers with their usage history, caused-by and causing
+  issues, the blast radius, the delivery trail with reasons, the pager status,
+  what kwatch sent, moved links and the changes made before it recovered.
+
+- New: an Activity feed, browser notifications, live push (`/api/events`), an
+  offline and stale banner, text size and high contrast, and keyboard
+  shortcuts. The UI is described in `docs/dashboard.md`.
+
+- New: browser notifications arrive with every dashboard tab closed (Web
+  Push). The browser subscribes through `/api/push`. kwatch compares the
+  issues every 10 s and sends each subscribed browser what changed at its
+  level, encrypted for it alone (RFC 8291) and signed with a VAPID key
+  (RFC 8292) kept in the state file. It sends only to the major browsers'
+  push services, through the providers' guarded client. A service worker
+  (`/sw.js`; the CSP gains `worker-src 'self'`) shows each one until it is
+  closed and opens the issue on a click. Signing out, turning them off, an
+  ended subscription, 30 days unseen or a new password stops them. A
+  **Send a test notification** button and a line saying how they arrive
+  are in the sidebar. Without a push service, an open tab shows them as
+  before, now also kept on screen until closed.
+
+- Every `400` from the dashboard API has the same body (`error`, `param`,
+  `term`), and the Issues page shows the sentence with the bad word marked.
+  `/api/incidents` adds `modeLabels`, the `stopped` filter and facet, and
+  `/api/trends` and `/api/insights` take `tzName`. `/api/status` adds `self`
+  and `failedLastHour`, and `/api/coverage` adds `kindTotals`, `rule` and
+  `missingRules`.
+
+- Resolved issues kwatch stopped tracking have a Stopped tracking filter,
+  quick view and `is:stopped`, and a banner on the issue page.
+
+- The live stream sends `signedout` when the sign-in stops being valid
+  (checked every 2 seconds), and the page shows the sign-in at once.
+
+- An address that cannot be parsed gets the not-found page instead of a bare
+  `400`, also when kwatch serves TLS itself (HTTP/2 still works there).
+  A `401` or `404` is logged at verbosity 1.
+
+- `failedLastHour` is now exact: it counts every failed or retried provider
+  send of the last hour, summaries, roll-ups and digests included, however
+  many one incident had, instead of what the send trail still held.
+
+- The Insights API's `days` carry `untold` (openings no message
+  reached, as `/api/trends` counts them), so the page needs no second
+  request.
+
+- The not-found page (and the 400 page for an unparsable address) has
+  the dashboard's look and the title "Not found · kwatch".
+
+- The container usage history is kept in the state file (new bucket
+  `usage`), so it survives a restart. The delivery trail (new bucket
+  `trails`) is kept there only while the dashboard runs (Pro with
+  `dashboard.enabled`), its only reader.
+
+- New `/api/coverage` answers what kwatch watches and what it cannot read.
+
 ### Evidence (Pro)
+
+- A running container whose readiness, liveness or startup probe keeps
+  getting an HTTP error status has its current log read (the last 50
+  lines, redacted, within the crash-log round's 20 reads per round and its
+  backoff after a refused `pods/log`, at most once every 5 minutes), and
+  the last line naming a failure is quoted next to the probe result: "Its
+  readiness check answers HTTP 503 (from its log: "...")". The dashboard
+  shows it in the captured log lines and as `log` proof (new `probe-log`
+  investigation check). A probe that got no answer ("connection refused")
+  and a healthy container are never read. Community messages do not quote
+  it.
 
 - kwatch now runs the read-only look a message used to suggest and shows
   the result: pod state, logs (previous and current run, per container),
@@ -96,34 +252,42 @@
   certificates, quotas, autoscalers, Jobs and probes. Every applicable
   check runs in parallel when an incident opens and on re-investigation,
   under a 10-second budget with at most four API reads at once.
+
 - A Pro message keeps only the steps that change the cluster; a read-only
   step stays when its read was not allowed or timed out. When the gathered
   evidence proves the cause, the message says so and the confidence is
   "confirmed". When a provider's length limit cuts a message, it cuts the
   proof and keeps the fix whole.
+
 - The dashboard's issue page has an Evidence tab with one section per
   check, a log viewer, the related objects and the correlation (the
   failure signature and what it points to, the nearest change, the spread
   and what a rollout changed). `GET /api/incidents/{id}` adds `evidence`
   and `correlation`. The report is kept in memory only, not in the state
   file.
+
 - New settings: `investigation.logs` (default true; false reads no log)
   and the Helm value `rbac.readyz` (default true). Memory and CPU use come
   from the kubelet stats kwatch already reads (nodes/stats), so no add-on
   such as metrics-server is needed. A read that is not allowed shows as
   such and never fails the investigation. Audit entries add `evidence`
   and `readSteps`.
+
 - A Pro message for a workload whose container was killed at its memory
   limit suggests a new limit: half again above the observed peak (or the
   limit, when higher), rounded up to 64Mi, as a step that changes the
   cluster.
+
 - Teams cards and email lay a Pro message out as cause, what kwatch found,
   the log quote and the fix; email adds an HTML part next to the plain
   text. The webhook, n8n and Zapier payloads add an `evidence` object
   (confirmed, checks, facts, quote, fix); every other field is unchanged.
+
 - When a provider's limit cuts a Pro message, the log quote loses lines
   first, then the proof, then the quote; the cause and the fix stay.
+
 - The dashboard shows when each check read its section.
+
 - `GET /api/incidents/{id}` no longer fails with 500 for a very large
   incident: past the 64 KiB response limit it drops the oldest timeline
   events, log lines and evidence lines first, then shortens long text,
@@ -131,30 +295,511 @@
   `logLines`, `evidenceLines`, `evidenceFacts`, `evidenceSections`,
   `texts`; absent when nothing was cut). The issue page says how many
   entries are not shown. A refused response now logs its path and size.
+
 - The evidence is Pro only: Community messages carry none of it.
 
-### Cluster DNS
+### Incidents and messages
 
-- The cluster DNS servers are found through the DNS Service
-  (`kube-system/kube-dns`, `openshift-dns/dns-default`, or a kube-system
-  Service named for CoreDNS or selecting `k8s-app=kube-dns`), then its
-  pods and their owners of any kind. OpenShift's DaemonSet, RKE2's
-  `rke2-coredns-rke2-coredns` and Helm installs with a release prefix are
-  now recognized for DNS metrics and DNS outages; the coredns and kube-dns
-  names remain the fallback.
+- **Every incident has a stable problem title.** It is written when the
+  incident opens, before any message, from the lead of its announcement,
+  and again when the problem changes; at most 140 characters, clipped on a
+  word. The dashboard names incidents by it instead of the last message's
+  wording ("is healthy again.", "Moved: …", "Cause now known: …") or the
+  root's raw key. A Community title says what fails, never the cause. A
+  move into a shared-error incident says "part of the incident of
+  workloads failing with the same error".
 
-### Delivery
+- **Settled before alerting.** An incident that recovered or moved before
+  anyone was told is marked untold (`untold` in the API) and counts as no
+  page and no notification in the trends, the day chart and the urgent
+  count. One whose failures all moved to another incident before alerting
+  (a pod listed before its owner at startup) is dropped instead of kept as
+  a duplicate, and every such close is logged.
 
-- Discord incidents are an embed again: the headline as the title, the
-  cause, proof, log quote and fix in the description, color by status,
-  and kwatch, the cluster and the time in the footer. The embed stays
-  within Discord's limits (description 4096, embed 6000) by cutting the
-  proof, never the fix, and without one field per section, which broke
-  long messages before (#194, #416). Mentions are neutralized, thread_id
-  still works, and plain notices stay message content of at most 2000
-  characters. This changes Discord output in both editions.
+- **A root deleted while kwatch was down resolves as removed**, not as
+  "healthy for 3m", once the sources are listed and it is gone.
+
+- **A page left with only digest findings falls to the digest** (a
+  pressure stall that outlived the crash loop that paged): it is not paged
+  again, and its thread hears the change once.
+
+- **Restarts are quieter and truer.** A restored incident's tier no longer
+  logs and journals flips while its findings come back inside the restore
+  grace; a detector rewording the same failure is not noted as a
+  recovery; an idle fail-closed webhook (or any incident left with digest
+  findings) is listed with the lower-priority incidents instead of being
+  announced at notify again; the restored summary's audit entry counts the
+  incidents as ongoing, names the lower-priority ones and carries the
+  loudest listed tier.
+
+- **Recurrence notes no longer dangle.** "happened again (Nth time this
+  week, last time Mon 14:02 UTC)" names when, not the ID of the forgotten
+  predecessor, and counts the occurrences History keeps, the count the
+  dashboard shows. A resolved incident keeps why it was at its level.
+
+- **Cause swings are damped.** A failure whose cause returns to the root
+  it left less than two minutes ago stays where it is, and a finding that
+  becomes its own root writes no "X is now explained by X" note.
+
+- **A tie with a rolled-up cause is not a revision message.** An
+  incident that only a roll-up (or the startup summary) announced no
+  longer breaks out with its own "Cause changed" message when the new
+  cause only ties with the cause the roll-up stated ("two possible
+  causes: X or <told cause>"); it moves to the new root silently, and
+  its resolve joins the roll-up's grouped recovery. An incident with its
+  own thread still hears the tie, and a page still speaks.
+
+- **A namespace outage is one message even when the workloads have a
+  Service.** Eight crash-looping Deployments that each sit behind a Service
+  were announced and paged one by one, because a Service made each blame
+  itself. They are now held and named in one namespace message.
+
+- **A page of another team is never held.** Two unrelated user-facing outages
+  that began in the same moment were paged once, because the second looked
+  like part of the first. A roll-up pages the first page-tier incident of each
+  namespace and holds only the others of that namespace.
+
+- **A restart no longer swallows a rise to page.** An incident held by the
+  restored-incidents summary, or one whose fingerprint was adopted during the
+  restore grace, that rose to the page tier was never paged. The rise is paged
+  at once and told.
+
+- **A roll-up no longer says "all N problems resolved" while a problem lives
+  on.** An incident that was closed as moved, or whose recurrence was still
+  failing, counted as resolved for the roll-up that named it. The roll-up now
+  closes only when the incident that took over, or the recurrence of a
+  forgotten one, is over too.
+
+- **A node outage names every node it merged.** A merged node outage reached
+  the owners and namespaces of one node only. It now reaches the pods on every
+  merged node.
+
+- **A zone that fails minutes after its first node is one outage, one page.**
+  When the zone or pool fails as a whole, the incident that paged for the
+  first node takes the zone as its root and says its cause was revised.
+  Before, a second incident was announced and paged, and the first alert was
+  closed as moved while the outage went on.
+
+- **An outage message holds the pages it did not send.** The other page-tier
+  incidents of a namespace outage kept the page tier, so their reminders paged
+  the pagers for an alert nobody opened. They are held at notify, and a held
+  page no longer repeats itself as a "material change" a few seconds later.
+
+- **Held updates widen the route of the resolve.** An update that was held
+  (startup summary, outage hold) and rose to a page did not record its
+  severity and reasons, so the resolve could miss the pager route. It now
+  does.
+
+- **A page is not delayed by digest incidents.** Digest-tier incidents
+  settling beside a page counted toward a burst, so the page waited 75 seconds
+  instead of 15.
+
+- **A flapping page keeps an open alert.** A page that resolved and failed
+  again left the pagers with no open alert after the first resolve. When it
+  becomes a flapper, or comes back for the third time inside two hours, one
+  update goes to the pagers at the page tier and reopens the alert; the
+  resolve of a stable recovery closes it. The held page is not released into a
+  second page while the alert is open. A flapper that someone acknowledged
+  does not page.
+
+- **One incident panicking costs one incident.** A panic while advancing one
+  incident, or in one collecting step of the announcer (digest, listings,
+  roll-up), dropped every decision of the tick. Each incident and each step is
+  contained on its own, counted and logged, and the others still speak.
+
+- **"Failing again" survives a restart.** A reopened flapping incident that
+  restarted before its "failing again" update went out never sent it. It is
+  sent, and an owed one is not repeated after a flapping update that already
+  said it.
+
+- **A forgotten outage leaves no group memory.** The roots a grouped node
+  outage merged stayed in memory after the incident was forgotten.
+
+- **A moved roll-up member closes its chat thread.** A roll-up member that
+  spoke on its own and was then closed as moved closed for the pagers only,
+  leaving its chat thread open. It is closed in chat too; a member that never
+  spoke still closes for the pagers alone.
+
+- **A node that recovered while kwatch was down resolves at once.** After a
+  restart its incident waited for the restore grace and the hold (13 minutes)
+  to resolve, and said it was down for that long. It resolves as soon as the
+  sources synced, and its downtime ends when the node became ready.
+
+- **Late failures of an outage join it.** The sixth and seventh workload of a
+  namespace outage, failing a minute or two after its message, were announced
+  alone. They are held and sent as one more outage message naming the whole
+  outage, and are held at notify when the outage paged.
+
+- **A page that moves to a workload says the node recovered.** When a node
+  page was re-rooted to a workload because the node came back, the update gave
+  no word about the node. It now says "Node n1 has recovered; the workload
+  still has open failures". The incident keeps its page tier.
+
+- **The restart summary does not wait ten minutes for loud problems.**
+  Restored incidents at notify or page whose findings are back are named one
+  settle after the sources synced; the rest, and the quiet ones, are named
+  when the restore grace ends. An incident a listing named within the last
+  hour is not listed again; when nothing else is, the short restart note
+  says how many are still open.
+
+- **A severity override cannot undo a held repeat page.** An override that
+  made a failure critical paged again on a repeat of a page that had just
+  resolved. The hold stands.
+
+- **"Moved" waits for the message it points to.** The incidents closed as
+  moved said so half a minute before the incident that took over sent its
+  "cause revised" update. They close together, the update first.
+
+- **The digest audit entry names every incident.** The audit entry of a digest
+  worded 20 incidents and hid the rest. It words 100 and ends with "and N
+  more: id, id, ..." naming the others.
+
+- **A flickering failure keeps one incident ID.** A probe that failed for a
+  few seconds, over and over, opened a new incident every time. The silent
+  incident of the same root is revived under its own ID. The docs now say the
+  timeline keeps 7 days or 32 MiB, whichever is reached first.
+
+- **A re-ranked cause does not move an old incident.** An incident announced
+  more than ten minutes ago stays rooted where it is when the engine finds a
+  new cause that only ties with its root, or one that an alternative of the
+  same kind explains as well. Before, a peer that edged ahead every few hours
+  moved the incident and told it again each time.
+
+- Fixed a restart that told a rise to the page tier twice: the second,
+  identical "material change" update ten minutes later is gone.
+
+- A page that keeps coming back no longer opens a second alert beside the one
+  already open for the same outage, and it honors an acknowledgement
+  annotation; the once-per-incident rule now survives a restart.
+
+- A node under disk, memory or other pressure that is Ready again after a
+  restart no longer resolves early and reopens; only a node that was just not
+  ready or had a stale heartbeat resolves at once.
+
+- A late page-tier failure of a namespace outage that already paged is held at
+  notify from the first one, so the outage has one alert.
+
+- A quota used up with nothing refused, and CPU throttling while nothing is
+  affected, no longer produce a digest line.
+
+- After a restart, a problem that was announced before and whose findings
+  only come back after the restore grace (for example a Deployment whose new
+  pod is created minutes after kwatch starts and is held while the cluster
+  wakes up) is now named in a restored-problems message when it is back,
+  instead of staying silent for days. As with every restored listing, a
+  problem a listing already named within the last hour is not listed again.
+
+- Fixed: an incident only a roll-up announced, whose new cause tied with
+  the cause the roll-up stated (no update sent), now tells the new cause
+  once the tie ends; the tie is part of the cause's identity.
+
+- Fixed: an incident that never alerted, one of whose failures moved to
+  another incident while another recovered in place, is kept as
+  "settled before alerting" instead of being dropped as a duplicate.
+
+- Dashboard links are real links. `Open in dashboard`, `Open dashboard`,
+  `Cause in dashboard` and `Earlier times` are now the clickable label of a
+  link in every provider with link markup: `<address|label>` in Slack and
+  Google Chat, `[label](address)` in the Markdown chats, trackers and the
+  structured `markdown` field, `<a href>` in Telegram and Matrix HTML and
+  `[label|address]` in Jira. Plain-text providers, mail and paging
+  details still read `label: address`; SMS, push and the structured Note
+  are unchanged. Only http and https addresses become links, and a size
+  cut drops a link line whole.
+
+- A flapping workload that is out of service says so first: "api in web
+  is not serving: its readiness check fails (connection refused) and it
+  keeps restarting", or "... its Service has no ready endpoint", instead of
+  only "keeps failing and recovering". The incident stays flapping.
+
+- Fixed: a deleted object is no longer listed under "Recovered at the same
+  moment", and a resolve that stopped tracking an incident that is still
+  failing is never listed there either. Deleted objects that only a roll-up
+  named and that end in the same tick now share one message under "Deleted
+  at the same moment", so cleaning up a namespace is one message, not one per
+  workload.
+
+- Fixed: text a pod or an event wrote is now quoted byte for byte in every
+  message. A double quote, a backtick, a run of spaces or a final full stop
+  inside a quoted error no longer cuts it short or changes it in Slack,
+  Discord, Mattermost, Teams, Telegram, Matrix, Jira and the other rich chats;
+  text that a code span cannot hold exactly goes in a code block.
+
+- Fixed: a change to a Deployment, StatefulSet or other pod template no longer
+  shows secret values. An environment variable shows its old and new value
+  only when its name is on a short list (host, port, url, level, env, region,
+  enabled, timeout, replicas, mode, addr) and the value is a plain word; every
+  other literal, and every command or argument that follows a flag, says
+  "changed". Query strings of probe paths are hidden too.
+
+- Fixed: a Secret or ConfigMap that was edited shortly before the failure is
+  no longer said to "not exist"; the message says it "changed shortly before".
+  A missing or deleted one still says it does not exist.
+
+- Fixed: durations and semicolons inside quoted text are left exactly as the
+  pod or the event wrote them; kwatch only rewrites its own words.
+
+- Fixed: "Fixed by rollout 15 after N minutes" now measures to the moment the
+  failures cleared, not to the end of the resolve hold, and every time in a
+  message names its zone ("10:03 UTC"), including the change window, the
+  serving certificate expiry and "same as Tue 14:02 UTC".
+
+- Fixed: the update that says someone changed the workload, or its config,
+  names the workload in its short text, so a provider that shows only the
+  short text (an Opsgenie alert title, an SMS) still says what it is about.
+
+- Fixed: a failure signature is no longer printed between quotes as lower-case
+  normalized words that no pod wrote; the cause now keeps the error one of the
+  failing pods wrote (`SharedError`) and the message quotes it as written,
+  without credentials.
+
+- Fixed: an external endpoint whose probe error says "no such host" is no
+  longer described as not accepting connections; it is worded as a name that
+  does not resolve, with the error quoted as written.
+
+- Fixed: a fact about a container (memory used against its limit, "its last
+  run lasted ...") is no longer said as "It" under a node or Secret lead; the
+  message names the container. A fact about a claim no longer drifts onto a
+  workload whose quoted crash comes before it ("It is used by ..." now ends
+  the usage sentence).
+
+- Fixed: "no memory limit" is only said for memory evictions, a node that was
+  only under memory or disk pressure now resolves as "no longer low on
+  memory/disk space" instead of "is ready again", and a cause that is the
+  workload's own pod ("keeps crashing because its own pod is not ready") is
+  dropped.
+
+- Fixed: kubectl `--previous` is only suggested for a container that
+  restarted; readiness-only and never-restarted containers get describe pod
+  plus current logs. Pages about the cluster DNS, scheduler, controller
+  manager, API server and etcd now start with a first step.
+
+- Fixed: affected lists name every namespace when there are several ("a in
+  billing; b and c in media"), a network-policy lead names the caller without
+  a capital and no longer lists it as affected, the same quoted error is shown
+  once, baseline sentences use each figure's own verdict once, and a container
+  recovering with its pod is told once.
+
+- Fixed: an outage of several nodes says "They report ..." and "the nodes may
+  be down"; its updates say "Nodes n1-n5 are spreading to ..."; a zone's
+  updates speak for the zone and never say "Node a1 is spreading to node a1".
+
+- Fixed: a reminder for a condition that fails nothing (quota used up,
+  throttled but ready) says "still the case, for one day now" instead of
+  "still failing".
+
+- Fixed: the digest closes with "It is not urgent ..." for one problem, says
+  nothing when only resolved ones are listed, and says "one more still
+  failing"; "kwatch" stays lowercase at the start of a sentence.
+
+- Fixed: "The error mentions it" is only said next to the quoted error;
+  otherwise it is left out.
+
+- Fixed: the "Quoted:" and "Quoted readiness failure:" labels are gone.
+
+- Fixed: the rollback hint says what the command does ("Rolling back to
+  revision N, the one before this release, undoes it") instead of promising it
+  fixes the failure.
+
+- Fixed: a LimitRange change shows only the bounds that changed.
+
+- Fixed: the namespace outage message ends with a full stop.
+
+- Fixed: removed repeated or empty-information sentences: the rival that
+  restated the lead, a service listed again after its Service, the last chain
+  hop repeated, "The pod-security changed.", a workload named "storage"
+  capitalized, one workload named twice in an update.
+
+- Fixed: an update that only raised the tier says "It is now critical."
+
+- Fixed: messages speak of kwatch in the third person ("kwatch can't see ...",
+  "kwatch will write again ...").
+
+- Fixed: removed "work in flight was cut off", "so the restarts are a
+  symptom", and the load balancer event label now says "failed to deploy"
+  (what happened), not "can't deploy" (a claim about the state).
+
+- Fixed: a release whose image cannot be pulled starts with `kubectl describe
+  pod` (the events) instead of `rollout status`.
+
+- Fixed: durations the message writes are in words ("ten seconds", "created
+  two hours ago", "three minutes after the release", "30-second grace
+  period"); a whole rate reads "12 requests a second".
+
+- Fixed: the node controller's own taints are no longer listed as something
+  that "changed before it broke".
+
+- Fixed: a resolve no longer counts the time a node's Warning event stayed in
+  its window as time the node was failing.
+
+- Fixed: a Service that selects a typo keeps the clause that says
+  no pod has those labels ("selects app=apii, but no pod or workload template
+  in shop has those labels").
+
+- Fixed: the webhook consequence states what was seen ("It fails
+  closed (failurePolicy Fail); no request has been rejected so far.") instead
+  of forecasting that any create is rejected.
+
+- A config map or Secret key change reads "Key app.yaml changed." instead of
+  "changed to changed".
+
+- Fixed: the configuration risks quoted beside a failure now state facts only
+  ("It runs a single replica.", "Its image has no fixed tag.", "Its containers
+  have no memory limit, so nothing caps their memory use.", "It has no
+  readiness probe, so Kubernetes sends it traffic while the container runs.")
+  instead of "so this is downtime" or "what runs may have changed". A test
+  scans every sentence the message writers can say for forecasting words, like
+  the one the detectors have.
+
+- Fixed: a quotation shown in its own code block no longer leaves a stray line
+  that starts with ". Every error mentions it." or "; its recent events
+  include ..."; the words after the block start a sentence of their own.
+
+- Fixed: when a cause revision moves an incident from a node to a workload,
+  its resolve now describes the workload ("cart in shop is healthy again. It
+  was failing for ten minutes.") and counts that workload's own failing time,
+  instead of saying the node is ready again after the whole incident's twelve
+  minutes. A page for a node no longer makes the workload it moved to "down".
+
+- Fixed: a digest says "still open", not "still failing" ("one more still
+  open, unchanged (...)", "+2 more still open", "... — still open since
+  17:14"), for ongoing problems that are standing conditions or configuration
+  advice; a reminder of an advice-only incident no longer says "still
+  failing".
+
+- The dashboard address in "Open in dashboard" links is found by kwatch itself.
+  When there is none, the Overview shows an "Alert links are off" notice and
+  the log says why.
+
+- Crash logs are captured more carefully: kwatch backs off for a while when the
+  API refuses pod logs, and the dashboard says crash output is not shown.
+
+- Each incident keeps a journal: snapshots of the failing containers, the
+  changes linked to it and its state transitions.
+
+- A resolve message says how many pods were affected, a repeat offender gets a
+  note, and an acknowledgement names who made it.
+
+- After a restart kwatch sends one short message that says why it stopped,
+  instead of listing the open incidents again, when every restored incident
+  still failing was already listed within the last hour; otherwise the
+  restored problems are listed as before. The same note is not sent twice
+  within that hour.
+
+- When the cause is not known yet, a Pro message says "Likely caused by: X;
+  kwatch is still checking." A resolve may add "Changed just before it
+  recovered", which never says the change was the fix. A resolve of an issue
+  kwatch stopped tracking says it is not fixed.
+
+- Fixed: a new page could be closed by an older queued resolve.
+
+- Fixed: "Moved" could point to an incident that was never announced, after a
+  restart handover or a split node outage.
+
+- Fixed: false `LeaseStale` and `CronJobNotScheduled` incidents when the
+  Lease or CronJob data was stale.
+
+- Fixed: two lines of one message that gave contradicting causes.
+
+- Fixed: a tier rise after a restart was not called out.
+
+- Fixed: flapping incidents were dropped on a restart caused by a license
+  lapse.
+
+- Fixed: a lost page was not detected when the pager and its fallback both
+  failed.
+
+- Fixed: the outbox retry count was inflated.
+
+- Fixed: a grouped recovery could list problems that had not recovered.
 
 ### Detection
+
+- A fail-closed admission webhook whose backend Service is gone or has no
+  ready pods is judged by its rules (operations, resources, scope,
+  namespace and object selectors): when they cover create or update of a
+  resource with objects that exist now, the finding says "rejects creates
+  and updates of pods right now: it fails closed and its backend Service
+  ... is gone"; when they cover only resources with no object, such as
+  custom resources whose definition was removed, it is a digest line and
+  sends no notification; when kwatch cannot tell, the finding says so. A
+  webhook that ignores failure is unchanged (digest only).
+
+- A pod's single sandbox failure (`FailedCreatePodSandBox`,
+  `NetworkNotReady`) waits a minute for the kubelet's retry before it is a
+  finding; a second failure counts at once. A node's sandbox finding needs
+  a pod that has still not started, and a node in its boot window makes
+  none: its network plugin is warming up. Address-assignment failures on
+  a node younger than the boot window ("failed to assign an IP address")
+  are held like any other sandbox failure and are reported once the node
+  is old if the pod still has not started.
+
+- A Service's "N of M backends ready" waits from the last change of its
+  endpoint count, not only of its ready count, so a backend added by a
+  scale-up or a replacement has its time to start.
+
+- A release is dated by its ReplicaSet's creation (or the revision change
+  kwatch saw, for a rollback), not by its oldest pod: pods of an old
+  revision recreated by a node rotation or an eviction are no new
+  rollout. A release is followed past its 15-minute window only when it
+  was reported inside it.
+
+- A missing IngressClass, PriorityClass or RuntimeClass is reported only
+  after it has been absent for two minutes from kwatch's first sighting,
+  so an object that is briefly missing from the model at start-up is not
+  reported.
+
+- A Warning event whose message reports a failed delete of an external
+  resource that is still in use ("DeleteLoadBalancer ... ResourceInUse",
+  "is in use", "DependencyViolation", "still attached") is a warning
+  finding at its first occurrence, with the count the Event object keeps
+  across restarts; it waits for the digest like other unknown events. An
+  object that is itself being deleted keeps its stuck-deletion finding,
+  which quotes the event.
+
+- Probe findings carry a "probe result" evidence ("HTTP 500", "timed
+  out", "connection refused"). A readiness check the running application
+  answers with an error status says so: "keeps failing its own readiness
+  check (HTTP 500) while it runs". A liveness kill says the check failed
+  and the kubelet restarts it ("keeps failing its liveness check (HTTP
+  500), so the kubelet keeps restarting it") and is recognized when the
+  kill ends in SIGKILL (exit 137) after the grace period, not only in
+  SIGTERM; a memory kill stays a memory kill. A liveness failure of a
+  container that exited on its own with an error is worded as that
+  exit ("keeps exiting on its own with an error (exit code 1)"): the
+  probe only fails while it is down. Without a readiness probe, a kill at
+  the end of what liveness allows with the probe refused counts as a kill
+  before the start finished.
+
+- A CronJob's repeated-failure finding is dated from the start of its
+  failure streak (the first failed run kept, or the last success when the
+  earlier Jobs are gone), not from the latest failed run.
+
+- VolumeAttachments record the finalizers that hold their deletion.
+
+- A container whose last run ended with a non-zero exit now has its
+  previous log read by the Pro crash investigation whatever the exit
+  family (a segfault, an abort, a plain exit 1) and whatever the
+  incident's state, flapping included; before, only crash-loop, error and
+  failed modes led the read, so a container that exited 139 and was then
+  killed by liveness had no captured log lines.
+
+- A container's readiness and liveness probe failures are now kept apart:
+  the kubelet reports both as `Unhealthy` events, and a liveness event used
+  to replace the readiness note's message and count. Notes now carry a
+  topic (recorded logs gain an optional `topic` field), each probe kind is
+  judged on its own newest event, and a readiness failure between crashes
+  is reported next to the liveness one. A probe finding notes the
+  container's restart count, and the incident's timeline records the
+  failure count and the kubelet's last message ("Container keeps failing
+  its readiness probe: 23 failures, last: Readiness probe failed: ...").
+
+- Exit codes 139 and 134 are worded after the program's last words: with
+  an unhandled-exception line in the termination message or previous log
+  (.NET, Java, Node and the like) the summary says "crashed with an
+  unhandled exception (exit code 139)"; otherwise 139 says "crashed (exit
+  code 139, signal SIGSEGV)" instead of "a segmentation fault". Reasons
+  and modes (`ContainerExitSegfault`, `Exit.Segfault`) are unchanged.
 
 - A node that has not been Ready since it joined is now given the ten-minute
   boot window before it is reported as lost, and the report says "has not been
@@ -288,7 +933,67 @@
   problem reporter is known to set no longer adds a digest line on its own; it
   stays as evidence inside the incident of a real failure of the node.
 
+- Fixed: a liveness kill whose program exits 1 (or any code) on SIGTERM
+  is a liveness kill, not "keeps exiting on its own": the kubelet's
+  "failed liveness probe, will be restarted" note within 2 minutes of the
+  end of the run decides, as on the dashboard (one shared test).
+
+- The cluster DNS servers are found through the DNS Service
+  (`kube-system/kube-dns`, `openshift-dns/dns-default`, or a kube-system
+  Service named for CoreDNS or selecting `k8s-app=kube-dns`), then its
+  pods and their owners of any kind. OpenShift's DaemonSet, RKE2's
+  `rke2-coredns-rke2-coredns` and Helm installs with a release prefix are
+  now recognized for DNS metrics and DNS outages; the coredns and kube-dns
+  names remain the fallback.
+
 ### Root cause
+
+- When a log line names several clients, the dependency is read from the
+  one nearest the failure, in the same clause or on the port the call used;
+  a URL path segment such as `/users/redis` is not taken for a client.
+
+- Dependency detection also recognizes Kafka's "Connection to node … could
+  not be established", libpq/psycopg2's "could not connect to server … host
+  "X" … port N" and "connection to server at "X" (…), port N failed", and
+  .NET SqlClient's "error occurred while establishing a connection to SQL
+  Server".
+
+- A Service whose backends are pods of a workload that run but are not
+  ready, before anything about those pods has a finding, no longer
+  explains its callers or itself: rows `called-service-backends-not-ready`
+  and `backends-not-ready` root the cause on the workload at a prior that
+  keeps it below high confidence. Pods that themselves call a Service
+  with no ready endpoint are not counted: their readiness may be the
+  symptom of what they call. An init container that waits for the
+  Service keeps the Service as its cause.
+
+- A Service that only a pod's configuration names, and that does not
+  exist, explains a crash only when the crash's own error line names it;
+  a crash whose log is not read yet is no longer blamed on the name.
+
+- A volume attachment whose detach failed, or whose volume or node is
+  gone, is its own root: its storage driver's attacher finalizer is
+  handled and cannot finish, so the finalizer is not blamed as
+  unhandled (for any driver).
+
+- New row `log-names-dependency`: a workload that crashes or exits and
+  whose own last words say it could not connect to a dependency is
+  explained by that dependency, at likely confidence at most (text is
+  never proof): "api in web keeps crashing, likely because it cannot
+  connect to Redis (from its log: "...")". A small table of
+  connection-failure words and client names (Redis, PostgreSQL, MySQL,
+  MongoDB, Kafka, RabbitMQ, Elasticsearch, Memcached, Cassandra, SQL
+  Server, and well-known ports) reads the dependency; the row needs a
+  crash or error exit and ignores the kubelet's probe messages. A host
+  that is an in-cluster Service with no ready endpoint, or failing
+  backends, stays with the called-service rows; a host outside the
+  cluster that one workload alone fails on stays that workload's own
+  problem, as before; several workloads naming one dependency stay with
+  the shared rows. The fix step checks the Service and its endpoints when
+  the host is one, else the address in the workload's configuration.
+  Community says "Cause found: likely a dependency." "Could not connect",
+  "unable to connect" and "Connection to host:port refused" now count as
+  failed calls for the called-service rows too.
 
 - A stuck-deleting finalizer is no longer blamed on a controller that only has
   a similar name. A workload is named as the handler only when the owner of
@@ -460,185 +1165,108 @@
   the controller not reconciling it (apiserver throttling), so those incidents
   blame the right entity.
 
-### Incidents and paging
+- Fixed: the log-names-dependency rule reads timestamped lines. A time
+  ("2026/11/03 12:30:45", klog "E1103 12:30:45.123", ISO
+  "2026-11-03T12:30:45Z") is never a host, so such lines are explained
+  and two workloads no longer share a dependency called "12". A host is
+  an IP address or a name that starts with a letter.
 
-- **A namespace outage is one message even when the workloads have a
-  Service.** Eight crash-looping Deployments that each sit behind a Service
-  were announced and paged one by one, because a Service made each blame
-  itself. They are now held and named in one namespace message.
+- Fixed: a URL's user and password are not its host and port.
+  "postgres://admin:12345@db:5432/app" names PostgreSQL at db:5432, and
+  every dependency host and quoted log line in a message is redacted.
 
-- **A page of another team is never held.** Two unrelated user-facing outages
-  that began in the same moment were paged once, because the second looked
-  like part of the first. A roll-up pages the first page-tier incident of each
-  namespace and holds only the others of that namespace.
+- Fixed: a client named in another clause of the line ("request timed
+  out after 30s; kafka consumer started") no longer names the
+  dependency. The client or host must be within six words of the failure,
+  in its clause, or in the exception or client class name.
 
-- **A restart no longer swallows a rise to page.** An incident held by the
-  restored-incidents summary, or one whose fingerprint was adopted during the
-  restore grace, that rose to the page tier was never paged. The rise is paged
-  at once and told.
+### Delivery and providers
 
-- **A roll-up no longer says "all N problems resolved" while a problem lives
-  on.** An incident that was closed as moved, or whose recurrence was still
-  failing, counted as resolved for the roll-up that named it. The roll-up now
-  closes only when the incident that took over, or the recurrence of a
-  forgotten one, is over too.
+- Discord incidents are an embed again: the headline as the title, the
+  cause, proof, log quote and fix in the description, color by status,
+  and kwatch, the cluster and the time in the footer. The embed stays
+  within Discord's limits (description 4096, embed 6000) by cutting the
+  proof, never the fix, and without one field per section, which broke
+  long messages before (#194, #416). Mentions are neutralized, thread_id
+  still works, and plain notices stay message content of at most 2000
+  characters. This changes Discord output in both editions.
 
-- **A node outage names every node it merged.** A merged node outage reached
-  the owners and namespaces of one node only. It now reaches the pods on every
-  merged node.
+- Fixed: chat messages no longer delete underscores or stars from names in
+  italic or bold text (Slack and Google Chat write such text plain), keep runs
+  of spaces in code spans, and carry backticks in code blocks instead of
+  replacing them with a look-alike character.
 
-- **A zone that fails minutes after its first node is one outage, one page.**
-  When the zone or pool fails as a whole, the incident that paged for the
-  first node takes the zone as its root and says its cause was revised.
-  Before, a second incident was announced and paged, and the first alert was
-  closed as moved while the outage went on.
+- Fixed: the Microsoft Teams card shows the incident title as escaped text, so
+  a title taken from the cluster cannot become a link or a mention.
 
-- **An outage message holds the pages it did not send.** The other page-tier
-  incidents of a namespace outage kept the page tier, so their reminders paged
-  the pagers for an alert nobody opened. They are held at notify, and a held
-  page no longer repeats itself as a "material change" a few seconds later.
+- Fixed: ilert sends notify and low tier incidents at priority LOW; only a
+  page-tier incident gets the configured priority, so a warning no longer
+  pages.
 
-- **Held updates widen the route of the resolve.** An update that was held
-  (startup summary, outage hold) and rose to a page did not record its
-  severity and reasons, so the resolve could miss the pager route. It now
-  does.
+- Fixed: Telegram messages neutralize @username in text a pod wrote, so a log
+  line cannot notify a person or a channel.
 
-- **A page is not delayed by digest incidents.** Digest-tier incidents
-  settling beside a page counted toward a burst, so the page waited 75 seconds
-  instead of 15.
+- Jira shows a quote that contains braces in a {noformat} block, byte for
+  byte, instead of dropping the braces.
 
-- **A flapping page keeps an open alert.** A page that resolved and failed
-  again left the pagers with no open alert after the first resolve. When it
-  becomes a flapper, or comes back for the third time inside two hours, one
-  update goes to the pagers at the page tier and reopens the alert; the
-  resolve of a stable recovery closes it. The held page is not released into a
-  second page while the alert is open. A flapper that someone acknowledged
-  does not page.
+- An Opsgenie alert whose close is answered 404 is retried in the background
+  for up to 5 minutes without holding the provider queue, then given up with
+  an info log and kwatch_delivery_resolves_lost_total.
 
-- **One incident panicking costs one incident.** A panic while advancing one
-  incident, or in one collecting step of the announcer (digest, listings,
-  roll-up), dropped every decision of the tick. Each incident and each step is
-  contained on its own, counted and logged, and the others still speak.
+- Messages now stay within the length limit of Alerta, Flock, Google Chat,
+  IFTTT, Mattermost, Rocket.Chat, Signal, SNS, Splunk, Teams, Teams Workflow,
+  WeCom and Zulip.
 
-- **"Failing again" survives a restart.** A reopened flapping incident that
-  restarted before its "failing again" update went out never sent it. It is
-  sent, and an owed one is not repeated after a flapping update that already
-  said it.
+- Pushover keeps cancelling the newest alarms beyond 1000: past that it
+  forgets the oldest receipt, not the new one.
 
-- **A forgotten outage leaves no group memory.** The roots a grouped node
-  outage merged stayed in memory after the incident was forgotten.
+- SNS receives the paging-only messages.
 
-- **A moved roll-up member closes its chat thread.** A roll-up member that
-  spoke on its own and was then closed as moved closed for the pagers only,
-  leaving its chat thread open. It is closed in chat too; a member that never
-  spoke still closes for the pagers alone.
+- SES, SendGrid, Mailgun and Resend send the HTML layout beside the text.
 
-- **A node that recovered while kwatch was down resolves at once.** After a
-  restart its incident waited for the restore grace and the hold (13 minutes)
-  to resolve, and said it was down for that long. It resolves as soon as the
-  sources synced, and its downtime ends when the node became ready.
+### Security
 
-- **Late failures of an outage join it.** The sixth and seventh workload of a
-  namespace outage, failing a minute or two after its message, were announced
-  alone. They are held and sent as one more outage message naming the whole
-  outage, and are held at notify when the outage paged.
+- Secrets hidden behind terminal color or control codes in logs are now
+  redacted.
 
-- **A page that moves to a workload says the node recovered.** When a node
-  page was re-rooted to a workload because the node came back, the update gave
-  no word about the node. It now says "Node n1 has recovered; the workload
-  still has open failures". The incident keeps its page tier.
+- Redaction also removes a bare `user:password@host` (for example
+  `admin:s3cret@db:5432`), not only the one inside a URL.
+  It also catches passwords with `# / ? ; ^ { } :` or after a backtick,
+  brace or key colon (`dsn:admin:pw@db`), and leaves package versions such
+  as `npm:lodash@4.17.21` and `cluster_name:rabbit@host` values alone.
 
-- **The restart summary does not wait ten minutes for loud problems.**
-  Restored incidents at notify or page whose findings are back are named one
-  settle after the sources synced; the rest, and the quiet ones, are named
-  when the restore grace ends. An incident a listing named within the last
-  hour is not listed again; when nothing else is, the short restart note
-  says how many are still open.
+- Root-cause text no longer takes the tail of a password that contains "@"
+  (for example `postgres://app:Pa@55word@db.prod:5432`) for the host.
 
-- **A severity override cannot undo a held repeat page.** An override that
-  made a failure critical paged again on a repeat of a page that had just
-  resolved. The hold stands.
+- Email (SMTP) alerts refuse cloud-metadata destinations, by host name or
+  resolved address, like the HTTP providers.
 
-- **"Moved" waits for the message it points to.** The incidents closed as
-  moved said so half a minute before the incident that took over sent its
-  "cause revised" update. They close together, the update first.
+- The dashboard's 400 page for an unparsable request sends the same
+  security headers as every other page, plus HSTS in shared mode over
+  kwatch's own TLS.
 
-- **The digest audit entry names every incident.** The audit entry of a digest
-  worded 20 incidents and hid the rest. It words 100 and ends with "and N
-  more: id, id, ..." naming the others.
+- Mattermost and Rocket.Chat no longer ping users named in workload text, and
+  emails and URLs in it are no longer mangled.
 
-- **A flickering failure keeps one incident ID.** A probe that failed for a
-  few seconds, over and over, opened a new incident every time. The silent
-  incident of the same root is revived under its own ID. The docs now say the
-  timeline keeps 7 days or 32 MiB, whichever is reached first.
+- WeCom and Teams Workflow escape Markdown in workload text.
 
-- **A re-ranked cause does not move an old incident.** An incident announced
-  more than ten minutes ago stays rooted where it is when the engine finds a
-  new cause that only ties with its root, or one that an alternative of the
-  same kind explains as well. Before, a peer that edged ahead every few hours
-  moved the incident and told it again each time.
+- The Slack SDK client no longer follows redirects and reads a bounded
+  response.
 
-- Fixed a restart that told a rise to the page tier twice: the second,
-  identical "material change" update ten minutes later is gone.
+- Provider sends to a cloud metadata address are refused for good, checked
+  on the URL and again on every resolved address: 169.254.169.254 and all
+  of 169.254.0.0/16 and fe80::/10, fd00:ec2::254, 100.100.100.200,
+  metadata.google.internal and metadata.goog. The send trail says "blocked:
+  cloud metadata address". Private and in-cluster addresses still work.
 
-- A page that keeps coming back no longer opens a second alert beside the one
-  already open for the same outage, and it honors an acknowledgement
-  annotation; the once-per-incident rule now survives a restart.
+- The image build context leaves out key and credential files (`*.pem`,
+  `*.key`, `*.crt`, `*.p12`, `*.pfx`, `*.jks`, `.env*`, kubeconfigs,
+  `id_rsa*`) at any depth.
 
-- A node under disk, memory or other pressure that is Ready again after a
-  restart no longer resolves early and reopens; only a node that was just not
-  ready or had a stale heartbeat resolves at once.
-
-- A late page-tier failure of a namespace outage that already paged is held at
-  notify from the first one, so the outage has one alert.
-
-- A quota used up with nothing refused, and CPU throttling while nothing is
-  affected, no longer produce a digest line.
-
-- After a restart, a problem that was announced before and whose findings
-  only come back after the restore grace (for example a Deployment whose new
-  pod is created minutes after kwatch starts and is held while the cluster
-  wakes up) is now named in a restored-problems message when it is back,
-  instead of staying silent for days. As with every restored listing, a
-  problem a listing already named within the last hour is not listed again.
-
-### Messages and providers
-
-- Fixed: a deleted object is no longer listed under "Recovered at the same
-  moment", and a resolve that stopped tracking an incident that is still
-  failing is never listed there either. Deleted objects that only a roll-up
-  named and that end in the same tick now share one message under "Deleted
-  at the same moment", so cleaning up a namespace is one message, not one per
-  workload.
-
-- Fixed: text a pod or an event wrote is now quoted byte for byte in every
-  message. A double quote, a backtick, a run of spaces or a final full stop
-  inside a quoted error no longer cuts it short or changes it in Slack,
-  Discord, Mattermost, Teams, Telegram, Matrix, Jira and the other rich chats;
-  text that a code span cannot hold exactly goes in a code block.
-
-- Fixed: a change to a Deployment, StatefulSet or other pod template no longer
-  shows secret values. An environment variable shows its old and new value
-  only when its name is on a short list (host, port, url, level, env, region,
-  enabled, timeout, replicas, mode, addr) and the value is a plain word; every
-  other literal, and every command or argument that follows a flag, says
-  "changed". Query strings of probe paths are hidden too.
-
-- Fixed: a Secret or ConfigMap that was edited shortly before the failure is
-  no longer said to "not exist"; the message says it "changed shortly before".
-  A missing or deleted one still says it does not exist.
-
-- Fixed: durations and semicolons inside quoted text are left exactly as the
-  pod or the event wrote them; kwatch only rewrites its own words.
-
-- Fixed: "Fixed by rollout 15 after N minutes" now measures to the moment the
-  failures cleared, not to the end of the resolve hold, and every time in a
-  message names its zone ("10:03 UTC"), including the change window, the
-  serving certificate expiry and "same as Tue 14:02 UTC".
-
-- Fixed: the update that says someone changed the workload, or its config,
-  names the workload in its short text, so a provider that shows only the
-  short text (an Opsgenie alert title, an SMS) still says what it is about.
+- Dashboard sign-in is hardened: `X-Forwarded-For` counts only when it is a
+  valid IP address, the failure limiter tracks at most 10,000 clients, only an
+  `Authorization: Bearer` header is a token (the scheme in any case) and tokens
+  are compared in constant time.
 
 - Fixed: redaction now also removes PGPASSWORD-style names, pass= and PASS:,
   curl -u user:password, redis-cli -a, sshpass -p, docker login -p, Azure
@@ -648,128 +1276,18 @@
   before the @ of a web address, passwords that contain commas or semicolons,
   Digest response values and "the password is X" prose.
 
-- Fixed: chat messages no longer delete underscores or stars from names in
-  italic or bold text (Slack and Google Chat write such text plain), keep runs
-  of spaces in code spans, and carry backticks in code blocks instead of
-  replacing them with a look-alike character.
-
 - Changed: private addresses (10.x, 172.16-31.x, 192.168.x, 100.64.0.0/10,
   169.254.0.0/16, fc00::/7, fe80::) now stay visible in log lines as they
   already did in events and termination messages, which is what the evidence
   policy in the docs says and what the owner annotation after an address
   needs.
 
-- Fixed: the Microsoft Teams card shows the incident title as escaped text, so
-  a title taken from the cluster cannot become a link or a mention.
-
-- Fixed: ilert sends notify and low tier incidents at priority LOW; only a
-  page-tier incident gets the configured priority, so a warning no longer
-  pages.
-
-- Fixed: a failure signature is no longer printed between quotes as lower-case
-  normalized words that no pod wrote; the cause now keeps the error one of the
-  failing pods wrote (`SharedError`) and the message quotes it as written,
-  without credentials.
-
-- Fixed: Telegram messages neutralize @username in text a pod wrote, so a log
-  line cannot notify a person or a channel.
-
 - Fixed: redaction treats 100.64.0.0/10 and 169.254.0.0/16 as private
   addresses and redacts "the password is X" prose.
-
-- Fixed: an external endpoint whose probe error says "no such host" is no
-  longer described as not accepting connections; it is worded as a name that
-  does not resolve, with the error quoted as written.
-
-- Fixed: a fact about a container (memory used against its limit, "its last
-  run lasted ...") is no longer said as "It" under a node or Secret lead; the
-  message names the container. A fact about a claim no longer drifts onto a
-  workload whose quoted crash comes before it ("It is used by ..." now ends
-  the usage sentence).
-
-- Fixed: "no memory limit" is only said for memory evictions, a node that was
-  only under memory or disk pressure now resolves as "no longer low on
-  memory/disk space" instead of "is ready again", and a cause that is the
-  workload's own pod ("keeps crashing because its own pod is not ready") is
-  dropped.
-
-- Fixed: kubectl `--previous` is only suggested for a container that
-  restarted; readiness-only and never-restarted containers get describe pod
-  plus current logs. Pages about the cluster DNS, scheduler, controller
-  manager, API server and etcd now start with a first step.
-
-- Fixed: affected lists name every namespace when there are several ("a in
-  billing; b and c in media"), a network-policy lead names the caller without
-  a capital and no longer lists it as affected, the same quoted error is shown
-  once, baseline sentences use each figure's own verdict once, and a container
-  recovering with its pod is told once.
-
-- Fixed: an outage of several nodes says "They report ..." and "the nodes may
-  be down"; its updates say "Nodes n1-n5 are spreading to ..."; a zone's
-  updates speak for the zone and never say "Node a1 is spreading to node a1".
-
-- Fixed: a reminder for a condition that fails nothing (quota used up,
-  throttled but ready) says "still the case, for one day now" instead of
-  "still failing".
-
-- Fixed: the digest closes with "It is not urgent ..." for one problem, says
-  nothing when only resolved ones are listed, and says "one more still
-  failing"; "kwatch" stays lowercase at the start of a sentence.
-
-- Fixed: "The error mentions it" is only said next to the quoted error;
-  otherwise it is left out.
-
-- Fixed: the "Quoted:" and "Quoted readiness failure:" labels are gone.
-
-- Fixed: the rollback hint says what the command does ("Rolling back to
-  revision N, the one before this release, undoes it") instead of promising it
-  fixes the failure.
-
-- Fixed: a LimitRange change shows only the bounds that changed.
-
-- Fixed: the namespace outage message ends with a full stop.
-
-- Fixed: removed repeated or empty-information sentences: the rival that
-  restated the lead, a service listed again after its Service, the last chain
-  hop repeated, "The pod-security changed.", a workload named "storage"
-  capitalized, one workload named twice in an update.
-
-- Fixed: an update that only raised the tier says "It is now critical."
-
-- Fixed: messages speak of kwatch in the third person ("kwatch can't see ...",
-  "kwatch will write again ...").
-
-- Fixed: removed "work in flight was cut off", "so the restarts are a
-  symptom", and the load balancer event label now says "failed to deploy"
-  (what happened), not "can't deploy" (a claim about the state).
-
-- Fixed: a release whose image cannot be pulled starts with `kubectl describe
-  pod` (the events) instead of `rollout status`.
-
-- Fixed: durations the message writes are in words ("ten seconds", "created
-  two hours ago", "three minutes after the release", "30-second grace
-  period"); a whole rate reads "12 requests a second".
-
-- Fixed: the node controller's own taints are no longer listed as something
-  that "changed before it broke".
-
-- Fixed: a resolve no longer counts the time a node's Warning event stayed in
-  its window as time the node was failing.
-
-- Fixed: a Service that selects a typo keeps the clause that says
-  no pod has those labels ("selects app=apii, but no pod or workload template
-  in shop has those labels").
-
-- Fixed: the webhook consequence states what was seen ("It fails
-  closed (failurePolicy Fail); no request has been rejected so far.") instead
-  of forecasting that any create is rejected.
 
 - An edit of a hidden environment variable or command-line value is no longer
   dropped from "Only change in revision N", so a release whose only edit was
   FOO=1 to FOO=2 still says "env FOO changed".
-
-- A config map or Secret key change reads "Key app.yaml changed." instead of
-  "changed to changed".
 
 - An environment value that merely starts with "from " is hidden like any
   other literal; references to Secrets and ConfigMaps are told apart by
@@ -782,43 +1300,31 @@
 - A quote mark hidden inside a word can no longer slip a password past the
   redactor, and no message field can carry a stray quote marker.
 
-- Jira shows a quote that contains braces in a {noformat} block, byte for
-  byte, instead of dropping the braces.
-
 - "PASS: TestName" Go test output, pass_through=true and proxy_pass=... are no
   longer redacted; a quoted curl -u 'user:pw' / --user "user:pw" and a quoted
   password cut off before its closing quote are now redacted to the end of the
   line.
 
-- An Opsgenie alert whose close is answered 404 is retried in the background
-  for up to 5 minutes without holding the provider queue, then given up with
-  an info log and kwatch_delivery_resolves_lost_total.
+- The license, the adoption telemetry and the update check always verify TLS;
+  `app.insecureSkipTLSVerify` applies to alert providers only.
 
-- Fixed: the configuration risks quoted beside a failure now state facts only
-  ("It runs a single replica.", "Its image has no fixed tag.", "Its containers
-  have no memory limit, so nothing caps their memory use.", "It has no
-  readiness probe, so Kubernetes sends it traffic while the container runs.")
-  instead of "so this is downtime" or "what runs may have changed". A test
-  scans every sentence the message writers can say for forecasting words, like
-  the one the detectors have.
+- The permission audit checks the license instance Secret when a license key
+  is set.
 
-- Fixed: a quotation shown in its own code block no longer leaves a stray line
-  that starts with ". Every error mentions it." or "; its recent events
-  include ..."; the words after the block start a sentence of their own.
+- A KwatchConfig may now set only the fields of the CRD schema; license,
+  status endpoint, Secret watching and other settings are refused. It can turn
+  telemetry, check-ins and the update check off but never back on, and cannot
+  add probe targets that name loopback, link-local or metadata addresses.
 
-- Fixed: when a cause revision moves an incident from a node to a workload,
-  its resolve now describes the workload ("cart in shop is healthy again. It
-  was failing for ten minutes.") and counts that workload's own failing time,
-  instead of saying the node is ready again after the whole incident's twelve
-  minutes. A page for a node no longer makes the workload it moved to "down".
+- The kubelet client no longer follows redirects; the update notice accepts
+  only a strict version tag and compares pre-releases correctly.
 
-- Fixed: a digest says "still open", not "still failing" ("one more still
-  open, unchanged (...)", "+2 more still open", "... — still open since
-  17:14"), for ongoing problems that are standing conditions or configuration
-  advice; a reminder of an advice-only incident no longer says "still
-  failing".
+- Probe targets added by a KwatchConfig are refused at connect time when their
+  name resolves to a loopback, link-local (cloud metadata), unspecified or
+  multicast address; in-cluster private addresses such as Service ClusterIPs
+  are allowed, and anything else can be listed in the mounted configuration.
 
-### Runtime and performance
+### Performance and operations
 
 - Fixed a startup slowdown on large clusters: with the flight recorder on, the
   initial sync of a 20,000-pod cluster no longer copies the whole recording
@@ -882,68 +1388,15 @@
   kubelet now counts as unreachable only after two failed polls in a row, and
   never while the node is under ten minutes old or cordoned.
 
-### Editions, permissions, configuration and chart
-
-- The least-privilege chart rules now include PriorityClasses, RuntimeClasses,
-  IngressClasses and ReplicationControllers, so a missing PriorityClass,
-  RuntimeClass or IngressClass is detected again; after the first discovery
-  kwatch logs one warning naming the kinds it cannot watch and shows a
-  degraded `coverage` note on /health.
-
-- A Community install whose configuration sets Pro features is now told once,
-  at its first start, which settings are ignored, and the start logs a real
-  warning.
-
-- A license key with a space or newline no longer stops kwatch from starting:
-  whitespace is stripped and a key that is still unusable is reported as an
-  invalid license.
-
-- A mistyped, expired, revoked or conflicting license key now logs one warning
-  per reason, shows a `license` component on /health and sends a "Pro is
-  disabled: reason" notice, even when Pro never ran.
-
-- Community now keeps the incidents it announced across a restart, so their
-  resolves are still sent and a pager alert is not left open; when the
-  provider cap leaves a paging service inactive kwatch warns, and the provider
-  Community keeps is chosen pager first, then chat, then email.
-
-- The license, the adoption telemetry and the update check always verify TLS;
-  `app.insecureSkipTLSVerify` applies to alert providers only.
-
 - The README Helm quick-start installs no provider; kwatch now warns at start
   when no provider is active and the chart notes say so.
-
-- Adoption telemetry uses its own ID, separate from the license cluster ID
-  (installs get a new telemetry ID once).
-
-- Pro cluster check-ins (the 30-minute ping) are removed. `clusterCheckins`
-  and `KWATCH_CLUSTER_CHECKINS` are accepted, ignored and logged once as
-  deprecated. Pro only renews its license daily; a revocation applies at
-  the next renewal. Use `heartbeatMonitor.url` to learn when kwatch stops.
-
-- The Pro lease and clock guard are mirrored to the
-  `kwatch-license-instance` Secret, so offline grace survives `emptyDir`.
 
 - An invalid KwatchConfig at startup now falls back to the last one that
   applied cleanly (kept in the state file), and a notice is sent once per
   refused spec.
 
-- The permission audit checks the license instance Secret when a license key
-  is set.
-
 - `kwatch replay-export` and `kwatch version --json` read the effective
   edition from the running installation's state file, so they work on Pro.
-
-- A KwatchConfig may now set only the fields of the CRD schema; license,
-  status endpoint, Secret watching and other settings are refused. It can turn
-  telemetry, check-ins and the update check off but never back on, and cannot
-  add probe targets that name loopback, link-local or metadata addresses.
-
-- The license clock guard recovers when a wrong clock step is corrected and
-  the server signs a newer lease.
-
-- The kubelet client no longer follows redirects; the update notice accepts
-  only a strict version tag and compares pre-releases correctly.
 
 - `kwatch lint` and `kwatch test-alert` use the providers the edition actually
   runs.
@@ -953,26 +1406,11 @@
   logs a warning and uses the safe side. A license key written as text in the
   configuration file is warned about.
 
-- A Pro start no longer logs the Community warnings for a second while the
-  license is settling.
-
 - During an edition rebuild the health port keeps answering liveness until the
   new generation takes it over, so a slow rebuild no longer risks a liveness
   restart.
 
-- The chart gains `priorityClassName`, `imagePullSecrets`, `extraVolumes` and
-  `extraVolumeMounts`, rolls the pod when an existing license Secret changes
-  (where Helm can read it), and renders the license instance Secret and its
-  Role only when a license key is configured (`license.instanceSecret` forces
-  them).
-
-- The sizing table now says what the non-pod objects add.
-
 - The KwatchConfig API types encode an explicit `enabled: false`.
-
-- The chart and manifest no longer set `karpenter.sh/do-not-disrupt` by
-  default, so Karpenter can consolidate kwatch's node; opt in with
-  `podAnnotations`, and see the docs for PodDisruptionBudget guidance.
 
 - The feature catalog says Community detects nodes that are not ready, and Pro
   adds pressure and draining.
@@ -989,19 +1427,12 @@
 - The error-line normalizer memo is no longer a process-wide global; each
   detection tracker owns its own.
 
-- Probe targets added by a KwatchConfig are refused at connect time when their
-  name resolves to a loopback, link-local (cloud metadata), unspecified or
-  multicast address; in-cluster private addresses such as Service ClusterIPs
-  are allowed, and anything else can be listed in the mounted configuration.
-
 - `make alert-quality-gate` now also runs the check that the scorecard gates
   see root-cause regressions.
 
 - When the last good KwatchConfig cannot be read at startup (lock timeout,
   unreadable file, invalid kept spec), kwatch logs the reason once at Info
   level.
-
-### Alert-quality gates
 
 - The alert-quality scorecard can now see root-cause regressions: it fails on
   any labeled scenario that states a wrong root at likely confidence (0.50)
@@ -1036,154 +1467,10 @@
   independent faults sharing a node, states that must stay quiet) joined the
   labeled library as permanent regression tests.
 
-### Dashboard
-
-- The dashboard is rebuilt as an incident view. The Overview is first, at
-  `/`: insights, the namespace map, top causes, a quiet-cluster line, the
-  coverage panel, weekly trends and a "kwatch itself" card.
-
-- One Issues table at `/issues` shows Active, Resolved or All, and the server
-  filters, sorts and pages it, so thousands of issues stay fast. It has
-  multi-select filters with chips, saved views, columns you choose, density,
-  page size, Local or UTC times, a "N new or changed" bar, a preview drawer,
-  similar issues, search highlight and a return to the place you left.
-
-- The issue page shows why the issue is open, a journal and timeline, a state
-  strip, evidence, containers with their usage history, caused-by and causing
-  issues, the blast radius, the delivery trail with reasons, the pager status,
-  what kwatch sent, moved links and the changes made before it recovered.
-
-- New: an Activity feed, browser notifications, live push (`/api/events`), an
-  offline and stale banner, text size and high contrast, and keyboard
-  shortcuts. The UI is described in `docs/dashboard.md`.
-
-- Every `400` from the dashboard API has the same body (`error`, `param`,
-  `term`), and the Issues page shows the sentence with the bad word marked.
-  `/api/incidents` adds `modeLabels`, the `stopped` filter and facet, and
-  `/api/trends` and `/api/insights` take `tzName`. `/api/status` adds `self`
-  and `failedLastHour`, and `/api/coverage` adds `kindTotals`, `rule` and
-  `missingRules`.
-
-- Resolved issues kwatch stopped tracking have a Stopped tracking filter,
-  quick view and `is:stopped`, and a banner on the issue page.
-
-- The live stream sends `signedout` when the sign-in stops being valid
-  (checked every 2 seconds), and the page shows the sign-in at once.
-
-- An address that cannot be parsed gets the not-found page instead of a bare
-  `400`, also when kwatch serves TLS itself (HTTP/2 still works there).
-  A `401` or `404` is logged at verbosity 1.
-
-- `failedLastHour` is now exact: it counts every failed or retried provider
-  send of the last hour, summaries, roll-ups and digests included, however
-  many one incident had, instead of what the send trail still held.
-
-### Incident journal and messages
-
-- The dashboard address in "Open in dashboard" links is found by kwatch itself.
-  When there is none, the Overview shows an "Alert links are off" notice and
-  the log says why.
-
-- The container usage history is kept in the state file (new bucket
-  `usage`), so it survives a restart. The delivery trail (new bucket
-  `trails`) is kept there only while the dashboard runs (Pro with
-  `dashboard.enabled`), its only reader.
-
-- Crash logs are captured more carefully: kwatch backs off for a while when the
-  API refuses pod logs, and the dashboard says crash output is not shown.
-
-- New `/api/coverage` answers what kwatch watches and what it cannot read.
-
-- Each incident keeps a journal: snapshots of the failing containers, the
-  changes linked to it and its state transitions.
-
-- A resolve message says how many pods were affected, a repeat offender gets a
-  note, and an acknowledgement names who made it.
-
-- After a restart kwatch sends one short message that says why it stopped,
-  instead of listing the open incidents again, when every restored incident
-  still failing was already listed within the last hour; otherwise the
-  restored problems are listed as before. The same note is not sent twice
-  within that hour.
-
-- When the cause is not known yet, a Pro message says "Likely caused by: X;
-  kwatch is still checking." A resolve may add "Changed just before it
-  recovered", which never says the change was the fix. A resolve of an issue
-  kwatch stopped tracking says it is not fixed.
-
-### Alerting fixes
-
-- Fixed: a new page could be closed by an older queued resolve.
-
-- Fixed: "Moved" could point to an incident that was never announced, after a
-  restart handover or a split node outage.
-
-- Fixed: false `LeaseStale` and `CronJobNotScheduled` incidents when the
-  Lease or CronJob data was stale.
-
-- Fixed: two lines of one message that gave contradicting causes.
-
-- Fixed: a tier rise after a restart was not called out.
-
-- Fixed: flapping incidents were dropped on a restart caused by a license
-  lapse.
-
-- Fixed: a lost page was not detected when the pager and its fallback both
-  failed.
-
-- Fixed: the outbox retry count was inflated.
-
-- Fixed: a grouped recovery could list problems that had not recovered.
-
-### Security
-
-- Secrets hidden behind terminal color or control codes in logs are now
-  redacted.
-
-- Mattermost and Rocket.Chat no longer ping users named in workload text, and
-  emails and URLs in it are no longer mangled.
-
-- WeCom and Teams Workflow escape Markdown in workload text.
-
-- The Slack SDK client no longer follows redirects and reads a bounded
-  response.
-
-- Provider sends to a cloud metadata address are refused for good, checked
-  on the URL and again on every resolved address: 169.254.169.254 and all
-  of 169.254.0.0/16 and fe80::/10, fd00:ec2::254, 100.100.100.200,
-  metadata.google.internal and metadata.goog. The send trail says "blocked:
-  cloud metadata address". Private and in-cluster addresses still work.
-
-- The image build context leaves out key and credential files (`*.pem`,
-  `*.key`, `*.crt`, `*.p12`, `*.pfx`, `*.jks`, `.env*`, kubeconfigs,
-  `id_rsa*`) at any depth.
-
-- Dashboard sign-in is hardened: `X-Forwarded-For` counts only when it is a
-  valid IP address, the failure limiter tracks at most 10,000 clients, only an
-  `Authorization: Bearer` header is a token (the scheme in any case) and tokens
-  are compared in constant time.
-
-### Providers
-
-- Messages now stay within the length limit of Alerta, Flock, Google Chat,
-  IFTTT, Mattermost, Rocket.Chat, Signal, SNS, Splunk, Teams, Teams Workflow,
-  WeCom and Zulip.
-
-- Pushover keeps cancelling the newest alarms beyond 1000: past that it
-  forgets the oldest receipt, not the new one.
-
-- SNS receives the paging-only messages.
-
-- SES, SendGrid, Mailgun and Resend send the HTML layout beside the text.
-
-### Performance
-
 - Cold start on large clusters is about four times faster.
 
 - The state file is written less often for usage history: unchanged records
   are not written again.
-
-### Health and operations
 
 - `/health` and `/api/coverage` use one set of coverage reason codes. The
   names `/health` used before are still accepted on input.
@@ -1219,10 +1506,28 @@
 - The least-privilege RBAC covers the Gateway API `udproutes`,
   `backendtlspolicies` and `listenersets`.
 
-- The install notes say how to open the dashboard and recommend the
-  heartbeat.
+- The install notes say how to open the dashboard and recommend the Pro
+  heartbeat (`config.heartbeatMonitor`).
 
-### Upgrade notes (unreleased)
+- The least-privilege chart rules now include PriorityClasses, RuntimeClasses,
+  IngressClasses and ReplicationControllers, so a missing PriorityClass,
+  RuntimeClass or IngressClass is detected again; after the first discovery
+  kwatch logs one warning naming the kinds it cannot watch and shows a
+  degraded `coverage` note on /health.
+
+- The chart gains `priorityClassName`, `imagePullSecrets`, `extraVolumes` and
+  `extraVolumeMounts`, rolls the pod when an existing license Secret changes
+  (where Helm can read it), and renders the license instance Secret and its
+  Role only when a license key is configured (`license.instanceSecret` forces
+  them).
+
+- The sizing table now says what the non-pod objects add.
+
+- The chart and manifest no longer set `karpenter.sh/do-not-disrupt` by
+  default, so Karpenter can consolidate kwatch's node; opt in with
+  `podAnnotations`, and see the docs for PodDisruptionBudget guidance.
+
+### Upgrade notes
 
 - **New state buckets.** `trails` and `usage` are added to an existing state
   file when kwatch opens it; there is nothing to migrate.

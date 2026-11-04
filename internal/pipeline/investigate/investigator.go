@@ -113,7 +113,7 @@ func (r *RootInvestigator) Plan(p incident.Incident) (Investigation, bool) {
 	if len(checks) == 0 {
 		return Investigation{}, false
 	}
-	lead := leadOf(p, checks)
+	lead := leadOf(p, r.sources.Model, checks)
 	kind := checks[0].name
 	if lead >= 0 {
 		kind = checks[lead].name

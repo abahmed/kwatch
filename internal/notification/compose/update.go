@@ -123,8 +123,7 @@ func strongestProof(f caseFacts) []sentence {
 func flappingSentences(f caseFacts) []sentence {
 	return []sentence{
 		{part: partLead, text: capitalName(leadSubject(f),
-			f.leadName(leadSubject(f))) +
-			" keeps failing and recovering: it has recovered " +
+			f.leadName(leadSubject(f))) + " " + flappingUpdate(f) +
 			plural(len(f.p.Cycles), "time") + " recently."},
 		{part: partFollowUp, text: "kwatch will write again when it stays " +
 			"healthy or fails differently."},

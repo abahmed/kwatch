@@ -3,6 +3,7 @@ package compose
 import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // movedNote is the close of an incident whose failures another incident
@@ -14,6 +15,13 @@ func movedNote(f caseFacts) []sentence {
 		return []sentence{{part: partLead,
 			text: "Moved: the failures of " + f.leadName(p.Root) +
 				" are now part of another incident and are not resolved."}}
+	}
+	if p.SupersededRoot.Kind == explain.KindFailureSignature {
+		// The signature's name is normalised error words, not an
+		// object: say what the other incident is about instead.
+		return []sentence{{part: partLead, text: "Moved: this is now " +
+			"part of the incident of workloads failing with the same " +
+			"error" + f.clusterTag() + "."}}
 	}
 	return []sentence{{part: partLead, text: "Moved: this is now part of " +
 		"the " + shortName(p.SupersededRoot) + movedNoun(p.Mode) +

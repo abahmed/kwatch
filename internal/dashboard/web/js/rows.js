@@ -48,7 +48,7 @@
     n.appendChild(KW.el("b", "", "kwatch hasn't checked in a while."));
     var p = KW.el("p", "", "Last check: " + KW.rel(status.lastScan) + ". ");
     var a = KW.el("a", "ulink", "See kwatch status.");
-    a.href = "/";
+    a.href = "/kwatch";
     a.dataset.link = "";
     p.appendChild(a);
     n.appendChild(p);

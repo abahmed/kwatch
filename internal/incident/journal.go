@@ -124,7 +124,7 @@ func (m *Manager) observe(p *Incident, now time.Time) {
 	if p.State != Resolved && (j.Level == "" || j.seenTier != p.Tier) {
 		p.noteLevel(m.levelOf(p))
 	}
-	worse := j.noteTransitions(p, now)
+	worse := j.noteTransitions(p, now, m.tierUnsettled(p, now))
 	if p.State == Resolved {
 		return
 	}
@@ -150,7 +150,9 @@ func (m *Manager) observe(p *Incident, now time.Time) {
 // noteTransitions appends p's state and tier changes since the last
 // observation and returns why a snapshot is due: BreakFirst when it
 // opened, BreakWorse when its tier rose or it reopened, else "".
-func (j *Journal) noteTransitions(p *Incident, now time.Time) string {
+func (j *Journal) noteTransitions(
+	p *Incident, now time.Time, unsettled bool,
+) string {
 	worse := ""
 	if from := j.seenState; from != p.State {
 		kind := transitionKind(from, p.State)
@@ -162,6 +164,12 @@ func (j *Journal) noteTransitions(p *Incident, now time.Time) string {
 		case TransitionReopened:
 			worse = BreakWorse
 		}
+	}
+	if unsettled {
+		// The tier of a restored incident moves with a partial view
+		// until the grace is over: only where it lands is recorded.
+		j.seenState = p.State
+		return worse
 	}
 	if j.seenTier != p.Tier && j.seenState != 0 &&
 		p.State != Settling && p.State != Resolved {

@@ -29,8 +29,8 @@ func (m *Manager) revive(p *Incident, now time.Time) {
 	p.Cycles = recent(p.Cycles, now, m.cfg.FlapWindow)
 	p.Cycles = append(p.Cycles, now)
 	p.Occurrences = appendOccurrence(p.Occurrences, now)
-	week := recent(p.Occurrences, now, recurrenceWeek)
-	p.note(now, "happened again ("+ordinal(len(week))+" time this week)")
+	p.note(now, "happened again ("+ordinal(weekCount(p.History, now))+
+		" time this week)")
 	p.State, p.Opened, p.Resolved = Settling, now, time.Time{}
 	p.RecoveringSince = time.Time{}
 	p.Fix, p.FixedBy = "", nil

@@ -2,7 +2,7 @@ POST /chat.postMessage
 Content-Type: application/x-www-form-urlencoded
 
 as_user=true
-blocks=[{"type":"section","text":{"type":"mrkdwn","text":"🔴 payments in shop is crash-looping.\nCaused by: …[521 runes sha256:94de25fbd50aa9513da761c2]…e}},{"type":"section","text":{"type":"mrkdwn","text":"```panic: out of memory```","verbatim":true}}]
+blocks=[{"type":"section","text":{"type":"mrkdwn","text":"🔴 payments in shop is crash-looping.\nCaused by: …[554 runes sha256:f9e2df3f4518986dcee1fcd2]…e}},{"type":"section","text":{"type":"mrkdwn","text":"```panic: out of memory```","verbatim":true}}]
 channel=C1
 text=🔴 payments in shop is crash-looping.
 token=<redacted>

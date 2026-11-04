@@ -158,7 +158,7 @@ func changeLead(f caseFacts) string {
 	workload := affectedWorkload(f)
 	text := shortName(workload) + " " + stateWords(f.p)
 	if f.p.State == incident.Flapping {
-		text = shortName(workload) + " keeps failing and recovering"
+		text = shortName(workload) + " " + flappingState(f)
 	}
 	if workload.Namespace != "" {
 		text += " in " + workload.Namespace
@@ -267,7 +267,7 @@ func causedLead(f caseFacts) string {
 func symptomState(f caseFacts, subject inventory.EntityID) string {
 	name := f.leadName(subject)
 	if f.p.State == incident.Flapping {
-		return name + " keeps failing and recovering"
+		return name + " " + flappingState(f)
 	}
 	if !f.ok || f.lead.Entity == f.p.Cause.Root || nodeStateOfWorkload(f) {
 		return name + " " + stateWords(f.p)
@@ -307,7 +307,7 @@ func subjectWithState(f caseFacts, subject inventory.EntityID) string {
 	name := f.leadName(subject)
 	switch {
 	case f.p.State == incident.Flapping:
-		return name + " keeps failing and recovering"
+		return name + " " + flappingState(f)
 	case onlyAdvisory(f.members):
 		// Only configuration risks remain: nothing is failing.
 		return name + " is no longer failing"

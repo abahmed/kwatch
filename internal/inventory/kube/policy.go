@@ -235,6 +235,9 @@ func (VolumeAttachmentSchema) Describe(obj any) (Description, bool) {
 	if at := va.DeletionTimestamp; at != nil {
 		attrs[AttrDeletingSince] = inventory.Time(at.Time)
 	}
+	// The finalizer of the driver's attacher holds the deletion; it is
+	// what the stuck deletion names.
+	setFinalizers(attrs, va)
 	if va.Spec.Attacher != "" {
 		attrs[AttrAttacher] = inventory.Text(evidenceText(va.Spec.Attacher))
 	}
@@ -281,12 +284,8 @@ func (WebhookSchema) RelationTypes() []inventory.RelationType {
 // Describe implements Schema.
 func (w WebhookSchema) Describe(obj any) (Description, bool) {
 	var (
-		name     string
-		uid      string
-		clients  []admissionv1.WebhookClientConfig
-		policies []string
-		hooks    []string
-		rules    []admissionv1.RuleWithOperations
+		name, uid string
+		specs     []hookSpec
 	)
 	switch config := obj.(type) {
 	case *admissionv1.MutatingWebhookConfiguration:
@@ -294,38 +293,38 @@ func (w WebhookSchema) Describe(obj any) (Description, bool) {
 			return Description{}, false
 		}
 		name, uid = config.Name, string(config.UID)
-		for _, hook := range config.Webhooks {
-			clients = append(clients, hook.ClientConfig)
-			policies = append(policies, failurePolicy(hook.FailurePolicy))
-			hooks = append(hooks, hook.Name)
-			rules = append(rules, hook.Rules...)
-		}
+		specs = mutatingSpecs(config.Webhooks)
 	case *admissionv1.ValidatingWebhookConfiguration:
 		if w.Mutating {
 			return Description{}, false
 		}
 		name, uid = config.Name, string(config.UID)
-		for _, hook := range config.Webhooks {
-			clients = append(clients, hook.ClientConfig)
-			policies = append(policies, failurePolicy(hook.FailurePolicy))
-			hooks = append(hooks, hook.Name)
-			rules = append(rules, hook.Rules...)
-		}
+		specs = validatingSpecs(config.Webhooks)
 	default:
 		return Description{}, false
 	}
+	var (
+		clients         []admissionv1.WebhookClientConfig
+		policies, hooks []string
+		rules           []admissionv1.RuleWithOperations
+	)
 	rel := relations{}
-	for _, client := range clients {
-		if svc := client.Service; svc != nil {
+	for _, h := range specs {
+		clients = append(clients, h.client)
+		policies = append(policies, h.policy)
+		hooks = append(hooks, h.name)
+		rules = append(rules, h.rules...)
+		if svc := h.client.Service; svc != nil {
 			rel.add(inventory.Serves, inventory.CoreID(
 				KindService, svc.Namespace, svc.Name))
 		}
 	}
+	attrs := withClosedServices(
+		configAttributes(policies, hooks, rules), clients, policies)
 	return Description{
 		ID: inventory.CoreID(w.Kind(), "", name), UID: uid,
-		Attributes: withClosedServices(
-			configAttributes(policies, hooks, rules), clients, policies),
-		Relations: rel,
+		Attributes: withClosedRules(attrs, specs),
+		Relations:  rel,
 	}, true
 }
 

@@ -80,7 +80,7 @@ func TestDetailSameTimeListsNearbyIssuesClosestFirst(t *testing.T) {
 	if strings.Join(got, " ") != want {
 		t.Errorf("sameTime = %v, want %s", got, want)
 	}
-	if s := d.SameTime[0]; s.Title != "Deployment/shop/app-b" ||
+	if s := d.SameTime[0]; s.Title != "Deployment app-b in shop" ||
 		s.Severity != "notify" || s.State != "open" ||
 		s.Namespace != "shop" || !s.StartedAt.Equal(shop.Opened) {
 		t.Errorf("first = %+v", s)

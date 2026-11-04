@@ -97,7 +97,14 @@ another that closed), and then nobody would be told.
   grace: it is named one settle (`DefaultSettle`) after the sources synced,
   with the lower-priority ones that are back by then, and the end of the
   grace names the rest. A tier that may still fall when its findings settle
-  waits for the grace (`currentNews`, `Incident.LiveTier`). On a
+  waits for the grace (`currentNews`, `Incident.LiveTier`). One whose
+  findings only wait for the digest (an idle fail-closed webhook that
+  refused nothing, or digest findings alone: `Incident.DigestBound`) was
+  told once already and is counted with the lower-priority ones the next
+  digest lists, not announced at the notify tier again. The audit entry of
+  the summary counts the restored incidents as ongoing, not opened, names
+  the lower-priority ones after the listed ones, and carries the loudest
+  listed tier. On a
   cold start the first `StartupWindow` (2m) collects existing incidents into
   one startup summary, and an active page still reaches the pagers at once
   (Pro; Community announces each still-failing one after the startup

@@ -240,7 +240,8 @@ func TestTableRows(t *testing.T) {
 		initWaitRowCases, finalizerRowCases, storageRowCases,
 		runConfigRowCases, policyAdmitRowCases, claimRowCases,
 		volumeRowCases, controllerRowCases, accountRowCases,
-		pullRowCases, diskRowCases, grantRowCases}
+		pullRowCases, diskRowCases, grantRowCases, dependencyLogRowCases,
+		backendNotReadyRowCases}
 	tested := map[string]bool{}
 	for _, group := range groups {
 		for _, tc := range group {

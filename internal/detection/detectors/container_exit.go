@@ -1,6 +1,9 @@
 package detectors
 
 import (
+	"regexp"
+	"strconv"
+
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -34,6 +37,31 @@ func applyCrashLoopExit(s *detection.Finding, e inventory.Entity) {
 		return
 	}
 	s.Reason = meaning.reason
-	s.Summary = containerRole(e) + " " + meaning.summary +
+	s.Summary = containerRole(e) + " " + exitSummary(meaning, e) +
 		" and is restarting"
+}
+
+// unhandledException matches the line a managed runtime prints when an
+// exception ends the program: .NET "Unhandled exception.", Java
+// 'Exception in thread "main"', Node "Uncaught" and the like.
+var unhandledException = regexp.MustCompile(`(?i)\b(unhandled|uncaught)` +
+	`\b.*\b(exception|error|rejection)\b|exception in thread "|` +
+	`unhandledpromiserejection`)
+
+// exitSummary words a decoded exit. A runtime that aborts (134) or ends
+// with 139 on an unhandled exception did not segfault in its own code:
+// when the container's last words show such an exception, the exit is
+// worded after it. Only the words change; the reason stays the code's.
+func exitSummary(meaning exitMeaning, e inventory.Entity) string {
+	if meaning.code != exitSIGSEGV && meaning.code != exitSIGABRT {
+		return meaning.summary
+	}
+	for _, attr := range []string{kube.AttrMessage, kube.AttrLastMessage,
+		kube.AttrLastErrorLine} {
+		if unhandledException.MatchString(text(e, attr)) {
+			return "crashed with an unhandled exception (exit code " +
+				strconv.Itoa(int(meaning.code)) + ")"
+		}
+	}
+	return meaning.summary
 }

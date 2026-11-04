@@ -24,7 +24,14 @@ nearly every first message by one settle (page latency included) and
 changed roll-ups, for the sake of a handful of late cause revisions. The
 settle above is the whole wait.
 
-An incident that recovers while settling is dropped silently. When the
+An incident that recovers while settling is closed without a message and
+logged ("incident resolved", reason `settled before alerting`); it is
+marked untold (`Incident.Untold`), so the dashboard shows it as settled
+before alerting and counts it as no page and no notification. One whose
+failures all moved to another incident before anyone was told (a pod
+listed before its ReplicaSet's owner at startup opens under the
+ReplicaSet, then moves to the Deployment) was a duplicate: it is logged
+(`moved before alerting`) and dropped. When the
 same root fails again within `FlapWindow`, that incident is revived (`revive`
 in `revive.go`): same ID, settling again, with the flap cycles, occurrences
 and the earlier blip in its history, as a recurrence has them. A probe that
@@ -52,6 +59,20 @@ evidence and never becomes a digest line, because "Node condition X is True"
 alone tells nobody anything. An expired TLS certificate is critical only when
 a pod or Ingress is known to use it; with its users unknown (Ingresses or
 pods not yet watched) it is a warning that says only that it expired.
+
+## The problem title
+
+Every incident gets a stable problem title when it opens, before any
+message is sent (`problem.go`, written by the pipeline with
+`compose.Writer.ProblemTitle`): the lead of its announcement, without the
+cluster tag, at most 140 characters, clipped on a word. It is written
+again when the open problem changes materially (another root, cause,
+failure mode or set of reasons), never from an update, a recovery or a
+move, and a resolved incident keeps the last one. It is persisted
+(`Record.Problem`); an older record gets one when its findings are back.
+The dashboard names incidents by it, so an incident nobody was told about
+has a title too; the root's key is only the last resort. A Community
+title says what fails and never the cause.
 
 ---
 

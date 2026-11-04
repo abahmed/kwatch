@@ -43,3 +43,14 @@ func evaluate(d detection.Detector, m *inventory.Model, now time.Time,
 ) detection.Evaluation {
 	return detection.NewRegistry(synced, d).Evaluate(m, now, id)
 }
+
+// evaluateAfterGrace evaluates id once at first, so a sustained check
+// remembers its first sighting, and again grace later.
+func evaluateAfterGrace(d detection.Detector, m *inventory.Model,
+	first time.Time, grace time.Duration, id inventory.EntityID,
+	synced func(inventory.Kind) bool,
+) detection.Evaluation {
+	registry := detection.NewRegistry(synced, d)
+	registry.Evaluate(m, first, id)
+	return registry.Evaluate(m, first.Add(grace), id)
+}

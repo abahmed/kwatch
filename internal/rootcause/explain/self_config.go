@@ -72,6 +72,7 @@ func (v *view) selfConfigModes(effect inventory.EntityID) []modeHealth {
 	}
 	modes := v.podConfigModes(effect)
 	modes = append(modes, v.claimConfigModes(effect)...)
+	modes = append(modes, v.dependencyModes(effect)...)
 	for _, id := range containers {
 		modes = append(modes, v.containerConfigModes(id, effect)...)
 	}

@@ -97,7 +97,7 @@ func (m *Manager) attach(
 	}
 	if _, known := p.Members[key]; !known {
 		about := s.Entity
-		p.noteAbout(now, s.Summary+" ("+describe(s.Entity)+")", &about)
+		p.noteAbout(now, memberNote(s), &about)
 	}
 	p.Members[key] = s
 	logMember("added to", p, key)
@@ -129,7 +129,8 @@ func (m *Manager) keepsMember(
 		!m.edgesOutIncumbent(now, previous, where) &&
 		!m.beganTooLate(previous, where.cause) &&
 		!m.sameChainFlip(previous, key, where.root) &&
-		!m.explanationLapsed(previous, where) {
+		!m.explanationLapsed(previous, where) &&
+		!m.swingsBack(now, key, where.root) {
 		return false
 	}
 	m.incidents[previous].Members[key] = s
@@ -180,12 +181,14 @@ func (m *Manager) refresh(model inventory.Reader, now time.Time) {
 			computed := m.override.apply(p, base)
 			p.Tier = m.ratchetTier(p, computed, now)
 			p.noteLevel(m.levelFor(p, base, why, computed))
-			if p.Tier != was && p.State != Settling {
+			if p.Tier != was && p.State != Settling &&
+				!m.tierUnsettled(p, now) {
 				// A settling incident's tier is in its "opened" line.
 				logLifecycle(p, "tier", "incident tier changed",
 					"from", was.String())
 			}
 			m.observe(p, now)
+			m.noteProblem(p)
 		}
 	}
 	clear(m.changed)
@@ -201,10 +204,19 @@ func wasAnnounced(p *Incident) bool {
 	return false
 }
 
-func (m *Manager) detach(now time.Time, s detection.Finding) {
+// detach removes finding s from its incident and notes the recovery.
+// stillFailing says the object has another active failure: a restored
+// incident whose detector words the failure differently once every
+// source is listed ("has not succeeded since" becomes "the last runs
+// failed") recovered nothing, so inside the restore grace the swap is
+// not noted as a recovery.
+func (m *Manager) detach(
+	now time.Time, s detection.Finding, stillFailing bool,
+) {
 	key := s.Key()
 	delete(m.churn.held, key)
 	delete(m.left, key)
+	delete(m.flips, key)
 	id, ok := m.byMember[key]
 	if !ok {
 		return
@@ -216,9 +228,14 @@ func (m *Manager) detach(now time.Time, s detection.Finding) {
 	}
 	delete(p.Members, key)
 	logMember("removed from", p, key)
-	about := s.Entity
-	p.noteAbout(now,
-		RecoveredPrefix+s.Summary+" ("+describe(s.Entity)+")", &about)
+	if !s.Advisory && !stillFailing {
+		p.recoveredHere = true
+	}
+	if !(stillFailing && m.tierUnsettled(p, now)) {
+		about := s.Entity
+		p.noteAbout(now,
+			RecoveredPrefix+s.Summary+" ("+describe(s.Entity)+")", &about)
+	}
 	if !s.Advisory && !hasFailingMember(p) {
 		m.dropAdvisories(p)
 	}

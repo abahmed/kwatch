@@ -18,8 +18,9 @@ func rawGet(t *testing.T, target string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := &http.Server{Handler: newTestServer().Handler()}
-	go func() { _ = srv.Serve(pageListener{ln}) }()
+	s := newTestServer()
+	srv := &http.Server{Handler: s.Handler()}
+	go func() { _ = srv.Serve(pageListener{ln, s.assets.badRequest}) }()
 	t.Cleanup(func() { _ = srv.Close() })
 	c, err := net.Dial("tcp", ln.Addr().String())
 	if err != nil {
@@ -36,7 +37,7 @@ func TestPageListenerAnswersABrokenEscapeWithThePage(t *testing.T) {
 	got := rawGet(t, "/issues/%E0%A4%A")
 	if !strings.HasPrefix(got, "HTTP/1.1 400 Bad Request\r\n") ||
 		!strings.Contains(got, "text/html") ||
-		!strings.Contains(got, "<title>Not found - kwatch</title>") ||
+		!strings.Contains(got, "<title>Not found · kwatch</title>") ||
 		!strings.Contains(got, "Content-Security-Policy: ") {
 		t.Errorf("reply = %q", got)
 	}

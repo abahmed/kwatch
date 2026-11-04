@@ -136,6 +136,9 @@ func (v *view) virtualModes(
 			return modes
 		}
 	}
+	if modes := v.servedBackendModes(id, effect, link); len(modes) > 0 {
+		return modes
+	}
 	if modes := v.callModes(id, effect, link); len(modes) > 0 {
 		return modes
 	}

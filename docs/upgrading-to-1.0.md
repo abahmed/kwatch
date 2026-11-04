@@ -124,8 +124,9 @@ v0.10.x install has no license key, so v1.0.0 starts it as Community, and
 - Pro settings in your configuration stay valid but are ignored:
   `namespaceSelector`, `reasons` filters, severity overrides, maintenance
   annotations other than the defaults, runbooks, active probes, a file audit
-  log, the heartbeat monitor, `healthCheck.statusEndpoint`. Namespace
-  include/exclude lists and silences keep working. `kwatch lint` lists
+  log, the heartbeat monitor, `healthCheck.statusEndpoint`,
+  `dashboard.enabled` (`ui.dashboard`). Namespace include/exclude lists and
+  silences keep working. `kwatch lint` lists
   everything that is ignored.
 - A Community alert says what broke and the type of cause, never which
   object, change, image or version it is: "payments in shop keeps

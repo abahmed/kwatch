@@ -57,9 +57,10 @@ func TestActivityDerivesNewUrgentReopenedAndResolved(t *testing.T) {
 	if got := activityLine(day); got != want {
 		t.Errorf("24h = %q, want %q", got, want)
 	}
-	if e := hour.Events[1]; e.Title != "Deployment/pay/app-p" ||
+	if e := hour.Events[1]; e.Title != "Deployment app-p in pay" ||
 		e.Severity != "page" || e.Namespace != "pay" ||
-		e.Workload != "app-p" || e.State != "open" {
+		e.Workload != "app-p" || e.WorkloadKind != "Deployment" ||
+		e.State != "open" {
 		t.Errorf("event = %+v", e)
 	}
 }
@@ -145,5 +146,23 @@ func TestActivityNeedsAuthAndAPipeline(t *testing.T) {
 	if w := get(t, s, "/api/activity"); w.Code !=
 		http.StatusServiceUnavailable {
 		t.Errorf("without a pipeline: %d", w.Code)
+	}
+}
+
+func TestActivityEventJSONCarriesWorkloadKindWhenKnown(t *testing.T) {
+	p := testIncident("k", "shop", -10*time.Minute)
+	p.Occurrences = []time.Time{p.Opened}
+	out := buildActivity([]incident.Incident{p}, testEpoch, time.Hour,
+		redact.Evidence)
+	body, err := json.Marshal(out.Events[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), `"workloadKind":"Deployment"`) {
+		t.Errorf("event JSON = %s", body)
+	}
+	body, _ = json.Marshal(ActivityEvent{})
+	if strings.Contains(string(body), "workloadKind") {
+		t.Errorf("empty kind not omitted: %s", body)
 	}
 }
