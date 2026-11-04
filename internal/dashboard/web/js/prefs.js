@@ -18,7 +18,7 @@
     { key: "ns", label: "Namespace", sort: "namespace" },
     { key: "obj", label: "Object", sort: "object" },
     { key: "status", label: "Status", sort: "status" },
-    { key: "last", label: "When (going on or resolved)", sort: "last" },
+    { key: "last", label: "When (happening now or resolved)", sort: "last" },
     { key: "ack", label: "Acknowledged", short: "Acked", sort: "acked" },
     { key: "started", label: "Start time", sort: "started" },
     { key: "dur", label: "Duration", sort: "duration" }

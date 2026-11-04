@@ -12,7 +12,7 @@ import (
 // serve runs the listener, over TLS when certificate files are set.
 func (s *Server) serve(server *http.Server, ln net.Listener) error {
 	if s.opts.TLSCertFile == "" {
-		return server.Serve(pageListener{ln})
+		return server.Serve(pageListener{ln, s.assets.badRequest})
 	}
 	certs := &certReloader{cert: s.opts.TLSCertFile, key: s.opts.TLSKeyFile}
 	if _, err := certs.get(nil); err != nil {
@@ -26,9 +26,15 @@ func (s *Server) serve(server *http.Server, ln net.Listener) error {
 		NextProtos: []string{"h2", "http/1.1"},
 	}
 	// TLS sits below pageListener, so a pageConn sees the plaintext
-	// reply and can swap net/http's bare 400 for the page.
+	// reply and can swap net/http's bare 400 for the page. Shared mode
+	// over kwatch's own TLS sends HSTS on every page (sendHSTS), so the
+	// 400 does too.
 	tlsLn := tls.NewListener(ln, server.TLSConfig)
-	return server.Serve(pageListener{tlsLn})
+	reply := s.assets.badRequest
+	if s.opts.Shared {
+		reply = badRequestReply(s.assets.notFound, true)
+	}
+	return server.Serve(pageListener{tlsLn, reply})
 }
 
 // certReloader loads the key pair again when either file changes, so a

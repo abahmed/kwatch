@@ -1,7 +1,8 @@
 /* kwatch dashboard: telling people about an issue. "Copy summary" in
-   the summary card copies a short text for chat or a ticket; "Who was
-   told" lists what each alert channel did, and "What we sent" the text
-   kwatch sent, folded away. All built from the issue's data. */
+   the summary card copies a short text for chat or a ticket; its "Who
+   was told" line shows each channel's state. In the Alerts tab, "Who
+   was told" lists what each alert channel did, and "What we sent" the
+   text kwatch sent. All built from the issue's data. */
 (function () {
   "use strict";
   var KW = window.KW;
@@ -93,8 +94,8 @@
     return li;
   }
 
-  /* KW.told fills "Who was told". Whether someone acknowledged it is
-     said once, in "Alert status" (incwhy.js). */
+  /* KW.told fills "Who was told" in the Alerts tab. Whether someone
+     acknowledged it is in "Alert status" (incwhy.js). */
   KW.told = function (root, inc) {
     var fold = KW.$('[data-fold="told"]', root);
     var box = KW.$("[data-told]", root);
@@ -110,52 +111,41 @@
       (cut ? " " + KW.plural(cut, "older message", "older messages") + " not shown." : "")));
   };
 
-  /* statusCode: the HTTP status in a channel's error ("401"), or "". */
-  function statusCode(err) {
-    var m = /\b([45]\d\d)\b/.exec(err || "");
-    return m ? m[1] : "";
-  }
+  /* TOLD: a channel's state in the summary: mark, words, class.
+     Pagers say whether the page is still open there. */
+  var TOLD = {
+    sent: ["✓", "sent", "t-ok"], failed: ["✗", "failed", "t-bad"], pending: ["⏳", "sending, will retry", "t-wait"]
+  };
+  var PAGED = {
+    open: ["●", "paged · still open", "t-open"], closed: ["✓", "paged · closed", "t-ok"],
+    failed: ["✗", "page failed", "t-bad"], pending: ["⏳", "page pending, will retry", "t-wait"]
+  };
 
-  /* toldText: who was told, failures first, each channel with the
-     time it first took a message: "PagerDuty failed (401) · fell back
-     to Opsgenie 19:06 · Slack 18:51 · not acknowledged". */
-  KW.toldText = function (inc) {
-    var list = inc.deliveries || [], by = {}, order = [];
-    list.forEach(function (d) {
-      var name = d.name || "";
-      if (!name) return;
-      if (!by[name]) { by[name] = {}; order.push(name); }
-      var c = by[name];
-      if (d.result === "ok" && !c.ok) c.ok = d;
-      if (d.result === "failed") c.failed = d;
-      if (d.result === "retrying") c.retrying = d;
-    });
-    var bad = [], fell = [], fine = [];
-    order.forEach(function (name) {
-      var c = by[name];
-      if (c.ok) {
-        var at = name + " " + KW.when(c.ok.at);
-        if (c.ok.fallbackFor) fell.push("fell back to " + at);
-        else fine.push(at);
-      } else if (c.failed) {
-        var n = statusCode(c.failed.error);
-        bad.push(name + " failed" + (n ? " (" + n + ")" : ""));
-      } else if (c.retrying) {
-        bad.push("still trying " + name);
-      }
-    });
-    // Nothing went wrong: "Sent to Slack 18:51 · …".
-    if (!bad.length && !fell.length && fine.length) fine[0] = "sent to " + fine[0];
-    var parts = bad.concat(fell, fine);
-    if (!parts.length) {
-      var d = list.filter(function (x) { return x.result === "carried"; })[0];
-      if (!list.length) return "";
-      parts.push(d ? "Listed in the " + (d.carrier || "summary") + " " + KW.when(d.at) :
-        "Not sent to any channel");
+  /* KW.toldSummary fills "Who was told" of the summary card: one line
+     per channel, pagers first, from summary.told. */
+  KW.toldSummary = function (dd, inc, root) {
+    var list = (inc.summary || {}).told || [], cut = KW.cutCount(inc, "summaryTold");
+    if (!list.length && !cut) {
+      dd.appendChild(KW.el("p", "ds-sub", KW.nobodyText(inc)));
+      return;
     }
-    parts.push(inc.ackedBy ? "acknowledged" : "not acknowledged");
-    var text = parts.join(" · ");
-    return text.charAt(0).toUpperCase() + text.slice(1);
+    var ul = dd.appendChild(KW.el("ul", "ds-told"));
+    list.forEach(function (c) {
+      var w = (c.kind === "pager" ? PAGED : TOLD)[c.state] || ["•", c.state, ""];
+      var li = ul.appendChild(KW.el("li", "ds-tc " + w[2]));
+      li.appendChild(KW.el("span", "ds-tc-i", w[0])).setAttribute("aria-hidden", "true");
+      li.appendChild(KW.el("b", "", c.name || c.provider));
+      li.appendChild(KW.el("span", "ds-tc-s", w[1]));
+      if (KW.valid(c.at)) li.appendChild(KW.el("span", "ds-at")).appendChild(KW.hm(c.at));
+    });
+    if (cut) ul.appendChild(KW.el("li", "ev-cap", KW.plural(cut, "more channel", "more channels") + " not shown."));
+    var sends = inc.deliveries || [];
+    if (!sends.length) return;
+    var bad = sends.some(function (d) { return d.result === "failed" || d.result === "retrying"; });
+    var b = dd.appendChild(KW.el("button", "link ds-steps-b", bad ?
+      "Every message and why it failed →" : "Every message sent →"));
+    b.type = "button";
+    b.addEventListener("click", function () { KW.openFold(root, "told"); });
   };
 
   /* KW.sent fills "What we sent": the exact text kwatch composed for

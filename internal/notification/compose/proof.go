@@ -344,6 +344,24 @@ var reasonConsequences = map[string]string{
 const webhookRejected = "It fails closed (failurePolicy Fail) and the " +
 	"API server has rejected requests because of it."
 
+// idleWebhookText says what a fail-closed webhook nothing was refused
+// by yet does. When its rules cover objects that exist now, their
+// creates and updates are refused: the lead says so when it is the
+// webhook's own summary, else this sentence does.
+func idleWebhookText(f caseFacts) string {
+	names := evidence(f.lead, detection.EvidenceWebhookIntercepts)
+	switch {
+	case names != "" && f.p.Root == f.lead.Entity:
+		return ""
+	case names != "":
+		return "It fails closed (failurePolicy Fail) and covers " +
+			names + " that exist now: their creates and updates are " +
+			"rejected right now."
+	}
+	return "It fails closed (failurePolicy Fail); no request has been " +
+		"rejected so far."
+}
+
 // consequenceSentences say what the lead's condition breaks. A webhook
 // blocks requests only when its failurePolicy is Fail: critical once a
 // request was refused, a warning before, and then it says so.
@@ -359,10 +377,11 @@ func consequenceSentences(f caseFacts) []sentence {
 		f.lead.Reason == reasons.WebhookBackendNotFound
 	expired := f.lead.Reason == reasons.TLSCertExpired
 	if webhook && f.lead.Severity == detection.Warning {
-		// A fail-closed webhook nothing was refused by yet.
-		return []sentence{{part: partConsequence, weight: 1,
-			text: "It fails closed (failurePolicy Fail); no request " +
-				"has been rejected so far."}}
+		text := idleWebhookText(f)
+		if text == "" {
+			return nil
+		}
+		return []sentence{{part: partConsequence, weight: 1, text: text}}
 	}
 	if (webhook || expired) && f.lead.Severity != detection.Critical {
 		return nil

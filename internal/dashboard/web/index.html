@@ -56,14 +56,19 @@
 <script defer src="{{asset:js/incwhy.js}}"></script>
 <script defer src="{{asset:js/inclinks.js}}"></script>
 <script defer src="{{asset:js/usagechart.js}}"></script>
+<script defer src="{{asset:js/issuestage.js}}"></script>
 <script defer src="{{asset:js/detail.js}}"></script>
 <script defer src="{{asset:js/incpanel.js}}"></script>
 <script defer src="{{asset:js/incnav.js}}"></script>
+<script defer src="{{asset:js/viz.js}}"></script>
+<script defer src="{{asset:js/pages.js}}"></script>
 <script defer src="{{asset:js/trends.js}}"></script>
 <script defer src="{{asset:js/activity.js}}"></script>
 <script defer src="{{asset:js/ovinsights.js}}"></script>
 <script defer src="{{asset:js/ovcoverage.js}}"></script>
 <script defer src="{{asset:js/status.js}}"></script>
+<script defer src="{{asset:js/kwatchpage.js}}"></script>
+<script defer src="{{asset:js/push.js}}"></script>
 <script defer src="{{asset:js/notify.js}}"></script>
 <script defer src="{{asset:js/refresh.js}}"></script>
 <script defer src="{{asset:js/main.js}}"></script>
@@ -109,14 +114,17 @@
               <li><span class="dot low"></span><b>Low</b>: only in the daily summary. No rush.</li>
               <li><span class="dot quiet"></span><b>Quiet</b>: kwatch keeps track but sends nothing.</li>
             </ul>
-            <p>The alert level is how kwatch told your team. Open an issue and start with "What to do first".</p>
+            <p>The alert level is how kwatch told your team. Open an issue and start with "What to do".</p>
             <p class="legend-sub">States</p>
-                        <ul data-legend-states></ul>
+            <ul data-legend-states></ul>
+            <ul><li><b>Settled before alerting</b>: it recovered while kwatch was still confirming it, so nobody was told.</li></ul>
             <p class="legend-h legend-keys">Keyboard</p>
             <ul class="keys legend-keys-list">
+              <li><kbd>g</kbd> then <kbd>o</kbd> Overview · <kbd>i</kbd> Issues · <kbd>n</kbd> Insights · <kbd>a</kbd> Activity · <kbd>k</kbd> kwatch</li>
               <li><kbd>/</kbd> Search the issues</li>
               <li><kbd>j</kbd> <kbd>k</kbd> Next / previous row, or issue when one is open beside the table</li>
               <li><kbd>Enter</kbd> Open the issue beside the table (Cmd or Ctrl and click: its own page in a new tab)</li>
+              <li>On an issue: <kbd>t</kbd> <kbd>e</kbd> <kbd>i</kbd> <kbd>a</kbd> <kbd>d</kbd> Timeline / Evidence / Impact / Alerts / Details; <kbd>←</kbd> <kbd>→</kbd> move between tabs</li>
               <li><kbd>[</kbd> <kbd>]</kbd> Previous / next issue in your list, on an issue page or beside the table</li>
               <li><kbd>?</kbd> Show or hide this help · <kbd>Esc</kbd> close it, or the issue open beside the table</li>
             </ul>
@@ -127,6 +135,9 @@
       <nav class="nav" aria-label="Dashboard">
         <a href="/" data-link data-nav="status">Overview</a>
         <a href="/issues" data-link data-nav="issues">Issues<span class="count" data-badge hidden></span></a>
+        <a href="/insights" data-link data-nav="insights">Insights</a>
+        <a href="/activity" data-link data-nav="activity">Activity</a>
+        <a href="/kwatch" data-link data-nav="kwatch">kwatch<span class="nav-dot" data-kw-dot hidden></span><span class="sr-only" data-kw-dot-sr></span></a>
       </nav>
       <div class="who" id="who">
         <div class="ntf" data-ntf>
@@ -135,7 +146,9 @@
           <div class="ntf-opts" data-ntf-opts hidden>
             <label class="ntf-l">Tell me about<select data-ntf-min><option value="page">Urgent only</option><option value="notify">Urgent and needs attention</option><option value="digest">Everything</option></select></label>
             <label class="ntf-c"><input type="checkbox" data-ntf-resolved>Also when resolved</label>
-            <label class="ntf-c"><input type="checkbox" data-ntf-open>Even when this tab is open</label>
+            <label class="ntf-c" data-ntf-open-l><input type="checkbox" data-ntf-open>Even when this tab is open</label>
+            <p class="ntf-mode" data-ntf-mode></p>
+            <button class="link ntf-test" type="button" data-ntf-test>Send a test notification</button>
           </div>
         </div>
         <div class="tz" role="group" aria-label="Show times in"><span>Times</span><button class="tz-b" type="button" data-tz="local" aria-pressed="true">Local</button><button class="tz-b" type="button" data-tz="utc" aria-pressed="false">UTC</button></div>
@@ -203,7 +216,7 @@
   <div class="qvbox" data-qv></div>
   <div class="filterbox" data-filterbox role="search" aria-label="Filter issues">
     <div class="stsw" role="group" aria-label="Status">
-      <button class="stsw-b" type="button" data-status="active" aria-pressed="true" title="Issues going on now">Active<span class="fc-n" data-n></span></button><button class="stsw-b" type="button" data-status="resolved" aria-pressed="false" title="Issues that stopped failing (kwatch keeps them 7 days)">Resolved<span class="fc-n" data-n></span></button><button class="stsw-b" type="button" data-status="all" aria-pressed="false" title="Active and resolved together">All<span class="fc-n" data-n></span></button>
+      <button class="stsw-b" type="button" data-status="active" aria-pressed="true" title="Issues happening now">Active<span class="fc-n" data-n></span></button><button class="stsw-b" type="button" data-status="resolved" aria-pressed="false" title="Issues that stopped failing (kwatch keeps them 7 days)">Resolved<span class="fc-n" data-n></span></button><button class="stsw-b" type="button" data-status="all" aria-pressed="false" title="Active and resolved together">All<span class="fc-n" data-n></span></button>
     </div>
     <button class="btn btn-sm ftoggle" type="button" data-ftoggle aria-expanded="false">Filters</button>
     <div class="filters">
@@ -351,45 +364,5 @@
   </div>
 </template>
 
-<template id="tpl-status">
-  <div class="page-head">
-    <div><h1>Overview</h1></div>
-    <div class="updated" data-updated hidden></div>
-  </div>
-  <div data-alert></div>
-  <section class="ov" data-overview hidden>
-    <h2 class="ov-h" data-headline></h2>
-    <p class="ov-today" data-today hidden></p>
-    <p class="ov-quiet" data-quiet hidden><span data-quiet-text></span> · <a class="ulink" href="#cov" data-cov-open>What kwatch is watching</a></p>
-    <div class="ov-counts" data-counts></div>
-  </section>
-  <section class="in" data-ins hidden aria-label="Insights">
-    <div class="in-grid" data-ins-grid></div>
-  </section>
-  <section class="nsmap" data-nsmap hidden aria-labelledby="nsmap-h">
-    <h2 class="ovl-h" id="nsmap-h">Namespaces with active issues</h2>
-    <p class="muted small">Most urgent first. Each opens its issues.</p>
-    <ul class="ns-tiles" data-nsmap-list></ul>
-    <p class="ns-more"><a class="ulink" href="/issues?status=active" data-link data-nsmap-more hidden></a></p>
-  </section>
-  <section class="act" data-activity hidden aria-labelledby="act-h">
-    <div class="act-head">
-      <h2 class="ovl-h" id="act-h">What changed recently</h2>
-      <div class="tz act-sw" role="group" aria-label="Show changes from"><button class="tz-b" type="button" data-act-since="1h" aria-pressed="true">Last hour</button><button class="tz-b" type="button" data-act-since="24h" aria-pressed="false">Last 24 hours</button></div>
-    </div>
-    <ul class="act-list" data-act-list></ul>
-    <p class="act-none" data-act-none hidden></p>
-    <p class="act-more" data-act-more hidden></p>
-  </section>
-  <details class="fold tr" data-trends hidden><summary>This week</summary><div class="fold-body"><div class="tr-grid" data-trends-body></div><div class="tr-grid" data-causes></div></div></details>
-  <div class="notice sum" data-summary hidden><b></b></div>
-  <details class="fold" data-body hidden><summary>kwatch health details</summary><div class="fold-body">
-    <div class="cards">
-      <div class="card"><h2>About this kwatch</h2><dl class="facts" data-about></dl></div>
-      <div class="card"><h2>Where alerts go</h2><div data-channels></div></div>
-    </div>
-  </div></details>
-  <details class="fold cov" id="cov" data-cov><summary>What kwatch is watching</summary><div class="fold-body" data-cov-body><p class="muted">Loading…</p></div></details>
-</template>
 </body>
 </html>

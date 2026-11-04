@@ -2,6 +2,7 @@ package detectors
 
 import (
 	"strings"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
@@ -54,7 +55,8 @@ func missingClass(
 			missing = append(missing, id.Name)
 		}
 	}
-	if len(missing) == 0 {
+	if len(missing) == 0 || !sustained(ctx, "class/"+string(kind)+"/"+
+		strings.Join(missing, ","), time.Time{}, DefaultClassGrace) {
 		return detection.Finding{}, false
 	}
 	label := string(kind)

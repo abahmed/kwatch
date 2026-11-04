@@ -103,10 +103,12 @@ func (v *view) finalizerModes(
 
 // finalizersOf lists the finalizers that hold the deletion of id, as its
 // StuckDeleting finding names them. Finalizers Kubernetes itself runs
-// are left out: their handler is the control plane, not a workload.
+// are left out: their handler is the control plane, not a workload. So
+// are those of an object whose own finding says why its handler cannot
+// finish (see handlerCannotFinish).
 func (v *view) finalizersOf(id inventory.EntityID) []string {
 	if id.Kind == kube.KindNamespace || id.Kind == kube.KindPod ||
-		id.Kind == kube.KindNode {
+		id.Kind == kube.KindNode || v.handlerCannotFinish(id) {
 		return nil
 	}
 	var out []string

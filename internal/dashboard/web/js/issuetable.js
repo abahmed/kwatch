@@ -28,6 +28,22 @@
     return KW.obj(item.workloadKind, item.namespace, item.workload);
   }
 
+  /* breaks lets a long object wrap after "/" and "." ("deployment/
+     api.v2"), never inside a word. */
+  function breaks(node) {
+    var walk = document.createTreeWalker(node, NodeFilter.SHOW_TEXT), list = [];
+    while (walk.nextNode()) list.push(walk.currentNode);
+    list.forEach(function (t) {
+      var parts = t.nodeValue.split(/(?<=[\/.])/);
+      if (parts.length < 2) return;
+      parts.forEach(function (p, i) {
+        t.parentNode.insertBefore(document.createTextNode(p), t);
+        if (i < parts.length - 1) t.parentNode.insertBefore(document.createElement("wbr"), t);
+      });
+      t.parentNode.removeChild(t);
+    });
+  }
+
   /* dash is an empty value; cards leave such a line out. */
   function dash(td) {
     td.classList.add("none");
@@ -51,7 +67,7 @@
   }
 
   /* marks: after the title, how often it failed again (× 3), New
-     or Changed since the last visit, "Stopped tracking"; "in the cause" when the search
+     or Changed since the last visit, "Settled before alerting", "Stopped tracking"; "in the cause" when the search
      matched only the likely cause. */
   function marks(td, item, ctx) {
     if (item.repeatCount > 0) {
@@ -60,6 +76,7 @@
     }
     var m = ctx.marks[item.id];
     if (m) td.appendChild(KW.visitChip(m));
+    if (KW.isUntold(item)) td.appendChild(KW.untoldMark());
     if (item.stoppedTracking) {
       var stop = td.appendChild(KW.el("span", "i-stopped", "Stopped tracking"));
       stop.title = "kwatch stopped tracking this issue while it was still failing.";
@@ -94,8 +111,12 @@
     },
     obj: function (td, item, ctx) {
       if (!item.workload) return td.appendChild(dash(td));
-      KW.highlight(td.appendChild(KW.el("span", "mono")), objectText(item), ctx.terms);
+      var span = td.appendChild(KW.el("span", "mono"));
+      KW.highlight(span, objectText(item), ctx.terms);
+      breaks(span);
       td.title = objectText(item);
+      // A card leaves the line out when the title already names it.
+      td.classList.toggle("in-title", String(item.title).indexOf(item.workload) >= 0);
     },
     status: function (td, item) { td.appendChild(KW.stateChip(item.state)); },
     started: function (td, item) {

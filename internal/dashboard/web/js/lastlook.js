@@ -2,7 +2,8 @@
    this browser remembers when it last showed it (localStorage key
    kwatch.looked, at most 200 issues, forgotten after 8 days). On a
    revisit the issue's newer timeline entries, changes and warnings get
-   a "New since your last visit" mark and the summary card counts them. */
+   a "New since your last visit" mark and the summary card counts them.
+   Also the issue's exact times and IDs ("More details"). */
 (function () {
   "use strict";
   var KW = window.KW;
@@ -82,5 +83,49 @@
       " since you last looked (" + KW.when(at) + ")";
     p.title = "Since you last opened this issue in this browser, " + KW.full(at) +
       ". New entries are marked New.";
+  };
+
+  /* oneLine: "1 Nov, 18:50" (with UTC when the page shows UTC) on one
+     line; the exact time in both zones is in its tooltip. */
+  function oneLine(iso) {
+    var t = KW.el("time", "d-nowrap", KW.stamp(iso) + (KW.utc ? " UTC" : ""));
+    t.setAttribute("datetime", iso);
+    t.title = KW.full(iso);
+    return t;
+  }
+
+  /* KW.facts: the exact times and IDs, under "More details" (Details). */
+  KW.facts = function (dl, inc) {
+    dl.textContent = "";
+    function add(label, value, cls, tip) {
+      var dt = dl.appendChild(KW.el("dt", "", label));
+      if (tip) dt.title = tip;
+      var dd = dl.appendChild(KW.el("dd", cls || ""));
+      if (typeof value === "string") dd.textContent = value;
+      else dd.appendChild(value);
+    }
+    var sev = KW.SEVERITY[inc.severity];
+    add("Alert level", sev ? sev.level : inc.severity, "", "How kwatch told your team about this.");
+    add("Started", oneLine(inc.firstSeen));
+    add("Last seen", KW.timeEl(inc.lastSeen));
+    if (inc.repeatCount > 0) add("Failed again", KW.plural(inc.repeatCount, "time", "times"));
+    if (inc.state === "resolved" && KW.valid(inc.resolvedAt)) {
+      add(inc.stoppedTracking ? "Stopped tracking" : "Resolved", KW.stamp(inc.resolvedAt) + " (lasted " +
+        KW.lasted(inc.firstSeen, inc.resolvedAt) + ")");
+    }
+    if (inc.ackedBy) {
+      add("Acknowledged", "Yes, on " + inc.ackedBy, "mono",
+        "Someone marked this as seen with kwatch's annotation on that object, so kwatch stops reminding.");
+    }
+    add("Issue ID", inc.id, "mono");
+  };
+
+  /* KW.shortNote: one line in the summary when the server shortened
+     long text to keep the response small. */
+  KW.shortNote = function (root, inc) {
+    var p = KW.$("[data-short]", root);
+    p.textContent = "Some text shortened";
+    p.title = "The server shortened some long text to keep the page small.";
+    p.hidden = !KW.cutCount(inc, "texts");
   };
 })();

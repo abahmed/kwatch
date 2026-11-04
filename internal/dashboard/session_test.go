@@ -82,8 +82,8 @@ func TestSessionCookieOpensTheAPIAndHasSafeAttributes(t *testing.T) {
 			t.Errorf("%s with cookie: %d", path, code)
 		}
 	}
-	if code := s.getWith("/api/session", nil); code != 401 {
-		t.Errorf("/api/session without cookie: %d, want 401", code)
+	if code := s.getWith("/api/incidents", nil); code != 401 {
+		t.Errorf("/api/incidents without cookie: %d, want 401", code)
 	}
 }
 
@@ -110,17 +110,17 @@ func TestSessionEndsAfterTwelveHoursOnResetAndOnRestart(t *testing.T) {
 		t.Errorf("before 12h: %d, want 204", code)
 	}
 	s.now = testEpoch.Add(12 * time.Hour)
-	if code := s.getWith("/api/session", c); code != 401 {
+	if code := s.getWith("/api/incidents", c); code != 401 {
 		t.Errorf("at 12h: %d, want 401", code)
 	}
 
 	s.now = testEpoch
 	reset := newSessionServer(false, "NEWP-ASSW-ORD0-0000")
-	if code := reset.getWith("/api/session", c); code != 401 {
+	if code := reset.getWith("/api/incidents", c); code != 401 {
 		t.Errorf("after reset: %d, want 401", code)
 	}
 	again := newSessionServer(false, testPassword)
-	if code := again.getWith("/api/session", c); code != 401 {
+	if code := again.getWith("/api/incidents", c); code != 401 {
 		t.Errorf("restart, same password: %d, want 401", code)
 	}
 }
@@ -138,7 +138,7 @@ func TestSessionLogoutRevokesTheCookie(t *testing.T) {
 	if len(cleared) != 1 || cleared[0].MaxAge >= 0 {
 		t.Errorf("logout cookies = %+v", cleared)
 	}
-	if code := s.getWith("/api/session", c); code != 401 {
+	if code := s.getWith("/api/incidents", c); code != 401 {
 		t.Errorf("revoked cookie: %d, want 401", code)
 	}
 }

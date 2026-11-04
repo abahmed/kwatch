@@ -1,0 +1,11 @@
+{
+  "name": "heldout-queue-timeout-backend-down",
+  "description": "A Go worker exits 2 on a timed-out dial to queue:5672 while the queue Service's only pod is not ready.",
+  "root": "deployment/pipeline/queue",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/pipeline/ingest",
+    "node//n1"
+  ]
+}

@@ -4,5 +4,5 @@ Content-Type: application/json
 {
   "chat_id": "chat",
   "parse_mode": "HTML",
-  "text": "🔴 payments in shop is crash-looping.\nCaused by: Node n1 is not ready.\nCause in dashboard: https://kwatch.example/issues/p-cause\nEarlier times: https://kwatch.example/issues?status=all&amp;like=p-link\nOpen in dashboard: https://kwatch.example/issues/p-link\n\n<pre>panic: out of memory</pre>"
+  "text": "🔴 payments in shop is crash-looping.\nCaused by: Node n1 is not ready.\n<a href=\"https://kwatch.example/issues/p-cause\">Cause in dashboard</a>\n<a href=\"https://kwatch.example/issues?status=all&amp;like=p-link\">Earlier times</a>\n<a href=\"https://kwatch.example/issues/p-link\">Open in dashboard</a>\n\n<pre>panic: out of memory</pre>"
 }

@@ -159,9 +159,10 @@ func (m *Manager) recur(p, previous *Incident, now time.Time) {
 	if previous.SupersededBy == "" {
 		p.History = appendHistory(previous.History, occurrenceOf(previous))
 	}
-	week := recent(p.Occurrences, now, recurrenceWeek)
-	p.note(now, "happened again ("+ordinal(len(week))+
-		" time this week, last time "+previous.ID+")")
+	// The note names when, not the predecessor's ID: the predecessor is
+	// forgotten below, and a link to it would lead nowhere.
+	p.note(now, "happened again ("+ordinal(weekCount(p.History, now))+
+		" time this week, last time "+lastTimeAt(previous)+")")
 	// The recurrence carries everything the predecessor knew, so keeping
 	// the predecessor would only grow memory with every blip.
 	m.forget(previous)

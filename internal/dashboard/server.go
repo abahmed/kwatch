@@ -75,6 +75,9 @@ type Options struct {
 	ChangeHistory bool
 	Scope         Scope
 	Self          Self
+	// StateCapBytes is the size cap the state file's compactor keeps
+	// the stored data under, for /api/kwatch; 0 when unknown.
+	StateCapBytes int64
 }
 
 // sources holds what the running pipeline provides. The listener serves
@@ -92,6 +95,8 @@ type sources struct {
 	coverage atomic.Pointer[coverageSource]
 	// usage is the kubelet usage history (detail_usage.go).
 	usage atomic.Pointer[usageSource]
+	// push sends browser notifications (push_run.go).
+	push atomic.Pointer[pusher]
 	// self, failed and delivery are kwatch's view of itself, its failed
 	// sends and what the pagers and channels hold (self_status.go).
 	self     atomic.Pointer[selfSource]
@@ -280,14 +285,20 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("/api/activity", s.activityHandler)
 	api.HandleFunc("/api/coverage", s.coverageHandler)
 	api.HandleFunc("/api/insights", s.insightsHandler)
+	api.HandleFunc("/api/overview", s.overviewHandler)
+	api.HandleFunc("/api/kwatch", s.kwatchHandler)
 	api.HandleFunc("/api/events", s.eventsHandler)
+	api.HandleFunc("/api/push", s.pushHandler)
+	api.HandleFunc("/api/push/status", s.pushStatusHandler)
+	api.HandleFunc("/api/push/remove", s.pushRemoveHandler)
+	api.HandleFunc("/api/push/test", s.pushTestHandler)
 	api.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})
 	mux := http.NewServeMux()
 	mux.Handle("/api/", s.auth.Middleware(s.recordScheme(api)))
 	mux.Handle("/api/session", s.auth.requireHTTPS(
-		s.auth.Middleware(s.recordScheme(
+		s.auth.sessionCheck(s.recordScheme(
 			http.HandlerFunc(sessionHandler)))))
 	mux.HandleFunc("/login", s.auth.loginHandler)
 	mux.HandleFunc("/logout", s.auth.logoutHandler)

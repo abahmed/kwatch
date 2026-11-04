@@ -206,7 +206,7 @@ func TestManagerRecurrenceOpensLinkedIncident(t *testing.T) {
 	for _, e := range got.Timeline {
 		found = found ||
 			e.Text == "happened again (2nd time this week, last time "+
-				first+")"
+				"Mon 12:00 UTC)"
 	}
 	if !found {
 		t.Fatalf("timeline lacks recurrence note: %+v", got.Timeline)

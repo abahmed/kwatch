@@ -46,35 +46,66 @@ var probeKinds = []struct {
 // it repeated probeFailureEvents times or the container has been unready
 // for probeSustain. Readiness and startup failures inside the container's
 // startup budget, and probes failing while the pod shuts down, are
-// expected.
+// expected. Each kind of probe is judged on its own newest event, so a
+// liveness kill does not hide that readiness fails too: a container
+// that is not ready is out of its Service whatever kills it.
 func probeFindings(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	if ctx.Model == nil {
 		return nil
 	}
-	note, ok := latestUnhealthy(ctx, e.ID, probeNotReadyRecency)
-	if !ok {
-		return nil
-	}
+	notes := ctx.Model.Notes(e.ID, ctx.Now.Add(-probeNotReadyRecency))
+	var out []detection.Finding
 	for _, kind := range probeKinds {
-		if !strings.HasPrefix(note.Message, kind.prefix) {
+		note, ok := latestProbeNote(notes, kind.prefix)
+		if !ok {
 			continue
 		}
 		keep, ok := probeVisible(ctx, e, note, kind.reason)
 		if !ok {
-			return nil
+			continue
 		}
 		ctx.RecheckAfter(note.At.Add(keep).Sub(ctx.Now) + time.Nanosecond)
-		return []detection.Finding{{
+		out = append(out, detection.Finding{
 			Reason: kind.reason, Severity: detection.Warning,
-			Since:   note.At,
-			Summary: containerRole(e) + " " + kind.summary,
-			Evidence: append(probeEvidence(note),
+			Since: note.At,
+			Summary: probeSummary(ctx, e, note, kind.reason,
+				kind.summary),
+			Evidence: append(append(append(probeEvidence(note),
+				probeLogEvidence(e, note)...), restartEvidence(e)...),
 				throttleEvidence(e)...),
-		}}
+		})
 	}
-	return nil
+	return out
+}
+
+// restartEvidence is the container's restart count when it restarted:
+// a probe failing between crashes is part of a restart loop.
+func restartEvidence(e inventory.Entity) []detection.Evidence {
+	restarts, ok := number(e, kube.AttrRestarts)
+	if !ok || restarts < 1 {
+		return nil
+	}
+	return []detection.Evidence{{Label: "restarts",
+		Value: strconv.Itoa(int(restarts))}}
+}
+
+// latestProbeNote is the newest Unhealthy warning whose message starts
+// with prefix.
+func latestProbeNote(
+	notes []inventory.Note, prefix string,
+) (inventory.Note, bool) {
+	var latest inventory.Note
+	found := false
+	for _, note := range notes {
+		if note.Warning && note.Reason == unhealthyEvent &&
+			strings.HasPrefix(note.Message, prefix) &&
+			(!found || note.At.After(latest.At)) {
+			latest, found = note, true
+		}
+	}
+	return latest, found
 }
 
 // probeVisible decides whether a probe failure is reported now, and for
@@ -100,20 +131,6 @@ func probeVisible(
 		return 0, false
 	}
 	return keep, true
-}
-
-func latestUnhealthy(
-	ctx detection.Context, id inventory.EntityID, window time.Duration,
-) (inventory.Note, bool) {
-	var latest inventory.Note
-	found := false
-	for _, note := range ctx.Model.Notes(id, ctx.Now.Add(-window)) {
-		if note.Warning && note.Reason == unhealthyEvent &&
-			(!found || note.At.After(latest.At)) {
-			latest, found = note, true
-		}
-	}
-	return latest, found
 }
 
 func probeSustained(
@@ -149,7 +166,8 @@ func shuttingDown(ctx detection.Context, e inventory.Entity) bool {
 }
 
 func probeEvidence(note inventory.Note) []detection.Evidence {
-	evidence := []detection.Evidence{{Label: "probe", Value: note.Message}}
+	evidence := append([]detection.Evidence{{Label: "probe",
+		Value: note.Message}}, probeResultEvidence(note)...)
 	if note.Count > 1 {
 		evidence = append(evidence, detection.Evidence{
 			Label: "failures", Value: strconv.Itoa(note.Count),

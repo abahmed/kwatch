@@ -1,0 +1,10 @@
+{
+  "name": "liveness-refused-while-app-crashes",
+  "description": "A container exits with an error on its own; its liveness probe is refused while it is down.",
+  "root": "deployment/shop/notifier",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

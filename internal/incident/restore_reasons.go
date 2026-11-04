@@ -127,3 +127,13 @@ func savedMembers(p *Incident) []inventory.EntityID {
 	}
 	return memberEntities(p)
 }
+
+// tierUnsettled reports a restored incident whose tier still moves with
+// a partial view: the sources are not all listed, or the restore grace
+// is not over. A target not listed yet reads as missing, a member back
+// before its sibling reads alone, and the tier flips up and down within
+// seconds of the start. Such moves are neither logged nor recorded in
+// the journal; where the tier stands once the grace is over is.
+func (m *Manager) tierUnsettled(p *Incident, now time.Time) bool {
+	return p.restored && p.State != Resolved && m.inGrace(p, now)
+}

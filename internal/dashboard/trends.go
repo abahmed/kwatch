@@ -37,12 +37,15 @@ type TrendsResponse struct {
 }
 
 // TrendDay is how many issues opened on one calendar day (YYYY-MM-DD
-// in the requested zone), by the issue's current severity.
+// in the requested zone), by the issue's current severity. Untold
+// counts the openings no message reached (told_counts.go); they are in
+// Total and in no severity.
 type TrendDay struct {
 	Date   string `json:"date"`
 	Page   int    `json:"page"`
 	Notify int    `json:"notify"`
 	Digest int    `json:"digest"`
+	Untold int    `json:"untold,omitempty"`
 	Total  int    `json:"total"`
 }
 
@@ -177,7 +180,7 @@ func buildTrends(
 				previous++
 			}
 			if i := w.day(at); i >= 0 {
-				out.Days[i].add(p.Tier)
+				out.Days[i].addOpening(p, at)
 				n++
 			}
 		}

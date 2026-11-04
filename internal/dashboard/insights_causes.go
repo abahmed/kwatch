@@ -155,11 +155,14 @@ type InsightNamespaces struct {
 }
 
 // NamespaceTile is a namespace, the most urgent severity of its active
-// issues and how many it has.
+// issues and how many it has, in all and by severity.
 type NamespaceTile struct {
 	Namespace string `json:"namespace"`
 	Severity  string `json:"severity"`
 	Count     int    `json:"count"`
+	Urgent    int    `json:"urgent"`
+	Attention int    `json:"attention"`
+	Low       int    `json:"low"`
 }
 
 // namespaceMap tiles the namespaces of the active issues, most urgent
@@ -167,7 +170,7 @@ type NamespaceTile struct {
 // no tile.
 func namespaceMap(live []incident.Incident) InsightNamespaces {
 	worst := map[string]incident.Tier{}
-	count := map[string]int{}
+	count := map[string]*SeverityCounts{}
 	for _, p := range live {
 		ns := p.Root.Namespace
 		if ns == "" {
@@ -176,12 +179,17 @@ func namespaceMap(live []incident.Incident) InsightNamespaces {
 		if t, ok := worst[ns]; !ok || p.Tier > t {
 			worst[ns] = p.Tier
 		}
-		count[ns]++
+		if count[ns] == nil {
+			count[ns] = &SeverityCounts{}
+		}
+		count[ns].add(p.Tier)
 	}
 	tiles := make([]NamespaceTile, 0, len(count))
 	for ns, n := range count {
 		tiles = append(tiles, NamespaceTile{Namespace: ns,
-			Severity: worst[ns].String(), Count: n})
+			Severity: worst[ns].String(),
+			Count:    n.Urgent + n.Attention + n.Low + n.Quiet,
+			Urgent:   n.Urgent, Attention: n.Attention, Low: n.Low})
 	}
 	slices.SortFunc(tiles, func(a, b NamespaceTile) int {
 		return cmp.Or(cmp.Compare(worst[b.Namespace], worst[a.Namespace]),

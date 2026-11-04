@@ -58,9 +58,7 @@ func (Event) Detect(
 	}
 	out := make([]detection.Finding, 0, len(order))
 	for _, key := range order {
-		if key == reasons.VolumeMultiAttach && !sustained(ctx,
-			"multi-attach", ctx.Onset("multi-attach", byReason[key].first),
-			DefaultMultiAttachHold) {
+		if heldEvent(ctx, e, key, byReason[key]) {
 			continue
 		}
 		found := byReason[key].finding(key)
@@ -71,6 +69,30 @@ func (Event) Detect(
 		out = append(out, found)
 	}
 	return append(out, unusualEvents(ctx, e)...)
+}
+
+// DefaultSandboxGrace is how long a pod's first failure to set up its
+// sandbox waits for the kubelet's retry. The retry comes at once and
+// usually works: a single failure that a start follows within seconds
+// is not a problem. A second failure is reported at once, and a node
+// whose pods keep failing has its own sandbox finding.
+const DefaultSandboxGrace = time.Minute
+
+// heldEvent reports a reason that must last before it counts: a
+// multi-attach error (a rolling update overlaps two pods) and a pod's
+// single sandbox failure (the kubelet's retry usually works).
+func heldEvent(
+	ctx detection.Context, e inventory.Entity, key string, g *eventGroup,
+) bool {
+	switch {
+	case key == reasons.VolumeMultiAttach:
+		return !sustained(ctx, "multi-attach",
+			ctx.Onset("multi-attach", g.first), DefaultMultiAttachHold)
+	case e.ID.Kind == kube.KindPod && bootReasons[key] && g.count < 2:
+		return !sustained(ctx, "sandbox", ctx.Onset("sandbox", g.first),
+			DefaultSandboxGrace)
+	}
+	return false
 }
 
 // eventGroup folds the notes of one reason: notes are kept per source,

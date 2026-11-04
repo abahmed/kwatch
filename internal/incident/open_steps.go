@@ -75,7 +75,7 @@ func (m *Manager) revisedStep(p *Incident, now time.Time) (Decision, bool) {
 		return Decision{}, true
 	}
 	p.Pending.ClearRevised()
-	if causeWithdrawn(p) {
+	if causeWithdrawn(p) || hedgesTold(p) {
 		// The thread keeps its words; the fingerprint adopts the new
 		// root so the move is not re-sent as a material change.
 		p.Digest = fingerprint(p)
@@ -92,6 +92,33 @@ func (m *Manager) revisedStep(p *Incident, now time.Time) (Decision, bool) {
 // speaks.
 func causeWithdrawn(p *Incident) bool {
 	return p.Pending.CauseReplaced() && p.Cause == nil && p.Tier < Page
+}
+
+// hedgesTold reports a revision of an incident that only a listing (a
+// roll-up, the startup summary) announced, whose new cause only ties
+// with the cause the listing stated: the told root is its rival, so the
+// update would say "two possible causes: X or what you were told".
+// Nothing observed contradicts the listing, and the update would be the
+// incident's first message of its own, a new conversation (and later a
+// resolve of its own) for a re-rank. An incident with a thread of its
+// own still hears it there. A page always speaks.
+func hedgesTold(p *Incident) bool {
+	return p.Pending.CauseReplaced() && p.Tier < Page && tiedWithTold(p)
+}
+
+// tiedWithTold reports a listed-only incident whose cause ties with the
+// root the listing stated. The tie is part of the cause's identity
+// (causeIdentity): a skipped hedge adopts it, so the tie ending (the new
+// cause alone) is a change, and the thread then learns the new cause.
+func tiedWithTold(p *Incident) bool {
+	return onlyListed(p) && p.Cause != nil && p.Cause.Rival != nil &&
+		p.Pending.WasTold(p.Cause.Rival.Root)
+}
+
+// onlyListed reports an incident whose only message so far is the
+// listing that carried its announcement.
+func onlyListed(p *Incident) bool {
+	return p.Delivery.RolledUp() && p.Revision <= 1
 }
 
 func (m *Manager) reminderStep(p *Incident, now time.Time) (Decision, bool) {

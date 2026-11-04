@@ -137,7 +137,7 @@ func library() []scenario {
 		operatorScenarios(), workloadConfigScenarios(),
 		containerScenarios(), borderlineScenarios(),
 		borderlineTrafficScenarios(), storageScenarios(),
-		admissionScenarios(), webhookTLSScenarios(),
+		admissionScenarios(), webhookTLSScenarios(), webhookReachScenarios(),
 		policyAdmissionScenarios(), nodeDegradedScenarios(),
 		nodeAgentScenarios(), csiRegistrationScenarios(), kubeletCertScenarios(),
 		apiThrottlingScenarios(),
@@ -145,7 +145,7 @@ func library() []scenario {
 		loadBalancerScenarios(),
 		trafficBackendScenarios(),
 		autoscalingScenarios(), sharedErrorScenarios(),
-		logsOnlyScenarios(),
+		logsOnlyScenarios(), dependencyLogScenarios(),
 		commonFactorScenarios(), dependencyScenarios(), bootScenarios(),
 		bootEndpointScenarios(),
 		releaseScenarios(), metricsHPAScenarios(), nodeFlapScenarios(),
@@ -153,7 +153,7 @@ func library() []scenario {
 		recentChangeScenarios(), fixAttemptScenarios(),
 		flipScenarios(), unschedulableQuantifiedScenarios(),
 		schedulingFitScenarios(),
-		readyNeverScenarios(), readyZeroScenarios(),
+		readyNeverScenarios(), readyZeroScenarios(), probeLogScenarios(),
 		namespaceOutageScenarios(),
 		reopenScenarios(), jobLongScenarios(), scaleZeroScenarios(),
 		firstRolloutScenarios(), usageHistoryScenarios(), nodeOOMScenarios(),
@@ -187,6 +187,11 @@ func library() []scenario {
 		rcaPathScenarios(),
 		rcaEvidenceScenarios(),
 		adversarialScenarios(),
+		// Added last so the staging day keeps every earlier
+		// scenario's place.
+		backendNotReadyScenarios(), attachmentDetachScenarios(),
+		inUseDeleteScenarios(), livenessKindScenarios(),
+		releaseRescheduledScenarios(), transientStartScenarios(),
 	} {
 		out = append(out, group...)
 	}

@@ -54,6 +54,7 @@ const (
 	CheckHPA          = "hpa"
 	CheckJob          = "job"
 	CheckProbe        = "probe"
+	CheckProbeLog     = "probe-log"
 )
 
 // StepChecks are the checks that cover a read-only suggested step. The

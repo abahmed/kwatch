@@ -167,6 +167,7 @@ var noteWriters = []sentenceWriter{
 	windowSentences,
 	wakeSentences,
 	errorSentences,
+	probeLogSentences,
 	nodeWhySentences,
 	calledServiceSentences,
 	missingServiceSentences,

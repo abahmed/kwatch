@@ -150,3 +150,22 @@ func AlertLevelText(code string) string {
 	}
 	return levelTexts[code]
 }
+
+// keepLevel makes sure a closing incident keeps a level code, so a
+// resolved incident still says why it was at its tier: the policy's
+// code while members are left, else the plain code of its tier.
+func (m *Manager) keepLevel(p *Incident) {
+	if p.Journal.Level != "" {
+		return
+	}
+	p.noteLevel(m.levelOf(p))
+	if p.Journal.Level != "" {
+		return
+	}
+	switch p.Tier {
+	case Page, Notify:
+		p.noteLevel(levelNotify)
+	case Digest:
+		p.noteLevel(levelDigestOnly)
+	}
+}

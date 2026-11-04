@@ -108,6 +108,7 @@ var serviceCallRows = []Row{
 		Effect: Side{Kind: kube.KindPod, Modes: callerFailures},
 		Prior:  0.65,
 	},
+	backendNotReadyRow, notReadyBackendRow,
 }
 
 // serviceCallHops lead from a failing pod to the Service its error
@@ -296,7 +297,8 @@ func (v *view) calledServiceModes(
 	}
 	call, ok := v.clusterCallOf(effect)
 	if !ok || call.service != id || v.aliasService(id) ||
-		!v.noReadyEndpoints(id) || v.backendChanged(id) {
+		!v.noReadyEndpoints(id) || v.backendChanged(id) ||
+		v.backendsNotReady(id) {
 		return nil
 	}
 	return pseudoFailing(detection.ModeNoEndpoints)
@@ -369,5 +371,5 @@ func (v *view) calledBackendModes(
 			return pseudoFailing(ModeBackendsFailing + named)
 		}
 	}
-	return nil
+	return v.notReadyBackendMode(id, effect, call.service, named)
 }

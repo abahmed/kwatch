@@ -16,13 +16,17 @@ const (
 	Italic
 	// Code marks text a pod wrote, or a command.
 	Code
+	// Link marks a label that links to the span's URL.
+	Link
 )
 
 // Span is a run of text in one style. Text is always raw: the dialect
-// escapes it, so text from a pod can never become markup.
+// escapes it, so text from a pod can never become markup. A Link span
+// shows Text and links to URL; without markup it reads "Text: URL".
 type Span struct {
 	Text  string
 	Style Style
+	URL   string `json:",omitempty"`
 }
 
 // BlockKind is the shape of one block of a message.
@@ -52,11 +56,12 @@ type Block struct {
 	Pinned bool `json:"-"`
 }
 
-// Text is the block's text without any markup.
+// Text is the block's text without any markup. A link is its label
+// and its address.
 func (b Block) Text() string {
 	var sb strings.Builder
 	for _, s := range b.Spans {
-		sb.WriteString(s.Text)
+		sb.WriteString(s.plain())
 	}
 	return sb.String()
 }
@@ -72,6 +77,11 @@ type Dialect struct {
 	Bold, Italic, Code func(string) string
 	// Fence wraps raw text as a code block.
 	Fence func(string) string
+	// Link writes raw label text as a link to address, which is
+	// already an http or https address with every byte that could end
+	// the markup percent-encoded. Nil writes the label and the address
+	// as plain text.
+	Link func(text, address string) string
 	// SpanFits reports whether raw text can sit in an inline Code span
 	// exactly as written. Nil means every text can. A code span that does
 	// not fit is lifted out of its line into a Fence block.
@@ -222,6 +232,9 @@ func renderBlock(b Block, d Dialect) string {
 }
 
 func renderSpan(s Span, kind BlockKind, d Dialect) string {
+	if s.Style == Link {
+		return renderLink(s, d)
+	}
 	text := d.neutral(s.Text)
 	style := s.Style
 	if style == Plain {

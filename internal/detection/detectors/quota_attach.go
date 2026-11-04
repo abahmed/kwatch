@@ -94,7 +94,7 @@ func detachFailure(
 	}
 	if message != "" {
 		f.Evidence = []detection.Evidence{
-			{Label: "detach error", Value: message}}
+			{Label: detection.EvidenceDetachError, Value: message}}
 	} else {
 		f.Summary = "Volume has been detaching for " +
 			format.Duration(ctx.Now.Sub(since))

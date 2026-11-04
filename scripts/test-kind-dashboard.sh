@@ -119,7 +119,7 @@ grep -q "\"kwatchNamespace\":\"$namespace\"" "$work/body" ||
 
 [ "$(code --cookie "$work/jar" --cookie-jar "$work/jar" --request POST \
 	"http://127.0.0.1:$port/logout")" = 204 ] || fail "sign-out"
-[ "$(code --cookie "$work/jar" "http://127.0.0.1:$port/api/session")" = 401 ] ||
+[ "$(code --cookie "$work/jar" "http://127.0.0.1:$port/api/incidents")" = 401 ] ||
 	fail "the session must end at sign-out"
 
 echo "Switching to shared mode: sign-in over plain http is refused"

@@ -1,0 +1,7 @@
+{
+  "name": "sandbox-first-attempt-retried",
+  "description": "Six new pods each fail their first sandbox attempt and start a second later.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "15m0s"
+}

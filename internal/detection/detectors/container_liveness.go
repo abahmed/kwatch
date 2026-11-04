@@ -1,7 +1,6 @@
 package detectors
 
 import (
-	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -18,10 +17,11 @@ const livenessKills = 3
 // "Unhealthy" event may be and still explain it. An older one belongs to
 // an earlier kill; this kill (a SIGTERM from a rollout or a node drain,
 // say) has no probe behind it.
-const livenessNoteLead = 2 * time.Minute
+const livenessNoteLead = kube.LivenessKillLead
 
 // livenessKilled reports a container the kubelet keeps killing for a
-// failing liveness probe: its last termination is SIGTERM (exit 143),
+// failing liveness probe: its last termination is a kill (killExit, or
+// any code after the kubelet's liveness stop: livenessKillAtExit),
 // it restarted livenessKills times, the last restart is recent, and a
 // liveness "Unhealthy" event is inside the event window. It returns the
 // event so the finding can quote it.
@@ -31,30 +31,89 @@ func livenessKilled(
 	restarts, _ := number(e, kube.AttrRestarts)
 	code, known := number(e, kube.AttrLastExitCode)
 	lastRestart := timestamp(e, kube.AttrLastFinished)
-	if restarts < livenessKills || !known || code != exitSIGTERM ||
+	killed := known && (killExit(e, code) || livenessKillAtExit(ctx, e))
+	if restarts < livenessKills || !killed ||
 		lastRestart.IsZero() || ctx.Now.Sub(lastRestart) > restartRecency ||
 		flag(e, kube.AttrInit) || shuttingDown(ctx, e) || ctx.Model == nil {
 		return inventory.Note{}, false
 	}
-	note, ok := latestUnhealthy(ctx, e.ID, probeRecency)
+	// The newest liveness event: a readiness failure after it is its
+	// own note and does not hide the kill.
+	note, ok := latestProbeNote(ctx.Model.Notes(e.ID,
+		ctx.Now.Add(-probeRecency)), livenessPrefix)
 	if !ok {
 		// An event that names no container belongs to the pod.
 		if pod, found := owningPod(ctx, e); found {
-			note, ok = latestUnhealthy(ctx, pod.ID, probeRecency)
+			note, ok = latestProbeNote(ctx.Model.Notes(pod.ID,
+				ctx.Now.Add(-probeRecency)), livenessPrefix)
 		}
 	}
-	if !ok || !isLivenessNote(note) ||
+	if !ok ||
 		note.At.Before(lastRestart.Add(-livenessNoteLead)) {
 		return inventory.Note{}, false
 	}
 	return note, true
 }
 
-func isLivenessNote(note inventory.Note) bool {
-	return strings.HasPrefix(note.Message, livenessPrefix)
+const livenessPrefix = "Liveness probe"
+
+// livenessKillAtExit reports a kubelet note on the container or its pod
+// that it stopped the container for a failing liveness probe
+// (kube.LivenessKillMessage), within livenessNoteLead of the end of its
+// last run, or the container's own Warning liveness failure just before
+// that end (kube.LivenessFailureKill): that run ended because of the
+// probe, whatever its code.
+func livenessKillAtExit(ctx detection.Context, e inventory.Entity) bool {
+	finished := timestamp(e, kube.AttrLastFinished)
+	if finished.IsZero() || ctx.Model == nil {
+		return false
+	}
+	if livenessFailureAtExit(ctx, e, finished) {
+		return true
+	}
+	ids := []inventory.EntityID{e.ID}
+	if pod, ok := owningPod(ctx, e); ok {
+		ids = append(ids, pod.ID)
+	}
+	for _, id := range ids {
+		for _, note := range ctx.Model.Notes(id,
+			finished.Add(-livenessNoteLead)) {
+			gap := note.At.Sub(finished).Abs()
+			if gap <= livenessNoteLead &&
+				kube.LivenessKillMessage(note.Message) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
-const livenessPrefix = "Liveness probe"
+// livenessFailureAtExit reports the container's latest Warning liveness
+// failure as the cause of the run that ended at finished.
+func livenessFailureAtExit(
+	ctx detection.Context, e inventory.Entity, finished time.Time,
+) bool {
+	note, ok := latestProbeNote(ctx.Model.Notes(e.ID,
+		finished.Add(-livenessNoteLead)), livenessPrefix)
+	if !ok {
+		return false
+	}
+	restarts, _ := number(e, kube.AttrRestarts)
+	threshold, _ := number(e, kube.ProbeAttr("liveness", "failures"))
+	return kube.LivenessFailureKill(kube.LivenessFailure{
+		Message: note.Message, At: note.At, Count: note.Count,
+		Threshold: int(threshold), Finished: finished,
+		Restarts: int(restarts),
+	})
+}
+
+// killExit reports an exit the kubelet's stop leaves: SIGTERM (143), or
+// SIGKILL (137) when the process did not stop within its grace period.
+// A memory kill also ends with 137 but says OOMKilled.
+func killExit(e inventory.Entity, code float64) bool {
+	return code == exitSIGTERM || code == exitSIGKILL &&
+		text(e, kube.AttrLastReason) != reasons.OOMKilled
+}
 
 // livenessKilledFinding is the crash-loop-class finding of a running
 // container between kills. It replaces the plain probe finding: the
@@ -98,8 +157,9 @@ func livenessFinding(
 	return detection.Finding{
 		Reason: reasons.LivenessKilled, Severity: detection.Critical,
 		Since: timestamp(e, kube.AttrLastFinished),
-		Summary: containerRole(e) + " keeps being killed by its " +
-			"liveness probe",
+		Summary: containerRole(e) + " keeps failing its liveness " +
+			"check" + resultWords(note) + ", so the kubelet keeps " +
+			"restarting it",
 		Evidence: append(append(containerEvidence(e),
 			probeEvidence(note)...), throttleEvidence(e)...),
 	}

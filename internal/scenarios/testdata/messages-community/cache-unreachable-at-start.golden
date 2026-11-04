@@ -1,0 +1,7 @@
+10:05:45 settled
+🟠 api in web (prod-eu-1) keeps exiting on its own with an error (exit code 139). Cause found: likely a dependency.
+Pro shows which one and how to fix it. Get Pro free during early access: kwatch.dev/pro
+🟠 api in web (prod-eu-1) keeps exiting on its own with an error (exit code 139).
+| 🟠 **api** in **web** (**prod-eu-1**) keeps exiting on its own with an error (exit code 139).
+| Cause found: likely a dependency.
+| *Pro shows which one and how to fix it. Get Pro free during early access: kwatch.dev/pro*

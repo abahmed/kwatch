@@ -1,0 +1,13 @@
+10:05:15 settled
+🟠 api in web (prod-eu-1) keeps exiting on its own with an error (exit code 139), likely because it cannot connect to Redis (from its log: "Unhandled exception. StackExchange.Redis.RedisConnectionException: It was not possible to connect to the redis…"). Its last run lasted ten seconds. Service api can't serve traffic. It runs a single replica. Check the Redis address in api's configuration and that it is reachable from web.
+🟠 api in web (prod-eu-1) keeps exiting on its own with an error (exit code 139), likely because it cannot connect to Redis (from its log: "Unhandled exception. StackExchange.Redis.RedisConnectionException: It was not possible to connect to the redis…").
+| 🟠 **api** in **web** (**prod-eu-1**) keeps exiting on its own with an error (exit code 139), likely because it cannot connect to Redis (from its log: `Unhandled exception. StackExchange.Redis.RedisConnectionException: It was not possible to connect to the redis…`).
+| Its last run lasted ten seconds.
+| Service **api** can't serve traffic.
+| It runs a single replica.
+| Check the Redis address in **api**'s configuration and that it is reachable from **web**.
+10:12:00 flapping
+🟠 api in web (prod-eu-1) is not serving: its readiness check fails (connection refused) and it keeps restarting; it has recovered three times recently. kwatch will write again when it stays healthy or fails differently.
+🟠 api in web (prod-eu-1) is not serving: its readiness check fails (connection refused) and it keeps restarting; it has recovered three times recently.
+| 🟠 **api** in **web** (**prod-eu-1**) is not serving: its readiness check fails (connection refused) and it keeps restarting; it has recovered three times recently.
+| kwatch will write again when it stays healthy or fails differently.

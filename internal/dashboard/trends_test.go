@@ -18,8 +18,10 @@ var trendNow = time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
 
 func opened(id, ns string, tier incident.Tier,
 	at ...time.Time) incident.Incident {
+	// An open incident was announced: its opening was told.
 	p := incident.Incident{ID: id, Tier: tier, State: incident.Open,
-		Occurrences: at, Opened: at[len(at)-1]}
+		Occurrences: at, Opened: at[len(at)-1],
+		Announced: at[len(at)-1]}
 	p.Root.Kind, p.Root.Namespace, p.Root.Name = "Deployment", ns, "app-"+id
 	return p
 }

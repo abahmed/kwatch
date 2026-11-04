@@ -20,6 +20,14 @@ const DefaultTLSSecretGrace = 10 * time.Minute
 // that creates the Ingress first.
 const DefaultBackendGrace = 2 * time.Minute
 
+// DefaultClassGrace is how long a referenced cluster-scoped class
+// (IngressClass, PriorityClass, RuntimeClass) may be absent before it is
+// reported. It counts from when kwatch first saw it absent, never from
+// the referring object's age: at start-up, or while a class is replaced,
+// the class can be missing from the model for a moment although it
+// exists.
+const DefaultClassGrace = 2 * time.Minute
+
 // ingressTLSSecrets reports spec.tls secrets that do not exist. Most
 // controllers then serve their default certificate, so HTTPS clients see
 // a certificate for the wrong host.
@@ -68,7 +76,9 @@ func ingressClass(
 		return nil
 	}
 	class := inventory.CoreID(kube.KindIngressClass, "", name)
-	if ctx.Model.Exists(class) {
+	if ctx.Model.Exists(class) ||
+		!sustained(ctx, "ingress-class/"+name, time.Time{},
+			DefaultClassGrace) {
 		return nil
 	}
 	return []detection.Finding{{

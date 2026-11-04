@@ -146,6 +146,7 @@ type noteWire struct {
 	FirstSeen *time.Time `json:"first_seen,omitempty"`
 	Source    string     `json:"source,omitempty"`
 	Reason    string     `json:"reason,omitempty"`
+	Topic     string     `json:"topic,omitempty"`
 	Message   string     `json:"message,omitempty"`
 	Count     int        `json:"count,omitempty"`
 	Warning   bool       `json:"warning,omitempty"`
@@ -171,8 +172,9 @@ func (o Observation) MarshalJSON() ([]byte, error) {
 		wire.Note = &noteWire{
 			At: wireTime(o.Note.At), FirstSeen: wireTime(o.Note.FirstSeen),
 			Source: o.Note.Source,
-			Reason: o.Note.Reason, Message: o.Note.Message,
-			Count: o.Note.Count, Warning: o.Note.Warning,
+			Reason: o.Note.Reason, Topic: o.Note.Topic,
+			Message: o.Note.Message,
+			Count:   o.Note.Count, Warning: o.Note.Warning,
 			UID: o.Note.UID, Origin: o.Note.Origin,
 			Refusal: o.Note.Refusal,
 		}
@@ -205,8 +207,9 @@ func (o *Observation) UnmarshalJSON(data []byte) error {
 			At:        fromWireTime(wire.Note.At),
 			FirstSeen: fromWireTime(wire.Note.FirstSeen),
 			Source:    wire.Note.Source,
-			Reason:    wire.Note.Reason, Message: wire.Note.Message,
-			Count: wire.Note.Count, Warning: wire.Note.Warning,
+			Reason:    wire.Note.Reason, Topic: wire.Note.Topic,
+			Message: wire.Note.Message,
+			Count:   wire.Note.Count, Warning: wire.Note.Warning,
 			UID: wire.Note.UID, Origin: wire.Note.Origin,
 			Refusal: wire.Note.Refusal,
 		}

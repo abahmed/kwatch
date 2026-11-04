@@ -52,8 +52,10 @@ type pipelineBuild struct {
 	// stats is the kubelet stats poller once it runs (Pro); the
 	// dashboard reads its usage history.
 	stats *kube.StatsPoller
-	// crashLogs reads crashed containers' previous logs; nil when
-	// investigation or its log reads are off (crashLogsEnabled).
+	// crashLogs reads crashed containers' previous logs and the current
+	// logs of running containers whose probe gets an HTTP error status;
+	// nil when investigation or its log reads are off
+	// (crashLogsEnabled).
 	crashLogs *kube.CrashLogRound
 	// links is the state of the dashboard links in messages; nil
 	// without the dashboard.
@@ -314,11 +316,13 @@ func (p *pipelineBuild) newRunners(
 			deps, source, dynamicSource))),
 	}
 	if crashLogsEnabled(deps) {
+		logs := kube.LogReader{Client: deps.clients.Kubernetes}
 		p.crashLogs = kube.NewCrashLogRound(kube.CrashLogConfig{
-			Logs:   kube.LogReader{Client: deps.clients.Kubernetes},
-			Model:  p.model,
-			Now:    p.clock.Now,
-			Submit: submit,
+			Logs:    logs,
+			Current: logs,
+			Model:   p.model,
+			Now:     p.clock.Now,
+			Submit:  submit,
 		})
 		runners = append(runners, p.crashLogs.Run)
 	}

@@ -1,10 +1,10 @@
-PUT /_matrix/client/v3/rooms/%21room:example/send/m.room.message/kwatch-44edeb9f35b2fda53daf8bfd989dbaed
+PUT /_matrix/client/v3/rooms/%21room:example/send/m.room.message/kwatch-0635c8df2bfd27f22be1165aef03ab8c
 Content-Type: application/json
 Authorization: Bearer <redacted>
 
 {
   "body": "🔴 payments in shop is crash-looping.\nCaused by: Node n1 is not ready.\nCause in dashboard: https://kwatch.example/issues/p-cause\nEarlier times: https://kwatch.example/issues?status=all&like=p-link\nOpen in dashboard: https://kwatch.example/issues/p-link\n\npanic: out of memory",
   "format": "org.matrix.custom.html",
-  "formatted_body": "🔴 payments in shop is crash-looping.<br>\nCaused by: Node n1 is not ready.<br>\nCause in dashboard: https://kwatch.example/issues/p-cause<br>\nEarlier times: https://kwatch.example/issues?status=all&amp;like=p-link<br>\nOpen in dashboard: https://kwatch.example/issues/p-link<pre><code>panic: out of memory</code></pre>",
+  "formatted_body": "🔴 payments in shop is crash-looping.<br>\nCaused by: Node n1 is not ready.<br>\n<a href=\"https://kwatch.example/issues/p-cause\">Cause in dashboard</a><br>\n<a href=\"https://kwatch.example/issues?status=all&amp;like=p-link\">Earlier times</a><br>\n<a href=\"https://kwatch.example/issues/p-link\">Open in dashboard</a><pre><code>panic: out of memory</code></pre>",
   "msgtype": "m.text"
 }

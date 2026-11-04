@@ -1,0 +1,7 @@
+{
+  "name": "release-old-revision-rescheduled",
+  "description": "The pods of a three-week-old revision are recreated by a node rotation and restart twice each.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

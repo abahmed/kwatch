@@ -94,6 +94,7 @@ func dashboardTrail(
 				Placement: a.Placement, Result: a.Result,
 				Retries: a.Retries, Carrier: a.Carrier,
 				Fallback: a.Fallback, Error: a.Error, Reason: a.Reason,
+				Pager: a.Pager,
 			})
 		}
 		return out

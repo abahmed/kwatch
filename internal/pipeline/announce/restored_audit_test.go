@@ -34,7 +34,8 @@ func TestRestoredListingNamesIncidentRootTierAndReasons(t *testing.T) {
 		restoredDecision(2, incident.Digest, "NodePSIHigh"),
 	})
 
-	assert.Equal(t, 2, listed.Opened)
+	assert.Zero(t, listed.Opened, "restored incidents are not new")
+	assert.Equal(t, 2, listed.Ongoing)
 	assert.Equal(t, []string{
 		"inc-1: deployment/shop/app1 tier=notify reasons=CrashLoop,OOMKilled",
 		"inc-2: deployment/shop/app2 tier=digest reasons=NodePSIHigh",
@@ -52,7 +53,7 @@ func TestRestoredListingIsBounded(t *testing.T) {
 	listed := restoredListing(all)
 
 	require.Len(t, listed.Items, MaxRestoredAuditItems)
-	assert.Equal(t, 120, listed.Opened)
+	assert.Equal(t, 120, listed.Ongoing)
 }
 
 func TestRestoredTotalsCountByTier(t *testing.T) {
@@ -64,4 +65,22 @@ func TestRestoredTotalsCountByTier(t *testing.T) {
 
 	assert.Equal(t, []any{"incidents", 3, "page", 1, "notify", 0,
 		"digest", 2, "silent", 0}, got)
+}
+
+// The lower-priority incidents the next digest carries are named too,
+// after the listed ones, and the entry's tier is the loudest listed.
+func TestRestoredListingNamesLowerPriorityAndLoudestTier(t *testing.T) {
+	listed := []incident.Decision{
+		restoredDecision(1, incident.Notify, "A"),
+		restoredDecision(2, incident.Page, "B"),
+	}
+	lower := []incident.Decision{restoredDecision(3, incident.Digest, "C")}
+
+	got := restoredListing(listed, lower...)
+
+	assert.Equal(t, 2, got.Ongoing)
+	require.Len(t, got.Items, 3)
+	assert.Equal(t, "inc-3: deployment/shop/app3 tier=digest reasons=C"+
+		" (lower priority, next digest)", got.Items[2])
+	assert.Equal(t, incident.Page, loudest(listed))
 }

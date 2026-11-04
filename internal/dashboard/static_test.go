@@ -93,7 +93,8 @@ func TestStaticShellAppliesTheLookBeforeTheFirstPaint(t *testing.T) {
 
 func TestStaticShellRoutesAndHashedAssets(t *testing.T) {
 	s := newTestServer()
-	for _, path := range []string{"/", "/signin", "/issues",
+	for _, path := range []string{"/", "/signin", "/issues", "/insights",
+		"/activity", "/activity?since=24h", "/kwatch",
 		"/issues?status=resolved", "/issues/inc-1"} {
 		w := call(t, s, http.MethodGet, path, "")
 		if w.Code != 200 ||
@@ -156,7 +157,8 @@ func TestStaticEveryResponseCarriesTheCSP(t *testing.T) {
 		csp := w.Header().Get("Content-Security-Policy")
 		for _, part := range []string{"default-src 'none'",
 			"script-src 'self'", "style-src 'self'", "connect-src 'self'",
-			"frame-ancestors 'none'", "base-uri 'none'"} {
+			"frame-ancestors 'none'", "base-uri 'none'",
+			"worker-src 'self'"} {
 			if !strings.Contains(csp, part) {
 				t.Errorf("%s: CSP %q lacks %q", path, csp, part)
 			}
@@ -175,6 +177,15 @@ func TestStaticBuildRefusesAMissingReference(t *testing.T) {
 		t.Error("a reference to a missing file built")
 	}
 	root["web/gone.css"] = &fstest.MapFile{Data: []byte("body{}")}
+	if _, err := buildAssets(root); err == nil {
+		t.Error("built without what the not-found page names")
+	}
+	root["web/app.css"] = &fstest.MapFile{Data: []byte("body{}")}
+	root["web/favicon.svg"] = &fstest.MapFile{Data: []byte("<svg/>")}
+	if _, err := buildAssets(root); err == nil {
+		t.Error("built without the service worker")
+	}
+	root["web/sw.js"] = &fstest.MapFile{Data: []byte("self;")}
 	if _, err := buildAssets(root); err != nil {
 		t.Errorf("complete set: %v", err)
 	}
@@ -188,7 +199,7 @@ func TestStaticUnknownAddressShowsANotFoundPage(t *testing.T) {
 	w := call(t, s, http.MethodGet, "/nope", "")
 	if w.Code != 404 ||
 		!strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") ||
-		!strings.Contains(w.Body.String(), `<a href="/">`) {
+		!strings.Contains(w.Body.String(), `href="/">Go to the Overview`) {
 		t.Errorf("/nope: %d %v %s", w.Code, w.Header(), w.Body.String())
 	}
 	for _, path := range []string{"/assets/nope.css", "/api/nope"} {
@@ -197,5 +208,36 @@ func TestStaticUnknownAddressShowsANotFoundPage(t *testing.T) {
 			w.Header().Get("Content-Type"), "application/json") {
 			t.Errorf("%s: %d %v", path, w.Code, w.Header())
 		}
+	}
+}
+
+// The not-found page looks like the rest of the dashboard: the title
+// format of every page, the shell's stylesheet and brand by their
+// hashed links, and nothing inline the Content Security Policy blocks.
+func TestStaticNotFoundPageUsesTheSharedLook(t *testing.T) {
+	s := newTestServer()
+	page := call(t, s, http.MethodGet, "/nope", "").Body.String()
+	css := regexp.MustCompile(`/assets/app\.[0-9a-f]{12}\.css`).
+		FindString(string(s.assets.shell))
+	for _, want := range []string{"<title>Not found · kwatch</title>",
+		`<link rel="stylesheet" href="` + css + `">`,
+		`class="wordmark">kwatch</span>`, "Page not found"} {
+		if css == "" || !strings.Contains(page, want) {
+			t.Errorf("page lacks %q:\n%s", want, page)
+		}
+	}
+	for _, banned := range []string{"{{asset:", "<style", "style=",
+		"<script"} {
+		if strings.Contains(page, banned) {
+			t.Errorf("page has %q", banned)
+		}
+	}
+	if w := call(t, s, http.MethodGet, css, ""); w.Code != 200 {
+		t.Errorf("its stylesheet: %d", w.Code)
+	}
+	reply := string(s.assets.badRequest)
+	if !strings.HasPrefix(reply, "HTTP/1.1 400 Bad Request\r\n") ||
+		!strings.HasSuffix(reply, page) {
+		t.Errorf("400 reply = %q", reply)
 	}
 }

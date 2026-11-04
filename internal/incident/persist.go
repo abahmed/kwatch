@@ -140,6 +140,9 @@ type Record struct {
 	// older records have neither and restore without them.
 	Headline string `json:",omitempty"`
 	DocsLink string `json:",omitempty"`
+	// Problem is the incident's stable problem title; older records
+	// restore without it and get one when their findings are back.
+	Problem string `json:",omitempty"`
 	// Steps are the suggested steps of the last message; older records
 	// restore without them.
 	Steps []FixStep `json:",omitempty"`
@@ -205,7 +208,8 @@ func (m *Manager) Export() []Record {
 			FormerRoot: p.formerRoot, RerootedAt: p.rerootedAt,
 			RejectionSeenAt: p.rejectionAt, Merged: p.Merged,
 			Facts: p.Facts, Headline: p.Headline, DocsLink: p.DocsLink,
-			Steps: p.Steps, Reasons: savedReasons(&p),
+			Problem: p.Problem,
+			Steps:   p.Steps, Reasons: savedReasons(&p),
 			Members: savedMembers(&p), Breaks: p.Journal.Breaks,
 			LinkedChanges: p.Journal.Changes,
 			Transitions:   p.Journal.Transitions,
@@ -315,7 +319,7 @@ func restored(r Record) *Incident {
 		rerootedAt: r.RerootedAt, rejectionAt: r.RejectionSeenAt,
 		rejectionSeen: !r.RejectionSeenAt.IsZero(), Merged: r.Merged,
 		Facts: r.Facts, Headline: r.Headline, DocsLink: r.DocsLink,
-		Steps: r.Steps,
+		Problem: r.Problem, Steps: r.Steps,
 		Delivery: Delivery{
 			paged: r.Paged, rolledUp: r.RolledUp,
 			podPeak: r.PodPeak, pageHeld: r.PageHeld,

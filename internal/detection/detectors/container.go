@@ -194,7 +194,7 @@ func terminatedFinding(
 	default:
 		if exit, ok := terminatedExit(code, reason); ok {
 			findingReason = exit.reason
-			summary = containerRole(e) + " " + exit.summary
+			summary = containerRole(e) + " " + exitSummary(exit, e)
 		} else if restarts, _ := number(e, kube.AttrRestarts); restarts > 0 {
 			// A container that was restarted before and exits again
 			// is in the crash loop the kubelet is about to name. It

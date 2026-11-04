@@ -57,6 +57,7 @@ apiserver-writes-slow self
 apiservice-backend-service-missing found-high
 attachment-node-gone self
 attachment-volume-gone self,self
+attachments-detach-error-disk-gone self,self
 autoscaler-ceiling-cpu found-likely
 autoscaler-ceiling-requests found-likely
 bad-config-value-change found-high
@@ -75,6 +76,10 @@ borderline-schedule-and-secret found-high
 borderline-selector-and-rollout found-high
 borderline-two-policies found-likely
 budget-blocks-drain found-high
+cache-retry-healthy-quiet quiet
+cache-unreachable-at-start found-likely
+called-backend-not-ready-refused found-high
+called-backend-not-ready-timeout found-high
 cause-flip-stable found-high
 cause-revised found-high
 certificate-expired found-high
@@ -196,6 +201,8 @@ kube-proxy-one-node-crash found-high
 kubelet-cert-expired self
 kubelet-unreachable-window self
 kwatch-network-restricted self
+lb-delete-resource-in-use self
+lb-delete-throttled-once quiet
 lease-holder-crash-loops found-high
 lease-holder-gone quiet
 lease-taken-once-healthy-holder quiet
@@ -205,8 +212,11 @@ limits-overcommitted-quiet quiet
 liveness-cascade found-likely
 liveness-cascade-healthy-dependency found-likely
 liveness-kill-after-start self
+liveness-kill-http-500 self
 liveness-kill-loop self
+liveness-kills-slow-start-no-startup-probe found-high
 liveness-never-ready found-likely
+liveness-refused-while-app-crashes self
 liveness-scale-out-too-tight found-high
 liveness-single-kill quiet
 liveness-slow-start found-high
@@ -308,6 +318,7 @@ quota-exhausted found-high
 quota-forbids-pods found-high
 rbac-binding-removed found-high
 rbac-change-unrelated-crash self
+readiness-error-logged self
 readiness-flapping self
 ready-never self
 ready-never-service found-likely
@@ -322,6 +333,7 @@ registry-login-missing-secret found-high
 registry-no-pull-secret found-high
 registry-rate-limited found-high
 registry-unavailable self
+release-old-revision-rescheduled quiet
 release-regression found-high
 release-steady quiet
 resourceclaim-unallocated-pod-pending found-likely
@@ -338,7 +350,9 @@ route-missing-backend found-high
 route-not-accepted found-high
 same-tag-mixed-digests-healthy quiet
 same-tag-new-digest found-high
+sandbox-first-attempt-retried quiet
 scale-failure-replaced self
+scale-up-backend-starting quiet
 scaled-to-zero-blue-green quiet
 scaled-to-zero-parked self
 scaled-to-zero-routed self
@@ -391,17 +405,21 @@ volume-nearly-full-quiet quiet
 wake-up-blips-held quiet
 wake-up-crash-loop self
 webhook-backend-namespace-gone found-high
+webhook-closed-on-gone-crds-backend-gone self
+webhook-closed-on-pods-backend-gone self
 webhook-denies-pod found-high
 webhook-flaps-hourly found-high
 webhook-idle-backend-gone self
 webhook-idle-then-rejects found-high
 webhook-ignore-beside-closed self
 webhook-ignore-no-endpoints self
+webhook-ignore-on-pods-backend-gone self
 webhook-no-endpoints found-high
 webhook-shared-backend found-high,found-high
 webhook-timeout found-high
 webhook-tls-serving-cert-expired found-high,self
 webhook-tls-unknown-authority found-high
+young-node-address-warm-up quiet
 zone-failure found-likely
 zone-nodes-lost-staggered found-likely
 zone-outage-healthy-node-crash found-high,self

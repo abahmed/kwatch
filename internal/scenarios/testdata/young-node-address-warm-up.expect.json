@@ -1,0 +1,7 @@
+{
+  "name": "young-node-address-warm-up",
+  "description": "Pods on a node that just joined fail address assignment for 90 seconds, then start.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "15m0s"
+}

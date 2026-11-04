@@ -1,0 +1,7 @@
+{
+  "name": "cache-retry-healthy-quiet",
+  "description": "A Deployment logs a Redis connection retry but never restarts, stays ready and keeps its endpoint.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "10m0s"
+}

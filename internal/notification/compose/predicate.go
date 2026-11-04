@@ -54,7 +54,7 @@ var extraSubjectWords = map[inventory.Kind][]string{
 var subjectlessVerbs = []string{"reports ", "has ", "is ", "keeps ",
 	"cannot ", "can't ", "references ", "routes ", "calls ", "stopped ",
 	"was ", "allows ", "uses ", "needs ", "selects ", "does ", "targets ",
-	"did ", "refused ", "could "}
+	"did ", "refused ", "could ", "rejects "}
 
 func hasPrefixFold(text, prefix string) bool {
 	return len(text) >= len(prefix) &&

@@ -1,9 +1,9 @@
-/* kwatch dashboard: how an issue relates to the others. "Caused by" and
-   the blast radius in the summary card, and "Other issues": "Also
+/* kwatch dashboard: how an issue relates to the others. "Caused by"
+   and the moved links in the summary card; in the Impact tab "Who it
+   hits" (the blast radius as count chips) and "Other issues": "Also
    causing" (the issues this one causes) and "Started at the same time"
    (issues that started within 5 minutes of it, less those already
-   named), with a hint line each. Every part hides when the API leaves
-   its field out. */
+   named). Every part hides when the API leaves its field out. */
 (function () {
   "use strict";
   var KW = window.KW;
@@ -64,11 +64,6 @@
      others into this one. Only issues still kept are named. */
   function moved(root, inc) {
     var box = KW.$("[data-moved]", root), m = inc.moved || {};
-    if (!box) {
-      box = KW.el("div", "d-moved");
-      box.dataset.moved = "";
-      KW.$("[data-blast]", root).insertAdjacentElement("afterend", box);
-    }
     box.textContent = "";
     var from = refs(m.from), cut = KW.cutCount(inc, "movedFrom");
     box.hidden = !m.into && !from.length;
@@ -87,14 +82,31 @@
     if (cut) q.appendChild(document.createTextNode(" (" + KW.num(cut) + " more not shown)"));
   }
 
+  /* chips: the blast radius as counts, each with its words. */
+  function chips(inc) {
+    var out = [], by = {};
+    (inc.affected || []).forEach(function (o) { by[o.status] = (by[o.status] || 0) + 1; });
+    [["failing", "failing object", "failing objects", "c-page"], ["cause", "likely cause", "likely causes", "c-notify"],
+      ["affected", "object hit", "objects hit", "c-notify"], ["gone", "deleted object", "deleted objects", "c-low"]
+    ].forEach(function (k) { if (by[k[0]]) out.push([KW.plural(by[k[0]], k[1], k[2]), k[3]]); });
+    var down = (inc.traffic || []).filter(function (t) { return t.total && t.ready < t.total; }).length;
+    if (down) out.push([KW.plural(down, "Service or Ingress short of endpoints", "Services or Ingresses short of endpoints"), "c-page"]);
+    var causing = refs(inc.causing).length + KW.cutCount(inc, "causing");
+    if (causing) out.push([KW.plural(causing, "issue it causes", "issues it causes"), "c-notify"]);
+    var same = (inc.sameTime || []).length;
+    if (same) out.push([KW.plural(same, "issue at the same time", "issues at the same time"), "c-low"]);
+    return out;
+  }
+
   function blast(root, inc) {
     var p = KW.$("[data-blast]", root), text = blastText(inc.blastRadius);
-    p.textContent = "";
+    var box = KW.$("[data-blast-chips]", root), list = chips(inc);
+    p.textContent = text;
     p.hidden = !text;
-    if (p.hidden) return;
-    p.appendChild(KW.el("b", "", "Who it hits: "));
-    p.appendChild(document.createTextNode(text));
-    p.title = "What this failure reaches beyond the failing object.";
+    box.textContent = "";
+    list.forEach(function (c) { box.appendChild(KW.chip(c[1] + " bl-chip", c[0])); });
+    box.hidden = !list.length;
+    KW.$('[data-fold="blast"]', root).hidden = !text && !list.length;
   }
 
   function row(r, meta) {
@@ -157,24 +169,12 @@
     return [c, s[0]];
   }
 
-  function hint(root, text, fold, tip) {
-    if (!text) return;
-    var ul = KW.$("[data-ctx]", root);
-    var b = KW.el("button", "link d-ctx-b", text);
-    b.type = "button";
-    b.title = tip;
-    b.onclick = function () { KW.openFold(root, fold); };
-    ul.appendChild(KW.el("li")).appendChild(b);
-    ul.hidden = false;
-  }
-
-  /* KW.links runs after KW.context, which empties the hint lines. */
+  /* KW.links fills "Caused by" and the moved links of the summary,
+     and "Who it hits" and "Other issues" in the Impact tab. */
   KW.links = function (root, inc) {
     causedBy(root, inc);
     blast(root, inc);
     moved(root, inc);
-    var lines = others(root, inc);
-    hint(root, lines[0], "others", "Other issues kwatch thinks this one causes.");
-    hint(root, lines[1], "others", "Other issues that started within 5 minutes of this one.");
+    others(root, inc);
   };
 })();

@@ -209,9 +209,14 @@ func (Webhook) Detect(
 		if !ctx.Synced(kube.KindService) {
 			return nil
 		}
-		blocking := closed[service.Namespace+"/"+service.Name]
-		if f, ok := backendFinding(
-			ctx, service, blocking, blocking && rejected); ok {
+		b := backend{config: e.ID, service: service,
+			blocking: closed[service.Namespace+"/"+service.Name]}
+		b.rejected = b.blocking && rejected
+		if b.blocking {
+			b.reach = kube.ClosedRuleReach(ctx.Model, ctx.Synced, e,
+				service)
+		}
+		if f, ok := backendFinding(ctx, b); ok {
 			out = append(out, f)
 		}
 	}
@@ -234,54 +239,20 @@ func closedBackends(e inventory.Entity) map[string]bool {
 // backendFinding is the finding for a Service whose webhook cannot call
 // it: the Service does not exist, or nothing behind it is ready.
 func backendFinding(
-	ctx detection.Context, service inventory.EntityID,
-	blocking, rejected bool,
+	ctx detection.Context, b backend,
 ) (detection.Finding, bool) {
-	severity := backendSeverity(blocking, rejected)
-	if !ctx.Model.Exists(service) {
-		return detection.Finding{
-			Reason:   reasons.WebhookBackendNotFound,
-			Severity: severity,
-			Summary: "Admission webhook calls Service " + service.Name +
-				", which does not exist" + effect(blocking, rejected),
-		}, true
+	if !ctx.Model.Exists(b.service) {
+		return b.finding(reasons.WebhookBackendNotFound,
+			"Admission webhook calls Service "+b.service.Name+
+				", which does not exist", "is gone"), true
 	}
-	ready, known := readyEndpoints(ctx, service)
-	if !known || ready > 0 || backendsAreStarting(ctx, service) {
+	ready, known := readyEndpoints(ctx, b.service)
+	if !known || ready > 0 || backendsAreStarting(ctx, b.service) {
 		return detection.Finding{}, false
 	}
-	return detection.Finding{
-		Reason: reasons.WebhookNoEndpoints, Severity: severity,
-		Summary: "Admission webhook backend " + service.Name +
-			" has no ready pods" + effect(blocking, rejected),
-	}, true
-}
-
-// backendSeverity is how much a dead webhook backend matters. With
-// failurePolicy Ignore, requests skip it and nothing is blocked: that is
-// only worth the digest. With Fail it blocks every request the webhook
-// matches, but it is critical only once a request was refused: an
-// operator's leftover webhook matches only that operator's own objects
-// and may never be called again. Until then it is a warning.
-func backendSeverity(blocking, rejected bool) detection.Severity {
-	switch {
-	case rejected:
-		return detection.Critical
-	case blocking:
-		return detection.Warning
-	}
-	return detection.Info
-}
-
-// effect says what a dead webhook backend does to requests.
-func effect(blocking, rejected bool) string {
-	switch {
-	case rejected:
-		return "; it blocks matching requests (failurePolicy Fail)"
-	case blocking:
-		return "; no request has been rejected yet (failurePolicy Fail)"
-	}
-	return "; requests skip it because failurePolicy is Ignore"
+	return b.finding(reasons.WebhookNoEndpoints,
+		"Admission webhook backend "+b.service.Name+" has no ready pods",
+		"has no ready pods"), true
 }
 
 // readyEndpoints sums ready endpoints across a Service's slices.

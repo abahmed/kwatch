@@ -53,8 +53,11 @@ var exitMeanings = []exitMeaning{
 	{exitSIGKILL, reasons.ExitKilled,
 		"was killed by SIGKILL (exit code 137) without running out " +
 			"of memory", false},
+	// A managed runtime (.NET, the JVM, Node) that dies of an unhandled
+	// exception can end with 139 too, so the code alone names only the
+	// signal; exitSummary words it after the log when the log says more.
 	{exitSIGSEGV, reasons.ExitSegfault,
-		"crashed with a segmentation fault (exit code 139)", true},
+		"crashed (exit code 139, signal SIGSEGV)", true},
 	// An out-of-range status says little, so it keeps the generic
 	// reason and only explains the number.
 	{exitOutOfRange, reasons.Error,

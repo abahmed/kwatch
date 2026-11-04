@@ -131,6 +131,7 @@ func SlackDialect() Dialect {
 				strings.ReplaceAll(foldLines(s), "`", "ˋ")) + "`"
 		},
 		Fence:  slackFence,
+		Link:   slackLink,
 		Bullet: "• ", Gap: "\n", Ellipsis: "...",
 	}
 }
@@ -154,6 +155,7 @@ func MarkdownDialect(neutralize func(string) string, gap string) Dialect {
 		Italic:     wrapper("*", markdownEscaper.Replace),
 		Code:       codeSpanOf,
 		Fence:      fenceOf,
+		Link:       markdownLink,
 		Bullet:     "- ", Gap: gap,
 	}
 }
@@ -184,6 +186,7 @@ func GoogleChatDialect() Dialect {
 			return "```\n" + strings.ReplaceAll(s, "```", "``\u200b`") +
 				"\n```"
 		},
+		Link:   googleChatLink,
 		Bullet: "• ", Gap: "\n",
 	}
 }
@@ -214,6 +217,7 @@ func HTMLDialect(neutralize func(string) string, br bool) Dialect {
 		Fence: func(s string) string {
 			return "<pre>" + html.EscapeString(s) + "</pre>"
 		},
+		Link:   htmlLink,
 		Bullet: "• ", Gap: gap,
 	}
 }
@@ -248,6 +252,7 @@ func JiraDialect() Dialect {
 				strings.ReplaceAll(s, "{noformat}", "{ noformat}") +
 				"\n{noformat}"
 		},
+		Link:   jiraLink,
 		Bullet: "* ", Gap: "\n",
 	}
 }

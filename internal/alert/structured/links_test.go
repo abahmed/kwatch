@@ -8,16 +8,17 @@ import (
 )
 
 // The structured Note is the plain paragraph and carries no dashboard
-// link; the markdown rendering of the blocks does.
+// link; the markdown rendering of the blocks links each label.
 func TestNewIncidentKeepsLinksOutOfNote(t *testing.T) {
 	p := NewIncident("dev", providertest.Linked())
-	for _, line := range []string{providertest.CauseLink,
-		providertest.EarlierLink, providertest.IncidentLink} {
-		if strings.Contains(p.Note, line) {
-			t.Fatalf("note carries %q: %q", line, p.Note)
+	for _, link := range providertest.LinkSpans() {
+		if strings.Contains(p.Note, link.URL) ||
+			strings.Contains(p.Note, link.Text) {
+			t.Fatalf("note carries %q: %q", link.Text, p.Note)
 		}
-		if !strings.Contains(p.Markdown, line) {
-			t.Fatalf("markdown lacks %q: %q", line, p.Markdown)
+		want := "[" + link.Text + "](" + link.URL + ")"
+		if !strings.Contains(p.Markdown, want) {
+			t.Fatalf("markdown lacks %q: %q", want, p.Markdown)
 		}
 	}
 }

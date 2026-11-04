@@ -13,8 +13,8 @@ import (
 // Lines that tie an opening to what people already know: the incident
 // that caused this one, and the earlier times the same root failed.
 const (
-	causeLinkLead   = "Cause in dashboard: "
-	earlierLinkLead = "Earlier times: "
+	causeLinkLabel   = "Cause in dashboard"
+	earlierLinkLabel = "Earlier times"
 	// repeatOffender is how many times in a week, this one included,
 	// make an incident a repeat offender: the recurrence line names the
 	// object and the message links the earlier times.
@@ -91,11 +91,11 @@ func (w Writer) withRelatedLinks(
 		return msg
 	}
 	if cause, ok := d.Incident.CauseTold(); ok {
-		msg = withLink(msg, causeLinkLead+base+"/issues/"+
-			url.PathEscape(cause.ID))
+		msg = withLink(msg, causeLinkLabel,
+			base+"/issues/"+url.PathEscape(cause.ID))
 	}
 	if weekTimes(d.Incident, now) >= repeatOffender {
-		msg = withLink(msg, earlierLinkLead+base+
+		msg = withLink(msg, earlierLinkLabel, base+
 			"/issues?status=all&like="+url.QueryEscape(d.Incident.ID))
 	}
 	return msg

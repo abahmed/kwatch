@@ -28,6 +28,11 @@ func nextSteps(
 				quote(root.Name) + namespaceFlag(root.Namespace),
 		}}
 	}
+	if root := p.Root; dependencyLogCause(p.Cause) &&
+		incident.IsWorkload(root.Kind) {
+		return append(dependencySteps(p.Cause, root.Namespace,
+			root.Name), symptomSteps(members)...)
+	}
 	return rootSteps(p, members)
 }
 

@@ -100,11 +100,20 @@ func (r LogReader) Lines(
 func (r LogReader) CurrentLines(
 	ctx context.Context, container inventory.EntityID,
 ) []string {
+	lines, _ := r.CurrentRunLines(ctx, container)
+	return lines
+}
+
+// CurrentRunLines is CurrentLines with the read's error: an error
+// means the read failed (a Forbidden one means pods/log is not granted).
+func (r LogReader) CurrentRunLines(
+	ctx context.Context, container inventory.EntityID,
+) ([]string, error) {
 	body, err := r.read(ctx, container, false, crashTailLines)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return logLines(lastBytes(body, crashKeepBytes))
+	return logLines(lastBytes(body, crashKeepBytes)), nil
 }
 
 // PreviousLines returns the output of a container's previous run only,

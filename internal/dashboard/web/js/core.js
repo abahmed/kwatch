@@ -248,6 +248,47 @@
       title: "Recovered, or kwatch stopped tracking it." }
   };
 
+  /* UNTOLD: an issue that recovered while kwatch was still confirming
+     it (the API's untold on a settled issue): no alert went out. The
+     same words on every page; it is never shown as a severity. */
+  KW.UNTOLD = { label: "Settled before alerting",
+    line: "Settled before alerting \u2014 nobody was told.",
+    title: "It recovered while kwatch was still confirming it, so no alert went out." };
+  KW.isUntold = function (item) {
+    return !!(item && item.untold) && item.state !== "settling" &&
+      item.state !== "open" && item.state !== "flapping";
+  };
+  /* clampTitle: a long issue title cut at two lines (CSS .clamp2), the
+     whole title in its tooltip. The one way titles are cut. */
+  KW.clampTitle = function (node) {
+    node.classList.add("clamp2");
+    node.title = node.textContent;
+    return node;
+  };
+  /* problemTitle: the problem of a title an older kwatch stored with a
+     note in front ("Cause now known: …", "Moved: this is now part of
+     …"); item names the object a moved issue was about. */
+  KW.problemTitle = function (t, item) {
+    var s = String(t), m = /^(Cause now known|Moved):\s*/.exec(s);
+    if (!m) return s;
+    s = s.slice(m[0].length);
+    var name = item && (item.workload || item.name);
+    if (m[1] === "Moved" && /^this is now part of /.test(s)) {
+      // A name is never changed, so it starts the sentence as it is.
+      if (name) return name + " is " + s.slice("this is ".length);
+      s = s.slice("this is ".length);
+    }
+    var first = s.split(" ")[0];
+    if (first === name || /[-\/.:_0-9]/.test(first)) return s;
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  };
+  /* untoldMark: the small muted "Settled before alerting" label. */
+  KW.untoldMark = function () {
+    var m = KW.el("span", "m-untold", KW.UNTOLD.label);
+    m.title = KW.UNTOLD.title;
+    return m;
+  };
+
   KW.chip = function (cls, text, title) {
     var c = KW.el("span", "chip " + cls, text);
     if (title) c.title = title;

@@ -35,7 +35,7 @@ type check struct {
 	budget  time.Duration
 	applies func(incident.Incident, inventory.Reader) bool
 	read    func(context.Context, Sources, incident.Incident) []incident.Section
-	leads   func(incident.Incident) bool
+	leads   func(incident.Incident, inventory.Reader) bool
 	summary func(context.Context, Sources, incident.Incident) Result
 }
 
@@ -57,8 +57,8 @@ func leadChecks() []check {
 		nodeCheck(),
 		leader(incident.CheckScheduling, "Scheduling", modelReadBudget,
 			isSchedulingRoot, readScheduling),
-		leader(incident.CheckCrash, "Crash output", crashReadBudget,
-			isCrashRoot, readCrash),
+		crashCheck(),
+		probeLogCheck(),
 		leader(incident.CheckInitWait, "Init container output",
 			apiReadBudget, isInitWaitRoot, readInitWait),
 	}
@@ -70,10 +70,25 @@ func leader(
 	leads func(incident.Incident) bool,
 	summary func(context.Context, Sources, incident.Incident) Result,
 ) check {
+	byIncident := func(p incident.Incident, _ inventory.Reader) bool {
+		return leads(p)
+	}
 	return check{name: name, title: title, budget: budget,
-		applies: func(p incident.Incident, _ inventory.Reader) bool {
-			return leads(p)
-		}, leads: leads, summary: summary}
+		applies: byIncident, leads: byIncident, summary: summary}
+}
+
+// crashCheck reads the previous run of the incident's containers. It
+// leads for a crash mode, and for any member container whose last run
+// ended with a non-zero exit, whatever its exit family (a segfault, an
+// abort) or the incident's state (flapping included): the previous
+// log is where such a container says why it stopped.
+func crashCheck() check {
+	leads := func(p incident.Incident, model inventory.Reader) bool {
+		return isCrashRoot(p) || hasErrorExit(p, model)
+	}
+	return check{name: incident.CheckCrash, title: "Crash output",
+		budget: crashReadBudget, applies: leads, leads: leads,
+		summary: readCrash}
 }
 
 // withRead adds a report read to a leading check; its facts join the
@@ -99,9 +114,11 @@ func applicable(p incident.Incident, model inventory.Reader) []check {
 }
 
 // leadOf is the index of the first check that leads p, or -1.
-func leadOf(p incident.Incident, planned []check) int {
+func leadOf(
+	p incident.Incident, model inventory.Reader, planned []check,
+) int {
 	for i, c := range planned {
-		if c.leads != nil && c.leads(p) {
+		if c.leads != nil && c.leads(p, model) {
 			return i
 		}
 	}
@@ -144,6 +161,12 @@ func isSchedulingRoot(p incident.Incident) bool {
 
 func isCrashRoot(p incident.Incident) bool {
 	return hasMode(p, crashModes)
+}
+
+// hasErrorExit reports a container of the incident that restarted
+// after a run that ended with a non-zero exit code.
+func hasErrorExit(p incident.Incident, model inventory.Reader) bool {
+	return len(erroredContainers(model, p)) > 0
 }
 
 func isConfigKind(kind inventory.Kind) bool {

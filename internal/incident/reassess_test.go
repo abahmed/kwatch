@@ -45,9 +45,10 @@ func TestManagerReplacedFindingLowersTierAndSaysSo(t *testing.T) {
 	wantNone(t, r.tick(now.Add(time.Hour)))
 }
 
-// A page stays a page whatever replaces its findings: no new page, no
-// un-page, and no message for it.
-func TestManagerPagedIncidentIsNeverLowered(t *testing.T) {
+// A page whose paging failures cleared, with only a digest finding
+// left, falls to the digest: it is never paged again, and the thread
+// hears of the change once.
+func TestManagerPageWithOnlyDigestFindingsLeftIsLowered(t *testing.T) {
 	r := newRig(t, Config{})
 	node := entity(kube.KindNode, "n1")
 	critical := sig(node, reasons.NodeNotReady, detection.Critical)
@@ -58,11 +59,18 @@ func TestManagerPagedIncidentIsNeverLowered(t *testing.T) {
 	r.raise(at(time.Minute), sig(node, reasons.ContainerCPUHigh,
 		detection.Warning))
 	r.clear(at(time.Minute), critical)
-	for _, d := range r.tick(at(time.Minute + DefaultReviseSettle)) {
-		assert.NotEqual(t, ReasonCauseRevised, d.Reason)
-		assert.False(t, d.Thread)
+	var revised int
+	for now := time.Minute; now < 10*time.Minute; now += 10 * time.Second {
+		for _, d := range r.tick(at(now)) {
+			assert.NotEqual(t, Announce, d.Action)
+			assert.Less(t, d.Incident.Tier, Page, "never paged again")
+			if d.Reason == ReasonCauseRevised {
+				revised++
+			}
+		}
 	}
-	assert.Equal(t, Page, r.of(node).Tier)
+	assert.Equal(t, 1, revised)
+	assert.Equal(t, Digest, r.of(node).Tier)
 }
 
 // A restart keeps no members: the restored Notify incident is judged

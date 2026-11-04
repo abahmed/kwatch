@@ -10,7 +10,7 @@ Content-Type: application/json
   "embeds": [
     {
       "color": 11805464,
-      "description": "Caused by: Node n1 is not ready.\nCause in dashboard: https://kwatch.example/issues/p-cause\nEarlier times: https://kwatch.example/issues?status=all&like=p-link\nOpen in dashboard: https://kwatch.example/issues/p-link\n```\npanic: out of memory\n```",
+      "description": "Caused by: Node n1 is not ready.\n[Cause in dashboard](https://kwatch.example/issues/p-cause)\n[Earlier times](https://kwatch.example/issues?status=all&like=p-link)\n[Open in dashboard](https://kwatch.example/issues/p-link)\n```\npanic: out of memory\n```",
       "footer": {
         "text": "kwatch · dev"
       },

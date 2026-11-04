@@ -72,11 +72,13 @@ var nodeSandboxReasons = map[detection.Mode]struct {
 
 // sandboxFindings reports a node on which several pods cannot get their
 // network for the same reason: IP exhaustion or an uninitialised CNI
-// plugin is a node problem, not a pod one.
+// plugin is a node problem, not a pod one. A node in its boot window is
+// held (see youngNodeHold), and a class whose pods all started since is
+// over.
 func sandboxFindings(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
-	if ctx.Model == nil {
+	if ctx.Model == nil || youngNodeHold(ctx, e.ID) {
 		return nil
 	}
 	t := sandboxTally{pods: map[detection.Mode]int{},
@@ -146,7 +148,9 @@ func buildSandboxFindings(
 ) []detection.Finding {
 	modes := make([]detection.Mode, 0, len(t.pods))
 	for mode, count := range t.pods {
-		if count >= nodeSandboxPods {
+		// Pods that all started since were retried and recovered:
+		// nothing fails now.
+		if count >= nodeSandboxPods && t.stuck[mode] > 0 {
 			modes = append(modes, mode)
 		}
 	}

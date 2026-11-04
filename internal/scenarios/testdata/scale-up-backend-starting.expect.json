@@ -1,0 +1,7 @@
+{
+  "name": "scale-up-backend-starting",
+  "description": "A Service has 2 of 3 ready backends for 20 seconds while a scale-up's new pod starts.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "15m0s"
+}

@@ -2,6 +2,7 @@ package kube
 
 import (
 	"regexp"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -44,12 +45,38 @@ func EventNote(obj any, now time.Time) (inventory.Observation, bool) {
 		Kind: inventory.Noted, Source: ObservationSource, At: now, Entity: id,
 		Note: inventory.Note{
 			At: eventTime(ev), Source: eventSource(ev), Reason: ev.Reason,
+			Topic:   eventTopic(ev),
 			Message: eventText(ev.Message), Count: count,
 			Warning: ev.Type == corev1.EventTypeWarning,
 			UID:     uid, Origin: eventOrigin(ev),
 			Refusal: PullRefusal(ev.Message),
 		},
 	}, true
+}
+
+// probeTopics are the topics of the kubelet's Unhealthy events, by the
+// probe their message names ("Readiness probe failed: ...",
+// pkg/kubelet/prober). One container's readiness and liveness failures
+// are different news: a liveness event must not replace the count and
+// message of the readiness ones.
+var probeTopics = []struct{ prefix, topic string }{
+	{"Readiness probe", "readiness"},
+	{"Liveness probe", "liveness"},
+	{"Startup probe", "startup"},
+}
+
+// eventTopic is the topic of an event whose reason covers several
+// things, or "".
+func eventTopic(ev *corev1.Event) string {
+	if ev.Reason != "Unhealthy" {
+		return ""
+	}
+	for _, p := range probeTopics {
+		if strings.HasPrefix(ev.Message, p.prefix) {
+			return p.topic
+		}
+	}
+	return ""
 }
 
 func eventTime(ev *corev1.Event) time.Time {

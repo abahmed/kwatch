@@ -54,6 +54,8 @@ func testIncident(
 		State:  incident.Open,
 		Tier:   incident.Notify,
 		Opened: testEpoch.Add(opened),
+		// Open means announced: a message of it went out.
+		Announced: testEpoch.Add(opened),
 	}
 }
 

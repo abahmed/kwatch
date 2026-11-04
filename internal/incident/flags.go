@@ -1,6 +1,11 @@
 package incident
 
-import "time"
+import (
+	"slices"
+	"time"
+
+	"github.com/abahmed/kwatch/internal/inventory"
+)
 
 // Delivery is what people have been told about an incident and how it
 // reached them. Its fields change only through the methods below, so
@@ -131,6 +136,11 @@ type Pending struct {
 	// replaced: the revision swapped one known cause for another, as
 	// opposed to finding a cause where none was known.
 	replaced bool
+	// told: the roots of the cause people last heard of, kept by the
+	// first revision owed since then (toldKept). In memory only: after a
+	// restart an owed revision is sent as before.
+	told     []inventory.EntityID
+	toldKept bool
 }
 
 // ScheduleReopenUpdate owes a "failing again" update, due after the
@@ -156,7 +166,25 @@ func (p *Pending) DueReopenUpdate(now time.Time, settle time.Duration) bool {
 
 // MarkRevised owes a "cause revised" update, due after the settle.
 func (p *Pending) MarkRevised(now time.Time) {
+	if !p.revised {
+		p.told, p.toldKept = nil, false
+	}
 	p.revised, p.revisedAt, p.replaced = true, now, false
+}
+
+// KeepTold remembers roots as the cause people last heard of, unless a
+// revision owed earlier already did: a second move before the update
+// goes out must not make an unsent root look told. No roots means no
+// cause was told.
+func (p *Pending) KeepTold(roots ...inventory.EntityID) {
+	if !p.toldKept {
+		p.told, p.toldKept = roots, true
+	}
+}
+
+// WasTold reports whether root stated the cause people last heard of.
+func (p *Pending) WasTold(root inventory.EntityID) bool {
+	return slices.Contains(p.told, root)
 }
 
 // MarkReplaced notes that the owed revision replaces a cause that was

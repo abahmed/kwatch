@@ -26,9 +26,11 @@ var endpointClasses = []struct {
 	{endpointTLS, regexp.MustCompile(`x509:|tls: |handshake failure`)},
 	{endpointUnresolved, regexp.MustCompile(`no such host`)},
 	{endpointRefused, regexp.MustCompile(`connection refused|` +
-		`connection reset`)},
+		`connection reset|connection to \S+ refused`)},
 	{endpointUnreachable, regexp.MustCompile(`timed out|i/o timeout|` +
-		`deadline exceeded|no route to host|network is unreachable`)},
+		`deadline exceeded|no route to host|network is unreachable|` +
+		`(?:could not|couldn't|unable to|failed to|not possible to) ` +
+		`connect`)},
 }
 
 // endpointPattern finds the endpoint a failed call was made to, in
@@ -104,6 +106,25 @@ func endpointMatch(text string) (host, port string, ok bool) {
 	return "", "", false
 }
 
+// schemeUserinfo is the "user:password@" after a URL's scheme, and
+// bareUserinfo one with no scheme ("admin:s3cret@db:5432"). Neither is
+// a host: "admin:12345" is a name and a password, not a port. A
+// password may hold "@" itself ("Pa@55word"), so both run greedily to
+// the last "@" before the host.
+var (
+	schemeUserinfo = regexp.MustCompile(
+		`([a-z][a-z0-9+.-]*://)[^\s/?#]*@`)
+	bareUserinfo = regexp.MustCompile(
+		`(^|[\s"'(=,\[])[^\s"'/?#@:]+:[^\s"'/?#]*@`)
+)
+
+// withoutUserinfo drops the user and password of every address in
+// text, so only the host and port that follow are read as the address.
+func withoutUserinfo(text string) string {
+	text = schemeUserinfo.ReplaceAllString(text, "$1")
+	return bareUserinfo.ReplaceAllString(text, "$1")
+}
+
 // dnsServerFailure matches a lookup the DNS server could not answer.
 // That is a cluster DNS problem, not one of the name looked up.
 var dnsServerFailure = regexp.MustCompile(`lookup \S+ on \S+: ` +
@@ -121,7 +142,7 @@ type endpointCall struct {
 // It reports false when the text shows no failed call, or when the
 // failure is the cluster DNS server's rather than the endpoint's.
 func endpointIn(text string) (endpointCall, bool) {
-	text = strings.ToLower(text)
+	text = withoutUserinfo(strings.ToLower(text))
 	class := endpointClass(text)
 	if class == "" || dnsServerFailure.MatchString(text) {
 		return endpointCall{}, false

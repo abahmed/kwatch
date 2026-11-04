@@ -24,7 +24,9 @@ func TestWorkloadReportsMissingPriorityClass(t *testing.T) {
 	})
 	put(m, inventory.CoreID(kube.KindRuntimeClass, "", "gvisor"), t0, nil)
 
-	eval := evaluate(NewWorkload(0), m, t0, deploy, nil)
+	assert.Empty(t, evaluate(NewWorkload(0), m, t0, deploy, nil).Findings)
+	eval := evaluateAfterGrace(NewWorkload(0), m, t0, DefaultClassGrace,
+		deploy, nil)
 
 	require.Len(t, eval.Findings, 1)
 	assert.Equal(t, reasons.PriorityClassMissing, eval.Findings[0].Reason)
@@ -40,7 +42,7 @@ func TestJobReportsMissingRuntimeClass(t *testing.T) {
 	link(m, job, inventory.References,
 		inventory.CoreID(kube.KindRuntimeClass, "", "kata"))
 
-	eval := evaluate(Job{}, m, t0, job, nil)
+	eval := evaluateAfterGrace(Job{}, m, t0, DefaultClassGrace, job, nil)
 
 	require.Len(t, eval.Findings, 1)
 	assert.Equal(t, "Reference.RuntimeClassMissing", string(eval.Findings[0].Mode))

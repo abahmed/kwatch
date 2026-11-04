@@ -115,7 +115,7 @@ func (v *view) missingRefs(pod inventory.EntityID) []missingRef {
 		for _, call := range kube.ServiceCalls(entity) {
 			if v.namesMissingService(call.Service, pod) &&
 				!v.ownName(pod, call.Service) &&
-				namedOrSilent(quoted, call.Service) &&
+				v.configuredMayExplain(pod, quoted, call.Service) &&
 				!v.lookupUnanswered(pod, quoted) {
 				refs.add(missingRef{service: call.Service, port: call.Port})
 			}
@@ -170,22 +170,6 @@ func (v *view) crashErrors(pod inventory.EntityID) []string {
 		}
 	}
 	return out
-}
-
-// namedOrSilent reports whether a name only the configuration holds may
-// explain the crash: the quoted errors name the Service, or the pod
-// quotes none. A crash that quotes a different error is its own cause;
-// a name in its configuration does not outrank it.
-func namedOrSilent(quoted []string, service inventory.EntityID) bool {
-	if len(quoted) == 0 {
-		return true
-	}
-	for _, line := range quoted {
-		if strings.Contains(strings.ToLower(line), service.Name) {
-			return true
-		}
-	}
-	return false
 }
 
 // refList collects missing Services, one entry for each, merging what

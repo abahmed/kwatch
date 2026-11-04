@@ -17,9 +17,16 @@ import (
 // returns its address and the certificate directory.
 func serveTLS(t *testing.T) (string, string) {
 	t.Helper()
+	return serveTLSMode(t, false)
+}
+
+// serveTLSMode is serveTLS, in shared mode when shared is set.
+func serveTLSMode(t *testing.T, shared bool) (string, string) {
+	t.Helper()
 	dir := t.TempDir()
 	writePair(t, dir, "first", testEpoch)
 	s := newTestServer()
+	s.opts.Shared = shared
 	s.opts.TLSCertFile = filepath.Join(dir, "tls.crt")
 	s.opts.TLSKeyFile = filepath.Join(dir, "tls.key")
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -57,7 +64,7 @@ func TestTLSServeAnswersABrokenEscapeWithThePage(t *testing.T) {
 	got := string(body)
 	if !strings.HasPrefix(got, "HTTP/1.1 400 Bad Request\r\n") ||
 		!strings.Contains(got, "text/html") ||
-		!strings.Contains(got, "<title>Not found - kwatch</title>") ||
+		!strings.Contains(got, "<title>Not found · kwatch</title>") ||
 		!strings.Contains(got, "Content-Security-Policy: ") {
 		t.Errorf("reply = %q", got)
 	}
@@ -112,4 +119,9 @@ func peerName(t *testing.T, addr string) string {
 	}
 	defer c.Close()
 	return c.ConnectionState().PeerCertificates[0].Subject.CommonName
+}
+
+// tlsDial opens an HTTP/1.1 TLS connection to addr.
+func tlsDial(addr string) (*tls.Conn, error) {
+	return tls.Dial("tcp", addr, insecureTLS("http/1.1"))
 }

@@ -10,7 +10,7 @@ import (
 // URLs) that the general key/value rules would otherwise only half cover.
 var allCredentialRules = joinRules(
 	extraRedactions, commandRedactions(), serviceRedactions,
-	credentialRedactions,
+	credentialRedactions, userinfoRedactions,
 )
 
 // joinRules is the rule lists one after the other, in order.

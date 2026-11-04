@@ -36,6 +36,8 @@ type InsightsResponse struct {
 	Causes      []InsightCause    `json:"causes"`
 	Namespaces  InsightNamespaces `json:"namespaces"`
 	Quiet       *InsightQuiet     `json:"quiet,omitempty"`
+	// Days are the last week, day by day (insights_days.go).
+	Days []InsightDay `json:"days"`
 }
 
 // InsightToday counts today's issues (in the requested zone): opened,
@@ -139,6 +141,7 @@ func buildInsights(in insightInput) InsightsResponse {
 		Undelivered: undelivered(in.items, in.trail, in.now, in.red),
 		Causes:      topCauses(in.items),
 		Namespaces:  namespaceMap(live),
+		Days:        insightDays(in.items, in.now, in.zone),
 	}
 	if len(live) == 0 {
 		out.Quiet = &InsightQuiet{}
@@ -182,7 +185,8 @@ func today(
 		}
 	}
 	for _, p := range live {
-		if p.Tier == incident.Page {
+		// A page still settling paged nobody yet.
+		if p.Tier == incident.Page && !p.Untold() {
 			out.Urgent++
 		}
 	}

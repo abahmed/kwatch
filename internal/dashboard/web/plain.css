@@ -35,19 +35,6 @@
 .fold .logs { margin-top: 0; }
 @media print { .fold > .fold-body { display: block; } }
 
-/* Overview: one headline, counts by severity, health folded away. */
-.ov { margin-top: 18px; }
-.ov-h { font-size: clamp(1.625rem, 2vw + 1rem, 2.375rem); }
-.ov-h.urgent { color: var(--failing); }
-.ov-h.stale { color: var(--degraded); }
-.ov-counts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
-.ov-n { display: inline-flex; align-items: center; gap: 8px; min-height: var(--hit); padding: 0 16px; border: 1px solid var(--line); border-radius: var(--radius-card); text-decoration: none; color: var(--text); }
-.ov-n:hover { background: var(--surface); border-color: var(--text); }
-.ov-n b { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
-.ov-n .dot { width: 10px; height: 10px; border-radius: 50%; }
-.ov ~ .fold { margin-top: 18px; border-top: 1px solid var(--line); }
-.ov ~ .fold .cards { margin-top: 4px; }
-
 /* Help: "?" beside the logo opens what the colors mean. */
 .side-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
 .side-top .brand { margin-bottom: 0; }
@@ -78,6 +65,8 @@
 .ntf-opts select { margin-top: 4px; min-height: 34px; padding: 4px 8px; font-size: 0.8125rem; border-color: var(--control-border); }
 .ntf-c { display: flex; align-items: center; gap: 8px; min-height: 28px; cursor: pointer; }
 .ntf-c input { display: inline-block; width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; flex: none; accent-color: var(--text); }
+.ntf-mode { margin: 0; font-size: 0.75rem; color: var(--text-muted); max-width: 11.875rem; }
+.ntf-test { width: fit-content; font-size: 0.8125rem; }
 
 /* Under 700px the sidebar's settings fold behind one button. */
 .who-b { display: none; }
@@ -91,7 +80,7 @@
   .side-top .legend { position: static; }
   .legend-pop { position: absolute; top: calc(100% + 8px); left: 0; max-height: calc(100vh - 120px); }
   .ntf { flex-basis: 100%; }
-  .ntf-hint { max-width: none; }
+  .ntf-hint, .ntf-mode { max-width: none; }
   .d-sum { padding: 16px; }
   .cmd code { white-space: pre-wrap; overflow-wrap: anywhere; }
 }
@@ -125,5 +114,10 @@
 html.kw-stale .updated { opacity: .6; }
 html.kw-stale .live, .updated.stale .live { color: var(--text-muted); }
 html.kw-stale .live::before, .updated.stale .live::before { background: var(--text-muted); animation: none; }
-html.kw-stale .ov, html.kw-stale .act, html.kw-stale .itable, html.kw-stale .detail { opacity: .8; }
-@media (max-width: 700px) { .offline { padding-left: var(--space-4); } }
+html.kw-stale .ov-tile, html.kw-stale .ov-first, html.kw-stale .pgrid, html.kw-stale .act-list, html.kw-stale .itable, html.kw-stale .detail { opacity: .8; }
+/* On a phone the bar would cover the page heading: it takes its own
+   room above the page instead. */
+@media (max-width: 700px) {
+  .offline-pin { height: auto; }
+  .offline { position: relative; padding-left: var(--space-4); }
+}

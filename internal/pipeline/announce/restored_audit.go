@@ -18,14 +18,23 @@ const maxItemReasons = 5
 
 // restoredListing summarises the restored incidents for the audit log,
 // so the summary entry says which incidents it covers: each as
-// "id: root tier=T reasons=A,B", the first MaxRestoredAuditItems of them.
-func restoredListing(decisions []incident.Decision) *notification.Listed {
-	listed := &notification.Listed{Opened: len(decisions)}
-	for _, d := range decisions[:min(len(decisions),
-		MaxRestoredAuditItems)] {
+// "id: root tier=T reasons=A,B", the listed ones first, then the
+// lower-priority ones the next digest carries, the first
+// MaxRestoredAuditItems of them. They are not new: Ongoing counts the
+// listed ones still open and Opened stays zero.
+func restoredListing(
+	decisions []incident.Decision, lower ...incident.Decision,
+) *notification.Listed {
+	listed := &notification.Listed{Ongoing: len(decisions)}
+	all := append(slices.Clip(decisions), lower...)
+	for i, d := range all[:min(len(all), MaxRestoredAuditItems)] {
 		p := d.Incident
-		listed.Items = append(listed.Items, p.ID+": "+p.Root.String()+
-			" tier="+p.Tier.String()+" reasons="+memberReasons(p))
+		item := p.ID + ": " + p.Root.String() + " tier=" + p.Tier.String() +
+			" reasons=" + memberReasons(p)
+		if i >= len(decisions) {
+			item += " (lower priority, next digest)"
+		}
+		listed.Items = append(listed.Items, item)
 	}
 	return listed
 }
@@ -57,4 +66,13 @@ func restoredTotals(decisions []incident.Decision) []any {
 		out = append(out, tier.String(), tiers[tier])
 	}
 	return out
+}
+
+// loudest is the highest tier among decisions.
+func loudest(decisions []incident.Decision) incident.Tier {
+	tier := incident.Silent
+	for _, d := range decisions {
+		tier = max(tier, d.Incident.Tier)
+	}
+	return tier
 }

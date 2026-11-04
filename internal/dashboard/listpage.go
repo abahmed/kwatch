@@ -44,6 +44,11 @@ const (
 type listRowOf struct {
 	item IncidentListItem
 	pass int
+	// severityCounted is false for a row the severity facet leaves out:
+	// without a severity filter the list hides quiet issues that are
+	// still active (severityOK), so counting them would make the
+	// severity facets add up to more than the list holds.
+	severityCounted bool
 }
 
 // buildList answers a list request over every incident: facets over
@@ -61,7 +66,8 @@ func buildList(req listRequest, incidents []incident.Incident,
 		if !f.restOK(p, item) {
 			continue
 		}
-		rows = append(rows, listRowOf{item: item, pass: f.passes(item)})
+		rows = append(rows, listRowOf{item: item, pass: f.passes(item),
+			severityCounted: f.severities != nil || f.severityOK(item)})
 	}
 	out := ListResponse{Page: req.page, PageSize: req.pageSize,
 		Facets: newFacets(), ModeLabels: modeLabelsOf(f.modes)}
@@ -159,7 +165,7 @@ func addFacets(fc *ListFacets, rows []listRowOf) []IncidentListItem {
 		map[string]string{}
 	for _, r := range rows {
 		item := r.item
-		if r.passesBut(passSeverity) {
+		if r.passesBut(passSeverity) && r.severityCounted {
 			fc.Severity[item.Severity]++
 		}
 		if r.passesBut(passStatus) {

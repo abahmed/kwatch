@@ -110,6 +110,9 @@ func (v *view) score(c *candidate) scored {
 	if sharedFactorOnly(c) {
 		total = min(total, sharedFactorCap(out.contributions))
 	}
+	if dependencyLogOnly(c) {
+		total = min(total, DependencyLogMaxConfidence)
+	}
 	if v.changeOnlyDependency(c, out.contributions) {
 		total = min(total, ChangeOnlyMaxConfidence)
 	}

@@ -95,15 +95,26 @@ func restated(p *Incident, reason string) bool {
 	return false
 }
 
-// causeIdentity names the cause by rule, blamed entity, the reasons of the
-// root's own findings and the blamed change.
+// causeIdentity names the cause (causeOwnIdentity) and, while it only
+// ties with the root a listing told (tiedWithTold), that tie. The tie
+// is appended only then, so other fingerprints stay as persisted.
+func causeIdentity(p *Incident) string {
+	id := causeOwnIdentity(p)
+	if tiedWithTold(p) {
+		id += ";tied:" + p.Cause.Rival.Root.String()
+	}
+	return id
+}
+
+// causeOwnIdentity names the cause by rule, blamed entity, the reasons of
+// the root's own findings and the blamed change.
 //
 // A cause that blames the incident's own root and no change tells the
 // reader nothing the fingerprint does not already hold, except root
 // findings that are not members: the root and its member reasons count on
 // their own. Only those extra findings name it, so a cause appearing for
 // an incident that already stated its root is not news.
-func causeIdentity(p *Incident) string {
+func causeOwnIdentity(p *Incident) string {
 	c := p.Cause
 	if c == nil {
 		return ""

@@ -59,6 +59,7 @@ var causeCategories = map[string]string{
 	"autoscaling-limit":                categoryScaling,
 	"autoscaling-limit-unavailable":    categoryScaling,
 	"backends-failing":                 categoryDependency,
+	"backends-not-ready":               categoryDependency,
 	"budget-blocks-drain":              categoryBudget,
 	"called-service-backend-changed":   categoryDependency,
 	"called-service-backends-failing":  categoryDependency,
@@ -87,6 +88,7 @@ var causeCategories = map[string]string{
 	"lease-holder-failing":             categoryController,
 	"limit-range-rejects":              categoryAdmission,
 	"liveness-kills-before-ready":      categoryProbe,
+	"log-names-dependency":             categoryDependency,
 	"liveness-shorter-than-start":      categoryProbe,
 	"memory-limit-too-low":             categoryMemoryLimit,
 	"metrics-api-down":                 categoryControlPlane,
@@ -142,6 +144,9 @@ var causeCategories = map[string]string{
 	"webhook-slows-api":                categoryControlPlane,
 	"workload-fills-disks":             categoryShortage,
 	"zone-failing":                     categoryNode,
+
+	// The longest rule name stands apart so the table keeps its layout.
+	"called-service-backends-not-ready": categoryDependency,
 }
 
 // whichCategories are the categories that stand for one object among

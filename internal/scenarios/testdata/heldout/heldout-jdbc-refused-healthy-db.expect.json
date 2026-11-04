@@ -1,0 +1,13 @@
+{
+  "name": "heldout-jdbc-refused-healthy-db",
+  "description": "A Java service exits 1 on start with a PSQLException refusing its connection to db:5432; the db Service and its pod are healthy.",
+  "root": "deployment/sales/orders",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "service/sales/db",
+    "deployment/sales/db",
+    "node//n1",
+    "node//n2"
+  ]
+}

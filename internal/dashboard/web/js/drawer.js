@@ -1,7 +1,8 @@
 /* kwatch dashboard: the preview drawer of the Issues table. A click on
    a row (or Enter on its title) opens the issue in a panel on the
    right, over the table, which keeps its filters, page, scroll and
-   focused row. The panel draws the issue page's content (incpanel.js),
+   focused row. The panel draws the issue page's summary (incpanel.js;
+   no tabs, links to them on the full page instead),
    with Previous / Next through the rows of the table (also j / k and
    [ / ]), "Open full page" and Close (×, Esc or a click beside it).
    Focus stays inside while it is open, and while it is open the page
@@ -43,7 +44,9 @@
     function drawn(root, inc) {
       // The dialog is named after the issue once it is known.
       if (inc.title) dialog.setAttribute("aria-label", inc.title);
-      KW.highlight(KW.$("[data-title]", root), inc.title, hooks.terms());
+      var h1 = KW.$("[data-title]", root);
+      KW.highlight(h1, inc.title, hooks.terms());
+      KW.clampTitle(h1);
       if (current && !dialog.contains(document.activeElement)) {
         dialog.focus({ preventScroll: true });
       }

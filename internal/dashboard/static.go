@@ -33,8 +33,14 @@ var assetTypes = map[string]string{
 	".woff2": "font/woff2",
 }
 
-// shellRoutes are the UI's own paths; each serves the HTML shell.
-var shellRoutes = []string{"/", "/signin", "/issues"}
+// workerFile is the service worker (web/sw.js), served at /sw.js so
+// its scope is the whole dashboard.
+const workerFile = "sw.js"
+
+// shellRoutes are the UI's own pages (Overview, Issues, Insights,
+// Activity, kwatch); each serves the HTML shell.
+var shellRoutes = []string{"/", "/signin", "/issues", "/insights",
+	"/activity", "/kwatch"}
 
 // asset is one file ready to serve.
 type asset struct {
@@ -43,10 +49,14 @@ type asset struct {
 }
 
 // assets serves the UI: the shell at its routes, hashed files under
-// /assets/.
+// /assets/, and the not-found page (static_not_found.go) as the 404
+// and, through pageListener, as net/http's own 400.
 type assets struct {
-	shell  []byte
-	byPath map[string]asset
+	shell      []byte
+	worker     []byte
+	notFound   []byte
+	badRequest []byte
+	byPath     map[string]asset
 }
 
 // mustAssets builds the assets from the embedded files. A missing or
@@ -74,8 +84,17 @@ func buildAssets(root fs.FS) (*assets, error) {
 	if err != nil {
 		return nil, err
 	}
-	a.shell, err = rewriteRefs(shell, urls)
-	return a, err
+	if a.worker, err = fs.ReadFile(root, "web/"+workerFile); err != nil {
+		return nil, err
+	}
+	if a.shell, err = rewriteRefs(shell, urls); err != nil {
+		return nil, err
+	}
+	if a.notFound, err = rewriteRefs([]byte(notFoundPage), urls); err != nil {
+		return nil, err
+	}
+	a.badRequest = badRequestReply(a.notFound, false)
+	return a, nil
 }
 
 func isLeaf(name string) bool  { return !isStyle(name) }
@@ -85,7 +104,8 @@ func (a *assets) addPass(
 	root fs.FS, urls map[string]string, want func(string) bool,
 ) error {
 	return fs.WalkDir(root, "web", func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || p == "web/index.html" || !want(p) {
+		if err != nil || d.IsDir() || p == "web/index.html" ||
+			p == "web/"+workerFile || !want(p) {
 			return err
 		}
 		ext := path.Ext(p)
@@ -140,6 +160,15 @@ func (a *assets) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if redirectOld(w, r) {
 		return
 	}
+	if r.URL.Path == "/"+workerFile {
+		// Never hashed and never kept long: a service worker's scope
+		// is the folder it is served from, and browsers check it for
+		// updates by its fixed URL.
+		w.Header().Set("Content-Type", assetTypes[".js"])
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write(a.worker)
+		return
+	}
 	if isShellRoute(r.URL.Path) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(a.shell)
@@ -147,40 +176,12 @@ func (a *assets) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	file, ok := a.byPath[r.URL.Path]
 	if !ok {
-		notFound(w, r)
+		a.serveNotFound(w, r)
 		return
 	}
 	w.Header().Set("Content-Type", file.contentType)
 	w.Header().Set("Cache-Control", assetCache)
 	_, _ = w.Write(file.body)
-}
-
-// notFoundPage is what a browser shows for an address the dashboard
-// does not have: plain HTML, no script or style, and a way back.
-const notFoundPage = `<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>Not found - kwatch</title></head>
-<body>
-<h1>Page not found</h1>
-<p>The dashboard has no page at this address.</p>
-<p><a href="/">Go to the Overview</a></p>
-</body>
-</html>
-`
-
-// notFound answers 404: a small HTML page for an address a person
-// typed or followed, and the JSON error for a missing asset, which a
-// page asked for, not a person.
-func notFound(w http.ResponseWriter, r *http.Request) {
-	if strings.HasPrefix(r.URL.Path, "/assets/") {
-		writeError(w, http.StatusNotFound, "not found")
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusNotFound)
-	if r.Method != http.MethodHead {
-		_, _ = w.Write([]byte(notFoundPage))
-	}
 }
 
 func isShellRoute(p string) bool {

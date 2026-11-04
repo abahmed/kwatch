@@ -35,6 +35,7 @@ func heldoutLibrary() []scenario {
 		heldoutWorkloadScenarios(), heldoutClusterScenarios(),
 		heldoutBatchScenarios(), heldoutStormScenarios(),
 		heldoutPlacementScenarios(), heldoutStartupScenarios(),
+		heldoutDependencyScenarios(),
 	} {
 		out = append(out, group...)
 	}

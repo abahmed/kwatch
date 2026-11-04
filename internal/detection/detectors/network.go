@@ -70,8 +70,11 @@ func backendFindings(
 	case ready == 0:
 		return noReadyBackends(ctx, e, since)
 	case ready < endpoints:
-		// Losing one more backend must not restart the wait.
-		since = ctx.Onset("degraded-backends", since)
+		// Losing one more backend must not restart the wait. A
+		// backend added while the ready count stood still (a scale-up,
+		// a pod replaced) starts it: the new pod has its time to start.
+		since = ctx.Onset("degraded-backends",
+			latest(since, endpointsChanged(ctx, slices)))
 		if sustained(ctx, "degraded-backends", since, DefaultDegradedBackends) {
 			return []detection.Finding{{
 				Reason:   reasons.ServiceBackendsDegraded,
@@ -151,6 +154,20 @@ func sumEndpoints(
 		}
 	}
 	return endpoints, ready, since
+}
+
+// endpointsChanged is the latest time the endpoint count of any of the
+// slices changed.
+func endpointsChanged(
+	ctx detection.Context, slices []inventory.EntityID,
+) time.Time {
+	var at time.Time
+	for _, id := range slices {
+		if slice, ok := ctx.Model.Entity(id); ok {
+			at = latest(at, valueSince(slice, kube.AttrEndpoints))
+		}
+	}
+	return at
 }
 
 // DefaultDegradedBackends is how long a Service may run with some unready

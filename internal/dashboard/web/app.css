@@ -144,6 +144,9 @@ input, select { display: block; width: 100%; margin-top: 6px; padding: 12px 14px
 .sev-notify { border-left-color: var(--degraded); }
 .sev-low { border-left-color: var(--control-border); }
 .sev-resolved { border-left-color: var(--success); }
+.m-untold { display: inline-block; margin-left: 6px; font-size: 0.75rem; font-weight: 500; line-height: 1.4; color: var(--text-muted); border: 1px solid var(--line); border-radius: var(--radius-chip); padding: 0 6px; white-space: nowrap; vertical-align: 1px; cursor: help; }
+.clamp2.clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
 .i-rep { display: inline-block; margin-left: 8px; font-size: 0.75rem; font-weight: 700; padding: 0 8px; border-radius: var(--radius-pill); background: var(--degraded-bg); color: var(--degraded); vertical-align: 2px; }
 .nomatch { padding: 28px 0; color: var(--text-muted); }
 .skel { padding: 18px 20px; }
@@ -215,6 +218,7 @@ input, select { display: block; width: 100%; margin-top: 6px; padding: 12px 14px
 .d-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
 .d-meta .btn { min-height: 34px; }
 .chips .chip + .chip { margin-left: 0; }
+.chips .m-untold { margin-left: 0; font-size: 0.8125rem; padding: 2px 9px; align-self: center; }
 .step + .step { margin-top: 14px; }
 .runbook { margin-top: 14px; }
 .cmd { margin-top: 12px; background: var(--ink); color: var(--ink-text); border: 1px solid var(--ink-line); border-radius: var(--radius-card); display: flex; align-items: flex-start; gap: 8px; padding: 10px 10px 10px 16px; }
@@ -246,6 +250,8 @@ input, select { display: block; width: 100%; margin-top: 6px; padding: 12px 14px
 .tl .latest .node::after { width: 12px; height: 12px; left: 2px; top: 5px; box-shadow: 0 0 0 4px var(--surface); }
 .tl .latest .tx-text { font-weight: 600; }
 .tl .latest .t { color: var(--text); }
+.tl li.same-t .t time { visibility: hidden; }
+.tl li.same-t.latest .t time { visibility: visible; }
 .tl-latest { display: inline-block; margin-left: 8px; font-size: 0.75rem; font-weight: 600; padding: 0 8px; border-radius: var(--radius-pill); background: var(--surface); color: var(--text-soft); vertical-align: 1px; }
 .tl .tx { line-height: 1.4; overflow-wrap: anywhere; }
 .tl-count { display: inline-block; margin-left: 8px; font-size: 0.75rem; font-weight: 700; padding: 0 8px; border-radius: var(--radius-pill); background: var(--degraded-bg); color: var(--degraded); vertical-align: 1px; }
@@ -356,3 +362,6 @@ input, select { display: block; width: 100%; margin-top: 6px; padding: 12px 14px
 @media (max-width: 480px) { .ev-log { font-size: 0.75rem; } }
 @media (prefers-reduced-motion: reduce) { .ev-head::before { transition: none; } }
 @media print { .ev-body[hidden] { display: block !important; } .ev-log { max-height: none; } }
+/* The not-found page loads only this file: its logo link is a full
+   44px touch target too. */
+@media (pointer: coarse) { .signin .brand { min-height: 44px; } }

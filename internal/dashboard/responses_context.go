@@ -92,6 +92,8 @@ type DeliveryAttempt struct {
 	Fallback  string    `json:"fallbackFor,omitempty"`
 	Error     string    `json:"error,omitempty"`
 	Reason    string    `json:"reason,omitempty"`
+	// Pager marks a send to a provider that holds alerts by key.
+	Pager bool `json:"pager,omitempty"`
 }
 
 // AffectedObject is one object the incident is about. Status is

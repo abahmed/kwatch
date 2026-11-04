@@ -57,6 +57,8 @@ type view struct {
 	stuckIndex *stuckGroups
 	// callMemo holds what is read from error text and policies.
 	callMemo
+	// depUsers memoises dependencyDependents; nil until computed.
+	depUsers map[string]map[inventory.EntityID]bool
 }
 
 func newView(s Snapshot) *view {
@@ -275,6 +277,7 @@ func (v *view) causeState(
 		modes = append(modes, v.selfConfigModes(effect)...)
 	} else {
 		modes = append(modes, v.virtualModes(id, effect, link)...)
+		modes = v.withoutRepeatedEmptiness(id, effect, link, modes)
 	}
 	if link == LinkUses && id.Kind == kube.KindSecret &&
 		v.pullFailing(effect) && !v.isPullLogin(id, effect) {

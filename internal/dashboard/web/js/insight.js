@@ -50,7 +50,7 @@
 
   function lastSeen(iso, count) {
     var s = KW.el("span");
-    if (count > 1) s.appendChild(document.createTextNode("×" + count + " · "));
+    if (count > 1) s.appendChild(document.createTextNode("seen " + count + " times · "));
     s.appendChild(KW.timeEl(iso, "last "));
     return s;
   }

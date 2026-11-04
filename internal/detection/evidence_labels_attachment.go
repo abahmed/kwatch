@@ -20,3 +20,7 @@ const (
 	// "volume", "node" or "volume and node".
 	EvidenceAttachGone = "no longer exists"
 )
+
+// EvidenceDetachError is the detach error a storage driver reported on
+// a volume attachment, quoted as written.
+const EvidenceDetachError = "detach error"

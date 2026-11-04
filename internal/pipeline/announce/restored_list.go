@@ -48,10 +48,10 @@ func (c *Collector) ListRestored(ctx context.Context, now time.Time) bool {
 
 // restoredNews sorts the restored incidents still failing: listed are
 // the ones to list now, repeated the ones a recent listing named (only
-// gathered when final), and lower counts the lower-priority ones the
+// gathered when final), and lower the lower-priority ones the
 // digest lists.
 func (c *Collector) restoredNews(now time.Time, final bool) (
-	listed, repeated []incident.Decision, lower int,
+	listed, repeated, lower []incident.Decision,
 ) {
 	for _, p := range c.env.Incidents.RestoredFailing() {
 		d := incident.Decision{Action: incident.Announce, Incident: p,
@@ -59,9 +59,12 @@ func (c *Collector) restoredNews(now time.Time, final bool) (
 		switch {
 		case c.env.Scope != nil && !c.env.Scope(p):
 		case c.restoredListed[p.ID]:
-		case p.Tier < incident.Notify:
-			// The next digest lists it (see ongoing_compact.go).
-			lower++
+		case p.Tier < incident.Notify || p.DigestBound():
+			// The next digest lists it (see ongoing_compact.go). One
+			// whose findings only wait for the digest (an idle
+			// webhook) was told once and falls there after the
+			// grace; a restart does not announce it again.
+			lower = append(lower, d)
 			c.markRestoredListed(p.ID)
 		case c.recentlyListed(p.ID, now):
 			if final {
@@ -107,23 +110,27 @@ func (c *Collector) listLateRestored(
 			Action: incident.Announce, Incident: p, Reason: "restored"})
 		c.markRestoredListed(p.ID)
 	}
-	return c.sendRestored(ctx, now, listed, 0)
+	return c.sendRestored(ctx, now, listed, nil)
 }
 
 // sendRestored sends the restored-incidents message for listed, if any.
 func (c *Collector) sendRestored(
-	ctx context.Context, now time.Time, listed []incident.Decision,
-	lower int,
+	ctx context.Context, now time.Time,
+	listed, lower []incident.Decision,
 ) bool {
 	if len(listed) == 0 {
 		return false
 	}
-	msg := c.env.Messages.RestoredSummaryWith(listed, lower, now)
-	// The audit entry has no incident of its own: name the restored ones.
-	msg.Listed = restoredListing(listed)
+	msg := c.env.Messages.RestoredSummaryWith(listed, len(lower), now)
+	// The audit entry has no incident of its own: name the restored ones,
+	// the lower-priority ones too.
+	msg.Listed = restoredListing(listed, lower...)
 	klog.InfoS("pipeline: restored incidents still failing",
-		append(restoredTotals(listed), "lowerPriority", lower)...)
-	c.env.Sink(ctx, incident.Decision{Reason: "restored incidents"}, msg)
+		append(restoredTotals(listed), "lowerPriority", len(lower))...)
+	// The entry's tier is the loudest listed one, so a listing that
+	// names a page does not read as silent.
+	c.env.Sink(ctx, incident.Decision{Reason: "restored incidents",
+		Incident: incident.Incident{Tier: loudest(listed)}}, msg)
 	c.rememberListed(listed, now)
 	return true
 }
@@ -165,5 +172,6 @@ func (c *Collector) NextWarm() time.Time {
 // whose findings are still notify or page news now, so its tier will not
 // fall when the grace is over.
 func currentNews(p incident.Incident) bool {
-	return p.Tier >= incident.Notify && p.LiveTier() >= incident.Notify
+	return p.Tier >= incident.Notify && p.LiveTier() >= incident.Notify &&
+		!p.DigestBound()
 }

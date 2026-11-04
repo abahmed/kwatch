@@ -1,0 +1,10 @@
+{
+  "name": "liveness-kills-slow-start-no-startup-probe",
+  "description": "Liveness kills every pod of a Deployment that has no startupProbe while it is still starting.",
+  "root": "deployment/shop/reports",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

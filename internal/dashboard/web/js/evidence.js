@@ -1,5 +1,5 @@
 /* kwatch dashboard: the evidence of an issue (Pro), under "Why kwatch
-   thinks this", its Ingress-to-pods chain under "Affected objects", and
+   thinks this" (Details tab), its Ingress-to-pods chain under "Affected objects", and
    "Logs": the lines kept when it started and the logs the checks read.
    Every string from the API is set with textContent; log text is never
    interpreted. */
@@ -285,7 +285,7 @@
     note.hidden = false;
     note.textContent = "Crash output not shown: kwatch isn't allowed to read pod logs. ";
     var a = note.appendChild(KW.el("a", "ulink", "How to allow it"));
-    a.href = "/#cov";
+    a.href = "/kwatch#cov";
     a.dataset.link = "";
   }
 
@@ -356,8 +356,8 @@
 
   /* KW.evidence fills the evidence under "Why kwatch thinks this" and
      the chain in "Affected objects". Without evidence (Community) both
-     stay out; KW.objects shows the section for its own table. ?tab=evidence, the old link to the evidence, opens
-     "Why kwatch thinks this". */
+     stay out; KW.objects shows the section for its own table. The old
+     link ?tab=evidence opens the Details tab (incpanel.js). */
   KW.evidence = function (root, inc) {
     var host = KW.$("[data-evidence]", root);
     var related = KW.$('[data-fold="related"]', root);
@@ -374,10 +374,11 @@
       box.appendChild(side);
       related.hidden = false;
     }
-    if (!root.dataset.opened &&
-        new URLSearchParams(location.search).get("tab") === "evidence") {
-      KW.$('[data-fold="why"]', root).open = true;
-    }
-    root.dataset.opened = "1";
+  };
+
+  /* KW.checkedText: what the checks managed, for the summary when no
+     cause is known ("kwatch checked 3 things: …"), or "". */
+  KW.checkedText = function (inc) {
+    return inc.evidence && inc.evidence.length ? summary(inc.evidence)[1] : "";
   };
 })();

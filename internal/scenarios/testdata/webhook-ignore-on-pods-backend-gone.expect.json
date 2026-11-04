@@ -1,0 +1,11 @@
+{
+  "name": "webhook-ignore-on-pods-backend-gone",
+  "description": "A webhook that ignores failure covers pods and calls a Service that does not exist: a digest line, no notification.",
+  "root": "validatingwebhookconfiguration//guard-pods",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders"
+  ],
+  "tail": "1h0m0s"
+}

@@ -35,12 +35,14 @@ type PreviousLogReader interface {
 	) ([]string, error)
 }
 
-// CrashLogConfig configures the crash-log round.
+// CrashLogConfig configures the crash-log round. Current is optional:
+// without it the round reads no running container's log.
 type CrashLogConfig struct {
-	Logs   PreviousLogReader
-	Model  inventory.Reader
-	Now    func() time.Time
-	Submit Submit
+	Logs    PreviousLogReader
+	Current CurrentLogReader
+	Model   inventory.Reader
+	Now     func() time.Time
+	Submit  Submit
 }
 
 // crashRun identifies one termination of a container: a new restart
@@ -64,6 +66,9 @@ type CrashLogRound struct {
 	// read failed, the round that may try it again.
 	rounds  int
 	retryAt map[inventory.EntityID]int
+	// probes holds, per running container whose probe gets an HTTP
+	// error status, when its current log was read (probe_log_round.go).
+	probes map[inventory.EntityID]probeRead
 	// start is where the next pass begins in the sorted containers, so
 	// a budget that runs out reaches every container over time.
 	start  int
@@ -79,7 +84,8 @@ type CrashLogRound struct {
 func NewCrashLogRound(cfg CrashLogConfig) *CrashLogRound {
 	return &CrashLogRound{cfg: cfg,
 		read:    map[inventory.EntityID]crashRun{},
-		retryAt: map[inventory.EntityID]int{}}
+		retryAt: map[inventory.EntityID]int{},
+		probes:  map[inventory.EntityID]probeRead{}}
 }
 
 // Run reads crash logs every crashLogInterval until ctx ends.
@@ -97,7 +103,9 @@ func (r *CrashLogRound) Run(ctx context.Context) {
 	}
 }
 
-// Round makes one pass over the model's containers.
+// Round makes one pass over the model's containers: the crashed ones
+// first, then the running ones whose probe gets an HTTP error status.
+// Both share the round's read budget and the backoff after a refusal.
 func (r *CrashLogRound) Round(ctx context.Context) {
 	// Entities is sorted, so the rotation (r.start) visits the same
 	// containers in the same order every round.
@@ -105,9 +113,32 @@ func (r *CrashLogRound) Round(ctx context.Context) {
 	r.forgetGone(containers)
 	r.rounds++
 	r.logSelfHealth(r.cfg.Now())
-	holding := r.holding(containers)
+	pass := readPass{holding: r.holding(containers)}
+	observations := r.crashPass(ctx, containers, &pass)
+	observations = append(observations,
+		r.probePass(ctx, containers, &pass)...)
+	if len(observations) > 0 {
+		r.cfg.Submit(ctx, observations...)
+	}
+}
+
+// readPass is the state one round's passes share: whether reads are
+// held back after a refusal, and how many reads were made.
+type readPass struct {
+	holding bool
+	reads   int
+}
+
+// spent reports a round that may make no more reads.
+func (p *readPass) spent(ctx context.Context) bool {
+	return p.holding || p.reads == maxCrashLogReads || ctx.Err() != nil
+}
+
+// crashPass reads the previous run of the crashed containers.
+func (r *CrashLogRound) crashPass(
+	ctx context.Context, containers []inventory.EntityID, pass *readPass,
+) []inventory.Observation {
 	var observations []inventory.Observation
-	reads := 0
 	next := 0
 	for i := range containers {
 		idx := (r.start + i) % len(containers)
@@ -117,19 +148,17 @@ func (r *CrashLogRound) Round(ctx context.Context) {
 			observations = append(observations, r.forgetRun(id)...)
 			continue
 		}
-		if holding || r.read[id] == run || r.retryAt[id] > r.rounds {
+		if pass.holding || r.read[id] == run || r.retryAt[id] > r.rounds {
 			continue
 		}
-		if reads == maxCrashLogReads || ctx.Err() != nil {
+		if pass.spent(ctx) {
 			next = idx
 			break
 		}
-		reads++
+		pass.reads++
 		lines, err := r.cfg.Logs.PreviousLines(ctx, id)
 		if err != nil {
-			r.noteError(err)
-			if apierrors.IsForbidden(err) {
-				r.holdAfterDenial(containers)
+			if r.refused(err, containers, pass) {
 				break
 			}
 			observations = append(observations,
@@ -142,9 +171,21 @@ func (r *CrashLogRound) Round(ctx context.Context) {
 			CrashLogObservation(id, r.cfg.Now(), lines))
 	}
 	r.start = next
-	if len(observations) > 0 {
-		r.cfg.Submit(ctx, observations...)
+	return observations
+}
+
+// refused notes a failed read and reports a refusal, which holds every
+// further read back (see crash_log_denied.go).
+func (r *CrashLogRound) refused(
+	err error, containers []inventory.EntityID, pass *readPass,
+) bool {
+	r.noteError(err)
+	if !apierrors.IsForbidden(err) {
+		return false
 	}
+	r.holdAfterDenial(containers)
+	pass.holding = true
+	return true
 }
 
 // afterError decides what a failed read means. "No previous log" (not
@@ -218,7 +259,7 @@ func CrashLogObservation(
 
 // forgetGone drops the state of containers the model no longer has.
 func (r *CrashLogRound) forgetGone(live []inventory.EntityID) {
-	if len(r.read) == 0 && len(r.retryAt) == 0 {
+	if len(r.read) == 0 && len(r.retryAt) == 0 && len(r.probes) == 0 {
 		return
 	}
 	keep := make(map[inventory.EntityID]bool, len(live))
@@ -233,6 +274,11 @@ func (r *CrashLogRound) forgetGone(live []inventory.EntityID) {
 	for id := range r.retryAt {
 		if !keep[id] {
 			delete(r.retryAt, id)
+		}
+	}
+	for id := range r.probes {
+		if !keep[id] {
+			delete(r.probes, id)
 		}
 	}
 }

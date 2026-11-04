@@ -25,6 +25,9 @@ type releaseCase struct {
 	crashLoop   bool
 	// lastRestart is how long ago the last restart ended; zero is unset.
 	lastRestart time.Duration
+	// reported is set when the release was reported inside its window,
+	// ten minutes before the evaluation.
+	reported bool
 }
 
 func buildRelease(t *testing.T, c releaseCase) (
@@ -115,7 +118,11 @@ func TestReleaseWatch(t *testing.T) {
 			age: 20 * time.Minute}, false},
 		{"window ended, restarts continue keeps the finding", releaseCase{
 			history: steady, restarts: [2]float64{3, 4},
-			age: 20 * time.Minute, lastRestart: 2 * time.Minute}, true},
+			age: 20 * time.Minute, lastRestart: 2 * time.Minute,
+			reported: true}, true},
+		{"never reported in its window is no release", releaseCase{
+			history: steady, restarts: [2]float64{3, 4},
+			age: 20 * time.Minute, lastRestart: 2 * time.Minute}, false},
 		{"window ended, quiet for 10 minutes clears", releaseCase{
 			history: steady, restarts: [2]float64{3, 4},
 			age: 20 * time.Minute, lastRestart: 10 * time.Minute}, false},
@@ -133,6 +140,11 @@ func TestReleaseWatch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m, dep := buildRelease(t, tt.c)
 			got := evaluate(ReleaseWatch{}, m, t0, dep, nil).Findings
+			if tt.c.reported {
+				got = evaluateAfterGrace(ReleaseWatch{}, m,
+					t0.Add(-10*time.Minute), 10*time.Minute, dep,
+					nil).Findings
+			}
 			if !tt.want {
 				assert.Empty(t, got)
 				return

@@ -41,16 +41,23 @@ func TestWriterLinksIncidentPageWhenDashboardHasAddress(t *testing.T) {
 func TestWriterRendersDashboardLinkInEveryDialect(t *testing.T) {
 	d := runbookDecision(incident.Announce, "OOMKilled")
 	msg := linkWriter(linkBase).Write(d, d.Incident.Opened)
-	want := linkBase + "/issues/rb"
-	for name, dialect := range map[string]notification.Dialect{
-		"plain":    notification.PlainDialect(),
-		"slack":    notification.SlackDialect(),
-		"markdown": notification.MarkdownDialect(nil, "\n\n"),
-		"html":     notification.HTMLDialect(nil, false),
-		"jira":     notification.JiraDialect(),
+	u := linkBase + "/issues/rb"
+	for name, c := range map[string]struct {
+		dialect notification.Dialect
+		want    string
+	}{
+		"plain": {notification.PlainDialect(), "Open in dashboard: " + u},
+		"slack": {notification.SlackDialect(),
+			"<" + u + "|Open in dashboard>"},
+		"markdown": {notification.MarkdownDialect(nil, "\n\n"),
+			"[Open in dashboard](" + u + ")"},
+		"html": {notification.HTMLDialect(nil, false),
+			`<a href="` + u + `">Open in dashboard</a>`},
+		"jira": {notification.JiraDialect(),
+			"[Open in dashboard|" + u + "]"},
 	} {
-		text := msg.Render(dialect)
-		assert.True(t, strings.HasSuffix(text, want), "%s: %q", name, text)
+		text := msg.Render(c.dialect)
+		assert.True(t, strings.HasSuffix(text, c.want), "%s: %q", name, text)
 	}
 }
 
@@ -88,12 +95,15 @@ func TestWithLinkKeepsPinnedFixTogether(t *testing.T) {
 		{Kind: notification.CodeBlock, Pinned: true,
 			Spans: []notification.Span{{Text: "kubectl rollout undo"}}},
 	}}
-	got := withLink(msg, "Open in dashboard: x")
+	got := withLink(msg, "Open in dashboard", linkBase)
 	require.Len(t, got.Doc, 3)
 	assert.True(t, got.Doc[2].Pinned)
+	assert.Equal(t, []notification.Span{
+		notification.LinkSpan("Open in dashboard", linkBase)},
+		got.Doc[2].Spans, "the line is one link span")
 	assert.Len(t, msg.Doc, 2, "the original blocks are not changed")
 
 	msg.Doc[1].Pinned = false
-	assert.False(t, withLink(msg, "x").Doc[2].Pinned)
-	assert.Empty(t, withLink(notification.Message{}, "x").Doc)
+	assert.False(t, withLink(msg, "x", linkBase).Doc[2].Pinned)
+	assert.Empty(t, withLink(notification.Message{}, "x", linkBase).Doc)
 }
