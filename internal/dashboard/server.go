@@ -99,6 +99,8 @@ type sources struct {
 	push atomic.Pointer[pusher]
 	// resources is kwatch's own use (kwatch_resources.go).
 	resources atomic.Pointer[resourceSource]
+	// releases is the release book (releases_run.go).
+	releases atomic.Pointer[releaseBook]
 	// self, failed and delivery are kwatch's view of itself, its failed
 	// sends and what the pagers and channels hold (self_status.go).
 	self     atomic.Pointer[selfSource]
@@ -285,6 +287,8 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("/api/status", s.statusHandler)
 	api.HandleFunc("/api/trends", s.trendsHandler)
 	api.HandleFunc("/api/activity", s.activityHandler)
+	api.HandleFunc("/api/releases", s.releasesHandler)
+	api.HandleFunc("/api/map", s.mapHandler)
 	api.HandleFunc("/api/coverage", s.coverageHandler)
 	api.HandleFunc("/api/insights", s.insightsHandler)
 	api.HandleFunc("/api/overview", s.overviewHandler)

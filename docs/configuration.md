@@ -574,6 +574,13 @@ so they arrive with every dashboard tab closed. In a cluster without that
 access they arrive only while a dashboard tab is open. See
 [dashboard notes](./dashboard.md#browser-notifications).
 
+Release reports need no setting either. The dashboard's Releases page
+lists every rollout of a Deployment, StatefulSet or DaemonSet with its
+verdict; a healthy release sends no message and is not added to the
+digest, and one that goes wrong is reported by the issue it causes. They
+need no extra permission and follow the namespace scope. See
+[Releases](./dashboard.md#releases).
+
 ## 🌱 Environment variables
 
 kwatch reads these variables. The chart and `deploy/deploy.yaml` set the ones

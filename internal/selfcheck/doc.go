@@ -8,7 +8,7 @@
 // at most 50 over the same seven days), for a person to review and
 // export as a replay; it is a list, never a judgement acted on.
 //
-// The counts and the misses are display only. Nothing in root-cause scoring, tiers or
-// messages reads them, so a rule that looks weak here is never made
-// weaker, and one that looks strong is never trusted more.
+// The counts and the misses are display only. Nothing in root-cause
+// scoring, tiers or messages reads them, so a rule that looks weak here
+// is never made weaker, and one that looks strong is never trusted more.
 package selfcheck

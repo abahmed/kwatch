@@ -27,6 +27,11 @@ const (
 	// (easePage). It goes to the providers that keep alerts by key only:
 	// chat is not told of a lowering.
 	ReasonTierLowered Reason = "tier lowered"
+	// ReasonIntroduced is the first own message of an incident that a
+	// roll-up or a namespace outage only named: once its investigation
+	// is in, it says the incident in full, with what was read, as an
+	// announcement would have (introduce.go).
+	ReasonIntroduced Reason = "introduced"
 )
 
 // ReasonRecoveredUnheard closes the pager alert of an incident that paged

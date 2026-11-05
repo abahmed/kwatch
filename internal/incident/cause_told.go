@@ -20,8 +20,9 @@ const toldCausesMax = 8
 // for CauseHold, seen on at least two evaluations. The first cause found
 // after none was told is news at once. No cause counts as a cause here:
 // the explanation may have moved off the cause record (a called backend,
-// say), which is news once it holds. A cause told before is never news again by itself; a tier rise, new reasons, impact growth
-// and every other part of the fingerprint count as before.
+// say), which is news once it holds. A cause told before is never news
+// again by itself; a tier rise, new reasons, impact growth and every
+// other part of the fingerprint count as before.
 type causeMemory struct {
 	// told are hashes of the causes told, oldest first.
 	told []string

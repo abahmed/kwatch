@@ -12,8 +12,9 @@ the first thing on each page says what is wrong in one sentence, the key
 details sit right under it, and the rest waits behind a click or a tab.
 
 - **Sidebar**: **Overview** (`/`, the landing page), **Issues**
-  (`/issues`, with the count of active issues), **Activity**
-  (`/activity`) and **kwatch** (`/kwatch`). The old `/insights` page is
+  (`/issues`, with the count of active issues), **Releases**
+  (`/releases`), **Map** (`/map`),
+  **Activity** (`/activity`) and **kwatch** (`/kwatch`). The old `/insights` page is
   part of the Overview now; its address redirects to `/`. Every page is
   as wide as the Issues table (90rem at most).
   The **sidebar dot** beside "kwatch" (`js/pages.js`, `KW.selfDot`)
@@ -204,6 +205,100 @@ Issues table opens the same summary card in a panel beside the table,
 with "On the full page: Timeline (1) · Impact (3) …" links instead of
 the tabs.
 
+## Releases
+
+`/releases` (`js/releases.js`, from `/api/releases`) lists every rollout
+kwatch saw of a Deployment, StatefulSet or DaemonSet in the last 7 days
+(or 24 hours), newest first, with its verdict. A release is a change of
+the pod template (an image, the environment, resources, probes, config
+references, volumes, `kubectl rollout restart`); a replica, pause or
+label change is none. kwatch's own Deployment and namespaces it does
+not watch are left out. Each row shows the time, the verdict, the
+workload, what changed ("api:2.3 → api:2.4 · environment"), how the
+rollout went ("Rolled out in 1 min", "Stalled: it missed its progress
+deadline", "2 of 3 ready", "The previous version still serves 2 of 3")
+and who made it when the change journal knows: the GitOps application
+or the field manager, and the `kubernetes.io/change-cause` note. Pro adds
+the restarts per hour before and after, the usual time to ready and the
+first fatal line a new container stopped with. A release that went
+wrong links to its issue and says how to undo it:
+
+- a workload Argo CD or Flux deploys: "Revert the change in Git: a
+  rollback in the cluster would be overwritten by the next sync";
+- a Helm release (the `meta.helm.sh/release-name` annotation):
+  `helm rollback <release> -n <release namespace>`, the namespace from
+  `meta.helm.sh/release-namespace`, else the workload's; a chart label
+  alone (`helm template | kubectl apply`) is no release and takes the
+  kubectl undo;
+- anything else: `kubectl rollout undo <kind>/<name> -n <namespace>`.
+
+Only the workload's newest release offers a command: a rollback goes
+back one revision from what runs now, so on an older release it would
+bring back the newer one. An older release says to undo from the newest.
+
+A Deployment stalls only when it misses its progress deadline: a slow
+rollout that keeps going is still rolling out. A StatefulSet or
+DaemonSet stalls when no replica was updated or got ready for 15
+minutes; one that waits for people on purpose (the `OnDelete` strategy,
+a StatefulSet partition) never stalls.
+
+Filters: the window, a namespace and any verdict ("Went wrong" is
+regressed, failed or down), kept in the address. Without change history
+(not Pro), no release shows Pro detail, even one kept from a Pro run. The Overview adds one line when
+there were releases in the last 24 hours: "4 releases in the last 24
+hours, 1 went wrong", a link to this page.
+
+| Verdict | Means |
+|:--|:--|
+| Rolling out | the new pods are still replacing the old ones |
+| Watching | rolled out; watched for 15 minutes, as the release watch compares a new revision with the previous one |
+| Healthy | rolled out and nothing broke while kwatch watched it |
+| Regressed | the release watch found the new version restarting far more than the previous one |
+| Failed | an issue people were told of started about the workload while it was watched, or the rollout stalled, while the workload still has ready replicas |
+| Down | as Failed, with no ready replica |
+| Replaced | a newer release came before a verdict |
+| Not watched | kwatch saw the release more than 30 minutes after it happened (after a restart, say) |
+
+A release keeps the worst verdict it reached while watched (its rollout
+time plus 15 minutes). A healthy release sends no message, and nothing
+is added to the digest: this page is where it shows. A release that went
+wrong is reported by the issue it causes; when the release is at least
+the likely cause, its message offers the same undo (a revert in Git for
+Argo CD and Flux, a Helm rollback, or a rollback to the revision before
+the release). The book is kept in the
+state file (`dashboard.releases`), at most 500 releases or 7 days, and
+in memory without one; it is looked at every 15 seconds.
+
+## Map
+
+`/map` (`js/map.js`, `js/maplayout.js`, `map.css`, from `/api/map`)
+draws how objects connect and where it is failing, from relations every
+cluster has: an Ingress or HTTPRoute routes to a Service, a Service
+sends to the workload whose pods it selects (pods are folded into their
+Deployment, StatefulSet, DaemonSet or CronJob, "2/3 ready"), and, where
+kwatch knows them (configuration or observed calls), the Services a
+workload calls, including those of other namespaces (dashed boxes). It
+works without any call data: the drawing then stops at the workloads.
+
+- **One namespace** (default; the one with the most failing objects
+  when none is picked) or **What's failing**: every object an open
+  issue touches across the watched namespaces, with the objects one
+  connection away. Namespaces kwatch does not watch never show.
+- **Show nodes** adds the nodes the workloads run on.
+- Boxes take the color of the worst open issue touching them (root,
+  members or impact): urgent red, needs attention amber, low outlined,
+  no open issue plain. A box with an issue opens it; any other says its
+  state below the drawing. Boxes are reachable with Tab and open with
+  Enter.
+- Objects are laid out left to right by how traffic flows (routes,
+  Services, workloads, what they call, nodes), ordered in each column
+  to keep crossings few, and drawn as SVG with no outside library. The
+  drawing scrolls inside its frame.
+- **Objects and connections** lists the same objects and edges as text,
+  under the drawing; under 700 px wide only the list shows.
+- More than 150 objects are not drawn: the page says how many there are
+  and asks for a namespace.
+
 ## Activity
 
 `/activity` (`js/activity.js`, see "Activity API")
@@ -264,7 +359,7 @@ short.
 
 | Keys | Does |
 |:--|:--|
-| `g` then `o` / `i` / `a` / `k` | Overview / Issues / Activity / kwatch |
+| `g` then `o` / `i` / `r` / `m` / `a` / `k` | Overview / Issues / Releases / Map / Activity / kwatch |
 | `/` | search the issues |
 | `j` `k` | next / previous row, or issue while one is open beside the table |
 | `Enter` | open the issue beside the table (Cmd or Ctrl and click: its own page in a new tab) |
@@ -889,6 +984,38 @@ the key, counted as `/api/incidents?status=all&like=<id>` lists them
 (active quiet issues left out, as on every list without a severity
 filter), from at most 20,000 incidents read. The issue page and drawer
 link "14 other issues have the same error → see them" to that list.
+
+## Releases API
+
+`GET /api/releases?since=24h|7d&namespace=<ns>&verdict=<verdict>` (read
+only, signed in, with an `ETag`; see "Releases") answers
+`{since, total, bad, namespaces, releases}`: `total` and `bad` count the
+window before the namespace and verdict filters, `namespaces` are those
+with releases in it. `since` defaults to `7d`; `verdict` is one of
+`rolling`, `watching`, `healthy`, `regressed`, `failed`, `down`,
+`replaced`, `unknown` or `bad` (regressed, failed or down). An unknown
+`since` or `verdict`, or a repeated parameter, answers `400`; before the
+pipeline runs, `503`. Each release carries `id`, `kind`, `namespace`,
+`name`, `at`, `images` (`container`, `before`, `after`), `changed`,
+`actor`, `app`, `cause`, `verdict`, `final`, `rolledOut`,
+`rolloutSeconds`, `stalled`, `deadline`, `ready`, `desired`,
+`oldServing`, `incident`, `undo` (`text`, `command`, `mutating`) and, in
+Pro, `detail` (`restartsBefore`, `restartsAfter`, `readyBefore`,
+`errorLine`).
+
+## Map API
+
+`GET /api/map?view=namespace|failing&namespace=&nodes=1`, read-only, with
+the session and an `ETag` like the other reads; `400` for another `view`
+or `nodes` value, `503` before the pipeline runs.
+
+| Field | Data |
+|:--|:--|
+| `view`, `namespace` | the view drawn and, for `namespace`, the namespace (the one asked for, else the one with the most failing objects, else the first) |
+| `namespaces` | the watched namespaces, for the picker |
+| `nodes` | `{id, kind, name, namespace, level, ready, issue, external}`: `level` is `page`, `notify`, `digest` or `ok` (the worst open issue touching the object, quiet and resolved ones left out), `issue` its ID, `ready` "ready/wanted" for workloads, `external` an object of another namespace this one calls |
+| `edges` | `{from, to, type}`: `routes`, `selects`, `calls`, `runs-on` (with `nodes=1`) |
+| `tooMany`, `count` | more than 150 objects: nothing is drawn and `count` says how many |
 
 ## Activity API
 

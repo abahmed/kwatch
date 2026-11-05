@@ -217,6 +217,11 @@ func (a *announcer) send(
 		// Lowers the alert a pager keeps by key; chat is not told.
 		msg.PagingOnly, msg.ChatCarrier = true, ""
 	}
+	if d.Reason == incident.ReasonIntroduced {
+		// Says in chat what the listing only named; the pagers had
+		// their own message (introduce.go).
+		msg.SkipPaging = true
+	}
 	if written.Action == incident.Resolve && a.joint != nil {
 		msg = a.withRecovered(ctx, written, msg, at)
 	}
@@ -259,6 +264,11 @@ func (a *announcer) scopePaging(
 			// material changes) is chat news; the pagers hear of it
 			// again only when the tier itself rises to Page.
 			msg.SkipPaging = true
+			return
+		}
+		if msg.SkipPaging {
+			// Chat only (an introduction): the pagers did not hear
+			// it, so it opens nothing a later resolve must close.
 			return
 		}
 		a.incidents.RecordPaged(id, true)

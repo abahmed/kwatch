@@ -36,6 +36,8 @@
     if (path === "/issues") return { name: "issues" };
     if (path === "/kwatch") return { name: "kwatch" };
     if (path === "/activity") return { name: "activity" };
+    if (path === "/map") return { name: "map" };
+    if (path === "/releases") return { name: "releases" };
     var m = /^\/issues\/([^/]+)$/.exec(path);
     if (m) {
       // A malformed escape (%E0) is an ID no issue has: show "not found".
@@ -119,7 +121,8 @@
     KW.startDot();
     var views = { issues: KW.issuesView, detail: KW.detailView,
       status: KW.statusView, kwatch: KW.kwatchView,
-      activity: KW.activityView };
+      activity: KW.activityView, map: KW.mapView,
+      releases: KW.releasesView };
     view = views[r.name](main, r);
   }
 

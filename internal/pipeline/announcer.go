@@ -43,6 +43,9 @@ type announcer struct {
 	held []heldAnnouncement
 	// evidence is what investigation found, by incident ID.
 	evidence map[string]*evidenceState
+	// intros are the incidents a listing only named, waiting for their
+	// investigation before their first own message (introduce.go).
+	intros map[string]time.Time
 	// collect holds the startup summary, digest, outage and roll-up
 	// steps (see the announce package).
 	collect *announce.Collector
@@ -107,21 +110,26 @@ func (a *announcer) announce(
 		c.CollectStartup)
 	decisions, digested := a.collected(ctx, now, "digest", decisions,
 		c.CollectDigest)
+	listable := decisions
 	decisions, grouped := a.collected(ctx, now, "outage", decisions,
 		c.CollectOutages)
 	decisions, rolled := a.collected(ctx, now, "rollup", decisions,
 		c.CollectRollup)
+	a.noteListed(listable, decisions, now)
 	var expired, closed, listed bool
 	contain("announce", "held", func() { expired = a.expireHeld(ctx, now) })
 	a.deliver(ctx, now, a.splitRecoveries(decisions))
 	contain("announce", "joint", func() { a.flushJoint(ctx, now) })
+	var introduced bool
+	contain("announce", "introduce",
+		func() { introduced = a.introduceDue(ctx, now) })
 	contain("announce", "close", func() { closed = c.CloseListings(ctx) })
 	contain("announce", "restored",
 		func() { listed = c.ListRestored(ctx, now) })
 	contain("announce", "pro checks",
 		func() { c.SendDailyProChecks(ctx, now) })
 	return summarised || digested || grouped || rolled || closed ||
-		listed || expired
+		listed || expired || introduced
 }
 
 // collectingStep is a step of the announce collector: it takes the

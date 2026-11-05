@@ -184,7 +184,7 @@ func (a *announcer) withEvidence(d incident.Decision) incident.Decision {
 	// The report is the dashboard's whole picture, so every message
 	// carries the latest one; it is never news by itself.
 	d.Facts.Report = state.result.Report
-	d.Facts.Correlation = state.result.Correlation
+	d.Facts.Correlation = a.correlationNow(d.Incident, state.result)
 	var fresh []incident.Fact
 	for _, ev := range state.result.Evidence {
 		key := evidenceKey{kind: ev.Kind, subject: ev.Subject, text: ev.Text}
@@ -201,6 +201,31 @@ func (a *announcer) withEvidence(d incident.Decision) incident.Decision {
 		}
 	}
 	return d
+}
+
+// recorrelator concludes again across a stored report (RootInvestigator
+// does; test investigators need not).
+type recorrelator interface {
+	Recorrelate(incident.Incident, []incident.Section) *incident.Correlation
+}
+
+// correlationNow is the stored correlation, or, when it confirmed
+// nothing, one concluded again for p as it is now: the investigation may
+// have run before the incident had a cause.
+func (a *announcer) correlationNow(
+	p incident.Incident, r investigate.Result,
+) *incident.Correlation {
+	if r.Correlation != nil && r.Correlation.Confirmed != "" {
+		return r.Correlation
+	}
+	re, ok := a.investigator.(recorrelator)
+	if !ok || len(r.Report) == 0 {
+		return r.Correlation
+	}
+	if c := re.Recorrelate(p, r.Report); c != nil && c.Confirmed != "" {
+		return c
+	}
+	return r.Correlation
 }
 
 // forgetEvidence drops the evidence of a resolved incident.

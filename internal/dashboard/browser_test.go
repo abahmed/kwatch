@@ -48,7 +48,7 @@ func browserIssues() []incident.Incident {
 func TestBrowserDashboardPages(t *testing.T) {
 	ctx, srv := browserSetup(t)
 	pages := []string{"/", "/issues", "/issues/inc-001", "/activity",
-		"/kwatch"}
+		"/kwatch", "/map", "/map?view=failing", "/releases"}
 	for _, size := range browserSizes {
 		tab, problems := browserTab(t, ctx)
 		signInBrowser(t, tab, srv.URL)
@@ -81,7 +81,10 @@ func browserSetup(t *testing.T) (context.Context, *httptest.Server) {
 	if path == "" {
 		t.Skip("no Chrome or Chromium found (set CHROME_PATH)")
 	}
-	srv := httptest.NewServer(newTestServer(browserIssues()...).Handler())
+	served := newTestServer(browserIssues()...)
+	served.SetModel(browserMapModel(t))
+	served.sources.releases.Store(browserReleases())
+	srv := httptest.NewServer(served.Handler())
 	t.Cleanup(srv.Close)
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.ExecPath(path))

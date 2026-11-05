@@ -1,7 +1,7 @@
 /* kwatch dashboard: "?" opens and closes the help beside the logo,
    which lists the keyboard keys; Esc, a click outside it or moving to
    another page closes it. "g" then a letter goes to a page: o
-   Overview, i Issues, a Activity, k kwatch. The other keys
+   Overview, i Issues, r Releases, m Map, a Activity, k kwatch. The other keys
    (/, j, k) are in main.js; this file's listener runs first, so the
    letter after "g" does not also move through a list. */
 (function () {
@@ -24,7 +24,7 @@
   window.addEventListener("popstate", closeHelp);
   window.addEventListener("hashchange", closeHelp);
 
-  var GO = { o: "/", i: "/issues", a: "/activity", k: "/kwatch" };
+  var GO = { o: "/", i: "/issues", r: "/releases", m: "/map", a: "/activity", k: "/kwatch" };
   var gAt = 0;
   document.addEventListener("keydown", function (e) {
     if (e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;

@@ -100,7 +100,10 @@ the `bad-rollout` scenario in `internal/scenarios`.
    it, then `Tick` returns an announce decision.
 7. **Investigation joins in.** When the incident opened, a worker read a short
    log excerpt, redacted. If it arrives within a short wait it is attached;
-   otherwise the message goes without it.
+   otherwise the message goes without it. A roll-up member gets it in one
+   introduction of its own once it is in (`pipeline/introduce.go`), and a
+   cause found after the reads is confirmed over them when the message is
+   written.
 8. **The note is written.** `compose.Writer` turns the facts into sentences:
    what broke and why, what changed and which tool made the change, the one
    or two facts that prove it, who is affected, and one `kubectl`
@@ -235,6 +238,34 @@ cause that began more than ten minutes afterwards (`Cause.Began`) does not
 take it over: people were told about something that cause cannot have
 caused, so the incident keeps its root and the new cause explains only the
 new failures.
+
+## Release reports
+
+`internal/release` keeps a verdict for every rollout of a Deployment,
+StatefulSet or DaemonSet. A release is a change of the pod template in
+the change journal (`inventory.Change`); a replica, pause or label change
+is none, kwatch's own Deployment is left out, and only watched namespaces
+count. Every 15 seconds the dashboard's runner (`dashboard.RunReleases`)
+reads the journal, each workload's rollout status (updated, ready and
+available replicas, the observed generation, the Deployment's
+`ProgressDeadlineExceeded`) and the incidents, and judges each release
+until its verdict is final: rolling, watching (15 minutes after the
+rollout, as the release watch), healthy, regressed (the release watch's
+finding), failed (an issue people were told of about the workload, or a
+stall: a Deployment's progress deadline, or a StatefulSet or DaemonSet
+with no replica updated or ready for 15 minutes unless it waits for
+people with `OnDelete` or a partition, while replicas are ready), down (no ready replica), replaced, or
+unknown (seen more than 30 minutes late). It only reads and sends nothing:
+a release that goes wrong is reported by its incident.
+
+How to undo a release follows what deploys it, from the GitOps marker the
+change journal already records (`kube.GitOpsApp`): a revert in Git for
+Argo CD and Flux, since a rollback in the cluster would be overwritten by
+the next sync; `helm rollback` in the release's namespace for a Helm
+release (`meta.helm.sh/release-name`; a `helm.sh/chart` label alone is no
+release); `kubectl rollout undo` otherwise, offered as a command only on
+the workload's newest release. The issue's steps and its message use the same rule
+(`compose/managed_undo.go`).
 
 ## How kwatch watches
 

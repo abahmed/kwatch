@@ -340,6 +340,8 @@ registry-login-missing-secret found-high
 registry-no-pull-secret found-high
 registry-rate-limited found-high
 registry-unavailable self
+release-gitops-managed found-high
+release-helm-managed found-high
 release-old-revision-rescheduled quiet
 release-regression found-high
 release-steady quiet

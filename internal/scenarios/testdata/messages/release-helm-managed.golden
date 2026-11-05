@@ -1,0 +1,11 @@
+10:03:05 settled
+🟠 billing in shop (prod-eu-1): the new version (billing:1.1) can't start; the previous version is still serving: it stops at start with "panic: missing key DB_URL". The previous image was registry.example.com/billing:1.0. Only the new revision fails; the previous one stays healthy. Fix in: deployment/billing → container app → image (registry.example.com/billing:1.1). Rolling back the Helm release undoes this release (changes the cluster): helm rollback billing -n shop
+🟠 billing in shop (prod-eu-1): the new version (billing:1.1) can't start; the previous version is still serving: it stops at start with "panic: missing key DB_URL".
+| 🟠 **billing** in **shop** (**prod-eu-1**): the new version (billing:1.1) can't start; the previous version is still serving: it stops at start with `panic: missing key DB_URL`.
+| The previous image was registry.example.com/billing:1.0.
+| Only the new revision fails; the previous one stays healthy.
+| Fix in: deployment/billing → container app → image (registry.example.com/billing:1.1).
+| Rolling back the Helm release undoes this release (changes the cluster):
+| ```
+| helm rollback billing -n shop
+| ```

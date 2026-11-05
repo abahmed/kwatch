@@ -149,6 +149,18 @@
     more.appendChild(link("/issues?status=active", "See all " + KW.plural(total, "issue", "issues") + " →"));
   }
 
+  /* releasesLine: "4 releases in the last 24 hours, 1 went wrong", a
+     link to the Releases page, or nothing when there were none. */
+  function releasesLine(box, res) {
+    var d = res && res.status === 200 && res.data;
+    box.textContent = "";
+    box.hidden = !d || !d.total;
+    if (box.hidden) return;
+    var text = KW.plural(d.total, "release", "releases") + " in the last 24 hours" +
+      (d.bad ? ", " + KW.num(d.bad) + " went wrong" : ", all fine so far");
+    box.appendChild(link(d.bad ? "/releases?since=24h&verdict=bad" : "/releases?since=24h", text));
+  }
+
   KW.statusView = function (main) {
     var etag = "", data = null, status = null, kw = null;
     // Made before pageView, which reads (read() below) right away.
@@ -162,6 +174,10 @@
     var lookBox = pg.body.appendChild(KW.el("section", "ov-first"));
     var calm = pg.body.appendChild(KW.el("p", "ov-calm"));
     calm.appendChild(link("/activity", "What changed recently"));
+    // One quiet line about today's releases (releases.js), only when
+    // there were some.
+    var rel = pg.body.appendChild(KW.el("p", "ov-rel"));
+    rel.hidden = true;
     pg.body.appendChild(weekBox);
     pg.body.hidden = true;
 
@@ -179,8 +195,10 @@
 
     function read() {
       return Promise.all([KW.api("/api/overview", { etag: etag }), KW.api("/api/status"),
-        kw ? null : KW.api("/api/kwatch"), week.read()]).then(function (out) {
+        kw ? null : KW.api("/api/kwatch"), week.read(),
+        KW.api("/api/releases?since=24h")]).then(function (out) {
         var r = out[0];
+        releasesLine(rel, out[4]);
         if (out[1].status === 200 && out[1].data) status = out[1].data;
         if (out[2] && out[2].status === 200) kw = out[2].data;
         KW.selfDot(status, kw);

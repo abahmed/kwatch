@@ -24,6 +24,8 @@
 <link rel="stylesheet" href="{{asset:columns.css}}">
 <link rel="stylesheet" href="{{asset:drawer.css}}">
 <link rel="stylesheet" href="{{asset:activity.css}}">
+<link rel="stylesheet" href="{{asset:releases.css}}">
+<link rel="stylesheet" href="{{asset:map.css}}">
 <link rel="stylesheet" href="{{asset:overview.css}}">
 <link rel="stylesheet" href="{{asset:look.css}}">
 <script defer src="{{asset:js/core.js}}"></script>
@@ -68,6 +70,9 @@
 <script defer src="{{asset:js/pages.js}}"></script>
 <script defer src="{{asset:js/trends.js}}"></script>
 <script defer src="{{asset:js/activity.js}}"></script>
+<script defer src="{{asset:js/releases.js}}"></script>
+<script defer src="{{asset:js/maplayout.js}}"></script>
+<script defer src="{{asset:js/map.js}}"></script>
 <script defer src="{{asset:js/ovinsights.js}}"></script>
 <script defer src="{{asset:js/ovcoverage.js}}"></script>
 <script defer src="{{asset:js/status.js}}"></script>
@@ -124,7 +129,7 @@
             <ul><li><b>Settled before alerting</b>: it recovered while kwatch was still confirming it, so nobody was told.</li></ul>
             <p class="legend-h legend-keys">Keyboard</p>
             <ul class="keys legend-keys-list">
-              <li><kbd>g</kbd> then <kbd>o</kbd> Overview · <kbd>i</kbd> Issues · <kbd>a</kbd> Activity · <kbd>k</kbd> kwatch</li>
+              <li><kbd>g</kbd> then <kbd>o</kbd> Overview · <kbd>i</kbd> Issues · <kbd>r</kbd> Releases · <kbd>m</kbd> Map · <kbd>a</kbd> Activity · <kbd>k</kbd> kwatch</li>
               <li><kbd>/</kbd> Search the issues</li>
               <li><kbd>j</kbd> <kbd>k</kbd> Next / previous row, or issue when one is open beside the table</li>
               <li><kbd>Enter</kbd> Open the issue beside the table (Cmd or Ctrl and click: its own page in a new tab)</li>
@@ -139,6 +144,8 @@
       <nav class="nav" aria-label="Dashboard">
         <a href="/" data-link data-nav="status">Overview</a>
         <a href="/issues" data-link data-nav="issues">Issues<span class="count" data-badge hidden></span></a>
+        <a href="/releases" data-link data-nav="releases">Releases</a>
+        <a href="/map" data-link data-nav="map">Map</a>
         <a href="/activity" data-link data-nav="activity">Activity</a>
         <a href="/kwatch" data-link data-nav="kwatch">kwatch<span class="nav-dot" data-kw-dot hidden></span><span class="sr-only" data-kw-dot-sr></span></a>
       </nav>
