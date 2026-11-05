@@ -1,0 +1,12 @@
+{
+  "name": "start-error-release-liveness-143",
+  "description": "A release's new pod stops at start with an unhandled configuration exception and its liveness probe kills it, while the previous version still serves: the line is the cause, not the probe.",
+  "root": "deployment/shop/orders",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

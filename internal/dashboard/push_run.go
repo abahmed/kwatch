@@ -110,6 +110,7 @@ func (p *pusher) check(
 	// for its other browsers: a cluster without internet access would
 	// wait out every timeout.
 	down := map[string]error{}
+	urgent := next.urgent()
 	for id, sub := range targets {
 		service := transport.LogURL(sub.Sub.Endpoint)
 		for _, m := range pushMessages(pushChanges(prev, next,
@@ -117,9 +118,17 @@ func (p *pusher) check(
 			if ctx.Err() != nil {
 				return
 			}
+			m.Badge = &urgent
 			err, skip := down[service]
 			if !skip {
 				err = p.deliver(ctx, sub.Sub, m, now)
+			}
+			if err == nil {
+				// The ID is the subscription's hash, never the
+				// push address (a capability URL).
+				klog.InfoS("dashboard: browser notification sent",
+					"component", "dashboard-push", "browser", id[:8],
+					"service", service, "issue", m.Tag)
 			}
 			if unreachable(err) {
 				down[service] = err

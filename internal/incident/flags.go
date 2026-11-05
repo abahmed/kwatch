@@ -141,6 +141,10 @@ type Pending struct {
 	// restart an owed revision is sent as before.
 	told     []inventory.EntityID
 	toldKept bool
+	// lowered: a page eased (easePage) is owed loweredStep's update to
+	// the pagers. In memory only: after a restart the incident's next
+	// message carries its tier.
+	lowered bool
 }
 
 // ScheduleReopenUpdate owes a "failing again" update, due after the

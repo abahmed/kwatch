@@ -1,7 +1,7 @@
 10:02:50 settled
-🟠 cert-controller in external-secrets (prod-eu-1) keeps failing its own readiness check (HTTP 500) while it runs. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. Service cert-controller can't serve traffic. To see the pod's state and events, run kubectl describe pod cert-controller-0d9addc3-a -n external-secrets
-🟠 cert-controller in external-secrets (prod-eu-1) keeps failing its own readiness check (HTTP 500) while it runs.
-| 🟠 **cert-controller** in **external-secrets** (**prod-eu-1**) keeps failing its own readiness check (HTTP 500) while it runs.
+🟠 cert-controller in external-secrets (prod-eu-1) is not ready: its readiness check (/readyz on port 8081) answers HTTP 500. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. Service cert-controller can't serve traffic. To see the pod's state and events, run kubectl describe pod cert-controller-0d9addc3-a -n external-secrets
+🟠 cert-controller in external-secrets (prod-eu-1) is not ready: its readiness check (/readyz on port 8081) answers HTTP 500.
+| 🟠 **cert-controller** in **external-secrets** (**prod-eu-1**) is not ready: its readiness check (/readyz on port 8081) answers HTTP 500.
 | Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
 | Service **cert-controller** can't serve traffic.
 | To see the pod's state and events, run

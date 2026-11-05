@@ -23,7 +23,7 @@ func findingState(f detection.Finding) string {
 	if unresolvedProbe(f) {
 		return predicate(f.Entity, unresolvedSummary)
 	}
-	return predicate(f.Entity, f.Summary)
+	return withCustomDetail(predicate(f.Entity, f.Summary), f)
 }
 
 // unresolvedProbe reports an external endpoint finding whose own error

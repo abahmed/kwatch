@@ -73,6 +73,9 @@ func (r *resolvedIndex) compact() {
 // markResolved records p, which has just resolved, and enforces the
 // per-root and total bounds, forgetting the oldest first.
 func (m *Manager) markResolved(p *Incident) {
+	// A crash-loop gap seen while it recovered ends with it: a later
+	// reopen starts without one (crash_gap.go).
+	delete(m.gaps, p.ID)
 	root := p.Root.String()
 	m.resolved.add(p.ID, root)
 	for len(m.resolved.byRoot[root]) > maxResolvedPerRoot {
@@ -130,6 +133,7 @@ func (m *Manager) forget(p *Incident) {
 		}
 	}
 	delete(m.incidents, p.ID)
+	delete(m.gaps, p.ID)
 	m.unindex(p)
 	m.dropResolved(p.ID, p.Root.String())
 }

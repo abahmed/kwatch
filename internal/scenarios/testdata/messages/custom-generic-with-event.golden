@@ -1,0 +1,9 @@
+10:03:15 settled
+🟠 Issuer internal in certs (prod-eu-1) is not ready: "Secret does not exist". It reports "could not get secret data from provider". To see the object's state and events, run kubectl describe issuer internal -n certs
+🟠 Issuer internal in certs (prod-eu-1) is not ready: "Secret does not exist".
+| 🟠 Issuer **internal** in **certs** (**prod-eu-1**) is not ready: `Secret does not exist`.
+| It reports `could not get secret data from provider`.
+| To see the object's state and events, run
+| ```
+| kubectl describe issuer internal -n certs
+| ```

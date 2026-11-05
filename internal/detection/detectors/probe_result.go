@@ -115,3 +115,23 @@ func resultWords(note inventory.Note) string {
 	}
 	return ""
 }
+
+// probeCheckEvidence is what the container's probe of kind asks
+// ("http /readyz :8081") and its timeout, from its spec; nothing when
+// the spec is not known.
+func probeCheckEvidence(
+	e inventory.Entity, kind string,
+) []detection.Evidence {
+	check := text(e, kube.ProbeAttr(kind, "check"))
+	if check == "" {
+		return nil
+	}
+	out := []detection.Evidence{{
+		Label: detection.EvidenceProbeCheck, Value: check}}
+	if timeout, ok := number(e, kube.ProbeAttr(kind, "timeout")); ok {
+		out = append(out, detection.Evidence{
+			Label: detection.EvidenceProbeTimeout,
+			Value: strconv.Itoa(int(timeout))})
+	}
+	return out
+}

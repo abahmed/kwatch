@@ -43,6 +43,27 @@ step that decides ends the tick, so one tick sends at most one update:
    tick ends here, so a fix-attempt update also waits, up to `MaterialGap`,
    until the material update goes out and the digest catches up (it is
    recorded meanwhile, see step 3).
+   The cause in the fingerprint (`causePart`, `cause_told.go`) is the one
+   last told unless the cause now is new for the incident and has held for
+   `CauseHold` (30s) over at least two evaluations. The first cause found
+   while none was told is news at once (it is no flip). A cause told before
+   is never news again by itself: a solver that blames a release, then a
+   startup setting, and back, for the same failures sends nothing. No
+   cause is the exception: it is never "told before", since what explains
+   the incident then lives elsewhere (a called backend, say) and may have
+   changed; it is news once it holds. Every message records the cause it
+   shows, held or not, so a cause that changes with other news goes out
+   with that news and is not sent again 30 s later. Up to 8 told causes
+   are kept per incident (hashes, saved with it). Changes in the affected
+   count, the confidence or the evidence checked never enter the
+   fingerprint. A repeated Warning event on the root (`UnusualEvent.*`)
+   does not enter it while the root fails on its own (a condition not
+   ready, say): the repeat only confirms the failure, so neither it nor
+   its window closing sends an update (`eventRestated`,
+   `fingerprint.go`). Likewise pods that run but never get ready
+   (`WorkloadNeverReady`) are no news once the incident said they are not
+   ready (no endpoints, a failing readiness probe, containers not ready),
+   unless the workload never became healthy since it was created.
 
 **Falling to the digest** (`reassess.go`, called from `advance`). An
 announced incident keeps the loudest tier it reached, so crash-loop members

@@ -14,11 +14,12 @@ import (
 // previous session that still fail: a restart announces none of them, so
 // without it nobody would hear that they are still open. The findings of
 // a restored incident come back within the restore grace, so the message
-// goes out when the grace is over (WarmAt). An incident that is already
-// back at the notify tier or higher does not wait for the rest: it is
-// listed one settle after the sources synced, with the lower-priority
-// ones that are back by then. Whatever comes back later is listed when the
-// grace is over, if it is not named already. An incident a listing named
+// goes out when the grace is over (WarmAt), so a restart sends one
+// message. Only an urgent incident that is already back (page tier, its
+// findings still news) does not wait for the rest: it is listed one
+// settle after the sources synced, with the others that are back by
+// then. Whatever comes back later is listed when the grace is over, if it
+// is not named already. An incident a listing named
 // within RestoredRelist is not listed again: when nothing else is, one
 // short restart note says how many are still open (restart_note.go). It
 // reports whether it sent a message.

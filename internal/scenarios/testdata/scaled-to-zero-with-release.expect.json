@@ -1,0 +1,8 @@
+{
+  "name": "scaled-to-zero-with-release",
+  "description": "One apply changes the image and scales a Deployment to zero while an Ingress still routes to it: it is scaled to zero, not a failing release.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "15m0s"
+}

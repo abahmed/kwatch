@@ -55,6 +55,34 @@ another namespace is another team's outage and is never held. A
 node outage page is held only beside a page of the same story, that is the
 same namespace and settle window, or the same chain (`pagedBeside`).
 
+A Deployment whose ready replicas still cover what it wants, from a
+previous ReplicaSet, while the pods of its new one fail, is a rollout that
+cannot start, not an outage (`Incident.PreviousServes`, `serving_ease.go`).
+It notifies, and an incident that paged for a real outage falls back to
+notify once nothing pages any more and the previous version serves again
+(`easePage`); a new outage pages through the usual raise. The fall-back
+owes the providers that keep alerts by key one update, reason `tier
+lowered` (`loweredStep`), sent once and not held by `MaterialGap`: "web in
+shop is no longer urgent: the previous version serves again; only the new
+rollout fails". It is paging-only (`PagingOnly`), so chat is not told; when
+other news is due at the same time it is one material update to every
+provider instead. PagerDuty takes it as a trigger with the same dedup key
+and severity `warning`: the alert is updated, but PagerDuty keeps the
+urgency of the incident it opened (its Events API cannot lower it).
+Opsgenie updates the open alert's priority to P3, its message and its
+description. The other paging providers get it like any update; issue
+trackers and the keyed structured receivers (webhook, n8n, Zapier, AWS
+SNS, Splunk HEC) record it with the incident key. Its
+lead says "the new version (api:2.3) can't start; the previous version is
+still serving", with the fatal line its containers stopped with when they
+did.
+
+kwatch's own pods waiting for their volume (`VolumeAttachWaiting`,
+`VolumeMultiAttach`) within `OwnStartWindow` (10 minutes) of its start are
+its own restart moving a ReadWriteOnce volume between nodes: they are
+silent (`own_start.go`, `Config.OwnNamespace` from `POD_NAMESPACE`). A wait
+that outlasts the window is told as usual.
+
 Everything else that is critical notifies; what is only worth knowing waits
 for the digest. The rules live in code and are listed here, so change both
 together. A repeat of a page that just resolved is held at notify.

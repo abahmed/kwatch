@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
@@ -101,4 +102,24 @@ func TestCrashedOnItsOwnNeedsTheProbesContainerAtTheFailure(
 	d, _ = crashDetail(1, "Error")
 	d.Containers[0].LastFinished = at.Add(-kube.LivenessKillLead)
 	assert.True(t, crashedOnItsOwn(&d), "a crash within the lead")
+}
+
+// A liveness kill of a program whose log shows it had already stopped
+// with a fatal error at start: the log line leads, the probe only ended
+// a process that had failed.
+func TestSummaryProofLeadsWithAFatalStartBeforeTheKill(t *testing.T) {
+	d := richDetail()
+	code := 137
+	d.Containers[0].LastReason, d.Containers[0].LastExitCode = "Error", &code
+	d.CapturedLogLines = []string{"Unhandled exception. Config.Error: " +
+		"setting 'Store' is required."}
+	d.Warnings = append(d.Warnings, RecentWarning{Reason: "Killing",
+		Object: "Pod/api-2", Count: 9, Message: "Container api failed " +
+			"liveness probe, will be restarted"})
+
+	got := proofOf(&d)
+
+	require.NotEmpty(t, got)
+	assert.Equal(t, "log", got[0].Kind)
+	assert.Contains(t, got[0].Detail, "is required")
 }

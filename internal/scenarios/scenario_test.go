@@ -42,7 +42,7 @@ type expectation struct {
 	// Tier is the expected delivery tier of the first incident.
 	Tier string `json:"tier,omitempty"`
 	// BootHeld marks a scenario whose first message is held on purpose
-	// by the node boot grace. It is measured by its own gate, not the
+	// by a start grace: a node's boot, or kwatch's own start. It is measured by its own gate, not the
 	// general first-message gate.
 	BootHeld bool `json:"bootHeld,omitempty"`
 	// MaxMessages bounds every message the scenario may produce.
@@ -154,6 +154,7 @@ func library() []scenario {
 		flipScenarios(), unschedulableQuantifiedScenarios(),
 		schedulingFitScenarios(),
 		readyNeverScenarios(), readyZeroScenarios(), probeLogScenarios(),
+		startRuleScenarios(), wordingRuleScenarios(),
 		namespaceOutageScenarios(),
 		reopenScenarios(), jobLongScenarios(), scaleZeroScenarios(),
 		firstRolloutScenarios(), usageHistoryScenarios(), nodeOOMScenarios(),

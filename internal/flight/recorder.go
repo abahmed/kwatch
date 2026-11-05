@@ -60,12 +60,28 @@ type seenState struct {
 	at  time.Time
 }
 
+// Options tune a recorder.
+type Options struct {
+	// KeepText keeps free text (log error lines, event and condition
+	// messages, change causes) scrubbed instead of dropping it
+	// (replay.SanitizeOptions.ScrubText).
+	KeepText bool
+}
+
 // NewRecorder returns a recorder that writes to ring, with pseudonyms
-// keyed by salt. now is the pipeline clock.
+// keyed by salt, and drops free text. now is the pipeline clock.
 func NewRecorder(
 	ring Ring, salt string, now func() time.Time,
 ) (*Recorder, error) {
-	sanitizer, err := replay.NewSanitizer(replay.SanitizeOptions{Salt: salt})
+	return NewRecorderWith(ring, salt, now, Options{})
+}
+
+// NewRecorderWith is NewRecorder with options.
+func NewRecorderWith(
+	ring Ring, salt string, now func() time.Time, opts Options,
+) (*Recorder, error) {
+	sanitizer, err := replay.NewSanitizer(replay.SanitizeOptions{
+		Salt: salt, ScrubText: opts.KeepText})
 	if err != nil {
 		return nil, err
 	}

@@ -124,6 +124,14 @@ const (
 // An HTTP status means the application answered: its own check failed.
 const EvidenceProbeResult = "probe result"
 
+// EvidenceProbeCheck is what the failing probe asks the container, as
+// the spec says it: "http /readyz :8081", "tcp :5432", "grpc :9090" or
+// "exec". EvidenceProbeTimeout is its timeout in seconds.
+const (
+	EvidenceProbeCheck   = "probe check"
+	EvidenceProbeTimeout = "probe timeout"
+)
+
 // EvidenceProbeLog is the last line naming a failure in the current log
 // of a running container whose probe the application answers with an
 // HTTP error status: the application's own words on why. It is quoted,

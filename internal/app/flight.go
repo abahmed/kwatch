@@ -1,7 +1,9 @@
 package app
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -31,7 +33,8 @@ func newFlightRecorder(
 		klog.ErrorS(err, "flight recorder disabled", "component", "flight")
 		return nil
 	}
-	rec, err := flight.NewRecorder(flight.NewRing(state), salt, now)
+	rec, err := flight.NewRecorderWith(flight.NewRing(state), salt, now,
+		flight.Options{KeepText: flightKeepsText()})
 	if err != nil {
 		klog.ErrorS(err, "flight recorder disabled", "component", "flight")
 		return nil
@@ -46,4 +49,17 @@ func recordedSubmit(rec *flight.Recorder, submit kube.Submit) kube.Submit {
 		return submit
 	}
 	return kube.Submit(rec.Wrap(flight.Submit(submit)))
+}
+
+// flightTextEnv turns off keeping scrubbed free text in the flight
+// recording ("false" or "off"); it is on by default.
+const flightTextEnv = "KWATCH_FLIGHT_TEXT"
+
+// flightKeepsText reports whether the recording keeps scrubbed text.
+func flightKeepsText() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(flightTextEnv))) {
+	case "false", "off", "0", "no":
+		return false
+	}
+	return true
 }

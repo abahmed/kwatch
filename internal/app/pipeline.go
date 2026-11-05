@@ -65,7 +65,8 @@ func runPipeline(
 		return err
 	}
 	if deps.dashboardServer != nil {
-		runners = append(runners, p.dashboardPush())
+		runners = append(runners, p.dashboardPush(),
+			p.dashboardResources())
 	}
 	defer p.publishSources()()
 	defer startSources(ctx, runners)()

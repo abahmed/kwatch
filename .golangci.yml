@@ -1,5 +1,11 @@
 version: "2"
 
+run:
+  # The dashboard's browser checks (make verify-dashboard-browser) are
+  # linted too.
+  build-tags:
+    - browser
+
 linters:
   default: none
   enable:

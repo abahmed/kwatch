@@ -94,6 +94,47 @@
     return c;
   }
 
+  /* cores: a CPU amount in plain digits ("0.04", "1.5"). */
+  function cores(n) { return String(Number(n.toFixed(n < 1 ? 2 : 1))); }
+
+  /* resPart: one resource: a gauge against its limit, or the use alone
+     when no limit is set. */
+  function resPart(box, name, used, limit, words, extra) {
+    var part = box.appendChild(KW.el("div", "kp-res-part"));
+    if (limit > 0) part.appendChild(KW.viz.gauge(used, limit, name + ": " + words));
+    part.appendChild(KW.el("h3", "kp-res-h", name));
+    part.appendChild(KW.el("p", "kp-res-t", words));
+    if (extra) part.appendChild(KW.el("p", "kp-res-x", extra));
+  }
+
+  function pctOf(used, limit) { return " (" + Math.round(used / limit * 100) + "%)"; }
+
+  /* resources: kwatch's own memory, CPU and disk against its
+     container's limits (/api/kwatch resources); null when unknown. */
+  function resources(k) {
+    var r = k && k.resources;
+    if (!r) return null;
+    var c = KW.viz.card("Resources");
+    var box = c.appendChild(KW.el("div", "kp-res"));
+    var m = r.memory, cpu = r.cpu, d = r.disk, f = r.stateFile;
+    if (m) {
+      resPart(box, "Memory", m.used, m.limit, m.limit > 0 ?
+        KW.size(m.used) + " of " + KW.size(m.limit) + " limit" + pctOf(m.used, m.limit) :
+        KW.size(m.used) + " · no limit set");
+    }
+    if (cpu) {
+      resPart(box, "CPU", cpu.cores, cpu.limitCores, cpu.limitCores > 0 ?
+        cores(cpu.cores) + " of " + cores(cpu.limitCores) + " cores" +
+        pctOf(cpu.cores, cpu.limitCores) : cores(cpu.cores) + " cores · no limit set");
+    }
+    if (d && d.total > 0) {
+      var cap = f && f.capKnown && f.capBytes > 0 ? " (cap " + KW.size(f.capBytes) + ")" : "";
+      resPart(box, "Disk", d.used, d.total, KW.size(d.used) + " of " + KW.size(d.total) +
+        " volume" + pctOf(d.used, d.total), f ? "State file " + KW.size(f.bytes) + cap : "");
+    }
+    return box.firstChild ? c : null;
+  }
+
   function coverage(k, cov) {
     var c = KW.viz.card("What kwatch is watching", "", true);
     var t = k && k.coverage;
@@ -183,6 +224,35 @@
     return c;
   }
 
+  /* misses: the cause self-check's likely misses (kwatch_status.go
+     likelyMisses): issues that recovered after something other than the
+     cause they named changed. Each links to its issue and, while the
+     recording still holds it (48 hours), gives the export command. */
+  function misses(k, s) {
+    var list = (k && k.likelyMisses) || [];
+    if (!list.length) return null;
+    var c = KW.viz.card("Likely wrong causes (last 7 days)",
+      "These recovered after something other than the cause they named changed.", true);
+    var ul = c.appendChild(KW.el("ul", "ip-list"));
+    var ns = (s && s.kwatchNamespace) || "kwatch";
+    var dep = (s && s.kwatchDeployment) || "kwatch";
+    list.forEach(function (m) {
+      var li = ul.appendChild(KW.el("li"));
+      var a = li.appendChild(KW.el("a", "ip-link", m.id));
+      a.href = "/issues/" + encodeURIComponent(m.id);
+      a.dataset.link = "";
+      var said = "Named " + m.root + " (" + m.rule + ")";
+      if (m.other) said += "; " + m.other + " changed" + (m.change ? " (" + m.change + ")" : "");
+      li.appendChild(KW.el("span", "ip-meta", said));
+      if (KW.valid(m.exportUntil) && KW.now() - Date.parse(m.exportUntil) < 48 * 3600 * 1000) {
+        li.appendChild(KW.cmd("kubectl exec -n " + ns + " deploy/" + dep +
+          " -- kwatch replay-export --since " + m.exportSince + " --until " + m.exportUntil +
+          " --out /var/lib/kwatch/incident.jsonl"));
+      }
+    });
+    return c;
+  }
+
   KW.kwatchView = function (main) {
     var tags = { k: "", c: "" }, k = null, cov = null, s = null, opened = false;
     var pg = KW.pageView(main, { title: "kwatch", tab: "kwatch status · kwatch",
@@ -206,9 +276,14 @@
       summary(sum, s, k, KW.selfIssues(s, k));
       var wasOpen = KW.$("#cov", grid), keep = wasOpen ? wasOpen.open : null;
       grid.textContent = "";
-      grid.appendChild(itself(s, k));
-      var f = stateFile(k);
-      if (f) grid.appendChild(f);
+      // Half-width cards in pairs, so no row is left with a gap: kwatch
+      // itself beside About, alerts beside Resources (alone, it
+      // takes the whole row), then what kwatch watches across the page.
+      var me = grid.appendChild(itself(s, k));
+      if (s) grid.appendChild(about(s)); else me.classList.add("pwide");
+      var dl = grid.appendChild(delivery(k, s));
+      var f = resources(k) || stateFile(k);
+      if (f) grid.appendChild(f); else dl.classList.add("pwide");
       var cv = coverage(k, cov);
       grid.appendChild(cv.card);
       if (cv.fold) {
@@ -216,8 +291,8 @@
         if (!opened && location.hash === "#cov") cv.fold.scrollIntoView({ block: "start" });
         opened = true;
       }
-      grid.appendChild(delivery(k, s));
-      if (s) grid.appendChild(about(s));
+      var lm = misses(k, s);
+      if (lm) grid.appendChild(lm);
     }
 
     function read() {

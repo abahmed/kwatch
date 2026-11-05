@@ -47,8 +47,10 @@ func TestWriteProbeLogQuotesTheAppNextToTheProbeResult(t *testing.T) {
 	got := Writer{}.Write(announce(unreadyApp("HTTP 500", probeLogLine)),
 		writerNow).Note
 
-	assert.Contains(t, got, "Its readiness check answers HTTP 500 (from "+
-		"its log: \""+probeLogLine+"\").")
+	// The lead says the answer; the proof adds the app's own words.
+	assert.Contains(t, got, "is not ready: its readiness check answers "+
+		"HTTP 500")
+	assert.Contains(t, got, "From its log: \""+probeLogLine+"\".")
 }
 
 func TestWriteProbeLogNeedsAnAnsweredProbeAndALine(t *testing.T) {

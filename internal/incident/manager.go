@@ -52,6 +52,11 @@ type Manager struct {
 	// restoreGrace delays recovery of restored incidents until detectors
 	// had time to re-raise their findings.
 	restoreGrace time.Time
+	// started is when the manager first ran (own_start.go).
+	started time.Time
+	// gaps are the recovering incidents whose workload kept crashing
+	// while they recovered (crash_gap.go).
+	gaps map[string]bool
 	// quietIDs are the incidents that resolved without a decision, until
 	// TakeQuietResolves reports them.
 	quietIDs []string
@@ -125,6 +130,7 @@ func (m *Manager) Apply(
 ) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.noteStart(s.Now)
 	if s.Verifiable == nil {
 		s.Verifiable = m.cfg.Verifiable
 	}

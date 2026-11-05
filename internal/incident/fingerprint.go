@@ -35,18 +35,18 @@ func fingerprint(p *Incident) string {
 	names := make([]string, 0, len(p.Members)+len(p.rootReasons))
 	for key, s := range p.Members {
 		if key.Entity == p.Root && !s.Symptom && !s.Advisory &&
-			!restated(p, key.Reason) {
+			!restatedOnce(p, key.Reason) {
 			names = append(names, key.Reason)
 		}
 	}
-	for reason := range p.rootReasons {
-		if !restated(p, reason) {
+	for reason, again := range p.rootReasons {
+		if !again {
 			names = append(names, reason)
 		}
 	}
 	sort.Strings(names)
 	parts := []string{
-		strconv.Itoa(int(p.Tier)), p.Root.String(), causeIdentity(p),
+		strconv.Itoa(int(p.Tier)), p.Root.String(), p.causePart(),
 		strings.Join(uniq(names), ","),
 		impactBucket(max(p.impactPeak, impactSize(p))),
 		strconv.Itoa(int(p.State)),
@@ -75,6 +75,16 @@ func fingerprint(p *Incident) string {
 	return hex.EncodeToString(sum[:hashBytes])
 }
 
+// restatedOnce is restated as it was decided when the reason was first
+// remembered: what clears later (a condition the repeat confirmed) must
+// not turn the repeat into news, nor an improvement into an update.
+func restatedOnce(p *Incident, reason string) bool {
+	if again, ok := p.rootReasons[reason]; ok {
+		return again
+	}
+	return restated(p, reason)
+}
+
 // restated reports a reason that only repeats, at a later stage, what
 // p already says. A workload whose Service has no endpoints is not
 // serving, and people were told so; learning that its pods run but never
@@ -84,11 +94,56 @@ func fingerprint(p *Incident) string {
 // healthy" after minutes of waiting is a milestone of its own, so only
 // the Service's word restates it.
 func restated(p *Incident, reason string) bool {
-	if reason != reasons.WorkloadNeverReady {
+	if strings.HasPrefix(reason, reasons.UnusualEventPrefix) {
+		return eventRestated(p, reason)
+	}
+	if reason != reasons.WorkloadNeverReady || neverHealthy(p) {
 		return false
 	}
 	for key, s := range p.Members {
-		if !s.Advisory && key.Reason == reasons.ServiceNoEndpoints {
+		if !s.Advisory && notReadyTold[key.Reason] {
+			return true
+		}
+	}
+	return false
+}
+
+// neverHealthy reports a workload whose first rollout never became
+// healthy: that it never worked since it was created is news of its own
+// (compose/first_rollout.go), unlike a workload that stopped being ready.
+func neverHealthy(p *Incident) bool {
+	for key, s := range p.Members {
+		if key.Reason != reasons.WorkloadNeverReady {
+			continue
+		}
+		for _, e := range s.Evidence {
+			if e.Label == detection.EvidenceNeverHealthy {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// notReadyTold are findings that already say the workload's pods are not
+// ready: learning later that they run but never got ready says nothing
+// new (WorkloadNeverReady).
+var notReadyTold = map[string]bool{
+	reasons.ServiceNoEndpoints:   true,
+	reasons.ReadinessProbeFailed: true,
+	reasons.ContainersNotReady:   true,
+}
+
+// eventRestated reports a repeated Warning event on the root
+// (UnusualEvent.*) while the root has a failing finding of its own, such
+// as a condition that is not ready: the repeat only confirms what the
+// incident already says. It never counts by itself, so the event's
+// window opening or closing sends nothing either.
+func eventRestated(p *Incident, reason string) bool {
+	for key, s := range p.Members {
+		if key.Entity == p.Root && key.Reason != reason && !s.Advisory &&
+			!s.Symptom &&
+			!strings.HasPrefix(key.Reason, reasons.UnusualEventPrefix) {
 			return true
 		}
 	}
@@ -234,10 +289,25 @@ func (p *Incident) rememberRootReasons() {
 			continue
 		}
 		if p.rootReasons == nil {
-			p.rootReasons = map[string]struct{}{}
+			p.rootReasons = map[string]bool{}
 		}
-		p.rootReasons[key.Reason] = struct{}{}
+		if _, seen := p.rootReasons[key.Reason]; !seen {
+			p.rootReasons[key.Reason] = restated(p, key.Reason)
+		}
 	}
+}
+
+// restatedReasonList returns the remembered root reasons that only
+// restated the incident, sorted, for the persisted record.
+func (p *Incident) restatedReasonList() []string {
+	var out []string
+	for reason, again := range p.rootReasons {
+		if again {
+			out = append(out, reason)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // rootReasonList returns the remembered root reasons, sorted, for the

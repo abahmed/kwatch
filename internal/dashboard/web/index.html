@@ -4,8 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#FFFFFF">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#15171B">
 <title>kwatch</title>
 <link rel="icon" type="image/svg+xml" id="favicon" href="{{asset:favicon.svg}}" data-alert="{{asset:favicon-alert.svg}}">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="{{asset:icon-192.png}}">
 <script src="{{asset:js/look.js}}"></script>
 <link rel="stylesheet" href="{{asset:app.css}}">
 <link rel="stylesheet" href="{{asset:plain.css}}">
@@ -120,7 +124,7 @@
             <ul><li><b>Settled before alerting</b>: it recovered while kwatch was still confirming it, so nobody was told.</li></ul>
             <p class="legend-h legend-keys">Keyboard</p>
             <ul class="keys legend-keys-list">
-              <li><kbd>g</kbd> then <kbd>o</kbd> Overview · <kbd>i</kbd> Issues · <kbd>n</kbd> Insights · <kbd>a</kbd> Activity · <kbd>k</kbd> kwatch</li>
+              <li><kbd>g</kbd> then <kbd>o</kbd> Overview · <kbd>i</kbd> Issues · <kbd>a</kbd> Activity · <kbd>k</kbd> kwatch</li>
               <li><kbd>/</kbd> Search the issues</li>
               <li><kbd>j</kbd> <kbd>k</kbd> Next / previous row, or issue when one is open beside the table</li>
               <li><kbd>Enter</kbd> Open the issue beside the table (Cmd or Ctrl and click: its own page in a new tab)</li>
@@ -135,7 +139,6 @@
       <nav class="nav" aria-label="Dashboard">
         <a href="/" data-link data-nav="status">Overview</a>
         <a href="/issues" data-link data-nav="issues">Issues<span class="count" data-badge hidden></span></a>
-        <a href="/insights" data-link data-nav="insights">Insights</a>
         <a href="/activity" data-link data-nav="activity">Activity</a>
         <a href="/kwatch" data-link data-nav="kwatch">kwatch<span class="nav-dot" data-kw-dot hidden></span><span class="sr-only" data-kw-dot-sr></span></a>
       </nav>
@@ -144,9 +147,9 @@
           <button class="ntf-b" type="button" data-ntf-toggle aria-pressed="false" aria-describedby="ntf-hint"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg><span>Notifications</span><span class="ntf-state" data-ntf-state>Off</span></button>
           <p class="ntf-hint" id="ntf-hint" data-ntf-hint hidden></p>
           <div class="ntf-opts" data-ntf-opts hidden>
-            <label class="ntf-l">Tell me about<select data-ntf-min><option value="page">Urgent only</option><option value="notify">Urgent and needs attention</option><option value="digest">Everything</option></select></label>
-            <label class="ntf-c"><input type="checkbox" data-ntf-resolved>Also when resolved</label>
-            <label class="ntf-c" data-ntf-open-l><input type="checkbox" data-ntf-open>Even when this tab is open</label>
+            <label class="ntf-l">Tell me about<select name="ntf-min" data-ntf-min><option value="page">Urgent only</option><option value="notify">Urgent and needs attention</option><option value="digest">Everything</option></select></label>
+            <label class="ntf-c"><input type="checkbox" name="ntf-resolved" data-ntf-resolved>Also when resolved</label>
+            <label class="ntf-c" data-ntf-open-l><input type="checkbox" name="ntf-open" data-ntf-open>Even when this tab is open</label>
             <p class="ntf-mode" data-ntf-mode></p>
             <button class="link ntf-test" type="button" data-ntf-test>Send a test notification</button>
           </div>
@@ -220,16 +223,16 @@
     </div>
     <button class="btn btn-sm ftoggle" type="button" data-ftoggle aria-expanded="false">Filters</button>
     <div class="filters">
-      <label class="f f-search"><span class="sr-only">Search</span><svg class="icon f-icon" aria-hidden="true"><use href="#i-search"/></svg><input type="search" data-f="q" placeholder="Search issues" autocomplete="off" aria-keyshortcuts="/"><kbd class="f-kbd" aria-hidden="true" title="Press / to search">/</kbd></label>
+      <label class="f f-search"><span class="sr-only">Search</span><svg class="icon f-icon" aria-hidden="true"><use href="#i-search"/></svg><input type="search" name="q" data-f="q" placeholder="Search issues" autocomplete="off" aria-keyshortcuts="/"><kbd class="f-kbd" aria-hidden="true" title="Press / to search">/</kbd></label>
       <div class="fpicks">
       <div class="f f-pick" data-ms="namespace"></div>
       <div class="f f-pick" data-ms="kind"></div>
       <div class="f f-pick" data-ms="state"></div>
       <div class="f f-pick" data-ms="acked"></div>
       <div class="f f-pick" data-ms="stopped"></div>
-      <label class="f f-pick"><span class="sr-only">Started</span><select data-f="age" data-dd-mark><option value="">Any start time</option><option value="today">Started today</option><option value="day">Going on over a day</option></select></label>
-      <label class="f f-pick"><span class="sr-only">Resolved within</span><select data-f="since" data-dd-mark><option value="">Resolved in 7 days</option><option value="24h">Resolved in 24 hours</option><option value="72h">Resolved in 3 days</option></select></label>
-      <label class="f f-sort"><span class="sr-only">Sort</span><select data-f="sort"><option value="">Most urgent, then newest</option><option value="severity">Severity</option><option value="last">Last seen</option><option value="started">Started</option><option value="duration">Duration</option><option value="repeats">Times repeated</option><option value="status">Status</option><option value="namespace">Namespace</option><option value="title">Title</option></select></label>
+      <label class="f f-pick"><span class="sr-only">Started</span><select name="age" data-f="age" data-dd-mark><option value="">Any start time</option><option value="today">Started today</option><option value="day">Going on over a day</option></select></label>
+      <label class="f f-pick"><span class="sr-only">Resolved within</span><select name="since" data-f="since" data-dd-mark><option value="">Resolved in 7 days</option><option value="24h">Resolved in 24 hours</option><option value="72h">Resolved in 3 days</option></select></label>
+      <label class="f f-sort"><span class="sr-only">Sort</span><select name="sort" data-f="sort"><option value="">Most urgent, then newest</option><option value="severity">Severity</option><option value="last">Last seen</option><option value="started">Started</option><option value="duration">Duration</option><option value="repeats">Times repeated</option><option value="status">Status</option><option value="namespace">Namespace</option><option value="title">Title</option></select></label>
       <button class="btn btn-sm f-dir" type="button" data-f-dir hidden></button>
       </div>
     </div>
@@ -259,16 +262,16 @@
       <summary class="btn btn-sm">View options</summary>
       <div class="vopts-pop">
         <div class="vo-grid">
-          <label>Density<select data-vo-density><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label>
-          <label>Rows per page<select data-vo-size><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
-          <label>Issues opens with<select data-vo-status><option value="active">Active</option><option value="resolved">Resolved</option><option value="all">All</option></select></label>
-          <label>Order<select data-vo-sort></select></label>
-          <label>Text size<select data-vo-text><option value="s">Small</option><option value="m">Normal</option><option value="l">Large</option><option value="xl">Extra large</option></select></label>
-          <label class="vo-check"><input type="checkbox" data-vo-contrast>High contrast</label>
+          <label>Density<select name="vo-density" data-vo-density><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label>
+          <label>Rows per page<select name="vo-size" data-vo-size><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
+          <label>Issues opens with<select name="vo-status" data-vo-status><option value="active">Active</option><option value="resolved">Resolved</option><option value="all">All</option></select></label>
+          <label>Order<select name="vo-sort" data-vo-sort></select></label>
+          <label>Text size<select name="vo-text" data-vo-text><option value="s">Small</option><option value="m">Normal</option><option value="l">Large</option><option value="xl">Extra large</option></select></label>
+          <label class="vo-check"><input type="checkbox" name="vo-contrast" data-vo-contrast>High contrast</label>
         </div>
         <p class="vo-colsnote">Which columns show, their order and width: <button class="link" type="button" data-vo-cols>Columns</button></p>
         <h3 class="vo-h">Saved views</h3>
-        <form class="vo-save" data-vo-save><input type="text" maxlength="40" placeholder="Name this view" aria-label="Name for this view" autocomplete="off"><button class="btn btn-sm" type="submit">Save this view</button></form>
+        <form class="vo-save" data-vo-save><input type="text" name="view-name" maxlength="40" placeholder="Name this view" aria-label="Name for this view" autocomplete="off"><button class="btn btn-sm" type="submit">Save this view</button></form>
         <p class="muted small" data-vo-none>No saved views yet. A saved view keeps the filters, order and columns.</p>
         <ul class="vo-views" data-vo-views></ul>
         <p class="vo-foot"><button class="link" type="button" data-vo-reset>Reset to defaults</button><span class="muted small">Kept in this browser only.</span></p>
@@ -291,7 +294,7 @@
   <nav class="pager" data-pager aria-label="Pages" hidden>
     <span class="pager-range" data-range></span>
     <span class="pager-btns" data-pages></span>
-    <label class="pager-size">Rows per page<select data-size><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
+    <label class="pager-size">Rows per page<select name="page-size" data-size><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
   </nav>
 </template>
 
@@ -340,7 +343,7 @@
     <details class="fold" data-fold="node" hidden><summary data-node-h>Node</summary><div class="fold-body" data-node></div></details>
     <details class="fold" data-fold="timeline"><summary>What happened, step by step</summary><div class="fold-body"><div class="strip" data-strip hidden></div><ol class="tl" data-timeline></ol><button class="btn btn-sm tl-more" type="button" data-tl-more aria-expanded="false" hidden></button></div></details>
     <details class="fold" data-fold="logs" hidden><summary>Logs</summary><div class="fold-body">
-      <div class="lg-ctl" data-log-ctl hidden><label>Show <select data-log-pick></select></label><span class="muted small" data-log-n></span></div><p class="ev-note" data-log-note hidden></p>
+      <div class="lg-ctl" data-log-ctl hidden><label>Show <select name="log-pick" data-log-pick></select></label><span class="muted small" data-log-n></span></div><p class="ev-note" data-log-note hidden></p>
       <div class="logs" tabindex="0" role="region" aria-label="Log lines" data-logs></div>
       <div class="cap"><span data-logcap></span><span class="cap-actions"><button class="btn btn-sm" type="button" data-wrap-logs aria-pressed="false">Wrap lines</button><button class="btn btn-sm" type="button" data-copy-logs>Copy all</button></span></div>
     </div></details>

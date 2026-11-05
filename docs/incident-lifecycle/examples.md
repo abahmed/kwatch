@@ -45,8 +45,15 @@ Ten workloads crash with the same line, `license key rejected for tenant
    answer, such as "connection refused": nothing listens to log why), at
    most once every 5 minutes, and stores the last line that names a
    failure as `AttrProbeLogLine` (`LastFailureLine`). A Pro message quotes
-   it next to the probe result ("Its readiness check answers HTTP 503
-   (from its log: ...)"); a Community message never does.
+   it next to the probe result; a Community message never does. When
+   nothing else explains the incident, that answer is the lead
+   (`compose/probe_lead.go`), with what the probe asks from its spec
+   (`probe check` evidence): "web in shop is not ready: its readiness
+   check (/readyz on port 8081) answers HTTP 503", and the Pro proof
+   then adds only "From its log: ..."; a liveness check reads "is restarted: ...", a startup check "can't
+   finish starting: ...", a check that timed out "does not answer
+   within 1s". A check that could not connect is not worded so: nothing
+   listened.
 2. `detectors/container.go` puts that text in the finding as `error`
    evidence, quoted as it is.
 3. `explain` reads only that `error` evidence (`signatureOf`). It runs

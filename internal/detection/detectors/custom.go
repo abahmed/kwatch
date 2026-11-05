@@ -49,11 +49,18 @@ func (Custom) Detect(
 		return out
 	}
 	sort.Strings(labels)
+	evidence := append(messageEvidence(e, failing), listeners...)
+	if event, ok := lastWarning(ctx, e); ok {
+		// A condition that says only "could not get data" leaves the
+		// why to the controller's newest Warning event.
+		evidence = append(evidence,
+			detection.Evidence{Label: "event", Value: event})
+	}
 	return append(out, detection.Finding{
 		Reason: customReason(e.ID.Kind), Severity: detection.Warning,
 		Since:    since,
 		Summary:  "Reports " + strings.Join(labels, ", "),
-		Evidence: append(messageEvidence(e, failing), listeners...),
+		Evidence: evidence,
 	})
 }
 

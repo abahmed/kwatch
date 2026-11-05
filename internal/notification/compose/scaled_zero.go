@@ -38,3 +38,18 @@ func scaledZeroSentences(f caseFacts) []sentence {
 	}
 	return nil
 }
+
+// onlyScaledToZero reports members that only say a routed workload is
+// scaled to zero. Such a workload is not failing, and no release is
+// blamed for it: the lead states the scale-down (its own finding), and
+// scaledZeroSentences say when and by whom.
+func onlyScaledToZero(members []detection.Finding) bool {
+	found := false
+	for _, m := range failing(members) {
+		if m.Reason != reasons.ScaledToZeroRouted {
+			return false
+		}
+		found = true
+	}
+	return found
+}

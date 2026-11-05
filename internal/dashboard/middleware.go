@@ -8,11 +8,12 @@ import (
 )
 
 // contentSecurityPolicy allows only same-origin scripts, styles, fonts,
-// images, requests and the service worker: no inline script or style,
-// no framing.
+// images, requests, the service worker and the app manifest: no inline
+// script or style, no framing.
 const contentSecurityPolicy = "default-src 'none'; script-src 'self'; " +
 	"style-src 'self'; img-src 'self' data:; font-src 'self'; " +
-	"connect-src 'self'; worker-src 'self'; form-action 'self'; " +
+	"connect-src 'self'; worker-src 'self'; manifest-src 'self'; " +
+	"form-action 'self'; " +
 	"base-uri 'none'; " +
 	"frame-ancestors 'none'"
 

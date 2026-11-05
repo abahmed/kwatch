@@ -53,7 +53,8 @@
     EVENTS.forEach(function (ev) {
       root.addEventListener(ev, touch, { passive: true });
     });
-    window.addEventListener("scroll", touch, { passive: true });
+    // Capturing: the table's frame scrolls on its own on wide screens.
+    document.addEventListener("scroll", touch, { passive: true, capture: true });
 
     /* words: "2 new urgent · 3 new · 12 changed" for a diff d of the
        rows shown and the issues of the fresh list by ID. */
@@ -78,7 +79,7 @@
       /* calm: a fresh order may replace the rows now. */
       calm: function (page, table) {
         var focused = document.activeElement;
-        return page === 1 && window.scrollY < 80 &&
+        return page === 1 && KW.scrollTop() < 80 &&
           !(focused && table.contains(focused)) &&
           Date.now() - touched > QUIET;
       },
@@ -90,7 +91,7 @@
       clear: function () { bar.hidden = true; },
       stop: function () {
         EVENTS.forEach(function (ev) { root.removeEventListener(ev, touch, { passive: true }); });
-        window.removeEventListener("scroll", touch, { passive: true });
+        document.removeEventListener("scroll", touch, { passive: true, capture: true });
       }
     };
   };

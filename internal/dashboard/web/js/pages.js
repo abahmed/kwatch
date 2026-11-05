@@ -1,4 +1,4 @@
-/* kwatch dashboard: what the Overview, Insights, Activity and kwatch
+/* kwatch dashboard: what the Overview, Activity and kwatch
    pages share: the page head with its freshness line, the refresh loop
    with the shared error panel, and the small dot on the sidebar's
    "kwatch" link that says kwatch itself needs a look. */
@@ -41,7 +41,7 @@
           // The Issues count in the sidebar stays current on every page.
           KW.refreshBadge();
           if (scrollBack) {
-            window.scrollTo(0, scrollBack);
+            KW.scrollTo(scrollBack);
             scrollBack = 0;
           }
           return 0;

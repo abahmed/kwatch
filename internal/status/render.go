@@ -176,6 +176,24 @@ func (r Report) writeCauseChecks(b *strings.Builder) {
 	for _, c := range r.CauseChecks {
 		line(b, "  "+c.Rule+": "+c.Text)
 	}
+	if len(r.LikelyMisses) == 0 {
+		return
+	}
+	line(b, "Likely wrong causes (last 7 days): recovery followed a "+
+		"change to something else")
+	for _, m := range r.LikelyMisses {
+		text := "  " + m.ID + ": named " + m.Root + " (" + m.Rule + ")"
+		if m.Other != "" {
+			text += "; " + m.Other + " changed"
+			if m.Change != "" {
+				text += " (" + m.Change + ")"
+			}
+		}
+		line(b, text)
+		line(b, "    kwatch replay-export --since "+
+			m.ExportSince.Format(time.RFC3339)+" --until "+
+			m.ExportUntil.Format(time.RFC3339))
+	}
 }
 
 // writeUnexplained shows what kwatch saw and could not explain, so a

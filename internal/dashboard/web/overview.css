@@ -1,5 +1,5 @@
 /* kwatch dashboard: the Overview (js/status.js), the small charts every
-   page shares (js/viz.js), the card grid of the Insights and kwatch
+   page shares (js/viz.js), the card grid of the Overview and kwatch
    pages, the kwatch page (js/kwatchpage.js) and what kwatch watches
    (js/ovcoverage.js). Colors are the tokens of app.css, so light, dark
    and high contrast follow by themselves. */
@@ -32,6 +32,19 @@
 .ov-tile .updated { margin-left: auto; }
 .ov-sev { margin-top: 16px; }
 .ov-sev .viz-track { height: 14px; }
+/* How the week went: below what is wrong now, set apart by a line. */
+.ov-week { margin-top: 36px; padding-top: 4px; border-top: 1px solid var(--line); }
+/* The week in four numbers, then the cards; the rest folds under "More". */
+.ov-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 4px 0 0; }
+.ov-stat { min-width: 0; }
+.ov-stat dt { font-size: 0.8125rem; color: var(--text-muted); }
+.ov-stat dd { margin: 0; }
+.ov-stat-n { font-size: 1.75rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.ov-stat-sub { font-size: 0.8125rem; color: var(--text-muted); }
+.ov-fold { margin-top: 20px; }
+.ov-fold > summary { cursor: pointer; width: fit-content; min-height: 28px; color: var(--text-muted); font-size: 0.875rem; }
+.ov-fold > summary:hover { color: var(--text); }
+@media (max-width: 700px) { .ov-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .ov-h2 { font-family: var(--font-body); font-size: 1rem; font-weight: 700; letter-spacing: 0; margin: 28px 0 8px; }
 .ov-look { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; }
 .ov-look > li + li { border-top: 1px solid var(--line); }
@@ -87,7 +100,7 @@ a.viz-key:hover span:not(.viz-sw) { text-decoration: underline; }
 .viz-gfill { stroke: var(--success); } .viz-gfill.warn { stroke: var(--degraded); } .viz-gfill.bad { stroke: var(--failing); }
 .viz-gtext { font-family: var(--font-body); font-size: 18px; font-weight: 700; fill: var(--text); }
 
-/* ---- page cards (Insights, kwatch) ---- */
+/* ---- page cards (Overview, kwatch) ---- */
 .pgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
 .pcard { border: 1px solid var(--line); border-radius: var(--radius-card); padding: 18px 20px; min-width: 0; }
 .pcard.pwide { grid-column: 1 / -1; }
@@ -152,3 +165,11 @@ a.viz-key:hover span:not(.viz-sw) { text-decoration: underline; }
 }
 .ov-ack { width: fit-content; }
 @media (max-width: 700px) { .viz-cols text { font-size: 14px; } }
+/* Resources on the kwatch page: memory, CPU and disk side by side,
+   each a gauge against its limit (js/kwatchpage.js). */
+.kp-res { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 16px; margin-top: 8px; }
+.kp-res-part { min-width: 0; }
+.kp-res-part .viz-gauge { width: 7.5rem; }
+.kp-res-h { font-family: var(--font-body); font-size: 0.875rem; font-weight: 700; letter-spacing: 0; margin: 4px 0 2px; }
+.kp-res-t { font-size: 0.875rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.kp-res-x { margin-top: 2px; font-size: 0.8125rem; color: var(--text-muted); overflow-wrap: anywhere; }

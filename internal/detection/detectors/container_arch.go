@@ -59,6 +59,10 @@ func markArchMismatch(
 	f.Evidence = append(f.Evidence, detection.Evidence{
 		Label: detection.EvidenceArchNode,
 		Value: arch + " node " + node.ID.Name})
+	if image := text(e, kube.AttrImage); image != "" {
+		f.Evidence = append(f.Evidence, detection.Evidence{
+			Label: detection.EvidenceArchImage, Value: image})
+	}
 	if len(other) > 0 {
 		f.Evidence = append(f.Evidence, detection.Evidence{
 			Label: detection.EvidenceArchHealthy, Value: other})

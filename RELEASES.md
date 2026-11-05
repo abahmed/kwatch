@@ -6,7 +6,7 @@
 
 - **Evidence (Pro).** kwatch runs the read-only look a message used to suggest and shows the result: pod state, logs, events, memory, node, Services, rollouts and more.
 
-- **The dashboard is rebuilt as an incident view** with five pages: Overview, Issues, Insights, Activity and kwatch.
+- **The dashboard is rebuilt as an incident view** with four pages: Overview, Issues, Activity and kwatch.
 
 - **Community and Pro are split more clearly.** `/metrics`, readiness probe failures, shared-factor causes, some pod reasons, fix commands, recurrence lines and the text `/status` page are Pro; a Community message names the category of a cause, never its object. Pro is free during early access.
 
@@ -140,9 +140,26 @@
 - A Pro start no longer logs the Community warnings for a second while the
   license is settling.
 
+- A Pro installation builds its components once at start: kwatch starts with
+  the edition its last session ran when the state file says Pro and the cached
+  lease is still in its grace, instead of starting as Community, opening the
+  state file and taking the lock, then rebuilding as Pro.
+
+- An older state file is migrated in place instead of reset, once a release
+  ships a migration step for its version: one transaction with the version
+  bump, after a `state.db.pre-migration-v<N>` backup copy when the volume has
+  room. A failed migration resets as before (`kwatch_storage_resets_total`
+  `reason="migration_failed"`), keeping the file as it was before the attempt.
+
+- The operations guide explains the restart gap on another node (the
+  `ReadWriteOnce` volume's detach and attach) and that a zonal disk keeps kwatch
+  `Pending` while no node in its zone can take it.
+
 ### Dashboard
 
-- The dashboard is rebuilt as an incident view with five pages. Overview (`/`) shows what is wrong now: the top five issues. Issues lists them all. Insights shows weekly trends, top causes, namespaces and nodes. Activity is the feed. kwatch shows whether kwatch itself is working: restarts, coverage, where alerts go and the state disk.
+- The dashboard is rebuilt as an incident view with four pages. Overview (`/`) shows what is wrong now (the top five issues), then the week: four numbers, a day-by-day chart, top causes and where the trouble is, with the rest folded under "More"; the old `/insights` redirects to it. Issues lists them all; on a wide screen its filters stay on screen and only the table scrolls. Activity is the feed. kwatch shows whether kwatch itself is working: restarts, coverage, where alerts go and its resources. Every page is as wide as the Issues table, and every form field has a name, so browsers no longer flag them. The dashboard can be installed as an app (Chrome or Edge: "Install kwatch"): its own window and icon, the number of urgent issues on that icon, a title bar in the page's colors, notifications with the kwatch logo, and a "Can't reach kwatch" page that retries when kwatch is restarting. Each browser notification sent is now logged.
+- Activity leaves out changes nobody was told about (an issue that settled before alerting, its resolve, an earlier occurrence no message reached): a rollout settling or kwatch restarting no longer fills the feed with blips. "Show N changes nobody was told about" adds them back, marked "Settled before alerting" (`?untold=1`; the API's `untold` parameter and count).
+- The docs say plainly what kwatch cannot see: an app that hangs at start with no readiness probe is Ready to Kubernetes, so it is found only through its callers' errors or active probes (docs/architecture.md).
 
 - New pages and API reads: the kwatch page (`/kwatch`, from `/api/kwatch`) and `/api/overview`, which carries the top of the Overview in one read.
 
@@ -300,6 +317,16 @@
 
 ### Incidents and messages
 
+- A workload already reported as not ready no longer gets a second "now has pods that run without restarting but are not ready" update ten minutes later; a first rollout that never became healthy still says so.
+- A Warning event that keeps repeating on an object already reported as failing (a custom resource not ready, say) no longer sends "is now failing: Kubernetes reported UpdateFailed 3 times": it only confirms what the message already says.
+- A root cause that flips back and forth for the same failures (a release, then a startup setting, then no rule) no longer posts an update every 10 minutes: a cause new to the incident is news once it holds for 30 s, and a cause already told is never news again by itself. The first cause found is still news at once, and a cause that changes together with other news goes out once, with that news. The causes told are saved with the incident.
+- A release whose new pods cannot start while the previous version still serves is no longer called "down" or paged: it notifies, and its title reads "api in shop: the new version (api:2.3) can't start; the previous version is still serving: it stops at start with "…"" (or "keeps failing" without such a line). A page for a real outage falls back to a notification once the previous version serves again, and the paging providers get one update that says so (chat is not told): Opsgenie lowers the open alert to P3; PagerDuty updates the alert's severity to warning but keeps the urgency of the incident it opened.
+- A crash loop whose container looks ready between crashes (no readiness probe) is no longer "flapping" or "keeps failing and recovering": the quiet between two crashes is no recovery, so the incident stays open and reads "keeps crashing". A failure back within 10 minutes while the workload's containers crash (the kubelet's back-off reset) counts no flap cycle whether it reopens, recurs or revives, and a crash loop whose runs outlast the settle is still told on time.
+- kwatch's own pod waiting for its volume during the first 10 minutes after kwatch starts (a single replica with a ReadWriteOnce volume moving nodes) no longer opens a notification, with the pod not ready and the Deployment unavailable that come with it; a longer wait still does.
+- A container that cannot run on its node's CPU ("exec format error") is named outright, with or without a release behind it: "reports in shop can't run: its image reports:3.2 is not built for this node's CPU (arm64)", or, while replicas on nodes of another CPU run fine, "api in shop can't run on arm64 node n1: its image api:1.4 is not built for that CPU".
+- A health check that answers but says no is told with its answer: "cert-agent in infra is not ready: its readiness check (/readyz on port 8081) answers HTTP 500", followed in Pro by the application's own words when its log has them ("From its log: "…""), and "… does not answer within 1s" for a check that times out. A liveness check reads "is restarted: …", a startup check "can't finish starting: …".
+- A workload scaled to 0 that an Ingress still routes to is no longer "failing after the release of …": the title says it is scaled to 0, as for any other.
+- A custom resource with a failing condition says why in its title, the condition message's innermost clause or, when that only says something failed, its newest Warning event: "ClusterIssuer ca is not ready: "contact email has forbidden domain …"" instead of "is not ready (err register ACME account)".
 - **Every incident has a stable problem title.** It is written when the
   incident opens, before any message, from the lead of its announcement,
   and again when the problem changes; at most 140 characters, clipped on a
@@ -948,6 +975,9 @@
 
 ### Root cause
 
+- A container that stopped with a fatal error at start (an unhandled exception, a panic, an invalid or missing setting, "exec format error", a cloud API refusing its identity or finding no credentials such as AWS `AccessDenied`, Google Cloud `PERMISSION_DENIED` or Azure `AuthorizationFailed`, or "read-only file system") before a probe killed it (exit 137 or 143) is no longer blamed on a probe budget ("its containers get too little time to start"): the release that shipped it stays the cause on every evaluation, and the line is quoted. On the dashboard the log line leads the proof, before the liveness probe.
+- A probe aimed at a port the container does not declare is blamed only when it could not connect; a probe that got an HTTP status (such as 500) reached something listening.
+
 - When a log line names several clients, the dependency is read from the
   one nearest the failure, in the same clause or on the port the call used;
   a URL path segment such as `/users/redis` is not taken for a client.
@@ -1326,6 +1356,8 @@
 
 ### Performance and operations
 
+- The flight recording keeps the text most causes are read from, scrubbed instead of dropped: a crashed container's first error line, Warning event and condition messages, probe and volume errors and change causes. Credentials go; object and namespace names inside the text get the same pseudonyms as everywhere else in the recording, so a message still names its object; images, email addresses and outside host names get pseudonyms; each text is cut to 512 bytes; changed field values are never kept. A `kwatch replay-export` of a real incident now replays with its evidence. `persistence.flightRecorderText: false` (`KWATCH_FLIGHT_TEXT=false`) drops all free text as before. Read an export before sharing it: scrubbing is a pattern match.
+- The cause self-check also keeps its likely misses by name (Pro): incidents whose recovery followed a change to something other than the cause they named, at most 50 over 7 days. `/status` and the dashboard's kwatch page ("Likely wrong causes") list each with what changed instead and the `kwatch replay-export` window to export it. Display only, like the counts.
 - Fixed a startup slowdown on large clusters: with the flight recorder on, the
   initial sync of a 20,000-pod cluster no longer copies the whole recording
   queue on every event, and the change history no longer copies its ring on

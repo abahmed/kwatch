@@ -2,11 +2,21 @@
    updates bar and the pager. Tokens come from app.css. Under 1100px
    wide the Object column hides; under 900px the table becomes stacked
    cards, so the page never scrolls sideways; under 700px the filters
-   fold behind one "Filters" button. */
+   fold behind one "Filters" button. Over 900px wide the page is one
+   screen high: the head and filters stay put and only the table
+   scrolls, its heading on top (js/core.js KW.scrollBox). */
 
-.content.wide { max-width: 90rem; }
-/* The filters are tall here: they scroll away with the page. */
+/* The filters are tall here; the table scrolls under them instead. */
 .content.wide .filterbox { position: static; }
+@media (min-width: 901px) {
+  .main:has(> .content.wide) { height: 100vh; height: 100dvh; }
+  .content.wide { position: relative; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; padding-bottom: var(--space-4); }
+  .content.wide > * { flex-shrink: 0; }
+  .content.wide > .tablewrap { flex: 0 1 auto; min-height: 10rem; overflow: auto; overscroll-behavior: contain; scroll-padding-top: 40px; }
+  .content.wide > .livebar { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); margin: 0; }
+  /* The pager sits at the screen's bottom edge: its menu opens upward. */
+  .pager .dd-pop { top: auto; bottom: calc(100% + 6px); }
+}
 
 /* Status: one pressed choice of three, with counts. */
 .stsw { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; padding: 3px; border: 1px solid var(--line); border-radius: var(--radius-pill); }

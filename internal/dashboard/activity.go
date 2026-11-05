@@ -34,11 +34,17 @@ var activityOrder = map[string]int{activityNew: 0, activityUrgent: 1,
 
 // ActivityResponse is the /api/activity response: what changed in the
 // window, newest first, at most maxActivity events. Total counts every
-// event in the window, so the page can say more happened.
+// event listed in the window, so the page can say more happened.
+// Changes nobody was told about (an issue that settled before alerting,
+// its resolve) are left out unless ?untold=1 asks for them; Untold
+// counts them either way, so the page can offer to show them.
 type ActivityResponse struct {
 	Since  string          `json:"since"`
 	Events []ActivityEvent `json:"events"`
 	Total  int             `json:"total"`
+	Untold int             `json:"untold"`
+	// WithUntold says the events include the untold ones (?untold=1).
+	WithUntold bool `json:"withUntold"`
 }
 
 // ActivityEvent is one change to one incident: it opened (new), became
@@ -56,6 +62,8 @@ type ActivityEvent struct {
 	Workload  string    `json:"workload"`
 	// WorkloadKind is the root object's kind, as the list shows it.
 	WorkloadKind string `json:"workloadKind,omitempty"`
+	// Untold marks a change no message reached (told_counts.go).
+	Untold bool `json:"untold,omitempty"`
 	// root and own find the copies of one event: a recurrence carries
 	// the opens and resolves of the incident it repeats. own marks the
 	// copy of the incident the event happened to.
@@ -63,17 +71,25 @@ type ActivityEvent struct {
 	own  bool
 }
 
-// activityHandler serves GET /api/activity?since=1h|24h, with an ETag
-// like the list.
+// activityHandler serves GET /api/activity?since=1h|24h&untold=1, with
+// an ETag like the list.
 func (s *Server) activityHandler(w http.ResponseWriter, r *http.Request) {
 	if !onlyGet(w, r) {
 		return
 	}
-	since := r.URL.Query().Get("since")
+	q := r.URL.Query()
+	since := q.Get("since")
 	window, ok := activityWindows[since]
-	if !ok || len(r.URL.Query()["since"]) > 1 {
+	if !ok || len(q["since"]) > 1 {
 		writeBadQuery(w, badQuery("since", since,
 			"Unknown activity window: %q. Use 1h or 24h.", since))
+		return
+	}
+	untold := q.Get("untold")
+	if (untold != "" && untold != "0" && untold != "1") ||
+		len(q["untold"]) > 1 {
+		writeBadQuery(w, badQuery("untold", untold,
+			"Unknown untold value: %q. Use 1 or 0.", untold))
 		return
 	}
 	reader := s.sources.incidents.Load()
@@ -82,7 +98,7 @@ func (s *Server) activityHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := buildActivity((*reader).Incidents(), s.now.Now(), window,
-		s.texts.redact)
+		s.texts.redact, untold == "1")
 	out.Since = cmp.Or(since, "1h")
 	writeTagged(w, r, out)
 }
@@ -90,9 +106,11 @@ func (s *Server) activityHandler(w http.ResponseWriter, r *http.Request) {
 // buildActivity lists the events of items within window before now,
 // newest first; ties fall back to the incident ID and the kind, so two
 // reads of the same incidents give the same body. Quiet incidents are
-// left out, as on the active list.
+// left out, as on the active list, and so are the changes nobody was
+// told about unless withUntold.
 func buildActivity(items []incident.Incident, now time.Time,
-	window time.Duration, red func(string) string) ActivityResponse {
+	window time.Duration, red func(string) string,
+	withUntold bool) ActivityResponse {
 	from := now.Add(-window)
 	in := func(t time.Time) bool {
 		return !t.IsZero() && t.After(from) && !t.After(now)
@@ -108,19 +126,30 @@ func buildActivity(items []incident.Incident, now time.Time,
 		events = appendActivity(events, p, in, red)
 	}
 	events = dropCopies(events)
+	untold := 0
+	for _, e := range events {
+		if e.Untold {
+			untold++
+		}
+	}
+	if !withUntold {
+		events = slices.DeleteFunc(events, func(e ActivityEvent) bool {
+			return e.Untold
+		})
+	}
 	slices.SortFunc(events, func(a, b ActivityEvent) int {
 		return cmp.Or(b.At.Compare(a.At), cmp.Compare(a.ID, b.ID),
 			cmp.Compare(activityOrder[a.Kind], activityOrder[b.Kind]))
 	})
 	return ActivityResponse{Events: events[:min(len(events), maxActivity)],
-		Total: len(events)}
+		Total: len(events), Untold: untold, WithUntold: withUntold}
 }
 
 // appendActivity adds p's events that in keeps.
 func appendActivity(events []ActivityEvent, p incident.Incident,
 	in func(time.Time) bool, red func(string) string) []ActivityEvent {
 	var item *IncidentListItem
-	add := func(at time.Time, kind string, own bool) {
+	add := func(at time.Time, kind string, own, told bool) {
 		if !in(at) {
 			return
 		}
@@ -132,21 +161,26 @@ func appendActivity(events []ActivityEvent, p incident.Incident,
 			ID: item.ID, Title: item.Title, Severity: item.Severity,
 			State: item.State, Namespace: item.Namespace,
 			Workload: item.Workload, WorkloadKind: item.WorkloadKind,
-			root: p.Root.String(), own: own})
+			Untold: !told, root: p.Root.String(), own: own})
 	}
+	// An opening was told when a message of it went out (openingTold);
+	// a tier rise or a resolve of the current incident when the incident
+	// was; an earlier occurrence's resolve when that occurrence was heard.
+	told := !p.Untold()
 	for i, at := range openings(p) {
-		add(at, openingKind(p, i, at), !at.Before(p.Opened))
+		add(at, openingKind(p, i, at), !at.Before(p.Opened),
+			openingTold(p, at))
 	}
 	for _, at := range urgentTimes(p) {
-		add(at, activityUrgent, !at.Before(p.Opened))
+		add(at, activityUrgent, !at.Before(p.Opened), told)
 	}
 	for _, o := range p.History {
-		add(o.Resolved, activityResolved, false)
+		add(o.Resolved, activityResolved, false, o.Heard)
 	}
 	// A superseded incident closes because another took its failures
 	// over: nothing was fixed.
 	if p.SupersededBy == "" {
-		add(p.Resolved, activityResolved, true)
+		add(p.Resolved, activityResolved, true, told)
 	}
 	return events
 }

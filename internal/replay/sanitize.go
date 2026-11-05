@@ -22,6 +22,10 @@ type SanitizeOptions struct {
 	// KeepMessages keeps note messages. They are free text and dropped by
 	// default.
 	KeepMessages bool
+	// ScrubText keeps free text (note messages, error and message
+	// attributes, log lines, change causes) scrubbed instead of dropping
+	// it (sanitize_text.go). KeepMessages, when set too, wins for notes.
+	ScrubText bool
 }
 
 // Sanitizer replaces identifying data in observations with stable
@@ -34,11 +38,16 @@ type SanitizeOptions struct {
 // are kept and label values are hashed. Kinds, relation types, sources,
 // attribute names, reason codes, numbers, booleans and times are kept.
 // Free text (messages, errors, change causes, anything containing spaces)
-// is dropped.
+// is dropped, or kept scrubbed with ScrubText (sanitize_text.go).
 type Sanitizer struct {
 	salt         string
 	keep         map[string]bool
 	keepMessages bool
+	scrub        bool
+	// known are the names hidden so far, for scrubbed text, and
+	// firstStage the cached name-independent part of scrubbing.
+	known      knownNames
+	firstStage scrubCache
 }
 
 // ErrNoSalt is returned by NewSanitizer without a salt: unsalted
@@ -57,6 +66,7 @@ func NewSanitizer(opts SanitizeOptions) (*Sanitizer, error) {
 	}
 	return &Sanitizer{
 		salt: opts.Salt, keep: keep, keepMessages: opts.KeepMessages,
+		scrub: opts.ScrubText,
 	}, nil
 }
 
@@ -77,15 +87,20 @@ func (s *Sanitizer) Observation(o inventory.Observation) inventory.Observation {
 	out := o
 	out.Entity = s.entity(o.Entity)
 	out.UID = s.optional("uid", o.UID)
-	out.Attributes = s.attributes(o.Attributes)
+	// Every object the observation names is learned before any of its
+	// text is scrubbed, so a message naming its own target is hidden.
 	out.Targets = nil
 	for _, target := range o.Targets {
 		out.Targets = append(out.Targets, s.entity(target))
 	}
+	if !o.Change.Entity.IsZero() {
+		s.entity(o.Change.Entity)
+	}
+	out.Attributes = s.attributes(o.Attributes)
 	out.Change = s.change(o.Change)
 	out.Note = o.Note
-	out.Note.Message = ""
-	out.Note.Refusal = ""
+	out.Note.Message = s.freeText(o.Note.Message)
+	out.Note.Refusal = s.freeText(o.Note.Refusal)
 	if s.keepMessages {
 		out.Note.Message = o.Note.Message
 		out.Note.Refusal = o.Note.Refusal
@@ -173,6 +188,9 @@ func (s *Sanitizer) text(name, text string) (string, bool) {
 	case isLabels(name):
 		return s.labels(text), true
 	case isFreeText(name) || strings.ContainsAny(text, " \t\n"):
+		if s.scrub {
+			return s.scrubText(text), true
+		}
 		return "", false
 	default:
 		return s.code(text), true
@@ -190,15 +208,17 @@ func (s *Sanitizer) change(c inventory.Change) inventory.Change {
 	out.Revision = s.code(c.Revision)
 	// The change cause is free text ("deploy of the billing hotfix"),
 	// dropped like note messages unless they are kept.
-	out.Cause = ""
+	out.Cause = s.freeText(c.Cause)
 	if s.keepMessages {
 		out.Cause = c.Cause
 	}
 	out.Fields = nil
 	for _, field := range c.Fields {
 		path := s.path(field.Path)
-		before, _ := s.text(field.Path, field.Before)
-		after, _ := s.text(field.Path, field.After)
+		// Field values are never kept as text: an edited setting may
+		// hold a secret that no pattern recognises.
+		before := s.fieldText(field.Path, field.Before)
+		after := s.fieldText(field.Path, field.After)
 		if field.Before != field.After && before == after {
 			// Dropping free text must not hide that the field changed.
 			before = s.pseudonym("text", field.Before)
@@ -233,7 +253,30 @@ func (s *Sanitizer) optional(class, text string) string {
 	if text == "" {
 		return ""
 	}
-	return s.pseudonym(class, text)
+	p := s.pseudonym(class, text)
+	if s.scrub && (class == "name" || class == "ns") {
+		s.known.remember(text, p)
+	}
+	return p
+}
+
+// freeText is a note message, refusal or change cause: scrubbed when
+// text is kept, else dropped.
+func (s *Sanitizer) freeText(text string) string {
+	if !s.scrub || text == "" {
+		return ""
+	}
+	return s.scrubText(text)
+}
+
+// fieldText sanitizes a changed field's value as text never kept: free
+// text is dropped.
+func (s *Sanitizer) fieldText(path, text string) string {
+	if isFreeText(path) || strings.ContainsAny(text, " \t\n") {
+		return ""
+	}
+	out, _ := s.text(path, text)
+	return out
 }
 
 // pseudonymBytes is how many hash bytes a pseudonym keeps: ten hex

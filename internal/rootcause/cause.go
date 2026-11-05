@@ -73,9 +73,10 @@ type CauseRecord struct {
 	Refused string `json:",omitempty"`
 	// SharedError is the error a failure-signature root stands for, as
 	// one of the failing pods wrote it, or, for a dependency read from
-	// the log (explain.DependencyLogRow), the line that names it (not
-	// yet redacted or clipped: writers do that). Empty for any other
-	// root.
+	// the log (explain.DependencyLogRow), the line that names it, or,
+	// for a root whose containers stopped at start, the fatal line they
+	// stopped with (explain.FatalStartLine) (not yet redacted or clipped: writers
+	// do that). Empty for any other root.
 	SharedError string `json:",omitempty"`
 	// ServingCert is the TLS Secret a webhook's pods serve when its
 	// certificate has already expired, for a webhook whose calls fail

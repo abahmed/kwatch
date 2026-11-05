@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"os"
 	"sync"
 	"time"
 
@@ -112,6 +113,8 @@ func (p *pipelineBuild) incidentConfig() incident.Config {
 		VerifiableObject: func(id inventory.EntityID) bool {
 			return p.source == nil || p.source.VerifiableObject(id)
 		},
+		OwnNamespace: envOrKwatch("POD_NAMESPACE"),
+		OwnWorkload:  incident.OwnWorkloadOf(os.Getenv("POD_NAME")),
 	}
 	if deps.has(feature.SeverityOverrides) {
 		policy := deps.runtime.Policy()

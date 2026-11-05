@@ -13,7 +13,7 @@ To see the object's state and events, run kubectl describe service ledger -n sho
 | ```
 | kubectl describe service ledger -n shop
 | ```
-10:13:00 material change
+10:13:30 material change
 🟠 ledger in shop (prod-eu-1) has not been ready for three minutes. orders fails calling service ledger with "ledger client: dial tcp ledger:9000: connect: connection refused", and the service has had no ready endpoints since 10:10 UTC.
 🟠 ledger in shop (prod-eu-1) has not been ready for three minutes.
 | 🟠 **ledger** in **shop** (**prod-eu-1**) has not been ready for three minutes.

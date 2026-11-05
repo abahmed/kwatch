@@ -97,6 +97,8 @@ type sources struct {
 	usage atomic.Pointer[usageSource]
 	// push sends browser notifications (push_run.go).
 	push atomic.Pointer[pusher]
+	// resources is kwatch's own use (kwatch_resources.go).
+	resources atomic.Pointer[resourceSource]
 	// self, failed and delivery are kwatch's view of itself, its failed
 	// sends and what the pagers and channels hold (self_status.go).
 	self     atomic.Pointer[selfSource]

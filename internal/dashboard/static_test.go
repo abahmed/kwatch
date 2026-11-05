@@ -93,7 +93,7 @@ func TestStaticShellAppliesTheLookBeforeTheFirstPaint(t *testing.T) {
 
 func TestStaticShellRoutesAndHashedAssets(t *testing.T) {
 	s := newTestServer()
-	for _, path := range []string{"/", "/signin", "/issues", "/insights",
+	for _, path := range []string{"/", "/signin", "/issues",
 		"/activity", "/activity?since=24h", "/kwatch",
 		"/issues?status=resolved", "/issues/inc-1"} {
 		w := call(t, s, http.MethodGet, path, "")
@@ -131,6 +131,7 @@ func TestStaticOldAddressesRedirectToTheNewOnes(t *testing.T) {
 	s := newTestServer()
 	cases := map[string]string{
 		"/status":                     "/",
+		"/insights":                   "/",
 		"/resolved":                   "/issues?status=resolved",
 		"/resolved?since=24h&q=a+b":   "/issues?status=resolved&q=a+b&since=24h",
 		"/?severity=page&age=today":   "/issues?severity=page&age=today",
@@ -158,7 +159,7 @@ func TestStaticEveryResponseCarriesTheCSP(t *testing.T) {
 		for _, part := range []string{"default-src 'none'",
 			"script-src 'self'", "style-src 'self'", "connect-src 'self'",
 			"frame-ancestors 'none'", "base-uri 'none'",
-			"worker-src 'self'"} {
+			"worker-src 'self'", "manifest-src 'self'"} {
 			if !strings.Contains(csp, part) {
 				t.Errorf("%s: CSP %q lacks %q", path, csp, part)
 			}
@@ -186,6 +187,14 @@ func TestStaticBuildRefusesAMissingReference(t *testing.T) {
 		t.Error("built without the service worker")
 	}
 	root["web/sw.js"] = &fstest.MapFile{Data: []byte("self;")}
+	if _, err := buildAssets(root); err == nil {
+		t.Error("built without the app manifest")
+	}
+	root["web/manifest.webmanifest"] = &fstest.MapFile{Data: []byte("{}")}
+	if _, err := buildAssets(root); err == nil {
+		t.Error("built without the offline page")
+	}
+	root["web/offline.html"] = &fstest.MapFile{Data: []byte("<p>")}
 	if _, err := buildAssets(root); err != nil {
 		t.Errorf("complete set: %v", err)
 	}

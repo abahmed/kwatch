@@ -32,13 +32,14 @@ var probeKinds = []struct {
 	prefix  string
 	reason  string
 	summary string
+	kind    string
 }{
 	{"Liveness probe", reasons.LivenessProbeFailed,
-		"keeps failing its liveness probe"},
+		"keeps failing its liveness probe", "liveness"},
 	{"Readiness probe", reasons.ReadinessProbeFailed,
-		"keeps failing its readiness probe"},
+		"keeps failing its readiness probe", "readiness"},
 	{"Startup probe", reasons.StartupProbeFailed,
-		"keeps failing its startup probe"},
+		"keeps failing its startup probe", "startup"},
 }
 
 // probeFindings reports a running container whose probe keeps failing,
@@ -72,9 +73,9 @@ func probeFindings(
 			Since: note.At,
 			Summary: probeSummary(ctx, e, note, kind.reason,
 				kind.summary),
-			Evidence: append(append(append(probeEvidence(note),
+			Evidence: append(append(append(append(probeEvidence(note),
 				probeLogEvidence(e, note)...), restartEvidence(e)...),
-				throttleEvidence(e)...),
+				throttleEvidence(e)...), probeCheckEvidence(e, kind.kind)...),
 		})
 	}
 	return out

@@ -1,9 +1,9 @@
 10:03:05 settled
-🟠 payments is failing in shop (prod-eu-1) after the 10:01 UTC release of registry.example.com/payments:2.3. The previous image was registry.example.com/payments:2.2. It fails with "panic: missing key DB_PASSWORD_V2". Fix in: deployment/payments → container app → image (registry.example.com/payments:2.3). To see the rollout state, run kubectl rollout status deployment/payments -n shop
-🟠 payments is failing in shop (prod-eu-1) after the 10:01 UTC release of registry.example.com/payments:2.3.
-| 🟠 **payments** is failing in **shop** (**prod-eu-1**) after the 10:01 UTC release of registry.example.com/payments:2.3.
+🟠 payments in shop (prod-eu-1): the new version (payments:2.3) can't start; the previous version is still serving: it stops at start with "panic: missing key DB_PASSWORD_V2". The previous image was registry.example.com/payments:2.2. Only the new revision fails; the previous one stays healthy. Fix in: deployment/payments → container app → image (registry.example.com/payments:2.3). To see the rollout state, run kubectl rollout status deployment/payments -n shop
+🟠 payments in shop (prod-eu-1): the new version (payments:2.3) can't start; the previous version is still serving: it stops at start with "panic: missing key DB_PASSWORD_V2".
+| 🟠 **payments** in **shop** (**prod-eu-1**): the new version (payments:2.3) can't start; the previous version is still serving: it stops at start with `panic: missing key DB_PASSWORD_V2`.
 | The previous image was registry.example.com/payments:2.2.
-| It fails with `panic: missing key DB_PASSWORD_V2`.
+| Only the new revision fails; the previous one stays healthy.
 | Fix in: deployment/payments → container app → image (registry.example.com/payments:2.3).
 | To see the rollout state, run
 | ```

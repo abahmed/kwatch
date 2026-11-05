@@ -118,6 +118,7 @@ cr-controller-crash-manager-is-deployment-name found-high
 cr-single-resource-default-manager found-high
 crash-loop-during-node-replacement self
 crash-loop-for-hours self
+crash-loop-ready-between-crashes self
 crash-on-arm64-node-other-error self
 crash-quotes-other-error self
 crashloop-after-announce self
@@ -130,7 +131,9 @@ cronjob-last-run-failed found-likely
 csi-node-plugin-failing found-possible
 csi-node-plugin-missing-on-node found-possible
 csr-denied self
+custom-condition-detail self
 custom-controller-failed-events self
+custom-generic-with-event self
 custom-healthy-warning-stream quiet
 custom-task-succeeded-false self
 custom-warnings-then-recovery self
@@ -149,6 +152,7 @@ disk-hog-moves-nodes found-likely
 endpoint-answers-probe-three-workloads unknown
 etcd-down found-high
 exec-format-error-arm64 self
+exec-format-error-no-release self
 external-database-one-workload self
 external-database-storm found-high
 finalizer-controller-granted-the-group found-high
@@ -286,6 +290,8 @@ oom-under-limit-on-pressured-node found-likely
 operator-cr-owned-failing found-high
 operator-cr-stuck found-high
 operator-down-crs-stuck found-high
+own-volume-wait-at-start quiet
+own-volume-wait-too-long self
 owner-routed found-high
 page-flaps-reopens found-high
 pdb-overlap-eviction-refused self,self
@@ -318,6 +324,7 @@ quota-exhausted found-high
 quota-forbids-pods found-high
 rbac-binding-removed found-high
 rbac-change-unrelated-crash self
+readiness-answers-on-undeclared-port self
 readiness-error-logged self
 readiness-flapping self
 ready-never self
@@ -357,6 +364,7 @@ scaled-to-zero-blue-green quiet
 scaled-to-zero-parked self
 scaled-to-zero-routed self
 scaled-to-zero-unrouted quiet
+scaled-to-zero-with-release found-high
 scheduler-down found-high
 scheduler-insufficient-memory found-high
 secret-edited-after-code-crash self
@@ -384,6 +392,8 @@ spot-node-removed found-high
 spot-reclaim-after-notify self
 stable-restarts-spike self
 stack-frame-not-endpoint self,self
+start-error-release-liveness-137 found-high
+start-error-release-liveness-143 found-high
 start-mid-outage-missing-secret found-high
 startup-budget-too-short found-high
 startup-readiness-churn quiet

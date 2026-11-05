@@ -103,7 +103,7 @@
     var cols = KW.columnsPanel($("[data-cols]"), redraw);
     var quick = KW.quickViews($("[data-qv]"), function (next) { setView(next); });
     var live = KW.liveControl(main, {
-      show: function () { if (pending) apply(pending); window.scrollTo(0, 0); }
+      show: function () { if (pending) apply(pending); KW.scrollTo(0); }
     });
     var opts = KW.viewOptions($("[data-vopts]"), {
       view: function () { return f; },
@@ -254,7 +254,7 @@
       emptyState(page, ids);
       if (place) {
         if (!drawer.id()) focusRow(place.id);
-        window.scrollTo(0, place.y);
+        KW.scrollTo(place.y);
         place = null;
       }
     }
@@ -380,7 +380,7 @@
         return true;
       },
       stop: function () {
-        KW.place.save(KW.lastList, window.scrollY, lastRow);
+        KW.place.save(KW.lastList, KW.scrollTop(), lastRow);
         drawer.stop();
         table.stop();
         keep.stop();

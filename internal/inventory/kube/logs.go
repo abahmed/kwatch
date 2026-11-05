@@ -22,6 +22,9 @@ const (
 	// looks for the crash's first error line.
 	crashTailLines = 50
 	crashKeepBytes = 16 << 10
+	// startErrorAfter is how many lines after a run's first error line
+	// are kept with it when the tail no longer holds it.
+	startErrorAfter = 2
 	// logFetchBytes is asked of the API server, logLimitBytes is kept.
 	// The server applies LimitBytes to the start of the tail, so a tail
 	// over the limit loses its end, where the crash message is; kwatch
@@ -128,6 +131,87 @@ func (r LogReader) PreviousLines(
 		return nil, err
 	}
 	return logLines(lastBytes(body, crashKeepBytes)), nil
+}
+
+// PreviousLinesFromStart is PreviousLines for a run that stopped soon
+// after it started: a program that stops at start prints its error
+// first and a long stack trace after it, past the tail. When the tail
+// is full, the run's first error line (and the lines after it) from its
+// start come first, unless the tail already holds them. Only for short
+// runs: a long run's early lines say nothing of how it ended.
+func (r LogReader) PreviousLinesFromStart(
+	ctx context.Context, container inventory.EntityID,
+) ([]string, error) {
+	body, err := r.read(ctx, container, true, crashTailLines)
+	if err != nil {
+		return nil, err
+	}
+	tail := logLines(lastBytes(body, crashKeepBytes))
+	// Counted on the raw body: blank and filtered lines fill the tail too.
+	if bytes.Count(body, []byte{'\n'}) < crashTailLines {
+		return tail, nil
+	}
+	return append(notIn(r.firstError(ctx, container), tail), tail...), nil
+}
+
+// notIn keeps the lines of head that tail does not hold.
+func notIn(head, tail []string) []string {
+	seen := make(map[string]bool, len(tail))
+	for _, line := range tail {
+		seen[line] = true
+	}
+	var out []string
+	for _, line := range head {
+		if !seen[line] {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+// firstError reads the start of a container's previous run and returns
+// its first error line and the startErrorAfter lines that follow it
+// (the detail many runtimes print on the next lines), or nil.
+func (r LogReader) firstError(
+	ctx context.Context, container inventory.EntityID,
+) []string {
+	body, err := r.readHead(ctx, container)
+	if err != nil {
+		return nil
+	}
+	head := logLines(body)
+	for i, line := range head {
+		if IsErrorLine(line) {
+			return head[i:min(len(head), i+1+startErrorAfter)]
+		}
+	}
+	return nil
+}
+
+// readHead fetches the first crashKeepBytes of a container's previous
+// run: LimitBytes without TailLines counts from the start of the log.
+func (r LogReader) readHead(
+	ctx context.Context, container inventory.EntityID,
+) ([]byte, error) {
+	pod, name, ok := strings.Cut(container.Name, "/")
+	if !ok || r.Client == nil {
+		return nil, errors.New("no log client or container name")
+	}
+	fetchCtx, cancel := context.WithTimeout(ctx, logFetchBudget)
+	defer cancel()
+	limit := int64(crashKeepBytes)
+	body, err := r.Client.CoreV1().Pods(container.Namespace).GetLogs(
+		pod, &corev1.PodLogOptions{
+			Container: name, Previous: true, LimitBytes: &limit,
+		}).DoRaw(fetchCtx)
+	if err != nil {
+		return nil, err
+	}
+	// The limit can cut the last line; keep whole lines only.
+	if i := bytes.LastIndexByte(body, '\n'); i >= 0 {
+		body = body[:i+1]
+	}
+	return body, nil
 }
 
 // read fetches one run's log tail within logFetchBudget.

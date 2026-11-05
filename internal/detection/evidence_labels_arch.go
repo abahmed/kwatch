@@ -10,4 +10,7 @@ const (
 	// fine on nodes of another architecture, written as "2 pods on
 	// amd64 nodes". Absent when there are none.
 	EvidenceArchHealthy = "healthy on other architecture"
+	// EvidenceArchImage is the image the container runs, which is not
+	// built for the node's architecture. Absent when unknown.
+	EvidenceArchImage = "image for another architecture"
 )

@@ -19,6 +19,7 @@ read the header there for how they relate.
 | `PageRemindAfter` | 6h | a long outage does not go quiet |
 | `RemindEvery` / `ChronicRemindEvery` | 7d / 24h | still-open reminders |
 | `MaterialGap` | 10m | at most one material update per 10 minutes |
+| `CauseHold` | 30s | a cause new to the incident is news once it holds this long |
 | `FixWatch` | 10m | when to say a fix attempt did not work |
 | `RecentWindow` | 30m | how far back "what changed" looks |
 | `DigestReportEvery` | 24h | at least one digest a day lists a periodic recurrence |

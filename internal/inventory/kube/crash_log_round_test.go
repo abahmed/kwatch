@@ -20,11 +20,20 @@ const redisLine = "Unhandled exception. StackExchange.Redis." +
 	"RedisConnectionException: It was not possible to connect to the " +
 	"redis server(s). Error connecting right now."
 
-// previousLogs serves canned previous-run lines and counts reads.
+// previousLogs serves canned previous-run lines and counts reads, and
+// which of them asked for the run's start too.
 type previousLogs struct {
-	lines map[string][]string
-	err   error
-	reads []inventory.EntityID
+	lines      map[string][]string
+	err        error
+	reads      []inventory.EntityID
+	fromStarts []inventory.EntityID
+}
+
+func (p *previousLogs) PreviousLinesFromStart(
+	ctx context.Context, id inventory.EntityID,
+) ([]string, error) {
+	p.fromStarts = append(p.fromStarts, id)
+	return p.PreviousLines(ctx, id)
 }
 
 func (p *previousLogs) PreviousLines(
@@ -228,4 +237,30 @@ func TestCrashLogObservationCarriesTheErrorLine(t *testing.T) {
 		[]string{"fatal: boom"})
 	assert.Equal(t, "fatal: boom", o.Attributes[kube.AttrLastErrorLine].
 		AsText())
+}
+
+// Only a run that stopped soon after it started is read from its start:
+// a long run's early lines say nothing of how it ended.
+func TestCrashLogRoundReadsTheStartOfShortRunsOnly(t *testing.T) {
+	for name, ran := range map[string]time.Duration{
+		"short run": 2 * time.Minute,
+		"long run":  72 * time.Hour,
+	} {
+		t.Run(name, func(t *testing.T) {
+			r := newCrashRig(t)
+			id := kube.ContainerID(testNamespace, "p1", "app")
+			r.apply(t, id, map[string]inventory.Value{
+				kube.AttrRestarts:     inventory.Number(3),
+				kube.AttrStateReason:  inventory.Text("CrashLoopBackOff"),
+				kube.AttrLastExitCode: inventory.Number(1),
+				kube.AttrLastStarted: inventory.Time(
+					fixedTime().Add(-ran)),
+				kube.AttrLastFinished: inventory.Time(fixedTime()),
+			})
+			r.logs.lines["p1/app"] = []string{redisLine}
+			r.round.Round(context.Background())
+			require.Len(t, r.logs.reads, 1)
+			assert.Equal(t, ran < time.Hour, len(r.logs.fromStarts) == 1)
+		})
+	}
 }

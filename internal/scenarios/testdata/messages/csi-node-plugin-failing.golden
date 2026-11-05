@@ -13,7 +13,7 @@ To read the output of the last crash, run kubectl logs ebs-csi-node-n1 -c app -n
 | ```
 | kubectl logs ebs-csi-node-n1 -c app -n kube-system --previous
 | ```
-10:16:00 material change
+10:16:30 material change
 🟠 ebs-csi-node in kube-system (prod-eu-1) now has 1 of 2 replicas ready.
 🟠 ebs-csi-node in kube-system (prod-eu-1) now has 1 of 2 replicas ready.
 | 🟠 **ebs-csi-node** in **kube-system** (**prod-eu-1**) now has 1 of 2 replicas ready.

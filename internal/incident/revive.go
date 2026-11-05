@@ -27,11 +27,20 @@ func (m *Manager) revive(p *Incident, now time.Time) {
 	m.dropResolved(p.ID, p.Root.String())
 	p.History = appendHistory(p.History, occurrenceOf(p))
 	p.Cycles = recent(p.Cycles, now, m.cfg.FlapWindow)
-	p.Cycles = append(p.Cycles, now)
+	// A crash loop's run between two crashes is no new start: the
+	// failure goes on, so it keeps its cycles and its settle clock (a
+	// loop whose runs outlast the settle would never be told).
+	loop := m.crashLoopReturn(p, p.Resolved, now)
+	if !loop {
+		p.Cycles = append(p.Cycles, now)
+	}
 	p.Occurrences = appendOccurrence(p.Occurrences, now)
 	p.note(now, "happened again ("+ordinal(weekCount(p.History, now))+
 		" time this week)")
-	p.State, p.Opened, p.Resolved = Settling, now, time.Time{}
+	if !loop {
+		p.Opened = now
+	}
+	p.State, p.Resolved = Settling, time.Time{}
 	p.RecoveringSince = time.Time{}
 	p.Fix, p.FixedBy = "", nil
 	m.noteOpened(p.ID)

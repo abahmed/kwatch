@@ -44,6 +44,8 @@ func sentencesFor(
 		return ackRemovedSentences, true
 	case incident.ReasonMaterialChange:
 		return changeSentencesFor, true
+	case incident.ReasonTierLowered:
+		return loweredSentences, true
 	case incident.ReasonSettled, incident.ReasonSuperseded:
 		// Announce and Resolve decisions never reach updateSentences.
 		return changeSentencesFor, true

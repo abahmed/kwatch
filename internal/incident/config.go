@@ -63,6 +63,14 @@ type Config struct {
 	// a reset or a new volume starts with a new nonce, and its IDs never
 	// equal earlier ones. Tests set it for deterministic IDs.
 	IDNonce string
+	// OwnNamespace is the namespace kwatch runs in, when known: its own
+	// pods waiting for their volume right after it starts are expected
+	// (own_start.go).
+	OwnNamespace string
+	// OwnWorkload is the name of kwatch's own Deployment, from its pod
+	// name (OwnWorkloadOf). Empty turns the own-start quiet off: other
+	// workloads of the namespace are never covered by it.
+	OwnWorkload string
 }
 
 // Defaults for Config counts; the durations are in timings.go.

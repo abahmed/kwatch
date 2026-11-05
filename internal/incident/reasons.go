@@ -22,6 +22,11 @@ const (
 	// ReasonSuperseded closes an incident whose members now belong to
 	// another announced incident.
 	ReasonSuperseded Reason = "superseded by revised cause"
+	// ReasonTierLowered is the update that lowers the alert of an
+	// incident that paged once the previous version serves again
+	// (easePage). It goes to the providers that keep alerts by key only:
+	// chat is not told of a lowering.
+	ReasonTierLowered Reason = "tier lowered"
 )
 
 // ReasonRecoveredUnheard closes the pager alert of an incident that paged
@@ -42,7 +47,7 @@ var AllReasons = []Reason{
 	ReasonSettled, ReasonCauseRevised, ReasonMaterialChange,
 	ReasonFlapping, ReasonSuperseded, ReasonReminder,
 	ReasonFixAttempt, ReasonFixStillFailing, ReasonFailingAgain,
-	ReasonAcknowledged, ReasonAckRemoved,
+	ReasonAcknowledged, ReasonAckRemoved, ReasonTierLowered,
 }
 
 // RecoveredPrefix starts the timeline note of a member that recovered;

@@ -23,3 +23,16 @@ func releaseLead(f caseFacts, own detection.Finding) string {
 	summary := strings.TrimSuffix(strings.TrimSpace(own.Summary), ".")
 	return f.leadName(own.Entity) + ": " + lowerFirst(summary)
 }
+
+// releaseLeads are the leads about a release: one whose new pods fail
+// while the previous version serves (startLead), and one that restarts
+// more than the rollout it replaced (releaseLead).
+func releaseLeads(f caseFacts) (string, bool) {
+	if text, ok := startLead(f); ok {
+		return text, true
+	}
+	if own := releaseRegression(f); own != nil {
+		return releaseLead(f, *own), true
+	}
+	return "", false
+}

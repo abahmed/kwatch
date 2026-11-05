@@ -24,6 +24,7 @@ func (e *Engine) Status() status.Report {
 		Upgrade:      status.Assess(findings, e.deps.Model),
 		Zones:        status.ZoneHealth(e.deps.Model, findings),
 		CauseChecks:  e.storage.history.checks.report(now),
+		LikelyMisses: e.storage.history.checks.missesReport(now),
 		Unexplained:  e.storage.history.unexplained.report(now),
 	}
 	entitlements := feature.OrCommunity(e.deps.Entitlements)
@@ -39,6 +40,7 @@ func (e *Engine) Status() status.Report {
 		// The self-check and the unexplained counts are Pro detail.
 		report.Brief = true
 		report.CauseChecks, report.Unexplained = nil, status.Unexplained{}
+		report.LikelyMisses = nil
 	}
 	return report
 }

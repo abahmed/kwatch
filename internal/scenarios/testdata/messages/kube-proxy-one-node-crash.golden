@@ -22,12 +22,12 @@
 | ```
 | kubectl describe deployment web -n shop
 | ```
-10:10:00 material change
-🟠 kube-proxy in kube-system (prod-eu-1) now has 2 of 3 replicas ready. It is spreading to api, worker and web in shop: they have only 2 of 3 replicas ready.
-🟠 kube-proxy in kube-system (prod-eu-1) now has 2 of 3 replicas ready.
-| 🟠 **kube-proxy** in **kube-system** (**prod-eu-1**) now has 2 of 3 replicas ready.
-| It is spreading to **api**, **worker** and **web** in shop: they have only 2 of 3 replicas ready.
 10:10:00 superseded by revised cause
 🟠 Moved: this is now part of the kube-proxy failure in kube-system (prod-eu-1).
 🟠 Moved: this is now part of the kube-proxy failure in kube-system (prod-eu-1).
 | 🟠 Moved: this is now part of the kube-proxy failure in kube-system (**prod-eu-1**).
+10:10:30 material change
+🟠 kube-proxy in kube-system (prod-eu-1) now has 2 of 3 replicas ready. It is spreading to api, worker and web in shop: they have only 2 of 3 replicas ready.
+🟠 kube-proxy in kube-system (prod-eu-1) now has 2 of 3 replicas ready.
+| 🟠 **kube-proxy** in **kube-system** (**prod-eu-1**) now has 2 of 3 replicas ready.
+| It is spreading to **api**, **worker** and **web** in shop: they have only 2 of 3 replicas ready.

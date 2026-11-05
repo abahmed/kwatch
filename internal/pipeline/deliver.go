@@ -213,6 +213,10 @@ func (a *announcer) send(
 	if movedWithoutThread(written, spoke) {
 		msg.PagingOnly, msg.ChatCarrier = true, "roll-up"
 	}
+	if d.Reason == incident.ReasonTierLowered {
+		// Lowers the alert a pager keeps by key; chat is not told.
+		msg.PagingOnly, msg.ChatCarrier = true, ""
+	}
 	if written.Action == incident.Resolve && a.joint != nil {
 		msg = a.withRecovered(ctx, written, msg, at)
 	}

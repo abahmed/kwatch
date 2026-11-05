@@ -131,10 +131,14 @@ provider catalog and the website reference.
 
 ## Persistence
 
-Keep persisted records flat. A format change bumps `storage.SchemaVersion`.
-Because an unreadable or mismatched file is renamed to `state.db.corrupt`
-(one copy, replaced by a later reset) and a fresh one is created, add a
-test that an old-version file is reset and reported, and a release note.
+Keep persisted records flat. An added field with `omitempty` that reads
+as its zero value in older records needs no version change: unknown
+fields are ignored on read. A layout change bumps `storage.SchemaVersion`
+and adds the step from the previous version to `migrations`
+(`internal/storage/migrate.go`): idempotent, inside the open transaction,
+with a test that an old-version file is migrated and its data kept, and a
+release note. Without a step, an old file is reset (renamed to
+`state.db.corrupt`) and a fresh one is created.
 
 ## Test and verify
 
@@ -152,6 +156,13 @@ workflow runs: `make verify` plus actionlint, ShellCheck and a `go mod tidy`
 drift check. Locally, a check whose tool is not installed is skipped with a
 notice; in CI it fails. `make alert-quality` prints the alert-quality report
 without failing, and `make alert-quality-gate` runs only those gates.
+`make verify-dashboard-browser` loads every dashboard page in headless
+Chrome (chromedp, build tag `browser`, `internal/dashboard/browser*_test.go`)
+at desktop and phone size and fails on console errors, uncaught
+exceptions, Content Security Policy reports, sideways page scrolling,
+basic accessibility gaps (names, labels, duplicate ids) and Issues
+filters that scroll away; it skips without Chrome, and the `CI` workflow
+runs it after `make ci` with Chrome required.
 Real-cluster suites run in the `E2E` workflow: nightly, on demand, or on a
 pull request labeled `e2e`.
 

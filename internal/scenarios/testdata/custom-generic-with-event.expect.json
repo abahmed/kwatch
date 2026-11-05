@@ -1,0 +1,8 @@
+{
+  "name": "custom-generic-with-event",
+  "description": "A custom resource's Ready=False message is generic and its newest Warning event says why: the title says the event's words.",
+  "root": "issuer.certs.example.com/certs/internal",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "30m0s"
+}

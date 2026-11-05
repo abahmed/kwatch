@@ -37,12 +37,16 @@ type causeHistory interface {
 type causeChecker struct {
 	model  causeHistory
 	counts *selfcheck.Counts
+	// misses are the incidents where something else changed (likely
+	// misses), kept by name for review.
+	misses *selfcheck.Misses
 	// save hands the encoded counts to a writer; nil without a store.
 	save func(json.RawMessage)
 }
 
 func newCauseChecker(model causeHistory) *causeChecker {
-	return &causeChecker{model: model, counts: selfcheck.NewCounts()}
+	return &causeChecker{model: model, counts: selfcheck.NewCounts(),
+		misses: &selfcheck.Misses{}}
 }
 
 // restore loads the counts of the previous run.
@@ -59,10 +63,7 @@ func (c *causeChecker) restore(store IncidentStore) {
 		}
 		return
 	}
-	restored := selfcheck.NewCounts()
-	if json.Unmarshal(raw, restored) == nil {
-		c.counts = restored
-	}
+	c.decode(raw)
 }
 
 // observe counts the incidents these decisions resolved.
@@ -77,19 +78,26 @@ func (c *causeChecker) observe(decisions []incident.Decision) {
 		if inc.Cause == nil || inc.Cause.Rule == "" {
 			continue
 		}
-		outcome := selfcheck.Classify(c.evidence(inc))
+		e, other := c.evidence(inc)
+		outcome := selfcheck.Classify(e)
 		c.counts.Record(inc.Cause.Rule, inc.Resolved, outcome)
+		if outcome == selfcheck.OtherChanged {
+			c.misses.Record(missOf(inc, other))
+		}
 		changed = true
 	}
 	if changed && c.save != nil {
-		if raw, err := json.Marshal(c.counts); err == nil {
+		if raw, err := c.encode(); err == nil {
 			c.save(raw)
 		}
 	}
 }
 
-// evidence reads the model for the resolved incident inc.
-func (c *causeChecker) evidence(inc incident.Incident) selfcheck.Evidence {
+// evidence reads the model for the resolved incident inc, and the
+// latest meaningful change to something other than the cause.
+func (c *causeChecker) evidence(
+	inc incident.Incident,
+) (selfcheck.Evidence, inventory.Change) {
 	recovered := inc.RecoveringSince
 	if recovered.IsZero() {
 		recovered = inc.Resolved
@@ -97,8 +105,9 @@ func (c *causeChecker) evidence(inc incident.Incident) selfcheck.Evidence {
 	e := selfcheck.Evidence{MembersRecovered: recovered}
 	cause := inc.Cause.Root
 	members := memberEntities(inc, cause)
+	var other inventory.Change
 	for _, id := range append([]inventory.EntityID{cause}, members...) {
-		c.readChanges(&e, id, cause, inc.Opened)
+		c.readChanges(&e, &other, id, cause, inc.Opened)
 	}
 	if slices.Contains(inc.Removed, cause) {
 		e.CauseChanged = latest(e.CauseChanged, recovered)
@@ -106,13 +115,14 @@ func (c *causeChecker) evidence(inc incident.Incident) selfcheck.Evidence {
 	if !slices.Contains(members, cause) {
 		e.CauseRecovered = c.recoveredAt(cause, inc.Opened)
 	}
-	return e
+	return e, other
 }
 
 // readChanges adds to e the meaningful changes around id made while the
 // incident was open: to the cause itself, or to something else.
 func (c *causeChecker) readChanges(
-	e *selfcheck.Evidence, id, cause inventory.EntityID, opened time.Time,
+	e *selfcheck.Evidence, other *inventory.Change,
+	id, cause inventory.EntityID, opened time.Time,
 ) {
 	for _, set := range c.model.ChangeSets(id, opened) {
 		for _, ch := range set.Changes {
@@ -123,6 +133,9 @@ func (c *causeChecker) readChanges(
 				e.CauseChanged = latest(e.CauseChanged, ch.At)
 			} else {
 				e.OtherChanged = latest(e.OtherChanged, ch.At)
+				if !ch.At.Before(other.At) {
+					*other = ch
+				}
 			}
 		}
 	}

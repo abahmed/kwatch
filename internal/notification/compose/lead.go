@@ -25,34 +25,22 @@ func leadSentences(f caseFacts) []sentence {
 		causeTeaser(f)...)
 }
 
+// specificLeads are the leads for a case the evidence names exactly, in
+// order: the first that applies is the lead.
+var specificLeads = []func(caseFacts) (string, bool){
+	releaseLeads, archLead, firstRolloutLead, createdLead, volumeHeldLead,
+	provisionerLead, rivalLead, finalizerLead, attachmentLead,
+}
+
 func leadText(f caseFacts) string {
 	p := f.p
 	if len(causeTeaser(f)) > 0 {
 		return communityLead(f)
 	}
-	if own := releaseRegression(f); own != nil {
-		return releaseLead(f, *own)
-	}
-	if text, ok := firstRolloutLead(f); ok {
-		return text
-	}
-	if text, ok := createdLead(f); ok {
-		return text
-	}
-	if text, ok := volumeHeldLead(f); ok {
-		return text
-	}
-	if text, ok := provisionerLead(f); ok {
-		return text
-	}
-	if text, ok := rivalLead(f); ok {
-		return text
-	}
-	if text, ok := finalizerLead(f); ok {
-		return text
-	}
-	if text, ok := attachmentLead(f); ok {
-		return text
+	for _, lead := range specificLeads {
+		if text, ok := lead(f); ok {
+			return text
+		}
 	}
 	switch {
 	case policyBlocksCall(p.Cause):
@@ -71,6 +59,9 @@ func leadText(f caseFacts) string {
 		return changeLead(f)
 	case p.Cause != nil && rootFinding(p, f.members) == nil:
 		return causedLead(f)
+	}
+	if text, ok := probeLead(f); ok {
+		return text
 	}
 	return ownLead(f)
 }
@@ -130,7 +121,8 @@ func failingNodes(f caseFacts) (int, string) {
 // the node controller sets are not anybody's change at all.
 func blamedChange(f caseFacts) *inventory.Change {
 	cause := f.p.Cause
-	if cause == nil || cause.Change == nil || systemChange(*cause.Change) {
+	if cause == nil || cause.Change == nil || systemChange(*cause.Change) ||
+		onlyScaledToZero(f.members) {
 		return nil
 	}
 	if cause.Rule == "account-missing-at-create" {

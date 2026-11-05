@@ -1,0 +1,8 @@
+{
+  "name": "custom-condition-detail",
+  "description": "A custom resource's Ready=False message ends in a specific detail: the title says it.",
+  "root": "issuer.certs.example.com/certs/public",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "30m0s"
+}

@@ -104,8 +104,14 @@ func (v *view) containerConfigModes(
 		shortLastRun(container) {
 		out = append(out, ModeMemoryTooLow)
 	}
-	if probeMissesPorts(container) {
+	if probeMissesPorts(container) && v.probeRefused(id, failing) {
 		out = append(out, ModeProbePortMismatch)
+	}
+	if v.startupErrorLine(id, container) != "" {
+		// The program stopped at start: a probe budget or a liveness
+		// kill came after it and explains nothing
+		// (self_start_error.go).
+		return out
 	}
 	if v.startupBudgetShort(failing, container) {
 		out = append(out, ModeStartupBudgetShort)

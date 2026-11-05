@@ -12,6 +12,7 @@ import (
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/status"
 )
 
 func readKwatch(t *testing.T, s *Server) (KwatchResponse, string) {
@@ -123,4 +124,41 @@ func TestKwatchStatusNeedsAuthAndGet(t *testing.T) {
 		call(t, s, http.MethodGet, "/api/kwatch", "").Code)
 	assert.Equal(t, http.StatusMethodNotAllowed,
 		call(t, s, http.MethodPost, "/api/kwatch", testToken).Code)
+}
+
+// A provider the delivery health names in lower case and the send
+// trail capitalized is one channel, with both its sends and health.
+func TestChannelDeliveriesMergeProviderCase(t *testing.T) {
+	health := []ChannelHealth{{Channel: "slack", LastSuccess: testEpoch}}
+	items := []incident.Incident{{ID: "inc-1"}}
+	trail := func(string) []DeliveryAttempt {
+		return []DeliveryAttempt{{At: testEpoch, Channel: "Slack",
+			Result: deliveredOK}}
+	}
+	got := channelDeliveries(health, items, trail, testEpoch)
+	if len(got) != 1 || got[0].Sent != 1 ||
+		!got[0].LastSuccess.Equal(testEpoch) {
+		t.Fatalf("channels: %+v", got)
+	}
+}
+
+// The cause self-check's likely misses reach the kwatch page.
+func TestKwatchStatusCarriesTheLikelyMisses(t *testing.T) {
+	s := newTestServer()
+	miss := status.LikelyMiss{ID: "inc-1", Rule: "rollout",
+		Root: "deployment/shop/api", Other: "configmap/shop/settings",
+		Change: "config", Opened: testEpoch,
+		Resolved:    testEpoch.Add(time.Hour),
+		ExportSince: testEpoch.Add(-10 * time.Minute),
+		ExportUntil: testEpoch.Add(70 * time.Minute)}
+	s.SetStatus(func() status.Report {
+		return status.Report{At: testEpoch,
+			LikelyMisses: []status.LikelyMiss{miss}}
+	})
+
+	got, _ := readKwatch(t, s)
+
+	require.Len(t, got.LikelyMisses, 1)
+	assert.Equal(t, "inc-1", got.LikelyMisses[0].ID)
+	assert.True(t, got.LikelyMisses[0].ExportUntil.Equal(miss.ExportUntil))
 }

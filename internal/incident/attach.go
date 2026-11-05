@@ -166,6 +166,7 @@ func (m *Manager) refresh(model inventory.Reader, now time.Time) {
 			p.Impact = impact(model, p)
 			p.trafficLost = trafficLost(model, p)
 			p.servingDown = servingDown(model, p)
+			p.PreviousServes = previousServes(model, p)
 			p.admissionBlocked = admissionBlocked(model, p)
 			p.noteRejection(now)
 			p.routedMissing = routedMissing(model, p)
@@ -181,6 +182,7 @@ func (m *Manager) refresh(model inventory.Reader, now time.Time) {
 			computed := m.override.apply(p, base)
 			p.Tier = m.ratchetTier(p, computed, now)
 			p.noteLevel(m.levelFor(p, base, why, computed))
+			m.quietOwnStart(p, now)
 			if p.Tier != was && p.State != Settling &&
 				!m.tierUnsettled(p, now) {
 				// A settling incident's tier is in its "opened" line.

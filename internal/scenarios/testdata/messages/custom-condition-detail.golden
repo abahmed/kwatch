@@ -1,0 +1,8 @@
+10:03:15 settled
+🟠 Issuer public in certs (prod-eu-1) is not ready: "contact email has forbidden domain "example.com"". To see the object's state and events, run kubectl describe issuer public -n certs
+🟠 Issuer public in certs (prod-eu-1) is not ready: "contact email has forbidden domain "example.com"".
+| 🟠 Issuer **public** in **certs** (**prod-eu-1**) is not ready: `contact email has forbidden domain "example.com"`.
+| To see the object's state and events, run
+| ```
+| kubectl describe issuer public -n certs
+| ```

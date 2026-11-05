@@ -1,11 +1,12 @@
 /* kwatch dashboard: the Overview, the landing page. It answers "is
-   anything broken right now, and what do I look at first" and nothing
-   else: notices only when someone must act (kwatch is starting, alert
-   links are off, alerts failed to send), one status tile, the active
-   issues by alert level as one bar, and up to five issues to look at
-   first. Trends live on Insights (ovinsights.js, trends.js), kwatch's
-   own health on the kwatch page (kwatchpage.js), the change feed on
-   Activity (activity.js). Data: /api/overview and /api/status. */
+   anything broken right now, and what do I look at first" first:
+   notices only when someone must act (kwatch is starting, alert links
+   are off, alerts failed to send), one status tile, the active issues
+   by alert level as one bar, and up to five issues to look at first.
+   Below that, how the week went (ovinsights.js, trends.js). kwatch's
+   own health is on the kwatch page (kwatchpage.js), the change feed on
+   Activity (activity.js). Data: /api/overview, /api/status,
+   /api/insights and /api/trends. */
 (function () {
   "use strict";
   var KW = window.KW;
@@ -150,6 +151,9 @@
 
   KW.statusView = function (main) {
     var etag = "", data = null, status = null, kw = null;
+    // Made before pageView, which reads (read() below) right away.
+    var weekBox = KW.el("section", "ov-week");
+    var week = KW.insightsPart(weekBox);
     var pg = KW.pageView(main, { title: "Overview", read: read, conn: draw });
     var notes = pg.body.appendChild(KW.el("div", "ov-notes"));
     var tileBox = pg.body.appendChild(KW.el("section"));
@@ -158,6 +162,7 @@
     var lookBox = pg.body.appendChild(KW.el("section", "ov-first"));
     var calm = pg.body.appendChild(KW.el("p", "ov-calm"));
     calm.appendChild(link("/activity", "What changed recently"));
+    pg.body.appendChild(weekBox);
     pg.body.hidden = true;
 
     function draw() {
@@ -174,7 +179,7 @@
 
     function read() {
       return Promise.all([KW.api("/api/overview", { etag: etag }), KW.api("/api/status"),
-        kw ? null : KW.api("/api/kwatch")]).then(function (out) {
+        kw ? null : KW.api("/api/kwatch"), week.read()]).then(function (out) {
         var r = out[0];
         if (out[1].status === 200 && out[1].data) status = out[1].data;
         if (out[2] && out[2].status === 200) kw = out[2].data;
