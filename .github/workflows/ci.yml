@@ -231,6 +231,9 @@ jobs:
           chart:
             - 'deploy/**'
             - 'api/**'
+            # A change to this workflow (how Helm is installed, how the
+            # chart is tested) is tested by the chart job too.
+            - '.github/workflows/ci.yml'
 
     - name: Install Helm
       if: steps.changes.outputs.chart == 'true'
