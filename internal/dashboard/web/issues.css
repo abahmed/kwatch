@@ -149,3 +149,7 @@
 .itable td.c-where { white-space: nowrap; }
 /* The status switch is explained only where the choice is not obvious. */
 .stsw:has(.stsw-b[data-status="active"][aria-pressed="true"]) ~ .stsw-help { display: none; }
+
+/* Filters: an open state, and the namespace on the search row. */
+.ftoggle[aria-expanded="true"] { background: var(--surface); border-color: var(--text); }
+@media (min-width: 701px) { .filters .fpicks { display: contents; } }
