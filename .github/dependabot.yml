@@ -4,6 +4,8 @@ updates:
   # the full CI gate run once for the whole set.
   - package-ecosystem: "gomod"
     directory: "/"
+    commit-message:
+      prefix: "⬆️"
     schedule:
       interval: "weekly"
     groups:
@@ -17,6 +19,8 @@ updates:
       - "/"
       - "/test/e2e/receiver"
       - "/test/e2e/workload"
+    commit-message:
+      prefix: "⬆️"
     schedule:
       interval: "weekly"
     groups:
@@ -25,6 +29,8 @@ updates:
           - "*"
   - package-ecosystem: "github-actions"
     directory: "/"
+    commit-message:
+      prefix: "⬆️"
     schedule:
       interval: "weekly"
     groups:
