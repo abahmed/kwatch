@@ -194,6 +194,9 @@ func stoppedTracking(
 	f caseFacts, subject inventory.EntityID, rest string,
 ) []sentence {
 	span, _, _ := strings.Cut(rest, ";")
+	if strings.HasSuffix(rest, incident.UnconfirmedNote) {
+		return unconfirmedRecovery(f, subject, span)
+	}
 	state := " has not recovered."
 	switch {
 	case strings.HasSuffix(rest, incident.StillCrashingNote):
@@ -207,5 +210,21 @@ func stoppedTracking(
 		{part: partFollowUp, text: "kwatch stopped tracking this " +
 			"after " + strings.TrimSpace(span) + "; it is still not " +
 			"healthy, so check it yourself."},
+	}
+}
+
+// unconfirmedRecovery words the end of a hold for missing data: kwatch
+// waited, could not see the object, and says so instead of claiming a
+// recovery or a failure.
+func unconfirmedRecovery(
+	f caseFacts, subject inventory.EntityID, span string,
+) []sentence {
+	return []sentence{
+		{part: partLead, text: capitalName(subject,
+			f.leadName(subject)+": kwatch could not confirm it "+
+				"recovered.")},
+		{part: partFollowUp, text: "kwatch could not observe it for " +
+			strings.TrimSpace(span) + " and stopped checking; look " +
+			"at it yourself."},
 	}
 }

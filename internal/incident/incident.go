@@ -192,6 +192,10 @@ type Incident struct {
 	// heldForData says the latest tick held a resolve because kwatch
 	// cannot observe the root. Not persisted.
 	heldForData bool
+	// heldSince is when the current hold for missing data began; zero
+	// when none. It is persisted, so a restart does not restart the
+	// bound (Config.HeldMax).
+	heldSince time.Time
 	// Held marks an announcement collected for the startup summary and
 	// not yet handed to delivery.
 	Held bool

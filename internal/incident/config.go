@@ -24,6 +24,9 @@ type Config struct {
 	// doubles for each recent recovery, up to MaxHold.
 	Hold    time.Duration
 	MaxHold time.Duration
+	// HeldMax bounds a resolve held because kwatch cannot observe the
+	// incident's object. Past it the incident resolves as unconfirmed.
+	HeldMax time.Duration
 	// FlapCycles recoveries within FlapWindow make an incident flapping.
 	FlapWindow time.Duration
 	FlapCycles int
@@ -93,6 +96,7 @@ func (c Config) withDefaults() Config {
 	}
 	set(&c.Hold, DefaultHold)
 	set(&c.MaxHold, DefaultMaxHold)
+	set(&c.HeldMax, DefaultHeldMax)
 	set(&c.FlapWindow, DefaultFlapWindow)
 	set(&c.Remember, DefaultRemember)
 	if c.FlapCycles <= 0 {

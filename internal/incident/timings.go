@@ -48,6 +48,10 @@ const (
 	// DefaultMaxHold caps the doubled hold, and is how long a flapping
 	// incident must be stable before it resolves.
 	DefaultMaxHold = 30 * time.Minute
+	// DefaultHeldMax bounds how long an incident whose object kwatch
+	// cannot observe stays open waiting for sight to return. After it
+	// the incident resolves as unconfirmed and is no longer rechecked.
+	DefaultHeldMax = 6 * time.Hour
 	// DefaultFlapWindow is how far back recoveries are counted as flaps.
 	DefaultFlapWindow = 30 * time.Minute
 	// DefaultRemember keeps resolved incidents for a week, long enough to

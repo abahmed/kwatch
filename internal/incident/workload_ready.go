@@ -166,6 +166,9 @@ func (m *Manager) resolveReason(
 	stopped := StoppedTrackingPrefix + format.Duration(StillBrokenMax) +
 		"; coverage check continues"
 	switch {
+	case m.holdExpired(p, now):
+		return Reason(StoppedTrackingPrefix + format.Duration(m.cfg.HeldMax) +
+			UnconfirmedNote)
 	case m.workloadBroken(p):
 		return Reason(stopped)
 	case m.crashing(p, now):

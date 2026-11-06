@@ -76,3 +76,23 @@ func TestStoppedTrackingWarnsOnBothEditions(t *testing.T) {
 		}
 	}
 }
+
+// A hold for missing data that ran out says kwatch could not confirm a
+// recovery; it neither claims health nor claims the object still fails.
+func TestStoppedTrackingUnconfirmedSaysItCouldNotConfirm(t *testing.T) {
+	p := podCrash(incident.Notify)
+	p.State, p.Resolved = incident.Resolved, writerNow
+	d := incident.Decision{Action: incident.Resolve, Incident: p,
+		Reason: incident.Reason(incident.StoppedTrackingPrefix +
+			"6h" + incident.UnconfirmedNote)}
+	note := Writer{}.Write(d, writerNow).Note
+	for _, want := range []string{"kwatch could not confirm it recovered.",
+		"could not observe it for 6h and stopped checking"} {
+		if !strings.Contains(note, want) {
+			t.Errorf("want %q in %q", want, note)
+		}
+	}
+	if strings.Contains(note, "healthy again") {
+		t.Errorf("an unconfirmed resolve claimed health: %q", note)
+	}
+}
