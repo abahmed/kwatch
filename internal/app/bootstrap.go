@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert/catalog"
@@ -90,7 +91,8 @@ func newBootstrap(
 	}
 	healthServer := newHealthServer(
 		runtime, clockSource, overlay.invalid, entitlements)
-	dashboardServer := newDashboardServer(runtime, clockSource, entitlements)
+	dashboardServer := newDashboardServer(
+		ctx, runtime, clients.Kubernetes, clockSource, entitlements)
 	return newBootstrapDeps(
 		runtime, clients, healthServer, dashboardServer, deliveryManager,
 		clockSource, wake, entitlements, inactive, notice, overlay,
@@ -215,7 +217,8 @@ func applyEditionEndpoints(
 // sign-in password come from KWATCH_DASHBOARD_TOKEN and
 // KWATCH_DASHBOARD_PASSWORD (set by the chart from its Secret).
 func newDashboardServer(
-	runtime config.RuntimeConfig, now clock.Clock, e feature.Entitlements,
+	ctx context.Context, runtime config.RuntimeConfig,
+	client kubernetes.Interface, now clock.Clock, e feature.Entitlements,
 ) *dashboard.Server {
 	if !feature.OrCommunity(e).Limits().Dashboard {
 		return nil
@@ -224,8 +227,8 @@ func newDashboardServer(
 	if !dc.Enabled {
 		return nil
 	}
-	token := os.Getenv(dashboardTokenEnv)
-	password := os.Getenv(dashboardPasswordEnv)
+	token, password := dashboardCredentials(
+		ctx, client, envOrKwatch("POD_NAMESPACE"))
 	if token == "" && password == "" {
 		klog.InfoS("WARNING: dashboard is enabled but "+dashboardTokenEnv+
 			" and "+dashboardPasswordEnv+" are empty; every dashboard "+
@@ -233,14 +236,13 @@ func newDashboardServer(
 	}
 	scope := runtime.Scope()
 	return dashboard.NewServer(dashboard.Options{
-		Port:        dc.Port,
-		Token:       token,
-		Password:    password,
-		Shared:      dc.Mode == config.DashboardShared,
-		TrustProxy:  dc.TrustProxy,
-		TLSCertFile: dc.TLSCertFile,
-		TLSKeyFile:  dc.TLSKeyFile,
-		Edition:     string(feature.OrCommunity(e).Edition()),
+		Port:           dc.Port,
+		Token:          token,
+		Password:       password,
+		TrustedProxies: dc.TrustedProxies,
+		TLSCertFile:    dc.TLSCertFile,
+		TLSKeyFile:     dc.TLSKeyFile,
+		Edition:        string(feature.OrCommunity(e).Edition()),
 		ChangeHistory: feature.OrCommunity(e).Has(
 			feature.ChangeCorrelation),
 		Scope: dashboard.Scope{

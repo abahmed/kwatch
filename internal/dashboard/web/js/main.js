@@ -207,7 +207,9 @@
     app.appendChild(KW.clone("tpl-signin"));
     var params = new URLSearchParams(location.search);
     var next = safeNext(params.get("next"));
-    KW.$("[data-expired]", app).hidden = params.get("reason") !== "expired";
+    var reason = params.get("reason");
+    KW.$("[data-restarted]", app).hidden = reason !== "restarted";
+    KW.$("[data-expired]", app).hidden = reason !== "expired";
     var form = KW.$("form", app);
     var input = KW.$("#pw", app);
     var err = KW.$("[data-error]", app);
@@ -332,12 +334,20 @@
         return showHTTPS();
       }
       var signedIn = res.status === 204;
+      // A cookie from before kwatch restarted: say so on the sign-in page.
+      var restarted = res.status === 200 && !!res.data && res.data.reason === "restarted";
       if (location.pathname === "/signin") {
-        if (signedIn) return KW.go(safeNext(new URLSearchParams(location.search).get("next")), true);
+        var q = new URLSearchParams(location.search);
+        if (signedIn) return KW.go(safeNext(q.get("next")), true);
+        if (restarted) {
+          q.set("reason", "restarted");
+          history.replaceState(null, "", "/signin?" + q.toString());
+        }
         return render();
       }
       if (!signedIn && res.status !== 0) {
-        return KW.go("/signin?next=" + encodeURIComponent(here()), true);
+        return KW.go("/signin?" + (restarted ? "reason=restarted&" : "") +
+          "next=" + encodeURIComponent(here()), true);
       }
       render();
     });

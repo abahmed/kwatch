@@ -74,6 +74,16 @@ port other than 443 need the same.
 DASHBOARD (Pro): reach it with a port-forward, then open the URL:
   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "kwatch.fullname" . }}-dashboard {{ $dp }}:{{ $dp }}
   {{ if (default dict $dashN.tls).secretName }}https{{ else }}http{{ end }}://localhost:{{ $dp }}
+{{- if or $dashN.trustedProxies (default dict $dashN.tls).secretName }}
+With dashboard.trustedProxies or dashboard.tls set, sign-in needs https; a
+plain http port-forward can only use the API token.
+{{- else }}
+NOTE: dashboard.trustedProxies is empty. Behind an Ingress, Gateway or load
+balancer set it to that proxy's address range (for example ["10.0.0.0/8"]):
+without it kwatch cannot see the real client or the https the proxy ended, so
+all clients share one sign-in failure limit and sign-in is not limited to
+https.
+{{- end }}
 {{- if $dashN.existingSecret }}
 The sign-in password (key password) and the API bearer token (key token) are
 in the Secret {{ $dashN.existingSecret }}.

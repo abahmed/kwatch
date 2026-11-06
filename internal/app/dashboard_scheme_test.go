@@ -48,7 +48,8 @@ func visit(s *dashboard.Server, proto string) {
 
 func TestDashboardAddressUsesHTTPSSeenThroughTrustedProxy(t *testing.T) {
 	model := plainIngress(t)
-	s := newSchemeDashboard(dashboard.Options{TrustProxy: true})
+	s := newSchemeDashboard(dashboard.Options{
+		TrustedProxies: []string{"0.0.0.0/0"}})
 	visit(s, "https")
 	assert.Equal(t, "https://k.example.com",
 		testDashboard.address(model, s))
@@ -64,7 +65,7 @@ func TestDashboardAddressIgnoresProtoHeaderWithoutTrust(t *testing.T) {
 
 func TestDashboardAddressHTTPSWhenSignInRefusesHTTP(t *testing.T) {
 	model := plainIngress(t)
-	s := newSchemeDashboard(dashboard.Options{Shared: true})
+	s := newSchemeDashboard(dashboard.Options{TLSCertFile: "/tls/tls.crt"})
 	assert.Equal(t, "https://k.example.com",
 		testDashboard.address(model, s), "nothing seen yet")
 	visit(s, "")
@@ -74,7 +75,7 @@ func TestDashboardAddressHTTPSWhenSignInRefusesHTTP(t *testing.T) {
 
 func TestDashboardAddressHTTPWhenSeenAndAllowed(t *testing.T) {
 	model := plainIngress(t)
-	s := newSchemeDashboard(dashboard.Options{TrustProxy: true})
+	s := newSchemeDashboard(dashboard.Options{})
 	assert.Equal(t, "http://k.example.com",
 		testDashboard.address(model, s), "nothing seen yet")
 	visit(s, "")

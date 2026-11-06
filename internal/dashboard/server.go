@@ -57,13 +57,12 @@ type Options struct {
 	Token string
 	// Password is the shared sign-in password; empty refuses sign-in.
 	Password string
-	// Shared is true when people reach the dashboard through an Ingress:
-	// the cookie is Secure and sign-in over plain HTTP is refused.
-	Shared bool
-	// TrustProxy honours X-Forwarded-Proto/For from the proxy in front
-	// (Ingress, Gateway, Route or an outside load balancer). Without it
-	// only TLS that kwatch serves itself counts as https.
-	TrustProxy bool
+	// TrustedProxies are the CIDRs or addresses of the proxies that
+	// terminate TLS in front (Ingress, Gateway, Route, load balancer).
+	// X-Forwarded-For and X-Forwarded-Proto count only from these
+	// peers. With any entry, or with TLSCertFile, the dashboard is
+	// shared: https only, a Secure cookie and HSTS.
+	TrustedProxies []string
 	// TLSCertFile and TLSKeyFile make kwatch serve TLS itself; the files
 	// are read again when they change, so a renewed certificate is used
 	// without a restart.
@@ -142,9 +141,20 @@ func NewServer(opts Options, now clock.Clock) *Server {
 }
 
 func newServerAuth(opts Options, now clock.Clock) *Auth {
-	a := NewAuth(opts.Token, opts.Password, opts.Shared, now)
-	a.trustProxy = opts.TrustProxy
+	a := NewAuth(opts.Token, opts.Password, opts.shared(), now)
+	trusted, errs := parseProxies(opts.TrustedProxies)
+	for _, err := range errs {
+		klog.ErrorS(err, "ignored", "component", "dashboard-server")
+	}
+	a.trusted = trusted
 	return a
+}
+
+// shared reports whether people reach the dashboard through a TLS
+// front: a trusted proxy or kwatch's own TLS. Otherwise it is local,
+// reached through a port-forward over plain http.
+func (o Options) shared() bool {
+	return len(o.TrustedProxies) > 0 || o.TLSCertFile != ""
 }
 
 // NoteScan records that the engine finished a loop iteration now.
@@ -244,7 +254,14 @@ func (s *Server) Serve(_ context.Context) error {
 	}
 	s.lifecycleMu.Unlock()
 	klog.InfoS("starting dashboard server", "port", s.opts.Port,
-		"shared", s.opts.Shared)
+		"shared", s.opts.shared())
+	if len(s.opts.TrustedProxies) == 0 {
+		klog.InfoS("WARNING: dashboard.trustedProxies is empty: behind "+
+			"an Ingress, Gateway or load balancer kwatch cannot see the "+
+			"real client or the https the proxy ended, so all clients "+
+			"share one sign-in failure limit; set it to the proxy's "+
+			"address range", "component", "dashboard-server")
+	}
 	err := s.serve(server, listener)
 	if err == nil || err == http.ErrServerClosed {
 		return nil
@@ -314,5 +331,5 @@ func (s *Server) Handler() http.Handler {
 // sendHSTS reports whether a response carries Strict-Transport-Security:
 // in shared mode, over https.
 func (s *Server) sendHSTS(r *http.Request) bool {
-	return s.opts.Shared && s.auth.isHTTPS(r)
+	return s.opts.shared() && s.auth.isHTTPS(r)
 }
