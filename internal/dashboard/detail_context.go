@@ -58,7 +58,7 @@ func (s *Server) detailOf(p incident.Incident) IncidentDetail {
 		c.usage = *u
 	}
 	d := buildDetail(p, c)
-	d.Release = s.releaseFor(p.ID)
+	d.Release = s.releaseFor(p.ID, p.Opened)
 	return d
 }
 

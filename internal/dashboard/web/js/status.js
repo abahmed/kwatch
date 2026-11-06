@@ -172,13 +172,14 @@
     var wrong = KW.num(d.bad) + " went wrong";
     if (to) line.appendChild(link(to, wrong, "ulink"));
     else line.appendChild(document.createTextNode(wrong));
+    box.appendChild(KW.el("p", "ov-rel-h", "Releases that went wrong"));
     var ul = box.appendChild(KW.el("ul", "ov-rel-list"));
     (d.wrong || []).forEach(function (w) {
       var li = ul.appendChild(KW.el("li"));
       var name = KW.el("span", "mono", w.name + " · " + w.namespace);
       if (w.incident) li.appendChild(link("/issues/" + encodeURIComponent(w.incident), "", "ulink")).appendChild(name);
       else li.appendChild(name);
-      li.appendChild(document.createTextNode(" " + (WRONG[w.verdict] || w.verdict) + ", rolled out "));
+      li.appendChild(document.createTextNode(" · " + (WRONG[w.verdict] || w.verdict) + " · rolled out "));
       li.appendChild(KW.hm(w.at));
       if (!w.incident) li.appendChild(document.createTextNode(". No issue was opened for it."));
     });

@@ -209,3 +209,7 @@
 .rl-list { margin: 0; padding: 0 0 0 18px; font-size: var(--t-small); }
 .rl-log { margin-top: 6px; max-height: 8rem; }
 .ds-r-release .cmd { margin-top: 6px; }
+.rl-lead { margin: 0; font-size: var(--t-small); font-weight: 600; }
+.rl-repo { font-size: var(--t-micro); }
+.ds-step-t { flex: 1 1 0; min-width: 0; }
+.detail { max-width: none; }

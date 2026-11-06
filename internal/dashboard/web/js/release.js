@@ -54,7 +54,12 @@
     (r.images || []).forEach(function (im) {
       var li = ul.appendChild(KW.el("li"));
       li.appendChild(document.createTextNode("Image " + im.container + ": "));
-      li.appendChild(mono(im.before ? tag(im.before) + " → " + tag(im.after) : "added " + tag(im.after)));
+      var b = split(im.before), a = split(im.after);
+      if (!im.before) li.appendChild(mono("added " + im.after));
+      else if (b[0] === a[0]) {
+        li.appendChild(mono(b[1] + " → " + a[1]));
+        li.appendChild(KW.el("span", "mono muted rl-repo", " " + a[0]));
+      } else li.appendChild(mono(im.before + " → " + im.after));
     });
     var more = (r.changed || []).map(function (c) { return CHANGED[c] || c; });
     if (more.length) ul.appendChild(KW.el("li", "", "Also changed: " + more.join(", ") + "."));
@@ -63,10 +68,21 @@
     return ul.children.length ? ul : null;
   }
 
-  /* tag: an image without its registry path, "api:1.5". */
-  function tag(image) {
-    var s = String(image || "");
-    return s.length > 48 ? s.slice(s.lastIndexOf("/") + 1) : s;
+  /* KW.releaseWhy: the line for "Why" when a release that went wrong is
+     linked and no other cause is known, or "". */
+  var ACTS = { failed: "fails.", down: "has no replica ready.",
+    regressed: "restarts far more than the previous one." };
+  KW.releaseWhy = function (inc) {
+    var r = inc.release;
+    if (!r || !ACTS[r.verdict] || !KW.valid(r.at)) return "";
+    return "The " + r.name + " release rolled out " + KW.when(r.at) + " and the new version " +
+      ACTS[r.verdict];
+  };
+
+  /* split: an image as [repository, tag]. */
+  function split(image) {
+    var s = String(image || ""), at = s.lastIndexOf(":");
+    return at > s.lastIndexOf("/") ? [s.slice(0, at), s.slice(at + 1)] : [s, ""];
   }
 
   function rate(n) { return (Math.round(n * 10) / 10).toLocaleString("en-US"); }
@@ -107,9 +123,11 @@
     var r = inc.release, v = r && (VERDICTS[r.verdict] || VERDICTS.unknown);
     row.hidden = !r;
     if (!r) return;
-    KW.$("dt", row).textContent = v[3] ? "Likely caused by a release" : "A release near this issue";
+    KW.$("dt", row).textContent = "Release";
     var dd = KW.$("dd", row);
     dd.textContent = "";
+    dd.appendChild(KW.el("p", "rl-lead", v[3] ? "Likely caused by this release." :
+      "Close in time to this issue."));
     var head = dd.appendChild(KW.el("p", "rl-who"));
     head.appendChild(mono(who(r)));
     dd.appendChild(timing(r, inc));

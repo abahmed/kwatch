@@ -106,11 +106,14 @@
     /* where: the namespace and the object in one mono cell, the
        namespace first: "shop · deployment/api". */
     where: function (td, item, ctx) {
-      var text = KW.whereText(item);
-      var span = td.appendChild(KW.el("span", "mono"));
-      KW.highlight(span, text, ctx.terms);
-      breaks(span);
-      td.title = text;
+      var ns = item.namespace || "whole cluster", o = objectText(item);
+      var first = td.appendChild(KW.el("span", "mono"));
+      KW.highlight(first, ns, ctx.terms);
+      if (o) {
+        var second = td.appendChild(KW.el("span", "mono muted c-where-obj"));
+        KW.highlight(second, o, ctx.terms);
+      }
+      td.title = KW.whereText(item);
     },
     status: function (td, item) { td.appendChild(KW.stateChip(item.state)); },
     started: function (td, item) {

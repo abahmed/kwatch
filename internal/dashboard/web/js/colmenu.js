@@ -15,7 +15,7 @@
   var BASE = { sev: 8.5, status: 9.5, last: 6.5, started: 7, dur: 6.5,
     ack: 6.5 };
   var SHARE = { where: "24%" };
-  var LEAST = { where: 10, title: 14 };
+  var LEAST = { where: 18, title: 14 };
   var HEAD_MAX = 120;
 
   function close(refocus) {

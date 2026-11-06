@@ -171,3 +171,5 @@ a.viz-key:hover span:not(.viz-sw) { text-decoration: underline; }
 .kp-res-h { font-family: var(--font-body); font-size: var(--t-small); font-weight: 700; letter-spacing: 0; margin: 4px 0 2px; }
 .kp-res-t { font-size: var(--t-small); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .kp-res-x { margin-top: 2px; font-size: var(--t-micro); color: var(--text-muted); overflow-wrap: anywhere; }
+.ov-rel { margin: 24px 0; }
+.ov-rel-h { margin: 12px 0 0; font-size: var(--t-micro); font-weight: 600; color: var(--text-muted); }

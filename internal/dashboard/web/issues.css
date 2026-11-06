@@ -143,3 +143,9 @@
 }
 
 .stsw-help { margin: 0 0 12px; max-width: var(--measure); }
+
+/* Where: the namespace, then the object under it; never cut mid-word. */
+.itable td.c-where .mono { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.itable td.c-where { white-space: nowrap; }
+/* The status switch is explained only where the choice is not obvious. */
+.stsw:has(.stsw-b[data-status="active"][aria-pressed="true"]) ~ .stsw-help { display: none; }

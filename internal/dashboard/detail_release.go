@@ -71,14 +71,23 @@ func (s *Server) releaseBookSnapshot() (release.Book, bool) {
 	return snap, true
 }
 
-// releaseFor is the release that caused the incident, or nil.
-func (s *Server) releaseFor(id string) *ReleaseCause {
+// releaseFor is the release that caused the incident, or nil. A release
+// that rolled out after the incident started cannot have caused it.
+func (s *Server) releaseFor(id string, opened time.Time) *ReleaseCause {
 	snap, ok := s.releaseBookSnapshot()
 	if !ok {
 		return nil
 	}
-	return releaseOf(snap, id)
+	r := releaseOf(snap, id)
+	if r == nil || (!opened.IsZero() && r.At.After(opened.Add(releaseSlack))) {
+		return nil
+	}
+	return r
 }
+
+// releaseSlack is how far after an incident's start a release may be
+// stamped and still count: the two are noticed on different ticks.
+const releaseSlack = time.Minute
 
 // releaseOf finds the newest release of b linked to incident id.
 func releaseOf(b release.Book, id string) *ReleaseCause {

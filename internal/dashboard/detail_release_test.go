@@ -30,6 +30,17 @@ func releaseOfIncident(t *testing.T, s *Server, id string) *ReleaseCause {
 	return out.Release
 }
 
+// A release stamped after the incident started is not its cause.
+func TestReleaseAfterTheIncidentIsNotLinked(t *testing.T) {
+	now := testEpoch
+	s := releasesServer(release.Record{ID: "a", Kind: "deployment",
+		Namespace: "shop", Name: "api", At: now.Add(time.Hour),
+		Verdict: release.Failed, Incident: "inc-1"})
+	s.SetIncidents(&fakeIncidents{items: []incident.Incident{
+		testIncident("inc-1", "shop", 0)}})
+	assert.Nil(t, releaseOfIncident(t, s, "inc-1"))
+}
+
 func TestScopeCovers(t *testing.T) {
 	assert.True(t, Scope{}.covers("any"))
 	assert.False(t, Scope{Excluded: []string{"kube-system"}}.
