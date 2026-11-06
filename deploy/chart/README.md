@@ -232,7 +232,6 @@ run the kwatch.sh Dashboard menu or create your own Ingress or route
 pointing at Service `<release>-dashboard` (port name `dashboard`).
 
 | `image.repository` / `image.tag` / `image.pullPolicy` | Container image; an empty tag uses the chart's `appVersion` | `ghcr.io/abahmed/kwatch` / `""` / `IfNotPresent` |
-| `rbac.readyz` | Grant `get` on the API server's `/readyz`, which the prober and Pro evidence read. `false` removes the grant and the control plane evidence then shows that kwatch may not read it | `true` |
 | `crd.install` | Install the shared `KwatchConfig` CRD with this release; skipped automatically when another release owns it. `config.crd.enabled` is separate: it turns the live overlay on | `true` |
 | `rbac.mode` | `least-privilege` grants an explicit read-only `list`/`watch` set, and kinds outside it (custom resources included) show as `permission_denied` in `/health` coverage (kwatch logs one warning about them and the install notes say so); `full` grants `list`/`watch` on every resource, except that `full` with `watch.secrets: false` renders the least-privilege list. Both grant `get` only on namespaces, nodes, `nodes/stats`, `nodes/metrics` and `pods/log`. Set `full` to watch custom resources | `least-privilege` |
 | `persistence.size` | Size of the state volume (PVC). The state file is capped at 512 MiB of logical data (evidence 128 MiB), is rewritten at startup when it grows more than a quarter past that, and no backups are kept; the file and the temporary rewrite copy share the volume | `2Gi` |
