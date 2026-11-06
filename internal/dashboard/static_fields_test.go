@@ -42,6 +42,7 @@ func TestWorkerChangesWithTheOfflinePage(t *testing.T) {
 		root := fstest.MapFS{
 			"web/index.html":           {Data: []byte("<p>")},
 			"web/app.css":              {Data: []byte("body{}")},
+			"web/tokens.css":           {Data: []byte(":root{}")},
 			"web/favicon.svg":          {Data: []byte("<svg/>")},
 			"web/manifest.webmanifest": {Data: []byte("{}")},
 			"web/sw.js": {Data: []byte(

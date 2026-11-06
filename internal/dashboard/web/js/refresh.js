@@ -20,7 +20,7 @@
     if (b) {
       b.hidden = total === 0;
       b.textContent = KW.num(total);
-      b.className = "count" + (urgent ? " urgent" : "");
+      b.className = "count";
       b.setAttribute("aria-label", KW.plural(total, "active issue", "active issues"));
     }
     var fav = document.getElementById("favicon");
@@ -55,7 +55,7 @@
     var n = KW.unseen || 0;
     document.title = n ? "(" + n + ") " + text.replace(/^\(\d+\) /, "") : text;
   };
-  KW.title = function (text) { KW.setTitle(text + " · kwatch"); };
+  KW.title = function (text) { KW.setTitle(text + " - kwatch"); };
 
   /* ---- live refresh ---- */
   /* poller runs load now and every `every` ms while the tab is visible,
@@ -342,5 +342,12 @@
       "This page updates by itself.";
     node.appendChild(tag);
     node.appendChild(KW.el("span", "", "updated " + ago(lastOk)));
+    // A phone has no other way to read again at once.
+    var again = node.appendChild(KW.el("button", "btn btn-sm upd-refresh", "Refresh"));
+    again.type = "button";
+    again.addEventListener("click", function () {
+      KW.tryNow();
+      KW.announce("Refreshing");
+    });
   };
 })();

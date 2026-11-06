@@ -48,7 +48,7 @@ func browserIssues() []incident.Incident {
 func TestBrowserDashboardPages(t *testing.T) {
 	ctx, srv := browserSetup(t)
 	pages := []string{"/", "/issues", "/issues/inc-001", "/activity",
-		"/kwatch", "/map", "/map?view=failing", "/releases"}
+		"/kwatch", "/map", "/map?view=failing"}
 	for _, size := range browserSizes {
 		tab, problems := browserTab(t, ctx)
 		signInBrowser(t, tab, srv.URL)

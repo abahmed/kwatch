@@ -13,20 +13,19 @@
      New / Changed mark. "When" is how long an active issue has been
      going on, or when a resolved one resolved (issuetable.js). */
   var COLUMNS = [
-    { key: "sev", label: "Severity", sort: "severity", always: true },
     { key: "title", label: "Issue", sort: "title", always: true },
-    { key: "ns", label: "Namespace", sort: "namespace" },
-    { key: "obj", label: "Object", sort: "object" },
+    { key: "sev", label: "Severity", sort: "severity", always: true },
+    { key: "where", label: "Where", sort: "namespace" },
     { key: "status", label: "Status", sort: "status" },
     { key: "last", label: "When (happening now or resolved)", sort: "last" },
     { key: "ack", label: "Acknowledged", short: "Acked", sort: "acked" },
     { key: "started", label: "Start time", sort: "started" },
     { key: "dur", label: "Duration", sort: "duration" }
   ];
-  var SHOWN = ["sev", "title", "ns", "obj", "status", "last", "ack"];
+  var SHOWN = ["title", "sev", "where", "status", "last"];
   /* Column presets of the Columns panel. */
   var PRESETS = [
-    { id: "compact", label: "Compact", cols: ["sev", "title", "ns", "status", "last"] },
+    { id: "compact", label: "Compact", cols: ["title", "sev", "where", "last"] },
     { id: "standard", label: "Standard", cols: SHOWN },
     { id: "all", label: "Everything", cols: COLUMNS.map(function (c) { return c.key; }) }
   ];
@@ -42,20 +41,27 @@
     return COLUMNS.filter(function (c) { return c.key === key; })[0];
   }
 
+  /* A column kept from before Namespace and Object became one. */
+  var MERGED = { ns: "where", obj: "where" };
+  function migrate(keys) {
+    return keys.map(function (k) { return MERGED[k] || k; })
+      .filter(function (k, i, all) { return known(k) && all.indexOf(k) === i; });
+  }
+
   /* order: every column key in the order chosen (new columns at the
-     end). Severity is always first: its color strip marks the row. */
+     end). The issue is always first: its row carries the severity strip. */
   function order() {
     var saved = KW.store.get("order");
-    var keys = Array.isArray(saved) ? saved.filter(known) : [];
+    var keys = Array.isArray(saved) ? migrate(saved) : [];
     COLUMNS.forEach(function (c) { if (keys.indexOf(c.key) < 0) keys.push(c.key); });
-    keys = keys.filter(function (k, i) { return keys.indexOf(k) === i && k !== "sev"; });
-    return ["sev"].concat(keys);
+    keys = keys.filter(function (k, i) { return keys.indexOf(k) === i && k !== "title"; });
+    return ["title"].concat(keys);
   }
 
   /* columns: the visible column keys, in table order. */
   function columns() {
     var saved = KW.store.get("cols");
-    var keys = Array.isArray(saved) ? saved.filter(known) : SHOWN;
+    var keys = Array.isArray(saved) ? migrate(saved) : SHOWN;
     return order().filter(function (k) {
       return column(k).always || keys.indexOf(k) >= 0;
     });
@@ -64,7 +70,7 @@
   /* setColumns shows the keys (in the order kept) and, given one, puts
      the columns in that order. */
   function setColumns(keys, newOrder) {
-    if (newOrder) KW.store.set("order", newOrder.filter(known));
+    if (newOrder) KW.store.set("order", migrate(newOrder));
     KW.store.set("cols", order().filter(function (k) { return keys.indexOf(k) >= 0; }));
   }
 
@@ -92,8 +98,8 @@
 
   /* useView puts a saved view's columns back. */
   function useView(v) {
-    if (Array.isArray(v.order)) KW.store.set("order", v.order);
-    if (Array.isArray(v.cols)) KW.store.set("cols", v.cols);
+    if (Array.isArray(v.order)) KW.store.set("order", migrate(v.order));
+    if (Array.isArray(v.cols)) KW.store.set("cols", migrate(v.cols));
     KW.store.set("widths", v.widths && typeof v.widths === "object" ? v.widths : undefined);
   }
 

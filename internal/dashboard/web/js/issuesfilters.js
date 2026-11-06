@@ -60,7 +60,7 @@
     /* countUsed: how many filters narrow the list, for the button
        that shows the filters under 700px. */
     function countUsed(v) {
-      var c = (v.q ? 1 : 0) + (v.like ? 1 : 0) + (v.age ? 1 : 0) +
+      var c = (v.q ? 1 : 0) + (v.like ? 1 : 0) + (v.release ? 1 : 0) + (v.age ? 1 : 0) +
         (v.since && v.status !== "active" ? 1 : 0);
       LQ().MULTI.forEach(function (k) { c += v[k].length; });
       return c;

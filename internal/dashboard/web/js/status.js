@@ -37,20 +37,21 @@
   /* KW.selfNotices fills box with what about kwatch itself needs acting
      on now; the kwatch page uses it too (onKwatch leaves out the links
      that point at the kwatch page). */
-  KW.selfNotices = function (box, s, failed, onKwatch, readDone) {
+  KW.selfNotices = function (box, s, failed, onKwatch, readDone, hasData) {
     box.textContent = "";
     var self = (s && s.self) || {}, st = self.startup, links = self.dashboardLinks;
     var here = function (text) { return onKwatch ? null : link("/kwatch", text); };
     // readDone: the coverage says the first read of the cluster finished.
-    var started = readDone || !!(st && st.done);
+    // With issues to show there is data: nothing is "starting".
+    var started = readDone || hasData || !!(st && st.done);
     if (st && !started) {
-      var n = notice(box, "", "kwatch is starting", "", null, "status");
+      var n = notice(box, "", "kwatch is loading what it knows", "", null, "status");
       var text = KW.num(st.synced) + " of " + KW.plural(st.kinds, "kind", "kinds") +
         " read · " + KW.plural(st.objects, "object", "objects");
       n.appendChild(KW.viz.meter(st.synced, st.kinds, "Kinds read: " + text));
-      n.appendChild(KW.el("p", "small", text + ". Problems show up once it has read the cluster."));
+      n.appendChild(KW.el("p", "small", text + ". This page updates by itself."));
     } else if (s && !KW.valid(s.lastScan) && !KW.down() && !started) {
-      notice(box, "", "kwatch is starting", "It hasn't finished its first check yet.", null, "status");
+      notice(box, "", "kwatch is loading what it knows", "This page updates by itself.", null, "status");
     } else if (s && s.lastScanLate) {
       notice(box, "n-degraded", "kwatch hasn't checked your cluster in a while",
         "Last check " + KW.rel(s.lastScan) + ".", here("See kwatch status"));
@@ -78,7 +79,7 @@
       text = "Can't reach kwatch · last known at " + KW.hhmm(new Date(lastOk + KW.skew));
     } else if (!total && starting) {
       cls = "wait";
-      text = "kwatch is starting · nothing found yet";
+      text = "kwatch is loading what it knows";
     } else if (!total) {
       cls = "ok";
       text = "All clear · nothing is failing";
@@ -149,16 +150,39 @@
     more.appendChild(link("/issues?status=active", "See all " + KW.plural(total, "issue", "issues") + " →"));
   }
 
-  /* releasesLine: "4 releases in the last 24 hours, 1 went wrong", a
-     link to the Releases page, or nothing when there were none. */
-  function releasesLine(box, res) {
-    var d = res && res.status === 200 && res.data;
+  var WRONG = { failed: "Failed", down: "Down", regressed: "Regressed" };
+
+  /* releasesLine: "4 releases in the last 24 hours, 1 went wrong".
+     "went wrong" links to the issues those releases caused; a release
+     that opened no issue (a regression) is listed under the line.
+     Nothing when there were no releases. */
+  function releasesLine(box, d) {
     box.textContent = "";
     box.hidden = !d || !d.total;
     if (box.hidden) return;
-    var text = KW.plural(d.total, "release", "releases") + " in the last 24 hours" +
-      (d.bad ? ", " + KW.num(d.bad) + " went wrong" : ", all fine so far");
-    box.appendChild(link(d.bad ? "/releases?since=24h&verdict=bad" : "/releases?since=24h", text));
+    var line = box.appendChild(KW.el("span", "", KW.plural(d.total, "release", "releases") +
+      " in the last 24 hours, "));
+    if (!d.bad) {
+      line.appendChild(document.createTextNode("all fine so far"));
+      return;
+    }
+    var ids = d.badIncidents || [];
+    var to = ids.length === 1 && d.bad === 1 ? "/issues/" + encodeURIComponent(ids[0]) :
+      ids.length ? "/issues?status=all&release=bad" : "";
+    var wrong = KW.num(d.bad) + " went wrong";
+    if (to) line.appendChild(link(to, wrong, "ulink"));
+    else line.appendChild(document.createTextNode(wrong));
+    box.appendChild(KW.el("p", "ov-rel-h", "Releases that went wrong"));
+    var ul = box.appendChild(KW.el("ul", "ov-rel-list"));
+    (d.wrong || []).forEach(function (w) {
+      var li = ul.appendChild(KW.el("li"));
+      var name = KW.el("span", "mono", w.name + " · " + w.namespace);
+      if (w.incident) li.appendChild(link("/issues/" + encodeURIComponent(w.incident), "", "ulink")).appendChild(name);
+      else li.appendChild(name);
+      li.appendChild(document.createTextNode(" · " + (WRONG[w.verdict] || w.verdict) + " · rolled out "));
+      li.appendChild(KW.hm(w.at));
+      if (!w.incident) li.appendChild(document.createTextNode(". No issue was opened for it."));
+    });
   }
 
   KW.statusView = function (main) {
@@ -174,9 +198,8 @@
     var lookBox = pg.body.appendChild(KW.el("section", "ov-first"));
     var calm = pg.body.appendChild(KW.el("p", "ov-calm"));
     calm.appendChild(link("/activity", "What changed recently"));
-    // One quiet line about today's releases (releases.js), only when
-    // there were some.
-    var rel = pg.body.appendChild(KW.el("p", "ov-rel"));
+    // One quiet line about today's releases, only when there were some.
+    var rel = pg.body.appendChild(KW.el("div", "ov-rel"));
     rel.hidden = true;
     pg.body.appendChild(weekBox);
     pg.body.hidden = true;
@@ -186,7 +209,7 @@
       var c = data.counts || {};
       var failed = typeof data.failedSendsLastHour === "number" ? data.failedSendsLastHour :
         (status && status.failedLastHour) || 0;
-      KW.selfNotices(notes, status, failed);
+      KW.selfNotices(notes, status, failed, false, false, totalOf(c) > 0);
       tile(tileBox, c, status, pg.updated, pg.lastOk());
       bar(barBox, c);
       look(lookBox, data);
@@ -195,10 +218,9 @@
 
     function read() {
       return Promise.all([KW.api("/api/overview", { etag: etag }), KW.api("/api/status"),
-        kw ? null : KW.api("/api/kwatch"), week.read(),
-        KW.api("/api/releases?since=24h")]).then(function (out) {
+        kw ? null : KW.api("/api/kwatch"), week.read()]).then(function (out) {
         var r = out[0];
-        releasesLine(rel, out[4]);
+        if (r.status === 200 && r.data) releasesLine(rel, r.data.releases);
         if (out[1].status === 200 && out[1].data) status = out[1].data;
         if (out[2] && out[2].status === 200) kw = out[2].data;
         KW.selfDot(status, kw);

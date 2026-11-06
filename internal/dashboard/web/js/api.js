@@ -128,12 +128,12 @@
     if (kind === "starting") p.setAttribute("role", "status");
     var retry = KW.$("[data-retry]", p);
     var texts = {
-      starting: ["kwatch is starting",
-        "It is still loading. This page refreshes by itself.",
-        "Try now"],
+      starting: ["kwatch is loading what it knows",
+        "This page updates by itself.", "Try now"],
       network: ["Can't reach kwatch",
-        "Check your connection. We'll keep trying.", "Try now"],
-      limit: ["Too many tries", "Wait a minute, then try again.", ""],
+        "Check your connection. This page tries again by itself.", "Try now"],
+      limit: ["Too many requests",
+        "Wait a minute. This page tries again by itself.", ""],
       error: ["The dashboard hit an error",
         "Your cluster is not affected. kwatch's own logs say why:",
         "Try again"]

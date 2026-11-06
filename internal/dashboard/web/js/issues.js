@@ -13,7 +13,7 @@
   KW.issuesView = function (main) {
     main.appendChild(KW.clone("tpl-issues"));
     main.classList.add("wide");
-    KW.title("Issues");
+    KW.title("Active issues");
     // A bare /issues opens this browser's default view; a link with a
     // view in it always wins.
     var f = location.search ? LQ.parse(location.search) : KW.prefs.start();
@@ -218,7 +218,8 @@
         KW.updateBadge(data.facets.severity);
       }
       var active = KW.activeTotal || 0;
-      KW.setTitle(active ? "(" + KW.num(active) + ") Issues · kwatch" : "Issues · kwatch");
+      var label = { active: "Active issues", resolved: "Resolved issues" }[f.status] || "All issues";
+      KW.setTitle((active ? "(" + KW.num(active) + ") " : "") + label + " - kwatch");
       sub.textContent = KW.listNotes.subtitle(f, data);
       pager.paint(data, f.page, f.pageSize);
       // A chip removed hands the focus to the one before it, else to

@@ -5,18 +5,17 @@
    same; a double-click fits it to what it shows). Columns nobody sized
    keep a fixed width, so they don't move between views; the title
    takes the room left (at least 14rem). A column hidden at this width
-   (issues.css hides Object under 1100px) takes no room. issuetable.js
+   (issues.css hides Where under 1100px) takes no room. issuetable.js
    builds the headings. */
 (function () {
   "use strict";
   var KW = window.KW;
   var menu = null, opener = null, sized = null;
-  /* Widths, in rem, of the columns nobody dragged; namespace and
-     object take a share of the table (at least LEAST rem). */
-  var BASE = { sev: 9.5, status: 10.5, last: 7, started: 7, dur: 6.5,
+  /* Widths, in rem, of the columns nobody dragged; where takes a share of the table (at least LEAST rem). */
+  var BASE = { sev: 8.5, status: 9.5, last: 6.5, started: 7, dur: 6.5,
     ack: 6.5 };
-  var SHARE = { ns: "12%", obj: "15%" };
-  var LEAST = { ns: 5, obj: 7, title: 14 };
+  var SHARE = { where: "24%" };
+  var LEAST = { where: 18, title: 14 };
   var HEAD_MAX = 120;
 
   function close(refocus) {

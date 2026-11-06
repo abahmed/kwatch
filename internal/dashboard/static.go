@@ -49,7 +49,7 @@ var rootFiles = map[string]string{
 // shellRoutes are the UI's own pages (Overview, Issues, Activity,
 // kwatch); each serves the HTML shell.
 var shellRoutes = []string{"/", "/signin", "/issues", "/activity",
-	"/kwatch", "/map", "/releases"}
+	"/kwatch", "/map"}
 
 // asset is one file ready to serve.
 type asset struct {

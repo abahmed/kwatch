@@ -95,6 +95,9 @@ func (s *Server) incidentsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		req.filter.onNodes = onNodes(model, items, req.filter.nodes)
 	}
+	if req.filter.wrongReleases {
+		req.filter.onWrong = s.wrongReleaseIssues(now)
+	}
 	writeTagged(w, r, buildList(req, items, now, s.texts.redact))
 }
 

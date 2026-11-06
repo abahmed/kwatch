@@ -1,6 +1,6 @@
 /* kwatch dashboard: the Issues table, its status switch, the live
    updates bar and the pager. Tokens come from app.css. Under 1100px
-   wide the Object column hides; under 900px the table becomes stacked
+   wide the Where column hides; under 900px the table becomes stacked
    cards, so the page never scrolls sideways; under 700px the filters
    fold behind one "Filters" button. Over 900px wide the page is one
    screen high: the head and filters stay put and only the table
@@ -19,17 +19,22 @@
 }
 
 /* Status: one pressed choice of three, with counts. */
-.stsw { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; padding: 3px; border: 1px solid var(--line); border-radius: var(--radius-pill); }
-.stsw-b { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 14px; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--text); font-weight: 600; font-size: 0.875rem; }
+.stsw { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; padding: 3px; border: 1px solid var(--line); border-radius: var(--radius-chip); }
+.stsw-b { display: inline-flex; align-items: center; gap: 6px; min-height: calc(var(--ctl) - 6px); padding: 0 14px; border: 0; border-radius: var(--radius-chip); background: transparent; color: var(--text); font-weight: 600; font-size: var(--t-small); }
 .stsw-b:hover { background: var(--surface); }
 .stsw-b[aria-pressed="true"] { background: var(--text); color: var(--bg); }
 .stsw-b[aria-pressed="true"] .fc-n { background: var(--bg); color: var(--text); }
-.filters .f-sort, .f-dir, .ftoggle { display: none; }
+.filters .f-sort, .f-dir { display: none; }
+/* The namespace picker stays in the row; the other pickers open under
+   "More filters" in one panel. */
+.ftoggle { display: inline-flex; align-items: center; margin: 0 0 12px 8px; vertical-align: top; }
+.fmore { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); }
+.content:not(.f-open) .fmore { display: none; }
 
 /* New or changed issues waiting: at the bottom of the screen, so it
    never covers the table's heading. */
-.livebar { position: sticky; bottom: 12px; z-index: 4; width: fit-content; margin-left: auto; margin-right: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 6px 6px 6px 16px; border-radius: var(--radius-pill); background: var(--text); color: var(--bg); font-weight: 600; font-size: 0.875rem; box-shadow: 0 4px 14px rgba(0, 0, 0, .18); }
-.livebar .btn { color: var(--bg); border-color: var(--bg); min-height: 32px; }
+.livebar { position: sticky; bottom: 12px; z-index: 4; width: fit-content; margin-left: auto; margin-right: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 6px 6px 6px 16px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--text); color: var(--bg); font-weight: 600; font-size: var(--t-small); }
+.livebar .btn { color: var(--bg); border-color: var(--bg); }
 .livebar .btn:hover:not(:disabled) { background: var(--bg); color: var(--text); }
 .pagenote { margin-top: 10px; }
 
@@ -40,9 +45,9 @@
 .tablewrap { margin-top: 16px; border: 1px solid var(--line); border-radius: var(--radius-card); overflow: clip; }
 .tablewrap.scrollx { overflow-x: auto; }
 .tablewrap.loading { opacity: .7; }
-.itable { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.875rem; table-layout: fixed; }
+.itable { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--t-small); table-layout: fixed; }
 .itable.stale { opacity: .6; }
-.itable th { text-align: left; font-size: 0.8125rem; font-weight: 600; color: var(--text-muted); background: var(--surface); padding-left: 8px; height: 40px; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.itable th { text-align: left; font-size: var(--t-micro); font-weight: 600; color: var(--text-muted); background: var(--surface); padding-left: 8px; height: 40px; white-space: nowrap; border-bottom: 1px solid var(--line); }
 .it-sort { background: none; border: 0; padding: 0; color: inherit; font: inherit; line-height: 2rem; display: inline-block; white-space: nowrap; }
 .it-sort:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 .itable th[aria-sort] { color: var(--text); }
@@ -54,22 +59,22 @@
 .itable.compact .chip { padding-top: 0; padding-bottom: 0; }
 .itable tbody tr { cursor: pointer; }
 .itable tbody tr:hover td { background: var(--surface); }
-.itable td.c-sev { border-left: 4px solid transparent; padding-left: 8px; }
-.itable th.c-sev { padding-left: 12px; }
-.it-row.sev-page td.c-sev { border-left-color: var(--failing); }
-.it-row.sev-notify td.c-sev { border-left-color: var(--degraded); }
-.it-row.sev-low td.c-sev { border-left-color: var(--control-border); }
-.it-row.sev-resolved td.c-sev { border-left-color: var(--success); }
+.itable td:first-child { border-left: 4px solid transparent; padding-left: 8px; }
+.itable th:first-child { padding-left: 12px; }
+.it-row.sev-page td:first-child { border-left-color: var(--failing); }
+.it-row.sev-notify td:first-child { border-left-color: var(--degraded); }
+.it-row.sev-low td:first-child { border-left-color: var(--control-border); }
+.it-row.sev-resolved td:first-child { border-left-color: var(--success); }
 .it-link { font-weight: 600; color: var(--text); text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; }
 .it-link:hover { text-decoration: underline; }
-.itable td.c-ns .mono, .itable td.c-obj .mono { font-size: 0.8125rem; }
+.itable td.c-where .mono { font-size: var(--t-micro); }
 .itable td.c-started, .itable td.c-last, .itable td.c-dur, .itable td.c-rep { font-variant-numeric: tabular-nums; }
 .itable td.ok { color: var(--success); }
-.itable .chip { font-size: 0.75rem; }
+.itable .chip { font-size: var(--t-micro); }
 .it-row.is-gone td { opacity: .7; text-decoration: line-through; text-decoration-color: var(--text-muted); }
 /* Not only faded: a word says the row has left the list. */
-.it-row.is-gone td.c-title::after { content: "Gone"; margin-left: 8px; font-size: 0.75rem; font-weight: 600; text-decoration: none; display: inline-block; color: var(--text-muted); }
-.it-row.is-updated td.c-title { box-shadow: inset 3px 0 0 var(--signal); }
+.it-row.is-gone td.c-title::after { content: "Gone"; margin-left: 8px; font-size: var(--t-micro); font-weight: 600; text-decoration: none; display: inline-block; color: var(--text-muted); }
+.it-row.is-updated td.c-title { box-shadow: inset 3px 0 0 var(--text); }
 /* The row with the keyboard focus is marked as a whole. */
 .itable tbody tr:focus-within td { background: var(--surface); box-shadow: inset 0 2px 0 var(--text), inset 0 -2px 0 var(--text); }
 .itable tbody tr:focus-within .it-link:focus-visible { outline: none; text-decoration: underline; }
@@ -77,10 +82,10 @@
 .itable td.c-title .it-link { flex: 0 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .itable td.c-title { padding-top: 6px; padding-bottom: 6px; }
 .itable td.c-title .chip, .itable td.c-title .i-rep, .itable td.c-title .m-untold, .i-why { flex: none; }
-.i-stopped { flex: none; margin-left: 6px; font-size: 0.75rem; line-height: 1.4; font-weight: 600; color: var(--text-muted); border: 1px solid var(--control-border); border-radius: var(--radius-chip); padding: 0 6px; white-space: nowrap; }
-.i-why { margin-left: 6px; font-size: 0.75rem; line-height: 1.4; color: var(--text-muted); border: 1px dashed var(--line); border-radius: var(--radius-chip); padding: 0 6px; }
+.i-stopped { flex: none; margin-left: 6px; font-size: var(--t-micro); line-height: 1.4; font-weight: 600; color: var(--text-muted); border: 1px solid var(--control-border); border-radius: var(--radius-chip); padding: 0 6px; white-space: nowrap; }
+.i-why { margin-left: 6px; font-size: var(--t-micro); line-height: 1.4; color: var(--text-muted); border: 1px dashed var(--line); border-radius: var(--radius-chip); padding: 0 6px; }
 @media (max-width: 1100px) and (min-width: 901px) {
-  .itable .c-obj { display: none; }
+  .itable .c-where { display: none; }
   .shell { grid-template-columns: 11.5rem 1fr; }
   .content.wide { padding-left: var(--space-5); padding-right: var(--space-5); }
 }
@@ -91,14 +96,14 @@
 .badreq .btn { border-color: var(--text); }
 
 /* Pager. */
-.pager { margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; font-size: 0.875rem; color: var(--text-muted); }
+.pager { margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; font-size: var(--t-small); color: var(--text-muted); }
 .pager-btns { display: inline-flex; flex-wrap: wrap; gap: 6px; }
-.pager .btn { min-height: 32px; min-width: 32px; padding: 0 10px; white-space: nowrap; }
+.pager .btn { min-width: var(--ctl); padding: 0 10px; white-space: nowrap; }
 .pager .btn[aria-current="page"] { background: var(--text); color: var(--bg); border-color: var(--text); }
 .pager-gap { align-self: center; padding: 0 2px; }
 .pager-range { font-variant-numeric: tabular-nums; }
 .pager-size { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-weight: 400; }
-.pager-size .dd-btn { min-height: 32px; min-width: 72px; }
+.pager-size .dd-btn { min-width: 72px; }
 
 @media (max-width: 900px) {
   .filters .f-sort { display: block; flex: 0 1 auto; }
@@ -112,7 +117,7 @@
   .it-row.sev-notify { border-left-color: var(--degraded); }
   .it-row.sev-resolved { border-left-color: var(--success); }
   .itable td { display: block; height: auto; padding: 0; border: 0; max-width: none; white-space: normal; overflow-wrap: break-word; background: transparent !important; box-shadow: none !important; }
-  .itable td.c-sev { border: 0; }
+  .itable td:first-child { border: 0; }
   .itable td.c-title { grid-column: 1 / -1; width: auto; max-width: none; display: block; }
   .it-link { white-space: normal; display: inline; }
   /* A long title takes two lines at most; the issue page has it all. */
@@ -120,14 +125,15 @@
   /* The whole card is the title's link, so it is one big tap target. */
   .itable tr { position: relative; }
   .it-link::after { content: ""; position: absolute; inset: 0; }
-  .itable td:not(.c-sev):not(.c-title)::before { content: attr(data-label); display: block; color: var(--text-muted); font-size: 0.75rem; }
-  .itable td:empty, .itable td.none, .itable td.c-obj.in-title { display: none; }
-  .itable td.c-obj .mono { overflow-wrap: break-word; word-break: normal; }
+  .itable td:not(.c-sev):not(.c-title)::before { content: attr(data-label); display: block; color: var(--text-muted); font-size: var(--t-micro); }
+  .itable td:empty, .itable td.none { display: none; }
+  .itable td.c-where .mono { overflow-wrap: break-word; word-break: normal; }
   .itable tbody tr:hover td { background: transparent; }
   .itable tbody tr:focus-within { outline: 2px solid var(--text); outline-offset: 1px; }
 }
 @media (max-width: 700px) {
-  .ftoggle { display: inline-flex; align-items: center; margin: 0 0 8px; }
+  .ftoggle { margin: 0 0 8px; }
+  .fmore { padding: 0; border: 0; background: none; }
   .content:not(.f-open) .filters, .content:not(.f-open) .shint,
   .content:not(.f-open) .frow, .content:not(.f-open) .qvbox { display: none; }
   .stsw { display: flex; }
@@ -135,3 +141,15 @@
   .pager { flex-direction: column; align-items: stretch; }
   .pager-btns .btn { flex: 1 0 auto; }
 }
+
+.stsw-help { margin: 0 0 12px; max-width: var(--measure); }
+
+/* Where: the namespace, then the object under it; never cut mid-word. */
+.itable td.c-where .mono { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.itable td.c-where { white-space: nowrap; }
+/* The status switch is explained only where the choice is not obvious. */
+.stsw:has(.stsw-b[data-status="active"][aria-pressed="true"]) ~ .stsw-help { display: none; }
+
+/* Filters: an open state, and the namespace on the search row. */
+.ftoggle[aria-expanded="true"] { background: var(--surface); border-color: var(--text); }
+@media (min-width: 701px) { .filters .fpicks { display: contents; } }

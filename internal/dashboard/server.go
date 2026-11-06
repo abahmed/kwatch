@@ -287,7 +287,6 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("/api/status", s.statusHandler)
 	api.HandleFunc("/api/trends", s.trendsHandler)
 	api.HandleFunc("/api/activity", s.activityHandler)
-	api.HandleFunc("/api/releases", s.releasesHandler)
 	api.HandleFunc("/api/map", s.mapHandler)
 	api.HandleFunc("/api/coverage", s.coverageHandler)
 	api.HandleFunc("/api/insights", s.insightsHandler)

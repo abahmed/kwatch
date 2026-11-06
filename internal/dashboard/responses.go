@@ -93,6 +93,9 @@ type IncidentDetail struct {
 	Timing     *Timing        `json:"timing,omitempty"`
 	SameTime   []SameTimeItem `json:"sameTime,omitempty"`
 	UsageHours []UsageHistory `json:"usageHours,omitempty"`
+	// Release is the release that caused the incident, when one did
+	// (detail_release.go).
+	Release *ReleaseCause `json:"release,omitempty"`
 	// Similar is how many other incidents have the same error
 	// (similar.go): /api/incidents?status=all&like=<id> lists them.
 	Similar int `json:"similar,omitempty"`

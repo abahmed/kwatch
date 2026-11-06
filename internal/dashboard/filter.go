@@ -70,6 +70,10 @@ type filter struct {
 	// incidents, set by the handler from the inventory.
 	nodes   map[string]bool
 	onNodes map[string]bool
+	// wrongReleases is ?release=bad: only issues a release that went
+	// wrong caused. onWrong is their IDs, set by the handler.
+	wrongReleases bool
+	onWrong       map[string]bool
 	// modes are failure families (?mode=, insights_causes.go).
 	modes map[string]bool
 	// stopped narrows to resolved issues kwatch stopped tracking at
@@ -135,6 +139,11 @@ func parseSearch(q url.Values, f *filter) error {
 			"The similar issues link names no issue.")
 	}
 	f.like = q.Get("like")
+	if v := q["release"]; len(v) > 1 || (len(v) == 1 && v[0] != "bad") {
+		return badQuery("release", q.Get("release"),
+			"Unknown release filter: use release=bad.")
+	}
+	f.wrongReleases = q.Get("release") == "bad"
 	return nil
 }
 
@@ -320,6 +329,9 @@ func (f filter) restOK(p incident.Incident, item IncidentListItem) bool {
 		return false
 	}
 	if f.nodes != nil && !f.onNodes[p.ID] {
+		return false
+	}
+	if f.wrongReleases && !f.onWrong[p.ID] {
 		return false
 	}
 	return f.likeOK(p) && f.matchesText(p, item)

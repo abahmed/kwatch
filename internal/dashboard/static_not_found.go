@@ -9,15 +9,16 @@ import (
 // does not have: the shell's stylesheet and brand by their hashed
 // asset links (buildAssets rewrites them), no script and no inline
 // style, so the Content Security Policy holds, and a way back. Its
-// title reads like every other page's: "Not found · kwatch".
+// title reads like every other page's: "Not found - kwatch".
 const notFoundPage = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Not found · kwatch</title>
+<title>Not found - kwatch</title>
 <link rel="icon" type="image/svg+xml" href="{{asset:favicon.svg}}">
+<link rel="stylesheet" href="{{asset:tokens.css}}">
 <link rel="stylesheet" href="{{asset:app.css}}">
 </head>
 <body>

@@ -8,10 +8,10 @@
 /* Tabs. */
 .d-tabbar { margin-top: 22px; border-bottom: 1px solid var(--line); }
 .d-tabs { display: flex; gap: 2px; overflow-x: auto; }
-.d-tab { display: inline-flex; align-items: center; gap: 8px; min-height: var(--hit); padding: 0 14px; background: none; border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px; color: var(--text-muted); font-weight: 600; font-size: 0.9375rem; white-space: nowrap; }
+.d-tab { display: inline-flex; align-items: center; gap: 8px; min-height: var(--hit); padding: 0 14px; background: none; border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px; color: var(--text-muted); font-weight: 600; font-size: var(--t-small); white-space: nowrap; }
 .d-tab:hover { color: var(--text); }
 .d-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--text); }
-.d-badge { min-width: 1.5rem; padding: 0 7px; font-size: 0.75rem; font-weight: 700; line-height: 1.5; text-align: center; border-radius: var(--radius-pill); background: var(--surface); color: var(--text-soft); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.d-badge { min-width: 1.5rem; padding: 0 7px; font-size: var(--t-micro); font-weight: 700; line-height: 1.5; text-align: center; border-radius: var(--radius-chip); background: var(--surface); color: var(--text-soft); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 .d-tabsel { display: none; align-items: center; gap: 10px; margin: 0 0 12px; }
 .d-tabsel select { flex: 1; width: auto; margin: 0; }
 .d-panel { padding-top: 4px; }
@@ -25,7 +25,7 @@
 .d-panel > .d-alert { margin-top: 16px; }
 .bl-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .bl-chips .chip + .chip { margin-left: 0; }
-.step-n { display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); }
+.step-n { display: block; font-size: var(--t-micro); font-weight: 700; color: var(--text-muted); }
 @media (max-width: 700px) {
   .d-tabs { display: none; }
   .d-tabsel { display: flex; }
@@ -33,35 +33,37 @@
 }
 
 /* Summary card notes. */
-.d-caused, .d-blast { font-size: 0.9375rem; overflow-wrap: anywhere; max-width: var(--measure); }
+.d-caused, .d-blast { font-size: var(--t-small); overflow-wrap: anywhere; max-width: var(--measure); }
 .d-caused { padding: 6px 10px; border-radius: var(--radius-input); background: var(--degraded-bg); }
-.d-looked { margin-top: 10px; font-size: 0.875rem; font-weight: 600; color: var(--resolved); cursor: help; }
+.d-looked { margin-top: 10px; font-size: var(--t-small); font-weight: 600; color: var(--resolved); cursor: help; }
 
 /* What's going on with this alert. */
-.d-alert { margin-top: 12px; border: 1px solid var(--line); border-radius: var(--radius-card); padding: 14px 22px 16px; background: var(--bg); display: grid; gap: 8px; }
+/* The summary is the one card of the page; what the tabs hold is flat,
+   set apart by a line. */
+.d-alert { margin-top: 12px; border-top: 1px solid var(--line); padding: 14px 0 16px; display: grid; gap: 8px; }
 .d-alert .d-kicker { margin-bottom: 2px; }
 .al-open p { font-weight: 600; overflow-wrap: anywhere; }
 .al-open[title] { cursor: help; }
-.al-bar { height: 8px; max-width: 420px; margin-top: 6px; border-radius: var(--radius-pill); background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
+.al-bar { height: 8px; max-width: 420px; margin-top: 6px; border-radius: var(--radius-chip); background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
 .al-fill { display: block; width: 0; height: 100%; background: var(--success); transition: width 900ms linear; }
-.al-line { font-size: 0.9375rem; color: var(--text-soft); overflow-wrap: anywhere; max-width: var(--measure); }
+.al-line { font-size: var(--t-small); color: var(--text-soft); overflow-wrap: anywhere; max-width: var(--measure); }
 .al-line b { color: var(--text); }
-.al-timing { font-size: 0.875rem; }
+.al-timing { font-size: var(--t-small); }
 .al-t { cursor: help; white-space: nowrap; }
-.al-t time { font-size: 0.8125rem; color: var(--text); }
-.al-how { margin-top: 4px; font-size: 0.875rem; }
+.al-t time { font-size: var(--t-micro); color: var(--text); }
+.al-how { margin-top: 4px; font-size: var(--t-small); }
 .al-how summary { cursor: pointer; color: var(--text-soft); text-decoration: underline; text-decoration-color: var(--line); min-height: 28px; display: inline-flex; align-items: center; }
 .al-how > p { margin-top: 6px; max-width: var(--measure); }
 .al-how .cmd { margin-top: 6px; }
 @media (prefers-reduced-motion: reduce) { .al-fill { transition: none; } }
 
 /* New since your last visit. */
-.c-new { color: var(--resolved); background: var(--resolved-bg); font-size: 0.75rem; padding: 0 7px; margin-left: 8px; vertical-align: 1px; }
+.c-new { color: var(--resolved); background: var(--resolved-bg); font-size: var(--t-micro); padding: 0 7px; margin-left: 8px; vertical-align: 1px; }
 .tl .ev.is-new .tx-text { font-weight: 600; }
 .cx-row.is-new, .in-warn.is-new { box-shadow: inset 3px 0 0 var(--resolved); padding-left: 10px; }
 
 /* Before and after of a change. */
-.cx-diff { margin-top: 6px; font-size: 0.8125rem; }
+.cx-diff { margin-top: 6px; font-size: var(--t-micro); }
 .cx-diff summary { cursor: pointer; color: var(--text-soft); min-height: 28px; display: inline-flex; align-items: center; }
 .cx-fields { display: grid; grid-template-columns: minmax(0, 14em) minmax(0, 1fr); gap: 4px 12px; margin: 6px 0 0; padding: 8px 10px; border-radius: var(--radius-input); background: var(--surface); }
 .cx-fields dt { overflow-wrap: anywhere; color: var(--text-muted); }
@@ -76,11 +78,11 @@
 .rel-row:first-child { border-top: 0; }
 .rel-row[title] { cursor: help; }
 .rel-body { min-width: 0; overflow-wrap: anywhere; }
-.rel-row .chip { flex: none; font-size: 0.75rem; }
+.rel-row .chip { flex: none; font-size: var(--t-micro); }
 
 /* Containers: at first break, when it got worse, now. */
 .snap-sw { flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
-.snap-sw .tz-b, .snap-sw .tz-b:first-of-type, .snap-sw .tz-b:last-of-type { border-radius: var(--radius-pill); border-left: 1px solid var(--line); min-height: 32px; }
+.snap-sw .tz-b, .snap-sw .tz-b:first-of-type, .snap-sw .tz-b:last-of-type { border-radius: var(--radius-chip); border-left: 1px solid var(--line); }
 .snap-sw .tz-b[aria-pressed="true"] { border-color: var(--text); }
 
 /* States strip: the states transitions add, and alert level marks. */
@@ -111,13 +113,13 @@
 .uc-col.hot { fill: var(--failing); }
 .uc-limit { stroke: var(--failing); stroke-width: 1.5; stroke-dasharray: 5 4; }
 .uc-base { stroke: var(--line); stroke-width: 1; }
-.uc-axis { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); }
+.uc-axis { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; font-variant-numeric: tabular-nums; font-size: var(--t-micro); color: var(--text-muted); }
 .uc-key { display: inline-flex; align-items: center; gap: 6px; }
 .uc-dash { width: 18px; border-top: 2px dashed var(--failing); }
-.uc-sum { margin-top: 6px; font-size: 0.875rem; max-width: var(--measure); }
+.uc-sum { margin-top: 6px; font-size: var(--t-small); max-width: var(--measure); }
 
 @media (max-width: 600px) {
-  .d-alert { padding: 14px 16px; }
+  .d-alert { padding: 14px 0; }
   .cx-fields { grid-template-columns: 1fr; gap: 0 0; }
   .cx-fields dd { margin-bottom: 6px; }
 }
@@ -125,5 +127,5 @@
 /* Alert status: the pager's lines and the "can't see it" note. Issues
    moved into or out of this one. */
 .al-extra { display: grid; gap: 4px; margin-top: 8px; }
-.d-moved { display: grid; gap: 2px; margin-top: 10px; font-size: 0.9375rem; overflow-wrap: anywhere; max-width: var(--measure); }
+.d-moved { display: grid; gap: 2px; margin-top: 10px; font-size: var(--t-small); overflow-wrap: anywhere; max-width: var(--measure); }
 .d-short { margin-top: 16px; }

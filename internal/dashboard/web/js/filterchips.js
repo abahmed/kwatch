@@ -99,6 +99,9 @@
       if (v.like) {
         box.appendChild(chip("Similar to", likeTitle(v.like), function () { return { like: "" }; }));
       }
+      if (v.release) {
+        box.appendChild(chip("Caused by", "a release that went wrong", function () { return { release: "" }; }));
+      }
       LQ().MULTI.forEach(function (key) {
         if (!NAMES[key]) return;
         v[key].forEach(function (x) {

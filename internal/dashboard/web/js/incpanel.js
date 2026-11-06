@@ -138,7 +138,7 @@
     if (inc.severity === "silent") return "Nobody was told: its alert level is Quiet, so kwatch only keeps track of it.";
     if (inc.severity === "digest") return "Nobody was told yet: Low issues wait for the daily summary.";
     if (inc.state === "settling") return "Nobody was told yet: kwatch alerts once it is sure this is real.";
-    return "kwatch has no record of telling anyone about this.";
+    return "Nobody was notified yet.";
   };
 
   /* count: the timeline's events; else the sections a tab shows. */

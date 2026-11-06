@@ -47,7 +47,7 @@
   function hook(tag, cls, name) { var n = KW.el(tag, cls); n.dataset[name] = ""; return n; }
 
   /* ROWS: the summary's lines, label first. */
-  var ROWS = [["what", "What's wrong"], ["why", "Why"], ["proof", "Proof"],
+  var ROWS = [["what", "What's wrong"], ["why", "Why"], ["proof", "Proof"], ["release", "Release"],
     ["next", "What to do"], ["told", "Who was told"]];
 
   /* top builds the summary card from the template's, keeping its
@@ -74,6 +74,7 @@
     ROWS.forEach(function (r) {
       var div = dl.appendChild(KW.el("div", "ds-row ds-r-" + r[0]));
       div.dataset.dsRow = r[0];
+      div.hidden = r[0] === "release";
       div.appendChild(KW.el("dt", "", r[1]));
       div.appendChild(KW.el("dd"));
     });
@@ -185,8 +186,15 @@
       if (CONF[w.confidence]) dd.appendChild(meter(w.confidence));
       return;
     }
+    var viaRelease = KW.releaseWhy ? KW.releaseWhy(inc) : "";
+    if (viaRelease) {
+      dd.appendChild(KW.el("p", "ds-why-t", viaRelease));
+      return;
+    }
     dd.appendChild(KW.el("p", "ds-why-t ds-unknown", inc.state === "resolved" ? "Cause not found." : "Cause not found yet."));
     var more = inc.state === "settling" ? "kwatch is still collecting what failed around it." : "";
+    // Evidence (Pro) lists what the last investigation checked.
+    if (inc.evidence && inc.evidence.length) more = [more, "Open Evidence to see what kwatch checked."].filter(Boolean).join(" ");
     if (KW.checkedText) more = [more, KW.checkedText(inc)].filter(Boolean).join(" ");
     if (more) dd.appendChild(KW.el("p", "ds-sub", more));
   }
@@ -313,6 +321,7 @@
       KW.$("p", banner).textContent = stopped(inc);
     }
     summaryTop(root, inc);
+    KW.releaseRow(root, inc);
     KW.similar(root, inc);
     KW.alertBox(root, inc);
     var copyLink = KW.$("[data-copy-link]", root);

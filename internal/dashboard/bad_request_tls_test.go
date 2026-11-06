@@ -64,7 +64,7 @@ func TestTLSServeAnswersABrokenEscapeWithThePage(t *testing.T) {
 	got := string(body)
 	if !strings.HasPrefix(got, "HTTP/1.1 400 Bad Request\r\n") ||
 		!strings.Contains(got, "text/html") ||
-		!strings.Contains(got, "<title>Not found · kwatch</title>") ||
+		!strings.Contains(got, "<title>Not found - kwatch</title>") ||
 		!strings.Contains(got, "Content-Security-Policy: ") {
 		t.Errorf("reply = %q", got)
 	}

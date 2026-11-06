@@ -4,16 +4,15 @@
 
 /* Issue summary: the one card to read first. */
 .d-sum { border: 1px solid var(--line); border-radius: var(--radius-card); padding: 20px 22px; background: var(--bg); }
-.d-kicker { font-family: var(--font-body); font-weight: 600; font-size: 0.875rem; letter-spacing: 0; color: var(--text-muted); }
 .d-sum .chips { margin-top: 10px; }
-.d-sum h1 { font-size: clamp(1.5rem, 1.5vw + 1.125rem, 2.125rem); margin-top: 10px; overflow-wrap: anywhere; }
-.d-facts { display: flex; flex-wrap: wrap; gap: 6px 28px; margin: 14px 0 0; font-size: 0.9375rem; }
+.d-sum h1 { font-size: var(--t-h1); margin-top: 10px; overflow-wrap: anywhere; }
+.d-facts { display: flex; flex-wrap: wrap; gap: 6px 28px; margin: 14px 0 0; font-size: var(--t-small); }
 .d-facts div { display: flex; gap: 8px; min-width: 0; }
 .d-facts dt { color: var(--text-muted); }
 .d-facts dd { margin: 0; overflow-wrap: anywhere; }
-.d-facts .mono { font-size: 0.875rem; }
+.d-facts .mono { font-size: var(--t-small); }
 .d-first { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
-.d-first h2 { font-family: var(--font-body); font-weight: 700; font-size: 1rem; letter-spacing: 0; margin-bottom: 6px; }
+.d-first h2 { margin-bottom: 6px; }
 .d-first p { max-width: var(--measure); }
 .d-cause { max-width: var(--measure); }
 
@@ -24,11 +23,11 @@
 .fold > summary::-webkit-details-marker { display: none; }
 .fold > summary::before { content: ""; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); flex: none; margin: 0 4px 0 2px; }
 .fold[open] > summary::before { transform: rotate(45deg); }
-.fold > summary:hover { text-decoration: underline; text-underline-offset: 3px; }
+.fold > summary:hover { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
 .fold-body { padding: 4px 0 20px; }
-.fold-h { font-family: var(--font-body); font-weight: 600; font-size: 0.875rem; letter-spacing: 0; color: var(--text-muted); margin-bottom: 4px; width: fit-content; }
+.fold-h { margin-bottom: 4px; width: fit-content; }
 /* One muted line under a section heading; the heading keeps its tooltip too. */
-.fold-cap { color: var(--text-muted); font-size: 0.8125rem; margin: 0 0 6px 21px; }
+.fold-cap { color: var(--text-muted); font-size: var(--t-micro); margin: 0 0 6px 21px; }
 .fold-h + .fold-cap { margin: 0 0 8px; }
 .fold-n { color: var(--text-muted); font-weight: 400; }
 .fold .tl { margin-top: 4px; }
@@ -39,10 +38,10 @@
 .side-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
 .side-top .brand { margin-bottom: 0; }
 .legend { position: relative; }
-.legend > summary { list-style: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1.5px solid var(--control-border); border-radius: 50%; font-weight: 700; font-size: 0.875rem; color: var(--text-muted); cursor: pointer; }
+.legend > summary { list-style: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1.5px solid var(--control-border); border-radius: 50%; font-weight: 700; font-size: var(--t-small); color: var(--text-muted); cursor: pointer; }
 .legend > summary::-webkit-details-marker { display: none; }
-.legend > summary:hover, .legend[open] > summary { color: var(--text); border-color: var(--text); }
-.legend-pop { position: fixed; z-index: 20; top: 70px; left: 16px; width: min(20rem, calc(100vw - 32px)); max-height: calc(100vh - 86px); overflow-y: auto; padding: 14px 16px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-card); box-shadow: 0 6px 24px rgba(0, 0, 0, .15); font-size: 0.875rem; color: var(--text); }
+.legend > summary:hover, .legend[open] > summary { background: var(--surface); border-color: var(--text); }
+.legend-pop { position: fixed; z-index: 20; top: 70px; left: 16px; width: min(20rem, calc(100vw - 32px)); max-height: calc(100vh - 86px); overflow-y: auto; padding: 14px 16px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-card); font-size: var(--t-small); color: var(--text); }
 .legend-h { font-weight: 700; margin-bottom: 8px; }
 .legend ul { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; }
 .legend li { line-height: 1.45; }
@@ -54,26 +53,26 @@
 
 /* Notifications switch in the sidebar. */
 .ntf { display: flex; flex-direction: column; gap: 8px; }
-.ntf-b { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: transparent; color: var(--text); font-size: 0.8125rem; width: fit-content; }
+.ntf-b { display: inline-flex; align-items: center; gap: 8px; min-height: var(--ctl); padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius-chip); background: transparent; color: var(--text); font-size: var(--t-micro); width: fit-content; }
 .ntf-b:hover { border-color: var(--text); }
 .ntf-state { font-weight: 600; color: var(--text-muted); }
 .ntf-b[aria-pressed="true"] { border-color: var(--success); }
 .ntf-b[aria-pressed="true"] .ntf-state { color: var(--success); }
-.ntf-hint { font-size: 0.75rem; color: var(--degraded); max-width: 11.875rem; }
+.ntf-hint { font-size: var(--t-micro); color: var(--degraded); max-width: 11.875rem; }
 .ntf-opts { display: flex; flex-direction: column; gap: 6px; }
-.ntf-opts label { margin: 0; font-size: 0.8125rem; font-weight: 400; color: var(--text-muted); }
-.ntf-opts select { margin-top: 4px; min-height: 34px; padding: 4px 8px; font-size: 0.8125rem; border-color: var(--control-border); }
+.ntf-opts label { margin: 0; font-size: var(--t-micro); font-weight: 400; color: var(--text-muted); }
+.ntf-opts select { margin-top: 4px; min-height: var(--ctl); padding: 4px 8px; font-size: var(--t-micro); border-color: var(--control-border); }
 .ntf-c { display: flex; align-items: center; gap: 8px; min-height: 28px; cursor: pointer; }
 .ntf-c input { display: inline-block; width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; flex: none; accent-color: var(--text); }
-.ntf-mode { margin: 0; font-size: 0.75rem; color: var(--text-muted); max-width: 11.875rem; }
-.ntf-test { width: fit-content; font-size: 0.8125rem; }
+.ntf-mode { margin: 0; font-size: var(--t-micro); color: var(--text-muted); max-width: 11.875rem; }
+.ntf-test { width: fit-content; font-size: var(--t-micro); }
 
 /* Under 700px the sidebar's settings fold behind one button. */
 .who-b { display: none; }
 
 @media (max-width: 700px) {
   .side-top { margin: 0 6px 0 0; flex: 1; }
-  .who-b { display: inline-flex; align-items: center; min-height: 34px; margin-left: auto; }
+  .who-b { display: inline-flex; align-items: center; min-height: var(--ctl); margin-left: auto; }
   .side:not(.who-open) .who { display: none; }
   /* Under its button: the popover hangs from the logo row, not a fixed offset. */
   .side-top { position: relative; }
@@ -88,29 +87,29 @@
 /* Quick views above a list, and what is new since the last visit. */
 .qvbox { margin-top: 18px; }
 .qv-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.qv { min-height: 32px; padding: 0 12px; border-radius: var(--radius-pill); border: 1.5px solid var(--line); background: transparent; color: var(--text); font-size: 0.875rem; font-weight: 500; }
+.qv { min-height: var(--ctl); padding: 0 12px; border-radius: var(--radius-chip); border: 1.5px solid var(--line); background: transparent; color: var(--text); font-size: var(--t-small); font-weight: 500; }
 .qv:hover { border-color: var(--text); background: var(--surface); }
 .qv[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
-.qv-news { margin-top: 8px; font-size: 0.875rem; color: var(--text-muted); }
+.qv-news { margin-top: 8px; font-size: var(--t-small); color: var(--text-muted); }
 .qv-news span { color: var(--text); font-weight: 600; cursor: help; }
 .qvbox + .filterbox { margin-top: 8px; }
-.c-title .c-seen-new, .c-title .c-seen-changed { margin-left: 6px; font-size: 0.6875rem; padding: 0 6px; }
+.c-title .c-seen-new, .c-title .c-seen-changed { margin-left: 6px; font-size: var(--t-micro); padding: 0 6px; }
 .c-seen-new { color: var(--resolved); background: var(--resolved-bg); }
 .c-seen-changed { color: var(--degraded); background: var(--degraded-bg); }
-.also .chip { margin: 0 0 0 6px; font-size: 0.6875rem; padding: 0 6px; }
+.also .chip { margin: 0 0 0 6px; font-size: var(--t-micro); padding: 0 6px; }
 .legend-keys { margin-top: 12px; }
 /* A phone has no keyboard: the keys are left out of the help. */
 @media (max-width: 700px), (pointer: coarse) {
   .legend-h.legend-keys, .legend ul.legend-keys-list { display: none; }
 }
-.legend kbd { display: inline-block; min-width: 22px; padding: 0 6px; margin-right: 4px; border: 1px solid var(--line); border-radius: var(--radius-chip); font-family: var(--font-mono); font-size: 0.75rem; line-height: 1.25rem; text-align: center; color: var(--text); }
+.legend kbd { display: inline-block; min-width: 22px; padding: 0 6px; margin-right: 4px; border: 1px solid var(--line); border-radius: var(--radius-chip); font-family: var(--font-body); font-weight: 600; font-size: var(--t-micro); line-height: 1.25rem; text-align: center; color: var(--text); }
 
 /* Can't reach kwatch: a bar over the top of every page (js/refresh.js),
    pinned in a zero-height box so showing it never moves the page.
    What is shown stays, dimmed a little, with a muted freshness line. */
 .offline-pin { position: sticky; top: 0; z-index: 35; height: 0; }
-.offline { position: absolute; top: 0; left: 0; right: 0; box-shadow: 0 4px 14px rgba(0, 0, 0, .15); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 16px 8px var(--space-6); background: var(--degraded-bg); color: var(--text); border-bottom: 1px solid var(--degraded); font-size: 0.9375rem; font-weight: 500; }
-.offline .btn { min-height: 34px; border-color: var(--text); }
+.offline { position: absolute; top: 0; left: 0; right: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 16px 8px var(--space-6); background: var(--degraded-bg); color: var(--text); border-bottom: 1px solid var(--degraded); font-size: var(--t-small); font-weight: 500; }
+.offline .btn { min-height: var(--ctl); border-color: var(--text); }
 html.kw-stale .updated { opacity: .6; }
 html.kw-stale .live, .updated.stale .live { color: var(--text-muted); }
 html.kw-stale .live::before, .updated.stale .live::before { background: var(--text-muted); animation: none; }

@@ -57,7 +57,9 @@ func (s *Server) detailOf(p incident.Incident) IncidentDetail {
 	if u := s.sources.usage.Load(); u != nil {
 		c.usage = *u
 	}
-	return buildDetail(p, c)
+	d := buildDetail(p, c)
+	d.Release = s.releaseFor(p.ID, p.Opened)
+	return d
 }
 
 // addContext fills the page's context parts of d. Each list is bounded

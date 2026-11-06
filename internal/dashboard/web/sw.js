@@ -12,7 +12,7 @@
    stylesheet name and a hash of the page (static.go versionWorker), so
    any release that changes either changes this worker too: browsers
    install it and it keeps its own copy. */
-var OFFLINE = ["/offline.html", "{{asset:app.css}}", "{{asset:favicon.svg}}"];
+var OFFLINE = ["/offline.html", "{{asset:tokens.css}}", "{{asset:app.css}}", "{{asset:favicon.svg}}"];
 var CACHE = "kwatch-offline-" + OFFLINE[1] + "-{{version:offline.html}}";
 
 /* ICON is the kwatch logo beside each notification (a bitmap: not
