@@ -41,7 +41,8 @@ func cssFiles(t *testing.T) map[string]string {
 // The dashboard's tokens.css is the brand's file. When the brand
 // package is next to this repository (the workspace), the two must be
 // identical; apart from that, no other stylesheet (but look.css, the
-// high-contrast overrides) may declare a brand token, so the dashboard cannot drift from it.
+// high-contrast overrides) may declare a brand token, so the dashboard
+// cannot drift from it.
 func TestTokensAreTheBrandTokens(t *testing.T) {
 	files := cssFiles(t)
 	tokens, ok := files["tokens.css"]

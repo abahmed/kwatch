@@ -9,8 +9,8 @@ import (
 )
 
 // browserReleases is a release book with one release of each kind of
-// row the issue page and Overview draw: healthy, failed with an undo command, and
-// down under GitOps with an undo in Git.
+// row the issue page and Overview draw: healthy, failed with an undo
+// command, and down under GitOps with an undo in Git.
 func browserReleases() *releaseBook {
 	at := time.Now().Add(-time.Hour)
 	after := 12.0
