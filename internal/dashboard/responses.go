@@ -231,6 +231,9 @@ type StatusResponse struct {
 	PerChannelHealth   []ChannelHealth `json:"perChannelHealth"`
 	Self               *SelfStatus     `json:"self,omitempty"`
 	FailedLastHour     *int            `json:"failedLastHour,omitempty"`
+	// Kwatch is what the kwatch page shows: coverage, sends per
+	// channel, the state file and kwatch's own resources.
+	Kwatch *KwatchResponse `json:"kwatch,omitempty"`
 }
 
 // ChannelHealth is one alert channel's delivery health. LastErrorMessage

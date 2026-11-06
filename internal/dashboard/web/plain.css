@@ -52,20 +52,6 @@
 .legend .legend-sub { font-weight: 600; color: var(--text); margin: 8px 0 6px; }
 
 /* Notifications switch in the sidebar. */
-.ntf { display: flex; flex-direction: column; gap: 8px; }
-.ntf-b { display: inline-flex; align-items: center; gap: 8px; min-height: var(--ctl); padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius-chip); background: transparent; color: var(--text); font-size: var(--t-micro); width: fit-content; }
-.ntf-b:hover { border-color: var(--text); }
-.ntf-state { font-weight: 600; color: var(--text-muted); }
-.ntf-b[aria-pressed="true"] { border-color: var(--success); }
-.ntf-b[aria-pressed="true"] .ntf-state { color: var(--success); }
-.ntf-hint { font-size: var(--t-micro); color: var(--degraded); max-width: 11.875rem; }
-.ntf-opts { display: flex; flex-direction: column; gap: 6px; }
-.ntf-opts label { margin: 0; font-size: var(--t-micro); font-weight: 400; color: var(--text-muted); }
-.ntf-opts select { margin-top: 4px; min-height: var(--ctl); padding: 4px 8px; font-size: var(--t-micro); border-color: var(--control-border); }
-.ntf-c { display: flex; align-items: center; gap: 8px; min-height: 28px; cursor: pointer; }
-.ntf-c input { display: inline-block; width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; flex: none; accent-color: var(--text); }
-.ntf-mode { margin: 0; font-size: var(--t-micro); color: var(--text-muted); max-width: 11.875rem; }
-.ntf-test { width: fit-content; font-size: var(--t-micro); }
 
 /* Under 700px the sidebar's settings fold behind one button. */
 .who-b { display: none; }
@@ -78,8 +64,6 @@
   .side-top { position: relative; }
   .side-top .legend { position: static; }
   .legend-pop { position: absolute; top: calc(100% + 8px); left: 0; max-height: calc(100vh - 120px); }
-  .ntf { flex-basis: 100%; }
-  .ntf-hint, .ntf-mode { max-width: none; }
   .d-sum { padding: 16px; }
   .cmd code { white-space: pre-wrap; overflow-wrap: anywhere; }
 }

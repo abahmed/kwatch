@@ -77,8 +77,6 @@
 <script defer src="{{asset:js/ovcoverage.js}}"></script>
 <script defer src="{{asset:js/status.js}}"></script>
 <script defer src="{{asset:js/kwatchpage.js}}"></script>
-<script defer src="{{asset:js/push.js}}"></script>
-<script defer src="{{asset:js/notify.js}}"></script>
 <script defer src="{{asset:js/refresh.js}}"></script>
 <script defer src="{{asset:js/main.js}}"></script>
 <script defer src="{{asset:js/keys.js}}"></script>
@@ -149,17 +147,6 @@
         <a href="/kwatch" data-link data-nav="kwatch">kwatch<span class="nav-dot" data-kw-dot hidden></span><span class="sr-only" data-kw-dot-sr></span></a>
       </nav>
       <div class="who" id="who">
-        <div class="ntf" data-ntf>
-          <button class="ntf-b" type="button" data-ntf-toggle aria-pressed="false" aria-describedby="ntf-hint"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg><span>Notifications</span><span class="ntf-state" data-ntf-state>Off</span></button>
-          <p class="ntf-hint" id="ntf-hint" data-ntf-hint hidden></p>
-          <div class="ntf-opts" data-ntf-opts hidden>
-            <label class="ntf-l">Tell me about<select name="ntf-min" data-ntf-min><option value="page">Urgent only</option><option value="notify">Urgent and needs attention</option><option value="digest">Everything</option></select></label>
-            <label class="ntf-c"><input type="checkbox" name="ntf-resolved" data-ntf-resolved>Also when resolved</label>
-            <label class="ntf-c" data-ntf-open-l><input type="checkbox" name="ntf-open" data-ntf-open>Even when this tab is open</label>
-            <p class="ntf-mode" data-ntf-mode></p>
-            <button class="link ntf-test" type="button" data-ntf-test>Send a test notification</button>
-          </div>
-        </div>
         <div class="tz" role="group" aria-label="Show times in"><span>Times</span><button class="tz-b" type="button" data-tz="local" aria-pressed="true">Local</button><button class="tz-b" type="button" data-tz="utc" aria-pressed="false">UTC</button></div>
         <div><span>Read-only dashboard</span><button class="link" type="button" data-signout>Sign out</button></div>
       </div>

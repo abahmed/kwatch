@@ -2,7 +2,6 @@ package dashboard
 
 import (
 	"cmp"
-	"net/http"
 	"slices"
 	"strings"
 	"time"
@@ -78,10 +77,7 @@ type StateFileStatus struct {
 }
 
 // kwatchHandler serves GET /api/kwatch.
-func (s *Server) kwatchHandler(w http.ResponseWriter, r *http.Request) {
-	if !onlyGet(w, r) {
-		return
-	}
+func (s *Server) kwatchReport() *KwatchResponse {
 	out := KwatchResponse{
 		DeliveryWindowHours: int(kwatchDeliveryWindow / time.Hour),
 		FailedSendsLastHour: s.failedLastHour(),
@@ -113,7 +109,7 @@ func (s *Server) kwatchHandler(w http.ResponseWriter, r *http.Request) {
 	if src := s.sources.status.Load(); src != nil {
 		out.LikelyMisses = (*src)().LikelyMisses
 	}
-	writeTagged(w, r, out)
+	return &out
 }
 
 // coverageTotals is the totals of c.

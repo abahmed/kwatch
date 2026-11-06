@@ -1,9 +1,9 @@
 /* kwatch dashboard: the kwatch page (/kwatch): is kwatch itself
    working, can it see the whole cluster, and do its alerts get out.
-   From /api/kwatch (coverage totals, sends per channel over 24 hours,
-   the state file), /api/status (kwatch's own view of itself, its
-   channels, version) and /api/coverage (the gaps and the rules to
-   copy, ovcoverage.js). */
+   From /api/status (coverage totals, sends per channel over 24 hours,
+   the state file and kwatch's own resources in its kwatch part; kwatch's
+   own view of itself, its channels, version) and /api/coverage (the gaps
+   and the rules to copy, ovcoverage.js). */
 (function () {
   "use strict";
   var KW = window.KW;
@@ -110,7 +110,7 @@
   function pctOf(used, limit) { return " (" + Math.round(used / limit * 100) + "%)"; }
 
   /* resources: kwatch's own memory, CPU and disk against its
-     container's limits (/api/kwatch resources); null when unknown. */
+     container's limits (/api/status resources); null when unknown. */
   function resources(k) {
     var r = k && k.resources;
     if (!r) return null;
@@ -254,7 +254,7 @@
   }
 
   KW.kwatchView = function (main) {
-    var tags = { k: "", c: "" }, k = null, cov = null, s = null, opened = false;
+    var tags = { c: "" }, k = null, cov = null, s = null, opened = false;
     var pg = KW.pageView(main, { title: "kwatch", tab: "kwatch status · kwatch",
       sub: "Is kwatch itself working, can it see your cluster, and do alerts get out.", read: read, conn: draw });
     var notes = pg.body.appendChild(KW.el("div", "ov-notes"));
@@ -296,14 +296,13 @@
     }
 
     function read() {
-      return Promise.all([KW.api("/api/kwatch", { etag: tags.k }), KW.api("/api/status"),
+      return Promise.all([KW.api("/api/status"),
         KW.api("/api/coverage", { etag: tags.c })]).then(function (out) {
-        if (out[0].status === 200 && out[0].data) { tags.k = out[0].etag; k = out[0].data; }
-        if (out[1].status === 200 && out[1].data) s = out[1].data;
-        if (out[2].status === 200 && out[2].data) { tags.c = out[2].etag; cov = out[2].data; }
+        if (out[0].status === 200 && out[0].data) { s = out[0].data; k = s.kwatch || k; }
+        if (out[1].status === 200 && out[1].data) { tags.c = out[1].etag; cov = out[1].data; }
         KW.selfDot(s, k);
         draw();
-        return out[0].status === 200 || out[0].status === 304 ? out[0] : out[1];
+        return out[0];
       });
     }
     return { stop: pg.stop };

@@ -1,5 +1,5 @@
 /* kwatch dashboard: the Overview's "This week" part, below what is
-   wrong now (status.js), from /api/insights and /api/trends. Kept
+   wrong now (status.js), from the insights and trends of /api/overview. Kept
    quiet on purpose: four numbers, the week chart (trends.js), the top
    causes beside where the trouble is (five rows each), and the rest
    (kept coming back, started after a change, nodes) folded under
@@ -64,7 +64,7 @@
   }
 
   /* trouble: the namespaces with active issues, by alert level, with
-     how many issues each opened this week (/api/trends). */
+     how many issues each opened this week (the trends of /api/overview). */
   function trouble(m, week) {
     var tiles = (m && m.tiles) || [];
     if (!tiles.length) return null;
@@ -129,10 +129,9 @@
     return grid.childElementCount;
   }
 
-  /* KW.insightsPart draws the part into box; read() reads and redraws
-     it and returns a promise of the /api/insights answer. */
+  /* KW.insightsPart draws the part into box; set() redraws it from an /api/overview answer. */
   KW.insightsPart = function (box) {
-    var tags = { i: "", t: "" }, ins = null, tr = null, zoneNow = "";
+    var ins = null, tr = null;
     box.setAttribute("aria-labelledby", "ov-week");
     var h = box.appendChild(KW.el("h2", "ov-h2", "This week"));
     h.id = "ov-week";
@@ -164,19 +163,14 @@
       }).join(" · ");
     }
 
-    function read() {
-      var z = V.zone();
-      if (z !== zoneNow) tags = { i: "", t: "" };
-      zoneNow = z;
-      return Promise.all([KW.api("/api/insights?" + z, { etag: tags.i }),
-        KW.api("/api/trends?" + z, { etag: tags.t })]).then(function (out) {
-        var changed = false;
-        if (out[0].status === 200 && out[0].data) { tags.i = out[0].etag; ins = out[0].data; changed = true; }
-        if (out[1].status === 200 && out[1].data) { tags.t = out[1].etag; tr = out[1].data; changed = true; }
-        if (changed) draw();
-        return out[0];
-      });
+    /* set takes the insights and trends parts of an /api/overview
+       answer and redraws. */
+    function set(insights, trends) {
+      if (!insights && !trends) return;
+      if (insights) ins = insights;
+      if (trends) tr = trends;
+      draw();
     }
-    return { read: read };
+    return { set: set };
   };
 })();

@@ -82,7 +82,7 @@
   var seen = { status: null, kw: null };
 
   /* selfIssues: what about kwatch itself needs a look, in plain words,
-     from /api/status and /api/kwatch (either may be missing). */
+     from /api/status and its kwatch part (either may be missing). */
   KW.selfIssues = function (s, k) {
     var out = [], self = (s && s.self) || {};
     var failed = (s && s.failedLastHour) || (k && k.failedSendsLastHour) || 0;
@@ -98,7 +98,7 @@
     return out;
   };
 
-  /* selfDot takes a fresh /api/status or /api/kwatch answer and shows
+  /* selfDot takes a fresh /api/status answer and its kwatch part and shows
      or hides the dot. */
   KW.selfDot = function (status, kw) {
     if (status) seen.status = status;
@@ -115,15 +115,15 @@
     if (a) a.title = words || "kwatch itself: is it working and are alerts getting out";
   };
 
-  /* dotPoll reads both every minute on every page, so the dot stays
+  /* dotPoll reads /api/status every minute on every page, so the dot stays
      right; a page that reads them itself calls KW.selfDot too. */
   var dotPoll = null;
   KW.startDot = function () {
     if (dotPoll) return;
     dotPoll = KW.poller(function () {
-      return Promise.all([KW.api("/api/status"), KW.api("/api/kwatch")]).then(function (out) {
-        KW.selfDot(out[0].status === 200 ? out[0].data : null,
-          out[1].status === 200 ? out[1].data : null);
+      return KW.api("/api/status").then(function (res) {
+        var data = res.status === 200 ? res.data : null;
+        KW.selfDot(data, data && data.kwatch);
       });
     }, 60000, { wants: function () { return false; } });
   };

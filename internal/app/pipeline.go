@@ -33,6 +33,7 @@ func runPipeline(
 		return err
 	}
 	p.gap = gap
+	dropLegacyPush(state)
 	defer p.close()
 	go p.decisions.run()
 	engine, err := p.newEngine()
@@ -65,7 +66,7 @@ func runPipeline(
 		return err
 	}
 	if deps.dashboardServer != nil {
-		runners = append(runners, p.dashboardPush(),
+		runners = append(runners,
 			p.dashboardResources(), p.dashboardReleases())
 	}
 	defer p.publishSources()()

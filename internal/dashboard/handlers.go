@@ -176,6 +176,7 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 		PerChannelHealth:   health,
 		Self:               s.selfStatus(),
 		FailedLastHour:     s.failedLastHour(),
+		Kwatch:             s.kwatchReport(),
 	})
 }
 

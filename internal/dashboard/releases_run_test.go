@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,7 +32,7 @@ func TestReleasesLookSavesTheBook(t *testing.T) {
 					After: name + ":2"}}}})
 	}
 	s.SetModel(m)
-	store := openPushStore(t)
+	store := openStateStore(t)
 	values := storage.StateValues[release.Book](store)
 	b := &releaseBook{}
 	s.lookAtReleases(b, &values,
@@ -42,4 +43,16 @@ func TestReleasesLookSavesTheBook(t *testing.T) {
 	require.Len(t, saved.Records, 1)
 	assert.Equal(t, "api", saved.Records[0].Name)
 	assert.Equal(t, release.Rolling, saved.Records[0].Verdict)
+}
+
+// openStateStore is a claimed state file in a temporary directory.
+func openStateStore(t *testing.T) *storage.Store {
+	t.Helper()
+	s, err := storage.Open(t.TempDir()+"/state.db",
+		storage.Options{Now: func() time.Time { return testEpoch }})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+	_, err = s.Claim()
+	require.NoError(t, err)
+	return s
 }

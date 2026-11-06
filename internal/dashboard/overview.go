@@ -24,6 +24,10 @@ type OverviewResponse struct {
 	// Releases is the last 24 hours of releases; absent until the
 	// release book is read.
 	Releases *ReleaseSummary `json:"releases,omitempty"`
+	// Insights and Trends are the "This week" part of the Overview,
+	// computed for the time zone of the request (tz).
+	Insights *InsightsResponse `json:"insights,omitempty"`
+	Trends   *TrendsResponse   `json:"trends,omitempty"`
 }
 
 // SeverityCounts count issues by severity in the page's words: urgent
@@ -74,11 +78,20 @@ func (s *Server) overviewHandler(w http.ResponseWriter, r *http.Request) {
 		unavailable(w)
 		return
 	}
-	items := (*reader).Incidents()
+	zone, err := parseZone(r.URL.Query())
+	if err != nil {
+		writeBadQuery(w, err)
+		return
+	}
+	all := (*reader).Incidents()
+	items := all
 	if len(items) > maxInsightScan {
 		items = items[:maxInsightScan]
 	}
 	out := buildOverview(items, s.texts.redact)
+	insights := s.insights(items, zone)
+	trends := buildTrends(all, s.now.Now(), zone, incident.DefaultRemember)
+	out.Insights, out.Trends = &insights, &trends
 	out.FailedSendsLastHour = s.failedLastHour()
 	if snap, ok := s.releaseBookSnapshot(); ok {
 		out.Releases = summarizeReleases(snap,

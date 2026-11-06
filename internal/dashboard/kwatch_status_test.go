@@ -17,7 +17,10 @@ import (
 
 func readKwatch(t *testing.T, s *Server) (KwatchResponse, string) {
 	t.Helper()
-	w := get(t, s, "/api/kwatch")
+	if s.sources.status.Load() == nil {
+		s.SetStatus(func() status.Report { return status.Report{} })
+	}
+	w := getPart(t, s, "/api/status", "kwatch")
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	var out KwatchResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &out))
@@ -121,9 +124,9 @@ func TestKwatchStatusNeedsAuthAndGet(t *testing.T) {
 	s := newTestServer()
 
 	assert.Equal(t, http.StatusUnauthorized,
-		call(t, s, http.MethodGet, "/api/kwatch", "").Code)
+		call(t, s, http.MethodGet, "/api/status", "").Code)
 	assert.Equal(t, http.StatusMethodNotAllowed,
-		call(t, s, http.MethodPost, "/api/kwatch", testToken).Code)
+		call(t, s, http.MethodPost, "/api/status", testToken).Code)
 }
 
 // A provider the delivery health names in lower case and the send

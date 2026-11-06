@@ -94,8 +94,6 @@ type sources struct {
 	coverage atomic.Pointer[coverageSource]
 	// usage is the kubelet usage history (detail_usage.go).
 	usage atomic.Pointer[usageSource]
-	// push sends browser notifications (push_run.go).
-	push atomic.Pointer[pusher]
 	// resources is kwatch's own use (kwatch_resources.go).
 	resources atomic.Pointer[resourceSource]
 	// releases is the release book (releases_run.go).
@@ -302,18 +300,11 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("/api/incidents", s.incidentsHandler)
 	api.HandleFunc("/api/incidents/", s.incidentDetailHandler)
 	api.HandleFunc("/api/status", s.statusHandler)
-	api.HandleFunc("/api/trends", s.trendsHandler)
 	api.HandleFunc("/api/activity", s.activityHandler)
 	api.HandleFunc("/api/map", s.mapHandler)
 	api.HandleFunc("/api/coverage", s.coverageHandler)
-	api.HandleFunc("/api/insights", s.insightsHandler)
 	api.HandleFunc("/api/overview", s.overviewHandler)
-	api.HandleFunc("/api/kwatch", s.kwatchHandler)
 	api.HandleFunc("/api/events", s.eventsHandler)
-	api.HandleFunc("/api/push", s.pushHandler)
-	api.HandleFunc("/api/push/status", s.pushStatusHandler)
-	api.HandleFunc("/api/push/remove", s.pushRemoveHandler)
-	api.HandleFunc("/api/push/test", s.pushTestHandler)
 	api.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})

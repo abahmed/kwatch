@@ -103,13 +103,10 @@
     var r = route(location.pathname);
     if (r.name === "detail") {
       KW.visits.opened(r.id);
-      KW.notify.opened(r.id);
     }
     current = r.name;
     if (r.name === "signin") {
       shellEl = null;
-      KW.notify.stop();
-      KW.notify.signedOut();
       KW.appBadge(0);
       KW.stopDot();
       KW.live.stop();
@@ -117,7 +114,7 @@
     }
     var main = shell(r.name === "detail" ? "issues" : r.name);
     // Reads /api/status (every page then knows kwatch's own namespace,
-    // api.js) and /api/kwatch every minute, for the dot on "kwatch".
+    // api.js) every minute, for the dot on "kwatch".
     KW.startDot();
     var views = { issues: KW.issuesView, detail: KW.detailView,
       status: KW.statusView, kwatch: KW.kwatchView,
@@ -146,7 +143,6 @@
       legendStates(shellEl);
       whoMenu(shellEl);
       KW.updateBadge(KW.badge);
-      KW.notify.start(shellEl);
     }
     KW.setNav(current);
     var main = KW.$("#main", shellEl);
@@ -191,10 +187,7 @@
   };
 
   function signOut() {
-    // Pushes stop first: signing out needs the session.
-    KW.notify.signOut().then(function () {
-      return KW.api("/logout", { method: "POST" });
-    }).then(function () {
+    KW.api("/logout", { method: "POST" }).then(function () {
       KW.go("/signin", true);
     });
   }
@@ -274,7 +267,6 @@
   function showHTTPS() {
     stopView();
     shellEl = null;
-    KW.notify.stop();
     KW.stopDot();
     KW.live.stop();
     KW.title("Use https");
@@ -329,6 +321,12 @@
       next.scrollIntoView({ block: "nearest" });
     });
     window.setInterval(KW.tickTimes, 30000);
+    // Earlier releases registered a service worker; this one has none.
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+      navigator.serviceWorker.getRegistrations().then(function (list) {
+        list.forEach(function (r) { r.unregister(); });
+      }, function () { /* no access: nothing to remove */ });
+    }
     KW.api("/api/session").then(function (res) {
       if (res.status === 403 && res.data && res.data.error === "https_required") {
         return showHTTPS();
