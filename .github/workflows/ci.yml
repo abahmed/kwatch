@@ -50,6 +50,10 @@ jobs:
 
     - name: Install Helm
       uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
+      with:
+        # Pinned: "latest" falls back to Helm 3 when the
+        # lookup fails, and the chart tests need Helm 4.
+        version: v4.3.1
 
     # golangci-lint is pinned by GOLANGCI_VERSION in the Makefile and built
     # by `make lint` with this Go toolchain; there is nothing to install.
@@ -227,10 +231,17 @@ jobs:
           chart:
             - 'deploy/**'
             - 'api/**'
+            # A change to this workflow (how Helm is installed, how the
+            # chart is tested) is tested by the chart job too.
+            - '.github/workflows/ci.yml'
 
     - name: Install Helm
       if: steps.changes.outputs.chart == 'true'
       uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
+      with:
+        # Pinned: "latest" falls back to Helm 3 when the
+        # lookup fails, and the chart tests need Helm 4.
+        version: v4.3.1
 
     - name: Create disposable Kubernetes cluster
       if: steps.changes.outputs.chart == 'true'

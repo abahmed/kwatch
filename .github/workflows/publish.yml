@@ -334,6 +334,10 @@ jobs:
 
       - name: Install Helm
         uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
+        with:
+          # Pinned: "latest" falls back to Helm 3 when the
+          # lookup fails, and the chart tests need Helm 4.
+          version: v4.3.1
 
       - name: Validate and package chart
         env:
