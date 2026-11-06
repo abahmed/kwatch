@@ -1,4 +1,4 @@
-/* kwatch dashboard: small charts shared by the Overview, Insights and
+/* kwatch dashboard: small charts shared by the Overview and
    kwatch pages. Every chart carries its numbers as text too and an
    aria-label that says what it shows, so color is never the only
    signal. Bars are plain boxes sized with el.style (CSSOM, allowed by
@@ -155,7 +155,7 @@
     var arc = "M 10 60 A 50 50 0 0 1 110 60";
     s.appendChild(svg("path", { d: arc, pathLength: 100 }, "viz-gtrack"));
     var fill = svg("path", { d: arc, pathLength: 100, "stroke-dasharray": (p * 100) + " 100" },
-      "viz-gfill" + (p >= 0.9 ? " bad" : p >= 0.75 ? " warn" : ""));
+      "viz-gfill" + (p >= 0.9 ? " bad" : p >= 0.8 ? " warn" : ""));
     if (p > 0) s.appendChild(fill);
     var t = svg("text", { x: 60, y: 58, "text-anchor": "middle" }, "viz-gtext");
     t.textContent = Math.round(p * 100) + "%";

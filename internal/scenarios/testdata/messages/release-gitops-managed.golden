@@ -1,0 +1,8 @@
+10:03:05 settled
+🟠 orders in shop (prod-eu-1): the new version (orders:1.1) can't start; the previous version is still serving: it stops at start with "panic: missing key DB_URL". The previous image was registry.example.com/orders:1.0. Only the new revision fails; the previous one stays healthy. Fix in: deployment/orders → container app → image (registry.example.com/orders:1.1). Revert the change in Git (argocd/shop): a rollback in the cluster would be overwritten by the next sync.
+🟠 orders in shop (prod-eu-1): the new version (orders:1.1) can't start; the previous version is still serving: it stops at start with "panic: missing key DB_URL".
+| 🟠 **orders** in **shop** (**prod-eu-1**): the new version (orders:1.1) can't start; the previous version is still serving: it stops at start with `panic: missing key DB_URL`.
+| The previous image was registry.example.com/orders:1.0.
+| Only the new revision fails; the previous one stays healthy.
+| Fix in: deployment/orders → container app → image (registry.example.com/orders:1.1).
+| Revert the change in Git (argocd/shop): a rollback in the cluster would be overwritten by the next sync.

@@ -78,7 +78,9 @@
       if (sized && sized.table.isConnected) size(sized.table, sized.cols);
     }, 150);
   });
-  window.addEventListener("scroll", function () { close(false); }, { passive: true });
+  // Capturing: the table's frame scrolls on its own on wide screens.
+  document.addEventListener("scroll", function () { close(false); },
+    { passive: true, capture: true });
 
   /* contentWidth: how wide the cells of a column want to be: the
      widest content plus the cell's own padding (and the heading's

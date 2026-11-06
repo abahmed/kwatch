@@ -15,10 +15,11 @@ import (
 )
 
 // SchemaVersion is the on-disk format version. Any change to a persisted
-// layout must bump it. There are no migrations: a file
-// with another version is moved aside and replaced by a fresh store (see
-// reset.go); only the queued deliveries and thread ids are copied across
-// (see reset_carry.go).
+// layout must bump it and add the step from the previous version to
+// migrations (migrate.go), which converts an older file in place at
+// Open. A file with no complete chain of steps (or a newer one) is moved
+// aside and replaced by a fresh store (see reset.go); only the queued
+// deliveries and thread ids are copied across (see reset_carry.go).
 const SchemaVersion = 2
 
 // Errors returned by the store.
@@ -142,7 +143,7 @@ func Open(path string, options Options) (*Store, error) {
 	if options.DeferRepair {
 		db, f.absent, err = openForInspection(path)
 	} else {
-		db, err = openChecked(path)
+		db, err = openCheckedFree(path, f.free)
 	}
 	var bad *unusableError
 	if err != nil && !errors.As(err, &bad) {
@@ -213,11 +214,13 @@ func (f *file) openForWriting() error {
 		}
 		f.db = nil
 	}
-	open := openWritable
+	var db *bolt.DB
+	var err error
 	if f.absent {
-		open = openChecked
+		db, err = openChecked(f.path)
+	} else {
+		db, err = openWritable(f.path, f.free)
 	}
-	db, err := open(f.path)
 	var bad *unusableError
 	if err != nil && !errors.As(err, &bad) {
 		return err

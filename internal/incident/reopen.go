@@ -47,7 +47,8 @@ func (m *Manager) reopen(p *Incident, now time.Time) {
 	m.dropResolved(p.ID, p.Root.String())
 	p.History = appendHistory(p.History, occurrenceOf(p))
 	p.Cycles = recent(p.Cycles, now, m.cfg.FlapWindow)
-	if now.Sub(p.Resolved) <= m.cfg.FlapWindow {
+	if now.Sub(p.Resolved) <= m.cfg.FlapWindow &&
+		!m.crashLoopReturn(p, p.Resolved, now) {
 		p.Cycles = append(p.Cycles, now)
 	}
 	p.Occurrences = appendOccurrence(p.Occurrences, now)
@@ -152,7 +153,8 @@ func (m *Manager) incident(
 func (m *Manager) recur(p, previous *Incident, now time.Time) {
 	p.Previous = previous.ID
 	p.Cycles = recent(previous.Cycles, now, m.cfg.FlapWindow)
-	if now.Sub(previous.Resolved) <= m.cfg.FlapWindow {
+	if now.Sub(previous.Resolved) <= m.cfg.FlapWindow &&
+		!m.crashLoopReturn(previous, previous.Resolved, now) {
 		p.Cycles = append(p.Cycles, now)
 	}
 	p.Occurrences = appendOccurrence(previous.Occurrences, now)

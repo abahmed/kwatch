@@ -1,0 +1,9 @@
+{
+  "name": "own-volume-wait-too-long",
+  "description": "kwatch's own new pod waits for its volume after a restart: quiet within the start window, told after it.",
+  "root": "deployment/kwatch/kwatch",
+  "tier": "notify",
+  "bootHeld": true,
+  "maxMessages": 2,
+  "tail": "5m0s"
+}

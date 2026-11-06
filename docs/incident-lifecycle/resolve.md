@@ -23,7 +23,11 @@ incident.
 
 A failure inside the hold returns the incident to `Open` and the manager says
 nothing. There is one exception. Each such failure is a recovery that counts
-in `FlapWindow`. When the count reaches `FlapCycles` (3) the incident becomes
+in `FlapWindow`, unless the workload's containers kept crashing while it
+recovered (in back-off, or a run that ended with an error within the hold):
+that quiet was a gap of the crash loop, as a container without a readiness
+probe looks ready while it runs, so it counts no cycle and never makes the
+incident flap (`crash_gap.go`). When the count reaches `FlapCycles` (3) the incident becomes
 `Flapping` and sends one `flapping` update. After that a flapping incident
 speaks only when the failure grows or a reminder is due, and it resolves
 after `MaxHold` of quiet. It does not run the `revised` step: a resolve (or a

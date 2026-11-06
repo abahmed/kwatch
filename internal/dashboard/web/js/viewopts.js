@@ -50,6 +50,7 @@
         var def = KW.el("label", "vo-def");
         var cb = KW.el("input");
         cb.type = "checkbox";
+        cb.name = "view-default";
         cb.checked = !!v.isDefault;
         cb.addEventListener("change", function () {
           P.setDefault(cb.checked ? v.name : "");
@@ -80,6 +81,7 @@
     function rename(li, v) {
       li.textContent = "";
       var input = KW.el("input", "vo-rename");
+      input.name = "view-rename";
       input.value = v.name;
       input.maxLength = 40;
       input.setAttribute("aria-label", "New name for " + v.name);

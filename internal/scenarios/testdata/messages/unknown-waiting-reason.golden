@@ -8,7 +8,3 @@
 | ```
 | kubectl describe pod ledger-f5f1f477-a -n shop
 | ```
-10:16:15 material change
-🟠 ledger in shop (prod-eu-1) now has pods that run without restarting but are not ready.
-🟠 ledger in shop (prod-eu-1) now has pods that run without restarting but are not ready.
-| 🟠 **ledger** in **shop** (**prod-eu-1**) now has pods that run without restarting but are not ready.

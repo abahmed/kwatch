@@ -65,6 +65,10 @@ type Record struct {
 	// does not re-report a condition the incident already covered. Older
 	// records restore without them and rebuild the set from the members.
 	RootReasons []string `json:",omitempty"`
+	// RestatedReasons are the RootReasons that only restated the
+	// incident when first seen (fingerprint.go restatedOnce). Older
+	// records restore without them: those reasons count, as before.
+	RestatedReasons []string `json:",omitempty"`
 	// AlertKey was added so paging alerts keep their identity across
 	// restarts. An older announced record restores with the key derived
 	// from its root and mode, as a new announcement would get it.
@@ -171,6 +175,12 @@ type Record struct {
 	// without links.
 	MovedInto string   `json:",omitempty"`
 	MovedFrom []string `json:",omitempty"`
+	// ToldCauses (hashes), ToldCause and ToldCauseKnown are the causes
+	// told (cause_told.go). An older record restores without them and
+	// adopts the cause it has as told.
+	ToldCauses     []string `json:",omitempty"`
+	ToldCause      string   `json:",omitempty"`
+	ToldCauseKnown bool     `json:",omitempty"`
 }
 
 // Export returns every incident as a record, for persistence.
@@ -195,8 +205,11 @@ func (m *Manager) Export() []Record {
 			ImpactPeak: p.impactPeak, Revised: p.Pending.revised,
 			Replaced:  p.Pending.replaced,
 			RevisedAt: p.Pending.revisedAt, AlertKey: p.AlertKey,
-			RootReasons: p.rootReasonList(),
-			Paged:       p.Delivery.paged, PagedKnown: true,
+			RootReasons:     p.rootReasonList(),
+			RestatedReasons: p.restatedReasonList(),
+			ToldCauses:      p.causes.told, ToldCause: p.causes.last,
+			ToldCauseKnown: p.causes.known,
+			Paged:          p.Delivery.paged, PagedKnown: true,
 			DigestedAt: p.DigestedAt, RolledUp: p.Delivery.rolledUp,
 			PodPeak: p.Delivery.podPeak, PageHeld: p.Delivery.pageHeld,
 			FlapPaged:  p.Delivery.flapPaged,
@@ -232,6 +245,8 @@ func (m *Manager) Restore(records []Record, graceUntil time.Time) {
 	newest := 0
 	for _, r := range records {
 		p := restored(r)
+		p.causes = causeMemory{told: r.ToldCauses, last: r.ToldCause,
+			known: r.ToldCauseKnown}
 		if p.State != Resolved {
 			// Only restored live incidents wait for their findings;
 			// with none, such as on a cold start, new incidents
@@ -269,9 +284,14 @@ func restoreSets(p *Incident, r Record) {
 	}
 	for _, reason := range r.RootReasons {
 		if p.rootReasons == nil {
-			p.rootReasons = map[string]struct{}{}
+			p.rootReasons = map[string]bool{}
 		}
-		p.rootReasons[reason] = struct{}{}
+		p.rootReasons[reason] = false
+	}
+	for _, reason := range r.RestatedReasons {
+		if _, ok := p.rootReasons[reason]; ok {
+			p.rootReasons[reason] = true
+		}
 	}
 }
 

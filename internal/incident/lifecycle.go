@@ -31,6 +31,9 @@ func (m *Manager) adoptFingerprints(now time.Time) {
 			continue
 		}
 		p.Digest = adoptedFingerprint(p)
+		if !p.causes.known {
+			p.causes.record(p.causePart())
+		}
 		if !graceOver {
 			kept = append(kept, id)
 		}
@@ -91,6 +94,8 @@ func (m *Manager) advance(p *Incident, now time.Time) (Decision, bool) {
 		return m.reopenUpdate(p, now)
 	}
 	m.reassess(p, now)
+	m.easePage(p, now)
+	m.quietOwnStart(p, now)
 	m.escalate(p, now)
 	m.releaseHeldPage(p, now)
 	switch p.State {
@@ -180,7 +185,16 @@ func (m *Manager) recovering(p *Incident, now time.Time) (Decision, bool) {
 		// A restored incident whose findings are coming back: the
 		// failure never stopped, the restart only hid it. A root kind
 		// kwatch cannot observe never proved a recovery either. No cycle.
+		// A crash-loop gap noted on the way is void with the recovery.
 		p.State = Open
+		delete(m.gaps, p.ID)
+		return Decision{}, false
+	}
+	if m.crashGap(p, now) {
+		// The quiet was a crash loop between two crashes (a container
+		// with no readiness probe looks ready while it runs): nothing
+		// recovered, so it is no cycle and never flapping.
+		p.State, p.RecoveringSince = Open, time.Time{}
 		return Decision{}, false
 	}
 	if len(p.Members) > 0 {
@@ -306,6 +320,9 @@ func (m *Manager) decide(p *Incident, action Action, why Reason) Decision {
 	p.Owners, p.Spaces = m.reachOf(p)
 	p.Revision++
 	p.prevDigest, p.updateHeld = p.Digest, false
+	// A message shows the cause as it is now, held or not: record that
+	// one as told, so it is not news again 30 s later (causeMemory).
+	p.causes.record(causeIdentity(p))
 	p.Digest = fingerprint(p)
 	p.Delivery.RecordSent(p.Tier, growthKey(p))
 	p.decided = failingKeys(p)

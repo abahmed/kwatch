@@ -146,6 +146,11 @@
           ],
           "default": "2Gi"
         },
+        "flightRecorderText": {
+          "type": "boolean",
+          "default": true,
+          "description": "Keep scrubbed log, event and condition text in the flight recording (KWATCH_FLIGHT_TEXT)"
+        },
         "storageClass": {
           "type": "string",
           "default": ""

@@ -4,9 +4,11 @@ import (
 	"cmp"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/status"
 )
 
 // kwatchDeliveryWindow is how far back /api/kwatch counts sends.
@@ -21,9 +23,14 @@ type KwatchResponse struct {
 	Delivery            []ChannelDelivery `json:"delivery"`
 	DeliveryWindowHours int               `json:"deliveryWindowHours"`
 	StateFile           *StateFileStatus  `json:"stateFile,omitempty"`
-	Restarts24h         *int              `json:"restarts24h,omitempty"`
-	OutboxPending       *int              `json:"outboxPending,omitempty"`
-	FailedSendsLastHour *int              `json:"failedSendsLastHour,omitempty"`
+	Resources           *ResourcesStatus  `json:"resources,omitempty"`
+	// LikelyMisses are the incidents of the last seven days whose
+	// recovery followed a change to something other than the cause they
+	// named (the cause self-check), newest first; Pro only.
+	LikelyMisses        []status.LikelyMiss `json:"likelyMisses,omitempty"`
+	Restarts24h         *int                `json:"restarts24h,omitempty"`
+	OutboxPending       *int                `json:"outboxPending,omitempty"`
+	FailedSendsLastHour *int                `json:"failedSendsLastHour,omitempty"`
 }
 
 // KwatchCoverage is what kwatch reads, in totals (see /api/coverage
@@ -102,6 +109,10 @@ func (s *Server) kwatchHandler(w http.ResponseWriter, r *http.Request) {
 		trail = *t
 	}
 	out.Delivery = channelDeliveries(health, items, trail, s.now.Now())
+	out.Resources = s.resources(out.StateFile)
+	if src := s.sources.status.Load(); src != nil {
+		out.LikelyMisses = (*src)().LikelyMisses
+	}
 	writeTagged(w, r, out)
 }
 
@@ -124,14 +135,17 @@ func channelDeliveries(
 	health []ChannelHealth, items []incident.Incident,
 	trail deliveryTrailSource, now time.Time,
 ) []ChannelDelivery {
+	// One entry per provider whatever its case: the delivery health
+	// names it "slack" where the send trail says "Slack".
 	byProvider := map[string]*ChannelDelivery{}
 	entry := func(provider string) *ChannelDelivery {
-		c := byProvider[provider]
+		key := strings.ToLower(provider)
+		c := byProvider[key]
 		if c == nil {
 			c = &ChannelDelivery{Provider: provider,
 				Name: channelName(provider),
 				Kind: channelKind(provider, false)}
-			byProvider[provider] = c
+			byProvider[key] = c
 		}
 		return c
 	}

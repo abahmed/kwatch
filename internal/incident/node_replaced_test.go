@@ -32,7 +32,7 @@ func TestNodeReplacedNeedsRealFailure(t *testing.T) {
 	// Findings cleared before the resolve: remembered root reasons count.
 	r, p = goneNodeIncident(t, reasons.NodeDraining)
 	p.Members = nil
-	p.rootReasons = map[string]struct{}{reasons.NodeHeartbeatStale: {}}
+	p.rootReasons = map[string]bool{reasons.NodeHeartbeatStale: false}
 	assert.True(t, nodeReplaced(r.model, p))
 }
 

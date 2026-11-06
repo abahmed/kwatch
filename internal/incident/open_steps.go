@@ -41,6 +41,7 @@ var openSteps = []step{
 	(*Manager).revisedStep,
 	(*Manager).attemptUpdate,
 	(*Manager).ackStep,
+	(*Manager).loweredStep,
 	(*Manager).reminderStep,
 	(*Manager).materialStep,
 }
@@ -60,6 +61,7 @@ func (m *Manager) evidenceStep(p *Incident, now time.Time) (Decision, bool) {
 	}
 	if len(p.Members) == 0 {
 		p.State, p.RecoveringSince = Recovering, m.recoveryStart(p, now)
+		m.noteCrashGap(p, now)
 		return Decision{}, true
 	}
 	return Decision{}, false

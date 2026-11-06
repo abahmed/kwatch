@@ -171,7 +171,13 @@ func quarantine(path, aside string) error {
 // It creates a missing file and the buckets of a new one. It returns an
 // *unusableError when the file should be reset.
 func openChecked(path string) (*bolt.DB, error) {
-	return openVerified(path, false)
+	return openVerified(path, false, nil)
+}
+
+// openCheckedFree is openChecked whose backup before a migration checks
+// the room with free (the store's volume-limit-aware free space).
+func openCheckedFree(path string, free freeSpaceFunc) (*bolt.DB, error) {
+	return openVerified(path, false, free)
 }
 
 // openForInspection opens the existing file at path read-only, for a
@@ -182,13 +188,14 @@ func openForInspection(path string) (db *bolt.DB, absent bool, err error) {
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
 		return nil, true, nil
 	}
-	db, err = openVerified(path, true)
+	db, err = openVerified(path, true, nil)
 	return db, false, err
 }
 
 // openWritable opens path for writing and creates any missing bucket.
-// It is used after openForInspection already checked the pages.
-func openWritable(path string) (*bolt.DB, error) {
+// It is used after openForInspection already checked the pages. free
+// checks the room for the backup before a migration.
+func openWritable(path string, free freeSpaceFunc) (*bolt.DB, error) {
 	db, err := bolt.Open(path, 0o600, &bolt.Options{Timeout: openTimeout})
 	if err != nil {
 		if resettable(err) {
@@ -196,6 +203,7 @@ func openWritable(path string) (*bolt.DB, error) {
 		}
 		return nil, err
 	}
+	backupBeforeMigration(db, path, free)
 	if err := initialise(db); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -203,7 +211,9 @@ func openWritable(path string) (*bolt.DB, error) {
 	return db, nil
 }
 
-func openVerified(path string, readOnly bool) (db *bolt.DB, err error) {
+func openVerified(
+	path string, readOnly bool, free freeSpaceFunc,
+) (db *bolt.DB, err error) {
 	db, err = bolt.Open(path, 0o600, &bolt.Options{
 		Timeout: openTimeout, ReadOnly: readOnly,
 	})
@@ -234,6 +244,7 @@ func openVerified(path string, readOnly bool) (db *bolt.DB, err error) {
 	if readOnly {
 		err = db.View(checkVersion)
 	} else {
+		backupBeforeMigration(db, path, free)
 		err = initialise(db)
 	}
 	if err != nil {
@@ -274,10 +285,14 @@ func resettable(err error) bool {
 }
 
 // initialise creates every bucket in a new file and checks the version
-// of an existing one.
+// of an existing one, migrating an older one that has a complete chain
+// of steps (migrate.go) in the same transaction as the version bump.
 func initialise(db *bolt.DB) error {
 	return db.Update(func(tx *bolt.Tx) error {
 		if err := checkVersion(tx); err != nil {
+			return err
+		}
+		if err := migrateOlder(tx); err != nil {
 			return err
 		}
 		meta, err := tx.CreateBucketIfNotExists(metaBucket)
@@ -307,10 +322,11 @@ func initialise(db *bolt.DB) error {
 var legacyAuditBucket = []byte("audit")
 
 // checkVersion returns an *unusableError when the file has another
-// schema version. A new, empty file has no version yet and passes.
+// schema version that no chain of migrations (migrate.go) brings to
+// SchemaVersion. A new, empty file has no version yet and passes.
 func checkVersion(tx *bolt.Tx) error {
 	version, known := storedVersion(tx)
-	if known && version != SchemaVersion {
+	if _, migratable := migrationChain(version); known && !migratable {
 		return &unusableError{
 			reason: ResetSchemaMismatch, version: version,
 			cause: fmt.Errorf("supported version is %d", SchemaVersion),

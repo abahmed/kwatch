@@ -23,6 +23,7 @@ var probeCheckWords = map[string]string{
 // (from its log: "…")." The line is quoted, never interpreted. It is
 // proof, which a Community message leaves out.
 func probeLogSentences(f caseFacts) []sentence {
+	answered := answeredByProbeLead(f)
 	for _, m := range f.members {
 		line := evidence(m, detection.EvidenceProbeLog)
 		result := evidence(m, detection.EvidenceProbeResult)
@@ -34,9 +35,13 @@ func probeLogSentences(f caseFacts) []sentence {
 		if !f.aboutLead(m.Entity) {
 			subject = "The " + check + " of " + f.memberName(m.Entity)
 		}
+		text := subject + " answers " + result + " (from its log: " +
+			quoted(line) + ")."
+		if answered {
+			text = "From its log: " + quoted(line) + "."
+		}
 		return []sentence{{part: partProof, weight: weightProbeLog,
-			text: subject + " answers " + result + " (from its log: " +
-				quoted(line) + ")."}}
+			text: text}}
 	}
 	return nil
 }

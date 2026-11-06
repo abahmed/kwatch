@@ -1,15 +1,15 @@
-/* kwatch dashboard: the Insights page (/insights): how the week went
-   and where the trouble is, from /api/insights and /api/trends. "This
-   week" as a column chart with a table beside it (trends.js), the top
-   causes, the namespaces with active issues as stacked bars, the nodes
-   with the most issues, and how many active issues started right
-   after a change. Each section says so in plain words when it has
-   nothing to show. */
+/* kwatch dashboard: the Overview's "This week" part, below what is
+   wrong now (status.js), from /api/insights and /api/trends. Kept
+   quiet on purpose: four numbers, the week chart (trends.js), the top
+   causes beside where the trouble is (five rows each), and the rest
+   (kept coming back, started after a change, nodes) folded under
+   "More", each shown only when it has something to say. */
 (function () {
   "use strict";
   var KW = window.KW;
   var V = KW.viz;
   var SEVS = [["urgent", "page", "s-page"], ["attention", "notify", "s-notify"], ["low", "digest", "s-low"]];
+  var TOP = 5;
 
   function link(href, text, cls) {
     var a = KW.el("a", cls || "ulink", text);
@@ -18,70 +18,86 @@
     return a;
   }
 
-  function todayLine(t) {
-    if (!t || !(t.new || t.resolved || t.urgent)) return "Nothing new today.";
-    return "Today: " + KW.num(t.new) + " new, " + KW.num(t.resolved) + " resolved, " +
-      KW.num(t.urgent) + " still urgent.";
+  function seeAll(c, href, text) {
+    c.appendChild(KW.el("p", "pcard-more")).appendChild(link(href, text));
+  }
+
+  /* stats: the week in four numbers. */
+  function stats(ins, tr) {
+    var opened = 0, resolved = 0, paged = 0;
+    (ins.days || []).forEach(function (d) {
+      opened += d.opened || 0; resolved += d.resolved || 0; paged += d.paged || 0;
+    });
+    var vs = "";
+    if (tr && typeof tr.previousWeek === "number") {
+      var diff = opened - tr.previousWeek;
+      vs = !diff ? "same as last week" : KW.num(Math.abs(diff)) + (diff > 0 ? " more" : " fewer") + " than last week";
+    }
+    var r = tr && tr.resolve;
+    var items = [["Opened", KW.num(opened), vs], ["Resolved", KW.num(resolved), ""],
+      ["Paged the on-call person", KW.num(paged), ""],
+      ["Time to resolve", r && r.count ? KW.duration(r.medianSeconds) : "–", r && r.count ? "median" : ""]];
+    var dl = KW.el("dl", "ov-stats");
+    items.forEach(function (it) {
+      var d = dl.appendChild(KW.el("div", "ov-stat"));
+      d.appendChild(KW.el("dt", "", it[0]));
+      d.appendChild(KW.el("dd", "ov-stat-n", it[1]));
+      if (it[2]) d.appendChild(KW.el("dd", "ov-stat-sub", it[2]));
+    });
+    return dl;
   }
 
   function causes(list) {
-    var c = V.card("Top causes this week", "What the issues of the last 7 days failed with.");
-    if (!list || !list.length) {
-      c.appendChild(V.empty("No issues this week, so no causes to show."));
-      return c;
-    }
+    if (!list || !list.length) return null;
+    var c = V.card("Top causes");
     var max = 0;
     list.forEach(function (x) { max = Math.max(max, x.count); });
     var ul = c.appendChild(KW.el("ul", "viz-rows"));
-    list.forEach(function (x) {
+    list.slice(0, TOP).forEach(function (x) {
       ul.appendChild(V.row({ name: x.label, href: "/issues?status=all&mode=" + encodeURIComponent(x.mode),
         value: KW.plural(x.count, "time", "times") + (x.active ? " · " + KW.num(x.active) + " active" : ""), max: max,
         parts: [{ n: x.active, cls: "s-notify", label: "Still active" },
           { n: x.count - x.active, cls: "s-low", label: "Resolved" }] }));
     });
-    c.appendChild(V.legend([{ cls: "s-notify", label: "Still active" }, { cls: "s-low", label: "Resolved" }]));
+    if (list.length > TOP) seeAll(c, "/issues?status=all", "See all issues of the week →");
     return c;
   }
 
-  function namespaces(m) {
-    var c = V.card("Namespaces with active issues", "Most urgent first. Each opens its issues.");
+  /* trouble: the namespaces with active issues, by alert level, with
+     how many issues each opened this week (/api/trends). */
+  function trouble(m, week) {
     var tiles = (m && m.tiles) || [];
-    if (!tiles.length) {
-      c.appendChild(V.empty("No namespace has an active issue."));
-      return c;
-    }
+    if (!tiles.length) return null;
+    var opened = {};
+    (week || []).forEach(function (n) { opened[n.namespace] = n.count; });
+    var c = V.card("Where the trouble is");
     var max = 0;
     tiles.forEach(function (t) { max = Math.max(max, t.count); });
     var ul = c.appendChild(KW.el("ul", "viz-rows"));
-    tiles.forEach(function (t) {
-      var href = "/issues?status=active&namespace=" + encodeURIComponent(t.namespace);
+    tiles.slice(0, TOP).forEach(function (t) {
       var words = SEVS.filter(function (s) { return t[s[0]]; }).map(function (s) {
         return KW.num(t[s[0]]) + " " + KW.SEVERITY[s[1]].label.toLowerCase();
       });
-      ul.appendChild(V.row({ name: t.namespace, href: href, mono: true, max: max,
+      if (opened[t.namespace]) words.push(KW.num(opened[t.namespace]) + " this week");
+      ul.appendChild(V.row({ name: t.namespace, mono: true, max: max,
+        href: "/issues?status=active&namespace=" + encodeURIComponent(t.namespace),
         value: words.join(" · ") || KW.plural(t.count, "issue", "issues"),
         parts: SEVS.map(function (s) {
           return { n: t[s[0]] || 0, cls: s[2], label: KW.SEVERITY[s[1]].label };
         }) }));
     });
-    c.appendChild(V.legend(SEVS.map(function (s) { return { cls: s[2], label: KW.SEVERITY[s[1]].label }; })));
-    if (m.more) {
-      c.appendChild(KW.el("p", "pcard-more")).appendChild(link("/issues?status=active",
-        "+" + KW.plural(m.more, "more namespace", "more namespaces")));
-    }
+    var more = (m.more || 0) + Math.max(0, tiles.length - TOP);
+    if (more) seeAll(c, "/issues?status=active", "+" + KW.plural(more, "more namespace", "more namespaces"));
     return c;
   }
 
   function nodes(list) {
-    var c = V.card("Nodes with the most issues", "Active issues on each node.");
-    if (!list || !list.length) {
-      c.appendChild(V.empty("No node has an active issue."));
-      return c;
-    }
+    if (!list || !list.length) return null;
+    var c = V.card("Nodes with the most issues");
     var max = 0;
     list.forEach(function (n) { max = Math.max(max, n.issues); });
     var ul = c.appendChild(KW.el("ul", "viz-rows"));
-    list.forEach(function (n) {
+    list.slice(0, TOP).forEach(function (n) {
       ul.appendChild(V.row({ name: n.name, mono: true, max: max,
         href: "/issues?status=active&node=" + encodeURIComponent(n.name),
         value: KW.plural(n.issues, "issue", "issues") + (n.urgent ? " · " + KW.num(n.urgent) + " urgent" : ""),
@@ -92,19 +108,12 @@
   }
 
   function afterChange(a) {
-    var c = V.card("Started right after a change", "A deploy or config change shortly before it began.");
-    var total = (a && a.total) || 0, n = (a && a.count) || 0;
-    if (!total) {
-      c.appendChild(V.empty("No active issues right now."));
-      return c;
-    }
+    var n = (a && a.count) || 0, total = (a && a.total) || 0;
+    if (!n || !total) return null;
+    var c = V.card("Started right after a change");
     var line = KW.num(n) + " of " + KW.plural(total, "active issue", "active issues");
     c.appendChild(KW.el("p", "kp-mline", line));
     c.appendChild(V.meter(n, total, line + " started right after a change", "warn"));
-    if (!n) {
-      c.appendChild(V.empty("None of them followed a change."));
-      return c;
-    }
     var ul = c.appendChild(KW.el("ul", "ip-list"));
     (a.issues || []).forEach(function (i) {
       var li = ul.appendChild(KW.el("li"));
@@ -115,22 +124,44 @@
     return c;
   }
 
-  KW.insightsView = function (main) {
+  function add(grid, cards) {
+    cards.forEach(function (c) { if (c) grid.appendChild(c); });
+    return grid.childElementCount;
+  }
+
+  /* KW.insightsPart draws the part into box; read() reads and redraws
+     it and returns a promise of the /api/insights answer. */
+  KW.insightsPart = function (box) {
     var tags = { i: "", t: "" }, ins = null, tr = null, zoneNow = "";
-    var pg = KW.pageView(main, { title: "Insights", read: read,
-      sub: "How the last 7 days went, and where the trouble is." });
-    var lead = pg.body.appendChild(KW.el("p", "ip-today"));
-    var grid = pg.body.appendChild(KW.el("div", "pgrid"));
-    pg.body.hidden = true;
+    box.setAttribute("aria-labelledby", "ov-week");
+    var h = box.appendChild(KW.el("h2", "ov-h2", "This week"));
+    h.id = "ov-week";
+    var nums = box.appendChild(KW.el("div"));
+    var week = box.appendChild(KW.el("div", "pgrid"));
+    var main = box.appendChild(KW.el("div", "pgrid"));
+    var fold = box.appendChild(KW.el("details", "ov-fold"));
+    var sum = fold.appendChild(KW.el("summary"));
+    var rest = fold.appendChild(KW.el("div", "pgrid"));
+    // Hidden until the week is read: a failed read leaves no empty heading.
+    box.hidden = true;
 
     function draw() {
       if (!ins) return;
-      lead.textContent = todayLine(ins.today);
-      grid.textContent = "";
-      grid.appendChild(KW.weekCard(ins.days || [], tr));
-      [causes(ins.causes), namespaces(ins.namespaces), nodes(ins.nodes),
-        afterChange(ins.afterChange)].forEach(function (c) { grid.appendChild(c); });
-      if (tr && tr.enough) KW.trendCards(tr).forEach(function (c) { grid.appendChild(c); });
+      box.hidden = false;
+      nums.textContent = "";
+      nums.appendChild(stats(ins, tr));
+      week.textContent = "";
+      week.appendChild(KW.weekCard(ins.days || [], tr));
+      main.textContent = "";
+      main.hidden = !add(main, [causes(ins.causes), trouble(ins.namespaces, tr && tr.namespaces)]);
+      rest.textContent = "";
+      var cards = [tr && tr.noisiest && tr.noisiest.length ? KW.keptComingBack(tr.noisiest) : null,
+        afterChange(ins.afterChange), nodes(ins.nodes)].filter(Boolean);
+      add(rest, cards);
+      fold.hidden = !cards.length;
+      sum.textContent = "More: " + cards.map(function (c) {
+        return KW.$(".pcard-h", c).textContent.toLowerCase();
+      }).join(" · ");
     }
 
     function read() {
@@ -146,6 +177,6 @@
         return out[0];
       });
     }
-    return { stop: pg.stop };
+    return { read: read };
   };
 })();

@@ -10,6 +10,7 @@
 	coverage coverage-check verify ci verify-focused verify-fast \
 	verify-latency verify-race verify-security verify-manifests \
 	verify-operational verify-scenarios verify-negative-regressions \
+	verify-dashboard-browser \
 	verify-catalogs release-keys-check test-licensetest \
 	docs-verify line-check diff-check mod-tidy-check architecture-check \
 	test-layout-check hygiene-check deadcode-check lint-actions lint-shell \
@@ -237,6 +238,14 @@ verify-scenarios:
 # Fails when a named regression test is renamed or deleted.
 verify-negative-regressions:
 	./scripts/test-negative-regressions.sh
+
+# The dashboard in headless Chrome or Chromium (CHROME_PATH, else one on
+# PATH): every page at a desktop and a phone size, with no console
+# errors or CSP violations, no sideways scroll and basic accessibility
+# checks. Not part of `make ci`, which must not need a browser; CI runs
+# it as its own step. It skips when no browser is found.
+verify-dashboard-browser:
+	$(GOCMD) test -tags browser -run Browser -count=1 ./internal/dashboard/
 
 verify-operational:
 	@for tool in kind kubectl helm docker; do \

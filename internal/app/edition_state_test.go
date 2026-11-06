@@ -115,3 +115,41 @@ func TestEffectiveEntitlementsLeaveTheStateFileAndDirectoryAlone(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, entries, 1, "the temporary copy is removed")
 }
+
+// The first generation starts with the edition the last session ran
+// while its lease holds, so a Pro start builds once; past the grace, a
+// Community leader, no lease or no file at all start as Community and
+// the license session settles the edition as before.
+func TestStartEntitlementsFollowTheLastSession(t *testing.T) {
+	for name, tc := range map[string]struct {
+		edition feature.Edition
+		exp     time.Time
+		want    feature.Edition
+	}{
+		"pro in its lease": {feature.ProEdition,
+			stateNow.Add(24 * time.Hour), feature.ProEdition},
+		"pro past its grace": {feature.ProEdition,
+			stateNow.Add(-90 * 24 * time.Hour), feature.CommunityEdition},
+		"community leader": {feature.CommunityEdition,
+			stateNow.Add(24 * time.Hour), feature.CommunityEdition},
+		"no lease": {feature.ProEdition, time.Time{},
+			feature.CommunityEdition},
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := stateFileWith(t, tc.edition, tc.exp)
+			require.Equal(t, tc.want,
+				StartEntitlements(path, stateNow).Edition())
+			// Opened in place and closed: the file is not left
+			// locked for the generation that claims it.
+			store, err := storage.Open(path, storage.Options{
+				Now: func() time.Time { return stateNow }})
+			require.NoError(t, err)
+			require.NoError(t, store.Close())
+		})
+	}
+	missing := filepath.Join(t.TempDir(), "state.db")
+	require.Equal(t, feature.CommunityEdition,
+		StartEntitlements(missing, stateNow).Edition())
+	_, err := os.Stat(missing)
+	require.True(t, os.IsNotExist(err), "a missing file is not created")
+}

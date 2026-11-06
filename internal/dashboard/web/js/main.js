@@ -18,7 +18,7 @@
      too; this covers Back to an old history entry), or "". */
   function moved(path, search) {
     var p = new URLSearchParams(search);
-    if (path === "/status") return "/";
+    if (path === "/status" || path === "/insights") return "/";
     if (path === "/resolved") {
       p.delete("status");
       var rest = p.toString();
@@ -34,9 +34,10 @@
     if (path === "/signin") return { name: "signin" };
     if (path === "/") return { name: "status" };
     if (path === "/issues") return { name: "issues" };
-    if (path === "/insights") return { name: "insights" };
     if (path === "/kwatch") return { name: "kwatch" };
     if (path === "/activity") return { name: "activity" };
+    if (path === "/map") return { name: "map" };
+    if (path === "/releases") return { name: "releases" };
     var m = /^\/issues\/([^/]+)$/.exec(path);
     if (m) {
       // A malformed escape (%E0) is an ID no issue has: show "not found".
@@ -109,6 +110,7 @@
       shellEl = null;
       KW.notify.stop();
       KW.notify.signedOut();
+      KW.appBadge(0);
       KW.stopDot();
       KW.live.stop();
       return showSignin();
@@ -118,8 +120,9 @@
     // api.js) and /api/kwatch every minute, for the dot on "kwatch".
     KW.startDot();
     var views = { issues: KW.issuesView, detail: KW.detailView,
-      status: KW.statusView, insights: KW.insightsView, kwatch: KW.kwatchView,
-      activity: KW.activityView };
+      status: KW.statusView, kwatch: KW.kwatchView,
+      activity: KW.activityView, map: KW.mapView,
+      releases: KW.releasesView };
     view = views[r.name](main, r);
   }
 
@@ -136,7 +139,7 @@
           KW.setUTC(b.dataset.tz === "utc");
           markTZ();
           // Redraw in the other zone where the reader is, not at the top.
-          KW.pendingScroll = window.scrollY;
+          KW.pendingScroll = KW.scrollTop();
           render();
         });
       });

@@ -45,7 +45,7 @@ func rootSteps(
 	case p.Cause != nil && p.Cause.Change != nil &&
 		incident.IsWorkload(root.Kind):
 		return rolloutSteps(root, p.Cause.RollbackRevision,
-			pullFailure(members))
+			pullFailure(members), p.Cause.Change.App)
 	case root.Kind == kube.KindNode && !nodeRemoved(p):
 		return nodeSteps(root)
 	case root.Kind == kube.KindSecret:
@@ -105,9 +105,12 @@ func nodeRemoved(p incident.Incident) bool {
 // rolloutSteps offers an undo only to a known revision: a bare undo goes
 // to whatever revision is previous at the time it runs. It opens with the
 // rollout state, or with the events of a pod that cannot pull its image
-// (pull is its finding), where the registry's answer is.
+// (pull is its finding), where the registry's answer is. A workload a
+// GitOps controller or Helm deploys (app) is undone there instead
+// (managedUndo).
 func rolloutSteps(
 	workload inventory.EntityID, revision string, pull *detection.Finding,
+	app string,
 ) []notification.Step {
 	ref := quote(string(workload.Kind) + "/" + workload.Name)
 	ns := namespaceFlag(workload.Namespace)
@@ -117,6 +120,9 @@ func rolloutSteps(
 	}
 	if pull != nil {
 		steps = containerSteps(*pull)
+	}
+	if undo, ok := managedUndo(workload, app); ok {
+		return append(steps, undo)
 	}
 	if revision != "" {
 		steps = append(steps, notification.Step{

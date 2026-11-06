@@ -6,8 +6,10 @@
 //
 // Recording is always on and bounded. Each observation is sanitized when
 // it is written (names, namespaces, UIDs, images and label values become
-// salted hash pseudonyms; messages and other free text are dropped; a
-// Secret keeps only numbers, booleans and times), batched, compressed and
+// salted hash pseudonyms; messages and other free text are kept
+// scrubbed with the same pseudonyms, or dropped with KeepText off
+// (replay/sanitize_text.go); a Secret keeps only numbers, booleans and
+// times), batched, compressed and
 // appended to the flight bucket. The bucket is kept for 48 hours and at
 // most 64 MiB; the compactor drops the oldest batches first. Recording
 // never delays the pipeline and never blocks it: a slow store drops the

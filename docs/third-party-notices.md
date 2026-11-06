@@ -64,6 +64,8 @@ listed where a dependency contains a separately licensed fork or subpackage.
 ## MIT
 
 - [github.com/stretchr/testify](https://github.com/stretchr/testify/blob/v1.12.1/LICENSE)
+- [github.com/chromedp/cdproto](https://github.com/chromedp/cdproto/blob/v0.157.8/LICENSE)
+- [github.com/chromedp/chromedp](https://github.com/chromedp/chromedp/blob/v0.21.0/LICENSE)
 - [github.com/emicklei/go-restful/v3](https://github.com/emicklei/go-restful/blob/v3.13.0/LICENSE)
 - [github.com/fxamacker/cbor/v2](https://github.com/fxamacker/cbor/blob/v2.9.3/LICENSE)
 - [github.com/json-iterator/go](https://github.com/json-iterator/go/blob/v1.1.12/LICENSE)

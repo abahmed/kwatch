@@ -65,5 +65,6 @@ func TestCauseOutsideTheChainStaysNews(t *testing.T) {
 		Root: entity(kube.KindNode, "n1")}
 	p.causeChain = r.m.inChain(p)
 	assert.False(t, p.causeChain)
+	// The first cause found is news at once (causeMemory).
 	assert.NotEqual(t, before, fingerprint(p))
 }

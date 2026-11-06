@@ -105,14 +105,7 @@ func newPipelineBuild(
 // correlation the journal links no changes and takes no snapshots.
 func (p *pipelineBuild) incidentConfig() incident.Config {
 	deps := p.deps
-	cfg := incident.Config{
-		Verifiable: func(kind inventory.Kind) bool {
-			return p.source == nil || p.source.Verifiable(kind)
-		},
-		VerifiableObject: func(id inventory.EntityID) bool {
-			return p.source == nil || p.source.VerifiableObject(id)
-		},
-	}
+	cfg := p.baseIncidentConfig()
 	if deps.has(feature.SeverityOverrides) {
 		policy := deps.runtime.Policy()
 		cfg.SeverityByReason = policy.SeverityByReason()

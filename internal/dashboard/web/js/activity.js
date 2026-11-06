@@ -2,8 +2,11 @@
    recently: from /api/activity, the issues that are new, got more
    urgent, came back or were resolved in the last hour (or 24 hours,
    ?since=24h), newest first, at most what the server sends, each a
-   link to its issue page. One line counts them by kind. It reads the
-   feed with its ETag, so an unchanged feed costs a 304. */
+   link to its issue page. One line counts them by kind. Changes nobody
+   was told about (an issue that settled before alerting, and its
+   resolve) are left out unless the reader shows them (?untold=1); a
+   link says how many there are. It reads the feed with its ETag, so
+   an unchanged feed costs a 304. */
 (function () {
   "use strict";
   var KW = window.KW;
@@ -28,7 +31,7 @@
     var what = a.appendChild(KW.el("span", "act-what"));
     what.appendChild(KW.chip(k[1], k[0], k[2]));
     what.appendChild(KW.severityChip(e.severity, e.kind === "resolved" ? "Was: " : ""));
-    if (e.untold && e.kind === "resolved") what.appendChild(KW.untoldMark());
+    if (e.untold) what.appendChild(KW.untoldMark());
     var main = a.appendChild(KW.el("span", "act-main"));
     KW.clampTitle(main.appendChild(KW.el("span", "act-title", e.title)));
     // e.kind is what happened, not the object's kind.
@@ -46,7 +49,9 @@
   }
 
   KW.activityView = function (main) {
-    var since = new URLSearchParams(location.search).get("since") === "24h" ? "24h" : "1h";
+    var query = new URLSearchParams(location.search);
+    var since = query.get("since") === "24h" ? "24h" : "1h";
+    var untold = query.get("untold") === "1";
     var etag = "", seq = 0;
     var pg = KW.pageView(main, { title: "Activity", tab: "Activity · kwatch", read: load,
       sub: "What changed recently: issues that started, got more urgent, came back or were resolved." });
@@ -62,6 +67,10 @@
     var line = pg.body.appendChild(KW.el("p", "act-sum"));
     var list = pg.body.appendChild(KW.el("ul", "act-list"));
     var more = pg.body.appendChild(KW.el("p", "act-more"));
+    var quiet = pg.body.appendChild(KW.el("p", "act-quiet"));
+    var quietB = quiet.appendChild(KW.el("button", "link"));
+    quietB.type = "button";
+    quietB.dataset.actUntold = "";
     pg.body.hidden = true;
 
     function mark() {
@@ -82,11 +91,28 @@
       more.hidden = total <= events.length;
       more.textContent = "Showing the latest " + KW.num(events.length) + " of " +
         KW.num(total) + " changes.";
+      var n = data.untold || 0;
+      quiet.hidden = !n;
+      quietB.textContent = untold ? "Hide changes nobody was told about" :
+        "Show " + KW.plural(n, "change", "changes") + " nobody was told about";
+      quietB.title = "Issues that settled before kwatch alerted anyone, and their resolves.";
+      quietB.setAttribute("aria-pressed", untold ? "true" : "false");
+    }
+
+    /* place keeps the window and the untold choice in the address. */
+    function place() {
+      var q = new URLSearchParams();
+      if (since === "24h") q.set("since", "24h");
+      if (untold) q.set("untold", "1");
+      var s = q.toString();
+      history.replaceState(null, "", "/activity" + (s ? "?" + s : ""));
+      KW.rendered = location.pathname + location.search;
     }
 
     function load() {
       var mine = ++seq;
-      return KW.api("/api/activity?since=" + since, { etag: etag }).then(function (res) {
+      return KW.api("/api/activity?since=" + since + (untold ? "&untold=1" : ""),
+        { etag: etag }).then(function (res) {
         if (mine !== seq) return null;
         if (res.status === 200 && res.data) {
           etag = res.etag;
@@ -101,10 +127,15 @@
         since = b.dataset.actSince;
         etag = "";
         mark();
-        history.replaceState(null, "", "/activity" + (since === "24h" ? "?since=24h" : ""));
-        KW.rendered = location.pathname + location.search;
+        place();
         pg.now();
       });
+    });
+    quietB.addEventListener("click", function () {
+      untold = !untold;
+      etag = "";
+      place();
+      pg.now();
     });
     mark();
     return { stop: pg.stop };

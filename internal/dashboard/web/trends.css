@@ -1,7 +1,6 @@
-/* kwatch dashboard: the Insights page (js/ovinsights.js, js/trends.js):
-   the lead line, the week chart's table and the trend cards. The cards
-   and charts themselves are in overview.css. */
-.ip-today { margin-top: 12px; font-size: 1.0625rem; }
+/* kwatch dashboard: the Overview's "This week" (js/ovinsights.js,
+   js/trends.js): the week chart's table and the lists in its cards.
+   The cards and charts themselves are in overview.css. */
 .ip-chart { margin-top: 4px; }
 .ip-table { margin-top: 12px; font-size: 0.875rem; }
 .ip-table > summary { cursor: pointer; width: fit-content; color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; min-height: 28px; }
@@ -19,10 +18,6 @@
 .tr-list li { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .tr-link { font-weight: 600; overflow-wrap: break-word; width: fit-content; max-width: 100%; }
 .tr-meta { font-size: 0.875rem; color: var(--text-muted); overflow-wrap: anywhere; }
-.tr-sum { margin: 0 0 12px; }
-.tr-facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; font-size: 1rem; }
-.tr-facts dt { color: var(--text-muted); }
-.tr-facts dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 @media (pointer: coarse) {
   .ip-link, .ip-table > summary { display: inline-flex; align-items: center; min-height: 44px; }
 }

@@ -51,6 +51,19 @@ type CrashLogConfig struct {
 type crashRun struct {
 	restarts int
 	finished time.Time
+	// short is a run that stopped within shortRun of its start.
+	short bool
+}
+
+// shortRun is how long a run may last and still count as stopping at
+// start: long enough for a slow start a liveness probe gives up on.
+const shortRun = 5 * time.Minute
+
+// StartLogReader also reads a short run's start (LogReader does).
+type StartLogReader interface {
+	PreviousLinesFromStart(
+		ctx context.Context, container inventory.EntityID,
+	) ([]string, error)
 }
 
 // CrashLogRound reads, for crashed containers, the first error line of
@@ -156,7 +169,7 @@ func (r *CrashLogRound) crashPass(
 			break
 		}
 		pass.reads++
-		lines, err := r.cfg.Logs.PreviousLines(ctx, id)
+		lines, err := r.previous(ctx, id, run)
 		if err != nil {
 			if r.refused(err, containers, pass) {
 				break
@@ -172,6 +185,17 @@ func (r *CrashLogRound) crashPass(
 	}
 	r.start = next
 	return observations
+}
+
+// previous reads a run's log: from its start too when the run was short
+// and the reader can (StartLogReader), else its tail only.
+func (r *CrashLogRound) previous(
+	ctx context.Context, id inventory.EntityID, run crashRun,
+) ([]string, error) {
+	if s, ok := r.cfg.Logs.(StartLogReader); ok && run.short {
+		return s.PreviousLinesFromStart(ctx, id)
+	}
+	return r.cfg.Logs.PreviousLines(ctx, id)
 }
 
 // refused notes a failed read and reports a refusal, which holds every
@@ -238,8 +262,11 @@ func (r *CrashLogRound) crashedRun(id inventory.EntityID) (crashRun, bool) {
 		return crashRun{}, false
 	}
 	finished, _ := e.Attribute(AttrLastFinished)
-	return crashRun{restarts: int(count),
-		finished: finished.Value.AsTime()}, true
+	started, _ := e.Attribute(AttrLastStarted)
+	end, begin := finished.Value.AsTime(), started.Value.AsTime()
+	return crashRun{restarts: int(count), finished: end,
+		short: !begin.IsZero() && !end.Before(begin) &&
+			end.Sub(begin) < shortRun}, true
 }
 
 // CrashLogObservation is what the round records for a container whose

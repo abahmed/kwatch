@@ -131,6 +131,25 @@ another that closed), and then nobody would be told.
   digest. The audit entry words the first `MaxAuditItems` (100) incidents of
   a digest and ends with "and N more: id, id, ..." naming the others by ID
   (up to `MaxHiddenIDs`).
+- **Introducing listed incidents.** A roll-up or a namespace outage only
+  names its members: it says they fail, not why. Each member whose
+  investigation is in within `outputWait` gets one first message of its
+  own, threaded under the listing and written as an announcement, with the
+  cause, the evidence and the confirmation the checks give
+  (`incident.ReasonIntroduced`, `pipeline/introduce.go`). It goes to chat
+  only, never to the pagers (so it opens no alert a later resolve would
+  close), never twice, and not for a member that already spoke on its
+  own. A member a namespace outage still holds waits for that listing to
+  go out, within the same bound. Without it, a failure that just goes on (a crash
+  loop) never changes enough to send an update, and its cause would stay
+  untold. A member without an investigation, or whose investigation is not
+  in time, is not introduced.
+- **Confirmation follows the cause.** An investigation starts when the
+  incident opens, often before its cause is known, and confirmation needs a
+  cause or a failing root. A message whose stored investigation confirmed
+  nothing concludes again over the same reads for the incident as it is
+  then (`RootInvestigator.Recorrelate`), so a cause found later is
+  confirmed by what was read: an OOM-killed run, say.
 - **Listings and resolves.** A roll-up or summary counts a member as having
   said it resolved only when that resolve reached chat. A resolve sent to
   the pagers alone, or to nobody (`unannounced`), leaves the roll-up to close

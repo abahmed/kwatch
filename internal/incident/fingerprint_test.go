@@ -58,6 +58,7 @@ func TestManagerFingerprintUpdatesWhenCauseChanges(t *testing.T) {
 	network.Health = detection.Failing
 	r.sigs[node] = []detection.Finding{network}
 	r.apply(at(2*time.Minute), detection.Changed, pod)
+	// The first cause found after none is news at once (causeMemory).
 	wantAction(t, r.tick(at(3*time.Minute)), Update, "material change")
 }
 

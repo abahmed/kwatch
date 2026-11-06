@@ -11,6 +11,7 @@ import (
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 func scaledToZero(evidence ...detection.Evidence) incident.Incident {
@@ -48,4 +49,24 @@ func TestWriteScaledToZeroWithoutHistoryAddsNoWho(t *testing.T) {
 
 	assert.NotContains(t, msg.Note, "It was scaled to 0 by")
 	assert.NotContains(t, msg.Note, "It was scaled to 0 at")
+}
+
+// A workload scaled to zero is not failing, and the release that came
+// before the scale-down is not blamed for it: the lead states the
+// scale-down, as it does without a change.
+func TestWriteScaledToZeroBlamesNoRelease(t *testing.T) {
+	p := scaledToZero()
+	release := inventory.Change{Entity: p.Root, At: writerNow.Add(-2 *
+		time.Hour), Fields: []inventory.FieldChange{{
+		Path:  "spec.template.spec.containers[0].image",
+		After: "registry.example/api:2.3"}}}
+	p.Cause = &rootcause.CauseRecord{Rule: "rollout", Root: p.Root,
+		Mode: "Changed.Spec", Change: &release}
+
+	msg := Writer{}.Write(announce(p), writerNow)
+
+	assert.Contains(t, msg.Note, "api in shop is scaled to 0 "+
+		"but Ingress shop/web still routes traffic to it via Service api.")
+	assert.NotContains(t, msg.Note, "release of")
+	assert.NotContains(t, msg.Note, "is failing")
 }

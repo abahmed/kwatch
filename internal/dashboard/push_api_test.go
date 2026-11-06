@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -162,6 +163,17 @@ func TestServiceWorkerIsServedAtTheRoot(t *testing.T) {
 		!strings.Contains(w.Body.String(), "requireInteraction: true") {
 		t.Errorf("/sw.js: %d %v", w.Code, w.Header())
 	}
+	// The notification icon is named by its hashed address, which
+	// serves a PNG.
+	icon := regexp.MustCompile(`/assets/icon-192\.[0-9a-f]{12}\.png`).
+		FindString(w.Body.String())
+	if icon == "" || strings.Contains(w.Body.String(), "{{asset:") {
+		t.Fatalf("/sw.js names no hashed icon")
+	}
+	if iw := call(t, s, http.MethodGet, icon, ""); iw.Code != 200 ||
+		iw.Header().Get("Content-Type") != "image/png" {
+		t.Errorf("%s: %d %v", icon, iw.Code, iw.Header())
+	}
 }
 
 // A browser that renews its subscription (pushsubscriptionchange)
@@ -190,5 +202,55 @@ func TestPushAPIRenewalKeepsTheSettings(t *testing.T) {
 	if w := pushCall(t, s, http.MethodPost, "/api/push", string(b),
 		nil); w.Code != 400 {
 		t.Errorf("renewing an unknown browser without settings: %d", w.Code)
+	}
+}
+
+// The app manifest is served at the root, its icons by their hashed
+// address, so the dashboard can be installed as an app.
+func TestAppManifestIsServedAtTheRoot(t *testing.T) {
+	s := newTestServer()
+	w := call(t, s, http.MethodGet, "/manifest.webmanifest", "")
+	if w.Code != 200 || w.Header().Get("Content-Type") !=
+		"application/manifest+json" ||
+		w.Header().Get("Cache-Control") != "no-cache" {
+		t.Fatalf("manifest: %d %v", w.Code, w.Header())
+	}
+	var m struct {
+		Name     string
+		StartURL string `json:"start_url"`
+		Display  string
+		Icons    []struct{ Src, Sizes string }
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.Name != "kwatch" || m.StartURL != "/" ||
+		m.Display != "standalone" || len(m.Icons) != 2 {
+		t.Fatalf("manifest: %+v", m)
+	}
+	for _, i := range m.Icons {
+		iw := call(t, s, http.MethodGet, i.Src, "")
+		if iw.Code != 200 || iw.Header().Get("Content-Type") != "image/png" {
+			t.Errorf("icon %s (%s): %d", i.Src, i.Sizes, iw.Code)
+		}
+	}
+}
+
+// The page the service worker shows when kwatch can't be reached is
+// served at the root, its stylesheet by its hashed address, and the
+// worker keeps a copy of exactly those.
+func TestOfflinePageIsServedAndCopiedByTheWorker(t *testing.T) {
+	s := newTestServer()
+	w := call(t, s, http.MethodGet, "/offline.html", "")
+	css := regexp.MustCompile(`/assets/app\.[0-9a-f]{12}\.css`).
+		FindString(w.Body.String())
+	if w.Code != 200 || css == "" ||
+		w.Header().Get("Cache-Control") != "no-cache" ||
+		w.Header().Get("Content-Security-Policy") == "" {
+		t.Fatalf("offline page: %d %v", w.Code, w.Header())
+	}
+	sw := call(t, s, http.MethodGet, "/sw.js", "").Body.String()
+	if !strings.Contains(sw, `"/offline.html", "`+css+`"`) {
+		t.Error("the worker doesn't copy the offline page's files")
 	}
 }

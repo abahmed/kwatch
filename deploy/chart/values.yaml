@@ -170,6 +170,12 @@ persistence:
   # offline renders (kubectl get csinodes shows each driver's topologyKeys).
   # A node carries it only once the driver is registered there.
   storageDriverTopologyKey: ""
+  # -- Keep scrubbed text (log error lines, event and condition messages)
+  # in the flight recording that `kwatch replay-export` exports, so a
+  # replay sees the evidence a cause was read from. Names, hosts, emails,
+  # images and credentials inside the text are hidden. false drops all
+  # free text, as before. Sets KWATCH_FLIGHT_TEXT.
+  flightRecorderText: true
 
 nodeSelector: {}
 

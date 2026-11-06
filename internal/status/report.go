@@ -31,6 +31,10 @@ type Report struct {
 	// CauseChecks says, per propagation rule, how often recovery
 	// followed a change to the named cause. It is display only.
 	CauseChecks []CauseCheck `json:"causeChecks,omitempty"`
+	// LikelyMisses are the incidents of the last seven days whose
+	// recovery followed a change to something other than the cause they
+	// named, newest first, at most 50. They are for review only.
+	LikelyMisses []LikelyMiss `json:"likelyMisses,omitempty"`
 	// Unexplained counts, over the last seven days, what kwatch saw but
 	// could not explain. It is display only.
 	Unexplained Unexplained `json:"unexplained"`
@@ -89,6 +93,22 @@ type CauseCheck struct {
 	// Text is "cause confirmed by the fix in N of M resolved incidents
 	// (last 7 days)".
 	Text string `json:"text"`
+}
+
+// LikelyMiss is one incident whose recovery followed a change to
+// something other than the cause it named: that cause was likely wrong.
+// ExportSince and ExportUntil bound the window to export it with
+// `kwatch replay-export` (the recording holds 48 hours).
+type LikelyMiss struct {
+	ID          string    `json:"id"`
+	Rule        string    `json:"rule"`
+	Root        string    `json:"root"`
+	Other       string    `json:"other,omitempty"`
+	Change      string    `json:"change,omitempty"`
+	Opened      time.Time `json:"opened"`
+	Resolved    time.Time `json:"resolved"`
+	ExportSince time.Time `json:"exportSince"`
+	ExportUntil time.Time `json:"exportUntil"`
 }
 
 // Problems are the open incidents, the worst first.

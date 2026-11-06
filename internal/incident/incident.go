@@ -70,6 +70,9 @@ type Incident struct {
 	// same root failing again.
 	Previous string
 	Cause    *rootcause.CauseRecord
+	// PreviousServes: the previous version serves while the new
+	// rollout fails (serving_ease.go). Recomputed, never stored.
+	PreviousServes bool
 	// CauseUnclear is set when no cause reached the confidence floor
 	// although something outside the root's own workload was considered
 	// and dropped: the failure could have an upstream cause kwatch could
@@ -278,13 +281,15 @@ type Incident struct {
 	// rootReasons are the root's own finding reasons ever seen in this
 	// incident. The fingerprint reads them, so a crash loop whose pods
 	// come up and fall over again, toggling the workload's own
-	// conditions, is not a stream of "material changes".
-	rootReasons map[string]struct{}
+	// conditions, is not a stream of "material changes" (restatedOnce).
+	rootReasons map[string]bool
 	// causeFindings are the "entity=reason" pairs of the cause's root
 	// findings ever seen. The fingerprint reads them, so a finding that
 	// ages out of the cause is not a "material change". Not persisted:
 	// a restored incident adopts its fingerprint.
 	causeFindings map[string]struct{}
+	// causes keeps a flip-flopping cause from being news (cause_told.go).
+	causes causeMemory
 	// impactPeak is the largest impact size seen. The fingerprint reads it,
 	// so impact that shrinks while failures churn is not news.
 	impactPeak int

@@ -37,6 +37,18 @@ func newPushSnapshot(items []IncidentListItem) pushSnapshot {
 	return out
 }
 
+// urgent counts the issues that are urgent and not resolved: the
+// number on the installed app's icon.
+func (s pushSnapshot) urgent() int {
+	n := 0
+	for _, it := range s {
+		if it.severity == "page" && !it.resolved {
+			n++
+		}
+	}
+	return n
+}
+
 // pushWhere is the issue's place, as the dashboard writes it:
 // "payments · deployment/api", or "whole cluster".
 func pushWhere(it IncidentListItem) string {
@@ -160,6 +172,9 @@ type pushMessage struct {
 	Body  string `json:"body"`
 	Tag   string `json:"tag"`
 	URL   string `json:"url"`
+	// Badge is the urgent issues now, for the installed app's icon;
+	// absent on a test.
+	Badge *int `json:"badge,omitempty"`
 }
 
 // maxPushText bounds a title or body in runes, so every message fits

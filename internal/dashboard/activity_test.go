@@ -45,13 +45,13 @@ func TestActivityDerivesNewUrgentReopenedAndResolved(t *testing.T) {
 	quiet.Tier = incident.Silent
 	items := []incident.Incident{fresh, paged, back, done, moved, quiet}
 
-	hour := buildActivity(items, testEpoch, time.Hour, redact.Evidence)
+	hour := buildActivity(items, testEpoch, time.Hour, redact.Evidence, true)
 	want := "d:resolved@1m0s p:urgent@5m0s f:new@10m0s " +
 		"b:reopened@20m0s b:resolved@30m0s"
 	if got := activityLine(hour); got != want || hour.Total != 5 {
 		t.Errorf("1h = %q (%d), want %q", got, hour.Total, want)
 	}
-	day := buildActivity(items, testEpoch, 24*time.Hour, redact.Evidence)
+	day := buildActivity(items, testEpoch, 24*time.Hour, redact.Evidence, true)
 	want = want + " d:new@2h0m0s m:new@2h0m0s p:urgent@2h0m0s " +
 		"p:new@3h0m0s b:new@5h0m0s"
 	if got := activityLine(day); got != want {
@@ -77,7 +77,7 @@ func TestActivityShowsARecurrenceOnce(t *testing.T) {
 	again.History = []incident.Occurrence{{Opened: first.Opened,
 		Resolved: first.Resolved}}
 	got := activityLine(buildActivity([]incident.Incident{again, first},
-		testEpoch, time.Hour, redact.Evidence))
+		testEpoch, time.Hour, redact.Evidence, true))
 	want := "a2:reopened@10m0s a1:resolved@40m0s a1:new@50m0s"
 	if got != want {
 		t.Errorf("activity = %q, want %q", got, want)
@@ -91,9 +91,9 @@ func TestActivityKeepsTheNewestTwentyInAFixedOrder(t *testing.T) {
 		p.Occurrences = []time.Time{p.Opened}
 		items = append(items, p)
 	}
-	r := buildActivity(items, testEpoch, time.Hour, redact.Evidence)
+	r := buildActivity(items, testEpoch, time.Hour, redact.Evidence, true)
 	again := buildActivity(append(items[15:], items[:15]...), testEpoch,
-		time.Hour, redact.Evidence)
+		time.Hour, redact.Evidence, true)
 	if len(r.Events) != maxActivity || r.Total != 30 ||
 		activityLine(r) != activityLine(again) {
 		t.Fatalf("%d of %d, stable %v", len(r.Events), r.Total,
@@ -153,7 +153,7 @@ func TestActivityEventJSONCarriesWorkloadKindWhenKnown(t *testing.T) {
 	p := testIncident("k", "shop", -10*time.Minute)
 	p.Occurrences = []time.Time{p.Opened}
 	out := buildActivity([]incident.Incident{p}, testEpoch, time.Hour,
-		redact.Evidence)
+		redact.Evidence, true)
 	body, err := json.Marshal(out.Events[0])
 	if err != nil {
 		t.Fatal(err)
@@ -164,5 +164,72 @@ func TestActivityEventJSONCarriesWorkloadKindWhenKnown(t *testing.T) {
 	body, _ = json.Marshal(ActivityEvent{})
 	if strings.Contains(string(body), "workloadKind") {
 		t.Errorf("empty kind not omitted: %s", body)
+	}
+}
+
+// Changes nobody was told about (an issue that settled before
+// alerting, and its resolve) are left out unless asked for, and
+// counted either way; an earlier occurrence counts as told when it was
+// heard.
+func TestActivityLeavesOutChangesNobodyWasToldAbout(t *testing.T) {
+	told := testIncident("t", "shop", -10*time.Minute)
+	told.Occurrences = []time.Time{told.Opened}
+	blip := testIncident("q", "shop", -20*time.Minute)
+	blip.Announced = time.Time{}
+	blip.Occurrences = []time.Time{blip.Opened}
+	blip.State, blip.Resolved = incident.Resolved, before(19*time.Minute)
+	back := testIncident("b", "web", -5*time.Minute)
+	back.Occurrences = []time.Time{before(50 * time.Minute),
+		before(40 * time.Minute), back.Opened}
+	back.History = []incident.Occurrence{
+		{Opened: before(50 * time.Minute), Resolved: before(45 * time.Minute),
+			Heard: true},
+		{Opened: before(40 * time.Minute), Resolved: before(35 * time.Minute)},
+	}
+	items := []incident.Incident{told, blip, back}
+
+	r := buildActivity(items, testEpoch, time.Hour, redact.Evidence, false)
+	want := "b:reopened@5m0s t:new@10m0s b:resolved@45m0s b:new@50m0s"
+	if got := activityLine(r); got != want || r.Total != 4 ||
+		r.Untold != 4 || r.WithUntold {
+		t.Errorf("default = %q (total %d, untold %d), want %q", got,
+			r.Total, r.Untold, want)
+	}
+	all := buildActivity(items, testEpoch, time.Hour, redact.Evidence, true)
+	if all.Total != 8 || all.Untold != 4 || !all.WithUntold {
+		t.Fatalf("with untold: total %d, untold %d", all.Total, all.Untold)
+	}
+	for _, e := range all.Events {
+		quiet := e.ID == "q" || (e.ID == "b" && (e.At.Equal(
+			before(40*time.Minute)) || e.At.Equal(before(35*time.Minute))))
+		if e.Untold != quiet {
+			t.Errorf("%s %s@%s untold = %v", e.ID, e.Kind,
+				testEpoch.Sub(e.At), e.Untold)
+		}
+	}
+}
+
+func TestActivityHandlerTakesUntold(t *testing.T) {
+	blip := testIncident("q", "shop", -10*time.Minute)
+	blip.Announced = time.Time{}
+	blip.Occurrences = []time.Time{blip.Opened}
+	s := newTestServer(blip)
+	for _, path := range []string{"/api/activity?untold=yes",
+		"/api/activity?untold=1&untold=0"} {
+		w := get(t, s, path)
+		if w.Code != http.StatusBadRequest ||
+			!strings.Contains(w.Body.String(), `"param":"untold"`) {
+			t.Errorf("%s: %d %s", path, w.Code, w.Body.String())
+		}
+	}
+	for path, n := range map[string]int{"/api/activity": 0,
+		"/api/activity?untold=0": 0, "/api/activity?untold=1": 1} {
+		var r ActivityResponse
+		w := get(t, s, path)
+		if err := json.Unmarshal(w.Body.Bytes(), &r); err != nil ||
+			len(r.Events) != n || r.Untold != 1 {
+			t.Errorf("%s: %d events, untold %d", path, len(r.Events),
+				r.Untold)
+		}
 	}
 }

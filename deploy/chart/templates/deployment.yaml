@@ -131,6 +131,9 @@ spec:
               value: {{ include "kwatch.leaseName" . | quote }}
             - name: KWATCH_DATA_DIR
               value: "/var/lib/kwatch"
+            # Scrubbed text in the flight recording (replay-export).
+            - name: KWATCH_FLIGHT_TEXT
+              value: {{ ternary "true" "false" (ne .Values.persistence.flightRecorderText false) | quote }}
             {{- if .Values.persistence.emptyDir }}
             # Tells kwatch the real size cap of the emptyDir volume, so
             # its storage limits follow it.

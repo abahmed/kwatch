@@ -8,7 +8,3 @@
 | ```
 | kubectl describe pod cert-controller-733b4b6c-a -n shop
 | ```
-10:10:00 material change
-🟠 cert-controller in shop (prod-eu-1) now has pods that run without restarting but are not ready.
-🟠 cert-controller in shop (prod-eu-1) now has pods that run without restarting but are not ready.
-| 🟠 **cert-controller** in **shop** (**prod-eu-1**) now has pods that run without restarting but are not ready.

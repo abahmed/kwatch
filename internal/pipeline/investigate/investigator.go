@@ -127,6 +127,16 @@ func (r *RootInvestigator) Plan(p incident.Incident) (Investigation, bool) {
 		}}, true
 }
 
+// Recorrelate concludes again across a report read earlier, for p as it
+// is now. Confirmation needs a cause or a failing root (correlate), and
+// an investigation started when the incident opened may have run before
+// either was known: what it read then can confirm the cause found later.
+func (r *RootInvestigator) Recorrelate(
+	p incident.Incident, report []incident.Section,
+) *incident.Correlation {
+	return boundCorrelation(correlate(r.sources.Model, p, report))
+}
+
 // Evidence bounds. A message quotes one or two facts; the rest is noise.
 const (
 	maxEvidence     = 4

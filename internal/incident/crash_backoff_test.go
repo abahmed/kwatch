@@ -134,3 +134,44 @@ func TestCappedResolveSaysWhichConditionHeld(t *testing.T) {
 	assert.Equal(t, Reason(StoppedTrackingPrefix+
 		"2h; coverage check continues"+StillCrashingNote), ds[0].Reason)
 }
+
+// A crash loop whose container looks ready between crashes (it has no
+// readiness probe) comes back again and again; each return is the next
+// crash, not a recovery that failed again. It stays open and never
+// flaps.
+func TestCrashLoopGapsAreNoFlapCycles(t *testing.T) {
+	r, container := backoffRig(t)
+	pod := entity(kube.KindPod, "api-1")
+	r.setAttrs(container, map[string]inventory.Value{
+		kube.AttrStateReason: inventory.Text(reasons.CrashLoopBackOff)})
+	now := 5 * time.Minute
+	for i := 0; i < 2*DefaultFlapCycles; i++ {
+		now += time.Minute
+		r.raise(at(now), crashSig(pod))
+		r.tick(at(now))
+		now += time.Minute
+		r.clear(at(now), crashSig(pod))
+		r.tick(at(now))
+	}
+	r.raise(at(now+time.Minute), crashSig(pod))
+	r.tick(at(now + time.Minute))
+	got := r.only()
+	assert.NotEqual(t, Flapping, got.State)
+	// The rig's first recovery came before the container reported its
+	// back-off; every later one was a gap of the crash loop.
+	assert.LessOrEqual(t, len(got.Cycles), 1)
+}
+
+// A crash-loop gap noted while an incident recovered is dropped when it
+// resolves, so a later recovery is not taken for a gap.
+func TestCrashGapForgottenOnResolve(t *testing.T) {
+	r := newRig(t, Config{})
+	p := &Incident{ID: "inc-gap", State: Recovering}
+	r.m.mu.Lock()
+	defer r.m.mu.Unlock()
+	r.m.gaps = map[string]bool{p.ID: true}
+	r.m.markResolved(p)
+	if r.m.gaps[p.ID] {
+		t.Fatal("the gap outlived the incident's resolve")
+	}
+}

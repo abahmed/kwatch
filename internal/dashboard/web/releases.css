@@ -1,0 +1,30 @@
+/* kwatch dashboard: the Releases page (js/releases.js): a window switch
+   and two pickers, a count line, and one row per release, newest first:
+   time, verdict, workload, what changed and how it went; a release that
+   went wrong adds its issue and how to undo it. */
+.rel-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 16px; }
+.rel-sw .tz-b { min-height: 32px; padding: 0 14px; font-size: 0.8125rem; }
+.rel-f { margin: 0; font-weight: 400; }
+.rel-sum { margin-top: 12px; color: var(--text-muted); font-size: 0.9375rem; }
+.rel-sum.is-empty { padding: 16px 20px; border: 1px solid var(--line); border-radius: var(--radius-card); font-size: 1rem; }
+.rel-list { list-style: none; margin: 12px 0 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; }
+.rel-list > li + li { border-top: 1px solid var(--line); }
+.rel-row { padding: 10px 16px; }
+.rel-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.rel-at { font-size: 0.875rem; color: var(--text-muted); font-variant-numeric: tabular-nums; min-width: 6.5rem; }
+.rel-name { font-weight: 600; font-size: 0.875rem; overflow-wrap: anywhere; }
+.rel-ns { font-size: 0.8125rem; color: var(--text-muted); }
+.rel-body { margin: 4px 0 0 7.5rem; min-width: 0; }
+.rel-body > p { margin: 2px 0 0; }
+.rel-what { font-size: 0.8125rem; overflow-wrap: anywhere; }
+.rel-line, .rel-who { font-size: 0.875rem; color: var(--text-soft); }
+.rel-who { color: var(--text-muted); overflow-wrap: anywhere; }
+.rel-error { margin-top: 6px; padding: 6px 10px; border-radius: var(--radius-input); background: var(--failing-bg); color: var(--text); font-size: 0.8125rem; overflow-wrap: anywhere; }
+.rel-undo { margin-top: 6px; font-weight: 600; color: var(--text); }
+.rel-body .cmd { margin-top: 4px; }
+@media (max-width: 700px) {
+  .rel-row { padding: 10px 14px; }
+  .rel-body { margin-left: 0; }
+}
+/* The Overview's line about today's releases (status.js). */
+.ov-rel { margin-top: 12px; }

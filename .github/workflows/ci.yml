@@ -64,6 +64,13 @@ jobs:
           || github.event.before || 'origin/main' }}
       run: make ci
 
+    # The dashboard in the runner's Google Chrome (headless): console
+    # errors, CSP violations, sideways scroll and basic accessibility.
+    - name: Check the dashboard in a browser
+      env:
+        CHROME_PATH: google-chrome
+      run: make verify-dashboard-browser
+
     - name: Publish alert-quality report
       if: always()
       run: |

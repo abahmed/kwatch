@@ -1,0 +1,10 @@
+{
+  "name": "release-gitops-managed",
+  "description": "A Deployment that a deployment tool manages rolls out an image whose pods crash-loop; the previous revision keeps serving.",
+  "root": "deployment/shop/orders",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

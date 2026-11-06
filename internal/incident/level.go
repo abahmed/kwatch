@@ -27,6 +27,7 @@ const (
 	levelSilenced   = "lowered-silent"
 	levelOverride   = "override"
 	levelNoPaging   = "paging-off"
+	// levelOwnStart is in own_start.go.
 )
 
 // fixedLevel is the code of a tier fixedTier sets.
@@ -120,6 +121,8 @@ var levelTexts = map[string]string{
 		"configuration.",
 	levelNoPaging: "Sends a notification instead of a page: paging " +
 		"is turned off in kwatch's configuration.",
+	levelOwnStart: "No message: kwatch's own pod waits for its volume " +
+		"while kwatch restarts, which every restart does for a while.",
 }
 
 // pageTexts are the plain words of each page rule.

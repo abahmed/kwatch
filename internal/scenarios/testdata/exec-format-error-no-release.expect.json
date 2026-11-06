@@ -1,0 +1,11 @@
+{
+  "name": "exec-format-error-no-release",
+  "description": "A single replica on an arm64 node exits at start with \"exec format error\", with no release behind it: the image's CPU is named, it is no flap.",
+  "root": "deployment/shop/reports",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

@@ -25,7 +25,7 @@
   --font-mono: 'Geist Mono', ui-monospace, monospace;
   --space-4: 16px; --space-5: 24px; --space-6: 32px;
   --radius-chip: 4px; --radius-input: 8px; --radius-card: 10px; --radius-pill: 999px;
-  --max-app: 62.5rem; --measure: 62ch; --btn-height: var(--hit); --btn-border: 1.5px; --motion-fast: 120ms;
+  --max-app: 90rem; --measure: 62ch; --btn-height: var(--hit); --btn-border: 1.5px; --motion-fast: 120ms;
 }
 @media (prefers-color-scheme: dark) {
   :root {

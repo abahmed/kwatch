@@ -4,6 +4,8 @@ go 1.27.3
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0
+	github.com/chromedp/cdproto v0.157.8
+	github.com/chromedp/chromedp v0.21.0
 	github.com/go-logr/logr v1.4.4
 	github.com/google/go-github/v55 v55.0.0
 	github.com/google/uuid v1.6.0
@@ -33,6 +35,7 @@ require (
 	github.com/emicklei/go-restful/v3 v3.14.0 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/fxamacker/cbor/v2 v2.10.0 // indirect
+	github.com/go-json-experiment/json v0.0.0-20260213210345-44df1a37e875 // indirect
 	github.com/go-openapi/jsonpointer v1.0.2 // indirect
 	github.com/go-openapi/jsonreference v1.0.3 // indirect
 	github.com/go-openapi/swag v0.29.2 // indirect

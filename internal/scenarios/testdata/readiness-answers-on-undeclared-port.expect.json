@@ -1,0 +1,8 @@
+{
+  "name": "readiness-answers-on-undeclared-port",
+  "description": "A readiness probe on a port the container does not declare answers HTTP 500: the answer is said, the port is not blamed.",
+  "root": "deployment/infra/cert-agent",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "20m0s"
+}

@@ -276,7 +276,8 @@ func errorSentences(f caseFacts) []sentence {
 			return []sentence{{part: partProof, weight: weightError,
 				text: "Its image cannot be pulled."}}
 		}
-	case said != "" && quotedByMissingService(f, said):
+	case said != "" && (quotedByMissingService(f, said) ||
+		quotedByStartLead(f, said) || quotedByCustomDetail(f, said)):
 		return nil
 	case said != "" && !restartNoise.MatchString(said):
 		return []sentence{{part: partProof, weight: weightError,

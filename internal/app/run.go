@@ -15,9 +15,12 @@ func Run() int {
 // integration tests and embedded callers.
 //
 // The edition is not fixed for the life of the process: the leader's
-// license manager decides it. When a license starts or stops entitling Pro,
-// the leader session ends and kwatch rebuilds in process, so every
-// component is built with the new entitlements and the pod never restarts.
+// license manager decides it. The first generation starts with the
+// edition the state file says the last session ran, while its cached
+// lease holds (StartEntitlements), so a Pro start builds once. When a
+// license starts or stops entitling Pro, the leader session ends and
+// kwatch rebuilds in process, so every component is built with the new
+// entitlements and the pod never restarts.
 func RunWithClock(now func() time.Time) int {
-	return newGenerationEnv(now).runAll(ResolveEntitlements())
+	return newGenerationEnv(now).runAll(StartEntitlements(StatePath(), now()))
 }

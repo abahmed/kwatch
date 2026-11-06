@@ -48,7 +48,7 @@ type Registry struct {
 	TelemetryFailures        [5]atomic.Int64
 	RenderedDetailsOmitted   atomic.Int64
 	RedactedValues           atomic.Int64
-	StorageResets            [2]atomic.Int64
+	StorageResets            [3]atomic.Int64
 	StorageCorruptRecords    atomic.Int64
 	StorageExpired           atomic.Int64
 	StorageEvicted           atomic.Int64
@@ -151,7 +151,8 @@ var (
 
 	unexplainedKinds = [...]string{"event", "incident"}
 
-	storageResetReasons = [...]string{"schema_mismatch", "unreadable"}
+	storageResetReasons = [...]string{"schema_mismatch", "unreadable",
+		"migration_failed"}
 
 	incidentActions = [...]string{"announce", "update", "resolve"}
 

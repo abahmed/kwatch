@@ -135,8 +135,12 @@ kwatch does not learn from user feedback. It reasons from the cluster:
 
 ## Reliability
 
-- One replica with a Lease lock. This is not HA. A restart gap of 1 to 2
-  minutes is accepted.
+- One replica with a Lease lock. This is not HA. A restart on the same
+  node, with a gap of 1 to 2 minutes, is accepted. A restart on another
+  node adds the move of the `ReadWriteOnce` volume (detach, then attach:
+  usually under a minute, longer on some storage drivers), and a hard node
+  failure adds up to about 6 minutes of force-detach; see "Node failure"
+  in docs/production-operations.md.
 - A warm restart in the middle of an incident announces it no second
   time, and queued outbox messages are sent once after a restart.
 - No lost messages across restarts: delivery is at least once through a
@@ -147,8 +151,10 @@ kwatch does not learn from user feedback. It reasons from the cluster:
   start.
 - A stale writer is fenced.
 - A corrupt record is skipped.
-- A schema mismatch or an unreadable file causes a reset (the old
-  file is kept as `state.db.corrupt`; no migration).
+- An older file is migrated in place, in one transaction, after a backup
+  copy; a newer file, an older one without a complete chain of
+  migrations, a failed migration or an unreadable file causes a reset
+  (the old file is kept as `state.db.corrupt`).
 
 ## Security
 
@@ -162,7 +168,7 @@ kwatch does not learn from user feedback. It reasons from the cluster:
 
 - Sentences are built dynamically from the facts of the case.
 - One status emoji everywhere: 🔴 page, 🟠 notify, 🟡 low, ✅ resolved.
-- No labels, sections, or links.
+- No labels or sections, and no links except the optional "Open in dashboard" link when the dashboard is reachable.
 - The startup and upgrade notices are single sentences. Summaries and plain
   notices are not sent to PagerDuty, Opsgenie, GoAlert, Zenduty, Squadcast,
   SIGNL4, iLert, incident.io, GitLab, Gitea, GitHub, Jira or ClickUp, because

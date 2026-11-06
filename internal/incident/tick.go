@@ -15,6 +15,7 @@ import (
 func (m *Manager) Tick(now time.Time) ([]Decision, time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.noteStart(now)
 	var decisions []Decision
 	m.adoptFingerprints(now)
 	m.releaseChurn(now)
@@ -60,6 +61,7 @@ func (m *Manager) tickOne(id string, now time.Time) (d Decision, ok bool) {
 		if p.restored && p.bootedAt.IsZero() {
 			p.bootedAt = now
 		}
+		p.causes.note(causeIdentity(p), now)
 		d, ok = m.advance(p, now)
 		m.observe(p, now)
 		if p.State == Resolved && m.incidents[id] == p {

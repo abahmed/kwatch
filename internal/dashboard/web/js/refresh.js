@@ -27,6 +27,16 @@
     if (!fav.dataset.plain) fav.dataset.plain = fav.getAttribute("href");
     fav.setAttribute("href", urgent ? fav.dataset.alert : fav.dataset.plain);
     KW.activeTotal = total;
+    KW.appBadge(counts.page || 0);
+  };
+
+  /* appBadge puts the urgent count on the installed app's icon (the
+     dock or task bar); 0 clears it. Browsers without it, or a page not
+     installed, ignore it. */
+  KW.appBadge = function (n) {
+    var nav = window.navigator;
+    if (!nav.setAppBadge) return;
+    (n > 0 ? nav.setAppBadge(n) : nav.clearAppBadge()).catch(function () { /* not allowed here */ });
   };
   var badgeTag = "";
   KW.refreshBadge = function () {

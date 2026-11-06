@@ -1,12 +1,12 @@
 10:04:15 settled
-🟠 KafkaCluster events in data (prod-eu-1) is not ready (invalid broker config). It reports "broker config log.retention.hours=-5 is invalid". All of its dependents are failing.
+🟠 KafkaCluster events in data (prod-eu-1) is not ready: "broker config log.retention.hours=-5 is invalid". All of its dependents are failing. The last run of container app in pod events-kafka-0 lasted ten seconds.
 Also grouped: 2 crash loops
 To read the output of the last crash, run kubectl logs events-kafka-0 -c app -n data --previous
 Checked: both replicas fail, on 2 nodes.
-🟠 KafkaCluster events in data (prod-eu-1) is not ready (invalid broker config).
-| 🟠 KafkaCluster **events** in **data** (**prod-eu-1**) is not ready (invalid broker config).
-| It reports `broker config log.retention.hours=-5 is invalid`.
+🟠 KafkaCluster events in data (prod-eu-1) is not ready: "broker config log.retention.hours=-5 is invalid".
+| 🟠 KafkaCluster **events** in **data** (**prod-eu-1**) is not ready: `broker config log.retention.hours=-5 is invalid`.
 | All of its dependents are failing.
+| The last run of container app in pod events-kafka-0 lasted ten seconds.
 | Also grouped: 2 crash loops
 | To read the output of the last crash, run
 | ```

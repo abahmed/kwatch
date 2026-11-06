@@ -100,7 +100,10 @@ the `bad-rollout` scenario in `internal/scenarios`.
    it, then `Tick` returns an announce decision.
 7. **Investigation joins in.** When the incident opened, a worker read a short
    log excerpt, redacted. If it arrives within a short wait it is attached;
-   otherwise the message goes without it.
+   otherwise the message goes without it. A roll-up member gets it in one
+   introduction of its own once it is in (`pipeline/introduce.go`), and a
+   cause found after the reads is confirmed over them when the message is
+   written.
 8. **The note is written.** `compose.Writer` turns the facts into sentences:
    what broke and why, what changed and which tool made the change, the one
    or two facts that prove it, who is affected, and one `kubectl`
@@ -153,11 +156,33 @@ that is blamed only because it changed, with no error naming it and no
 error of the kind it produces, is capped below "likely" when the failures
 quote a defect of the program's own code (a nil dereference, an index out of
 range). Rows that read a setting or a probe also need the failure to be the
-kind that setting causes: a probe-port mismatch needs a probe that cannot
-connect, a NetworkPolicy needs a connection error, an RBAC change needs a
+kind that setting causes: a probe-port mismatch needs a probe that could
+not connect at all (connection refused, no route; a probe that got an HTTP
+status reached something listening, so an undeclared port is no proof:
+`probe_refused.go`), a NetworkPolicy needs a connection error, an RBAC change needs a
 "forbidden" error naming the pod's own ServiceAccount and is never a
-creation. A workload blamed for its own setting gets no credit for its own
-pods failing, and its own name in its own log lines is not an error that
+creation. A container whose last run ended with an error after a fatal
+line at start (an unhandled exception, a panic, an invalid or missing
+setting, "exec format error", a cloud API refusing the program's identity
+or finding none, such as `AccessDenied`, "not authorized to perform",
+`PERMISSION_DENIED`, `AuthorizationFailed`, `NoCredentialProviders` or
+`WebIdentityErr`, and "read-only file system": `explain.FatalStartLine`,
+a line naming a dependency it could not reach excepted) had already failed when a probe killed it: the probe
+budget and liveness rows are not tried for it, so the cause is the rollout
+that shipped it, when one did, or the workload on its own, and does not
+flip between evaluations. The record keeps the line (`SharedError`) for the
+message to quote. "exec format error" on a node of a known architecture is
+named outright in the lead, with or without a release
+(`compose/arch_lead.go`): "can't run: its image … is not built for this
+node's CPU (arm64)", or "can't run on arm64 node n1: … not built for that
+CPU" while replicas on nodes of another CPU run fine.
+
+A crash loop's return within `CrashLoopGap` (10 minutes, the kubelet's
+back-off reset) while the workload's containers crash is the same failure
+(`incident/crash_gap.go`): a revive, recurrence or reopen then counts no
+flap cycle, and a revive keeps its settle clock, so a loop whose runs
+outlast the settle is still told on time and never reads as flapping. A workload blamed for its own setting gets no credit for
+its own pods failing, and its own name in its own log lines is not an error that
 "mentions it".
 
 When nothing upstream shows a fault, the engine still has four things to
@@ -214,6 +239,34 @@ take it over: people were told about something that cause cannot have
 caused, so the incident keeps its root and the new cause explains only the
 new failures.
 
+## Release reports
+
+`internal/release` keeps a verdict for every rollout of a Deployment,
+StatefulSet or DaemonSet. A release is a change of the pod template in
+the change journal (`inventory.Change`); a replica, pause or label change
+is none, kwatch's own Deployment is left out, and only watched namespaces
+count. Every 15 seconds the dashboard's runner (`dashboard.RunReleases`)
+reads the journal, each workload's rollout status (updated, ready and
+available replicas, the observed generation, the Deployment's
+`ProgressDeadlineExceeded`) and the incidents, and judges each release
+until its verdict is final: rolling, watching (15 minutes after the
+rollout, as the release watch), healthy, regressed (the release watch's
+finding), failed (an issue people were told of about the workload, or a
+stall: a Deployment's progress deadline, or a StatefulSet or DaemonSet
+with no replica updated or ready for 15 minutes unless it waits for
+people with `OnDelete` or a partition, while replicas are ready), down (no ready replica), replaced, or
+unknown (seen more than 30 minutes late). It only reads and sends nothing:
+a release that goes wrong is reported by its incident.
+
+How to undo a release follows what deploys it, from the GitOps marker the
+change journal already records (`kube.GitOpsApp`): a revert in Git for
+Argo CD and Flux, since a rollback in the cluster would be overwritten by
+the next sync; `helm rollback` in the release's namespace for a Helm
+release (`meta.helm.sh/release-name`; a `helm.sh/chart` label alone is no
+release); `kubectl rollout undo` otherwise, offered as a command only on
+the workload's newest release. The issue's steps and its message use the same rule
+(`compose/managed_undo.go`).
+
 ## How kwatch watches
 
 Sources turn Kubernetes objects into observations. Each kind has a schema in
@@ -239,6 +292,34 @@ directly from each node's kubelet on port 10250 (RBAC `nodes/stats` and
 optional active probes, and on-demand log excerpts. A source that cannot read a resource
 makes that object unknown. It never creates or resolves an incident.
 
+### What kwatch cannot see: a hang without a readiness probe
+
+kwatch reads what Kubernetes reports; it does not call applications on
+its own unless active probes are configured. A container that starts and
+then hangs (it never listens, or listens and never answers) is seen as
+follows:
+
+| The workload has | What Kubernetes reports | What kwatch sees |
+| --- | --- | --- |
+| A readiness probe | The pod not ready | Not ready, a Service without ready endpoints, a workload never ready: an incident with the probe's failure |
+| Only a liveness probe | Restarts after failed liveness checks | Liveness kills and the crash loop: an incident |
+| No probe at all | The pod **Ready** as soon as the container runs | Nothing failing on the workload itself |
+
+In the last case kwatch still finds it when:
+
+- other workloads log errors calling it (connection refused, timeouts):
+  the called-backend rules name it as the cause of their failures;
+- active probes are on (Pro, `activeProbeMonitor`): an explicit `http` or
+  `tcp` target, or `autoServices`, which opens a TCP connection to each
+  Service's first port. A TCP probe sees a port that is not listening; a
+  program that listens and never answers needs an explicit `http` target.
+
+Otherwise the hang is not seen. The only sign kwatch gives ahead of it is
+the advisory `Risk.NoReadinessProbe` ("Its containers have no readiness
+probe"), listed in the digest. kwatch does not guess a hang from silence
+(no log lines, no traffic): that would alert on every quiet worker. The
+fix is a readiness probe on the workload.
+
 ## Storage
 
 State is one bbolt file, `state.db`, on the volume at `/var/lib/kwatch`. It has
@@ -253,7 +334,7 @@ one bucket per data class:
 | `timeline` | Health transitions, changes, events, decisions | 7 days, at most 32 MiB (about 100,000 entries): whichever limit is reached first, so a busy cluster keeps less than 7 days |
 | `fingerprints` | Last seen digest per object | No expiry |
 | `state` | Cluster identity, version, startup and telemetry markers (with the pending digest and what digests listed in full today), each workload's last healthy time, the flight recorder's pseudonym salt, and the 7-day counts behind the cause self-check and the unexplained list in `/status` | No expiry; a healthy time lasts 7 days; the counts hold 7 days |
-| `flight` | The flight recorder: sanitized, compressed batches of what the sources observed (names hashed, no messages), exported with `kwatch replay-export` | 48 hours, at most 64 MiB |
+| `flight` | The flight recorder: sanitized, compressed batches of what the sources observed (names hashed; log error lines, event and condition messages kept scrubbed unless `KWATCH_FLIGHT_TEXT=false`), exported with `kwatch replay-export` | 48 hours, at most 64 MiB |
 | `threads` | Provider thread IDs, so updates stay in one conversation | No expiry |
 | `outbox` | Delivery jobs not yet accepted by a provider | Until accepted; at most 2048 jobs, none older than 24 hours |
 | `trails` | Per incident, what became of its messages at each provider (the dashboard's "Who was told"). Written only while the dashboard runs (Pro with `dashboard.enabled`) | The 512 incidents told most recently, 16 attempts each (the newest, plus the first one a channel accepted); a trail whose incident record is gone is deleted at the next start |
@@ -288,12 +369,14 @@ The history, the fingerprints and the changes made while kwatch was down
 are Pro: Community restores only the incidents it announced and starts
 from a fresh baseline.
 
-Reset: if the file has another schema version or bbolt cannot read it, kwatch
-renames it to `state.db.corrupt.<UTC time>` (the newest two copies are kept)
-and starts fresh. Only structural errors reset: a locked or inaccessible file
+Migration: an older file with a complete chain of migration steps
+(`internal/storage/migrate.go`) is converted in place at open, in one
+transaction with the version bump, after a backup copy. Reset: if the file
+is newer, has no complete chain, fails its migration or bbolt cannot read
+it, kwatch renames it to `state.db.corrupt.<UTC time>` (the newest two
+copies are kept) and starts fresh. Only structural errors reset: a locked or inaccessible file
 fails startup instead. The reset is logged and shown in `/health`. A single
-record that does not decode is skipped and counted. There is no migration
-before the first stable release. To reset by hand, stop kwatch and delete
+record that does not decode is skipped and counted. To reset by hand, stop kwatch and delete
 `state.db`; the next start
 repeats the startup summary and relearns baselines.
 

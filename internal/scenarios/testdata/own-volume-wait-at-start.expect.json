@@ -1,0 +1,7 @@
+{
+  "name": "own-volume-wait-at-start",
+  "description": "kwatch's own new pod waits for its volume after a restart: quiet within the start window, told after it.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "5m0s"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "crash-loop-ready-between-crashes",
+  "description": "A container without a readiness probe crashes two minutes into every run for half an hour and looks ready in between: one open incident, no flapping.",
+  "root": "deployment/shop/ledger",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

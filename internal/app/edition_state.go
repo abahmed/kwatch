@@ -31,6 +31,31 @@ func EffectiveEntitlements(
 	return base
 }
 
+// StartEntitlements is the edition the process starts its first
+// generation with: the build's own, else Pro when the state file says the
+// last session ran Pro and its cached lease is still inside its grace.
+// The leader's license session then settles the edition as before; a
+// start that guessed wrong rebuilds once, as every start did when it
+// always began as Community. A Pro installation thus builds once, not
+// twice. The file is opened in place, read-only: before the first
+// generation nothing in this process holds it, and a holder elsewhere
+// makes the open time out, which reads as the build's edition.
+func StartEntitlements(
+	statePath string, now time.Time,
+) feature.Entitlements {
+	base := ResolveEntitlements()
+	if base.Edition() == feature.ProEdition {
+		return base
+	}
+	if _, err := os.Stat(statePath); err != nil {
+		return base
+	}
+	if fileRunsPro(statePath, now) {
+		return feature.ProEntitlements()
+	}
+	return base
+}
+
 // stateRunsPro reads a copy of the state file. The running leader holds
 // the file locked, so it is never opened in place.
 func stateRunsPro(statePath string, now time.Time) bool {
@@ -39,7 +64,13 @@ func stateRunsPro(statePath string, now time.Time) bool {
 		return false
 	}
 	defer func() { _ = os.Remove(copyPath) }()
-	store, err := storage.Open(copyPath, storage.Options{
+	return fileRunsPro(copyPath, now)
+}
+
+// fileRunsPro opens path read-only and reports whether it records a Pro
+// session whose cached lease is still inside its grace.
+func fileRunsPro(path string, now time.Time) bool {
+	store, err := storage.Open(path, storage.Options{
 		Now: func() time.Time { return now }, DeferRepair: true,
 	})
 	if err != nil {

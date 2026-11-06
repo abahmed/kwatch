@@ -8,7 +8,7 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
-// certControllerFixture is the external-secrets cert-controller of the
+// certControllerFixture is the secrets-system cert-controller of the
 // field: one pod whose own readiness check fails while it waits for its
 // webhook certificates. Its configuration names no Service it calls;
 // calls is what its calls attribute holds (an older model kept words
@@ -16,14 +16,14 @@ import (
 func certControllerFixture(
 	f *fixture, calls string,
 ) inventory.EntityID {
-	const ns = "external-secrets"
+	const ns = "secrets-system"
 	f.add(inventory.CoreID(kube.KindNamespace, "", ns),
-		inventory.CoreID(kube.KindService, ns, "external-secrets-webhook"))
-	pod := f.workload(ns, "external-secrets-cert-controller", 1)[0]
+		inventory.CoreID(kube.KindService, ns, "secrets-webhook"))
+	pod := f.workload(ns, "cert-controller", 1)[0]
 	attrs := map[string]inventory.Value{
 		kube.AttrLabels: inventory.Text("app.kubernetes.io/instance=" +
-			"external-secrets,app.kubernetes.io/name=" +
-			"external-secrets-cert-controller"),
+			"secrets-system,app.kubernetes.io/name=" +
+			"cert-controller"),
 	}
 	if calls != "" {
 		attrs[kube.AttrServiceCalls] = inventory.Text(calls)
@@ -41,11 +41,11 @@ func certControllerFixture(
 func TestMissingServiceNamedAfterThePodIsNotBlamed(t *testing.T) {
 	for name, calls := range map[string]string{
 		"no calls": "",
-		"own name": "external-secrets/external-secrets-cert-controller",
-		"invalid name": "external-secrets/" +
-			"owner=external-secrets-cert-controller",
-		"both": "external-secrets/external-secrets-cert-controller," +
-			"external-secrets/owner=external-secrets-cert-controller",
+		"own name": "secrets-system/cert-controller",
+		"invalid name": "secrets-system/" +
+			"owner=cert-controller",
+		"both": "secrets-system/cert-controller," +
+			"secrets-system/owner=cert-controller",
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFixture(t)
@@ -63,7 +63,7 @@ func TestMissingServiceNamedAfterThePodIsNotBlamed(t *testing.T) {
 				}
 			}
 			c := requireCause(t, e, containerOf(pod), "deployment/"+
-				"external-secrets/external-secrets-cert-controller")
+				"secrets-system/cert-controller")
 			if c.Row != "self" {
 				t.Fatalf("row = %q, want the pod's own failure", c.Row)
 			}

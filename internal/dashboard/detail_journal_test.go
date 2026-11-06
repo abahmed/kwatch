@@ -130,7 +130,7 @@ func TestActivityCountsEveryTierRiseAsUrgent(t *testing.T) {
 		{At: before(10 * time.Minute), Kind: incident.TransitionTierLowered},
 	}
 	got := buildActivity([]incident.Incident{p}, testEpoch, time.Hour,
-		redact.Evidence)
+		redact.Evidence, true)
 	assert.Equal(t, "t:urgent@20m0s t:new@30m0s t:urgent@40m0s",
 		activityLine(got), "the older timeline still counts")
 }

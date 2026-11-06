@@ -137,3 +137,14 @@ func TestProblemTitleMatchesTheDashboard(t *testing.T) {
 		}
 	}
 }
+
+// The installed app's icon counts the urgent issues still failing.
+func TestPushSnapshotCountsUrgentIssues(t *testing.T) {
+	s := pushList(pushTestItem("a", "page", "open"),
+		pushTestItem("b", "page", stateResolved),
+		pushTestItem("c", "notify", "open"),
+		pushTestItem("d", "page", "flapping"))
+	if got := s.urgent(); got != 2 {
+		t.Errorf("urgent = %d, want 2", got)
+	}
+}

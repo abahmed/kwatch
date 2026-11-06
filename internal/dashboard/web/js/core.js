@@ -139,6 +139,23 @@
     return y;
   };
 
+  /* scrollBox: the box that scrolls the page's content: the Issues
+     table's frame on a wide screen (issues.css keeps the filters on
+     screen and scrolls only the table), else null for the window. */
+  KW.scrollBox = function () {
+    var w = document.querySelector("#main [data-tablewrap]");
+    return w && /auto|scroll/.test(getComputedStyle(w).overflowY) ? w : null;
+  };
+  /* scrollTop and scrollTo read and set the page's scroll position. */
+  KW.scrollTop = function () {
+    var b = KW.scrollBox();
+    return b ? b.scrollTop : window.scrollY;
+  };
+  KW.scrollTo = function (y) {
+    var b = KW.scrollBox();
+    if (b) b.scrollTop = y; else window.scrollTo(0, y);
+  };
+
   /* hm: a <time> with the clock time ("14:02"; "yesterday 14:02" or
      "12 Oct, 14:02" when it isn't today) and the exact time, seconds
      included, in its tooltip. The one clock format of the dashboard. */

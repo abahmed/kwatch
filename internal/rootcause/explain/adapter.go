@@ -56,6 +56,9 @@ func (s Snapshot) Record(c Cause) rootcause.CauseRecord {
 	if out.SharedError == "" {
 		out.SharedError = s.dependencyLine(c)
 	}
+	if out.SharedError == "" {
+		out.SharedError = s.startupLine(c)
+	}
 	for _, e := range c.Contributions {
 		out.Proof = append(out.Proof, rootcause.Proof{
 			Code: e.Code, Count: e.Count, Total: e.Total, Fields: e.Fields,

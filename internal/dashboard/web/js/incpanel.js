@@ -105,6 +105,7 @@
     var label = nav.appendChild(KW.el("label", "d-tabsel"));
     label.appendChild(KW.el("span", "", "Show"));
     var pick = label.appendChild(KW.el("select"));
+    pick.name = "issue-tab";
     pick.dataset.tabPick = "";
     KW.ISSUE_TABS.forEach(function (t) {
       var b = list.appendChild(KW.el("button", "d-tab"));

@@ -17,6 +17,7 @@
 .act-main { display: flex; flex-direction: column; min-width: 0; }
 .act-title { font-weight: 600; overflow-wrap: anywhere; }
 .act-ns { font-family: var(--font-mono); font-size: 0.8125rem; color: var(--text-muted); overflow-wrap: break-word; }
+.act-quiet { margin-top: 8px; font-size: 0.875rem; }
 .act-more { margin-top: 10px; color: var(--text-muted); font-size: 0.9375rem; }
 @media (max-width: 700px) {
   .act-row { grid-template-columns: auto minmax(0, 1fr); padding: 10px 14px; }

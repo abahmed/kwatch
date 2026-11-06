@@ -86,6 +86,7 @@ const (
 	fluxKustomizeLabel  = "kustomize.toolkit.fluxcd.io/name"
 	fluxHelmLabel       = "helm.toolkit.fluxcd.io/name"
 	helmReleaseName     = "meta.helm.sh/release-name"
+	helmReleaseSpace    = "meta.helm.sh/release-namespace"
 	helmChartLabel      = "helm.sh/chart"
 	deploymentRevision  = "deployment.kubernetes.io/revision"
 	daemonSetGeneration = "deprecated.daemonset.template.generation"
@@ -106,11 +107,15 @@ var gitOpsMarkers = []gitOpsMarker{
 	{fluxKustomizeLabel, "flux"},
 	{fluxHelmLabel, "flux"},
 	{helmReleaseName, "helm"},
-	{helmChartLabel, "helm"},
+	// The chart label is "chart-version", not a release: rendered with
+	// "helm template", there is no release to roll back.
+	{helmChartLabel, "helm-chart"},
 }
 
 // GitOpsApp names the application that deploys meta, such as
-// "argocd/shop", "flux/apps" or "helm/api", or returns "".
+// "argocd/shop", "flux/apps", "helm/api" (a Helm release; "helm/ops/api"
+// when the release lives in another namespace than meta) or
+// "helm-chart/api-1.2.0" (only a chart label), or returns "".
 func GitOpsApp(meta metav1.Object) string {
 	labels, annotations := meta.GetLabels(), meta.GetAnnotations()
 	for _, marker := range gitOpsMarkers {
@@ -124,6 +129,12 @@ func GitOpsApp(meta metav1.Object) string {
 		if marker.key == argoTrackingID {
 			// The tracking ID is "app:group/kind:namespace/name".
 			value, _, _ = strings.Cut(value, ":")
+		}
+		if marker.key == helmReleaseName {
+			space := annotations[helmReleaseSpace]
+			if space != "" && space != meta.GetNamespace() {
+				value = space + "/" + value
+			}
 		}
 		return marker.tool + "/" + value
 	}

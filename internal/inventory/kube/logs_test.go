@@ -2,6 +2,7 @@ package kube_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -112,4 +113,63 @@ func TestLogReaderPreviousLinesRedactsAndKeepsPreviousOnly(t *testing.T) {
 	require.Len(t, lines, 1)
 	assert.NotContains(t, lines[0], "hunter2hunter2")
 	assert.Equal(t, []bool{true}, previous)
+}
+
+// A run that stopped at start with a long stack trace prints its error
+// first: when the tail is full, the run's first error line and the
+// lines after it come from its start, before the tail.
+func TestLogReaderPreviousLinesKeepsTheStartErrorBeyondTheTail(t *testing.T) {
+	client := fake.NewSimpleClientset(pod("p"))
+	head := "starting\nUnhandled exception. app.ConfigError: " +
+		"configuration is invalid:\n[Failure] setting X must be " +
+		"specified\n   at Frame.Start()\n"
+	var frames strings.Builder
+	for i := range 50 {
+		fmt.Fprintf(&frames, "   at Frame.Call%d()\n", i)
+	}
+	client.PrependReactor("get", "pods",
+		func(a ktesting.Action) (bool, runtime.Object, error) {
+			g, ok := a.(ktesting.GenericAction)
+			if !ok || a.GetSubresource() != "log" {
+				return false, nil, nil
+			}
+			opts, _ := g.GetValue().(*corev1.PodLogOptions)
+			body := frames.String()
+			if opts.TailLines == nil {
+				body = head + frames.String()
+			}
+			return true, &runtime.Unknown{Raw: []byte(body)}, nil
+		})
+	id := kube.ContainerID(testNamespace, "p", "app")
+	lines, err := kube.LogReader{Client: client}.PreviousLinesFromStart(
+		context.Background(), id)
+	require.NoError(t, err)
+	require.Len(t, lines, 53)
+	assert.Equal(t, "Unhandled exception. app.ConfigError: "+
+		"configuration is invalid:", lines[0])
+	assert.Equal(t, "[Failure] setting X must be specified", lines[1])
+	assert.Equal(t, "at Frame.Call0()", lines[3])
+}
+
+// A run whose first error is still inside the tail does not get it
+// twice, and a tail full of blank lines still counts as full.
+func TestLogReaderPreviousLinesNoDuplicateStartError(t *testing.T) {
+	client := fake.NewSimpleClientset(pod("p"))
+	var body strings.Builder
+	body.WriteString("fatal: setting X must be set\n")
+	for range 49 {
+		body.WriteString("\n")
+	}
+	client.PrependReactor("get", "pods",
+		func(a ktesting.Action) (bool, runtime.Object, error) {
+			if a.GetSubresource() != "log" {
+				return false, nil, nil
+			}
+			return true, &runtime.Unknown{Raw: []byte(body.String())}, nil
+		})
+	id := kube.ContainerID(testNamespace, "p", "app")
+	lines, err := kube.LogReader{Client: client}.PreviousLinesFromStart(
+		context.Background(), id)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"fatal: setting X must be set"}, lines)
 }

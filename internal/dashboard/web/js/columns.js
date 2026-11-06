@@ -72,6 +72,7 @@
       var l = KW.el("label", "cols-c");
       var cb = KW.el("input");
       cb.type = "checkbox";
+      cb.name = "col-" + key;
       cb.checked = shown.indexOf(key) >= 0;
       cb.disabled = !!c.always;
       cb.addEventListener("change", function () {

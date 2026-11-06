@@ -101,6 +101,10 @@ func composeDependencies(
 			// A fixed nonce keeps incident IDs, and the order of
 			// incidents announced at the same moment, reproducible.
 			IDNonce: "5c3e",
+			// kwatch's own namespace and Deployment, as the chart's
+			// POD_NAMESPACE and POD_NAME give them.
+			OwnNamespace: "kwatch",
+			OwnWorkload:  "kwatch",
 		}, ablated{explain.NewSolver(), ablation}),
 		Synced:  synced,
 		Writer:  compose.NewWriter(scenarioCluster, policy.Runbooks()),

@@ -32,6 +32,9 @@ func actionSentences(f caseFacts) []sentence {
 					step.Command}}
 		}
 	}
+	if text, ok := managedAction(f, steps); ok {
+		return []sentence{{part: partAction, text: text}}
+	}
 	if step, ok := evidenceFix(steps); ok {
 		return []sentence{{part: partAction,
 			text: "To " + lowerFirst(step.Text) + ", run " + step.Command}}

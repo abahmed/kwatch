@@ -120,6 +120,10 @@ const (
 	// MaterialGap is the least time between two material-change updates
 	// of one incident. A tier rise is not held back.
 	MaterialGap = 10 * time.Minute
+	// CauseHold is how long a cause never told before must stay the
+	// cause, over at least two evaluations, before it is news; a cause
+	// already told is never news again by itself (cause_told.go).
+	CauseHold = 30 * time.Second
 	// FixWatch is how long after a fix attempt an incident may keep
 	// failing before the thread says so.
 	FixWatch = 10 * time.Minute

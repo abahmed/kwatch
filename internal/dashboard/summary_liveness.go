@@ -6,6 +6,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // Crash or liveness kill. A container that exited by itself with an
@@ -14,8 +15,11 @@ import (
 // evidence, but the probe is a symptom of the crash. Only when the
 // kubelet killed the container because the probe failed ("failed
 // liveness probe, will be restarted", then exit 137 or 143) is the
-// probe the story. Readiness ranks as it always did: it is what takes
-// a pod out of traffic.
+// probe the story, unless the container's log shows it had already
+// stopped with a fatal error at start (explain.FatalStartLine): the
+// probe then only ended a process that had failed, and the log line
+// leads. Readiness ranks as it always did: it is what takes a pod out
+// of traffic.
 
 // livenessKillCodes are the exit codes of a container the kubelet
 // stopped: SIGKILL and SIGTERM.
@@ -107,6 +111,9 @@ func crashBehindProbe(d *IncidentDetail, p ProbeRow) bool {
 // first and the exit worded as the kubelet's restart.
 func proofSourcesOf(d *IncidentDetail) []proofSource {
 	switch {
+	case livenessKilled(d) && fatalStartLogged(d):
+		return append([]proofSource{logProof, livenessFirst,
+			killedExitProof}, proofSources[3:]...)
 	case livenessKilled(d):
 		return append([]proofSource{livenessFirst, logProof,
 			killedExitProof}, proofSources[3:]...)
@@ -115,6 +122,17 @@ func proofSourcesOf(d *IncidentDetail) []proofSource {
 			probeProof}, proofSources[3:]...)
 	}
 	return proofSources
+}
+
+// fatalStartLogged reports a captured log line that says the program
+// stopped at start.
+func fatalStartLogged(d *IncidentDetail) bool {
+	for _, p := range logProof(d) {
+		if explain.FatalStartLine(p.Detail) {
+			return true
+		}
+	}
+	return false
 }
 
 // readinessProof is probeProof of the readiness probes alone.

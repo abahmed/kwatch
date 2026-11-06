@@ -26,6 +26,25 @@ twice and the state file has one writer. Some names still say "leader"
 kept so existing installs and dashboards keep working, and all refer to this
 state lock.
 
+### Planned restart: on the same node or another
+
+An upgrade, a config change or a drain stops the Pod (within
+`terminationGracePeriodSeconds`, 60 by default: the outbox and the state
+file are flushed first) and the `Recreate` strategy then starts the next
+one. On the same node the volume stays attached and the gap is the stop
+plus the start. On another node the `ReadWriteOnce` volume must detach
+from the old node, once it is unmounted, and attach to the new one; the
+storage driver decides how long that takes, usually under a minute. The
+replacement Pod shows `ContainerCreating` meanwhile; once it runs, kwatch
+keeps quiet about its own pods' volume wait for its first 10 minutes.
+
+A zonal disk (EBS, Persistent Disk, Azure Disk) cannot leave its zone:
+the PersistentVolume's own node affinity keeps the Pod in that zone, so
+no extra pinning is needed, but when no node in that zone can take the
+Pod (all cordoned, tainted or scaled down) kwatch stays `Pending` until
+one can. Keep at least one schedulable node in the volume's zone, or use
+a regional disk class where the cloud offers one.
+
 ### Node failure: the real monitoring gap
 
 A crashed or unreachable node is the slowest case, because Kubernetes, not
@@ -306,7 +325,12 @@ restart the Deployment yourself after editing it.
   `pods/log` is refused) and `dashboard links in alerts` with `off: <reason>`
   when alerts carry no dashboard link.
 
-When the license changes the edition, kwatch rebuilds in the same process.
+kwatch starts with the edition its last session ran when the state file
+says it was Pro and the cached lease is still within its grace, so a Pro
+installation builds its components once at start instead of starting as
+Community and rebuilding. When the license then changes the edition (a key
+added, removed, expired or revoked, or a first activation), kwatch
+rebuilds in the same process.
 The old health listener keeps answering `/healthz` (and reports not ready)
 until the new generation has built everything slow and takes the port over,
 so the kubelet's liveness probe (45 seconds of tolerance once the startup
@@ -436,8 +460,20 @@ Every write,
 including compaction, first checks the store's claim epoch, so a process that
 lost the Lease cannot write or delete anything.
 
-**Schema changes reset the store.** There are no migrations. When the file
-has another schema version (older or newer) or bbolt cannot read it, Kwatch
+**Schema changes migrate the store.** A release that changes the file's
+layout bumps its schema version and ships a migration step from the
+previous version (`internal/storage/migrate.go`). When the file is older
+and every step from its version to the current one exists, kwatch copies
+it to `state.db.pre-migration-v<old version>` (when the volume has room
+for twice its size; only the latest copy is kept), then runs the steps
+and the version bump in one write transaction at open: the file is either
+fully migrated or left as it was. The log says `state store migrated`
+with `fromVersion` and `toVersion`, and nothing is reset.
+
+**Otherwise the store resets.** When the file is newer than the release
+(a downgrade), older than the first migration step, its migration fails
+(`reason` `migration_failed`; the transaction rolled back, so the file set
+aside is the one before the migration) or bbolt cannot read it, Kwatch
 renames it to `state.db.corrupt.<UTC time>` (the newest two copies are kept,
 older ones are deleted; a copy larger than a quarter of the volume limit is
 deleted at once), creates a fresh store, and continues: it starts cold and
@@ -546,10 +582,45 @@ is dropped, both logged at `-v=2`. Memory is bounded by that queue and
 event sources, images and label values are salted hash pseudonyms
 (`pod-` style names such as `name-468f1de69a`), the same everywhere, so
 owners, selectors and rollouts still line up. Reason codes, numbers,
-booleans and times are kept. Messages, log lines, error text, change
-causes and anything with spaces are dropped, so a recording has no quoted
-log or event text; detectors that read a crash log line or an event
-message see nothing in a replay of it. A Secret keeps only numbers,
+booleans and times are kept.
+
+Free text (a crashed container's first error line, Warning event
+messages, condition and termination messages, probe and volume errors,
+change causes) is kept **scrubbed**, because most causes are read from
+it, so a replay of the export sees the same evidence kwatch saw:
+
+- credentials are removed, as everywhere kwatch keeps text;
+- an object or namespace name gets the same pseudonym inside the text as
+  everywhere else, whatever its case and next to any punctuation
+  (`volume_name`, `pvc/name`), so "dial tcp name-3f1c…:9000" still names
+  that Service;
+- a name right after a Kubernetes kind is hidden even when kwatch never
+  saw the object (`configmap "billing-config" not found`, `Secret
+  db-creds`, `deployments.apps "api"`), with the pseudonym the object
+  gets if it appears later; so are the object and namespace labels of a
+  cluster DNS name;
+- container images, email addresses and outside host names
+  (`docs.example.com`, `DB01.Corp.Example.COM`, `db-1.corp-internal`)
+  get pseudonyms of their own; Kubernetes' own domains
+  (`node.kubernetes.io/not-ready`) and cluster DNS suffixes stay;
+- everything else stays as written: the words of the error, codes,
+  numbers, IP addresses, ports, versions, file names (`main.go`) and code
+  names (`app.ConfigError`, `Main.run`);
+- each text is cut to 512 bytes.
+
+Changed field values (an edited environment variable, say) are never kept
+as text: a setting may hold a secret no pattern recognises. Scrubbing is a
+pattern match, not a guarantee: a plain word that is also a name kwatch
+never saw as an object or after a kind word, a dotted name written like
+code (a type, `Db.Example.Error`, or a type and a method,
+`Billing.corp`), a host whose last label is also a file extension
+(`mycorp.sh`), and names shorter than 3 characters stay. A namespace
+or object named like a common word (`default`, `app`, `api`) stays a
+word in text unless a kind word names it. Read an export before sharing
+it. To drop
+all free text as before, set `persistence.flightRecorderText: false` in the
+Helm values (or `KWATCH_FLIGHT_TEXT=false` on the container); recordings
+made either way load the same. A Secret keeps only numbers,
 booleans and times; its key names, types and digests are hashed. The salt
 is random, created once and kept in the state file; it is never exported.
 The state file itself still holds real names (incidents, changes), so
@@ -595,6 +666,18 @@ rules, a few kilobytes) in the state file, and `/status` shows, per rule,
 (`causeChecks` in the JSON). It is display only: it never changes a
 confidence, a tier or a message. Incidents superseded by a revised cause
 are not counted.
+
+**Likely wrong causes.** An incident whose recovery followed a change to
+something other than the cause it named (the "something else changed"
+count) is also kept by name: at most 50 over the same 7 days, saved with
+the counts. `/status` lists them under "Likely wrong causes" with the rule,
+the entity blamed, what changed instead and the `kwatch replay-export
+--since … --until …` window (10 minutes either side of the incident); the
+dashboard's kwatch page shows the same list with the full command while
+the recording still holds it (48 hours). Export one, label the cause a
+person would blame, and add it under "Turn it into a scenario" above. Like
+the counts, the list is display only: it never changes a confidence, a
+tier or a message.
 
 ## Auditing incidents from the logs
 

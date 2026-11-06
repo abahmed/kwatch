@@ -7,7 +7,3 @@
 | ```
 | kubectl describe pod search-152b6507-a -n shop
 | ```
-10:16:15 material change
-🟠 search in shop (prod-eu-1) now has pods that run without restarting but are not ready.
-🟠 search in shop (prod-eu-1) now has pods that run without restarting but are not ready.
-| 🟠 **search** in **shop** (**prod-eu-1**) now has pods that run without restarting but are not ready.

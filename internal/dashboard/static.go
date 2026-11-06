@@ -29,18 +29,27 @@ var assetRef = regexp.MustCompile(`\{\{asset:([a-z0-9./-]+)\}\}`)
 var assetTypes = map[string]string{
 	".css":   "text/css; charset=utf-8",
 	".js":    "text/javascript; charset=utf-8",
+	".png":   "image/png",
 	".svg":   "image/svg+xml",
 	".woff2": "font/woff2",
 }
 
-// workerFile is the service worker (web/sw.js), served at /sw.js so
-// its scope is the whole dashboard.
-const workerFile = "sw.js"
+// rootFiles are served at the root by a fixed name, never hashed, by
+// their content type: the service worker (its scope is the folder it
+// is served from, so /sw.js covers the whole dashboard), the app
+// manifest, and the page the worker shows when kwatch can't be
+// reached. Browsers and the worker find them by that name. What they
+// name ({{asset:…}}) is rewritten to the hashed address.
+var rootFiles = map[string]string{
+	"sw.js":                "text/javascript; charset=utf-8",
+	"manifest.webmanifest": "application/manifest+json",
+	"offline.html":         "text/html; charset=utf-8",
+}
 
-// shellRoutes are the UI's own pages (Overview, Issues, Insights,
-// Activity, kwatch); each serves the HTML shell.
-var shellRoutes = []string{"/", "/signin", "/issues", "/insights",
-	"/activity", "/kwatch"}
+// shellRoutes are the UI's own pages (Overview, Issues, Activity,
+// kwatch); each serves the HTML shell.
+var shellRoutes = []string{"/", "/signin", "/issues", "/activity",
+	"/kwatch", "/map", "/releases"}
 
 // asset is one file ready to serve.
 type asset struct {
@@ -53,7 +62,7 @@ type asset struct {
 // and, through pageListener, as net/http's own 400.
 type assets struct {
 	shell      []byte
-	worker     []byte
+	root       map[string][]byte
 	notFound   []byte
 	badRequest []byte
 	byPath     map[string]asset
@@ -73,7 +82,7 @@ func mustAssets() *assets {
 // them. Leaves (fonts, images, scripts) go first, then stylesheets,
 // which name fonts, then the shell, which names everything.
 func buildAssets(root fs.FS) (*assets, error) {
-	a := &assets{byPath: map[string]asset{}}
+	a := &assets{byPath: map[string]asset{}, root: map[string][]byte{}}
 	urls := map[string]string{}
 	for _, pass := range []func(string) bool{isLeaf, isStyle} {
 		if err := a.addPass(root, urls, pass); err != nil {
@@ -84,9 +93,16 @@ func buildAssets(root fs.FS) (*assets, error) {
 	if err != nil {
 		return nil, err
 	}
-	if a.worker, err = fs.ReadFile(root, "web/"+workerFile); err != nil {
-		return nil, err
+	for name := range rootFiles {
+		body, err := fs.ReadFile(root, "web/"+name)
+		if err != nil {
+			return nil, err
+		}
+		if a.root[name], err = rewriteRefs(body, urls); err != nil {
+			return nil, err
+		}
 	}
+	a.versionWorker()
 	if a.shell, err = rewriteRefs(shell, urls); err != nil {
 		return nil, err
 	}
@@ -97,7 +113,28 @@ func buildAssets(root fs.FS) (*assets, error) {
 	return a, nil
 }
 
-func isLeaf(name string) bool  { return !isStyle(name) }
+// offlineVersion is where the service worker carries a hash of the
+// offline page. That page is served by a fixed name, never hashed: the
+// hash makes a release that changes only the page change the worker too,
+// so browsers install it and copy the new page.
+const offlineVersion = "{{version:offline.html}}"
+
+// versionWorker writes the offline page's hash into the worker.
+func (a *assets) versionWorker() {
+	sum := sha256.Sum256(a.root["offline.html"])
+	a.root[workerName] = []byte(strings.ReplaceAll(
+		string(a.root[workerName]), offlineVersion,
+		hex.EncodeToString(sum[:])[:12]))
+}
+
+// workerName is the service worker among rootFiles.
+const workerName = "sw.js"
+
+func isLeaf(name string) bool { return !isStyle(name) }
+func isRootFile(p string) bool {
+	_, ok := rootFiles[strings.TrimPrefix(p, "web/")]
+	return ok
+}
 func isStyle(name string) bool { return path.Ext(name) == ".css" }
 
 func (a *assets) addPass(
@@ -105,7 +142,7 @@ func (a *assets) addPass(
 ) error {
 	return fs.WalkDir(root, "web", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || p == "web/index.html" ||
-			p == "web/"+workerFile || !want(p) {
+			isRootFile(p) || !want(p) {
 			return err
 		}
 		ext := path.Ext(p)
@@ -160,13 +197,12 @@ func (a *assets) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if redirectOld(w, r) {
 		return
 	}
-	if r.URL.Path == "/"+workerFile {
-		// Never hashed and never kept long: a service worker's scope
-		// is the folder it is served from, and browsers check it for
-		// updates by its fixed URL.
-		w.Header().Set("Content-Type", assetTypes[".js"])
+	if body, ok := a.root[strings.TrimPrefix(r.URL.Path, "/")]; ok {
+		// Never kept long: browsers check these by their fixed URL.
+		name := strings.TrimPrefix(r.URL.Path, "/")
+		w.Header().Set("Content-Type", rootFiles[name])
 		w.Header().Set("Cache-Control", "no-cache")
-		_, _ = w.Write(a.worker)
+		_, _ = w.Write(body)
 		return
 	}
 	if isShellRoute(r.URL.Path) {

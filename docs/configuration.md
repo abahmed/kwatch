@@ -273,7 +273,7 @@ Endpoints kwatch serves so you can see it's alive and grab Prometheus metrics. T
 | `kwatch_edition_rebuilds_total` | counter | `result` = `success`, `retry`, `failed` | In-process rebuilds after a license edition change: success once the new generation serves, retry per transient step retry, failed when a rebuild gave up and the process exits |
 | `kwatch_heartbeat_failures_total` | counter | none | Heartbeat pings that failed or were rejected |
 | `kwatch_kubelet_stats_failures_total` | counter | none | Kubelet stats summary reads that failed, one per node per round |
-| `kwatch_storage_resets_total` | counter | `reason` = `schema_mismatch`, `unreadable` | State files set aside (or deleted) and recreated at open |
+| `kwatch_storage_resets_total` | counter | `reason` = `schema_mismatch`, `unreadable`, `migration_failed` | State files set aside (or deleted) and recreated at open |
 | `kwatch_storage_corrupt_records_total` | counter | none | Stored values skipped because they did not decode |
 | `kwatch_storage_expired_total` | counter | none | Stored entries deleted by retention |
 | `kwatch_storage_evicted_total` | counter | none | Stored entries deleted to meet the size cap |
@@ -426,7 +426,7 @@ reported as `component_failed`.
 | `persistence_restore_failed` | Saved state could not be read back, for example the delivery outbox |
 | `persistence_write_failed` | Saved state could not be written; reported by the `usage-history` component (the container usage history) and the delivery outbox |
 | `trail_restore_failed` | The saved send trail ("Who was told") could not be read back; reported by the `delivery-outbox` component |
-| `storage_reset` | The state file had another schema version or was unreadable and was set aside as `state.db.corrupt` and recreated |
+| `storage_reset` | The state file had another schema version with no migration, failed its migration or was unreadable, and was set aside as `state.db.corrupt` and recreated |
 | `storage_over_cap` | Data that is never evicted keeps the state store over its size cap |
 | `provider_unavailable` | The `provider-<name>` component could not reach its provider (transient failures; the job stays queued) |
 | `provider_rejected` | The `provider-<name>` component's provider refused a message permanently, for example a revoked token |
@@ -573,6 +573,13 @@ dashboard, kwatch sends them through the browser's push service over HTTPS
 so they arrive with every dashboard tab closed. In a cluster without that
 access they arrive only while a dashboard tab is open. See
 [dashboard notes](./dashboard.md#browser-notifications).
+
+Release reports need no setting either. The dashboard's Releases page
+lists every rollout of a Deployment, StatefulSet or DaemonSet with its
+verdict; a healthy release sends no message and is not added to the
+digest, and one that goes wrong is reported by the issue it causes. They
+need no extra permission and follow the namespace scope. See
+[Releases](./dashboard.md#releases).
 
 ## 🌱 Environment variables
 

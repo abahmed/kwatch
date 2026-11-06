@@ -79,6 +79,12 @@ func daemonSetStatus(d *appsv1.DaemonSet, attrs map[string]inventory.Value) {
 	attrs[AttrUpdatedReplicas] = number(st.UpdatedNumberScheduled)
 	attrs[AttrUnavailable] = number(st.NumberUnavailable)
 	attrs[AttrMisscheduled] = number(st.NumberMisscheduled)
+	strategy := d.Spec.UpdateStrategy.Type
+	if strategy == "" {
+		strategy = appsv1.RollingUpdateDaemonSetStrategyType
+	}
+	// OnDelete never rolls on its own (release stall judgement).
+	attrs[AttrUpdateStrategy] = inventory.Text(string(strategy))
 }
 
 func jobStatus(j *batchv1.Job, attrs map[string]inventory.Value) {

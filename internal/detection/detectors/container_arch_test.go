@@ -83,6 +83,7 @@ func TestExecFormatErrorNamesTheNodeArchitecture(t *testing.T) {
 	assert.Equal(t, "2 pods on amd64 nodes",
 		ev[detection.EvidenceArchHealthy])
 	assert.Equal(t, execFormatLine, ev[detection.EvidenceError])
+	assert.Equal(t, "ghcr.io/x/api:1.4", ev[detection.EvidenceArchImage])
 }
 
 func TestExecFormatErrorWithoutHealthyReplicas(t *testing.T) {

@@ -39,7 +39,13 @@ func TestGitOpsApp(t *testing.T) {
 			map[string]string{helmReleaseName: "api"}, "helm/api"},
 		{"helm chart only",
 			map[string]string{helmChartLabel: "api-1.2.0"}, nil,
-			"helm/api-1.2.0"},
+			"helm-chart/api-1.2.0"},
+		{"helm release in its own namespace", nil,
+			map[string]string{helmReleaseName: "api",
+				helmReleaseSpace: "shop"}, "helm/api"},
+		{"helm release in another namespace", nil,
+			map[string]string{helmReleaseName: "api",
+				helmReleaseSpace: "ops"}, "helm/ops/api"},
 		{"argocd renders helm", map[string]string{
 			argoInstanceLabel: "shop", helmChartLabel: "api-1.2.0",
 		}, nil, "argocd/shop"},
@@ -47,7 +53,7 @@ func TestGitOpsApp(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			meta := &metav1.ObjectMeta{
+			meta := &metav1.ObjectMeta{Namespace: "shop",
 				Labels: tt.labels, Annotations: tt.annotations,
 			}
 			assert.Equal(t, tt.want, GitOpsApp(meta))

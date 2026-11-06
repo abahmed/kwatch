@@ -141,6 +141,7 @@
     var pop = KW.el("div", "dd-pop");
     var find = KW.el("input", "dd-find");
     find.type = "search";
+    find.name = "find-" + cfg.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
     find.autocomplete = "off";
     find.placeholder = "Find a " + (cfg.noun || cfg.name.toLowerCase());
     find.setAttribute("aria-label", "Find a " + (cfg.noun || cfg.name));
