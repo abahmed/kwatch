@@ -12,11 +12,13 @@ the first thing on each page says what is wrong in one sentence, the key
 details sit right under it, and the rest waits behind a click or a tab.
 
 - **Sidebar**: **Overview** (`/`, the landing page), **Issues**
-  (`/issues`, with the count of active issues), **Releases**
-  (`/releases`), **Map** (`/map`),
+  (`/issues`, with the count of active issues), **Map** (`/map`),
   **Activity** (`/activity`) and **kwatch** (`/kwatch`). The old `/insights` page is
-  part of the Overview now; its address redirects to `/`. Every page is
-  as wide as the Issues table (90rem at most).
+  part of the Overview now; its address redirects to `/`. The old
+  `/releases` page is part of the issues now ("Releases" below); its
+  address redirects to `/issues`. Pages of prose are 1000px wide at most
+  (`--max-app`, the brand's); the Issues table is wider (`--max-table`,
+  90rem).
   The **sidebar dot** beside "kwatch" (`js/pages.js`, `KW.selfDot`)
   shows when kwatch itself needs a look: alerts failed to send in the
   last hour, alert links are off, it is still starting, it can't read
@@ -93,17 +95,20 @@ openings out of `paged` and of the urgent counts.
 bottom:
 
 1. **Notices**, only when someone must act (`KW.selfNotices`, shared
-   with the kwatch page): "kwatch is starting" with a bar of the kinds
-   read (from `self.startup`, until `startup.done`), "kwatch hasn't
+   with the kwatch page): "kwatch is loading what it knows" with a bar
+   of the kinds read (from `self.startup`, until `startup.done`) and
+   "This page updates by itself.", shown only while there is no data
+   yet (no issue to list), "kwatch hasn't
    checked your cluster in a while", "Alert links are off" with
    `dashboardLinks.text`, and "2 alerts failed to send in the last
    hour" (`failedSendsLastHour`). Each links to the kwatch page.
 2. **Status tile**: one sentence: "37 issues happening now · 2 urgent",
-   "All clear · nothing is failing", "kwatch is starting · nothing found
-   yet", or while kwatch can't be reached "Can't reach kwatch · last
-   known at 19:44" (see "When kwatch can't be reached"); red with an
-   urgent issue, amber with others, green when clear, with the
-   freshness line.
+   "All clear · nothing is failing", "kwatch is loading what it knows", or while kwatch can't be reached "Can't reach kwatch · last
+   known at 19:44" (see "When kwatch can't be reached"); the
+   tile is a `--failing-bg` panel with a 1px `--line` border, the
+   sentence in `--text` and a small marker: red with an urgent issue,
+   amber with others, green when clear, with the freshness line (and, on
+   a phone, a **Refresh** button beside "Live").
 3. **Severity bar**: the active issues by alert level (`counts`) as one
    bar that starts at 0 and spans their total, with a key that gives
    each level's word and number ("Urgent 2 · Needs attention 9 · Low
@@ -207,24 +212,35 @@ the tabs.
 
 ## Releases
 
-`/releases` (`js/releases.js`, from `/api/releases`) lists every rollout
-kwatch saw of a Deployment, StatefulSet or DaemonSet in the last 7 days
-(or 24 hours), newest first, with its verdict. A release is a change of
-the pod template (an image, the environment, resources, probes, config
-references, volumes, `kubectl rollout restart`); a replica, pause or
-label change is none. kwatch's own Deployment and namespaces it does
-not watch are left out. Each row shows the time, the verdict, the
-workload, what changed ("api:2.3 → api:2.4 · environment"), how the
-rollout went ("Rolled out in 1 min", "Stalled: it missed its progress
-deadline", "2 of 3 ready", "The previous version still serves 2 of 3")
-and who made it when the change journal knows: the GitOps application
-or the field manager, and the `kubernetes.io/change-cause` note. Pro adds
-the restarts per hour before and after, the usual time to ready and the
-first fatal line a new container stopped with. A release that went
-wrong links to its issue and says how to undo it:
+There is no Releases page: a release is part of the issue it caused.
+`/releases` redirects to `/issues`; `/api/releases` is gone (the
+dashboard was only in release candidates). kwatch still watches every
+rollout of a Deployment, StatefulSet or DaemonSet and keeps its book of
+releases (`dashboard.releases` in the state file) as before; the book
+drives the alerts, the undo commands and the two places below.
+
+A release is a change of the pod template (an image, the environment,
+resources, probes, config references, volumes, `kubectl rollout
+restart`); a replica, pause or label change is none. kwatch's own
+Deployment and namespaces it does not watch are left out.
+
+**On the issue** (`js/release.js`, from `release` on
+`/api/incidents/{id}`): a row of the summary between the proof and
+"What to do", shown only when a release is linked to the issue. Its
+label follows the verdict: "Likely caused by a release" for failed,
+down and regressed; "A release near this issue" for the others (the
+release is then only close in time). It shows the workload (mono), when
+it rolled out and how long before or after the issue started, the
+verdict as a chip with a sentence, what changed ("Image app: api:1.4 →
+api:1.5", "Also changed: environment, probes", the GitOps application or
+the field manager, the `kubernetes.io/change-cause` note) and how to
+undo it. Pro adds the restarts per hour before and after and the first
+fatal line a new container stopped with, only when kept (Community shows
+neither, with no empty slot). The undo:
 
 - a workload Argo CD or Flux deploys: "Revert the change in Git: a
-  rollback in the cluster would be overwritten by the next sync";
+  rollback in the cluster would be overwritten by the next sync" (text
+  only);
 - a Helm release (the `meta.helm.sh/release-name` annotation):
   `helm rollback <release> -n <release namespace>`, the namespace from
   `meta.helm.sh/release-namespace`, else the workload's; a chart label
@@ -232,21 +248,28 @@ wrong links to its issue and says how to undo it:
   kubectl undo;
 - anything else: `kubectl rollout undo <kind>/<name> -n <namespace>`.
 
-Only the workload's newest release offers a command: a rollback goes
-back one revision from what runs now, so on an older release it would
-bring back the newer one. An older release says to undo from the newest.
+A command comes with "Run this in your terminal. kwatch does not change
+your cluster." and a Copy button: the dashboard stays read-only. Only
+the workload's newest release offers a command: a rollback goes back one
+revision from what runs now, so on an older release it would bring back
+the newer one. An older release says to undo from the newest.
+
+**On the Overview**: one line when there were releases in the last 24
+hours: "4 releases in the last 24 hours, 1 went wrong" ("all fine so
+far" when none did). "went wrong" links to the issue (one) or to
+`/issues?status=all&release=bad` (several): the issues that releases
+which went wrong caused. A release that went wrong without an issue (a
+regression: the release watch saw the new version restart far more than
+the previous one, but no issue opened) has no issue to link, so the line
+lists up to five such releases beneath it with their verdict and time. No
+issue is opened for it.
 
 A Deployment stalls only when it misses its progress deadline: a slow
 rollout that keeps going is still rolling out. A StatefulSet or
 DaemonSet stalls when no replica was updated or got ready for 15
 minutes; one that waits for people on purpose (the `OnDelete` strategy,
-a StatefulSet partition) never stalls.
-
-Filters: the window, a namespace and any verdict ("Went wrong" is
-regressed, failed or down), kept in the address. Without change history
-(not Pro), no release shows Pro detail, even one kept from a Pro run. The Overview adds one line when
-there were releases in the last 24 hours: "4 releases in the last 24
-hours, 1 went wrong", a link to this page.
+a StatefulSet partition) never stalls. Without change history (not Pro),
+no release shows Pro detail, even one kept from a Pro run.
 
 | Verdict | Means |
 |:--|:--|
@@ -257,17 +280,17 @@ hours, 1 went wrong", a link to this page.
 | Failed | an issue people were told of started about the workload while it was watched, or the rollout stalled, while the workload still has ready replicas |
 | Down | as Failed, with no ready replica |
 | Replaced | a newer release came before a verdict |
-| Not watched | kwatch saw the release more than 30 minutes after it happened (after a restart, say) |
+| Unknown | kwatch saw the release more than 30 minutes after it happened (after a restart, say) |
 
 A release keeps the worst verdict it reached while watched (its rollout
-time plus 15 minutes). A healthy release sends no message, and nothing
-is added to the digest: this page is where it shows. A release that went
-wrong is reported by the issue it causes; when the release is at least
-the likely cause, its message offers the same undo (a revert in Git for
-Argo CD and Flux, a Helm rollback, or a rollback to the revision before
-the release). The book is kept in the
-state file (`dashboard.releases`), at most 500 releases or 7 days, and
-in memory without one; it is looked at every 15 seconds.
+time plus 15 minutes). A healthy release sends no message and nothing
+is added to the digest. A release that went wrong is reported by the
+issue it causes; when the release is at least the likely cause, its
+message offers the same undo (a revert in Git for Argo CD and Flux, a
+Helm rollback, or a rollback to the revision before the release). The
+book is kept in the state file (`dashboard.releases`), at most 500
+releases or 7 days, and in memory without one; it is looked at every 15
+seconds.
 
 ## Map
 
@@ -359,7 +382,7 @@ short.
 
 | Keys | Does |
 |:--|:--|
-| `g` then `o` / `i` / `r` / `m` / `a` / `k` | Overview / Issues / Releases / Map / Activity / kwatch |
+| `g` then `o` / `i` / `m` / `a` / `k` | Overview / Issues / Map / Activity / kwatch |
 | `/` | search the issues |
 | `j` `k` | next / previous row, or issue while one is open beside the table |
 | `Enter` | open the issue beside the table (Cmd or Ctrl and click: its own page in a new tab) |
@@ -537,21 +560,26 @@ issue. The server filters, sorts and pages it, so it behaves the same
 with ten issues or ten thousand.
 
 **Status.** A switch at the top: *Active* (the default), *Resolved* or
-*All*, each with its count. Resolved and All show "Resolved within"
+*All*, each with its count; a line under it says what each means (no
+tooltip). Next to it, **Filters** opens the other pickers (kind, state,
+acknowledged, stopped tracking, start time, resolved within); the
+namespace picker and the search stay in view. Resolved and All show "Resolved within"
 (last 24 hours, 3 days, or 7 days: kwatch keeps resolved issues a
 week); it narrows resolved issues only, never active ones.
 
-**Columns.** By default: severity badge, the issue's title (two lines
+**Columns.** By default: the issue's title first and flexible (two lines
 at most, cut with "…"; the tooltip has the whole title and the likely
 cause; after it, small marks for how often it failed again, `× 3`, New /
 Changed since your last visit, the muted labels "Settled before
 alerting" (see "Layout and reading order") and "Stopped tracking"),
-namespace ("whole cluster" when there
-is none), object (`deployment/payments-api`), status, when (on Active
+the severity badge, where (one mono
+cell: the namespace, or "whole cluster", then the object: `payments ·
+deployment/payments-api`; it replaces the old Namespace and Object
+columns, and a view that kept them keeps Where), status, when (on Active
 "Going on": "for 3 h", or "now" under a minute, the exact start in
 the tooltip; on Resolved "Resolved": "3 h ago"; "Going on or
-resolved" on All) and acknowledged. Start time and duration can be
-added in the Columns panel. The Resolved list has no Status column
+resolved" on All). Acknowledged, start time and duration can be added in
+the Columns panel. The Resolved list has no Status column
 (every row is resolved). Status is in plain words:
 
 | API state | Shown as | Tooltip |
@@ -573,7 +601,7 @@ row, heading, pager button or filter chip (by its key) when a live
 update, a new page, a sort or a removed chip draws them again (a
 removed chip hands it to its neighbour). A "Skip to issues" link,
 first on the page for the keyboard, goes to the first row. Below 1100
-px wide the Object column hides and the sidebar and page margins
+px wide the Where column hides and the sidebar and page margins
 narrow; below 900 px each row becomes a card
 (the column name above each value, empty values left out), so the page
 never scrolls sideways; the order is then picked with the "Sort"
@@ -607,11 +635,11 @@ a link to the first. The pager is hidden while there is only one page.
 **Columns** button at the top right of the table opens a panel with
 every column: a checkbox shows or hides it, the handle drags it to
 another place (the up and down buttons do the same from the keyboard),
-the presets *Compact* (severity, issue, namespace, status, when),
+the presets *Compact* (issue, severity, where, when),
 *Standard* (the default) and *Everything* set them in one click, and
 *Reset columns* goes back to the standard set, order and widths.
-Severity and Issue can't be hidden; severity stays first, since its
-color strip marks the row. Each heading also has a menu (its ⋮ button,
+Severity and Issue can't be hidden; the issue stays first, and its row
+carries the severity color strip. Each heading also has a menu (its ⋮ button,
 shown on hover or focus, or a right-click on the heading): the two
 sort directions, Hide column, Move left, Move right. It stays open
 while the table updates. A
@@ -672,7 +700,7 @@ time, resolved within, the sort picker under 700 px, rows per page,
 the View options pickers, the notifications level, the log container)
 is the site's own dropdown, drawn like the multi-select ones: body
 font, input radius and border, a check on the chosen value, the card
-border and shadow, light and dark. The native `<select>` stays in the
+border, light and dark. The native `<select>` stays in the
 page, hidden, and keeps the value, so code and the address read and
 set it as before; a button with a listbox (arrows, Enter or Space,
 Esc and Tab close and return focus) replaces its look. A select added
@@ -985,23 +1013,21 @@ the key, counted as `/api/incidents?status=all&like=<id>` lists them
 filter), from at most 20,000 incidents read. The issue page and drawer
 link "14 other issues have the same error → see them" to that list.
 
-## Releases API
+## Releases in the API
 
-`GET /api/releases?since=24h|7d&namespace=<ns>&verdict=<verdict>` (read
-only, signed in, with an `ETag`; see "Releases") answers
-`{since, total, bad, namespaces, releases}`: `total` and `bad` count the
-window before the namespace and verdict filters, `namespaces` are those
-with releases in it. `since` defaults to `7d`; `verdict` is one of
-`rolling`, `watching`, `healthy`, `regressed`, `failed`, `down`,
-`replaced`, `unknown` or `bad` (regressed, failed or down). An unknown
-`since` or `verdict`, or a repeated parameter, answers `400`; before the
-pipeline runs, `503`. Each release carries `id`, `kind`, `namespace`,
-`name`, `at`, `images` (`container`, `before`, `after`), `changed`,
-`actor`, `app`, `cause`, `verdict`, `final`, `rolledOut`,
-`rolloutSeconds`, `stalled`, `deadline`, `ready`, `desired`,
-`oldServing`, `incident`, `undo` (`text`, `command`, `mutating`) and, in
-Pro, `detail` (`restartsBefore`, `restartsAfter`, `readyBefore`,
-`errorLine`).
+`GET /api/incidents/{id}` carries `release` when a release is linked to
+the issue: the release's `id`, `kind`, `namespace`, `name`, `at`,
+`images` (`container`, `before`, `after`), `changed`, `actor`, `app`,
+`cause`, `verdict`, `final`, `rolledOut`, `rolloutSeconds`, `stalled`,
+`deadline`, `ready`, `desired`, `oldServing`, `incident`, `newest` (no
+later release of the workload), `undo` (`text`, `command`, `mutating`)
+and, in Pro, `detail` (`restartsBefore`, `restartsAfter`,
+`readyBefore`, `errorLine`). `GET /api/overview` carries `releases`:
+`{total, bad, badIncidents, wrong}` for the last 24 hours (`bad` counts
+regressed, failed and down; `wrong` is up to five of them with `id`,
+`kind`, `namespace`, `name`, `at`, `verdict` and `incident`).
+`GET /api/incidents?release=bad` lists the issues caused by a release
+that went wrong in the last 24 hours.
 
 ## Map API
 
@@ -1306,7 +1332,7 @@ true while the stream is quiet.
   request does not turn it back to http.
 - **Unknown addresses.** A path outside `/api/` and `/assets/` that the
   UI does not have answers `404` with a small page in the dashboard's
-  own look, titled "Not found · kwatch" (the shared stylesheet and
+  own look, titled "Not found - kwatch" (the shared stylesheet and
   brand by their hashed asset links, no script or inline style), linking
   to the Overview; `/api/*` and missing assets keep the JSON error. A path
   that can't be parsed at all (a broken escape such as `%E0%A4%A`) gets
@@ -1501,7 +1527,7 @@ push") makes a check happen sooner (at most every 10 s) while the tab is
 shown. Close every kwatch tab and nothing arrives.
 
 While the tab is hidden, the tab title counts the changes not seen yet,
-"(3) Issues · kwatch"; the count clears when the tab is shown. The
+"(3) Active issues - kwatch"; the count clears when the tab is shown. The
 count follows the same severity choice, whether or not notifications are
 on.
 
@@ -1521,3 +1547,28 @@ Limits:
 - The Content Security Policy gains only `worker-src 'self'` and
   `manifest-src 'self'`: the page still loads nothing from elsewhere and
   connects only to its own origin.
+
+## Look and brand
+
+The brand tokens are `web/tokens.css`, a copy of
+`kwatch.dev/packages/brand/tokens.css`; no other stylesheet redeclares
+one (`look.css`'s high-contrast overrides aside). `tokens_test.go` fails
+when the copy differs from the brand file (when the two repositories sit
+side by side, or `KWATCH_BRAND_TOKENS` names it), when a stylesheet
+redeclares a brand token, uses an undeclared `var(--x)`, holds an
+`rgb()` color or a blurred drop shadow. `app.css` adds only what is the
+dashboard's own: `--max-table`, `--ctl` (one 36px control height, 44px
+on a touch screen), `--text-scale` and the `--t-*` sizes (the brand's
+sizes times the View options text size), and `--ink-failing` /
+`--ink-degraded`, the dark-mode red and amber for log lines on the
+always-dark `--ink` surface (the brand has no token for that).
+
+Signal (lime) is on the logo dot only. The active nav bar and an
+updated row use `--text`; a search match is `--surface` with an
+underline. No shadows: menus, the drawer and bars have a 1px `--line`
+border. `--radius-pill` is for buttons; chips, counts, the switches and
+filter chips use `--radius-chip`. Inputs and pickers have one border,
+`--control-border`. A hover on a row or card is `--surface`; a text link
+grows its underline from 1px to 2px with no color change. Information is
+visible text, never only a tooltip. A tab title reads "Active issues -
+kwatch".
