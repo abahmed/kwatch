@@ -5,27 +5,27 @@
    come from app.css. */
 
 .dd { position: relative; display: inline-block; min-width: 0; max-width: 100%; vertical-align: middle; }
-.dd-btn { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 40px; padding: 0 12px 0 14px; background: var(--bg); color: var(--text); border: 1.5px solid var(--control-border); border-radius: var(--radius-input); font-family: var(--font-body); font-size: 0.875rem; font-weight: 400; text-align: left; white-space: nowrap; }
+.dd-btn { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: var(--ctl); padding: 0 12px 0 14px; background: var(--bg); color: var(--text); border: 1.5px solid var(--control-border); border-radius: var(--radius-input); font-family: var(--font-body); font-size: var(--t-small); font-weight: 400; text-align: left; white-space: nowrap; }
 .dd-btn:hover { border-color: var(--text); }
 .dd.is-open .dd-btn { border-color: var(--text); box-shadow: 0 0 0 1px var(--text); }
 .dd.is-set .dd-btn { border-color: var(--text); box-shadow: inset 0 0 0 0.5px var(--text); }
 .dd-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .dd-text b { font-weight: 600; }
-.dd-text .mono { font-size: 0.8125rem; }
+.dd-text .mono { font-size: var(--t-micro); }
 .dd-name { color: var(--text-muted); }
 .dd-chev { width: 14px; height: 14px; color: var(--text-muted); stroke-width: 1.8; }
 .dd.is-open .dd-chev { transform: rotate(180deg); color: var(--text); }
 
-.dd-pop { position: absolute; left: 0; top: calc(100% + 6px); z-index: 30; min-width: 100%; width: max-content; max-width: min(22.5rem, calc(100vw - 32px)); padding: 6px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-card); box-shadow: 0 10px 30px rgba(0, 0, 0, .18); font-size: 0.875rem; }
+.dd-pop { position: absolute; left: 0; top: calc(100% + 6px); z-index: 30; min-width: 100%; width: max-content; max-width: min(22.5rem, calc(100vw - 32px)); padding: 6px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-card); font-size: var(--t-small); }
 .dd-pop.dd-right { left: auto; right: 0; }
 .dd-multi .dd-pop { width: 18.75rem; }
 .dd-list { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow-y: auto; }
-.dd-opt { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.dd-opt { display: flex; align-items: center; gap: 10px; min-height: var(--ctl); padding: 0 10px; border-radius: var(--radius-chip); cursor: pointer; white-space: nowrap; }
 .dd-opt:hover, .dd-opt:focus { background: var(--surface); }
 .dd-opt:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
 .dd-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.dd-label.mono { font-size: 0.8125rem; }
-.dd-n { flex: none; color: var(--text-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.dd-label.mono { font-size: var(--t-micro); }
+.dd-n { flex: none; color: var(--text-muted); font-size: var(--t-micro); font-variant-numeric: tabular-nums; }
 .dd-menu .dd-opt > .icon { width: 14px; height: 14px; visibility: hidden; }
 .dd-menu .dd-opt[aria-selected="true"] { font-weight: 600; }
 .dd-menu .dd-opt[aria-selected="true"] > .icon { visibility: visible; }
@@ -34,16 +34,15 @@
 .dd-box .icon { width: 12px; height: 12px; stroke-width: 2.4; visibility: hidden; }
 [aria-selected="true"] > .dd-box, [aria-checked="true"] > .dd-box { background: var(--text); border-color: var(--text); color: var(--bg); }
 [aria-selected="true"] > .dd-box .icon, [aria-checked="true"] > .dd-box .icon { visibility: visible; }
-.dd-find { display: block; width: 100%; margin: 0 0 6px; min-height: 36px; padding: 6px 10px; font-size: 0.875rem; border: 1.5px solid var(--control-border); border-radius: var(--radius-input); }
-.dd-note { padding: 6px 10px; font-size: 0.8125rem; color: var(--text-muted); }
-.dd-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; padding: 8px 10px 4px; border-top: 1px solid var(--line); font-size: 0.8125rem; }
+.dd-find { display: block; width: 100%; margin: 0 0 6px; min-height: var(--ctl); padding: 6px 10px; font-size: var(--t-small); border: 1.5px solid var(--control-border); border-radius: var(--radius-input); }
+.dd-note { padding: 6px 10px; font-size: var(--t-micro); color: var(--text-muted); }
+.dd-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; padding: 8px 10px 4px; border-top: 1px solid var(--line); font-size: var(--t-micro); }
 .dd-foot .link { min-height: 28px; }
 
 /* Smaller where the controls around are smaller. */
 .vopts-pop .dd, .pager .dd, .ntf-opts .dd { display: block; }
-.vopts-pop .dd-btn, .pager .dd-btn { min-height: 36px; }
 .ntf-opts .dd { margin-top: 4px; }
-.ntf-opts .dd-btn { min-height: 32px; font-size: 0.8125rem; padding: 0 10px; }
+.ntf-opts .dd-btn { font-size: var(--t-micro); padding: 0 10px; }
 .pager .dd { display: inline-block; }
 
 @media (max-width: 700px) {
@@ -53,4 +52,4 @@
 .dd-find:focus-visible, .dd-opt:focus-visible { outline-offset: -2px; outline-width: 2px; }
 /* The sidebar scrolls: its picker opens in place, inside it. */
 .ntf-opts .dd-pop { position: static; width: 100%; max-width: none; margin-top: 4px; box-shadow: none; }
-.dd-count { display: inline-block; margin-left: 6px; min-width: 20px; padding: 0 6px; border-radius: var(--radius-pill); background: var(--text); color: var(--bg); font-size: 0.75rem; line-height: 1.25rem; text-align: center; }
+.dd-count { display: inline-block; margin-left: 6px; min-width: 20px; padding: 0 6px; border-radius: var(--radius-chip); background: var(--text); color: var(--bg); font-size: var(--t-micro); line-height: 1.25rem; text-align: center; }

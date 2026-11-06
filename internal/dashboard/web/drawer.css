@@ -4,13 +4,12 @@
 html { scrollbar-gutter: stable; }
 html.drw-open { overflow: hidden; }
 .drw { position: fixed; inset: 0; z-index: 40; }
-.drw-shade { position: absolute; inset: 0; background: rgba(14, 17, 22, .38); }
-.drw-panel { position: absolute; top: 0; right: 0; bottom: 0; width: min(52rem, 64vw); display: flex; flex-direction: column; background: var(--bg); border-left: 1px solid var(--line); box-shadow: -12px 0 32px rgba(0, 0, 0, .22); }
+.drw-shade { position: absolute; inset: 0; background: color-mix(in srgb, var(--ink) 40%, transparent); }
+.drw-panel { position: absolute; top: 0; right: 0; bottom: 0; width: min(52rem, 64vw); display: flex; flex-direction: column; background: var(--bg); border-left: 1px solid var(--line); }
 .drw-panel:focus { outline: none; }
 .drw-panel:focus-visible { outline: var(--focus-width) solid var(--text); outline-offset: calc(-1 * var(--focus-width)); }
 .drw-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--bg); }
 .drw-nav, .drw-acts { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.drw-bar .btn { min-height: 36px; }
 .drw-full { display: inline-flex; align-items: center; text-decoration: none; }
 .drw-x { display: inline-flex; align-items: center; justify-content: center; width: 2.5rem; padding: 0; }
 .drw-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 4px 24px 32px; }
@@ -18,8 +17,8 @@ html.drw-open { overflow: hidden; }
 .drw-body .panel { margin-top: 16px; }
 .drw-gone { margin-top: 24px; font-size: 1.375rem; }
 .d-fresh { margin: 0 0 12px; }
-mark.hl { background: var(--signal); color: var(--on-signal); border-radius: 2px; padding: 0 1px; }
-.d-similar { margin-top: 10px; font-size: 0.9375rem; }
+mark.hl { background: var(--surface); color: var(--text); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 2px; border-radius: var(--radius-chip); padding: 0 1px; }
+.d-similar { margin-top: 10px; font-size: var(--t-small); }
 @media (max-width: 900px) {
   .drw-panel { width: 100%; border-left: 0; }
   .drw-body { padding: 4px 16px 24px; }
@@ -30,5 +29,4 @@ mark.hl { background: var(--signal); color: var(--on-signal); border-radius: 2px
   .drw-page { display: none; }
 }
 @media (prefers-color-scheme: dark) {
-  .drw-shade { background: rgba(0, 0, 0, .55); }
 }

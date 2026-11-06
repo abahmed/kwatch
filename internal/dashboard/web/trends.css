@@ -2,7 +2,7 @@
    js/trends.js): the week chart's table and the lists in its cards.
    The cards and charts themselves are in overview.css. */
 .ip-chart { margin-top: 4px; }
-.ip-table { margin-top: 12px; font-size: 0.875rem; }
+.ip-table { margin-top: 12px; font-size: var(--t-small); }
 .ip-table > summary { cursor: pointer; width: fit-content; color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; min-height: 28px; }
 .ip-table > summary:hover { color: var(--text); }
 .ip-t { margin-top: 8px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
@@ -13,11 +13,11 @@
 .ip-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
 .ip-list li { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ip-link { font-weight: 600; overflow-wrap: anywhere; width: fit-content; max-width: 100%; }
-.ip-meta { font-size: 0.8125rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.ip-meta { font-size: var(--t-micro); color: var(--text-muted); overflow-wrap: anywhere; }
 .tr-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .tr-list li { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .tr-link { font-weight: 600; overflow-wrap: break-word; width: fit-content; max-width: 100%; }
-.tr-meta { font-size: 0.875rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.tr-meta { font-size: var(--t-small); color: var(--text-muted); overflow-wrap: anywhere; }
 @media (pointer: coarse) {
   .ip-link, .ip-table > summary { display: inline-flex; align-items: center; min-height: 44px; }
 }

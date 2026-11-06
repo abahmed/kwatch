@@ -103,20 +103,14 @@
       td.appendChild(a);
       marks(td, item, ctx);
     },
-    ns: function (td, item, ctx) {
-      var span = td.appendChild(KW.el("span", item.namespace ? "mono" : ""));
-      if (item.namespace) KW.highlight(span, item.namespace, ctx.terms);
-      else span.textContent = "whole cluster";
-      td.title = item.namespace || "whole cluster";
-    },
-    obj: function (td, item, ctx) {
-      if (!item.workload) return td.appendChild(dash(td));
+    /* where: the namespace and the object in one mono cell, the
+       namespace first: "shop · deployment/api". */
+    where: function (td, item, ctx) {
+      var text = KW.whereText(item);
       var span = td.appendChild(KW.el("span", "mono"));
-      KW.highlight(span, objectText(item), ctx.terms);
+      KW.highlight(span, text, ctx.terms);
       breaks(span);
-      td.title = objectText(item);
-      // A card leaves the line out when the title already names it.
-      td.classList.toggle("in-title", String(item.title).indexOf(item.workload) >= 0);
+      td.title = text;
     },
     status: function (td, item) { td.appendChild(KW.stateChip(item.state)); },
     started: function (td, item) {
@@ -221,7 +215,7 @@
     function move(key, by) {
       var order = KW.prefs.order(), at = order.indexOf(key);
       var shown = KW.prefs.columns(), next = shown[shown.indexOf(key) + by];
-      if (!next || next === "sev") return;
+      if (!next || next === "title") return;
       order.splice(at, 1);
       order.splice(order.indexOf(next) + (by > 0 ? 1 : 0), 0, key);
       KW.prefs.setColumns(shown, order);

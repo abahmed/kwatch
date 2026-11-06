@@ -21,6 +21,9 @@ type OverviewResponse struct {
 	Counts              SeverityCounts  `json:"counts"`
 	LookFirst           []OverviewIssue `json:"lookFirst"`
 	FailedSendsLastHour *int            `json:"failedSendsLastHour,omitempty"`
+	// Releases is the last 24 hours of releases; absent until the
+	// release book is read.
+	Releases *ReleaseSummary `json:"releases,omitempty"`
 }
 
 // SeverityCounts count issues by severity in the page's words: urgent
@@ -77,6 +80,10 @@ func (s *Server) overviewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	out := buildOverview(items, s.texts.redact)
 	out.FailedSendsLastHour = s.failedLastHour()
+	if snap, ok := s.releaseBookSnapshot(); ok {
+		out.Releases = summarizeReleases(snap,
+			s.now.Now().Add(-releaseWindow))
+	}
 	writeTagged(w, r, out)
 }
 

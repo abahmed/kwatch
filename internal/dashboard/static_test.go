@@ -182,6 +182,7 @@ func TestStaticBuildRefusesAMissingReference(t *testing.T) {
 		t.Error("built without what the not-found page names")
 	}
 	root["web/app.css"] = &fstest.MapFile{Data: []byte("body{}")}
+	root["web/tokens.css"] = &fstest.MapFile{Data: []byte(":root{}")}
 	root["web/favicon.svg"] = &fstest.MapFile{Data: []byte("<svg/>")}
 	if _, err := buildAssets(root); err == nil {
 		t.Error("built without the service worker")
@@ -228,7 +229,7 @@ func TestStaticNotFoundPageUsesTheSharedLook(t *testing.T) {
 	page := call(t, s, http.MethodGet, "/nope", "").Body.String()
 	css := regexp.MustCompile(`/assets/app\.[0-9a-f]{12}\.css`).
 		FindString(string(s.assets.shell))
-	for _, want := range []string{"<title>Not found · kwatch</title>",
+	for _, want := range []string{"<title>Not found - kwatch</title>",
 		`<link rel="stylesheet" href="` + css + `">`,
 		`class="wordmark">kwatch</span>`, "Page not found"} {
 		if css == "" || !strings.Contains(page, want) {

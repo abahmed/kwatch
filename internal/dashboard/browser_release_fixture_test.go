@@ -9,7 +9,7 @@ import (
 )
 
 // browserReleases is a release book with one release of each kind of
-// row the Releases page draws: healthy, failed with an undo command, and
+// row the issue page and Overview draw: healthy, failed with an undo command, and
 // down under GitOps with an undo in Git.
 func browserReleases() *releaseBook {
 	at := time.Now().Add(-time.Hour)
@@ -27,6 +27,8 @@ func browserReleases() *releaseBook {
 		{ID: "b", Kind: "statefulset", Namespace: "data", Name: "db",
 			At: at.Add(-time.Hour), Verdict: release.Down,
 			App: "argocd/data", Changed: []string{"environment"}},
+		{ID: "d", Kind: "deployment", Namespace: "shop", Name: "web",
+			At: at.Add(-30 * time.Minute), Verdict: release.Regressed},
 		{ID: "c", Kind: "daemonset", Namespace: "ops", Name: "agent",
 			At: at.Add(-2 * time.Hour), Verdict: release.Healthy,
 			RolledOut: at.Add(-2*time.Hour + time.Minute),

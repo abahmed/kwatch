@@ -2,7 +2,7 @@
    column with a checkbox to show it, a handle to drag it to another
    place (and Move up / Move down buttons for the keyboard), the
    presets Compact, Standard and Everything, and "Reset columns".
-   Severity and Issue are always shown; severity stays first. Kept in
+   Severity and Issue are always shown; the issue stays first. Kept in
    this browser with the view options (prefs.js). */
 (function () {
   "use strict";
@@ -63,11 +63,11 @@
       var c = P.column(key);
       var li = KW.el("li", "cols-row");
       li.dataset.key = key;
-      var pinned = key === "sev";
+      var pinned = key === "title";
       li.draggable = !pinned;
       var grip = KW.el("span", "cols-grip" + (pinned ? " is-off" : ""));
       grip.appendChild(KW.icon("grip"));
-      grip.title = pinned ? "Severity stays first" : "Drag to move";
+      grip.title = pinned ? "Issue stays first" : "Drag to move";
       li.appendChild(grip);
       var l = KW.el("label", "cols-c");
       var cb = KW.el("input");
@@ -118,7 +118,7 @@
     });
     list.addEventListener("dragover", function (e) {
       var li = e.target.closest && e.target.closest("[data-key]");
-      if (!dragging || !li || li.dataset.key === "sev") return;
+      if (!dragging || !li || li.dataset.key === "title") return;
       e.preventDefault();
       KW.$$(".is-drop", list).forEach(function (x) { x.classList.remove("is-drop"); });
       li.classList.add("is-drop");

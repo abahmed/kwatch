@@ -13,7 +13,8 @@ var listParams = []string{"q", "severity", "namespace", "state", "age",
 	"limit", "page", "pageSize"}
 
 // oldRoute is where an address of the old two-list layout lives now:
-// "/status" (the Overview) and "/insights" (now part of the
+// "/releases" (folded into the issues)
+// is "/issues", "/status" (the Overview) and "/insights" (now part of the
 // Overview) are "/", "/resolved?…" is "/issues?status=resolved&…",
 // and "/" with list filters is "/issues?…". It returns "" for every
 // other address.
@@ -21,6 +22,9 @@ func oldRoute(u *url.URL) string {
 	switch u.Path {
 	case "/status", "/insights":
 		return "/"
+	case "/releases":
+		// Releases are part of the issues they cause now.
+		return "/issues"
 	case "/resolved":
 		q := u.Query()
 		q.Del("status")

@@ -156,7 +156,8 @@
     if (!data.segs.length) data = fromPhases(inc, nowIso);
     var segs = data.segs, chg = changes(inc);
     box.textContent = "";
-    box.hidden = !segs.length;
+    // One state is no history: the bar shows only when it changed.
+    box.hidden = segs.length < 2;
     if (box.hidden) return;
     var start = Date.parse(segs[0].from), stop = Date.parse(segs[segs.length - 1].to);
     chg.forEach(function (c) {

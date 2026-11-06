@@ -23,11 +23,11 @@
 .map-node:focus { outline: none; }
 .map-node:focus-visible rect { stroke: var(--text); stroke-width: 3; }
 .map-info { margin-top: 10px; padding: 10px 14px; border-radius: var(--radius-card); background: var(--surface); }
-.map-h { margin-top: 24px; font-size: 1rem; }
-.map-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; font-size: 0.875rem; }
+.map-h { margin-top: 24px; font-size: var(--t-body); }
+.map-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; font-size: var(--t-small); }
 .map-list li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; min-width: 0; overflow-wrap: anywhere; }
 .map-li { font-weight: 600; }
-.map-li-level { font-size: 0.8125rem; color: var(--text-muted); }
+.map-li-level { font-size: var(--t-micro); color: var(--text-muted); }
 .map-li-level.map-l-page { color: var(--failing); }
 .map-li-level.map-l-notify { color: var(--degraded); }
 .map-li-out { flex-basis: 100%; color: var(--text-muted); }

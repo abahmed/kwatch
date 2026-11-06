@@ -250,7 +250,8 @@ func TestOfflinePageIsServedAndCopiedByTheWorker(t *testing.T) {
 		t.Fatalf("offline page: %d %v", w.Code, w.Header())
 	}
 	sw := call(t, s, http.MethodGet, "/sw.js", "").Body.String()
-	if !strings.Contains(sw, `"/offline.html", "`+css+`"`) {
+	if !strings.Contains(sw, `"/offline.html"`) ||
+		!strings.Contains(sw, `"`+css+`"`) {
 		t.Error("the worker doesn't copy the offline page's files")
 	}
 }

@@ -1,0 +1,99 @@
+/* kwatch brand tokens. Light is the default; dark follows the OS setting. */
+:root {
+  --bg: #FFFFFF;
+  --surface: #F2F3F0;
+  --line: #DADDE2;
+  --text: #0E1116;
+  --text-muted: #5B6270;
+
+  --signal: #C8F542;
+  --on-signal: #0E1116;
+
+  --failing: #B42318;
+  --failing-bg: #FDECEC;
+  --degraded: #8A5300;
+  --degraded-bg: #FDF1DC;
+  --resolved: #1D5FC2;
+  --resolved-bg: #E8F0FD;
+  --success: #1E6B3A;
+  --success-bg: #E6F4EA;
+
+  /* Controls: --control-border is 3:1 against --bg (WCAG 1.4.11) */
+  --control-border: #7C828E;
+  --primary-hover: #2A2F38;
+  --hit: 44px;
+  --focus-width: 3px;
+  --focus-offset: 3px;
+  --text-soft: #3A404B;
+
+  /* Surfaces that stay dark in both modes */
+  --ink: #0E1116;
+  --ink-text: #ECEDEA;
+  --ink-muted: #9AA0AA;
+  --ink-line: #2A2E35;
+
+  --font-display: 'Bricolage Grotesque', sans-serif;
+  --font-body: 'Instrument Sans', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
+}
+
+/* ---- Shared scales (additive; same in light and dark) ----
+   Breakpoints cannot be variables. Use exactly: 960px, 700px, 480px.
+   Marketing (web) body is 17px; product surfaces (docs, app) body is 16px. */
+:root {
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 24px; --space-6: 32px; --space-7: 48px; --space-8: 64px; --space-9: 96px;
+
+  --radius-chip: 4px;   /* chips, code, inline controls */
+  --radius-input: 8px;  /* inputs */
+  --radius-card: 10px;  /* every card and panel */
+  --radius-output: 14px;/* kwatch output shown as a product screen (hero alert) */
+  --radius-pill: 999px; /* buttons and the Pro badge only */
+
+  --max: 1280px;        /* marketing and docs shell width */
+  --max-app: 1000px;    /* app content width */
+  --gutter: 24px;       /* 16px at <=640px, set by each app's base css */
+  --measure: 62ch;      /* longest line of running text */
+
+  --text-body: 17px;    /* marketing; product surfaces use --text-body-product */
+  --text-body-product: 16px;
+  --text-small: 15px;
+  --text-micro: 13px;   /* mono labels, eyebrows */
+  --h1-marketing: clamp(48px, 4vw + 32px, 92px);
+  --h1-product: clamp(30px, 2vw + 22px, 48px);
+  --h2-lead: clamp(36px, 3vw + 24px, 60px);
+  --h2-section: clamp(30px, 1.6vw + 24px, 44px);
+  --h3-card: 24px;
+
+  --section-pad: 96px;  /* 64px at <=960px, 48px at <=480px */
+  --btn-height: var(--hit);
+  --btn-border: 1.5px;
+  --shadow-output: 0 24px 60px rgba(14, 17, 22, .28); /* hero alert card only */
+  --motion-fast: 120ms; /* wrap in prefers-reduced-motion: no-preference */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171B;
+    --surface: #1E2126;
+    --line: #2A2E35;
+    --text: #ECEDEA;
+    --text-muted: #9AA0AA;
+
+    --signal: #B5DE3C;
+    --on-signal: #0E1116;
+
+    --failing: #FF9B8F;
+    --failing-bg: #3A1F1E;
+    --degraded: #F5B953;
+    --degraded-bg: #3A2C14;
+    --resolved: #8DB8FF;
+    --resolved-bg: #1B2A44;
+    --success: #7FD99A;
+    --success-bg: #1A3326;
+
+    --control-border: #6B7280;
+    --primary-hover: #FFFFFF;
+    --text-soft: #C3C7CE;
+  }
+}

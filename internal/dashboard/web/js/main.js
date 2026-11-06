@@ -12,13 +12,14 @@
   /* The list filters of the old Active issues page at "/". */
   var LIST_KEYS = ["q", "severity", "namespace", "state", "age", "since",
     "sort", "dir", "group", "kind", "acked", "status", "offset", "limit",
-    "page", "pageSize"];
+    "page", "pageSize", "release"];
 
   /* moved is the new address of an old one (the server redirects them
      too; this covers Back to an old history entry), or "". */
   function moved(path, search) {
     var p = new URLSearchParams(search);
     if (path === "/status" || path === "/insights") return "/";
+    if (path === "/releases") return "/issues";
     if (path === "/resolved") {
       p.delete("status");
       var rest = p.toString();
@@ -37,7 +38,6 @@
     if (path === "/kwatch") return { name: "kwatch" };
     if (path === "/activity") return { name: "activity" };
     if (path === "/map") return { name: "map" };
-    if (path === "/releases") return { name: "releases" };
     var m = /^\/issues\/([^/]+)$/.exec(path);
     if (m) {
       // A malformed escape (%E0) is an ID no issue has: show "not found".
@@ -121,8 +121,7 @@
     KW.startDot();
     var views = { issues: KW.issuesView, detail: KW.detailView,
       status: KW.statusView, kwatch: KW.kwatchView,
-      activity: KW.activityView, map: KW.mapView,
-      releases: KW.releasesView };
+      activity: KW.activityView, map: KW.mapView };
     view = views[r.name](main, r);
   }
 

@@ -93,6 +93,7 @@
     f.mode = values(p, "mode", function (v) { return MODE.test(v); });
     f.age = pick(p.get("age"), AGES);
     f.like = ID.test(p.get("like") || "") ? p.get("like") : "";
+    f.release = p.get("release") === "bad" ? "bad" : "";
     f.since = pick(p.get("since"), SINCE);
     var sort = p.get("sort") === "recent" ? "last" : p.get("sort");
     f.sort = pick(sort, SORTS);
@@ -113,6 +114,7 @@
     p.set("status", f.status || "active");
     if (f.q) p.set("q", f.q);
     if (f.like) p.set("like", f.like);
+    if (f.release) p.set("release", f.release);
     MULTI.forEach(function (k) {
       if (k === "state" && f.status === "resolved") return;
       f[k].forEach(function (v) { p.append(k, v); });
@@ -152,6 +154,7 @@
     p.set("status", f.status);
     KW.searchQuery.toAPI(p, KW.searchQuery.parse(f.q), f);
     if (f.like) p.set("like", f.like);
+    if (f.release) p.set("release", f.release);
     f.node.forEach(function (v) { p.append("node", v); });
     f.mode.forEach(function (v) { p.append("mode", v); });
     if (f.since && f.status !== "active") p.set("since", f.since);

@@ -5,9 +5,9 @@
    (most pass AAA): text at least 7:1 on the page and the surfaces,
    borders at least 5:1. */
 html { font-size: 100%; }
-html[data-text="s"] { font-size: 87.5%; }
-html[data-text="l"] { font-size: 112.5%; }
-html[data-text="xl"] { font-size: 125%; }
+html[data-text="s"] { font-size: 87.5%; --text-scale: .875; }
+html[data-text="l"] { font-size: 112.5%; --text-scale: 1.125; }
+html[data-text="xl"] { font-size: 125%; --text-scale: 1.25; }
 
 :root[data-contrast="more"] {
   --text: #0E1116; --text-muted: #2A2F38; --text-soft: #1F242C;
