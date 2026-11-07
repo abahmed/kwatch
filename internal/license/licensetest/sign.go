@@ -1,5 +1,3 @@
-// Package licensetest signs license keys and leases for tests of other
-// packages. Nothing in the shipped binary imports it.
 package licensetest
 
 import (
