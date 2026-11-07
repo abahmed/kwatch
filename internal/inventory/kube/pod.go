@@ -65,6 +65,9 @@ func (PodSchema) Describe(obj any) (Description, bool) {
 	attrs := podAttributes(pod)
 	setPriority(attrs, pod)
 	setFinalizers(attrs, pod)
+	if refs := envConfigRefs(pod); len(refs) > 0 {
+		attrs[AttrConfigEnvRefs] = inventory.Text(strings.Join(refs, ","))
+	}
 	if len(serviceCalls) > 0 {
 		attrs[AttrServiceCalls] = inventory.Text(
 			serviceCallsText(serviceCalls))

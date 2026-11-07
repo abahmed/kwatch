@@ -297,6 +297,9 @@ func ownLead(f caseFacts) string {
 
 func subjectWithState(f caseFacts, subject inventory.EntityID) string {
 	name := f.leadName(subject)
+	if cause := f.p.Cause; cause != nil && cause.Root == subject {
+		name += sourceClause(cause)
+	}
 	switch {
 	case f.p.State == incident.Flapping:
 		return name + " " + flappingState(f)

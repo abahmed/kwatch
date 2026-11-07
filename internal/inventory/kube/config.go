@@ -101,6 +101,9 @@ func (d Digester) HashConfigMapData(obj any) (any, error) {
 	if !ok {
 		return obj, nil
 	}
+	// The targets are read before the values are digested: afterwards
+	// the host names are gone for good.
+	targets := configMapTargets(cm)
 	for key, value := range cm.Data {
 		cm.Data[key] = d.digest([]byte(value))
 	}
@@ -108,6 +111,13 @@ func (d Digester) HashConfigMapData(obj any) (any, error) {
 		cm.BinaryData[key] = []byte(d.digest(value))
 	}
 	delete(cm.Annotations, corev1.LastAppliedConfigAnnotation)
+	delete(cm.Annotations, configTargetsAnnotation)
+	if len(targets) > 0 {
+		if cm.Annotations == nil {
+			cm.Annotations = map[string]string{}
+		}
+		cm.Annotations[configTargetsAnnotation] = targetsText(targets)
+	}
 	return cm, nil
 }
 
@@ -188,13 +198,17 @@ func (s ConfigMapSchema) Describe(obj any) (Description, bool) {
 		return Description{}, false
 	}
 	values := configMapDigestsWith(s.digester, cm)
+	attrs := map[string]inventory.Value{
+		AttrKeys: inventory.Text(
+			strings.Join(sortedKeys(values), ",")),
+		AttrDataDigest: inventory.Text(mapDigestWith(s.digester, values)),
+	}
+	if text := cm.Annotations[configTargetsAnnotation]; text != "" {
+		attrs[AttrConfigTargets] = inventory.Text(text)
+	}
 	return Description{
 		ID: objectID(KindConfigMap, cm), UID: string(cm.UID),
-		Attributes: map[string]inventory.Value{
-			AttrKeys: inventory.Text(
-				strings.Join(sortedKeys(values), ",")),
-			AttrDataDigest: inventory.Text(mapDigestWith(s.digester, values)),
-		},
+		Attributes: attrs,
 	}, true
 }
 

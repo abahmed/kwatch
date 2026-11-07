@@ -15,6 +15,7 @@ const ObservationSource = "kubernetes"
 type Translator struct {
 	schema      Schema
 	maintenance MaintenanceAnnotations
+	join        *ConfigJoin
 }
 
 // NewTranslator builds a translator for one schema.
@@ -34,6 +35,7 @@ func (t *Translator) Added(
 	t.annotate(obj, &desc)
 	link(obj, &desc)
 	observations := t.describe(desc, nil, at)
+	observations = append(observations, t.joined(desc, at)...)
 	if !initialList {
 		observations = append(observations, inventory.Observation{
 			Kind: inventory.Changed, Source: ObservationSource, At: at, Entity: desc.ID,
@@ -73,6 +75,7 @@ func (t *Translator) Updated(
 		previous = &oldDesc
 	}
 	observations := t.describe(desc, previous, at)
+	observations = append(observations, t.joined(desc, at)...)
 	if fields := boundFields(t.schema.Diff(old, new)); len(fields) > 0 {
 		observations = append(observations, inventory.Observation{
 			Kind: inventory.Changed, Source: ObservationSource, At: at, Entity: desc.ID,
@@ -95,7 +98,27 @@ func (t *Translator) Deleted(obj any, at time.Time) []inventory.Observation {
 	}
 	gone := goneObservation(desc.ID, at)
 	gone.Attributes = goneAttributes(desc)
-	return append(observations, gone)
+	observations = append(observations, gone)
+	if t.join != nil {
+		observations = append(observations, t.join.Gone(desc.ID, at)...)
+	}
+	return observations
+}
+
+// WithConfigJoin makes the translator tell the join of the pods and
+// ConfigMaps what it describes, and pass on the observations it returns.
+func (t *Translator) WithConfigJoin(j *ConfigJoin) *Translator {
+	t.join = j
+	return t
+}
+
+func (t *Translator) joined(
+	desc Description, at time.Time,
+) []inventory.Observation {
+	if t.join == nil {
+		return nil
+	}
+	return t.join.Observed(desc, at)
 }
 
 func (t *Translator) describe(

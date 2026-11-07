@@ -1,0 +1,11 @@
+{
+  "name": "dependency-host-from-configmap",
+  "description": "A Deployment crash-loops on a database whose address only a ConfigMap names; the probe is refused.",
+  "root": "external-endpoint//db.example.com:5432",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/orders/api",
+    "node//n1"
+  ]
+}

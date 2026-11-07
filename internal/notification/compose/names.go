@@ -103,7 +103,17 @@ func causeRootName(
 		cause.SharedError != "" {
 		return "the error " + quoted(cause.SharedError)
 	}
-	return nameFrom(subject, cause.Root)
+	return nameFrom(subject, cause.Root) + sourceClause(cause)
+}
+
+// sourceClause says where the root's address was read from: " (from
+// ConfigMap api-config, DB_HOST)". Empty for a cause with no source.
+func sourceClause(cause *rootcause.CauseRecord) string {
+	if cause == nil || cause.Source == nil {
+		return ""
+	}
+	return " (from ConfigMap " + cause.Source.ConfigMap.Name + ", " +
+		cause.Source.Key + ")"
 }
 
 // placedName adds the namespace to shortName ("payments in shop").

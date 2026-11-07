@@ -52,6 +52,7 @@ func (s Snapshot) Record(c Cause) rootcause.CauseRecord {
 	out.Place = s.placeOf(c, out.Change)
 	out.Logins, out.Refused = s.pullLogins(c)
 	out.ServingCert = s.servingCert(c)
+	out.Source = s.configSource(c)
 	out.SharedError = s.sharedError(c)
 	if out.SharedError == "" {
 		out.SharedError = s.dependencyLine(c)

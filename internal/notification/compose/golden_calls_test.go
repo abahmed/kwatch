@@ -68,6 +68,10 @@ func writeEndpointStorm() notification.Message {
 			return "dial tcp db.example.com:5432: connect: " +
 				"connection refused"
 		})
+	p.Cause.Source = &rootcause.ConfigSource{
+		ConfigMap: inventory.CoreID(kube.KindConfigMap, "shop",
+			"api-config"),
+		Key: "DB_HOST", Address: "db.example.com:5432"}
 	return Writer{}.Write(announce(p), at(4, 0))
 }
 
