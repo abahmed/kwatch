@@ -67,11 +67,6 @@ func NeutralizeWebexMentions(text string) string {
 	return webexMentions.Replace(NeutralizeMentions(text))
 }
 
-// NeutralizeZulipMentions neutralizes plain and Zulip mentions.
-func NeutralizeZulipMentions(text string) string {
-	return zulipMentions.Replace(NeutralizeMentions(text))
-}
-
 // telegramAt matches Telegram's @username mention: a username starts with
 // a letter and has 5 to 32 letters, digits and underscores. The @ must
 // not follow a word character, so an e-mail address is left whole.

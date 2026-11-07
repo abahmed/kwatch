@@ -1,7 +1,6 @@
 package license
 
 import (
-	"crypto/ed25519"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -58,11 +57,6 @@ func (l Lease) LicenseEnd() time.Time {
 		return time.Time{}
 	}
 	return time.Unix(l.LicExp, 0).UTC()
-}
-
-func signLease(l Lease, priv ed25519.PrivateKey) string {
-	payload, _ := json.Marshal(l)
-	return sign(leasePrefix, payload, priv)
 }
 
 func decodeLease(payload []byte) (Lease, error) {

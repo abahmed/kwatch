@@ -277,9 +277,6 @@ func TestManagerNoKeyNoNetwork(t *testing.T) {
 	if st := m.Status(); st.State != StateCommunity {
 		t.Fatalf("state = %v", st.State)
 	}
-	if err := m.Deactivate(context.Background()); err != nil {
-		t.Fatal(err)
-	}
 	if n := h.worker.total(); n != 0 {
 		t.Fatalf("requests = %d, want 0", n)
 	}

@@ -21,45 +21,6 @@ func OrDefault(value, fallback string) string {
 	return value
 }
 
-// ShortImage reduces an image reference to what a reader needs: the image
-// name with its tag or digest. The registry host and the repository path
-// say where it came from, not what it is, and they triple the line length:
-//
-//	registry.example.com/team/api:1.2.0        → api:1.2.0
-//	ghcr.io/org/tool@sha256:abcdef0123456789…  → tool@abcdef012345
-//	nginx:1.25                                 → nginx:1.25
-//
-// A digest is cut to its first 12 characters, the way container tools show it.
-func ShortImage(image string) string {
-	image = strings.TrimSpace(image)
-	if image == "" {
-		return ""
-	}
-	// Keep only the last path segment: everything before it is registry
-	// host and repository path.
-	if i := strings.LastIndex(image, "/"); i >= 0 {
-		image = image[i+1:]
-	}
-	if i := strings.Index(image, "@sha256:"); i > 0 {
-		digest := image[i+len("@sha256:"):]
-		if len(digest) > 12 {
-			digest = digest[:12]
-		}
-		image = image[:i] + "@" + digest
-	}
-	return image
-}
-
-// ShortNode trims a node name to its hostname. Cloud node names carry a
-// domain that says nothing a reader needs and triples the line length:
-func ShortNode(node string) string {
-	node = strings.TrimSpace(node)
-	if i := strings.Index(node, "."); i > 0 {
-		return node[:i]
-	}
-	return node
-}
-
 // JoinNames lists up to max names, sorted, and summarises the rest as
 // "+N more". Names are deduplicated first.
 func JoinNames(names []string, max int) string {

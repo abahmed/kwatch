@@ -67,7 +67,7 @@ func TestKwatchStatusServesTheStateFileAndRestarts(t *testing.T) {
 	s := newTestServer()
 	s.SetSelf(func() (health.SelfReport, bool) {
 		stops := []health.SelfStop{{At: testEpoch}, {At: testEpoch}}
-		return health.SelfReport{StateFileBytes: 4096, OutboxPending: 1,
+		return health.SelfReport{StateFileBytes: 4096, OutboxPending: &one,
 			Restarts: stops}, true
 	})
 	s.SetFailedSince(func(time.Time) int { return 2 })

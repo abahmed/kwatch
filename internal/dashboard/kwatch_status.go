@@ -86,8 +86,8 @@ func (s *Server) kwatchReport() *KwatchResponse {
 		out.Coverage = coverageTotals(withTotals((*src)()))
 	}
 	if self, ok := s.selfReport(); ok {
-		restarts, pending := len(self.Restarts), self.OutboxPending
-		out.Restarts24h, out.OutboxPending = &restarts, &pending
+		restarts := len(self.Restarts)
+		out.Restarts24h, out.OutboxPending = &restarts, self.OutboxPending
 		out.StateFile = &StateFileStatus{Bytes: self.StateFileBytes,
 			CapBytes: s.opts.StateCapBytes,
 			CapKnown: s.opts.StateCapBytes > 0}

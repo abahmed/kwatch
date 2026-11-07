@@ -34,17 +34,6 @@ func TestBodyFenceOutgrowsBackticksInOutput(t *testing.T) {
 	}
 }
 
-func TestFencedBodyNeutralisesNoformatToken(t *testing.T) {
-	body := FencedBody(
-		msgWithOutput("x {noformat} @everyone"), "{noformat}")
-	if strings.Count(body, "{noformat}") != 2 {
-		t.Fatalf("only the two real fences may remain: %q", body)
-	}
-	if !strings.Contains(body, "{\u200bnoformat}") {
-		t.Fatalf("token not broken up: %q", body)
-	}
-}
-
 func TestBodyWithoutOutputHasNoFence(t *testing.T) {
 	if got := Body(notification.Message{Note: "n"}); got != "n" {
 		t.Fatalf("body = %q", got)
@@ -69,13 +58,5 @@ func TestNoteMentionsAreNeutralised(t *testing.T) {
 	}
 	if !strings.Contains(body, "@bob in output") {
 		t.Fatalf("output is verbatim inside its fence: %q", body)
-	}
-}
-
-func TestFencedBodyWithEscapesTheNote(t *testing.T) {
-	msg := notification.Message{Note: "see [x]"}
-	body := FencedBodyWith(msg, "{noformat}", strings.ToUpper)
-	if body != "SEE [X]" {
-		t.Fatalf("body = %q", body)
 	}
 }

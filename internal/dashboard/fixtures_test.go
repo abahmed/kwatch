@@ -111,3 +111,8 @@ func getPart(
 	w.Body = bytes.NewBuffer(all[key])
 	return w
 }
+
+// toDetail is the detail of p alone, without the server's context.
+func toDetail(p incident.Incident) IncidentDetail {
+	return buildDetail(p, detailContext{})
+}

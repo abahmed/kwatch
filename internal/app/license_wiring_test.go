@@ -21,6 +21,7 @@ import (
 	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/kubeclient"
 	"github.com/abahmed/kwatch/internal/license"
+	"github.com/abahmed/kwatch/internal/license/licensetest"
 	"github.com/abahmed/kwatch/internal/metrics"
 )
 
@@ -79,7 +80,7 @@ func (w *licenseWorld) verifier() *license.Verifier {
 
 func (w *licenseWorld) key(plan string, expiresIn time.Duration) string {
 	now := w.clock.Now()
-	return license.SignKey(license.Key{
+	return licensetest.SignKey(license.Key{
 		V: 1, KID: "v1", LID: testLID, Acc: "acct", Plan: plan,
 		Iat: now.Unix(), Exp: now.Add(expiresIn).Unix(), Max: 5,
 	}, w.priv)
@@ -126,7 +127,7 @@ func (w *licenseWorld) serve(rw http.ResponseWriter, r *http.Request) {
 		reply(http.StatusOK, map[string]any{"ok": true})
 		return
 	}
-	lease := license.SignLease(license.Lease{
+	lease := licensetest.SignLease(license.Lease{
 		KID: "v1", LID: testLID, ClusterUUID: str("cluster_uuid"),
 		ClusterProof: str("cluster_proof"), InstancePub: w.instance,
 		Plan: license.PlanPro, LicExp: now.Add(300 * 24 * time.Hour).Unix(),
