@@ -28,11 +28,6 @@ Use this matrix when disabling features for a least-privilege deployment.
 | Restart evidence | Pods in the kwatch namespace | get |
 | Control-plane health | scheduler and controller-manager Leases in `kube-system` | get |
 
-The chart value `rbac.readyz` (default `true`) controls the `/readyz` part of
-the non-resource URL grant. Set it to `false` to remove that one grant (the
-`/metrics` grant stays): the prober and Pro evidence then cannot read the API
-server's readiness checks, and the control-plane evidence says kwatch is not
-allowed to read them.
 
 Roles, RoleBindings, ClusterRoles and ClusterRoleBindings are watched as full
 objects (the API server sends their rules), but kwatch keeps only the custom

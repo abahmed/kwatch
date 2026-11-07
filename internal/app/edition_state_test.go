@@ -12,6 +12,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/license"
+	"github.com/abahmed/kwatch/internal/license/licensetest"
 	"github.com/abahmed/kwatch/internal/storage"
 )
 
@@ -35,7 +36,7 @@ func stateFileWith(
 	if !exp.IsZero() {
 		_, priv, err := ed25519.GenerateKey(rand.Reader)
 		require.NoError(t, err)
-		lease := license.SignLease(license.Lease{
+		lease := licensetest.SignLease(license.Lease{
 			KID: "v1", LID: "lic_x", Plan: license.PlanPro,
 			Nbf: stateNow.Add(-time.Hour).Unix(), Exp: exp.Unix(),
 		}, priv)

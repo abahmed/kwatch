@@ -47,14 +47,8 @@
         KW.updateBadge(res.data.facets.severity || {});
       });
   };
-  /* setTitle sets the tab title. While the tab is hidden, notify.js
-     puts the count of changes not seen yet in front: "(3) ...". */
-  KW.baseTitle = "kwatch";
-  KW.setTitle = function (text) {
-    KW.baseTitle = text;
-    var n = KW.unseen || 0;
-    document.title = n ? "(" + n + ") " + text.replace(/^\(\d+\) /, "") : text;
-  };
+  /* setTitle sets the tab title. */
+  KW.setTitle = function (text) { document.title = text; };
   KW.title = function (text) { KW.setTitle(text + " - kwatch"); };
 
   /* ---- live refresh ---- */
@@ -208,8 +202,7 @@
       live.started = true;
       liveOpen();
     },
-    /* onChange(fn): fn(ids, more) after each change, e.g. for
-       notify.js, which keeps its own interval. */
+    /* onChange(fn): fn(ids, more) after each change. */
     onChange: function (fn) { live.listeners.push(fn); },
     /* stop closes the stream for good (sign-out, 401) and forgets the
        back-off, so the next start() connects afresh. */

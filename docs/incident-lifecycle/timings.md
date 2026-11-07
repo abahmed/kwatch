@@ -13,6 +13,7 @@ read the header there for how they relate.
 | `BurstIncidents` | 3 | this many announceable incidents settling together wait the full settle |
 | `DefaultHold` / `DefaultMaxHold` | 3m / 30m | healthy long enough to trust; cap of the doubling |
 | `StillBrokenMax` | 2h | the extra hold of a workload still short of replicas ends here |
+| `DefaultHeldMax` | 6h | longest a resolve waits for sight of an object kwatch cannot observe; then it resolves as unconfirmed and is not rechecked |
 | `DefaultFlapWindow`, `DefaultFlapCycles` | 30m, 3 | how far back recoveries count as flaps; how many make a flapper |
 | `ChronicWindow`, `ChronicOccurrences`, `ChronicFactor` | 1h, 2, x4 | a fast flapper must not say "healthy" and "failing" in turn |
 | `RepageWindow` | 2h | the same outage must not page twice, and reopens, not restarts |

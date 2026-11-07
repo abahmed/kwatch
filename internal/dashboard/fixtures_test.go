@@ -1,6 +1,8 @@
 package dashboard
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -90,4 +92,27 @@ func call(
 	w := httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, req)
 	return w
+}
+
+// getPart is get, with the body narrowed to one part of an answer that
+// carries several, such as the insights of /api/overview.
+func getPart(
+	t *testing.T, s *Server, path, key string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+	w := get(t, s, path)
+	if w.Code != http.StatusOK {
+		return w
+	}
+	var all map[string]json.RawMessage
+	if err := json.Unmarshal(w.Body.Bytes(), &all); err != nil {
+		t.Fatal(err)
+	}
+	w.Body = bytes.NewBuffer(all[key])
+	return w
+}
+
+// toDetail is the detail of p alone, without the server's context.
+func toDetail(p incident.Incident) IncidentDetail {
+	return buildDetail(p, detailContext{})
 }

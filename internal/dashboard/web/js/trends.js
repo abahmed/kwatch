@@ -1,8 +1,8 @@
 /* kwatch dashboard: parts of the Overview's "This week": the last
    seven days as a column chart (opened, with the part that paged
-   someone, and resolved, per day, from /api/insights days) with the
+   someone, and resolved, per day, from the insights days of /api/overview) with the
    same numbers as a table, the issues that kept coming back and how
-   long fixing took (from /api/trends). ovinsights.js reads the data
+   long fixing took (from the trends of /api/overview). ovinsights.js reads the data
    and places them. */
 (function () {
   "use strict";
@@ -48,7 +48,7 @@
   KW.weekCard = function (days, t) {
     var c = V.card("Day by day", "", true);
     // Untold openings (settled before alerting) are in opened, never in
-    // paged; a day without its own count takes /api/trends' for that date.
+    // paged; a day without its own count takes the trends' for that date.
     var opened = 0, resolved = 0, untold = 0, byDate = {};
     ((t && t.days) || []).forEach(function (d) { byDate[d.date] = d.untold || 0; });
     var rows = days.map(function (d, i) {

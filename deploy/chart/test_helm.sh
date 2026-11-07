@@ -598,9 +598,10 @@ grep -A1 'name: KWATCH_DASHBOARD_ENABLED' <<<"$OUT1" | grep -Fq 'value: "false"'
   echo "FAIL: KWATCH_DASHBOARD_ENABLED must be false by default"; exit 1
 }
 OUT_DASH=$(helm template kwatch . --set dashboard.enabled=true 2>&1)
-for want in 'name: KWATCH_DASHBOARD_PASSWORD' 'key: password' \
-  'name: KWATCH_DASHBOARD_MODE' 'value: "local"' \
-  'name: KWATCH_DEPLOYMENT_NAME' '  password: ' '  token: '; do
+for want in 'name: KWATCH_DASHBOARD_SECRET' 'value: "kwatch-dashboard"' \
+  'name: KWATCH_DASHBOARD_TRUSTED_PROXIES' 'name: KWATCH_DEPLOYMENT_NAME' \
+  'name: kwatch-dashboard-credentials' 'resourceNames: ["kwatch-dashboard"]' \
+  'verbs: ["get", "update"]'; do
   grep -Fq -- "$want" <<<"$OUT_DASH" || {
     echo "FAIL: dashboard render lacks $want"; exit 1;
   }
@@ -608,10 +609,17 @@ done
 if grep -Fq "kind: Ingress" <<<"$OUT_DASH"; then
   echo "FAIL: local mode must not render an Ingress"; exit 1
 fi
-PW=$(grep -E '^  password: ' <<<"$OUT_DASH" | awk '{print $2}' |
-  base64 --decode)
-grep -Eq '^([A-HJ-NP-Z2-9]{4}-){3}[A-HJ-NP-Z2-9]{4}$' <<<"$PW" || {
-  echo "FAIL: generated password has the wrong shape: $PW"; exit 1;
+# The Secret ships empty: no password or token in any render, and two
+# renders (and a GitOps controller's) are byte for byte the same.
+if grep -Eq '^  (password|token): ' <<<"$OUT_DASH"; then
+  echo "FAIL: the dashboard Secret must ship without credentials"; exit 1
+fi
+grep -Eq 'name: KWATCH_DASHBOARD_(PASSWORD|TOKEN)' <<<"$OUT_DASH" && {
+  echo "FAIL: chart-managed credentials must not use env refs"; exit 1
+}
+OUT_DASH2=$(helm template kwatch . --set dashboard.enabled=true 2>&1)
+[ "$OUT_DASH" = "$OUT_DASH2" ] || {
+  echo "FAIL: two renders of the dashboard differ"; exit 1
 }
 # expose_ok renders with dashboard.enabled and the given flags and checks
 # every following string is present; expose_fail checks the render fails
@@ -640,12 +648,12 @@ expose_fail() {
     echo "FAIL: $label: message lacks '$want': $out"; exit 1;
   }
 }
-expose_fail "unknown mode" "must be one of" --set dashboard.mode=public
-expose_fail "shared without https" "https only" --set dashboard.mode=shared
-expose_ok "shared behind a proxy" --set dashboard.mode=shared \
-  --set dashboard.trustProxy=true -- \
-  'value: "shared"' 'name: KWATCH_DASHBOARD_TRUST_PROXY' "type: ClusterIP"
-expose_ok "shared with own TLS" --set dashboard.mode=shared \
+expose_ok "behind a proxy" \
+  --set 'dashboard.trustedProxies[0]=10.0.0.0/8' \
+  --set 'dashboard.trustedProxies[1]=192.168.0.7' -- \
+  'name: KWATCH_DASHBOARD_TRUSTED_PROXIES' \
+  'value: "10.0.0.0/8,192.168.0.7"' "type: ClusterIP"
+expose_ok "own TLS" \
   --set dashboard.tls.secretName=kwatch-tls -- \
   "name: KWATCH_DASHBOARD_TLS_CERT" "secretName: kwatch-tls" \
   "mountPath: /etc/kwatch/dashboard-tls"
@@ -661,9 +669,12 @@ for kind in "kind: Ingress" "kind: HTTPRoute" "kind: Route" \
 done
 OUT_EXIST=$(helm template kwatch . --set dashboard.enabled=true \
   --set dashboard.existingSecret=mine 2>&1)
-if grep -Eq '^  password: ' <<<"$OUT_EXIST"; then
-  echo "FAIL: existingSecret must not render a password Secret"; exit 1
+if grep -Fq "kind: Secret" <<<"$(sed -n '/dashboard-secret.yaml/,/^---/p' <<<"$OUT_EXIST")"; then
+  echo "FAIL: existingSecret must not render a dashboard Secret"; exit 1
 fi
+grep -Fq "name: kwatch-dashboard-credentials" <<<"$OUT_EXIST" && {
+  echo "FAIL: existingSecret must not grant access to a chart Secret"; exit 1
+}
 grep -Fq "name: mine" <<<"$OUT_EXIST" || {
   echo "FAIL: existingSecret must feed the dashboard env"; exit 1;
 }

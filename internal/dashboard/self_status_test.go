@@ -31,7 +31,7 @@ func TestStatusServesSelfAndFailedSendsOfTheLastHour(t *testing.T) {
 	s.SetSelf(func() (health.SelfReport, bool) {
 		return health.SelfReport{StartedAt: testEpoch,
 			Restarts:       []health.SelfStop{},
-			OutboxPending:  2,
+			OutboxPending:  &two,
 			DashboardLinks: health.LinkStatus{Reason: health.LinksPortMismatch},
 			Startup: &health.StartupProgress{Kinds: 30, Synced: 12,
 				Required: 4, RequiredSynced: 4}}, true
@@ -41,7 +41,7 @@ func TestStatusServesSelfAndFailedSendsOfTheLastHour(t *testing.T) {
 	assert.Equal(t, 3, *got.FailedLastHour)
 	assert.True(t, asked.Equal(testEpoch.Add(-time.Hour)))
 	require.NotNil(t, got.Self)
-	assert.Equal(t, 2, got.Self.OutboxPending)
+	assert.Equal(t, 2, *got.Self.OutboxPending)
 	assert.Equal(t, 12, got.Self.Startup.Synced)
 	assert.False(t, got.Self.DashboardLinks.On)
 	assert.Equal(t, "port_mismatch", got.Self.DashboardLinks.Reason)
@@ -82,3 +82,5 @@ func TestLinksOffTextNamesEveryReason(t *testing.T) {
 		linksOffText(health.LinkStatus{Reason: "other"}))
 	assert.Empty(t, linksOffText(health.LinkStatus{On: true}))
 }
+
+var one, two = 1, 2

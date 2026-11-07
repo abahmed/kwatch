@@ -117,6 +117,11 @@ type Manager struct {
 	providerReasons  map[string]string
 	providerOutcomes map[string]providerOutcome
 	healthEvents     chan struct{}
+	// notices tracks what was said about failing providers; see
+	// provider_notice.go. sendNotice replaces the queue in tests.
+	notices    map[string]*providerNotice
+	allFailing bool
+	sendNotice func(target, text string)
 }
 
 func (m *Manager) globalTemplates() map[string]*template.Template {

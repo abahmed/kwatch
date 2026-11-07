@@ -2,7 +2,6 @@ package dashboard
 
 import (
 	"cmp"
-	"net/http"
 	"slices"
 	"time"
 
@@ -79,27 +78,6 @@ type TrendResolve struct {
 	MedianSeconds  int64  `json:"medianSeconds"`
 	LongestSeconds int64  `json:"longestSeconds"`
 	LongestID      string `json:"longestId,omitempty"`
-}
-
-// trendsHandler serves GET /api/trends?tzName=&tz=: days are counted in
-// the IANA zone tzName, else tz minutes east of UTC (default UTC); see
-// parseZone.
-func (s *Server) trendsHandler(w http.ResponseWriter, r *http.Request) {
-	if !onlyGet(w, r) {
-		return
-	}
-	zone, err := parseZone(r.URL.Query())
-	if err != nil {
-		writeBadQuery(w, err)
-		return
-	}
-	reader := s.sources.incidents.Load()
-	if reader == nil {
-		unavailable(w)
-		return
-	}
-	writeTagged(w, r, buildTrends((*reader).Incidents(), s.now.Now(),
-		zone, incident.DefaultRemember))
 }
 
 // trendWeek is the week trends count in: trendDays calendar days of

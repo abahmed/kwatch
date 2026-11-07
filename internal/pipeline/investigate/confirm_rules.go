@@ -40,6 +40,8 @@ func confirmWaiting(
 
 // confirmCrashExit confirms a crash from the run that ended it: a
 // non-zero exit, and the first error the run logged when one was read.
+// An exit by signal (128+n) is not a crash on its own: see
+// signalExitUnexplained.
 func confirmCrashExit(
 	model inventory.Reader, p incident.Incident, report []incident.Section,
 	sig signature,
@@ -52,6 +54,10 @@ func confirmCrashExit(
 			e, _ := model.Entity(c)
 			code := exitCodeOf(e)
 			if code == "" || code == "0" || !runSupports(model, p, pod, c) {
+				continue
+			}
+			if signalExit(code) &&
+				!signalExitUnexplained(model, p, pod, e) {
 				continue
 			}
 			why := "the last run of " + c.Name + " exited with code " + code

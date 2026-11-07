@@ -2,7 +2,6 @@ package dashboard
 
 import (
 	"cmp"
-	"net/http"
 	"slices"
 	"time"
 
@@ -72,23 +71,10 @@ func activeIssue(p incident.Incident) bool {
 	return p.State != incident.Resolved && p.Tier != incident.Silent
 }
 
-// insightsHandler serves GET /api/insights?tzName=&tz=, the zone as on
-// /api/trends.
-func (s *Server) insightsHandler(w http.ResponseWriter, r *http.Request) {
-	if !onlyGet(w, r) {
-		return
-	}
-	zone, err := parseZone(r.URL.Query())
-	if err != nil {
-		writeBadQuery(w, err)
-		return
-	}
-	reader := s.sources.incidents.Load()
-	if reader == nil {
-		unavailable(w)
-		return
-	}
-	items := (*reader).Incidents()
+// insights computes the "This week" insights of items in zone.
+func (s *Server) insights(
+	items []incident.Incident, zone *time.Location,
+) InsightsResponse {
 	if len(items) > maxInsightScan {
 		items = items[:maxInsightScan]
 	}
@@ -104,7 +90,7 @@ func (s *Server) insightsHandler(w http.ResponseWriter, r *http.Request) {
 	if out.Quiet != nil {
 		s.explainQuiet(out.Quiet, in.model)
 	}
-	writeTagged(w, r, out)
+	return out
 }
 
 // insightInput is what the insights are computed from.

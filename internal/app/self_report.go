@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"sync/atomic"
 
+	"k8s.io/klog/v2"
+
 	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/storage"
 )
@@ -46,15 +48,21 @@ func (p *pipelineBuild) selfReport() health.SelfReport {
 }
 
 // outboxPending counts the messages the outbox holds: accepted by
-// delivery and not yet sent. A read failure counts none.
-func outboxPending(state *storage.Store) int {
+// delivery and not yet sent. A read failure is logged and reported as
+// unknown (nil), never as none.
+func outboxPending(state *storage.Store) *int {
 	n := 0
-	_ = storage.OutboxValues[json.RawMessage](state).Range("",
+	err := storage.OutboxValues[json.RawMessage](state).Range("",
 		func(string, json.RawMessage) error {
 			n++
 			return nil
 		})
-	return n
+	if err != nil {
+		klog.ErrorS(err, "could not count the outbox",
+			"component", "self-report")
+		return nil
+	}
+	return &n
 }
 
 // startupProgress is how far the first sync of the watches is; nil

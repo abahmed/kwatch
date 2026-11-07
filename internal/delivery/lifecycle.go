@@ -47,6 +47,7 @@ func (m *Manager) launchWorkers(ctx context.Context) (bool, error) {
 		go m.runProvider(generation.entries[name], workerCtx)
 	}
 	m.outbox.Load().start(ctx)
+	go m.watchProviders(workerCtx)
 	m.replayQueuedLocked()
 	return true, nil
 }

@@ -42,12 +42,3 @@ func WeCom(text string) string {
 func Zulip(text string) string {
 	return zulipMentions.Replace(notification.NeutralizeMentions(text))
 }
-
-// Lines neutralizes each line of output with fn.
-func Lines(output []string, fn func(string) string) []string {
-	out := make([]string, len(output))
-	for i, line := range output {
-		out[i] = fn(line)
-	}
-	return out
-}

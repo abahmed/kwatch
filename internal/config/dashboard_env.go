@@ -14,15 +14,14 @@ import (
 const (
 	dashboardEnabledEnv = "KWATCH_DASHBOARD_ENABLED"
 	dashboardPortEnv    = "KWATCH_DASHBOARD_PORT"
-	dashboardModeEnv    = "KWATCH_DASHBOARD_MODE"
-	dashboardTrustEnv   = "KWATCH_DASHBOARD_TRUST_PROXY"
+	dashboardProxiesEnv = "KWATCH_DASHBOARD_TRUSTED_PROXIES"
 	dashboardCertEnv    = "KWATCH_DASHBOARD_TLS_CERT"
 	dashboardKeyEnv     = "KWATCH_DASHBOARD_TLS_KEY"
 )
 
-// applyDashboardEnv applies the dashboard port and mode. A value that
-// does not parse is a warning and the file's setting stays; validation
-// still rejects an unknown mode written in the file.
+// applyDashboardEnv applies the dashboard port, TLS files and trusted
+// proxies. A port that does not parse is a warning and the file's
+// setting stays. The proxy list wins over the file in both directions.
 func applyDashboardEnv(c *Config) {
 	if raw := strings.TrimSpace(os.Getenv(dashboardPortEnv)); raw != "" {
 		port, err := strconv.Atoi(raw)
@@ -40,14 +39,18 @@ func applyDashboardEnv(c *Config) {
 	if v := strings.TrimSpace(os.Getenv(dashboardKeyEnv)); v != "" {
 		c.Dashboard.TLSKeyFile = v
 	}
-	raw := strings.ToLower(strings.TrimSpace(os.Getenv(dashboardModeEnv)))
-	switch raw {
-	case "":
-	case DashboardLocal, DashboardShared:
-		c.Dashboard.Mode = raw
-	default:
-		c.envWarnings = append(c.envWarnings, fmt.Sprintf(
-			"%s=%q is not local or shared; the file's dashboard.mode "+
-				"stays", dashboardModeEnv, raw))
+	if raw, ok := os.LookupEnv(dashboardProxiesEnv); ok {
+		c.Dashboard.TrustedProxies = splitList(raw)
 	}
+}
+
+// splitList splits a comma-separated list, dropping blanks.
+func splitList(raw string) []string {
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }

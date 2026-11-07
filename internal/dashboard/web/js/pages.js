@@ -82,7 +82,7 @@
   var seen = { status: null, kw: null };
 
   /* selfIssues: what about kwatch itself needs a look, in plain words,
-     from /api/status and /api/kwatch (either may be missing). */
+     from /api/status and its kwatch part (either may be missing). */
   KW.selfIssues = function (s, k) {
     var out = [], self = (s && s.self) || {};
     var failed = (s && s.failedLastHour) || (k && k.failedSendsLastHour) || 0;
@@ -98,9 +98,44 @@
     return out;
   };
 
-  /* selfDot takes a fresh /api/status or /api/kwatch answer and shows
+  /* selfDot takes a fresh /api/status answer and its kwatch part and shows
      or hides the dot. */
+  /* providerBanner shows, on every page, each alert channel that is
+     failing: what is wrong in plain words, since when, how many alerts
+     wait, and where to fix it. It hides when none is. */
+  function providerBanner(status) {
+    var box = document.querySelector("[data-provbar]");
+    if (!box || !status) return;
+    var bad = (status.perChannelHealth || []).filter(function (c) { return c.failing; });
+    box.hidden = !bad.length;
+    box.textContent = "";
+    bad.slice(0, 2).forEach(function (c) {
+      var name = c.name || c.channel;
+      var p = box.appendChild(KW.el("p"));
+      p.appendChild(KW.el("span", "prov-word", "Failing \u00b7"));
+      p.appendChild(KW.el("span", "mono", name));
+      var line = ": kwatch can't send alerts there";
+      if (c.since) line += " since " + KW.hm(c.since).textContent;
+      if (c.problem) line += " (" + c.problem + ")";
+      line += ".";
+      if (c.waiting > 0) {
+        line += " " + KW.plural(c.waiting, "alert is", "alerts are") + " waiting.";
+      }
+      p.appendChild(document.createTextNode(line));
+      box.appendChild(KW.el("p", "prov-fix", "Fix: update " + name +
+        " in the installer, under Notifications."));
+    });
+    if (bad.length > 2) {
+      var more = box.appendChild(KW.el("p"));
+      var a = KW.el("a", "ulink", "and " + (bad.length - 2) + " more");
+      a.href = "/kwatch";
+      a.dataset.link = "";
+      more.appendChild(a);
+    }
+  }
+
   KW.selfDot = function (status, kw) {
+    providerBanner(status);
     if (status) seen.status = status;
     if (kw) seen.kw = kw;
     var dot = document.querySelector("[data-kw-dot]");
@@ -115,15 +150,15 @@
     if (a) a.title = words || "kwatch itself: is it working and are alerts getting out";
   };
 
-  /* dotPoll reads both every minute on every page, so the dot stays
+  /* dotPoll reads /api/status every minute on every page, so the dot stays
      right; a page that reads them itself calls KW.selfDot too. */
   var dotPoll = null;
   KW.startDot = function () {
     if (dotPoll) return;
     dotPoll = KW.poller(function () {
-      return Promise.all([KW.api("/api/status"), KW.api("/api/kwatch")]).then(function (out) {
-        KW.selfDot(out[0].status === 200 ? out[0].data : null,
-          out[1].status === 200 ? out[1].data : null);
+      return KW.api("/api/status").then(function (res) {
+        var data = res.status === 200 ? res.data : null;
+        KW.selfDot(data, data && data.kwatch);
       });
     }, 60000, { wants: function () { return false; } });
   };

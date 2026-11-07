@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/clock"
@@ -17,10 +18,11 @@ type Auth struct {
 	token    string
 	password string
 	shared   bool
-	// trustProxy honours X-Forwarded-Proto and X-Forwarded-For from a
-	// proxy that terminates TLS. Set by NewServer from Options.
-	trustProxy bool
-	sessions   *sessions
+	// trusted are the proxies whose X-Forwarded-Proto and
+	// X-Forwarded-For count. Set by NewServer from Options.
+	trusted         proxySet
+	warnedForwarded atomic.Bool
+	sessions        *sessions
 	// failRate limits failures per connecting peer; clientRate per
 	// client a trusted proxy names. proxyRate only counts the failures
 	// that came through each proxy, to log when there are many: it
@@ -48,58 +50,66 @@ func NewAuth(token, password string, shared bool, now clock.Clock) *Auth {
 }
 
 // Middleware lets a request through with a valid bearer token or
-// session cookie. A bearer token can be guessed: each one reserves an
-// attempt from the client's failure limit (a right one gives it back),
-// and past the limit even a right one is refused, so a guess that
-// happens to be right cannot get in. A session cookie cannot be guessed
-// (its ID is random and only a sign-in makes one): a valid one is let
-// through even while the client is limited, so guesses from a shared
-// address do not lock out people already signed in, and an invalid one
+// session cookie. The failure limiter counts failures only: a wrong
+// bearer token reserves an attempt from the client's limit and is
+// refused past it, but a correct token or a valid session cookie is
+// never held back by the limiter. A session cookie cannot be guessed
+// (its ID is random and only a sign-in makes one), and an invalid one
 // does not count, because after a restart every open tab presents one
 // on each poll. In shared mode a bearer token must come over https,
 // except from loopback (a port-forward).
 func (a *Auth) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ok, guess := a.check(r)
-		if ok && !guess {
-			next.ServeHTTP(w, r)
-			return
-		}
-		if guess && a.shared && !a.isHTTPS(r) && !loopback(r) {
+		ok, token := a.check(r)
+		switch {
+		case ok && token && !a.tokenAllowed(r):
 			writeError(w, http.StatusForbidden,
 				"the token must be sent over https")
-			return
+		case ok:
+			next.ServeHTTP(w, r)
+		case token:
+			a.refuseGuess(w, r)
+		default:
+			a.refuseAnonymous(w, r)
 		}
-		if !guess {
-			if !a.allowed(r) {
-				writeError(w, http.StatusTooManyRequests,
-					"too many requests")
-				return
-			}
-			writeError(w, http.StatusUnauthorized, "unauthorized")
-			return
-		}
-		attempt, reserved := a.reserve(r)
-		if !reserved {
-			writeError(w, http.StatusTooManyRequests, "too many requests")
-			return
-		}
-		if !ok {
-			a.noteProxyFailure(r)
-			writeError(w, http.StatusUnauthorized, "unauthorized")
-			return
-		}
-		attempt.forgive()
-		next.ServeHTTP(w, r)
 	})
 }
 
-// check reports whether r carries a valid credential and whether a
-// failed one counts as a guess: a bearer token does, a session cookie
-// (random, so never guessed) and no credential at all do not. A valid
-// session cookie wins over a bearer token that is wrong, and that is
-// not a guess.
-func (a *Auth) check(r *http.Request) (ok, guess bool) {
+// refuseGuess answers a wrong bearer token: it counts as a failure.
+func (a *Auth) refuseGuess(w http.ResponseWriter, r *http.Request) {
+	if a.shared && !a.isHTTPS(r) && !a.loopback(r) {
+		writeError(w, http.StatusForbidden,
+			"the token must be sent over https")
+		return
+	}
+	if _, reserved := a.reserve(r); !reserved {
+		writeError(w, http.StatusTooManyRequests, "too many requests")
+		return
+	}
+	a.noteProxyFailure(r)
+	writeError(w, http.StatusUnauthorized, "unauthorized")
+}
+
+// refuseAnonymous answers a request with no usable credential. It is
+// not counted, but a client already over its limit is told so.
+func (a *Auth) refuseAnonymous(w http.ResponseWriter, r *http.Request) {
+	if !a.allowed(r) {
+		writeError(w, http.StatusTooManyRequests, "too many requests")
+		return
+	}
+	writeError(w, http.StatusUnauthorized, "unauthorized")
+}
+
+// tokenAllowed reports whether a correct bearer token may pass: in
+// shared mode only over https, or from a port-forward.
+func (a *Auth) tokenAllowed(r *http.Request) bool {
+	return !a.shared || a.isHTTPS(r) || a.loopback(r)
+}
+
+// check reports whether r carries a valid credential and whether it
+// came as a bearer token. A valid session cookie wins over a wrong
+// token and is not a token sign-in.
+func (a *Auth) check(r *http.Request) (ok, viaToken bool) {
 	token, has := bearerToken(r)
 	if has && a.validToken(token) {
 		return true, true

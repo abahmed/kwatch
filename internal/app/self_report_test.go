@@ -36,7 +36,7 @@ func TestSelfReportReadsTheSessionAndTheStateFile(t *testing.T) {
 	assert.Equal(t, &stop, got.LastStop)
 	assert.Equal(t, []health.SelfStop{stop}, got.Restarts,
 		"only the last day")
-	assert.Equal(t, 2, got.OutboxPending)
+	assert.Equal(t, 2, *got.OutboxPending)
 	assert.Positive(t, got.StateFileBytes)
 	assert.Equal(t, health.LinkStatus{Reason: health.LinksNoRoute},
 		got.DashboardLinks)
@@ -50,13 +50,15 @@ func TestSelfHolderReportsOnlyWhileASessionRuns(t *testing.T) {
 	require.False(t, ok)
 
 	h.set(func() health.SelfReport {
-		return health.SelfReport{OutboxPending: 3}
+		return health.SelfReport{OutboxPending: intp(3)}
 	})
 	got, ok := h.Report()
 	require.True(t, ok)
-	assert.Equal(t, 3, got.OutboxPending)
+	assert.Equal(t, 3, *got.OutboxPending)
 
 	h.set(nil)
 	_, ok = h.Report()
 	assert.False(t, ok)
 }
+
+func intp(n int) *int { return &n }

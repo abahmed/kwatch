@@ -22,8 +22,12 @@ type sessionServer struct {
 
 func newSessionServer(shared bool, password string) *sessionServer {
 	s := &sessionServer{now: testEpoch}
+	var proxies []string
+	if shared {
+		proxies = []string{"192.0.2.0/24", "10.0.0.0/8"}
+	}
 	s.Server = NewServer(Options{Token: testToken, Password: password,
-		Shared: shared, TrustProxy: shared, Edition: "Pro"},
+		TrustedProxies: proxies, Edition: "Pro"},
 		clock.Func(func() time.Time { return s.now }))
 	s.SetIncidents(&fakeIncidents{})
 	return s
@@ -263,10 +267,10 @@ func TestSessionMissingCredentialsDoNotCountAsFailures(t *testing.T) {
 	s.signIn(t, testPassword)
 }
 
-func TestSessionForwardedProtoNeedsTrustProxy(t *testing.T) {
+func TestSessionForwardedProtoNeedsTrustedPeer(t *testing.T) {
 	s := newSessionServer(true, testPassword)
 	s.Server = NewServer(Options{Token: testToken, Password: testPassword,
-		Shared: true, Edition: "Pro"},
+		TrustedProxies: []string{"192.0.2.0/24"}, Edition: "Pro"},
 		clock.Func(func() time.Time { return s.now }))
 	claimed := loginRequest(testPassword)
 	claimed.RemoteAddr = "10.0.0.5:1234"
@@ -278,27 +282,6 @@ func TestSessionForwardedProtoNeedsTrustProxy(t *testing.T) {
 	direct.TLS = &tls.ConnectionState{}
 	if w := s.do(direct); w.Code != 204 {
 		t.Errorf("kwatch's own TLS: %d, want 204", w.Code)
-	}
-}
-
-func TestSessionRevokedSetEvictsTheOldestWhenFull(t *testing.T) {
-	now := testEpoch
-	s := newSessions("pw", "tok", clock.Func(func() time.Time { return now }))
-	first, _, _ := s.issue()
-	s.revoke(first)
-	for i := 1; i < maxRevoked; i++ {
-		now = testEpoch.Add(time.Duration(i) * time.Millisecond * 10)
-		v, _, _ := s.issue()
-		s.revoke(v)
-	}
-	now = testEpoch.Add(time.Minute)
-	last, _, _ := s.issue()
-	s.revoke(last)
-	if s.valid(last) {
-		t.Error("a sign-out at a full revoked set was dropped")
-	}
-	if len(s.revoked) > maxRevoked {
-		t.Errorf("revoked set grew to %d", len(s.revoked))
 	}
 }
 

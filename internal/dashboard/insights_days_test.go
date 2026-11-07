@@ -74,7 +74,8 @@ func TestInsightsDaysFollowTheZoneNameAcrossADaylightSavingChange(
 	s := newTestServer(items...)
 	s.now = clock.Func(func() time.Time { return trendNow })
 
-	w := get(t, s, "/api/insights?tzName=Europe/Berlin&tz=60")
+	w := getPart(t, s,
+		"/api/overview?tzName=Europe/Berlin&tz=60", "insights")
 	require.Equal(t, 200, w.Code, w.Body.String())
 	var got InsightsResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
@@ -96,7 +97,7 @@ func TestInsightsAfterChangeCountsOutOfTheActiveIssues(t *testing.T) {
 	assert.Len(t, got.Days, trendDays)
 }
 
-// Each day carries its untold openings, as /api/trends counts them, so
+// Each day carries its untold openings, as the overview's trends count them, so
 // the Insights page needs no second request for them.
 func TestInsightsDaysCountUntoldOpeningsAsTrendsDo(t *testing.T) {
 	quiet := untoldPage("q", ago(2*time.Hour))

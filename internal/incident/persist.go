@@ -23,11 +23,13 @@ type Record struct {
 	Announced       time.Time
 	RecoveringSince time.Time
 	Resolved        time.Time
-	Cycles          []time.Time
-	Occurrences     []time.Time `json:",omitempty"`
-	Revision        int
-	Digest          string
-	Timeline        []Event
+	// HeldSince was added with the bounded hold for missing data.
+	HeldSince   time.Time `json:",omitempty"`
+	Cycles      []time.Time
+	Occurrences []time.Time `json:",omitempty"`
+	Revision    int
+	Digest      string
+	Timeline    []Event
 	// Scope, Held and SupersededBy were added after the first format;
 	// records without them restore as described in Restore.
 	Scope        Scope  `json:",omitempty"`
@@ -194,7 +196,7 @@ func (m *Manager) Export() []Record {
 			ID: p.ID, Root: p.Root, Previous: p.Previous, Cause: p.Cause,
 			Tier: p.Tier, State: p.State, Opened: p.Opened,
 			Announced: p.Announced, RecoveringSince: p.RecoveringSince,
-			Resolved: p.Resolved, Cycles: p.Cycles,
+			Resolved: p.Resolved, HeldSince: p.heldSince, Cycles: p.Cycles,
 			Occurrences: p.Occurrences, Revision: p.Revision,
 			Digest: p.savedDigest(), Timeline: p.Timeline, Scope: p.Scope,
 			HeldUpdate: p.updateHeld,
@@ -275,6 +277,7 @@ func (m *Manager) Restore(records []Record, graceUntil time.Time) {
 // restoreSets rebuilds the failure modes, the root's own reasons and
 // the moved links.
 func restoreSets(p *Incident, r Record) {
+	p.heldSince = r.HeldSince
 	p.Moved = Moved{Into: r.MovedInto, From: r.MovedFrom}
 	for _, mode := range r.Modes {
 		if p.modes == nil {

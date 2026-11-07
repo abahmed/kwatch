@@ -45,10 +45,6 @@ rbac:
   # release namespace, in both modes and even with watch.secrets=false.
   # Opt back into the wildcard with --set rbac.mode=full.
   mode: least-privilege
-  # -- Grant get on the API server's /readyz. The prober and Pro evidence
-  # read its readiness checks; false removes the grant and the control
-  # plane evidence shows that kwatch isn't allowed to read it.
-  readyz: true
 
 watch:
   # -- Watch Secrets. They feed checks such as missing Secret references
@@ -295,23 +291,70 @@ license:
 # -- Read-only dashboard: web UI and API. Pro only, off by default. Runs
 # on its own listener and ClusterIP Service. The <release>-dashboard
 # Secret holds the sign-in password (key password) and the API bearer
-# token (key token); the chart generates both when dashboard.enabled is
-# true and no existingSecret is set, and keeps them across upgrades.
+# token (key token). The chart ships that Secret empty and kwatch fills
+# both keys itself the first time it starts, so they are the same under
+# any renderer (helm template, Argo CD, Flux, CI) and across upgrades.
 dashboard:
   # -- Enable the dashboard listener and Service.
   enabled: false
   # -- Port for the dashboard listener (must not equal healthCheck.port).
   port: 8061
-  # -- local: reached through kubectl port-forward (the cookie works on
-  # http://localhost). shared: https only; kwatch refuses sign-in over
-  # plain http and marks the cookie Secure. Shared needs trustProxy or
-  # tls.secretName. The chart never exposes the dashboard: run the
-  # kwatch.sh Dashboard menu, or point your own Ingress, route or
-  # Service at the ClusterIP Service <release>-dashboard.
-  mode: local
-  # -- Trust X-Forwarded-Proto/For from the Ingress or proxy that
-  # terminates TLS in front of kwatch. Only then does that header count.
-  trustProxy: false
+  # -- CIDRs or addresses of the proxies that terminate TLS in front of
+  # kwatch (your Ingress controller, Gateway, Route or load balancer),
+  # for example ["10.0.0.0/8"]. X-Forwarded-For and X-Forwarded-Proto
+  # are believed only from these peers; the client is the first hop from
+  # the right that is not itself listed. Any entry makes the dashboard
+  # https only: sign-in over plain http is refused and the cookie is
+  # Secure. Without it (and without tls.secretName) the dashboard is
+  # local, reached through kubectl port-forward over http, and every
+  # client behind a proxy shares one sign-in failure limit. The chart
+  # never exposes the dashboard: run the kwatch.sh Dashboard menu, or
+  # point your own Ingress, route or Service at the ClusterIP Service
+  # <release>-dashboard.
+  trustedProxies: []
+  # -- kwatch serves https itself from this kubernetes.io/tls Secret
+  # (keys tls.crt, tls.key), for a LoadBalancer or NodePort with nothing
+  # in front. Renewals are picked up without a restart.
+  tls:
+    secretName: ""
+  # -- Name of an existing Secret with the keys `password` and `token`.
+  # When empty and enabled is true, the chart ships `<release>-dashboard`
+  # empty and kwatch writes a generated password and token into it once.
+  # An edit to the Secret takes effect when kwatch restarts.
+  existingSecret: ""
+  # -- The license key itself (discouraged). When set and existingSecret is
+  # empty, the chart creates the Secret <release>-license.
+  key: ""
+  # -- The chart renders the license instance Secret and its Role only when
+  # a key is configured here (key or existingSecret). Set true when the key
+  # reaches kwatch another way, for example in the configSecretName Secret
+  # or an extra environment variable, so the license can activate.
+  instanceSecret: false
+
+# -- Read-only dashboard: web UI and API. Pro only, off by default. Runs
+# on its own listener and ClusterIP Service. The <release>-dashboard
+# Secret holds the sign-in password (key password) and the API bearer
+# token (key token). The chart ships that Secret empty and kwatch fills
+# both keys itself the first time it starts, so they are the same under
+# any renderer (helm template, Argo CD, Flux, CI) and across upgrades.
+dashboard:
+  # -- Enable the dashboard listener and Service.
+  enabled: false
+  # -- Port for the dashboard listener (must not equal healthCheck.port).
+  port: 8061
+  # -- CIDRs or addresses of the proxies that terminate TLS in front of
+  # kwatch (your Ingress controller, Gateway, Route or load balancer),
+  # for example ["10.0.0.0/8"]. X-Forwarded-For and X-Forwarded-Proto
+  # are believed only from these peers; the client is the first hop from
+  # the right that is not itself listed. Any entry makes the dashboard
+  # https only: sign-in over plain http is refused and the cookie is
+  # Secure. Without it (and without tls.secretName) the dashboard is
+  # local, reached through kubectl port-forward over http, and every
+  # client behind a proxy shares one sign-in failure limit. The chart
+  # never exposes the dashboard: run the kwatch.sh Dashboard menu, or
+  # point your own Ingress, route or Service at the ClusterIP Service
+  # <release>-dashboard.
+  trustedProxies: []
   # -- kwatch serves https itself from this kubernetes.io/tls Secret
   # (keys tls.crt, tls.key), for a LoadBalancer or NodePort with nothing
   # in front. Renewals are picked up without a restart.

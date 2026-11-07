@@ -24,11 +24,6 @@
           ],
           "default": "least-privilege",
           "description": "least-privilege (default) grants an explicit list/watch set; full grants read-only list/watch on every resource"
-        },
-        "readyz": {
-          "type": "boolean",
-          "default": true,
-          "description": "Grant get on the API server's /readyz (prober and Pro evidence)"
         }
       },
       "additionalProperties": false
@@ -118,19 +113,13 @@
           },
           "additionalProperties": false
         },
-        "mode": {
-          "type": "string",
-          "enum": [
-            "local",
-            "shared"
-          ],
-          "default": "local",
-          "description": "local: port-forward. shared: https only (needs trustProxy or tls.secretName)"
-        },
-        "trustProxy": {
-          "type": "boolean",
-          "default": false,
-          "description": "Trust X-Forwarded-Proto/For from the Ingress or proxy that terminates TLS"
+        "trustedProxies": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "CIDRs or addresses of the proxies that terminate TLS in front of kwatch; X-Forwarded-For and X-Forwarded-Proto count only from them. Any entry (or tls.secretName) makes the dashboard https only"
         }
       },
       "additionalProperties": false

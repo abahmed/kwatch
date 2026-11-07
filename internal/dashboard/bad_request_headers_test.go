@@ -49,11 +49,11 @@ func tlsBrokenEscape(t *testing.T, addr string) string {
 	return string(body)
 }
 
-// In shared mode over kwatch's own TLS every page sends HSTS, and so
-// does the 400; outside shared mode neither does.
+// Over kwatch's own TLS (shared mode) every page sends HSTS, and so
+// does the 400.
 func TestTLSServeBadRequestSendsHSTSInSharedMode(t *testing.T) {
 	hsts := "Strict-Transport-Security: " + hstsValue + "\r\n"
-	addr, _ := serveTLSMode(t, true)
+	addr, _ := serveTLS(t)
 	got := tlsBrokenEscape(t, addr)
 	if !strings.HasPrefix(got, "HTTP/1.1 400 ") ||
 		!strings.Contains(got, hsts) {
@@ -63,9 +63,5 @@ func TestTLSServeBadRequestSendsHSTSInSharedMode(t *testing.T) {
 		if !strings.Contains(got, line) {
 			t.Errorf("shared reply lacks %q", line)
 		}
-	}
-	addr, _ = serveTLS(t)
-	if got := tlsBrokenEscape(t, addr); strings.Contains(got, hsts) {
-		t.Errorf("unshared reply sends HSTS: %q", got)
 	}
 }

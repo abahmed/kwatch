@@ -48,6 +48,12 @@ follows these rules (`grace.go`, `restored_recovered.go`):
   stop. The same holds for a root kind kwatch cannot observe: its returning
   findings count no cycle either (`recovering` tests `verifiable` as well
   as `inGrace`).
+- A hold for a root kwatch cannot observe is bounded by `HeldMax` (6h).
+  After it the incident resolves with the reason "stopped tracking after
+  6h; could not confirm recovery", the message says kwatch could not
+  confirm it recovered, and the incident is not rechecked. If sight comes
+  back sooner, the normal healthy hold applies. The start of the hold is
+  persisted (`Record.HeldSince`), so a restart does not restart the bound.
 - The exception is a node that was only ever failing as not ready. When the
   synced model shows the node `Ready` again and no member is back, the
   incident does not wait: it recovers at once, and its downtime ends when

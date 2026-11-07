@@ -45,9 +45,9 @@ func TestServerDepsWireTheDashboardSelfReport(t *testing.T) {
 		t.Fatalf("before a session: %+v", got)
 	}
 	deps.self.set(func() health.SelfReport {
-		return health.SelfReport{OutboxPending: 4}
+		return health.SelfReport{OutboxPending: intp(4)}
 	})
-	if got := read(); got.Self == nil || got.Self.OutboxPending != 4 {
+	if got := read(); got.Self == nil || *got.Self.OutboxPending != 4 {
 		t.Fatalf("with a session: %+v", got.Self)
 	}
 }

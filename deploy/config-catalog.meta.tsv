@@ -38,8 +38,7 @@ healthCheck.port|Operations|Port for health and optional diagnostic endpoints.|a
 healthCheck.statusEndpoint|Security|Pro only. Serve the read-only /status view (object names, no authentication) on the health port; off by default.|active|
 dashboard.enabled|Operations|Serve the read-only incident dashboard (web UI and API) on a separate listener; Pro only, off by default.|active|
 dashboard.port|Operations|Port for the dashboard API listener; must not equal healthCheck.port.|active|
-dashboard.mode|Security|How people reach the dashboard: local (port-forward) or shared (Ingress, https only; sign-in over plain http is refused).|active|
-dashboard.trustProxy|Security|Honor X-Forwarded-Proto and X-Forwarded-For from the proxy that terminates TLS in front of the dashboard.|active|
+dashboard.trustedProxies|Security|CIDRs or addresses of the proxies that terminate TLS in front of the dashboard; X-Forwarded-For and X-Forwarded-Proto count only from them, and any entry makes the dashboard https only.|active|
 dashboard.tlsCertFile|Security|Certificate file kwatch serves on the dashboard port itself (with tlsKeyFile); reloaded when it changes.|active|
 dashboard.tlsKeyFile|Security|Key file for dashboard.tlsCertFile.|active|
 crd.enabled|Operations|Watch KwatchConfig and supported CRD status conditions; restart kwatch when configuration changes; enabled by the interactive installer after installing the CRD.|active|
