@@ -4,7 +4,9 @@ set -euo pipefail
 # Disposable-cluster check of the dashboard as the chart installs it: the
 # web UI and API on their own Service, password sign-in with a session
 # cookie, the cookie on /api/*, sign-out, and shared mode refusing sign-in
-# over plain http. The image must be built with the licensetest tag; it
+# over plain http. The password must survive a re-render and a helm upgrade,
+# forwarded headers count only from trusted proxies, and Community refuses
+# the dashboard. The image must be built with the licensetest tag; it
 # runs as Pro through KWATCH_EDITION_OVERRIDE.
 release="${KWATCH_RELEASE:-kwatch-dash}"
 namespace="${KWATCH_NAMESPACE:-kwatch-dash}"
@@ -122,15 +124,70 @@ grep -q "\"kwatchNamespace\":\"$namespace\"" "$work/body" ||
 [ "$(code --cookie "$work/jar" "http://127.0.0.1:$port/api/incidents")" = 401 ] ||
 	fail "the session must end at sign-out"
 
-echo "Switching to shared mode: sign-in over plain http is refused"
+echo "The password survives a re-render and a helm upgrade"
+helm template "$release" deploy/chart --namespace "$namespace" \
+	"${chart_values[@]}" >"$work/render1.yaml"
+helm template "$release" deploy/chart --namespace "$namespace" \
+	"${chart_values[@]}" >"$work/render2.yaml"
+cmp -s "$work/render1.yaml" "$work/render2.yaml" ||
+	fail "two renders of the chart differ"
+grep -Eq '^  (password|token): ' "$work/render1.yaml" &&
+	fail "the render carries credentials"
 helm upgrade "$release" deploy/chart --namespace "$namespace" \
-	"${chart_values[@]}" --set dashboard.mode=shared \
-	--set dashboard.trustProxy=true --wait=false
+	"${chart_values[@]}" --wait=false
+rollout
+again=$(kubectl --namespace "$namespace" get secret \
+	"$release-dashboard" -o jsonpath='{.data.password}' | base64 --decode)
+[ "$again" = "$password" ] || fail "the password changed after helm upgrade"
+start_forward
+[ "$(login "$password")" = 204 ] ||
+	fail "the saved password stopped working after the upgrade"
+
+echo "Forwarded headers count only from trusted proxies"
+# Through a port-forward the peer is 127.0.0.1.
+helm upgrade "$release" deploy/chart --namespace "$namespace" \
+	"${chart_values[@]}" \
+	--set 'dashboard.trustedProxies[0]=10.255.255.0/24' --wait=false
 rollout
 start_forward
-if [ "$(login "$password")" != 403 ] ||
+if [ "$(code --header 'X-Forwarded-Proto: https' \
+	--header 'Content-Type: application/json' \
+	--data "{\"password\":\"$password\"}" \
+	"http://127.0.0.1:$port/login")" != 403 ] ||
 	! grep -q https_required "$work/body"; then
-	fail "shared mode must refuse sign-in over plain http"
+	fail "X-Forwarded-Proto from an untrusted peer must not count"
 fi
+helm upgrade "$release" deploy/chart --namespace "$namespace" \
+	"${chart_values[@]}" \
+	--set 'dashboard.trustedProxies[0]=127.0.0.1/32' --wait=false
+rollout
+start_forward
+[ "$(login "$password")" = 403 ] ||
+	fail "a trusted proxy without X-Forwarded-Proto is http: refuse"
+[ "$(code --cookie-jar "$work/jar" --header 'X-Forwarded-Proto: https' \
+	--header 'X-Forwarded-For: 203.0.113.9' \
+	--header 'Content-Type: application/json' \
+	--data "{\"password\":\"$password\"}" \
+	"http://127.0.0.1:$port/login")" = 204 ] ||
+	fail "a trusted proxy that says https must be believed"
+
+echo "Community refuses the dashboard"
+kubectl --namespace "$namespace" set env "deployment/$release" \
+	KWATCH_EDITION_OVERRIDE- >/dev/null
+kubectl --namespace "$namespace" rollout status "deployment/$release" \
+	--timeout=240s
+start_forward_expect_closed() {
+	kill "${forward_pid:-}" >/dev/null 2>&1 || true
+	kubectl --namespace "$namespace" port-forward \
+		"service/$release-dashboard" "$port:8061" \
+		>"$work/forward.log" 2>&1 &
+	forward_pid=$!
+	sleep 5
+	if curl --silent --max-time 5 --output /dev/null \
+		"http://127.0.0.1:$port/"; then
+		fail "Community must not open the dashboard port"
+	fi
+}
+start_forward_expect_closed
 
 echo "Kind dashboard test passed."
