@@ -57,11 +57,6 @@ func shortCause(cause string) string {
 	return strings.TrimSpace(string(runes[:maxListCause-1])) + "…"
 }
 
-// toDetail is the detail of p alone, without the server's context.
-func toDetail(p incident.Incident) IncidentDetail {
-	return buildDetail(p, detailContext{})
-}
-
 // buildDetail converts p, adds the context c and fits the result to
 // the response limit.
 func buildDetail(p incident.Incident, c detailContext) IncidentDetail {

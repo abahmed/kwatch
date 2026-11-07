@@ -107,11 +107,13 @@ const backupSuffix = ".pre-migration-v"
 func backupBeforeMigration(db *bolt.DB, path string, free freeSpaceFunc) {
 	var version uint64
 	var known bool
-	_ = db.View(func(tx *bolt.Tx) error {
-		version, known = storedVersion(tx)
-		return nil
-	})
-	if chain, ok := migrationChain(version); !known || !ok ||
+	if err := readVersion(db, &version, &known); err != nil {
+		// Without the version nobody can tell whether a migration is
+		// due, so fail safe: take the copy anyway, named for version 0.
+		klog.ErrorS(err, "state store version unreadable; taking the "+
+			"pre-migration copy anyway", "component", "state",
+			"operation", "migrate")
+	} else if chain, ok := migrationChain(version); !known || !ok ||
 		len(chain) == 0 {
 		return
 	}
@@ -152,6 +154,15 @@ func backupBeforeMigration(db *bolt.DB, path string, free freeSpaceFunc) {
 	pruneBackups(path, dst, false)
 	klog.InfoS("state store backed up before migration",
 		"component", "state", "operation", "migrate", "keptAs", dst)
+}
+
+// readVersion reads the stored schema version of db into version and
+// known.
+func readVersion(db *bolt.DB, version *uint64, known *bool) error {
+	return db.View(func(tx *bolt.Tx) error {
+		*version, *known = storedVersion(tx)
+		return nil
+	})
 }
 
 // backupTemp names a pre-migration copy still being written.

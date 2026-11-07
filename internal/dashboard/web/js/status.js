@@ -5,11 +5,12 @@
    by alert level as one bar, and up to five issues to look at first.
    Below that, how the week went (ovinsights.js, trends.js). kwatch's
    own health is on the kwatch page (kwatchpage.js), the change feed on
-   Activity (activity.js). Data: /api/overview, /api/status,
-   /api/insights and /api/trends. */
+   Activity (activity.js). Data: /api/overview, /api/status
+   (its insights and trends parts). */
 (function () {
   "use strict";
   var KW = window.KW;
+  var V = KW.viz;
   var LEVELS = [["urgent", "page", "s-page"], ["attention", "notify", "s-notify"],
     ["low", "digest", "s-low"]];
 
@@ -186,7 +187,7 @@
   }
 
   KW.statusView = function (main) {
-    var etag = "", data = null, status = null, kw = null;
+    var etag = "", zoneNow = "", data = null, status = null, kw = null;
     // Made before pageView, which reads (read() below) right away.
     var weekBox = KW.el("section", "ov-week");
     var week = KW.insightsPart(weekBox);
@@ -217,16 +218,22 @@
     }
 
     function read() {
-      return Promise.all([KW.api("/api/overview", { etag: etag }), KW.api("/api/status"),
-        kw ? null : KW.api("/api/kwatch"), week.read()]).then(function (out) {
+      var q = V.zone();
+      if (q !== zoneNow) etag = "";
+      zoneNow = q;
+      return Promise.all([KW.api("/api/overview?" + q, { etag: etag }),
+        KW.api("/api/status")]).then(function (out) {
         var r = out[0];
         if (r.status === 200 && r.data) releasesLine(rel, r.data.releases);
-        if (out[1].status === 200 && out[1].data) status = out[1].data;
-        if (out[2] && out[2].status === 200) kw = out[2].data;
+        if (out[1].status === 200 && out[1].data) {
+          status = out[1].data;
+          kw = status.kwatch || kw;
+        }
         KW.selfDot(status, kw);
         if (r.status === 200 && r.data) {
           etag = r.etag;
           data = r.data;
+          week.set(data.insights, data.trends);
           var c = data.counts || {};
           KW.updateBadge({ page: c.urgent || 0, notify: c.attention || 0,
             digest: c.low || 0, silent: c.quiet || 0 });

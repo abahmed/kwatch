@@ -13,20 +13,13 @@ import (
 	"time"
 )
 
-// serveTLS runs a dashboard over kwatch's own TLS on a free port and
-// returns its address and the certificate directory.
+// serveTLS runs a dashboard over kwatch's own TLS (shared mode) on a
+// free port and returns its address and the certificate directory.
 func serveTLS(t *testing.T) (string, string) {
-	t.Helper()
-	return serveTLSMode(t, false)
-}
-
-// serveTLSMode is serveTLS, in shared mode when shared is set.
-func serveTLSMode(t *testing.T, shared bool) (string, string) {
 	t.Helper()
 	dir := t.TempDir()
 	writePair(t, dir, "first", testEpoch)
 	s := newTestServer()
-	s.opts.Shared = shared
 	s.opts.TLSCertFile = filepath.Join(dir, "tls.crt")
 	s.opts.TLSKeyFile = filepath.Join(dir, "tls.key")
 	ln, err := net.Listen("tcp", "127.0.0.1:0")

@@ -76,7 +76,7 @@ func (s *Server) SchemeFor(host string) (string, bool) {
 // RequiresHTTPS reports whether sign-in refuses plain http (shared
 // mode), so a link to the dashboard is only useful over https.
 func (s *Server) RequiresHTTPS() bool {
-	return s.opts.Shared
+	return s.opts.shared()
 }
 
 // requestHost is the request's Host without a port, in lower case.

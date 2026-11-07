@@ -282,6 +282,7 @@ func (m *Manager) flappingNews(p *Incident, now time.Time) (Decision, bool) {
 
 func (m *Manager) resolve(p *Incident, now time.Time, why Reason) Decision {
 	p.State, p.Resolved = Resolved, now
+	p.heldSince = time.Time{}
 	p.Pending.ClearReopen()
 	p.Pending.ClearRevised()
 	// Only a change made before the failure ended can have fixed it: the

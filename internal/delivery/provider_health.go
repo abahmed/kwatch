@@ -25,6 +25,10 @@ type ProviderHealth struct {
 	LastSuccess      time.Time
 	LastError        time.Time
 	LastErrorMessage string
+	// FailingSince is when the current failure began; zero while the
+	// provider works. Waiting is how many alerts wait for it.
+	FailingSince time.Time
+	Waiting      int
 }
 
 // providerOutcome is the delivery history ProviderHealth reports.
@@ -49,6 +53,7 @@ func (m *Manager) setProviderHealth(
 		m.providerOutcomes = make(map[string]providerOutcome)
 	}
 	changed := m.providerReasons[name] != reason
+	m.noteFailingLocked(name, reason, now)
 	m.providerReasons[name] = reason
 	outcome := m.providerOutcomes[name]
 	if reason == "" {
@@ -90,6 +95,16 @@ func (m *Manager) ProviderHealthEvents() <-chan struct{} {
 // configuration order. A provider outage never fails readiness: kwatch
 // keeps watching and queues for the provider.
 func (m *Manager) ProviderHealth() []ProviderHealth {
+	out := m.healthSnapshot()
+	for i := range out {
+		if out[i].Reason != "" {
+			out[i].Waiting = m.waitingFor(out[i].Name)
+		}
+	}
+	return out
+}
+
+func (m *Manager) healthSnapshot() []ProviderHealth {
 	m.mu.Lock()
 	var names []string
 	if generation := m.currentGenerationLocked(); generation != nil {
@@ -107,6 +122,9 @@ func (m *Manager) ProviderHealth() []ProviderHealth {
 			LastError:        m.providerOutcomes[name].lastError,
 			LastErrorMessage: m.providerOutcomes[name].errorMessage,
 		})
+		if n := m.notices[name]; n != nil && m.providerReasons[name] != "" {
+			out[len(out)-1].FailingSince = n.failingSince
+		}
 	}
 	return out
 }

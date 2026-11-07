@@ -83,8 +83,9 @@ type SelfReport struct {
 	LastAPIContact time.Time `json:"lastApiContact,omitzero"`
 	// StateFileBytes is the state file's data size.
 	StateFileBytes int64 `json:"stateFileBytes"`
-	// OutboxPending counts the messages accepted but not yet sent.
-	OutboxPending int `json:"outboxPending"`
+	// OutboxPending counts the messages accepted but not yet sent; nil
+	// when the outbox could not be read, which is not the same as none.
+	OutboxPending *int `json:"outboxPending"`
 	// DashboardLinks says whether messages link to the dashboard.
 	DashboardLinks LinkStatus `json:"dashboardLinks"`
 	// PodLogsForbidden is set while kwatch may not read pod logs:

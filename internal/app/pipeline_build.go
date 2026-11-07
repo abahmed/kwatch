@@ -67,6 +67,7 @@ type pipelineBuild struct {
 func newPipelineBuild(
 	deps *serverDeps, state *storage.Store,
 ) (*pipelineBuild, error) {
+	dropLegacyPush(state)
 	p := &pipelineBuild{deps: deps, state: state,
 		clock: deps.clients.Clock, withheld: feature.NewWithheld()}
 	if deps.has(FlightRecorder) {

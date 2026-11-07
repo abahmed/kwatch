@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"io"
 	"mime"
-	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -92,7 +92,12 @@ func (a *Auth) sessionCheck(next http.Handler) http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte("{\"signedIn\":false}\n"))
+		body := "{\"signedIn\":false}\n"
+		if c, err := r.Cookie(sessionCookie); err == nil &&
+			a.sessions.fromEarlierStart(c.Value) {
+			body = "{\"signedIn\":false,\"reason\":\"restarted\"}\n"
+		}
+		_, _ = w.Write([]byte(body))
 	})
 }
 
@@ -182,43 +187,13 @@ func sameOrigin(r *http.Request) bool {
 	return err == nil && u.Host != "" && strings.EqualFold(u.Host, r.Host)
 }
 
-// isHTTPS reports whether the browser reached kwatch over https: kwatch
-// served TLS itself, or a trusted proxy that terminated TLS said so in
-// X-Forwarded-Proto. The header counts only with trustProxy and never
-// from loopback, so a port-forward can never claim https.
-func (a *Auth) isHTTPS(r *http.Request) bool {
-	if r.TLS != nil {
-		return true
-	}
-	if !a.trustProxy || loopback(r) {
-		return false
-	}
-	return strings.EqualFold(lastHeaderValue(r, "X-Forwarded-Proto"),
-		"https")
-}
-
-// forwardedClient is the client a trusted proxy named: the last
-// X-Forwarded-For hop, the one the proxy added, as a canonical IP
-// address. Empty without trustProxy, from loopback or when the hop is
-// not an IP address, so a made-up value falls back to the peer.
-func (a *Auth) forwardedClient(r *http.Request) string {
-	if !a.trustProxy || loopback(r) {
-		return ""
-	}
-	ip := net.ParseIP(lastHeaderValue(r, "X-Forwarded-For"))
-	if ip == nil {
-		return ""
-	}
-	return ip.String()
-}
-
 // limiterFor is the limit r counts against and its key: the client a
 // trusted proxy names, else the connecting peer. Behind a trusted proxy
 // only the named client is limited: the proxy appends the address it
 // saw, so a client cannot rotate it, and one client's guesses never
-// lock out the others. Without trustProxy behind an Ingress, all
+// lock out the others. Without trusted proxies behind an Ingress, all
 // clients share the one peer limit, so one guesser can lock everyone
-// out for a minute: set trustProxy there.
+// out for a minute: set dashboard.trustedProxies there.
 func (a *Auth) limiterFor(r *http.Request) (*rateLimiter, string) {
 	if client := a.forwardedClient(r); client != "" {
 		return a.clientRate, client
@@ -253,18 +228,9 @@ func (a *Auth) noteProxyFailure(r *http.Request) {
 	}
 }
 
-func loopback(r *http.Request) bool {
-	ip := net.ParseIP(remoteHost(r))
-	return ip != nil && ip.IsLoopback()
-}
-
-// lastHeaderValue is the last comma-separated value of a header that may
-// repeat, trimmed.
-func lastHeaderValue(r *http.Request, name string) string {
-	values := r.Header.Values(name)
-	if len(values) == 0 {
-		return ""
-	}
-	parts := strings.Split(values[len(values)-1], ",")
-	return strings.TrimSpace(parts[len(parts)-1])
+// loopback reports whether r came straight from this host, such as a
+// port-forward. A trusted proxy on loopback is not a port-forward.
+func (a *Auth) loopback(r *http.Request) bool {
+	ip, err := netip.ParseAddr(remoteHost(r))
+	return err == nil && ip.IsLoopback() && !a.peerTrusted(r)
 }

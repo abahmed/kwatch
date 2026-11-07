@@ -63,13 +63,13 @@ func TestTrendsRefuseANameThatCannotBeAZone(t *testing.T) {
 	s := newTestServer()
 	for _, name := range []string{"../../etc/passwd", "/UTC",
 		strings.Repeat("A", maxZoneName+1), "Europe/Berlin%00"} {
-		w := get(t, s, "/api/trends?tzName="+url.QueryEscape(name))
+		w := get(t, s, "/api/overview?tzName="+url.QueryEscape(name))
 		got := decodeBadQuery(t, w)
 		if w.Code != http.StatusBadRequest || got.Param != "tzName" {
 			t.Errorf("%q: %d %s", name, w.Code, w.Body.String())
 		}
 	}
-	w := get(t, s, "/api/trends?tzName=Europe/Berlin")
+	w := get(t, s, "/api/overview?tzName=Europe/Berlin")
 	if w.Code != http.StatusOK {
 		t.Errorf("Europe/Berlin: %d %s", w.Code, w.Body.String())
 	}

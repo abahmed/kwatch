@@ -35,15 +35,10 @@ var assetTypes = map[string]string{
 }
 
 // rootFiles are served at the root by a fixed name, never hashed, by
-// their content type: the service worker (its scope is the folder it
-// is served from, so /sw.js covers the whole dashboard), the app
-// manifest, and the page the worker shows when kwatch can't be
-// reached. Browsers and the worker find them by that name. What they
-// name ({{asset:…}}) is rewritten to the hashed address.
+// their content type: the app manifest, which browsers find by that
+// name. What it names ({{asset:…}}) is rewritten to the hashed address.
 var rootFiles = map[string]string{
-	"sw.js":                "text/javascript; charset=utf-8",
 	"manifest.webmanifest": "application/manifest+json",
-	"offline.html":         "text/html; charset=utf-8",
 }
 
 // shellRoutes are the UI's own pages (Overview, Issues, Activity,
@@ -102,7 +97,6 @@ func buildAssets(root fs.FS) (*assets, error) {
 			return nil, err
 		}
 	}
-	a.versionWorker()
 	if a.shell, err = rewriteRefs(shell, urls); err != nil {
 		return nil, err
 	}
@@ -112,23 +106,6 @@ func buildAssets(root fs.FS) (*assets, error) {
 	a.badRequest = badRequestReply(a.notFound, false)
 	return a, nil
 }
-
-// offlineVersion is where the service worker carries a hash of the
-// offline page. That page is served by a fixed name, never hashed: the
-// hash makes a release that changes only the page change the worker too,
-// so browsers install it and copy the new page.
-const offlineVersion = "{{version:offline.html}}"
-
-// versionWorker writes the offline page's hash into the worker.
-func (a *assets) versionWorker() {
-	sum := sha256.Sum256(a.root["offline.html"])
-	a.root[workerName] = []byte(strings.ReplaceAll(
-		string(a.root[workerName]), offlineVersion,
-		hex.EncodeToString(sum[:])[:12]))
-}
-
-// workerName is the service worker among rootFiles.
-const workerName = "sw.js"
 
 func isLeaf(name string) bool { return !isStyle(name) }
 func isRootFile(p string) bool {

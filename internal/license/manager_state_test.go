@@ -85,26 +85,6 @@ func TestManagerRejectsLeaseForOtherBinding(t *testing.T) {
 	}
 }
 
-func TestManagerDeactivate(t *testing.T) {
-	h := newHarness(t)
-	h.run()
-	if err := h.m.Deactivate(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if h.worker.count("/license/deactivate") != 1 ||
-		h.worker.bound || h.worker.badSigs != 0 {
-		t.Fatal("deactivate not accepted")
-	}
-	if h.leases.lease != "" {
-		t.Fatal("lease kept")
-	}
-	before := h.worker.total()
-	h.m.cycle(context.Background())
-	if h.worker.total() != before {
-		t.Fatal("released manager contacted the server")
-	}
-}
-
 func TestManagerLoop(t *testing.T) {
 	h := newHarness(t)
 	ctx, cancel := context.WithCancel(context.Background())

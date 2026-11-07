@@ -33,18 +33,3 @@ func IsValidSeverity(s string) bool {
 func NormalizeSeverity(s string) Severity {
 	return Severity(strings.ToLower(strings.TrimSpace(s)))
 }
-
-// Rank orders severities for escalation decisions; higher is more severe.
-// medium and warning share a rank; unknown or empty values rank as normal.
-func (s Severity) Rank() int {
-	switch s {
-	case SeverityCritical:
-		return 3
-	case SeverityHigh:
-		return 2
-	case SeverityMedium, SeverityWarning:
-		return 1
-	default:
-		return 0
-	}
-}

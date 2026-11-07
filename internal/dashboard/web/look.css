@@ -44,7 +44,7 @@ html[data-text="xl"] { font-size: 125%; --text-scale: 1.25; }
   .pager .btn { min-width: 44px; }
   .brand, .btn, .btn-sm, details > summary, .back a, .link, .fpill, .fpill-clear,
   .dd-btn, .vopts-pop .dd-btn, .pager .dd-btn, .pager-size .dd-btn,
-  .lg-ctl .dd-btn, .ntf-opts .dd-btn, .d-ctx-b, .in-link, .tr-link {
+  .lg-ctl .dd-btn, .d-ctx-b, .in-link, .tr-link {
     min-height: 44px;
   }
   .brand, .btn, .btn-sm, .back a { min-width: 44px; }

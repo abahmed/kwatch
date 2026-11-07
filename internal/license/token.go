@@ -70,19 +70,6 @@ func split(prefix, s string) (payload, sig []byte, err error) {
 	return payload, sig, nil
 }
 
-func sign(prefix string, payload []byte, priv ed25519.PrivateKey) string {
-	sig := ed25519.Sign(priv, payload)
-	return prefix +
-		base64.RawURLEncoding.EncodeToString(payload) + "." +
-		base64.RawURLEncoding.EncodeToString(sig)
-}
-
-// SignKey encodes and signs a license key.
-func SignKey(k Key, priv ed25519.PrivateKey) string {
-	payload, _ := json.Marshal(k)
-	return sign(keyPrefix, payload, priv)
-}
-
 func decodeKey(payload []byte) (Key, error) {
 	var k Key
 	if err := json.Unmarshal(payload, &k); err != nil {

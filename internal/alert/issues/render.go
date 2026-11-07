@@ -39,38 +39,6 @@ func RichBody(
 	return b.String()
 }
 
-// FencedBody is Body with a tracker-specific code fence, such as Jira's
-// "{noformat}". The output is workload text, so it must not be able to
-// close the fence early: a backtick fence is made longer than any backtick
-// run in the output, and any other fence token is broken up where it
-// appears in the output.
-func FencedBody(msg notification.Message, fence string) string {
-	return FencedBodyWith(msg, fence, nil)
-}
-
-// FencedBodyWith is FencedBody with an extra escape applied to the Note
-// (for example Jira wiki markup). The Note can carry pod-controlled text
-// such as a termination message, so every tracker neutralises @mentions
-// in it; output stays verbatim inside its fence, where mentions are inert.
-func FencedBodyWith(
-	msg notification.Message, fence string, escape func(string) string,
-) string {
-	note := NeutralizeMentions(msg.NoteText())
-	if escape != nil {
-		note = escape(note)
-	}
-	var b strings.Builder
-	b.WriteString(note)
-	if len(msg.Output) > 0 {
-		text := strings.Join(msg.Output, "\n")
-		fence, text = safeFence(fence, text)
-		b.WriteString("\n\n" + fence + "\n")
-		b.WriteString(text)
-		b.WriteString("\n" + fence)
-	}
-	return b.String()
-}
-
 // mention matches an @name or @org/team that trackers turn into a
 // notification.
 // An @ inside a word, as in an email address, is not a mention.

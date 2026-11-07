@@ -69,11 +69,21 @@ func TestAuthRateLimit(t *testing.T) {
 		}
 	}
 	req := httptest.NewRequest("GET", "/api/incidents", nil)
-	req.Header.Set("Authorization", "Bearer secret-token")
+	req.Header.Set("Authorization", "Bearer wrong-token")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 	if w.Code != http.StatusTooManyRequests {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusTooManyRequests)
+	}
+	// The limiter counts failures only: the right token is never held
+	// back by it.
+	req = httptest.NewRequest("GET", "/api/incidents", nil)
+	req.Header.Set("Authorization", "Bearer secret-token")
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("right token past the limit: status = %d, want 200",
+			w.Code)
 	}
 }
 
@@ -201,7 +211,7 @@ func TestAuthValidTokenIgnoresLength(t *testing.T) {
 // a fresh bucket: the peer is limited instead.
 func TestAuthLimiterIgnoresForwardedGarbage(t *testing.T) {
 	auth := NewAuth("secret-token", "", false, clock.RealClock{})
-	auth.trustProxy = true
+	auth.trusted, _ = parseProxies([]string{"10.0.0.0/8"})
 	for i := range 2 * maxFailures {
 		req := httptest.NewRequest("GET", "/api/incidents", nil)
 		req.RemoteAddr = "10.1.2.3:4000"
@@ -222,7 +232,7 @@ func TestAuthLimiterIgnoresForwardedGarbage(t *testing.T) {
 
 func TestAuthForwardedClientIsCanonical(t *testing.T) {
 	auth := NewAuth("secret-token", "", false, clock.RealClock{})
-	auth.trustProxy = true
+	auth.trusted, _ = parseProxies([]string{"10.0.0.0/8"})
 	req := httptest.NewRequest("GET", "/", nil)
 	req.RemoteAddr = "10.1.2.3:4000"
 	req.Header.Set("X-Forwarded-For", "evil, 2001:0DB8:0:0:0:0:0:1")

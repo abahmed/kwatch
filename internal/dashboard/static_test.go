@@ -65,7 +65,7 @@ func TestStaticShellHasNoInlineScriptOrStyle(t *testing.T) {
 		"filterchips", "issuesfilters", "pager", "issueslive", "viewopts",
 		"place", "drawer", "issues", "evidence", "timeline", "context",
 		"objects", "insight", "share", "detail", "incpanel", "incnav",
-		"trends", "api", "activity", "status", "notify", "refresh",
+		"trends", "api", "activity", "status", "refresh",
 		"main", "keys"} {
 		if !regexp.MustCompile(`src="/assets/js/` + js +
 			`\.[0-9a-f]{12}\.js"`).MatchString(shell) {
@@ -185,17 +185,9 @@ func TestStaticBuildRefusesAMissingReference(t *testing.T) {
 	root["web/tokens.css"] = &fstest.MapFile{Data: []byte(":root{}")}
 	root["web/favicon.svg"] = &fstest.MapFile{Data: []byte("<svg/>")}
 	if _, err := buildAssets(root); err == nil {
-		t.Error("built without the service worker")
-	}
-	root["web/sw.js"] = &fstest.MapFile{Data: []byte("self;")}
-	if _, err := buildAssets(root); err == nil {
 		t.Error("built without the app manifest")
 	}
 	root["web/manifest.webmanifest"] = &fstest.MapFile{Data: []byte("{}")}
-	if _, err := buildAssets(root); err == nil {
-		t.Error("built without the offline page")
-	}
-	root["web/offline.html"] = &fstest.MapFile{Data: []byte("<p>")}
 	if _, err := buildAssets(root); err != nil {
 		t.Errorf("complete set: %v", err)
 	}

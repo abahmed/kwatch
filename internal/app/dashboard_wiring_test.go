@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -37,18 +38,18 @@ func TestNewDashboardServerNeedsProAndEnabled(t *testing.T) {
 	now := clock.Func(func() time.Time { return time.Unix(0, 0) })
 	cfg := config.DefaultConfig()
 	pro := feature.ProEntitlements()
-	if newDashboardServer(config.CompileRuntimeConfig(cfg), now, pro) != nil {
+	if newDashboardServer(context.Background(),
+		config.CompileRuntimeConfig(cfg), nil, now, pro) != nil {
 		t.Fatal("a disabled dashboard was built")
 	}
 	cfg.Dashboard.Enabled = true
-	cfg.Dashboard.Mode = config.DashboardShared
 	runtime := config.CompileRuntimeConfig(cfg)
-	if newDashboardServer(runtime, now, nil) != nil {
+	if newDashboardServer(context.Background(), runtime, nil, now, nil) != nil {
 		t.Fatal("Community built the dashboard")
 	}
 	t.Setenv(dashboardPasswordEnv, "pw")
 	t.Setenv(dashboardDeploymentEnv, "kwatch-prod")
-	if newDashboardServer(runtime, now, pro) == nil {
+	if newDashboardServer(context.Background(), runtime, nil, now, pro) == nil {
 		t.Fatal("Pro with the dashboard enabled built nothing")
 	}
 }

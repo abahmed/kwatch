@@ -46,17 +46,6 @@ spec:
         {{- else if $license.key }}
         checksum/license: {{ $license.key | sha256sum }}
         {{- end }}
-        {{- /* Roll the pod when the dashboard Secret changes (password and
-        token are read at start). Same lookup limits as the license Secret:
-        an offline render hashes the name only. */}}
-        {{- if (default dict .Values.dashboard).enabled }}
-        {{- $dashSecret := lookup "v1" "Secret" .Release.Namespace (include "kwatch.dashboardSecretName" .) }}
-        {{- if $dashSecret }}
-        checksum/dashboard-secret: {{ toJson $dashSecret.data | sha256sum }}
-        {{- else }}
-        checksum/dashboard-secret: {{ include "kwatch.dashboardSecretName" . | sha256sum }}
-        {{- end }}
-        {{- end }}
         {{- with .Values.podAnnotations }}
           {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -164,18 +153,16 @@ spec:
             # the pod start without the dashboard (Community, or the
             # dashboard disabled).
             {{- $dashEnv := default dict .Values.dashboard }}
-            # ENABLED and TRUST_PROXY are always set, true or false: the
+            # ENABLED and TRUSTED_PROXIES are always set, on or off: the
             # environment wins over the config file, so the chart values
             # decide both ways.
             - name: KWATCH_DASHBOARD_ENABLED
               value: {{ if $dashEnv.enabled }}"true"{{ else }}"false"{{ end }}
-            - name: KWATCH_DASHBOARD_TRUST_PROXY
-              value: {{ if and $dashEnv.enabled $dashEnv.trustProxy }}"true"{{ else }}"false"{{ end }}
+            - name: KWATCH_DASHBOARD_TRUSTED_PROXIES
+              value: {{ if $dashEnv.enabled }}{{ join "," ($dashEnv.trustedProxies | default list) | quote }}{{ else }}""{{ end }}
             {{- if $dashEnv.enabled }}
             - name: KWATCH_DASHBOARD_PORT
               value: {{ $dashEnv.port | default 8061 | quote }}
-            - name: KWATCH_DASHBOARD_MODE
-              value: {{ $dashEnv.mode | default "local" | quote }}
             {{- if (default dict $dashEnv.tls).secretName }}
             - name: KWATCH_DASHBOARD_TLS_CERT
               value: /etc/kwatch/dashboard-tls/tls.crt
@@ -184,19 +171,26 @@ spec:
             {{- end }}
             - name: KWATCH_DEPLOYMENT_NAME
               value: {{ include "kwatch.fullname" . | quote }}
-            {{- end }}
+            {{- if $dashEnv.existingSecret }}
             - name: KWATCH_DASHBOARD_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "kwatch.dashboardSecretName" . }}
+                  name: {{ $dashEnv.existingSecret }}
                   key: token
                   optional: true
             - name: KWATCH_DASHBOARD_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "kwatch.dashboardSecretName" . }}
+                  name: {{ $dashEnv.existingSecret }}
                   key: password
                   optional: true
+            {{- else }}
+            # kwatch fills the chart's empty Secret itself (get/update on
+            # that one name) and reads the values through the API.
+            - name: KWATCH_DASHBOARD_SECRET
+              value: {{ include "kwatch.dashboardSecretName" . | quote }}
+            {{- end }}
+            {{- end }}
             {{- if eq (include "kwatch.watchSecrets" .) "false" }}
             # watch.secrets=false: matches the RBAC, which grants no
             # Secret access, even when config.yaml comes from a Secret.

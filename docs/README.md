@@ -42,6 +42,7 @@ implementation-only notes may remain beside code when they are not published.
   [add a source or kind schema](./contributing-source.md),
   [add a message fact](./contributing-message-fact.md),
   [add a labeled scenario](./contributing-scenario.md).
+- [What happens to alerts when kwatch restarts](./single-replica-restarts.md) — what is kept, resent or lost across a restart.
 - [Production operations](./production-operations.md) — readiness, restarts,
   recovery, outage handling, and release operations.
 - [Configuration notes](./configuration.md) — offline configuration and

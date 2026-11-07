@@ -40,7 +40,10 @@ func resolvedRootKinds(result replay.Result) map[inventory.Kind]bool {
 
 // The absence of findings on a kind kwatch cannot observe is missing
 // data, not recovery: with the root kind unverifiable, no scenario may
-// resolve an incident rooted there.
+// resolve an incident rooted there as recovered. A replay that hides the
+// kind for good outlasts the held-resolve bound, and the incident then
+// ends, but only as unconfirmed (incident.UnconfirmedNote), never as a
+// recovery.
 func TestScenariosNeverResolveUnverifiableRoots(t *testing.T) {
 	t.Parallel()
 	checked := 0
@@ -53,7 +56,8 @@ func TestScenariosNeverResolveUnverifiableRoots(t *testing.T) {
 			for _, d := range hidden.Decisions {
 				if d.Action == incident.Resolve &&
 					d.Incident.Root.Kind == kind &&
-					d.Reason != incident.ReasonSuperseded {
+					d.Reason != incident.ReasonSuperseded &&
+					!unconfirmed(d.Reason) {
 					t.Errorf("%s: resolved %s although %s is not "+
 						"observable", e.Name, d.Incident.Root, kind)
 				}
@@ -64,6 +68,14 @@ func TestScenariosNeverResolveUnverifiableRoots(t *testing.T) {
 		t.Fatal("no scenario resolves an incident; nothing was checked")
 	}
 	t.Logf("checked %d resolving root kinds", checked)
+}
+
+// unconfirmed reports a resolve that the held-resolve bound made: it
+// claims no recovery, only that kwatch could not confirm one.
+func unconfirmed(reason incident.Reason) bool {
+	return strings.HasPrefix(string(reason),
+		incident.StoppedTrackingPrefix) &&
+		strings.HasSuffix(string(reason), incident.UnconfirmedNote)
 }
 
 // Scenario messages are written for a named cluster: every incident

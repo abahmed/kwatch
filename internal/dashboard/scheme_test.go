@@ -13,7 +13,11 @@ import (
 )
 
 func newSchemeServer(trustProxy bool) *Server {
-	return NewServer(Options{Token: testToken, TrustProxy: trustProxy},
+	var proxies []string
+	if trustProxy {
+		proxies = []string{"0.0.0.0/0", "::/0"}
+	}
+	return NewServer(Options{Token: testToken, TrustedProxies: proxies},
 		clock.Func(func() time.Time { return testEpoch }))
 }
 
@@ -95,8 +99,8 @@ func TestSchemeLogKeepsAtMostSixteenHosts(t *testing.T) {
 }
 
 func TestRequiresHTTPSFollowsSharedMode(t *testing.T) {
-	assert.False(t, newSchemeServer(true).RequiresHTTPS())
-	shared := NewServer(Options{Shared: true},
+	assert.False(t, newSchemeServer(false).RequiresHTTPS())
+	shared := NewServer(Options{TrustedProxies: []string{"10.0.0.0/8"}},
 		clock.Func(func() time.Time { return testEpoch }))
 	assert.True(t, shared.RequiresHTTPS())
 }
