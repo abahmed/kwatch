@@ -19,12 +19,12 @@ func signalExit(code string) bool {
 }
 
 // signalExitUnexplained reports that nothing else accounts for a
-// signal exit of container c: its termination reason is known and is
+// signal exit of its container: its termination reason is known and is
 // not an out-of-memory kill, and no probe failure, probe event or
 // probe-failure finding points to a kill by the kubelet. Only then may
 // the exit code alone stand as a crash.
 func signalExitUnexplained(
-	model inventory.Reader, p incident.Incident, pod, c inventory.EntityID,
+	model inventory.Reader, p incident.Incident, pod inventory.EntityID,
 	e inventory.Entity,
 ) bool {
 	reason := terminationReason(e)

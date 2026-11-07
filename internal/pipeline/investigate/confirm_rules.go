@@ -57,7 +57,7 @@ func confirmCrashExit(
 				continue
 			}
 			if signalExit(code) &&
-				!signalExitUnexplained(model, p, pod, c, e) {
+				!signalExitUnexplained(model, p, pod, e) {
 				continue
 			}
 			why := "the last run of " + c.Name + " exited with code " + code

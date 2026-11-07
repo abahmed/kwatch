@@ -52,9 +52,6 @@ var (
 		"<users/", "<"+zeroWidthSpace+"users/")
 	// Webex: <@all>, <@personEmail:...> and <@personId:...>.
 	webexMentions = strings.NewReplacer("<@", "<"+zeroWidthSpace+"@")
-	// Zulip: @**all**, @**everyone**, @**Name** and the silent @_**Name**.
-	zulipMentions = strings.NewReplacer(
-		"@**", "@"+zeroWidthSpace+"**", "@_**", "@"+zeroWidthSpace+"_**")
 )
 
 // NeutralizeGoogleChatMentions neutralizes plain and Google Chat mentions.

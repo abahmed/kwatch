@@ -33,7 +33,6 @@ func runPipeline(
 		return err
 	}
 	p.gap = gap
-	dropLegacyPush(state)
 	defer p.close()
 	go p.decisions.run()
 	engine, err := p.newEngine()

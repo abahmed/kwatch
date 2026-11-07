@@ -277,6 +277,7 @@ func (m *Manager) Restore(records []Record, graceUntil time.Time) {
 // restoreSets rebuilds the failure modes, the root's own reasons and
 // the moved links.
 func restoreSets(p *Incident, r Record) {
+	p.heldSince = r.HeldSince
 	p.Moved = Moved{Into: r.MovedInto, From: r.MovedFrom}
 	for _, mode := range r.Modes {
 		if p.modes == nil {
@@ -326,9 +327,8 @@ func restored(r Record) *Incident {
 		Cause: restoredCause(r.Cause),
 		Tier:  r.Tier, State: r.State, Opened: r.Opened,
 		Announced: r.Announced, RecoveringSince: r.RecoveringSince,
-		Resolved: r.Resolved, heldSince: r.HeldSince, Cycles: r.Cycles,
-		Occurrences: r.Occurrences,
-		Revision:    r.Revision, Digest: r.Digest, Timeline: r.Timeline,
+		Resolved: r.Resolved, Cycles: r.Cycles, Occurrences: r.Occurrences,
+		Revision: r.Revision, Digest: r.Digest, Timeline: r.Timeline,
 		Scope: r.Scope, SupersededBy: r.SupersededBy,
 		Unverified: r.Unverified, CauseUnclear: r.CauseUnclear,
 		Checked: r.Checked, Considered: r.Considered, Reminded: r.Reminded,
