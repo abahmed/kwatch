@@ -211,3 +211,21 @@ func TestOutboxSweepDropsExpiredRecords(t *testing.T) {
 	assert.True(t, freshLive)
 	assert.Equal(t, dropped+1, metrics.DefaultRegistry().OutboxDropped.Load())
 }
+
+func TestProviderHealthSignalReachesPublisherAndNoticeWatcher(t *testing.T) {
+	manager := &Manager{}
+	manager.signalProviderHealth()
+
+	// The notice watcher taking its signal must not consume the
+	// publisher's.
+	select {
+	case <-manager.noticeEventsChannel():
+	default:
+		t.Fatal("notice watcher was not signalled")
+	}
+	select {
+	case <-manager.ProviderHealthEvents():
+	default:
+		t.Fatal("health publisher was not signalled")
+	}
+}

@@ -69,10 +69,24 @@ func (m *Manager) setProviderHealth(
 	}
 }
 
+// signalProviderHealth wakes every consumer. Each has its own channel:
+// a shared one lets the notice watcher steal the signal from the health
+// publisher, which then never shows the change.
 func (m *Manager) signalProviderHealth() {
-	select {
-	case m.healthEventsChannel() <- struct{}{}:
-	default:
+	m.healthMu.Lock()
+	if m.healthEvents == nil {
+		m.healthEvents = make(chan struct{}, 1)
+	}
+	if m.noticeEvents == nil {
+		m.noticeEvents = make(chan struct{}, 1)
+	}
+	events, notices := m.healthEvents, m.noticeEvents
+	m.healthMu.Unlock()
+	for _, ch := range []chan struct{}{events, notices} {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
 	}
 }
 
@@ -83,6 +97,15 @@ func (m *Manager) healthEventsChannel() chan struct{} {
 		m.healthEvents = make(chan struct{}, 1)
 	}
 	return m.healthEvents
+}
+
+func (m *Manager) noticeEventsChannel() chan struct{} {
+	m.healthMu.Lock()
+	defer m.healthMu.Unlock()
+	if m.noticeEvents == nil {
+		m.noticeEvents = make(chan struct{}, 1)
+	}
+	return m.noticeEvents
 }
 
 // ProviderHealthEvents is signalled when a provider's health changed or
