@@ -184,3 +184,18 @@ func TestPruneBackups(t *testing.T) {
 		t.Fatalf("complete prune: old %v cur %v", exists(old), exists(cur))
 	}
 }
+
+// A failed version read is an error the backup logs and goes on from;
+// it is never swallowed into "nothing to migrate".
+func TestReadVersionReportsAFailedRead(t *testing.T) {
+	db, err := bolt.Open(filepath.Join(t.TempDir(), "v.db"), 0o600, nil)
+	require.NoError(t, err)
+	var v uint64
+	var known bool
+	require.NoError(t, readVersion(db, &v, &known))
+	require.NoError(t, db.Close())
+	require.Error(t, readVersion(db, &v, &known))
+	// backupBeforeMigration on the unreadable file must not panic and
+	// must not skip silently (it logs and tries the copy).
+	backupBeforeMigration(db, filepath.Join(t.TempDir(), "x.db"), nil)
+}

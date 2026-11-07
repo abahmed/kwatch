@@ -225,10 +225,10 @@ func TestInsightsNodesCountIssuesOnEachNode(t *testing.T) {
 	assert.Empty(t, insightsOf(p).Nodes)
 }
 
-func TestInsightsHandlerTagsTheBodyAndValidatesTZ(t *testing.T) {
+func TestOverviewTagsTheBodyAndValidatesTZ(t *testing.T) {
 	s := newTestServer(issueAt("p", "a", incident.Page, time.Hour))
 
-	w := get(t, s, "/api/insights?tz=60")
+	w := getPart(t, s, "/api/overview?tz=60", "insights")
 	require.Equal(t, http.StatusOK, w.Code)
 	var got InsightsResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
@@ -236,18 +236,18 @@ func TestInsightsHandlerTagsTheBodyAndValidatesTZ(t *testing.T) {
 	tag := w.Header().Get("ETag")
 	require.NotEmpty(t, tag)
 
-	again := getIfNoneMatch(t, s, "/api/insights?tz=60", tag)
+	again := getIfNoneMatch(t, s, "/api/overview?tz=60", tag)
 	assert.Equal(t, http.StatusNotModified, again.Code)
 
 	assert.Equal(t, http.StatusBadRequest,
-		get(t, s, "/api/insights?tz=9999").Code)
+		get(t, s, "/api/overview?tz=9999").Code)
 	assert.Equal(t, http.StatusMethodNotAllowed,
-		call(t, s, http.MethodPost, "/api/insights", testToken).Code)
+		call(t, s, http.MethodPost, "/api/overview", testToken).Code)
 	assert.Equal(t, http.StatusUnauthorized,
-		call(t, s, http.MethodGet, "/api/insights", "").Code)
+		call(t, s, http.MethodGet, "/api/overview", "").Code)
 	s.SetIncidents(nil)
 	assert.Equal(t, http.StatusServiceUnavailable,
-		get(t, s, "/api/insights").Code)
+		get(t, s, "/api/overview").Code)
 }
 
 func TestInsightsExplainAQuietCluster(t *testing.T) {
@@ -262,7 +262,7 @@ func TestInsightsExplainAQuietCluster(t *testing.T) {
 	})
 	s.NoteScan()
 
-	w := get(t, s, "/api/insights")
+	w := getPart(t, s, "/api/overview", "insights")
 	require.Equal(t, http.StatusOK, w.Code)
 	var got InsightsResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))

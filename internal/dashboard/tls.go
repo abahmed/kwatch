@@ -31,7 +31,7 @@ func (s *Server) serve(server *http.Server, ln net.Listener) error {
 	// 400 does too.
 	tlsLn := tls.NewListener(ln, server.TLSConfig)
 	reply := s.assets.badRequest
-	if s.opts.Shared {
+	if s.opts.shared() {
 		reply = badRequestReply(s.assets.notFound, true)
 	}
 	return server.Serve(pageListener{tlsLn, reply})

@@ -14,18 +14,39 @@ import (
 func (m *Manager) awaitingEvidence(p *Incident, now time.Time) bool {
 	p.heldForData = false
 	if len(p.Members) > 0 {
+		p.heldSince = time.Time{}
 		return false
 	}
 	if m.inGrace(p, now) {
 		return true
 	}
 	if m.verifiable(p) {
+		p.heldSince = time.Time{}
+		return false
+	}
+	if p.heldSince.IsZero() {
+		p.heldSince = now
+	}
+	if m.holdExpired(p, now) {
 		return false
 	}
 	p.heldForData = true
 	p.noteHeld(now)
 	return true
 }
+
+// holdExpired reports whether p has waited Config.HeldMax for sight of
+// an object kwatch still cannot observe. The hold ends there and the
+// incident resolves as unconfirmed; it is never rechecked again.
+func (m *Manager) holdExpired(p *Incident, now time.Time) bool {
+	return !p.heldSince.IsZero() && len(p.Members) == 0 &&
+		!now.Before(p.heldSince.Add(m.cfg.HeldMax)) && !m.verifiable(p)
+}
+
+// UnconfirmedNote ends the reason of a resolve that came from the hold
+// for missing data running out: nothing was seen recover, because
+// nothing could be seen. Messages word their lead from it.
+const UnconfirmedNote = "; could not confirm recovery"
 
 // heldNote says on the timeline why an incident with no failure left
 // stays open.

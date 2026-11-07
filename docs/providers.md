@@ -164,11 +164,11 @@ this order, the first that applies wins:
 1. https when the Ingress has a TLS entry for the host, or for an
    HTTPRoute, since TLS ends at its Gateway;
 2. https when the latest dashboard request for that host came over https:
-   kwatch served TLS itself, or, with `dashboard.trustProxy`, the proxy in
-   front said so in `X-Forwarded-Proto` (a load balancer that ends TLS
+   kwatch served TLS itself, or a proxy listed in `dashboard.trustedProxies`
+   said so in `X-Forwarded-Proto` (a load balancer that ends TLS
    before an Ingress without a `tls:` block, as in the installer's
-   upstream mode). Without `trustProxy` the header is ignored;
-3. https in shared mode (`dashboard.mode: shared`), which refuses sign-in
+   upstream mode). From any other peer the header is ignored;
+3. https in shared mode (trusted proxies or kwatch's own TLS), which refuses sign-in
    over plain http, so an http link could not be used;
 4. otherwise http.
 

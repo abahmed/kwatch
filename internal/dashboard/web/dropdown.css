@@ -40,9 +40,7 @@
 .dd-foot .link { min-height: 28px; }
 
 /* Smaller where the controls around are smaller. */
-.vopts-pop .dd, .pager .dd, .ntf-opts .dd { display: block; }
-.ntf-opts .dd { margin-top: 4px; }
-.ntf-opts .dd-btn { font-size: var(--t-micro); padding: 0 10px; }
+.vopts-pop .dd, .pager .dd { display: block; }
 .pager .dd { display: inline-block; }
 
 @media (max-width: 700px) {
@@ -51,5 +49,4 @@
 }
 .dd-find:focus-visible, .dd-opt:focus-visible { outline-offset: -2px; outline-width: 2px; }
 /* The sidebar scrolls: its picker opens in place, inside it. */
-.ntf-opts .dd-pop { position: static; width: 100%; max-width: none; margin-top: 4px; box-shadow: none; }
 .dd-count { display: inline-block; margin-left: 6px; min-width: 20px; padding: 0 6px; border-radius: var(--radius-chip); background: var(--text); color: var(--bg); font-size: var(--t-micro); line-height: 1.25rem; text-align: center; }

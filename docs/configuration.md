@@ -556,30 +556,23 @@ listener, never on the health port. Everything about reaching it from outside
 |:---|:---|:---|
 | `dashboard.enabled` | `false` | Serves the dashboard. Pro only. Community reports it as an ignored setting (`ui.dashboard`) at start and in /status |
 | `dashboard.port` | `8061` | The dashboard port |
-| `dashboard.mode` | `local` | `local` for a port-forward, `shared` for an Ingress with TLS. Shared mode marks the session cookie Secure and refuses sign-in over plain HTTP |
-| `dashboard.trustProxy` | `false` | Believes `X-Forwarded-Proto` and `X-Forwarded-For` from the proxy that ends TLS in front of kwatch |
+| `dashboard.trustedProxies` | `[]` | CIDRs or addresses of the proxies that end TLS in front of kwatch. `X-Forwarded-For` and `X-Forwarded-Proto` count only from them; any entry (or own TLS) makes the dashboard https only |
 | `dashboard.tlsCertFile`, `dashboard.tlsKeyFile` | empty | Make kwatch serve TLS on the dashboard port itself. Set both or neither |
 | `investigation.logs` | `true` | Reads container logs as evidence (redacted, bounded). `false` reads no log at all, and the dashboard shows the log section as turned off |
 
-The bearer token and the sign-in password are not in the file: they come
-from `KWATCH_DASHBOARD_TOKEN` and `KWATCH_DASHBOARD_PASSWORD`. With both
-empty and the dashboard enabled, kwatch logs a warning and refuses every
-dashboard request with 401.
-
-Browser notifications need no setting. When someone turns them on in the
-dashboard, kwatch sends them through the browser's push service over HTTPS
-(`fcm.googleapis.com`, `updates.push.services.mozilla.com`,
-`*.push.apple.com`, `*.notify.windows.com`), through the configured proxy,
-so they arrive with every dashboard tab closed. In a cluster without that
-access they arrive only while a dashboard tab is open. See
-[dashboard notes](./dashboard.md#browser-notifications).
+The bearer token and the sign-in password are not in the file. The chart
+ships the Secret `<release>-dashboard` empty and kwatch fills both values
+the first time it starts (`KWATCH_DASHBOARD_SECRET` names it); with your own
+Secret they come from `KWATCH_DASHBOARD_TOKEN` and
+`KWATCH_DASHBOARD_PASSWORD`. With neither, kwatch logs a warning and
+refuses every dashboard request with 401.
 
 Release reports need no setting either. The dashboard's Releases page
 lists every rollout of a Deployment, StatefulSet or DaemonSet with its
 verdict; a healthy release sends no message and is not added to the
 digest, and one that goes wrong is reported by the issue it causes. They
 need no extra permission and follow the namespace scope. See
-[Releases](./dashboard.md#releases).
+the dashboard's Releases page.
 
 ## 🌱 Environment variables
 
@@ -597,9 +590,8 @@ letter case; an empty value counts as unset, and any other text fails startup
 | `KWATCH_TELEMETRY` | `false` turns adoption telemetry off |
 | `KWATCH_CLUSTER_CHECKINS` | Deprecated and ignored (cluster check-ins were removed); logs a notice when set |
 | `KWATCH_DASHBOARD_ENABLED` | Overrides `dashboard.enabled` in both directions; the chart always sets it |
-| `KWATCH_DASHBOARD_TRUST_PROXY` | Overrides `dashboard.trustProxy` in both directions; the chart always sets it |
+| `KWATCH_DASHBOARD_TRUSTED_PROXIES` | Comma-separated list that overrides `dashboard.trustedProxies` in both directions; the chart always sets it |
 | `KWATCH_DASHBOARD_PORT` | Overrides `dashboard.port`; a value that is not a port is warned about and the file's setting stays |
-| `KWATCH_DASHBOARD_MODE` | `local` or `shared`; overrides `dashboard.mode`. Any other value is warned about and the file's setting stays |
 | `KWATCH_DASHBOARD_TLS_CERT`, `KWATCH_DASHBOARD_TLS_KEY` | Override `dashboard.tlsCertFile` and `dashboard.tlsKeyFile` |
 | `KWATCH_DASHBOARD_TOKEN` | The dashboard bearer token (API requests); the chart fills it from a Secret |
 | `KWATCH_DASHBOARD_PASSWORD` | The dashboard sign-in password; the chart fills it from a Secret |

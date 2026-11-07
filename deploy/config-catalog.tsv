@@ -51,8 +51,7 @@ app.communityProvider|string|empty|Operations|Alert provider the Community editi
 clusterCheckins|boolean|empty|Compatibility|Removed: kwatch no longer sends cluster check-ins. Accepted and ignored with a deprecation notice; use heartbeatMonitor (Pro) to learn when kwatch stops.|deprecated|heartbeatMonitor
 dashboard.enabled|boolean|false|Operations|Serve the read-only incident dashboard API on a separate listener; Pro only, off by default.|active|
 dashboard.port|integer|8061|Operations|Port for the dashboard API listener; must not equal healthCheck.port.|active|
-dashboard.mode|string|local|Security|How people reach the dashboard: local (port-forward) or shared (Ingress, https only; sign-in over plain http is refused).|active|
-dashboard.trustProxy|boolean|false|Security|Honor X-Forwarded-Proto and X-Forwarded-For from the proxy that terminates TLS in front of the dashboard.|active|
 dashboard.tlsCertFile|string|empty|Security|Certificate file kwatch serves on the dashboard port itself (with tlsKeyFile); reloaded when it changes.|active|
 dashboard.tlsKeyFile|string|empty|Security|Key file for dashboard.tlsCertFile.|active|
 investigation.logs|boolean|true|Scope|Read container logs for Pro evidence (redacted, bounded); false reads no log and shows the log section as turned off.|active|
+dashboard.trustedProxies|list|null|Security|CIDRs or addresses of the proxies that terminate TLS in front of the dashboard; X-Forwarded-For and X-Forwarded-Proto count only from them, and any entry makes the dashboard https only.|active|

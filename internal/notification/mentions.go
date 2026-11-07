@@ -52,9 +52,6 @@ var (
 		"<users/", "<"+zeroWidthSpace+"users/")
 	// Webex: <@all>, <@personEmail:...> and <@personId:...>.
 	webexMentions = strings.NewReplacer("<@", "<"+zeroWidthSpace+"@")
-	// Zulip: @**all**, @**everyone**, @**Name** and the silent @_**Name**.
-	zulipMentions = strings.NewReplacer(
-		"@**", "@"+zeroWidthSpace+"**", "@_**", "@"+zeroWidthSpace+"_**")
 )
 
 // NeutralizeGoogleChatMentions neutralizes plain and Google Chat mentions.
@@ -65,11 +62,6 @@ func NeutralizeGoogleChatMentions(text string) string {
 // NeutralizeWebexMentions neutralizes plain and Webex Markdown mentions.
 func NeutralizeWebexMentions(text string) string {
 	return webexMentions.Replace(NeutralizeMentions(text))
-}
-
-// NeutralizeZulipMentions neutralizes plain and Zulip mentions.
-func NeutralizeZulipMentions(text string) string {
-	return zulipMentions.Replace(NeutralizeMentions(text))
 }
 
 // telegramAt matches Telegram's @username mention: a username starts with

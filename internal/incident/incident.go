@@ -85,17 +85,15 @@ type Incident struct {
 	// found: "node", "image", "configmap". A message says so instead of
 	// leaving the reader with no cause at all. Sorted, without repeats.
 	Checked []string
-	// Considered lists the other causes the solver weighed for the
-	// latest placement, best first, as "root (row, confidence)". The
-	// audit log carries them; messages do not.
+	// Considered: the other causes weighed for the latest placement,
+	// best first, as "root (row, confidence"). Audit log only.
 	Considered []string
 	// Unverified names what root-cause rules could not check because
-	// kwatch cannot see that kind ("secrets in billing"). It is kept for
-	// the incident's life so every message states the gap.
+	// kwatch cannot see it ("secrets in billing"); every message says so.
 	Unverified []string
-	// ProCause is set when an analysis the edition withholds (a shared
-	// factor) would explain the incident: a Community message says Pro
-	// found a likely cause. It is not persisted.
+	// ProCause: an analysis the edition withholds would explain the
+	// incident, so a Community message says Pro found a cause. Not
+	// persisted.
 	ProCause bool
 	// Members are the findings this incident explains, keyed by finding key.
 	Members map[detection.Key]detection.Finding
@@ -189,9 +187,11 @@ type Incident struct {
 	// Scope remembers whether the announcement reached people, so its
 	// updates and resolve follow it even when no finding is left to judge.
 	Scope Scope
-	// heldForData says the latest tick held a resolve because kwatch
-	// cannot observe the root. Not persisted.
+	// heldForData: the latest tick held a resolve; not persisted.
 	heldForData bool
+	// heldSince starts the bounded hold for missing data (HeldMax);
+	// persisted.
+	heldSince time.Time
 	// Held marks an announcement collected for the startup summary and
 	// not yet handed to delivery.
 	Held bool

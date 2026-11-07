@@ -26,22 +26,20 @@
 
   /* marks: id -> {what, was, times} for the listed items. what is
      "new" (started after base and never seen), "escalated" (more
-     urgent than when seen) or "again" (failed again since). It reuses
-     the notification comparison (KW.notifyLogic). */
+     urgent than when seen) or "again" (failed again since). */
   function marks(store, items) {
-    var prev = { at: store.base, complete: false, items: {} };
-    Object.keys(store.items).forEach(function (id) {
-      var e = store.items[id];
-      prev.items[id] = { id: id, severity: e && typeof e === "object" ? e.severity : null,
-        state: "active" };
-    });
-    var next = KW.notifyLogic.snapshot({ incidents: items }, null, 0);
     var out = {};
-    KW.notifyLogic.changes(prev, next, { min: "silent", resolved: false })
-      .forEach(function (c) {
-        out[c.item.id] = { what: c.what === "reopened" ? "again" : c.what,
-          now: c.item.severity, was: c.was ? c.was.severity : "" };
-      });
+    items.forEach(function (i) {
+      var e = store.items[i.id];
+      if (!e) {
+        if (Date.parse(i.firstSeen) >= store.base - 30000) out[i.id] = { what: "new" };
+        return;
+      }
+      var was = e && typeof e === "object" ? e.severity : null;
+      if (was && rank(i.severity) < rank(was)) {
+        out[i.id] = { what: "escalated", now: i.severity, was: was };
+      }
+    });
     items.forEach(function (i) {
       var e = store.items[i.id];
       var more = e ? (i.repeatCount || 0) - e.repeat : 0;

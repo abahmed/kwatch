@@ -196,16 +196,16 @@ func TestTrendsTimeToResolveMedianAndLongest(t *testing.T) {
 	}
 }
 
-func TestTrendsHandlerValidatesTZAndUsesTheClock(t *testing.T) {
+func TestOverviewTrendsValidateTZAndUseTheClock(t *testing.T) {
 	s := newTestServer(testIncident("a", "shop", -time.Hour),
 		testIncident("b", "shop", -2*time.Hour))
-	for _, path := range []string{"/api/trends?tz=x",
-		"/api/trends?tz=841", "/api/trends?tz=-841"} {
+	for _, path := range []string{"/api/overview?tz=x",
+		"/api/overview?tz=841", "/api/overview?tz=-841"} {
 		if w := get(t, s, path); w.Code != http.StatusBadRequest {
 			t.Errorf("%s: %d, want 400", path, w.Code)
 		}
 	}
-	w := get(t, s, "/api/trends?tz=-840")
+	w := getPart(t, s, "/api/overview?tz=-840", "trends")
 	if w.Code != http.StatusOK {
 		t.Fatalf("status %d: %s", w.Code, w.Body)
 	}
@@ -217,16 +217,16 @@ func TestTrendsHandlerValidatesTZAndUsesTheClock(t *testing.T) {
 		out.Days[trendDays-1].Date != "2026-09-30" {
 		t.Errorf("trends = %+v", out)
 	}
-	if w := call(t, s, http.MethodGet, "/api/trends", ""); w.Code !=
+	if w := call(t, s, http.MethodGet, "/api/overview", ""); w.Code !=
 		http.StatusUnauthorized {
 		t.Errorf("no token: %d", w.Code)
 	}
-	if w := call(t, s, http.MethodPost, "/api/trends",
+	if w := call(t, s, http.MethodPost, "/api/overview",
 		testToken); w.Code != http.StatusMethodNotAllowed {
 		t.Errorf("POST: %d", w.Code)
 	}
 	s.SetIncidents(nil)
-	if w := get(t, s, "/api/trends"); w.Code !=
+	if w := get(t, s, "/api/overview"); w.Code !=
 		http.StatusServiceUnavailable {
 		t.Errorf("no source: %d", w.Code)
 	}
@@ -234,12 +234,12 @@ func TestTrendsHandlerValidatesTZAndUsesTheClock(t *testing.T) {
 
 func TestTrendsAnswerNotModifiedForTheSameETag(t *testing.T) {
 	s := newTestServer(testIncident("a", "shop", -time.Hour))
-	first := get(t, s, "/api/trends")
+	first := get(t, s, "/api/overview")
 	tag := first.Header().Get("ETag")
 	if first.Code != http.StatusOK || tag == "" {
 		t.Fatalf("first: %d, ETag %q", first.Code, tag)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/api/trends", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/overview", nil)
 	req.Header.Set("Authorization", "Bearer "+testToken)
 	req.Header.Set("If-None-Match", tag)
 	w := httptest.NewRecorder()

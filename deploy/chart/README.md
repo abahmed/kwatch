@@ -204,26 +204,24 @@ Karpenter annotation with `--set-string`.
 | `networkPolicy.healthIngressFrom` | Extra peers (`namespaceSelector`, `podSelector` or `ipBlock`) that may reach the health port (`/health`, `/metrics`, `/status`), such as your Prometheus namespace. Without it only pods in the release namespace (and `kubeletCIDRs`) can | `[]` |
 | `dashboard.enabled` | Serve the read-only dashboard (web UI and `/api/*`) on its own port and ClusterIP Service `<release>-dashboard`. Pro only; Community never opens the port | `false` |
 | `dashboard.port` | Dashboard port; must not equal the health port `config.healthCheck.port` (the render fails when they are equal) | `8061` |
-| `dashboard.mode` | `local`: reached through `kubectl port-forward`; the cookie works on `http://localhost`. `shared`: https only; kwatch refuses sign-in over plain http and marks the cookie `Secure`. Needs `dashboard.trustProxy` or `dashboard.tls.secretName`, or the render fails | `local` |
-| `dashboard.trustProxy` | Trust `X-Forwarded-Proto`/`X-Forwarded-For` from the Ingress or proxy that terminates TLS in front of kwatch. Without it the header is ignored | `false` |
+| `dashboard.trustedProxies` | CIDRs or addresses of the proxies that terminate TLS in front of kwatch (Ingress controller, Gateway, load balancer), for example `["10.0.0.0/8"]`. `X-Forwarded-For` and `X-Forwarded-Proto` count only from these peers, and the client is the first hop from the right that is not itself listed. Any entry (or `dashboard.tls.secretName`) makes the dashboard https only: sign-in over plain http is refused and the cookie is `Secure`. Empty means local (port-forward over http); behind a proxy, sign-in failures are then limited per connecting address, so set it | `[]` |
 | `dashboard.tls.secretName` | `kubernetes.io/tls` Secret kwatch serves https from itself, for a LoadBalancer or NodePort with nothing in front. Renewals are picked up without a restart | `""` |
-| `dashboard.existingSecret` | Existing Secret with the keys `password` (sign-in) and `token` (API bearer token). Without it the chart creates `<release>-dashboard` with a generated password (`XXXX-XXXX-XXXX-XXXX`) and token, and keeps both across upgrades. Changing the password signs everyone out | `""` |
+| `dashboard.existingSecret` | Existing Secret with the keys `password` (sign-in) and `token` (API bearer token). Without it the chart ships `<release>-dashboard` empty and kwatch writes a generated password (`XXXX-XXXX-XXXX-XXXX`) and token into it once, so every renderer (`helm template`, Argo CD, Flux) sees the same manifest and the values never change. kwatch gets and updates only that Secret. Edits take effect after a restart; changing the password signs everyone out | `""` |
 | `config.investigation.logs` | Pro evidence reads container logs (redacted, bounded). `false` reads none and the dashboard shows the log section as turned off | `true` |
 | `dashboard.networkPolicyFrom` | With `networkPolicy.enabled`: extra peers (your ingress controller, `ipBlock`s for load balancer clients) allowed to reach the dashboard port. The release namespace and `healthIngressFrom` always may | `[]` |
 
 Sign-ins last 12 hours. A password change or a kwatch restart (upgrade,
 rollout, rescheduling) signs everyone out. Behind an Ingress, set
-`dashboard.trustProxy`: without it every client shares the Ingress's
+`dashboard.trustedProxies`: without it every client shares the Ingress's
 address, and ten wrong passwords in a minute from anyone lock everyone
 out of sign-in for that minute.
 
-The generated `<release>-dashboard` Secret carries
+The `<release>-dashboard` Secret carries
 `helm.sh/resource-policy: keep`: uninstalling or turning the dashboard off
 leaves it, so a reinstall keeps the saved password. Delete it to forget the
-password. The password and token are kept across upgrades through Helm
-`lookup`, which offline renders (`helm template`, Argo CD, Flux with
-post-rendering) cannot do: each sync would make a new password and sign
-everyone out. With GitOps, create the Secret yourself (keys `password` and
+password. It is shipped empty and kwatch fills it, so the manifest is the
+same on every render (including `helm template` and GitOps controllers) and
+the password never changes by itself. To use your own values create the Secret yourself (keys `password` and
 `token`, for example with a sealed or external secret) and set
 `dashboard.existingSecret`.
 
@@ -232,7 +230,6 @@ run the kwatch.sh Dashboard menu or create your own Ingress or route
 pointing at Service `<release>-dashboard` (port name `dashboard`).
 
 | `image.repository` / `image.tag` / `image.pullPolicy` | Container image; an empty tag uses the chart's `appVersion` | `ghcr.io/abahmed/kwatch` / `""` / `IfNotPresent` |
-| `rbac.readyz` | Grant `get` on the API server's `/readyz`, which the prober and Pro evidence read. `false` removes the grant and the control plane evidence then shows that kwatch may not read it | `true` |
 | `crd.install` | Install the shared `KwatchConfig` CRD with this release; skipped automatically when another release owns it. `config.crd.enabled` is separate: it turns the live overlay on | `true` |
 | `rbac.mode` | `least-privilege` grants an explicit read-only `list`/`watch` set, and kinds outside it (custom resources included) show as `permission_denied` in `/health` coverage (kwatch logs one warning about them and the install notes say so); `full` grants `list`/`watch` on every resource, except that `full` with `watch.secrets: false` renders the least-privilege list. Both grant `get` only on namespaces, nodes, `nodes/stats`, `nodes/metrics` and `pods/log`. Set `full` to watch custom resources | `least-privilege` |
 | `persistence.size` | Size of the state volume (PVC). The state file is capped at 512 MiB of logical data (evidence 128 MiB), is rewritten at startup when it grows more than a quarter past that, and no backups are kept; the file and the temporary rewrite copy share the volume | `2Gi` |

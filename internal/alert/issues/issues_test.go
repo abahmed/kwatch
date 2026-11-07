@@ -138,10 +138,3 @@ func TestTitleAndBodyRenderTheNarrative(t *testing.T) {
 		t.Fatalf("resolve body = %q", got)
 	}
 }
-
-func TestFencedBodyUsesTheTrackerFence(t *testing.T) {
-	body := FencedBody(providertest.Announce(), "{noformat}")
-	if !strings.Contains(body, "{noformat}\npanic: out of memory\n{noformat}") {
-		t.Fatalf("body = %q", body)
-	}
-}

@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"sort"
 	"strings"
 )
@@ -170,29 +171,33 @@ func validateDashboard(cfg *Config) []error {
 		))
 	}
 	errs = append(errs, validateDashboardTLS(cfg.Dashboard)...)
-	switch cfg.Dashboard.Mode {
-	case "", DashboardLocal, DashboardShared:
-	default:
-		errs = append(errs, errors.New(
-			"dashboard.mode must be local or shared",
-		))
-	}
 	return errs
 }
 
-// validateDashboardTLS keeps plain http out of shared mode: https must
-// come from kwatch's own TLS or from a trusted proxy.
+// validateDashboardTLS checks the TLS file pair and the trusted
+// proxy list.
 func validateDashboardTLS(d Dashboard) []error {
 	var errs []error
 	if (d.TLSCertFile == "") != (d.TLSKeyFile == "") {
 		errs = append(errs, errors.New(
 			"dashboard.tlsCertFile and dashboard.tlsKeyFile go together"))
 	}
-	if d.Mode == DashboardShared && !d.TrustProxy && d.TLSCertFile == "" {
-		errs = append(errs, errors.New(
-			"dashboard.mode shared needs dashboard.trustProxy (TLS "+
-				"ends at a proxy) or dashboard.tlsCertFile (kwatch "+
-				"serves TLS)"))
+	for _, entry := range d.TrustedProxies {
+		if !validProxyEntry(entry) {
+			errs = append(errs, fmt.Errorf(
+				"dashboard.trustedProxies entry %q is not an IP "+
+					"address or CIDR", entry))
+		}
 	}
 	return errs
+}
+
+// validProxyEntry reports whether entry is an IP address or a CIDR.
+func validProxyEntry(entry string) bool {
+	entry = strings.TrimSpace(entry)
+	if _, err := netip.ParsePrefix(entry); err == nil {
+		return true
+	}
+	_, err := netip.ParseAddr(entry)
+	return err == nil
 }

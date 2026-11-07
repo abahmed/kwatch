@@ -89,47 +89,6 @@ func (m *Manager) persistLocked() {
 	m.savedMax = m.clock.MaxSeen
 }
 
-// Deactivate releases this cluster's binding on the server and drops the
-// local lease; the renew loop then stops contacting the server. It does
-// nothing without a key.
-func (m *Manager) Deactivate(ctx context.Context) error {
-	if m.cfg.Key == "" {
-		return nil
-	}
-	m.opMu.Lock()
-	defer m.opMu.Unlock()
-	if err := m.ensureInstance(ctx); err != nil {
-		return err
-	}
-	b, err := m.binding(ctx)
-	if err != nil {
-		return err
-	}
-	m.mu.Lock()
-	lease, priv := m.lease, m.priv
-	m.mu.Unlock()
-	var iat int64
-	if l, err := m.v.VerifyLease(lease, b, m.effective()); err == nil {
-		iat = l.Iat
-	}
-	_, err = m.signedCall(ctx, b, iat,
-		func(req SignedRequest) (Result, error) {
-			return m.cfg.Client.Deactivate(ctx, priv, req)
-		})
-	if err != nil && !errors.Is(err, ErrUnauthorized) {
-		m.mu.Lock()
-		m.persistLocked()
-		m.mu.Unlock()
-		return err
-	}
-	m.mu.Lock()
-	m.lease, m.verdict, m.released = "", VerdictNone, true
-	m.persistLocked()
-	m.mu.Unlock()
-	m.refresh(ctx)
-	return nil
-}
-
 // CheckDeactivated picks up a release made by another process (see
 // Config.DeactivatedAt): the cached lease is dropped and the status falls
 // back to pending, which entitles Community. It is cheap to call on every

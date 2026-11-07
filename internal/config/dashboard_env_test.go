@@ -1,6 +1,7 @@
 package config
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -8,66 +9,67 @@ import (
 func TestDashboardEnvironmentOverridesTheFile(t *testing.T) {
 	t.Setenv(dashboardEnabledEnv, "true")
 	t.Setenv(dashboardPortEnv, "9090")
-	t.Setenv(dashboardModeEnv, "Shared")
-	t.Setenv(dashboardTrustEnv, "true")
+	t.Setenv(dashboardProxiesEnv, "10.0.0.0/8, 192.168.1.5 ,")
 	cfg := loadConfigText(t, "dashboard:\n  enabled: false\n  port: 8061\n")
 	d := cfg.Runtime.Lifecycle().Dashboard()
-	if !d.Enabled || d.Port != 9090 || d.Mode != DashboardShared {
+	want := []string{"10.0.0.0/8", "192.168.1.5"}
+	if !d.Enabled || d.Port != 9090 ||
+		!reflect.DeepEqual(d.TrustedProxies, want) {
 		t.Fatalf("dashboard = %+v, want the environment's values", d)
 	}
 
 	t.Setenv(dashboardEnabledEnv, "")
 	t.Setenv(dashboardPortEnv, "")
-	t.Setenv(dashboardModeEnv, "")
-	t.Setenv(dashboardTrustEnv, "")
-	cfg = loadConfigText(t,
-		"dashboard:\n  enabled: true\n  mode: shared\n  trustProxy: true\n")
+	t.Setenv(dashboardProxiesEnv, "")
+	cfg = loadConfigText(t, "dashboard:\n  enabled: true\n"+
+		"  trustedProxies: [10.1.0.0/16]\n")
 	d = cfg.Runtime.Lifecycle().Dashboard()
-	if !d.Enabled || d.Mode != DashboardShared || d.Port != 8061 {
+	if len(d.TrustedProxies) != 0 {
+		t.Fatalf("a set but empty environment list clears the file: %+v", d)
+	}
+}
+
+func TestDashboardEnvironmentKeepsTheFileWhenUnset(t *testing.T) {
+	cfg := loadConfigText(t, "dashboard:\n  enabled: true\n"+
+		"  trustedProxies: [10.1.0.0/16]\n")
+	d := cfg.Runtime.Lifecycle().Dashboard()
+	if !d.Enabled || d.Port != 8061 ||
+		!reflect.DeepEqual(d.TrustedProxies, []string{"10.1.0.0/16"}) {
 		t.Fatalf("unset environment must keep the file: %+v", d)
 	}
 }
 
-func TestDashboardEnvironmentIgnoresBadValuesWithAWarning(t *testing.T) {
+func TestDashboardEnvironmentIgnoresBadPortWithAWarning(t *testing.T) {
 	t.Setenv(dashboardPortEnv, "eighty")
-	t.Setenv(dashboardModeEnv, "public")
 	cfg := loadConfigText(t, "dashboard:\n  enabled: true\n")
 	d := cfg.Runtime.Lifecycle().Dashboard()
-	if d.Port != 8061 || d.Mode != DashboardLocal {
+	if d.Port != 8061 {
 		t.Fatalf("bad environment changed the settings: %+v", d)
 	}
 	if got := strings.Join(cfg.envWarnings, "\n"); !strings.Contains(got,
-		dashboardPortEnv) || !strings.Contains(got, dashboardModeEnv) {
+		dashboardPortEnv) {
 		t.Fatalf("warnings = %q", got)
 	}
 }
 
-func TestDashboardModeIsValidated(t *testing.T) {
+func TestDashboardValidation(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Dashboard.Enabled = true
-	cfg.Dashboard.Mode = "public"
-	found := false
-	for _, err := range Validate(cfg) {
-		if strings.Contains(err.Error(), "dashboard.mode") {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatal("an unknown dashboard.mode passed validation")
-	}
-	cfg.Dashboard.Mode = DashboardShared
+	cfg.Dashboard.TrustedProxies = []string{"10.0.0.0/8", "::1", "bogus"}
 	if !hasDashboardError(Validate(cfg)) {
-		t.Fatal("shared mode without TLS or a trusted proxy passed")
+		t.Fatal("a trusted proxy that is not an address passed")
+	}
+	cfg.Dashboard.TrustedProxies = []string{"10.0.0.0/8", "::1"}
+	if hasDashboardError(Validate(cfg)) {
+		t.Fatal("valid trusted proxies were rejected")
 	}
 	cfg.Dashboard.TLSCertFile = "/tls/tls.crt"
 	if !hasDashboardError(Validate(cfg)) {
 		t.Fatal("a certificate without a key passed")
 	}
 	cfg.Dashboard.TLSKeyFile = "/tls/tls.key"
-	for _, err := range Validate(cfg) {
-		if strings.Contains(err.Error(), "dashboard") {
-			t.Fatalf("shared mode rejected: %v", err)
-		}
+	if hasDashboardError(Validate(cfg)) {
+		t.Fatal("a certificate and key were rejected")
 	}
 }
 
@@ -80,14 +82,12 @@ func hasDashboardError(errs []error) bool {
 	return false
 }
 
-func TestDashboardEnvironmentSetsTrustAndTLSFiles(t *testing.T) {
-	t.Setenv(dashboardTrustEnv, "true")
+func TestDashboardEnvironmentSetsTLSFiles(t *testing.T) {
 	t.Setenv(dashboardCertEnv, "/tls/tls.crt")
 	t.Setenv(dashboardKeyEnv, "/tls/tls.key")
 	cfg := loadConfigText(t, "dashboard:\n  enabled: true\n")
 	d := cfg.Runtime.Lifecycle().Dashboard()
-	if !d.TrustProxy || d.TLSCertFile != "/tls/tls.crt" ||
-		d.TLSKeyFile != "/tls/tls.key" {
+	if d.TLSCertFile != "/tls/tls.crt" || d.TLSKeyFile != "/tls/tls.key" {
 		t.Fatalf("dashboard = %+v", d)
 	}
 }

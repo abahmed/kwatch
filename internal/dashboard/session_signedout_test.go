@@ -3,7 +3,11 @@ package dashboard
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/abahmed/kwatch/internal/clock"
 )
 
 func TestSessionSignedOutAnswers200SignedInFalseOnly(t *testing.T) {
@@ -76,5 +80,79 @@ func TestSessionSignedOutKeepsEveryOtherRoute401(t *testing.T) {
 		if code := s.getWith(path, nil); code != 401 {
 			t.Errorf("%s signed out: %d, want 401", path, code)
 		}
+	}
+}
+
+func TestSessionRevocationIsNeverForgottenWhileFull(t *testing.T) {
+	now := testEpoch
+	s := newSessions("pw", "tok", clock.Func(func() time.Time { return now }))
+	var all []string
+	for range maxRevoked {
+		v, _, _ := s.issue()
+		all = append(all, v)
+		s.revoke(v)
+	}
+	survivor, _, _ := s.issue()
+	last, _, _ := s.issue()
+	s.revoke(last)
+	for _, v := range all {
+		if s.valid(v) {
+			t.Fatal("a revoked session became valid again")
+		}
+	}
+	if s.valid(last) || s.valid(survivor) {
+		t.Error("a full table must sign everyone out, not forget revoked")
+	}
+	fresh, _, _ := s.issue()
+	if !s.valid(fresh) {
+		t.Error("a new sign-in after the rotation does not work")
+	}
+}
+
+func TestSessionRevocationsExpireWithTheirSession(t *testing.T) {
+	now := testEpoch
+	s := newSessions("pw", "tok", clock.Func(func() time.Time { return now }))
+	v, _, _ := s.issue()
+	s.revoke(v)
+	now = now.Add(sessionLifetime + time.Minute)
+	other, _, _ := s.issue()
+	s.revoke(other)
+	if len(s.revoked) != 1 {
+		t.Errorf("revoked = %d, want only the live one", len(s.revoked))
+	}
+}
+
+func TestSessionFromEarlierStartIsRecognized(t *testing.T) {
+	clk := clock.Func(func() time.Time { return testEpoch })
+	old := newSessions("pw", "tok", clk)
+	v, _, _ := old.issue()
+	restarted := newSessions("pw", "tok", clk)
+	if restarted.valid(v) || !restarted.fromEarlierStart(v) {
+		t.Error("a cookie from before a restart was not recognized")
+	}
+	if restarted.fromEarlierStart("junk") {
+		t.Error("junk is not a cookie from an earlier start")
+	}
+	fresh, _, _ := restarted.issue()
+	if restarted.fromEarlierStart(fresh) {
+		t.Error("a current cookie was called stale")
+	}
+}
+
+func TestSessionCheckSaysTheSignOutWasARestart(t *testing.T) {
+	old := newSessionServer(false, testPassword)
+	c := old.signIn(t, testPassword)
+	s := newSessionServer(false, testPassword)
+	req := httptest.NewRequest(http.MethodGet, "/api/session", nil)
+	req.AddCookie(c)
+	w := s.do(req)
+	if w.Code != 200 || !strings.Contains(w.Body.String(),
+		`"reason":"restarted"`) {
+		t.Errorf("stale cookie: %d %q", w.Code, w.Body.String())
+	}
+	plain := httptest.NewRequest(http.MethodGet, "/api/session", nil)
+	if w := s.do(plain); strings.Contains(w.Body.String(), "reason") {
+		t.Errorf("a visitor with no cookie got a reason: %q",
+			w.Body.String())
 	}
 }

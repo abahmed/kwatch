@@ -17,7 +17,10 @@ import (
 
 func readKwatch(t *testing.T, s *Server) (KwatchResponse, string) {
 	t.Helper()
-	w := get(t, s, "/api/kwatch")
+	if s.sources.status.Load() == nil {
+		s.SetStatus(func() status.Report { return status.Report{} })
+	}
+	w := getPart(t, s, "/api/status", "kwatch")
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	var out KwatchResponse
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &out))
@@ -64,7 +67,7 @@ func TestKwatchStatusServesTheStateFileAndRestarts(t *testing.T) {
 	s := newTestServer()
 	s.SetSelf(func() (health.SelfReport, bool) {
 		stops := []health.SelfStop{{At: testEpoch}, {At: testEpoch}}
-		return health.SelfReport{StateFileBytes: 4096, OutboxPending: 1,
+		return health.SelfReport{StateFileBytes: 4096, OutboxPending: &one,
 			Restarts: stops}, true
 	})
 	s.SetFailedSince(func(time.Time) int { return 2 })
@@ -121,9 +124,9 @@ func TestKwatchStatusNeedsAuthAndGet(t *testing.T) {
 	s := newTestServer()
 
 	assert.Equal(t, http.StatusUnauthorized,
-		call(t, s, http.MethodGet, "/api/kwatch", "").Code)
+		call(t, s, http.MethodGet, "/api/status", "").Code)
 	assert.Equal(t, http.StatusMethodNotAllowed,
-		call(t, s, http.MethodPost, "/api/kwatch", testToken).Code)
+		call(t, s, http.MethodPost, "/api/status", testToken).Code)
 }
 
 // A provider the delivery health names in lower case and the send
@@ -161,4 +164,22 @@ func TestKwatchStatusCarriesTheLikelyMisses(t *testing.T) {
 	require.Len(t, got.LikelyMisses, 1)
 	assert.Equal(t, "inc-1", got.LikelyMisses[0].ID)
 	assert.True(t, got.LikelyMisses[0].ExportUntil.Equal(miss.ExportUntil))
+}
+
+func TestStatusCarriesAFailingChannelForTheBanner(t *testing.T) {
+	s := newTestServer()
+	s.SetStatus(func() status.Report { return status.Report{} })
+	s.SetDeliveryHealth(func() []ChannelHealth {
+		return []ChannelHealth{{Channel: "slack", Failing: true,
+			Since: testEpoch, Problem: "it isn't answering", Waiting: 12}}
+	})
+	w := get(t, s, "/api/status")
+	require.Equal(t, http.StatusOK, w.Code)
+	var got StatusResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	require.Len(t, got.PerChannelHealth, 1)
+	c := got.PerChannelHealth[0]
+	assert.True(t, c.Failing)
+	assert.Equal(t, 12, c.Waiting)
+	assert.Equal(t, "it isn't answering", c.Problem)
 }
