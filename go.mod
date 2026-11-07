@@ -4,14 +4,14 @@ go 1.27.3
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0
-	github.com/chromedp/cdproto v0.157.8
-	github.com/chromedp/chromedp v0.21.0
+	github.com/chromedp/cdproto v0.159.1
+	github.com/chromedp/chromedp v0.22.0
 	github.com/go-logr/logr v1.4.4
 	github.com/google/go-github/v55 v55.0.0
 	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/slack-go/slack v0.33.0
+	github.com/slack-go/slack v0.34.0
 	github.com/stretchr/testify v1.12.1
 	go.etcd.io/bbolt v1.5.0
 	gopkg.in/mail.v2 v2.3.1
