@@ -221,10 +221,10 @@ func unconfirmedRecovery(
 ) []sentence {
 	return []sentence{
 		{part: partLead, text: capitalName(subject,
-			f.leadName(subject)+": kwatch could not confirm it "+
+			f.leadName(subject)+": kwatch can't confirm this "+
 				"recovered.")},
-		{part: partFollowUp, text: "kwatch could not observe it for " +
-			strings.TrimSpace(span) + " and stopped checking; look " +
+		{part: partFollowUp, text: "It could not watch it for " +
+			strings.TrimSpace(span) + " and stopped checking. Look " +
 			"at it yourself."},
 	}
 }

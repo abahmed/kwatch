@@ -108,3 +108,5 @@ html.kw-stale .ov-tile, html.kw-stale .ov-first, html.kw-stale .pgrid, html.kw-s
 .provbar p { margin: 0; }
 .provbar p + p { margin-top: 6px; }
 .provbar .prov-word { font-weight: 600; color: var(--failing); margin-right: 6px; }
+.provbar .prov-fix { color: var(--text-muted); }
+.provbar { overflow-wrap: anywhere; }

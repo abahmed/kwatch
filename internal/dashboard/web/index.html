@@ -152,7 +152,7 @@
       </div>
     </header>
     <div class="main">
-      <div class="provbar" data-provbar role="alert" hidden></div>
+      <div class="provbar" data-provbar role="status" hidden></div>
       <div class="offline-pin"><div class="offline" data-offline role="status" aria-live="polite" hidden><span data-offline-text></span><button class="btn btn-sm" type="button" data-offline-try>Try now</button></div></div>
       <nav class="incnav" aria-label="Issues in your list" data-incnav hidden><a class="btn btn-sm" data-link data-incnav-prev aria-keyshortcuts="[" title="Previous issue in your list (press [)">← Previous</a><span class="pager-pos" data-incnav-pos></span><a class="btn btn-sm" data-link data-incnav-next aria-keyshortcuts="]" title="Next issue in your list (press ])">Next →</a></nav>
       <main class="content" id="main" tabindex="-1"></main>
@@ -166,7 +166,7 @@
       <svg class="mark" width="44" height="44" viewBox="0 0 64 64" aria-hidden="true"><use href="#i-mark"/><circle class="mark-dot" cx="28.6" cy="32.2" r="8.6" stroke-width="3.2"/></svg>
       <h1>Sign in to kwatch</h1>
       <div class="notice" data-expired hidden><p>Your session ended. Sign in again.</p></div>
-      <div class="notice" data-restarted hidden><p>You were signed out because kwatch restarted.</p></div>
+      <div class="notice" data-restarted role="status" hidden><p>kwatch restarted, so your session ended. Sign in again.</p></div>
       <form novalidate>
         <input class="sr-only" type="text" name="username" value="kwatch" autocomplete="username" tabindex="-1" aria-hidden="true">
         <label for="pw">Password</label>

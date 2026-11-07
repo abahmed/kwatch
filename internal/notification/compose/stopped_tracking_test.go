@@ -86,8 +86,8 @@ func TestStoppedTrackingUnconfirmedSaysItCouldNotConfirm(t *testing.T) {
 		Reason: incident.Reason(incident.StoppedTrackingPrefix +
 			"6h" + incident.UnconfirmedNote)}
 	note := Writer{}.Write(d, writerNow).Note
-	for _, want := range []string{"kwatch could not confirm it recovered.",
-		"could not observe it for 6h and stopped checking"} {
+	for _, want := range []string{"kwatch can't confirm this recovered.",
+		"It could not watch it for 6h and stopped checking"} {
 		if !strings.Contains(note, want) {
 			t.Errorf("want %q in %q", want, note)
 		}

@@ -79,8 +79,8 @@ func TestFailingProviderIsToldToTheWorkingOnesOnce(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.True(t, strings.HasPrefix(got[0], "email: kwatch can't send "+
 		"to slack since 09:00 UTC"), got[0])
-	assert.Contains(t, got[0], "webhook, token or address")
-	assert.Contains(t, got[0], "installer → Notifications")
+	assert.Contains(t, got[0], "webhook, token or address may have expired")
+	assert.Contains(t, got[0], "installer, under Notifications")
 
 	r.clk.Advance(time.Hour)
 	r.m.CheckNotices()

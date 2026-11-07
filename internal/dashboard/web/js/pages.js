@@ -109,19 +109,29 @@
     var bad = (status.perChannelHealth || []).filter(function (c) { return c.failing; });
     box.hidden = !bad.length;
     box.textContent = "";
-    bad.forEach(function (c) {
+    bad.slice(0, 2).forEach(function (c) {
+      var name = c.name || c.channel;
       var p = box.appendChild(KW.el("p"));
-      p.appendChild(KW.el("span", "prov-word", "Failing"));
-      var line = "kwatch can't send to " + (c.name || c.channel);
+      p.appendChild(KW.el("span", "prov-word", "Failing \u00b7"));
+      p.appendChild(KW.el("span", "mono", name));
+      var line = ": kwatch can't send alerts there";
       if (c.since) line += " since " + KW.hm(c.since).textContent;
-      line += (c.problem ? " (" + c.problem + ")" : "") + ".";
+      if (c.problem) line += " (" + c.problem + ")";
+      line += ".";
       if (c.waiting > 0) {
         line += " " + KW.plural(c.waiting, "alert is", "alerts are") + " waiting.";
       }
-      line += " Fix: update the settings for " + (c.name || c.channel) +
-        " in the installer, under Notifications.";
       p.appendChild(document.createTextNode(line));
+      box.appendChild(KW.el("p", "prov-fix", "Fix: update " + name +
+        " in the installer, under Notifications."));
     });
+    if (bad.length > 2) {
+      var more = box.appendChild(KW.el("p"));
+      var a = KW.el("a", "ulink", "and " + (bad.length - 2) + " more");
+      a.href = "/kwatch";
+      a.dataset.link = "";
+      more.appendChild(a);
+    }
   }
 
   KW.selfDot = function (status, kw) {

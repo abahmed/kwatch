@@ -35,8 +35,8 @@ func PlainReason(reason string) string {
 	case "":
 		return ""
 	case reasonRejected:
-		return "it refused the message, so the webhook, token or " +
-			"address is probably wrong or has expired"
+		return "it refused the message. The webhook, token or address " +
+			"may have expired"
 	case reasonRateLimited:
 		return "it is asking kwatch to slow down"
 	default:
@@ -48,14 +48,14 @@ func PlainReason(reason string) string {
 func failureNoticeText(
 	name, reason string, since time.Time, waiting int,
 ) string {
-	text := fmt.Sprintf("kwatch can't send to %s since %s (%s).",
+	text := fmt.Sprintf("kwatch can't send to %s since %s: %s.",
 		name, since.UTC().Format("15:04 UTC"), PlainReason(reason))
 	if waiting > 0 {
 		text += fmt.Sprintf(" %d %s waiting.", waiting,
 			plural(waiting, "alert is", "alerts are"))
 	}
-	return text + fmt.Sprintf(" Fix: update the settings for %s in the "+
-		"installer → Notifications.", name)
+	return text + fmt.Sprintf(" Fix: update %s in the installer, "+
+		"under Notifications.", name)
 }
 
 // recoveryNoticeText is the notice when the provider works again.
