@@ -303,7 +303,7 @@ your file with `values.yaml` before upgrading.
 | `tolerations` | Merged with the new `defaultTolerations` (30-second `not-ready` and `unreachable` tolerations) |
 | `terminationGracePeriodSeconds` | New, default 60 |
 | Startup probe | New: `/healthz` every 10 seconds, up to 30 failures, so a slow first start is not killed by the liveness probe |
-| Dashboard environment | The chart always sets `KWATCH_DASHBOARD_ENABLED` and `KWATCH_DASHBOARD_TRUST_PROXY` (`true` or `false`), so the chart values win over the config file in both directions. A `checksum/dashboard-secret` annotation restarts the Pod when the dashboard Secret changes |
+| Dashboard environment | The chart always sets `KWATCH_DASHBOARD_ENABLED` (`true` or `false`) and `KWATCH_DASHBOARD_TRUSTED_PROXIES`, so the chart values win over the config file in both directions. The dashboard Secret is shipped empty and kwatch fills it |
 | `dashboard.port` | The render fails when it equals `config.healthCheck.port` with the dashboard enabled, because kwatch refuses to start with both ports equal |
 | `networkPolicy.*` dashboard rules | The dashboard ingress rules follow `dashboard.enabled` and `dashboard.networkPolicyFrom`, not `allowDefaults`. With `allowDefaults: false` and no `ingress`, `egress`, `extraEgressPorts` or `allowProbeEgressAll`, the render fails instead of producing a deny-all policy |
 
