@@ -4,6 +4,12 @@ set -euo pipefail
 # Helm chart template tests
 cd "$(dirname "$0")"
 
+echo "=== values.yaml has no duplicate top-level keys ==="
+DUP=$(grep -E '^[A-Za-z_][A-Za-z0-9_-]*:' values.yaml | cut -d: -f1 | sort | uniq -d)
+[ -z "$DUP" ] || {
+  echo "FAIL: duplicate top-level keys in values.yaml: $DUP"; exit 1;
+}
+
 echo "=== default template ==="
 OUT1=$(helm template test1 . 2>&1)
 
