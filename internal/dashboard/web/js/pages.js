@@ -100,7 +100,32 @@
 
   /* selfDot takes a fresh /api/status answer and its kwatch part and shows
      or hides the dot. */
+  /* providerBanner shows, on every page, each alert channel that is
+     failing: what is wrong in plain words, since when, how many alerts
+     wait, and where to fix it. It hides when none is. */
+  function providerBanner(status) {
+    var box = document.querySelector("[data-provbar]");
+    if (!box || !status) return;
+    var bad = (status.perChannelHealth || []).filter(function (c) { return c.failing; });
+    box.hidden = !bad.length;
+    box.textContent = "";
+    bad.forEach(function (c) {
+      var p = box.appendChild(KW.el("p"));
+      p.appendChild(KW.el("span", "prov-word", "Failing"));
+      var line = "kwatch can't send to " + (c.name || c.channel);
+      if (c.since) line += " since " + KW.hm(c.since).textContent;
+      line += (c.problem ? " (" + c.problem + ")" : "") + ".";
+      if (c.waiting > 0) {
+        line += " " + KW.plural(c.waiting, "alert is", "alerts are") + " waiting.";
+      }
+      line += " Fix: update the settings for " + (c.name || c.channel) +
+        " in the installer, under Notifications.";
+      p.appendChild(document.createTextNode(line));
+    });
+  }
+
   KW.selfDot = function (status, kw) {
+    providerBanner(status);
     if (status) seen.status = status;
     if (kw) seen.kw = kw;
     var dot = document.querySelector("[data-kw-dot]");

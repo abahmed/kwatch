@@ -248,4 +248,11 @@ type ChannelHealth struct {
 	LastSuccess      time.Time `json:"lastSuccess,omitzero"`
 	LastError        time.Time `json:"lastError,omitzero"`
 	LastErrorMessage string    `json:"lastErrorMessage,omitempty"`
+	// Failing is true while the channel cannot deliver; Since is when
+	// that began, Problem says why in plain words and Waiting counts
+	// the alerts waiting for it.
+	Failing bool      `json:"failing,omitempty"`
+	Since   time.Time `json:"since,omitzero"`
+	Problem string    `json:"problem,omitempty"`
+	Waiting int       `json:"waiting,omitempty"`
 }

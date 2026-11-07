@@ -104,3 +104,7 @@ html.kw-stale .ov-tile, html.kw-stale .ov-first, html.kw-stale .pgrid, html.kw-s
   .offline-pin { height: auto; }
   .offline { position: relative; padding-left: var(--space-4); }
 }
+.provbar { margin: 0 0 var(--space-4); padding: 10px 14px; background: var(--failing-bg); border: 1px solid var(--line); border-radius: var(--radius-chip); color: var(--text); font-size: var(--t-small, 0.875rem); }
+.provbar p { margin: 0; }
+.provbar p + p { margin-top: 6px; }
+.provbar .prov-word { font-weight: 600; color: var(--failing); margin-right: 6px; }

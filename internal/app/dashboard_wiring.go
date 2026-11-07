@@ -74,6 +74,10 @@ func dashboardHealth(
 				LastSuccess:      h.LastSuccess,
 				LastError:        h.LastError,
 				LastErrorMessage: h.LastErrorMessage,
+				Failing:          h.Reason != "",
+				Since:            h.FailingSince,
+				Problem:          delivery.PlainReason(h.Reason),
+				Waiting:          h.Waiting,
 			})
 		}
 		return out

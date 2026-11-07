@@ -165,3 +165,21 @@ func TestKwatchStatusCarriesTheLikelyMisses(t *testing.T) {
 	assert.Equal(t, "inc-1", got.LikelyMisses[0].ID)
 	assert.True(t, got.LikelyMisses[0].ExportUntil.Equal(miss.ExportUntil))
 }
+
+func TestStatusCarriesAFailingChannelForTheBanner(t *testing.T) {
+	s := newTestServer()
+	s.SetStatus(func() status.Report { return status.Report{} })
+	s.SetDeliveryHealth(func() []ChannelHealth {
+		return []ChannelHealth{{Channel: "slack", Failing: true,
+			Since: testEpoch, Problem: "it isn't answering", Waiting: 12}}
+	})
+	w := get(t, s, "/api/status")
+	require.Equal(t, http.StatusOK, w.Code)
+	var got StatusResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &got))
+	require.Len(t, got.PerChannelHealth, 1)
+	c := got.PerChannelHealth[0]
+	assert.True(t, c.Failing)
+	assert.Equal(t, 12, c.Waiting)
+	assert.Equal(t, "it isn't answering", c.Problem)
+}
