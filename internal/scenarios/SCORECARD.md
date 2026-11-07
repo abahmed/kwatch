@@ -550,7 +550,7 @@ here verbatim and checked by `TestScorecardGates`.
 | Messages per incident (p95) | <= 3 | 3 | pass |
 | Messages per incident (most) | <= 5 | 5 | pass |
 | Time to first message (page tier) | max <= 2m0s | p95 1m45s, max 1m45s (47 scenarios) | pass |
-| Time to first message (notify tier) | max <= 5m0s | p95 4m15s, max 5m0s (298 scenarios) | pass |
+| Time to first message (notify tier) | max <= 5m0s | p95 3m15s, max 4m15s (298 scenarios) | pass |
 | Time to first message (boot-held) | max <= 15m0s | p95 12m15s, max 12m15s (4 scenarios) | pass |
 | Notifications from non-events (staging day) | <= 0 | 0 | pass |
 | Notifications per hour (staging day peak) | <= 30/h | 28/h | pass |
@@ -574,10 +574,10 @@ Staging day: 939 notifications in 66h18m0s (14.2/h mean, peak hour 28); 0 from n
 Storm shared node: 1000 pods, 2 messages in total, 1 in the loudest 2 minutes.
 Storm shared registry: 1000 pods, 1 messages in total, 1 in the loudest 2 minutes.
 Storm multi-cause: 1000 pods from 10 causes, 10 of them reported, 10 messages in total, 8 in the loudest 2 minutes.
-Slowest first messages: boot-endpoints-still-down notify 12m15s, node-join-never-ready page 10m15s, own-volume-wait-too-long notify 10m0s, node-replace-sandbox-stuck notify 7m15s, autoscaler-ceiling-cpu notify 5m0s.
+Slowest first messages: boot-endpoints-still-down notify 12m15s, node-join-never-ready page 10m15s, own-volume-wait-too-long notify 10m0s, node-replace-sandbox-stuck notify 7m15s, init-waits-on-healthy-service notify 4m15s.
 Calibration: the labelled cases put high confidence at 0.55 (committed 0.70).
 Right roots: 264 with a stated cause, 157 by falling back to the failing entity with no stated cause, 4 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 10 scenarios, 7 of them labelled as legitimate revisions.
-Time to first correct root: p95 5m0s, max 12m15s over 376 scenarios; slowest: boot-endpoints-still-down 12m15s, one-hpa-bad-target 11m15s, metrics-blip-long 11m15s, node-join-never-ready 10m15s, own-volume-wait-too-long 10m0s. Never stated: crash-loop-for-hours, coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
+Time to first correct root: p95 4m15s, max 12m15s over 376 scenarios; slowest: boot-endpoints-still-down 12m15s, one-hpa-bad-target 11m15s, metrics-blip-long 11m15s, node-join-never-ready 10m15s, own-volume-wait-too-long 10m0s. Never stated: crash-loop-for-hours, coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
 
 ## Scenarios
 

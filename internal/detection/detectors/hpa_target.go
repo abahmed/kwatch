@@ -75,3 +75,34 @@ func missingSince(ctx detection.Context, e inventory.Entity) time.Time {
 	}
 	return ctx.Onset("hpa-target-missing", ctx.Now)
 }
+
+// CeilingUnavailable is how long a workload may fall short of its ready
+// replicas before it is a finding while its autoscaler sits at the
+// maximum and wants more. The ceiling already names the reason the
+// shortfall is not a transient, so the full DefaultUnavailable wait only
+// delays the message.
+const CeilingUnavailable = 3 * time.Minute
+
+// atCeiling reports whether an autoscaler that scales id is at its
+// maximum with ScalingLimited true.
+func atCeiling(ctx detection.Context, id inventory.EntityID) bool {
+	if ctx.Model == nil {
+		return false
+	}
+	for _, hpa := range ctx.Model.Related(id, inventory.Scales,
+		inventory.Incoming) {
+		e, ok := ctx.Model.Entity(hpa)
+		if !ok || hpa.Kind != kube.KindHPA {
+			continue
+		}
+		current, _ := number(e, kube.AttrCurrentReplicas)
+		desired, _ := number(e, kube.AttrDesiredReplicas)
+		maximum, known := number(e, kube.AttrMaxReplicas)
+		status, _, _ := condition(e, "ScalingLimited")
+		if known && current >= maximum && desired >= maximum &&
+			status == "True" {
+			return true
+		}
+	}
+	return false
+}
