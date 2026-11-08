@@ -16,3 +16,17 @@
 .rd-help dd { margin: 0; color: var(--text-muted); }
 .rd-reach { margin: 2px 0 0; padding-left: 1.2em; }
 @media (max-width: 640px) { .rd-chain { padding-left: 1.2em; } }
+.rd-table { width: 100%; border-collapse: collapse; margin: 6px 0; }
+.rd-table th, .rd-table td { text-align: left; vertical-align: top; padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.rd-table thead th { font-size: var(--t-micro); color: var(--text-muted); font-weight: 600; }
+.rd-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rd-track { position: relative; height: 10px; margin: 8px 0 2px; border: 1px solid var(--line); }
+.rd-bar { position: absolute; inset: 0 auto 0 0; background: var(--text); }
+.rd-rule { position: absolute; top: -4px; bottom: -4px; border-left: 2px dashed var(--text-muted); }
+.rd-scale { margin: 2px 0 0; color: var(--text-muted); }
+.rd-proofs { margin: 0; padding-left: 1.1em; }
+.rd-fold { margin: 4px 0; }
+.rd-fold summary { cursor: pointer; font-weight: 600; }
+.rd-sub { margin: 8px 0 2px; font-size: var(--t-micro); color: var(--text-muted); }
+.rd-podlist { margin: 0; padding-left: 1.2em; }
+@media (max-width: 640px) { .rd-causes-t thead { display: none; } .rd-causes-t tr, .rd-causes-t th, .rd-causes-t td { display: block; } }

@@ -102,7 +102,7 @@ func TestRoundOfBurstShowsWhatKubernetesReports(t *testing.T) {
 	require.NotNil(t, got.Burst)
 	assert.Equal(t, RoundBurst{Errors: 340, WindowMin: 5,
 		Line: "pq: refused", Count: 312, Before: 2, ReadyPods: 3,
-		DesiredPods: 3}, *got.Burst)
+		DesiredPods: 3, PerMinute: 68}, *got.Burst)
 }
 
 func TestReachOfListsAddressesDownFirstAndDropsBadHosts(t *testing.T) {

@@ -27,6 +27,9 @@ type RoundDetail struct {
 	Blast    *RoundBlast    `json:"blast,omitempty"`
 	Chain    []ChainStep    `json:"chain,omitempty"`
 	Check    *RoundCheck    `json:"check,omitempty"`
+	// Candidates are the stated cause and its close rival, for the
+	// Details tab; Pods are the failing pods behind the overlap.
+	Candidates []RoundCandidate `json:"candidates,omitempty"`
 	// CauseNow is "still" or "recovered" for a resolved issue whose
 	// cause kwatch looked at again, else empty.
 	CauseNow string `json:"causeNow,omitempty"`
@@ -52,6 +55,9 @@ type RoundBurst struct {
 	Before      int    `json:"before"`
 	ReadyPods   int    `json:"readyPods,omitempty"`
 	DesiredPods int    `json:"desiredPods,omitempty"`
+	// PerMinute and Usual are errors per minute now and before.
+	PerMinute float64 `json:"perMinute"`
+	Usual     float64 `json:"usual"`
 }
 
 // RoundTogether is workloads that began failing within seconds of each
@@ -67,6 +73,8 @@ type RoundBlast struct {
 	Count int    `json:"count"`
 	Total int    `json:"total"`
 	Verb  string `json:"verb"`
+	// Pods lists each failing pod and whether it uses the object.
+	Pods []RoundPod `json:"pods,omitempty"`
 }
 
 // ChainStep is one step of the chain of events, in the order each step
@@ -101,6 +109,10 @@ func roundOf(
 		r.Together, r.Blast = proofsOf(cause)
 		r.Chain = chainOf(p, cause)
 		r.Check = checkOf(cause, facts)
+		r.Candidates = candidatesOf(cause, r.Check)
+		if r.Blast != nil {
+			r.Blast.Pods = blastPodsOf(model, p, r.Blast)
+		}
 	}
 	r.Burst = burstOf(model, p)
 	if p.State == incident.Resolved {
@@ -108,6 +120,7 @@ func roundOf(
 	}
 	if r.Config == nil && r.Burst == nil && r.Together == nil &&
 		r.Blast == nil && len(r.Chain) == 0 && r.Check == nil &&
+		len(r.Candidates) == 0 &&
 		r.CauseNow == "" {
 		return nil
 	}
@@ -244,6 +257,8 @@ func burstOf(model inventory.Reader, p incident.Incident) *RoundBurst {
 				b.Line = redact.Evidence(e.Value)
 			}
 		}
+		b.PerMinute, b.Usual = logRates(model, f.Entity, b.Errors,
+			evidenceInt(f, detection.EvidenceLogWindow))
 		if model != nil {
 			b.ReadyPods = int(attrNumber(model, f.Entity,
 				kube.AttrReadyReplicas))

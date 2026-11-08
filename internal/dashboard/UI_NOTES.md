@@ -1423,6 +1423,15 @@ existing tokens only.
 - Chain of events: an ordered list, one step per row, in the order each
   step was first seen failing; a step without a time says `time
   unknown`. Three steps or more.
+- Each part also has its own place, drawn by `roundmore.js`: Evidence >
+  Logs gets "Errors per minute" (a Now/Usual table, a bar and a dashed
+  "usual" rule; from the last log window against the hour before, not a
+  30-minute series), Details > Why kwatch thinks this gets "Possible
+  causes" (cause, score, Kept / Ruled out / Close call, up to three
+  proofs, with the check), and What changed just before gets a closed
+  "Read it: N, did not: M" fold listing each failing pod, each opening
+  Containers. The pod list is left out when its counts disagree with
+  the stated overlap.
 - Traffic impact rows list `Users reach it at`: up to 8 host/path rows,
   the ones without ready endpoints first, with ready and total
   endpoints.

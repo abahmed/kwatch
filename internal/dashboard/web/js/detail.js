@@ -339,6 +339,7 @@
     KW.evidence(root, inc);
     KW.objects(root, inc);
     KW.context(root, inc);
+    if (KW.roundMore) KW.roundMore(root, inc);
     KW.links(root, inc);
     KW.usageChart(root, inc);
     KW.shortNote(root, inc);

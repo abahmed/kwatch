@@ -35,6 +35,8 @@
     return s;
   }
 
+  KW.roundTerm = term;
+
   function line(box, label) {
     var p = box.appendChild(KW.el("p", "rd-line"));
     if (label) p.appendChild(KW.el("b", "rd-k", label + " "));

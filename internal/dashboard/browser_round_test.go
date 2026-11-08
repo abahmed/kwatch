@@ -35,6 +35,10 @@ func browserRoundCause() *rootcause.CauseRecord {
 				Supports: true},
 			{Code: rootcause.ProofBlastOverlap, Count: 9, Total: 10,
 				Supports: true}},
+		Rival: &rootcause.CauseRecord{Root: inventory.CoreID(
+			"cluster-dns", "", "cluster-dns"), Score: 0.6,
+			Proof: []rootcause.Proof{{Text: "DNS answers slowly",
+				Supports: true}}},
 		Hops: []rootcause.Hop{
 			hop(kube.KindNode, "", "n3", 0),
 			hop(kube.KindDeployment, "shop", "redis", 1),
@@ -76,6 +80,18 @@ func TestBrowserIssueRound(t *testing.T) {
 			"started failing 4 s apart"} {
 			if !strings.Contains(text, want) {
 				t.Errorf("%s: missing %q in:\n%s", name, want, text)
+			}
+		}
+		causes, err := chromedp.Run(tab, chromedp.Evaluate[string](
+			`(document.querySelector(".rd-causes") || {}).textContent || ""`))
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		for _, want := range []string{"Possible causes", "cluster-dns",
+			"Ruled out", "DNS answers slowly"} {
+			if !strings.Contains(causes, want) {
+				t.Errorf("%s: causes table lacks %q: %s", name, want,
+					causes)
 			}
 		}
 		stored, err := chromedp.Run(tab, chromedp.Evaluate[string](
