@@ -1,0 +1,14 @@
+{
+  "name": "adv-co-onset-pair-minutes-apart",
+  "description": "Two Deployments crash-loop their replicas on one healthy node three minutes apart; the node is not suspected.",
+  "root": "deployment/shop/orders",
+  "otherRoots": [
+    "deployment/shop/cart"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n1",
+    "zone//zone-a"
+  ]
+}

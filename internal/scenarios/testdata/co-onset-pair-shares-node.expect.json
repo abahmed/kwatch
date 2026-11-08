@@ -1,0 +1,12 @@
+{
+  "name": "co-onset-pair-shares-node",
+  "description": "Two Deployments crash-loop their replicas on one healthy node four seconds apart; replicas elsewhere are fine.",
+  "root": "node//n1",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "deployment/shop/cart",
+    "zone//zone-a"
+  ]
+}

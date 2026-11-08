@@ -58,6 +58,7 @@ var scorers = []scorer{
 	{"outcome", scoreOutcome},
 	{"revision", scoreRevision},
 	{"shared", scoreShared},
+	{"co-onset", scoreCoOnset},
 	{"baseline", scoreBaseline},
 	{"quality", scoreQuality},
 }

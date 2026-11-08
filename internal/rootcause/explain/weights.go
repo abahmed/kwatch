@@ -148,6 +148,20 @@ const (
 	SignatureWindow = 30 * time.Minute
 )
 
+// Co-onset: failures of several workloads that begin seconds apart.
+const (
+	// CoOnsetWindow is how close together the first failures of
+	// several workloads must be to count as one moment. A cause that
+	// breaks its callers does it faster than people and rollouts do.
+	CoOnsetWindow = 30 * time.Second
+	// CoOnsetMinWorkloads is the fewest workloads that make a moment.
+	CoOnsetMinWorkloads = 2
+	// CoOnsetWeight is what a shared moment adds to a candidate that
+	// already has evidence of its own. It is the smallest weight in
+	// the table: clocks coincide by chance.
+	CoOnsetWeight = 0.05
+)
+
 // Baseline deviation and data quality.
 const (
 	// BaselineWeight is the most a baseline adds or subtracts. It is

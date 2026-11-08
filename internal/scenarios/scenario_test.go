@@ -147,7 +147,7 @@ func library() []scenario {
 		trafficBackendScenarios(),
 		autoscalingScenarios(), sharedErrorScenarios(),
 		logsOnlyScenarios(), dependencyLogScenarios(),
-		commonFactorScenarios(), dependencyScenarios(),
+		commonFactorScenarios(), coOnsetScenarios(), dependencyScenarios(),
 		dependencyConfigScenarios(), logBurstScenarios(),
 		resolveCauseScenarios(), bootScenarios(),
 		bootEndpointScenarios(),

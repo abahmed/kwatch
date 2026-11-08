@@ -25,6 +25,9 @@ const (
 // maxQuote bounds a quoted error or scheduler message.
 const maxQuote = 120
 
+// weightCoOnset ranks the moment several workloads began failing.
+const weightCoOnset = 0.6
+
 // changeSentences say what the blamed change did: "The release changed
 // the image from payments:2.2 to payments:2.3." When the lead does not
 // blame the change, they say when it happened: "Its selector changed
@@ -218,6 +221,11 @@ func causeProofSentences(f caseFacts) []sentence {
 		}
 		next := sentence{part: partProof, weight: item.Weight,
 			text: sentenceCase(humanizeText(text))}
+		if item.Code == rootcause.ProofCoOnset {
+			// When the workloads began failing is the point of a
+			// cause found by timing: it ranks above the other proof.
+			next.weight = weightCoOnset
+		}
 		if item.Code == rootcause.ProofErrorsName {
 			var ok bool
 			if next, ok = mentionWithError(f, item, next.text); !ok {

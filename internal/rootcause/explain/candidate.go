@@ -37,6 +37,9 @@ type candidate struct {
 	// change to covers goes through them.
 	directIDs []inventory.EntityID
 	directSet bool
+	// coOnset marks a shared factor of only CoOnsetMinWorkloads
+	// workloads, kept because they began failing as one moment.
+	coOnset bool
 }
 
 // direct returns the effects the candidate explains through a row,
