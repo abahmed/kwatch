@@ -1,8 +1,8 @@
 # Repository documentation
 
 The canonical source for published user, operator, architecture, and
-contributor documentation is the [`kwatch.dev` repository](https://github.com/abahmed/kwatch.dev)
-and its [documentation site](https://kwatch.dev/docs). This repository owns
+contributor documentation is [docs.kwatch.dev](https://docs.kwatch.dev).
+This repository owns
 the code-derived generators and the rules that keep generated references in
 sync with runtime behavior.
 
