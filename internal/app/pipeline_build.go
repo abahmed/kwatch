@@ -229,8 +229,10 @@ func (p *pipelineBuild) newInvestigator() investigate.Investigator {
 		Tail:        logs.Tail,
 		Endpoints:   kube.EndpointReader{Client: client}.ReadyEndpoints,
 		Readyz:      kube.ReadyzReader{Client: client}.Checks,
-		LogsOff:     !p.deps.runtime.Application().InvestigationLogs,
-		Now:         p.clock.Now,
+		CloseCall: kube.NewCloseCall(p.deps.clients.Resolver, nil,
+			p.clock.Now).Check,
+		LogsOff: !p.deps.runtime.Application().InvestigationLogs,
+		Now:     p.clock.Now,
 	})
 }
 

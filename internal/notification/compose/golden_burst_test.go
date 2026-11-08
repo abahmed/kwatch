@@ -51,3 +51,30 @@ func burstIncident(count, before, span int) incident.Incident {
 		Members: members(finding),
 	}
 }
+
+// checkCases are close calls settled by a read-only check.
+func checkCases() []goldenCase {
+	return []goldenCase{
+		{"close_call_checked", func() notification.Message {
+			d := announce(endpointRefusal())
+			d.Facts.Evidence = []incident.Fact{{Kind: incident.FactCheck,
+				Subject: "db.example.com:5432",
+				Text: "kwatch checked: DNS resolves db.example.com " +
+					"fine, so DNS is not the cause."}}
+			return Writer{}.Write(d, at(5, 0))
+		}},
+	}
+}
+
+func endpointRefusal() incident.Incident {
+	root := inventory.CoreID(kube.KindExternalEndpoint, "",
+		"db.example.com:5432")
+	p := crashStorm(root, "external-endpoint-failing",
+		"EndpointFailing.Refused", func(int) string {
+			return "dial tcp db.example.com:5432: connect: " +
+				"connection refused"
+		})
+	p.Tier = incident.Notify
+	p.Cause.Score = 0.64
+	return p
+}
