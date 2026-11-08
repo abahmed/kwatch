@@ -29,8 +29,8 @@ func DefaultConfig() *Config {
 			Enabled: false,
 			Port:    8061,
 		},
-		AuditLog:      AuditLogConfig{Enabled: true, Output: "stdout"},
-		Watch:         WatchConfig{Secrets: true},
+		AuditLog: AuditLogConfig{Enabled: true, Output: "stdout"},
+		Watch:    WatchConfig{Secrets: true},
 		Investigation: InvestigationConfig{
 			Logs: true, SampleLogs: true},
 	}

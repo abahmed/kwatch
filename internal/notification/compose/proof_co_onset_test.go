@@ -16,4 +16,7 @@ func TestCoOnsetProofStatesTheGapOnly(t *testing.T) {
 	many := rootcause.Proof{Code: rootcause.ProofCoOnset, Count: 5, Total: 12}
 	assert.Equal(t, "all started failing within 12 seconds",
 		proofWords(many))
+	same := rootcause.Proof{Code: rootcause.ProofCoOnset, Count: 2}
+	assert.Equal(t, "they started failing at the same time",
+		proofWords(same))
 }

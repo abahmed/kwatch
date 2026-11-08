@@ -542,15 +542,15 @@ here verbatim and checked by `TestScorecardGates`.
 | --- | --- | --- | --- |
 | Correct root cause (labelled) | >= 90% | 98.9% | pass |
 | Correct root cause (held-out) | >= 80% | 100% | pass |
-| Wrong high-confidence root | <= 5% (at least 20 cases) | 0% (0 of 231 high-confidence cases, labelled and held-out) | pass |
+| Wrong high-confidence root | <= 5% (at least 20 cases) | 0% (0 of 232 high-confidence cases, labelled and held-out) | pass |
 | Wrong root stated at likely confidence or higher (labelled) | <= 0 | 0 | pass |
 | Scenarios whose first message stated a wrong root | <= 0 | 0 | pass |
-| Calibration: high confidence | 80-100% (at least 10 cases) | 100.0% (218 of 218 right) | pass |
-| Calibration: likely confidence | 50-90% (at least 10 cases) | 89.6% (43 of 48 right) | pass |
+| Calibration: high confidence | 80-100% (at least 10 cases) | 100.0% (219 of 219 right) | pass |
+| Calibration: likely confidence | 50-90% (at least 10 cases) | 89.8% (44 of 49 right) | pass |
 | Messages per incident (p95) | <= 3 | 3 | pass |
 | Messages per incident (most) | <= 5 | 5 | pass |
-| Time to first message (page tier) | max <= 2m0s | p95 1m45s, max 1m45s (47 scenarios) | pass |
-| Time to first message (notify tier) | max <= 5m0s | p95 3m15s, max 4m15s (306 scenarios) | pass |
+| Time to first message (page tier) | max <= 2m0s | p95 1m45s, max 1m45s (48 scenarios) | pass |
+| Time to first message (notify tier) | max <= 5m0s | p95 3m15s, max 4m15s (307 scenarios) | pass |
 | Time to first message (boot-held) | max <= 15m0s | p95 12m15s, max 12m15s (4 scenarios) | pass |
 | Notifications from non-events (staging day) | <= 0 | 0 | pass |
 | Notifications per hour (staging day peak) | <= 30/h | 26/h | pass |
@@ -569,15 +569,15 @@ here verbatim and checked by `TestScorecardGates`.
 | Recoveries said while members still fail | <= 0 | 0 | pass |
 | Scenarios that passed and no longer do (ratchet) | <= 0 | 0 | pass |
 
-28 of 28 gates pass. 440 labelled root cases in 451 scenarios; first-incident tier matches in 451 of 451 scenarios.
-Staging day: 954 notifications in 67h57m0s (14.0/h mean, peak hour 26); 0 from non-events, 0 of them notify or page.
+28 of 28 gates pass. 442 labelled root cases in 453 scenarios; first-incident tier matches in 453 of 453 scenarios.
+Staging day: 961 notifications in 68h15m0s (14.1/h mean, peak hour 26); 0 from non-events, 0 of them notify or page.
 Storm shared node: 1000 pods, 2 messages in total, 1 in the loudest 2 minutes.
 Storm shared registry: 1000 pods, 1 messages in total, 1 in the loudest 2 minutes.
 Storm multi-cause: 1000 pods from 10 causes, 10 of them reported, 10 messages in total, 8 in the loudest 2 minutes.
 Slowest first messages: boot-endpoints-still-down notify 12m15s, node-join-never-ready page 10m15s, own-volume-wait-too-long notify 10m0s, node-replace-sandbox-stuck notify 7m15s, init-waits-on-healthy-service notify 4m15s.
 Calibration: the labelled cases put high confidence at 0.55 (committed 0.70).
-Right roots: 268 with a stated cause, 163 by falling back to the failing entity with no stated cause, 4 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 10 scenarios, 7 of them labelled as legitimate revisions.
-Time to first correct root: p95 4m15s, max 12m15s over 384 scenarios; slowest: boot-endpoints-still-down 12m15s, one-hpa-bad-target 11m15s, metrics-blip-long 11m15s, node-join-never-ready 10m15s, own-volume-wait-too-long 10m0s. Never stated: crash-loop-for-hours, coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
+Right roots: 270 with a stated cause, 163 by falling back to the failing entity with no stated cause, 4 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 10 scenarios, 7 of them labelled as legitimate revisions.
+Time to first correct root: p95 4m15s, max 12m15s over 386 scenarios; slowest: boot-endpoints-still-down 12m15s, one-hpa-bad-target 11m15s, metrics-blip-long 11m15s, node-join-never-ready 10m15s, own-volume-wait-too-long 10m0s. Never stated: crash-loop-for-hours, coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
 
 ## Scenarios
 
@@ -598,7 +598,7 @@ Time to first correct root: p95 4m15s, max 12m15s over 384 scenarios; slowest: b
 | zone-outage-healthy-node-crash | `zone//zone-a`, `deployment/shop/api` | `zone//zone-a`, `deployment/shop/api (no cause)` | high 1.00 | page/page | 2 (4) | pass |
 | coredns-down | `cluster-dns//cluster-dns` | `cluster-dns//cluster-dns` | high 1.00 | page/page | 1 (2) | pass |
 | webhook-no-endpoints | `validatingwebhookconfiguration//policy-validator` | `validatingwebhookconfiguration//policy-validator` | high 1.00 | page/page | 2 (2) | pass |
-| webhook-shared-backend | `service/policy/policy-svc`, `service/mesh-system/mesh-webhook` | `service/policy/policy-svc`, `service/mesh-system/mesh-webhook` | high 1.00 | notify/notify | 2 (2) | pass |
+| webhook-shared-backend | `service/policy/policy-svc`, `service/mesh-system/mesh-webhook` | `service/policy/policy-svc`, `service/mesh-system/mesh-webhook` | high 0.95 | notify/notify | 2 (2) | pass |
 | quota-exhausted | `resourcequota/analytics/compute-quota` | `resourcequota/analytics/compute-quota` | high 1.00 | notify/notify | 1 (2) | pass |
 | quota-forbids-pods | `resourcequota/analytics/zero-pods` | `resourcequota/analytics/zero-pods` | high 1.00 | notify/notify | 1 (2) | pass |
 | metrics-apiservice-down | `apiservice//v1beta1.metrics.k8s.io` | `apiservice//v1beta1.metrics.k8s.io` | high 1.00 | notify/notify | 2 (2) | pass |
@@ -671,7 +671,7 @@ Time to first correct root: p95 4m15s, max 12m15s over 384 scenarios; slowest: b
 | volume-full-names-users | `persistentvolumeclaim/inventory/pgdata` | `persistentvolumeclaim/inventory/pgdata` | high 0.80 | notify/notify | 1 (2) | pass |
 | volume-nearly-full-quiet | quiet | - | - | -/- | 0 (0) | pass |
 | registry-login-expired | `registry//registry.corp.example` | `registry//registry.corp.example` | high 1.00 | notify/notify | 1 (2) | pass |
-| registry-login-missing-secret | `secret/shop/regcred` | `secret/shop/regcred` | high 0.98 | notify/notify | 1 (2) | pass |
+| registry-login-missing-secret | `secret/shop/regcred` | `secret/shop/regcred` | high 0.93 | notify/notify | 1 (2) | pass |
 | registry-no-pull-secret | `registry//registry.corp.example` | `registry//registry.corp.example` | high 1.00 | notify/notify | 1 (2) | pass |
 | registry-rate-limited | `registry//registry.corp.example` | `registry//registry.corp.example` | high 1.00 | notify/notify | 1 (2) | pass |
 | mutating-webhook-slow-backend | `mutatingwebhookconfiguration//mesh-injector` | `mutatingwebhookconfiguration//mesh-injector` | high 1.00 | page/page | 1 (2) | pass |
@@ -695,7 +695,7 @@ Time to first correct root: p95 4m15s, max 12m15s over 384 scenarios; slowest: b
 | node-agent-healthy-app-crashes | `deployment/shop/cart` | `deployment/shop/cart (no cause)` | none | notify/notify | 1 (2) | pass |
 | csi-node-plugin-failing | `daemonset/kube-system/ebs-csi-node` | `daemonset/kube-system/ebs-csi-node` | possible 0.45 | notify/notify | 2 (3) | pass |
 | kubelet-cert-expired | `node//n1` | `node//n1 (no cause)` | none | page/page | 1 (3) | pass |
-| apiserver-throttling-stalls-controllers | `apiserver//kube-apiserver` | `apiserver//kube-apiserver` | high 0.80 | notify/notify | 2 (2) | pass |
+| apiserver-throttling-stalls-controllers | `apiserver//kube-apiserver` | `apiserver//kube-apiserver` | high 0.75 | notify/notify | 2 (2) | pass |
 | csr-denied | `certificatesigningrequest//csr-w7k2p` | `certificatesigningrequest//csr-w7k2p (no cause)` | none | notify/notify | 1 (2) | pass |
 | flowschema-dangling-priority-level | `flowschema//batch-jobs` | `flowschema//batch-jobs (no cause)` | none | notify/notify | 1 (2) | pass |
 | resourceclaim-unallocated-pod-pending | `resourceclaim/ml/gpu-claim` | `resourceclaim/ml/gpu-claim` | likely 0.69 | notify/notify | 2 (2) | pass |
@@ -712,12 +712,12 @@ Time to first correct root: p95 4m15s, max 12m15s over 384 scenarios; slowest: b
 | hpa-at-max-healthy-quiet | quiet | - | - | -/- | 0 (0) | pass |
 | external-database-storm | `external-endpoint//db.example.com:5432` | `external-endpoint//db.example.com:5432` | high 1.00 | notify/notify | 1 (3) | pass |
 | external-database-one-workload | `deployment/reports/builder` | `deployment/reports/builder (no cause)` | none | notify/notify | 1 (2) | pass |
-| shared-panic-storm | `failure-signature//CrashLoop panic: license check failed for tenant #` | `failure-signature//CrashLoop panic: license check failed for tenant #` | high 0.80 | notify/notify | 1 (3) | pass |
+| shared-panic-storm | `failure-signature//CrashLoop panic: license check failed for tenant #` | `failure-signature//CrashLoop panic: license check failed for tenant #` | high 0.75 | notify/notify | 1 (3) | pass |
 | stack-frame-not-endpoint | `deployment/orders/api`, `deployment/billing/ledger` | `deployment/orders/api (no cause)`, `deployment/billing/ledger (no cause)` | none | notify/notify | 1 (4) | pass |
-| redis-down-storm | `failure-signature//CrashLoop dial tcp <ip>:6379: connect: connection refused` | `failure-signature//CrashLoop dial tcp <ip>:6379: connect: connection refused` | high 0.80 | notify/notify | 1 (3) | pass |
+| redis-down-storm | `failure-signature//CrashLoop dial tcp <ip>:6379: connect: connection refused` | `failure-signature//CrashLoop dial tcp <ip>:6379: connect: connection refused` | high 0.75 | notify/notify | 1 (3) | pass |
 | different-errors-stay-apart | `deployment/shop/cart`, `deployment/shop/search`, `deployment/billing/ledger` | `deployment/shop/cart (no cause)`, `deployment/shop/search (no cause)`, `deployment/billing/ledger (no cause)` | none | notify/notify | 1 (6) | pass |
-| redis-storm-logs-only | `failure-signature//CrashLoop unhandled exception. stackexchange.redis.redisconnectionexception: it was not po` | `failure-signature//CrashLoop unhandled exception. stackexchange.redis.redisconnectionexception: it was not po` | high 0.80 | notify/notify | 1 (3) | pass |
-| redis-storm-logs-late | `failure-signature//CrashLoop unhandled exception. stackexchange.redis.redisconnectionexception: it was not po` | `failure-signature//CrashLoop unhandled exception. stackexchange.redis.redisconnectionexception: it was not po` | high 0.80 | notify/notify | 1 (1) | pass |
+| redis-storm-logs-only | `failure-signature//CrashLoop unhandled exception. stackexchange.redis.redisconnectionexception: it was not po` | `failure-signature//CrashLoop unhandled exception. stackexchange.redis.redisconnectionexception: it was not po` | high 0.75 | notify/notify | 1 (3) | pass |
+| redis-storm-logs-late | `failure-signature//CrashLoop unhandled exception. stackexchange.redis.redisconnectionexception: it was not po` | `failure-signature//CrashLoop unhandled exception. stackexchange.redis.redisconnectionexception: it was not po` | high 0.75 | notify/notify | 1 (1) | pass |
 | cronjob-last-run-failed | `cronjob/reports/weekly-export` | `cronjob/reports/weekly-export` | likely 0.55 | digest/digest | 0 (2) | pass |
 | cron-runs-keep-failing | `cronjob/ops/stats-rollup` | `cronjob/ops/stats-rollup` | likely 0.69 | notify/notify | 3 (3) | pass |
 | cache-unreachable-at-start | `deployment/web/api` | `deployment/web/api` | likely 0.69 | notify/notify | 1 (3) | pass |
@@ -735,6 +735,7 @@ Time to first correct root: p95 4m15s, max 12m15s over 384 scenarios; slowest: b
 | healthy-pods-steady-errors | quiet | - | - | -/- | 0 (0) | pass |
 | healthy-pods-small-burst | quiet | - | - | -/- | 0 (0) | pass |
 | healthy-pods-burst-without-baseline | quiet | - | - | -/- | 0 (0) | pass |
+| user-endpoints-named | `deployment/shop/payments` | `deployment/shop/payments` | high 1.00 | page/page | 1 (2) | pass |
 | resolve-cause-recovered | `external-endpoint//db.example.com:5432` | `external-endpoint//db.example.com:5432` | high 0.85 | notify/notify | 2 (2) | pass |
 | resolve-cause-still-present | `external-endpoint//db.example.com:5432` | `external-endpoint//db.example.com:5432` | high 0.85 | notify/notify | 1 (1) | pass |
 | pool-boot-quiet | quiet | - | - | -/- | 0 (0) | pass |
@@ -820,19 +821,20 @@ Time to first correct root: p95 4m15s, max 12m15s over 384 scenarios; slowest: b
 | hpa-resolve-while-workload-broken | `deployment/shop/warehouse` | `deployment/shop/warehouse (no cause)` | none | notify/notify | 1 (2) | pass |
 | crash-loop-during-node-replacement | `deployment/data/warehouse` | `deployment/data/warehouse (no cause)` | none | notify/notify | 6 (6) | pass |
 | metrics-blip-short | quiet | - | - | -/- | 0 (0) | pass |
-| metrics-blip-long | `apiservice//v1beta1.metrics.k8s.io` | `apiservice//v1beta1.metrics.k8s.io` | high 1.00 | digest/digest | 0 (3) | pass |
+| metrics-blip-long | `apiservice//v1beta1.metrics.k8s.io` | `apiservice//v1beta1.metrics.k8s.io` | high 0.95 | digest/digest | 0 (3) | pass |
 | digest-flap-reopens | `horizontalpodautoscaler/shop/orders` | `horizontalpodautoscaler/shop/orders (no cause)` | none | digest/digest | 2 (3) | pass |
 | deprecated-api-still-called | quiet | - | - | -/- | 0 (0) | pass |
 | upgrade-readiness-digest | quiet | - | - | -/- | 0 (0) | pass |
 | apiserver-writes-slow | `apiserver//kube-apiserver` | `apiserver//kube-apiserver (no cause)` | none | digest/digest | 1 (2) | pass |
 | slow-webhook-slows-api | `validatingwebhookconfiguration//policy-check` | `validatingwebhookconfiguration//policy-check` | high 0.85 | notify/notify | 1 (2) | pass |
 | slow-webhook-blocks-deploys | `validatingwebhookconfiguration//policy-check` | `validatingwebhookconfiguration//policy-check` | high 1.00 | page/page | 2 (2) | pass |
-| redis-down-linked-by-error | `deployment/shop/redis` | `deployment/shop/redis` | high 1.00 | notify/notify | 1 (2) | pass |
+| redis-down-linked-by-error | `deployment/shop/redis` | `deployment/shop/redis` | high 0.95 | notify/notify | 1 (2) | pass |
 | ingress-service-no-endpoints-chain | `deployment/shop/cache` | `deployment/shop/cache` | high 0.80 | page/page | 1 (2) | pass |
 | networkpolicy-blocks-dependency | `networkpolicy/shop/deny-all` | `networkpolicy/shop/deny-all` | high 1.00 | notify/notify | 1 (2) | pass |
 | chain-postgres-api-ingress | `deployment/shop/postgres` | `deployment/shop/postgres` | high 0.80 | page/page | 2 (2) | pass |
 | chain-wrong-time-order | `deployment/shop/api`, `deployment/shop/postgres` | `deployment/shop/api`, `deployment/shop/postgres` | high 0.75 | page/page | 2 (5) | pass |
 | chain-capped-at-three-steps | `deployment/shop/postgres`, `service/shop/web` | `deployment/shop/postgres`, `service/shop/web` | high 0.80 | notify/notify | 5 (6) | pass |
+| chain-timeline-line | `deployment/shop/postgres` | `deployment/shop/postgres` | high 0.80 | page/page | 3 (3) | pass |
 | serving-last-replica-down | `deployment/shop/front` | `deployment/shop/front` | high 0.75 | page/page | 1 (2) | pass |
 | internal-only-down | `deployment/shop/front` | `deployment/shop/front` | high 0.75 | notify/notify | 1 (2) | pass |
 | rollout-healthy-slow | quiet | - | - | -/- | 0 (0) | pass |
@@ -884,15 +886,15 @@ Time to first correct root: p95 4m15s, max 12m15s over 384 scenarios; slowest: b
 | lease-taken-once-healthy-holder | quiet | - | - | -/- | 0 (0) | pass |
 | cronjob-blocked-by-stuck-run | `cronjob/reports/nightly-report` | `cronjob/reports/nightly-report (no cause)` | none | notify/notify | 1 (2) | pass |
 | pod-terminating-node-lost | `node//n1` | `node//n1` | high 0.95 | page/page | 2 (2) | pass |
-| finalizer-controller-scaled-down | `deployment/widget-system/widget-controller` | `deployment/widget-system/widget-controller` | high 0.80 | digest/digest | 0 (2) | pass |
-| finalizer-controller-running | `finalizer/widget-system/widgets.example.com/cleanup` | `finalizer/widget-system/widgets.example.com/cleanup` | high 0.75 | digest/digest | 0 (2) | pass |
-| finalizer-controller-scaled-down-fresh | `deployment/widget-system/widget-controller` | `deployment/widget-system/widget-controller` | high 0.80 | notify/notify | 1 (2) | pass |
+| finalizer-controller-scaled-down | `deployment/widget-system/widget-controller` | `deployment/widget-system/widget-controller` | high 0.75 | digest/digest | 0 (2) | pass |
+| finalizer-controller-running | `finalizer/widget-system/widgets.example.com/cleanup` | `finalizer/widget-system/widgets.example.com/cleanup` | high 0.70 | digest/digest | 0 (2) | pass |
+| finalizer-controller-scaled-down-fresh | `deployment/widget-system/widget-controller` | `deployment/widget-system/widget-controller` | high 0.75 | notify/notify | 1 (2) | pass |
 | attachment-volume-gone | `volumeattachment//csi-0a1b2c`, `volumeattachment//csi-3d4e5f` | `volumeattachment//csi-0a1b2c (no cause)`, `volumeattachment//csi-3d4e5f (no cause)` | none | digest/digest | 0 (2) | pass |
 | attachment-node-gone | `volumeattachment//csi-6a7b8c` | `volumeattachment//csi-6a7b8c (no cause)` | none | notify/notify | 1 (2) | pass |
-| finalizer-lookalike-controllers | `finalizer/arc-system/actions.github.com/cleanup-protection` | `finalizer/arc-system/actions.github.com/cleanup-protection` | high 0.75 | digest/digest | 1 (2) | pass |
-| finalizer-lookalike-no-rbac-view | `finalizer/arc-system/actions.github.com/cleanup-protection` | `finalizer/arc-system/actions.github.com/cleanup-protection` | high 0.75 | digest/digest | 1 (2) | pass |
-| finalizer-controller-granted-the-group | `deployment/arc-system/gha-runner-scale-set-controller` | `deployment/arc-system/gha-runner-scale-set-controller` | high 0.80 | digest/digest | 1 (2) | pass |
-| finalizer-owned-by-a-workload | `deployment/tools/gha-finalizer-reaper` | `deployment/tools/gha-finalizer-reaper` | high 0.80 | digest/digest | 1 (2) | pass |
+| finalizer-lookalike-controllers | `finalizer/arc-system/actions.github.com/cleanup-protection` | `finalizer/arc-system/actions.github.com/cleanup-protection` | high 0.70 | digest/digest | 1 (2) | pass |
+| finalizer-lookalike-no-rbac-view | `finalizer/arc-system/actions.github.com/cleanup-protection` | `finalizer/arc-system/actions.github.com/cleanup-protection` | high 0.70 | digest/digest | 1 (2) | pass |
+| finalizer-controller-granted-the-group | `deployment/arc-system/gha-runner-scale-set-controller` | `deployment/arc-system/gha-runner-scale-set-controller` | high 0.75 | digest/digest | 1 (2) | pass |
+| finalizer-owned-by-a-workload | `deployment/tools/gha-finalizer-reaper` | `deployment/tools/gha-finalizer-reaper` | high 0.75 | digest/digest | 1 (2) | pass |
 | service-stuck-deleting-warning | `service/kube-addons/ingress-internal` | `service/kube-addons/ingress-internal (no cause)` | none | digest/digest | 1 (2) | pass |
 | scale-failure-replaced | `horizontalpodautoscaler/staging/thirdparty` | `horizontalpodautoscaler/staging/thirdparty (no cause)` | none | notify/notify | 2 (3) | pass |
 | node-replace-sandbox-blip | quiet | - | - | -/- | 0 (0) | pass |
@@ -932,7 +934,7 @@ Time to first correct root: p95 4m15s, max 12m15s over 384 scenarios; slowest: b
 | coupled-silent-config-fault-state | `configmap/post/ledger-config` | `configmap/post/ledger-config` | likely 0.69 | notify/notify | 1 (2) | pass |
 | node-lost-owner-routed | `node//n1` | `node//n1` | high 1.00 | page/page | 3 (4) | pass |
 | cni-agent-crash-quoted | `node//n1` | `node//n1` | high 1.00 | notify/notify | 3 (4) | pass |
-| coredns-down-no-probe | `cluster-dns//cluster-dns` | `cluster-dns//cluster-dns` | high 0.95 | notify/notify | 1 (3) | pass |
+| coredns-down-no-probe | `cluster-dns//cluster-dns` | `cluster-dns//cluster-dns` | high 0.90 | notify/notify | 1 (3) | pass |
 | dependency-clusterip-dial | `deployment/data/postgres` | `deployment/data/postgres` | high 1.00 | notify/notify | 1 (6) | pass |
 | node-blip-then-down | `node//n1` | `node//n1 (no cause)` | none | page/page | 4 (5) | pass |
 | nodes-lost-same-zone | `node//n1` | `node//n1 (no cause)` | none | page/page | 2 (6) | pass |
@@ -948,7 +950,7 @@ Time to first correct root: p95 4m15s, max 12m15s over 384 scenarios; slowest: b
 | node-join-kubelet-notices | quiet | - | - | -/digest | 0 (0) | pass |
 | pod-dns-search-line-notice | quiet | - | - | -/digest | 0 (0) | pass |
 | chronic-never-ready-deployment | `deployment/shop/cert-controller` | `deployment/shop/cert-controller (no cause)` | none | notify/notify | 1 (3) | pass |
-| webhook-backend-namespace-gone | `service/policy-gone/policy-svc` | `service/policy-gone/policy-svc` | high 1.00 | notify/notify | 1 (2) | pass |
+| webhook-backend-namespace-gone | `service/policy-gone/policy-svc` | `service/policy-gone/policy-svc` | high 0.95 | notify/notify | 1 (2) | pass |
 | webhook-ignore-no-endpoints | `validatingwebhookconfiguration//widget-operator` | `validatingwebhookconfiguration//widget-operator (no cause)` | none | digest/digest | 1 (2) | pass |
 | webhook-ignore-beside-closed | `validatingwebhookconfiguration//mixed-policy` | `validatingwebhookconfiguration//mixed-policy (no cause)` | none | digest/digest | 1 (2) | pass |
 | node-readonly-filesystem | `node//n1` | `node//n1 (no cause)` | none | digest/digest | 1 (2) | pass |
@@ -973,7 +975,7 @@ Time to first correct root: p95 4m15s, max 12m15s over 384 scenarios; slowest: b
 | cr-controller-crash-manager-is-deployment-name | `deployment/gadget-system/gadget-controller` | `deployment/gadget-system/gadget-controller` | high 0.85 | notify/notify | 2 (3) | pass |
 | cr-controller-crash-default-manager | `deployment/gadget-system/gadget-controller` | `deployment/gadget-system/gadget-controller` | high 0.85 | notify/notify | 2 (3) | pass |
 | cr-single-resource-default-manager | `deployment/gadget-system/gadget-controller` | `deployment/gadget-system/gadget-controller` | high 0.78 | notify/notify | 1 (3) | pass |
-| disk-hog-moves-nodes | `deployment/media/ingest` | `deployment/media/ingest` | high 0.73 | notify/notify | 2 (4) | pass |
+| disk-hog-moves-nodes | `deployment/media/ingest` | `deployment/media/ingest` | likely 0.68 | notify/notify | 2 (4) | pass |
 | service-account-deleted-before-scale-out | `serviceaccount/shop/api` | `serviceaccount/shop/api` | high 1.00 | notify/notify | 1 (2) | pass |
 | pull-secret-rotated-hours-before-scale-out | `secret/payments/pull-creds` | `secret/payments/pull-creds` | high 0.73 | notify/notify | 1 (2) | pass |
 | pull-without-secret-beside-logins | `deployment/labs/newa`, `deployment/labs/newb` | `deployment/labs/newa`, `deployment/labs/newb` | high 1.00 | notify/notify | 1 (4) | pass |
@@ -1000,7 +1002,7 @@ Time to first correct root: p95 4m15s, max 12m15s over 384 scenarios; slowest: b
 | adv-dns-nxdomain-two-namespaces | `deployment/shop/checkout`, `deployment/billing/invoicer` | `deployment/shop/checkout (no cause)`, `deployment/billing/invoicer (no cause)` | none | notify/notify | 1 (4) | pass |
 | adv-init-wait-selector-edited | `service/shop/queue` | `service/shop/queue` | high 0.85 | notify/notify | 2 (3) | pass |
 | adv-webhook-timeout-six-namespaces | `validatingwebhookconfiguration//image-policy` | `validatingwebhookconfiguration//image-policy` | high 1.00 | page/page | 1 (2) | pass |
-| adv-same-error-different-targets | `deployment/shop/db-a`, `service/billing/db-b` | `deployment/shop/db-a`, `service/billing/db-b` | high 0.90 | notify/notify | 2 (4) | pass |
+| adv-same-error-different-targets | `deployment/shop/db-a`, `service/billing/db-b` | `deployment/shop/db-a`, `service/billing/db-b` | high 0.85 | notify/notify | 2 (4) | pass |
 | adv-hpa-max-throttled | `horizontalpodautoscaler/shop/web` | `horizontalpodautoscaler/shop/web` | high 0.75 | notify/notify | 2 (2) | pass |
 | adv-quota-after-hpa-scale-up | `resourcequota/batch/pod-cap` | `resourcequota/batch/pod-cap` | high 1.00 | notify/notify | 1 (2) | pass |
 | adv-statefulset-zone-without-nodes | `persistentvolumeclaim/streaming/data-kafka-2` | `persistentvolumeclaim/streaming/data-kafka-2` | high 1.00 | notify/notify | 1 (2) | pass |

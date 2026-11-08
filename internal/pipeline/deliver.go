@@ -203,7 +203,7 @@ func (a *announcer) send(
 	ctx context.Context, d incident.Decision, at time.Time,
 ) {
 	d = a.withWake(a.withKindNames(a.withChanges(d, at)), at)
-	d = a.withCauseState(d)
+	d = a.withReach(a.withCauseState(d))
 	spoke := a.collect.SpokeOnItsOwn(d.Incident.ID)
 	written := a.collect.Follow(d)
 	listedBy := a.listedOnly(written, spoke)

@@ -1,0 +1,10 @@
+{
+  "name": "user-endpoints-named",
+  "description": "A release crash-loops every pod behind a Service that an Ingress publishes at three addresses.",
+  "root": "deployment/shop/payments",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "service/shop/payments"
+  ]
+}

@@ -148,7 +148,7 @@ func library() []scenario {
 		autoscalingScenarios(), sharedErrorScenarios(),
 		logsOnlyScenarios(), dependencyLogScenarios(),
 		commonFactorScenarios(), coOnsetScenarios(), dependencyScenarios(),
-		dependencyConfigScenarios(), logBurstScenarios(),
+		dependencyConfigScenarios(), logBurstScenarios(), userReachScenarios(),
 		resolveCauseScenarios(), bootScenarios(),
 		bootEndpointScenarios(),
 		releaseScenarios(), metricsHPAScenarios(), nodeFlapScenarios(),

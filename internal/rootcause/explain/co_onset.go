@@ -45,14 +45,16 @@ func (v *view) coOnset(effects []inventory.EntityID) (int, time.Duration, bool) 
 		spread <= CoOnsetWindow
 }
 
-// scoreCoOnset rewards a candidate that several workloads began failing
-// under within seconds of each other. Failures that begin together
-// share a cause more often than failures minutes apart. The reward is
-// small and only corroborates: the candidate already needs evidence of
-// its own, so a coincidence of clocks never makes a cause.
+// scoreCoOnset rewards a shared factor that was kept only because its
+// workloads began failing within seconds of each other (see
+// sharedFactorCount). The reward is small and only corroborates: the
+// candidate already had to pass every other gate, so a coincidence of
+// clocks never makes a cause.
 func scoreCoOnset(v *view, c *candidate) outcome {
-	effects := c.others()
-	workloads, spread, ok := v.coOnset(effects)
+	if !c.coOnset {
+		return outcome{}
+	}
+	workloads, spread, ok := v.coOnset(c.others())
 	if !ok {
 		return outcome{}
 	}

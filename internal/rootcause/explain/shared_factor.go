@@ -170,7 +170,7 @@ func (v *view) beganTogether(effects []inventory.EntityID) bool {
 func (v *view) sharedFactorCount(
 	c *candidate, effects []inventory.EntityID,
 ) string {
-	if v.workloadsOf(effects) >= SharedFactorMinWorkloads {
+	if v.workloadsOf(c.direct()) >= SharedFactorMinWorkloads {
 		return ""
 	}
 	if _, _, ok := v.coOnset(effects); !ok {

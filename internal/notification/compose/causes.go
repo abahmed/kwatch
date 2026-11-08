@@ -279,7 +279,12 @@ var proofWriters = map[rootcause.ProofCode]func(rootcause.Proof) string{
 		return errorWords(p.Count, p.Total)
 	},
 	rootcause.ProofCoOnset: func(p rootcause.Proof) string {
-		if p.Count == 2 {
+		switch {
+		case p.Total == 0 && p.Count == 2:
+			return "they started failing at the same time"
+		case p.Total == 0:
+			return "all started failing at the same time"
+		case p.Count == 2:
 			return "they started failing " + secondsWords(p.Total) +
 				" apart"
 		}
