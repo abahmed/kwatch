@@ -13,11 +13,12 @@ import (
 // other, one read-only check can tell them apart: does the endpoint's
 // name resolve, and does it accept a connection. The check is the
 // ones kwatch already runs on an endpoint, once, on demand: one DNS
-// lookup and one TCP connect, each bounded by CloseCallTimeout, to an
+// lookup and one TCP connect, together bounded by CloseCallTimeout, to an
 // address that is not private (privateAddress). It changes nothing and
 // sends no payload.
 const (
-	// CloseCallTimeout bounds each of the two operations of a check.
+	// CloseCallTimeout bounds a whole check: the lookup and the connect
+	// share it.
 	CloseCallTimeout = 5 * time.Second
 	// closeCallRemember is how long a result stands, so that incidents
 	// investigated again do not dial the endpoint again.
@@ -90,9 +91,9 @@ func (c *CloseCall) Check(
 		return CloseCallResult{Endpoint: endpoint, Error: "not a host:port"}
 	}
 	result := CloseCallResult{Endpoint: endpoint, Host: host}
-	lookupCtx, cancel := context.WithTimeout(ctx, CloseCallTimeout)
+	checkCtx, cancel := context.WithTimeout(ctx, CloseCallTimeout)
 	defer cancel()
-	addrs, err := c.resolver.LookupHost(lookupCtx, host)
+	addrs, err := c.resolver.LookupHost(checkCtx, host)
 	switch {
 	case err != nil:
 		result.TimedOut = timedOut(err)
@@ -101,7 +102,7 @@ func (c *CloseCall) Check(
 		result.Error = "no address"
 	default:
 		result.Resolved = true
-		c.connect(ctx, &result)
+		c.connect(checkCtx, &result)
 	}
 	// A caller that gave up cut the check short; that is not a result.
 	if ctx.Err() == nil {
@@ -112,9 +113,7 @@ func (c *CloseCall) Check(
 
 // connect opens one TCP connection and records how it went.
 func (c *CloseCall) connect(ctx context.Context, result *CloseCallResult) {
-	dialCtx, cancel := context.WithTimeout(ctx, CloseCallTimeout)
-	defer cancel()
-	err := closeDialed(c.dial(dialCtx, "tcp", result.Endpoint))
+	err := closeDialed(c.dial(ctx, "tcp", result.Endpoint))
 	switch {
 	case err == nil:
 		result.Connected = true
@@ -157,8 +156,28 @@ func (c *CloseCall) remembered(endpoint string) (CloseCallResult, bool) {
 func (c *CloseCall) remember(endpoint string, result CloseCallResult) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if len(c.last) >= maxCloseCallMemory {
-		c.last = map[string]closeCallMemory{}
+	if _, kept := c.last[endpoint]; !kept &&
+		len(c.last) >= maxCloseCallMemory {
+		c.evict()
 	}
 	c.last[endpoint] = closeCallMemory{at: c.now(), result: result}
+}
+
+// evict makes room for one result: it drops the expired ones, and when
+// none expired, the oldest. Callers hold c.mu.
+func (c *CloseCall) evict() {
+	now := c.now()
+	oldest, oldestAt := "", time.Time{}
+	for k, m := range c.last {
+		if now.Sub(m.at) >= closeCallRemember {
+			delete(c.last, k)
+			continue
+		}
+		if oldest == "" || m.at.Before(oldestAt) {
+			oldest, oldestAt = k, m.at
+		}
+	}
+	if len(c.last) >= maxCloseCallMemory {
+		delete(c.last, oldest)
+	}
 }

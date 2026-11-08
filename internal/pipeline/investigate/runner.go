@@ -3,6 +3,7 @@ package investigate
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -75,8 +76,9 @@ func assemble(planned []check, outputs []*checkOutput, lead int) Result {
 		}
 		switch {
 		case i == lead:
-			out.Output, out.Evidence = got.summary.Output,
-				append(got.summary.Evidence, out.Evidence...)
+			out.Output = got.summary.Output
+			out.Evidence = slices.Concat(
+				got.summary.Evidence, out.Evidence)
 		case c.adds:
 			out.Evidence = append(out.Evidence, got.summary.Evidence...)
 		}
