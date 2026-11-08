@@ -80,19 +80,6 @@ func (h *sampleHarness) workload(name string, ready bool) {
 	h.put(inventory.CoreID(kube.KindContainer, "shop", name+"-0/app"), nil, nil)
 }
 
-func (h *sampleHarness) attr(name, attr string) (float64, bool) {
-	e, ok := h.model.Entity(inventory.CoreID(kube.KindDeployment, "shop", name))
-	if !ok {
-		return 0, false
-	}
-	v, ok := e.Attribute(attr)
-	if !ok {
-		return 0, false
-	}
-	n, _ := v.Value.AsNumber()
-	return n, true
-}
-
 func errorLines(n int) []string {
 	out := []string{"info ok"}
 	for i := range n {

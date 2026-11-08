@@ -43,25 +43,13 @@ func reachOf(model inventory.Reader, p incident.Incident) []incident.Reach {
 	seen := map[string]bool{}
 	for namespace := range namespaces {
 		for _, addr := range kube.PublicAddresses(model, namespace) {
-			service := inventory.CoreID(kube.KindService, namespace,
-				addr.Service)
-			host := cleanHost(addr.Host)
-			ready, total := endpointCounts(model, service)
-			// An Ingress in the impact leads to its Services; only the
-			// addresses whose Service has lost endpoints are told.
-			affected := services[service] ||
-				(sources[addr.Source] && ready < total)
-			if host == "" || !affected {
-				continue
-			}
-			path := cleanPath(addr.Path)
-			key := host + path + "\x00" + addr.Source.String()
-			if seen[key] {
+			r, ok := addressReach(model, addr, sources, services)
+			key := r.Address() + "\x00" + addr.Source.String()
+			if !ok || seen[key] {
 				continue
 			}
 			seen[key] = true
-			out = append(out, incident.Reach{Host: host, Path: path,
-				Source: addr.Source, Ready: ready, Total: total})
+			out = append(out, r)
 		}
 	}
 	slices.SortFunc(out, compareReach)
@@ -119,19 +107,41 @@ func endpointCounts(
 		if !ok {
 			continue
 		}
-		up, _ := numberAttr(slice, kube.AttrEndpointsReady)
-		all, _ := numberAttr(slice, kube.AttrEndpoints)
-		leaving, _ := numberAttr(slice, kube.AttrEndpointsTerminating)
+		up := numberAttr(slice, kube.AttrEndpointsReady)
+		all := numberAttr(slice, kube.AttrEndpoints)
+		leaving := numberAttr(slice, kube.AttrEndpointsTerminating)
 		ready += int(up)
 		total += int(all - leaving)
 	}
 	return ready, total
 }
 
-func numberAttr(e inventory.Entity, name string) (float64, bool) {
+func numberAttr(e inventory.Entity, name string) float64 {
 	attribute, ok := e.Attribute(name)
 	if !ok {
-		return 0, false
+		return 0
 	}
-	return attribute.Value.AsNumber()
+	n, _ := attribute.Value.AsNumber()
+	return n
+}
+
+// addressReach is the reach of one public address when it leads to an
+// affected object: its Ingress or route is in the incident, or the
+// Service it leads to is. An Ingress in the impact leads to its
+// Services; only the addresses whose Service lost endpoints are told.
+func addressReach(
+	model inventory.Reader, addr kube.PublicAddress,
+	sources, services map[inventory.EntityID]bool,
+) (incident.Reach, bool) {
+	service := inventory.CoreID(kube.KindService, addr.Source.Namespace,
+		addr.Service)
+	host := cleanHost(addr.Host)
+	ready, total := endpointCounts(model, service)
+	affected := services[service] ||
+		(sources[addr.Source] && ready < total)
+	if host == "" || !affected {
+		return incident.Reach{}, false
+	}
+	return incident.Reach{Host: host, Path: cleanPath(addr.Path),
+		Source: addr.Source, Ready: ready, Total: total}, true
 }

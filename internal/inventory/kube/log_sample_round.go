@@ -86,11 +86,7 @@ func (r *LogSampleRound) Round(ctx context.Context) {
 	reads, next := 0, 0
 	for i := range workloads {
 		idx := (r.start + i) % len(workloads)
-		w := workloads[idx]
-		if !r.due(w) {
-			continue
-		}
-		container, ok := r.sampleTarget(w)
+		container, ok := r.due(workloads[idx])
 		if !ok {
 			continue
 		}
@@ -99,20 +95,44 @@ func (r *LogSampleRound) Round(ctx context.Context) {
 			break
 		}
 		reads++
-		lines, err := r.cfg.Logs.SampleLines(ctx, container,
-			logSampleWindow)
-		if err != nil {
-			if r.refused(err) {
-				break
-			}
-			continue
+		observation, stop := r.sample(ctx, workloads[idx], container)
+		if observation != nil {
+			observations = append(observations, *observation)
 		}
-		observations = append(observations, r.record(w, lines))
+		if stop {
+			break
+		}
 	}
 	r.start = next
 	if len(observations) > 0 {
 		r.cfg.Submit(ctx, observations...)
 	}
+}
+
+// due returns the container to read for a workload that is due and has
+// a pod Running and Ready.
+func (r *LogSampleRound) due(
+	w inventory.EntityID,
+) (inventory.EntityID, bool) {
+	windows := r.history[w]
+	if len(windows) > 0 &&
+		r.cfg.Now().Before(windows[len(windows)-1].at.Add(logSampleWindow)) {
+		return inventory.EntityID{}, false
+	}
+	return r.sampleTarget(w)
+}
+
+// sample reads one container and describes the window. stop is set by
+// a refusal, which holds every read back.
+func (r *LogSampleRound) sample(
+	ctx context.Context, w, container inventory.EntityID,
+) (observation *inventory.Observation, stop bool) {
+	lines, err := r.cfg.Logs.SampleLines(ctx, container, logSampleWindow)
+	if err != nil {
+		return nil, r.refused(err)
+	}
+	o := r.record(w, lines)
+	return &o, false
 }
 
 // workloads lists the workloads sampled, sorted.
@@ -123,13 +143,6 @@ func (r *LogSampleRound) workloads() []inventory.EntityID {
 		out = append(out, r.cfg.Model.Entities(kind)...)
 	}
 	return out
-}
-
-// due reports a workload whose last window ended a window ago.
-func (r *LogSampleRound) due(w inventory.EntityID) bool {
-	windows := r.history[w]
-	return len(windows) == 0 ||
-		!r.cfg.Now().Before(windows[len(windows)-1].at.Add(logSampleWindow))
 }
 
 // sampleTarget picks the container to read: the first container of a

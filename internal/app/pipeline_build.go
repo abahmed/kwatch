@@ -311,20 +311,7 @@ func (p *pipelineBuild) newRunners(
 		p.syncReporter(engine, p.withSelfChecks(newPipelineSourceHealth(
 			deps, source, dynamicSource))),
 	}
-	if crashLogsEnabled(deps) {
-		logs := kube.LogReader{Client: deps.clients.Kubernetes}
-		p.crashLogs = kube.NewCrashLogRound(kube.CrashLogConfig{
-			Logs:    logs,
-			Current: logs,
-			Model:   p.model,
-			Now:     p.clock.Now,
-			Submit:  submit,
-		})
-		runners = append(runners, p.crashLogs.Run)
-	}
-	if logSamplingEnabled(deps) {
-		runners = append(runners, p.newLogSampler(submit).Run)
-	}
+	runners = append(runners, p.logRunners(submit)...)
 	// The kubelet stats and the control plane probes feed detectors
 	// that only Pro runs; Community does not read them.
 	if deps.has(feature.NodeUsage) {

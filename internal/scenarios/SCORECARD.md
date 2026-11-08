@@ -118,6 +118,33 @@ Two earlier misses were closed on 2026-10-05, without changing a target:
   tick that only a roll-up named are one message
   (`docs/incident-lifecycle/resolve.md`).
 
+The 2026-11 round (root cause and correlation) gained headroom
+without moving a target:
+
+- The slowest notify-tier first message was 5m0s against the 5m gate: a
+  workload short of ready replicas under an autoscaler at its ceiling
+  waited the full `DefaultUnavailable` (5m) for a cause the ceiling
+  already named. It now waits `CeilingUnavailable` (3m): the notify
+  maximum is 4m15s, the p95 3m15s.
+- The staging-day peak fell from 28/h to 26/h: two workloads that begin
+  failing within `CoOnsetWindow` (30s) on one healthy node are one
+  incident rooted at the node at once, where they were two incidents and
+  a "cause revised" update.
+- Messages per incident (p95 3, most 5) did not move. The five-message
+  incident exists on the staging day only (the labelled scenarios top
+  out at four) and none of this round's work adds a message to a
+  scenario.
+- Accuracy rose from 98.8% to 98.9% on 440 to 443 labelled root cases;
+  the new scenarios add no wrong root.
+- `TestMissingEvidenceNeverStatesAWrongRoot` (part of
+  `make alert-quality-gate`) replays every labelled scenario with logs
+  denied, without metrics and with Secrets and ConfigMaps hidden. The
+  first two add no wrong root. The third finds fifteen scenarios whose
+  hidden Secret or ConfigMap is the cause and where the engine states
+  the workload's own rollout or configuration instead of leaving the
+  cause unknown; they are listed in `toleratedWithoutEvidence`, each a
+  defect to fix, and the test fails when one stops being true.
+
 Freshness and memory are gated by tests rather than this replay:
 
 | Metric | Target | Now | Test |
