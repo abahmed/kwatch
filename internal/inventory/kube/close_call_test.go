@@ -3,6 +3,7 @@ package kube_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"sync/atomic"
 	"testing"
@@ -109,4 +110,47 @@ func TestCloseCallDoesNotRememberACheckTheCallerCutShort(t *testing.T) {
 	check.Check(ctx, "db.example.com:5432")
 	check.Check(context.Background(), "db.example.com:5432")
 	assert.EqualValues(t, 2, resolver.calls.Load())
+}
+
+func TestCloseCallSharesOneDeadlineAcrossLookupAndConnect(t *testing.T) {
+	var lookup, connect time.Time
+	resolver := &deadlineResolver{at: &lookup}
+	dial := func(ctx context.Context, _, _ string) (net.Conn, error) {
+		connect, _ = ctx.Deadline()
+		return nil, errors.New("connection refused")
+	}
+	check := kube.NewCloseCall(resolver, dial, time.Now)
+	check.Check(context.Background(), "db.example.com:5432")
+	assert.False(t, lookup.IsZero())
+	assert.Equal(t, lookup, connect)
+	assert.WithinDuration(t, time.Now().Add(kube.CloseCallTimeout),
+		connect, time.Second)
+}
+
+type deadlineResolver struct{ at *time.Time }
+
+func (r *deadlineResolver) LookupHost(
+	ctx context.Context, _ string,
+) ([]string, error) {
+	*r.at, _ = ctx.Deadline()
+	return []string{"203.0.113.9"}, nil
+}
+
+func TestCloseCallEvictsOnlyTheOldestWhenFull(t *testing.T) {
+	now := time.Unix(100, 0)
+	resolver := &closeResolver{addrs: []string{"203.0.113.9"}}
+	check := kube.NewCloseCall(resolver, dialing(nil),
+		func() time.Time { return now })
+	for i := 0; i < 64; i++ {
+		check.Check(context.Background(), fmt.Sprintf("h%d.example.com:1", i))
+		now = now.Add(time.Second)
+	}
+	check.Check(context.Background(), "new.example.com:1")
+	assert.EqualValues(t, 65, resolver.calls.Load())
+	// Everything but the oldest is still remembered.
+	check.Check(context.Background(), "h1.example.com:1")
+	check.Check(context.Background(), "h63.example.com:1")
+	assert.EqualValues(t, 65, resolver.calls.Load())
+	check.Check(context.Background(), "h0.example.com:1")
+	assert.EqualValues(t, 66, resolver.calls.Load())
 }
