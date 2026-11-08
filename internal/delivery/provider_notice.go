@@ -127,7 +127,7 @@ func (m *Manager) watchProviders(ctx context.Context) {
 			return
 		case <-ticker.C:
 			m.CheckNotices()
-		case <-m.healthEventsChannel():
+		case <-m.noticeEventsChannel():
 			m.CheckNotices()
 		}
 	}
