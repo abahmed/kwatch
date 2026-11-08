@@ -38,7 +38,7 @@ func closeCallFacts(
 	inv, ok := NewInvestigator(sources).Plan(p)
 	require.True(t, ok)
 	got := inv.Run(context.Background())
-	if _, _, ok := closeCallEndpoint(p); ok {
+	if _, ok := closeCallEndpoint(p); ok {
 		assert.Equal(t, 1, calls, "one check, no more")
 	} else {
 		assert.Zero(t, calls)

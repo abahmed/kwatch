@@ -7,7 +7,6 @@ import (
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
-	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 // The checks kwatch can run to settle a close call, each read-only and
@@ -26,25 +25,25 @@ func closeCallCheck() check {
 }
 
 // closeCallEndpoint returns the external endpoint among the two causes
-// of a close call, and the other cause.
+// of a close call.
 func closeCallEndpoint(
 	p incident.Incident,
-) (endpoint inventory.EntityID, other *rootcause.CauseRecord, ok bool) {
+) (endpoint inventory.EntityID, ok bool) {
 	cause := p.Cause
 	if cause == nil || cause.Rival == nil {
-		return endpoint, nil, false
+		return endpoint, false
 	}
 	switch {
 	case cause.Root.Kind == kube.KindExternalEndpoint:
-		return cause.Root, cause.Rival, true
+		return cause.Root, true
 	case cause.Rival.Root.Kind == kube.KindExternalEndpoint:
-		return cause.Rival.Root, cause, true
+		return cause.Rival.Root, true
 	}
-	return endpoint, nil, false
+	return endpoint, false
 }
 
 func closeCallApplies(p incident.Incident, _ inventory.Reader) bool {
-	_, _, ok := closeCallEndpoint(p)
+	_, ok := closeCallEndpoint(p)
 	return ok
 }
 
@@ -52,7 +51,7 @@ func closeCallApplies(p incident.Incident, _ inventory.Reader) bool {
 func readCloseCall(
 	ctx context.Context, s Sources, p incident.Incident,
 ) Result {
-	endpoint, _, ok := closeCallEndpoint(p)
+	endpoint, ok := closeCallEndpoint(p)
 	if !ok || s.CloseCall == nil {
 		return Result{}
 	}
