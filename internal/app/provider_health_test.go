@@ -63,11 +63,16 @@ func TestProviderHealthIsPublishedWithoutFailingReadiness(t *testing.T) {
 	}
 	require.NoError(t, deps.deliveryManager.Start(context.Background()))
 	deps.deliveryManager.Notify("startup")
-	select {
-	case <-deps.deliveryManager.ProviderHealthEvents():
-	case <-time.After(5 * time.Second):
-		t.Fatal("no provider health change")
-	}
+	// The provider notice loop reads the same event channel and may take
+	// the signal first, so wait for the health itself, not for the event.
+	require.Eventually(t, func() bool {
+		for _, h := range deps.deliveryManager.ProviderHealth() {
+			if h.Reason == "provider_rejected" {
+				return true
+			}
+		}
+		return false
+	}, 30*time.Second, 10*time.Millisecond, "no provider health change")
 	publishProviderHealth(deps, published)
 	status := deps.healthServer.ComponentStatuses()["provider-slack"]
 	require.Equal(t, "degraded", status.State)
