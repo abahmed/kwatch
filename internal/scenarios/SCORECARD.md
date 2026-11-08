@@ -139,11 +139,12 @@ without moving a target:
 - `TestMissingEvidenceNeverStatesAWrongRoot` (part of
   `make alert-quality-gate`) replays every labelled scenario with logs
   denied, without metrics and with Secrets and ConfigMaps hidden. The
-  first two add no wrong root. The third finds fifteen scenarios whose
-  hidden Secret or ConfigMap is the cause and where the engine states
-  the workload's own rollout or configuration instead of leaving the
-  cause unknown; they are listed in `toleratedWithoutEvidence`, each a
-  defect to fix, and the test fails when one stops being true.
+  all three add no wrong root. When a Secret or ConfigMap the failing
+  pods read is unreadable, a cause that blames no concrete fault (the
+  workload's rollout, its bare failure, a registry refusing a login) is
+  held below the confidence floor and the message says the cause is
+  unknown, naming what kwatch cannot see. `toleratedWithoutEvidence` is
+  empty and must stay empty.
 
 Freshness and memory are gated by tests rather than this replay:
 

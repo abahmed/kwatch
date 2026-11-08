@@ -136,34 +136,7 @@ func wrongWithout(
 
 // toleratedWithoutEvidence lists, per loss, the scenarios that state a
 // root the label does not name once evidence is missing, which they did
-// not with all of it. Each entry is a defect this gate found and this
-// round did not fix: the engine states a cause it could only have
-// seen with the evidence it lost. The test fails when an entry stops
-// being true, so the list only shrinks. A new scenario or change must
-// not add to it.
-var toleratedWithoutEvidence = map[string]map[string]string{
-	"restricted RBAC": {
-		"missing-secret":                     hiddenCause,
-		"borderline-init-after-rotation":     hiddenCause,
-		"registry-login-missing-secret":      hiddenCause,
-		"ambiguous-init-secret-edited":       hiddenCause,
-		"ambiguous-cron-secret-edited":       hiddenCause,
-		"ambiguous-image-and-config-config":  hiddenCause,
-		"coupled-config-rejected-value":      hiddenCause,
-		"cron-secret-edited-hours-before":    hiddenCause,
-		"coupled-silent-config-fault":        hiddenCause,
-		"coupled-silent-secret-fault-secret": hiddenCause,
-		"coupled-silent-config-fault-state":  hiddenCause,
-		"adv-bad-config-and-stuck-drain":     hiddenCause,
-		"adv-bad-config-clean-drain":         hiddenCause,
-		"adv-two-causes-stable":              hiddenCause,
-		"adv-two-causes-six-hours":           hiddenCause,
-	},
-}
-
-// hiddenCause is the defect behind every entry: the Secret or ConfigMap
-// that is the cause is a kind kwatch cannot see, and the engine states
-// the failing workload's rollout or own configuration instead of
-// leaving the cause unknown beside the "can't see secrets" note.
-const hiddenCause = "a hidden Secret or ConfigMap is the cause; the " +
-	"workload is stated instead"
+// not with all of it. It is empty and must stay empty: a new scenario or
+// change that needs an entry is a defect to fix, not to list. The test
+// also fails when an entry stops being true, so the list only shrinks.
+var toleratedWithoutEvidence = map[string]map[string]string{}
