@@ -37,6 +37,9 @@ type caseFacts struct {
 	// wake is the cluster wake-up the problem began in, set by the
 	// pipeline.
 	wake *incident.WakeContext
+	// causeState is what the pipeline found when it looked at the stated
+	// cause again as the incident resolved.
+	causeState incident.CauseState
 	// gathered are the checks whose read came back ok, and confirmed
 	// says why gathered evidence proves the cause (investigate confirms
 	// only an incident with a cause or a failing root); both empty in
@@ -61,7 +64,8 @@ func gatherFacts(d incident.Decision, now time.Time, fix *inventory.Change,
 		reason: d.Reason, output: d.Facts.Output,
 		evidence: d.Facts.Evidence, changes: d.Facts.Changes,
 		window: d.Facts.Window, wake: d.Facts.Wake,
-		gathered: incident.GatheredChecks(d.Facts.Report)}
+		causeState: d.Facts.Cause,
+		gathered:   incident.GatheredChecks(d.Facts.Report)}
 	if c := d.Facts.Correlation; c != nil {
 		f.confirmed = c.Confirmed
 	}
@@ -168,6 +172,7 @@ var noteWriters = []sentenceWriter{
 	wakeSentences,
 	errorSentences,
 	probeLogSentences,
+	logBurstSentences,
 	nodeWhySentences,
 	calledServiceSentences,
 	missingServiceSentences,

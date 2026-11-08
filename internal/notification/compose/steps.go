@@ -28,6 +28,9 @@ func nextSteps(
 				quote(root.Name) + namespaceFlag(root.Namespace),
 		}}
 	}
+	if own := logBurst(p, members); own != nil {
+		return logBurstSteps(*own)
+	}
 	if root := p.Root; dependencyLogCause(p.Cause) &&
 		incident.IsWorkload(root.Kind) {
 		return append(dependencySteps(p.Cause, root.Namespace,

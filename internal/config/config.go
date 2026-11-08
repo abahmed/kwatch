@@ -295,6 +295,10 @@ type InvestigationConfig struct {
 	// false no log is read at all and the dashboard shows the log
 	// section as turned off. Default true.
 	Logs bool `yaml:"logs"`
+	// SampleLogs samples a bounded slice of the log of Running and Ready
+	// pods to find a burst of errors Kubernetes cannot see. It reads
+	// nothing while Logs is false. Default true.
+	SampleLogs bool `yaml:"sampleLogs"`
 }
 
 // WatchConfig turns optional watched resources on or off.

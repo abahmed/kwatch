@@ -559,6 +559,7 @@ listener, never on the health port. Everything about reaching it from outside
 | `dashboard.trustedProxies` | `[]` | CIDRs or addresses of the proxies that end TLS in front of kwatch. `X-Forwarded-For` and `X-Forwarded-Proto` count only from them; any entry (or own TLS) makes the dashboard https only |
 | `dashboard.tlsCertFile`, `dashboard.tlsKeyFile` | empty | Make kwatch serve TLS on the dashboard port itself. Set both or neither |
 | `investigation.logs` | `true` | Reads container logs as evidence (redacted, bounded). `false` reads no log at all, and the dashboard shows the log section as turned off |
+| `investigation.sampleLogs` | `true` | Samples a bounded slice of the log (the last 2 minutes, one pod per workload, at most 6 reads per 30 seconds) of Running and Ready pods and reports a burst of errors new against the workload's own earlier windows (`LogErrorBurst`: at least 20 error lines in the window, at least 5 times the earlier rate per window, with at least 10 minutes of earlier windows). Reads nothing when `investigation.logs` is `false`. A refused log read pauses it quietly for 5 minutes |
 
 The bearer token and the sign-in password are not in the file. The chart
 ships the Secret `<release>-dashboard` empty and kwatch fills both values

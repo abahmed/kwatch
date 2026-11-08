@@ -99,6 +99,7 @@ func (w Writer) write(
 		fill(&msg, mark, w.shape(
 			respell(arrange(sentences), d.Facts.KindNames), proLine{}))
 		boldNames(msg.Doc, incidentNames(p, w.Cluster))
+		msg.Steps = stillSteps(f)
 		msg.Opening = w.opening(d, now)
 		if p.CanReopen() {
 			msg.ReopenWithin = incident.RepageWindow

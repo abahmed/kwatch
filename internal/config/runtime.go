@@ -39,6 +39,9 @@ type ApplicationRuntime struct {
 	// InvestigationLogs is false when evidence must not read logs
 	// (investigation.logs).
 	InvestigationLogs bool
+	// InvestigationSampleLogs is false when running pods' logs must not
+	// be sampled for error bursts (investigation.sampleLogs).
+	InvestigationSampleLogs bool
 }
 
 // These private views keep the snapshot navigable without exposing mutable
@@ -109,6 +112,7 @@ func CompileRuntimeConfig(c *Config) RuntimeConfig {
 			KubeletInsecureSkipVerify: c.Kubelet.InsecureSkipVerify,
 			WatchSecrets:              c.Watch.Secrets,
 			InvestigationLogs:         c.Investigation.Logs,
+			InvestigationSampleLogs:   c.Investigation.SampleLogs,
 		},
 		lifecycle: runtimeLifecycle{
 			telemetry:   c.Telemetry,

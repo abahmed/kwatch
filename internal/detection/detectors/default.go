@@ -69,6 +69,7 @@ func Entries() []Entry {
 		{Feature: feature.ControlPlane, Detector: APIServerLoad{}},
 		{Feature: feature.AdmissionDetection, Detector: WebhookCalls{}},
 		{Feature: feature.ChangeCorrelation, Detector: ReleaseWatch{}},
+		{Feature: feature.Investigation, Detector: LogErrors{}},
 	}
 }
 

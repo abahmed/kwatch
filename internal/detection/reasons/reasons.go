@@ -197,6 +197,10 @@ const (
 	// ImageDigestDrift is a workload whose pods run different builds of
 	// the same image tag.
 	ImageDigestDrift = "ImageDigestDrift"
+	// LogErrorBurst is a workload whose pods are Running and Ready while
+	// their log reports a burst of errors new against the workload's own
+	// recent baseline.
+	LogErrorBurst = "LogErrorBurst"
 	// ReleaseRegression is a Deployment whose new revision restarts far
 	// more often than the revision it replaced did.
 	ReleaseRegression = "ReleaseRegression"

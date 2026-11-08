@@ -44,6 +44,9 @@ type Facts struct {
 	// the entities' kind.name attribute so a message names a custom
 	// resource the way its CRD does.
 	KindNames map[inventory.Kind]string
+	// Cause is what looking at the stated cause again found when the
+	// incident resolved; set on a resolve only.
+	Cause CauseState
 	// Wake is the cluster wake-up the problem began in or right after,
 	// set on an announcement; nil when there was none.
 	Wake *WakeContext

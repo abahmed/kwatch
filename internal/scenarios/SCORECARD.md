@@ -540,22 +540,22 @@ here verbatim and checked by `TestScorecardGates`.
 
 | Metric | Target | Current | Result |
 | --- | --- | --- | --- |
-| Correct root cause (labelled) | >= 90% | 98.8% | pass |
+| Correct root cause (labelled) | >= 90% | 98.9% | pass |
 | Correct root cause (held-out) | >= 80% | 100% | pass |
-| Wrong high-confidence root | <= 5% (at least 20 cases) | 0% (0 of 228 high-confidence cases, labelled and held-out) | pass |
+| Wrong high-confidence root | <= 5% (at least 20 cases) | 0% (0 of 230 high-confidence cases, labelled and held-out) | pass |
 | Wrong root stated at likely confidence or higher (labelled) | <= 0 | 0 | pass |
 | Scenarios whose first message stated a wrong root | <= 0 | 0 | pass |
-| Calibration: high confidence | 80-100% (at least 10 cases) | 100.0% (215 of 215 right) | pass |
+| Calibration: high confidence | 80-100% (at least 10 cases) | 100.0% (217 of 217 right) | pass |
 | Calibration: likely confidence | 50-90% (at least 10 cases) | 89.8% (44 of 49 right) | pass |
 | Messages per incident (p95) | <= 3 | 3 | pass |
 | Messages per incident (most) | <= 5 | 5 | pass |
 | Time to first message (page tier) | max <= 2m0s | p95 1m45s, max 1m45s (47 scenarios) | pass |
-| Time to first message (notify tier) | max <= 5m0s | p95 3m15s, max 4m15s (300 scenarios) | pass |
+| Time to first message (notify tier) | max <= 5m0s | p95 3m15s, max 4m15s (303 scenarios) | pass |
 | Time to first message (boot-held) | max <= 15m0s | p95 12m15s, max 12m15s (4 scenarios) | pass |
 | Notifications from non-events (staging day) | <= 0 | 0 | pass |
 | Notifications per hour (staging day peak) | <= 30/h | 28/h | pass |
 | Unchanged updates | <= 0% | 0% | pass |
-| Re-created incidents | <= 5% | 1.3% | pass |
+| Re-created incidents | <= 5% | 1.5% | pass |
 | Repeated recoveries | <= 0 | 0 | pass |
 | Storm messages in 2 minutes (shared node) | <= 3 | 1 | pass |
 | Storm messages in 2 minutes (shared registry) | <= 3 | 1 | pass |
@@ -569,15 +569,15 @@ here verbatim and checked by `TestScorecardGates`.
 | Recoveries said while members still fail | <= 0 | 0 | pass |
 | Scenarios that passed and no longer do (ratchet) | <= 0 | 0 | pass |
 
-28 of 28 gates pass. 432 labelled root cases in 442 scenarios; first-incident tier matches in 442 of 442 scenarios.
-Staging day: 944 notifications in 66h36m0s (14.2/h mean, peak hour 28); 0 from non-events, 0 of them notify or page.
+28 of 28 gates pass. 435 labelled root cases in 448 scenarios; first-incident tier matches in 448 of 448 scenarios.
+Staging day: 947 notifications in 67h30m0s (14.0/h mean, peak hour 28); 0 from non-events, 0 of them notify or page.
 Storm shared node: 1000 pods, 2 messages in total, 1 in the loudest 2 minutes.
 Storm shared registry: 1000 pods, 1 messages in total, 1 in the loudest 2 minutes.
 Storm multi-cause: 1000 pods from 10 causes, 10 of them reported, 10 messages in total, 8 in the loudest 2 minutes.
 Slowest first messages: boot-endpoints-still-down notify 12m15s, node-join-never-ready page 10m15s, own-volume-wait-too-long notify 10m0s, node-replace-sandbox-stuck notify 7m15s, init-waits-on-healthy-service notify 4m15s.
 Calibration: the labelled cases put high confidence at 0.55 (committed 0.70).
-Right roots: 265 with a stated cause, 158 by falling back to the failing entity with no stated cause, 4 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 10 scenarios, 7 of them labelled as legitimate revisions.
-Time to first correct root: p95 4m15s, max 12m15s over 378 scenarios; slowest: boot-endpoints-still-down 12m15s, one-hpa-bad-target 11m15s, metrics-blip-long 11m15s, node-join-never-ready 10m15s, own-volume-wait-too-long 10m0s. Never stated: crash-loop-for-hours, coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
+Right roots: 267 with a stated cause, 159 by falling back to the failing entity with no stated cause, 4 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 10 scenarios, 7 of them labelled as legitimate revisions.
+Time to first correct root: p95 4m15s, max 12m15s over 381 scenarios; slowest: boot-endpoints-still-down 12m15s, one-hpa-bad-target 11m15s, metrics-blip-long 11m15s, node-join-never-ready 10m15s, own-volume-wait-too-long 10m0s. Never stated: crash-loop-for-hours, coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
 
 ## Scenarios
 
@@ -728,6 +728,12 @@ Time to first correct root: p95 4m15s, max 12m15s over 378 scenarios; slowest: b
 | dependency-answers | `deployment/orders/api` | `deployment/orders/api (no cause)` | none | notify/notify | 1 (2) | pass |
 | dependency-host-from-configmap | `external-endpoint//db.example.com:5432` | `external-endpoint//db.example.com:5432` | high 0.85 | notify/notify | 1 (2) | pass |
 | dependency-host-in-credential-key | `deployment/orders/api` | `deployment/orders/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| healthy-pods-error-burst | `deployment/shop/orders` | `deployment/shop/orders (no cause)` | none | notify/notify | 2 (2) | pass |
+| healthy-pods-steady-errors | quiet | - | - | -/- | 0 (0) | pass |
+| healthy-pods-small-burst | quiet | - | - | -/- | 0 (0) | pass |
+| healthy-pods-burst-without-baseline | quiet | - | - | -/- | 0 (0) | pass |
+| resolve-cause-recovered | `external-endpoint//db.example.com:5432` | `external-endpoint//db.example.com:5432` | high 0.85 | notify/notify | 2 (2) | pass |
+| resolve-cause-still-present | `external-endpoint//db.example.com:5432` | `external-endpoint//db.example.com:5432` | high 0.85 | notify/notify | 1 (1) | pass |
 | pool-boot-quiet | quiet | - | - | -/- | 0 (0) | pass |
 | pool-boot-broken | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
 | boot-endpoints-quiet | quiet | - | - | -/- | 0 (0) | pass |

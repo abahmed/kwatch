@@ -787,6 +787,11 @@
               "type": "boolean",
               "default": true,
               "description": "Read container logs for evidence; false reads none"
+            },
+            "sampleLogs": {
+              "type": "boolean",
+              "default": true,
+              "description": "Sample the logs of Running and Ready pods for a burst of errors; false reads none"
             }
           }
         }

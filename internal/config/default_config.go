@@ -31,6 +31,7 @@ func DefaultConfig() *Config {
 		},
 		AuditLog:      AuditLogConfig{Enabled: true, Output: "stdout"},
 		Watch:         WatchConfig{Secrets: true},
-		Investigation: InvestigationConfig{Logs: true},
+		Investigation: InvestigationConfig{
+			Logs: true, SampleLogs: true},
 	}
 }

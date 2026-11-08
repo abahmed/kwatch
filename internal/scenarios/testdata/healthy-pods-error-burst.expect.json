@@ -1,0 +1,10 @@
+{
+  "name": "healthy-pods-error-burst",
+  "description": "All replicas are Running and Ready while the log reports hundreds of errors, new against the workload's own earlier windows.",
+  "root": "deployment/shop/orders",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

@@ -82,6 +82,7 @@ const (
 	ModeDisruptionBudget       Mode = "DisruptionBudget"
 	ModeImageDrift             Mode = "ImageDrift"
 	ModeReleaseRegression      Mode = "ReleaseRegression"
+	ModeErrorBurst             Mode = "ErrorBurst"
 	ModeLeaseStale             Mode = "LeaseStale"
 	ModeDeprecatedAPI          Mode = "DeprecatedAPI"
 	ModeAPIServerErrors        Mode = "APIServer.Errors"

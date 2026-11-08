@@ -1,0 +1,6 @@
+{
+  "name": "healthy-pods-steady-errors",
+  "description": "A service that always logs hundreds of errors per window is not news when it still does.",
+  "maxMessages": 0,
+  "quiet": true
+}

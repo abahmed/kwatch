@@ -1,0 +1,11 @@
+{
+  "name": "resolve-cause-recovered",
+  "description": "The database answers again and the replicas recover; the resolve says it accepts connections.",
+  "root": "external-endpoint//db.example.com:5432",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/orders/api",
+    "node//n1"
+  ]
+}

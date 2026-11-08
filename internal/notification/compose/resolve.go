@@ -26,14 +26,17 @@ func resolveNote(f caseFacts) (string, []sentence) {
 		return notification.MarkerResolved, stoppedTracking(f, subject, rest)
 	}
 	lead := sentence{part: partLead, text: capitalName(subject,
-		f.leadName(subject)+" "+resolution(f, subject)+".")}
+		f.leadName(subject)+" "+resolution(f, subject)+
+			stillClause(f, subject)+".")}
 	lasted := "it was " + downWord(p) + " for " +
 		humanDuration(failedSpan(p)) + resolvedCause(f, subject)
 	detail := sentenceCase(lasted)
 	if fix := resolveFixer(f, subject); fix != "" {
 		detail = fix + "; " + lasted + "."
 	}
-	out := []sentence{lead, {part: partProof, text: detail}}
+	out := []sentence{lead}
+	out = append(out, causeStateSentences(f, subject)...)
+	out = append(out, sentence{part: partProof, text: detail})
 	if affected := affectedSentence(p); affected != "" {
 		out = append(out, sentence{part: partConsequence, text: affected})
 	}
@@ -156,7 +159,9 @@ func fixPhrase(f caseFacts) string {
 // blamed for itself names none.
 func resolvedCause(f caseFacts, subject inventory.EntityID) string {
 	cause := f.p.Cause
-	if cause == nil || cause.Rule == "self" || cause.Root == subject {
+	if cause == nil || cause.Rule == "self" || cause.Root == subject ||
+		checkedCause(f, subject) {
+		// A checked cause was said above, as it is now.
 		return ""
 	}
 	return " because " + pastTense(causePhrase(cause, subject))

@@ -46,6 +46,7 @@ var workloadReasons = []ReasonInfo{
 	reason(reasons.PdbViolation, ModeDisruptionBudget),
 	reason(reasons.ImageDigestDrift, ModeImageDrift),
 	reason(reasons.ReleaseRegression, ModeReleaseRegression),
+	reason(reasons.LogErrorBurst, ModeErrorBurst),
 	reason(reasons.LeaseStale, ModeLeaseStale),
 	reason(reasons.DeprecatedAPIInUse, ModeDeprecatedAPI),
 	reason(reasons.APIServerErrors, ModeAPIServerErrors),

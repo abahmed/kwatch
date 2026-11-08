@@ -1,0 +1,6 @@
+{
+  "name": "healthy-pods-burst-without-baseline",
+  "description": "A burst in the first windows kwatch sees has no earlier windows to be new against.",
+  "maxMessages": 0,
+  "quiet": true
+}
