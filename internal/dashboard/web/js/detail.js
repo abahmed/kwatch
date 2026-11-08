@@ -299,6 +299,7 @@
     var used = what(root, inc);
     why(root, inc);
     proof(root, inc, used);
+    if (KW.roundBlock) KW.roundBlock(root, inc);
     next(root, inc);
     KW.toldSummary(row(root, "told", true), inc, root);
     KW.summaryNotes(root, inc);

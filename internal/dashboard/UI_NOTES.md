@@ -1394,3 +1394,35 @@ filter chips use `--radius-chip`. Inputs and pickers have one border,
 grows its underline from 1px to 2px with no color change. Information is
 visible text, never only a tooltip. A tab title reads "Active issues -
 kwatch".
+
+## What kwatch found (`round.js`)
+
+A block under the summary rows of the issue page, drawn from the
+`round` part of the detail response and hidden when it is absent.
+Everything in it is visible text. Each term (ConfigMap, up but failing,
+cause still present, same upstream, Ingress, chain of events, kwatch
+checked, failing pods read it) has its meaning in its tooltip, which
+opens on focus as well as hover, and in a folded "What does this mean?"
+that stays closed until opened and keeps its state in localStorage
+(`kwatch.issueHelp`). No colour carries a meaning; the block uses the
+existing tokens only.
+
+- Where it was read: `<host:port> (from ConfigMap <name>, <KEY>)`, with
+  `+N more keys` when the same address is in several keys.
+- Up but failing: what Kubernetes reports (Running, Ready n/m) and the
+  most frequent error line with its count, against the count before.
+- Started together: workloads that began failing seconds apart, under
+  the shared upstream; the Other issues list shows `same upstream` and
+  `started N s apart`.
+- Overlap: `N of M failing pods read it` (use, mount), only for a
+  majority of at least two pods.
+- Check: the read-only check kwatch ran to tell two close causes apart,
+  and the two candidates.
+- Cause now: for a resolved issue, `Still present` or `Recovered`,
+  from a look at the cause when the page is opened.
+- Chain of events: an ordered list, one step per row, in the order each
+  step was first seen failing; a step without a time says `time
+  unknown`. Three steps or more.
+- Traffic impact rows list `Users reach it at`: up to 8 host/path rows,
+  the ones without ready endpoints first, with ready and total
+  endpoints.

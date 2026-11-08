@@ -23,6 +23,9 @@ type SameTimeItem struct {
 	Namespace string    `json:"namespace,omitempty"`
 	StartedAt time.Time `json:"startedAt"`
 	Relation  string    `json:"relation"`
+	// GapSeconds is how many seconds apart the two started, when that
+	// is under a minute: "started 4 s apart".
+	GapSeconds int `json:"gapSeconds,omitempty"`
 }
 
 // UsageHistory is one container's hourly peaks of one resource over

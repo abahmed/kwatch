@@ -26,6 +26,9 @@ type TrafficRow struct {
 	Ready     int      `json:"ready"`
 	Total     int      `json:"total"`
 	Backends  []string `json:"backends,omitempty"`
+	// Reach is where users reach it: up to maxTraffic host/path rows,
+	// the ones without ready endpoints first (detail_reach.go).
+	Reach []ReachRow `json:"reach,omitempty"`
 }
 
 // NodeRow is one node the incident involves: the root node, or a node

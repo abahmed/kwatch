@@ -28,23 +28,6 @@ const maxTimelineLength = 600
 // again and left out of a message that is already long.
 const factTimeline factKey = "timeline"
 
-// eventWords are the observed events of a finding's mode, in the words
-// of the timeline line: what was seen, never why.
-var eventWords = map[detection.Mode]string{
-	detection.ModeCrashLoop:      "crash",
-	detection.ModeRestarting:     "crash",
-	detection.ModeOOMKilled:      "out of memory",
-	detection.ModeEvicted:        "evicted",
-	detection.ModeDiskPressure:   "disk pressure",
-	detection.ModeMemoryPressure: "memory pressure",
-	detection.ModePIDPressure:    "pid pressure",
-	detection.ModeNotReady:       "not ready",
-	detection.ModeUnavailable:    "unavailable",
-	detection.ModeNoEndpoints:    "no ready endpoints",
-	detection.ModeImagePull:      "image pull failing",
-	detection.ModeUnschedulable:  "unschedulable",
-}
-
 // timelineStep is one line of the chain: the workloads or objects that
 // began failing in one minute with one observed event.
 type timelineStep struct {
@@ -154,7 +137,7 @@ func hopEvent(f caseFacts, hop inventory.EntityID) string {
 		if !belongsTo(m.Entity, hop) {
 			continue
 		}
-		if _, known := eventWords[findingMode(m)]; !known {
+		if _, known := detection.EventWord(findingMode(m)); !known {
 			continue
 		}
 		if best == nil || m.Severity > best.Severity {
@@ -164,7 +147,8 @@ func hopEvent(f caseFacts, hop inventory.EntityID) string {
 	if best == nil {
 		return "failing"
 	}
-	return eventWords[findingMode(*best)]
+	word, _ := detection.EventWord(findingMode(*best))
+	return word
 }
 
 // belongsTo reports a finding about the hop, or about a pod or container

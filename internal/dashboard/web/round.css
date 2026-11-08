@@ -1,0 +1,18 @@
+/* "What kwatch found" on the issue page: plain text lines, a numbered
+   chain, a folded help. No colour carries meaning here; the existing
+   tokens only. */
+.rd { margin: 14px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); }
+.rd-h { margin: 0 0 6px; font-size: var(--t-micro); font-weight: 600; color: var(--text-muted); }
+.rd-line { margin: 4px 0; overflow-wrap: anywhere; }
+.rd-k { font-weight: 600; }
+.rd-term { text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; }
+.rd-term:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.rd-chain { margin: 4px 0 0; padding-left: 1.4em; }
+.rd-chain li { margin: 2px 0; overflow-wrap: anywhere; }
+.rd-at { font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.rd-help { margin: 8px 0 0; }
+.rd-help summary { cursor: pointer; font-weight: 600; }
+.rd-help dt { margin-top: 6px; font-weight: 600; }
+.rd-help dd { margin: 0; color: var(--text-muted); }
+.rd-reach { margin: 2px 0 0; padding-left: 1.2em; }
+@media (max-width: 640px) { .rd-chain { padding-left: 1.2em; } }
