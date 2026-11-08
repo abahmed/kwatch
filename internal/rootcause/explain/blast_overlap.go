@@ -99,14 +99,24 @@ func (v *view) failingPodsOf(
 	return pods
 }
 
-// podsBehind lists the pods a workload effect owns.
+// podsBehind lists the pods a workload effect owns, directly or through
+// its ReplicaSets or Jobs.
 func (v *view) podsBehind(effect inventory.EntityID) []inventory.EntityID {
 	var pods []inventory.EntityID
-	for _, id := range v.s.Model.Related(effect, inventory.OwnedBy,
-		inventory.Incoming) {
-		if id.Kind == kube.KindPod {
-			pods = append(pods, id)
+	level := []inventory.EntityID{effect}
+	for depth := 0; depth < 2 && len(level) > 0; depth++ {
+		var next []inventory.EntityID
+		for _, owner := range level {
+			for _, id := range v.s.Model.Related(owner, inventory.OwnedBy,
+				inventory.Incoming) {
+				if id.Kind == kube.KindPod {
+					pods = append(pods, id)
+				} else {
+					next = append(next, id)
+				}
+			}
 		}
+		level = next
 	}
 	return pods
 }
