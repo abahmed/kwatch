@@ -183,3 +183,26 @@ func TestLogSampleRoundRunStopsWhenCancelled(t *testing.T) {
 		t.Fatal("Run did not stop")
 	}
 }
+
+func TestLogSampleObservationOfNoWindowsIsEmpty(t *testing.T) {
+	id := inventory.CoreID(kube.KindDeployment, "shop", "orders")
+	o := kube.LogSampleObservation(id, time.Unix(1, 0), nil)
+	assert.Empty(t, o.Attributes)
+}
+
+func TestLogSampleKeepsACappedWindowsCountUnknown(t *testing.T) {
+	id := inventory.CoreID(kube.KindDeployment, "shop", "orders")
+	var busy []string
+	for i := range 30 {
+		busy = append(busy, fmt.Sprintf("error: kind%c failed", 'a'+i))
+	}
+	now := []string{"error: kindz failed", "error: kindz failed"}
+	o := kube.LogSampleObservation(id, time.Unix(1, 0),
+		[][]string{busy, now})
+	_, known := o.Attributes[kube.AttrLogTopBaseline]
+	assert.False(t, known, "its earlier count is unknown, not zero")
+	quiet := kube.LogSampleObservation(id, time.Unix(1, 0),
+		[][]string{{"error: x failed"}, now})
+	_, known = quiet.Attributes[kube.AttrLogTopBaseline]
+	assert.True(t, known)
+}

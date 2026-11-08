@@ -66,6 +66,9 @@ type windowCount struct {
 	lines map[string]int
 	// shown is the line as first seen, per folded form.
 	shown map[string]string
+	// capped is set when the window met more distinct lines than it
+	// tracks: a line it does not list may still have come up in it.
+	capped bool
 }
 
 // countErrors counts the error lines of a window and groups repeats.
@@ -80,6 +83,7 @@ func countErrors(lines []string, at time.Time) windowCount {
 		key := foldLine(line)
 		if _, tracked := w.lines[key]; !tracked &&
 			len(w.lines) >= maxTrackedLines {
+			w.capped = true
 			continue
 		}
 		w.lines[key]++
@@ -126,9 +130,15 @@ func sampleObservation(
 ) inventory.Observation {
 	baseline, topBaseline := 0, 0
 	key, count := last.top()
+	unknown := false
 	for _, w := range earlier {
 		baseline += w.errors
 		topBaseline += w.lines[key]
+		// A line a capped window does not list may have come up in it:
+		// its earlier count is unknown, not zero.
+		if _, listed := w.lines[key]; !listed && w.capped {
+			unknown = true
+		}
 	}
 	attrs := map[string]inventory.Value{
 		AttrLogErrors:   inventory.Number(float64(last.errors)),
@@ -140,7 +150,10 @@ func sampleObservation(
 	if count > 0 {
 		attrs[AttrLogTopLine] = inventory.Text(last.shown[key])
 		attrs[AttrLogTopCount] = inventory.Number(float64(count))
-		attrs[AttrLogTopBaseline] = inventory.Number(float64(topBaseline))
+		if !unknown {
+			attrs[AttrLogTopBaseline] = inventory.Number(
+				float64(topBaseline))
+		}
 	}
 	return inventory.Observation{
 		Kind: inventory.Observed, Source: logSampleSource, At: now,
@@ -179,6 +192,10 @@ func (r LogReader) SampleLines(
 func LogSampleObservation(
 	workload inventory.EntityID, at time.Time, windows [][]string,
 ) inventory.Observation {
+	if len(windows) == 0 {
+		return inventory.Observation{Kind: inventory.Observed,
+			Source: logSampleSource, At: at, Entity: workload}
+	}
 	counted := make([]windowCount, len(windows))
 	for i, lines := range windows {
 		counted[i] = countErrors(lines, at)

@@ -13,11 +13,12 @@ import (
 // other, one read-only check can tell them apart: does the endpoint's
 // name resolve, and does it accept a connection. The check is the
 // ones kwatch already runs on an endpoint, once, on demand: one DNS
-// lookup and one TCP connect, each bounded by closeCallTimeout, to an
+// lookup and one TCP connect, each bounded by CloseCallTimeout, to an
 // address that is not private (privateAddress). It changes nothing and
 // sends no payload.
 const (
-	closeCallTimeout = 5 * time.Second
+	// CloseCallTimeout bounds each of the two operations of a check.
+	CloseCallTimeout = 5 * time.Second
 	// closeCallRemember is how long a result stands, so that incidents
 	// investigated again do not dial the endpoint again.
 	closeCallRemember = 2 * time.Minute
@@ -35,7 +36,7 @@ type CloseCallResult struct {
 	// Connected is true when a TCP connection opened.
 	Connected bool
 	// TimedOut is true when the lookup or the connect got no answer in
-	// closeCallTimeout: the check is then inconclusive.
+	// CloseCallTimeout: the check is then inconclusive.
 	TimedOut bool
 	// Blocked is true when the name resolved to an address kwatch
 	// refuses to dial.
@@ -89,7 +90,7 @@ func (c *CloseCall) Check(
 		return CloseCallResult{Endpoint: endpoint, Error: "not a host:port"}
 	}
 	result := CloseCallResult{Endpoint: endpoint, Host: host}
-	lookupCtx, cancel := context.WithTimeout(ctx, closeCallTimeout)
+	lookupCtx, cancel := context.WithTimeout(ctx, CloseCallTimeout)
 	defer cancel()
 	addrs, err := c.resolver.LookupHost(lookupCtx, host)
 	switch {
@@ -102,13 +103,16 @@ func (c *CloseCall) Check(
 		result.Resolved = true
 		c.connect(ctx, &result)
 	}
-	c.remember(endpoint, result)
+	// A caller that gave up cut the check short; that is not a result.
+	if ctx.Err() == nil {
+		c.remember(endpoint, result)
+	}
 	return result
 }
 
 // connect opens one TCP connection and records how it went.
 func (c *CloseCall) connect(ctx context.Context, result *CloseCallResult) {
-	dialCtx, cancel := context.WithTimeout(ctx, closeCallTimeout)
+	dialCtx, cancel := context.WithTimeout(ctx, CloseCallTimeout)
 	defer cancel()
 	err := closeDialed(c.dial(dialCtx, "tcp", result.Endpoint))
 	switch {

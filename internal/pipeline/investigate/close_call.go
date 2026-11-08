@@ -2,7 +2,7 @@ package investigate
 
 import (
 	"context"
-	"strings"
+	"strconv"
 
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -52,11 +52,11 @@ func closeCallApplies(p incident.Incident, _ inventory.Reader) bool {
 func readCloseCall(
 	ctx context.Context, s Sources, p incident.Incident,
 ) Result {
-	endpoint, other, ok := closeCallEndpoint(p)
+	endpoint, _, ok := closeCallEndpoint(p)
 	if !ok || s.CloseCall == nil {
 		return Result{}
 	}
-	text := closeCallWords(s.CloseCall(ctx, endpoint.Name), other)
+	text := closeCallWords(s.CloseCall(ctx, endpoint.Name))
 	if text == "" {
 		return Result{}
 	}
@@ -67,28 +67,23 @@ func readCloseCall(
 // closeCallWords says what the check found and, when it is a verdict,
 // what it rules out. An inconclusive check states the fact and no
 // verdict.
-func closeCallWords(
-	r kube.CloseCallResult, rejected *rootcause.CauseRecord,
-) string {
+func closeCallWords(r kube.CloseCallResult) string {
 	switch {
 	case r.Blocked || r.Host == "":
 		return ""
 	case r.TimedOut:
-		return "kwatch checked " + r.Endpoint + ": no answer in 5 seconds."
+		return "kwatch checked " + r.Endpoint + ": no answer in " +
+			strconv.Itoa(int(kube.CloseCallTimeout.Seconds())) +
+			" seconds."
 	case !r.Resolved:
 		return "kwatch checked: " + r.Host + " does not resolve."
 	case r.Connected:
-		return "kwatch checked: " + r.Host + " resolves and accepts a " +
-			"connection from kwatch."
-	case isDNS(rejected):
-		return "kwatch checked: DNS resolves " + r.Host + " fine, so " +
-			"DNS is not the cause."
+		return "kwatch checked: " + r.Host + " resolves from kwatch and " +
+			"accepts a connection from kwatch."
+	case r.Refused:
+		return "kwatch checked: " + r.Host + " resolves from kwatch but " +
+			"refuses connections."
 	}
-	return "kwatch checked: " + r.Host + " resolves but refuses " +
-		"connections."
-}
-
-// isDNS reports the cluster DNS as the cause a check rules out.
-func isDNS(c *rootcause.CauseRecord) bool {
-	return c != nil && strings.Contains(string(c.Root.Kind), "dns")
+	return "kwatch checked: " + r.Host + " resolves from kwatch but a " +
+		"connection from kwatch failed: " + r.Error + "."
 }

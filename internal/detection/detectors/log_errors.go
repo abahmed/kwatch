@@ -93,13 +93,16 @@ func burstEvidence(
 	}
 	if line := text(e, kube.AttrLogTopLine); line != "" {
 		count, _ := number(e, kube.AttrLogTopCount)
-		before, _ := number(e, kube.AttrLogTopBaseline)
 		out = append(out,
 			detection.Evidence{Label: detection.EvidenceLogLine, Value: line},
 			detection.Evidence{Label: detection.EvidenceLogLineCount,
-				Value: itoa(count)},
-			detection.Evidence{Label: detection.EvidenceLogLineBefore,
-				Value: itoa(before)})
+				Value: itoa(count)})
+		// Absent when an earlier window met more distinct lines than it
+		// tracks: how often the line came up before is then unknown.
+		if before, known := number(e, kube.AttrLogTopBaseline); known {
+			out = append(out, detection.Evidence{
+				Label: detection.EvidenceLogLineBefore, Value: itoa(before)})
+		}
 	}
 	return out
 }

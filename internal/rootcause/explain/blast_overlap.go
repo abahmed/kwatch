@@ -19,11 +19,11 @@ func scoreBlastOverlap(v *view, c *candidate) outcome {
 	if len(pods) == 0 || !v.hasChangedRival(c.id) {
 		return outcome{}
 	}
-	total := v.failingPodsIn(c.id.Namespace)
+	total := v.failingPodsAmong(namespacesOf(pods))
 	if total < BlastOverlapMinPods {
 		return outcome{}
 	}
-	share := float64(len(pods)) / float64(total)
+	share := min(float64(len(pods))/float64(total), 1)
 	out := outcome{code: rootcause.ProofBlastOverlap,
 		count: len(pods), total: total,
 		text: fmt.Sprintf("%d of %d failing pods are downstream of it",
@@ -48,7 +48,8 @@ func (v *view) noteBlast(cs *candidateSet) {
 		if c.isSelf() || !v.changedInWindow(id) {
 			continue
 		}
-		if pods := v.failingPodsOf(c.others()); len(pods) > 0 {
+		pods := v.failingOnly(v.failingPodsOf(c.others()))
+		if len(pods) > 0 {
 			v.blast[id] = pods
 		}
 	}
@@ -110,23 +111,59 @@ func (v *view) podsBehind(effect inventory.EntityID) []inventory.EntityID {
 	return pods
 }
 
-// failingPodsIn counts the distinct pods of a namespace with an
-// unhealthy finding of their own or of one of their containers.
-func (v *view) failingPodsIn(namespace string) int {
-	pods := map[inventory.EntityID]bool{}
+// failingPodSet is every pod with an unhealthy finding of its own or of
+// one of its containers, symptoms left out: the one rule both sides of
+// the overlap share.
+func (v *view) failingPodSet() map[inventory.EntityID]bool {
+	if v.failingPods != nil {
+		return v.failingPods
+	}
+	v.failingPods = map[inventory.EntityID]bool{}
 	for id, findings := range v.s.Findings {
-		if id.Namespace != namespace {
-			continue
-		}
 		pod, ok := rootcause.PodOf(v.s.Model, id)
 		if !ok {
 			continue
 		}
 		for _, f := range findings {
 			if unhealthy(f) && !f.Symptom {
-				pods[pod] = true
+				v.failingPods[pod] = true
 			}
 		}
 	}
-	return len(pods)
+	return v.failingPods
+}
+
+// failingOnly keeps the pods that are failing by failingPodSet's rule.
+func (v *view) failingOnly(
+	pods map[inventory.EntityID]bool,
+) map[inventory.EntityID]bool {
+	out := map[inventory.EntityID]bool{}
+	for pod := range pods {
+		if v.failingPodSet()[pod] {
+			out[pod] = true
+		}
+	}
+	return out
+}
+
+// namespacesOf lists the namespaces of pods, so a cluster-scoped
+// candidate is judged over the namespaces it reaches, like a namespaced
+// one.
+func namespacesOf(pods map[inventory.EntityID]bool) map[string]bool {
+	out := map[string]bool{}
+	for pod := range pods {
+		out[pod.Namespace] = true
+	}
+	return out
+}
+
+// failingPodsAmong counts the failing pods in the namespaces.
+func (v *view) failingPodsAmong(namespaces map[string]bool) int {
+	n := 0
+	for pod := range v.failingPodSet() {
+		if namespaces[pod.Namespace] {
+			n++
+		}
+	}
+	return n
 }

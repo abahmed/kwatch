@@ -61,7 +61,11 @@ func logBurstSentences(f caseFacts) []sentence {
 // logBaselineTail is ", up from 2 in the previous hour", or ", no
 // earlier errors seen" when the earlier windows held none of the line.
 func logBaselineTail(own detection.Finding) string {
-	before, _ := strconv.Atoi(evidence(own, detection.EvidenceLogLineBefore))
+	known := evidence(own, detection.EvidenceLogLineBefore)
+	if known == "" {
+		return ""
+	}
+	before, _ := strconv.Atoi(known)
 	if before == 0 {
 		return ", no earlier errors seen"
 	}

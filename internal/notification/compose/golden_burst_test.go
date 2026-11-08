@@ -59,8 +59,8 @@ func checkCases() []goldenCase {
 			d := announce(endpointRefusal())
 			d.Facts.Evidence = []incident.Fact{{Kind: incident.FactCheck,
 				Subject: "db.example.com:5432",
-				Text: "kwatch checked: DNS resolves db.example.com " +
-					"fine, so DNS is not the cause."}}
+				Text: "kwatch checked: db.example.com resolves from " +
+					"kwatch but refuses connections."}}
 			return Writer{}.Write(d, at(5, 0))
 		}},
 	}

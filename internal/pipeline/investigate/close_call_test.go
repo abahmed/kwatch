@@ -55,14 +55,15 @@ func checkFact(r Result) (incident.Fact, bool) {
 	return incident.Fact{}, false
 }
 
-func TestCloseCallRulesOutDNSWhenTheNameResolves(t *testing.T) {
+func TestCloseCallStatesWhatKwatchSawWithoutRulingDNSOut(t *testing.T) {
 	got := closeCallFacts(t, kube.CloseCallResult{
 		Endpoint: closeDB.Name, Host: "db.example.com", Resolved: true,
 		Refused: true}, closeCallIncident())
 	fact, ok := checkFact(got)
 	require.True(t, ok)
-	assert.Equal(t, "kwatch checked: DNS resolves db.example.com fine, "+
-		"so DNS is not the cause.", fact.Text)
+	assert.Equal(t, "kwatch checked: db.example.com resolves from kwatch "+
+		"but refuses connections.", fact.Text)
+	assert.NotContains(t, fact.Text, "not the cause")
 }
 
 func TestCloseCallStatesOnlyTheFactOfAnInconclusiveCheck(t *testing.T) {
@@ -101,4 +102,13 @@ func TestCloseCallDoesNotRunWithoutARivalOrAnEndpoint(t *testing.T) {
 		Rival: &rootcause.CauseRecord{
 			Root: inventory.CoreID(kube.KindNode, "", "n2")}}}
 	assert.False(t, closeCallApplies(nodes, nil))
+}
+
+func TestCloseCallDoesNotCallAnyOtherFailureARefusal(t *testing.T) {
+	got := closeCallFacts(t, kube.CloseCallResult{
+		Endpoint: closeDB.Name, Host: "db.example.com", Resolved: true,
+		Error: "no route to host"}, closeCallIncident())
+	fact, _ := checkFact(got)
+	assert.Equal(t, "kwatch checked: db.example.com resolves from kwatch "+
+		"but a connection from kwatch failed: no route to host.", fact.Text)
 }

@@ -99,3 +99,14 @@ func TestCloseCallRefusesAPrivateAddress(t *testing.T) {
 	assert.True(t, r.Blocked || !r.Connected)
 	assert.False(t, r.Connected)
 }
+
+func TestCloseCallDoesNotRememberACheckTheCallerCutShort(t *testing.T) {
+	resolver := &closeResolver{err: context.Canceled}
+	check := kube.NewCloseCall(resolver, dialing(nil),
+		func() time.Time { return time.Unix(100, 0) })
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	check.Check(ctx, "db.example.com:5432")
+	check.Check(context.Background(), "db.example.com:5432")
+	assert.EqualValues(t, 2, resolver.calls.Load())
+}
