@@ -9,6 +9,7 @@ import (
 // as convincing as the change itself; a node's heaviest pods only
 // explain where the pressure comes from.
 const (
+	weightCheck       = 0.95
 	weightKeys        = 0.7
 	weightEndpoints   = 0.6
 	weightNode        = 0.5
@@ -53,6 +54,13 @@ var evidenceWriters = map[string]func(incident.Fact) (sentence, bool){
 			" of "+e.Subject+"."), true
 	},
 	incident.FactEndpoints: endpointSentence,
+	// A check that settled a close call is said as the check found it.
+	// The product's name stays lowercase at the start of a sentence.
+	incident.FactCheck: func(e incident.Fact) (sentence, bool) {
+		s := proof(weightCheck, e.Text)
+		s.keepCase = true
+		return s, true
+	},
 	incident.FactDependency: func(e incident.Fact) (sentence, bool) {
 		return proof(weightEndpoints,
 			"Its output names "+e.Text+"."), true

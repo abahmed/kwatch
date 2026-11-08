@@ -140,6 +140,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Draining | degraded | `NodeDraining` | `node` |
 | EphemeralStorageHigh | varies | `ContainerEphemeralStorageUsageHigh` | `resources` |
 | Error | varies | `Error` | `container`, `exit_codes` |
+| ErrorBurst | degraded | `LogErrorBurst` | `log_errors` |
 | Etcd.Large | degraded | `EtcdDatabaseLarge` | `control_plane_storage` |
 | Evicted | varies | `Evicted` | `pod_failed` |
 | Evicting | degraded | `NodeEvicting` | `kubelet_health` |

@@ -1,0 +1,3 @@
+🟠 orders in shop is up but failing: 340 errors in 5 min. Pods are Running and Ready; the log shows "pq: connection refused" 312 times, no earlier errors seen. To read the recent errors, run kubectl logs deploy/orders -n shop --since=5m | grep -i error
+
+🟠 orders in shop is up but failing: 340 errors in 5 min.

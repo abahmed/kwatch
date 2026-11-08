@@ -18,6 +18,6 @@ var sharedRows = []Row{
 		Cause:  Side{Kind: kube.KindNode, Modes: sharedFactorModes},
 		Link:   LinkRunsOn,
 		Effect: anything, Prior: 0.4,
-		MinWorkloads: SharedFactorMinWorkloads,
+		MinWorkloads: CoOnsetMinWorkloads,
 	},
 }

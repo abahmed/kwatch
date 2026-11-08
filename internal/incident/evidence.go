@@ -55,6 +55,7 @@ const (
 	CheckJob          = "job"
 	CheckProbe        = "probe"
 	CheckProbeLog     = "probe-log"
+	CheckCloseCall    = "close-call"
 )
 
 // StepChecks are the checks that cover a read-only suggested step. The

@@ -99,6 +99,7 @@ func (w Writer) write(
 		fill(&msg, mark, w.shape(
 			respell(arrange(sentences), d.Facts.KindNames), proLine{}))
 		boldNames(msg.Doc, incidentNames(p, w.Cluster))
+		msg.Steps = stillSteps(f)
 		msg.Opening = w.opening(d, now)
 		if p.CanReopen() {
 			msg.ReopenWithin = incident.RepageWindow
@@ -112,7 +113,8 @@ func (w Writer) write(
 		msg.Confidence = confidenceOf(f)
 	}
 	fill(&msg, marker(p), w.shape(
-		respell(arrange(noteSentences(d, f)), d.Facts.KindNames), note))
+		respell(trimTimeline(arrange(noteSentences(d, f))),
+			d.Facts.KindNames), note))
 	boldNames(msg.Doc, incidentNames(p, w.Cluster))
 	if !w.Community {
 		pinFix(msg.Doc, msg.Steps)
@@ -145,7 +147,8 @@ func (w Writer) opening(
 // noteSentences are the sentences of an announcement or an update.
 func noteSentences(d incident.Decision, f caseFacts) []sentence {
 	if d.Action == incident.Update {
-		return append(updateSentences(f), freshEvidenceSentences(f)...)
+		return append(append(updateSentences(f),
+			freshEvidenceSentences(f)...), completedChainSentences(f)...)
 	}
 	return append(append(append(append(leadSentences(f),
 		causedBySentences(f)...), confirmedSentences(f)...),

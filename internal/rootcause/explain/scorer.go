@@ -55,9 +55,11 @@ var scorers = []scorer{
 	{"exclusivity", scoreExclusivity},
 	{"specificity", scoreSpecificity},
 	{"change", scoreChange},
+	{"blast-overlap", scoreBlastOverlap},
 	{"outcome", scoreOutcome},
 	{"revision", scoreRevision},
 	{"shared", scoreShared},
+	{"co-onset", scoreCoOnset},
 	{"baseline", scoreBaseline},
 	{"quality", scoreQuality},
 }
@@ -115,6 +117,9 @@ func (v *view) score(c *candidate) scored {
 	}
 	if v.changeOnlyDependency(c, out.contributions) {
 		total = min(total, ChangeOnlyMaxConfidence)
+	}
+	if v.blindToHiddenCause(c, out.contributions) {
+		total = min(total, HiddenCauseMaxConfidence)
 	}
 	out.raw = total
 	out.confidence = min(max(total, 0), 1)

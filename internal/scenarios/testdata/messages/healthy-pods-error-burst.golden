@@ -1,0 +1,14 @@
+10:14:15 settled
+🟠 orders in shop (prod-eu-1) is up but failing: 340 errors in 2 min. Pods are Running and Ready; the log shows "level=error msg="pq: connection refused" id=1000" 340 times, up from 7 in the previous 12 min. To read the recent errors, run kubectl logs deploy/orders -n shop --since=2m | grep -i error
+🟠 orders in shop (prod-eu-1) is up but failing: 340 errors in 2 min.
+| 🟠 **orders** in **shop** (**prod-eu-1**) is up but failing: 340 errors in 2 min.
+| Pods are Running and Ready; the log shows `level=error msg="pq: connection refused" id=1000` 340 times, up from 7 in the previous 12 min.
+| To read the recent errors, run
+| ```
+| kubectl logs deploy/orders -n shop --since=2m | grep -i error
+| ```
+10:20:00 healthy for 3m0s
+✅ orders in shop (prod-eu-1) is healthy again. It was failing for four minutes.
+✅ orders in shop (prod-eu-1) is healthy again.
+| ✅ **orders** in **shop** (**prod-eu-1**) is healthy again.
+| It was failing for four minutes.

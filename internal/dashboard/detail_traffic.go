@@ -52,6 +52,9 @@ func trafficOf(
 			out = append(out, row)
 		}
 	}
+	for i := range out {
+		out[i].Reach = reachOf(model, out[i])
+	}
 	slices.SortFunc(out, compareTraffic)
 	if len(out) > maxTraffic {
 		return out[:maxTraffic], len(out) - maxTraffic

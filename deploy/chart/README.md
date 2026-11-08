@@ -208,6 +208,7 @@ Karpenter annotation with `--set-string`.
 | `dashboard.tls.secretName` | `kubernetes.io/tls` Secret kwatch serves https from itself, for a LoadBalancer or NodePort with nothing in front. Renewals are picked up without a restart | `""` |
 | `dashboard.existingSecret` | Existing Secret with the keys `password` (sign-in) and `token` (API bearer token). Without it the chart ships `<release>-dashboard` empty and kwatch writes a generated password (`XXXX-XXXX-XXXX-XXXX`) and token into it once, so every renderer (`helm template`, Argo CD, Flux) sees the same manifest and the values never change. kwatch gets and updates only that Secret. Edits take effect after a restart; changing the password signs everyone out | `""` |
 | `config.investigation.logs` | Pro evidence reads container logs (redacted, bounded). `false` reads none and the dashboard shows the log section as turned off | `true` |
+| `config.investigation.sampleLogs` | Samples a bounded slice of the logs of Running and Ready pods for a burst of errors (redacted). `false` reads none | `true` |
 | `dashboard.networkPolicyFrom` | With `networkPolicy.enabled`: extra peers (your ingress controller, `ipBlock`s for load balancer clients) allowed to reach the dashboard port. The release namespace and `healthIngressFrom` always may | `[]` |
 
 Sign-ins last 12 hours. A password change or a kwatch restart (upgrade,

@@ -38,6 +38,10 @@ func members(
 func goldenCases() []goldenCase {
 	cases := append(clusterCases(), nodeResolveCases()...)
 	cases = append(cases, callCases()...)
+	cases = append(cases, burstCases()...)
+	cases = append(cases, resolveCauseCases()...)
+	cases = append(cases, reachCases()...)
+	cases = append(cases, checkCases()...)
 	return append(cases, []goldenCase{
 		{"bad_rollout", func() notification.Message {
 			return Writer{}.Write(announce(badRollout()), at(5, 0))

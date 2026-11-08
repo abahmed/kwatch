@@ -106,7 +106,7 @@ func trimEnvSource(from *corev1.EnvVarSource) *corev1.EnvVarSource {
 	if ref := from.ConfigMapKeyRef; ref != nil {
 		out.ConfigMapKeyRef = &corev1.ConfigMapKeySelector{
 			LocalObjectReference: ref.LocalObjectReference,
-			Optional:             ref.Optional,
+			Key:                  ref.Key, Optional: ref.Optional,
 		}
 	}
 	if out.SecretKeyRef == nil && out.ConfigMapKeyRef == nil {

@@ -1,0 +1,16 @@
+{
+  "name": "adv-co-onset-separate-nodes",
+  "description": "Two Deployments crash-loop four seconds apart, each on its own node; independent failures stay apart.",
+  "root": "deployment/shop/orders",
+  "otherRoots": [
+    "deployment/shop/cart"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "node//n3",
+    "zone//zone-a"
+  ]
+}

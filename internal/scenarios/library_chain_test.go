@@ -12,7 +12,7 @@ import (
 // empties what users reach.
 func chainScenarios() []scenario {
 	return []scenario{postgresChainToIngress(), chainWrongOrder(),
-		chainCappedAtThree()}
+		chainCappedAtThree(), chainTimelineLine()}
 }
 
 // chainProbe is what a readiness probe of the API prints while its
@@ -210,6 +210,53 @@ func chainCappedAtThree() scenario {
 				unreadyTier(c, tier)
 			}
 			c.after(8 * time.Minute)
+		},
+	}
+}
+
+// chainTimelineLine: the only postgres pod is OOM-killed at 10:09, the
+// API behind the Ingress stops being ready at 10:10 and its Service has
+// no ready endpoint a minute after that. Each step begins in a minute of
+// its own, so the first message can tell the chain as a timeline of
+// three steps.
+func chainTimelineLine() scenario {
+	return scenario{
+		expect: expectation{
+			Name: "chain-timeline-line",
+			Description: "A database is OOM-killed, the API that calls " +
+				"it stops being ready a minute later and its Service " +
+				"has no ready endpoint a minute after that.",
+			Root: "deployment/shop/postgres", Tier: "page", MaxMessages: 3,
+			MustNotBlame: []string{"deployment/shop/api", "node//n1"},
+		},
+		build: func(c *cluster) {
+			c.list(c.node("n1", "zone-a"))
+			db := chainTierOf(c, "postgres", 1, "")
+			api := chainTierOf(c, "api", 2, "postgres")
+			c.list(trafficIngress(c, "api", ""))
+			c.after(9*time.Minute + 55*time.Second)
+			c.update(db.w.pod(0, "n1", crashLoop(137, "OOMKilled", "", 1)))
+			db.w.setReady(0)
+			c.update(db.w.objects())
+			c.update(trafficUnreadySlice(c, "postgres", db.pods...))
+			c.after(time.Minute)
+			var pods []*corev1.Pod
+			for i := range 2 {
+				p := api.w.pod(i, "n1", notReady)
+				pods = append(pods, p)
+				c.update(p)
+			}
+			api.w.setReady(0)
+			c.update(api.w.objects())
+			c.after(time.Minute)
+			c.update(trafficUnreadySlice(c, "api", pods...))
+			for count := int32(1); count <= 6; count++ {
+				for _, p := range pods {
+					c.warn(c.warningEvent(p, "Pod", "Unhealthy", chainProbe,
+						"kubelet", count))
+				}
+				c.after(time.Minute)
+			}
 		},
 	}
 }

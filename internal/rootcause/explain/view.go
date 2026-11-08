@@ -59,6 +59,11 @@ type view struct {
 	callMemo
 	// depUsers memoises dependencyDependents; nil until computed.
 	depUsers map[string]map[inventory.EntityID]bool
+	// blast holds, per changed candidate, the failing pods downstream
+	// of it; filled by rank (see scoreBlastOverlap).
+	blast map[inventory.EntityID]map[inventory.EntityID]bool
+	// failing memoises failingPodSet; nil until computed.
+	failingPods map[inventory.EntityID]bool
 }
 
 func newView(s Snapshot) *view {

@@ -77,6 +77,12 @@ type IncidentDetail struct {
 	Nodes    []NodeRow       `json:"nodes,omitempty"`
 	Probes   []ProbeRow      `json:"probes,omitempty"`
 	Waiting  *Waiting        `json:"waiting,omitempty"`
+	// Round is what kwatch found beyond the objects themselves: where a
+	// dependency's address was read, errors in the log of healthy pods,
+	// failures that began together, the share of failing pods behind a
+	// change, the chain of events and the check that settled a close
+	// call (detail_round.go).
+	Round *RoundDetail `json:"round,omitempty"`
 	// The incident's own record (responses_journal.go): its failing
 	// containers when it broke and when it last got worse (Snapshot
 	// is the latest of Snapshots), its state and tier changes, why it

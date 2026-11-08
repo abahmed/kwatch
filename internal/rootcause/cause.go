@@ -82,10 +82,24 @@ type CauseRecord struct {
 	// certificate has already expired, for a webhook whose calls fail
 	// the TLS handshake.
 	ServingCert *ServingCert `json:",omitempty"`
+	// Source says where the pods read the root's address from, when the
+	// root is an external endpoint they are configured to call through
+	// a ConfigMap. Nil otherwise.
+	Source *ConfigSource `json:",omitempty"`
 	// Place is the exact setting the cause is, when the cause is one:
 	// object, container, field path and its current value. Nil when
 	// the cause is not a setting (a node that is down).
 	Place *detection.Place `json:",omitempty"`
+}
+
+// ConfigSource is the ConfigMap key an address was read from. The
+// address is host and port only, never a credential.
+type ConfigSource struct {
+	ConfigMap inventory.EntityID
+	Key       string
+	Address   string
+	// More counts further keys that name the same address.
+	More int `json:",omitempty"`
 }
 
 // Hop is one step of a failure chain: an entity that failed, a workload,

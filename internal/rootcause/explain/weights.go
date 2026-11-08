@@ -148,6 +148,43 @@ const (
 	SignatureWindow = 30 * time.Minute
 )
 
+// Co-onset: failures of several workloads that begin seconds apart.
+const (
+	// CoOnsetWindow is how close together the first failures of
+	// several workloads must be to count as one moment. A cause that
+	// breaks its callers does it faster than people and rollouts do.
+	CoOnsetWindow = 30 * time.Second
+	// CoOnsetMinWorkloads is the fewest workloads that make a moment.
+	CoOnsetMinWorkloads = 2
+	// CoOnsetWeight is what a shared moment adds to a candidate that
+	// already has evidence of its own. It is the smallest weight in
+	// the table: clocks coincide by chance.
+	CoOnsetWeight = 0.05
+)
+
+// Blast overlap: how many of the failing pods are downstream of a
+// changed candidate. Several changes often precede one failure; the one
+// that the failing pods share is likelier than one that touches a few.
+const (
+	// BlastOverlapMin is the share of the failing pods a changed
+	// candidate must reach to be rewarded. Below it the change touches
+	// a minority of the failure.
+	BlastOverlapMin = 0.5
+	// BlastOverlapWeight is the most a full overlap adds. It grows from
+	// nothing at BlastOverlapMin to this at all the pods, and is smaller
+	// than ChangeWeight: it ranks changes, it does not make a cause.
+	BlastOverlapWeight = 0.1
+	// BlastOverlapLow is the share under which a changed candidate is
+	// penalised: most of the failure does not depend on it.
+	BlastOverlapLow = 0.3
+	// BlastOverlapPenalty is that penalty. Half the reward: a small
+	// share can still be a real, partial cause.
+	BlastOverlapPenalty = 0.05
+	// BlastOverlapMinPods is the fewest failing pods that make a share
+	// mean anything.
+	BlastOverlapMinPods = 2
+)
+
 // Baseline deviation and data quality.
 const (
 	// BaselineWeight is the most a baseline adds or subtracts. It is

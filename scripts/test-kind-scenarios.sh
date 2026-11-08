@@ -356,11 +356,11 @@ if [ "$install_only" != true ]; then
 	warm_pid=$!
 fi
 
-# Download the metrics-server manifest while the cluster is created.
+# The metrics-server manifest is kept in the repository, so a GitHub
+# release-download outage cannot fail the run; the checksum still pins it.
 metrics_manifest=$(mktemp)
-curl -fsSL "https://github.com/kubernetes-sigs/metrics-server/releases/\
-download/$METRICS_SERVER_VERSION/components.yaml" \
-	-o "$metrics_manifest" &
+cp "test/e2e/testdata/metrics-server-$METRICS_SERVER_VERSION.yaml" \
+	"$metrics_manifest" &
 metrics_pid=$!
 
 sanitize_bin=$(mktemp)

@@ -40,6 +40,11 @@ func browserIssues() []incident.Incident {
 		if i%4 == 0 {
 			it.Tier = incident.Page
 		}
+		if i == 2 {
+			it.Cause = browserRoundCause()
+			it.Facts = []string{
+				"kwatch checked: DNS resolves db fine."}
+		}
 		out = append(out, it)
 	}
 	return out

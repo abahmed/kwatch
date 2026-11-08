@@ -243,11 +243,23 @@ jobs:
         # lookup fails, and the chart tests need Helm 4.
         version: v4.3.1
 
+    # kind comes from the Go module proxy (checksum-verified), not
+    # GitHub release downloads, which can fail with 504s.
+    - name: Set up Go for Kind
+      if: steps.changes.outputs.chart == 'true'
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: go.mod
+
     - name: Create disposable Kubernetes cluster
       if: steps.changes.outputs.chart == 'true'
-      uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
-      with:
-        cluster_name: kwatch-chart
+      env:
+        KIND_VERSION: v0.30.0
+      run: |
+        set -euo pipefail
+        go install "sigs.k8s.io/kind@${KIND_VERSION}"
+        echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+        "$(go env GOPATH)/bin/kind" create cluster --name kwatch-chart --wait 120s
 
     - name: CRD lifecycle integration test
       if: steps.changes.outputs.chart == 'true'

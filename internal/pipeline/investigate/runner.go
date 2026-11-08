@@ -73,9 +73,12 @@ func assemble(planned []check, outputs []*checkOutput, lead int) Result {
 				Status: incident.SectionTimeout})
 			continue
 		}
-		if i == lead {
+		switch {
+		case i == lead:
 			out.Output, out.Evidence = got.summary.Output,
-				got.summary.Evidence
+				append(got.summary.Evidence, out.Evidence...)
+		case c.adds:
+			out.Evidence = append(out.Evidence, got.summary.Evidence...)
 		}
 		out.Report = append(out.Report, got.sections...)
 	}

@@ -55,3 +55,4 @@ ignoreNodeMessages|Compatibility|Legacy node-message suppression field.|deprecat
 kubelet.insecureSkipVerify|Security|Skip kubelet serving certificate verification for direct node stats reads; only for self-signed kubelet certificates.|active|
 watch.secrets|Scope|Watch Secrets (values hashed, never stored); false removes Secret RBAC and Secret-based checks report that they cannot verify.|active|
 investigation.logs|Scope|Read container logs for Pro evidence (redacted, bounded); false reads no log and shows the log section as turned off.|active|
+investigation.sampleLogs|Scope|Sample a bounded slice of the logs of Running and Ready pods for a burst of errors (redacted); false reads none.|active|

@@ -13,6 +13,14 @@ func crashLogsEnabled(deps *serverDeps) bool {
 		deps.runtime.Application().InvestigationLogs
 }
 
+// logSamplingEnabled reports whether the logs of Running and Ready pods
+// are sampled for error bursts: with investigation, while its log reads
+// are on, unless investigation.sampleLogs turns the sample off.
+func logSamplingEnabled(deps *serverDeps) bool {
+	return crashLogsEnabled(deps) &&
+		deps.runtime.Application().InvestigationSampleLogs
+}
+
 // podLogsReader is the crash-log round as health reporting sees it.
 type podLogsReader interface {
 	PodLogsForbidden() bool

@@ -61,6 +61,9 @@ func (v *view) applySharedFactorWindow(cs *candidateSet) {
 			continue
 		}
 		reason := v.sharedFactorVeto(c.id, effects)
+		if reason == "" {
+			reason = v.sharedFactorCount(c, effects)
+		}
 		if reason != "" {
 			v.dropSharedCoverage(cs, c, effects, reason)
 			continue
@@ -157,4 +160,23 @@ func (v *view) beganTogether(effects []inventory.EntityID) bool {
 		}
 	}
 	return !first.ok || !last.t.After(first.t.Add(SharedFactorWindow))
+}
+
+// sharedFactorCount says why too few workloads share a factor, or
+// returns "" and marks the candidate as a co-onset one when only two
+// do and they began failing within CoOnsetWindow. Why: three workloads
+// on one node within minutes share it by cause; two do only when their
+// failures began as one moment.
+func (v *view) sharedFactorCount(
+	c *candidate, effects []inventory.EntityID,
+) string {
+	if v.workloadsOf(c.direct()) >= SharedFactorMinWorkloads {
+		return ""
+	}
+	if _, _, ok := v.coOnset(effects); !ok {
+		return "fewer than three workloads share it and they did not " +
+			"begin failing within seconds of each other"
+	}
+	c.coOnset = true
+	return ""
 }

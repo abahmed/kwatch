@@ -142,3 +142,20 @@ const EvidenceProbeLog = "probe log"
 // fail-closed webhook with a dead backend intercepts that have objects
 // now: their creates and updates are refused.
 const EvidenceWebhookIntercepts = "intercepts"
+
+// Evidence labels of a burst of errors in a log that Kubernetes sees as
+// healthy.
+const (
+	// EvidenceLogLine is the most frequent error line, as first seen.
+	EvidenceLogLine = "log line"
+	// EvidenceLogLineCount is how many times that line came up.
+	EvidenceLogLineCount = "log line count"
+	// EvidenceLogLineBefore is how often it came up in the baseline.
+	EvidenceLogLineBefore = "log line before"
+	// EvidenceLogBaselineSpan is how long the baseline is, in seconds.
+	EvidenceLogBaselineSpan = "log baseline seconds"
+	// EvidenceLogErrors is the error lines in the window.
+	EvidenceLogErrors = "log errors"
+	// EvidenceLogWindow is the window, in seconds.
+	EvidenceLogWindow = "log window seconds"
+)

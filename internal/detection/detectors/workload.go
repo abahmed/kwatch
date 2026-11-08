@@ -91,6 +91,9 @@ func (d Workload) availability(
 		valueSince(e, kube.AttrReadyReplicas),
 		valueSince(e, desiredAttr(e))))
 	wait := d.unavailable + workloadReplacementGrace(ctx, e.ID)
+	if atCeiling(ctx, e.ID) {
+		wait = min(wait, CeilingUnavailable)
+	}
 	if !sustained(ctx, "unavailable", since, wait) {
 		return detection.Finding{}, false
 	}

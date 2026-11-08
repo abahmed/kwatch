@@ -161,6 +161,15 @@
     p.appendChild(document.createTextNode(": "));
     p.appendChild(KW.el("b", bad ? "x-bad" : "", r.total === 0 ? "no endpoints" :
       r.ready + " of " + KW.plural(r.total, "endpoint", "endpoints") + " ready"));
+    if (r.reach && r.reach.length) {
+      li.appendChild(KW.el("p", "rd-line", "Users reach it at:"));
+      var ul = li.appendChild(KW.el("ul", "rd-reach"));
+      r.reach.forEach(function (a) {
+        var item = ul.appendChild(KW.el("li"));
+        item.appendChild(KW.el("span", "mono", a.address));
+        item.appendChild(document.createTextNode(" " + a.ready + " of " + a.total + " endpoints ready"));
+      });
+    }
     return li;
   }
 

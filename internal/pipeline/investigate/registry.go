@@ -37,6 +37,9 @@ type check struct {
 	read    func(context.Context, Sources, incident.Incident) []incident.Section
 	leads   func(incident.Incident, inventory.Reader) bool
 	summary func(context.Context, Sources, incident.Incident) Result
+	// adds marks a check whose summary evidence joins the lead's
+	// without leading: a look that settles a close call.
+	adds bool
 }
 
 // checks are in priority order. The root-kind investigators come first
@@ -59,6 +62,7 @@ func leadChecks() []check {
 			isSchedulingRoot, readScheduling),
 		crashCheck(),
 		probeLogCheck(),
+		closeCallCheck(),
 		leader(incident.CheckInitWait, "Init container output",
 			apiReadBudget, isInitWaitRoot, readInitWait),
 	}

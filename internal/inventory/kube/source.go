@@ -158,6 +158,7 @@ func NewSource(cfg SourceConfig) (*Source, error) {
 		synced:  make(map[inventory.Kind]cache.InformerSynced),
 		started: make(chan struct{}),
 	}
+	join := NewConfigJoin()
 	for _, r := range registrations() {
 		if cfg.DisableSecrets && r.resource == SecretsResource {
 			s.disabled = append(s.disabled, r)
@@ -168,8 +169,7 @@ func NewSource(cfg SourceConfig) (*Source, error) {
 		// delivering later updates; SafeEventHandler counts and logs it.
 		handler := kubeclient.SafeEventHandler("inventory", r.resource.Name,
 			translatorHandler(s.context, &s.listed,
-				NewTranslator(withGenericAttributes(r.schema, r.mode())).
-					WithMaintenance(cfg.Maintenance),
+				joinTranslator(r, cfg, join),
 				cfg.Submit, cfg.Now))
 		handle, err := informer.AddEventHandler(handler)
 		if err != nil {
@@ -347,4 +347,17 @@ func translatorHandler(
 			send(t.Deleted(obj, now()))
 		},
 	}
+}
+
+// joinTranslator builds the translator of a registration. Pods and
+// ConfigMaps share one join of the dependencies pods read from them.
+func joinTranslator(
+	r registration, cfg SourceConfig, join *ConfigJoin,
+) *Translator {
+	t := NewTranslator(withGenericAttributes(r.schema, r.mode())).
+		WithMaintenance(cfg.Maintenance)
+	if kind := r.schema.Kind(); kind == KindPod || kind == KindConfigMap {
+		t.WithConfigJoin(join)
+	}
+	return t
 }

@@ -128,4 +128,5 @@ func addInsight(
 	countCut(d, func(t *DetailTruncation) { t.Probes += cut })
 	d.Waiting, cut = waitingOf(model, p)
 	countCut(d, func(t *DetailTruncation) { t.WaitReasons += cut })
+	d.Round = roundOf(model, p, d.CapturedLogLines)
 }

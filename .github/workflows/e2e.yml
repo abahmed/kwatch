@@ -285,7 +285,7 @@ jobs:
         rbac: [ full, least-privilege ]
         secrets: [ true, false ]
     env:
-      # One name for the cluster kind-action creates and the script loads
+      # One name for the cluster kind creates and the script loads
       # the image into.
       KIND_CLUSTER_NAME: kwatch-ops
     steps:
@@ -301,10 +301,19 @@ jobs:
           # lookup fails, and the chart tests need Helm 4.
           version: v4.3.1
 
-      - name: Create disposable Kubernetes cluster
-        uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
+      # kind comes from the Go module proxy (checksum-verified), not
+      # GitHub release downloads, which can fail with 504s.
+      - name: Set up Go for Kind
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          cluster_name: ${{ env.KIND_CLUSTER_NAME }}
+          go-version-file: go.mod
+
+      - name: Create disposable Kubernetes cluster
+        run: |
+          set -euo pipefail
+          go install "sigs.k8s.io/kind@${KIND_VERSION}"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          "$(go env GOPATH)/bin/kind" create cluster --name "$KIND_CLUSTER_NAME" --wait 120s
 
       # The scenarios' Kwatch image, which the smoke test only needs under
       # another name.

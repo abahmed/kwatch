@@ -22,6 +22,7 @@ const (
 
 // Relations of another issue to this one, closest first.
 const (
+	relationUpstream  = "same upstream"
 	relationNode      = "same node"
 	relationNamespace = "same namespace"
 	relationCluster   = "cluster"
@@ -44,13 +45,19 @@ func sameTimeOf(
 	for i, q := range near {
 		rel := relationCluster
 		switch {
+		case sharesUpstream(p, q):
+			rel = relationUpstream
 		case i < maxSameTimeNodeOf && shareNode(mine, nodeSet(model, q)):
 			rel = relationNode
 		case p.Root.Namespace != "" &&
 			q.Root.Namespace == p.Root.Namespace:
 			rel = relationNamespace
 		}
-		items = append(items, sameTimeItem(q, rel))
+		item := sameTimeItem(q, rel)
+		if g := gap(p.Opened, q.Opened); g < time.Minute {
+			item.GapSeconds = int(g.Seconds())
+		}
+		items = append(items, item)
 	}
 	slices.SortStableFunc(items, func(a, b SameTimeItem) int {
 		return cmp.Compare(relationRank(a.Relation),
@@ -96,12 +103,22 @@ func gap(a, b time.Time) time.Duration {
 
 func relationRank(rel string) int {
 	switch rel {
-	case relationNode:
+	case relationUpstream:
 		return 0
-	case relationNamespace:
+	case relationNode:
 		return 1
+	case relationNamespace:
+		return 2
 	}
-	return 2
+	return 3
+}
+
+// sharesUpstream reports two issues with the same cause, which is not a
+// workload: one external address, node or object explains both.
+func sharesUpstream(p, q incident.Incident) bool {
+	return p.Cause != nil && q.Cause != nil &&
+		p.Cause.Root == q.Cause.Root &&
+		!incident.IsWorkload(p.Cause.Root.Kind)
 }
 
 func sameTimeItem(q incident.Incident, rel string) SameTimeItem {

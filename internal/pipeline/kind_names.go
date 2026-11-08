@@ -59,3 +59,15 @@ func (a *announcer) kindNames(p incident.Incident) map[inventory.Kind]string {
 	}
 	return out
 }
+
+// withCauseState looks at the stated cause of a resolving incident again
+// and tells the writer whether it recovered or is still present. It
+// reads the model now, at resolve time, not what was true when the
+// incident opened.
+func (a *announcer) withCauseState(d incident.Decision) incident.Decision {
+	if d.Action != incident.Resolve || a.history == nil {
+		return d
+	}
+	d.Facts.Cause = incident.CheckCause(a.history, d.Incident.Cause)
+	return d
+}

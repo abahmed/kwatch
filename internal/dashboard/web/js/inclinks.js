@@ -9,6 +9,7 @@
   var KW = window.KW;
 
   var RELATION = {
+    "same upstream": ["Same upstream", "Both depend on the same external address or service, so one failure explains both."],
     "same node": ["Same node", "Runs on the same node as this issue."],
     "same namespace": ["Same namespace", "In the same namespace as this issue."],
     cluster: ["Elsewhere", "Elsewhere in the cluster, at the same moment."]
@@ -146,7 +147,7 @@
     list.forEach(function (s) {
       var rel = RELATION[s.relation] || [s.relation, ""];
       var start = Date.parse(s.startedAt) - Date.parse(inc.firstSeen);
-      var gap = Math.abs(start) < 60000 ? "started at the same minute" :
+      var gap = s.gapSeconds > 0 ? "started " + s.gapSeconds + " s apart" : Math.abs(start) < 60000 ? "started at the same minute" :
         KW.lasted(start < 0 ? s.startedAt : inc.firstSeen, start < 0 ? inc.firstSeen : s.startedAt) +
         (start < 0 ? " before" : " after");
       var li = ul.appendChild(row(s, [rel[0], s.namespace, gap].filter(Boolean).join(" · ")));

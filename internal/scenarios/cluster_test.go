@@ -37,12 +37,15 @@ type cluster struct {
 	objects map[string]runtime.Object
 	// probed lists the virtual entities probe reported on.
 	probed []inventory.EntityID
+	// join gives pods the endpoints their ConfigMaps name.
+	join *kube.ConfigJoin
 }
 
 func newCluster(start time.Time, suffix string) *cluster {
 	return &cluster{
 		start: start, now: start, suffix: suffix,
 		objects: make(map[string]runtime.Object),
+		join:    kube.NewConfigJoin(),
 	}
 }
 
@@ -57,7 +60,7 @@ func (c *cluster) after(d time.Duration) { c.now = c.now.Add(d) }
 func (c *cluster) list(objects ...runtime.Object) {
 	for _, obj := range objects {
 		c.remember(obj)
-		c.emit(translator(obj).Added(obj, true, c.now)...)
+		c.emit(c.translator(obj).Added(obj, true, c.now)...)
 	}
 }
 
@@ -65,7 +68,7 @@ func (c *cluster) list(objects ...runtime.Object) {
 func (c *cluster) create(objects ...runtime.Object) {
 	for _, obj := range objects {
 		c.remember(obj)
-		c.emit(translator(obj).Added(obj, false, c.now)...)
+		c.emit(c.translator(obj).Added(obj, false, c.now)...)
 	}
 }
 
@@ -79,7 +82,7 @@ func (c *cluster) update(objects ...runtime.Object) {
 			continue
 		}
 		c.remember(obj)
-		c.emit(translator(obj).Updated(old, obj, c.now)...)
+		c.emit(c.translator(obj).Updated(old, obj, c.now)...)
 	}
 }
 
@@ -87,7 +90,7 @@ func (c *cluster) update(objects ...runtime.Object) {
 func (c *cluster) remove(objects ...runtime.Object) {
 	for _, obj := range objects {
 		delete(c.objects, objectKey(obj))
-		c.emit(translator(obj).Deleted(obj, c.now)...)
+		c.emit(c.translator(obj).Deleted(obj, c.now)...)
 	}
 }
 
@@ -196,8 +199,8 @@ func objectKey(obj runtime.Object) string {
 }
 
 // translator picks the schema the application uses for an object type.
-func translator(obj runtime.Object) *kube.Translator {
-	return kube.NewTranslator(schemaFor(obj))
+func (c *cluster) translator(obj runtime.Object) *kube.Translator {
+	return kube.NewTranslator(schemaFor(obj)).WithConfigJoin(c.join)
 }
 
 func schemaFor(obj runtime.Object) kube.Schema {

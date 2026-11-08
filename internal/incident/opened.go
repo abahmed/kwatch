@@ -25,6 +25,10 @@ const (
 	// FactDependency is the Service a stuck init container's output
 	// names, with what is wrong with it, if anything.
 	FactDependency = "dependency"
+	// FactCheck is what a read-only check kwatch ran to tell two close
+	// causes apart found: "kwatch checked: DNS resolves db fine, so DNS
+	// is not the cause."
+	FactCheck = "check"
 	// FactProbeLog is the last line naming a failure in the current log
 	// of a running container whose probe gets an HTTP error status.
 	FactProbeLog = "probe.log"

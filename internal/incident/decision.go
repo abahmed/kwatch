@@ -44,6 +44,13 @@ type Facts struct {
 	// the entities' kind.name attribute so a message names a custom
 	// resource the way its CRD does.
 	KindNames map[inventory.Kind]string
+	// Reach is where users reach what the incident affects: the hosts
+	// and paths of the Ingresses and routes that lead to it, worst
+	// first, at most MaxReach. Empty when none was found.
+	Reach []Reach
+	// Cause is what looking at the stated cause again found when the
+	// incident resolved; set on a resolve only.
+	Cause CauseState
 	// Wake is the cluster wake-up the problem began in or right after,
 	// set on an announcement; nil when there was none.
 	Wake *WakeContext

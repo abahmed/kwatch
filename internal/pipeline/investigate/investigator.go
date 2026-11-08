@@ -7,6 +7,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/redact"
 )
 
@@ -75,6 +76,9 @@ type Sources struct {
 	// Now stamps when each check returned; nil leaves sections
 	// unstamped.
 	Now func() time.Time
+	// CloseCall checks one external endpoint, read-only, to settle a
+	// close call between two causes. Nil leaves the check out.
+	CloseCall func(ctx context.Context, endpoint string) kube.CloseCallResult
 	// LogsOff is set when log capture is turned off
 	// (investigation.logs: false): no log is read at all.
 	LogsOff bool

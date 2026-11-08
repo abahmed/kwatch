@@ -278,6 +278,18 @@ var proofWriters = map[rootcause.ProofCode]func(rootcause.Proof) string{
 	rootcause.ProofErrorsName: func(p rootcause.Proof) string {
 		return errorWords(p.Count, p.Total)
 	},
+	rootcause.ProofCoOnset: func(p rootcause.Proof) string {
+		switch {
+		case p.Total == 0 && p.Count == 2:
+			return "they started failing at the same time"
+		case p.Total == 0:
+			return "all started failing at the same time"
+		case p.Count == 2:
+			return "they started failing " + secondsWords(p.Total) +
+				" apart"
+		}
+		return "all started failing within " + secondsWords(p.Total)
+	},
 	rootcause.ProofWorkloadsMeet: func(p rootcause.Proof) string {
 		return numberWord(p.Count) + " failing workloads all depend on it"
 	},
@@ -349,4 +361,12 @@ func changedFieldsWords(paths []string) string {
 		fields = append(fields, lastSegment(path))
 	}
 	return "its " + joinAnd(fields, maxNamed) + " changed shortly before"
+}
+
+// secondsWords is "4 seconds", or "1 second".
+func secondsWords(n int) string {
+	if n == 1 {
+		return "1 second"
+	}
+	return strconv.Itoa(n) + " seconds"
 }

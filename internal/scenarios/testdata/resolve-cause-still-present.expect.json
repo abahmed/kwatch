@@ -1,0 +1,11 @@
+{
+  "name": "resolve-cause-still-present",
+  "description": "The replicas recover after a restart while the database they crashed on still refuses connections.",
+  "root": "external-endpoint//db.example.com:5432",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "deployment/orders/api",
+    "node//n1"
+  ]
+}

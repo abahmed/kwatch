@@ -73,8 +73,11 @@ ALERT_QUALITY_TEST := $(GOTEST) -count=1 -timeout 600s ./internal/scenarios \
 	-run '^TestScorecardGates$$' -v
 # The mutation check: the gates must fail when part of the root-cause
 # engine is switched off, so a gate that cannot see a regression is caught.
+# The second test replays every labelled scenario with logs denied, without
+# metrics and with a trimmed RBAC, and fails on a wrong root stated.
 ALERT_QUALITY_ABLATION_TEST := $(GOTEST) -count=1 -timeout 600s \
-	./internal/scenarios -run '^TestScorecardGatesSeeRootCauseRegressions$$' -v
+	./internal/scenarios -v -run \
+	'^(TestScorecardGatesSeeRootCauseRegressions|TestMissingEvidenceNeverStatesAWrongRoot)$$'
 
 # Race tests are slower than the default per-package timeout allows for
 # the scenario replay.

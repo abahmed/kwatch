@@ -1,0 +1,6 @@
+{
+  "name": "healthy-pods-small-burst",
+  "description": "Ten errors in a window after a quiet hour is under the floor for any service.",
+  "maxMessages": 0,
+  "quiet": true
+}

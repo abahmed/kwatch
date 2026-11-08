@@ -28,8 +28,9 @@ func leadSentences(f caseFacts) []sentence {
 // specificLeads are the leads for a case the evidence names exactly, in
 // order: the first that applies is the lead.
 var specificLeads = []func(caseFacts) (string, bool){
-	releaseLeads, archLead, firstRolloutLead, createdLead, volumeHeldLead,
-	provisionerLead, rivalLead, finalizerLead, attachmentLead,
+	logBurstLead, releaseLeads, archLead, firstRolloutLead, createdLead,
+	volumeHeldLead, provisionerLead, rivalLead, finalizerLead,
+	attachmentLead,
 }
 
 func leadText(f caseFacts) string {
@@ -297,6 +298,9 @@ func ownLead(f caseFacts) string {
 
 func subjectWithState(f caseFacts, subject inventory.EntityID) string {
 	name := f.leadName(subject)
+	if cause := f.p.Cause; cause != nil && cause.Root == subject {
+		name += sourceClause(cause)
+	}
 	switch {
 	case f.p.State == incident.Flapping:
 		return name + " " + flappingState(f)
