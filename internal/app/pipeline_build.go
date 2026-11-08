@@ -321,13 +321,7 @@ func (p *pipelineBuild) newRunners(
 		runners = append(runners, p.crashLogs.Run)
 	}
 	if logSamplingEnabled(deps) {
-		runners = append(runners, kube.NewLogSampleRound(
-			kube.LogSampleConfig{
-				Logs:   kube.LogReader{Client: deps.clients.Kubernetes},
-				Model:  p.model,
-				Now:    p.clock.Now,
-				Submit: submit,
-			}).Run)
+		runners = append(runners, p.newLogSampler(submit).Run)
 	}
 	// The kubelet stats and the control plane probes feed detectors
 	// that only Pro runs; Community does not read them.

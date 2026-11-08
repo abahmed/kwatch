@@ -33,15 +33,16 @@ func TestTimelineIsOrderedByOnsetAndJoinsOneMinuteOneEvent(t *testing.T) {
 		hopAt(kube.KindNode, "", "n3", 14, 2),
 		hopAt(kube.KindDeployment, "shop", "cart", 14, 3),
 	}}
-	f := caseFacts{p: incident.Incident{Cause: cause}, members: []detection.Finding{
-		finding(kube.KindNode, "", "n3", detection.ModeDiskPressure),
-		finding(kube.KindContainer, "shop", "redis-7d9/app",
-			detection.ModeEvicted),
-		finding(kube.KindContainer, "shop", "checkout-6d4/app",
-			detection.ModeCrashLoop),
-		finding(kube.KindContainer, "shop", "cart-9b1/app",
-			detection.ModeCrashLoop),
-	}}
+	f := caseFacts{p: incident.Incident{Cause: cause},
+		members: []detection.Finding{
+			finding(kube.KindNode, "", "n3", detection.ModeDiskPressure),
+			finding(kube.KindContainer, "shop", "redis-7d9/app",
+				detection.ModeEvicted),
+			finding(kube.KindContainer, "shop", "checkout-6d4/app",
+				detection.ModeCrashLoop),
+			finding(kube.KindContainer, "shop", "cart-9b1/app",
+				detection.ModeCrashLoop),
+		}}
 
 	got := chainLineSentences(f)
 

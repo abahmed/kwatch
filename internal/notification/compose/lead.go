@@ -28,8 +28,9 @@ func leadSentences(f caseFacts) []sentence {
 // specificLeads are the leads for a case the evidence names exactly, in
 // order: the first that applies is the lead.
 var specificLeads = []func(caseFacts) (string, bool){
-	logBurstLead, releaseLeads, archLead, firstRolloutLead, createdLead, volumeHeldLead,
-	provisionerLead, rivalLead, finalizerLead, attachmentLead,
+	logBurstLead, releaseLeads, archLead, firstRolloutLead, createdLead,
+	volumeHeldLead, provisionerLead, rivalLead, finalizerLead,
+	attachmentLead,
 }
 
 func leadText(f caseFacts) string {

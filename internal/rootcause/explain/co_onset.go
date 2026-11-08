@@ -39,7 +39,9 @@ func (v *view) onsetSpread(
 
 // coOnset reports workloads that began failing within CoOnsetWindow of
 // each other, at least CoOnsetMinWorkloads of them.
-func (v *view) coOnset(effects []inventory.EntityID) (int, time.Duration, bool) {
+func (v *view) coOnset(
+	effects []inventory.EntityID,
+) (int, time.Duration, bool) {
 	workloads, spread := v.onsetSpread(effects)
 	return workloads, spread, workloads >= CoOnsetMinWorkloads &&
 		spread <= CoOnsetWindow
