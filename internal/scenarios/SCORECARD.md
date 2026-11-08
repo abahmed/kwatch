@@ -542,15 +542,15 @@ here verbatim and checked by `TestScorecardGates`.
 | --- | --- | --- | --- |
 | Correct root cause (labelled) | >= 90% | 98.9% | pass |
 | Correct root cause (held-out) | >= 80% | 100% | pass |
-| Wrong high-confidence root | <= 5% (at least 20 cases) | 0% (0 of 232 high-confidence cases, labelled and held-out) | pass |
+| Wrong high-confidence root | <= 5% (at least 20 cases) | 0% (0 of 233 high-confidence cases, labelled and held-out) | pass |
 | Wrong root stated at likely confidence or higher (labelled) | <= 0 | 0 | pass |
 | Scenarios whose first message stated a wrong root | <= 0 | 0 | pass |
-| Calibration: high confidence | 80-100% (at least 10 cases) | 100.0% (219 of 219 right) | pass |
+| Calibration: high confidence | 80-100% (at least 10 cases) | 100.0% (220 of 220 right) | pass |
 | Calibration: likely confidence | 50-90% (at least 10 cases) | 89.8% (44 of 49 right) | pass |
 | Messages per incident (p95) | <= 3 | 3 | pass |
 | Messages per incident (most) | <= 5 | 5 | pass |
 | Time to first message (page tier) | max <= 2m0s | p95 1m45s, max 1m45s (48 scenarios) | pass |
-| Time to first message (notify tier) | max <= 5m0s | p95 3m15s, max 4m15s (307 scenarios) | pass |
+| Time to first message (notify tier) | max <= 5m0s | p95 3m15s, max 4m15s (308 scenarios) | pass |
 | Time to first message (boot-held) | max <= 15m0s | p95 12m15s, max 12m15s (4 scenarios) | pass |
 | Notifications from non-events (staging day) | <= 0 | 0 | pass |
 | Notifications per hour (staging day peak) | <= 30/h | 26/h | pass |
@@ -569,15 +569,15 @@ here verbatim and checked by `TestScorecardGates`.
 | Recoveries said while members still fail | <= 0 | 0 | pass |
 | Scenarios that passed and no longer do (ratchet) | <= 0 | 0 | pass |
 
-28 of 28 gates pass. 442 labelled root cases in 453 scenarios; first-incident tier matches in 453 of 453 scenarios.
-Staging day: 961 notifications in 68h15m0s (14.1/h mean, peak hour 26); 0 from non-events, 0 of them notify or page.
+28 of 28 gates pass. 443 labelled root cases in 454 scenarios; first-incident tier matches in 454 of 454 scenarios.
+Staging day: 966 notifications in 68h24m0s (14.1/h mean, peak hour 26); 0 from non-events, 0 of them notify or page.
 Storm shared node: 1000 pods, 2 messages in total, 1 in the loudest 2 minutes.
 Storm shared registry: 1000 pods, 1 messages in total, 1 in the loudest 2 minutes.
 Storm multi-cause: 1000 pods from 10 causes, 10 of them reported, 10 messages in total, 8 in the loudest 2 minutes.
 Slowest first messages: boot-endpoints-still-down notify 12m15s, node-join-never-ready page 10m15s, own-volume-wait-too-long notify 10m0s, node-replace-sandbox-stuck notify 7m15s, init-waits-on-healthy-service notify 4m15s.
 Calibration: the labelled cases put high confidence at 0.55 (committed 0.70).
-Right roots: 270 with a stated cause, 163 by falling back to the failing entity with no stated cause, 4 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 10 scenarios, 7 of them labelled as legitimate revisions.
-Time to first correct root: p95 4m15s, max 12m15s over 386 scenarios; slowest: boot-endpoints-still-down 12m15s, one-hpa-bad-target 11m15s, metrics-blip-long 11m15s, node-join-never-ready 10m15s, own-volume-wait-too-long 10m0s. Never stated: crash-loop-for-hours, coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
+Right roots: 271 with a stated cause, 163 by falling back to the failing entity with no stated cause, 4 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 10 scenarios, 7 of them labelled as legitimate revisions.
+Time to first correct root: p95 4m15s, max 12m15s over 387 scenarios; slowest: boot-endpoints-still-down 12m15s, one-hpa-bad-target 11m15s, metrics-blip-long 11m15s, node-join-never-ready 10m15s, own-volume-wait-too-long 10m0s. Never stated: crash-loop-for-hours, coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
 
 ## Scenarios
 
@@ -736,6 +736,7 @@ Time to first correct root: p95 4m15s, max 12m15s over 386 scenarios; slowest: b
 | healthy-pods-small-burst | quiet | - | - | -/- | 0 (0) | pass |
 | healthy-pods-burst-without-baseline | quiet | - | - | -/- | 0 (0) | pass |
 | user-endpoints-named | `deployment/shop/payments` | `deployment/shop/payments` | high 1.00 | page/page | 1 (2) | pass |
+| change-blast-overlap | `configmap/shop/app-defaults` | `configmap/shop/app-defaults` | high 1.00 | notify/notify | 1 (4) | pass |
 | resolve-cause-recovered | `external-endpoint//db.example.com:5432` | `external-endpoint//db.example.com:5432` | high 0.85 | notify/notify | 2 (2) | pass |
 | resolve-cause-still-present | `external-endpoint//db.example.com:5432` | `external-endpoint//db.example.com:5432` | high 0.85 | notify/notify | 1 (1) | pass |
 | pool-boot-quiet | quiet | - | - | -/- | 0 (0) | pass |
@@ -918,12 +919,12 @@ Time to first correct root: p95 4m15s, max 12m15s over 386 scenarios; slowest: b
 | ambiguous-oom-half-limit | `node//n1` | `node//n1` | likely 0.52 | notify/notify | 2 (3) | pass |
 | ambiguous-ceiling-slow-dependency | `external-endpoint//db.example.com:5432` | `external-endpoint//db.example.com:5432 (no cause)` | none | notify/notify | 2 (2) | pass |
 | ambiguous-ceiling-dependency-fine | `horizontalpodautoscaler/orders/worker` | `horizontalpodautoscaler/orders/worker` | likely 0.70 | notify/notify | 1 (2) | pass |
-| ambiguous-image-and-config-image | `deployment/shop/checkout` | `deployment/shop/checkout` | high 0.97 | notify/notify | 1 (2) | pass |
+| ambiguous-image-and-config-image | `deployment/shop/checkout` | `deployment/shop/checkout` | high 1.00 | notify/notify | 1 (2) | pass |
 | ambiguous-image-and-config-config | `configmap/shop/checkout-config` | `configmap/shop/checkout-config` | high 1.00 | notify/notify | 1 (2) | pass |
 | ambiguous-rollout-one-pressured-node | `node//n1` | `node//n1 (no cause)` | none | notify/notify | 2 (3) | pass |
 | ambiguous-rollout-every-node | `deployment/shop/payments` | `deployment/shop/payments` | high 1.00 | notify/notify | 2 (3) | pass |
 | coupled-config-rejected-value | `configmap/billing/ledger-config` | `configmap/billing/ledger-config` | high 1.00 | notify/notify | 1 (2) | pass |
-| coupled-image-nil-pointer | `deployment/stock/sync` | `deployment/stock/sync` | high 0.97 | notify/notify | 1 (2) | pass |
+| coupled-image-nil-pointer | `deployment/stock/sync` | `deployment/stock/sync` | high 1.00 | notify/notify | 1 (2) | pass |
 | cron-secret-edited-hours-before | `secret/billing/sync-key` | `secret/billing/sync-key` | high 0.80 | notify/notify | 1 (2) | pass |
 | cron-secret-edited-then-succeeded | `cronjob/billing/invoice-sync` | `cronjob/billing/invoice-sync` | likely 0.55 | notify/notify | 1 (2) | pass |
 | coupled-silent-image-fault | `deployment/mail/intake` | `configmap/mail/intake-config` | likely 0.69 | notify/notify | 1 (2) | wrong root |
@@ -1007,7 +1008,7 @@ Time to first correct root: p95 4m15s, max 12m15s over 386 scenarios; slowest: b
 | adv-quota-after-hpa-scale-up | `resourcequota/batch/pod-cap` | `resourcequota/batch/pod-cap` | high 1.00 | notify/notify | 1 (2) | pass |
 | adv-statefulset-zone-without-nodes | `persistentvolumeclaim/streaming/data-kafka-2` | `persistentvolumeclaim/streaming/data-kafka-2` | high 1.00 | notify/notify | 1 (2) | pass |
 | adv-readiness-flap-under-load | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (3) | pass |
-| adv-node-lost-and-app-crash | `deployment/shop/api`, `node//n2` | `deployment/shop/api`, `node//n2` | high 0.77 | notify/notify | 3 (6) | pass |
+| adv-node-lost-and-app-crash | `deployment/shop/api`, `node//n2` | `deployment/shop/api`, `node//n2` | high 0.79 | notify/notify | 3 (6) | pass |
 | adv-lookalike-redis | `deployment/shop/cart` | `deployment/shop/cart (no cause)` | none | notify/notify | 1 (2) | pass |
 | adv-silent-exit-no-evidence | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
 | adv-exit137-not-oom | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |

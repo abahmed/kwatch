@@ -42,6 +42,7 @@ func (v *view) rank(cs *candidateSet) []scored {
 	v.rejected = cs.rejected
 	v.checked = cs.checked
 	v.explainedBy = map[inventory.EntityID]bool{}
+	v.noteBlast(cs)
 	var ranked, selves []scored
 	for _, id := range sortedKeys(cs.byID) {
 		c := cs.byID[id]

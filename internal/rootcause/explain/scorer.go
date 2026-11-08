@@ -55,6 +55,7 @@ var scorers = []scorer{
 	{"exclusivity", scoreExclusivity},
 	{"specificity", scoreSpecificity},
 	{"change", scoreChange},
+	{"blast-overlap", scoreBlastOverlap},
 	{"outcome", scoreOutcome},
 	{"revision", scoreRevision},
 	{"shared", scoreShared},

@@ -163,6 +163,7 @@ var noteWriters = []sentenceWriter{
 	unclearSentences,
 	checkedSentences,
 	changeSentences,
+	blastSentences,
 	causeProofSentences,
 	refusalSentences,
 	pullLoginSentences,

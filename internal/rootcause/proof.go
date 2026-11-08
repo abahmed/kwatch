@@ -77,6 +77,9 @@ const (
 	// ProofCoOnset: Count workloads began failing within Total seconds of
 	// each other (co-onset).
 	ProofCoOnset ProofCode = "co-onset"
+	// ProofBlastOverlap: Count of the Total failing pods in the cause's
+	// namespace are downstream of the changed cause (blast overlap).
+	ProofBlastOverlap ProofCode = "blast-overlap"
 	// ProofOneWorkload: only one workload fails behind a shared cause
 	// (shared).
 	ProofOneWorkload ProofCode = "one-workload"
