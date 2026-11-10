@@ -48,7 +48,8 @@ func TestIftttCustomEvent(t *testing.T) {
 	}
 	c := NewIfttt(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
-	assert.Equal(c.url, "https://maker.ifttt.com/trigger/k8s-alert/with/key/abc123")
+	assert.Equal(c.url, "https://maker.ifttt.com/trigger/k8s-alert/with/"+
+		"key/abc123")
 }
 
 func TestSendMessage(t *testing.T) {
@@ -121,4 +122,21 @@ func TestInvalidHttpRequest(t *testing.T) {
 
 	c.url = "http://localhost:132323/%s"
 	assert.NotNil(c.SendMessage(context.Background(), "test"))
+}
+
+// A Maker webhook answers a successful trigger with plain text: that is
+// a delivery, not an error to retry (a retry fires the applet again).
+func TestSendMessageAcceptsAPlainTextSuccess(t *testing.T) {
+	s := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte("Congratulations! You've fired the " +
+				"kwatch event"))
+		}))
+	defer s.Close()
+
+	c := NewIfttt(map[string]interface{}{"key": "abc123"},
+		testAppConfig(), testDeps)
+	c.url = s.URL
+
+	assert.NoError(t, c.SendMessage(context.Background(), "test"))
 }

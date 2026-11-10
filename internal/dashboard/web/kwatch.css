@@ -1,0 +1,26 @@
+/* kwatch dashboard: the kwatch health page (js/kwatchpage.js), on top
+   of the page cards in overview.css: a plain headline, cards in pairs
+   that stretch to one height, amber and red from 70% and 90% of a
+   limit. */
+.kp-why { flex: 1 1 100%; margin: 0; padding-left: 38px; color: var(--text-muted); font-size: var(--t-small); }
+.pgrid { align-items: stretch; }
+.pgrid > .pcard { display: flex; flex-direction: column; }
+.kp-facts { grid-template-columns: max-content 1fr; }
+.kp-facts dd.warn { color: var(--degraded); font-weight: 600; }
+.kp-facts-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 12px 24px; margin: 4px 0 0; }
+.kp-facts-row dt { color: var(--text-muted); font-size: var(--t-small); }
+.kp-facts-row dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.kp-facts-row dd.mono { font-family: var(--font-mono); font-size: var(--t-small); }
+.kp-note { margin: 6px 0 0; }
+.kp-counts.bad { color: var(--failing); font-weight: 600; }
+.kp-res { grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)); }
+.kp-res-h { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.kp-res-h .chip { font-size: var(--t-micro); }
+@media (max-width: 700px) {
+  .kp-why { padding-left: 0; }
+  .kp-facts { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .kp-facts dt { margin-top: 8px; }
+}
+/* The non-production badge under the health verdict. */
+.kp-np { flex: 1 1 100%; margin: 0; padding-left: 38px; }
+@media (max-width: 700px) { .kp-np { padding-left: 0; } }

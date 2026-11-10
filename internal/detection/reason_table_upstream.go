@@ -80,7 +80,10 @@ var upstreamReasons = []ReasonInfo{
 	eventReason("MissingClusterDNS", Warning),
 	eventReason("FailedMountOnFilesystemMismatch", Critical),
 	eventReason("FailedNodeDeclaredFeaturesCheck", Warning),
-	eventReason("FailedToRetrieveImagePullSecret", Warning),
+	// The kubelet pulls without a pull Secret it cannot read: a notice,
+	// never a failure of its own. Whether it matters shows in the
+	// container's state: a pull that is then refused is the finding.
+	stateReason("FailedToRetrieveImagePullSecret", kube.KindPod),
 	eventReason("HostIPsIPFamilyMismatch", Warning),
 	eventReason("InvalidImageID", Warning),
 	eventReason("LifecycleHTTPFallback", Info),

@@ -8,13 +8,30 @@ says nothing yet. It waits `Settle` (75s) so the findings of one failure
 arrive as one message, and so a shared cause can surface and replace many
 incidents with one.
 
-A page is urgent, so it waits only `PageSettle` (15s). The exception is a
-burst. `BurstIncidents` (3) is how many incidents may settle at once before a
+A page is urgent, so it waits only `PageSettle` (15s). The exceptions are a
+failure kwatch found already there when it started (`foundAtStart`: opened
+by its first look, with a member older than kwatch), which may be clearing
+already and waits the full 75s, and a burst. `BurstIncidents` (3) is how many incidents may settle at once before a
 page also waits the full 75s. The count (`settlingCount` in `lifecycle.go`)
 takes incidents in `Settling` that have members and are at the `Notify`
 tier or higher. A `Silent` or `Digest` incident never speaks on its own, so
 it never counts toward a burst: a page that settles beside three digest
 findings still goes out after `PageSettle`.
+
+An incident also waits while the cluster scales (`scale_wave.go`,
+`scale_hold.go`). At least 3 nodes, or a fifth of the most nodes seen if
+that is more, added or removed within 10 minutes make a scaling wave; it
+is over when no node was added or removed for 5 minutes. An incident of
+the `Notify` tier or higher opened during the wave whose failures are all
+scaling side effects (pods pending, unschedulable, creating, pulling
+images, evicted, lost or not ready; workloads unavailable; Services
+without endpoints; a node that is removed, being removed or joined during
+the wave) settles until 5 minutes after the wave is over, at most 30
+minutes from its opening. A notification is held as well as a page: told
+at once, it would turn into a page a minute later. A crash loop, an OOM
+kill, a node that fails without being taken out, or a cause that blames a
+change other than a node's coming or going ends the hold at once. Its
+timers say "Paging held: cluster is scaling".
 
 A settling incident does not wait for evidence that is still on its way.
 Holding the announcement while a pod of the failing workload, or of a

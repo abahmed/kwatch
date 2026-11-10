@@ -8,17 +8,25 @@ Reminders say `still open` when nothing else changed (`reminderEvery` in
 - A page (or a held page) is said again once after `PageRemindAfter` (6h),
   then every `RemindEvery` (a week).
 - An incident that only the digest or a roll-up carries (digest tier, or
-  `Delivery.rolledUp`) is said again every `ChronicRemindEvery` (a day): "still
-  failing, for 3d now". Without it nobody would hear of it twice.
+  `Delivery.rolledUp`) is said again after `ChronicRemindEvery` (a day), then
+  3 days later, then a week later, and weekly from then on ("still failing,
+  for 3d now"); `chronicBackoff` in `reminder_backoff.go`. Any other message
+  of the incident (a rise, a new cause, new objects, a reopening) starts the
+  gaps over at a day. The count is saved with the incident, so a restart
+  keeps the back-off. Without a reminder nobody would hear of it twice, but a
+  low problem that changes nothing does not need one every day.
 - Every other tier is said again every `RemindEvery`.
 
 A flapping incident also gets its reminder when it is due.
 
 ## Ongoing digest problems
 
-A digest lists a problem once, and the daily reminder above comes only
+A digest lists a problem once, and the reminder above comes only
 when the incident stays quiet. A digest-tier incident that a digest listed
-and that is still open (also flapping or recovering) and not acknowledged
+and that is still failing and not acknowledged (open, or flapping with a
+failure right now; one that recovers, or flaps and is healthy at the
+moment, is left out, because "still failing" would be false:
+`stillFailing` in `announce/ongoing.go`)
 is therefore named again in the digests that go out, as an ongoing item
 in the Problems list: `Service web (shop) is still failing, for two days
 now.` Each ongoing item is listed in full at most once a day (UTC): in the
@@ -62,9 +70,19 @@ kubectl annotate deploy/api kwatch.dev/ack="looking into it"
   again` update still goes out, because the resolve ended the thread. If
   the annotation was removed meanwhile, the removal is told after it.
 - A new incident (after the window, or another mode) is not pre-acked by
-  the old one. If the annotation is still on the object when it is
-  announced, the announcement says `The ack annotation is still present on
-  deployment/api, so reminders are held`, and reminders are held for it too.
+  the old one. An annotation that was on the object before the incident
+  opened is ignored for it (`staleAck` in `ack_stale.go`): no mention in
+  the announcement, and it reminds, releases a held page and pages a
+  flapper as usual. "Before" is the `Since` of the model's ack attribute,
+  when kwatch first saw the annotation with its present note, so changing
+  the note, or removing the annotation and setting it again, acknowledges
+  the new incident. A restart rebuilds the model and would make every
+  annotation look new, so the incident keeps the objects whose annotation
+  it ignored (`AckIgnored` in the record) and goes on ignoring them until
+  the annotation changes after the restore grace.
+- An annotation written while the incident still settles is about it: the
+  announcement says `It is already acknowledged (annotation on
+  deployment/api)`, no separate update follows, and reminders are held.
 - The note is a person's text: kwatch reads it as one line, removes
   credentials, bounds it to 200 bytes and only ever quotes it.
 - `Incident.Ack` is persisted, so a restart does not tell it again. While a

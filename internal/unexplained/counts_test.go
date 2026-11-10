@@ -120,3 +120,29 @@ func TestUnknownKindsAndEmptyCountsAreIgnored(t *testing.T) {
 	c.Record(KindEvent, "M", "R", "", 0, day0)
 	assert.Zero(t, c.Summary(day0, 5).Events)
 }
+
+// The overflow rows count inside MaxRows: what is counted before a
+// restart is counted after it.
+func TestOverflowSurvivesARestore(t *testing.T) {
+	now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
+	c := New()
+	for i := range MaxRows + 5 {
+		c.Record(KindEvent, "mode", "reason-"+strconv.Itoa(i), "", 1, now)
+		c.Record(KindIncident, "mode", "cause-"+strconv.Itoa(i), "", 1, now)
+	}
+	raw, err := json.Marshal(c)
+	require.NoError(t, err)
+	d := New()
+	require.NoError(t, json.Unmarshal(raw, d))
+	assert.Equal(t, c.Summary(now, 0), d.Summary(now, 0))
+}
+
+// Latest follows the events counted only: an incident counted later
+// does not mark events before it as read.
+func TestLatestIgnoresIncidents(t *testing.T) {
+	t0 := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
+	c := New()
+	c.Record(KindEvent, "mode", "reason", "", 1, t0)
+	c.RecordIncident("inc-1", "mode", "cause", "", t0.Add(time.Minute))
+	assert.Equal(t, t0, c.Latest())
+}

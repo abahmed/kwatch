@@ -93,8 +93,7 @@ func restartJudgement(
 		return judgement{}
 	}
 	cmp := b.Compare(workload, inventory.MetricRestartsPerHour, rate)
-	return judge(cmp, "restarts "+perHour(rate)+" vs a usual "+
-		perHour(cmp.Typical))
+	return judge(cmp, "restarts "+vsUsualRate(rate, cmp.Typical))
 }
 
 // memoryJudgement compares bytes, a container's memory, with the usual
@@ -139,6 +138,15 @@ const startSlack = 2 * time.Minute
 
 func usualDuration(seconds float64) string {
 	return format.Duration(time.Duration(seconds * float64(time.Second)))
+}
+
+// vsUsualRate writes a rate beside the usual one: "8×/h vs a usual
+// 2×/h", or "8×/h, usually none" when the usual rate rounds to nothing.
+func vsUsualRate(rate, usual float64) string {
+	if usual < 0.005 {
+		return perHour(rate) + ", usually none"
+	}
+	return perHour(rate) + " vs a usual " + perHour(usual)
 }
 
 // perHour writes a rate such as "12×/h" or "0.1×/h".

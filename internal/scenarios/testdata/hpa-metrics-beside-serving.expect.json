@@ -1,0 +1,11 @@
+{
+  "name": "hpa-metrics-beside-serving",
+  "description": "One of two pods of a Deployment crash-loops and the other serves; its HPA cannot read metrics.",
+  "root": "deployment/shop/web",
+  "otherRoots": [
+    "horizontalpodautoscaler/shop/web"
+  ],
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "10m0s"
+}

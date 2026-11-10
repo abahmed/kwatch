@@ -26,20 +26,23 @@ var gvr = schema.GroupVersionResource{
 // applied live: a partially reconfigured controller is harder to reason about
 // than a brief, explicit restart.
 type Watcher struct {
-	runtime             config.RuntimeConfig
-	dynamicClient       dynamic.Interface
-	namespace           string
-	resync              time.Duration
-	mu                  sync.Mutex
-	lifecycleMu         sync.Mutex
-	seen                map[string]string
-	ready               bool
-	started             bool
-	resetting           bool
-	generation          uint64
-	cancel              context.CancelFunc
-	restart             func()
-	restartRequested    bool
+	runtime          config.RuntimeConfig
+	dynamicClient    dynamic.Interface
+	namespace        string
+	resync           time.Duration
+	mu               sync.Mutex
+	lifecycleMu      sync.Mutex
+	seen             map[string]string
+	ready            bool
+	started          bool
+	resetting        bool
+	generation       uint64
+	cancel           context.CancelFunc
+	restart          func()
+	restartRequested bool
+	// startupSignature is what the startup overlay read (ExpectStartup).
+	startupKnown        bool
+	startupSignature    string
 	statusSink          func(error)
 	stateSink           func(Status)
 	lastError           string

@@ -6,3 +6,4 @@ api_secret=<redacted>
 from=kwatch
 text=🔴 сервис «платежи» в shop падает — 支付失败 ñandú.
 to=+12025550100
+type=unicode

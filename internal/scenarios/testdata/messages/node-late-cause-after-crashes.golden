@@ -1,24 +1,24 @@
 10:02:15 settled
-🟠 billing-a in billing (prod-eu-1) keeps crashing; node n1 is what the failing workloads have in common, though it looks healthy, which might be related. It fails with "OCI runtime exec failed: read init-p: connection reset". All of its dependents are failing. media-a in media; search-a in search; shop-a in shop are affected as well. To check the node's conditions and recent events, run kubectl describe node n1
+🟠 billing-a in billing (prod-eu-1) keeps crashing; node n1 is what the failing workloads have in common, though it looks healthy, which might be related. It fails with "OCI runtime exec failed: read init-p: connection reset". Every app that uses it is failing. Affected: media-a in media; search-a in search; shop-a in shop. To check the node's conditions and recent events, run kubectl describe node n1
 🟠 billing-a in billing (prod-eu-1) keeps crashing; node n1 is what the failing workloads have in common, though it looks healthy, which might be related.
 | 🟠 **billing-a** in **billing** (**prod-eu-1**) keeps crashing; node n1 is what the failing workloads have in common, though it looks healthy, which might be related.
 | It fails with `OCI runtime exec failed: read init-p: connection reset`.
-| All of its dependents are failing.
-| **media-a** in **media**; **search-a** in **search**; **shop-a** in **shop** are affected as well.
+| Every app that uses it is failing.
+| Affected: **media-a** in **media**; **search-a** in **search**; **shop-a** in **shop**.
 | To check the node's conditions and recent events, run
 | ```
 | kubectl describe node n1
 | ```
 10:06:50 material change
-🔴 Node n1 (prod-eu-1) is getting worse: billing-a in billing; media-a in media; search-a in search; and one other now crash-loop. It is now critical. All of its dependents are failing.
+🔴 Node n1 (prod-eu-1) is getting worse: billing-a in billing; media-a in media; search-a in search; and one other now crash-loop. It is now critical. Every app that uses it is failing.
 🔴 Node n1 (prod-eu-1) is getting worse: billing-a in billing; media-a in media; search-a in search; and one other now crash-loop.
 | 🔴 Node n1 (**prod-eu-1**) is getting worse: **billing-a** in **billing**; **media-a** in **media**; **search-a** in **search**; and one other now crash-loop.
 | It is now critical.
-| All of its dependents are failing.
+| Every app that uses it is failing.
 10:19:00 healthy for 3m0s
-✅ billing-a in billing (prod-eu-1) is healthy again. Node n1 is Ready again. It was down for 15 minutes. Four pods were affected.
+✅ billing-a in billing (prod-eu-1) is healthy again. Node n1 is ready again. It was down for 15 minutes and recovered on its own. Four pods were affected.
 ✅ billing-a in billing (prod-eu-1) is healthy again.
 | ✅ billing-a in billing (**prod-eu-1**) is healthy again.
-| Node n1 is Ready again.
-| It was down for 15 minutes.
+| Node n1 is ready again.
+| It was down for 15 minutes and recovered on its own.
 | Four pods were affected.

@@ -1,0 +1,11 @@
+{
+  "name": "hpa-no-ready-pods-joins-workload",
+  "description": "Both pods of a Deployment crash-loop; its HPA cannot read metrics from pods that are not ready.",
+  "root": "deployment/shop/web",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "horizontalpodautoscaler/shop/web"
+  ],
+  "tail": "10m0s"
+}

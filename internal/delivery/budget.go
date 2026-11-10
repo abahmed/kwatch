@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 )
@@ -36,6 +37,8 @@ type sendPacer struct {
 	blocked map[string]time.Time
 	// failures counts each provider's failed rounds in a row.
 	failures map[string]int
+	// rejections counts each provider's permanent failures in a row.
+	rejections map[string]int
 	// hourly is each provider's notification budget.
 	hourly map[string]*hourlyBudget
 }
@@ -80,6 +83,43 @@ func (m *Manager) waitForSendSlot(
 	return m.sleep(ctx, wait)
 }
 
+// errProviderBlocked means a provider cannot be sent to soon: it is
+// blocked after a failure or rate limit for longer than one pacing
+// interval, or so many sends are already waiting for it that the next
+// free slot is more than shortSlotIntervals away. Nothing was reserved.
+var errProviderBlocked = errors.New("provider_blocked")
+
+// shortSlotIntervals is how many pacing intervals a caller that must
+// not wait out a block still waits behind a provider's own traffic.
+const shortSlotIntervals = 5
+
+// waitForShortSendSlot is waitForSendSlot for a caller that must not
+// wait out a block. A provider that is only busy (its next slots are
+// taken by its own sends) is healthy: the caller takes the next free
+// slot and waits for it, up to shortSlotIntervals. A provider blocked
+// for longer than one interval, or busier than that, gives
+// errProviderBlocked and nothing is reserved. It returns ctx's error
+// when ctx ended.
+func (m *Manager) waitForShortSendSlot(
+	ctx context.Context, provider string,
+) error {
+	m.pacer.mu.Lock()
+	now := m.nowTime()
+	interval := m.pacer.sendInterval()
+	slot := m.pacer.last[provider].Add(interval)
+	if m.pacer.blocked[provider].Sub(now) > interval ||
+		slot.Sub(now) > shortSlotIntervals*interval {
+		m.pacer.mu.Unlock()
+		return errProviderBlocked
+	}
+	wait := m.pacer.reserve(provider, now)
+	m.pacer.mu.Unlock()
+	if wait > 0 && !m.sleep(ctx, wait) {
+		return ctx.Err()
+	}
+	return nil
+}
+
 // retain keeps the pacing, outage, hourly budget and pending summary state
 // of the providers in keep and drops the rest. A reconfiguration must not
 // refill an exhausted budget, forget a provider outage, or lose an overflow
@@ -91,6 +131,7 @@ func (p *sendPacer) retain(keep map[string]struct{}) {
 	retainKeys(p.summaries, keep)
 	retainKeys(p.blocked, keep)
 	retainKeys(p.failures, keep)
+	retainKeys(p.rejections, keep)
 	retainKeys(p.hourly, keep)
 }
 

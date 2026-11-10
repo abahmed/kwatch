@@ -64,6 +64,7 @@ type Registry struct {
 	LicenseExpiry            atomic.Int64
 	LicenseRenewals          [len(licenseRenewalResults)]atomic.Int64
 	EditionRebuilds          [len(editionRebuildResults)]atomic.Int64
+	LeadershipRejoins        [len(rejoinResults)]atomic.Int64
 	DecisionLag              LagHistogram
 	// Delivery holds the per-provider and outbox delivery metrics.
 	Delivery DeliveryMetrics

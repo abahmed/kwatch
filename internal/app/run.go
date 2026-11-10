@@ -22,5 +22,7 @@ func Run() int {
 // kwatch rebuilds in process, so every component is built with the new
 // entitlements and the pod never restarts.
 func RunWithClock(now func() time.Time) int {
+	// Copies of the state file that interrupted commands left behind.
+	sweepEditionCopies(StatePath(), now())
 	return newGenerationEnv(now).runAll(StartEntitlements(StatePath(), now()))
 }

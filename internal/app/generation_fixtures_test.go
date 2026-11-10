@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"path/filepath"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/config/crd"
 	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/kubeclient"
@@ -38,26 +41,51 @@ type genHarness struct {
 
 	loadErr func(gen int) error
 	bootErr func(gen, attempt int) error
-	health  func(gen int) config.HealthCheck
-	serve   func(gen int, deps *serverDeps) int
+	// apiErr answers the startup API call of each attempt, through the
+	// generation's real StartupRetry; apiSleeps records its waits.
+	apiErr    func(gen, attempt int) error
+	apiSleeps *sleepRecorder
+	// apiBlock makes every API retry wait until the generation ends.
+	apiBlock bool
+	// skew moves the harness clock forward by every API retry wait, so
+	// the first start's budget runs out without waiting for it.
+	skew   atomic.Int64
+	health func(gen int) config.HealthCheck
+	serve  func(gen int, deps *serverDeps) int
 	// tweakBoot changes the bootstrap of every generation.
 	tweakBoot func(*bootstrap)
 	// fired makes every release wait give up at once.
 	fired bool
+	// stop stands in for the process's stop signal; nil lets the loop
+	// register the real handler.
+	stop chan struct{}
 }
 
 func newGenHarness(t *testing.T) *genHarness {
 	t.Helper()
-	return &genHarness{t: t, sleeps: &sleepRecorder{}}
+	return &genHarness{t: t, sleeps: &sleepRecorder{},
+		apiSleeps: &sleepRecorder{}}
 }
 
 func (h *genHarness) env() generationEnv {
-	now := time.Now
+	now := func() time.Time {
+		return time.Now().Add(time.Duration(h.skew.Load()))
+	}
 	return generationEnv{
 		now: now, processStart: now(), retry: h.sleeps.retry(),
 		after: h.after, load: h.load, boot: h.boot, serve: h.run,
-		logs: newLogFormat(),
+		logs: newLogFormat(), stop: h.stop, apiSleep: h.apiSleep,
 	}
+}
+
+func (h *genHarness) apiSleep(ctx context.Context, d time.Duration) error {
+	h.skew.Add(int64(d))
+	err := h.apiSleeps.sleep(ctx, d)
+	if h.apiBlock {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	return err
 }
 
 func (h *genHarness) after(time.Duration) <-chan time.Time {
@@ -86,8 +114,8 @@ func (h *genHarness) load() (*config.Config, error) {
 }
 
 func (h *genHarness) boot(
-	_ context.Context, cfg *config.Config, _ func() time.Time, _ time.Time,
-	entitlements feature.Entitlements,
+	ctx context.Context, cfg *config.Config, _ func() time.Time, _ time.Time,
+	entitlements feature.Entitlements, api *crd.StartupRetry,
 ) (*bootstrap, error) {
 	h.boots++
 	h.events = append(h.events, "boot")
@@ -95,6 +123,9 @@ func (h *genHarness) boot(
 		if err := h.bootErr(h.gen, h.boots); err != nil {
 			return nil, err
 		}
+	}
+	if err := h.callAPI(ctx, api); err != nil {
+		return nil, err
 	}
 	clk := clock.Func(time.Now)
 	runtime := cfg.Runtime
@@ -109,6 +140,20 @@ func (h *genHarness) boot(
 		h.tweakBoot(boot)
 	}
 	return boot, nil
+}
+
+// callAPI stands in for the startup KwatchConfig List.
+func (h *genHarness) callAPI(
+	ctx context.Context, api *crd.StartupRetry,
+) error {
+	if h.apiErr == nil {
+		return nil
+	}
+	attempt := 0
+	return api.Do(ctx, func(context.Context) error {
+		attempt++
+		return h.apiErr(h.gen, attempt)
+	})
 }
 
 func (h *genHarness) run(_ context.Context, deps *serverDeps) int {
@@ -142,6 +187,23 @@ func endGeneration(deps *serverDeps, next *feature.Entitlements) int {
 }
 
 func restartTo(e feature.Entitlements) *feature.Entitlements { return &e }
+
+// loseLease ends a generation the way a lost Lease does: the election
+// returns (finishElection, as for a pod that held no session) and the
+// supervisor reports it, while the health listener keeps serving.
+func loseLease(deps *serverDeps) int {
+	supervisor := newComponentSupervisor(time.Now)
+	if deps.runtime.Lifecycle().HealthCheck().Enabled {
+		supervisor.startOwned(deps.ctx, componentSpec{
+			name: "health-server", required: true,
+			run: deps.healthServer.Serve,
+		})
+	}
+	callbacks := &leaderCallbacks{activeErrors: make(chan error, 1)}
+	err := finishElection(deps.ctx, deps, callbacks, nil, "kwatch-a")
+	supervisor.report(fmt.Errorf("leader-election: %w", err))
+	return waitShutdown(deps, supervisor)
+}
 
 // holdStateFile opens the state file the way a leader session does and
 // records it on deps, so the loop can wait for it.

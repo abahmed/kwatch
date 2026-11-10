@@ -133,3 +133,28 @@ func (s Snapshot) fatalLineOf(id inventory.EntityID) string {
 	}
 	return ""
 }
+
+// podStoppedAtStart reports a fatal line at start in container id or in
+// any other container of its pod: a sidecar's probe settings must not
+// take the blame for the app container's crash.
+func (v *view) podStoppedAtStart(
+	id inventory.EntityID, container inventory.Entity,
+) bool {
+	if v.startupErrorLine(id, container) != "" {
+		return true
+	}
+	for _, pod := range v.s.Model.Related(id, inventory.PartOf,
+		inventory.Outgoing) {
+		for _, other := range v.s.Model.Related(pod, inventory.PartOf,
+			inventory.Incoming) {
+			if other == id {
+				continue
+			}
+			if e, ok := v.s.Model.Entity(other); ok &&
+				v.startupErrorLine(other, e) != "" {
+				return true
+			}
+		}
+	}
+	return false
+}

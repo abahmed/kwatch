@@ -45,6 +45,26 @@ func (a *announcer) noteListed(
 	}
 }
 
+// queueRestoredIntros starts the investigation of each restored
+// incident still owed its introduction (announce restored_intro.go) and
+// waits for it like a listed one.
+func (a *announcer) queueRestoredIntros(now time.Time) {
+	owed := a.collect.TakeRestoredIntros()
+	if a.pool == nil {
+		return
+	}
+	for _, p := range owed {
+		if _, waiting := a.intros[p.ID]; waiting {
+			continue
+		}
+		a.investigate(p, now)
+		if a.intros == nil {
+			a.intros = map[string]time.Time{}
+		}
+		a.intros[p.ID] = now.Add(outputWait)
+	}
+}
+
 // introduceDue sends the introductions whose investigation is in and
 // drops those that waited outputWait in vain. It reports whether it
 // sent one, which changes the incident's saved state.

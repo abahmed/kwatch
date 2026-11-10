@@ -13,19 +13,19 @@ import (
 
 func TestUrgencyLineAgreesWithHowManyProblemsAreOpen(t *testing.T) {
 	assert.Empty(t, urgencySentences(0))
-	assert.Equal(t, "It is not urgent; if it gets worse it gets its own "+
-		"message.", urgencySentences(1)[0].text)
-	assert.Equal(t, "None of them is urgent; one that gets worse gets "+
-		"its own message.", urgencySentences(2)[0].text)
+	assert.Equal(t, "Not urgent: kwatch alerts on its own if it gets "+
+		"worse.", urgencySentences(1)[0].text)
+	assert.Equal(t, "None is urgent: kwatch alerts on its own if one "+
+		"gets worse.", urgencySentences(2)[0].text)
 }
 
 func TestUnchangedLineSpellsOutOne(t *testing.T) {
 	web := Ongoing{Root: inventory.CoreID(kube.KindDeployment, "shop", "web")}
 	db := Ongoing{Root: inventory.CoreID(kube.KindDeployment, "shop", "db")}
 
-	assert.Equal(t, "one more still failing, unchanged (web)",
+	assert.Equal(t, "Still failing and unchanged: web",
 		unchangedLine([]Ongoing{web}))
-	assert.Equal(t, "two more still failing, unchanged (web, db)",
+	assert.Equal(t, "Still failing and unchanged (2): web, db",
 		unchangedLine([]Ongoing{web, db}))
 }
 

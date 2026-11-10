@@ -3,6 +3,7 @@ package ilert
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -10,10 +11,13 @@ import (
 	"github.com/abahmed/kwatch/internal/notification"
 )
 
+// testKey is distinctive so a redacted golden cannot mask other text.
+const testKey = "ilert-key-123"
+
 func newTestIlert(t *testing.T) (*Ilert, *providertest.Recorder) {
 	t.Helper()
 	rec := providertest.NewRecorder(t)
-	c := NewIlert(map[string]interface{}{"integrationKey": "ik"}, "dev",
+	c := NewIlert(map[string]interface{}{"integrationKey": testKey}, "dev",
 		rec.Dependencies())
 	c.url = rec.URL()
 	return c, rec
@@ -41,13 +45,43 @@ func TestIlertIncidentLifecycle(t *testing.T) {
 			}
 			p := decodePayload(t, rec.Last(t).Body)
 			if p.EventType != want[tc.Name] || p.AlertKey != "kwatch-dev-p-42" ||
-				p.Summary != m.Short || p.Message != m.Note ||
+				p.Summary != m.Short || p.IntegrationKey != testKey ||
 				!strings.HasPrefix(p.Details, m.Note) ||
 				p.Priority != "HIGH" {
 				t.Fatalf("payload = %+v", p)
 			}
 			providertest.AssertOneLeadingEmoji(t, p.Summary)
 		})
+	}
+}
+
+// The documented Events API is POST /api/events with the integration key
+// in the JSON body. The old /api/v1/events/push/<key> form, with the key
+// in the path, fails this test.
+func TestIlertUsesTheDocumentedEventsAPI(t *testing.T) {
+	c, rec := newTestIlert(t)
+	u, err := url.Parse(ilertAPIURL)
+	if err != nil || u.Host != "api.ilert.com" || u.Path != "/api/events" {
+		t.Fatalf("ilertAPIURL = %q (%v)", ilertAPIURL, err)
+	}
+	c.url = rec.URL() + u.Path
+	if err := c.SendIncident(
+		context.Background(), providertest.Announce()); err != nil {
+		t.Fatal(err)
+	}
+	req := rec.Last(t)
+	if req.Method != "POST" || req.Path != "/api/events" {
+		t.Fatalf("request = %s %s", req.Method, req.Path)
+	}
+	if strings.Contains(req.RawPath+req.Query, testKey) {
+		t.Fatalf("integration key leaked into the URL: %s", req.RawPath)
+	}
+	body := req.JSON(t)
+	if body["integrationKey"] != testKey {
+		t.Fatalf("integrationKey = %v", body["integrationKey"])
+	}
+	if _, ok := body["message"]; ok {
+		t.Fatal("undocumented message field is still sent")
 	}
 }
 
@@ -102,11 +136,28 @@ func TestIlertPriorityFollowsTheIncidentSeverity(t *testing.T) {
 	}
 }
 
+func TestIlertConfiguredPriorityIsSentAsHighOrLow(t *testing.T) {
+	for in, want := range map[interface{}]string{
+		"CRITICAL": "HIGH", "critical": "HIGH", " High ": "HIGH",
+		"low": "LOW", "bogus": "HIGH", "": "HIGH", nil: "HIGH", 3: "HIGH",
+	} {
+		if got := normalizePriority(in); got != want {
+			t.Errorf("normalizePriority(%v) = %q, want %q", in, got, want)
+		}
+	}
+	c := NewIlert(map[string]interface{}{
+		"integrationKey": "k", "priority": "CRITICAL",
+	}, testAppConfig(), testDeps)
+	if got := c.priorityFor(providertest.Announce()); got != "HIGH" {
+		t.Errorf("CRITICAL sent as %q, want HIGH", got)
+	}
+}
+
 func TestIlertConfiguredPriorityIsForPagesOnly(t *testing.T) {
-	c := &Ilert{priority: "CRITICAL"}
+	c := &Ilert{priority: "HIGH"}
 	page, note := providertest.Announce(), providertest.Announce()
 	note.Route.Severity = "warning"
-	if got := c.priorityFor(page); got != "CRITICAL" {
+	if got := c.priorityFor(page); got != "HIGH" {
 		t.Errorf("page priority = %q", got)
 	}
 	if got := c.priorityFor(note); got != "LOW" {

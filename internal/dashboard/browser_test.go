@@ -19,6 +19,8 @@ import (
 	"github.com/chromedp/chromedp"
 
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
 // The dashboard in a real (headless) browser: every page at a desktop
@@ -40,6 +42,11 @@ func browserIssues() []incident.Incident {
 		if i%4 == 0 {
 			it.Tier = incident.Page
 		}
+		if i == 1 {
+			// The Deployment of browserMapModel: its Impact tab draws
+			// "How it connects".
+			it.Root = inventory.CoreID(kube.KindDeployment, "shop", "web")
+		}
 		if i == 2 {
 			it.Cause = browserRoundCause()
 			it.Facts = []string{
@@ -52,8 +59,8 @@ func browserIssues() []incident.Incident {
 
 func TestBrowserDashboardPages(t *testing.T) {
 	ctx, srv := browserSetup(t)
-	pages := []string{"/", "/issues", "/issues/inc-001", "/activity",
-		"/kwatch", "/map", "/map?view=failing"}
+	pages := []string{"/", "/issues", "/issues/inc-001",
+		"/issues/inc-001#impact", "/activity", "/kwatch"}
 	for _, size := range browserSizes {
 		tab, problems := browserTab(t, ctx)
 		signInBrowser(t, tab, srv.URL)
@@ -63,6 +70,8 @@ func TestBrowserDashboardPages(t *testing.T) {
 		}
 		if size.w > 900 {
 			checkIssuesFiltersStay(t, tab, srv.URL)
+			checkIssueMap(t, tab, srv.URL)
+			checkLayouts(t, tab, srv.URL)
 		}
 	}
 }

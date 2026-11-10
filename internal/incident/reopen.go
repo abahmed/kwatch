@@ -60,6 +60,7 @@ func (m *Manager) reopen(p *Incident, now time.Time) {
 	p.State, p.Opened, p.Announced = Open, now, now
 	p.Resolved, p.RecoveringSince, p.Reminded = time.Time{}, time.Time{},
 		time.Time{}
+	p.Reminders = 0
 	p.Fix, p.FixedBy = "", nil
 	// A fix attempt of the earlier occurrence says nothing about this one.
 	p.Attempt, p.attemptSeen, p.attemptLate = nil, nil, false

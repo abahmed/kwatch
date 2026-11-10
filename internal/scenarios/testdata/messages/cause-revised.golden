@@ -1,16 +1,16 @@
 10:02:15 settled
-🟠 api in shop (prod-eu-1) keeps running out of memory because its memory limit is too low for normal use. It was killed within 10 seconds of starting. Two restarts since its pod was created one hour ago. Fix in: deployment/api → container app → resources.limits.memory (2Gi). To read the output of the last crash, run kubectl logs api-aeb6377b-a -c app -n shop --previous
+🟠 api in shop (prod-eu-1) keeps running out of memory because its memory limit is too low for normal use. It was killed within 10 seconds of starting. Two restarts since its pod was created one hour ago. Fix: raise the memory limit of container app in deployment/api above 2Gi. To read the output of the last crash, run kubectl logs api-aeb6377b-a -c app -n shop --previous
 🟠 api in shop (prod-eu-1) keeps running out of memory because its memory limit is too low for normal use.
 | 🟠 **api** in **shop** (**prod-eu-1**) keeps running out of memory because its memory limit is too low for normal use.
 | It was killed within 10 seconds of starting.
 | Two restarts since its pod was created one hour ago.
-| Fix in: deployment/api → container app → resources.limits.memory (2Gi).
+| Fix: raise the memory limit of container app in deployment/api above 2Gi.
 | To read the output of the last crash, run
 | ```
 | kubectl logs api-aeb6377b-a -c app -n shop --previous
 | ```
 10:06:30 cause revised
-🟠 Cause changed: Node n3 (prod-eu-1) is low on memory. All of its dependents are failing.
-🟠 Cause changed: Node n3 (prod-eu-1) is low on memory.
-| 🟠 Cause changed: Node n3 (**prod-eu-1**) is low on memory.
-| All of its dependents are failing.
+🟠 Cause changed (earlier: api in shop): Node n3 (prod-eu-1) is low on memory. Every app that uses it is failing.
+🟠 Cause changed (earlier: api in shop): Node n3 (prod-eu-1) is low on memory.
+| 🟠 Cause changed (earlier: **api** in **shop**): Node n3 (**prod-eu-1**) is low on memory.
+| Every app that uses it is failing.

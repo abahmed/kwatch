@@ -98,6 +98,11 @@ func (v *Vonage) SendMessage(ctx context.Context, msg string) error {
 	form.Set("from", v.from)
 	form.Set("to", v.to)
 	form.Set("text", msg)
+	if needsUnicode(msg) {
+		// Without type=unicode, characters outside GSM-7 (the status
+		// emoji) are replaced on the handset.
+		form.Set("type", "unicode")
+	}
 
 	body, err := v.sender.Send(ctx, transport.Request{
 		Provider: v.Name(), URL: v.url, Body: []byte(form.Encode()),

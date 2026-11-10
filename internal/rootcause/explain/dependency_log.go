@@ -68,11 +68,13 @@ func (d Dependency) Label() string {
 // It reports false unless the text says a connection failed and names
 // what it was to: a known client or a host.
 func DependencyIn(text string) (Dependency, bool) {
-	lower := withoutUserinfo(strings.ToLower(text))
-	failures := connectionFailure.FindAllStringIndex(lower, -1)
-	if failures == nil || dnsServerFailure.MatchString(lower) {
+	lower := withoutUserinfo(strings.ToLower(capText(text,
+		dependencyScanMax)))
+	spans := connectionFailure.FindAllStringIndex(lower, -1)
+	if spans == nil || dnsServerFailure.MatchString(lower) {
 		return Dependency{}, false
 	}
+	failures := newFailureSet(lower, spans)
 	host, port := dependencyHost(lower, failures)
 	d := Dependency{Name: clientName(lower, port, failures), Host: host}
 	if port != "" && d.Host != "" {

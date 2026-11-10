@@ -1,0 +1,7 @@
+{
+  "name": "job-created-suspended",
+  "description": "A Job is created with suspend: true, waits twenty minutes for its queue, then runs and completes.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

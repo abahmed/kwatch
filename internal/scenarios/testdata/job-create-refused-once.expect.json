@@ -1,0 +1,7 @@
+{
+  "name": "job-create-refused-once",
+  "description": "A Job's first pod create is refused once by a webhook timeout; the retry creates the pod and the Job completes a minute later.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

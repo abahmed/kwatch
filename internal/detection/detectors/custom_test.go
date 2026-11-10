@@ -142,3 +142,16 @@ func TestCustomReportsFailingAndSucceededConditions(t *testing.T) {
 		})
 	}
 }
+
+// A condition without a transition time does not hide the others'.
+func TestFailingSinceIgnoresZeroTimes(t *testing.T) {
+	early := t0.Add(-time.Hour)
+	zero := failingCondition{}
+	known := failingCondition{since: early}
+	for _, in := range [][]failingCondition{
+		{zero, known}, {known, zero},
+	} {
+		assert.True(t, failingSince(in).Equal(early))
+	}
+	assert.True(t, failingSince([]failingCondition{zero}).IsZero())
+}

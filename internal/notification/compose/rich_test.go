@@ -56,13 +56,13 @@ func digestMessage() notification.Message {
 func TestDigestIsAScannableList(t *testing.T) {
 	msg := digestMessage()
 	slack := msg.Render(notification.SlackDialect())
-	want := "🟡 *kwatch digest* · staging — 2 problems · 5 resolved · " +
+	want := "🟡 *kwatch summary* · staging — 2 problems · 5 resolved · " +
 		"1 workload not ready\n\n" +
 		"*Problems*\n" +
 		"• Node *ip-10-0-67-211* — failing again (2nd time in 2h)\n" +
 		"• Service *ingress-nginx* (*kube-addons*) — failed to deploy its " +
 		"load balancer: FailedDeployModel ×3 in 15 min\n\n" +
-		"✅ 5 resolved since last digest: accounts, assets, comms +2\n\n" +
+		"✅ 5 resolved since the last summary: accounts, assets, comms +2\n\n" +
 		"*Running but not ready*\n" +
 		"• Pods never ready — 1: cart"
 	if slack != want {
@@ -73,7 +73,7 @@ func TestDigestIsAScannableList(t *testing.T) {
 		"\n- Node ip-10-0-67-211 — failing again (2nd time in 2h)\n") {
 		t.Fatalf("plain digest:\n%s", plain)
 	}
-	if !strings.Contains(msg.Note, "kwatch (staging) has two") {
+	if !strings.Contains(msg.Note, "kwatch summary (staging): two") {
 		t.Fatalf("the Note keeps its one-paragraph wording: %q", msg.Note)
 	}
 }
@@ -86,7 +86,7 @@ func TestIncidentLinesAndEmphasis(t *testing.T) {
 		"🔴 *payments* is down in *shop* (*prod-eu-1*) after the 14:02 UTC",
 		"\nOnly pods of the new revision fail.\n",
 		"Service *payments* and ingress *storefront* can't serve traffic.",
-		"*checkout* is affected as well.",
+		"Affected: *checkout*.",
 		"(changes the cluster):\n```\nkubectl rollout undo " +
 			"deployment/payments -n shop --to-revision=13\n```",
 	} {
@@ -138,7 +138,7 @@ func TestStartupSummaryIsAList(t *testing.T) {
 	got := msg.Render(notification.SlackDialect())
 	want := "🟠 *kwatch started* · prod — 1 problem began before it was " +
 		"watching\n\n*Problems*\n• Pod *alpha* (ns) — crash looping" +
-		"\n\n_" + eachOwnMessage + "_"
+		"\n\n_" + oneOwnMessage + "_"
 	if got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 	}

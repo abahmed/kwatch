@@ -27,11 +27,11 @@ func TestDigestListsAnOngoingProblemWithItsAge(t *testing.T) {
 	msg := Writer{}.DigestWith(nil, nil, nil,
 		DigestExtras{Ongoing: []Ongoing{lbOngoing()}}, extrasNow)
 
-	assert.Equal(t, "🟡 *kwatch digest* — 1 ongoing\n\n*Ongoing*\n• "+
+	assert.Equal(t, "🟡 *kwatch summary* — 1 ongoing\n\n*Ongoing*\n• "+
 		"Service *internal-ingress-nginx-controller-internal* "+
 		"(*kube-system*) — still failing since 17:14 UTC",
 		msg.Render(notification.SlackDialect()))
-	assert.Contains(t, msg.Note, "one ongoing problem to report")
+	assert.Contains(t, msg.Note, "one problem still open")
 }
 
 func TestOngoingProblemsShareTheDigestCap(t *testing.T) {
@@ -95,7 +95,7 @@ func TestDigestCarriesTheWakeLineAlone(t *testing.T) {
 
 	assert.Contains(t, msg.Render(notification.SlackDialect()),
 		"Cluster waking up: 42 workloads started between 06:51 UTC and 07:03 UTC")
-	assert.Contains(t, msg.Note, "has a cluster wake-up to report")
+	assert.Contains(t, msg.Note, "kwatch summary: a cluster wake-up.")
 }
 
 func TestDigestWithoutExtrasIsTheDigest(t *testing.T) {
@@ -118,10 +118,10 @@ func TestUnchangedOngoingProblemsAreOneLine(t *testing.T) {
 		DigestExtras{Unchanged: unchanged}, extrasNow)
 
 	assert.Contains(t, msg.Plain(),
-		"- five more still failing, unchanged (a, b, c +2)")
-	assert.Contains(t, msg.Note, "five ongoing problems to report")
+		"- Still failing and unchanged (5): a, b, c +2")
+	assert.Contains(t, msg.Note, "five problems still open")
 	assert.Contains(t, msg.Note,
-		"five more still failing, unchanged (a, b, c +2).")
+		"Still failing and unchanged (5): a, b, c +2.")
 	assert.False(t, DigestExtras{Unchanged: unchanged}.Empty())
 }
 
@@ -138,5 +138,5 @@ func TestChangedAndUnchangedOngoingProblemsShareADigest(t *testing.T) {
 
 	assert.Contains(t, msg.Plain(), "- "+strings.TrimSuffix(changed.Title,
 		".")+"\n", "a digest bullet has no closing period")
-	assert.Contains(t, msg.Plain(), "- one more still failing, unchanged (db)")
+	assert.Contains(t, msg.Plain(), "- Still failing and unchanged: db")
 }

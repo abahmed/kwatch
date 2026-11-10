@@ -3,9 +3,9 @@ Content-Type: application/json
 
 {
   "alertKey": "kwatch-dev-p-big",
-  "details": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[5995 runes sha256:efe5311fba0148f3b01979a8]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\npa…",
+  "details": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[5991 runes sha256:b045391af4c74fe89264808d]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…",
   "eventType": "ALERT",
-  "message": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[5990 runes sha256:5e5532f656904572db57d5b4]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "integrationKey": "<secret>",
   "priority": "HIGH",
   "summary": "🔴 payments in shop is crash-looping."
 }

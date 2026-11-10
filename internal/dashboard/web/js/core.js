@@ -226,6 +226,16 @@
     if (!name) return "";
     return (kind ? String(kind).toLowerCase() + "/" : "") + name;
   };
+  /* wrapName: a name in monospace that may wrap after "/" and "." but
+     never in the middle of a word. */
+  KW.wrapName = function (text, cls) {
+    var span = KW.el("span", cls || "mono");
+    String(text).replace(/([\/.])/g, "$1\u0001").split("\u0001").filter(Boolean).forEach(function (part, i) {
+      if (i) span.appendChild(document.createElement("wbr"));
+      span.appendChild(document.createTextNode(part));
+    });
+    return span;
+  };
   /* KW.cutCount: how many entries of a part the server left out to keep
      the response within its size limit (inc.truncated), else 0. */
   KW.cutCount = function (inc, part) {
@@ -236,19 +246,16 @@
   /* Severity is kwatch's alert level (the API's severity: page,
      notify, digest, silent). label is the badge; level says how the
      team was told, in plain words, for tooltips and the legend. */
+  var SEV = KW.TERMS.severity;
   KW.SEVERITY = {
-    page: { label: "Urgent", chip: "c-page", stripe: "sev-page",
-      level: "Alerted the on-call person",
-      title: "Alert level: alerted the on-call person. Look now." },
-    notify: { label: "Needs attention", chip: "c-notify", stripe: "sev-notify",
-      level: "Sent a message",
-      title: "Alert level: sent a message to your channels. Look soon." },
-    digest: { label: "Low", chip: "c-low", stripe: "sev-low",
-      level: "In the daily summary",
-      title: "Alert level: in the daily summary only. No rush." },
-    silent: { label: "Quiet", chip: "c-quiet", stripe: "sev-low",
-      level: "Not sent",
-      title: "Alert level: not sent. kwatch only keeps track of it." }
+    page: { label: SEV.page.label, chip: "c-page", stripe: "sev-page",
+      level: SEV.page.level, title: SEV.page.title },
+    notify: { label: SEV.notify.label, chip: "c-notify", stripe: "sev-notify",
+      level: SEV.notify.level, title: SEV.notify.title },
+    digest: { label: SEV.digest.label, chip: "c-low", stripe: "sev-low",
+      level: SEV.digest.level, title: SEV.digest.title },
+    silent: { label: SEV.silent.label, chip: "c-quiet", stripe: "sev-low",
+      level: SEV.silent.level, title: SEV.silent.title }
   };
   /* RANK orders severities, most urgent first. */
   KW.RANK = { page: 0, notify: 1, digest: 2, silent: 3 };
@@ -268,9 +275,7 @@
   /* UNTOLD: an issue that recovered while kwatch was still confirming
      it (the API's untold on a settled issue): no alert went out. The
      same words on every page; it is never shown as a severity. */
-  KW.UNTOLD = { label: "Settled before alerting",
-    line: "Settled before alerting \u2014 nobody was told.",
-    title: "It recovered while kwatch was still confirming it, so no alert went out." };
+  KW.UNTOLD = KW.TERMS.settled;
   KW.isUntold = function (item) {
     return !!(item && item.untold) && item.state !== "settling" &&
       item.state !== "open" && item.state !== "flapping";
@@ -281,6 +286,49 @@
     node.classList.add("clamp2");
     node.title = node.textContent;
     return node;
+  };
+  /* shortTitle: an issue's title for a list row, in plain words and
+     short: the namespace the row shows anyway is left out ("api in shop
+     is down" reads "api is down"), and so is everything after the first
+     "because", colon or dash; at most SHORT characters, cut at a word.
+     The whole title stays for its tooltip and the issue's page. */
+  var SHORT = 72;
+  var CUTS = [" because ", ", likely because ", ": ", "; ", " — ", " - ", ". ", " (from its log"];
+  function words(s) { return s.split(" ").filter(Boolean).length; }
+  /* KW.entityText turns an object's key ("kind/namespace/name") into
+     words: "external endpoint db.example.com:5432", "cluster DNS",
+     "deployment shop/api". */
+  var ACRONYM = { dns: "DNS", api: "API", tls: "TLS", url: "URL", http: "HTTP", pvc: "PVC" };
+  KW.entityText = function (key) {
+    var s = String(key || ""), a = s.indexOf("/"), b = a < 0 ? -1 : s.indexOf("/", a + 1);
+    if (b < 0) return s;
+    var kind = s.slice(0, a), ns = s.slice(a + 1, b), name = s.slice(b + 1);
+    var words = kind.split("-").map(function (w) { return ACRONYM[w] || w; }).join(" ");
+    if (!name || name === kind) return words;
+    return words + " " + (ns ? ns + "/" : "") + name;
+  };
+
+  KW.shortTitle = function (title, item) {
+    var s = String(title || "");
+    var ns = item && item.namespace;
+    if (ns) {
+      // "api in shop (prod-eu-1) is down": the row shows the namespace.
+      var esc = ns.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      s = s.replace(new RegExp(" in " + esc + "( \\([^)]*\\))?(?=[ :.;,]|$)"), "");
+    }
+    var at = -1;
+    CUTS.forEach(function (c) {
+      var i = s.indexOf(c);
+      // Never cut so early that only the object's name is left.
+      if (i > 0 && words(s.slice(0, i)) >= 3 && (at < 0 || i < at)) at = i;
+    });
+    if (at > 0) s = s.slice(0, at);
+    s = s.replace(/[\s.,;:]+$/, "");
+    if (s.length > SHORT) {
+      var cut = s.lastIndexOf(" ", SHORT - 1);
+      s = s.slice(0, cut > 24 ? cut : SHORT - 1) + "…";
+    }
+    return s;
   };
   /* problemTitle: the problem of a title an older kwatch stored with a
      note in front ("Cause now known: …", "Moved: this is now part of
@@ -299,7 +347,7 @@
     if (first === name || /[-\/.:_0-9]/.test(first)) return s;
     return s.charAt(0).toUpperCase() + s.slice(1);
   };
-  /* untoldMark: the small muted "Settled before alerting" label. */
+  /* untoldMark: the small muted "Settled on its own" label. */
   KW.untoldMark = function () {
     var m = KW.el("span", "m-untold", KW.UNTOLD.label);
     m.title = KW.UNTOLD.title;
@@ -315,6 +363,12 @@
     var s = KW.SEVERITY[sev];
     if (!s) return KW.chip("c-low c-raw" + (extra || ""), (prefix || "") + sev);
     return KW.chip(s.chip + (extra || ""), (prefix || "") + s.label, s.title);
+  };
+  /* wasChip: "Was Urgent", muted, for an issue that settled on its
+     own: nobody was alerted, so the level's colour would mislead. */
+  KW.wasChip = function (sev) {
+    var s = KW.SEVERITY[sev];
+    return KW.chip("c-acked c-was", "Was " + (s ? s.label : sev), KW.TERMS.settled.wasTitle);
   };
   KW.stateChip = function (state) {
     var s = KW.STATE[state];

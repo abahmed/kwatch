@@ -3,6 +3,7 @@ package delivery
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -47,13 +48,15 @@ func TestDeliverFallbackHonoursPagingScope(t *testing.T) {
 
 	paging := incidentJob("k", "default")
 	paging.incident.PagingOnly = true
-	err := m.deliverFallback(context.Background(), chat, "Pager", paging)
+	err := m.deliverFallback(context.Background(), chat, "Pager", paging,
+		false)
 	assert.ErrorIs(t, err, errFallbackNotRouted,
 		"chat must not receive a paging-only message")
 
 	unpaged := incidentJob("k", "default")
 	unpaged.incident.SkipPaging = true
-	err = m.deliverFallback(context.Background(), pager, "Chat", unpaged)
+	err = m.deliverFallback(context.Background(), pager, "Chat", unpaged,
+		false)
 	assert.ErrorIs(t, err, errFallbackNotRouted,
 		"a pager must not close an alert it never opened")
 }
@@ -73,9 +76,12 @@ func TestStructuredReceiverAcceptsPagingOnly(t *testing.T) {
 	assert.False(t, skipsPlainMessages(hook.provider))
 
 	m := newTestManager()
-	err := m.deliverFallback(context.Background(), &hook, "Chat", job)
+	m.pacer.interval = time.Millisecond
+	err := m.deliverFallback(context.Background(), &hook, "Chat", job,
+		false)
 	assert.NotErrorIs(t, err, errFallbackNotRouted)
 	summary := incidentJob("startup/1", "default")
-	err = m.deliverFallback(context.Background(), &hook, "Chat", summary)
+	err = m.deliverFallback(context.Background(), &hook, "Chat", summary,
+		false)
 	assert.NotErrorIs(t, err, errFallbackNotRouted)
 }

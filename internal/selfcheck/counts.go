@@ -42,7 +42,9 @@ func (c *Counts) Record(rule string, at time.Time, outcome Outcome) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if _, known := c.rules[rule]; !known && len(c.rules) >= MaxRules {
+	// The overflow row counts inside the bound: MaxRules-1 named rules
+	// and it, so a restore (which keeps MaxRules) loses none.
+	if _, known := c.rules[rule]; !known && len(c.rules) >= MaxRules-1 {
 		rule = OverflowRule
 	}
 	days := c.rules[rule]
@@ -168,8 +170,10 @@ func (c *Counts) UnmarshalJSON(data []byte) error {
 	defer c.mu.Unlock()
 	c.rules = map[string]map[string]tally{}
 	for rule, days := range in {
-		if len(c.rules) >= MaxRules {
-			break
+		// The overflow row is always kept: it already counts the rules
+		// past the bound.
+		if len(c.rules) >= MaxRules && rule != OverflowRule {
+			continue
 		}
 		for key, t := range days {
 			if _, err := time.Parse(dayFormat, key); err != nil {

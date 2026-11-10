@@ -50,7 +50,8 @@ func TestAcknowledgedHeldRepeatDoesNotPageAgain(t *testing.T) {
 	r, _ := pagedRig(t)
 	resolved := resolvePage(t, r, 5*time.Minute)
 	_, raiseAt := failAgain(t, r, resolved, 10*time.Minute)
-	setAck(t, r, nodeID(), "replacing the node")
+	setAckAt(t, r, nodeID(), "replacing the node",
+		at(raiseAt+time.Second))
 
 	start := at(raiseAt)
 	for _, d := range r.tick(start.Add(DefaultPageSettle + DefaultHold +

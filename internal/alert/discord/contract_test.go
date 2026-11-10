@@ -76,3 +76,31 @@ func checkShape(
 		t.Fatalf("mentions must be disabled: %s", reqs[0].Body)
 	}
 }
+
+// A webhook on another host (the legacy discordapp.com, a relay) is sent
+// there: the library itself always builds discord.com URLs.
+func TestDiscordSendsToTheWebhooksHost(t *testing.T) {
+	var seen string
+	deps := providertest.NewRecorder(t).Dependencies()
+	deps.HTTPClient = &http.Client{Transport: roundTrip(
+		func(req *http.Request) (*http.Response, error) {
+			seen = req.URL.Host
+			return nil, http.ErrHandlerTimeout
+		})}
+	c := NewDiscord(map[string]interface{}{
+		"webhook": "https://discordapp.com/api/webhooks/123/wh-secret",
+	}, "dev", deps)
+	if c == nil {
+		t.Fatal("discord was not constructed")
+	}
+	_ = c.SendMessage(t.Context(), "hi")
+	if seen != "discordapp.com" {
+		t.Fatalf("sent to %q, want discordapp.com", seen)
+	}
+}
+
+type roundTrip func(*http.Request) (*http.Response, error)
+
+func (f roundTrip) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}

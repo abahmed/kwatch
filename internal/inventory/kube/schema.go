@@ -55,14 +55,26 @@ func objectID(kind inventory.Kind, meta metav1.Object) inventory.EntityID {
 // ownerIDs converts controller owner references into owned-by targets.
 // The owner's apiVersion sets its group, so an owner whose kind is also a
 // built-in kind (a Knative Service) never resolves to the built-in one.
+//
+// An owner reference carries no namespace: the owner is in the object's
+// namespace, or it has none. A built-in cluster-scoped kind (a Node,
+// which "owns" its static pods) gets no namespace. Any other owner is
+// taken to be in the object's namespace, even one named "Cluster" (a
+// database operator's Cluster is namespaced): that is wrong for a
+// cluster-scoped custom resource, and inventory.ResolveOwner makes up
+// for it when the owner is read.
 func ownerIDs(meta metav1.Object) []inventory.EntityID {
 	var out []inventory.EntityID
 	for _, ref := range meta.GetOwnerReferences() {
-		if ref.Controller != nil && *ref.Controller {
-			out = append(out, EntityFor(
-				ref.APIVersion, ref.Kind, meta.GetNamespace(), ref.Name,
-			))
+		if ref.Controller == nil || !*ref.Controller {
+			continue
 		}
+		id := EntityFor(
+			ref.APIVersion, ref.Kind, meta.GetNamespace(), ref.Name)
+		if id.Group == "" && clusterKinds[id.Kind] {
+			id.Namespace = ""
+		}
+		out = append(out, id)
 	}
 	return out
 }

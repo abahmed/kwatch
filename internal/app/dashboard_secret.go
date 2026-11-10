@@ -43,23 +43,43 @@ const (
 func dashboardCredentials(
 	ctx context.Context, client kubernetes.Interface, namespace string,
 ) (token, password string) {
-	name := strings.TrimSpace(os.Getenv(dashboardSecretEnv))
+	token, password, err := readDashboardCredentials(ctx, client, namespace)
+	if err != nil {
+		klog.ErrorS(err, "dashboard credentials unavailable; every "+
+			"dashboard request is refused until a later try reads them",
+			"component", "dashboard-server",
+			"secret", dashboardSecretName())
+		return "", ""
+	}
+	return token, password
+}
+
+// dashboardSecretName is the chart-managed Secret, or empty when the
+// credentials come from the environment.
+func dashboardSecretName() string {
+	return strings.TrimSpace(os.Getenv(dashboardSecretEnv))
+}
+
+// readDashboardCredentials is dashboardCredentials with the error of a
+// chart-managed Secret that could not be read or filled. The environment
+// never fails.
+func readDashboardCredentials(
+	ctx context.Context, client kubernetes.Interface, namespace string,
+) (token, password string, err error) {
+	name := dashboardSecretName()
 	if name == "" || client == nil {
 		return os.Getenv(dashboardTokenEnv),
-			os.Getenv(dashboardPasswordEnv)
+			os.Getenv(dashboardPasswordEnv), nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, dashboardSecretWait)
 	defer cancel()
 	data, err := ensureDashboardSecret(
 		ctx, client.CoreV1().Secrets(namespace), name)
 	if err != nil {
-		klog.ErrorS(err, "dashboard credentials unavailable; every "+
-			"dashboard request is refused", "component",
-			"dashboard-server", "secret", name)
-		return "", ""
+		return "", "", err
 	}
 	return string(data[dashboardSecretToken]),
-		string(data[dashboardSecretPassword])
+		string(data[dashboardSecretPassword]), nil
 }
 
 // ensureDashboardSecret fills the token and password of the existing

@@ -130,3 +130,20 @@ func TestWhenEveryProviderFailsItIsLoggedAndNothingIsSent(t *testing.T) {
 	require.Len(t, got, 1, "email then hears slack is down")
 	assert.Contains(t, got[0], "can't send to slack")
 }
+
+// Only a refusal is fixed in the installer: an outage or a rate limit
+// says kwatch keeps trying. The recovery does not claim every waiting
+// alert went out: some may have aged out meanwhile.
+func TestNoticeWordingFitsTheReason(t *testing.T) {
+	since := time.Date(2026, 1, 5, 12, 0, 0, 0, time.UTC)
+	for _, reason := range []string{reasonUnavailable, reasonRateLimited} {
+		text := failureNoticeText("slack", reason, since, 3)
+		assert.NotContains(t, text, "Fix:", reason)
+		assert.Contains(t, text, "keeps trying", reason)
+	}
+	assert.Contains(t, failureNoticeText("slack", reasonRejected, since, 3),
+		"Fix: update slack in the installer")
+	recovered := recoveryNoticeText("slack", 3)
+	assert.NotContains(t, recovered, "went out")
+	assert.Contains(t, recovered, "waiting alerts are being sent")
+}

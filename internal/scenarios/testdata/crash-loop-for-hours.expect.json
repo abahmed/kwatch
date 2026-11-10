@@ -1,12 +1,11 @@
 {
   "name": "crash-loop-for-hours",
-  "description": "The only replica of a Deployment crashes on every start for nearly two hours, cycling through running, Error and CrashLoopBackOff; it stays one incident, and a revision that only takes the cause back stays quiet.",
-  "root": "deployment/staging/warehouse",
+  "description": "The only replica of a Deployment crashes on every start for nearly two hours, cycling through running, Error and CrashLoopBackOff, with a panic that names a Service that does not exist; it stays one incident rooted at the missing Service.",
+  "root": "service/staging/regional",
   "tier": "notify",
   "maxMessages": 3,
   "mustNotBlame": [
     "node//n1"
   ],
-  "revisesRoot": true,
   "tail": "10m0s"
 }

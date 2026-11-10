@@ -1,0 +1,8 @@
+{
+  "name": "fresh-issuer-notifies",
+  "description": "A certificate issuer reports Ready=False since an hour ago: Needs attention.",
+  "root": "issuer.certs.example.com/certs/letsencrypt",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "1h0m0s"
+}

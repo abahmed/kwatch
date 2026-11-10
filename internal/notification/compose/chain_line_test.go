@@ -94,7 +94,7 @@ func TestChainLineComesBeforeTheCheckedLine(t *testing.T) {
 	msg := Writer{}.Write(announce(p), writerNow)
 
 	chain, checked := strings.Index(msg.Note, "Timeline:"),
-		strings.Index(msg.Note, "Checked:")
+		strings.Index(msg.Note, "Proof:")
 	if chain < 0 || checked < chain {
 		t.Fatalf("want the chain line first:\n%s", msg.Note)
 	}

@@ -57,7 +57,7 @@ var connectTo = regexp.MustCompile(`connect(?:ing|ion)? to ` +
 const nearWords = 6
 
 // nearAny reports a word of which some occurrence is near a failure.
-func nearAny(lower string, failures [][]int, word string) bool {
+func nearAny(lower string, failures *failureSet, word string) bool {
 	for from := 0; ; {
 		i := strings.Index(lower[from:], word)
 		if i < 0 {
@@ -75,7 +75,7 @@ func nearAny(lower string, failures [][]int, word string) bool {
 // dependencyHost is the host and port a failed connection names, most
 // precise first, near the failure. A host that reads like a source file
 // ("main.go:42"), a stack frame or a time ("12:30:45") is not one.
-func dependencyHost(lower string, failures [][]int) (host, port string) {
+func dependencyHost(lower string, failures *failureSet) (host, port string) {
 	if m := quotedHost.FindStringSubmatch(lower); m != nil &&
 		hostName(m[1]) {
 		return m[1], m[2]

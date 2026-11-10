@@ -49,6 +49,8 @@ func changeSentences(f caseFacts) []sentence {
 	case ownCause(f.p.Cause) && len(change.Fields) > 0:
 		text = "the " + clock(change.At) + " release changed " +
 			fieldList(change) + changeValues(change)
+	case blamedChange(f) != nil && previousSaidByLead(f):
+		text = releasedByText(change)
 	case blamedChange(f) != nil:
 		text = blamedChangeText(change)
 	default:
@@ -251,20 +253,14 @@ func skipProof(f caseFacts, item rootcause.Proof, text string) bool {
 		return true
 	case deniedCause(cause) && strings.Contains(text, "mention"):
 		return true
+	case restatedByStartLead(f, item.Code):
+		return true
 	}
 	// The change sentence already says what changed.
 	return (cause.Change != nil &&
 		strings.HasSuffix(text, "changed shortly before")) ||
 		(policyBlocksCall(cause) &&
 			strings.HasSuffix(text, "shortly before"))
-}
-
-// createdBlame reports a cause whose blamed change is the creation of
-// the failing workload itself. A new policy or config that broke
-// others still failed them after it changed.
-func createdBlame(cause *rootcause.CauseRecord) bool {
-	return cause.Change != nil && cause.Change.Created &&
-		incident.IsWorkload(cause.Change.Entity.Kind)
 }
 
 // errorSentences quote the failure's own error, else the first error

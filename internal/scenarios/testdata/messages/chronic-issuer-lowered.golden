@@ -1,0 +1,7 @@
+10:31:15 digest
+🟡 kwatch summary (prod-eu-1): one new low-priority problem. Issuer letsencrypt in certs is not ready: "Failed to register ACME account: 403 forbidden". Not urgent: kwatch alerts on its own if it gets worse.
+🟡 kwatch summary (prod-eu-1): one new low-priority problem.
+| 🟡 **kwatch summary** · prod-eu-1 — 1 problem
+|
+| **Problems**
+| - Issuer **letsencrypt** (**certs**) — not ready (`Failed to register ACME account: 403 forbidden`)

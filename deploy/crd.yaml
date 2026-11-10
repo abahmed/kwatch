@@ -149,6 +149,11 @@ spec:
                       enum:
                         - text
                         - json
+                    environment:
+                      type: string
+                      enum:
+                        - production
+                        - non-production
                 templates:
                   type: object
                   additionalProperties:
@@ -302,6 +307,11 @@ spec:
                       enum:
                         - text
                         - json
+                    environment:
+                      type: string
+                      enum:
+                        - production
+                        - non-production
                 templates:
                   type: object
                   additionalProperties:

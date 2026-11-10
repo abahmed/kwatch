@@ -2,6 +2,7 @@ package compose
 
 import (
 	"strings"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -23,6 +24,13 @@ func recentChangeSentence(f caseFacts) []sentence {
 	return []sentence{{part: partCause, weight: -1, text: "In the last 30 " +
 		"minutes in " +
 		f.p.Root.Namespace + ": " + strings.Join(items, "; ") + "."}}
+}
+
+// changeSeen reports a decision with a recent change its Pro message
+// would name. Its Community copy drops the change, so this is read from
+// the decision before it is copied.
+func changeSeen(d incident.Decision, now time.Time) bool {
+	return len(recentChangeSentence(gatherFacts(d, now, nil))) > 0
 }
 
 // changeFacts are the clauses of the changes somebody made: the node

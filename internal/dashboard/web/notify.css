@@ -1,0 +1,23 @@
+/* kwatch dashboard: the Notifications switch in the sidebar
+   (js/notify.js, js/push.js) and its options. */
+.ntf { display: flex; flex-direction: column; gap: 8px; }
+.ntf-b { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius-pill); background: transparent; color: var(--text); font-size: 0.8125rem; width: fit-content; }
+.ntf-b:hover { border-color: var(--text); }
+.ntf-state { font-weight: 600; color: var(--text-muted); }
+.ntf-b[aria-pressed="true"] { border-color: var(--success); }
+.ntf-b[aria-pressed="true"] .ntf-state { color: var(--success); }
+.ntf-hint { font-size: 0.75rem; color: var(--degraded); max-width: 11.875rem; }
+.ntf-opts { display: flex; flex-direction: column; gap: 6px; }
+.ntf-opts label { margin: 0; font-size: 0.8125rem; font-weight: 400; color: var(--text-muted); }
+.ntf-opts select { margin-top: 4px; min-height: 34px; padding: 4px 8px; font-size: 0.8125rem; border-color: var(--control-border); }
+.ntf-c { display: flex; align-items: center; gap: 8px; min-height: 28px; cursor: pointer; }
+.ntf-c input { display: inline-block; width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; flex: none; accent-color: var(--text); }
+.ntf-mode { margin: 0; font-size: 0.75rem; color: var(--text-muted); max-width: 11.875rem; }
+.ntf-test { width: fit-content; font-size: 0.8125rem; }
+.ntf-opts .dd { display: block; margin-top: 4px; }
+.ntf-opts .dd-btn { min-height: 32px; font-size: 0.8125rem; padding: 0 10px; }
+.ntf-opts .dd-pop { position: static; width: 100%; max-width: none; margin-top: 4px; box-shadow: none; }
+@media (max-width: 700px) {
+  .ntf { flex-basis: 100%; }
+  .ntf-hint, .ntf-mode { max-width: none; }
+}

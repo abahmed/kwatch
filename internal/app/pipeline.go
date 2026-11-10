@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/kubeclient"
+	"github.com/abahmed/kwatch/internal/pipeline"
 	"github.com/abahmed/kwatch/internal/safego"
 	"github.com/abahmed/kwatch/internal/storage"
 )
@@ -33,6 +36,7 @@ func runPipeline(
 		return err
 	}
 	p.gap = gap
+	p.incidents.SetAlertIdentity(alertIdentity(ctx, deps))
 	defer p.close()
 	go p.decisions.run()
 	engine, err := p.newEngine()
@@ -43,38 +47,91 @@ func runPipeline(
 		deps.healthServer.SetStatusSource(engine.Status)
 		defer deps.healthServer.SetStatusSource(nil)
 	}
-	if deps.dashboardServer != nil {
-		deps.dashboardServer.SetIncidents(p.incidents)
-		deps.dashboardServer.SetStatus(engine.Status)
-		deps.dashboardServer.SetDeliveryHealth(
-			dashboardHealth(deps.deliveryManager))
-		deps.dashboardServer.SetModel(p.model)
-		deps.dashboardServer.SetDeliveryTrail(
-			dashboardTrail(deps.deliveryManager))
-		deps.dashboardServer.SetDeliveryDetail(
-			dashboardDeliveryDetail(deps.deliveryManager))
-		defer deps.dashboardServer.SetDeliveryDetail(nil)
-		defer deps.dashboardServer.SetDeliveryTrail(nil)
-		defer deps.dashboardServer.SetModel(nil)
-		defer deps.dashboardServer.SetDeliveryHealth(nil)
-		defer deps.dashboardServer.SetStatus(nil)
-		defer deps.dashboardServer.SetIncidents(nil)
-	}
+	defer p.wireDashboard(engine)()
 	runners, err := p.newRunners(engine)
 	if err != nil {
 		return err
 	}
 	if deps.dashboardServer != nil {
 		runners = append(runners,
-			p.dashboardResources(), p.dashboardReleases())
+			p.dashboardResources(), p.dashboardReleases(),
+			p.dashboardPush())
 	}
 	defer p.publishSources()()
-	defer startSources(ctx, runners)()
-	err = engine.Run(ctx)
-	if !engine.WriterStopped() {
-		guard.abandon()
+	err = runEngine(ctx, runners, func(runCtx context.Context) error {
+		err := engine.Run(runCtx)
+		if !engine.WriterStopped() {
+			guard.abandon()
+		}
+		return err
+	})
+	return pipelineExit(ctx, err)
+}
+
+// runEngine runs the engine with its sources and returns its error. A
+// source that panics ends the run with errSourcePanicked.
+func runEngine(
+	ctx context.Context, runners []func(context.Context),
+	engine func(context.Context) error,
+) error {
+	runCtx, fail := context.WithCancelCause(ctx)
+	defer fail(nil)
+	defer startSources(runCtx, runners, fail)()
+	err := engine(runCtx)
+	if cause := context.Cause(runCtx); errors.Is(cause, errSourcePanicked) {
+		return cause
 	}
 	return err
+}
+
+// errSourcePanicked fails the pipeline when one of its input runners
+// panicked: that input is dead and is not restarted in place, so the
+// supervisor restarts the whole pipeline instead.
+var errSourcePanicked = errors.New("pipeline source panicked")
+
+// errFencedWhileLeading is a fenced store while this session's lease is
+// still held. Nobody else ends the session then, so it must fail.
+var errFencedWhileLeading = errors.New(
+	"state fenced while the leader lease is still held")
+
+// pipelineExit turns a fenced store into a clean stop only when the
+// session already ended (ctx is done): a newer leader owns the state
+// and losing the lease ends this replica's term the normal way. A
+// fence while the lease is still held is a failure, otherwise the
+// replica would stay ready with no pipeline.
+func pipelineExit(ctx context.Context, err error) error {
+	if !errors.Is(err, pipeline.ErrFenced) {
+		return err
+	}
+	if ctx.Err() != nil {
+		return errComponentCleanStop
+	}
+	return fmt.Errorf("%w: %w", errFencedWhileLeading, err)
+}
+
+// wireDashboard hands the dashboard the pipeline's incidents, status,
+// model and delivery records, and returns the function that takes them
+// back. It does nothing without a dashboard.
+func (p *pipelineBuild) wireDashboard(engine *pipeline.Engine) func() {
+	d := p.deps.dashboardServer
+	if d == nil {
+		return func() {}
+	}
+	m := p.deps.deliveryManager
+	d.SetIncidents(p.incidents)
+	d.SetStatus(engine.Status)
+	d.SetDeliveryHealth(dashboardHealth(m))
+	d.SetModel(p.model)
+	d.SetDeliveryTrail(dashboardTrail(m))
+	d.SetDeliveryDetail(dashboardDeliveryDetail(m))
+	return func() {
+		d.SetDeliveryDetail(nil)
+		d.SetDeliveryTrail(nil)
+		d.SetModel(nil)
+		d.SetDeliveryHealth(nil)
+		d.SetStatus(nil)
+		d.SetIncidents(nil)
+	}
 }
 
 // publishSources hands what the sources know to the readers outside the
@@ -125,6 +182,7 @@ func newPipelineSourceHealth(
 // the engine.
 func startSources(
 	ctx context.Context, runners []func(context.Context),
+	fail context.CancelCauseFunc,
 ) (stop func()) {
 	sourceCtx, cancel := context.WithCancel(ctx)
 	var background sync.WaitGroup
@@ -132,7 +190,16 @@ func startSources(
 		background.Add(1)
 		go func() {
 			defer background.Done()
-			run(sourceCtx)
+			// A panicking source is logged and counted, then fails
+			// the pipeline: a dead input is not restarted in place.
+			err := safego.Run("pipeline-source", func() error {
+				run(sourceCtx)
+				return nil
+			})
+			if err != nil {
+				safego.Report(err)
+				fail(fmt.Errorf("%w: %w", errSourcePanicked, err))
+			}
 		}()
 	}
 	return func() {

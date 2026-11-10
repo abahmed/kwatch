@@ -54,7 +54,8 @@ type Dependencies struct {
 	// InScope reports whether people want to hear about an incident.
 	// Decisions for incidents out of scope are dropped before delivery; the
 	// incident is still tracked so reasoning keeps its evidence. Optional.
-	InScope func(incident.Incident) bool
+	// ScopePending: a refusal is only for now (scope_pending.go).
+	InScope, ScopePending func(incident.Incident) bool
 	// Synced reports whether a kind is fully watched, so rules conclude
 	// that an object is missing only when its kind is known. Optional.
 	Synced func(inventory.Kind) bool
@@ -194,7 +195,7 @@ func (e *Engine) SourcesSynced() {
 // ends. The loop itself does no I/O: investigations and storage writes run
 // on workers Run owns, and Run waits for them, within bounded deadlines,
 // before it returns. Each iteration waits for something to do, then
-// steps: drain, evaluate, tick and announce.
+// steps: drain, evaluate, tick and announce. A fenced store ends it.
 func (e *Engine) Run(ctx context.Context) error {
 	e.started = e.deps.Clock.Now()
 	e.pauseLearningForGap()
@@ -221,6 +222,9 @@ func (e *Engine) Run(ctx context.Context) error {
 			e.reconcileDowntime()
 		case result := <-e.announcer.outputs():
 			released = e.announcer.attachOutput(ctx, result)
+		}
+		if e.storage.fenced() {
+			return ErrFenced
 		}
 		now := e.deps.Clock.Now()
 		released = e.announcer.retryUnsent(ctx, now) || released
@@ -347,7 +351,7 @@ func (e *Engine) evaluate(
 			unsynced = nil
 		}
 		e.waits.record(id, unsynced)
-		changed := e.observeResult(id, result)
+		changed := e.observeResult(now, id, result)
 		logTransitions(changed)
 		transitions = append(transitions, changed...)
 		e.keepFindings(id)
@@ -378,7 +382,7 @@ func (e *Engine) tick(
 	var decisions []incident.Decision
 	var next time.Duration
 	if !contain("incident", "tick", func() {
-		decisions, next = e.deps.Incidents.Tick(now)
+		decisions, next = e.announcer.decisions(now)
 	}) {
 		return time.Time{}, false
 	}

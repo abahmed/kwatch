@@ -1,10 +1,10 @@
 10:04:15 settled
-🟠 api in shop (prod-eu-1) keeps crashing; node n3 is what the failing workloads have in common, though it looks healthy, which might be related. They started failing at the same time. It fails with "dial tcp 10.96.40.12:6379: i/o timeout". worker is affected as well. To check the node's conditions and recent events, run kubectl describe node n3
+🟠 api in shop (prod-eu-1) keeps crashing; node n3 is what the failing workloads have in common, though it looks healthy, which might be related. They started failing at the same time. It fails with "dial tcp 10.96.40.12:6379: i/o timeout". Affected: worker. To check the node's conditions and recent events, run kubectl describe node n3
 🟠 api in shop (prod-eu-1) keeps crashing; node n3 is what the failing workloads have in common, though it looks healthy, which might be related.
 | 🟠 **api** in **shop** (**prod-eu-1**) keeps crashing; node n3 is what the failing workloads have in common, though it looks healthy, which might be related.
 | They started failing at the same time.
 | It fails with `dial tcp 10.96.40.12:6379: i/o timeout`.
-| **worker** is affected as well.
+| Affected: **worker**.
 | To check the node's conditions and recent events, run
 | ```
 | kubectl describe node n3

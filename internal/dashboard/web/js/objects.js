@@ -50,6 +50,12 @@
     return (image || "").split("/").pop();
   }
 
+  /* healthy: ready, never restarted and not stopped by an error. */
+  function healthy(c) {
+    var bad = c.lastReason && c.lastReason !== "Completed" || (c.lastExitCode && c.lastExitCode !== 0);
+    return c.ready !== false && !c.restarts && !bad;
+  }
+
   function lastExit(c) {
     if (!c.lastReason && c.lastExitCode === undefined) return KW.el("span", "muted", "None");
     var text = (c.lastReason || "Exited") + (c.lastExitCode !== undefined ? " (" + c.lastExitCode + ")" : "");
@@ -148,9 +154,12 @@
       ["Last died"], ["Image", "The image tag it runs now."]], "kt-stack");
     var body = KW.$("tbody", t), top = 0;
     pick.rows.forEach(function (c) { top = Math.max(top, c.restarts || 0); });
-    pick.rows.forEach(function (c) {
+    // Healthy containers (sidecars) wait behind a toggle while another fails.
+    var sick = pick.rows.filter(function (c) { return !healthy(c); }).length;
+    var all = box.dataset.healthy === "1" || !sick;
+    pick.rows.filter(function (c) { return all || !healthy(c); }).forEach(function (c) {
       var tr = body.appendChild(KW.el("tr"));
-      var name = KW.el("span", "mono", c.pod + " / " + c.container);
+      var name = KW.wrapName(c.pod + " / " + c.container);
       cell(tr, "Container", name, "kt-name");
       cell(tr, "Ready", readyText(c), c.ready === false ? "x-bad" : "");
       cell(tr, "Restarts", restarts(c.restarts || 0, top), c.restarts ? "x-num x-warn" : "x-num");
@@ -161,6 +170,17 @@
       cell(tr, "Image", img, "kt-img");
     });
     box.appendChild(KW.el("div", "kt-wrap")).appendChild(t);
+    var well = pick.rows.length - sick;
+    if (sick && well) {
+      var tog = box.appendChild(KW.el("button", "btn btn-sm kt-more", all ? "Hide healthy containers" :
+        "+" + KW.plural(well, "healthy container", "healthy containers")));
+      tog.type = "button";
+      tog.setAttribute("aria-expanded", all ? "true" : "false");
+      tog.addEventListener("click", function () {
+        box.dataset.healthy = all ? "" : "1";
+        redraw();
+      });
+    }
     var cut = pick.key === "now" ? KW.cutCount(inc, "containers") : 0;
     box.appendChild(KW.el("p", "ev-cap", pick.cap +
       (cut ? " " + KW.plural(cut, "more container", "more containers") + " not shown." : "")));
@@ -245,11 +265,13 @@
     return b;
   }
 
+  /* commands: a row's log commands; the describe commands are one Copy
+     above the table. */
   function commands(o) {
     var box = KW.el("div", "ao-cmds");
-    (o.commands || []).forEach(function (c, i) {
+    (o.commands || []).slice(1).forEach(function (c) {
       var m = / -c (\S+) --previous$/.exec(c);
-      box.appendChild(copyButton(i === 0 ? "Copy describe" : "Copy logs" + (m ? " of " + m[1] : ""), c));
+      box.appendChild(copyButton("Copy logs" + (m ? " of " + m[1] : ""), c));
     });
     return box;
   }
@@ -261,8 +283,17 @@
     box.textContent = "";
     if (!list.length) return;
     fold.hidden = false;
-    var t = grid([["Status"], ["Kind"], ["Name"], ["Started failing"], ["Commands",
-      "Ready to paste in a terminal that can reach your cluster."]], "kt-stack");
+    var describes = list.map(function (o) { return (o.commands || [])[0]; }).filter(Boolean);
+    if (describes.length) {
+      var bar = box.appendChild(KW.el("p", "ao-bar"));
+      bar.appendChild(copyButton(describes.length === 1 ? "Copy describe command" :
+        "Copy describe commands for all " + describes.length, describes.join("\n")));
+      bar.appendChild(KW.el("span", "muted small", " Paste in a terminal that can reach your cluster."));
+    }
+    var logs = list.some(function (o) { return (o.commands || []).length > 1; });
+    var heads = [["Status"], ["Kind"], ["Name"], ["Started failing"]];
+    if (logs) heads.push(["Logs"]);
+    var t = grid(heads, "kt-stack");
     var body = KW.$("tbody", t);
     list.forEach(function (o) {
       var tr = body.appendChild(KW.el("tr"));
@@ -278,9 +309,9 @@
         kind.title = "The object this issue is about.";
       }
       cell(tr, "Kind", kind);
-      cell(tr, "Name", KW.el("span", "mono", (o.namespace ? o.namespace + "/" : "") + o.name), "kt-name");
+      cell(tr, "Name", KW.wrapName((o.namespace ? o.namespace + "/" : "") + o.name), "kt-name");
       cell(tr, "Started failing", KW.valid(o.since) ? KW.timeEl(o.since) : KW.el("span", "muted", "—"));
-      cell(tr, "Commands", commands(o));
+      if (logs) cell(tr, "Logs", commands(o));
     });
     box.appendChild(KW.el("div", "kt-wrap")).appendChild(t);
     var cut = KW.cutCount(inc, "affected");
@@ -291,6 +322,7 @@
     containers(root, inc);
     resources(root, inc);
     affected(root, inc);
+    KW.issueMap(root, inc);
     KW.strip(root, inc);
   };
   /* KW.liveObjects redraws only what changes between reads. */

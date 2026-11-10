@@ -37,7 +37,7 @@ func (m *Manager) deliverQueuedJobs(
 			backlog = m.takeBacklog(entry)
 		}
 		if len(handedOff)+len(backlog) == 0 &&
-			len(entry.ch) == 0 {
+			len(entry.ch) == 0 && !m.hasOverflowSummary(entry) {
 			continue
 		}
 		wg.Add(1)

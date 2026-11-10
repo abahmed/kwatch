@@ -62,7 +62,7 @@ func TestWaitForActiveSessionReturnsWhenDone(t *testing.T) {
 	done := make(chan struct{})
 	close(done)
 
-	require.NoError(t, waitForActiveSession(done))
+	require.NoError(t, waitForActiveSession(done, 0))
 }
 
 func TestDeliveryProgressRequiresProviders(t *testing.T) {
@@ -159,32 +159,4 @@ func TestCRDWatcherReasonBoundsUnknownReasons(t *testing.T) {
 
 func TestRecordShutdownTimeoutIsSafeToCall(t *testing.T) {
 	recordShutdownTimeout("test-component")
-}
-
-func TestRunWithProgressToleratesMissingPieces(t *testing.T) {
-	ran := false
-
-	require.NoError(t, runWithProgress(context.Background(), nil, nil, nil))
-	require.NoError(t, runWithProgress(context.Background(), nil, nil,
-		func(context.Context) error {
-			ran = true
-			return nil
-		}))
-	require.True(t, ran)
-}
-
-func TestStartProgressHeartbeatStopsOnRequest(t *testing.T) {
-	stop := startProgressHeartbeat(context.Background(), func() {})
-
-	stop()
-	startProgressHeartbeat(context.Background(), nil)()
-}
-
-func TestStartProgressHeartbeatStopsOnCancel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	stop := startProgressHeartbeat(ctx, func() {})
-
-	cancel()
-
-	stop()
 }

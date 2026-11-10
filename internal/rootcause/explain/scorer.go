@@ -52,6 +52,7 @@ type scorer struct {
 var scorers = []scorer{
 	{"temporal", scoreTemporal},
 	{"coverage", scoreCoverage},
+	{"self-quoted", scoreSelfQuoted},
 	{"exclusivity", scoreExclusivity},
 	{"specificity", scoreSpecificity},
 	{"change", scoreChange},

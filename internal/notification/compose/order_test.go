@@ -1,6 +1,7 @@
 package compose
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -58,7 +59,10 @@ func TestDigestTitlesLeaveCallerOrderAlone(t *testing.T) {
 	}
 	titles := Writer{}.digestTitles(list,
 		time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC), "")
-	if len(titles) != 2 || list[0].Incident.Root.Name != "a" {
+	// The two titles say the same, so they are one line, b (the more
+	// urgent) first.
+	if len(titles) != 1 || list[0].Incident.Root.Name != "a" ||
+		!strings.HasPrefix(titles[0].text, "b and a in shop") {
 		t.Fatalf("caller slice reordered or titles lost: %+v", titles)
 	}
 }

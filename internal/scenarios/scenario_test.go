@@ -197,6 +197,9 @@ func library() []scenario {
 		backendNotReadyScenarios(), attachmentDetachScenarios(),
 		inUseDeleteScenarios(), livenessKindScenarios(),
 		releaseRescheduledScenarios(), transientStartScenarios(),
+		oldProblemScenarios(), scalingWaveScenarios(), hpaNoReadyScenarios(),
+		configExposureScenarios(), pullSecretAbsentScenarios(),
+		batchNormalScenarios(), statefulSetScaleScenarios(),
 	} {
 		out = append(out, group...)
 	}

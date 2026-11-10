@@ -1,7 +1,9 @@
 package explain
 
 import (
+	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -32,7 +34,42 @@ func (v *view) isPullLogin(secret, effect inventory.EntityID) bool {
 		return false
 	}
 	text, ok := v.pullText(effect)
-	return ok && classifyPull(text) == pullAuth
+	if !ok {
+		return false
+	}
+	switch classifyPull(text) {
+	case pullAuth:
+		return true
+	case pullImage:
+		// Docker Hub answers a pull without credentials of a private
+		// image as it answers a typo: "repository does not exist or may
+		// require authorization". With the login the pod names absent,
+		// the missing credentials are the likelier reading.
+		return !v.s.Model.Exists(secret) &&
+			mayRequireAuthPattern.MatchString(strings.ToLower(text))
+	}
+	return false
+}
+
+// mayRequireAuthPattern is a registry's refusal that is either an
+// unknown image or one the client may not read without a login.
+var mayRequireAuthPattern = regexp.MustCompile(
+	`may require (authorization|'docker login')|requested access to ` +
+		`the resource is denied`)
+
+// pullOnly reports a Secret the effect's pod names only as an image
+// pull Secret. The kubelet reads it when it pulls and at no other time,
+// and pulls without it when it is absent: its absence or an edit of it
+// cannot be why a container that has its image crashes or waits.
+func (v *view) pullOnly(secret, effect inventory.EntityID) bool {
+	pod, ok := v.podOf(effect)
+	if !ok || pod.Namespace != secret.Namespace {
+		return false
+	}
+	entity, ok := v.s.Model.Entity(pod)
+	return ok && kube.OptionalReference(entity, secret) &&
+		slices.Contains(kube.PullSecretNames(attrText(entity,
+			kube.AttrPullSecrets)), secret.Name)
 }
 
 // withoutPseudo drops the pseudo modes (changes, absences), keeping the

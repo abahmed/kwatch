@@ -37,7 +37,6 @@
     if (path === "/issues") return { name: "issues" };
     if (path === "/kwatch") return { name: "kwatch" };
     if (path === "/activity") return { name: "activity" };
-    if (path === "/map") return { name: "map" };
     var m = /^\/issues\/([^/]+)$/.exec(path);
     if (m) {
       // A malformed escape (%E0) is an ID no issue has: show "not found".
@@ -103,10 +102,13 @@
     var r = route(location.pathname);
     if (r.name === "detail") {
       KW.visits.opened(r.id);
+      KW.notify.opened(r.id);
     }
     current = r.name;
     if (r.name === "signin") {
       shellEl = null;
+      KW.notify.stop();
+      KW.notify.signedOut();
       KW.appBadge(0);
       KW.stopDot();
       KW.live.stop();
@@ -118,7 +120,7 @@
     KW.startDot();
     var views = { issues: KW.issuesView, detail: KW.detailView,
       status: KW.statusView, kwatch: KW.kwatchView,
-      activity: KW.activityView, map: KW.mapView };
+      activity: KW.activityView };
     view = views[r.name](main, r);
   }
 
@@ -143,6 +145,7 @@
       legendStates(shellEl);
       whoMenu(shellEl);
       KW.updateBadge(KW.badge);
+      KW.notify.start(shellEl);
     }
     KW.setNav(current);
     var main = KW.$("#main", shellEl);
@@ -187,13 +190,22 @@
   };
 
   function signOut() {
-    KW.api("/logout", { method: "POST" }).then(function () {
-      KW.go("/signin", true);
-    });
+    // Pushes stop first: signing out needs the session.
+    // Whatever fails on the way, the user ends on the sign-in page.
+    function go() { KW.go("/signin", true); }
+    var out;
+    try { out = Promise.resolve(KW.notify.signOut()); } catch (e) { out = Promise.resolve(); }
+    out.then(null, function () { /* push unsubscribe failed */ })
+      .then(function () { return KW.api("/logout", { method: "POST" }); })
+      .then(null, function () { /* sign-out request failed */ })
+      .then(go);
   }
 
   /* ---- sign in ---- */
   function showSignin() {
+    // The cluster's name is for signed-in readers only: it may say
+    // more than the address does (see KW.clusterTitle).
+    KW.cluster = null;
     KW.title("Sign in");
     var app = document.getElementById("app");
     app.textContent = "";
@@ -267,6 +279,7 @@
   function showHTTPS() {
     stopView();
     shellEl = null;
+    KW.notify.stop();
     KW.stopDot();
     KW.live.stop();
     KW.title("Use https");

@@ -1,10 +1,10 @@
-10:02:15 settled
-🔴 Ingress shop in shop (prod-eu-1) routes /api to Service api port 9090, which api doesn't have (it has 8080). Its rules changed at 10:01 UTC from shop.example.com/ to shop.example.com/api. Its dependents failed soon after it changed. Fix in: ingress/shop → spec.rules (shop.example.com/api). To see the object's state and events, run kubectl describe ingress shop -n shop
+10:01:45 settled
+🔴 Ingress shop in shop (prod-eu-1) routes /api to Service api port 9090, which api doesn't have (it has 8080). Its rules changed at 10:01 UTC from shop.example.com/ to shop.example.com/api. The apps that use it failed soon after it changed. Fix: correct the rules of ingress/shop (now shop.example.com/api). To see the object's state and events, run kubectl describe ingress shop -n shop
 🔴 Ingress shop in shop (prod-eu-1) routes /api to Service api port 9090, which api doesn't have (it has 8080).
 | 🔴 Ingress **shop** in **shop** (**prod-eu-1**) routes /api to Service api port 9090, which api doesn't have (it has 8080).
 | Its rules changed at 10:01 UTC from shop.example.com/ to shop.example.com/api.
-| Its dependents failed soon after it changed.
-| Fix in: ingress/shop → spec.rules (shop.example.com/api).
+| The apps that use it failed soon after it changed.
+| Fix: correct the rules of ingress/shop (now shop.example.com/api).
 | To see the object's state and events, run
 | ```
 | kubectl describe ingress shop -n shop

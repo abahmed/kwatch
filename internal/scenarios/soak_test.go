@@ -52,8 +52,10 @@ func TestSoakHeapPlateaus(t *testing.T) {
 	var hours []float64
 	start := log.Start
 	record := soakRecorder(t, log)
+	// Discard: the replay's own record of every decision is not the
+	// application's memory.
 	opts := replay.Options{
-		Tail: time.Hour, Every: soakPrune,
+		Tail: time.Hour, Every: soakPrune, Discard: true,
 		Tick: func(at time.Time) {
 			record(at)
 			model.Prune(at.Add(-soakRetention))

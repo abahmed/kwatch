@@ -55,6 +55,20 @@ type serverDeps struct {
 	// editionRestart is set when the leader session ended because the
 	// license changed the edition; RunWithClock then rebuilds.
 	editionRestart atomic.Bool
+	// leaseLost is set when the election ended because this pod lost the
+	// Lease while the application still ran: kwatch then rejoins the
+	// election in a new generation instead of exiting.
+	leaseLost atomic.Bool
+	// sessionLive is set once the leader session started its components.
+	sessionLive atomic.Bool
+	// startFailed is set when the election ended in a rejoin before the
+	// leader session started its components; the rejoin then backs off.
+	startFailed atomic.Bool
+	// stop closes when the process is asked to stop (notifyStop). stopped
+	// is set when that, or the canceled application context, ended the
+	// generation: it is then never rebuilt.
+	stop    <-chan struct{}
+	stopped atomic.Bool
 	// rebuild paces the retries of a generation built after an edition
 	// change; nil on a first start, which never retries.
 	rebuild *rebuildRetry
@@ -96,6 +110,7 @@ func newServerDeps(
 	deps.edition.Store(boot.entitlements)
 	if deps.dashboardServer != nil {
 		deps.dashboardServer.SetSelf(deps.self.Report)
+		wireDashboardBlindSpots(deps.dashboardServer, deps.healthServer)
 		if deps.deliveryManager != nil {
 			deps.dashboardServer.SetFailedSince(
 				deps.deliveryManager.FailedSince)
@@ -127,7 +142,10 @@ type componentSpec struct {
 	progress       progressReporter
 	startupTimeout time.Duration
 	stallTimeout   time.Duration
-	cleanStop      bool
+	// freshStart makes the startup deadline apply until progress is
+	// reported after this run began, even if an older report exists.
+	freshStart bool
+	cleanStop  bool
 }
 
 // progressReporter is intentionally a lifecycle-only interface. Domain

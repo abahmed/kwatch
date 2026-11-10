@@ -131,7 +131,7 @@ func rivalPhrase(cause *rootcause.CauseRecord, subject inventory.EntityID,
 	return causePhrase(cause, subject)
 }
 
-// maxCheckedShown bounds the "Checked:" line.
+// maxCheckedShown bounds the "Proof:" line.
 const maxCheckedShown = 3
 
 // checkedLineSentences are the closing small print of a message with a
@@ -155,5 +155,5 @@ func checkedLineSentences(f caseFacts) []sentence {
 		return nil
 	}
 	return []sentence{{part: partChecked,
-		text: "Checked: " + strings.Join(texts, "; ") + "."}}
+		text: "Proof: " + strings.Join(texts, "; ") + "."}}
 }

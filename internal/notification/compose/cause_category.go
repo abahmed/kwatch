@@ -6,7 +6,7 @@ import (
 )
 
 // A Community message says what is failing and only the category of
-// its cause: "Cause found: a config change." The category never names
+// its cause: "Most likely cause: a config change." The category never names
 // the object, the change, the version, the image or who made it; the
 // Pro line says what Pro adds (which one, the proof, the fix).
 
@@ -17,10 +17,10 @@ const (
 	categoryNode          = "a node problem"
 	categoryImagePull     = "an image pull problem"
 	categoryImage         = "an image problem"
-	categoryMemoryLimit   = "a memory limit"
+	categoryMemoryLimit   = "its memory limit"
 	categoryResourceLimit = "a resource limit"
 	categoryShortage      = "a resource shortage"
-	categoryRollout       = "a rollout"
+	categoryRollout       = "a recent rollout"
 	categoryDependency    = "a dependency"
 	categoryMissingDep    = "a missing dependency"
 	categoryExternal      = "an external dependency"
@@ -177,18 +177,17 @@ func causeCategory(c *rootcause.CauseRecord) string {
 	return category
 }
 
-// teaserLabel starts the sentence that tells the category.
-const teaserLabel = "Cause found: "
+// teaserLabel starts the sentence that tells the category, at the high
+// and likely certainty levels: the Community message names no proof, so
+// it never states the category as certain.
+const teaserLabel = "Most likely cause: "
 
-// Labels of a category told below the high certainty level, the
-// confidence wording of a diagnosis (see confidence.go).
-const (
-	teaserLikely   = "Cause found: likely "
-	teaserPossible = "Cause found: possibly "
-)
+// teaserPossible starts the category of a cause below the likely level,
+// the confidence wording of a diagnosis (see confidence.go).
+const teaserPossible = "Possible cause: "
 
 // causeTeaser is the sentence that tells the category of f's cause, at
-// the cause's certainty: "Cause found: likely a config change." It is
+// the cause's certainty: "Most likely cause: a config change." It is
 // nil outside the Community message, without a category, and when the
 // failing root is its own cause ("Node n1 is not ready"): the category
 // would only repeat the lead.
@@ -201,10 +200,7 @@ func causeTeaser(f caseFacts) []sentence {
 		return nil
 	}
 	label := teaserLabel
-	switch certaintyOf(f.p.Cause) {
-	case certaintyLikely:
-		label = teaserLikely
-	case certaintyPossible:
+	if certaintyOf(f.p.Cause) == certaintyPossible {
 		label = teaserPossible
 	}
 	return []sentence{{part: partCause, fact: factCauseTeaser,
@@ -220,23 +216,27 @@ func causeIsRoot(f caseFacts) bool {
 		blamedChange(f) == nil
 }
 
-// Pro lines of a message that tells its cause's category.
+// What the Pro line of a message that tells its cause's category says
+// Pro adds.
 const (
-	proWhich     = "Pro shows which one and "
-	proExact     = "Pro shows the exact cause and "
-	proProofTail = "the proof."
-	proFixTail   = "how to fix it."
+	proWhich     = "which one"
+	proExact     = "the exact cause"
+	proProofTail = "the proof"
 )
 
 // causeNote is the one Pro line of a message that tells the category of
-// cause: what Pro adds to it, and the fix when Pro says how to fix it.
-func causeNote(cause *rootcause.CauseRecord, fixable bool) string {
+// cause: what Pro adds to it, and how to fix it or check it when Pro
+// says so (help), else the proof.
+func causeNote(cause *rootcause.CauseRecord, help proHelp) string {
 	head, tail := proExact, proProofTail
 	if whichCategories[causeCategory(cause)] {
 		head = proWhich
 	}
-	if fixable {
-		tail = proFixTail
+	switch help {
+	case helpFix:
+		tail = proFixWords
+	case helpCheck:
+		tail = proCheckWords
 	}
-	return head + tail + proInvite
+	return proLineText([]string{head, tail})
 }

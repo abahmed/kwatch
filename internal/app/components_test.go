@@ -42,12 +42,9 @@ func TestComponentHealthHelpersTolerateMissingServer(t *testing.T) {
 
 	degrade(deps, "x")(errors.New("boom"))
 	recoverComponent(deps, "x")()
-
-	require.True(t, componentStartTime(deps).IsZero())
-	require.True(t, componentStartTime(nil).IsZero())
 }
 
-func TestMonitoredComponentRunsWithProgress(t *testing.T) {
+func TestMonitoredComponentRunsWithoutFakeProgress(t *testing.T) {
 	deps := componentDeps()
 	ran := make(chan struct{})
 	spec := monitoredComponent(deps, "heartbeat",
@@ -61,9 +58,34 @@ func TestMonitoredComponentRunsWithProgress(t *testing.T) {
 	<-ran
 	require.NoError(t, err)
 	require.True(t, spec.cleanStop, "heartbeat may stop cleanly")
-	require.False(t, spec.progress.LastProgress().IsZero())
 	require.False(t, monitoredComponent(deps, "crd-watcher",
 		func(context.Context, *serverDeps) error { return nil }).cleanStop)
+}
+
+// TestOptionalComponentsReportNoProgress guards against a timer that
+// touches progress for an optional component: it would keep the
+// supervisor's stall check from ever firing, so the spec must carry no
+// progress and the supervisor takes its crash-and-return-only path.
+func TestOptionalComponentsReportNoProgress(t *testing.T) {
+	deps := componentDeps()
+	block := func(ctx context.Context) error {
+		<-ctx.Done()
+		return nil
+	}
+	specs := []componentSpec{
+		monitoredComponent(deps, "threads",
+			func(ctx context.Context, _ *serverDeps) error {
+				return block(ctx)
+			}),
+		monitoredRun(deps, "telemetry", block),
+		selfReportedRun(deps, "rbac", block),
+	}
+	for _, spec := range specs {
+		require.Nil(t, spec.progress, spec.name)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		require.NoError(t, spec.run(ctx), spec.name)
+	}
 }
 
 func TestRunDeliveryWithoutProvidersWaitsForCancellation(t *testing.T) {

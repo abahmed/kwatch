@@ -66,6 +66,9 @@ const (
 	ModeCreated detection.Mode = "Changed.Created"
 	// ModeMissing is a referenced object that does not exist.
 	ModeMissing detection.Mode = "Missing"
+	// ModeKeyMissing is a Secret or ConfigMap that exists without a
+	// key a container reads from it, as the kubelet reports it.
+	ModeKeyMissing detection.Mode = "KeyMissing"
 	// ModeMembersFailing is a zone or pool with failing nodes.
 	ModeMembersFailing detection.Mode = "MembersFailing"
 	// ModeRejectsNodes is a scheduling constraint the scheduler named.

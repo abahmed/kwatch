@@ -57,6 +57,13 @@ type Finding struct {
 	// (a memory limit a container reached). Nil when the failure is not
 	// a setting. See Place.
 	Place *Place `json:",omitempty"`
+	// Leftover is the absent backend this finding was left behind by,
+	// when it is one: the Service of a removed or scaled-to-zero
+	// operator that its webhooks still call. Set only on findings that
+	// are low on their own (an expired certificate nothing uses, a
+	// deletion stuck on its finalizer, a parked workload). Findings
+	// that share one are one incident rooted at it. Zero otherwise.
+	Leftover inventory.EntityID `json:",omitzero"`
 	// Detector is the Name of the detector that raised the finding; the
 	// registry sets it. When that detector panics later, the findings it
 	// raised before are kept (see Evaluation.Keeping). It lives only

@@ -56,6 +56,13 @@ func (s workloadSchema[T]) Describe(obj any) (Description, bool) {
 		setHandlerSignals(attrs, template)
 		rel.add(inventory.References,
 			templateReferences(workload.GetNamespace(), template)...)
+		// The claims it names are in use even with no pod running
+		// (scaled to zero), as a CronJob's are between runs.
+		rel.add(inventory.References, podClaims(&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: workload.GetNamespace()},
+			Spec: template.Spec,
+		})...)
 	}
 	if s.replicas != nil {
 		if replicas := s.replicas(workload); replicas != nil {

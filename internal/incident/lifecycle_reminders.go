@@ -8,11 +8,41 @@ import "time"
 // page settles fast on its own; in a burst of incidents settling at once
 // it waits the full settle, so the cause they share can surface and one
 // incident replaces many instead of many being announced and revised.
+// A failure that kwatch found already there at its start takes the full
+// settle too: it may be clearing already, and an urgent page is for news.
+// A page held for a scaling wave settles until the wave is over
+// (scale_hold.go).
 func (m *Manager) settleFor(p *Incident) time.Duration {
-	if p.Tier == Page && m.settlingCount() < m.cfg.BurstIncidents {
-		return m.cfg.PageSettle
+	settle := m.cfg.Settle
+	if m.fastPage(p) {
+		settle = m.cfg.PageSettle
 	}
-	return m.cfg.Settle
+	return m.scaleSettle(p, settle)
+}
+
+// fastPage reports whether p settles with the short page settle.
+func (m *Manager) fastPage(p *Incident) bool {
+	return p.Tier == Page && m.settlingCount() < m.cfg.BurstIncidents &&
+		!m.foundAtStart(p)
+}
+
+// startFindSlack is how long after kwatch's first look an incident may
+// open and still count as one that existed when kwatch started: the
+// first sync of the sources is not instant.
+const startFindSlack = 30 * time.Second
+
+// foundAtStart reports an incident opened by kwatch's first look at the
+// cluster with a failing member whose onset is older than kwatch.
+func (m *Manager) foundAtStart(p *Incident) bool {
+	if m.started.IsZero() || p.Opened.After(m.started.Add(startFindSlack)) {
+		return false
+	}
+	for _, f := range p.Members {
+		if !f.Since.IsZero() && f.Since.Before(m.started) {
+			return true
+		}
+	}
+	return false
 }
 
 // settlingCount is how many announceable incidents with members are
@@ -57,7 +87,7 @@ func reminderEvery(p *Incident) time.Duration {
 		}
 		return RemindEvery
 	case p.Delivery.RolledUp() || p.Tier == Digest:
-		return ChronicRemindEvery
+		return chronicBackoff(p.Reminders)
 	}
 	return RemindEvery
 }

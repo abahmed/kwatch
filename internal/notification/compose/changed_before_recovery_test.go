@@ -92,3 +92,22 @@ func TestRecoveredKeepsTheChangedBeforeLine(t *testing.T) {
 		t.Fatalf("note = %q", got.Note)
 	}
 }
+
+// A recovery with changes listed just before it is not said to be on
+// its own; without such a change it still is.
+func TestResolveWithChangesBeforeIsNotOnItsOwn(t *testing.T) {
+	d := recoveredWith(5)
+	d.Incident.Fix = incident.FixNone
+	note := Writer{}.Write(d, d.Incident.Resolved).Note
+	if !strings.Contains(note, beforeLine) ||
+		strings.Contains(note, "on its own") {
+		t.Fatalf("note = %q", note)
+	}
+
+	quiet := recoveredWith(25)
+	quiet.Incident.Fix = incident.FixNone
+	note = Writer{}.Write(quiet, quiet.Incident.Resolved).Note
+	if !strings.Contains(note, "recovered on its own") {
+		t.Fatalf("note = %q", note)
+	}
+}

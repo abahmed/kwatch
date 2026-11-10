@@ -182,24 +182,36 @@ func withoutError(in []Evidence) []Evidence {
 }
 
 // changed reports whether a re-evaluated finding describes a different
-// condition than the one already announced. A new or different error
+// condition than the one already announced. A finding that stops being
+// advisory, as a Job's pod does when its retries run out, is a failure
+// now. A new or different error
 // line counts: the crash log is read after the finding is raised, and
 // the incident must then be regrouped by the message it carries.
 func changed(old, current tracked) bool {
 	o, c := old.finding, current.finding
 	return o.Severity != c.Severity ||
 		o.Health != c.Health || o.Mode != c.Mode ||
-		o.Normal != c.Normal ||
+		o.Normal != c.Normal || o.Advisory != c.Advisory ||
 		errorChanged(old.errLine, current.errLine)
 }
 
-// reworded reports whether the summary or the evidence other than the
-// error line says something new. It compares normalised text, like
-// the error line, so a growing count or a fresh address is not news. The
-// error line is left to changed: a line that goes away must not wipe
-// the one the incident still quotes.
+// reworded reports whether the summary, the evidence other than the
+// error line, the symptom flag or the setting blamed says something new.
+// It compares normalised text, like the error line, so a growing count
+// or a fresh address is not news. The error line is left to changed: a
+// line that goes away must not wipe the one the incident still quotes.
 func reworded(old, current tracked) bool {
-	return old.summary != current.summary || old.extra != current.extra
+	return old.summary != current.summary || old.extra != current.extra ||
+		old.finding.Symptom != current.finding.Symptom ||
+		!samePlace(old.finding.Place, current.finding.Place)
+}
+
+// samePlace compares the settings two findings point at by value.
+func samePlace(a, b *Place) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 // evidenceShape joins the normalised evidence without the error line.

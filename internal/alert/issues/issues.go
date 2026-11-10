@@ -11,7 +11,6 @@ import (
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
-	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/notification"
 )
 
@@ -97,7 +96,19 @@ type Map struct {
 	// closedUntil holds the keys whose issue is closed but still mapped,
 	// with the end of their reopen window.
 	closedUntil map[string]time.Time
-	now         func() time.Time
+	// commented holds the keys whose resolve comment is already posted
+	// while the state change is still being retried. It lives in memory
+	// only: after a restart a retried resolve may post its comment a
+	// second time, which is acceptable (at most one duplicate comment).
+	// It is cleared when the resolve ends, when the incident recurs and
+	// when the key gets a new issue, so the next resolve comments again.
+	commented map[string]struct{}
+	// tried holds the keys whose create failed in this process: an issue
+	// found for one of them is that create, not an older issue.
+	tried map[string]struct{}
+	// cluster is part of the marker new issues carry (see markers).
+	cluster string
+	now     func() time.Time
 }
 
 // NewMap returns an empty issue map that reads time from now.
@@ -105,6 +116,8 @@ func NewMap(now func() time.Time) *Map {
 	return &Map{
 		ids:         make(map[string]string),
 		closedUntil: make(map[string]time.Time),
+		commented:   make(map[string]struct{}),
+		tried:       make(map[string]struct{}),
 		now:         clock.RequireFunc(now),
 	}
 }
@@ -127,17 +140,18 @@ func (m *Map) Deliver(
 	id, closed := m.lookup(key)
 	switch {
 	case msg.Resolved() && id == "":
-		return nil
+		return m.closeUnmapped(ctx, tracker, msg, key, body)
 	case id == untracked:
 		return m.skipUntracked(tracker, msg, key)
 	case msg.Resolved() && closed:
 		// Already closed and waiting out its reopen window.
 		return nil
 	case msg.Resolved():
-		if err := tracker.Close(ctx, id, body); err != nil &&
-			!transport.IsNotFound(err) {
+		err := m.closeIssue(ctx, tracker, key, id, body)
+		if err != nil && !transport.IsNotFound(err) {
 			return err
 		}
+		m.clearResolveCommented(key)
 		if !closesIssues(tracker) {
 			// Only a comment was added: the issue is still open, so the
 			// mapping stays and a recurrence comments on it.
@@ -159,62 +173,7 @@ func (m *Map) Deliver(
 		// The issue was deleted: forget it and open a new one below.
 		m.forget(key)
 	}
-	return m.create(ctx, tracker, key, title, body)
-}
-
-// create files the issue for key. A tracker that can search for an issue
-// by marker is asked first: a create whose answer was lost (timeout) may
-// have succeeded, and creating again would duplicate the issue.
-func (m *Map) create(
-	ctx context.Context, tracker Tracker, key, title, body string,
-) error {
-	finder, searchable := tracker.(Finder)
-	if searchable {
-		marker := Marker(key)
-		existing, err := find(ctx, finder, tracker, marker)
-		if err != nil {
-			return err
-		}
-		if existing != "" {
-			m.remember(key, existing)
-			return nil
-		}
-		body += "\n\nRef: " + marker
-	}
-	id, err := tracker.Create(ctx, title, body)
-	if err != nil {
-		return err
-	}
-	if id == "" {
-		id = untracked
-		klog.InfoS("issue created without a readable reference; "+
-			"later updates for this incident are skipped",
-			"component", "delivery", "operation", "create_issue",
-			"provider", tracker.Name(), "key", key)
-		metrics.DefaultRegistry().Delivery.TrackerUntracked.Add(1)
-	}
-	m.remember(key, id)
-	return nil
-}
-
-// find asks the tracker for an open issue carrying marker. A search that
-// fails for a reason a retry may fix is returned, so the create is not
-// repeated blindly; a search the tracker refuses for good (no permission,
-// unsupported) is logged and the issue is created as before.
-func find(
-	ctx context.Context, finder Finder, tracker Tracker, marker string,
-) (string, error) {
-	id, err := finder.Find(ctx, marker)
-	if err == nil {
-		return id, nil
-	}
-	if !transport.IsPermanent(err) {
-		return "", err
-	}
-	klog.InfoS("issue search refused; creating without it",
-		"component", "delivery", "operation", "find_issue",
-		"provider", tracker.Name())
-	return "", nil
+	return m.create(ctx, tracker, msg, key, title, body)
 }
 
 // update comments on the issue of a live incident. When the issue is
@@ -224,6 +183,9 @@ func (m *Map) update(
 	ctx context.Context, tracker Tracker, key, id string,
 	closed bool, body string,
 ) error {
+	// The incident is failing again: a resolve whose delivery was given
+	// up must not leave its comment marked as posted for the next one.
+	m.clearResolveCommented(key)
 	if closed {
 		if r, ok := tracker.(Reopener); ok {
 			if err := r.Reopen(ctx, id); err != nil {
@@ -300,6 +262,8 @@ func (m *Map) remember(key, id string) {
 	defer m.mu.Unlock()
 	m.expireLocked()
 	delete(m.closedUntil, key)
+	delete(m.commented, key)
+	delete(m.tried, key)
 	if _, exists := m.ids[key]; !exists {
 		m.order = append(m.order, key)
 	}
@@ -334,6 +298,7 @@ func (m *Map) forget(key string) {
 func (m *Map) forgetLocked(key string) {
 	delete(m.ids, key)
 	delete(m.closedUntil, key)
+	delete(m.commented, key)
 	for i, candidate := range m.order {
 		if candidate == key {
 			m.order = append(m.order[:i], m.order[i+1:]...)

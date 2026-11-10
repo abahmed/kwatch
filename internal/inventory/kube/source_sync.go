@@ -75,7 +75,10 @@ type watchState struct {
 	resource  Resource
 	required  bool
 	hasSynced cache.InformerSynced
-	// lastVersion is the informer's last synced resource version.
+	// lastVersion marks how far the watch got: the informer's last
+	// synced resource version, with the count of answered lists and
+	// watches when the source has one (see Source.progressOf). It
+	// moves whenever a list or watch got through.
 	lastVersion func() string
 	mu          sync.Mutex
 	reason      string
@@ -114,9 +117,10 @@ func (w *watchState) record(err error) {
 }
 
 // accessLost reports whether the API refused the watch after it synced
-// and no relist succeeded since. The resource version only moves once
-// a list or watch got through again; on a fully idle cluster it may not
-// move at all, and the kind stays unverifiable, which is the safe side.
+// and no list or watch succeeded since (see Source.progressOf). Without
+// a count of answers only the resource version says so, and for a kind
+// nothing changes it may not move: the kind then stays unverifiable,
+// which is the safe side.
 func (w *watchState) accessLost() bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -142,7 +146,7 @@ func (s *Source) track(
 	w := &watchState{
 		resource: resource, required: required,
 		hasSynced:   handle.HasSynced,
-		lastVersion: informer.LastSyncResourceVersion,
+		lastVersion: s.progressOf(resource, informer),
 		now:         s.cfg.Now,
 	}
 	s.watches = append(s.watches, w)

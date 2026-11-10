@@ -73,10 +73,10 @@ func TestStartupSummaryBoundsDescribedProblems(t *testing.T) {
 		t.Errorf("summary should stop after %d problems: %q",
 			maxSummaryNamed, msg.Note)
 	}
-	if !strings.Contains(msg.Note, "Two more are not described here.") {
+	if !strings.Contains(msg.Note, "Two more are not shown.") {
 		t.Errorf("summary should count the rest: %q", msg.Note)
 	}
-	if !strings.Contains(msg.Note, "its own message") {
+	if !strings.Contains(msg.Note, "alerts on its own") {
 		t.Errorf("summary should say updates come separately: %q",
 			msg.Note)
 	}
@@ -185,5 +185,20 @@ func TestDigestHidesConfigurationAdviceAndNamesUnreadyWorkloads(
 		strings.Contains(msg.Note, "readiness probe") ||
 		strings.Contains(msg.Note, "single replica") {
 		t.Fatalf("advice must not be announced: %q", msg.Note)
+	}
+}
+
+// A list of one problem closes with the singular line, in the note and
+// in the structured message.
+func TestStartupSummaryOfOneSaysIt(t *testing.T) {
+	now := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
+	msg := Writer{}.StartupSummary([]incident.Decision{
+		podDecision("lone", incident.Notify)}, now)
+	if !strings.HasSuffix(msg.Note, oneOwnMessage) {
+		t.Fatalf("note = %q", msg.Note)
+	}
+	last := msg.Doc[len(msg.Doc)-1]
+	if len(last.Spans) == 0 || last.Spans[0].Text != oneOwnMessage {
+		t.Fatalf("doc ends with %+v", last)
 	}
 }

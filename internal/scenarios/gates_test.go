@@ -244,8 +244,11 @@ type calibrationBand struct {
 
 // calibrationBands are the bands of the levels that make a claim.
 var calibrationBands = map[string]calibrationBand{
-	scorecard.LevelHigh:   {low: 80, high: 100},
-	scorecard.LevelLikely: {low: 50, high: 90},
+	scorecard.LevelHigh: {low: 80, high: 100},
+	// The ceiling is 95, not 90: with about 50 labelled likely cases
+	// one case is 2 points, so 90 trips on a single correct answer,
+	// while 95 still catches systematic under-confidence.
+	scorecard.LevelLikely: {low: 50, high: 95},
 }
 
 // minCalibrationCases is the fewest cases a level needs before its band

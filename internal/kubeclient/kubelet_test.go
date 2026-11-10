@@ -184,9 +184,27 @@ func TestKubeletAddress(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "10.0.0.7:10255", got)
 
-	node.Status.Addresses = node.Status.Addresses[:1]
+	node.Status.Addresses = nil
 	_, err = KubeletAddress(node)
-	assert.ErrorIs(t, err, errNoInternalIP)
+	assert.ErrorIs(t, err, errNoAddress)
+}
+
+// A node that reports no InternalIP (some bare-metal and edge setups)
+// is still read: its ExternalIP, else its hostname.
+func TestKubeletAddressFallsBackWithoutAnInternalIP(t *testing.T) {
+	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "n1"}}
+	node.Status.Addresses = []corev1.NodeAddress{
+		{Type: corev1.NodeHostName, Address: "n1.example"},
+		{Type: corev1.NodeExternalIP, Address: "203.0.113.9"},
+	}
+	got, err := KubeletAddress(node)
+	require.NoError(t, err)
+	assert.Equal(t, "203.0.113.9:10250", got)
+
+	node.Status.Addresses = node.Status.Addresses[:1]
+	got, err = KubeletAddress(node)
+	require.NoError(t, err)
+	assert.Equal(t, "n1.example:10250", got)
 }
 
 func TestNewKubeletClientRequiresDependencies(t *testing.T) {

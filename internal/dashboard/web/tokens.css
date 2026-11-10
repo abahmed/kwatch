@@ -4,19 +4,19 @@
   --surface: #F2F3F0;
   --line: #DADDE2;
   --text: #0E1116;
-  --text-muted: #5B6270;
+  --text-muted: #474E5C;
 
   --signal: #C8F542;
   --on-signal: #0E1116;
 
   --failing: #B42318;
-  --failing-bg: #FDECEC;
+  --failing-bg: #FAD4D0;
   --degraded: #8A5300;
-  --degraded-bg: #FDF1DC;
+  --degraded-bg: #FADFAE;
   --resolved: #1D5FC2;
-  --resolved-bg: #E8F0FD;
+  --resolved-bg: #D5E4FB;
   --success: #1E6B3A;
-  --success-bg: #E6F4EA;
+  --success-bg: #D2EDD9;
 
   /* Controls: --control-border is 3:1 against --bg (WCAG 1.4.11) */
   --control-border: #7C828E;
@@ -24,13 +24,14 @@
   --hit: 44px;
   --focus-width: 3px;
   --focus-offset: 3px;
-  --text-soft: #3A404B;
+  --text-soft: #2C323C;
 
   /* Surfaces that stay dark in both modes */
   --ink: #0E1116;
   --ink-text: #ECEDEA;
   --ink-muted: #9AA0AA;
   --ink-line: #2A2E35;
+  --ink-edge: #6A717D; /* the visible edge of a dark block on any page */
 
   --font-display: 'Bricolage Grotesque', sans-serif;
   --font-body: 'Instrument Sans', sans-serif;
@@ -51,7 +52,7 @@
   --radius-pill: 999px; /* buttons and the Pro badge only */
 
   --max: 1280px;        /* marketing and docs shell width */
-  --max-app: 1000px;    /* app content width */
+  --max-app: 90rem;     /* content width: every page as wide as Issues */
   --gutter: 24px;       /* 16px at <=640px, set by each app's base css */
   --measure: 62ch;      /* longest line of running text */
 
@@ -78,7 +79,7 @@
     --surface: #1E2126;
     --line: #2A2E35;
     --text: #ECEDEA;
-    --text-muted: #9AA0AA;
+    --text-muted: #B6BBC4;
 
     --signal: #B5DE3C;
     --on-signal: #0E1116;
@@ -94,6 +95,6 @@
 
     --control-border: #6B7280;
     --primary-hover: #FFFFFF;
-    --text-soft: #C3C7CE;
+    --text-soft: #D3D6DC;
   }
 }

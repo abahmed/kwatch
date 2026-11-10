@@ -73,3 +73,15 @@ func TestDigestShowsTheNormalThatExcusedARestartingWorkload(t *testing.T) {
 	assert.Contains(t, got.Note,
 		"(within its normal: restarts 2×/h vs a usual 2×/h).")
 }
+
+// Each metric is quoted once, even when two findings carry figures for
+// it.
+func TestBaselineQuotesOneFigurePerMetric(t *testing.T) {
+	got := restartingNote(t, detection.NormalUnusual,
+		"restarts 10×/h vs a usual 0.3×/h",
+		"restarts 8×/h vs a usual 0.3×/h", "memory 1Gi vs a usual 200Mi peak")
+	assert.Contains(t, got, "That is unusual for this workload: "+
+		"restarts 10×/h vs a usual 0.3×/h; memory 1Gi vs a usual 200Mi "+
+		"peak.")
+	assert.NotContains(t, got, "8×/h")
+}

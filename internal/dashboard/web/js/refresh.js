@@ -47,8 +47,26 @@
         KW.updateBadge(res.data.facets.severity || {});
       });
   };
-  /* setTitle sets the tab title. */
-  KW.setTitle = function (text) { document.title = text; };
+  /* setTitle sets the tab title. While the tab is hidden, notify.js
+     puts the count of changes not seen yet in front: "(3) ...". */
+  KW.baseTitle = "kwatch";
+  KW.setTitle = function (text) {
+    KW.baseTitle = text;
+    text = KW.clusterTitle(text);
+    var n = KW.unseen || 0;
+    document.title = n ? "(" + n + ") " + text.replace(/^\(\d+\) /, "") : text;
+  };
+  /* clusterTitle puts the cluster's name before the closing "kwatch"
+     once /api/status said it (KW.cluster, pages.js): "Issues - shop-eu
+     (non-production) - kwatch". Before sign-in nothing is known, so the
+     sign-in page's tab says only "kwatch". */
+  KW.clusterTitle = function (text) {
+    var c = KW.cluster;
+    if (!c) return text;
+    var name = c.label + (c.nonProduction ? " (non-production)" : "");
+    if (text === "kwatch") return name + " - kwatch";
+    return text.replace(/ [-\u00b7] kwatch$/, " - " + name + " - kwatch");
+  };
   KW.title = function (text) { KW.setTitle(text + " - kwatch"); };
 
   /* ---- live refresh ---- */
@@ -64,6 +82,7 @@
   var conn = { lastOk: 0, failing: false, shownSince: Date.now() };
   KW.poller = function (load, every, opts) {
     var timer = 0, stopped = false, last = 0, busy = false, kicked = false;
+    var failedOnce = false;
     var entry = { run: run, kick: kick, wants: opts && opts.wants,
       ago: function () { return Date.now() - last; } };
     function gap() { return Math.max(0, last + LIVE_GAP - Date.now()); }
@@ -89,9 +108,18 @@
       last = Date.now();
       busy = true;
       kicked = false;
-      Promise.resolve(load()).then(function (delay) {
+      // A load that throws or rejects must not leave busy set: the page
+      // would never refresh again.
+      var out;
+      try { out = Promise.resolve(load()); } catch (e) { out = Promise.reject(e); }
+      out.then(function (delay) {
         busy = false;
         schedule(delay || (kicked ? gap() : live.on ? LIVE_EVERY : every));
+      }, function (err) {
+        busy = false;
+        if (!failedOnce) console.error("kwatch: refresh failed", err);
+        failedOnce = true;
+        schedule(kicked ? gap() : live.on ? LIVE_EVERY : every);
       });
     }
     function onVisible() {
@@ -336,8 +364,11 @@
     node.appendChild(tag);
     node.appendChild(KW.el("span", "", "updated " + ago(lastOk)));
     // A phone has no other way to read again at once.
-    var again = node.appendChild(KW.el("button", "btn btn-sm upd-refresh", "Refresh"));
+    var again = node.appendChild(KW.el("button", "btn btn-sm upd-refresh"));
     again.type = "button";
+    again.title = "Refresh";
+    again.setAttribute("aria-label", "Refresh");
+    again.appendChild(KW.icon("refresh"));
     again.addEventListener("click", function () {
       KW.tryNow();
       KW.announce("Refreshing");

@@ -91,9 +91,13 @@ func TestActivityKeepsTheNewestTwentyInAFixedOrder(t *testing.T) {
 		p.Occurrences = []time.Time{p.Opened}
 		items = append(items, p)
 	}
-	r := buildActivity(items, testEpoch, time.Hour, redact.Evidence, true)
+	r := buildActivity(items, testEpoch, time.Hour, redact.Evidence,
+		true).newest(maxActivity)
 	again := buildActivity(append(items[15:], items[:15]...), testEpoch,
-		time.Hour, redact.Evidence, true)
+		time.Hour, redact.Evidence, true).newest(maxActivity)
+	if r.Kinds[activityNew] != 30 {
+		t.Errorf("kinds count the whole window: %v", r.Kinds)
+	}
 	if len(r.Events) != maxActivity || r.Total != 30 ||
 		activityLine(r) != activityLine(again) {
 		t.Fatalf("%d of %d, stable %v", len(r.Events), r.Total,

@@ -68,13 +68,14 @@ func (m *Manager) TakeUntitled() []Incident {
 	return out
 }
 
-// SetProblem stores the problem title of incident id. An empty title
-// keeps the earlier one. No-op for an unknown incident.
-func (m *Manager) SetProblem(id, title string) {
+// SetProblem stores the problem title of incident id, bounded for a
+// list, and full, the same title uncut. An empty title keeps the earlier
+// ones. No-op for an unknown incident.
+func (m *Manager) SetProblem(id, title, full string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if p := m.incidents[id]; p != nil && title != "" {
-		p.Problem = title
+		p.Problem, p.ProblemFull = title, full
 	}
 }
 
@@ -86,4 +87,13 @@ func (p Incident) Title() string {
 		return p.Problem
 	}
 	return p.Headline
+}
+
+// FullTitle is Title uncut, the problem title as the composer wrote
+// it; a record saved before it existed has its bounded Title.
+func (p Incident) FullTitle() string {
+	if p.ProblemFull != "" {
+		return p.ProblemFull
+	}
+	return p.Title()
 }

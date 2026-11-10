@@ -47,8 +47,8 @@ func placeLine(f caseFacts) string {
 func TestFixLineNamesObjectContainerFieldAndValue(t *testing.T) {
 	f := placeCase(nil, place("app", "resources.limits.memory", "256Mi"))
 
-	assert.Equal(t, "Fix in: deployment/api → container app → "+
-		"resources.limits.memory (256Mi).", placeLine(f))
+	assert.Equal(t, "Fix: raise the memory limit of container app in "+
+		"deployment/api above 256Mi.", placeLine(f))
 }
 
 func TestFixLineLeavesOutWhatIsNotThere(t *testing.T) {
@@ -56,12 +56,13 @@ func TestFixLineLeavesOutWhatIsNotThere(t *testing.T) {
 		Place: &detection.Place{Object: inventory.CoreID(
 			kube.KindHPA, "shop", "web"), Path: "spec.maxReplicas",
 			Value: "6"}}
-	assert.Equal(t, "Fix in: horizontalpodautoscaler/web → "+
-		"spec.maxReplicas (6).", placeLine(placeCase(cause, nil)))
+	assert.Equal(t, "Fix: raise maxReplicas of "+
+		"horizontalpodautoscaler/web above 6.",
+		placeLine(placeCase(cause, nil)))
 
 	env := place("app", "env[DB_HOST]", "")
-	assert.Equal(t, "Fix in: deployment/api → container app → "+
-		"env[DB_HOST].", placeLine(placeCase(nil, env)))
+	assert.Equal(t, "Fix: correct env var DB_HOST of container app in "+
+		"deployment/api.", placeLine(placeCase(nil, env)))
 }
 
 func TestFixLineComesFromTheCauseWhenThereIsOne(t *testing.T) {
@@ -70,8 +71,8 @@ func TestFixLineComesFromTheCauseWhenThereIsOne(t *testing.T) {
 		Value: "api:2"}}
 	f := placeCase(cause, place("app", "resources.limits.memory", "256Mi"))
 
-	assert.Equal(t, "Fix in: deployment/api → container app → "+
-		"image (api:2).", placeLine(f))
+	assert.Equal(t, "Fix: change the image of container app in "+
+		"deployment/api (now api:2).", placeLine(f))
 }
 
 func TestFixLineIsAbsentWhenTheCauseIsNotASetting(t *testing.T) {
@@ -112,6 +113,6 @@ func TestFixLineReachesTheNote(t *testing.T) {
 	f := placeCase(nil, place("app", "resources.limits.memory", "256Mi"))
 
 	note := Writer{}.Write(announce(f.p), writerNow).Note
-	assert.Contains(t, note, "Fix in: deployment/api → container app → "+
-		"resources.limits.memory (256Mi).")
+	assert.Contains(t, note, "Fix: raise the memory limit of container "+
+		"app in deployment/api above 256Mi.")
 }

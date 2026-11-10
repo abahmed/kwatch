@@ -29,6 +29,9 @@ type overrides struct {
 	byKind   map[string]Tier
 	// noPage caps every tier at Notify: paging is off.
 	noPage bool
+	// nonProd caps every tier at Notify too: the cluster is set as not
+	// production (Config.NonProduction).
+	nonProd bool
 }
 
 func newOverrides(byReason, byKind map[string]string) overrides {
@@ -67,7 +70,8 @@ func compileOverrides(in map[string]string) map[string]Tier {
 // pages again through an override.
 func (o overrides) apply(p *Incident, base Tier) Tier {
 	tier := o.override(p, base)
-	if tier > Notify && (o.noPage || p.Delivery.PageHeld()) {
+	if tier > Notify &&
+		(o.noPage || o.nonProd || p.Delivery.PageHeld()) {
 		// A repeat of a page that just resolved stays held whatever the
 		// override says (see tier): the page of this outage was sent.
 		return Notify

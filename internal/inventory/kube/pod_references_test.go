@@ -81,3 +81,31 @@ func TestOptionalReferenceRequiresEveryUseOptional(t *testing.T) {
 	assert.False(t, kube.OptionalReference(pod,
 		inventory.CoreID(kube.KindConfigMap, "ns", "opt-vol")))
 }
+
+// The kubelet pulls without a pull Secret it cannot read, so a Secret
+// named only in imagePullSecrets is one the pod starts without. A use
+// in the environment or a volume keeps it required.
+func TestPullSecretOnlyReferenceIsOptional(t *testing.T) {
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "ns"},
+		Spec: corev1.PodSpec{
+			ImagePullSecrets: []corev1.LocalObjectReference{
+				{Name: "regcred"}, {Name: "both"}},
+			Containers: []corev1.Container{{
+				Name: "app", Image: "app:1",
+				EnvFrom: []corev1.EnvFromSource{{
+					SecretRef: &corev1.SecretEnvSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: "both"}}}},
+			}},
+		},
+	}
+	desc, ok := kube.PodSchema{}.Describe(pod)
+	require.True(t, ok)
+
+	assert.Contains(t, desc.Relations[inventory.References],
+		inventory.CoreID(kube.KindSecret, "ns", "regcred"),
+		"the pull Secret stays related for change tracking")
+	assert.Equal(t, "secret/regcred",
+		desc.Attributes[kube.AttrOptionalRefs].AsText())
+}

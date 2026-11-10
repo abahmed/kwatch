@@ -92,7 +92,17 @@ another that closed), and then nobody would be told.
   `pipeline/announce/restored_list.go`) names the restored incidents that
   still fail and have not spoken for themselves since the restart,
   digest-tier ones after the louder ones, within the usual cap, so nothing
-  restored is silent. A restored incident at the notify tier or higher whose
+  restored is silent. One a listing named less than `RestoredRetell` (12h)
+  ago whose told fingerprint (`Digest`) has not changed is left out
+  (`toldUnchanged` in `restart_note.go`); when nothing else is listed, the
+  short restart note counts it instead. A restored incident that only a
+  listing named and that never spoke on its own (`SpokeOnItsOwn`) is owed
+  one introduction: at the end of the grace it is queued like a roll-up's
+  (`noteRestoredIntros` in `restored_intro.go`, `queueRestoredIntros` in
+  `pipeline/introduce.go`), sent once its investigation is ready, threaded
+  under the listing, and never paging by itself; once sent, the listing
+  records it as followed, so a later restart does not introduce it again.
+  A restored incident at the notify tier or higher whose
   findings are back and still call for that tier does not wait for the whole
   grace: it is named one settle (`DefaultSettle`) after the sources synced,
   with the lower-priority ones that are back by then, and the end of the

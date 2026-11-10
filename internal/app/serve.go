@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
+	"sync"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -34,13 +32,7 @@ func serve(ctx context.Context, deps *serverDeps) int {
 			run:      deps.healthServer.Serve,
 		})
 	}
-	if deps.dashboardServer != nil {
-		supervisor.startOwned(ctx, componentSpec{
-			name:     "dashboard-server",
-			required: false,
-			run:      deps.dashboardServer.Serve,
-		})
-	}
+	startDashboard(ctx, deps, supervisor)
 	supervisor.startOwned(ctx, componentSpec{
 		name:     "leader-election",
 		required: true,
@@ -64,29 +56,14 @@ func startCRDWatcher(ctx context.Context, deps *serverDeps) error {
 					"component", "crd-watcher")
 			}
 		},
-		func(status crd.Status) {
-			if status.State == "waiting" {
-				deps.healthServer.SetComponentStatus(
-					"crd-watcher", "waiting",
-					"optional_api_unavailable", false,
-				)
-				return
-			}
-			if status.State == "degraded" {
-				deps.healthServer.SetComponentStatus(
-					"crd-watcher", "degraded",
-					crdWatcherReason(status.LastError), false,
-				)
-				return
-			}
-			if status.Ready {
-				deps.healthServer.SetComponentStatus(
-					"crd-watcher", "running", "", true,
-				)
-			}
-		},
+		crdWatcherStatus(deps),
 		loadConfig,
 	)
+	// The overlay was applied at bootstrap; the watcher starts only now.
+	// What changed in between restarts kwatch, like a later edit.
+	if deps.overlay.listed {
+		w.ExpectStartup(deps.overlay.signature)
+	}
 	if err := w.Start(ctx); err != nil {
 		return fmt.Errorf("crd watcher: %w", err)
 	}
@@ -101,6 +78,31 @@ func startCRDWatcher(ctx context.Context, deps *serverDeps) error {
 	}()
 	<-ctx.Done()
 	return nil
+}
+
+// crdWatcherStatus publishes the watcher's state on /health.
+func crdWatcherStatus(deps *serverDeps) func(crd.Status) {
+	return func(status crd.Status) {
+		if status.State == "waiting" {
+			deps.healthServer.SetComponentStatus(
+				"crd-watcher", "waiting",
+				"optional_api_unavailable", false,
+			)
+			return
+		}
+		if status.State == "degraded" {
+			deps.healthServer.SetComponentStatus(
+				"crd-watcher", "degraded",
+				crdWatcherReason(status.LastError), false,
+			)
+			return
+		}
+		if status.Ready {
+			deps.healthServer.SetComponentStatus(
+				"crd-watcher", "running", "", true,
+			)
+		}
+	}
 }
 
 func crdWatcherReason(reason string) string {
@@ -119,40 +121,32 @@ func waitShutdown(
 	deps *serverDeps,
 	supervisor *componentSupervisor,
 ) int {
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-	defer signal.Stop(sigCh)
-
 	applicationContext := deps.ctx
 	if applicationContext == nil {
 		applicationContext = context.Background()
 	}
 	exitCode := 0
 	var failureErr error
+	stopped := false
 	select {
-	case <-sigCh:
-		klog.InfoS("shutting down gracefully...")
+	case <-deps.stop:
+		stopped = true
 	case err := <-supervisor.errCh:
 		failureErr, exitCode = componentExit(err)
 	case <-applicationContext.Done():
-		klog.InfoS("shutting down because the application context was canceled")
+		stopped = true
 	}
-	if failureErr != nil {
-		klog.ErrorS(failureErr, "shutting down after a component failure")
-	}
-	rebuild := deps.editionRestart.Load()
+	// A stop wins over a rebuild that was asked for at the same moment.
+	stopped = stopped || stopRequested(deps.stop) ||
+		applicationContext.Err() != nil
+	logShutdownCause(deps, stopped, failureErr)
+	// Only a rebuild that the ended leader session asked for skips the
+	// wait below. After a stop the session may still be draining, even
+	// when the license asked for a rebuild just before.
+	rebuild := !stopped && deps.rebuildReason() != rebuildNone
+	deps.stopped.Store(stopped)
 	deps.cancel()
-	if rebuild {
-		// An edition rebuild keeps answering liveness: a kubelet that
-		// finds no listener for its whole tolerance restarts the pod, and
-		// the rebuild's own steps can take that long. Readiness is
-		// withdrawn; the next generation closes the listener just before
-		// it binds the port (generationEnv.run).
-		deps.healthServer.SetReady(false)
-	} else {
-		stopHealthServer(deps)
-		stopDashboardServer(deps)
-	}
+	stopServersAtExit(deps, rebuild)
 	waitBackground(supervisor, rebuild)
 
 	// The leader session already drained delivery (active.go); this
@@ -164,8 +158,23 @@ func waitShutdown(
 		klog.ErrorS(err, "timed out waiting for delivery manager to drain")
 	}
 	cancel()
-	releaseLeaseAfterShutdown(deps, applicationContext)
+	// A rebuild keeps the Lease for the next generation.
+	if !rebuild {
+		releaseLeaseAfterShutdown(deps, applicationContext)
+	}
 	return exitCode
+}
+
+func logShutdownCause(deps *serverDeps, stopped bool, failure error) {
+	switch {
+	case failure != nil:
+		klog.ErrorS(failure, "shutting down after a component failure")
+	case stopRequested(deps.stop):
+		klog.InfoS("shutting down gracefully...")
+	case stopped:
+		klog.InfoS("shutting down because the application context " +
+			"was canceled")
+	}
 }
 
 // waitBackground waits for the leader session to stop its components and
@@ -189,6 +198,30 @@ func waitBackground(supervisor *componentSupervisor, rebuild bool) {
 	case <-time.After(backgroundShutdownTimeout):
 		recordShutdownTimeout("background-tasks")
 	}
+}
+
+// stopServersAtExit stops the generation's listeners. An edition rebuild
+// keeps answering liveness: a kubelet that finds no listener for its
+// whole tolerance restarts the pod, and the rebuild's own steps can take
+// that long. Readiness is withdrawn; the next generation closes the
+// listener just before it binds the port (generationEnv.run). The
+// dashboard always stops: the next generation builds its own for the
+// new edition, and an old one left open would keep serving the old
+// edition's pages, or hold the port the new one needs.
+//
+// The two listeners stop at the same time, so together they take one
+// healthStopTimeout, which is what the shutdown budget counts
+// (shutdown_context.go).
+func stopServersAtExit(deps *serverDeps, rebuild bool) {
+	if rebuild {
+		deps.healthServer.SetReady(false)
+		stopDashboardServer(deps)
+		return
+	}
+	var stops sync.WaitGroup
+	stops.Go(func() { stopHealthServer(deps) })
+	stops.Go(func() { stopDashboardServer(deps) })
+	stops.Wait()
 }
 
 func stopHealthServer(deps *serverDeps) {
@@ -233,14 +266,17 @@ func releaseLeaseAfterShutdown(deps *serverDeps, parent context.Context) {
 }
 
 // componentExit is the failure and exit code for a component's end. The
-// license's request for a new generation is a planned rebuild, not a
-// failure.
+// license's request for a new generation and a lost Lease are planned
+// rebuilds, not failures.
 func componentExit(err error) (error, int) {
 	switch {
 	case err == nil:
 		return nil, 0
 	case errors.Is(err, errEditionChanged):
 		klog.InfoS("rebuilding for the new edition")
+		return nil, 0
+	case errors.Is(err, errLeaseLostRejoin):
+		klog.InfoS("rejoining leader election after losing the Lease")
 		return nil, 0
 	}
 	return err, 1

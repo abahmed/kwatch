@@ -33,12 +33,12 @@ func TestUnchangedLineOfStandingConditionsSaysStillOpen(t *testing.T) {
 	failing := Ongoing{Root: inventory.CoreID(kube.KindDeployment, "shop",
 		"web")}
 
-	assert.Equal(t, "one more still open, unchanged (pod-cap)",
+	assert.Equal(t, "Still open and unchanged: pod-cap",
 		unchangedLine([]Ongoing{standingOngoing("pod-cap")}))
-	assert.Equal(t, "two more still open, unchanged (web, pod-cap)",
+	assert.Equal(t, "Still open and unchanged (2): web, pod-cap",
 		unchangedLine([]Ongoing{failing, standingOngoing("pod-cap")}),
 		"a list with a condition in it is not all failures")
-	assert.Equal(t, "one more still failing, unchanged (web)",
+	assert.Equal(t, "Still failing and unchanged: web",
 		unchangedLine([]Ongoing{failing}))
 }
 

@@ -58,3 +58,26 @@ func TestComponentProgressIsSafeForConcurrentUse(t *testing.T) {
 		t.Error("progress was lost")
 	}
 }
+
+func TestFreshStartWaitsForFirstReportOfTheRun(t *testing.T) {
+	supervisor := newComponentSupervisor(time.Now)
+	started := time.Now()
+	older := started.Add(-time.Minute)
+	watch := runWatch{
+		stall: time.Second, startup: time.Hour, freshStart: true,
+	}
+
+	if supervisor.progressStalled(older, started, watch) {
+		t.Error("an old report must not shorten the startup allowance")
+	}
+	watch.freshStart = false
+	if !supervisor.progressStalled(older, started, watch) {
+		t.Error("without freshStart an old report is a stall")
+	}
+	watch.freshStart = true
+	reported := time.Now().Add(-time.Minute)
+	if !supervisor.progressStalled(reported, reported.Add(-time.Second),
+		watch) {
+		t.Error("a report from this run must use the steady-state stall")
+	}
+}

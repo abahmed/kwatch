@@ -230,7 +230,7 @@ func normalizeReason(reason string) string {
 		"provider_shutdown_timeout", "component_failed", "component_stopped",
 		"timeout", "canceled", "rate_limited", "shutdown",
 		"leadership_lost", "cache_sync_pending", "watcher_failed",
-		"api_unavailable", "permission_denied",
+		"api_unavailable", "api_unreachable", "permission_denied",
 		"optional_permission_denied", "storage_reset", "storage_over_cap",
 		"heartbeat_failed", "config_overlay_invalid",
 		"kubelet_unreachable", "kubelet_partially_unreachable",

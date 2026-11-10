@@ -38,8 +38,10 @@ func TestNamespaceOutageLeadCountsAndDatesTheFailures(t *testing.T) {
 		!strings.HasSuffix(msg.Key, "/shop") {
 		t.Fatalf("key = %q opens = %v", msg.Key, msg.Opens)
 	}
-	if len(msg.Lines) != 5 {
-		t.Fatalf("want five titles, got %q", msg.Lines)
+	// Five workloads in the same state are one line that names each.
+	if len(msg.Lines) != 1 ||
+		!strings.HasPrefix(msg.Lines[0], "a, b, c, d and e in shop") {
+		t.Fatalf("want one line naming all five, got %q", msg.Lines)
 	}
 }
 

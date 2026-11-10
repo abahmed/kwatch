@@ -9,6 +9,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/release"
 	"github.com/abahmed/kwatch/internal/storage"
 )
@@ -82,7 +83,7 @@ func (s *Server) lookAtReleases(
 		items = (*reader).Incidents()
 	}
 	view := release.View{Model: *model, Incidents: items,
-		InScope: s.opts.Scope.covers, OwnNamespace: own.Namespace,
+		InScope: s.opts.Scope.over(*model), OwnNamespace: own.Namespace,
 		OwnWorkload: own.Name, Detail: s.opts.ChangeHistory}
 	b.mu.Lock()
 	changed := release.Observe(&b.book, view, s.now.Now())
@@ -94,6 +95,18 @@ func (s *Server) lookAtReleases(
 	if err := values.Put(releasesKey, saved); err != nil {
 		klog.ErrorS(err, "dashboard: release book not saved",
 			"component", "dashboard-releases")
+	}
+}
+
+// over is the scope as a release look reads it over model: the whole
+// namespace scope when Allowed is set, so a namespace the label
+// selector leaves out has no releases; the two lists otherwise.
+func (sc Scope) over(model inventory.Reader) func(namespace string) bool {
+	if sc.Allowed == nil {
+		return sc.covers
+	}
+	return func(namespace string) bool {
+		return sc.Allowed(model, namespace)
 	}
 }
 

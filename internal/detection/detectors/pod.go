@@ -165,6 +165,13 @@ func (d Pod) pending(
 	if status == "" {
 		return d.unscheduled(ctx, e)
 	}
+	return d.notStarted(ctx, e)
+}
+
+// notStarted reports a pod scheduled long ago that has not started.
+func (d Pod) notStarted(
+	ctx detection.Context, e inventory.Entity,
+) []detection.Finding {
 	// Scheduled but not started: container-level findings explain image
 	// and configuration incidents, so only a long wait is reported here.
 	started := timestamp(e, kube.AttrStartTime)
@@ -175,6 +182,11 @@ func (d Pod) pending(
 	// A pod cannot have waited before it existed.
 	if created := timestamp(e, kube.AttrCreated); started.Before(created) {
 		started = created
+	}
+	// A running init container is the pod doing its first job (a
+	// migration, a download): InitWait judges how long that may take.
+	if initRunning(ctx, e.ID) {
+		return nil
 	}
 	wait := d.thresholds.Pending*startedPendingFactor +
 		bootGraceFor(ctx, e)
@@ -207,17 +219,20 @@ func (d Pod) unscheduled(
 	}}
 }
 
-// notReady reports a running pod that stays unready. A pod that has never
-// been ready gets the startup budget its own probes declare.
+// notReady reports a running pod that stays unready. A pod that has not
+// been ready since its containers started gets the startup budget its own
+// probes declare; one that served and then lost readiness gets only the
+// NotReady threshold.
 func (d Pod) notReady(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
-	if flag(e, kube.AttrReady) {
+	if flag(e, kube.AttrReady) || unreadyOnlyByFinished(ctx, e) {
 		return nil
 	}
 	since := timestamp(e, kube.AttrReadySince)
 	threshold := d.thresholds.NotReady
-	if budget := startupBudget(ctx, e.ID); budget > threshold {
+	if budget := startupBudget(ctx, e.ID); budget > threshold &&
+		!servedSinceStart(e) {
 		threshold = budget
 	}
 	threshold += replacementGraceFor(ctx, e)
@@ -235,6 +250,15 @@ func (d Pod) notReady(
 	readyJudgement(ctx, e, since).apply(&s)
 	withReadinessGates(&s, e)
 	return []detection.Finding{s}
+}
+
+// servedSinceStart reports a pod that was ready after its containers
+// started: its Ready condition turned false after the start, which a
+// pod still starting up (false since before the start) never did.
+func servedSinceStart(e inventory.Entity) bool {
+	started := timestamp(e, kube.AttrContainersStarted)
+	since := timestamp(e, kube.AttrReadySince)
+	return !started.IsZero() && since.After(started)
 }
 
 func startupBudget(
@@ -292,6 +316,6 @@ func unschedulableEvidence(
 ) []detection.Evidence {
 	message := conditionMessage(e, "PodScheduled")
 	out := []detection.Evidence{{Label: "scheduler", Value: message}}
-	out = append(out, capacityEvidence(ctx.Model, e.ID, message)...)
+	out = append(out, capacityEvidence(ctx, e.ID, message)...)
 	return append(out, fitEvidence(ctx, e)...)
 }

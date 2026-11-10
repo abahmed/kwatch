@@ -213,6 +213,7 @@ func (v *view) addUpstream(cs *candidateSet, effect inventory.EntityID) {
 	effectState := v.effectState(effect)
 	reached := v.walk(effect)
 	v.noteInputs(effect, reached)
+	v.noteReach(effect, reached)
 	for _, r := range reached {
 		cause := v.causeState(r.id, effect, r.link)
 		if len(cause.modes) == 0 {

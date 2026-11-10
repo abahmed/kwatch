@@ -6,3 +6,4 @@ api_secret=<redacted>
 from=kwatch
 text=✅ payments in shop is healthy again.
 to=+12025550100
+type=unicode

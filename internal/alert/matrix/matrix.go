@@ -123,6 +123,7 @@ func (m *Matrix) sendBodies(
 	identity, plainMsg, formattedMsg string,
 ) error {
 
+	plainMsg, formattedMsg = fitBodies(plainMsg, formattedMsg)
 	payload := struct {
 		Msgtype       string `json:"msgtype"`
 		Format        string `json:"format"`

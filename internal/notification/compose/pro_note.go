@@ -1,7 +1,7 @@
 package compose
 
 import (
-	"strings"
+	"slices"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/incident"
@@ -9,79 +9,134 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
-// The Pro line of a Community message: one line at most, either the
-// teaser (a Pro analysis would explain an incident Community leaves
-// without a cause) or the note for the alert's type, then the fix hint
-// when Pro says how to fix it. A message that tells its cause's
-// category has the line of causeNote instead (cause_category.go). Copy
-// is fixed by kwatch.dev/packages/brand/specs/community-pro-teasers.md:
-// no names, no interpolation.
+// The Pro line of a Community message: one sentence at most, on the
+// first alert of an issue only, saying what Pro shows: the teaser (a Pro
+// analysis would explain an incident Community leaves without a cause)
+// or the note for the alert's type, then the fix hint when Pro says how
+// to fix it. A message that tells its cause's category has the line of
+// causeNote instead (cause_category.go). The phrases are fixed copy: no
+// names, no interpolation.
 
 // proInvite closes every Pro line.
-const proInvite = " Get Pro free during early access: kwatch.dev/pro"
+const proInvite = ", free during early access: kwatch.dev/pro"
 
-// proTeaser replaces the note when Pro found a likely cause.
-const proTeaser = "Pro found a likely cause for this."
+// proTeaser replaces the note when Pro found a likely cause: a shared
+// factor its analysis found (Incident.ProCause).
+const proTeaser = "the likely cause it found"
 
-// proFix says that Pro has the steps and the setting Community leaves
-// out. It joins the note or teaser in its one line.
-const proFix = "Pro shows how to fix it."
+// proChangeSeen replaces the note when the engine found no cause but
+// saw a recent change next to the failure.
+const proChangeSeen = "what changed just before this"
 
-// Notes by alert type.
+// proFixWords say that Pro has the fix Community leaves out: a Fix line
+// or a step that changes the cluster. proCheckWords say that it has
+// only a command to look closer. Either joins the note in its one line.
 const (
-	noteCrash = "Pro would show the change that caused this crash."
-	noteOOM   = "Pro would show what changed memory use and the " +
-		"limit to set."
-	noteImage   = "Pro would show who changed the image and when."
-	notePending = "Pro would show which nodes were ruled out and why."
-	noteNode    = "Pro would show which pods this node took down."
-	noteGeneric = "Pro would show the recent change behind this and " +
-		"the services it affects."
+	proFixWords   = "how to fix it"
+	proCheckWords = "how to check it"
+)
+
+// Notes by alert type: what Pro shows for it. The notes that promise a
+// change are used only when the engine found one (changeKnown).
+var (
+	noteCrash   = []string{"the change that caused this crash"}
+	noteOOM     = []string{"what changed memory use", "the limit to set"}
+	noteImage   = []string{"who changed the image and when"}
+	notePending = []string{"which nodes were ruled out and why"}
+	noteNode    = []string{"which pods this node took down"}
+	noteGeneric = []string{"the recent change behind this",
+		"the services it affects"}
+	noteLog    = "the error from its log"
+	noteImpact = "the services it affects"
+)
+
+// proHelp is what Pro gives to act on: a fix, or only a way to check.
+type proHelp uint8
+
+const (
+	helpNone proHelp = iota
+	helpCheck
+	helpFix
 )
 
 // proNote is the one Pro line of d, or "" when the engine found nothing
-// Pro would show. fixable adds the fix hint: Pro says how to fix it.
-func proNote(d incident.Decision, fixable bool) string {
-	var line []string
+// Pro would show. help adds how to fix it, or how to check it.
+func proNote(d incident.Decision, help proHelp) string {
+	var shows []string
 	switch {
-	case proTeaserFits(d):
-		line = append(line, proTeaser)
+	case d.Incident.Cause == nil && d.Incident.ProCause:
+		shows = append(shows, proTeaser)
+	case d.Incident.Cause == nil && changeKnown(d):
+		shows = append(shows, proChangeSeen)
 	case proFound(d):
-		line = append(line, noteByType(d.Incident))
+		shows = append(shows, typeNote(d)...)
 	}
-	if fixable {
-		line = append(line, proFix)
+	switch help {
+	case helpFix:
+		shows = append(shows, proFixWords)
+	case helpCheck:
+		shows = append(shows, proCheckWords)
 	}
-	if len(line) == 0 {
+	if len(shows) == 0 {
 		return ""
 	}
-	return strings.Join(line, " ") + proInvite
+	return proLineText(shows)
 }
 
-// proTeaserFits reports an incident without a cause that a withheld
-// analysis would explain: a shared factor, or a recent change. With a
-// cause the message tells its category already.
-func proTeaserFits(d incident.Decision) bool {
-	if d.Incident.Cause != nil {
-		return false
-	}
-	return d.Incident.ProCause || len(d.Facts.Changes) > 0 ||
-		d.Facts.Window != nil
+// proLineText is the one sentence of a Pro line: "Pro shows which one
+// and how to fix it, free during early access: kwatch.dev/pro".
+func proLineText(shows []string) string {
+	return "Pro shows " + joinWords(shows) + proInvite
+}
+
+// changeKnown reports a change the engine found for d: the cause's
+// change, recent changes next to it, or changes in its health window.
+func changeKnown(d incident.Decision) bool {
+	cause := d.Incident.Cause
+	return (cause != nil && cause.Change != nil) ||
+		len(d.Facts.Changes) > 0 || d.Facts.Window != nil
 }
 
 // proFound reports whether the engine found something Pro would show:
 // a recent change, affected services, or logs.
 func proFound(d incident.Decision) bool {
 	cause := d.Incident.Cause
-	return (cause != nil && cause.Change != nil) ||
-		len(d.Facts.Changes) > 0 || d.Facts.Window != nil ||
-		len(d.Incident.Impact) > 0 ||
+	return changeKnown(d) || len(d.Incident.Impact) > 0 ||
 		(cause != nil && len(cause.Hops) > 0) ||
 		hasLogs(d.Incident.Root.Kind)
 }
 
-// noteByType is the note of the incident's alert type.
-func noteByType(p incident.Incident) string {
+// typeNote is what Pro shows for d: the note of its alert type, or, when
+// that note promises a change the engine did not find, what Pro does
+// show: the error from its log and the services it affects.
+func typeNote(d incident.Decision) []string {
+	note := noteByType(d.Incident)
+	if changeKnown(d) || !promisesChange(note) {
+		return note
+	}
+	var out []string
+	if len(d.Facts.Output) > 0 {
+		out = append(out, noteLog)
+	}
+	if len(d.Incident.Impact) > 0 {
+		out = append(out, noteImpact)
+	}
+	return out
+}
+
+// promisesChange reports a note that names a change.
+func promisesChange(note []string) bool {
+	for _, changed := range [][]string{noteCrash, noteOOM, noteImage,
+		noteGeneric} {
+		if slices.Equal(note, changed) {
+			return true
+		}
+	}
+	return false
+}
+
+// noteByType is what Pro shows for the incident's alert type.
+func noteByType(p incident.Incident) []string {
 	if p.Root.Kind == kube.KindNode && p.Mode == detection.ModeNotReady {
 		return noteNode
 	}

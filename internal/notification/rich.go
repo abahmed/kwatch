@@ -319,8 +319,13 @@ func (d Dialect) ellipsis() string {
 // cut shortens text to limit bytes, ending in the dialect's ellipsis.
 func cut(text string, d Dialect, limit int) string {
 	out := Truncate(text, limit)
-	if out != text && d.Ellipsis != "" {
-		out = strings.Replace(out, "…", d.Ellipsis, 1)
+	if out == text || d.Ellipsis == "" {
+		return out
+	}
+	// The cut's own ellipsis is the last one: one inside the kept text
+	// is part of what the message says.
+	if i := strings.LastIndex(out, "…"); i >= 0 {
+		out = out[:i] + d.Ellipsis + out[i+len("…"):]
 	}
 	return out
 }

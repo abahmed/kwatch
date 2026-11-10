@@ -1,5 +1,6 @@
 # kwatch config metadata v1
 resyncSeconds|Performance|Periodic safety resync interval in seconds; zero keeps event-driven mode, otherwise at least 30.|active|
+oldProblemDays|Performance|Days after which a problem kwatch found already there is old: a low one opens no issue and is only counted, one that needs attention is lowered to Low; zero turns it off.|active|
 namespaces|Scope|Comma-separated namespaces to watch; leave empty to watch every namespace.|active|
 namespaceSelector|Scope|Pro only. Kubernetes label selector used to choose namespaces.|active|
 reasons|Scope|Pro only. Comma-separated event reasons to allow or exclude with a leading !.|active|
@@ -31,8 +32,9 @@ app.disableStartupMessage|Operations|Disable the startup notification.|active|
 app.logFormatter|Operations|Log output format: text or json.|active|
 app.insecureSkipTLSVerify|Security|Skip TLS verification for outbound providers; strongly discouraged.|active|
 app.caBundlePath|Security|Path to a mounted PEM bundle for outbound provider TLS.|active|
-app.hideProHints|Operations|Remove every Pro hint from Community messages: the note that names what kwatch Pro adds, the teaser ("Pro shows which one…"), "Pro shows how to fix it." and the Pro-checks notes; the "Cause found: …" sentence stays.|active|
+app.hideProHints|Operations|Remove every Pro hint from Community messages: the one Pro line on the first alert of an issue ("Pro shows which one and how to fix it, free during early access: kwatch.dev/pro") and the Pro-checks notes; the "Most likely cause: …" sentence stays.|active|
 app.communityProvider|Operations|Alert provider the Community edition keeps when several are configured; empty keeps a pager first, then chat and the rest, then email, with the name breaking a tie.|active|
+app.environment|Operations|What the cluster is for: production (default) or non-production; non-production caps every incident at Needs attention, so nothing in the cluster pages.|active|
 healthCheck.enabled|Operations|Expose the built-in health endpoint.|active|
 healthCheck.port|Operations|Port for health and optional diagnostic endpoints.|active|
 healthCheck.statusEndpoint|Security|Pro only. Serve the read-only /status view (object names, no authentication) on the health port; off by default.|active|

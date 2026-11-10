@@ -82,7 +82,7 @@ func preemptorName(ctx detection.Context, e inventory.Entity) string {
 		}
 		if after, ok := strings.CutPrefix(note.Message,
 			preemptedByEvent); ok {
-			if name := podName(strings.Fields(after + " ")[0]); name != "" {
+			if name := podName(firstField(after)); name != "" {
 				return name
 			}
 		}
@@ -128,4 +128,13 @@ func preemptorEvidence(
 			Value: strconv.Itoa(int(high)) + " > " + strconv.Itoa(int(low))})
 	}
 	return out
+}
+
+// firstField is the first space-separated word of s, or "" when it has
+// none.
+func firstField(s string) string {
+	if fields := strings.Fields(s); len(fields) > 0 {
+		return fields[0]
+	}
+	return ""
 }

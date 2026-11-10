@@ -8,7 +8,8 @@ If you want the fewest decisions, use the [interactive manager](https://kwatch.d
 ## ✅ Requirements
 
 - Helm 3 or newer
-- A supported Kubernetes cluster
+- Kubernetes 1.23 or newer; on older clusters HPA, PodDisruptionBudget, CronJob and EndpointSlice checks may be unavailable (kwatch logs one
+  warning at start on an older server)
 - Permission to create resources in the target namespace
 
 ## 🚀 Install
@@ -174,7 +175,13 @@ release is named `kwatch`. This is kept as is so `helm upgrade` of existing
 releases does not recreate them.
 
 The pod rolls when the config, license or dashboard Secret changes
-(`checksum/dashboard-secret`), where Helm `lookup` can read the Secret. The
+(`checksum/dashboard-secret`), where Helm `lookup` can read the Secret.
+`lookup` returns nothing in an offline render (`helm template`, Argo CD), so
+there the chart hashes only the Secret's name and a change to the config or
+license Secret does not roll the pod. After changing such a Secret, restart
+the Deployment (`kubectl rollout restart`), put a value of your own in a
+`podAnnotations` checksum key that you change with the Secret, or run a
+reloader that watches the Secret. The
 container has a `startupProbe` on `/healthz` (30 tries, 10 s apart) so a slow
 cold start is not killed by the liveness probe. Pass numbers as given:
 `--set image.tag=123` and `--set persistence.size=5` are accepted. Pass the
@@ -185,7 +192,9 @@ Karpenter annotation with `--set-string`.
 | `config` | Non-sensitive kwatch configuration | `{crd: {enabled: true}}` |
 | `configSecretName` | Existing Secret containing `config.yaml` | `""` |
 | `config.resyncSeconds` | Informer resync, a safety net for lost watch events: `0` (off) or at least `30`; the schema rejects other values | `300` |
-| `config.app.logFormatter` | `text` or `json` | `text` |
+| `config.oldProblemDays` | Days after which a problem that was already there when kwatch first saw it is old: a low one opens no issue and is only counted, one that needs attention is lowered to Low. `0` turns it off; the schema rejects a negative value | `30` |
+| `config.app.logFormatter` | `text` or `json`: `json` writes one JSON object per line (`ts`, `level`, `msg`, `caller`, fields); INFO and WARNING go to stdout and ERROR to stderr in both formats. `KWATCH_LOG_FORMAT` overrides it | `text` |
+| `config.app.environment` | `production` or `non-production`: `non-production` caps every incident at Needs attention, so nothing in the cluster pages (a staging or development cluster). The schema rejects other values | `production` |
 | `config.app.caBundlePath` / `config.app.insecureSkipTLSVerify` | Extra PEM CA bundle for outbound HTTP (added to the system roots) and a switch that skips TLS verification (testing only). Not settable from a `KwatchConfig` | `""` / `false` |
 | `license.existingSecret` | Existing Secret with the key `license-key`, read as `KWATCH_LICENSE_KEY` (optional: the pod starts as Community without it) | `""` |
 | `license.key` | The license key itself (discouraged: it lands in release history). When set and `existingSecret` is empty, the chart creates the Secret `<release>-license` | `""` |
@@ -202,7 +211,7 @@ Karpenter annotation with `--set-string`.
 | `networkPolicy.extraEgressPorts` | Extra TCP egress ports open to any address, for providers not on 443: SMTP (`25`, `465` or `587`) for email, or a webhook's custom port | `[]` |
 | `networkPolicy.kubeletCIDRs` | Node address ranges the kubelet egress rule is limited to; empty allows any address. Also admitted to the health port, for kubelet probes on a network plugin that enforces policy on node traffic | `[]` |
 | `networkPolicy.healthIngressFrom` | Extra peers (`namespaceSelector`, `podSelector` or `ipBlock`) that may reach the health port (`/health`, `/metrics`, `/status`), such as your Prometheus namespace. Without it only pods in the release namespace (and `kubeletCIDRs`) can | `[]` |
-| `dashboard.enabled` | Serve the read-only dashboard (web UI and `/api/*`) on its own port and ClusterIP Service `<release>-dashboard`. Pro only; Community never opens the port | `false` |
+| `dashboard.enabled` | Serve the read-only dashboard (web UI and `/api/*`) on its own port and ClusterIP Service `<fullname>-dashboard`. Pro only; Community never opens the port | `false` |
 | `dashboard.port` | Dashboard port; must not equal the health port `config.healthCheck.port` (the render fails when they are equal) | `8061` |
 | `dashboard.trustedProxies` | CIDRs or addresses of the proxies that terminate TLS in front of kwatch (Ingress controller, Gateway, load balancer), for example `["10.0.0.0/8"]`. `X-Forwarded-For` and `X-Forwarded-Proto` count only from these peers, and the client is the first hop from the right that is not itself listed. Any entry (or `dashboard.tls.secretName`) makes the dashboard https only: sign-in over plain http is refused and the cookie is `Secure`. Empty means local (port-forward over http); behind a proxy, sign-in failures are then limited per connecting address, so set it | `[]` |
 | `dashboard.tls.secretName` | `kubernetes.io/tls` Secret kwatch serves https from itself, for a LoadBalancer or NodePort with nothing in front. Renewals are picked up without a restart | `""` |
@@ -241,7 +250,7 @@ pointing at Service `<release>-dashboard` (port name `dashboard`).
 | `persistence.flightRecorderText` | Keep scrubbed log error lines, event and condition messages in the flight recording `kwatch replay-export` exports (names, hosts, emails, images and credentials inside them hidden); `false` drops all free text. Sets `KWATCH_FLIGHT_TEXT` | `true` |
 | `persistence.emptyDirSizeLimit` | `sizeLimit` of the `emptyDir`; also passed to kwatch as `KWATCH_VOLUME_LIMIT` so the startup rewrite checks the real limit | `2Gi` |
 | `watch.secrets` | Watch Secrets; `false` removes all Secret RBAC (in both `rbac.mode` values) and Secret-based checks report that they cannot verify. Secrets are watched by default, which lets the kwatch ServiceAccount list and watch Secrets cluster-wide; set `watch.secrets: false` to remove all Secret RBAC and the Secret watch. | `true` |
-| `resources` | CPU and memory requests/limits; kwatch sets `GOMEMLIMIT` to 90% of the memory limit. Live heap is about 26 KB per pod: the default 512Mi suits up to about 8,000 pods, 10,000 pods need `768Mi` and 20,000 need `1Gi` (see docs/production-operations.md, Memory) | `100m` CPU and `128Mi` memory request (use `256Mi` or more on large clusters), `500m` CPU and `512Mi` memory limit |
+| `resources` | CPU and memory requests/limits; the chart sets `KWATCH_MEMORY_LIMIT` from the memory limit and kwatch sets the Go soft limit to 90% of it. Live heap is about 26 KB per pod: the default 512Mi suits up to about 8,000 pods, 10,000 pods need `768Mi` and 20,000 need `1Gi` (see docs/production-operations.md, Memory) | `100m` CPU and `128Mi` memory request (use `256Mi` or more on large clusters), `500m` CPU and `512Mi` memory limit |
 | `securityContext.runAsUser` / `securityContext.runAsGroup` | Numeric user and group of the container; they match the image's `kwatch` user | `1000` / `1000` |
 | `podSecurityContext.fsGroup` | Group that owns the state volume | `1000` |
 | `persistence.storageClass` | StorageClass of the state claim; empty uses the cluster default | `""` |
@@ -262,7 +271,7 @@ pointing at Service `<release>-dashboard` (port name `dashboard`).
 | `config.kubelet.insecureSkipVerify` | Skip kubelet serving-certificate verification for node stats; only for kubelets with self-signed certificates | `false` |
 | `defaultTolerations` | Not-ready/unreachable `NoExecute` tolerations (30s) merged after `tolerations`, so kwatch leaves a failed node quickly | 30s not-ready and unreachable |
 | `terminationGracePeriodSeconds` | Time for workers and savers to stop; must be at least 60 | `60` |
-| `sacAnnotations` | Annotations for the kwatch ServiceAccount (for example a cloud IAM role) | `{}` |
+| `sacAnnotations` | Annotations for the kwatch ServiceAccount (for example a cloud IAM role: `eks.amazonaws.com/role-arn` gives AWS SES and SNS their credentials through IAM roles for service accounts; see the AWS credentials section of docs/providers.md) | `{}` |
 | `nameOverride` | Override the chart name used in resource names and labels | `""` |
 | `fullnameOverride` | Override the full resource name prefix | `""` |
 

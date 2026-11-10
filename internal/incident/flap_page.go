@@ -25,7 +25,8 @@ func (m *Manager) pagesFlapper(
 		return false
 	}
 	if !p.Delivery.PageHeld() || p.Delivery.OpenAtPagers() ||
-		p.Delivery.flapPaged || m.override.noPage {
+		p.Delivery.flapPaged || m.override.noPage ||
+		m.override.nonProd {
 		return false
 	}
 	if p.State != Flapping && p.RepeatCount < m.cfg.FlapCycles {

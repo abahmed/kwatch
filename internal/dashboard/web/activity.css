@@ -1,25 +1,35 @@
 /* kwatch dashboard: the Activity page (js/activity.js): one row per
-   change, newest first: the time, what happened, the issue. */
+   change, newest first: the time, a sentence saying what happened to
+   which workload, the issue's title under it, how urgent it is. A burst
+   in one minute folds behind one line. */
 .act-sw { margin-top: 16px; }
 .act-sw .tz-b { min-height: 32px; padding: 0 14px; font-size: var(--t-micro); }
-.act-sum { margin-top: 12px; color: var(--text-muted); font-size: var(--t-small); }
+.act-sum { margin-top: 14px; color: var(--text); font-size: var(--t-body); font-weight: 600; }
 /* Nothing changed: the same quiet box as the empty cards elsewhere. */
-.act-sum.is-empty { padding: 16px 20px; border: 1px solid var(--line); border-radius: var(--radius-card); font-size: var(--t-body); }
+.act-sum.is-empty { padding: 16px 20px; border: 1px solid var(--line); border-radius: var(--radius-card); font-weight: 400; }
 .act-list { list-style: none; margin: 12px 0 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; }
-.act-list > li + li { border-top: 1px solid var(--line); }
-.act-row { display: grid; grid-template-columns: 7.5rem 15rem minmax(0, 1fr); align-items: baseline; gap: 4px 16px; padding: 10px 16px; min-height: var(--hit); color: var(--text); text-decoration: none; font-size: var(--t-small); }
+.act-list > li + li, .act-sub > li { border-top: 1px solid var(--line); }
+.act-sub { list-style: none; margin: 0; padding: 0; }
+.act-row { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr) auto; align-items: baseline; gap: 4px 16px; padding: 10px 16px; min-height: var(--hit); color: var(--text); text-decoration: none; font-size: var(--t-body); }
 .act-row:hover { background: var(--surface); }
-.act-row:hover .act-title { text-decoration: underline; }
-.act-at { font-size: var(--t-small); color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.act-what { display: flex; flex-wrap: wrap; gap: 4px; }
-.act-what .chip + .chip, .act-what .m-untold { margin-left: 0; }
-.act-what .m-untold { align-self: center; }
-.act-main { display: flex; flex-direction: column; min-width: 0; }
-.act-title { font-weight: 600; overflow-wrap: anywhere; }
-.act-ns { font-family: var(--font-mono); font-size: var(--t-micro); color: var(--text-muted); overflow-wrap: break-word; }
+.act-row:hover .act-who { text-decoration: underline; }
+.act-at { white-space: nowrap; font-size: var(--t-small); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.act-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.act-line { overflow-wrap: anywhere; }
+.act-who { font-weight: 700; }
+.act-title { font-size: var(--t-small); color: var(--text-muted); overflow-wrap: anywhere; }
+.act-chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+/* The folded rest of a burst: one quiet line that opens the rows. */
+.act-fold > summary { display: flex; align-items: center; min-height: var(--hit); padding: 0 16px 0 calc(4.5rem + 32px); cursor: pointer; color: var(--text-muted); font-size: var(--t-small); font-weight: 600; }
+.act-fold > summary:hover { background: var(--surface); color: var(--text); }
+.act-fold > summary::before { content: "+"; display: inline-block; width: 1.25em; font-weight: 700; }
+.act-fold[open] > summary::before { content: "\2212"; }
+.act-fold[open] > summary { border-bottom: 1px solid var(--line); }
 .act-quiet { margin-top: 8px; font-size: var(--t-small); }
 .act-more { margin-top: 10px; color: var(--text-muted); font-size: var(--t-small); }
 @media (max-width: 700px) {
   .act-row { grid-template-columns: auto minmax(0, 1fr); padding: 10px 14px; }
-  .act-main { grid-column: 1 / -1; }
+  .act-body { grid-column: 1 / -1; grid-row: 2; }
+  .act-chips { grid-column: 2; grid-row: 1; }
+  .act-fold > summary { padding: 0 14px; }
 }

@@ -1,7 +1,7 @@
 10:04:30 settled
-🟠 api in web (prod-eu-1) is failing. Cause found: likely a dependency.
-Pro shows which one and how to fix it. Get Pro free during early access: kwatch.dev/pro
+🟠 api in web (prod-eu-1) is failing. Most likely cause: a dependency.
+Pro shows which one and how to check it, free during early access: kwatch.dev/pro
 🟠 api in web (prod-eu-1) is failing.
 | 🟠 **api** in **web** (**prod-eu-1**) is failing.
-| Cause found: likely a dependency.
-| *Pro shows which one and how to fix it. Get Pro free during early access: kwatch.dev/pro*
+| Most likely cause: a dependency.
+| *Pro shows which one and how to check it, free during early access: kwatch.dev/pro*

@@ -90,6 +90,9 @@ func (d Workload) availability(
 	since := ctx.Onset("unavailable", latest(
 		valueSince(e, kube.AttrReadyReplicas),
 		valueSince(e, desiredAttr(e))))
+	if statefulSetGrowing(ctx, e, since) {
+		return detection.Finding{}, false
+	}
 	wait := d.unavailable + workloadReplacementGrace(ctx, e.ID)
 	if atCeiling(ctx, e.ID) {
 		wait = min(wait, CeilingUnavailable)
@@ -209,7 +212,7 @@ func (Job) Detect(
 		out = append(out, f)
 	}
 	status, reason, since := condition(e, "Failed")
-	if status != "True" {
+	if status != "True" || runSuperseded(ctx, e) {
 		return out
 	}
 	findingReason := reasons.JobFailed

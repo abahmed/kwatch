@@ -2,11 +2,11 @@
    switch (Active, Resolved, All), the search box, the multi-select
    pickers (namespace, kind, state, acknowledged, stopped tracking: dropdown.js), the
    start time and "resolved within" pickers and the severity chips with
-   their counts. It puts a view (listquery.js)
+   their counts; all but the status and the search sit behind one
+   "Filters (2)" button. It puts a view (listquery.js)
    into the controls, reads it back, and paints the counts the API
    returns (facets). The chips of the filters in use are drawn by
-   filterchips.js. Under 700px wide the filters fold behind one
-   "Filters (2)" button. issues.js owns it. */
+   filterchips.js. issues.js owns it. */
 (function () {
   "use strict";
   var KW = window.KW;
@@ -57,10 +57,10 @@
       toggle.setAttribute("aria-expanded", open ? "true" : "false");
     });
 
-    /* countUsed: how many filters narrow the list, for the button
-       that shows the filters under 700px. */
+    /* countUsed: how many filters behind the "Filters" button narrow
+       the list (the search box shows its own text). */
     function countUsed(v) {
-      var c = (v.q ? 1 : 0) + (v.like ? 1 : 0) + (v.release ? 1 : 0) + (v.age ? 1 : 0) +
+      var c = (v.like ? 1 : 0) + (v.release ? 1 : 0) + (v.age ? 1 : 0) +
         (v.since && v.status !== "active" ? 1 : 0);
       LQ().MULTI.forEach(function (k) { c += v[k].length; });
       return c;

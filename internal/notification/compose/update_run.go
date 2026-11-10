@@ -33,6 +33,9 @@ func lastRunSentence(
 	if !named {
 		text = "The last run of " + homeName + ", "
 	}
-	text += nameList(home, g.ids) + ", failed: " + why
+	if !strings.HasPrefix(why, "failed ") {
+		why = "failed: " + why
+	}
+	text += nameList(home, g.ids) + ", " + why
 	return endSentence(text), true
 }

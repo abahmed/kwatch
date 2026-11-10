@@ -28,15 +28,9 @@ func resolveNote(f caseFacts) (string, []sentence) {
 	lead := sentence{part: partLead, text: capitalName(subject,
 		f.leadName(subject)+" "+resolution(f, subject)+
 			stillClause(f, subject)+".")}
-	lasted := "it was " + downWord(p) + " for " +
-		humanDuration(failedSpan(p)) + resolvedCause(f, subject)
-	detail := sentenceCase(lasted)
-	if fix := resolveFixer(f, subject); fix != "" {
-		detail = fix + "; " + lasted + "."
-	}
 	out := []sentence{lead}
 	out = append(out, causeStateSentences(f, subject)...)
-	out = append(out, sentence{part: partProof, text: detail})
+	out = append(out, resolveDetail(f, subject))
 	if affected := affectedSentence(p); affected != "" {
 		out = append(out, sentence{part: partConsequence, text: affected})
 	}
@@ -47,6 +41,54 @@ func resolveNote(f caseFacts) (string, []sentence) {
 		out = append(out, sentence{part: partProof, text: last})
 	}
 	return notification.MarkerResolved, out
+}
+
+// resolveDetail says how long it lasted and what ended it: who fixed
+// it, or how it ended when nobody is named ("It was failing for four
+// minutes and recovered on its own."). The Community message says how
+// long and how it ended only: the cause and the fixer are Pro detail.
+func resolveDetail(f caseFacts, subject inventory.EntityID) sentence {
+	lasted := "it was " + downWord(f.p) + " for " +
+		humanDuration(failedSpan(f.p))
+	if f.community {
+		return sentence{part: partFollowUp,
+			text: sentenceCase(lasted + endedWords(f, subject))}
+	}
+	cause := resolvedCause(f, subject)
+	if fix := resolveFixer(f, subject); fix != "" {
+		return sentence{part: partProof,
+			text: fix + "; " + lasted + cause + "."}
+	}
+	if cause != "" {
+		return sentence{part: partProof, text: sentenceCase(lasted + cause)}
+	}
+	return sentence{part: partProof,
+		text: sentenceCase(lasted + endedWords(f, subject))}
+}
+
+// endedWords say how an incident ended when no fixing change is named:
+// " and recovered on its own", "; a rollback fixed it". Nothing for a
+// deleted subject or a node, whose lead says how it ended, or when how
+// it ended is not known. A recovery with changes listed just before it
+// is not said to be on its own: the line naming them follows.
+func endedWords(f caseFacts, subject inventory.EntityID) string {
+	if removed(f, subject) || subject.Kind == kube.KindNode {
+		return ""
+	}
+	switch f.p.Fix {
+	case incident.FixNone:
+		if len(changesBeforeRecovery(f)) > 0 {
+			return ""
+		}
+		return " and recovered on its own"
+	case incident.FixRollback:
+		return "; a rollback fixed it"
+	case incident.FixConfig:
+		return "; a config change fixed it"
+	case incident.FixChange:
+		return "; a change fixed it"
+	}
+	return ""
 }
 
 // lastAffected names the root an incident ended on when its resolve

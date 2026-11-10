@@ -16,6 +16,8 @@
 /* Previous / Next through the list an issue was opened from. */
 .incnav { display: flex; align-items: center; gap: 8px; padding: var(--space-5) var(--space-6) 0; max-width: var(--max-app); width: 100%; }
 .incnav:not([hidden]) + .content { padding-top: 14px; }
+/* On the issue page the bar sits in the row of "← Issues". */
+.d-nav .incnav { padding: 0; width: auto; max-width: none; margin-left: auto; }
 .incnav .btn { min-height: 32px; display: inline-flex; align-items: center; text-decoration: none; }
 .incnav .btn[aria-disabled="true"] { opacity: .4; pointer-events: none; }
 

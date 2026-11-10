@@ -158,7 +158,15 @@ func sameFailures(p, target *Incident) bool {
 // ReviseSettle and they are exactly the ones people were told about,
 // so it is the same story under another root. A page, held or not, keeps
 // its resolve, which is what closes its alert.
+//
+// A reopened incident that still owes its "failing again" update is
+// quiet too: the last word of its thread is its resolve, and a second
+// one would follow it with nothing in between (as closeUnheardReopen).
+// Only an alert still open at the pagers keeps the resolve.
 func (m *Manager) quietSupersede(p *Incident, now time.Time) bool {
+	if p.Pending.ReopenOwed() && !p.Delivery.OpenAtPagers() {
+		return true
+	}
 	target := m.incidents[p.SupersededBy]
 	return target != nil && !reachedPaging(p) &&
 		now.Sub(target.Opened) <= m.cfg.ReviseSettle &&

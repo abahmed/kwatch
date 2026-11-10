@@ -20,12 +20,16 @@ const (
 	maxSearchTerms = 10
 	maxLikeLength  = 128
 	maxModes       = 20
+	// maxFilterValues bounds each repeatable filter (namespace, kind,
+	// node, mode): every value is looked up for every incident.
+	maxFilterValues = 50
 )
 
 // List states: an incident is active until it resolves.
 const (
 	stateActive   = "active"
 	stateResolved = "resolved"
+	stateSettling = "settling"
 )
 
 var (
@@ -90,6 +94,11 @@ type filter struct {
 // is one incident ID. stopped (true, false) is repeatable like acked.
 // Every error is a queryError.
 func parseFilter(q url.Values, now time.Time) (filter, error) {
+	for _, key := range []string{"namespace", "kind"} {
+		if err := capValues(q, key); err != nil {
+			return filter{}, err
+		}
+	}
 	f := filter{namespaces: anySet(q["namespace"]),
 		kinds:    anySet(lowerTerms(q["kind"])),
 		texts:    lowerTerms(q["q"]),
@@ -147,12 +156,27 @@ func parseSearch(q url.Values, f *filter) error {
 	return nil
 }
 
+// capValues refuses a repeatable filter given more than
+// maxFilterValues times.
+func capValues(q url.Values, key string) error {
+	if len(q[key]) > maxFilterValues {
+		return badQuery(key, "",
+			"Too many %s values: %d is the limit.", key, maxFilterValues)
+	}
+	return nil
+}
+
 // maxNodeName bounds a ?node= value: a Kubernetes object name.
 const maxNodeName = 253
 
 // parseNodesModes reads the repeatable node and mode filters.
 func parseNodesModes(q url.Values) (nodes, modes map[string]bool,
 	err error) {
+	for _, key := range []string{"node", "mode"} {
+		if err = capValues(q, key); err != nil {
+			return nil, nil, err
+		}
+	}
 	for _, n := range q["node"] {
 		if n == "" || len(n) > maxNodeName {
 			return nil, nil, badQuery("node", n,
@@ -185,21 +209,6 @@ func parseStatus(raw string) (string, error) {
 	}
 	return "", badQuery("status", raw,
 		"Unknown status: %s. Use active, resolved or all.", raw)
-}
-
-// parseTimes reads since, startedAfter and startedBefore.
-func parseTimes(q url.Values, now time.Time, f filter) (filter, error) {
-	var err error
-	if f.since, err = parseAgo("since", q.Get("since"), now); err != nil {
-		return f, err
-	}
-	if f.startedAfter, err = parseAgo("startedAfter",
-		q.Get("startedAfter"), now); err != nil {
-		return f, err
-	}
-	f.startedBefore, err = parseAgo("startedBefore",
-		q.Get("startedBefore"), now)
-	return f, err
 }
 
 // parseSet reads the repeated values of key, each one of known; nil
@@ -249,25 +258,6 @@ func termsLength(terms []string) int {
 		n += len(t)
 	}
 	return n
-}
-
-// parseAgo reads the positive Go duration of key as that long before
-// now.
-func parseAgo(key, raw string, now time.Time) (time.Time, error) {
-	if raw == "" {
-		return time.Time{}, nil
-	}
-	d, err := time.ParseDuration(raw)
-	if err != nil {
-		return time.Time{}, badQuery(key, raw,
-			"Not a length of time: %q. Use a number and a unit, "+
-				"like 24h.", raw)
-	}
-	if d <= 0 {
-		return time.Time{}, badQuery(key, raw,
-			"%s must be more than zero.", raw)
-	}
-	return now.Add(-d), nil
 }
 
 // statusOK reports whether item is in the requested list (active,

@@ -22,14 +22,15 @@ func crashLoopForHours() scenario {
 	return scenario{
 		expect: expectation{
 			Name: "crash-loop-for-hours",
-			// The story ends with a cause taken back.
-			RevisesRoot: true,
+			// The crash quotes the Service the configuration names, and
+			// that Service does not exist: it is the root for the whole
+			// loop (as in missing-service-lookup), never taken back.
 			Description: "The only replica of a Deployment crashes on " +
 				"every start for nearly two hours, cycling through " +
-				"running, Error and CrashLoopBackOff; it stays one " +
-				"incident, and a revision that only takes the " +
-				"cause back stays quiet.",
-			Root: "deployment/staging/warehouse", Tier: "notify",
+				"running, Error and CrashLoopBackOff, with a panic " +
+				"that names a Service that does not exist; it stays " +
+				"one incident rooted at the missing Service.",
+			Root: "service/staging/regional", Tier: "notify",
 			MaxMessages:  3,
 			MustNotBlame: []string{"node//n1"},
 			Tail:         duration(10 * time.Minute),

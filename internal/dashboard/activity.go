@@ -4,14 +4,19 @@ import (
 	"cmp"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/incident"
 )
 
-// maxActivity bounds the events /api/activity returns: the newest.
-const maxActivity = 20
+// maxActivity is how many events /api/activity returns by default: the
+// newest. ?limit= asks for more ("Show more"), up to maxActivityLimit.
+const (
+	maxActivity      = 20
+	maxActivityLimit = 200
+)
 
 // activityWindows are the ?since= values /api/activity accepts; empty
 // is the first.
@@ -33,8 +38,10 @@ var activityOrder = map[string]int{activityNew: 0, activityUrgent: 1,
 	activityReopened: 2, activityResolved: 3}
 
 // ActivityResponse is the /api/activity response: what changed in the
-// window, newest first, at most maxActivity events. Total counts every
-// event listed in the window, so the page can say more happened.
+// window, newest first, at most ?limit= events (maxActivity unless
+// asked). Total counts every event listed in the window, so the page
+// can say more happened; Kinds counts them by kind, so its summary
+// line covers the whole window, not only the events it shows.
 // Changes nobody was told about (an issue that settled before alerting,
 // its resolve) are left out unless ?untold=1 asks for them; Untold
 // counts them either way, so the page can offer to show them.
@@ -42,6 +49,7 @@ type ActivityResponse struct {
 	Since  string          `json:"since"`
 	Events []ActivityEvent `json:"events"`
 	Total  int             `json:"total"`
+	Kinds  map[string]int  `json:"kinds"`
 	Untold int             `json:"untold"`
 	// WithUntold says the events include the untold ones (?untold=1).
 	WithUntold bool `json:"withUntold"`
@@ -64,6 +72,8 @@ type ActivityEvent struct {
 	WorkloadKind string `json:"workloadKind,omitempty"`
 	// Untold marks a change no message reached (told_counts.go).
 	Untold bool `json:"untold,omitempty"`
+	// Lasted is how many seconds the issue went on, on a resolve.
+	Lasted int64 `json:"lasted,omitempty"`
 	// root and own find the copies of one event: a recurrence carries
 	// the opens and resolves of the incident it repeats. own marks the
 	// copy of the incident the event happened to.
@@ -71,8 +81,9 @@ type ActivityEvent struct {
 	own  bool
 }
 
-// activityHandler serves GET /api/activity?since=1h|24h&untold=1, with
-// an ETag like the list.
+// activityHandler serves GET
+// /api/activity?since=1h|24h&untold=1&limit=N, with an ETag like the
+// list.
 func (s *Server) activityHandler(w http.ResponseWriter, r *http.Request) {
 	if !onlyGet(w, r) {
 		return
@@ -92,13 +103,20 @@ func (s *Server) activityHandler(w http.ResponseWriter, r *http.Request) {
 			"Unknown untold value: %q. Use 1 or 0.", untold))
 		return
 	}
+	limit, ok := activityLimit(q["limit"])
+	if !ok {
+		raw := q.Get("limit")
+		writeBadQuery(w, badQuery("limit", raw,
+			"Unknown limit: %q. Use a number from 1 to 200.", raw))
+		return
+	}
 	reader := s.sources.incidents.Load()
 	if reader == nil {
 		unavailable(w)
 		return
 	}
 	out := buildActivity((*reader).Incidents(), s.now.Now(), window,
-		s.texts.redact, untold == "1")
+		s.texts.redact, untold == "1").newest(limit)
 	out.Since = cmp.Or(since, "1h")
 	writeTagged(w, r, out)
 }
@@ -141,15 +159,39 @@ func buildActivity(items []incident.Incident, now time.Time,
 		return cmp.Or(b.At.Compare(a.At), cmp.Compare(a.ID, b.ID),
 			cmp.Compare(activityOrder[a.Kind], activityOrder[b.Kind]))
 	})
-	return ActivityResponse{Events: events[:min(len(events), maxActivity)],
-		Total: len(events), Untold: untold, WithUntold: withUntold}
+	kinds := map[string]int{}
+	for _, e := range events {
+		kinds[e.Kind]++
+	}
+	return ActivityResponse{Events: events, Total: len(events),
+		Kinds: kinds, Untold: untold, WithUntold: withUntold}
+}
+
+// newest keeps the first n events, the newest.
+func (r ActivityResponse) newest(n int) ActivityResponse {
+	r.Events = r.Events[:min(len(r.Events), n)]
+	return r
+}
+
+// activityLimit reads ?limit=: maxActivity when absent, else a number
+// from 1 to maxActivityLimit, given once.
+func activityLimit(vals []string) (int, bool) {
+	if len(vals) == 0 {
+		return maxActivity, true
+	}
+	n, err := strconv.Atoi(vals[0])
+	if len(vals) > 1 || err != nil || n < 1 || n > maxActivityLimit {
+		return 0, false
+	}
+	return n, true
 }
 
 // appendActivity adds p's events that in keeps.
 func appendActivity(events []ActivityEvent, p incident.Incident,
 	in func(time.Time) bool, red func(string) string) []ActivityEvent {
 	var item *IncidentListItem
-	add := func(at time.Time, kind string, own, told bool) {
+	add := func(at time.Time, kind string, own, told bool,
+		opened time.Time) {
 		if !in(at) {
 			return
 		}
@@ -161,7 +203,8 @@ func appendActivity(events []ActivityEvent, p incident.Incident,
 			ID: item.ID, Title: item.Title, Severity: item.Severity,
 			State: item.State, Namespace: item.Namespace,
 			Workload: item.Workload, WorkloadKind: item.WorkloadKind,
-			Untold: !told, root: p.Root.String(), own: own})
+			Untold: !told, Lasted: lasted(kind, opened, at),
+			root: p.Root.String(), own: own})
 	}
 	// An opening was told when a message of it went out (openingTold);
 	// a tier rise or a resolve of the current incident when the incident
@@ -169,20 +212,28 @@ func appendActivity(events []ActivityEvent, p incident.Incident,
 	told := !p.Untold()
 	for i, at := range openings(p) {
 		add(at, openingKind(p, i, at), !at.Before(p.Opened),
-			openingTold(p, at))
+			openingTold(p, at), time.Time{})
 	}
 	for _, at := range urgentTimes(p) {
-		add(at, activityUrgent, !at.Before(p.Opened), told)
+		add(at, activityUrgent, !at.Before(p.Opened), told, time.Time{})
 	}
 	for _, o := range p.History {
-		add(o.Resolved, activityResolved, false, o.Heard)
+		add(o.Resolved, activityResolved, false, o.Heard, o.Opened)
 	}
 	// A superseded incident closes because another took its failures
 	// over: nothing was fixed.
 	if p.SupersededBy == "" {
-		add(p.Resolved, activityResolved, true, told)
+		add(p.Resolved, activityResolved, true, told, p.Opened)
 	}
 	return events
+}
+
+// lasted is how many seconds a resolved issue went on, else 0.
+func lasted(kind string, opened, at time.Time) int64 {
+	if kind != activityResolved || opened.IsZero() || !at.After(opened) {
+		return 0
+	}
+	return int64(at.Sub(opened).Seconds())
 }
 
 // urgentTimes are when p became more urgent: every tier rise its

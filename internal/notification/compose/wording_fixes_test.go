@@ -150,3 +150,24 @@ func TestSummariesCarryTheRoutesOfTheirMembers(t *testing.T) {
 		t.Errorf("a closing message names no problems: %+v", r)
 	}
 }
+
+// A second verb is made plural too, but not inside quotes or
+// parentheses, which may speak of another subject.
+func TestPluralPredicateSecondVerb(t *testing.T) {
+	for in, want := range map[string]string{
+		"is failing: aborted with SIGABRT (exit code 134) and is " +
+			"restarting": "are failing: aborted with SIGABRT (exit " +
+			"code 134) and are restarting",
+		`is failing (Service db in shop is down and is gone) and ` +
+			`keeps restarting`: `are failing (Service db in shop is ` +
+			`down and is gone) and keep restarting`,
+		"has been Pending since it was scheduled": "have been Pending " +
+			"since they were scheduled",
+		`reports "x and is y" and has no pods`: `report "x and is y" and ` +
+			`have no pods`,
+	} {
+		if got := pluralPredicate(in); got != want {
+			t.Errorf("pluralPredicate(%q)\n = %q\nwant %q", in, got, want)
+		}
+	}
+}

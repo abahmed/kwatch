@@ -34,6 +34,9 @@ type deliverJob struct {
 	// attempts counts sends that began and never returned, kept in the
 	// outbox record so a poison job is given up after a restart too.
 	attempts int
+	// openLost: it replaced its conversation's opening while both waited
+	// for a provider, so no provider heard the opening (holdPending).
+	openLost bool
 }
 
 // isResolve reports whether the job closes an incident.
@@ -49,33 +52,6 @@ func (j deliverJob) key() string {
 	}
 	return "message"
 }
-
-// deliverFallback re-sends a job through a provider's configured fallback.
-// The job shape lives in the job, so one call covers every shape; only the
-// retry budget and the "primary failed" prefix differ from a normal
-// delivery.
-func (m *Manager) deliverFallback(
-	ctx context.Context,
-	entry *providerEntry,
-	primary string,
-	job deliverJob,
-) error {
-	if !m.wants(*entry, job) || !acceptsPagingOnly(*entry, job) ||
-		(job.informational() && skipsPlainMessages(entry.provider)) {
-		return errFallbackNotRouted
-	}
-	opts := deliverOpts{retry: fallbackRetryConfig(entry.retry)}
-	if entry.provider.Name() != primary {
-		opts.fallbackFrom = primary
-	}
-	return m.dispatch(ctx, entry, job, opts)
-}
-
-// errFallbackNotRouted means the fallback's routes, or the paging rules of
-// the job (PagingOnly, SkipPaging), exclude it, or the job only informs
-// and the fallback skips such messages, so the job was not delivered
-// anywhere.
-var errFallbackNotRouted = errors.New("fallback_not_routed")
 
 // channelCap is the capacity of each provider queue and, per provider, of
 // the pending queue that holds jobs created before Start.
@@ -99,6 +75,13 @@ func (m *Manager) recordDeadLetter(
 	err error,
 ) {
 	metrics.DefaultRegistry().DeliveryDeadLetters.Add(1)
+	logDeadLetter(provider, job, err)
+}
+
+// logDeadLetter logs a job that was given up on without counting it as a
+// dead letter: a job the overflow summary stands in for is counted as
+// saturated, and counting it here too would count it twice.
+func logDeadLetter(provider string, job deliverJob, err error) {
 	noteLostResolve(job, deadLetterReason(err))
 	klog.InfoS("delivery dead-lettered",
 		"component", "delivery", "operation", "dead_letter",
@@ -170,18 +153,34 @@ const (
 // deliverOne sends one job once, for the shutdown drain. A job it cannot
 // send now is deferred: kept for the next session or generation when it
 // has an outbox record, dead-lettered otherwise.
+//
+// It takes the worker's guards: the newest revision of the conversation,
+// the age limit, the poisoned-send limit, and a recover around the send,
+// so a provider panic in the drain cannot stop the process before the
+// outbox is written.
 func (m *Manager) deliverOne(
 	ctx context.Context,
 	entry *providerEntry,
 	job deliverJob,
 ) bool {
-	switch m.deliver(ctx, entry, job) {
+	job = m.newestRevision(entry, job)
+	if m.expired(job) {
+		m.openFailed(entry, job)
+		m.recordTerminalFailure(entry, job, errJobExpired)
+		return false
+	}
+	if job.attempts >= maxUnfinishedSends {
+		m.recordTerminalFailure(entry, job, errProviderPanic)
+		return false
+	}
+	outcome, started := m.guardedDeliver(ctx, entry, job)
+	switch outcome {
 	case outcomeDelivered:
 		return true
 	case outcomeInterrupted:
-		m.deferJob(entry, job, errDeliveryShutdown)
-	case outcomeRetryLater:
-		m.deferJob(entry, job, errProviderUnavailable)
+		m.deferJob(entry, started, errDeliveryShutdown)
+	case outcomeRetryLater, outcomePanicked:
+		m.deferJob(entry, started, errProviderUnavailable)
 	}
 	return false
 }
@@ -216,7 +215,9 @@ func (m *Manager) deliverViaFallback(
 	if !isPager(&fallback) {
 		m.pageLost(entry, job)
 	}
-	fbErr := m.deliverFallback(ctx, &fallback, p.Name(), job)
+	// The primary refused this payload for good, so it is not retried;
+	// a blocked fallback is waited out instead.
+	fbErr := m.deliverFallback(ctx, &fallback, p.Name(), job, true)
 	if fbErr == nil {
 		m.pageLanded(&fallback, job)
 		m.accepted(job)
@@ -233,7 +234,10 @@ func (m *Manager) deliverViaFallback(
 
 // fallbackOrRetry runs after the primary failed in a way that passes.
 // The fallback, when there is one, gets the job now; otherwise, or when
-// the fallback fails too, the job waits for the primary to recover.
+// the fallback fails too or is blocked, the job is retried later like any
+// passing failure. A blocked fallback is not waited out here: that would
+// hold the primary's worker, and every job queued behind it, for as long
+// as the fallback's block lasts.
 func (m *Manager) fallbackOrRetry(
 	ctx context.Context,
 	entry *providerEntry,
@@ -243,13 +247,20 @@ func (m *Manager) fallbackOrRetry(
 	if !ok || mustReachPrimary(entry, job) {
 		return outcomeRetryLater
 	}
-	err := m.deliverFallback(ctx, &fallback, entry.provider.Name(), job)
+	err := m.deliverFallback(ctx, &fallback, entry.provider.Name(), job,
+		false)
 	switch {
 	case err == nil:
+		// The primary never heard an opening the fallback took.
+		m.openFailed(entry, job)
 		m.accepted(job)
 		return outcomeDelivered
 	case ctx.Err() != nil:
 		return outcomeInterrupted
+	case errors.Is(err, errProviderBlocked):
+		klog.V(2).InfoS("fallback blocked; retrying later",
+			"provider", fallback.provider.Name(), "key", job.key())
+		return outcomeRetryLater
 	}
 	klog.ErrorS(loggedErr(err), "fallback delivery failed",
 		"provider", fallback.provider.Name())

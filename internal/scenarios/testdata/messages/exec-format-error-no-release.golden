@@ -1,8 +1,7 @@
 10:02:15 settled
-🟠 reports in shop (prod-eu-1) can't run: its image reports:3.2 is not built for this node's CPU (arm64). Its node and registry are healthy and unchanged, so nothing outside it points to a cause. It fails with "exec /usr/bin/sh: exec format error". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs reports-45f1eccc-a -c app -n shop --previous
+🟠 reports in shop (prod-eu-1) can't run: its image reports:3.2 is not built for this node's CPU (arm64). It fails with "exec /usr/bin/sh: exec format error". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs reports-45f1eccc-a -c app -n shop --previous
 🟠 reports in shop (prod-eu-1) can't run: its image reports:3.2 is not built for this node's CPU (arm64).
 | 🟠 **reports** in **shop** (**prod-eu-1**) can't run: its image reports:3.2 is not built for this node's CPU (arm64).
-| Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
 | It fails with `exec /usr/bin/sh: exec format error`.
 | Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
 | It runs a single replica.

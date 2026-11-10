@@ -43,18 +43,8 @@ func Observe(b *Book, v View, now time.Time) bool {
 			if !v.watched(id) {
 				continue
 			}
-			for _, c := range v.Model.Changes(id, now.Add(-KeepFor)) {
-				if !isRelease(c) || b.find(recordID(id, c.At)) != nil ||
-					b.tooOld(c.At) {
-					continue
-				}
-				r := newRecord(id, c)
-				if now.Sub(c.At) > LateAfter {
-					r.Verdict, r.Final = Unknown, true
-				}
-				b.add(r)
-				changed = true
-			}
+			changed = b.take(id, v.Model.Changes(
+				id, now.Add(-KeepFor)), now) || changed
 		}
 	}
 	for i := range b.Records {
@@ -67,6 +57,33 @@ func Observe(b *Book, v View, now time.Time) bool {
 		changed = changed || !sameJudgement(before, *r)
 	}
 	return changed
+}
+
+// take adds the releases among the changes of the workload id (oldest
+// first) that b does not hold yet; true when it added one.
+func (b *Book) take(
+	id inventory.EntityID, changes []inventory.Change, now time.Time,
+) bool {
+	added := false
+	inSecond := map[int64]int{}
+	for _, c := range changes {
+		if !isRelease(c) {
+			continue
+		}
+		inSecond[c.At.Unix()]++
+		rid := recordID(id, c.At, inSecond[c.At.Unix()])
+		if b.find(rid) != nil || b.tooOld(c.At) {
+			continue
+		}
+		r := newRecord(id, c)
+		r.ID = rid
+		if now.Sub(c.At) > LateAfter {
+			r.Verdict, r.Final = Unknown, true
+		}
+		b.add(r)
+		added = true
+	}
+	return added
 }
 
 // watched reports a workload kwatch judges releases of.
@@ -118,14 +135,22 @@ func templatePath(path string) bool {
 	return path != ""
 }
 
-func recordID(id inventory.EntityID, at time.Time) string {
-	return string(id.Kind) + "/" + id.Namespace + "/" + id.Name + "@" +
+// recordID names the nth release (from 1) of the workload within the
+// second of at. The first keeps the plain kind/namespace/name@seconds
+// name saved books already hold; a later one of the same second gets
+// "-n", so two template changes within one second stay two releases.
+func recordID(id inventory.EntityID, at time.Time, nth int) string {
+	out := string(id.Kind) + "/" + id.Namespace + "/" + id.Name + "@" +
 		strconv.FormatInt(at.Unix(), 10)
+	if nth > 1 {
+		out += "-" + strconv.Itoa(nth)
+	}
+	return out
 }
 
 // newRecord is the release c made of the workload id.
 func newRecord(id inventory.EntityID, c inventory.Change) Record {
-	r := Record{ID: recordID(id, c.At), Kind: string(id.Kind),
+	r := Record{ID: recordID(id, c.At, 1), Kind: string(id.Kind),
 		Namespace: id.Namespace, Name: id.Name, At: c.At,
 		Actor: c.Actor, App: c.App, Cause: c.Cause, Verdict: Rolling}
 	seen := map[string]bool{}

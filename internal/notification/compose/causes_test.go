@@ -98,13 +98,13 @@ func TestProofWordsReadLikePeople(t *testing.T) {
 	}{
 		"every dependent": {rootcause.Proof{
 			Code: rootcause.ProofDependentsFail, Count: 2, Total: 2},
-			"all of its dependents are failing"},
+			"every app that uses it is failing"},
 		"only dependent": {rootcause.Proof{
 			Code: rootcause.ProofDependentsFail, Count: 1, Total: 1},
-			"its only dependent is failing"},
+			"the one app that uses it is failing"},
 		"some dependents": {rootcause.Proof{
 			Code: rootcause.ProofDependentsFail, Count: 1, Total: 3},
-			"one of its three dependents is failing"},
+			"one of the three apps that use it is failing"},
 		"every error": {rootcause.Proof{
 			Code: rootcause.ProofErrorsName, Count: 3, Total: 3},
 			"every error mentions it"},
@@ -113,7 +113,7 @@ func TestProofWordsReadLikePeople(t *testing.T) {
 			"one of the two errors mentions it"},
 		"workloads meet": {rootcause.Proof{
 			Code: rootcause.ProofWorkloadsMeet, Count: 3},
-			"three failing workloads all depend on it"},
+			"all three failing apps use it"},
 		"changed fields": {rootcause.Proof{Code: rootcause.ProofChanged,
 			Fields: []string{"spec.selector"}},
 			"its selector changed shortly before"},

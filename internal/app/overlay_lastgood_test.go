@@ -51,7 +51,7 @@ func startOverlay(
 	cfg, outcome, err := applyStartupCRD(context.Background(), crdBase(),
 		overlayClient(spec), func() (*config.Config, error) {
 			return crdBase(), nil
-		}, lastGood)
+		}, lastGood, nil)
 	require.NoError(t, err)
 	return cfg, outcome
 }
@@ -148,7 +148,7 @@ func TestDeletingTheKwatchConfigClearsTheLastGoodSpec(t *testing.T) {
 			kwatchConfigResource: "KwatchConfigList",
 		})
 	_, none, err := applyStartupCRD(context.Background(), crdBase(),
-		client, loadConfig, noLastGood)
+		client, loadConfig, noLastGood, nil)
 	require.NoError(t, err)
 	require.False(t, none.invalid)
 	require.Empty(t, none.applied)

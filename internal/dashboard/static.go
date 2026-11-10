@@ -35,16 +35,19 @@ var assetTypes = map[string]string{
 }
 
 // rootFiles are served at the root by a fixed name, never hashed, by
-// their content type: the app manifest, which browsers find by that
-// name. What it names ({{asset:…}}) is rewritten to the hashed address.
+// their content type: the app manifest and the service worker, which
+// browsers find by that name (a worker's scope is the folder it is
+// served from, so /sw.js covers the whole dashboard). What they name
+// ({{asset:…}}) is rewritten to the hashed address.
 var rootFiles = map[string]string{
 	"manifest.webmanifest": "application/manifest+json",
+	"sw.js":                "text/javascript; charset=utf-8",
 }
 
 // shellRoutes are the UI's own pages (Overview, Issues, Activity,
 // kwatch); each serves the HTML shell.
 var shellRoutes = []string{"/", "/signin", "/issues", "/activity",
-	"/kwatch", "/map"}
+	"/kwatch"}
 
 // asset is one file ready to serve.
 type asset struct {
@@ -100,6 +103,7 @@ func buildAssets(root fs.FS) (*assets, error) {
 	if a.shell, err = rewriteRefs(shell, urls); err != nil {
 		return nil, err
 	}
+	a.shell = withDocsRef(a.shell)
 	if a.notFound, err = rewriteRefs([]byte(notFoundPage), urls); err != nil {
 		return nil, err
 	}

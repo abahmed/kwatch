@@ -127,6 +127,46 @@
     return e;
   }
 
+  /* TAIL: the object an event names at its end, "(container ns/pod/c)":
+     it is said once above the list, not in every line. */
+  var TAIL = /\s*\((?:container|pod|node|deployment|replicaset|statefulset|daemonset)[^)]*\)\s*$/;
+  function clean(t) { return t.replace(TAIL, ""); }
+  var GROUPED = 3;
+
+  /* podOf: an entity key as the pod it belongs to, so a pod and its
+     container count as one object: "container/ns/pod/c" → "pod/ns/pod". */
+  function podOf(key) {
+    var p = key.split("/");
+    return p[0] === "container" && p.length >= 4 ? "pod/" + p[1] + "/" + p[2] : key;
+  }
+
+  /* signature: what makes two events the same thing happening again:
+     their words without the object, the numbers and the detail after the
+     first colon; a failure and its "recovered:" share one. */
+  function signature(ev, text) {
+    var t = clean(text).replace(/^recovered:\s*/i, "").replace(/\d+/g, "#"), at = t.indexOf(": ");
+    return ev.kind + "|" + (at >= 12 ? t.slice(0, at) : t);
+  }
+
+  function groupTitle(text) {
+    var t = clean(text).replace(/^recovered:\s*/i, ""), at = t.indexOf(": ");
+    return at >= 12 ? t.slice(0, at) : t;
+  }
+
+  /* groupText: "Container keeps failing its readiness probe · 28 times
+     between 10:35 and 11:20, recovered 27 times". */
+  function groupText(events) {
+    var fails = events.filter(function (e) { return !/^recovered:/i.test(e.w[0]); });
+    var at = events.map(function (e) { return Date.parse(e.ev.at); });
+    var first = new Date(Math.min.apply(null, at)).toISOString(), last = new Date(Math.max.apply(null, at)).toISOString();
+    var back = events.length - fails.length;
+    var title = groupTitle((fails[0] || events[0]).w[0]);
+    var n = fails.length || back;
+    var text = title + " · " + KW.plural(n, "time", "times") + " between " + KW.when(first) + " and " + KW.when(last);
+    if (fails.length && back) text += ", recovered " + KW.plural(back, "time", "times");
+    return text;
+  }
+
   /* timeline: newest first, grouped by day. Back-to-back events that say
      the same thing collapse into one row with a count; a different event
      in between still splits them, so the order stays true. Each event
@@ -149,24 +189,47 @@
     events.sort(function (a, b) {
       return (Date.parse(b.ev.at) - Date.parse(a.ev.at)) || (b.i - a.i);
     });
-    var rows = [];
+    var sigs = {};
     events.forEach(function (e) {
+      if (e.ev.kind === "opened" || e.ev.kind === "transition") return;
+      e.sig = signature(e.ev, e.w[0]);
+      (sigs[e.sig] = sigs[e.sig] || []).push(e);
+    });
+    var rows = [], done = {};
+    events.forEach(function (e) {
+      var many = e.sig && sigs[e.sig].length >= GROUPED;
+      if (many) {
+        if (done[e.sig]) return;
+        done[e.sig] = true;
+        var all = sigs[e.sig];
+        rows.push({ key: e.sig, e: { ev: e.ev, w: [groupText(all), e.w[1]], i: e.i }, group: true,
+          all: all.map(function (x) { return x.ev.at; }), folded: 0 });
+        return;
+      }
       var key = e.ev.kind + "|" + e.w[0] + "|" + (e.ev.entity || "");
       var last = rows[rows.length - 1];
       // kwatch itself folds old repeats into one event ("repeats"); count
       // them with the ones shown here.
       var folded = e.ev.repeats || 0;
-      if (last && last.key === key) {
+      if (last && !last.group && last.key === key) {
         last.all.push(e.ev.at);
         last.folded += folded;
       } else {
         rows.push({ key: key, e: e, all: [e.ev.at], folded: folded });
       }
     });
+    // One object in every event: say so once, above the list.
+    var objects = {};
+    events.forEach(function (e) { if (e.ev.entity) objects[podOf(e.ev.entity)] = true; });
+    var names = Object.keys(objects), single = names.length === 1 ? names[0] : "";
     ol.dataset.rows = String(rows.length);
     var open = ol.dataset.open === "1";
     var shown = open ? rows : rows.slice(0, TIMELINE_SHOWN);
     var lastDay = "", lastHM = "";
+    if (single) {
+      var about = ol.appendChild(KW.el("li", "earlier tl-about", "About "));
+      about.appendChild(KW.wrapName(single));
+    }
     shown.forEach(function (row, n) {
       var ev = row.e.ev, w = row.e.w;
       var d = new Date(ev.at);
@@ -191,9 +254,9 @@
       li.appendChild(t);
       li.appendChild(KW.el("span", "node"));
       var tx = KW.el("span", "tx");
-      KW.hideMarks(tx.appendChild(KW.el("span", "tx-text")), w[0]);
+      KW.hideMarks(tx.appendChild(KW.el("span", "tx-text")), single || row.group ? clean(w[0]) : w[0]);
       var count = row.all.length + row.folded;
-      if (count > 1) {
+      if (count > 1 && !row.group) {
         tx.appendChild(KW.el("span", "tl-count", KW.plural(count, "time", "times"))).title =
           "Happened " + KW.plural(count, "time", "times") + " in a row";
       }
@@ -202,20 +265,24 @@
       // "2 h ago" helps today; on earlier days the day and time say it.
       var meta = KW.el("small");
       function sep() { if (meta.firstChild) meta.appendChild(document.createTextNode(" · ")); }
-      if (row.all.length > 1) {
+      if (row.all.length > 1 && !row.group) {
         meta.appendChild(document.createTextNode("since " + KW.stamp(row.all[row.all.length - 1])));
       } else if (KW.isToday(d)) {
         meta.appendChild(KW.timeEl(ev.at));
       }
-      var entity = entityShown(ev, w[0], inc);
+      var entity = row.group || single && (!ev.entity || podOf(ev.entity) === single) ? "" : entityShown(ev, w[0], inc);
       if (entity) { sep(); meta.appendChild(KW.el("span", "mono", entity)); }
       if (meta.firstChild) tx.appendChild(meta);
       if (count > 1) {
         var det = KW.el("details", "tl-times");
-        det.appendChild(KW.el("summary", "", "Show all times"));
+        det.appendChild(KW.el("summary", "", row.group ? "Show every time" : "Show all times"));
         var times = KW.el("p", "mono");
-        times.textContent = row.all.map(function (at) { return KW.stamp(at); }).join(" · ") +
-          (row.folded ? " · and " + row.folded + " earlier" : "");
+        // Today's stamps are just the time; a stamp never breaks inside.
+        row.all.forEach(function (at, i) {
+          if (i) times.appendChild(document.createTextNode(" · "));
+          times.appendChild(KW.el("span", "tl-stamp", KW.when(at)));
+        });
+        if (row.folded) times.appendChild(document.createTextNode(" · and " + row.folded + " earlier"));
         det.appendChild(times);
         tx.appendChild(det);
       }

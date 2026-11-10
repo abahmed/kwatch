@@ -41,9 +41,12 @@ var (
 )
 
 var (
-	metaBucket  = []byte("meta")
-	versionKey  = []byte("schema.version")
-	epochKey    = []byte("lease.epoch")
+	metaBucket = []byte("meta")
+	versionKey = []byte("schema.version")
+	epochKey   = []byte("lease.epoch")
+	// lastCopyKey keeps lastCopy across restarts (reclaim.go); a file
+	// without it has had no rewrite measured.
+	lastCopyKey = []byte("reclaim.lastCopy")
 	openTimeout = 5 * time.Second
 )
 
@@ -107,8 +110,13 @@ type file struct {
 	reset   *Reset         // the reset Open or Claim performed
 	pending *unusableError // a reset deferred until Claim
 	shrink  bool           // a rewrite deferred until Claim
-	latest  *Store         // the newest claimed handle
-	closers []func()       // run once by Close, before the file closes
+	// lastCopy is the size the last online rewrite left (reclaim.go);
+	// copyNoGain says one gained nothing. Both are held under gate.
+	lastCopy   int64
+	copyNoGain bool
+	retry      reclaimBackoff // after failed rewrites (reclaim_backoff.go)
+	latest     *Store         // the newest claimed handle
+	closers    []func()       // run once by Close, before the file closes
 
 	writes   map[Bucket]*atomic.Uint64 // see generation in mirror.go
 	counters counters
@@ -174,6 +182,10 @@ func logOpened(path string, deferred, absent bool, took time.Duration) {
 // repair performs the pending reset and rewrite. It runs once, under
 // the file lock, before anything is written.
 func (f *file) repair() error {
+	// A copy a crash left half written only takes room, and with a
+	// volume limit it would count as used: drop it before anything
+	// measures free space. Only the claimer writes copies.
+	removeLeftoverCopy(f.path)
 	if err := f.openForWriting(); err != nil {
 		return err
 	}
@@ -330,14 +342,17 @@ func (f *file) claimInto(handle *Store) (uint64, error) {
 		return 0, err
 	}
 	var epoch uint64
+	var lastCopy int64
 	err = f.db.Update(func(tx *bolt.Tx) error {
 		meta := tx.Bucket(metaBucket)
 		epoch = readUint(meta.Get(epochKey)) + 1
+		lastCopy = int64(readUint(meta.Get(lastCopyKey)))
 		return meta.Put(epochKey, writeUint(epoch))
 	})
 	if err != nil {
 		return 0, fmt.Errorf("store: claim: %w", err)
 	}
+	f.lastCopy = lastCopy
 	if f.latest != nil && f.latest != handle {
 		f.latest.abandoned.Store(true)
 	}

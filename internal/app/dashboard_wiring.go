@@ -77,6 +77,7 @@ func dashboardHealth(
 				Failing:          h.Reason != "",
 				Since:            h.FailingSince,
 				Problem:          delivery.PlainReason(h.Reason),
+				Reason:           h.Reason,
 				Waiting:          h.Waiting,
 			})
 		}

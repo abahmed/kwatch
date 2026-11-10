@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -21,14 +22,28 @@ func run(args []string, out, errOut io.Writer) int {
 	input := flags.String("input", "-",
 		"audit log: JSON lines or a log export CSV (- for stdin)")
 	asJSON := flags.Bool("json", false, "print the report as JSON")
+	allowEmpty := flags.Bool("allow-empty", false,
+		"exit 0 even when no audit entries were found in the input")
 	limits := scorecard.NoThresholds()
 	registerLimits(flags, &limits)
 	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		return 2
 	}
-	entries, err := readEntries(*input)
+	entries, skipped, err := readEntries(*input)
 	if err != nil {
 		_, _ = fmt.Fprintf(errOut, "read audit log: %v\n", err)
+		return 2
+	}
+	if skipped > 0 {
+		_, _ = fmt.Fprintf(errOut,
+			"skipped %d lines that were not audit entries\n", skipped)
+	}
+	if len(entries) == 0 && !*allowEmpty {
+		_, _ = fmt.Fprintln(errOut, "no audit entries found in the "+
+			"input; nothing was scored (use -allow-empty to accept)")
 		return 2
 	}
 	report := scorecard.Score(entries)
@@ -79,17 +94,17 @@ func registerLimits(flags *flag.FlagSet, limits *scorecard.Thresholds) {
 		"fail above this 95th percentile of messages per incident")
 }
 
-func readEntries(path string) ([]audit.Entry, error) {
+func readEntries(path string) ([]audit.Entry, int, error) {
 	if path == "-" {
-		return scorecard.Parse(os.Stdin)
+		return scorecard.ParseCounted(os.Stdin)
 	}
 	// #nosec G304 -- operator-selected input file
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer func() { _ = file.Close() }()
-	return scorecard.Parse(file)
+	return scorecard.ParseCounted(file)
 }
 
 func write(out io.Writer, report scorecard.Report, asJSON bool) error {

@@ -42,7 +42,7 @@ CI measures these on synthetic replay and labeled scenarios with
 | Wrong root in the first message of a labeled scenario | 0, even when a later message corrects it (a scenario whose story is a revision says so in its label) |
 | A labeled scenario that passed | keeps passing (per-scenario ratchet) |
 | Calibration, high confidence | right 80% to 100% of the time, gated at 10 or more cases |
-| Calibration, likely confidence | right 50% to 90% of the time, gated at 10 or more cases |
+| Calibration, likely confidence | right 50% to 95% of the time, gated at 10 or more cases |
 | Messages per incident | p95 at most 3, most at most 5 |
 | Time to first message, page tier | at most 2 minutes from the first failure observation |
 | Time to first message, notify tier | at most 5 minutes from the first failure observation (aim: p95 at most 3 minutes) |

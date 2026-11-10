@@ -47,7 +47,7 @@ func (w Writer) StartupSummary(
 	// The lead named the cluster; the listed titles do not repeat it.
 	sentences = append(sentences, w.digestTitles(decisions, now, "")...)
 	sentences = append(sentences, sentence{part: partAction,
-		text: eachOwnMessage})
+		text: eachOwn(len(decisions))})
 	msg := notification.Message{
 		Key: StartupKey(now), Revision: 1, Status: status, Opens: true,
 		Route: summaryRoute(decisions, nil),
@@ -59,9 +59,21 @@ func (w Writer) StartupSummary(
 	return w.linkedList(msg)
 }
 
-// eachOwnMessage closes a message that lists several incidents.
-const eachOwnMessage = "Each gets its own message when it changes or " +
-	"resolves."
+// eachOwnMessage closes a message that lists several incidents, and
+// oneOwnMessage one that lists a single incident.
+const (
+	eachOwnMessage = "Each one alerts on its own when it changes or " +
+		"resolves."
+	oneOwnMessage = "It alerts on its own when it changes or resolves."
+)
+
+// eachOwn is the closing line of a list of n incidents.
+func eachOwn(n int) string {
+	if n == 1 {
+		return oneOwnMessage
+	}
+	return eachOwnMessage
+}
 
 // RollupKey is the conversation key of the roll-up sent at at.
 func RollupKey(at time.Time) string {
@@ -87,7 +99,7 @@ func (w Writer) Rollup(
 		" at the same time."}}
 	sentences = append(sentences, w.digestTitles(decisions, now, "")...)
 	sentences = append(sentences, sentence{part: partAction,
-		text: eachOwnMessage})
+		text: eachOwn(len(decisions))})
 	msg := notification.Message{
 		Key: RollupKey(now), Revision: 1, Status: status, Opens: true,
 		Route: summaryRoute(decisions, nil),
@@ -139,8 +151,8 @@ func (w Writer) DigestWith(
 	sortByImpact(opened)
 	risks = neverReady(risks)
 	counts := digestCounts(opened, resolved, risks, extras)
-	sentences := []sentence{{part: partLead, text: "kwatch" +
-		w.clusterTag() + " has " + joinWords(counts) + " to report."}}
+	sentences := []sentence{{part: partLead, text: "kwatch summary" +
+		w.clusterTag() + ": " + joinWords(counts) + "."}}
 	if extras.Wake != nil {
 		sentences = append(sentences, sentence{part: partProof,
 			text: extras.Wake.Text()})
@@ -177,11 +189,10 @@ func urgencySentences(open int) []sentence {
 	text := ""
 	switch {
 	case open == 1:
-		text = "It is not urgent; if it gets worse it gets its own " +
-			"message."
+		text = "Not urgent: kwatch alerts on its own if it gets worse."
 	case open > 1:
-		text = "None of them is urgent; one that gets worse gets its " +
-			"own message."
+		text = "None is urgent: kwatch alerts on its own if one gets " +
+			"worse."
 	}
 	if text == "" {
 		return nil
@@ -197,14 +208,14 @@ func digestCounts(
 ) []string {
 	var counts []string
 	if len(opened) > 0 {
-		counts = append(counts, plural(len(opened), "low-priority problem"))
+		counts = append(counts,
+			plural(len(opened), "new low-priority problem"))
 	}
 	if n := len(extras.Ongoing) + len(extras.Unchanged); n > 0 {
-		counts = append(counts, plural(n, "ongoing problem"))
+		counts = append(counts, plural(n, "problem")+" still open")
 	}
 	if len(resolved) > 0 {
-		counts = append(counts, plural(len(resolved), "earlier one")+
-			" that resolved")
+		counts = append(counts, plural(len(resolved), "problem")+" resolved")
 	}
 	if len(risks) > 0 {
 		counts = append(counts, plural(riskWorkloads(risks), "workload")+
@@ -227,16 +238,15 @@ func (w Writer) digestTitles(
 	for i, d := range decisions {
 		if i == maxSummaryNamed {
 			out = append(out, sentence{part: partProof,
-				text: sentenceCase(numberWord(len(decisions)-i) + " more" +
-					" " + verb(len(decisions)-i, "is", "are") +
-					" not described here")})
+				text: sentenceCase(numberWord(len(decisions)-i) + " more " +
+					verb(len(decisions)-i, "is", "are") + " not shown")})
 			break
 		}
 		out = append(out, sentence{part: partProof,
 			text: prefix + withUsualTail(
 				markedTitle(w.listWriter().Write(d, now)), d)})
 	}
-	return out
+	return mergeTitles(out)
 }
 
 // joinWords joins two or three phrases with commas and "and".

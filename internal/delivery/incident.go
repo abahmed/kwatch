@@ -56,8 +56,9 @@ func (m *Manager) dispatchIncident(
 	if opts.sent != nil {
 		*opts.sent = sentTextOf(msg)
 	}
-	requestCtx := m.requestContext(ctx)
 	return sendWithRetry(ctx, opts.counted(func() error {
+		requestCtx, done := m.beginSend(ctx)
+		defer done()
 		return p.SendIncident(requestCtx, msg)
 	}), opts.retry, p.Name())
 }

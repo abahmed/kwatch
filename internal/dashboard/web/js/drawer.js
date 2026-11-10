@@ -22,7 +22,8 @@
   /* drawer builds the drawer into host. hooks: ids() is the issue IDs
      of the table rows in order, terms() the search words to mark,
      moved(id) says Previous / Next showed another issue, closed(id,
-     byReader) that it closed (byReader: ×, Esc or a click beside). */
+     byReader) that it closed (byReader: ×, Esc or a click beside);
+     offset() and total() place the rows in the whole list. */
   KW.drawer = function (host, hooks) {
     host.appendChild(KW.clone("tpl-drawer"));
     var el = host.lastElementChild;
@@ -45,8 +46,9 @@
       // The dialog is named after the issue once it is known.
       if (inc.title) dialog.setAttribute("aria-label", inc.title);
       var h1 = KW.$("[data-title]", root);
-      KW.highlight(h1, inc.title, hooks.terms());
+      KW.highlight(h1, KW.issueHeading ? KW.issueHeading(inc) : inc.title, hooks.terms());
       KW.clampTitle(h1);
+      h1.title = inc.fullTitle || inc.title;
       if (current && !dialog.contains(document.activeElement)) {
         dialog.focus({ preventScroll: true });
       }
@@ -57,8 +59,10 @@
       var ids = hooks.ids(), at = ids.indexOf(current);
       prev.disabled = at <= 0;
       next.disabled = at < 0 || at >= ids.length - 1;
-      pos.textContent = at < 0 ? "" : (at + 1) + " of " + ids.length;
-      if (at >= 0) pos.appendChild(KW.el("span", "drw-page", " on this page"));
+      var off = hooks.offset ? hooks.offset() : 0;
+      var total = Math.max((hooks.total && hooks.total()) || 0, off + ids.length);
+      pos.textContent = at < 0 ? "" : KW.num(off + at + 1) + " of " + KW.num(total);
+      pos.title = "In your Issues list";
     }
 
     function show(id) {

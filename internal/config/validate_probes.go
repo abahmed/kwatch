@@ -39,7 +39,11 @@ func tcpAddressProblem(address string) string {
 	return ""
 }
 
-// validateHeartbeatMonitor rejects a negative ping interval.
+// MinHeartbeatInterval is the shortest accepted heartbeat interval in
+// seconds; faster pings only load the monitoring endpoint.
+const MinHeartbeatInterval = 30
+
+// validateHeartbeatMonitor rejects a negative or too short ping interval.
 func validateHeartbeatMonitor(cfg *Config) []error {
 	var errs []error
 	if cfg.HeartbeatMonitor.Enabled && cfg.HeartbeatMonitor.Interval < 0 {
@@ -50,6 +54,13 @@ func validateHeartbeatMonitor(cfg *Config) []error {
 					"heartbeatMonitor.enabled is true",
 			),
 		)
+	}
+	if cfg.HeartbeatMonitor.Enabled &&
+		cfg.HeartbeatMonitor.Interval > 0 &&
+		cfg.HeartbeatMonitor.Interval < MinHeartbeatInterval {
+		errs = append(errs, fmt.Errorf(
+			"heartbeatMonitor.interval must be 0 (the default) or at "+
+				"least %d seconds", MinHeartbeatInterval))
 	}
 	if cfg.HeartbeatMonitor.Enabled && cfg.HeartbeatMonitor.URL == "" {
 		errs = append(

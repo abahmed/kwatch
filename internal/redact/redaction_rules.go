@@ -12,7 +12,10 @@ import (
 var bareTokenPrefixes = []string{
 	`gh[pousr]_[A-Za-z0-9]{20,}`,                 // GitHub tokens
 	`github_pat_[A-Za-z0-9_]{20,}`,               // GitHub fine-grained tokens
-	`xox[abpr]-[A-Za-z0-9-]{10,}`,                // Slack tokens
+	`xox[abprs]-[A-Za-z0-9-]{10,}`,               // Slack tokens
+	`xoxe\.xox[bp]-[A-Za-z0-9-]{10,}`,            // Slack rotating tokens
+	`xoxe-[0-9]-[A-Za-z0-9-]{10,}`,               // Slack refresh tokens
+	`xapp-[0-9]-[A-Za-z0-9-]{10,}`,               // Slack app-level tokens
 	`glpat-[A-Za-z0-9_-]{20,}`,                   // GitLab personal tokens
 	`AIza[0-9A-Za-z_-]{35}`,                      // Google API keys
 	`[sr]k_(?:live|test)_[0-9A-Za-z]{16,}`,       // Stripe secret, restricted
@@ -24,6 +27,10 @@ var bareTokenPrefixes = []string{
 	`hvs\.[A-Za-z0-9_-]{20,}`,                    // HashiCorp Vault tokens
 	`do[opr]_v1_[A-Za-z0-9]{20,}`,                // DigitalOcean tokens
 	`AGE-SECRET-KEY-1[A-Z0-9]{20,}`,              // age private keys
+	`whsec_[A-Za-z0-9]{16,}`,                     // Stripe webhook secrets
+	`SK[0-9a-f]{32}`,                             // Twilio API keys
+	`pypi-[A-Za-z0-9_-]{40,}`,                    // PyPI upload tokens
+	`[0-9]{8,10}:[A-Za-z0-9_-]{35,}`,             // Telegram bot tokens
 }
 
 var bareTokenPattern = regexp.MustCompile(
@@ -118,7 +125,9 @@ func skipNonSecret(groups []string) bool {
 	}
 	key := strings.ToLower(strings.TrimRight(groups[1], " \t:="))
 	value := groups[2]
-	if isGoTestResult(groups[1], value) {
+	if isGoTestResult(groups[1], value) || isPassCount(key, value) ||
+		strings.HasPrefix(value, redacted) {
+		// The last one is a value an earlier rule already replaced.
 		return true
 	}
 	if key == "pwd" {
@@ -147,6 +156,16 @@ var goTestName = regexp.MustCompile(
 func isGoTestResult(key, value string) bool {
 	return strings.TrimRight(key, " \t:=") == "PASS" &&
 		strings.Contains(key, ":") && goTestName.MatchString(value)
+}
+
+// passCount is a small count or a progress counter: 3, 3/5, 12/120.
+var passCount = regexp.MustCompile(`^\d{1,3}(?:/\d{1,4})?[,;.)]?$`)
+
+// isPassCount reports "pass=3/5 checks": the short key "pass" also
+// counts what passed. Only that key, and only a short number, so a
+// numeric password of four digits or more stays redacted.
+func isPassCount(key, value string) bool {
+	return key == "pass" && passCount.MatchString(value)
 }
 
 // skipProseWord keeps the word after "password" unless it looks like a

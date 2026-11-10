@@ -24,9 +24,6 @@ const dnsSelector = "k8s-app=kube-dns"
 // or it selects no pod.
 var dnsServerNames = map[string]bool{"coredns": true, "kube-dns": true}
 
-// maxOwnerDepth bounds the owner walk: pod, ReplicaSet, Deployment.
-const maxOwnerDepth = 3
-
 // DNSServerPods returns the pods that serve the cluster DNS, sorted:
 // the pods the DNS Services select, of any workload kind (an OpenShift
 // DaemonSet, an RKE2 or Helm Deployment with a release prefix). Without
@@ -123,17 +120,10 @@ func namedDNSPods(model inventory.Reader) []inventory.EntityID {
 }
 
 // TopOwner is the pod's top owner: the Deployment behind its
-// ReplicaSet, a DaemonSet or StatefulSet, or the pod itself.
+// ReplicaSet, a DaemonSet or StatefulSet, or the pod itself (see
+// inventory.TopOwner).
 func TopOwner(
 	model inventory.Reader, pod inventory.EntityID,
 ) inventory.EntityID {
-	id := pod
-	for range maxOwnerDepth {
-		owners := model.Related(id, inventory.OwnedBy, inventory.Outgoing)
-		if len(owners) == 0 {
-			break
-		}
-		id = owners[0]
-	}
-	return id
+	return inventory.TopOwner(model, pod)
 }

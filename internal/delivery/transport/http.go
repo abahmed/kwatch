@@ -59,10 +59,15 @@ type BasicAuth struct {
 	Password string
 }
 
-// ClassifyHTTPStatus applies the shared status policy to an SDK error.
-func ClassifyHTTPStatus(status int, err error) error {
+// ClassifyHTTPStatus applies the shared status policy to an SDK error. A
+// redirect is permanent, as it is in Send: the SDK client does not follow
+// it either, so retrying the same URL can never work.
+func ClassifyHTTPStatus(provider string, status int, err error) error {
 	if err == nil {
 		return nil
+	}
+	if isRedirect(status) {
+		return redirected(provider, status)
 	}
 	if IsPermanentHTTPStatus(status) {
 		return Permanent(err)
@@ -179,16 +184,25 @@ func classifyResponse(
 			RetryAfter: retryAfter,
 		}
 	}
-	if response.StatusCode >= 300 && response.StatusCode <= 399 {
-		return body, Permanent(fmt.Errorf(
-			"call to %s was redirected (status code %d) and kwatch does "+
-				"not follow redirects: check the configured URL",
-			r.Provider, response.StatusCode))
+	if isRedirect(response.StatusCode) {
+		return body, redirected(r.Provider, response.StatusCode)
 	}
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		return body, failureOf(r, response, body, now)
 	}
 	return body, nil
+}
+
+func isRedirect(status int) bool {
+	return status >= 300 && status <= 399
+}
+
+// redirected is the permanent error of a redirect answer.
+func redirected(provider string, status int) error {
+	return Permanent(fmt.Errorf(
+		"call to %s was redirected (status code %d) and kwatch does "+
+			"not follow redirects: check the configured URL",
+		provider, status))
 }
 
 // failureOf is the error of a non-2xx answer: a StatusError, permanent for

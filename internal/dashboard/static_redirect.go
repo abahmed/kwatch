@@ -10,7 +10,7 @@ import (
 // /issues with the same query.
 var listParams = []string{"q", "severity", "namespace", "state", "age",
 	"since", "sort", "dir", "group", "kind", "acked", "status", "offset",
-	"limit", "page", "pageSize"}
+	"limit", "page", "pageSize", "release"}
 
 // oldRoute is where an address of the old two-list layout lives now:
 // "/releases" (folded into the issues)

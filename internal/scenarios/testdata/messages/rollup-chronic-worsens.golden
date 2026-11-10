@@ -1,5 +1,5 @@
 10:02:15 roll-up
-🟠 kwatch (prod-eu-1) found two new problems at the same time. api in shop keeps crashing. worker in shop keeps crashing. Each gets its own message when it changes or resolves.
+🟠 kwatch (prod-eu-1) found two new problems at the same time. api and worker in shop keep crashing. Each one alerts on its own when it changes or resolves.
 🟠 kwatch (prod-eu-1) found two new problems at the same time.
 | 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
 |
@@ -7,17 +7,17 @@
 | - **api** in **shop** keeps crashing
 | - **worker** in **shop** keeps crashing
 |
-| *Each gets its own message when it changes or resolves.*
+| *Each one alerts on its own when it changes or resolves.*
 10:39:00 material change
-🟠 api in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. It fails with "panic: connection refused". Its last run lasted ten seconds.
-Also grouped: 6 not-ready pods
+🟠 api in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "panic: connection refused". Its last run lasted ten seconds.
+Related alerts: 6 not-ready pods
 To read the output of the last crash, run kubectl logs api-e04f9b69-a -c app -n shop --previous
 🟠 api in shop (prod-eu-1) keeps crashing.
 | 🟠 **api** in **shop** (**prod-eu-1**) keeps crashing.
-| Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
 | It fails with `panic: connection refused`.
 | Its last run lasted ten seconds.
-| Also grouped: 6 not-ready pods
+| Related alerts: 6 not-ready pods
 | To read the output of the last crash, run
 | ```
 | kubectl logs api-e04f9b69-a -c app -n shop --previous

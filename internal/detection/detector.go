@@ -22,6 +22,7 @@ type Context struct {
 	misses      *int
 	specialised bool
 	onsets      *onsetScope
+	pass        *passCache
 }
 
 // Specialised reports whether a detector registered for the entity's own
@@ -136,6 +137,7 @@ type Registry struct {
 	synced func(inventory.Kind) bool
 	fresh  func(inventory.Kind) bool
 	onsets *onsets
+	pass   passCache
 }
 
 // NewRegistry indexes detectors by kind. synced reports which kinds are
@@ -184,6 +186,7 @@ func (r *Registry) Evaluate(
 		fresh: r.fresh, unsynced: &unsynced, misses: &misses,
 		specialised: present && len(r.byKind[id.Kind]) > 0,
 		onsets:      scope,
+		pass:        &r.pass,
 	}
 	groups := [][]Detector{r.byKind[AnyKind]}
 	if present {

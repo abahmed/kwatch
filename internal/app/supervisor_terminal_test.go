@@ -143,3 +143,25 @@ func TestRunComponentTurnsPanicIntoError(t *testing.T) {
 
 	require.ErrorContains(t, err, "boom panicked: bad payload")
 }
+
+func TestRunComponentFreshStartAllowsSlowFirstReport(t *testing.T) {
+	supervisor := newComponentSupervisor(time.Now)
+	progress := &testProgress{}
+	progress.last.Store(time.Now().Add(-time.Minute).UnixNano())
+	ctx, cancel := context.WithTimeout(
+		context.Background(), 150*time.Millisecond)
+	defer cancel()
+
+	err := supervisor.runComponent(ctx, componentSpec{
+		progress:       progress,
+		startupTimeout: time.Minute,
+		stallTimeout:   20 * time.Millisecond,
+		freshStart:     true,
+		run: func(ctx context.Context) error {
+			<-ctx.Done()
+			return ctx.Err()
+		},
+	})
+
+	require.NotErrorIs(t, err, errComponentStalled)
+}

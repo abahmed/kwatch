@@ -2,18 +2,18 @@ package license
 
 import "time"
 
-// CachedLeaseGraceUntil reads, without verifying it, when the grace of a
-// cached lease ends. It is for reading kwatch's own state file from
-// outside the running process, where the cluster binding needed to verify
-// the lease is not available; the running leader has already verified the
-// lease, and a caller that gates behavior still goes through Evaluate.
-func CachedLeaseGraceUntil(lease string) (time.Time, bool) {
-	payload, _, err := split(leasePrefix, lease)
-	if err != nil {
-		return time.Time{}, false
+// CachedLeaseGraceUntil reads when the grace of a cached lease ends. It is
+// for reading kwatch's own state file from outside the running process,
+// where the cluster binding needed to verify the lease is not available,
+// so it checks the signature only: a lease not signed by a trusted key
+// (an edited state file) reads as no lease. A nil v uses
+// DefaultVerifier.
+func CachedLeaseGraceUntil(v *Verifier, lease string) (time.Time, bool) {
+	if v == nil {
+		v = DefaultVerifier()
 	}
-	l, err := decodeLease(payload)
-	if err != nil {
+	l, ok := v.signedLease(lease)
+	if !ok {
 		return time.Time{}, false
 	}
 	return l.GraceUntil(), true

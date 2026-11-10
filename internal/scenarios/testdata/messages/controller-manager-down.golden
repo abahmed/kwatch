@@ -8,6 +8,6 @@
 | kubectl -n kube-system get pods -l component=kube-controller-manager
 | ```
 10:06:30 material change
-🔴 The controller manager (prod-eu-1) is spreading to invoices in billing; cart and search in shop: they are waiting for their controller to process the latest change.
-🔴 The controller manager (prod-eu-1) is spreading to invoices in billing; cart and search in shop: they are waiting for their controller to process the latest change.
-| 🔴 The controller manager (**prod-eu-1**) is spreading to **invoices** in **billing**; **cart** and **search** in shop: they are waiting for their controller to process the latest change.
+🔴 The controller manager (prod-eu-1) is now also affecting invoices in billing; cart and search in shop: they are waiting for their controller to process the latest change.
+🔴 The controller manager (prod-eu-1) is now also affecting invoices in billing; cart and search in shop: they are waiting for their controller to process the latest change.
+| 🔴 The controller manager (**prod-eu-1**) is now also affecting **invoices** in **billing**; **cart** and **search** in shop: they are waiting for their controller to process the latest change.

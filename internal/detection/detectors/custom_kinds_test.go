@@ -167,8 +167,8 @@ func TestCustomReportsRouteBackendMissing(t *testing.T) {
 		}
 		link(m, route, inventory.RoutesTo, service)
 
-		eval := evaluate(Custom{}, m, t0.Add(DefaultBackendGrace), route,
-			nil)
+		eval := evaluateAfterGrace(Custom{}, m, t0, DefaultBackendGrace,
+			route, nil)
 
 		if exists {
 			assert.Empty(t, eval.Findings)

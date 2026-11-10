@@ -1,7 +1,7 @@
 /* kwatch dashboard: the parts of "What kwatch found" that live in their
    own tab, drawn after the issue page renders: the errors-per-minute
-   strip (Evidence > Logs), the possible causes table (Details > Why
-   kwatch thinks this) and the per-pod "read it / did not" fold under
+   strip (Proof > Logs), the possible causes table (Proof > What kwatch
+   checked) and the per-pod "read it / did not" fold under
    the changes (Timeline > What changed just before). Read-only, visible
    text first; the terms reuse round.js tooltips. Every string is set
    with textContent. */
@@ -81,7 +81,7 @@
       var tr = tb.appendChild(KW.el("tr"));
       var th = tr.appendChild(KW.el("th"));
       th.scope = "row";
-      th.appendChild(KW.el("span", "mono", c.cause));
+      th.appendChild(KW.el("span", "", KW.entityText(c.cause))).title = c.cause;
       tr.appendChild(KW.el("td", "rd-num", c.score + "%"));
       tr.appendChild(KW.el("td", "", STATE[c.state] || c.state));
       var td = tr.appendChild(KW.el("td"));
@@ -94,7 +94,7 @@
   }
 
   /* pods: "Read it: 9, did not: 1", folded, closed by default; each pod
-     opens Evidence > Containers. */
+     opens Proof > Containers. */
   function pods(root, r) {
     var b = r.blast;
     var fold = KW.$('[data-fold="changes"]', root);

@@ -35,8 +35,15 @@ const (
 	maxKubeletErrorBody = 4 << 10
 )
 
-// errNoInternalIP reports a Node without an InternalIP address.
-var errNoInternalIP = errors.New("node has no InternalIP address")
+// errNoAddress reports a Node without an address to reach its kubelet.
+var errNoAddress = errors.New("node has no kubelet address")
+
+// kubeletAddressTypes are the Node address types tried for the kubelet,
+// in order: the internal IP, else the external one (nodes that report
+// only that), else the hostname.
+var kubeletAddressTypes = []corev1.NodeAddressType{
+	corev1.NodeInternalIP, corev1.NodeExternalIP, corev1.NodeHostName,
+}
 
 // KubeletClientConfig configures a KubeletClient.
 type KubeletClientConfig struct {
@@ -165,19 +172,22 @@ func (c *KubeletClient) forget(node string) {
 }
 
 // KubeletAddress returns the host:port of a Node's kubelet: its first
-// InternalIP and the advertised kubelet port, or DefaultKubeletPort.
+// address of the first kubeletAddressTypes it has, and the advertised
+// kubelet port, or DefaultKubeletPort.
 func KubeletAddress(node *corev1.Node) (string, error) {
 	port := int(node.Status.DaemonEndpoints.KubeletEndpoint.Port)
 	if port <= 0 {
 		port = DefaultKubeletPort
 	}
-	for _, address := range node.Status.Addresses {
-		if address.Type == corev1.NodeInternalIP && address.Address != "" {
-			return net.JoinHostPort(address.Address, strconv.Itoa(port)),
-				nil
+	for _, kind := range kubeletAddressTypes {
+		for _, address := range node.Status.Addresses {
+			if address.Type == kind && address.Address != "" {
+				return net.JoinHostPort(address.Address,
+					strconv.Itoa(port)), nil
+			}
 		}
 	}
-	return "", fmt.Errorf("%w: %s", errNoInternalIP, node.Name)
+	return "", fmt.Errorf("%w: %s", errNoAddress, node.Name)
 }
 
 // NewKubeletTransport builds the HTTPS transport for kubelet requests from

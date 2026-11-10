@@ -51,8 +51,8 @@ pushover|Pushover|retry|integer|false|false|integer||Emergency retry interval in
 pushover|Pushover|expire|integer|false|false|integer||Emergency expiration in seconds
 pushover|Pushover|title|string|false|false|||Custom title
 webex|Webex|accessToken|string|true|true|||Bot access token
-webex|Webex|roomId|string|false|false|||Room ID (at least one destination required)|destination|at-least-one
-webex|Webex|toPersonEmail|string|false|false|||Person email (at least one destination required)|destination|at-least-one
+webex|Webex|roomId|string|false|false|||Room ID (set exactly one of roomId or toPersonEmail)|destination|at-least-one
+webex|Webex|toPersonEmail|string|false|false|||Person email (set exactly one of roomId or toPersonEmail)|destination|at-least-one
 github|GitHub|token|string|true|true|||Personal access token
 github|GitHub|owner|string|true|false|||Repository owner
 github|GitHub|repo|string|true|false|||Repository name
@@ -102,7 +102,7 @@ clickup|ClickUp|priority|integer|false|false|integer||Optional task priority (1-
 clickup|ClickUp|closeStatus|string|false|false|||List status a resolve moves the task to (default: comment only)
 clickup|ClickUp|reopenStatus|string|false|false|||List status a closed task returns to when the incident fails again (needs closeStatus; default: open a new task)
 ilert|iLert|integrationKey|string|true|true|||Integration key
-ilert|iLert|priority|string|false|false|one-of:LOW,HIGH,CRITICAL|HIGH|Priority (LOW/HIGH/CRITICAL, default: HIGH)
+ilert|iLert|priority|string|false|false|one-of:LOW,HIGH,CRITICAL|HIGH|Priority (HIGH or LOW, default: HIGH; CRITICAL is accepted and sent as HIGH)
 incidentio|Incident.io|url|string|true|true|url||Incident.io URL
 incidentio|Incident.io|apiKey|string|false|true|||Optional API key
 squadcast|Squadcast|serviceKey|string|true|true|||Service key
@@ -132,17 +132,19 @@ sendgrid|SendGrid|apiKey|string|true|true|||API key
 sendgrid|SendGrid|from|string|true|false|||From address
 sendgrid|SendGrid|to|list|true|false|list||Recipients: a list or a comma-separated string
 sendgrid|SendGrid|subject|string|false|false|||Email subject (plain messages only)
-ses|SES|accessKeyId|string|true|true|||AWS access key ID
-ses|SES|secretAccessKey|string|true|true|||AWS secret access key
-ses|SES|sessionToken|string|false|true|||Session token for temporary AWS credentials
+ses|SES|accessKeyId|string|false|true|||AWS access key ID (omit to use the pod IAM role: IRSA or EKS Pod Identity)
+ses|SES|secretAccessKey|string|false|true|||AWS secret access key (set with accessKeyId)
+ses|SES|sessionToken|string|false|true|||Session token for temporary AWS credentials (expires; kwatch cannot refresh it)
 ses|SES|region|string|false|false||us-east-1|AWS region (default: us-east-1)
+ses|SES|endpoint|string|false|false|url||Optional endpoint URL override (default: the region endpoint)
 ses|SES|from|string|true|false|||Verified sender address
 ses|SES|to|string|true|false|||Recipients (comma-separated)
 ses|SES|subject|string|false|false|||Email subject (plain messages only)
-sns|SNS|accessKeyId|string|true|true|||AWS access key ID
-sns|SNS|secretAccessKey|string|true|true|||AWS secret access key
-sns|SNS|sessionToken|string|false|true|||Session token for temporary AWS credentials
+sns|SNS|accessKeyId|string|false|true|||AWS access key ID (omit to use the pod IAM role: IRSA or EKS Pod Identity)
+sns|SNS|secretAccessKey|string|false|true|||AWS secret access key (set with accessKeyId)
+sns|SNS|sessionToken|string|false|true|||Session token for temporary AWS credentials (expires; kwatch cannot refresh it)
 sns|SNS|region|string|false|false||us-east-1|AWS region (default: us-east-1)
+sns|SNS|endpoint|string|false|false|url||Optional endpoint URL override (default: the region endpoint)
 sns|SNS|topicArn|string|false|false|||SNS topic ARN (or targetArn)|destination|choice:topic
 sns|SNS|targetArn|string|false|false|||SNS target ARN (alternative to topicArn)|destination|choice:target
 sns|SNS|subject|string|false|false|||Optional subject (email subscriptions)
@@ -169,7 +171,7 @@ resend|Resend|to|string|true|false|||Recipients (comma-separated)
 resend|Resend|subject|string|false|false|||Email subject (plain messages only)
 goalert|GoAlert|url|string|true|false|url||GoAlert server URL
 goalert|GoAlert|token|string|true|true|||API token
-goalert|GoAlert|serviceId|string|true|false|||Service ID
+goalert|GoAlert|serviceId|string|false|false|||Service ID (optional, unused)
 alerta|Alerta|url|string|true|false|url||Alerta server URL
 alerta|Alerta|apiKey|string|true|true|||API key
 alerta|Alerta|environment|string|false|false||Production|Environment (default: Production)

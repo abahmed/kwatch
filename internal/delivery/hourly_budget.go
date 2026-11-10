@@ -95,7 +95,7 @@ func (m *Manager) foldOverBudget(entry *providerEntry, job deliverJob) bool {
 	klog.V(2).InfoS("notification folded into the digest",
 		"component", "delivery", "operation", "hourly_budget",
 		"provider", entry.provider.Name(), "key", key)
+	// The summary keeps the job's outbox record until it is sent.
 	m.addToOverflowSummary(entry.provider.Name(), job)
-	m.outbox.Load().remove(job.outboxID)
 	return true
 }

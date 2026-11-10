@@ -134,3 +134,20 @@ func TestOwnedPodsCollectsThroughIntermediateOwners(t *testing.T) {
 		t.Errorf("pod owns itself, got %v", got)
 	}
 }
+
+// An owner filed under the owned object's namespace that only exists as
+// a cluster-scoped entity is the top owner.
+func TestOwnerChainFindsAClusterScopedOwner(t *testing.T) {
+	h := newGraph(t)
+	const group = "operator.example.com"
+	p, ds := podID("agent-x"), eid(kube.KindDaemonSet, "ns", "agent")
+	filed := inventory.NewEntityID(group, "install", "ns", "default")
+	install := inventory.NewEntityID(group, "install", "", "default")
+	h.observe(install)
+	h.relateOwned(p, ds)
+	h.relate(ds, inventory.OwnedBy, filed)
+
+	if TopOwner(h.model, p) != install {
+		t.Errorf("top owner = %v", TopOwner(h.model, p))
+	}
+}

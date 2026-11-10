@@ -3,7 +3,6 @@ package dashboard
 import (
 	"cmp"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 )
@@ -68,28 +67,6 @@ func probeProof(d *IncidentDetail) []SummaryProof {
 			strings.ToUpper(r.Probe[:1]), r.Probe[1:], r.Pod)
 		out = append(out, SummaryProof{Kind: "probe", Text: text,
 			Detail: r.LastMessage, Count: r.Count, At: r.LastAt})
-	}
-	return out
-}
-
-// errorLine matches a log line that reports a failure, including an
-// application that says its own health check fails ("unhealthy", "not
-// ready", a 5xx status it answered).
-var errorLine = regexp.MustCompile(`(?i)\b(error|err|panic|fatal|` +
-	`exception|fail(ed|ure)?|refused|denied|timeout|timed out|` +
-	`cannot|can't|unable|traceback|killed|unhealthy|not ready)\b|` +
-	`\b(status|code|http)[ =:/]*5\d\d\b`)
-
-// logProof lists the captured log lines that report a failure, the
-// last first.
-func logProof(d *IncidentDetail) []SummaryProof {
-	var out []SummaryProof
-	for _, line := range slices.Backward(d.CapturedLogLines) {
-		line = strings.TrimSpace(line)
-		if line != "" && errorLine.MatchString(line) {
-			out = append(out, SummaryProof{Kind: "log",
-				Text: "Last error in the logs", Detail: line})
-		}
 	}
 	return out
 }

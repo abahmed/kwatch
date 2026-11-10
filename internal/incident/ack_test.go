@@ -1,6 +1,7 @@
 package incident
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -30,9 +31,27 @@ func observeAttrs(
 	attrs map[string]inventory.Value,
 ) {
 	t.Helper()
+	observeAttrsAt(t, r, id, attrs, t0)
+}
+
+// setAckAt is setAck for an annotation kwatch first sees at when.
+func setAckAt(
+	t *testing.T, r *rig, id inventory.EntityID, note string,
+	when time.Time,
+) {
+	t.Helper()
+	observeAttrsAt(t, r, id, map[string]inventory.Value{
+		kube.AttrAck: inventory.Text(note)}, when)
+}
+
+func observeAttrsAt(
+	t *testing.T, r *rig, id inventory.EntityID,
+	attrs map[string]inventory.Value, when time.Time,
+) {
+	t.Helper()
 	_, err := r.model.Apply(inventory.Observation{
 		Kind: inventory.Observed, Source: kube.ObservationSource,
-		At: t0, Entity: id, Attributes: attrs,
+		At: when, Entity: id, Attributes: attrs,
 	})
 	require.NoError(t, err)
 }
@@ -85,11 +104,12 @@ func TestAckRemovedResumesRemindersFromThen(t *testing.T) {
 	wantAction(t, r.tick(removed.Add(RemindEvery)), Update, ReasonReminder)
 }
 
+// An annotation written while the incident settles is about it.
 func TestAckPresentAtAnnouncementIsMentionedNotPosted(t *testing.T) {
 	r := newRig(t, Config{})
 	pod := entity(kube.KindPod, "web")
-	setAck(t, r, pod, "known issue")
 	r.raise(at(0), podSig("web"))
+	setAckAt(t, r, pod, "known issue", at(10*time.Second))
 
 	ds := r.tick(at(DefaultSettle))
 
@@ -190,9 +210,13 @@ func TestNewIncidentAfterTheRepageWindowIsNotPreAcked(t *testing.T) {
 	assert.Nil(t, ds[0].Incident.Ack)
 }
 
-func TestNewIncidentWithTheAnnotationStillThereSaysSo(t *testing.T) {
+// An annotation left on the object after its incident says nothing
+// about the next one: the new incident is not acknowledged, and it
+// reminds. Before, it adopted the old annotation and never reminded.
+func TestStaleAckDoesNotSilenceANewIncident(t *testing.T) {
 	r, _ := pagedRig(t)
-	setAck(t, r, nodeID(), "replacing the node")
+	setAckAt(t, r, nodeID(), "replacing the node",
+		r.only().Announced.Add(30*time.Second))
 	wantAction(t, r.tick(r.only().Announced.Add(time.Minute)), Update,
 		ReasonAcknowledged)
 	resolved := resolvePage(t, r, 5*time.Minute)
@@ -203,8 +227,52 @@ func TestNewIncidentWithTheAnnotationStillThereSaysSo(t *testing.T) {
 
 	require.NotEmpty(t, ds)
 	assert.Equal(t, Announce, ds[0].Action)
-	require.NotNil(t, ds[0].Incident.Ack)
-	assert.True(t, ds[0].Incident.Ack.AtAnnounce)
+	assert.Nil(t, ds[0].Incident.Ack, "the old annotation is ignored")
+	announced := r.of(nodeID()).Announced
+	wantAction(t, r.tick(announced.Add(PageRemindAfter)), Update,
+		ReasonReminder)
+}
+
+// Changing the note of a stale annotation acknowledges the new incident.
+func TestStaleAckCountsOnceItsNoteChanges(t *testing.T) {
+	r := newRig(t, Config{})
+	pod := entity(kube.KindPod, "web")
+	setAck(t, r, pod, "last week's outage")
+	r.raise(at(time.Hour), podSig("web"))
+	ds := r.tick(at(time.Hour + DefaultSettle))
+	wantAction(t, ds, Announce, "settled")
+	require.Nil(t, ds[0].Incident.Ack)
+
+	edited := at(time.Hour + DefaultSettle + time.Minute)
+	setAckAt(t, r, pod, "on it again", edited)
+
+	wantAction(t, r.tick(edited.Add(time.Second)), Update,
+		ReasonAcknowledged)
+}
+
+// A restart rebuilds the model, so the stale annotation looks new. The
+// incident remembers that it ignored it.
+func TestStaleAckStaysIgnoredAfterARestore(t *testing.T) {
+	src := newRig(t, Config{})
+	pod := entity(kube.KindPod, "web")
+	setAck(t, src, pod, "last week's outage")
+	src.raise(at(time.Hour), podSig("web"))
+	wantAction(t, src.tick(at(time.Hour+DefaultSettle)), Announce,
+		"settled")
+
+	dst := newRig(t, Config{})
+	restart := at(2 * time.Hour)
+	grace := restart.Add(5 * time.Minute)
+	dst.m.Restore(src.m.Export(), grace)
+	setAckAt(t, dst, pod, "last week's outage", restart)
+	dst.raise(restart.Add(time.Minute), podSig("web"))
+
+	wantNone(t, dst.tick(grace.Add(time.Minute)))
+	assert.Nil(t, dst.only().Ack)
+
+	setAckAt(t, dst, pod, "on it", grace.Add(2*time.Minute))
+	wantAction(t, dst.tick(grace.Add(3*time.Minute)), Update,
+		ReasonAcknowledged)
 }
 
 func TestRestoredAckIsNotRemovedWhileTheModelIsRebuilt(t *testing.T) {
@@ -241,4 +309,31 @@ func TestAckKeptSilentlyWhenItsPodIsReplaced(t *testing.T) {
 	wantNone(t, r.tick(at(DefaultSettle+2*time.Minute)))
 	require.NotNil(t, r.only().Ack, "a replaced pod is not a removal")
 	assert.Equal(t, member, r.only().Ack.On)
+}
+
+// More stale annotations than the incident lists are not forgotten: a
+// restart keeps ignoring every one of them, not only the listed ones.
+func TestStaleAcksPastTheListStayIgnoredAfterARestore(t *testing.T) {
+	src := newRig(t, Config{})
+	src.raise(at(time.Hour), podSig("web"))
+	wantAction(t, src.tick(at(time.Hour+DefaultSettle)), Announce,
+		"settled")
+	pods := make([]inventory.EntityID, maxAckIgnored+1)
+	src.m.mu.Lock()
+	p := src.m.lookup(entity(kube.KindPod, "web"))
+	for i := range pods {
+		pods[i] = entity(kube.KindPod, fmt.Sprintf("web-%d", i))
+		require.True(t, src.m.staleAck(p, pods[i], t0))
+	}
+	src.m.mu.Unlock()
+
+	dst := newRig(t, Config{})
+	restart := at(2 * time.Hour)
+	dst.m.Restore(src.m.Export(), restart.Add(5*time.Minute))
+	dst.m.mu.Lock()
+	defer dst.m.mu.Unlock()
+	q := dst.m.incidents[p.ID]
+	for _, pod := range pods {
+		assert.True(t, dst.m.staleAck(q, pod, restart), pod.Name)
+	}
 }

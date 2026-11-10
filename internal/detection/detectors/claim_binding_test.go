@@ -41,8 +41,12 @@ func TestClaimPendingBindingMode(t *testing.T) {
 				link(m, claim, inventory.References, class)
 			}
 			if tc.mounted {
+				// Scheduled: an unscheduled consumer still waits
+				// (TestClaimWaitsWhileItsConsumerIsUnscheduled).
 				pod := newID(kube.KindPod, "default", "app")
-				put(m, pod, t0, nil)
+				put(m, pod, t0, map[string]inventory.Value{
+					kube.ConditionKey("PodScheduled"): inventory.Text("True"),
+				})
 				link(m, pod, inventory.Mounts, claim)
 			}
 			entity, _ := m.Entity(claim)

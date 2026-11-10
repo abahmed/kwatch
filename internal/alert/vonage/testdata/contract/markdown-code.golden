@@ -6,3 +6,4 @@ api_secret=<redacted>
 from=kwatch
 text=🔴 payments in shop is crash-looping.
 to=+12025550100
+type=unicode

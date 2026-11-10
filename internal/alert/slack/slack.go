@@ -137,8 +137,10 @@ func NewSlack(
 			url string,
 			msg *slackClient.WebhookMessage,
 		) error {
+			// The guarded client: no redirect (a POST redirected to a
+			// GET page would read as delivered) and a capped body.
 			return slackClient.PostWebhookCustomHTTPContext(
-				ctx, url, httpClient, msg,
+				ctx, url, transport.SDKClient(httpClient), msg,
 			)
 		},
 	}

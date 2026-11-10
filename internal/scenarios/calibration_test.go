@@ -17,6 +17,7 @@ func TestCalibrationGateIsTwoSided(t *testing.T) {
 		value          string
 	}{
 		"inside the band":      {14, 20, true, "70.0%"},
+		"at the ceiling":       {19, 20, true, "95.0%"},
 		"overconfident":        {8, 20, false, "40.0%"},
 		"underconfident":       {20, 20, false, "100.0%"},
 		"too few cases to say": {6, 6, true, "not gated"},

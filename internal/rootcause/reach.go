@@ -33,25 +33,34 @@ func Reach(
 	for depth := 1; depth <= hops && len(frontier) > 0; depth++ {
 		var next []Reached
 		for _, from := range frontier {
+			room := maxReach - len(out) - len(next)
 			next = append(next, expand(model, from, dir, depth, types,
-				seen)...)
+				seen, room)...)
+			if len(out)+len(next) >= maxReach {
+				break
+			}
 		}
 		out = append(out, next...)
 		if len(out) >= maxReach {
-			return out[:maxReach]
+			return out
 		}
 		frontier = next
 	}
 	return out
 }
 
-// expand returns the unseen entities one relation away from from.
+// expand returns the unseen entities one relation away from from, at
+// most room of them: Reach stops expanding once its cap is reached.
 func expand(
 	model inventory.Reader, from Reached, dir inventory.Direction,
 	depth int, types []inventory.RelationType, seen map[inventory.EntityID]bool,
+	room int,
 ) []Reached {
 	var out []Reached
 	for _, r := range model.Relations(from.ID, dir) {
+		if len(out) >= room {
+			break
+		}
 		to := r.To
 		if dir == inventory.Incoming {
 			to = r.From

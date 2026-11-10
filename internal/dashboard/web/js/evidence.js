@@ -15,14 +15,20 @@
 
   var DENIED = {
     logs: "kwatch isn't allowed to read pod logs. The rest of the evidence is shown. " +
-      "To allow it, set rbac.mode and check that pods/log is granted in your Role.",
+      "The Helm chart grants this in every rbac.mode, so kwatch's ClusterRole was likely changed: " +
+      "make sure it allows get on pods/log.",
     config: "kwatch isn't allowed to read Secret names here. Other checks are shown. " +
       "To allow it, set watch.secrets: true in your Helm values.",
     "control-plane": "kwatch isn't allowed to read the control plane's readiness endpoint. " +
-      "To allow it, set rbac.readyz: true in your Helm values."
+      "The Helm chart grants this in every rbac.mode, so kwatch's ClusterRole was likely changed: " +
+      "make sure it allows get on the non-resource URL /readyz."
   };
+  /* rbac.mode: full widens the ClusterRole only while watch.secrets is
+     true (the chart's RBAC template): without it the chart keeps
+     its fixed list of kinds in either mode. */
   var DENIED_OTHER = "kwatch isn't allowed to read this. To allow it, set rbac.mode: full " +
-    "in your Helm values, or grant get on it in your Role.";
+    "together with watch.secrets: true in your Helm values (full changes nothing while " +
+    "watch.secrets is false), or grant read access to it in kwatch's ClusterRole.";
   var OFF = "Log capture is turned off (investigation.logs: false). " +
     "Set investigation.logs: true to show logs here.";
   var TIMEOUT = "This check took longer than its time limit, so kwatch moved on. " +
@@ -348,6 +354,13 @@
     // Long lines scroll sideways by default; wrapping reads easier.
     var wrap = KW.$("[data-wrap-logs]", root);
     wrap.hidden = !src.lines.length;
+    // On a phone lines wrap at first, so the error is read in full.
+    if (!box.dataset.wrapSet) {
+      box.dataset.wrapSet = "1";
+      var phone = window.matchMedia && window.matchMedia("(max-width: 700px)").matches;
+      box.classList.toggle("wrap", !!phone);
+      wrap.setAttribute("aria-pressed", phone ? "true" : "false");
+    }
     wrap.onclick = function () {
       var on = box.classList.toggle("wrap");
       wrap.setAttribute("aria-pressed", on ? "true" : "false");
@@ -364,6 +377,7 @@
     var has = !!(inc.evidence && inc.evidence.length);
     var box = KW.$("[data-related]", root);
     host.hidden = !has;
+    KW.$('[data-fold="why"]', root).hidden = !has;
     host.textContent = "";
     box.textContent = "";
     related.hidden = true;

@@ -51,12 +51,13 @@ func TestCommunityMessageKeepsTheHeadlineAndDropsTheDetail(t *testing.T) {
 	assert.Equal(t, firstSentence(pro.Note), firstSentence(got.Note),
 		"the headline stays")
 	assert.Less(t, len(got.Doc), len(pro.Doc))
-	assert.NotContains(t, got.Note, "Checked:")
+	assert.NotContains(t, got.Note, "Proof:")
 	assert.Equal(t, pro.Route, got.Route, "routing reads the incident")
 	assert.NotEmpty(t, pro.Steps)
 	assert.Empty(t, got.Steps, "the fix steps are Pro")
 	assert.NotContains(t, got.Note, "kubectl", "the commands are Pro")
-	assert.Contains(t, noteFooter(got.Note), proFix)
+	// Pro has checks to run but no fix: the line says so.
+	assert.Contains(t, noteFooter(got.Note), proCheckWords)
 }
 
 func firstSentence(note string) string {
@@ -74,7 +75,8 @@ func TestCommunityNamesWhatProWouldAdd(t *testing.T) {
 
 	got := community.Write(d, at(4, 0))
 	hint := noteFooter(got.Note)
-	assert.Equal(t, noteNode+" "+proFix+proInvite, hint, "%q", got.Note)
+	assert.Equal(t, proLineText(append(noteNode, proCheckWords)), hint,
+		"%q", got.Note)
 	assert.NotContains(t, strings.Join(got.Lines, "\n"), "Pro would",
 		"the note is not an explanation line")
 	last := got.Doc[len(got.Doc)-1]

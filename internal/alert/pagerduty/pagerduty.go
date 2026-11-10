@@ -98,7 +98,16 @@ func (p *Pagerduty) SendIncident(
 			"component", "delivery", "provider", p.Name())
 		return nil
 	}
-	body, err := json.Marshal(p.buildPayload(m))
+	for _, payload := range p.payloads(m) {
+		if err := p.send(ctx, payload); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *Pagerduty) send(ctx context.Context, payload pagerdutyPayload) error {
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
@@ -106,6 +115,34 @@ func (p *Pagerduty) SendIncident(
 		Provider: "PagerDuty", URL: p.url, Body: body,
 	})
 	return err
+}
+
+// payloads are the events one message sends. A message that raises the
+// page (RaisesPage) triggers the page key at critical first and then
+// resolves the alert opened below the page tier: the incident that alert
+// opened keeps its low urgency, so only a new alert pages. Later messages
+// go to the page key, and the resolve closes both keys. Each event is
+// idempotent, so a retry of the whole message is safe.
+func (p *Pagerduty) payloads(m notification.Message) []pagerdutyPayload {
+	base := p.buildPayload(m)
+	if !m.PageKeyed && !m.RaisesPage {
+		return []pagerdutyPayload{base}
+	}
+	paged := base
+	paged.DedupKey = m.AlertKeyVariant(
+		p.clusterName, notification.PageKeySuffix, maxDedupKey)
+	if m.Resolved() {
+		return []pagerdutyPayload{base, paged}
+	}
+	if !m.RaisesPage {
+		return []pagerdutyPayload{paged}
+	}
+	detail := *paged.Payload
+	detail.Severity = "critical"
+	paged.Payload = &detail
+	closeBase := pagerdutyPayload{RoutingKey: p.integrationKey,
+		EventAction: "resolve", DedupKey: base.DedupKey}
+	return []pagerdutyPayload{paged, closeBase}
 }
 
 // pagerdutySeverity maps the incident onto the four severities PagerDuty
@@ -125,11 +162,26 @@ func pagerdutySeverity(m notification.Message) string {
 	return "warning"
 }
 
+// detailsLimit caps the note and the output, each in bytes, so the event
+// stays far under the Events API v2 limit of 512 KB even after JSON
+// escaping.
+const detailsLimit = 64000
+
+// capLines keeps lines within limit bytes; a longer output becomes one
+// truncated line.
+func capLines(lines []string, limit int) []string {
+	joined := strings.Join(lines, "\n")
+	if len(joined) <= limit {
+		return lines
+	}
+	return []string{notification.Truncate(joined, limit)}
+}
+
 func (p *Pagerduty) buildPayload(m notification.Message) pagerdutyPayload {
 	payload := pagerdutyPayload{
 		RoutingKey:  p.integrationKey,
 		EventAction: "trigger",
-		DedupKey:    m.AlertKey(p.clusterName),
+		DedupKey:    m.AlertKeyMax(p.clusterName, maxDedupKey),
 	}
 	if m.Resolved() {
 		payload.EventAction = "resolve"
@@ -144,12 +196,16 @@ func (p *Pagerduty) buildPayload(m notification.Message) pagerdutyPayload {
 		Source:   source,
 		Severity: pagerdutySeverity(m),
 		CustomDetail: pagerdutyCustomDetails{
-			Cluster:    p.clusterName,
-			Details:    strings.TrimSpace(m.NoteText()),
-			Output:     m.Output,
+			Cluster: p.clusterName,
+			Details: notification.Truncate(
+				strings.TrimSpace(m.NoteText()), detailsLimit),
+			Output:     capLines(m.Output, detailsLimit),
 			Namespaces: m.Route.Namespaces,
 			Reasons:    m.Route.Reasons,
 		},
 	}
 	return payload
 }
+
+// maxDedupKey is the longest dedup_key the Events API accepts.
+const maxDedupKey = 255

@@ -20,17 +20,16 @@ func ProChecksTodayText(c feature.WithheldCounts) string {
 }
 
 // proChecksLine is "Pro checks found 3 issues<when>2 readiness probes,
-// 1 shared cause. Get Pro ...", or nothing when c counts nothing.
+// 1 shared cause. Pro shows them, ...", or nothing when c counts nothing.
 func proChecksLine(c feature.WithheldCounts, when string) string {
 	total := c.Total()
 	if total == 0 {
 		return ""
 	}
-	issues := " issues"
+	issues, them := " issues", "them"
 	if total == 1 {
-		issues = " issue"
+		issues, them = " issue", "it"
 	}
 	return "Pro checks found " + strconv.Itoa(total) + issues + when +
-		c.Text() + ". Get Pro free during " +
-		"early access to see them: kwatch.dev/pro"
+		c.Text() + ". Pro shows " + them + proInvite
 }

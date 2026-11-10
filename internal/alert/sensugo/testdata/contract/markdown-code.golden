@@ -4,16 +4,20 @@ Authorization: Key <redacted>
 
 {
   "check": {
+    "interval": 60,
     "issued": 1767323045,
     "metadata": {
-      "name": "kwatch-dev-p-md"
+      "name": "kwatch-dev-p-md",
+      "namespace": "default"
     },
     "output": "🔴 payments in shop is crash-looping.\nIt said boom *x* @channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop",
     "status": 2
   },
   "entity": {
+    "entity_class": "proxy",
     "metadata": {
-      "name": "kwatch"
+      "name": "kwatch",
+      "namespace": "default"
     }
   }
 }

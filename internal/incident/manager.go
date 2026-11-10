@@ -84,6 +84,29 @@ type Manager struct {
 	// looked at the nodes, so a look is only made when it can find
 	// something new.
 	nodesDirty bool
+	// aged holds the old low findings that opened no incident (see
+	// old_problem.go), until they clear or change. Nil until the first.
+	aged map[detection.Key]detection.Finding
+	// rising is the old low finding the attach under way found worse
+	// (noteRose); the zero key otherwise.
+	rising detection.Key
+	// leftovers counts, per absent backend, the objects the findings of
+	// the latest Apply say it left behind (leftover.go).
+	leftovers map[inventory.EntityID]int
+	// wave tracks nodes added and removed in numbers, and scaleHolds
+	// the settling pages it holds (scale_wave.go).
+	wave       scaleWave
+	scaleHolds map[string]bool
+	// scaled are the autoscaler findings joined to their target's
+	// incident, with since when the target has ready replicas again
+	// (attach_scaled.go).
+	scaled map[detection.Key]time.Time
+	// heldSince is, per entity whose findings the latest evaluation held
+	// over a kind kwatch cannot verify now, since when (unverified.go).
+	heldSince map[inventory.EntityID]time.Time
+	// scopeWaiting are the incidents whose announcement waits for the
+	// scope's verdict (scope_waiting.go).
+	scopeWaiting map[string]bool
 }
 
 // NewManager builds a manager that explains failures with explainer.
@@ -111,6 +134,7 @@ func NewManager(cfg Config, explainer Explainer) *Manager {
 		resolved:  newResolvedIndex(),
 	}
 	m.override.noPage = cfg.NoPaging
+	m.override.nonProd = cfg.NonProduction
 	return m
 }
 
@@ -138,7 +162,9 @@ func (m *Manager) Apply(
 		m.model = history
 	}
 	m.nodesDirty = m.nodesDirty || touchesNode(dirty, transitions)
+	m.wave.noteSync(s.Synced)
 	m.observeNodes(s.Model, s.Now)
+	m.noteLeftovers(s)
 	touched := append([]inventory.EntityID(nil), dirty...)
 	for _, t := range transitions {
 		if t.Kind == detection.Refreshed {
@@ -164,6 +190,7 @@ func (m *Manager) Apply(
 			m.attach(s.Now, t.Finding, own)
 		}
 	}
+	m.regroupLeftovers(s)
 	m.recallSuspects(s.Now)
 	m.adoptAdvisories(s)
 	m.refresh(s.Model, s.Now)

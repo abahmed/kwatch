@@ -1,7 +1,7 @@
 10:31:15 digest
-🟡 kwatch (prod-eu-1) has one low-priority problem to report. Validating webhook mixed-policy calls Service widget-gone, which does not exist. It is not urgent; if it gets worse it gets its own message.
-🟡 kwatch (prod-eu-1) has one low-priority problem to report.
-| 🟡 **kwatch digest** · prod-eu-1 — 1 problem
+🟡 kwatch summary (prod-eu-1): one new low-priority problem. Validating webhook mixed-policy calls Service widget-gone, which does not exist. Not urgent: kwatch alerts on its own if it gets worse.
+🟡 kwatch summary (prod-eu-1): one new low-priority problem.
+| 🟡 **kwatch summary** · prod-eu-1 — 1 problem
 |
 | **Problems**
 | - Validating webhook **mixed-policy** calls Service widget-gone, which does not exist

@@ -8,7 +8,7 @@ Api-Key: <redacted>
     "cluster": "dev",
     "eventType": "KwatchAlert",
     "incidentKey": "kwatch-dev-p-big",
-    "message": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[4091 runes sha256:d235e9e1328a732a907b9433]…xxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nLast output:\npanic…",
+    "message": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[4085 runes sha256:fa6efc30131e8eecf8cf386d]…xxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nLast output:…",
     "namespace": "shop",
     "reason": "OOMKilled",
     "revision": 1,

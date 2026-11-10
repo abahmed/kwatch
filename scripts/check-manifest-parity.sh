@@ -56,7 +56,8 @@ require 'cluster-autoscaler.kubernetes.io/safe-to-evict: "false"' \
 require 'memory: "512Mi"' "memory limit must be 512Mi"
 require 'cpu: "500m"' "cpu limit must be 500m (matches the chart)"
 # Both probes need a timeout that survives a busy pod; the chart sets 3s.
-probe_timeouts=$(grep -c 'timeoutSeconds: 3' "$manifest" || true)
+# Anchored: a bare match would also count timeoutSeconds: 30 or 300.
+probe_timeouts=$(grep -Ec 'timeoutSeconds: 3[[:space:]]*$' "$manifest" || true)
 if [ "$probe_timeouts" -lt 2 ]; then
 	echo "manifest parity: liveness and readiness need timeoutSeconds: 3" >&2
 	exit 1
@@ -68,6 +69,43 @@ if grep -Fq 'name: GOMEMLIMIT' "$manifest"; then
 fi
 if grep -Fq 'kind: PodDisruptionBudget' "$manifest"; then
 	echo "manifest parity: a single-writer deployment must not have a PDB" >&2
+	exit 1
+fi
+
+# Compare the important Deployment and RBAC fields of the raw manifest with
+# the chart rendered with rbac.mode=full and a license key set (the raw
+# manifest ships the license Role). scripts/manifestfields prints both as
+# sorted "path = value" lines. Differences listed in the allowlist are
+# intentional: the raw manifest is the core install only (see its header),
+# and it mounts a Secret where the chart mounts its ConfigMap.
+if ! command -v helm >/dev/null 2>&1; then
+	if [ "${CI:-}" = true ]; then
+		echo "manifest parity: helm is required in CI" >&2
+		exit 1
+	fi
+	echo "manifest parity: SKIP chart comparison (helm is not installed)"
+	echo "manifest parity: PASS"
+	exit 0
+fi
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT INT TERM
+go build -o "$tmp/manifestfields" ./scripts/manifestfields
+helm template kwatch deploy/chart --namespace kwatch \
+	--set rbac.mode=full --set license.key=parity >"$tmp/chart.yaml"
+printf '%s\n' \
+	'Role kwatch-config-overlay ' \
+	'container kwatch.env KWATCH_CRD_ENABLED ' \
+	'container kwatch.env KWATCH_DASHBOARD_ENABLED ' \
+	'container kwatch.env KWATCH_DASHBOARD_TRUSTED_PROXIES ' \
+	'container kwatch.env KWATCH_FLIGHT_TEXT ' \
+	'volume config-volume ' >"$tmp/allow"
+"$tmp/manifestfields" "$manifest" | grep -vF -f "$tmp/allow" >"$tmp/raw.txt"
+"$tmp/manifestfields" "$tmp/chart.yaml" | grep -vF -f "$tmp/allow" \
+	>"$tmp/chart.txt"
+if ! diff -u "$tmp/raw.txt" "$tmp/chart.txt" >"$tmp/diff.txt"; then
+	echo "manifest parity: deploy/deploy.yaml (-) and the chart (+) differ:" \
+		>&2
+	cat "$tmp/diff.txt" >&2
 	exit 1
 fi
 

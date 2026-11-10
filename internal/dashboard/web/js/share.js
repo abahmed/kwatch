@@ -1,8 +1,8 @@
-/* kwatch dashboard: telling people about an issue. "Copy summary" in
-   the summary card copies a short text for chat or a ticket; its "Who
-   was told" line shows each channel's state. In the Alerts tab, "Who
-   was told" lists what each alert channel did, and "What we sent" the
-   text kwatch sent. All built from the issue's data. */
+/* kwatch dashboard: alerting people about an issue. "Copy summary" in
+   the summary card copies a short text for chat or a ticket. In the
+   Alerts tab, "Who was alerted" lists the first alert, the updates
+   (repeats folded) and the resolve, and "What we sent" the text kwatch
+   sent. All built from the issue's data. */
 (function () {
   "use strict";
   var KW = window.KW;
@@ -31,7 +31,7 @@
      Markdown bold and code that Slack and most trackers understand. */
   KW.summaryText = function (inc, link) {
     var sev = KW.SEVERITY[inc.severity];
-    var lines = ["*" + inc.title + "*"];
+    var lines = ["*" + (inc.fullTitle || inc.title) + "*"];
     lines.push("Severity: " + (sev ? sev.label + " (" + sev.level.toLowerCase() + ")" : inc.severity));
     if (inc.state === "resolved" && KW.valid(inc.resolvedAt)) {
       lines.push("Resolved: " + utc(inc.resolvedAt) + " (lasted " +
@@ -42,7 +42,14 @@
     }
     lines.push("Where: " + where(inc));
     if (KW.valid(inc.firstSeen)) lines.push("Since: " + utc(inc.firstSeen));
-    if (inc.rootCause) lines.push("Likely cause: " + inc.rootCause);
+    if (inc.rootCause) lines.push("Likely cause: " + (KW.causeSentence ? KW.causeSentence(inc) : inc.rootCause));
+    var cluster = KW.cluster && typeof KW.cluster === "object" ? KW.cluster.name : KW.cluster;
+    if (cluster && typeof cluster === "string") lines.push("Cluster: " + cluster);
+    var proof = KW.proofLine ? KW.proofLine(inc) : "";
+    if (proof) lines.push("Proof: " + (proof.length > 300 ? proof.slice(0, 299) + "…" : proof));
+    var sent = KW.firstAlert ? KW.firstAlert(inc) : null;
+    lines.push("Alerted: " + (sent ? sent.name + " at " + utc(sent.at) :
+      "nobody" + (KW.isUntold(inc) ? " (settled on its own)" : "")));
     var step = (inc.fixSteps || [])[0];
     if (step) {
       if (step.text) lines.push("First step: " + step.text);
@@ -58,7 +65,7 @@
     ok: ["sent", "", "The channel accepted the message."],
     failed: ["failed", "x-bad", "The channel refused it. kwatch tried its fallback, if one is set."],
     retrying: ["will be sent again", "x-warn", "The channel did not answer. kwatch sends it again later."],
-    carried: ["listed in a summary", "", "Not sent on its own: a summary message listed it."],
+    carried: ["bundled in the summary message", "", "Not sent on its own: the summary message listed it."],
     "not routed": ["not sent", "", "No channel is set up to receive this kind of alert."],
     "paging only": ["not sent", "", "Meant only for paging tools, and none is set up."]
   };
@@ -68,16 +75,52 @@
     standalone: "resolved message"
   };
 
-  /* toldRow: "18:51  Slack · first alert sent". */
-  function toldRow(d) {
-    var li = KW.el("li", "told-row");
+  function kindWord(d) {
+    return d.kind === "resolve" ? "resolved message" : d.kind === "summary" ? "summary" : WHAT[d.placement] || "message";
+  }
+
+  function who(d) {
+    return d.name || (d.carrier ? "Summary message" : "No channel");
+  }
+
+  /* groups folds messages that are the same thing to the same place,
+     one after another, into one entry with every time. */
+  function groups(list) {
+    var out = [];
+    list.forEach(function (d) {
+      var key = d.result === "carried" ? "carried" : [who(d), kindWord(d), d.result, d.reason || ""].join("|"), last = out[out.length - 1];
+      if (last && last.key === key) last.all.push(d);
+      else out.push({ key: key, d: d, all: [d] });
+    });
+    return out;
+  }
+
+  function times(body, list, label) {
+    if (!label) return;
+    var det = body.appendChild(KW.el("details", "tl-times"));
+    det.appendChild(KW.el("summary", "", label));
+    det.appendChild(KW.el("p", "mono", list.map(function (x) { return KW.stamp(x.at); }).join(" · ")));
+  }
+
+  /* toldRow: "18:51  Slack · first alert sent", with "3 more updates". */
+  function toldRow(g) {
+    var d = g.d, li = KW.el("li", "told-row");
     li.appendChild(KW.hm(d.at)).className = "mono";
     var body = KW.el("div", "told-body");
     var head = KW.el("p");
     var r = RESULT[d.result] || [d.result, "", ""];
-    head.appendChild(KW.el("b", "", d.name || (d.carrier ? "The " + d.carrier : "No channel")));
-    head.appendChild(document.createTextNode(" · " + (d.kind === "resolve" ? "resolved message" :
-      d.kind === "summary" ? "summary" : WHAT[d.placement] || "message") + " "));
+    if (d.result === "carried") {
+      // Not sent on its own: said once, never as "update bundled in ...".
+      var bundled = head.appendChild(KW.el("b", "", "Bundled in the summary message"));
+      bundled.title = r[2];
+      head.appendChild(document.createTextNode(" · " + (g.all.length > 1 ? KW.plural(g.all.length, "message", "messages") : kindWord(d))));
+      body.appendChild(head);
+      times(body, g.all, g.all.length > 1 ? "Show every time" : "");
+      li.appendChild(body);
+      return li;
+    }
+    head.appendChild(KW.el("b", "", who(d)));
+    head.appendChild(document.createTextNode(" · " + kindWord(d) + " "));
     var res = head.appendChild(KW.el("span", r[1], r[0]));
     if (r[2]) res.title = r[2];
     // Why a send failed, in plain words, next to the failure.
@@ -90,62 +133,31 @@
     if (d.fallbackFor) meta.push("fallback for " + d.fallbackFor);
     if (meta.length) body.appendChild(KW.el("small", "cx-meta", meta.join(" · ")));
     if (d.error) body.appendChild(KW.el("p", "ch-msg", d.error));
+    if (g.all.length > 1) {
+      var more = g.all.length - 1, det = body.appendChild(KW.el("details", "tl-times"));
+      det.appendChild(KW.el("summary", "", KW.plural(more, "more " + kindWord(d), "more " + kindWord(d) + "s")));
+      det.appendChild(KW.el("p", "mono", g.all.slice(1).map(function (x) { return KW.stamp(x.at); }).join(" · ")));
+    }
     li.appendChild(body);
     return li;
   }
 
-  /* KW.told fills "Who was told" in the Alerts tab. Whether someone
-     acknowledged it is in "Alert status" (incwhy.js). */
+  /* KW.told fills "Who was alerted" in the Alerts tab, oldest first.
+     Whether someone acknowledged it is in "Alert status" (incwhy.js). */
   KW.told = function (root, inc) {
     var fold = KW.$('[data-fold="told"]', root);
     var box = KW.$("[data-told]", root);
     var list = inc.deliveries || [];
     box.textContent = "";
     fold.hidden = !list.length;
+    KW.$("h3", fold).textContent = "Who was alerted";
     if (fold.hidden) return;
     var ul = KW.el("ul", "told-list");
-    list.slice().reverse().forEach(function (d) { ul.appendChild(toldRow(d)); });
+    groups(list).forEach(function (g) { ul.appendChild(toldRow(g)); });
     box.appendChild(ul);
     var cut = KW.cutCount(inc, "deliveries");
     box.appendChild(KW.el("p", "ev-cap", "What kwatch remembers since it last started." +
       (cut ? " " + KW.plural(cut, "older message", "older messages") + " not shown." : "")));
-  };
-
-  /* TOLD: a channel's state in the summary: mark, words, class.
-     Pagers say whether the page is still open there. */
-  var TOLD = {
-    sent: ["✓", "sent", "t-ok"], failed: ["✗", "failed", "t-bad"], pending: ["⏳", "sending, will retry", "t-wait"]
-  };
-  var PAGED = {
-    open: ["●", "paged · still open", "t-open"], closed: ["✓", "paged · closed", "t-ok"],
-    failed: ["✗", "page failed", "t-bad"], pending: ["⏳", "page pending, will retry", "t-wait"]
-  };
-
-  /* KW.toldSummary fills "Who was told" of the summary card: one line
-     per channel, pagers first, from summary.told. */
-  KW.toldSummary = function (dd, inc, root) {
-    var list = (inc.summary || {}).told || [], cut = KW.cutCount(inc, "summaryTold");
-    if (!list.length && !cut) {
-      dd.appendChild(KW.el("p", "ds-sub", KW.nobodyText(inc)));
-      return;
-    }
-    var ul = dd.appendChild(KW.el("ul", "ds-told"));
-    list.forEach(function (c) {
-      var w = (c.kind === "pager" ? PAGED : TOLD)[c.state] || ["•", c.state, ""];
-      var li = ul.appendChild(KW.el("li", "ds-tc " + w[2]));
-      li.appendChild(KW.el("span", "ds-tc-i", w[0])).setAttribute("aria-hidden", "true");
-      li.appendChild(KW.el("b", "", c.name || c.provider));
-      li.appendChild(KW.el("span", "ds-tc-s", w[1]));
-      if (KW.valid(c.at)) li.appendChild(KW.el("span", "ds-at")).appendChild(KW.hm(c.at));
-    });
-    if (cut) ul.appendChild(KW.el("li", "ev-cap", KW.plural(cut, "more channel", "more channels") + " not shown."));
-    var sends = inc.deliveries || [];
-    if (!sends.length) return;
-    var bad = sends.some(function (d) { return d.result === "failed" || d.result === "retrying"; });
-    var b = dd.appendChild(KW.el("button", "link ds-steps-b", bad ?
-      "Every message and why it failed →" : "Every message sent →"));
-    b.type = "button";
-    b.addEventListener("click", function () { KW.openFold(root, "told"); });
   };
 
   /* KW.sent fills "What we sent": the exact text kwatch composed for

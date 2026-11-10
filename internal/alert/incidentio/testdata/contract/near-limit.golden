@@ -4,7 +4,7 @@ Authorization: Bearer <redacted>
 
 {
   "deduplication_key": "kwatch-dev-p-big",
-  "description": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[5995 runes sha256:efe5311fba0148f3b01979a8]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\npa…",
+  "description": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[5991 runes sha256:b045391af4c74fe89264808d]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…",
   "metadata": {
     "cluster": "dev",
     "namespaces": [

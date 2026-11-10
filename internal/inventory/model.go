@@ -213,7 +213,17 @@ func (m *Model) observe(observation Observation) Update {
 	}
 }
 
+// relate replaces what one source declared for one relation type. A
+// relation declared for an entity that is gone is dropped: a late
+// observation from another watch (a join that raced the delete) would
+// otherwise leave edges from a dead entity and a tombstone that is
+// never pruned. A re-created entity is observed first, so its
+// relations are kept.
 func (m *Model) relate(observation Observation) Update {
+	if rec := m.records[observation.Entity]; rec != nil &&
+		!rec.present && !rec.goneAt.IsZero() {
+		return Update{}
+	}
 	rec := m.recordFor(observation.Entity)
 	key := relationKeyBySource{
 		source: observation.Source, relation: observation.Relation,

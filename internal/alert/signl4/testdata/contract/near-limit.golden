@@ -4,7 +4,7 @@ Content-Type: application/json
 {
   "X-S4-ExternalID": "kwatch-dev-p-big",
   "X-S4-Status": "new",
-  "message": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[6009 runes sha256:b90b6f3334edf5f970edc9df]…xxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nLa…\n\nCluster: dev",
+  "message": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[6005 runes sha256:4b971d9fcc02cf20b55b746f]…xxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…\n\nCluster: dev",
   "severity": "critical",
   "title": "🔴 payments in shop is crash-looping.",
   "user": "kwatch"

@@ -147,28 +147,52 @@
       KW.cutCount(inc, "warnings"), "more warning", "more warnings");
   }
 
-  function trafficRow(r) {
-    var li = KW.el("li", "in-row");
+  /* trafficItems: one entry per Service; an Ingress that sends to it and
+     counts the same is folded into it ("via Ingress x"), and the
+     addresses are listed once. An Ingress with no such Service stands
+     alone. */
+  function trafficItems(list) {
+    var items = [];
+    list.filter(function (r) { return r.kind !== "ingress"; }).forEach(function (r) {
+      items.push({ row: r, via: [], reach: (r.reach || []).slice() });
+    });
+    list.filter(function (r) { return r.kind === "ingress"; }).forEach(function (r) {
+      var host = items.filter(function (it) {
+        return (r.backends || []).indexOf(it.row.name) >= 0 && it.row.ready === r.ready && it.row.total === r.total;
+      })[0];
+      if (!host) { items.push({ row: r, via: [], reach: (r.reach || []).slice() }); return; }
+      host.via.push(r.name);
+      host.reach = host.reach.concat(r.reach || []);
+    });
+    return items;
+  }
+
+  function trafficRow(it) {
+    var r = it.row, li = KW.el("li", "in-row");
     var bad = r.total === 0 || r.ready < r.total;
     var dot = li.appendChild(KW.el("span", "ao-dot " + (r.ready === 0 ? "s-failing" : bad ? "s-cause" : "s-recovered")));
     dot.setAttribute("aria-hidden", "true");
-    var p = li.appendChild(KW.el("p"));
-    p.appendChild(document.createTextNode((r.kind === "ingress" ? "Ingress " : "Service ")));
-    p.appendChild(KW.el("span", "mono", r.namespace + "/" + r.name));
-    if (r.backends && r.backends.length) {
-      p.appendChild(document.createTextNode(" → " + r.backends.join(", ")));
-    }
+    var body = li.appendChild(KW.el("div", "in-body"));
+    var p = body.appendChild(KW.el("p"));
+    p.appendChild(document.createTextNode(r.kind === "ingress" ? "Ingress " : "Service "));
+    p.appendChild(KW.wrapName(r.namespace + "/" + r.name));
+    if (r.backends && r.backends.length) p.appendChild(document.createTextNode(" → " + r.backends.join(", ")));
     p.appendChild(document.createTextNode(": "));
     p.appendChild(KW.el("b", bad ? "x-bad" : "", r.total === 0 ? "no endpoints" :
       r.ready + " of " + KW.plural(r.total, "endpoint", "endpoints") + " ready"));
-    if (r.reach && r.reach.length) {
-      li.appendChild(KW.el("p", "rd-line", "Users reach it at:"));
-      var ul = li.appendChild(KW.el("ul", "rd-reach"));
-      r.reach.forEach(function (a) {
-        var item = ul.appendChild(KW.el("li"));
-        item.appendChild(KW.el("span", "mono", a.address));
-        item.appendChild(document.createTextNode(" " + a.ready + " of " + a.total + " endpoints ready"));
+    if (it.via.length) body.appendChild(KW.el("p", "rd-line", "Also behind Ingress " + it.via.join(", ") + "."));
+    var seen = {}, reach = it.reach.filter(function (a) { return !seen[a.address] && (seen[a.address] = true); });
+    if (reach.length) {
+      var q = body.appendChild(KW.el("p", "rd-line", "Users reach it at "));
+      reach.forEach(function (a, i) {
+        if (i) q.appendChild(document.createTextNode(", "));
+        q.appendChild(KW.wrapName(a.address));
+        // Only a count that differs from the one above is worth saying.
+        if (a.ready !== r.ready || a.total !== r.total) {
+          q.appendChild(document.createTextNode(" (" + a.ready + " of " + a.total + " ready)"));
+        }
       });
+      q.appendChild(document.createTextNode("."));
     }
     return li;
   }
@@ -178,7 +202,7 @@
     var box = fold(root, "traffic", list.length > 0);
     if (!list.length) return;
     var ul = box.appendChild(KW.el("ul", "in-rows"));
-    list.forEach(function (r) { ul.appendChild(trafficRow(r)); });
+    trafficItems(list).forEach(function (it) { ul.appendChild(trafficRow(it)); });
     cap(box, "Endpoints are the pods a Service sends traffic to; only ready ones get it. Counted now.",
       KW.cutCount(inc, "traffic"), "more", "more");
   }

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -15,9 +16,10 @@ import (
 // Auth checks access to /api/*: the bearer token or a session cookie
 // from a password sign-in. Failures share one per-client rate limit.
 type Auth struct {
-	token    string
-	password string
-	shared   bool
+	// secrets are the bearer token and the password; SetCredentials
+	// swaps them (credentials.go).
+	secrets atomic.Pointer[authSecrets]
+	shared  bool
 	// trusted are the proxies whose X-Forwarded-Proto and
 	// X-Forwarded-For count. Set by NewServer from Options.
 	trusted         proxySet
@@ -38,15 +40,15 @@ type Auth struct {
 // Secure and refuses sign-in over plain HTTP. now is the clock of
 // sessions and of the rate-limit window; nil is rejected.
 func NewAuth(token, password string, shared bool, now clock.Clock) *Auth {
-	return &Auth{
-		token:      token,
-		password:   normalizePassword(password),
+	a := &Auth{
 		shared:     shared,
 		sessions:   newSessions(normalizePassword(password), token, now),
 		failRate:   newRateLimiter(now, maxFailures),
 		clientRate: newRateLimiter(now, maxFailures),
-		proxyRate:  newRateLimiter(now, maxProxyFailures),
+		proxyRate:  newRateLimiter(now, maxProxyHard),
 	}
+	a.secrets.Store(newAuthSecrets(token, password))
+	return a
 }
 
 // Middleware lets a request through with a valid bearer token or
@@ -123,7 +125,7 @@ func (a *Auth) check(r *http.Request) (ok, viaToken bool) {
 // validCookie reports whether r carries a valid session cookie.
 func (a *Auth) validCookie(r *http.Request) bool {
 	c, err := r.Cookie(sessionCookie)
-	if err != nil || c.Value == "" || a.password == "" {
+	if err != nil || c.Value == "" || a.secret().password == "" {
 		return false
 	}
 	return a.sessions.valid(c.Value)
@@ -133,28 +135,48 @@ func (a *Auth) validCookie(r *http.Request) bool {
 // constant time. Both are hashed first, so the length of the right
 // token does not leak.
 func (a *Auth) validToken(token string) bool {
-	if a.token == "" {
+	secret := a.secret()
+	if secret.token == "" {
 		return false
 	}
 	got := sha256.Sum256([]byte(token))
-	want := sha256.Sum256([]byte(a.token))
+	want := sha256.Sum256([]byte(secret.token))
 	return subtle.ConstantTimeCompare(got[:], want[:]) == 1
 }
 
 // validPassword compares a typed password with the configured one in
-// constant time. Both are normalized first, so the installer's grouped
-// form is accepted with or without dashes and in any case.
+// constant time. A generated grouped password is accepted with or
+// without dashes and in any case; any other password must match as
+// configured, so a chosen one keeps all its strength.
 func (a *Auth) validPassword(typed string) bool {
-	if a.password == "" {
+	secret := a.secret()
+	if secret.password == "" {
 		return false
 	}
-	got := sha256.Sum256([]byte(normalizePassword(typed)))
-	want := sha256.Sum256([]byte(a.password))
+	if secret.grouped {
+		typed = groupKey(typed)
+	}
+	got := sha256.Sum256([]byte(typed))
+	want := sha256.Sum256([]byte(secret.password))
 	return subtle.ConstantTimeCompare(got[:], want[:]) == 1
 }
 
-// normalizePassword drops dashes and spaces and upper-cases the rest.
+// groupedPassword is the generated form: four groups of four upper-case
+// letters and digits, joined by dashes ("XM86-CS8S-LB77-F3GE").
+var groupedPassword = regexp.MustCompile(
+	`^[A-Z0-9]{4}(-[A-Z0-9]{4}){3}$`)
+
+// normalizePassword is the configured password as it is compared: a
+// generated grouped one without dashes, upper-cased; any other as it is.
 func normalizePassword(p string) string {
+	if !groupedPassword.MatchString(strings.TrimSpace(p)) {
+		return p
+	}
+	return groupKey(p)
+}
+
+// groupKey is a grouped password without dashes or spaces, upper-cased.
+func groupKey(p string) string {
 	return strings.ToUpper(strings.Map(func(r rune) rune {
 		if r == '-' || r == ' ' || r == '\t' {
 			return -1
@@ -187,21 +209,23 @@ type rateLimiter struct {
 	gen     uint64
 	now     func() time.Time
 	maxFail int
+	// order is the keys of the window, oldest first, for eviction.
+	order []string
 }
 
-// maxLimiterKeys bounds the clients one window remembers. Past it new
-// clients share the overflowKey bucket, so memory stays bounded.
-const (
-	maxLimiterKeys = 10000
-	overflowKey    = "\x00overflow"
-)
+// maxLimiterKeys bounds the clients one window remembers. Past it the
+// oldest is forgotten for a new one, so memory stays bounded and a
+// flood of new keys never locks out a client it did not see.
+const maxLimiterKeys = 10000
 
 // Failures allowed per minute per client. maxProxyFailures is how many
 // failures through one trusted proxy in a minute are logged as a
-// warning; it never refuses a request.
+// warning; maxProxyHard is how many it may pass at all, so a peer that
+// rotates the client it names is still bounded.
 const (
 	maxFailures      = 10
 	maxProxyFailures = 100
+	maxProxyHard     = 1000
 )
 
 func newRateLimiter(now clock.Clock, maxFail int) *rateLimiter {
@@ -213,14 +237,18 @@ func newRateLimiter(now clock.Clock, maxFail int) *rateLimiter {
 	}
 }
 
-// bucket is the key ip is counted under: itself, or the shared
-// overflowKey when the window already holds maxLimiterKeys others.
-// The caller holds the lock.
+// bucket makes room for ip and returns it: past maxLimiterKeys the
+// oldest key of the window is forgotten. The caller holds the lock.
 func (r *rateLimiter) bucket(ip string) string {
-	if _, ok := r.counts[ip]; ok || len(r.counts) < maxLimiterKeys {
+	if _, ok := r.counts[ip]; ok {
 		return ip
 	}
-	return overflowKey
+	for len(r.counts) >= maxLimiterKeys && len(r.order) > 0 {
+		delete(r.counts, r.order[0])
+		r.order = r.order[1:]
+	}
+	r.order = append(r.order, ip)
+	return ip
 }
 
 // record counts a failure and returns the count in this window.
@@ -237,7 +265,8 @@ func (r *rateLimiter) allowed(ip string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.rotate()
-	return r.counts[r.bucket(ip)] < r.maxFail
+	// A read: an unseen key has no count and takes no room.
+	return r.counts[ip] < r.maxFail
 }
 
 // attempt is a reserved try: it counts as a failure unless forgiven.
@@ -287,6 +316,7 @@ func (r *rateLimiter) rotate() {
 	if r.now().Sub(r.window) > time.Minute {
 		r.window = r.now()
 		r.counts = make(map[string]int)
+		r.order = nil
 		r.gen++
 	}
 }

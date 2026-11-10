@@ -24,3 +24,15 @@ func TestGithubRejectsInvalidURL(t *testing.T) {
 	assert.NotNil(t, build(rec.URL()))
 	assert.NotNil(t, build(""), "unset uses the default")
 }
+
+// A server URL written with a trailing slash still builds single-slash
+// API paths.
+func TestGithubTrimsTrailingSlash(t *testing.T) {
+	rec := providertest.NewRecorder(t)
+	g := NewGithub(map[string]interface{}{
+		"url": rec.URL() + "/api/v3/", "token": "t", "owner": "o",
+		"repo": "r",
+	}, "dev", rec.Dependencies())
+	assert.Equal(t, rec.URL()+"/api/v3/repos/o/r/issues", g.url)
+	assert.Equal(t, rec.URL()+"/api/v3/search/issues", g.searchURL)
+}

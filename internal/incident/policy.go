@@ -124,6 +124,9 @@ func tierWhy(p *Incident) (Tier, string) {
 			return Page, levelPagePrefix + rule
 		}
 	}
+	if chronicLow(p, worst) {
+		return Digest, chronicLevel(p)
+	}
 	return Notify, levelNotify
 }
 
@@ -140,7 +143,12 @@ func quietTier(p *Incident) (Tier, string, bool) {
 		// Happens at the same time every day and resolves on its own:
 		// learned normal, reported in the digest. One that outlasts
 		// the boot window with a crash loop or nothing ready does not
-		// resolve on its own (see escalate).
+		// resolve on its own (see escalate). An outage a page rule
+		// names (a node lost, traffic down) is never only a digest
+		// line, however regular: it still notifies.
+		if pageRuleOf(p) != "" {
+			return Notify, levelRoutine, true
+		}
 		return Digest, levelRoutine, true
 	case reachedPaging(p) || p.persistent || unusual(p):
 		return 0, "", false
@@ -210,20 +218,31 @@ func drainTier(p *Incident) Tier {
 }
 
 // routine reports an incident that opened within routineWindow of the
-// same time of day on at least routineDays of the recorded days.
+// same time of day on at least routineDays of the recorded days, and
+// went away on its own those days: a day someone fixed it (a rollback,
+// a config change, History) is no routine, it is a repeated outage.
 func routine(p *Incident) bool {
 	if len(p.Occurrences) < routineDays {
 		return false
 	}
+	fixed := map[string]bool{}
+	for _, o := range p.History {
+		if o.Fix != "" && o.Fix != FixNone {
+			fixed[dayOf(o.Opened)] = true
+		}
+	}
 	latest := p.Occurrences[len(p.Occurrences)-1]
 	days := map[string]bool{}
 	for _, at := range p.Occurrences {
-		if timeOfDayDistance(at, latest) <= routineWindow {
-			days[at.UTC().Format("2006-01-02")] = true
+		if timeOfDayDistance(at, latest) <= routineWindow &&
+			!fixed[dayOf(at)] {
+			days[dayOf(at)] = true
 		}
 	}
 	return len(days) >= routineDays
 }
+
+func dayOf(at time.Time) string { return at.UTC().Format("2006-01-02") }
 
 func timeOfDayDistance(a, b time.Time) time.Duration {
 	day := format.Day

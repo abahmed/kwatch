@@ -16,7 +16,8 @@ func itemRev(item IncidentListItem) string {
 		stamp(item.ResolvedAt), strconv.Itoa(item.RepeatCount),
 		item.AckedBy, item.RootCause,
 		strconv.FormatBool(item.StoppedTracking),
-		strconv.FormatBool(item.Untold)}, "\x00"))
+		strconv.FormatBool(item.Untold),
+		strconv.Itoa(item.LeftoverObjects)}, "\x00"))
 }
 
 // bodyETag is the entity tag of a response body: equal bodies, equal

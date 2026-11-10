@@ -1,0 +1,11 @@
+{
+  "name": "operator-cluster-cr-owned-failing",
+  "description": "A cluster-scoped custom resource reports a failing condition; the StatefulSet it owns in a namespace then crash-loops.",
+  "root": "messagebus.bus.example.com//events",
+  "tier": "notify",
+  "maxMessages": 1,
+  "mustNotBlame": [
+    "statefulset/data/events-bus",
+    "deployment/bus-system/bus-operator"
+  ]
+}

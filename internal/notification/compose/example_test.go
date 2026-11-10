@@ -44,7 +44,8 @@ func ExampleWriter_Write() {
 	fmt.Println(lines.Replace(message.Note))
 	// Output:
 	// 🔴 payments in shop is crash looping.
-	// Nothing outside it points to a cause.
+	// Cause not found yet: nothing outside it points to one,
+	// so look at the app itself.
 	// It fails with "panic: STRIPE_KEY is not set".
 	// To read the output of the last crash,
 	// run kubectl logs payments-7d9f -c app -n shop --previous

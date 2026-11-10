@@ -28,7 +28,8 @@ func (v *view) changeModes(
 			// A namespace deletion removes its objects on purpose.
 			continue
 		}
-		if cutoff.ok && change.At.After(cutoff.t) {
+		if cutoff.ok && change.At.After(cutoff.t) ||
+			v.tooOldFor(id, effect, change) {
 			continue
 		}
 		out = append(out, modeHealth{mode: changeMode(change),
@@ -142,7 +143,10 @@ func (v *view) virtualModes(
 	if modes := v.callModes(id, effect, link); len(modes) > 0 {
 		return modes
 	}
-	return v.missingModes(id, link)
+	if modes := v.missingModes(id, link); len(modes) > 0 {
+		return modes
+	}
+	return v.keyMissingModes(id, effect, link)
 }
 
 // sharedServiceModes are the pseudo modes of the cluster services every

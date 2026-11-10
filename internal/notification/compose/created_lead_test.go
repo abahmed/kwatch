@@ -84,5 +84,5 @@ func TestWriteKeepsFailedAfterChangeForACreatedNonWorkload(t *testing.T) {
 
 	msg := Writer{}.Write(announce(p), writerNow)
 
-	assert.Contains(t, msg.Note, "dependents failed soon after it changed")
+	assert.Contains(t, msg.Note, "apps that use it failed soon after it changed")
 }

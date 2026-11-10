@@ -13,6 +13,23 @@ import (
 // as the startup error rule reads it (explain.FatalStartLine's caller).
 const startRun = 5 * time.Minute
 
+// newPodSlack is how long before the release is stamped a pod may have
+// been created and still belong to it: the pod and the change reach
+// kwatch on separate watches, in either order.
+const newPodSlack = time.Minute
+
+// podCreated is when the pod was created. FirstSeen is only when kwatch
+// first saw it, which after a kwatch restart is the restart for every
+// pod, so it stands in only for a pod without a creation time.
+func podCreated(p inventory.Entity) time.Time {
+	if a, ok := p.Attribute(kube.AttrCreated); ok {
+		if at := a.Value.AsTime(); !at.IsZero() {
+			return at
+		}
+	}
+	return p.FirstSeen
+}
+
 // detailOf compares the workload before and after the release r: its
 // usual restarts and ready time from its baseline, the restarts of the
 // pods the release created, and the first fatal line one of their
@@ -29,7 +46,7 @@ func detailOf(
 	restarts, created := 0.0, false
 	for _, pod := range kube.OwnedPods(model, id) {
 		p, ok := model.Entity(pod)
-		if !ok || p.FirstSeen.Before(r.At) {
+		if !ok || podCreated(p).Before(r.At.Add(-newPodSlack)) {
 			continue
 		}
 		created = true

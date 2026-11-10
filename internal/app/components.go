@@ -59,18 +59,17 @@ func newMonitoredSpec(
 	run func(context.Context) error,
 	reportStatus bool,
 ) componentSpec {
-	progress := newComponentProgress(componentStartTime(deps))
 	if reportStatus {
 		run = reportedRun(deps, name, run)
 	}
+	// No progress: an optional component has no real progress point, and
+	// a helper that touched progress on a timer would only hide a stall.
+	// The supervisor still restarts it after a crash or early return.
 	return componentSpec{
 		name:      name,
 		cleanStop: cleanStopComponents[name],
 		onError:   degrade(deps, name),
-		progress:  progress,
-		run: func(ctx context.Context) error {
-			return runWithProgress(ctx, deps, progress, run)
-		},
+		run:       run,
 	}
 }
 
@@ -89,13 +88,6 @@ func reportedRun(
 		}
 		return err
 	}
-}
-
-func componentStartTime(deps *serverDeps) time.Time {
-	if deps == nil || deps.clients.Clock == nil {
-		return time.Time{}
-	}
-	return deps.clients.Clock.Now()
 }
 
 func degrade(deps *serverDeps, name string) func(error) {

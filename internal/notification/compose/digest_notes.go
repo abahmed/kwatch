@@ -120,7 +120,7 @@ func stillWord(problems []Ongoing) string {
 const maxUnchangedNamed = 3
 
 // unchangedLine is the one line for the problems that did not change:
-// "2 more still failing, unchanged (web, db +1)". Empty when none. Its
+// "Still failing and unchanged (3): web, db +1". Empty when none. Its
 // wording follows stillWord.
 func unchangedLine(unchanged []Ongoing) string {
 	if len(unchanged) == 0 {
@@ -134,8 +134,12 @@ func unchangedLine(unchanged []Ongoing) string {
 	if extra := len(unchanged) - len(names); extra > 0 {
 		list += " +" + strconv.Itoa(extra)
 	}
-	return numberWord(len(unchanged)) + " more " + stillWord(unchanged) +
-		", unchanged (" + list + ")"
+	count := ""
+	if len(unchanged) > 1 {
+		count = " (" + strconv.Itoa(len(unchanged)) + ")"
+	}
+	return upperFirst(stillWord(unchanged)) + " and unchanged" + count +
+		": " + list
 }
 
 // ongoingSentences are the ongoing problems for the plain note, as many

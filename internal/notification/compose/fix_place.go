@@ -1,8 +1,6 @@
 package compose
 
 import (
-	"strings"
-
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -12,8 +10,9 @@ import (
 // shares the part.
 const weightPlace = 0.5
 
-// placeSentences name the exact place to change: "Fix in:
-// deployment/api → container app → resources.limits.memory (256Mi)."
+// placeSentences name the exact place to change, as an action: "Fix:
+// raise the memory limit of container app in deployment/api above
+// 256Mi." (see fix_wording.go).
 // The place comes from structured fields of the cause (or of the
 // failure when no cause was found), never from message text. They say
 // nothing when the cause is not a setting, or when two causes are
@@ -23,8 +22,12 @@ func placeSentences(f caseFacts) []sentence {
 	if !ok {
 		return nil
 	}
+	said := false
+	for _, s := range leadSentences(f) {
+		said = said || valueNamed(s.text, place.Value)
+	}
 	return []sentence{{part: partPlace, weight: weightPlace,
-		text: placeText(place)}}
+		text: fixText(place, said)}}
 }
 
 // fixPlace finds the setting the incident comes from. The cause's own
@@ -67,20 +70,4 @@ func isWorkloadKind(kind inventory.Kind) bool {
 		}
 	}
 	return false
-}
-
-// placeText is the fix line: object, container (when the field is in
-// one), field path and its value now.
-func placeText(p detection.Place) string {
-	parts := []string{strings.ToLower(string(p.Object.Kind)) + "/" +
-		p.Object.Name}
-	if p.Container != "" {
-		parts = append(parts, "container "+p.Container)
-	}
-	path := p.Path
-	if p.Value != "" {
-		path += " (" + p.Value + ")"
-	}
-	parts = append(parts, path)
-	return "Fix in: " + strings.Join(parts, " → ") + "."
 }

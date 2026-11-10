@@ -3,6 +3,7 @@ package homeassistant
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"strings"
 
 	"k8s.io/klog/v2"
@@ -63,7 +64,7 @@ func NewHomeAssistant(
 	return &HomeAssistant{
 		sender: transport.NewSender(dependencies),
 		url: strings.TrimRight(server, "/") +
-			"/api/services/notify/" + service,
+			"/api/services/notify/" + url.PathEscape(service),
 		token:       token,
 		service:     service,
 		clusterName: clusterName,

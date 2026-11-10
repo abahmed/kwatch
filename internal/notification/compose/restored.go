@@ -42,11 +42,11 @@ func (w Writer) RestoredSummaryWith(
 	if lower > 0 {
 		note := plural(lower, "lower-priority problem")
 		sentences = append(sentences, sentence{part: partProof,
-			text: "Also " + note + ", listed in the next digest"})
-		facts = append(facts, note+" in the next digest")
+			text: "Also " + note + ", listed in the next summary."})
+		facts = append(facts, note+" in the next summary")
 	}
 	sentences = append(sentences, sentence{part: partAction,
-		text: eachOwnMessage})
+		text: eachOwn(len(decisions) + lower)})
 	msg := notification.Message{
 		Key: StartupKey(now), Revision: 1, Status: status, Opens: true,
 		Route: summaryRoute(decisions, nil),

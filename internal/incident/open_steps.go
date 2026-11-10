@@ -128,7 +128,7 @@ func (m *Manager) reminderStep(p *Incident, now time.Time) (Decision, bool) {
 		return Decision{}, false
 	}
 	if m.reminderDue(p, now) {
-		p.Reminded = now
+		p.noteReminded(now)
 		return m.decide(p, Update, ReasonReminder), true
 	}
 	return Decision{}, true

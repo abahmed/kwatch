@@ -161,7 +161,7 @@ func (d *Datadog) buildPayload(m notification.Message) datadogPayload {
 		Text:           notification.Truncate(text, maxTextBytes),
 		Tags:           d.tagsWithCluster(),
 		AlertType:      d.alertTypeFor(m),
-		AggregationKey: m.AlertKey(d.clusterName),
+		AggregationKey: m.AlertKeyMax(d.clusterName, maxAggregationKey),
 	}
 }
 
@@ -216,3 +216,6 @@ func badSite(site string) bool {
 	return strings.ContainsAny(site, "/?#@") ||
 		strings.IndexFunc(site, unicode.IsSpace) >= 0
 }
+
+// maxAggregationKey is the longest aggregation_key an event may carry.
+const maxAggregationKey = 100

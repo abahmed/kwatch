@@ -165,3 +165,25 @@ func TestOngoingLineKeepsTheOriginalStartAndSaysNoReasonCode(t *testing.T) {
 	assert.Equal(t, record.Opened, got[0].Since)
 	assert.Contains(t, got[0].Line(foldNow), "still failing, for two days")
 }
+
+// A held problem resolving in the tick its hold ends was never told: it
+// closes quietly, and the summary sent that tick does not list it as
+// still failing.
+func TestWarmProblemResolvingAtTheDeadlineIsNotListed(t *testing.T) {
+	c, sent := foldHarness()
+	root := inventory.CoreID(kube.KindDeployment, "shop", "w")
+	w := incident.Decision{Action: incident.Announce,
+		Incident: incident.Incident{ID: "w", Tier: incident.Notify,
+			Root: root, Opened: foldNow}}
+	c.Startup.WarmAt = foldNow
+	c.Startup.Warm = []incident.Decision{w}
+	resolved := w
+	resolved.Action = incident.Resolve
+	rest, _ := c.CollectStartup(context.Background(), foldNow,
+		[]incident.Decision{resolved})
+	c.ListRestored(context.Background(), foldNow)
+	assert.Empty(t, rest, "the resolve of a never-told problem is sent")
+	for _, m := range *sent {
+		assert.NotContains(t, m.Members, "w", "listed as still failing")
+	}
+}

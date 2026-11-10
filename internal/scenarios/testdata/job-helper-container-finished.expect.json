@@ -1,0 +1,7 @@
+{
+  "name": "job-helper-container-finished",
+  "description": "One container of a two-container Job pod exits 0 early; the other keeps working and the pod shows Ready=False until the Job completes.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "20m0s"
+}

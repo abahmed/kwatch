@@ -1,7 +1,6 @@
 package dashboard
 
 import (
-	"slices"
 	"strconv"
 
 	"github.com/abahmed/kwatch/internal/incident"
@@ -198,110 +197,4 @@ func (b *mapBuilder) number(id inventory.EntityID, name string) (
 		return 0, false
 	}
 	return a.Value.AsNumber()
-}
-
-// namespaces are the watched namespaces the model holds, sorted.
-func (b *mapBuilder) namespaces() []string {
-	var out []string
-	for _, id := range b.model.Entities(kube.KindNamespace) {
-		if mapScope(b.scope, id.Name) {
-			out = append(out, id.Name)
-		}
-	}
-	slices.Sort(out)
-	return out
-}
-
-// failingIn counts the failing objects of each namespace.
-func (b *mapBuilder) failingIn() map[string]int {
-	out := map[string]int{}
-	for id := range b.worst {
-		if id.Namespace != "" && mapScope(b.scope, id.Namespace) {
-			out[id.Namespace]++
-		}
-	}
-	return out
-}
-
-// build answers one request.
-func (b *mapBuilder) build(view, ns string) MapResponse {
-	out := MapResponse{View: view, Namespaces: b.namespaces(),
-		Nodes: []MapNode{}, Edges: []MapEdge{}}
-	if out.Namespaces == nil {
-		out.Namespaces = []string{}
-	}
-	var g *graph
-	if view == mapViewFailing {
-		g = b.failing()
-	} else {
-		ns = b.pick(ns, out.Namespaces)
-		out.Namespace = ns
-		if ns == "" || !mapScope(b.scope, ns) {
-			return out
-		}
-		g = b.namespace(ns)
-	}
-	out.Count = len(g.nodes)
-	if out.Count > maxMapNodes {
-		out.TooMany = true
-		return out
-	}
-	for _, n := range g.nodes {
-		out.Nodes = append(out.Nodes, n)
-	}
-	for e := range g.edges {
-		out.Edges = append(out.Edges, e)
-	}
-	sortMap(&out)
-	return out
-}
-
-// pick is the namespace to draw: the one asked for, else the one with
-// the most failing objects, else the first.
-func (b *mapBuilder) pick(ns string, all []string) string {
-	if ns != "" || len(all) == 0 {
-		return ns
-	}
-	best, most := all[0], 0
-	for name, n := range b.failingIn() {
-		if n > most || (n == most && most > 0 && name < best) {
-			best, most = name, n
-		}
-	}
-	return best
-}
-
-// failing draws, across the watched namespaces, every failing object
-// and the objects one connection away from it.
-func (b *mapBuilder) failing() *graph {
-	out := b.newGraph("")
-	names := make([]string, 0, len(b.failingIn()))
-	for ns := range b.failingIn() {
-		names = append(names, ns)
-	}
-	slices.Sort(names)
-	for _, ns := range names {
-		g := b.namespace(ns)
-		keep := map[string]bool{}
-		for key, n := range g.nodes {
-			if n.Level != mapLevelOK {
-				keep[key] = true
-			}
-		}
-		for e := range g.edges {
-			if keep[e.From] || keep[e.To] {
-				out.edges[e] = true
-				out.nodes[e.From], out.nodes[e.To] =
-					g.nodes[e.From], g.nodes[e.To]
-			}
-		}
-		for key := range keep {
-			out.nodes[key] = g.nodes[key]
-		}
-	}
-	for key, n := range out.nodes {
-		n.External = false
-		out.nodes[key] = n
-	}
-	return out
 }

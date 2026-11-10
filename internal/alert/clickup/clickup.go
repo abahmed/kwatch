@@ -18,10 +18,12 @@ const clickupAPIURL = "https://api.clickup.com/api/v2"
 
 type clickupPayload struct {
 	Name string `json:"name"`
-	// MarkdownDescription is rendered as Markdown; the plain
-	// "description" field would show the code fence literally.
-	MarkdownDescription string `json:"markdown_description"`
-	Priority            *int   `json:"priority,omitempty"`
+	// MarkdownContent is the documented create field for a Markdown
+	// description (it wins over "description"); the plain field would
+	// show the code fence literally. markdown_description is only the
+	// name of the field in a response.
+	MarkdownContent string `json:"markdown_content"`
+	Priority        *int   `json:"priority,omitempty"`
 }
 
 type Clickup struct {
@@ -76,7 +78,9 @@ func NewClickup(
 		"reopenStatus", reopenStatus)
 
 	return &Clickup{
-		issues:       issues.NewMap(clock.Require(dependencies.Clock).Now),
+		issues: issues.NewMap(
+			clock.Require(dependencies.Clock).Now,
+		).ForCluster(clusterName),
 		sender:       transport.NewSender(dependencies),
 		api:          clickupAPIURL,
 		url:          fmt.Sprintf("%s/list/%s/task", clickupAPIURL, listID),
@@ -120,7 +124,7 @@ func (g *Clickup) SkipsPlainMessages() bool { return true }
 func (g *Clickup) Create(
 	ctx context.Context, title, body string,
 ) (string, error) {
-	payload := clickupPayload{Name: title, MarkdownDescription: body}
+	payload := clickupPayload{Name: title, MarkdownContent: body}
 	if g.priority > 0 {
 		payload.Priority = &g.priority
 	}
@@ -153,6 +157,11 @@ func (g *Clickup) Close(ctx context.Context, id, body string) error {
 	if err := g.Comment(ctx, id, body); err != nil {
 		return err
 	}
+	return g.CloseState(ctx, id)
+}
+
+// CloseState implements issues.StateCloser.
+func (g *Clickup) CloseState(ctx context.Context, id string) error {
 	if g.closeStatus == "" {
 		return nil
 	}
@@ -196,9 +205,12 @@ func (g *Clickup) setStatus(ctx context.Context, id, status string) error {
 func (g *Clickup) call(
 	ctx context.Context, method, url string, payload interface{},
 ) ([]byte, error) {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
+	var body []byte
+	if payload != nil {
+		var err error
+		if body, err = json.Marshal(payload); err != nil {
+			return nil, err
+		}
 	}
 	return g.sender.Send(ctx, transport.Request{
 		Provider: g.Name(), Method: method, URL: url, Body: body,

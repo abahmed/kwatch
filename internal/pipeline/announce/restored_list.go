@@ -19,10 +19,10 @@ import (
 // findings still news) does not wait for the rest: it is listed one
 // settle after the sources synced, with the others that are back by
 // then. Whatever comes back later is listed when the grace is over, if it
-// is not named already. An incident a listing named
-// within RestoredRelist is not listed again: when nothing else is, one
-// short restart note says how many are still open (restart_note.go). It
-// reports whether it sent a message.
+// is not named already. An incident a listing already named that has not
+// changed since (toldUnchanged) is not listed again: when nothing else
+// is, one short restart note says how many are still open
+// (restart_note.go). It reports whether it sent a message.
 func (c *Collector) ListRestored(ctx context.Context, now time.Time) bool {
 	s := &c.Startup
 	if s.WarmAt.IsZero() {
@@ -40,6 +40,7 @@ func (c *Collector) ListRestored(ctx context.Context, now time.Time) bool {
 		// after the grace: keep watching for them (listLateRestored).
 		s.lateUntil = s.WarmAt.Add(kube.WakeMax)
 		s.WarmAt = time.Time{}
+		c.noteRestoredIntros()
 	}
 	if len(listed) == 0 && len(repeated) > 0 {
 		return c.sendRestartNote(ctx, now, repeated)
@@ -67,7 +68,7 @@ func (c *Collector) restoredNews(now time.Time, final bool) (
 			// grace; a restart does not announce it again.
 			lower = append(lower, d)
 			c.markRestoredListed(p.ID)
-		case c.recentlyListed(p.ID, now):
+		case c.toldUnchanged(p, now):
 			if final {
 				repeated = append(repeated, d)
 				c.markRestoredListed(p.ID)
@@ -103,7 +104,7 @@ func (c *Collector) listLateRestored(
 	var listed []incident.Decision
 	for _, p := range c.env.Incidents.RestoredFailing() {
 		if c.restoredListed[p.ID] || !currentNews(p) ||
-			c.recentlyListed(p.ID, now) ||
+			c.toldUnchanged(p, now) ||
 			(c.env.Scope != nil && !c.env.Scope(p)) {
 			continue
 		}

@@ -45,7 +45,7 @@ kubelet.insecureSkipVerify|boolean|false|Security|Skip kubelet serving certifica
 watch.secrets|boolean|true|Scope|Watch Secrets (values hashed, never stored); false removes Secret RBAC and Secret-based checks report that they cannot verify.|active|
 activeProbeMonitor.autoDependencies|boolean|false|Monitors|Pro only. Probe the endpoints outside the cluster that pod environments name, over TCP; a refused dependency explains its callers.|active|
 healthCheck.statusEndpoint|boolean|false|Security|Pro only. Serve the read-only /status view (object names, no authentication) on the health port; off by default.|active|
-app.hideProHints|boolean|false|Operations|Remove every Pro hint from Community messages: the note that names what kwatch Pro adds, the teaser ("Pro shows which one…"), "Pro shows how to fix it." and the Pro-checks notes; the "Cause found: …" sentence stays.|active|
+app.hideProHints|boolean|false|Operations|Remove every Pro hint from Community messages: the one Pro line on the first alert of an issue ("Pro shows which one and how to fix it, free during early access: kwatch.dev/pro") and the Pro-checks notes; the "Most likely cause: …" sentence stays.|active|
 license.key|string|empty|Operations|kwatch Pro license key; reference it as ${KWATCH_LICENSE_KEY}. The KWATCH_LICENSE_KEY variable wins over this setting. Empty runs the Community edition.|active|
 app.communityProvider|string|empty|Operations|Alert provider the Community edition keeps when several are configured; empty keeps a pager first, then chat and the rest, then email, with the name breaking a tie.|active|
 clusterCheckins|boolean|empty|Compatibility|Removed: kwatch no longer sends cluster check-ins. Accepted and ignored with a deprecation notice; use heartbeatMonitor (Pro) to learn when kwatch stops.|deprecated|heartbeatMonitor
@@ -56,3 +56,5 @@ dashboard.tlsKeyFile|string|empty|Security|Key file for dashboard.tlsCertFile.|a
 investigation.logs|boolean|true|Scope|Read container logs for Pro evidence (redacted, bounded); false reads no log and shows the log section as turned off.|active|
 dashboard.trustedProxies|list|null|Security|CIDRs or addresses of the proxies that terminate TLS in front of the dashboard; X-Forwarded-For and X-Forwarded-Proto count only from them, and any entry makes the dashboard https only.|active|
 investigation.sampleLogs|boolean|true|Scope|Sample a bounded slice of the logs of Running and Ready pods for a burst of errors (redacted); false reads none.|active|
+oldProblemDays|integer|30|Performance|Days after which a problem kwatch found already there is old: a low one opens no issue and is only counted, one that needs attention is lowered to Low; zero turns it off.|active|
+app.environment|string|empty|Operations|What the cluster is for: production (default) or non-production; non-production caps every incident at Needs attention, so nothing in the cluster pages.|active|

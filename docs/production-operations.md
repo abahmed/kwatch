@@ -5,6 +5,13 @@ operations reference, not a promise of high availability.
 
 ## Operating model
 
+Requirements: Kubernetes 1.23 or newer; on older clusters HPA,
+PodDisruptionBudget, CronJob and EndpointSlice checks may be unavailable.
+Those kinds are read through `autoscaling/v2`, `policy/v1`, `batch/v1` and
+`discovery.k8s.io/v1`; an older server that does not serve them reports them
+as `api_unavailable` in watch coverage, and kwatch logs one warning at start.
+The chart does not block an install on an older cluster.
+
 Kwatch runs one replica with the `Recreate` strategy. State lives in a bbolt
 file on a PVC mounted at `/var/lib/kwatch`. A Kubernetes Lease is used only as
 a lock: it stops two processes from writing the volume at once. Only the Lease
@@ -178,7 +185,8 @@ must not lose connectivity during an upgrade.
 
 Node, container and volume usage (`/stats/summary`, `/metrics/cadvisor`,
 `/metrics`) is read directly from each node's kubelet over HTTPS, at the
-node's `InternalIP` and the port in
+node's `InternalIP` (else its `ExternalIP`, else its `Hostname`) and the
+port in
 `status.daemonEndpoints.kubeletEndpoint.Port` (default 10250). kwatch sends
 its ServiceAccount token and verifies the kubelet serving certificate with
 the cluster CA, which works when kubelet serving certificates are signed by
@@ -289,6 +297,27 @@ same as a small pod entry. A cluster with a few thousand ConfigMaps and
 Secrets and many old ReplicaSets can need noticeably more than its pod count
 suggests, so read the live heap from the `self-health` line after a day on
 the real cluster before trusting the table.
+
+**The working set is more than the Go heap.** `kubectl top` and the
+dashboard's Resources card show the container's working set, which adds
+to the Go runtime's memory (`goMemoryMiB` in the `self-health` line: the
+heap, goroutine stacks and the runtime's own structures) the pages of the
+state file kwatch has read. bbolt maps the whole file into memory, and
+reading it (restoring incidents at start, the compactor's passes) brings
+those pages in; they count toward the container's memory although the
+kernel can drop them under pressure, so they do not cause an out-of-memory
+kill on their own. A cluster with a 102 MiB Go heap and a 178 MiB state
+file showed a 366 MiB working set: about 150 MiB of the file plus the Go
+runtime's memory. Keeping the file small keeps that part small: the
+compactor rewrites the file while running when most of it is free pages,
+or when it is at least twice the data it holds (keys written in no
+particular order leave pages about half full; a rewrite packs them), so
+a file like that one, holding 75 MiB of data, shrinks to about half its
+size. A copy that would not make the file smaller (records of about one
+page each fill their pages) is dropped and logged once, and the next
+rewrite waits until the file is twice the size that copy had. When
+sizing, add the state file's size (the Resources card or the `state
+compaction pass` line, `fileBytes`) to the heap figure below.
 
 The default 512Mi supports about 8,000 realistic pods; beyond that, raise
 `resources.requests.memory` and `resources.limits.memory` together. Pods
@@ -405,6 +434,33 @@ queued alerts are dead-lettered, because this Pod no longer holds the Lease
 and must not send; their outbox records stay, so the next session sends them. If a dependency does not stop within its deadline,
 Kwatch records a shutdown timeout and exits rather than waiting forever.
 
+**A lost Lease rejoins in the same process.** When the Lease is lost while
+kwatch is running (the API server was unreachable for longer than the renew
+deadline, for example), the session ends as above and kwatch then builds a
+new generation with the same edition instead of exiting. The new generation
+goes through a fresh election, checks that the Lease names this Pod and
+claims the state file with a new epoch, exactly as a start does, so it
+either leads again or waits as a standby when another Pod took the Lease.
+The old health listener keeps answering `/healthz` until the new one takes
+the port; `/health` shows `leader-election` as `degraded` with
+`leadership_lost`, and `/readyz` stays failing until the Pod leads and has
+synced again. `kwatch_leadership_rejoins_total` counts the rejoins. The
+same rejoin follows a Lease lost while the new session is still starting,
+and a session start that fails on an API server outage (5xx, 429, timeouts,
+refused or reset connections) or finds the Lease already naming another Pod;
+each such start that fails in a row doubles the wait before the next rejoin,
+from 1 to 30 seconds, and the error is logged and shown on the `state`
+component. kwatch still exits with code 1, and Kubernetes restarts it, in
+two cases. First, whenever it cannot prove the old session stopped: the
+session did not end within its shutdown budget, the state file was not
+released, or delivery did not stop within its drain deadline after a lost
+Lease, also when an edition change was asked for at the same time (an HTTP
+send still in flight cannot be fenced by the state file). Second, when a
+step fails in a way waiting cannot fix: an invalid configuration, any other
+error from a session start or a running required component, or a startup
+API error that is not retried (see
+[API server outage](#api-server-outage)).
+
 The deployment provides a 60-second termination grace period. A required
 component failure (delivery or the pipeline) or an internal stall makes the
 Pod unready immediately, before any shutdown work, then cancels the active
@@ -430,8 +486,16 @@ incident again. Once every restored incident that is still failing was listed
 after a recent restart, it sends one short message instead: that kwatch
 restarted, why, how long it was down, and how many problems from before are
 still open, with the dashboard address when there is one. A restored incident
-that was listed is not listed again for an hour (`RestoredRelist`), and the
-same note (same reason, same incidents) is not sent twice within that hour.
+a listing named is listed again only when it changed since (its tier, cause,
+reasons or impact: the told fingerprint) or when it was last named more than
+12 hours ago (`RestoredRetell`), so restarts close together repeat nothing and
+a cluster that sleeps every night still hears each morning what is still
+failing. The same note (same reason, same incidents) is not sent twice within
+an hour (`RestoredRelist`). A restored incident that a listing or roll-up only
+named, and that never had a message of its own, gets one introduction of its
+own once its findings are back after the restore grace, threaded under the
+listing like a roll-up's introduction. It is sent once, not again after later
+restarts, and never pages by itself.
 The reason is one of `graceful_shutdown`, `leader_handoff`,
 `internal_failure`, `oom_killed`, `eviction`, `node_disruption`,
 `deployment_rollout`, `api_unavailable` or `unknown`.
@@ -679,6 +743,20 @@ person would blame, and add it under "Turn it into a scenario" above. Like
 the counts, the list is display only: it never changes a confidence, a
 tier or a message.
 
+## Log streams and format
+
+kwatch writes INFO and WARNING lines to stdout and ERROR and FATAL lines to
+stderr, in klog's text format (`I1109 12:00:00.000000 1 file.go:56] "msg"
+key=value`). Container log collectors mark everything on stderr as an error,
+so only real errors show up as errors.
+
+Set `KWATCH_LOG_FORMAT=json` (or `app.logFormatter: json`; the variable wins)
+for one JSON object per line instead. The fields are `ts` (RFC 3339 with
+nanoseconds), `level` (`info`, `warning` or `error`), `msg`, `caller`
+(`file.go:56`) and every key/value pair of the line. Errors go to stderr, the
+rest to stdout. Point your log tool's severity at the `level` field; the
+Pro audit log has the same `level` and a `message` field.
+
 ## Auditing incidents from the logs
 
 Every lifecycle step is one default-level log line with
@@ -703,6 +781,10 @@ the story; only without such repeats do the oldest events go.
 An announcement the configured scope drops (namespaces, reasons,
 silences) is logged once as `incident not announced: out of scope`
 (`component="pipeline"`), so a filtered-out failure leaves a trace.
+While such an incident keeps failing, the scope is asked again on every
+tick; when it allows the incident (a maintenance window ended, a silence
+expired) the incident is announced then and logged as `incident back in
+scope: announced` (`component="incident"`).
 
 The dashboard logs sign-in, sign-out and every failed request (`401`,
 `403`, `429`, `5xx`) at the default level; successful reads, which an
@@ -771,8 +853,10 @@ guaranteed, and tested by killing a real process in the middle of each write:
 - **Online file rewrite.** The rewrite copies the live data to
   `<state file>.compact` and renames the copy over the file. A kill during
   the copy leaves the original whole. The leftover copy is never read: the
-  next rewrite deletes it and starts again. A kill after the rename leaves
-  the new, whole file.
+  next claim of the file deletes it before free space is measured, so it
+  does not count against the volume. The copy is opened before the
+  rename, so a copy that cannot be opened leaves the original in use. A
+  kill after the rename leaves the new, whole file.
 - **Messages.** A crash between a provider accepting a message and the outbox
   forgetting it sends that message again once at the next start, with the
   same conversation key and alert key, so a thread or a paging alert takes it
@@ -853,15 +937,33 @@ the configured proxy and CA bundle but **always verify TLS**:
 
 kwatch holds a state lock (a Lease) and must renew it through the API
 server. When the API server is out long enough that the lock cannot be
-renewed, kwatch deliberately stops sending and restarts: with the lock lost,
-another process could hold the state file, and only one writer may send.
-Alerts that were queued stay in the outbox and are sent once the API server
-is back and kwatch holds the lock again. During the outage kwatch cannot tell
-you about it, so the heartbeat (Pro; the dead man's switch,
+renewed, kwatch deliberately stops sending: with the lock lost, another
+process could hold the state file, and only one writer may send. It then
+rejoins the election in the same process (see
+[Shutdown and recovery](#shutdown-and-recovery)) instead of restarting, so
+it leads again as soon as the API server is back, with no CrashLoopBackOff
+delay. Alerts that were queued stay in the outbox and are sent once the API
+server is back and kwatch holds the lock again. During the outage kwatch
+cannot tell you about it, so the heartbeat (Pro; the dead man's switch,
 `heartbeatMonitor`) is the only alarm. Configure it; see
 [Heartbeat Monitor](./configuration.md#-heartbeat-monitor-dead-mans-switch).
-The restart is reported after the fact as `api_unavailable` in the restart
-note.
+The gap is reported after the fact in the restart note.
+
+The startup `KwatchConfig` list is the one API call a start needs before it
+serves. While the API server is unreachable (5xx, 429, timeouts, refused or
+reset connections) it is retried, each attempt limited to 15 seconds, with
+waits from 1 second doubling to 30. A first start retries for about 4
+minutes, under the 300-second startup probe, and then exits with code 1 as
+before. A rejoin retries until a stop, while the old health listener keeps
+answering and `/health` shows `leader-election` with `api_unreachable`. On
+a first start a Forbidden or Unauthorized answer fails at once; a rejoin
+retries them for about 5 minutes, since an authentication or authorization
+webhook can still be down as the API server comes back, and then exits with
+code 1. NotFound means the CRD is not
+installed: a first start takes it at once, a rejoin only after it lasted
+about 45 seconds. Either way a NotFound does not clear the last
+`KwatchConfig` that applied cleanly; only an empty list (the object was
+deleted) does.
 
 Kubernetes API and provider outages are otherwise handled through bounded retries and
 degraded status. Delivery queues are bounded; sustained saturation coalesces or
@@ -882,8 +984,8 @@ The chart value `rbac.mode` selects the cluster read access:
   `nodes/metrics` and `pods/log`; a wildcard `get` would also match `pods/exec` and similar
   subresources. Secret values are covered by the grant but are hashed in
   the informer transform and never stored. The only other grants are the
-  audit's `selfsubjectaccessreviews` create, the `/readyz` and `/metrics`
-  non-resource URL reads, `get` on `nodes` (restart evidence and kubelet
+  audit's `selfsubjectaccessreviews` create, the `/readyz`, `/metrics` and
+  `/version` non-resource URL reads, `get` on `nodes` (restart evidence and kubelet
   addresses), `get` on the scheduler and controller-manager Leases in
   `kube-system`, and in kwatch's own namespace the Lease writes and `get`
   on pods (restart evidence for the previous kwatch Pod).
@@ -988,6 +1090,8 @@ For a local run with Docker, Kind, kubectl, and Helm installed:
 ```sh
 docker build -t kwatch:ci .
 kind create cluster --name kwatch-ops
+# KWATCH_RBAC_MODE and KWATCH_LOAD_COUNT are variables of the test script
+# only; the kwatch binary never reads them.
 KWATCH_RBAC_MODE=least-privilege KWATCH_WATCH_SECRETS=false \
   KWATCH_LOAD_COUNT=100 make verify-operational
 ```

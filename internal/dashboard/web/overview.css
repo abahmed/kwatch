@@ -17,17 +17,27 @@
 .ov-note p { margin-top: 2px; }
 .ov-note .viz-meter { margin: 8px 0 4px; max-width: 28rem; }
 .n-failing { background: var(--failing-bg); } .n-failing b { color: var(--failing); }
-.ov-tile { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 20px; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius-card); }
+.ov-tile { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 20px; padding: 16px 20px; border: 1px solid var(--line); border-radius: var(--radius-card); }
 .ov-tile.bad { background: var(--failing-bg); }
+.ov-status.bad { border-color: var(--failing); }
+.ov-status.warn { background: var(--degraded-bg); border-color: var(--degraded); }
+.ov-tile > .ov-say { flex: 1 1 16rem; }
+.ov-says { min-width: 0; flex: 1 1 12rem; }
+/* How far the first read is, under a "starting" verdict. */
+.ov-start { flex: 1 1 100%; margin: 0; }
+.viz-meter.ov-start { max-width: 28rem; margin: 6px 0 2px; }
+.ov-tile > .ov-start { padding-left: 38px; }
+.ov-tile > .viz-meter.ov-start { padding-left: 0; margin-left: 38px; }
+@media (max-width: 700px) { .ov-tile > .ov-start { padding-left: 0; } .ov-tile > .viz-meter.ov-start { margin-left: 0; } }
+.ov-sub { margin: 2px 0 0; font-size: var(--t-small); color: var(--text-muted); }
+.ov-lvl { color: inherit; text-decoration: none; white-space: nowrap; }
+.ov-lvl:hover { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
 .ov-mark { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; flex: none; background: var(--control-border); color: var(--bg); }
 .ov-tile.ok .ov-mark { background: var(--success); }
 .ov-tile.warn .ov-mark { background: var(--degraded); }
 .ov-tile.bad .ov-mark { background: var(--failing); }
 .ov-mark .icon { width: 12px; height: 12px; stroke-width: 2.6; }
-.ov-say { flex: 1 1 16rem; font-size: clamp(1.375rem, 1.4vw + 1rem, 1.875rem); letter-spacing: -0.02em; overflow-wrap: anywhere; }
-.ov-tile .updated { margin-left: auto; }
-.ov-sev { margin-top: 16px; }
-.ov-sev .viz-track { height: 14px; }
+.ov-say { font-size: clamp(1.25rem, 1.4vw + 0.9rem, 1.75rem); letter-spacing: -0.02em; overflow-wrap: anywhere; }
 /* How the week went: below what is wrong now, set apart by a line. */
 .ov-week { margin-top: 36px; padding-top: 4px; border-top: 1px solid var(--line); }
 /* The week in four numbers, then the cards; the rest folds under "More". */
@@ -37,24 +47,34 @@
 .ov-stat dd { margin: 0; }
 .ov-stat-n { font-size: 1.75rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .ov-stat-sub { font-size: var(--t-micro); color: var(--text-muted); }
+.ov-settled { margin: 14px 0 0; font-size: var(--t-body); }
+.ov-settled b { font-variant-numeric: tabular-nums; }
 .ov-fold { margin-top: 20px; }
 .ov-fold > summary { cursor: pointer; width: fit-content; min-height: 28px; color: var(--text-muted); font-size: var(--t-small); }
 .ov-fold > summary:hover { text-decoration: underline; text-decoration-thickness: 2px; }
 @media (max-width: 700px) { .ov-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .ov-h2 { font-family: var(--font-body); font-size: var(--t-small); font-weight: 600; line-height: 1.3; color: var(--text-muted); letter-spacing: 0; margin: 28px 0 8px; }
-.ov-rel { margin-top: 16px; font-size: var(--t-small); color: var(--text-muted); }
-.ov-rel-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.ov-rel .ov-h2 { color: var(--failing); }
+.ov-rel-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; }
+.ov-rel-list > li { padding: 10px 16px; font-size: var(--t-small); }
+.ov-rel-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 16px; }
+.ov-rel-name { font-weight: 600; overflow-wrap: anywhere; }
+.ov-rel-list > li + li { border-top: 1px solid var(--line); }
+.ov-rel-v { font-weight: 600; color: var(--failing); }
+.ov-rel-at { margin-top: 2px; color: var(--text-muted); overflow-wrap: anywhere; }
 .ov-look { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; }
 .ov-look > li + li { border-top: 1px solid var(--line); }
-.ov-row { display: grid; grid-template-columns: 15rem minmax(0, 1fr) 9rem; gap: 6px 16px; align-items: center; padding: 12px 16px; min-height: var(--hit); color: var(--text); text-decoration: none; }
+.ov-rule { margin: -4px 0 8px; font-size: var(--t-micro); color: var(--text-muted); }
+.ov-row { display: grid; grid-template-columns: minmax(0, 1fr) 11rem; gap: 6px 16px; align-items: start; padding: 12px 16px; min-height: var(--hit); color: var(--text); text-decoration: none; }
 .ov-row:hover { background: var(--surface); }
 .ov-row:hover .ov-title { text-decoration: underline; }
-.ov-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.ov-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.ov-chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.ov-gist { font-size: var(--t-small); color: var(--text-soft); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .ov-chips .chip + .chip { margin-left: 0; }
 .ov-what { display: flex; flex-direction: column; min-width: 0; }
 .ov-title { font-weight: 600; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.ov-where { font-size: var(--t-micro); color: var(--text-muted); overflow-wrap: anywhere; }
-.ov-dur { display: flex; flex-direction: column; gap: 4px; }
+.ov-where { font-size: var(--t-micro); color: var(--text-muted); margin-top: 2px; }
 .ov-dtext { font-size: var(--t-micro); color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .ov-more, .ov-calm { margin-top: 12px; }
 
@@ -78,7 +98,7 @@ a.viz-key:hover span:not(.viz-sw) { text-decoration: underline; }
 .viz-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 .viz-name.mono { font-size: var(--t-small); }
 .viz-val { font-size: var(--t-micro); color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.viz-cols { display: block; width: 100%; max-width: 40rem; height: auto; overflow: visible; }
+.viz-cols { display: block; width: 100%; height: 150px; overflow: visible; }
 .viz-cols .viz-axis { stroke: var(--line); }
 .viz-cols .viz-hit { fill: transparent; }
 .viz-cols .viz-day:hover .viz-hit { fill: var(--surface); }
@@ -102,6 +122,8 @@ a.viz-key:hover span:not(.viz-sw) { text-decoration: underline; }
 .pgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
 .pcard { border: 1px solid var(--line); border-radius: var(--radius-card); padding: 18px 20px; min-width: 0; }
 .pcard.pwide { grid-column: 1 / -1; }
+/* A lone card, or the odd last one, fills the row instead of leaving a hole. */
+.pgrid > .pcard:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .pcard-h { font-family: var(--font-body); font-size: var(--t-body); font-weight: 700; letter-spacing: 0; margin: 0 0 4px; }
 .pcard-note { font-size: var(--t-small); color: var(--text-muted); margin: 0 0 12px; }
 .pcard-more { margin-top: 12px; font-size: var(--t-small); }
@@ -109,6 +131,9 @@ a.viz-key:hover span:not(.viz-sw) { text-decoration: underline; }
 
 /* ---- kwatch page ---- */
 .kp-facts { grid-template-columns: 8.5rem 1fr; }
+/* A mono value (Version) sits on the label's baseline at its size. */
+.kp-facts { align-items: baseline; }
+.kp-facts dd.mono { font-size: var(--t-small); }
 .kp-sub { font-family: var(--font-body); font-size: var(--t-small); font-weight: 600; letter-spacing: 0; color: var(--text-muted); margin: 16px 0 0; }
 .kp-gauge { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
 .kp-gtext, .kp-big { font-size: 1.125rem; font-weight: 600; }
@@ -149,16 +174,15 @@ a.viz-key:hover span:not(.viz-sw) { text-decoration: underline; }
   .viz-dot { width: 20px; height: 20px; margin-left: -10px; bottom: -11px; }
 }
 @media (max-width: 900px) {
-  .ov-row { grid-template-columns: minmax(0, 1fr) 8rem; }
-  .ov-chips { grid-column: 1 / -1; }
+  .ov-row { grid-template-columns: minmax(0, 1fr); }
+  .ov-side { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 4px 10px; }
+  .ov-chips { justify-content: flex-start; }
 }
 @media (max-width: 700px) {
   .pgrid, .cov-grid { grid-template-columns: minmax(0, 1fr); }
   .pcard { padding: 16px; }
   .ov-tile { padding: 14px 16px; }
-  .ov-tile .updated { margin-left: 0; }
-  .ov-row { grid-template-columns: minmax(0, 1fr); padding: 12px 14px; }
-  .ov-dur { flex-direction: row; align-items: center; gap: 10px; }
+  .ov-row { padding: 12px 14px; }
   .kp-facts { grid-template-columns: 7rem 1fr; }
 }
 .ov-ack { width: fit-content; }
@@ -171,5 +195,11 @@ a.viz-key:hover span:not(.viz-sw) { text-decoration: underline; }
 .kp-res-h { font-family: var(--font-body); font-size: var(--t-small); font-weight: 700; letter-spacing: 0; margin: 4px 0 2px; }
 .kp-res-t { font-size: var(--t-small); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .kp-res-x { margin-top: 2px; font-size: var(--t-micro); color: var(--text-muted); overflow-wrap: anywhere; }
-.ov-rel { margin: 24px 0; }
-.ov-rel-h { margin: 12px 0 0; font-size: var(--t-micro); font-weight: 600; color: var(--text-muted); }
+
+/* Paging held while nodes come and go; old problems not shown. */
+.ov-hold { margin: 4px 0 0; font-size: var(--t-small); color: var(--text-soft); }
+.ov-hold-at { white-space: nowrap; }
+.ov-olds { margin-top: 12px; font-size: var(--t-small); color: var(--text-muted); }
+.ov-old > summary { cursor: pointer; list-style: none; }
+.ov-old > summary::-webkit-details-marker { display: none; }
+.ov-old .lo-list { max-width: var(--max-app); }

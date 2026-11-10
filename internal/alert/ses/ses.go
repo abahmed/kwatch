@@ -2,6 +2,7 @@ package ses
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/alert/email"
+	"github.com/abahmed/kwatch/internal/delivery/awscreds"
 	"github.com/abahmed/kwatch/internal/delivery/signing"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -18,21 +20,20 @@ import (
 
 const (
 	sesServiceName   = "ses"
-	sesURLFormat     = "https://email.%s.amazonaws.com/"
+	sesHost          = "email"
 	defaultSESRegion = "us-east-1"
 )
 
 type Ses struct {
-	sender          transport.Sender
-	url             string
-	region          string
-	accessKeyID     string
-	sessionToken    string
-	secretAccessKey string
-	from            string
-	to              []string
-	subject         string
-	now             func() time.Time
+	sender   transport.Sender
+	url      string
+	region   string
+	creds    awscreds.Source
+	refusals awscreds.Refusals
+	from     string
+	to       []string
+	subject  string
+	now      func() time.Time
 }
 
 // NewSes returns a new Ses object
@@ -42,19 +43,6 @@ func NewSes(
 	_ string,
 	dependencies transport.Dependencies,
 ) *Ses {
-	sessionToken, _ := config["sessionToken"].(string)
-	accessKeyID, ok := config["accessKeyId"].(string)
-	if !ok || len(accessKeyID) == 0 {
-		klog.InfoS("initializing ses with empty accessKeyId")
-		return nil
-	}
-
-	secretAccessKey, ok := config["secretAccessKey"].(string)
-	if !ok || len(secretAccessKey) == 0 {
-		klog.InfoS("initializing ses with empty secretAccessKey")
-		return nil
-	}
-
 	from, ok := config["from"].(string)
 	if !ok || len(from) == 0 {
 		klog.InfoS("initializing ses with empty from")
@@ -82,23 +70,50 @@ func NewSes(
 	if r, ok := config["region"].(string); ok && len(r) > 0 {
 		region = r
 	}
-
-	subject, _ := config["subject"].(string)
+	s, err := newSes(config, region, dependencies)
+	if err != nil {
+		klog.InfoS("initializing ses failed", "error", err)
+		return nil
+	}
+	s.from, s.to = from, recipients
+	s.subject, _ = config["subject"].(string)
 
 	klog.InfoS("initializing ses", "region", region, "from", from)
+	return s
+}
 
-	return &Ses{
-		sender:          transport.NewSender(dependencies),
-		url:             fmt.Sprintf(sesURLFormat, region),
-		region:          region,
-		accessKeyID:     accessKeyID,
-		sessionToken:    sessionToken,
-		secretAccessKey: secretAccessKey,
-		from:            from,
-		to:              recipients,
-		subject:         subject,
-		now:             dependencies.Now,
+// newSes resolves the endpoint and the credential source.
+func newSes(
+	config map[string]interface{}, region string,
+	dependencies transport.Dependencies,
+) (*Ses, error) {
+	override, _ := config["endpoint"].(string)
+	if override == "" && strings.HasPrefix(region, "cn-") {
+		// SES has no endpoint in the China regions: email.cn-*
+		// does not exist, so every send would fail.
+		return nil, errors.New("SES is not offered in the China " +
+			"region " + region + "; use another region, or set " +
+			"endpoint")
 	}
+	endpoint, err := awscreds.Endpoint(override, sesHost, region)
+	if err != nil {
+		return nil, err
+	}
+	sender := transport.NewSender(dependencies)
+	creds, err := awscreds.Select(config, awscreds.Options{
+		Provider: "SES", Region: region, Sender: sender,
+		Now: dependencies.Now,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if creds == nil {
+		return nil, errors.New("no AWS credentials: set accessKeyId " +
+			"and secretAccessKey, or give the pod an IAM role (IRSA " +
+			"or EKS Pod Identity)")
+	}
+	return &Ses{sender: sender, url: endpoint, region: region,
+		creds: creds, now: dependencies.Now}, nil
 }
 
 // Name returns name of the provider
@@ -145,11 +160,11 @@ func (s *Ses) send(ctx context.Context, subject, msg, page string) error {
 	body := []byte(form.Encode())
 	contentType := "application/x-www-form-urlencoded"
 
-	headers, err := signing.SignAWSV4At(
-		signing.Credentials{
-			AccessKeyID: s.accessKeyID, SecretAccessKey: s.secretAccessKey,
-			SessionToken: s.sessionToken,
-		}, s.region, sesServiceName,
+	creds, err := s.creds.Credentials(ctx)
+	if err != nil {
+		return fmt.Errorf("%s: AWS credentials: %w", s.Name(), err)
+	}
+	headers, err := signing.SignAWSV4At(creds, s.region, sesServiceName,
 		"POST", s.url, body, s.now())
 	if err != nil {
 		return err
@@ -165,7 +180,7 @@ func (s *Ses) send(ctx context.Context, subject, msg, page string) error {
 			Provider: s.Name(), StatusCode: 400,
 		}
 	}
-	return err
+	return s.refusals.Check(s.Name(), s.creds, err, answer)
 }
 
 // throttled reports whether SES refused the send for sending too fast.

@@ -1,5 +1,7 @@
 package config
 
+import "strings"
+
 // Config is the YAML-facing kwatch configuration.
 type Config struct {
 	// App general configuration
@@ -84,6 +86,12 @@ type Config struct {
 	// ResyncSeconds is the interval (in seconds) for periodic informer
 	// resyncs, a safety net for missed watch events. Zero disables it.
 	ResyncSeconds int `yaml:"resyncSeconds"`
+
+	// OldProblemDays is the age, in days, past which a problem that was
+	// already there when kwatch first saw it is old: a low one opens no
+	// incident and is only counted, and one that needs attention is
+	// lowered to Low. Zero turns it off.
+	OldProblemDays int `yaml:"oldProblemDays"`
 
 	// SeverityByOwnerKind raises or lowers incidents by the kind of the
 	// affected workload, e.g. {"StatefulSet": "critical"}.
@@ -194,6 +202,22 @@ type App struct {
 	// the first by name; a name that is not configured is warned about
 	// and falls back the same way. Pro runs every provider.
 	CommunityProvider string `yaml:"communityProvider"`
+
+	// Environment says what the cluster is for: "production" (the
+	// default, also when empty) or "non-production", which caps every
+	// incident at Needs attention: nothing in the cluster pages.
+	Environment string `yaml:"environment"`
+}
+
+// EnvironmentNonProduction is the app.environment value of a cluster
+// that is not production.
+const EnvironmentNonProduction = "non-production"
+
+// NonProduction reports whether app.environment marks the cluster as
+// not production.
+func (a App) NonProduction() bool {
+	return strings.EqualFold(strings.TrimSpace(a.Environment),
+		EnvironmentNonProduction)
 }
 
 // Upgrader confing struct

@@ -40,6 +40,10 @@ type deliveryTrailSource func(id string) []DeliveryAttempt
 type Scope struct {
 	Watched  []string
 	Excluded []string
+	// Allowed, when set, is the whole namespace scope, the namespace
+	// label selector included: the releases are scoped by it. The two
+	// lists alone know nothing of the selector.
+	Allowed func(model inventory.Reader, namespace string) bool
 }
 
 // Self names kwatch's own Deployment, so the dashboard can show the
@@ -103,6 +107,10 @@ type sources struct {
 	self     atomic.Pointer[selfSource]
 	failed   atomic.Pointer[failedSource]
 	delivery atomic.Pointer[deliveryDetailSource]
+	// components is kwatch's failed optional parts (blind_spots.go).
+	components atomic.Pointer[componentSource]
+	// push sends browser notifications (push_run.go).
+	push atomic.Pointer[pusher]
 	// lastScan is the Unix nanosecond time of the engine's latest loop
 	// iteration; zero until the first.
 	lastScan atomic.Int64
@@ -212,15 +220,21 @@ func (s *Server) SetDeliveryTrail(src func(id string) []DeliveryAttempt) {
 }
 
 // Open creates the HTTP listener within ctx without starting a goroutine.
-// The application supervisor owns the serving goroutine.
+// The application supervisor owns the serving goroutine. It fails, and
+// can be called again, when the port is taken or the TLS key pair cannot
+// be read; a Serve that failed is opened again the same way. After Stop
+// it always fails.
 func (s *Server) Open(ctx context.Context) error {
 	s.lifecycleMu.Lock()
 	defer s.lifecycleMu.Unlock()
+	if s.stopped {
+		return fmt.Errorf("dashboard server cannot be restarted")
+	}
 	if s.started {
-		if s.stopped {
-			return fmt.Errorf("dashboard server cannot be restarted")
-		}
 		return nil
+	}
+	if err := s.checkCertificate(); err != nil {
+		return err
 	}
 	s.server = &http.Server{
 		Addr:              ":" + strconv.Itoa(s.opts.Port),
@@ -264,9 +278,7 @@ func (s *Server) Serve(_ context.Context) error {
 	if err == nil || err == http.ErrServerClosed {
 		return nil
 	}
-	s.lifecycleMu.Lock()
-	s.stopErr = err
-	s.lifecycleMu.Unlock()
+	s.failed(server, listener, err)
 	klog.ErrorS(err, "dashboard server stopped",
 		"component", "dashboard-server")
 	return err
@@ -275,12 +287,20 @@ func (s *Server) Serve(_ context.Context) error {
 // Stop shuts the HTTP server down within ctx.
 func (s *Server) Stop(ctx context.Context) error {
 	s.lifecycleMu.Lock()
-	if !s.started || s.stopped {
+	if s.stopped {
 		err := s.stopErr
 		s.lifecycleMu.Unlock()
 		return err
 	}
+	// Stopped even when no listener is open, so a retry of Open that is
+	// still waiting (the application's restart loop) never opens one
+	// after the stop.
 	s.stopped = true
+	if !s.started {
+		s.stopErr = nil
+		s.lifecycleMu.Unlock()
+		return nil
+	}
 	server, listener := s.server, s.listener
 	s.lifecycleMu.Unlock()
 	err := server.Shutdown(ctx)
@@ -301,10 +321,13 @@ func (s *Server) Handler() http.Handler {
 	api.HandleFunc("/api/incidents/", s.incidentDetailHandler)
 	api.HandleFunc("/api/status", s.statusHandler)
 	api.HandleFunc("/api/activity", s.activityHandler)
-	api.HandleFunc("/api/map", s.mapHandler)
 	api.HandleFunc("/api/coverage", s.coverageHandler)
 	api.HandleFunc("/api/overview", s.overviewHandler)
 	api.HandleFunc("/api/events", s.eventsHandler)
+	api.HandleFunc("/api/push", s.pushHandler)
+	api.HandleFunc("/api/push/status", s.pushStatusHandler)
+	api.HandleFunc("/api/push/remove", s.pushRemoveHandler)
+	api.HandleFunc("/api/push/test", s.pushTestHandler)
 	api.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not found")
 	})

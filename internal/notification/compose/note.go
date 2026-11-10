@@ -57,6 +57,9 @@ type caseFacts struct {
 	// community writes the Community message: the lead stops before the
 	// cause and causeTeaser tells only its category.
 	community bool
+	// changeSeen is set when the decision before its Community copy
+	// had a recent change to name: the copy no longer carries it.
+	changeSeen bool
 }
 
 func gatherFacts(d incident.Decision, now time.Time, fix *inventory.Change,
@@ -151,6 +154,9 @@ type sentence struct {
 	// which keeps its case even when the name is also a kind word
 	// ("storage").
 	keepCase bool
+	// shortSwap, on a lead, replaces its first text with its second in
+	// the message's Short only (see startShortSwap).
+	shortSwap [2]string
 }
 
 // sentenceWriter turns one type of fact into sentences. It returns
@@ -302,9 +308,18 @@ func fill(msg *notification.Message, marker string, sentences []sentence) {
 		}
 	}
 	msg.Title = texts[0]
-	msg.Short = marker + " " + texts[0]
+	msg.Short = marker + " " + shortOf(sentences[0])
 	msg.Note = note
 	msg.Doc = docOf(*msg, marker, sentences)
+}
+
+// shortOf is the lead as the message's Short says it.
+func shortOf(lead sentence) string {
+	text := lead.text
+	if swap := lead.shortSwap; swap[0] != "" {
+		text = settleStop(strings.Replace(text, swap[0], swap[1], 1))
+	}
+	return plainQuotes(text)
 }
 
 // previousPart is the part of the sentence before i, or the lead.

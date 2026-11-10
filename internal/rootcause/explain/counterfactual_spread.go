@@ -22,8 +22,9 @@ func scoreReplicas(v *view, c *candidate) outcome {
 	for _, g := range groups {
 		if g.nodeLocal() {
 			text := fmt.Sprintf("%d failing replicas share node %s while "+
-				"%d run healthy on other nodes", len(g.failing),
-				g.nodes(g.failing)[0].Name, len(g.healthy))
+				"%d %s healthy on other nodes", len(g.failing),
+				g.nodes(g.failing)[0].Name, len(g.healthy),
+				runVerb(len(g.healthy)))
 			v.compareGroup(g, rootcause.ProofReplicasNodeLocal, text)
 			return outcome{weight: -NodeLocalPenalty,
 				code:  rootcause.ProofReplicasNodeLocal,
@@ -159,4 +160,12 @@ func replicaCount(n int) string {
 		return "both replicas"
 	}
 	return fmt.Sprintf("all %d replicas", n)
+}
+
+// runVerb agrees "run" with a count: "1 runs", "2 run".
+func runVerb(n int) string {
+	if n == 1 {
+		return "runs"
+	}
+	return "run"
 }

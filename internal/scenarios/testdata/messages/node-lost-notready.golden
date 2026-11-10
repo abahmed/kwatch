@@ -1,17 +1,17 @@
 10:02:30 settled
 🔴 Node n1 (prod-eu-1) has not reported for about two minutes. It reports "Kubelet stopped posting node status." kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable.
-Also grouped: 1 node problem
+Related alerts: 1 node problem
 To check the node's conditions and recent events, run kubectl describe node n1
 🔴 Node n1 (prod-eu-1) has not reported for about two minutes.
 | 🔴 Node n1 (**prod-eu-1**) has not reported for about two minutes.
 | It reports `Kubelet stopped posting node status.`
 | kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable.
-| Also grouped: 1 node problem
+| Related alerts: 1 node problem
 | To check the node's conditions and recent events, run
 | ```
 | kubectl describe node n1
 | ```
 10:04:40 material change
-🔴 Node n1 (prod-eu-1) is spreading to svc-0, svc-1, svc-2 and five others in apps: they have not been ready for three minutes.
-🔴 Node n1 (prod-eu-1) is spreading to svc-0, svc-1, svc-2 and five others in apps: they have not been ready for three minutes.
-| 🔴 Node n1 (**prod-eu-1**) is spreading to **svc-0**, **svc-1**, **svc-2** and five others in apps: they have not been ready for three minutes.
+🔴 Node n1 (prod-eu-1) is now also affecting svc-0, svc-1, svc-2 and five others in apps: they have not been ready for three minutes.
+🔴 Node n1 (prod-eu-1) is now also affecting svc-0, svc-1, svc-2 and five others in apps: they have not been ready for three minutes.
+| 🔴 Node n1 (**prod-eu-1**) is now also affecting **svc-0**, **svc-1**, **svc-2** and five others in apps: they have not been ready for three minutes.

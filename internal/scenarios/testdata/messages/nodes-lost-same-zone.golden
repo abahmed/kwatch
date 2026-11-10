@@ -1,17 +1,17 @@
 10:02:30 settled
 🔴 Three nodes (prod-eu-1) have not reported for about two minutes: n1, n2 and n3. They report "Kubelet stopped posting node status." kwatch cannot see why from inside the cluster: the kubelets stopped reporting, so the nodes may be down or unreachable.
-Also grouped: 3 node problems
+Related alerts: 3 node problems
 To check the node's conditions and recent events, run kubectl describe node n1
 🔴 Three nodes (prod-eu-1) have not reported for about two minutes: n1, n2 and n3.
 | 🔴 Three nodes (**prod-eu-1**) have not reported for about two minutes: n1, n2 and n3.
 | They report `Kubelet stopped posting node status.`
 | kwatch cannot see why from inside the cluster: the kubelets stopped reporting, so the nodes may be down or unreachable.
-| Also grouped: 3 node problems
+| Related alerts: 3 node problems
 | To check the node's conditions and recent events, run
 | ```
 | kubectl describe node n1
 | ```
 10:04:40 material change
-🔴 Nodes n1–n3 (prod-eu-1) are spreading to media-app1 and media-app2 in media; shop-app0 in shop; and two others: they have not been ready for three minutes.
-🔴 Nodes n1–n3 (prod-eu-1) are spreading to media-app1 and media-app2 in media; shop-app0 in shop; and two others: they have not been ready for three minutes.
-| 🔴 Nodes n1–n3 (**prod-eu-1**) are spreading to **media-app1** and **media-app2** in **media**; **shop-app0** in **shop**; and two others: they have not been ready for three minutes.
+🔴 Nodes n1–n3 (prod-eu-1) are now also affecting media-app1 and media-app2 in media; shop-app0 in shop; and two others: they have not been ready for three minutes.
+🔴 Nodes n1–n3 (prod-eu-1) are now also affecting media-app1 and media-app2 in media; shop-app0 in shop; and two others: they have not been ready for three minutes.
+| 🔴 Nodes n1–n3 (**prod-eu-1**) are now also affecting **media-app1** and **media-app2** in **media**; **shop-app0** in **shop**; and two others: they have not been ready for three minutes.

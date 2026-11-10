@@ -1,9 +1,9 @@
 10:06:15 settled
-🟠 PostgresCluster orders-db in data (prod-eu-1) is not ready: "spec.storage.size: cannot shrink volume from 100Gi to 50Gi". Its spec changed at 10:03 UTC. Its dependents failed soon after it changed. To see the object's state and events, run kubectl describe postgrescluster orders-db -n data
+🟠 PostgresCluster orders-db in data (prod-eu-1) is not ready: "spec.storage.size: cannot shrink volume from 100Gi to 50Gi". Its spec changed at 10:03 UTC. The apps that use it failed soon after it changed. To see the object's state and events, run kubectl describe postgrescluster orders-db -n data
 🟠 PostgresCluster orders-db in data (prod-eu-1) is not ready: "spec.storage.size: cannot shrink volume from 100Gi to 50Gi".
 | 🟠 PostgresCluster **orders-db** in **data** (**prod-eu-1**) is not ready: `spec.storage.size: cannot shrink volume from 100Gi to 50Gi`.
 | Its spec changed at 10:03 UTC.
-| Its dependents failed soon after it changed.
+| The apps that use it failed soon after it changed.
 | To see the object's state and events, run
 | ```
 | kubectl describe postgrescluster orders-db -n data

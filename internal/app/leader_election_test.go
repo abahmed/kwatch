@@ -241,15 +241,36 @@ func TestLeaderElectionReturnsLeadershipLoss(t *testing.T) {
 	close(lose)
 	select {
 	case err := <-result:
-		if !errors.Is(err, errLeadershipLost) {
-			t.Fatalf("error = %v, want leadership loss", err)
-		}
+		requireRejoin(t, deps, err)
 	case <-time.After(time.Second):
 		t.Fatal("leadership loss was not reported")
 	}
 	if got := deps.healthServer.LeadershipStatus(); got == nil ||
 		got.Role != "stopped" || got.LossReason != "leadership_lost" {
 		t.Fatalf("unexpected stopped status: %+v", got)
+	}
+}
+
+// requireRejoin checks that a lost Lease asks for an in-process rejoin
+// instead of failing the process, names it on /health, and leaves the
+// Lease alone: it is no longer this pod's to release.
+func requireRejoin(t *testing.T, deps *serverDeps, err error) {
+	t.Helper()
+	if !errors.Is(err, errLeaseLostRejoin) {
+		t.Fatalf("error = %v, want a rejoin", err)
+	}
+	if _, code := componentExit(err); code != 0 {
+		t.Fatalf("exit code = %d, want 0 (rejoin, not a failure)", code)
+	}
+	if got := deps.rebuildReason(); got != rebuildLeadershipLost {
+		t.Fatalf("rebuild reason = %q", got)
+	}
+	status := deps.healthServer.ComponentStatuses()["leader-election"]
+	if status.State != "degraded" || status.Reason != "leadership_lost" {
+		t.Fatalf("leader-election status = %+v", status)
+	}
+	if deps.leaseRelease() != nil {
+		t.Fatal("a lost Lease was set up for release")
 	}
 }
 
@@ -319,9 +340,7 @@ func TestLeaderElectionNeverStartsSessionAfterRunReturned(t *testing.T) {
 		context.Background(), deps, factory, activeRunner)
 	<-election.late
 
-	if !errors.Is(err, errLeadershipLost) {
-		t.Fatalf("error = %v, want leadership loss", err)
-	}
+	requireRejoin(t, deps, err)
 	if ran {
 		t.Fatal("a session started after election stopped")
 	}

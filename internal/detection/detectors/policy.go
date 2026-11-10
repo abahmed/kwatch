@@ -242,17 +242,28 @@ func backendFinding(
 	ctx detection.Context, b backend,
 ) (detection.Finding, bool) {
 	if !ctx.Model.Exists(b.service) {
-		return b.finding(reasons.WebhookBackendNotFound,
+		return b.leftover(ctx, b.finding(reasons.WebhookBackendNotFound,
 			"Admission webhook calls Service "+b.service.Name+
-				", which does not exist", "is gone"), true
+				", which does not exist", "is gone")), true
 	}
 	ready, known := readyEndpoints(ctx, b.service)
 	if !known || ready > 0 || backendsAreStarting(ctx, b.service) {
 		return detection.Finding{}, false
 	}
-	return b.finding(reasons.WebhookNoEndpoints,
+	return b.leftover(ctx, b.finding(reasons.WebhookNoEndpoints,
 		"Admission webhook backend "+b.service.Name+" has no ready pods",
-		"has no ready pods"), true
+		"has no ready pods")), true
+}
+
+// leftover marks the finding of a dead backend that blocks nothing a
+// leftover of its namespace's absent backend; see leftoverOf.
+func (b backend) leftover(
+	ctx detection.Context, f detection.Finding,
+) detection.Finding {
+	if f.Severity > detection.Info {
+		return f
+	}
+	return asLeftover(ctx, f, b.service.Namespace)
 }
 
 // readyEndpoints sums ready endpoints across a Service's slices.

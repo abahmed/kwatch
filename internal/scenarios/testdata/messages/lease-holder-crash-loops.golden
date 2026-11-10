@@ -1,5 +1,5 @@
 10:01:15 roll-up
-🟠 kwatch (prod-eu-1) found two new problems at the same time. ccm in kube-system keeps crashing. Lease cloud-controller in kube-system is failing: held by pod ccm-e465b17e-a has not been renewed for 12 minutes. Each gets its own message when it changes or resolves.
+🟠 kwatch (prod-eu-1) found two new problems at the same time. ccm in kube-system keeps crashing. Lease cloud-controller in kube-system is failing: held by pod ccm-e465b17e-a has not been renewed for 12 minutes. Each one alerts on its own when it changes or resolves.
 🟠 kwatch (prod-eu-1) found two new problems at the same time.
 | 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
 |
@@ -7,18 +7,18 @@
 | - **ccm** in **kube-system** keeps crashing
 | - Lease **cloud-controller** (**kube-system**) — held by pod ccm-e465b17e-a has not been renewed for 12 min
 |
-| *Each gets its own message when it changes or resolves.*
+| *Each one alerts on its own when it changes or resolves.*
 10:03:00 material change
-🟠 ccm in kube-system (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. It fails with "fatal: cannot reach the cloud API". Its last run lasted ten seconds; six restarts since its pod was created one hour ago. It runs a single replica.
-Also grouped: 1 lease stale alert, 1 not-ready pod
+🟠 ccm in kube-system (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "fatal: cannot reach the cloud API". Its last run lasted ten seconds; six restarts since its pod was created one hour ago. It runs a single replica.
+Related alerts: 1 lease stale alert, 1 not-ready pod
 To read the output of the last crash, run kubectl logs ccm-e465b17e-a -c app -n kube-system --previous
 🟠 ccm in kube-system (prod-eu-1) keeps crashing.
 | 🟠 **ccm** in **kube-system** (**prod-eu-1**) keeps crashing.
-| Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
 | It fails with `fatal: cannot reach the cloud API`.
 | Its last run lasted ten seconds; six restarts since its pod was created one hour ago.
 | It runs a single replica.
-| Also grouped: 1 lease stale alert, 1 not-ready pod
+| Related alerts: 1 lease stale alert, 1 not-ready pod
 | To read the output of the last crash, run
 | ```
 | kubectl logs ccm-e465b17e-a -c app -n kube-system --previous

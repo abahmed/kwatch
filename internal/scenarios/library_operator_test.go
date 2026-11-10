@@ -14,7 +14,8 @@ import (
 // resource whose failing condition breaks what it owns, and an operator
 // whose crash leaves the resources it manages unreconciled.
 func operatorScenarios() []scenario {
-	return []scenario{operatorCROwnedFailing(), operatorDownCRsStuck()}
+	return []scenario{operatorCROwnedFailing(), operatorDownCRsStuck(),
+		operatorClusterCROwnedFailing()}
 }
 
 // kafkaRoot is group-qualified: KafkaCluster is not built in.

@@ -128,3 +128,39 @@ func TestGitlabCreateFailureIsReturned(t *testing.T) {
 		t.Fatal("unauthorized create must fail")
 	}
 }
+
+// A close whose state change fails is retried; the resolve comment that
+// already went out must not be posted again.
+func TestGitlabResolveRetryPostsOneComment(t *testing.T) {
+	g, rec := newRecordedGitlab(t)
+	ctx := context.Background()
+	if err := g.SendIncident(ctx, providertest.Announce()); err != nil {
+		t.Fatal(err)
+	}
+	fail := true
+	rec.Reply = func(w http.ResponseWriter, r providertest.Request) {
+		if r.Method == http.MethodPut && fail {
+			fail = false
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write([]byte(`{"iid":3}`))
+	}
+	rec.Reset()
+	resolve := providertest.Resolve()
+	if err := g.SendIncident(ctx, resolve); err == nil {
+		t.Fatal("want the state failure")
+	}
+	if err := g.SendIncident(ctx, resolve); err != nil {
+		t.Fatal(err)
+	}
+	notes := 0
+	for _, r := range rec.Requests() {
+		if r.Method == http.MethodPost {
+			notes++
+		}
+	}
+	if notes != 1 {
+		t.Fatalf("resolve comment posted %d times, want 1", notes)
+	}
+}

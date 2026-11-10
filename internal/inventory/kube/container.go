@@ -133,7 +133,9 @@ func containerStatusAttributes(
 	if last := s.LastTerminationState.Terminated; last != nil {
 		attrs[AttrLastReason] = inventory.Text(last.Reason)
 		attrs[AttrLastExitCode] = inventory.Number(float64(last.ExitCode))
-		attrs[AttrLastFinished] = inventory.Time(last.FinishedAt.Time)
+		if !last.FinishedAt.IsZero() {
+			attrs[AttrLastFinished] = inventory.Time(last.FinishedAt.Time)
+		}
 		if !last.StartedAt.IsZero() {
 			attrs[AttrLastStarted] = inventory.Time(last.StartedAt.Time)
 		}

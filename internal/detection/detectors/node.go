@@ -238,8 +238,11 @@ func drainFinding(e inventory.Entity) (bool, detection.Finding) {
 // says nothing beyond spec.unschedulable.
 var removalTaints = []struct{ key, reason string }{
 	{"node.kubernetes.io/out-of-service", "marked out of service"},
+	{"node.cloudprovider.kubernetes.io/shutdown", "shut down"},
 	{"ToBeDeletedByClusterAutoscaler", "scale-down"},
 	{"DeletionCandidateOfClusterAutoscaler", "scale-down"},
+	{"karpenter.sh/disrupted", "disruption"},
+	{"karpenter.sh/disruption", "disruption"},
 }
 
 // removalTaint names the removal a node's taints announce, or "".

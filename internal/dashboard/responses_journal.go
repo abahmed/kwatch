@@ -38,6 +38,16 @@ type WhyDetail struct {
 	HoldTotal        int    `json:"holdTotal,omitempty"`
 	HoldElapsed      int    `json:"holdElapsed,omitempty"`
 	CannotSee        bool   `json:"cannotSee,omitempty"`
+	// PagingHeldReason says a page waits because the cluster is
+	// scaling ("Paging held: cluster is scaling"); empty otherwise.
+	PagingHeldReason string `json:"pagingHeldReason,omitempty"`
+	// PagingHeldUntil is when the hold ends if no node changes again,
+	// the Overview's scalingHold.expectedEnd; zero without a hold.
+	PagingHeldUntil time.Time `json:"pagingHeldUntil,omitzero"`
+	// UnverifiedReason says kwatch has held a finding of the incident
+	// for a while over a kind it cannot read now ("kwatch can't verify
+	// this right now: ..."); empty otherwise.
+	UnverifiedReason string `json:"unverifiedReason,omitempty"`
 }
 
 // AckDetail is the acknowledgement of the incident: the person's note,

@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="{{asset:tokens.css}}">
 <link rel="stylesheet" href="{{asset:app.css}}">
 <link rel="stylesheet" href="{{asset:plain.css}}">
+<link rel="stylesheet" href="{{asset:notify.css}}">
 <link rel="stylesheet" href="{{asset:incident.css}}">
 <link rel="stylesheet" href="{{asset:insight.css}}">
 <link rel="stylesheet" href="{{asset:round.css}}">
@@ -28,7 +29,9 @@
 <link rel="stylesheet" href="{{asset:activity.css}}">
 <link rel="stylesheet" href="{{asset:map.css}}">
 <link rel="stylesheet" href="{{asset:overview.css}}">
+<link rel="stylesheet" href="{{asset:kwatch.css}}">
 <link rel="stylesheet" href="{{asset:look.css}}">
+<script defer src="{{asset:js/terms.js}}"></script>
 <script defer src="{{asset:js/core.js}}"></script>
 <script defer src="{{asset:js/api.js}}"></script>
 <script defer src="{{asset:js/rows.js}}"></script>
@@ -57,6 +60,7 @@
 <script defer src="{{asset:js/timeline.js}}"></script>
 <script defer src="{{asset:js/context.js}}"></script>
 <script defer src="{{asset:js/objects.js}}"></script>
+<script defer src="{{asset:js/paging.js}}"></script>
 <script defer src="{{asset:js/insight.js}}"></script>
 <script defer src="{{asset:js/round.js}}"></script>
 <script defer src="{{asset:js/roundmore.js}}"></script>
@@ -65,7 +69,8 @@
 <script defer src="{{asset:js/incwhy.js}}"></script>
 <script defer src="{{asset:js/inclinks.js}}"></script>
 <script defer src="{{asset:js/usagechart.js}}"></script>
-<script defer src="{{asset:js/issuestage.js}}"></script>
+<script defer src="{{asset:js/incsum.js}}"></script>
+<script defer src="{{asset:js/incdetails.js}}"></script>
 <script defer src="{{asset:js/release.js}}"></script>
 <script defer src="{{asset:js/detail.js}}"></script>
 <script defer src="{{asset:js/incpanel.js}}"></script>
@@ -81,6 +86,8 @@
 <script defer src="{{asset:js/status.js}}"></script>
 <script defer src="{{asset:js/kwatchpage.js}}"></script>
 <script defer src="{{asset:js/refresh.js}}"></script>
+<script defer src="{{asset:js/push.js}}"></script>
+<script defer src="{{asset:js/notify.js}}"></script>
 <script defer src="{{asset:js/main.js}}"></script>
 <script defer src="{{asset:js/keys.js}}"></script>
 </head>
@@ -99,6 +106,7 @@
   <symbol id="i-down" viewBox="0 0 16 16"><path d="M8 3v10M3.5 8.5 8 13l4.5-4.5"/></symbol>
   <symbol id="i-grip" viewBox="0 0 16 16"><path d="M6 3.5h.01M10 3.5h.01M6 8h.01M10 8h.01M6 12.5h.01M10 12.5h.01" stroke-width="2.6" stroke-linecap="round"/></symbol>
   <symbol id="i-more" viewBox="0 0 16 16"><path d="M8 3.5h.01M8 8h.01M8 12.5h.01" stroke-width="2.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3"/></symbol>
   <symbol id="i-columns" viewBox="0 0 16 16"><path d="M2.5 3h11v10h-11zM6.2 3v10M9.8 3v10"/></symbol>
   <symbol id="i-mark" viewBox="0 0 64 64"><path d="M17 5.5v53" stroke-width="8.5"/><path d="M47.5 6.5 32.2 27.6" stroke-width="7.5"/><path d="M33.4 36.8 48.5 57.5" stroke-width="8"/></symbol>
 </svg>
@@ -120,17 +128,19 @@
             <p class="legend-h">Colors and words</p>
             <ul>
               <li><span class="dot page"></span><b>Urgent</b>: kwatch alerted the on-call person. Look now.</li>
-              <li><span class="dot notify"></span><b>Needs attention</b>: kwatch sent a message. Look soon.</li>
-              <li><span class="dot low"></span><b>Low</b>: only in the daily summary. No rush.</li>
-              <li><span class="dot quiet"></span><b>Quiet</b>: kwatch keeps track but sends nothing.</li>
+              <li><span class="dot notify"></span><b>Needs attention</b>: kwatch alerted your chat channels. Look soon.</li>
+              <li><span class="dot low"></span><b>Low</b>: listed in the daily summary only. No rush.</li>
+              <li><span class="dot quiet"></span><b>Quiet</b>: nobody was alerted. kwatch only keeps track of it.</li>
             </ul>
-            <p>The alert level is how kwatch told your team. Open an issue and start with "What to do".</p>
+            <p>The alert level is how kwatch told your team. Open an issue and start with "What should I do?".</p>
             <p class="legend-sub">States</p>
             <ul data-legend-states></ul>
-            <ul><li><b>Settled before alerting</b>: it recovered while kwatch was still confirming it, so nobody was told.</li></ul>
+            <ul><li><b>Settled on its own</b>: it recovered while kwatch was still checking it, so nobody was alerted.</li></ul>
+            <p>A list shows a state only where it differs: every Active issue is happening now, every Resolved one resolved.</p>
+            <p><b>Browser alerts</b> (in the side bar, or under Settings on a phone): this browser tells you about new issues at the level you pick, even when the tab is in the background.</p>
             <p class="legend-h legend-keys">Keyboard</p>
             <ul class="keys legend-keys-list">
-              <li><kbd>g</kbd> then <kbd>o</kbd> Overview · <kbd>i</kbd> Issues · <kbd>m</kbd> Map · <kbd>a</kbd> Activity · <kbd>k</kbd> kwatch</li>
+              <li><kbd>g</kbd> then <kbd>o</kbd> Overview · <kbd>i</kbd> Issues · <kbd>a</kbd> Activity · <kbd>k</kbd> kwatch</li>
               <li><kbd>/</kbd> Search the issues</li>
               <li><kbd>j</kbd> <kbd>k</kbd> Next / previous row, or issue when one is open beside the table</li>
               <li><kbd>Enter</kbd> Open the issue beside the table (Cmd or Ctrl and click: its own page in a new tab)</li>
@@ -142,16 +152,27 @@
         </details>
         <button class="who-b btn btn-sm" type="button" data-who-toggle aria-expanded="false" aria-controls="who">Settings</button>
       </div>
+      <p class="side-cluster" data-cluster hidden><span class="sr-only">Cluster: </span><span class="cl-name" data-cluster-name></span><span class="chip c-acked cl-env" data-cluster-env title="app.environment marks this cluster as non-production, so kwatch alerts your channels but never pages anyone." hidden>Non-production</span></p>
       <nav class="nav" aria-label="Dashboard">
         <a href="/" data-link data-nav="status">Overview</a>
         <a href="/issues" data-link data-nav="issues">Issues<span class="count" data-badge hidden></span></a>
-        <a href="/map" data-link data-nav="map">Map</a>
         <a href="/activity" data-link data-nav="activity">Activity</a>
-        <a href="/kwatch" data-link data-nav="kwatch">kwatch<span class="nav-dot" data-kw-dot hidden></span><span class="sr-only" data-kw-dot-sr></span></a>
+        <a href="/kwatch" data-link data-nav="kwatch"><span class="nav-pre">kwatch&nbsp;</span><span class="nav-end">health</span><span class="nav-dot" data-kw-dot hidden></span><span class="sr-only" data-kw-dot-sr></span></a>
       </nav>
       <div class="who" id="who">
+        <div class="ntf" data-ntf>
+          <button class="ntf-b" type="button" data-ntf-toggle aria-pressed="false" aria-describedby="ntf-hint"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg><span>Browser alerts</span><span class="ntf-state" data-ntf-state>Off</span></button>
+          <p class="ntf-hint" id="ntf-hint" data-ntf-hint hidden></p>
+          <div class="ntf-opts" data-ntf-opts hidden>
+            <label class="ntf-l">Tell me about<select name="ntf-min" data-ntf-min><option value="page">Urgent only</option><option value="notify">Urgent and needs attention</option><option value="digest">Everything</option></select></label>
+            <label class="ntf-c"><input type="checkbox" name="ntf-resolved" data-ntf-resolved>Also when resolved</label>
+            <label class="ntf-c" data-ntf-open-l><input type="checkbox" name="ntf-open" data-ntf-open>Even when this tab is open</label>
+            <p class="ntf-mode" data-ntf-mode></p>
+            <button class="link ntf-test" type="button" data-ntf-test>Send a test notification</button>
+          </div>
+        </div>
         <div class="tz" role="group" aria-label="Show times in"><span>Times</span><button class="tz-b" type="button" data-tz="local" aria-pressed="true">Local</button><button class="tz-b" type="button" data-tz="utc" aria-pressed="false">UTC</button></div>
-        <div><span>Read-only dashboard</span><button class="link" type="button" data-signout>Sign out</button></div>
+        <div class="who-acct"><span>Read-only dashboard</span><button class="link" type="button" data-signout>Sign out</button></div>
       </div>
     </header>
     <div class="main">
@@ -167,7 +188,7 @@
   <div class="center">
     <div class="signin" data-form>
       <svg class="mark" width="44" height="44" viewBox="0 0 64 64" aria-hidden="true"><use href="#i-mark"/><circle class="mark-dot" cx="28.6" cy="32.2" r="8.6" stroke-width="3.2"/></svg>
-      <h1>Sign in to kwatch</h1>
+      <h1>Sign in to see this cluster's issues</h1>
       <div class="notice" data-expired hidden><p>Your session ended. Sign in again.</p></div>
       <div class="notice" data-restarted role="status" hidden><p>kwatch restarted, so your session ended. Sign in again.</p></div>
       <form novalidate>
@@ -180,10 +201,7 @@
         <p class="field-error" id="pwerr" role="alert" data-error hidden></p>
         <button class="btn btn-primary btn-block" type="submit" data-submit>Sign in</button>
       </form>
-      <div class="help">
-        <p>Forgot it? Open the installer, choose Dashboard, then "Show my access link and password".</p>
-        <div class="cmd"><code tabindex="0">bash &lt;(curl -fsSL https://kwatch.dev/kwatch.sh)</code><button class="btn" type="button" data-copy>Copy</button></div>
-      </div>
+      <p class="help"><a class="ulink" href="https://github.com/abahmed/kwatch/blob/{{docs-ref}}/docs/dashboard.md#how-to-get-the-password" target="_blank" rel="noopener noreferrer">How to get the password</a></p>
     </div>
   </div>
 </template>
@@ -209,57 +227,53 @@
 </template>
 
 <template id="tpl-issues">
-  <div class="page-head">
-    <div><h1>Issues</h1><p class="sub" data-sub></p></div>
+  <div class="page-head ihead">
+    <div class="ihead-t"><h1>Issues</h1><p class="sub" data-sub></p></div>
     <div class="updated" data-updated hidden></div>
   </div>
   <a class="skip" href="#issues-table" data-skip>Skip to issues</a>
-  <div class="qvbox" data-qv></div>
   <div class="filterbox" data-filterbox role="search" aria-label="Filter issues">
+    <div class="tbar">
     <div class="stsw" role="group" aria-label="Status" aria-describedby="stsw-help">
-      <button class="stsw-b" type="button" data-status="active" aria-pressed="true">Active<span class="fc-n" data-n></span></button><button class="stsw-b" type="button" data-status="resolved" aria-pressed="false">Resolved<span class="fc-n" data-n></span></button><button class="stsw-b" type="button" data-status="all" aria-pressed="false">All<span class="fc-n" data-n></span></button>
-    </div>
-    <button class="btn btn-sm ftoggle" type="button" data-ftoggle aria-expanded="false" aria-controls="fmore">Filters</button>
-    <p class="stsw-help muted small" id="stsw-help">Active is what is failing now. Resolved is what stopped failing in the last 7 days. All shows both.</p>
-    <div class="filters">
-      <label class="f f-search"><span class="sr-only">Search</span><svg class="icon f-icon" aria-hidden="true"><use href="#i-search"/></svg><input type="search" name="q" data-f="q" placeholder="Search issues" autocomplete="off" aria-keyshortcuts="/"><kbd class="f-kbd" aria-hidden="true">/</kbd></label>
-      <div class="fpicks">
-      <div class="f f-pick" data-ms="namespace"></div>
-      <div class="fmore" id="fmore" data-fmore>
-      <div class="f f-pick" data-ms="kind"></div>
-      <div class="f f-pick" data-ms="state"></div>
-      <div class="f f-pick" data-ms="acked"></div>
-      <div class="f f-pick" data-ms="stopped"></div>
-      <label class="f f-pick"><span class="sr-only">Started</span><select name="age" data-f="age" data-dd-mark><option value="">Any start time</option><option value="today">Started today</option><option value="day">Going on over a day</option></select></label>
-      <label class="f f-pick"><span class="sr-only">Resolved within</span><select name="since" data-f="since" data-dd-mark><option value="">Resolved in 7 days</option><option value="24h">Resolved in 24 hours</option><option value="72h">Resolved in 3 days</option></select></label>
+        <button class="stsw-b" type="button" data-status="active" aria-pressed="true">Active<span class="fc-n" data-n></span></button><button class="stsw-b" type="button" data-status="resolved" aria-pressed="false">Resolved<span class="fc-n" data-n></span></button><button class="stsw-b" type="button" data-status="all" aria-pressed="false">All<span class="fc-n" data-n></span></button>
       </div>
-      <label class="f f-sort"><span class="sr-only">Sort</span><select name="sort" data-f="sort"><option value="">Most urgent, then newest</option><option value="severity">Severity</option><option value="last">Last seen</option><option value="started">Started</option><option value="duration">Duration</option><option value="repeats">Times repeated</option><option value="status">Status</option><option value="namespace">Namespace</option><option value="title">Title</option></select></label>
-      <button class="btn btn-sm f-dir" type="button" data-f-dir hidden></button>
+      <div class="filters">
+        <label class="f f-search"><span class="sr-only">Search</span><svg class="icon f-icon" aria-hidden="true"><use href="#i-search"/></svg><input type="search" name="q" data-f="q" placeholder="Search issues" autocomplete="off" aria-keyshortcuts="/"><kbd class="f-kbd" aria-hidden="true">/</kbd></label>
       </div>
-    </div>
-    <details class="shint" data-shint><summary>Search tips</summary><ul>
-      <li><code>ns:staging</code> one namespace</li>
-      <li><code>is:urgent</code> one alert level</li>
-      <li><code>"out of memory"</code> these words together</li>
-    </ul><ul data-shint-rest hidden>
-      <li><code>-is:acked</code> not acknowledged yet · <code>-word</code> leave out issues that mention it</li>
-      <li><code>state:open</code> <code>state:flapping</code> one state · <code>is:stopped</code> stopped tracking</li>
-      <li><code>age:&lt;2h</code> started in the last 2 hours · <code>age:&gt;1d</code> going on over a day</li>
-    </ul><button class="link shint-more" type="button" data-shint-more aria-expanded="false">More</button></details>
-    <div class="frow">
-      <div class="fchips" role="group" aria-labelledby="sevlabel"><span class="f-lbl" id="sevlabel">Severity</span>
-        <button class="fchip" type="button" data-sev="page" aria-pressed="false"><svg class="icon fchip-on" aria-hidden="true"><use href="#i-check"/></svg><span class="dot page"></span>Urgent<span class="fc-n" data-n></span></button>
-        <button class="fchip" type="button" data-sev="notify" aria-pressed="false"><svg class="icon fchip-on" aria-hidden="true"><use href="#i-check"/></svg><span class="dot notify"></span>Needs attention<span class="fc-n" data-n></span></button>
-        <button class="fchip" type="button" data-sev="digest" aria-pressed="false"><svg class="icon fchip-on" aria-hidden="true"><use href="#i-check"/></svg><span class="dot low"></span>Low<span class="fc-n" data-n></span></button>
-        <button class="fchip" type="button" data-sev="silent" aria-pressed="false" hidden><svg class="icon fchip-on" aria-hidden="true"><use href="#i-check"/></svg><span class="dot quiet"></span>Quiet<span class="fc-n" data-n></span></button></div>
+      <button class="btn btn-sm ftoggle" type="button" data-ftoggle aria-expanded="false" aria-controls="fmore">Filters</button>
+      <p class="sr-only" id="stsw-help">Active is what is failing now. Resolved is what stopped failing in the last 7 days. All shows both.</p>
+      <details class="shint" data-shint><summary aria-label="Search tips" title="Search tips">?</summary><div class="shint-pop"><p class="shint-h">Search tips</p><ul>
+        <li><code>ns:staging</code> one namespace</li>
+        <li><code>is:urgent</code> one alert level</li>
+        <li><code>"out of memory"</code> these words together</li>
+      </ul><ul data-shint-rest hidden>
+        <li><code>-is:acked</code> not acknowledged yet · <code>-word</code> leave out issues that mention it</li>
+        <li><code>state:open</code> <code>state:flapping</code> one state · <code>is:stopped</code> stopped tracking</li>
+        <li><code>age:&lt;2h</code> started in the last 2 hours · <code>age:&gt;1d</code> going on over a day</li>
+      </ul><button class="link shint-more" type="button" data-shint-more aria-expanded="false">More</button></div></details>
     </div>
     <div class="factive" data-factive role="group" hidden></div>
-  </div>
-  <div class="livebar" data-livebar role="status" hidden><span data-livebar-text></span><button class="btn btn-sm" type="button" data-livebar-show>Show</button></div>
-  <div data-alert></div>
-  <p class="muted small pagenote" data-pagenote hidden>is:new and is:changed are checked on this page only: your browser remembers what you saw, the server doesn't.</p>
-  <div class="ttools">
-    <details class="vopts" data-vopts>
+    <div class="fmore" id="fmore" data-fmore>
+      <div class="filters fpicks">
+        <div class="f f-pick" data-ms="namespace"></div>
+        <div class="f f-pick" data-ms="kind"></div>
+        <div class="f f-pick" data-ms="state"></div>
+        <div class="f f-pick" data-ms="acked"></div>
+        <div class="f f-pick" data-ms="stopped"></div>
+        <label class="f f-pick"><span class="sr-only">Started</span><select name="age" data-f="age" data-dd-mark><option value="">Any start time</option><option value="today">Started today</option><option value="day">Going on over a day</option></select></label>
+        <label class="f f-pick"><span class="sr-only">Resolved within</span><select name="since" data-f="since" data-dd-mark><option value="">Resolved in 7 days</option><option value="24h">Resolved in 24 hours</option><option value="72h">Resolved in 3 days</option></select></label>
+        <label class="f f-sort"><span class="sr-only">Sort</span><select name="sort" data-f="sort"><option value="">Most urgent, then newest</option><option value="severity">Severity</option><option value="last">Last seen</option><option value="started">Started</option><option value="duration">Duration</option><option value="repeats">Times repeated</option><option value="status">Status</option><option value="namespace">Namespace</option><option value="title">Title</option></select></label>
+        <button class="btn btn-sm f-dir" type="button" data-f-dir hidden></button>
+      </div>
+        <div class="fchips" role="group" aria-labelledby="sevlabel"><span class="sr-only" id="sevlabel">Severity</span>
+          <button class="fchip" type="button" data-sev="page" aria-pressed="false"><svg class="icon fchip-on" aria-hidden="true"><use href="#i-check"/></svg><span class="dot page"></span>Urgent<span class="fc-n" data-n></span></button>
+          <button class="fchip" type="button" data-sev="notify" aria-pressed="false"><svg class="icon fchip-on" aria-hidden="true"><use href="#i-check"/></svg><span class="dot notify"></span>Needs attention<span class="fc-n" data-n></span></button>
+          <button class="fchip" type="button" data-sev="digest" aria-pressed="false"><svg class="icon fchip-on" aria-hidden="true"><use href="#i-check"/></svg><span class="dot low"></span>Low<span class="fc-n" data-n></span></button>
+          <button class="fchip" type="button" data-sev="silent" aria-pressed="false" hidden><svg class="icon fchip-on" aria-hidden="true"><use href="#i-check"/></svg><span class="dot quiet"></span>Quiet<span class="fc-n" data-n></span></button></div>
+      <div class="trow2">
+        <div class="qvbox" data-qv></div>
+    <div class="ttools">
+      <details class="vopts" data-vopts>
       <summary class="btn btn-sm">View options</summary>
       <div class="vopts-pop">
         <div class="vo-grid">
@@ -277,8 +291,8 @@
         <ul class="vo-views" data-vo-views></ul>
         <p class="vo-foot"><button class="link" type="button" data-vo-reset>Reset to defaults</button><span class="muted small">Kept in this browser only.</span></p>
       </div>
-    </details>
-    <div class="cols" data-cols>
+      </details>
+      <div class="cols" data-cols>
       <button class="btn btn-sm cols-btn" type="button" data-cols-btn aria-haspopup="dialog"><svg class="icon" aria-hidden="true"><use href="#i-columns"/></svg>Columns</button>
       <div class="cols-pop" data-cols-pop role="dialog" aria-label="Columns">
         <p class="cols-h">Columns</p>
@@ -286,8 +300,14 @@
         <ul class="cols-list" data-cols-list></ul>
         <p class="cols-foot"><button class="link" type="button" data-cols-reset>Reset columns</button><span class="muted small">Drag a heading's edge to resize; double-click it to fit.</span></p>
       </div>
+      </div>
+  </div>
+      </div>
     </div>
   </div>
+  <div class="livebar" data-livebar role="status" hidden><span data-livebar-text></span><button class="btn btn-sm" type="button" data-livebar-show>Show</button></div>
+  <div data-alert></div>
+  <p class="muted small pagenote" data-pagenote hidden>is:new and is:changed are checked on this page only: your browser remembers what you saw, the server doesn't.</p>
   <div class="tablewrap" data-tablewrap>
     <table class="itable" id="issues-table" tabindex="-1" data-table><caption class="sr-only">Issues</caption><thead></thead><tbody></tbody></table>
   </div>
@@ -328,16 +348,13 @@
       <p class="al-line al-timing" data-timing hidden></p>
       <div class="al-ack" data-ack hidden></div>
     </section>
-    <details class="fold" data-fold="why"><summary>Why kwatch thinks this</summary><div class="fold-body">
-      <h3 class="fold-h">Likely cause</h3>
-      <p class="fold-cap">kwatch's best guess at what started this. Check it against the evidence below.</p>
-      <p class="d-cause" data-cause></p>
+    <details class="fold" data-fold="why"><summary>What kwatch checked</summary><div class="fold-body">
       <div data-evidence hidden></div>
     </div></details>
     <details class="fold" data-fold="others" hidden><summary>Other issues <span class="fold-n" data-others-n></span></summary><div class="fold-body"><div data-causing></div><div data-sametime></div></div></details>
-    <details class="fold" data-fold="fix" hidden><summary>All steps to fix <span class="fold-n" data-fix-n></span></summary><div class="fold-body"><div data-steps></div><p class="runbook" data-runbook hidden></p></div></details>
+    <details class="fold" data-fold="fix" hidden><summary>All steps <span class="fold-n" data-fix-n></span></summary><div class="fold-body"><div data-steps></div><p class="runbook" data-runbook hidden></p></div></details>
     <details class="fold" data-fold="changes" hidden><summary>What changed just before <span class="fold-n" data-changes-n></span></summary><div class="fold-body" data-changes></div></details>
-    <details class="fold" data-fold="seen" hidden><summary>Seen before</summary><div class="fold-body" data-seen></div></details>
+    <details class="fold" data-fold="seen" hidden><summary>Has this happened before?</summary><div class="fold-body" data-seen></div></details>
     <details class="fold" data-fold="waiting" hidden><summary>Why it's waiting to start</summary><div class="fold-body" data-waiting></div></details>
     <details class="fold" data-fold="probes" hidden><summary>Failing probe</summary><div class="fold-body" data-probes></div></details>
     <details class="fold" data-fold="warnings" hidden><summary>Recent warnings <span class="fold-n" data-warnings-n></span></summary><div class="fold-body" data-warnings></div></details>
@@ -350,9 +367,10 @@
       <div class="cap"><span data-logcap></span><span class="cap-actions"><button class="btn btn-sm" type="button" data-wrap-logs aria-pressed="false">Wrap lines</button><button class="btn btn-sm" type="button" data-copy-logs>Copy all</button></span></div>
     </div></details>
     <details class="fold" data-fold="containers" hidden><summary>Containers</summary><div class="fold-body"><div data-containers></div><div class="ct-part" data-resources></div><div class="ct-part" data-usage></div></div></details>
+    <details class="fold" data-fold="map" hidden open><summary>How it connects</summary><div class="fold-body"><p class="map-line" data-map-line></p><div class="map-canvas" data-map-canvas></div><details class="map-more" open><summary>As a list</summary><ul class="map-list" data-map-list></ul></details></div></details>
     <details class="fold" data-fold="related" hidden><summary>Affected objects</summary><div class="fold-body"><div data-affected></div><div data-related></div></div></details>
     <details class="fold" data-fold="told" hidden><summary>Who was told</summary><div class="fold-body" data-told></div></details>
-    <details class="fold" data-fold="more"><summary>More details</summary><div class="fold-body"><dl class="facts" data-facts></dl></div></details>
+    <details class="fold" data-fold="more"><summary>Reference</summary><div class="fold-body"><dl class="facts" data-facts></dl></div></details>
   </div>
 </template>
 
@@ -361,8 +379,8 @@
     <div class="drw-shade" data-drw-shade></div>
     <section class="drw-panel" role="dialog" aria-modal="true" aria-label="Issue preview" tabindex="-1" data-drw-panel>
       <div class="drw-bar">
-        <span class="drw-nav"><button class="btn btn-sm" type="button" data-drw-prev aria-keyshortcuts="k [" title="Previous issue in the table (k or [)">← Previous</button><span class="pager-pos" data-drw-pos></span><button class="btn btn-sm" type="button" data-drw-next aria-keyshortcuts="j ]" title="Next issue in the table (j or ])">Next →</button></span>
-        <span class="drw-acts"><a class="btn btn-sm drw-full" data-link data-drw-full>Open full page</a><button class="btn btn-sm drw-x" type="button" data-drw-close aria-label="Close the preview" title="Close (Esc)" aria-keyshortcuts="Escape"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button></span>
+        <span class="drw-nav"><button class="btn btn-sm" type="button" data-drw-prev aria-keyshortcuts="k [" title="Previous issue in the table (k or [)"><span aria-hidden="true">←</span><span class="drw-w"> Previous</span></button><span class="pager-pos" data-drw-pos></span><button class="btn btn-sm" type="button" data-drw-next aria-keyshortcuts="j ]" title="Next issue in the table (j or ])"><span class="drw-w">Next </span><span aria-hidden="true">→</span></button></span>
+        <span class="drw-acts"><a class="btn btn-sm drw-full" data-link data-drw-full title="Open full page"><svg class="icon drw-i" aria-hidden="true"><use href="#i-up"/></svg><span class="drw-w">Open full page</span></a><button class="btn btn-sm drw-x" type="button" data-drw-close aria-label="Close the preview" title="Close (Esc)" aria-keyshortcuts="Escape"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></button></span>
       </div>
       <div class="drw-body" data-drw-body></div>
     </section>

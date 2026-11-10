@@ -241,17 +241,17 @@ func TestAuthForwardedClientIsCanonical(t *testing.T) {
 	}
 }
 
-// Past maxLimiterKeys clients, new ones share one bucket, so the map
-// stays bounded.
+// Past maxLimiterKeys clients the oldest is forgotten, so the map stays
+// bounded and a client past the bound keeps its own count.
 func TestRateLimiterCapsItsKeys(t *testing.T) {
 	l := newRateLimiter(clock.RealClock{}, maxFailures)
 	for i := range maxLimiterKeys + 500 {
 		l.record("client-" + strconv.Itoa(i))
 	}
-	if n := len(l.counts); n != maxLimiterKeys+1 {
-		t.Errorf("keys = %d, want %d", n, maxLimiterKeys+1)
+	if n := len(l.counts); n != maxLimiterKeys {
+		t.Errorf("keys = %d, want %d", n, maxLimiterKeys)
 	}
-	if l.allowed("client-" + strconv.Itoa(maxLimiterKeys+1)) {
-		t.Error("overflow clients share a bucket that is over the limit")
+	if !l.allowed("client-" + strconv.Itoa(maxLimiterKeys+1)) {
+		t.Error("a client past the bound shares a full bucket")
 	}
 }

@@ -45,6 +45,56 @@ func (d *DynamicSource) dropUnwanted(
 	return retired
 }
 
+// handOverVersions parks the watch of a type whose served version
+// changed (a CRD's preferred version moving from v1beta1 to v1) under
+// the new version, so the new watch takes its objects over (takeOver)
+// instead of the old one being retired and its live objects reported
+// gone: entity IDs carry no version. The caller holds d.mu.
+func (d *DynamicSource) handOverVersions(desired []plannedResource) {
+	wanted := gvrSet(desired)
+	for _, r := range desired {
+		_, running := d.running[r.gvr]
+		_, parked := d.parked[r.gvr]
+		if running || parked {
+			continue
+		}
+		if w, ok := d.takeOldVersion(wanted, r.gvr); ok {
+			d.parked[r.gvr] = w
+		}
+	}
+}
+
+// takeOldVersion removes and returns the running (then stopped) or
+// parked watch of another, no longer wanted version of target's
+// resource. The caller holds d.mu.
+func (d *DynamicSource) takeOldVersion(
+	wanted map[schema.GroupVersionResource]bool,
+	target schema.GroupVersionResource,
+) (*dynamicWatch, bool) {
+	old := func(gvr schema.GroupVersionResource) bool {
+		return gvr != target && !wanted[gvr] && sameResource(gvr, target)
+	}
+	for gvr, w := range d.running {
+		if old(gvr) {
+			w.cancel()
+			delete(d.running, gvr)
+			return w, true
+		}
+	}
+	for gvr, w := range d.parked {
+		if old(gvr) {
+			delete(d.parked, gvr)
+			return w, true
+		}
+	}
+	return nil, false
+}
+
+// sameResource reports two versions of one group and resource.
+func sameResource(a, b schema.GroupVersionResource) bool {
+	return a.Group == b.Group && a.Resource == b.Resource
+}
+
 func gvrSet(
 	resources []plannedResource,
 ) map[schema.GroupVersionResource]bool {

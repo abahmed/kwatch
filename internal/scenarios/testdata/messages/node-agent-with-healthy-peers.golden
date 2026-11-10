@@ -1,5 +1,5 @@
 10:11:15 roll-up
-🟠 kwatch (prod-eu-1) found three new problems at the same time. logship in observability keeps crashing. api in shop keeps crashing. web in shop keeps crashing. Each gets its own message when it changes or resolves.
+🟠 kwatch (prod-eu-1) found three new problems at the same time. logship in observability keeps crashing. api and web in shop keep crashing. Each one alerts on its own when it changes or resolves.
 🟠 kwatch (prod-eu-1) found three new problems at the same time.
 | 🟠 **kwatch roll-up** · prod-eu-1 — 3 new problems at the same time
 |
@@ -8,4 +8,4 @@
 | - **api** in **shop** keeps crashing
 | - **web** in **shop** keeps crashing
 |
-| *Each gets its own message when it changes or resolves.*
+| *Each one alerts on its own when it changes or resolves.*

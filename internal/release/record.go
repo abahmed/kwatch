@@ -55,7 +55,8 @@ type Image struct {
 
 // Record is one release of one workload.
 type Record struct {
-	// ID names the release: kind/namespace/name@unix-seconds.
+	// ID names the release: kind/namespace/name@unix-seconds, with
+	// "-n" for the nth release of the workload within that second.
 	ID        string    `json:"id"`
 	Kind      string    `json:"kind"`
 	Namespace string    `json:"namespace"`

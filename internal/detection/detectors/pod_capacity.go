@@ -36,10 +36,11 @@ var (
 // free. It says nothing when the pod declares no requests, since then
 // the gap cannot be measured.
 func capacityEvidence(
-	model inventory.Reader, pod inventory.EntityID, message string,
+	ctx detection.Context, pod inventory.EntityID, message string,
 ) []detection.Evidence {
+	model := ctx.Model
 	blockers, _ := kube.ParseSchedulerMessage(message)
-	eligible := eligibleNodes(model, pod)
+	eligible := eligibleNodes(ctx, pod)
 	var out []detection.Evidence
 	for _, ask := range []resourceAsk{cpuAsk, memoryAsk} {
 		if !blocked(blockers, ask.blocker) {

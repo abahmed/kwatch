@@ -19,6 +19,16 @@ cannot. The mechanics of the gap are in
   same thread.
 - **Nothing is sent twice by two pods.** Only the pod that holds the lock
   claims the state file; an old pod that lost it stops sending.
+- **An API server outage does not restart the pod.** While the API server
+  is down kwatch cannot renew its lock, so it stops sending, then rejoins
+  the election in the same process and leads again once the API server is
+  back. A lock lost while the new session is still starting, or an outage
+  that hits the session's own startup calls, rejoins the same way, waiting
+  longer (1 to 30 seconds) after each start that fails in a row. kwatch
+  exits, and Kubernetes restarts it, when it cannot prove the old session
+  stopped sending and writing, and when a step fails in a way waiting
+  cannot fix (an invalid configuration, a missing permission, a broken
+  state volume).
 - **A restart is never silent about a failure.** After the restart kwatch
   lists the cluster again. An issue that is still happening is found again
   and keeps its place; a short grace after the restart keeps it from being

@@ -1,6 +1,7 @@
 package rootcause
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -72,4 +73,51 @@ func ids(reached []Reached) []inventory.EntityID {
 		out[i] = r.ID
 	}
 	return out
+}
+
+// countingReader counts the entities whose relations are read.
+type countingReader struct {
+	inventory.Reader
+	reads int
+}
+
+func (c *countingReader) Relations(
+	id inventory.EntityID, dir inventory.Direction,
+) []inventory.Relation {
+	c.reads++
+	return c.Reader.Relations(id, dir)
+}
+
+// Reach stops expanding once maxReach is met: a hub with many branches
+// is not walked to the end of the level only to drop most of it.
+func TestReachStopsExpandingAtTheCap(t *testing.T) {
+	h := newGraph(t)
+	hub := podID("hub")
+	var mids []inventory.EntityID
+	for i := 0; i < 10; i++ {
+		mid := podID(fmt.Sprintf("mid-%d", i))
+		mids = append(mids, mid)
+		var leaves []inventory.EntityID
+		for j := 0; j < 100; j++ {
+			leaves = append(leaves, podID(fmt.Sprintf("leaf-%d-%d", i, j)))
+		}
+		h.relateAll(mid, leaves)
+	}
+	h.relateAll(hub, mids)
+	reader := &countingReader{Reader: h.model}
+
+	got := Reach(reader, hub, inventory.Outgoing, 2)
+
+	assert.Len(t, got, maxReach)
+	assert.LessOrEqual(t, reader.reads, 5)
+}
+
+func (g *graph) relateAll(from inventory.EntityID, to []inventory.EntityID) {
+	g.t.Helper()
+	if _, err := g.model.Apply(inventory.Observation{
+		Kind: inventory.Related, Source: "test", Entity: from,
+		Relation: inventory.Calls, Targets: to,
+	}); err != nil {
+		g.t.Fatal(err)
+	}
 }

@@ -99,13 +99,35 @@ func TestStatusOutputIsBounded(t *testing.T) {
 		report.Upgrade.Items = append(report.Upgrade.Items,
 			status.Blocker{Text: strings.Repeat("y", 200)})
 	}
-	body, _ := renderStatus(report, "")
+	body, _, _ := renderStatus(report, "")
 	if len(body) > maxStatusBytes+100 {
 		t.Fatalf("body of %d bytes", len(body))
 	}
-	body, _ = renderStatus(report, "json")
+	body, _, code := renderStatus(report, "json")
+	if code != http.StatusInternalServerError {
+		t.Errorf("oversized json answered %d, want 500", code)
+	}
 	if len(body) > maxStatusBytes {
 		t.Fatalf("json of %d bytes", len(body))
+	}
+}
+
+func TestStatusOversizedJSONIsNotA200(t *testing.T) {
+	h := newStatusServer()
+	h.SetStatusSource(func() status.Report {
+		r := status.Report{}
+		for i := 0; i < 5000; i++ {
+			r.Upgrade.Items = append(r.Upgrade.Items,
+				status.Blocker{Text: strings.Repeat("y", 200)})
+		}
+		return r
+	})
+	w := getStatus(h, http.MethodGet, "/status?format=json")
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("json: %d, want 500", w.Code)
+	}
+	if w = getStatus(h, http.MethodGet, "/status"); w.Code != 200 {
+		t.Fatalf("text: %d, want 200", w.Code)
 	}
 }
 

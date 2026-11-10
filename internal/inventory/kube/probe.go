@@ -84,6 +84,9 @@ type Prober struct {
 	// plane remembers the control-plane metrics of each API server
 	// process, to measure the calls made between two rounds.
 	plane planeMemory
+	// versionWarned is set once an old server version was logged (see
+	// warnOldServer). Only the Run goroutine touches it.
+	versionWarned bool
 }
 
 // LeaseScanPeriod is the time between two Lease scans. A detector that
@@ -175,6 +178,7 @@ func (p *Prober) addServerVersion(
 		return
 	}
 	attrs[AttrServerVersion] = inventory.Text(info.GitVersion)
+	p.warnOldServer(info.GitVersion)
 	if minor, ok := ParseMinor(info.GitVersion); ok {
 		attrs[AttrServerMinor] = inventory.Number(float64(minor))
 	}

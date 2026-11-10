@@ -18,7 +18,7 @@ func crashReplaceScenarios() []scenario {
 
 // fileNotFoundLine is the log line of the replaced-assembly crash.
 const fileNotFoundLine = "FileNotFoundException: Could not load file or " +
-	"assembly 'Trella.Models.Common, Version=3.1.120.0'"
+	"assembly 'Retail.Models.Common, Version=3.1.120.0'"
 
 // crashLoopDuringNodeReplacement: both replicas of a Deployment abort
 // (exit 134, empty termination message) on every start for an hour.

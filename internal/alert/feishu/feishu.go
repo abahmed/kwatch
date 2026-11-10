@@ -20,8 +20,15 @@ import (
 	"github.com/abahmed/kwatch/internal/ratelimit"
 )
 
-// feiShuTextLimit keeps the card within Feishu's request size limit.
-const feiShuTextLimit = 30000
+// feiShuTextLimit is the first text budget, in runes. The real bound is
+// the whole request body (see feiShuBodyLimit), which JSON escaping and
+// multi-byte text make larger than the text, so the text is cut further
+// until the body fits.
+const feiShuTextLimit = 15000
+
+// feiShuBodyLimit keeps the request body within the 20 KB Feishu allows
+// for a custom bot message, with a little room to spare.
+const feiShuBodyLimit = 20 * 1000
 
 // defaultTitle is the card header when the operator sets none.
 const defaultTitle = "kwatch"
@@ -123,13 +130,30 @@ func (f *FeiShu) Name() string {
 func (f *FeiShu) SendIncident(
 	ctx context.Context, m notification.Message,
 ) error {
-	text := safetext.RichWithOutput(m,
-		notification.FeishuDialect(), "\n\n", feiShuTextLimit)
-	body, err := f.buildRequestBodyFeiShu(text)
+	body, err := f.fitBody(func(limit int) string {
+		return safetext.RichWithOutput(m,
+			notification.FeishuDialect(), "\n\n", limit)
+	})
 	if err != nil {
 		return err
 	}
 	return f.sendByFeiShuApi(ctx, body)
+}
+
+// fitBody renders the text with a shrinking limit until the whole
+// request body is within feiShuBodyLimit.
+func (f *FeiShu) fitBody(render func(limit int) string) (string, error) {
+	limit := feiShuTextLimit
+	for {
+		body, err := f.buildRequestBodyFeiShu(render(limit))
+		if err != nil || len(body) <= feiShuBodyLimit || limit <= 1 {
+			return body, err
+		}
+		// Each rune is at least one body byte, so cutting the excess in
+		// runes always makes progress.
+		limit -= max(len(body)-feiShuBodyLimit, limit/10+1)
+		limit = max(limit, 1)
+	}
 }
 
 // rateLimitCodes are the documented frequency-limit codes; every other
@@ -166,8 +190,10 @@ func (f *FeiShu) sendByFeiShuApi(
 
 // SendMessage sends text message to the provider
 func (f *FeiShu) SendMessage(ctx context.Context, msg string) error {
-	body, err := f.buildRequestBodyFeiShu(notification.Truncate(
-		notification.NeutralizeFeishuMentions(msg), feiShuTextLimit))
+	text := notification.NeutralizeFeishuMentions(msg)
+	body, err := f.fitBody(func(limit int) string {
+		return notification.Truncate(text, limit)
+	})
 	if err != nil {
 		return err
 	}

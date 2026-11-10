@@ -115,28 +115,32 @@ func (h *HealthServer) statusHandler(
 	if license := h.statusHolder.license.Load(); license != nil {
 		report.License = (*license)()
 	}
-	body, contentType := renderStatus(report, r.URL.Query().Get("format"))
+	body, contentType, code := renderStatus(report,
+		r.URL.Query().Get("format"))
 	w.Header().Set("Content-Type", contentType)
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(code)
 	writeBody(w, body)
 }
 
-// renderStatus writes the report as JSON or text, within the bound.
-func renderStatus(report status.Report, format string) ([]byte, string) {
+// renderStatus writes the report as JSON or text, within the bound,
+// with the HTTP status to answer. A JSON report over the bound is a
+// 500 error body, not a 200 a script would read as a report.
+func renderStatus(report status.Report, format string) ([]byte, string,
+	int) {
 	if format == "json" {
 		body, err := json.MarshalIndent(report, "", "  ")
 		if err != nil || len(body) > maxStatusBytes {
 			return []byte("{\"error\":\"status too large\"}\n"),
-				"application/json"
+				"application/json", http.StatusInternalServerError
 		}
-		return append(body, '\n'), "application/json"
+		return append(body, '\n'), "application/json", http.StatusOK
 	}
 	text := report.Text()
 	if len(text) > maxStatusBytes {
 		cut := strings.LastIndexByte(text[:maxStatusBytes], '\n')
 		text = text[:cut+1] + "... cut: status too large\n"
 	}
-	return []byte(text), "text/plain; charset=utf-8"
+	return []byte(text), "text/plain; charset=utf-8", http.StatusOK
 }
 
 func writeBody(w http.ResponseWriter, body []byte) {

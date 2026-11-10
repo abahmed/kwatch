@@ -22,7 +22,7 @@ func failed(ctx detection.Context, e inventory.Entity) []detection.Finding {
 		daemonPodOnLeavingNode(ctx, e) {
 		return nil
 	}
-	if s, ok := admissionFinding(e); ok {
+	if s, ok := admissionFinding(ctx, e, since); ok {
 		return []detection.Finding{s}
 	}
 	findingReason, summary := reasons.PodFailed, "Pod failed"
@@ -41,8 +41,8 @@ func failed(ctx detection.Context, e inventory.Entity) []detection.Finding {
 
 // podFailedAt is when the pod's last container ended: the cluster's own
 // record, which stays true after kwatch restarts. A pod without a
-// finished container (rejected before it started) counts from when its
-// phase was first seen.
+// finished container (rejected before it started) counts from its start
+// or creation time.
 func podFailedAt(ctx detection.Context, pod inventory.Entity) time.Time {
 	var at time.Time
 	if ctx.Model != nil {
@@ -56,9 +56,21 @@ func podFailedAt(ctx detection.Context, pod inventory.Entity) time.Time {
 		}
 	}
 	if at.IsZero() {
-		return valueSince(pod, kube.AttrPhase)
+		return podBeganAt(pod)
 	}
 	return at
+}
+
+// podBeganAt dates a pod that never ran a container from the cluster's
+// records: its start time, else its creation time. Only a pod with
+// neither falls back to when kwatch first saw the phase.
+func podBeganAt(pod inventory.Entity) time.Time {
+	for _, name := range []string{kube.AttrStartTime, kube.AttrCreated} {
+		if t := timestamp(pod, name); !t.IsZero() {
+			return t
+		}
+	}
+	return valueSince(pod, kube.AttrPhase)
 }
 
 // failedPodSeverity is a warning while the failure is news and

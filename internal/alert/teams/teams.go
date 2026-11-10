@@ -86,7 +86,8 @@ func (t *Teams) SendIncident(
 
 // SendMessage sends plain text message to the Power Automate flow
 func (t *Teams) SendMessage(ctx context.Context, msg string) error {
-	b, err := t.buildRequestBodyMessage(msg)
+	b, err := t.buildRequestBodyMessage(
+		notification.Truncate(msg, teamsTextLimit))
 	if err != nil {
 		return err
 	}
@@ -109,7 +110,10 @@ func (t *Teams) sendAPI(ctx context.Context, payload []byte) error {
 			),
 		)
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	return connectorFailure(body)
 }
 
 // teamsTextLimit bounds the narrative so the payload stays under the

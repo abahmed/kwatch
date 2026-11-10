@@ -7,7 +7,8 @@ type offerResult struct {
 	// superseded is a queued job of the same conversation that the new
 	// one replaced; everything it said, the new one says too.
 	superseded *deliverJob
-	// displaced is a queued job pushed out to make room for a resolve.
+	// displaced is a queued job pushed out to make room for a resolve or
+	// a page announcement.
 	displaced *deliverJob
 }
 
@@ -19,9 +20,11 @@ type offerResult struct {
 // state once instead of every revision in turn. A resolve is never
 // dropped for a routine job: in a full queue with nothing to replace it
 // takes the place of the newest routine job, which goes to the overflow
-// summary instead. It never takes the place of another resolve or of a
-// page announcement, whose alert would then never open; when only those
-// are queued the resolve is dropped and logged as lost.
+// summary instead. A page announcement does the same: its alert would
+// never open if it only reached the overflow summary, which pagers skip.
+// Neither takes the place of a resolve or of another page announcement;
+// when only those are queued the job is not accepted and the caller keeps
+// it (a page goes to the backlog, a resolve is logged as lost).
 func offerQueuedJob(
 	queue chan deliverJob,
 	job deliverJob,
@@ -111,7 +114,7 @@ func coalesce(
 	if len(queued) < capacity {
 		return append(queued, job), offerResult{accepted: true}
 	}
-	if !job.isResolve() {
+	if !job.isResolve() && !job.announcesPage() {
 		return queued, offerResult{}
 	}
 	index := displacementVictim(queued)
@@ -167,8 +170,9 @@ func replacementIndex(queued []deliverJob, arriving deliverJob) int {
 }
 
 // displacementVictim picks the queued job a full queue gives up for a
-// resolve: the newest routine job, else the newest other job that is
-// neither a resolve nor a page announcement. It is -1 when there is none.
+// resolve or a page announcement: the newest routine job, else the newest
+// other job that is neither a resolve nor a page announcement. It is -1
+// when there is none.
 func displacementVictim(queued []deliverJob) int {
 	fallback := -1
 	for i := len(queued) - 1; i >= 0; i-- {

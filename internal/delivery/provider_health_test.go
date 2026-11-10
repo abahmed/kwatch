@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/notification"
 	"github.com/abahmed/kwatch/internal/ratelimit"
@@ -23,8 +22,7 @@ func TestProviderHealthReportsLastOutcomeWithBoundedReasons(t *testing.T) {
 	}{
 		{"outage", errors.New("dial tcp 10.0.0.1: refused"),
 			reasonUnavailable},
-		{"rejection", transport.Permanent(errors.New("bad token")),
-			reasonRejected},
+		{"rejection", rejection(401), reasonRejected},
 		{"rate limit", &ratelimit.Error{StatusCode: 429}, reasonRateLimited},
 	}
 	for _, tc := range cases {

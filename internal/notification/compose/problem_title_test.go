@@ -90,3 +90,36 @@ func TestProblemTitleOfFlappingMatchesTheAlert(t *testing.T) {
 	assert.Contains(t, got, "is not serving: its readiness check fails")
 	assert.Equal(t, clipTitle(alert), got)
 }
+
+// The list title is bounded; the full title keeps the whole sentence,
+// with the quoted log line cut on a word and not in the middle of one.
+func TestProblemTitlesKeepTheFullLeadForThePage(t *testing.T) {
+	long := "Unhandled exception. " + strings.Repeat("Failure ", 40)
+	p := stuckRelease(long+"the end.", true, incident.Notify)
+	w := Writer{}
+
+	short, full := w.ProblemTitles(p, nil, writerNow)
+
+	assert.Equal(t, short, w.ProblemTitle(p, nil, writerNow))
+	assert.LessOrEqual(t, utf8.RuneCountInString(short), maxProblemTitle)
+	assert.True(t, strings.HasSuffix(short, "…"), short)
+	assert.Greater(t, utf8.RuneCountInString(full),
+		utf8.RuneCountInString(short))
+	assert.Contains(t, full, "can't start (it stops at start with")
+	assert.Contains(t, full, "); the previous version is still serving")
+	assert.LessOrEqual(t, utf8.RuneCountInString(full), maxFullTitle)
+	assert.NotContains(t, full, "the end", "the quote is cut")
+	assert.NotRegexp(t, `Failur[^e]*…`, full, "never mid-word")
+
+	p.Members = nil
+	short, full = w.ProblemTitles(p, nil, writerNow)
+	assert.Empty(t, short+full)
+}
+
+// A title that fits is the same short and full.
+func TestProblemTitlesAgreeWhenShort(t *testing.T) {
+	short, full := Writer{}.ProblemTitles(crashIncident(), nil,
+		revisionNow)
+
+	assert.Equal(t, short, full)
+}

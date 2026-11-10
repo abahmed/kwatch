@@ -5,12 +5,13 @@
    tpl-detail clone. While the reader has something open in it or is
    selecting text, nothing is redrawn: a bar says the issue changed and
    "Show the update" draws it.
-   Tabs (issue page only): Timeline, Evidence, Impact, Alerts, Details,
+   Tabs (issue page only): Timeline, Proof, Impact, Alerts, Details,
    each with a count. The last one picked is kept for this browser
-   (localStorage kwatch.issueTab); #timeline … #details open one; arrow
-   keys move along the tabs and t, e, i, a, d pick one. Under 700px they
-   are a select menu. The drawer shows only the summary, with links to
-   the tabs of the full page. */
+   (localStorage kwatch.issueTab); #timeline … #details open one (#evidence
+   is Proof); arrow keys move along the tabs and t, p, i, a, d pick one.
+   On a phone the tabs are one row that scrolls sideways, right under the
+   summary. The drawer shows only the summary, with links to the tabs of
+   the full page. */
 (function () {
   "use strict";
   var KW = window.KW;
@@ -19,7 +20,7 @@
 
   var EMPTY = {
     timeline: "Nothing happened yet besides kwatch noticing it.",
-    evidence: "kwatch has no readings for this yet: no failing probe, logs, containers, warnings or node problems.",
+    evidence: "kwatch has no proof for this yet: no failing probe, logs, containers, warnings or node problems.",
     impact: "Nothing else looks hit: kwatch found no affected objects, lost traffic or linked issues.",
     details: "No more details."
   };
@@ -33,7 +34,7 @@
       if (k !== "containers" && k !== "usageHours" && k !== "why") copy[k] = data[k];
     });
     var w = data.why;
-    if (w) copy.why = [w.alertLevelReason, w.holdTotal, !!w.cannotSee,
+    if (w) copy.why = [w.alertLevelReason, w.pagingHeldReason, w.unverifiedReason, w.holdTotal, !!w.cannotSee,
       (w.stillOpenReason || "").split(/[,;]/)[0]];
     return JSON.stringify(copy);
   }
@@ -75,7 +76,6 @@
       b.tabIndex = on ? 0 : -1;
       KW.$('[data-panel="' + t[0] + '"]', root).hidden = !on;
     });
-    KW.$("[data-tab-pick]", root).value = key;
     root.dataset.shownTab = key;
     if (!user) return;
     save(key);
@@ -95,6 +95,21 @@
     b.focus();
   }
 
+  /* hintMore marks the tab bar "more" while tabs wait off its right
+     edge on a narrow screen (CSS shows a fade and an arrow). */
+  function hintMore(nav, list) {
+    function upd() {
+      nav.classList.toggle("more", list.scrollWidth - list.clientWidth - list.scrollLeft > 2);
+    }
+    list.addEventListener("scroll", upd, { passive: true });
+    window.addEventListener("resize", upd);
+    if (window.MutationObserver) {
+      new MutationObserver(upd).observe(list, { subtree: true, childList: true,
+        characterData: true, attributes: true, attributeFilter: ["hidden"] });
+    }
+    window.setTimeout(upd, 0);
+  }
+
   /* tabBar builds the tabs above the panels of an issue page. */
   function tabBar(root) {
     var nav = KW.el("div", "d-tabbar");
@@ -102,11 +117,6 @@
     list.setAttribute("role", "tablist");
     list.setAttribute("aria-label", "More about this issue");
     list.dataset.tabs = "";
-    var label = nav.appendChild(KW.el("label", "d-tabsel"));
-    label.appendChild(KW.el("span", "", "Show"));
-    var pick = label.appendChild(KW.el("select"));
-    pick.name = "issue-tab";
-    pick.dataset.tabPick = "";
     KW.ISSUE_TABS.forEach(function (t) {
       var b = list.appendChild(KW.el("button", "d-tab"));
       b.type = "button";
@@ -119,26 +129,26 @@
       b.appendChild(KW.el("span", "", t[1]));
       b.appendChild(KW.el("span", "d-badge")).hidden = true;
       b.addEventListener("click", function () { select(root, t[0], true); });
-      pick.appendChild(KW.el("option", "", t[1])).value = t[0];
       var panel = KW.$('[data-panel="' + t[0] + '"]', root);
       panel.id = "panel-" + t[0];
       panel.setAttribute("aria-labelledby", b.id);
     });
     list.addEventListener("keydown", function (e) { arrows(root, e); });
-    pick.addEventListener("change", function () { select(root, pick.value, true); });
+    hintMore(nav, list);
     var panels = KW.$(".d-panels", root);
     panels.parentNode.insertBefore(nav, panels);
     var old = new URLSearchParams(location.search).get("tab") === "evidence" ? "details" : "";
     select(root, fromHash() || old || saved() || "timeline", false);
   }
 
-  /* nobody: why no channel was told, in plain words. */
+  /* nobody: why nobody was alerted, in plain words. */
   KW.nobodyText = function (inc) {
-    if (KW.isUntold(inc)) return "Nobody was told: it settled before alerting.";
-    if (inc.severity === "silent") return "Nobody was told: its alert level is Quiet, so kwatch only keeps track of it.";
-    if (inc.severity === "digest") return "Nobody was told yet: Low issues wait for the daily summary.";
-    if (inc.state === "settling") return "Nobody was told yet: kwatch alerts once it is sure this is real.";
-    return "Nobody was notified yet.";
+    if (KW.isUntold(inc)) return "Nobody was alerted: it settled on its own.";
+    if (inc.severity === "silent") return "Nobody was alerted: its level is Quiet, so kwatch only keeps track of it.";
+    if (inc.severity === "digest") return "Nobody was alerted yet: Low issues are listed in the daily summary.";
+    if (KW.heldWords && KW.heldWords(inc)) return "Nobody was alerted yet: " + KW.heldWords(inc) + ".";
+    if (inc.state === "settling") return "Nobody was alerted yet: kwatch alerts once it is sure this is real.";
+    return "Nobody was alerted yet.";
   };
 
   /* count: the timeline's events; else the sections a tab shows. */
@@ -170,8 +180,9 @@
         var b = KW.$('[data-tab="' + t[0] + '"] .d-badge', root);
         b.hidden = !n;
         b.textContent = KW.num(n);
-        KW.$('[data-tab-pick] option[value="' + t[0] + '"]', root).textContent = words;
-      } else if (more && n) {
+      } else if (more && (n || t[0] === "evidence")) {
+        // Evidence is always one click away from the drawer, even before
+        // kwatch has readings: its empty note says why.
         var a = more.appendChild(KW.el("a", "ulink", words));
         a.href = "/issues/" + encodeURIComponent(inc.id) + "#" + t[0];
         a.dataset.link = "";
@@ -193,7 +204,18 @@
     sec.scrollIntoView({ block: "start" });
   };
 
-  /* Keys t, e, i, a, d pick a tab of the issue page. */
+  /* KW.showTab opens tab key: on the issue page at once, from the
+     drawer on the full page. */
+  KW.showTab = function (root, key) {
+    if (!KW.$("[data-tabs]", root)) {
+      KW.go("/issues/" + encodeURIComponent(root.dataset.lookedId || "") + "#" + key);
+      return;
+    }
+    select(root, key, true);
+    KW.$(".d-tabbar", root).scrollIntoView({ block: "start" });
+  };
+
+  /* Keys t, p, i, a, d pick a tab of the issue page. */
   document.addEventListener("keydown", function (e) {
     if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented || !page || !page.isConnected) return;
     var t = e.target;

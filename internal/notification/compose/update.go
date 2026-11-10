@@ -6,6 +6,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 // maxUpdate bounds an update: only what changed, in one or two
@@ -99,7 +100,7 @@ func revisedSentences(f caseFacts) []sentence {
 	lead := leadSentences(f)
 	label := "Cause now known: "
 	if f.p.Pending.CauseReplaced() {
-		label = "Cause changed: "
+		label = "Cause changed" + formerWords(f) + ": "
 	}
 	labeled := &lead[0]
 	if last := &lead[len(lead)-1]; last.fact == factCauseTeaser {
@@ -109,6 +110,19 @@ func revisedSentences(f caseFacts) []sentence {
 	labeled.text = label + labeled.text
 	lead = append(lead, strongestProof(f)...)
 	return append(lead, formerRootSentences(f)...)
+}
+
+// formerWords name what the thread was told before a revision, so the
+// reader knows which diagnosis it replaces: " (earlier: api in shop)".
+// The Community message never names a cause, so it says nothing.
+func formerWords(f caseFacts) string {
+	former := f.p.FormerRoot()
+	if f.community || former == (inventory.EntityID{}) ||
+		former == leadSubject(f) || former.Kind == rootcause.KindScheduling {
+		// The scheduler's reason is no object a reader was told about.
+		return ""
+	}
+	return " (earlier: " + f.objectName(former) + ")"
 }
 
 func strongestProof(f caseFacts) []sentence {

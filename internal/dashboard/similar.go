@@ -1,6 +1,8 @@
 package dashboard
 
 import (
+	"slices"
+
 	"github.com/abahmed/kwatch/internal/incident"
 )
 
@@ -64,4 +66,52 @@ func countSimilar(p incident.Incident, all []incident.Incident) int {
 		n++
 	}
 	return n
+}
+
+// maxSimilarRefs bounds how many similar issues the detail names.
+const maxSimilarRefs = 3
+
+// SimilarRef names one other issue with the same error.
+type SimilarRef struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	State string `json:"state"`
+}
+
+// similarRefs names up to maxSimilarRefs of the incidents countSimilar
+// counts: the ones still going first, then the newest.
+func similarRefs(p incident.Incident, all []incident.Incident) []SimilarRef {
+	key := similarKey(p)
+	if key == "" {
+		return nil
+	}
+	var found []incident.Incident
+	for i, q := range all {
+		if i >= maxSimilarScan {
+			break
+		}
+		if q.ID == p.ID || similarKey(q) != key ||
+			(q.Tier == incident.Silent && q.State != incident.Resolved) {
+			continue
+		}
+		found = append(found, q)
+	}
+	slices.SortStableFunc(found, func(a, b incident.Incident) int {
+		ra, rb := a.State == incident.Resolved, b.State == incident.Resolved
+		if ra != rb && ra {
+			return 1
+		} else if ra != rb {
+			return -1
+		}
+		return b.Opened.Compare(a.Opened)
+	})
+	if len(found) > maxSimilarRefs {
+		found = found[:maxSimilarRefs]
+	}
+	out := make([]SimilarRef, 0, len(found))
+	for _, q := range found {
+		out = append(out, SimilarRef{ID: q.ID, Title: toListItem(q).Title,
+			State: q.State.String()})
+	}
+	return out
 }

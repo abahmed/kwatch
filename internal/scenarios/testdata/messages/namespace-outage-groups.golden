@@ -1,5 +1,5 @@
 10:03:22 roll-up
-🟠 shop (prod-eu-1): 8 of 15 workloads failing since 10:02 UTC. app0 in shop keeps crashing. app1 in shop keeps crashing. app2 in shop keeps crashing. app3 in shop keeps crashing. app4 in shop keeps crashing. Three more are not described here. Each gets its own message when it changes or resolves.
+🟠 shop (prod-eu-1): 8 of 15 workloads failing since 10:02 UTC. app0, app1, app2, app3 and app4 in shop keep crashing. Three more are not shown. Each one alerts on its own when it changes or resolves.
 🟠 shop (prod-eu-1): 8 of 15 workloads failing since 10:02 UTC.
 | 🟠 **shop** · prod-eu-1 — 8 of 15 workloads failing since 10:02 UTC
 |
@@ -11,4 +11,4 @@
 | - **app4** in **shop** keeps crashing
 | - +3 more
 |
-| *Each gets its own message when it changes or resolves.*
+| *Each one alerts on its own when it changes or resolves.*

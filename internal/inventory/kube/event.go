@@ -11,9 +11,10 @@ import (
 )
 
 // containerFieldPath extracts the container from an event's field path,
-// such as "spec.containers{app}" or "spec.initContainers{migrate}".
-var containerFieldPath = regexp.MustCompile(
-	`^spec\.(?:initContainers|containers)\{([^}]+)\}$`)
+// such as "spec.containers{app}", "spec.initContainers{migrate}" or
+// "spec.ephemeralContainers{debugger}".
+var containerFieldPath = regexp.MustCompile(`^spec\.(?:initContainers|` +
+	`containers|ephemeralContainers)\{([^}]+)\}$`)
 
 // EventNote turns a Kubernetes Event into a note on the object it is
 // about. Normal events are ignored: only warnings are evidence of

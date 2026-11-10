@@ -73,7 +73,8 @@ func TestUnclearCauseIsNotRepeatedOrContradicted(t *testing.T) {
 	}
 	text := notification.Text(Writer{}.Write(announce(noRootFinding),
 		at(6, 0)))
-	if !strings.Contains(text, "Nothing outside it points to a cause.") {
+	if !strings.Contains(text,
+		"Cause not found yet: nothing outside it points to one") {
 		t.Errorf("the note must still say nothing outside explains it:\n%s",
 			text)
 	}
@@ -88,8 +89,8 @@ func TestCheckedSentencesNameWhatWasHealthy(t *testing.T) {
 
 	text := notification.Text(Writer{}.Write(announce(p), at(6, 0)))
 
-	want := "Its configuration, image and node are healthy and " +
-		"unchanged, so nothing outside it points to a cause."
+	want := "Cause not found yet: its configuration, image and node " +
+		"are healthy and unchanged, so look at the app itself."
 	if !strings.Contains(text, want) {
 		t.Fatalf("note = %s\nwant %q", text, want)
 	}
@@ -106,7 +107,7 @@ func TestCausedByLineSilencesNoCauseSentences(t *testing.T) {
 
 		text := notification.Text(Writer{}.Write(announce(p), at(6, 0)))
 
-		for _, no := range []string{unclearText, "points to a cause",
+		for _, no := range []string{unclearText, "Cause not found yet",
 			"Caused by: "} {
 			if strings.Contains(text, no) {
 				t.Errorf("%s: said %q:\n%s", name, no, text)
@@ -144,7 +145,7 @@ func TestCausedByLineIsPlainWithACause(t *testing.T) {
 func TestCommunityWriterDropsTheCausedByLine(t *testing.T) {
 	community := Writer{}.ForEdition(feature.CommunityEntitlements(), true)
 	wants := map[string]string{
-		"unclear": unclearText, "checked": "points to a cause",
+		"unclear": unclearText, "checked": "Cause not found yet",
 	}
 	for name, own := range map[string]bool{
 		"unclear": true, "checked": false,

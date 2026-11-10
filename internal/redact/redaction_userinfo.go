@@ -81,3 +81,20 @@ func skipNotUserinfo(g []string) bool {
 		strings.HasPrefix(g[2], "/") ||
 		(strings.HasSuffix(user, "name") && nameValue.MatchString(g[2]))
 }
+
+// portPath is a port followed by a path: what stands after "host:" in
+// "http://registry:4873/@scope%2fpkg".
+var portPath = regexp.MustCompile(`^\d{1,5}/`)
+
+// skipHostPort keeps a URL whose "user:password" is really "host:port"
+// followed by a path with an "@" in it ("https://api:8443/v1/users/@me").
+// A password may hold "/", so the match cannot stop there; a number
+// and a "/" right after the colon is a port, not a password.
+func skipHostPort(g []string) bool {
+	if len(g) < 2 || len(g[0]) <= len(g[1]) {
+		return false
+	}
+	rest := g[0][len(g[1]):]
+	_, after, ok := strings.Cut(rest, ":")
+	return ok && portPath.MatchString(after)
+}

@@ -151,3 +151,18 @@ func TestWarningReasonsAreBounded(t *testing.T) {
 }
 
 func itoaForTest(i int) string { return string(rune('a' + i)) }
+
+// One crash-looping hour in a quiet week would inflate the mean; the
+// usual figure leaves such an unusual hour out, but keeps the rare
+// restart of a workload that restarts now and then.
+func TestCompareLeavesUnusualHoursOutOfTheUsual(t *testing.T) {
+	b := NewBaselines()
+	at := quietHours(b, 39, 0)
+	b.AddRestarts(baselineWorkload, 1, at)
+	b.AddRestarts(baselineWorkload, 2000, at.Add(time.Hour))
+	b.AddRestarts(baselineWorkload, 0, at.Add(2*time.Hour))
+	cmp := b.Compare(baselineWorkload, MetricRestartsPerHour, 8)
+	require.True(t, cmp.Known)
+	assert.Greater(t, cmp.Typical, 0.0, "the rare restart stays")
+	assert.Less(t, cmp.Typical, 0.1, "the crash-loop hour is left out")
+}

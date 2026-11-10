@@ -41,7 +41,8 @@ func TestCauseCategoryFollowsTheRowAndMode(t *testing.T) {
 		"changed config map": {&rootcause.CauseRecord{
 			Rule: "configmap-missing-or-changed", Mode: explain.ModeChanged},
 			categoryConfigChange},
-		"rollout":       {&rootcause.CauseRecord{Rule: "rollout"}, "a rollout"},
+		"rollout": {&rootcause.CauseRecord{Rule: "rollout"},
+			"a recent rollout"},
 		"unknown row":   {&rootcause.CauseRecord{Rule: "new-row"}, categoryOther},
 		"no row at all": {&rootcause.CauseRecord{Summary: "x"}, categoryOther},
 	}
@@ -73,10 +74,12 @@ func TestCommunityTellsOnlyTheCauseCategory(t *testing.T) {
 
 	got := community.Write(d, at(5, 0))
 	assert.Contains(t, got.Note,
-		"Cause found: a missing Secret or ConfigMap.")
+		"Most likely cause: a missing Secret or ConfigMap.")
 	assert.NotContains(t, got.Note, "stripe-api")
 	assert.NotContains(t, got.Title, "because")
-	assert.Equal(t, proWhich+proFixTail+proInvite, noteFooter(got.Note))
+	// Pro only has a command to check it: no fix is promised.
+	assert.Equal(t, "Pro shows which one and how to check it, free "+
+		"during early access: kwatch.dev/pro", noteFooter(got.Note))
 	assert.Equal(t, 1, strings.Count(got.Note, "Pro shows"))
 }
 
@@ -84,7 +87,7 @@ func TestCommunityTeaserKeepsTheCertainty(t *testing.T) {
 	_, community, _ := communityWriters()
 	got := community.Write(announce(missingSecretCrash(0.6)), at(5, 0))
 	assert.Contains(t, got.Note,
-		"Cause found: likely a missing Secret or ConfigMap.")
+		"Most likely cause: a missing Secret or ConfigMap.")
 }
 
 // app.hideProHints removes only the Pro line: the category is the free

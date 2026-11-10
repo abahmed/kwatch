@@ -15,6 +15,10 @@ import (
 // the people it would remind are already on it. Everything else carries
 // on, because it is news, not a repeat: a worse state, a resolve.
 //
+// The annotation acknowledges the incident it was written for. One that
+// was already on the object before the incident opened is ignored: left
+// behind, it would silence every later incident of that object.
+//
 // kwatch tells the thread once when the annotation appears and once when
 // it goes. It does not name who set it: a Kubernetes object records the
 // tool that wrote it last (a field manager), not the person. The
@@ -55,7 +59,8 @@ func (a *Ack) clone() *Ack {
 	return &out
 }
 
-// ackOn finds the annotation on the root, then on the members.
+// ackOn finds the annotation on the root, then on the members. One left
+// over from an earlier incident does not count (ack_stale.go).
 func (m *Manager) ackOn(p *Incident) (Ack, bool) {
 	if m.model == nil {
 		return Ack{}, false
@@ -66,7 +71,8 @@ func (m *Manager) ackOn(p *Incident) (Ack, bool) {
 	}
 	slices.SortFunc(members, compareIDs)
 	for _, id := range append([]inventory.EntityID{p.Root}, members...) {
-		if attr, ok := m.model.Attribute(id, kube.AttrAck); ok {
+		attr, ok := m.model.Attribute(id, kube.AttrAck)
+		if ok && !m.staleAck(p, id, attr.Since) {
 			return Ack{On: id, Note: attr.Value.AsText()}, true
 		}
 	}
@@ -84,7 +90,8 @@ func compareIDs(a, b inventory.EntityID) int {
 }
 
 // adoptAck records an annotation that is already there when p is
-// announced. The announcement mentions it.
+// announced: one written after p opened, while it settled. The
+// announcement mentions it.
 func (m *Manager) adoptAck(p *Incident, now time.Time) {
 	if found, ok := m.ackOn(p); ok {
 		found.AtAnnounce = true
@@ -181,7 +188,7 @@ func (m *Manager) ackStep(p *Incident, now time.Time) (Decision, bool) {
 	}
 	p.Ack = nil
 	// Reminders count from now, not from before the acknowledgement.
-	p.Reminded = now
+	p.Reminded, p.Reminders = now, 0
 	if audible {
 		p.note(now, "acknowledgement removed")
 		return m.decide(p, Update, ReasonAckRemoved), true

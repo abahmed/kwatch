@@ -1,0 +1,14 @@
+10:42:00 settled
+🔴 Web in shop (prod-eu-1) has no ready replicas (0 of 1); two possible causes: node n1 or node n2 was removed and no other node has room. The scheduler says "0/2 nodes are available: 2 Insufficient cpu." Service web in shop can't serve traffic. Users can't reach shop.example.com.
+Related alerts: 1 scheduling failure, 1 service without endpoints
+To see the object's state and events, run kubectl describe deployment web -n shop
+🔴 Web in shop (prod-eu-1) has no ready replicas (0 of 1); two possible causes: node n1 or node n2 was removed and no other node has room.
+| 🔴 Web in **shop** (**prod-eu-1**) has no ready replicas (0 of 1); two possible causes: node n1 or node n2 was removed and no other node has room.
+| The scheduler says `0/2 nodes are available: 2 Insufficient cpu.`
+| Service **web** in **shop** can't serve traffic.
+| Users can't reach shop.example.com.
+| Related alerts: 1 scheduling failure, 1 service without endpoints
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment web -n shop
+| ```

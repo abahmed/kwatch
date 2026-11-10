@@ -26,7 +26,14 @@ mark.hl { background: var(--surface); color: var(--text); text-decoration: under
 @media (max-width: 600px) {
   .drw-bar { gap: 6px; padding: 8px 12px; }
   .drw-bar .btn { padding: 0 10px; }
-  .drw-page { display: none; }
+  /* Icons only: the words stay as the buttons' names. */
+  .drw-bar .drw-w { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .drw-bar .btn { min-width: var(--hit); justify-content: center; }
+  .drw-bar { flex-wrap: nowrap; }
 }
 @media (prefers-color-scheme: dark) {
 }
+/* The drawer is narrower than the page: a smaller title. */
+.drw-body .d-sum h1 { font-size: 1.75rem; line-height: 1.2; }
+.drw-full .drw-i { display: none; transform: rotate(45deg); }
+@media (max-width: 600px) { .drw-full .drw-i { display: inline; } }

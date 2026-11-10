@@ -66,7 +66,10 @@ func (m *Manager) prepareGenerationLocked() {
 // replayQueuedLocked queues the jobs an earlier session or generation
 // left unsent, in their old order, then the jobs created before delivery
 // started. Left-over jobs go through the backlog, so any number of them
-// fits; the jobs created before Start fit the queues by construction.
+// fits. The jobs created before Start do not always fit: the pending
+// queue holds up to a queue's worth per provider, and a provider may also
+// have restored jobs queued ahead of them. What does not fit waits in the
+// backlog instead of being dropped.
 func (m *Manager) replayQueuedLocked() {
 	generation := m.currentGenerationLocked()
 	if generation == nil {
@@ -88,9 +91,11 @@ func (m *Manager) replayQueuedLocked() {
 	for _, name := range generation.order {
 		m.refillLocked(generation.entries[name])
 	}
+	m.replaying = true
 	for _, job := range m.pending {
 		m.fanOut(job)
 	}
+	m.replaying = false
 	m.pending = nil
 }
 
@@ -104,7 +109,7 @@ func (m *Manager) HasProviders() bool {
 
 func (m *Manager) runProvider(entry providerEntry, ctx context.Context) {
 	defer m.workerFinished()
-	ticker := time.NewTicker(workerProgressInterval)
+	ticker := time.NewTicker(m.progressInterval())
 	defer ticker.Stop()
 	for {
 		select {
@@ -112,6 +117,10 @@ func (m *Manager) runProvider(entry providerEntry, ctx context.Context) {
 			return
 		case <-ticker.C:
 			m.touchProgress()
+			// A summary restored after a failed flush, or left by a
+			// storm that ended while the worker was idle, is retried
+			// here: no job completes to trigger it.
+			m.maybeFlushOverflowSummary(ctx, &entry)
 		case job, ok := <-entry.ch:
 			if !ok {
 				return
@@ -126,6 +135,15 @@ func (m *Manager) runProvider(entry providerEntry, ctx context.Context) {
 			m.touchProgress()
 		}
 	}
+}
+
+func (m *Manager) progressInterval() time.Duration {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.workers.progressEvery > 0 {
+		return m.workers.progressEvery
+	}
+	return workerProgressInterval
 }
 
 func (m *Manager) workerFinished() {
@@ -179,6 +197,7 @@ func (m *Manager) shutdownContext(ctx context.Context) error {
 		return m.failShutdown(run.generation, err)
 	}
 	drainErr := m.deliverQueuedJobs(ctx, run.generation)
+	m.stopProviders(run.generation)
 	if m.closeDoneUnlessReconfiguring() {
 		return drainErr
 	}
@@ -261,6 +280,7 @@ func (m *Manager) failShutdown(
 ) error {
 	m.markWorkersStuck()
 	m.drainQueuedJobs(generation)
+	m.stopProviders(generation)
 	return errors.Join(err, m.closeOutbox())
 }
 

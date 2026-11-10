@@ -151,10 +151,12 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 	if !onlyGet(w, r) {
 		return
 	}
-	if s.sources.status.Load() == nil {
+	src := s.sources.status.Load()
+	if src == nil {
 		unavailable(w)
 		return
 	}
+	report := (*src)()
 	health := make([]ChannelHealth, 0)
 	if h := s.sources.health.Load(); h != nil {
 		for _, c := range (*h)() {
@@ -176,7 +178,8 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 		PerChannelHealth:   health,
 		Self:               s.selfStatus(),
 		FailedLastHour:     s.failedLastHour(),
-		Kwatch:             s.kwatchReport(),
+		Kwatch:             s.kwatchReport(report),
+		Cluster:            report.Cluster,
 	})
 }
 

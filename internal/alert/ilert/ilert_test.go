@@ -37,7 +37,8 @@ func TestIlert(t *testing.T) {
 	c := NewIlert(configMap, testAppConfig(), testDeps)
 	assert.NotNil(c)
 	assert.Equal(c.Name(), "Ilert")
-	assert.Equal(c.url, "https://api.ilert.com/api/v1/events/push/test")
+	assert.Equal("https://api.ilert.com/api/events", c.url)
+	assert.NotContains(c.url, "test")
 }
 
 func TestIlertSendMessageSkipsNotice(t *testing.T) {

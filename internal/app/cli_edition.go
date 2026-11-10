@@ -10,7 +10,9 @@ import (
 // CLIEdition is the edition a command run beside the leader sees. Reading
 // it copies the whole state file, which can be large on a nearly full
 // volume, so a command reads it once with NewCLIEdition and passes the
-// value down. The zero value reads as the Community edition.
+// value down. Copies that interrupted commands left behind are removed
+// at the next read and when kwatch starts (sweepEditionCopies). The zero
+// value reads as the Community edition.
 type CLIEdition struct {
 	entitlements feature.Entitlements
 }

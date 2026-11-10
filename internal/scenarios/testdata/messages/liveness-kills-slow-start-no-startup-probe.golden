@@ -1,10 +1,10 @@
 10:02:45 settled
-🟠 reports in shop (prod-eu-1) keeps failing its liveness check (connection refused), so the kubelet keeps restarting it, likely because its containers are not ready when liveness gives up. Liveness gives reports 25s (5s delay + 2 × 10s), and reports was not ready when each kill came. Its last run lasted 27 seconds; three restarts since its pod was created one hour ago. Fix in: deployment/reports → container app → livenessProbe (initialDelaySeconds 5, periodSeconds 10, failureThreshold 2). To read the output of the last crash, run kubectl logs reports-c87cd316-a -c app -n shop --previous
+🟠 reports in shop (prod-eu-1) keeps failing its liveness check (connection refused), so the kubelet keeps restarting it, likely because its containers are not ready when liveness gives up. Liveness gives reports 25s (5s delay + 2 × 10s), and reports was not ready when each kill came. Its last run lasted 27 seconds; three restarts since its pod was created one hour ago. Fix: give the liveness probe of container app in deployment/reports more time (now initialDelaySeconds 5, periodSeconds 10, failureThreshold 2). To read the output of the last crash, run kubectl logs reports-c87cd316-a -c app -n shop --previous
 🟠 reports in shop (prod-eu-1) keeps failing its liveness check (connection refused), so the kubelet keeps restarting it, likely because its containers are not ready when liveness gives up.
 | 🟠 **reports** in **shop** (**prod-eu-1**) keeps failing its liveness check (connection refused), so the kubelet keeps restarting it, likely because its containers are not ready when liveness gives up.
 | Liveness gives **reports** 25s (5s delay + 2 × 10s), and **reports** was not ready when each kill came.
 | Its last run lasted 27 seconds; three restarts since its pod was created one hour ago.
-| Fix in: deployment/reports → container app → livenessProbe (initialDelaySeconds 5, periodSeconds 10, failureThreshold 2).
+| Fix: give the liveness probe of container app in deployment/reports more time (now initialDelaySeconds 5, periodSeconds 10, failureThreshold 2).
 | To read the output of the last crash, run
 | ```
 | kubectl logs reports-c87cd316-a -c app -n shop --previous

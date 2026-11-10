@@ -131,3 +131,31 @@ func sameIDs(got, want string) bool {
 	}
 	return true
 }
+
+func TestSimilarRefsNameAFewOpenFirst(t *testing.T) {
+	var all []incident.Incident
+	for i, id := range []string{"a", "b", "c", "d", "e", "f"} {
+		p := testIncident(id, "team-"+id, time.Duration(i)*time.Minute)
+		p.Mode = detection.Mode("ImagePull")
+		if id == "f" {
+			p.State = incident.Resolved
+		}
+		all = append(all, p)
+	}
+	got := similarRefs(all[0], all)
+
+	if len(got) != maxSimilarRefs {
+		t.Fatalf("%d refs, want %d", len(got), maxSimilarRefs)
+	}
+	if got[0].ID != "e" || got[0].State != "open" {
+		t.Errorf("newest open first, got %+v", got[0])
+	}
+	for _, r := range got {
+		if r.ID == "a" || r.ID == "f" {
+			t.Errorf("%s: itself or a resolved one before open ones", r.ID)
+		}
+	}
+	if similarRefs(incident.Incident{}, all) != nil {
+		t.Error("an issue with no error key has no similar ones")
+	}
+}

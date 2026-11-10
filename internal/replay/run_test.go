@@ -72,6 +72,33 @@ func TestRunForwardsToTheCallerSink(t *testing.T) {
 	}
 }
 
+// A discarding replay keeps nothing in the result, but the caller's
+// sink still hears every decision.
+func TestRunDiscardKeepsNothing(t *testing.T) {
+	deps := newDependencies()
+	forwarded := 0
+	deps.Sink = func(context.Context, incident.Decision,
+		notification.Message) {
+		forwarded++
+	}
+	result, err := replay.Run(context.Background(),
+		readBytes(t, recordBadRollout(t)), deps,
+		replay.Options{Discard: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if forwarded == 0 {
+		t.Fatal("the sink heard nothing")
+	}
+	if n := len(result.Decisions) + len(result.Messages) +
+		len(result.Times) + len(result.Carried); n != 0 {
+		t.Fatalf("a discarding replay kept %d entries", n)
+	}
+	if len(result.Incidents) == 0 {
+		t.Fatal("expected tracked incidents in the result")
+	}
+}
+
 func TestRunEmptyLogEndsAfterTheTail(t *testing.T) {
 	log := replay.Log{Start: rolloutStart}
 	result, err := replay.Run(context.Background(), log, newDependencies(),

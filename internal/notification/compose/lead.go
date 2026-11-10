@@ -21,15 +21,16 @@ func leadSentences(f caseFacts) []sentence {
 		// The product's name is lowercase wherever it starts a sentence.
 		text = leadText(f)
 	}
-	return append([]sentence{{part: partLead, text: endSentence(text)}},
-		causeTeaser(f)...)
+	lead := sentence{part: partLead, text: endSentence(text),
+		shortSwap: startShortSwap(f)}
+	return append([]sentence{lead}, causeTeaser(f)...)
 }
 
 // specificLeads are the leads for a case the evidence names exactly, in
 // order: the first that applies is the lead.
 var specificLeads = []func(caseFacts) (string, bool){
-	logBurstLead, releaseLeads, archLead, firstRolloutLead, createdLead,
-	volumeHeldLead, provisionerLead, rivalLead, finalizerLead,
+	leftoverLead, logBurstLead, releaseLeads, archLead, firstRolloutLead,
+	createdLead, volumeHeldLead, provisionerLead, rivalLead, finalizerLead,
 	attachmentLead,
 }
 

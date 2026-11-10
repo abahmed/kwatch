@@ -59,7 +59,7 @@ func (w Writer) NamespaceOutage(
 	sentences = append(sentences, w.digestTitles(decisions, now, "")...)
 	sentences = append(sentences, w.sharedSentences(o.Shared)...)
 	sentences = append(sentences, sentence{part: partAction,
-		text: eachOwnMessage})
+		text: eachOwn(len(decisions))})
 	msg := notification.Message{
 		Key:      NamespaceOutageKey(o.Namespace, now),
 		Revision: 1, Status: status, Opens: true,

@@ -12,8 +12,8 @@ import (
 
 // This file is the Community edition of a message. The engine still
 // finds the cause, the changes and the impact; a Community message says
-// what is failing and only the category of its cause ("Cause found: a
-// config change.", see cause_category.go), and drops the detail: the
+// what is failing and only the category of its cause ("Most likely
+// cause: a config change.", see cause_category.go), and drops the detail: the
 // cause's object, change, version, image and wording, what to do (the
 // steps, the command to run and the setting to change), proofs,
 // counterfactual checks, confidence, the recent change, who made a
@@ -54,9 +54,12 @@ var communityParts = map[part]bool{
 
 // proLine is the Pro note of a Community message. cause is the line of
 // a message that tells its cause's category; plain is the line of one
-// that does not (an update that only says what changed).
+// that does not (an update that only says what changed). changeSeen
+// carries, past the copy that drops it, that the decision had a recent
+// change to name (see caseFacts.changeSeen).
 type proLine struct {
 	plain, cause string
+	changeSeen   bool
 }
 
 // communityOf is d as a Community message tells it, and the message's
@@ -65,30 +68,41 @@ func (w Writer) communityOf(
 	d incident.Decision, now time.Time,
 ) (incident.Decision, proLine) {
 	plain := communityDecision(d)
-	note := proLine{plain: w.noteFor(d, plain, now)}
-	if w.ProNote && d.Action != incident.Resolve {
-		note.cause = causeNote(plain.Incident.Cause,
-			fixable(gatherFacts(plain, now, nil)))
+	seen := changeSeen(d, now)
+	if !w.ProNote || d.Action != incident.Announce {
+		// Only an issue's first alert carries the Pro line: an update
+		// or a resolve of the same issue does not repeat it.
+		return plain, proLine{changeSeen: seen}
 	}
-	return plain, note
+	help := proHelpOf(proFacts(d, now))
+	return plain, proLine{plain: proNote(d, help),
+		cause: causeNote(plain.Incident.Cause, help), changeSeen: seen}
 }
 
-// noteFor is the Pro note of d, when this writer adds one and the
-// decision is a message that can carry it. plain is d as the Community
-// message tells it: the fix it leaves out is what the note names.
-func (w Writer) noteFor(
-	d, plain incident.Decision, now time.Time,
-) string {
-	if !w.ProNote || d.Action == incident.Resolve {
-		return ""
-	}
-	return proNote(d, fixable(gatherFacts(plain, now, nil)))
+// proFacts are the facts of d's Pro message as far as Community can
+// know them: an investigation report is never part of a Community
+// message, not even through what its Pro line promises.
+func proFacts(d incident.Decision, now time.Time) caseFacts {
+	d.Facts.Report, d.Facts.Correlation = nil, nil
+	return gatherFacts(d, now, nil)
 }
 
-// fixable reports a message whose Pro edition says how to fix it: steps
-// to run or the setting to change.
-func fixable(f caseFacts) bool {
-	return len(proSteps(f)) > 0 || len(placeSentences(f)) > 0
+// proHelpOf is what the Pro message of f gives to act on: a fix (a Fix
+// line or a step that changes the cluster), or only a command to check.
+func proHelpOf(f caseFacts) proHelp {
+	if _, ok := settledTie(f).fixPlace(); ok {
+		return helpFix
+	}
+	help := helpNone
+	for _, step := range proSteps(f) {
+		if step.Mutating {
+			return helpFix
+		}
+		if step.Command != "" {
+			help = helpCheck
+		}
+	}
+	return help
 }
 
 // withoutPart is sentences without those of part p.
@@ -178,4 +192,20 @@ func (w Writer) communitySentences(
 func aboutCause(s sentence) bool {
 	return s.fact != factCauseTeaser &&
 		(s.part == partCause || s.part == partUnverified)
+}
+
+// settledTie is f as the promise of its Pro line reads it: without the
+// cause's close rival. Pro runs detectors Community does not, and their
+// evidence is what usually settles such a close call, so Pro's message
+// then has the Fix line the tie alone would hide here. Only the promise
+// reads this; the Community message names neither cause.
+func settledTie(f caseFacts) caseFacts {
+	c := f.p.Cause
+	if c == nil || c.Rival == nil {
+		return f
+	}
+	settled := *c
+	settled.Rival = nil
+	f.p.Cause = &settled
+	return f
 }

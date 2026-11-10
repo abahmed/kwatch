@@ -30,7 +30,7 @@ func TestRestoredSummaryListsIncidentsStillFailing(t *testing.T) {
 	if strings.Index(msg.Note, "loud") > strings.Index(msg.Note, "quiet") {
 		t.Errorf("paging problem should come first: %q", msg.Note)
 	}
-	if !strings.Contains(msg.Note, "Each gets its own message") {
+	if !strings.Contains(msg.Note, "Each one alerts on its own") {
 		t.Errorf("note should say where updates go: %q", msg.Note)
 	}
 }
@@ -50,7 +50,7 @@ func TestRestoredSummaryCountsLowerPriorityProblems(t *testing.T) {
 		podDecision("loud", incident.Notify)}, 19, time.Time{})
 
 	for _, want := range []string{"19 lower-priority problems",
-		"next digest", "loud"} {
+		"listed in the next summary. Each", "loud"} {
 		if !strings.Contains(msg.Note, want) {
 			t.Errorf("note lacks %q: %q", want, msg.Note)
 		}

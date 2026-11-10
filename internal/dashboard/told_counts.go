@@ -37,3 +37,31 @@ func (d *TrendDay) addOpening(p incident.Incident, opened time.Time) {
 	}
 	d.add(p.Tier)
 }
+
+// toldOnly is the durations of the occurrences someone was alerted
+// about.
+func toldOnly(ds []trendDuration) []trendDuration {
+	var out []trendDuration
+	for _, d := range ds {
+		if d.told {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// resolvesTold are the times p resolved after someone was alerted: its
+// heard earlier occurrences and p itself when it was told.
+func resolvesTold(p incident.Incident) []time.Time {
+	var out []time.Time
+	for _, o := range p.History {
+		if !o.Resolved.IsZero() && o.Heard {
+			out = append(out, o.Resolved)
+		}
+	}
+	if p.State == incident.Resolved && p.SupersededBy == "" &&
+		!p.Resolved.IsZero() && !p.Untold() {
+		out = append(out, p.Resolved)
+	}
+	return out
+}

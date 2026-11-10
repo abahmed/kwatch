@@ -70,7 +70,8 @@ var extraRedactions = []redactionRule{
 		`(?i)((?:^|[^a-z0-9_.-])(?:key|sig|session)\s*=\s*)(` +
 			secretValue + `)`,
 	), placeholder: redacted, skip: skipShortOrPlainKeyValue,
-		rebuild: rebuildKeyValue, needs: []string{"key", "sig", "session"}},
+		rebuildAt: rebuildKeyValueAt,
+		needs:     []string{"key", "sig", "session"}},
 	{pattern: regexp.MustCompile(
 		`(?i)(\bhooks\.slack\.com/services/)[A-Za-z0-9/_-]+`,
 	), placeholder: redacted},
@@ -78,6 +79,15 @@ var extraRedactions = []redactionRule{
 		`(?i)(\bdiscord(?:app)?\.com/api/(?:v\d+/)?webhooks/)` +
 			`[A-Za-z0-9._/-]+`,
 	), placeholder: redacted},
+	// Microsoft Teams webhooks keep the secret in the path, on the old
+	// outlook.office.com host and on <tenant>.webhook.office.com.
+	{pattern: regexp.MustCompile(
+		`(?i)(\b(?:outlook\.office(?:365)?\.com/webhook/|` +
+			`webhook\.office\.com/webhookb2/))[A-Za-z0-9@/_.-]+`,
+	), placeholder: redacted, needs: []string{"office"}},
+	{pattern: regexp.MustCompile(
+		`(?i)(\bhooks\.zapier\.com/hooks/catch/)[A-Za-z0-9/_-]+`,
+	), placeholder: redacted, needs: []string{"zapier"}},
 	// Telegram puts the bot token in the URL path: /bot<id>:<token>/.
 	{pattern: regexp.MustCompile(`(\bbot)\d{6,}:[A-Za-z0-9_-]{30,}`),
 		placeholder: redacted},

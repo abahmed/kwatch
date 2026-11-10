@@ -7,7 +7,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/abahmed/kwatch/internal/incident"
-	"github.com/abahmed/kwatch/internal/pipeline/announce"
 )
 
 // restore loads the incidents, the startup marker and the fingerprints
@@ -53,7 +52,11 @@ func (e *Engine) restore() error {
 	if startup.ColdStart {
 		startup.HoldUntilSync()
 		// Restore runs before the loop starts, so it may write directly.
-		if err := e.deps.Store.SaveStartup(announce.StartupState{}); err != nil {
+		// Keep what the old marker carried: a second restart inside
+		// the window still owes its roll-ups, digest and listing.
+		kept := marker
+		kept.Complete = false
+		if err := e.deps.Store.SaveStartup(kept); err != nil {
 			klog.ErrorS(err, "pipeline: save startup marker",
 				"component", "pipeline")
 		}

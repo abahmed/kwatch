@@ -126,6 +126,12 @@ func (o LifecycleRuntime) ResyncInterval() time.Duration {
 	return o.values.resync
 }
 
+// OldProblem returns the age past which a problem kwatch found already
+// there is old (oldProblemDays); zero is off.
+func (o LifecycleRuntime) OldProblem() time.Duration {
+	return o.values.oldProblem
+}
+
 // Scope returns the scope policy. Accessors copy on read.
 func (r RuntimeConfig) Scope() ScopeRuntime {
 	return ScopeRuntime{values: r.scope}

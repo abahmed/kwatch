@@ -41,6 +41,11 @@ type SourceConfig struct {
 	// stored key after a restart so digests stay comparable and downtime
 	// changes are found; empty uses a random per-process key.
 	DigestKey []byte
+	// Answered, when set, counts the lists and watches of a resource
+	// the API server answered with success (kubeclient.Answers.Count).
+	// A watch that failed is working again as soon as the count moves,
+	// even when its resource version does not.
+	Answered func(group, resource string) uint64
 }
 
 // DynamicKinds reports the state of dynamically watched kinds.

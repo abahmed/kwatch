@@ -107,10 +107,10 @@ func (v *view) containerConfigModes(
 	if probeMissesPorts(container) && v.probeRefused(id, failing) {
 		out = append(out, ModeProbePortMismatch)
 	}
-	if v.startupErrorLine(id, container) != "" {
-		// The program stopped at start: a probe budget or a liveness
-		// kill came after it and explains nothing
-		// (self_start_error.go).
+	if v.podStoppedAtStart(id, container) {
+		// A program of the pod stopped at start: a probe budget or a
+		// liveness kill, of this container or a sidecar's, came after
+		// it and explains nothing (self_start_error.go).
 		return out
 	}
 	if v.startupBudgetShort(failing, container) {

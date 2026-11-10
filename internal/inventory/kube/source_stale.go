@@ -2,10 +2,32 @@ package kube
 
 import (
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/inventory"
 )
+
+// progressOf is the mark a watch of resource compares to tell that a
+// list or watch got through after a failure: the informer's resource
+// version and, with SourceConfig.Answered, the number of lists and
+// watches the API server answered. The count matters for kinds that
+// rarely change (storage classes, webhook configurations): a relist
+// after a blip returns the version the informer already had, so the
+// version alone would leave the kind stale until one of its objects
+// changed.
+func (s *Source) progressOf(
+	resource Resource, informer interface{ LastSyncResourceVersion() string },
+) func() string {
+	answered := s.cfg.Answered
+	if answered == nil {
+		return informer.LastSyncResourceVersion
+	}
+	return func() string {
+		return informer.LastSyncResourceVersion() + "/" +
+			strconv.FormatUint(answered(resource.Group, resource.Name), 10)
+	}
+}
 
 // noteFailure starts, or restarts, the run of failures of a synced watch.
 // A run that began at an older resource version ended when a list or watch
@@ -63,17 +85,21 @@ func (s *Source) Stale() []SourceStatus {
 // gets through: it is verifiable and not stale (see Stale). The detection
 // registry reads it (Registry.SetFresh) so a detector that would raise
 // from the passage of time alone stays undecided over a cache that
-// stopped moving. Kinds no watch lists are fresh.
+// stopped moving. Kinds no watch lists are fresh. A dynamic kind is
+// fresh unless a synced watch of it is stale (KindState.Stale): whether
+// it is verifiable is for Synced and Verifiable to say.
 func (s *Source) Fresh(kind inventory.Kind) bool {
+	listed := kind
+	if listed == KindContainer {
+		listed = KindPod
+	}
+	resource, typed := resourceOfKind()[listed]
+	if !typed {
+		state, ok := s.dynamicState(kind)
+		return !ok || !state.Stale
+	}
 	if !s.Verifiable(kind) {
 		return false
-	}
-	if kind == KindContainer {
-		kind = KindPod
-	}
-	resource, ok := resourceOfKind()[kind]
-	if !ok {
-		return true
 	}
 	now := s.cfg.Now()
 	for _, w := range s.watches {

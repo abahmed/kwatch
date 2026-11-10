@@ -1,0 +1,12 @@
+10:32:15 settled
+🔴 web in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "panic: invalid configuration value". Its last run lasted ten seconds. It runs a single replica. To read the output of the last crash, run kubectl logs web-39fafdb2-b -c app -n shop --previous
+🔴 web in shop (prod-eu-1) keeps crashing.
+| 🔴 **web** in **shop** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| It fails with `panic: invalid configuration value`.
+| Its last run lasted ten seconds.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs web-39fafdb2-b -c app -n shop --previous
+| ```

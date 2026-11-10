@@ -1,12 +1,13 @@
 /* kwatch dashboard: the Issues table, its status switch, the live
-   updates bar and the pager. Tokens come from app.css. Under 1100px
-   wide the Where column hides; under 900px the table becomes stacked
-   cards, so the page never scrolls sideways; under 700px the filters
-   fold behind one "Filters" button. Over 900px wide the page is one
-   screen high: the head and filters stay put and only the table
+   updates bar and the pager. Tokens come from app.css. One toolbar row
+   (status, search, "Filters (N)"); the other filters, the quick views
+   and the view buttons open from it. Under 1100px wide the Where
+   column hides; under 900px the table becomes two-line cards, so the
+   page never scrolls sideways. Over 900px wide the page is one screen
+   high: the head and the small toolbar stay put and only the table
    scrolls, its heading on top (js/core.js KW.scrollBox). */
 
-/* The filters are tall here; the table scrolls under them instead. */
+/* The toolbar is one row here; the table scrolls under it. */
 .content.wide .filterbox { position: static; }
 @media (min-width: 901px) {
   .main:has(> .content.wide) { height: 100vh; height: 100dvh; }
@@ -68,6 +69,7 @@
 .it-link { font-weight: 600; color: var(--text); text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; }
 .it-link:hover { text-decoration: underline; }
 .itable td.c-where .mono { font-size: var(--t-micro); }
+.it-ns { display: none; }
 .itable td.c-started, .itable td.c-last, .itable td.c-dur, .itable td.c-rep { font-variant-numeric: tabular-nums; }
 .itable td.ok { color: var(--success); }
 .itable .chip { font-size: var(--t-micro); }
@@ -78,14 +80,20 @@
 /* The row with the keyboard focus is marked as a whole. */
 .itable tbody tr:focus-within td { background: var(--surface); box-shadow: inset 0 2px 0 var(--text), inset 0 -2px 0 var(--text); }
 .itable tbody tr:focus-within .it-link:focus-visible { outline: none; text-decoration: underline; }
-.itable td.c-title { display: flex; align-items: center; gap: 0; }
-.itable td.c-title .it-link { flex: 0 1 auto; min-width: 0; white-space: normal; overflow-wrap: anywhere; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.itable td.c-title { padding-top: 6px; padding-bottom: 6px; }
-.itable td.c-title .chip, .itable td.c-title .i-rep, .itable td.c-title .m-untold, .i-why { flex: none; }
-.i-stopped { flex: none; margin-left: 6px; font-size: var(--t-micro); line-height: 1.4; font-weight: 600; color: var(--text-muted); border: 1px solid var(--control-border); border-radius: var(--radius-chip); padding: 0 6px; white-space: nowrap; }
-.i-why { margin-left: 6px; font-size: var(--t-micro); line-height: 1.4; color: var(--text-muted); border: 1px dashed var(--line); border-radius: var(--radius-chip); padding: 0 6px; }
+.itable td.c-title { white-space: normal; padding-top: 6px; padding-bottom: 6px; }
+.itable td.c-title .it-link { white-space: normal; overflow-wrap: break-word; text-wrap: balance; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* What else is true of the issue sits under its title, so it never
+   squeezes the title. */
+.it-marks { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin-top: 2px; font-size: var(--t-micro); color: var(--text-muted); }
+.it-marks > * { margin: 0 !important; flex: none; vertical-align: baseline !important; }
+.it-marks .i-rep { padding: 0; background: none; color: var(--text-muted); font-weight: 500; }
+.it-marks .i-left { padding: 0 6px; line-height: 1.3; }
+.i-stopped { flex: none; font-size: var(--t-micro); line-height: 1.4; font-weight: 600; color: var(--text-muted); border: 1px solid var(--control-border); border-radius: var(--radius-chip); padding: 0 6px; white-space: nowrap; }
+.i-why { font-size: var(--t-micro); line-height: 1.4; color: var(--text-muted); border: 1px dashed var(--line); border-radius: var(--radius-chip); padding: 0 6px; }
 @media (max-width: 1100px) and (min-width: 901px) {
   .itable .c-where { display: none; }
+  /* Where is gone: the namespace stays, a second line under the title. */
+  .itable td.c-title .it-ns { display: block; margin-top: 2px; font-size: var(--t-micro); color: var(--text-muted); overflow-wrap: anywhere; }
   .shell { grid-template-columns: 11.5rem 1fr; }
   .content.wide { padding-left: var(--space-5); padding-right: var(--space-5); }
 }
@@ -112,31 +120,41 @@
   .tablewrap { border: 0; overflow: visible; }
   .itable, .itable tbody { display: block; min-width: 0 !important; }
   .itable thead { display: none; }
-  .itable tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; padding: 12px 14px; border: 1px solid var(--line); border-left-width: 4px; border-radius: var(--radius-card); margin-bottom: 10px; }
+  /* A card is two lines: the title, then where, how urgent, how long. */
+  .itable tr { position: relative; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 10px 14px; border: 1px solid var(--line); border-left-width: 4px; border-radius: var(--radius-card); margin-bottom: 8px; }
   .it-row.sev-page { border-left-color: var(--failing); }
   .it-row.sev-notify { border-left-color: var(--degraded); }
   .it-row.sev-resolved { border-left-color: var(--success); }
-  .itable td { display: block; height: auto; padding: 0; border: 0; max-width: none; white-space: normal; overflow-wrap: break-word; background: transparent !important; box-shadow: none !important; }
+  .itable td { display: block; flex: none; height: auto; max-width: 100%; padding: 0; border: 0; white-space: normal; overflow: visible; text-overflow: clip; background: transparent !important; box-shadow: none !important; }
   .itable td:first-child { border: 0; }
-  .itable td.c-title { grid-column: 1 / -1; width: auto; max-width: none; display: block; }
-  .it-link { white-space: normal; display: inline; }
-  /* A long title takes two lines at most; the issue page has it all. */
-  .itable td.c-title .it-link { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  /* The title cell lets its parts join the card: the title takes its
+     own line, its marks ("failed again", "12 objects", "Settled on its
+     own") end the last line beside the level and the time, where there
+     is room, so a card stays about four lines. */
+  .itable td.c-title { display: contents; }
+  .itable td.c-title .it-link { order: 0; flex: 1 0 100%; }
+  .itable td.c-title .it-marks { display: contents; }
+  .itable td.c-title .it-marks > *, .it-row.is-gone td.c-title::after { order: 6; }
+  /* Where takes two lines at most; the whole of it is in the tooltip. */
+  .itable td.c-where { order: 1; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .itable td.c-sev { order: 2; }
+  .itable td.c-status { order: 3; }
+  .itable td.c-last { order: 4; }
+  .itable td.c-ack, .itable td.c-started, .itable td.c-dur { order: 5; }
+  .itable td.c-where span.mono { display: inline; }
+  .itable td.c-where .c-where-obj::before { content: " · "; }
   /* The whole card is the title's link, so it is one big tap target. */
-  .itable tr { position: relative; }
   .it-link::after { content: ""; position: absolute; inset: 0; }
-  .itable td:not(.c-sev):not(.c-title)::before { content: attr(data-label); display: block; color: var(--text-muted); font-size: var(--t-micro); }
+  .itable td.c-last, .itable td.c-ack, .itable td.c-started, .itable td.c-dur { font-size: var(--t-micro); color: var(--text-muted); }
+  .itable td.c-sev .chip { padding-top: 0; padding-bottom: 0; }
   .itable td:empty, .itable td.none { display: none; }
-  .itable td.c-where .mono { overflow-wrap: break-word; word-break: normal; }
   .itable tbody tr:hover td { background: transparent; }
   .itable tbody tr:focus-within { outline: 2px solid var(--text); outline-offset: 1px; }
 }
 @media (max-width: 700px) {
-  .ftoggle { margin: 0 0 8px; }
-  .fmore { padding: 0; border: 0; background: none; }
-  .content:not(.f-open) .filters, .content:not(.f-open) .shint,
-  .content:not(.f-open) .frow, .content:not(.f-open) .qvbox { display: none; }
-  .stsw { display: flex; }
+  .content:not(.f-open) .shint { display: none; }
+  .tbar .stsw { display: flex; flex: 1 0 100%; }
+  .tbar .filters { flex: 1 1 0; }
   .stsw-b { flex: 1; justify-content: center; padding: 0 8px; }
   .pager { flex-direction: column; align-items: stretch; }
   .pager-btns .btn { flex: 1 0 auto; }
@@ -144,12 +162,47 @@
 
 .stsw-help { margin: 0 0 12px; max-width: var(--measure); }
 
-/* Where: the namespace, then the object under it; never cut mid-word. */
-.itable td.c-where .mono { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.itable td.c-where { white-space: nowrap; }
+/* Where: the namespace, then the object under it; it wraps after "/"
+   and "." instead of being cut. */
+.itable td.c-where .mono { display: block; white-space: normal; overflow-wrap: break-word; word-break: normal; }
+.itable td.c-where { white-space: normal; padding-top: 6px; padding-bottom: 6px; }
 /* The status switch is explained only where the choice is not obvious. */
 .stsw:has(.stsw-b[data-status="active"][aria-pressed="true"]) ~ .stsw-help { display: none; }
 
 /* Filters: an open state, and the namespace on the search row. */
 .ftoggle[aria-expanded="true"] { background: var(--surface); border-color: var(--text); }
-@media (min-width: 701px) { .filters .fpicks { display: contents; } }
+
+/* One toolbar row above the table: status, search, "Filters (N)" and
+   the search tips ("?"); the filters in use sit in a slim row under it
+   and the rest in the panel the button opens. */
+.ihead { align-items: center; gap: 8px 24px; }
+.ihead-t { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.ihead h1 { font-size: 1.5rem; }
+.ihead .sub { margin: 0; }
+.ihead > .updated { margin-top: 0; }
+.content.wide .filterbox { margin-top: 12px; padding: 0; }
+.tbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tbar .stsw, .tbar .ftoggle { margin: 0; }
+.tbar .filters { flex: 1 1 14rem; min-width: 0; }
+.tbar .filters .f-search { flex: 1 1 100%; }
+.trow2 .ttools { margin: 0 0 0 auto; }
+.shint { position: relative; margin: 0; }
+.shint > summary { justify-content: center; width: 30px; height: 30px; min-height: 0; border: 1px solid var(--line); border-radius: 50%; font-weight: 600; color: var(--text-muted); }
+.shint > summary::before { display: none; }
+.shint > summary:hover { text-decoration: none; border-color: var(--text); }
+.shint-pop { position: absolute; z-index: 25; top: calc(100% + 6px); left: 0; width: min(24rem, calc(100vw - 32px)); padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-card) }
+.shint-h { margin: 0 0 4px; font-weight: 600; color: var(--text); }
+.trow2 { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.filterbox .factive { margin-top: 8px; }
+.fmore .fpicks { flex: 1 1 100%; }
+.trow2 .qvbox, .qvbox + .filterbox { margin-top: 0; }
+.trow2 .qv { min-height: 30px; padding: 0 10px; font-size: var(--t-micro); }
+.trow2 .qv-news { margin: 0; }
+.content.wide .tablewrap { margin-top: 10px; }
+@media (max-width: 900px) {
+  /* Rows are cards here: columns and view options do nothing. */
+  .trow2 .ttools { display: none; }
+}
+
+/* "Was Needs attention" may take two lines in the narrow Severity column. */
+.chip.c-was { white-space: normal; line-height: 1.25; text-align: center; max-width: 100%; }

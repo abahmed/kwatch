@@ -61,7 +61,7 @@ func (m *Manager) fallsQuiet(p *Incident) bool {
 	case p.Tier != Notify || p.Delivery.PageHeld():
 		return false
 	}
-	return quietMembers(p) || idleWebhook(p)
+	return quietMembers(p) || idleWebhook(p) || chronicFalls(p)
 }
 
 // reassess lowers the tier of p when lowerable says so, and owes the
@@ -74,7 +74,7 @@ func (m *Manager) reassess(p *Incident, now time.Time) {
 	}
 	p.Tier = m.override.apply(p, Digest)
 	p.Delivery.MarkDemoted()
-	if idleWebhook(p) {
+	if idleWebhook(p) || chronicFalls(p) {
 		// Told once at the announcement; the digest carries it now,
 		// and the new tier is no news for the thread.
 		p.Digest = fingerprint(p)

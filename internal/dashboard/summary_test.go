@@ -126,7 +126,7 @@ func TestSummaryWhyWordsTheConfidence(t *testing.T) {
 		}
 		d := toDetail(p)
 		got := whyText(&d, p)
-		assert.Equal(t, SummaryWhy{Text: "the image is wrong",
+		assert.Equal(t, SummaryWhy{Text: "The deployment api is the cause.",
 			Confidence: c.want, CauseKnown: true}, got)
 	}
 }

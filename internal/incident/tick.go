@@ -57,10 +57,12 @@ func (m *Manager) tickOne(id string, now time.Time) (d Decision, ok bool) {
 		// An earlier incident of this tick merged it (see reroot).
 		return Decision{}, false
 	}
+	before := snapshotTick(p)
 	err := safego.Run("incident", func() error {
 		if p.restored && p.bootedAt.IsZero() {
 			p.bootedAt = now
 		}
+		clampToNow(p, now)
 		p.causes.note(causeIdentity(p), now)
 		d, ok = m.advance(p, now)
 		m.observe(p, now)
@@ -72,7 +74,21 @@ func (m *Manager) tickOne(id string, now time.Time) (d Decision, ok bool) {
 	if err != nil {
 		klog.ErrorS(err, "incident: tick of one incident failed",
 			"component", "incident", "operation", "tick", "incident", id)
+		m.undoTick(p, before)
 		return Decision{}, false
 	}
 	return d, ok
+}
+
+// clampToNow brings p's open time back to now when the clock has
+// stepped back past it (an NTP correction, or a restore after one): its
+// settle and hold then count from now instead of waiting out the step.
+// Times a later step left in the future are no news, never a wait.
+func clampToNow(p *Incident, now time.Time) {
+	if now.Before(p.Opened) {
+		p.Opened = now
+	}
+	if !p.RecoveringSince.IsZero() && now.Before(p.RecoveringSince) {
+		p.RecoveringSince = now
+	}
 }

@@ -53,10 +53,19 @@ func validateLifecycleSettings(cfg *Config) []error {
 			"resyncSeconds must be 0 (off) or at least %d",
 			minResyncSeconds))
 	}
+	if cfg.OldProblemDays < 0 {
+		errs = append(errs, fmt.Errorf(
+			"oldProblemDays must be 0 (off) or a number of days"))
+	}
 	if !validLogFormatter(cfg.App.LogFormatter) {
 		errs = append(errs, fmt.Errorf(
 			"app.logFormatter %q must be \"text\" or \"json\"",
 			cfg.App.LogFormatter))
+	}
+	if !validEnvironment(cfg.App.Environment) {
+		errs = append(errs, fmt.Errorf(
+			"app.environment %q must be \"production\" or "+
+				"\"non-production\"", cfg.App.Environment))
 	}
 	if cfg.HealthCheck.Enabled && !validPort(cfg.HealthCheck.Port) {
 		errs = append(errs, errors.New(
@@ -143,6 +152,16 @@ func caseCollisionErrors(mapName string, m map[string]string) []error {
 // every second.
 const minResyncSeconds = 30
 
+// validEnvironment accepts the two values app.environment documents.
+// An empty value means production.
+func validEnvironment(env string) bool {
+	switch strings.ToLower(strings.TrimSpace(env)) {
+	case "", "production", EnvironmentNonProduction:
+		return true
+	}
+	return false
+}
+
 // validLogFormatter accepts the two formats app.logFormatter documents.
 // An empty value means the default.
 func validLogFormatter(format string) bool {
@@ -165,7 +184,8 @@ func validateDashboard(cfg *Config) []error {
 				"dashboard.enabled is true",
 		))
 	}
-	if cfg.Dashboard.Port == cfg.HealthCheck.Port {
+	if cfg.HealthCheck.Enabled &&
+		cfg.Dashboard.Port == cfg.HealthCheck.Port {
 		errs = append(errs, errors.New(
 			"dashboard.port must not equal healthCheck.port",
 		))

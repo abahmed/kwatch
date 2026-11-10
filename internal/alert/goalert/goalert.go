@@ -50,11 +50,9 @@ func NewGoalert(
 		return nil
 	}
 
-	serviceID, ok := config["serviceId"].(string)
-	if !ok || len(serviceID) == 0 {
-		klog.InfoS("initializing goalert with empty serviceId")
-		return nil
-	}
+	// serviceId is accepted for compatibility but unused: the generic
+	// API's token already selects the service.
+	serviceID, _ := config["serviceId"].(string)
 
 	server, ok := config["url"].(string)
 	if !ok || strings.TrimSpace(server) == "" {

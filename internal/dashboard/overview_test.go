@@ -36,7 +36,7 @@ func TestOverviewCountsIssuesBySeverity(t *testing.T) {
 		Quiet: 1}, got.Counts)
 }
 
-func TestOverviewLooksFirstAtUrgentUnackedThenNewest(t *testing.T) {
+func TestOverviewLooksFirstAtMostUrgentThenLongestRunning(t *testing.T) {
 	acked := issueAt("acked", "a", incident.Page, time.Minute)
 	acked.Ack = &incident.Ack{}
 	items := []incident.Incident{
@@ -50,14 +50,14 @@ func TestOverviewLooksFirstAtUrgentUnackedThenNewest(t *testing.T) {
 
 	got := buildOverview(items, nil)
 
-	assert.Equal(t, []string{"new-urgent", "old-urgent", "newest",
-		"acked", "older"}, lookFirstIDs(got.LookFirst))
-	first := got.LookFirst[0]
+	assert.Equal(t, []string{"old-urgent", "new-urgent", "acked",
+		"older", "newest"}, lookFirstIDs(got.LookFirst))
+	first := got.LookFirst[1]
 	assert.Equal(t, OverviewIssue{ID: "new-urgent",
 		Title: "Deployment app-new-urgent in a", Namespace: "a",
 		Kind: "Deployment", Name: "app-new-urgent", Severity: "page",
 		State: "open", Since: testEpoch.Add(-2 * time.Hour)}, first)
-	assert.True(t, got.LookFirst[3].Acked)
+	assert.True(t, got.LookFirst[2].Acked)
 }
 
 func TestOverviewLooksFirstAtFiveAtMost(t *testing.T) {
@@ -69,7 +69,7 @@ func TestOverviewLooksFirstAtFiveAtMost(t *testing.T) {
 
 	got := buildOverview(items, nil)
 
-	assert.Equal(t, []string{"0", "1", "2", "3", "4"},
+	assert.Equal(t, []string{"8", "7", "6", "5", "4"},
 		lookFirstIDs(got.LookFirst))
 }
 

@@ -12,7 +12,27 @@ var (
 	// serving); retry (one transient step failure that was retried);
 	// failed (the rebuild gave up and the process exits).
 	editionRebuildResults = [...]string{"success", "retry", "failed"}
+
+	leadershipRejoinsDesc = prometheus.NewDesc(
+		"kwatch_leadership_rejoins_total",
+		"In-process rejoins of leader election after a lost Lease, "+
+			"by result",
+		[]string{"result"}, nil)
+
+	// rejoinResults: success (the new generation is built and serving);
+	// failed (the rejoin gave up and the process exits).
+	rejoinResults = [...]string{"success", "failed"}
 )
+
+// IncLeadershipRejoin records one rejoin event; an unknown result counts
+// as failed.
+func (r *Registry) IncLeadershipRejoin(result string) {
+	if result == rejoinResults[0] {
+		r.LeadershipRejoins[0].Add(1)
+		return
+	}
+	r.LeadershipRejoins[1].Add(1)
+}
 
 // IncEditionRebuild records one rebuild event using a bounded result
 // label; an unknown result counts as failed.
@@ -28,6 +48,7 @@ func (r *Registry) IncEditionRebuild(result string) {
 
 func (r *Registry) describeRebuilds(ch chan<- *prometheus.Desc) {
 	ch <- editionRebuildsDesc
+	ch <- leadershipRejoinsDesc
 }
 
 func (r *Registry) collectRebuilds(ch chan<- prometheus.Metric) {
@@ -35,6 +56,12 @@ func (r *Registry) collectRebuilds(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(
 			editionRebuildsDesc, prometheus.CounterValue,
 			float64(r.EditionRebuilds[i].Load()), result,
+		)
+	}
+	for i, result := range rejoinResults {
+		ch <- prometheus.MustNewConstMetric(
+			leadershipRejoinsDesc, prometheus.CounterValue,
+			float64(r.LeadershipRejoins[i].Load()), result,
 		)
 	}
 }

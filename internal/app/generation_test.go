@@ -95,7 +95,7 @@ func TestRebuildWaitsForALateStateFileClose(t *testing.T) {
 		return make(chan time.Time)
 	}
 
-	require.NoError(t, awaitRelease(deps, after))
+	require.NoError(t, awaitRelease(deps, after, true))
 	require.True(t, waited)
 	require.True(t, isClosed(s.Done()))
 }

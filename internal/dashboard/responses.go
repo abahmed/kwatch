@@ -32,6 +32,10 @@ type IncidentListItem struct {
 	// RootCause is the one-line cause, so a list row can say why
 	// without opening the issue. Empty while kwatch has none.
 	RootCause string `json:"rootCause"`
+	// LeftoverObjects is how many objects a removed or stopped
+	// controller left behind, for an issue that groups them (see
+	// leftovers.go); absent for any other issue.
+	LeftoverObjects int `json:"leftoverObjects,omitempty"`
 	// Rev fingerprints what a list row shows, so a page can tell which
 	// rows changed between two reads. Only lists carry it.
 	Rev string `json:"rev,omitempty"`
@@ -44,6 +48,9 @@ type IncidentListItem struct {
 // FixSteps are the last message's steps with their exact commands.
 type IncidentDetail struct {
 	IncidentListItem
+	// FullTitle is Title uncut, for the page's heading; Title stays
+	// the bounded one lists use.
+	FullTitle string `json:"fullTitle,omitempty"`
 	// Summary is the page's five-line top (summary.go); absent only
 	// when the size limit left it out.
 	Summary          *IncidentSummary `json:"summary,omitempty"`
@@ -105,6 +112,11 @@ type IncidentDetail struct {
 	// Similar is how many other incidents have the same error
 	// (similar.go): /api/incidents?status=all&like=<id> lists them.
 	Similar int `json:"similar,omitempty"`
+	// SimilarIssues names up to three of them.
+	SimilarIssues []SimilarRef `json:"similarIssues,omitempty"`
+	// Map is the picture of what the incident touches and what is next
+	// to it (map_issue.go); absent when kwatch knows no connection.
+	Map *IssueMap `json:"map,omitempty"`
 	// IncidentRelations are its cause and effect incidents and its
 	// blast radius (detail_relations.go).
 	IncidentRelations
@@ -112,6 +124,9 @@ type IncidentDetail struct {
 	// the page cannot show (responses_ended.go).
 	DeliveryOutcome
 	IncidentEnd
+	// Leftovers lists the objects of an issue that groups the
+	// leftovers of a removed or stopped controller (leftovers.go).
+	Leftovers []LeftoverObject `json:"leftovers,omitempty"`
 	// Truncated counts what was left out to keep the response within
 	// its size limit; absent when nothing was.
 	Truncated *DetailTruncation `json:"truncated,omitempty"`
@@ -240,6 +255,9 @@ type StatusResponse struct {
 	// Kwatch is what the kwatch page shows: coverage, sends per
 	// channel, the state file and kwatch's own resources.
 	Kwatch *KwatchResponse `json:"kwatch,omitempty"`
+	// Cluster is app.clusterName, the name alerts carry; "" when it is
+	// not set (the dashboard says "unnamed cluster").
+	Cluster string `json:"cluster"`
 }
 
 // ChannelHealth is one alert channel's delivery health. LastErrorMessage
@@ -256,9 +274,12 @@ type ChannelHealth struct {
 	LastErrorMessage string    `json:"lastErrorMessage,omitempty"`
 	// Failing is true while the channel cannot deliver; Since is when
 	// that began, Problem says why in plain words and Waiting counts
-	// the alerts waiting for it.
+	// the alerts waiting for it. Reason is the fixed health reason
+	// (provider_rejected, provider_unavailable, provider_rate_limited):
+	// only a refusal is fixed in the settings.
 	Failing bool      `json:"failing,omitempty"`
 	Since   time.Time `json:"since,omitzero"`
 	Problem string    `json:"problem,omitempty"`
+	Reason  string    `json:"reason,omitempty"`
 	Waiting int       `json:"waiting,omitempty"`
 }

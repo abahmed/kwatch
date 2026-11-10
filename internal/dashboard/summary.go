@@ -106,7 +106,7 @@ func whyText(d *IncidentDetail, p incident.Incident) SummaryWhy {
 	if p.Cause == nil || d.RootCause == "" {
 		return SummaryWhy{}
 	}
-	text, _ := shortText(d.RootCause, maxSummaryText)
+	text, _ := shortText(causeSentence(d, p), maxSummaryText)
 	return SummaryWhy{Text: text, Confidence: confidenceOf(p.Cause),
 		CauseKnown: true}
 }

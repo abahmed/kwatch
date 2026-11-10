@@ -75,13 +75,17 @@ func scaledToZeroRouted(
 	if !sustained(ctx, "scaled-to-zero", since, scaledToZeroGrace) {
 		return detection.Finding{}, false
 	}
-	return detection.Finding{
+	f := detection.Finding{
 		Reason:   reasons.ScaledToZeroRouted,
 		Severity: scaledSeverity(ctx, since, known),
 		Since:    since,
 		Summary:  scaledSummary(exposed[0], known),
 		Evidence: scaleEvidence(exposed, scaled),
-	}, true
+	}
+	if f.Severity <= detection.Info {
+		f = asLeftover(ctx, f, e.ID.Namespace)
+	}
+	return f, true
 }
 
 // scaledSince is when the workload was scaled to zero, from the cluster

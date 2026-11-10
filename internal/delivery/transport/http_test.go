@@ -49,10 +49,10 @@ func TestSendClassifiesRateLimitResponse(t *testing.T) {
 
 func TestClassifyHTTPStatusMarksClientErrorsPermanent(t *testing.T) {
 	err := errors.New("bad request")
-	if got := ClassifyHTTPStatus(http.StatusBadRequest, err); got == err {
+	if got := ClassifyHTTPStatus("P", http.StatusBadRequest, err); got == err {
 		t.Fatal("ClassifyHTTPStatus returned the unclassified error")
 	}
-	if got := ClassifyHTTPStatus(http.StatusBadGateway, err); got != err {
+	if got := ClassifyHTTPStatus("P", http.StatusBadGateway, err); got != err {
 		t.Fatal("server errors should remain retryable")
 	}
 }
@@ -206,5 +206,20 @@ func TestSendRejectsBadHeaderAsPermanent(t *testing.T) {
 				t.Fatalf("the header value leaked: %v", err)
 			}
 		})
+	}
+}
+
+// An SDK error for a redirect is permanent and says what to check, as
+// Send does: neither follows it, so a retry of the same URL cannot work.
+func TestClassifyHTTPStatusMakesARedirectPermanent(t *testing.T) {
+	for _, status := range []int{301, 302, 307, 308} {
+		got := ClassifyHTTPStatus("Chat", status, errors.New("status"))
+		if !IsPermanent(got) {
+			t.Fatalf("status %d stayed retryable: %v", status, got)
+		}
+		if !strings.Contains(got.Error(), "check the configured URL") ||
+			!strings.Contains(got.Error(), "Chat") {
+			t.Fatalf("status %d: %v", status, got)
+		}
 	}
 }

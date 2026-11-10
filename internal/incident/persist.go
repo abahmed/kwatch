@@ -49,6 +49,9 @@ type Record struct {
 	// Reminded was added with the weekly reminder; an older record
 	// restores as never reminded, which costs at most one reminder.
 	Reminded time.Time `json:",omitempty"`
+	// Reminders was added with the reminder back-off; an older record
+	// restores as zero, the normal first interval.
+	Reminders int `json:",omitempty"`
 	// Mode, Fix and History were added for recurrence memory; older
 	// records restore without them.
 	Mode    detection.Mode `json:",omitempty"`
@@ -118,8 +121,12 @@ type Record struct {
 	// Subject is what the first message was about. Older records restore
 	// without it and their resolve names the root.
 	Subject inventory.EntityID `json:",omitempty"`
-	// Ack is the acknowledgement the thread was told about.
-	Ack *Ack `json:",omitempty"`
+	// Ack is the acknowledgement the thread was told about; AckIgnored
+	// are the objects whose annotation predates it, AckAll that there
+	// were too many to list and all of them do (ack_stale.go).
+	Ack        *Ack                 `json:",omitempty"`
+	AckIgnored []inventory.EntityID `json:",omitempty"`
+	AckAll     bool                 `json:",omitempty"`
 	// Demoted was added with lowering the tier of an announced incident.
 	Demoted bool `json:",omitempty"`
 	// HeldUpdate marks a material-change update that was waiting for its
@@ -148,7 +155,8 @@ type Record struct {
 	DocsLink string `json:",omitempty"`
 	// Problem is the incident's stable problem title; older records
 	// restore without it and get one when their findings are back.
-	Problem string `json:",omitempty"`
+	Problem     string `json:",omitempty"`
+	ProblemFull string `json:",omitempty"`
 	// Steps are the suggested steps of the last message; older records
 	// restore without them.
 	Steps []FixStep `json:",omitempty"`
@@ -183,6 +191,9 @@ type Record struct {
 	ToldCauses     []string `json:",omitempty"`
 	ToldCause      string   `json:",omitempty"`
 	ToldCauseKnown bool     `json:",omitempty"`
+	// SequenceMark is the ID sequence's high-water mark (id_sequence.go).
+	SequenceMark
+	Marks
 }
 
 // Export returns every incident as a record, for persistence.
@@ -204,6 +215,7 @@ func (m *Manager) Export() []Record {
 			Unverified: p.Unverified, CauseUnclear: p.CauseUnclear,
 			Checked: p.Checked, Considered: p.Considered, Mode: p.Mode,
 			Fix: p.Fix, History: p.History, Reminded: p.Reminded,
+			Reminders:  p.Reminders,
 			ImpactPeak: p.impactPeak, Revised: p.Pending.revised,
 			Replaced:  p.Pending.replaced,
 			RevisedAt: p.Pending.revisedAt, AlertKey: p.AlertKey,
@@ -220,31 +232,31 @@ func (m *Manager) Export() []Record {
 			ToldKnown: true,
 			StagePeak: uint8(p.stagePeak), AnnouncedRoute: p.AnnouncedRoute,
 			Ack: p.Ack, Demoted: p.Delivery.demoted, Subject: p.Subject,
+			AckIgnored: p.ackIgnored, AckAll: p.ackAll,
 			FormerRoot: p.formerRoot, RerootedAt: p.rerootedAt,
 			RejectionSeenAt: p.rejectionAt, Merged: p.Merged,
 			Facts: p.Facts, Headline: p.Headline, DocsLink: p.DocsLink,
-			Problem: p.Problem,
-			Steps:   p.Steps, Reasons: savedReasons(&p),
+			Problem: p.Problem, ProblemFull: p.ProblemFull,
+			Steps: p.Steps, Reasons: savedReasons(&p),
 			Members: savedMembers(&p), Breaks: p.Journal.Breaks,
 			LinkedChanges: p.Journal.Changes,
 			Transitions:   p.Journal.Transitions,
 			ErrorKey:      p.Journal.ErrorKey, Level: p.Journal.Level,
 			Widest:    p.Journal.Widest,
-			MovedInto: p.Moved.Into, MovedFrom: p.Moved.From,
+			MovedInto: p.Moved.Into, MovedFrom: p.Moved.From, Marks: p.marks,
 		})
 	}
-	return out
+	return m.markSequence(out)
 }
 
 // Restore loads records after a restart. Until graceUntil, restored open
 // incidents without members are not moved to recovering: detectors need
 // time to re-raise their findings after the model is rebuilt. Without a
 // live record there is nothing to wait for, and no grace applies. New IDs
-// continue after the highest restored sequence number, with its nonce.
+// continue after the highest sequence number ever used (id_sequence.go).
 func (m *Manager) Restore(records []Record, graceUntil time.Time) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	newest := 0
 	for _, r := range records {
 		p := restored(r)
 		p.causes = causeMemory{told: r.ToldCauses, last: r.ToldCause,
@@ -263,21 +275,16 @@ func (m *Manager) Restore(records []Record, graceUntil time.Time) {
 		if wasAnnounced(p) && !r.HeldUpdate {
 			m.refingerprint = append(m.refingerprint, p.ID)
 		}
-		if seq := idSequence(p.ID); seq > newest {
-			newest = seq
-			if nonce := idNonce(p.ID); nonce != "" {
-				m.nonce = nonce
-			}
-		}
 	}
-	m.seq = max(m.seq, newest)
+	m.restoreSequence(records)
 	m.indexResolvedRestored()
 }
 
 // restoreSets rebuilds the failure modes, the root's own reasons and
 // the moved links.
 func restoreSets(p *Incident, r Record) {
-	p.heldSince = r.HeldSince
+	p.heldSince, p.ackIgnored = r.HeldSince, r.AckIgnored
+	p.ackAll = r.AckAll
 	p.Moved = Moved{Into: r.MovedInto, From: r.MovedFrom}
 	for _, mode := range r.Modes {
 		if p.modes == nil {
@@ -332,6 +339,7 @@ func restored(r Record) *Incident {
 		Scope: r.Scope, SupersededBy: r.SupersededBy,
 		Unverified: r.Unverified, CauseUnclear: r.CauseUnclear,
 		Checked: r.Checked, Considered: r.Considered, Reminded: r.Reminded,
+		Reminders: r.Reminders, marks: r.Marks,
 		Mode: r.Mode, Fix: r.Fix, History: r.History,
 		Members:    make(map[detection.Key]detection.Finding),
 		impactPeak: r.ImpactPeak, AlertKey: r.AlertKey,
@@ -342,7 +350,7 @@ func restored(r Record) *Incident {
 		rerootedAt: r.RerootedAt, rejectionAt: r.RejectionSeenAt,
 		rejectionSeen: !r.RejectionSeenAt.IsZero(), Merged: r.Merged,
 		Facts: r.Facts, Headline: r.Headline, DocsLink: r.DocsLink,
-		Problem: r.Problem, Steps: r.Steps,
+		Problem: r.Problem, ProblemFull: r.ProblemFull, Steps: r.Steps,
 		Delivery: Delivery{
 			paged: r.Paged, rolledUp: r.RolledUp,
 			podPeak: r.PodPeak, pageHeld: r.PageHeld,
@@ -356,6 +364,15 @@ func restored(r Record) *Incident {
 	restoreSets(p, r)
 	p.awaited = awaitedReasons(r)
 	p.formerMembers = r.Members
+	restoreDefaults(p, r)
+	restoreTiers(p, r)
+	restoreJournal(p, r)
+	return p
+}
+
+// restoreDefaults fills what an older record left out and undoes what
+// never reached delivery: a held announcement restores as settling.
+func restoreDefaults(p *Incident, r Record) {
 	if !r.PagedKnown && wasAnnounced(p) {
 		p.Delivery.MarkPaged()
 	}
@@ -369,9 +386,6 @@ func restored(r Record) *Incident {
 	if p.Scope == ScopeUnknown && wasAnnounced(p) {
 		p.Scope = ScopeIn
 	}
-	restoreTiers(p, r)
-	restoreJournal(p, r)
-	return p
 }
 
 // restoreTiers keeps the saved tier as the one of the record and, for an

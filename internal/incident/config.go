@@ -45,12 +45,22 @@ type Config struct {
 	// kind can be unverifiable as a whole while most of its objects are
 	// still observed. Nil judges a root by its kind.
 	VerifiableObject func(inventory.EntityID) bool
+	// AlertIdentity is a stable identity of this cluster (the
+	// kube-system namespace UID). It is set only when no cluster name is
+	// configured, and is hashed into the alert key of every new
+	// incident, so two unnamed clusters paging one account never share
+	// a key. Empty keeps the key of the root and mode alone.
+	AlertIdentity string
 	// NoFlapping turns flapping off: an incident that fails and recovers
 	// again and again stays an ordinary open incident.
 	NoFlapping bool
 	// NoPaging turns paging rules off: no incident reaches the page
 	// tier, so the loudest message is a notification.
 	NoPaging bool
+	// NonProduction marks a cluster that is not production: nothing in
+	// it pages, so the loudest message is a notification, and the
+	// reason says so (levelNonProd).
+	NonProduction bool
 	// NoReminders turns off the reminders an open incident repeats.
 	NoReminders bool
 	// NoHandover turns off the hand-over of a restored incident whose
@@ -74,6 +84,12 @@ type Config struct {
 	// name (OwnWorkloadOf). Empty turns the own-start quiet off: other
 	// workloads of the namespace are never covered by it.
 	OwnWorkload string
+	// OldProblem is the horizon of an old problem: a low finding whose
+	// onset is older than it when kwatch first sees it opens no
+	// incident, and a problem that needs attention but had already
+	// lasted that long when its incident opened is lowered to Low (see
+	// old_problem.go). Zero turns both off.
+	OldProblem time.Duration
 }
 
 // Defaults for Config counts; the durations are in timings.go.

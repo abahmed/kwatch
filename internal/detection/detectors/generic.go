@@ -85,8 +85,18 @@ func badConditions(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
 	var out []detection.Finding
+	checked := false
 	for _, rule := range kube.ConditionRules {
 		status, reason, since := condition(e, rule.Type)
+		if status != "" && !checked {
+			checked = true
+			// A condition read from a stale watch says nothing about
+			// now: hold what was raised, neither raise nor clear.
+			if !ctx.Fresh(e.ID.Kind) {
+				ctx.RecheckAfter(DefaultConditionGrace)
+				return nil
+			}
+		}
 		key := "cond/" + rule.Type + "/" + rule.Bad
 		if status != rule.Bad ||
 			!sustained(ctx, key, since, conditionGrace(rule)) {
@@ -204,15 +214,16 @@ func stuckDeletion(
 		evidence = append(evidence, detection.Evidence{
 			Label: detection.EvidenceLastWarning, Value: warning})
 	}
-	severity := detection.Warning
-	if leftover(ctx, e, since) {
-		severity = detection.Info
-	}
-	return detection.Finding{
-		Reason: reasons.StuckDeleting, Severity: severity,
+	f := detection.Finding{
+		Reason: reasons.StuckDeleting, Severity: detection.Warning,
 		Health: detection.Degraded, Since: since,
 		Summary: summary, Evidence: evidence,
-	}, true
+	}
+	if leftover(ctx, e, since) {
+		f.Severity = detection.Info
+		f = asLeftover(ctx, f, e.ID.Namespace)
+	}
+	return f, true
 }
 
 // failedPhases are status phases that mean the object does not work.

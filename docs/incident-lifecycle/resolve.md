@@ -30,7 +30,10 @@ probe looks ready while it runs, so it counts no cycle and never makes the
 incident flap (`crash_gap.go`). When the count reaches `FlapCycles` (3) the incident becomes
 `Flapping` and sends one `flapping` update. After that a flapping incident
 speaks only when the failure grows or a reminder is due, and it resolves
-after `MaxHold` of quiet. It does not run the `revised` step: a resolve (or a
+after `MaxHold` of quiet. A flapper that instead stays down without a
+break for `MaxHold` since its last return has stopped flapping: it goes
+back to `Open` and runs the open steps again, so a revised cause or a
+worse stage is told (`flapping` in `lifecycle.go`). It does not run the `revised` step: a resolve (or a
 quiet supersede) drops any owed `cause revised` update, so it never appears
 after a later reopen.
 
@@ -103,7 +106,12 @@ with the listing as `carrier`, not as `not routed`.
 
 `compose.resolveNote` leads with how the subject ended ("payments in shop
 is healthy again."), then who fixed it when the fixing change is known,
-how long it was failing and what it was blamed on. When something changed
+how long it was failing and what it was blamed on. Not every change can
+be the fix (`notAFix` in `history.go`): a scale is a reaction, a node's
+taints are removed by Kubernetes itself when the node is ready again, and
+a pod that is deleted or created is the pod being replaced, so none of
+them makes the resolve say "a change fixed it" or name who did it.
+When something changed
 in the 15 minutes before it recovered (and after its failures began), it adds
 "Changed just before it recovered: ..." with at most two changes, newest
 first; the fixing change is not repeated there (`changed_before_recovery.go`).

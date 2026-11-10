@@ -64,13 +64,17 @@ func NewGithub(
 				"setting", "url")
 			return nil
 		}
-		server = s
+		// A GitHub Enterprise URL is often written with a trailing
+		// slash (".../api/v3/"): "//repos" would 404 every issue.
+		server = strings.TrimRight(s, "/")
 	}
 
 	klog.InfoS("initializing github", "owner", owner, "repo", repo)
 
 	return &Github{
-		issues:      issues.NewMap(clock.Require(dependencies.Clock).Now),
+		issues: issues.NewMap(
+			clock.Require(dependencies.Clock).Now,
+		).ForCluster(clusterName),
 		sender:      transport.NewSender(dependencies),
 		url:         fmt.Sprintf("%s/repos/%s/%s/issues", server, owner, repo),
 		searchURL:   server + "/search/issues",
@@ -168,6 +172,11 @@ func (g *Github) Close(ctx context.Context, id, body string) error {
 	if err := g.Comment(ctx, id, body); err != nil {
 		return err
 	}
+	return g.CloseState(ctx, id)
+}
+
+// CloseState implements issues.StateCloser.
+func (g *Github) CloseState(ctx context.Context, id string) error {
 	_, err := g.call(ctx, "PATCH",
 		g.url+"/"+id, map[string]string{"state": "closed"})
 	return err

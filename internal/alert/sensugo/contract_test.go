@@ -57,6 +57,13 @@ func checkEventShape(
 		p.Entity.Metadata.Name == "" || p.Check.Issued == 0 {
 		t.Fatalf("event = %+v, want status %d", p, want)
 	}
+	// The events API rejects an event without an entity class and a
+	// check without an interval, and both carry their namespace.
+	if p.Entity.EntityClass != "proxy" || p.Check.Interval <= 0 ||
+		p.Entity.Metadata.Namespace != "default" ||
+		p.Check.Metadata.Namespace != "default" {
+		t.Fatalf("event is missing required fields: %+v", p)
+	}
 	if len(p.Check.Output) > safetext.DetailsLimit+64 {
 		t.Fatalf("output is %d bytes", len(p.Check.Output))
 	}

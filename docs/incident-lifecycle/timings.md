@@ -18,7 +18,7 @@ read the header there for how they relate.
 | `ChronicWindow`, `ChronicOccurrences`, `ChronicFactor` | 1h, 2, x4 | a fast flapper must not say "healthy" and "failing" in turn |
 | `RepageWindow` | 2h | the same outage must not page twice, and reopens, not restarts |
 | `PageRemindAfter` | 6h | a long outage does not go quiet |
-| `RemindEvery` / `ChronicRemindEvery` | 7d / 24h | still-open reminders |
+| `RemindEvery` / `ChronicRemindEvery` | 7d / 24h, then 3d, 7d | still-open reminders; low ones back off |
 | `MaterialGap` | 10m | at most one material update per 10 minutes |
 | `CauseHold` | 30s | a cause new to the incident is news once it holds this long |
 | `FixWatch` | 10m | when to say a fix attempt did not work |
@@ -26,7 +26,7 @@ read the header there for how they relate.
 | `DigestReportEvery` | 24h | at least one digest a day lists a periodic recurrence |
 | `DefaultRemember` | 7d | resolved incidents are kept this long ("3rd time this week") |
 | `KnownAfter`, `RhythmWindow` | 24h | a problem heard for a day waits for the digest |
-| `routineWindow`, `recurrenceWeek` | 45m, 7d | same time of day counts as a routine; window of "the third time this week" |
+| `routineWindow`, `recurrenceWeek` | 45m, 7d | same time of day counts as a routine (only days it went away on its own: a day someone fixed it, by a rollback or a change, does not count, and a routine a page rule names still notifies); window of "the third time this week" |
 | pipeline `restoreGrace` | 10m | restored incidents wait this long for findings to return |
 | announce `StartupWindow` | 2m | cold-start announcements are collected into one summary |
 | announce `outageHoldMax` (`announce/timings.go`) | 30s | a namespace outage waits this long for its siblings |

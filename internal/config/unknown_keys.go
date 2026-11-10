@@ -35,6 +35,7 @@ func unknownConfigKeys(raw []byte) []string {
 	if yaml.Unmarshal(raw, &document) != nil {
 		return nil
 	}
+	paths := keyPaths(&document)
 	var keys []string
 	for _, message := range typeErr.Errors {
 		match := unknownFieldRe.FindStringSubmatch(message)
@@ -43,8 +44,13 @@ func unknownConfigKeys(raw []byte) []string {
 			// not unknown keys; the lenient load has already judged them.
 			continue
 		}
+		if len(keys) == maxUnknownKeys {
+			keys = append(keys, fmt.Sprintf("%s%d", moreKeys,
+				unknownCount(typeErr.Errors)-maxUnknownKeys))
+			break
+		}
 		line, _ := strconv.Atoi(match[1])
-		path := keyPath(&document, line, match[2])
+		path := paths[lineKey{line, match[2]}]
 		if path == "" {
 			path = match[2]
 		}
@@ -53,42 +59,69 @@ func unknownConfigKeys(raw []byte) []string {
 	return keys
 }
 
-// keyPath finds the mapping key named field on line and returns its full
-// dotted path, such as "app.clusterNmae" or "silences[0].bogus". It
-// returns "" when no such key exists.
-func keyPath(node *yaml.Node, line int, field string) string {
+// maxUnknownKeys bounds the unknown keys reported one by one; the rest
+// are counted in one "and N more" entry.
+const maxUnknownKeys = 50
+
+// moreKeys starts the entry that counts the unknown keys not listed.
+const moreKeys = "and more unknown keys: "
+
+// unknownCount counts the unknown-key messages among errs.
+func unknownCount(errs []string) int {
+	n := 0
+	for _, message := range errs {
+		if unknownFieldRe.MatchString(message) {
+			n++
+		}
+	}
+	return n
+}
+
+// lineKey is a mapping key by its line and name.
+type lineKey struct {
+	line  int
+	field string
+}
+
+// keyPaths maps every mapping key of the document to its full dotted
+// path, such as "app.clusterNmae" or "silences[0].bogus", in one walk:
+// the first key in file order wins a line and name it shares.
+func keyPaths(document *yaml.Node) map[lineKey]string {
+	out := map[lineKey]string{}
+	walkKeys(out, document, "")
+	return out
+}
+
+// walkKeys records the keys under node, whose path is prefix.
+func walkKeys(out map[lineKey]string, node *yaml.Node, prefix string) {
 	switch node.Kind {
 	case yaml.DocumentNode:
 		for _, child := range node.Content {
-			if path := keyPath(child, line, field); path != "" {
-				return path
-			}
+			walkKeys(out, child, prefix)
 		}
 	case yaml.MappingNode:
-		return mappingKeyPath(node, line, field)
+		walkMapping(out, node, prefix)
 	case yaml.SequenceNode:
 		for i, item := range node.Content {
-			if path := keyPath(item, line, field); path != "" {
-				return fmt.Sprintf("[%d]%s", i, dotted(path))
-			}
+			walkKeys(out, item, fmt.Sprintf("%s[%d]", prefix, i))
 		}
 	}
-	return ""
 }
 
-// mappingKeyPath searches the keys of one mapping node and then its values.
-// Content alternates key and value nodes.
-func mappingKeyPath(node *yaml.Node, line int, field string) string {
+// walkMapping records one mapping's keys, then the keys of their
+// values. Content alternates key and value nodes.
+func walkMapping(out map[lineKey]string, node *yaml.Node, prefix string) {
 	for i := 0; i+1 < len(node.Content); i += 2 {
 		key, value := node.Content[i], node.Content[i+1]
-		if key.Line == line && key.Value == field {
-			return key.Value
+		path := key.Value
+		if prefix != "" {
+			path = prefix + dotted(key.Value)
 		}
-		if path := keyPath(value, line, field); path != "" {
-			return key.Value + dotted(path)
+		if k := (lineKey{key.Line, key.Value}); out[k] == "" {
+			out[k] = path
 		}
+		walkKeys(out, value, path)
 	}
-	return ""
 }
 
 // dotted joins a child path to its parent: a sequence index attaches
@@ -114,6 +147,12 @@ func unknownKeysError(raw []byte) error {
 func unknownKeyWarnings(cfg *Config) []string {
 	warnings := make([]string, 0, len(cfg.unknownKeys))
 	for _, key := range cfg.unknownKeys {
+		if _, n, ok := strings.Cut(key, moreKeys); ok {
+			warnings = append(warnings, fmt.Sprintf(
+				"%s more config keys are not recognized and are ignored",
+				n))
+			continue
+		}
 		warnings = append(warnings, fmt.Sprintf(
 			"config key is not recognized and is ignored (%s); it may be "+
 				"misspelled or removed in this release", key))

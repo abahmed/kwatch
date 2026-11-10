@@ -2,8 +2,6 @@ package kube
 
 import (
 	"context"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -67,6 +65,10 @@ type DynamicConfig struct {
 	// false when ctx ended first; nil uses safego.Wait (a real timer).
 	// Tests pass one that returns at once.
 	RestartWait func(ctx context.Context, d time.Duration) bool
+	// Answered, when set, counts the lists and watches the API server
+	// answered per group and resource (as SourceConfig.Answered), so a
+	// relist that returns the same version still ends a failure run.
+	Answered func(group, resource string) uint64
 }
 
 // notedWindow is how recent a Warning event must be to pull its kind
@@ -165,20 +167,11 @@ type dynamicWatch struct {
 	// reported gone what disappeared in between; until then the kind is
 	// not complete. It is nil for a watch without a predecessor.
 	handedOver chan struct{}
-}
-
-// takingOver reports whether the watch still hands over from its
-// predecessor.
-func (w *dynamicWatch) takingOver() bool {
-	if w.handedOver == nil {
-		return false
-	}
-	select {
-	case <-w.handedOver:
-		return false
-	default:
-		return true
-	}
+	// Times of the refusals retried through (retryingRefusal); d.mu
+	// guards them.
+	firstRefusal, lastRefusal time.Time
+	// failure is the run of transient errors (noteTransient).
+	failure dynamicFailure
 }
 
 // NewDynamicSource builds a dynamic source.
@@ -218,7 +211,8 @@ func (d *DynamicSource) Run(ctx context.Context) {
 	ticker := time.NewTicker(d.cfg.Rediscovery)
 	defer ticker.Stop()
 	for {
-		d.reconcile(ctx)
+		// A panic loses that pass only.
+		safego.Do("dynamic-reconcile", func() { d.reconcile(ctx) })
 		select {
 		case <-ctx.Done():
 			d.stopAll()
@@ -226,6 +220,7 @@ func (d *DynamicSource) Run(ctx context.Context) {
 		case <-ticker.C:
 			d.retryRefused()
 		case <-d.trigger:
+			d.retryRefused()
 		}
 	}
 }
@@ -245,6 +240,7 @@ func (d *DynamicSource) statusLocked() DynamicStatus {
 		Ran:      d.ran,
 	}
 	var kinds []DynamicKind
+	now := d.failureNow()
 	note := func(gvr schema.GroupVersionResource, reason string) {
 		out.Reasons[reason]++
 		kinds = append(kinds, DynamicKind{
@@ -259,6 +255,11 @@ func (d *DynamicSource) statusLocked() DynamicStatus {
 		if w.admission.capped() {
 			out.Capped++
 			note(gvr, ReasonObjectCap)
+		}
+		// A watch failing past the bound: not synced yet, or stale.
+		// Both stay available, like stale typed kinds.
+		if d.staleLocked(w, now) {
+			note(gvr, ReasonSyncFailed)
 		}
 	}
 	for gvr, f := range d.refused {
@@ -299,7 +300,39 @@ func (d *DynamicSource) retryRefused() {
 // being deleted.
 func (d *DynamicSource) reconcile(ctx context.Context) {
 	discovered, complete := discoverResources(ctx, d.cfg.Discovery)
+	plan := d.plan(ctx, discovered, complete)
+	d.logRefused(plan.refusedTypes, plan.denied)
+	if kinds, changed := d.skippedChanged(plan.skipped); changed {
+		klog.InfoS("resource types over the watch budget are skipped",
+			"component", "inventory", "operation", "discover",
+			"discovered", len(discovered), "budget", d.cfg.Budget,
+			"skipped", len(plan.skipped), "kinds", kinds)
+	}
+	for _, w := range plan.retired {
+		d.retire(ctx, w)
+	}
+	if d.cfg.Reconciled != nil {
+		d.cfg.Reconciled(plan.status)
+	}
+}
+
+// reconcilePlan is what one locked reconcile pass hands to the unlocked
+// rest of the pass.
+type reconcilePlan struct {
+	skipped      []plannedResource
+	retired      []*dynamicWatch
+	status       DynamicStatus
+	refusedTypes string
+	denied       int
+}
+
+// plan applies a discovery result under d.mu. The lock is released by
+// defer, so a panic in here cannot leave the source locked.
+func (d *DynamicSource) plan(
+	ctx context.Context, discovered []plannedResource, complete bool,
+) (out reconcilePlan) {
 	d.mu.Lock()
+	defer d.mu.Unlock()
 	desired, skipped := applyBudget(discovered, d.cfg.Budget,
 		func(gvr schema.GroupVersionResource) bool {
 			_, ok := d.running[gvr]
@@ -308,48 +341,30 @@ func (d *DynamicSource) reconcile(ctx context.Context) {
 	retry := d.retryDue
 	d.retryDue = false
 	d.complete, d.ran = complete, true
-	d.left = make(map[schema.GroupVersionResource]kindIssue)
+	// Only a complete pass knows every type: after a failed or partial
+	// one, what earlier passes left out stays noted, or Verifiable would
+	// trust "absent" for kinds that were never watched.
+	if complete || d.left == nil {
+		d.left = make(map[schema.GroupVersionResource]kindIssue)
+	}
+	for _, r := range desired {
+		delete(d.left, r.gvr)
+	}
 	for _, r := range skipped {
 		d.left[r.gvr] = kindIssue{KindFor(r.kind), ReasonWatchBudget}
 	}
+	d.handOverVersions(desired)
 	for _, r := range desired {
 		if _, running := d.running[r.gvr]; !running {
 			d.watch(ctx, r, retry)
 		}
 	}
-	retired := d.dropUnwanted(desired, skipped, complete)
+	out.skipped = skipped
+	out.retired = d.dropUnwanted(desired, skipped, complete)
 	d.forgetSyncedDenials()
-	status := d.statusLocked()
-	refusedTypes, denied := d.refusedSummaryLocked()
-	d.mu.Unlock()
-	d.logRefused(refusedTypes, denied)
-	if kinds, changed := d.skippedChanged(skipped); changed {
-		klog.InfoS("resource types over the watch budget are skipped",
-			"component", "inventory", "operation", "discover",
-			"discovered", len(discovered), "budget", d.cfg.Budget,
-			"skipped", len(skipped), "kinds", kinds)
-	}
-	for _, w := range retired {
-		d.retire(ctx, w)
-	}
-	if d.cfg.Reconciled != nil {
-		d.cfg.Reconciled(status)
-	}
-}
-
-// skippedChanged returns the skipped kinds and whether they differ from
-// the list last logged, so the log names them at startup and again only
-// when the list changes, not on every discovery pass. An empty list is
-// never logged.
-func (d *DynamicSource) skippedChanged(
-	skipped []plannedResource,
-) (string, bool) {
-	kinds := skippedKinds(skipped)
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	changed := kinds != "" && kinds != d.loggedSkipped
-	d.loggedSkipped = kinds
-	return kinds, changed
+	out.status = d.statusLocked()
+	out.refusedTypes, out.denied = d.refusedSummaryLocked()
+	return out
 }
 
 // watch starts a wanted type that is not running, taking over a refused
@@ -370,18 +385,6 @@ func (d *DynamicSource) watch(
 		return
 	}
 	d.left[r.gvr] = kindIssue{KindFor(r.kind), ReasonAPIUnavailable}
-}
-
-// skippedKinds names the kinds the budget left out, sorted, so an
-// operator can raise the budget or recognise a gap without guessing. The
-// list is bounded by what discovery returned beyond the budget.
-func skippedKinds(skipped []plannedResource) string {
-	names := make([]string, 0, len(skipped))
-	for _, r := range skipped {
-		names = append(names, r.kind)
-	}
-	sort.Strings(names)
-	return strings.Join(names, ",")
 }
 
 // notedKinds asks the model which kinds had Warning events recently,

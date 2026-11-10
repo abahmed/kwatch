@@ -270,7 +270,11 @@ func (j *ConfigJoin) sourceObservations(
 		if j.said[endpoint] == text {
 			continue
 		}
-		j.said[endpoint] = text
+		if text == "" {
+			delete(j.said, endpoint)
+		} else {
+			j.said[endpoint] = text
+		}
 		out = append(out, inventory.Observation{
 			Kind: inventory.Observed, Source: ConfigSource, At: at,
 			Entity: endpointOf(endpoint), Attributes: attrs,

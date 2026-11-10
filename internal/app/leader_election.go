@@ -22,7 +22,10 @@ const (
 	leaderLeaseName     = "kwatch-leader"
 )
 
-var errLeadershipLost = errors.New("leadership lost")
+// errLeaseLostRejoin ends a generation whose election lost the Lease
+// while the application still ran. It is not a failure: the generation
+// loop builds a new one, which rejoins the election (generation.go).
+var errLeaseLostRejoin = errors.New("leadership lost; rejoining")
 
 type electionRunner interface {
 	Run(context.Context)
@@ -152,7 +155,8 @@ func runLeaderElectionWithRunner(
 
 // finishElection runs after the elector returns. It waits for a started
 // active session, arranges the Lease release for a clean shutdown, and
-// reports why the election ended.
+// reports why the election ended. A session that did not stop in time
+// fails the process: nothing then proves it stopped sending and writing.
 func finishElection(
 	ctx context.Context,
 	deps *serverDeps,
@@ -161,10 +165,18 @@ func finishElection(
 	identity string,
 ) error {
 	if callbacks.started.Load() {
-		if err := waitForActiveSession(callbacks.activeDone); err != nil {
+		err := waitForActiveSession(
+			callbacks.activeDone, callbacks.sessionWait)
+		if err != nil {
 			return err
 		}
-		if ctx.Err() != nil {
+		// A session that ended for an edition rebuild keeps the Lease for
+		// the next generation; the release is kept in case a stop signal
+		// arrives before one is built (generationResult.abandon), and so
+		// is a term given up on an outage (gaveUp). A lost Lease is not
+		// ours to release.
+		if ctx.Err() != nil || deps.editionRestart.Load() ||
+			callbacks.gaveUp.Load() {
 			deps.setLeaseRelease(func(releaseCtx context.Context) {
 				releaseLease(
 					releaseCtx, lock, identity, deps.clients.Clock.Now,
@@ -174,13 +186,25 @@ func finishElection(
 	}
 	select {
 	case err := <-callbacks.activeErrors:
+		// An elector that returned on its own lost the Lease, even when
+		// the session also asked for an edition rebuild: delivery must
+		// then be fenced (awaitRelease).
+		if !callbacks.ended.Load() && ctx.Err() == nil {
+			deps.leaseLost.Store(true)
+		}
 		return err
 	default:
 	}
 	if ctx.Err() != nil {
 		return nil
 	}
-	return errLeadershipLost
+	deps.leaseLost.Store(true)
+	if callbacks.startFailed.Load() {
+		deps.startFailed.Store(true)
+	}
+	deps.healthServer.SetComponentStatus(
+		"leader-election", "degraded", "leadership_lost", false)
+	return errLeaseLostRejoin
 }
 
 // waitForSupervisor waits for the leader components to return and reports
@@ -225,8 +249,9 @@ const activeSessionWait = activeSessionTimeout
 // within activeSessionTimeout: the session stops its components, drains
 // delivery, flushes threads and records its end, so it needs the whole
 // nested budget, not one component's.
-func waitForActiveSession(done <-chan struct{}) error {
-	timer := time.NewTimer(activeSessionWait)
+// A zero wait uses activeSessionWait.
+func waitForActiveSession(done <-chan struct{}, wait time.Duration) error {
+	timer := time.NewTimer(durationOr(wait, activeSessionWait))
 	defer timer.Stop()
 	select {
 	case <-done:

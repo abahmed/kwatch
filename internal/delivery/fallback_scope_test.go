@@ -65,7 +65,7 @@ func TestPagerFallbackDoesNotSwallowInformationalMessages(t *testing.T) {
 		"summary": summary,
 	} {
 		err := m.deliverFallback(context.Background(),
-			&managerEntries(m)[1], "Primary", job)
+			&managerEntries(m)[1], "Primary", job, false)
 		assert.ErrorIs(t, err, errFallbackNotRouted, name)
 		assert.Equal(t, outcomeRetryLater,
 			m.deliver(context.Background(), entry, job), name)

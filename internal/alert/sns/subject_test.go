@@ -1,10 +1,12 @@
 package sns
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSubjectTransliteratesAndCollapsesGaps(t *testing.T) {
@@ -46,4 +48,18 @@ func TestSubjectIsCutAtTheByteLimit(t *testing.T) {
 	got := asciiSubject(strings.Repeat("abcdefghi ", 20))
 	assert.LessOrEqual(t, len(got), maxSubjectBytes)
 	assert.NotEmpty(t, got)
+}
+
+// A plain notice (the startup message, a test) uses the same subject
+// rules as an incident: SNS rejects a non-ASCII or 100-byte subject.
+func TestSnsSendMessageSubjectIsASCIIAndBounded(t *testing.T) {
+	c, rec := newTestSns(t, map[string]interface{}{
+		"subject": "kwatch — prod " + strings.Repeat("x", 200),
+	})
+	require.NoError(t, c.SendMessage(context.Background(), "hello"))
+	subject := lastForm(t, rec).Get("Subject")
+	assert.LessOrEqual(t, len(subject), maxSubjectBytes)
+	for _, r := range subject {
+		assert.Less(t, r, rune(127), "non-ASCII subject %q", subject)
+	}
 }

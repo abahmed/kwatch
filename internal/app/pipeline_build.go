@@ -67,7 +67,6 @@ type pipelineBuild struct {
 func newPipelineBuild(
 	deps *serverDeps, state *storage.Store,
 ) (*pipelineBuild, error) {
-	dropLegacyPush(state)
 	p := &pipelineBuild{deps: deps, state: state,
 		clock: deps.clients.Clock, withheld: feature.NewWithheld()}
 	if deps.has(FlightRecorder) {
@@ -117,6 +116,8 @@ func (p *pipelineBuild) incidentConfig() incident.Config {
 		cfg.NoReminders, cfg.NoHandover = true, true
 	}
 	cfg.NoJournalDetail = !deps.has(feature.ChangeCorrelation)
+	cfg.OldProblem = deps.runtime.Lifecycle().OldProblem()
+	cfg.NonProduction = deps.runtime.Application().NonProduction
 	return cfg
 }
 
@@ -160,6 +161,7 @@ func (p *pipelineBuild) newEngine() (*pipeline.Engine, error) {
 		Store:        pipeline.NewIncidentStore(p.state),
 		Investigator: p.newInvestigator(),
 		InScope:      pipeline.IncidentScope(p.model, p.scope),
+		ScopePending: pipeline.IncidentPending(p.model, p.scope),
 		Progress: func() {
 			deps.pipelineProgress.Touch(p.clock.Now())
 			if deps.dashboardServer != nil {

@@ -104,13 +104,17 @@ func touchesNode(
 }
 
 // observeNodes looks at the nodes when one changed since the last look,
-// or when there is no baseline yet. Expiry of a displacement needs no
-// look: it is read from the clock in displacedPods.
+// or when there is no baseline yet (the wave takes its own only once
+// every node is listed). Expiry of a displacement needs no look: it is
+// read from the clock in displacedPods.
 func (m *Manager) observeNodes(model inventory.Reader, now time.Time) {
-	if !m.nodesDirty && m.churn.baselined {
+	if !m.nodesDirty && m.churn.baselined && m.wave.nodes != nil {
 		return
 	}
 	m.churn.observe(model, now)
+	m.wave.observe(model, now)
+	m.pruneScaleHolds()
+	m.dropRemovedNodes(now)
 	m.nodesDirty = false
 }
 
@@ -314,11 +318,14 @@ func (m *Manager) releaseChurn(now time.Time) {
 	if released {
 		m.refresh(m.model, now)
 	}
+	// The other join that ends on the clock (attach_scaled.go).
+	m.releaseScaled(now)
 }
 
-// churnWakes lists when held findings need a tick.
+// churnWakes lists when held findings and joined autoscalers need a
+// tick.
 func (m *Manager) churnWakes() []time.Time {
-	var out []time.Time
+	out := m.scaledWakes()
 	for _, h := range m.churn.held {
 		out = append(out, minTime(m.churn.at.Add(churnStart),
 			h.since.Add(churnMaxHold)))

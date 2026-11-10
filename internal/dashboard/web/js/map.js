@@ -1,18 +1,17 @@
-/* kwatch dashboard: the Map page (/map), how objects connect and where
-   it fails, from /api/map. One namespace at a time (?namespace=), or
-   what fails across the watched namespaces with what is next to it
-   (?view=failing); nodes on request (?nodes=1). Routes, Services and
-   workloads (pods folded in) are boxes colored by the worst open issue
-   touching them, laid out left to right by maplayout.js and drawn as
-   SVG; a box with an issue opens it, any other shows its status below.
-   The same objects and connections are a plain list under the drawing,
-   which is all a narrow screen shows. Reads with its ETag. */
+/* kwatch dashboard: the picture on an issue's Impact tab ("How it
+   connects"), from the detail's map: the objects the issue touches and
+   those next to them, laid out left to right by maplayout.js and drawn
+   as SVG. Routes, Services and workloads (pods folded in) are boxes
+   colored by the worst open issue touching them; the issue's own object
+   is outlined. A box with another issue opens it. The same objects and
+   connections are a plain list below, which is all a narrow screen
+   shows. */
 (function () {
   "use strict";
   var KW = window.KW;
   var SVG = "http://www.w3.org/2000/svg";
   var LEVEL = { page: "Urgent", notify: "Needs attention", digest: "Low", ok: "No open issue" };
-  var EDGE = { routes: "routes to", selects: "sends to", calls: "calls", "runs-on": "runs on" };
+  var EDGE = { routes: "routes to", selects: "sends to", calls: "calls" };
 
   function svg(tag, attrs, cls) {
     var e = document.createElementNS(SVG, tag);
@@ -25,42 +24,14 @@
 
   function short(text, max) { return text.length > max ? text.slice(0, max - 1) + "…" : text; }
 
-  function params() {
-    var p = new URLSearchParams(location.search);
-    return { view: p.get("view") === "failing" ? "failing" : "namespace",
-      namespace: p.get("namespace") || "", nodes: p.get("nodes") === "1" };
-  }
+  function issueHref(id) { return "/issues/" + encodeURIComponent(id); }
 
-  function query(s) {
-    var q = new URLSearchParams();
-    if (s.view === "failing") q.set("view", "failing");
-    else if (s.namespace) q.set("namespace", s.namespace);
-    if (s.nodes) q.set("nodes", "1");
-    return q.toString();
-  }
-
-  /* draw renders data into the canvas, the list and the line above. */
-  function draw(box, data, open) {
-    box.canvas.textContent = "";
-    box.list.textContent = "";
-    box.info.hidden = true;
-    var nodes = data.nodes || [], edges = data.edges || [], byId = {};
-    nodes.forEach(function (n) { byId[n.id] = n; });
-    var failing = nodes.filter(function (n) { return n.level !== "ok"; }).length;
-    if (data.tooMany) {
-      box.line.textContent = "Too many objects to draw (" + KW.num(data.count) +
-        "). Pick a namespace.";
-      return;
-    }
-    box.line.textContent = !nodes.length ? (data.view === "failing" ?
-      "Nothing is failing." : "Nothing to draw in this namespace.") :
-      KW.plural(nodes.length, "object", "objects") + ", " +
-      (failing ? KW.num(failing) + " with an open issue." : "none with an open issue.");
-    if (!nodes.length) return;
+  function picture(canvas, data, selfIssue) {
+    var nodes = data.nodes, edges = data.edges;
     var lay = KW.mapLayout(nodes, edges);
-    var root = box.canvas.appendChild(svg("svg", { viewBox: "0 0 " + lay.width + " " + lay.height,
-      width: lay.width, height: lay.height, role: "group", "aria-label": "Map of " +
-      KW.plural(nodes.length, "object", "objects") }, "map-svg"));
+    var root = canvas.appendChild(svg("svg", { viewBox: "0 0 " + lay.width + " " + lay.height,
+      width: lay.width, height: lay.height, role: "group",
+      "aria-label": "How it connects: " + KW.plural(nodes.length, "object", "objects") }, "map-svg"));
     edges.forEach(function (e) {
       var a = lay.pos[e.from], b = lay.pos[e.to];
       if (!a || !b) return;
@@ -70,30 +41,40 @@
     });
     nodes.forEach(function (n) {
       var p = lay.pos[n.id];
-      var g = root.appendChild(svg("g", { transform: "translate(" + p.x + " " + p.y + ")",
-        tabindex: "0", role: "button", "aria-label": label(n) + ", " + LEVEL[n.level] +
-        (n.ready ? ", " + n.ready + " ready" : "") }, "map-node map-l-" + n.level +
-        (n.external ? " map-ext" : "")));
-      g.appendChild(svg("title")).textContent = label(n);
+      var self = n.id === data.self;
+      var link = n.issue && n.issue !== selfIssue;
+      var g = root.appendChild(svg("g", { transform: "translate(" + p.x + " " + p.y + ")" },
+        "map-node map-l-" + n.level + (n.external ? " map-ext" : "") + (self ? " map-self" : "")));
+      g.appendChild(svg("title")).textContent = label(n) + " · " + LEVEL[n.level];
       g.appendChild(svg("rect", { width: lay.w, height: lay.h, rx: 6 }));
-      g.appendChild(svg("text", { x: 10, y: 15 }, "map-kind")).textContent = n.kind +
-        (n.ready ? " · " + n.ready : "");
-      g.appendChild(svg("text", { x: 10, y: 29 }, "map-name")).textContent = short(n.name, 24);
-      var act = function () { open(n); };
+      g.appendChild(svg("text", { x: 10, y: 16 }, "map-kind")).textContent = n.kind +
+        (n.ready ? " · " + n.ready + " ready" : "");
+      g.appendChild(svg("text", { x: 10, y: 32 }, "map-name")).textContent = short(n.name, 22);
+      if (!link) return;
+      g.setAttribute("tabindex", "0");
+      g.setAttribute("role", "link");
+      g.setAttribute("aria-label", label(n) + ", " + LEVEL[n.level] + ": open its issue");
+      var act = function () { KW.go(issueHref(n.issue)); };
       g.addEventListener("click", act);
       g.addEventListener("keydown", function (ev) {
-        if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); act(); }
+        if (ev.key === "Enter") { ev.preventDefault(); act(); }
       });
     });
-    nodes.forEach(function (n) {
-      var li = box.list.appendChild(KW.el("li"));
-      var name = li.appendChild(KW.el(n.issue ? "a" : "span", "map-li", label(n)));
-      if (n.issue) {
-        name.href = "/issues/" + encodeURIComponent(n.issue);
+  }
+
+  function list(box, data, selfIssue) {
+    var byId = {};
+    data.nodes.forEach(function (n) { byId[n.id] = n; });
+    data.nodes.forEach(function (n) {
+      var li = box.appendChild(KW.el("li"));
+      var name = li.appendChild(KW.el(n.issue && n.issue !== selfIssue ? "a" : "span", "map-li",
+        label(n) + (n.id === data.self ? " (this issue)" : "")));
+      if (name.tagName === "A") {
+        name.href = issueHref(n.issue);
         name.dataset.link = "";
       }
       li.appendChild(KW.el("span", "map-li-level map-l-" + n.level, LEVEL[n.level]));
-      var out = edges.filter(function (e) { return e.from === n.id && byId[e.to]; });
+      var out = data.edges.filter(function (e) { return e.from === n.id && byId[e.to]; });
       if (out.length) {
         li.appendChild(KW.el("span", "map-li-out", out.map(function (e) {
           return EDGE[e.type] + " " + label(byId[e.to]);
@@ -102,97 +83,21 @@
     });
   }
 
-  KW.mapView = function (main) {
-    var state = params(), etag = "", seq = 0;
-    var pg = KW.pageView(main, { title: "Map", tab: "Map · kwatch", read: load,
-      sub: "How Ingresses, Services and workloads connect, and where it is failing." });
-    var bar = pg.body.appendChild(KW.el("div", "map-bar"));
-    var sw = bar.appendChild(KW.el("div", "tz"));
-    sw.setAttribute("role", "group");
-    sw.setAttribute("aria-label", "Show");
-    var views = [["namespace", "One namespace"], ["failing", "What's failing"]].map(function (v) {
-      var b = sw.appendChild(KW.el("button", "tz-b", v[1]));
-      b.type = "button";
-      b.dataset.mapView = v[0];
-      return b;
-    });
-    var nsLabel = bar.appendChild(KW.el("label", "map-ns"));
-    nsLabel.appendChild(KW.el("span", "", "Namespace"));
-    var pick = nsLabel.appendChild(KW.el("select"));
-    pick.name = "map-namespace";
-    var nodesLabel = bar.appendChild(KW.el("label", "map-nodes"));
-    var nodesBox = nodesLabel.appendChild(KW.el("input"));
-    nodesBox.type = "checkbox";
-    nodesBox.name = "map-nodes";
-    nodesLabel.appendChild(document.createTextNode("Show nodes"));
-    var box = { line: pg.body.appendChild(KW.el("p", "map-line")) };
-    box.canvas = pg.body.appendChild(KW.el("div", "map-canvas"));
-    box.info = pg.body.appendChild(KW.el("div", "map-info"));
-    box.info.setAttribute("role", "status");
-    box.info.hidden = true;
-    pg.body.appendChild(KW.el("h2", "map-h", "Objects and connections"));
-    box.list = pg.body.appendChild(KW.el("ul", "map-list"));
-    pg.body.hidden = true;
-
-    function open(n) {
-      if (n.issue) {
-        KW.go("/issues/" + encodeURIComponent(n.issue));
-        return;
-      }
-      box.info.textContent = label(n) + ": " + LEVEL[n.level] +
-        (n.ready ? ", " + n.ready + " ready" : "") + ".";
-      box.info.hidden = false;
-    }
-
-    function mark() {
-      views.forEach(function (b) {
-        b.setAttribute("aria-pressed", b.dataset.mapView === state.view ? "true" : "false");
-      });
-      nsLabel.hidden = state.view === "failing";
-      nodesBox.checked = state.nodes;
-    }
-
-    function names(list, current) {
-      var want = ["", current].concat(list).join("\n");
-      if (pick.dataset.names === want) return;
-      pick.dataset.names = want;
-      pick.textContent = "";
-      list.forEach(function (ns) {
-        var o = pick.appendChild(KW.el("option", "", ns));
-        o.value = ns;
-      });
-      pick.value = current;
-    }
-
-    function load() {
-      var mine = ++seq;
-      return KW.api("/api/map?" + query(state), { etag: etag }).then(function (res) {
-        if (mine !== seq) return null;
-        if (res.status === 200 && res.data) {
-          etag = res.etag;
-          if (state.view === "namespace" && res.data.namespace) state.namespace = res.data.namespace;
-          names(res.data.namespaces || [], state.namespace);
-          draw(box, res.data, open);
-        }
-        return res;
-      });
-    }
-
-    function change() {
-      etag = "";
-      mark();
-      var q = query(state);
-      history.replaceState(null, "", "/map" + (q ? "?" + q : ""));
-      KW.rendered = location.pathname + location.search;
-      pg.now();
-    }
-
-    views.forEach(function (b) {
-      b.addEventListener("click", function () { state.view = b.dataset.mapView; change(); });
-    });
-    pick.addEventListener("change", function () { state.namespace = pick.value; change(); });
-    nodesBox.addEventListener("change", function () { state.nodes = nodesBox.checked; change(); });
-    mark();
-    return { stop: pg.stop };
+  /* KW.issueMap fills the "How it connects" fold of an issue's page from
+     inc.map, or keeps it hidden when kwatch knows no connection. */
+  KW.issueMap = function (root, inc) {
+    var fold = KW.$('[data-fold="map"]', root);
+    if (!fold) return;
+    var data = inc.map;
+    var canvas = KW.$("[data-map-canvas]", fold), box = KW.$("[data-map-list]", fold);
+    canvas.textContent = "";
+    box.textContent = "";
+    fold.hidden = !(data && data.nodes && data.nodes.length);
+    if (fold.hidden) return;
+    var failing = data.nodes.filter(function (n) { return n.level !== "ok"; }).length;
+    KW.$("[data-map-line]", fold).textContent = KW.plural(data.nodes.length, "object", "objects") +
+      " around this issue" + (failing > 1 ? ", " + KW.num(failing) + " with an open issue." : ".");
+    picture(canvas, data, inc.id);
+    list(box, data, inc.id);
   };
 })();

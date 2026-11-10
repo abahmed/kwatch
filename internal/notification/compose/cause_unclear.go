@@ -1,6 +1,8 @@
 package compose
 
 import (
+	"strings"
+
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -52,22 +54,70 @@ func checkedSentences(f caseFacts) []sentence {
 		onlyAdvisory(f.members) {
 		return nil
 	}
-	if _, _, byNode := nodeKill(f.members); byNode {
-		// The node is named as the cause by the sentences that follow.
-		return recentChangeSentence(f)
+	recent := recentChangeSentence(f)
+	if !checkedSaysMore(f) {
+		return recent
 	}
-	if toldCause(f) {
-		// The caused-by line names a likely cause already.
-		return recentChangeSentence(f)
+	next := "."
+	if lookAtTheApp(f, len(recent) > 0) {
+		next = ", so look at the app itself."
 	}
-	text := "Nothing outside it points to a cause."
+	text := "Cause not found yet: nothing outside it points to one" + next
 	if words := checkedWordsFor(p.Checked); len(words) > 0 {
-		text = "Its " + joinWords(words) + " " +
-			verb(len(words), "is", "are") + " healthy and unchanged, " +
-			"so nothing outside it points to a cause."
+		text = "Cause not found yet: its " + joinWords(words) + " " +
+			verb(len(words), "is", "are") + " healthy and unchanged" + next
 	}
-	return append([]sentence{{part: partCause, text: text}},
-		recentChangeSentence(f)...)
+	return append([]sentence{{part: partCause, text: text}}, recent...)
+}
+
+// checkedSaysMore reports a message the "Cause not found yet" sentence
+// adds to. It says nothing when the message names a cause or where to
+// fix it already: a node that killed the pods, a caused-by line, a fix
+// place, a CPU the image is not built for. Nor for a node: what was
+// checked around a node is not what a reader of a node alert looks at.
+func checkedSaysMore(f caseFacts) bool {
+	if _, _, byNode := nodeKill(f.members); byNode {
+		return false
+	}
+	if toldCause(f) || f.p.Root.Kind == kube.KindNode {
+		return false
+	}
+	if _, ok := f.fixPlace(); ok {
+		return false
+	}
+	_, arch := archLead(f)
+	return !arch
+}
+
+// appModes are the lead modes whose failure is the app's own when
+// nothing outside it points to a cause: it crashes, exits, errors,
+// restarts or fails its probes.
+var appModes = []detection.Mode{detection.ModeCrashLoop,
+	detection.ModeError, detection.ModeRestarting, detection.ModeProbe,
+	detection.ModeExit}
+
+// lookAtTheApp reports a failure whose next place to look is the app
+// itself: a workload whose lead is one of appModes, with nothing kwatch
+// could not see (Unverified), no shared factor a Pro analysis found
+// (ProCause) and no recent change (changed) to look at first.
+func lookAtTheApp(f caseFacts, changed bool) bool {
+	p := f.p
+	if changed || f.changeSeen || p.ProCause || len(p.Unverified) > 0 {
+		return false
+	}
+	if !isWorkloadKind(p.Root.Kind) && p.Root.Kind != kube.KindPod {
+		return false
+	}
+	mode := p.Mode
+	if f.ok {
+		mode = findingMode(f.lead)
+	}
+	for _, m := range appModes {
+		if mode == m || strings.HasPrefix(string(mode), string(m)+".") {
+			return true
+		}
+	}
+	return false
 }
 
 // onlyAdvisory reports members that are all configuration risks: there

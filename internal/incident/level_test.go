@@ -21,7 +21,7 @@ func TestAlertLevelTextCoversEveryCode(t *testing.T) {
 	for _, rule := range pageRules {
 		assert.Contains(t, pageTexts, rule.name, "page rule %s", rule.name)
 	}
-	assert.Equal(t, "Pages: it matches a rule for failures that need "+
+	assert.Equal(t, "Urgent: it matches a rule for failures that need "+
 		"someone now.", AlertLevelText(levelPagePrefix+"new-rule"))
 	assert.Empty(t, AlertLevelText(""))
 	assert.Empty(t, AlertLevelText("unknown"))
