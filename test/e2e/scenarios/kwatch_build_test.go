@@ -105,7 +105,8 @@ func (s *Scenario) ExpectDeliveryRejected() {
 }
 
 // ExpectHeartbeat waits until the receiver gets a bodyless GET, which is
-// what a Kwatch heartbeat sends.
+// what a Kwatch heartbeat sends. The interval is 30 seconds, the shortest
+// Kwatch accepts, so the wait leaves room for the Pod to start first.
 func (s *Scenario) ExpectHeartbeat() {
 	s.T.Helper()
 	s.Must(wait.PollUntilContextTimeout(s.Ctx,
@@ -170,7 +171,7 @@ func (s *Scenario) StartHeartbeatKwatch() {
 	// The heartbeat URL is sensitive, so Kwatch only accepts it as a file
 	// reference to a mounted Secret key.
 	config := string(base) + "\nheartbeatMonitor:\n  enabled: true\n" +
-		"  interval: 1\n  url: \"${file:/config/heartbeat-url}\"\n"
+		"  interval: 30\n  url: \"${file:/config/heartbeat-url}\"\n"
 	const name = "kwatch-heartbeat"
 	s.GrantLease(name)
 	s.StartKwatch(name, map[string][]byte{

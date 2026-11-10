@@ -111,10 +111,6 @@ type IncidentStore interface {
 // (see reconcileDowntime): sustains are counted from what kwatch observed.
 const restoreGrace = 10 * time.Minute
 
-// saveInterval bounds how stale persisted incidents can be when nothing is
-// decided for a while.
-const saveInterval = time.Minute
-
 // Engine runs the pipeline. One goroutine, Run, makes every decision:
 // it drains submitted observations into the model, evaluates the touched
 // entities, solves root cause, ticks the incident lifecycles and hands

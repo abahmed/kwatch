@@ -14,27 +14,67 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// sparseFill writes n values just over half a page each, under keys in
-// no particular order: every page holds one and is about half empty,
-// as a long-running file's pages end up, and nothing is free.
-func sparseFill(t *testing.T, s *Store, n int) {
+// sparseFill leaves a file at least twice its data with little free
+// space, as a long-running file's pages end up: it writes values of an
+// eighth of a page under keys in no particular order, then deletes
+// every other key. bbolt merges a page only when it is under a quarter
+// full, so the pages stay part empty, and deleting a few keys per
+// transaction lets the next one reuse the pages each frees. The data
+// left is about data bytes; it returns a key that is kept.
+func sparseFill(t *testing.T, s *Store, data int) string {
 	t.Helper()
-	value := strings.Repeat("v", 2100)
-	for i := 0; i < n; i++ {
+	value := strings.Repeat("v", s.bolt().Info().PageSize/8)
+	keys := make([]string, 0, 2*data/len(value))
+	items := map[string]Item[string]{}
+	for i := 0; i < cap(keys); i++ {
 		sum := sha256.Sum256([]byte{byte(i), byte(i >> 8), byte(i >> 16)})
-		require.NoError(t, state(s).Put(hex.EncodeToString(sum[:8]), value))
+		keys = append(keys, hex.EncodeToString(sum[:8]))
+		items[keys[i]] = Item[string]{Value: value}
+		if len(items) == 500 || i == cap(keys)-1 {
+			require.NoError(t, state(s).PutAll(items))
+			items = map[string]Item[string]{}
+		}
 	}
+	for i := 1; i < len(keys); i += 2 * 50 {
+		var odd []string
+		for j := i; j < min(i+2*50, len(keys)); j += 2 {
+			odd = append(odd, keys[j])
+		}
+		require.NoError(t, state(s).DeleteMany(odd))
+	}
+	return keys[0]
+}
+
+// withPageSize makes the files the test creates use pages of size
+// bytes, whatever the OS's page size is.
+func withPageSize(t *testing.T, size int) {
+	t.Helper()
+	old := newFilePageSize
+	newFilePageSize = size
+	t.Cleanup(func() { newFilePageSize = old })
 }
 
 // A file at least twice the size of the data the last pass measured,
 // with little free space, is rewritten: its half-full pages cost memory
-// when it is mapped. The measured size stands in for half-full pages,
-// which bbolt only leaves behind over long runs.
+// when it is mapped. It runs with the 4 KiB pages of Linux on x86 and
+// the 16 KiB pages of macOS on Apple silicon, whatever the test runs
+// on: values of over half a 4 KiB page took one page each in the copy,
+// so the copy gained nothing there and the test passed only on macOS.
 func TestReclaimRewritesASparseFile(t *testing.T) {
+	for _, page := range []int{4 << 10, 16 << 10} {
+		t.Run(fmt.Sprintf("%d KiB pages", page>>10), func(t *testing.T) {
+			withPageSize(t, page)
+			reclaimsSparseFile(t, page)
+		})
+	}
+}
+
+func reclaimsSparseFile(t *testing.T, page int) {
 	smallReclaim(t)
 	s := openClaimed(t, newFakeClock())
+	require.Equal(t, page, s.bolt().Info().PageSize)
 	s.bolt().NoSync = true // the fill only; fsync is not under test
-	sparseFill(t, s, 3000)
+	kept := sparseFill(t, s, 6<<20)
 	s.bolt().NoSync = false
 	before, free := s.fileUsage()
 	require.Less(t, free, before/2, "not a free-pages case")
@@ -50,10 +90,9 @@ func TestReclaimRewritesASparseFile(t *testing.T) {
 	after, _ := s.fileUsage()
 	t.Logf("after %d", after)
 	assert.Less(t, after, before*3/4, "the copy packs the pages")
-	_, found, err := state(s).Get(func() string {
-		sum := sha256.Sum256([]byte{0, 0, 0})
-		return hex.EncodeToString(sum[:8])
-	}())
+	assert.Equal(t, page, s.bolt().Info().PageSize,
+		"the copy keeps the file's page size")
+	_, found, err := state(s).Get(kept)
 	require.NoError(t, err)
 	assert.True(t, found, "data kept")
 
@@ -118,7 +157,7 @@ func TestReclaimDoesNotRepeatACopyThatGainsNothing(t *testing.T) {
 func putPageRecords(t *testing.T, s *Store) {
 	t.Helper()
 	items := map[string]Item[string]{}
-	page := os.Getpagesize()
+	page := s.bolt().Info().PageSize
 	for i := range 1500 {
 		items[fmt.Sprintf("inc-%05d", i)] =
 			Item[string]{Value: strings.Repeat("r", page-40)}

@@ -2,6 +2,10 @@ package pipeline
 
 import "time"
 
+// saveInterval bounds how stale persisted incidents can be when nothing is
+// decided for a while.
+const saveInterval = time.Minute
+
 // saveGate decides when the loop builds a save snapshot. A decided
 // iteration only marks the state dirty; the snapshot is built at most once
 // per writeBatch, because the writer keeps just the latest one anyway.

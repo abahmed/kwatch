@@ -196,7 +196,9 @@ func openForInspection(path string) (db *bolt.DB, absent bool, err error) {
 // It is used after openForInspection already checked the pages. free
 // checks the room for the backup before a migration.
 func openWritable(path string, free freeSpaceFunc) (*bolt.DB, error) {
-	db, err := bolt.Open(path, 0o600, &bolt.Options{Timeout: openTimeout})
+	db, err := bolt.Open(path, 0o600, &bolt.Options{
+		Timeout: openTimeout, PageSize: newFilePageSize,
+	})
 	if err != nil {
 		if resettable(err) {
 			err = &unusableError{reason: ResetUnreadable, cause: err}
@@ -216,6 +218,7 @@ func openVerified(
 ) (db *bolt.DB, err error) {
 	db, err = bolt.Open(path, 0o600, &bolt.Options{
 		Timeout: openTimeout, ReadOnly: readOnly,
+		PageSize: newFilePageSize,
 	})
 	if err != nil {
 		if resettable(err) {
