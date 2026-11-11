@@ -14,8 +14,10 @@ import (
 // totalProbe records the node total the pass sample saw.
 type totalProbe struct{ total *int }
 
-func (totalProbe) Name() string            { return "total-probe" }
-func (totalProbe) Kinds() []inventory.Kind { return []inventory.Kind{kube.KindPod} }
+func (totalProbe) Name() string { return "total-probe" }
+func (totalProbe) Kinds() []inventory.Kind {
+	return []inventory.Kind{kube.KindPod}
+}
 func (p totalProbe) Detect(
 	ctx detection.Context, _ inventory.Entity,
 ) []detection.Finding {
