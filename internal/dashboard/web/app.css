@@ -304,7 +304,7 @@ input:hover, select:hover { border-color: var(--text); }
   .brand { margin: 0 6px 0 0; }
   .side-cluster { order: 2; flex-basis: 100%; margin: 0; }
   /* One row that scrolls sideways, never a second line of links. */
-  .nav { flex-direction: row; flex-wrap: nowrap; gap: 4px 6px; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; flex: 1 1 100%; order: 3; }
+  .nav { flex-direction: row; flex-wrap: nowrap; gap: 4px 2px; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; flex: 1 1 100%; order: 3; }
   .nav::-webkit-scrollbar { display: none; }
   .nav a { flex: none; white-space: nowrap; }
   /* "kwatch health" reads "Health" here, so all four links fit at 390px. */
@@ -315,8 +315,8 @@ input:hover, select:hover { border-color: var(--text); }
   .page-head > .updated { padding: 0 4px 0 10px; border-color: transparent; gap: 2px; }
   .updated:not(.stale) > span:not(.live) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .upd-refresh { width: var(--hit); padding: 0; justify-content: center; border-color: transparent; }
-  .nav a { min-height: var(--hit); margin: 0; }
-  .nav a[aria-current="page"]::before { left: 10px; right: 10px; top: auto; bottom: 6px; width: auto; height: 3px; }
+  .nav a { min-height: var(--hit); margin: 0; padding: 0 8px; }
+  .nav a[aria-current="page"]::before { left: 8px; right: 8px; top: auto; bottom: 6px; width: auto; height: 3px; }
   .who { margin: 0; flex-basis: 100%; display: flex; flex-direction: row; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
   .filters .f-sort { margin-left: 0; }
   .content { padding: var(--space-5) var(--space-4); }

@@ -87,10 +87,18 @@ var layoutChecks = []layoutCheck{
 // more frame has drawn, so a measurement never sees the fallback font
 // (wider on Linux) that font-display: swap shows meanwhile. With
 // KWATCH_BROWSER_WIDE_FONT=1 it first swaps in a wide system font, to
-// check that the layout promises hold whatever the font.
+// check that the layout promises hold whatever the font. With
+// KWATCH_BROWSER_TEXT_WIDER=1 all text is a little wider (Linux draws
+// the same font so), to check the layout keeps some headroom.
 func settleFonts() chromedp.Action[chromedp.Void] {
 	wide := os.Getenv("KWATCH_BROWSER_WIDE_FONT") == "1"
-	js := `(async (wide) => {
+	wider := os.Getenv("KWATCH_BROWSER_TEXT_WIDER") == "1"
+	js := `(async (wide, wider) => {
+  if (wider) {
+    const w = new CSSStyleSheet();
+    w.replaceSync("body{letter-spacing:0.02em}");
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, w];
+  }
   if (wide) {
     const s = new CSSStyleSheet();
     s.replaceSync(":root{--font-body:Verdana,sans-serif !important;" +
@@ -100,7 +108,7 @@ func settleFonts() chromedp.Action[chromedp.Void] {
   await document.fonts.ready;
   await new Promise((r) => requestAnimationFrame(() => r()));
   return true;
-})(` + strconv.FormatBool(wide) + `)`
+})(` + strconv.FormatBool(wide) + `,` + strconv.FormatBool(wider) + `)`
 	eval := chromedp.Evaluate[bool](js, chromedp.EvalAwaitPromise)
 	return chromedp.Func(func(ctx context.Context, t *chromedp.Target) error {
 		_, err := eval(ctx, t)

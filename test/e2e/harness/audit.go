@@ -39,7 +39,10 @@ type AuditMatch struct {
 	Resource  string
 	Reason    string
 	Action    string
-	Count     int
+	// DecisionReason, when set, matches only entries sent for that
+	// reason, such as FailingAgain.
+	DecisionReason string
+	Count          int
 }
 
 func NewAuditReader(environment *Environment) *AuditReader {
@@ -50,6 +53,17 @@ func (a *AuditReader) WaitFor(
 	ctx context.Context,
 	match AuditMatch,
 ) ([]AuditEntry, error) {
+	return a.WaitForAny(ctx, match)
+}
+
+// WaitForAny waits until one of matches is met and returns its entries.
+// A scenario uses it when Kwatch may tell the same thing in more than
+// one way, such as a returning failure that opens a new incident or
+// reopens the old one.
+func (a *AuditReader) WaitForAny(
+	ctx context.Context,
+	matches ...AuditMatch,
+) ([]AuditEntry, error) {
 	deadline, cancel := withDefaultDeadline(ctx, 10*time.Minute)
 	defer cancel()
 	ticker := time.NewTicker(auditPollInterval)
@@ -57,8 +71,7 @@ func (a *AuditReader) WaitFor(
 	for {
 		entries, err := a.snapshot(deadline)
 		if err == nil {
-			matched := matchingEntries(entries, match)
-			if len(matched) >= match.Count {
+			if matched, ok := firstMet(entries, matches); ok {
 				return matched, nil
 			}
 		}
@@ -130,6 +143,38 @@ func parseAudit(payload []byte) ([]AuditEntry, error) {
 	return result, scanner.Err()
 }
 
+// ToldAgain lists the two ways Kwatch tells that the failure of an
+// incident it resolved came back: the old incident reopens under its
+// own ID with a "failing again" update, or a second incident of the
+// same resource opens. Which one happens is Kwatch's choice, not
+// timing the scenario controls: the old incident reopens only while
+// the returning failure has the root the incident resolved with, and
+// a cause revision while it recovered may have moved that root.
+func ToldAgain(
+	namespace, incident, resource, reason string,
+) []AuditMatch {
+	return []AuditMatch{
+		{Incident: incident, Action: "update", Reason: reason,
+			DecisionReason: FailingAgain, Count: 1},
+		{Namespace: namespace, Resource: resource, Reason: reason,
+			Action: "create", Count: 2},
+	}
+}
+
+// firstMet returns the entries of the first match that has at least
+// Count entries (at least one when Count is 0).
+func firstMet(
+	entries []AuditEntry, matches []AuditMatch,
+) ([]AuditEntry, bool) {
+	for _, match := range matches {
+		matched := matchingEntries(entries, match)
+		if len(matched) >= max(match.Count, 1) {
+			return matched, true
+		}
+	}
+	return nil, false
+}
+
 func matchingEntries(entries []AuditEntry, match AuditMatch) []AuditEntry {
 	result := make([]AuditEntry, 0, len(entries))
 	for _, entry := range entries {
@@ -146,6 +191,10 @@ func matchingEntries(entries []AuditEntry, match AuditMatch) []AuditEntry {
 			continue
 		}
 		if match.Action != "" && entry.Action != match.Action {
+			continue
+		}
+		if match.DecisionReason != "" &&
+			entry.DecisionReason != match.DecisionReason {
 			continue
 		}
 		result = append(result, entry)

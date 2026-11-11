@@ -1524,3 +1524,7 @@ existing tokens only.
   `text-wrap: balance`. Activity's time column is `nowrap`; the
   timeline's "Show every time" stamps use `KW.when` in `.tl-stamp`
   (`nowrap`).
+
+## Testing
+
+Browser tests (`-tags browser`) also run with `KWATCH_BROWSER_TEXT_WIDER=1` (text 2% wider, as Linux draws it) to keep headroom in the phone layout; `KWATCH_BROWSER_WIDE_FONT=1` swaps in Verdana (stricter than the layout promises).

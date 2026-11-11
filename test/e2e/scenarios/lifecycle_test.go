@@ -36,10 +36,14 @@ func TestScenarioRefailureAfterRecovery(t *testing.T) {
 		s.ExpectResolved(incident)
 
 		// Pods that already started keep their environment, so the
-		// problem only returns when the Pods are replaced.
+		// problem only returns when the Pods are replaced. Kwatch tells
+		// it either by reopening the incident ("failing again") or, when
+		// the incident's root moved to the Deployment while it
+		// recovered, by a new incident. Both tell the reader.
 		s.DeleteConfigMap("settings")
 		s.RestartPods("refailure")
-		s.ExpectIncidents("settings", "ProjectedConfigMapMissing", 2)
+		s.ExpectToldAgain(incident, "settings",
+			"ProjectedConfigMapMissing")
 	})
 }
 

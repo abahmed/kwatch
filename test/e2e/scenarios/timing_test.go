@@ -53,6 +53,14 @@ func resolveWait() time.Duration {
 	return holdTime + settleTime + slackTime
 }
 
+// toldAgainWait is how long to wait for a failure that came back after its
+// incident resolved to be told again. A reopened incident sends its
+// "failing again" update after ReviseSettle and a new incident announces
+// after the settle time, so the longer of the two decides.
+func toldAgainWait() time.Duration {
+	return max(settleTime, incident.DefaultReviseSettle) + slackTime
+}
+
 // syncedQuietTime is how long Kwatch must have been running before a
 // scenario may start a problem that it announces only much later. The
 // startup summary holds only problems that existed when Kwatch's sources

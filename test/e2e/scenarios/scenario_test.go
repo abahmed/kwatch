@@ -167,14 +167,19 @@ func (s *Scenario) ExpectIncident(
 	})
 }
 
-// ExpectIncidents waits until Kwatch has announced count incidents for
-// resource, for example after a problem came back.
-func (s *Scenario) ExpectIncidents(resource, reason string, count int) {
+// ExpectToldAgain waits until Kwatch tells that the failure of incident,
+// which it resolved, came back: either the incident reopens with a
+// "failing again" update or a new incident for resource opens (see
+// harness.ToldAgain). Call it after the scenario broke resource again.
+func (s *Scenario) ExpectToldAgain(incident, resource, reason string) {
 	s.T.Helper()
-	s.waitForAudit(announceWait(0), harness.AuditMatch{
-		Namespace: s.Namespace, Resource: resource,
-		Reason: reason, Action: "create", Count: count,
-	})
+	ctx, cancel := context.WithTimeout(s.Ctx, toldAgainWait())
+	defer cancel()
+	matches := harness.ToldAgain(s.Namespace, incident, resource, reason)
+	if _, err := s.Env.Audit.WaitForAny(ctx, matches...); err != nil {
+		s.T.Fatalf("waiting for %s to be told again (%+v): %v",
+			resource, matches, err)
+	}
 }
 
 // ExpectClusterIncident is ExpectIncident for a root without a namespace,
