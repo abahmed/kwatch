@@ -1,0 +1,11 @@
+{
+  "name": "pod-replaced-not-the-fix",
+  "description": "A crash-looping pod is deleted and its replacement runs; the resolve does not credit a change with the fix.",
+  "root": "unknown",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "1h0m0s"
+}

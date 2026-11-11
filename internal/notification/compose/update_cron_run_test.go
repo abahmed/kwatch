@@ -42,7 +42,7 @@ func TestCronJobUpdateSaysItsLastRunFailed(t *testing.T) {
 	note := cronRunUpdate(true, "failed after 3 failed pod(s)")
 
 	assert.Contains(t, note, "Its last run, job stats-rollup-292510, "+
-		"failed: failed after 3 failed pod(s).")
+		"failed after 3 failed pod(s).")
 	assert.NotContains(t, note, "spreading")
 }
 
@@ -50,7 +50,7 @@ func TestCronJobUpdateSaysItsLastRunFailed(t *testing.T) {
 func TestCronJobUpdateQuotesTheRunsOwnFailure(t *testing.T) {
 	note := cronRunUpdate(true, "failed after 5 failed pod(s)")
 
-	assert.Contains(t, note, "failed: failed after 5 failed pod(s).")
+	assert.Contains(t, note, "failed after 5 failed pod(s).")
 	assert.NotContains(t, note, "3 failed")
 }
 
@@ -59,6 +59,6 @@ func TestCronJobUpdateNamesTheCronJobWhenNothingElseDid(t *testing.T) {
 	note := cronRunUpdate(false, "failed after 3 failed pod(s)")
 
 	assert.Contains(t, note, "The last run of cron job stats-rollup in ops "+
-		"(prod-eu-1), job stats-rollup-292510, failed: failed after 3 "+
+		"(prod-eu-1), job stats-rollup-292510, failed after 3 "+
 		"failed pod(s).")
 }

@@ -55,7 +55,7 @@ func TestGroupedLineCountsTypesHighestFirstThenAlphabetical(t *testing.T) {
 	p = groupedWith(p, 2, detection.ModeOOMKilled, false)
 	p = groupedWith(p, 1, detection.ModeImagePull, false)
 
-	assert.Equal(t, "Also grouped: 3 probe failures, 2 out-of-memory "+
+	assert.Equal(t, "Related alerts: 3 probe failures, 2 out-of-memory "+
 		"kills, 2 rollout stalls, 1 image pull failure",
 		groupedLine(groupedNote(p)))
 }
@@ -64,7 +64,7 @@ func TestGroupedLineSkipsTheRootsFindingAndAdvisories(t *testing.T) {
 	p := groupedWith(badRollout(), 1, detection.ModeProbe, false)
 	p = groupedWith(p, 2, detection.ModeRiskSingleReplica, true)
 
-	assert.Equal(t, "Also grouped: 1 probe failure",
+	assert.Equal(t, "Related alerts: 1 probe failure",
 		groupedLine(groupedNote(p)))
 }
 
@@ -79,7 +79,7 @@ func TestGroupedLineNamesFourTypesThenCountsTheRest(t *testing.T) {
 
 	line := groupedLine(groupedNote(p))
 
-	assert.Equal(t, "Also grouped: 10 probe failures, 9 out-of-memory "+
+	assert.Equal(t, "Related alerts: 10 probe failures, 9 out-of-memory "+
 		"kills, 8 image pull failures, 7 scheduling failures, and 2 more "+
 		"types", line)
 }
@@ -90,7 +90,7 @@ func TestGroupedLineNeverShowsARawIdentifier(t *testing.T) {
 
 	line := groupedLine(groupedNote(p))
 
-	assert.Equal(t, "Also grouped: 2 api service unavailable alerts", line)
+	assert.Equal(t, "Related alerts: 2 api service unavailable alerts", line)
 	assert.NotContains(t, line, "APIService")
 }
 
@@ -144,14 +144,14 @@ func TestGroupedLineWithOneOtherFinding(t *testing.T) {
 		Entity: inventory.CoreID(kube.KindNode, "", "n1")}
 	p = badRollout()
 	p.Members[node.Key()] = node
-	assert.Equal(t, "Also grouped: 1 node problem",
+	assert.Equal(t, "Related alerts: 1 node problem",
 		groupedLine(groupedNote(p)))
 
 	other := own
 	other.Entity = inventory.CoreID(kube.KindService, "shop", "billing")
 	p = badRollout()
 	p.Members[other.Key()] = other
-	assert.Equal(t, "Also grouped: 1 service without endpoints",
+	assert.Equal(t, "Related alerts: 1 service without endpoints",
 		groupedLine(groupedNote(p)), "another workload's symptom")
 }
 
@@ -162,7 +162,7 @@ func TestGroupedLineOmitsTheLeadFamilyAndStorms(t *testing.T) {
 	assert.NotContains(t, groupedNote(p), groupedPrefix, "same family")
 
 	p = groupedWith(p, 1, detection.ModeProbe, false)
-	assert.Equal(t, "Also grouped: 1 probe failure",
+	assert.Equal(t, "Related alerts: 1 probe failure",
 		groupedLine(groupedNote(p)), "storm plus one other family")
 }
 
@@ -197,7 +197,7 @@ func TestGroupedLineShowsInCommunityAndPro(t *testing.T) {
 		})
 		require.Greater(t, at, 0, name)
 		if name == "community" {
-			assert.Contains(t, lines[at+1], proFixTail)
+			assert.Contains(t, lines[at+1], proFixWords)
 			continue
 		}
 		assert.Contains(t, lines[at+1], "kubectl", name)

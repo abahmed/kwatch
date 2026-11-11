@@ -122,9 +122,11 @@ func rolloutOf(e inventory.Entity, kind inventory.Kind) rollout {
 	available := count(e, kube.AttrAvailable)
 	observed, generation := count(e, kube.AttrObservedGen),
 		count(e, kube.AttrGeneration)
-	// The Progressing condition says the deadline passed.
+	// The Progressing condition says the deadline passed. Until the
+	// controller has observed the current generation the condition is
+	// still the previous rollout's and says nothing about this one.
 	key := kube.ConditionKey("Progressing") + kube.AttrConditionReason
-	if reason, ok := e.Attribute(key); ok {
+	if reason, ok := e.Attribute(key); ok && observed >= generation {
 		st.deadline = reason.Value.AsText() == deadlineReason
 	}
 	st.complete = observed >= generation && st.updated >= st.desired &&

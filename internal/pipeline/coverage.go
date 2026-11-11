@@ -43,9 +43,13 @@ func (e *Engine) checkCoverage(now time.Time) {
 	klog.InfoS("pipeline: coverage check found failing workloads no "+
 		"incident covers; an incident was lost, opening one",
 		"component", "pipeline", "workloads", entityNames(lost))
-	snapshot := e.snapshot(now)
-	e.deps.Incidents.Apply(snapshot, dirty, nil)
-	e.announcer.investigateOpened(now)
+	// Contained like solve: the object that made Apply panic there, and
+	// so lost its incident, is the one handed back here. Uncontained,
+	// the same panic would end the process, on every restart.
+	contain("incident", "coverage", func() {
+		e.deps.Incidents.Apply(e.snapshot(now), dirty, nil)
+		e.announcer.investigateOpened(now)
+	})
 }
 
 // findingEntities lists the workload, its pods and their containers

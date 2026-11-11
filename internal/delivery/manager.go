@@ -87,12 +87,17 @@ type Manager struct {
 	// sleepFn replaces real waits in tests; nil waits on a timer.
 	sleepFn func(context.Context, time.Duration) bool
 
+	// replaying is set while Start replays pending jobs, whose copies
+	// for one provider may outnumber its queue (see replayQueuedLocked).
+	replaying bool
 	// backlog holds restored jobs per provider until its queue has room.
 	backlog map[string][]deliverJob
 
 	// busy counts workers in the middle of a job: pacing, waiting out a
 	// provider, or sending. See LastProgress.
 	busy atomic.Int32
+	// sends tracks provider requests in flight, for the stall check.
+	sends sendTracker
 
 	// told remembers which providers each conversation was routed to.
 	told routeLedger
@@ -187,6 +192,7 @@ func (m *Manager) initRuntime(
 		return err
 	}
 	m.applyThreadGate(entries)
+	warnUnnamedCluster(entries, clusterName)
 	if active {
 		if err := m.drainForReconfiguration(); err != nil {
 			return err

@@ -1,14 +1,13 @@
 10:05:55 settled
-🟠 checkout in shop (prod-eu-1): the new version (checkout:5.2) can't start; the previous version is still serving: it stops at start with "panic: invalid probe configuration". Changes in revision 14, likeliest culprit first: image registry.example.com/checkout:5.1 → registry.example.com/checkout:5.2; env LOG_LEVEL unset → debug; readiness probe unset → http /ready :8080 every 5s, timeout 1s, 3 failures (by alice); pods crash-looping since. Only the new revision fails; the previous one stays healthy. Also changed before it broke: bob changed config map checkout-config at 10:02 UTC. Fix in: deployment/checkout → container app → image (registry.example.com/checkout:5.2). Rolling back to revision 13, the one before this release, undoes it (changes the cluster): kubectl rollout undo deployment/checkout -n shop --to-revision=13
-Checked: the previous revision ran healthy for 64 minutes before the change.
-🟠 checkout in shop (prod-eu-1): the new version (checkout:5.2) can't start; the previous version is still serving: it stops at start with "panic: invalid probe configuration".
-| 🟠 **checkout** in **shop** (**prod-eu-1**): the new version (checkout:5.2) can't start; the previous version is still serving: it stops at start with `panic: invalid probe configuration`.
+🟠 checkout in shop (prod-eu-1): the new version (checkout:5.2) can't start (it stops at start with "panic: invalid probe configuration"); the previous version is still serving. Changes in revision 14, likeliest culprit first: image registry.example.com/checkout:5.1 → registry.example.com/checkout:5.2; env LOG_LEVEL unset → debug; readiness probe unset → http /ready :8080 every 5s, timeout 1s, 3 failures (by alice); pods crash-looping since. Only the new revision fails; the previous one stays healthy. Also changed before it broke: bob changed config map checkout-config at 10:02 UTC. Rolling back to revision 13, the one before this release, undoes it (changes the cluster): kubectl rollout undo deployment/checkout -n shop --to-revision=13
+Proof: the previous revision ran healthy for 64 minutes before the change.
+🟠 checkout in shop (prod-eu-1): the new version (checkout:5.2) can't start; the previous version is still serving.
+| 🟠 **checkout** in **shop** (**prod-eu-1**): the new version (checkout:5.2) can't start (it stops at start with `panic: invalid probe configuration`); the previous version is still serving.
 | Changes in revision 14, likeliest culprit first: image registry.example.com/checkout:5.1 → registry.example.com/checkout:5.2; env LOG\_LEVEL unset → debug; readiness probe unset → http /ready :8080 every 5s, timeout 1s, 3 failures (by alice); pods crash-looping since.
 | Only the new revision fails; the previous one stays healthy.
 | Also changed before it broke: bob changed config map checkout-config at 10:02 UTC.
-| Fix in: deployment/checkout → container app → image (registry.example.com/checkout:5.2).
 | Rolling back to revision 13, the one before this release, undoes it (changes the cluster):
 | ```
 | kubectl rollout undo deployment/checkout -n shop --to-revision=13
 | ```
-| *Checked: the previous revision ran healthy for 64 minutes before the change.*
+| *Proof: the previous revision ran healthy for 64 minutes before the change.*

@@ -49,7 +49,7 @@ func TestValidateRejectsStartupRefusedSettings(t *testing.T) {
 		}, "invalid port"},
 		{"heartbeat url scheme", func(c *Config) {
 			c.HeartbeatMonitor = HeartbeatMonitor{
-				Enabled: true, Interval: 10, URL: "ftp://x.test"}
+				Enabled: true, Interval: 60, URL: "ftp://x.test"}
 		}, "heartbeatMonitor.url has unsupported scheme"},
 		{"severity keys differ in case", func(c *Config) {
 			c.SeverityByReason = map[string]string{

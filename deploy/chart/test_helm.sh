@@ -103,6 +103,7 @@ for bad in "unknownTopLevel=1" "rbac.bogus=1" "watch.bogus=1" \
   "config.kubelet.bogus=1" "config.watch.bogus=1" \
   "config.resyncSeconds=5" "config.resyncSeconds=-3" \
   "config.app.logFormatter=xml" "config.heartbeatMonitor.interval=-1" \
+  "config.app.environment=staging" \
   "config.activeProbeMonitor.intervalSeconds=0" \
   "config.activeProbeMonitor.bogus=1" \
   "config.activeProbeMonitor.http[0].expectedStatus=99" \
@@ -117,6 +118,7 @@ helm template test-schema . --set config.kubelet.insecureSkipVerify=true \
 }
 for good in "config.resyncSeconds=0" "config.resyncSeconds=30" \
   "config.app.logFormatter=json" "config.app.caBundlePath=/etc/ca.pem" \
+  "config.app.environment=non-production" \
   "config.app.insecureSkipTLSVerify=false" "config.heartbeatMonitor.interval=0" \
   "config.activeProbeMonitor.autoServices=true" "crd.install=false"; do
   helm template test-schema . --set "$good" >/dev/null || {
@@ -392,6 +394,9 @@ grep -Fq 'self == 0 || self >= 30' ../crd.yaml || {
 }
 grep -Fq -- '- json' ../crd.yaml || {
   echo "FAIL: CRD must restrict app.logFormatter"; exit 1;
+}
+grep -Fq -- '- non-production' ../crd.yaml || {
+  echo "FAIL: CRD must restrict app.environment"; exit 1;
 }
 # A KwatchConfig must not disable or move the health server.
 if grep -Fq 'healthCheck:' ../crd.yaml; then

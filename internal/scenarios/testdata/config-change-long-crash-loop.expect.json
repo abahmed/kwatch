@@ -1,0 +1,13 @@
+{
+  "name": "config-change-long-crash-loop",
+  "description": "A ConfigMap edit breaks the mounted app.yaml and every pod crash-loops for 50 minutes; the edit is still the cause after the causal window has passed.",
+  "root": "configmap/web/frontend-config",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/web/frontend",
+    "node//n1",
+    "node//n2",
+    "zone//zone-a"
+  ]
+}

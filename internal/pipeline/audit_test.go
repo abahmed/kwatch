@@ -57,6 +57,8 @@ func TestAuditEntryRecordsDecision(t *testing.T) {
 		RootCause:      "the rollout that changed the image",
 		Confidence:     "high",
 		DecisionReason: "settled", ContentHash: "h1", Previous: "p0",
+		Level:   audit.LevelError,
+		Message: "deployment/api in shop: alert sent (settled)",
 	}, entry)
 }
 
@@ -113,6 +115,8 @@ func TestAuditEntryOfASummaryHasNoIncidentRoot(t *testing.T) {
 	assert.Equal(t, "roll-up", entry.DecisionReason)
 	assert.Equal(t, []string{"p1", "p2"}, entry.Items)
 	assert.Equal(t, 2, entry.Opened)
+	assert.Equal(t, audit.LevelInfo, entry.Level)
+	assert.Equal(t, "summary sent (roll-up)", entry.Message)
 }
 
 // The restored-incidents summary has no incident of its own; its entry

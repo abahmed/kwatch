@@ -82,8 +82,8 @@ input:hover, select:hover { border-color: var(--text); }
 
 .chip { display: inline-block; font-size: var(--t-micro); font-weight: 600; line-height: 1.4; padding: 2px 9px; border-radius: var(--radius-chip); border: 1px solid transparent; white-space: nowrap; }
 .chip + .chip { margin-left: 4px; }
-.c-page { color: var(--failing); background: var(--failing-bg); }
-.c-notify { color: var(--degraded); background: var(--degraded-bg); }
+.c-page { color: var(--failing); background: var(--failing-bg); border-color: var(--failing); }
+.c-notify { color: var(--degraded); background: var(--degraded-bg); border-color: var(--degraded); }
 .c-low { color: var(--text-soft); background: var(--surface); border-color: var(--line); }
 .c-quiet { color: var(--text-soft); background: var(--surface); border: 1px dashed var(--control-border); }
 .c-resolved { color: var(--success); background: var(--success-bg); }
@@ -108,6 +108,10 @@ input:hover, select:hover { border-color: var(--text); }
 .brand { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
 .side a.brand { color: var(--text); }
 .wordmark { font-family: var(--font-display); font-weight: 800; font-size: 1.625rem; letter-spacing: -0.03em; }
+/* Which cluster this is (app.clusterName), and "Non-production". */
+.side-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: -8px 0 6px; font-size: var(--t-micro); color: var(--text-muted); min-width: 0; }
+.cl-name { font-family: var(--font-mono); color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+.cl-name.unnamed { font-family: inherit; color: var(--text-muted); font-weight: 500; }
 .nav { display: flex; flex-direction: column; gap: 4px; }
 .nav a { display: flex; align-items: center; min-height: 34px; position: relative; padding: 0 10px; margin: 0 -10px; border-radius: var(--radius-input); }
 .nav a:hover { background: var(--surface); }
@@ -123,7 +127,10 @@ input:hover, select:hover { border-color: var(--text); }
 .tz-b:last-of-type { border-radius: 0 var(--radius-chip) var(--radius-chip) 0; border-left: 0; }
 .tz-b:hover { background: var(--surface); }
 .tz-b[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
-.who .link { color: var(--text-muted); margin-left: 8px; min-height: 28px; }
+/* "Read-only dashboard" and "Sign out" share a left edge with the
+   rest of the side bar, side by side or wrapped. */
+.who-acct { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; }
+.who .link { color: var(--text-muted); margin-left: 0; padding-left: 0; padding-right: 0; min-height: 28px; }
 .who .link:hover { text-decoration-thickness: 2px; }
 .mark { stroke: var(--text); fill: none; }
 .mark-dot { fill: var(--signal); }
@@ -214,11 +221,11 @@ input:hover, select:hover { border-color: var(--text); }
 .chips .m-untold { margin-left: 0; font-size: var(--t-micro); padding: 2px 9px; align-self: center; }
 .step + .step { margin-top: 14px; }
 .runbook { margin-top: 14px; }
-.cmd { margin-top: 12px; background: var(--ink); color: var(--ink-text); border: 1px solid var(--ink-line); border-radius: var(--radius-card); display: flex; align-items: flex-start; gap: 8px; padding: 10px 10px 10px 16px; }
+.cmd { margin-top: 12px; background: var(--ink); color: var(--ink-text); border: 1px solid var(--ink-edge); border-radius: var(--radius-card); display: flex; align-items: flex-start; gap: 8px; padding: 10px 10px 10px 16px; }
 .cmd code { flex: 1; min-width: 0; font-size: var(--t-micro); line-height: 1.6; white-space: pre; overflow-x: auto; padding: 2px 0 6px; }
 .cmd .btn { color: var(--ink-text); border-color: var(--ink-muted); min-height: 36px; padding: 0 12px; font-size: var(--t-micro); flex: none; }
 .cmd .btn:hover { background: var(--ink-line); border-color: var(--ink-text); }
-.logs { margin-top: 8px; background: var(--ink); color: var(--ink-text); border: 1px solid var(--ink-line); border-radius: var(--radius-card); max-height: 320px; overflow: auto; padding: 14px 16px; font-family: var(--font-mono); font-size: var(--t-micro); line-height: 1.7; }
+.logs { margin-top: 8px; background: var(--ink); color: var(--ink-text); border: 1px solid var(--ink-edge); border-radius: var(--radius-card); max-height: 320px; overflow: auto; padding: 14px 16px; font-family: var(--font-mono); font-size: var(--t-micro); line-height: 1.7; }
 .logs div { white-space: pre; }
 .logs.wrap div { white-space: pre-wrap; overflow-wrap: anywhere; }
 .cap-actions { display: inline-flex; gap: 8px; margin-left: auto; }
@@ -286,18 +293,30 @@ input:hover, select:hover { border-color: var(--text); }
 .pw .eye { display: inline-flex; align-items: center; justify-content: center; width: var(--hit); min-height: var(--hit); padding: 0; right: 2px; color: var(--text-muted); position: absolute; top: 50%; transform: translateY(-50%); margin-top: 3px; }
 .pw .eye:hover { background: var(--surface); }
 .pw .eye .icon { width: 20px; height: 20px; vertical-align: 0; }
-.signin .help { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--line); font-size: var(--t-small); color: var(--text-muted); }
-.signin .cmd { margin-top: 10px; }
-.signin .cmd code { font-size: var(--t-micro); white-space: pre-wrap; overflow-wrap: anywhere; }
+.signin .help { margin-top: 12px; font-size: var(--t-small); }
+.signin h1 { font-size: 1.5rem; line-height: 1.25; overflow-wrap: break-word; }
+.signin .help a { display: inline-flex; align-items: center; min-height: var(--hit); color: var(--text); }
 
 @media (max-width: 700px) {
-  .shell { grid-template-columns: 1fr; min-height: 0; }
+  .shell { grid-template-columns: minmax(0, 1fr); min-height: 0; }
   .side { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 18px; border-right: 0; border-bottom: 1px solid var(--line); padding: 12px 16px;
     position: static; height: auto; overflow: visible; }
   .brand { margin: 0 6px 0 0; }
-  .nav { flex-direction: row; flex-wrap: wrap; gap: 4px 18px; }
-  .nav a { min-height: var(--hit); margin: 0; }
-  .nav a[aria-current="page"]::before { left: 10px; right: 10px; top: auto; bottom: 6px; width: auto; height: 3px; }
+  .side-cluster { order: 2; flex-basis: 100%; margin: 0; }
+  /* One row that scrolls sideways, never a second line of links. */
+  .nav { flex-direction: row; flex-wrap: nowrap; gap: 4px 2px; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; flex: 1 1 100%; order: 3; }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav a { flex: none; white-space: nowrap; }
+  /* "kwatch health" reads "Health" here, so all four links fit at 390px. */
+  .nav-pre { display: none; }
+  .nav-end { display: inline-block; }
+  .nav-end::first-letter { text-transform: uppercase; }
+  /* Live is its dot; "updated …" stays for screen readers. */
+  .page-head > .updated { padding: 0 4px 0 10px; border-color: transparent; gap: 2px; }
+  .updated:not(.stale) > span:not(.live) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .upd-refresh { width: var(--hit); padding: 0; justify-content: center; border-color: transparent; }
+  .nav a { min-height: var(--hit); margin: 0; padding: 0 8px; }
+  .nav a[aria-current="page"]::before { left: 8px; right: 8px; top: auto; bottom: 6px; width: auto; height: 3px; }
   .who { margin: 0; flex-basis: 100%; display: flex; flex-direction: row; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
   .filters .f-sort { margin-left: 0; }
   .content { padding: var(--space-5) var(--space-4); }

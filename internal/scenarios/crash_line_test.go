@@ -10,7 +10,7 @@ import (
 )
 
 const dotnetLine = "System.IO.FileNotFoundException: Could not load file " +
-	"or assembly 'Trella.Models.Common, Version=3.1.120.0, " +
+	"or assembly 'Retail.Models.Common, Version=3.1.120.0, " +
 	"Culture=neutral, PublicKeyToken=null'. The system cannot find " +
 	"the file specified."
 
@@ -29,7 +29,7 @@ func TestSingleReplicaCrashQuotesTheFirstLogLine(t *testing.T) {
 		c.update(pod)
 		id := kube.ContainerID(pod.Namespace, pod.Name, "app")
 		c.emit(kube.CrashLogObservation(id, c.now,
-			[]string{dotnetLine, "", "File name: 'Trella.Models.Common'"}))
+			[]string{dotnetLine, "", "File name: 'Retail.Models.Common'"}))
 		w.setReady(0)
 		c.update(w.objects())
 		c.after(2 * time.Minute)

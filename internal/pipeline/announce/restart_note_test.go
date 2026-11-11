@@ -25,6 +25,13 @@ type restartRig struct {
 	marker StartupState
 	found  bool
 	issues string
+	// digests are the told fingerprints the incidents come back with,
+	// by name; unset leaves them without one.
+	digests map[string]string
+	// rolledUp names the incidents whose announcement a listing
+	// carried; last is the collector of the latest start.
+	rolledUp map[string]bool
+	last     *Collector
 }
 
 // start is one kwatch start at now: the incidents come back failing,
@@ -45,7 +52,8 @@ func (r *restartRig) start(
 		records = append(records, incident.Record{ID: "inc-" + name,
 			Root: root, Tier: incident.Notify, State: incident.Open,
 			Opened:    now.Add(-2 * time.Hour),
-			Announced: now.Add(-2 * time.Hour)})
+			Announced: now.Add(-2 * time.Hour),
+			Digest:    r.digests[name], RolledUp: r.rolledUp[name]})
 		f := detection.Finding{Entity: root, Reason: "CrashLoopBackOff",
 			Severity: detection.Critical, Since: now.Add(-2 * time.Hour)}
 		snapshot.Findings[root] = []detection.Finding{f}
@@ -73,6 +81,7 @@ func (r *restartRig) start(
 	marker.Complete = true
 	c.Startup.Restore(marker, true, len(records), now)
 	c.ListRestored(context.Background(), now)
+	r.last = c
 	return sent
 }
 
@@ -110,7 +119,8 @@ func TestRestoredListingIsNotRepeatedByQuickRestarts(t *testing.T) {
 	assert.Contains(t, other[0].Title, "(it ran out of memory)")
 }
 
-// Past RestoredRelist the restored incidents are listed in full again.
+// Without told digests (a listing saved before them), past
+// RestoredRelist the restored incidents are listed in full again.
 func TestRestoredListingReturnsAfterTheRelistWindow(t *testing.T) {
 	r := &restartRig{t: t}
 	require.Len(t, r.start(foldNow, apiLost), 1)
@@ -119,6 +129,36 @@ func TestRestoredListingReturnsAfterTheRelistWindow(t *testing.T) {
 
 	require.Len(t, later, 1)
 	assert.Contains(t, later[0].Title, "still failing")
+}
+
+// Incidents a listing named that have not changed since are not listed
+// again by a restart within RestoredRetell: the short note says they
+// are still open. One that changed (its told fingerprint moved on) is
+// listed again, alone, and so is one last named RestoredRetell ago.
+func TestRestoredListingNamesOnlyWhatChanged(t *testing.T) {
+	r := &restartRig{t: t, digests: map[string]string{
+		"api": "d-api", "web": "d-web"}}
+	require.Len(t, r.start(foldNow, apiLost), 1)
+	assert.Equal(t, "d-api", r.marker.Restored.Told["inc-api"].Digest)
+
+	later := r.start(foldNow.Add(2*RestoredRelist), apiLost)
+	require.Len(t, later, 1)
+	assert.Contains(t, later[0].Title, "2 problems from before are "+
+		"still open", "unchanged: the note, not the list")
+
+	r.digests["web"] = "d-web-2"
+	changed := r.start(foldNow.Add(4*RestoredRelist), apiLost)
+	require.Len(t, changed, 1)
+	assert.Contains(t, changed[0].Title, "still failing")
+	require.NotNil(t, changed[0].Listed)
+	require.Len(t, changed[0].Listed.Items, 1, "only what changed")
+	assert.Contains(t, changed[0].Listed.Items[0], "inc-web")
+
+	day := r.start(foldNow.Add(RestoredRetell), apiLost)
+	require.Len(t, day, 1)
+	require.NotNil(t, day[0].Listed)
+	require.Len(t, day[0].Listed.Items, 1, "only the one told long ago")
+	assert.Contains(t, day[0].Listed.Items[0], "inc-api")
 }
 
 func TestRestartNoteTextWithoutDashboardOrReason(t *testing.T) {

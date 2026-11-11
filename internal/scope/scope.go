@@ -23,9 +23,12 @@ type Scope struct {
 	allowedReasons      set
 	forbiddenReasons    set
 	selector            labels.Selector
-	silences            []silence
-	maintenance         bool
-	now                 func() time.Time
+	// unknown times the namespaces the selector cannot see (set with
+	// the selector; see namespace_unknown.go).
+	unknown     *unknownNamespaces
+	silences    []silence
+	maintenance bool
+	now         func() time.Time
 }
 
 // New compiles the scope policy. An invalid selector or pattern is a
@@ -48,6 +51,7 @@ func New(
 			return nil, fmt.Errorf("namespace selector: %w", err)
 		}
 		s.selector = selector
+		s.unknown = newUnknownNamespaces()
 	}
 	for i, rule := range rules {
 		compiled, err := compileSilence(rule)
@@ -65,8 +69,16 @@ func (s *Scope) Allows(model inventory.Reader, sig detection.Finding) bool {
 	if s == nil {
 		return true
 	}
-	if !s.namespaceAllowed(model, sig.Entity.Namespace) ||
-		!s.allowedReasons.allows(sig.Reason) ||
+	return s.namespaceAllowed(model, sig.Entity.Namespace) &&
+		s.findingAllowed(model, sig)
+}
+
+// findingAllowed is Allows without the namespace rules: the reasons,
+// maintenance and silences.
+func (s *Scope) findingAllowed(
+	model inventory.Reader, sig detection.Finding,
+) bool {
+	if !s.allowedReasons.allows(sig.Reason) ||
 		s.forbiddenReasons.has(sig.Reason) ||
 		s.underMaintenance(model, sig.Entity) {
 		return false
@@ -80,35 +92,54 @@ func (s *Scope) Allows(model inventory.Reader, sig detection.Finding) bool {
 }
 
 // namespaceAllowed keeps cluster-scoped findings: a node or storage class
-// failure affects every namespace.
+// failure affects every namespace. The label selector only judges a
+// Namespace the model holds. One it does not hold has unknown labels,
+// not "no labels": the decision is held, then let in (see
+// NamespaceHold), never taken against labels nobody read.
 func (s *Scope) namespaceAllowed(
 	model inventory.Reader, namespace string,
 ) bool {
 	if namespace == "" {
 		return true
 	}
-	if !s.allowedNamespaces.allows(namespace) ||
-		s.forbiddenNamespaces.has(namespace) {
+	if !s.listed(namespace) {
 		return false
 	}
 	if s.selector == nil {
 		return true
 	}
-	return s.selector.Matches(namespaceLabels(model, namespace))
+	set, known := namespaceLabels(model, namespace)
+	if !known {
+		return s.unknown.allow(namespace, s.now, true)
+	}
+	s.unknown.seen(namespace)
+	return s.selector.Matches(set)
 }
 
-func namespaceLabels(model inventory.Reader, namespace string) labels.Set {
-	attribute, ok := model.Attribute(
-		inventory.CoreID(kube.KindNamespace, "", namespace), kube.AttrLabels)
+// listed reports a namespace the allowed and forbidden lists let in.
+func (s *Scope) listed(namespace string) bool {
+	return s.allowedNamespaces.allows(namespace) &&
+		!s.forbiddenNamespaces.has(namespace)
+}
+
+// namespaceLabels reads the labels of a Namespace, and whether the model
+// holds it at all. A Namespace without labels is known and has none.
+func namespaceLabels(
+	model inventory.Reader, namespace string,
+) (labels.Set, bool) {
+	id := inventory.CoreID(kube.KindNamespace, "", namespace)
+	if model == nil || !model.Exists(id) {
+		return nil, false
+	}
+	attribute, ok := model.Attribute(id, kube.AttrLabels)
 	if !ok {
-		return nil
+		return labels.Set{}, true
 	}
-	text := attribute.Value.AsText()
-	set, err := labels.ConvertSelectorToLabelsMap(text)
+	set, err := labels.ConvertSelectorToLabelsMap(attribute.Value.AsText())
 	if err != nil {
-		return nil
+		return labels.Set{}, true
 	}
-	return set
+	return set, true
 }
 
 // silence matches a finding when every field the rule sets matches. A rule

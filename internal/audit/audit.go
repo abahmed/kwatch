@@ -98,6 +98,12 @@ type Entry struct {
 	// grouped, unchanged and wake-up lines, bounded.
 	Lines     int      `json:"lines,omitempty"`
 	Summaries []string `json:"summaries,omitempty"`
+	// Level and Message make the line readable in log tools: Level is
+	// info, warning or error by the tier, Message one short sentence
+	// built from the fields above. Both are additive; readers of older
+	// lines see them empty.
+	Level   string `json:"level,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
 // Carried reports whether a Delivery value names a decision that people

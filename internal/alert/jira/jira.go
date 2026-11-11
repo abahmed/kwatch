@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -105,7 +106,9 @@ func NewJira(
 		"reopenTransition", reopenTransition)
 
 	return &Jira{
-		issues:           issues.NewMap(clock.Require(dependencies.Clock).Now),
+		issues: issues.NewMap(
+			clock.Require(dependencies.Clock).Now,
+		).ForCluster(clusterName),
 		sender:           transport.NewSender(dependencies),
 		url:              strings.TrimRight(url, "/") + jiraAPIPath,
 		user:             user,
@@ -176,9 +179,14 @@ func (g *Jira) Find(ctx context.Context, marker string) (string, error) {
 	jql := fmt.Sprintf(
 		`project = "%s" AND description ~ "%s" AND statusCategory != Done`,
 		g.projectKey, marker)
-	search := strings.TrimSuffix(g.url, "/issue") +
-		"/search?fields=description&maxResults=5&jql=" + url.QueryEscape(jql)
-	response, err := g.call(ctx, "GET", search, nil)
+	query := "?fields=description&maxResults=5&jql=" + url.QueryEscape(jql)
+	base := strings.TrimSuffix(g.url, "/issue")
+	response, err := g.call(ctx, "GET", base+"/search"+query, nil)
+	if gone(err) {
+		// Jira Cloud retired /search for the enhanced /search/jql, which
+		// takes the same query; Jira Data Center keeps /search.
+		response, err = g.call(ctx, "GET", base+"/search/jql"+query, nil)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -199,6 +207,14 @@ func (g *Jira) Find(ctx context.Context, marker string) (string, error) {
 		}
 	}
 	return "", nil
+}
+
+// gone reports an endpoint the server no longer has (404 or 410).
+func gone(err error) bool {
+	var status *transport.StatusError
+	return errors.As(err, &status) &&
+		// 404 Not Found or 410 Gone: the endpoint was retired.
+		(status.StatusCode == 404 || status.StatusCode == 410)
 }
 
 // Comment implements issues.Tracker.

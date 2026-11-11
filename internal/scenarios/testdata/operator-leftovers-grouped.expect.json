@@ -1,0 +1,11 @@
+{
+  "name": "operator-leftovers-grouped",
+  "description": "A scaled-to-zero operator left two webhooks and two expired certificates behind: one digest incident, not four.",
+  "root": "deployment/policy-system/policy-controller",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders"
+  ],
+  "tail": "1h0m0s"
+}

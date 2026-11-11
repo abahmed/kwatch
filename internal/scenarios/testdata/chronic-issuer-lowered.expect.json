@@ -1,0 +1,8 @@
+{
+  "name": "chronic-issuer-lowered",
+  "description": "A certificate issuer has reported Ready=False for two and a half years: Low, with the reason.",
+  "root": "issuer.certs.example.com/certs/letsencrypt",
+  "tier": "digest",
+  "maxMessages": 2,
+  "tail": "1h0m0s"
+}

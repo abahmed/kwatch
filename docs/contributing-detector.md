@@ -77,11 +77,16 @@ cannot read its metrics.
    extraction to the kind's schema in `internal/inventory/kube` (see the
    [source guide](./contributing-source.md)).
 6. **Choose its delivery tier.** The incident manager decides how loudly a
-   finding is delivered in `internal/incident/policy.go`. A finding worth
-   knowing but never worth an interruption on its own (like
-   `ServiceUnused`) is marked `.digest()` in its table entry (reasons with a
-   shared prefix, such as `UnusualEvent.*`, `Risk.*` and `NodeCondition.*`,
-   are matched by prefix in `digestReason`). A finding that fires before
+   finding is delivered in `internal/incident/policy.go`. A finding that is
+   advice, not a failure (a configuration risk, a Service that selects no
+   pod, a claim nobody uses, a volume nearly full while its writes still
+   work, a Job running longer than usual), sets `Advisory`: it never opens
+   an incident and only joins the incident of a real failure of the same
+   object, as context. kwatch detects what fails now; advice is not an
+   alert. A finding worth knowing but never worth an interruption on its
+   own is marked `.digest()` in its table entry (reasons with a shared
+   prefix, such as `UnusualEvent.*`, `Risk.*` and `NodeCondition.*`, are
+   matched by prefix in `digestReason`). A finding that fires before
    anything failed but is a real cause of the failures that follow (like
    `HPAMaxedOut` or `VolumeUsageHigh`) is marked `.causeOnly()`: an incident
    made only of such findings is silent, and is announced once a real

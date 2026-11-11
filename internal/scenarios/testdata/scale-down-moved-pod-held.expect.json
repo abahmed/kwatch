@@ -1,0 +1,8 @@
+{
+  "name": "scale-down-moved-pod-held",
+  "description": "Three of five nodes are removed within two minutes; the only pod of a routed Deployment moves, waits for room, pulls its image and is ready nine minutes later.",
+  "maxMessages": 0,
+  "alone": true,
+  "quiet": true,
+  "tail": "30m0s"
+}

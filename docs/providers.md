@@ -62,7 +62,14 @@ stable key, so a provider can update and close the same alert, thread or
 issue. Paging providers and webhooks use `kwatch-<cluster>-<key>` as that
 id (spaces in the cluster name become `-`; without `app.clusterName` it is
 `kwatch-<key>`), so two clusters that share one service never merge or resolve
-each other's alerts. Plain operator messages (startup, upgrade, test) share
+each other's alerts. Set `app.clusterName` on every cluster: it is the only
+identity a reader can tell apart. Without it kwatch warns at start and builds
+the `<key>` of each new incident from the cluster's own identity (the
+`kube-system` namespace UID, hashed), so two unnamed clusters still get
+different keys. An alert keeps the key it was opened with, so alerts that are
+open during an upgrade or restart are still updated and resolved. Setting
+`app.clusterName` later changes the id of the alerts open at that moment;
+close those by hand. Plain operator messages (startup, upgrade, test) share
 `kwatch-<cluster>-notice`.
 
 Plain operator messages are not incidents. Providers that open an alert
@@ -73,7 +80,7 @@ anyone. Sensu Go records them as a passing (OK) check.
 | Group | Providers | What they send |
 |:--|:--|:--|
 | 💬 Chat | Slack, Discord, Microsoft Teams, Teams Workflow, Mattermost, Rocket.Chat, Google Chat, Webex, Matrix, Telegram, Zulip, Feishu, DingTalk, WeCom, Flock, Threema, Signal | The Note as the message text, escaped for the chat's markup, with recent application output as a code or quoted block when there is any. Broadcast mentions such as `@channel` are neutralized, and only where they stand alone: an `@` inside an email address or a URL is left as it is. Mattermost and Rocket.Chat neutralize every `@name`, because both notify the user or group of any name. WeCom and Teams Workflow escape Markdown in the narrative. Matrix sends the Note as `body` and HTML-escaped as `formatted_body`. Slack with a bot token announces each incident as one root message holding the whole Note and its output, keeps every update and the resolve in its thread, and edits the root to the same announcement under the new status marker when the status changes (a thread reply that is not a status change leaves the root alone; after a restart the root cannot be rebuilt, so only the thread grows). Application output is fenced with a code fence longer than any run of backticks in it, so it cannot close the block; it is cut before the closing fence is added. WeCom `<@userid>` and Zulip `@*group*` mentions in workload text are neutralized too, and so is Telegram's `@username` (a zero-width space follows the `@`). Microsoft Teams shows the incident title as escaped text, so a title taken from the cluster never becomes a link or a mention. |
-| 🚨 Paging | PagerDuty, Opsgenie, Splunk On-Call, GoAlert, ilert, incident.io, Squadcast, Zenduty, SIGNL4, Alerta, Datadog, New Relic, AWS SNS, Splunk HEC, Sensu Go | The Short as the alert title or summary, the Note (plus output) as details, the incident id as the dedup or alert key, and the provider's resolve or close action when the incident resolves. Severity follows the incident severity: only a page-tier incident gets the priority that pages (for ilert the configured `priority`); a notify or low tier incident is sent at a lower one (ilert `LOW`, Opsgenie P3 or P4). An incident that paged and falls back to notify because the previous version serves again (only the new rollout fails) sends these providers one paging-only update ("is no longer urgent"): Opsgenie lowers the open alert to P3, PagerDuty updates the alert's severity to `warning` but keeps the urgency of the incident it opened. AWS SNS and Splunk HEC also receive the paging-only messages (the close of an incident another one took over), because their subscribers track the incident key; so do the keyed structured receivers (Custom Webhook, n8n, Zapier). When Community picks its one provider, AWS SNS ranks with chat, not with the paging services. |
+| 🚨 Paging | PagerDuty, Opsgenie, Splunk On-Call, GoAlert, ilert, incident.io, Squadcast, Zenduty, SIGNL4, Alerta, Datadog, New Relic, AWS SNS, Splunk HEC, Sensu Go | The Short as the alert title or summary, the Note (plus output) as details, the incident id as the dedup or alert key, and the provider's resolve or close action when the incident resolves. Severity follows the incident severity: only a page-tier incident gets the priority that pages (for ilert the configured `priority`); a notify or low tier incident is sent at a lower one (ilert `LOW`, Opsgenie P3 or P4). When an incident the pagers heard below Urgent rises to Urgent, PagerDuty and ilert open a second alert under the incident key plus `-page` and close the first, because an open alert keeps the urgency it was opened with; later updates and the resolve go to the `-page` alert, and the resolve closes both keys. Zenduty, Squadcast, SIGNL4 and incident.io keep the urgency of the first alert; to page only on Urgent there, route the provider with `severities: [critical]`, so the rise is the first alert it hears. An incident that paged and falls back to notify because the previous version serves again (only the new rollout fails) sends these providers one paging-only update ("is no longer urgent"): Opsgenie lowers the open alert to P3, PagerDuty updates the alert's severity to `warning` but keeps the urgency of the incident it opened. AWS SNS and Splunk HEC also receive the paging-only messages (the close of an incident another one took over), because their subscribers track the incident key; so do the keyed structured receivers (Custom Webhook, n8n, Zapier). When Community picks its one provider, AWS SNS ranks with chat, not with the paging services. |
 | 📋 Issue trackers | GitHub, GitLab, Gitea, Jira, ClickUp | One issue per incident: the Short as title and the Note (plus output and the cluster name) as body. Updates add a comment. On resolve kwatch comments and closes the issue (GitHub, GitLab, Gitea; Jira moves it through `closeTransition` and ClickUp to `closeStatus` when you set one, otherwise they only comment, because workflows are defined per project or list). A resolved incident that fails again within its reopen window comments on the same issue and reopens it on GitHub, GitLab and Gitea. Jira (`reopenTransition`) and ClickUp (`reopenStatus`) reopen only when you configure both the close and the reopen name; otherwise the mapping is forgotten at resolve and a recurrence opens a new issue. Pod-controlled text in the Note has its `@mentions` neutralized, and Jira wiki markup in it is escaped. A GitHub 403 that says the rate limit was hit is retried like a 429. |
 | 📱 SMS and push | Twilio, Plivo, Vonage, MessageBird, Pushover, Pushbullet, Gotify, ntfy, IFTTT, Home Assistant | The Short. A resolve is never louder than the incident: for Pushover, Gotify and ntfy it is sent at the configured priority capped at normal, or at `resolvedPriority` when set. IFTTT also sends the Note as `value2` and the status as `value3`. |
 | 📧 Email | Email (SMTP), AWS SES, SendGrid, Mailgun, Resend | Subject is the Short on one line; the body is the Note followed by recent output as a `> ` quoted block. A Pro message with evidence is sent as the same plain text plus an HTML alternative, by all five (SMTP, SES, SendGrid, Mailgun and Resend). |
@@ -147,8 +154,8 @@ names no recurrence, pod count or fixer.
   rolled back to revision 13 at 14:09").
 
 The other parts of a blast radius (Services, Ingresses, workloads) are
-already named by the alert ("service cart can't serve traffic", "checkout
-is affected as well"), so the one-line summary is only shown by the
+already named by the alert ("service cart can't serve traffic", "Affected: checkout
+in shop"), so the one-line summary is only shown by the
 dashboard (`blastRadius`).
 
 There is nothing to configure: kwatch finds the address itself, from the
@@ -182,7 +189,7 @@ Ingress or route changes the link from the next message on.
 
 To get the link, expose the dashboard the usual way: let `kwatch.sh` set
 up the dashboard, or point your own Ingress or HTTPRoute in kwatch's
-namespace at the `<release>-dashboard` Service, port `dashboard`, with a
+namespace at the `<fullname>-dashboard` Service, port `dashboard`, with a
 host (and TLS). A dashboard reached only through `kubectl port-forward`,
 a LoadBalancer or NodePort Service, or a route in another namespace has
 no address kwatch can name, so messages carry no link.
@@ -310,13 +317,13 @@ search.
 
 | Parameter | What it does |
 |:---|---|
-| `alert.email.from` | 📤 From address |
-| `alert.email.password` | 🔑 SMTP password (optional for a relay without authentication) |
-| `alert.email.username` | 👤 SMTP username (optional, defaults to `from`) |
+| `alert.email.from` | 📤 From address, plain or with a name (`Kwatch <kwatch@example.com>`); an invalid address fails the config |
+| `alert.email.password` | 🔑 SMTP password (optional for a relay without authentication). kwatch logs in with `AUTH PLAIN`, or with `AUTH LOGIN` on a server that offers only that |
+| `alert.email.username` | 👤 SMTP username (optional, defaults to the address in `from`) |
 | `alert.email.tls` | 🔒 `required` (default) or `none` for a trusted relay |
 | `alert.email.host` | 🖥️ SMTP host |
 | `alert.email.port` | 🔌 SMTP port |
-| `alert.email.to` | 📥 Receiver email |
+| `alert.email.to` | 📥 Receiver email; a list separated by commas or semicolons is allowed (an address that cannot be parsed disables the provider at startup, with the reason in the log). A recipient the server refuses is skipped and logged; the mail fails only if all are refused |
 
 ### 🚨 PagerDuty
 
@@ -326,6 +333,11 @@ someone should be woken up.
 | Parameter | What it does |
 |:---|---|
 | `alert.pagerduty.integrationKey` | 🔑 PagerDuty integration key |
+
+> 💡 An incident PagerDuty heard below Urgent that rises to Urgent opens a
+> second alert at `critical` under its dedup key plus `-page`, and the first
+> alert is resolved: on a service with urgency based on alert severity, the
+> incident the first alert opened keeps its low urgency.
 
 ### ✈️ Telegram
 
@@ -457,7 +469,7 @@ alert:
 | Parameter | What it does |
 |:---|---|
 | `alert.webex.accessToken` | 🔑 Bot access token |
-| `alert.webex.roomId` | 🚪 Room ID (provide this or `toPersonEmail`) |
+| `alert.webex.roomId` | 🚪 Room ID (provide this or `toPersonEmail`, not both) |
 | `alert.webex.toPersonEmail` | ✉️ Person email (provide this or `roomId`) |
 
 ### 🐙 GitHub
@@ -558,7 +570,7 @@ alert:
 
 | Parameter | What it does |
 |:---|---|
-| `alert.splunk.url` | 🔗 HEC endpoint URL |
+| `alert.splunk.url` | 🔗 HEC endpoint URL (`/services/collector/event` is added when no path is given) |
 | `alert.splunk.token` | 🔑 HEC token |
 | `alert.splunk.source` | 🏷️ Source name (optional) |
 | `alert.splunk.sourcetype` | 🏷️ Source type (optional) |
@@ -619,8 +631,14 @@ alert:
 
 | Parameter | What it does |
 |:---|---|
-| `alert.ilert.integrationKey` | 🔑 Integration key |
-| `alert.ilert.priority` | 🎚️ Priority of a page-tier incident (LOW/HIGH/CRITICAL, default: HIGH). Notify and low tier incidents are always sent as LOW, so they never page |
+| `alert.ilert.integrationKey` | 🔑 Integration key. Sent in the body of a `POST https://api.ilert.com/api/events` request (ilert's Events API), never in the URL |
+| `alert.ilert.priority` | 🎚️ Priority of a page-tier incident (HIGH or LOW, default: HIGH; CRITICAL is accepted and sent as HIGH). Notify and low tier incidents are always sent as LOW, so they never page |
+
+> 💡 An open ilert alert keeps its priority, so an incident ilert heard as
+> `LOW` that rises to Urgent opens a second alert at the configured
+> `priority` under its `alertKey` plus `-page`, and the `LOW` alert is
+> resolved. A refused resolve of a key ilert has no open alert for is not
+> counted as a failure.
 
 ### 🚨 Incident.io
 
@@ -721,10 +739,11 @@ alert:
 
 | Parameter | What it does |
 |:---|---|
-| `alert.ses.accessKeyId` | 🔑 AWS access key ID |
-| `alert.ses.secretAccessKey` | 🔑 AWS secret access key |
-| `alert.ses.sessionToken` | 🎟️ Session token for temporary credentials (optional) |
-| `alert.ses.region` | 🌍 AWS region (default: `us-east-1`) |
+| `alert.ses.accessKeyId` | 🔑 AWS access key ID (optional: leave both keys out to use the pod's IAM role, see [AWS credentials](#aws-credentials-ses-and-sns)) |
+| `alert.ses.secretAccessKey` | 🔑 AWS secret access key (set together with `accessKeyId`) |
+| `alert.ses.sessionToken` | 🎟️ Session token for temporary credentials (optional). It expires and kwatch cannot refresh it, so kwatch logs a warning at startup; prefer an IAM role |
+| `alert.ses.region` | 🌍 AWS region (default: `us-east-1`). SES is not offered in the China regions (`cn-…`): with one the provider does not start and the log says why, unless `endpoint` is set |
+| `alert.ses.endpoint` | 🔗 Endpoint URL override (optional; default: the region's endpoint), for example a VPC endpoint. Must be an http or https URL, or the provider does not start |
 | `alert.ses.from` | 📤 Verified sender address |
 | `alert.ses.to` | 📥 Recipients (comma-separated) |
 | `alert.ses.subject` | ✏️ Email subject (plain messages only) |
@@ -743,11 +762,12 @@ alert:
 
 | Parameter | What it does |
 |:---|---|
-| `alert.sns.accessKeyId` | 🔑 AWS access key ID |
-| `alert.sns.secretAccessKey` | 🔑 AWS secret access key |
-| `alert.sns.sessionToken` | 🎟️ Session token for temporary credentials (optional) |
-| `alert.sns.region` | 🌍 AWS region (default: `us-east-1`) |
-| `alert.sns.topicArn` | 📢 SNS topic ARN (optional when using `targetArn`) |
+| `alert.sns.accessKeyId` | 🔑 AWS access key ID (optional: leave both keys out to use the pod's IAM role, see [AWS credentials](#aws-credentials-ses-and-sns)) |
+| `alert.sns.secretAccessKey` | 🔑 AWS secret access key (set together with `accessKeyId`) |
+| `alert.sns.sessionToken` | 🎟️ Session token for temporary credentials (optional). It expires and kwatch cannot refresh it, so kwatch logs a warning at startup; prefer an IAM role |
+| `alert.sns.region` | 🌍 AWS region (default: `us-east-1`). A China region (`cn-…`) uses the `amazonaws.com.cn` endpoints |
+| `alert.sns.endpoint` | 🔗 Endpoint URL override (optional; default: the region's endpoint), for example a VPC endpoint. Must be an http or https URL, or the provider does not start |
+| `alert.sns.topicArn` | 📢 SNS topic ARN (optional when using `targetArn`). FIFO topics (`.fifo`) are not supported and fail startup |
 | `alert.sns.targetArn` | 📢 SNS endpoint or target ARN (alternative to `topicArn`) |
 | `alert.sns.subject` | ✏️ Optional subject (email subscriptions) |
 
@@ -759,6 +779,78 @@ alert:
     region: "us-east-1"
     topicArn: "arn:aws:sns:us-east-1:123456789012:kwatch"
 ```
+
+### AWS credentials (SES and SNS)
+
+SES and SNS sign every request with AWS Signature Version 4. kwatch takes
+the credentials from the first of these that is set:
+
+1. `accessKeyId` and `secretAccessKey` in the provider settings.
+2. IAM roles for service accounts (IRSA): `AWS_ROLE_ARN` and
+   `AWS_WEB_IDENTITY_TOKEN_FILE` (optional `AWS_ROLE_SESSION_NAME`,
+   default `kwatch`), which EKS sets when the ServiceAccount carries the
+   role annotation. kwatch calls STS `AssumeRoleWithWebIdentity` over
+   HTTPS at `sts.<region>` of the provider's region (override with
+   `AWS_ENDPOINT_URL_STS`, which must be https) and reads the token file
+   again on every call, since kubelet rotates it.
+3. EKS Pod Identity: `AWS_CONTAINER_CREDENTIALS_FULL_URI` and
+   `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE`, which EKS sets when a Pod
+   Identity association names the ServiceAccount. kwatch asks the node's
+   Pod Identity agent and connects only to its addresses
+   (`169.254.170.23`, `fd00:ec2::23`) or a loopback address; any other
+   host in the URL disables the provider with the reason in the log.
+
+With none of them the provider does not start, and the log says why.
+Temporary credentials are cached and fetched again 5 minutes before they
+expire. When AWS answers 403 `ExpiredToken`, `InvalidClientTokenId` or
+`SignatureDoesNotMatch` (or `ExpiredTokenException` or
+`UnrecognizedClientException`, the same refusals as the JSON APIs name
+them), kwatch drops the role credentials, fetches new
+ones and retries once before the send counts as rejected. With static
+keys an expired `sessionToken` is rejected at once and the send trail
+reads "AWS session token expired". The log shows the role ARN and the
+expiry, never a token or key.
+
+The EC2 instance role (the node's instance metadata service) is not
+used: kwatch refuses the cloud metadata address for every provider, so
+the node's instance role is never used, even where pods can reach the
+metadata service.
+
+The role needs `sns:Publish` on the topic or target (SNS) or
+`ses:SendEmail` for the sender identity (SES).
+
+IRSA with the Helm chart (the role's trust policy must allow
+`sts:AssumeRoleWithWebIdentity` from the cluster's OIDC provider for
+this ServiceAccount):
+
+```yaml
+sacAnnotations:
+  eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/kwatch"
+```
+
+EKS Pod Identity (install the EKS Pod Identity Agent add-on; the role
+trusts `pods.eks.amazonaws.com` for `sts:AssumeRole` and
+`sts:TagSession`):
+
+```sh
+aws eks create-pod-identity-association --cluster-name my-cluster \
+  --namespace kwatch --service-account kwatch \
+  --role-arn arn:aws:iam::123456789012:role/kwatch
+```
+
+Then leave the keys out:
+
+```yaml
+alert:
+  sns:
+    region: "eu-west-1"
+    topicArn: "arn:aws:sns:eu-west-1:123456789012:kwatch"
+```
+
+With the chart's network policy enabled, Pod Identity also needs egress
+to the agent on port 80 (`extraEgressPorts`); STS uses port 443, which
+the defaults allow. Restart the pod after adding the annotation or the
+association: EKS sets the variables when the pod starts.
 
 ### 📋 Jira
 
@@ -780,6 +872,9 @@ alert:
     apiToken: "${file:/config/jira-api-token}"
     projectKey: "OPS"
 ```
+
+kwatch finds an incident's issue with `/rest/api/2/search` and, where the
+server has retired it (404 or 410), with `/rest/api/2/search/jql`.
 
 ### 🟩 WeCom (WeChat Work)
 
@@ -851,7 +946,7 @@ alert:
 |:---|---|
 | `alert.goalert.url` | 🔗 GoAlert server URL (required) |
 | `alert.goalert.token` | 🔑 API token |
-| `alert.goalert.serviceId` | 🆔 Service ID |
+| `alert.goalert.serviceId` | 🆔 Service ID (optional, unused) |
 
 ```yaml
 alert:
@@ -912,6 +1007,9 @@ alert:
     url: "http://sensu.example.com:8080"
     apiKey: "${file:/config/sensugo-api-key}"
 ```
+
+Each event is a proxy entity (`entity_class: proxy`) with a check that has a
+60-second interval; both carry the configured namespace.
 
 ### 🔗 Custom Webhook
 

@@ -1,9 +1,17 @@
+--- request 1 of 2
+GET /list/abc123/task?include_markdown_description=true&order_by=created&page=0&reverse=true
+Content-Type: application/json
+Authorization: <redacted>
+
+(empty body)
+
+--- request 2 of 2
 POST /list/abc123/task
 Content-Type: application/json
 Authorization: <redacted>
 
 {
-  "markdown_description": "🔴 payments in shop is crash-looping.\n\nCaused by: Node n1 is not ready.\n\n[Cause in dashboard](https://kwatch.example/issues/p-cause)\n\n[Earlier times](https://kwatch.example/issues?status=all&like=p-link)\n\n[Open in dashboard](https://kwatch.example/issues/p-link)\n\n```\npanic: out of memory\n```",
+  "markdown_content": "🔴 payments in shop is crash-looping.\n\nCaused by: Node n1 is not ready.\n\n[Cause in dashboard](https://kwatch.example/issues/p-cause)\n\n[Earlier times](https://kwatch.example/issues?status=all&like=p-link)\n\n[Open in dashboard](https://kwatch.example/issues/p-link)\n\n```\npanic: out of memory\n```\n\nRef: kwatchkey3789c0f3c9b01dc5",
   "name": "🔴 payments in shop is crash-looping.",
   "priority": 2
 }

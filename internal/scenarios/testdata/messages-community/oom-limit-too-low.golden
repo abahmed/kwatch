@@ -1,7 +1,7 @@
 10:02:15 settled
-🟠 cart in shop (prod-eu-1) keeps running out of memory. Cause found: a memory limit.
-Pro shows the exact cause and how to fix it. Get Pro free during early access: kwatch.dev/pro
+🟠 cart in shop (prod-eu-1) keeps running out of memory. Most likely cause: its memory limit.
+Pro shows the exact cause and how to fix it, free during early access: kwatch.dev/pro
 🟠 cart in shop (prod-eu-1) keeps running out of memory.
 | 🟠 **cart** in **shop** (**prod-eu-1**) keeps running out of memory.
-| Cause found: a memory limit.
-| *Pro shows the exact cause and how to fix it. Get Pro free during early access: kwatch.dev/pro*
+| Most likely cause: its memory limit.
+| *Pro shows the exact cause and how to fix it, free during early access: kwatch.dev/pro*

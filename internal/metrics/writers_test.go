@@ -26,6 +26,7 @@ var writtenVia = map[string]string{
 	"LicenseStateIndex": "SetLicenseState",
 	"LicenseRenewals":   "IncLicenseRenewal",
 	"EditionRebuilds":   "IncEditionRebuild",
+	"LeadershipRejoins": "IncLeadershipRejoin",
 }
 
 // productionSelectors returns every selector name used by non-test Go files

@@ -42,6 +42,7 @@ func (v *view) rank(cs *candidateSet) []scored {
 	v.rejected = cs.rejected
 	v.checked = cs.checked
 	v.explainedBy = map[inventory.EntityID]bool{}
+	v.explainedOutside = map[inventory.EntityID]bool{}
 	v.noteBlast(cs)
 	var ranked, selves []scored
 	for _, id := range sortedKeys(cs.byID) {
@@ -56,9 +57,7 @@ func (v *view) rank(cs *candidateSet) []scored {
 		// so it must not use up the self row's "nothing upstream".
 		if s.veto == "" && s.confidence >= ConfidenceFloor &&
 			!sharedFactorOnly(c) {
-			for _, effect := range c.others() {
-				v.explainedBy[effect] = true
-			}
+			v.noteExplained(c)
 		}
 	}
 	for _, id := range sortedKeys(cs.byID) {
@@ -67,6 +66,19 @@ func (v *view) rank(cs *candidateSet) []scored {
 		}
 	}
 	return append(ranked, selves...)
+}
+
+// noteExplained marks the failures c explains, and those it explains
+// from outside their own workload: a Job of a CronJob explains the
+// CronJob's pods from within it.
+func (v *view) noteExplained(c *candidate) {
+	owner := rootcause.TopOwner(v.s.Model, c.id)
+	for _, effect := range c.others() {
+		v.explainedBy[effect] = true
+		if v.workloadOf(effect) != owner {
+			v.explainedOutside[effect] = true
+		}
+	}
 }
 
 // splitViable keeps candidates above the floor and not vetoed, and

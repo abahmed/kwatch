@@ -13,6 +13,7 @@ import (
 	"github.com/abahmed/kwatch/internal/alert/catalog"
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
+	"github.com/abahmed/kwatch/internal/config/crd"
 	"github.com/abahmed/kwatch/internal/dashboard"
 	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/feature"
@@ -54,7 +55,7 @@ func newBootstrap(
 	ctx context.Context,
 	cfg *config.Config,
 	now func() time.Time, processStart time.Time,
-	entitlements feature.Entitlements,
+	entitlements feature.Entitlements, api *crd.StartupRetry,
 ) (*bootstrap, error) {
 	clockSource := clock.Func(now)
 	clients, err := kubeclient.NewClusterClientSet(&net.Resolver{}, clockSource)
@@ -64,7 +65,7 @@ func newBootstrap(
 	cfg, overlay, err := applyStartupCRD(
 		ctx, cfg, clients.Dynamic, loadConfig, func() ([]byte, bool) {
 			return readLastGood(StatePath(), clockSource.Now)
-		})
+		}, api)
 	if err != nil {
 		return nil, fmt.Errorf("apply startup CRD configuration: %w", err)
 	}
@@ -234,7 +235,6 @@ func newDashboardServer(
 			" and "+dashboardPasswordEnv+" are empty; every dashboard "+
 			"request is refused with 401", "component", "dashboard-server")
 	}
-	scope := runtime.Scope()
 	return dashboard.NewServer(dashboard.Options{
 		Port:           dc.Port,
 		Token:          token,
@@ -245,10 +245,7 @@ func newDashboardServer(
 		Edition:        string(feature.OrCommunity(e).Edition()),
 		ChangeHistory: feature.OrCommunity(e).Has(
 			feature.ChangeCorrelation),
-		Scope: dashboard.Scope{
-			Watched:  scope.AllowedNamespaces(),
-			Excluded: scope.ForbiddenNamespaces(),
-		},
+		Scope: dashboardScope(runtime.Scope(), now),
 		Self: dashboard.Self{
 			Namespace:  envOrKwatch("POD_NAMESPACE"),
 			Deployment: envOrKwatch(dashboardDeploymentEnv),

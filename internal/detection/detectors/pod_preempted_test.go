@@ -119,3 +119,15 @@ func TestPreemptedPodWithoutAPreemptorStillSaysItWasPreempted(t *testing.T) {
 	require.Len(t, found, 1)
 	assert.Empty(t, preemptEvidence(found[0], detection.EvidencePreemptor))
 }
+
+// An event that names nobody must not crash the detector.
+func TestPreemptedPodEventWithoutAPreemptorName(t *testing.T) {
+	blank := []string{preemptedByEvent, preemptedByEvent + "  "}
+	for _, message := range blank {
+		model, victim := preemptFixture(t, 2, "")
+		noteEntity(model, victim, "Preempted", message, 1,
+			podNodeNow.Add(-2*time.Minute))
+
+		assert.NotPanics(t, func() { preemptedFinding(t, model, victim) })
+	}
+}

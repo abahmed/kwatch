@@ -40,7 +40,7 @@ func TestClickupIncidentLifecycleFollowsOneTask(t *testing.T) {
 		if err := c.SendIncident(context.Background(), tc.Message); err != nil {
 			t.Fatalf("%s: %v", tc.Name, err)
 		}
-		requests := rec.Requests()
+		requests := withoutSearch(rec.Requests())
 		if len(requests) != 1 {
 			t.Fatalf("%s sent %d requests", tc.Name, len(requests))
 		}
@@ -58,7 +58,7 @@ func TestClickupIncidentLifecycleFollowsOneTask(t *testing.T) {
 				t.Fatalf("task = %v", body)
 			}
 			providertest.AssertOneLeadingEmoji(t, body["name"].(string))
-			text, _ = body["markdown_description"].(string)
+			text, _ = body["markdown_content"].(string)
 		}
 		providertest.AssertOneLeadingEmoji(t, text)
 		if !strings.Contains(text, tc.Message.Note) {

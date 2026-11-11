@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/abahmed/kwatch/internal/delivery/awscreds"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/ratelimit"
 )
@@ -15,7 +16,8 @@ import (
 // tooLongHints are the words providers use when they refuse a message
 // for its size: an HTTP body or a bare SDK code such as msg_too_long.
 var tooLongHints = []string{"too long", "too_long", "too large",
-	"too_large", "too big", "exceeds", "max length", "maximum length"}
+	"too_large", "too big", "exceeds the maximum", "exceeds maximum",
+	"exceeds max length", "max length", "maximum length"}
 
 // tokenHints are the bare SDK codes of a refused credential.
 var tokenHints = []string{"invalid_auth", "not_authed", "token_revoked",
@@ -36,13 +38,24 @@ func failureReason(err error) string {
 		return "blocked: cloud metadata address"
 	case errors.As(err, &limited):
 		return "rate limited, retrying"
+	case errors.Is(err, awscreds.ErrSessionTokenExpired):
+		return "AWS session token expired"
+	case errors.Is(err, awscreds.ErrCredentialsRefused):
+		return "AWS credentials refused, fetching new ones"
+	}
+	// The status the provider answered comes first: a 5xx whose body
+	// mentions a quota is a server error, not a message that was too long.
+	if code, ok := transport.StatusOf(err); ok {
+		if code < 500 && hasAny(text, tooLongHints) {
+			return "rejected: message too long"
+		}
+		return statusReason(code)
+	}
+	switch {
 	case hasAny(text, tooLongHints):
 		return "rejected: message too long"
 	case isTimeout(err):
 		return "timed out"
-	}
-	if code, ok := transport.StatusOf(err); ok {
-		return statusReason(code)
 	}
 	switch {
 	case strings.Contains(text, "redirected"):

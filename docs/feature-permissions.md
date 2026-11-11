@@ -18,7 +18,7 @@ Use this matrix when disabling features for a least-privilege deployment.
 | Network and admission | Services, EndpointSlices, Ingresses, NetworkPolicies, webhook and admission policy resources | list/watch |
 | Storage and PVC | PersistentVolumeClaims, PersistentVolumes, StorageClasses, VolumeAttachments, VolumeSnapshots (and their contents and classes) | list/watch |
 | Kubelet stats and logs | `nodes/stats`, `nodes/metrics` (read from each kubelet directly), `pods/log` | get |
-| API server and metrics | non-resource URLs `/readyz` and `/metrics`; APIService `v1beta1.metrics.k8s.io`, Services, EndpointSlices | get (URLs); list/watch |
+| API server and metrics | non-resource URLs `/readyz`, `/metrics` and `/version`; APIService `v1beta1.metrics.k8s.io`, Services, EndpointSlices | get (URLs); list/watch |
 | Finalizer handler evidence | Roles, RoleBindings, ClusterRoles, ClusterRoleBindings | list/watch |
 | RBAC health | SelfSubjectAccessReviews | create |
 | CRD overlay | KwatchConfig in the kwatch namespace (a Role), CustomResourceDefinitions | list/watch |

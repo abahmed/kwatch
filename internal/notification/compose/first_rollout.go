@@ -6,6 +6,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 // firstRolloutLead says plainly that a workload has never worked: "api
@@ -80,4 +81,12 @@ func ownCreation(f caseFacts, change inventory.Change) bool {
 	workload := affectedWorkload(f)
 	return change.Created && change.Entity == workload &&
 		incident.IsWorkload(workload.Kind)
+}
+
+// createdBlame reports a cause whose blamed change is the creation of
+// the failing workload itself. A new policy or config that broke
+// others still failed them after it changed.
+func createdBlame(cause *rootcause.CauseRecord) bool {
+	return cause.Change != nil && cause.Change.Created &&
+		incident.IsWorkload(cause.Change.Entity.Kind)
 }

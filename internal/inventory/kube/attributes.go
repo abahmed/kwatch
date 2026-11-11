@@ -12,7 +12,9 @@ const (
 	AttrDeleting   = "deleting"
 	// AttrDeletionTime is when the pod's deletion was requested; set only
 	// while it is being deleted. AttrTerminationGrace is the seconds its
-	// containers are given to stop (spec.terminationGracePeriodSeconds).
+	// containers are given to stop: the deletion's own grace while it is
+	// being deleted (a drain or --grace-period sets it), else the spec's
+	// terminationGracePeriodSeconds.
 	AttrDeletionTime     = "deletion.timestamp"
 	AttrTerminationGrace = "termination.grace.seconds"
 	AttrQoS              = "qos"
@@ -115,10 +117,13 @@ const (
 	AttrSucceeded        = "succeeded"
 	AttrFailed           = "failed"
 	AttrBackoffLimit     = "backoff.limit"
-	AttrCurrentReplicas  = "replicas.current"
-	AttrDesiredReplicas  = "replicas.desired"
-	AttrMinReplicas      = "replicas.min"
-	AttrMaxReplicas      = "replicas.max"
+	// AttrBackoffLimitPerIndex is an indexed Job's retry limit per index
+	// (spec.backoffLimitPerIndex); its failed count spans every index.
+	AttrBackoffLimitPerIndex = "backoff.limit.per.index"
+	AttrCurrentReplicas      = "replicas.current"
+	AttrDesiredReplicas      = "replicas.desired"
+	AttrMinReplicas          = "replicas.min"
+	AttrMaxReplicas          = "replicas.max"
 )
 
 // AttrTemplateLabels are the labels of the pods a workload creates, in

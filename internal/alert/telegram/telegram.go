@@ -117,7 +117,8 @@ func (t *Telegram) SendMessage(ctx context.Context, msg string) error {
 		"messageLength", len(msg),
 	)
 	return t.sendByTelegramApi(ctx, t.body(telegramPayload{
-		ChatID: t.chatId, Text: msg,
+		ChatID: t.chatId,
+		Text:   notification.Truncate(msg, telegramTextLimit),
 	}))
 }
 
@@ -145,7 +146,7 @@ func incidentText(m notification.Message, limit int) string {
 	output := strings.Join(m.Output, "\n")
 	// The output gets at most half of the limit; the narrative comes
 	// first and is cut by whole lines, so no tag is ever cut open.
-	budget := min(len(output), limit/2)
+	budget := max(0, min(len(output), limit/2))
 	note := m.RenderWithin(d, limit-budget-len("<pre></pre>")-len(sep))
 	for {
 		block := d.Fence(notification.NeutralizeTelegramMentions(

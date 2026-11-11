@@ -67,7 +67,7 @@ func TestAnnouncementMentionsAnAckThatWasAlreadyThere(t *testing.T) {
 	msg := Writer{}.Write(d, writerNow)
 
 	assert.Contains(t, msg.Note,
-		"The ack annotation is still present on deployment/api")
+		"It is already acknowledged (annotation on deployment/api)")
 }
 
 func TestAnnouncementSaysNothingOfALaterAck(t *testing.T) {
@@ -76,7 +76,7 @@ func TestAnnouncementSaysNothingOfALaterAck(t *testing.T) {
 
 	msg := Writer{}.Write(d, writerNow)
 
-	assert.NotContains(t, msg.Note, "ack annotation")
+	assert.NotContains(t, msg.Note, "already acknowledged")
 }
 
 func TestAckUpdatesNameTheCluster(t *testing.T) {

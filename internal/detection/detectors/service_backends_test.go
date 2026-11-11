@@ -104,7 +104,8 @@ func TestIngressMetadataAndSyncGate(t *testing.T) {
 	assert.Empty(t, evaluate(Ingress{}, m, now, ing, unsynced).Findings)
 	assert.Empty(t, evaluate(Ingress{}, m, t0.Add(time.Second), ing,
 		nil).Findings, "the Service may be applied just after the Ingress")
-	assert.Len(t, evaluate(Ingress{}, m, now, ing, nil).Findings, 1)
+	assert.Len(t, evaluateAfterGrace(Ingress{}, m, t0, DefaultBackendGrace,
+		ing, nil).Findings, 1)
 	assert.Equal(t, "ingress", Ingress{}.Name())
 	assert.Equal(t, []inventory.Kind{kube.KindIngress}, Ingress{}.Kinds())
 	assert.Equal(t, "egress-policy", EgressPolicy{}.Name())
@@ -121,4 +122,19 @@ func TestMissingReferenceKinds(t *testing.T) {
 	assert.Equal(t, "certificate", Certificate{}.Name())
 	assert.Equal(t, []inventory.Kind{kube.KindSecret, kube.KindEndpoint},
 		Certificate{}.Kinds())
+}
+
+// The grace counts from when the Service went missing: an old Ingress
+// whose Service is deleted and recreated is not Critical at once.
+func TestIngressBackendGraceCountsFromTheMissingService(t *testing.T) {
+	m := newTestModel()
+	ing := newID(kube.KindIngress, "default", "web")
+	put(m, ing, t0, nil)
+	link(m, ing, inventory.RoutesTo, newID(kube.KindService, "default", "x"))
+	later := t0.Add(24 * time.Hour)
+
+	registry := detection.NewRegistry(nil, Ingress{})
+	assert.Empty(t, registry.Evaluate(m, later, ing).Findings)
+	assert.Len(t, registry.Evaluate(m, later.Add(DefaultBackendGrace),
+		ing).Findings, 1)
 }

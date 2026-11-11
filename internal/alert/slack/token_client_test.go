@@ -49,3 +49,24 @@ func TestSlackTokenClientDoesNotFollowRedirects(t *testing.T) {
 		t.Fatalf("requests = %d, want 1 (no redirect followed)", got)
 	}
 }
+
+// The webhook path uses the guarded client too: a redirected POST is not
+// followed, so a moved or wrong webhook is not read as delivered.
+func TestSlackWebhookDoesNotFollowRedirects(t *testing.T) {
+	rt := &redirectingTransport{}
+	s := NewSlack(map[string]interface{}{
+		"webhook": "https://example.test/hook",
+	}, "dev", transport.Dependencies{
+		HTTPClient: &http.Client{Transport: rt},
+		Clock:      clock.RealClock{},
+	})
+	if s == nil {
+		t.Fatal("slack was not constructed")
+	}
+	if err := s.SendMessage(context.Background(), "hi"); err == nil {
+		t.Fatal("a redirected webhook read as delivered")
+	}
+	if n := rt.calls.Load(); n != 1 {
+		t.Fatalf("requests = %d, want 1 (no redirect followed)", n)
+	}
+}

@@ -1,6 +1,7 @@
 package detectors
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
@@ -72,29 +73,72 @@ type fitCase struct {
 func fitEvidence(
 	ctx detection.Context, pod inventory.Entity,
 ) []detection.Evidence {
-	c := newFitCase(ctx.Model, pod)
+	c := newFitCase(ctx, pod)
 	out := c.verdict()
 	return append(out, autoscalerEvidence(ctx, pod.ID)...)
 }
 
-func newFitCase(model inventory.Reader, pod inventory.Entity) *fitCase {
+func newFitCase(ctx detection.Context, pod inventory.Entity) *fitCase {
+	model := ctx.Model
 	c := &fitCase{pod: pod.ID, spec: kube.ParseSchedulingSpec(pod),
 		labels: kube.ParseLabels(text(pod, kube.AttrLabels)),
 		need:   podNeeds(model, pod.ID), peers: map[string][]fitPeer{}}
 	c.claims = podClaimTerms(model, pod.ID)
 	c.ports = kube.ParseHostPorts(text(pod, kube.AttrHostPorts))
-	ids := model.Entities(kube.KindNode)
-	sort.Slice(ids, func(i, j int) bool { return ids[i].Name < ids[j].Name })
-	c.total = len(ids)
-	for _, id := range ids[:min(len(ids), maxFitNodes)] {
+	sample := fitSampleFor(ctx)
+	c.total = sample.total
+	for _, id := range sample.ids {
 		node, ok := model.Entity(id)
 		if !ok {
 			continue
 		}
 		c.nodes = append(c.nodes, newFitNode(model, node, c.need))
-		c.peers[id.Name] = peersOn(model, id)
+		c.peers[id.Name] = sample.peers[id.Name]
 	}
 	return c
+}
+
+// fitSample is the nodes checked for every pod of one pass and the pods
+// running on them, which do not depend on the pod being placed.
+type fitSample struct {
+	ids   []inventory.EntityID
+	peers map[string][]fitPeer
+	total int
+}
+
+// fitSampleFor reads the sample once per evaluation pass, however many
+// unschedulable pods the pass has.
+func fitSampleFor(ctx detection.Context) fitSample {
+	ids := ctx.Model.Entities(kube.KindNode)
+	// The counts are in the key so a model that gained or lost nodes or
+	// pods at the same instant is read again.
+	key := fmt.Sprintf("pod-fit-nodes/%d/%d", len(ids),
+		len(ctx.Model.Entities(kube.KindPod)))
+	return ctx.Pass(key, func() any {
+		sort.Slice(ids, func(i, j int) bool {
+			return ids[i].Name < ids[j].Name
+		})
+		s := fitSample{total: len(ids), peers: map[string][]fitPeer{}}
+		s.ids = evenSample(ids, maxFitNodes)
+		for _, id := range s.ids {
+			s.peers[id.Name] = peersOn(ctx.Model, id)
+		}
+		return s
+	}).(fitSample)
+}
+
+// evenSample picks at most limit items spread evenly over ids, so a
+// large cluster is judged by nodes from all its pools, not by the
+// alphabetic first ones. A list within limit is returned whole.
+func evenSample(ids []inventory.EntityID, limit int) []inventory.EntityID {
+	if len(ids) <= limit {
+		return ids
+	}
+	out := make([]inventory.EntityID, limit)
+	for i := range out {
+		out[i] = ids[i*len(ids)/limit]
+	}
+	return out
 }
 
 func newFitNode(

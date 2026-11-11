@@ -42,8 +42,11 @@ func openStore(ctx context.Context, deps *serverDeps) (*storage.Store, error) {
 		return err
 	})
 	if err != nil {
-		if deps.rebuild != nil {
-			_ = failRebuild("state store", err)
+		// An outage or a lost Lease rejoins (leaderCallbacks.settle),
+		// so only a failure that ends the process is reported as one.
+		if deps.rebuild != nil && ctx.Err() == nil &&
+			!retryableStart(startFailure(err)) {
+			_ = deps.rebuild.fail("state store", err)
 		}
 		return nil, err
 	}

@@ -9,6 +9,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"github.com/abahmed/kwatch/internal/delivery/awscreds"
 	"github.com/abahmed/kwatch/internal/delivery/signing"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -16,21 +17,19 @@ import (
 
 const (
 	snsServiceName   = "sns"
-	snsURLFormat     = "https://sns.%s.amazonaws.com/"
 	defaultSNSRegion = "us-east-1"
 )
 
 type Sns struct {
-	sender          transport.Sender
-	url             string
-	region          string
-	accessKeyID     string
-	sessionToken    string
-	secretAccessKey string
-	topicArn        string
-	targetArn       string
-	subject         string
-	now             func() time.Time
+	sender    transport.Sender
+	url       string
+	region    string
+	creds     awscreds.Source
+	refusals  awscreds.Refusals
+	topicArn  string
+	targetArn string
+	subject   string
+	now       func() time.Time
 
 	clusterName string
 }
@@ -42,19 +41,6 @@ func NewSns(
 	clusterName string,
 	dependencies transport.Dependencies,
 ) *Sns {
-	sessionToken, _ := config["sessionToken"].(string)
-	accessKeyID, ok := config["accessKeyId"].(string)
-	if !ok || len(accessKeyID) == 0 {
-		klog.InfoS("initializing sns with empty accessKeyId")
-		return nil
-	}
-
-	secretAccessKey, ok := config["secretAccessKey"].(string)
-	if !ok || len(secretAccessKey) == 0 {
-		klog.InfoS("initializing sns with empty secretAccessKey")
-		return nil
-	}
-
 	topicArn, _ := config["topicArn"].(string)
 	targetArn, _ := config["targetArn"].(string)
 	if len(topicArn) == 0 && len(targetArn) == 0 {
@@ -62,9 +48,35 @@ func NewSns(
 		return nil
 	}
 
+	if strings.HasSuffix(topicArn, ".fifo") {
+		// A FIFO topic needs a message group id on every publish, which
+		// kwatch does not send: every alert would be rejected.
+		klog.InfoS("sns FIFO topics (.fifo) are not supported; " +
+			"use a standard topic")
+		return nil
+	}
+
 	region := defaultSNSRegion
 	if r, ok := config["region"].(string); ok && len(r) > 0 {
 		region = r
+	}
+	override, _ := config["endpoint"].(string)
+	endpoint, err := awscreds.Endpoint(override, snsServiceName, region)
+	if err != nil {
+		klog.InfoS("initializing sns with an invalid endpoint",
+			"error", err)
+		return nil
+	}
+	sender := transport.NewSender(dependencies)
+	creds, err := awscreds.Select(config, awscreds.Options{
+		Provider: "SNS", Region: region, Sender: sender,
+		Now: dependencies.Now,
+	})
+	if err != nil || creds == nil {
+		klog.InfoS("initializing sns without AWS credentials: set "+
+			"accessKeyId and secretAccessKey, or give the pod an IAM "+
+			"role (IRSA or EKS Pod Identity)", "error", err)
+		return nil
 	}
 
 	subject, _ := config["subject"].(string)
@@ -72,17 +84,9 @@ func NewSns(
 	klog.InfoS("initializing sns", "region", region, "topicArn", topicArn)
 
 	return &Sns{
-		sender:          transport.NewSender(dependencies),
-		url:             fmt.Sprintf(snsURLFormat, region),
-		region:          region,
-		accessKeyID:     accessKeyID,
-		sessionToken:    sessionToken,
-		secretAccessKey: secretAccessKey,
-		topicArn:        topicArn,
-		targetArn:       targetArn,
-		subject:         subject,
-		clusterName:     clusterName,
-		now:             dependencies.Now,
+		sender: sender, url: endpoint, region: region, creds: creds,
+		topicArn: topicArn, targetArn: targetArn, subject: subject,
+		clusterName: clusterName, now: dependencies.Now,
 	}
 }
 
@@ -187,7 +191,7 @@ func setAttribute(form url.Values, index int, name, value string) {
 
 // SendMessage sends text message to the provider
 func (s *Sns) SendMessage(ctx context.Context, msg string) error {
-	return s.publish(ctx, s.publishForm(msg, s.subject))
+	return s.publish(ctx, s.publishForm(msg, asciiSubject(s.subject)))
 }
 
 func (s *Sns) publishForm(message, subject string) url.Values {
@@ -211,21 +215,21 @@ func (s *Sns) publish(ctx context.Context, form url.Values) error {
 	body := []byte(form.Encode())
 	contentType := "application/x-www-form-urlencoded"
 
-	headers, err := signing.SignAWSV4At(
-		signing.Credentials{
-			AccessKeyID: s.accessKeyID, SecretAccessKey: s.secretAccessKey,
-			SessionToken: s.sessionToken,
-		}, s.region, snsServiceName,
+	creds, err := s.creds.Credentials(ctx)
+	if err != nil {
+		return fmt.Errorf("%s: AWS credentials: %w", s.Name(), err)
+	}
+	headers, err := signing.SignAWSV4At(creds, s.region, snsServiceName,
 		"POST", s.url, body, s.now())
 	if err != nil {
 		return err
 	}
 
-	_, err = s.sender.Send(ctx, transport.Request{
+	answer, err := s.sender.Send(ctx, transport.Request{
 		Provider: s.Name(), URL: s.url, Body: body,
 		ContentType: contentType, Headers: headers,
 	})
-	return err
+	return s.refusals.Check(s.Name(), s.creds, err, answer)
 }
 
 // ReceivesPagingOnly implements api.PagingOnlyReceiver: every message

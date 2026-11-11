@@ -3,6 +3,7 @@
 # how to update this file on purpose. One scenario per line, sorted.
 ack-annotation found-high
 ack-at-announce found-high
+ack-stale-ignored found-high
 admission-policy-denies-pods found-high
 adv-bad-config-and-stuck-drain found-high,found-high
 adv-bad-config-clean-drain found-high
@@ -89,6 +90,7 @@ certificate-expiring-app-crash self
 chain-capped-at-three-steps found-high,found-likely
 chain-postgres-api-ingress found-high
 chain-wrong-time-order found-high,found-high
+chronic-issuer-lowered self
 chronic-never-ready-deployment self
 claim-full-unlisted-volume found-high
 claim-full-with-volume found-high
@@ -99,6 +101,7 @@ claim-stuck-deleting self
 cni-agent-crash-quoted found-high
 cold-start-preexisting found-high,self
 config-breaks-image-runs-elsewhere found-high
+config-change-long-crash-loop found-high
 config-edited-new-pods-fail found-high
 config-edited-plain-mount found-high
 config-run-as-non-root-rejected found-high
@@ -122,12 +125,14 @@ crash-loop-ready-between-crashes self
 crash-on-arm64-node-other-error self
 crash-quotes-other-error self
 crashloop-after-announce self
+cron-run-failed-then-recovered found-likely
 cron-runs-keep-failing found-likely
 cron-secret-edited-hours-before found-high
 cron-secret-edited-then-succeeded found-likely
 cronjob-blocked-by-stuck-run self
 cronjob-invalid-schedule found-high
 cronjob-last-run-failed found-likely
+cronjob-suspended-on-purpose quiet
 csi-node-plugin-failing found-possible
 csi-node-plugin-missing-on-node found-possible
 csr-denied self
@@ -175,9 +180,11 @@ fix-attempt-fails found-high
 fix-attempt-works found-high
 flapping-workload self
 flowschema-dangling-priority-level self
+fresh-issuer-notifies self
 healthy-node-app-crash self
 hpa-at-max found-likely
 hpa-at-max-healthy-quiet quiet
+hpa-metrics-outlive-recovery self
 hpa-resolve-while-workload-broken self
 hpa-target-missing self
 image-and-env-change-ranking found-high
@@ -194,6 +201,9 @@ init-finishes-slowly quiet
 init-waits-on-broken-service found-likely
 init-waits-on-healthy-service self
 internal-only-down found-high
+job-create-refused-once quiet
+job-created-suspended quiet
+job-helper-container-finished quiet
 job-retries-all-fail self
 job-retry-succeeds quiet
 job-running-long quiet
@@ -279,6 +289,8 @@ node-stays-down found-high
 nodes-lost-same-zone self
 nodes-lost-three-zones self
 notify-flap-reopens self
+old-leftover-joins-late-group self,self
+old-leftovers-age-out quiet
 one-hpa-bad-target self
 oom-at-own-limit-during-node-oom self
 oom-by-node self
@@ -287,9 +299,11 @@ oom-limit-on-pressured-node self,self
 oom-limit-too-low found-high
 oom-steady-climb self
 oom-under-limit-on-pressured-node found-likely
+operator-cluster-cr-owned-failing found-high
 operator-cr-owned-failing found-high
 operator-cr-stuck found-high
 operator-down-crs-stuck found-high
+operator-leftovers-grouped self
 own-volume-wait-at-start quiet
 own-volume-wait-too-long self
 owner-routed found-high
@@ -300,6 +314,7 @@ pod-cgroup-create-fails self
 pod-dns-search-line-notice quiet
 pod-evicted-over-ephemeral-limit found-high
 pod-ips-exhausted found-high
+pod-replaced-not-the-fix unknown
 pod-security-enforce-label-added found-high
 pod-terminating-node-lost found-high
 policy-blocks-call-by-address found-high
@@ -315,6 +330,9 @@ provisioner-controller-down found-high
 provisioner-controller-scaled-to-zero found-high
 provisioner-look-alike-workload self
 provisioner-no-workload-found self
+pull-secret-absent-own-crash self
+pull-secret-absent-pods-healthy quiet
+pull-secret-absent-slow-start quiet
 pull-secret-rotated-hours-before-scale-out found-high
 pull-without-secret-beside-logins found-high,found-high
 pvc-full found-high
@@ -360,6 +378,8 @@ route-not-accepted found-high
 same-tag-mixed-digests-healthy quiet
 same-tag-new-digest found-high
 sandbox-first-attempt-retried quiet
+scale-down-moved-pod-pull-fails self
+scale-down-unrelated-outage-told self
 scale-failure-replaced self
 scale-up-backend-starting quiet
 scaled-to-zero-blue-green quiet
@@ -370,7 +390,10 @@ scaled-to-zero-with-release found-high
 scheduler-down found-high
 scheduler-insufficient-memory found-high
 secret-edited-after-code-crash self
+secret-edited-hours-earlier-own-crash self
+secret-key-never-present found-high
 secret-key-removed found-high
+secret-key-removed-hours-earlier found-high
 secret-rotated-before-code-crash self
 separate-nodes-not-suspected self,self,self
 service-account-deleted-before-scale-out found-high
@@ -399,7 +422,9 @@ start-error-release-liveness-143 found-high
 start-mid-outage-missing-secret found-high
 startup-budget-too-short found-high
 startup-readiness-churn quiet
+statefulset-ordered-scale-up quiet
 statefulset-rollout-stuck found-high
+statefulset-scale-up-stalls self
 two-independent-problems found-high,found-high
 two-teams-two-pages self,self
 undeclared-probe-port-code-crash self

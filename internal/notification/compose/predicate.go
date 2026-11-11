@@ -99,6 +99,9 @@ var summaryRewrites = []summaryRewrite{
 	{regexp.MustCompile(
 		`^stopped reporting \(kubelet unreachable\) for (.+)$`),
 		"has not reported for $1"},
+	{regexp.MustCompile(`^is NotReady for (.+)$`),
+		"has not been ready for $1"},
+	{regexp.MustCompile(`^is NotReady\b(.*)$`), "is not ready$1"},
 	{regexp.MustCompile(`^schedule is not a valid cron expression$`),
 		"has an invalid schedule"},
 	{regexp.MustCompile(`^(?i:kubelet|controller) cannot (.+)$`),
@@ -114,6 +117,11 @@ var summaryRewrites = []summaryRewrite{
 		`(\d+) times in the last (\d+) hours$`),
 		"has a kubelet that kwatch could not reach $1 times in the " +
 			"last $2 hours"},
+	{regexp.MustCompile(`^last run failed (.+) \(BackoffLimitExceeded\)$`),
+		"has a last run that failed $1: it ran out of retries"},
+	{regexp.MustCompile(`^last run failed (.+) \(DeadlineExceeded\)$`),
+		"has a last run that failed $1: it ran past its time limit"},
+	{regexp.MustCompile(`^failed$`), "has failed"},
 	{regexp.MustCompile(`^last run failed (.+)$`),
 		"has a last run that failed $1"},
 	{regexp.MustCompile(`^name does not resolve$`),
@@ -147,10 +155,28 @@ func rewriteSummary(summary string) string {
 	}
 	for _, r := range summaryRewrites {
 		if r.match.MatchString(summary) {
-			return r.match.ReplaceAllString(summary, r.replace)
+			return plainReason(r.match.ReplaceAllString(summary, r.replace))
 		}
 	}
-	return summary
+	return plainReason(summary)
+}
+
+// reasonTail matches a summary that ends in an API reason in brackets:
+// "cannot start (RegistryUnavailable)".
+var reasonTail = regexp.MustCompile(`^(.*\S) \(([A-Z][a-z]+[A-Z]\w*)\)$`)
+
+// plainReason writes the API reason a summary ends in as words: "cannot
+// start (registry unavailable)". A "Failed..." reason only repeats that
+// something failed, so it goes: the words before it say what.
+func plainReason(summary string) string {
+	m := reasonTail.FindStringSubmatch(summary)
+	if m == nil {
+		return summary
+	}
+	if strings.HasPrefix(m[2], "Failed") {
+		return m[1]
+	}
+	return m[1] + " (" + splitCamel(m[2]) + ")"
 }
 
 // splitCamel writes an API reason as words: "InvalidBrokerConfig"
@@ -198,16 +224,67 @@ func firstClause(text string) string {
 }
 
 // pluralPredicate turns a predicate about one subject into one about
-// several: "has not been ready" becomes "have not been ready".
+// several: "has not been ready" becomes "have not been ready", and a
+// second verb follows: "is failing: exited with code 1 and is
+// restarting" becomes "are failing: … and are restarting", and "since it
+// was scheduled" reads "since they were scheduled". Quotations
+// and parentheses (which may speak of another subject) keep their verbs.
 func pluralPredicate(text string) string {
 	first, rest, _ := strings.Cut(text, " ")
 	if plural, ok := pluralVerbs[first]; ok {
 		first = plural
 	}
+	depth := 0
 	rest = outsideQuotes(" "+rest, func(part string) string {
-		return strings.ReplaceAll(part, " its ", " their ")
+		part = strings.ReplaceAll(part, " its ", " their ")
+		part = strings.ReplaceAll(part, " since it was ",
+			" since they were ")
+		return pluralSecondVerbs(part, &depth)
 	})
 	return first + rest
+}
+
+// secondVerbs are the verbs a predicate joins with " and ".
+var secondVerbs = []string{"is", "has", "keeps"}
+
+// pluralSecondVerbs makes " and is " read " and are " (and so on for
+// secondVerbs) outside parentheses. depth carries the parenthesis depth
+// from one unquoted part of a predicate to the next.
+func pluralSecondVerbs(part string, depth *int) string {
+	var b strings.Builder
+	for i := 0; i < len(part); {
+		switch part[i] {
+		case '(':
+			*depth++
+		case ')':
+			*depth = max(*depth-1, 0)
+		}
+		if *depth == 0 {
+			if verb, ok := secondVerbAt(part[i:]); ok {
+				b.WriteString(" and " + pluralVerbs[verb] + " ")
+				i += len(" and " + verb + " ")
+				continue
+			}
+		}
+		b.WriteByte(part[i])
+		i++
+	}
+	return b.String()
+}
+
+// secondVerbAt reports the verb of secondVerbs that text starts with,
+// after " and ".
+func secondVerbAt(text string) (string, bool) {
+	rest, ok := strings.CutPrefix(text, " and ")
+	if !ok {
+		return "", false
+	}
+	for _, verb := range secondVerbs {
+		if strings.HasPrefix(rest, verb+" ") {
+			return verb, true
+		}
+	}
+	return "", false
 }
 
 var pluralVerbs = map[string]string{

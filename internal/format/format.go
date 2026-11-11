@@ -48,7 +48,8 @@ func JoinNames(names []string, max int) string {
 // dropped — an alert about a pod that has been stuck for 12 minutes does not
 // need milliseconds.
 func Duration(d time.Duration) string {
-	d = d.Round(time.Second)
+	// A negative span is a clock step, not a time: say nothing of it.
+	d = max(0, d).Round(time.Second)
 	if d < time.Minute {
 		return fmt.Sprintf("%ds", int(d.Seconds()))
 	}

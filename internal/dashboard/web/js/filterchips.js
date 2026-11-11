@@ -2,21 +2,25 @@
    Issues table, as chips that each remove one value ("Namespace:
    team-1 ×", "Similar to: <title> ×"), with how many issues match and
    "Clear all". Each filter shows once: the values of the pickers here
-   (in the pickers' own words), while the search box, the severity
-   chips and the start time picker show their own. issuesfilters.js
+   (in the pickers' own words), the severity and the start times too
+   (the panel behind "Filters" may be closed), while the search box
+   shows its own. issuesfilters.js
    owns it. */
 (function () {
   "use strict";
   var KW = window.KW;
   var LQ = function () { return KW.listQuery; };
-  var NAMES = { namespace: "Namespace", kind: "Kind", state: "State",
+  var NAMES = { severity: "Level", namespace: "Namespace", kind: "Kind", state: "State",
     acked: "Acknowledged", stopped: "Stopped tracking", node: "Node",
     mode: "Failure" };
   var ACKED = { "true": "Yes", "false": "No" };
+  var AGES = { today: "started today", day: "going on over a day" };
+  var SINCES = { "24h": "24 hours", "72h": "3 days" };
 
   /* word: a filter value in words. modes are the server's labels of
      the failure types ("CPUHigh" is "CPU high"). */
   function word(key, v, kinds, modes) {
+    if (key === "severity") return KW.SEVERITY[v] ? KW.SEVERITY[v].label : v;
     if (key === "state") return KW.STATE[v] ? KW.STATE[v].label : v;
     if (key === "acked" || key === "stopped") return ACKED[v] || v;
     if (key === "kind") return kinds[v] || v;
@@ -101,6 +105,14 @@
       }
       if (v.release) {
         box.appendChild(chip("Caused by", "a release that went wrong", function () { return { release: "" }; }));
+      }
+      // The filters behind the "Filters" button show here too, so a
+      // closed panel still says what narrows the list.
+      if (v.age) {
+        box.appendChild(chip("Started", AGES[v.age] || v.age, function () { return { age: "" }; }));
+      }
+      if (v.since && v.status !== "active") {
+        box.appendChild(chip("Resolved within", SINCES[v.since] || v.since, function () { return { since: "" }; }));
       }
       LQ().MULTI.forEach(function (key) {
         if (!NAMES[key]) return;

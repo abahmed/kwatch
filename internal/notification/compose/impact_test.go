@@ -40,7 +40,7 @@ func TestImpactDoesNotListAWorkloadBesideItsOwnService(t *testing.T) {
 	}
 	assert.Equal(t, []string{
 		"Services fleet and storage in shop can't serve traffic.",
-		"batch in shop is affected as well."}, texts)
+		"Affected: batch in shop."}, texts)
 }
 
 func TestImpactKeepsAWorkloadNameAsWritten(t *testing.T) {
@@ -48,7 +48,7 @@ func TestImpactKeepsAWorkloadNameAsWritten(t *testing.T) {
 
 	got := arrange(impactSentences(f))
 
-	assert.Equal(t, "storage and support in shop are affected as well.",
+	assert.Equal(t, "Affected: storage and support in shop.",
 		got[0].text)
 }
 

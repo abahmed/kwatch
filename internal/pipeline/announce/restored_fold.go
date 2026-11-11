@@ -47,8 +47,23 @@ func (c *Collector) holdWarm(
 	ctx context.Context, now time.Time, decisions []incident.Decision,
 ) []incident.Decision {
 	s := &c.Startup
-	if s.WarmAt.IsZero() || !now.Before(s.WarmAt) {
+	if s.WarmAt.IsZero() {
 		return decisions
+	}
+	if !now.Before(s.WarmAt) {
+		// The hold is over but its summary is not out yet (it goes later
+		// this tick): a held problem resolving now was never told, so it
+		// closes quietly as within the hold, and the summary does not
+		// list it as still failing.
+		var rest []incident.Decision
+		for _, d := range decisions {
+			if d.Action != incident.Resolve ||
+				indexOfIncident(s.Warm, d.Incident.ID) < 0 ||
+				!c.holdWarmOne(ctx, now, d) {
+				rest = append(rest, d)
+			}
+		}
+		return rest
 	}
 	var rest []incident.Decision
 	for _, d := range decisions {
@@ -81,7 +96,9 @@ func (c *Collector) holdWarmOne(
 			c.pageOnly(ctx, now, d, restoredSummary)
 			return true
 		}
-		c.recordCarried(ctx, now, d, restoredSummary)
+		if !c.lowerAtPagers(ctx, now, d, restoredSummary) {
+			c.recordCarried(ctx, now, d, restoredSummary)
+		}
 		return true
 	case held >= 0 && d.Action == incident.Resolve:
 		s.Warm = append(s.Warm[:held], s.Warm[held+1:]...)

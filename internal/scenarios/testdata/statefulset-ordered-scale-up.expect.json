@@ -1,0 +1,7 @@
+{
+  "name": "statefulset-ordered-scale-up",
+  "description": "An OrderedReady StatefulSet scales from 3 to 9; a new pod becomes ready every two minutes and the original three serve throughout.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "20m0s"
+}

@@ -12,18 +12,25 @@ import "time"
 // return. The doubled holds of a flapper do not apply: they say how long
 // a flapper must be healthy, not how long a dead node may stay unpaged.
 func (m *Manager) heldPageDue(p *Incident) time.Time {
-	return p.Opened.Add(m.cfg.PageSettle + m.cfg.Hold)
+	return lastReturn(p).Add(m.cfg.PageSettle + m.cfg.Hold)
 }
 
-// failingSince reports an open incident that has not recovered since it
-// opened: no recovery was recorded after its return.
-func failingSince(p *Incident) bool {
-	for _, at := range p.Cycles {
-		if at.After(p.Opened) {
-			return false
-		}
+// lastReturn is when p's failure last came back (Cycles), or when it
+// opened.
+func lastReturn(p *Incident) time.Time {
+	at := p.Opened
+	if n := len(p.Cycles); n > 0 && p.Cycles[n-1].After(at) {
+		at = p.Cycles[n-1]
 	}
-	return p.State == Open && len(p.Members) > 0
+	return at
+}
+
+// failingSince reports an open or flapping incident that has not
+// recovered since its last return: a recovery in between would have
+// started RecoveringSince, and a return after it a new cycle.
+func failingSince(p *Incident) bool {
+	return (p.State == Open || p.State == Flapping) &&
+		len(p.Members) > 0 && p.RecoveringSince.IsZero()
 }
 
 // holdsPage reports a held repeat whose page is still due. Someone who

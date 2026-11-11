@@ -37,7 +37,8 @@ var familySymptoms = map[string]symptom{
 	"Evicted":          {"had pods evicted", "had pods evicted"},
 	"JobFailed":        {"failed", "failed"},
 	"DeadlineExceeded": {"ran too long and was stopped", "ran too long"},
-	"RolloutStuck":     {"has a stuck rollout", "had a stuck rollout"},
+	"RolloutStuck": {"has a new version that is not getting ready",
+		"had a new version that never got ready"},
 	"Unavailable": {"has too few pods available",
 		"had too few pods available"},
 	"ReplicaFailure": {"can't create its pods", "couldn't create pods"},
@@ -122,7 +123,10 @@ func symptomOf(d *IncidentDetail, p incident.Incident) string {
 	if s, ok := notServing(d, past); ok && subject != "" {
 		return sentence(subject + " " + s)
 	}
-	s, ok := familySymptoms[modeFamily(p)]
+	if p.PreviousServes && p.Root.Name != "" {
+		return newVersionWhat(d, p)
+	}
+	s, ok := symptomFor(p)
 	if probe, found := failingProbe(d); found &&
 		(probe != "liveness" || !crashedOnItsOwn(d)) {
 		// A liveness probe that fails after the container crashed by

@@ -41,6 +41,7 @@ func toListItemWith(
 		Untold:          p.Untold(),
 		ResolvedAt:      p.Resolved,
 		RootCause:       shortCause(red(causeText(p))),
+		LeftoverObjects: p.LeftoverObjects(),
 	}
 }
 
@@ -65,12 +66,14 @@ func buildDetail(p incident.Incident, c detailContext) IncidentDetail {
 	item.RootCause = redact.Evidence(causeText(p))
 	d := IncidentDetail{
 		IncidentListItem: item,
+		FullTitle:        redact.Evidence(p.FullTitle()),
 		FixSteps:         steps,
 		Timeline:         toTimeline(p.Timeline),
 		CapturedLogLines: redactAll(p.Facts),
 		DocsLink:         p.DocsLink,
 		Evidence:         toEvidence(p.Evidence),
 		Correlation:      toCorrelation(p.Correlation),
+		Leftovers:        toLeftovers(p),
 	}
 	if cut := len(p.Timeline) - len(d.Timeline); cut > 0 {
 		d.Truncated = &DetailTruncation{Timeline: cut}
@@ -141,14 +144,22 @@ func kindDisplay(id inventory.EntityID) string {
 	return strings.ToUpper(k[:1]) + k[1:]
 }
 
+// lastSeen is the latest sign of life of p: its resolve, else its
+// announcement or opening, and any later timeline entry (a failure
+// that went on, a member that joined or recovered, a revised cause).
 func lastSeen(p incident.Incident) time.Time {
+	last := p.Opened
 	if !p.Resolved.IsZero() {
-		return p.Resolved
+		last = p.Resolved
+	} else if !p.Announced.IsZero() {
+		last = p.Announced
 	}
-	if !p.Announced.IsZero() {
-		return p.Announced
+	for _, e := range p.Timeline {
+		if e.At.After(last) {
+			last = e.At
+		}
 	}
-	return p.Opened
+	return last
 }
 
 func ackedBy(p incident.Incident) string {

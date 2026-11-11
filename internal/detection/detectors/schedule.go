@@ -15,7 +15,7 @@ import (
 const DefaultMissedRun = 5 * time.Minute
 
 // Schedule detects CronJobs that missed a run, and suspended CronJobs and
-// Jobs. Suspension is usually deliberate, so it is informational.
+// Jobs. Suspension is usually deliberate, so it is advisory context.
 type Schedule struct{}
 
 // Name implements detection.Detector.
@@ -54,8 +54,12 @@ func scheduleFindings(
 		if e.ID.Kind == kube.KindCronJob {
 			reason = reasons.CronJobSuspended
 		}
+		// Suspension is a setting someone chose (a paused schedule, a
+		// Job a queue has not admitted yet), not a failure: it is
+		// context in the incident of a real failure, never a line of
+		// its own.
 		return []detection.Finding{{
-			Reason: reason, Severity: detection.Info,
+			Reason: reason, Severity: detection.Info, Advisory: true,
 			Since:   valueSince(e, kube.AttrSuspended),
 			Summary: "Suspended; it does not run until resumed",
 		}}

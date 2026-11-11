@@ -1,0 +1,11 @@
+{
+  "name": "cron-run-failed-then-recovered",
+  "description": "One run of a five-minute CronJob fails; the next twelve succeed while the failed Job stays in the API.",
+  "root": "cronjob/batch/rollup",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "2m0s"
+}

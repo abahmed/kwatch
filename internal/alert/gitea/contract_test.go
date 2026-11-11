@@ -110,7 +110,7 @@ func checkCreate(t *testing.T, reqs []providertest.Request, base string) {
 	search, create := reqs[0], reqs[1]
 	if search.Method != "GET" || search.Path != base ||
 		!strings.Contains(search.Query, "state=open") ||
-		!strings.Contains(search.Query, "kwatchkey") {
+		strings.Contains(search.Query, "q=") {
 		t.Fatalf("search = %s %s?%s", search.Method, search.Path,
 			search.Query)
 	}

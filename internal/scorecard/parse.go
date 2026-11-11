@@ -20,27 +20,35 @@ const maxLineBytes = 4 << 20
 // last column holds the log line. Lines that are not audit entries, such as
 // ordinary klog output, are skipped. Entries are returned in time order.
 func Parse(r io.Reader) ([]audit.Entry, error) {
+	entries, _, err := ParseCounted(r)
+	return entries, err
+}
+
+// ParseCounted is Parse that also returns how many non-blank lines (or CSV
+// records) were skipped because they were not audit entries.
+func ParseCounted(r io.Reader) ([]audit.Entry, int, error) {
 	reader := bufio.NewReaderSize(r, 64<<10)
 	head, err := reader.Peek(1)
 	if errors.Is(err, io.EOF) {
-		return nil, nil
+		return nil, 0, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var entries []audit.Entry
+	var skipped int
 	if head[0] == '"' || isCSVHeader(reader) {
-		entries, err = parseCSV(reader)
+		entries, skipped, err = parseCSV(reader)
 	} else {
-		entries, err = parseJSONLines(reader)
+		entries, skipped, err = parseJSONLines(reader)
 	}
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	sort.SliceStable(entries, func(i, j int) bool {
 		return entries[i].Timestamp.Before(entries[j].Timestamp)
 	})
-	return entries, nil
+	return entries, skipped, nil
 }
 
 func isCSVHeader(reader *bufio.Reader) bool {
@@ -51,38 +59,45 @@ func isCSVHeader(reader *bufio.Reader) bool {
 	return strings.HasPrefix(string(line), "Date,")
 }
 
-func parseCSV(r io.Reader) ([]audit.Entry, error) {
+func parseCSV(r io.Reader) ([]audit.Entry, int, error) {
 	reader := csv.NewReader(r)
 	reader.FieldsPerRecord = -1
 	reader.LazyQuotes = true
 	var entries []audit.Entry
+	skipped := 0
 	for {
 		record, err := reader.Read()
 		if err == io.EOF {
-			return entries, nil
+			return entries, skipped, nil
 		}
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if len(record) == 0 {
 			continue
 		}
 		if entry, ok := decodeEntry(record[len(record)-1]); ok {
 			entries = append(entries, entry)
+		} else {
+			skipped++
 		}
 	}
 }
 
-func parseJSONLines(r io.Reader) ([]audit.Entry, error) {
+func parseJSONLines(r io.Reader) ([]audit.Entry, int, error) {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 64<<10), maxLineBytes)
 	var entries []audit.Entry
+	skipped := 0
 	for scanner.Scan() {
-		if entry, ok := decodeEntry(scanner.Text()); ok {
+		line := scanner.Text()
+		if entry, ok := decodeEntry(line); ok {
 			entries = append(entries, entry)
+		} else if strings.TrimSpace(line) != "" {
+			skipped++
 		}
 	}
-	return entries, scanner.Err()
+	return entries, skipped, scanner.Err()
 }
 
 func decodeEntry(line string) (audit.Entry, bool) {

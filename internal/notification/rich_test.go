@@ -180,3 +180,14 @@ func TestJiraPlainTextEscapesMentionsAndMacros(t *testing.T) {
 		t.Fatalf("Text = %q, want %q", got, want)
 	}
 }
+
+// The dialect's ellipsis replaces the cut's own, the last one; an
+// ellipsis the text itself says stays.
+func TestCutReplacesTheLastEllipsis(t *testing.T) {
+	d := Dialect{Ellipsis: "..."}
+	text := `fails with "dial tcp…" and more words after it here`
+	got := cut(text, d, 30)
+	if !strings.HasSuffix(got, "...") || !strings.Contains(got, "tcp…") {
+		t.Fatalf("cut = %q", got)
+	}
+}

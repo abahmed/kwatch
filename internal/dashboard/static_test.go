@@ -9,12 +9,15 @@ import (
 	"testing/fstest"
 )
 
-// allowedURLs are the only absolute URLs the UI may contain. Neither is
-// fetched: one is the SVG namespace, the other is the installer command
-// the sign-in page shows as text to copy.
+// allowedURLs are the only absolute URLs the UI may contain. None is
+// fetched: one is the SVG namespace, one is the installer command the
+// dashboard docs show as text, one is the sign-in page's link to how
+// to get the password, which a person opens.
 var allowedURLs = map[string]bool{
 	"http://www.w3.org/2000/svg":   true,
 	"https://kwatch.dev/kwatch.sh": true,
+	"https://github.com/abahmed/kwatch/blob/" + docsRefMark + "/docs/" +
+		"dashboard.md#how-to-get-the-password": true,
 }
 
 var absoluteURL = regexp.MustCompile(
@@ -58,6 +61,9 @@ func TestStaticShellHasNoInlineScriptOrStyle(t *testing.T) {
 	}
 	if strings.Contains(shell, "{{asset:") {
 		t.Error("shell has an unresolved asset reference")
+	}
+	if strings.Contains(shell, docsRefMark) {
+		t.Error("shell has an unresolved docs reference")
 	}
 	for _, js := range []string{"look", "core", "rows", "searchq",
 		"highlight", "listquery", "prefs", "visits", "dropdown",
@@ -188,6 +194,10 @@ func TestStaticBuildRefusesAMissingReference(t *testing.T) {
 		t.Error("built without the app manifest")
 	}
 	root["web/manifest.webmanifest"] = &fstest.MapFile{Data: []byte("{}")}
+	if _, err := buildAssets(root); err == nil {
+		t.Error("built without the notification worker")
+	}
+	root["web/sw.js"] = &fstest.MapFile{Data: []byte("self;")}
 	if _, err := buildAssets(root); err != nil {
 		t.Errorf("complete set: %v", err)
 	}
@@ -201,7 +211,8 @@ func TestStaticUnknownAddressShowsANotFoundPage(t *testing.T) {
 	w := call(t, s, http.MethodGet, "/nope", "")
 	if w.Code != 404 ||
 		!strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") ||
-		!strings.Contains(w.Body.String(), `href="/">Go to the Overview`) {
+		!strings.Contains(w.Body.String(), `href="/">Go to the Overview`) ||
+		!strings.Contains(w.Body.String(), `href="/issues">see the Issues`) {
 		t.Errorf("/nope: %d %v %s", w.Code, w.Header(), w.Body.String())
 	}
 	for _, path := range []string{"/assets/nope.css", "/api/nope"} {

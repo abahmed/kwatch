@@ -32,6 +32,11 @@ type KindState struct {
 	// Reason is a bounded code for why the kind is not synced.
 	// ReasonObjectCap means nothing else is wrong with it.
 	Reason string
+	// Stale is set when a synced watch of the kind keeps failing without
+	// a list or watch getting through (see dynamicStaleAfter). Synced
+	// stays true: like a stale typed kind, it affects Source.Fresh, not
+	// readiness or Verifiable.
+	Stale bool
 }
 
 // KindState reports the state of kind and whether the dynamic source
@@ -39,22 +44,22 @@ type KindState struct {
 func (d *DynamicSource) KindState(kind inventory.Kind) (KindState, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	found, reason := false, ""
+	found, reason, stale := false, "", false
 	note := func(r string) {
 		found = true
 		reason = kindReason(reason, r)
 	}
+	now := d.failureNow()
 	for _, w := range d.running {
 		if w.kind != kind {
 			continue
 		}
-		switch {
-		case !w.hasSynced() || w.takingOver():
-			note(ReasonSyncPending)
-		case w.admission.capped():
-			note(ReasonObjectCap)
-		default:
+		reason, failing := d.watchReason(w, now)
+		stale = stale || failing
+		if reason == "" {
 			found = true
+		} else {
+			note(reason)
 		}
 	}
 	for _, f := range d.refused {
@@ -67,7 +72,31 @@ func (d *DynamicSource) KindState(kind inventory.Kind) (KindState, bool) {
 			note(issue.reason)
 		}
 	}
-	return KindState{Synced: found && reason == "", Reason: reason}, found
+	return KindState{
+		Synced: found && reason == "", Reason: reason, Stale: stale,
+	}, found
+}
+
+// watchReason is why a running watch leaves its kind not synced ("" when
+// nothing does), and whether it is a synced watch gone stale. An unsynced
+// watch failing past the bound has failed, not still pending. The caller
+// holds d.mu.
+func (d *DynamicSource) watchReason(
+	w *dynamicWatch, now time.Time,
+) (reason string, stale bool) {
+	failing := d.staleLocked(w, now)
+	synced := w.hasSynced()
+	switch {
+	case !synced && failing:
+		return ReasonSyncFailed, false
+	case !synced:
+		return ReasonSyncPending, false
+	case w.takingOver():
+		return ReasonSyncPending, failing
+	case w.admission.capped():
+		return ReasonObjectCap, failing
+	}
+	return "", failing
 }
 
 // kindReason keeps the first reason a kind is not synced, except that any
@@ -136,7 +165,7 @@ func (d *DynamicSource) refuse(
 	d.wg.Add(1)
 	go func() {
 		defer d.wg.Done()
-		d.retire(w.parent, w)
+		safego.Do("dynamic-retire", func() { d.retire(w.parent, w) })
 	}()
 }
 
@@ -215,9 +244,11 @@ func (d *DynamicSource) panicked(
 	d.wg.Add(1)
 	go func() {
 		defer d.wg.Done()
-		if d.cfg.RestartWait(w.parent, wait) {
-			d.retryRefused()
-			d.requestDiscovery()
-		}
+		safego.Do("dynamic-rebuild", func() {
+			if d.cfg.RestartWait(w.parent, wait) {
+				d.retryRefused()
+				d.requestDiscovery()
+			}
+		})
 	}()
 }

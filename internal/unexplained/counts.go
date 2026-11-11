@@ -78,7 +78,9 @@ func (c *Counts) recordLocked(
 	key := rowKey{kind, clean(mode, 64), clean(reason, 96)}
 	r, known := c.rows[key]
 	if !known {
-		if len(c.rows) >= MaxRows {
+		// Two rows are kept for the overflow (one per kind), inside
+		// MaxRows, so a restore (which keeps MaxRows) loses none.
+		if len(c.rows) >= MaxRows-2 {
 			key = rowKey{kind, Overflow, Overflow}
 			r = c.rows[key]
 		}
@@ -95,7 +97,9 @@ func (c *Counts) recordLocked(
 			r.samples = r.samples[over:]
 		}
 	}
-	if at.After(c.high) {
+	// high is the newest Event counted (Since): an incident's decision
+	// time must not move it past events not yet read.
+	if kind == KindEvent && at.After(c.high) {
 		c.high = at
 	}
 	c.pruneLocked(at)
@@ -272,7 +276,7 @@ func (c *Counts) UnmarshalJSON(data []byte) error {
 		c.seen = c.seen[len(c.seen)-MaxSeen:]
 	}
 	for _, w := range in.Rows {
-		if len(c.rows) >= MaxRows ||
+		if (len(c.rows) >= MaxRows && w.Mode != Overflow) ||
 			(w.Kind != KindEvent && w.Kind != KindIncident) {
 			continue
 		}

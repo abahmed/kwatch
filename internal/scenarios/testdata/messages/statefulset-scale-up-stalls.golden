@@ -1,0 +1,9 @@
+10:11:15 settled
+🟠 queue in streaming (prod-eu-1) has not been ready for three minutes. Cause not found yet: its node and registry are healthy and unchanged. To see the object's state and events, run kubectl describe pod queue-4 -n streaming
+🟠 queue in streaming (prod-eu-1) has not been ready for three minutes.
+| 🟠 **queue** in **streaming** (**prod-eu-1**) has not been ready for three minutes.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| To see the object's state and events, run
+| ```
+| kubectl describe pod queue-4 -n streaming
+| ```

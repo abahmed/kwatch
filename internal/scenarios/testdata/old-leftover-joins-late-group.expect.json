@@ -1,0 +1,11 @@
+{
+  "name": "old-leftover-joins-late-group",
+  "description": "A scaled-to-zero operator left a fail-closed webhook and a certificate that expired over a year ago; later a second expired certificate appears: the two certificates are one digest incident.",
+  "root": "validatingwebhookconfiguration//policy-resource",
+  "otherRoots": [
+    "deployment/policy-system/policy-controller"
+  ],
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "1h0m0s"
+}

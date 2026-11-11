@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"sync/atomic"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/abahmed/kwatch/internal/config"
 	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/license"
+	"github.com/abahmed/kwatch/internal/safego"
 )
 
 // errEditionChanged ends a leader session whose license state flipped the
@@ -116,4 +118,29 @@ func newLicenseSetup(
 	return &licenseSetup{
 		key: cfg.Key, endpoint: endpoint, processStart: processStart,
 	}
+}
+
+// keepLoop runs the session's loop until ctx ends or it asked for a
+// restart. A panic in it (a notice, a status no code expected) must not
+// end the process, because licensing never takes monitoring down: it is
+// logged and counted, and the loop starts again from the manager's
+// current state, which still rests on the cached lease. The loop is
+// ready only once it observed the license: one that panics at its
+// start backs off and, after a few failures, shows on /health.
+func (l *licenseSession) keepLoop(ctx context.Context) {
+	safego.Keep(ctx, "license", func(ready func()) error {
+		l.loop(ctx, ready)
+		return nil
+	}, safego.Options{Wait: l.restartWait, Sick: l.loopSick})
+}
+
+// loopSick shows on /health a loop that keeps failing. Its recovery
+// needs nothing here: the loop's first observation records the
+// license's own status.
+func (l *licenseSession) loopSick(sick bool) {
+	if !sick || l.deps == nil || l.deps.healthServer == nil {
+		return
+	}
+	l.deps.healthServer.SetComponentStatus(licenseComponent, "degraded",
+		"license_loop_failing", false)
 }

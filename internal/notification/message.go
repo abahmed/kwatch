@@ -79,6 +79,15 @@ type Message struct {
 	// opened an alert for it, so a resolve would close nothing; chat
 	// channels still get it.
 	SkipPaging bool `json:",omitempty"`
+	// RaisesPage marks the update that first takes an incident to the
+	// page tier after the paging providers heard it below that tier. A
+	// pager that keeps the urgency an alert was opened with opens a
+	// second alert under PageKeySuffix and closes the first.
+	RaisesPage bool `json:",omitempty"`
+	// PageKeyed marks that raise and every later message of the same
+	// incident, its resolve too: they go to the PageKeySuffix alert,
+	// and the resolve closes both.
+	PageKeyed bool `json:",omitempty"`
 	// Listed describes what a digest holds, for the audit log: counts and
 	// the first incidents named. Nil for every other message.
 	Listed *Listed `json:",omitempty"`

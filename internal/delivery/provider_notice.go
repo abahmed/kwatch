@@ -54,16 +54,24 @@ func failureNoticeText(
 		text += fmt.Sprintf(" %d %s waiting.", waiting,
 			plural(waiting, "alert is", "alerts are"))
 	}
+	// Only a refusal is fixed in kwatch's settings: an outage or a rate
+	// limit passes on its own, and the setting is fine.
+	if reason != reasonRejected {
+		return text + " kwatch keeps trying."
+	}
 	return text + fmt.Sprintf(" Fix: update %s in the installer, "+
 		"under Notifications.", name)
 }
 
-// recoveryNoticeText is the notice when the provider works again.
+// recoveryNoticeText is the notice when the provider works again. The
+// count is how many waited at the failure notice: some may have aged out
+// since, so it says they are being sent, not that all went out.
 func recoveryNoticeText(name string, waiting int) string {
 	text := fmt.Sprintf("kwatch is sending to %s again.", name)
 	if waiting > 0 {
-		text += fmt.Sprintf(" The %d waiting %s went out.", waiting,
-			plural(waiting, "alert", "alerts"))
+		text += fmt.Sprintf(" The waiting %s %s being sent.",
+			plural(waiting, "alert", "alerts"),
+			plural(waiting, "is", "are"))
 	}
 	return text
 }

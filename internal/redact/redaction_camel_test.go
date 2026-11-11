@@ -68,6 +68,8 @@ func TestRedactURLsWithoutUserinfoStayVisible(t *testing.T) {
 		"https://example.com/path?q=1#frag",
 		"redis://redis:6379/0",
 		"http://example.com:8443/docs",
+		"http://registry:4873/@scope%2fpkg",
+		"https://api:8443/v1/users/@me",
 	}
 	for _, s := range same {
 		if got := Credentials(s); got != s {

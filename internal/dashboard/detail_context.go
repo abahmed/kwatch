@@ -20,6 +20,8 @@ type detailContext struct {
 	known func(id string) bool
 	// similar is how many other incidents have the same error.
 	similar int
+	// similarRefs names a few of them.
+	similarRefs []SimilarRef
 	// peers are the incidents kwatch holds, for "at the same time".
 	peers []incident.Incident
 	// usage is the containers' hourly usage peaks; nil without.
@@ -53,12 +55,22 @@ func (s *Server) detailOf(p incident.Incident) IncidentDetail {
 		c.lookup = reader.Incident
 		c.peers = reader.Incidents()
 		c.similar = countSimilar(p, c.peers)
+		c.similarRefs = similarRefs(p, c.peers)
 	}
 	if u := s.sources.usage.Load(); u != nil {
 		c.usage = *u
 	}
 	d := buildDetail(p, c)
+	if d.Why != nil && d.Why.PagingHeldReason != "" {
+		if hold := s.scalingHold(c.now); hold != nil {
+			d.Why.PagingHeldUntil = hold.ExpectedEnd
+		}
+	}
+	s.addUnverified(&d, p.ID, c.now)
 	d.Release = s.releaseFor(p.ID, p.Opened)
+	if c.model != nil {
+		d.Map = issueMap(c.model, s.opts.Scope, c.peers, p)
+	}
 	return d
 }
 
@@ -67,6 +79,7 @@ func (s *Server) detailOf(p incident.Incident) IncidentDetail {
 func (c detailContext) addContext(d *IncidentDetail, p incident.Incident) {
 	d.Fix = string(p.Fix)
 	d.Similar = c.similar
+	d.SimilarIssues = c.similarRefs
 	d.SeenBefore = seenBefore(p, c.now, c.known)
 	d.Phases = phasesOf(p, c.now)
 	addJournal(d, p, c.now)

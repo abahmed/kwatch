@@ -36,7 +36,7 @@ func whyOf(p incident.Incident, now time.Time) *WhyDetail {
 		StillOpenReason: w.StillOpen,
 		HoldTotal:       int(w.HoldTotal.Seconds()),
 		HoldElapsed:     int(w.HoldElapsed.Seconds()),
-		CannotSee:       w.CannotSee}
+		CannotSee:       w.CannotSee, PagingHeldReason: w.PagingHeld}
 	if out == (WhyDetail{}) {
 		return nil
 	}

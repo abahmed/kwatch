@@ -43,6 +43,7 @@ func (d *DynamicSource) start(
 		store:     informer.GetStore(),
 		admission: admission,
 	}
+	w.failure.progress = d.progressOf(r.gvr, informer)
 	if prev != nil {
 		// The new watch keeps the previous one's translator, which holds
 		// what it already knows about the objects.
@@ -163,17 +164,8 @@ func (d *DynamicSource) addHandlers(
 			return err
 		}
 	}
-	gvr := r.gvr
-	// The handler names its own watch: a reflector that is still
-	// stopping after a restart must not refuse its replacement.
 	return informer.SetWatchErrorHandlerWithContext(
-		func(ctx context.Context, reflector *cache.Reflector, err error) {
-			if refusedByAPI(err) {
-				d.refuse(gvr, w, err)
-				return
-			}
-			cache.DefaultWatchErrorHandler(ctx, reflector, err)
-		})
+		d.watchError(r.gvr, w))
 }
 
 // refusedByAPI reports list errors a retry will not fix soon.

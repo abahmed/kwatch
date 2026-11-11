@@ -3,6 +3,8 @@ package delivery
 import (
 	"fmt"
 
+	"k8s.io/klog/v2"
+
 	deliveryapi "github.com/abahmed/kwatch/internal/delivery/api"
 	"github.com/abahmed/kwatch/internal/metrics"
 )
@@ -31,7 +33,7 @@ func (m *Manager) fanOut(job deliverJob) {
 			m.outbox.Load().remove(job.outboxID)
 			return
 		}
-		m.offer(entry, job)
+		m.offerMarked(entry, name, job)
 		return
 	}
 	var routed []string
@@ -44,13 +46,24 @@ func (m *Manager) fanOut(job deliverJob) {
 		copied := job
 		copied.target = name
 		copied.outboxID = m.outbox.Load().add(copied, name)
-		m.offer(entry, copied)
+		m.offerMarked(entry, name, copied)
 	}
 	if len(routed) == 0 {
 		result, carrier := unroutedResult(job)
 		m.noteUnsent(job, result, carrier)
 	}
 	m.noteRouted(job, routed...)
+}
+
+// offerMarked offers a job to one provider, first recording a lost
+// opening the job carries for it.
+func (m *Manager) offerMarked(
+	entry providerEntry, name string, job deliverJob,
+) {
+	if job.openLost {
+		m.markOpenLost(name, job.key())
+	}
+	m.offer(entry, job)
 }
 
 // unroutedResult is what the send log says of a job no provider took. A
@@ -100,7 +113,6 @@ func receivesPagingOnly(p Provider) bool {
 // caller holds m.mu.
 func (m *Manager) offer(entry providerEntry, job deliverJob) {
 	defer m.publishQueueDepthLocked(entry)
-	box := m.outbox.Load()
 	if old, ok := m.replaceInBacklogLocked(entry, job); ok {
 		m.superseded(entry, old, job)
 		return
@@ -115,16 +127,35 @@ func (m *Manager) offer(entry providerEntry, job deliverJob) {
 	if result.superseded != nil {
 		m.superseded(entry, *result.superseded, job)
 	}
+	// A dropped job is counted in the overflow summary, which keeps its
+	// outbox record until the summary is sent (recordQueueDrop).
 	if result.displaced != nil {
-		box.remove(result.displaced.outboxID)
 		m.recordQueueDrop(entry, *result.displaced)
+	}
+	if !result.accepted && (job.announcesPage() || m.replaying) {
+		m.keepInBacklogLocked(entry, job)
+		return
 	}
 	if !result.accepted {
 		// Nothing queued belongs to the same conversation, so there is
 		// nothing to supersede; record the overflow for diagnostics.
-		box.remove(job.outboxID)
 		m.recordQueueDrop(entry, job)
 	}
+}
+
+// keepInBacklogLocked holds a job a full queue could not take in the
+// provider's backlog, which streams into the queue as it drains. A page
+// announcement belongs here because the overflow summary is no home for
+// it: pagers skip summaries, so the alert would never open. So do the
+// jobs replayed at Start, which may be more than a queue holds. The
+// caller holds m.mu.
+func (m *Manager) keepInBacklogLocked(entry providerEntry, job deliverJob) {
+	metrics.DefaultRegistry().DeliveryQueueSaturated.Add(1)
+	klog.InfoS("queue full; job kept in the backlog",
+		"component", "delivery", "operation", "queue_backlog",
+		"provider", entry.provider.Name(), "key", job.key())
+	job.target = entry.lookupName()
+	m.toBacklogLocked(job)
 }
 
 // superseded settles a queued job a newer revision replaced before it was
@@ -148,7 +179,7 @@ func (m *Manager) recordQueueDrop(
 	m.openFailed(&entry, job)
 	m.pageLost(&entry, job)
 	m.addToOverflowSummary(entry.provider.Name(), job)
-	m.recordDeadLetter(entry.provider.Name(), job,
+	logDeadLetter(entry.provider.Name(), job,
 		fmt.Errorf("delivery queue saturated"))
 }
 

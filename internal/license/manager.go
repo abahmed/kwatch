@@ -169,25 +169,31 @@ func (m *Manager) Start(ctx context.Context) {
 		close(m.done)
 		return
 	}
-	m.init(ctx)
+	m.guard("load", func() { m.init(ctx) })
 	if m.cfg.InitialSyncTimeout > 0 {
-		delay := m.initialDelay(ctx)
-		if delay == 0 {
-			syncCtx, cancel := context.WithTimeout(
-				ctx, m.cfg.InitialSyncTimeout)
-			delay = m.cycle(syncCtx)
-			cancel()
-		}
-		go func() {
-			defer close(m.done)
-			m.loopFrom(ctx, delay)
-		}()
+		delay := m.guardedDelay(func() time.Duration {
+			return m.firstSync(ctx)
+		})
+		m.run(ctx, func() time.Duration { return delay })
 		return
 	}
-	go func() {
-		defer close(m.done)
-		m.loop(ctx)
-	}()
+	m.run(ctx, func() time.Duration {
+		return m.guardedDelay(func() time.Duration {
+			return m.initialDelay(ctx)
+		})
+	})
+}
+
+// firstSync runs the first activation or renewal when one is due, bounded
+// by InitialSyncTimeout, and returns the delay before the next one.
+func (m *Manager) firstSync(ctx context.Context) time.Duration {
+	delay := m.initialDelay(ctx)
+	if delay != 0 {
+		return delay
+	}
+	syncCtx, cancel := context.WithTimeout(ctx, m.cfg.InitialSyncTimeout)
+	defer cancel()
+	return m.cycle(syncCtx)
 }
 
 // Wait blocks until the background loop has stopped.

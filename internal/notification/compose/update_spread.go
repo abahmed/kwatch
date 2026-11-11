@@ -10,10 +10,10 @@ import (
 )
 
 // spreadSentences say what newly fails, one sentence per condition,
-// led by the incident's subject: "payments in shop is spreading to
-// payments-api and cart: they have not been ready for three minutes." A cause
-// that now shows its own condition is not spreading: "API service m
-// now reports …".
+// led by the incident's subject: "payments in shop is now also
+// affecting payments-api and cart: they have not been ready for three
+// minutes." A cause that now shows its own condition is not spreading:
+// "API service m now reports …".
 func spreadSentences(f caseFacts, spread []detection.Finding) []sentence {
 	home := leadSubject(f)
 	spread = slices.DeleteFunc(slices.Clone(spread),
@@ -80,8 +80,8 @@ func spreadGroups(
 }
 
 // spreadGroupSentences say what each group of workloads is spreading
-// to, led by the incident's subject: "payments in shop is spreading to
-// cart and search: they have not been ready for three minutes."
+// to, led by the incident's subject: "payments in shop is now also
+// affecting cart and search: they have not been ready for three minutes."
 func spreadGroupSentences(
 	f caseFacts, home inventory.EntityID, named bool, groups []spreadGroup,
 ) []sentence {
@@ -94,13 +94,14 @@ func spreadGroupSentences(
 			continue
 		}
 		text := capitalName(home, homeName+" "+beWord(many)+
-			" spreading to ")
+			" now also affecting ")
 		switch {
 		case i > 0:
 			text = pronoun(many) + " " + beWord(many) + " also " +
-				"spreading to "
+				"affecting "
 		case named:
-			text = pronoun(many) + " " + beWord(many) + " spreading to "
+			text = pronoun(many) + " " + beWord(many) +
+				" now also affecting "
 		}
 		text += nameList(home, g.ids) + ": "
 		states := make([]string, 0, len(g.states))

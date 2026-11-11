@@ -124,14 +124,19 @@
     if (list) turn(list, a.dataset.edge);
   }, true);
 
-  /* The issue page shows the bar while it is open. */
+  /* The issue page shows the bar while it is open, on the row of its
+     "← Issues" link: the way back comes first, Previous / Next beside
+     it. Leaving the page puts the bar back in the shell, hidden. */
   var detailView = KW.detailView;
   KW.detailView = function (main, r) {
     show(r.id);
+    var b = bar(), home = b && b.parentNode, after = b && b.nextSibling;
     var view = detailView(main, r);
     return { stop: function () {
-      var b = bar();
-      if (b) b.hidden = true;
+      if (b) {
+        b.hidden = true;
+        if (home && b.parentNode !== home) home.insertBefore(b, after);
+      }
       if (view && view.stop) view.stop();
     } };
   };
@@ -148,7 +153,13 @@
     a.click();
   });
 
-  KW.incNav = { remember: remember, recall: recall };
+  /* place moves the bar into the drawn issue page's "← Issues" row. */
+  function place(root) {
+    var b = bar(), row = root && KW.$(".d-nav", root);
+    if (b && row && b.parentNode !== row) row.appendChild(b);
+  }
+
+  KW.incNav = { remember: remember, recall: recall, place: place };
 
   /* KW.issueNotFound: the issue page of an issue the API no longer
      has, with links back to the lists. */

@@ -1,6 +1,6 @@
 /* kwatch dashboard: how an issue relates to the others. "Caused by"
    and the moved links in the summary card; in the Impact tab "Who it
-   hits" (the blast radius as count chips) and "Other issues": "Also
+   hits" (the blast radius in one sentence) and "Other issues": "Also
    causing" (the issues this one causes) and "Started at the same time"
    (issues that started within 5 minutes of it, less those already
    named). Every part hides when the API leaves its field out. */
@@ -83,31 +83,14 @@
     if (cut) q.appendChild(document.createTextNode(" (" + KW.num(cut) + " more not shown)"));
   }
 
-  /* chips: the blast radius as counts, each with its words. */
-  function chips(inc) {
-    var out = [], by = {};
-    (inc.affected || []).forEach(function (o) { by[o.status] = (by[o.status] || 0) + 1; });
-    [["failing", "failing object", "failing objects", "c-page"], ["cause", "likely cause", "likely causes", "c-notify"],
-      ["affected", "object hit", "objects hit", "c-notify"], ["gone", "deleted object", "deleted objects", "c-low"]
-    ].forEach(function (k) { if (by[k[0]]) out.push([KW.plural(by[k[0]], k[1], k[2]), k[3]]); });
-    var down = (inc.traffic || []).filter(function (t) { return t.total && t.ready < t.total; }).length;
-    if (down) out.push([KW.plural(down, "Service or Ingress short of endpoints", "Services or Ingresses short of endpoints"), "c-page"]);
-    var causing = refs(inc.causing).length + KW.cutCount(inc, "causing");
-    if (causing) out.push([KW.plural(causing, "issue it causes", "issues it causes"), "c-notify"]);
-    var same = (inc.sameTime || []).length;
-    if (same) out.push([KW.plural(same, "issue at the same time", "issues at the same time"), "c-low"]);
-    return out;
-  }
-
+  /* blast: the one sentence of who it hits ("Affects 1 service, 1
+     ingress and 1 of 1 pod"); the table of affected objects says the
+     counts, so they are not drawn twice. */
   function blast(root, inc) {
     var p = KW.$("[data-blast]", root), text = blastText(inc.blastRadius);
-    var box = KW.$("[data-blast-chips]", root), list = chips(inc);
     p.textContent = text;
     p.hidden = !text;
-    box.textContent = "";
-    list.forEach(function (c) { box.appendChild(KW.chip(c[1] + " bl-chip", c[0])); });
-    box.hidden = !list.length;
-    KW.$('[data-fold="blast"]', root).hidden = !text && !list.length;
+    KW.$('[data-fold="blast"]', root).hidden = !text;
   }
 
   function row(r, meta) {

@@ -30,6 +30,9 @@ type ApplicationRuntime struct {
 	// HideProHints removes the Pro note from Community messages
 	// (app.hideProHints).
 	HideProHints bool
+	// NonProduction is set when app.environment marks the cluster as
+	// not production: nothing in it pages.
+	NonProduction bool
 	// KubeletInsecureSkipVerify skips kubelet serving certificate
 	// verification (kubelet.insecureSkipVerify).
 	KubeletInsecureSkipVerify bool
@@ -56,6 +59,7 @@ type runtimeLifecycle struct {
 	heartbeat   HeartbeatMonitor
 	crdEnabled  bool
 	resync      time.Duration
+	oldProblem  time.Duration
 }
 
 type runtimeScope struct {
@@ -112,6 +116,7 @@ func CompileRuntimeConfig(c *Config) RuntimeConfig {
 			heartbeat:   c.HeartbeatMonitor,
 			crdEnabled:  c.CrdConfig.Enabled,
 			resync:      time.Duration(c.ResyncSeconds) * time.Second,
+			oldProblem:  oldProblemHorizon(c.OldProblemDays),
 		},
 		scope: runtimeScope{
 			allowedNamespaces:   cloneStrings(c.AllowedNamespaces),
@@ -146,9 +151,21 @@ func applicationRuntime(c *Config) ApplicationRuntime {
 		InsecureSkipTLSVerify:     c.App.InsecureSkipTLSVerify,
 		CABundlePath:              c.App.CABundlePath,
 		HideProHints:              c.App.HideProHints,
+		NonProduction:             c.App.NonProduction(),
 		KubeletInsecureSkipVerify: c.Kubelet.InsecureSkipVerify,
 		WatchSecrets:              c.Watch.Secrets,
 		InvestigationLogs:         c.Investigation.Logs,
 		InvestigationSampleLogs:   c.Investigation.SampleLogs,
 	}
+}
+
+// maxOldProblemDays bounds oldProblemDays at a century. A larger value
+// means "never" just as well, and past 106,751 days the conversion to
+// a duration overflows: it would turn the setting off, or into minutes.
+const maxOldProblemDays = 36500
+
+// oldProblemHorizon is oldProblemDays as a duration, clamped instead
+// of rejected so a very large value that worked keeps kwatch starting.
+func oldProblemHorizon(days int) time.Duration {
+	return time.Duration(min(days, maxOldProblemDays)) * 24 * time.Hour
 }

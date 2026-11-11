@@ -149,7 +149,8 @@ func (c *Collector) holdStartup(
 		}
 		c.env.Incidents.HoldAnnouncement(id)
 		c.env.Incidents.RecordRolledUp(id)
-		if held < 0 && d.Incident.Tier == incident.Page {
+		if held < 0 && d.Incident.Tier == incident.Page &&
+			!c.pagedAlready(d) {
 			c.pageOnly(ctx, now, d, "startup summary")
 			return true
 		}
@@ -162,7 +163,9 @@ func (c *Collector) holdStartup(
 			c.pageOnly(ctx, now, d, "startup summary")
 			return true
 		}
-		c.recordCarried(ctx, now, d, "startup summary")
+		if !c.lowerAtPagers(ctx, now, d, "startup summary") {
+			c.recordCarried(ctx, now, d, "startup summary")
+		}
 		return true
 	case held >= 0 && d.Action == incident.Resolve:
 		// Resolved before anyone was told: leave it out of the summary.

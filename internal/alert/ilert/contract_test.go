@@ -15,7 +15,7 @@ func TestContract(t *testing.T) {
 	c, rec := newTestIlert(t)
 	providertest.RunContract(t, providertest.Contract{
 		Send: c.SendIncident, Rec: rec,
-		Secrets: []string{"ik"}, LimitBytes: safetext.DetailsLimit,
+		Secrets: []string{testKey}, LimitBytes: safetext.DetailsLimit,
 		KeyOf: func(t *testing.T, r providertest.Request) string {
 			return r.JSON(t)["alertKey"].(string)
 		},

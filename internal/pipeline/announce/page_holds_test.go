@@ -85,3 +85,25 @@ func TestOutageListingHoldsThePagesItDidNotSend(t *testing.T) {
 	}
 	assert.Equal(t, 2, held, "the other two page-tier members are held")
 }
+
+// Cluster-scoped roots have no namespace: two nodes lost in the same
+// tick are two outages and both page.
+func TestRollupPagesEveryClusterScopedRoot(t *testing.T) {
+	node := func(id string) inventory.EntityID {
+		return inventory.CoreID(kube.KindNode, "", id)
+	}
+	record := func(id string) incident.Record {
+		return incident.Record{ID: id, Tier: incident.Page,
+			State: incident.Settling, Opened: foldNow, Root: node(id)}
+	}
+	announce := func(id string) incident.Decision {
+		return incident.Decision{Action: incident.Announce,
+			Reason: incident.ReasonSettled,
+			Incident: incident.Incident{ID: id, Tier: incident.Page,
+				Opened: foldNow, Root: node(id)}}
+	}
+	c, sent := foldHarness(record("n1"), record("n2"))
+	c.CollectRollup(context.Background(), foldNow,
+		[]incident.Decision{announce("n1"), announce("n2")})
+	assert.Equal(t, 2, pagesIn(*sent))
+}

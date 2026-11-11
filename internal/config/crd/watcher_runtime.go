@@ -320,6 +320,8 @@ func (w *Watcher) startInformer(
 	w.seedKnown(initial)
 	if restartOnInitial {
 		w.restartForLateObjects(initial)
+	} else {
+		w.restartForStartupDrift(initial)
 	}
 
 	klog.InfoS("CRD watcher started", "namespace", w.namespace)

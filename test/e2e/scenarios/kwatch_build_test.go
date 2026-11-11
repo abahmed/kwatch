@@ -105,7 +105,8 @@ func (s *Scenario) ExpectDeliveryRejected() {
 }
 
 // ExpectHeartbeat waits until the receiver gets a bodyless GET, which is
-// what a Kwatch heartbeat sends.
+// what a Kwatch heartbeat sends. The interval is 30 seconds, the shortest
+// Kwatch accepts, so the wait leaves room for the Pod to start first.
 func (s *Scenario) ExpectHeartbeat() {
 	s.T.Helper()
 	s.Must(wait.PollUntilContextTimeout(s.Ctx,
@@ -136,8 +137,17 @@ func activeProbeSpec() map[string]any {
 	}
 }
 
+// kwatchRestartWait bounds the wait for Kwatch to restart after its
+// KwatchConfig was deleted. The kubelet delays a container that exits
+// again and again by up to five minutes (its crash-loop back-off), and
+// the config scenarios restart Kwatch several times in a row.
+const kwatchRestartWait = 5*time.Minute + slackTime
+
 // CreateKwatchConfig creates a KwatchConfig in the Kwatch namespace and
-// deletes it when the test ends. Kwatch restarts to apply a valid one.
+// deletes it when the test ends. Kwatch restarts to apply a valid one, and
+// it restarts again when one it saw is deleted, so the cleanup waits for
+// that restart: otherwise it lands in the middle of the next scenario,
+// which then waits for an announcement while Kwatch is down.
 func (s *Scenario) CreateKwatchConfig(name string, spec map[string]any) {
 	s.T.Helper()
 	object := &unstructured.Unstructured{Object: map[string]any{
@@ -153,9 +163,20 @@ func (s *Scenario) CreateKwatchConfig(name string, spec map[string]any) {
 	_, err := configs.Create(s.Ctx, object, metav1.CreateOptions{})
 	s.Must(err)
 	s.T.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), slackTime)
+		ctx, cancel := context.WithTimeout(
+			context.Background(), kwatchRestartWait)
 		defer cancel()
-		_ = configs.Delete(ctx, name, metav1.DeleteOptions{})
+		before, err := s.Env.KwatchRestarts(ctx)
+		if err != nil {
+			s.T.Errorf("count Kwatch restarts: %v", err)
+		}
+		if configs.Delete(ctx, name, metav1.DeleteOptions{}) != nil ||
+			err != nil {
+			return
+		}
+		if err := s.Env.WaitForKwatchRestart(ctx, before); err != nil {
+			s.T.Errorf("after deleting KwatchConfig %s: %v", name, err)
+		}
 	})
 }
 
@@ -170,7 +191,7 @@ func (s *Scenario) StartHeartbeatKwatch() {
 	// The heartbeat URL is sensitive, so Kwatch only accepts it as a file
 	// reference to a mounted Secret key.
 	config := string(base) + "\nheartbeatMonitor:\n  enabled: true\n" +
-		"  interval: 1\n  url: \"${file:/config/heartbeat-url}\"\n"
+		"  interval: 30\n  url: \"${file:/config/heartbeat-url}\"\n"
 	const name = "kwatch-heartbeat"
 	s.GrantLease(name)
 	s.StartKwatch(name, map[string][]byte{

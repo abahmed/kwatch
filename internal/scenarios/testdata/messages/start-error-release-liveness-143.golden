@@ -1,11 +1,10 @@
 10:06:15 settled
-🟠 orders in shop (prod-eu-1): the new version (orders:1.1) can't start; the previous version is still serving: it stops at start with "Unhandled exception. Config.ConfigurationException: The configuration is invalid: setting 'Queue:License' must be…". The release changed the image and one other field. Only the new revision fails; the previous one stays healthy. It has no readiness probe, so Kubernetes sends it traffic while the container runs. Fix in: deployment/orders → container app → image (registry.example.com/orders:1.1). To see the rollout state, run kubectl rollout status deployment/orders -n shop
-🟠 orders in shop (prod-eu-1): the new version (orders:1.1) can't start; the previous version is still serving: it stops at start with "Unhandled exception. Config.ConfigurationException: The configuration is invalid: setting 'Queue:License' must be…".
-| 🟠 **orders** in **shop** (**prod-eu-1**): the new version (orders:1.1) can't start; the previous version is still serving: it stops at start with `Unhandled exception. Config.ConfigurationException: The configuration is invalid: setting 'Queue:License' must be…`.
+🟠 orders in shop (prod-eu-1): the new version (orders:1.1) can't start (it stops at start with "Unhandled exception. Config.ConfigurationException: The configuration is invalid: setting 'Queue:License' must be…"); the previous version is still serving. The release changed the image and one other field. Only the new revision fails; the previous one stays healthy. It has no readiness probe, so Kubernetes sends it traffic while the container runs. To see the rollout state, run kubectl rollout status deployment/orders -n shop
+🟠 orders in shop (prod-eu-1): the new version (orders:1.1) can't start; the previous version is still serving.
+| 🟠 **orders** in **shop** (**prod-eu-1**): the new version (orders:1.1) can't start (it stops at start with `Unhandled exception. Config.ConfigurationException: The configuration is invalid: setting 'Queue:License' must be…`); the previous version is still serving.
 | The release changed the image and one other field.
 | Only the new revision fails; the previous one stays healthy.
 | It has no readiness probe, so Kubernetes sends it traffic while the container runs.
-| Fix in: deployment/orders → container app → image (registry.example.com/orders:1.1).
 | To see the rollout state, run
 | ```
 | kubectl rollout status deployment/orders -n shop

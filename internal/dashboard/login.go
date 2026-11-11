@@ -126,7 +126,7 @@ func (a *Auth) formChecks(w http.ResponseWriter, r *http.Request) bool {
 		writeError(w, http.StatusForbidden, "https_required")
 		return false
 	}
-	if !sameOrigin(r) {
+	if !a.sameOrigin(r) {
 		writeError(w, http.StatusForbidden, "forbidden")
 		return false
 	}
@@ -177,14 +177,45 @@ func readPassword(r *http.Request) (string, bool) {
 }
 
 // sameOrigin accepts a request without an Origin header (not a browser
-// form) or one whose Origin host is the request's own host.
-func sameOrigin(r *http.Request) bool {
+// form) or one whose Origin host is the request's own host. Behind a
+// trusted proxy that rewrites Host, the host the browser used is the
+// proxy's X-Forwarded-Host, which counts too. From any other peer that
+// header is ignored.
+func (a *Auth) sameOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
 		return true
 	}
 	u, err := url.Parse(origin)
-	return err == nil && u.Host != "" && strings.EqualFold(u.Host, r.Host)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	if strings.EqualFold(u.Host, r.Host) {
+		return true
+	}
+	fwd := a.forwardedHost(r)
+	return fwd != "" && strings.EqualFold(u.Host, fwd)
+}
+
+// forwardedHost is the last X-Forwarded-Host value of a trusted
+// proxy, or "" when the peer is not trusted or the value is not a
+// host name or address with an optional port.
+func (a *Auth) forwardedHost(r *http.Request) string {
+	if !a.peerTrusted(r) {
+		return ""
+	}
+	host := lastHeaderValue(r, "X-Forwarded-Host")
+	if host == "" || len(host) > 260 {
+		return ""
+	}
+	for _, c := range host {
+		ok := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' ||
+			c >= '0' && c <= '9' || strings.ContainsRune(".-_:[]", c)
+		if !ok {
+			return ""
+		}
+	}
+	return host
 }
 
 // limiterFor is the limit r counts against and its key: the client a
@@ -196,26 +227,38 @@ func sameOrigin(r *http.Request) bool {
 // out for a minute: set dashboard.trustedProxies there.
 func (a *Auth) limiterFor(r *http.Request) (*rateLimiter, string) {
 	if client := a.forwardedClient(r); client != "" {
-		return a.clientRate, client
+		return a.clientRate, limitKey(client)
 	}
-	return a.failRate, remoteHost(r)
+	return a.failRate, limitKey(remoteHost(r))
+}
+
+// proxyFlooded reports a request through a trusted proxy that has passed
+// the hard limit of failures this minute: a peer rotating the client it
+// names is guessing, and only the cap bounds it.
+func (a *Auth) proxyFlooded(r *http.Request) bool {
+	return a.forwardedClient(r) != "" &&
+		!a.proxyRate.allowed(remoteHost(r))
 }
 
 // allowed reports whether r's client is under its failure limit.
 func (a *Auth) allowed(r *http.Request) bool {
 	limiter, key := a.limiterFor(r)
-	return limiter.allowed(key)
+	return !a.proxyFlooded(r) && limiter.allowed(key)
 }
 
 // reserve counts one attempt for r's client; false past the limit.
 func (a *Auth) reserve(r *http.Request) (attempt, bool) {
+	if a.proxyFlooded(r) {
+		return attempt{}, false
+	}
 	limiter, key := a.limiterFor(r)
 	return limiter.reserve(key)
 }
 
 // noteProxyFailure counts a failure that came through a trusted proxy
 // against the proxy and logs once a minute when there are many: many
-// clients behind it are guessing. It never refuses a request.
+// clients behind it are guessing. Past maxProxyHard in a minute the
+// proxy's sign-ins are refused for the rest of it (proxyFlooded).
 func (a *Auth) noteProxyFailure(r *http.Request) {
 	if a.forwardedClient(r) == "" {
 		return

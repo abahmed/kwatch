@@ -47,6 +47,15 @@ type overlayOutcome struct {
 	// rememberOverlay). Empty when there was no KwatchConfig or it was
 	// refused.
 	applied []byte
+	// listed is set when the KwatchConfig list was read; signature then
+	// identifies what it held (crd.StartupSignature), so the watcher can
+	// tell what changed before it started.
+	listed    bool
+	signature string
+	// typeMissing is set when the API server did not serve the
+	// KwatchConfig type (a NotFound, not an empty list). That says nothing
+	// about the object, so the kept last good spec stays as it is.
+	typeMissing bool
 }
 
 // applyStartupCRD returns the configuration kwatch runs with: the mounted
@@ -54,29 +63,37 @@ type overlayOutcome struct {
 // fatal: a failing start would only crash-loop on the same object, so
 // kwatch runs with the last spec that applied cleanly (lastGood reads it
 // from the state file), or with the mounted file alone when there is none,
-// and reports it. API errors still fail startup. A deleted KwatchConfig is
-// a choice: the leader clears the kept spec (see rememberOverlay).
+// and reports it. An unreachable API server is retried as api says; other
+// API errors still fail startup. A deleted KwatchConfig is a choice: the
+// leader clears the kept spec (see rememberOverlay).
 func applyStartupCRD(
 	ctx context.Context,
 	cfg *config.Config,
 	dynamicClient dynamic.Interface,
 	reload func() (*config.Config, error),
 	lastGood func() ([]byte, bool),
+	api *crd.StartupRetry,
 ) (effective *config.Config, outcome overlayOutcome, err error) {
 	if !cfg.CrdConfig.Enabled {
 		return cfg, overlayOutcome{}, nil
 	}
-	spec, err := crd.ApplyStartupConfigWithClient(
-		ctx, cfg, dynamicClient, kubeclient.GetNamespace(),
+	spec, missing, err := crd.ApplyStartupConfigChecked(
+		ctx, cfg, dynamicClient, kubeclient.GetNamespace(), api,
 	)
 	if err == nil {
-		return cfg, overlayOutcome{applied: spec}, nil
+		return cfg, overlayOutcome{
+			applied: spec, listed: true, typeMissing: missing,
+			signature: crd.StartupSignature(spec, false),
+		}, nil
 	}
 	if !errors.Is(err, crd.ErrInvalidOverlay) {
 		return nil, overlayOutcome{}, err
 	}
 	refused := err
-	outcome = overlayOutcome{invalid: true, rejected: fingerprintOf(spec)}
+	outcome = overlayOutcome{
+		invalid: true, rejected: fingerprintOf(spec), listed: true,
+		signature: crd.StartupSignature(spec, true),
+	}
 	// The failed overlay left cfg partly applied; start from a fresh load.
 	base, err := reload()
 	if err != nil {

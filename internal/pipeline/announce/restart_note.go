@@ -2,6 +2,7 @@ package announce
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -14,11 +15,24 @@ import (
 	"github.com/abahmed/kwatch/internal/notification"
 )
 
-// RestoredRelist is how long a restored incident, once listed after a
-// restart, is not listed again by the next restarts: a kwatch that
-// restarts every few minutes would otherwise post the same list each
-// time.
+// RestoredRelist is how long the same restart note is not sent again,
+// and, for a listing saved before the told digests (Told), how long its
+// incidents are not listed again: a kwatch that restarts every few
+// minutes would otherwise post the same list each time.
 const RestoredRelist = time.Hour
+
+// RestoredRetell is how long after a listing named an incident a later
+// restart may leave it out while it is unchanged: restarts close
+// together repeat nothing, but a cluster that sleeps every night still
+// names, each morning, what is still failing.
+const RestoredRetell = 12 * time.Hour
+
+// ToldMark is an incident's told fingerprint and when a listing named
+// it.
+type ToldMark struct {
+	Digest string
+	At     time.Time
+}
 
 // RestoredMark is the persisted memory of the restored listings: which
 // incidents were listed and when, and the last restart note.
@@ -26,6 +40,12 @@ type RestoredMark struct {
 	// At is when IDs were last listed.
 	At  time.Time
 	IDs []string `json:",omitempty"`
+	// Told is the told fingerprint of each incident a listing named,
+	// kept while it stays restored and failing: a later restart lists
+	// it again only when it changed since or RestoredRetell passed
+	// (toldUnchanged). Absent in files written before it; their IDs
+	// keep the RestoredRelist rule.
+	Told map[string]ToldMark `json:",omitempty"`
 	// NoteAt is when the last restart note was sent and NoteKey what
 	// it said (restart reason and incidents), so the same note is not
 	// sent twice within RestoredRelist.
@@ -35,6 +55,7 @@ type RestoredMark struct {
 
 func (m RestoredMark) clone() RestoredMark {
 	m.IDs = slices.Clone(m.IDs)
+	m.Told = maps.Clone(m.Told)
 	return m
 }
 
@@ -52,12 +73,23 @@ type Restart struct {
 	Down time.Duration
 }
 
-// recentlyListed reports that a restored listing named id within
+// toldUnchanged reports a restored incident a listing named less than
+// RestoredRetell ago and that has not changed since: its told
+// fingerprint is the one the listing saw. Listing it after every
+// restart would only repeat the same list; the short restart note says
+// it is still open instead.
+// Without a told digest on either side (a listing saved before them, an
+// incident never fingerprinted) the old rule holds: named within
 // RestoredRelist of now.
-func (c *Collector) recentlyListed(id string, now time.Time) bool {
+func (c *Collector) toldUnchanged(p incident.Incident, now time.Time) bool {
 	m := c.Startup.Summary.Restored
-	return m != nil && now.Sub(m.At) < RestoredRelist &&
-		slices.Contains(m.IDs, id)
+	if m == nil {
+		return false
+	}
+	if t, ok := m.Told[p.ID]; ok && t.Digest != "" && p.Digest != "" {
+		return t.Digest == p.Digest && now.Sub(t.At) < RestoredRetell
+	}
+	return now.Sub(m.At) < RestoredRelist && slices.Contains(m.IDs, p.ID)
 }
 
 // rememberListed records that the incidents of listed were listed at
@@ -67,17 +99,30 @@ func (c *Collector) rememberListed(
 	listed []incident.Decision, now time.Time,
 ) {
 	s := &c.Startup.Summary
-	mark := RestoredMark{At: now}
+	mark := RestoredMark{At: now, Told: map[string]ToldMark{}}
 	if s.Restored != nil {
 		mark.NoteAt, mark.NoteKey = s.Restored.NoteAt, s.Restored.NoteKey
 		if now.Sub(s.Restored.At) < RestoredRelist {
 			mark.IDs = slices.Clone(s.Restored.IDs)
+		}
+		// Keep the marks of incidents still restored and failing;
+		// the others resolved or are gone, so the map stays bounded.
+		live := map[string]bool{}
+		for _, p := range c.env.Incidents.RestoredFailing() {
+			live[p.ID] = true
+		}
+		for id, t := range s.Restored.Told {
+			if live[id] {
+				mark.Told[id] = t
+			}
 		}
 	}
 	for _, d := range listed {
 		if !slices.Contains(mark.IDs, d.Incident.ID) {
 			mark.IDs = append(mark.IDs, d.Incident.ID)
 		}
+		mark.Told[d.Incident.ID] = ToldMark{
+			Digest: d.Incident.Digest, At: now}
 	}
 	s.Restored = &mark
 	c.saveSummary()

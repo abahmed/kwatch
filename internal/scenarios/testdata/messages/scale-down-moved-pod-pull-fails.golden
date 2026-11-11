@@ -1,0 +1,9 @@
+10:33:15 settled
+🔴 web in shop (prod-eu-1) cannot pull its image. Cause not found yet: its node is healthy and unchanged. To see why the container cannot start, run kubectl describe pod web-39fafdb2-b -n shop
+🔴 web in shop (prod-eu-1) cannot pull its image.
+| 🔴 **web** in **shop** (**prod-eu-1**) cannot pull its image.
+| Cause not found yet: its node is healthy and unchanged.
+| To see why the container cannot start, run
+| ```
+| kubectl describe pod web-39fafdb2-b -n shop
+| ```

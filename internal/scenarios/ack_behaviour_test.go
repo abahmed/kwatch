@@ -29,16 +29,44 @@ func TestAckAnnotationIsToldOnceEachWayAndSilencesReminders(t *testing.T) {
 	assert.Equal(t, "deployment", string(ack.On.Kind))
 }
 
-// An annotation already on the object at the announcement is mentioned
-// in it, and the thread gets no separate acknowledgement.
+// An annotation written while the incident settles is mentioned in the
+// announcement, and the thread gets no separate acknowledgement.
 func TestAckAlreadyPresentIsMentionedInTheAnnouncement(t *testing.T) {
 	result := replayNamed(t, "ack-at-announce")
 
 	require.Len(t, result.Messages, 1)
 	assert.Contains(t, result.Messages[0].Note,
-		"The ack annotation is still present on deployment/payments")
+		"It is already acknowledged (annotation on deployment/payments)")
 	assert.Empty(t, decisionsOf(result, incident.Update,
 		incident.ReasonAcknowledged))
+}
+
+// An annotation left over from an earlier incident does not acknowledge
+// the new one: nothing says it is acknowledged, and it still reminds.
+func TestStaleAckIsIgnoredAndTheIncidentStillReminds(t *testing.T) {
+	result := replayNamed(t, "ack-stale-ignored")
+
+	var reasons []incident.Reason
+	for _, d := range result.Decisions {
+		reasons = append(reasons, d.Reason)
+		assert.Nil(t, d.Incident.Ack)
+	}
+	assert.Equal(t, []incident.Reason{incident.ReasonSettled,
+		incident.ReasonReminder}, reasons)
+	for _, m := range result.Messages {
+		assert.NotContains(t, m.Note, "acknowledged")
+	}
+}
+
+// A crashing pod that was deleted and replaced is not "a change fixed
+// it": nothing was changed.
+func TestReplacedPodIsNotCreditedWithTheFix(t *testing.T) {
+	result := replayNamed(t, "pod-replaced-not-the-fix")
+
+	resolves := decisionsOf(result, incident.Resolve, "")
+	require.Len(t, resolves, 1)
+	assert.Equal(t, incident.FixNone, resolves[0].Incident.Fix)
+	assert.Nil(t, resolves[0].Incident.FixedBy)
 }
 
 // The owner of the namespace routes an incident whose workload has none.

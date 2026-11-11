@@ -50,7 +50,7 @@ func TestUpdateNamesEverythingSinceLastMessage(t *testing.T) {
 		}
 	}
 	if !strings.Contains(note,
-		"payments in shop is spreading to services") {
+		"payments in shop is now also affecting services") {
 		t.Fatalf("affected objects stay grouped: %s", note)
 	}
 }
@@ -145,7 +145,7 @@ func TestUpdateNamesTheSubjectOnce(t *testing.T) {
 	note := Writer{}.Write(d, at(8, 0)).Note
 
 	if strings.Count(note, "payments in shop") != 1 ||
-		!strings.Contains(note, "It is spreading to service cart") {
+		!strings.Contains(note, "It is now also affecting service cart") {
 		t.Fatalf("the subject must be named once: %s", note)
 	}
 }

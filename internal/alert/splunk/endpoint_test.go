@@ -4,20 +4,22 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/abahmed/kwatch/internal/delivery/providertest"
 )
 
-func TestSplunkRejectsInvalidURL(t *testing.T) {
-	rec := providertest.NewRecorder(t)
-	build := func(endpoint string) *Splunk {
-		return NewSplunk(map[string]interface{}{
-			"url":   endpoint,
-			"token": "t",
-		}, "dev", rec.Dependencies())
+func TestSplunkURLWithoutPathGetsTheEventEndpoint(t *testing.T) {
+	deps := providertest.NewRecorder(t).Dependencies()
+	for url, want := range map[string]string{
+		"https://splunk.corp:8088":    "https://splunk.corp:8088" + eventPath,
+		"https://splunk.corp:8088/":   "https://splunk.corp:8088" + eventPath,
+		"https://splunk.corp/custom":  "https://splunk.corp/custom",
+		"https://splunk.corp/a/event": "https://splunk.corp/a/event",
+	} {
+		c := NewSplunk(map[string]interface{}{
+			"url": url, "token": "t"}, "dev", deps)
+		require.NotNil(t, c)
+		assert.Equal(t, want, c.url)
 	}
-	for _, endpoint := range []string{"not a url", "ftp://x", "/relative"} {
-		assert.Nil(t, build(endpoint), endpoint)
-	}
-	assert.NotNil(t, build(rec.URL()))
 }

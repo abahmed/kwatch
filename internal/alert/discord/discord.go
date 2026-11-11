@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/delivery/transport"
@@ -25,11 +26,13 @@ const defaultHost = "https://discord.com"
 
 type Discord struct {
 	httpClient *http.Client
-	sender     transport.Sender
-	host       string
-	id         string
-	token      string
-	send       func(webhookID,
+	// guarded is the client every send goes through (see NewDiscord).
+	guarded *http.Client
+	sender  transport.Sender
+	host    string
+	id      string
+	token   string
+	send    func(webhookID,
 		token string,
 		wait bool,
 		data *discordgo.WebhookParams,
@@ -76,19 +79,41 @@ func webhookHost(webhook string) string {
 	return parsed.Scheme + "://" + parsed.Host
 }
 
-// execute sends through the webhook, inside the configured thread if any.
-func (d *Discord) execute(
-	data *discordgo.WebhookParams,
-	options ...discordgo.RequestOption,
-) error {
-	if d.threadID != "" && d.sendThread != nil {
-		_, err := d.sendThread(
-			d.id, d.token, false, d.threadID, data, options...,
-		)
-		return err
+// toWebhookHost sends c's requests for the library's default host to
+// host (a webhook on discordapp.com, or a compatible relay), or leaves
+// them alone when host is empty or the default.
+func toWebhookHost(c *http.Client, host string) *http.Client {
+	target, err := url.Parse(host)
+	if c == nil || host == "" || err != nil ||
+		target.Host == defaultWebhookHost {
+		return c
 	}
-	_, err := d.send(d.id, d.token, false, data, options...)
-	return err
+	copied := *c
+	base := copied.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	copied.Transport = hostRewrite{base: base, scheme: target.Scheme,
+		host: target.Host}
+	return &copied
+}
+
+// defaultWebhookHost is the host the library builds webhook URLs on.
+const defaultWebhookHost = "discord.com"
+
+// hostRewrite points requests for defaultWebhookHost at another host.
+type hostRewrite struct {
+	base         http.RoundTripper
+	scheme, host string
+}
+
+func (h hostRewrite) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.URL.Host != defaultWebhookHost {
+		return h.base.RoundTrip(r)
+	}
+	r = r.Clone(r.Context())
+	r.URL.Scheme, r.URL.Host, r.Host = h.scheme, h.host, h.host
+	return h.base.RoundTrip(r)
 }
 
 // NewDiscord returns new Discord instance
@@ -111,34 +136,25 @@ func NewDiscord(
 	}
 	klog.InfoS("initializing discord with webhook configured")
 
-	discordClient, err := discordgo.New("")
-	if err != nil {
-		klog.ErrorS(err, "initializing discord client")
-		return nil
-	}
-	discordClient.Client = httpClient
-	disableLibraryRetries(discordClient)
+	// The guarded client (no redirect, a capped body), sending to the
+	// host the webhook names: the library always builds discord.com URLs.
+	guarded := toWebhookHost(transport.SDKClient(httpClient),
+		webhookHost(webhook))
+	sessions := sessionSource{client: guarded}
 
 	return &Discord{
 		httpClient:  httpClient,
+		guarded:     guarded,
 		sender:      transport.NewSender(dependencies),
 		host:        webhookHost(webhook),
 		id:          webhookID,
 		token:       webhookToken,
-		send:        discordClient.WebhookExecute,
+		send:        sessions.execute,
 		threadID:    threadID,
-		sendThread:  discordClient.WebhookThreadExecute,
+		sendThread:  sessions.executeThread,
 		clusterName: clusterName,
 		clockSource: clock.Require(dependencies.Clock),
 	}
-}
-
-// disableLibraryRetries stops discordgo from sleeping through a 429 on its
-// own. That sleep ignores the context, so the 429 must surface and be
-// handled by delivery's rate limiting instead.
-func disableLibraryRetries(s *discordgo.Session) {
-	s.ShouldRetryOnRateLimit = false
-	s.MaxRestRetries = 0
 }
 
 // Name returns name of the provider
@@ -179,16 +195,12 @@ func (d *Discord) SendIncident(
 ) error {
 	klog.V(4).InfoS("sending incident to discord",
 		"component", "discord", "conversation", m.Key)
-	err := d.execute(
-		&discordgo.WebhookParams{
-			AllowedMentions: noMentions(),
-			Embeds: []*discordgo.MessageEmbed{
-				incidentEmbed(m, d.clusterName, d.clockSource.Now()),
-			},
+	return d.execute(ctx, &discordgo.WebhookParams{
+		AllowedMentions: noMentions(),
+		Embeds: []*discordgo.MessageEmbed{
+			incidentEmbed(m, d.clusterName, d.clockSource.Now()),
 		},
-		discordgo.WithContext(ctx),
-	)
-	return wrapDiscordRateLimit(err)
+	})
 }
 
 // SendMessage sends text using the caller's cancellation context.
@@ -196,17 +208,12 @@ func (d *Discord) SendMessage(
 	ctx context.Context,
 	msg string,
 ) error {
-	// send message
-	err := d.execute(
-		&discordgo.WebhookParams{
-			AllowedMentions: noMentions(),
-			// The delivery bound is the embed's; plain content has its
-			// own, smaller limit.
-			Content: notification.Truncate(msg, maxContent),
-		},
-		discordgo.WithContext(ctx),
-	)
-	return wrapDiscordRateLimit(err)
+	return d.execute(ctx, &discordgo.WebhookParams{
+		AllowedMentions: noMentions(),
+		// The delivery bound is the embed's; plain content has its
+		// own, smaller limit.
+		Content: notification.Truncate(msg, maxContent),
+	})
 }
 
 func wrapDiscordRateLimit(err error) error {
@@ -224,7 +231,8 @@ func wrapDiscordRateLimit(err error) error {
 	}
 	var restErr *discordgo.RESTError
 	if errors.As(err, &restErr) && restErr.Response != nil {
-		return transport.ClassifyHTTPStatus(restErr.Response.StatusCode, err)
+		return transport.ClassifyHTTPStatus(
+			"Discord", restErr.Response.StatusCode, err)
 	}
 	return err
 }
@@ -235,4 +243,57 @@ func noMentions() *discordgo.MessageAllowedMentions {
 	return &discordgo.MessageAllowedMentions{
 		Parse: []discordgo.AllowedMentionType{},
 	}
+}
+
+// sessionSource makes one library session per send.
+type sessionSource struct {
+	client *http.Client
+}
+
+func (s sessionSource) session() (*discordgo.Session, error) {
+	session, err := discordgo.New("")
+	if err != nil {
+		return nil, err
+	}
+	if s.client != nil {
+		session.Client = s.client
+	}
+	// A 429 must surface instead of being slept through and retried.
+	session.ShouldRetryOnRateLimit = false
+	session.MaxRestRetries = 0
+	return session, nil
+}
+
+// noteRateLimits returns a copy of c that records a 429 and its
+// Retry-After header in note, for one send.
+func noteRateLimits(
+	c *http.Client, note *limitNote, now func() time.Time,
+) *http.Client {
+	if c == nil {
+		return nil
+	}
+	copied := *c
+	base := copied.Transport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	copied.Transport = limitNoting{base: base, note: note, now: now}
+	return &copied
+}
+
+type limitNoting struct {
+	base http.RoundTripper
+	note *limitNote
+	now  func() time.Time
+}
+
+func (l limitNoting) RoundTrip(r *http.Request) (*http.Response, error) {
+	response, err := l.base.RoundTrip(r)
+	if err != nil || response == nil ||
+		response.StatusCode != http.StatusTooManyRequests {
+		return response, err
+	}
+	l.note.limited = true
+	l.note.retryAfter = ratelimit.ParseRetryAfterAt(response, l.now())
+	return response, err
 }

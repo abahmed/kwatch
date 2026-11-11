@@ -1,26 +1,26 @@
 10:04:15 settled
-🟠 Node n1 (prod-eu-1) is low on memory. All of its dependents are failing. Replicas that do not depend on it are healthy. indexer in batch is affected as well.
-Also grouped: 2 error alerts, 2 evictions
+🟠 Node n1 (prod-eu-1) is low on memory. Every app that uses it is failing. Replicas that do not depend on it are healthy. Affected: indexer in batch.
+Related alerts: 2 error alerts, 2 evictions
 To check the node's conditions and recent events, run kubectl describe node n1
-Checked: 2 failing replicas share node n1 while 1 run healthy on other nodes.
+Proof: 2 failing replicas share node n1 while 1 runs healthy on other nodes.
 🟠 Node n1 (prod-eu-1) is low on memory.
 | 🟠 Node n1 (**prod-eu-1**) is low on memory.
-| All of its dependents are failing.
+| Every app that uses it is failing.
 | Replicas that do not depend on it are healthy.
-| **indexer** in **batch** is affected as well.
-| Also grouped: 2 error alerts, 2 evictions
+| Affected: **indexer** in **batch**.
+| Related alerts: 2 error alerts, 2 evictions
 | To check the node's conditions and recent events, run
 | ```
 | kubectl describe node n1
 | ```
-| *Checked: 2 failing replicas share node n1 while 1 run healthy on other nodes.*
+| *Proof: 2 failing replicas share node n1 while 1 runs healthy on other nodes.*
 10:05:05 settled
-🟠 checkout in shop (prod-eu-1): the new version (checkout:8.01) keeps failing; the previous version is still serving. The previous image was registry.example.com/checkout:8.0. It fails with "TypeError: cannot read properties of undefined (reading 'currency')". Fix in: deployment/checkout → container app → image (registry.example.com/checkout:8.01). To see the rollout state, run kubectl rollout status deployment/checkout -n shop
-🟠 checkout in shop (prod-eu-1): the new version (checkout:8.01) keeps failing; the previous version is still serving.
-| 🟠 **checkout** in **shop** (**prod-eu-1**): the new version (checkout:8.01) keeps failing; the previous version is still serving.
-| The previous image was registry.example.com/checkout:8.0.
+🟠 checkout in shop (prod-eu-1): the new version (checkout:8.01) keeps failing; the previous version (checkout:8.0) is still serving. It fails with "TypeError: cannot read properties of undefined (reading 'currency')". Its last run lasted ten seconds. Fix: change the image of container app in deployment/checkout. To see the rollout state, run kubectl rollout status deployment/checkout -n shop
+🟠 checkout in shop (prod-eu-1): the new version (checkout:8.01) keeps failing; the previous version (checkout:8.0) is still serving.
+| 🟠 **checkout** in **shop** (**prod-eu-1**): the new version (checkout:8.01) keeps failing; the previous version (checkout:8.0) is still serving.
 | It fails with `TypeError: cannot read properties of undefined (reading 'currency')`.
-| Fix in: deployment/checkout → container app → image (registry.example.com/checkout:8.01).
+| Its last run lasted ten seconds.
+| Fix: change the image of container app in deployment/checkout.
 | To see the rollout state, run
 | ```
 | kubectl rollout status deployment/checkout -n shop

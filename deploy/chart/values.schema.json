@@ -381,6 +381,12 @@
       ],
       "description": "kwatch configuration (see deploy/config.yaml for full reference)",
       "properties": {
+        "oldProblemDays": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 30,
+          "description": "Days after which a problem kwatch found already there is old: a low one opens no issue, one that needs attention is lowered to Low; 0 turns it off"
+        },
         "resyncSeconds": {
           "type": "integer",
           "description": "Informer resync in seconds: 0 (off) or at least 30",
@@ -552,7 +558,7 @@
             },
             "hideProHints": {
               "type": "boolean",
-              "description": "Remove every Pro hint from Community messages: the note that names what kwatch Pro adds, the teaser (\"Pro shows which one…\"), \"Pro shows how to fix it.\" and the Pro-checks notes; the \"Cause found: …\" sentence stays"
+              "description": "Remove every Pro hint from Community messages: the one Pro line on the first alert of an issue (\"Pro shows which one and how to fix it, free during early access: kwatch.dev/pro\") and the Pro-checks notes; the \"Most likely cause: …\" sentence stays"
             },
             "communityProvider": {
               "type": "string",
@@ -564,6 +570,14 @@
                 "text",
                 "json"
               ]
+            },
+            "environment": {
+              "type": "string",
+              "enum": [
+                "production",
+                "non-production"
+              ],
+              "description": "What the cluster is for; non-production caps every incident at Needs attention, so nothing in the cluster pages"
             },
             "insecureSkipTLSVerify": {
               "type": "boolean",

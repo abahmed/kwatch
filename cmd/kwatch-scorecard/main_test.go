@@ -108,7 +108,27 @@ func TestRunEmptyInput(t *testing.T) {
 	defer os.Remove(file)
 	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
 	code := run([]string{"-input", file}, out, errOut)
+	assert.Equal(t, 2, code)
+	assert.Contains(t, errOut.String(), "no audit entries")
+	code = run([]string{"-input", file, "-allow-empty"}, out, errOut)
 	assert.Equal(t, 0, code)
+}
+
+func TestRunNoValidEntriesReportsSkipped(t *testing.T) {
+	file := tempFileWithContent(t, "I0101 klog line\nnot json\n\n")
+	defer os.Remove(file)
+	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
+	code := run([]string{"-input", file}, out, errOut)
+	assert.Equal(t, 2, code)
+	assert.Contains(t, errOut.String(), "skipped 2 lines")
+	code = run([]string{"-input", file, "-allow-empty"}, out, errOut)
+	assert.Equal(t, 0, code)
+}
+
+func TestRunHelpExitsZero(t *testing.T) {
+	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
+	assert.Equal(t, 0, run([]string{"-h"}, out, errOut))
+	assert.Contains(t, errOut.String(), "allow-empty")
 }
 
 func tempFileWithContent(t *testing.T, content string) string {

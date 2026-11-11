@@ -108,7 +108,7 @@ func wrapSlackRateLimit(err error) error {
 		if code == http.StatusTooManyRequests {
 			return &ratelimit.Error{Provider: "Slack", StatusCode: code}
 		}
-		return transport.ClassifyHTTPStatus(code, err)
+		return transport.ClassifyHTTPStatus("Slack", code, err)
 	}
 	code := strings.TrimSpace(err.Error())
 	if isSlackAPICode(code) && !transientSlackErrors[code] {

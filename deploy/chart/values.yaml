@@ -122,9 +122,9 @@ networkPolicy:
   ingress: []
   egress: []
 
-# -- kwatch sets the Go soft memory limit (GOMEMLIMIT) to 90% of the
-# memory limit, so garbage collection works harder before the kernel would
-# kill the Pod. Live heap is about 26 KB per pod: 140 MiB at 5,000 pods and
+# -- The chart sets KWATCH_MEMORY_LIMIT from the memory limit, and kwatch
+# sets the Go soft memory limit to 90% of it, so garbage collection works
+# harder before the kernel would kill the Pod. Live heap is about 26 KB per pod: 140 MiB at 5,000 pods and
 # 520 MiB at 20,000. The default 512Mi suits up to about 8,000 pods; use
 # 768Mi at 10,000 pods and 1Gi at 20,000 (raise the request with the limit).
 # The request stays 128Mi so upgrades with an older 128Mi limit still work;
@@ -264,6 +264,22 @@ podLabels: {}
 #       enabled: false
 #     upgrader:
 #       disableUpdateCheck: true
+#
+# A staging or development cluster can be kept from paging anyone: every
+# incident is capped at Needs attention.
+#
+#   config:
+#     app:
+#       environment: non-production
+#
+# Problems that were already there long before kwatch first saw them
+# (a Job that failed last year, an issuer broken for months) are old:
+# a low one opens no issue and is only counted, one that needs attention
+# is lowered to Low. oldProblemDays sets how old (default 30); 0 turns
+# it off.
+#
+#   config:
+#     oldProblemDays: 60
 config:
   crd:
     enabled: true
@@ -310,7 +326,8 @@ dashboard:
   # client behind a proxy shares one sign-in failure limit. The chart
   # never exposes the dashboard: run the kwatch.sh Dashboard menu, or
   # point your own Ingress, route or Service at the ClusterIP Service
-  # <release>-dashboard.
+  # <fullname>-dashboard. List only the proxies: an entry wider than /16
+  # (IPv4) or /48 (IPv6) is accepted with a warning.
   trustedProxies: []
   # -- kwatch serves https itself from this kubernetes.io/tls Secret
   # (keys tls.crt, tls.key), for a LoadBalancer or NodePort with nothing

@@ -35,6 +35,9 @@ type announcer struct {
 	// keeps every decision.
 	scope        func(incident.Incident) bool
 	investigator investigate.Investigator
+	// pending and waiting: see scope_pending.go.
+	pending func(incident.Incident) bool
+	waiting map[string]bool
 	// pool investigates incidents off the loop; nil without an
 	// investigator.
 	pool *investigationPool
@@ -64,6 +67,8 @@ func newAnnouncer(
 		messages:     deps.Writer,
 		sink:         deps.Sink,
 		scope:        deps.InScope,
+		pending:      deps.ScopePending,
+		waiting:      map[string]bool{},
 		investigator: deps.Investigator,
 		evidence:     map[string]*evidenceState{},
 		storage:      storage,
@@ -126,6 +131,8 @@ func (a *announcer) announce(
 	contain("announce", "close", func() { closed = c.CloseListings(ctx) })
 	contain("announce", "restored",
 		func() { listed = c.ListRestored(ctx, now) })
+	contain("announce", "restored intros",
+		func() { a.queueRestoredIntros(now) })
 	contain("announce", "pro checks",
 		func() { c.SendDailyProChecks(ctx, now) })
 	return summarised || digested || grouped || rolled || closed ||

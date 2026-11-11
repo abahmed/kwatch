@@ -198,3 +198,31 @@ func TestStoppedAtStart(t *testing.T) {
 		}
 	}
 }
+
+// A sidecar's probe budget does not take the blame for the app
+// container's fatal line at start: the pod stopped at start either way.
+func TestStartupErrorInAnyContainerRulesOutSidecarProbes(t *testing.T) {
+	f := newFixture(t)
+	pods := f.workload("shop", "api", 3)
+	for _, pod := range pods[:2] {
+		f.observe(pod, map[string]inventory.Value{
+			kube.AttrReady:      inventory.Bool(true),
+			kube.AttrStartTime:  inventory.Time(t0.Add(-time.Hour)),
+			kube.AttrReadySince: inventory.Time(t0.Add(-20 * time.Minute)),
+		})
+	}
+	failing := pods[2]
+	side := inventory.CoreID(kube.KindContainer, failing.Namespace,
+		failing.Name+"/proxy")
+	f.add(side)
+	f.relate(side, inventory.PartOf, failing)
+	f.observe(side, map[string]inventory.Value{
+		kube.AttrProbeBudget: inventory.Number(80),
+	})
+	startFails(f, []inventory.EntityID{failing}, configLine, 1)
+	f.fail(failing, "Probe.Startup", failingH, 2, "")
+	c, ok := f.explain().CauseOf(failing)
+	if ok && probeRows[c.Row] {
+		t.Fatalf("blamed %s: the app container stopped at start", c.Row)
+	}
+}

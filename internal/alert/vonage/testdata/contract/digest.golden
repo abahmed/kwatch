@@ -6,3 +6,4 @@ api_secret=<redacted>
 from=kwatch
 text=🟠 kwatch started and found 2 problems.
 to=+12025550100
+type=unicode

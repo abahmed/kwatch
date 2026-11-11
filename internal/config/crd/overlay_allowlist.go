@@ -47,7 +47,7 @@ var overlayKeys = keyTree{
 	},
 	"app": {
 		"clusterName": nil, "disableStartupMessage": nil,
-		"logFormatter": nil,
+		"logFormatter": nil, "environment": nil,
 	},
 }
 

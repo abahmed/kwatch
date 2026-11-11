@@ -9,10 +9,6 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func (m *Manager) loop(ctx context.Context) {
-	m.loopFrom(ctx, m.initialDelay(ctx))
-}
-
 // loopFrom waits delay, then runs cycles until ctx ends.
 func (m *Manager) loopFrom(ctx context.Context, delay time.Duration) {
 	for {

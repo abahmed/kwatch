@@ -6,13 +6,7 @@
   "use strict";
   var KW = window.KW;
 
-  var FIX = {
-    rollback: "fixed by a rollback",
-    "config fix": "fixed by a config change",
-    "node replaced": "the node was replaced",
-    change: "fixed by a change",
-    "recovered without change": "recovered on its own"
-  };
+  var FIX = KW.TERMS.fix;
 
   /* KW.extraFold: a section the template has no place for, made once
      and put after the section named after. It returns the section and
@@ -50,7 +44,8 @@
     a.rel = "noopener noreferrer";
   };
 
-  /* KW.fixSteps fills "All steps to fix" and the runbook. */
+  /* KW.fixSteps fills "All steps" (shown only when the summary does not
+     list them all) and the runbook. */
   KW.fixSteps = function (root, inc) {
     var list = inc.fixSteps || [], box = KW.$("[data-steps]", root);
     box.textContent = "";
@@ -63,20 +58,8 @@
     KW.$("[data-fix-n]", root).textContent = list.length ? "(" + list.length + ")" : "";
     var cut = KW.cutCount(inc, "fixSteps");
     if (cut) box.appendChild(KW.el("p", "ev-cap", KW.plural(cut, "more step", "more steps") + " not shown."));
-    KW.$('[data-fold="fix"]', root).hidden = !list.length && !inc.docsLink;
-  };
-
-  /* KW.similar: "14 other issues have the same error → see them", a
-     link to the table filtered to them (like=). */
-  KW.similar = function (root, inc) {
-    var p = KW.$("[data-similar]", root), n = inc.similar || 0;
-    KW.$('[data-fold="similar"]', root).hidden = p.hidden = !n;
-    if (!n) return;
-    var a = KW.$("a", p);
-    a.setAttribute("href", "/issues?status=all&like=" + encodeURIComponent(inc.id));
-    a.textContent = n === 1 ? "1 other issue has the same error → see it" :
-      KW.num(n) + " other issues have the same error → see them";
-    a.title = "Issues that failed the same way, with the same likely cause, in any namespace. Active and resolved.";
+    // The summary shows the first steps; the rest are listed here.
+    KW.$('[data-fold="fix"]', root).hidden = list.length <= Number(root.dataset.stepsShown || 0);
   };
 
   /* ago: how long before or after the issue started, in words. */
@@ -226,43 +209,6 @@
     if (cut) x.body.appendChild(KW.el("p", "ev-cap", KW.plural(cut, "more change", "more changes") + " not shown."));
   }
 
-  function fixWords(fix) { return FIX[fix] || ""; }
-
-  function seen(root, inc) {
-    var fold = KW.$('[data-fold="seen"]', root);
-    var box = KW.$("[data-seen]", root);
-    var s = inc.seenBefore;
-    box.textContent = "";
-    fold.hidden = !s || !s.recent || !s.recent.length;
-    if (fold.hidden) return;
-    var n = s.inWindow;
-    box.appendChild(KW.el("p", "", n ?
-      "It failed the same way " + KW.plural(n, "time", "times") + " in the last " + s.windowDays + " days before this." :
-      "It failed the same way before, but not in the last " + s.windowDays + " days."));
-    var ul = KW.el("ul", "seen-list");
-    s.recent.forEach(function (o) {
-      var li = KW.el("li");
-      li.appendChild(KW.el("span", "mono", KW.stamp(o.opened)));
-      var parts = [];
-      if (KW.valid(o.resolved)) parts.push("lasted " + KW.lasted(o.opened, o.resolved));
-      if (fixWords(o.fix)) parts.push(fixWords(o.fix));
-      if (parts.length) li.appendChild(document.createTextNode(" · " + parts.join(" · ")));
-      li.title = KW.full(o.opened);
-      ul.appendChild(li);
-    });
-    box.appendChild(ul);
-    var cap = s.capped ? "kwatch keeps only the last " + s.recent.length + " times, so there may be more." : "";
-    var cut = KW.cutCount(inc, "occurrences");
-    if (cut) cap += (cap ? " " : "") + KW.plural(cut, "earlier time", "earlier times") + " not shown.";
-    if (cap) box.appendChild(KW.el("p", "ev-cap", cap));
-    if (s.previousId) {
-      var a = KW.el("a", "ulink", "Open the last time it happened");
-      a.href = "/issues/" + encodeURIComponent(s.previousId);
-      a.dataset.link = "";
-      box.appendChild(KW.el("p", "seen-prev")).appendChild(a);
-    }
-  }
-
   /* blamed: the change the likely cause names: the one the API marks,
      else the one the checks agree on (the correlation's "Change"),
      else one the cause text names other than the issue's own object. */
@@ -285,54 +231,14 @@
     })[0] || null;
   }
 
-  /* CAPTIONS: one muted line under each section heading, so the
-     explanation is not only a tooltip. */
-  var CAPTIONS = {
-    why: "What kwatch found, and how sure it is.",
-    others: "Issues that look linked to this one.",
-    fix: "Every step, in order.",
-    changes: "Changes near the time it started, nearest first.",
-    seen: "Earlier times this object failed the same way.",
-    waiting: "kwatch is checking before it alerts.",
-    probes: "The health check that is failing.",
-    warnings: "Recent warnings from the cluster.",
-    traffic: "How much traffic this affects.",
-    node: "The machine this runs on.",
-    timeline: "Newest first.",
-    logs: "The latest lines from the container.",
-    containers: "What runs inside the pod.",
-    related: "Objects hit by the same problem.",
-    told: "Which channels kwatch told, and who acknowledged.",
-    more: "Technical details.",
-    blast: "What this failure reaches beyond the failing object.",
-    similar: "Other issues with the same error.",
-    sent: "The text kwatch sent to each channel."
-  };
-
-  /* captions adds the lines once; a section's own body is rebuilt
-     by its module, so the caption sits beside the body, not in it. */
-  function captions(root) {
-    KW.$$("section.sec[data-fold]", root).forEach(function (d) {
-      var text = CAPTIONS[d.dataset.fold];
-      if (!text || d.querySelector(":scope > .fold-cap")) return;
-      var body = d.querySelector(":scope > .fold-body");
-      if (body) d.insertBefore(KW.el("p", "fold-cap", text), body);
-    });
-    KW.$$(".fold-h[title]", root).forEach(function (h) {
-      if (h.nextElementSibling && h.nextElementSibling.classList.contains("fold-cap")) return;
-      h.parentNode.insertBefore(KW.el("p", "fold-cap", h.title), h.nextSibling);
-    });
-  }
-
   KW.context = function (root, inc) {
     changes(root, inc);
     recovered(root, inc);
-    seen(root, inc);
+    KW.seenBefore(root, inc);
     KW.told(root, inc);
     KW.sent(root, inc);
     // What the cluster says now, and sharing (insight.js, share.js).
     if (KW.insight) KW.insight(root, inc);
     if (KW.share) KW.share(root, inc);
-    captions(root);
   };
 })();

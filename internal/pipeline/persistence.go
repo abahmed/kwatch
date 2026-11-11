@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"errors"
 	"sync/atomic"
 	"time"
 
@@ -79,6 +80,12 @@ func (p *persistence) saveStartup(state announce.StartupState) {
 	p.incidents.offer(storeSnapshot{startup: &state})
 }
 
+// fenced reports that a newer leader claimed the store, so this process
+// is deposed and its writer dropped its state for good.
+func (p *persistence) fenced() bool {
+	return p.incidents != nil && p.incidents.isFenced()
+}
+
 // askStop asks both writers for their final write without waiting, so
 // the two writes run at the same time.
 func (p *persistence) askStop() {
@@ -103,3 +110,7 @@ func (p *persistence) stopped() bool {
 		return false
 	}
 }
+
+// ErrFenced is what Run returns once a newer leader claimed the store:
+// this process no longer owns the state and must not send anything.
+var ErrFenced = errors.New("pipeline: store claimed by a newer leader")

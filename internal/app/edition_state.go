@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/feature"
@@ -56,9 +57,17 @@ func StartEntitlements(
 	return base
 }
 
+// cachedLeaseVerifier checks the signature of the lease a state file
+// holds before its edition counts: a file edited by hand never starts or
+// unlocks Pro. Tests replace it with their own key.
+var cachedLeaseVerifier = license.DefaultVerifier
+
 // stateRunsPro reads a copy of the state file. The running leader holds
-// the file locked, so it is never opened in place.
+// the file locked, and a read-only open waits for that same lock, so the
+// file cannot be read in place. Copies an earlier command left behind are
+// removed first.
 func stateRunsPro(statePath string, now time.Time) bool {
+	sweepEditionCopies(statePath, now)
 	copyPath, err := copyStateFile(statePath)
 	if err != nil {
 		return false
@@ -87,7 +96,7 @@ func fileRunsPro(path string, now time.Time) bool {
 	if err != nil {
 		return false
 	}
-	grace, ok := license.CachedLeaseGraceUntil(lease)
+	grace, ok := license.CachedLeaseGraceUntil(cachedLeaseVerifier(), lease)
 	return ok && now.Before(grace)
 }
 
@@ -99,7 +108,8 @@ func copyStateFile(statePath string) (string, error) {
 		return "", err
 	}
 	defer func() { _ = in.Close() }()
-	out, err := os.CreateTemp(filepath.Dir(statePath), "state.edition*")
+	out, err := os.CreateTemp(
+		filepath.Dir(statePath), editionCopyPrefix+"*")
 	if err != nil {
 		return "", err
 	}
@@ -109,4 +119,37 @@ func copyStateFile(statePath string) (string, error) {
 		return "", err
 	}
 	return out.Name(), out.Close()
+}
+
+const (
+	// editionCopyPrefix starts the name of every copy copyStateFile makes.
+	editionCopyPrefix = "state.edition"
+	// editionCopyMaxAge is how old a copy must be to count as left
+	// behind. A command uses its copy for seconds; the margin keeps a
+	// sweep from removing the copy of a command that runs right now.
+	editionCopyMaxAge = 10 * time.Minute
+)
+
+// sweepEditionCopies removes the copies that interrupted commands left
+// next to the state file (a `kubectl exec` that was cut, a killed
+// process). Each is as large as the state file and nothing else deletes
+// it, so on a small volume a few of them leave no room for the state
+// itself. It runs before every copy and when kwatch starts.
+func sweepEditionCopies(statePath string, now time.Time) {
+	dir := filepath.Dir(statePath)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if !entry.Type().IsRegular() ||
+			!strings.HasPrefix(entry.Name(), editionCopyPrefix) {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil || now.Sub(info.ModTime()) < editionCopyMaxAge {
+			continue
+		}
+		_ = os.Remove(filepath.Join(dir, entry.Name()))
+	}
 }

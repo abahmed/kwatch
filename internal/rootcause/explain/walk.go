@@ -110,6 +110,9 @@ func (v *view) upstream(id inventory.EntityID) []hop {
 				// (serviceCallHops); configuration alone proves nothing.
 				continue
 			}
+			if stored.relation == inventory.OwnedBy {
+				to = inventory.ResolveOwner(v.s.Model, to)
+			}
 			out = append(out, hop{link: stored.link, to: to})
 		}
 	}

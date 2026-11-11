@@ -143,10 +143,14 @@ func causeObject(p incident.Incident) (inventory.EntityID, bool) {
 }
 
 // causeID is the object labelled the likely cause: the one the cause
-// blames, else p's root.
+// blames, else p's root. Without a cause (no summary: the page says
+// "Cause not found yet") no object is, so the zero ID.
 func causeID(p incident.Incident) inventory.EntityID {
 	if id, ok := causeObject(p); ok {
 		return id
+	}
+	if causeText(p) == "" {
+		return inventory.EntityID{}
 	}
 	return p.Root
 }

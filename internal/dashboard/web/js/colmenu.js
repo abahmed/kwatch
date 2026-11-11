@@ -12,9 +12,9 @@
   var KW = window.KW;
   var menu = null, opener = null, sized = null;
   /* Widths, in rem, of the columns nobody dragged; where takes a share of the table (at least LEAST rem). */
-  var BASE = { sev: 8.5, status: 9.5, last: 6.5, started: 7, dur: 6.5,
+  var BASE = { sev: 8.5, status: 9.5, last: 8.5, started: 7, dur: 6.5,
     ack: 6.5 };
-  var SHARE = { where: "24%" };
+  var SHARE = { where: "28%" };
   var LEAST = { where: 18, title: 14 };
   var HEAD_MAX = 120;
 

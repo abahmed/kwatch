@@ -107,3 +107,14 @@ func sortedKeys(set map[string]bool) []string {
 	slices.Sort(out)
 	return out
 }
+
+// widenRouteToPage widens the route of a flapper that now pages: noteRoute
+// saw the held tier, so a pager that asks for critical alerts would
+// otherwise never hear the resolve of the alert this opened.
+func (p *Incident) widenRouteToPage(d *Decision) {
+	if p.AnnouncedRoute == nil {
+		return
+	}
+	p.AnnouncedRoute.widen(routeOf(&d.Incident))
+	d.Incident.AnnouncedRoute = p.AnnouncedRoute.clone()
+}

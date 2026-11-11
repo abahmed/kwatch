@@ -64,7 +64,8 @@ func TestApplyStartupCRDFallsBackToBaseOnInvalidOverlay(t *testing.T) {
 	}
 
 	cfg, outcome, err := applyStartupCRD(
-		context.Background(), crdBase(), client, reload, noLastGood)
+		context.Background(), crdBase(), client, reload, noLastGood,
+		nil)
 
 	if err != nil || !outcome.invalid {
 		t.Fatalf("outcome = %+v, err = %v; want fallback", outcome, err)
@@ -86,7 +87,8 @@ func TestApplyStartupCRDAppliesValidOverlay(t *testing.T) {
 	}
 
 	cfg, outcome, err := applyStartupCRD(
-		context.Background(), crdBase(), client, reload, noLastGood)
+		context.Background(), crdBase(), client, reload, noLastGood,
+		nil)
 
 	if err != nil || outcome.invalid || cfg.App.ClusterName != "overlay" {
 		t.Fatalf("cfg = %v, outcome = %+v, err = %v", cfg, outcome, err)
@@ -101,7 +103,8 @@ func TestApplyStartupCRDFailsOnAPIError(t *testing.T) {
 		})
 
 	_, outcome, err := applyStartupCRD(
-		context.Background(), crdBase(), client, loadConfig, noLastGood)
+		context.Background(), crdBase(), client, loadConfig,
+		noLastGood, nil)
 
 	if err == nil || outcome.invalid {
 		t.Fatalf("outcome = %+v, err = %v; want a startup error",

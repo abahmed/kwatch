@@ -28,6 +28,9 @@ type Timers struct {
 	// because kwatch cannot observe its root now (see awaitingEvidence):
 	// no hold runs until it can check again.
 	Held bool
+	// ScalingHeld marks a settling page held while the cluster scales
+	// (scale_hold.go).
+	ScalingHeld bool
 }
 
 // noteTimers stores p's timers as of now. next is its deadline when ok;
@@ -44,9 +47,11 @@ func (m *Manager) noteTimers(
 	switch p.State {
 	case Settling:
 		t.Settle = m.cfg.Settle
-		if p.Tier == Page && !burst {
+		if p.Tier == Page && !burst && !m.foundAtStart(p) {
 			t.Settle = m.cfg.PageSettle
 		}
+		t.Settle = m.scaleSettle(p, t.Settle)
+		t.ScalingHeld = m.scaleHeld(p, now)
 	case Flapping:
 		t.Hold = m.cfg.MaxHold
 	default:
@@ -66,6 +71,9 @@ type Why struct {
 	// CannotSee says kwatch cannot observe the root right now, so the
 	// incident stays open with no hold running until it can check again.
 	CannotSee bool
+	// PagingHeld is ScalingHeldText for a page held while the cluster
+	// scales, empty otherwise.
+	PagingHeld string
 }
 
 // WhyOf explains p as of now from its journal: the level code and the
@@ -81,6 +89,9 @@ func WhyOf(p Incident, now time.Time) Why {
 		w.NextCheckAt = t.Next
 	}
 	w.CannotSee = t.Held && !t.Grace
+	if t.ScalingHeld && p.State == Settling {
+		w.PagingHeld = ScalingHeldText
+	}
 	if t.Hold > 0 && p.State != Settling && !w.CannotSee {
 		w.HoldTotal = t.Hold
 		if p.State != Open && !p.RecoveringSince.IsZero() &&
@@ -134,6 +145,9 @@ func settlingText(p Incident, t Timers, now time.Time) string {
 	case len(p.Members) == 0:
 		return "Confirming: its failures cleared, so it closes " +
 			"without sending a message"
+	case t.ScalingHeld:
+		return ScalingHeldText + "; it pages if it still fails " +
+			"once the new nodes have settled"
 	case t.Settle <= 0:
 		return "Confirming: making sure it still fails before alerting"
 	}

@@ -98,7 +98,7 @@ func finalizerControllerScaledDownFresh() scenario {
 	}
 }
 
-// attachmentVolumeGone: two attachments were deleted a year ago and the
+// attachmentVolumeGone: two attachments were deleted weeks ago and the
 // volumes they attach no longer exist. Each is named by its volume, not
 // by its hash, and waits for the digest.
 func attachmentVolumeGone() scenario {
@@ -120,7 +120,7 @@ func attachmentVolumeGone() scenario {
 	}
 }
 
-// attachmentNodeGone: an attachment was deleted a year ago; its volume
+// attachmentNodeGone: an attachment was deleted weeks ago; its volume
 // exists but its node was removed, so the volume cannot attach to
 // another node. That is still news.
 func attachmentNodeGone() scenario {
@@ -142,13 +142,21 @@ func attachmentNodeGone() scenario {
 	}
 }
 
-// staleAttachment is a VolumeAttachment of a node that was deleted a
-// year ago, for a volume.
+// staleAttachment is a VolumeAttachment of a node that was deleted
+// twenty days ago, for a volume: old, but younger than the old-problem
+// horizon (oldProblemAttachment is older).
 func staleAttachment(
 	c *cluster, name, volume, node string,
 ) *storagev1.VolumeAttachment {
+	return attachmentDeleted(c, name, volume, node, 20*24*time.Hour)
+}
+
+// attachmentDeleted is a VolumeAttachment deleted age ago.
+func attachmentDeleted(
+	c *cluster, name, volume, node string, age time.Duration,
+) *storagev1.VolumeAttachment {
 	meta := c.meta("", name)
-	stamp := metav1.NewTime(c.now.Add(-365 * 24 * time.Hour))
+	stamp := metav1.NewTime(c.now.Add(-age))
 	meta.DeletionTimestamp = &stamp
 	meta.Finalizers = []string{"external-attacher/ebs-csi-example-com"}
 	return &storagev1.VolumeAttachment{ObjectMeta: meta,

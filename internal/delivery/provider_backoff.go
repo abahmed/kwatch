@@ -2,6 +2,8 @@ package delivery
 
 import (
 	"context"
+	"net/http"
+	"strings"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -64,6 +66,45 @@ func (p *sendPacer) recordRecovery(provider string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	delete(p.failures, provider)
+	delete(p.rejections, provider)
+}
+
+// rejectionsBeforeNotice is how many rejections in a row, none of them
+// about the credential or address, show that the provider refuses
+// everything and not one malformed payload.
+const rejectionsBeforeNotice = 3
+
+// rejectionMarksProvider counts a permanent failure and reports whether
+// it says the provider's webhook, token or address is wrong: an answer
+// of 401, 403, 404 or 410, a refused credential, or several rejections in
+// a row. One 400 for one payload says nothing about the provider.
+func (p *sendPacer) rejectionMarksProvider(
+	provider string, err error,
+) bool {
+	if refusedAccess(err) {
+		return true
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.rejections == nil {
+		p.rejections = make(map[string]int)
+	}
+	p.rejections[provider]++
+	return p.rejections[provider] >= rejectionsBeforeNotice
+}
+
+// refusedAccess reports whether err says the credential or the address
+// is bad, not the payload.
+func refusedAccess(err error) bool {
+	if code, ok := transport.StatusOf(err); ok {
+		switch code {
+		case http.StatusUnauthorized, http.StatusForbidden,
+			http.StatusNotFound, http.StatusGone:
+			return true
+		}
+		return false
+	}
+	return hasAny(strings.ToLower(err.Error()), tokenHints)
 }
 
 // blockedUntil returns when the provider may be sent to again.
@@ -75,7 +116,9 @@ func (p *sendPacer) blockedUntil(provider string) time.Time {
 
 // recordProviderFailure blocks the provider after a failed delivery: for
 // the wait it asked for when it rate limited, for the outage backoff
-// when it failed in a way that passes. A rejection does not block it.
+// when it failed in a way that passes. A rejection does not block it, and
+// marks the provider rejecting only when it is not about one payload (see
+// rejectionMarksProvider).
 func (m *Manager) recordProviderFailure(entry *providerEntry, err error) {
 	name := entry.provider.Name()
 	now := m.nowTime()
@@ -95,7 +138,9 @@ func (m *Manager) recordProviderFailure(entry *providerEntry, err error) {
 		return
 	}
 	if transport.IsPermanent(err) {
-		m.setProviderHealth(entry, reasonRejected, err)
+		if m.pacer.rejectionMarksProvider(name, err) {
+			m.setProviderHealth(entry, reasonRejected, err)
+		}
 		return
 	}
 	// Jittered like the rate-limit backoff, so the pods of several

@@ -117,5 +117,34 @@ func TestFullBookIgnoresReleasesOlderThanItKeeps(t *testing.T) {
 	now := t0.Add(24 * time.Hour)
 	assert.False(t, Observe(&b, View{Model: w.m}, now))
 	assert.Len(t, b.Records, MaxRecords)
-	assert.Nil(t, b.find(recordID(w.id, t0)))
+	assert.Nil(t, b.find(recordID(w.id, t0, 1)))
+}
+
+// A pod the model saw a few seconds before the release was stamped is
+// still the release's: its crash-loop restarts count.
+func TestDetailCountsAPodSeenJustBeforeTheReleaseStamp(t *testing.T) {
+	w := newWorld(kube.KindDeployment, "api")
+	w.status(1, 0, 1, deadlineReason)
+	w.change(t0, "", image("api:1", "api:2"))
+	pod := inventory.CoreID(kube.KindPod, "shop", "api-2-x")
+	container := kube.ContainerID("shop", "api-2-x", "app")
+	at := t0.Add(-5 * time.Second)
+	w.m.Apply(inventory.Observation{Kind: inventory.Observed,
+		Source: "test", At: at, Entity: pod})
+	w.m.Apply(inventory.Observation{Kind: inventory.Related,
+		Source: "test", At: at, Entity: pod, Relation: inventory.OwnedBy,
+		Targets: []inventory.EntityID{w.id}})
+	w.m.Apply(inventory.Observation{Kind: inventory.Observed,
+		Source: "test", At: at, Entity: container,
+		Attributes: map[string]inventory.Value{
+			kube.AttrRestarts: inventory.Number(30)}})
+	w.m.Apply(inventory.Observation{Kind: inventory.Related,
+		Source: "test", At: at, Entity: container,
+		Relation: inventory.OwnedBy, Targets: []inventory.EntityID{pod}})
+	var b Book
+	Observe(&b, View{Model: w.m, Detail: true}, t0.Add(30*time.Minute))
+	d := b.Records[0].Detail
+	if assert.NotNil(t, d) && assert.NotNil(t, d.RestartsAfter) {
+		assert.InDelta(t, 60, *d.RestartsAfter, 0.1)
+	}
 }

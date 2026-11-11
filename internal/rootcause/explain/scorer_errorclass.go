@@ -53,12 +53,22 @@ var errorClasses = []errorClass{
 		fits: configKinds},
 	programDefect,
 	{name: "a connection that does not arrive",
-		markers: []string{"i/o timeout", "connection refused",
-			"no route to host", "connection timed out",
-			"network is unreachable", "dial tcp"},
-		fits: networkKinds, misfits: configKinds, addressKeys: true,
+		markers: connectionMarkers,
+		fits:    networkKinds, misfits: configKinds, addressKeys: true,
 		newMisfits: codeKinds},
 }
+
+// connectionMarkers are the words of a call to another address that
+// does not arrive.
+var connectionMarkers = []string{"i/o timeout", "connection refused",
+	"no route to host", "connection timed out",
+	"network is unreachable", "dial tcp"}
+
+// dependencyErrorMarkers are connectionMarkers and the other words of
+// a call to another address that fails: the error is about what the
+// program calls, not the program.
+var dependencyErrorMarkers = slices.Concat(connectionMarkers,
+	[]string{"no such host", "tls handshake", "dial udp"})
 
 // programDefect is a crash in the program's own code. A setting, a
 // policy, a permission or a node does not write these words; a misfit

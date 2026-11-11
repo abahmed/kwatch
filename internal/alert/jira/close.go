@@ -19,6 +19,11 @@ func (g *Jira) Close(ctx context.Context, id, body string) error {
 	if err := g.Comment(ctx, id, body); err != nil {
 		return err
 	}
+	return g.CloseState(ctx, id)
+}
+
+// CloseState implements issues.StateCloser.
+func (g *Jira) CloseState(ctx context.Context, id string) error {
 	if g.closeTransition == "" {
 		return nil
 	}

@@ -237,13 +237,36 @@ func (c *Collector) resolveInDigest(
 	return false
 }
 
+// digestRetry is how long a digest that could not be written waits
+// before it is tried again.
+const digestRetry = 5 * time.Minute
+
 // flushDigest sends the pending digest once its window is over, and
-// reports whether it did.
+// reports whether it did. A digest that panics while it is written
+// (one bad entry is enough) is due again only after digestRetry: left
+// due, it would be retried on every loop iteration with no wait at all
+// (see NextDigest), a busy loop that logs an error each time. The
+// panic goes on to the caller, which counts and logs it.
 func (c *Collector) flushDigest(ctx context.Context, now time.Time) bool {
 	g := &c.Low
 	if g.Since.IsZero() || now.Before(g.Since.Add(DigestWindow)) {
 		return false
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			if !g.Since.IsZero() { // not sent (see sendDigest)
+				g.Since = now.Add(digestRetry - DigestWindow)
+			}
+			panic(r)
+		}
+	}()
+	return c.sendDigest(ctx, now)
+}
+
+// sendDigest writes and sends the digest that is due, and reports
+// whether there was anything to send.
+func (c *Collector) sendDigest(ctx context.Context, now time.Time) bool {
+	g := &c.Low
 	sent := false
 	c.wake = freshWake(c.wake, now)
 	ongoing, unchanged := c.splitOngoing(c.ongoingProblems(now), now)
@@ -256,6 +279,8 @@ func (c *Collector) flushDigest(ctx context.Context, now time.Time) bool {
 		msg.Listed = c.listedInDigest(g, len(risks),
 			append(slices.Clone(ongoing), unchanged...), now, msg.Listed)
 		c.env.Sink(ctx, incident.Decision{Reason: "digest"}, msg)
+		// Sent: a panic in the bookkeeping below must not send it again.
+		defer func() { *g, c.wake = LowDigest{}, nil }()
 		for _, d := range g.Opened {
 			c.env.Incidents.ReleaseAnnouncement(d.Incident.ID)
 			c.env.Incidents.RecordDigested(d.Incident.ID, now)

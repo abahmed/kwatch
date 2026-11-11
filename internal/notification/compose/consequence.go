@@ -13,7 +13,7 @@ import (
 const maxNamed = 3
 
 // impactSentences say who else is affected: "service cart can't serve
-// traffic." and "checkout is affected as well."
+// traffic." and "Affected: checkout."
 func impactSentences(f caseFacts) []sentence {
 	subject := leadSubject(f)
 	var traffic, workloads []inventory.EntityID
@@ -39,8 +39,7 @@ func impactSentences(f caseFacts) []sentence {
 	if len(workloads) > 0 {
 		// The first word is a workload's own name: it keeps its case.
 		out = append(out, sentence{part: partConsequence, keepCase: true,
-			text: nameList(subject, workloads) + " " +
-				verb(len(workloads), "is", "are") + " affected as well."})
+			text: "Affected: " + nameList(subject, workloads) + "."})
 	}
 	return out
 }

@@ -105,6 +105,9 @@ func composeDependencies(
 			// POD_NAMESPACE and POD_NAME give them.
 			OwnNamespace: "kwatch",
 			OwnWorkload:  "kwatch",
+			// The default old-problem horizon, as the app sets it.
+			OldProblem: config.RuntimeConfigFor(
+				config.DefaultConfig()).Lifecycle().OldProblem(),
 		}, ablated{explain.NewSolver(), ablation}),
 		Synced:  synced,
 		Writer:  compose.NewWriter(scenarioCluster, policy.Runbooks()),

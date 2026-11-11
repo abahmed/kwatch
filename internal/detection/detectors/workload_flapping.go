@@ -92,7 +92,7 @@ func flapJudgement(
 	cmp := b.Compare(e.ID, inventory.WarningMetric(unhealthyEvent),
 		float64(failures))
 	return judge(cmp, "readiness probe failures "+
-		perHour(float64(failures))+" vs a usual "+perHour(cmp.Typical))
+		vsUsualRate(float64(failures), cmp.Typical))
 }
 
 // earliest is the older of two times, ignoring a zero one.

@@ -1,5 +1,5 @@
 --- request 1 of 2
-GET /repos/kwatch/kwatch/issues?q=kwatchkey3789c0f3c9b01dc5&state=open&type=issues
+GET /repos/kwatch/kwatch/issues?limit=50&sort=newest&state=open&type=issues
 Content-Type: application/json
 Authorization: token <redacted>
 

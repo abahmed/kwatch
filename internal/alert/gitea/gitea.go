@@ -70,13 +70,15 @@ func NewGitea(
 		"repo", repo)
 
 	return &Gitea{
-		issues: issues.NewMap(clock.Require(dependencies.Clock).Now),
+		issues: issues.NewMap(
+			clock.Require(dependencies.Clock).Now,
+		).ForCluster(clusterName),
 		sender: transport.NewSender(dependencies),
 		url: fmt.Sprintf(
 			"%s/repos/%s/%s/issues",
 			strings.TrimRight(server, "/"),
-			owner,
-			repo,
+			url.PathEscape(owner),
+			url.PathEscape(repo),
 		),
 		token:       token,
 		owner:       owner,
@@ -132,10 +134,18 @@ func (g *Gitea) Create(
 	return strconv.Itoa(created.Number), nil
 }
 
-// Find implements issues.Finder with the repository issue search.
+// findLimit is how many of the newest open issues Find checks. The text
+// search (q=) is not used: it depends on an asynchronous indexer, so an
+// issue made a moment ago may not be searchable yet. A create lost to a
+// timeout is always among the newest issues.
+const findLimit = 50
+
+// Find implements issues.Finder: it lists the newest open issues and
+// returns the one whose body carries marker.
 func (g *Gitea) Find(ctx context.Context, marker string) (string, error) {
 	response, err := g.call(ctx, "GET",
-		g.url+"?state=open&type=issues&q="+url.QueryEscape(marker), nil)
+		g.url+"?state=open&type=issues&sort=newest&limit="+
+			strconv.Itoa(findLimit), nil)
 	if err != nil {
 		return "", err
 	}
@@ -166,6 +176,11 @@ func (g *Gitea) Close(ctx context.Context, id, body string) error {
 	if err := g.Comment(ctx, id, body); err != nil {
 		return err
 	}
+	return g.CloseState(ctx, id)
+}
+
+// CloseState implements issues.StateCloser.
+func (g *Gitea) CloseState(ctx context.Context, id string) error {
 	_, err := g.call(ctx, "PATCH",
 		g.url+"/"+id, map[string]string{"state": "closed"})
 	return err

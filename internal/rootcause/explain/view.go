@@ -21,6 +21,9 @@ type view struct {
 	// explainedBy marks the failures some candidate other than their
 	// own workload explains. It is filled once candidates are known.
 	explainedBy map[inventory.EntityID]bool
+	// explainedOutside marks those of them a candidate outside their
+	// own workload explains.
+	explainedOutside map[inventory.EntityID]bool
 	// rejected collects why entities were dropped.
 	rejected map[inventory.EntityID]rejectNote
 	// checked lists, per failure, the upstream entities that showed
@@ -64,6 +67,17 @@ type view struct {
 	blast map[inventory.EntityID]map[inventory.EntityID]bool
 	// failing memoises failingPodSet; nil until computed.
 	failingPods map[inventory.EntityID]bool
+	// onsets memoises groupOnset per failure unit, and anchored lists
+	// the failures of each anchor; both nil until computed.
+	onsets   map[inventory.EntityID]timeValue
+	anchored map[inventory.EntityID][]inventory.EntityID
+	// history memoises historyFrom; zero until computed.
+	history time.Time
+	// exposures memoises exposureFrom per ConfigMap or Secret.
+	exposures map[inventory.EntityID]timeValue
+	// reachFrom holds, per entity a walk reached, where the causal
+	// window of the earliest failure that reached it begins.
+	reachFrom map[inventory.EntityID]time.Time
 }
 
 func newView(s Snapshot) *view {
@@ -78,6 +92,8 @@ func newView(s Snapshot) *view {
 		unverified: map[inventory.EntityID][]string{},
 		calls:      map[inventory.EntityID]endpointCall{},
 		signatures: map[inventory.EntityID]string{},
+		reachFrom:  map[inventory.EntityID]time.Time{},
+		exposures:  map[inventory.EntityID]timeValue{},
 	}
 }
 
@@ -148,18 +164,31 @@ func (v *view) unitGate(pod inventory.EntityID) bool {
 	return v.unitFailing(pod)
 }
 
-// changesOf returns id's changes inside the causal window, which a
-// failing run's exposure can extend (see changeFrom).
+// changesOf returns id's changes inside the causal window of the
+// failures that reached it (see change_window.go), which a failing
+// run's exposure can extend (see changeFrom). The window can still
+// grow while the walks run, so what is cached is every change the
+// history keeps and the window is applied on each call.
 func (v *view) changesOf(id inventory.EntityID) []inventory.Change {
 	if v.s.Changes == nil {
 		return nil
 	}
-	if cached, ok := v.changes[id]; ok {
-		return cached
+	kept, ok := v.changes[id]
+	if !ok {
+		if v.history.IsZero() {
+			v.history = v.historyFrom()
+		}
+		kept = dropHarmlessCreations(v.s.Changes.Changes(id,
+			v.history, v.s.Now))
+		v.changes[id] = kept
 	}
-	out := dropHarmlessCreations(
-		v.s.Changes.Changes(id, v.changeFrom(id), v.s.Now))
-	v.changes[id] = out
+	from := v.changeFrom(id)
+	var out []inventory.Change
+	for _, change := range kept {
+		if !change.At.Before(from) {
+			out = append(out, change)
+		}
+	}
 	return out
 }
 
@@ -285,8 +314,10 @@ func (v *view) causeState(
 		modes = v.withoutRepeatedEmptiness(id, effect, link, modes)
 	}
 	if link == LinkUses && id.Kind == kube.KindSecret &&
-		v.pullFailing(effect) && !v.isPullLogin(id, effect) {
-		// A failed pull blames a Secret only as the pod's login.
+		(v.pullFailing(effect) || v.pullOnly(id, effect)) &&
+		!v.isPullLogin(id, effect) {
+		// A failed pull blames a Secret only as the pod's login, and
+		// a Secret that is only a login is blamed for nothing else.
 		modes = withoutPseudo(modes)
 	}
 	return state{id: id, modes: modes}

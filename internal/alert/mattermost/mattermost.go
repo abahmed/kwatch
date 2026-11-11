@@ -109,7 +109,9 @@ func (m *Mattermost) sendAPI(ctx context.Context, content []byte) error {
 
 func (m *Mattermost) buildMessage(msg string) ([]byte, error) {
 	return marshalPayload(mmPayload{
-		Text: notification.NeutralizeUserMentions(msg),
+		Text: notification.Truncate(
+			notification.NeutralizeUserMentions(msg),
+			mattermostTextLimit),
 	})
 }
 

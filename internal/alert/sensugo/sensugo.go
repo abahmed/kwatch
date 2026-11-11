@@ -16,19 +16,31 @@ import (
 const sensuAPIPath = "/api/core/v2/namespaces/%s/events"
 
 type sensuMetadata struct {
-	Name string `json:"name"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace,omitempty"`
 }
 
+// sensuEntity is the entity the event is about. Sensu Go's events API
+// expects an entity class; kwatch reports for an agentless (proxy)
+// entity, as its API examples do.
 type sensuEntity struct {
-	Metadata sensuMetadata `json:"metadata"`
+	EntityClass string        `json:"entity_class"`
+	Metadata    sensuMetadata `json:"metadata"`
 }
 
+// sensuCheck carries an interval: Sensu Go validates a check's interval
+// as positive, and an event check without one can be refused.
 type sensuCheck struct {
 	Metadata sensuMetadata `json:"metadata"`
 	Status   int           `json:"status"`
 	Output   string        `json:"output"`
 	Issued   int64         `json:"issued"`
+	Interval int           `json:"interval"`
 }
+
+// sensuEventInterval is the interval kwatch reports: how often it checks
+// at the most, not a schedule Sensu runs.
+const sensuEventInterval = 60
 
 type sensuPayload struct {
 	Entity sensuEntity `json:"entity"`
@@ -119,13 +131,17 @@ func (s *Sensugo) SendIncident(
 		m.NoteText(), safetext.LastOutput(m.Output), "\n\n", safetext.DetailsLimit)
 	payload := sensuPayload{
 		Entity: sensuEntity{
-			Metadata: sensuMetadata{Name: s.entity},
+			EntityClass: "proxy",
+			Metadata: sensuMetadata{Name: s.entity,
+				Namespace: s.namespace},
 		},
 		Check: sensuCheck{
-			Metadata: sensuMetadata{Name: m.AlertKey(s.clusterName)},
+			Metadata: sensuMetadata{Name: m.AlertKey(s.clusterName),
+				Namespace: s.namespace},
 			Status:   checkStatus(m),
 			Output:   output,
 			Issued:   s.now().Unix(),
+			Interval: sensuEventInterval,
 		},
 	}
 	body, err := json.Marshal(payload)

@@ -27,7 +27,7 @@ rules:
   resources: ["nodes/stats", "nodes/metrics", "pods/log"]
   verbs: ["get"]
 # /readyz: the prober and Pro evidence read the API server readiness checks.
-- nonResourceURLs: ["/readyz", "/metrics"]
+- nonResourceURLs: ["/readyz", "/metrics", "/version"]
   verbs: ["get"]
 - apiGroups: ["authorization.k8s.io"]
   resources: ["selfsubjectaccessreviews"]
@@ -59,7 +59,7 @@ rules:
   resources: ["nodes/stats", "nodes/metrics", "pods/log"]
   verbs: ["get"]
 # /readyz: the prober and Pro evidence read the API server readiness checks.
-- nonResourceURLs: ["/readyz", "/metrics"]
+- nonResourceURLs: ["/readyz", "/metrics", "/version"]
   verbs: ["get"]
 - apiGroups: ["apps"]
   resources: ["deployments", "replicasets", "statefulsets", "daemonsets", "controllerrevisions"]

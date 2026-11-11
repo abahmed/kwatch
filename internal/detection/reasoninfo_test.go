@@ -96,3 +96,12 @@ func TestEveryShownReasonNamesItsKinds(t *testing.T) {
 		}
 	}
 }
+
+// The kubelet pulls without a pull Secret it cannot read: the notice is
+// no failure by itself, and what it leads to shows in the pod's state.
+func TestPullSecretNoticeIsNotAFailureOfItsOwn(t *testing.T) {
+	_, failing := EventSeverity("FailedToRetrieveImagePullSecret")
+	assert.False(t, failing)
+	assert.True(t, ShownByStateOn("FailedToRetrieveImagePullSecret",
+		kube.KindPod))
+}

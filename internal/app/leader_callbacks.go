@@ -23,6 +23,9 @@ type leaderCallbacks struct {
 	activeRunner   activeComponentRunner
 	activeErrors   chan error
 	activeDone     chan struct{}
+	// sessionWait bounds the wait for the session to stop; zero uses
+	// activeSessionWait.
+	sessionWait time.Duration
 	// mu orders onStartedLeading against onStoppedLeading. client-go runs
 	// onStartedLeading in a goroutine and onStoppedLeading as Run returns,
 	// so a session could otherwise start after Run returned and nobody
@@ -38,6 +41,15 @@ type leaderCallbacks struct {
 	// renewalNanos is the newest Lease write, kept so the "leader" status
 	// starts with the acquire write that came before the callback.
 	renewalNanos atomic.Int64
+	// ended is set when this pod stopped the elector itself (endElection);
+	// an elector that returned without it lost the Lease.
+	ended atomic.Bool
+	// gaveUp is set when the session start failed on an outage and this
+	// pod ended its term while it still held the Lease.
+	gaveUp atomic.Bool
+	// startFailed is set when the session ended before its components
+	// started; the next rejoin then backs off (rejoinBackoff).
+	startFailed atomic.Bool
 }
 
 func (c *leaderCallbacks) callbacks() leaderelection.LeaderCallbacks {
@@ -75,13 +87,7 @@ func (c *leaderCallbacks) onStartedLeading(leaderCtx context.Context) {
 	if currentEpoch > 1 || c.observedLeader.Load() {
 		metrics.DefaultRegistry().LeaderTakeovers.Add(1)
 	}
-	if runErr := c.activeRunner(leaderCtx, c.deps); runErr != nil {
-		select {
-		case c.activeErrors <- runErr:
-		default:
-		}
-		c.cancelElection()
-	}
+	c.settle(leaderCtx, c.activeRunner(leaderCtx, c.deps))
 	close(c.activeDone)
 }
 
@@ -106,8 +112,9 @@ func (c *leaderCallbacks) onStoppedLeading() {
 		return
 	}
 	// A session that ended for a license edition change is a planned
-	// rebuild, not a lost Lease.
-	loss := c.parent.Err() == nil && !c.deps.editionRestart.Load()
+	// rebuild, not a lost Lease; nor is a term this pod gave up.
+	loss := c.parent.Err() == nil && !c.deps.editionRestart.Load() &&
+		!c.gaveUp.Load()
 	if loss {
 		metrics.DefaultRegistry().LeadershipLosses.Add(1)
 	}

@@ -36,6 +36,10 @@ type workerSet struct {
 	// its own drain deadline ends.
 	sendCtx    context.Context
 	cancelSend context.CancelFunc
+	// progressEvery replaces workerProgressInterval when set (tests).
+	progressEvery time.Duration
+	// sendLimit replaces sendTimeout when set (tests).
+	sendLimit time.Duration
 	// stuck is set when the workers outlived a shutdown deadline. Until
 	// they return, no new generation may start.
 	stuck bool

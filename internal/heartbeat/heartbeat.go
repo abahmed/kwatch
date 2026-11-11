@@ -18,6 +18,14 @@ import (
 // first ping follows soon after monitoring becomes ready.
 const readyCheckInterval = 5 * time.Second
 
+// A failed ping is retried after retryInitialWait, doubling up to
+// retryMaxWait, so a blip does not cost a whole interval of silence that
+// the external monitor reports as downtime.
+const (
+	retryInitialWait = 10 * time.Second
+	retryMaxWait     = time.Minute
+)
+
 // HeartbeatMonitor pings an external dead man's switch while kwatch is
 // monitoring. A ping means "kwatch is watching the cluster", so no ping
 // is sent while monitoring is not ready.
@@ -27,6 +35,10 @@ type HeartbeatMonitor struct {
 	// ready reports whether monitoring is ready; nil means always.
 	ready      func() bool
 	readyCheck time.Duration
+	// retryInitial and retryMax bound the wait before a failed ping is
+	// tried again; the wait doubles from the first to the second.
+	retryInitial, retryMax time.Duration
+	now                    func() time.Time
 }
 
 // NewHeartbeatMonitor builds a monitor with its shared HTTP client. ready
@@ -36,7 +48,9 @@ func NewHeartbeatMonitor(
 ) *HeartbeatMonitor {
 	return &HeartbeatMonitor{
 		config: cfg, client: client, ready: ready,
-		readyCheck: readyCheckInterval,
+		readyCheck:   readyCheckInterval,
+		retryInitial: retryInitialWait, retryMax: retryMaxWait,
+		now: time.Now,
 	}
 }
 
@@ -79,10 +93,13 @@ func (m *HeartbeatMonitor) Start(ctx context.Context, report StatusFunc) error {
 	// interval that the external monitor would report as downtime. A due
 	// ping waits until monitoring is ready.
 	due := true
+	var retry retrySchedule
 	for {
 		if due && m.monitoringReady() {
-			m.reportPing(m.ping(ctx), report)
+			err := m.ping(ctx)
+			m.reportPing(err, report)
 			due = false
+			retry.after(err, m, interval)
 		}
 		select {
 		case <-ctx.Done():
@@ -91,8 +108,42 @@ func (m *HeartbeatMonitor) Start(ctx context.Context, report StatusFunc) error {
 		case <-ticker.C:
 			due = true
 		case <-check.C:
+			due = due || retry.due(m.now())
 		}
 	}
+}
+
+// retrySchedule times the retries of failed pings.
+type retrySchedule struct {
+	at   time.Time
+	wait time.Duration
+}
+
+// after plans the next retry once a ping failed, or clears the schedule
+// once one succeeded. The wait never exceeds the ping interval.
+func (r *retrySchedule) after(
+	err error, m *HeartbeatMonitor, interval time.Duration,
+) {
+	if err == nil {
+		*r = retrySchedule{}
+		return
+	}
+	switch {
+	case r.wait == 0:
+		r.wait = m.retryInitial
+	default:
+		r.wait = min(2*r.wait, m.retryMax)
+	}
+	r.at = m.now().Add(min(r.wait, interval))
+}
+
+// due reports whether a planned retry has come, and consumes it.
+func (r *retrySchedule) due(now time.Time) bool {
+	if r.at.IsZero() || now.Before(r.at) {
+		return false
+	}
+	r.at = time.Time{}
+	return true
 }
 
 func (m *HeartbeatMonitor) monitoringReady() bool {

@@ -12,7 +12,7 @@ the first thing on each page says what is wrong in one sentence, the key
 details sit right under it, and the rest waits behind a click or a tab.
 
 - **Sidebar**: **Overview** (`/`, the landing page), **Issues**
-  (`/issues`, with the count of active issues), **Map** (`/map`),
+  (`/issues`, with the count of active issues),
   **Activity** (`/activity`) and **kwatch** (`/kwatch`). The old `/insights` page is
   part of the Overview now; its address redirects to `/`. The old
   `/releases` page is part of the issues now ("Releases" below); its
@@ -123,9 +123,14 @@ bottom:
 
 5. **This week**, below a line (`js/ovinsights.js`, `js/trends.js`,
    from `/api/insights` and `/api/trends`), kept short on purpose:
-   - four numbers: **Opened** (with "4 more than last week" when the
-     previous week is known), **Resolved**, **Paged the on-call
-     person** and **Time to resolve** (the median);
+   - four numbers, all over the issues someone was alerted about:
+     **Alerted** (opened minus settled on their own, with "4 more than
+     last week" from `previousWeekAlerted` when known), **Resolved**
+     (`resolvedAlerted` per day), **Alerted the on-call person** and
+     **Median time to resolve an alerted issue** (`resolveAlerted`,
+     "over 4 alerted issues resolved"); an older server without those
+     fields gives the plain counts. The settled-on-their-own line under
+     them is the side note;
    - **Day by day**: a column chart per day: opened (its paged part at
      the bottom) and resolved, each column labeled with its number, 0
      included, all from 0 on one scale, with a key. "Show as a table"
@@ -139,6 +144,29 @@ bottom:
    - **More**, folded: **Kept coming back**, **Started right after a
      change** (`afterChange`) and **Nodes with the most issues**
      (`nodes`), each only when it has something to show.
+
+Two quiet additions (`js/paging.js`): while `scalingHold` is set the
+status tile adds "Paging held while the cluster scales · until ~14:20"
+(`expectedEnd`, in the chosen zone; the tooltip has since when). The
+server sends no `scalingHold` for a non-production cluster: nothing
+pages there, so nothing is held. Under "Look at these first" one muted
+line, "3 old problems not shown (already failing for 30+ days when
+kwatch first saw them) Show them", unfolds `oldProblems.items` (kind
+· namespace/name, what is wrong, "for about 2 years"; the first ten,
+then "Show all N", and "+10 more problems not shown." when `count` is
+more than the items sent). The number of days is `oldProblems.days`
+(the configured `oldProblemDays`); without it the line says "already
+failing for a long time when kwatch first saw them". The ages use the words
+of the issue's "Lowered to Low" line (`spokenDays` in
+`internal/incident/old_problem.go`): "about a year" from 365.25 days.
+The line is left out when `oldProblems.count` is 0 or absent.
+
+"Show all N" is remembered across redraws the way the open fold is:
+`KW.objectList` marks the expanded list (`data-all`) and the caller
+reads the mark before it empties the box, here and in "Objects left
+behind" on the issue page. That list has one row per object (an object
+with several failures names them all in one row), so
+`leftoverObjects`, the rows and the cap of 100 all count objects.
 
 Cards carry a title only, and a card with nothing to show is left out.
 kwatch's own health is on the kwatch page and the change feed on
@@ -159,6 +187,27 @@ resolved 14:02" on a resolved issue. When kwatch stopped tracking an
 issue while it was still failing, a prominent "Stopped tracking: not
 fixed" banner sits above the card and says whether a container still
 crashed or it was short of replicas.
+
+**Why the level** (`js/paging.js`, `KW.levelNote`): one line under the
+severity chip, only when kwatch held the page while the cluster scales
+(`why.pagingHeldReason`) or lowered or capped the level
+(`why.alertLevelReason` starting "Lowered to", "Not paged" or "… instead
+of …"): its first sentence, the whole in the tooltip. A held page adds
+" · until ~14:20" (`why.pagingHeldUntil`, Local/UTC aware), and "Who was
+alerted?" says "Nobody was alerted yet: the page is held while the
+cluster scales, until ~14:20". Before both, `why.unverifiedReason`
+("kwatch can't verify this right now: …", `incident.Manager.Unverified`:
+a finding held 10 minutes over a kind kwatch cannot read) takes the
+line while the issue is open. Any other level
+reason is only in the Alerts tab ("Why you got this alert").
+
+**Objects left behind**: an issue that groups the objects a removed or
+stopped controller left behind (`leftoverObjects`, `leftovers`) says
+"12 objects left behind · See which →" in "What's wrong?", which opens
+the first section of the Impact tab: one line per object (kind ·
+namespace/name, then what is wrong, the reason in the tooltip), the
+first ten shown and "Show all 12" for the rest (the detail lists 100 at
+most; "+N more objects not shown" past that).
 
 **The stepper** (`summary.stage`): Confirming → Happening now → Looks
 better → Resolved, the current step marked with "since 03:29"; it says
@@ -292,35 +341,25 @@ book is kept in the state file (`dashboard.releases`), at most 500
 releases or 7 days, and in memory without one; it is looked at every 15
 seconds.
 
-## Map
+## How it connects
 
-`/map` (`js/map.js`, `js/maplayout.js`, `map.css`, from `/api/map`)
-draws how objects connect and where it is failing, from relations every
-cluster has: an Ingress or HTTPRoute routes to a Service, a Service
-sends to the workload whose pods it selects (pods are folded into their
-Deployment, StatefulSet, DaemonSet or CronJob, "2/3 ready"), and, where
-kwatch knows them (configuration or observed calls), the Services a
-workload calls, including those of other namespaces (dashed boxes). It
-works without any call data: the drawing then stops at the workloads.
+The Impact tab of an issue (`js/map.js`, `js/maplayout.js`, `map.css`, from
+`map` in `GET /api/incidents/{id}`) draws how the objects around the issue
+connect, from relations every cluster has: an Ingress or HTTPRoute routes
+to a Service, a Service sends to the workload whose pods it selects (pods
+are folded into their Deployment, StatefulSet, DaemonSet or CronJob, "2/3
+ready"), and, where kwatch knows them (configuration or observed calls),
+the Services a workload calls, including those of other namespaces (dashed
+boxes). The fold stays hidden when kwatch knows no connection. There is no
+separate Map page and no `/map` or `/api/map`.
 
-- **One namespace** (default; the one with the most failing objects
-  when none is picked) or **What's failing**: every object an open
-  issue touches across the watched namespaces, with the objects one
-  connection away. Namespaces kwatch does not watch never show.
-- **Show nodes** adds the nodes the workloads run on.
-- Boxes take the color of the worst open issue touching them (root,
-  members or impact): urgent red, needs attention amber, low outlined,
-  no open issue plain. A box with an issue opens it; any other says its
-  state below the drawing. Boxes are reachable with Tab and open with
-  Enter.
-- Objects are laid out left to right by how traffic flows (routes,
-  Services, workloads, what they call, nodes), ordered in each column
-  to keep crossings few, and drawn as SVG with no outside library. The
-  drawing scrolls inside its frame.
-- **Objects and connections** lists the same objects and edges as text,
-  under the drawing; under 700 px wide only the list shows.
-- More than 150 objects are not drawn: the page says how many there are
-  and asks for a namespace.
+- Boxes take the color of the worst open issue touching them: urgent red,
+  needs attention amber, low outlined, no open issue plain. A box with an
+  issue opens it. Boxes are reachable with Tab and open with Enter.
+- Objects are laid out left to right by how traffic flows, ordered in each
+  column to keep crossings few, and drawn as SVG with no outside library.
+- **As a list** shows the same objects and edges as text under the drawing;
+  under 700 px wide only the list shows.
 
 ## Activity
 
@@ -348,7 +387,9 @@ about" removes them again. The link shows only when there are some.
 `/api/status` and `/api/coverage`) answers "is kwatch itself working,
 can it see the cluster, and do alerts get out": the same notices as the
 Overview plus "kwatch can't read pod logs", one verdict line ("kwatch is
-running, but some alerts aren't getting out"), and the cards **kwatch
+running, but some alerts aren't getting out"; under it the outlined
+badge "Non-production cluster: nothing pages" while the `kwatch` part
+of `/api/status` has `nonProduction`, nothing otherwise), and the cards **kwatch
 itself** (running since, last restart and why, last API contact,
 messages waiting, restarts in the last 24 hours on a time line) beside
 **About this kwatch** (version, plan, last check, scope), **Where alerts
@@ -373,6 +414,36 @@ holds it (48 hours), the `kubectl exec … kwatch replay-export --since …
 --until …` command to export it (see "Cause self-check" in
 docs/production-operations.md).
 
+Blind spots: `kwatch.blindSpots` of `/api/status` (`blind_spots.go`,
+from `health.ComponentErrors`, wired in `app/dashboard_blind_spots.go`)
+lists each optional part that does not work as `{part, reason}`;
+`pod-logs` and `coverage` are left out, the page shows them from their
+own fields. `KW.blindWords` (pages.js) words them from
+`KW.TERMS.blind` (head: what kwatch can't do; text: why and what it
+means, never a fix step). Each gets an amber notice above the verdict;
+`KW.selfIssues` adds its head, so the side bar's dot counts it
+(`data-count`, "N things need a look") and the verdict says "kwatch is
+running, but N things need a look" without repeating the notices.
+`KW.blindList` adds one more entry, `scope-waiting`, when
+`kwatch.scopeWaiting` (`incident.Manager.ScopeWaiting`, read through the
+incident source in `incident_waits.go`) counts announcements waiting
+only for a namespace's labels: "N issues are waiting: kwatch hasn't
+read their namespace's labels yet", counted like the others; absent at 0.
+
+A kwatch still reading the cluster says so once: the verdict tile
+("kwatch is starting up", on the Overview "kwatch is loading what it
+knows") carries the progress meter (`KW.startupLine`); no notice beside
+it. About says "Watching" once ("every namespace").
+
+Cluster name: `cluster` of `/api/status` (the status report's, the name
+alerts carry). `KW.cluster` = `{name, label, nonProduction}` (label
+"unnamed cluster" when unset), set by `KW.selfDot` on every status
+read, null before sign-in and on the sign-in page. The side bar shows it
+under the brand with the outlined "Non-production" chip; the tab title
+reads "Issues - shop-eu (non-production) - kwatch" (`KW.clusterTitle`).
+Copy summary reads `KW.cluster`. Not shown before sign-in: the name may
+say more than the address does.
+
 ## Keyboard
 
 The **?** beside the logo opens the help: the colors and alert levels,
@@ -382,7 +453,7 @@ short.
 
 | Keys | Does |
 |:--|:--|
-| `g` then `o` / `i` / `m` / `a` / `k` | Overview / Issues / Map / Activity / kwatch |
+| `g` then `o` / `i` / `a` / `k` | Overview / Issues / Activity / kwatch |
 | `/` | search the issues |
 | `j` `k` | next / previous row, or issue while one is open beside the table |
 | `Enter` | open the issue beside the table (Cmd or Ctrl and click: its own page in a new tab) |
@@ -432,7 +503,7 @@ notes row of the summary card says "Some text shortened".
 | `seenBefore` | Seen before | the incident's own history of earlier occurrences of the same root (kwatch keeps the last 30) | 30 |
 | `snapshot`, `snapshots` | When it broke | the failing containers (not ready, restarted, or waiting or ended for a reason) of the incident's pods, stored when it opened (`reason: "first break"`) and replaced each time it got worse (`"got worse"`: its tier rose or it reopened); same row fields as `containers`, as they were then. `snapshot` is the latest of `snapshots` (oldest first) | 2 snapshots, 10 containers each |
 | `transitions` | the states strip | every state and tier change: `at`, `kind` (`opened`, `announced`, `recovering`, `failing again`, `flapping`, `reopened`, `resolved`, `state changed`, `tier raised`, `tier lowered`), `from`, `to` (state names, or tier names for a tier change) | 50 newest |
-| `why` | Why this level, why still open | `alertLevelReason`: why the incident is at its alert level, in plain words (a page rule, a known or routine failure, a configured override, a level kept from earlier …); `stillOpenReason`, e.g. "Looks better; closes after 3m healthy, 1m20s so far", "Confirming: making sure it still fails before alerting, 40s left", "Flapping: waiting for 30m stable, 5m so far"; `holdTotal` and `holdElapsed` in seconds; `cannotSee`, true when kwatch can't see the object right now (the page says so and shows no countdown). Timers come from kwatch's latest tick; a resolved incident has only `alertLevelReason` | |
+| `why` | Why this level, why still open | `alertLevelReason`: why the incident is at its alert level, in plain words (a page rule, a known or routine failure, a configured override, a level kept from earlier …); `stillOpenReason`, e.g. "Looks better; closes after 3m healthy, 1m20s so far", "Confirming: making sure it still fails before alerting, 40s left", "Flapping: waiting for 30m stable, 5m so far"; `holdTotal` and `holdElapsed` in seconds; `cannotSee`, true when kwatch can't see the object right now (the page says so and shows no countdown); `pagingHeldReason`, "Paging held: cluster is scaling" on a page that waits for the cluster's scaling to settle (absent otherwise), with `pagingHeldUntil`, when the hold ends if no node changes again; `unverifiedReason`, "kwatch can't verify this right now: …" when a finding has been held 10 minutes over a kind kwatch can no longer read (absent otherwise). An incident the non-production setting kept from paging has an `alertLevelReason` that starts "Not paged: non-production cluster". Timers come from kwatch's latest tick; a resolved incident has only `alertLevelReason` | |
 | `ack` | Acknowledged | `note` (the annotation's text, redacted), `since` (when kwatch saw it or its note change), `by` (the tool that wrote it: the field manager the object's managed fields name for the `kwatch.dev/ack` key, such as `kubectl-annotate`; absent when they name none) and `on` (the object that carries it) | |
 | `causedBy`, `causing` | Caused by, Other issues | the other open incidents this one is caused by and the ones it causes, as the reasoning ties them (a failure chain that goes on past its limit into the other's failures, or a cause rooted at the other's root): `id`, `title` (the headline of its last message, else its root), `severity`, `state` | 5 each |
 | `blastRadius` | Who it hits | one line from the impact and the failing pods, such as "Affects 2 services, 1 ingress and 3 of 4 pods of payments"; once nothing fails (or after the resolve), the widest it reached | |
@@ -571,7 +642,9 @@ week); it narrows resolved issues only, never active ones.
 at most, cut with "…"; the tooltip has the whole title and the likely
 cause; after it, small marks for how often it failed again, `× 3`, New /
 Changed since your last visit, the muted labels "Settled before
-alerting" (see "Layout and reading order") and "Stopped tracking"),
+alerting" (see "Layout and reading order") and "Stopped tracking", and
+"12 objects" on an issue that groups the objects a removed or stopped
+controller left behind, from the row's `leftoverObjects`),
 the severity badge, where (one mono
 cell: the namespace, or "whole cluster", then the object: `payments ·
 deployment/payments-api`; it replaces the old Namespace and Object
@@ -604,7 +677,11 @@ first on the page for the keyboard, goes to the first row. Below 1100
 px wide the Where column hides and the sidebar and page margins
 narrow; below 900 px each row becomes a card
 (the column name above each value, empty values left out), so the page
-never scrolls sideways; the order is then picked with the "Sort"
+never scrolls sideways (a card: the title, where in two lines at most,
+then the level, the time and the title's marks on one line where they
+fit, wrapping only when they don't; the title cell and its marks are
+`display: contents` there, so a card stays under 175 px with every
+mark); the order is then picked with the "Sort"
 picker above the table, since the column headers are hidden. The
 title column keeps at least 14rem; the other columns have fixed widths
 (so they stay put between views) unless dragged.
@@ -1029,20 +1106,6 @@ regressed, failed and down; `wrong` is up to five of them with `id`,
 `GET /api/incidents?release=bad` lists the issues caused by a release
 that went wrong in the last 24 hours.
 
-## Map API
-
-`GET /api/map?view=namespace|failing&namespace=&nodes=1`, read-only, with
-the session and an `ETag` like the other reads; `400` for another `view`
-or `nodes` value, `503` before the pipeline runs.
-
-| Field | Data |
-|:--|:--|
-| `view`, `namespace` | the view drawn and, for `namespace`, the namespace (the one asked for, else the one with the most failing objects, else the first) |
-| `namespaces` | the watched namespaces, for the picker |
-| `nodes` | `{id, kind, name, namespace, level, ready, issue, external}`: `level` is `page`, `notify`, `digest` or `ok` (the worst open issue touching the object, quiet and resolved ones left out), `issue` its ID, `ready` "ready/wanted" for workloads, `external` an object of another namespace this one calls |
-| `edges` | `{from, to, type}`: `routes`, `selects`, `calls`, `runs-on` (with `nodes=1`) |
-| `tooMany`, `count` | more than 150 objects: nothing is drawn and `count` says how many |
-
 ## Activity API
 
 The Activity page (`js/activity.js`, see "Activity", from
@@ -1096,7 +1159,7 @@ those resolved within the last week), with its own clock; quiet
 | Issues opened per day | each incident's kept open times (`Occurrences`: first open, reopens and recurrences, at most 30 per incident), bucketed into the 7 calendar days ending today; colored by the issue's alert level now. An opening no message reached (the incident settled, recovered or moved before alerting, or an earlier occurrence that was not heard) is counted as `untold` (in `total`, in no level), never as a page or a notification |
 | Busiest namespaces | open times per namespace in those days, top 5; each links to `/issues?status=active&namespace=` when the namespace has an active issue, else `/issues?status=resolved&namespace=` |
 | Kept coming back | issues opened twice or more in those days, or flapping now; top 5 by openings, then flapping, then repeat count; each links to its issue and names its namespace and object (`workloadKind` as on list items) |
-| Time to resolve | median and longest time from open to resolve of every occurrence (the incident's `History` and the incident itself) resolved in those days; the longest links to its issue |
+| Time to resolve | median and longest time from open to resolve of every occurrence (the incident's `History` and the incident itself) resolved in those days; the longest links to its issue. `resolveAlerted` is the same over the occurrences someone was alerted about; `previousWeekAlerted` counts the told openings of the week before |
 
 `tzName` is the dashboard's zone as an IANA name (`Africa/Cairo`: letters,
 digits and `/ _ - +`, at most 64 characters; the browser's zone, or `UTC`
@@ -1195,6 +1258,7 @@ objects" until the first read is done, and "Alert links are off" with
 | `stateFile` | `bytes` (the state file's size), `capBytes` (the size cap the compactor keeps the stored data under: 512 MiB by default) and `capKnown`; while no session runs it is absent |
 | `likelyMisses` | the cause self-check's likely wrong causes of the last 7 days, newest first, at most 50 (Pro; absent otherwise): `{id, rule, root, other, change, opened, resolved, exportSince, exportUntil}`, `other` and `change` saying what changed instead, the export window 10 minutes either side of the incident |
 | `resources` | kwatch's own container, read from its cgroup (v2, else v1) every 15 s, so it needs no metrics-server and no extra permission: `memory` `{used, limit}`, `cpu` `{cores, limitCores}` (use between the last two samples; absent until there are two), `disk` `{used, total}` of the volume that holds the state file, and `stateFile` as above. `limit` and `limitCores` are absent when the container has none; a part kwatch can't read is absent, and `resources` is absent when nothing is known. `disk` and `stateFile` need a state file |
+| `nonProduction` | true when `app.environment: non-production` is set: nothing in the cluster pages, every incident is capped at Needs attention |
 | `restarts24h`, `outboxPending` | the restarts of the last 24 hours and the messages waiting, as in `self` |
 | `failedSendsLastHour` | as `failedLastHour` |
 
@@ -1209,6 +1273,7 @@ running. It reads the incidents the dashboard holds (at most 20,000).
 | `counts` | the issues not resolved by severity: `urgent` (page), `attention` (notify), `low` (digest), `quiet` (silent) |
 | `lookFirst` | at most 5 active issues (not resolved, not quiet): the urgent ones nobody acknowledged first, then the newest started, then by ID; each `{id, title, namespace, kind, name, severity, state, since, acked}` (`kind`/`name` are the root object's, `title` at most 200 characters) |
 | `failedSendsLastHour` | the provider sends that failed or are being retried in the last hour, as `failedLastHour` on `/api/status`; absent without delivery |
+| `scalingHold` | set while pages are held because the cluster is scaling (many nodes added or removed): `{reason, since, expectedEnd}`, `reason` "Paging held: cluster is scaling", `since` when the nodes began to come and go, `expectedEnd` when the hold ends if no node changes again (the wave over plus the grace); absent otherwise |
 
 ## Insights API
 
@@ -1227,7 +1292,7 @@ resolved and not quiet.
 | `nodes` | Nodes with the most issues | the 5 nodes with the most active issues (the issue is about the node, or its pods run there, from the live inventory), with how many are urgent; each links to `/issues?status=active&node=` |
 | `causes` | Top causes this week | the 5 failure families with the most issues kwatch holds (it keeps a week), counted as `/issues?status=all&mode=` lists them (active quiet issues left out), with a plain label ("Image pull failures", "Out of memory"; other families split into words) and how many are still active |
 | `namespaces` | Namespaces with active issues | one tile per namespace with active issues: its most urgent severity and count, with `urgent`, `attention` and `low` counts, most urgent first, then most issues, then A to Z; at most 60 (`more` counts the rest). Each tile is a link to `/issues?status=active&namespace=`, in a list, with the count and severity in words, not color alone. Cluster-wide issues have no tile |
-| `days` | the week chart | the 7 calendar days ending today in the requested zone (`tzName`, else `tz`, as on `/api/trends`, so a daylight-saving change is counted right): `{date, opened, resolved, paged, untold}`; `opened` counts every kept opening (reopens included), `resolved` every resolve (earlier occurrences included, a superseded incident not), `paged` the openings that paged (an earlier occurrence that paged, or the current one while the issue is urgent and a message of it went out), `untold` the openings no message reached (settled, recovered or moved before alerting, or an earlier occurrence that was not heard; counted as `untold` on `/api/trends`, and also in `opened`, always present, 0 when none); quiet issues left out |
+| `days` | the week chart | the 7 calendar days ending today in the requested zone (`tzName`, else `tz`, as on `/api/trends`, so a daylight-saving change is counted right): `{date, opened, resolved, paged, untold, resolvedAlerted}` (`resolvedAlerted`: the resolves of issues someone was alerted about); `opened` counts every kept opening (reopens included), `resolved` every resolve (earlier occurrences included, a superseded incident not), `paged` the openings that paged (an earlier occurrence that paged, or the current one while the issue is urgent and a message of it went out), `untold` the openings no message reached (settled, recovered or moved before alerting, or an earlier occurrence that was not heard; counted as `untold` on `/api/trends`, and also in `opened`, always present, 0 when none); quiet issues left out |
 | `quiet` | not drawn now | only when nothing is active: `objects` (the inventory's size), `namespaces` and `kinds` watched (coverage) and `lastScan`, with the scope from `/api/status` in the Issues page's words: "Watching every namespace (34 namespaces now) · 2,841 objects · last checked 10 s ago · What kwatch is watching" |
 
 The body is bounded (5 entries per list, 60 tiles, texts cut to 200
@@ -1311,15 +1376,15 @@ true while the stream is quiet.
   the usual check, so a wrong token still gets `401` and counts. Every
   other `/api/*` route still answers `401` when signed out. The answer
   is `Cache-Control: no-store` like every other.
-- **Behind a trusted proxy** (`dashboard.trustProxy`), the client is
+- **Behind a trusted proxy** (`dashboard.trustedProxies`), the client is
   the address the proxy appended to `X-Forwarded-For` (a value that is
   not an IP address is ignored and the peer is limited instead), and
   only that client is limited: guesses from some clients never lock out the
   others. Failures through one proxy are counted only to log a warning
   ("many dashboard sign-in failures through one proxy") when 100 come
-  in a minute. Without `trustProxy` behind an Ingress every client
+  in a minute. Without `trustedProxies` behind an Ingress every client
   shares the proxy's address and its one limit.
-- **Shared mode** (`dashboard.mode: shared`) refuses sign-in over plain http
+- **Shared mode** (`dashboard.trustedProxies` or `dashboard.tls` set) refuses sign-in over plain http
   (`403 https_required`) and refuses the bearer token over plain http
   too (`403`, "the token must be sent over https"), except from
   loopback, which is how a `kubectl port-forward` arrives. Over https
@@ -1435,3 +1500,31 @@ existing tokens only.
 - Traffic impact rows list `Users reach it at`: up to 8 host/path rows,
   the ones without ready endpoints first, with ready and total
   endpoints.
+
+## Issue page polish (R8b)
+
+- **Heading**: `KW.issueHeading` is `KW.shortTitle` of the whole title (the
+  rule the Overview and lists use); the whole title is the `h1` tooltip
+  and the "Full title" fold (`[data-full-title]`). The drawer uses the
+  same heading.
+- **"Was Urgent"**: `KW.wasChip` (muted `c-acked c-was`) replaces the
+  level chip on rows that settled on their own (`KW.isUntold`), on Issues
+  and Activity; the tooltip is `TERMS.settled.wasTitle`.
+- **Copy summary** adds `Cluster:` (read from `KW.cluster`, a string or
+  `{name}`, only when set), `Proof:` (`KW.proofLine`) and `Alerted:`
+  (`KW.firstAlert`, or "nobody").
+- **Phones**: the proof line (`.ds-raw-t`) and log lines wrap by default
+  (`evidence.js` sets `.wrap` once; the toggle still works). The tab
+  strip gets `.more` while tabs are off the edge (fade and arrow).
+- **Top card** shows the acknowledge command (`KW.ackCommand`, the one
+  of the Alerts tab) beside "Not acknowledged yet": a command to copy,
+  never a button. The Alerts line reads "Why this level" without an alert.
+- **Issues 900-1100 px**: `.it-ns` (namespace) shows under the title
+  while the Where column is hidden. Titles wrap with `break-word` and
+  `text-wrap: balance`. Activity's time column is `nowrap`; the
+  timeline's "Show every time" stamps use `KW.when` in `.tl-stamp`
+  (`nowrap`).
+
+## Testing
+
+Browser tests (`-tags browser`) also run with `KWATCH_BROWSER_TEXT_WIDER=1` (text 2% wider, as Linux draws it) to keep headroom in the phone layout; `KWATCH_BROWSER_WIDE_FONT=1` swaps in Verdana (stricter than the layout promises).

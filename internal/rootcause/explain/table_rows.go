@@ -248,7 +248,7 @@ var workloadRows = []Row{
 	{
 		Name: "config-missing-or-changed",
 		Cause: Side{Kind: kube.KindSecret, Modes: []detection.Mode{ModeMissing,
-			ModeChanged}},
+			ModeChanged, ModeKeyMissing}},
 		// A Secret can be an image pull Secret: a pod that cannot
 		// pull with a missing or rotated login fails with ImagePull.
 		Link: LinkUses, Effect: podSide(
@@ -258,7 +258,7 @@ var workloadRows = []Row{
 	{
 		Name: "configmap-missing-or-changed",
 		Cause: Side{Kind: kube.KindConfigMap, Modes: []detection.Mode{
-			ModeMissing, ModeChanged}},
+			ModeMissing, ModeChanged, ModeKeyMissing}},
 		Link: LinkUses, Effect: podSide(configModes...), Prior: 0.7,
 	},
 	{

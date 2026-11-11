@@ -43,10 +43,50 @@ func sleepContext(ctx context.Context, d time.Duration) error {
 	return ctx.Err()
 }
 
+// rebuildReason is why a generation asked for the next one.
+type rebuildReason string
+
+const (
+	rebuildNone rebuildReason = ""
+	// rebuildEdition: the license changed the edition.
+	rebuildEdition rebuildReason = "edition"
+	// rebuildLeadershipLost: the Lease was lost while the application
+	// still ran; the next generation rejoins the election.
+	rebuildLeadershipLost rebuildReason = "leadership_lost"
+)
+
+// rebuildReason is why this generation asked for a new one, if it did.
+// An edition change wins: it also changes what the next one runs.
+func (d *serverDeps) rebuildReason() rebuildReason {
+	switch {
+	case d.editionRestart.Load():
+		return rebuildEdition
+	case d.leaseLost.Load():
+		return rebuildLeadershipLost
+	default:
+		return rebuildNone
+	}
+}
+
 // rebuildRetry retries one step of a rebuild on transient errors. The nil
 // value runs the step once, which is how the first start behaves.
 type rebuildRetry struct {
 	sleep sleepFunc
+	// reason names the rebuild in logs and metrics; empty is an edition
+	// rebuild.
+	reason rebuildReason
+}
+
+// forReason is a copy of r that reports for reason.
+func (r *rebuildRetry) forReason(reason rebuildReason) *rebuildRetry {
+	if r == nil {
+		return nil
+	}
+	return &rebuildRetry{sleep: r.sleep, reason: reason}
+}
+
+func (r *rebuildRetry) rejoin() bool {
+	return r != nil && r.reason == rebuildLeadershipLost
 }
 
 // transientRebuildError reports whether err can clear by waiting for the
@@ -77,10 +117,12 @@ func (r *rebuildRetry) do(
 			return fmt.Errorf("%s: still failing after %d attempts: %w",
 				stage, attempt, err)
 		}
-		klog.InfoS("edition rebuild step failed; retrying",
+		klog.InfoS(r.what()+" step failed; retrying",
 			"component", "app", "stage", stage, "attempt", attempt,
 			"retryIn", wait, "error", err.Error())
-		metrics.DefaultRegistry().IncEditionRebuild("retry")
+		if !r.rejoin() {
+			metrics.DefaultRegistry().IncEditionRebuild("retry")
+		}
 		if serr := r.sleep(ctx, wait); serr != nil {
 			return fmt.Errorf("%s: retry canceled: %w: %w",
 				stage, serr, err)
@@ -90,16 +132,43 @@ func (r *rebuildRetry) do(
 	}
 }
 
-// failRebuild reports a rebuild that gave up, so `kubectl logs --previous`
-// of the restarted pod says why. It returns err unchanged.
-func failRebuild(stage string, err error) error {
-	klog.ErrorS(err, "edition rebuild failed", "component", "app",
+func (r *rebuildRetry) what() string {
+	if r.rejoin() {
+		return "leadership rejoin"
+	}
+	return "edition rebuild"
+}
+
+// fail reports a rebuild that gave up, so `kubectl logs --previous` of
+// the restarted pod says why. It returns err unchanged.
+func (r *rebuildRetry) fail(stage string, err error) error {
+	klog.ErrorS(err, r.what()+" failed", "component", "app",
 		"stage", stage)
-	metrics.DefaultRegistry().IncEditionRebuild("failed")
+	if r.rejoin() {
+		metrics.DefaultRegistry().IncLeadershipRejoin("failed")
+	} else {
+		metrics.DefaultRegistry().IncEditionRebuild("failed")
+	}
 	return err
 }
 
-func logRebuild(deps *serverDeps) {
+// succeed counts a rebuilt generation that is about to serve.
+func (r *rebuildRetry) succeed() {
+	if r.rejoin() {
+		metrics.DefaultRegistry().IncLeadershipRejoin("success")
+		return
+	}
+	metrics.DefaultRegistry().IncEditionRebuild("success")
+}
+
+func logRebuild(deps *serverDeps, reason rebuildReason) {
+	if reason == rebuildLeadershipLost {
+		klog.InfoS("lost the state lock Lease; rejoining leader "+
+			"election in a new generation", "component", "app",
+			"reason", string(reason))
+		return
+	}
 	klog.InfoS(fmt.Sprintf("edition changed to %s, rebuilding components",
-		editionLabel(deps.edition.Load().Edition())), "component", "app")
+		editionLabel(deps.edition.Load().Edition())), "component", "app",
+		"reason", string(reason))
 }

@@ -1,0 +1,24 @@
+10:06:56 settled
+🟠 Cron job rollup in batch (prod-eu-1) is failing: exited with code 1. Cause not found yet: its registry is healthy and unchanged. It fails with "panic: rollup table is locked".
+Related alerts: 3 failed pods
+To see the pod's state and events, run kubectl describe pod rollup-292510-a -n batch
+🟠 Cron job rollup in batch (prod-eu-1) is failing: exited with code 1.
+| 🟠 Cron job **rollup** in **batch** (**prod-eu-1**) is failing: exited with code 1.
+| Cause not found yet: its registry is healthy and unchanged.
+| It fails with `panic: rollup table is locked`.
+| Related alerts: 3 failed pods
+| To see the pod's state and events, run
+| ```
+| kubectl describe pod rollup-292510-a -n batch
+| ```
+10:07:01 material change
+🟠 Cron job rollup in batch (prod-eu-1) now has a last run that failed less than a minute ago: it ran out of retries. Its last run, job rollup-292510, failed after 3 pod failures.
+🟠 Cron job rollup in batch (prod-eu-1) now has a last run that failed less than a minute ago: it ran out of retries.
+| 🟠 Cron job **rollup** in **batch** (**prod-eu-1**) now has a last run that failed less than a minute ago: it ran out of retries.
+| Its last run, job **rollup-292510**, failed after 3 pod failures.
+10:15:01 healthy for 3m0s
+✅ Cron job rollup in batch (prod-eu-1) is healthy again. It was failing for six minutes and recovered on its own. Three pods were affected.
+✅ Cron job rollup in batch (prod-eu-1) is healthy again.
+| ✅ Cron job **rollup** in **batch** (**prod-eu-1**) is healthy again.
+| It was failing for six minutes and recovered on its own.
+| Three pods were affected.

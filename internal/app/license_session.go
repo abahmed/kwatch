@@ -41,6 +41,8 @@ type licenseSession struct {
 	restart     chan struct{}
 	stopOnce    sync.Once
 	wg          sync.WaitGroup
+	// restartWait paces the loop's restart after a panic; nil is a timer.
+	restartWait func(context.Context, time.Duration) bool
 }
 
 // startLicense creates the manager and, when a key is set, runs the first
@@ -100,11 +102,11 @@ func (l *licenseSession) watch(ctx context.Context) {
 	l.wg.Add(1)
 	go func() {
 		defer l.wg.Done()
-		l.loop(ctx)
+		l.keepLoop(ctx)
 	}()
 }
 
-func (l *licenseSession) loop(ctx context.Context) {
+func (l *licenseSession) loop(ctx context.Context, ready func()) {
 	tick := time.NewTicker(l.deps.license.tickEvery())
 	defer tick.Stop()
 	var debounce *time.Timer
@@ -130,6 +132,7 @@ func (l *licenseSession) loop(ctx context.Context) {
 		}
 	}
 	observe(l.mgr.Status())
+	ready() // a loop that panics before here backs off (keepLoop)
 	for {
 		select {
 		case <-ctx.Done():

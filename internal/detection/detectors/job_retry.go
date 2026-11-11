@@ -37,6 +37,11 @@ func hasRetriesLeft(job inventory.Entity) bool {
 			return false
 		}
 	}
+	// With a limit per index the failed count spans every index: each
+	// index retries on its own until the Job is Failed.
+	if _, perIndex := number(job, kube.AttrBackoffLimitPerIndex); perIndex {
+		return true
+	}
 	failed, _ := number(job, kube.AttrFailed)
 	limit, known := number(job, kube.AttrBackoffLimit)
 	if !known {

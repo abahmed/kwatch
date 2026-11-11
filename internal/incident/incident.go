@@ -152,8 +152,9 @@ type Incident struct {
 	Headline string
 	// Problem is the stable headline of what is failing (problem.go),
 	// written when the incident opens and when the problem changes,
-	// never from an update, a recovery or a move. Persisted.
-	Problem string
+	// never from an update, a recovery or a move. Persisted. Problem is
+	// bounded for lists; ProblemFull is the same title uncut.
+	Problem, ProblemFull string
 	// problemKey is what Problem was written for; see problemKey.
 	problemKey string
 	// DocsLink is the configured runbook link the last message named,
@@ -215,9 +216,9 @@ type Incident struct {
 	SupersededRoot inventory.EntityID
 	// Moved links the incidents moved into one another (moved.go).
 	Moved Moved
-	// Reminded is when the last weekly "still open" update was sent;
-	// zero until the first.
-	Reminded time.Time
+	// Reminded is the last "still open"; Reminders counts them since news.
+	Reminded  time.Time
+	Reminders int
 	// DigestedAt is when a digest last listed this incident; zero when
 	// none did. A recurrence reads it through History (see
 	// DigestWorthy).
@@ -259,6 +260,11 @@ type Incident struct {
 	// back within RepageWindow at its latest reopen; zero when it never
 	// reopened. Writers read it instead of the timeline note.
 	RepeatCount int
+	// ackIgnored are the objects whose ack annotation is older than the
+	// incident (ack_stale.go). Replaced, never changed. ackAll: too
+	// many to list, so every annotation older than it counts as known.
+	ackIgnored []inventory.EntityID
+	ackAll     bool
 	// attemptLate records that the thread already said the incident
 	// still fails FixWatch after Attempt.
 	attemptLate bool
@@ -325,6 +331,8 @@ type Incident struct {
 	// restored marks an incident loaded from the state file; only such
 	// incidents wait out the restore grace.
 	restored bool
+	// marks are the incident's persisted marks (persist_marks.go).
+	marks Marks
 	// restoredTier is the tier of the saved record: a rise above it is
 	// news adoptedFingerprint must not swallow (see toldTier).
 	restoredTier Tier
@@ -357,6 +365,10 @@ type Incident struct {
 	// generic, non-critical condition, so its members alone are not
 	// critical either. It is recomputed with the impact.
 	routedMissing bool
+	// chronic is how long the failure had already lasted when the
+	// incident opened, when every member that may interrupt anyone is
+	// that old (see old_problem.go). Zero for a new onset.
+	chronic time.Duration
 }
 
 // criticalRoot reports a root that takes something away from everyone
@@ -372,19 +384,6 @@ func (inc *Incident) criticalRoot() bool {
 func (inc Incident) TrafficLost() bool {
 	return inc.trafficLost
 }
-
-// Scope records the delivery scope of an incident's announcement.
-type Scope uint8
-
-// Scopes.
-const (
-	// ScopeUnknown means no announcement was judged yet.
-	ScopeUnknown Scope = iota
-	// ScopeIn means the announcement was delivered.
-	ScopeIn
-	// ScopeOut means the announcement was dropped as out of scope.
-	ScopeOut
-)
 
 // Event is one line of the incident timeline.
 type Event struct {

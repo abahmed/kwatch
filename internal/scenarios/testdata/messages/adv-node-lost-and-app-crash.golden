@@ -1,30 +1,29 @@
 10:03:15 settled
-🟠 api in shop (prod-eu-1): the new version (api:2.0) can't start; the previous version is still serving: it stops at start with "panic: assignment to entry in nil map". The previous image was registry.example.com/api:1.0. Only the new revision fails; the previous one stays healthy. Fix in: deployment/api → container app → image (registry.example.com/api:2.0). To see the rollout state, run kubectl rollout status deployment/api -n shop
-Checked: both replicas fail, on 2 nodes.
-🟠 api in shop (prod-eu-1): the new version (api:2.0) can't start; the previous version is still serving: it stops at start with "panic: assignment to entry in nil map".
-| 🟠 **api** in **shop** (**prod-eu-1**): the new version (api:2.0) can't start; the previous version is still serving: it stops at start with `panic: assignment to entry in nil map`.
-| The previous image was registry.example.com/api:1.0.
-| Only the new revision fails; the previous one stays healthy.
-| Fix in: deployment/api → container app → image (registry.example.com/api:2.0).
+🟠 api in shop (prod-eu-1): the new version (api:2.0) can't start (it stops at start with "panic: assignment to entry in nil map"); the previous version (api:1.0) is still serving. Its last run lasted ten seconds. Fix: change the image of container app in deployment/api. To see the rollout state, run kubectl rollout status deployment/api -n shop
+Proof: both replicas fail, on 2 nodes.
+🟠 api in shop (prod-eu-1): the new version (api:2.0) can't start; the previous version (api:1.0) is still serving.
+| 🟠 **api** in **shop** (**prod-eu-1**): the new version (api:2.0) can't start (it stops at start with `panic: assignment to entry in nil map`); the previous version (api:1.0) is still serving.
+| Its last run lasted ten seconds.
+| Fix: change the image of container app in deployment/api.
 | To see the rollout state, run
 | ```
 | kubectl rollout status deployment/api -n shop
 | ```
-| *Checked: both replicas fail, on 2 nodes.*
+| *Proof: both replicas fail, on 2 nodes.*
 10:06:30 settled
 🔴 Node n2 (prod-eu-1) has not reported for about two minutes. It reports "Kubelet stopped posting node status." kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable.
-Also grouped: 1 node problem
+Related alerts: 1 node problem
 To check the node's conditions and recent events, run kubectl describe node n2
 🔴 Node n2 (prod-eu-1) has not reported for about two minutes.
 | 🔴 Node n2 (**prod-eu-1**) has not reported for about two minutes.
 | It reports `Kubelet stopped posting node status.`
 | kwatch cannot see why from inside the cluster: the kubelet stopped reporting, so the node may be down or unreachable.
-| Also grouped: 1 node problem
+| Related alerts: 1 node problem
 | To check the node's conditions and recent events, run
 | ```
 | kubectl describe node n2
 | ```
 10:08:40 material change
-🔴 Node n2 (prod-eu-1) is spreading to api, cart and search in shop: they have not been ready for three minutes.
-🔴 Node n2 (prod-eu-1) is spreading to api, cart and search in shop: they have not been ready for three minutes.
-| 🔴 Node n2 (**prod-eu-1**) is spreading to **api**, **cart** and **search** in shop: they have not been ready for three minutes.
+🔴 Node n2 (prod-eu-1) is now also affecting api, cart and search in shop: they have not been ready for three minutes.
+🔴 Node n2 (prod-eu-1) is now also affecting api, cart and search in shop: they have not been ready for three minutes.
+| 🔴 Node n2 (**prod-eu-1**) is now also affecting **api**, **cart** and **search** in shop: they have not been ready for three minutes.

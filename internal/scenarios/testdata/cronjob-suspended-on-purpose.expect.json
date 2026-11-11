@@ -1,0 +1,7 @@
+{
+  "name": "cronjob-suspended-on-purpose",
+  "description": "A healthy CronJob is suspended and stays suspended for an hour.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

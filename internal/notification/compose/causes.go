@@ -291,7 +291,10 @@ var proofWriters = map[rootcause.ProofCode]func(rootcause.Proof) string{
 		return "all started failing within " + secondsWords(p.Total)
 	},
 	rootcause.ProofWorkloadsMeet: func(p rootcause.Proof) string {
-		return numberWord(p.Count) + " failing workloads all depend on it"
+		if p.Count == 2 {
+			return "both failing apps use it"
+		}
+		return "all " + numberWord(p.Count) + " failing apps use it"
 	},
 	rootcause.ProofFillsDisks: func(p rootcause.Proof) string {
 		return "its pods hold most of the disk in use on " +
@@ -316,25 +319,26 @@ var proofPhrases = map[rootcause.ProofCode]string{
 	rootcause.ProofCreated:         "it was created shortly before",
 	rootcause.ProofSiblingsHealthy: "replicas that do not depend on it " +
 		"are healthy",
-	rootcause.ProofRevertRecovered: "reverting its change brought its " +
-		"dependents back",
-	rootcause.ProofFailedAfterChange: "its dependents failed soon after " +
-		"it changed",
+	rootcause.ProofRevertRecovered: "reverting its change brought the " +
+		"apps that use it back",
+	rootcause.ProofFailedAfterChange: "the apps that use it " +
+		"failed soon after it changed",
 	rootcause.ProofNewRevisionFails: "only the new revision fails; the " +
 		"previous one stays healthy",
 }
 
-// dependentWords writes "its only dependent is failing", "all of its
-// dependents are failing" or "two of its three dependents are failing".
+// dependentWords writes "the one app that uses it is failing", "every
+// app that uses it is failing" or "two of the three apps that use it are
+// failing".
 func dependentWords(n, of int) string {
 	switch {
 	case of == 1 && n == 1:
-		return "its only dependent is failing"
+		return "the one app that uses it is failing"
 	case n == of:
-		return "all of its dependents are failing"
+		return "every app that uses it is failing"
 	}
-	return numberWord(n) + " of its " + numberWord(of) + " dependents " +
-		verb(n, "is", "are") + " failing"
+	return numberWord(n) + " of the " + numberWord(of) + " apps that " +
+		"use it " + verb(n, "is", "are") + " failing"
 }
 
 // errorWords writes "the error mentions it", "every error mentions it"

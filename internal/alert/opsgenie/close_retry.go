@@ -31,6 +31,8 @@ const (
 type closeRetries struct {
 	mu      sync.Mutex
 	pending map[string]*pendingClose
+	// stopped is set by Stop: no close is kept after it.
+	stopped bool
 	// running counts the retry goroutines, so a test can wait for them.
 	running sync.WaitGroup
 }
@@ -41,16 +43,23 @@ type pendingClose struct {
 }
 
 // keepClose starts retrying the close of alias in the background and
-// returns at once. The retry ends with ctx (shutdown), with a newer alert
-// of the same alias (cancelClose), or when the window is over. A close
-// already waiting for alias is the same close and is kept as it is.
+// returns at once. The retry outlives the request that started it:
+// delivery cancels ctx as soon as SendIncident returns, so the retry
+// keeps only ctx's values. It ends with the provider (Stop), with a newer
+// alert of the same alias (cancelClose), or when the window is over. A
+// close already waiting for alias is the same close and is kept as it is.
 func (o *Opsgenie) keepClose(ctx context.Context, alias string) {
-	retryCtx, cancel := context.WithCancel(ctx)
+	retryCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	entry := &pendingClose{cancel: cancel}
 	switch o.closes.add(alias, entry) {
 	case closeAdded:
+		noteWaiting(&o.closes)
 	case closeDuplicate:
 		cancel()
+		return
+	case closeStopped:
+		cancel()
+		o.giveUpClose(alias, "stopped before the alert was found")
 		return
 	default:
 		cancel()
@@ -72,6 +81,7 @@ const (
 	closeAdded closeAdd = iota
 	closeDuplicate
 	closeFull
+	closeStopped
 )
 
 // add records a pending close, unless alias has one or the bound is
@@ -79,6 +89,9 @@ const (
 func (c *closeRetries) add(alias string, entry *pendingClose) closeAdd {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.stopped {
+		return closeStopped
+	}
 	if c.pending == nil {
 		c.pending = make(map[string]*pendingClose)
 	}
@@ -109,13 +122,24 @@ func (c *closeRetries) stillPending(alias string, e *pendingClose) bool {
 }
 
 // cancelClose drops the pending close of alias: a new alert of the same
-// alias must not be closed by the close of the old one.
+// alias must not be closed by the close of the old one, in this
+// instance or one an earlier configuration left (close_siblings.go).
 func (o *Opsgenie) cancelClose(alias string) {
+	o.closes.cancel(alias)
+	cancelEverywhere(alias)
+}
+
+// Stop ends every close still waiting, for shutdown. Each is given up,
+// logged and counted by its own retry. It implements api.Stopper.
+func (o *Opsgenie) Stop() {
 	o.closes.mu.Lock()
-	entry := o.closes.pending[alias]
-	delete(o.closes.pending, alias)
+	o.closes.stopped = true
+	entries := make([]*pendingClose, 0, len(o.closes.pending))
+	for _, entry := range o.closes.pending {
+		entries = append(entries, entry)
+	}
 	o.closes.mu.Unlock()
-	if entry != nil {
+	for _, entry := range entries {
 		entry.cancel()
 	}
 }
@@ -152,7 +176,7 @@ func (o *Opsgenie) retryClose(
 }
 
 // endCancelledClose settles a retry whose context ended. A newer alert of
-// the same alias dropped the close on purpose; shutdown gives it up.
+// the same alias dropped the close on purpose; Stop gives it up.
 func (o *Opsgenie) endCancelledClose(alias string, entry *pendingClose) {
 	if o.closes.stillPending(alias, entry) {
 		o.giveUpClose(alias, "stopped before the alert was found")

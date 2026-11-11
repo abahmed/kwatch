@@ -29,6 +29,9 @@ func (Container) Kinds() []inventory.Kind {
 func (c Container) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
+	if flag(e, kube.AttrEphemeral) {
+		return nil
+	}
 	return withArchMismatch(ctx, e,
 		withNodeOOM(ctx, e, withHowItFailed(ctx, e, c.byState(ctx, e))))
 }
@@ -46,6 +49,11 @@ func (Container) byState(
 	case "running":
 		if killed := livenessKilledFinding(ctx, e); killed != nil {
 			return killed
+		}
+		// Between two back-offs its probes fail because it is about to
+		// crash again: the loop is the finding, they are its symptom.
+		if loop := crashLoopRunning(ctx, e); loop != nil {
+			return withRestartBaseline(ctx, e, loop)
 		}
 		return append(withRestartBaseline(ctx, e,
 			restartingFinding(ctx, e)), probeFindings(ctx, e)...)
@@ -122,15 +130,9 @@ func waitingFinding(
 	if reason == reasons.CreateConfigError {
 		s.Summary = containerRole(e) + " " + configErrorWords(ctx, e)
 	}
-	// A crash loop caused by the kernel OOM killer is an OOM incident; the
-	// back-off is only its consequence.
-	if reason == reasons.CrashLoopBackOff &&
-		text(e, kube.AttrLastReason) == reasons.OOMKilled {
-		s.Reason = reasons.OOMKilled
-		s.Summary = containerRole(e) + " is killed for exceeding its " +
-			"memory limit and restarting"
-	} else if reason == reasons.CrashLoopBackOff {
-		applyCrashLoopExit(&s, e)
+	if reason == reasons.CrashLoopBackOff {
+		s = crashLoopFinding(e, s.Since)
+		keepCrashLoop(ctx)
 	}
 	// The restart count stays in the evidence: a summary that changed
 	// with every restart would report the finding as changed each time.
@@ -204,6 +206,7 @@ func terminatedFinding(
 			findingReason = reasons.CrashLoopBackOff
 			summary = containerRole(e) + " " +
 				describeWaiting(findingReason)
+			keepCrashLoop(ctx)
 		}
 	}
 	since := terminatedAt(e)

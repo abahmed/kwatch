@@ -18,6 +18,9 @@ type redactionRule struct {
 	// rebuild, when set, builds the whole replacement from the capture
 	// groups instead of prefix + placeholder + suffix.
 	rebuild func(groups []string) string
+	// rebuildAt is rebuild for a rule that needs to see where the match
+	// starts in text (see rebuildKeyValueAt).
+	rebuildAt func(text string, start int, groups []string) string
 	// needs, when set, lists lower-case fragments of which at least one
 	// must be in the text for the rule to be tried: a cheap check that
 	// lets the key-name rules skip the lines that name no secret.
@@ -48,7 +51,7 @@ const secretKeys = `password|passwd|passwort|sslpassword|pwd|passphrase|` +
 	`passcode|token|secret|api[_-]?key|access[_-]?token|client[_-]?secret|` +
 	`secret[_-]?access[_-]?key|private[_-]?key|credentials?|` +
 	`access[_-]?key|account[_-]?key|signing[_-]?key|secret[_-]?key|` +
-	`signature|session[_-]?id|pass`
+	`signature|session[_-]?id|routing[_-]?key|integration[_-]?key|pass`
 
 // capsSecretKeys are the key words that follow an upper-case run with no
 // separator: PGPASSWORD, DBPASSWORD, GITHUBTOKEN. Only these words, and
@@ -111,7 +114,7 @@ var credentialRedactions = []redactionRule{
 	{pattern: regexp.MustCompile(
 		`(?i)(\b` + secretKey + `\s*[:=]\s*)(` + secretValue + `)`,
 	), placeholder: "[redacted]", skip: skipNonSecret,
-		rebuild: rebuildKeyValue, needs: secretNeeds},
+		rebuildAt: rebuildKeyValueAt, needs: secretNeeds},
 	// Cookie headers carry session credentials; the whole value goes.
 	{pattern: regexp.MustCompile(
 		`(?i)(\b(?:set-)?cookie\s*:\s*)[^\r\n\[][^\r\n]*`,
@@ -140,7 +143,7 @@ var credentialRedactions = []redactionRule{
 	{pattern: regexp.MustCompile(
 		`(?i)(\b[a-z][a-z0-9+.-]*://)[^/\s:@?#]*:` +
 			`(?:[^\s?#]*|[^\s/]*)@`,
-	), placeholder: "[redacted]", suffix: "@"},
+	), placeholder: "[redacted]", suffix: "@", skip: skipHostPort},
 	{pattern: regexp.MustCompile(`\b(?:AKIA|ASIA)[0-9A-Z]{16}\b`),
 		placeholder: "[redacted]"},
 	{pattern: regexp.MustCompile(
@@ -198,6 +201,9 @@ func EvidenceWithPolicy(
 }
 
 func applyRedaction(value string, rule redactionRule) string {
+	if rule.rebuildAt != nil {
+		return applyInContext(value, rule)
+	}
 	return rule.pattern.ReplaceAllStringFunc(value, func(match string) string {
 		groups := rule.pattern.FindStringSubmatch(match)
 		if rule.skip != nil && rule.skip(groups) {

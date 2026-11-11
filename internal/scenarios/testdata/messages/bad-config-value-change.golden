@@ -1,13 +1,13 @@
 10:06:55 settled
-🟠 checkout in shop (prod-eu-1): the new version keeps failing; the previous version is still serving. Only change in revision 14: env DB_HOST db-old → db-new (by alice); pods crash-looping since. It fails with "dial tcp: lookup db-new: no such host". Fix in: deployment/checkout → container app → env[DB_HOST]. Rolling back to revision 13, the one before this release, undoes it (changes the cluster): kubectl rollout undo deployment/checkout -n shop --to-revision=13
-Checked: the previous revision ran healthy for 65 minutes before the change.
+🟠 checkout in shop (prod-eu-1): the new version keeps failing; the previous version is still serving. Only change in revision 14: env DB_HOST db-old → db-new (by alice); pods crash-looping since. It fails with "dial tcp: lookup db-new: no such host". Fix: correct env var DB_HOST of container app in deployment/checkout. Rolling back to revision 13, the one before this release, undoes it (changes the cluster): kubectl rollout undo deployment/checkout -n shop --to-revision=13
+Proof: the previous revision ran healthy for 65 minutes before the change.
 🟠 checkout in shop (prod-eu-1): the new version keeps failing; the previous version is still serving.
 | 🟠 **checkout** in **shop** (**prod-eu-1**): the new version keeps failing; the previous version is still serving.
 | Only change in revision 14: env DB\_HOST db-old → db-new (by alice); pods crash-looping since.
 | It fails with `dial tcp: lookup db-new: no such host`.
-| Fix in: deployment/checkout → container app → env\[DB\_HOST\].
+| Fix: correct env var DB\_HOST of container app in deployment/checkout.
 | Rolling back to revision 13, the one before this release, undoes it (changes the cluster):
 | ```
 | kubectl rollout undo deployment/checkout -n shop --to-revision=13
 | ```
-| *Checked: the previous revision ran healthy for 65 minutes before the change.*
+| *Proof: the previous revision ran healthy for 65 minutes before the change.*

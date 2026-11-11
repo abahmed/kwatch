@@ -66,6 +66,8 @@ func AuditEntry(
 	if !p.Subject.IsZero() && p.Subject != p.Root {
 		entry.Subject = p.Subject.String()
 	}
+	entry.Level = audit.LevelFor(entry.Tier)
+	entry.Message = audit.Describe(entry)
 	return entry
 }
 

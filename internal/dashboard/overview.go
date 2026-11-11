@@ -28,6 +28,12 @@ type OverviewResponse struct {
 	// computed for the time zone of the request (tz).
 	Insights *InsightsResponse `json:"insights,omitempty"`
 	Trends   *TrendsResponse   `json:"trends,omitempty"`
+	// ScalingHold is set while pages are held because the cluster is
+	// scaling.
+	ScalingHold *ScalingHold `json:"scalingHold,omitempty"`
+	// OldProblems counts the old problems that opened no issue
+	// (old_problems.go); absent when the reader cannot say.
+	OldProblems *OldProblems `json:"oldProblems,omitempty"`
 }
 
 // SeverityCounts count issues by severity in the page's words: urgent
@@ -93,6 +99,8 @@ func (s *Server) overviewHandler(w http.ResponseWriter, r *http.Request) {
 	trends := buildTrends(all, s.now.Now(), zone, incident.DefaultRemember)
 	out.Insights, out.Trends = &insights, &trends
 	out.FailedSendsLastHour = s.failedLastHour()
+	out.ScalingHold = s.scalingHold(s.now.Now())
+	out.OldProblems = s.oldProblems(s.now.Now())
 	if snap, ok := s.releaseBookSnapshot(); ok {
 		out.Releases = summarizeReleases(snap,
 			s.now.Now().Add(-releaseWindow))
@@ -126,18 +134,24 @@ func buildOverview(
 	return out
 }
 
-// lookFirst orders the urgent issues nobody acknowledged first, then
-// the newest started, then by ID.
+// lookFirst orders the most urgent issues first (an urgent one nobody
+// acknowledged, then an acknowledged urgent one, then needs attention,
+// then low), and within a level the one going on longest.
 func lookFirst(a, b incident.Incident) int {
 	return cmp.Or(cmp.Compare(rankOf(a), rankOf(b)),
-		b.Opened.Compare(a.Opened), cmp.Compare(a.ID, b.ID))
+		a.Opened.Compare(b.Opened), cmp.Compare(a.ID, b.ID))
 }
 
 func rankOf(p incident.Incident) int {
-	if p.Tier == incident.Page && p.Ack == nil {
+	switch {
+	case p.Tier == incident.Page && p.Ack == nil:
 		return 0
+	case p.Tier == incident.Page:
+		return 1
+	case p.Tier == incident.Notify:
+		return 2
 	}
-	return 1
+	return 3
 }
 
 func overviewIssue(

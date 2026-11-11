@@ -45,7 +45,7 @@ func TestDigestGroupsExpiredUnusedSecrets(t *testing.T) {
 	assert.NotContains(t, text, "Secret *tls*")
 	assert.Contains(t, msg.Note, "5 expired TLS Secrets that no pod or "+
 		"Ingress references: ns0/tls, ns1/tls, ns2/tls +2.")
-	assert.Contains(t, msg.Note, "five low-priority problems")
+	assert.Contains(t, msg.Note, "five new low-priority problems")
 }
 
 func TestDigestKeepsALoneLeftoverAndCriticalOnes(t *testing.T) {

@@ -89,15 +89,28 @@ func (c *Collector) named(ds []incident.Decision) []incident.Decision {
 func (c *Collector) openListed() []incident.Incident {
 	var out []incident.Incident
 	for _, p := range c.env.Incidents.Incidents() {
-		open := p.State == incident.Open || p.State == incident.Flapping ||
-			p.State == incident.Recovering
-		if open && p.Ack == nil && p.Tier == incident.Digest &&
+		if stillFailing(p) && p.Ack == nil && p.Tier == incident.Digest &&
 			(!p.DigestedAt.IsZero() || p.Delivery.Demoted()) &&
 			(c.env.Scope == nil || c.env.Scope(p)) {
 			out = append(out, p)
 		}
 	}
 	return out
+}
+
+// stillFailing reports an incident a digest may list as still failing.
+// One that recovers (its hold can last half an hour, or hours for a
+// root kwatch cannot verify) or that flaps and is healthy right now has
+// no failure to list: "still failing" would be false. An open one
+// counts without members too: after a restart they are on their way.
+func stillFailing(p incident.Incident) bool {
+	switch p.State {
+	case incident.Open:
+		return true
+	case incident.Flapping, incident.Recovering:
+		return len(p.Members) > 0
+	}
+	return false
 }
 
 // ongoingReason names what keeps failing, as Kubernetes does for an

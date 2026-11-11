@@ -1,0 +1,7 @@
+{
+  "name": "old-leftovers-age-out",
+  "description": "An expired certificate nothing uses and a stuck VolumeAttachment, both over a year old when kwatch starts: no incident.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "1h0m0s"
+}

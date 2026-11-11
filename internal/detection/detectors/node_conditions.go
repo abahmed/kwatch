@@ -42,12 +42,15 @@ func nodeConditionFindings(
 	var out []detection.Finding
 	for _, conditionType := range extraConditionTypes(e) {
 		status, reason, since := condition(e, conditionType)
+		if status != "True" {
+			// Its clock starts when it turns True, not while it is fine.
+			continue
+		}
 		key := "node-condition/" + conditionType
 		if since.IsZero() {
 			since = ctx.Onset("sustained/"+key, ctx.Now)
 		}
-		if status != "True" || !sustained(ctx, key, since,
-			DefaultNodePressure) {
+		if !sustained(ctx, key, since, DefaultNodePressure) {
 			continue
 		}
 		out = append(out, detection.Finding{

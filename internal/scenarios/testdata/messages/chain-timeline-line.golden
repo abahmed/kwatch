@@ -11,14 +11,14 @@
 | kubectl logs postgres-1ff9723b-a -c app -n shop --previous
 | ```
 10:12:55 material change
-🔴 postgres in shop (prod-eu-1) is spreading to service api: it has no ready backends. It is now critical. Timeline: 10:09 postgres out of memory → 10:10 api failing → 10:11 service api no ready endpoints.
-🔴 postgres in shop (prod-eu-1) is spreading to service api: it has no ready backends.
-| 🔴 **postgres** in **shop** (**prod-eu-1**) is spreading to service api: it has no ready backends.
+🔴 postgres in shop (prod-eu-1) is now also affecting service api: it has no ready backends. It is now critical. Timeline: 10:09 postgres out of memory → 10:10 api failing → 10:11 service api no ready endpoints.
+🔴 postgres in shop (prod-eu-1) is now also affecting service api: it has no ready backends.
+| 🔴 **postgres** in **shop** (**prod-eu-1**) is now also affecting service api: it has no ready backends.
 | It is now critical.
 | Timeline: 10:09 **postgres** out of memory → 10:10 **api** failing → 10:11 service **api** no ready endpoints.
 10:22:55 material change
-🔴 postgres in shop (prod-eu-1) now has no ready replicas (0 of 1). It is spreading to api: it has not been ready for six minutes and has pods that run without restarting but are not ready. Timeline: 10:09 postgres out of memory → 10:10 api unavailable → 10:11 service api no ready endpoints.
+🔴 postgres in shop (prod-eu-1) now has no ready replicas (0 of 1). It is now also affecting api: it has not been ready for six minutes and has pods that run without restarting but are not ready. Timeline: 10:09 postgres out of memory → 10:10 api unavailable → 10:11 service api no ready endpoints.
 🔴 postgres in shop (prod-eu-1) now has no ready replicas (0 of 1).
 | 🔴 **postgres** in **shop** (**prod-eu-1**) now has no ready replicas (0 of 1).
-| It is spreading to api: it has not been ready for six minutes and has pods that run without restarting but are not ready.
+| It is now also affecting api: it has not been ready for six minutes and has pods that run without restarting but are not ready.
 | Timeline: 10:09 **postgres** out of memory → 10:10 **api** unavailable → 10:11 service **api** no ready endpoints.

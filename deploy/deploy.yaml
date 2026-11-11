@@ -39,7 +39,7 @@ rules:
 - apiGroups: [""]
   resources: ["nodes/stats", "nodes/metrics", "pods/log"]
   verbs: ["get"]
-- nonResourceURLs: ["/readyz", "/metrics"]
+- nonResourceURLs: ["/readyz", "/metrics", "/version"]
   verbs: ["get"]
 - apiGroups: ["authorization.k8s.io"]
   resources: ["selfsubjectaccessreviews"]
@@ -304,6 +304,9 @@ spec:
         env:
           - name: CONFIG_FILE
             value: "/config/config.yaml"
+          # Optional: set KWATCH_LOG_FORMAT to "json" for one JSON object
+          # per log line (ts, level, msg, caller); the default is text.
+          # INFO and WARNING go to stdout, ERROR to stderr either way.
           - name: POD_NAMESPACE
             valueFrom:
               fieldRef:

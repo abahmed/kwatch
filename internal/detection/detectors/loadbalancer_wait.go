@@ -191,10 +191,11 @@ func minutesText(d time.Duration) string {
 	return strconv.Itoa(int(d.Minutes())) + " min"
 }
 
-// quotedByService reports an AWS-style load balancer controller event
-// that the Service's own waiting finding quotes already, so it is not
-// also an unusual event.
-func quotedByService(e inventory.Entity, reason string) bool {
-	return (reason == "FailedDeployModel" || reason == "FailedBuildModel") &&
-		e.ID.Kind == kube.KindService && loadBalancerUnaddressed(e)
+// quotedByService reports a Warning event about a LoadBalancer Service
+// still without an address. The Service's own waiting finding quotes
+// the latest one, whichever controller wrote it (a cloud provider, an
+// in-cluster load balancer, a vendor controller), so it is not also an
+// unusual event.
+func quotedByService(e inventory.Entity) bool {
+	return e.ID.Kind == kube.KindService && loadBalancerUnaddressed(e)
 }

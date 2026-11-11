@@ -3,10 +3,12 @@
 package scenarios
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/abahmed/kwatch/internal/detection/detectors"
 	"github.com/abahmed/kwatch/test/e2e/harness"
@@ -19,11 +21,36 @@ func TestScenarioPodLifecycleHookFailure(t *testing.T) {
 	})
 }
 
+// A suspended CronJob is advisory: it is context inside a real failure's
+// incident and never an incident of its own, so Kwatch stays quiet.
 func TestScenarioCronJobSuspended(t *testing.T) {
 	inNamespace(t, "workload.cronjob", func(s *Scenario) {
 		s.CreateCronJob(suspendedCronJob("suspended"))
-		s.ExpectIncident("suspended", "CronJobSuspended", 0)
+		s.ExpectNoIncidentFor("suspended", announceWait(0))
 	})
+}
+
+// ExpectNoIncidentFor fails if Kwatch announces anything about resource
+// within window. Running out the window is the pass.
+func (s *Scenario) ExpectNoIncidentFor(resource string, window time.Duration) {
+	s.T.Helper()
+	err := wait.PollUntilContextTimeout(s.Ctx, 5*time.Second, window, false,
+		func(ctx context.Context) (bool, error) {
+			entries, err := s.Env.Audit.Matching(ctx, harness.AuditMatch{
+				Namespace: s.Namespace, Resource: resource,
+			})
+			if err != nil {
+				return false, err
+			}
+			if len(entries) > 0 {
+				s.T.Fatalf("unexpected incident for %s: %+v",
+					resource, entries[0])
+			}
+			return false, nil
+		})
+	if err != nil && !wait.Interrupted(err) {
+		s.Must(err)
+	}
 }
 
 func TestScenarioMissingRequiredReferences(t *testing.T) {

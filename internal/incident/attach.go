@@ -56,6 +56,7 @@ func (m *Manager) placeArea(
 	for _, failure := range area.Failures {
 		where := p.placementOf(failure)
 		for _, f := range s.Findings[failure] {
+			f = handlerLeftover(s, f, where)
 			if f.Advisory {
 				// A configuration risk follows no cause; it joins the
 				// incident rooted at its own object (adoptAdvisories).
@@ -77,7 +78,12 @@ func (m *Manager) attach(
 		// incident of a real failure of the same root, if there is one.
 		return
 	}
-	if m.heldForChurn(now, s, where) || m.leavesAsHistory(now, s, where) {
+	if m.nodeRemoved(s.Entity) {
+		return // a deleted node cannot fail (node_removed.go)
+	}
+	where = m.joinLeftover(s, where)
+	if m.heldForChurn(now, s, where) || m.leavesAsHistory(now, s, where) ||
+		m.agesOut(now, s, where) {
 		return
 	}
 	key := s.Key()
@@ -99,6 +105,7 @@ func (m *Manager) attach(
 		about := s.Entity
 		p.noteAbout(now, memberNote(s), &about)
 	}
+	m.noteRose(p, s)
 	p.Members[key] = s
 	logMember("added to", p, key)
 	p.SupersededBy, p.SupersededRoot = "", inventory.EntityID{}
@@ -133,7 +140,11 @@ func (m *Manager) keepsMember(
 		!m.swingsBack(now, key, where.root) {
 		return false
 	}
+	m.noteRose(m.incidents[previous], s)
 	m.incidents[previous].Members[key] = s
+	// The kept finding may have changed (worse, another mode): the
+	// incident's mode, impact, tier and stage follow it (refresh).
+	m.changed[previous] = true
 	return true
 }
 
@@ -144,7 +155,24 @@ func (m *Manager) keepsMember(
 // recovery. Before the first message the tier still follows the members,
 // and so does the provisional tier of a restored incident
 // (restore_reasons.go).
+//
+// Where nothing pages (paging off, or a cluster set as not production)
+// the kept tier is capped like the computed one: a page restored from
+// before the setting falls to a notification without a message. Its
+// alert stays open at the pagers (Delivery) until its resolve closes
+// it.
 func (m *Manager) ratchetTier(
+	p *Incident, computed Tier, now time.Time,
+) Tier {
+	tier := m.keptTier(p, computed, now)
+	if tier > Notify && (m.override.noPage || m.override.nonProd) {
+		return Notify
+	}
+	return tier
+}
+
+// keptTier is the ratchet itself, before the cap of ratchetTier.
+func (m *Manager) keptTier(
 	p *Incident, computed Tier, now time.Time,
 ) Tier {
 	if m.provisional(p, now) && !unpaged(p) {
@@ -178,6 +206,7 @@ func (m *Manager) refresh(model inventory.Reader, now time.Time) {
 			p.notePodPeak()
 			p.causeChain = m.inChain(p)
 			was := p.Tier
+			m.noteChronic(p)
 			base, why := tierWhy(p)
 			computed := m.override.apply(p, base)
 			p.Tier = m.ratchetTier(p, computed, now)
@@ -216,6 +245,7 @@ func (m *Manager) detach(
 	now time.Time, s detection.Finding, stillFailing bool,
 ) {
 	key := s.Key()
+	m.forgetAged(key)
 	delete(m.churn.held, key)
 	delete(m.left, key)
 	delete(m.flips, key)
@@ -229,6 +259,8 @@ func (m *Manager) detach(
 		return
 	}
 	delete(p.Members, key)
+	// What is left decides the tier and the page rules now (refresh).
+	m.changed[p.ID] = true
 	logMember("removed from", p, key)
 	if !s.Advisory && !stillFailing {
 		p.recoveredHere = true
@@ -322,6 +354,7 @@ func (m *Manager) leavesAsHistory(
 func (m *Manager) reroute(
 	now time.Time, s detection.Finding, where placement,
 ) placement {
+	where = m.joinScaledWorkload(s, where)
 	where = m.retakeSuperseded(now, s, where)
 	where = m.retakeFormer(now, s, where)
 	where = m.retakeSuspect(now, s, where)

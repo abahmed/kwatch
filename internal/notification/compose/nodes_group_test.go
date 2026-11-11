@@ -103,7 +103,7 @@ func TestGroupedNodeOutageUpdateNamesTheNodesOnce(t *testing.T) {
 
 	note := Writer{Cluster: "prod-eu-1"}.Write(d, at(6, 0)).Note
 
-	assert.Contains(t, note, "Nodes n1–n5 (prod-eu-1) are spreading to "+
+	assert.Contains(t, note, "Nodes n1–n5 (prod-eu-1) are now also affecting "+
 		"auth and cart in shop: they have not been ready for three "+
 		"minutes.")
 	assert.NotContains(t, note, "Node n1")
@@ -129,8 +129,8 @@ func TestZoneUpdateSpeaksForTheZoneNotItsWorstNode(t *testing.T) {
 
 	note := Writer{Cluster: "prod-eu-1"}.Write(d, at(6, 0)).Note
 
-	assert.Contains(t, note, "Zone zone-a (prod-eu-1) is spreading to "+
+	assert.Contains(t, note, "Zone zone-a (prod-eu-1) is now also affecting "+
 		"auth and cart in shop")
-	assert.NotContains(t, note, "spreading to node a1")
-	assert.NotContains(t, note, "Node a1 (prod-eu-1) is spreading")
+	assert.NotContains(t, note, "affecting node a1")
+	assert.NotContains(t, note, "Node a1 (prod-eu-1) is now also")
 }

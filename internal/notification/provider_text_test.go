@@ -104,7 +104,7 @@ func TestTruncateCutsOnRuneBoundary(t *testing.T) {
 		{"hello world", 8, "hello…"},
 		{"héllo", 5, "h…"},
 		{"hello", 2, ""},
-		{"hello", 0, "hello"},
+		{"hello", 0, ""},
 	}
 	for _, tc := range cases {
 		if got := Truncate(tc.text, tc.limit); got != tc.want {
@@ -146,7 +146,7 @@ func TestTruncateKeepsMarkupWellFormed(t *testing.T) {
 		{"closed fence kept", "```\nok\n```\nand a long tail of text", 20},
 	}
 	for _, tc := range cases {
-		got := Truncate(tc.text, tc.limit)
+		got := TruncateHTML(tc.text, tc.limit)
 		if len(got) > tc.limit {
 			t.Errorf("%s: %q is %d bytes, limit %d",
 				tc.name, got, len(got), tc.limit)

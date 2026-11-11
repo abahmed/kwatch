@@ -39,6 +39,9 @@ const (
 	// ProofDependentsFail: Count of the cause's Total dependents fail
 	// (coverage).
 	ProofDependentsFail ProofCode = "dependents-fail"
+	// ProofOwnErrors: all Total dependents of a workload blamed for
+	// itself fail, each quoting its own error (self-quoted).
+	ProofOwnErrors ProofCode = "own-errors"
 	// ProofNoHealthyPeer: no healthy node outside a zone or pool to
 	// compare with (exclusivity veto).
 	ProofNoHealthyPeer ProofCode = "no-healthy-peer"

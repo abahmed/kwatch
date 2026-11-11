@@ -28,8 +28,9 @@ const notFoundPage = `<!doctype html>
 	`<img class="mark" src="{{asset:favicon.svg}}" width="26" height="26" ` +
 	`alt=""><span class="wordmark">kwatch</span></a>
 <h1>Page not found</h1>
-<p class="lead">The dashboard has no page at this address.</p>
-<p><a class="ulink" href="/">Go to the Overview</a></p>
+<p class="lead">There is no page at this address.</p>
+<p class="lead"><a class="ulink" href="/">Go to the Overview</a> or ` +
+	`<a class="ulink" href="/issues">see the Issues</a>.</p>
 </div>
 </main>
 </body>

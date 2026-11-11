@@ -66,11 +66,12 @@ func logLastGoodUnavailable(reason string, err error) {
 // rememberOverlay keeps, in the state file, what the startup KwatchConfig
 // turned out to be: a spec that applied cleanly becomes the last good one,
 // and no object (deleted on purpose) clears it, so a later invalid one
-// cannot bring an old spec back. A refused spec changes nothing. The
-// leader calls it once the state file is open and claimed.
+// cannot bring an old spec back. A refused spec, or a KwatchConfig type
+// the API server did not serve, changes nothing. The leader calls it once
+// the state file is open and claimed.
 func rememberOverlay(deps *serverDeps, disk diskState) {
 	o := deps.overlay
-	if o.invalid {
+	if o.invalid || o.typeMissing {
 		return
 	}
 	want := string(o.applied)

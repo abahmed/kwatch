@@ -64,6 +64,10 @@ func quotaRefusedCreate(
 // the attach-detach controller force-detaches after six minutes.
 const DefaultDetachStuck = 10 * time.Minute
 
+// DefaultDetachErrorGrace is how long a detach error may last before it
+// is reported: the controller retries with back-off for minutes.
+const DefaultDetachErrorGrace = 5 * time.Minute
+
 // detachFailure reports a volume that cannot be detached: the CSI driver
 // returned a detach error, or deletion of the attachment has been pending
 // for DefaultDetachStuck. Until it detaches, the volume cannot attach to
@@ -86,6 +90,15 @@ func detachFailure(
 	if message == "" &&
 		!sustained(ctx, "detach-stuck", since, DefaultDetachStuck) {
 		return nil
+	}
+	// A detach error is retried: during a node's removal (spot, scale
+	// down) the first attempts often fail and a later one succeeds. Only
+	// an error that outlasts the retries is a failure.
+	if message != "" && !deleting {
+		since = ctx.Onset("detach-error", since)
+		if !sustained(ctx, "detach-error", since, DefaultDetachErrorGrace) {
+			return nil
+		}
 	}
 	f := detection.Finding{
 		Reason: reasons.VolumeDetachFailure, Severity: detection.Warning,

@@ -49,7 +49,7 @@ var className = regexp.MustCompile(`(?:exception|error|client)\W*$`)
 // port the call used wins ("mongo …, dial tcp 10.0.0.9:6379" is Redis),
 // then the one nearest the failure words ("redis ok, postgres timed
 // out" is PostgreSQL), then the first in clientNames.
-func clientName(lower, port string, failures [][]int) string {
+func clientName(lower, port string, failures *failureSet) string {
 	best, bestGap := "", math.MaxInt
 	for _, c := range clientNames {
 		for _, m := range c.pattern.FindAllStringIndex(lower, -1) {
@@ -76,7 +76,7 @@ func clientName(lower, port string, failures [][]int) string {
 // failing call: near the failure words, inside an exception or client
 // class, or the library prefix of the error ("kafka: client has run
 // out of available brokers: …") in the failure's clause.
-func clientTied(lower string, failures [][]int, start, end int) bool {
+func clientTied(lower string, failures *failureSet, start, end int) bool {
 	if nearFailure(lower, failures, start, end, nearWords) ||
 		inClassName(lower, start, end) {
 		return true
@@ -86,36 +86,37 @@ func clientTied(lower string, failures [][]int, start, end int) bool {
 	return prefix && nearFailure(lower, failures, start, end, -1)
 }
 
-// clauseBreak ends a clause: a ";", a new line, or a comma before a
-// space ("redis ok, postgres timed out"). A comma inside a number or a
-// time ("12:30:45,123") does not.
-var clauseBreak = regexp.MustCompile(`[;\n]|,\s`)
+// A clause ends at a ";", a new line, or a comma before a space
+// ("redis ok, postgres timed out"). A comma inside a number or a time
+// ("12:30:45,123") does not (failureSet.broken).
 
 // clauseGap is how many words stand between text at [start, end) and
 // the failure phrase f, and false when a clause break is between them.
-func clauseGap(lower string, f []int, start, end int) (int, bool) {
-	var gap string
+func clauseGap(
+	lower string, fs *failureSet, f []int, start, end int,
+) (int, bool) {
+	var from, to int
 	switch {
 	case end <= f[0]:
-		gap = lower[end:f[0]]
+		from, to = end, f[0]
 	case start >= f[1]:
-		gap = lower[f[1]:start]
+		from, to = f[1], start
 	default:
 		return 0, true
 	}
-	if clauseBreak.MatchString(gap) {
+	if fs.broken(from, to) {
 		return 0, false
 	}
-	return len(strings.Fields(gap)), true
+	return fs.words(lower, from, to), true
 }
 
 // nearFailure reports text at [start, end) within limit words of a
 // failure phrase (any number when limit is negative), in its clause.
 func nearFailure(
-	lower string, failures [][]int, start, end, limit int,
+	lower string, failures *failureSet, start, end, limit int,
 ) bool {
-	for _, f := range failures {
-		if words, ok := clauseGap(lower, f, start, end); ok &&
+	for _, f := range failures.spans {
+		if words, ok := clauseGap(lower, failures, f, start, end); ok &&
 			(limit < 0 || words <= limit) {
 			return true
 		}
@@ -126,10 +127,10 @@ func nearFailure(
 // failureGap is the fewest words between text at [start, end) and a
 // failure phrase in its clause; math.MaxInt when none shares it (a
 // client tied by its class name alone).
-func failureGap(lower string, failures [][]int, start, end int) int {
+func failureGap(lower string, failures *failureSet, start, end int) int {
 	least := math.MaxInt
-	for _, f := range failures {
-		if words, ok := clauseGap(lower, f, start, end); ok &&
+	for _, f := range failures.spans {
+		if words, ok := clauseGap(lower, failures, f, start, end); ok &&
 			words < least {
 			least = words
 		}

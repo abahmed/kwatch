@@ -43,7 +43,9 @@ func (m Message) Resolved() bool {
 // AlertKey is the stable identity paging systems and issue trackers use to
 // update and resolve one alert per incident. The cluster name is part of
 // the key, so two clusters sending to one service account never merge or
-// resolve each other's alerts. An empty cluster keeps the bare key.
+// resolve each other's alerts. An empty cluster keeps the bare key; the
+// key of a new incident then already carries the cluster's own identity
+// (incident.Config.AlertIdentity), so it stays unique without a name.
 func (m Message) AlertKey(cluster string) string {
 	key := m.conversationKey()
 	if m.DedupKey != "" {

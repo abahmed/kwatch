@@ -31,8 +31,9 @@ func TestGiteaAnnounceAdoptsExistingIssue(t *testing.T) {
 			len(requests))
 	}
 	target := requests[0].Path + "?" + requests[0].Query
-	if !strings.Contains(target, "q="+marker) {
-		t.Fatalf("search %s lacks the marker", target)
+	if strings.Contains(target, "q=") ||
+		!strings.Contains(target, "sort=newest") {
+		t.Fatalf("search %s must list newest issues without q=", target)
 	}
 	if !g.HasThread(providertest.Announce().ThreadKey()) {
 		t.Fatal("the found issue was not tracked")

@@ -39,7 +39,7 @@ func ackAnnouncedSentences(f caseFacts) []sentence {
 	if ack == nil || !ack.AtAnnounce {
 		return nil
 	}
-	return []sentence{{part: partFollowUp, text: "The ack annotation " +
-		"is still present on " + objectName(ack.On) +
-		", so reminders are held."}}
+	return []sentence{{part: partFollowUp, text: "It is already " +
+		"acknowledged (annotation on " + objectName(ack.On) +
+		"), so kwatch sends no reminders while it stays."}}
 }

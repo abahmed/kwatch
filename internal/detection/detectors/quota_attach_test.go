@@ -48,7 +48,11 @@ func TestAttachmentReportsDetachError(t *testing.T) {
 		kube.AttrDetachError: inventory.Text("volume is still in use"),
 	})
 
-	eval := evaluate(Attachment{}, m, t0, id, nil)
+	// Detach errors are retried: none is reported at once, only one that
+	// outlasts DefaultDetachErrorGrace.
+	assert.Empty(t, evaluate(Attachment{}, m, t0, id, nil).Findings)
+	eval := evaluate(Attachment{}, m, t0.Add(DefaultDetachErrorGrace), id,
+		nil)
 
 	require.Len(t, eval.Findings, 1)
 	assert.Equal(t, "Volume.DetachFailed", string(eval.Findings[0].Mode))

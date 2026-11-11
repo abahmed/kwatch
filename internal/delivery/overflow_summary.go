@@ -31,7 +31,15 @@ type overflowSummary struct {
 	unnamed int
 	// since is when the oldest summarized notification was added.
 	since time.Time
+	// records are the outbox records of the summarized jobs, kept until
+	// the summary is sent: a crash before it does sends them on their
+	// own after the restart instead of losing them (maxSummaryRecords).
+	records []string
 }
+
+// maxSummaryRecords bounds the records one summary keeps; beyond it the
+// oldest are given up, as before.
+const maxSummaryRecords = 1024
 
 // maxOverflowReasonKeys bounds the distinct reasons one summary stores.
 // A provider that stays down for days would otherwise keep one entry for
@@ -72,6 +80,26 @@ func (m *Manager) addToOverflowSummary(
 		m.pacer.summaries[provider] = state
 	}
 	state.count(reason, 1)
+	if job.outboxID != "" {
+		state.records = append(state.records, job.outboxID)
+		if len(state.records) > maxSummaryRecords {
+			m.outbox.Load().remove(state.records[0])
+			state.records = state.records[1:]
+		}
+	}
+}
+
+// settleSummaryRecords removes the outbox records a summary kept, once
+// it was sent or will never be.
+func (m *Manager) settleSummaryRecords(state *overflowSummary) {
+	if state == nil {
+		return
+	}
+	box := m.outbox.Load()
+	for _, id := range state.records {
+		box.remove(id)
+	}
+	state.records = nil
 }
 
 // takeOverflowSummary claims and renders the pending overflow summary for
@@ -111,6 +139,7 @@ func (m *Manager) restoreOverflowSummary(
 	}
 	current.unnamed += state.unnamed
 	current.total += state.unnamed
+	current.records = append(current.records, state.records...)
 }
 
 // renderOverflowSummary names the most frequent reasons and counts the
@@ -179,6 +208,7 @@ func (m *Manager) flushOverflowSummary(
 		klog.V(2).InfoS("overflow digest skipped",
 			"component", "delivery", "operation", "digest",
 			"provider", name, "notifications", state.total)
+		m.settleSummaryRecords(state)
 		return
 	}
 	if !m.waitForSendSlot(ctx, name) {
@@ -189,10 +219,14 @@ func (m *Manager) flushOverflowSummary(
 	// it is neither retried here nor dead-lettered. One the provider
 	// rejected for good was dead-lettered by deliver; keeping it would
 	// fail and count it again at every flush.
-	outcome := m.deliver(ctx, entry, deliverJob{kind: jobMessage, msg: text})
-	if outcome == outcomeRetryLater || outcome == outcomeInterrupted {
+	outcome, _ := m.guardedDeliver(ctx, entry,
+		deliverJob{kind: jobMessage, msg: text})
+	if outcome == outcomeRetryLater || outcome == outcomeInterrupted ||
+		outcome == outcomePanicked {
 		m.restoreOverflowSummary(name, state)
+		return
 	}
+	m.settleSummaryRecords(state)
 }
 
 // maxOverflowSummaryDelay bounds how long a summary waits for its storm
@@ -220,6 +254,14 @@ func (m *Manager) maybeFlushOverflowSummary(
 		return
 	}
 	m.flushOverflowSummary(ctx, entry)
+}
+
+// hasOverflowSummary reports whether a summary waits for the provider.
+func (m *Manager) hasOverflowSummary(entry providerEntry) bool {
+	m.pacer.mu.Lock()
+	defer m.pacer.mu.Unlock()
+	state := m.pacer.summaries[entry.provider.Name()]
+	return state != nil && state.total > 0
 }
 
 func skipsPlainMessages(p Provider) bool {

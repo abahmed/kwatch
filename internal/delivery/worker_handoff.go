@@ -121,7 +121,8 @@ func (m *Manager) deferJobLocked(provider string, job deliverJob, err error) {
 			"reason", deadLetterReason(err))
 		return
 	}
-	if errors.Is(err, errProviderUnavailable) {
+	if errors.Is(err, errProviderUnavailable) ||
+		errors.Is(err, errDeliveryShutdown) {
 		metrics.DefaultRegistry().NotificationsDropped.Add(1)
 	}
 	m.recordDeadLetter(provider, job, err)

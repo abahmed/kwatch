@@ -87,6 +87,7 @@ func (w Writer) write(
 	f := gatherFacts(d, now, fix)
 	f.cluster = w.Cluster
 	f.community = w.Community
+	f.changeSeen = note.changeSeen
 	p := f.p
 	msg := notification.Message{
 		Key: p.ID, DedupKey: p.AlertKey, Revision: p.Revision,
@@ -175,20 +176,6 @@ func tierStatus(tier incident.Tier) notification.Status {
 	default:
 		return notification.StatusLow
 	}
-}
-
-// rootFinding is the root's own most severe condition, if it has one.
-// Symptoms (a workload below its replicas) never lead the message.
-func rootFinding(
-	p incident.Incident, members []detection.Finding,
-) *detection.Finding {
-	for i := range members {
-		if members[i].Entity == p.Root && !members[i].Symptom &&
-			!members[i].Advisory {
-			return &members[i]
-		}
-	}
-	return nil
 }
 
 func nonEmpty(value string) []string {

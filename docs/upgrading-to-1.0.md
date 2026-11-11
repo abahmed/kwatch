@@ -130,12 +130,13 @@ v0.10.x install has no license key, so v1.0.0 starts it as Community, and
   everything that is ignored.
 - A Community alert says what broke and the type of cause, never which
   object, change, image or version it is: "payments in shop keeps
-  crashing. Cause found: a config change." The exact cause and its proof,
-  the commands to run, the setting to change ("Fix in: ...") and how often
-  it happened before ("This is the third time this week") are Pro; the
-  alert's one Pro line says what Pro adds, such as "Pro shows which one
-  and how to fix it." (`app.hideProHints` removes that line; the "Cause
-  found:" sentence stays).
+  crashing. Most likely cause: a config change." The exact cause and its
+  proof, the commands to run, the fix ("Fix: change the image of container
+  app in deployment/api ...") and how often it happened before ("This is
+  the third time this week") are Pro; the first alert of an issue ends
+  with one Pro line that says what Pro adds: "Pro shows which one and how
+  to fix it, free during early access: kwatch.dev/pro" (`app.hideProHints`
+  removes that line; the "Most likely cause:" sentence stays).
 - The text `/status` page is Pro: Community answers it with `402`.
   `/metrics` is Pro too: Community answers it with `404`. `/health` stays
   available in both editions.
@@ -202,7 +203,9 @@ selects pods by `app: kwatch` and `app.kubernetes.io/instance: kwatch`,
 and a Deployment selector cannot change, so `kubectl apply` over a 0.10.x
 install fails. The manifest also reads its configuration from the Secret
 `kwatch` instead of the ConfigMap. Create the Secret, then delete the
-Deployment and apply:
+Deployment and apply. Run the last command from a checkout of the release
+you are upgrading to (`deploy/deploy.yaml` is a path in that checkout), or
+pass that release's raw file URL to `-f` instead:
 
 ```sh
 kubectl -n kwatch create secret generic kwatch \
@@ -358,7 +361,10 @@ helm rollback kwatch --namespace kwatch
   two buckets, so they stay until you remove them with the state file.
 - Between 1.0 builds, a state file with another schema version is moved aside
   and the outbox and thread IDs are carried over, so a rollback inside the
-  1.0 line does not drop queued pages. Issue trackers save a resolved issue
+  1.0 line does not drop queued pages. Nothing else carries over: a state
+  file written by a newer build is quarantined and replaced, so open
+  incidents and learned baselines are lost, and incidents still open are
+  announced again. Issue trackers save a resolved issue
   in a new format; an older 1.0 build reads it as an unknown issue ID, gets a
   404 and forgets it, with at most one failed call per issue.
 

@@ -1,11 +1,11 @@
 10:01:15 settled
 🟠 catalog in shop (prod-eu-1) is not ready: its readiness check (/ready on port 8080) answers HTTP 503. From its log: "warn: readiness check failed: search index not loaded".
-Also grouped: 2 probe failures
+Related alerts: 2 probe failures
 To see the object's state and events, run kubectl describe deployment catalog -n shop
 🟠 catalog in shop (prod-eu-1) is not ready: its readiness check (/ready on port 8080) answers HTTP 503.
 | 🟠 **catalog** in **shop** (**prod-eu-1**) is not ready: its readiness check (/ready on port 8080) answers HTTP 503.
 | From its log: `warn: readiness check failed: search index not loaded`.
-| Also grouped: 2 probe failures
+| Related alerts: 2 probe failures
 | To see the object's state and events, run
 | ```
 | kubectl describe deployment catalog -n shop

@@ -1,0 +1,19 @@
+10:01:15 settled
+🟠 Validating webhook policy-resource (prod-eu-1) has no ready pods behind service policy-controller. It fails closed (failurePolicy Fail); no request has been rejected so far. To see the object's state and events, run kubectl describe validatingwebhookconfiguration policy-resource
+🟠 Validating webhook policy-resource (prod-eu-1) has no ready pods behind service policy-controller.
+| 🟠 Validating webhook **policy-resource** (**prod-eu-1**) has no ready pods behind service policy-controller.
+| It fails closed (failurePolicy Fail); no request has been rejected so far.
+| To see the object's state and events, run
+| ```
+| kubectl describe validatingwebhookconfiguration policy-resource
+| ```
+10:41:15 digest
+🟡 kwatch summary (prod-eu-1): one new low-priority problem and one problem still open. Leftovers of a removed or stopped controller (2 objects): policy-controller in policy-system, which its webhooks call, is gone or has nothing ready. Validating webhook policy-resource has no ready pods behind service policy-controller; still the case, for 41 minutes now. None is urgent: kwatch alerts on its own if one gets worse.
+🟡 kwatch summary (prod-eu-1): one new low-priority problem and one problem still open.
+| 🟡 **kwatch summary** · prod-eu-1 — 1 problem · 1 ongoing
+|
+| **Problems**
+| - Leftovers of a removed or stopped controller (2 objects): **policy-controller** in **policy-system**, which its webhooks call, is gone or has nothing ready
+|
+| **Ongoing**
+| - Validating webhook **policy-resource** has no ready pods behind service policy-controller; still the case, for 41 minutes now

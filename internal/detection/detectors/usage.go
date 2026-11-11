@@ -118,8 +118,12 @@ func (VolumeUsage) Detect(
 	if s, ok := volumeInodes(ctx, e); ok {
 		out = append(out, s)
 	}
+	failing := volumeWritesFail(ctx, e)
 	for i := range out {
 		out[i].Evidence = append(out[i].Evidence, volumeDetail(ctx, e)...)
+		// A nearly full volume is a risk, not a failure: it is advice
+		// until writes fail now (volumeWritesFail).
+		out[i].Advisory = !failing
 	}
 	return out
 }

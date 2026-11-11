@@ -98,6 +98,7 @@ func (p *Incident) notePodPeak() {
 func (m *Manager) RecordScope(id string, in bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.noteScopeWaiting(id, false)
 	if p := m.incidents[id]; p != nil {
 		p.Scope = ScopeOut
 		p.sent.withdraw()

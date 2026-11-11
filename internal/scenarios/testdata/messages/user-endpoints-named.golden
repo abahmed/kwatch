@@ -1,12 +1,12 @@
 10:01:35 settled
-🔴 payments is down in shop (prod-eu-1) after the 10:01 UTC release of registry.example.com/payments:4. The previous image was registry.example.com/payments:3. It fails with "panic: runtime error: invalid memory address". Ingress storefront and service payments can't serve traffic. Users can't reach shop.example.com/pay/refunds, shop.example.com/pay and 2 more. Fix in: deployment/payments → container app → image (registry.example.com/payments:4). To see the rollout state, run kubectl rollout status deployment/payments -n shop
+🔴 payments is down in shop (prod-eu-1) after the 10:01 UTC release of registry.example.com/payments:4. The previous image was registry.example.com/payments:3. It fails with "panic: runtime error: invalid memory address". Ingress storefront and service payments can't serve traffic. Users can't reach shop.example.com/pay/refunds, shop.example.com/pay and 2 more. Fix: change the image of container app in deployment/payments. To see the rollout state, run kubectl rollout status deployment/payments -n shop
 🔴 payments is down in shop (prod-eu-1) after the 10:01 UTC release of registry.example.com/payments:4.
 | 🔴 **payments** is down in **shop** (**prod-eu-1**) after the 10:01 UTC release of registry.example.com/payments:4.
 | The previous image was registry.example.com/payments:3.
 | It fails with `panic: runtime error: invalid memory address`.
 | Ingress **storefront** and service **payments** can't serve traffic.
 | Users can't reach shop.example.com/pay/refunds, shop.example.com/pay and 2 more.
-| Fix in: deployment/payments → container app → image (registry.example.com/payments:4).
+| Fix: change the image of container app in deployment/payments.
 | To see the rollout state, run
 | ```
 | kubectl rollout status deployment/payments -n shop

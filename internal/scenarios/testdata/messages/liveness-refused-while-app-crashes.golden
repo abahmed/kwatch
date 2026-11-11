@@ -1,9 +1,9 @@
 10:03:35 settled
-🟠 notifier in shop (prod-eu-1) keeps exiting on its own with an error (exit code 1). Its node and registry are healthy and unchanged, so nothing outside it points to a cause. Its last run lasted six seconds; two restarts since its pod was created one hour ago. It has no readiness probe, so Kubernetes sends it traffic while the container runs. To read the output of the last crash, run kubectl logs notifier-9a3d5365-a -c app -n shop --previous
+🟠 notifier in shop (prod-eu-1) keeps exiting on its own with an error (exit code 1). Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. Its last run lasted six seconds; three restarts since its pod was created one hour ago. It has no readiness probe, so Kubernetes sends it traffic while the container runs. To read the output of the last crash, run kubectl logs notifier-9a3d5365-a -c app -n shop --previous
 🟠 notifier in shop (prod-eu-1) keeps exiting on its own with an error (exit code 1).
 | 🟠 **notifier** in **shop** (**prod-eu-1**) keeps exiting on its own with an error (exit code 1).
-| Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
-| Its last run lasted six seconds; two restarts since its pod was created one hour ago.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| Its last run lasted six seconds; three restarts since its pod was created one hour ago.
 | It has no readiness probe, so Kubernetes sends it traffic while the container runs.
 | To read the output of the last crash, run
 | ```

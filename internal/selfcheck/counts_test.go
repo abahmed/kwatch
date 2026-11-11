@@ -97,3 +97,30 @@ func TestSummaryLine(t *testing.T) {
 		t.Errorf("singular = %q", got)
 	}
 }
+
+// The overflow rule counts inside MaxRules: a restore keeps every count.
+func TestCountsOverflowSurvivesARestore(t *testing.T) {
+	now := day(0)
+	c := NewCounts()
+	for i := range MaxRules + 5 {
+		c.Record(fmt.Sprintf("rule-%d", i), now, CauseConfirmed)
+	}
+	total := func(c *Counts) int {
+		n := 0
+		for _, r := range c.Summary(now) {
+			n += r.Total()
+		}
+		return n
+	}
+	raw, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := NewCounts()
+	if err := json.Unmarshal(raw, d); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := total(d), total(c); got != want {
+		t.Fatalf("restored %d counts, want %d", got, want)
+	}
+}

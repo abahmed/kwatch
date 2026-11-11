@@ -62,7 +62,9 @@ func NewGitlab(
 		"projectId", projectID)
 
 	return &Gitlab{
-		issues: issues.NewMap(clock.Require(dependencies.Clock).Now),
+		issues: issues.NewMap(
+			clock.Require(dependencies.Clock).Now,
+		).ForCluster(clusterName),
 		sender: transport.NewSender(dependencies),
 		url: fmt.Sprintf(
 			"%s/projects/%s/issues",
@@ -158,6 +160,11 @@ func (g *Gitlab) Close(ctx context.Context, id, body string) error {
 	if err := g.Comment(ctx, id, body); err != nil {
 		return err
 	}
+	return g.CloseState(ctx, id)
+}
+
+// CloseState implements issues.StateCloser.
+func (g *Gitlab) CloseState(ctx context.Context, id string) error {
 	_, err := g.call(ctx, "PUT",
 		g.url+"/"+id, map[string]string{"state_event": "close"})
 	return err

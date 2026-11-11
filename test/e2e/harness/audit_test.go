@@ -103,3 +103,51 @@ func TestParseAuditReportsOversizedLine(t *testing.T) {
 		t.Fatal("an oversized line must be reported, not dropped silently")
 	}
 }
+
+// toldAgainRun is the audit of one CI run of the re-failure scenario:
+// the first incident, its resolve, and how the return was told.
+func toldAgainRun(root string, back AuditEntry) []AuditEntry {
+	reason := "CreateContainerConfigError,ProjectedConfigMapMissing"
+	return []AuditEntry{
+		{Action: "create", Incident: "inc-1", Namespace: "shop",
+			Root: "configmap/shop/settings", Reason: reason},
+		{Action: "resolved", Incident: "inc-1", Namespace: "shop",
+			Root: root, Reason: reason},
+		back,
+	}
+}
+
+// Both outcomes seen on CI count as telling the failure again: a reopen
+// with "failing again" when the incident kept the ConfigMap root, a new
+// incident when its root had moved to the Deployment while recovering.
+func TestToldAgainAcceptsAReopenOrANewIncident(t *testing.T) {
+	reason := "CreateContainerConfigError,ProjectedConfigMapMissing"
+	reopen := toldAgainRun("configmap/shop/settings", AuditEntry{
+		Action: "update", Incident: "inc-1", Namespace: "shop",
+		Root: "configmap/shop/settings", Reason: reason,
+		DecisionReason: FailingAgain,
+	})
+	recur := toldAgainRun("deployment/shop/web", AuditEntry{
+		Action: "create", Incident: "inc-2", Namespace: "shop",
+		Root: "configmap/shop/settings", Reason: reason,
+	})
+	quiet := toldAgainRun("configmap/shop/settings", AuditEntry{
+		Action: "update", Incident: "inc-1", Namespace: "shop",
+		Root: "configmap/shop/settings", Reason: reason,
+		DecisionReason: "fix attempt",
+	})
+	matches := ToldAgain(
+		"shop", "inc-1", "settings", "ProjectedConfigMapMissing")
+	for name, tc := range map[string]struct {
+		entries []AuditEntry
+		want    bool
+	}{
+		"reopened": {reopen, true}, "new incident": {recur, true},
+		"not told again":    {quiet, false},
+		"before the return": {reopen[:2], false},
+	} {
+		if _, got := firstMet(tc.entries, matches); got != tc.want {
+			t.Errorf("%s: told again = %v, want %v", name, got, tc.want)
+		}
+	}
+}

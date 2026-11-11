@@ -36,7 +36,7 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 	state, err := openStore(activeCtx, deps)
 	if err != nil {
 		deps.healthServer.SetComponentError("state", err)
-		return fmt.Errorf("state: %w", err)
+		return startFailure(fmt.Errorf("state: %w", err))
 	}
 	reportStoreReset(deps, state)
 	disk := diskState{store: state, client: deps.clients.Kubernetes}
@@ -94,7 +94,7 @@ func failStartup(
 ) error {
 	closeEarly(cancel, lic, state)
 	deps.healthServer.SetComponentError("state", err)
-	return fmt.Errorf("state: %s: %w", stage, err)
+	return startFailure(fmt.Errorf("state: %s: %w", stage, err))
 }
 
 func newSessionStartup(deps *serverDeps, disk diskState) *startupManager {
@@ -308,15 +308,7 @@ func startActiveComponents(
 			return runDelivery(ctx, deps)
 		},
 	})
-	supervisor.startOwned(ctx, componentSpec{
-		name:     "pipeline",
-		required: true,
-		progress: deps.pipelineProgress,
-		run: func(ctx context.Context) error {
-			return runPipeline(ctx, deps, res.state, res.guard,
-				res.session.gap())
-		},
-	})
+	supervisor.startOwned(ctx, pipelineComponent(deps, res))
 	upgraderConfig := deps.runtime.Lifecycle().Upgrader()
 	optional := []componentSpec{
 		monitoredRun(deps, "telemetry", configureTelemetryRunner(
@@ -337,6 +329,27 @@ func startActiveComponents(
 	optional = append(optional, conditionalComponents(deps)...)
 	for _, component := range optional {
 		supervisor.startOptional(ctx, component)
+	}
+	// From here a lost Lease is no longer a failed session start.
+	deps.sessionLive.Store(true)
+}
+
+// pipelineComponent is the pipeline's supervised component.
+func pipelineComponent(
+	deps *serverDeps, res activeResources,
+) componentSpec {
+	return componentSpec{
+		name:     "pipeline",
+		required: true,
+		progress: deps.pipelineProgress,
+		// Build, restore and the first full pass report nothing; allow
+		// what liveness allows before the first report of this run.
+		startupTimeout: pipelineLivenessStall,
+		freshStart:     true,
+		run: func(ctx context.Context) error {
+			return runPipeline(ctx, deps, res.state, res.guard,
+				res.session.gap())
+		},
 	}
 }
 

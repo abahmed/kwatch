@@ -1,6 +1,6 @@
 {
   "name": "ack-at-announce",
-  "description": "A crash-looping Deployment still carries an ack annotation when its incident is announced.",
+  "description": "A crash-looping Deployment is acknowledged with an annotation before its incident is announced.",
   "root": "deployment/shop/payments",
   "tier": "notify",
   "maxMessages": 2,

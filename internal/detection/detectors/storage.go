@@ -1,6 +1,7 @@
 package detectors
 
 import (
+	"strings"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -65,16 +66,26 @@ func (Claim) Detect(
 }
 
 // awaitingFirstConsumer reports a claim of a WaitForFirstConsumer class
-// that no pod mounts yet. Such a claim stays Pending by design until its
-// first pod is scheduled.
+// whose pods are not scheduled yet: none mounts it, or every one that
+// does still waits for a node (an autoscaler adding one, say). Such a
+// claim stays Pending by design until its first pod is scheduled; an
+// unschedulable pod is reported on its own.
 func awaitingFirstConsumer(ctx detection.Context, e inventory.Entity) bool {
-	if ctx.Model == nil {
+	if ctx.Model == nil || !firstConsumerClass(ctx, e) {
 		return false
 	}
-	consumers := ctx.Model.Related(e.ID, inventory.Mounts, inventory.Incoming)
-	if len(consumers) > 0 {
-		return false
+	for _, id := range ctx.Model.Related(e.ID, inventory.Mounts,
+		inventory.Incoming) {
+		if pod, ok := ctx.Model.Entity(id); !ok || podScheduled(ctx, pod) {
+			return false
+		}
 	}
+	return true
+}
+
+// firstConsumerClass reports a claim whose storage class binds on the
+// first consumer.
+func firstConsumerClass(ctx detection.Context, e inventory.Entity) bool {
 	for _, id := range ctx.Model.Related(
 		e.ID, inventory.References, inventory.Outgoing,
 	) {
@@ -87,6 +98,15 @@ func awaitingFirstConsumer(ctx detection.Context, e inventory.Entity) bool {
 		}
 	}
 	return false
+}
+
+// podScheduled reports a pod the scheduler placed on a node.
+func podScheduled(ctx detection.Context, pod inventory.Entity) bool {
+	if text(pod, kube.ConditionKey("PodScheduled")) == "True" {
+		return true
+	}
+	return len(ctx.Model.Related(pod.ID, inventory.RunsOn,
+		inventory.Outgoing)) > 0
 }
 
 // Volume detects failed PersistentVolumes.
@@ -158,12 +178,17 @@ func unusedClaim(
 	}
 	return detection.Finding{
 		Reason: reasons.ClaimUnused, Severity: detection.Info, Since: since,
+		// Clutter, not a failure: it only joins a real failure's incident.
+		Advisory: true,
 		Summary: "Volume claim is bound but no pod has mounted it for " +
 			format.Duration(ctx.Now.Sub(since)),
 	}, true
 }
 
-// claimInUse reports a claim a pod mounts or a CronJob's template names.
+// claimInUse reports a claim a pod mounts, or one a workload's pod
+// template names (a CronJob between runs, a workload scaled to zero),
+// or a StatefulSet's claim (named <template>-<statefulset>-<ordinal>):
+// such a claim is idle by design, not unused.
 func claimInUse(ctx detection.Context, e inventory.Entity) bool {
 	if len(ctx.Model.Related(
 		e.ID, inventory.Mounts, inventory.Incoming)) > 0 {
@@ -172,9 +197,50 @@ func claimInUse(ctx detection.Context, e inventory.Entity) bool {
 	for _, id := range ctx.Model.Related(
 		e.ID, inventory.References, inventory.Incoming,
 	) {
-		if id.Kind == kube.KindCronJob {
+		if workloadKinds[id.Kind] {
+			return true
+		}
+	}
+	return statefulSetClaim(ctx, e.ID)
+}
+
+// workloadKinds are the kinds whose pod template can name a claim.
+var workloadKinds = map[inventory.Kind]bool{
+	kube.KindCronJob: true, kube.KindJob: true,
+	kube.KindDeployment: true, kube.KindReplicaSet: true,
+	kube.KindStatefulSet: true, kube.KindDaemonSet: true,
+}
+
+// statefulSetClaim reports a claim named like one of a StatefulSet of
+// its namespace: <template>-<statefulset>-<ordinal>.
+func statefulSetClaim(ctx detection.Context, claim inventory.EntityID) bool {
+	head, ordinal, ok := strings.Cut(reverse(claim.Name), "-")
+	if !ok || !allDigits(reverse(head)) {
+		return false
+	}
+	base := reverse(ordinal)
+	for _, sts := range ctx.Model.EntitiesIn(kube.KindStatefulSet,
+		claim.Namespace) {
+		if strings.HasSuffix(base, "-"+sts.Name) {
 			return true
 		}
 	}
 	return false
+}
+
+func reverse(s string) string {
+	r := []rune(s)
+	for i, j := 0, len(r)-1; i < j; i, j = i+1, j-1 {
+		r[i], r[j] = r[j], r[i]
+	}
+	return string(r)
+}
+
+func allDigits(s string) bool {
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return s != ""
 }

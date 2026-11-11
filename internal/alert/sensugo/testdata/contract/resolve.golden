@@ -4,16 +4,20 @@ Authorization: Key <redacted>
 
 {
   "check": {
+    "interval": 60,
     "issued": 1767323045,
     "metadata": {
-      "name": "kwatch-dev-p-42"
+      "name": "kwatch-dev-p-42",
+      "namespace": "default"
     },
     "output": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart.",
     "status": 0
   },
   "entity": {
+    "entity_class": "proxy",
     "metadata": {
-      "name": "kwatch"
+      "name": "kwatch",
+      "namespace": "default"
     }
   }
 }

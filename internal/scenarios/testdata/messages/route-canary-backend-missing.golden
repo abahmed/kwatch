@@ -1,9 +1,9 @@
-10:02:15 settled
-🔴 HTTP route checkout in storefront (prod-eu-1) is failing because service checkout-canary does not exist. Also changed before it broke: HTTP route checkout: backends checkout:80 → checkout-canary:80,checkout:80 at 10:02 UTC. Fix in: httproute/checkout → spec.rules[].backendRefs[].name (checkout-canary). To see the object's state and events, run kubectl describe httproute checkout -n storefront
+10:03:45 settled
+🔴 HTTP route checkout in storefront (prod-eu-1) is failing because service checkout-canary does not exist. Also changed before it broke: HTTP route checkout: backends checkout:80 → checkout-canary:80,checkout:80 at 10:02 UTC. Fix: point httproute/checkout at a service that exists (now checkout-canary). To see the object's state and events, run kubectl describe httproute checkout -n storefront
 🔴 HTTP route checkout in storefront (prod-eu-1) is failing because service checkout-canary does not exist.
 | 🔴 HTTP route **checkout** in **storefront** (**prod-eu-1**) is failing because service **checkout-canary** does not exist.
 | Also changed before it broke: HTTP route checkout: backends checkout:80 → checkout-canary:80,checkout:80 at 10:02 UTC.
-| Fix in: httproute/checkout → spec.rules\[\].backendRefs\[\].name (**checkout-canary**).
+| Fix: point httproute/checkout at a service that exists (now **checkout-canary**).
 | To see the object's state and events, run
 | ```
 | kubectl describe httproute checkout -n storefront

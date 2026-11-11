@@ -30,6 +30,16 @@ type KwatchResponse struct {
 	Restarts24h         *int                `json:"restarts24h,omitempty"`
 	OutboxPending       *int                `json:"outboxPending,omitempty"`
 	FailedSendsLastHour *int                `json:"failedSendsLastHour,omitempty"`
+	// NonProduction is set when app.environment marks the cluster as
+	// not production: nothing in it pages.
+	NonProduction bool `json:"nonProduction"`
+	// BlindSpots are kwatch's optional parts that do not work now
+	// (kubelet stats, permissions, license, ...), so it sees less.
+	BlindSpots []BlindSpot `json:"blindSpots,omitempty"`
+	// ScopeWaiting counts the failing incidents not announced yet only
+	// because kwatch has not read their namespace's labels; 0 is left
+	// out.
+	ScopeWaiting int `json:"scopeWaiting,omitempty"`
 }
 
 // KwatchCoverage is what kwatch reads, in totals (see /api/coverage
@@ -76,11 +86,13 @@ type StateFileStatus struct {
 	CapKnown bool  `json:"capKnown"`
 }
 
-// kwatchHandler serves GET /api/kwatch.
-func (s *Server) kwatchReport() *KwatchResponse {
+// kwatchReport is the kwatch part of /api/status; report is the
+// engine's status, read once per answer.
+func (s *Server) kwatchReport(report status.Report) *KwatchResponse {
 	out := KwatchResponse{
 		DeliveryWindowHours: int(kwatchDeliveryWindow / time.Hour),
 		FailedSendsLastHour: s.failedLastHour(),
+		NonProduction:       s.nonProduction(),
 	}
 	if src := s.sources.coverage.Load(); src != nil {
 		out.Coverage = coverageTotals(withTotals((*src)()))
@@ -106,9 +118,9 @@ func (s *Server) kwatchReport() *KwatchResponse {
 	}
 	out.Delivery = channelDeliveries(health, items, trail, s.now.Now())
 	out.Resources = s.resources(out.StateFile)
-	if src := s.sources.status.Load(); src != nil {
-		out.LikelyMisses = (*src)().LikelyMisses
-	}
+	out.LikelyMisses = report.LikelyMisses
+	out.BlindSpots = s.blindSpots()
+	out.ScopeWaiting = s.scopeWaiting()
 	return &out
 }
 

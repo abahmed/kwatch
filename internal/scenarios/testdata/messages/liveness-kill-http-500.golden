@@ -1,8 +1,8 @@
 10:02:55 settled
-🟠 catalog in shop (prod-eu-1) keeps failing its liveness check (HTTP 500), so the kubelet keeps restarting it. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. Its last run lasted 30 seconds; three restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs catalog-23af8d25-a -c app -n shop --previous
+🟠 catalog in shop (prod-eu-1) keeps failing its liveness check (HTTP 500), so the kubelet keeps restarting it. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. Its last run lasted 30 seconds; three restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs catalog-23af8d25-a -c app -n shop --previous
 🟠 catalog in shop (prod-eu-1) keeps failing its liveness check (HTTP 500), so the kubelet keeps restarting it.
 | 🟠 **catalog** in **shop** (**prod-eu-1**) keeps failing its liveness check (HTTP 500), so the kubelet keeps restarting it.
-| Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
 | Its last run lasted 30 seconds; three restarts since its pod was created one hour ago.
 | To read the output of the last crash, run
 | ```

@@ -89,6 +89,11 @@ type Collector struct {
 	// restoredListed are the incidents the early restored summary named
 	// (see ListRestored).
 	restoredListed map[string]bool
+	// restoredIntros are the restored incidents still owed their
+	// introduction, and introsNoted says they were collected this
+	// start (restored_intro.go).
+	restoredIntros []incident.Incident
+	introsNoted    bool
 	// folded are the restored incidents whose first demotion to the
 	// digest tier was folded into a digest, not posted (see
 	// carriesThread).
@@ -206,6 +211,24 @@ func (c *Collector) pageOnly(
 	msg.PagingOnly, msg.ChatCarrier = true, carrier
 	c.env.Incidents.RecordPaged(d.Incident.ID, true)
 	c.env.Sink(ctx, d, msg)
+}
+
+// lowerAtPagers sends a held incident's lowering (ReasonTierLowered) to
+// the paging tools while its alert is open there, and reports whether it
+// did. A listing carries the incident to chat, but the pagers would keep
+// a critical alert until the resolve. It is no page: nothing is recorded
+// as paged.
+func (c *Collector) lowerAtPagers(
+	ctx context.Context, now time.Time, d incident.Decision, carrier string,
+) bool {
+	if d.Reason != incident.ReasonTierLowered ||
+		!c.env.Incidents.PageOpen(d.Incident.ID) {
+		return false
+	}
+	msg := c.env.Write(d, now)
+	msg.PagingOnly, msg.ChatCarrier = true, carrier
+	c.env.Sink(ctx, d, msg)
+	return true
 }
 
 // closeUnannounced settles a held incident that resolved before anyone was

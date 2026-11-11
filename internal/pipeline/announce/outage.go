@@ -109,7 +109,10 @@ func (c *Collector) absorbAnnounce(
 		h.Held = append(h.Held, d)
 	}
 	if d.Incident.Tier == incident.Page && !h.Paged {
-		c.pageOnly(ctx, now, d, "roll-up")
+		// An incident that already paged is the hold's page as it is.
+		if !c.pagedAlready(d) {
+			c.pageOnly(ctx, now, d, "roll-up")
+		}
 		h.Paged, h.PagedID = true, d.Incident.ID
 	}
 }
@@ -125,6 +128,9 @@ func (c *Collector) absorbUpdate(
 		// The namespace is paged once: this incident stands for it.
 		c.pageOnly(ctx, now, d, "roll-up")
 		h.Paged, h.PagedID = true, d.Incident.ID
+		return
+	}
+	if c.lowerAtPagers(ctx, now, d, "roll-up") {
 		return
 	}
 	c.recordCarried(ctx, now, d, "roll-up")

@@ -28,6 +28,8 @@ func modalWords(cause *rootcause.CauseRecord) (string, bool) {
 	case cause.Mode.Within(explain.ModeMissing),
 		cause.Mode.Within(explain.ModeDeleted):
 		return "does not exist", true
+	case cause.Mode.Within(explain.ModeKeyMissing):
+		return "lacks a key the pods read", true
 	case cause.Mode.Within(explain.ModeChanged):
 		return "changed shortly before", true
 	}

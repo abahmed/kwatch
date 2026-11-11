@@ -15,12 +15,15 @@ import (
 func (a *announcer) titleProblems(now time.Time) {
 	for _, p := range a.incidents.TakeUntitled() {
 		contain("compose", "problem title", func() {
-			a.incidents.SetProblem(p.ID, a.problemTitle(p, now))
+			short, full := a.problemTitle(p, now)
+			a.incidents.SetProblem(p.ID, short, full)
 		})
 	}
 }
 
-// problemTitle is the composer's problem title of p.
-func (a *announcer) problemTitle(p incident.Incident, now time.Time) string {
-	return a.messages.ProblemTitle(p, a.kindNames(p), now)
+// problemTitle is the composer's problem title of p, bounded and uncut.
+func (a *announcer) problemTitle(
+	p incident.Incident, now time.Time,
+) (string, string) {
+	return a.messages.ProblemTitles(p, a.kindNames(p), now)
 }

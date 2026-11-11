@@ -18,6 +18,24 @@ import (
 
 var stateNow = time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 
+// stateLeasePub and stateLeasePriv sign the leases these tests cache;
+// the edition check trusts stateLeasePub as the vendor key in tests.
+var stateLeasePub, stateLeasePriv = func() (ed25519.PublicKey,
+	ed25519.PrivateKey) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		panic(err)
+	}
+	return pub, priv
+}()
+
+func init() {
+	cachedLeaseVerifier = func() *license.Verifier {
+		return license.NewVerifier(
+			map[string]ed25519.PublicKey{"v1": stateLeasePub})
+	}
+}
+
 // stateFileWith writes a state file as the leader leaves it: the edition
 // the last session ran and the cached lease (empty for none).
 func stateFileWith(
@@ -34,12 +52,10 @@ func stateFileWith(
 	require.NoError(t, disk.put(stateEditionLast,
 		editionRecord{Edition: string(edition)}))
 	if !exp.IsZero() {
-		_, priv, err := ed25519.GenerateKey(rand.Reader)
-		require.NoError(t, err)
 		lease := licensetest.SignLease(license.Lease{
 			KID: "v1", LID: "lic_x", Plan: license.PlanPro,
 			Nbf: stateNow.Add(-time.Hour).Unix(), Exp: exp.Unix(),
-		}, priv)
+		}, stateLeasePriv)
 		require.NoError(t, boltLeaseStore{disk: disk}.SaveLease(
 			lease, license.ClockGuard{}))
 	}
@@ -153,4 +169,28 @@ func TestStartEntitlementsFollowTheLastSession(t *testing.T) {
 		StartEntitlements(missing, stateNow).Edition())
 	_, err := os.Stat(missing)
 	require.True(t, os.IsNotExist(err), "a missing file is not created")
+}
+
+// A state file whose lease another key signed (one edited by hand) does
+// not start or unlock Pro, whatever its edition record says.
+func TestEditedStateFileDoesNotUnlockPro(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.db")
+	store, err := storage.Open(path, storage.Options{
+		Now: func() time.Time { return stateNow }})
+	require.NoError(t, err)
+	_, err = store.Claim()
+	require.NoError(t, err)
+	disk := diskState{store: store}
+	require.NoError(t, disk.put(stateEditionLast,
+		editionRecord{Edition: string(feature.ProEdition)}))
+	_, other, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	forged := licensetest.SignLease(license.Lease{KID: "v1", LID: "lic_x",
+		Plan: license.PlanPro, Nbf: stateNow.Add(-time.Hour).Unix(),
+		Exp: stateNow.Add(1000 * 24 * time.Hour).Unix()}, other)
+	require.NoError(t, boltLeaseStore{disk: disk}.SaveLease(
+		forged, license.ClockGuard{}))
+	require.NoError(t, store.Close())
+
+	require.False(t, fileRunsPro(path, stateNow))
 }

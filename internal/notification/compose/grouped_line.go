@@ -11,12 +11,12 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
-// This file writes the "Also grouped" line: the other findings that
+// This file writes the "Related alerts" line: the other findings that
 // joined an incident, counted by type. All of its wording lives here so
 // a wording change touches one file.
 
 const (
-	groupedPrefix = "Also grouped: "
+	groupedPrefix = "Related alerts: "
 	// groupedMaxTypes is how many types the line names before it says
 	// how many more there are.
 	groupedMaxTypes = 4
@@ -43,6 +43,7 @@ var (
 	labelThrottle = groupedLabel{"CPU throttling alert",
 		"CPU throttling alerts"}
 	labelNotReady = groupedLabel{"not-ready pod", "not-ready pods"}
+	labelFailed   = groupedLabel{"failed pod", "failed pods"}
 	labelEvicted  = groupedLabel{"eviction", "evictions"}
 	labelNetwork  = groupedLabel{"network problem", "network problems"}
 )
@@ -122,6 +123,8 @@ func podMode(f detection.Finding, mode detection.Mode) (groupedLabel, bool) {
 		return labelPending, true
 	case mode == detection.ModeNotReady && isPod:
 		return labelNotReady, true
+	case mode == detection.ModeFailed && isPod:
+		return labelFailed, true
 	}
 	return groupedLabel{}, false
 }

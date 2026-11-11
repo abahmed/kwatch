@@ -77,3 +77,13 @@ func TestParseInvalidJSON(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, entries, 0)
 }
+
+func TestParseCountedReportsSkippedLines(t *testing.T) {
+	input := "klog line\n\n" +
+		entry("2026-01-01T00:00:00Z", "ns:key1", "Test", "create") +
+		"\n{broken\n"
+	entries, skipped, err := ParseCounted(strings.NewReader(input))
+	require.NoError(t, err)
+	assert.Len(t, entries, 1)
+	assert.Equal(t, 2, skipped)
+}

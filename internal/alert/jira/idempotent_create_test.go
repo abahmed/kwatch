@@ -58,3 +58,30 @@ func TestJiraAnnounceCreatesWithMarkerWhenNoneFound(t *testing.T) {
 		t.Fatalf("create body lacks the marker: %s", requests[1].Body)
 	}
 }
+
+// Jira Cloud retired /rest/api/2/search: a 404 there falls back to the
+// enhanced /search/jql with the same query, so the issue is still found
+// instead of a duplicate being opened.
+func TestJiraFindFallsBackToEnhancedSearch(t *testing.T) {
+	g, rec := newRecordedJira(t)
+	marker := issues.Marker(providertest.Announce().ThreadKey())
+	rec.Reply = func(w http.ResponseWriter, r providertest.Request) {
+		if strings.HasSuffix(r.Path, "/search") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte(
+			`{"issues":[{"key":"OPS-9","fields":` +
+				`{"description":"x ` + marker + `"}}]}`))
+	}
+
+	key, err := g.Find(context.Background(), marker)
+
+	if err != nil || key != "OPS-9" {
+		t.Fatalf("Find = %q, %v; want OPS-9", key, err)
+	}
+	if n := len(rec.Requests()); n != 2 ||
+		!strings.HasSuffix(rec.Requests()[1].Path, "/search/jql") {
+		t.Fatalf("want /search then /search/jql, got %d requests", n)
+	}
+}

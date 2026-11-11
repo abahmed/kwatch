@@ -46,10 +46,15 @@ func (c *Collector) CollectRollup(
 // again only if they outlast the hold of a repeated page.
 func (c *Collector) holdCoveredPages(announcements []incident.Decision) {
 	// One page stands for the problems of its own namespace; a page of
-	// another namespace is another team's outage and is never held.
+	// another namespace is another team's outage and is never held. A
+	// cluster-scoped root (a node, a webhook) has no namespace: each is
+	// its own, so two nodes lost together both page.
 	paged := map[string]bool{}
 	for i, d := range announcements {
 		ns := d.Incident.Root.Namespace
+		if ns == "" {
+			ns = "cluster/" + d.Incident.Root.String()
+		}
 		if d.Incident.Tier != incident.Page || c.pagedAlready(d) {
 			paged[ns] = paged[ns] || d.Incident.Tier == incident.Page
 			continue

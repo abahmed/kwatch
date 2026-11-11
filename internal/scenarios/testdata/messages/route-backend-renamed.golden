@@ -1,9 +1,9 @@
-10:03:15 settled
-🔴 HTTP route api in storefront (prod-eu-1) is failing because service search-v3 does not exist. Also changed before it broke: HTTP route api: backends search:80 → search-v3:80 at 10:03 UTC. Fix in: httproute/api → spec.rules[].backendRefs[].name (search-v3). To see the object's state and events, run kubectl describe httproute api -n storefront
+10:04:45 settled
+🔴 HTTP route api in storefront (prod-eu-1) is failing because service search-v3 does not exist. Also changed before it broke: HTTP route api: backends search:80 → search-v3:80 at 10:03 UTC. Fix: point httproute/api at a service that exists (now search-v3). To see the object's state and events, run kubectl describe httproute api -n storefront
 🔴 HTTP route api in storefront (prod-eu-1) is failing because service search-v3 does not exist.
 | 🔴 HTTP route **api** in **storefront** (**prod-eu-1**) is failing because service **search-v3** does not exist.
 | Also changed before it broke: HTTP route api: backends search:80 → search-v3:80 at 10:03 UTC.
-| Fix in: httproute/api → spec.rules\[\].backendRefs\[\].name (**search-v3**).
+| Fix: point httproute/api at a service that exists (now **search-v3**).
 | To see the object's state and events, run
 | ```
 | kubectl describe httproute api -n storefront

@@ -27,6 +27,7 @@ const (
 	levelSilenced   = "lowered-silent"
 	levelOverride   = "override"
 	levelNoPaging   = "paging-off"
+	levelNonProd    = "non-production"
 	// levelOwnStart is in own_start.go.
 )
 
@@ -58,6 +59,8 @@ func (m *Manager) levelFor(
 		return levelKept
 	case p.Tier < overridden:
 		return loweredLevel(p.Tier)
+	case overridden < base && base == Page && m.override.nonProd:
+		return levelNonProd
 	case overridden < base && base == Page && m.override.noPage:
 		return levelNoPaging
 	case overridden != base:
@@ -88,40 +91,46 @@ func (p *Incident) noteLevel(code string) {
 
 // levelTexts are the plain words of each level code.
 var levelTexts = map[string]string{
-	levelPageHeld: "Sends a notification instead of a page: the same " +
-		"failure paged less than " + format.Duration(RepageWindow) +
+	levelPageHeld: "Needs attention instead of Urgent: the same " +
+		"failure was Urgent less than " + format.Duration(RepageWindow) +
 		" ago.",
-	levelNotify: "Sends a notification: something failed, but users " +
-		"are still served and the cluster keeps working.",
-	levelDigestOnly: "Listed in the next digest, not sent on its own: " +
-		"it holds only informational findings or planned disruption.",
-	levelRoutine: "Listed in the next digest, not sent on its own: it " +
-		"happens at about the same time every day and ends by itself.",
-	levelKnown: "Listed in the next digest, not sent on its own: " +
-		"people have been told about it for a day already.",
-	levelRhythm: "Listed in the next digest, not sent on its own: it " +
-		"fails and recovers on a regular schedule.",
-	levelCauseOnly: "No message of its own: it is the cause of other " +
+	levelNotify: "Needs attention: something failed, but users are " +
+		"still served and the cluster keeps working.",
+	levelDigestOnly: "Low: kwatch lists it in the daily summary and " +
+		"sends no alert. It holds only informational findings or " +
+		"planned disruption.",
+	levelRoutine: "Low: kwatch lists it in the daily summary and " +
+		"sends no alert. It happens at about the same time every day " +
+		"and ends by itself.",
+	levelKnown: "Low: kwatch lists it in the daily summary and sends " +
+		"no alert. People have been alerted about it for a day " +
+		"already.",
+	levelRhythm: "Low: kwatch lists it in the daily summary and sends " +
+		"no alert. It fails and recovers on a regular schedule.",
+	levelCauseOnly: "No alert of its own: it is the cause of other " +
 		"alerts, and those alerts name it.",
-	levelAdvisory: "No message: throttling or a full quota that has " +
+	levelAdvisory: "No alert: throttling or a full quota that has " +
 		"not broken anything yet.",
 	levelDrain: "Planned maintenance: a node is being drained on " +
 		"purpose, so its pods are expected to move.",
-	levelIdle: "Listed in the next digest, not sent on its own: the " +
-		"failing webhook receives no requests right now.",
+	levelIdle: "Low: kwatch lists it in the daily summary and sends " +
+		"no alert. The failing webhook receives no requests right now.",
 	levelKept: "Kept at its highest level: it was worse earlier, and " +
 		"stays at that level until it resolves.",
-	levelLowered: "Lowered to the next digest: the failures that made " +
-		"it louder have cleared.",
-	levelLoweredTo: "Lowered to a notification: the failures that " +
-		"made it page have cleared.",
-	levelSilenced: "Lowered to no message: the failures left need no " +
+	levelLowered: "Lowered to Low: the failures that made it louder " +
+		"have cleared.",
+	levelLoweredTo: "Lowered to Needs attention: the failures that " +
+		"made it Urgent have cleared.",
+	levelSilenced: "Lowered to no alert: the failures left need no " +
 		"one's attention.",
 	levelOverride: "Set by a severity override in kwatch's " +
 		"configuration.",
-	levelNoPaging: "Sends a notification instead of a page: paging " +
-		"is turned off in kwatch's configuration.",
-	levelOwnStart: "No message: kwatch's own pod waits for its volume " +
+	levelNoPaging: "Needs attention instead of Urgent: paging is " +
+		"turned off in kwatch's configuration.",
+	levelNonProd: NonProductionText + ". Needs attention instead of " +
+		"Urgent: kwatch's configuration marks this cluster as not " +
+		"production.",
+	levelOwnStart: "No alert: kwatch's own pod waits for its volume " +
 		"while kwatch restarts, which every restart does for a while.",
 }
 
@@ -146,10 +155,13 @@ var pageTexts = map[string]string{
 func AlertLevelText(code string) string {
 	if rule, ok := strings.CutPrefix(code, levelPagePrefix); ok {
 		if text, known := pageTexts[rule]; known {
-			return "Pages: " + text
+			return "Urgent: " + text
 		}
-		return "Pages: it matches a rule for failures that need " +
+		return "Urgent: it matches a rule for failures that need " +
 			"someone now."
+	}
+	if text, ok := chronicText(code); ok {
+		return text
 	}
 	return levelTexts[code]
 }

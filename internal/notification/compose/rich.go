@@ -59,7 +59,7 @@ func sentenceBlocks(
 				Spans: []notification.Span{{Text: cmd}}},
 		}
 	}
-	if s.text == eachOwnMessage {
+	if s.text == eachOwnMessage || s.text == oneOwnMessage {
 		return []notification.Block{{Kind: notification.Small,
 			Spans: podSpans(s.text)}}
 	}

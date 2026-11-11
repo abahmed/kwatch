@@ -103,7 +103,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | ActiveProbe | failing | `ActiveProbeFailure` | `active_probe` |
 | ActiveProbe.Latency | varies | `ActiveProbeLatency` | `active_probe` |
 | Admission.FailingOpen | degraded | `WebhookFailingOpen` | `webhook_calls` |
-| Admission.Rejected | failing | `PodAdmissionRejected` | `pod_admission` |
+| Admission.Rejected | varies | `PodAdmissionRejected` | `pod_admission` |
 | AttachFailed | failing | `VolumeAttachmentFailure` | `policy` |
 | BackendMissing | failing | `IngressBackendNotFound` | `network` |
 | BackendsDegraded | degraded | `ServiceBackendsDegraded` | `network` |
@@ -122,7 +122,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Cluster.VersionSkew | degraded | `ClusterVersionSkew` | `version_skew` |
 | Completed | varies | `Completed`, `PodCompleted` | - |
 | Condition | varies | `ConditionFailure` | - |
-| CrashLoop | failing | `CrashLoopBackOff` | `container` |
+| CrashLoop | failing | `CrashLoopBackOff` | `container`, `container_crashloop_run` |
 | CrashLoop.Liveness | failing | `LivenessKilled` | `container_liveness` |
 | CreateError | failing | `CreateContainerError` | `container` |
 | CreateError.Config | failing | `CreateContainerConfigError` | `container` |
@@ -207,7 +207,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | NotReady.Never | varies | `WorkloadNeverReady` | `workload_never_ready` |
 | NotReconciling | degraded | `CustomResourceFailure`, `GenerationLagging` | `custom`, `generic` |
 | NotScheduling | degraded | `CronJobNotScheduled` | `schedule` |
-| OOMKilled | failing | `OOMKILLED`, `OOMKilled` | `container` |
+| OOMKilled | failing | `OOMKILLED`, `OOMKilled` | `container`, `container_crashloop_run` |
 | PIDPressure | varies | `PIDPressure` | `condition_rules` |
 | PLEGSlow | degraded | `NodePLEGSlow` | `kubelet_health` |
 | Pending | degraded | `PhasePending`, `PodPending` | `generic`, `pod` |

@@ -54,6 +54,12 @@ func NewWebex(
 		return nil
 	}
 
+	if len(roomID) != 0 && len(toPersonEmail) != 0 {
+		klog.InfoS("initializing webex with both roomId and " +
+			"toPersonEmail; set exactly one")
+		return nil
+	}
+
 	klog.InfoS("initializing webex", "roomId", roomID, "toPersonEmail", toPersonEmail)
 
 	return &Webex{

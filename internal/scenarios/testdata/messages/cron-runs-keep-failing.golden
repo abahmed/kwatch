@@ -1,23 +1,23 @@
 10:31:56 settled
-🟠 Cron job stats-rollup in ops (prod-eu-1) is failing: exited with code 1. Its registry is healthy and unchanged, so nothing outside it points to a cause. It fails with "panic: rollup table is locked".
-Also grouped: 3 failed alerts
+🟠 Cron job stats-rollup in ops (prod-eu-1) is failing: exited with code 1. Cause not found yet: its registry is healthy and unchanged. It fails with "panic: rollup table is locked".
+Related alerts: 3 failed pods
 To see the pod's state and events, run kubectl describe pod stats-rollup-292510-a -n ops
 🟠 Cron job stats-rollup in ops (prod-eu-1) is failing: exited with code 1.
 | 🟠 Cron job **stats-rollup** in **ops** (**prod-eu-1**) is failing: exited with code 1.
-| Its registry is healthy and unchanged, so nothing outside it points to a cause.
+| Cause not found yet: its registry is healthy and unchanged.
 | It fails with `panic: rollup table is locked`.
-| Also grouped: 3 failed alerts
+| Related alerts: 3 failed pods
 | To see the pod's state and events, run
 | ```
 | kubectl describe pod stats-rollup-292510-a -n ops
 | ```
 10:32:01 material change
-🟠 Cron job stats-rollup in ops (prod-eu-1) now has a last run that failed less than a minute ago (BackoffLimitExceeded). Its last run, job stats-rollup-292510, failed: failed after 3 pod failures.
-🟠 Cron job stats-rollup in ops (prod-eu-1) now has a last run that failed less than a minute ago (BackoffLimitExceeded).
-| 🟠 Cron job **stats-rollup** in **ops** (**prod-eu-1**) now has a last run that failed less than a minute ago (BackoffLimitExceeded).
-| Its last run, job **stats-rollup-292510**, failed: failed after 3 pod failures.
+🟠 Cron job stats-rollup in ops (prod-eu-1) now has a last run that failed less than a minute ago: it ran out of retries. Its last run, job stats-rollup-292510, failed after 3 pod failures.
+🟠 Cron job stats-rollup in ops (prod-eu-1) now has a last run that failed less than a minute ago: it ran out of retries.
+| 🟠 Cron job **stats-rollup** in **ops** (**prod-eu-1**) now has a last run that failed less than a minute ago: it ran out of retries.
+| Its last run, job **stats-rollup-292510**, failed after 3 pod failures.
 11:30:01 material change
-🟠 Cron job stats-rollup in ops (prod-eu-1) is now failing: the last 3 scheduled runs failed. It is spreading to pods stats-rollup-292511-a, stats-rollup-292511-b and stats-rollup-292511-c: they are failing: failed.
+🟠 Cron job stats-rollup in ops (prod-eu-1) is now failing: the last 3 scheduled runs failed. It is now also affecting pods stats-rollup-292511-a, stats-rollup-292511-b and stats-rollup-292511-c: they have failed.
 🟠 Cron job stats-rollup in ops (prod-eu-1) is now failing: the last 3 scheduled runs failed.
 | 🟠 Cron job **stats-rollup** in **ops** (**prod-eu-1**) is now failing: the last 3 scheduled runs failed.
-| It is spreading to pods **stats-rollup-292511-a**, **stats-rollup-292511-b** and stats-rollup-292511-c: they are failing: failed.
+| It is now also affecting pods **stats-rollup-292511-a**, **stats-rollup-292511-b** and stats-rollup-292511-c: they have failed.

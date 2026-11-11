@@ -3,7 +3,8 @@
    edge: colmenu.js), and rows that update their cells in place so a
    refresh never moves what is being read. A click on a row opens its
    issue beside it (drawer.js). Under 900px wide the rows become
-   stacked cards (issues.css). issues.js drives it. */
+   two-line cards: the title, then "staging · deployment/api · Urgent
+   · 6 h" (issues.css). issues.js drives it. */
 (function () {
   "use strict";
   var KW = window.KW;
@@ -20,8 +21,7 @@
 
   /* The "When" column: how long an active issue has been going on,
      when a resolved one resolved. */
-  var WHEN = { active: "Going on", resolved: "Resolved",
-    all: "Going on or resolved" };
+  var WHEN = { active: "Going on", resolved: "Resolved", all: "When" };
   function whenSort(status) { return status === "active" ? "duration" : "last"; }
 
   function objectText(item) {
@@ -66,34 +66,46 @@
     return at > LEAD * 2 ? "…" + title.slice(at - LEAD) : title;
   }
 
-  /* marks: after the title, how often it failed again (× 3), New
-     or Changed since the last visit, "Settled before alerting", "Stopped tracking"; "in the cause" when the search
-     matched only the likely cause. */
+  /* marks: under the title (never beside it, so they cannot squeeze
+     it), only when there is one: "failed again 3 times", New or
+     Changed since the last visit, "Settled on its own", "Stopped
+     tracking"; "in the cause" when the search matched only the likely
+     cause. */
   function marks(td, item, ctx) {
+    var row = KW.el("span", "it-marks");
     if (item.repeatCount > 0) {
-      var rep = td.appendChild(KW.el("span", "i-rep", "× " + KW.num(item.repeatCount + 1)));
-      rep.title = KW.failedAgain(item.repeatCount);
+      var rep = row.appendChild(KW.el("span", "i-rep", KW.failedAgain(item.repeatCount).toLowerCase()));
+      rep.title = "It recovered and failed again " + KW.plural(item.repeatCount, "time", "times") + ".";
+    }
+    if (item.leftoverObjects > 0) {
+      row.appendChild(KW.chip("c-acked i-left", KW.plural(item.leftoverObjects, "object", "objects"),
+        KW.TERMS.paging.leftTitle));
     }
     var m = ctx.marks[item.id];
-    if (m) td.appendChild(KW.visitChip(m));
-    if (KW.isUntold(item)) td.appendChild(KW.untoldMark());
+    if (m) row.appendChild(KW.visitChip(m));
+    if (KW.isUntold(item)) row.appendChild(KW.untoldMark());
     if (item.stoppedTracking) {
-      var stop = td.appendChild(KW.el("span", "i-stopped", "Stopped tracking"));
+      var stop = row.appendChild(KW.el("span", "i-stopped", "Stopped tracking"));
       stop.title = "kwatch stopped tracking this issue while it was still failing.";
     }
     if (ctx.terms.length && !found(item.title + " " + item.namespace + " " +
         objectText(item), ctx.terms) && found(item.rootCause, ctx.terms)) {
-      var why = td.appendChild(KW.el("span", "i-why", "in the cause"));
+      var why = row.appendChild(KW.el("span", "i-why", "in the cause"));
       why.title = "The search matched the likely cause: " + item.rootCause;
     }
+    if (row.firstChild) td.appendChild(row);
   }
 
   /* CELLS fill one cell of an issue row. */
   var CELLS = {
-    sev: function (td, item) { td.appendChild(KW.severityChip(item.severity)); },
+    sev: function (td, item) {
+      td.appendChild(KW.isUntold(item) ? KW.wasChip(item.severity) : KW.severityChip(item.severity));
+    },
     title: function (td, item, ctx) {
       var a = KW.el("a", "it-link");
-      KW.highlight(a, titleText(item.title, ctx.terms), ctx.terms);
+      // A search shows the whole title, so its match is there to see.
+      KW.highlight(a, ctx.terms.length ? titleText(item.title, ctx.terms) :
+        KW.shortTitle(item.title, item), ctx.terms);
       a.href = href(item.id);
       a.dataset.link = "";
       a.dataset.rowlink = "";
@@ -101,6 +113,9 @@
       a.title = item.title + (item.rootCause && item.rootCause !== item.title ?
         "\nLikely cause: " + item.rootCause : "");
       td.appendChild(a);
+      // Where is hidden at 900-1100px; the namespace stays under the title.
+      var ns = td.appendChild(KW.el("span", "it-ns mono", item.namespace || "whole cluster"));
+      ns.title = KW.whereText(item);
       marks(td, item, ctx);
     },
     /* where: the namespace and the object in one mono cell, the
@@ -109,13 +124,24 @@
       var ns = item.namespace || "whole cluster", o = objectText(item);
       var first = td.appendChild(KW.el("span", "mono"));
       KW.highlight(first, ns, ctx.terms);
+      breaks(first);
       if (o) {
         var second = td.appendChild(KW.el("span", "mono muted c-where-obj"));
         KW.highlight(second, o, ctx.terms);
+        breaks(second);
       }
       td.title = KW.whereText(item);
     },
-    status: function (td, item) { td.appendChild(KW.stateChip(item.state)); },
+    /* status: a pill only where it tells something: the Active list is
+       all "Happening now" and the Resolved list all "Resolved", so those
+       say it in words for screen readers alone. */
+    status: function (td, item, ctx) {
+      var plain = { active: "open", resolved: "resolved" }[ctx.status] === item.state;
+      if (!plain) { td.appendChild(KW.stateChip(item.state)); return; }
+      var st = KW.STATE[item.state];
+      td.appendChild(KW.el("span", "sr-only", st ? st.label : item.state));
+      td.classList.add("none");
+    },
     started: function (td, item) {
       if (KW.valid(item.firstSeen)) td.appendChild(KW.timeEl(item.firstSeen));
     },
@@ -268,13 +294,21 @@
        timer would keep all of it alive. */
     function stop() { window.clearInterval(ticker); }
 
-    /* draw replaces every row with page (a list response) and returns
-       the issue IDs in the order shown. The Resolved list has no
-       Status column: every row there is resolved. */
-    function draw(page, f, o) {
-      var cols = o.cols.filter(function (k) {
-        return !(k === "status" && f.status === "resolved");
+    /* plainStatus: every row is "Happening now" (Active) or "Resolved"
+       (Resolved): a Status column of blanks says nothing, so it is left
+       out until a row has another state. */
+    function plainStatus(page, f) {
+      if (f.status === "resolved") return true;
+      return f.status === "active" && (page.incidents || []).every(function (i) {
+        return i.state === "open";
       });
+    }
+
+    /* draw replaces every row with page (a list response) and returns
+       the issue IDs in the order shown. */
+    function draw(page, f, o) {
+      var plain = plainStatus(page, f);
+      var cols = o.cols.filter(function (k) { return !(k === "status" && plain); });
       ctx = { cols: cols, marks: o.marks, terms: o.terms, status: f.status };
       KW.columnHead.close(false);
       drawHead(cols, f);

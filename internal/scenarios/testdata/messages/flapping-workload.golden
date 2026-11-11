@@ -1,19 +1,19 @@
 10:05:15 settled
-🟠 search in shop (prod-eu-1) keeps crashing. Its node and registry are healthy and unchanged, so nothing outside it points to a cause. It fails with "fatal: connection pool exhausted". Its last run lasted ten seconds. To read the output of the last crash, run kubectl logs search-d44e0da6-a -c app -n shop --previous
+🟠 search in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "fatal: connection pool exhausted". Its last run lasted ten seconds. To read the output of the last crash, run kubectl logs search-d44e0da6-a -c app -n shop --previous
 🟠 search in shop (prod-eu-1) keeps crashing.
 | 🟠 **search** in **shop** (**prod-eu-1**) keeps crashing.
-| Its node and registry are healthy and unchanged, so nothing outside it points to a cause.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
 | It fails with `fatal: connection pool exhausted`.
 | Its last run lasted ten seconds.
 | To read the output of the last crash, run
 | ```
 | kubectl logs search-d44e0da6-a -c app -n shop --previous
 | ```
-10:11:30 healthy for 3m0s
-✅ search in shop (prod-eu-1) is healthy again. It was failing for about five minutes.
+10:12:00 healthy for 3m0s
+✅ search in shop (prod-eu-1) is healthy again. It was failing for five minutes and recovered on its own.
 ✅ search in shop (prod-eu-1) is healthy again.
 | ✅ **search** in **shop** (**prod-eu-1**) is healthy again.
-| It was failing for about five minutes.
+| It was failing for five minutes and recovered on its own.
 10:13:00 failing again
 🟠 search in shop (prod-eu-1) is failing again: 2nd time in two hours. It fails with "fatal: connection pool exhausted".
 🟠 search in shop (prod-eu-1) is failing again: 2nd time in two hours.

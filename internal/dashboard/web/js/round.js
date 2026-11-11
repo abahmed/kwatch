@@ -85,9 +85,7 @@
     term(p, "kwatch checked", "Check");
     p.appendChild(document.createTextNode(": " + c.text));
     var q = line(box, "Candidates");
-    q.appendChild(KW.el("span", "mono", c.cause));
-    q.appendChild(document.createTextNode(" and "));
-    q.appendChild(KW.el("span", "mono", c.rival));
+    q.appendChild(document.createTextNode(KW.entityText(c.cause) + " and " + KW.entityText(c.rival)));
   }
 
   function causeNow(box, state) {

@@ -1,0 +1,12 @@
+{
+  "name": "statefulset-scale-up-stalls",
+  "description": "An OrderedReady StatefulSet scales from 3 to 9; the fifth pod never becomes ready, so the scale-up stops with four ready.",
+  "root": "statefulset/streaming/queue",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

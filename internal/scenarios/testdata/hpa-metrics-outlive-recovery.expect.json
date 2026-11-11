@@ -1,0 +1,9 @@
+{
+  "name": "hpa-metrics-outlive-recovery",
+  "description": "Both pods of a Deployment crash-loop and its HPA cannot read metrics; the pods recover and the HPA still cannot read metrics 15 minutes later.",
+  "root": "horizontalpodautoscaler/shop/web",
+  "tier": "notify",
+  "maxMessages": 3,
+  "revisesRoot": true,
+  "tail": "10m0s"
+}

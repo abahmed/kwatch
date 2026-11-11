@@ -1,10 +1,9 @@
 10:03:05 settled
-🟠 payments in shop (prod-eu-1): the new version (payments:2.3) can't start; the previous version is still serving: it stops at start with "panic: missing key DB_PASSWORD_V2". The previous image was registry.example.com/payments:2.2. Only the new revision fails; the previous one stays healthy. Fix in: deployment/payments → container app → image (registry.example.com/payments:2.3). To see the rollout state, run kubectl rollout status deployment/payments -n shop
-🟠 payments in shop (prod-eu-1): the new version (payments:2.3) can't start; the previous version is still serving: it stops at start with "panic: missing key DB_PASSWORD_V2".
-| 🟠 **payments** in **shop** (**prod-eu-1**): the new version (payments:2.3) can't start; the previous version is still serving: it stops at start with `panic: missing key DB_PASSWORD_V2`.
-| The previous image was registry.example.com/payments:2.2.
-| Only the new revision fails; the previous one stays healthy.
-| Fix in: deployment/payments → container app → image (registry.example.com/payments:2.3).
+🟠 payments in shop (prod-eu-1): the new version (payments:2.3) can't start (it stops at start with "panic: missing key DB_PASSWORD_V2"); the previous version (payments:2.2) is still serving. Its last run lasted ten seconds. Fix: change the image of container app in deployment/payments. To see the rollout state, run kubectl rollout status deployment/payments -n shop
+🟠 payments in shop (prod-eu-1): the new version (payments:2.3) can't start; the previous version (payments:2.2) is still serving.
+| 🟠 **payments** in **shop** (**prod-eu-1**): the new version (payments:2.3) can't start (it stops at start with `panic: missing key DB_PASSWORD_V2`); the previous version (payments:2.2) is still serving.
+| Its last run lasted ten seconds.
+| Fix: change the image of container app in deployment/payments.
 | To see the rollout state, run
 | ```
 | kubectl rollout status deployment/payments -n shop

@@ -128,7 +128,10 @@
     p.hidden = !why.alertLevelReason;
     if (p.hidden) return;
     p.textContent = "";
-    p.appendChild(KW.el("b", "", inc.state === "resolved" ? "Why it alerted: " : "Why you got this alert: "));
+    // With no alert sent (a lowered issue) it says why the level is what it is.
+    var sent = KW.firstAlert ? !!KW.firstAlert(inc) || !!(inc.pager || []).length : true;
+    p.appendChild(KW.el("b", "", !sent ? "Why this level: " :
+      inc.state === "resolved" ? "Why it alerted: " : "Why you got this alert: "));
     p.appendChild(document.createTextNode(why.alertLevelReason));
   }
 
@@ -153,7 +156,7 @@
       part(p, "kwatch noticed", t.noticedAt, "When kwatch opened this issue:");
     }
     if (KW.valid(t.toldAt)) {
-      part(p, "told " + (t.toldVia || "a channel"), t.toldAt,
+      part(p, "alerted " + (t.toldVia || "a channel"), t.toldAt,
         "When an alert channel first accepted a message about it:");
     }
     p.hidden = !p.firstChild;
@@ -163,7 +166,7 @@
      alert box. Rebuilt on every draw. */
   var PAGER = {
     open: ["still open on the pager", ""], closed: ["closed", "closedAt"],
-    pending: ["page pending", ""], failed: ["page failed", ""]
+    pending: ["alert pending", ""], failed: ["alert failed", ""]
   };
 
   function pagerLine(g) {
@@ -177,7 +180,7 @@
     if (KW.valid(g.pagedAt)) bits.push(" at " + KW.when(g.pagedAt));
     var tail = g.state === "closed" && KW.valid(g.closedAt) ? "closed at " + KW.when(g.closedAt) :
       (PAGER[g.state] || ["", ""])[0];
-    p.textContent = "Paged " + name + bits.join("") + (tail ? " · " + tail : "");
+    p.textContent = "Alerted " + name + bits.join("") + (tail ? " · " + tail : "");
     if (KW.valid(g.pagedAt)) p.title = KW.full(g.pagedAt);
     return p;
   }
@@ -210,6 +213,13 @@
   function command(t, value) {
     return "kubectl " + (t.ns ? "-n " + t.ns + " " : "") + "annotate " + t.obj + " " + ACK + value;
   }
+
+  /* KW.ackCommand: the kubectl command that acknowledges the issue,
+     or "" when it is acknowledged or has no object to annotate. */
+  KW.ackCommand = function (inc) {
+    var t = inc.ack ? null : target(inc);
+    return t ? command(t, '="on it"') : "";
+  };
 
   function how(summary, items) {
     var det = KW.el("details", "al-how");

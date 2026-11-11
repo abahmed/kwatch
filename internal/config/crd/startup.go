@@ -29,6 +29,44 @@ func ApplyStartupConfigWithClient(
 	return applyStartupConfig(ctx, cfg, dynamicClient, namespace)
 }
 
+// ApplyStartupConfigWithRetry is ApplyStartupConfigWithClient with the
+// List retried while the API server is unreachable (see StartupRetry).
+// NotFound still means there is no CRD (after retry.NotFoundWindow), and
+// Forbidden fails at once unless retry.AuthWindow is set.
+func ApplyStartupConfigWithRetry(
+	ctx context.Context,
+	cfg *config.Config,
+	dynamicClient dynamic.Interface,
+	namespace string,
+	retry *StartupRetry,
+) ([]byte, error) {
+	spec, _, err := ApplyStartupConfigChecked(
+		ctx, cfg, dynamicClient, namespace, retry)
+	return spec, err
+}
+
+// ApplyStartupConfigChecked is ApplyStartupConfigWithRetry that also
+// reports typeMissing: the List answered NotFound, so the API server did
+// not serve the KwatchConfig type. That is not the same as an empty list:
+// the type may only be missing for a moment, so a caller must not take it
+// as a deleted object.
+func ApplyStartupConfigChecked(
+	ctx context.Context,
+	cfg *config.Config,
+	dynamicClient dynamic.Interface,
+	namespace string,
+	retry *StartupRetry,
+) (spec []byte, typeMissing bool, err error) {
+	spec, err = listStartupConfig(ctx, cfg, dynamicClient, namespace, retry)
+	if stderrors.Is(err, errTypeMissing) {
+		return nil, true, nil
+	}
+	return spec, false, err
+}
+
+// errTypeMissing is a NotFound from the startup List.
+var errTypeMissing = stderrors.New("KwatchConfig type is not served")
+
 // ErrInvalidOverlay marks a KwatchConfig that cannot be applied: more than
 // one object, a forbidden field, or a spec that fails validation. Callers
 // keep the mounted configuration instead of failing, so a bad edit cannot
@@ -41,6 +79,19 @@ func applyStartupConfig(
 	dynamicClient dynamic.Interface,
 	namespace string,
 ) ([]byte, error) {
+	return ApplyStartupConfigWithRetry(
+		ctx, cfg, dynamicClient, namespace, nil)
+}
+
+// listStartupConfig lists and applies the KwatchConfig. A NotFound comes
+// back as errTypeMissing.
+func listStartupConfig(
+	ctx context.Context,
+	cfg *config.Config,
+	dynamicClient dynamic.Interface,
+	namespace string,
+	retry *StartupRetry,
+) ([]byte, error) {
 	if !config.RuntimeConfigFor(cfg).Lifecycle().CRDEnabled() {
 		return nil, nil
 	}
@@ -48,12 +99,16 @@ func applyStartupConfig(
 	if dc == nil {
 		return nil, fmt.Errorf("crdwatch: dynamic client is not configured")
 	}
-	list, err := dc.Resource(gvr).Namespace(namespace).List(
-		ctx, metav1.ListOptions{},
-	)
+	var list *unstructured.UnstructuredList
+	err := retry.Do(ctx, func(ctx context.Context) (err error) {
+		list, err = dc.Resource(gvr).Namespace(namespace).List(
+			ctx, metav1.ListOptions{},
+		)
+		return err
+	})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil, nil
+			return nil, errTypeMissing
 		}
 		return nil, err
 	}

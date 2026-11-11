@@ -1,7 +1,7 @@
 {{/*
 Dashboard settings. The chart never exposes the dashboard outside the
 cluster: the kwatch.sh Dashboard menu, or you, point an Ingress, route
-or Service at the ClusterIP Service <release>-dashboard.
+or Service at the ClusterIP Service <fullname>-dashboard.
   trustedProxies  proxies that end TLS and set X-Forwarded-*; any entry
                   (or tls) makes the dashboard https only
   tls             kwatch serves https itself from a kubernetes.io/tls Secret

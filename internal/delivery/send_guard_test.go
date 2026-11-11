@@ -50,3 +50,23 @@ func TestRestoredJobAtAttemptBoundIsNotSent(t *testing.T) {
 	assert.Zero(t, sentCalls(provider))
 	assert.Zero(t, store.len())
 }
+
+// The shutdown drain sends through the same guard as the workers: a
+// provider that panics while kwatch stops cannot stop the process before
+// the outbox is written.
+func TestShutdownDrainSurvivesAProviderPanic(t *testing.T) {
+	provider := newScriptedProvider(func(
+		_ context.Context, _ int, text string,
+	) error {
+		panic("boom: " + text)
+	})
+	manager := outboxManager(t, provider, nil)
+	manager.mu.Lock()
+	entry := manager.currentGenerationLocked().entries["slack"]
+	manager.mu.Unlock()
+	job := deliverJob{kind: jobMessage, msg: "poison"}
+	assert.NotPanics(t, func() {
+		assert.False(t, manager.deliverOne(context.Background(), &entry,
+			job))
+	})
+}

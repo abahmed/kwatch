@@ -17,7 +17,8 @@ import (
 // the UTC day the incident opened, the store's nonce and a sequence
 // number that only grows. IDs never change, so delivery keeps one
 // conversation per incident even when its cause is revised. Restore
-// moves the sequence past every restored ID. The nonce keeps IDs unique
+// moves the sequence past every ID this store ever gave out, forgotten
+// ones too (id_sequence.go). The nonce keeps IDs unique
 // when the sequence starts over: after a store reset, or on a new empty
 // volume after a reschedule, the same day and sequence get a new nonce.
 func (m *Manager) newID(now time.Time) string {
@@ -46,7 +47,7 @@ func alertKey(root inventory.EntityID, mode detection.Mode) string {
 // share its alert: each would update and resolve the other's. The new one
 // gets a numbered suffix instead.
 func (m *Manager) freeAlertKey(p *Incident) string {
-	base := alertKey(p.Root, p.Mode)
+	base := m.cfg.newAlertKey(p.Root, p.Mode)
 	key := base
 	for n := 2; m.liveAlertKey(p, key); n++ {
 		key = fmt.Sprintf("%s-%d", base, n)

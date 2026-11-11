@@ -92,6 +92,10 @@ func jobStatus(j *batchv1.Job, attrs map[string]inventory.Value) {
 	attrs[AttrActive] = number(st.Active)
 	attrs[AttrSucceeded] = number(st.Succeeded)
 	attrs[AttrFailed] = number(st.Failed)
+	if j.Spec.BackoffLimitPerIndex != nil {
+		attrs[AttrBackoffLimitPerIndex] =
+			number(*j.Spec.BackoffLimitPerIndex)
+	}
 	if j.Spec.BackoffLimit != nil {
 		attrs[AttrBackoffLimit] = number(*j.Spec.BackoffLimit)
 	}

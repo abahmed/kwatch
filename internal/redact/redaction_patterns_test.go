@@ -110,8 +110,8 @@ func TestRedactQueryParamToken(t *testing.T) {
 	input := "https://example.com/hook?token=secret123&x=1"
 	got := Evidence(input)
 	assert.NotContains(t, got, "secret123")
-	assert.Contains(t, got, "[redacted]")
-	assert.NotContains(t, got, "x=1")
+	assert.Equal(t, "https://example.com/hook?token=[redacted]&x=1", got,
+		"the parameter after the secret is not part of it")
 }
 
 func TestRedactQueryParamPasswordSingleParam(t *testing.T) {

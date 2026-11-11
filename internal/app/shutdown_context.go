@@ -12,7 +12,8 @@ import (
 // outer wait is at least the sum of the waits nested inside it and the
 // whole sequence fits inside the grace period:
 //
-//	health stop                  healthStopTimeout
+//	listeners stop               healthStopTimeout
+//	  health and dashboard, at the same time (stopServersAtExit)
 //	leader session (background)  backgroundShutdownTimeout
 //	  components                 supervisorShutdownTimeout
 //	    one component            componentShutdownTimeout

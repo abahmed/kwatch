@@ -32,7 +32,8 @@ func (b *Baselines) Compare(
 	}
 	out.Known = true
 	out.Samples = len(stat.Recent)
-	out.Typical, out.High = stat.Typical(), stat.High()
+	out.High = stat.High()
+	out.Typical = usualOf(stat, out.High, stat.Median()+floorOf(metric))
 	out.Usual = value <= out.High
 	out.Unusual = value > unusualFactor*out.High &&
 		value > stat.Median()+floorOf(metric)
@@ -41,14 +42,16 @@ func (b *Baselines) Compare(
 
 // TopOwner follows id's owners to the top-level controller: a pod's
 // Deployment, a Job's CronJob. An object without an owner is its own
-// workload. It stops after maxOwnerHops.
+// workload, and so is a static pod: the Node that "owns" it is where it
+// runs, not a controller that stamps it out. It stops after
+// maxOwnerHops.
 func TopOwner(model Reader, id EntityID) EntityID {
 	for hop := 0; hop < maxOwnerHops; hop++ {
-		owners := model.Related(id, OwnedBy, Outgoing)
-		if len(owners) == 0 {
+		owner, ok := Owner(model, id)
+		if !ok || owner == id || isNode(owner) {
 			break
 		}
-		id = owners[0]
+		id = owner
 	}
 	return id
 }
@@ -56,3 +59,20 @@ func TopOwner(model Reader, id EntityID) EntityID {
 // maxOwnerHops bounds the owner chain followed to find a workload: pod,
 // ReplicaSet, Deployment.
 const maxOwnerHops = 3
+
+// usualOf is the figure quoted as usual: Stat.Typical over the samples
+// that were not themselves unusual (above unusualFactor times high and
+// above floor), so one earlier crash-looping hour does not make a
+// workload that restarts about once a day read "a usual 60×/h".
+func usualOf(stat Stat, high, floor float64) float64 {
+	kept := Stat{}
+	for _, v := range stat.Recent {
+		if v <= unusualFactor*high || v <= floor {
+			kept.Recent = append(kept.Recent, v)
+		}
+	}
+	if len(kept.Recent) == 0 {
+		return stat.Typical()
+	}
+	return kept.Typical()
+}

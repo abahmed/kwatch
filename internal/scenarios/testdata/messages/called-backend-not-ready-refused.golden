@@ -1,14 +1,14 @@
 10:12:15 settled
-🟠 ledger in shop (prod-eu-1) has no ready backends. Its node, registry and services are healthy and unchanged, so nothing outside it points to a cause. The last run of container app in pod orders-d4346e95-a lasted ten seconds; two restarts since the pod was created about one hour ago. Service ledger can't serve traffic. orders is affected as well.
-Also grouped: 2 crash loops
+🟠 ledger in shop (prod-eu-1) has no ready backends. Cause not found yet: its node, registry and services are healthy and unchanged. The last run of container app in pod orders-d4346e95-a lasted ten seconds; two restarts since the pod was created about one hour ago. Service ledger can't serve traffic. Affected: orders.
+Related alerts: 2 crash loops
 To see the object's state and events, run kubectl describe service ledger -n shop
 🟠 ledger in shop (prod-eu-1) has no ready backends.
 | 🟠 **ledger** in **shop** (**prod-eu-1**) has no ready backends.
-| Its node, registry and services are healthy and unchanged, so nothing outside it points to a cause.
+| Cause not found yet: its node, registry and services are healthy and unchanged.
 | The last run of container app in pod orders-d4346e95-a lasted ten seconds; two restarts since the pod was created about one hour ago.
 | Service **ledger** can't serve traffic.
-| **orders** is affected as well.
-| Also grouped: 2 crash loops
+| Affected: **orders**.
+| Related alerts: 2 crash loops
 | To see the object's state and events, run
 | ```
 | kubectl describe service ledger -n shop

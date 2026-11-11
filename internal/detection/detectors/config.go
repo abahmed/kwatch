@@ -53,13 +53,13 @@ func expiredCertificate(
 ) detection.Finding {
 	use := certificateUse(ctx, e)
 	if use == certificateUnused {
-		return detection.Finding{
+		return asLeftover(ctx, detection.Finding{
 			Reason: reasons.TLSCertExpired, Severity: detection.Warning,
 			Since: notAfter,
 			Summary: "TLS certificate expired on " +
 				notAfter.UTC().Format("2006-01-02") +
 				" and no pod or Ingress mounts or references it",
-		}
+		}, e.ID.Namespace)
 	}
 	severity := detection.Critical
 	if use == certificateUnknown {

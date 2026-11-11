@@ -73,7 +73,16 @@ func TestRestartsFromAStableWorkloadAreUnusual(t *testing.T) {
 	assert.Equal(t, detection.NormalUnusual, got[0].Normal)
 	assert.Contains(t, got[0].Evidence, detection.Evidence{
 		Label: detection.EvidenceBaseline,
-		Value: "restarts 6×/h vs a usual 0×/h"})
+		Value: "restarts 6×/h, usually none"})
+}
+
+// TestVsUsualRateSaysNoneForAUsualRateThatRoundsToNothing: "a usual
+// 0×/h" reads as a figure; nothing usual is said as none.
+func TestVsUsualRateSaysNoneForAUsualRateThatRoundsToNothing(t *testing.T) {
+	assert.Equal(t, "8×/h, usually none", vsUsualRate(8, 0))
+	assert.Equal(t, "8×/h, usually none", vsUsualRate(8, 0.004))
+	assert.Equal(t, "8×/h vs a usual 0.1×/h", vsUsualRate(8, 0.1))
+	assert.Equal(t, "8×/h vs a usual 0.02×/h", vsUsualRate(8, 0.02))
 }
 
 func TestRestartsWithinTheWorkloadsNormalAreUsual(t *testing.T) {

@@ -140,7 +140,7 @@ func (w Writer) listDoc(
 		doc = append(doc, w.problemBullets(ds, now)...)
 	}
 	return append(doc, notification.Block{Kind: notification.Small,
-		Spans: []notification.Span{{Text: eachOwnMessage}}})
+		Spans: []notification.Span{{Text: eachOwn(len(ds))}}})
 }
 
 // digestDoc is the structured digest.
@@ -164,7 +164,7 @@ func (w Writer) digestDoc(
 			"workload")+" not ready")
 	}
 	doc := []notification.Block{
-		w.headline(notification.MarkerLow, "kwatch digest", facts)}
+		w.headline(notification.MarkerLow, "kwatch summary", facts)}
 	if extras.Wake != nil {
 		doc = append(doc, notification.Block{Kind: notification.Para,
 			Spans: []notification.Span{{Text: extras.Wake.Text()}}})
@@ -182,7 +182,7 @@ func (w Writer) digestDoc(
 		doc = append(doc, lineBullets(list.same)...)
 	}
 	if len(resolved) > 0 {
-		doc = append(doc, resolvedBlock(resolved, "since last digest"))
+		doc = append(doc, resolvedBlock(resolved, "since the last summary"))
 	}
 	return append(doc, riskBlocks(risks)...)
 }

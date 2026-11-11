@@ -50,6 +50,8 @@ func NewSplunk(
 		return nil
 	}
 
+	url = withEventPath(url)
+
 	token, ok := config["token"].(string)
 	if !ok || len(token) == 0 {
 		klog.InfoS("initializing splunk with empty token")

@@ -1,7 +1,6 @@
 package compose
 
 import (
-	"slices"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -16,22 +15,26 @@ const weightBaseline = 0.7
 // baselineSentences compare a finding with what its workload did over
 // the last week, from the evidence the detectors attached. They only
 // describe the past: "restarts 12×/h vs a usual 0.1×/h". Each figure
-// keeps the verdict of the finding it came from, and a figure two
-// findings share is said once.
+// keeps the verdict of the finding it came from, and a verdict says
+// each metric once, by the first finding with it.
 func baselineSentences(f caseFacts) []sentence {
-	byVerdict := map[detection.Normality][]string{}
-	for _, m := range f.members {
-		for _, e := range m.Evidence {
-			if e.Label == detection.EvidenceBaseline &&
-				!slices.Contains(byVerdict[m.Normal], e.Value) {
-				byVerdict[m.Normal] = append(byVerdict[m.Normal], e.Value)
-			}
-		}
-	}
 	var out []sentence
 	for i, verdict := range []detection.Normality{detection.NormalUnusual,
 		detection.NormalUsual, detection.NormalUnjudged} {
-		if phrases := byVerdict[verdict]; len(phrases) > 0 {
+		var phrases []string
+		said := map[string]bool{}
+		for _, m := range f.members {
+			for _, e := range m.Evidence {
+				metric := baselineMetric(e.Value)
+				if m.Normal != verdict ||
+					e.Label != detection.EvidenceBaseline || said[metric] {
+					continue
+				}
+				said[metric] = true
+				phrases = append(phrases, e.Value)
+			}
+		}
+		if len(phrases) > 0 {
 			out = append(out, sentence{part: partProof,
 				weight: weightBaseline - float64(i)/100,
 				text: baselineLead[verdict] + strings.Join(phrases, "; ") +
@@ -39,6 +42,15 @@ func baselineSentences(f caseFacts) []sentence {
 		}
 	}
 	return out
+}
+
+// baselineMetric is what a baseline phrase measures: the words before
+// its first figure ("restarts" in "restarts 8×/h vs a usual 2×/h").
+func baselineMetric(phrase string) string {
+	if i := strings.IndexAny(phrase, "0123456789"); i >= 0 {
+		return strings.TrimSpace(phrase[:i])
+	}
+	return phrase
 }
 
 // baselineLead introduces the figures of one verdict.

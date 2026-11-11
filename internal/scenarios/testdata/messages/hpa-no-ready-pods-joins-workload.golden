@@ -1,0 +1,11 @@
+10:02:15 settled
+🟠 web in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "panic: web: cannot parse settings". Its last run lasted ten seconds; six restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs web-f0ca4eb8-a -c app -n shop --previous
+🟠 web in shop (prod-eu-1) keeps crashing.
+| 🟠 **web** in **shop** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| It fails with `panic: web: cannot parse settings`.
+| Its last run lasted ten seconds; six restarts since its pod was created one hour ago.
+| To read the output of the last crash, run
+| ```
+| kubectl logs web-f0ca4eb8-a -c app -n shop --previous
+| ```

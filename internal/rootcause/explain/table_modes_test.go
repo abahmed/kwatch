@@ -22,7 +22,7 @@ var pseudoModes = []detection.Mode{
 	ModeHoldsVolume, ModeProvisionerDown,
 	ModeNoStorageClass, modeFailedMount, modeFailedAttach,
 	ModeAgentAbsent, ModeNoPullSecret, ModeDiskHog, ModeNoGrant,
-	ModeDependencyUnreachable, ModeBackendsNotReady,
+	ModeDependencyUnreachable, ModeBackendsNotReady, ModeKeyMissing,
 }
 
 // TestTableModesAreKnown checks every mode a row names is one some

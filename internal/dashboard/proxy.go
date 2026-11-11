@@ -21,6 +21,7 @@ func parseProxies(list []string) (proxySet, []error) {
 	for _, entry := range list {
 		entry = strings.TrimSpace(entry)
 		if p, err := netip.ParsePrefix(entry); err == nil {
+			warnBroadProxy(p)
 			set = append(set, p.Masked())
 			continue
 		}
@@ -33,6 +34,43 @@ func parseProxies(list []string) (proxySet, []error) {
 		set = append(set, netip.PrefixFrom(addr, addr.BitLen()))
 	}
 	return set, errs
+}
+
+// broadBits are the shortest prefixes trusted without a warning: a
+// wider range usually holds every pod of the cluster, and any of them
+// could then name any client and claim https.
+const (
+	broadBits4 = 16
+	broadBits6 = 48
+)
+
+// warnBroadProxy logs when a trusted range is wider than broadBits.
+func warnBroadProxy(p netip.Prefix) {
+	limit := broadBits4
+	if p.Addr().Is6() && !p.Addr().Is4In6() {
+		limit = broadBits6
+	}
+	if p.Bits() >= limit {
+		return
+	}
+	klog.InfoS("WARNING: dashboard.trustedProxies entry is wide: any "+
+		"peer inside it can name any client and claim https; list "+
+		"only the proxies in front of kwatch", "component",
+		"dashboard-server", "entry", p.String())
+}
+
+// limitKey is the key sign-in failures of addr count under: the address
+// itself, or its /64 for IPv6, which one host can rotate through freely.
+func limitKey(addr string) string {
+	ip, err := netip.ParseAddr(addr)
+	if err != nil || !ip.Is6() || ip.Is4In6() {
+		return addr
+	}
+	p, err := ip.Prefix(64)
+	if err != nil {
+		return addr
+	}
+	return p.String()
 }
 
 func (p proxySet) contains(addr netip.Addr) bool {
@@ -72,9 +110,10 @@ func (a *Auth) isHTTPS(r *http.Request) bool {
 // forwardedClient is the client a trusted proxy named. X-Forwarded-For
 // is walked from the right, skipping hops that are trusted proxies
 // themselves; the first other hop is the client. Empty when the peer
-// is not trusted or a hop is not an IP address, so a made-up value
-// falls back to the peer. A header from an untrusted peer is ignored
-// and logged once, so a missing trustedProxies setting is noticed.
+// is not trusted or a hop is not an IP address (with or without a port,
+// see hopAddr), so a made-up value falls back to the peer. A header
+// from an untrusted peer is ignored and logged once, so a missing
+// trustedProxies setting is noticed.
 func (a *Auth) forwardedClient(r *http.Request) string {
 	if !a.peerTrusted(r) {
 		a.noteUntrustedForwarded(r)
@@ -86,8 +125,8 @@ func (a *Auth) forwardedClient(r *http.Request) string {
 	}
 	client := ""
 	for i := len(hops) - 1; i >= 0; i-- {
-		addr, err := netip.ParseAddr(strings.TrimSpace(hops[i]))
-		if err != nil {
+		addr, ok := hopAddr(hops[i])
+		if !ok {
 			return ""
 		}
 		client = addr.Unmap().String()
@@ -96,6 +135,28 @@ func (a *Auth) forwardedClient(r *http.Request) string {
 		}
 	}
 	return client
+}
+
+// hopAddr reads one X-Forwarded-For hop: a bare address, or an address
+// with a port ("203.0.113.7:4711", "[2001:db8::7]:4711"), which some
+// proxies append, or in brackets alone. Without this every client behind
+// such a proxy would share the proxy's sign-in failure limit.
+func hopAddr(hop string) (netip.Addr, bool) {
+	hop = strings.TrimSpace(hop)
+	if addr, err := netip.ParseAddr(hop); err == nil {
+		return addr, true
+	}
+	if withPort, err := netip.ParseAddrPort(hop); err == nil {
+		return withPort.Addr(), true
+	}
+	if bare, ok := strings.CutPrefix(hop, "["); ok {
+		if bare, ok = strings.CutSuffix(bare, "]"); ok {
+			if addr, err := netip.ParseAddr(bare); err == nil {
+				return addr, true
+			}
+		}
+	}
+	return netip.Addr{}, false
 }
 
 // noteUntrustedForwarded logs once when a peer that is not a trusted

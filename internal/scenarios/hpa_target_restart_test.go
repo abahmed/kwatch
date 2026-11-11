@@ -16,8 +16,10 @@ import (
 )
 
 // agedMissingTargetHPA is an autoscaler whose Deployment was deleted
-// long ago: the controller's AbleToScale condition has said
-// FailedGetScale for two years, as on a staging cluster.
+// weeks ago: the controller's AbleToScale condition has said
+// FailedGetScale for twenty days. That is old for a restart, but
+// younger than the old-problem horizon (oldProblemDays): one older than
+// it would open no issue at all.
 func agedMissingTargetHPA(
 	c *cluster,
 ) *autoscalingv2.HorizontalPodAutoscaler {
@@ -29,7 +31,7 @@ func agedMissingTargetHPA(
 		HorizontalPodAutoscalerCondition{
 		Type: autoscalingv2.AbleToScale, Status: "False",
 		Reason: "FailedGetScale", Message: message,
-		LastTransitionTime: metav1.NewTime(c.now.AddDate(-2, 0, 0)),
+		LastTransitionTime: metav1.NewTime(c.now.AddDate(0, 0, -20)),
 	}
 	return hpa
 }

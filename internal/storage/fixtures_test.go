@@ -1,13 +1,25 @@
 package storage
 
 import (
+	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+// KWATCH_TEST_PAGE_SIZE runs the package's tests with files of that
+// page size, so one OS can check the page size of another:
+// KWATCH_TEST_PAGE_SIZE=4096 on macOS runs them as on Linux on x86.
+func init() {
+	size, err := strconv.Atoi(os.Getenv("KWATCH_TEST_PAGE_SIZE"))
+	if err == nil {
+		newFilePageSize = size
+	}
+}
 
 // fakeClock is a settable clock safe for use from worker goroutines.
 type fakeClock struct {

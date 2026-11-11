@@ -2,6 +2,7 @@ package detectors
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -60,4 +61,24 @@ func TestPodAdmissionOtherFailuresStayGeneric(t *testing.T) {
 		require.Len(t, found, 1, reason)
 		assert.Equal(t, want, found[0].Reason, reason)
 	}
+}
+
+// A pod rejected long ago is history, not a new Critical after kwatch
+// restarts: its age comes from the cluster's creation time.
+func TestPodAdmissionRejectedAgesOutByClusterTime(t *testing.T) {
+	reject := func(created time.Time) detection.Finding {
+		found := detectFailedPod(t, map[string]inventory.Value{
+			kube.AttrReason:  inventory.Text("OutOfcpu"),
+			kube.AttrCreated: inventory.Time(created),
+		})
+		require.Len(t, found, 1)
+		return found[0]
+	}
+
+	fresh := reject(podNodeNow.Add(-time.Minute))
+	old := reject(podNodeNow.Add(-EventWindow - time.Hour))
+
+	assert.Equal(t, detection.Critical, fresh.Severity)
+	assert.Equal(t, detection.Info, old.Severity)
+	assert.True(t, old.Since.Equal(podNodeNow.Add(-EventWindow-time.Hour)))
 }

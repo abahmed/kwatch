@@ -35,6 +35,14 @@ func (Custom) Detect(
 	if !flag(e, kube.AttrCustom) {
 		return nil
 	}
+	// Conditions read from a watch that stopped getting through say
+	// nothing about now: hold what was raised, neither raise nor clear.
+	// This covers the kind-specific checks too, which are time based
+	// and would otherwise fire from a frozen cache.
+	if !ctx.Fresh(e.ID.Kind) {
+		ctx.RecheckAfter(DefaultCustomFailing)
+		return nil
+	}
 	out := kindFindings(ctx, e)
 	failing := failingConditions(e)
 	since := failingSince(failing)
@@ -120,10 +128,15 @@ func failingGrace(failing []failingCondition) time.Duration {
 	return DefaultGenerationGrace
 }
 
-// failingSince is when the first of the conditions began, or zero.
+// failingSince is when the first of the conditions began, or zero. A
+// condition without a time is ignored, so the result does not depend on
+// their order.
 func failingSince(failing []failingCondition) time.Time {
 	var since time.Time
 	for _, c := range failing {
+		if c.since.IsZero() {
+			continue
+		}
 		if since.IsZero() || c.since.Before(since) {
 			since = c.since
 		}

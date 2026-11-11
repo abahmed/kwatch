@@ -1,9 +1,13 @@
 /* kwatch dashboard: the Overview's "This week" part, below what is
-   wrong now (status.js), from the insights and trends of /api/overview. Kept
-   quiet on purpose: four numbers, the week chart (trends.js), the top
-   causes beside where the trouble is (five rows each), and the rest
-   (kept coming back, started after a change, nodes) folded under
-   "More", each shown only when it has something to say. */
+   wrong now (status.js), from the insights and trends of /api/overview.
+   Kept quiet on purpose: up to four numbers (none of them a blank),
+   all over the issues someone was alerted about, one plain sentence on
+   the issues that settled on their own, the week
+   chart (trends.js), the top causes beside where the trouble is (five
+   rows each, each number saying what it counts) and the rest (kept
+   coming back, nodes) folded under "More", each shown only when it has
+   something to say. Issues that started right after a change are in the
+   "Bad releases and changes" block above (status.js). */
 (function () {
   "use strict";
   var KW = window.KW;
@@ -22,21 +26,29 @@
     c.appendChild(KW.el("p", "pcard-more")).appendChild(link(href, text));
   }
 
-  /* stats: the week in four numbers. */
+  /* stats: the week in four numbers, each over the issues someone was
+     alerted about: those that settled on their own are the side note
+     below (settled). An older kwatch without the alerted counts gives
+     the plain ones. */
   function stats(ins, tr) {
-    var opened = 0, resolved = 0, paged = 0;
+    var resolved = 0, paged = 0, L = KW.TERMS.lists;
+    var w = KW.weekTotals(ins.days || [], tr), alerted = w.opened - w.untold;
     (ins.days || []).forEach(function (d) {
-      opened += d.opened || 0; resolved += d.resolved || 0; paged += d.paged || 0;
+      resolved += typeof d.resolvedAlerted === "number" ? d.resolvedAlerted : d.resolved || 0;
+      paged += d.paged || 0;
     });
-    var vs = "";
-    if (tr && typeof tr.previousWeek === "number") {
-      var diff = opened - tr.previousWeek;
+    var vs = "", prev = tr && (typeof tr.previousWeekAlerted === "number" ?
+      tr.previousWeekAlerted : tr.previousWeek);
+    if (typeof prev === "number") {
+      var diff = alerted - prev;
       vs = !diff ? "same as last week" : KW.num(Math.abs(diff)) + (diff > 0 ? " more" : " fewer") + " than last week";
     }
-    var r = tr && tr.resolve;
-    var items = [["Opened", KW.num(opened), vs], ["Resolved", KW.num(resolved), ""],
-      ["Paged the on-call person", KW.num(paged), ""],
-      ["Time to resolve", r && r.count ? KW.duration(r.medianSeconds) : "–", r && r.count ? "median" : ""]];
+    var r = tr && (tr.resolveAlerted || tr.resolve);
+    var items = [[L.alerted, KW.num(alerted), vs || L.alertedSub],
+      [L.resolvedAlerted, KW.num(resolved), L.resolvedAlertedSub],
+      [L.alertedOnCall, KW.num(paged), L.alertedOnCallSub],
+      r && r.count ? [L.medianResolveAlerted, KW.duration(r.medianSeconds),
+        "over " + KW.plural(r.count, "alerted issue", "alerted issues") + " resolved"] : null].filter(Boolean);
     var dl = KW.el("dl", "ov-stats");
     items.forEach(function (it) {
       var d = dl.appendChild(KW.el("div", "ov-stat"));
@@ -47,15 +59,28 @@
     return dl;
   }
 
+  /* settled: the week's noise in one plain sentence: most issues
+     recovered before kwatch had to alert anyone. */
+  function settled(ins, tr) {
+    var w = KW.weekTotals(ins.days || [], tr);
+    if (!w.untold || !w.opened) return null;
+    var p = KW.el("p", "ov-settled");
+    p.appendChild(KW.el("b", "", KW.num(w.untold)));
+    p.appendChild(document.createTextNode(" of " + KW.num(w.opened) +
+      " issues settled on their own before anyone was alerted."));
+    return p;
+  }
+
   function causes(list) {
     if (!list || !list.length) return null;
-    var c = V.card("Top causes");
+    var c = V.card("Top causes this week");
     var max = 0;
     list.forEach(function (x) { max = Math.max(max, x.count); });
     var ul = c.appendChild(KW.el("ul", "viz-rows"));
     list.slice(0, TOP).forEach(function (x) {
       ul.appendChild(V.row({ name: x.label, href: "/issues?status=all&mode=" + encodeURIComponent(x.mode),
-        value: KW.plural(x.count, "time", "times") + (x.active ? " · " + KW.num(x.active) + " active" : ""), max: max,
+        value: KW.plural(x.count, "issue", "issues") + " this week" +
+          (x.active ? " · " + KW.num(x.active) + " still going on" : ""), max: max,
         parts: [{ n: x.active, cls: "s-notify", label: "Still active" },
           { n: x.count - x.active, cls: "s-low", label: "Resolved" }] }));
     });
@@ -75,13 +100,11 @@
     tiles.forEach(function (t) { max = Math.max(max, t.count); });
     var ul = c.appendChild(KW.el("ul", "viz-rows"));
     tiles.slice(0, TOP).forEach(function (t) {
-      var words = SEVS.filter(function (s) { return t[s[0]]; }).map(function (s) {
-        return KW.num(t[s[0]]) + " " + KW.SEVERITY[s[1]].label.toLowerCase();
-      });
-      if (opened[t.namespace]) words.push(KW.num(opened[t.namespace]) + " this week");
+      var words = [KW.num(t.count) + " active now" + (t.urgent ? " (" + KW.num(t.urgent) + " urgent)" : "")];
+      if (opened[t.namespace]) words.push(KW.plural(opened[t.namespace], "issue", "issues") + " this week");
       ul.appendChild(V.row({ name: t.namespace, mono: true, max: max,
         href: "/issues?status=active&namespace=" + encodeURIComponent(t.namespace),
-        value: words.join(" · ") || KW.plural(t.count, "issue", "issues"),
+        value: words.join(" · "),
         parts: SEVS.map(function (s) {
           return { n: t[s[0]] || 0, cls: s[2], label: KW.SEVERITY[s[1]].label };
         }) }));
@@ -107,23 +130,6 @@
     return c;
   }
 
-  function afterChange(a) {
-    var n = (a && a.count) || 0, total = (a && a.total) || 0;
-    if (!n || !total) return null;
-    var c = V.card("Started right after a change");
-    var line = KW.num(n) + " of " + KW.plural(total, "active issue", "active issues");
-    c.appendChild(KW.el("p", "kp-mline", line));
-    c.appendChild(V.meter(n, total, line + " started right after a change", "warn"));
-    var ul = c.appendChild(KW.el("ul", "ip-list"));
-    (a.issues || []).forEach(function (i) {
-      var li = ul.appendChild(KW.el("li"));
-      KW.clampTitle(li.appendChild(link("/issues/" + encodeURIComponent(i.id), i.title || i.id, "ip-link")));
-      li.appendChild(KW.el("span", "ip-meta", i.object + " " + i.change + ", " +
-        KW.lasted(i.changedAt, i.since) + " before"));
-    });
-    return c;
-  }
-
   function add(grid, cards) {
     cards.forEach(function (c) { if (c) grid.appendChild(c); });
     return grid.childElementCount;
@@ -133,7 +139,7 @@
   KW.insightsPart = function (box) {
     var ins = null, tr = null;
     box.setAttribute("aria-labelledby", "ov-week");
-    var h = box.appendChild(KW.el("h2", "ov-h2", "This week"));
+    var h = box.appendChild(KW.el("h2", "ov-h2", "This week (last 7 days)"));
     h.id = "ov-week";
     var nums = box.appendChild(KW.el("div"));
     var week = box.appendChild(KW.el("div", "pgrid"));
@@ -149,13 +155,15 @@
       box.hidden = false;
       nums.textContent = "";
       nums.appendChild(stats(ins, tr));
+      var said = settled(ins, tr);
+      if (said) nums.appendChild(said);
       week.textContent = "";
       week.appendChild(KW.weekCard(ins.days || [], tr));
       main.textContent = "";
       main.hidden = !add(main, [causes(ins.causes), trouble(ins.namespaces, tr && tr.namespaces)]);
       rest.textContent = "";
       var cards = [tr && tr.noisiest && tr.noisiest.length ? KW.keptComingBack(tr.noisiest) : null,
-        afterChange(ins.afterChange), nodes(ins.nodes)].filter(Boolean);
+        nodes(ins.nodes)].filter(Boolean);
       add(rest, cards);
       fold.hidden = !cards.length;
       sum.textContent = "More: " + cards.map(function (c) {

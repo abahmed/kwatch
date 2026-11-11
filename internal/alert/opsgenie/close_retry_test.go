@@ -191,9 +191,9 @@ func TestOpsgenieCreateCancelsAPendingCloseOfTheSameAlias(t *testing.T) {
 	}
 }
 
-// Shutdown ends the wait at once, and the close that never went through
-// is counted.
-func TestOpsgenieShutdownEndsAPendingClose(t *testing.T) {
+// Stopping the provider ends the wait at once, and the close that never
+// went through is counted.
+func TestOpsgenieStopEndsAPendingClose(t *testing.T) {
 	c, rec := newTestOpsgenie(t)
 	c.wait = func(ctx context.Context, _ time.Duration) error {
 		<-ctx.Done()
@@ -202,15 +202,53 @@ func TestOpsgenieShutdownEndsAPendingClose(t *testing.T) {
 	rec.Reply = func(w http.ResponseWriter, _ providertest.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
 	before := lostResolves()
-	_ = c.SendIncident(ctx, providertest.Resolve())
+	_ = c.SendIncident(context.Background(), providertest.Resolve())
 
-	cancel()
+	c.Stop()
 	settle(c)
 
 	if got := lostResolves() - before; got != 1 {
 		t.Fatalf("lost resolves counted = %d, want 1", got)
+	}
+	// A close that arrives after the stop is not kept.
+	_ = c.SendIncident(context.Background(), providertest.Resolve())
+	settle(c)
+	if got := lostResolves() - before; got != 2 {
+		t.Fatalf("lost resolves after stop = %d, want 2", got)
+	}
+}
+
+// Delivery cancels the request context as soon as SendIncident returns.
+// The background close must not end with it: the alert would stay open
+// while the resolve already counted as delivered.
+func TestOpsgenieCloseRetryOutlivesTheRequestContext(t *testing.T) {
+	c, rec := newTestOpsgenie(t)
+	returned := make(chan struct{})
+	c.wait = func(ctx context.Context, _ time.Duration) error {
+		<-returned
+		return ctx.Err()
+	}
+	var calls atomic.Int32
+	rec.Reply = func(w http.ResponseWriter, _ providertest.Request) {
+		if calls.Add(1) == 1 {
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}
+	before := lostResolves()
+	ctx, done := context.WithCancel(context.Background())
+	if err := c.SendIncident(ctx, providertest.Resolve()); err != nil {
+		t.Fatalf("SendIncident: %v", err)
+	}
+	done()
+	close(returned)
+	settle(c)
+
+	if got := closeRequests(rec); got != 2 {
+		t.Fatalf("close requests = %d, want the miss and the retry", got)
+	}
+	if lostResolves() != before {
+		t.Fatal("the close was given up when the request context ended")
 	}
 }
 

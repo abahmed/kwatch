@@ -92,8 +92,8 @@ Messages look like this in your channel. This one is real kwatch output
 ```text
 🟠 **checkout** in **shop** (**prod-eu-1**): rollout 14 restarted 4 times in its first 2 minutes; rollout 13 did not restart.
 Only change in revision 14: image registry.example.com/checkout:5.1 → registry.example.com/checkout:5.2; pods restarting more than before since.
-Its dependents failed soon after it changed.
-Fix in: deployment/checkout → container app → image (registry.example.com/checkout:5.2).
+The apps that use it failed soon after it changed.
+Fix: change the image of container app in deployment/checkout (now registry.example.com/checkout:5.2).
 Rolling back to revision 13, the one before this release, undoes it (changes the cluster):
     kubectl rollout undo deployment/checkout -n shop --to-revision=13
 ```
@@ -166,7 +166,7 @@ SMS, push and pager providers get the same lines as plain text.
 ```text
 🟠 **Node n1** (**prod-eu-1**) is low on memory. All of its dependents are failing.
 Replicas that do not depend on it are healthy.
-**cart**, **orders** and **api** in **shop** are affected as well.
+Affected: **cart**, **orders** and **api** in **shop**.
 To check the node's conditions and recent events, run
     kubectl describe node n1
 ```
@@ -191,7 +191,7 @@ happening, not what could happen: advice such as a single replica or a missing
 probe is never listed:
 
 ```text
-🟡 **kwatch digest** · prod-eu-1 — 1 problem
+🟡 **kwatch summary** · prod-eu-1 — 1 problem
 
 **Problems**
 - Service **web** (**shop**) — failed to deploy its load balancer: FailedDeployModel ×5 in 15 min
@@ -218,7 +218,7 @@ blames the database, not the apps:
 🟠 api in shop (prod-eu-1) keeps crashing because external endpoint
 db.example.com:5432 refuses connections. It fails with "dial tcp
 db.example.com:5432: connect: connection refused". Every error mentions it.
-cart, search, auth and one other are affected as well. To read the output
+Affected: cart, search, auth and one other. To read the output
 of the last crash, run
 kubectl logs api-6d4f-0 -c app -n shop --previous
 ```
@@ -298,6 +298,8 @@ bash <(curl -fsSL https://kwatch.dev/kwatch.sh)
 
 Prefer Helm? See the [chart guide](./deploy/chart/README.md).
 
+**Requirements:** Kubernetes 1.23 or newer; on older clusters HPA, PodDisruptionBudget, CronJob and EndpointSlice checks may be unavailable.
+
 ## ⭐ Editions
 
 One binary, two editions. Community needs no account and no key. Pro is free
@@ -306,7 +308,7 @@ during early access. No credit card required.
 | | Community | Pro |
 | --- | --- | --- |
 | Detection | Pods: crash loops, OOM kills, Pending and unschedulable pods, image pull errors, config errors, evictions, init-container failures, liveness and startup probe failures; node NotReady | Adds node pressure and draining, readiness, rollouts, Jobs and CronJobs, PDBs, HPAs, storage, network, admission, certificates, quota, custom resources, control plane, probes and unusual events |
-| Root cause | What is failing and the type of cause ("Cause found: a config change.") | The exact cause (which object or change), full proof and confidence, shared-factor suspects, recent changes and the tool or GitOps app that made them, affected services, log excerpts, fix commands and the setting to change, recurrence ("This is the third time this week") |
+| Root cause | What is failing and the type of cause ("Most likely cause: a config change.") | The exact cause (which object or change), full proof and confidence, shared-factor suspects, recent changes and the tool or GitOps app that made them, affected services, log excerpts, fix commands and the setting to change, recurrence ("This is the third time this week") |
 | Channels | 1 provider (pick with `app.communityProvider`), namespace filters and silences | All providers, routing by scope, threads, text templates, audit log |
 | Noise control | Related alerts arrive as one incident, in Community and Pro. Dedup and settling; failures already present at start are announced one by one if still failing after the startup window; announced incidents survive a restart, so their resolves are still sent | Flapping detection, startup summary, state kept on disk across restarts, changes made while kwatch was down, gap report |
 | Operations | RBAC audit, secret redaction, health (`/health`) | Heartbeat monitor (dead man's switch), Prometheus `/metrics`, severity overrides, maintenance holds, runbook links, `/status` (text and JSON), flight recorder and `replay-export` |

@@ -33,6 +33,7 @@
         opts.signal.addEventListener("abort", onAbort, { once: true });
       }
     }
+    // Any failure, reading the body included, answers status 0.
     return fetch(path, init).then(function (res) {
       var date = Date.parse(res.headers.get("Date") || "");
       if (!isNaN(date)) KW.skew = date - Date.now();
@@ -52,7 +53,7 @@
         return { status: res.status, data: data, etag: etag,
           retryAfter: isNaN(retry) ? 0 : retry };
       });
-    }, function () {
+    }).then(null, function () {
       settle();
       return { status: 0, data: null, retryAfter: 0, etag: "" };
     });

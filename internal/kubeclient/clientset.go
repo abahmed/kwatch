@@ -38,6 +38,9 @@ type ClientSet struct {
 	Metadata  metadata.Interface
 	Discovery discovery.DiscoveryInterfaceWithContext
 	REST      rest.Interface
+	// Answers counts the lists and watches the API server answered, so
+	// a watch that failed can tell when one got through again.
+	Answers *Answers
 	// HTTP is the client for alert providers and the heartbeat URL; the
 	// only one app.insecureSkipTLSVerify applies to.
 	HTTP *http.Client
@@ -145,6 +148,11 @@ func NewPlatformHTTPClientWithRuntime(
 }
 
 func newClusterClients(restConfig *rest.Config) (ClientSet, error) {
+	// Only the API clients count their answers; the kubelet client
+	// derives from the plain configuration.
+	answers, plain := &Answers{}, restConfig
+	restConfig = rest.CopyConfig(plain)
+	restConfig.Wrap(answers.Wrap)
 	kubernetesClient, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
 		return ClientSet{}, err
@@ -182,7 +190,8 @@ func newClusterClients(restConfig *rest.Config) (ClientSet, error) {
 		Metadata:   metadataClient,
 		Discovery:  discoveryClient,
 		REST:       restClient,
-		restConfig: restConfig,
+		Answers:    answers,
+		restConfig: plain,
 	}, nil
 }
 

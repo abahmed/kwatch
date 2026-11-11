@@ -1,11 +1,11 @@
 10:03:35 settled
-🟠 batch is failing in shop (prod-eu-1) after the 10:01 UTC change to config map app-defaults. Key app.yaml changed. It fails with "exit status 1". 5 of 5 failing pods read it. orders is affected as well. To check the object the pods depend on, run kubectl get configmap app-defaults -n shop -o yaml
+🟠 batch is failing in shop (prod-eu-1) after the 10:01 UTC change to config map app-defaults. Key app.yaml changed. It fails with "exit status 1". 5 of 5 failing pods read it. Affected: orders. To check the object the pods depend on, run kubectl get configmap app-defaults -n shop -o yaml
 🟠 batch is failing in shop (prod-eu-1) after the 10:01 UTC change to config map app-defaults.
 | 🟠 **batch** is failing in **shop** (**prod-eu-1**) after the 10:01 UTC change to config map **app-defaults**.
 | Key app.yaml changed.
 | It fails with `exit status 1`.
 | 5 of 5 failing pods read it.
-| **orders** is affected as well.
+| Affected: **orders**.
 | To check the object the pods depend on, run
 | ```
 | kubectl get configmap app-defaults -n shop -o yaml

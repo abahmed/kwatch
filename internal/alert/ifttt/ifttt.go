@@ -1,6 +1,7 @@
 package ifttt
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -105,7 +106,10 @@ func (i *Ifttt) send(ctx context.Context, payload iftttPayload) error {
 	if err != nil {
 		return err
 	}
-	if len(responseBody) == 0 {
+	// Maker webhooks answer a 2xx with plain text ("Congratulations!
+	// You've fired the … event"); only a JSON body can report errors.
+	trimmed := bytes.TrimSpace(responseBody)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
 		return nil
 	}
 	var response iftttResponse

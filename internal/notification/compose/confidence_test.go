@@ -75,7 +75,7 @@ func TestCheckedLineListsAtMostThreeChecks(t *testing.T) {
 
 	msg := Writer{}.Write(announce(p), writerNow)
 
-	want := "Checked: image api:2.3 runs fine in staging-2; node n3 is " +
+	want := "Proof: image api:2.3 runs fine in staging-2; node n3 is " +
 		"healthy for 12 other pods; the previous revision ran healthy " +
 		"for 9 minutes."
 	if !strings.HasSuffix(msg.Note, want) {
@@ -100,7 +100,7 @@ func TestCheckedLineListsAtMostThreeChecks(t *testing.T) {
 
 func TestNoChecksNoCheckedLine(t *testing.T) {
 	msg := Writer{}.Write(announce(secretCause(0.8)), writerNow)
-	if strings.Contains(msg.Note, "Checked:") {
+	if strings.Contains(msg.Note, "Proof:") {
 		t.Errorf("no checks, no line: %s", msg.Note)
 	}
 }

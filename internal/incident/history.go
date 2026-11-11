@@ -201,13 +201,13 @@ func fixOf(model inventory.HistoryReader, p *Incident, now time.Time) Fix {
 	if nodeReplaced(model, p) {
 		return FixNodeReplaced
 	}
-	return fixByChanges(outcomes, p.Opened, now)
+	return fixByChanges(outcomes, notAFixOf(model, p.Root), p.Opened, now)
 }
 
 // fixingChange is the latest change around p's root made while it was
-// open, other than a scale: the change that most likely fixed it, so the
-// resolve can say who fixed it and how. Nil when nothing changed or
-// without a model.
+// open that can be a fix (see notAFix): the change that most likely
+// fixed it, so the resolve can say who fixed it and how. Nil when
+// nothing changed or without a model.
 func fixingChange(
 	model inventory.HistoryReader, p *Incident, now time.Time,
 ) *inventory.Change {
@@ -215,12 +215,13 @@ func fixingChange(
 		return nil
 	}
 	var latest *inventory.Change
+	skip := notAFixOf(model, p.Root)
 	for _, outcome := range model.ChangeOutcomes(
 		p.Root, p.Opened.Add(-inventory.MaxEffectWindow), now,
 	) {
 		for _, change := range outcome.Set.Changes {
 			if change.At.Before(p.Opened) || change.At.After(now) ||
-				scaleOnly(change) {
+				skip(change) {
 				continue
 			}
 			if latest == nil || change.At.After(latest.At) {
@@ -238,15 +239,29 @@ func scaleOnly(change inventory.Change) bool {
 	return change.Classify() == inventory.ClassScale
 }
 
-// fixByChanges names the fix from changes made after the incident opened.
+// notAFix reports a change that is never credited with ending an
+// incident. A scale is a reaction to it. A node's taints follow its
+// conditions: Kubernetes removes them itself when the node is ready
+// again (SystemChange). A pod that is created or deleted is the
+// failure going on or the pod being replaced, such as a crashing pod
+// someone deleted to restart it: the new pod runs, but nothing changed.
+func notAFix(change inventory.Change) bool {
+	return scaleOnly(change) || SystemChange(change) ||
+		(change.Entity.Kind == kube.KindPod &&
+			(change.Created || change.Deleted))
+}
+
+// fixByChanges names the fix from changes made after the incident
+// opened, skipping those skip says are no fix.
 func fixByChanges(
-	outcomes []inventory.ChangeOutcome, opened, until time.Time,
+	outcomes []inventory.ChangeOutcome,
+	skip func(inventory.Change) bool, opened, until time.Time,
 ) Fix {
 	fix := FixNone
 	for _, outcome := range outcomes {
 		for _, change := range outcome.Set.Changes {
 			if change.At.Before(opened) || change.At.After(until) ||
-				scaleOnly(change) {
+				skip(change) {
 				continue
 			}
 			if change.Classify() == inventory.ClassConfig {

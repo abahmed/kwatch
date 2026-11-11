@@ -58,6 +58,8 @@ func SourceAccess() []Access {
 		Access{NonResourceURL: "/readyz", Verb: "get"},
 		// The prober reads the API server's own metrics; optional.
 		Access{NonResourceURL: "/metrics", Verb: "get"},
+		// The prober reads the API server version for skew; optional.
+		Access{NonResourceURL: "/version", Verb: "get"},
 		// The grant is limited to the two leader Leases by name.
 		Access{Resource: Resource{Group: "coordination.k8s.io",
 			Name: "leases"}, Verb: "get", Namespace: "kube-system",

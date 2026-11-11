@@ -87,7 +87,8 @@ func TestBrowserIssueRound(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		for _, want := range []string{"Possible causes", "cluster-dns",
+		// Candidates are named in words (KW.entityText), not keys.
+		for _, want := range []string{"Possible causes", "cluster DNS",
 			"Ruled out", "DNS answers slowly"} {
 			if !strings.Contains(causes, want) {
 				t.Errorf("%s: causes table lacks %q: %s", name, want,

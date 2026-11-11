@@ -1,0 +1,11 @@
+{
+  "name": "ack-stale-ignored",
+  "description": "A crash-looping Deployment carries an ack annotation left over from an earlier incident; the new incident is not acknowledged and still reminds.",
+  "root": "deployment/shop/payments",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "1h0m0s"
+}

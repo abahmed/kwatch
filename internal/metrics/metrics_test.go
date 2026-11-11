@@ -143,3 +143,19 @@ func TestEditionRebuildMetricIsBounded(t *testing.T) {
 		t.Fatal("unbounded value became a label")
 	}
 }
+
+func TestLeadershipRejoinMetricIsBounded(t *testing.T) {
+	r := &Registry{}
+	r.IncLeadershipRejoin("success")
+	r.IncLeadershipRejoin("some error text") // counts as failed
+	text := scrape(t, r)
+
+	for _, want := range []string{
+		`kwatch_leadership_rejoins_total{result="success"} 1`,
+		`kwatch_leadership_rejoins_total{result="failed"} 1`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %q in:\n%s", want, text)
+		}
+	}
+}

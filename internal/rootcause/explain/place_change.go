@@ -28,6 +28,9 @@ var containerFields = []string{
 // resources.limits.memory, and the value it was set to. Data of a
 // ConfigMap or Secret is no setting of this kind, and a Secret never
 // gives a value. An environment variable is named without its value.
+// A change that set several settings names none of them, since picking
+// one would guess, unless it scaled the object to zero: the replicas
+// are then the place.
 func placeOfChange(
 	root inventory.EntityID, change inventory.Change,
 ) *detection.Place {
@@ -35,13 +38,25 @@ func placeOfChange(
 		change.Created || change.Deleted {
 		return nil
 	}
+	var places []*detection.Place
 	for _, field := range change.Fields {
 		if place := placeOfField(root, field); place != nil {
+			places = append(places, place)
+		}
+	}
+	if len(places) == 1 {
+		return places[0]
+	}
+	for _, place := range places {
+		if place.Path == replicasField && place.Value == "0" {
 			return place
 		}
 	}
 	return nil
 }
+
+// replicasField is the object field that holds a workload's replicas.
+const replicasField = "spec.replicas"
 
 func placeOfField(
 	root inventory.EntityID, field inventory.FieldChange,

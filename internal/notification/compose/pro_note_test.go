@@ -25,7 +25,7 @@ func TestProNoteNamesTheAlertType(t *testing.T) {
 	cases := []struct {
 		name string
 		mode detection.Mode
-		want string
+		want []string
 	}{
 		{"crash", detection.ModeCrashLoop, noteCrash},
 		{"liveness probe", detection.ModeProbe, noteCrash},
@@ -37,33 +37,60 @@ func TestProNoteNamesTheAlertType(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want+proInvite,
-				proNote(modeDecision(tc.mode), false))
+			assert.Equal(t, proLineText(tc.want),
+				proNote(withChange(modeDecision(tc.mode)), helpNone))
 		})
 	}
+}
+
+// withChange is d with a recent change the engine found.
+func withChange(d incident.Decision) incident.Decision {
+	d.Facts.Changes = []inventory.Change{{}}
+	return d
 }
 
 func TestProNoteTeasesAWithheldCause(t *testing.T) {
 	d := modeDecision(detection.ModeCrashLoop)
 	d.Incident.Cause, d.Incident.ProCause = nil, true
-	assert.Equal(t, proTeaser+proInvite, proNote(d, false))
+	assert.Equal(t, "Pro shows the likely cause it found, free during "+
+		"early access: kwatch.dev/pro", proNote(d, helpNone))
 
-	changed := modeDecision(detection.ModeCrashLoop)
+	changed := withChange(modeDecision(detection.ModeCrashLoop))
 	changed.Incident.Cause = nil
-	changed.Facts.Changes = []inventory.Change{{}}
-	assert.Equal(t, proTeaser+proInvite, proNote(changed, false))
+	assert.Equal(t, "Pro shows what changed just before this, free "+
+		"during early access: kwatch.dev/pro", proNote(changed, helpNone))
+}
+
+// Without a change found, no note promises one: it names what Pro does
+// show, or nothing.
+func TestProNotePromisesAChangeOnlyWhenOneIsKnown(t *testing.T) {
+	d := modeDecision(detection.ModeCrashLoop)
+	d.Facts.Output = []string{"panic: boom"}
+	assert.Equal(t, "Pro shows the error from its log and how to check "+
+		"it, free during early access: kwatch.dev/pro",
+		proNote(d, helpCheck))
+
+	generic := modeDecision(detection.ModeEvicted)
+	generic.Incident.Impact = []inventory.EntityID{{}}
+	assert.Equal(t, proLineText([]string{noteImpact}),
+		proNote(generic, helpNone))
+
+	assert.Equal(t, proLineText([]string{proCheckWords}),
+		proNote(modeDecision(detection.ModeImagePull), helpCheck))
+	assert.Equal(t, proLineText(notePending),
+		proNote(modeDecision(detection.ModePending), helpNone))
 }
 
 func TestProNoteSkipsTheTeaserWhenTheCauseIsNamed(t *testing.T) {
 	d := modeDecision(detection.ModeCrashLoop)
 	d.Incident.ProCause = true
-	assert.Equal(t, noteCrash+proInvite, proNote(d, false))
+	assert.Equal(t, proLineText(noteCrash), proNote(withChange(d), helpNone))
 }
 
 func TestProNoteIsEmptyWhenProShowsNothing(t *testing.T) {
 	d := modeDecision(detection.ModeEvicted)
 	d.Incident.Root = inventory.CoreID(kube.KindDeployment, "shop", "api")
-	assert.Empty(t, proNote(d, false))
+	assert.Empty(t, proNote(d, helpNone))
 }
 
 func TestProNoteFollowsHideProHints(t *testing.T) {
@@ -73,25 +100,31 @@ func TestProNoteFollowsHideProHints(t *testing.T) {
 	quiet := Writer{}.ForEdition(feature.CommunityEntitlements(), true)
 	pro := Writer{}.ForEdition(feature.ProEntitlements(), false)
 
-	assert.Equal(t, proTeaser+proInvite, community.noteFor(d, d, at(4, 0)))
-	assert.Empty(t, quiet.noteFor(d, d, at(4, 0)))
-	assert.Empty(t, pro.noteFor(d, d, at(4, 0)))
+	noteOf := func(w Writer) string {
+		_, note := w.communityOf(d, at(4, 0))
+		return note.plain
+	}
+	assert.Equal(t, proLineText([]string{proTeaser}), noteOf(community))
+	assert.Empty(t, noteOf(quiet))
+	assert.Empty(t, noteOf(pro))
 	d.Action = incident.Resolve
-	assert.Empty(t, community.noteFor(d, d, at(4, 0)),
-		"a resolve gets no Pro line")
+	assert.Empty(t, noteOf(community), "a resolve gets no Pro line")
 }
 
 func TestProNoteJoinsTheFixHintInOneLine(t *testing.T) {
 	d := modeDecision(detection.ModeCrashLoop)
-	assert.Equal(t, noteCrash+" "+proFix+proInvite, proNote(d, true))
+	assert.Equal(t, "Pro shows the change that caused this crash and how "+
+		"to fix it, free during early access: kwatch.dev/pro",
+		proNote(withChange(d), helpFix))
 	d.Incident.Cause, d.Incident.ProCause = nil, true
-	assert.Equal(t, proTeaser+" "+proFix+proInvite, proNote(d, true))
+	assert.Equal(t, proLineText([]string{proTeaser, proFixWords}),
+		proNote(d, helpFix))
 
 	alone := modeDecision(detection.ModeEvicted)
 	alone.Incident.Root = inventory.CoreID(kube.KindDeployment, "shop",
 		"api")
-	assert.Equal(t, "Pro shows how to fix it."+proInvite,
-		proNote(alone, true))
+	assert.Equal(t, "Pro shows how to fix it"+proInvite,
+		proNote(alone, helpFix))
 }
 
 func TestProNoteIsAtMostOneLine(t *testing.T) {
@@ -107,16 +140,17 @@ func TestProChecksTextCountsSinceStart(t *testing.T) {
 	got := ProChecksText(feature.WithheldCounts{4, 2, 1, 0})
 	assert.Equal(t, "Pro checks found 7 issues since kwatch started: "+
 		"4 readiness probes, 2 shared causes, 1 preemption and "+
-		"admission. Get Pro free during early access to see them: "+
+		"admission. Pro shows them, free during early access: "+
 		"kwatch.dev/pro", got)
 	assert.Contains(t, ProChecksText(feature.WithheldCounts{0, 0, 0, 1}),
-		"found 1 issue since kwatch started: 1 scheduling gate.")
+		"found 1 issue since kwatch started: 1 scheduling gate. Pro "+
+			"shows it,")
 }
 
 func TestProChecksTodayTextCountsToday(t *testing.T) {
 	assert.Empty(t, ProChecksTodayText(feature.WithheldCounts{}))
 	got := ProChecksTodayText(feature.WithheldCounts{1, 0, 0, 2})
 	assert.Equal(t, "Pro checks found 3 issues today: 1 readiness probe, "+
-		"2 scheduling gates. Get Pro free during early access to see "+
-		"them: kwatch.dev/pro", got)
+		"2 scheduling gates. Pro shows them, free during early access: "+
+		"kwatch.dev/pro", got)
 }

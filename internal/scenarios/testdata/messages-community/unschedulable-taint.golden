@@ -1,7 +1,7 @@
 10:03:15 settled
-🟠 report in analytics (prod-eu-1) has waited two minutes for a node. Cause found: a scheduling problem.
-Pro shows the exact cause and how to fix it. Get Pro free during early access: kwatch.dev/pro
+🟠 report in analytics (prod-eu-1) has waited two minutes for a node. Most likely cause: a scheduling problem.
+Pro shows the exact cause and how to fix it, free during early access: kwatch.dev/pro
 🟠 report in analytics (prod-eu-1) has waited two minutes for a node.
 | 🟠 **report** in **analytics** (**prod-eu-1**) has waited two minutes for a node.
-| Cause found: a scheduling problem.
-| *Pro shows the exact cause and how to fix it. Get Pro free during early access: kwatch.dev/pro*
+| Most likely cause: a scheduling problem.
+| *Pro shows the exact cause and how to fix it, free during early access: kwatch.dev/pro*

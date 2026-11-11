@@ -13,6 +13,7 @@ func pullLoginScenarios() []scenario {
 	return []scenario{
 		registryLoginExpired(), registryLoginMissingSecret(),
 		registryNoPullSecret(), registryRateLimited(),
+		registryPrivateImageMissingSecret(),
 	}
 }
 
@@ -124,6 +125,34 @@ func registryLoginMissingSecret() scenario {
 				loginApp(c, "shop", "worker", "regcred"),
 			}
 			loginOutage(c, apps, loginAnswer)
+		},
+	}
+}
+
+// privateImageAnswer is Docker Hub's answer to a pull of a private image
+// without a login, which it shares with a mistyped image name.
+const privateImageAnswer = "pull access denied for shop/api, " +
+	"repository does not exist or may require authorization: server " +
+	"message: insufficient_scope: authorization failed"
+
+// registryPrivateImageMissingSecret: the workload names a pull Secret
+// that does not exist, and the registry answers the anonymous pull as
+// it answers an unknown image. The absent Secret is still the cause.
+func registryPrivateImageMissingSecret() scenario {
+	return scenario{
+		expect: expectation{
+			Name: "registry-private-image-missing-secret",
+			Description: "A workload names an image pull Secret that " +
+				"does not exist; its pulls are answered \"repository " +
+				"does not exist or may require authorization\".",
+			Root: "secret/shop/regcred", Tier: "notify",
+			MaxMessages: 2,
+			MustNotBlame: []string{"node//n3", "deployment/shop/api",
+				"registry//" + clusterRegistry},
+		},
+		build: func(c *cluster) {
+			apps := []*workload{loginApp(c, "shop", "api", "regcred")}
+			loginOutage(c, apps, privateImageAnswer)
 		},
 	}
 }

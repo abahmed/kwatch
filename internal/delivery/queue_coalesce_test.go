@@ -124,6 +124,9 @@ func TestStopBeforeStartDeadLettersPendingJobs(t *testing.T) {
 		metrics.DefaultRegistry().DeliveryDeadLetters.Load()-before)
 }
 
+// A job the full queue displaced is counted in the overflow summary,
+// which keeps its outbox record until the summary is sent: a crash in
+// between sends it after the restart instead of losing it.
 func TestFanOutSettlesDisplacedOutboxRecord(t *testing.T) {
 	entry := providerEntry{
 		catalogName: "slack", provider: &fakeProvider{},
@@ -137,7 +140,13 @@ func TestFanOutSettlesDisplacedOutboxRecord(t *testing.T) {
 	am.fanOut(resolveJob("b"))
 	am.mu.Unlock()
 
-	box.mu.Lock()
-	defer box.mu.Unlock()
-	assert.Len(t, box.live, 1, "only the queued resolve keeps a record")
+	live := func() int {
+		box.mu.Lock()
+		defer box.mu.Unlock()
+		return len(box.live)
+	}
+	assert.Equal(t, 2, live(), "the summary keeps the displaced record")
+	state, _ := am.takeOverflowSummary(entry.provider.Name())
+	am.settleSummaryRecords(state)
+	assert.Equal(t, 1, live(), "sent: only the queued resolve keeps one")
 }

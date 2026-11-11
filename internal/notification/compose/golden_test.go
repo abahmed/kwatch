@@ -42,9 +42,11 @@ func TestWriterGoldenNotes(t *testing.T) {
 	}
 }
 
-// labelStart matches the section labels the note must not use.
+// labelStart matches the section labels the note must not use. The
+// dashboard's own words are allowed: "Affected:" names who else a
+// failure hits, as the issue page does.
 var labelStart = regexp.MustCompile(`(?i)(^|\n|\. )(cause|impact|why|` +
-	`evidence|confidence|next steps|timeline|how we know|affected|` +
+	`evidence|confidence|next steps|timeline|how we know|` +
 	`started|root cause|resolved|quoted|quoted [a-z ]+):`)
 
 func TestWriterNoteProperties(t *testing.T) {
@@ -114,7 +116,7 @@ func assertSentences(t *testing.T, note string) {
 	}
 }
 
-// withoutGrouped is the note without its "Also grouped" line, which sits
+// withoutGrouped is the note without its "Related alerts" line, which sits
 // on a line of its own.
 func withoutGrouped(note string) string {
 	var out []string

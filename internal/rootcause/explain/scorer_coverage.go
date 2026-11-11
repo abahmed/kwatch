@@ -2,7 +2,10 @@ package explain
 
 import (
 	"fmt"
+	"slices"
 
+	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/rootcause"
@@ -40,6 +43,78 @@ func scoreCoverage(v *view, c *candidate) outcome {
 		code: rootcause.ProofDependentsFail, count: failing,
 		total: len(dependents), text: fmt.Sprintf("%d of %d dependents fail", failing,
 			len(dependents))}
+}
+
+// scoreSelfQuoted rewards a workload blamed for itself whose every
+// dependent fails and quotes its own error: the program says what is
+// wrong with it in every replica, which is more than "nothing upstream
+// is failing".
+func scoreSelfQuoted(v *view, c *candidate) outcome {
+	if len(c.others()) == 0 || !c.isSelf() {
+		return outcome{}
+	}
+	dependents := v.dependents(c.id)
+	if len(dependents) < CoverageMinDependents {
+		return outcome{}
+	}
+	for _, id := range dependents {
+		if !v.unitFailing(id) {
+			return outcome{}
+		}
+	}
+	// A failure something upstream explains is that cause's evidence,
+	// whatever the program says about it.
+	for _, effect := range c.others() {
+		if v.explainedOutside[effect] {
+			return outcome{}
+		}
+	}
+	if !v.ownErrorsQuoted(dependents) {
+		return outcome{}
+	}
+	n := len(dependents)
+	return outcome{weight: SelfQuotedWeight,
+		code: rootcause.ProofOwnErrors, count: n, total: n,
+		text: fmt.Sprintf("%d of %d dependents fail with their own "+
+			"error", n, n)}
+}
+
+// ownErrorsQuoted reports that each of ids, or a container of it,
+// quotes the program's own error: the words it exited with or its last
+// log line.
+func (v *view) ownErrorsQuoted(ids []inventory.EntityID) bool {
+	for _, id := range ids {
+		units := append([]inventory.EntityID{id}, v.s.Model.Related(
+			id, inventory.PartOf, inventory.Incoming)...)
+		if !slices.ContainsFunc(units, v.quotesOwnError) {
+			return false
+		}
+	}
+	return len(ids) > 0
+}
+
+// quotesOwnError reports an unhealthy finding of id that quotes the
+// program's own error: its error line, or the termination message of a
+// container that exited with an error. A previous log line no finding
+// quotes counts too. Messages the kubelet writes do not, nor does an
+// error of a call to another address ("dial tcp ...: connection
+// refused"): that is about the dependency, not the program.
+func (v *view) quotesOwnError(id inventory.EntityID) bool {
+	for _, f := range v.s.Findings[id] {
+		if !unhealthy(f) {
+			continue
+		}
+		for _, e := range f.Evidence {
+			if e.Value != "" && (e.Label == detection.EvidenceError ||
+				e.Label == "message" && f.Reason == reasons.Error &&
+					id.Kind == kube.KindContainer) &&
+				!hasMarker(e.Value, dependencyErrorMarkers) {
+				return true
+			}
+		}
+	}
+	line := v.previousLogLine(id)
+	return line != "" && !hasMarker(line, dependencyErrorMarkers)
 }
 
 // dependents lists what depends on id directly: the pods of a node or

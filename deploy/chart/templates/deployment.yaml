@@ -22,6 +22,11 @@ spec:
     metadata:
       annotations:
         {{- if .Values.configSecretName }}
+        {{- /* Roll the pod when the config Secret changes. lookup needs a
+        live cluster; an offline render (helm template, Argo CD) hashes only
+        the name, so a change to the Secret does not roll the pod. Restart
+        the Deployment after such a change, set a checksum value of your own
+        in podAnnotations, or run a reloader. */}}
         {{- $configSecret := lookup "v1" "Secret" .Release.Namespace .Values.configSecretName }}
         {{- if $configSecret }}
         checksum/config-secret: {{ toJson $configSecret.data | sha256sum }}

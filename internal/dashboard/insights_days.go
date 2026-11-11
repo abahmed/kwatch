@@ -17,6 +17,9 @@ type InsightDay struct {
 	Resolved int    `json:"resolved"`
 	Paged    int    `json:"paged"`
 	Untold   int    `json:"untold"`
+	// ResolvedAlerted counts the resolves of issues someone was
+	// alerted about: Resolved without those that settled on their own.
+	ResolvedAlerted int `json:"resolvedAlerted"`
 }
 
 // insightDays counts the last trendDays days in zone, today last, as
@@ -54,6 +57,11 @@ func insightDays(
 		for _, resolved := range resolves(p) {
 			if day := at(resolved); day != nil {
 				day.Resolved++
+			}
+		}
+		for _, resolved := range resolvesTold(p) {
+			if day := at(resolved); day != nil {
+				day.ResolvedAlerted++
 			}
 		}
 	}

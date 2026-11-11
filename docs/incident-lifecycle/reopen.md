@@ -28,6 +28,9 @@ due, the update is sent when the failure returns and the incident is `Open`
 again (never while `Recovering`). If it recovers for good before that
 update was ever sent, it closes without a second resolve message
 (`closeUnheardReopen`): the thread already ends on the first resolve.
+The same holds when its failure moves to another announced incident
+before that update was sent (`quietSupersede`): it closes quietly, with
+no "moved" resolve after the resolve.
 After the window, or for another mode, the failure is a new
 incident that remembers the old one. A reopen also forgets the fix attempt
 of the earlier occurrence (`Attempt`, the unsent attempt and its late flag).
@@ -73,8 +76,9 @@ How paging state works now:
   for (`pagedBeside`, the same test the hold's release uses) never page
   here: they would open a second alert beside the one that is open.
 - A held repeat that keeps failing is not a flap. When it has failed
-  without a recovery for `PageSettle` plus the base `Hold` (the settle and
-  the hold a first recovery waits, not the doubled holds of a flapper), and
+  without a recovery for `PageSettle` plus the base `Hold` since its last
+  return (the settle and the hold a first recovery waits, not the doubled
+  holds of a flapper; a flapping incident counts too), and
   nobody acknowledged it, the hold ends (`releaseHeldPage`) and the next
   update pages once. It does not while another live page of the same
   story, or one announced with it, is open, nor when the alert is already

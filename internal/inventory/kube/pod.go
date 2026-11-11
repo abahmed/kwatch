@@ -77,7 +77,8 @@ func (PodSchema) Describe(obj any) (Description, bool) {
 		AltUID:     pod.Annotations[corev1.MirrorPodAnnotationKey],
 		Attributes: attrs,
 		Relations:  rel,
-		Children:   containerDescriptions(pod, id),
+		Children: append(containerDescriptions(pod, id),
+			ephemeralDescriptions(pod)...),
 	}, true
 }
 
@@ -118,7 +119,7 @@ func podAttributes(pod *corev1.Pod) map[string]inventory.Value {
 	if pod.DeletionTimestamp != nil {
 		attrs[AttrDeletionTime] = inventory.Time(pod.DeletionTimestamp.Time)
 	}
-	if grace := pod.Spec.TerminationGracePeriodSeconds; grace != nil {
+	if grace := terminationGrace(pod); grace != nil {
 		attrs[AttrTerminationGrace] = inventory.Number(float64(*grace))
 	}
 	if pod.Status.Message != "" {
@@ -166,7 +167,10 @@ func setPodConditions(attrs map[string]inventory.Value, pod *corev1.Pod) {
 			attrs[AttrReady] = inventory.Bool(
 				c.Status == corev1.ConditionTrue,
 			)
-			attrs[AttrReadySince] = inventory.Time(c.LastTransitionTime.Time)
+			if !c.LastTransitionTime.IsZero() {
+				attrs[AttrReadySince] = inventory.Time(
+					c.LastTransitionTime.Time)
+			}
 		}
 	}
 	setConditions(attrs, conditions)
@@ -230,10 +234,13 @@ func podReferences(pod *corev1.Pod) []inventory.EntityID {
 }
 
 // configReferences lists the pod's Secret and ConfigMap references in
-// spec order. Image pull secrets are required: kubelet cannot pull a
-// private image without them.
+// spec order. An image pull Secret is optional: the kubelet only warns
+// when it cannot read one and pulls without it, which works for any
+// image the node may pull anyway. Its absence matters only when a pull
+// is refused for want of a login, which the pull failure itself shows.
 func configReferences(pod *corev1.Pod) []podRef {
 	var out []podRef
+	tolerated := true
 	add := func(kind inventory.Kind, name string, optional *bool) {
 		out = append(out, podRef{
 			kind: kind, name: name,
@@ -241,7 +248,7 @@ func configReferences(pod *corev1.Pod) []podRef {
 		})
 	}
 	for _, ref := range pod.Spec.ImagePullSecrets {
-		add(KindSecret, ref.Name, nil)
+		add(KindSecret, ref.Name, &tolerated)
 	}
 	for _, volume := range pod.Spec.Volumes {
 		volumeReferences(volume, add)
@@ -344,4 +351,14 @@ func forEachContainer(pod *corev1.Pod, visit func(corev1.Container, bool)) {
 	for _, c := range pod.Spec.Containers {
 		visit(c, false)
 	}
+}
+
+// terminationGrace is the grace a pod's containers get to stop: the one
+// its deletion was given (metadata.deletionGracePeriodSeconds) while it
+// is being deleted, else its spec's.
+func terminationGrace(pod *corev1.Pod) *int64 {
+	if pod.DeletionTimestamp != nil && pod.DeletionGracePeriodSeconds != nil {
+		return pod.DeletionGracePeriodSeconds
+	}
+	return pod.Spec.TerminationGracePeriodSeconds
 }

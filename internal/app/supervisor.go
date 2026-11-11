@@ -219,6 +219,7 @@ func (s *componentSupervisor) runComponent(
 	return s.watchProgress(runWatch{
 		parent: ctx, runCtx: runCtx, cancel: cancel, done: runDone,
 		component: component, stall: stallTimeout, startup: startupTimeout,
+		freshStart: component.freshStart,
 	})
 }
 
@@ -240,6 +241,8 @@ type runWatch struct {
 	// startup bounds the wait for the first report.
 	stall   time.Duration
 	startup time.Duration
+	// freshStart ignores reports older than the run's start.
+	freshStart bool
 }
 
 // watchProgress waits for the run to end and cancels it when it stops
@@ -271,7 +274,7 @@ func (s *componentSupervisor) watchProgress(w runWatch) error {
 func (s *componentSupervisor) progressStalled(
 	last, startedAt time.Time, w runWatch,
 ) bool {
-	if last.IsZero() {
+	if last.IsZero() || (w.freshStart && last.Before(startedAt)) {
 		return s.now().Sub(startedAt) > w.startup
 	}
 	return s.now().Sub(last) > w.stall

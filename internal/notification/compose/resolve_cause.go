@@ -13,7 +13,7 @@ import (
 // recoveredWords say a checked cause works again, by the kind of its
 // root. Only the kinds incident.CheckCause looks at have words.
 var recoveredWords = map[inventory.Kind]string{
-	kube.KindNode:                "is Ready again",
+	kube.KindNode:                "is ready again",
 	explain.KindExternalEndpoint: "accepts connections again",
 	kube.KindService:             "has ready endpoints again",
 }

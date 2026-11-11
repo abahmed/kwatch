@@ -82,7 +82,7 @@ var scenarioCosts = map[string]scenarioCost{
 	"TestScenarioExtendedMetricsAPIFailure":      alone(203, "metrics-api"),
 	"TestScenarioExtendedTLS":                    shared(82),
 	"TestScenarioExtendedVolumeAttachment":       alone(198, "volume-attachment"),
-	"TestScenarioHeartbeatDelivery":              alone(2, "kwatch-pod"),
+	"TestScenarioHeartbeatDelivery":              alone(60, "kwatch-pod"),
 	"TestScenarioInvalidLiveConfiguration":       alone(65, "kwatch-config"),
 	"TestScenarioInvalidStartupConfiguration":    alone(3, "kwatch-config"),
 	"TestScenarioJobFailure":                     shared(84),

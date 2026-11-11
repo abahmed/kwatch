@@ -37,6 +37,32 @@ func (s *Server) serve(server *http.Server, ln net.Listener) error {
 	return server.Serve(pageListener{tlsLn, reply})
 }
 
+// checkCertificate reports a TLS key pair that cannot be loaded, before
+// the port is bound. Without TLS there is nothing to check.
+func (s *Server) checkCertificate() error {
+	if s.opts.TLSCertFile == "" {
+		return nil
+	}
+	_, err := tls.LoadX509KeyPair(s.opts.TLSCertFile, s.opts.TLSKeyFile)
+	return err
+}
+
+// failed closes the listener of a Serve that ended with err, so the next
+// Open binds the port again with a new server: a listener that failed
+// cannot be served a second time. After Stop there is nothing to reopen.
+func (s *Server) failed(
+	server *http.Server, listener net.Listener, err error,
+) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	s.stopErr = err
+	if s.stopped || s.server != server {
+		return
+	}
+	_ = listener.Close()
+	s.server, s.listener, s.started = nil, nil, false
+}
+
 // certReloader loads the key pair again when either file changes, so a
 // certificate renewed in its Secret is served without a restart.
 type certReloader struct {

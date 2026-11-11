@@ -25,7 +25,7 @@ func logLifecycle(p *Incident, operation, message string, kv ...any) {
 func logResolved(p *Incident, now time.Time, why Reason, quiet bool) {
 	logLifecycle(p, "resolve", "incident resolved",
 		"reason", string(why), "quiet", quiet,
-		"lasted", now.Sub(p.Opened).Round(time.Second).String())
+		"lasted", max(0, now.Sub(p.Opened)).Round(time.Second).String())
 }
 
 // reasonUntold is the logged reason of an incident that ended before

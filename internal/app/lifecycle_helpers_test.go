@@ -2,13 +2,8 @@ package app
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
-
-	"github.com/abahmed/kwatch/internal/clock"
-	"github.com/abahmed/kwatch/internal/feature"
-	"github.com/abahmed/kwatch/internal/kubeclient"
 )
 
 func TestComponentProgressTracksInjectedTime(t *testing.T) {
@@ -70,25 +65,5 @@ func TestLeaderIdentityAndLeaseNameUseEnvironment(t *testing.T) {
 	identity, err := podIdentity()
 	if err != nil || identity != "kwatch-0" {
 		t.Fatalf("pod identity = %q, %v", identity, err)
-	}
-}
-
-func TestRunWithProgressTouchesClockAndRunsFunction(t *testing.T) {
-	now := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
-	progress := newComponentProgress(time.Time{})
-	deps := &serverDeps{entitlements: feature.ProEntitlements(),
-		clients: kubeclient.ClientSet{
-			Clock: clock.Func(func() time.Time {
-				return now
-			})}}
-	runErr := errors.New("run failed")
-	if err := runWithProgress(
-		context.Background(), deps, progress,
-		func(context.Context) error { return runErr },
-	); !errors.Is(err, runErr) {
-		t.Fatalf("runWithProgress() error = %v", err)
-	}
-	if !progress.LastProgress().Equal(now) {
-		t.Fatalf("progress timestamp = %v, want %v", progress.LastProgress(), now)
 	}
 }

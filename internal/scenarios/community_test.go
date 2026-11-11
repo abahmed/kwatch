@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -65,15 +66,15 @@ const withheldReason = "pro checks"
 var proOnlyParts = []string{
 	"Caused by", "Likely caused by", "Changed just before it recovered",
 	"pods were affected", "Evidence", "Logs:", "Last log", "dashboard",
-	"two possible causes", "Checked:", "Confidence", "Fix in:",
+	"two possible causes", "Proof:", "Confidence", "Fix:",
 	", run kubectl", "time this week", "It fails every",
 	"from its log",
 }
 
 // communityCauseLeaks are, for each scenario whose Pro run names a
 // cause, the cause's object names, images and wording. A Community
-// message tells only the cause's category ("Cause found: a rollout."),
-// so it shows none of them.
+// message tells only the cause's category ("Most likely cause: a recent
+// rollout."), so it shows none of them.
 var communityCauseLeaks = map[string][]string{
 	"crash-loop-for-hours": {"regional"},
 	"bad-rollout": {
@@ -92,7 +93,10 @@ var communityCauseLeaks = map[string][]string{
 }
 
 // causeTeaser starts the Community sentence that tells the category.
-const causeTeaser = "Cause found:"
+var causeTeaser = regexp.MustCompile(`(Most likely|Possible) cause: `)
+
+// proLink is in the one Pro line a Community message may carry.
+const proLink = "kwatch.dev/pro"
 
 func communityMessagesPath(name string) string {
 	return filepath.Join("testdata", "messages-community", name+".golden")
@@ -163,6 +167,7 @@ func TestCommunityScenarioMessages(t *testing.T) {
 			runParallelUnlessUpdating(t)
 			result := replayCommunity(t, name)
 			checkNoProParts(t, result)
+			checkProLineOnFirstAlertOnly(t, result)
 			checkCauseCategoryOnly(t, name, result)
 			if proDetectorOnly[name] {
 				checkOnlyWithheldNote(t, result)
@@ -196,6 +201,27 @@ func checkNoProParts(t *testing.T, result replay.Result) {
 	}
 }
 
+// checkProLineOnFirstAlertOnly fails on a Community update or resolve
+// that carries the Pro line, and on a message with more than one: only
+// an issue's first alert mentions Pro, once.
+func checkProLineOnFirstAlertOnly(t *testing.T, result replay.Result) {
+	t.Helper()
+	for i, m := range result.Messages {
+		d := result.Decisions[i]
+		n := strings.Count(m.Note, proLink)
+		if d.Reason == withheldReason {
+			continue
+		}
+		if d.Action != incident.Announce && n > 0 {
+			t.Errorf("Community %s repeats the Pro line: %s",
+				d.Reason, m.Note)
+		}
+		if n > 1 {
+			t.Errorf("Community note has %d Pro lines: %s", n, m.Note)
+		}
+	}
+}
+
 // checkCauseCategoryOnly fails on a Community message that names its
 // cause, and on a scenario whose cause Pro names but no Community message
 // tells the category of.
@@ -207,7 +233,7 @@ func checkCauseCategoryOnly(
 	leaks = append(leaks, "shortly before", " because ")
 	teased := false
 	for _, m := range result.Messages {
-		teased = teased || strings.Contains(m.Note, causeTeaser)
+		teased = teased || causeTeaser.MatchString(m.Note)
 		for _, leak := range leaks {
 			if strings.Contains(m.Note, leak) {
 				t.Errorf("Community note names the cause %q: %s",
@@ -217,7 +243,7 @@ func checkCauseCategoryOnly(
 	}
 	if teased != caused {
 		t.Errorf("Community says %q: %v, Pro names a cause: %v",
-			causeTeaser, teased, caused)
+			causeTeaser.String(), teased, caused)
 	}
 }
 

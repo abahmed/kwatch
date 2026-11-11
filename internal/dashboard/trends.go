@@ -26,13 +26,19 @@ const (
 // the incidents kept do not cover that week. Enough is false when there
 // is too little to draw.
 type TrendsResponse struct {
-	Days         []TrendDay       `json:"days"`
-	Opened       int              `json:"opened"`
-	PreviousWeek *int             `json:"previousWeek,omitempty"`
-	Namespaces   []TrendNamespace `json:"namespaces"`
-	Noisiest     []TrendIssue     `json:"noisiest"`
-	Resolve      TrendResolve     `json:"resolve"`
-	Enough       bool             `json:"enough"`
+	Days         []TrendDay `json:"days"`
+	Opened       int        `json:"opened"`
+	PreviousWeek *int       `json:"previousWeek,omitempty"`
+	// PreviousWeekAlerted is how many of those reached someone (no
+	// settled-on-their-own openings), nil with PreviousWeek.
+	PreviousWeekAlerted *int             `json:"previousWeekAlerted,omitempty"`
+	Namespaces          []TrendNamespace `json:"namespaces"`
+	Noisiest            []TrendIssue     `json:"noisiest"`
+	Resolve             TrendResolve     `json:"resolve"`
+	// ResolveAlerted is Resolve over the issues someone was alerted
+	// about only: those that settled on their own are left out.
+	ResolveAlerted TrendResolve `json:"resolveAlerted"`
+	Enough         bool         `json:"enough"`
 }
 
 // TrendDay is how many issues opened on one calendar day (YYYY-MM-DD
@@ -144,7 +150,7 @@ func buildTrends(
 	}
 	spaces := map[string]*TrendNamespace{}
 	var durations []trendDuration
-	previous, covered := 0, false
+	previous, alerted, covered := 0, 0, false
 	for _, p := range items {
 		if p.Tier == incident.Silent {
 			continue
@@ -156,6 +162,9 @@ func buildTrends(
 			}
 			if !at.Before(w.prevStart) && at.Before(w.start) {
 				previous++
+				if openingTold(p, at) {
+					alerted++
+				}
 			}
 			if i := w.day(at); i >= 0 {
 				out.Days[i].addOpening(p, at)
@@ -170,12 +179,13 @@ func buildTrends(
 		durations = append(durations, resolvedIn(p, w)...)
 	}
 	if covered && remember >= 2*trendDays*24*time.Hour {
-		out.PreviousWeek = &previous
+		out.PreviousWeek, out.PreviousWeekAlerted = &previous, &alerted
 	}
 	out.Namespaces = topSpaces(spaces)
 	slices.SortFunc(out.Noisiest, noisier)
 	out.Noisiest = out.Noisiest[:min(len(out.Noisiest), trendTop)]
 	out.Resolve = summarize(durations)
+	out.ResolveAlerted = summarize(toldOnly(durations))
 	out.Enough = out.Opened >= trendEnough ||
 		out.Resolve.Count >= trendEnough
 	return out
@@ -245,29 +255,31 @@ func noisier(a, b TrendIssue) int {
 		b.RepeatCount-a.RepeatCount, cmp.Compare(a.ID, b.ID))
 }
 
-// trendDuration is how long one resolved occurrence of an issue took.
+// trendDuration is how long one resolved occurrence of an issue took;
+// told is set when someone was alerted about it.
 type trendDuration struct {
 	id   string
 	took time.Duration
+	told bool
 }
 
 // resolvedIn lists the occurrences of p resolved within the week: its
 // earlier occurrences from History and p itself when it is resolved.
 func resolvedIn(p incident.Incident, w trendWeek) []trendDuration {
 	var out []trendDuration
-	add := func(opened, resolved time.Time) {
+	add := func(opened, resolved time.Time, told bool) {
 		if opened.IsZero() || resolved.Before(opened) ||
 			resolved.Before(w.start) || resolved.After(w.now) {
 			return
 		}
 		out = append(out, trendDuration{id: p.ID,
-			took: resolved.Sub(opened)})
+			took: resolved.Sub(opened), told: told})
 	}
 	for _, o := range p.History {
-		add(o.Opened, o.Resolved)
+		add(o.Opened, o.Resolved, o.Heard)
 	}
 	if p.State == incident.Resolved {
-		add(p.Opened, p.Resolved)
+		add(p.Opened, p.Resolved, !p.Untold())
 	}
 	return out
 }

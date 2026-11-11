@@ -1,0 +1,9 @@
+{
+  "name": "scale-down-unrelated-outage-told",
+  "description": "Three of five nodes are removed within two minutes; meanwhile the only pod of another routed Deployment, on a node that stays, stops being ready.",
+  "root": "deployment/shop/pay",
+  "tier": "notify",
+  "maxMessages": 2,
+  "alone": true,
+  "tail": "20m0s"
+}

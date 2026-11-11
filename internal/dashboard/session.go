@@ -208,6 +208,27 @@ func (s *sessions) rotateKey() {
 	s.expiry = nil
 }
 
+// rekey signs with a key for new sign-in secrets: every session of the
+// old ones is signed out and the revocation table emptied.
+func (s *sessions) rekey(password, token string) {
+	fresh := make([]byte, 32)
+	if _, err := rand.Read(fresh); err != nil {
+		s.disabled.Store(true)
+		return
+	}
+	mac := hmac.New(sha256.New, []byte("kwatch-dashboard-session"))
+	mac.Write(fresh)
+	mac.Write([]byte(token))
+	mac.Write([]byte{0})
+	mac.Write([]byte(password))
+	key := mac.Sum(nil)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.key.Store(&key)
+	s.revoked = make(map[string]time.Time)
+	s.expiry = nil
+}
+
 // fromEarlierStart reports whether value is a well-formed cookie of
 // this server's kind that was issued before this start: its signature
 // cannot be checked any more, but its boot tag differs. The sign-in

@@ -52,7 +52,9 @@ var (
 // Before the first Start the job is split into one copy per provider and
 // each copy gets an outbox record, so a crash before delivery starts does
 // not lose it. A job held during a reconfiguration stays whole: it goes
-// to the providers of the next generation.
+// to the providers of the next generation. The pending queue is bounded
+// by a queue's worth per provider, which is not a promise that the copies
+// fit the provider queues at replay; the overflow goes to the backlog.
 func (m *Manager) holdPendingLocked(job deliverJob) {
 	if job.queued.IsZero() {
 		job.queued = m.nowTime()
@@ -85,6 +87,7 @@ func (m *Manager) holdOnePendingLocked(job deliverJob, limit int) {
 	box := m.outbox.Load()
 	if result.superseded != nil {
 		box.remove(result.superseded.outboxID)
+		m.pendingOpenLost(*result.superseded, job)
 	}
 	if result.displaced != nil {
 		box.remove(result.displaced.outboxID)
@@ -95,6 +98,27 @@ func (m *Manager) holdOnePendingLocked(job deliverJob, limit int) {
 		box.remove(job.outboxID)
 		recordPendingDrop(job, errPendingFull)
 		m.recordDeadLetter(pendingProvider, job, errPendingFull)
+	}
+}
+
+// pendingOpenLost settles an opening a newer revision replaced while both
+// waited for a provider, as the queue path does (superseded): the
+// replacement then tells its provider of an opening it never heard,
+// instead of a bare update or resolve. A job not yet routed carries the
+// mark until fanOut knows its providers.
+func (m *Manager) pendingOpenLost(old, replacement deliverJob) {
+	if !(old.opens() || old.openLost) || replacement.opens() {
+		return
+	}
+	if replacement.target != "" {
+		m.markOpenLost(replacement.target, replacement.key())
+		return
+	}
+	for i := range m.pending {
+		if m.pending[i].key() == replacement.key() &&
+			m.pending[i].target == "" {
+			m.pending[i].openLost = true
+		}
 	}
 }
 

@@ -232,8 +232,12 @@ func missingBackends(
 			missing = append(missing, service.Name)
 		}
 	}
+	// The grace counts from when the Service went missing, not from the
+	// Ingress's first sighting: a Service deleted and recreated under an
+	// old Ingress gets the same time to come back as a new Ingress.
 	if len(missing) == 0 ||
-		!sustained(ctx, "missing-backend", e.FirstSeen, DefaultBackendGrace) {
+		!sustained(ctx, "missing-backend", time.Time{},
+			DefaultBackendGrace) {
 		return nil
 	}
 	return []detection.Finding{{
@@ -289,6 +293,8 @@ func unusedService(
 	}
 	return detection.Finding{
 		Reason: reasons.ServiceUnused, Severity: detection.Info, Since: since,
+		// Clutter, not a failure: it only joins a real failure's incident.
+		Advisory: true,
 		Summary: "Service has selected no pod for " +
 			format.Duration(ctx.Now.Sub(since)),
 	}, true

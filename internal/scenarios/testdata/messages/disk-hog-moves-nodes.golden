@@ -1,19 +1,19 @@
 10:03:15 settled
-🟠 Node n1 (prod-eu-1) is low on disk space. Replicas that do not depend on it are healthy. Its dependents failed soon after it changed. ingest in media is affected as well.
-Also grouped: 1 eviction, 1 node problem
+🟠 Node n1 (prod-eu-1) is low on disk space. Replicas that do not depend on it are healthy. The apps that use it failed soon after it changed. Affected: ingest in media.
+Related alerts: 1 eviction, 1 node problem
 To check the node's conditions and recent events, run kubectl describe node n1
 🟠 Node n1 (prod-eu-1) is low on disk space.
 | 🟠 Node n1 (**prod-eu-1**) is low on disk space.
 | Replicas that do not depend on it are healthy.
-| Its dependents failed soon after it changed.
-| **ingest** in **media** is affected as well.
-| Also grouped: 1 eviction, 1 node problem
+| The apps that use it failed soon after it changed.
+| Affected: **ingest** in **media**.
+| Related alerts: 1 eviction, 1 node problem
 | To check the node's conditions and recent events, run
 | ```
 | kubectl describe node n1
 | ```
 10:10:20 cause revised
-🟠 Cause changed: ingest in media (prod-eu-1) is failing because it fills the disks of the nodes it runs on, so pods on those nodes are evicted. Its pods hold most of the disk in use on two nodes.
-🟠 Cause changed: ingest in media (prod-eu-1) is failing because it fills the disks of the nodes it runs on, so pods on those nodes are evicted.
-| 🟠 Cause changed: **ingest** in **media** (**prod-eu-1**) is failing because it fills the disks of the nodes it runs on, so pods on those nodes are evicted.
+🟠 Cause changed (earlier: node n1): ingest in media (prod-eu-1) is failing because it fills the disks of the nodes it runs on, so pods on those nodes are evicted. Its pods hold most of the disk in use on two nodes.
+🟠 Cause changed (earlier: node n1): ingest in media (prod-eu-1) is failing because it fills the disks of the nodes it runs on, so pods on those nodes are evicted.
+| 🟠 Cause changed (earlier: node n1): **ingest** in **media** (**prod-eu-1**) is failing because it fills the disks of the nodes it runs on, so pods on those nodes are evicted.
 | Its pods hold most of the disk in use on two nodes.

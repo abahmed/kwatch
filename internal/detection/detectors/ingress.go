@@ -15,10 +15,12 @@ import (
 // so it is missing for as long as issuance takes.
 const DefaultTLSSecretGrace = 10 * time.Minute
 
-// DefaultBackendGrace is how long a new Ingress or route may point at a
+// DefaultBackendGrace is how long an Ingress or route may point at a
 // Service that is not there yet: manifests are often applied in an order
-// that creates the Ingress first.
-const DefaultBackendGrace = 2 * time.Minute
+// that creates the Ingress first, and a Service may be deleted and
+// recreated. It counts from when the Service went missing, and it is
+// short enough for the page that follows to stay within two minutes.
+const DefaultBackendGrace = 90 * time.Second
 
 // DefaultClassGrace is how long a referenced cluster-scoped class
 // (IngressClass, PriorityClass, RuntimeClass) may be absent before it is

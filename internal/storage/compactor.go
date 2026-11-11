@@ -114,6 +114,7 @@ func (c *Compactor) Pass(ctx context.Context) (PassResult, error) {
 	result.Bytes, result.PinnedBytes = report.total(), report.pinned()
 	result.OverCap = result.Bytes > c.policy.SizeCap
 	c.store.counters.overCap.Store(result.OverCap)
+	c.store.counters.logicalBytes.Store(result.Bytes)
 	result.Rewrote, err = c.reclaim()
 	if err != nil {
 		return result, err

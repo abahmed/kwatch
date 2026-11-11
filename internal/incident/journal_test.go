@@ -166,6 +166,6 @@ func TestJournalLevelSaysWhyItPages(t *testing.T) {
 	r.tick(at(time.Second))
 	p := r.only()
 	assert.Equal(t, levelPagePrefix+"cluster-dns-failing", p.Journal.Level)
-	assert.Equal(t, "Pages: cluster DNS is failing.",
+	assert.Equal(t, "Urgent: cluster DNS is failing.",
 		AlertLevelText(p.Journal.Level))
 }

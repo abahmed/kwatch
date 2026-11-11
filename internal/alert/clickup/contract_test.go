@@ -24,6 +24,10 @@ func TestContract(t *testing.T) {
 	rec := providertest.NewRecorder(t)
 	rec.Reply = func(w http.ResponseWriter, r providertest.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodGet {
+			_, _ = w.Write([]byte(`{"tasks":[],"last_page":true}`))
+			return
+		}
 		_, _ = w.Write([]byte(`{"id":"` + createdID + `"}`))
 	}
 	c := NewClickup(map[string]interface{}{
@@ -47,7 +51,7 @@ func taskKey(t *testing.T, r providertest.Request) string {
 	if m := taskRef.FindStringSubmatch(r.Path); m != nil {
 		return m[1]
 	}
-	if r.Method == http.MethodPost {
+	if r.Method == http.MethodPost || r.Method == http.MethodGet {
 		return createdID
 	}
 	t.Fatalf("request addresses no task: %s %s", r.Method, r.Path)
@@ -95,26 +99,30 @@ func checkComment(t *testing.T, r providertest.Request) {
 }
 
 func checkCreate(t *testing.T, reqs []providertest.Request) {
-	if len(reqs) != 1 {
-		t.Fatalf("create sent %d requests", len(reqs))
+	if len(reqs) != 2 {
+		t.Fatalf("create sent %d requests, want search and create",
+			len(reqs))
 	}
-	r := reqs[0]
+	search, r := reqs[0], reqs[1]
+	if search.Method != "GET" || search.Path != "/list/abc123/task" {
+		t.Fatalf("search = %s %s", search.Method, search.Path)
+	}
 	p := r.JSON(t)
 	name, _ := p["name"].(string)
-	desc, _ := p["markdown_description"].(string)
+	desc, _ := p["markdown_content"].(string)
 	if r.Method != "POST" || r.Path != "/list/abc123/task" ||
 		name == "" || desc == "" || p["priority"] != 2.0 {
 		t.Fatalf("create = %s %s %v", r.Method, r.Path, p)
 	}
 	if _, plain := p["description"]; plain {
-		t.Fatal("markdown text must go in markdown_description")
+		t.Fatal("markdown text must go in markdown_content")
 	}
 	if n := utf8.RuneCountInString(name); n > titleLimit {
 		t.Fatalf("name is %d runes, limit %d", n, titleLimit)
 	}
 	providertest.AssertOneLeadingEmoji(t, name)
-	if strings.Contains(desc, "Ref: kwatchkey") {
-		t.Fatal("ClickUp has no search, so no marker is expected")
+	if !strings.Contains(desc, "Ref: kwatchkey") {
+		t.Fatal("the create must carry the search marker")
 	}
 	providertest.AssertFencesBalanced(t, desc)
 }

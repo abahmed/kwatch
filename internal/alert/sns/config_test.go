@@ -30,6 +30,9 @@ func TestSnsRejectsIncompleteConfig(t *testing.T) {
 		"no key id": {"secretAccessKey": "s", "topicArn": "t"},
 		"no secret": {"accessKeyId": "a", "topicArn": "t"},
 		"no target": {"accessKeyId": "a", "secretAccessKey": "s"},
+		// A FIFO topic would reject every publish: no group id is sent.
+		"fifo topic": {"accessKeyId": "a", "secretAccessKey": "s",
+			"topicArn": "arn:aws:sns:us-east-1:000000000000:alerts.fifo"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			assert.Nil(t, NewSns(config, "dev", deps))

@@ -33,6 +33,11 @@ func (a *announcer) deliver(
 ) {
 	for _, d := range decisions {
 		a.releaseHeld(ctx, d.Incident.ID)
+		// A joint recovery's followers ride on their lead's message: a
+		// held announcement of theirs goes first, as for the lead.
+		for _, f := range a.joint[d.Incident.ID].followers {
+			a.releaseHeld(ctx, f.Incident.ID)
+		}
 		if investigable(d) && a.hold(d, now) {
 			continue
 		}
@@ -57,8 +62,10 @@ func investigable(d incident.Decision) bool {
 // hold holds announcement d until its investigation's result arrives or
 // outputWait passes. It reports false when there is nothing to wait for.
 func (a *announcer) hold(d incident.Decision, now time.Time) bool {
-	waits, unsent := a.awaitsEvidence(d, now)
-	if !waits {
+	var waits, unsent bool
+	if !contain("investigate", "plan", func() {
+		waits, unsent = a.awaitsEvidence(d, now)
+	}) || !waits {
 		return false
 	}
 	if d.Action == incident.Announce {
@@ -191,7 +198,11 @@ func (a *announcer) sendHeld(ctx context.Context, h heldAnnouncement) bool {
 	}
 	a.incidents.ReleaseAnnouncement(h.decision.Incident.ID)
 	a.incidents.ReleaseUpdate(h.decision.Incident.ID)
-	a.send(ctx, a.withEvidence(h.decision), h.decided)
+	// A panic loses this one message only. The hold is already
+	// released, so a restart does not announce it again forever.
+	contain("compose", "write-held", func() {
+		a.send(ctx, a.withEvidence(h.decision), h.decided)
+	})
 	return true
 }
 
@@ -229,10 +240,10 @@ func (a *announcer) send(
 	if written.Action == incident.Announce {
 		a.incidents.RecordSubject(d.Incident.ID, a.messages.Subject(written))
 	}
-	a.scopePaging(d, &msg)
 	if d.PagedAlready {
 		msg.SkipPaging = true
 	}
+	a.scopePaging(d, &msg)
 	if d.Action == incident.Resolve && msg.Carrier == "" && !msg.PagingOnly {
 		a.collect.NoteResolveDelivered(d.Incident.ID)
 	}
@@ -254,6 +265,8 @@ func (a *announcer) listedOnly(d incident.Decision, spoke bool) string {
 // message of its own reaches them and is remembered, and a resolve goes to
 // them only when an announcement did. A resolve of an incident that only a
 // digest, roll-up or summary carried would close an alert nobody opened.
+// A message that takes to the page tier an incident the pagers heard
+// below it raises the page under a second key (incident.RecordPagerTier).
 func (a *announcer) scopePaging(
 	d incident.Decision, msg *notification.Message,
 ) {
@@ -273,10 +286,14 @@ func (a *announcer) scopePaging(
 			return
 		}
 		a.incidents.RecordPaged(id, true)
+		msg.RaisesPage, msg.PageKeyed = a.incidents.RecordPagerTier(
+			id, d.Incident.Tier == incident.Page)
 		return
 	}
+	keyed := a.incidents.ClosePageKeys(id)
 	if a.incidents.Paged(id) {
 		a.incidents.RecordPaged(id, false)
+		msg.PageKeyed = keyed
 		return
 	}
 	msg.SkipPaging = true

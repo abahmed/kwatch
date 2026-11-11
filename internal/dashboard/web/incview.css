@@ -12,8 +12,6 @@
 .d-tab:hover { color: var(--text); }
 .d-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--text); }
 .d-badge { min-width: 1.5rem; padding: 0 7px; font-size: var(--t-micro); font-weight: 700; line-height: 1.5; text-align: center; border-radius: var(--radius-chip); background: var(--surface); color: var(--text-soft); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
-.d-tabsel { display: none; align-items: center; gap: 10px; margin: 0 0 12px; }
-.d-tabsel select { flex: 1; width: auto; margin: 0; }
 .d-panel { padding-top: 4px; }
 .d-panel:focus { outline: none; }
 .d-panel:focus-visible { outline: var(--focus-width) solid var(--text); outline-offset: 2px; }
@@ -23,14 +21,18 @@
 .sec > .fold-cap { margin: 0 0 8px; }
 .sec > .fold-body { padding: 4px 0 12px; }
 .d-panel > .d-alert { margin-top: 16px; }
-.bl-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-.bl-chips .chip + .chip { margin-left: 0; }
 .step-n { display: block; font-size: var(--t-micro); font-weight: 700; color: var(--text-muted); }
+/* On a phone the tabs stay one row that scrolls sideways, right under the
+   summary. */
 @media (max-width: 700px) {
-  .d-tabs { display: none; }
-  .d-tabsel { display: flex; }
-  .d-tabbar { border-bottom: 0; }
+  .d-tabbar { margin-top: 14px; }
+  .d-tabs { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .d-tab { flex: none; padding: 0 9px; gap: 6px; }
+  .d-tabs { gap: 0; }
 }
+/* Tabs waiting off the right edge: a fade and an arrow say the bar scrolls. */
+.d-tabbar { position: relative; }
+.d-tabbar.more::after { content: "›"; position: absolute; right: 0; top: 0; bottom: 1px; width: 44px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; background: linear-gradient(to right, transparent, var(--bg) 65%); font-size: 1.6rem; font-weight: 700; color: var(--text); pointer-events: none; }
 
 /* Summary card notes. */
 .d-caused, .d-blast { font-size: var(--t-small); overflow-wrap: anywhere; max-width: var(--measure); }
@@ -129,3 +131,20 @@
 .al-extra { display: grid; gap: 4px; margin-top: 8px; }
 .d-moved { display: grid; gap: 2px; margin-top: 10px; font-size: var(--t-small); overflow-wrap: anywhere; max-width: var(--measure); }
 .d-short { margin-top: 16px; }
+
+/* Objects listed in one issue (paging.js): the objects a removed
+   controller left behind, and the Overview's old problems. One line
+   each on a wide screen: kind · namespace/name, then what is wrong. */
+.lo-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.lo-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; padding: 6px 0; border-top: 1px solid var(--line); font-size: var(--t-small); }
+.lo-row:first-child { border-top: 0; }
+.lo-name { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; color: var(--text); }
+.lo-what { flex: 1 1 14rem; min-width: 0; color: var(--text-soft); }
+.lo-age { flex: none; color: var(--text-muted); font-size: var(--t-micro); }
+.lo-all { margin-top: 8px; }
+.lo-line { margin: 4px 0 0; font-size: var(--t-small); color: var(--text-soft); }
+/* Beside the alert level: why kwatch lowered, capped or held it. */
+.ds-lvl { margin: 6px 0 0; font-size: var(--t-small); color: var(--text-soft); overflow-wrap: anywhere; }
+
+/* "Show every time": a stamp never breaks inside. */
+.tl-stamp { white-space: nowrap; }

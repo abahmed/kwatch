@@ -242,6 +242,17 @@ func (m *Manager) enterFlapping(
 func (m *Manager) flapping(p *Incident, now time.Time) (Decision, bool) {
 	if len(p.Members) > 0 {
 		p.RecoveringSince = time.Time{}
+		if !now.Before(lastReturn(p).Add(m.cfg.MaxHold)) {
+			// Down without a break for as long as a flapper must stay
+			// healthy to resolve: it stopped flapping, it is down. Back
+			// to open, so its news (a revised cause, a worse stage) is
+			// told again.
+			p.State = Open
+			p.note(now, "steady: failing without a break for "+
+				m.cfg.MaxHold.String())
+			logLifecycle(p, "steady", "incident no longer flapping")
+			return m.open(p, now)
+		}
 		return m.flappingNews(p, now)
 	}
 	if p.RecoveringSince.IsZero() {
@@ -274,7 +285,7 @@ func (m *Manager) flappingNews(p *Incident, now time.Time) (Decision, bool) {
 		return m.decide(p, Update, ReasonMaterialChange), true
 	}
 	if wasAnnounced(p) && m.reminderDue(p, now) {
-		p.Reminded = now
+		p.noteReminded(now)
 		return m.decide(p, Update, ReasonReminder), true
 	}
 	return Decision{}, false
@@ -320,6 +331,7 @@ func (m *Manager) decide(p *Incident, action Action, why Reason) Decision {
 	p.Owner = m.ownerOf(p)
 	p.Owners, p.Spaces = m.reachOf(p)
 	p.Revision++
+	p.resetBackoff(why)
 	p.prevDigest, p.updateHeld = p.Digest, false
 	// A message shows the cause as it is now, held or not: record that
 	// one as told, so it is not news again 30 s later (causeMemory).
@@ -337,6 +349,7 @@ func (m *Manager) decide(p *Incident, action Action, why Reason) Decision {
 	d.PagedAlready = action == Announce && p.Delivery.OpenAtPagers()
 	if m.pagesFlapper(p, action, why) {
 		d.Incident.Tier = Page
+		p.widenRouteToPage(&d)
 	}
 	p.sent.decided(delivered)
 	return d

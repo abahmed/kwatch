@@ -1,5 +1,5 @@
 10:06:45 roll-up
-🟠 kwatch (prod-eu-1) found nine new problems at the same time. Node n1 has run out of pod IP addresses. billing-app0 in billing is failing: networking cannot be set up. billing-app1 in billing is failing: networking cannot be set up. media-app0 in media is failing: networking cannot be set up. media-app1 in media is failing: networking cannot be set up. Four more are not described here. Each gets its own message when it changes or resolves.
+🟠 kwatch (prod-eu-1) found nine new problems at the same time. Node n1 has run out of pod IP addresses. billing-app0 and billing-app1 in billing are failing: networking cannot be set up. media-app0 and media-app1 in media are failing: networking cannot be set up. Four more are not shown. Each one alerts on its own when it changes or resolves.
 🟠 kwatch (prod-eu-1) found nine new problems at the same time.
 | 🟠 **kwatch roll-up** · prod-eu-1 — 9 new problems at the same time
 |
@@ -11,17 +11,17 @@
 | - **media-app1** (**media**) — networking cannot be set up
 | - +4 more
 |
-| *Each gets its own message when it changes or resolves.*
+| *Each one alerts on its own when it changes or resolves.*
 10:08:30 material change
-🟠 Node n1 (prod-eu-1) has run out of pod IP addresses. 8 pods can't start: no free pod IPs. Their events say "failed to assign an IP address to container". Pod aws-node-n1 in kube-system fails with "failed to initialize ipamd: no IP addresses available". aws-node in kube-system; billing-app0 and billing-app1 in billing; and six others are affected as well.
-Also grouped: 9 not-ready pods, 1 crash loop
+🟠 Node n1 (prod-eu-1) has run out of pod IP addresses. 8 pods can't start: no free pod IPs. Their events say "failed to assign an IP address to container". Pod aws-node-n1 in kube-system fails with "failed to initialize ipamd: no IP addresses available". Affected: aws-node in kube-system; billing-app0 and billing-app1 in billing; and six others.
+Related alerts: 9 not-ready pods, 1 crash loop
 To check the node's conditions and recent events, run kubectl describe node n1
 🟠 Node n1 (prod-eu-1) has run out of pod IP addresses.
 | 🟠 Node n1 (**prod-eu-1**) has run out of pod IP addresses.
 | 8 pods can't start: no free pod IPs. Their events say `failed to assign an IP address to container`.
 | Pod **aws-node-n1** in **kube-system** fails with `failed to initialize ipamd: no IP addresses available`.
-| **aws-node** in **kube-system**; **billing-app0** and **billing-app1** in **billing**; and six others are affected as well.
-| Also grouped: 9 not-ready pods, 1 crash loop
+| Affected: **aws-node** in **kube-system**; **billing-app0** and **billing-app1** in **billing**; and six others.
+| Related alerts: 9 not-ready pods, 1 crash loop
 | To check the node's conditions and recent events, run
 | ```
 | kubectl describe node n1

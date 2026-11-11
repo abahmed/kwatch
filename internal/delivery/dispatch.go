@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"context"
+	"errors"
 )
 
 // jobKind names what a delivery carries: a plain operator message or an
@@ -58,10 +59,17 @@ func (m *Manager) dispatch(
 	record.pager, record.text = isPager(entry), sent
 	logSend(record)
 	m.noteSent(record, job)
-	if err != nil {
+	if err != nil && !endedByShutdown(ctx, err) {
 		m.failures.add(m.nowTime())
 	}
 	return err
+}
+
+// endedByShutdown reports whether a failed send was cut off by shutdown
+// (the worker's context or the send context was cancelled) and not by the
+// provider: it is not a failure of the provider.
+func endedByShutdown(ctx context.Context, err error) bool {
+	return ctx.Err() != nil || errors.Is(err, context.Canceled)
 }
 
 // dispatchMessage sends a plain operator message as text, cut to the
@@ -80,8 +88,9 @@ func (m *Manager) dispatchMessage(
 	if entry.maxBytes > 0 {
 		msg = truncateMsg(msg, entry.maxBytes)
 	}
-	requestCtx := m.requestContext(ctx)
 	return sendWithRetry(ctx, opts.counted(func() error {
+		requestCtx, done := m.beginSend(ctx)
+		defer done()
 		return p.SendMessage(requestCtx, msg)
 	}), opts.retry, p.Name())
 }

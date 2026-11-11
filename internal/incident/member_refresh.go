@@ -10,7 +10,12 @@ import "github.com/abahmed/kwatch/internal/detection"
 func (m *Manager) refreshMember(f detection.Finding) {
 	key := f.Key()
 	if p := m.incidents[m.byMember[key]]; p != nil {
-		if _, held := p.Members[key]; held {
+		if was, held := p.Members[key]; held {
+			if f.Leftover.IsZero() {
+				// A mark the incident layer gave (handlerLeftover)
+				// lasts as long as the member.
+				f.Leftover = was.Leftover
+			}
 			p.Members[key] = f
 		}
 	}

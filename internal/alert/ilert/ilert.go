@@ -3,7 +3,7 @@ package ilert
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"strings"
 
 	"k8s.io/klog/v2"
 
@@ -13,18 +13,21 @@ import (
 )
 
 const (
-	ilertAPIURL = "https://api.ilert.com/api/v1/events/push/%s"
+	// ilertAPIURL is the documented Events API endpoint. The integration key
+	// travels in the request body, never in the URL.
+	ilertAPIURL = "https://api.ilert.com/api/events"
 	// summaryLimit bounds the alert summary iLert shows in lists.
 	summaryLimit = 250
 )
 
+// ilertPayload holds only fields the Events API documents.
 type ilertPayload struct {
-	EventType string `json:"eventType"`
-	Summary   string `json:"summary"`
-	Message   string `json:"message"`
-	Priority  string `json:"priority,omitempty"`
-	Details   string `json:"details,omitempty"`
-	AlertKey  string `json:"alertKey,omitempty"`
+	IntegrationKey string `json:"integrationKey"`
+	EventType      string `json:"eventType"`
+	Summary        string `json:"summary"`
+	Priority       string `json:"priority,omitempty"`
+	Details        string `json:"details,omitempty"`
+	AlertKey       string `json:"alertKey,omitempty"`
 }
 
 type Ilert struct {
@@ -49,20 +52,35 @@ func NewIlert(
 		return nil
 	}
 
-	priority := "HIGH"
-	if p, ok := config["priority"].(string); ok && len(p) > 0 {
-		priority = p
-	}
+	priority := normalizePriority(config["priority"])
 
 	klog.InfoS("initializing ilert", "priority", priority)
 
 	return &Ilert{
 		sender:         transport.NewSender(dependencies),
-		url:            fmt.Sprintf(ilertAPIURL, integrationKey),
+		url:            ilertAPIURL,
 		integrationKey: integrationKey,
 		priority:       priority,
 		clusterName:    clusterName,
 	}
+}
+
+// normalizePriority maps the configured priority to one the Events API
+// accepts (HIGH or LOW). CRITICAL stays valid in configs and is sent as
+// HIGH; an unknown value falls back to HIGH.
+func normalizePriority(v interface{}) string {
+	p, ok := v.(string)
+	if !ok || len(p) == 0 {
+		return "HIGH"
+	}
+	switch strings.ToUpper(strings.TrimSpace(p)) {
+	case "HIGH", "CRITICAL":
+		return "HIGH"
+	case "LOW":
+		return "LOW"
+	}
+	klog.InfoS("unknown ilert priority, using HIGH", "priority", p)
+	return "HIGH"
 }
 
 // Name returns name of the provider
@@ -83,20 +101,62 @@ func (i *Ilert) SendIncident(
 			"component", "delivery", "provider", i.Name())
 		return nil
 	}
+	payload := i.buildPayload(m)
+	if !m.PageKeyed && !m.RaisesPage {
+		return i.send(ctx, payload)
+	}
+	paged := payload
+	paged.AlertKey = m.AlertKeyVariant(
+		i.clusterName, notification.PageKeySuffix, 0)
+	if m.RaisesPage {
+		paged.Priority = i.priority
+	}
+	if !m.Resolved() && !m.RaisesPage {
+		return i.send(ctx, paged)
+	}
+	// The raise opens the page key first, then closes the alert opened
+	// below the page tier: an open alert never changes its priority, so
+	// only the new alert pages. The resolve closes both keys.
+	if m.RaisesPage {
+		if err := i.send(ctx, paged); err != nil {
+			return err
+		}
+		return i.closeBase(ctx, closing(payload))
+	}
+	if err := i.closeBase(ctx, payload); err != nil {
+		return err
+	}
+	return i.send(ctx, paged)
+}
+
+// closeBase sends the resolve of the base key that goes with the page
+// key. A pager that never heard the incident below the page tier has no
+// alert under it, so an answer that only says so is no failure.
+func (i *Ilert) closeBase(ctx context.Context, payload ilertPayload) error {
+	if err := i.send(ctx, payload); err != nil && !closedAlready(err) {
+		return err
+	}
+	return nil
+}
+
+func (i *Ilert) buildPayload(m notification.Message) ilertPayload {
 	eventType := "ALERT"
 	if m.Resolved() {
 		eventType = "RESOLVE"
 	}
 	details := safetext.PlainWithOutput(
 		m.NoteText(), m.Output, "\n\n", safetext.DetailsLimit)
-	payload := ilertPayload{
-		EventType: eventType,
-		Summary:   notification.Truncate(m.ShortText(), summaryLimit),
-		Message:   m.NoteText(),
-		Details:   details,
-		Priority:  i.priorityFor(m),
-		AlertKey:  m.AlertKey(i.clusterName),
+	return ilertPayload{
+		IntegrationKey: i.integrationKey,
+		EventType:      eventType,
+		Summary:        notification.Truncate(m.ShortText(), summaryLimit),
+		Details:        details,
+		Priority:       i.priorityFor(m),
+		AlertKey:       m.AlertKey(i.clusterName),
 	}
+}
+
+func (i *Ilert) send(ctx context.Context, payload ilertPayload) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -106,6 +166,23 @@ func (i *Ilert) SendIncident(
 		ContentType: "application/json",
 	})
 	return err
+}
+
+// closing is the RESOLVE of the alert payload names.
+func closing(payload ilertPayload) ilertPayload {
+	payload.EventType, payload.Priority = "RESOLVE", ""
+	return payload
+}
+
+// closedAlready reports a refused resolve of the base key that only says
+// there was nothing open to close. The Events API documents 202 for an
+// accepted event (it logs "no open alert with key" and changes nothing)
+// and 400 for a bad request; a resolve of a key it never saw is not
+// documented as an error, so a 400, 404 or 422 on that one resolve counts
+// as done: the alert is not open, which is what the resolve asked for.
+func closedAlready(err error) bool {
+	code, ok := transport.StatusOf(err)
+	return ok && (code == 400 || code == 404 || code == 422)
 }
 
 // priorityFor follows the incident severity: only a page-tier incident

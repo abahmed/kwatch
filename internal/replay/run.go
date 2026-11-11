@@ -39,6 +39,10 @@ type Options struct {
 	// model at a steady point. It receives the simulated tick time.
 	Tick  func(at time.Time)
 	Every time.Duration
+	// Discard keeps no decisions, messages, times or carried decisions
+	// in the Result; they still reach deps.Sink. A soak that measures
+	// the heap over a long replay would otherwise measure the Result.
+	Discard bool
 }
 
 // CarriedDecision is a decision people heard through another message;
@@ -88,21 +92,7 @@ func Run(
 	// Workers (storage batching, shutdown deadlines) wait on simulated
 	// time too, so a replay never depends on how fast the host runs.
 	deps.Timer = sim.Timer
-	deps.Sink = func(
-		ctx context.Context, d incident.Decision, m notification.Message,
-	) {
-		if m.Carrier != "" {
-			result.Carried = append(result.Carried, CarriedDecision{
-				Decision: d, Carrier: m.Carrier, At: sim.Now()})
-			return
-		}
-		result.Decisions = append(result.Decisions, d)
-		result.Messages = append(result.Messages, m)
-		result.Times = append(result.Times, sim.Now())
-		if next != nil {
-			next(ctx, d, m)
-		}
-	}
+	deps.Sink = result.collect(sim, next, opts.Discard)
 	engine, err := pipeline.NewEngine(deps)
 	if err != nil {
 		return Result{}, err
@@ -126,6 +116,33 @@ func Run(
 	result.Incidents = engine.Incidents()
 	result.End = sim.Now()
 	return result, nil
+}
+
+// collect is the sink a replay gives the engine: it keeps each
+// decision in r (none when discard) and passes the ones people heard
+// directly on to next.
+func (r *Result) collect(
+	sim *simClock, next pipeline.Sink, discard bool,
+) pipeline.Sink {
+	return func(
+		ctx context.Context, d incident.Decision, m notification.Message,
+	) {
+		if m.Carrier != "" {
+			if !discard {
+				r.Carried = append(r.Carried, CarriedDecision{
+					Decision: d, Carrier: m.Carrier, At: sim.Now()})
+			}
+			return
+		}
+		if !discard {
+			r.Decisions = append(r.Decisions, d)
+			r.Messages = append(r.Messages, m)
+			r.Times = append(r.Times, sim.Now())
+		}
+		if next != nil {
+			next(ctx, d, m)
+		}
+	}
 }
 
 func endOf(log Log, opts Options) time.Time {

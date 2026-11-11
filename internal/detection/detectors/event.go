@@ -39,7 +39,8 @@ func (Event) Detect(
 		deadline := noteDeadline(e, note)
 		if ctx.Now.After(deadline) || !note.Warning || !failing ||
 			overcomeAtStart(e, note) ||
-			recoveredBefore(e, note) || bootNoise(ctx, e, note) ||
+			recoveredBefore(e, note) || jobCreateOvercome(ctx, e, note) ||
+			bootNoise(ctx, e, note) ||
 			daemonNodeNoise(ctx, e, note) || staleNodeNote(e, note) {
 			continue
 		}

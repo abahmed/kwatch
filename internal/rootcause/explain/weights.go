@@ -68,6 +68,12 @@ const (
 	// CoverageMinDependents is the fewest dependents for a share to
 	// mean anything; one of one is not a pattern.
 	CoverageMinDependents = 2
+	// SelfQuotedWeight is added to full coverage when a workload is
+	// blamed for itself and every failing dependent quotes its own
+	// error (its exit words or last log line). All replicas failing
+	// with the program's own words is evidence about the program, not
+	// only the absence of a culprit upstream.
+	SelfQuotedWeight = 0.1
 )
 
 // Exclusivity: the effect's siblings that do not depend on the

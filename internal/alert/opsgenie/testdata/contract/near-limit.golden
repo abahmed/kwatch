@@ -4,7 +4,7 @@ Authorization: GenieKey <redacted>
 
 {
   "alias": "kwatch-dev-p-big",
-  "description": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[14995 runes sha256:483fc2dee489fc4757aadf3e]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\npa…",
+  "description": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[14991 runes sha256:1bd8bff3a781b23145607ca6]…xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…",
   "details": {
     "Cluster": "dev",
     "Namespace": "shop",

@@ -89,6 +89,9 @@ type counters struct {
 	rewrites  atomic.Uint64
 	fileBytes atomic.Int64
 	freeBytes atomic.Int64
+	// logicalBytes is the stored data the last pass measured; with
+	// fileBytes it shows how sparse the file's pages are (reclaim.go).
+	logicalBytes atomic.Int64
 	// rewriteDue is set while the file waits for a startup rewrite.
 	rewriteDue atomic.Bool
 }
@@ -127,6 +130,10 @@ type Stats struct {
 	// FileBytes is the size of the state file after the last pass, and
 	// FreeBytes the part of it that is free pages inside the file.
 	FileBytes, FreeBytes int64
+	// LogicalBytes is the data stored in it, as the last pass measured.
+	// The file is mapped into memory, so FileBytes, not LogicalBytes, is
+	// what reading it can cost in resident memory.
+	LogicalBytes int64
 }
 
 // Stats returns the counters since Open.
@@ -140,5 +147,6 @@ func (s *Store) Stats() Stats {
 		Rewrites:       s.counters.rewrites.Load(),
 		FileBytes:      s.counters.fileBytes.Load(),
 		FreeBytes:      s.counters.freeBytes.Load(),
+		LogicalBytes:   s.counters.logicalBytes.Load(),
 	}
 }

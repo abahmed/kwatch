@@ -54,6 +54,10 @@
     var drawer = KW.drawer(main, {
       ids: function () { return KW.$$("tr[data-id]", tableEl).map(function (tr) { return tr.dataset.id; }); },
       terms: function () { return KW.searchTerms(f.q); },
+      // Where the rows sit in the whole list, so the drawer says
+      // "12 of 40" as the issue page does.
+      offset: function () { return Math.max(0, (f.page || 1) - 1) * (f.pageSize || 0); },
+      total: function () { return (last && last.total) || 0; },
       moved: function (id) {
         openId = lastRow = id;
         writeURL(true);

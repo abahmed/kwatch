@@ -1,0 +1,14 @@
+{
+  "name": "scale-down-moved-pod-never-starts",
+  "description": "Three of five nodes are removed within two minutes; the only pod of a routed Deployment moves and its replacement never finds room.",
+  "root": "node//n1",
+  "tier": "page",
+  "bootHeld": true,
+  "maxMessages": 2,
+  "alone": true,
+  "mustNotBlame": [
+    "deployment/shop/web"
+  ],
+  "ambiguous": true,
+  "tail": "30m0s"
+}

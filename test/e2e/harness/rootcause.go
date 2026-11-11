@@ -203,9 +203,9 @@ func rootMatches(actual, want string) bool {
 	return a[2] == w[2]
 }
 
-// failingAgain is the decision reason of an update that reopens an
+// FailingAgain is the decision reason of an update that reopens an
 // incident Kwatch resolved earlier, keeping its ID.
-const failingAgain = "failing again"
+const FailingAgain = "failing again"
 
 // staleIncidents maps an incident opened before the scenario to the time
 // it became the scenario's own: never, or when it was reopened.
@@ -236,7 +236,7 @@ func openedBefore(entries []AuditEntry, since time.Time) staleIncidents {
 	for _, entry := range entries {
 		from, stale := older[entry.Incident]
 		if !stale || entry.Action != "update" ||
-			entry.DecisionReason != failingAgain ||
+			entry.DecisionReason != FailingAgain ||
 			entry.Timestamp.Before(since) || !entry.Timestamp.Before(from) {
 			continue
 		}

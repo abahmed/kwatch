@@ -196,3 +196,39 @@ func (e *Environment) WaitForKwatchAge(
 			return len(list.Items) > 0, nil
 		})
 }
+
+// KwatchRestarts returns how often the containers of the Kwatch Pods have
+// restarted so far.
+func (e *Environment) KwatchRestarts(ctx context.Context) (int32, error) {
+	list, err := e.Client.CoreV1().Pods(e.Config.KwatchNamespace).List(
+		ctx, metav1.ListOptions{LabelSelector: "app=kwatch"})
+	if err != nil {
+		return 0, err
+	}
+	var restarts int32
+	for _, pod := range list.Items {
+		for _, status := range pod.Status.ContainerStatuses {
+			restarts += status.RestartCount
+		}
+	}
+	return restarts, nil
+}
+
+// WaitForKwatchRestart waits until the Kwatch containers have restarted
+// more often than before, and Kwatch is healthy again.
+func (e *Environment) WaitForKwatchRestart(
+	ctx context.Context, before int32,
+) error {
+	err := wait.PollUntilContextCancel(ctx, 2*time.Second, true,
+		func(ctx context.Context) (bool, error) {
+			restarts, err := e.KwatchRestarts(ctx)
+			return err == nil && restarts > before, nil
+		})
+	if err != nil {
+		return fmt.Errorf("wait for Kwatch to restart: %w", err)
+	}
+	return wait.PollUntilContextCancel(ctx, 2*time.Second, true,
+		func(ctx context.Context) (bool, error) {
+			return e.AssertHealthy(ctx) == nil, nil
+		})
+}

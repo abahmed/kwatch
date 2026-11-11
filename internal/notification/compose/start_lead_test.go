@@ -11,6 +11,7 @@ import (
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/notification"
 	"github.com/abahmed/kwatch/internal/rootcause"
 	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
@@ -50,8 +51,9 @@ func TestStartLeadNamesTheVersionTheErrorAndWhatServes(t *testing.T) {
 	p := stuckRelease(startLine, true, incident.Notify)
 	msg := Writer{}.Write(announce(p), writerNow)
 	assert.Contains(t, msg.Title, "api in shop: the new version "+
-		"(api:2.3) can't start; the previous version is still "+
-		"serving: it stops at start with")
+		"(api:2.3) can't start (it stops at start with")
+	assert.Contains(t, msg.Title, "); the previous version is still "+
+		"serving")
 	assert.Contains(t, msg.Title, "setting 'Store' is required")
 	assert.NotContains(t, msg.Title, "is down")
 	assert.NotContains(t, msg.Title, "too little time")
@@ -87,4 +89,27 @@ func TestStartLeadForAStuckRollout(t *testing.T) {
 	msg := Writer{}.Write(announce(p), writerNow)
 	assert.Contains(t, msg.Title, "api in shop: the new version keeps "+
 		"failing; the previous version is still serving")
+}
+
+// The Short drops the quoted start error, so a provider that cuts it
+// short still says the previous version serves; the CPU stays.
+func TestStartLeadShortDropsTheQuote(t *testing.T) {
+	p := stuckRelease(startLine, true, incident.Notify)
+	msg := Writer{}.Write(announce(p), writerNow)
+	assert.Contains(t, msg.Title, "setting 'Store' is required")
+	assert.Equal(t, notification.MarkerNotify+" api in shop: the new "+
+		"version (api:2.3) can't start; the previous version is still "+
+		"serving.", msg.Short)
+
+	arch := stuckRelease("exec /usr/bin/sh: exec format error", true,
+		incident.Notify)
+	for k, m := range arch.Members {
+		m.Evidence = append(m.Evidence, detection.Evidence{
+			Label: detection.EvidenceArchNode, Value: "arm64 node n1"})
+		arch.Members[k] = m
+	}
+	short := Writer{}.Write(announce(arch), writerNow).Short
+	assert.Contains(t, short, "can't start (it is not built for this "+
+		"node's CPU (arm64)); the previous version")
+	assert.NotContains(t, short, "exec format error")
 }

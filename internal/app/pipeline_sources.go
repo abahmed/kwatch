@@ -22,6 +22,7 @@ func typedSourceConfig(
 		Maintenance: maintenanceAnnotations(maintenance),
 		Dynamic:     dynamic,
 		DigestKey:   digestKey,
+		Answered:    deps.clients.Answers.Count,
 		// watch.secrets: false leaves Secrets unwatched.
 		DisableSecrets: !deps.runtime.Application().WatchSecrets,
 	}
@@ -51,6 +52,7 @@ func dynamicSourceConfig(
 		Submit:      submit,
 		Maintenance: maintenanceAnnotations(maintenance),
 		Noted:       model.NotedKinds,
+		Answered:    deps.clients.Answers.Count,
 	}
 }
 

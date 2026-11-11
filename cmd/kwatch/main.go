@@ -11,6 +11,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/app"
 	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/logsetup"
 	"github.com/abahmed/kwatch/internal/version"
 
 	// Embed the IANA zone database: the runtime image has none, and
@@ -36,6 +37,7 @@ func runWithFlags() int {
 	klog.InitFlags(nil)
 	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+	logsetup.Apply(flag.CommandLine)
 
 	if *showVersion {
 		fmt.Println(version.Short())

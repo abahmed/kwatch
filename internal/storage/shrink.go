@@ -114,11 +114,18 @@ func compactOversized(
 	return db, nil
 }
 
+// newFilePageSize is the page size of a state file this package
+// creates; 0 is the OS page size. bbolt reads an existing file's page
+// size from the file. Tests set it to run with another OS's pages.
+var newFilePageSize int
+
 // copyTo writes the live data of db into a new file at tmp. On error tmp
-// is removed and db is untouched.
+// is removed and db is untouched. The copy keeps db's page size.
 func copyTo(db *bolt.DB, tmp string) error {
 	_ = os.Remove(tmp)
-	dst, err := bolt.Open(tmp, 0o600, &bolt.Options{Timeout: openTimeout})
+	dst, err := bolt.Open(tmp, 0o600, &bolt.Options{
+		Timeout: openTimeout, PageSize: db.Info().PageSize,
+	})
 	if err != nil {
 		return err
 	}

@@ -71,3 +71,26 @@ func TestEngineJointRecoveryKeepsHeldPageThreadsAndAlerts(t *testing.T) {
 		t.Fatalf("a thread or an open alert is never merged: %+v", *seen)
 	}
 }
+
+// A follower of a joint recovery whose own update is still held for its
+// investigation: the update goes out before the recovery that names it,
+// as it does for any incident, never after its "Recovered".
+func TestEngineJointRecoveryReleasesHeldFollowerFirst(t *testing.T) {
+	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
+	e, seen := rollupHarness(t, now)
+	update := resolved("b", true)
+	update.Action, update.Reason = incident.Update, incident.ReasonMaterialChange
+	update.Incident.State = incident.Open
+	e.announcer.held = append(e.announcer.held, heldAnnouncement{
+		decision: update, decided: now, until: now.Add(time.Minute)})
+
+	e.announcer.announce(context.Background(), now, []incident.Decision{
+		resolved("a", true), resolved("b", true), resolved("c", true)})
+
+	if len(*seen) == 0 || (*seen)[0].Resolved() {
+		t.Fatalf("the held update must come first: %+v", *seen)
+	}
+	if len(e.announcer.held) != 0 {
+		t.Fatalf("still held after its recovery: %+v", e.announcer.held)
+	}
+}

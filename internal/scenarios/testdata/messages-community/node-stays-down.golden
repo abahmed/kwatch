@@ -1,6 +1,6 @@
 10:03:45 settled
-🟠 Node n1 (prod-eu-1) is NotReady for about two minutes.
-Pro shows how to fix it. Get Pro free during early access: kwatch.dev/pro
-🟠 Node n1 (prod-eu-1) is NotReady for about two minutes.
-| 🟠 Node n1 (**prod-eu-1**) is NotReady for about two minutes.
-| *Pro shows how to fix it. Get Pro free during early access: kwatch.dev/pro*
+🟠 Node n1 (prod-eu-1) has not been ready for about two minutes.
+Pro shows how to check it, free during early access: kwatch.dev/pro
+🟠 Node n1 (prod-eu-1) has not been ready for about two minutes.
+| 🟠 Node n1 (**prod-eu-1**) has not been ready for about two minutes.
+| *Pro shows how to check it, free during early access: kwatch.dev/pro*

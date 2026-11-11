@@ -11,6 +11,8 @@ func DefaultConfig() *Config {
 		// Informers are event-driven; a periodic resync is a cheap safety net
 		// for a watch event lost during an API server disruption.
 		ResyncSeconds: 300,
+		// Old problems age out after 30 days (incident/old_problem.go).
+		OldProblemDays: 30,
 		Maintenance: MaintenanceConfig{
 			Enabled:         true,
 			Annotation:      "kwatch.dev/maintenance",

@@ -84,6 +84,7 @@ type AppConfig struct {
 	ClusterName           string `json:"clusterName,omitempty"`
 	DisableStartupMessage *bool  `json:"disableStartupMessage,omitempty"`
 	LogFormatter          string `json:"logFormatter,omitempty"`
+	Environment           string `json:"environment,omitempty"`
 }
 
 type SilenceRule struct {
