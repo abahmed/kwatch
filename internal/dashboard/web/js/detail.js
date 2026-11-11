@@ -1,11 +1,13 @@
-/* kwatch dashboard: the issue page. On top, always shown, the summary
-   from the API's `summary`, as plain questions: the short title (the
-   full one a click away) and a
-   status line, What's wrong?, Why?, What should I do? and Who was
-   alerted? (incsum.js). Below it, tabs (incpanel.js) hold everything
-   else, one section each. The template's folded sections are turned
-   into those sections once, by layout; the modules that fill them keep
-   their data- hooks. */
+/* kwatch dashboard: the issue page. On top, always shown, the header
+   card: level and state, the short title, where and since when, the
+   whole title when the heading had to shorten it, and the copy
+   buttons. Under it, tabs (incpanel.js) hold everything else: Summary
+   (the API's `summary` as plain questions, What's wrong?, Why? and
+   What should I do? (incsum.js), and What kwatch found), then one
+   section each in the other tabs; Who was alerted? opens the Alerts
+   tab. The drawer keeps the questions in the card. The template's
+   folded sections are turned into those sections once, by layout; the
+   modules that fill them keep their data- hooks. */
 (function () {
   "use strict";
   var KW = window.KW;
@@ -13,6 +15,7 @@
 
   /* ISSUE_TABS: key, label, shortcut key and the sections it holds. */
   KW.ISSUE_TABS = [
+    ["summary", "Summary", "s", []],
     ["timeline", "Timeline", "t", ["changes", "timeline"]],
     ["evidence", T.proof, "p", ["probes", "waiting", "logs", "containers", "warnings", "node", "why"]],
     ["impact", "Impact", "i", ["leftovers", "blast", "others", "traffic", "related", "map"]],
@@ -47,39 +50,49 @@
 
   function hook(tag, cls, name) { var n = KW.el(tag, cls); n.dataset[name] = ""; return n; }
 
-  /* ROWS: the summary's questions. */
-  var ROWS = [["what", T.ask.what], ["why", T.ask.why], ["next", T.ask.todo], ["told", T.ask.told]];
+  /* ROWS: the summary's questions; Who was alerted? is apart, for
+     the Alerts tab. */
+  var ROWS = [["what", T.ask.what], ["why", T.ask.why], ["next", T.ask.todo]];
 
-  /* top builds the summary card from the template's, keeping its
-     chips, title, copy buttons and notes. */
-  function top(old) {
-    var sum = KW.el("section", "d-sum ds");
-    sum.setAttribute("aria-labelledby", "d-title");
-    var head = sum.appendChild(KW.el("div", "ds-top"));
-    head.appendChild(KW.$("[data-chips]", old));
-    head.appendChild(KW.$(".d-acts", old));
-    sum.appendChild(KW.$("[data-title]", old));
-    var full = sum.appendChild(hook("details", "ds-full", "fullTitle"));
-    full.hidden = true;
-    full.appendChild(KW.el("summary", "", "Full title"));
-    full.appendChild(KW.el("p", "ds-full-t"));
-    var stage = sum.appendChild(KW.el("div", "ds-stage"));
-    stage.appendChild(hook("p", "ds-status", "dsStatus"));
-    stage.appendChild(hook("p", "ds-where", "dsWhere"));
-    var notes = sum.appendChild(KW.el("div", "ds-notes"));
-    notes.appendChild(hook("ul", "ds-dyn", "dsDyn"));
-    notes.appendChild(KW.$("[data-caused]", old));
-    notes.appendChild(hook("div", "d-moved", "moved")).hidden = true;
-    notes.appendChild(KW.$("[data-looked]", old));
-    notes.appendChild(hook("p", "ev-cap d-short", "short")).hidden = true;
-    var dl = sum.appendChild(KW.el("dl", "ds-grid"));
-    ROWS.forEach(function (r) {
+  function rows(dl, list) {
+    list.forEach(function (r) {
       var div = dl.appendChild(KW.el("div", "ds-row ds-r-" + r[0]));
       div.dataset.dsRow = r[0];
       div.appendChild(KW.el("dt", "", r[1]));
       div.appendChild(KW.el("dd"));
     });
-    sum.appendChild(hook("nav", "ds-more", "dsMore")).hidden = true;
+    return dl;
+  }
+
+  /* top builds the summary card from the template's, keeping its
+     chips, title, copy buttons and notes. The header: the level and
+     state chips with the copy buttons, the short title, one line of
+     where and since when, and the whole title when it was cut. Then
+     the summary's body (.ds-body: the stepper, the notes and the
+     questions) and Who was alerted? (.ds-alerted), which the issue
+     page moves into the Summary and Alerts tabs (incpanel.js). */
+  function top(old) {
+    var sum = KW.el("section", "d-sum ds");
+    sum.setAttribute("aria-labelledby", "d-title");
+    var head = sum.appendChild(KW.el("header", "ds-head"));
+    var bar = head.appendChild(KW.el("div", "ds-top"));
+    bar.appendChild(KW.$("[data-chips]", old));
+    bar.appendChild(KW.$(".d-acts", old));
+    head.appendChild(KW.$("[data-title]", old));
+    head.appendChild(hook("ul", "ds-where", "dsWhere"));
+    head.appendChild(hook("p", "ds-lead", "dsLead")).hidden = true;
+    var body = sum.appendChild(KW.el("div", "ds ds-body"));
+    var stage = body.appendChild(KW.el("div", "ds-stage"));
+    var notes = body.appendChild(KW.el("div", "ds-notes"));
+    notes.appendChild(hook("ul", "ds-dyn", "dsDyn"));
+    notes.appendChild(KW.$("[data-caused]", old));
+    notes.appendChild(hook("div", "d-moved", "moved")).hidden = true;
+    notes.appendChild(KW.$("[data-looked]", old));
+    notes.appendChild(hook("p", "ev-cap d-short", "short")).hidden = true;
+    rows(body.appendChild(KW.el("dl", "ds-grid")), ROWS);
+    body.appendChild(hook("nav", "ds-more", "dsMore")).hidden = true;
+    rows(sum.appendChild(KW.el("dl", "ds-grid ds-alerted")),
+      [["told", T.ask.told]]);
     return sum;
   }
 
@@ -131,34 +144,63 @@
   }
 
   /* KW.issueHeading: the heading of an issue: the short title lists
-     use (KW.shortTitle, the Overview's rule), the whole title one
-     click away. */
+     use (KW.shortTitle, the Overview's rule). The whole sentence is the
+     description line under it. */
   KW.issueHeading = function (inc) { return KW.shortTitle(heading(inc), inc); };
 
-  function sep(p) { p.appendChild(KW.el("span", "ds-sep", " · ")); }
+  /* item adds one part of the where line; CSS puts a dot between. */
+  function item(ul, node, cls) {
+    var li = ul.appendChild(KW.el("li", cls || ""));
+    li.appendChild(typeof node === "string" ? document.createTextNode(node) : node);
+    return li;
+  }
 
-  /* header: the alert level, the whole title and, under the status
-     line, "shop · deployment/api" with names that wrap at / and . */
+  /* since: "for 40 min (since 03:28)", or "lasted 12 min, resolved
+     14:02" on a resolved issue. */
+  function since(inc) {
+    var span = KW.el("span");
+    function add(text) { span.appendChild(document.createTextNode(text)); }
+    if (inc.state === "resolved" && KW.valid(inc.resolvedAt)) {
+      add("lasted " + KW.lasted(inc.firstSeen, inc.resolvedAt) + ", resolved ");
+      span.appendChild(KW.hm(inc.resolvedAt));
+      return span;
+    }
+    var long = inc.state !== "settling" && KW.forLong(inc.firstSeen);
+    if (!KW.valid(inc.firstSeen)) return long ? KW.el("span", "", long) : null;
+    add(long && long !== "now" ? long + " (since " : "since ");
+    span.appendChild(KW.hm(inc.firstSeen));
+    if (long && long !== "now") add(")");
+    return span;
+  }
+
+  /* header: the alert level and the state as chips, the short title,
+     and one line: "shop · deployment/api · for
+     40 min (since 03:28) · failed again 2 times", names wrapping at /
+     and . The state's details (users still served, …) follow it. */
   function header(root, inc) {
     var chips = KW.$("[data-chips]", root);
     chips.textContent = "";
-    chips.appendChild(KW.severityChip(inc.severity, inc.state === "resolved" ? "Was: " : ""));
+    // "Was Urgent" only for a resolved issue people were alerted about;
+    // one that settled on its own shows its level greyed beside
+    // "Settled on its own".
+    chips.appendChild(KW.isUntold(inc) ? KW.settledChip(inc.severity) :
+      KW.severityChip(inc.severity, inc.state === "resolved" ? "Was " : ""));
+    chips.appendChild(KW.issueStateChip(inc));
     if (KW.isUntold(inc)) chips.appendChild(KW.untoldMark());
     KW.levelLine(chips.parentNode, inc);
-    var h1 = KW.$("[data-title]", root), full = heading(inc), short = KW.issueHeading(inc);
-    h1.textContent = short;
-    h1.title = full;
-    var more = KW.$("[data-full-title]", root);
-    more.hidden = short === full;
-    KW.$(".ds-full-t", more).textContent = full;
-    var p = KW.$("[data-ds-where]", root), o = KW.obj(inc.workloadKind, inc.namespace, inc.workload);
-    p.textContent = "";
-    p.appendChild(KW.wrapName(inc.namespace || "whole cluster"));
-    if (o) { sep(p); p.appendChild(KW.wrapName(o)); }
+    var h1 = KW.$("[data-title]", root);
+    h1.textContent = KW.issueHeading(inc);
+    h1.title = heading(inc);
+    var ul = KW.$("[data-ds-where]", root), o = KW.obj(inc.workloadKind, inc.namespace, inc.workload);
+    ul.textContent = "";
+    item(ul, KW.wrapName(inc.namespace || "whole cluster"), "ds-ns");
+    if (o) item(ul, KW.wrapName(o), "ds-obj");
+    var when = since(inc);
+    if (when) item(ul, when, "ds-when");
     if (inc.state !== "resolved" && inc.repeatCount > 0) {
-      sep(p);
-      p.appendChild(document.createTextNode(KW.failedAgain(inc.repeatCount).toLowerCase()));
+      item(ul, KW.failedAgain(inc.repeatCount).toLowerCase());
     }
+    KW.issueStatus(root, inc).forEach(function (b) { item(ul, b, "ds-impact"); });
   }
 
   /* KW.summaryRow empties row key, sets its question and shows it or
@@ -171,14 +213,37 @@
     return dd;
   };
 
-  /* what: "What's wrong?". It hides when it only repeats the title
-     (ignoring case and punctuation). */
+  function bare(x) { return String(x || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
+
+  /* core: a title's words without "in <namespace>" (and its cluster
+     note), which the line under the title already names. */
+  function core(x, inc) {
+    var s = String(x || ""), ns = inc.namespace;
+    if (ns) {
+      var esc = ns.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      s = s.replace(new RegExp(" in " + esc + "( \\([^)]*\\))?(?=[ :.;,]|$)", "g"), "");
+    }
+    return bare(s);
+  }
+
+  /* what: under the short title, one description line, only when the
+     heading had to shorten the title: the whole title (a title that
+     only adds "in <namespace>" counts as the same). The plain sentence
+     of what is wrong is the "What's wrong?" question of the Summary
+     tab; when it only says what the title already says, the question
+     says so rather than repeat it. It also carries the objects a
+     removed controller left behind. */
   function what(root, inc) {
-    function bare(x) { return String(x || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
+    var short = core(KW.issueHeading(inc), inc), full = heading(inc);
     var w = sum(inc).what && KW.problemTitle(sum(inc).what, inc);
-    var show = !!bare(w) && bare(w) !== bare(heading(inc));
-    var dd = KW.summaryRow(root, "what", T.ask.what, show || inc.leftoverObjects > 0);
-    if (show) KW.hideMarks(dd.appendChild(KW.el("p", "ds-what")), w);
+    var lead = KW.$("[data-ds-lead]", root), cut = core(full, inc) !== short;
+    lead.textContent = "";
+    lead.hidden = !cut;
+    if (cut) KW.hideMarks(lead, full);
+    var said = !core(w, inc) || core(w, inc) === short || (cut && core(w, inc) === core(full, inc));
+    var dd = KW.summaryRow(root, "what", T.ask.what, true);
+    if (!said) KW.hideMarks(dd.appendChild(KW.el("p", "ds-what")), w);
+    else if (!(inc.leftoverObjects > 0)) dd.appendChild(KW.el("p", "ds-sub", T.ask.asTitle));
     KW.leftoverLine(dd, root, inc);
   }
 

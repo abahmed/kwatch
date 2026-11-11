@@ -1,5 +1,5 @@
 10:03:15 settled
-🟠 orders in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "fatal: orders worker lost its socket". Its last run lasted ten seconds. To read the output of the last crash, run kubectl logs orders-5936569f-a -c app -n shop --previous
+🟠 orders in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "fatal: orders worker lost its socket". Its last run lasted ten seconds. To read the output of the last crash, run kubectl logs deploy/orders -c app -n shop --previous
 🟠 orders in shop (prod-eu-1) keeps crashing.
 | 🟠 **orders** in **shop** (**prod-eu-1**) keeps crashing.
 | Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
@@ -7,10 +7,10 @@
 | Its last run lasted ten seconds.
 | To read the output of the last crash, run
 | ```
-| kubectl logs orders-5936569f-a -c app -n shop --previous
+| kubectl logs deploy/orders -c app -n shop --previous
 | ```
 10:06:15 settled
-🟠 cart in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "fatal: cart worker lost its socket". Its last run lasted ten seconds. To read the output of the last crash, run kubectl logs cart-58d28062-a -c app -n shop --previous
+🟠 cart in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "fatal: cart worker lost its socket". Its last run lasted ten seconds. To read the output of the last crash, run kubectl logs deploy/cart -c app -n shop --previous
 🟠 cart in shop (prod-eu-1) keeps crashing.
 | 🟠 **cart** in **shop** (**prod-eu-1**) keeps crashing.
 | Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
@@ -18,5 +18,5 @@
 | Its last run lasted ten seconds.
 | To read the output of the last crash, run
 | ```
-| kubectl logs cart-58d28062-a -c app -n shop --previous
+| kubectl logs deploy/cart -c app -n shop --previous
 | ```

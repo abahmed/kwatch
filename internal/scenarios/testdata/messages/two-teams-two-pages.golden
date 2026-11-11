@@ -9,7 +9,7 @@
 |
 | *Each one alerts on its own when it changes or resolves.*
 10:02:15 settled
-🔴 api in billing (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "fatal: validator lost its own dependency". Its last run lasted ten seconds. It runs a single replica. To read the output of the last crash, run kubectl logs api-4dffe2cd-a -c app -n billing --previous
+🔴 api in billing (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "fatal: validator lost its own dependency". Its last run lasted ten seconds. It runs a single replica. To read the output of the last crash, run kubectl logs deploy/api -c app -n billing --previous
 🔴 api in billing (prod-eu-1) keeps crashing.
 | 🔴 **api** in **billing** (**prod-eu-1**) keeps crashing.
 | Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
@@ -18,10 +18,10 @@
 | It runs a single replica.
 | To read the output of the last crash, run
 | ```
-| kubectl logs api-4dffe2cd-a -c app -n billing --previous
+| kubectl logs deploy/api -c app -n billing --previous
 | ```
 10:02:15 settled
-🔴 api in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "fatal: uploader lost its own dependency". Its last run lasted ten seconds. It runs a single replica. To read the output of the last crash, run kubectl logs api-4dffe2cd-a -c app -n shop --previous
+🔴 api in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "fatal: uploader lost its own dependency". Its last run lasted ten seconds. It runs a single replica. To read the output of the last crash, run kubectl logs deploy/api -c app -n shop --previous
 🔴 api in shop (prod-eu-1) keeps crashing.
 | 🔴 **api** in **shop** (**prod-eu-1**) keeps crashing.
 | Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
@@ -30,5 +30,5 @@
 | It runs a single replica.
 | To read the output of the last crash, run
 | ```
-| kubectl logs api-4dffe2cd-a -c app -n shop --previous
+| kubectl logs deploy/api -c app -n shop --previous
 | ```

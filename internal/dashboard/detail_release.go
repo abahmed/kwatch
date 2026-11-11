@@ -37,6 +37,11 @@ type ReleaseSummary struct {
 	// that opened no issue (a regression) is still seen. Incident is
 	// empty for it.
 	Wrong []WrongRelease `json:"wrong"`
+	// WindowHours is the window counted (releaseWindow), and
+	// MatchMinutes how long after a release an issue on its workload
+	// is linked to it (release_issues.go).
+	WindowHours  int `json:"windowHours,omitempty"`
+	MatchMinutes int `json:"matchMinutes,omitempty"`
 }
 
 // maxWrong bounds Wrong.
@@ -51,6 +56,9 @@ type WrongRelease struct {
 	At        time.Time       `json:"at"`
 	Verdict   release.Verdict `json:"verdict"`
 	Incident  string          `json:"incident,omitempty"`
+	// Issue is the issue it opened, resolved or not: Incident, else
+	// one on the workload that opened just after (release_issues.go).
+	Issue *SimilarRef `json:"issue,omitempty"`
 }
 
 // releaseWindow is the window of the Overview's line.

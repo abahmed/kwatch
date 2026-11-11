@@ -1,5 +1,5 @@
 10:02:15 settled
-🟠 api in shop (prod-eu-1) keeps running out of memory. Its memory rose steadily from 200Mi to 512Mi over three hours before the kill. Its last run lasted three hours; four restarts since its pod was created one hour ago. Fix: raise the memory limit of container app in deployment/api above 512Mi. To read the output of the last crash, run kubectl logs api-d461a92b-a -c app -n shop --previous
+🟠 api in shop (prod-eu-1) keeps running out of memory. Its memory rose steadily from 200Mi to 512Mi over three hours before the kill. Its last run lasted three hours; four restarts since its pod was created one hour ago. Fix: raise the memory limit of container app in deployment/api above 512Mi. To read the output of the last crash, run kubectl logs deploy/api -c app -n shop --previous
 🟠 api in shop (prod-eu-1) keeps running out of memory.
 | 🟠 **api** in **shop** (**prod-eu-1**) keeps running out of memory.
 | Its memory rose steadily from 200Mi to 512Mi over three hours before the kill.
@@ -7,5 +7,5 @@
 | Fix: raise the memory limit of container app in deployment/api above 512Mi.
 | To read the output of the last crash, run
 | ```
-| kubectl logs api-d461a92b-a -c app -n shop --previous
+| kubectl logs deploy/api -c app -n shop --previous
 | ```

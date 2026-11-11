@@ -194,7 +194,7 @@ func overviewPaging(old int) map[string]any {
 	return ov
 }
 
-// D2 and D4: one quiet line counts the old problems and opens them;
+// D2 and D4: one quiet line counts the old problems, listed under it;
 // the status tile says paging is held until about when.
 func TestBrowserOverviewOldProblemsAndHold(t *testing.T) {
 	srv := listsServer(t, map[string]any{
@@ -202,15 +202,14 @@ func TestBrowserOverviewOldProblemsAndHold(t *testing.T) {
 	tab := pagingTab(t, srv, 1280, 800, "/", ".ov-hold")
 	got := evalString(t, tab, `(() => {
   const q = (s) => document.querySelector(s);
-  const closed = !q(".ov-old .lo-row").checkVisibility();
-  q(".ov-old summary").click();
-  return [q(".ov-old summary").textContent, closed,
+  const closed = !document.querySelector(".ov-olds details");
+  return [q(".ov-old-h").textContent, closed,
     q(".ov-old .lo-row").checkVisibility(),
     q(".ov-old .lo-row").textContent, q(".ov-hold").textContent].join("|");
 })()`)
 	p := strings.Split(got, "|")
-	want := []string{"3 old problems not shown (already failing for 30+ " +
-		"days when kwatch first saw them) Show them", "true", "true",
+	want := []string{"3 old problems not shown in the issues (already " +
+		"failing for 30+ days when kwatch first saw them)", "true", "true",
 		"Job · shop/report-00The job failedfor about 2 years"}
 	for i, w := range want {
 		if p[i] != w {

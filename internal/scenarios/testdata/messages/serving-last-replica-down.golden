@@ -1,5 +1,5 @@
 10:01:15 settled
-🔴 front in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "panic: config: listen address is empty". Its last run lasted ten seconds. Service front can't serve traffic. To read the output of the last crash, run kubectl logs front-79a45689-a -c app -n shop --previous
+🔴 front in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "panic: config: listen address is empty". Its last run lasted ten seconds. Service front can't serve traffic. To read the output of the last crash, run kubectl logs deploy/front -c app -n shop --previous
 🔴 front in shop (prod-eu-1) keeps crashing.
 | 🔴 **front** in **shop** (**prod-eu-1**) keeps crashing.
 | Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
@@ -8,5 +8,5 @@
 | Service **front** can't serve traffic.
 | To read the output of the last crash, run
 | ```
-| kubectl logs front-79a45689-a -c app -n shop --previous
+| kubectl logs deploy/front -c app -n shop --previous
 | ```

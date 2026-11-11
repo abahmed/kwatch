@@ -4,25 +4,35 @@
    "Containers" (table, restarts, usage now) and affected objects.
    Tokens come from app.css, so light, dark and high contrast follow. */
 
-/* The summary card. */
+/* The summary card. Its header: the level and state chips with the
+   copy buttons on one row, the whole title (wrapped, never cut), one
+   line of where and since when, and the plain sentence of what is
+   wrong. */
 .ds { padding: 18px 22px 16px; }
+.ds-head { display: flex; flex-direction: column; gap: 8px; padding-bottom: 14px; }
+/* On the issue page the card holds only its header; the questions
+   (.ds-body) and Who was alerted? (.ds-alerted) sit in the Summary and
+   Alerts tabs, without the card's padding. The drawer keeps them in. */
+.d-sum > .ds-head:last-child { padding-bottom: 0; }
+.ds.ds-body { padding: 0; }
+.d-panel > .ds-body > .ds-grid > .ds-row:first-child, .d-panel > .ds-alerted > .ds-row:first-child { border-top: 0; }
+.d-panel > .ds-alerted { margin: 6px 0 0; }
+.d-panel > .ds-body > .ds-notes { margin-top: 14px; }
 .ds-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
-.ds-top .chips { margin-top: 0; }
-.ds-top .btn { min-height: 34px; }
-.ds h1 { margin-top: 8px; }
-.ds-full { margin-top: 6px; font-size: var(--t-small); color: var(--text-soft); }
-.ds-full > summary { cursor: pointer; width: fit-content; color: var(--text-muted); font-weight: 600; }
-.ds-full-t { margin: 4px 0 0; max-width: 75ch; overflow-wrap: anywhere; color: var(--text); }
-.ds-where { margin-top: 6px; font-size: var(--t-small); color: var(--text-soft); overflow-wrap: anywhere; }
+.ds-top .chips { margin-top: 0; align-items: center; }
+.ds-top .d-acts { display: inline-flex; gap: 8px; margin-left: auto; }
+.ds-top .btn { min-height: 32px; padding: 0 12px; font-size: var(--t-micro); }
+.ds-head .ds-lvl { margin: -2px 0 0; }
+.ds h1 { margin: 2px 0 0; font-size: clamp(1.25rem, 1.1rem + 0.9vw, 1.75rem); line-height: 1.25; letter-spacing: -0.02em; max-width: 60ch; overflow-wrap: anywhere; text-wrap: pretty; }
+.ds-where { display: flex; flex-wrap: wrap; align-items: baseline; list-style: none; margin: 0; padding: 0; font-size: var(--t-small); color: var(--text-soft); overflow-wrap: anywhere; }
+.ds-where li { min-width: 0; }
+.ds-where li:not(:last-child)::after { content: "\00b7"; padding: 0 8px; color: var(--text-muted); }
 .ds-where .mono { font-size: var(--t-small); color: var(--text); }
-.ds-where b { font-weight: 600; color: var(--text); }
-.ds-sep { color: var(--text-muted); }
-.ds-stage { margin-top: 8px; }
-.ds h1 { font-size: clamp(1.25rem, 1.1rem + 0.9vw, 1.75rem); line-height: 1.25; letter-spacing: -0.02em; max-width: 75ch; overflow-wrap: break-word; }
-.ds-status { margin: 0; font-size: 1.0625rem; color: var(--text-soft); }
-.ds-status .ds-state { color: var(--text); }
-.ds-status .ds-state.s-open, .ds-status .ds-state.s-flapping { color: var(--failing); }
-.ds-status .ds-state.s-recovering { color: var(--resolved); }
+.ds-where .ds-impact { color: var(--text); font-weight: 600; }
+.ds-lead { margin: 2px 0 0; max-width: 75ch; overflow-wrap: anywhere; font-size: 1.0625rem; line-height: 1.45; color: var(--text); }
+.ds-state.s-open, .ds-state.s-flapping { font-weight: 700; }
+.ds-stage { margin: 0; }
+.ds-stage:not(:has(> :not([hidden]))) { display: none; }
 .ds-stage .al-open { margin-top: 8px; }
 .ds-stage .al-open p { font-size: var(--t-small); font-weight: 400; color: var(--text-soft); }
 /* Notes: one muted line under the stepper; each note one line, its
@@ -66,7 +76,6 @@
   .ds-raw-t { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 12em; overflow: auto; cursor: text; }
 }
 .ds-raw-t.is-open { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 12em; overflow: auto; cursor: text; }
-.ds-copy.btn { min-height: 30px; padding: 0 10px; font-size: var(--t-micro); flex: none; }
 .ds-r-next .cmd { margin-top: 6px; }
 .ds-steps-b { display: inline-block; margin-top: 6px; font-size: var(--t-small); text-align: left; }
 .ds-told { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 18px; }

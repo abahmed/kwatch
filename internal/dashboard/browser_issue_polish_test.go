@@ -39,8 +39,9 @@ func polishPage(
 	}
 }
 
-// The heading is the short title; the whole one is a click away, and
-// on a phone the heading takes three lines at most.
+// The heading is the short title, and on a phone it takes three lines
+// at most; the whole title is the description line under it, never cut,
+// with no "Full title" fold.
 func TestBrowserIssueHeadingIsShort(t *testing.T) {
 	srv := stubIssueServer(t, stubDetail())
 	text, done := polishPage(t, srv.URL, "/issues/stub-1",
@@ -49,8 +50,7 @@ func TestBrowserIssueHeadingIsShort(t *testing.T) {
 	got := text(`(() => { const h = document.querySelector("h1");
 	  const lines = h.getBoundingClientRect().height /
 	    parseFloat(getComputedStyle(h).lineHeight);
-	  return h.textContent.length + "|" + Math.round(lines) + "|" +
-	    h.title.length; })()`)
+	  return h.textContent.length + "|" + Math.round(lines); })()`)
 	parts := strings.Split(got, "|")
 	if parts[0] == "" || len(stubTitle) <= atoiOr(parts[0]) ||
 		atoiOr(parts[0]) > 80 {
@@ -59,15 +59,13 @@ func TestBrowserIssueHeadingIsShort(t *testing.T) {
 	if atoiOr(parts[1]) > 3 {
 		t.Errorf("heading takes %s lines on a phone", parts[1])
 	}
-	if atoiOr(parts[2]) != len(stubTitle) {
-		t.Errorf("tooltip is not the whole title: %q", got)
-	}
-	if got := text(`(() => { const d = document.querySelector(
-	  "[data-full-title]"); const open = d.open;
-	  d.querySelector("summary").click();
-	  return open + "|" + d.open + "|" + d.querySelector(".ds-full-t").
-	    textContent; })()`); got != "false|true|"+stubTitle {
-		t.Errorf("the full title is not one click away: %q", got)
+	if got := text(`(() => {
+	  const l = document.querySelector("[data-ds-lead]");
+	  const cut = l.scrollWidth > l.clientWidth + 1;
+	  return (document.querySelector("[data-full-title]") ? "fold|" : "") +
+	    (l.hidden ? "hidden|" : "") + (cut ? "cut|" : "") + l.textContent;
+	})()`); got != stubTitle {
+		t.Errorf("the description line is %q, want the whole title", got)
 	}
 }
 
@@ -170,12 +168,13 @@ func TestBrowserAlertsWhyThisLevel(t *testing.T) {
 	}
 }
 
-// The top card shows the acknowledge command, to copy, never a button
-// that acts; once acknowledged it is gone.
-func TestBrowserTopCardShowsAckCommand(t *testing.T) {
+// Who was alerted?, at the top of the Alerts tab, shows the
+// acknowledge command, to copy, never a button that acts; once
+// acknowledged it is gone.
+func TestBrowserAlertsTabShowsAckCommand(t *testing.T) {
 	srv := stubIssueServer(t, stubDetail())
-	text, done := polishPage(t, srv.URL, "/issues/stub-1",
-		".ds-r-told", 1280)
+	text, done := polishPage(t, srv.URL, "/issues/stub-1#alerts",
+		"[data-panel=alerts] > .ds-alerted .ds-r-told", 1280)
 	defer done()
 	got := text(`(() => { const r = document.querySelector(".ds-r-told");
 	  const c = r.querySelector("code, .cmd");
@@ -189,7 +188,7 @@ func TestBrowserTopCardShowsAckCommand(t *testing.T) {
 	d["ack"] = map[string]any{"by": "sam", "on": "Deployment/shop/api",
 		"since": time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)}
 	srv2 := stubIssueServer(t, d)
-	text2, done2 := polishPage(t, srv2.URL, "/issues/stub-1",
+	text2, done2 := polishPage(t, srv2.URL, "/issues/stub-1#alerts",
 		".ds-r-told", 1280)
 	defer done2()
 	got = text2(`document.querySelector(".ds-r-told").textContent`)

@@ -94,6 +94,7 @@ func (c detailContext) addContext(d *IncidentDetail, p incident.Incident) {
 		// Stored changes outlive the change history, so they are
 		// listed even before the inventory is read.
 		d.Changes, d.FixedBy, cut = changesOf(c.model, p, c.now)
+		d.Onset = p.Onset()
 		countCut(d, func(t *DetailTruncation) { t.Changes += cut })
 	}
 	c.addMoment(d, p)

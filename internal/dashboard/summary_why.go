@@ -12,8 +12,23 @@ import (
 // causeSentence says the cause in plain words, from the cause record
 // and not from the engine's own sentence ("deployment x explains 4
 // failures"): the release or change it started after, else the object
-// that is the common cause of the failing ones.
+// that is the common cause of the failing ones. A cause the evidence
+// proves (provenCause) comes first, as the title says it, and the
+// timing follows it.
 func causeSentence(d *IncidentDetail, p incident.Incident) string {
+	timing := startedSentence(d, p)
+	if proven := provenCause(p); proven != "" {
+		return strings.TrimSpace(proven + " " + sentence(timing))
+	}
+	if timing != "" {
+		return timing
+	}
+	return commonCause(p)
+}
+
+// startedSentence is the release or change the incident started
+// after, "" without one.
+func startedSentence(d *IncidentDetail, p incident.Incident) string {
 	onset := p.Onset()
 	if r := d.Release; r != nil && !r.At.IsZero() {
 		return startedAfter(onset, r.At, "the release") +
@@ -23,7 +38,7 @@ func causeSentence(d *IncidentDetail, p incident.Incident) string {
 		return startedAfter(onset, c.At, "a change to "+
 			kindDisplay(c.Entity)+" "+c.Entity.Name)
 	}
-	return commonCause(p)
+	return ""
 }
 
 // commonCause names the object that fails the others with it.

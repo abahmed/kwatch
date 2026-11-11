@@ -1,0 +1,11 @@
+{
+  "name": "exec-format-error-release-retitle",
+  "description": "A release to an amd64-only image crash-loops with \"exec format error\" on an arm64 node, some runs leave no log line, then the old pod goes and the Service has no ready endpoint: the CPU stays the cause.",
+  "root": "deployment/shop/reports",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

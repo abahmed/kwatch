@@ -149,7 +149,8 @@
     return worker().then(function (r) {
       if (r) return r.showNotification(n.title, opts);
       var note = new window.Notification(n.title, opts);
-      note.onclick = function () {
+      note.onclick = function (e) {
+        if (e && e.preventDefault) e.preventDefault();
         window.focus();
         open(n.url);
         note.close();
@@ -173,7 +174,7 @@
   function open(url) {
     if (typeof url !== "string" || url.charAt(0) !== "/" ||
         url.charAt(1) === "/" || url.charAt(1) === "\\") return;
-    if (KW.go && location.pathname !== url) KW.go(url);
+    if (KW.go && location.pathname + location.search !== url) KW.go(url);
   }
 
   // A click on a notification while a tab is open moves that tab.

@@ -61,13 +61,19 @@ func overviewAnswer(urgent, attention, low int, bad bool) map[string]any {
 			"tiles": []any{}, "more": 0}}
 	rel := map[string]any{"total": 3, "bad": 0}
 	if bad {
-		rel = map[string]any{"total": 3, "bad": 2, "wrong": []any{
-			map[string]any{"name": "api", "namespace": "shop",
-				"kind": "deployment", "at": listAgo(2 * time.Hour),
-				"verdict": "failed", "incident": "inc-001"},
-			map[string]any{"name": "worker", "namespace": "shop",
-				"kind": "deployment", "at": listAgo(3 * time.Hour),
-				"verdict": "down"}}}
+		rel = map[string]any{"total": 4, "bad": 3, "windowHours": 24,
+			"matchMinutes": 30, "wrong": []any{
+				map[string]any{"name": "api", "namespace": "shop",
+					"kind": "deployment", "at": listAgo(2 * time.Hour),
+					"verdict": "failed", "incident": "inc-001"},
+				map[string]any{"name": "worker", "namespace": "shop",
+					"kind": "deployment", "at": listAgo(3 * time.Hour),
+					"verdict": "down"},
+				map[string]any{"name": "cart", "namespace": "shop",
+					"kind": "deployment", "at": listAgo(4 * time.Hour),
+					"verdict": "failed", "issue": map[string]any{
+						"id": "inc-009", "title": "cart in shop is not ready",
+						"state": "resolved"}}}}
 		ins["afterChange"] = map[string]any{"count": 1, "total": 5,
 			"issues": []any{map[string]any{"id": "inc-001",
 				"title":    "api in shop: the new version can't start",
@@ -147,9 +153,10 @@ func TestBrowserOverviewStatusLine(t *testing.T) {
 	}
 }
 
-// Bad releases and changes that caused issues are one block: the
-// failed release and the issue that followed it are one line, a release
-// with no issue is another, and nothing shows when all is well.
+// Bad releases and changes are one block: the failed release and the
+// issue that followed it are one line, a release whose issue is
+// resolved links it, a release with no issue says so for its window
+// and links its workload's issues, and nothing shows when all is well.
 func TestBrowserOverviewMergesReleasesAndChanges(t *testing.T) {
 	actx, _ := browserSetup(t)
 	srv := listsServer(t, map[string]any{
@@ -164,7 +171,8 @@ func TestBrowserOverviewMergesReleasesAndChanges(t *testing.T) {
 	}
 	got, err := chromedp.Run(tab, chromedp.Evaluate[string](`
   document.querySelector(".ov-rel .ov-h2").textContent + "|" +
-  document.querySelectorAll(".ov-rel li").length + "|" +
+  document.querySelectorAll(".ov-rel li").length + "/" +
+  document.querySelectorAll(".ov-rel li .ov-rel-name[href]").length + "|" +
   [...document.querySelectorAll(".ov-rel li")].map((l) => l.textContent).
     join(" / ") + "|" +
   document.body.textContent.includes("Recent bad releases") + "|" +
@@ -173,12 +181,14 @@ func TestBrowserOverviewMergesReleasesAndChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := strings.SplitN(got, "|", 5)
-	if p[0] != "Bad releases and changes that caused issues" || p[1] != "2" {
+	if p[0] != "Bad releases (last 24 h) and changes behind active "+
+		"issues" || p[1] != "3/3" {
 		t.Errorf("block is %q with %s rows", p[0], p[1])
 	}
 	for _, want := range []string{"api: the new version can't start",
 		"The release failed", "image a → b", "worker in shop",
-		"No issue was opened"} {
+		"No issue on worker opened in the 30 minutes after it.",
+		"See its issues", "cart in shop", "Its issue is resolved."} {
 		if !strings.Contains(p[2], want) {
 			t.Errorf("block lacks %q: %q", want, p[2])
 		}
@@ -224,7 +234,8 @@ func TestBrowserOverviewWeekSaysTheNoise(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := "49 of 70 issues settled on their own before anyone was " +
-		"alerted.|Alerted,Resolved,Alerted the on-call person," +
+		"alerted.|Alerted,Resolved this week,Alerted the on-call " +
+		"person," +
 		"Median time to resolve an alerted issue"
 	if got != want {
 		t.Errorf("week says %q, want %q", got, want)

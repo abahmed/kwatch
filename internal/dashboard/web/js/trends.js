@@ -25,8 +25,7 @@
   };
 
   function table(rows, untold) {
-    var d = KW.el("details", "ip-table");
-    d.appendChild(KW.el("summary", "", "Show as a table"));
+    var d = KW.el("div", "ip-table");
     var tb = d.appendChild(KW.el("table", "ip-t"));
     tb.appendChild(KW.el("caption", "sr-only", "Issues per day, last 7 days"));
     var hr = tb.appendChild(KW.el("thead")).appendChild(KW.el("tr"));
@@ -67,10 +66,10 @@
     function col(g, x, n, cls) {
       if (n) g.appendChild(svg("rect", { x: x, y: base - h(n), width: colW, height: h(n), rx: 3 }, cls));
     }
-    function num(g, x, n) {
+    function num(g, x, n, cls) {
       // No "0" labels: the tooltip and the table still say 0.
       if (!n) return;
-      var t = svg("text", { x: x + colW / 2, y: base - h(n) - 4, "text-anchor": "middle" }, "viz-cnum");
+      var t = svg("text", { x: x + colW / 2, y: base - h(n) - 4, "text-anchor": "middle" }, "viz-cnum " + cls);
       t.textContent = KW.num(n);
       g.appendChild(t);
     }
@@ -85,14 +84,41 @@
         g.appendChild(svg("rect", { x: x0, y: base - ph, width: colW, height: ph, rx: 3 }, "viz-paged"));
       }
       col(g, x1, d.resolved, "viz-res");
-      num(g, x0, d.opened);
-      num(g, x1, d.resolved);
+      num(g, x0, d.opened, "viz-cnum-open");
+      num(g, x1, d.resolved, "viz-cnum-res");
       var day = svg("text", { x: i * W + W / 2, y: H - 6, "text-anchor": "middle" }, "viz-clabel");
       day.textContent = d.label;
       g.appendChild(day);
       s.appendChild(g);
     });
     return s;
+  }
+
+  /* overlaps: whether any two of the shown labels touch. */
+  function overlaps(texts) {
+    var boxes = texts.filter(function (t) { return t.style.display !== "none"; })
+      .map(function (t) { return t.getBoundingClientRect(); });
+    for (var i = 0; i < boxes.length; i++) {
+      for (var j = i + 1; j < boxes.length; j++) {
+        var a = boxes[i], b = boxes[j];
+        if (a.left < b.right + 2 && b.left < a.right + 2 &&
+          a.top < b.bottom && b.top < a.bottom) return true;
+      }
+    }
+    return false;
+  }
+
+  /* thinLabels: the column numbers, measured once drawn, so a narrow
+     card (a phone) or a 4-digit count never prints "192193": all of
+     them when they fit, else the opened ones only, else none (each
+     column's tooltip and "Show as a table" still have every number). */
+  function thinLabels(chart) {
+    var all = [].slice.call(chart.querySelectorAll(".viz-cnum"));
+    var res = all.filter(function (t) { return t.classList.contains("viz-cnum-res"); });
+    if (!overlaps(all)) return;
+    res.forEach(function (t) { t.style.display = "none"; });
+    if (!overlaps(all)) return;
+    all.forEach(function (t) { t.style.display = "none"; });
   }
 
   /* KW.weekTotals: the week's openings, and how many of them settled
@@ -111,7 +137,7 @@
   /* KW.weekCard: the week's chart, its key and its table; the totals
      are in the numbers above it (ovinsights.js). */
   KW.weekCard = function (days, t) {
-    var c = V.card("Day by day", "", true);
+    var c = V.card("Day by day", "Issues opened and resolved each day.", true);
     // Untold openings (settled on their own) are in opened, never in
     // paged; a day without its own count takes the trends' for that date.
     var opened = 0, resolved = 0, untold = 0, byDate = {};
@@ -139,16 +165,44 @@
       if (!w || w === drawn) return;
       drawn = w;
       wrap.textContent = "";
-      wrap.appendChild(weekChart(rows, said, w));
+      thinLabels(wrap.appendChild(weekChart(rows, said, w)));
     }
     // Drawn once the card is on the page and again when its width changes.
     if (window.ResizeObserver) new ResizeObserver(draw).observe(wrap);
     else wrap.appendChild(weekChart(rows, said, 640));
-    c.appendChild(V.legend([{ cls: "s-open", label: "Opened" }, { cls: "s-page", label: "Of those, alerted the on-call person" },
-      { cls: "s-ok", label: "Resolved" }]));
-    c.appendChild(table(rows, untold));
+    var key = c.appendChild(V.legend([{ cls: "s-open", label: "Opened" },
+      { cls: "s-page", label: "Of those, alerted the on-call person" }, { cls: "s-ok", label: "Resolved" }]));
+    var tab = c.appendChild(table(rows, untold));
+    tab.hidden = true;
+    viewSwitch(c, function (asTable) {
+      wrap.hidden = key.hidden = asTable;
+      tab.hidden = !asTable;
+      if (!asTable) draw();
+    });
     return c;
   };
+
+  /* viewSwitch: "Chart | Table", two views of the same numbers (not a
+     fold: the Overview hides nothing behind a click). show(asTable)
+     swaps them. */
+  function viewSwitch(c, show) {
+    // In the card's header, on the right of its title.
+    var sw = KW.$(".pcard-top", c).appendChild(KW.el("div", "tz ip-view pcard-act"));
+    sw.setAttribute("role", "group");
+    sw.setAttribute("aria-label", "Show the days as");
+    ["Chart", "Table"].forEach(function (label, i) {
+      var b = sw.appendChild(KW.el("button", "tz-b", label));
+      b.type = "button";
+      b.dataset.view = label.toLowerCase();
+      b.setAttribute("aria-pressed", i ? "false" : "true");
+      b.addEventListener("click", function () {
+        KW.$$(".tz-b", sw).forEach(function (x) {
+          x.setAttribute("aria-pressed", x === b ? "true" : "false");
+        });
+        show(i === 1);
+      });
+    });
+  }
 
   function link(href, text) {
     var a = KW.el("a", "tr-link", text);
@@ -159,7 +213,8 @@
 
   /* KW.keptComingBack: the issues that opened more than once. */
   KW.keptComingBack = function (list) {
-    var c = V.card("Kept coming back");
+    var c = V.card("Kept coming back", "Issues that opened more than once this week.", false,
+      V.seeAll("/issues?status=all&sort=repeats&dir=desc"));
     var ol = KW.el("ol", "tr-list");
     list.forEach(function (n) {
       var li = KW.el("li", "tr-issue");

@@ -264,7 +264,9 @@ type trendDuration struct {
 }
 
 // resolvedIn lists the occurrences of p resolved within the week: its
-// earlier occurrences from History and p itself when it is resolved.
+// earlier occurrences from History and p itself when it is resolved
+// and was not superseded, as resolves and resolvesTold count them, so
+// the median is over the same issues as the week's resolved count.
 func resolvedIn(p incident.Incident, w trendWeek) []trendDuration {
 	var out []trendDuration
 	add := func(opened, resolved time.Time, told bool) {
@@ -278,7 +280,7 @@ func resolvedIn(p incident.Incident, w trendWeek) []trendDuration {
 	for _, o := range p.History {
 		add(o.Opened, o.Resolved, o.Heard)
 	}
-	if p.State == incident.Resolved {
+	if p.State == incident.Resolved && p.SupersededBy == "" {
 		add(p.Opened, p.Resolved, !p.Untold())
 	}
 	return out

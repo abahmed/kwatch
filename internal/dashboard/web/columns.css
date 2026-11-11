@@ -8,7 +8,7 @@
 .ttools + .tablewrap { margin-top: 8px; }
 .cols { position: relative; }
 .cols.is-open .cols-btn { background: var(--text); color: var(--bg); border-color: var(--text); }
-.cols-pop { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: min(21.25rem, calc(100vw - 32px)); padding: 14px 14px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-card); font-size: var(--t-small); }
+.cols-pop { position: absolute; right: 0; top: calc(100% + 8px); z-index: var(--z-popover); width: min(21.25rem, calc(100vw - 32px)); padding: 14px 14px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-card); font-size: var(--t-small); }
 .cols-h { font-size: var(--t-micro); font-weight: 600; color: var(--text-muted); }
 .cols-presets { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 10px; }
 .cols-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
@@ -27,20 +27,20 @@
 .cols-foot .link { min-height: 28px; font-size: var(--t-small); }
 
 /* Column headings: sort, menu, resize edge. */
-.itable th { position: sticky; top: 0; z-index: 2; padding-right: 12px; overflow: hidden; }
+.itable th { position: sticky; top: 0; z-index: var(--z-sticky); padding-right: 12px; overflow: hidden; }
 .itable th .it-sort, .itable th .it-th { max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
 .it-th { display: inline-block; vertical-align: middle; }
 /* The menu button shows over the heading's end on hover or focus. */
 .it-menu { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-chip); background: var(--surface); color: var(--text-muted); opacity: 0; }
 .itable th:hover .it-menu, .it-menu:focus-visible, .it-menu[aria-expanded="true"] { opacity: 1; }
 .it-menu:hover, .it-menu[aria-expanded="true"] { background: var(--line); color: var(--text); }
-.it-rs { position: absolute; right: 0; top: 0; bottom: 0; z-index: 1; width: 8px; cursor: col-resize; touch-action: none; }
+.it-rs { position: absolute; right: 0; top: 0; bottom: 0; z-index: var(--z-raised); width: 8px; cursor: col-resize; touch-action: none; }
 .it-rs::after { content: ""; position: absolute; right: 0; top: 10px; bottom: 10px; width: 2px; border-radius: var(--radius-chip); background: transparent; }
 .itable th:hover .it-rs::after { background: var(--line); }
 .it-rs:hover::after, .it-rs:focus-visible::after, .is-resizing .it-rs::after { background: var(--text); }
 .it-rs:focus-visible { outline: none; }
 @media (hover: none) { .it-menu { opacity: 1; } }
-.colmenu { position: fixed; z-index: 40; list-style: none; margin: 0; padding: 6px; min-width: 11.25rem; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-card); font-size: var(--t-small); }
+.colmenu { position: fixed; z-index: var(--z-overlay); list-style: none; margin: 0; padding: 6px; min-width: 11.25rem; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius-card); font-size: var(--t-small); }
 .colmenu-i { display: flex; align-items: center; min-height: var(--ctl); padding: 0 10px; border-radius: var(--radius-chip); cursor: pointer; }
 .colmenu-i:hover, .colmenu-i:focus { background: var(--surface); outline: none; }
 .colmenu-i:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }

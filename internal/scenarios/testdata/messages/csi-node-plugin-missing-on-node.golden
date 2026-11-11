@@ -1,9 +1,9 @@
 10:11:15 settled
-🟠 ebs-csi-node in kube-system (prod-eu-1) is failing; it has no pod on that node, which might be related. Affected: api in shop. To see the object's state and events, run kubectl describe pod api-fcee2e1a-a -n shop
+🟠 ebs-csi-node in kube-system (prod-eu-1) is failing; it has no pod on that node, which might be related. Affected: api in shop. To see the pods' state and events, run kubectl describe pods api- -n shop
 🟠 ebs-csi-node in kube-system (prod-eu-1) is failing; it has no pod on that node, which might be related.
 | 🟠 **ebs-csi-node** in **kube-system** (**prod-eu-1**) is failing; it has no pod on that node, which might be related.
 | Affected: **api** in **shop**.
-| To see the object's state and events, run
+| To see the pods' state and events, run
 | ```
-| kubectl describe pod api-fcee2e1a-a -n shop
+| kubectl describe pods api- -n shop
 | ```

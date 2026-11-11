@@ -232,7 +232,9 @@
         li.appendChild(KW.el("b", "", KW.num(x[0])));
         li.appendChild(document.createTextNode(" " + x[1]));
       });
-      c.appendChild(KW.el("p", "kp-ns", t.allNamespaces && !t.excludedNamespaces ?
+      // The namespaces line only without the details below, which
+      // have their own.
+      if (!cov) c.appendChild(KW.el("p", "kp-ns", t.allNamespaces && !t.excludedNamespaces ?
         "All namespaces watched (" + KW.num(t.namespaces) + ")." :
         KW.plural(t.namespaces, "namespace", "namespaces") + " watched" +
         (t.excludedNamespaces ? ", " + KW.num(t.excludedNamespaces) + " left out" : "") + "."));
@@ -243,14 +245,16 @@
         "kwatch hasn't finished reading the cluster yet."));
     }
     if (cov) {
-      var fold = c.appendChild(KW.el("details", "fold kp-fold"));
-      fold.id = "cov";
-      fold.appendChild(KW.el("summary", "", KW.coverageDenied(cov) ? "What it can't read, and the permission to add" : "Details"));
-      var body = fold.appendChild(KW.el("div", "fold-body"));
+      // Shown in full, not folded: what kwatch reads, by namespace and
+      // kind, and what it can't read with the permission to add.
+      var body = c.appendChild(KW.el("div", "kp-cov"));
+      body.id = "cov";
+      if (KW.coverageDenied(cov)) {
+        body.appendChild(KW.el("h3", "kp-cov-h", "What it can't read, and the permission to add"));
+      }
       KW.coverageDraw(body, cov);
-      return { card: c, fold: fold };
     }
-    return { card: c, fold: null };
+    return c;
   }
 
   /* channel: one alert channel: its state in words, what it sent in
@@ -316,7 +320,8 @@
     return c;
   }
 
-  /* about: version, plan and what it watches: a slim card across the page. */
+  /* about: version, plan and what it watches: a slim card across the
+     top of the page. */
   function about(s) {
     var c = KW.viz.card("About this kwatch");
     c.classList.add("pwide", "kp-about");
@@ -340,6 +345,9 @@
     var tags = { c: "" }, k = null, cov = null, s = null, opened = false, covErr = false;
     var pg = KW.pageView(main, { title: "kwatch health", tab: "kwatch health · kwatch",
       sub: "Is kwatch itself working, can it see your cluster, and do alerts get out.", read: read, conn: draw });
+    // About comes first: which kwatch this is (version, plan, last
+    // check, what it watches); then what needs a look and the verdict.
+    var aboutBox = pg.body.appendChild(KW.el("div", "kp-top"));
     var notes = pg.body.appendChild(KW.el("div", "ov-notes"));
     var sum = pg.body.appendChild(KW.el("section"));
     var grid = pg.body.appendChild(KW.el("div", "pgrid"));
@@ -357,21 +365,23 @@
         notes.hidden = false;
       }
       blindNotices(notes, k);
+      aboutBox.textContent = "";
+      if (s) aboutBox.appendChild(about(s));
       summary(sum, s, k, KW.selfIssues(s, k), loading);
-      var wasOpen = KW.$("#cov", grid), keep = wasOpen ? wasOpen.open : null;
       grid.textContent = "";
       // Half-width cards in pairs of about the same height: kwatch
-      // itself beside its resources, alerts beside what it watches; an
-      // odd one out takes the whole row. About goes across the bottom.
-      var cv = coverage(k, cov, covErr);
-      var halves = [itself(s, k), resources(k) || stateFile(k), delivery(k, s), cv.card]
+      // itself beside its resources, then where alerts go; an odd one
+      // out takes the whole row. What it watches, shown in full, goes
+      // across the bottom.
+      var halves = [itself(s, k), resources(k) || stateFile(k), delivery(k, s)]
         .filter(Boolean);
       halves.forEach(function (c) { grid.appendChild(c); });
       if (halves.length % 2) halves[halves.length - 1].classList.add("pwide");
-      if (s) grid.appendChild(about(s));
-      if (cv.fold) {
-        cv.fold.open = keep !== null ? keep : KW.coverageDenied(cov) || location.hash === "#cov";
-        if (!opened && location.hash === "#cov") cv.fold.scrollIntoView({ block: "start" });
+      var cv = coverage(k, cov, covErr);
+      cv.classList.add("pwide");
+      grid.appendChild(cv);
+      if (!opened && cov && location.hash === "#cov") {
+        KW.$("#cov", grid).scrollIntoView({ block: "start" });
         opened = true;
       }
     }

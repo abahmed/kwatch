@@ -7,7 +7,7 @@
 .pgrid > .pcard { display: flex; flex-direction: column; }
 .kp-facts { grid-template-columns: max-content 1fr; }
 .kp-facts dd.warn { color: var(--degraded); font-weight: 600; }
-.kp-facts-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 12px 24px; margin: 4px 0 0; }
+.kp-facts-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 12px 24px; margin: 4px 0 0; }
 .kp-facts-row dt { color: var(--text-muted); font-size: var(--t-small); }
 .kp-facts-row dd { margin: 2px 0 0; overflow-wrap: anywhere; }
 .kp-facts-row dd.mono { font-family: var(--font-mono); font-size: var(--t-small); }
@@ -24,3 +24,8 @@
 /* The non-production badge under the health verdict. */
 .kp-np { flex: 1 1 100%; margin: 0; padding-left: 38px; }
 @media (max-width: 700px) { .kp-np { padding-left: 0; } }
+/* About this kwatch: first on the page, a slim card. */
+.kp-top { margin-top: 16px; }
+/* What kwatch watches, shown in full under its numbers. */
+.kp-cov { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.kp-cov-h { font-size: var(--t-small); font-weight: 600; margin: 0 0 6px; }

@@ -155,3 +155,24 @@ func TestChangeSummaryWording(t *testing.T) {
 		}
 	}
 }
+
+// The page measures a change from the time the server sorts it
+// against: the onset of the current failures, not when the issue
+// first opened (an issue reopened by a later failure keeps its first
+// open time).
+func TestDetailChangesSendTheOnsetTheyAreSortedBy(t *testing.T) {
+	tm, p := changesFixture(t)
+	onset := p.Onset()
+	p.Opened = onset.Add(-9 * time.Hour)
+	d := detailOf(t, contextServer(tm.m, true, p), "c")
+	if !d.Onset.Equal(onset) || d.FirstSeen.Equal(onset) {
+		t.Fatalf("onset %v, first seen %v, want onset %v",
+			d.Onset, d.FirstSeen, onset)
+	}
+	for _, c := range d.Changes {
+		if (c.When == "before") != !c.At.After(d.Onset) {
+			t.Errorf("%s at %v is %q against onset %v",
+				c.Name, c.At, c.When, d.Onset)
+		}
+	}
+}

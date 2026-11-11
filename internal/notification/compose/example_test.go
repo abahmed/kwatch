@@ -48,5 +48,5 @@ func ExampleWriter_Write() {
 	// so look at the app itself.
 	// It fails with "panic: STRIPE_KEY is not set".
 	// To read the output of the last crash,
-	// run kubectl logs payments-7d9f -c app -n shop --previous
+	// run kubectl logs deploy/payments -c app -n shop --previous
 }

@@ -18,7 +18,12 @@ const checkScript = `(async () => {
   KW.notify.stop();
   await wait();
   let phase = 0, calls = 0;
-  KW.api = () => {
+  KW.api = (path) => {
+    // Only the two list reads count; turning alerts on also talks to
+    // the push endpoints.
+    if (!/^\/api\/incidents\?/.test(path)) {
+      return Promise.resolve({ status: 200, etag: "", data: {} });
+    }
     calls++;
     if (phase === 1) throw new Error("read threw");
     if (phase === 2) return Promise.reject(new Error("read failed"));
@@ -43,11 +48,9 @@ func TestBrowserNotifyCheckSurvivesFailedReads(t *testing.T) {
 	ctx, srv := browserSetup(t)
 	tab, _ := browserTab(t, ctx)
 	signInBrowser(t, tab, srv.URL)
-	err := chromedp.Do(tab, chromedp.Navigate(srv.URL+"/"),
-		chromedp.WaitVisible(chromedp.CSS("h1")))
-	if err != nil {
-		t.Fatal(err)
-	}
+	// With browser alerts off the check reads nothing at all
+	// (browser_notify_reads_test.go), so they are on here.
+	alertsOn(t, tab, srv.URL)
 	got, err := chromedp.Run(tab, chromedp.Evaluate[string](checkScript,
 		chromedp.EvalAwaitPromise))
 	if err != nil {

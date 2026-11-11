@@ -74,10 +74,11 @@ func TestBrowserOverviewWeekCountsAlerted(t *testing.T) {
 	tab := pagingTab(t, srv, 1280, 800, "/", ".ov-stat")
 	got := evalString(t, tab, `[...document.querySelectorAll(".ov-stat")].
   map((d) => d.textContent).join("|")`)
-	want := "Alerted211 more than last week|Resolved21of the alerted " +
-		"issues|Alerted the on-call person7urgent issues opened|" +
-		"Median time to resolve an alerted issue10 minover 4 alerted " +
-		"issues resolved"
+	want := "Alerted21▲ 1 more than last week|Resolved this week21" +
+		"alerted issues, incl. ones opened earlier|Alerted the " +
+		"on-call person7urgent issues opened|Median time to resolve " +
+		"an alerted issue10 minover the alerted issues resolved " +
+		"this week"
 	if got != want {
 		t.Errorf("week numbers\n%q, want\n%q", got, want)
 	}

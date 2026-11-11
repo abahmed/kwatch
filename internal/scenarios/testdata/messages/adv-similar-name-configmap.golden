@@ -1,6 +1,6 @@
 10:03:35 settled
 🟠 payments in payments (prod-eu-1) keeps crashing. Cause not found yet: its configuration, node and registry are healthy and unchanged. In the last 30 minutes in payments: config map payments-config changed at 10:02 UTC. It fails with "panic: runtime error: invalid memory address or nil pointer dereference
-[signal SIGSEGV] payments/ledger.(*Entry).Post". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs payments-73eab35a-a -c app -n payments --previous
+[signal SIGSEGV] payments/ledger.(*Entry).Post". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs deploy/payments -c app -n payments --previous
 🟠 payments in payments (prod-eu-1) keeps crashing.
 | 🟠 **payments** in **payments** (**prod-eu-1**) keeps crashing.
 | Cause not found yet: its configuration, node and registry are healthy and unchanged.
@@ -13,5 +13,5 @@
 | Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
 | To read the output of the last crash, run
 | ```
-| kubectl logs payments-73eab35a-a -c app -n payments --previous
+| kubectl logs deploy/payments -c app -n payments --previous
 | ```

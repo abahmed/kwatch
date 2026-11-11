@@ -163,6 +163,9 @@ type NamespaceTile struct {
 	Urgent    int    `json:"urgent"`
 	Attention int    `json:"attention"`
 	Low       int    `json:"low"`
+	// Week is how many times issues opened in it this week
+	// (insights_week.go).
+	Week int `json:"week"`
 }
 
 // namespaceMap tiles the namespaces of the active issues, most urgent

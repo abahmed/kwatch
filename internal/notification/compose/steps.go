@@ -15,8 +15,16 @@ import (
 
 // nextSteps suggests read-only commands for the real objects first, then
 // clearly labelled changes. Names are shell-quoted; secret values are
-// never printed.
+// never printed. A cause the evidence proves (an image not built for
+// the node's CPU) leads with its own steps.
 func nextSteps(
+	p incident.Incident, members []detection.Finding,
+) []notification.Step {
+	return append(archSteps(p, members), causeSteps(p, members)...)
+}
+
+// causeSteps are the steps for the incident's cause or root.
+func causeSteps(
 	p incident.Incident, members []detection.Finding,
 ) []notification.Step {
 	if root := p.Root; finalizerCause(p.Cause) &&
@@ -34,7 +42,7 @@ func nextSteps(
 	if root := p.Root; dependencyLogCause(p.Cause) &&
 		incident.IsWorkload(root.Kind) {
 		return append(dependencySteps(p.Cause, root.Namespace,
-			root.Name), symptomSteps(members)...)
+			root.Name), symptomSteps(knownOwners(p), members)...)
 	}
 	return rootSteps(p, members)
 }
@@ -48,7 +56,7 @@ func rootSteps(
 	case p.Cause != nil && p.Cause.Change != nil &&
 		incident.IsWorkload(root.Kind):
 		return rolloutSteps(root, p.Cause.RollbackRevision,
-			pullFailure(members), p.Cause.Change.App)
+			pullFailure(members), p.Cause.Change.App, knownOwners(p))
 	case root.Kind == kube.KindNode && !nodeRemoved(p):
 		return nodeSteps(root)
 	case root.Kind == kube.KindSecret:
@@ -89,7 +97,13 @@ func rootSteps(
 				namespaceFlag(root.Namespace),
 		}}
 	}
-	return symptomSteps(members)
+	return symptomSteps(knownOwners(p), members)
+}
+
+// knownOwners are the objects a failing pod's controller is looked up
+// in: the incident's root and what it impacts.
+func knownOwners(p incident.Incident) []inventory.EntityID {
+	return append([]inventory.EntityID{p.Root}, p.Impact...)
 }
 
 // webhookKind reports an admission webhook configuration.
@@ -110,10 +124,10 @@ func nodeRemoved(p incident.Incident) bool {
 // rollout state, or with the events of a pod that cannot pull its image
 // (pull is its finding), where the registry's answer is. A workload a
 // GitOps controller or Helm deploys (app) is undone there instead
-// (managedUndo).
+// (managedUndo). known are where the pod's controller is looked up.
 func rolloutSteps(
 	workload inventory.EntityID, revision string, pull *detection.Finding,
-	app string,
+	app string, known []inventory.EntityID,
 ) []notification.Step {
 	ref := quote(string(workload.Kind) + "/" + workload.Name)
 	ns := namespaceFlag(workload.Namespace)
@@ -122,7 +136,7 @@ func rolloutSteps(
 			Command: "kubectl rollout status " + ref + ns},
 	}
 	if pull != nil {
-		steps = containerSteps(*pull)
+		steps = containerSteps(append(known, workload), *pull)
 	}
 	if undo, ok := managedUndo(workload, app); ok {
 		return append(steps, undo)
@@ -194,20 +208,30 @@ var virtualKinds = map[inventory.Kind]bool{
 	explain.KindExternalEndpoint: true, explain.KindFailureSignature: true,
 }
 
-func symptomSteps(members []detection.Finding) []notification.Step {
+// symptomSteps read the first member; known are where a pod's
+// controller is looked up (knownOwners).
+func symptomSteps(
+	known []inventory.EntityID, members []detection.Finding,
+) []notification.Step {
 	if len(members) == 0 {
 		return nil
 	}
-	if steps := evictedSteps(members); steps != nil {
+	if steps := evictedSteps(known, members); steps != nil {
 		return steps
 	}
 	s := members[0]
 	id := s.Entity
 	if id.Kind == kube.KindContainer {
-		return containerSteps(s)
+		return containerSteps(known, s)
 	}
 	if virtualKinds[id.Kind] {
 		return nil
+	}
+	if ref := podRefOf(known, id); id.Kind == kube.KindPod && ref.owned() {
+		return []notification.Step{{
+			Text:    "See the pods' state and events",
+			Command: "kubectl describe " + ref.describe() + ref.ns,
+		}}
 	}
 	return []notification.Step{{
 		Text: "See the object's state and events",
@@ -218,60 +242,60 @@ func symptomSteps(members []detection.Finding) []notification.Step {
 
 // evictedSteps reads an evicted pod's state: the kubelet removed it, so
 // its containers have no crash output and the pod's status says why.
-func evictedSteps(members []detection.Finding) []notification.Step {
+// An evicted pod of a controller is described with its replacement.
+func evictedSteps(
+	known []inventory.EntityID, members []detection.Finding,
+) []notification.Step {
 	for _, m := range members {
 		if m.Reason != reasons.Evicted && m.Mode != detection.ModeEvicted {
 			continue
 		}
-		pod := m.Entity
-		if pod.Kind == kube.KindContainer {
-			name, _ := splitContainer(pod.Name)
-			pod = inventory.CoreID(kube.KindPod, pod.Namespace, name)
-		}
+		ref := podRefOf(known, m.Entity)
 		return []notification.Step{{
-			Text: "See why the pod was evicted",
-			Command: "kubectl describe pod " + quote(pod.Name) +
-				namespaceFlag(pod.Namespace),
+			Text:    "See why the pod was evicted",
+			Command: "kubectl describe " + ref.describe() + ref.ns,
 		}}
 	}
 	return nil
 }
 
-func containerSteps(s detection.Finding) []notification.Step {
-	id := s.Entity
-	pod, container := splitContainer(id.Name)
-	ns := namespaceFlag(id.Namespace)
+// containerSteps read a failing container. Its pod is named only when
+// it has no controller that would replace it (podRef); otherwise the
+// steps read it through the controller, so they still work after the
+// pod is replaced.
+func containerSteps(
+	known []inventory.EntityID, s detection.Finding,
+) []notification.Step {
+	ref := podRefOf(known, s.Entity)
 	if neverStarted[s.Reason] || s.Mode == detection.ModeUnknownWaiting {
 		// An unknown waiting reason says nothing of a previous run, so
 		// the pod's state and events are the safe thing to read.
 		return []notification.Step{{
 			Text:    "See why the container cannot start",
-			Command: "kubectl describe pod " + quote(pod) + ns,
+			Command: "kubectl describe " + ref.describe() + ref.ns,
 		}}
 	}
 	if s.Reason == reasons.InitContainerWaiting {
 		// It is still running: its current output is what to read.
-		return []notification.Step{{
-			Text: "Read what the init container is printing",
-			Command: "kubectl logs " + quote(pod) + " -c " +
-				quote(container) + ns,
-		}}
+		return append([]notification.Step{{
+			Text:    "Read what the init container is printing",
+			Command: "kubectl logs " + ref.logs() + ref.ns,
+		}}, ref.pickPodStep()...)
 	}
 	steps := nodeOOMSteps(s)
 	if ranBefore(s) {
 		steps = append(steps, notification.Step{
-			Text: "Read the output of the last crash",
-			Command: "kubectl logs " + quote(pod) + " -c " +
-				quote(container) + ns + " --previous",
+			Text:    "Read the output of the last crash",
+			Command: "kubectl logs " + ref.logs() + ref.ns + " --previous",
 		})
+		steps = append(steps, ref.pickPodStep()...)
 	} else {
-		steps = append(steps, currentRunSteps(pod, container, ns)...)
+		steps = append(steps, currentRunSteps(ref)...)
 	}
 	if s.Reason == reasons.OOMKilled {
 		steps = append(steps, notification.Step{
-			Text: "Compare memory use with the limit",
-			Command: "kubectl top pod " + quote(pod) + ns +
-				" --containers",
+			Text:    "Compare memory use with the limit",
+			Command: "kubectl top pod " + ref.usage(),
 		})
 		steps = append(steps, memorySteps(s)...)
 	}

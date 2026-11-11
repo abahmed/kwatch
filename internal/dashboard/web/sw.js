@@ -1,6 +1,7 @@
 /* kwatch dashboard: the service worker. It shows the notifications
    kwatch pushes (push_run.go), with or without a kwatch tab open, and
-   opens the issue when one is clicked. Every notification stays until
+   opens the issue when one is clicked. A new version takes over at
+   once (skipWaiting, clients.claim): nobody has to subscribe again. Every notification stays until
    it is closed: on some computers (macOS among them) a notification
    that leaves on its own is never shown. It caches nothing and handles
    no requests: every page and file comes from kwatch. */
@@ -75,18 +76,36 @@ function pick(tabs) {
   return best;
 }
 
-/* A click brings kwatch to the front and opens the issue: in a kwatch
-   tab already open (which moves there itself, push.js), else in a new
-   one. A tab that can't be brought forward gets a new one too. */
+/* address: the notification's page as a full address inside the
+   dashboard: the worker's scope (the dashboard's root, so a dashboard
+   served under a path prefix keeps it) plus the page. */
+function address(n) {
+  var path = safeURL(n && n.data && n.data.url);
+  return new URL(path.slice(1), self.registration.scope).href;
+}
+
+/* A click brings kwatch to the front and opens the page of the
+   notification (the issue; the Overview for the test one): a kwatch
+   tab already on it, else another kwatch tab, which moves there itself
+   (push.js), else a new tab. A tab that can't be brought forward gets
+   a new one too. */
 self.addEventListener("notificationclick", function (e) {
   e.notification.close();
-  var url = safeURL(e.notification.data && e.notification.data.url);
+  var url = address(e.notification);
   e.waitUntil(self.clients.matchAll({ type: "window",
     includeUncontrolled: true }).then(function (tabs) {
-    var tab = pick(tabs);
+    var on = tabs.filter(function (t) {
+      return t.url.split("#")[0] === url && "focus" in t;
+    });
+    var tab = on[0] || pick(tabs);
     if (!tab) return self.clients.openWindow(url);
     return tab.focus().then(function (t) {
-      (t || tab).postMessage({ kwatch: "open", url: url });
-    }, function () { return self.clients.openWindow(url); });
+      var to = t || tab;
+      if (to.url.split("#")[0] !== url) {
+        var u = new URL(url);
+        to.postMessage({ kwatch: "open", url: u.pathname + u.search });
+      }
+      return to;
+    }).catch(function () { return self.clients.openWindow(url); });
   }));
 });

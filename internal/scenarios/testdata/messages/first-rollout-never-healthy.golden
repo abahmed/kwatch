@@ -1,12 +1,12 @@
 10:04:15 settled
-🟠 web in shop (prod-eu-1) has not been ready for three minutes. Cause not found yet: its node and registry are healthy and unchanged. It runs a single replica. To see the object's state and events, run kubectl describe pod web-187b2ca1-a -n shop
+🟠 web in shop (prod-eu-1) has not been ready for three minutes. Cause not found yet: its node and registry are healthy and unchanged. It runs a single replica. To see the pods' state and events, run kubectl describe pods web- -n shop
 🟠 web in shop (prod-eu-1) has not been ready for three minutes.
 | 🟠 **web** in **shop** (**prod-eu-1**) has not been ready for three minutes.
 | Cause not found yet: its node and registry are healthy and unchanged.
 | It runs a single replica.
-| To see the object's state and events, run
+| To see the pods' state and events, run
 | ```
-| kubectl describe pod web-187b2ca1-a -n shop
+| kubectl describe pods web- -n shop
 | ```
 10:10:00 material change
 🟠 web in shop (prod-eu-1) has never become healthy since it was created ten minutes ago.

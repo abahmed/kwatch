@@ -140,9 +140,7 @@
     var text = yaml(list);
     var snip = box.appendChild(KW.el("div", "cov-yaml"));
     snip.appendChild(KW.el("pre")).appendChild(KW.el("code", "", text));
-    var b = snip.appendChild(KW.el("button", "btn btn-sm", "Copy"));
-    b.type = "button";
-    b.addEventListener("click", function () { KW.copy(b, text, "Copy"); });
+    snip.appendChild(KW.copyButton(text, "rules"));
     return box;
   }
 

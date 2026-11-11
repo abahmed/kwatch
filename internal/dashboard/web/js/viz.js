@@ -140,12 +140,31 @@
     return ul;
   };
 
-  /* card: a titled section of a page; note is a muted line under it. */
-  V.card = function (title, note, wide) {
+  /* card: a titled section of a page; note is a muted line under it
+     and action (a link or a control) sits on the right of the title.
+     Every card of a page has this one header (V.head). */
+  V.card = function (title, note, wide, action) {
     var c = KW.el("section", "pcard" + (wide ? " pwide" : ""));
-    c.appendChild(KW.el("h2", "pcard-h", title));
-    if (note) c.appendChild(KW.el("p", "pcard-note", note));
+    V.head(c, title, note, action);
     return c;
+  };
+
+  /* head: a card's header: the title (h2), on its right an optional
+     action, and under it an optional one-line note. cls adds classes
+     to the h2 (the Overview's "ov-h2"). */
+  V.head = function (box, title, note, action, cls) {
+    var top = box.appendChild(KW.el("div", "pcard-top"));
+    top.appendChild(KW.el("h2", "pcard-h" + (cls ? " " + cls : ""), title));
+    if (action) top.appendChild(action).classList.add("pcard-act");
+    if (note) box.appendChild(KW.el("p", "pcard-note", note));
+  };
+
+  /* seeAll: the "See all →" link a card's header carries. */
+  V.seeAll = function (href, text) {
+    var a = KW.el("a", "ulink", text || "See all →");
+    a.href = href;
+    a.dataset.link = "";
+    return a;
   };
 
   /* empty: a calm line for a section with nothing to show. */

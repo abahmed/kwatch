@@ -76,8 +76,17 @@
   /* ---- copy ---- */
   KW.copy = function (button, text, label) {
     function done() {
-      button.textContent = "Copied";
       KW.announce("Copied");
+      if (button.classList.contains("copy-ico")) {
+        // An icon button shows a check for a moment; its name stays.
+        button.classList.add("is-copied");
+        window.clearTimeout(button._copied);
+        button._copied = window.setTimeout(function () {
+          button.classList.remove("is-copied");
+        }, 1600);
+        return;
+      }
+      button.textContent = "Copied";
       window.setTimeout(function () { button.textContent = label || "Copy"; }, 2000);
     }
     function fallback() {
@@ -96,16 +105,33 @@
     }
   };
 
-  /* cmd is a command box: one line, scrolls inside, Copy copies it. */
+  /* KW.copyButton is the one copy button of every command and code
+     box: a small copy icon at the box's top right (the box keeps room
+     for it), named "Copy <what>" for screen readers and in its
+     tooltip. After a copy it shows a check for a moment and "Copied" is
+     announced (KW.copy). text is the text, or a function that reads it
+     at the click. */
+  KW.copyButton = function (text, what) {
+    var b = KW.el("button", "copy-ico");
+    b.type = "button";
+    b.setAttribute("aria-label", "Copy " + (what || "command"));
+    b.title = "Copy " + (what || "command");
+    b.appendChild(KW.icon("copy")).classList.add("copy-i");
+    b.appendChild(KW.icon("check")).classList.add("copy-ok");
+    b.addEventListener("click", function () {
+      KW.copy(b, typeof text === "function" ? text() : text);
+    });
+    return b;
+  };
+
+  /* cmd is a command box: one line, scrolls inside, the copy icon
+     copies it. */
   KW.cmd = function (command) {
     var box = KW.el("div", "cmd");
     var code = KW.el("code", "", command);
     code.tabIndex = 0;
-    var b = KW.el("button", "btn", "Copy");
-    b.type = "button";
-    b.addEventListener("click", function () { KW.copy(b, command); });
     box.appendChild(code);
-    box.appendChild(b);
+    box.appendChild(KW.copyButton(command));
     return box;
   };
 

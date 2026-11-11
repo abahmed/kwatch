@@ -221,9 +221,11 @@
       if (f.status === "active" && !LQ.used(f) && data.facets.severity) {
         KW.updateBadge(data.facets.severity);
       }
-      var active = KW.activeTotal || 0;
+      // No count in the title: the badge and the favicon say how many
+      // are active, and "(n)" in front means changes not seen yet
+      // (notify.js), so one more would read as that.
       var label = { active: "Active issues", resolved: "Resolved issues" }[f.status] || "All issues";
-      KW.setTitle((active ? "(" + KW.num(active) + ") " : "") + label + " - kwatch");
+      KW.setTitle(label + " - kwatch");
       sub.textContent = KW.listNotes.subtitle(f, data);
       pager.paint(data, f.page, f.pageSize);
       // A chip removed hands the focus to the one before it, else to

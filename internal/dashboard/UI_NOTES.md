@@ -114,47 +114,80 @@ bottom:
    each level's word and number ("Urgent 2 · Needs attention 9 · Low
    26", Quiet only when there are some). A segment or key opens the
    Issues table at that level (`/issues?status=active&severity=page`).
-4. **Look at these first**: up to five issues (`lookFirst`: urgent and
+4. **Look at these first** (left) beside **Bad releases (last 24 h)
+   and changes behind active issues** (right, 3:2, from 1100 px wide;
+   the hours are `releases.windowHours`; one under the
+   other below, and the issues take the whole row when there is no bad
+   release): up to eight issues (`lookFirst`: urgent and
    not acknowledged first, then the newest), each with its severity and
    state chips, the title (two lines at most), where, and how long it
    has been going on ("for 40 min", with a bar against the longest of
    the five), "Acknowledged" when someone did. "See all 37 issues →"
    opens the Issues table, and a link opens Activity.
+   Every release row links somewhere: to `wrong[].issue` (the issue it
+   opened, resolved or not: the one the release watch linked, else the
+   first issue on the same workload that opened from a minute before
+   to `matchMinutes` (30) after it, `release_issues.go`), else to the
+   workload's issues (`namespace`, `kind`, `q`) with "No issue on api
+   opened in the 30 minutes after it." A resolved issue adds "Its
+   issue is resolved."
+   The week's numbers are small cards of one size in a row (two per
+   row on a phone).
 
 5. **This week**, below a line (`js/ovinsights.js`, `js/trends.js`,
    from `/api/insights` and `/api/trends`), kept short on purpose:
    - four numbers, all over the issues someone was alerted about:
      **Alerted** (opened minus settled on their own, with "4 more than
-     last week" from `previousWeekAlerted` when known), **Resolved**
-     (`resolvedAlerted` per day), **Alerted the on-call person** and
-     **Median time to resolve an alerted issue** (`resolveAlerted`,
-     "over 4 alerted issues resolved"); an older server without those
+     last week" from `previousWeekAlerted` when known), **Resolved
+     this week** (`resolvedAlerted` per day; "alerted issues, incl. ones
+     opened earlier", so it may be more than Alerted), **Alerted the
+     on-call person** and **Median time to resolve an alerted issue**
+     (`resolveAlerted`, "over the alerted issues resolved this week":
+     no count of its own, since `resolvedIn` counts exactly the
+     resolves `resolvesTold` counts, superseded issues left out of
+     both; `TestWeekResolvedCountMatchesTheMedianCount`); an older server without those
      fields gives the plain counts. The settled-on-their-own line under
      them is the side note;
    - **Day by day**: a column chart per day: opened (its paged part at
-     the bottom) and resolved, each column labeled with its number, 0
-     included, all from 0 on one scale, with a key. "Show as a table"
-     has the same numbers, with a "Settled before alerting" column when
+     the bottom) and resolved, each column labeled with its number
+     (thousands separated; no "0" labels), all from 0 on one scale,
+     with a key. The labels are measured once drawn (`thinLabels`):
+     when any two touch (a phone, 4-digit counts) only the opened ones
+     stay, and when those still touch none do; the tooltips and the
+     table keep every number (`TestBrowserWeekLabelsNeverOverlap`).
+     **Chart | Table** in the card's header switches between two views
+     of the same numbers (a view switch, not a fold: nothing is
+     hidden that the other view does not show). The table has the
+     same numbers, with a "Settled before alerting" column when
      there are any (`untold` of the `/api/insights` day when it carries
      one, else of the `/api/trends` day with the same date). A quiet
      week says "A quiet week: nothing opened or resolved.";
    - **Top causes** (`causes`) beside **Where the trouble is** (the
      namespaces with active issues by level, with how many issues each
-     opened this week), five rows each, with a link to the rest;
-   - **More**, folded: **Kept coming back**, **Started right after a
-     change** (`afterChange`) and **Nodes with the most issues**
-     (`nodes`), each only when it has something to show.
+     opened this week: the tile's `week`, sent for every tile, so a
+     namespace outside the trends' top five says "0 opened this week"
+     rather than nothing), five rows each, with a link to the rest.
+     Each card has its own key, and a colour means one thing on all of
+     them: a level's colour is that level, `s-open` is "Opened this
+     week" (as in Day by day; Top causes is one bar of it, its active
+     count in words), `s-done` the rest of a count that is not a
+     level ("Other levels" on the nodes card), striped so it never
+     reads as Low's solid grey;
+   - **Kept coming back** beside **Nodes with the most issues**
+     (`nodes`), cards like the others, each only when it has
+     something to show. Nothing on the Overview is folded away.
 
 Two quiet additions (`js/paging.js`): while `scalingHold` is set the
 status tile adds "Paging held while the cluster scales · until ~14:20"
 (`expectedEnd`, in the chosen zone; the tooltip has since when). The
 server sends no `scalingHold` for a non-production cluster: nothing
-pages there, so nothing is held. Under "Look at these first" one muted
-line, "3 old problems not shown (already failing for 30+ days when
-kwatch first saw them) Show them", unfolds `oldProblems.items` (kind
-· namespace/name, what is wrong, "for about 2 years"; the first ten,
-then "Show all N", and "+10 more problems not shown." when `count` is
-more than the items sent). The number of days is `oldProblems.days`
+pages there, so nothing is held. At the bottom of the "Look at these
+first" card one muted line, "3 old problems not shown in the issues
+(already failing for 30+ days when kwatch first saw them)", and under
+it every one of `oldProblems.items` (kind · namespace/name, what is
+wrong, "for about 2 years"; never behind a fold or "Show all"), and
+"+10 more problems not shown." when `count` is more than the items
+sent. The number of days is `oldProblems.days`
 (the configured `oldProblemDays`); without it the line says "already
 failing for a long time when kwatch first saw them". The ages use the words
 of the issue's "Lowered to Low" line (`spokenDays` in
@@ -172,18 +205,76 @@ Cards carry a title only, and a card with nothing to show is left out.
 kwatch's own health is on the kwatch page and the change feed on
 Activity.
 
+### Overview layout rules
+
+- **Reading order**, the same at every width: the verdict tile (is the
+  cluster OK?), then what to act on (Look at these first beside Bad
+  releases), then the week (four numbers, the settled line, Day by
+  day), then "Patterns this week" (Top causes beside Where the trouble
+  is, Kept coming back beside Nodes with the most issues).
+- **One grid**: `.pgrid` is two equal columns with one 16px gap; the
+  act pair is 3:2 from 1100px with the same gap. Cards in a row
+  stretch to the same top and bottom (`align-items: stretch`); a lone
+  card, or the odd last one, spans the row. Below 700px everything is
+  one column in the same order. `TestBrowserOverviewCardsShareTheirRow`
+  checks at 1440 that cards side by side share their bottom edge
+  (within 1px), and at 1440, 2000 and 390 that nothing is folded
+  (`details`) and nothing scrolls sideways.
+- **Look at these first fills its row** (`js/lookfit.js`): the server
+  sends up to eight issues; the card shows five and, when it sits beside
+  Bad releases from 1100px, adds rows one at a time while the row stays
+  as tall as it was (the neighbour sets the height). When every active
+  issue is shown and room is left, "That's everything happening now."
+  sits at the card's bottom (`.ov-end`). Stacked, on a phone, or with no
+  bad release it shows five. Refit on resize (one rAF-debounced
+  listener) and after each live update.
+  `TestBrowserOverviewLookFillsItsRow` checks it.
+- **One card header** (`V.head`, `V.card(title, note, wide, action)`):
+  the title (`h2.pcard-h`) with an optional action on its right ("See
+  all →", or the Chart | Table switch), then one muted line saying
+  what the card counts. Every card has "See all →" to the Issues view
+  it summarises; every row is a link (an issue, or the filtered list).
+  A card's footer ("+2 more namespaces") sits at its bottom. Look at
+  these first and Bad releases are cards too, their rows edge to edge
+  under the header.
+- **Visuals that answer a question**: stat tiles are a plain label,
+  the number (tabular) and one line; Alerted adds "▲ 9 more than last
+  week" in the failing colour (more alerts is worse) or "▼ 3 fewer"
+  in the success colour, the arrow and words saying it before the
+  colour. Ranked lists are bars on one scale; severity colours only
+  ever mean severity, each card with its key; counts are right
+  aligned with tabular figures.
+- **Phone**: one column, the same order, touch targets 44px on a
+  coarse pointer (keys, names, links, the Chart | Table buttons).
+
 ## Issue page
 
 `/issues/<id>` (`js/detail.js`, `incpanel.js`, `incwhy.js`,
 `share.js`, `inclinks.js`, `lastlook.js`, and the section modules) puts
-the summary card on top, always shown, and everything else in five
-tabs. Times are hh:mm; the seconds are in the tooltips.
+the header card on top, always shown, and everything else in six
+tabs right under it: Summary first, then Timeline, Proof, Impact,
+Alerts and Details. The card holds only the header (chips, short title,
+where and since when, the whole title when it was cut, Copy summary and
+Copy link); the questions, the stepper, the notes row and "What kwatch
+found" are the Summary tab, and "Who was alerted?" is the top of the
+Alerts tab. Times are hh:mm; the seconds are in the tooltips.
 
-**The header**: the severity chip ("Was Urgent" once resolved), the
-"Settled before alerting" label when it applies, Copy summary and Copy
-link, the title, then one line: "shop · deployment/payments-api · for
-40 min (since 03:28) · failed again 2 times", or "lasted 12 min,
-resolved 14:02" on a resolved issue. When kwatch stopped tracking an
+**The header** (`.ds-head`): one row of the severity chip ("Was Urgent"
+once resolved; an issue that settled on its own shows its level greyed,
+`KW.settledChip`, beside "Settled on its own") and the state chip ("Happening now", "Resolved",
+"Stopped tracking", `KW.issueStateChip`), the "Settled before alerting"
+label when it applies, and on the right Copy summary and Copy link;
+the short title (`KW.issueHeading`, the lists' rule) as the `h1`; one
+line: "shop · deployment/payments-api · for 40 min (since 03:28) ·
+failed again 2 times", or "lasted 12 min, resolved 14:02" on a resolved
+issue, then what the state means ("users are still served by the old
+version"); and, only when the heading had to shorten the title, one
+description line in body text: the whole title (`fullTitle`). A whole
+title that only adds "in <namespace>" counts as the same (both sides
+are compared without it), so "Deployment app in web" under the heading
+"Deployment app" shows no line. There is no "Full title" fold. Long
+names wrap anywhere (`overflow-wrap: anywhere`), so a node or pod name
+never runs off a phone. When kwatch stopped tracking an
 issue while it was still failing, a prominent "Stopped tracking: not
 fixed" banner sits above the card and says whether a container still
 crashed or it was short of replicas.
@@ -236,28 +327,49 @@ shortened" (`truncated.texts`). The row hides when there is no note.
 | What to do | the first fix step and its copyable command, then "2 more steps →" (opens them in Details) or the runbook link |
 | Who was told | one line per channel, pagers first, each with a mark and a word ("paged · still open", "page failed", "sent", "sending, will retry") and the time; "Every message and why it failed →" opens it in Alerts. Without a message: why nobody was told ("Nobody was told: it settled before alerting.", "Low issues wait for the daily summary." …) |
 
-A row with nothing to say is left out, except What's wrong, Why and Who
-was told.
+What's wrong?, Why? and What should I do? are always in the Summary tab.
+What's wrong? shows `summary.what`; when that sentence only repeats the
+title (the headline fallback of an issue kwatch knows little about),
+it says "What the title says; kwatch has no more detail on the symptom
+yet" instead of repeating it. What should I do? without fix steps (and
+without a release to undo) says kwatch has none yet and gives three
+read-only commands to start with: `kubectl describe` of the object,
+`kubectl logs <kind>/<name> --all-containers --tail=50` for a kind with
+pods, and the namespace's Warning events (`-A` without a namespace),
+then a link to the Proof tab; the runbook link follows when there is
+one. Why this mattered: before the tabs, an issue whose `what` only
+repeated its title showed it as the description line and hid the
+question, and an issue without steps hid What should I do?. Who was
+alerted? (Alerts tab) always answers, with the acknowledge command
+while the issue is open and not acknowledged, alerted or not.
 
-**Tabs** (`KW.ISSUE_TABS`): **Timeline** (what happened, step by step,
-with the states strip, and what changed just before), **Evidence**
+**Tabs** (`KW.ISSUE_TABS`): **Summary** (the questions above, the
+stepper and notes row, and "What kwatch found"; no count), **Timeline**
+(what happened, step by step,
+with the states strip, and what changed just before), **Proof**
 (failing probe, why it's waiting to start, logs, containers, recent
 warnings, node), **Impact** (who it hits, affected objects, traffic,
-other issues), **Alerts** (alert status, who was told and what we sent)
+other issues), **Alerts** (Who was alerted?, alert status, who was
+told and what we sent)
 and **Details** (why kwatch thinks this, all steps to fix, same error
 elsewhere, seen before, more details). Each tab names its count, and an
-empty tab says so in one sentence. Keys: `t` `e` `i` `a` `d` pick a tab
-from anywhere on the page, `←` `→` (and Home, End) move between tabs
-when one is focused. The tab is in the address as a deep link
-(`/issues/<id>#evidence`), so a pasted link opens that tab; without one
-the page opens the tab last picked in this browser (`localStorage` key
-`kwatch.issueTab`), else Timeline. The old `?tab=evidence` link opens
-Details.
+empty tab says so in one sentence. Keys: `s` `t` `p` `i` `a` `d` pick
+a tab from anywhere on the page, `←` `→` (and Home, End) move between
+tabs when one is focused (`tablist`/`tab`/`tabpanel` roles, each tab
+`aria-controls` its panel). The open tab is in the address
+(`/issues/<id>#evidence`, `#summary` …), replaced rather than pushed,
+so a reload, Back to the issue or a pasted link opens that tab; without
+one the page opens Summary (no longer the tab last picked in this
+browser: the questions must come first). The old `?tab=evidence` link
+opens Details. The tab bar is sticky at the top of the window; picking
+another tab while it is stuck scrolls back to the start of the panels.
+An update in place never redraws the tab bar, so the tab stays.
 
 **The drawer** (see "The preview drawer"): a click on a row of the
-Issues table opens the same summary card in a panel beside the table,
-with "On the full page: Timeline (1) · Impact (3) …" links instead of
-the tabs.
+Issues table opens the same card in a panel beside the table, with the
+questions and Who was alerted? inside the card (the page moves them
+into its tabs; the drawer has none), and "On the full page: Timeline
+(1) · Impact (3) …" links instead of the tabs.
 
 ## Releases
 
@@ -385,25 +497,28 @@ about" removes them again. The link shows only when there are some.
 
 `/kwatch` (`js/kwatchpage.js`, `ovcoverage.js`, from `/api/kwatch`,
 `/api/status` and `/api/coverage`) answers "is kwatch itself working,
-can it see the cluster, and do alerts get out": the same notices as the
+can it see the cluster, and do alerts get out". **About this kwatch**
+(version, plan, last check, scope) comes first, a slim card across the
+top; then the same notices as the
 Overview plus "kwatch can't read pod logs", one verdict line ("kwatch is
 running, but some alerts aren't getting out"; under it the outlined
 badge "Non-production cluster: nothing pages" while the `kwatch` part
 of `/api/status` has `nonProduction`, nothing otherwise), and the cards **kwatch
 itself** (running since, last restart and why, last API contact,
 messages waiting, restarts in the last 24 hours on a time line) beside
-**About this kwatch** (version, plan, last check, scope), **Where alerts
+**Resources**, then **Where alerts
 go** (`delivery`, per channel: kind, the last failure or "delivering", a
 bar of sent, failed and retrying with the numbers in words, the last
-error) beside **Resources** (`resources`: a gauge each for memory "182
+error); **Resources** is (`resources`: a gauge each for memory "182
 MB of 256 MB limit (71%)", CPU "0.04 of 0.5 cores (8%)" and disk "96 MB
 of 1 GB volume (9%)" with the state file under it, "State file 38 MB
 (cap 512 MB)"; amber from 80%, red from 90%; without a limit the use
 and "no limit set", no gauge; a part kwatch can't read is left out),
 then across the page **What kwatch is watching** (`coverage`: "233 of
 236 kinds of objects watched" with a bar and counts that can't be read,
-not read yet and not watched; folded, the gaps and the "Permission to
-add" YAML, see "Watch coverage"). Half-width cards come in pairs, so
+not read yet and not watched, then, always shown (no fold), the
+namespaces, the kinds, the gaps and the "Permission to add" YAML, see
+"Watch coverage"; `/kwatch#cov` scrolls to them). Half-width cards come in pairs, so
 no row has a gap: one left without its pair takes the whole row. Before
 `resources` is known the Resources card is the old **State file** gauge.
 Last, only when there are some, **Likely wrong causes (last 7 days)**
@@ -457,7 +572,7 @@ short.
 | `/` | search the issues |
 | `j` `k` | next / previous row, or issue while one is open beside the table |
 | `Enter` | open the issue beside the table (Cmd or Ctrl and click: its own page in a new tab) |
-| `t` `e` `i` `a` `d` | on an issue page: Timeline / Evidence / Impact / Alerts / Details |
+| `s` `t` `p` `i` `a` `d` | on an issue page: Summary / Timeline / Proof / Impact / Alerts / Details |
 | `←` `→` | move between the issue page's tabs |
 | `[` `]` | previous / next issue in your list, on an issue page or beside the table |
 | `?`, `Esc` | show or hide the help; `Esc` also closes the issue beside the table |
@@ -499,7 +614,9 @@ notes row of the summary card says "Some text shortened".
 
 | Field | Section | Source | Bound |
 |:--|:--|:--|:--|
-| `changes`, `fixedBy`, `fix` | What changed just before | the changes the incident stored while it was live (first), merged with the inventory's change history around the root (what it uses, routes to or scales it, its node), from 30 minutes before the failure began until it resolved; `fixedBy` is the change kwatch judged fixed it, and a change with `cause` is the one the likely cause blames (the page marks it "Likely cause" and names it in the summary card). Each change carries `fields` (`path`, `before`, `after`) for a diff: at most 6, values redacted and cut to 160 bytes, and the data of a Secret or ConfigMap names its key only (`after` is `added`, `changed` or `removed`) | 8, before first, then during |
+| `changes`, `fixedBy`, `fix` | What changed just before | the changes the incident stored while it was live (first), merged with the inventory's change history around the root (what it uses, routes to or scales it, its node), from 30 minutes before the failure began (`onset`, sent beside them:
+the earliest start of the current failing members, which can be hours
+after `firstSeen`) until it resolved; `fixedBy` is the change kwatch judged fixed it, and a change with `cause` is the one the likely cause blames (the page marks it "Likely cause" and names it in the summary card). Each change carries `fields` (`path`, `before`, `after`) for a diff: at most 6, values redacted and cut to 160 bytes, and the data of a Secret or ConfigMap names its key only (`after` is `added`, `changed` or `removed`) | 8, before first, then during |
 | `seenBefore` | Seen before | the incident's own history of earlier occurrences of the same root (kwatch keeps the last 30) | 30 |
 | `snapshot`, `snapshots` | When it broke | the failing containers (not ready, restarted, or waiting or ended for a reason) of the incident's pods, stored when it opened (`reason: "first break"`) and replaced each time it got worse (`"got worse"`: its tier rose or it reopened); same row fields as `containers`, as they were then. `snapshot` is the latest of `snapshots` (oldest first) | 2 snapshots, 10 containers each |
 | `transitions` | the states strip | every state and tier change: `at`, `kind` (`opened`, `announced`, `recovering`, `failing again`, `flapping`, `reopened`, `resolved`, `state changed`, `tier raised`, `tier lowered`), `from`, `to` (state names, or tier names for a tier change) | 50 newest |
@@ -619,6 +736,28 @@ The container usage history behind the Containers section (the 24-hour
 memory and CPU peaks, and the run before the last restart) is saved in
 the state file and survives a restart of kwatch; see "Kubelet stats" in
 `production-operations.md`.
+
+**What changed just before** (`context.js`) measures every change from
+the detail's `onset` (else `firstSeen`), the time the server sorted it
+into Before and During against, so the label, "10 min before it
+started failing" and the caption "from 30 minutes before it started
+failing (14:02)" always agree, even on an issue that first opened
+hours earlier. The caption says "Changes made to this object and what
+it uses (by people or automatically)", and an actor that is a
+controller rather than a person or the deploy tool acting for one
+(`system:*`, `kube-*`, `kubelet`, autoscalers and operators such as
+karpenter or keda; `KW.automaticActor`) reads "by karpenter
+(automatic)" (`TestBrowserChangesMeasureFromTheOnset`).
+
+**Browser alerts' check** (`notify.js`) reads the two lists of 100
+issues only while browser alerts are on: off, it reads nothing and
+forgets its last picture, so turning them on never tells what changed
+meanwhile (the first read only takes the picture). On, a hidden tab
+keeps its 30 s interval; a tab in view with the live stream up leaves
+the reads to the stream's changes (at most every 10 s), so the two
+never read the same lists twice (`TestBrowserNotifyReadsOnlyWhenAlertsAreOn`).
+The "(n)" unseen count in a hidden tab's title comes from that check,
+so it shows only with browser alerts on.
 
 ## Issues table
 
@@ -852,10 +991,12 @@ waits for "Show"), and the drawer's issue reads again on its own, every 60 s
 while the live stream is connected (a change to it is read sooner) and
 every 30 s without the stream.
 
-**Not redrawn while you read.** The issue page and the drawer redraw
-nothing while a section is open or text in them is selected: a bar
-says "This issue changed. Show the update". The table does not update
-its cells while text in it is selected.
+**Updated without moving what you read.** The issue page and the
+drawer take a newer reading in place, keeping the tab, the open folds
+and the scroll position, and wait only while text in them is selected
+or a control is focused from the keyboard (see "Tabs, live updates and
+copy buttons"). The table does not update its cells while text in it
+is selected.
 
 **Back to the same place** (`js/place.js`, `sessionStorage` key
 `kwatch.place`, this tab only). When the table is left, its address,
@@ -1271,7 +1412,7 @@ running. It reads the incidents the dashboard holds (at most 20,000).
 | Field | Data |
 |:--|:--|
 | `counts` | the issues not resolved by severity: `urgent` (page), `attention` (notify), `low` (digest), `quiet` (silent) |
-| `lookFirst` | at most 5 active issues (not resolved, not quiet): the urgent ones nobody acknowledged first, then the newest started, then by ID; each `{id, title, namespace, kind, name, severity, state, since, acked}` (`kind`/`name` are the root object's, `title` at most 200 characters) |
+| `lookFirst` | at most 8 active issues (not resolved, not quiet): the urgent ones nobody acknowledged first, then the newest started, then by ID; each `{id, title, namespace, kind, name, severity, state, since, acked}` (`kind`/`name` are the root object's, `title` at most 200 characters) |
 | `failedSendsLastHour` | the provider sends that failed or are being retried in the last hour, as `failedLastHour` on `/api/status`; absent without delivery |
 | `scalingHold` | set while pages are held because the cluster is scaling (many nodes added or removed): `{reason, since, expectedEnd}`, `reason` "Paging held: cluster is scaling", `since` when the nodes began to come and go, `expectedEnd` when the hold ends if no node changes again (the wave over plus the grace); absent otherwise |
 
@@ -1458,7 +1599,10 @@ filter chips use `--radius-chip`. Inputs and pickers have one border,
 `--control-border`. A hover on a row or card is `--surface`; a text link
 grows its underline from 1px to 2px with no color change. Information is
 visible text, never only a tooltip. A tab title reads "Active issues -
-kwatch".
+kwatch", never with a count: the badge and the favicon have it, and a
+"(n) " in front only ever means changes not seen yet while the tab was
+hidden (`notify.js`). `KW.setTitle` takes off any "(n) " prefix first,
+"(1,234) " too, so two never stack.
 
 ## What kwatch found (`round.js`)
 
@@ -1504,27 +1648,131 @@ existing tokens only.
 ## Issue page polish (R8b)
 
 - **Heading**: `KW.issueHeading` is `KW.shortTitle` of the whole title (the
-  rule the Overview and lists use); the whole title is the `h1` tooltip
-  and the "Full title" fold (`[data-full-title]`). The drawer uses the
-  same heading.
-- **"Was Urgent"**: `KW.wasChip` (muted `c-acked c-was`) replaces the
-  level chip on rows that settled on their own (`KW.isUntold`), on Issues
-  and Activity; the tooltip is `TERMS.settled.wasTitle`.
+  rule the Overview and lists use); the whole title is the description
+  line under it (see "Issue page"). The drawer uses the same heading.
+- **"Was" means one thing**: "Was Urgent" is only a resolved issue
+  people were alerted about (`KW.severityChip(sev, "Was ")`, issue
+  header and Activity). A row that settled on its own (`KW.isUntold`)
+  shows its level greyed on one line, `KW.settledChip` (muted
+  `c-acked c-settled`, never "Was"), beside the "Settled on its own"
+  mark on Issues and the issue header (Activity's verb already says
+  it settled); the tooltip is `TERMS.settled.wasTitle`.
 - **Copy summary** adds `Cluster:` (read from `KW.cluster`, a string or
   `{name}`, only when set), `Proof:` (`KW.proofLine`) and `Alerted:`
   (`KW.firstAlert`, or "nobody").
 - **Phones**: the proof line (`.ds-raw-t`) and log lines wrap by default
   (`evidence.js` sets `.wrap` once; the toggle still works). The tab
   strip gets `.more` while tabs are off the edge (fade and arrow).
-- **Top card** shows the acknowledge command (`KW.ackCommand`, the one
-  of the Alerts tab) beside "Not acknowledged yet": a command to copy,
-  never a button. The Alerts line reads "Why this level" without an alert.
+- **Who was alerted?** shows the acknowledge command (`KW.ackCommand`,
+  the one of Alert status) beside "Not acknowledged yet": a command to
+  copy, never a button. The Alerts line reads "Why this level" without an alert.
 - **Issues 900-1100 px**: `.it-ns` (namespace) shows under the title
   while the Where column is hidden. Titles wrap with `break-word` and
   `text-wrap: balance`. Activity's time column is `nowrap`; the
   timeline's "Show every time" stamps use `KW.when` in `.tl-stamp`
   (`nowrap`).
 
+## Tabs, live updates and copy buttons (R9)
+
+- **Tabs**: plain words with their count; the open tab is in full ink
+  with a 3px bar under it and a filled count, the others muted with a
+  soft background on hover and a focus ring from the keyboard. On a
+  phone one row that scrolls sideways (no scrollbar; the fade and arrow
+  of `.more`).
+- **The open issue updates by itself** (`js/incupdate.js`, used by
+  `incpanel.js`). It used to wait behind a bar, "This issue changed.
+  Show the update", whenever a fold was open or text was selected. Now
+  a newer reading is drawn in place at once, as every other page is
+  Live, and nothing the reader set up moves: the open tab stays (the
+  tab bar is never redrawn), the open folds stay open (matched by their
+  section and their summary's words), and the part at the top of the
+  window stays where it was (the page scrolls by however much the parts
+  above it grew or shrank). What changed (the header, a summary row,
+  the notes, a section, a tab's count) gets a short highlight: a bar on
+  its left and a soft background that fades in 2.6 s (no fade with
+  reduced motion), and the header says "Updated just now" for 8 s;
+  screen readers hear "This issue was updated." It waits only while the
+  reader is selecting text in the issue or has a control in it focused
+  from the keyboard (a text box, a menu, a button reached with Tab; not
+  a button just clicked with the mouse): a redraw would drop the
+  selection or the focus. Then one quiet line says "This issue changed.
+  It updates when you finish." with "Show now", and the update applies
+  by itself as soon as the selection or the focus goes. Why not keep
+  the button for an open fold too: folds are opened often and stay open
+  (the "What does this mean?" fold is remembered open), so the page
+  would rarely be live; keeping the folds open across the redraw removes
+  the reason to wait.
+- **Copy buttons** of commands and code (`KW.copyButton` in `api.js`:
+  `KW.cmd`, the proof line, the Issue ID, the "Permission to add" YAML
+  and the template's `[data-copy]`): a small copy icon at the box's top
+  right, beside the text and never over it, named "Copy command" (or
+  what it copies) for screen readers and in its tooltip; after a copy a
+  check shows for 1.6 s and "Copied" is announced. 32 px, 44 px on a
+  touch screen. Copy summary and Copy link stay words.
+
+## Stacking and button states
+
+One z-index scale in `app.css` (`--z-raised` 1, `--z-sticky` 2 for the
+table heading, `--z-livebar`, `--z-skip`, `--z-toolbar` 12, `--z-legend`,
+`--z-popover` 30, `--z-offline`, `--z-side`, `--z-overlay` 40 for the
+drawer and the column menu); no stylesheet uses a bare number. Why View
+options and Columns opened under the table's heading: the Issues
+toolbar (`.filterbox`) is a flex item, so its `z-index: 2` made it a
+stacking context level with the sticky heading, which comes later in
+the page and won. The toolbar is now `--z-toolbar`, above the heading,
+so every popover in it is too. Search tips open leftward from their
+button, inside the window. A filled button (View options or Columns
+open, a pressed quick view, the current page) stays filled on hover, a
+shade lighter (`--text-soft` under `--bg` text): the plain hover's
+surface under its light text read 1.1:1.
+
+## Notifications click
+
+`sw.js` resolves the notification's page against the worker's scope
+(so a dashboard served under a path keeps its prefix; anything that is
+not a path of the dashboard opens the Overview), then brings forward a
+kwatch tab already on that page, else the focused or a visible kwatch
+tab, which moves there itself (`push.js`, path and query), else opens a
+new tab; a tab that can't be focused gets a new one. Every
+notification carries its page: an issue its `/issues/<id>`, the test
+one `/`, the summary `/issues`. The worker takes over at once
+(`skipWaiting`, `clients.claim`; `/sw.js` is `no-cache`), so a fix
+reaches browsers on their next visit without subscribing again. The
+page's own `new Notification` (no service worker) focuses the window,
+moves it and closes the notification on click.
+
+Why a click once did nothing: `main.js` still carried a clean-up from
+a release without a worker and unregistered every service worker on
+each page load, including the `sw.js` that `push.js` had just
+registered. The notification (the test one too, which is shown by the
+worker) then stayed on screen with no worker left to handle its
+click once the tab closed or reloaded, and the push subscription ended
+with the registration. Nothing unregisters the worker now; a worker of
+an earlier release at the same scope is replaced by `sw.js`.
+`TestBrowserServiceWorkerSurvivesReload` registers the worker, opens
+the dashboard again and checks it is still registered, controls the
+page and shows a notification with its page. The real click is not
+driven in a browser test (a `notificationclick` made by script has no
+user activation); the click's logic is checked against fake clients
+as above.
+
 ## Testing
+
+No page whose content fits the window scrolls or keeps a scrollbar
+track (`TestBrowserNoEmptyScroll`, real scrollbars on, every page at
+1440x900, 2000x1200 and 390x844). The cause it guards against: the
+page shell is `min-height: 100vh` and the live region `#announce`
+(`.sr-only`, absolutely placed after it) sat 1px below, so every page
+was 1px taller than the window; `.sr-only` now has `margin: -1px`. And
+`html { scrollbar-gutter: stable }` (for the drawer) kept an empty
+track beside every page that fits; it is gone. Popovers are checked
+over the stuck table heading (`TestBrowserPopoversAboveStickyHeading`),
+hovered buttons for 4.5:1 text in light, dark and high contrast
+(`TestBrowserHoverKeepsContrast`), and the notification click against
+the real `sw.js` (`TestBrowserNotificationClickOpensKwatch`), which
+must stay registered across page loads
+(`TestBrowserServiceWorkerSurvivesReload`).
+`TestBrowserShots` saves screenshots of the main pages into `KW_SHOTS`
+when set.
 
 Browser tests (`-tags browser`) also run with `KWATCH_BROWSER_TEXT_WIDER=1` (text 2% wider, as Linux draws it) to keep headroom in the phone layout; `KWATCH_BROWSER_WIDE_FONT=1` swaps in Verdana (stricter than the layout promises).

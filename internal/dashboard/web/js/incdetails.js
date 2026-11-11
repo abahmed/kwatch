@@ -162,9 +162,7 @@
       else dd.appendChild(value);
       return dd;
     }
-    var id = add("Issue ID", KW.el("span", "mono", inc.id)), b = id.appendChild(KW.el("button", "btn btn-sm ds-copy", "Copy"));
-    b.type = "button";
-    b.addEventListener("click", function () { KW.copy(b, inc.id, "Copy"); });
+    add("Issue ID", KW.el("span", "mono", inc.id)).appendChild(KW.copyButton(inc.id, "issue ID"));
     var last = KW.lastChange(inc);
     if (last) add("Last change", KW.timeEl(last, "", false), "", "The newest thing kwatch saw happen: " + KW.full(last));
     add("Started", oneLine(inc.firstSeen));

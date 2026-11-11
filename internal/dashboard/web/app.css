@@ -27,6 +27,20 @@
      brand has no token for text on a surface that stays dark. */
   --ink-failing: #FF9B8F;
   --ink-degraded: #F5B953;
+  /* One stacking scale, lowest first. A toolbar that opens popovers
+     sits above the sticky table heading, so they never open under it;
+     menus and popovers above both; the sidebar, the offline pin, the
+     drawer and menus placed on the screen over everything. */
+  --z-raised: 1;
+  --z-sticky: 2;
+  --z-livebar: 4;
+  --z-skip: 10;
+  --z-toolbar: 12;
+  --z-legend: 20;
+  --z-popover: 30;
+  --z-offline: 35;
+  --z-side: 36;
+  --z-overlay: 40;
 }
 @media (pointer: coarse) { :root { --ctl: var(--hit); } }
 
@@ -43,9 +57,11 @@ p { margin: 0; }
 code, .mono { font-family: var(--font-mono); }
 .muted { color: var(--text-muted); }
 .small { font-size: var(--t-small); }
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* margin -1px keeps the 1px box inside its static place: at the end of
+   a page that fills the window it would add 1px and a scrollbar. */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
-.skip { position: absolute; left: 8px; top: -60px; z-index: 10; background: var(--bg); padding: 10px 14px; border: 1.5px solid var(--text); border-radius: var(--radius-input); }
+.skip { position: absolute; left: 8px; top: -60px; z-index: var(--z-skip); background: var(--bg); padding: 10px 14px; border: 1.5px solid var(--text); border-radius: var(--radius-input); }
 .skip:focus { top: 8px; }
 button { font: inherit; cursor: pointer; }
 button:disabled { opacity: .5; cursor: not-allowed; }
@@ -58,6 +74,10 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .btn:active:not(:disabled) { background: var(--line); }
 .btn-primary { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 600; }
 .btn-primary:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); }
+/* A filled button (open, pressed, current) stays filled on hover, a
+   shade lighter: the plain hover's light surface under its light text
+   would make it unreadable. */
+:is(.vopts[open] > summary, .cols.is-open .cols-btn, .qv[aria-pressed="true"], .pager .btn[aria-current="page"]):hover:not(:disabled) { background: var(--text-soft); border-color: var(--text-soft); color: var(--bg); }
 .btn-primary:active:not(:disabled) { background: var(--primary-hover); transform: translateY(1px); }
 .btn-block { width: 100%; margin-top: 14px; padding: 13px; }
 .btn-sm { font-size: var(--t-small); min-height: var(--ctl); padding: 0 14px; }
@@ -101,7 +121,7 @@ input:hover, select:hover { border-color: var(--text); }
 .shell { display: grid; grid-template-columns: 13.75rem 1fr; min-height: 100vh; }
 /* The sidebar stays put; only the page beside it scrolls. */
 .side { border-right: 1px solid var(--line); padding: 26px 22px; display: flex; flex-direction: column; gap: 12px; font-size: var(--t-small);
-  position: sticky; top: 0; height: 100vh; overflow-y: auto; align-self: start; background: var(--bg); z-index: 36; }
+  position: sticky; top: 0; height: 100vh; overflow-y: auto; align-self: start; background: var(--bg); z-index: var(--z-side); }
 .side a { text-decoration: none; color: var(--text-muted); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .side a:hover:not(.brand) { text-decoration: underline; text-decoration-thickness: 2px; }
 .side a[aria-current="page"] { color: var(--text); font-weight: 600; }
@@ -157,7 +177,7 @@ input:hover, select:hover { border-color: var(--text); }
 
 /* Filter bar: search and the two pickers on one row, severity below.
    It stays at the top while a long list scrolls. */
-.filterbox { margin-top: 20px; position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 12px 0; border-bottom: 1px solid transparent; }
+.filterbox { margin-top: 20px; position: sticky; top: 0; z-index: var(--z-toolbar); background: var(--bg); padding: 12px 0; border-bottom: 1px solid transparent; }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .filters .f { display: block; min-width: 0; margin-top: 0; font-weight: 400; position: relative; }
 .filters input { margin-top: 0; font-size: var(--t-small); min-height: var(--ctl); padding-top: 6px; padding-bottom: 6px; }
@@ -225,6 +245,19 @@ input:hover, select:hover { border-color: var(--text); }
 .cmd code { flex: 1; min-width: 0; font-size: var(--t-micro); line-height: 1.6; white-space: pre; overflow-x: auto; padding: 2px 0 6px; }
 .cmd .btn { color: var(--ink-text); border-color: var(--ink-muted); min-height: 36px; padding: 0 12px; font-size: var(--t-micro); flex: none; }
 .cmd .btn:hover { background: var(--ink-line); border-color: var(--ink-text); }
+/* The copy icon of a command or code box (KW.copyButton): 32px (44px
+   on a touch screen), at the box's top right beside the text, never
+   over it; a check for a moment after a copy. */
+.copy-ico { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; min-height: 0; padding: 0; margin: 0; border: 1px solid transparent; border-radius: var(--radius-input); background: transparent; color: var(--text-soft); cursor: pointer; }
+.copy-ico .icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.copy-ico .copy-ok, .copy-ico.is-copied .copy-i { display: none; }
+.copy-ico.is-copied .copy-ok { display: inline; color: var(--success); }
+.copy-ico:hover { color: var(--text); background: var(--surface); border-color: var(--line); }
+.copy-ico:focus-visible { outline: var(--focus-width) solid var(--text); outline-offset: 1px; }
+.cmd .copy-ico { color: var(--ink-text); margin: -4px -2px 0 0; }
+.cmd .copy-ico:hover { color: var(--ink-text); background: var(--ink-line); border-color: var(--ink-muted); }
+.cmd .copy-ico:focus-visible { outline-color: var(--ink-text); }
+.cmd .copy-ico.is-copied .copy-ok { color: var(--ink-text); }
 .logs { margin-top: 8px; background: var(--ink); color: var(--ink-text); border: 1px solid var(--ink-edge); border-radius: var(--radius-card); max-height: 320px; overflow: auto; padding: 14px 16px; font-family: var(--font-mono); font-size: var(--t-micro); line-height: 1.7; }
 .logs div { white-space: pre; }
 .logs.wrap div { white-space: pre-wrap; overflow-wrap: anywhere; }

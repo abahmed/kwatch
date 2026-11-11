@@ -1,12 +1,12 @@
 10:02:15 settled
-🟠 worker in shop (prod-eu-1) was preempted by the scheduler for a pod of higher priority because importer in batch is preempting lower-priority pods. 2 pods were preempted by batch/importer-3f56bb51-a (priority 1000 > 0) at 10:01 UTC. Replicas that do not depend on it are healthy. To see the object's state and events, run kubectl describe pod worker-8eef3660-a -n shop
+🟠 worker in shop (prod-eu-1) was preempted by the scheduler for a pod of higher priority because importer in batch is preempting lower-priority pods. 2 pods were preempted by batch/importer-3f56bb51-a (priority 1000 > 0) at 10:01 UTC. Replicas that do not depend on it are healthy. To see the pods' state and events, run kubectl describe pods worker- -n shop
 Proof: 2 failing replicas share node n1 while 1 runs healthy on other nodes.
 🟠 worker in shop (prod-eu-1) was preempted by the scheduler for a pod of higher priority because importer in batch is preempting lower-priority pods.
 | 🟠 **worker** in **shop** (**prod-eu-1**) was preempted by the scheduler for a pod of higher priority because **importer** in **batch** is preempting lower-priority pods.
 | 2 pods were preempted by batch/importer-3f56bb51-a (priority 1000 \> 0) at 10:01 UTC.
 | Replicas that do not depend on it are healthy.
-| To see the object's state and events, run
+| To see the pods' state and events, run
 | ```
-| kubectl describe pod worker-8eef3660-a -n shop
+| kubectl describe pods worker- -n shop
 | ```
 | *Proof: 2 failing replicas share node n1 while 1 runs healthy on other nodes.*

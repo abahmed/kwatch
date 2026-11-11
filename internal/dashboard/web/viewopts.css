@@ -5,7 +5,7 @@
 .vopts > summary { list-style: none; display: inline-flex; align-items: center; min-height: 32px; }
 .vopts > summary::-webkit-details-marker { display: none; }
 .vopts[open] > summary { background: var(--text); color: var(--bg); border-color: var(--text); }
-.vopts-pop { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: min(26.25rem, calc(100vw - 32px)); padding: 16px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-card); font-size: var(--t-small); }
+.vopts-pop { position: absolute; right: 0; top: calc(100% + 8px); z-index: var(--z-popover); width: min(26.25rem, calc(100vw - 32px)); padding: 16px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-card); font-size: var(--t-small); }
 .vo-h { font-family: var(--font-body); font-size: var(--t-micro); font-weight: 600; letter-spacing: 0; color: var(--text-muted); margin-bottom: 6px; padding: 0; }
 .vo-h { margin-top: 16px; }
 .vo-def { display: flex; align-items: center; gap: 8px; min-height: 32px; margin: 0; font-weight: 400; }

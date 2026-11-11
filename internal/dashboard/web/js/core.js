@@ -364,11 +364,14 @@
     if (!s) return KW.chip("c-low c-raw" + (extra || ""), (prefix || "") + sev);
     return KW.chip(s.chip + (extra || ""), (prefix || "") + s.label, s.title);
   };
-  /* wasChip: "Was Urgent", muted, for an issue that settled on its
-     own: nobody was alerted, so the level's colour would mislead. */
-  KW.wasChip = function (sev) {
+  /* settledChip: the level of an issue that settled on its own,
+     greyed ("Urgent", muted): nobody was alerted, so the level's colour
+     would mislead. Beside it the "Settled on its own" mark says why.
+     "Was <level>" is kept for resolved issues people were alerted
+     about (KW.severityChip(sev, "Was ")), so "Was" means one thing. */
+  KW.settledChip = function (sev) {
     var s = KW.SEVERITY[sev];
-    return KW.chip("c-acked c-was", "Was " + (s ? s.label : sev), KW.TERMS.settled.wasTitle);
+    return KW.chip("c-acked c-settled", s ? s.label : sev, KW.TERMS.settled.wasTitle);
   };
   KW.stateChip = function (state) {
     var s = KW.STATE[state];

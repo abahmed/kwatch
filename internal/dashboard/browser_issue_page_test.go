@@ -131,7 +131,8 @@ func TestBrowserIssuePageIsPlain(t *testing.T) {
 	}
 	err := chromedp.Do(tab, chromedp.EmulateViewport(1280, 900),
 		chromedp.Navigate(srv.URL+"/issues/stub-1#timeline"),
-		chromedp.WaitVisible(chromedp.CSS(".ds-r-why")),
+		chromedp.WaitReady(chromedp.CSS(".ds-r-why")),
+		chromedp.WaitVisible(chromedp.CSS("[data-panel=timeline]")),
 		chromedp.Sleep(time.Second))
 	if err != nil {
 		t.Fatal(err)
@@ -213,11 +214,11 @@ func TestBrowserIssuePagePhoneFits(t *testing.T) {
 	srv := stubIssueServer(t, stubDetail())
 	tab, _ := browserTab(t, actx)
 	signInBrowser(t, tab, srv.URL)
-	for _, key := range []string{"timeline", "evidence", "impact",
-		"alerts", "details"} {
+	for _, key := range []string{"summary", "timeline", "evidence",
+		"impact", "alerts", "details"} {
 		err := chromedp.Do(tab, chromedp.EmulateViewport(390, 844),
 			chromedp.Navigate(srv.URL+"/issues/stub-1#"+key),
-			chromedp.WaitVisible(chromedp.CSS(".ds-r-why")),
+			chromedp.WaitVisible(chromedp.CSS("[data-panel="+key+"]")),
 			chromedp.Sleep(time.Second))
 		if err != nil {
 			t.Fatal(err)

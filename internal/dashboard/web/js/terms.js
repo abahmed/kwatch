@@ -40,7 +40,13 @@
     navHealth: "kwatch health",
     /* The questions at the top of an issue page. */
     ask: { what: "What's wrong?", why: "Why?", todo: "What should I do?",
-      told: "Who was alerted?" },
+      told: "Who was alerted?",
+      // What's wrong? when the plain sentence only repeats the title.
+      asTitle: "What the title says; kwatch has no more detail on the " +
+        "symptom yet. The Timeline tab shows what it saw.",
+      // What should I do? without steps of its own.
+      noSteps: "kwatch has no fix steps for this yet. Start with what " +
+        "Kubernetes reports:" },
     /* A bundled message: not sent on its own. */
     bundled: "bundled in the summary message"
   };
@@ -148,10 +154,16 @@
     /* The week's numbers count the issues someone was alerted about. */
     alerted: "Alerted",
     alertedSub: "issues people were told about",
-    resolvedAlerted: "Resolved",
-    resolvedAlertedSub: "of the alerted issues",
+    /* Resolved counts resolves in the week, so it can be more than
+       Alerted: some of them opened the week before. */
+    resolvedAlerted: "Resolved this week",
+    resolvedAlertedSub: "alerted issues, incl. ones opened earlier",
+    medianResolveAlertedSub: "over the alerted issues resolved this week",
     medianResolveAlerted: "Median time to resolve an alerted issue",
-    changes: "Bad releases and changes that caused issues"
+    /* changes(24): the title of the Overview's releases block. */
+    changes: function (hours) {
+      return "Bad releases (last " + hours + " h) and changes behind active issues";
+    }
   };
 
   /* Paging and grouping: an issue that groups the objects a removed

@@ -43,25 +43,19 @@ const shownRows = `((sel) => {
     box.querySelectorAll(".lo-all").length;
 })`
 
-// A reader who chose "Show all 20" on the Overview's old problems still
-// sees all 20 after the page reads again.
-func TestBrowserOldProblemsStayExpandedAcrossRefresh(t *testing.T) {
+// The Overview's old problems are all shown, never behind a fold or a
+// "Show all", and stay so after the page reads again.
+func TestBrowserOldProblemsAreAllShown(t *testing.T) {
 	srv := listsServer(t, map[string]any{
 		"/api/overview": overviewPaging(20)})
 	tab := pagingTab(t, srv, 1280, 800, "/", ".ov-old")
-	before := evalString(t, tab, `(() => {
-  document.querySelector(".ov-old summary").click();
-  const folded = `+shownRows+`(".ov-old");
-  document.querySelector(".ov-old .lo-all").click();
-  return folded + "," + `+shownRows+`(".ov-old");
-})()`)
-	if before != "10|1,20|0" {
+	probe := shownRows + `(".ov-old") + "," +
+  document.querySelectorAll(".ov-olds details").length`
+	if before := evalString(t, tab, probe); before != "20|0,0" {
 		t.Fatalf("before the refresh the list shows %q", before)
 	}
 	refreshPage(t, tab)
-	after := evalString(t, tab, shownRows+`(".ov-old") + "," +
-  document.querySelector(".ov-old").open`)
-	if after != "20|0,true" {
+	if after := evalString(t, tab, probe); after != "20|0,0" {
 		t.Errorf("after a refresh the list shows %q, want all 20", after)
 	}
 }
@@ -107,10 +101,8 @@ func TestBrowserLeftoversStayExpandedAcrossRedraw(t *testing.T) {
 		t.Fatalf("before the redraw the list shows %q", before)
 	}
 	refreshPage(t, tab)
-	// An open fold holds the update back behind "Show the update".
+	// The update is drawn in place by itself.
 	after := evalString(t, tab, `(() => {
-  const bar = document.querySelector(".d-fresh");
-  if (bar && !bar.hidden) bar.querySelector("button").click();
   return `+shownRows+`(`+sec+`) + "," +
     document.querySelector(`+sec+` + " .lo-what").textContent;
 })()`)
@@ -127,10 +119,10 @@ func TestBrowserLeftoversStayExpandedAcrossRedraw(t *testing.T) {
 // when the answer has none.
 func TestBrowserOldProblemsLineNamesTheConfiguredDays(t *testing.T) {
 	for days, want := range map[int]string{
-		90: "3 old problems not shown (already failing for 90+ days " +
-			"when kwatch first saw them) Show them",
-		0: "3 old problems not shown (already failing for a long " +
-			"time when kwatch first saw them) Show them",
+		90: "3 old problems not shown in the issues (already " +
+			"failing for 90+ days when kwatch first saw them)",
+		0: "3 old problems not shown in the issues (already " +
+			"failing for a long time when kwatch first saw them)",
 	} {
 		ov := overviewPaging(3)
 		op := ov["oldProblems"].(map[string]any)
@@ -141,7 +133,7 @@ func TestBrowserOldProblemsLineNamesTheConfiguredDays(t *testing.T) {
 		srv := listsServer(t, map[string]any{"/api/overview": ov})
 		tab := pagingTab(t, srv, 1280, 800, "/", ".ov-old")
 		if got := evalString(t, tab, `document.querySelector(
-  ".ov-old summary").textContent`); got != want {
+  ".ov-old-h").textContent`); got != want {
 			t.Errorf("days %d: the line is %q, want %q", days, got, want)
 		}
 	}

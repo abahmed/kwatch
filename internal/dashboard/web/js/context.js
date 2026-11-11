@@ -62,20 +62,40 @@
     KW.$('[data-fold="fix"]', root).hidden = list.length <= Number(root.dataset.stepsShown || 0);
   };
 
-  /* ago: how long before or after the issue started, in words. */
+  /* onset: when its current failures began. The server sorts each
+     change into Before and During against it, so the label, the
+     offset and the caption all measure from the same time. */
+  function onset(inc) {
+    return KW.valid(inc.onset) ? inc.onset : inc.firstSeen;
+  }
+
+  /* offset: how long before or after it started failing, in words. */
   function offset(inc, iso) {
-    var start = Date.parse(inc.firstSeen), at = Date.parse(iso);
-    if (Math.abs(start - at) < 60000) return "when it started";
-    if (at < start) return KW.lasted(iso, inc.firstSeen) + " before it started";
-    return KW.lasted(inc.firstSeen, iso) + " after it started";
+    var from = onset(inc), start = Date.parse(from), at = Date.parse(iso);
+    if (Math.abs(start - at) < 60000) return "when it started failing";
+    if (at < start) return KW.lasted(iso, from) + " before it started failing";
+    return KW.lasted(from, iso) + " after it started failing";
   }
 
   function objName(c) { return KW.obj(c.kind, c.namespace, c.name); }
 
-  /* who: "by kubectl-edit · argocd/shop", or "". */
+  /* automatic: an actor that is a controller, not a person or the
+     deploy tool acting for one: Kubernetes itself (system:*, kube-*,
+     kubelet) and autoscalers or operators (karpenter, keda, ...). */
+  KW.automaticActor = function (actor) {
+    var a = String(actor || "").toLowerCase();
+    if (/argocd|flux|helm|kustomize|kubectl/.test(a)) return false;
+    return /^(system:|kube-|kubelet)/.test(a) ||
+      /autoscaler|karpenter|keda|operator|^vpa/.test(a);
+  };
+
+  /* who: "by kubectl-edit · argocd/shop", "by karpenter (automatic)",
+     or "". */
   function who(c) {
     var parts = [];
-    if (c.actor) parts.push("by " + c.actor);
+    if (c.actor) {
+      parts.push("by " + c.actor + (KW.automaticActor(c.actor) ? " (automatic)" : ""));
+    }
     if (c.app) parts.push("app " + c.app);
     return parts.join(" · ");
   }
@@ -180,8 +200,9 @@
     list.forEach(function (c) { ul.appendChild(changeRow(inc, c)); });
     if (list.length) box.appendChild(ul);
     var cut = KW.cutCount(inc, "changes");
-    box.appendChild(KW.el("p", "ev-cap", "Changes people made to this object and what it uses, " +
-      "from 30 minutes before it started" + (inc.state === "resolved" ? " until it was resolved." : " until now.") +
+    box.appendChild(KW.el("p", "ev-cap", "Changes made to this object and what it uses " +
+      "(by people or automatically), from 30 minutes before it started failing (" +
+      KW.when(onset(inc)) + ")" + (inc.state === "resolved" ? " until it was resolved." : " until now.") +
       (cut ? " " + KW.plural(cut, "more change", "more changes") + " not shown." : "")));
   }
 

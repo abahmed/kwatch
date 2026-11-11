@@ -146,10 +146,7 @@
     }
     code.addEventListener("click", grow);
     code.addEventListener("keydown", grow);
-    var b = box.appendChild(KW.el("button", "btn btn-sm ds-copy", "Copy"));
-    b.type = "button";
-    b.title = "Copy the exact text";
-    b.addEventListener("click", function () { KW.copy(b, text, "Copy"); });
+    box.appendChild(KW.copyButton(text, "the exact text"));
     return box;
   }
 
@@ -227,10 +224,37 @@
     return { list: out, used: used };
   }
 
+  var LOGS = /^(deployment|statefulset|daemonset|replicaset|job|pod)$/;
+
+  /* firstLook: without fix steps, the read-only kubectl commands that
+     show what Kubernetes reports about the object, and the proof. */
+  function firstLook(dd, root, inc) {
+    var kind = String(inc.workloadKind || "").toLowerCase(), name = inc.workload;
+    var ns = inc.namespace ? "-n " + inc.namespace + " " : "", obj = kind + "/" + name;
+    var list = [];
+    if (kind && name) list.push(["Its state and recent events:", "kubectl " + ns + "describe " + obj]);
+    if (kind && name && LOGS.test(kind)) {
+      list.push(["Its latest logs:", "kubectl " + ns + "logs " + obj + " --all-containers --tail=50"]);
+    }
+    list.push(["Recent warnings around it:", "kubectl " + (ns || "-A ") +
+      "get events --field-selector type=Warning --sort-by=.lastTimestamp"]);
+    dd.appendChild(KW.el("p", "ds-sub", T.ask.noSteps));
+    var ol = dd.appendChild(KW.el("ol", "ds-todo"));
+    list.forEach(function (x) {
+      var li = ol.appendChild(KW.el("li"));
+      li.appendChild(KW.el("p", "ds-next-t", x[0]));
+      li.appendChild(KW.cmd(x[1]));
+    });
+    var b = dd.appendChild(KW.el("button", "link ds-steps-b", "See what kwatch found in " + T.proof + " →"));
+    b.type = "button";
+    b.addEventListener("click", function () { KW.showTab(root, "evidence"); });
+  }
+
   function todoRow(root, inc) {
     var a = actions(inc), steps = inc.fixSteps || [];
-    var dd = KW.summaryRow(root, "next", T.ask.todo, a.list.length > 0 || !!inc.docsLink);
+    var dd = KW.summaryRow(root, "next", T.ask.todo, true);
     root.dataset.stepsShown = String(a.used);
+    if (!a.list.length) firstLook(dd, root, inc);
     if (a.list.length) {
       var ol = dd.appendChild(KW.el("ol", "ds-todo"));
       a.list.forEach(function (x) {
@@ -280,6 +304,7 @@
     var f = first(inc), t = inc.timing || {};
     if (!f && !list.length) {
       dd.appendChild(KW.el("p", "ds-sub", KW.nobodyText(inc)));
+      ackLine(dd, inc);
       return;
     }
     if (f) {
@@ -347,22 +372,27 @@
     return lost.ready + " of " + lost.total + " endpoints of " + lost.kind + " " + lost.name + " are ready";
   }
 
-  /* KW.issueStatus: "Happening now · for 6 h · users are still served by the old version". */
+  /* KW.issueStateChip: the state as a chip: "Happening now",
+     "Resolved", "Stopped tracking" or "Settled before alerting". */
+  KW.issueStateChip = function (inc) {
+    var st = KW.STATE[inc.state] || {}, resolved = inc.state === "resolved";
+    var text = resolved ? (inc.stoppedTracking ? "Stopped tracking" :
+      KW.isUntold(inc) ? T.settled.label : "Resolved") : st.label || inc.state || "";
+    var c = KW.chip((st.chip || "c-state") + " ds-state s-" + inc.state, text, st.title || "");
+    c.dataset.dsStatus = "";
+    return c;
+  };
+
+  /* KW.issueStatus: what the state means beyond its chip: "users are
+     still served by the old version", "it keeps failing and
+     recovering". The header lists them after where and since when. */
   KW.issueStatus = function (root, inc) {
-    var p = KW.$("[data-ds-status]", root), bits = [], st = KW.STATE[inc.state];
-    p.textContent = "";
-    var resolved = inc.state === "resolved";
-    var head = resolved ? (inc.stoppedTracking ? "Stopped tracking" : KW.isUntold(inc) ? T.settled.label : "Resolved") :
-      (st ? st.label : "");
-    if (head) p.appendChild(KW.el("b", "ds-state s-" + inc.state, head));
-    if (resolved && KW.valid(inc.resolvedAt)) bits.push("lasted " + KW.lasted(inc.firstSeen, inc.resolvedAt));
-    else if (inc.state !== "settling" && KW.forLong(inc.firstSeen)) bits.push(KW.forLong(inc.firstSeen));
-    if (!resolved && impact(inc)) bits.push(impact(inc));
-    bits.forEach(function (b) { p.appendChild(document.createTextNode(" · " + b)); });
+    var bits = [];
+    if (inc.state !== "resolved" && impact(inc)) bits.push(impact(inc));
     if (inc.state === "flapping" || (sum(inc).stage || {}).flapping) {
-      p.appendChild(document.createTextNode(" · it keeps failing and recovering"));
+      bits.push("it keeps failing and recovering");
     }
-    p.title = st ? st.title : "";
+    return bits;
   };
 
   KW.summaryRows = function (root, inc) {
