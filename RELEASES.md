@@ -22,6 +22,8 @@
 
 - **Browser notifications with the dashboard closed.** Turning notifications on in the dashboard subscribes the browser to Web Push: kwatch sends each change itself, encrypted for that browser, and every notification stays on screen until closed, so macOS shows it.
 
+- Built with Go 1.27.4 (GO-2026-6859).
+
 ### Editions
 
 - Community Pro line: it says "how to fix it" only when Pro has a fix, otherwise "how to check it", and it promises a change only when one is known.

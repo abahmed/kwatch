@@ -4,6 +4,8 @@ package dashboard
 
 import (
 	"context"
+	"os"
+	"strconv"
 	"testing"
 
 	"github.com/chromedp/chromedp"
@@ -81,6 +83,31 @@ var layoutChecks = []layoutCheck{
 })()`},
 }
 
+// settleFonts waits until the dashboard's web fonts have loaded and one
+// more frame has drawn, so a measurement never sees the fallback font
+// (wider on Linux) that font-display: swap shows meanwhile. With
+// KWATCH_BROWSER_WIDE_FONT=1 it first swaps in a wide system font, to
+// check that the layout promises hold whatever the font.
+func settleFonts() chromedp.Action[chromedp.Void] {
+	wide := os.Getenv("KWATCH_BROWSER_WIDE_FONT") == "1"
+	js := `(async (wide) => {
+  if (wide) {
+    const s = new CSSStyleSheet();
+    s.replaceSync(":root{--font-body:Verdana,sans-serif !important;" +
+      "--font-display:Verdana,sans-serif !important}");
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, s];
+  }
+  await document.fonts.ready;
+  await new Promise((r) => requestAnimationFrame(() => r()));
+  return true;
+})(` + strconv.FormatBool(wide) + `)`
+	eval := chromedp.Evaluate[bool](js, chromedp.EvalAwaitPromise)
+	return chromedp.Func(func(ctx context.Context, t *chromedp.Target) error {
+		_, err := eval(ctx, t)
+		return err
+	})
+}
+
 // checkLayouts runs every layout check in tab.
 func checkLayouts(t *testing.T, ctx context.Context, base string) {
 	t.Helper()
@@ -89,6 +116,7 @@ func checkLayouts(t *testing.T, ctx context.Context, base string) {
 			chromedp.EmulateViewport(c.w, c.h),
 			chromedp.Navigate(base+c.path),
 			chromedp.WaitVisible(chromedp.CSS(c.ready)),
+			settleFonts(),
 		)
 		if err != nil {
 			t.Errorf("%s: %v", c.name, err)

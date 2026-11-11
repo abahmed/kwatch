@@ -63,7 +63,7 @@ func pagingTab(t *testing.T, srv *httptest.Server, w, h int64,
 	err := chromedp.Do(tab, chromedp.EmulateViewport(w, h),
 		chromedp.Navigate(srv.URL+path),
 		chromedp.WaitVisible(chromedp.CSS(ready)),
-		chromedp.Sleep(300*time.Millisecond))
+		settleFonts(), chromedp.Sleep(300*time.Millisecond))
 	if err != nil {
 		t.Fatal(err)
 	}
