@@ -1,7 +1,7 @@
 10:05:15 settled
 🟠 Job report in batch (prod-eu-1) is failing: exited with code 1. Cause not found yet: its registry is healthy and unchanged. It fails with "relation "users" does not exist".
 Related alerts: 2 failed pods
-To see the pod's state and events, run kubectl describe pod report-a -n batch
+To see the pod's state and events, run kubectl describe pods report- -n batch
 🟠 Job report in batch (prod-eu-1) is failing: exited with code 1.
 | 🟠 Job **report** in **batch** (**prod-eu-1**) is failing: exited with code 1.
 | Cause not found yet: its registry is healthy and unchanged.
@@ -9,7 +9,7 @@ To see the pod's state and events, run kubectl describe pod report-a -n batch
 | Related alerts: 2 failed pods
 | To see the pod's state and events, run
 | ```
-| kubectl describe pod report-a -n batch
+| kubectl describe pods report- -n batch
 | ```
 10:10:00 material change
 🟠 Job report in batch (prod-eu-1) is now failing: failed after 5 pod failures. It is now also affecting container app in pod report-c, container app in pod report-d and container app in pod report-e: they are failing: exited with code 1.

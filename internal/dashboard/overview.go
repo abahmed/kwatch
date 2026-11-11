@@ -10,7 +10,7 @@ import (
 )
 
 // overviewTop bounds the issues "Look at these first" lists.
-const overviewTop = 5
+const overviewTop = 8
 
 // OverviewResponse is the /api/overview response: the Overview's top
 // in one read. Counts are the issues not resolved by severity;
@@ -104,6 +104,7 @@ func (s *Server) overviewHandler(w http.ResponseWriter, r *http.Request) {
 	if snap, ok := s.releaseBookSnapshot(); ok {
 		out.Releases = summarizeReleases(snap,
 			s.now.Now().Add(-releaseWindow))
+		linkReleaseIssues(out.Releases, all, s.texts.redact)
 	}
 	writeTagged(w, r, out)
 }

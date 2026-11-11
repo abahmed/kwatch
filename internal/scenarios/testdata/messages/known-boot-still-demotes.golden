@@ -1,5 +1,5 @@
 10:02:15 settled
-🟠 sync in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "panic: sync: cursor table is locked". Its last run lasted ten seconds; six restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs sync-d4ad54cc-a -c app -n shop --previous
+🟠 sync in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "panic: sync: cursor table is locked". Its last run lasted ten seconds; six restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs deploy/sync -c app -n shop --previous
 🟠 sync in shop (prod-eu-1) keeps crashing.
 | 🟠 **sync** in **shop** (**prod-eu-1**) keeps crashing.
 | Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
@@ -8,7 +8,7 @@
 | It runs a single replica.
 | To read the output of the last crash, run
 | ```
-| kubectl logs sync-d4ad54cc-a -c app -n shop --previous
+| kubectl logs deploy/sync -c app -n shop --previous
 | ```
 10:16:00 healthy for 3m0s
 ✅ sync in shop (prod-eu-1) is healthy again. It was failing for 12 minutes and recovered on its own.
@@ -16,7 +16,7 @@
 | ✅ **sync** in **shop** (**prod-eu-1**) is healthy again.
 | It was failing for 12 minutes and recovered on its own.
 09:14:15 settled
-🟠 sync in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. That is unusual for this workload: restarts 6×/h, usually none. It fails with "panic: sync: cursor table is locked". It runs a single replica. This is the second time this week. Last time it recovered on its own. To read the output of the last crash, run kubectl logs sync-d4ad54cc-a -c app -n shop --previous
+🟠 sync in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. That is unusual for this workload: restarts 6×/h, usually none. It fails with "panic: sync: cursor table is locked". It runs a single replica. This is the second time this week. Last time it recovered on its own. To read the output of the last crash, run kubectl logs deploy/sync -c app -n shop --previous
 🟠 sync in shop (prod-eu-1) keeps crashing.
 | 🟠 **sync** in **shop** (**prod-eu-1**) keeps crashing.
 | Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
@@ -26,7 +26,7 @@
 | This is the second time this week. Last time it recovered on its own.
 | To read the output of the last crash, run
 | ```
-| kubectl logs sync-d4ad54cc-a -c app -n shop --previous
+| kubectl logs deploy/sync -c app -n shop --previous
 | ```
 09:28:00 healthy for 3m0s
 ✅ sync in shop (prod-eu-1) is healthy again. It was failing for 12 minutes and recovered on its own.

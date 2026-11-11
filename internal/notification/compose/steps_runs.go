@@ -31,12 +31,11 @@ func ranBefore(s detection.Finding) bool {
 
 // currentRunSteps read a container that never restarted: the pod's
 // state and events, then what the container prints now.
-func currentRunSteps(pod, container, ns string) []notification.Step {
-	return []notification.Step{
+func currentRunSteps(ref podRef) []notification.Step {
+	return append([]notification.Step{
 		{Text: "See the pod's state and events",
-			Command: "kubectl describe pod " + quote(pod) + ns},
+			Command: "kubectl describe " + ref.describe() + ref.ns},
 		{Text: "Read what the container prints",
-			Command: "kubectl logs " + quote(pod) + " -c " +
-				quote(container) + ns},
-	}
+			Command: "kubectl logs " + ref.logs() + ref.ns},
+	}, ref.pickPodStep()...)
 }

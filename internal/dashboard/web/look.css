@@ -58,10 +58,10 @@ html[data-text="xl"] { font-size: 125%; --text-scale: 1.25; }
    size). A bar or a dot keeps its look: the extra room is transparent
    padding around it. */
 @media (pointer: coarse) {
-  html .btn, html .btn-sm, html .ds-copy.btn, html .cmd .btn,
+  html .btn, html .btn-sm, html .copy-ico, html .cmd .btn,
   html .tz-b, html .link, html .brand, html .ds-raw-t,
   html details > summary, html .vo-colsnote .link { min-height: 44px !important; }
-  html .btn, html .btn-sm, html .tz-b { min-width: 44px !important; }
+  html .btn, html .btn-sm, html .tz-b, html .copy-ico { min-width: 44px !important; }
   html .link { display: inline-flex; align-items: center; }
   html .ds-raw-t, html details > summary { align-content: center; }
   /* Links inside a sentence: inline padding widens the hit area

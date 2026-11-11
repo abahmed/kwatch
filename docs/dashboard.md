@@ -114,7 +114,8 @@ level you pick through the browser's push service (Web Push, encrypted
 for that browser), so they arrive with every dashboard tab closed and
 stay on screen until closed. They are for confirmed issues only: an
 issue still settling is told once it is confirmed, and one that settles
-before alerting is never told, neither new nor resolved. **Send a test notification** checks the
+before alerting is never told, neither new nor resolved. With browser
+alerts off a tab reads nothing for them. **Send a test notification** checks the
 path. Signing out, turning them off, 30 days unseen or a new password
 stops them; at most 100 browsers are kept. A service worker (`/sw.js`)
 shows them and caches nothing.
@@ -159,16 +160,19 @@ low" (each part opens that level's issues); it is red only while
 something is urgent, amber while something needs attention, and calm
 otherwise. **Look at these first** lists up to five issues, most urgent
 first and then the longest running, each with a short cause, where it
-is, its level and how long ago it started. **Bad releases and changes
-that caused issues** joins the releases of the last 24 hours that
-failed, went down or got worse with the active issues that started right
-after a change; it shows only when there is one. **This week** has four
-numbers, all over the issues someone was alerted about (alerted,
-resolved, the urgent issues that alerted the on-call person, the median
-time to resolve an alerted issue), one line saying how many issues
-settled on their own before anyone was alerted, the day-by-day chart, and
-the top causes beside where the trouble is, each number saying what it
-counts ("105 issues this week").
+is, its level and how long ago it started. **Bad releases (last 24 h)
+and changes behind active issues** joins the releases of the last 24
+hours that failed, went down or got worse with the active issues that
+started right after a change; each release links the issue it opened
+(resolved or not), or says none opened in the 30 minutes after it and
+links its workload's issues. It shows only when there is one. **This
+week** has four numbers, all over the issues someone was alerted about
+(alerted, resolved this week, the urgent issues that alerted the
+on-call person, the median time to resolve those same resolved
+issues), one line saying how many issues settled on their own before
+anyone was alerted, the day-by-day chart, and the top causes beside
+where the trouble is, each with a small colour key and each number
+saying what it counts ("105 issues this week").
 
 **Issues** (`/issues`) shows one toolbar row: the Active, Resolved and
 All tabs, the search box and **Filters (N)**, which opens the other

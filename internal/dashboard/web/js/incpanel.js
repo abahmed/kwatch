@@ -1,24 +1,30 @@
 /* kwatch dashboard: one issue, loaded and kept fresh, and the tabs of
    the issue page. The issue page (detail.js) and the preview drawer of
    the Issues table (drawer.js) both use it: it reads /api/incidents/<id>
-   every 30 s and draws the issue with KW.renderIncident into a
-   tpl-detail clone. While the reader has something open in it or is
-   selecting text, nothing is redrawn: a bar says the issue changed and
-   "Show the update" draws it.
-   Tabs (issue page only): Timeline, Proof, Impact, Alerts, Details,
-   each with a count. The last one picked is kept for this browser
-   (localStorage kwatch.issueTab); #timeline … #details open one (#evidence
-   is Proof); arrow keys move along the tabs and t, p, i, a, d pick one.
-   On a phone the tabs are one row that scrolls sideways, right under the
-   summary. The drawer shows only the summary, with links to the tabs of
-   the full page. */
+   every 30 s (and at once when the live stream says it changed) and
+   draws the issue with KW.renderIncident into a tpl-detail clone. A
+   newer reading is drawn in place on its own, keeping the tab, the
+   scroll position and the open folds, and marks what changed
+   (incupdate.js). Only while the reader is selecting text or has a
+   control focused from the keyboard does it wait, with a quiet note,
+   and it applies once they are done.
+   Tabs (issue page only): Summary (the questions), Timeline, Proof,
+   Impact, Alerts (Who was alerted? first), Details, each but Summary
+   with a count. The open tab is in the address: #summary … #details
+   (#evidence is Proof), so a reload, Back or a pasted link opens it;
+   without one, Summary. Arrow keys move along the tabs and s, t, p, i,
+   a, d pick one. The tab bar sticks to the top of the window while the
+   page scrolls; on a phone it is one row that scrolls sideways. The
+   drawer shows the header card with the questions, and links to the
+   tabs of the full page. */
 (function () {
   "use strict";
   var KW = window.KW;
-  var EVERY = 30000, KEY = "kwatch.issueTab";
+  var EVERY = 30000;
   var page = null;
 
   var EMPTY = {
+    summary: "",
     timeline: "Nothing happened yet besides kwatch noticing it.",
     evidence: "kwatch has no proof for this yet: no failing probe, logs, containers, warnings or node problems.",
     impact: "Nothing else looks hit: kwatch found no affected objects, lost traffic or linked issues.",
@@ -56,17 +62,24 @@
     var h = location.hash.slice(1);
     return keys().indexOf(h) >= 0 ? h : "";
   }
-  function saved() {
-    var v = "";
-    try { v = window.localStorage.getItem(KEY) || ""; } catch (e) { v = ""; }
-    return keys().indexOf(v) >= 0 ? v : "";
-  }
-  function save(key) {
-    try { window.localStorage.setItem(KEY, key); } catch (e) { /* private mode */ }
+  /* toPanels: when the tab bar is stuck to the top of the window, the
+     page scrolls back so the newly picked tab starts under it. */
+  function toPanels(root) {
+    var nav = KW.$(".d-tabbar", root), panels = KW.$(".d-panels", root);
+    var gap = panels.getBoundingClientRect().top - nav.getBoundingClientRect().bottom;
+    if (gap < -1) window.scrollBy(0, gap);
   }
 
-  /* select shows tab key. user: the reader picked it, so it is kept and
-     put in the address. */
+  /* inStrip scrolls the tab strip sideways (never the page) so the open
+     tab is in view on a phone, also when a link opened it. */
+  function inStrip(bar, b) {
+    var l = b.offsetLeft - bar.offsetLeft, r = l + b.offsetWidth;
+    if (l < bar.scrollLeft) bar.scrollLeft = l;
+    else if (r > bar.scrollLeft + bar.clientWidth) bar.scrollLeft = r - bar.clientWidth + 44;
+  }
+
+  /* select shows tab key. user: the reader picked it, so it goes in
+     the address (replacing it: Back still leaves the issue). */
   function select(root, key, user) {
     var bar = KW.$("[data-tabs]", root);
     if (!bar) return;
@@ -75,10 +88,12 @@
       b.setAttribute("aria-selected", on ? "true" : "false");
       b.tabIndex = on ? 0 : -1;
       KW.$('[data-panel="' + t[0] + '"]', root).hidden = !on;
+      if (on) inStrip(bar, b);
     });
+    var was = root.dataset.shownTab;
     root.dataset.shownTab = key;
     if (!user) return;
-    save(key);
+    if (was && was !== key) toPanels(root);
     if (location.hash !== "#" + key) {
       history.replaceState(history.state, "", location.pathname + location.search + "#" + key);
     }
@@ -137,8 +152,13 @@
     hintMore(nav, list);
     var panels = KW.$(".d-panels", root);
     panels.parentNode.insertBefore(nav, panels);
+    // The questions leave the card for their tabs.
+    var sum = KW.$('[data-panel="summary"]', root);
+    sum.insertBefore(KW.$(".ds-body", root), KW.$(".tab-empty", sum));
+    var al = KW.$('[data-panel="alerts"]', root);
+    al.insertBefore(KW.$(".ds-alerted", root), KW.$(".tab-empty", al));
     var old = new URLSearchParams(location.search).get("tab") === "evidence" ? "details" : "";
-    select(root, fromHash() || old || saved() || "timeline", false);
+    select(root, fromHash() || old || "summary", false);
   }
 
   /* nobody: why nobody was alerted, in plain words. */
@@ -172,7 +192,7 @@
       var n = count(root, t[0]), panel = KW.$('[data-panel="' + t[0] + '"]', root);
       var empty = KW.$(".tab-empty", panel), none = !KW.$$(":scope > [data-fold]", panel).some(function (s) {
         return !s.hidden;
-      });
+      }) && !KW.$(":scope > .ds-body, :scope > .ds-alerted", panel);
       empty.hidden = !none;
       empty.textContent = t[0] === "alerts" ? KW.nobodyText(inc) : EMPTY[t[0]];
       var words = t[1] + (n ? " (" + KW.num(n) + ")" : "");
@@ -230,7 +250,7 @@
   });
   window.addEventListener("hashchange", function () {
     var key = fromHash();
-    if (page && page.isConnected && key) { select(page, key, false); save(key); }
+    if (page && page.isConnected && key) select(page, key, false);
   });
 
   /* incidentPanel shows issue id in box. hooks: page (true on the
@@ -243,19 +263,19 @@
     var alertBox = KW.el("div");
     box.appendChild(alertBox);
     var slow = window.setTimeout(function () { if (!root) skeleton(box); }, 300);
-    var bar = KW.el("div", "livebar d-fresh");
-    bar.setAttribute("role", "status");
-    bar.hidden = true;
-    bar.appendChild(KW.el("span", "", "This issue changed."));
-    var show = bar.appendChild(KW.el("button", "btn btn-sm", "Show the update"));
-    show.type = "button";
-    show.addEventListener("click", function () { if (waiting) draw(waiting); });
+    var bar = KW.waitNote(function () { if (waiting) draw(waiting); });
 
-    /* busy: the reader opened something inside (a diff, all times, how
-       to acknowledge) or is selecting text. */
-    function busy() {
-      return !!(KW.$(".detail details[open]", root) || KW.selecting(root));
+    /* busy: the reader is selecting text or using a control in it. */
+    function busy() { return !!root && KW.issueBusy(root); }
+
+    /* later applies a waiting update once the reader is done. */
+    function later() {
+      window.setTimeout(function () {
+        if (waiting && !stopped && !busy()) draw(waiting);
+      }, 0);
     }
+    document.addEventListener("selectionchange", later);
+    document.addEventListener("focusout", later);
 
     function draw(data) {
       waiting = null;
@@ -271,7 +291,9 @@
         KW.$(".detail", root).insertBefore(bar, KW.$(".detail", root).firstChild);
         box.appendChild(root);
       }
+      var back = first ? null : KW.keepPlace(root);
       KW.renderIncident(root, data);
+      if (back) back();
       if (first && hooks.page) {
         tabBar(root);
         page = root;
@@ -339,6 +361,12 @@
     var poll = KW.poller(load, EVERY, {
       wants: function (ids) { return ids.indexOf(id) >= 0; }
     });
-    return { stop: function () { stopped = true; poll.stop(); window.clearTimeout(slow); } };
+    return { stop: function () {
+      stopped = true;
+      poll.stop();
+      window.clearTimeout(slow);
+      document.removeEventListener("selectionchange", later);
+      document.removeEventListener("focusout", later);
+    } };
   };
 })();

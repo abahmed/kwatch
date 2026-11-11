@@ -82,3 +82,37 @@ func TestTitleForNamesTheRootInWords(t *testing.T) {
 	p.Root = inventory.EntityID{Kind: "cluster-dns", Name: "dns"}
 	assert.Equal(t, "Cluster-dns dns", toListItem(p).Title)
 }
+
+// The week's "Resolved" count and the median beside it are over the
+// same issues: an issue moved into another (superseded) is in neither,
+// and one that settled on its own is in neither of the alerted ones.
+func TestWeekResolvedCountMatchesTheMedianCount(t *testing.T) {
+	notify := opened("n", "a", incident.Notify, ago(50*time.Hour))
+	notify.State, notify.Resolved = incident.Resolved, ago(time.Hour)
+	moved := opened("m", "a", incident.Notify, ago(3*time.Hour))
+	moved.State, moved.Resolved = incident.Resolved, ago(time.Hour)
+	moved.SupersededBy = "x"
+	settled := opened("s", "a", incident.Notify, ago(5*time.Hour))
+	settled.State, settled.Resolved = incident.Resolved, ago(4*time.Hour)
+	settled.Announced = time.Time{}
+	again := opened("r", "a", incident.Page, ago(30*time.Hour),
+		ago(2*time.Hour))
+	again.History = []incident.Occurrence{{Opened: ago(30 * time.Hour),
+		Resolved: ago(29 * time.Hour), Heard: true}}
+	items := []incident.Incident{notify, moved, settled, again}
+
+	days := insightDays(items, trendNow, time.UTC)
+	tr := buildTrends(items, trendNow, time.UTC, incident.DefaultRemember)
+	resolved, alerted := 0, 0
+	for _, d := range days {
+		resolved += d.Resolved
+		alerted += d.ResolvedAlerted
+	}
+	if resolved != tr.Resolve.Count || alerted != tr.ResolveAlerted.Count {
+		t.Errorf("resolved %d/%d alerted, medians over %d/%d",
+			resolved, alerted, tr.Resolve.Count, tr.ResolveAlerted.Count)
+	}
+	if alerted != 2 {
+		t.Errorf("alerted resolves = %d, want 2", alerted)
+	}
+}

@@ -1,11 +1,11 @@
 10:03:15 settled
 🟠 aws-node in kube-system (prod-eu-1) is failing: Kubernetes reported FailedDaemonPod.
 Related alerts: 1 not-ready pod
-To see the object's state and events, run kubectl describe pod aws-node-n2 -n kube-system
+To see the pods' state and events, run kubectl describe pods aws-node- -n kube-system
 🟠 aws-node in kube-system (prod-eu-1) is failing: Kubernetes reported FailedDaemonPod.
 | 🟠 **aws-node** in **kube-system** (**prod-eu-1**) is failing: Kubernetes reported FailedDaemonPod.
 | Related alerts: 1 not-ready pod
-| To see the object's state and events, run
+| To see the pods' state and events, run
 | ```
-| kubectl describe pod aws-node-n2 -n kube-system
+| kubectl describe pods aws-node- -n kube-system
 | ```

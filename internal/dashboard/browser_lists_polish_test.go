@@ -8,31 +8,44 @@ import (
 	"time"
 )
 
-// A row that settled on its own says "Was Urgent" in a muted chip, on
-// the Issues list and on Activity.
-func TestBrowserSettledRowsSayWasUrgent(t *testing.T) {
+// A row that settled on its own shows its level greyed on one line,
+// never "Was ...", on the Issues list (beside "Settled on its own")
+// and on Activity; "Was Urgent" is kept for a resolved issue people
+// were alerted about.
+func TestBrowserSettledRowsShowTheirLevelGreyed(t *testing.T) {
 	ev := map[string]any{"id": "inc-003", "at": listAgo(10 * time.Minute),
 		"kind": "resolved", "severity": "page", "untold": true,
 		"title": "api in shop is not ready", "workload": "api",
 		"namespace": "shop"}
+	told := map[string]any{"id": "inc-004", "at": listAgo(time.Hour),
+		"kind": "resolved", "severity": "page",
+		"title": "web in shop is not ready", "workload": "web",
+		"namespace": "shop"}
 	srv := listsServer(t, map[string]any{
 		"/api/incidents": listAnswer(true),
-		"/api/activity": map[string]any{"events": []any{ev}, "total": 1,
-			"kinds": map[string]int{"resolved": 1}, "untold": 0}})
-	probe := `(() => { const c = [...document.querySelectorAll(
-	  ".c-sev .chip, .act-chips .chip")].filter((x) =>
-	  /Was/.test(x.textContent))[0];
-	  return c ? c.textContent + "|" + c.className : "none"; })()`
+		"/api/activity": map[string]any{"events": []any{ev, told},
+			"total": 2, "kinds": map[string]int{"resolved": 2},
+			"untold": 0}})
+	probe := `(() => { const c = document.querySelector(".c-settled");
+	  const r = c.getBoundingClientRect();
+	  const lh = parseFloat(getComputedStyle(c).lineHeight) || 20;
+	  const was = [...document.querySelectorAll(".chip")].
+	    map((x) => x.textContent).filter((x) => /^Was/.test(x));
+	  return c.textContent + "|" + c.className + "|" +
+	    (r.height < 2 * lh) + "|" + was.join(",") + "|" +
+	    !!document.querySelector(".m-untold"); })()`
 	for path, want := range map[string]string{
-		"/issues?status=resolved": "Was Needs attention|chip c-acked c-was",
-		"/activity":               "Was Urgent|chip c-acked c-was"} {
-		text, done := polishPage(t, srv.URL, path,
-			".c-sev .chip, .act-chips .chip", 1280)
-		got := text(probe)
-		if got != want {
-			t.Errorf("%s: %q", path, got)
+		"/issues?status=resolved": "Needs attention|chip c-acked " +
+			"c-settled|true||true",
+		"/activity": "Urgent|chip c-acked c-settled|true|Was Urgent|" +
+			"false"} {
+		for _, w := range []int64{1280, 390} {
+			text, done := polishPage(t, srv.URL, path, ".c-settled", w)
+			if got := text(probe); got != want {
+				t.Errorf("%s at %d: %q, want %q", path, w, got, want)
+			}
+			done()
 		}
-		done()
 	}
 }
 

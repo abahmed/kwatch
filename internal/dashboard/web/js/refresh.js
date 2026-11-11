@@ -51,10 +51,13 @@
      puts the count of changes not seen yet in front: "(3) ...". */
   KW.baseTitle = "kwatch";
   KW.setTitle = function (text) {
+    // Any "(n) " prefix already there ("(1,234) " too) is taken off
+    // first, so two never stack.
+    text = String(text).replace(/^(\([\d.,\s]+\)\s*)+/, "");
     KW.baseTitle = text;
     text = KW.clusterTitle(text);
     var n = KW.unseen || 0;
-    document.title = n ? "(" + n + ") " + text.replace(/^\(\d+\) /, "") : text;
+    document.title = n ? "(" + KW.num(n) + ") " + text : text;
   };
   /* clusterTitle puts the cluster's name before the closing "kwatch"
      once /api/status said it (KW.cluster, pages.js): "Issues - shop-eu

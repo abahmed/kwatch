@@ -11,7 +11,8 @@ const execFormatMessage = "exec /app/api: exec format error"
 // archScenarios are containers that cannot run on the CPU architecture
 // of their node.
 func archScenarios() []scenario {
-	return []scenario{execFormatOnArm(), execFormatOnOtherError()}
+	return []scenario{execFormatOnArm(), execFormatOnOtherError(),
+		execFormatAfterReleaseRetitled()}
 }
 
 // execFormatOnArm: one api replica was scheduled on an arm64 node and

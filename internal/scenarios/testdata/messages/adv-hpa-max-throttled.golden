@@ -11,11 +11,11 @@
 10:16:00 settled
 🟠 web in shop (prod-eu-1) has pods that run without restarting but are not ready.
 Related alerts: 4 CPU throttling alerts
-To see the pod's state and events, run kubectl describe pod web-ea886772-a -n shop
+To see the pod's state and events, run kubectl describe pods web- -n shop
 🟠 web in shop (prod-eu-1) has pods that run without restarting but are not ready.
 | 🟠 **web** in **shop** (**prod-eu-1**) has pods that run without restarting but are not ready.
 | Related alerts: 4 CPU throttling alerts
 | To see the pod's state and events, run
 | ```
-| kubectl describe pod web-ea886772-a -n shop
+| kubectl describe pods web- -n shop
 | ```

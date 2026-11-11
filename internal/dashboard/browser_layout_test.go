@@ -4,11 +4,15 @@ package dashboard
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/chromedp/chromedp"
+
+	"github.com/abahmed/kwatch/internal/incident"
 )
 
 // layoutCheck is a page at one size and a script that says what is
@@ -137,4 +141,96 @@ func checkLayouts(t *testing.T, ctx context.Context, base string) {
 			t.Errorf("%s: %s", c.name, got)
 		}
 	}
+}
+
+// scrollScript says why the page can be scrolled further than its
+// content reaches, or "". need is how far down the content goes: the
+// lowest box in the page, not counting what scrolls inside its own
+// frame (the sidebar, the Issues table) or is fixed, plus the bottom
+// padding of the page's column. A page whose content fits must not
+// scroll at all, nor keep a reserved, empty scrollbar track.
+const scrollScript = `(() => {
+  const de = document.documentElement;
+  let need = 0;
+  (function walk(el) {
+    for (const c of el.children) {
+      const cs = getComputedStyle(c);
+      if (cs.display === "none" || cs.position === "fixed") continue;
+      const r = c.getBoundingClientRect();
+      // An empty box (a "hidden" status bar) adds no height, but it
+      // may hold one that does; nor does a 1px text for screen readers.
+      if (r.height && (r.width > 1 || r.height > 1)) {
+        need = Math.max(need, r.bottom + scrollY);
+      }
+      if (cs.overflowY === "visible") walk(c);
+    }
+  })(document.body);
+  const col = document.querySelector(".content");
+  if (col && col.getBoundingClientRect().bottom + scrollY < need) {
+    need += parseFloat(getComputedStyle(col).paddingBottom);
+  }
+  const gutter = innerWidth - de.clientWidth;
+  const kept = /stable/.test(getComputedStyle(de).scrollbarGutter);
+  if (need <= innerHeight + 0.5) {
+    if (de.scrollHeight > innerHeight) return "content ends at " +
+      Math.round(need) + "px but the page scrolls to " + de.scrollHeight +
+      "px in a " + innerHeight + "px window";
+    if (gutter > 0 || kept) return "an empty scrollbar track is kept";
+    return "";
+  }
+  return de.scrollHeight > need + 2 ? "the page scrolls " +
+    Math.round(de.scrollHeight - need) + "px past its content" : "";
+})()`
+
+// fitPages are the pages checked for an empty scroll. The not-found
+// page is one too.
+var fitPages = []struct{ name, path, ready string }{
+	{"overview", "/", ".ov-say,.ov-tile,h1"},
+	{"issues", "/issues", "#issues-table tbody tr"},
+	{"issue", "/issues/fit-1", ".d-tab"},
+	{"activity", "/activity", ".act-row,.empty,h1"},
+	{"kwatch", "/kwatch", ".ov-say"},
+	{"not found", "/nothing-here", "h1"},
+}
+
+// A page whose content fits the window has no scrollbar: neither a
+// few pixels of extra height nor a reserved, empty track.
+func TestBrowserNoEmptyScroll(t *testing.T) {
+	items := []incident.Incident{
+		testIncident("fit-1", "shop", -10*time.Minute),
+		testIncident("fit-2", "pay", -20*time.Minute),
+	}
+	// Real scrollbars, as a desktop with a mouse draws them.
+	ctx, srv := browserSetupWith(t, items,
+		chromedp.Flag("hide-scrollbars", false))
+	for _, size := range []struct{ w, h int64 }{
+		{1440, 900}, {2000, 1200}, {390, 844}} {
+		tab, _ := browserTab(t, ctx)
+		signInBrowser(t, tab, srv.URL)
+		for _, p := range fitPages {
+			name := fmt.Sprintf("%s@%dx%d", p.name, size.w, size.h)
+			got, err := scrollProblem(tab, srv.URL+p.path, p.ready, size.w,
+				size.h)
+			if err != nil {
+				t.Errorf("%s: %v", name, err)
+			} else if got != "" {
+				t.Errorf("%s: %s", name, got)
+			}
+		}
+	}
+}
+
+// scrollProblem opens url at w x h and runs scrollScript once the page
+// has drawn its data.
+func scrollProblem(
+	tab context.Context, url, ready string, w, h int64,
+) (string, error) {
+	err := chromedp.Do(tab, chromedp.EmulateViewport(w, h),
+		chromedp.Navigate(url),
+		chromedp.WaitVisible(chromedp.CSS(ready)),
+		settleFonts(), chromedp.Sleep(700*time.Millisecond))
+	if err != nil {
+		return "", err
+	}
+	return chromedp.Run(tab, chromedp.Evaluate[string](scrollScript))
 }

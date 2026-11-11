@@ -3,8 +3,7 @@
    The cards and charts themselves are in overview.css. */
 .ip-chart { margin-top: 4px; }
 .ip-table { margin-top: 12px; font-size: var(--t-small); }
-.ip-table > summary { cursor: pointer; width: fit-content; color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; min-height: 28px; }
-.ip-table > summary:hover { color: var(--text); }
+.ip-table { overflow-x: auto; }
 .ip-t { margin-top: 8px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .ip-t th, .ip-t td { padding: 4px 16px 4px 0; text-align: right; border-bottom: 1px solid var(--line); }
 .ip-t th:first-child { text-align: left; }
@@ -19,5 +18,6 @@
 .tr-link { font-weight: 600; overflow-wrap: break-word; width: fit-content; max-width: 100%; }
 .tr-meta { font-size: var(--t-small); color: var(--text-muted); overflow-wrap: anywhere; }
 @media (pointer: coarse) {
-  .ip-link, .ip-table > summary { display: inline-flex; align-items: center; min-height: 44px; }
+  .ip-link { display: inline-flex; align-items: center; min-height: 44px; }
+  .ip-view .tz-b { min-height: 44px; }
 }

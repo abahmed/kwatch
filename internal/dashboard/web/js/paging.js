@@ -145,24 +145,20 @@
     return objectRow(o, t);
   }
 
-  /* KW.oldProblems: one quiet line, "3 old problems not shown (…)",
-     that unfolds into the list with how long each has failed. Hidden
-     when there are none. It keeps the fold open, and "Show all", across
-     redraws. op.days is the configured age of an old problem; without
-     it the line names no number. */
+  /* KW.oldProblems: one quiet line, "3 old problems not shown in the
+     issues (…)", and under it every one of them with how long each has
+     failed: the Overview folds nothing away, so the list is never
+     behind a click or a "Show all". Hidden when there are none. op.days
+     is the configured age of an old problem; without it the line names
+     no number. */
   KW.oldProblems = function (box, op) {
-    var was = KW.$("details", box), open = !!(was && was.open), all = wasAll(box);
     box.textContent = "";
     box.hidden = !op || !op.count;
     if (box.hidden) return;
-    var det = box.appendChild(KW.el("details", "ov-old"));
-    det.open = open;
-    var sum = det.appendChild(KW.el("summary"));
-    sum.appendChild(document.createTextNode(KW.plural(op.count, "old problem", "old problems") +
-      " not shown (" + (op.days > 0 ? P.oldDays.replace("{days}", KW.num(op.days)) : P.old) + ") "));
-    var show = sum.appendChild(KW.el("span", "ulink ov-old-show", open ? "Hide them" : "Show them"));
-    det.addEventListener("toggle", function () { show.textContent = det.open ? "Hide them" : "Show them"; });
-    KW.objectList(det, op.items || [], op.count, oldRow, all, ["more problem", "more problems"]);
+    var sec = box.appendChild(KW.el("div", "ov-old"));
+    sec.appendChild(KW.el("p", "ov-old-h", KW.plural(op.count, "old problem", "old problems") +
+      " not shown in the issues (" + (op.days > 0 ? P.oldDays.replace("{days}", KW.num(op.days)) : P.old) + ")"));
+    KW.objectList(sec, op.items || [], op.count, oldRow, true, ["more problem", "more problems"]);
   };
 
   /* KW.holdLine: "Paging held while the cluster scales · until ~14:20". */

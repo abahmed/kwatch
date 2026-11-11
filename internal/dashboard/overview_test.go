@@ -60,16 +60,17 @@ func TestOverviewLooksFirstAtMostUrgentThenLongestRunning(t *testing.T) {
 	assert.True(t, got.LookFirst[2].Acked)
 }
 
-func TestOverviewLooksFirstAtFiveAtMost(t *testing.T) {
+func TestOverviewLooksFirstAtEightAtMost(t *testing.T) {
 	var items []incident.Incident
-	for i := range 9 {
+	for i := range 11 {
 		items = append(items, issueAt(strconv.Itoa(i), "a",
 			incident.Notify, time.Duration(i)*time.Minute))
 	}
 
 	got := buildOverview(items, nil)
 
-	assert.Equal(t, []string{"8", "7", "6", "5", "4"},
+	assert.Equal(t, []string{"10", "9", "8", "7", "6", "5",
+		"4", "3"},
 		lookFirstIDs(got.LookFirst))
 }
 

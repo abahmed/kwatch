@@ -34,7 +34,7 @@
 
 /* New or changed issues waiting: at the bottom of the screen, so it
    never covers the table's heading. */
-.livebar { position: sticky; bottom: 12px; z-index: 4; width: fit-content; margin-left: auto; margin-right: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 6px 6px 6px 16px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--text); color: var(--bg); font-weight: 600; font-size: var(--t-small); }
+.livebar { position: sticky; bottom: 12px; z-index: var(--z-livebar); width: fit-content; margin-left: auto; margin-right: auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 6px 6px 6px 16px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--text); color: var(--bg); font-weight: 600; font-size: var(--t-small); }
 .livebar .btn { color: var(--bg); border-color: var(--bg); }
 .livebar .btn:hover:not(:disabled) { background: var(--bg); color: var(--text); }
 .pagenote { margin-top: 10px; }
@@ -192,7 +192,7 @@
 .shint > summary { justify-content: center; width: 30px; height: 30px; min-height: 0; border: 1px solid var(--line); border-radius: 50%; font-weight: 600; color: var(--text-muted); }
 .shint > summary::before { display: none; }
 .shint > summary:hover { text-decoration: none; border-color: var(--text); }
-.shint-pop { position: absolute; z-index: 25; top: calc(100% + 6px); left: 0; width: min(24rem, calc(100vw - 32px)); padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-card) }
+.shint-pop { position: absolute; z-index: var(--z-popover); top: calc(100% + 6px); right: 0; width: min(24rem, calc(100vw - 32px)); padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-card) }
 .shint-h { margin: 0 0 4px; font-weight: 600; color: var(--text); }
 .trow2 { display: flex; flex: 1 1 100%; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .filterbox .factive { margin-top: 8px; }
@@ -206,5 +206,5 @@
   .trow2 .ttools { display: none; }
 }
 
-/* "Was Needs attention" may take two lines in the narrow Severity column. */
-.chip.c-was { white-space: normal; line-height: 1.25; text-align: center; max-width: 100%; }
+/* A settled issue's greyed level stays on one line, like any level. */
+.chip.c-settled { white-space: nowrap; }

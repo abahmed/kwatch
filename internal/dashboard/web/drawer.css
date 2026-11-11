@@ -1,9 +1,12 @@
 /* kwatch dashboard: the preview drawer of the Issues table
    (js/drawer.js). A panel on the right over a shade; under 900px wide
-   it covers the screen. The issue inside is the issue page's content. */
-html { scrollbar-gutter: stable; }
+   it covers the screen. The issue inside is the issue page's content.
+   No scrollbar-gutter on html: a reserved gutter is an empty scrollbar
+   track on every page that fits. The Issues page itself never scrolls
+   over 900px (only its table does), and under 900px the drawer covers
+   the screen, so hiding the page's overflow shifts nothing in view. */
 html.drw-open { overflow: hidden; }
-.drw { position: fixed; inset: 0; z-index: 40; }
+.drw { position: fixed; inset: 0; z-index: var(--z-overlay); }
 .drw-shade { position: absolute; inset: 0; background: color-mix(in srgb, var(--ink) 40%, transparent); }
 .drw-panel { position: absolute; top: 0; right: 0; bottom: 0; width: min(52rem, 64vw); display: flex; flex-direction: column; background: var(--bg); border-left: 1px solid var(--line); }
 .drw-panel:focus { outline: none; }

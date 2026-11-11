@@ -334,12 +334,9 @@
       next.scrollIntoView({ block: "nearest" });
     });
     window.setInterval(KW.tickTimes, 30000);
-    // Earlier releases registered a service worker; this one has none.
-    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
-      navigator.serviceWorker.getRegistrations().then(function (list) {
-        list.forEach(function (r) { r.unregister(); });
-      }, function () { /* no access: nothing to remove */ });
-    }
+    // The service worker (sw.js, registered by push.js) stays: it shows
+    // the notifications and opens kwatch when one is clicked. A worker
+    // of an earlier release at the same scope is replaced by it.
     KW.api("/api/session").then(function (res) {
       if (res.status === 403 && res.data && res.data.error === "https_required") {
         return showHTTPS();

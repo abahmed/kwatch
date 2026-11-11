@@ -65,8 +65,11 @@
       KW.clampTitle(body.appendChild(KW.el("span", "act-title", title)));
     }
     var chips = a.appendChild(KW.el("span", "act-chips"));
-    chips.appendChild(e.kind === "resolved" && e.untold ? KW.wasChip(e.severity) :
-      KW.severityChip(e.severity, e.kind === "resolved" ? "Was: " : ""));
+    // "Was Urgent" only for a resolved issue people were alerted about;
+    // one that settled on its own shows its level greyed (the verb
+    // already says it settled).
+    chips.appendChild(e.kind === "resolved" && e.untold ? KW.settledChip(e.severity) :
+      KW.severityChip(e.severity, e.kind === "resolved" ? "Was " : ""));
     return li;
   }
 

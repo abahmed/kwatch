@@ -1,7 +1,7 @@
 10:02:15 settled
 🟠 External endpoint db.example.com:5432 (prod-eu-1) (from ConfigMap api-config, DB_HOST) does not accept connections. It reports "dial tcp: connection refused". Every app that uses it is failing. Affected: api in orders.
 Related alerts: 2 crash loops
-To read the output of the last crash, run kubectl logs api-e04ba4ad-a -c app -n orders --previous
+To read the output of the last crash, run kubectl logs deploy/api -c app -n orders --previous
 🟠 External endpoint db.example.com:5432 (prod-eu-1) (from ConfigMap api-config, DB_HOST) does not accept connections.
 | 🟠 External endpoint **db.example.com:5432** (**prod-eu-1**) (from ConfigMap api-config, DB\_HOST) does not accept connections.
 | It reports `dial tcp: connection refused`.
@@ -10,5 +10,5 @@ To read the output of the last crash, run kubectl logs api-e04ba4ad-a -c app -n 
 | Related alerts: 2 crash loops
 | To read the output of the last crash, run
 | ```
-| kubectl logs api-e04ba4ad-a -c app -n orders --previous
+| kubectl logs deploy/api -c app -n orders --previous
 | ```

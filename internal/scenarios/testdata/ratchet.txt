@@ -9,6 +9,8 @@ adv-bad-config-and-stuck-drain found-high,found-high
 adv-bad-config-clean-drain found-high
 adv-clean-drain-quiet quiet
 adv-clusterrolebinding-deleted found-high
+adv-co-onset-pair-minutes-apart self,self
+adv-co-onset-separate-nodes self,self
 adv-configmap-recreated-blip quiet
 adv-dependency-rolled-unrelated-panic self
 adv-dns-nxdomain-probed found-high
@@ -89,7 +91,9 @@ certificate-expired-unused self
 certificate-expiring-app-crash self
 chain-capped-at-three-steps found-high,found-likely
 chain-postgres-api-ingress found-high
+chain-timeline-line found-high
 chain-wrong-time-order found-high,found-high
+change-blast-overlap found-high
 chronic-issuer-lowered self
 chronic-never-ready-deployment self
 claim-full-unlisted-volume found-high
@@ -99,6 +103,7 @@ claim-no-storage-class found-high
 claim-pins-pod found-high
 claim-stuck-deleting self
 cni-agent-crash-quoted found-high
+co-onset-pair-shares-node found-possible
 cold-start-preexisting found-high,self
 config-breaks-image-runs-elsewhere found-high
 config-change-long-crash-loop found-high
@@ -120,12 +125,12 @@ cr-controller-crash-default-manager found-high
 cr-controller-crash-manager-is-deployment-name found-high
 cr-single-resource-default-manager found-high
 crash-loop-during-node-replacement self
-crash-loop-for-hours self
+crash-loop-for-hours found-high
 crash-loop-ready-between-crashes self
 crash-on-arm64-node-other-error self
 crash-quotes-other-error self
 crashloop-after-announce self
-cron-run-failed-then-recovered found-likely
+cron-run-failed-then-recovered found-high
 cron-runs-keep-failing found-likely
 cron-secret-edited-hours-before found-high
 cron-secret-edited-then-succeeded found-likely
@@ -147,6 +152,8 @@ daemonset-node-replaced quiet
 daemonset-settled-node-fails self
 dependency-answers self
 dependency-clusterip-dial found-high
+dependency-host-from-configmap found-high
+dependency-host-in-credential-key self
 dependency-refuses-connections found-high
 deprecated-api-still-called quiet
 different-errors-stay-apart self,self,self
@@ -158,6 +165,7 @@ endpoint-answers-probe-three-workloads unknown
 etcd-down found-high
 exec-format-error-arm64 self
 exec-format-error-no-release self
+exec-format-error-release-retitle found-high
 external-database-one-workload self
 external-database-storm found-high
 finalizer-controller-granted-the-group found-high
@@ -182,9 +190,15 @@ flapping-workload self
 flowschema-dangling-priority-level self
 fresh-issuer-notifies self
 healthy-node-app-crash self
+healthy-pods-burst-without-baseline quiet
+healthy-pods-error-burst self
+healthy-pods-small-burst quiet
+healthy-pods-steady-errors quiet
 hpa-at-max found-likely
 hpa-at-max-healthy-quiet quiet
+hpa-metrics-beside-serving self,self
 hpa-metrics-outlive-recovery self
+hpa-no-ready-pods-joins-workload self
 hpa-resolve-while-workload-broken self
 hpa-target-missing self
 image-and-env-change-ranking found-high
@@ -356,6 +370,7 @@ registry-auth-failure found-high
 registry-login-expired found-high
 registry-login-missing-secret found-high
 registry-no-pull-secret found-high
+registry-private-image-missing-secret found-likely
 registry-rate-limited found-high
 registry-unavailable self
 release-gitops-managed found-high
@@ -363,6 +378,8 @@ release-helm-managed found-high
 release-old-revision-rescheduled quiet
 release-regression found-high
 release-steady quiet
+resolve-cause-recovered found-high
+resolve-cause-still-present found-high
 resourceclaim-unallocated-pod-pending found-likely
 role-created-before-forbidden-crash self
 rollout-clean-stops quiet
@@ -378,6 +395,9 @@ route-not-accepted found-high
 same-tag-mixed-digests-healthy quiet
 same-tag-new-digest found-high
 sandbox-first-attempt-retried quiet
+scale-down-crash-loop-pages self
+scale-down-moved-pod-held quiet
+scale-down-moved-pod-never-starts found-likely
 scale-down-moved-pod-pull-fails self
 scale-down-unrelated-outage-told self
 scale-failure-replaced self
@@ -435,6 +455,7 @@ unschedulable-quantified found-high
 unschedulable-taint found-high
 unusual-event-recurs self
 upgrade-readiness-digest quiet
+user-endpoints-named found-high
 validating-webhook-deadline found-high
 volume-full-names-users found-high
 volume-inodes-full found-high

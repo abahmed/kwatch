@@ -67,7 +67,10 @@ type IncidentDetail struct {
 	// occurrences, its containers now, who was told, its affected
 	// objects and its states over time. Each is absent without data;
 	// see responses_context.go.
-	Changes    []ChangeItem      `json:"changes,omitempty"`
+	Changes []ChangeItem `json:"changes,omitempty"`
+	// Onset is when its current failures began: a change is "before"
+	// or "during" against it, and the page measures from it too.
+	Onset      time.Time         `json:"onset,omitzero"`
 	FixedBy    *ChangeItem       `json:"fixedBy,omitempty"`
 	Fix        string            `json:"fix,omitempty"`
 	SeenBefore *SeenBefore       `json:"seenBefore,omitempty"`

@@ -1,5 +1,5 @@
 10:03:40 settled
-🟠 ledger in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "fatal: lost connection to journal". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs ledger-815d59b2-a -c app -n shop --previous
+🟠 ledger in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "fatal: lost connection to journal". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs deploy/ledger -c app -n shop --previous
 🟠 ledger in shop (prod-eu-1) keeps crashing.
 | 🟠 **ledger** in **shop** (**prod-eu-1**) keeps crashing.
 | Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
@@ -8,5 +8,5 @@
 | It runs a single replica.
 | To read the output of the last crash, run
 | ```
-| kubectl logs ledger-815d59b2-a -c app -n shop --previous
+| kubectl logs deploy/ledger -c app -n shop --previous
 | ```

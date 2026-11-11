@@ -1,10 +1,10 @@
 10:02:15 settled
-🟠 api in shop (prod-eu-1) keeps failing its liveness check (connection refused), so the kubelet keeps restarting it. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. Its last run lasted two minutes; three restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs api-8ab26137-a -c app -n shop --previous
+🟠 api in shop (prod-eu-1) keeps failing its liveness check (connection refused), so the kubelet keeps restarting it. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. Its last run lasted two minutes; three restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs deploy/api -c app -n shop --previous
 🟠 api in shop (prod-eu-1) keeps failing its liveness check (connection refused), so the kubelet keeps restarting it.
 | 🟠 **api** in **shop** (**prod-eu-1**) keeps failing its liveness check (connection refused), so the kubelet keeps restarting it.
 | Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
 | Its last run lasted two minutes; three restarts since its pod was created one hour ago.
 | To read the output of the last crash, run
 | ```
-| kubectl logs api-8ab26137-a -c app -n shop --previous
+| kubectl logs deploy/api -c app -n shop --previous
 | ```

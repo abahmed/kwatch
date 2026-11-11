@@ -1,5 +1,5 @@
 10:02:15 settled
-🟠 ledger in billing (prod-eu-1) cannot pull its image because registry registry.corp.example rejects the credentials. Its pods name no pull secret, so the registry sees anonymous pulls, and the registry answers "401 Unauthorized". All three failing apps use it. Affected: api and worker in shop. To see why the container cannot start, run kubectl describe pod ledger-e005c2f7-c -n billing
+🟠 ledger in billing (prod-eu-1) cannot pull its image because registry registry.corp.example rejects the credentials. Its pods name no pull secret, so the registry sees anonymous pulls, and the registry answers "401 Unauthorized". All three failing apps use it. Affected: api and worker in shop. To see why the container cannot start, run kubectl describe pods ledger- -n billing
 🟠 ledger in billing (prod-eu-1) cannot pull its image because registry registry.corp.example rejects the credentials.
 | 🟠 **ledger** in **billing** (**prod-eu-1**) cannot pull its image because registry **registry.corp.example** rejects the credentials.
 | Its pods name no pull secret, so the registry sees anonymous pulls, and the registry answers `401 Unauthorized`.
@@ -7,5 +7,5 @@
 | Affected: **api** and **worker** in **shop**.
 | To see why the container cannot start, run
 | ```
-| kubectl describe pod ledger-e005c2f7-c -n billing
+| kubectl describe pods ledger- -n billing
 | ```

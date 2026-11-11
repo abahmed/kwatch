@@ -136,7 +136,7 @@
       host = KW.el("section", "rd");
       host.dataset.round = "";
       host.setAttribute("aria-label", "What kwatch found");
-      var grid = KW.$(".ds-grid", root);
+      var grid = KW.$(".ds-body .ds-grid", root);
       if (!grid) return;
       grid.parentNode.insertBefore(host, grid.nextSibling);
     }

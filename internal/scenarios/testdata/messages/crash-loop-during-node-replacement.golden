@@ -1,5 +1,5 @@
 10:02:15 settled
-🟠 warehouse in data (prod-eu-1) is failing: aborted with SIGABRT (exit code 134) and is restarting. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "FileNotFoundException: Could not load file or assembly 'Retail.Models.Common, Version=3.1.120.0'". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs warehouse-c1f19d7b-a -c app -n data --previous
+🟠 warehouse in data (prod-eu-1) is failing: aborted with SIGABRT (exit code 134) and is restarting. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "FileNotFoundException: Could not load file or assembly 'Retail.Models.Common, Version=3.1.120.0'". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs deploy/warehouse -c app -n data --previous
 🟠 warehouse in data (prod-eu-1) is failing: aborted with SIGABRT (exit code 134) and is restarting.
 | 🟠 **warehouse** in **data** (**prod-eu-1**) is failing: aborted with SIGABRT (exit code 134) and is restarting.
 | Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
@@ -10,7 +10,7 @@
 | Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
 | To read the output of the last crash, run
 | ```
-| kubectl logs warehouse-c1f19d7b-a -c app -n data --previous
+| kubectl logs deploy/warehouse -c app -n data --previous
 | ```
 10:10:00 healthy for 3m0s
 ✅ warehouse in data (prod-eu-1) is healthy again. It was failing for six minutes and recovered on its own. Two pods were affected.
@@ -19,7 +19,7 @@
 | It was failing for six minutes and recovered on its own.
 | Two pods were affected.
 10:02:15 settled
-🟠 warehouse in data (prod-eu-1) is failing: aborted with SIGABRT (exit code 134) and is restarting. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. That is unusual for this workload: restarts 1442×/h, usually none. It fails with "FileNotFoundException: Could not load file or assembly 'Retail.Models.Common, Version=3.1.120.0'". This is the second time this week. Last time it recovered on its own. To read the output of the last crash, run kubectl logs warehouse-c1f19d7b-a -c app -n data --previous
+🟠 warehouse in data (prod-eu-1) is failing: aborted with SIGABRT (exit code 134) and is restarting. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. That is unusual for this workload: restarts 1442×/h, usually none. It fails with "FileNotFoundException: Could not load file or assembly 'Retail.Models.Common, Version=3.1.120.0'". This is the second time this week. Last time it recovered on its own. To read the output of the last crash, run kubectl logs deploy/warehouse -c app -n data --previous
 🟠 warehouse in data (prod-eu-1) is failing: aborted with SIGABRT (exit code 134) and is restarting.
 | 🟠 **warehouse** in **data** (**prod-eu-1**) is failing: aborted with SIGABRT (exit code 134) and is restarting.
 | Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
@@ -31,7 +31,7 @@
 | This is the second time this week. Last time it recovered on its own.
 | To read the output of the last crash, run
 | ```
-| kubectl logs warehouse-c1f19d7b-a -c app -n data --previous
+| kubectl logs deploy/warehouse -c app -n data --previous
 | ```
 10:10:00 healthy for 3m0s
 ✅ warehouse in data (prod-eu-1) is healthy again. It was failing for six minutes and recovered on its own. Two pods were affected.
@@ -45,7 +45,7 @@
 | 🟡 **kwatch summary** · prod-eu-1 — 1 resolved
 | ✅ 1 resolved since the last summary: warehouse
 10:11:00 material change
-🟠 warehouse in data (prod-eu-1) is failing: aborted with SIGABRT (exit code 134) and is restarting. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. That is unusual for this workload: restarts 8×/h, usually none. It fails with "FileNotFoundException: Could not load file or assembly 'Retail.Models.Common, Version=3.1.120.0'". This is the fourth time this week on deployment/warehouse. Last time it recovered on its own. To read the output of the last crash, run kubectl logs warehouse-c1f19d7b-b -c app -n data --previous
+🟠 warehouse in data (prod-eu-1) is failing: aborted with SIGABRT (exit code 134) and is restarting. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. That is unusual for this workload: restarts 8×/h, usually none. It fails with "FileNotFoundException: Could not load file or assembly 'Retail.Models.Common, Version=3.1.120.0'". This is the fourth time this week on deployment/warehouse. Last time it recovered on its own. To read the output of the last crash, run kubectl logs deploy/warehouse -c app -n data --previous
 🟠 warehouse in data (prod-eu-1) is failing: aborted with SIGABRT (exit code 134) and is restarting.
 | 🟠 **warehouse** in **data** (**prod-eu-1**) is failing: aborted with SIGABRT (exit code 134) and is restarting.
 | Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
@@ -57,5 +57,5 @@
 | This is the fourth time this week on deployment/warehouse. Last time it recovered on its own.
 | To read the output of the last crash, run
 | ```
-| kubectl logs warehouse-c1f19d7b-b -c app -n data --previous
+| kubectl logs deploy/warehouse -c app -n data --previous
 | ```

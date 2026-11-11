@@ -10,6 +10,9 @@
 .s-page { --c: var(--s-page); } .s-notify { --c: var(--s-notify); } .s-low { --c: var(--s-low); }
 .s-ok { --c: var(--s-ok); } .s-open { --c: var(--s-open); } .s-done { --c: var(--s-done); }
 .s-quiet { --c: transparent; }
+/* "s-done", the rest of a count that is no alert level, is striped so
+   it never reads as Low's solid grey, in any theme. */
+.viz-seg.s-done, .viz-sw.s-done { background: repeating-linear-gradient(135deg, var(--text-muted) 0 2px, transparent 2px 5px); }
 
 /* ---- Overview ---- */
 .ov-notes { display: grid; gap: 8px; margin-top: 16px; }
@@ -39,22 +42,44 @@
 .ov-mark .icon { width: 12px; height: 12px; stroke-width: 2.6; }
 .ov-say { font-size: clamp(1.25rem, 1.4vw + 0.9rem, 1.75rem); letter-spacing: -0.02em; overflow-wrap: anywhere; }
 /* How the week went: below what is wrong now, set apart by a line. */
-.ov-week { margin-top: 36px; padding-top: 4px; border-top: 1px solid var(--line); }
+.ov-week { margin-top: 32px; padding-top: 4px; border-top: 1px solid var(--line); }
 /* The week in four numbers, then the cards; the rest folds under "More". */
-.ov-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 4px 0 0; }
-.ov-stat { min-width: 0; }
+.ov-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 12px; margin: 4px 0 0; }
+.ov-stat { min-width: 0; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--radius-card); }
 .ov-stat dt { font-size: var(--t-micro); color: var(--text-muted); }
 .ov-stat dd { margin: 0; }
 .ov-stat-n { font-size: 1.75rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .ov-stat-sub { font-size: var(--t-micro); color: var(--text-muted); }
 .ov-settled { margin: 14px 0 0; font-size: var(--t-body); }
 .ov-settled b { font-variant-numeric: tabular-nums; }
-.ov-fold { margin-top: 20px; }
-.ov-fold > summary { cursor: pointer; width: fit-content; min-height: 28px; color: var(--text-muted); font-size: var(--t-small); }
-.ov-fold > summary:hover { text-decoration: underline; text-decoration-thickness: 2px; }
-@media (max-width: 700px) { .ov-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .ov-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .ov-stat { padding: 10px 12px; } }
+/* The issues to look at first beside the bad releases and changes on a
+   wide screen (3:2), one under the other below 1100px. */
+.ov-pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: stretch; margin-top: 20px; }
+.ov-main { min-width: 0; display: flex; flex-direction: column; }
+.ov-main > .ov-act { flex: 1 0 auto; }
+@media (min-width: 1100px) {
+  .ov-pair:has(> .ov-rel:not([hidden])) { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+}
+/* What to act on is in cards like the rest of the page: the title is
+   the card header (V.head), the rows run edge to edge under it. */
+.pcard .ov-h2 { font-size: var(--t-body); font-weight: 700; color: var(--text); margin: 0; }
+.pcard .ov-look, .pcard .ov-rel-list { border: 0; border-radius: 0; margin: 0 -20px; border-top: 1px solid var(--line); }
+.pcard .ov-rel-list > li { padding: 12px 20px; }
+.pcard .ov-row { padding: 12px 20px; }
+.pcard > .ov-olds { margin-top: 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.ov-calm { margin-top: 0; }
+/* The short line that ends a card whose list is all there is: it sits
+   at the card's bottom, like a card footer. */
+.ov-first { flex: 1 0 auto; display: flex; flex-direction: column; }
+.ov-end { margin: auto 0 0; padding-top: 12px; text-align: center; font-size: var(--t-small); color: var(--text-muted); }
+/* A trend against last week: the arrow and the words, then the colour
+   (more alerts is worse). */
+.ov-trend.up { color: var(--failing); }
+.ov-trend.down { color: var(--success); }
+.ov-arrow { font-size: .85em; }
+.ov-pat { margin-top: 32px; }
 .ov-h2 { font-family: var(--font-body); font-size: var(--t-small); font-weight: 600; line-height: 1.3; color: var(--text-muted); letter-spacing: 0; margin: 28px 0 8px; }
-.ov-rel .ov-h2 { color: var(--failing); }
 .ov-rel-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; }
 .ov-rel-list > li { padding: 10px 16px; font-size: var(--t-small); }
 .ov-rel-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 16px; }
@@ -119,13 +144,22 @@ a.viz-key:hover span:not(.viz-sw) { text-decoration: underline; }
 .viz-gtext { font-family: var(--font-body); font-size: 18px; font-weight: 700; fill: var(--text); }
 
 /* ---- page cards (Overview, kwatch) ---- */
-.pgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
-.pcard { border: 1px solid var(--line); border-radius: var(--radius-card); padding: 18px 20px; min-width: 0; }
+/* One grid: two equal columns, one 16px gap everywhere, cards in a row
+   stretched to the same height; a lone card spans the row. */
+.pgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; align-items: stretch; }
+.ov-h2 + .pgrid { margin-top: 0; }
+.pcard { border: 1px solid var(--line); border-radius: var(--radius-card); padding: 18px 20px; min-width: 0; display: flex; flex-direction: column; }
+.pcard > * { min-width: 0; }
+.pcard-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; margin-bottom: 4px; }
+.pcard-act { flex: none; font-size: var(--t-small); }
+.pcard-top .pcard-h { margin: 0; }
+/* The footer of a card ("+2 more namespaces") sits at its bottom. */
+.pcard > .pcard-more { margin-top: auto; padding-top: 12px; }
 .pcard.pwide { grid-column: 1 / -1; }
 /* A lone card, or the odd last one, fills the row instead of leaving a hole. */
 .pgrid > .pcard:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .pcard-h { font-family: var(--font-body); font-size: var(--t-body); font-weight: 700; letter-spacing: 0; margin: 0 0 4px; }
-.pcard-note { font-size: var(--t-small); color: var(--text-muted); margin: 0 0 12px; }
+.pcard-note { font-size: var(--t-small); color: var(--text-muted); margin: 0 0 14px; }
 .pcard-more { margin-top: 12px; font-size: var(--t-small); }
 .pempty { color: var(--text-muted); margin: 4px 0 0; }
 
@@ -143,7 +177,6 @@ a.viz-key:hover span:not(.viz-sw) { text-decoration: underline; }
 .kp-stats li.bad { border-color: var(--failing); color: var(--failing); }
 .kp-stats li.warn { border-color: var(--degraded); color: var(--degraded); }
 .kp-ns { margin-top: 10px; font-size: var(--t-small); }
-.kp-fold { margin-top: 12px; border-top: 1px solid var(--line); border-bottom: 0; }
 .kp-chans { list-style: none; margin: 0; padding: 0; }
 .kp-ch { padding: 14px 0; border-top: 1px solid var(--line); }
 .kp-ch:first-child { border-top: 0; padding-top: 4px; }
@@ -162,8 +195,8 @@ a.viz-key:hover span:not(.viz-sw) { text-decoration: underline; }
 .cov-more { font-family: var(--font-body); color: var(--text-muted); }
 .cov-rbac { margin-top: 16px; }
 .cov-yaml { position: relative; margin-top: 8px; }
-.cov-yaml pre { margin: 0; padding: 10px 12px; padding-right: 5.5rem; overflow-x: auto; font-size: var(--t-micro); line-height: 1.5; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-input); }
-.cov-yaml .btn { position: absolute; top: 6px; right: 6px; }
+.cov-yaml pre { margin: 0; padding: 10px 12px; padding-right: 3rem; overflow-x: auto; font-size: var(--t-micro); line-height: 1.5; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-input); }
+.cov-yaml .copy-ico { position: absolute; top: 6px; right: 6px; background: var(--surface); }
 
 /* High contrast: marks get an outline so they stand apart from the track. */
 :root[data-contrast="more"] .viz-seg, :root[data-contrast="more"] .viz-mfill { box-shadow: inset 0 0 0 1px var(--text); }
@@ -200,6 +233,5 @@ a.viz-key:hover span:not(.viz-sw) { text-decoration: underline; }
 .ov-hold { margin: 4px 0 0; font-size: var(--t-small); color: var(--text-soft); }
 .ov-hold-at { white-space: nowrap; }
 .ov-olds { margin-top: 12px; font-size: var(--t-small); color: var(--text-muted); }
-.ov-old > summary { cursor: pointer; list-style: none; }
-.ov-old > summary::-webkit-details-marker { display: none; }
+.ov-old-h { margin: 0 0 4px; }
 .ov-old .lo-list { max-width: var(--max-app); }

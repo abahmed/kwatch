@@ -1,5 +1,5 @@
 10:02:15 settled
-🟠 ledger in billing (prod-eu-1) cannot pull its image because registry registry.corp.example rejects the credentials. It pulls with Secret regcred in billing (kubernetes.io/dockerconfigjson, last changed 92 days ago) and Secret regcred in shop (kubernetes.io/dockerconfigjson, last changed 92 days ago), and the registry answers "unauthorized: authentication required". All three failing apps use it. Affected: api and worker in shop. To see why the container cannot start, run kubectl describe pod ledger-36e65d30-c -n billing
+🟠 ledger in billing (prod-eu-1) cannot pull its image because registry registry.corp.example rejects the credentials. It pulls with Secret regcred in billing (kubernetes.io/dockerconfigjson, last changed 92 days ago) and Secret regcred in shop (kubernetes.io/dockerconfigjson, last changed 92 days ago), and the registry answers "unauthorized: authentication required". All three failing apps use it. Affected: api and worker in shop. To see why the container cannot start, run kubectl describe pods ledger- -n billing
 🟠 ledger in billing (prod-eu-1) cannot pull its image because registry registry.corp.example rejects the credentials.
 | 🟠 **ledger** in **billing** (**prod-eu-1**) cannot pull its image because registry **registry.corp.example** rejects the credentials.
 | It pulls with Secret regcred in **billing** (kubernetes.io/dockerconfigjson, last changed 92 days ago) and Secret regcred in **shop** (kubernetes.io/dockerconfigjson, last changed 92 days ago), and the registry answers `unauthorized: authentication required`.
@@ -7,5 +7,5 @@
 | Affected: **api** and **worker** in **shop**.
 | To see why the container cannot start, run
 | ```
-| kubectl describe pod ledger-36e65d30-c -n billing
+| kubectl describe pods ledger- -n billing
 | ```

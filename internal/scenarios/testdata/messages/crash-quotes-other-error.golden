@@ -1,5 +1,5 @@
 10:02:35 settled
-🟠 warehouse in staging (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "FileNotFoundException: Could not load file or assembly 'Retail.Models.Common, Version=3.1.120.0'". Its last run lasted ten seconds. It runs a single replica. To read the output of the last crash, run kubectl logs warehouse-b3e14f5e-a -c app -n staging --previous
+🟠 warehouse in staging (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "FileNotFoundException: Could not load file or assembly 'Retail.Models.Common, Version=3.1.120.0'". Its last run lasted ten seconds. It runs a single replica. To read the output of the last crash, run kubectl logs deploy/warehouse -c app -n staging --previous
 🟠 warehouse in staging (prod-eu-1) keeps crashing.
 | 🟠 **warehouse** in **staging** (**prod-eu-1**) keeps crashing.
 | Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
@@ -11,5 +11,5 @@
 | It runs a single replica.
 | To read the output of the last crash, run
 | ```
-| kubectl logs warehouse-b3e14f5e-a -c app -n staging --previous
+| kubectl logs deploy/warehouse -c app -n staging --previous
 | ```

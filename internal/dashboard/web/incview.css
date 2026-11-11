@@ -5,13 +5,20 @@
    mini timeline and the usage chart. Tokens come from app.css, so
    light, dark and high contrast follow it. */
 
-/* Tabs. */
-.d-tabbar { margin-top: 22px; border-bottom: 1px solid var(--line); }
-.d-tabs { display: flex; gap: 2px; overflow-x: auto; }
-.d-tab { display: inline-flex; align-items: center; gap: 8px; min-height: var(--hit); padding: 0 14px; background: none; border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px; color: var(--text-muted); font-weight: 600; font-size: var(--t-small); white-space: nowrap; }
-.d-tab:hover { color: var(--text); }
-.d-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--text); }
+/* Tabs: a row of plain words with their counts on one line. The open
+   tab is in full ink with a 3px bar under it and a filled count; the
+   others are muted and get a soft background on hover. */
+.d-tabbar { margin-top: 24px; border-bottom: 1px solid var(--line); }
+.d-tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.d-tabs::-webkit-scrollbar { display: none; }
+.d-tab { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: var(--hit); padding: 0 14px; background: none; border: 0; border-radius: var(--radius-input) var(--radius-input) 0 0; color: var(--text-muted); font-weight: 600; font-size: var(--t-small); white-space: nowrap; }
+.d-tab::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 3px; border-radius: 3px 3px 0 0; background: transparent; }
+.d-tab:hover { color: var(--text); background: var(--surface); }
+.d-tab:focus-visible { outline: var(--focus-width) solid var(--text); outline-offset: -4px; }
+.d-tab[aria-selected="true"] { color: var(--text); }
+.d-tab[aria-selected="true"]::after { background: var(--text); }
 .d-badge { min-width: 1.5rem; padding: 0 7px; font-size: var(--t-micro); font-weight: 700; line-height: 1.5; text-align: center; border-radius: var(--radius-chip); background: var(--surface); color: var(--text-soft); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.d-tab[aria-selected="true"] .d-badge { background: var(--text); border-color: var(--text); color: var(--bg); }
 .d-panel { padding-top: 4px; }
 .d-panel:focus { outline: none; }
 .d-panel:focus-visible { outline: var(--focus-width) solid var(--text); outline-offset: 2px; }
@@ -25,13 +32,15 @@
 /* On a phone the tabs stay one row that scrolls sideways, right under the
    summary. */
 @media (max-width: 700px) {
-  .d-tabbar { margin-top: 14px; }
-  .d-tabs { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-  .d-tab { flex: none; padding: 0 9px; gap: 6px; }
-  .d-tabs { gap: 0; }
+  .d-tabbar { margin-top: 16px; }
+  .d-tabs { gap: 0; -webkit-overflow-scrolling: touch; }
+  .d-tab { flex: none; padding: 0 10px; gap: 6px; }
+  .d-tab::after { left: 6px; right: 6px; }
 }
-/* Tabs waiting off the right edge: a fade and an arrow say the bar scrolls. */
-.d-tabbar { position: relative; }
+/* Tabs waiting off the right edge: a fade and an arrow say the bar
+   scrolls. The bar sticks to the top of the window while a long tab
+   scrolls, so another tab is always one click away. */
+.d-tabbar { position: sticky; top: 0; z-index: var(--z-sticky); background: var(--bg); }
 .d-tabbar.more::after { content: "›"; position: absolute; right: 0; top: 0; bottom: 1px; width: 44px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; background: linear-gradient(to right, transparent, var(--bg) 65%); font-size: 1.6rem; font-weight: 700; color: var(--text); pointer-events: none; }
 
 /* Summary card notes. */
@@ -148,3 +157,18 @@
 
 /* "Show every time": a stamp never breaks inside. */
 .tl-stamp { white-space: nowrap; }
+
+/* An update drawn in place (js/incupdate.js): what changed gets a short
+   highlight (a bar on its left, as an updated row of the Issues table,
+   and a soft background that fades), and the header says "Updated just
+   now" for a few seconds. While an update waits for the reader, one
+   quiet line says so. */
+.kw-changed { box-shadow: inset 3px 0 0 var(--text); background: var(--surface); }
+@media (prefers-reduced-motion: no-preference) {
+  .kw-changed { animation: kw-changed 2.6s ease-out forwards; }
+  @keyframes kw-changed { 0%, 40% { background: var(--surface); } 100% { background: transparent; box-shadow: inset 3px 0 0 transparent; } }
+}
+.d-upd { margin-left: auto; font-size: var(--t-micro); color: var(--text-muted); white-space: nowrap; }
+.d-upd:not([hidden]) + .d-acts { margin-left: 0; }
+.d-wait { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0 0 10px; padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--radius-input); font-size: var(--t-small); color: var(--text-soft); }
+.d-wait .link { font-size: var(--t-small); font-weight: 600; }

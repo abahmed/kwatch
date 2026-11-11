@@ -2,7 +2,7 @@
    anything broken right now, and what do I look at first" first:
    notices only when someone must act (kwatch is starting, alert links
    are off, alerts failed to send), one status tile, the active issues
-   by alert level as one line, up to five issues to look at first and
+   by alert level as one line, up to eight issues to look at first (lookfit.js) and
    the releases and changes that caused issues (only when there are any).
    Below that, how the week went (ovinsights.js, trends.js). kwatch's
    own health is on the kwatch page (kwatchpage.js), the change feed on
@@ -181,29 +181,62 @@
     var list = d.lookFirst || [], total = totalOf(d.counts || {});
     box.hidden = !list.length;
     if (!list.length) return;
-    box.appendChild(KW.el("h2", "ov-h2", "Look at these first"));
-    box.appendChild(KW.el("p", "ov-rule", KW.TERMS.lists.order));
+    V.head(box, "Look at these first", KW.TERMS.lists.order,
+      V.seeAll("/issues?status=active", "See all " + KW.plural(total, "issue", "issues") + " →"), "ov-h2");
     var ul = box.appendChild(KW.el("ul", "ov-look"));
     list.forEach(function (i) { ul.appendChild(row(i)); });
-    var more = box.appendChild(KW.el("p", "ov-more"));
-    more.appendChild(link("/issues?status=active", "See all " + KW.plural(total, "issue", "issues") + " →"));
+    // Every active issue is here when the server sent fewer than its cap.
+    ul.dataset.all = list.length < KW.LOOK_LIMIT ? "1" : "";
+    box.appendChild(KW.el("p", "ov-end", "That's everything happening now."));
   }
 
   var WRONG = { failed: "The release failed", down: "It went down after the release",
     regressed: "It got worse after the release" };
 
-  /* changes: "Bad releases and changes that caused issues": the
-     releases of the last 24 hours that failed, went down or regressed,
-     joined with the active issues that started right after a change
-     (one line per issue); only when there is one. */
+  /* relIssue: the issue a release that went wrong opened, resolved or
+     not (the server links it: release_issues.go), or null. */
+  function relIssue(w) {
+    if (w.issue && w.issue.id) return w.issue;
+    return w.incident ? { id: w.incident } : null;
+  }
+
+  /* workloadIssues: the Issues list filtered to a release's workload,
+     for a release that opened no issue. */
+  function workloadIssues(w) {
+    return "/issues?status=all&namespace=" + encodeURIComponent(w.namespace || "") +
+      "&kind=" + encodeURIComponent(String(w.kind || "").toLowerCase()) +
+      "&q=" + encodeURIComponent(w.name || "");
+  }
+
+  /* relLine: when a release rolled out and what became of its issue:
+     every row links somewhere, to its issue or to its workload's
+     issues. */
+  function relLine(at, w, issue, mins) {
+    at.appendChild(document.createTextNode("Rolled out at "));
+    at.appendChild(KW.hm(w.at));
+    if (issue) {
+      at.appendChild(document.createTextNode(issue.state === "resolved" ?
+        ". Its issue is resolved." : "."));
+      return;
+    }
+    at.appendChild(document.createTextNode(". No issue on " + w.name +
+      (mins ? " opened in the " + mins + " minutes after it. " : ". ")));
+    at.appendChild(link(workloadIssues(w), "See its issues →"));
+  }
+
+  /* changes: "Bad releases (last 24 h) and changes behind active
+     issues": the releases of the window that failed, went down or
+     regressed, joined with the active issues that started right after
+     a change (one line per issue); only when there is one. */
   function changes(box, d) {
     box.textContent = "";
-    var rel = (d.releases && d.releases.bad && d.releases.wrong) || [];
+    var rels = d.releases || {};
+    var rel = (rels.bad && rels.wrong) || [];
     var after = (d.insights && d.insights.afterChange && d.insights.afterChange.issues) || [];
     var by = {}, list = [];
     rel.forEach(function (w) {
-      var e = { w: w };
-      if (w.incident) by[w.incident] = e;
+      var e = { w: w, r: relIssue(w) };
+      if (e.r) by[e.r.id] = e;
       list.push(e);
     });
     after.forEach(function (i) {
@@ -212,16 +245,19 @@
     });
     box.hidden = !list.length;
     if (box.hidden) return;
-    box.appendChild(KW.el("h2", "ov-h2", KW.TERMS.lists.changes));
+    var hours = rels.windowHours || 24;
+    V.head(box, KW.TERMS.lists.changes(hours), "Releases of the last " + hours +
+      " hours that went wrong, and changes made just before an issue that is still going on.",
+      null, "ov-h2");
     var ul = box.appendChild(KW.el("ul", "ov-rel-list"));
     list.forEach(function (e) {
       var li = ul.appendChild(KW.el("li"));
       var top = li.appendChild(KW.el("div", "ov-rel-top"));
-      var id = e.i ? e.i.id : e.w.incident;
+      var id = e.i ? e.i.id : e.r && e.r.id;
       var name = e.i ? KW.shortTitle(e.i.title || e.i.id, { namespace: e.i.namespace }) :
         e.w.name + " in " + e.w.namespace;
-      if (id) top.appendChild(link("/issues/" + encodeURIComponent(id), name, "ulink ov-rel-name"));
-      else top.appendChild(KW.el("span", "ov-rel-name", name));
+      top.appendChild(link(id ? "/issues/" + encodeURIComponent(id) : workloadIssues(e.w),
+        name, "ulink ov-rel-name"));
       if (e.w) top.appendChild(KW.el("span", "ov-rel-v", WRONG[e.w.verdict] || e.w.verdict));
       var at = li.appendChild(KW.el("div", "ov-rel-at"));
       if (e.i) {
@@ -230,9 +266,7 @@
         var gap = KW.lasted(e.i.changedAt, e.i.since);
         at.appendChild(document.createTextNode(gap ? ", " + gap + " before the issue started." : "."));
       } else {
-        at.appendChild(document.createTextNode("Rolled out at "));
-        at.appendChild(KW.hm(e.w.at));
-        at.appendChild(document.createTextNode(id ? "." : ". No issue was opened."));
+        relLine(at, e.w, e.r, rels.matchMinutes);
       }
     });
   }
@@ -246,17 +280,26 @@
     var notes = pg.body.appendChild(KW.el("div", "ov-notes"));
     var tileBox = pg.body.appendChild(KW.el("section"));
     tileBox.setAttribute("aria-labelledby", "ov-say");
-    var lookBox = pg.body.appendChild(KW.el("section", "ov-first"));
-    var calm = pg.body.appendChild(KW.el("p", "ov-calm"));
-    calm.appendChild(link("/activity", "What changed recently"));
+    // Under the verdict, what to act on: the issues to look at first
+    // and, beside them on a wide screen, the bad releases and changes.
+    var pair = pg.body.appendChild(KW.el("div", "ov-pair"));
+    var main1 = pair.appendChild(KW.el("div", "ov-main"));
+    // The issues and, under them, the old problems left out are one
+    // card, the same height as the releases card beside it.
+    var lookCard = main1.appendChild(KW.el("div", "pcard ov-act"));
+    var lookBox = lookCard.appendChild(KW.el("section", "ov-first"));
     // Only when kwatch left old problems out.
-    var old = pg.body.appendChild(KW.el("section", "ov-olds"));
+    var old = lookCard.appendChild(KW.el("section", "ov-olds"));
     old.hidden = true;
+    var calm = main1.appendChild(KW.el("p", "ov-calm"));
+    calm.appendChild(link("/activity", "What changed recently"));
     // Only when a release or change caused an issue.
-    var rel = pg.body.appendChild(KW.el("section", "ov-rel"));
+    var rel = pair.appendChild(KW.el("section", "pcard ov-act ov-rel"));
     rel.hidden = true;
     pg.body.appendChild(weekBox);
     pg.body.hidden = true;
+    // Fills the issues card up to the height of the releases card.
+    var fitter = KW.lookFit(pair, lookCard, rel);
 
     function draw() {
       if (!data) return;
@@ -267,7 +310,9 @@
       tile(tileBox, c, status, pg.lastOk(), data.scalingHold);
       look(lookBox, data);
       KW.oldProblems(old, data.oldProblems);
+      lookCard.hidden = lookBox.hidden && old.hidden;
       changes(rel, data);
+      fitter.fit();
       calm.hidden = totalOf(c) > 0;
     }
 
@@ -295,6 +340,6 @@
         return r;
       });
     }
-    return { stop: pg.stop };
+    return { stop: function () { fitter.stop(); pg.stop(); } };
   };
 })();

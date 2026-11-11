@@ -1,5 +1,5 @@
 10:02:55 settled
-🟠 web in shop (prod-eu-1) keeps failing its liveness check (timed out), so the kubelet keeps restarting it. Liveness timed out while the container was CPU-throttled 72% of the time (limit 200m). Its last run lasted 35 seconds; three restarts since its pod was created one hour ago. Fix: raise the CPU limit of container app in deployment/web above 200m. To read the output of the last crash, run kubectl logs web-181fa9e6-a -c app -n shop --previous
+🟠 web in shop (prod-eu-1) keeps failing its liveness check (timed out), so the kubelet keeps restarting it. Liveness timed out while the container was CPU-throttled 72% of the time (limit 200m). Its last run lasted 35 seconds; three restarts since its pod was created one hour ago. Fix: raise the CPU limit of container app in deployment/web above 200m. To read the output of the last crash, run kubectl logs deploy/web -c app -n shop --previous
 🟠 web in shop (prod-eu-1) keeps failing its liveness check (timed out), so the kubelet keeps restarting it.
 | 🟠 **web** in **shop** (**prod-eu-1**) keeps failing its liveness check (timed out), so the kubelet keeps restarting it.
 | Liveness timed out while the container was CPU-throttled 72% of the time (limit 200m).
@@ -7,5 +7,5 @@
 | Fix: raise the CPU limit of container app in deployment/web above 200m.
 | To read the output of the last crash, run
 | ```
-| kubectl logs web-181fa9e6-a -c app -n shop --previous
+| kubectl logs deploy/web -c app -n shop --previous
 | ```

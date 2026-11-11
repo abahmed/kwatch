@@ -1,3 +1,3 @@
-🟠 api in shop is crash looping, likely because external endpoint db.example.com:5432 refuses connections. kwatch checked: db.example.com resolves from kwatch but refuses connections. It fails with "dial tcp db.example.com:5432: connect: connection refused". Every error mentions it. Affected: cart, search, auth and one other. To read the output of the last crash, run kubectl logs api-6d4f-0 -c app -n shop --previous
+🟠 api in shop is crash looping, likely because external endpoint db.example.com:5432 refuses connections. kwatch checked: db.example.com resolves from kwatch but refuses connections. It fails with "dial tcp db.example.com:5432: connect: connection refused". Every error mentions it. Affected: cart, search, auth and one other. To read the output of the last crash, run kubectl logs deploy/api -c app -n shop --previous
 
 🟠 api in shop is crash looping, likely because external endpoint db.example.com:5432 refuses connections.

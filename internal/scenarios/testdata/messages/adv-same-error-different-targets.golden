@@ -11,7 +11,7 @@
 10:10:00 material change
 🟠 db-a in shop (prod-eu-1) keeps crashing. It fails with "FATAL: password authentication failed for user "postgres"". Both failing apps use it. Service db-a can't serve traffic. It runs a single replica. Affected: api-a.
 Related alerts: 3 not-ready pods, 2 unavailable workloads, 1 service without endpoints
-To read the output of the last crash, run kubectl logs db-a-46001af3-a -c app -n shop --previous
+To read the output of the last crash, run kubectl logs deploy/db-a -c app -n shop --previous
 Proof: both replicas fail, on 2 nodes.
 🟠 db-a in shop (prod-eu-1) keeps crashing.
 | 🟠 **db-a** in **shop** (**prod-eu-1**) keeps crashing.
@@ -23,6 +23,6 @@ Proof: both replicas fail, on 2 nodes.
 | Related alerts: 3 not-ready pods, 2 unavailable workloads, 1 service without endpoints
 | To read the output of the last crash, run
 | ```
-| kubectl logs db-a-46001af3-a -c app -n shop --previous
+| kubectl logs deploy/db-a -c app -n shop --previous
 | ```
 | *Proof: both replicas fail, on 2 nodes.*

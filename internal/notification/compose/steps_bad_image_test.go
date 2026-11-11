@@ -30,7 +30,7 @@ func TestBadImageReleaseOpensWithTheEventsOfThePod(t *testing.T) {
 		commands = append(commands, step.Command)
 	}
 	assert.Equal(t, []string{
-		"kubectl describe pod api-7d9f-a -n shop",
+		"kubectl describe pods api- -n shop",
 		"kubectl rollout undo deployment/api -n shop --to-revision=4",
 	}, commands)
 }

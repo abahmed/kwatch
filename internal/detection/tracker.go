@@ -66,6 +66,7 @@ func (t *Tracker) Observe(
 		old, existed := previous[s.Reason]
 		if existed {
 			s.Since = old.finding.Since
+			s = keepProof(old.finding, s)
 		}
 		now := t.newTracked(s, old, existed)
 		next[s.Reason] = now

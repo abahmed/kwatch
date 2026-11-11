@@ -14,7 +14,7 @@ import (
 func TestRolloutStepsUndoWhereTheWorkloadIsDeployed(t *testing.T) {
 	api := inventory.CoreID(kube.KindDeployment, "shop", "api")
 	last := func(app string) string {
-		steps := rolloutSteps(api, "7", nil, app)
+		steps := rolloutSteps(api, "7", nil, app, nil)
 		s := steps[len(steps)-1]
 		return s.Text + " | " + s.Command
 	}

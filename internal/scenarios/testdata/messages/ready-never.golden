@@ -1,10 +1,10 @@
 10:04:15 settled
-🟠 cert-controller in shop (prod-eu-1) has not been ready for three minutes. Cause not found yet: its node and registry are healthy and unchanged. It runs a single replica. To see the object's state and events, run kubectl describe pod cert-controller-733b4b6c-a -n shop
+🟠 cert-controller in shop (prod-eu-1) has not been ready for three minutes. Cause not found yet: its node and registry are healthy and unchanged. It runs a single replica. To see the pods' state and events, run kubectl describe pods cert-controller- -n shop
 🟠 cert-controller in shop (prod-eu-1) has not been ready for three minutes.
 | 🟠 **cert-controller** in **shop** (**prod-eu-1**) has not been ready for three minutes.
 | Cause not found yet: its node and registry are healthy and unchanged.
 | It runs a single replica.
-| To see the object's state and events, run
+| To see the pods' state and events, run
 | ```
-| kubectl describe pod cert-controller-733b4b6c-a -n shop
+| kubectl describe pods cert-controller- -n shop
 | ```

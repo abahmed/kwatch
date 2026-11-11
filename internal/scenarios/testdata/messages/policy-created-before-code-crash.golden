@@ -1,5 +1,5 @@
 10:10:15 settled
-🟠 orders in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged. In the last 30 minutes in shop: network policy default-deny was created at 10:05 UTC. It fails with "panic: runtime error: invalid memory address or nil pointer dereference". Its last run lasted ten seconds; three restarts since its pod was created about one hour ago. To read the output of the last crash, run kubectl logs orders-e95a9204-a -c app -n shop --previous
+🟠 orders in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged. In the last 30 minutes in shop: network policy default-deny was created at 10:05 UTC. It fails with "panic: runtime error: invalid memory address or nil pointer dereference". Its last run lasted ten seconds; three restarts since its pod was created about one hour ago. To read the output of the last crash, run kubectl logs deploy/orders -c app -n shop --previous
 🟠 orders in shop (prod-eu-1) keeps crashing.
 | 🟠 **orders** in **shop** (**prod-eu-1**) keeps crashing.
 | Cause not found yet: its node and registry are healthy and unchanged.
@@ -8,5 +8,5 @@
 | Its last run lasted ten seconds; three restarts since its pod was created about one hour ago.
 | To read the output of the last crash, run
 | ```
-| kubectl logs orders-e95a9204-a -c app -n shop --previous
+| kubectl logs deploy/orders -c app -n shop --previous
 | ```

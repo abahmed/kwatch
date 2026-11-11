@@ -1,11 +1,11 @@
 10:03:15 settled
-🟠 trainer in ml (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (cannot allocate all claims). The scheduler says "0/1 nodes are available: 1 cannot allocate all claims." To see the object's state and events, run kubectl describe pod trainer-d1752e09-a -n ml
+🟠 trainer in ml (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (cannot allocate all claims). The scheduler says "0/1 nodes are available: 1 cannot allocate all claims." To see the pods' state and events, run kubectl describe pods trainer- -n ml
 🟠 trainer in ml (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (cannot allocate all claims).
 | 🟠 **trainer** in ml (**prod-eu-1**) has waited two minutes for a node because the scheduler rejects every node (**cannot allocate all claims**).
 | The scheduler says `0/1 nodes are available: 1 cannot allocate all claims.`
-| To see the object's state and events, run
+| To see the pods' state and events, run
 | ```
-| kubectl describe pod trainer-d1752e09-a -n ml
+| kubectl describe pods trainer- -n ml
 | ```
 10:05:30 cause revised
 🟠 Cause changed: ResourceClaim gpu-claim in ml (prod-eu-1) is failing; two possible causes: it has no device allocated, so its pod cannot start or the scheduler rejects every node (cannot allocate all claims). The scheduler says "0/1 nodes are available: 1 cannot allocate all claims."

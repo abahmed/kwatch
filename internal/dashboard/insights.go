@@ -129,6 +129,7 @@ func buildInsights(in insightInput) InsightsResponse {
 		Namespaces:  namespaceMap(live),
 		Days:        insightDays(in.items, in.now, in.zone),
 	}
+	addWeekOpenings(&out.Namespaces, in.items, in.now, in.zone)
 	if len(live) == 0 {
 		out.Quiet = &InsightQuiet{}
 	}

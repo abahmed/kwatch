@@ -99,7 +99,7 @@
   /* CELLS fill one cell of an issue row. */
   var CELLS = {
     sev: function (td, item) {
-      td.appendChild(KW.isUntold(item) ? KW.wasChip(item.severity) : KW.severityChip(item.severity));
+      td.appendChild(KW.isUntold(item) ? KW.settledChip(item.severity) : KW.severityChip(item.severity));
     },
     title: function (td, item, ctx) {
       var a = KW.el("a", "it-link");

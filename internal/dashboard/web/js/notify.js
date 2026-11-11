@@ -190,7 +190,19 @@
 
   var checkFailed = false;
 
-  function check() {
+  /* check reads the two lists and tells what changed. With browser
+     alerts off it reads nothing (and forgets the last picture, so
+     turning them on later never tells what changed meanwhile). While
+     the page is in view and the live stream is up, only the stream's
+     changes run it (fromLive): the 30 s interval would read the same
+     lists again. A hidden tab keeps the interval: that is when alerts
+     matter. */
+  function check(fromLive) {
+    if (!prefs.enabled || !allowed()) {
+      prev = null;
+      return;
+    }
+    if (fromLive !== true && prev && !document.hidden && KW.live.connected()) return;
     if (busy) return;
     busy = true;
     var run;
@@ -279,6 +291,8 @@
   function turnOn() {
     set("enabled", true);
     connect();
+    // The first read only takes the picture to compare with.
+    if (timer) check(false);
   }
 
   /* test sends one notification the way real ones come. */
@@ -345,8 +359,8 @@
       prev = null;
       // An interval, not KW.poller: it must keep running while the
       // tab is hidden. Browsers slow it to about once a minute then.
-      timer = window.setInterval(check, EVERY);
-      check();
+      timer = window.setInterval(function () { check(false); }, EVERY);
+      check(false);
       if (!liveHooked) {
         liveHooked = true;
         // A change on the live stream checks at once, at most every
@@ -354,7 +368,7 @@
         KW.live.onChange(function () {
           if (timer && Date.now() - lastLive > 10000) {
             lastLive = Date.now();
-            check();
+            check(true);
           }
         });
       }

@@ -1,5 +1,5 @@
 10:02:15 settled
-🟠 payments in shop (prod-eu-1) has a sidecar container that keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "critical: bootstrap: unable to parse /etc/proxy/bootstrap.yaml: line 12: mapping values are not allowed". Its last run lasted five seconds; two restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs payments-fc5a0372-a -c proxy -n shop --previous
+🟠 payments in shop (prod-eu-1) has a sidecar container that keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "critical: bootstrap: unable to parse /etc/proxy/bootstrap.yaml: line 12: mapping values are not allowed". Its last run lasted five seconds; two restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs deploy/payments -c proxy -n shop --previous
 🟠 payments in shop (prod-eu-1) has a sidecar container that keeps crashing.
 | 🟠 **payments** in **shop** (**prod-eu-1**) has a sidecar container that keeps crashing.
 | Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
@@ -11,7 +11,7 @@
 | It runs a single replica.
 | To read the output of the last crash, run
 | ```
-| kubectl logs payments-fc5a0372-a -c proxy -n shop --previous
+| kubectl logs deploy/payments -c proxy -n shop --previous
 | ```
 10:07:45 material change
 🟠 payments in shop (prod-eu-1) now has no ready replicas (0 of 1).

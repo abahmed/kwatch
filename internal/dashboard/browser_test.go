@@ -91,17 +91,28 @@ func TestBrowserSignInPage(t *testing.T) {
 // browserSetup starts the dashboard and a browser, or skips.
 func browserSetup(t *testing.T) (context.Context, *httptest.Server) {
 	t.Helper()
+	return browserSetupWith(t, browserIssues())
+}
+
+// browserSetupWith is browserSetup with these issues and browser
+// options.
+func browserSetupWith(
+	t *testing.T, items []incident.Incident,
+	extra ...chromedp.ExecAllocatorOption,
+) (context.Context, *httptest.Server) {
+	t.Helper()
 	path := findChrome()
 	if path == "" {
 		t.Skip("no Chrome or Chromium found (set CHROME_PATH)")
 	}
-	served := newTestServer(browserIssues()...)
+	served := newTestServer(items...)
 	served.SetModel(browserMapModel(t))
 	served.sources.releases.Store(browserReleases())
 	srv := httptest.NewServer(served.Handler())
 	t.Cleanup(srv.Close)
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.ExecPath(path))
+	opts = append(opts, extra...)
 	if os.Getenv("CI") != "" {
 		// CI runners may not allow Chrome's sandbox; the page is our own.
 		opts = append(opts, chromedp.NoSandbox)
