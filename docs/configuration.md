@@ -553,7 +553,7 @@ the catalog is informational and does not change runtime behavior.
 Guided notification setup uses `deploy/provider-catalog.tsv`. It covers every
 supported provider and documented provider field, and marks every credential
 field as Secret-backed. It can also describe provider-specific choice groups,
-conditional fields, and at-least-one destination groups (for example, one
+conditional fields, and at-least-one or exactly-one destination groups (for example, one
 authentication method requiring a channel). The installer interprets those
 relationships generically, so adding a new provider does not require
 provider-specific shell logic. Provider credentials never appear in the
