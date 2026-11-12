@@ -871,7 +871,8 @@ A file that cannot be read at all is replaced by an empty one (see
 Kwatch serves no diagnostic endpoints and writes nothing to the cluster except
 its own Lease, the license instance Secret (`kwatch-license-instance`, only
 when a license key is configured: kwatch updates its instance key there, and
-`kwatch license deactivate` writes a `deactivated-at` field) and
+a `deactivated-at` field appears when the license is deactivated from the
+installer's License / Pro menu) and
 SelfSubjectAccessReviews for its permission audit (not persisted). The
 license Secret grant is `get` and `update` on that one name, and the audit
 checks it when a key is set. Secret values are only hashed, and evidence is redacted before

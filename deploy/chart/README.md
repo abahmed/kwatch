@@ -113,9 +113,10 @@ keep`). Because neither the previous nor the new manifest has `data`, Helm's
 three-way merge leaves the instance key kwatch wrote alone on upgrade. If you
 install without this chart's
 templates, create that Secret empty (type Opaque) yourself, or the license
-stays pending and Community. Besides the instance key, `kwatch license
-deactivate` writes a `deactivated-at` field to the same Secret so the running
-leader drops its lease and falls back to Community. Licenses use 3 day leases
+stays pending and Community. Besides the instance key, kwatch writes a
+`deactivated-at` field to the same Secret when the license is deactivated
+from the installer's License / Pro menu, so the running leader drops its lease
+and falls back to Community. Licenses use 3 day leases
 with a 4 day grace, so a cluster that cannot reach the license server keeps
 Pro for at most 7 days.
 
