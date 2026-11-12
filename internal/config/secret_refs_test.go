@@ -147,8 +147,8 @@ func TestProviderCatalogDescribesConditionalCredentials(t *testing.T) {
 	assert.Equal(t, "destination", fields["sns.topicArn"].Group)
 	assert.Equal(t, "choice:target", fields["sns.targetArn"].Condition)
 	assert.Equal(t, "destination", fields["webex.roomId"].Group)
-	assert.Equal(t, "at-least-one", fields["webex.roomId"].Condition)
-	assert.Equal(t, "at-least-one", fields["webex.toPersonEmail"].Condition)
+	assert.Equal(t, "exactly-one", fields["webex.roomId"].Condition)
+	assert.Equal(t, "exactly-one", fields["webex.toPersonEmail"].Condition)
 }
 
 func providerCatalogTestConfig(field ProviderField, value string) string {
@@ -190,4 +190,10 @@ func TestProxyURLWithCredentialsMustBeFileReference(t *testing.T) {
 			require.NoError(t, validateSecretReferences(raw))
 		})
 	}
+}
+
+func TestValidateProviderConditionExactlyOne(t *testing.T) {
+	assert.NoError(t, validateProviderCondition("destination", "exactly-one"))
+	assert.Error(t, validateProviderCondition("", "exactly-one"))
+	assert.Error(t, validateProviderCondition("destination", "exactly-two"))
 }

@@ -69,9 +69,9 @@ func validateProviderCondition(group, condition string) error {
 		}
 		return nil
 	}
-	if condition == "at-least-one" {
+	if condition == "at-least-one" || condition == "exactly-one" {
 		if group == "" {
-			return fmt.Errorf("at-least-one conditions need a group")
+			return fmt.Errorf("%s conditions need a group", condition)
 		}
 		return nil
 	}
