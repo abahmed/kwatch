@@ -42,3 +42,28 @@ func TestSelfCauseLeadIsOnlyTheState(t *testing.T) {
 		t.Fatalf("title = %q, want the subject", msg.Title)
 	}
 }
+
+// A cause that is the subject itself, under a rule without words of
+// its own, must not be told as "web is failing because it is failing".
+func TestOwnRootWithoutWordsIsNotItsOwnCause(t *testing.T) {
+	now := time.Date(2026, 9, 29, 10, 0, 0, 0, time.UTC)
+	root := inventory.CoreID(kube.KindDeployment, "staging", "web")
+	pod := inventory.CoreID(kube.KindPod, "staging", "web-1")
+	p := incident.Incident{
+		ID: "inc-1", Root: root, Tier: incident.Notify,
+		State: incident.Open, Opened: now, Announced: now, Revision: 1,
+		Members: map[detection.Key]detection.Finding{
+			{Entity: pod, Reason: "CrashLoopBackOff"}: {Entity: pod,
+				Reason: "CrashLoopBackOff", Severity: detection.Critical,
+				Summary: "Container web keeps crashing"}},
+		Cause: &rootcause.CauseRecord{Root: root, Rule: "unworded-row",
+			Score: 0.9},
+	}
+
+	msg := Writer{}.Write(incident.Decision{Action: incident.Announce,
+		Incident: p}, now)
+
+	if strings.Contains(msg.Title, "because it is failing") {
+		t.Fatalf("title = %q", msg.Title)
+	}
+}

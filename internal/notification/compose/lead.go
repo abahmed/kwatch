@@ -127,9 +127,11 @@ func blamedChange(f caseFacts) *inventory.Change {
 		onlyScaledToZero(f.members) {
 		return nil
 	}
-	if cause.Rule == "account-missing-at-create" {
+	if cause.Rule == "account-missing-at-create" ||
+		cause.Rule == explain.RowNodePullsThrottled {
 		// "service account api does not exist" says more than the
-		// deletion that made it so.
+		// deletion that made it so, and a kubelet holding pulls back
+		// more than the node's arrival.
 		return nil
 	}
 	change := cause.Change
@@ -251,8 +253,21 @@ func causedLead(f caseFacts) string {
 		return lead
 	}
 	subject := symptomSubject(f)
-	return causeLink(f.p.Cause, symptomState(f, subject),
-		causePhrase(f.p.Cause, subject))
+	why := causePhrase(f.p.Cause, subject)
+	if why == "it "+fallbackCauseWords || f.p.Cause.PreviousFails ||
+		leftoverOnly(f) {
+		// "web is failing because it is failing" says nothing, nor
+		// does a release whose previous version fails the same way
+		// (previousFailsSentences): the state alone is said.
+		return ownLead(f)
+	}
+	return causeLink(f.p.Cause, symptomState(f, subject), why)
+}
+
+// leftoverOnly reports a lead that joined the incident only as a
+// leftover of its root, not through its cause: no "because" for it.
+func leftoverOnly(f caseFacts) bool {
+	return f.ok && !f.p.Root.IsZero() && f.lead.Leftover == f.p.Root
 }
 
 // symptomState is the subject and what is wrong with it, short enough

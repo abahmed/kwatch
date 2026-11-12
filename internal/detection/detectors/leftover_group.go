@@ -14,42 +14,72 @@ var webhookKinds = []inventory.Kind{
 	kube.KindMutatingWebhook, kube.KindValidatingHook,
 }
 
-// leftoverOf is the absent backend the leftovers of namespace share:
-// of the Services an admission webhook calls in namespace, the first by
-// name that does not exist or has nothing ready behind it, named by the
-// controller workload whose pods it selects when there is one (see
-// backendController). An operator
-// that was removed or scaled to zero leaves its webhooks calling such a
-// Service, and its expired certificates, parked Deployments and
-// objects stuck on its finalizers in the same namespace. Naming one
-// backend for all of them makes them one incident (incident/leftover.go)
-// instead of one per object. Zero when no webhook backend in namespace
-// is absent, or when Services are not synced.
+// leftoverOf is the absent backend that member was left behind by: of
+// the Services an admission webhook calls in namespace that do
+// not exist or have nothing ready behind them, the first by name that
+// member belongs with (see leftBehindBy), named by the controller
+// workload whose pods it selects when there is one (see
+// backendController). An operator that was removed or scaled to zero
+// leaves its webhooks calling such a Service, and its expired
+// certificates, parked Deployments and objects stuck on its finalizers
+// in the same namespace. Naming one backend for all of them makes them
+// one incident (incident/leftover.go) instead of one per object. Sharing
+// a namespace is not enough: two operators in one namespace leave two
+// groups. Zero when no absent backend is member's, or when Services are
+// not synced.
 func leftoverOf(
-	ctx detection.Context, namespace string,
+	ctx detection.Context, member inventory.EntityID, namespace string,
 ) inventory.EntityID {
 	if ctx.Model == nil || namespace == "" ||
 		!ctx.Synced(kube.KindService) {
 		return inventory.EntityID{}
 	}
-	var found inventory.EntityID
+	for _, call := range webhookCalls(ctx, namespace) {
+		if controller, ok := absentOwner(ctx, member, call.config,
+			call.service); ok {
+			return controller
+		}
+	}
+	return inventory.EntityID{}
+}
+
+// webhookCall is one admission webhook configuration calling one
+// Service.
+type webhookCall struct{ config, service inventory.EntityID }
+
+// webhookCalls lists the calls of every webhook configuration to a
+// Service in namespace, by Service name.
+func webhookCalls(
+	ctx detection.Context, namespace string,
+) []webhookCall {
+	var out []webhookCall
 	for _, kind := range webhookKinds {
 		for _, config := range ctx.Model.Entities(kind) {
 			for _, service := range ctx.Model.Related(
 				config, inventory.Serves, inventory.Outgoing) {
-				if service.Namespace != namespace ||
-					(!found.IsZero() && service.Name >= found.Name) ||
-					!backendAbsent(ctx, service) {
-					continue
+				if service.Namespace == namespace {
+					out = append(out, webhookCall{config, service})
 				}
-				found = service
 			}
 		}
 	}
-	if found.IsZero() {
-		return found
+	slices.SortStableFunc(out, func(a, b webhookCall) int {
+		return strings.Compare(a.service.Name, b.service.Name)
+	})
+	return out
+}
+
+// absentOwner is the controller of service, the absent backend config
+// calls, when member was left behind by it.
+func absentOwner(
+	ctx detection.Context, member, config, service inventory.EntityID,
+) (inventory.EntityID, bool) {
+	if !backendAbsent(ctx, service) {
+		return inventory.EntityID{}, false
 	}
-	return backendController(ctx, found)
+	controller := backendController(ctx, service)
+	return controller, leftBehindBy(ctx, member, config, service,
+		controller)
 }
 
 // controllerKinds are the workloads that may run an operator.
@@ -102,13 +132,14 @@ func backendAbsent(
 	return known && ready == 0 && !backendsAreStarting(ctx, service)
 }
 
-// asLeftover marks f a leftover of the absent backend of its
-// namespace, when there is one. Only a finding that is low on its own
-// is marked: one that blocks or breaks something keeps its own
-// incident and tier.
+// asLeftover marks f, about member, a leftover of the absent backend
+// in namespace that member belongs with, when there is one. Only a
+// finding that is low on its own is marked: one that blocks or breaks
+// something keeps its own incident and tier.
 func asLeftover(
-	ctx detection.Context, f detection.Finding, namespace string,
+	ctx detection.Context, f detection.Finding,
+	member inventory.EntityID, namespace string,
 ) detection.Finding {
-	f.Leftover = leftoverOf(ctx, namespace)
+	f.Leftover = leftoverOf(ctx, member, namespace)
 	return f
 }

@@ -568,17 +568,17 @@ here verbatim and checked by `TestScorecardGates`.
 
 | Metric | Target | Current | Result |
 | --- | --- | --- | --- |
-| Correct root cause (labelled) | >= 90% | 98.9% | pass |
+| Correct root cause (labelled) | >= 90% | 99.0% | pass |
 | Correct root cause (held-out) | >= 80% | 100% | pass |
-| Wrong high-confidence root | <= 5% (at least 20 cases) | 0% (0 of 241 high-confidence cases, labelled and held-out) | pass |
+| Wrong high-confidence root | <= 5% (at least 20 cases) | 0% (0 of 244 high-confidence cases, labelled and held-out) | pass |
 | Wrong root stated at likely confidence or higher (labelled) | <= 0 | 0 | pass |
 | Scenarios whose first message stated a wrong root | <= 0 | 0 | pass |
-| Calibration: high confidence | 80-100% (at least 10 cases) | 100.0% (228 of 228 right) | pass |
+| Calibration: high confidence | 80-100% (at least 10 cases) | 100.0% (231 of 231 right) | pass |
 | Calibration: likely confidence | 50-95% (at least 10 cases) | 90.2% (46 of 51 right) | pass |
 | Messages per incident (p95) | <= 3 | 3 | pass |
 | Messages per incident (most) | <= 5 | 5 | pass |
 | Time to first message (page tier) | max <= 2m0s | p95 1m45s, max 1m45s (50 scenarios) | pass |
-| Time to first message (notify tier) | max <= 5m0s | p95 3m15s, max 4m15s (326 scenarios) | pass |
+| Time to first message (notify tier) | max <= 5m0s | p95 3m15s, max 4m15s (333 scenarios) | pass |
 | Time to first message (boot-held) | max <= 15m0s | p95 12m15s, max 12m15s (5 scenarios) | pass |
 | Notifications from non-events (staging day) | <= 0 | 0 | pass |
 | Notifications per hour (staging day peak) | <= 30/h | 25/h | pass |
@@ -597,15 +597,15 @@ here verbatim and checked by `TestScorecardGates`.
 | Recoveries said while members still fail | <= 0 | 0 | pass |
 | Scenarios that passed and no longer do (ratchet) | <= 0 | 0 | pass |
 
-28 of 28 gates pass. 468 labelled root cases in 486 scenarios; first-incident tier matches in 486 of 486 scenarios.
-Staging day: 979 notifications in 72h44m0s (13.5/h mean, peak hour 25); 0 from non-events, 0 of them notify or page.
+28 of 28 gates pass. 478 labelled root cases in 495 scenarios; first-incident tier matches in 495 of 495 scenarios.
+Staging day: 996 notifications in 73h49m0s (13.5/h mean, peak hour 25); 0 from non-events, 0 of them notify or page.
 Storm shared node: 1000 pods, 2 messages in total, 1 in the loudest 2 minutes.
 Storm shared registry: 1000 pods, 1 messages in total, 1 in the loudest 2 minutes.
 Storm multi-cause: 1000 pods from 10 causes, 10 of them reported, 10 messages in total, 8 in the loudest 2 minutes.
 Slowest first messages: boot-endpoints-still-down notify 12m15s, scale-down-moved-pod-never-starts page 12m0s, node-join-never-ready page 10m15s, own-volume-wait-too-long notify 10m0s, node-replace-sandbox-stuck notify 7m15s.
 Calibration: the labelled cases put high confidence at 0.55 (committed 0.70).
-Right roots: 281 with a stated cause, 177 by falling back to the failing entity with no stated cause, 5 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 9 scenarios, 7 of them labelled as legitimate revisions.
-Time to first correct root: p95 4m15s, max 25m30s over 411 scenarios; slowest: hpa-metrics-outlive-recovery 25m30s, boot-endpoints-still-down 12m15s, scale-down-moved-pod-never-starts 12m0s, one-hpa-bad-target 11m15s, metrics-blip-long 11m15s. Never stated: coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
+Right roots: 284 with a stated cause, 184 by falling back to the failing entity with no stated cause, 5 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 9 scenarios, 7 of them labelled as legitimate revisions.
+Time to first correct root: p95 4m15s, max 25m30s over 419 scenarios; slowest: hpa-metrics-outlive-recovery 25m30s, boot-endpoints-still-down 12m15s, scale-down-moved-pod-never-starts 12m0s, one-hpa-bad-target 11m15s, metrics-blip-long 11m15s. Never stated: coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
 
 ## Scenarios
 
@@ -742,12 +742,12 @@ Time to first correct root: p95 4m15s, max 25m30s over 411 scenarios; slowest: h
 | hpa-at-max-healthy-quiet | quiet | - | - | -/- | 0 (0) | pass |
 | external-database-storm | `external-endpoint//db.example.com:5432` | `external-endpoint//db.example.com:5432` | high 1.00 | notify/notify | 1 (3) | pass |
 | external-database-one-workload | `deployment/reports/builder` | `deployment/reports/builder (no cause)` | none | notify/notify | 1 (2) | pass |
-| shared-panic-storm | `failure-signature//CrashLoop panic: license check failed for tenant #` | `failure-signature//CrashLoop panic: license check failed for tenant #` | high 0.75 | notify/notify | 1 (3) | pass |
+| shared-panic-storm | `failure-signature//panic: license check failed for tenant #` | `failure-signature//panic: license check failed for tenant #` | high 0.75 | notify/notify | 1 (3) | pass |
 | stack-frame-not-endpoint | `deployment/orders/api`, `deployment/billing/ledger` | `deployment/orders/api (no cause)`, `deployment/billing/ledger (no cause)` | none | notify/notify | 1 (4) | pass |
-| redis-down-storm | `failure-signature//CrashLoop dial tcp <ip>:6379: connect: connection refused` | `failure-signature//CrashLoop dial tcp <ip>:6379: connect: connection refused` | high 0.75 | notify/notify | 1 (3) | pass |
+| redis-down-storm | `failure-signature//dial tcp <ip>:6379: connect: connection refused` | `failure-signature//dial tcp <ip>:6379: connect: connection refused` | high 0.75 | notify/notify | 1 (3) | pass |
 | different-errors-stay-apart | `deployment/shop/cart`, `deployment/shop/search`, `deployment/billing/ledger` | `deployment/shop/cart (no cause)`, `deployment/shop/search (no cause)`, `deployment/billing/ledger (no cause)` | none | notify/notify | 1 (6) | pass |
-| redis-storm-logs-only | `failure-signature//CrashLoop unhandled exception. stackexchange.redis.redisconnectionexception: it was not po` | `failure-signature//CrashLoop unhandled exception. stackexchange.redis.redisconnectionexception: it was not po` | high 0.75 | notify/notify | 1 (3) | pass |
-| redis-storm-logs-late | `failure-signature//CrashLoop unhandled exception. stackexchange.redis.redisconnectionexception: it was not po` | `failure-signature//CrashLoop unhandled exception. stackexchange.redis.redisconnectionexception: it was not po` | high 0.75 | notify/notify | 1 (1) | pass |
+| redis-storm-logs-only | `failure-signature//unhandled exception. stackexchange.redis.redisconnectionexception: it was not po` | `failure-signature//unhandled exception. stackexchange.redis.redisconnectionexception: it was not po` | high 0.75 | notify/notify | 1 (3) | pass |
+| redis-storm-logs-late | `failure-signature//unhandled exception. stackexchange.redis.redisconnectionexception: it was not po` | `failure-signature//unhandled exception. stackexchange.redis.redisconnectionexception: it was not po` | high 0.75 | notify/notify | 1 (1) | pass |
 | cronjob-last-run-failed | `cronjob/reports/weekly-export` | `cronjob/reports/weekly-export` | likely 0.55 | digest/digest | 0 (2) | pass |
 | cron-runs-keep-failing | `cronjob/ops/stats-rollup` | `cronjob/ops/stats-rollup` | likely 0.69 | notify/notify | 3 (3) | pass |
 | cache-unreachable-at-start | `deployment/web/api` | `deployment/web/api` | likely 0.69 | notify/notify | 1 (3) | pass |
@@ -924,7 +924,7 @@ Time to first correct root: p95 4m15s, max 25m30s over 411 scenarios; slowest: h
 | finalizer-controller-running | `finalizer/widget-system/widgets.example.com/cleanup` | `finalizer/widget-system/widgets.example.com/cleanup` | high 0.70 | digest/digest | 0 (2) | pass |
 | finalizer-controller-scaled-down-fresh | `deployment/widget-system/widget-controller` | `deployment/widget-system/widget-controller` | high 0.75 | notify/notify | 1 (2) | pass |
 | attachment-volume-gone | `volumeattachment//csi-0a1b2c`, `volumeattachment//csi-3d4e5f` | `volumeattachment//csi-0a1b2c (no cause)`, `volumeattachment//csi-3d4e5f (no cause)` | none | digest/digest | 0 (2) | pass |
-| attachment-node-gone | `volumeattachment//csi-6a7b8c` | `volumeattachment//csi-6a7b8c (no cause)` | none | notify/notify | 1 (2) | pass |
+| attachment-node-gone | `volumeattachment//csi-6a7b8c`, `volumeattachment//csi-9d8e7f` | `volumeattachment//csi-6a7b8c (no cause)`, `volumeattachment//csi-9d8e7f (no cause)` | none | notify/notify | 1 (2) | pass |
 | finalizer-lookalike-controllers | `finalizer/arc-system/actions.github.com/cleanup-protection` | `finalizer/arc-system/actions.github.com/cleanup-protection` | high 0.70 | digest/digest | 1 (2) | pass |
 | finalizer-lookalike-no-rbac-view | `finalizer/arc-system/actions.github.com/cleanup-protection` | `finalizer/arc-system/actions.github.com/cleanup-protection` | high 0.70 | digest/digest | 1 (2) | pass |
 | finalizer-controller-granted-the-group | `deployment/arc-system/gha-runner-scale-set-controller` | `deployment/arc-system/gha-runner-scale-set-controller` | high 0.75 | digest/digest | 1 (2) | pass |
@@ -1070,7 +1070,7 @@ Time to first correct root: p95 4m15s, max 25m30s over 411 scenarios; slowest: h
 | sandbox-first-attempt-retried | quiet | - | - | -/- | 0 (0) | pass |
 | young-node-address-warm-up | quiet | - | - | -/- | 0 (0) | pass |
 | scale-up-backend-starting | quiet | - | - | -/- | 0 (0) | pass |
-| operator-leftovers-grouped | `deployment/policy-system/policy-controller` | `deployment/policy-system/policy-controller (no cause)` | none | digest/digest | 1 (2) | pass |
+| operator-leftovers-grouped | `deployment/policy-system/policy-controller`, `deployment/policy-system/trace-operator` | `deployment/policy-system/policy-controller (no cause)`, `deployment/policy-system/trace-operator (no cause)` | none | digest/digest | 1 (2) | pass |
 | old-leftovers-age-out | quiet | - | - | -/- | 0 (0) | pass |
 | chronic-issuer-lowered | `issuer.certs.example.com/certs/letsencrypt` | `issuer.certs.example.com/certs/letsencrypt (no cause)` | none | digest/digest | 1 (2) | pass |
 | fresh-issuer-notifies | `issuer.certs.example.com/certs/letsencrypt` | `issuer.certs.example.com/certs/letsencrypt (no cause)` | none | notify/notify | 1 (2) | pass |
@@ -1097,6 +1097,15 @@ Time to first correct root: p95 4m15s, max 25m30s over 411 scenarios; slowest: h
 | job-created-suspended | quiet | - | - | -/- | 0 (0) | pass |
 | statefulset-ordered-scale-up | quiet | - | - | -/- | 0 (0) | pass |
 | statefulset-scale-up-stalls | `statefulset/streaming/queue` | `statefulset/streaming/queue (no cause)` | none | notify/notify | 1 (2) | pass |
+| cold-start-shared-start-error | `failure-signature//stackexchange.redis.redisconnectionexception: it was not possible to connect to` | `failure-signature//stackexchange.redis.redisconnectionexception: it was not possible to connect to` | high 0.70 | notify/notify | 2 (3) | pass |
+| node-stall-from-capped-container | quiet | - | - | -/- | 0 (0) | pass |
+| node-stall-from-busy-node | `node//n1` | `node//n1 (no cause)` | none | digest/digest | 0 (2) | pass |
+| kubelet-pull-qps-exceeded | `node//n3` | `node//n3` | high 1.00 | notify/notify | 1 (2) | pass |
+| release-previous-version-fails | `deployment/shop/orders` | `deployment/shop/orders` | high 0.87 | notify/notify | 1 (2) | pass |
+| scaled-to-zero-then-released | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| probe-refused-then-http-500 | `deployment/external-secrets/cert-controller` | `deployment/external-secrets/cert-controller (no cause)` | none | notify/notify | 1 (3) | pass |
+| crash-loop-before-node-drain | `deployment/shop/report` | `deployment/shop/report (no cause)` | none | notify/notify | 1 (3) | pass |
+| crash-everywhere-node-pressure | `deployment/shop/worker` | `deployment/shop/worker (no cause)` | none | notify/notify | 1 (4) | pass |
 
 ## Held-out scenarios
 

@@ -20,7 +20,10 @@ func recoveredBefore(e inventory.Entity, note inventory.Note) bool {
 
 // readySince says whether e is fully ready, and since when: for a
 // workload, since its ready count took the value it has; for a pod,
-// since it became ready; for a custom resource, since its Ready condition
+// since it became ready; for a container, since kwatch saw it ready (its
+// status has no transition time: a kill-time event such as a failed
+// preStop hook, written before the restarted container turned ready, is
+// history once it is); for a custom resource, since its Ready condition
 // turned True, provided no other condition reports a failure.
 func readySince(e inventory.Entity) (time.Time, bool) {
 	switch e.ID.Kind {
@@ -41,6 +44,11 @@ func readySince(e inventory.Entity) (time.Time, bool) {
 		}
 		if at := timestamp(e, kube.AttrReadySince); !at.IsZero() {
 			return at, true
+		}
+		return valueSince(e, kube.AttrReady), true
+	case kube.KindContainer:
+		if !flag(e, kube.AttrReady) {
+			return time.Time{}, false
 		}
 		return valueSince(e, kube.AttrReady), true
 	}

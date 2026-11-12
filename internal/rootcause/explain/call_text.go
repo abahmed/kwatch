@@ -257,9 +257,13 @@ func cutRunes(text string, n int) string {
 	return strings.TrimSpace(string([]rune(text)[:n]))
 }
 
-// signatureName names a failure-signature entity: the failing mode,
-// then the normalised error ("CrashLoop panic: license key rejected").
-// The mode keeps different failures with the same words apart.
-func signatureName(mode detection.Mode, signature string) string {
-	return string(mode.Family()) + " " + signature
+// signatureName names a failure-signature entity by the normalised
+// error alone ("panic: license key rejected"). The mode is left out on
+// purpose: every mode that may share a signature (signatureFailures) is
+// a pod failing to run, and one error at start-up shows as a crash in
+// one pod, a liveness kill in another and a pod never ready in a third.
+// The guards against false grouping are the error's own words
+// (normalizeSignature), SignatureMinWorkloads and SignatureWindow.
+func signatureName(signature string) string {
+	return signature
 }

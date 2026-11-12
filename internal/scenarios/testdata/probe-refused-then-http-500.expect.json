@@ -1,0 +1,8 @@
+{
+  "name": "probe-refused-then-http-500",
+  "description": "A readiness probe on an undeclared port is refused while the app starts, then answers HTTP 500 for twenty minutes.",
+  "root": "deployment/external-secrets/cert-controller",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "5m0s"
+}

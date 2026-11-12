@@ -1,0 +1,11 @@
+{
+  "name": "release-previous-version-fails",
+  "description": "A release's pod stops at start on a missing connection string, and the restarted pod of the previous version stops with the same line.",
+  "root": "deployment/shop/orders",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

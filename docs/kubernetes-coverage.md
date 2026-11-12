@@ -112,7 +112,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Budget.SelectsNothing | degraded | `PdbSelectsNothing` | `budget` |
 | Budget.SyncFailed | degraded | `PdbSyncFailed` | `condition_rules` |
 | CPUHigh | degraded | `ContainerCPUUsageHigh` | `resources` |
-| CPUThrottled | varies | `ContainerCPUThrottled` | `resources` |
+| CPUThrottled | degraded | `ContainerCPUThrottled` | `cpu_capped`, `resources` |
 | CRD.NotEstablished | degraded | `CustomResourceDefinitionNotEstablished` | `condition_rules` |
 | CSRFailed | varies | `CertificateSigningRequestFailure` | `custom` |
 | Cert.Expired | degraded | `TLSCertExpired` | `config` |

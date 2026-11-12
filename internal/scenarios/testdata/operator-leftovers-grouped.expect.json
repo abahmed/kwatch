@@ -1,7 +1,10 @@
 {
   "name": "operator-leftovers-grouped",
-  "description": "A scaled-to-zero operator left two webhooks and two expired certificates behind: one digest incident, not four.",
+  "description": "Two scaled-to-zero operators in one namespace left webhooks and expired certificates behind: one digest incident per operator, not one per object nor one for the namespace.",
   "root": "deployment/policy-system/policy-controller",
+  "otherRoots": [
+    "deployment/policy-system/trace-operator"
+  ],
   "tier": "digest",
   "maxMessages": 2,
   "mustNotBlame": [

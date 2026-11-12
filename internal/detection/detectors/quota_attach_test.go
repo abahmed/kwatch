@@ -123,8 +123,8 @@ func TestAttachmentNamesAnOrphanStuckDeleting(t *testing.T) {
 	assert.Equal(t, reasons.VolumeDetachFailure, f.Reason)
 	assert.Equal(t, detection.Info, f.Severity)
 	assert.Equal(t, "Attachment of volume gone-pv to node gone-node by "+
-		"ebs.csi.example.com is stuck deleting; the volume gone-pv it "+
-		"attaches and the node no longer exist", f.Summary)
+		"ebs.csi.example.com is stuck deleting; its node and volume no "+
+		"longer exist, so nothing is left to detach it", f.Summary)
 	assert.Contains(t, f.Evidence, detection.Evidence{
 		Label: "detach error", Value: "persistentvolume not found"})
 }
@@ -181,4 +181,44 @@ func TestAttachmentWaitsForNodesAndPVsToSync(t *testing.T) {
 		eval.Findings[0].Summary)
 	assert.ElementsMatch(t, []inventory.Kind{kube.KindNode, kube.KindPV},
 		eval.Unsynced)
+}
+
+// Without relations (the node and volume were gone before kwatch
+// started) the attachment's own spec still names them.
+func TestAttachmentNamesItsGoneNodeAndVolumeWithoutRelations(t *testing.T) {
+	m := newTestModel()
+	id := newID(kube.KindVolumeAttachment, "", "csi-old")
+	put(m, id, t0, map[string]inventory.Value{
+		kube.AttrDeleting:      inventory.Bool(true),
+		kube.AttrDeletingSince: inventory.Time(t0.Add(-400 * 24 * time.Hour)),
+		kube.AttrDetachError:   inventory.Text("persistentvolume not found"),
+		kube.AttrAttachNode:    inventory.Text("gone-node"),
+		kube.AttrAttachVolume:  inventory.Text("gone-pv"),
+	})
+
+	eval := evaluate(Attachment{}, m, t0, id, nil)
+
+	require.Len(t, eval.Findings, 1)
+	f := eval.Findings[0]
+	assert.Equal(t, detection.Info, f.Severity)
+	assert.Contains(t, f.Summary, "its node and volume no longer exist")
+	assert.Contains(t, f.Evidence, detection.Evidence{
+		Label: detection.EvidenceAttachGone, Value: "volume and node"})
+}
+
+// While nodes have not synced, a gone node cannot be told: the
+// attachment is looked at again soon, not left with the generic words.
+func TestAttachmentIsRecheckedUntilItsKindsSync(t *testing.T) {
+	m := newTestModel()
+	id := stuckAttachment(m, newID(kube.KindNode, "", "gone-node"),
+		newID(kube.KindPV, "", "gone-pv"))
+	nodesLate := func(kind inventory.Kind) bool {
+		return kind != kube.KindNode
+	}
+
+	eval := evaluate(Attachment{}, m, t0, id, nodesLate)
+
+	require.Len(t, eval.Findings, 1)
+	assert.NotContains(t, eval.Findings[0].Summary, "node no longer")
+	assert.Equal(t, unsyncedRecheck, eval.RecheckAfter)
 }

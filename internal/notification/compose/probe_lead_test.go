@@ -56,8 +56,23 @@ func TestProbeLeadSaysWhatTheCheckAnswers(t *testing.T) {
 			[]detection.Evidence{check,
 				{Label: detection.EvidenceProbeResult, Value: "timed out"},
 				{Label: detection.EvidenceProbeTimeout, Value: "2"}},
-			"web in shop is restarted: its liveness check (/readyz on " +
-				"port 8081) does not answer within 2s"},
+			"web in shop keeps being restarted: its liveness check " +
+				"(/readyz on port 8081) does not answer within 2s"},
+		{"liveness refused after a start-up error",
+			reasons.LivenessProbeFailed,
+			[]detection.Evidence{check,
+				{Label: detection.EvidenceProbeResult,
+					Value: "connection refused"},
+				{Label: detection.EvidenceError, Value: "java.net." +
+					"ConnectException: Connection refused to cache:6379"}},
+			"web in shop keeps being restarted: its liveness check " +
+				"(/readyz on port 8081) fails (connection refused) after " +
+				"it failed at start-up: ConnectException: Connection " +
+				"refused to cache:6379"},
+		{"readiness fails without a known result",
+			reasons.ReadinessProbeFailed, []detection.Evidence{check},
+			"web in shop is not ready: its readiness check (/readyz on " +
+				"port 8081) fails"},
 	}
 	for _, c := range cases {
 		msg := Writer{}.Write(announce(probeIncident(c.reason, c.ev...)),
@@ -66,13 +81,28 @@ func TestProbeLeadSaysWhatTheCheckAnswers(t *testing.T) {
 	}
 }
 
-// Nothing listening is not an answer: the probe lead stays out.
-func TestProbeLeadLeavesARefusedConnectionAlone(t *testing.T) {
+// A refused connection with nothing else known is still said plainly.
+func TestProbeLeadSaysARefusedConnectionPlainly(t *testing.T) {
 	p := probeIncident(reasons.ReadinessProbeFailed,
 		detection.Evidence{Label: detection.EvidenceProbeResult,
 			Value: "connection refused"})
 	msg := Writer{}.Write(announce(p), writerNow)
-	assert.NotContains(t, msg.Title, "its readiness check")
+	assert.Contains(t, msg.Title, "web in shop is not ready: its "+
+		"readiness check fails (connection refused)")
+}
+
+// A liveness kill leads before the readiness failure it causes.
+func TestProbeLeadPrefersTheLivenessKill(t *testing.T) {
+	p := probeIncident(reasons.ReadinessProbeFailed)
+	container := inventory.EntityID{Kind: kube.KindContainer,
+		Namespace: "shop", Name: "web-1-x/app"}
+	live := detection.Finding{Entity: container,
+		Reason: reasons.LivenessProbeFailed, Severity: detection.Warning,
+		Since: writerNow.Add(-9 * time.Minute)}
+	p.Members[live.Key()] = live
+	msg := Writer{}.Write(announce(p), writerNow)
+	assert.Contains(t, msg.Title, "web in shop keeps being restarted: "+
+		"its liveness check fails")
 }
 
 func TestProbeTarget(t *testing.T) {
@@ -82,4 +112,16 @@ func TestProbeTarget(t *testing.T) {
 	assert.Equal(t, " (gRPC on port 9090)", probeTarget("grpc :9090"))
 	assert.Equal(t, "", probeTarget("exec"))
 	assert.Equal(t, "", probeTarget(""))
+}
+
+// A container that exits on its own is not killed by its probe: the
+// probe lead stays out and the exit leads.
+func TestProbeLeadLeavesAContainerThatExitsOnItsOwn(t *testing.T) {
+	p := probeIncident(reasons.LivenessProbeFailed,
+		detection.Evidence{Label: detection.EvidenceProbeResult,
+			Value: "connection refused"},
+		detection.Evidence{Label: detection.EvidenceExitedOnOwn,
+			Value: "1"})
+	msg := Writer{}.Write(announce(p), writerNow)
+	assert.NotContains(t, msg.Title, "keeps being restarted")
 }

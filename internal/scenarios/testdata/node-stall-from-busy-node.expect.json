@@ -1,0 +1,7 @@
+{
+  "name": "node-stall-from-busy-node",
+  "description": "A node whose pods use nearly all of its CPU reports a CPU stall.",
+  "root": "node//n1",
+  "tier": "digest",
+  "maxMessages": 2
+}

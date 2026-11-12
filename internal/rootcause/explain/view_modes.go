@@ -160,6 +160,10 @@ func (v *view) sharedServiceModes(
 		if class, ok := v.registryClass(effect); ok {
 			return pseudoFailing(class)
 		}
+	case kube.KindNode:
+		if link == LinkRunsOn && v.pullThrottledOnNode(effect) {
+			return pseudoFailing(ModePullThrottled)
+		}
 	case kindClusterDNS:
 		if v.resolutionFailing(effect, link) {
 			return pseudoFailing(ModeResolution)

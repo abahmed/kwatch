@@ -1,0 +1,6 @@
+{
+  "name": "node-stall-from-capped-container",
+  "description": "A node at a tenth of its CPU reports a CPU stall that comes from one container held at its 250m limit.",
+  "maxMessages": 0,
+  "quiet": true
+}

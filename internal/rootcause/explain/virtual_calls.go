@@ -48,6 +48,16 @@ var callerFailures = []detection.Mode{
 	detection.ModeCrashLoop, detection.ModeRestarting, detection.ModeExit,
 	detection.ModeFailed, detection.ModeError}
 
+// signatureFailures are the modes of a pod that may share a failure
+// signature: callerFailures, and the start-up failures a liveness kill
+// or a pod that never turns ready show. Why: one error at start-up
+// (a cache not reachable yet) makes some pods crash, others hang until
+// liveness kills them, others stay not ready; the mode differs, the
+// error line does not. Such a pod counts only when its own error line
+// is known (signatureOf), never by the probe's words.
+var signatureFailures = callerFailuresAnd(detection.ModeProbeLiveness,
+	detection.ModeProbeStartup, detection.ModeNotReady)
+
 // callerFailuresAnd is callerFailures plus further modes of a pod that
 // depends on the call.
 func callerFailuresAnd(more ...detection.Mode) []detection.Mode {
@@ -88,7 +98,7 @@ var calledRows = []Row{
 		Cause: Side{Kind: KindFailureSignature,
 			Modes: []detection.Mode{ModeSharedSignature}},
 		Link:   LinkSharesError,
-		Effect: podSide(callerFailures...),
+		Effect: podSide(signatureFailures...),
 		Prior:  0.55, MinWorkloads: SignatureMinWorkloads,
 	},
 }
@@ -196,7 +206,7 @@ func (v *view) signatureOf(id inventory.EntityID) (string, bool) {
 		return cached, cached != ""
 	}
 	name := ""
-	for _, f := range v.unitFindings(unit) {
+	for _, f := range v.unitFindingsIn(unit, signatureFailures) {
 		name = v.findingSignature(f)
 		if name != "" {
 			break
@@ -207,23 +217,39 @@ func (v *view) signatureOf(id inventory.EntityID) (string, bool) {
 }
 
 // findingSignature names the error of one finding: its "error"
-// evidence, else the previous log line the finding does not quote.
+// evidence, else the previous log line the finding does not quote (of
+// the pod's containers, for a finding on the pod).
 func (v *view) findingSignature(f detection.Finding) string {
 	texts := []string{}
 	for _, e := range f.Evidence {
-		if e.Label == "error" {
+		if e.Label == detection.EvidenceError {
 			texts = append(texts, e.Value)
 		}
 	}
-	if line := v.previousLogLine(f.Entity); line != "" {
-		texts = append(texts, line)
-	}
+	texts = append(texts, v.ownLogLines(f.Entity)...)
 	for _, text := range texts {
 		if signature := normalizeSignature(text); signature != "" {
-			return signatureName(f.Mode, signature)
+			return signatureName(signature)
 		}
 	}
 	return ""
+}
+
+// ownLogLines are the previous log lines of a container, or of each
+// container of a pod, in a stable order.
+func (v *view) ownLogLines(id inventory.EntityID) []string {
+	ids := []inventory.EntityID{id}
+	if id.Kind == kube.KindPod {
+		ids = v.s.Model.Related(id, inventory.PartOf, inventory.Incoming)
+		sortIDs(ids)
+	}
+	var out []string
+	for _, c := range ids {
+		if line := v.previousLogLine(c); line != "" {
+			out = append(out, line)
+		}
+	}
+	return out
 }
 
 // unitOf is the pod that fails for id: the pod itself, or a
@@ -241,13 +267,21 @@ func (v *view) unitOf(id inventory.EntityID) (inventory.EntityID, bool) {
 // unitFindings are the unhealthy findings of a pod and its containers
 // that a failed call can explain, in a stable order.
 func (v *view) unitFindings(pod inventory.EntityID) []detection.Finding {
+	return v.unitFindingsIn(pod, callerFailures)
+}
+
+// unitFindingsIn are the unhealthy findings of a pod and its containers
+// in one of modes, in a stable order.
+func (v *view) unitFindingsIn(
+	pod inventory.EntityID, modes []detection.Mode,
+) []detection.Finding {
 	ids := append([]inventory.EntityID{pod}, v.s.Model.Related(
 		pod, inventory.PartOf, inventory.Incoming)...)
 	sortIDs(ids)
 	var out []detection.Finding
 	for _, id := range ids {
 		for _, f := range v.s.Findings[id] {
-			if unhealthy(f) && anyModeMatches(callerFailures, f.Mode) {
+			if unhealthy(f) && anyModeMatches(modes, f.Mode) {
 				out = append(out, f)
 			}
 		}

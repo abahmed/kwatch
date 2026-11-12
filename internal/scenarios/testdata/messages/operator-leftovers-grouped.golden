@@ -1,7 +1,8 @@
 10:31:15 digest
-🟡 kwatch summary (prod-eu-1): one new low-priority problem. Leftovers of a removed or stopped controller (4 objects): policy-controller in policy-system, which its webhooks call, has no ready pods. Not urgent: kwatch alerts on its own if it gets worse.
-🟡 kwatch summary (prod-eu-1): one new low-priority problem.
-| 🟡 **kwatch summary** · prod-eu-1 — 1 problem
+🟡 kwatch summary (prod-eu-1): two new low-priority problems. Leftovers of a removed or stopped controller (4 objects): policy-controller in policy-system, which its webhooks call, has no ready pods. Leftovers of a removed or stopped controller (2 objects): trace-operator in policy-system, which its webhooks call, has no ready pods. None is urgent: kwatch alerts on its own if one gets worse.
+🟡 kwatch summary (prod-eu-1): two new low-priority problems.
+| 🟡 **kwatch summary** · prod-eu-1 — 2 problems
 |
 | **Problems**
 | - Leftovers of a removed or stopped controller (4 objects): **policy-controller** in **policy-system**, which its webhooks call, has no ready pods
+| - Leftovers of a removed or stopped controller (2 objects): **trace-operator** in **policy-system**, which its webhooks call, has no ready pods

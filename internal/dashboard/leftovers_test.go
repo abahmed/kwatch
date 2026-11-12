@@ -170,3 +170,21 @@ func TestOverviewSaysHowManyDaysMakeAProblemOld(t *testing.T) {
 	w = getPart(t, s, "/api/overview", "oldProblems")
 	assert.NotContains(t, w.Body.String(), `"days"`)
 }
+
+// The summary of a leftover issue says what the root left behind, not
+// one member's sentence as if it were the root's.
+func TestLeftoverIssueSummaryLeadsWithTheLeftovers(t *testing.T) {
+	p := leftoverIssue()
+	p.Mode = detection.ModeStuckDeleting
+	d := toDetail(p)
+
+	got := whatOf(&d, p)
+
+	assert.Equal(t, "Leftovers of Service policy-svc in policy-system: "+
+		"2 objects it left behind while it is gone.", got)
+	assert.NotContains(t, got, "stuck deleting")
+	assert.NotContains(t, got, "expired")
+
+	p.State = incident.Resolved
+	assert.Contains(t, whatOf(&d, p), "while it was gone.")
+}

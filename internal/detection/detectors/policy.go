@@ -263,7 +263,7 @@ func (b backend) leftover(
 	if f.Severity > detection.Info {
 		return f
 	}
-	return asLeftover(ctx, f, b.service.Namespace)
+	return asLeftover(ctx, f, b.config, b.service.Namespace)
 }
 
 // readyEndpoints sums ready endpoints across a Service's slices.

@@ -35,7 +35,7 @@ const (
 var notKubectl = map[inventory.Kind]bool{
 	kube.KindImage: true, kube.KindRegistry: true, kube.KindZone: true,
 	kube.KindNodePool: true, kube.KindExternalEndpoint: true,
-	kube.KindContainer: true,
+	kube.KindContainer: true, rootcause.KindScheduling: true,
 }
 
 // affectedOf lists the objects p is about: its root, the other roots

@@ -1,0 +1,8 @@
+{
+  "name": "scaled-to-zero-then-released",
+  "description": "A Deployment at zero replicas that an Ingress routes to gets a new image while it stays at zero.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "15m0s"
+}

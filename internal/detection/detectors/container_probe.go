@@ -73,10 +73,39 @@ func probeFindings(
 			Since: note.At,
 			Summary: probeSummary(ctx, e, note, kind.reason,
 				kind.summary),
-			Evidence: append(append(append(append(probeEvidence(note),
-				probeLogEvidence(e, note)...), restartEvidence(e)...),
-				throttleEvidence(e)...), probeCheckEvidence(e, kind.kind)...),
+			Evidence: append(append(append(append(append(
+				probeEvidence(note), probeLogEvidence(e, note)...),
+				restartEvidence(e)...), throttleEvidence(e)...),
+				probeCheckEvidence(e, kind.kind)...),
+				killEvidence(ctx, e, kind.reason)...),
 		})
+	}
+	return out
+}
+
+// killEvidence is what a probe that kills (liveness, startup) knows of
+// the run it ended: the first error line the crash-log round read from
+// its previous log (a container killed by its probe leaves no
+// termination message, and this line says why it never came up; quoted
+// as is), and for liveness, the exit code of a run that ended on its
+// own (detection.EvidenceExitedOnOwn).
+func killEvidence(
+	ctx detection.Context, e inventory.Entity, reason string,
+) []detection.Evidence {
+	if reason != reasons.LivenessProbeFailed &&
+		reason != reasons.StartupProbeFailed {
+		return nil
+	}
+	var out []detection.Evidence
+	if line := text(e, kube.AttrLastErrorLine); line != "" {
+		out = append(out, detection.Evidence{
+			Label: detection.EvidenceError, Value: line})
+	}
+	if reason == reasons.LivenessProbeFailed && crashedByItself(ctx, e) {
+		code, _ := number(e, kube.AttrLastExitCode)
+		out = append(out, detection.Evidence{
+			Label: detection.EvidenceExitedOnOwn,
+			Value: strconv.Itoa(int(code))})
 	}
 	return out
 }

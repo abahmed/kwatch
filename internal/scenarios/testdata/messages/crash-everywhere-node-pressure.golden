@@ -1,0 +1,11 @@
+10:08:15 settled
+🟠 worker in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "Error: queue consumer: unexpected message schema version 7". Its last run lasted ten seconds; three restarts since its pod was created about one hour ago. To read the output of the last crash, run kubectl logs deploy/worker -c app -n shop --previous
+🟠 worker in shop (prod-eu-1) keeps crashing.
+| 🟠 **worker** in **shop** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| It fails with `Error: queue consumer: unexpected message schema version 7`.
+| Its last run lasted ten seconds; three restarts since its pod was created about one hour ago.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/worker -c app -n shop --previous
+| ```

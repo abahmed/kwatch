@@ -130,6 +130,9 @@ func waitingFinding(
 	if reason == reasons.CreateConfigError {
 		s.Summary = containerRole(e) + " " + configErrorWords(ctx, e)
 	}
+	if pullThrottled(ctx, e) {
+		throttledPull(&s, e)
+	}
 	if reason == reasons.CrashLoopBackOff {
 		s = crashLoopFinding(e, s.Since)
 		keepCrashLoop(ctx)

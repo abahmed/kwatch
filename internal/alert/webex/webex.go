@@ -60,7 +60,8 @@ func NewWebex(
 		return nil
 	}
 
-	klog.InfoS("initializing webex", "roomId", roomID, "toPersonEmail", toPersonEmail)
+	klog.InfoS("initializing webex",
+		"roomId", roomID, "toPersonEmail", toPersonEmail)
 
 	return &Webex{
 		sender:        transport.NewSender(dependencies),

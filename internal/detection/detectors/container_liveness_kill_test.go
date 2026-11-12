@@ -44,6 +44,8 @@ func TestLivenessFailureOfAContainerThatCrashedIsLeftToTheCrash(
 	}
 	assert.Contains(t, found[0].Summary,
 		"keeps exiting on its own with an error (exit code 1)")
+	assert.Equal(t, "1",
+		evidenceOf(found[0], detection.EvidenceExitedOnOwn))
 }
 
 func TestReadinessAnsweredWithAnErrorStatusSaysItsOwnCheckFails(

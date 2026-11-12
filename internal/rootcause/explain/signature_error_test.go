@@ -20,7 +20,7 @@ func TestSharedErrorIsAFailingPodsOwnText(t *testing.T) {
 	second := inventory.CoreID(kube.KindPod, "shop", "web-b")
 	text := "panic: License key rejected for tenant 4711"
 	other := "panic: License key rejected for tenant 99"
-	signature := signatureName("CrashLoop.Panic", normalizeSignature(text))
+	signature := signatureName(normalizeSignature(text))
 	snap := Snapshot{Findings: map[inventory.EntityID][]detection.Finding{
 		second: {errorFinding(second, other)},
 		first:  {errorFinding(first, text)},

@@ -1,0 +1,13 @@
+{
+  "name": "kubelet-pull-qps-exceeded",
+  "description": "Pods of three workloads on a new node wait because its kubelet answers \"pull QPS exceeded\"; the registry serves the other nodes.",
+  "root": "node//n3",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "registry//registry.corp.example",
+    "deployment/shop/api",
+    "deployment/shop/worker",
+    "deployment/billing/ledger"
+  ]
+}

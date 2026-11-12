@@ -98,6 +98,9 @@ var causeWords = map[string]causeWording{
 	"node-overcommitted": {words: "is overcommitted on memory"},
 	"node-pid-pressure":  {words: "is short of process IDs"},
 	"node-removed":       {words: "was removed"},
+	"node-pulls-throttled": {
+		words: "holds image pulls back under its kubelet's pull rate " +
+			"limit (pull QPS exceeded); the kubelet retries them"},
 	"node-removed-capacity": {
 		words: "was removed and no other node has room"},
 	"nodepool-failing":   {words: "is failing as a whole"},
@@ -208,8 +211,12 @@ func causeWordsFor(cause *rootcause.CauseRecord) string {
 	if wording, ok := causeWords[cause.Rule]; ok {
 		return wording.words
 	}
-	return "is failing"
+	return fallbackCauseWords
 }
+
+// fallbackCauseWords follow the name of a cause kwatch has no words
+// for.
+const fallbackCauseWords = "is failing"
 
 // pullClassOfMode names the pull class of the two registry modes whose
 // lowercase name differs from it.
@@ -250,10 +257,7 @@ func readableSummary(cause *rootcause.CauseRecord) bool {
 // name is the scheduler's reason: "Insufficient cpu" becomes "no node
 // has enough cpu".
 func schedulingWords(id inventory.EntityID) string {
-	if resource, ok := strings.CutPrefix(id.Name, "Insufficient "); ok {
-		return "no node has enough " + resource
-	}
-	return "the scheduler rejects every node (" + id.Name + ")"
+	return rootcause.SchedulingWords(id.Name)
 }
 
 // proofWords word one piece of evidence from its code and numbers. A

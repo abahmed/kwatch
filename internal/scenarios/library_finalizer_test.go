@@ -8,6 +8,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+
+	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
 // finalizerScenarios are deletions that hold for good: objects waiting
@@ -122,14 +125,19 @@ func attachmentVolumeGone() scenario {
 
 // attachmentNodeGone: an attachment was deleted weeks ago; its volume
 // exists but its node was removed, so the volume cannot attach to
-// another node. That is still news.
+// another node. That is still news. A second attachment lost both its
+// node and its volume before kwatch started, so kwatch holds no
+// relation to either: its own spec still names them, and the steps end
+// with removing its finalizer.
 func attachmentNodeGone() scenario {
 	return scenario{
 		expect: expectation{
 			Name: "attachment-node-gone",
 			Description: "A VolumeAttachment is stuck deleting; its " +
-				"node no longer exists but its volume does.",
+				"node no longer exists but its volume does. Another " +
+				"has lost both, with no relation left to them.",
 			Root: "volumeattachment//csi-6a7b8c", Tier: "notify",
+			OtherRoots:  []string{"volumeattachment//csi-9d8e7f"},
 			MaxMessages: 2, Tail: duration(30 * time.Minute),
 		},
 		build: func(c *cluster) {
@@ -138,8 +146,26 @@ func attachmentNodeGone() scenario {
 				ObjectMeta: c.meta("", "pvc-3333")})
 			c.list(staleAttachment(c, "csi-6a7b8c", "pvc-3333",
 				"removed-node"))
+			c.list(staleAttachment(c, "csi-9d8e7f", "pvc-4444",
+				"removed-node-2"))
+			c.emit(noRelations(c.now, inventory.CoreID(
+				kube.KindVolumeAttachment, "", c.n("csi-9d8e7f")),
+				inventory.RunsOn, inventory.References)...)
 		},
 	}
+}
+
+// noRelations clears the relations of id, as when the objects they
+// pointed at were gone before kwatch started.
+func noRelations(
+	at time.Time, id inventory.EntityID, types ...inventory.RelationType,
+) []inventory.Observation {
+	var out []inventory.Observation
+	for _, rel := range types {
+		out = append(out, inventory.Observation{Kind: inventory.Related,
+			Source: "kubernetes", At: at, Entity: id, Relation: rel})
+	}
+	return out
 }
 
 // staleAttachment is a VolumeAttachment of a node that was deleted

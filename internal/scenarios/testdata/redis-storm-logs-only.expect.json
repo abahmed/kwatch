@@ -1,7 +1,7 @@
 {
   "name": "redis-storm-logs-only",
   "description": "Six Deployments are killed by their liveness probe with an empty termination message; their previous logs all start with one Redis error.",
-  "root": "failure-signature//CrashLoop unhandled exception. stackexchange.redis.redisconnectionexception: it was not po",
+  "root": "failure-signature//unhandled exception. stackexchange.redis.redisconnectionexception: it was not po",
   "tier": "notify",
   "maxMessages": 3,
   "mustNotBlame": [

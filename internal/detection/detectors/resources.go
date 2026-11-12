@@ -64,6 +64,16 @@ func (ContainerResources) Detect(
 			}
 		}
 	}
+	return append(out, cpuFindings(ctx, e)...)
+}
+
+// cpuFindings reports a container using nearly all of its CPU limit,
+// one the kernel throttles heavily, and one held at its limit while its
+// node stalls on CPU.
+func cpuFindings(
+	ctx detection.Context, e inventory.Entity,
+) []detection.Finding {
+	var out []detection.Finding
 	if pct, ok := ratio(e, kube.AttrCPUUsageMilli, kube.AttrCPULimit); ok &&
 		pct >= limitWarning {
 		// Usage changes with every sample, so its own Since restarts
@@ -93,6 +103,9 @@ func (ContainerResources) Detect(
 			s.Severity = detection.Warning
 			out = append(out, s)
 		}
+	}
+	if s, ok := cpuCappedFinding(ctx, e); ok {
+		out = append(out, s)
 	}
 	return out
 }

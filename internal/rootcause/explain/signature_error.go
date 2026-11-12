@@ -32,6 +32,31 @@ func (s Snapshot) sharedError(c Cause) string {
 			}
 		}
 	}
+	// A pod killed by its liveness probe or never ready quotes no
+	// error: its line is only the previous log the crash-log round read.
+	for _, id := range ids {
+		if text := s.logLineOf(id, c.Root.Name); text != "" {
+			return text
+		}
+	}
+	return ""
+}
+
+// logLineOf is the previous log line of container id when it
+// normalises to the signature name.
+func (s Snapshot) logLineOf(id inventory.EntityID, name string) string {
+	if id.Kind != kube.KindContainer || s.Model == nil {
+		return ""
+	}
+	e, ok := s.Model.Entity(id)
+	if !ok {
+		return ""
+	}
+	line := attrText(e, kube.AttrLastErrorLine)
+	if signature := normalizeSignature(line); signature != "" &&
+		signatureName(signature) == name {
+		return line
+	}
 	return ""
 }
 
@@ -43,7 +68,7 @@ func signatureEvidence(f detection.Finding, name string) string {
 			continue
 		}
 		if signature := normalizeSignature(e.Value); signature != "" &&
-			signatureName(f.Mode, signature) == name {
+			signatureName(signature) == name {
 			return e.Value
 		}
 	}

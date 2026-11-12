@@ -81,6 +81,7 @@ func (m *Manager) attach(
 	if m.nodeRemoved(s.Entity) {
 		return // a deleted node cannot fail (node_removed.go)
 	}
+	s, where = m.joinStuckPeers(s, where)
 	where = m.joinLeftover(s, where)
 	if m.heldForChurn(now, s, where) || m.leavesAsHistory(now, s, where) ||
 		m.agesOut(now, s, where) {
@@ -370,7 +371,19 @@ func (p *Incident) takeCause(where placement) {
 	case p.Grouped():
 	case where.cause != nil:
 		p.Cause, p.CauseUnclear = where.cause, false
+	case staleInsideCause(p, where):
+		p.Cause, p.CauseUnclear = nil, where.unclear
 	case p.Cause == nil && where.unclear:
 		p.CauseUnclear = true
 	}
+}
+
+// staleInsideCause reports a cause in the root's own settings, read
+// from an answer a later one contradicts (explain.RefutableRow), that a
+// new solve of the same root no longer states: a probe that was refused
+// while the app started now gets an HTTP status. Keeping it would go on
+// blaming a probe port the evidence no longer blames.
+func staleInsideCause(p *Incident, where placement) bool {
+	return p.Cause != nil && where.root == p.Root &&
+		p.Cause.Root == p.Root && explain.RefutableRow(p.Cause.Rule)
 }

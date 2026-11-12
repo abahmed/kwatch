@@ -1,61 +1,124 @@
 package compose
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/incident"
 )
 
 // probeLeadKinds are the probes probeLead words, in the order it looks
-// for them, with what a failing one does to the workload.
+// for them, with what a failing one does to the workload. A liveness
+// kill comes first: being restarted is worse than being out of traffic.
 var probeLeadKinds = []struct{ reason, effect string }{
-	{reasons.ReadinessProbeFailed, "is not ready"},
+	{reasons.LivenessProbeFailed, "keeps being restarted"},
 	{reasons.StartupProbeFailed, "can't finish starting"},
-	{reasons.LivenessProbeFailed, "is restarted"},
+	{reasons.ReadinessProbeFailed, "is not ready"},
 }
 
-// probeLead words a workload whose own health check answers but says
-// no, when nothing else explains it: "catalog in shop is not ready:
-// its readiness check (/readyz on port 8081) answers HTTP 503", or "…
-// does not answer within 1s" for a check that timed out. The
-// application's own words are proof (probeLogSentences), which a
-// Community message leaves out. A check that could not
-// connect (nothing listening) is not worded here: the port is.
+// probeLead words a workload whose own health check fails when nothing
+// else explains it, plainly, as a junior reads it: "catalog in shop is
+// not ready: its readiness check (/readyz on port 8081) answers HTTP
+// 503" (it is taken out of traffic), "… keeps being restarted: its
+// liveness check fails (connection refused)" (Kubernetes restarts it),
+// or "… does not answer within 1s" for a check that timed out. When the
+// container's last run logged an error, it is added: "… after it failed
+// at start-up: ConnectException: Connection refused". The application's
+// own words on an error status are proof (probeLogSentences), which a
+// Community message leaves out. A probe of a port nothing listens on is
+// a cause of its own and keeps its own lead.
 func probeLead(f caseFacts) (string, bool) {
+	m, kind, ok := probeLeadMember(f)
+	// A flapping incident keeps its own words (flappingState).
+	if !ok || f.p.State == incident.Flapping {
+		return "", false
+	}
+	return f.leadName(affectedWorkload(f)) + " " + kind.effect +
+		": its " + probeCheckWords[kind.reason] +
+		probeTarget(evidence(m, detection.EvidenceProbeCheck)) +
+		" " + probeAnswer(m) + startErrorClause(f, m), true
+}
+
+// probeLeadMember is the probe failure probeLead words, and its kind.
+func probeLeadMember(f caseFacts) (detection.Finding,
+	struct{ reason, effect string }, bool) {
 	for _, kind := range probeLeadKinds {
 		for _, m := range f.members {
-			if m.Reason != kind.reason {
-				continue
+			// A container that exits on its own is not killed by its
+			// probe: its exit leads (ownLead).
+			if m.Reason == kind.reason &&
+				evidence(m, detection.EvidenceExitedOnOwn) == "" {
+				return m, kind, true
 			}
-			answer, ok := probeAnswer(m)
-			if !ok {
-				continue
-			}
-			return f.leadName(affectedWorkload(f)) + " " + kind.effect +
-				": its " + probeCheckWords[kind.reason] +
-				probeTarget(evidence(m, detection.EvidenceProbeCheck)) +
-				" " + answer, true
 		}
 	}
-	return "", false
+	return detection.Finding{}, probeLeadKinds[0], false
 }
 
-// probeAnswer is what a probe got: "answers HTTP 503", or "does not
-// answer within 1s" when it timed out; false for any other failure.
-func probeAnswer(m detection.Finding) (string, bool) {
+// probeAnswer is what a probe got: "answers HTTP 503", "does not answer
+// within 1s" when it timed out, "fails (connection refused)" for
+// another known result, or "fails".
+func probeAnswer(m detection.Finding) string {
 	result := evidence(m, detection.EvidenceProbeResult)
 	switch {
 	case strings.HasPrefix(result, "HTTP "):
-		return "answers " + result, true
+		return "answers " + result
 	case result == "timed out":
 		words := "does not answer in time"
 		if s := evidence(m, detection.EvidenceProbeTimeout); s != "" {
 			words = "does not answer within " + s + "s"
 		}
-		return words, true
+		return words
+	case result != "":
+		return "fails (" + result + ")"
 	}
-	return "", false
+	return "fails"
+}
+
+// startErrorMax bounds the start-up error a probe lead quotes.
+const startErrorMax = 72
+
+// startErrorClause is " after it failed at start-up: …", the error line
+// the probed container's last run logged (detection.EvidenceError on
+// any member of its container), trimmed; empty when none is known.
+func startErrorClause(f caseFacts, probe detection.Finding) string {
+	for _, m := range f.members {
+		if m.Entity != probe.Entity {
+			continue
+		}
+		if line := evidence(m, detection.EvidenceError); line != "" {
+			return " after it failed at start-up: " +
+				clipTo(unqualifiedError(line), startErrorMax)
+		}
+	}
+	return ""
+}
+
+// quotedByProbeLead reports an error line the probe lead quotes
+// already, as its start-up error.
+func quotedByProbeLead(f caseFacts, line string) bool {
+	m, _, ok := probeLeadMember(f)
+	if !ok || startErrorClause(f, m) == "" {
+		return false
+	}
+	lead, isLead := probeLead(f)
+	return isLead && leadText(f) == lead &&
+		strings.Contains(lead, clipTo(unqualifiedError(line),
+			startErrorMax))
+}
+
+// qualifiedName is a dotted type name that leads an error line
+// ("java.net.ConnectException:"), as runtimes print exceptions.
+var qualifiedName = regexp.MustCompile(
+	`^(?:[A-Za-z_][\w]*\.)+([A-Za-z_][\w]*:)`)
+
+// unqualifiedError drops the package path of a leading type name, which
+// says where the type lives, not what failed: "java.net.ConnectException:
+// refused" reads "ConnectException: refused".
+func unqualifiedError(line string) string {
+	return qualifiedName.ReplaceAllString(line, "$1")
 }
 
 // probeTarget is " (/readyz on port 8081)" for "http /readyz :8081",

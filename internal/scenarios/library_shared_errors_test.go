@@ -104,7 +104,7 @@ func sharedPanicStorm() scenario {
 			Description: "Four Deployments panic with \"license check " +
 				"failed for tenant <N>\", each with its own tenant " +
 				"number.",
-			Root: "failure-signature//CrashLoop panic: license check " +
+			Root: "failure-signature//panic: license check " +
 				"failed for tenant #",
 			Tier: "notify", MaxMessages: 3, MustNotBlame: notBlamed,
 		},
@@ -188,7 +188,7 @@ func sharedErrorCrash(c *cluster, fleet []*workload,
 
 // redisRefusedRoot is the signature every caller of the in-cluster
 // Redis shares once its IP and numbers are normalised; the port stays.
-const redisRefusedRoot = "failure-signature//CrashLoop " +
+const redisRefusedRoot = "failure-signature//" +
 	"dial tcp <ip>:6379: connect: connection refused"
 
 // redisDownStorm: the in-cluster Redis is down and five Deployments

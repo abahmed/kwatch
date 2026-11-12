@@ -9,6 +9,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
@@ -120,13 +121,15 @@ func TestSummaryWhyWordsTheConfidence(t *testing.T) {
 	}
 	for _, c := range cases {
 		p.Cause = &rootcause.CauseRecord{Summary: "the image is wrong",
-			Score: c.score}
+			Score: c.score, Root: inventory.EntityID{Kind: "configmap",
+				Namespace: "shop", Name: "settings"}}
 		if c.rival {
 			p.Cause.Rival = &rootcause.CauseRecord{}
 		}
 		d := toDetail(p)
 		got := whyText(&d, p)
-		assert.Equal(t, SummaryWhy{Text: "The deployment api is the cause.",
+		assert.Equal(t, SummaryWhy{Text: "The configmap settings is the " +
+			"cause.",
 			Confidence: c.want, CauseKnown: true}, got)
 	}
 }

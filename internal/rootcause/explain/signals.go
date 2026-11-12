@@ -109,7 +109,15 @@ const (
 	// status error. It blames the registry only when several pulls from
 	// it fail (the row's MinCovered), never one image.
 	pullUnexplained detection.Mode = "Failing"
+	// pullNodeThrottled is the kubelet holding a pull back under its
+	// own pull rate limit (registryPullQPS, registryBurst): the request
+	// never reached the registry, and the kubelet retries it.
+	pullNodeThrottled detection.Mode = "NodeThrottled"
 )
+
+// nodeThrottlePattern is the kubelet's answer when its own pull rate
+// limit holds a pull back ("pull QPS exceeded").
+var nodeThrottlePattern = regexp.MustCompile(`pull qps exceeded`)
 
 // imageErrorPattern marks an error of one image, never of its registry.
 var imageErrorPattern = regexp.MustCompile(`not found|manifest unknown|` +
@@ -126,6 +134,7 @@ var pullPatterns = []struct {
 	class   detection.Mode
 	pattern *regexp.Regexp
 }{
+	{pullNodeThrottled, nodeThrottlePattern},
 	{pullImage, imageErrorPattern},
 	{pullRateLimit, regexp.MustCompile(`toomanyrequests|too many ` +
 		`requests|rate limit|` + statusCode(`429`))},

@@ -53,6 +53,13 @@ func leadFailure(
 			return m
 		}
 	}
+	for _, m := range failures {
+		// A member that only sits beside its incident's root as a
+		// leftover is not what the cause explains.
+		if m.Leftover != root {
+			return m
+		}
+	}
 	return failures[0]
 }
 

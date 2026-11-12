@@ -65,7 +65,7 @@ func TestUnusedCertificateBesideGoneBackendIsALeftover(t *testing.T) {
 // housekeeping: a fresh one is news of its own.
 func TestStuckDeletionBesideGoneBackendIsALeftoverWhenOld(t *testing.T) {
 	m, _ := webhook("Ignore", false, nil)
-	id := newID(kube.KindSecret, "default", "old-token")
+	id := newID(kube.KindSecret, "default", "hook-token")
 	put(m, id, t0, map[string]inventory.Value{
 		kube.AttrDeleting:      inventory.Bool(true),
 		kube.AttrDeletingSince: inventory.Time(t0),
@@ -87,7 +87,8 @@ func TestStuckDeletionBesideGoneBackendIsALeftoverWhenOld(t *testing.T) {
 func TestLeftoverOfPicksTheFirstAbsentBackend(t *testing.T) {
 	m, _ := webhook("Ignore", true, []float64{1})
 	ctx := testDetectorContext(m, t0)
-	assert.True(t, leftoverOf(ctx, "default").IsZero(),
+	hook := newID(kube.KindValidatingHook, "", "hook")
+	assert.True(t, leftoverOf(ctx, hook, "default").IsZero(),
 		"a backend with a ready endpoint is not absent")
 
 	other := newID(kube.KindMutatingWebhook, "", "mutate")
@@ -100,6 +101,6 @@ func TestLeftoverOfPicksTheFirstAbsentBackend(t *testing.T) {
 			newID(kube.KindService, "default", "z-gone"), gone},
 	})
 
-	assert.Equal(t, gone, leftoverOf(ctx, "default"))
-	assert.True(t, leftoverOf(ctx, "shop").IsZero())
+	assert.Equal(t, gone, leftoverOf(ctx, other, "default"))
+	assert.True(t, leftoverOf(ctx, other, "shop").IsZero())
 }

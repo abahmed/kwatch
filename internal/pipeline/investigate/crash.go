@@ -39,6 +39,12 @@ func readCrash(
 		// The termination message is in the model: no API call.
 		add(incident.FactTermination,
 			attributeText(s.Model, c, kube.AttrLastMessage))
+		// The crash-log round read the previous run from its start
+		// when it was short (a start-up that hung until liveness
+		// killed it): its first error line is in the model, where a
+		// tail read misses it and an evicted pod's log is gone.
+		add(incident.FactError,
+			attributeText(s.Model, c, kube.AttrLastErrorLine))
 		if s.Logs == nil {
 			continue
 		}

@@ -129,7 +129,14 @@ func TestStepsDescribeEveryPodOfTheController(t *testing.T) {
 		{"never restarted", detection.Finding{
 			Reason: reasons.ReadinessProbeFailed},
 			[]string{"kubectl describe pods web- -n shop",
-				"kubectl logs deploy/web -c app -n shop", pickWeb}},
+				"kubectl logs deploy/web -c app -n shop", pickWeb,
+				"kubectl describe deploy/web -n shop"}},
+		{"liveness kill", detection.Finding{
+			Reason: reasons.LivenessProbeFailed,
+			Evidence: []detection.Evidence{{Label: "restarts",
+				Value: "2"}}},
+			[]string{"kubectl logs deploy/web -c app -n shop --previous",
+				pickWeb, "kubectl describe deploy/web -n shop"}},
 		{"init container", detection.Finding{
 			Reason: reasons.InitContainerWaiting},
 			[]string{"kubectl logs deploy/web -c app -n shop", pickWeb}},

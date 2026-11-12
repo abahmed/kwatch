@@ -200,6 +200,9 @@ func library() []scenario {
 		oldProblemScenarios(), scalingWaveScenarios(), hpaNoReadyScenarios(),
 		configExposureScenarios(), pullSecretAbsentScenarios(),
 		batchNormalScenarios(), statefulSetScaleScenarios(),
+		coldStartScenarios(),
+		cpuCappedScenarios(), pullQPSScenarios(), releaseCheckScenarios(),
+		probeAnswerScenarios(), nodeAbsorbScenarios(),
 	} {
 		out = append(out, group...)
 	}
