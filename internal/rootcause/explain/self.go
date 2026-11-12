@@ -38,7 +38,7 @@ func (v *view) selfMatch(root, effect inventory.EntityID) (rowMatch, bool) {
 	}
 	cause := v.causeState(root, effect, LinkSelf)
 	if root != effect || !v.changedBefore(root, effect) ||
-		v.onlyNotReconciling(effect) {
+		v.onlyNotReconciling(effect) || v.zeroNotFromChange(root, effect) {
 		// An owner's change reaches its pods through the rollout row;
 		// a change after the failure began did not cause it.
 		cause.modes = withoutChanges(cause.modes)

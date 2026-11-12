@@ -9,6 +9,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 // removedOperator is an incident of the objects a removed policy
@@ -59,4 +60,33 @@ func TestSingleLeftoverKeepsItsOwnLead(t *testing.T) {
 	got := NewWriter("", nil).ProblemTitle(p, nil, revisionNow)
 
 	assert.NotContains(t, got, "Leftovers")
+}
+
+// A certificate that joined the incident of a webhook backend only as
+// its leftover is not caused by it: no "because" names the backend.
+func TestLeftoverBesideACauseIsNotCausedByIt(t *testing.T) {
+	p := removedOperator(leftoverFinding("secret", "policy-system",
+		"audit-tls", reasons.TLSCertExpired))
+	p.Cause = &rootcause.CauseRecord{Root: p.Root, Score: 0.9,
+		Rule: "webhook-backend-missing"}
+
+	got := NewWriter("", nil).ProblemTitle(p, nil, revisionNow)
+
+	assert.Contains(t, got, "audit-tls")
+	assert.NotContains(t, got, "because")
+}
+
+// Of a cause's own failure and a leftover beside it, the cause's own
+// failure leads.
+func TestLeadPrefersAFailureTheCauseExplains(t *testing.T) {
+	root := inventory.CoreID("service", "policy-system", "policy-svc")
+	left := leftoverFinding("secret", "policy-system", "audit-tls",
+		reasons.TLSCertExpired)
+	left.Leftover = root
+	hook := leftoverFinding("validatingwebhookconfiguration", "",
+		"policy-hook", reasons.WebhookNoEndpoints)
+
+	got := leadFailure(root, []detection.Finding{left, hook})
+
+	assert.Equal(t, hook.Entity, got.Entity)
 }

@@ -221,7 +221,7 @@ func stuckDeletion(
 	}
 	if leftover(ctx, e, since) {
 		f.Severity = detection.Info
-		f = asLeftover(ctx, f, e.ID.Namespace)
+		f = asLeftover(ctx, f, e.ID, e.ID.Namespace)
 	}
 	return f, true
 }

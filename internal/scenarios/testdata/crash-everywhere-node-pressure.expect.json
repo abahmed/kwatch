@@ -1,0 +1,10 @@
+{
+  "name": "crash-everywhere-node-pressure",
+  "description": "One node's tasks stall on memory while a workload crash-loops on it and on two healthy nodes.",
+  "root": "deployment/shop/worker",
+  "tier": "notify",
+  "maxMessages": 4,
+  "unrelated": [
+    "node//n1"
+  ]
+}

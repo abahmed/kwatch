@@ -65,25 +65,46 @@ func (v *view) removedNodeHops(pod inventory.EntityID) []hop {
 		detection.ModePending, detection.ModeUnschedulable}) {
 		return nil
 	}
-	var out []hop
+	removals := map[inventory.EntityID]time.Time{}
+	var latest time.Time
 	for _, node := range v.removedNodes() {
-		if v.replacedAfter(node, waiting.t) {
+		if at, ok := v.replacedAfter(node, waiting.t); ok {
+			removals[node] = at
+			latest = maxTime(latest, at)
+		}
+	}
+	// Of several nodes removed in the window, the pod waits for the one
+	// removed last before it began to wait: an earlier removal, such as
+	// another node's planned drain, had its replacements placed already.
+	var out []hop
+	for _, node := range sortedKeys(removals) {
+		if !removals[node].Before(latest.Add(-TemporalSlack)) {
 			out = append(out, hop{link: LinkSchedules, to: node})
 		}
 	}
 	return out
 }
 
+// maxTime is the later of a and b.
+func maxTime(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+	return a
+}
+
 // replacedAfter reports whether a pod that began waiting at t did so
-// within NodeReplacementWindow after the node was deleted.
-func (v *view) replacedAfter(node inventory.EntityID, t time.Time) bool {
+// within NodeReplacementWindow after the node was deleted, and when.
+func (v *view) replacedAfter(
+	node inventory.EntityID, t time.Time,
+) (time.Time, bool) {
 	for _, change := range v.changesOf(node) {
 		if change.Deleted && !t.Before(change.At.Add(-TemporalSlack)) &&
 			!t.After(change.At.Add(NodeReplacementWindow)) {
-			return true
+			return change.At, true
 		}
 	}
-	return false
+	return time.Time{}, false
 }
 
 // removedNodes lists the nodes deleted in the window, once per solve.

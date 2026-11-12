@@ -107,6 +107,7 @@ var causeCategories = map[string]string{
 	"node-overcommitted":               categoryNode,
 	"node-pid-pressure":                categoryNode,
 	"node-removed":                     categoryNode,
+	"node-pulls-throttled":             categoryNode,
 	"node-removed-capacity":            categoryNode,
 	"nodepool-failing":                 categoryNode,
 	"own-change":                       categoryConfigChange,

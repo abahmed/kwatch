@@ -143,7 +143,8 @@ func (v *view) registryClass(
 		return "", false
 	}
 	class := classifyRegistryPull(text)
-	if class == pullImage || v.pullSecretsMissing(effect, class) ||
+	if class == pullImage || class == pullNodeThrottled ||
+		v.pullSecretsMissing(effect, class) ||
 		v.anonymousBesideLogins(effect) {
 		return "", false
 	}

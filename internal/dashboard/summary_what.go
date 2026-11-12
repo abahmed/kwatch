@@ -9,6 +9,7 @@ import (
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/redact"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 // symptom is what is wrong in present and past tense, after the
@@ -65,6 +66,11 @@ var probeSymptoms = map[string]symptom{
 // latest finding's own sentence takes its place ("2 of 3 Service
 // backends are ready").
 func whatOf(d *IncidentDetail, p incident.Incident) string {
+	if lead, ok := leftoverWhat(p); ok {
+		// No member's sentence is the root's: each says its own in
+		// the leftovers list.
+		return lead
+	}
 	what := symptomOf(d, p)
 	if bare(what) != "" && bare(what) != bare(d.Title) {
 		return what
@@ -145,8 +151,10 @@ func symptomOf(d *IncidentDetail, p incident.Incident) string {
 
 // subjectOf names the root as a reader says it: "Deployment api in
 // shop", "Node n1".
+// A virtual scheduling root names the scheduler's reason, not an
+// object: the title says it in words instead.
 func subjectOf(p incident.Incident) string {
-	if p.Root.Name == "" {
+	if p.Root.Name == "" || p.Root.Kind == rootcause.KindScheduling {
 		return ""
 	}
 	return rootWords(p.Root)

@@ -140,6 +140,11 @@ type Row struct {
 	// resource that owns it. Such a cause names no outside object, but
 	// it is still a cause and the incident states it.
 	Inside bool
+	// Refutable marks a row read from the latest answer of the failing
+	// container (a probe refused), which a later answer can contradict
+	// (the probe gets an HTTP status). An incident that stated it drops
+	// it when a new solve of the same root no longer does.
+	Refutable bool
 }
 
 // InsideRow reports whether the named row blames a part of the
@@ -148,6 +153,17 @@ func InsideRow(name string) bool {
 	for _, row := range propagation {
 		if row.Name == name {
 			return row.Inside
+		}
+	}
+	return false
+}
+
+// RefutableRow reports whether the named row's evidence can be
+// contradicted by a later reading (see Row.Refutable).
+func RefutableRow(name string) bool {
+	for _, row := range propagation {
+		if row.Name == name {
+			return row.Refutable
 		}
 	}
 	return false

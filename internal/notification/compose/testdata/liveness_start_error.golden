@@ -1,0 +1,5 @@
+🟠 web in shop keeps being restarted: its liveness check (/live on port 8080) fails (connection refused) after it failed at start-up: RedisConnectionException: It was not possible to connect to the redis… Cause not found yet: nothing outside it points to one. Kubernetes reports: "dial tcp 10.0.0.7:8080: connect: connection refused".
+Related alerts: 1 failed pre stop hook alert, 1 probe failure
+To read the output of the last crash, run kubectl logs deploy/web -c app -n shop --previous
+
+🟠 web in shop keeps being restarted: its liveness check (/live on port 8080) fails (connection refused) after it failed at start-up: RedisConnectionException: It was not possible to connect to the redis…

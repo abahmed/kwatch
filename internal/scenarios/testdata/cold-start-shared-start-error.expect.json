@@ -1,0 +1,21 @@
+{
+  "name": "cold-start-shared-start-error",
+  "description": "On new nodes six services fail at start-up in different ways (crash loop, liveness kill, segfault, not ready) with the same first error line.",
+  "root": "failure-signature//stackexchange.redis.redisconnectionexception: it was not possible to connect to",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n0",
+    "node//n1",
+    "node//n2",
+    "node//n3",
+    "configmap/shop/settings",
+    "deployment/shop/cart",
+    "deployment/shop/orders",
+    "deployment/shop/search",
+    "deployment/billing/ledger",
+    "deployment/billing/invoicer",
+    "deployment/media/thumbs"
+  ],
+  "tail": "10m0s"
+}

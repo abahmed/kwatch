@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/release"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 // causeSentence says the cause in plain words, from the cause record
@@ -23,7 +25,7 @@ func causeSentence(d *IncidentDetail, p incident.Incident) string {
 	if timing != "" {
 		return timing
 	}
-	return commonCause(p)
+	return commonCause(d, p)
 }
 
 // startedSentence is the release or change the incident started
@@ -34,18 +36,36 @@ func startedSentence(d *IncidentDetail, p incident.Incident) string {
 		return startedAfter(onset, r.At, "the release") +
 			releaseWhat(r.Record)
 	}
-	if c := p.Cause.Change; c != nil && !c.At.IsZero() {
+	if c := p.Cause.Change; c != nil && !c.At.IsZero() &&
+		!ownCreation(p, *c) {
 		return startedAfter(onset, c.At, "a change to "+
 			kindDisplay(c.Entity)+" "+c.Entity.Name)
 	}
 	return ""
 }
 
-// commonCause names the object that fails the others with it.
-func commonCause(p incident.Incident) string {
+// ownCreation reports a change that is the object's own creation: a
+// Job that fails is always created just before, which explains
+// nothing.
+func ownCreation(p incident.Incident, c inventory.Change) bool {
+	return c.Created && (ownedName(p.Root, c.Entity) ||
+		ownedName(p.Cause.Root, c.Entity))
+}
+
+// commonCause names the object that fails the others with it. A root
+// that is the incident's own workload is not named as its own cause:
+// its own reason is said instead, and a scheduling constraint is
+// worded, not quoted.
+func commonCause(d *IncidentDetail, p incident.Incident) string {
 	root := p.Cause.Root
 	if root.Name == "" {
 		root = p.Root
+	}
+	switch {
+	case root.Kind == rootcause.KindScheduling:
+		return schedulingCause(p, root)
+	case failsOnItsOwn(p, root):
+		return selfCause(d, p)
 	}
 	name := strings.ToLower(kindDisplay(root)) + " " + root.Name
 	if n := len(p.Members); n > 1 {

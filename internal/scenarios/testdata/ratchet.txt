@@ -58,7 +58,7 @@ ambiguous-rollout-one-pressured-node self
 apiserver-throttling-stalls-controllers found-high
 apiserver-writes-slow self
 apiservice-backend-service-missing found-high
-attachment-node-gone self
+attachment-node-gone self,self
 attachment-volume-gone self,self
 attachments-detach-error-disk-gone self,self
 autoscaler-ceiling-cpu found-likely
@@ -105,6 +105,7 @@ claim-stuck-deleting self
 cni-agent-crash-quoted found-high
 co-onset-pair-shares-node found-possible
 cold-start-preexisting found-high,self
+cold-start-shared-start-error found-high
 config-breaks-image-runs-elsewhere found-high
 config-change-long-crash-loop found-high
 config-edited-new-pods-fail found-high
@@ -124,6 +125,8 @@ coupled-silent-secret-fault-secret found-likely
 cr-controller-crash-default-manager found-high
 cr-controller-crash-manager-is-deployment-name found-high
 cr-single-resource-default-manager found-high
+crash-everywhere-node-pressure self
+crash-loop-before-node-drain self
 crash-loop-during-node-replacement self
 crash-loop-for-hours found-high
 crash-loop-ready-between-crashes self
@@ -227,6 +230,7 @@ known-crashloop-past-boot self
 known-never-ready-past-boot self
 kube-proxy-one-node-crash found-high
 kubelet-cert-expired self
+kubelet-pull-qps-exceeded found-high
 kubelet-unreachable-window self
 kwatch-network-restricted self
 lb-delete-resource-in-use self
@@ -299,6 +303,8 @@ node-recovers-workload-stays-down self
 node-removed-earlier-scale-up found-high
 node-replace-sandbox-blip quiet
 node-replace-sandbox-stuck found-high
+node-stall-from-busy-node self
+node-stall-from-capped-container quiet
 node-stays-down found-high
 nodes-lost-same-zone self
 nodes-lost-three-zones self
@@ -317,7 +323,7 @@ operator-cluster-cr-owned-failing found-high
 operator-cr-owned-failing found-high
 operator-cr-stuck found-high
 operator-down-crs-stuck found-high
-operator-leftovers-grouped self
+operator-leftovers-grouped self,self
 own-volume-wait-at-start quiet
 own-volume-wait-too-long self
 owner-routed found-high
@@ -340,6 +346,7 @@ preempted-by-higher-priority found-high
 pressure-spike-fresh-node quiet
 pressure-sustained-settled-node self
 probe-port-mismatch found-high
+probe-refused-then-http-500 self
 provisioner-controller-down found-high
 provisioner-controller-scaled-to-zero found-high
 provisioner-look-alike-workload self
@@ -376,6 +383,7 @@ registry-unavailable self
 release-gitops-managed found-high
 release-helm-managed found-high
 release-old-revision-rescheduled quiet
+release-previous-version-fails found-high
 release-regression found-high
 release-steady quiet
 resolve-cause-recovered found-high
@@ -405,6 +413,7 @@ scale-up-backend-starting quiet
 scaled-to-zero-blue-green quiet
 scaled-to-zero-parked self
 scaled-to-zero-routed self
+scaled-to-zero-then-released self
 scaled-to-zero-unrouted quiet
 scaled-to-zero-with-release found-high
 scheduler-down found-high

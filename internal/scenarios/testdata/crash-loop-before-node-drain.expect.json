@@ -1,0 +1,11 @@
+{
+  "name": "crash-loop-before-node-drain",
+  "description": "A workload crash-loops at start for twenty minutes; then the node it runs on is drained and removed.",
+  "root": "deployment/shop/report",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

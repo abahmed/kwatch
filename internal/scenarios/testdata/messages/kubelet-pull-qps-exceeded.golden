@@ -1,0 +1,11 @@
+10:02:15 settled
+🟠 ledger in billing (prod-eu-1) is waiting to pull its image because node n3 holds image pulls back under its kubelet's pull rate limit (pull QPS exceeded); the kubelet retries them. It was created at 10:01 UTC. Every app that uses it is failing. Affected: api and worker in shop. To see the pulls the kubelet held back, run kubectl get events -A --field-selector reason=Failed
+🟠 ledger in billing (prod-eu-1) is waiting to pull its image because node n3 holds image pulls back under its kubelet's pull rate limit (pull QPS exceeded); the kubelet retries them.
+| 🟠 **ledger** in **billing** (**prod-eu-1**) is waiting to pull its image because node n3 holds image pulls back under its kubelet's pull rate limit (pull QPS exceeded); the kubelet retries them.
+| It was created at 10:01 UTC.
+| Every app that uses it is failing.
+| Affected: **api** and **worker** in **shop**.
+| To see the pulls the kubelet held back, run
+| ```
+| kubectl get events -A --field-selector reason=Failed
+| ```

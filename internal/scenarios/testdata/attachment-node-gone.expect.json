@@ -1,7 +1,10 @@
 {
   "name": "attachment-node-gone",
-  "description": "A VolumeAttachment is stuck deleting; its node no longer exists but its volume does.",
+  "description": "A VolumeAttachment is stuck deleting; its node no longer exists but its volume does. Another has lost both, with no relation left to them.",
   "root": "volumeattachment//csi-6a7b8c",
+  "otherRoots": [
+    "volumeattachment//csi-9d8e7f"
+  ],
   "tier": "notify",
   "maxMessages": 2,
   "tail": "30m0s"

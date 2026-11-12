@@ -14,7 +14,10 @@ func scoreSpecificity(v *view, c *candidate) outcome {
 	effects := c.others()
 	// Pods are named after their owners, so an owner is always
 	// "named"; that is not evidence.
-	if len(effects) == 0 || c.isSelf() || c.bestMatch().link == LinkOwns {
+	// A failure signature is named by the very words it is read from:
+	// its name in an error is no evidence either.
+	if len(effects) == 0 || c.isSelf() ||
+		c.bestMatch().link == LinkOwns || c.id.Kind == KindFailureSignature {
 		return outcome{}
 	}
 	names := v.namesOf(c.id)

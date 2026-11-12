@@ -39,6 +39,9 @@ func causeSteps(
 	if own := logBurst(p, members); own != nil {
 		return logBurstSteps(*own)
 	}
+	if m, ok := orphanedAttachment(p.Root, members); ok {
+		return orphanedAttachmentSteps(p.Root, m)
+	}
 	if root := p.Root; dependencyLogCause(p.Cause) &&
 		incident.IsWorkload(root.Kind) {
 		return append(dependencySteps(p.Cause, root.Namespace,
@@ -58,7 +61,7 @@ func rootSteps(
 		return rolloutSteps(root, p.Cause.RollbackRevision,
 			pullFailure(members), p.Cause.Change.App, knownOwners(p))
 	case root.Kind == kube.KindNode && !nodeRemoved(p):
-		return nodeSteps(root)
+		return nodeRootSteps(p)
 	case root.Kind == kube.KindSecret:
 		return secretSteps(root, members)
 	case root.Kind == kube.KindConfigMap:
@@ -182,6 +185,29 @@ func nodeSteps(node inventory.EntityID) []notification.Step {
 	}
 }
 
+// nodeRootSteps are the steps for a node root that still exists.
+func nodeRootSteps(p incident.Incident) []notification.Step {
+	if p.Cause != nil && p.Cause.Rule == explain.RowNodePullsThrottled {
+		return pullThrottleSteps(p.Root)
+	}
+	return nodeSteps(p.Root)
+}
+
+// pullThrottleSteps are for pulls a node's kubelet holds back under its
+// own pull rate limit: they clear as it retries, and they come back
+// while many pods start on one node at once.
+func pullThrottleSteps(node inventory.EntityID) []notification.Step {
+	return []notification.Step{
+		{Text: "See the pulls the kubelet held back",
+			Command: "kubectl get events -A --field-selector " +
+				"reason=Failed"},
+		{Text: "It clears by itself as the kubelet retries; if it " +
+			"keeps happening, start fewer pods on node " + node.Name +
+			" at once, or raise registryPullQPS and registryBurst in " +
+			"its kubelet configuration"},
+	}
+}
+
 // neverStarted are container waiting reasons of a container that has no
 // previous run, so it has no previous logs to read.
 var neverStarted = map[string]bool{
@@ -219,7 +245,7 @@ func symptomSteps(
 	if steps := evictedSteps(known, members); steps != nil {
 		return steps
 	}
-	s := members[0]
+	s := stepMember(members)
 	id := s.Entity
 	if id.Kind == kube.KindContainer {
 		return containerSteps(known, s)
@@ -292,6 +318,7 @@ func containerSteps(
 	} else {
 		steps = append(steps, currentRunSteps(ref)...)
 	}
+	steps = append(steps, probeCheckStep(ref, s)...)
 	if s.Reason == reasons.OOMKilled {
 		steps = append(steps, notification.Step{
 			Text:    "Compare memory use with the limit",

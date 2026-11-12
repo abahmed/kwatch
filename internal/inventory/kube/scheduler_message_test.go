@@ -68,3 +68,17 @@ func TestParseSchedulerMessageSplitsOnSeparatorsOnly(t *testing.T) {
 		t.Errorf("second = %+v", blockers[1])
 	}
 }
+
+func TestParseSchedulerMessageDropsTheSentenceAfterAReason(t *testing.T) {
+	msg := "0/7 nodes are available: 7 node(s) didn't satisfy " +
+		"plugin(s) [NodeAffinity]. no new claims to deallocate, " +
+		"preemption: 0/7 nodes are available: 7 Preemption is not " +
+		"helpful for scheduling."
+
+	blockers, _ := ParseSchedulerMessage(msg)
+
+	if len(blockers) != 1 || blockers[0].Reason !=
+		"didn't satisfy plugin(s) [NodeAffinity]" {
+		t.Fatalf("blockers = %+v", blockers)
+	}
+}

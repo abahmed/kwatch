@@ -52,6 +52,10 @@ func ParseSchedulerMessage(message string) ([]Blocker, int) {
 		if i := strings.Index(reason, " {"); i > 0 {
 			reason = reason[:i]
 		}
+		// Newer schedulers add a sentence to the item ("[NodeAffinity].
+		// no new claims to deallocate,"): it is not the reason.
+		reason, _, _ = strings.Cut(reason, ". ")
+		reason = strings.TrimRight(reason, ", ")
 		blockers = append(blockers, Blocker{Reason: reason, Nodes: nodes})
 	}
 	sort.SliceStable(blockers, func(i, j int) bool {

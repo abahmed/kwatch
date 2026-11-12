@@ -42,8 +42,7 @@ func oldLeftoverJoinsLateGroup() scenario {
 			operator := c.deployment("policy-system", "policy-controller",
 				"registry.example.com/policy-controller:1.0", 0)
 			c.list(operator.objects())
-			c.list(clusterService(c, "policy-system",
-				"policy-controller", 443))
+			c.list(policyService(c))
 			c.list(clusterSlice(c, "policy-system", "policy-controller"))
 			c.list(clusterValidatingHook(c, "policy-resource",
 				"validate.policy-resource.example.com", "policy-system",
@@ -51,8 +50,8 @@ func oldLeftoverJoinsLateGroup() scenario {
 			c.list(agedTLSSecret(c, "policy-system", "policy-tls",
 				400*24*time.Hour))
 			c.after(10 * time.Minute)
-			c.create(agedTLSSecret(c, "policy-system", "cleanup-tls",
-				24*time.Hour))
+			c.create(released(agedTLSSecret(c, "policy-system",
+				"cleanup-tls", 24*time.Hour)))
 			c.after(time.Minute)
 		},
 	}
@@ -60,15 +59,21 @@ func oldLeftoverJoinsLateGroup() scenario {
 
 // operatorLeftoversGrouped: a policy operator was scaled to zero. Its
 // two webhooks ignore failure and its two serving certificates expired:
-// four objects, one incident rooted at the operator, in the digest.
+// four objects, one incident rooted at the operator, in the digest. A
+// second operator in the same namespace, also scaled to zero, left its
+// own webhook and certificate: they are its own group, not the policy
+// operator's.
 func operatorLeftoversGrouped() scenario {
 	return scenario{
 		expect: expectation{
 			Name: "operator-leftovers-grouped",
-			Description: "A scaled-to-zero operator left two webhooks " +
-				"and two expired certificates behind: one digest " +
-				"incident, not four.",
+			Description: "Two scaled-to-zero operators in one namespace " +
+				"left webhooks and expired certificates behind: one " +
+				"digest incident per operator, not one per object " +
+				"nor one for the namespace.",
 			Root: "deployment/policy-system/policy-controller",
+			OtherRoots: []string{
+				"deployment/policy-system/trace-operator"},
 			Tier: "digest", MaxMessages: 2, Tail: duration(time.Hour),
 			MustNotBlame: []string{"deployment/shop/orders"},
 		},
@@ -81,16 +86,17 @@ func buildOperatorLeftovers(c *cluster) {
 	operator := c.deployment("policy-system", "policy-controller",
 		"registry.example.com/policy-controller:1.0", 0)
 	c.list(operator.objects())
-	c.list(clusterService(c, "policy-system", "policy-controller", 443))
+	c.list(policyService(c))
 	c.list(clusterSlice(c, "policy-system", "policy-controller"))
 	for _, name := range []string{"policy-resource", "policy-cleanup"} {
 		c.list(ignoringHook(clusterValidatingHook(c, name,
 			"validate."+name+".example.com", "policy-system",
 			"policy-controller")))
 	}
-	for _, name := range []string{"policy-tls", "cleanup-tls"} {
-		c.list(agedTLSSecret(c, "policy-system", name, 24*time.Hour))
-	}
+	c.list(agedTLSSecret(c, "policy-system", "policy-tls", 24*time.Hour))
+	c.list(released(agedTLSSecret(c, "policy-system", "cleanup-tls",
+		24*time.Hour)))
+	listTraceOperator(c)
 	orders := c.deployment("shop", "orders", "registry.example.com/o:2", 1)
 	c.list(orders.objects())
 	c.list(orders.pod(0, "n1"))
@@ -200,4 +206,33 @@ func failingIssuer(c *cluster, age time.Duration) *unstructured.Unstructured {
 		"Failed to register ACME account: 403 forbidden",
 		c.start.Add(-age))
 	return u
+}
+
+// policyService is the policy operator's webhook Service, labelled
+// with its installation as a Helm chart labels it.
+func policyService(c *cluster) *corev1.Service {
+	return released(clusterService(c, "policy-system",
+		"policy-controller", 443))
+}
+
+// released labels obj with the policy operator's installation.
+func released[T interface{ SetLabels(map[string]string) }](obj T) T {
+	obj.SetLabels(map[string]string{
+		"app.kubernetes.io/instance": "policy"})
+	return obj
+}
+
+// listTraceOperator lists a second operator in policy-system, scaled
+// to zero, with one ignoring webhook and an expired certificate named
+// after it.
+func listTraceOperator(c *cluster) {
+	operator := c.deployment("policy-system", "trace-operator",
+		"registry.example.com/trace-operator:1.0", 0)
+	c.list(operator.objects())
+	c.list(clusterService(c, "policy-system", "trace-operator", 443))
+	c.list(clusterSlice(c, "policy-system", "trace-operator"))
+	c.list(ignoringHook(clusterValidatingHook(c, "trace-mutation",
+		"mutate.trace.example.com", "policy-system", "trace-operator")))
+	c.list(agedTLSSecret(c, "policy-system", "trace-operator-cert",
+		24*time.Hour))
 }

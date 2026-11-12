@@ -77,6 +77,10 @@ func stallFindings(
 		if !ok || !crossed(ctx, key, stall, psiThreshold) {
 			continue
 		}
+		if p.attr == kube.AttrCPUPSI && stallFromLimits(ctx, e) {
+			// The containers held at their own limits are the stall.
+			continue
+		}
 		since := ctx.Onset(key, time.Time{})
 		if !sustained(ctx, key, since, psiSustain) {
 			return nil

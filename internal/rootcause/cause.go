@@ -90,6 +90,10 @@ type CauseRecord struct {
 	// object, container, field path and its current value. Nil when
 	// the cause is not a setting (a node that is down).
 	Place *detection.Place `json:",omitempty"`
+	// PreviousFails marks a release of the root whose previous version
+	// fails the same way: the pods of an older ReplicaSet fail too, so
+	// the release is not blamed and undoing it is not offered.
+	PreviousFails bool `json:",omitempty"`
 }
 
 // ConfigSource is the ConfigMap key an address was read from. The

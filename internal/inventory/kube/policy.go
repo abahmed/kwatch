@@ -204,8 +204,14 @@ func (NetworkPolicySchema) Diff(old, new any) []inventory.FieldChange {
 }
 
 // AttrAttacher is the CSI driver that attaches a volume to a node, as a
-// VolumeAttachment names it.
-const AttrAttacher = "attacher"
+// VolumeAttachment names it. AttrAttachNode and AttrAttachVolume are
+// the node and volume it names: read even when those objects are gone
+// and no relation to them is left.
+const (
+	AttrAttacher     = "attacher"
+	AttrAttachNode   = "attach.node"
+	AttrAttachVolume = "attach.volume"
+)
 
 // VolumeAttachmentSchema describes CSI volume attachments.
 type VolumeAttachmentSchema struct{}
@@ -250,8 +256,12 @@ func (VolumeAttachmentSchema) Describe(obj any) (Description, bool) {
 	rel := relations{}
 	rel.add(inventory.RunsOn,
 		inventory.CoreID(KindNode, "", va.Spec.NodeName))
+	if va.Spec.NodeName != "" {
+		attrs[AttrAttachNode] = inventory.Text(va.Spec.NodeName)
+	}
 	if pv := va.Spec.Source.PersistentVolumeName; pv != nil {
 		rel.add(inventory.References, inventory.CoreID(KindPV, "", *pv))
+		attrs[AttrAttachVolume] = inventory.Text(*pv)
 	}
 	return Description{
 		ID: objectID(KindVolumeAttachment, va), UID: string(va.UID),

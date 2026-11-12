@@ -864,8 +864,15 @@ Objects a removed or scaled-to-zero operator left behind (webhooks that
 call its gone Service, its expired certificates, objects stuck on its
 finalizers) are one low issue rooted at that operator, "Leftovers of a
 removed or stopped controller (N objects)", not one issue per object; a
-leftover that blocks requests keeps its own issue and tier. Problems that
-were already old when kwatch first saw them follow `oldProblemDays`.
+leftover that blocks requests keeps its own issue and tier. Sharing a
+namespace is not enough to join: an object joins when it is named after
+the operator or its Service, carries the same
+`app.kubernetes.io/instance`, `app.kubernetes.io/part-of` or Helm release
+(`meta.helm.sh/release-name`), or is the Secret cert-manager injects the
+webhook's CA from. Two operators in one namespace are two issues. An
+object stuck on the same finalizer as one already in an issue joins that
+issue at once. Problems that were already old when kwatch first saw
+them follow `oldProblemDays`.
 
 Every message starts with exactly one status emoji and no other: 🔴 page,
 🟠 notify, 🟡 low, ✅ resolved. Red is reserved for incidents that page.

@@ -119,6 +119,12 @@ const (
 	EvidenceLivenessSameCheck = "liveness same check"
 )
 
+// EvidenceExitedOnOwn is the exit code of a container whose last run
+// ended on its own with an error, on a probe finding: its probes fail
+// because the process is gone, so the probe is a symptom, never the
+// lead of the message.
+const EvidenceExitedOnOwn = "exited on its own"
+
 // EvidenceProbeResult is how a kubelet probe failed, in a few words
 // read from its message: "HTTP 500", "timed out", "connection refused".
 // An HTTP status means the application answered: its own check failed.

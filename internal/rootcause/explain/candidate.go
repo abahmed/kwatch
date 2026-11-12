@@ -193,6 +193,7 @@ func (v *view) candidates(failures []inventory.EntityID) *candidateSet {
 		v.addUpstream(cs, effect)
 		v.addSelf(cs, effect)
 	}
+	v.applyNodeClaims(cs)
 	applyMinCovered(cs)
 	v.applySharedFactorWindow(cs)
 	v.applyAgentGates(cs)

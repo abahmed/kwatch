@@ -54,7 +54,7 @@ func redisStormLogs(lag time.Duration) scenario {
 			Description: "Six Deployments are killed by their liveness " +
 				"probe with an empty termination message; their " +
 				"previous logs all start with one Redis error.",
-			Root: "failure-signature//CrashLoop unhandled exception. " +
+			Root: "failure-signature//unhandled exception. " +
 				"stackexchange.redis.redisconnectionexception: it was " +
 				"not po",
 			Tier: "notify", MaxMessages: 3, MustNotBlame: notBlamed,

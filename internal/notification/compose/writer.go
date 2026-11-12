@@ -214,6 +214,13 @@ func sortedMembers(p incident.Incident) []detection.Finding {
 		out = append(out, s)
 	}
 	sort.Slice(out, func(i, j int) bool {
+		// How a killed container stopped never leads while any other
+		// failure is there: the kill is what went wrong.
+		si, sj := detection.IsKillSideEffect(out[i].Reason),
+			detection.IsKillSideEffect(out[j].Reason)
+		if si != sj {
+			return sj
+		}
 		if out[i].Severity != out[j].Severity {
 			return out[i].Severity > out[j].Severity
 		}

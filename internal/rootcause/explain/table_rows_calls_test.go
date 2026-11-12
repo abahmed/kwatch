@@ -19,7 +19,7 @@ var calledRowCases = []rowCase{
 			return callStorm(f, 3, refusedDB)[0]
 		}},
 	{row: "shared-failure-signature",
-		want: "failure-signature//CrashLoop panic: license check " +
+		want: "failure-signature//panic: license check " +
 			"failed for tenant #",
 		build: func(f *fixture) inventory.EntityID {
 			return signatureStorm(f, 3)[0]
@@ -238,7 +238,7 @@ func TestExplainDifferentAddressesShareOneSignature(t *testing.T) {
 
 	e := f.explain()
 
-	want := "failure-signature//CrashLoop dial tcp <ip>:6379: connect: " +
+	want := "failure-signature//dial tcp <ip>:6379: connect: " +
 		"connection refused"
 	for _, effect := range effects {
 		requireCause(t, e, effect, want)
@@ -257,9 +257,9 @@ func TestExplainPostgresAndRedisRefusalsStaySeparate(t *testing.T) {
 
 	e := f.explain()
 
-	requireCause(t, e, redis[0], "failure-signature//CrashLoop dial tcp "+
+	requireCause(t, e, redis[0], "failure-signature//dial tcp "+
 		"<ip>:6379: connect: connection refused")
-	requireCause(t, e, postgres[0], "failure-signature//CrashLoop dial "+
+	requireCause(t, e, postgres[0], "failure-signature//dial "+
 		"tcp <ip>:5432: connect: connection refused")
 	if got := causes(e); len(got) != 2 {
 		t.Fatalf("causes = %v, want two", got)

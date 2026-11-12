@@ -1,0 +1,27 @@
+10:02:15 settled
+🟠 cart in shop (prod-eu-1) and three other workloads keep crashing with the same error. It fails with "StackExchange.Redis.RedisConnectionException: It was not possible to connect to the redis server(s). Error connecting…". Its last run lasted ten seconds. Affected: ledger in billing; orders and search in shop.
+Related alerts: 2 probe failures
+To read the output of the last crash, run kubectl logs deploy/cart -c app -n shop --previous
+🟠 cart in shop (prod-eu-1) and three other workloads keep crashing with the same error.
+| 🟠 **cart** in **shop** (**prod-eu-1**) and three other workloads keep crashing with the same error.
+| It fails with
+| ```
+| StackExchange.Redis.RedisConnectionException: It was not possible to connect to the redis server(s). Error connecting…
+| ```
+| Its last run lasted ten seconds.
+| Affected: **ledger** in **billing**; **orders** and **search** in **shop**.
+| Related alerts: 2 probe failures
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/cart -c app -n shop --previous
+| ```
+10:09:20 healthy for 3m0s
+✅ cart in shop (prod-eu-1) is healthy again. It was failing for five minutes because the error "StackExchange.Redis.RedisConnectionException: It was not possible to connect to the redis server(s). Error connecting…" was what several workloads fail with. Six pods were affected.
+✅ cart in shop (prod-eu-1) is healthy again.
+| ✅ cart in shop (**prod-eu-1**) is healthy again.
+| It was failing for five minutes because the error
+| ```
+| StackExchange.Redis.RedisConnectionException: It was not possible to connect to the redis server(s). Error connecting…
+| ```
+| was what several workloads fail with.
+| Six pods were affected.

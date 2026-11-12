@@ -123,3 +123,27 @@ func TestInvestigateCrashLeadsForAnyErrorExit(t *testing.T) {
 		}
 	}
 }
+
+// A start-up that hung until liveness killed it logged its error at the
+// start of the run: the crash-log round's line is shown though the
+// tail read misses it (or the evicted pod's log is gone).
+func TestInvestigateCrashShowsTheRoundsStartLine(t *testing.T) {
+	root := inventory.CoreID(kube.KindDeployment, "web", "api")
+	app := kube.ContainerID("web", "api-6d9f-x1", "api")
+	model := testModel(t, observed(app, map[string]inventory.Value{
+		kube.AttrRestarts:      num(1),
+		kube.AttrLastExitCode:  num(137),
+		kube.AttrLastReason:    text("Error"),
+		kube.AttrLastErrorLine: text(redisCrashLine)}))
+	logs := func(context.Context, inventory.EntityID) []string {
+		return []string{"info: waiting for the cache"}
+	}
+	p := incidentOf(root, finding(app, "Probe.Liveness"))
+
+	_, r := planAndRun(t, Sources{Model: model, Logs: logs}, p)
+
+	errs := evidenceOf(r, incident.FactError)
+	if len(errs) != 1 || errs[0].Text != redisCrashLine {
+		t.Fatalf("errors = %+v, want the round's start line", errs)
+	}
+}

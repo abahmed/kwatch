@@ -137,8 +137,10 @@ func deletingSince(e inventory.Entity) time.Time {
 func stuckDeleting(
 	ctx detection.Context, e inventory.Entity, f *detection.Finding,
 ) {
-	node, nodeGone := goneRelated(ctx, e, inventory.RunsOn, kube.KindNode)
-	pv, pvGone := goneRelated(ctx, e, inventory.References, kube.KindPV)
+	node, nodeGone := goneRelated(ctx, e, inventory.RunsOn, kube.KindNode,
+		kube.AttrAttachNode)
+	pv, pvGone := goneRelated(ctx, e, inventory.References, kube.KindPV,
+		kube.AttrAttachVolume)
 	subject := "Attachment of volume " + pv + " to node " + node
 	driver := text(e, kube.AttrAttacher)
 	if driver != "" {
@@ -148,8 +150,8 @@ func stuckDeleting(
 	switch {
 	case nodeGone && pvGone:
 		gone = "volume and node"
-		f.Summary = subject + " is stuck deleting; the volume " + pv +
-			" it attaches and the node no longer exist"
+		f.Summary = subject + " is stuck deleting; its node and " +
+			"volume no longer exist, so nothing is left to detach it"
 	case pvGone:
 		gone = "volume"
 		f.Summary = subject + " is stuck deleting; the volume " + pv +
@@ -174,20 +176,38 @@ func stuckDeleting(
 	}
 }
 
-// goneRelated is the name of the object of kind that e names through rel,
-// and whether it is missing from the model. The name is empty when e
-// names none.
+// goneRelated is the name of the object of kind that e names through
+// rel, else through its attribute attr, and whether it is missing from
+// the model. The attribute still names an object that was gone before
+// kwatch started, when no relation to it is left. The name is empty
+// when e names none.
 func goneRelated(
 	ctx detection.Context, e inventory.Entity, rel inventory.RelationType,
-	kind inventory.Kind,
+	kind inventory.Kind, attr string,
 ) (string, bool) {
 	if ctx.Model == nil {
 		return "", false
 	}
-	for _, id := range ctx.Model.Related(e.ID, rel, inventory.Outgoing) {
-		if id.Kind == kind {
-			return id.Name, ctx.Synced(kind) && !ctx.Model.Exists(id)
+	id := inventory.CoreID(kind, "", text(e, attr))
+	for _, related := range ctx.Model.Related(e.ID, rel,
+		inventory.Outgoing) {
+		if related.Kind == kind {
+			id = related
+			break
 		}
 	}
-	return "", false
+	if id.Name == "" {
+		return "", false
+	}
+	if !ctx.Synced(kind) {
+		// Look again once the kind has synced: nothing else touches
+		// the attachment to have it worded then.
+		ctx.RecheckAfter(unsyncedRecheck)
+		return id.Name, false
+	}
+	return id.Name, !ctx.Model.Exists(id)
 }
+
+// unsyncedRecheck is how soon an attachment whose node or volume kind
+// has not synced yet is looked at again.
+const unsyncedRecheck = time.Minute

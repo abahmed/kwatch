@@ -24,4 +24,4 @@ var nodeDegradedRows = []Row{{
 		detection.ModeCreating, detection.ModeCreateError,
 		detection.ModeCrashLoop, detection.ModeEvicted),
 	Prior: 0.55,
-}}
+}, nodePullThrottledRow}

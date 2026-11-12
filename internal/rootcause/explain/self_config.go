@@ -47,7 +47,7 @@ var workloadConfigRows = []Row{
 		Effect: Side{Kind: kube.KindPod, Signal: SignalConnection,
 			Modes: []detection.Mode{detection.ModeProbe,
 				detection.ModeNotReady, detection.ModeCrashLoopLiveness}},
-		Prior: 0.8, Inside: true,
+		Prior: 0.8, Inside: true, Refutable: true,
 	},
 	{
 		Name: "startup-budget-too-short",

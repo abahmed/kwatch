@@ -1,6 +1,9 @@
 package dashboard
 
 import (
+	"fmt"
+
+	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/redact"
@@ -61,4 +64,34 @@ func joinNew(have, more, sep string) string {
 		return more
 	}
 	return have + sep + more
+}
+
+// leftoverWhat is the summary of an issue that groups what a removed or
+// stopped controller left behind: "Leftovers of Deployment op in ops:
+// 4 objects it left behind while it has no ready pods." The root is
+// not stuck deleting nor expired: its members are, each in the list.
+// ok is false for any other issue, and for a lone leftover.
+func leftoverWhat(p incident.Incident) (string, bool) {
+	n := p.LeftoverObjects()
+	if n < 2 || p.Root.Name == "" {
+		return "", false
+	}
+	now, was := "is gone or has nothing ready",
+		"was gone or had nothing ready"
+	for _, m := range p.Members {
+		switch m.Reason {
+		case reasons.WebhookBackendNotFound:
+			now, was = "is gone", "was gone"
+		case reasons.WebhookNoEndpoints:
+			if now != "is gone" {
+				now, was = "has no ready pods", "had no ready pods"
+			}
+		}
+	}
+	state := now
+	if p.State == incident.Resolved {
+		state = was
+	}
+	return fmt.Sprintf("Leftovers of %s: %d objects it left behind "+
+		"while it %s.", rootWords(p.Root), n, state), true
 }
