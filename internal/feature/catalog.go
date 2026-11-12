@@ -171,7 +171,7 @@ var definitions = []Definition{
 		StartupOnly, []ID{DowntimeChanges},
 	},
 	{
-		Scope, "Filter by namespace, reason, selector and silences",
+		Scope, "Filter by namespace lists and silences",
 		Runtime, nil,
 	},
 	{
