@@ -66,7 +66,7 @@ jobs:
           ${{ github.event_name == 'pull_request'
           && format('origin/{0}', github.base_ref)
           || github.event.before || 'origin/main' }}
-      run: make ci
+      run: make ci-core
 
     # The dashboard in the runner's Google Chrome (headless): console
     # errors, CSP violations, sideways scroll and basic accessibility.
@@ -74,6 +74,35 @@ jobs:
       env:
         CHROME_PATH: google-chrome
       run: make verify-dashboard-browser
+
+    - name: Upload coverage to Codecov
+      if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        fail_ci_if_error: false
+
+  # The labelled scenario library and its alert-quality gates: the slowest
+  # package, so it runs beside Verify instead of inside it.
+  scenarios:
+    name: Scenarios
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        persist-credentials: false
+
+    - name: Install Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: go.mod
+
+    - name: Run scenarios and alert-quality gates
+      run: make scenarios-gate
 
     - name: Publish alert-quality report
       if: always()
@@ -89,13 +118,6 @@ jobs:
         name: alert-quality-report
         path: _output/alert-quality.md
         if-no-files-found: warn
-
-    - name: Upload coverage to Codecov
-      if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
-      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        fail_ci_if_error: false
 
   # publish.yml builds the release image only after a tag exists. This job
   # catches a broken Dockerfile, a failing binary, or a new HIGH/CRITICAL
