@@ -11,6 +11,7 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/metrics"
 	"github.com/abahmed/kwatch/internal/safego"
+	"github.com/abahmed/kwatch/internal/storage"
 )
 
 // maxPendingTimeline bounds timeline entries waiting for the writer. When
@@ -48,6 +49,8 @@ type historyWriter struct {
 	// unexplained waits for the unexplained counts write
 	// (unexplained_writer.go).
 	unexplained json.RawMessage
+	// hold waits for the timeline hold write (timeline_hold.go).
+	hold map[string]storage.LogHold
 
 	// now and nextExpiry schedule baseline expiry. Only the writer
 	// goroutine reads them, so expiry deletes and baseline saves never
@@ -202,7 +205,7 @@ func (w *historyWriter) flush() {
 	if !w.flushChanges() || !w.flushHealthy() {
 		failed = true
 	}
-	if !w.flushChecks() || !w.flushUnexplained() {
+	if !w.flushChecks() || !w.flushUnexplained() || !w.flushHold() {
 		failed = true
 	}
 	if !w.expireBaselines() {

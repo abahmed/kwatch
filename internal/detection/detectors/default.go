@@ -65,11 +65,13 @@ func Entries() []Entry {
 		{Feature: feature.ConfigurationRisks, Detector: Risk{}},
 		{Feature: feature.ConfigurationRisks, Detector: ImageDrift{}},
 		{Feature: feature.ControlPlane, Detector: Lease{}},
+		{Feature: feature.WorkloadRollouts, Detector: NewHelmRelease(0)},
 		{Feature: feature.ControlPlane, Detector: DeprecatedAPI{}},
 		{Feature: feature.ControlPlane, Detector: APIServerLoad{}},
 		{Feature: feature.AdmissionDetection, Detector: WebhookCalls{}},
 		{Feature: feature.ChangeCorrelation, Detector: ReleaseWatch{}},
 		{Feature: feature.Investigation, Detector: LogErrors{}},
+		{Feature: feature.Investigation, Detector: LogServiceMissing{}},
 	}
 }
 

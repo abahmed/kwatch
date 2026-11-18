@@ -31,6 +31,8 @@ type Model struct {
 	edges      edgeIndex
 	maxChanges int
 	enrichment map[string]bool
+	// sources numbers observation sources for the attribute store.
+	sources sourceTable
 	// history holds cluster-wide recent changes, entity health marks and
 	// workload baselines for change sets, outcomes and recurrence.
 	history history
@@ -51,6 +53,9 @@ type record struct {
 	notes     []Note
 	noteParts map[noteKey][]originCount
 	health    []HealthMark
+	// served is the workload's memory of revisions it saw serving
+	// (served.go). It goes with the workload's deletion.
+	served []ServedRevision
 	// altUID is a second identifier events may use for the object, such
 	// as the config hash of a static pod's mirror.
 	altUID string
@@ -58,6 +63,11 @@ type record struct {
 	// deletion: the few facts about the object that stay readable on its
 	// tombstone, such as who a deleted binding bound. See GoneAttribute.
 	goneAttrs map[string]Value
+	// former are the relations the entity declared when it was last
+	// deleted, such as the node a deleted pod ran on. They leave the
+	// graph with the deletion and stay here, also after the object is
+	// created again under the same name. See FormerRelated.
+	former []relationEntry
 }
 
 type relationKeyBySource struct {
@@ -201,12 +211,13 @@ func (m *Model) observe(observation Observation) Update {
 		m.indexKind(observation.Entity)
 	}
 	rec.adoptUID(observation.UID, observation.AltUID)
-	rec.dropAttributesFrom(observation.Source, observation.Attributes)
+	source := m.sources.id(observation.Source)
+	rec.dropAttributesFrom(source, observation.Attributes)
 	if rec.attrs == nil {
 		rec.attrs = make([]attrEntry, 0, len(observation.Attributes))
 	}
 	for name, value := range observation.Attributes {
-		rec.setAttribute(name, observation.Source, value, observation.At)
+		rec.setAttribute(name, source, value, observation.At)
 	}
 	return Update{
 		Touched: []EntityID{observation.Entity}, Appeared: appeared,
@@ -277,11 +288,13 @@ func (m *Model) remove(observation Observation) Update {
 			touched = append(touched, target)
 		}
 	}
+	rec.former = rec.relations
 	rec.relations = nil
 	rec.attrs = nil
 	rec.goneAttrs = maps.Clone(observation.Attributes)
 	rec.present = false
 	rec.goneAt = observation.At
+	rec.served = nil
 	m.unindexKind(observation.Entity)
 	m.change(Observation{
 		Entity: observation.Entity, At: observation.At,

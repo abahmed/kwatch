@@ -281,6 +281,8 @@ func otherSchemaFor(obj runtime.Object) kube.Schema {
 		return kube.WebhookSchema{}
 	case *admissionv1.MutatingWebhookConfiguration:
 		return kube.WebhookSchema{Mutating: true}
+	case *appsv1.ControllerRevision:
+		return kube.ControllerRevisionSchema{}
 	}
 	panic(fmt.Sprintf("scenarios: no schema for %T", obj))
 }

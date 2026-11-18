@@ -16,6 +16,10 @@ import (
 // a sentence of its own (causeTeaser).
 func leadSentences(f caseFacts) []sentence {
 	subject := leadSubject(f)
+	if workload, ok := removalSubject(f); ok {
+		// The lead starts with the workload, not the removed node.
+		subject = workload
+	}
 	text := capitalName(subject, leadText(f))
 	if subject == kube.KwatchSelf {
 		// The product's name is lowercase wherever it starts a sentence.
@@ -29,9 +33,9 @@ func leadSentences(f caseFacts) []sentence {
 // specificLeads are the leads for a case the evidence names exactly, in
 // order: the first that applies is the lead.
 var specificLeads = []func(caseFacts) (string, bool){
-	leftoverLead, logBurstLead, releaseLeads, archLead, firstRolloutLead,
-	createdLead, volumeHeldLead, provisionerLead, rivalLead, finalizerLead,
-	attachmentLead,
+	leftoverLead, logBurstLead, logMissingLead, releaseLeads, archLead,
+	firstRolloutLead, createdLead, volumeHeldLead, provisionerLead,
+	rivalLead, finalizerLead, attachmentLead, removalLead,
 }
 
 func leadText(f caseFacts) string {
@@ -127,7 +131,7 @@ func blamedChange(f caseFacts) *inventory.Change {
 		onlyScaledToZero(f.members) {
 		return nil
 	}
-	if cause.Rule == "account-missing-at-create" ||
+	if cause.Rule == explain.RuleAccountMissingAtCreate ||
 		cause.Rule == explain.RowNodePullsThrottled {
 		// "service account api does not exist" says more than the
 		// deletion that made it so, and a kubelet holding pulls back
@@ -233,8 +237,8 @@ func ownCauseLead(f caseFacts) string {
 
 // selfCause reports a cause that blames nothing but the subject itself.
 func selfCause(cause *rootcause.CauseRecord) bool {
-	return cause != nil && (cause.Rule == "self" ||
-		cause.Rule == "called-service-backends-failing")
+	return cause != nil && (cause.Rule == explain.RuleSelf ||
+		cause.Rule == explain.RuleCalledServiceBackendsFailing)
 }
 
 // selfLead is only the subject's state. "It is failing because it is
@@ -278,7 +282,8 @@ func symptomState(f caseFacts, subject inventory.EntityID) string {
 	if f.p.State == incident.Flapping {
 		return name + " " + flappingState(f)
 	}
-	if !f.ok || f.lead.Entity == f.p.Cause.Root || nodeStateOfWorkload(f) {
+	if !f.ok || f.lead.Entity == f.p.Cause.Root || nodeStateOfWorkload(f) ||
+		!f.owns(subject, f.lead.Entity) {
 		return name + " " + stateWords(f.p)
 	}
 	state := beforeColon(leadState(f))
@@ -325,6 +330,9 @@ func subjectWithState(f caseFacts, subject inventory.EntityID) string {
 		return name + " is no longer failing"
 	case !f.ok:
 		return name + " " + stateWords(f.p)
+	case !f.owns(subject, f.lead.Entity):
+		// Another object's finding is not subject's state.
+		return name + " " + f.othersState(subject)
 	}
 	return name + " " + leadState(f)
 }

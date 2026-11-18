@@ -1,0 +1,21 @@
+{
+  "name": "readiness-outage-node-out-of-addresses",
+  "description": "Seven services on one node lose their database while the node also runs out of pod addresses for three new pods.",
+  "root": "external-endpoint//10.0.9.40:5432",
+  "otherRoots": [
+    "node//n1"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n2",
+    "deployment/shop/accounts",
+    "deployment/shop/billing",
+    "deployment/shop/fleet",
+    "deployment/shop/pricing",
+    "deployment/shop/tracking",
+    "deployment/shop/payments",
+    "deployment/shop/reports"
+  ],
+  "tail": "10m0s"
+}

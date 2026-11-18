@@ -67,9 +67,10 @@ func TestRestoredTotalsCountByTier(t *testing.T) {
 		"digest", 2, "silent", 0}, got)
 }
 
-// The lower-priority incidents the next digest carries are named too,
-// after the listed ones, and the entry's tier is the loudest listed.
-func TestRestoredListingNamesLowerPriorityAndLoudestTier(t *testing.T) {
+// The incidents told before that the restart only counted are named
+// too, after the listed ones, and the entry's tier is the loudest
+// listed.
+func TestRestoredListingNamesCountedAndLoudestTier(t *testing.T) {
 	listed := []incident.Decision{
 		restoredDecision(1, incident.Notify, "A"),
 		restoredDecision(2, incident.Page, "B"),
@@ -81,6 +82,6 @@ func TestRestoredListingNamesLowerPriorityAndLoudestTier(t *testing.T) {
 	assert.Equal(t, 2, got.Ongoing)
 	require.Len(t, got.Items, 3)
 	assert.Equal(t, "inc-3: deployment/shop/app3 tier=digest reasons=C"+
-		" (lower priority, next digest)", got.Items[2])
+		" (told before, unchanged: counted)", got.Items[2])
 	assert.Equal(t, incident.Page, loudest(listed))
 }

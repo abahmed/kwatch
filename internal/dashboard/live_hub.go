@@ -142,7 +142,7 @@ func (h *liveHub) state() liveState {
 }
 
 // check compares the incidents with the last comparison when the
-// engine ran since (scan is its latest loop time) and liveCheck has
+// engine published since (scan is its view's revision) and liveCheck has
 // passed, and wakes the streams when any changed. red redacts the
 // texts that are fingerprinted.
 func (h *liveHub) check(

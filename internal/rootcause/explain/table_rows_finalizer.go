@@ -15,7 +15,7 @@ var finalizerRows = concatRows(finalizerHandlerRows(), []Row{{
 	// No controller is known to handle the finalizer, or one that is
 	// known runs: the objects that wait for it are one leftover. It
 	// needs two of them: one held object is its own problem.
-	Name: "finalizer-unhandled",
+	Name: RuleFinalizerUnhandled,
 	Cause: Side{Kind: KindFinalizer,
 		Modes: []detection.Mode{ModeFinalizerUnhandled}},
 	Link: LinkFinalizes, Effect: stuckObject, Prior: 0.55,
@@ -32,7 +32,7 @@ func finalizerHandlerRows() []Row {
 	var rows []Row
 	for _, link := range []LinkType{LinkFinalizes, LinkManages} {
 		rows = append(rows, Row{
-			Name: "finalizer-handler-stopped",
+			Name: RuleFinalizerHandlerStopped,
 			Cause: Side{Group: AnyGroup, Kind: AnyKind,
 				Modes: []detection.Mode{ModeHandlerStopped}},
 			Link: link, Effect: stuckObject, Prior: 0.75,

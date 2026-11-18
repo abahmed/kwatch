@@ -27,7 +27,7 @@ read the header there for how they relate.
 | `DefaultRemember` | 7d | resolved incidents are kept this long ("3rd time this week") |
 | `KnownAfter`, `RhythmWindow` | 24h | a problem heard for a day waits for the digest |
 | `routineWindow`, `recurrenceWeek` | 45m, 7d | same time of day counts as a routine (only days it went away on its own: a day someone fixed it, by a rollback or a change, does not count, and a routine a page rule names still notifies); window of "the third time this week" |
-| pipeline `restoreGrace` | 10m | restored incidents wait this long for findings to return |
+| pipeline `restoreSettle`, `restoreGrace` | 2m, 10m | restored incidents wait for their findings until the model is rebuilt: the sync plus the settle, their kinds synced; at most the grace |
 | announce `StartupWindow` | 2m | cold-start announcements are collected into one summary |
 | announce `outageHoldMax` (`announce/timings.go`) | 30s | a namespace outage waits this long for its siblings |
 | announce `outageWindow` | 10m | incidents opened this close are one outage; a later failure of the namespace within it joins that outage |

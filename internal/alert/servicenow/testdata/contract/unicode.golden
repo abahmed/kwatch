@@ -1,0 +1,21 @@
+--- request 1 of 2
+GET /api/now/table/incident?sysparm_fields=sys_id&sysparm_limit=1&sysparm_query=correlation_id=kwatchkeyc241fac44c71dde5^active=true^state!=6
+Authorization: Basic <redacted>
+Accept: application/json
+
+(empty body)
+
+--- request 2 of 2
+POST /api/now/table/incident?sysparm_fields=sys_id
+Content-Type: application/json
+Authorization: Basic <redacted>
+Accept: application/json
+
+{
+  "correlation_display": "kwatch",
+  "correlation_id": "kwatchkeyc241fac44c71dde5",
+  "description": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú. Причина: OOMKilled 💥 (café, naïve, 日本語).\n\n----\nпаника: нехватка памяти — 内存不足\n----\n\nRef: kwatchkeyc241fac44c71dde5",
+  "impact": "1",
+  "short_description": "🔴 сервис «платежи» в shop падает — 支付失败 ñandú.",
+  "urgency": "1"
+}

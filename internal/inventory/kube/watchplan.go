@@ -117,7 +117,8 @@ func operatorGroup(group string) bool {
 // spec is large or churns (Lease renewals) and their status, if any,
 // holds nothing detection reads. The RBAC kinds stay listed so the audit
 // covers them, but builtinMode watches them in the compact form of
-// rbacResources.
+// rbacResources, and ControllerRevisions with their revision number
+// (revisionTransform).
 var metadataResources = map[Resource]bool{
 	{Group: "coordination.k8s.io", Name: "leases"}:                    true,
 	{Group: "apps", Name: "controllerrevisions"}:                      true,
@@ -186,9 +187,11 @@ func planResource(
 
 // builtinMode watches a built-in kind's status when it has a status
 // subresource and is not a metadata kind. An RBAC kind is watched as a
-// status kind too, with its own compact transform (rbacTransform).
+// status kind too, with its own compact transform (rbacTransform), and
+// so is a ControllerRevision (revisionTransform).
 func builtinMode(r Resource, hasStatus bool) WatchMode {
-	if rbacResources[r] || hasStatus && !metadataResources[r] {
+	if rbacResources[r] || r == controllerRevisionResource ||
+		hasStatus && !metadataResources[r] {
 		return WatchStatus
 	}
 	return WatchMetadata

@@ -1,0 +1,12 @@
+{
+  "name": "networkpolicy-stops-covering-workload",
+  "description": "Under a default-deny policy, the policy that lets the API reach its database is edited so it no longer selects the API, which then times out on the database.",
+  "root": "networkpolicy/shop/orders-egress",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "networkpolicy/shop/deny-all",
+    "deployment/shop/postgres",
+    "node//n1"
+  ]
+}

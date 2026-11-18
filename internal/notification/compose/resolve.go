@@ -8,6 +8,7 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // resolveNote closes an incident. Its lead follows how the incident
@@ -201,7 +202,7 @@ func fixPhrase(f caseFacts) string {
 // blamed for itself names none.
 func resolvedCause(f caseFacts, subject inventory.EntityID) string {
 	cause := f.p.Cause
-	if cause == nil || cause.Rule == "self" || cause.Root == subject ||
+	if cause == nil || cause.Rule == explain.RuleSelf || cause.Root == subject ||
 		checkedCause(f, subject) {
 		// A checked cause was said above, as it is now.
 		return ""

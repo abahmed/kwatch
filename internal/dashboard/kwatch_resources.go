@@ -27,10 +27,18 @@ type ResourcesStatus struct {
 	StateFile *StateFileStatus `json:"stateFile,omitempty"`
 }
 
-// MemoryUse is the bytes in use and the memory limit.
+// MemoryUse is the bytes in use (the container's, file cache
+// included) and the memory limit. GoUsed is the memory the Go runtime
+// holds, which cannot be freed, against its limit GoLimit; Cache is
+// the file cache in Used that the system can free. Level ("", "warn",
+// "bad") judges GoUsed with hysteresis, so the page does not flap.
 type MemoryUse struct {
-	Used  int64 `json:"used"`
-	Limit int64 `json:"limit,omitempty"`
+	Used    int64  `json:"used"`
+	Limit   int64  `json:"limit,omitempty"`
+	GoUsed  int64  `json:"goUsed,omitempty"`
+	GoLimit int64  `json:"goLimit,omitempty"`
+	Cache   int64  `json:"cache,omitempty"`
+	Level   string `json:"level"`
 }
 
 // CPUUse is the cores in use (over the last sample) and the limit.
@@ -55,7 +63,9 @@ func (s *Server) resources(file *StateFileStatus) *ResourcesStatus {
 	u := (*src)()
 	out := &ResourcesStatus{}
 	if u.MemoryKnown {
-		out.Memory = &MemoryUse{Used: u.MemoryBytes, Limit: u.MemoryLimit}
+		out.Memory = &MemoryUse{Used: u.MemoryBytes, Limit: u.MemoryLimit,
+			GoUsed: u.GoMemory, GoLimit: u.GoLimit,
+			Cache: u.MemoryCache, Level: u.MemoryLevel}
 	}
 	if u.CPUKnown {
 		out.CPU = &CPUUse{Cores: u.CPUCores, LimitCores: u.CPULimit}

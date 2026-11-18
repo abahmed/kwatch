@@ -87,6 +87,7 @@ func (s *Server) insights(
 		in.trail = *t
 	}
 	out := buildInsights(in)
+	addOffline(out.Days, s.notWatching(), in.now, zone)
 	if out.Quiet != nil {
 		s.explainQuiet(out.Quiet, in.model)
 	}

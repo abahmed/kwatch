@@ -16,7 +16,7 @@ var storageClassRows = []Row{
 		// A claim names a StorageClass that does not exist, so nothing
 		// provisions its volume. The claim is only the one who named
 		// the class; the class is what is missing.
-		Name: "storage-class-missing",
+		Name: RuleStorageClassMissing,
 		Cause: Side{Kind: kube.KindStorageClass,
 			Modes: []detection.Mode{ModeMissing}},
 		Link: LinkUses,
@@ -29,7 +29,7 @@ var storageClassRows = []Row{
 	{
 		// The same class, seen from the pod that waits for the claim:
 		// the claim is only the way from the pod to the class.
-		Name: "storage-class-missing-pending",
+		Name: RuleStorageClassMissingPending,
 		Cause: Side{Kind: kube.KindStorageClass,
 			Modes: []detection.Mode{ModeMissing}},
 		Link: LinkUses,

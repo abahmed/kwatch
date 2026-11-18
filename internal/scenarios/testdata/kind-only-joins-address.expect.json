@@ -1,0 +1,12 @@
+{
+  "name": "kind-only-joins-address",
+  "description": "Three services name the cache address they cannot reach, two only say the cache cannot be reached: one incident named by the address.",
+  "root": "external-endpoint//10.0.7.20:6379",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/pricing",
+    "deployment/shop/tracking"
+  ]
+}

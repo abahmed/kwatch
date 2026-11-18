@@ -22,8 +22,8 @@ var connectionFailure = regexp.MustCompile(`connection refused|` +
 	`timeout expired|deadline exceeded|no such host|` +
 	`name or service not known|unknown host|` +
 	`temporary failure in name resolution|no route to host|` +
-	`network is unreachable|econnrefused|etimedout|enotfound|` +
-	`ehostunreach|(?:could not|couldn't|cannot|can't|unable to|` +
+	`network is unreachable|\b(?:econnrefused|etimedout|enotfound|` +
+	`ehostunreach)\b|(?:could not|couldn't|cannot|can't|unable to|` +
 	`failed to|not possible to) (?:connect|reach|establish)|` +
 	`communications link failure|server selection timeout|` +
 	`no brokers? (?:are )?available|brokers? (?:is |are )?not available|` +

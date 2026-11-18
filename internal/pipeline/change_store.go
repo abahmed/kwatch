@@ -42,10 +42,17 @@ type changeRecord struct {
 	ChangeSet string `json:",omitempty"`
 }
 
-// healthyRecord is the last time a workload was healthy.
+// healthyRecord is the last time a workload was healthy, and the
+// revisions kwatch saw it serve (served.go). Served is optional, so a
+// record saved before it loads with none; it holds at most
+// inventory.MaxServedRevisions entries.
 type healthyRecord struct {
-	V    int
-	Mark inventory.HealthMark
+	V      int
+	Mark   inventory.HealthMark
+	Served []inventory.ServedRevision `json:",omitempty"`
+	// forget asks a save to drop the stored Served. It is never
+	// persisted.
+	forget bool
 }
 
 // changeStore is the part of a store that persists changes. It is
@@ -128,23 +135,45 @@ func (d *diskIncidents) healthy() storage.Keyed[healthyRecord] {
 	return storage.StateValues[healthyRecord](d.store)
 }
 
-// SaveHealthy implements healthyStore. A record expires
-// healthyRetention after the mark.
+// SaveHealthy implements healthyStore. A record names only what
+// changed: a zero mark or nil Served keeps the stored one (served.go).
+// A record expires healthyRetention after its mark or
+// inventory.ServedRetention after its newest served revision,
+// whichever is later; one left with neither is deleted.
 func (d *diskIncidents) SaveHealthy(
 	records map[string]healthyRecord,
 ) error {
 	items := make(map[string]storage.Item[healthyRecord], len(records))
+	var empty []string
 	for entity, record := range records {
-		record.V = recordVersion
-		items[healthyKeyPrefix+entity] = storage.Item[healthyRecord]{
-			Value: record, Expires: record.Mark.At.Add(healthyRetention),
+		key := healthyKeyPrefix + entity
+		if record.partial() {
+			stored, _, err := d.healthy().Get(key)
+			if err != nil {
+				return err
+			}
+			record = mergeHealthy(stored, record)
 		}
+		if record.forget {
+			record.Served = nil
+		}
+		if record.Mark.At.IsZero() && len(record.Served) == 0 {
+			empty = append(empty, key)
+			continue
+		}
+		record.V, record.forget = recordVersion, false
+		items[key] = storage.Item[healthyRecord]{
+			Value: record, Expires: record.expires(),
+		}
+	}
+	if err := d.healthy().DeleteMany(empty); err != nil {
+		return err
 	}
 	return d.healthy().PutAll(items)
 }
 
 // LoadHealthy implements healthyStore: the newest limit records, keyed
-// by entity.
+// by entity, newest by their mark or served revision.
 func (d *diskIncidents) LoadHealthy(
 	limit int,
 ) (map[string]healthyRecord, error) {
@@ -164,7 +193,7 @@ func (d *diskIncidents) LoadHealthy(
 		keys = append(keys, key)
 	}
 	sort.Slice(keys, func(i, j int) bool {
-		return all[keys[i]].Mark.At.After(all[keys[j]].Mark.At)
+		return all[keys[i]].latest().After(all[keys[j]].latest())
 	})
 	for _, key := range keys[limit:] {
 		delete(all, key)

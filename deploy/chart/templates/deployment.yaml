@@ -64,7 +64,7 @@ spec:
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       serviceAccountName:  {{ .Release.Name }}
       automountServiceAccountToken: true
-      {{- with .Values.priorityClassName }}
+      {{- with include "kwatch.priorityClassName" . }}
       priorityClassName: {{ . | quote }}
       {{- end }}
       {{- with .Values.imagePullSecrets }}

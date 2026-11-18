@@ -117,8 +117,11 @@ func TestPlanResourceTiersAndModes(t *testing.T) {
 			Group: "coordination.k8s.io", Version: "v1",
 			Resource: "leases"}, false, true, tierBuiltin, WatchMetadata},
 		{"metadata_kind_even_with_status", schema.GroupVersionResource{
+			Group: "coordination.k8s.io", Version: "v1",
+			Resource: "leases"}, true, true, tierBuiltin, WatchMetadata},
+		{"controller_revision_keeps_revision", schema.GroupVersionResource{
 			Group: "apps", Version: "v1", Resource: "controllerrevisions"},
-			true, true, tierBuiltin, WatchMetadata},
+			false, true, tierBuiltin, WatchStatus},
 		{"builtin_status", schema.GroupVersionResource{
 			Group: "certificates.k8s.io", Version: "v1",
 			Resource: "certificatesigningrequests"},

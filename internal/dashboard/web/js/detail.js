@@ -232,7 +232,9 @@
      of what is wrong is the "What's wrong?" question of the Summary
      tab; when it only says what the title already says, the question
      says so rather than repeat it. It also carries the objects a
-     removed controller left behind. */
+     removed controller left behind, and the issue's shape
+     (incshape.js): whether users are affected first, then why its
+     members are one issue and what its failing replicas share. */
   function what(root, inc) {
     var short = core(KW.issueHeading(inc), inc), full = heading(inc);
     var w = sum(inc).what && KW.problemTitle(sum(inc).what, inc);
@@ -242,9 +244,12 @@
     if (cut) KW.hideMarks(lead, full);
     var said = !core(w, inc) || core(w, inc) === short || (cut && core(w, inc) === core(full, inc));
     var dd = KW.summaryRow(root, "what", T.ask.what, true);
+    KW.usersLine(dd, inc);
     if (!said) KW.hideMarks(dd.appendChild(KW.el("p", "ds-what")), w);
     else if (!(inc.leftoverObjects > 0)) dd.appendChild(KW.el("p", "ds-sub", T.ask.asTitle));
     KW.leftoverLine(dd, root, inc);
+    KW.groupedLine(dd, inc);
+    KW.replicaLines(dd, inc);
   }
 
   /* KW.summaryTop draws the summary card. */

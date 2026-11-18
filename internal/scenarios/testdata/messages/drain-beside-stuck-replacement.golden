@@ -1,0 +1,14 @@
+10:20:40 settled
+🔴 fleet, storage and support in shop (prod-eu-1) have no ready replicas (0 of 1) because node n3 was removed at 10:10 UTC. The failing pods run on node n5, which joined under a minute before they began failing. All three failing apps use it. Services fleet, storage and support in shop can't serve traffic.
+Related alerts: 3 failed create pod sand box alerts, 3 pending pods, 3 services without endpoints
+To see the object's state and events, run kubectl describe deployment fleet -n shop
+🔴 fleet, storage and support in shop (prod-eu-1) have no ready replicas (0 of 1) because node n3 was removed at 10:10 UTC.
+| 🔴 **fleet**, **storage** and **support** in **shop** (**prod-eu-1**) have no ready replicas (0 of 1) because node n3 was removed at 10:10 UTC.
+| The failing pods run on node n5, which joined under a minute before they began failing.
+| All three failing apps use it.
+| Services **fleet**, **storage** and **support** in **shop** can't serve traffic.
+| Related alerts: 3 failed create pod sand box alerts, 3 pending pods, 3 services without endpoints
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment fleet -n shop
+| ```

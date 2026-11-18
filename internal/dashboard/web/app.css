@@ -278,6 +278,7 @@ input:hover, select:hover { border-color: var(--text); }
 .tl .node::after { content: ""; position: absolute; left: 3px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--control-border); border: 2px solid var(--bg); box-sizing: content-box; margin: -2px; }
 .tl .k-warn .node::after { background: var(--degraded); }
 .tl .k-done .node::after { background: var(--success); }
+.tl .k-gap .tx-text { color: var(--text-muted); font-style: italic; }
 .tl .k-start .node::after { background: var(--bg); border-color: var(--control-border); }
 .tl .latest .node::after { width: 12px; height: 12px; left: 2px; top: 5px; box-shadow: 0 0 0 4px var(--surface); }
 .tl .latest .tx-text { font-weight: 600; }

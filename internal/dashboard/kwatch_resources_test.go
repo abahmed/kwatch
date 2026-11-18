@@ -17,14 +17,17 @@ func TestKwatchStatusServesTheResources(t *testing.T) {
 	s.SetResources(func() health.ResourceUse {
 		return health.ResourceUse{MemoryKnown: true, MemoryBytes: 100,
 			MemoryLimit: 200, CPUKnown: true, CPUCores: 0.04,
-			CPULimit: 0.5, DiskKnown: true, DiskUsed: 10, DiskTotal: 40}
+			CPULimit: 0.5, DiskKnown: true, DiskUsed: 10, DiskTotal: 40,
+			GoMemoryKnown: true, GoMemory: 60, GoLimit: 180,
+			MemoryCache: 30, MemoryLevel: health.MemoryWarn}
 	})
 
 	got, body := readKwatch(t, s)
 
 	require.NotNil(t, got.Resources)
 	assert.Equal(t, ResourcesStatus{
-		Memory:    &MemoryUse{Used: 100, Limit: 200},
+		Memory: &MemoryUse{Used: 100, Limit: 200, GoUsed: 60,
+			GoLimit: 180, Cache: 30, Level: "warn"},
 		CPU:       &CPUUse{Cores: 0.04, LimitCores: 0.5},
 		Disk:      &DiskUse{Used: 10, Total: 40},
 		StateFile: &StateFileStatus{Bytes: 4096},

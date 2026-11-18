@@ -1,0 +1,11 @@
+{
+  "name": "young-and-old-nodes-fail",
+  "description": "The cache is down: replicas on an old node and on a node that joined a minute ago fail together.",
+  "root": "external-endpoint//10.0.7.20:6379",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n3"
+  ]
+}

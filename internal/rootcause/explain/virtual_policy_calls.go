@@ -22,7 +22,7 @@ const maxCallEdges = 8
 // policyCallRows say that a policy created or changed recently, which
 // stops a call its pod makes, explains the pod's failure.
 var policyCallRows = []Row{{
-	Name: "policy-blocks-call",
+	Name: RulePolicyBlocksCall,
 	Cause: Side{Kind: kube.KindNetworkPolicy,
 		Modes: []detection.Mode{ModeBlocksCall}},
 	Link: LinkDenies,

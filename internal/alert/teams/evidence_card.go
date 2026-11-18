@@ -30,6 +30,17 @@ func evidenceCardAttachments(
 				"text": "- " + cardText(f), "wrap": true, "spacing": "None"})
 		}
 	}
+	for _, n := range ev.Notes() {
+		body = append(body, card{"type": "TextBlock",
+			"text": cardText(n), "wrap": true})
+	}
+	if checked := ev.CheckedShown(); len(checked) > 0 {
+		body = append(body, heading("What kwatch checked"))
+		for _, c := range checked {
+			body = append(body, card{"type": "TextBlock",
+				"text": cardText(c), "wrap": true, "spacing": "None"})
+		}
+	}
 	if q := ev.Quote; q != nil && len(q.Lines) > 0 {
 		body = append(body, card{"type": "Container", "items": []card{
 			{"type": "TextBlock", "text": cardText(quoteLabel(q)),

@@ -205,7 +205,8 @@ func TestListETagAnswers304UntilTheListChanges(t *testing.T) {
 		t.Errorf("unchanged: %d with %d bytes", w.Code, w.Body.Len())
 	}
 	reader.mu.Lock()
-	reader.items[3].RepeatCount++
+	reader.items[3].Occurrences = []time.Time{testEpoch,
+		testEpoch.Add(time.Minute)}
 	reader.mu.Unlock()
 	w := getIfNoneMatch(t, s, path, tag)
 	if w.Code != http.StatusOK || w.Header().Get("ETag") == tag {

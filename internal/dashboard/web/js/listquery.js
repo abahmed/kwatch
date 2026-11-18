@@ -45,8 +45,8 @@
   }
 
   /* MULTI: the list filters, as they are named in the address. */
-  var MULTI = ["severity", "namespace", "kind", "state", "acked", "stopped", "node",
-    "mode"];
+  var MULTI = ["severity", "namespace", "kind", "state", "acked", "stopped",
+    "node", "mode"];
 
   /* values reads a repeatable key (namespace=a&namespace=b, or an old
      link's namespace=a,b): the values ok accepts, each once. */

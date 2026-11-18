@@ -24,13 +24,14 @@
     return KW.lasted(new Date(1000).toISOString(), new Date(1000 + sec * 1000).toISOString());
   };
 
-  function table(rows, untold) {
+  function table(rows, untold, off) {
     var d = KW.el("div", "ip-table");
     var tb = d.appendChild(KW.el("table", "ip-t"));
     tb.appendChild(KW.el("caption", "sr-only", "Issues per day, last 7 days"));
     var hr = tb.appendChild(KW.el("thead")).appendChild(KW.el("tr"));
-    ["Day", "Opened", "Alerted on-call", untold ? KW.UNTOLD.label : "", "Resolved"].forEach(function (h, i) {
-      if (h) hr.appendChild(KW.el("th", i ? "num" : "", h)).scope = "col";
+    ["Day", "Opened", KW.TERMS.urgent.column, untold ? KW.UNTOLD.label : "", "Resolved",
+      off ? "kwatch not running" : ""].forEach(function (h, i) {
+      if (h) hr.appendChild(KW.el("th", i && i < 5 ? "num" : "", h)).scope = "col";
     });
     var body = tb.appendChild(KW.el("tbody"));
     rows.forEach(function (r) {
@@ -38,6 +39,9 @@
       tr.appendChild(KW.el("th", "", r.label + " " + r.date.slice(5))).scope = "row";
       (untold ? [r.opened, r.paged, r.untold, r.resolved] : [r.opened, r.paged, r.resolved])
         .forEach(function (n) { tr.appendChild(KW.el("td", "num", KW.num(n))); });
+      // The time off in words: a day off is not a day with nothing.
+      if (off) tr.appendChild(KW.el("td", "ip-off", r.off.all ? "All day" : r.off.sec ? KW.duration(r.off.sec) : ""))
+        .dataset.off = r.off.all ? "all" : r.off.sec ? "part" : "";
     });
     return d;
   }
@@ -55,12 +59,16 @@
      columns spread over the whole card, not a fixed 448 units).
      Per day, opened (its paged part at the bottom) beside resolved. */
   function weekChart(rows, label, width) {
-    var H = 150, top = 18, base = H - 22;
+    // A row of "6 h off" labels under the days when kwatch was off.
+    var anyOff = rows.some(function (d) { return d.off.sec; });
+    var H = anyOff ? 164 : 150, top = 18, base = (anyOff ? 150 : H) - 22;
     var W = width / rows.length;
     var colW = Math.max(12, Math.min(36, (W - 12) / 2 - 2));
     var max = 1;
     rows.forEach(function (d) { max = Math.max(max, d.opened, d.resolved); });
-    var s = svg("svg", { viewBox: "0 0 " + width + " " + H, role: "img", "aria-label": label }, "viz-cols");
+    var s = svg("svg", { viewBox: "0 0 " + width + " " + H, role: "img", "aria-label": label },
+      "viz-cols" + (anyOff ? " has-off" : ""));
+    var hatch = anyOff ? KW.offPattern(s) : "";
     s.appendChild(svg("line", { x1: 0, x2: width, y1: base + 0.5, y2: base + 0.5 }, "viz-axis"));
     function h(n) { return n ? Math.max(2, (base - top) * n / max) : 0; }
     function col(g, x, n, cls) {
@@ -78,6 +86,7 @@
       g.appendChild(svg("title")).textContent = d.title;
       var x0 = i * W + (W - 2 * colW - 4) / 2, x1 = x0 + colW + 4;
       g.appendChild(svg("rect", { x: i * W, y: 0, width: W, height: H }, "viz-hit"));
+      if (d.off.sec) offDay(g, d.off, i * W, W, top, base, H, hatch);
       col(g, x0, d.opened, "viz-open");
       if (d.paged) {
         var ph = h(Math.min(d.paged, d.opened));
@@ -92,6 +101,22 @@
       s.appendChild(g);
     });
     return s;
+  }
+
+  /* offDay: the hatch over a day kwatch was not running (the whole
+     plot for a day off, a lighter one for a part of a day), "6 h off"
+     under its name and, for a whole day, "not running" across it. */
+  function offDay(g, off, x, W, top, base, H, hatch) {
+    g.dataset.off = off.all ? "all" : "part";
+    g.appendChild(svg("rect", { x: x + 2, y: top - 8, width: W - 4, height: base - top + 8,
+      fill: hatch }, "viz-off" + (off.all ? "" : " viz-off-part")));
+    var t = svg("text", { x: x + W / 2, y: H - 3, "text-anchor": "middle" }, "viz-off-t");
+    t.textContent = off.short;
+    g.appendChild(t);
+    if (!off.all) return;
+    var m = svg("text", { x: x + W / 2, y: (top + base) / 2, "text-anchor": "middle" }, "viz-off-say");
+    m.textContent = "not running";
+    g.appendChild(m);
   }
 
   /* overlaps: whether any two of the shown labels touch. */
@@ -113,6 +138,10 @@
      them when they fit, else the opened ones only, else none (each
      column's tooltip and "Show as a table" still have every number). */
   function thinLabels(chart) {
+    [].slice.call(chart.querySelectorAll(".viz-off-say")).forEach(function (t) {
+      var slot = t.parentNode.querySelector(".viz-hit").getBoundingClientRect();
+      if (t.getBoundingClientRect().width > slot.width - 4) t.style.display = "none";
+    });
     var all = [].slice.call(chart.querySelectorAll(".viz-cnum"));
     var res = all.filter(function (t) { return t.classList.contains("viz-cnum-res"); });
     if (!overlaps(all)) return;
@@ -145,17 +174,25 @@
     var rows = days.map(function (d, i) {
       var u = typeof d.untold === "number" ? d.untold : byDate[d.date] || 0;
       opened += d.opened; resolved += d.resolved; untold += u;
-      var label = weekday(d.date, i === days.length - 1);
-      return { date: d.date, label: label, opened: d.opened, resolved: d.resolved, paged: d.paged, untold: u,
+      var label = weekday(d.date, i === days.length - 1), off = KW.dayOff(d);
+      return { date: d.date, label: label, opened: d.opened, resolved: d.resolved, paged: d.paged, untold: u, off: off,
         title: label + " (" + d.date + "): " + KW.num(d.opened) + " opened, " + KW.num(d.paged) +
-          " alerted the on-call person, " + (u ? KW.num(u) + " settled before alerting, " : "") + KW.num(d.resolved) + " resolved" };
+          " " + KW.TERMS.urgent.chart + ", " + (u ? KW.num(u) + " settled before alerting, " : "") + KW.num(d.resolved) + " resolved" +
+          (off.sec ? "; " + off.words : "") };
     });
-    if (!opened && !resolved) {
+    var anyOff = rows.some(function (r) { return r.off.sec; });
+    if (!opened && !resolved && !anyOff) {
       c.appendChild(V.empty("A quiet week: nothing opened or resolved."));
       return c;
     }
+    if (!opened && !resolved) {
+      // Days off are not quiet days: the chart still shows them.
+      c.appendChild(KW.el("p", "ip-off-note", "Nothing opened or resolved while kwatch was watching."));
+    }
     var spoken = rows.map(function (r) {
-      return r.label + ": " + KW.num(r.opened) + " opened, " + KW.num(r.resolved) + " resolved";
+      if (r.off.all) return r.label + ": kwatch was not running";
+      return r.label + ": " + KW.num(r.opened) + " opened, " + KW.num(r.resolved) + " resolved" +
+        (r.off.sec ? " (" + r.off.words + ")" : "");
     });
     var wrap = c.appendChild(KW.el("div", "ip-chart"));
     var said = "Issues per day, last 7 days. " + spoken.join("; ");
@@ -171,8 +208,9 @@
     if (window.ResizeObserver) new ResizeObserver(draw).observe(wrap);
     else wrap.appendChild(weekChart(rows, said, 640));
     var key = c.appendChild(V.legend([{ cls: "s-open", label: "Opened" },
-      { cls: "s-page", label: "Of those, alerted the on-call person" }, { cls: "s-ok", label: "Resolved" }]));
-    var tab = c.appendChild(table(rows, untold));
+      { cls: "s-page", label: KW.TERMS.urgent.legend }, { cls: "s-ok", label: "Resolved" }].concat(
+      anyOff ? [{ cls: "s-off", label: "kwatch not running" }] : [])));
+    var tab = c.appendChild(table(rows, untold, anyOff));
     tab.hidden = true;
     viewSwitch(c, function (asTable) {
       wrap.hidden = key.hidden = asTable;

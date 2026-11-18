@@ -3,7 +3,9 @@ package dashboard
 import (
 	"time"
 
+	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/release"
+	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
 // ReleaseCause is the release linked to an incident: what changed,
@@ -16,6 +18,8 @@ type ReleaseCause struct {
 	Undo           UndoStep `json:"undo"`
 	// Newest says no later release of the workload exists.
 	Newest bool `json:"newest"`
+	// Links lead to where the release came from (source_links.go).
+	Links []format.SourceLink `json:"links,omitempty"`
 }
 
 // UndoStep is how to undo a release: a text and, when one does it, the
@@ -81,12 +85,14 @@ func (s *Server) releaseBookSnapshot() (release.Book, bool) {
 
 // releaseFor is the release that caused the incident, or nil. A release
 // that rolled out after the incident started cannot have caused it.
-func (s *Server) releaseFor(id string, opened time.Time) *ReleaseCause {
+func (s *Server) releaseFor(
+	id string, opened time.Time, cause *rootcause.CauseRecord,
+) *ReleaseCause {
 	snap, ok := s.releaseBookSnapshot()
 	if !ok {
 		return nil
 	}
-	r := releaseOf(snap, id)
+	r := releaseOf(snap, id, cause)
 	if r == nil || (!opened.IsZero() && r.At.After(opened.Add(releaseSlack))) {
 		return nil
 	}
@@ -97,8 +103,11 @@ func (s *Server) releaseFor(id string, opened time.Time) *ReleaseCause {
 // stamped and still count: the two are noticed on different ticks.
 const releaseSlack = time.Minute
 
-// releaseOf finds the newest release of b linked to incident id.
-func releaseOf(b release.Book, id string) *ReleaseCause {
+// releaseOf finds the newest release of b linked to incident id; cause
+// is the incident's, which decides whether an undo is offered.
+func releaseOf(
+	b release.Book, id string, cause *rootcause.CauseRecord,
+) *ReleaseCause {
 	newest := newestReleases(b)
 	var best *release.Record
 	for i := range b.Records {
@@ -110,7 +119,8 @@ func releaseOf(b release.Book, id string) *ReleaseCause {
 	if best == nil {
 		return nil
 	}
-	c := releaseCause(*best, newest[workloadKey(*best)].Equal(best.At))
+	c := releaseCause(*best, newest[workloadKey(*best)].Equal(best.At),
+		cause)
 	return &c
 }
 
@@ -166,9 +176,13 @@ func newestReleases(b release.Book) map[string]time.Time {
 // releaseCause is r for the page. Only the workload's newest release
 // offers an undo command: a rollback goes back one revision from what
 // runs now, so on an older release it would bring back the newer one
-// (or the bad release a rollback replaced).
-func releaseCause(r release.Record, newest bool) ReleaseCause {
-	u := r.Undo()
+// (or the bad release a rollback replaced). The undo itself follows
+// the message's rules (undoFor).
+func releaseCause(
+	r release.Record, newest bool, cause *rootcause.CauseRecord,
+) ReleaseCause {
+	u, revision := undoFor(r, cause)
+	r.Revision = revision
 	if !newest && u.Command != "" {
 		u = release.Undo{Text: "A newer release of this workload came " +
 			"after this one: undo from the newest release"}

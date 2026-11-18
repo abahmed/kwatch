@@ -214,6 +214,10 @@ func (NamespaceSchema) Describe(obj any) (Description, bool) {
 	setConditions(attrs, conditions)
 	setDeletion(attrs, ns)
 	setNamespaceFinalizers(attrs, ns)
+	if !ns.CreationTimestamp.IsZero() {
+		// Its bootstrap objects follow it (BootstrapPending).
+		attrs[AttrCreated] = inventory.Time(ns.CreationTimestamp.Time)
+	}
 	return Description{
 		ID: objectID(KindNamespace, ns), UID: string(ns.UID),
 		Attributes: attrs,

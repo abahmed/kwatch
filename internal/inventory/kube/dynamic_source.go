@@ -69,6 +69,9 @@ type DynamicConfig struct {
 	// answered per group and resource (as SourceConfig.Answered), so a
 	// relist that returns the same version still ends a failure run.
 	Answered func(group, resource string) uint64
+	// Paused, when set, reports that the API server is under pressure:
+	// the safety-timer pass waits while it holds (dynamic_source_pause.go).
+	Paused func() bool
 }
 
 // notedWindow is how recent a Warning event must be to pull its kind
@@ -89,8 +92,7 @@ type DynamicStatus struct {
 	// Capped counts watched types with objects left out by an object
 	// cap; they are also counted in Watched.
 	Capped int
-	// Reasons counts skipped, unavailable and capped types by reason
-	// code.
+	// Reasons counts skipped, unavailable and capped types by reason.
 	Reasons map[string]int
 	// Kinds lists at most MaxDynamicStatusKinds of those types, sorted;
 	// KindsTruncated is set when more were left out.
@@ -213,14 +215,9 @@ func (d *DynamicSource) Run(ctx context.Context) {
 	for {
 		// A panic loses that pass only.
 		safego.Do("dynamic-reconcile", func() { d.reconcile(ctx) })
-		select {
-		case <-ctx.Done():
+		if !d.nextPass(ctx, ticker.C) {
 			d.stopAll()
 			return
-		case <-ticker.C:
-			d.retryRefused()
-		case <-d.trigger:
-			d.retryRefused()
 		}
 	}
 }

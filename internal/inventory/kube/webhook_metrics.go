@@ -55,11 +55,11 @@ func (p *Prober) webhookObservations(
 		KindMutatingWebhook, KindValidatingHook,
 	} {
 		for _, id := range p.cfg.Model.Entities(kind) {
-			entity, ok := p.cfg.Model.Entity(id)
+			names, ok := presentAttribute(p.cfg.Model, id,
+				AttrWebhookNames)
 			if !ok {
 				continue
 			}
-			names, _ := entity.Attribute(AttrWebhookNames)
 			hooks := strings.Split(names.Value.AsText(), ",")
 			out = append(out, inventory.Observation{
 				Kind: inventory.Observed, Source: webhookMetricsSource,

@@ -45,7 +45,7 @@ var lookupFailures = []*regexp.Regexp{
 // stronger than the one for a name only the configuration holds.
 var missingServiceRows = []Row{
 	{
-		Name: "missing-service-called",
+		Name: RuleMissingServiceCalled,
 		Cause: Side{Kind: kube.KindService,
 			Modes: []detection.Mode{ModeMissing}},
 		Link: LinkCalls,
@@ -54,7 +54,7 @@ var missingServiceRows = []Row{
 		Prior: 0.8,
 	},
 	{
-		Name: "missing-service-configured",
+		Name: RuleMissingServiceConfigured,
 		Cause: Side{Kind: kube.KindService,
 			Modes: []detection.Mode{ModeMissing}},
 		Link:   LinkCalls,

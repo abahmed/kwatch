@@ -56,7 +56,7 @@ func (m *Manager) dispatch(
 		err = m.dispatchMessage(ctx, entry, job, opts)
 	}
 	record := newSendRecord(entry.provider.Name(), job, opts, attempts, err)
-	record.pager, record.text = isPager(entry), sent
+	record.keyed, record.text = isPager(entry), sent
 	logSend(record)
 	m.noteSent(record, job)
 	if err != nil && !endedByShutdown(ctx, err) {

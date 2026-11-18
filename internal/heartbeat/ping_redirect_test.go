@@ -30,7 +30,7 @@ func TestHeartbeatPingDoesNotFollowRedirects(t *testing.T) {
 
 	err := m.ping(context.Background())
 
-	require.ErrorIs(t, err, errPingRejected)
+	require.ErrorIs(t, err, ErrPingRejected)
 	require.False(t, followed.Load())
 	require.Nil(t, srv.Client().CheckRedirect,
 		"the shared client must not be mutated")

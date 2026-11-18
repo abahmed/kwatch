@@ -55,7 +55,7 @@ func (v *view) specificityText(
 func (v *view) errorNamesBlockedCall(
 	c *candidate, effect inventory.EntityID,
 ) bool {
-	if c.covers[effect].match.row.Name != "policy-blocks-call" {
+	if c.covers[effect].match.row.Name != RulePolicyBlocksCall {
 		return false
 	}
 	pod, ok := v.unitOf(effect)

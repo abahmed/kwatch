@@ -1,0 +1,12 @@
+{
+  "name": "release-source-invalid",
+  "description": "A release whose recorded repository has credentials and whose revision is not a commit crash-loops; the message has no source line.",
+  "root": "deployment/shop/checkout",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "20m0s"
+}

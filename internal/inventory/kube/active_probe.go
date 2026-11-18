@@ -108,6 +108,9 @@ func NewActiveProber(cfg ActiveProbeConfig) *ActiveProber {
 		cfg.Dial = (&net.Dialer{}).DialContext
 		dependencyDial = externalDialer()
 	}
+	if cfg.Resolver == nil {
+		cfg.Resolver = &net.Resolver{}
+	}
 	return &ActiveProber{cfg: cfg, dependencyDial: dependencyDial,
 		restrictedAccess: restricted}
 }

@@ -33,8 +33,10 @@ func Validate(cfg *Config) []error {
 	}
 	errs = append(errs, validateProviderRequired(cfg)...)
 	errs = append(errs, validateDatadogSite(cfg)...)
+	errs = append(errs, validateServiceNow(cfg)...)
 	errs = append(errs, validateTemplates(cfg)...)
 	errs = append(errs, validateRunbooks(cfg)...)
+	errs = append(errs, validateGitOpsLinks(cfg)...)
 	errs = append(errs, validateFallbacks(cfg)...)
 	errs = append(errs, validateSeverityMaps(cfg)...)
 	errs = append(errs, caseCollisionErrors(

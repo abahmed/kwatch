@@ -4,13 +4,73 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unique"
 )
 
-// attrEntry is one stored attribute and the source that last set it.
+// attrEntry is one stored attribute and the source that last set it. It
+// is laid out by hand because a large cluster keeps millions of them:
+// the name is an interned handle (a few dozen names repeat on every
+// pod), the value is stored field by field so its kind shares a word
+// with the source index, and flips, which almost no attribute has, sit
+// behind a pointer that stays nil until the first flip. Since and
+// Updated stay full times so readers get back exactly what was set,
+// monotonic reading and location included.
 type attrEntry struct {
-	name   string
-	source string
-	attr   Attribute
+	name    unique.Handle[string]
+	text    string
+	num     float64
+	since   time.Time
+	updated time.Time
+	flips   *[]time.Time
+	source  sourceID
+	kind    valueKind
+}
+
+// sourceID names an observation source within one Model.
+type sourceID uint32
+
+// sourceTable gives each observation source a small ID. Sources are
+// names fixed in code (a dozen or so), so the table stays that small;
+// IDs are never reused within a Model.
+type sourceTable map[string]sourceID
+
+// id returns the ID of source, assigning the next one on first use.
+func (t *sourceTable) id(source string) sourceID {
+	if id, ok := (*t)[source]; ok {
+		return id
+	}
+	if *t == nil {
+		*t = make(sourceTable)
+	}
+	id := sourceID(len(*t))
+	(*t)[source] = id
+	return id
+}
+
+func (e *attrEntry) value() Value {
+	return Value{kind: e.kind, text: e.text, num: e.num}
+}
+
+// attribute rebuilds the public attribute. Flips share the stored
+// slice, as they did before: withFlip copies on every change.
+func (e *attrEntry) attribute() Attribute {
+	out := Attribute{
+		Value: e.value(), Since: e.since, Updated: e.updated,
+	}
+	if e.flips != nil {
+		out.Flips = *e.flips
+	}
+	return out
+}
+
+// reset stores a new value first seen at at, with flips (nil for none).
+func (e *attrEntry) reset(value Value, at time.Time, flips []time.Time) {
+	e.kind, e.text, e.num = value.kind, value.text, value.num
+	e.since, e.updated = at, at
+	e.flips = nil
+	if flips != nil {
+		e.flips = &flips
+	}
 }
 
 // A record keeps its attributes in a slice sorted by name instead of a
@@ -21,7 +81,7 @@ type attrEntry struct {
 func (r *record) findAttr(name string) (int, bool) {
 	return slices.BinarySearchFunc(r.attrs, name,
 		func(e attrEntry, name string) int {
-			return strings.Compare(e.name, name)
+			return strings.Compare(e.name.Value(), name)
 		})
 }
 
@@ -29,33 +89,35 @@ func (r *record) findAttr(name string) (int, bool) {
 // at. A value that did not change only refreshes Updated; a boolean that
 // did change adds a flip.
 func (r *record) setAttribute(
-	name, source string, value Value, at time.Time,
+	name string, source sourceID, value Value, at time.Time,
 ) {
 	i, found := r.findAttr(name)
 	if !found {
-		next := Attribute{Value: value, Since: at, Updated: at}
-		r.attrs = slices.Insert(r.attrs, i,
-			attrEntry{name: name, source: source, attr: next})
+		entry := attrEntry{name: unique.Make(name), source: source}
+		entry.reset(value, at, nil)
+		r.attrs = slices.Insert(r.attrs, i, entry)
 		return
 	}
 	entry := &r.attrs[i]
 	entry.source = source
-	if entry.attr.Value.Equal(value) {
-		entry.attr.Updated = at
+	if entry.value().Equal(value) {
+		entry.updated = at
 		return
 	}
-	next := Attribute{Value: value, Since: at, Updated: at}
+	var flips []time.Time
 	if _, isBool := value.AsBool(); isBool {
-		next.Flips = withFlip(entry.attr.Flips, at)
+		flips = withFlip(entry.attribute().Flips, at)
 	}
-	entry.attr = next
+	entry.reset(value, at, flips)
 }
 
 // dropAttributesFrom removes the attributes source set earlier and no
 // longer reports, those not in keep.
-func (r *record) dropAttributesFrom(source string, keep map[string]Value) {
+func (r *record) dropAttributesFrom(
+	source sourceID, keep map[string]Value,
+) {
 	r.attrs = slices.DeleteFunc(r.attrs, func(e attrEntry) bool {
-		_, still := keep[e.name]
+		_, still := keep[e.name.Value()]
 		return e.source == source && !still
 	})
 }
@@ -64,8 +126,8 @@ func (r *record) dropAttributesFrom(source string, keep map[string]Value) {
 func (r *record) snapshot() Entity {
 	out := r.entity
 	out.Attributes = make(map[string]Attribute, len(r.attrs))
-	for _, e := range r.attrs {
-		out.Attributes[e.name] = e.attr
+	for i := range r.attrs {
+		out.Attributes[r.attrs[i].name.Value()] = r.attrs[i].attribute()
 	}
 	return out
 }
@@ -73,7 +135,7 @@ func (r *record) snapshot() Entity {
 // attribute returns one stored attribute.
 func (r *record) attribute(name string) (Attribute, bool) {
 	if i, found := r.findAttr(name); found {
-		return r.attrs[i].attr, true
+		return r.attrs[i].attribute(), true
 	}
 	return Attribute{}, false
 }

@@ -1,0 +1,13 @@
+10:07:15 settled
+🟠 orders is failing in shop (prod-eu-1) after the 10:05 UTC change to network policy orders-egress. bob changed the podSelector from app=orders to app=order. It fails with "FATAL: could not connect to server: Connection timed out; dial tcp 10.96.14.3:5432: i/o timeout". To read the output of the last crash, run kubectl logs deploy/orders -c app -n shop --previous
+🟠 orders is failing in shop (prod-eu-1) after the 10:05 UTC change to network policy orders-egress.
+| 🟠 **orders** is failing in **shop** (**prod-eu-1**) after the 10:05 UTC change to network policy **orders-egress**.
+| bob changed the podSelector from app=**orders** to app=order.
+| It fails with
+| ```
+| FATAL: could not connect to server: Connection timed out; dial tcp 10.96.14.3:5432: i/o timeout
+| ```
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/orders -c app -n shop --previous
+| ```

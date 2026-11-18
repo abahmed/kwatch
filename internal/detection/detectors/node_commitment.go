@@ -96,7 +96,7 @@ func memoryLimitsOn(
 ) (limits float64, unlimited int) {
 	for _, pod := range ctx.Model.Related(node, inventory.RunsOn,
 		inventory.Incoming) {
-		if entity, ok := ctx.Model.Entity(pod); ok && podFinished(entity) {
+		if podFinishedID(ctx.Model, pod) {
 			continue
 		}
 		for _, container := range runningContainers(ctx, pod) {

@@ -41,6 +41,30 @@ func (m *Model) GoneAttribute(id EntityID, name string) (Value, bool) {
 	return value, ok
 }
 
+// FormerRelated returns the entities the entity was joined to by one
+// relation when it was last deleted, such as the node a deleted pod ran
+// on, in deterministic order. It answers also once an object of the same
+// name exists again; an entity never deleted has none.
+func (m *Model) FormerRelated(
+	id EntityID, relation RelationType,
+) []EntityID {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	rec := m.records[id]
+	if rec == nil {
+		return nil
+	}
+	var out []EntityID
+	for _, entry := range rec.former {
+		if entry.key.relation == relation {
+			out = append(out, entry.targets...)
+		}
+	}
+	out = uniqueIDs(out)
+	sortIDs(out)
+	return out
+}
+
 // Exists reports whether the entity is currently present.
 func (m *Model) Exists(id EntityID) bool {
 	m.mu.RLock()
@@ -200,11 +224,17 @@ func (m *Model) pruneRecords(
 		removed += len(rec.changes) - len(kept)
 		rec.changes = kept
 		rec.health = pruneHealth(rec.health, keepFrom)
+		// keepFrom is ChangeRetention ago; served revisions are kept
+		// for ServedRetention.
+		rec.served = boundServed(rec.served,
+			keepFrom.Add(ChangeRetention-ServedRetention))
 		// Records that hold nothing any more are dropped: tombstones
-		// whose history, notes and health marks expired.
+		// whose history, notes, health marks and served revisions
+		// expired.
 		if !rec.present && len(rec.changes) == 0 &&
 			len(rec.relations) == 0 && len(rec.notes) == 0 &&
-			len(rec.health) == 0 && rec.goneAt.Before(before) {
+			len(rec.health) == 0 && len(rec.served) == 0 &&
+			rec.goneAt.Before(before) {
 			delete(m.records, id)
 		}
 	}

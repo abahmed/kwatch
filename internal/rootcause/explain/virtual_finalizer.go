@@ -215,6 +215,6 @@ func sortedIDs(ids []inventory.EntityID) []inventory.EntityID {
 // together, so the "workloads meet here" evidence does not apply.
 func holdsFinalizers(c *candidate) bool {
 	name := c.bestMatch().match.row.Name
-	return name == "finalizer-unhandled" ||
-		name == "finalizer-handler-stopped"
+	return name == RuleFinalizerUnhandled ||
+		name == RuleFinalizerHandlerStopped
 }

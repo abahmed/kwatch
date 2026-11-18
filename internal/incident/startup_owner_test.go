@@ -55,10 +55,13 @@ func TestManagerKeepsUntoldIncidentThatRecovered(t *testing.T) {
 		"it still says why it was at its level")
 }
 
-// An untold incident whose other failure recovered while it was a
-// member settled before alerting, though one failure moved to a late
-// owner: it is kept, not dropped as a duplicate.
-func TestManagerKeepsUntoldIncidentWhenOnlySomeFailuresMoved(t *testing.T) {
+// An untold incident at a ReplicaSet whose other failure recovered
+// while it was a member is dropped all the same once the ReplicaSet's
+// owner is listed: a ReplicaSet's failures are its Deployment's, never
+// a problem of their own beside it.
+func TestManagerDropsUntoldChildIncidentWhenOnlySomeFailuresMoved(
+	t *testing.T,
+) {
 	r := newRig(t, Config{})
 	web, api := podSig("web"), podSig("api")
 	rs := entity(kube.KindReplicaSet, "web-5d4f")
@@ -78,8 +81,32 @@ func TestManagerKeepsUntoldIncidentWhenOnlySomeFailuresMoved(t *testing.T) {
 	r.apply(at(3*time.Second), detection.Changed, web)
 	r.tick(at(4 * time.Second))
 
-	got := r.of(rs)
-	assert.Equal(t, Resolved, got.State)
-	assert.True(t, got.Untold(), "settled before alerting")
+	for _, p := range r.m.Incidents() {
+		assert.NotEqual(t, rs, p.Root, "a standalone ReplicaSet incident")
+	}
 	assert.Equal(t, deploy, r.ofMember(web).Root)
+}
+
+// A failure that recovered while it was still rooted at a ReplicaSet
+// listed before its Deployment is not kept as a problem of its own: the
+// ReplicaSet has an owner by now, and its failures are the owner's.
+func TestManagerDropsUntoldChildIncidentThatRecovered(t *testing.T) {
+	r := newRig(t, Config{})
+	web := podSig("web")
+	rs := entity(kube.KindReplicaSet, "web-5d4f")
+	deploy := entity(kube.KindDeployment, "web")
+	r.observe(web.Entity)
+	r.relate(web.Entity, inventory.OwnedBy, rs)
+	r.raise(at(0), web)
+	require.Equal(t, rs, r.ofMember(web).Root)
+
+	r.observe(rs)
+	r.relate(rs, inventory.OwnedBy, deploy)
+	r.observe(deploy)
+	r.clear(at(3*time.Second), web)
+	r.tick(at(20 * time.Second))
+
+	for _, p := range r.m.Incidents() {
+		assert.NotEqual(t, rs, p.Root, "a standalone ReplicaSet incident")
+	}
 }

@@ -234,8 +234,7 @@ func TestBrowserOverviewWeekSaysTheNoise(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := "49 of 70 issues settled on their own before anyone was " +
-		"alerted.|Alerted,Resolved this week,Alerted the on-call " +
-		"person," +
+		"alerted.|Alerted,Resolved this week,Sent as urgent," +
 		"Median time to resolve an alerted issue"
 	if got != want {
 		t.Errorf("week says %q, want %q", got, want)

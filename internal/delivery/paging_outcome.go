@@ -19,7 +19,10 @@ func (m *Manager) AttachPageObserver(observe PageObserver) {
 	m.pageObserver.Store(&observe)
 }
 
-// isPager reports a provider that holds alerts by key.
+// isPager reports a provider that holds alerts by key: a pager, but
+// also an issue tracker or a keyed webhook. It decides the incident's
+// paged flag and the trail's Keyed mark; it does not say the provider
+// pages a person (providercatalog.PagesPerson does).
 func isPager(entry *providerEntry) bool {
 	return skipsPlainMessages(entry.provider) ||
 		receivesPagingOnly(entry.provider)

@@ -92,7 +92,10 @@ func TestManagerRestoredIncidentHasUnknownSentMark(t *testing.T) {
 	}
 }
 
-// Trimming the timeline's front moves the mark with it.
+// Trimming the timeline moves the mark with it: the reported "early"
+// entries fold into the first one, which stays reported, and the
+// unreported "late" ones thinned from the middle never pull the mark
+// below it.
 func TestSentMarkFollowsTrimmedTimeline(t *testing.T) {
 	p := &Incident{}
 	for i := 0; i < 10; i++ {
@@ -103,8 +106,9 @@ func TestSentMarkFollowsTrimmedTimeline(t *testing.T) {
 		p.note(at(time.Minute), "late")
 	}
 	got, known := p.sent.reported(len(p.Timeline))
-	if !known || got != 0 {
-		t.Fatalf("reported = %d, want 0 after the reported part was trimmed",
+	if !known || got != 1 || p.Timeline[0].Text != "early" ||
+		p.Timeline[1].Text != "late" {
+		t.Fatalf("reported = %d, want 1: only the folded early entry",
 			got)
 	}
 	p.sent.decided(true)

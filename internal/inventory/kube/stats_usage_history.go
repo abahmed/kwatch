@@ -27,6 +27,8 @@ type UsageRecord struct {
 	Prev *UsageRun `json:"prev,omitempty"`
 	// Hours are the hourly peaks of the last 24 hours, oldest first.
 	Hours []UsageHour `json:"hours,omitempty"`
+	// Ends are the peaks of the last ended runs, oldest first.
+	Ends []UsageEnd `json:"ends,omitempty"`
 }
 
 // UsageRun is the memory use of one run of a container (memoryRun).
@@ -156,7 +158,7 @@ func (h *memoryHistory) record(now time.Time) UsageRecord {
 		Node: h.node, Seen: h.seen.Truncate(usageSaveEvery),
 		Started: h.started,
 		Run:     runRecord(h.run), Prev: runRecord(h.prev),
-		Hours: h.usageHours(now),
+		Hours: h.usageHours(now), Ends: endRecords(h.ends),
 	}
 }
 
@@ -177,7 +179,7 @@ func runRecord(r memoryRun) *UsageRun {
 func historyOf(r UsageRecord, now time.Time) *memoryHistory {
 	h := &memoryHistory{
 		node: r.Node, seen: r.Seen, started: r.Started,
-		run: runOf(r.Run), prev: runOf(r.Prev),
+		run: runOf(r.Run), prev: runOf(r.Prev), ends: endsOf(r.Ends),
 	}
 	oldest := now.Unix()/3600 - memoryWindowHours
 	newest := now.Unix() / 3600

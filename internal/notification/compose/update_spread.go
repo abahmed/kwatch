@@ -93,6 +93,10 @@ func spreadGroupSentences(
 			out = append(out, sentence{part: partLead, text: run})
 			continue
 		}
+		if text, ok := removalSpread(f, home, i == 0, g); ok {
+			out = append(out, sentence{part: partLead, text: text})
+			continue
+		}
 		text := capitalName(home, homeName+" "+beWord(many)+
 			" now also affecting ")
 		switch {

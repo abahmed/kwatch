@@ -1,6 +1,10 @@
 package explain
 
-import "time"
+import (
+	"time"
+
+	"github.com/abahmed/kwatch/internal/rootcause"
+)
 
 // Every number the solver uses lives here, with the reason for its
 // value. Weights are added to a row's prior; the sum is clamped to
@@ -13,13 +17,12 @@ const (
 	// under a coin flip so a bare prior never passes without evidence
 	// once a contradicting point is found.
 	ConfidenceFloor = 0.45
-	// ConfidenceLikely is where a cause is worded as likely.
-	ConfidenceLikely = 0.5
-	// ConfidenceHigh is where a cause is stated plainly. It was
-	// calibrated on the labelled scenarios (scorecard.CalibratedHigh):
-	// causes scored 0.70 were right 92% of the time, so a strong row
-	// whose evidence does not argue against it is stated plainly.
-	ConfidenceHigh = 0.70
+	// ConfidenceLikely is where a cause is worded as likely. It is
+	// rootcause.Likely, which says why.
+	ConfidenceLikely = rootcause.Likely
+	// ConfidenceHigh is where a cause is stated plainly. It is
+	// rootcause.High, which says how it was calibrated.
+	ConfidenceHigh = rootcause.High
 )
 
 // Priors that are not rows of the table.
@@ -219,6 +222,14 @@ const (
 	// that must fail. Why: a node where most pods are fine is not what
 	// breaks the failing ones.
 	SharedFactorMinShare = 0.5
+	// SharedFactorMinElsewhere is the fewest pods on other nodes a node
+	// suspect is compared with, and SharedFactorConcentration how many
+	// times their failing share the node's failing share must be. Why:
+	// where nearly every pod runs on one node, a shared outage lands
+	// on it whatever its cause; only failures concentrated on the node
+	// beyond what the placement explains point at it.
+	SharedFactorMinElsewhere  = 2
+	SharedFactorConcentration = 2.0
 )
 
 // Groups of nodes.
@@ -277,6 +288,13 @@ const (
 // workload as its own cause, so a bare edit never takes the incident
 // from the workload.
 const ChangeOnlyMaxConfidence = ConfidenceLikely - 0.01
+
+// ReleaseUnclaimedMaxConfidence caps a failed or stuck Helm release
+// blamed for workloads whose changes do not name it as their app
+// ("helm/<release>"): the workloads only carry its marks, which a
+// chart may set on objects Helm did not change in that revision, so
+// the release is a suspect, worded "possibly".
+const ReleaseUnclaimedMaxConfidence = ConfidenceLikely - 0.01
 
 // CorrelatedCap is the most that the timing, change and outcome
 // scorers add together: they all read that something changed before

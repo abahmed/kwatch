@@ -7,6 +7,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/rootcause"
+	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // maxNamedFinalizers bounds how many finalizers the lead names.
@@ -15,8 +16,8 @@ const maxNamedFinalizers = 3
 // finalizerCause reports a cause that is a finalizer nothing removes, or
 // the controller that should remove it.
 func finalizerCause(cause *rootcause.CauseRecord) bool {
-	return cause != nil && (cause.Rule == "finalizer-unhandled" ||
-		cause.Rule == "finalizer-handler-stopped")
+	return cause != nil && (cause.Rule == explain.RuleFinalizerUnhandled ||
+		cause.Rule == explain.RuleFinalizerHandlerStopped)
 }
 
 // finalizerLead says that objects have been stuck deleting for good: the

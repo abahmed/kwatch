@@ -1,5 +1,7 @@
 package scorecard
 
+import "github.com/abahmed/kwatch/internal/rootcause"
+
 // Confidence floors of the levels a cause is stated with. They match the
 // wording thresholds of the root-cause engine: at or above HighConfidence
 // a message states the cause plainly, at or above LikelyConfidence it
@@ -11,16 +13,17 @@ package scorecard
 // band, so a cause scored 0.70 is stated plainly. The 4 cases between
 // 0.50 and 0.70 were all right, but too few to judge, so that range
 // stays "likely". The report prints what the method gives today.
+// Both are rootcause's thresholds, which are defined once there.
 const (
-	HighConfidence   = 0.70
-	LikelyConfidence = 0.5
+	HighConfidence   = rootcause.High
+	LikelyConfidence = rootcause.Likely
 )
 
-// Confidence level names, loudest first.
+// Confidence level names, loudest first, as rootcause words them.
 const (
-	LevelHigh     = "high"
-	LevelLikely   = "likely"
-	LevelPossible = "possible"
+	LevelHigh     = string(rootcause.LevelHigh)
+	LevelLikely   = string(rootcause.LevelLikely)
+	LevelPossible = string(rootcause.LevelPossible)
 	LevelNone     = "none"
 )
 
@@ -58,7 +61,11 @@ func (c Case) WrongStated() bool {
 	if c.Correct || (c.Hedged && c.Ambiguous) {
 		return false
 	}
-	level := ConfidenceLevel(c.Confidence)
+	return statedAtLikely(ConfidenceLevel(c.Confidence))
+}
+
+// statedAtLikely reports a level at or above likely.
+func statedAtLikely(level string) bool {
 	return level == LevelHigh || level == LevelLikely
 }
 
@@ -155,14 +162,7 @@ func ConfidenceLevel(confidence float64) string {
 	if confidence <= 0 {
 		return LevelNone
 	}
-	confidence += confidenceEpsilon
-	switch {
-	case confidence >= HighConfidence:
-		return LevelHigh
-	case confidence >= LikelyConfidence:
-		return LevelLikely
-	}
-	return LevelPossible
+	return string(rootcause.LevelOf(confidence + confidenceEpsilon))
 }
 
 // ScoreCases measures root-cause accuracy and calibration.
@@ -210,7 +210,7 @@ func (a *Accuracy) countRoot(c Case, level string) {
 	}
 	if c.WrongStated() {
 		a.WrongStated++
-	} else if level == LevelHigh || level == LevelLikely {
+	} else if statedAtLikely(level) {
 		a.ToleratedHedges++
 	}
 }

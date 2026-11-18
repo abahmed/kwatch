@@ -142,7 +142,7 @@ func (m *Manager) graceDeadline(
 	p *Incident, now time.Time,
 ) (time.Time, bool) {
 	if m.inGrace(p, now) {
-		return m.restoreGrace, true
+		return m.graceEnd(p, now), true
 	}
 	if p.heldForData {
 		return now.Add(heldRecheck), true

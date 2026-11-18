@@ -77,7 +77,10 @@ var signalPatterns = map[Signal]*regexp.Regexp{
 	SignalConnection: regexp.MustCompile(`connection refused|` +
 		`connection reset|no route to host|network is unreachable|` +
 		`i/o timeout|timed out|deadline exceeded|no such host|x509:|` +
-		`tls: |handshake failure`),
+		`tls: |handshake failure|` +
+		// The words endpointClasses read as an unreachable call.
+		`(?:could not|couldn't|unable to|failed to|not possible to) ` +
+		`connect`),
 }
 
 // hasSignal reports whether text shows the signal. The empty signal is

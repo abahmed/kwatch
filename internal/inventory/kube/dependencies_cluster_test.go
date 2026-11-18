@@ -23,6 +23,12 @@ func TestServiceCallInReadsClusterNames(t *testing.T) {
 		{"DATABASE_URL", "postgres://u:p@db:5432/x", "shop/db:5432"},
 		{"API_URL", "http://api.shop.svc.cluster.local", "shop/api:80"},
 		{"REDIS_HOST", "redis", "shop/redis"},
+		{"DB_HOSTNAME", "postgres", "shop/postgres"},
+		{"REDISHOST", "redis", "shop/redis"},
+		// A mode a webhook injects, under a name that only contains a
+		// hint inside a longer word: no Service is called.
+		{"AWS_STS_REGIONAL_ENDPOINTS", "regional", ""},
+		{"AWS_STS_REGIONAL_ENDPOINTS", "sts:443", "shop/sts:443"},
 		{"MODE", "production", ""},
 		{"CACHE", "10.0.0.5:6379", ""},
 		{"CACHE", "localhost:6379", ""},

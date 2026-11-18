@@ -1,0 +1,11 @@
+{
+  "name": "helm-upgrade-breaks-workload",
+  "description": "A Helm upgrade rolls out an image whose pods crash-loop and then fails: the release and its workload are one incident.",
+  "root": "helmrelease/shop/payments",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "20m0s"
+}

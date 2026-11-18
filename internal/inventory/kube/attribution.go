@@ -20,6 +20,10 @@ type Attribution struct {
 	Revision string
 	// Cause is the kubernetes.io/change-cause annotation, when set.
 	Cause string
+	// Repo and Commit are where the change was built from, when CI or
+	// a GitOps tool recorded it (change_source.go).
+	Repo   string
+	Commit string
 	// At is the API server time of the write, or zero when unknown.
 	At time.Time
 }
@@ -53,6 +57,7 @@ func Attribute(obj any, created bool) Attribution {
 		Actor: actor, App: GitOpsApp(meta), Revision: Revision(obj),
 		Cause: evidenceText(meta.GetAnnotations()[changeCauseAnnotation]),
 	}
+	out.Repo, out.Commit = changeSource(obj)
 	if created {
 		out.At = meta.GetCreationTimestamp().Time
 	} else {
@@ -181,6 +186,7 @@ func attributedChange(
 	return inventory.Change{
 		At: changeTime(who.At, receivedAt), Observed: receivedAt,
 		Actor: who.Actor, App: who.App, Revision: who.Revision,
-		Cause: who.Cause, Created: created, Fields: fields,
+		Cause: who.Cause, Repo: who.Repo, Commit: who.Commit,
+		Created: created, Fields: fields,
 	}
 }

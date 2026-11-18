@@ -66,6 +66,8 @@ type Registry struct {
 	EditionRebuilds          [len(editionRebuildResults)]atomic.Int64
 	LeadershipRejoins        [len(rejoinResults)]atomic.Int64
 	DecisionLag              LagHistogram
+	APIPressure              atomic.Int64
+	APIPressureSignals       [len(apiPressureSignals)]atomic.Int64
 	// Delivery holds the per-provider and outbox delivery metrics.
 	Delivery DeliveryMetrics
 
@@ -330,6 +332,7 @@ func (r *Registry) Describe(ch chan<- *prometheus.Desc) {
 	ch <- storageResetsDesc
 	r.describeLicense(ch)
 	r.describeRebuilds(ch)
+	r.describeAPIPressure(ch)
 	ch <- investigationsDesc
 	ch <- unexplainedDesc
 	ch <- panicsDesc
@@ -363,6 +366,7 @@ func (r *Registry) Collect(ch chan<- prometheus.Metric) {
 	}
 	r.collectLicense(ch)
 	r.collectRebuilds(ch)
+	r.collectAPIPressure(ch)
 	for i, result := range investigationResults {
 		ch <- prometheus.MustNewConstMetric(
 			investigationsDesc, prometheus.CounterValue,

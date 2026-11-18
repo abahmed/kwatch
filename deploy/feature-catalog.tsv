@@ -6,7 +6,7 @@ core.pods.readiness|runtime|Detect sustained pod readiness and readiness probe f
 core.pods.advanced|runtime|Detect preemption, admission rejection, grace-period kills and scheduling gates|core.detection.pods|pro
 core.pods.restarts|runtime|Detect crash loops and excessive restarts|core.detection.pods|community
 core.detection.workloads|runtime|Detect workload rollout and execution failures||pro
-core.workloads.rollouts|runtime|Detect stuck workload rollouts|core.detection.workloads|pro
+core.workloads.rollouts|runtime|Detect stuck workload rollouts and failed or stuck Helm releases|core.detection.workloads|pro
 core.workloads.jobs|runtime|Detect failed Jobs and failed or missed CronJobs|core.detection.workloads|pro
 core.workloads.pdb|runtime|Detect PodDisruptionBudgets that block disruption|core.detection.workloads|pro
 core.workloads.hpa|runtime|Diagnose HorizontalPodAutoscaler failures|core.detection.workloads|pro

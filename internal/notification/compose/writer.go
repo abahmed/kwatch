@@ -40,6 +40,9 @@ type Writer struct {
 	// https://kwatch.example.com, or "" when it has none. When it has
 	// one, messages link to it (see dashboard_link.go). Nil: no links.
 	Dashboard func() string
+	// GitOpsLinks maps a GitOps tool to the link template of its web
+	// page for one application (app.gitOpsLinks); see source_links.go.
+	GitOpsLinks map[string]string
 }
 
 // NewWriter builds a Writer for the cluster named cluster, which may be
@@ -59,7 +62,7 @@ func (w Writer) clusterTag() string {
 
 // Write composes the message for one decision.
 func (w Writer) Write(d incident.Decision, now time.Time) notification.Message {
-	return w.linked(w.write(d, now, nil))
+	return w.linked(w.withSourceLinks(d, w.write(d, now, nil)))
 }
 
 // Subject is the entity the message of d leads with. The incident keeps

@@ -21,7 +21,7 @@ func TestMaterialChangeSaysTheIncidentIsNowCritical(t *testing.T) {
 
 	note := Writer{}.Write(d, writerNow).Note
 
-	assert.Contains(t, note, "It is now critical.")
+	assert.Contains(t, note, "This is now critical.")
 }
 
 func TestMaterialChangeWithoutARiseDoesNotClaimOne(t *testing.T) {
@@ -60,5 +60,5 @@ func TestWorseningUpdateAlsoSaysTheIncidentIsNowCritical(t *testing.T) {
 	note := Writer{}.Write(d, at(7, 0)).Note
 
 	assert.Contains(t, note, "is getting worse")
-	assert.Contains(t, note, "It is now critical.")
+	assert.Contains(t, note, "This is now critical.")
 }

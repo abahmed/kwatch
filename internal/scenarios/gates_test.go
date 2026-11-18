@@ -9,6 +9,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/audit"
 	"github.com/abahmed/kwatch/internal/replay"
+	"github.com/abahmed/kwatch/internal/rootcause"
 	"github.com/abahmed/kwatch/internal/scorecard"
 )
 
@@ -178,6 +179,7 @@ func buildGates(c card) []scorecard.Gate {
 	gates = append(gates, wrongHighGate(c.cases, c.heldout.cases))
 	gates = append(gates, rootGates(c.verdicts, c.accuracy)...)
 	gates = append(gates, calibrationGates(c.accuracy)...)
+	gates = append(gates, boundaryGates(c.cases, rootcause.High)...)
 	gates = append(gates,
 		scorecard.AtMost("Messages per incident (p95)",
 			float64(c.noise.PerIncidentP95),

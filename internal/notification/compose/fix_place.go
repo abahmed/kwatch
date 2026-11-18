@@ -27,7 +27,7 @@ func placeSentences(f caseFacts) []sentence {
 		said = said || valueNamed(s.text, place.Value)
 	}
 	return []sentence{{part: partPlace, weight: weightPlace,
-		text: fixText(place, said)}}
+		text: cappedFix(f, place, fixText(place, said))}}
 }
 
 // fixPlace finds the setting the incident comes from. The cause's own

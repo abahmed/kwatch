@@ -3,6 +3,7 @@ package compose
 import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // weightLivenessStart ranks the start-time facts with the other direct
@@ -12,8 +13,8 @@ const weightLivenessStart = 0.7
 // livenessStartRules are the rows that blame a liveness probe that
 // kills a container before it has started.
 var livenessStartRules = map[string]bool{
-	"liveness-shorter-than-start": true,
-	"liveness-kills-before-ready": true,
+	explain.RuleLivenessShorterThanStart: true,
+	explain.RuleLivenessKillsBeforeReady: true,
 }
 
 // livenessStartSentences say what liveness allows and what a start

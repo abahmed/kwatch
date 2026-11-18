@@ -45,7 +45,7 @@ func scoreConfigElsewhere(v *view, c *candidate) outcome {
 // differs now is the change. It needs a pod of the previous revision
 // that is still up; a revision already scaled away leaves no evidence.
 func scorePreviousHealthy(v *view, c *candidate) outcome {
-	if c.bestMatch().match.row.Name != "rollout" {
+	if c.bestMatch().match.row.Name != RuleRollout {
 		return outcome{}
 	}
 	changedAt := v.latestChange(c.id)

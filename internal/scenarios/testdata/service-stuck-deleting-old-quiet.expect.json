@@ -1,0 +1,7 @@
+{
+  "name": "service-stuck-deleting-old-quiet",
+  "description": "A Service has been stuck deleting for six months, past the old-problem horizon: it goes quiet though its controller keeps writing a Warning event.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "40m0s"
+}

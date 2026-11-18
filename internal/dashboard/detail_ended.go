@@ -101,7 +101,8 @@ func movedOf(
 	return &out
 }
 
-// toPager names each pager and redacts its reason again.
+// toPager names each keyed provider, says its kind and redacts its
+// reason again.
 func toPager(in []PagerRow) []PagerRow {
 	if len(in) == 0 {
 		return nil
@@ -109,6 +110,7 @@ func toPager(in []PagerRow) []PagerRow {
 	out := make([]PagerRow, 0, len(in))
 	for _, r := range in {
 		r.Name = channelName(r.Provider)
+		r.Kind = channelKind(r.Provider)
 		r.Reason = redact.Evidence(r.Reason)
 		out = append(out, r)
 	}

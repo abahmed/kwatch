@@ -1,11 +1,11 @@
 10:01:15 settled
-🟠 Node n3 (prod-eu-1) is low on memory. Container app in pod ledger-c10ffc84-a in billing used 140Mi of its 512Mi limit. Node n3 ran out of memory; biggest users: search/indexer 3.1Gi. Affected: ledger in billing.
+🟠 Node n3 (prod-eu-1) is low on memory. Container app in pod ledger-c10ffc84-a in billing used 140Mi of its 512Mi limit. Node n3 ran out of memory (3.1Gi in use); biggest users: search/indexer 3.1Gi (no request). Affected: ledger in billing.
 Related alerts: 1 out-of-memory kill
 To check the node's conditions and recent events, run kubectl describe node n3
 🟠 Node n3 (prod-eu-1) is low on memory.
 | 🟠 Node n3 (**prod-eu-1**) is low on memory.
 | Container app in pod ledger-c10ffc84-a in **billing** used 140Mi of its 512Mi limit.
-| Node n3 ran out of memory; biggest users: search/indexer 3.1Gi.
+| Node n3 ran out of memory (3.1Gi in use); biggest users: search/indexer 3.1Gi (no request).
 | Affected: **ledger** in **billing**.
 | Related alerts: 1 out-of-memory kill
 | To check the node's conditions and recent events, run

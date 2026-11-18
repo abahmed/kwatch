@@ -39,12 +39,10 @@ type Record struct {
 	// restore without them and the next explanation fills them again.
 	Unverified   []string `json:",omitempty"`
 	CauseUnclear bool     `json:",omitempty"`
-	// Checked was added with the "checked and found healthy" wording;
-	// older records restore without it and the next explanation fills
-	// it again.
+	// Checked came with the "checked and found healthy" wording; older
+	// records restore without it and the next explanation fills it.
 	Checked []string `json:",omitempty"`
-	// Considered was added with the audit log's alternatives; older
-	// records restore without it.
+	// Considered came with the audit alternatives; older records lack it.
 	Considered []string `json:",omitempty"`
 	// Reminded was added with the weekly reminder; an older record
 	// restores as never reminded, which costs at most one reminder.
@@ -136,9 +134,11 @@ type Record struct {
 	HeldUpdate bool `json:",omitempty"`
 	// FormerRoot and RerootedAt remember the root a cause revision moved
 	// the incident away from, so a restart does not make the failure
-	// that goes back there look new. Older records restore without them.
-	FormerRoot inventory.EntityID `json:",omitempty"`
-	RerootedAt time.Time          `json:",omitempty"`
+	// that goes back there look new; PastRoots are every root it left.
+	// Older records restore without them (FormerRoot alone, or none).
+	FormerRoot inventory.EntityID   `json:",omitempty"`
+	RerootedAt time.Time            `json:",omitempty"`
+	PastRoots  []inventory.EntityID `json:",omitempty"`
 	// RejectionSeenAt is when a request was last seen refused because of
 	// the incident's webhooks. Older records restore without it, as
 	// never having seen one.
@@ -232,7 +232,7 @@ func (m *Manager) Export() []Record {
 			ToldKnown: true,
 			StagePeak: uint8(p.stagePeak), AnnouncedRoute: p.AnnouncedRoute,
 			Ack: p.Ack, Demoted: p.Delivery.demoted, Subject: p.Subject,
-			AckIgnored: p.ackIgnored, AckAll: p.ackAll,
+			AckIgnored: p.ackIgnored, AckAll: p.ackAll, PastRoots: p.pastRoots,
 			FormerRoot: p.formerRoot, RerootedAt: p.rerootedAt,
 			RejectionSeenAt: p.rejectionAt, Merged: p.Merged,
 			Facts: p.Facts, Headline: p.Headline, DocsLink: p.DocsLink,
@@ -339,7 +339,7 @@ func restored(r Record) *Incident {
 		Scope: r.Scope, SupersededBy: r.SupersededBy,
 		Unverified: r.Unverified, CauseUnclear: r.CauseUnclear,
 		Checked: r.Checked, Considered: r.Considered, Reminded: r.Reminded,
-		Reminders: r.Reminders, marks: r.Marks,
+		Reminders: r.Reminders, marks: r.Marks, pastRoots: r.PastRoots,
 		Mode: r.Mode, Fix: r.Fix, History: r.History,
 		Members:    make(map[detection.Key]detection.Finding),
 		impactPeak: r.ImpactPeak, AlertKey: r.AlertKey,

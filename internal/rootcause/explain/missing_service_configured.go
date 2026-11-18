@@ -14,10 +14,16 @@ import (
 // outranks what the log says. A pod that quotes nothing may be
 // explained by it only when it did not crash with an error: a crash
 // whose log is not read yet will say why, and blaming the name before
-// that is a guess that the log then takes back.
+// that is a guess that the log then takes back. A pod whose finding
+// proves its own fault (a binary built for another CPU or not
+// executable, a configuration it rejects or lacks; ownFaultProven) is
+// never explained by a name its configuration holds.
 func (v *view) configuredMayExplain(
 	pod inventory.EntityID, quoted []string, service inventory.EntityID,
 ) bool {
+	if v.ownFaultProven(pod) {
+		return false
+	}
 	if len(quoted) == 0 {
 		return !v.crashedWithError(pod)
 	}
@@ -42,6 +48,22 @@ func (v *view) crashedWithError(pod inventory.EntityID) bool {
 			continue
 		}
 		if code, _ := attrNumber(e, kube.AttrLastExitCode); code != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// ownFaultProven reports a pod one of whose findings, or its
+// containers', names its own fault: selfEvidentModes, or a binary built
+// for another CPU than its node's. A fatal line alone is not one here:
+// it may be the very line that names the missing Service.
+func (v *view) ownFaultProven(pod inventory.EntityID) bool {
+	ids := append([]inventory.EntityID{pod}, v.s.Model.Related(pod,
+		inventory.PartOf, inventory.Incoming)...)
+	for _, id := range ids {
+		if v.hasMode(id, selfEvidentModes) ||
+			archEvidence(v.s.Findings[id]) {
 			return true
 		}
 	}

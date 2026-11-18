@@ -126,21 +126,33 @@ func (v *view) dependencyOf(unit inventory.EntityID) (Dependency, bool) {
 		}
 	}
 	// Between crashes the container runs and fails its probes: its last
-	// run still ended with an error exit, and its words still count.
+	// run still ended with an error exit, and its words still count. A
+	// container that stays up and is not ready says it in its current
+	// log (kube.AttrProbeLogLine, held only while its probe fails).
 	for _, id := range v.s.Model.Related(unit, inventory.PartOf,
 		inventory.Incoming) {
-		if !v.failing(id) || !restartedAfterError(v.s.Model, id) {
+		if !v.failing(id) {
 			continue
 		}
 		e, _ := v.s.Model.Entity(id)
-		for _, attr := range []string{kube.AttrLastMessage,
-			kube.AttrLastErrorLine} {
+		for _, attr := range ownWordAttrs(v.s.Model, id) {
 			if d, ok := DependencyIn(attrText(e, attr)); ok {
 				return d, true
 			}
 		}
 	}
 	return Dependency{}, false
+}
+
+// ownWordAttrs are the attributes that hold a failing container's own
+// words: those of its last run when it restarted after an error, and
+// the current run's failure line while it runs but fails its probe.
+func ownWordAttrs(model inventory.Reader, id inventory.EntityID) []string {
+	if restartedAfterError(model, id) {
+		return []string{kube.AttrLastMessage, kube.AttrLastErrorLine,
+			kube.AttrProbeLogLine}
+	}
+	return []string{kube.AttrProbeLogLine}
 }
 
 // restartedAfterError reports a container that restarted after a run
@@ -219,7 +231,7 @@ func lastErrorLine(s Snapshot, id inventory.EntityID) string {
 	if !ok {
 		return ""
 	}
-	return attrText(e, kube.AttrLastErrorLine)
+	return ownLine(e)
 }
 
 // dependencyLogOnly reports a candidate blamed only through the

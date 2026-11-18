@@ -29,3 +29,4 @@
 /* What kwatch watches, shown in full under its numbers. */
 .kp-cov { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 .kp-cov-h { font-size: var(--t-small); font-weight: 600; margin: 0 0 6px; }
+.kp-gap { margin: 4px 0 0; color: var(--text-muted); font-size: var(--t-small); }

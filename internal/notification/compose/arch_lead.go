@@ -16,10 +16,13 @@ import (
 // replicas that run fine on other nodes follow as proof. A release
 // whose previous version still serves keeps its own lead (startLead).
 func archLead(f caseFacts) (string, bool) {
+	subject := affectedWorkload(f)
 	for _, m := range f.members {
 		node := evidence(m, detection.EvidenceArchNode)
 		arch, _, ok := strings.Cut(node, " node ")
-		if !ok || arch == "" {
+		if !ok || arch == "" || !f.owns(subject, m.Entity) {
+			// Only the subject's own container's image is "its
+			// image" (owns).
 			continue
 		}
 		image := "its image"
@@ -27,7 +30,7 @@ func archLead(f caseFacts) (string, bool) {
 		if ref != "" {
 			image += " " + ref
 		}
-		name := f.leadName(affectedWorkload(f))
+		name := f.leadName(subject)
 		if evidence(m, detection.EvidenceArchHealthy) != "" {
 			// Replicas on other nodes run: only this node's CPU fails.
 			return name + " can't run on " + node + ": " + image +

@@ -39,6 +39,7 @@ import (
 	"github.com/abahmed/kwatch/internal/alert/rocketchat"
 	"github.com/abahmed/kwatch/internal/alert/sendgrid"
 	"github.com/abahmed/kwatch/internal/alert/sensugo"
+	"github.com/abahmed/kwatch/internal/alert/servicenow"
 	"github.com/abahmed/kwatch/internal/alert/ses"
 	"github.com/abahmed/kwatch/internal/alert/signal"
 	"github.com/abahmed/kwatch/internal/alert/signl4"
@@ -115,6 +116,7 @@ var factories = map[string]factoryFunc{
 	"flock":        factory(flock.NewFlock),
 	"pushbullet":   factory(pushbullet.NewPushbullet),
 	"sensugo":      factory(sensugo.NewSensugo),
+	"servicenow":   factory(servicenow.NewServiceNow),
 }
 
 func factory[T deliveryapi.Provider](

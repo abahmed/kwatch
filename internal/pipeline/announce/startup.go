@@ -36,17 +36,12 @@ type Startup struct {
 	// there is nothing to list. A cold start lists nothing here: its
 	// summary names every existing incident.
 	WarmAt time.Time
-	// SyncedAt is when the sources synced, zero before that: the restored
-	// incidents whose findings are back are listed one settle later (see
-	// ListRestored).
+	// SyncedAt is when the sources synced, zero before that.
 	SyncedAt time.Time
 	// lateUntil is how long after the final listing the restored
 	// incidents whose findings come back late are still listed; zero
 	// when no such watch is on.
 	lateUntil time.Time
-	// earlyDone is set once the early look at the restored incidents was
-	// made, whether or not it listed any.
-	earlyDone bool
 	// Warm are the announcements of old problems found after a restart,
 	// held for the restored-incidents summary (see holdWarm).
 	Warm []incident.Decision
@@ -211,7 +206,8 @@ func (s *Startup) indexOf(id string) int {
 func (c *Collector) finishStartup(ctx context.Context, now time.Time) {
 	s := &c.Startup
 	state := StartupState{Complete: true, Rollups: s.Summary.Rollups,
-		Digest: s.Summary.Digest, Restored: s.Summary.Restored}
+		Digest: s.Summary.Digest, Restored: s.Summary.Restored,
+		Spoke: s.Summary.Spoke}
 	if len(s.Collected) > 0 {
 		msg := c.env.Messages.StartupSummary(s.Collected, now)
 		c.env.Sink(ctx, incident.Decision{Reason: "startup summary"}, msg)

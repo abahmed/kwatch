@@ -47,6 +47,29 @@ type SelfStop struct {
 	At        time.Time `json:"at"`
 	Reason    string    `json:"reason"`
 	StoppedAt time.Time `json:"stoppedAt,omitzero"`
+	// Text is Reason in plain words (StopReasonText).
+	Text string `json:"text,omitempty"`
+}
+
+// stopReasonWords are the restart reasons in plain words.
+var stopReasonWords = map[string]string{
+	"graceful_shutdown":  "normal restart",
+	"leader_handoff":     "another kwatch took over",
+	"internal_failure":   "kwatch stopped on an internal error",
+	"oom_killed":         "ran out of memory",
+	"eviction":           "evicted from its node",
+	"node_disruption":    "its node was drained, shut down or removed",
+	"deployment_rollout": "a new version or new settings rolled out",
+	"api_unavailable":    "could not reach the Kubernetes API",
+}
+
+// StopReasonText is a restart reason code in plain words; "unknown
+// reason" for a code it does not know.
+func StopReasonText(reason string) string {
+	if text, ok := stopReasonWords[reason]; ok {
+		return text
+	}
+	return "unknown reason"
 }
 
 // StartupProgress is how far the first sync of the watches is.
@@ -94,6 +117,21 @@ type SelfReport struct {
 	// Startup is the first sync's progress; nil before the sources
 	// exist.
 	Startup *StartupProgress `json:"startup,omitempty"`
+	// NotWatching are the times of the last NotWatchingWindow kwatch
+	// was not running, oldest first (NotWatchingSpan).
+	NotWatching []NotWatchingSpan `json:"notWatching"`
+}
+
+// NotWatchingWindow is how far back NotWatching reaches: the week the
+// dashboard's charts show, in any time zone.
+const NotWatchingWindow = 8 * 24 * time.Hour
+
+// NotWatchingSpan is one stretch kwatch was not running: from when a
+// session stopped (its stop record, else its last liveness stamp, at
+// most a minute before it stopped) until the next one started.
+type NotWatchingSpan struct {
+	From time.Time `json:"from"`
+	To   time.Time `json:"to"`
 }
 
 // SetDashboardLinks publishes whether messages link to the dashboard,

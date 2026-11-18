@@ -16,6 +16,7 @@ func (inc *Incident) Snapshot() Incident {
 	}
 	out.Impact = append([]inventory.EntityID(nil), inc.Impact...)
 	out.Merged = append([]inventory.EntityID(nil), inc.Merged...)
+	out.Belongs = inc.Belongs.clone()
 	out.Removed = append([]inventory.EntityID(nil), inc.Removed...)
 	out.Cycles = append([]time.Time(nil), inc.Cycles...)
 	out.Occurrences = append([]time.Time(nil), inc.Occurrences...)

@@ -38,6 +38,8 @@ func runPipeline(
 	p.gap = gap
 	p.incidents.SetAlertIdentity(alertIdentity(ctx, deps))
 	defer p.close()
+	// Read before close: kwatch's own pod and node as the pipeline stops.
+	defer gap.stopped(p.model)
 	go p.decisions.run()
 	engine, err := p.newEngine()
 	if err != nil {
@@ -124,6 +126,7 @@ func (p *pipelineBuild) wireDashboard(engine *pipeline.Engine) func() {
 	d.SetModel(p.model)
 	d.SetDeliveryTrail(dashboardTrail(m))
 	d.SetDeliveryDetail(dashboardDeliveryDetail(m))
+	d.SetGitOpsLinks(p.deps.runtime.Policy().GitOpsLinks())
 	return func() {
 		d.SetDeliveryDetail(nil)
 		d.SetDeliveryTrail(nil)
@@ -298,7 +301,7 @@ func newActiveProber(
 	for _, ns := range cfg.ExcludeNamespaces {
 		excluded[ns] = true
 	}
-	return kube.NewActiveProber(kube.ActiveProbeConfig{
+	probe := kube.ActiveProbeConfig{
 		Targets: targets, AutoServices: cfg.AutoServices, Excluded: excluded,
 		AutoDependencies: cfg.AutoDependencies,
 		Interval:         time.Duration(cfg.IntervalSeconds) * time.Second,
@@ -311,7 +314,8 @@ func newActiveProber(
 		Model:      model,
 		Now:        deps.clients.Clock.Now,
 		Submit:     submit,
-	}), true
+	}
+	return kube.NewActiveProber(probe), true
 }
 
 // probeTargets lists the configured probes. A target the KwatchConfig

@@ -40,8 +40,8 @@ type view struct {
 	dnsSeen *bool
 	// rbac memoises changedRBAC; nil until it is computed.
 	rbac *[]inventory.EntityID
-	// removed memoises removedNodes; nil until it is computed.
-	removed *[]inventory.EntityID
+	// removed memoises removedOf per kind; nil until it is computed.
+	removed map[inventory.Kind][]inventory.EntityID
 	// writers memoises groupWriters; nil until it is computed.
 	writers map[string][]inventory.EntityID
 	// logins memoises loggedIn per registry host; nil until computed.
@@ -53,6 +53,12 @@ type view struct {
 	// empty value means the pod names none.
 	calls      map[inventory.EntityID]endpointCall
 	signatures map[inventory.EntityID]string
+	// errorNodes memoises, per signature, the healthy nodes a failing
+	// pod with it runs on (errorSharedOffNode); nil until computed.
+	errorNodes map[string]map[inventory.EntityID]bool
+	// podTally memoises the failing and all pods on nodes; nil until
+	// failingElsewhere counts them.
+	podTally *[2]int
 	// compared lists, per failure, what the counterfactual checks
 	// compared it with; see Trace.Compared.
 	compared map[inventory.EntityID][]Comparison
@@ -62,6 +68,8 @@ type view struct {
 	callMemo
 	// depUsers memoises dependencyDependents; nil until computed.
 	depUsers map[string]map[inventory.EntityID]bool
+	// kindEndpoints memoises endpointsOfKind; nil until computed.
+	kindEndpoints map[string]map[string]timeValue
 	// blast holds, per changed candidate, the failing pods downstream
 	// of it; filled by rank (see scoreBlastOverlap).
 	blast map[inventory.EntityID]map[inventory.EntityID]bool
@@ -291,7 +299,8 @@ func (v *view) unitErrorText(pod inventory.EntityID) string {
 func (v *view) effectState(id inventory.EntityID) state {
 	return state{id: id, modes: findingModes(v.s.Findings[id]),
 		text: v.text(id), errText: v.errorText(id),
-		verdicts: v.containerVerdicts(id)}
+		verdicts: v.containerVerdicts(id), ran: v.hasRun(id),
+		agent: v.daemonPod(id)}
 }
 
 // causeState is how an upstream entity is matched as a row's cause:

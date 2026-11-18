@@ -32,11 +32,17 @@ type detailContext struct {
 	delivery DeliveryDetail
 	// logsForbidden says kwatch may not read pod logs now.
 	logsForbidden bool
+	// gitOps is app.gitOpsLinks, for the changes' source links.
+	gitOps map[string]string
 }
 
-// detailOf is the detail of p with everything the server can add.
-func (s *Server) detailOf(p incident.Incident) IncidentDetail {
-	c := detailContext{now: s.now.Now(), changes: s.opts.ChangeHistory}
+// detailOf is the detail of p with everything the server can add; the
+// other issues it names come from v, the view p was read from.
+func (s *Server) detailOf(
+	v *incident.View, p incident.Incident,
+) IncidentDetail {
+	c := detailContext{now: s.now.Now(), changes: s.opts.ChangeHistory,
+		gitOps: s.gitOpsLinks()}
 	if m := s.sources.model.Load(); m != nil {
 		c.model = *m
 	}
@@ -49,14 +55,11 @@ func (s *Server) detailOf(p incident.Incident) IncidentDetail {
 	if self, ok := s.selfReport(); ok {
 		c.logsForbidden = self.PodLogsForbidden
 	}
-	if r := s.sources.incidents.Load(); r != nil {
-		reader := *r
-		c.known = func(id string) bool { return reader.Incident(id) != nil }
-		c.lookup = reader.Incident
-		c.peers = reader.Incidents()
-		c.similar = countSimilar(p, c.peers)
-		c.similarRefs = similarRefs(p, c.peers)
-	}
+	c.known = func(id string) bool { return v.Incident(id) != nil }
+	c.lookup = v.Incident
+	c.peers = v.Incidents()
+	c.similar = countSimilar(p, c.peers)
+	c.similarRefs = similarRefs(p, c.peers)
 	if u := s.sources.usage.Load(); u != nil {
 		c.usage = *u
 	}
@@ -67,7 +70,9 @@ func (s *Server) detailOf(p incident.Incident) IncidentDetail {
 		}
 	}
 	s.addUnverified(&d, p.ID, c.now)
-	d.Release = s.releaseFor(p.ID, p.Opened)
+	d.Release = s.releaseFor(p.ID, p.Opened, p.Cause)
+	addReleaseLinks(&d, c.gitOps)
+	d.NotWatching = issueNotWatching(s.notWatching(), p, c.now)
 	if c.model != nil {
 		d.Map = issueMap(c.model, s.opts.Scope, c.peers, p)
 	}
@@ -94,10 +99,12 @@ func (c detailContext) addContext(d *IncidentDetail, p incident.Incident) {
 		// Stored changes outlive the change history, so they are
 		// listed even before the inventory is read.
 		d.Changes, d.FixedBy, cut = changesOf(c.model, p, c.now)
+		addChangeLinks(d, c.gitOps)
 		d.Onset = p.Onset()
 		countCut(d, func(t *DetailTruncation) { t.Changes += cut })
 	}
 	c.addMoment(d, p)
+	d.checked = c.checkedOf(d, p)
 	if c.model == nil {
 		return
 	}
@@ -143,4 +150,5 @@ func addInsight(
 	d.Waiting, cut = waitingOf(model, p)
 	countCut(d, func(t *DetailTruncation) { t.WaitReasons += cut })
 	d.Round = roundOf(model, p, d.CapturedLogLines)
+	d.shape = shapeOf(model, p)
 }

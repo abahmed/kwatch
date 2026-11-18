@@ -92,8 +92,8 @@ const (
 	// such as "180Mi".
 	EvidenceMemoryUsed = "memory used"
 	// EvidenceNodeMemoryUser is one of the biggest memory users on that
-	// node, such as "batch/importer 3.1Gi (no limit)". It repeats, the
-	// biggest first.
+	// node, such as "batch/importer 3.1Gi (request 1Gi, no limit)". It
+	// repeats, the biggest first.
 	EvidenceNodeMemoryUser = "node memory user"
 )
 

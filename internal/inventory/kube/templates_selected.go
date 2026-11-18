@@ -31,12 +31,12 @@ func SelectedByTemplate(
 	}
 	for _, kind := range templateKinds {
 		for _, id := range r.EntitiesIn(kind, service.ID.Namespace) {
-			workload, ok := r.Entity(id)
+			template, ok := presentAttribute(r, id, AttrTemplateLabels)
 			if !ok {
 				continue
 			}
 			set, err := labels.ConvertSelectorToLabelsMap(
-				entityText(workload, AttrTemplateLabels))
+				template.Value.AsText())
 			if err == nil && selectorMatches(selector, set) {
 				return true
 			}

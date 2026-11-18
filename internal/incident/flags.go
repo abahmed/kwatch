@@ -145,6 +145,13 @@ type Pending struct {
 	// the pagers. In memory only: after a restart the incident's next
 	// message carries its tier.
 	lowered bool
+	// reshaped: the diagnosis changed in a way the problem key does
+	// not show (a member moved to another incident, a cause its own
+	// evidence no longer holds was dropped); a new title is due.
+	// stepsFor is the cause and members the stored steps were written
+	// for (stepsKey). Both in memory only.
+	reshaped bool
+	stepsFor string
 }
 
 // ScheduleReopenUpdate owes a "failing again" update, due after the

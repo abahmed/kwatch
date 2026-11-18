@@ -1,0 +1,19 @@
+10:03:15 settled
+🟠 Helm release payments in shop (prod-eu-1) has failed to upgrade or roll back at revision 12. To see its revisions, run helm history payments -n shop
+🟠 Helm release payments in shop (prod-eu-1) has failed to upgrade or roll back at revision 12.
+| 🟠 Helm release **payments** in **shop** (**prod-eu-1**) has failed to upgrade or roll back at revision 12.
+| To see its revisions, run
+| ```
+| helm history payments -n shop
+| ```
+10:04:55 settled
+🟠 orders in shop (prod-eu-1): the new version (orders:1.1) can't start (it stops at start with "panic: missing key DB_URL"); the previous version (orders:1.0) is still serving. Its last run lasted ten seconds. It runs a single replica. Fix: change the image of container app in deployment/orders. Rolling back the Helm release undoes this release (changes the cluster): helm rollback orders 10 -n shop
+🟠 orders in shop (prod-eu-1): the new version (orders:1.1) can't start; the previous version (orders:1.0) is still serving.
+| 🟠 **orders** in **shop** (**prod-eu-1**): the new version (orders:1.1) can't start (it stops at start with `panic: missing key DB_URL`); the previous version (orders:1.0) is still serving.
+| Its last run lasted ten seconds.
+| It runs a single replica.
+| Fix: change the image of container app in deployment/orders.
+| Rolling back the Helm release undoes this release (changes the cluster):
+| ```
+| helm rollback orders 10 -n shop
+| ```

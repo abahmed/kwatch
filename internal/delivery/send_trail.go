@@ -28,10 +28,12 @@ type SendAttempt struct {
 	// Reason is a short plain-language reason a send failed, such as
 	// "token refused (401)" (see failureReason); empty when it worked.
 	Reason string `json:"reason,omitempty"`
-	// Pager marks a send to a provider that holds alerts by key (a
-	// pager), so the dashboard can tell whether the alert is open there
-	// (see PagerStates).
-	Pager bool `json:"pager,omitempty"`
+	// Keyed marks a send to a provider that holds alerts by key (a
+	// pager, an issue tracker or a keyed webhook), so the dashboard can
+	// tell whether the alert is open there (see PagerStates). It does
+	// not say the provider pages a person: the JSON name "pager" is
+	// kept so saved trails still load.
+	Keyed bool `json:"pager,omitempty"`
 }
 
 // Send trail bounds: the incidents remembered, the least recently told
@@ -146,7 +148,7 @@ func (m *Manager) noteSent(r sendRecord, job deliverJob) {
 	}
 	a := SendAttempt{At: m.nowTime(), Provider: r.provider,
 		Kind: r.kind, Placement: r.placement, Result: sendResult(r.err),
-		Retries: r.retries, Fallback: r.fallback, Pager: r.pager}
+		Retries: r.retries, Fallback: r.fallback, Keyed: r.keyed}
 	if r.err != nil {
 		a.Error = loggedError(r.err)
 		a.Reason = failureReason(r.err)

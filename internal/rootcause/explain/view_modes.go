@@ -223,12 +223,15 @@ func isAdmissionKind(kind inventory.Kind) bool {
 }
 
 // missingModes is ModeMissing for an object named by reference (used,
-// mounted or routed to) that does not exist.
+// mounted or routed to) that does not exist. An object the control
+// plane publishes into a namespace created moments ago is only late
+// (kube.BootstrapPending).
 func (v *view) missingModes(
 	id inventory.EntityID, link LinkType,
 ) []modeHealth {
 	if (link == LinkUses || link == LinkMounts || link == LinkRoutesTo) &&
-		!v.s.Model.Exists(id) && !v.namespaceTerminating(id.Namespace) {
+		!v.s.Model.Exists(id) && !v.namespaceTerminating(id.Namespace) &&
+		kube.BootstrapPending(v.s.Model, id, v.s.Now) == 0 {
 		return pseudoFailing(ModeMissing)
 	}
 	return nil

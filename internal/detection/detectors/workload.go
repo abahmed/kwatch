@@ -126,17 +126,16 @@ func daemonSetGaps(
 	var nodes, tainted []string
 	for _, id := range model.Related(e.ID, inventory.OwnedBy,
 		inventory.Incoming) {
-		pod, ok := model.Entity(id)
-		if !ok || id.Kind != kube.KindPod || flag(pod, kube.AttrReady) {
+		ready, ok := flagOf(model, id, kube.AttrReady)
+		if !ok || id.Kind != kube.KindPod || ready {
 			continue
 		}
 		for _, node := range model.Related(id, inventory.RunsOn,
 			inventory.Outgoing) {
 			nodes = append(nodes, node.Name)
-			if entity, ok := model.Entity(node); ok &&
-				text(entity, kube.AttrTaints) != "" {
-				tainted = append(tainted, node.Name+" ("+
-					text(entity, kube.AttrTaints)+")")
+			if taints := textOf(model, node,
+				kube.AttrTaints); taints != "" {
+				tainted = append(tainted, node.Name+" ("+taints+")")
 			}
 		}
 	}

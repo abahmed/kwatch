@@ -10,13 +10,13 @@ import (
 // view. The edit may be hours older than the run (see changeFrom).
 var runConfigRows = []Row{
 	{
-		Name: "run-secret-missing-or-changed",
+		Name: RuleRunSecretMissingOrChanged,
 		Cause: Side{Kind: kube.KindSecret, Modes: []detection.Mode{
 			ModeMissing, ModeChanged}},
 		Link: LinkUses, Effect: Side{Kind: kube.KindJob}, Prior: 0.7,
 	},
 	{
-		Name: "run-configmap-missing-or-changed",
+		Name: RuleRunConfigMapMissingOrChanged,
 		Cause: Side{Kind: kube.KindConfigMap, Modes: []detection.Mode{
 			ModeMissing, ModeChanged}},
 		Link: LinkUses, Effect: Side{Kind: kube.KindJob}, Prior: 0.7,

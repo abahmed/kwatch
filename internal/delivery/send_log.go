@@ -27,8 +27,8 @@ type sendRecord struct {
 	retries   int
 	err       error
 	fallback  string
-	// pager marks a provider that holds alerts by key.
-	pager bool
+	// keyed marks a provider that holds alerts by key.
+	keyed bool
 	// text is the provider-neutral text of an incident message, as
 	// prepared for the provider's renderer.
 	text string

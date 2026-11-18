@@ -82,6 +82,7 @@ func (m *Manager) leaveRoot(now time.Time, p *Incident) {
 	m.pruneFormer(now)
 	p.formerRoot, p.rerootedAt = p.Root, now
 	m.former[p.Root.String()] = p.ID
+	m.notePastRoot(p, p.Root)
 }
 
 // pruneFormer drops the memories of moves too old to matter, or whose
@@ -94,11 +95,13 @@ func (m *Manager) pruneFormer(now time.Time) {
 			delete(m.former, root)
 		}
 	}
+	m.prunePastRoots()
 }
 
 // restoreFormer rebuilds the memory of the move of a restored incident.
 // A root left by two incidents remembers the later move.
 func (m *Manager) restoreFormer(p *Incident) {
+	m.restorePastRoots(p)
 	if p.formerRoot == (inventory.EntityID{}) {
 		return
 	}

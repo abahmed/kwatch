@@ -72,6 +72,9 @@ func (t *Translator) Updated(
 	link(new, &desc)
 	var previous *Description
 	if hadOld {
+		if accessor, err := meta.Accessor(old); err == nil {
+			annotateDeployer(accessor, &oldDesc)
+		}
 		previous = &oldDesc
 	}
 	observations := t.describe(desc, previous, at)
@@ -124,7 +127,8 @@ func (t *Translator) joined(
 func (t *Translator) describe(
 	desc Description, previous *Description, at time.Time,
 ) []inventory.Observation {
-	observations := entityObservations(desc, t.schema.RelationTypes(), at)
+	observations := entityObservations(desc,
+		withDeployer(t.schema.RelationTypes(), desc, previous), at)
 	for _, child := range desc.Children {
 		observations = append(observations, entityObservations(
 			child, childRelationTypes(child), at)...)

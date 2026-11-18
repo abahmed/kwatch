@@ -1,0 +1,3 @@
+🟠 payments in shop was evicted. Cause not found yet: nothing outside it points to one. It used 900Mi, over its 256Mi request. Its node was short of memory (requested 7.5Gi of 8Gi allocatable; 7.9Gi in use); biggest users: batch/importer 3.1Gi (request 1Gi, no limit). To see why the pod was evicted, run kubectl describe pods payments- -n shop
+
+🟠 payments in shop was evicted.

@@ -91,7 +91,7 @@ var serviceCallRows = []Row{
 	{
 		// The pods behind the Service the error names, or the workload
 		// that owns them, fail: the workload is the one cause of both.
-		Name: "called-service-backends-failing",
+		Name: RuleCalledServiceBackendsFailing,
 		Cause: Side{Group: AnyGroup, Kind: AnyKind,
 			Modes: []detection.Mode{ModeBackendsFailing}},
 		Link:   LinkBacks,

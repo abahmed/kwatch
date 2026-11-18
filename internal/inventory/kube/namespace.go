@@ -62,14 +62,15 @@ func (LimitRangeSchema) Describe(obj any) (Description, bool) {
 	rel := relations{}
 	rel.add(inventory.Constrains,
 		inventory.CoreID(KindNamespace, "", lr.Namespace))
+	attrs := map[string]inventory.Value{
+		AttrLimitsInvalid: inventory.Text(limitRangeIncident(lr)),
+		AttrLimitsDigest: inventory.Text(
+			digest([]byte(limitRangeText(lr)))),
+	}
+	addLimitMaxMemory(attrs, lr)
 	return Description{
 		ID: objectID(KindLimitRange, lr), UID: string(lr.UID),
-		Attributes: map[string]inventory.Value{
-			AttrLimitsInvalid: inventory.Text(limitRangeIncident(lr)),
-			AttrLimitsDigest: inventory.Text(
-				digest([]byte(limitRangeText(lr)))),
-		},
-		Relations: rel,
+		Attributes: attrs, Relations: rel,
 	}, true
 }
 

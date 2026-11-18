@@ -20,6 +20,12 @@ type InsightDay struct {
 	// ResolvedAlerted counts the resolves of issues someone was
 	// alerted about: Resolved without those that settled on their own.
 	ResolvedAlerted int `json:"resolvedAlerted"`
+	// Seconds is how much of the day has passed (the whole day before
+	// today), and OffSeconds how much of it kwatch was not running
+	// (insights_offline.go): a day it was off all along is not a quiet
+	// day.
+	Seconds    int `json:"seconds"`
+	OffSeconds int `json:"offSeconds"`
 }
 
 // insightDays counts the last trendDays days in zone, today last, as

@@ -69,12 +69,17 @@ type windowCount struct {
 	// capped is set when the window met more distinct lines than it
 	// tracks: a line it does not list may still have come up in it.
 	capped bool
+	// unresolved holds the Service-shaped names the window failed to
+	// resolve, with a line for each (log_unresolved.go).
+	unresolved map[string]string
 }
 
-// countErrors counts the error lines of a window and groups repeats.
-func countErrors(lines []string, at time.Time) windowCount {
+// countErrors counts the error lines of a window of a workload in
+// namespace and groups repeats.
+func countErrors(lines []string, at time.Time, namespace string) windowCount {
 	w := windowCount{at: at, lines: map[string]int{},
-		shown: map[string]string{}}
+		shown:      map[string]string{},
+		unresolved: unresolvedIn(lines, namespace)}
 	for _, line := range lines {
 		if !IsErrorLine(line) {
 			continue
@@ -147,6 +152,8 @@ func sampleObservation(
 		AttrLogBaselineSpan: inventory.Number(
 			float64(len(earlier)) * logSampleWindow.Seconds()),
 	}
+	addUnresolved(attrs, append(append([]windowCount(nil), earlier...),
+		last), now)
 	if count > 0 {
 		attrs[AttrLogTopLine] = inventory.Text(last.shown[key])
 		attrs[AttrLogTopCount] = inventory.Number(float64(count))
@@ -198,7 +205,9 @@ func LogSampleObservation(
 	}
 	counted := make([]windowCount, len(windows))
 	for i, lines := range windows {
-		counted[i] = countErrors(lines, at)
+		// One window per logSampleWindow, the last one at at.
+		back := time.Duration(len(windows)-1-i) * logSampleWindow
+		counted[i] = countErrors(lines, at.Add(-back), workload.Namespace)
 	}
 	last := counted[len(counted)-1]
 	return sampleObservation(workload, at, last, counted[:len(counted)-1])

@@ -39,6 +39,9 @@ func causeSteps(
 	if own := logBurst(p, members); own != nil {
 		return logBurstSteps(*own)
 	}
+	if own := logMissing(p, members); own != nil {
+		return logMissingSteps(*own)
+	}
 	if m, ok := orphanedAttachment(p.Root, members); ok {
 		return orphanedAttachmentSteps(p.Root, m)
 	}
@@ -46,6 +49,9 @@ func causeSteps(
 		incident.IsWorkload(root.Kind) {
 		return append(dependencySteps(p.Cause, root.Namespace,
 			root.Name), symptomSteps(knownOwners(p), members)...)
+	}
+	if steps := kindOnlySteps(p, members); steps != nil {
+		return append(steps, rootSteps(p, members)...)
 	}
 	return rootSteps(p, members)
 }
@@ -57,13 +63,17 @@ func rootSteps(
 	root := p.Root
 	switch {
 	case p.Cause != nil && p.Cause.Change != nil &&
-		incident.IsWorkload(root.Kind):
-		return rolloutSteps(root, p.Cause.RollbackRevision,
-			pullFailure(members), p.Cause.Change.App, knownOwners(p))
+		!p.Cause.Change.Created && incident.IsWorkload(root.Kind):
+		// A creation is no change to revert: the workload never ran,
+		// and its own error is where to look (symptomSteps).
+		return rolloutSteps(root, p.Cause, pullFailure(members),
+			knownOwners(p))
 	case root.Kind == kube.KindNode && !nodeRemoved(p):
 		return nodeRootSteps(p)
 	case root.Kind == kube.KindSecret:
 		return secretSteps(root, members)
+	case root.Kind == kube.KindHelmRelease:
+		return helmSteps(root, p.Cause, members)
 	case root.Kind == kube.KindConfigMap:
 		return []notification.Step{{
 			Text: "Check the object the pods depend on",
@@ -122,38 +132,25 @@ func nodeRemoved(p incident.Incident) bool {
 		p.Cause.Change.Deleted && p.Cause.Change.Entity == p.Root
 }
 
-// rolloutSteps offers an undo only to a known revision: a bare undo goes
-// to whatever revision is previous at the time it runs. It opens with the
-// rollout state, or with the events of a pod that cannot pull its image
-// (pull is its finding), where the registry's answer is. A workload a
-// GitOps controller or Helm deploys (app) is undone there instead
-// (managedUndo). known are where the pod's controller is looked up.
+// rolloutSteps open with the rollout state, or with the events of a
+// pod that cannot pull its image (pull is its finding), where the
+// registry's answer is, then say how to undo the blamed release, when
+// kwatch can stand behind that (undoSteps). An undo goes only to a
+// known revision: a bare undo goes to whatever revision is previous at
+// the time it runs. known are where the pod's controller is looked up.
 func rolloutSteps(
-	workload inventory.EntityID, revision string, pull *detection.Finding,
-	app string, known []inventory.EntityID,
+	workload inventory.EntityID, cause *rootcause.CauseRecord,
+	pull *detection.Finding, known []inventory.EntityID,
 ) []notification.Step {
-	ref := quote(string(workload.Kind) + "/" + workload.Name)
-	ns := namespaceFlag(workload.Namespace)
 	steps := []notification.Step{
 		{Text: "See the rollout state",
-			Command: "kubectl rollout status " + ref + ns},
+			Command: "kubectl rollout status " + rolloutRef(workload) +
+				namespaceFlag(workload.Namespace)},
 	}
 	if pull != nil {
 		steps = containerSteps(append(known, workload), *pull)
 	}
-	if undo, ok := managedUndo(workload, app); ok {
-		return append(steps, undo)
-	}
-	if revision != "" {
-		steps = append(steps, notification.Step{
-			Text: "Roll back to revision " + revision +
-				" (changes the cluster)",
-			Command: "kubectl rollout undo " + ref + ns +
-				" --to-revision=" + quote(revision),
-			Mutating: true,
-		})
-	}
-	return steps
+	return append(steps, undoSteps(workload, cause)...)
 }
 
 // pullFailure is the first failing member that cannot pull its image.

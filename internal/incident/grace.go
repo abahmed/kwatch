@@ -67,15 +67,19 @@ func (p *Incident) noteHeld(now time.Time) {
 }
 
 // inGrace reports whether p is a restored incident still inside the
-// restore grace. Incidents opened after the restart have no stale
-// model to wait for: their members come from this session's detectors.
-// A node that is ready again has no findings to wait for either.
+// restore grace: its model is not rebuilt yet (grace_rebuilt.go) and
+// the upper bound is not over. Incidents opened after the restart have
+// no stale model to wait for: their members come from this session's
+// detectors. A node that is ready again has no findings to wait for
+// either.
 func (m *Manager) inGrace(p *Incident, now time.Time) bool {
 	if !p.restored || !now.Before(m.restoreGrace) {
 		return false
 	}
-	_, recovered := m.recoveredWhileDown(p)
-	return !recovered
+	if _, recovered := m.recoveredWhileDown(p); recovered {
+		return false
+	}
+	return !m.rebuilt(p, now)
 }
 
 // holdRecovery reports whether a recovering incident without members
@@ -98,8 +102,11 @@ func (m *Manager) holdRecovery(p *Incident, now time.Time) bool {
 func (m *Manager) afterGrace(
 	p *Incident, at, now time.Time,
 ) time.Time {
-	if m.inGrace(p, now) && at.Before(m.restoreGrace) {
-		return m.restoreGrace
+	if !m.inGrace(p, now) {
+		return at
+	}
+	if end := m.graceEnd(p, now); at.Before(end) {
+		return end
 	}
 	return at
 }
@@ -134,11 +141,11 @@ func ownsPods(kind inventory.Kind) bool {
 	return false
 }
 
-// ExtendGrace moves the restore grace to until when that is later.
-// The grace set at restore time starts before the sources synced, and
-// findings gated by a sustain re-raise one sustain after the sync, so
-// the engine extends it when the sync happens. Without a restored live
-// incident there is no grace to extend.
+// ExtendGrace moves the upper bound of the restore grace to until when
+// that is later. The bound set at restore time starts before the
+// sources synced, so the engine moves it when the sync happens: a kind
+// that syncs late, or a wait that never ends, is bounded from there.
+// Without a restored live incident there is no grace to extend.
 func (m *Manager) ExtendGrace(until time.Time) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

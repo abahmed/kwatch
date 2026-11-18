@@ -2,6 +2,8 @@ package dashboard
 
 import (
 	"time"
+
+	"github.com/abahmed/kwatch/internal/health"
 )
 
 // IncidentListItem is one incident in the /api/incidents list.
@@ -16,9 +18,10 @@ type IncidentListItem struct {
 	WorkloadKind string    `json:"workloadKind,omitempty"`
 	FirstSeen    time.Time `json:"firstSeen"`
 	LastSeen     time.Time `json:"lastSeen"`
-	RepeatCount  int       `json:"repeatCount"`
-	AckedBy      string    `json:"ackedBy,omitempty"`
-	ResolvedAt   time.Time `json:"resolvedAt,omitzero"`
+	// RepeatCount is how many times the issue came back (failedAgain).
+	RepeatCount int       `json:"repeatCount"`
+	AckedBy     string    `json:"ackedBy,omitempty"`
+	ResolvedAt  time.Time `json:"resolvedAt,omitzero"`
 	// Acked says someone acknowledged the incident; the detail's Ack
 	// says more.
 	Acked bool `json:"acked,omitempty"`
@@ -53,11 +56,18 @@ type IncidentDetail struct {
 	FullTitle string `json:"fullTitle,omitempty"`
 	// Summary is the page's five-line top (summary.go); absent only
 	// when the size limit left it out.
-	Summary          *IncidentSummary `json:"summary,omitempty"`
-	FixSteps         []FixStep        `json:"fixSteps"`
-	Timeline         []Event          `json:"timeline"`
-	CapturedLogLines []string         `json:"capturedLogLines"`
-	DocsLink         string           `json:"docsLink,omitempty"`
+	Summary *IncidentSummary `json:"summary,omitempty"`
+	// checked is what kwatch checked around it, for the summary's Why
+	// (summary_checked.go); nil when nothing was.
+	checked *SummaryChecked
+	// shape is what ties the members together, what the failing
+	// replicas share and whether users are affected, for the summary
+	// (summary_shape.go); nil without a model.
+	shape            *summaryShape
+	FixSteps         []FixStep `json:"fixSteps"`
+	Timeline         []Event   `json:"timeline"`
+	CapturedLogLines []string  `json:"capturedLogLines"`
+	DocsLink         string    `json:"docsLink,omitempty"`
 	// Evidence is one section per check the last investigation ran (Pro
 	// only; absent otherwise), and Correlation what kwatch concluded
 	// across them.
@@ -120,6 +130,10 @@ type IncidentDetail struct {
 	// Map is the picture of what the incident touches and what is next
 	// to it (map_issue.go); absent when kwatch knows no connection.
 	Map *IssueMap `json:"map,omitempty"`
+	// NotWatching are the times kwatch was not running while the issue
+	// was open (from its start to its end, or now), cut to that time,
+	// oldest first: its timeline marks them.
+	NotWatching []health.NotWatchingSpan `json:"notWatching,omitempty"`
 	// IncidentRelations are its cause and effect incidents and its
 	// blast radius (detail_relations.go).
 	IncidentRelations
@@ -233,6 +247,8 @@ type Event struct {
 	// Repeats counts earlier events that said the same and were folded
 	// into this one, so a long-running incident keeps its whole story.
 	Repeats int `json:"repeats,omitempty"`
+	// Gap, on a "gap" event, is how many updates were not kept there.
+	Gap int `json:"gap,omitempty"`
 }
 
 // StatusResponse is the /api/status response. WatchedNamespaces is ["*"]
@@ -258,8 +274,9 @@ type StatusResponse struct {
 	// Kwatch is what the kwatch page shows: coverage, sends per
 	// channel, the state file and kwatch's own resources.
 	Kwatch *KwatchResponse `json:"kwatch,omitempty"`
-	// Cluster is app.clusterName, the name alerts carry; "" when it is
-	// not set (the dashboard says "unnamed cluster").
+	// Cluster is the name the cluster is shown by: app.clusterName, or
+	// the name found at start; "" when neither is known (the dashboard
+	// says "unnamed cluster").
 	Cluster string `json:"cluster"`
 }
 
@@ -269,9 +286,13 @@ type StatusResponse struct {
 // Type is the provider (slack, email); Name is how the dashboard shows
 // it. Neither is ever a URL or a token.
 type ChannelHealth struct {
-	Channel          string    `json:"channel"`
-	Type             string    `json:"type"`
-	Name             string    `json:"name"`
+	Channel string `json:"channel"`
+	Type    string `json:"type"`
+	Name    string `json:"name"`
+	// Kind is how the channel reaches people: chat, pager, ticket,
+	// webhook, email or other (channelKind). The page says "on-call"
+	// only with a pager.
+	Kind             string    `json:"kind,omitempty"`
 	LastSuccess      time.Time `json:"lastSuccess,omitzero"`
 	LastError        time.Time `json:"lastError,omitzero"`
 	LastErrorMessage string    `json:"lastErrorMessage,omitempty"`

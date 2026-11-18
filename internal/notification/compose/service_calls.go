@@ -9,6 +9,7 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/rootcause"
+	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // A cause found through an error line that names a Service of the
@@ -154,7 +155,7 @@ func noEndpointsSince(f caseFacts, service inventory.EntityID) time.Time {
 // policyBlocksCall reports a cause explain found by evaluating the
 // NetworkPolicies against a call the failing pods make.
 func policyBlocksCall(cause *rootcause.CauseRecord) bool {
-	return cause != nil && cause.Rule == "policy-blocks-call"
+	return cause != nil && cause.Rule == explain.RulePolicyBlocksCall
 }
 
 // blockedCall is the call a policy blocks, from the finer mode explain

@@ -60,6 +60,7 @@ func (m *Manager) revise(
 	logMember("moved out of", old, key)
 	m.changed[old.ID] = true
 	old.noteMoved(root)
+	old.Pending.reshaped = true
 	m.flips[key] = flip{from: old.Root, at: now}
 	if !hasFailingMember(old) {
 		// Only configuration risks are left: they go with the failure.

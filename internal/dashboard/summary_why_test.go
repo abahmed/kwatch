@@ -93,9 +93,9 @@ func TestCauseSentenceOfAnOwnWorkloadFallsBack(t *testing.T) {
 		"container app last stopped: Error (exit code 1).",
 		whyText(&d, p).Text)
 
+	// Nothing to say: no "Why?" at all, not "the failure is in it".
 	d.Containers = nil
-	assert.Equal(t, "kwatch hasn't found an outside cause: the "+
-		"failure is in the deployment api itself.", whyText(&d, p).Text)
+	assert.Equal(t, SummaryWhy{}, whyText(&d, p))
 
 	p.Cause.Mode = "Config.ProbePortMismatch"
 	d.FullTitle = "api in shop is failing because its probe checks a " +
@@ -128,7 +128,7 @@ func TestCauseSentenceLeavesOutTheObjectsOwnCreation(t *testing.T) {
 	got := whyText(&d, p).Text
 
 	assert.NotContains(t, got, "started")
-	assert.Contains(t, got, noOutsideCause)
+	assert.Empty(t, got)
 
 	p.Cause.Change.Created = false
 	assert.Contains(t, whyText(&d, p).Text, "It started 1 minute after "+

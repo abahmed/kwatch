@@ -1,0 +1,7 @@
+{
+  "name": "helm-upgrade-deployed-quiet",
+  "description": "A Helm upgrade succeeded: deployed and superseded revisions raise nothing.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

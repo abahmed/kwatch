@@ -162,21 +162,23 @@ func nodeShortOnMemory(node inventory.Entity) bool {
 
 // memoryUser is the memory use of one workload on a node.
 type memoryUser struct {
-	name    string
-	bytes   float64
-	noLimit bool
+	name      string
+	bytes     float64
+	request   float64
+	noLimit   bool
+	noRequest bool
 }
 
 // biggestUsers lists the workloads using most memory on the node, as
-// "batch/importer 3.1Gi (no limit)", biggest first. The victim is left
-// out: its use after the restart says nothing.
+// "batch/importer 3.1Gi (request 1Gi, no limit)", biggest first. The
+// victim is left out: its use after the restart says nothing.
 func biggestUsers(
 	ctx detection.Context, node, victim inventory.EntityID,
 ) []string {
 	byWorkload := map[inventory.EntityID]*memoryUser{}
 	for _, pod := range ctx.Model.Related(node, inventory.RunsOn,
 		inventory.Incoming) {
-		if entity, ok := ctx.Model.Entity(pod); ok && podFinished(entity) {
+		if podFinishedID(ctx.Model, pod) {
 			continue
 		}
 		owner := inventory.TopOwner(ctx.Model, pod)
@@ -208,6 +210,11 @@ func addUse(
 	if limit, ok := number(c, kube.AttrMemoryLimit); !ok || limit <= 0 {
 		user.noLimit = true
 	}
+	if request, ok := number(c, kube.AttrMemoryReq); ok && request > 0 {
+		user.request += request
+	} else {
+		user.noRequest = true
+	}
 }
 
 // userTexts sorts users by memory, biggest first, and words the top
@@ -225,11 +232,22 @@ func userTexts(byWorkload map[inventory.EntityID]*memoryUser) []string {
 	})
 	var out []string
 	for _, user := range users[:min(len(users), nodeUsersShown)] {
-		text := user.name + " " + quantity(user.bytes)
-		if user.noLimit {
-			text += " (no limit)"
-		}
-		out = append(out, text)
+		out = append(out, user.name+" "+quantity(user.bytes)+
+			" ("+user.terms()+")")
 	}
 	return out
+}
+
+// terms words a user's request and limit: "request 1Gi", "request
+// 1Gi, no limit", "no request, no limit". A request that only some of
+// its containers set is not a request of the whole workload.
+func (u *memoryUser) terms() string {
+	terms := "no request"
+	if !u.noRequest {
+		terms = "request " + quantity(u.request)
+	}
+	if u.noLimit {
+		terms += ", no limit"
+	}
+	return terms
 }

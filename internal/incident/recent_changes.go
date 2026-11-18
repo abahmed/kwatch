@@ -1,6 +1,7 @@
 package incident
 
 import (
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -53,8 +54,8 @@ func NearChanges(
 ) []inventory.Change {
 	var out []inventory.Change
 	for _, change := range rankedChanges(model, root, now, nearNamespace) {
-		isBlamed := blamed != nil && change.Entity == blamed.Entity &&
-			change.At.Equal(blamed.At)
+		isBlamed := blamed != nil && (inventory.SameChange(change,
+			*blamed) || sameEdit(change, *blamed))
 		late := !onset.IsZero() && change.At.After(onset.Add(onsetSlack))
 		if isBlamed || late {
 			continue
@@ -92,27 +93,31 @@ func rankedUpTo(
 		return nil
 	}
 	near := newProximity(model, root)
-	ranks := map[inventory.EntityID]int{}
+	ranks := map[changeKey]int{}
 	var out []inventory.Change
-	for id, change := range newestPerObject(model, from, to) {
+	for key, change := range newestPerObject(model, from, to) {
 		if ownScheduledRun(model, root, change) {
 			continue
 		}
-		if rank := near.rank(id); rank < below {
-			ranks[id] = rank
+		if rank := near.changeRank(change); rank < below {
+			ranks[key] = rank
 			out = append(out, change)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i], out[j]
-		if ranks[a.Entity] != ranks[b.Entity] {
-			return ranks[a.Entity] < ranks[b.Entity]
+		if ra, rb := ranks[keyOf(a)], ranks[keyOf(b)]; ra != rb {
+			return ra < rb
 		}
 		if !a.At.Equal(b.At) {
 			return a.At.After(b.At)
 		}
-		return a.Entity.String() < b.Entity.String()
+		if a.Entity != b.Entity {
+			return a.Entity.String() < b.Entity.String()
+		}
+		return keyOf(a).link < keyOf(b).link
 	})
+	out = foldEndedLinks(out)
 	if len(out) > limit {
 		out = out[:limit]
 	}
@@ -150,27 +155,63 @@ func worthNaming(change inventory.Change, from, to time.Time) bool {
 }
 
 // newestPerObject keeps, for each object, its newest change worth naming
-// from from to to.
+// from from to to, and apart from it the end of each of its links
+// (keyOf): a selector edit and the routing it ended are both named.
 func newestPerObject(
 	model inventory.HistoryReader, from, to time.Time,
-) map[inventory.EntityID]inventory.Change {
-	newest := map[inventory.EntityID]inventory.Change{}
+) map[changeKey]inventory.Change {
+	newest := map[changeKey]inventory.Change{}
 	for _, set := range model.RecentChangeSets(from) {
 		for _, change := range set.Changes {
 			if !worthNaming(change, from, to) {
 				continue
 			}
-			old, seen := newest[change.Entity]
+			key := keyOf(change)
+			old, seen := newest[key]
 			if !seen || change.At.After(old.At) {
-				newest[change.Entity] = change
+				newest[key] = change
 			}
 		}
 	}
 	return newest
 }
 
+// changeKey is the object a change is of and, for the end of a link,
+// the relation and its target.
+type changeKey struct {
+	id   inventory.EntityID
+	link string
+}
+
+func keyOf(change inventory.Change) changeKey {
+	key := changeKey{id: change.Entity}
+	if rel, target, ok := change.RemovedLink(); ok {
+		key.link = string(rel) + " " + target.String()
+	}
+	return key
+}
+
+// changeRank is how near a change is to the root: that of its object,
+// or, for the end of a link, of the object the link pointed to when
+// that is nearer. A Service that stopped routing to the root's workload
+// fronted it until then.
+func (p *proximity) changeRank(change inventory.Change) int {
+	rank := p.rank(change.Entity)
+	_, target, ok := change.RemovedLink()
+	if !ok {
+		return rank
+	}
+	if p.anchors[target] || p.targets[target] ||
+		target.Kind == kube.KindService && p.fronts(target, 1) {
+		return min(rank, nearTraffic)
+	}
+	return rank
+}
+
 // Onset is when the incident's failures began: the earliest start among
 // its members, else when the incident opened. Zero when neither is known.
+// It is never after the opening: members replaced since (a recreated
+// pod starts its own failure later) do not move the start forward.
 func (p Incident) Onset() time.Time {
 	var first time.Time
 	for _, member := range p.Members {
@@ -179,8 +220,36 @@ func (p Incident) Onset() time.Time {
 			first = member.Since
 		}
 	}
-	if first.IsZero() {
+	if first.IsZero() || (!p.Opened.IsZero() && p.Opened.Before(first)) {
 		return p.Opened
 	}
 	return first
+}
+
+// sameEdit reports a and b as one edit told twice: an edit of an
+// object and the end of a link that edit brought about, made within
+// kube.LinkFlapWindow of each other. Two ends of links, or two edits,
+// are told apart.
+func sameEdit(a, b inventory.Change) bool {
+	_, _, aEnded := a.RemovedLink()
+	_, _, bEnded := b.RemovedLink()
+	gap := a.At.Sub(b.At).Abs()
+	return a.Entity == b.Entity && aEnded != bEnded &&
+		gap <= kube.LinkFlapWindow
+}
+
+// foldEndedLinks keeps, of an edit and the end of a link it brought
+// about (sameEdit), the one listed first: changes come nearest to the
+// root first, so a Service edit that stopped routing to the failing
+// workload is told as that, and an edit of the root itself as its edit.
+func foldEndedLinks(changes []inventory.Change) []inventory.Change {
+	var out []inventory.Change
+	for _, change := range changes {
+		if !slices.ContainsFunc(out, func(kept inventory.Change) bool {
+			return sameEdit(kept, change)
+		}) {
+			out = append(out, change)
+		}
+	}
+	return out
 }

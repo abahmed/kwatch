@@ -29,6 +29,12 @@ func (r *CrashLogRound) PodLogsForbidden() bool {
 	return r.denied.Load()
 }
 
+// PodLogsRead reports whether a pod log read has succeeded since start:
+// the proof that kwatch may read them. Safe for concurrent use.
+func (r *CrashLogRound) PodLogsRead() bool {
+	return r.readOK.Load()
+}
+
 // holdAfterDenial starts the backoff after a refused read.
 func (r *CrashLogRound) holdAfterDenial(containers []inventory.EntityID) {
 	r.hold = deniedHold{

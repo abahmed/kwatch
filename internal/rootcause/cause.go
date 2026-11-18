@@ -94,6 +94,16 @@ type CauseRecord struct {
 	// fails the same way: the pods of an older ReplicaSet fail too, so
 	// the release is not blamed and undoing it is not offered.
 	PreviousFails bool `json:",omitempty"`
+	// PreviousServed marks positive evidence that the version a rollback
+	// returns to has run: its ReplicaSet had ready replicas or a ready
+	// pod when the cause was solved. Without it no undo of the blamed
+	// change is offered, whatever RollbackRevision says.
+	PreviousServed bool `json:",omitempty"`
+	// HelmRollbackRevision is the revision a Helm rollback of the
+	// release that deploys the blamed workload returns to: the newest
+	// earlier one Helm recorded as deployed. Empty when Helm does not
+	// deploy it or kwatch does not see the release's revisions.
+	HelmRollbackRevision string `json:",omitempty"`
 }
 
 // ConfigSource is the ConfigMap key an address was read from. The
@@ -112,17 +122,3 @@ type Hop struct {
 	Entity inventory.EntityID
 	Began  time.Time `json:",omitempty"`
 }
-
-// Confidence levels shown to readers. They match explain's
-// ConfidenceHigh and ConfidenceLikely, which say how they were
-// calibrated.
-const (
-	High   = 0.70
-	Likely = 0.5
-	// RivalMargin is how close two causes of the same failures must
-	// score to be told as two possible causes instead of one answer.
-	RivalMargin = 0.05
-	// RivalCap is the highest score of a cause that has a rival: just
-	// under High, since a message names both causes.
-	RivalCap = High - 0.01
-)

@@ -75,11 +75,11 @@ func (s *Server) RunPush(
 // pushItems lists the issues as the dashboard shows them, or nil when
 // the pipeline has none to give.
 func (s *Server) pushItems() []IncidentListItem {
-	reader := s.sources.incidents.Load()
-	if reader == nil {
+	v := s.view()
+	if v == nil {
 		return nil
 	}
-	all := (*reader).Incidents()
+	all := v.Incidents()
 	out := make([]IncidentListItem, 0, len(all))
 	for _, p := range all {
 		out = append(out, toListItemWith(p, s.texts.redact))

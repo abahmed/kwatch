@@ -130,6 +130,9 @@ func library() []scenario {
 	var out []scenario
 	for _, group := range [][]scenario{
 		workloadScenarios(), releaseReportScenarios(), configScenarios(),
+		revisionRollbackScenarios(), rollbackEvidenceScenarios(),
+		endedLinkScenarios(),
+		droppedCallScenarios(),
 		nodeScenarios(),
 		clusterScenarios(), schedulingScenarios(), lifecycleScenarios(),
 		controlPlaneScenarios(), accessScenarios(), trafficScenarios(),
@@ -158,11 +161,16 @@ func library() []scenario {
 		flipScenarios(), unschedulableQuantifiedScenarios(),
 		schedulingFitScenarios(),
 		readyNeverScenarios(), readyZeroScenarios(), probeLogScenarios(),
+		readinessOutageScenarios(),
+		kindOnlyScenarios(), youngNodeScenarios(),
+		logMissingScenarios(),
+		nodeClearedScenarios(),
 		startRuleScenarios(), wordingRuleScenarios(),
 		namespaceOutageScenarios(),
 		reopenScenarios(), jobLongScenarios(), scaleZeroScenarios(),
 		firstRolloutScenarios(), usageHistoryScenarios(), nodeOOMScenarios(),
 		oomVerdictScenarios(), namespaceDeleteScenarios(),
+		namespaceBootstrapScenarios(),
 		nameMatchScenarios(), namedMissingScenarios(),
 		addressCallScenarios(),
 		probeThrottleScenarios(),
@@ -176,7 +184,8 @@ func library() []scenario {
 		counterfactualScenarios(), revisionDiffScenarios(),
 		ackScenarios(),
 		configVersionScenarios(), wakeScenarios(), ongoingScenarios(),
-		archScenarios(), ipScenarios(), preemptionScenarios(),
+		archScenarios(), archSplitScenarios(), ipScenarios(),
+		preemptionScenarios(),
 		graceKillScenarios(),
 		flappingScenarios(), missingServiceScenarios(),
 		livenessStartScenarios(),
@@ -203,6 +212,11 @@ func library() []scenario {
 		coldStartScenarios(),
 		cpuCappedScenarios(), pullQPSScenarios(), releaseCheckScenarios(),
 		probeAnswerScenarios(), nodeAbsorbScenarios(),
+		helmScenarios(), memoryContextScenarios(),
+		releaseUndoScenarios(), finalizerOldScenarios(),
+		changeSourceScenarios(), helmWorkloadScenarios(),
+		helmOldScenarios(),
+		nodeRemovalTieScenarios(),
 	} {
 		out = append(out, group...)
 	}

@@ -1,0 +1,12 @@
+{{- if .Values.priorityClass.create }}
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: {{ default (include "kwatch.fullname" .) .Values.priorityClass.name }}
+  labels:
+    {{- include "kwatch.labels" . | nindent 4 }}
+value: {{ .Values.priorityClass.value | int64 }}
+preemptionPolicy: {{ .Values.priorityClass.preemptionPolicy }}
+globalDefault: {{ .Values.priorityClass.globalDefault }}
+description: "Keeps the kwatch pod from being the first one evicted."
+{{- end }}

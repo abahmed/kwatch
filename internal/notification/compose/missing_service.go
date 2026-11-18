@@ -7,6 +7,7 @@ import (
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/rootcause"
+	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // weightMissingService is above the error line: the pods name a Service
@@ -16,8 +17,8 @@ const weightMissingService = 0.75
 // missingServiceRule reports a cause that is a Service the failing pods
 // call and that does not exist.
 func missingServiceRule(cause *rootcause.CauseRecord) bool {
-	return cause != nil && (cause.Rule == "missing-service-called" ||
-		cause.Rule == "missing-service-configured")
+	return cause != nil && (cause.Rule == explain.RuleMissingServiceCalled ||
+		cause.Rule == explain.RuleMissingServiceConfigured)
 }
 
 // missingServiceSentences say what the failing pods call and that it is

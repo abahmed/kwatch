@@ -107,14 +107,16 @@
   };
 
   /* gauge: a half circle filled to value of max, the percent inside;
-     amber from warnAt (a fraction, 0.8 unless given), red from 0.9. */
-  V.gauge = function (value, max, label, warnAt) {
+     amber from warnAt (a fraction, 0.8 unless given), red from 0.9,
+     unless level ("", "warn" or "bad") says the color. */
+  V.gauge = function (value, max, label, warnAt, level) {
     var p = pct(value, max) / 100;
+    var lvl = typeof level === "string" ? level : p >= 0.9 ? "bad" : p >= (warnAt || 0.8) ? "warn" : "";
     var s = svg("svg", { viewBox: "0 0 120 68", role: "img", "aria-label": label }, "viz-gauge");
     var arc = "M 10 60 A 50 50 0 0 1 110 60";
     s.appendChild(svg("path", { d: arc, pathLength: 100 }, "viz-gtrack"));
     var fill = svg("path", { d: arc, pathLength: 100, "stroke-dasharray": (p * 100) + " 100" },
-      "viz-gfill" + (p >= 0.9 ? " bad" : p >= (warnAt || 0.8) ? " warn" : ""));
+      "viz-gfill" + (lvl ? " " + lvl : ""));
     if (p > 0) s.appendChild(fill);
     var t = svg("text", { x: 60, y: 58, "text-anchor": "middle" }, "viz-gtext");
     t.textContent = Math.round(p * 100) + "%";

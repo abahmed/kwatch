@@ -74,10 +74,13 @@ func (e *Engine) Submit(
 	}
 }
 
-// drain applies pending observations to the model and returns the
-// touched entities, each once.
+// drain applies pending observations to the model, then the ends of
+// links that stayed gone (endedLinks), and returns the touched
+// entities.
 func (e *Engine) drain() []inventory.EntityID {
-	return e.apply(e.inbox.take())
+	dirty := e.apply(e.inbox.take())
+	return append(dirty, e.apply(
+		e.links.due(e.deps.Model, e.deps.Clock.Now()))...)
 }
 
 // take empties the queue and returns what was in it.

@@ -25,9 +25,14 @@ import (
 // is another failure and lends nothing. An entity no failure reached
 // keeps the window that ends now.
 
-// MaxChangeAge bounds how far back of now a change can be a cause,
-// however long the failure has lasted: a change older than a week is
-// history, not the cause of what is failing now.
+// MaxChangeAge caps how far back of now this package reads the change
+// history, however long the failure has lasted. It is not what limits
+// blame in practice: explain reads only the model, which keeps changes
+// for inventory.ChangeRetention (24 hours; the application prunes older
+// ones every ten minutes, and the bounded rings may drop older ones
+// sooner on a busy cluster). So the changes kwatch can blame are those
+// within that retention; this cap only applies to older changes if the
+// retention is ever raised above it, or to a model that is not pruned.
 const MaxChangeAge = 7 * 24 * time.Hour
 
 // historyFrom is how far back the change history is read: the causal

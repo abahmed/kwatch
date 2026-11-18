@@ -13,7 +13,8 @@ import (
 // "exit status 1") hides it. The solver still reads it, so a crash whose
 // log names the Service or endpoint it could not reach is explained by
 // it. The line is returned only when no finding of the container quotes
-// it already.
+// it already. A container that runs but is not ready has no previous
+// run: its current log's failure line stands in (ownLine).
 func (v *view) previousLogLine(id inventory.EntityID) string {
 	if id.Kind != kube.KindContainer {
 		return ""
@@ -22,7 +23,7 @@ func (v *view) previousLogLine(id inventory.EntityID) string {
 	if !ok {
 		return ""
 	}
-	line := attrText(e, kube.AttrLastErrorLine)
+	line := ownLine(e)
 	if line == "" {
 		return ""
 	}
@@ -47,4 +48,16 @@ func (v *view) evidenceTexts(f detection.Finding) []string {
 		out = append(out, line)
 	}
 	return out
+}
+
+// ownLine is the error line a container's own log holds: the first
+// error line of its previous run, else the failure line of the current
+// run of a container that runs but fails its probe (the crash-log
+// round records it only while that lasts and clears it after). Both
+// are quoted, never interpreted.
+func ownLine(e inventory.Entity) string {
+	if line := attrText(e, kube.AttrLastErrorLine); line != "" {
+		return line
+	}
+	return attrText(e, kube.AttrProbeLogLine)
 }

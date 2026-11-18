@@ -584,6 +584,37 @@ if helm template test-pod . --set 'extraVolumes[0].name=data' \
 fi
 echo "PASS: pod scheduling and volumes"
 
+echo "=== optional PriorityClass ==="
+OUT_PC=$(helm template test-pc . --set priorityClass.create=true 2>&1)
+grep -Fq "kind: PriorityClass" <<<"$OUT_PC" || {
+  echo "FAIL: priorityClass.create must render a PriorityClass"; exit 1;
+}
+grep -Fq "value: 1000000" <<<"$OUT_PC" || {
+  echo "FAIL: PriorityClass must carry the default value"; exit 1;
+}
+grep -Fq 'priorityClassName: "test-pc-kwatch"' <<<"$OUT_PC" ||
+  grep -Eq 'priorityClassName: "test-pc' <<<"$OUT_PC" || {
+  echo "FAIL: the pod must use the created class"; exit 1;
+}
+OUT_PC2=$(helm template test-pc . --set priorityClass.create=true \
+  --set priorityClass.name=mine 2>&1)
+grep -Fq 'priorityClassName: "mine"' <<<"$OUT_PC2" || {
+  echo "FAIL: priorityClass.name must name the class and the pod"; exit 1;
+}
+OUT_PC3=$(helm template test-pc . --set priorityClass.create=true \
+  --set priorityClassName=other 2>&1)
+grep -Fq 'priorityClassName: "other"' <<<"$OUT_PC3" || {
+  echo "FAIL: an explicit priorityClassName must win"; exit 1;
+}
+if grep -Fq "kind: PriorityClass" <<<"$OUT1"; then
+  echo "FAIL: no PriorityClass by default"; exit 1
+fi
+if helm template test-pc . --set priorityClass.create=true \
+  --set priorityClass.value=2000000000 >/dev/null 2>&1; then
+  echo "FAIL: a value above 1000000000 must be rejected"; exit 1
+fi
+echo "PASS: optional PriorityClass"
+
 echo "=== 0.10.5 values file ==="
 # A values file from the 0.10.5 chart (verbatim, with its empty config:
 # and the removed service: block) must still render for helm upgrade.

@@ -20,6 +20,7 @@ func (a *announcer) withChanges(
 		(d.Action != incident.Announce && d.Action != incident.Update) {
 		return d
 	}
+	d.Facts.ChangesRead = true
 	if d.Incident.Cause == nil {
 		d.Facts.Changes = incident.RecentChanges(
 			a.history, d.Incident.Root, at)
@@ -51,7 +52,7 @@ func withWindow(
 
 func inWindow(w *incident.HealthWindow, change inventory.Change) bool {
 	for _, named := range w.Changes {
-		if named.Entity == change.Entity && named.At.Equal(change.At) {
+		if inventory.SameChange(named, change) {
 			return true
 		}
 	}

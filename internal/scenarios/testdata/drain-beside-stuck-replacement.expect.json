@@ -1,0 +1,12 @@
+{
+  "name": "drain-beside-stuck-replacement",
+  "description": "A pool node is drained cleanly and removed in the same minute as another node whose replacement pods never set up their sandbox.",
+  "root": "node//n3",
+  "tier": "page",
+  "bootHeld": true,
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n2"
+  ],
+  "tail": "5m0s"
+}

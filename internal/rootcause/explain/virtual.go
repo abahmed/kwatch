@@ -230,7 +230,8 @@ func (v *view) schedulerVerdict(pod inventory.EntityID) (string, bool) {
 	return "", false
 }
 
-// policyHops lead from a pod to the network policies selecting it.
+// policyHops lead from a pod to the network policies selecting it, and
+// to those that stopped selecting it lately (endedPolicyHops).
 func (v *view) policyHops(pod inventory.EntityID) []hop {
 	var out []hop
 	for _, policy := range v.policiesIn(pod.Namespace) {
@@ -238,7 +239,7 @@ func (v *view) policyHops(pod inventory.EntityID) []hop {
 			out = append(out, hop{link: LinkRestricts, to: policy})
 		}
 	}
-	return out
+	return append(out, v.endedPolicyHops(pod)...)
 }
 
 // backendHops lead from a Service to the pods it selects.

@@ -31,8 +31,8 @@ func (t *Translator) WithMaintenance(m MaintenanceAnnotations) *Translator {
 }
 
 // annotate adds the attributes obj's labels and annotations give desc:
-// the acknowledgement, the owner, the installation and the
-// maintenance hold.
+// the acknowledgement, the owner, the installation and the maintenance
+// hold.
 func (t *Translator) annotate(obj any, desc *Description) {
 	accessor, err := meta.Accessor(obj)
 	if err != nil {
@@ -41,6 +41,7 @@ func (t *Translator) annotate(obj any, desc *Description) {
 	annotateAck(accessor, desc)
 	annotateOwner(accessor, desc)
 	annotateRelease(accessor, desc)
+	annotateDeployer(accessor, desc)
 	t.annotateMaintenance(accessor, desc)
 }
 

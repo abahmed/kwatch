@@ -57,20 +57,10 @@ func TestLeftoverIssueListsItsObjects(t *testing.T) {
 	assert.Nil(t, toLeftovers(testIncident("other", "a", 0)))
 }
 
-// oldProblemReader is a reader that also counts old problems.
-type oldProblemReader struct {
-	fakeIncidents
-	old []detection.Finding
-}
-
-func (r *oldProblemReader) OldProblems() []detection.Finding {
-	return r.old
-}
-
 func TestOverviewCountsOldProblemsNotShown(t *testing.T) {
 	s := newTestServer()
 	since := testEpoch.Add(-637 * 24 * time.Hour)
-	s.SetIncidents(&oldProblemReader{old: []detection.Finding{{
+	s.SetIncidents(&fakeIncidents{old: []detection.Finding{{
 		Entity: inventory.CoreID("job", "shop", "report"),
 		Reason: "JobFailed", Summary: "The job failed", Since: since,
 	}}})
@@ -85,8 +75,8 @@ func TestOverviewCountsOldProblemsNotShown(t *testing.T) {
 		AgeDays: 637}}}, got)
 
 	plain := newTestServer()
-	assert.Nil(t, plain.oldProblems(testEpoch),
-		"a reader that cannot say says nothing")
+	assert.Zero(t, plain.oldProblems(plain.view(), testEpoch).Count,
+		"a view without old problems counts none")
 }
 
 // An issue lowered for its age says why on its page.
@@ -146,27 +136,19 @@ func TestLeftoverCapCountsObjects(t *testing.T) {
 		rows[maxLeftovers-1].Reason)
 }
 
-// oldDaysReader also says how many days make a problem old.
-type oldDaysReader struct {
-	oldProblemReader
-	days int
-}
-
-func (r *oldDaysReader) OldProblemDays() int { return r.days }
-
 // The overview carries the configured age of an old problem, so the
 // page does not have to assume 30 days.
 func TestOverviewSaysHowManyDaysMakeAProblemOld(t *testing.T) {
 	s := newTestServer()
-	s.SetIncidents(&oldDaysReader{days: 90})
-	got := s.oldProblems(testEpoch)
+	s.SetIncidents(&fakeIncidents{days: 90})
+	got := s.oldProblems(s.view(), testEpoch)
 	require.NotNil(t, got)
 	assert.Equal(t, 90, got.Days)
 
 	w := getPart(t, s, "/api/overview", "oldProblems")
 	assert.Contains(t, w.Body.String(), `"days":90`)
 
-	s.SetIncidents(&oldProblemReader{})
+	s.SetIncidents(&fakeIncidents{})
 	w = getPart(t, s, "/api/overview", "oldProblems")
 	assert.NotContains(t, w.Body.String(), `"days"`)
 }

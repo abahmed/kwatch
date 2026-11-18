@@ -80,6 +80,8 @@ func (v *view) nodeDisowns(node, effect inventory.EntityID) string {
 		return "its container's own output names its fault"
 	case v.failsOnHealthyNode(node, pod):
 		return "the same workload fails the same way on a healthy node"
+	case v.errorSharedOffNode(node, pod):
+		return "pods on healthy nodes fail with the same error"
 	}
 	return ""
 }

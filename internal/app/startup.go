@@ -95,6 +95,15 @@ type startupManager struct {
 	// recent starts (restart_history.go); both are set by Start.
 	lastStop *health.SelfStop
 	restarts []health.SelfStop
+	// notWatching are the recent stretches kwatch was not running.
+	notWatching []health.NotWatchingSpan
+	// configDigest identifies the configuration file (configDigest);
+	// "" leaves configuration changes out of the restart reason.
+	configDigest string
+	// stopSeen is what the model showed of kwatch's own pod and node
+	// when the pipeline last stopped (noteStop), at stopSeenAt.
+	stopSeen   *stopFacts
+	stopSeenAt time.Time
 }
 
 // startupResult is what application composition needs from the startup
@@ -237,9 +246,9 @@ func (s *startupManager) loadRuntimeSession(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	s.restartReason = classifyRestart(previous)
-	if s.evidenceSource != nil && previous.SessionID != "" &&
-		previous.EndedAt.IsZero() {
+	now := s.identity()
+	s.restartReason = classifyRestartAt(previous, now)
+	if s.evidenceSource != nil && wantsEvidence(previous, now) {
 		evidence, evidenceErr := s.evidenceSource.ReadRestartEvidence(
 			ctx, previous,
 		)
@@ -258,9 +267,11 @@ func (s *startupManager) loadRuntimeSession(ctx context.Context) error {
 	defer s.sessionMu.Unlock()
 	s.session = runtimeSession{
 		SessionID:     uuid.NewString(),
-		PodName:       os.Getenv("POD_NAME"),
+		PodName:       now.Pod,
 		PodUID:        os.Getenv("POD_UID"),
-		NodeName:      os.Getenv("NODE_NAME"),
+		NodeName:      now.Node,
+		Version:       now.Version,
+		Config:        now.Config,
 		StartedAt:     s.now(),
 		LastHeartbeat: s.now(),
 	}
@@ -293,6 +304,12 @@ type runtimeSession struct {
 	LastHeartbeat time.Time `json:"lastHeartbeat"`
 	EndedAt       time.Time `json:"endedAt,omitempty"`
 	EndReason     string    `json:"endReason,omitempty"`
+	// Version and Config (a digest of the configuration file) let the
+	// next start tell a rollout from a restart; Stop is what the
+	// session saw of its own pod and node when it was asked to stop.
+	Version string     `json:"version,omitempty"`
+	Config  string     `json:"config,omitempty"`
+	Stop    *stopFacts `json:"stop,omitempty"`
 }
 
 // minReportableDowntime keeps ordinary restarts quiet. Rollouts and pod moves
@@ -349,6 +366,9 @@ func (s *startupManager) EndSession(ctx context.Context, reason string) {
 	}
 	s.session.EndedAt = s.now()
 	s.session.EndReason = normalizeRestartReason(reason)
+	if s.session.EndReason == "graceful_shutdown" {
+		s.session.Stop = s.factsAtStop(s.session.EndedAt)
+	}
 	if err := store.SaveRuntimeSession(ctx, s.session); err != nil {
 		klog.V(2).InfoS("failed to close runtime session", "error", err)
 	}

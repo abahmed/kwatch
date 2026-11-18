@@ -62,13 +62,14 @@ func TestDetailPhasesShowFailingQuietAndRecovering(t *testing.T) {
 	p.RecoveringSince = testEpoch.Add(-10 * time.Minute)
 	got := phasesOf(p, testEpoch)
 	want := []Phase{
-		{phaseFailing, testEpoch.Add(-3 * time.Hour),
-			testEpoch.Add(-2 * time.Hour)},
-		{phaseQuiet, testEpoch.Add(-2 * time.Hour),
-			testEpoch.Add(-time.Hour)},
-		{phaseFailing, testEpoch.Add(-time.Hour),
-			testEpoch.Add(-10 * time.Minute)},
-		{phaseRecovering, testEpoch.Add(-10 * time.Minute), time.Time{}},
+		{State: phaseFailing, From: testEpoch.Add(-3 * time.Hour),
+			To:    testEpoch.Add(-2 * time.Hour),
+			Began: testEpoch.Add(-30 * time.Hour)},
+		{State: phaseQuiet, From: testEpoch.Add(-2 * time.Hour),
+			To: testEpoch.Add(-time.Hour)},
+		{State: phaseFailing, From: testEpoch.Add(-time.Hour),
+			To: testEpoch.Add(-10 * time.Minute)},
+		{State: phaseRecovering, From: testEpoch.Add(-10 * time.Minute)},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("phases = %+v", got)
@@ -90,7 +91,51 @@ func TestDetailPhasesClipALongIncidentToADay(t *testing.T) {
 		!got[0].To.Equal(p.Resolved) {
 		t.Errorf("phases = %+v", got)
 	}
+	if want := p.Opened; !got[0].Began.Equal(want) {
+		t.Errorf("the first phase hides when it began: %+v", got[0])
+	}
 	if phasesOf(incident.Incident{}, testEpoch) != nil {
 		t.Error("an incident without an open time has phases")
+	}
+}
+
+// A window that cuts the middle of a long incident's story keeps its
+// start on the first phase; an incident that fits has nothing to say.
+func TestDetailPhasesKeepTheFirstStartWhenTheWindowCutsIt(t *testing.T) {
+	p := testIncident("a", "shop", -2*time.Hour)
+	p.History = []incident.Occurrence{
+		occurrence(-100*time.Hour, time.Hour, ""),
+		occurrence(-60*time.Hour, time.Hour, ""),
+	}
+	got := phasesOf(p, testEpoch)
+	if len(got) == 0 ||
+		!got[0].Began.Equal(testEpoch.Add(-100*time.Hour)) {
+		t.Fatalf("phases = %+v", got)
+	}
+	if !got[0].From.After(got[0].Began) {
+		t.Errorf("first phase starts at %v, not inside the window",
+			got[0].From)
+	}
+	short := testIncident("b", "shop", -time.Hour)
+	for _, ph := range phasesOf(short, testEpoch) {
+		if !ph.Began.IsZero() {
+			t.Errorf("an unclipped phase says it began: %+v", ph)
+		}
+	}
+}
+
+// Updates the incident dropped from the middle of its timeline show as
+// a gap event right where they were, with the count.
+func TestTimelineShowsWhereUpdatesWereNotKept(t *testing.T) {
+	events := []incident.Event{
+		{At: testEpoch, Text: "first"},
+		{At: testEpoch.Add(time.Minute), Text: "second", Gap: 12},
+		{At: testEpoch.Add(time.Hour), Text: "newest"},
+	}
+	got := toTimeline(events)
+	if len(got) != 4 || got[2].Kind != kindGap || got[2].Gap != 12 ||
+		got[2].Text != "12 earlier updates not kept" ||
+		got[1].Text != "second" || got[3].Text != "newest" {
+		t.Fatalf("timeline = %+v", got)
 	}
 }

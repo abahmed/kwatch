@@ -1,0 +1,10 @@
+{
+  "name": "crash-loop-short-backoff",
+  "description": "A container crashes once a minute on a kubelet whose maximum back-off is ten seconds.",
+  "root": "deployment/shop/reports",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

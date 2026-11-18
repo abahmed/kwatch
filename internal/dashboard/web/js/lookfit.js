@@ -4,7 +4,8 @@
    empty. So the card holds up to LIMIT issues, shows MIN of them, and
    adds rows while the row stays as tall as it already is. When every
    active issue is shown and there is still room, a short line at the
-   bottom says so. Stacked (phone, narrow, or no bad releases) it just
+   bottom says so, or, when the issues are capped, the rows share the
+   room (.ov-fill). Stacked (phone, narrow, or no bad releases) it just
    shows MIN. Refits on resize (one rAF-debounced listener) and after
    each live update (KW.lookFit(...).fit()). */
 (function () {
@@ -25,6 +26,7 @@
     var rows = ul.children, end = card.querySelector(".ov-end");
     var n = Math.min(rows.length, MIN);
     setShown(rows, n);
+    ul.classList.remove("ov-fill");
     if (end) end.hidden = true;
     if (rel.hidden || !window.matchMedia(WIDE).matches) return;
     var h = pair.offsetHeight;
@@ -40,6 +42,10 @@
       end.hidden = false;
       if (pair.offsetHeight > h) end.hidden = true;
     }
+    /* Every row the server sent is shown and the neighbour is still
+       taller (wider fonts make it so): share the room among the rows
+       instead of leaving a hole under the last one. */
+    if (n === rows.length && (!end || end.hidden)) ul.classList.add("ov-fill");
   }
 
   KW.lookFit = function (pair, card, rel) {

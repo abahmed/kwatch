@@ -29,8 +29,9 @@ func NewSnapshot(
 // Record turns a solved cause into the record an incident keeps and
 // messages are written from: its row and mode, the root's own unhealthy
 // findings that are not symptoms, the latest blamed change (see
-// BlamedChanges), for a rollout the revision a rollback returns to, and
-// each contribution as a proof.
+// BlamedChanges), for a rollout of a covered workload the revision a
+// rollback of that workload returns to and whether kwatch saw it serve
+// (blamedWorkload, previousServed), and each contribution as a proof.
 func (s Snapshot) Record(c Cause) rootcause.CauseRecord {
 	out := rootcause.CauseRecord{
 		Rule: c.Row, Mode: c.Mode, Root: c.Root, Chain: c.Chain,
@@ -45,12 +46,17 @@ func (s Snapshot) Record(c Cause) rootcause.CauseRecord {
 		}
 	}
 	if blamed := s.BlamedChanges(c); len(blamed) > 0 {
-		change := blamed[len(blamed)-1]
+		change := latestEdit(blamed)
 		out.Change = &change
-		out.RollbackRevision = rollbackRevision(s.Model, c.Covers)
+		if w, ok := blamedWorkload(s.Model, change, c.Covers); ok {
+			out.RollbackRevision = rollbackRevision(s.Model, w)
+			out.PreviousServed = s.previousServed(w)
+		}
+		out.HelmRollbackRevision = helmGoodRevision(s.Model, change)
 		if s.previousFails(change, c.Covers) {
 			out.Change, out.RollbackRevision = nil, ""
-			out.PreviousFails = true
+			out.PreviousServed, out.PreviousFails = false, true
+			out.HelmRollbackRevision = ""
 		}
 	}
 	out.Place = s.placeOf(c, out.Change)

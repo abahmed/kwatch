@@ -20,7 +20,10 @@ import (
 //     no incident; it is only counted (OldProblems);
 //   - an incident that needs attention but whose every interrupting
 //     failure had already lasted longer than the horizon when it opened
-//     is lowered to Low, and says why.
+//     is lowered to Low, and says why;
+//   - an incident made only of old low problems that kwatch opened
+//     before the rule, or restored, is closed quietly and its failures
+//     are counted with the others (old_problem_retire.go).
 //
 // A change brings either back: a new onset is young, and a finding that
 // rises above low opens as usual. A critical failure, or one that loses
@@ -104,9 +107,18 @@ func (m *Manager) forgetAged(key detection.Key) {
 func (m *Manager) OldProblems() []detection.Finding {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.oldProblems()
+}
+
+// oldProblems is OldProblems; the caller holds m.mu. An object a live
+// incident is about is left out: it is listed once, as that issue.
+func (m *Manager) oldProblems() []detection.Finding {
+	live := m.liveEntities()
 	out := make([]detection.Finding, 0, len(m.aged))
 	for _, s := range m.aged {
-		out = append(out, s)
+		if !live[s.Entity] {
+			out = append(out, s)
+		}
 	}
 	sort.Slice(out, func(i, j int) bool {
 		a, b := out[i].Entity.String(), out[j].Entity.String()

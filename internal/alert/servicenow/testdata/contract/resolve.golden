@@ -1,0 +1,21 @@
+--- request 1 of 2
+PATCH /api/now/table/incident/abc123?sysparm_fields=sys_id
+Content-Type: application/json
+Authorization: Basic <redacted>
+Accept: application/json
+
+{
+  "work_notes": "✅ payments in shop is healthy again. It ran for 10 minutes without a restart."
+}
+
+--- request 2 of 2
+PATCH /api/now/table/incident/abc123?sysparm_fields=sys_id
+Content-Type: application/json
+Authorization: Basic <redacted>
+Accept: application/json
+
+{
+  "close_code": "Solution provided",
+  "close_notes": "Resolved by kwatch: the failure recovered.",
+  "state": "6"
+}

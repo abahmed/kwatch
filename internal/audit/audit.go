@@ -61,6 +61,11 @@ type Entry struct {
 	// reader can see that kwatch ran a read instead of asking for it.
 	Evidence  []string `json:"evidence,omitempty"`
 	ReadSteps int      `json:"readSteps,omitempty"`
+	// Steps are the steps the message suggested, redacted and bounded
+	// (StepRecord), so a reader can see later what people were told to
+	// run. StepsMore counts those left out of Steps by its bound.
+	Steps     []StepRecord `json:"steps,omitempty"`
+	StepsMore int          `json:"stepsMore,omitempty"`
 	// DecisionReason explains why the manager sent this message.
 	DecisionReason string `json:"decisionReason,omitempty"`
 	// ContentHash fingerprints the announced content; an update with the

@@ -7,12 +7,8 @@ import (
 	"github.com/abahmed/kwatch/internal/delivery"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/notification"
-	"github.com/abahmed/kwatch/internal/redact"
+	"github.com/abahmed/kwatch/internal/pipeline"
 )
-
-// runbookStepPrefix starts the step compose writes for a configured
-// runbook: "Runbook for <reason>: <url>".
-const runbookStepPrefix = "Runbook for "
 
 // dashboardDetail is what a sent decision leaves on its incident for the
 // dashboard detail page: the composer's title, the runbook link and the
@@ -25,31 +21,15 @@ func dashboardDetail(
 	for _, f := range d.Facts.Evidence {
 		out.Facts = append(out.Facts, f.Text)
 	}
-	out.Steps = fixSteps(m)
+	out.Steps = pipeline.FixSteps(m)
 	out.Evidence, out.Correlation = d.Facts.Report, d.Facts.Correlation
-	return out
-}
-
-// fixSteps are the message's steps without the runbook step, which the
-// dashboard shows as its link, redacted like everything it serves.
-func fixSteps(m notification.Message) []incident.FixStep {
-	var out []incident.FixStep
-	for _, s := range m.Steps {
-		if strings.HasPrefix(s.Text, runbookStepPrefix) && s.Command == "" {
-			continue
-		}
-		out = append(out, incident.FixStep{
-			Text:    redact.Evidence(s.Text),
-			Command: redact.Evidence(s.Command),
-		})
-	}
 	return out
 }
 
 // runbookLink is the first runbook link among the message's steps.
 func runbookLink(m notification.Message) string {
 	for _, s := range m.Steps {
-		rest, ok := strings.CutPrefix(s.Text, runbookStepPrefix)
+		rest, ok := strings.CutPrefix(s.Text, pipeline.RunbookStepPrefix)
 		if !ok {
 			continue
 		}
@@ -99,7 +79,7 @@ func dashboardTrail(
 				Placement: a.Placement, Result: a.Result,
 				Retries: a.Retries, Carrier: a.Carrier,
 				Fallback: a.Fallback, Error: a.Error, Reason: a.Reason,
-				Pager: a.Pager,
+				Keyed: a.Keyed,
 			})
 		}
 		return out

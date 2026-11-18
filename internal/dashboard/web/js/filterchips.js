@@ -11,8 +11,8 @@
   var KW = window.KW;
   var LQ = function () { return KW.listQuery; };
   var NAMES = { severity: "Level", namespace: "Namespace", kind: "Kind", state: "State",
-    acked: "Acknowledged", stopped: "Stopped tracking", node: "Node",
-    mode: "Failure" };
+    acked: "Acknowledged", stopped: "Stopped tracking",
+    node: "Node", mode: "Failure" };
   var ACKED = { "true": "Yes", "false": "No" };
   var AGES = { today: "started today", day: "going on over a day" };
   var SINCES = { "24h": "24 hours", "72h": "3 days" };
@@ -22,7 +22,7 @@
   function word(key, v, kinds, modes) {
     if (key === "severity") return KW.SEVERITY[v] ? KW.SEVERITY[v].label : v;
     if (key === "state") return KW.STATE[v] ? KW.STATE[v].label : v;
-    if (key === "acked" || key === "stopped") return ACKED[v] || v;
+    if (key === "acked" || key === "stopped" || key === "known") return ACKED[v] || v;
     if (key === "kind") return kinds[v] || v;
     if (key === "mode") return modes[v] || v;
     return v;

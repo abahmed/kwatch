@@ -22,7 +22,8 @@ var recoveredWords = map[inventory.Kind]string{
 // it again and the cause is not the subject itself.
 func checkedCause(f caseFacts, subject inventory.EntityID) bool {
 	cause := f.p.Cause
-	return cause != nil && cause.Rule != "self" && cause.Root != subject &&
+	return cause != nil && cause.Rule != explain.RuleSelf &&
+		cause.Root != subject &&
 		f.causeState != incident.CauseUnchecked && !removed(f, subject)
 }
 

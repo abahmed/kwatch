@@ -1,6 +1,7 @@
 package announce
 
 import (
+	"maps"
 	"slices"
 
 	"github.com/abahmed/kwatch/internal/incident"
@@ -42,6 +43,11 @@ type StartupState struct {
 	// after does not list the same incidents again (restart_note.go).
 	// Absent in files written before it.
 	Restored *RestoredMark `json:",omitempty"`
+	// Spoke is the told fingerprint of the last own message of each
+	// incident a listing named, kept while the incident is open: it
+	// has a thread of its own, after a restart too (SpokeOnItsOwn), so
+	// it is never introduced again. Absent in files written before it.
+	Spoke map[string]string `json:",omitempty"`
 }
 
 // listings returns the startup summary and every open roll-up.
@@ -58,6 +64,7 @@ func (s StartupState) Clone() StartupState {
 	s.Listing = s.Listing.clone()
 	s.Digest = s.Digest.clone()
 	s.Rollups = slices.Clone(s.Rollups)
+	s.Spoke = maps.Clone(s.Spoke)
 	if s.Restored != nil {
 		mark := s.Restored.clone()
 		s.Restored = &mark
@@ -127,8 +134,12 @@ func (l *Listing) spoke(id string) bool {
 
 // SpokeOnItsOwn reports whether incident id, named by a roll-up or the
 // startup summary, has a thread of its own: an earlier message of its own
-// opened one. Ask before Follow, which records the message being sent.
+// opened one, in this session or an earlier one (StartupState.Spoke).
+// Ask before Follow, which records the message being sent.
 func (c *Collector) SpokeOnItsOwn(id string) bool {
+	if _, ok := c.Startup.Summary.Spoke[id]; ok {
+		return true
+	}
 	for _, l := range c.Startup.Summary.listings() {
 		if l.spoke(id) {
 			return true

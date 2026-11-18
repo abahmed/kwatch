@@ -9,6 +9,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/audit"
 	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/feature"
 	"github.com/abahmed/kwatch/internal/flight"
 	"github.com/abahmed/kwatch/internal/incident"
@@ -60,6 +61,9 @@ type pipelineBuild struct {
 	// links is the state of the dashboard links in messages; nil
 	// without the dashboard.
 	links *dashboardLinks
+	// detectors is set when the engine is built; the incident manager
+	// reads which objects a detector still watches through it.
+	detectors *detection.Registry
 }
 
 // newPipelineBuild builds the model, scope, audit log, incident manager
@@ -147,10 +151,11 @@ func (p *pipelineBuild) newEngine() (*pipeline.Engine, error) {
 	// synced for them once its first list is in the model, not as soon
 	// as the source has handed it over.
 	gate := pipeline.NewSyncGate(p.synced)
+	p.detectors = newDetectorRegistry(gate.Synced, p.fresh,
+		deps.entitlements, p.withheld)
 	return pipeline.NewEngine(pipeline.Dependencies{
-		Model: p.model,
-		Detectors: newDetectorRegistry(gate.Synced, p.fresh,
-			deps.entitlements, p.withheld),
+		Model:        p.model,
+		Detectors:    p.detectors,
 		Withheld:     p.withheld,
 		Incidents:    p.incidents,
 		Synced:       gate.Synced,
@@ -201,8 +206,9 @@ func (p *pipelineBuild) newWriter() compose.Writer {
 	if p.deps.has(feature.Runbooks) {
 		runbooks = p.deps.runtime.Policy().Runbooks()
 	}
-	w := compose.NewWriter(app.ClusterName, runbooks).
+	w := compose.NewWriter(p.deps.clusterName(), runbooks).
 		ForEdition(p.deps.entitlements, app.HideProHints)
+	w.GitOpsLinks = p.deps.runtime.Policy().GitOpsLinks()
 	if p.deps.dashboardServer != nil {
 		p.links = &dashboardLinks{
 			target: newDashboardTarget(

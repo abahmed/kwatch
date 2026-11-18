@@ -24,10 +24,31 @@ const (
 	crashLoopRestarts = 3
 	// crashLoopHold is how long a run counts as one between back-offs:
 	// a container that crashes on start fails again within seconds. A
-	// longer run is judged as running (restartingFinding), and the
-	// incident's own healthy wait decides whether the loop is over.
+	// container whose last run was longer gets twice that run (runHold),
+	// up to maxCrashLoopHold. A longer run is judged as running
+	// (restartingFinding), and the incident's own healthy wait decides
+	// whether the loop is over.
 	crashLoopHold = 30 * time.Second
+	// maxCrashLoopHold bounds the hold a long last run gives.
+	maxCrashLoopHold = 5 * time.Minute
 )
+
+// runHold is how long the current run of a crash-looping container
+// counts as one between back-offs. It follows the container's own last
+// run, not the kubelet's back-off: a kubelet may cap its back-off far
+// below the default five minutes (crashLoopBackOff.
+// maxContainerRestartPeriod), and a container that crashes after 45
+// seconds then spends most of its loop running. Judged by a fixed hold,
+// its crash loop would clear on every run and come back on every crash.
+func runHold(e inventory.Entity) time.Duration {
+	started := timestamp(e, kube.AttrLastStarted)
+	finished := timestamp(e, kube.AttrLastFinished)
+	if started.IsZero() || finished.Before(started) {
+		return crashLoopHold
+	}
+	return min(max(2*finished.Sub(started), crashLoopHold),
+		maxCrashLoopHold)
+}
 
 // crashLoopRunning reports the crash loop of a running container that
 // is only between two back-offs, with the reason and wording a waiting
@@ -49,10 +70,10 @@ func crashLoopRunning(
 	started := timestamp(e, kube.AttrStartedAt)
 	if last.IsZero() || started.IsZero() ||
 		ctx.Now.Sub(last) > restartRecency ||
-		ctx.Now.Sub(started) >= crashLoopHold {
+		ctx.Now.Sub(started) >= runHold(e) {
 		return nil
 	}
-	ctx.RecheckAfter(started.Add(crashLoopHold).Sub(ctx.Now))
+	ctx.RecheckAfter(started.Add(runHold(e)).Sub(ctx.Now))
 	keepCrashLoop(ctx)
 	return []detection.Finding{crashLoopFinding(e, last)}
 }

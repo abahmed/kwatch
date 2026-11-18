@@ -152,7 +152,8 @@ func recordID(id inventory.EntityID, at time.Time, nth int) string {
 func newRecord(id inventory.EntityID, c inventory.Change) Record {
 	r := Record{ID: recordID(id, c.At, 1), Kind: string(id.Kind),
 		Namespace: id.Namespace, Name: id.Name, At: c.At,
-		Actor: c.Actor, App: c.App, Cause: c.Cause, Verdict: Rolling}
+		Actor: c.Actor, App: c.App, Cause: c.Cause, Repo: c.Repo,
+		Commit: c.Commit, Verdict: Rolling}
 	seen := map[string]bool{}
 	for _, f := range c.Fields {
 		if container, ok := imagePath(f.Path); ok {

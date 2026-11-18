@@ -58,7 +58,7 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 	if err != nil {
 		return failStartup(deps, cancel, lic, state, "startup", err)
 	}
-	deps.readiness.setCurrent("state", true)
+	detachSessions := stateReady(deps, disk)
 	announceSession(deps, state, session, disk, edition)
 	lic.watch(activeCtx)
 
@@ -75,7 +75,7 @@ func runActiveComponents(ctx context.Context, deps *serverDeps) error {
 	deps.readiness.withdraw()
 	cancel()
 	lic.stop()
-	finishActiveSession(ctx, activeShutdown{
+	finishActiveSession(ctx, activeShutdown{detach: detachSessions,
 		supervisor: supervisor, delivery: deps.deliveryManager,
 		threads: threads, session: session, state: state, guard: guard,
 		failed:         err != nil && !errors.Is(err, errEditionChanged),
@@ -105,6 +105,7 @@ func newSessionStartup(deps *serverDeps, disk diskState) *startupManager {
 	)
 	session.gapReport = deps.has(feature.GapReport)
 	session.hideProHints = deps.runtime.Application().HideProHints
+	session.configDigest = configDigest()
 	return session
 }
 
@@ -177,6 +178,9 @@ func leadershipLost(leaderCtx context.Context, deps *serverDeps) bool {
 
 // activeShutdown is what the leader session releases when it ends.
 type activeShutdown struct {
+	// detach, when set, takes the state file from the dashboard's
+	// sessions first: sign-ins go on in memory.
+	detach     func()
 	supervisor *componentSupervisor
 	delivery   deliveryStopper
 	threads    *threadSaver
@@ -222,6 +226,9 @@ type sessionEnder interface {
 // closing it under a running write is unsafe and the process is
 // terminating anyway.
 func finishActiveSession(parent context.Context, s activeShutdown) {
+	if s.detach != nil {
+		s.detach()
+	}
 	stopped := waitForSupervisor(s.supervisor)
 	if !stopDelivery(
 		parent, s.delivery, s.leadershipLost, s.leaseDrainBudget(),
@@ -325,8 +332,10 @@ func startActiveComponents(
 		monitoredRun(deps, "threads", runThreadSaver(res.threads)),
 		monitoredRun(deps, "state-compactor",
 			runCompactor(res.state, storeMetrics(deps))),
+		selfAlertRun(deps, res.disk),
 	}
 	optional = append(optional, conditionalComponents(deps)...)
+	publishHeartbeatEdition(deps)
 	for _, component := range optional {
 		supervisor.startOptional(ctx, component)
 	}
@@ -358,8 +367,7 @@ func pipelineComponent(
 func conditionalComponents(deps *serverDeps) []componentSpec {
 	var optional []componentSpec
 	if deps.has(feature.Heartbeat) {
-		optional = append(optional,
-			monitoredComponent(deps, "heartbeat", runHeartbeat))
+		optional = append(optional, heartbeatComponent(deps))
 	}
 	if deps.runtime.Lifecycle().CRDEnabled() {
 		optional = append(optional,

@@ -25,6 +25,8 @@ func typedSourceConfig(
 		Answered:    deps.clients.Answers.Count,
 		// watch.secrets: false leaves Secrets unwatched.
 		DisableSecrets: !deps.runtime.Application().WatchSecrets,
+		// Helm release Secrets are watched for their labels only.
+		Metadata: deps.clients.Metadata,
 	}
 }
 
@@ -53,6 +55,7 @@ func dynamicSourceConfig(
 		Maintenance: maintenanceAnnotations(maintenance),
 		Noted:       model.NotedKinds,
 		Answered:    deps.clients.Answers.Count,
+		Paused:      deps.clients.Pressure.High,
 	}
 }
 

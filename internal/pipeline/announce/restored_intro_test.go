@@ -2,9 +2,13 @@ package announce
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 // A restored incident a roll-up only named, that never spoke on its own,
@@ -22,7 +26,29 @@ func TestRestoredIncidentOwedItsIntroduction(t *testing.T) {
 	assert.Empty(t, r.last.TakeRestoredIntros(), "handed over once")
 
 	r.marker.Rollups[0].Followed = []string{"inc-api"}
-	r.start(foldNow.Add(RestoredRelist), apiLost)
+	r.start(foldNow.Add(time.Hour), apiLost)
 	assert.Empty(t, r.last.TakeRestoredIntros(),
 		"its introduction went out before the restart")
+}
+
+// A restored incident only the restored summary named is introduced
+// once, not after every restart: the introduction sent is kept in the
+// startup marker with the fingerprint it told, until the incident is
+// over.
+func TestRestoredIntroductionIsNotRepeatedByLaterRestarts(t *testing.T) {
+	r := &restartRig{t: t, rolledUp: map[string]bool{"api": true},
+		digests: map[string]string{"api": "d-api"}}
+	r.start(foldNow, apiLost)
+	owed := r.last.TakeRestoredIntros()
+	require.Len(t, owed, 1)
+	r.last.NoteSpoke(incident.Decision{Action: incident.Update,
+		Reason: incident.ReasonIntroduced, Incident: owed[0]},
+		notification.Message{})
+	require.Contains(t, r.marker.Spoke, "inc-api")
+
+	for i := 1; i <= 6; i++ {
+		r.start(foldNow.Add(time.Duration(i)*time.Hour), apiLost)
+		assert.Empty(t, r.last.TakeRestoredIntros(),
+			"restart %d introduced it again", i)
+	}
 }

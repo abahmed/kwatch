@@ -59,7 +59,7 @@ func TestEveryRankedProviderIsAKnownProvider(t *testing.T) {
 	for _, name := range providercatalog.Names() {
 		known[name] = true
 	}
-	for name := range pagerProviders {
+	for _, name := range providercatalog.PagingProviders() {
 		assert.True(t, known[name], "pager %q", name)
 	}
 	for name := range emailProviders {
@@ -92,4 +92,13 @@ func TestProRunsEveryProviderAndWarnsAboutNone(t *testing.T) {
 	n := newEditionNotice(feature.ProEntitlements(),
 		alertsOf("slack", "pagerduty"))
 	assert.Empty(t, n.droppedPagers)
+}
+
+// The Community ranking puts first exactly the providers the shared
+// list says page a person, the list the dashboard reads too.
+func TestPagerRankIsTheSharedPagingList(t *testing.T) {
+	for _, name := range providercatalog.Names() {
+		assert.Equal(t, providercatalog.PagesPerson(name),
+			providerRank(name) == rankPager, name)
+	}
 }

@@ -46,15 +46,21 @@ func nodeOOMSentences(f caseFacts) []sentence {
 		// "It" would read as the node: name the container that used it.
 		who = f.memberName(m.Entity)
 	}
+	request := requestClause(m)
 	switch {
 	case used != "" && limit != "":
 		out = append(out, sentence{part: partProof, weight: weightNodeOOMUse,
-			text: who + " used " + used + " of its " + limit + " limit."})
+			text: who + " used " + used + " of its " + limit + " limit" +
+				request + "."})
 	case used != "":
 		out = append(out, sentence{part: partProof, weight: weightNodeOOMUse,
-			text: who + " used " + used + " and has no memory limit."})
+			text: who + " used " + used + request +
+				" and has no memory limit."})
 	}
 	text := "Node " + node + " ran out of memory"
+	if state := evidence(m, detection.EvidenceNodeMemory); state != "" {
+		text += " (" + state + ")"
+	}
 	if users := nodeUsers(m); len(users) > 0 {
 		text += "; biggest users: " + joinAnd(users, maxNamed)
 	}
@@ -84,4 +90,15 @@ func nodeOOMSteps(s detection.Finding) []notification.Step {
 		Text:    "See the node's memory use and the pods on it",
 		Command: "kubectl describe node " + quote(node),
 	}}
+}
+
+// requestClause is ", over its 128Mi request" from the victim's use
+// against its request, or "" when that is unknown.
+func requestClause(m detection.Finding) string {
+	_, clause, ok := strings.Cut(
+		evidence(m, detection.EvidenceOverRequest), ", ")
+	if !ok {
+		return ""
+	}
+	return ", " + clause
 }

@@ -28,25 +28,34 @@ const maxRevoked = 4096
 const sessionCookie = "kwatch_session"
 
 // sessions issues and checks signed session cookies. A cookie is the
-// sign-in time, a tag of this start and a random nonce, signed with a
-// key derived from the password, the token and a random value drawn at
-// each start: a new password and a kwatch restart both sign everyone
-// out (decision: sessions are not kept across restarts). Nothing is
-// stored per session except the nonces of sessions signed out early,
-// kept until they would have expired. A revocation is never forgotten
-// early: when the table is full the signing key rotates instead, which
-// signs every session out and empties the table.
+// sign-in time, a tag of the signing key's seed and a random nonce,
+// signed with a key derived from the password, the token and the
+// seed: a new password signs everyone out. In memory mode the seed is
+// drawn at each start, so a restart signs everyone out too, and
+// nothing is stored per session except the nonces of sessions signed
+// out early, kept until they would have expired. A revocation is never
+// forgotten early: when the table is full the signing key rotates
+// instead, which signs every session out and empties the table. Once a
+// state store is attached (session_store.go) the seed and a record per
+// session are kept in it, and sessions survive a restart.
 type sessions struct {
 	key      atomic.Pointer[[]byte]
-	boot     [bootTagBytes]byte
 	now      clock.Clock
 	disabled atomic.Bool
 
-	mu      sync.Mutex
+	mu   sync.Mutex
+	boot [bootTagBytes]byte
+	// stored keeps the sessions in the state store; nil in memory
+	// mode (session_store.go).
+	stored  *storedSessions
 	revoked map[string]time.Time
 	// expiry orders the revoked nonces by when they expire, so pruning
 	// pops only what has expired instead of scanning the table.
 	expiry expiryHeap
+	// saveMu orders the writes to the state store; attachMu the
+	// attaches.
+	saveMu   sync.Mutex
+	attachMu sync.Mutex
 }
 
 func newSessions(password, token string, now clock.Clock) *sessions {
@@ -56,18 +65,31 @@ func newSessions(password, token string, now clock.Clock) *sessions {
 		// every cookie rather than sign with a guessable key.
 		bootKey = nil
 	}
-	mac := hmac.New(sha256.New, []byte("kwatch-dashboard-session"))
-	mac.Write(bootKey)
-	mac.Write([]byte(token))
-	mac.Write([]byte{0})
-	mac.Write([]byte(password))
-	key := mac.Sum(nil)
+	key := deriveKey(bootKey, password, token)
 	s := &sessions{now: now, revoked: make(map[string]time.Time)}
 	s.disabled.Store(bootKey == nil)
 	s.key.Store(&key)
-	tag := sha256.Sum256(append([]byte("boot"), bootKey...))
-	copy(s.boot[:], tag[:])
+	s.boot = bootTag(bootKey)
 	return s
+}
+
+// deriveKey is the signing key of seed and the sign-in secrets.
+func deriveKey(seed []byte, password, token string) []byte {
+	mac := hmac.New(sha256.New, []byte("kwatch-dashboard-session"))
+	mac.Write(seed)
+	mac.Write([]byte(token))
+	mac.Write([]byte{0})
+	mac.Write([]byte(password))
+	return mac.Sum(nil)
+}
+
+// bootTag names the seed in each cookie, so a cookie of another seed
+// (an earlier start, or a reset state file) can be told apart.
+func bootTag(seed []byte) [bootTagBytes]byte {
+	var out [bootTagBytes]byte
+	tag := sha256.Sum256(append([]byte("boot"), seed...))
+	copy(out[:], tag[:])
+	return out
 }
 
 // expiryItem is a revoked nonce and when it expires.
@@ -101,13 +123,22 @@ func (s *sessions) issue() (string, time.Time, error) {
 	payload := make([]byte, sessionPayloadBytes)
 	at := s.now.Now()
 	binary.BigEndian.PutUint64(payload, uint64(at.Unix()))
-	copy(payload[8:], s.boot[:])
 	if _, err := rand.Read(payload[sessionNonceAt:]); err != nil {
 		return "", time.Time{}, err
 	}
+	s.mu.Lock()
+	copy(payload[8:], s.boot[:])
 	enc := base64.RawURLEncoding
 	value := enc.EncodeToString(payload) + "." +
 		enc.EncodeToString(s.sign(payload))
+	stored := s.stored != nil
+	if stored {
+		s.stored.add(payload[sessionNonceAt:], at.Add(sessionLifetime), at)
+	}
+	s.mu.Unlock()
+	if stored {
+		s.save()
+	}
 	return value, at.Add(sessionLifetime), nil
 }
 
@@ -154,6 +185,9 @@ func (s *sessions) valid(value string) bool {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.stored != nil {
+		return s.stored.has(payload[sessionNonceAt:], now)
+	}
 	_, out := s.revoked[string(payload[sessionNonceAt:])]
 	return !out
 }
@@ -165,6 +199,9 @@ func (s *sessions) valid(value string) bool {
 func (s *sessions) revoke(value string) {
 	payload, ok := s.parse(value)
 	if !ok {
+		return
+	}
+	if s.forgetStored(payload[sessionNonceAt:]) {
 		return
 	}
 	issued := time.Unix(int64(binary.BigEndian.Uint64(payload)), 0)
@@ -211,17 +248,15 @@ func (s *sessions) rotateKey() {
 // rekey signs with a key for new sign-in secrets: every session of the
 // old ones is signed out and the revocation table emptied.
 func (s *sessions) rekey(password, token string) {
+	if s.rekeyStored(password, token) {
+		return
+	}
 	fresh := make([]byte, 32)
 	if _, err := rand.Read(fresh); err != nil {
 		s.disabled.Store(true)
 		return
 	}
-	mac := hmac.New(sha256.New, []byte("kwatch-dashboard-session"))
-	mac.Write(fresh)
-	mac.Write([]byte(token))
-	mac.Write([]byte{0})
-	mac.Write([]byte(password))
-	key := mac.Sum(nil)
+	key := deriveKey(fresh, password, token)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.key.Store(&key)
@@ -247,5 +282,7 @@ func (s *sessions) fromEarlierStart(value string) bool {
 		len(sig) != sessionSigBytes {
 		return false
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return string(payload[8:sessionNonceAt]) != string(s.boot[:])
 }

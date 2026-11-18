@@ -174,6 +174,9 @@ func RefutableRow(name string) bool {
 // its pods fail.
 var summaryModes = []detection.Mode{
 	detection.ModeUnavailable, detection.ModeRolloutStuck,
+	// A workload whose pods run but never turn ready says so of its
+	// pods: whatever keeps them unready explains it too.
+	detection.ModeNeverReady,
 	detection.ModeStatefulSetRolloutStuck,
 	detection.ModeCondition, detection.ModeDisruptionBudget,
 	detection.ModeNoEndpoints, detection.ModeBackendsDegraded}

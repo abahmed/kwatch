@@ -36,6 +36,8 @@ type nodeChurn struct {
 	seen map[inventory.EntityID]bool // value: the node was leaving
 	at   time.Time
 	held map[detection.Key]heldFinding
+	// young holds findings of pods on new nodes (young_node_hold.go).
+	young map[detection.Key]youngHeld
 	// baselined is set by the first look at a model that has nodes. What
 	// that look finds is the state kwatch started in, not a change.
 	baselined bool
@@ -318,14 +320,16 @@ func (m *Manager) releaseChurn(now time.Time) {
 	if released {
 		m.refresh(m.model, now)
 	}
-	// The other join that ends on the clock (attach_scaled.go).
+	// The other holds that end on the clock (attach_scaled.go,
+	// young_node_hold.go).
 	m.releaseScaled(now)
+	m.releaseYoung(now)
 }
 
 // churnWakes lists when held findings and joined autoscalers need a
 // tick.
 func (m *Manager) churnWakes() []time.Time {
-	out := m.scaledWakes()
+	out := append(m.scaledWakes(), m.youngWakes()...)
 	for _, h := range m.churn.held {
 		out = append(out, minTime(m.churn.at.Add(churnStart),
 			h.since.Add(churnMaxHold)))

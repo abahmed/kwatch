@@ -1,0 +1,20 @@
+10:15:00 settled
+🟠 orders in shop (prod-eu-1) and two other workloads keep crashing with the same error. The failing pods run on node n3, which joined under a minute before they began failing. It fails with "dial tcp 10.0.7.20:6379: connect: connection refused". Affected: payments and search.
+Related alerts: 3 unavailable workloads
+To read the output of the last crash, run kubectl logs deploy/orders -c app -n shop --previous
+🟠 orders in shop (prod-eu-1) and two other workloads keep crashing with the same error.
+| 🟠 **orders** in **shop** (**prod-eu-1**) and two other workloads keep crashing with the same error.
+| The failing pods run on node n3, which joined under a minute before they began failing.
+| It fails with `dial tcp 10.0.7.20:6379: connect: connection refused`.
+| Affected: **payments** and **search**.
+| Related alerts: 3 unavailable workloads
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/orders -c app -n shop --previous
+| ```
+10:25:00 healthy for 3m0s
+✅ orders in shop (prod-eu-1) is healthy again. It was failing for 14 minutes because the error "dial tcp 10.0.7.20:6379: connect: connection refused" was what several workloads fail with. Three pods were affected.
+✅ orders in shop (prod-eu-1) is healthy again.
+| ✅ orders in shop (**prod-eu-1**) is healthy again.
+| It was failing for 14 minutes because the error `dial tcp 10.0.7.20:6379: connect: connection refused` was what several workloads fail with.
+| Three pods were affected.

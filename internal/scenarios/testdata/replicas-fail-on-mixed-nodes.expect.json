@@ -1,0 +1,13 @@
+{
+  "name": "replicas-fail-on-mixed-nodes",
+  "description": "Three replicas crash, two on arm64 nodes and one on an amd64 node; no clean split is claimed.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//a1",
+    "node//a2",
+    "node//b1"
+  ],
+  "tail": "10m0s"
+}

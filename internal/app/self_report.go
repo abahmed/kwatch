@@ -44,6 +44,7 @@ func (p *pipelineBuild) selfReport() health.SelfReport {
 		out.DashboardLinks = p.links.Status()
 	}
 	out.Startup = p.startupProgress()
+	out.NotWatching = recentNotWatching(self.notWatching, now)
 	return out
 }
 

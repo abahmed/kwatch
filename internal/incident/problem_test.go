@@ -93,3 +93,35 @@ func TestRestoredTitleIsTheBaseline(t *testing.T) {
 
 	assert.Empty(t, m.TakeUntitled())
 }
+
+// A finding that gains evidence naming what it is about (the node and
+// volume of an attachment) makes the diagnosis more specific: the
+// title is written again. Evidence that only goes away does not.
+func TestNamingEvidenceRetitles(t *testing.T) {
+	m, p := titled(t)
+	k, f := titleMember("LivenessProbeFailed", detection.ModeProbeLiveness)
+	f.Evidence = []detection.Evidence{{Label: "node", Value: "n1"}}
+	p.Members[k] = f
+
+	m.noteProblem(p)
+	require.Len(t, m.TakeUntitled(), 1)
+
+	f.Evidence = nil
+	p.Members[k] = f
+	m.noteProblem(p)
+	assert.Empty(t, m.TakeUntitled(), "evidence that went away")
+}
+
+// A member that moved to another incident reshapes the diagnosis: the
+// title, which may name it, is written again.
+func TestMovedMemberRetitles(t *testing.T) {
+	m, p := titled(t)
+	k, _ := titleMember("LivenessProbeFailed", detection.ModeProbeLiveness)
+	delete(p.Members, k)
+	p.Pending.reshaped = true
+
+	m.noteProblem(p)
+
+	assert.Len(t, m.TakeUntitled(), 1)
+	assert.False(t, p.Pending.reshaped, "titled once")
+}

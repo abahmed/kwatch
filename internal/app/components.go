@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/delivery"
-	"github.com/abahmed/kwatch/internal/heartbeat"
 )
 
 func monitoredComponent(
@@ -180,27 +179,6 @@ func publishProviderHealth(deps *serverDeps, published map[string]bool) {
 	}
 	for name := range current {
 		published[name] = true
-	}
-}
-
-func runHeartbeat(ctx context.Context, deps *serverDeps) error {
-	return deps.heartbeat.Start(ctx, heartbeatStatus(deps))
-}
-
-// heartbeatStatus publishes each ping outcome: a failed ping degrades the
-// heartbeat component, the next accepted ping clears it. Heartbeat is
-// optional, so neither changes readiness.
-func heartbeatStatus(deps *serverDeps) heartbeat.StatusFunc {
-	return func(err error) {
-		if deps.healthServer == nil {
-			return
-		}
-		if err != nil {
-			deps.healthServer.SetComponentStatus(
-				"heartbeat", "degraded", "heartbeat_failed", false)
-			return
-		}
-		deps.healthServer.SetComponentStatus("heartbeat", "running", "", true)
 	}
 }
 

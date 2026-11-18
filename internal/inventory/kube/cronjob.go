@@ -36,6 +36,7 @@ func (CronJobSchema) Describe(obj any) (Description, bool) {
 	}
 	template := &cron.Spec.JobTemplate.Spec.Template
 	attrs[AttrTemplateHash] = inventory.Text(TemplateHash(template))
+	setTemplateCalls(attrs, cron.Namespace, template)
 	if last := cron.Status.LastScheduleTime; last != nil {
 		attrs[AttrLastSchedule] = inventory.Time(last.Time)
 	}

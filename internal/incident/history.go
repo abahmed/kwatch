@@ -11,6 +11,7 @@ import (
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 	"github.com/abahmed/kwatch/internal/rootcause"
+	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // Fix says how an earlier occurrence of an incident ended. Values are
@@ -72,9 +73,9 @@ func TriggerOf(cause *rootcause.CauseRecord) string {
 		return ""
 	}
 	switch cause.Rule {
-	case "rollout", "own-change":
+	case explain.RuleRollout, explain.RuleOwnChange:
 		return TriggerRollout
-	case "config-missing-or-changed", "configmap-missing-or-changed":
+	case explain.RuleConfigMissingOrChanged, explain.RuleConfigMapMissingOrChanged:
 		if cause.Change != nil {
 			return TriggerConfig
 		}

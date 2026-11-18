@@ -1,0 +1,21 @@
+--- request 1 of 2
+GET /api/now/table/incident?sysparm_fields=sys_id&sysparm_limit=1&sysparm_query=correlation_id=kwatchkey7497924e83b66aac^active=true^state!=6
+Authorization: Basic <redacted>
+Accept: application/json
+
+(empty body)
+
+--- request 2 of 2
+POST /api/now/table/incident?sysparm_fields=sys_id
+Content-Type: application/json
+Authorization: Basic <redacted>
+Accept: application/json
+
+{
+  "correlation_display": "kwatch",
+  "correlation_id": "kwatchkey7497924e83b66aac",
+  "description": "🔴 payments in shop is crash-looping.\nIt said boom *x* @​channel.\nService web can't serve traffic. Run\nkubectl logs payments -n shop\n\nRef: kwatchkey7497924e83b66aac",
+  "impact": "1",
+  "short_description": "🔴 payments in shop is crash-looping.",
+  "urgency": "1"
+}

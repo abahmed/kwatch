@@ -1,0 +1,11 @@
+{
+  "name": "liveness-timeout-at-cpu-limit",
+  "description": "Liveness probes time out while the containers run at their 200m CPU limit with little throttling.",
+  "root": "deployment/shop/web",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

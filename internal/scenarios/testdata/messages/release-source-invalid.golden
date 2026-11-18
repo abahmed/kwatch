@@ -1,0 +1,13 @@
+10:06:55 settled
+🟠 checkout in shop (prod-eu-1): the new version (checkout:5.2) can't start (it stops at start with "fatal: initialization failed (exit 1)"); the previous version (checkout:5.1) is still serving. Only change in revision 14: image registry.example.com/checkout:5.1 → registry.example.com/checkout:5.2 (by argocd-controller); pods crash-looping since. Its last run lasted ten seconds. Fix: change the image of container app in deployment/checkout. Rolling back to revision 13, the one before this release, undoes it (changes the cluster): kubectl rollout undo deployment/checkout -n shop --to-revision=13
+Proof: the previous revision ran healthy for 65 minutes before the change.
+🟠 checkout in shop (prod-eu-1): the new version (checkout:5.2) can't start; the previous version (checkout:5.1) is still serving.
+| 🟠 **checkout** in **shop** (**prod-eu-1**): the new version (checkout:5.2) can't start (it stops at start with `fatal: initialization failed (exit 1)`); the previous version (checkout:5.1) is still serving.
+| Only change in revision 14: image registry.example.com/checkout:5.1 → registry.example.com/checkout:5.2 (by argocd-controller); pods crash-looping since.
+| Its last run lasted ten seconds.
+| Fix: change the image of container app in deployment/checkout.
+| Rolling back to revision 13, the one before this release, undoes it (changes the cluster):
+| ```
+| kubectl rollout undo deployment/checkout -n shop --to-revision=13
+| ```
+| *Proof: the previous revision ran healthy for 65 minutes before the change.*

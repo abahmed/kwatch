@@ -9,24 +9,18 @@ import (
 )
 
 // Level words a confidence for readers.
-type Level string
+type Level = rootcause.Level
 
 // Confidence levels, from ConfidenceFloor up.
 const (
-	LevelHigh     Level = "high"
-	LevelLikely   Level = "likely"
-	LevelPossible Level = "possible"
+	LevelHigh     = rootcause.LevelHigh
+	LevelLikely   = rootcause.LevelLikely
+	LevelPossible = rootcause.LevelPossible
 )
 
 // levelOf words a confidence at or above the floor.
 func levelOf(confidence float64) Level {
-	switch {
-	case confidence >= ConfidenceHigh:
-		return LevelHigh
-	case confidence >= ConfidenceLikely:
-		return LevelLikely
-	}
-	return LevelPossible
+	return rootcause.LevelOf(confidence)
 }
 
 // Explanation is the result of one solve.
@@ -58,6 +52,11 @@ type Area struct {
 	// Withheld are the failures a shared factor would have explained
 	// when Snapshot.NoSharedFactors withheld it, sorted.
 	Withheld []inventory.EntityID
+	// ChangeRefuted are the failures that changed just before they
+	// began but whose own change a check proves did not break them
+	// (refutedChange), sorted. A cause that blamed that change no
+	// longer holds.
+	ChangeRefuted []inventory.EntityID `json:",omitempty"`
 }
 
 // Unknown reports whether no cause reached the confidence floor.

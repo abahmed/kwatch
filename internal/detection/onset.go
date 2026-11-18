@@ -29,6 +29,8 @@ type onsets struct {
 type onsetEntry struct {
 	at    time.Time
 	owner string
+	// tracked marks a value kept by Track: a reading, not a bad state.
+	tracked bool
 }
 
 func newOnsets() *onsets {
@@ -87,6 +89,24 @@ func (s *onsetScope) ask(key string, at time.Time) {
 	s.kept[key] = onsetEntry{at: at, owner: s.detector}
 }
 
+// track keeps a tracked value under key.
+func (s *onsetScope) track(key string, at time.Time) {
+	s.kept[key] = onsetEntry{at: at, owner: s.detector, tracked: true}
+}
+
+// watching reports whether a bad state of id is remembered: a detector
+// asked for its onset at the last evaluation.
+func (o *onsets) watching(id inventory.EntityID) bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	for _, entry := range o.byEntity[id] {
+		if !entry.tracked {
+			return true
+		}
+	}
+	return false
+}
+
 // Onset returns when the bad state named key of the evaluated entity
 // began. Call it only while the state holds. The first call for a state
 // returns firstSeen (or now when firstSeen is zero); later evaluations
@@ -121,7 +141,7 @@ func (c Context) Track(
 		return time.Time{}, false
 	}
 	entry, found := c.onsets.known[key]
-	c.onsets.ask(key, value)
+	c.onsets.track(key, value)
 	return entry.at, found
 }
 

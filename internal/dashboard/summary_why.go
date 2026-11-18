@@ -48,8 +48,8 @@ func startedSentence(d *IncidentDetail, p incident.Incident) string {
 // Job that fails is always created just before, which explains
 // nothing.
 func ownCreation(p incident.Incident, c inventory.Change) bool {
-	return c.Created && (ownedName(p.Root, c.Entity) ||
-		ownedName(p.Cause.Root, c.Entity))
+	return c.Created && (ownedName(p, p.Root, c.Entity) ||
+		ownedName(p, p.Cause.Root, c.Entity))
 }
 
 // commonCause names the object that fails the others with it. A root
@@ -64,8 +64,10 @@ func commonCause(d *IncidentDetail, p incident.Incident) string {
 	switch {
 	case root.Kind == rootcause.KindScheduling:
 		return schedulingCause(p, root)
-	case failsOnItsOwn(p, root):
+	case failsOnItsOwn(p, root) && runsCode(root):
 		return selfCause(d, p)
+	case failsOnItsOwn(p, root) && !othersFail(p, root):
+		return ownFinding(p, root)
 	}
 	name := strings.ToLower(kindDisplay(root)) + " " + root.Name
 	if n := len(p.Members); n > 1 {

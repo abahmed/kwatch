@@ -84,11 +84,10 @@ func dnsServices(model inventory.Reader) []inventory.EntityID {
 		if id.Name == "kube-dns" {
 			continue
 		}
-		e, ok := model.Entity(id)
+		selector, ok := presentAttribute(model, id, AttrSelector)
 		if !ok {
 			continue
 		}
-		selector, _ := e.Attribute(AttrSelector)
 		if strings.Contains(id.Name, "coredns") ||
 			hasSelector(selector.Value.AsText(), dnsSelector) {
 			out = append(out, id)

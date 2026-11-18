@@ -9,6 +9,27 @@ import (
 	"github.com/abahmed/kwatch/internal/incident"
 )
 
+// restoreSettle is how long after the required sources synced the model
+// counts as rebuilt: one full detection pass, and the first kubelet
+// stats round (every minute by default) and log rounds (every 30
+// seconds) that detectors read, with a margin. A finding still waited
+// out after it keeps its incident in the grace (incident.Config.
+// Watching).
+const restoreSettle = 2 * time.Minute
+
+// endWarm ends the wait of the restored-incidents listing (WarmAt) once
+// no restored incident is in the restore grace any more: the listing
+// goes out when their findings are back, not at the upper bound.
+// Findings back later are listed by the late listing.
+func (e *Engine) endWarm(now time.Time) {
+	warm := &e.announcer.collect.Startup.WarmAt
+	if warm.IsZero() || !now.Before(*warm) || !e.storage.reconciled ||
+		e.deps.Incidents.Rebuilding(now) {
+		return
+	}
+	*warm = now
+}
+
 // restore loads the incidents, the startup marker and the fingerprints
 // of the previous run. It runs before the loop starts.
 func (e *Engine) restore() error {

@@ -105,10 +105,10 @@ type IncidentStore interface {
 	SaveStartup(announce.StartupState) error
 }
 
-// restoreGrace is how long restored incidents wait for their findings to be
-// re-raised before they may recover. It covers the longest detector
-// threshold, and runs from the restore and again from the source sync
-// (see reconcileDowntime): sustains are counted from what kwatch observed.
+// restoreGrace bounds how long restored incidents wait for their
+// findings to be re-raised before they may recover, from the restore and
+// again from the source sync (reconcileDowntime). Each one leaves the
+// grace sooner once its model is rebuilt (restoreSettle).
 const restoreGrace = 10 * time.Minute
 
 // Engine runs the pipeline. One goroutine, Run, makes every decision:
@@ -147,8 +147,8 @@ type Engine struct {
 	// storage writes incidents and history to the store.
 	storage *persistence
 	stats   workerStats
-	// started is when Run began: the floor of observation-time
-	// findings (see explain.Snapshot.Started).
+	links   endedLinks
+	// started: when Run began, floor of observation-time findings.
 	started time.Time
 }
 
@@ -201,6 +201,7 @@ func (e *Engine) Run(ctx context.Context) error {
 	e.startHistory()
 	stopWorkers := e.startWorkers(ctx)
 	defer stopWorkers()
+	e.deps.Incidents.Publish()
 	checks := newRechecks()
 	var nextTick time.Time
 	gate := &saveGate{lastSave: e.deps.Clock.Now()}
@@ -244,6 +245,7 @@ func (e *Engine) reconcileDowntime() {
 	e.storage.reconciled = true
 	e.announcer.collect.Startup.OpenWindow(e.deps.Clock.Now())
 	e.deps.Incidents.ExtendGrace(e.deps.Clock.Now().Add(restoreGrace))
+	e.deps.Incidents.SettleGrace(e.deps.Clock.Now().Add(restoreSettle))
 	// Split before draining: a kind synced now has submitted its list.
 	compare, carried := splitSaved(e.storage.saved, e.deps.Synced)
 	e.storage.saved, e.storage.carried = nil, carried
@@ -260,7 +262,7 @@ func (e *Engine) step(
 ) (time.Time, bool) {
 	dirty := e.dirty
 	e.dirty = nil
-	late := e.storage.carried.due(e.deps.Synced)
+	late := e.dueBeforeDrain()
 	if e.deps.SyncGate != nil {
 		e.deps.SyncGate.Advance()
 	}
@@ -270,6 +272,7 @@ func (e *Engine) step(
 	dirty = append(dirty, checks.due(now)...)
 	e.evaluate(ctx, now, dirty, checks)
 	e.checkCoverage(now)
+	e.endWarm(now)
 	next, decided := e.tick(ctx, now)
 	e.observeLag()
 	return next, decided
@@ -305,7 +308,7 @@ func (e *Engine) apply(
 	var dirty []inventory.EntityID
 	for _, observation := range observations {
 		moved := e.moves(observation)
-		update, err := e.deps.Model.Apply(observation)
+		update, err := e.links.apply(e.deps.Model, observation)
 		if err != nil {
 			klog.V(2).InfoS("pipeline: observation rejected", "error", err,
 				"entity", observation.Entity.String())

@@ -1,0 +1,15 @@
+{
+  "name": "helm-upgrade-fails-beside-other-crash",
+  "description": "A Helm release fails while a workload of another release in its namespace crash-loops: two separate incidents.",
+  "root": "helmrelease/shop/payments",
+  "otherRoots": [
+    "deployment/shop/orders"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n1",
+    "helmrelease/shop/orders"
+  ],
+  "tail": "20m0s"
+}

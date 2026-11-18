@@ -33,7 +33,7 @@
     return text + ". Lowest hour: " + f(low.value) + ".";
   }
 
-  function chart(h) {
+  function chart(h, spans) {
     var top = h.limit || 0;
     h.peaks.forEach(function (p) { top = Math.max(top, p.value); });
     top = top * 1.08 || 1;
@@ -43,6 +43,7 @@
       focusable: "false", "aria-hidden": "true" }, "uc-svg");
     s.appendChild(svg("line", { x1: 0, x2: W, y1: H - 0.5, y2: H - 0.5,
       "vector-effect": "non-scaling-stroke" }, "uc-base"));
+    var off = offHours(spans, end, s, slot);
     h.peaks.forEach(function (p) {
       var i = 24 - Math.round((end - Date.parse(p.start)) / HOUR);
       if (i < 0 || i > 23) return;
@@ -57,15 +58,34 @@
       s.appendChild(svg("line", { x1: 0, x2: W, y1: ly, y2: ly,
         "vector-effect": "non-scaling-stroke" }, "uc-limit"));
     }
-    return { svg: s, from: new Date(end - 24 * HOUR).toISOString() };
+    return { svg: s, from: new Date(end - 24 * HOUR).toISOString(), off: off };
   }
 
-  function item(h) {
+  /* offHours hatches the hours of the chart (ending at end) kwatch was
+     not running for 10 minutes or more: they have no reading, and an
+     empty hour must not read as a quiet one. It returns how many. */
+  function offHours(spans, end, s, slot) {
+    var n = 0, fill = "";
+    for (var i = 0; i < 24; i++) {
+      var from = end - (24 - i) * HOUR, to = from + HOUR, gone = 0;
+      (spans || []).forEach(function (sp) {
+        gone += Math.max(0, Math.min(to, Date.parse(sp.to)) - Math.max(from, Date.parse(sp.from)));
+      });
+      if (gone < 10 * 60 * 1000) continue;
+      fill = fill || KW.offPattern(s);
+      s.appendChild(svg("rect", { x: i * slot, y: 0, width: slot, height: H, fill: fill }, "uc-off"));
+      n++;
+    }
+    return n;
+  }
+
+  function item(h, spans) {
     var box = KW.el("div", "uc");
     box.appendChild(KW.el("p", "use-name mono", h.pod + " / " + h.container));
     var fig = box.appendChild(KW.el("figure", "uc-fig"));
-    var c = chart(h);
-    var text = summary(h);
+    var c = chart(h, spans);
+    var text = summary(h) + (c.off ? " kwatch was not running for " +
+      KW.plural(c.off, "hour", "hours") + " of these (hatched), so they have no reading." : "");
     fig.setAttribute("role", "img");
     fig.setAttribute("aria-label", text);
     fig.appendChild(c.svg);
@@ -95,7 +115,7 @@
     var mem = list.every(function (h) { return h.metric !== "cpu"; });
     box.appendChild(KW.el("h3", "fold-h", (cpu ? "CPU" : mem ? "Memory" : "Memory and CPU") +
       ", last 24 hours"));
-    list.forEach(function (h) { box.appendChild(item(h)); });
+    list.forEach(function (h) { box.appendChild(item(h, inc.notWatching)); });
     var cut = KW.cutCount(inc, "usageHours");
     box.appendChild(KW.el("p", "ev-cap", "The highest reading of each hour, from the node. " +
       (cpu ? "Shown because the container is being slowed down for using its CPU limit." :

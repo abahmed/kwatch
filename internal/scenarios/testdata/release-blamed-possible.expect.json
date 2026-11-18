@@ -1,0 +1,13 @@
+{
+  "name": "release-blamed-possible",
+  "description": "A Secret rotation and a release land together; the new pod crash-loops with an error naming neither while the previous revision serves.",
+  "root": "deployment/shop/checkout",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "ambiguous": true,
+  "tail": "20m0s"
+}

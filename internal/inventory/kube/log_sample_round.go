@@ -37,6 +37,9 @@ type LogSampleConfig struct {
 	Model  inventory.Reader
 	Now    func() time.Time
 	Submit Submit
+	// Paused, when set, reports that the API server is under pressure:
+	// rounds read nothing while it holds. Sampling is optional work.
+	Paused func() bool
 }
 
 // LogSampleRound samples the log of one Running and Ready pod of each
@@ -79,7 +82,8 @@ func (r *LogSampleRound) Round(ctx context.Context) {
 	r.rounds++
 	workloads := r.workloads()
 	r.forgetGone(workloads)
-	if r.rounds < r.deniedUntil || len(workloads) == 0 {
+	if r.rounds < r.deniedUntil || len(workloads) == 0 ||
+		(r.cfg.Paused != nil && r.cfg.Paused()) {
 		return
 	}
 	var observations []inventory.Observation
@@ -189,7 +193,7 @@ func (r *LogSampleRound) record(
 	w inventory.EntityID, lines []string,
 ) inventory.Observation {
 	now := r.cfg.Now()
-	last := countErrors(lines, now)
+	last := countErrors(lines, now, w.Namespace)
 	var earlier []windowCount
 	for _, old := range r.history[w] {
 		if now.Sub(old.at) <= logSampleHistory {

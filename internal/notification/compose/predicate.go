@@ -19,7 +19,7 @@ func predicate(id inventory.EntityID, summary string) string {
 			break
 		}
 	}
-	summary = rewriteSummary(lowerFirst(summary))
+	summary = namedHelper(id, rewriteSummary(lowerFirst(summary)))
 	for _, verb := range subjectlessVerbs {
 		if hasPrefixFold(summary, verb) {
 			return lowerFirst(summary)

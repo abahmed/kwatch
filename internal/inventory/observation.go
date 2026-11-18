@@ -129,6 +129,8 @@ type changeWire struct {
 	Actor    string            `json:"actor,omitempty"`
 	Cause    string            `json:"cause,omitempty"`
 	App      string            `json:"app,omitempty"`
+	Repo     string            `json:"repo,omitempty"`
+	Commit   string            `json:"commit,omitempty"`
 	Revision string            `json:"revision,omitempty"`
 	Created  bool              `json:"created,omitempty"`
 	Deleted  bool              `json:"deleted,omitempty"`
@@ -236,6 +238,7 @@ func toChangeWire(c Change) *changeWire {
 	wire := &changeWire{
 		At: wireTime(c.At), Observed: wireTime(c.Observed),
 		Actor: c.Actor, Cause: c.Cause, App: c.App, Revision: c.Revision,
+		Repo: c.Repo, Commit: c.Commit,
 		Created: c.Created, Deleted: c.Deleted,
 	}
 	if !c.Entity.IsZero() {
@@ -252,6 +255,7 @@ func (w *changeWire) change() Change {
 	out := Change{
 		At: fromWireTime(w.At), Observed: fromWireTime(w.Observed),
 		Actor: w.Actor, Cause: w.Cause, App: w.App, Revision: w.Revision,
+		Repo: w.Repo, Commit: w.Commit,
 		Created: w.Created, Deleted: w.Deleted,
 	}
 	if w.Entity != nil {

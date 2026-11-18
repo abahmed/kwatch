@@ -34,7 +34,7 @@ var volumeRows = []Row{
 		// The attach-detach controller refuses a ReadWriteOnce volume
 		// while another pod still uses it on another node: the old pod
 		// is what the new one waits for.
-		Name: "volume-held-by-pod",
+		Name: RuleVolumeHeldByPod,
 		Cause: Side{Kind: kube.KindPod,
 			Modes: []detection.Mode{ModeHoldsVolume}},
 		Link:   LinkHoldsVolume,
@@ -44,7 +44,7 @@ var volumeRows = []Row{
 	{
 		// No pod holds the volume any more but its attachment is still
 		// on the old node.
-		Name: "volume-held-by-node",
+		Name: RuleVolumeHeldByNode,
 		Cause: Side{Kind: kube.KindNode,
 			Modes: []detection.Mode{ModeHoldsVolume}},
 		Link:   LinkHoldsVolume,
@@ -52,7 +52,7 @@ var volumeRows = []Row{
 		Prior:  0.7,
 	},
 	{
-		Name: "provisioner-down",
+		Name: RuleProvisionerDown,
 		Cause: Side{Group: AnyGroup, Kind: AnyKind,
 			Modes: []detection.Mode{ModeProvisionerDown}},
 		Link:   LinkProvisions,
@@ -62,7 +62,7 @@ var volumeRows = []Row{
 	{
 		// The same provisioner, seen from the pod that waits for the
 		// claim: the claim is only the way from the pod to it.
-		Name: "provisioner-down-pending",
+		Name: RuleProvisionerDownPending,
 		Cause: Side{Group: AnyGroup, Kind: AnyKind,
 			Modes: []detection.Mode{ModeProvisionerDown}},
 		Link: LinkProvisions,
@@ -71,7 +71,7 @@ var volumeRows = []Row{
 		Prior: 0.8,
 	},
 	{
-		Name: "claim-no-storage-class",
+		Name: RuleClaimNoStorageClass,
 		Cause: Side{Kind: kube.KindPVC,
 			Modes: []detection.Mode{ModeNoStorageClass}},
 		Link:   LinkSelf,

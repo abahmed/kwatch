@@ -41,14 +41,17 @@ func probeLead(f caseFacts) (string, bool) {
 		" " + probeAnswer(m) + startErrorClause(f, m), true
 }
 
-// probeLeadMember is the probe failure probeLead words, and its kind.
+// probeLeadMember is the probe failure probeLead words, and its kind:
+// only one of the subject's own pods (owns), since the lead tells it
+// as the subject's.
 func probeLeadMember(f caseFacts) (detection.Finding,
 	struct{ reason, effect string }, bool) {
+	subject := affectedWorkload(f)
 	for _, kind := range probeLeadKinds {
 		for _, m := range f.members {
 			// A container that exits on its own is not killed by its
 			// probe: its exit leads (ownLead).
-			if m.Reason == kind.reason &&
+			if m.Reason == kind.reason && f.owns(subject, m.Entity) &&
 				evidence(m, detection.EvidenceExitedOnOwn) == "" {
 				return m, kind, true
 			}

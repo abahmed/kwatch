@@ -1,0 +1,12 @@
+10:37:55 settled
+🟠 checkout is failing in shop (prod-eu-1) after the 10:36 UTC release of registry.example.com/checkout:5.3. alice released it; the previous image was registry.example.com/checkout:5.2. It fails with "fatal: initialization failed (exit 1)". It runs a single replica. Fix: change the image of container app in deployment/checkout. Rolling back to revision 14, the one before this release, undoes it (changes the cluster): kubectl rollout undo deployment/checkout -n shop --to-revision=14
+🟠 checkout is failing in shop (prod-eu-1) after the 10:36 UTC release of registry.example.com/checkout:5.3.
+| 🟠 **checkout** is failing in **shop** (**prod-eu-1**) after the 10:36 UTC release of registry.example.com/checkout:5.3.
+| alice released it; the previous image was registry.example.com/checkout:5.2.
+| It fails with `fatal: initialization failed (exit 1)`.
+| It runs a single replica.
+| Fix: change the image of container app in deployment/checkout.
+| Rolling back to revision 14, the one before this release, undoes it (changes the cluster):
+| ```
+| kubectl rollout undo deployment/checkout -n shop --to-revision=14
+| ```

@@ -1,0 +1,8 @@
+{
+  "name": "helm-pending-upgrade-stuck",
+  "description": "A Helm upgrade stays pending-upgrade far longer than an upgrade takes.",
+  "root": "helmrelease/shop/payments",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "30m0s"
+}

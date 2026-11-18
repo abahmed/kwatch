@@ -37,6 +37,7 @@ var kindWords = map[inventory.Kind]string{
 	kube.KindRuntimeClass:        "runtime class",
 	kube.KindLimitRange:          "limit range",
 	kube.KindNodePool:            "node pool",
+	kube.KindHelmRelease:         "Helm release",
 	"rolebinding":                "role binding",
 	"clusterrolebinding":         "cluster role binding",
 	"clusterrole":                "cluster role",

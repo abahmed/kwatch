@@ -17,6 +17,7 @@ func TestModelHealthFieldsNameTheBigStructures(t *testing.T) {
 		got[fields[i].(string)] = true
 	}
 	for _, key := range []string{"heapLiveMiB", "heapGoalMiB", "goroutines",
+		"heapIdleUnreleasedMiB", "stackInuseMiB", "gcSysMiB",
 		"entities", "tombstones", "notes", "noteParts", "recentChanges",
 		"churnChanges", "baselines", "healthMarks"} {
 		if !got[key] {

@@ -89,7 +89,7 @@ func TestClusterClientsCountTheirAnswers(t *testing.T) {
 				`{"kind":"NamespaceList","apiVersion":"v1","items":[]}`))
 		}))
 	defer server.Close()
-	clients, err := newClusterClients(&rest.Config{Host: server.URL})
+	clients, err := newClusterClients(&rest.Config{Host: server.URL}, nil)
 	require.NoError(t, err)
 	require.NotNil(t, clients.Answers)
 	_, err = clients.Kubernetes.CoreV1().Namespaces().List(

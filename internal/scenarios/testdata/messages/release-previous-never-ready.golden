@@ -1,0 +1,11 @@
+10:06:55 settled
+🟠 checkout is failing in shop (prod-eu-1) after the 10:05 UTC release of registry.example.com/checkout:5.2. alice changed the image and one other field. It fails with "fatal: initialization failed (exit 1)". kwatch has no record of revision 13 running healthily, so it does not suggest rolling back to it. To see the rollout state, run kubectl rollout status deployment/checkout -n shop
+🟠 checkout is failing in shop (prod-eu-1) after the 10:05 UTC release of registry.example.com/checkout:5.2.
+| 🟠 **checkout** is failing in **shop** (**prod-eu-1**) after the 10:05 UTC release of registry.example.com/checkout:5.2.
+| alice changed the image and one other field.
+| It fails with `fatal: initialization failed (exit 1)`.
+| kwatch has no record of revision 13 running healthily, so it does not suggest rolling back to it.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/checkout -n shop
+| ```

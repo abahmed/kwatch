@@ -1,0 +1,21 @@
+--- request 1 of 2
+GET /api/now/table/incident?sysparm_fields=sys_id&sysparm_limit=1&sysparm_query=correlation_id=kwatchkey3789c0f3c9b01dc5^active=true^state!=6
+Authorization: Basic <redacted>
+Accept: application/json
+
+(empty body)
+
+--- request 2 of 2
+POST /api/now/table/incident?sysparm_fields=sys_id
+Content-Type: application/json
+Authorization: Basic <redacted>
+Accept: application/json
+
+{
+  "correlation_display": "kwatch",
+  "correlation_id": "kwatchkey3789c0f3c9b01dc5",
+  "description": "🔴 payments in shop is crash-looping.\nCaused by: Node n1 is not ready.\nCause in dashboard: https://kwatch.example/issues/p-cause\nEarlier times: https://kwatch.example/issues?status=all&like=p-link\nOpen in dashboard: https://kwatch.example/issues/p-link\n\n----\npanic: out of memory\n----\n\nRef: kwatchkey3789c0f3c9b01dc5",
+  "impact": "1",
+  "short_description": "🔴 payments in shop is crash-looping.",
+  "urgency": "1"
+}

@@ -43,6 +43,9 @@ type CrashLogConfig struct {
 	Model   inventory.Reader
 	Now     func() time.Time
 	Submit  Submit
+	// Paused, when set, reports that the API server is under pressure:
+	// the reads of running containers' logs wait while it holds.
+	Paused func() bool
 }
 
 // crashRun identifies one termination of a container: a new restart
@@ -89,6 +92,8 @@ type CrashLogRound struct {
 	// denied is whether the last read was refused (no pods/log access).
 	// It is read by other goroutines through PodLogsForbidden.
 	denied atomic.Bool
+	// readOK is whether any pod log read has ever succeeded.
+	readOK atomic.Bool
 	// hold is the backoff after a refused read (see crash_log_denied.go).
 	hold deniedHold
 }
@@ -179,6 +184,7 @@ func (r *CrashLogRound) crashPass(
 			continue
 		}
 		r.denied.Store(false)
+		r.readOK.Store(true)
 		r.read[id] = run
 		observations = append(observations,
 			CrashLogObservation(id, r.cfg.Now(), lines))

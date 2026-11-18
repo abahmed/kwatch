@@ -48,7 +48,16 @@ func podLeaving(pod inventory.Entity) bool {
 }
 
 func podFinished(pod inventory.Entity) bool {
-	phase := text(pod, kube.AttrPhase)
+	return finishedPhase(text(pod, kube.AttrPhase))
+}
+
+// podFinishedID is podFinished read from the model without copying the
+// pod: an absent pod, like one without a phase, has not finished.
+func podFinishedID(model inventory.Reader, id inventory.EntityID) bool {
+	return finishedPhase(textOf(model, id, kube.AttrPhase))
+}
+
+func finishedPhase(phase string) bool {
 	return phase == "Succeeded" || phase == "Failed"
 }
 

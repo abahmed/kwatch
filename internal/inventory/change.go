@@ -26,7 +26,13 @@ type Change struct {
 	// Cause is the kubernetes.io/change-cause annotation after the
 	// change, when the person or tool that made it recorded one:
 	// "bump api to 2.4 for the payments fix". Empty when unset.
-	Cause   string `json:",omitempty"`
+	Cause string `json:",omitempty"`
+	// Repo and Commit are the source repository (an https address) and
+	// the commit SHA or tag a CI or GitOps tool recorded on the object
+	// (org.opencontainers.image.source and .revision annotations).
+	// Each is empty when unset or not valid.
+	Repo    string `json:",omitempty"`
+	Commit  string `json:",omitempty"`
 	Created bool
 	Deleted bool
 	Fields  []FieldChange

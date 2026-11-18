@@ -201,12 +201,20 @@ const (
 	// their log reports a burst of errors new against the workload's own
 	// recent baseline.
 	LogErrorBurst = "LogErrorBurst"
+	// LogServiceMissing is a workload whose log keeps failing to resolve
+	// the name of a Service of the cluster that does not exist.
+	LogServiceMissing = "LogServiceMissing"
 	// ReleaseRegression is a Deployment whose new revision restarts far
 	// more often than the revision it replaced did.
 	ReleaseRegression = "ReleaseRegression"
 	// LeaseStale is a controller's Lease that its running holder stopped
 	// renewing: the controller runs but does not work.
 	LeaseStale = "LeaseStale"
+	// HelmReleaseFailed is a Helm release whose latest revision failed.
+	HelmReleaseFailed = "HelmReleaseFailed"
+	// HelmReleaseStuck is a Helm release whose latest revision has been
+	// pending (install, upgrade, rollback) or uninstalling for long.
+	HelmReleaseStuck = "HelmReleaseStuck"
 	// DeprecatedAPIInUse is an API version that something still requests
 	// and that a Kubernetes release removes.
 	DeprecatedAPIInUse = "DeprecatedAPIInUse"

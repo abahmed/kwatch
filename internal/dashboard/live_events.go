@@ -29,8 +29,7 @@ func (s *Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 	if !onlyGet(w, r) {
 		return
 	}
-	reader := s.sources.incidents.Load()
-	if reader == nil {
+	if s.view() == nil {
 		unavailable(w)
 		return
 	}
@@ -95,15 +94,15 @@ func (st liveStream) send(event string, data any) error {
 	return st.rc.Flush()
 }
 
-// checkLive compares the incidents if the engine ran since the last
-// comparison.
+// checkLive compares the incidents if the engine published a new view
+// since the last comparison.
 func (s *Server) checkLive() {
-	reader := s.sources.incidents.Load()
-	if reader == nil {
+	v := s.view()
+	if v == nil {
 		return
 	}
-	s.live.check(s.now.Now(), s.sources.lastScan.Load(),
-		(*reader).Incidents, s.texts.redact)
+	s.live.check(s.now.Now(), int64(v.Revision), v.Incidents,
+		s.texts.redact)
 }
 
 // streamEvents runs one stream until it ends.

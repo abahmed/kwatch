@@ -14,16 +14,26 @@ import (
 // delete transactions, so a large overshoot costs few full scans.
 const victimsPerBatch = 20
 
-// victim is one entry the size cap may delete.
+// victim is one entry the size cap may delete. rank orders it before
+// its age: a lower rank goes first (see hold.go).
 type victim struct {
 	bucket Bucket
 	key    []byte
 	at     time.Time
 	size   int64
+	rank   int
 }
 
-// victimHeap keeps the oldest entries seen so far. The youngest kept
-// entry is on top, so it is the first to make way for an older one.
+// before reports whether a goes before b: a lower rank, then older.
+func (a victim) before(b victim) bool {
+	if a.rank != b.rank {
+		return a.rank < b.rank
+	}
+	return a.at.Before(b.at)
+}
+
+// victimHeap keeps the first victims seen so far (lowest rank, then
+// oldest). The last kept one is on top, so it is the first to make way.
 type victimHeap struct {
 	items []victim
 	bytes int64
@@ -32,7 +42,7 @@ type victimHeap struct {
 func (h victimHeap) Len() int { return len(h.items) }
 
 func (h victimHeap) Less(i, j int) bool {
-	return h.items[i].at.After(h.items[j].at)
+	return h.items[j].before(h.items[i])
 }
 
 func (h victimHeap) Swap(i, j int) {
@@ -81,25 +91,28 @@ func (s *Store) evictOldest(
 	return total, nil
 }
 
-// collectVictims scans buckets once and returns, oldest first, the
-// oldest evictable entries that together free over bytes, at most limit.
+// collectVictims scans buckets once and returns, in eviction order, the
+// first evictable entries that together free over bytes, at most limit:
+// entries nobody holds first, oldest first, then the held ones by rank
+// (hold.go).
 func (s *Store) collectVictims(
 	ctx context.Context, buckets []Bucket, over int64, limit int,
 ) ([]victim, error) {
 	h := &victimHeap{}
+	held := map[Bucket]map[string]LogHold{}
+	for _, b := range buckets {
+		held[b] = s.holds(b)
+	}
 	s.counters.scans.Add(1)
 	err := s.view(func(tx *bolt.Tx) error {
 		visited := 0
 		for _, b := range buckets {
-			cursor := tx.Bucket([]byte(b)).Cursor()
-			for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-				if visited++; visited%ctxCheckEvery == 0 &&
-					ctx.Err() != nil {
-					return ctx.Err()
-				}
-				if c, ok := candidate(b, k, v); ok {
-					h.offer(c, over, limit)
-				}
+			ranker := &holdRanker{held: held[b], now: s.now(),
+				emit: func(c victim) { h.offer(c, over, limit) }}
+			err := rankBucket(ctx, tx.Bucket([]byte(b)).Cursor(), b,
+				ranker, &visited)
+			if err != nil {
+				return err
 			}
 		}
 		return nil
@@ -108,9 +121,26 @@ func (s *Store) collectVictims(
 		return nil, err
 	}
 	sort.Slice(h.items, func(i, j int) bool {
-		return h.items[i].at.Before(h.items[j].at)
+		return h.items[i].before(h.items[j])
 	})
 	return h.items, nil
+}
+
+// rankBucket offers every evictable entry of b to ranker, in key order.
+func rankBucket(
+	ctx context.Context, cursor *bolt.Cursor, b Bucket,
+	ranker *holdRanker, visited *int,
+) error {
+	for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+		if *visited++; *visited%ctxCheckEvery == 0 && ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if c, ok := candidate(b, k, v); ok {
+			ranker.add(logEntity(k), c)
+		}
+	}
+	ranker.flush()
+	return nil
 }
 
 // deleteVictims deletes victims in transactions of at most batch keys.
@@ -168,7 +198,8 @@ func candidate(b Bucket, key, data []byte) (victim, bool) {
 		return victim{}, false
 	}
 	size := int64(len(key) + len(data))
-	return victim{b, append([]byte(nil), key...), at, size}, true
+	return victim{bucket: b, key: append([]byte(nil), key...), at: at,
+		size: size}, true
 }
 
 // evictableAt reports whether an entry is evictable and its age, the

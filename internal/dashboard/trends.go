@@ -239,7 +239,7 @@ func noisy(p incident.Incident, n int) TrendIssue {
 		Severity: item.Severity, State: item.State,
 		Namespace: item.Namespace, Workload: item.Workload,
 		WorkloadKind: item.WorkloadKind, Opened: n,
-		RepeatCount: p.RepeatCount}
+		RepeatCount: failedAgain(p)}
 }
 
 // noisier orders the most openings first, then flapping issues, then the

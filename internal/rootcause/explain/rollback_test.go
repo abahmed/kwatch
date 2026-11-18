@@ -22,7 +22,7 @@ func TestRollbackRevisionFromDeploymentCover(t *testing.T) {
 				kube.AttrRevision: inventory.Text(revision)}})
 		f.relate(rs, inventory.OwnedBy, dep)
 	}
-	got := rollbackRevision(f.snapshot().Model, []inventory.EntityID{dep})
+	got := rollbackRevision(f.snapshot().Model, dep)
 	if got != "5" {
 		t.Fatalf("rollback revision = %q, want 5", got)
 	}
@@ -38,7 +38,7 @@ func TestRollbackRevisionNeedsAnEarlierRevision(t *testing.T) {
 		Entity: rs, Attributes: map[string]inventory.Value{
 			kube.AttrRevision: inventory.Text("1")}})
 	f.relate(rs, inventory.OwnedBy, dep)
-	got := rollbackRevision(f.snapshot().Model, []inventory.EntityID{dep})
+	got := rollbackRevision(f.snapshot().Model, dep)
 	if got != "" {
 		t.Fatalf("rollback revision = %q, want none", got)
 	}
@@ -75,22 +75,25 @@ func TestRollbackRevisionIgnoresTheCoveredPodsOwnRevision(t *testing.T) {
 	f := newFixture(t)
 	_, old, _ := revisionsFixture(f)
 
-	got := rollbackRevision(f.snapshot().Model, []inventory.EntityID{old})
+	got := rollbackRevision(f.snapshot().Model, old)
 
 	if got != "5" {
 		t.Fatalf("rollback revision = %q, want 5", got)
 	}
 }
 
-// A first covered pod with no Deployment does not stop the search.
-func TestRollbackRevisionTriesLaterCovers(t *testing.T) {
+// A first covered pod with no Deployment does not stop the search for
+// the blamed workload.
+func TestBlamedWorkloadTriesLaterCovers(t *testing.T) {
 	f := newFixture(t)
 	bare, _, newest := revisionsFixture(f)
+	dep := inventory.CoreID(kube.KindDeployment, "shop", "web")
 
-	got := rollbackRevision(f.snapshot().Model,
+	got, ok := blamedWorkload(f.snapshot().Model,
+		inventory.Change{Entity: dep},
 		[]inventory.EntityID{bare, newest})
 
-	if got != "5" {
-		t.Fatalf("rollback revision = %q, want 5", got)
+	if !ok || got != dep {
+		t.Fatalf("blamed workload = %v, %v; want %v", got, ok, dep)
 	}
 }

@@ -30,13 +30,7 @@ func (w *historyWriter) trimChangesLocked() {
 func (w *historyWriter) addHealthy(
 	id inventory.EntityID, mark inventory.HealthMark,
 ) {
-	w.mu.Lock()
-	if w.healthy == nil {
-		w.healthy = map[string]healthyRecord{}
-	}
-	w.healthy[id.String()] = healthyRecord{Mark: mark}
-	w.mu.Unlock()
-	notify(w.wake)
+	w.queueHealthy(id, healthyRecord{Mark: mark})
 }
 
 // flushChanges writes the queued changes with the change set each
@@ -68,8 +62,8 @@ func (w *historyWriter) flushChanges() bool {
 	return true
 }
 
-// flushHealthy writes the queued last-healthy marks. A failed write is
-// kept, unless a newer mark of the entity came in meanwhile.
+// flushHealthy writes the queued last-healthy marks and served
+// revisions. A failed write is kept beneath what came in meanwhile.
 func (w *historyWriter) flushHealthy() bool {
 	store, ok := w.store.(healthyStore)
 	w.mu.Lock()
@@ -86,9 +80,10 @@ func (w *historyWriter) flushHealthy() bool {
 			w.healthy = map[string]healthyRecord{}
 		}
 		for entity, record := range batch {
-			if _, newer := w.healthy[entity]; !newer {
-				w.healthy[entity] = record
+			if newer, ok := w.healthy[entity]; ok {
+				record = mergeHealthy(record, newer)
 			}
+			w.healthy[entity] = record
 		}
 		w.mu.Unlock()
 		return false

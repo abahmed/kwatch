@@ -5,12 +5,17 @@ import "time"
 // Timing is how fast kwatch saw and told: StartedAt is when the first
 // failure began (as Kubernetes reported it), NoticedAt when kwatch
 // opened the incident, ToldAt when a channel first accepted a message
-// about it and ToldVia that channel. Each is omitted when unknown.
+// about the issue (its first opening included, when it came back) and
+// ToldVia that channel, LastToldAt when one last did and LastToldVia
+// that channel: the page says "told at" for the first and "last
+// update" for the last. Each is omitted when unknown.
 type Timing struct {
-	StartedAt time.Time `json:"startedAt,omitzero"`
-	NoticedAt time.Time `json:"noticedAt,omitzero"`
-	ToldAt    time.Time `json:"toldAt,omitzero"`
-	ToldVia   string    `json:"toldVia,omitempty"`
+	StartedAt   time.Time `json:"startedAt,omitzero"`
+	NoticedAt   time.Time `json:"noticedAt,omitzero"`
+	ToldAt      time.Time `json:"toldAt,omitzero"`
+	ToldVia     string    `json:"toldVia,omitempty"`
+	LastToldAt  time.Time `json:"lastToldAt,omitzero"`
+	LastToldVia string    `json:"lastToldVia,omitempty"`
 }
 
 // SameTimeItem is another issue that started within a few minutes of

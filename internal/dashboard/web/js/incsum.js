@@ -159,10 +159,14 @@
     if (known) {
       KW.hideMarks(dd.appendChild(KW.el("p", "ds-why-t")), causeText(inc, text));
       if (CONF[w.confidence]) dd.appendChild(KW.el("p", "ds-sub", CONF[w.confidence]));
+      var also = checkedBlock(w.checked);
+      if (also) dd.appendChild(also);
     } else {
       unknownCause(dd, inc);
     }
     if (inc.release) dd.appendChild(releaseLine(inc.release));
+    var src = inc.release && KW.sourceLinks && KW.sourceLinks(inc.release.links, "ds-src");
+    if (src) dd.appendChild(src);
     proofBlock(dd, root, inc);
   }
 
@@ -178,9 +182,31 @@
     }
     dd.appendChild(KW.el("p", "ds-why-t ds-unknown", inc.state === "resolved" ? "Cause not found." : "Cause not found yet."));
     var more = inc.state === "settling" ? "kwatch is still collecting what failed around it." : "";
+    var list = checkedBlock((sum(inc).why || {}).checked);
     if (inc.evidence && inc.evidence.length) more = [more, "Open Proof to see what kwatch checked."].filter(Boolean).join(" ");
-    if (KW.checkedText) more = [more, KW.checkedText(inc)].filter(Boolean).join(" ");
+    if (!list && KW.checkedText) more = [more, KW.checkedText(inc)].filter(Boolean).join(" ");
     if (more) dd.appendChild(KW.el("p", "ds-sub", more));
+    if (list) dd.appendChild(list);
+  }
+
+  /* checkedBlock: what kwatch checked for this issue and found fine
+     (summary.why.checked, only what it checked for this one), as
+     "kwatch checked:" and a list, or "Also ruled out:" under a
+     possible cause, then what it could not check. null without. */
+  function checkedBlock(c) {
+    var fine = (c && c.fine) || [], not = (c && c.unchecked) || [];
+    if (!fine.length && !not.length) return null;
+    var box = KW.el("div", "ds-checked");
+    if (fine.length) {
+      box.appendChild(KW.el("p", "ds-sub", c.also ? "Also ruled out:" : "kwatch checked:"));
+      var ul = box.appendChild(KW.el("ul", "ds-checked-l"));
+      fine.forEach(function (t) { ul.appendChild(KW.el("li", "", t)); });
+    }
+    not.forEach(function (t) {
+      var s = /^kwatch /.test(t) ? t : t.charAt(0).toUpperCase() + t.slice(1);
+      box.appendChild(KW.el("p", "ds-sub ds-unchecked", s + "."));
+    });
+    return box;
   }
 
   /* proofBlock: the decisive line with Copy, the key number and the
@@ -193,6 +219,8 @@
       cap.appendChild(KW.el("b", "", T.proof + ": "));
       KW.hideMarks(cap.appendChild(KW.el("span")), p.text);
       if (p.detail) dd.appendChild(raw(p.detail));
+      var src = !inc.release && KW.sourceLinks && KW.sourceLinks(p.links, "ds-src");
+      if (src) dd.appendChild(src);
     }
     if (n) dd.appendChild(KW.el("p", "ds-key", n));
     if (total > (p ? 1 : 0) + (n ? 1 : 0) || (inc.evidence && inc.evidence.length)) {
@@ -275,7 +303,10 @@
   /* ---- who was alerted ---- */
 
   var PAGER = { open: "alerted · still open", closed: "alerted · closed", failed: "alert failed", pending: "alert pending, will retry" };
-  var SENT = { failed: "failed", pending: "sending, will retry" };
+  /* An issue tracker keeps a ticket, never pages anyone; a keyed
+     webhook only says whether its alert is still open there. */
+  var TICKET = { open: "ticket open", closed: "ticket closed", failed: "ticket failed", pending: "ticket pending, will retry" };
+  var SENT = { failed: "failed", pending: "sending, will retry", open: "sent · still open", closed: "sent · closed" };
 
   function first(inc) {
     var t = inc.timing || {};
@@ -316,17 +347,18 @@
         if (KW.valid(from) && gap >= 60000) p.appendChild(document.createTextNode(" · " + KW.lasted(from, f.at) + " after it started"));
       });
     }
-    var latest = list.filter(function (c) { return c.kind !== "pager" && KW.valid(c.at); })
-      .sort(function (a, b) { return ms(b.at) - ms(a.at); })[0];
+    // The server words both ends: timing.toldAt is the first send,
+    // timing.lastToldAt the latest one.
+    var latest = KW.valid(t.lastToldAt) ? { name: t.lastToldVia, at: t.lastToldAt } : null;
     if (latest && (!f || ms(latest.at) - ms(f.at) >= 60000)) {
       line(dd, "Last update:", function (p) {
-        p.appendChild(document.createTextNode(latest.name || latest.provider));
+        p.appendChild(document.createTextNode(latest.name || "a channel"));
         p.appendChild(document.createTextNode(" · "));
         p.appendChild(KW.hm(latest.at));
       });
     }
     list.forEach(function (c) {
-      var word = c.kind === "pager" ? PAGER[c.state] : SENT[c.state];
+      var word = (c.kind === "pager" ? PAGER : c.kind === "ticket" ? TICKET : SENT)[c.state];
       if (!word) return;
       var p = dd.appendChild(KW.el("p", "ds-alert" + (c.state === "failed" ? " t-bad" : "")));
       p.textContent = (c.name || c.provider) + ": " + word;

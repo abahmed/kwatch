@@ -101,3 +101,32 @@ func TestStuckObjectOfAnotherFinalizerStaysApart(t *testing.T) {
 	assert.Len(t, r.m.Export(), 2)
 	assert.Equal(t, other.Entity, r.of(other.Entity).Root)
 }
+
+// One object, one incident: an object that roots a live incident with
+// a failure no group takes is not also listed in another object's group
+// of stuck peers. The twin: an object whose only failure is the stuck
+// deletion joins its peer's incident.
+func TestStuckObjectWithItsOwnIncidentStaysThere(t *testing.T) {
+	for _, own := range []bool{false, true} {
+		r := newRig(t, Config{})
+		r.raise(at(0), stuckOn("token-a", "example.com/cleanup"))
+		second := stuckOn("token-b", "example.com/cleanup")
+		if own {
+			r.raise(at(30*time.Second), sig(second.Entity,
+				reasons.TLSCertExpired, detection.Warning))
+		}
+
+		r.raise(at(time.Minute), second)
+
+		holders := 0
+		for _, p := range r.m.Incidents() {
+			for key := range p.Members {
+				if key.Entity == second.Entity && p.State != Resolved {
+					holders++
+					break
+				}
+			}
+		}
+		assert.Equal(t, 1, holders, "own incident = %v", own)
+	}
+}

@@ -78,6 +78,11 @@ func (p PolicyRuntime) Runbooks() map[string]string {
 	return cloneStringMap(p.values.runbooks)
 }
 
+// GitOpsLinks returns the GitOps web page templates by tool.
+func (p PolicyRuntime) GitOpsLinks() map[string]string {
+	return cloneStringMap(p.values.gitOpsLinks)
+}
+
 // Maintenance returns the maintenance annotation settings.
 func (p PolicyRuntime) Maintenance() MaintenanceConfig {
 	return p.values.maintenance

@@ -49,6 +49,10 @@ type bootstrap struct {
 	license *licenseSetup
 	// overlay is how the startup KwatchConfig turned out.
 	overlay overlayOutcome
+	// displayName is the cluster name messages and the dashboard show:
+	// the configured one, or one detected at start. Alert keys never
+	// use a detected name (clusterDisplayName).
+	displayName string
 }
 
 func newBootstrap(
@@ -78,12 +82,12 @@ func newBootstrap(
 	// The overlay may change monitor and alert settings, so the snapshot
 	// and the clients that depend on it (outbound HTTP, kubelet) are built
 	// once, here.
-	runtime := config.RuntimeConfigFor(cfg)
+	runtime, displayName, nameFrom := clusterRuntime(
+		ctx, cfg, clients.Kubernetes)
 	clients, err = clients.WithRuntime(runtime)
 	if err != nil {
 		return nil, fmt.Errorf("create configured clients: %w", err)
 	}
-
 	wake := &threadWake{}
 	deliveryManager, err := newDeliveryManager(
 		runtime, clients, clockSource, wake, entitlements)
@@ -94,11 +98,26 @@ func newBootstrap(
 		runtime, clockSource, overlay.invalid, entitlements)
 	dashboardServer := newDashboardServer(
 		ctx, runtime, clients.Kubernetes, clockSource, entitlements)
-	return newBootstrapDeps(
+	dashboardServer.SetClusterNameSource(nameFrom)
+	boot := newBootstrapDeps(
 		runtime, clients, healthServer, dashboardServer, deliveryManager,
 		clockSource, wake, entitlements, inactive, notice, overlay,
 		processStart,
-	), nil
+	)
+	boot.displayName = displayName
+	return boot, nil
+}
+
+// clusterRuntime is the runtime snapshot of cfg and the cluster name
+// shown to people, with where it came from. The snapshot keeps the
+// configured name (or none): alert keys and tracker markers are built
+// from it, so a name detected now, and not on a later start, never
+// changes the key of an alert that is already open.
+func clusterRuntime(
+	ctx context.Context, cfg *config.Config, client kubernetes.Interface,
+) (runtime config.RuntimeConfig, name, from string) {
+	name, from = clusterDisplayName(ctx, cfg, client)
+	return config.RuntimeConfigFor(cfg), name, from
 }
 
 // newBootstrapDeps assembles the bootstrap struct once the servers,
@@ -252,6 +271,7 @@ func newDashboardServer(
 		},
 		// The active session compacts with the default policy.
 		StateCapBytes: storage.DefaultPolicy().SizeCap,
+		NodeName:      os.Getenv("NODE_NAME"),
 	}, now)
 }
 

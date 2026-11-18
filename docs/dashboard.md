@@ -50,8 +50,17 @@ Two credentials live in the Secret `<release>-dashboard` (keys `password`
 and `token`), or in `dashboard.existingSecret`:
 
 - **Password**: people sign in on the web page (`POST /login`). The session
-  cookie lasts 12 hours, is `HttpOnly` and `SameSite=Strict`, and ends when
-  kwatch restarts; the sign-in page then says "You were signed out because
+  cookie lasts 12 hours from sign-in, is `HttpOnly`, `SameSite=Strict`
+  and, in shared mode, `Secure`. Sessions are kept in the state file, so a
+  kwatch restart does not sign anyone out. Signing out ends the session at
+  once, also for later restarts; a new password or token signs everyone
+  out. The state file keeps only a random signing seed, a slow (PBKDF2)
+  digest of the password and token, and the SHA-256 of each session ID
+  with its expiry: never the password or a session ID. At most 1,024
+  sessions are kept; past that a new sign-in ends the oldest. A new or
+  reset state file, a standby replica, or a kwatch that could not read
+  its state file keeps sessions in memory only, so they end when kwatch
+  restarts; the sign-in page then says "You were signed out because
   kwatch restarted."
 - **Token**: API clients send `Authorization: Bearer <token>`. In shared
   mode the token must arrive over https.
@@ -130,7 +139,10 @@ shows them and caches nothing.
   shown (already failing for 30+ days before kwatch started
   watching)", opens the list of them with how long each has failed;
   the number of days is your `oldProblemDays`, and the line is left
-  out when there are none.
+  out when there are none. An object is either an issue or an old
+  problem, never both: an issue made only of old problems (one from
+  before you set `oldProblemDays`, or kept from before a restart) moves
+  to this list without a message.
 - **Issues** (`/issues`): every issue in one table, with search, filters
   and saved views. Active, Resolved and All are tabs on it. An issue that
   groups the objects a removed controller left behind carries a small
@@ -167,9 +179,11 @@ started right after a change; each release links the issue it opened
 (resolved or not), or says none opened in the 30 minutes after it and
 links its workload's issues. It shows only when there is one. **This
 week** has four numbers, all over the issues someone was alerted about
-(alerted, resolved this week, the urgent issues that alerted the
-on-call person, the median time to resolve those same resolved
-issues), one line saying how many issues settled on their own before
+(alerted, resolved this week, the urgent issues: "Alerted the
+on-call person" when a pager such as PagerDuty or Opsgenie is
+connected, else "Sent as urgent" with "No pager is connected, so urgent
+issues go to chat only.", the median time to resolve those same
+resolved issues), one line saying how many issues settled on their own before
 anyone was alerted, the day-by-day chart, and the top causes beside
 where the trouble is, each with a small colour key and each number
 saying what it counts ("105 issues this week").
@@ -196,8 +210,13 @@ normally" in green, or what is wrong in plain words in amber or red
 almost out of memory"), with the reasons under it. Below it, in pairs:
 kwatch itself (running since, the last restart, "Last heard from the
 Kubernetes API", and "Alerts waiting to be sent" only when some wait),
-Resources (memory, CPU and disk against their limits: amber from 70%,
-red from 90%, said in words too), Where alerts go (each channel, what it
+Resources (CPU and disk against their limits: amber from 70%, red from
+90%, said in words too; memory as the memory kwatch itself holds against
+what it can use, with the container's figure and the state-file cache
+the system can free under it; the memory warning comes when kwatch
+holds 80% of what it can use (the Go memory limit, 90% of the
+container's limit) for 3 minutes, turns red at 95%, and clears only
+below 70%, also after 3 minutes, so it does not flap), Where alerts go (each channel, what it
 sent in the last 24 hours, failures only when there are some) and What
 kwatch is watching ("Watching 233 of 233 resource types", with only the
 counts that are not zero). Version and plan sit in a slim card at the
@@ -209,14 +228,52 @@ normally". So do issues not announced yet only because kwatch has not
 read their namespace's labels ("3 issues are waiting: kwatch hasn't
 read their namespace's labels yet"); nothing is shown when none wait.
 
+The kwatch card also says how long kwatch was not watching in the last 24
+hours ("Not watching for about 5 min in the last 24 hours."), added up from
+the gaps between each stop and the next start. A restart with no recorded
+stop time (a crash) is not guessed; the page says how many it left out.
+Its **Heartbeat** line says whether anyone is told when kwatch itself
+stops: "Pinging every 5 min · last ping 14:02", "The monitoring URL
+refused the ping (HTTP 404) · failing since 14:05", or, when
+`heartbeatMonitor` is not set up, "Not set up. Nobody is told when kwatch
+itself stops." with the setting to use. Not set up is information: it
+does not turn the verdict amber. When kwatch was not watching for 15
+minutes or more of the last 24 hours, the green verdict says so under
+it.
+
+kwatch was not running is never shown as a quiet time. The Overview's
+"Day by day" chart hatches each day kwatch was off for 15 minutes or
+more, with "6 h off" under the day (a day off all along: "off", and "not
+running" across it), says it in each day's tooltip and in a "kwatch not
+running" column of the table view, and the week's numbers add "Based on
+5½ of 7 days of watching: kwatch was not running for 1 day 14 h this
+week". Activity and an issue's timeline put a "Not watching: kwatch was
+not running from 02:10 to 08:40 (6 h 30 min)" marker where the gap
+falls, and the memory and CPU chart of an issue hatches the hours with no
+reading. The times come from the stop and start of each restart kwatch
+keeps (32 restarts, at most a week back); a stop with no stop record (a
+crash, a lost node) is bounded by kwatch's last liveness stamp, at most
+a minute before it stopped.
+When kwatch's own node carries a known spot or preemptible label
+(`karpenter.sh/capacity-type=spot`, `eks.amazonaws.com/capacityType=SPOT`,
+`cloud.google.com/gke-spot=true`, `cloud.google.com/gke-preemptible=true`,
+`kubernetes.azure.com/scalesetpriority=spot`,
+`node.kubernetes.io/lifecycle=spot`), a notice says the cloud can take the
+node back at any time and kwatch is then not watching for a few minutes. It
+suggests, as optional steps, a priority class (chart value
+`priorityClass.create`) and, when the cluster has stable nodes,
+`nodeSelector` or `affinity`. The check is best effort: no known label, no
+notice.
+
 Once signed in, the side bar and the browser tab name the cluster
-(`app.clusterName`, or "unnamed cluster") and show "Non-production" when
+(`app.clusterName`, or "unnamed cluster"; the kwatch health page says where the name came from, or how to set one) and show "Non-production" when
 `app.environment` says so. The sign-in page names no cluster: the name
 may say more than the address does.
 
 **Activity** (`/activity`) lists what changed in the last hour or 24
 hours, newest first. Each row is a sentence: "api in shop: resolved after
-12 min", "warehouse in shop: became Urgent (alerted the on-call person)",
+12 min", "warehouse in shop: became Urgent (alerted the on-call person)" (with
+no pager connected: "sent as urgent"),
 "tracking in staging: settled on its own". The line at the top counts
 the changes in words ("25 issues started, 4 got more urgent and 21
 resolved"). Four or more of the same change in one minute fold behind "8
@@ -235,8 +292,10 @@ per command) and **Who was alerted?** (the first alert and how long after
 the start, the last update, whether anyone acknowledged it; if not, the
 command that acknowledges it, to copy). **Copy summary** also carries the
 proof line, who was alerted and when, and the cluster name. The tabs
-under it are **Timeline** (what changed just before first; repeated
-failures and recoveries grouped into one line), **Proof** (the logs,
+under it are **Timeline** (what changed just before first, each change
+with a short muted line saying why it is listed, such as "The failing
+pods mount this ConfigMap", or nothing when kwatch knows no link;
+repeated failures and recoveries grouped into one line), **Proof** (the logs,
 checks, containers, warnings and node; healthy containers stay folded),
 **Impact**, **Alerts** (the first alert, the updates and the resolve;
 repeats folded) and **Details** (has it happened before, is it happening
@@ -246,6 +305,24 @@ proof line and log lines wrap. Press `t`, `p`, `i`, `a` or `d` to open a tab. Th
 same on every page: Urgent, Needs attention, Low and Quiet for how urgent
 an issue is; "Alerted" for what kwatch did to Slack or a pager; "Settled
 on its own" for an issue that recovered before anyone was alerted.
+
+When kwatch has no cause for an issue, **Why?** says "Cause not found
+yet." and lists what kwatch checked for this issue and found fine, only
+what it really checked: for example "its node is healthy", "its ConfigMaps
+and Secrets are there and did not change", "its dependencies show no
+errors" and "nothing near it was changed in the 30 minutes before it
+started". It then says what it could not check, such as "kwatch cannot
+read pod logs here." When the cause is only possible, the same list
+follows it as "Also ruled out: its node, its image". When nothing was
+checked there is no list.
+
+A change, in **What changed just before**, on the release line of
+**Why?** and on a blamed change's proof, links to where it came from:
+"Source: Argo CD app shop · commit 1a2b3c4 · image api:1.5". The GitOps
+application is linked only when `app.gitOpsLinks` is set, a commit only on
+a known repository host, an image only on Docker Hub or Quay; otherwise
+each is shown as text (see "Links to where a change came from" in
+configuration.md).
 
 An issue's **Impact** tab has **How it connects** when kwatch knows the
 connections of the objects it touches: those objects and the ones next to

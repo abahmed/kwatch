@@ -1,0 +1,6 @@
+{
+  "name": "sidecar-starts-slowly",
+  "description": "A native sidecar passes its long startup probe after nine minutes; the pod was starting, not stuck.",
+  "maxMessages": 0,
+  "quiet": true
+}

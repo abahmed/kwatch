@@ -53,7 +53,7 @@ var clusterRows = []Row{
 		Prior: 0.7, InferredMinWorkloads: SharedMinWorkloads,
 	},
 	{
-		Name: "webhook-rejects",
+		Name: RuleWebhookRejects,
 		Cause: Side{Group: AnyGroup, Kind: AnyKind,
 			Modes: []detection.Mode{
 				detection.ModeWebhook, detection.ModeNoEndpoints}},

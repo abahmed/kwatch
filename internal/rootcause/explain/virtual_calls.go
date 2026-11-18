@@ -56,7 +56,16 @@ var callerFailures = []detection.Mode{
 // error line does not. Such a pod counts only when its own error line
 // is known (signatureOf), never by the probe's words.
 var signatureFailures = callerFailuresAnd(detection.ModeProbeLiveness,
-	detection.ModeProbeStartup, detection.ModeNotReady)
+	detection.ModeProbeStartup, detection.ModeNotReady,
+	detection.ModeProbeReadiness)
+
+// unreadyCallers are callerFailures and the modes of a pod that stays
+// up but is not ready. Why: a service whose database or cache refuses
+// it often keeps running and fails its readiness probe instead of
+// crashing; its own log names the call (kube.AttrProbeLogLine), never
+// the kubelet's probe message (callTexts leaves that out).
+var unreadyCallers = callerFailuresAnd(detection.ModeNotReady,
+	detection.ModeProbeReadiness)
 
 // callerFailuresAnd is callerFailures plus further modes of a pod that
 // depends on the call.
@@ -72,7 +81,7 @@ var calledRows = []Row{
 		// probe finds refusing connections. The probe is the proof, so
 		// the callers' errors need not name it, and one workload is
 		// enough: the endpoint is down whoever calls it.
-		Name: "external-endpoint-unreachable",
+		Name: RuleExternalEndpointUnreachable,
 		Cause: Side{Kind: KindExternalEndpoint,
 			Modes: []detection.Mode{detection.ModeActiveProbe}},
 		Link:   LinkCalls,
@@ -80,12 +89,15 @@ var calledRows = []Row{
 		Prior:  0.75,
 	},
 	{
-		Name: "external-endpoint-failing",
+		Name: RuleExternalEndpointFailing,
 		Cause: Side{Kind: KindExternalEndpoint,
 			Modes: []detection.Mode{ModeEndpointFailing}},
 		Link: LinkCalls,
-		Effect: Side{Kind: kube.KindPod, Modes: callerFailures,
-			Signal: SignalConnection},
+		// No Signal on the effect's text: calledModes already holds the
+		// call to the failure its own words name (endpointIn's class),
+		// and an unready pod's words are its containers' log lines,
+		// which the effect's text does not carry.
+		Effect: Side{Kind: kube.KindPod, Modes: unreadyCallers},
 		// Under the cluster DNS rows: when name resolution fails for
 		// everyone, the DNS outage is the better cause.
 		Prior: 0.65, MinWorkloads: EndpointMinWorkloads,
@@ -115,9 +127,9 @@ func (v *view) calledHops(pod inventory.EntityID) []hop {
 	// otherwise never reach the signature they all share. The rows'
 	// priors and minimums decide which one stands.
 	var hops []hop
-	if call, ok := v.callOf(pod); ok {
+	if endpoint, ok := v.calledEndpoint(pod); ok {
 		hops = append(hops, hop{link: LinkCalls, to: inventory.CoreID(
-			KindExternalEndpoint, "", call.endpoint)})
+			KindExternalEndpoint, "", endpoint)})
 	}
 	if name, ok := v.signatureOf(pod); ok {
 		hops = append(hops, hop{link: LinkSharesError, to: inventory.CoreID(
@@ -133,9 +145,9 @@ func (v *view) calledModes(
 ) []modeHealth {
 	switch {
 	case id.Kind == KindExternalEndpoint && link == LinkCalls:
-		if call, ok := v.callOf(effect); ok && call.endpoint == id.Name &&
+		if class, ok := v.calledClass(effect, id.Name); ok &&
 			!v.endpointAnswers(id, effect) {
-			return pseudoFailing(ModeEndpointFailing + "." + call.class)
+			return pseudoFailing(ModeEndpointFailing + "." + class)
 		}
 	case id.Kind == KindFailureSignature && link == LinkSharesError:
 		if name, ok := v.signatureOf(effect); ok && name == id.Name {
@@ -159,7 +171,7 @@ func (v *view) callOf(id inventory.EntityID) (endpointCall, bool) {
 		return cached, cached.endpoint != ""
 	}
 	var found endpointCall
-	for _, f := range v.unitFindings(unit) {
+	for _, f := range v.unitFindingsIn(unit, unreadyCallers) {
 		for _, text := range v.callTexts(f) {
 			call, ok := endpointIn(text)
 			if ok && !v.inCluster(endpointHost(call.endpoint), unit) {
@@ -177,7 +189,8 @@ func (v *view) callOf(id inventory.EntityID) (endpointCall, bool) {
 
 // callTexts are the words of a failing unit that may name a call: the
 // evidence of its finding, except the kubelet's own probe message, and
-// the previous log line the finding does not quote.
+// the own log lines (of its containers, for a pod) the finding does not
+// quote.
 func (v *view) callTexts(f detection.Finding) []string {
 	var out []string
 	for _, e := range f.Evidence {
@@ -185,10 +198,9 @@ func (v *view) callTexts(f detection.Finding) []string {
 			out = append(out, e.Value)
 		}
 	}
-	if line := v.previousLogLine(f.Entity); line != "" {
-		out = append(out, line)
-	}
-	return out
+	// A pod's finding reads its containers' lines: a pod that stays
+	// unready keeps naming its call after its probe's events age out.
+	return append(out, v.ownLogLines(f.Entity)...)
 }
 
 // signatureOf is the error signature of the failing pod of id, read
@@ -222,11 +234,12 @@ func (v *view) signatureOf(id inventory.EntityID) (string, bool) {
 func (v *view) findingSignature(f detection.Finding) string {
 	texts := []string{}
 	for _, e := range f.Evidence {
-		if e.Label == detection.EvidenceError {
+		if e.Label == detection.EvidenceError ||
+			e.Label == detection.EvidenceProbeLog {
 			texts = append(texts, e.Value)
 		}
 	}
-	texts = append(texts, v.ownLogLines(f.Entity)...)
+	texts = append(texts, v.rawLogLines(f.Entity)...)
 	for _, text := range texts {
 		if signature := normalizeSignature(text); signature != "" {
 			return signatureName(signature)
@@ -247,6 +260,27 @@ func (v *view) ownLogLines(id inventory.EntityID) []string {
 	for _, c := range ids {
 		if line := v.previousLogLine(c); line != "" {
 			out = append(out, line)
+		}
+	}
+	return out
+}
+
+// rawLogLines are the own log lines of a container, or of each
+// container of a pod, whether a finding quotes them or not: a
+// signature is the same error however it was reported.
+func (v *view) rawLogLines(id inventory.EntityID) []string {
+	ids := []inventory.EntityID{id}
+	if id.Kind == kube.KindPod {
+		ids = v.s.Model.Related(id, inventory.PartOf, inventory.Incoming)
+		sortIDs(ids)
+	}
+	var out []string
+	for _, c := range ids {
+		if e, ok := v.s.Model.Entity(c); ok && c.Kind ==
+			kube.KindContainer {
+			if line := ownLine(e); line != "" {
+				out = append(out, line)
+			}
 		}
 	}
 	return out

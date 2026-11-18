@@ -10,6 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/abahmed/kwatch/internal/inventory"
@@ -37,6 +38,9 @@ type SourceConfig struct {
 	// Secret is then never synced or verifiable, so checks that need
 	// Secrets report that they cannot verify instead of guessing.
 	DisableSecrets bool
+	// Metadata, when set, watches the labels of Helm's release Secrets
+	// (helm_release_source.go). Nil leaves Helm releases unwatched.
+	Metadata metadata.Interface
 	// DigestKey keys the Secret and ConfigMap value digests. Pass the same
 	// stored key after a restart so digests stay comparable and downtime
 	// changes are found; empty uses a random per-process key.
@@ -132,7 +136,9 @@ type Source struct {
 	watches     []*watchState
 	// disabled are the resources configuration turned off.
 	disabled []registration
-	started  chan struct{}
+	// helm is the Helm release Secret watch; nil when not watched.
+	helm    cache.SharedIndexInformer
+	started chan struct{}
 	// lifecycle is the Run context. Handlers submit with it, so a handler
 	// blocked on a full pipeline returns when the source stops.
 	lifecycle atomic.Pointer[context.Context]
@@ -186,20 +192,29 @@ func NewSource(cfg SourceConfig) (*Source, error) {
 		}
 		s.synced[r.schema.Kind()] = handle.HasSynced
 	}
+	if err := s.watchHelmReleases(); err != nil {
+		return nil, err
+	}
+	if err := s.watchEvents(factory); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// watchEvents registers the Warning event informer and the autoscaler
+// event factories.
+func (s *Source) watchEvents(factory informers.SharedInformerFactory) error {
 	events := warningEventInformer(factory)
 	handle, err := events.AddEventHandler(kubeclient.SafeEventHandler(
 		"inventory", eventsResource.Name, s.eventHandler()))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if err := s.track(eventsResource, false, events, handle); err != nil {
-		return nil, err
+		return err
 	}
-	s.scaleEvents, err = scaleEventFactories(cfg, s.eventHandler())
-	if err != nil {
-		return nil, err
-	}
-	return s, nil
+	s.scaleEvents, err = scaleEventFactories(s.cfg, s.eventHandler())
+	return err
 }
 
 // context returns the Run context, or a cancelled context before Run.
@@ -232,8 +247,10 @@ func (s *Source) Run(ctx context.Context) {
 	for _, f := range s.scaleEvents {
 		f.Start(ctx.Done())
 	}
+	helm := s.runHelm(ctx)
 	close(s.started)
 	<-ctx.Done()
+	<-helm
 	s.factory.Shutdown()
 	for _, f := range s.scaleEvents {
 		f.Shutdown()
@@ -306,7 +323,8 @@ func (s *Source) VerifiableObject(id inventory.EntityID) bool {
 // isDisabled reports whether configuration turned kind's watch off.
 func (s *Source) isDisabled(kind inventory.Kind) bool {
 	for _, r := range s.disabled {
-		if r.schema.Kind() == kind {
+		if r.schema.Kind() == kind ||
+			r.resource == SecretsResource && helmReleaseKind(kind) {
 			return true
 		}
 	}

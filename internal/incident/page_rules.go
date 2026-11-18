@@ -159,7 +159,7 @@ func admissionBlocked(model inventory.Reader, p *Incident) bool {
 }
 
 // webhookRejectsRule is the explain row of a webhook blocking creates.
-const webhookRejectsRule = "webhook-rejects"
+const webhookRejectsRule = explain.RuleWebhookRejects
 
 func hasKind(kinds []inventory.Kind, kind inventory.Kind) bool {
 	for _, k := range kinds {

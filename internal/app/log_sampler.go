@@ -18,6 +18,7 @@ func (p *pipelineBuild) newLogSampler(
 		Model:  p.model,
 		Now:    p.clock.Now,
 		Submit: submit,
+		Paused: p.deps.clients.Pressure.High,
 	})
 }
 
@@ -36,6 +37,7 @@ func (p *pipelineBuild) logRunners(
 			Model:   p.model,
 			Now:     p.clock.Now,
 			Submit:  submit,
+			Paused:  p.deps.clients.Pressure.High,
 		})
 		out = append(out, p.crashLogs.Run)
 	}

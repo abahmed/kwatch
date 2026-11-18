@@ -49,7 +49,7 @@ var ownedPayloadProviders = []string{
 	"gitlab", "goalert", "gotify", "homeassistant", "ifttt", "ilert",
 	"incident.io", "incidentio", "jira", "mailgun", "n8n", "newrelic",
 	"opsgenie", "pagerduty", "pushbullet", "resend", "sendgrid", "sensugo",
-	"ses", "signal", "signl4", "sns", "splunk", "splunkoncall",
+	"servicenow", "ses", "signal", "signl4", "sns", "splunk", "splunkoncall",
 	"squadcast", "webhook", "zapier", "zenduty",
 }
 

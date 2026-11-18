@@ -76,6 +76,10 @@
       case "paged_together":
         return ["Sent with the urgent alert for the same moment", ""];
       case "resolved":
+        if (ev.reason === "old_problem") {
+          return ["Moved to old problems: it was already failing long before kwatch first saw it, " +
+            "so the Overview lists it with the other old problems", "k-done"];
+        }
         if (ev.reason === "stopped_tracking") {
           return ["kwatch stopped tracking it: " + after(t, "resolved: stopped tracking after "), "k-done"];
         }
@@ -85,6 +89,8 @@
         return null;
       case "transition":
         return [t, ev.cls || ""];
+      case "gap":
+        return ["\u2026 " + t, "k-gap"];
     }
     return [upperFirst(t, ev), ""];
   }
@@ -191,7 +197,7 @@
     });
     var sigs = {};
     events.forEach(function (e) {
-      if (e.ev.kind === "opened" || e.ev.kind === "transition") return;
+      if (e.ev.kind === "opened" || e.ev.kind === "transition" || e.ev.kind === "gap") return;
       e.sig = signature(e.ev, e.w[0]);
       (sigs[e.sig] = sigs[e.sig] || []).push(e);
     });
@@ -225,7 +231,15 @@
     ol.dataset.rows = String(rows.length);
     var open = ol.dataset.open === "1";
     var shown = open ? rows : rows.slice(0, TIMELINE_SHOWN);
-    var lastDay = "", lastHM = "";
+    var lastDay = "", lastHM = "", prevAt = null, seenOff = {};
+    /* offGaps: a marker for each time kwatch was not running that
+       falls after "after" (ms) and before the row above. */
+    function offGaps(after) {
+      KW.offBetween(inc && inc.notWatching, after, prevAt, seenOff).forEach(function (sp) {
+        ol.appendChild(KW.offMarker("li", sp, "tl-off"));
+        lastHM = "";
+      });
+    }
     if (single) {
       var about = ol.appendChild(KW.el("li", "earlier tl-about", "About "));
       about.appendChild(KW.wrapName(single));
@@ -233,6 +247,8 @@
     shown.forEach(function (row, n) {
       var ev = row.e.ev, w = row.e.w;
       var d = new Date(ev.at);
+      offGaps(d.getTime());
+      prevAt = d.getTime();
       var day = dayLabel(d);
       if (day !== lastDay) {
         var dl = KW.el("li", "day", day);
@@ -289,6 +305,8 @@
       li.appendChild(tx);
       ol.appendChild(li);
     });
+    // Every event shown: a gap older than the oldest one goes last.
+    if (open || rows.length <= shown.length) offGaps(null);
     var tCut = KW.cutCount(inc, "transitions");
     if (tCut) ol.appendChild(KW.el("li", "earlier", KW.plural(tCut, "state change", "state changes") + " not shown."));
     var hidden = rows.length - shown.length;

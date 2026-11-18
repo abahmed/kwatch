@@ -264,15 +264,18 @@ The default memory limit is 512Mi. kwatch sets the Go soft memory limit
 (`GOMEMLIMIT`) to 90% of the container limit, read from the
 `KWATCH_MEMORY_LIMIT` downward-API variable, so the garbage collector works
 harder before the kernel would kill the Pod. An explicit `GOMEMLIMIT` always
-wins. A model of 5,000 simple pods and 500 nodes measured about 50 MiB of
-live heap (`TestMemoryBudgetLargeCluster`, which fails above 65 MiB of live
-heap or 200 MiB of peak heap).
+wins. Two tests back the numbers on this page. `TestMemoryBudgetLargeCluster`
+loads 5,000 simple pods and 500 nodes (with the flight recorder writing to a
+real state file) and measured about 47 MiB of live heap; it fails above
+54 MiB of live heap or 175 MiB of peak heap. `TestMemoryBudgetTwentyThousandPods`
+(below) measures realistic pods. Real pods are bigger than the simple ones,
+so size from the realistic figure.
 
 Size the limit from the number of pods. Measured with realistic pods (three
 containers, 45 environment variables, six volumes, probes, managed fields;
 `TestMemoryBudgetTwentyThousandPods`, run with `KWATCH_MEMORY_20K=1`), kwatch
-holds about 26 KB of live heap per pod: about 8 KB in the informer cache and
-18 KB in the model, which keeps one entity per pod and per container. Plan
+holds about 24 KB of live heap per pod: about 8 KB in the informer cache and
+16 KB in the model, which keeps one entity per pod and per container. Plan
 for twice the live heap, so the garbage collector has room and a burst of
 events does not reach the limit.
 
@@ -281,7 +284,7 @@ events does not reach the limit.
 | up to 2,000 | 60 MiB | `512Mi` (chart default) |
 | 5,000 | 140 MiB | `512Mi` (chart default) |
 | 10,000 | 270 MiB | `768Mi` |
-| 20,000 | 520 MiB | `1Gi` (`1280Mi` for pods with larger specs) |
+| 20,000 | 460 MiB | `1Gi` (`1280Mi` for pods with larger specs) |
 
 The chart's default request is 128Mi; set `requests.memory` to 256Mi or more
 on large clusters.
@@ -319,15 +322,46 @@ rewrite waits until the file is twice the size that copy had. When
 sizing, add the state file's size (the Resources card or the `state
 compaction pass` line, `fileBytes`) to the heap figure below.
 
-The default 512Mi supports about 8,000 realistic pods; beyond that, raise
-`resources.requests.memory` and `resources.limits.memory` together. Pods
-with many containers, large environment lists or many volumes weigh more,
-so measure with the `self-health` heap line and the Go heap metrics rather
-than trusting the table at the edges.
+The default 512Mi holds about 5,000 realistic pods with room to spare and
+about 8,000 at the edge (twice the live heap, about 410 MiB, leaves little
+for the items below); beyond that, raise `resources.requests.memory` and
+`resources.limits.memory` together.
+
+**What the heap figure does not include.** Add these on top:
+
+- The state file's pages the kernel keeps in memory (the working set the
+  kubelet counts), up to the size of the file. Not measured as a fixed
+  number: it depends on how large the file grows.
+- The flight recorder's and incident evidence's buffers (log excerpts and
+  captured events). The 5,000-pod test includes the recorder's queue, but
+  not the evidence of a large outbreak. Not measured.
+- Many watched resource types, and large objects (big pod specs, many
+  ConfigMaps, ReplicaSets and custom resources). Each weighs more than the
+  per-pod figure. Not measured beyond the 20,000-pod test.
+
+Starting points, from the measured 24 KB per pod plus the extras above
+(only the 5,000 simple-pod and 20,000 realistic-pod rows were measured; the
+others are computed):
+
+| Realistic pods | Memory request | Memory limit |
+|----------------|----------------|--------------|
+| up to 2,000 | `128Mi` | `512Mi` (default) |
+| 5,000 | `256Mi` | `512Mi` (default) |
+| 8,000 | `384Mi` | `768Mi` (`512Mi` is the edge) |
+| 10,000 | `512Mi` | `768Mi` |
+| 20,000 | `768Mi` | `1Gi` (`1280Mi` for larger specs) |
+
+These are starting points: measure with the `self-health` heap line and the
+container's working set (`kubectl top`, or the dashboard's Resources card),
+then adjust. Pods with many containers, large environment lists or many
+volumes weigh more.
 Every 30
 minutes kwatch logs a `self-health` line with the Go heap in use, the
 number of goroutines and the sizes of its bounded in-memory maps, so slow
-growth shows in the logs before the limit does.
+growth shows in the logs before the limit does. Its `stackInuseMiB`
+(goroutine stacks), `heapIdleUnreleasedMiB` (free heap not yet returned
+to the system) and `gcSysMiB` (the collector's metadata) explain most of
+the gap between the heap and `goMemoryMiB`.
 
 The chart takes the container and probe port from `config.healthCheck.port`
 (default 8060) and refuses to render with `config.healthCheck.enabled: false`,
@@ -471,8 +505,12 @@ Optional component failures remain visible as bounded degraded health states and
 bounded restart backoff; they do not create synthetic incidents.
 
 On Pro, after a restart the pipeline restores open incidents from the
-state file, so they are not announced again, and waits ten minutes before it may recover a
-restored incident so detectors can re-raise their findings. Once every source
+state file, so they are not announced again, and waits until its model is
+rebuilt before it may recover a restored incident, so detectors can re-raise
+their findings: the required sources synced plus a two-minute settle (one
+detection pass and the first kubelet-stats and log rounds), and for each
+incident every kind it reads synced and no wait still counting on its objects.
+Ten minutes from the sync bound the wait when a kind never syncs. Once every source
 has finished its initial list, Kwatch compares the saved object fingerprints with
 the live cluster and records changes made while it was down, so root-cause
 analysis can still find a rollout that happened during the gap. Kubernetes
@@ -481,24 +519,48 @@ The saved history, the fingerprints and the changes made while kwatch was
 down are Pro: Community restores only the incidents it announced and starts
 from a fresh baseline.
 
-**The restart note (Pro).** After a restart, kwatch does not list every restored
-incident again. Once every restored incident that is still failing was listed
-after a recent restart, it sends one short message instead: that kwatch
-restarted, why, how long it was down, and how many problems from before are
-still open, with the dashboard address when there is one. A restored incident
-a listing named is listed again only when it changed since (its tier, cause,
-reasons or impact: the told fingerprint) or when it was last named more than
-12 hours ago (`RestoredRetell`), so restarts close together repeat nothing and
-a cluster that sleeps every night still hears each morning what is still
-failing. The same note (same reason, same incidents) is not sent twice within
-an hour (`RestoredRelist`). A restored incident that a listing or roll-up only
-named, and that never had a message of its own, gets one introduction of its
-own once its findings are back after the restore grace, threaded under the
-listing like a roll-up's introduction. It is sent once, not again after later
-restarts, and never pages by itself.
-The reason is one of `graceful_shutdown`, `leader_handoff`,
-`internal_failure`, `oom_killed`, `eviction`, `node_disruption`,
-`deployment_rollout`, `api_unavailable` or `unknown`.
+**One message per restart (Pro).** A restart sends at most one message,
+once the restored incidents' findings are back (about two minutes after the
+sources synced, at most ten). It carries the gap after a long downtime (the
+gap report: how long nothing was watched, what changed and what crashed
+meanwhile), the restored incidents that are news, and how many ongoing ones
+are unchanged ("12 ongoing issues unchanged", with the dashboard address when
+there is one). A restored incident is news when nobody was told about it yet
+or its findings are now louder than the tier it was told at; a problem found
+after the restart that was failing since before it is news too. Incidents
+told before and unchanged are counted, never listed again, and the message's
+tier and severity come from the news alone, so a page that was told days ago
+does not make a restart message critical. With no gap worth reporting and no
+news, nothing is sent: a quiet restart stays quiet, and only the audit log
+(`delivery: quiet restart`) and the dashboard's kwatch page record it. A
+restored incident that a listing or roll-up only named, and that never had a
+message of its own, gets one introduction of its own once its findings are
+back, threaded under the listing like a roll-up's introduction. The startup
+marker remembers that it was introduced, with the fingerprint it told, until
+the incident is over, so it is sent once, not again after later restarts,
+and never pages by itself. The risks a digest already named are remembered
+the same way and are not named again after a restart.
+**Restart reasons.** When kwatch is asked to stop (SIGTERM) it notes,
+from what it already holds in memory and without another API call,
+whether its own node was cordoned, being deleted, NotReady or tainted
+as going away (cordon, cluster autoscaler, Karpenter, cloud termination
+notices), and whether its own pod had a `DisruptionTarget` condition.
+The next start compares that and the previous pod, node, version and
+configuration with its own, and asks the API about the previous pod only
+when it was replaced. The dashboard's kwatch page and `/api/status`
+(`self.lastStop`, `self.restarts`, with `text` in plain words) show:
+
+| Reason | Shown as | When |
+|:--|:--|:--|
+| `graceful_shutdown` | normal restart | stopped on a signal with nothing else to explain it, such as a deleted pod |
+| `deployment_rollout` | a new version or new settings rolled out | the version, the configuration file or the pod template changed |
+| `node_disruption` | its node was drained, shut down or removed | its node was cordoned, deleted, NotReady or tainted as going away, or the pod moved to another node with nothing else changed |
+| `eviction` | evicted from its node | the pod was evicted or preempted (its `DisruptionTarget` condition, or the old pod left with reason `Evicted`) |
+| `oom_killed` | ran out of memory | the previous container was OOM killed |
+| `leader_handoff` | another kwatch took over | it lost the API server or the state lock |
+| `internal_failure` | kwatch stopped on an internal error | a required part failed, or it crashed |
+| `api_unavailable` | could not reach the Kubernetes API | the restart could not be explained because the API did not answer |
+| `unknown` | unknown reason | nothing says |
 
 Crash-log reads (the previous run's output of a crashed container, and the
 current output of a running container whose probe gets an HTTP error
@@ -556,6 +618,21 @@ component with reason `storage_reset`; it does not affect readiness. The
 `unreadable`).
 A file locked by another process or on an inaccessible volume is not reset;
 startup fails and is retried by Kubernetes.
+
+**Rolling back to an older release.** If the state file was written by a
+newer release, the older one does not try to read it. It keeps that file
+next to the new one as `state.db.corrupt.<UTC time>`, untouched, and
+starts a fresh file. Only the queued alerts (outbox) and the chat and ticket
+thread IDs come across. Open incidents, history, baselines and evidence are
+not carried: kwatch rebuilds the picture from the cluster and announces
+the open incidents again once. The log line `state store reset: the old
+file was kept` names the copy in `keptAs`, and
+`kwatch_storage_resets_total{reason="schema_mismatch"}` goes up by one. The
+newest two copies stay (see above), so roll back and forward only a few
+times before you copy one off the volume if you want to keep it. Going
+forward again later does not bring the old history back by itself: the
+newer release migrates the fresh file. To read the kept copy, copy it off
+the volume and open it with a tool for bbolt files.
 
 A single record that cannot be decoded is skipped, counted
 (`kwatch_storage_corrupt_records_total`), and logged once per bucket per
@@ -836,7 +913,7 @@ retried with the next batch; it never affects delivery.
 Startup summaries and plain notices (startup, upgrade, test) are information:
 paging providers (PagerDuty, Opsgenie, Squadcast, GoAlert, Zenduty,
 incident.io, iLert, SIGNL4) and issue trackers (GitHub, GitLab, Gitea, Jira,
-ClickUp) do not receive them, because nothing would close the alert or issue
+ClickUp, ServiceNow) do not receive them, because nothing would close the alert or issue
 they open. Splunk On-Call, Alerta, Sensu Go, Datadog, New Relic, SNS and
 Splunk HEC receive them as informational.
 
@@ -948,7 +1025,7 @@ server is back and kwatch holds the lock again. During the outage kwatch
 cannot tell you about it, so the heartbeat (Pro; the dead man's switch,
 `heartbeatMonitor`) is the only alarm. Configure it; see
 [Heartbeat Monitor](./configuration.md#-heartbeat-monitor-dead-mans-switch).
-The gap is reported after the fact in the restart note.
+The gap is reported after the fact in the one restart message.
 
 The startup `KwatchConfig` list is the one API call a start needs before it
 serves. While the API server is unreachable (5xx, 429, timeouts, refused or
@@ -970,6 +1047,109 @@ Kubernetes API and provider outages are otherwise handled through bounded retrie
 degraded status. Delivery queues are bounded; sustained saturation coalesces or
 summarizes notifications and can drop them, so operators should alert on queue saturation, terminal
 delivery failures, and dead letters.
+
+### Alerting on kwatch itself
+
+Three layers, each for what the one before cannot see:
+
+1. **kwatch says when it is degraded** (both editions, on by default).
+   When one of its own parts stays degraded for 10 minutes, kwatch
+   sends one low-priority message to its channels, for example "kwatch
+   is degraded: it cannot read usage from some nodes' kubelets since
+   10:12 UTC. What this means: ... What to do: ...". It covers the
+   kubelet reads, a kind the API refuses or stops serving, a watch that
+   keeps failing, pod logs refused, the state file (reset, over its
+   cap, not writable), an alert channel that cannot be reached, refuses
+   or throttles kwatch, heartbeat pings that fail, API server
+   throttling, an optional part that keeps failing, decisions that wait
+   more than 10 seconds on average, and unsent alerts that do not drain
+   for 10 minutes. The message is updated in place when what is wrong
+   changes (Pro, where the channel threads; Community sends the opening
+   and the close only), at most once per 10 minutes: a reason that
+   keeps flipping waits, and the next update or the close carries the
+   newest one. One "kwatch is back to normal after 25 min" follows the
+   recovery. There is at most one open message per part,
+   at most 6 new ones per UTC day, and the open ones are kept in the
+   state file, so a restart neither repeats one nor closes it early.
+   An optional permission you never granted (for example `get` on
+   `pods/log`) sends nothing: it is refused from the first check, so
+   leaving it out was your choice, and `/health` and the dashboard
+   still list what is skipped. One kwatch could use and then lost
+   (refused after a read that worked) is told like any other part.
+   Which parts worked once is kept in the state file, so it survives
+   restarts, and a state reset starts fresh. Normal states send
+   nothing: a short restart, an optional API that
+   is not installed, a kind turned off in the configuration, a first
+   sync still running, a heartbeat not set up, a lost lock, the license
+   and a refused `KwatchConfig` (those two have notices of their own).
+   The message never pages: paging tools and issue trackers skip it.
+   Its route reason is `kwatch_degraded` and its severity `info`, so a
+   provider route can send it to one channel only, or leave it out;
+   `app.disableSelfAlerts: true` turns it off.
+2. **The heartbeat says when kwatch is down** (Pro,
+   `heartbeatMonitor`). A kwatch that is stopped, crashing, cut off
+   from the API server or unable to deliver anything cannot say so
+   itself; only the absence of its pings can. `/health`, `/api/status`
+   and the dashboard's kwatch page always show the `heartbeat`
+   component: `off` with `heartbeat_not_configured` (Pro, not set up)
+   or `heartbeat_pro_only` (Community), `running` with the last ping,
+   or `degraded` with `heartbeat_failed` and why. Not set up is
+   information and leaves `/health` `ok`. On Community, watch the pod
+   from outside instead, for example an alert in your own monitoring
+   when the kwatch Deployment has no ready replica.
+3. **Metrics alerts** (Pro, optional), below.
+
+kwatch exposes its own health as metrics on `/metrics`, which is a Pro
+endpoint (Community answers 404). Any monitoring system that reads
+Prometheus metrics and evaluates Prometheus-style rules can alert on them.
+Worth alerting on:
+
+- kwatch absent: it is not scraped, so it is not watching the cluster.
+- Decision lag: `kwatch_pipeline_decision_lag_seconds` p99 is high.
+- Dropped alerts: `kwatch_delivery_dropped_total` rose.
+- Queue or outbox full: the saturation and drop counters rose.
+- Outbox not draining: `kwatch_delivery_outbox_depth` stays above 0.
+- Heartbeat failures: `kwatch_heartbeat_failures_total` rose.
+- State file reset: `kwatch_storage_resets_total` rose.
+- Kubelet stats failures: `kwatch_kubelet_stats_failures_total` rose.
+- Leadership flapping: `kwatch_leadership_rejoins_total` failed or high.
+
+Example, adjust thresholds and the `job` label to your scrape job:
+
+```yaml
+groups:
+  - name: kwatch
+    rules:
+      - alert: KwatchAbsent
+        expr: absent(up{job="kwatch"} == 1)
+        for: 10m
+      - alert: KwatchDecisionLagHigh
+        expr: >-
+          histogram_quantile(0.99, sum by (le) (rate(
+          kwatch_pipeline_decision_lag_seconds_bucket[10m]))) > 5
+        for: 15m
+      - alert: KwatchDeliveryDropped
+        expr: increase(kwatch_delivery_dropped_total[15m]) > 0
+      - alert: KwatchDeliveryQueueSaturated
+        expr: >-
+          increase(kwatch_delivery_queue_saturated_total[15m]) > 0
+          or increase(kwatch_delivery_pending_dropped_total[15m]) > 0
+          or increase(kwatch_delivery_outbox_dropped_total[15m]) > 0
+      - alert: KwatchOutboxNotDraining
+        expr: min_over_time(kwatch_delivery_outbox_depth[30m]) > 0
+      - alert: KwatchHeartbeatFailing
+        expr: increase(kwatch_heartbeat_failures_total[30m]) > 0
+      - alert: KwatchStateFileReset
+        expr: increase(kwatch_storage_resets_total[1h]) > 0
+      - alert: KwatchKubeletStatsFailing
+        expr: increase(kwatch_kubelet_stats_failures_total[30m]) > 0
+        for: 30m
+      - alert: KwatchLeadershipFlapping
+        expr: >-
+          increase(kwatch_leadership_rejoins_total{result="failed"}[1h]) > 0
+          or
+          increase(kwatch_leadership_rejoins_total{result="success"}[1h]) > 3
+```
 
 ## RBAC mode and watch coverage
 

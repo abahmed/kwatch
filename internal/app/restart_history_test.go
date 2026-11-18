@@ -52,9 +52,10 @@ func TestStartupRecordsHowThePreviousSessionEnded(t *testing.T) {
 	assert.Equal(t, "internal_failure", third.lastStop.Reason)
 	assert.True(t, third.lastStop.StoppedAt.IsZero())
 	assert.Equal(t, []health.SelfStop{
-		{At: t0.Add(2 * time.Minute), Reason: "internal_failure"},
+		{At: t0.Add(2 * time.Minute), Reason: "internal_failure",
+			Text: "kwatch stopped on an internal error"},
 		{At: t0.Add(40 * time.Second), Reason: "leader_handoff",
-			StoppedAt: t0},
+			StoppedAt: t0, Text: "another kwatch took over"},
 	}, third.restarts, "newest first")
 }
 

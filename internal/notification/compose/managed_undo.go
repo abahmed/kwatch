@@ -12,13 +12,17 @@ import (
 // deploys (app is "argocd/…", "flux/…" or "helm/…"): a revert in Git,
 // since a rollback in the cluster would be overwritten by the next sync,
 // or a Helm rollback, so the release history stays true. false for a
-// workload deployed by other means, which keeps the rollout undo.
+// workload deployed by other means, which keeps the rollout undo. A
+// Helm rollback goes to helmRevision, the release's last deployed
+// revision (helmUndo).
 func managedUndo(
-	workload inventory.EntityID, app string,
+	workload inventory.EntityID, app, helmRevision string,
 ) (notification.Step, bool) {
 	tool, _, _ := strings.Cut(app, "/")
 	switch tool {
-	case "argocd", "flux", "helm":
+	case "argocd", "flux":
+	case "helm":
+		return helmUndo(workload, app, helmRevision), true
 	default:
 		return notification.Step{}, false
 	}
@@ -39,7 +43,7 @@ func managedUndo(
 func managedAction(
 	f caseFacts, steps []notification.Step,
 ) (string, bool) {
-	if _, sure := rollbackWords[certaintyOf(f.p.Cause)]; !sure {
+	if !undoSure(f.p.Cause) {
 		return "", false
 	}
 	for _, step := range steps {
@@ -54,4 +58,31 @@ func managedAction(
 		}
 	}
 	return "", false
+}
+
+// helmUndo rolls the Helm release that deploys the workload back to
+// revision, the newest earlier one Helm recorded as deployed. A bare
+// "helm rollback" goes to the revision just before, which may have
+// failed too, so without a known deployed revision none is offered and
+// the step says why.
+func helmUndo(
+	workload inventory.EntityID, app, revision string,
+) notification.Step {
+	_, name, _ := strings.Cut(app, "/")
+	space := workload.Namespace
+	if s, r, ok := strings.Cut(name, "/"); ok {
+		space, name = s, r
+	}
+	if revision == "" {
+		return notification.Step{Text: withheldLead + "a deployed " +
+			"revision of Helm release " + name + " to go back to, so " +
+			"it does not suggest rolling it back"}
+	}
+	return notification.Step{
+		Text: "Roll back the Helm release " + name + " to revision " +
+			revision + ", its last deployed one (changes the cluster)",
+		Command: "helm rollback " + quote(name) + " " + quote(revision) +
+			namespaceFlag(space),
+		Mutating: true,
+	}
 }

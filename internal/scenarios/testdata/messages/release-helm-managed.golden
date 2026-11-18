@@ -1,10 +1,10 @@
 10:03:05 settled
-🟠 billing in shop (prod-eu-1): the new version (billing:1.1) can't start (it stops at start with "panic: missing key DB_URL"); the previous version (billing:1.0) is still serving. Its last run lasted ten seconds. Fix: change the image of container app in deployment/billing. Rolling back the Helm release undoes this release (changes the cluster): helm rollback billing -n shop
+🟠 billing in shop (prod-eu-1): the new version (billing:1.1) can't start (it stops at start with "panic: missing key DB_URL"); the previous version (billing:1.0) is still serving. Its last run lasted ten seconds. Fix: change the image of container app in deployment/billing. Rolling back the Helm release undoes this release (changes the cluster): helm rollback billing 1 -n shop
 🟠 billing in shop (prod-eu-1): the new version (billing:1.1) can't start; the previous version (billing:1.0) is still serving.
 | 🟠 **billing** in **shop** (**prod-eu-1**): the new version (billing:1.1) can't start (it stops at start with `panic: missing key DB_URL`); the previous version (billing:1.0) is still serving.
 | Its last run lasted ten seconds.
 | Fix: change the image of container app in deployment/billing.
 | Rolling back the Helm release undoes this release (changes the cluster):
 | ```
-| helm rollback billing -n shop
+| helm rollback billing 1 -n shop
 | ```

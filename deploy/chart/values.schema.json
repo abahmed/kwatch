@@ -556,6 +556,13 @@
             "disableStartupMessage": {
               "type": "boolean"
             },
+            "gitOpsLinks": {
+              "type": "object",
+              "description": "Pro. GitOps tool (argocd, flux or helm) to the web address of one application, with {app} where its name goes",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
             "hideProHints": {
               "type": "boolean",
               "description": "Remove every Pro hint from Community messages: the one Pro line on the first alert of an issue (\"Pro shows which one and how to fix it, free during early access: kwatch.dev/pro\") and the Pro-checks notes; the \"Most likely cause: …\" sentence stays"
@@ -951,6 +958,40 @@
       "type": "string",
       "default": "",
       "description": "PriorityClass of the kwatch pod"
+    },
+    "priorityClass": {
+      "type": "object",
+      "description": "Optional PriorityClass created by the chart",
+      "additionalProperties": false,
+      "properties": {
+        "create": {
+          "type": "boolean",
+          "default": false,
+          "description": "Create a PriorityClass for kwatch"
+        },
+        "name": {
+          "type": "string",
+          "default": "",
+          "description": "Class name; empty uses the release full name"
+        },
+        "value": {
+          "type": "integer",
+          "default": 1000000,
+          "maximum": 1000000000,
+          "description": "Priority value (user classes stay at or below 1000000000)"
+        },
+        "preemptionPolicy": {
+          "type": "string",
+          "enum": ["PreemptLowerPriority", "Never"],
+          "default": "PreemptLowerPriority",
+          "description": "Whether kwatch may preempt lower-priority pods"
+        },
+        "globalDefault": {
+          "type": "boolean",
+          "default": false,
+          "description": "Make the class the cluster default"
+        }
+      }
     },
     "imagePullSecrets": {
       "type": "array",

@@ -214,7 +214,7 @@ func (a *announcer) send(
 	ctx context.Context, d incident.Decision, at time.Time,
 ) {
 	d = a.withWake(a.withKindNames(a.withChanges(d, at)), at)
-	d = a.withReach(a.withCauseState(d))
+	d = a.withShape(a.withReach(a.withCauseState(d)))
 	spoke := a.collect.SpokeOnItsOwn(d.Incident.ID)
 	written := a.collect.Follow(d)
 	listedBy := a.listedOnly(written, spoke)
@@ -247,6 +247,7 @@ func (a *announcer) send(
 	if d.Action == incident.Resolve && msg.Carrier == "" && !msg.PagingOnly {
 		a.collect.NoteResolveDelivered(d.Incident.ID)
 	}
+	a.collect.NoteSpoke(d, msg)
 	a.sink(ctx, d, msg)
 }
 

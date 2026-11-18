@@ -7,7 +7,7 @@
 # wall-clock latency and memory budgets then run once more without -race.
 
 .PHONY: help build test test-short vet lint verify-fmt clean \
-	coverage coverage-check verify ci verify-focused verify-fast \
+	coverage coverage-check scenarios-gate verify-core ci-core verify ci verify-focused verify-fast \
 	verify-latency verify-race verify-security verify-manifests \
 	verify-operational verify-scenarios verify-negative-regressions \
 	verify-dashboard-browser \
@@ -161,22 +161,36 @@ verify-fmt:
 	fi
 	@echo "All files are properly formatted."
 
-# The single test run of the gate: race-enabled, with coverage, and with the
-# alert-quality gates enforced inside it.
+# The test run of the gate: race-enabled, with coverage. The scenario
+# library has no production code and its tests do not use -coverpkg, so it
+# adds no coverage; it runs in scenarios-gate instead of here.
 coverage:
-	@mkdir -p $(dir $(ALERT_QUALITY_REPORT))
-	KWATCH_SCORECARD_GATE=1 $(ALERT_QUALITY_ENV) \
-		$(GOTEST) -race -timeout $(TEST_TIMEOUT) \
-		--coverprofile=coverage.txt --covermode=atomic ./...
+	$(GOTEST) -race -timeout $(TEST_TIMEOUT) \
+		--coverprofile=coverage.txt --covermode=atomic \
+		$$($(GOCMD) list ./... | grep -v /internal/scenarios$$)
 
 coverage-check: coverage
 	./scripts/check-coverage.sh coverage.txt
 
-verify: build vet lint coverage-check verify-latency line-check diff-check \
-	architecture-check test-layout-check hygiene-check verify-catalogs \
-	docs-verify verify-manifests verify-negative-regressions deadcode-check
+# The labelled scenarios with the alert-quality gates enforced, under
+# -race. It is the slowest package, so CI runs it as its own parallel job.
+scenarios-gate:
+	@mkdir -p $(dir $(ALERT_QUALITY_REPORT))
+	KWATCH_SCORECARD_GATE=1 $(ALERT_QUALITY_ENV) \
+		$(GOTEST) -race -count=1 -timeout $(TEST_TIMEOUT) \
+		./internal/scenarios/
 
-ci: verify test-licensetest lint-actions lint-shell mod-tidy-check
+verify-core: build vet lint coverage-check verify-latency line-check \
+	diff-check architecture-check test-layout-check hygiene-check \
+	verify-catalogs docs-verify verify-manifests \
+	verify-negative-regressions deadcode-check
+
+verify: verify-core scenarios-gate
+
+# What the CI Verify job runs; the Scenarios job runs scenarios-gate.
+ci-core: verify-core test-licensetest lint-actions lint-shell mod-tidy-check
+
+ci: ci-core scenarios-gate
 
 # Package-scoped gate for incremental refactors, for example:
 #   make verify-focused PKGS="./internal/incident ./internal/delivery/..."

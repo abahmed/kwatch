@@ -426,6 +426,18 @@ least 80% of the time, while it and everything above it together stay
 at 80% or more. The report prints what the method gives for the current
 labelled set next to the committed value.
 
+Two gates (`calibration_boundary_test.go`) fail the build when the
+committed boundary drifts from the labelled set. "Calibration:
+high-confidence boundary" fails when the computed boundary sits more than
+0.05 above `rootcause.High` (scores stated plainly in a range that is
+right too rarely: overconfidence) or more than 0.15 below it
+(underconfidence, wider because it states nothing wrong and because the
+boundary already stands at 0.55: 19 labelled cases in [0.55, 0.60) are
+all right), or when no range qualifies. "Calibration: precision at the
+high boundary" fails when the labelled cases scored at or above
+`rootcause.High` are right less than 92% of the time, the accuracy the
+boundary was calibrated at, once there are at least 10 of them.
+
 On 2026-10-01 the labelled cases scored in [0.70, 0.75) were right 12
 times in 13 (92%): stated as "likely", they made that level
 underconfident (90.9%, then 94.1% with the new scenarios). The method
@@ -568,22 +580,24 @@ here verbatim and checked by `TestScorecardGates`.
 
 | Metric | Target | Current | Result |
 | --- | --- | --- | --- |
-| Correct root cause (labelled) | >= 90% | 99.0% | pass |
+| Correct root cause (labelled) | >= 90% | 99.1% | pass |
 | Correct root cause (held-out) | >= 80% | 100% | pass |
-| Wrong high-confidence root | <= 5% (at least 20 cases) | 0% (0 of 244 high-confidence cases, labelled and held-out) | pass |
+| Wrong high-confidence root | <= 5% (at least 20 cases) | 0% (0 of 270 high-confidence cases, labelled and held-out) | pass |
 | Wrong root stated at likely confidence or higher (labelled) | <= 0 | 0 | pass |
 | Scenarios whose first message stated a wrong root | <= 0 | 0 | pass |
-| Calibration: high confidence | 80-100% (at least 10 cases) | 100.0% (231 of 231 right) | pass |
-| Calibration: likely confidence | 50-95% (at least 10 cases) | 90.2% (46 of 51 right) | pass |
+| Calibration: high confidence | 80-100% (at least 10 cases) | 100.0% (257 of 257 right) | pass |
+| Calibration: likely confidence | 50-95% (at least 10 cases) | 90.4% (47 of 52 right) | pass |
+| Calibration: high-confidence boundary | 0.55-0.75 (committed 0.70) | 0.55 | pass |
+| Calibration: precision at the high boundary | >= 92% (at least 10 cases) | 100.0% (257 of 257 right) | pass |
 | Messages per incident (p95) | <= 3 | 3 | pass |
 | Messages per incident (most) | <= 5 | 5 | pass |
 | Time to first message (page tier) | max <= 2m0s | p95 1m45s, max 1m45s (50 scenarios) | pass |
-| Time to first message (notify tier) | max <= 5m0s | p95 3m15s, max 4m15s (333 scenarios) | pass |
-| Time to first message (boot-held) | max <= 15m0s | p95 12m15s, max 12m15s (5 scenarios) | pass |
+| Time to first message (notify tier) | max <= 5m0s | p95 3m15s, max 4m15s (369 scenarios) | pass |
+| Time to first message (boot-held) | max <= 15m0s | p95 12m15s, max 12m15s (7 scenarios) | pass |
 | Notifications from non-events (staging day) | <= 0 | 0 | pass |
-| Notifications per hour (staging day peak) | <= 30/h | 25/h | pass |
+| Notifications per hour (staging day peak) | <= 30/h | 26/h | pass |
 | Unchanged updates | <= 0% | 0% | pass |
-| Re-created incidents | <= 5% | 1.5% | pass |
+| Re-created incidents | <= 5% | 1.4% | pass |
 | Repeated recoveries | <= 0 | 0 | pass |
 | Storm messages in 2 minutes (shared node) | <= 3 | 1 | pass |
 | Storm messages in 2 minutes (shared registry) | <= 3 | 1 | pass |
@@ -597,15 +611,15 @@ here verbatim and checked by `TestScorecardGates`.
 | Recoveries said while members still fail | <= 0 | 0 | pass |
 | Scenarios that passed and no longer do (ratchet) | <= 0 | 0 | pass |
 
-28 of 28 gates pass. 478 labelled root cases in 495 scenarios; first-incident tier matches in 495 of 495 scenarios.
-Staging day: 996 notifications in 73h49m0s (13.5/h mean, peak hour 25); 0 from non-events, 0 of them notify or page.
+30 of 30 gates pass. 528 labelled root cases in 546 scenarios; first-incident tier matches in 546 of 546 scenarios.
+Staging day: 1073 notifications in 81h27m0s (13.2/h mean, peak hour 26); 0 from non-events, 0 of them notify or page.
 Storm shared node: 1000 pods, 2 messages in total, 1 in the loudest 2 minutes.
 Storm shared registry: 1000 pods, 1 messages in total, 1 in the loudest 2 minutes.
 Storm multi-cause: 1000 pods from 10 causes, 10 of them reported, 10 messages in total, 8 in the loudest 2 minutes.
-Slowest first messages: boot-endpoints-still-down notify 12m15s, scale-down-moved-pod-never-starts page 12m0s, node-join-never-ready page 10m15s, own-volume-wait-too-long notify 10m0s, node-replace-sandbox-stuck notify 7m15s.
+Slowest first messages: boot-endpoints-still-down notify 12m15s, scale-down-moved-pod-never-starts page 12m0s, node-join-never-ready page 10m15s, young-node-persists notify 10m0s, own-volume-wait-too-long notify 10m0s.
 Calibration: the labelled cases put high confidence at 0.55 (committed 0.70).
-Right roots: 284 with a stated cause, 184 by falling back to the failing entity with no stated cause, 5 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 9 scenarios, 7 of them labelled as legitimate revisions.
-Time to first correct root: p95 4m15s, max 25m30s over 419 scenarios; slowest: hpa-metrics-outlive-recovery 25m30s, boot-endpoints-still-down 12m15s, scale-down-moved-pod-never-starts 12m0s, one-hpa-bad-target 11m15s, metrics-blip-long 11m15s. Never stated: coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
+Right roots: 312 with a stated cause, 206 by falling back to the failing entity with no stated cause, 5 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 9 scenarios, 9 of them labelled as legitimate revisions.
+Time to first correct root: p95 4m15s, max 25m30s over 458 scenarios; slowest: hpa-metrics-outlive-recovery 25m30s, log-missing-service 21m15s, boot-endpoints-still-down 12m15s, scale-down-moved-pod-never-starts 12m0s, one-hpa-bad-target 11m15s. Never stated: coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
 
 ## Scenarios
 
@@ -618,6 +632,16 @@ Time to first correct root: p95 4m15s, max 25m30s over 419 scenarios; slowest: h
 | missing-secret | `secret/billing/stripe-api` | `secret/billing/stripe-api` | likely 0.69 | notify/notify | 1 (2) | pass |
 | configmap-change | `configmap/web/frontend-config` | `configmap/web/frontend-config` | high 1.00 | notify/notify | 1 (2) | pass |
 | config-run-as-non-root-rejected | `deployment/billing/ledger` | `deployment/billing/ledger` | high 1.00 | notify/notify | 1 (2) | pass |
+| statefulset-release-rollback | `statefulset/streaming/queue` | `statefulset/streaming/queue` | high 0.77 | notify/notify | 2 (2) | pass |
+| statefulset-release-previous-unseen | `statefulset/streaming/queue` | `statefulset/streaming/queue` | high 0.83 | notify/notify | 2 (2) | pass |
+| daemonset-gitops-release | `daemonset/ops/agent` | `daemonset/ops/agent` | high 0.83 | notify/notify | 1 (2) | pass |
+| release-after-completed-rollout | `deployment/shop/checkout` | `deployment/shop/checkout` | high 0.83 | notify/notify | 1 (2) | pass |
+| statefulset-release-previous-fails | `statefulset/streaming/queue` | `statefulset/streaming/queue` | high 0.91 | notify/notify | 2 (2) | pass |
+| networkpolicy-stops-covering-workload | `networkpolicy/shop/orders-egress` | `networkpolicy/shop/orders-egress` | high 0.80 | notify/notify | 1 (2) | pass |
+| networkpolicy-selector-flips-back | quiet | - | - | -/digest | 0 (0) | pass |
+| pod-restart-keeps-links | quiet | - | - | -/- | 0 (0) | pass |
+| rollout-drops-service-dependency | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (3) | pass |
+| rollout-drops-service-dependency-and-back | quiet | - | - | -/- | 0 (0) | pass |
 | node-memory-pressure-eviction | `node//n1` | `node//n1` | high 1.00 | notify/notify | 2 (2) | pass |
 | node-lost-notready | `node//n1` | `node//n1` | high 1.00 | page/page | 2 (2) | pass |
 | healthy-node-app-crash | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
@@ -677,6 +701,10 @@ Time to first correct root: p95 4m15s, max 25m30s over 419 scenarios; slowest: h
 | sidecar-crash-loops | `deployment/shop/payments` | `deployment/shop/payments` | high 0.90 | notify/notify | 2 (2) | pass |
 | liveness-kill-loop | `deployment/shop/web` | `deployment/shop/web (no cause)` | none | notify/notify | 1 (2) | pass |
 | liveness-single-kill | quiet | - | - | -/- | 0 (0) | pass |
+| sidecar-starts-slowly | quiet | - | - | -/- | 0 (0) | pass |
+| restart-rule-exit-code | quiet | - | - | -/- | 0 (0) | pass |
+| restart-rule-other-code | `deployment/jobs/worker` | `deployment/jobs/worker (no cause)` | none | notify/notify | 1 (2) | pass |
+| crash-loop-short-backoff | `deployment/shop/reports` | `deployment/shop/reports (no cause)` | none | notify/notify | 1 (2) | pass |
 | borderline-policy-and-config | `networkpolicy/payments/restrict-egress` | `networkpolicy/payments/restrict-egress` | high 1.00 | notify/notify | 1 (2) | pass |
 | borderline-selector-and-rollout | `service/shop/checkout` | `service/shop/checkout` | high 0.70 | notify/notify | 1 (2) | pass |
 | borderline-operator-upgrade-and-edit | `postgrescluster.postgres.example.com/data/orders-db` | `postgrescluster.postgres.example.com/data/orders-db` | high 0.70 | notify/notify | 1 (2) | pass |
@@ -804,6 +832,18 @@ Time to first correct root: p95 4m15s, max 25m30s over 419 scenarios; slowest: h
 | ready-never-service | `deployment/external-secrets/cert-controller` | `deployment/external-secrets/cert-controller` | likely 0.55 | notify/notify | 1 (3) | pass |
 | known-never-ready-past-boot | `deployment/external-secrets/cert-controller` | `deployment/external-secrets/cert-controller (no cause)` | none | notify/notify | 6 (8) | pass |
 | readiness-error-logged | `deployment/shop/catalog` | `deployment/shop/catalog (no cause)` | none | notify/notify | 1 (3) | pass |
+| readiness-outage-shared-database | `external-endpoint//10.0.9.40:5432` | `external-endpoint//10.0.9.40:5432` | high 0.95 | notify/notify | 1 (3) | pass |
+| readiness-outage-node-out-of-addresses | `external-endpoint//10.0.9.40:5432`, `node//n1` | `external-endpoint//10.0.9.40:5432`, `node//n1` | high 0.80 | notify/notify | 2 (4) | pass |
+| readiness-outage-member-leaves | `external-endpoint//10.0.9.40:5432`, `deployment/shop/payments`, `deployment/shop/reports` | `external-endpoint//10.0.9.40:5432`, `deployment/shop/payments (no cause)`, `deployment/shop/reports (no cause)` | high 0.80 | notify/notify | 2 (6) | pass |
+| kind-only-joins-address | `external-endpoint//10.0.7.20:6379` | `external-endpoint//10.0.7.20:6379` | high 0.80 | notify/notify | 1 (2) | pass |
+| kind-only-other-kind | `external-endpoint//10.0.7.20:6379`, `deployment/shop/pricing`, `deployment/shop/tracking` | `external-endpoint//10.0.7.20:6379`, `deployment/shop/pricing (no cause)`, `deployment/shop/tracking (no cause)` | high 1.00 | notify/notify | 2 (4) | pass |
+| young-node-transient | quiet | - | - | -/- | 0 (0) | pass |
+| young-node-persists | `failure-signature//dial tcp <ip>:6379: connect: connection refused` | `failure-signature//dial tcp <ip>:6379: connect: connection refused` | high 0.85 | notify/notify | 2 (2) | pass |
+| young-and-old-nodes-fail | `external-endpoint//10.0.7.20:6379` | `external-endpoint//10.0.7.20:6379` | high 1.00 | notify/notify | 2 (2) | pass |
+| log-missing-service | `deployment/shop/reports` | `deployment/shop/reports (no cause)` | none | digest/digest | 1 (2) | pass |
+| log-missing-at-start-only | quiet | - | - | -/- | 0 (0) | pass |
+| log-missing-service-exists | quiet | - | - | -/- | 0 (0) | pass |
+| node-stall-clears-pods-still-unready | `node//n1`, `deployment/shop/api`, `deployment/shop/web`, `deployment/shop/worker` | `node//n1`, `deployment/shop/api (no cause)`, `deployment/shop/web (no cause)`, `deployment/shop/worker (no cause)` | possible 0.49 | notify/notify | 4 (6) | pass |
 | start-error-release-liveness-137 | `deployment/shop/orders` | `deployment/shop/orders` | high 0.91 | notify/notify | 1 (2) | pass |
 | start-error-release-liveness-143 | `deployment/shop/orders` | `deployment/shop/orders` | high 0.91 | notify/notify | 1 (2) | pass |
 | exec-format-error-no-release | `deployment/shop/reports` | `deployment/shop/reports (no cause)` | none | notify/notify | 1 (2) | pass |
@@ -821,6 +861,7 @@ Time to first correct root: p95 4m15s, max 25m30s over 419 scenarios; slowest: h
 | digest-never-paged-resolve | `horizontalpodautoscaler/shop/orders` | `horizontalpodautoscaler/shop/orders (no cause)` | none | digest/digest | 2 (3) | pass |
 | rollup-chronic-worsens | `deployment/shop/worker`, `deployment/shop/api` | `deployment/shop/worker (no cause)`, `deployment/shop/api (no cause)` | none | notify/notify | 2 (6) | pass |
 | unusual-event-recurs | `service/shop/web` | `service/shop/web (no cause)` | none | digest/digest | 1 (4) | pass |
+| moved-root-returns | `configmap/shop/settings` | `configmap/shop/settings` | high 1.00 | notify/notify | 3 (4) | pass |
 | job-running-long | quiet | - | - | -/- | 0 (0) | pass |
 | job-running-usual | quiet | - | - | -/- | 0 (0) | pass |
 | scaled-to-zero-routed | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
@@ -836,6 +877,7 @@ Time to first correct root: p95 4m15s, max 25m30s over 419 scenarios; slowest: h
 | oom-limit-on-pressured-node | `deployment/billing/ledger`, `node//n3` | `deployment/billing/ledger (no cause)`, `node//n3 (no cause)` | none | notify/notify | 3 (5) | pass |
 | oom-under-limit-on-pressured-node | `node//n3` | `node//n3` | likely 0.52 | notify/notify | 2 (3) | pass |
 | namespace-delete-crashing-pods | `deployment/preview-4/mailer` | `deployment/preview-4/mailer (no cause)` | none | notify/notify | 1 (3) | pass |
+| new-namespace-crash-before-root-ca | `deployment/team-new/api` | `deployment/team-new/api` | high 0.83 | notify/notify | 1 (2) | pass |
 | short-name-quoted-in-error | `configmap/pipeline/api` | `configmap/pipeline/api` | high 1.00 | notify/notify | 1 (3) | pass |
 | claim-names-missing-storage-class | `storageclass//nvme-archive` | `storageclass//nvme-archive` | high 1.00 | notify/notify | 1 (2) | pass |
 | apiservice-backend-service-missing | `service/reports/report-adapter` | `service/reports/report-adapter` | high 0.95 | notify/notify | 1 (2) | pass |
@@ -897,6 +939,8 @@ Time to first correct root: p95 4m15s, max 25m30s over 419 scenarios; slowest: h
 | exec-format-error-arm64 | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (3) | pass |
 | crash-on-arm64-node-other-error | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (3) | pass |
 | exec-format-error-release-retitle | `deployment/shop/reports` | `deployment/shop/reports` | high 0.82 | notify/notify | 1 (3) | pass |
+| replicas-fail-only-on-arm64 | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (3) | pass |
+| replicas-fail-on-mixed-nodes | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (3) | pass |
 | pod-ips-exhausted | `zone//zone-a` | `zone//zone-a` | high 1.00 | notify/notify | 1 (3) | pass |
 | preempted-by-higher-priority | `deployment/batch/importer` | `deployment/batch/importer` | high 1.00 | notify/notify | 1 (4) | pass |
 | preempted-and-rescheduled | quiet | - | - | -/- | 0 (0) | pass |
@@ -967,7 +1011,7 @@ Time to first correct root: p95 4m15s, max 25m30s over 419 scenarios; slowest: h
 | coupled-silent-image-fault-state | `deployment/mail/ledger` | `configmap/mail/ledger-config` | likely 0.69 | notify/notify | 1 (2) | wrong root |
 | coupled-silent-config-fault-state | `configmap/post/ledger-config` | `configmap/post/ledger-config` | likely 0.69 | notify/notify | 1 (2) | pass |
 | node-lost-owner-routed | `node//n1` | `node//n1` | high 1.00 | page/page | 3 (4) | pass |
-| cni-agent-crash-quoted | `node//n1` | `node//n1` | high 1.00 | notify/notify | 3 (4) | pass |
+| cni-agent-crash-quoted | `node//n1` | `node//n1` | high 1.00 | notify/notify | 2 (4) | pass |
 | coredns-down-no-probe | `cluster-dns//cluster-dns` | `cluster-dns//cluster-dns` | high 0.90 | notify/notify | 1 (3) | pass |
 | dependency-clusterip-dial | `deployment/data/postgres` | `deployment/data/postgres` | high 1.00 | notify/notify | 1 (6) | pass |
 | node-blip-then-down | `node//n1` | `node//n1 (no cause)` | none | page/page | 4 (5) | pass |
@@ -1106,6 +1150,27 @@ Time to first correct root: p95 4m15s, max 25m30s over 419 scenarios; slowest: h
 | probe-refused-then-http-500 | `deployment/external-secrets/cert-controller` | `deployment/external-secrets/cert-controller (no cause)` | none | notify/notify | 1 (3) | pass |
 | crash-loop-before-node-drain | `deployment/shop/report` | `deployment/shop/report (no cause)` | none | notify/notify | 1 (3) | pass |
 | crash-everywhere-node-pressure | `deployment/shop/worker` | `deployment/shop/worker (no cause)` | none | notify/notify | 1 (4) | pass |
+| helm-upgrade-failed | `helmrelease/shop/payments` | `helmrelease/shop/payments (no cause)` | none | notify/notify | 1 (2) | pass |
+| helm-pending-upgrade-stuck | `helmrelease/shop/payments` | `helmrelease/shop/payments (no cause)` | none | notify/notify | 1 (2) | pass |
+| helm-upgrade-deployed-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| helm-pending-upgrade-short-quiet | quiet | - | - | -/- | 0 (0) | pass |
+| oom-flat-at-limit-sizing | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (3) | pass |
+| oom-without-usage-history | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (3) | pass |
+| liveness-timeout-at-cpu-limit | `deployment/shop/web` | `deployment/shop/web (no cause)` | none | notify/notify | 1 (2) | pass |
+| liveness-timeout-under-cpu-limit | `deployment/shop/web` | `deployment/shop/web (no cause)` | none | notify/notify | 1 (2) | pass |
+| oom-at-limitrange-cap | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (3) | pass |
+| release-blamed-possible | `deployment/shop/checkout` | `deployment/shop/checkout` | likely 0.69 | notify/notify | 1 (2) | pass |
+| release-previous-never-ready | `deployment/shop/checkout` | `deployment/shop/checkout` | high 0.82 | notify/notify | 1 (2) | pass |
+| service-stuck-deleting-old-quiet | quiet | - | - | -/digest | 0 (0) | pass |
+| release-source-linked | `deployment/shop/checkout` | `deployment/shop/checkout` | high 0.96 | notify/notify | 1 (2) | pass |
+| release-source-invalid | `deployment/shop/checkout` | `deployment/shop/checkout` | high 0.96 | notify/notify | 1 (2) | pass |
+| helm-upgrade-breaks-workload | `helmrelease/shop/payments` | `helmrelease/shop/payments` | high 1.00 | notify/notify | 1 (3) | pass |
+| helm-upgrade-fails-beside-other-crash | `helmrelease/shop/payments`, `deployment/shop/orders` | `helmrelease/shop/payments (no cause)`, `deployment/shop/orders` | none | notify/notify | 2 (4) | pass |
+| helm-upgrade-fails-after-crash | `deployment/shop/payments`, `helmrelease/shop/payments` | `deployment/shop/payments`, `helmrelease/shop/payments (no cause)` | high 0.98 | notify/notify | 2 (4) | pass |
+| helm-old-failure-healthy | quiet | - | - | -/- | 0 (0) | pass |
+| helm-old-failure-workload-down | `deployment/shop/payments`, `helmrelease/shop/payments` | `deployment/shop/payments`, `helmrelease/shop/payments (no cause)` | high 0.98 | notify/notify | 2 (4) | pass |
+| drain-beside-stuck-replacement | `node//n3` | `node//n3` | high 1.00 | page/page | 1 (2) | pass |
+| drain-evictions-find-no-room | `node//n3` | `node//n3` | high 1.00 | notify/notify | 2 (2) | pass |
 
 ## Held-out scenarios
 

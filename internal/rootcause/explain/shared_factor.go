@@ -117,7 +117,7 @@ func (v *view) sharedFactorVeto(
 	if !v.mostDependentsFail(id) {
 		return "most of what depends on it is healthy"
 	}
-	return ""
+	return v.notConcentrated(id)
 }
 
 // mostDependentsFail reports whether at least SharedFactorMinShare of

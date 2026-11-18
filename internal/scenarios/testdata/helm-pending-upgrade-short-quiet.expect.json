@@ -1,0 +1,7 @@
+{
+  "name": "helm-pending-upgrade-short-quiet",
+  "description": "A Helm upgrade is pending for five minutes and then deploys; nothing is reported.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

@@ -1,0 +1,12 @@
+{
+  "name": "new-namespace-crash-before-root-ca",
+  "description": "A pod in a namespace created seconds ago crash-loops for its own reason before kwatch sees the namespace's kube-root-ca.crt ConfigMap and default ServiceAccount.",
+  "root": "deployment/team-new/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "configmap/team-new/kube-root-ca.crt",
+    "serviceaccount/team-new/default"
+  ],
+  "tail": "10m0s"
+}

@@ -3,6 +3,7 @@ package heartbeat
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -163,12 +164,29 @@ func (m *HeartbeatMonitor) reportPing(err error, report StatusFunc) {
 	}
 }
 
-// Ping failures, as bounded errors. Details stay in the logs.
+// Ping failures, as bounded errors. Details stay in the logs. A refused
+// ping is a RejectedError, which matches ErrPingRejected.
 var (
 	errNoClient     = errors.New("heartbeat: HTTP client is not configured")
-	errPingFailed   = errors.New("heartbeat: ping failed")
-	errPingRejected = errors.New("heartbeat: ping rejected")
+	ErrPingFailed   = errors.New("heartbeat: ping failed")
+	ErrPingRejected = errors.New("heartbeat: ping rejected")
 )
+
+// RejectedError is a ping the monitoring URL answered with a status
+// other than 2xx.
+type RejectedError struct {
+	Status int
+}
+
+// Error implements error.
+func (e RejectedError) Error() string {
+	return fmt.Sprintf("heartbeat: ping rejected (HTTP %d)", e.Status)
+}
+
+// Is makes a RejectedError match ErrPingRejected.
+func (e RejectedError) Is(target error) bool {
+	return target == ErrPingRejected
+}
 
 // maxDrainBytes caps the response body read so connections can be reused.
 const maxDrainBytes = 4 << 10
@@ -196,13 +214,13 @@ func (m *HeartbeatMonitor) ping(ctx context.Context) error {
 	if err != nil {
 		klog.ErrorS(transport.RedactURLError(err),
 			"heartbeat ping: failed to create request")
-		return errPingFailed
+		return ErrPingFailed
 	}
 	resp, err := noRedirects(m.client).Do(req)
 	if err != nil {
 		// The URL often embeds a token; never log it.
 		klog.ErrorS(transport.RedactURLError(err), "heartbeat ping failed")
-		return errPingFailed
+		return ErrPingFailed
 	}
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxDrainBytes))
 	if err := resp.Body.Close(); err != nil {
@@ -214,7 +232,7 @@ func (m *HeartbeatMonitor) ping(ctx context.Context) error {
 			"status",
 			resp.StatusCode,
 		)
-		return errPingRejected
+		return RejectedError{Status: resp.StatusCode}
 	}
 	return nil
 }

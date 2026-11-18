@@ -1,0 +1,12 @@
+{
+  "name": "rollout-drops-service-dependency",
+  "description": "A release removes the environment value that names the payments Service from the API's pod template, and the new pods crash.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/payments",
+    "service/shop/payments"
+  ]
+}

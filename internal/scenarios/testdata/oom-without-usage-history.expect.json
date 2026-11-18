@@ -1,0 +1,8 @@
+{
+  "name": "oom-without-usage-history",
+  "description": "A container is OOM-killed before kwatch read its memory even once; no usage is stated.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "10m0s"
+}

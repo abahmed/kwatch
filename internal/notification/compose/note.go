@@ -54,6 +54,9 @@ type caseFacts struct {
 	// asAnnounced names the subject people were told about in a resolve
 	// (see incident.Decision.AsAnnounced).
 	asAnnounced bool
+	// subjectFailing: the subject still fails under a root of its own
+	// (incident.Decision.SubjectFailing).
+	subjectFailing bool
 	// community writes the Community message: the lead stops before the
 	// cause and causeTeaser tells only its category.
 	community bool
@@ -76,6 +79,7 @@ func gatherFacts(d incident.Decision, now time.Time, fix *inventory.Change,
 	}
 	f.rootUnseen = rootUnseen(f.p, d.Facts.Report)
 	f.asAnnounced = d.AsAnnounced
+	f.subjectFailing = d.SubjectFailing
 	if own := rootFinding(f.p, f.members); own != nil {
 		f.lead, f.ok = *own, true
 	} else if failures := failing(f.members); len(failures) > 0 {
@@ -171,6 +175,8 @@ var noteWriters = []sentenceWriter{
 	changeSentences,
 	blastSentences,
 	causeProofSentences,
+	notStatedSentences,
+	youngNodeSentences,
 	refusalSentences,
 	pullLoginSentences,
 	servingCertSentences,
@@ -184,6 +190,7 @@ var noteWriters = []sentenceWriter{
 	probeLogSentences,
 	probeFailureSentences,
 	logBurstSentences,
+	logMissingSentences,
 	nodeWhySentences,
 	calledServiceSentences,
 	missingServiceSentences,
@@ -198,6 +205,8 @@ var noteWriters = []sentenceWriter{
 	preemptedSentences,
 	graceKillSentences,
 	memorySentences,
+	sizingSentences,
+	evictionSentences,
 	howFailedSentences,
 	livenessStartSentences,
 	livenessCascadeSentences,

@@ -76,7 +76,7 @@ func changeSentencesFor(f caseFacts) []sentence {
 }
 
 // raisedSentences say that an incident got louder since the last
-// message: "It is now critical." Without a rise they say nothing, so a
+// message: "This is now critical." Without a rise they say nothing, so a
 // restated case never claims news it does not have.
 func raisedSentences(f caseFacts) []sentence {
 	if !f.p.Delivery.TierRaised() {
@@ -88,7 +88,7 @@ func raisedSentences(f caseFacts) []sentence {
 	if !ok {
 		return nil
 	}
-	return []sentence{{part: partLead, text: "It is now " + word + "."}}
+	return []sentence{{part: partLead, text: "This is now " + word + "."}}
 }
 
 // revisedSentences restate the case under its new cause, led by what

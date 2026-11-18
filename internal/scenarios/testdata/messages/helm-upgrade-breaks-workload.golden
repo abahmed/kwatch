@@ -1,0 +1,13 @@
+10:04:15 settled
+🟠 Helm release payments in shop (prod-eu-1) has failed to upgrade or roll back at revision 12. The last run of container app in pod payments-09272817-a lasted ten seconds. Affected: payments.
+Related alerts: 1 crash loop
+Rolling back the Helm release undoes this release (changes the cluster): helm rollback payments 11 -n shop
+🟠 Helm release payments in shop (prod-eu-1) has failed to upgrade or roll back at revision 12.
+| 🟠 Helm release **payments** in **shop** (**prod-eu-1**) has failed to upgrade or roll back at revision 12.
+| The last run of container app in pod payments-09272817-a lasted ten seconds.
+| Affected: **payments**.
+| Related alerts: 1 crash loop
+| Rolling back the Helm release undoes this release (changes the cluster):
+| ```
+| helm rollback payments 11 -n shop
+| ```

@@ -4,20 +4,8 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/incident"
 )
-
-// oldProblemSource is what the incident reader may say about the old
-// problems it opened no issue for (incident/old_problem.go).
-// *incident.Manager says it; a reader without it says nothing.
-type oldProblemSource interface {
-	OldProblems() []detection.Finding
-}
-
-// oldProblemDaysSource is the reader that also says how many days make
-// a problem old (the configured oldProblemDays).
-type oldProblemDaysSource interface {
-	OldProblemDays() int
-}
 
 // OldProblems are the low problems that were already old when kwatch
 // first saw them, so they opened no issue: the overview says "N old
@@ -44,21 +32,12 @@ type OldProblem struct {
 // maxOldProblems bounds the old problems the overview lists.
 const maxOldProblems = 50
 
-// oldProblems is the count and first entries of the old problems at
-// now; nil when the incident reader cannot say.
-func (s *Server) oldProblems(now time.Time) *OldProblems {
-	reader := s.sources.incidents.Load()
-	if reader == nil {
-		return nil
-	}
-	source, ok := (*reader).(oldProblemSource)
-	if !ok {
-		return nil
-	}
-	out := buildOldProblems(source.OldProblems(), now, s.texts.redact)
-	if days, ok := (*reader).(oldProblemDaysSource); ok {
-		out.Days = max(days.OldProblemDays(), 0)
-	}
+// oldProblems is the count and first entries of the old problems of
+// view v at now. They come from the same view as the issues, so an
+// object is never in both lists (incident/old_problem_retire.go).
+func (s *Server) oldProblems(v *incident.View, now time.Time) *OldProblems {
+	out := buildOldProblems(v.OldProblems(), now, s.texts.redact)
+	out.Days = max(v.OldProblemDays(), 0)
 	return out
 }
 

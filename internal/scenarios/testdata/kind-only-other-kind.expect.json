@@ -1,0 +1,14 @@
+{
+  "name": "kind-only-other-kind",
+  "description": "Three services name the cache address they cannot reach; two others cannot reach their database and are not attached to the cache.",
+  "root": "external-endpoint//10.0.7.20:6379",
+  "otherRoots": [
+    "deployment/shop/pricing",
+    "deployment/shop/tracking"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

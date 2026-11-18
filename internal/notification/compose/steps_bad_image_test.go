@@ -19,7 +19,7 @@ func TestBadImageReleaseOpensWithTheEventsOfThePod(t *testing.T) {
 	api := inventory.CoreID(kube.KindDeployment, "shop", "api")
 	ct := inventory.CoreID(kube.KindContainer, "shop", "api-7d9f-a/app")
 	p := incident.Incident{Root: api, Cause: &rootcause.CauseRecord{
-		Root: api, RollbackRevision: "4",
+		Root: api, RollbackRevision: "4", Score: 0.9, PreviousServed: true,
 		Change: &inventory.Change{Entity: api}}}
 
 	steps := nextSteps(p, []detection.Finding{{Entity: ct,

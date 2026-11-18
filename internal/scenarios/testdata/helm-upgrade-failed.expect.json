@@ -1,0 +1,8 @@
+{
+  "name": "helm-upgrade-failed",
+  "description": "The latest revision of a Helm release is failed; the release is reported once.",
+  "root": "helmrelease/shop/payments",
+  "tier": "notify",
+  "maxMessages": 2,
+  "tail": "20m0s"
+}

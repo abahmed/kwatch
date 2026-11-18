@@ -55,10 +55,14 @@ func statusTransform(obj any) (any, error) {
 }
 
 // transformFor picks the cache transform of a status watch: the RBAC
-// kinds keep their own compact form, every other kind the status subset.
+// kinds and ControllerRevisions keep their own compact form, every
+// other kind the status subset.
 func transformFor(gvr schema.GroupVersionResource) cache.TransformFunc {
 	if isRBACResource(gvr) {
 		return rbacTransform
+	}
+	if isControllerRevision(gvr) {
+		return revisionTransform
 	}
 	return statusTransform
 }

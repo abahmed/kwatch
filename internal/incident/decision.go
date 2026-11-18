@@ -35,6 +35,10 @@ type Facts struct {
 	// Changes are the latest changes in the root's namespace, newest
 	// first, set for an incident without a cause (see RecentChanges).
 	Changes []inventory.Change
+	// ChangesRead says the change history was read for Changes, so an
+	// empty list means nothing changed nearby, not that kwatch could
+	// not tell.
+	ChangesRead bool
 	// Window is the stretch between the root's last healthy mark and the
 	// first failure, with the changes recorded inside it; nil unless
 	// both times are known and something changed (see WindowOf).
@@ -54,6 +58,15 @@ type Facts struct {
 	// Wake is the cluster wake-up the problem began in or right after,
 	// set on an announcement; nil when there was none.
 	Wake *WakeContext
+	// Grouping says what ties the members of a grouped incident
+	// together (GroupingOf), Split what its failing replicas share
+	// that the healthy ones do not (ReplicaSplitOf), and Users whether
+	// users reach what fails (UsersOf). Set on an announcement or an
+	// update; each is nil when it says nothing. Compose puts them in
+	// the structured evidence only: no message sentence reads them.
+	Grouping *Grouping
+	Split    *ReplicaSplit
+	Users    *Users
 }
 
 // WakeContext is a cluster wake-up, as a message mentions it: the
@@ -97,4 +110,8 @@ type Decision struct {
 	// the resolve names that subject even if the root moved since, and
 	// the root it ended on only as the last one affected.
 	AsAnnounced bool
+	// SubjectFailing marks the resolve of an incident whose subject
+	// still fails under a root of its own: its failures moved there.
+	// The resolve must not say the subject is healthy again.
+	SubjectFailing bool
 }

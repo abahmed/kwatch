@@ -51,12 +51,13 @@ func TestRunActiveComponentsServesUntilLeadershipEnds(t *testing.T) {
 
 	require.Eventually(t, deps.healthServer.Ready, 15*time.Second,
 		5*time.Millisecond, "leader session never became ready")
-	// Heartbeat is not configured, so it stops at once and is not shown
-	// as running.
+	// Heartbeat is not configured, so it stops at once and is shown as
+	// off, never as running, and not as a failure.
 	require.Eventually(t, func() bool {
-		_, shown := deps.healthServer.ComponentStatuses()["heartbeat"]
-		return !shown
-	}, 15*time.Second, 5*time.Millisecond, "disabled heartbeat shown")
+		hb := deps.healthServer.ComponentStatuses()["heartbeat"]
+		return hb.State == "off" && hb.Available
+	}, 15*time.Second, 5*time.Millisecond, "heartbeat not shown as off")
+	require.NotContains(t, deps.healthServer.ComponentErrors(), "heartbeat")
 	cancel()
 	select {
 	case err := <-done:

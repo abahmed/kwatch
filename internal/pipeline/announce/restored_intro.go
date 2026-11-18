@@ -8,8 +8,9 @@ import "github.com/abahmed/kwatch/internal/incident"
 // promises waits in memory (pipeline introduce.go), so a restart before
 // it went out loses it. After the restored listing at the end of the
 // grace, such incidents are handed to the introductions once. The
-// listing records the introduction sent (Listing.Followed), so it is
-// never sent twice, across restarts too.
+// introduction sent is recorded in the startup marker (NoteSpoke), not
+// only in the listing that named it: a restored listing is not
+// persisted, so without it every restart introduced it again.
 
 // noteRestoredIntros collects the restored incidents still owed their
 // introduction, once per start, when the restore grace is over.
@@ -18,6 +19,9 @@ func (c *Collector) noteRestoredIntros() {
 		return
 	}
 	c.introsNoted = true
+	if c.pruneSpoke() {
+		c.saveSummary()
+	}
 	for _, p := range c.env.Incidents.RestoredFailing() {
 		if !p.Delivery.RolledUp() || !currentNews(p) ||
 			c.ListedBy(p.ID) == "" || c.SpokeOnItsOwn(p.ID) ||

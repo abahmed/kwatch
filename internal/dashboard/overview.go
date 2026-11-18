@@ -79,8 +79,8 @@ func (s *Server) overviewHandler(w http.ResponseWriter, r *http.Request) {
 	if !onlyGet(w, r) {
 		return
 	}
-	reader := s.sources.incidents.Load()
-	if reader == nil {
+	v := s.view()
+	if v == nil {
 		unavailable(w)
 		return
 	}
@@ -89,7 +89,8 @@ func (s *Server) overviewHandler(w http.ResponseWriter, r *http.Request) {
 		writeBadQuery(w, err)
 		return
 	}
-	all := (*reader).Incidents()
+	markRevision(w, v)
+	all := v.Incidents()
 	items := all
 	if len(items) > maxInsightScan {
 		items = items[:maxInsightScan]
@@ -100,7 +101,7 @@ func (s *Server) overviewHandler(w http.ResponseWriter, r *http.Request) {
 	out.Insights, out.Trends = &insights, &trends
 	out.FailedSendsLastHour = s.failedLastHour()
 	out.ScalingHold = s.scalingHold(s.now.Now())
-	out.OldProblems = s.oldProblems(s.now.Now())
+	out.OldProblems = s.oldProblems(v, s.now.Now())
 	if snap, ok := s.releaseBookSnapshot(); ok {
 		out.Releases = summarizeReleases(snap,
 			s.now.Now().Add(-releaseWindow))

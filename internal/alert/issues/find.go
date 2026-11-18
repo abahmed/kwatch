@@ -59,7 +59,7 @@ func (m *Map) create(
 	if searched {
 		body += "\n\nRef: " + markers[0]
 	}
-	id, err := tracker.Create(ctx, title, body)
+	id, err := createIssue(ctx, tracker, msg, title, body, markers[0])
 	if err != nil {
 		m.markTriedCreate(key)
 		return err

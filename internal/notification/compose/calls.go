@@ -6,6 +6,7 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // endpointClassWords say how calls to an external endpoint fail, by
@@ -24,7 +25,7 @@ func endpointWords(mode detection.Mode) string {
 	if words, ok := endpointClassWords[strings.ToLower(class)]; ok {
 		return words
 	}
-	return causeWords["external-endpoint-failing"].words
+	return causeWords[explain.RuleExternalEndpointFailing].words
 }
 
 // signatureLead names a storm with nothing to blame but its words:
@@ -41,8 +42,9 @@ func signatureLead(f caseFacts) string {
 		return f.leadName(subject) + " " + state +
 			" with an error other workloads share"
 	}
-	return f.leadName(subject) + " and " + plural(others, "other workload") +
-		" " + pluralPredicate(state) + " with the same error"
+	return kindOnlyLead(f, f.leadName(subject)+" and "+
+		plural(others, "other workload")+" "+pluralPredicate(state)+
+		" with the same error")
 }
 
 // otherWorkloads counts the workloads in the impact besides subject.

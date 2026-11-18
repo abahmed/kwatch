@@ -33,6 +33,18 @@ type ResourceUse struct {
 	DiskKnown   bool
 	DiskUsed    int64
 	DiskTotal   int64
+	// GoMemory is the memory the Go runtime holds (goMemory): what
+	// kwatch cannot give back, unlike the file cache in MemoryBytes.
+	// GoLimit is the Go memory limit, 0 when none is set.
+	GoMemoryKnown bool
+	GoMemory      int64
+	GoLimit       int64
+	// MemoryCache is the file cache counted in MemoryBytes (mostly the
+	// state file), which the system frees when it needs the room.
+	MemoryCache int64
+	// MemoryLevel is MemoryOK, MemoryWarn or MemoryBad, judged on
+	// GoMemory with hysteresis over the samples (memoryAlarm).
+	MemoryLevel string
 }
 
 // UsageReader reads kwatch's own use from its cgroup (v2, else v1)
@@ -42,11 +54,15 @@ type UsageReader struct {
 	root, dir string
 	now       func() time.Time
 
+	// goMem reads the Go runtime's memory and limit (goMemory).
+	goMem func() (used, limit int64)
+
 	mu       sync.Mutex
 	lastUse  time.Duration
 	lastAt   time.Time
 	cores    float64
 	hasCores bool
+	alarm    memoryAlarm
 }
 
 // NewUsageReader reads the cgroup under root and the volume holding
@@ -54,7 +70,7 @@ type UsageReader struct {
 func NewUsageReader(
 	root, dir string, now func() time.Time,
 ) *UsageReader {
-	return &UsageReader{root: root, dir: dir, now: now}
+	return &UsageReader{root: root, dir: dir, now: now, goMem: goMemory}
 }
 
 // Run samples the CPU use now and on each tick until ctx ends.
@@ -75,6 +91,7 @@ func (r *UsageReader) Run(ctx context.Context, tick <-chan time.Time) {
 func (r *UsageReader) Sample() {
 	used, ok := r.cpuUsed()
 	at := r.now()
+	r.observeMemory(at)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if !ok {
@@ -92,8 +109,14 @@ func (r *UsageReader) Sample() {
 func (r *UsageReader) Use() ResourceUse {
 	var u ResourceUse
 	u.MemoryBytes, u.MemoryLimit, u.MemoryKnown = r.memory()
+	u.GoMemory, u.GoLimit = r.goMem()
+	u.GoMemoryKnown = u.GoMemory > 0
+	if u.MemoryKnown {
+		u.MemoryCache, _ = r.fileCache()
+	}
 	r.mu.Lock()
 	u.CPUCores, u.CPUKnown = r.cores, r.hasCores
+	u.MemoryLevel = r.alarm.level
 	r.mu.Unlock()
 	if u.CPUKnown {
 		u.CPULimit = r.cpuLimit()
@@ -102,6 +125,15 @@ func (r *UsageReader) Use() ResourceUse {
 		u.DiskUsed, u.DiskTotal, u.DiskKnown = diskUse(r.dir)
 	}
 	return u
+}
+
+// observeMemory feeds one sample of the Go memory to the alarm.
+func (r *UsageReader) observeMemory(at time.Time) {
+	_, limit, _ := r.memory()
+	used, goLimit := r.goMem()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.alarm.observe(at, used, memoryBase(goLimit, limit))
 }
 
 func (r *UsageReader) memory() (used, limit int64, ok bool) {

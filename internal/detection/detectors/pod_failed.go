@@ -26,16 +26,18 @@ func failed(ctx detection.Context, e inventory.Entity) []detection.Finding {
 		return []detection.Finding{s}
 	}
 	findingReason, summary := reasons.PodFailed, "Pod failed"
+	evidence := []detection.Evidence{{
+		Label: "message", Value: text(e, kube.AttrMessage),
+	}}
 	if evicted {
 		findingReason, summary = reasons.Evicted, "Pod was evicted"
+		evidence = append(evidence,
+			evictionMemoryContext(ctx, e, since)...)
 	}
 	return []detection.Finding{{
 		Reason: findingReason, Severity: failedPodSeverity(ctx, since),
 		Since: since, Summary: summary,
-		Advisory: jobRetrying(ctx, e),
-		Evidence: []detection.Evidence{{
-			Label: "message", Value: text(e, kube.AttrMessage),
-		}},
+		Advisory: jobRetrying(ctx, e), Evidence: evidence,
 	}}
 }
 

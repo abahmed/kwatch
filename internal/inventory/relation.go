@@ -65,6 +65,11 @@ const (
 	// medium confidence: a manager name is a convention, not a
 	// reference.
 	ManagedBy RelationType = "managed-by"
+	// DeployedBy points from a workload to the release that deploys
+	// it, as the object's release marks name it: a Deployment is
+	// deployed by its Helm release. The release may not exist: the
+	// marks name it whether kwatch sees it or not.
+	DeployedBy RelationType = "deployed-by"
 )
 
 // Relation is one directed edge.

@@ -30,21 +30,39 @@ var probeNames = map[string]string{
 func throttleSentences(f caseFacts) []sentence {
 	for _, m := range f.members {
 		name, probe := probeNames[m.Reason]
-		pct := evidence(m, detection.EvidenceCPUThrottled)
-		if !probe || pct == "" {
+		state := cpuState(m)
+		if !probe || state == "" {
 			continue
 		}
 		verb := " failed"
 		if probeTimeout.MatchString(evidence(m, "probe")) {
 			verb = " timed out"
 		}
-		text := name + verb + " while the container was CPU-throttled " +
-			pct + " of the time"
-		if limit := evidence(m, detection.EvidenceCPULimit); limit != "" {
-			text += " (limit " + limit + ")"
+		text := name + verb + " while the container " + state
+		if peak := evidence(m, detection.EvidenceCPUPeak); peak != "" {
+			text += "; its CPU peaked at " + peak + " in the last 24 hours"
 		}
 		return []sentence{{part: partProof, weight: weightThrottle,
 			text: endSentence(text)}}
 	}
 	return nil
+}
+
+// cpuState words how the container stood against its CPU limit: "was
+// CPU-throttled 72% of the time (limit 200m)" or "used 248m of its 250m
+// CPU limit". "" when it was not at its limit.
+func cpuState(m detection.Finding) string {
+	limit := evidence(m, detection.EvidenceCPULimit)
+	if pct := evidence(m, detection.EvidenceCPUThrottled); pct != "" {
+		text := "was CPU-throttled " + pct + " of the time"
+		if limit != "" {
+			text += " (limit " + limit + ")"
+		}
+		return text
+	}
+	used := evidence(m, detection.EvidenceCPUAtLimit)
+	if used == "" || limit == "" {
+		return ""
+	}
+	return "used " + used + " of its " + limit + " CPU limit"
 }

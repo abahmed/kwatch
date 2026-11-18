@@ -12,14 +12,14 @@ import (
 
 // "What changed just before" measures every change from the onset the
 // server sorted it by, so a change labelled Before never reads "after
-// it started", even when the issue first opened hours earlier. An
+// it started", even when the issue was first seen later. An
 // automatic actor is marked as one.
 func TestBrowserChangesMeasureFromTheOnset(t *testing.T) {
 	ago := func(d time.Duration) string {
 		return time.Now().Add(-d).UTC().Format(time.RFC3339)
 	}
 	d := stubDetail()
-	d["firstSeen"] = ago(10 * time.Hour)
+	d["firstSeen"] = ago(30 * time.Minute)
 	d["onset"] = ago(40 * time.Minute)
 	d["changes"] = []map[string]any{
 		{"at": ago(50 * time.Minute), "when": "before",

@@ -65,7 +65,7 @@ narrowing the watch list and turning off the noisy reasons.
 | Parameter | What it does |
 |:---|---|
 | `resyncSeconds` | How often informers re-list everything (default: 300). It is a safety net for lost watch events, not the detection path; `0` turns it off, and any other value must be at least 30 so a typo cannot re-list every object every second |
-| `oldProblemDays` | How old, in days, a problem that was already there when kwatch first saw it must be to count as old (default: 30). An old low problem (one that would only reach the digest: a Job that failed long ago, an expired certificate nothing uses) opens no issue; the dashboard overview counts it as an old problem not shown. An old problem that needs attention (an issuer that has been failing for months) is lowered to Low, and its issue says why. A new failure, a new onset or a finding that gets worse opens or raises the issue as usual; a critical one, or one that loses users traffic, is never lowered. `0` turns it off |
+| `oldProblemDays` | How old, in days, a problem that was already there when kwatch first saw it must be to count as old (default: 30). An old low problem (one that would only reach the digest: a Job that failed long ago, an expired certificate nothing uses) opens no issue; the dashboard overview counts it as an old problem not shown. An old problem that needs attention (an issuer that has been failing for months) is lowered to Low, and its issue says why. An issue kwatch opened before the rule, or kept from before a restart, whose every failure is such an old low problem is closed without a message and counted with the old problems: an object is never both an issue and an old problem. A new failure, a new onset or a finding that gets worse opens or raises the issue as usual; a critical one, or one that loses users traffic, is never lowered. `0` turns it off |
 | `namespaces` | 🔽 Deliver only incidents in these namespaces — or use `!kube-system` to deliver *everything except* it |
 | `namespaceSelector` | 🏷️ Pick namespaces by K8s label selector (use *instead of* `namespaces`, not with it). Pro; ignored on Community and listed at startup |
 | `reasons` | 🔽 Deliver only these reasons — or exclude some with `!` (e.g. `reasons: ["!Started"]`). Pro; ignored on Community and listed at startup |
@@ -167,6 +167,17 @@ goes out, and so does the resolve. Remove the annotation
   an object, not the person.
 - kwatch only reads objects; the annotation needs no extra permission.
 
+#### Which rule wins
+
+For each issue, kwatch applies these in order:
+
+1. `namespaces`, `namespaceSelector`, `reasons`, `silences` and
+   maintenance: an issue they leave out is not sent, whatever else
+   says.
+2. Acknowledgement (`kwatch.dev/ack`): a sent issue stops reminding,
+   and its news still goes out.
+3. Routes: where each message that is sent goes.
+
 ## 📱 App settings
 
 Small but useful global options — mostly about **what alerts say** and how kwatch
@@ -175,13 +186,15 @@ talks to the outside world.
 | Parameter | What it does |
 |:---|---|
 | `app.proxyURL` | 🔗 Proxy for outgoing HTTP requests. An invalid URL fails startup. A URL with credentials (`http://user:pass@host`) must be an absolute `${file:/path}` reference |
-| `app.clusterName` | 🏷️ Name shown in alerts so you know which cluster. It is also part of the alert id that paging and issue providers use: set it on every cluster that sends to the same account. Without it kwatch warns at start and uses the cluster's own identity for new alerts |
+| `app.clusterName` | 🏷️ Name shown in alerts so you know which cluster. It is also part of the alert id that paging and issue providers use: set it on every cluster that sends to the same account. Without it kwatch reads the name from its nodes when they all carry one (the node label `alpha.eksctl.io/cluster-name`, the node label or annotation `cluster.x-k8s.io/cluster-name`, a `kubernetes.io/cluster/<name>` label, or a custom `clusterName` in the kube-system `kubeadm-config` ConfigMap), using only what its role already reads. It never guesses: nodes that disagree, or a value that is not plainly a name (AKS's `kubernetes.azure.com/cluster` is a resource group, GKE has no name label, kubeadm's default is `kubernetes`), give no name. A name you set always wins. The kwatch health page shows the name and where it came from, or a notice when there is none. A detected name is only shown (messages, the dashboard, self-alerts); it never becomes part of an alert id or issue marker, so ids do not change when detection starts or stops. Without a name you set, kwatch warns at start and keys new alerts by the cluster's own identity |
 | `app.disableStartupMessage` | Silence the "kwatch is alive" welcome message |
 | `app.environment` | What the cluster is for: `production` (default) or `non-production`. `non-production` caps every incident at Needs attention for the whole cluster: nothing pages, and the alert level says "Not paged: non-production cluster". Use it for staging and development clusters. Any other value fails startup. Paging itself is Pro, so on Community the setting changes nothing |
 | `app.logFormatter` | Log format: `text` (default) or `json`. `json` writes one JSON object per log line; in both formats INFO and WARNING go to stdout and ERROR to stderr. `KWATCH_LOG_FORMAT` overrides it. Only `json` (any letter case) switches the format; any other value is not an error and keeps the text format |
 | `app.insecureSkipTLSVerify` | 🔓 Skip TLS verification on outbound HTTP to **alert providers** (default: false). It never applies to kwatch's own calls: the license server, the adoption telemetry and the update check always verify TLS (they still use `app.proxyURL` and `app.caBundlePath`) |
 | `app.caBundlePath` | 📜 Path to a PEM CA bundle for outbound HTTP. A missing or invalid bundle fails startup |
 | `app.hideProHints` | Remove every Pro hint from Community messages (default: false): the one Pro line on the first alert of an issue ("Pro shows which one and how to fix it, free during early access: kwatch.dev/pro"; "how to check it" when Pro has no fix; or the same sentence naming what Pro shows for that alert: "the exact cause", "the recent change behind this", "the likely cause it found"), the Pro sentence after a monitoring gap in the startup message, and the startup and daily "Pro checks found ..." notes. The "Most likely cause: <type of cause>." sentence stays |
+| `app.disableSelfAlerts` | Stop the messages kwatch sends about itself when one of its own parts stays degraded for 10 minutes (default: false, so they are sent). They are low priority, never page, never report an optional permission you never granted (only one lost after it worked), carry the route reason `kwatch_degraded` (severity `info`) so a route can send them to one channel or leave them out, and are capped at 6 a day; see "Alerting on kwatch itself" in production-operations.md |
+| `app.gitOpsLinks` | Pro. The web address of one application per GitOps tool (`argocd`, `flux` or `helm`), with `{app}` where its name goes, so messages and the dashboard link a change to the application that deployed it; see "Links to where a change came from" below |
 | `app.communityProvider` | The alert provider the Community edition keeps when more than one is configured (Community sends to one provider; Pro sends to all). Empty keeps one by class, not by the alphabet: a paging service (PagerDuty, Opsgenie, iLert, GoAlert, incident.io, Splunk On-Call, Squadcast, Zenduty, SIGNL4, Alerta, Sensu Go, Datadog, New Relic, Splunk HEC) first, then chat and everything else, then email, with the name breaking a tie. When the provider cap leaves a paging service inactive, kwatch logs a warning naming it. A name that is not a configured provider is warned about and falls back the same way. `/status`, the startup log and `kwatch lint` show which provider is kept, for example `Community sends to: slack (inactive: pagerduty)` |
 
 The startup message and the upgrade notice are each a single plain sentence
@@ -198,8 +211,8 @@ message when it changes or resolves, and the roll-up closes once all of
 them have. Summaries and plain
 notices are information,
 not incidents: PagerDuty, Opsgenie, Squadcast, GoAlert, Zenduty, incident.io,
-iLert and SIGNL4 (paging) and GitHub, GitLab, Gitea, Jira and ClickUp (issue
-trackers) do not receive them, because nothing would ever close the alert or
+iLert and SIGNL4 (paging) and GitHub, GitLab, Gitea, Jira, ClickUp and
+ServiceNow (issue trackers) do not receive them, because nothing would ever close the alert or
 issue they would open. Splunk On-Call, Alerta, Sensu Go, Datadog, New Relic,
 SNS and Splunk HEC receive them as informational.
 
@@ -287,6 +300,8 @@ Endpoints kwatch serves so you can see it's alive and grab Prometheus metrics. T
 | `kwatch_leadership_rejoins_total` | counter | `result` = `success`, `failed` | In-process rejoins of leader election after the Lease was lost: success once the new generation serves, failed when the rejoin gave up and the process exits |
 | `kwatch_heartbeat_failures_total` | counter | none | Heartbeat pings that failed or were rejected |
 | `kwatch_kubelet_stats_failures_total` | counter | none | Kubelet stats summary reads that failed, one per node per round |
+| `kwatch_api_pressure` | gauge | none | 1 while the API server throttles or slows kwatch (three HTTP 429s, reads of one object by name over 5s or client-side limiter waits over 1s within a minute; lists, watches, log reads and the leader election's Lease calls are not timed, because they are long on a large cluster without any pressure) and optional work waits (log sampling, the dynamic kinds' safety-timer rediscovery); 0 after two quiet minutes. `/health` shows the `api-pressure` component degraded (`rate_limited`) and `/status` a reduced-coverage gap meanwhile |
+| `kwatch_api_pressure_signals_total` | counter | `signal` (`throttled`, `slow`, `limiter`) | Signs of API server pressure kwatch saw |
 | `kwatch_storage_resets_total` | counter | `reason` = `schema_mismatch`, `unreadable`, `migration_failed` | State files set aside (or deleted) and recreated at open |
 | `kwatch_storage_corrupt_records_total` | counter | none | Stored values skipped because they did not decode |
 | `kwatch_storage_expired_total` | counter | none | Stored entries deleted by retention |
@@ -377,6 +392,12 @@ status, resource versions, and deletion metadata remain intact.
   with the providers that heard its announcement, even if the owner is
   edited later. Digests, roll-ups and summaries match when one problem
   they name matches.
+- **kwatch's messages about itself** (a part of kwatch degraded, and
+  back to normal) carry the reason `kwatch_degraded`, severity `info`
+  and no namespace or owner: a route with `reasons: [kwatch_degraded]`
+  takes them, and a provider whose routes all name other reasons or
+  severities does not get them. Paging providers and issue trackers
+  never get them, whatever their routes.
 - **Pages are never folded.** Page-tier messages (route severity
   `critical`) and the resolves of paged incidents are exempt from the
   hourly budget, because a pager skips the overflow digest and a folded
@@ -449,6 +470,7 @@ reported as `component_failed`.
 | `provider_rejected` | The `provider-<name>` component's provider refused a message permanently, for example a revoked token |
 | `provider_rate_limited` | The `provider-<name>` component's provider is rate limiting kwatch |
 | `heartbeat_failed` | A heartbeat ping failed or was rejected |
+| `heartbeat_not_configured`, `heartbeat_pro_only` | The `heartbeat` component is `off`: Pro without `heartbeatMonitor` set up, or Community, which has no heartbeat. Information only: `/health` stays `ok` |
 | `kubelet_unreachable`, `kubelet_partially_unreachable` | The `kubelet-stats` component could reach no node's kubelet, or only some of them, in the last stats round; only usage attributes are affected |
 | `config_overlay_invalid` | The `KwatchConfig` overlay is invalid; kwatch runs on the mounted configuration (`config-overlay` component), or the watcher rejected an edit without restarting (`crd-watcher` component) |
 | `leadership_lost`, `shutdown` | Why the state lock was lost or the process ended; the `leader-election` component reports `leadership_lost` while kwatch rejoins the election |
@@ -577,7 +599,7 @@ listener, never on the health port. Everything about reaching it from outside
 | `dashboard.trustedProxies` | `[]` | CIDRs or addresses of the proxies that end TLS in front of kwatch. `X-Forwarded-For` and `X-Forwarded-Proto` count only from them; any entry (or own TLS) makes the dashboard https only |
 | `dashboard.tlsCertFile`, `dashboard.tlsKeyFile` | empty | Make kwatch serve TLS on the dashboard port itself. Set both or neither |
 | `investigation.logs` | `true` | Reads container logs as evidence (redacted, bounded). `false` reads no log at all, and the dashboard shows the log section as turned off |
-| `investigation.sampleLogs` | `true` | Samples a bounded slice of the log (the last 2 minutes, one pod per workload, at most 6 reads per 30 seconds) of Running and Ready pods and reports a burst of errors new against the workload's own earlier windows (`LogErrorBurst`: at least 20 error lines in the window, at least 5 times the earlier rate per window, with at least 10 minutes of earlier windows). Reads nothing when `investigation.logs` is `false`. A refused log read pauses it quietly for 5 minutes |
+| `investigation.sampleLogs` | `true` | Samples a bounded slice of the log (the last 2 minutes, one pod per workload, at most 6 reads per 30 seconds) of Running and Ready pods and reports a burst of errors new against the workload's own earlier windows (`LogErrorBurst`: at least 20 error lines in the window, at least 5 times the earlier rate per window, with at least 10 minutes of earlier windows). The same samples report, as a low finding listed in the daily summary (`LogServiceMissing`), a workload whose log keeps failing to resolve a name shaped like a Service of the cluster (`name`, `name.namespace`, `name.namespace.svc…`) when no such Service exists in a namespace that does: the name must show in at least 3 sampled windows spread over at least 20 minutes, it clears when the Service appears or the lookups stop for 30 minutes, and a similar existing Service name is given as a hint. It never pages and reads no more logs. Reads nothing when `investigation.logs` is `false`. A refused log read pauses it quietly for 5 minutes |
 
 The bearer token and the sign-in password are not in the file. The chart
 ships the Secret `<release>-dashboard` empty and kwatch fills both values
@@ -626,7 +648,7 @@ letter case; an empty value counts as unset, and any other text fails startup
 | `KWATCH_LEADER_ELECTION_NAME` | Exact name of the state lock Lease. With `POD_NAME` set, this or `KWATCH_INSTALLATION_ID` is required, so two installations never share a Lease |
 | `POD_NAME` | The Pod's name, used as the state lock identity (falls back to the host name) and to explain the previous Pod's restart |
 | `POD_NAMESPACE` | The namespace kwatch runs in: its Lease, `KwatchConfig` and own-namespace reads (falls back to `kwatch`) |
-| `POD_UID`, `NODE_NAME` | Recorded in the runtime session, to tell a node disruption or rollout from a crash |
+| `POD_UID`, `NODE_NAME` | Recorded in the runtime session, to tell a drained or lost node, an eviction or a rollout from a plain restart or a crash (see "Restart reasons" in production-operations.md) |
 
 ## 🔑 License
 
@@ -830,6 +852,11 @@ ignored Pro setting.
 | `heartbeatMonitor.url` | 🔗 Secret-backed `${file:/absolute/path}` heartbeat URL |
 
 If kwatch stops or crashes, the external monitor stops getting pings and pages you. 🔔
+`/health` (and the dashboard's kwatch page) always shows the `heartbeat`
+component and a `heartbeat` object: `state` is `not_configured`,
+`pro_only`, `waiting` (no ping sent yet), `ok` (with `lastPing`) or
+`failing` (with `lastFailure`, `failure` `unreachable` or `rejected`, and
+`httpStatus`). It never shows the URL.
 A failed ping is retried after 10 seconds, doubling up to 60 seconds, instead of
 after a whole interval.
 
@@ -973,6 +1000,45 @@ runbooks:
   OOMKilled: https://wiki.example.com/runbooks/oom
 ```
 
+### 🔗 Links to where a change came from
+
+Pro (messages and the dashboard). When kwatch blames or lists a change, it
+links it to its source using only what the objects already carry:
+
+- **GitOps application**: the app kwatch finds on the object (Argo CD's
+  `argocd.argoproj.io/instance` label or tracking id, Flux's
+  `kustomize.toolkit.fluxcd.io/name` or `helm.toolkit.fluxcd.io/name` label,
+  Helm's `meta.helm.sh/release-name` annotation). It is named always and
+  linked only when `app.gitOpsLinks` gives that tool's web address.
+- **Commit**: the `org.opencontainers.image.source` (an `https` repository
+  address without credentials) and `org.opencontainers.image.revision` (a
+  commit SHA or a tag) annotations, on the workload or its pod template,
+  as CI or GitOps pipelines often set them. A commit is linked only on
+  github.com, gitlab.com and bitbucket.org, whose page addresses are known;
+  on any other host the repository is linked and the revision is shown as
+  text. A value that is not valid is ignored. `deployment.kubernetes.io/revision`
+  and `app.kubernetes.io/version` are not commits and are never read as one.
+- **Image** (dashboard only): linked to its page on Docker Hub or Quay; any
+  other registry is shown as text.
+
+`app.gitOpsLinks` maps a tool (`argocd`, `flux` or `helm`) to the web address
+of one application, with `{app}` where the application's name goes. Each value
+must be an absolute `http` or `https` address containing `{app}`; startup and
+`kwatch lint` reject anything else. Without it, the application is named
+without a link.
+
+```yaml
+app:
+  gitOpsLinks:
+    argocd: https://argocd.example.com/applications/{app}
+    flux: https://gitops.example.com/kustomizations/{app}
+```
+
+A message shows the links on one line of its own, after the text
+("Source: Argo CD app shop · commit 1a2b3c4"); providers without links write
+each as "label: address", and the short note never carries one. Community
+messages name no change, so they carry no source line.
+
 ### 🔐 Secret-backed credentials are required
 
 The base config is often a ConfigMap. ConfigMaps are readable by anyone with `get` access to
@@ -1053,6 +1119,14 @@ Each line has `message` (one short sentence built from the other fields,
 such as `deployment/web in prod: alert updated (still open)`) and `level`
 (`info` for the digest and silent tiers, `warning` for notify, `error` for
 page), so a log tool shows a readable row and can filter by level.
+
+A line also records what people were told to run. `steps` lists the steps
+of the message, each with a `kind` (`read-only` for a command that changes
+nothing, `changes the cluster` for one that does, `advice` for a step with
+no command) and its `command` (or, for advice, its `text`). They are
+redacted like the message itself, at most 8 are listed, each cut at 300
+characters, and `stepsMore` counts the ones left out. `readSteps` still
+counts the read-only commands, for older readers.
 
 kwatch reports what is happening, not what could happen. A workload with no
 readiness probe or memory limit, an image tag that can change or a single
