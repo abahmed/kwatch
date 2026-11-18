@@ -25,8 +25,8 @@ const (
 	// AttrActiveDeadline is its spec.activeDeadlineSeconds.
 	AttrCompletionTime = "completion.time"
 	AttrActiveDeadline = "active.deadline.seconds"
-	// AttrCreated is the pod creation time, for pending and ready
-	// baselines.
+	// AttrCreated is the creation time of a pod (for pending and ready
+	// baselines), node or namespace (for its bootstrap objects).
 	AttrCreated = "created"
 
 	AttrState        = "state"

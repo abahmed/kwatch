@@ -185,6 +185,23 @@ sensugo|SensiGo|url|string|true|false|url||Sensu Go API URL
 sensugo|SensiGo|apiKey|string|true|true|||API key
 sensugo|SensiGo|namespace|string|false|false||default|Namespace (default: default)
 sensugo|SensiGo|entity|string|false|false||kwatch|Entity name (default: kwatch)
+servicenow|ServiceNow|instanceURL|string|true|false|url||Instance address, for example https://example.service-now.com (https, no path)
+servicenow|ServiceNow|user|string|false|false|||Integration user name (basic authentication)|authentication|choice:basic
+servicenow|ServiceNow|password|string|false|true|||Integration user password (basic authentication)|authentication|choice:basic
+servicenow|ServiceNow|clientID|string|false|false|||OAuth client ID (client credentials)|authentication|choice:oauth
+servicenow|ServiceNow|clientSecret|string|false|true|||OAuth client secret (client credentials)|authentication|choice:oauth
+servicenow|ServiceNow|table|string|false|false||incident|Table the incidents are filed in (default: incident)
+servicenow|ServiceNow|assignmentGroup|string|false|false|||Assignment group (sys_id or name)
+servicenow|ServiceNow|caller|string|false|false|||Caller (sys_id or user name)
+servicenow|ServiceNow|category|string|false|false|||Incident category
+servicenow|ServiceNow|urgency|json|false|false|json||Urgency per tier, for example {"page": "1", "notify": "2", "low": "3"} (the default)
+servicenow|ServiceNow|impact|json|false|false|json||Impact per tier, for example {"page": "1", "notify": "2", "low": "3"} (the default)
+servicenow|ServiceNow|fields|json|false|false|json||Extra columns set on a new incident, for example {"u_cluster": "prod"}
+servicenow|ServiceNow|noteField|string|false|false||work_notes|Journal column updates are written to (default: work_notes)
+servicenow|ServiceNow|resolveState|string|false|false||6|State a resolve sets (default: 6, Resolved)
+servicenow|ServiceNow|closeCode|string|false|false||Solution provided|Resolution code a resolve sets (default: Solution provided)
+servicenow|ServiceNow|closeNotes|string|false|false|||Resolution notes a resolve sets
+servicenow|ServiceNow|reopenState|string|false|false||2|State that reopens a resolved incident when it fails again (default: 2, In Progress; empty files a new incident)
 webhook|Generic Webhook|url|string|true|true|url||Webhook URL
 webhook|Generic Webhook|headers|headers|false|false|||Custom headers
 webhook|Generic Webhook|basicAuth.username|string|false|false|||Basic-auth username.
@@ -405,6 +422,10 @@ sensugo|SensiGo|routes|json|false|false|json||Optional JSON route filters.
 sensugo|SensiGo|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
 sensugo|SensiGo|retry.delay|string|false|false|||Optional retry delay, for example 5s.
 sensugo|SensiGo|fallback|string|false|false|||Optional fallback provider name.
+servicenow|ServiceNow|routes|json|false|false|json||Optional JSON route filters.
+servicenow|ServiceNow|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
+servicenow|ServiceNow|retry.delay|string|false|false|||Optional retry delay, for example 5s.
+servicenow|ServiceNow|fallback|string|false|false|||Optional fallback provider name.
 webhook|Generic Webhook|routes|json|false|false|json||Optional JSON route filters.
 webhook|Generic Webhook|retry.maxAttempts|integer|false|false|integer||Optional maximum retry attempts.
 webhook|Generic Webhook|retry.delay|string|false|false|||Optional retry delay, for example 5s.

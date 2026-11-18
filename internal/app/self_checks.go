@@ -40,7 +40,18 @@ func reportPodLogs(sink sourceStatusSink, logs podLogsReader) {
 		return
 	}
 	sink.SetComponentStatus(health.PodLogsComponent, "running", "", true)
+	r, read := logs.(podLogsProof)
+	p, prove := sink.(accessProver)
+	if read && prove && r.PodLogsRead() {
+		p.ProveAccess(health.PodLogsComponent)
+	}
 }
+
+// podLogsProof is a crash-log round that tells whether a read worked.
+type podLogsProof interface{ PodLogsRead() bool }
+
+// accessProver records that a component's access was seen working.
+type accessProver interface{ ProveAccess(name string) }
 
 // withSelfChecks adds to the source health reports the coverage facts
 // that are not watches: pod log access and the dashboard links. Both
@@ -55,7 +66,30 @@ func (p *pipelineBuild) withSelfChecks(h *sourceHealth) *sourceHealth {
 		if p.links != nil {
 			p.links.Status()
 		}
+		reportAPIPressure(sink, p.deps.clients.Pressure)
 	})
+}
+
+// apiPressure is the API pressure signal as health reporting sees it.
+type apiPressure interface {
+	High() bool
+}
+
+// reportAPIPressure publishes the api-pressure component: degraded with
+// rate_limited while the API server throttles or slows kwatch, so
+// optional work (log sampling, rediscovery of optional kinds) waits and
+// coverage is reduced. It is health only, never an incident.
+func reportAPIPressure(sink sourceStatusSink, pressure apiPressure) {
+	if sink == nil || pressure == nil {
+		return
+	}
+	if pressure.High() {
+		sink.SetComponentStatus(health.APIPressureComponent, "degraded",
+			"rate_limited", false)
+		return
+	}
+	sink.SetComponentStatus(health.APIPressureComponent, "running", "",
+		true)
 }
 
 // podLogsForbidden reports whether pod log reads are refused; false

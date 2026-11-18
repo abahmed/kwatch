@@ -40,8 +40,15 @@ after a later reopen.
 ## The restore grace
 
 A restart hides failures, it does not end them: detectors need a while to
-re-raise their findings once the model is rebuilt. For `restoreGrace` (10m,
-extended when the sources finish syncing) a restored incident therefore
+re-raise their findings once the model is rebuilt. A restored incident is in
+the grace until its model is rebuilt (`grace_rebuilt.go`): the required
+sources synced and `restoreSettle` (2m: one detection pass and the first
+kubelet-stats and log rounds) passed, every kind it reads (its root, its
+former and current members, the pods of a workload root) is synced, and no
+detector still waits out a bad state on one of its former objects (a
+sustain counted from when kwatch first saw it). `restoreGrace` (10m, from
+the restore and again from the sync) is only the upper bound, for a sync
+or a kind that never completes. Inside the grace a restored incident
 follows these rules (`grace.go`, `restored_recovered.go`):
 
 - A restored incident without members does not recover, and a recovering
@@ -164,6 +171,16 @@ member. What never joins stays on its own: a page, an incident whose
 alert is open at the pagers, one that spoke in a thread of its own since
 the listing named it (`SpokeOnItsOwn`), a handover and a superseded
 incident. A member that recovers alone gets its own message, as before.
+
+One more close sends nothing: an incident whose every failure is an old
+low problem (`oldProblemDays`: low on its own and already older than that
+when the incident opened, not part of a group, still active) is closed
+quietly at the next `Apply` (`ReasonOldProblem`,
+`old_problem_retire.go`), and its failures join the old problems that
+never opened one. That catches incidents opened before the rule existed
+and ones restored from the state file. A quietly closed incident is not
+reopened as "failing again": a failure that gets worse opens a new one,
+which is announced as usual.
 
 ---
 

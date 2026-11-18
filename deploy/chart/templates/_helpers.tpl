@@ -270,3 +270,15 @@ so the pod starts without the dashboard when the Secret is missing.
 {{- $dash := default dict .Values.dashboard -}}
 {{- default (printf "%s-dashboard" .Release.Name) $dash.existingSecret -}}
 {{- end }}
+
+{{/*
+Name of the PriorityClass the kwatch pod uses: an explicit
+priorityClassName wins, then the class the chart creates, else none.
+*/}}
+{{- define "kwatch.priorityClassName" -}}
+{{- if .Values.priorityClassName -}}
+{{- .Values.priorityClassName -}}
+{{- else if .Values.priorityClass.create -}}
+{{- default (include "kwatch.fullname" .) .Values.priorityClass.name -}}
+{{- end -}}
+{{- end }}

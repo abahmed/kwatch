@@ -21,7 +21,7 @@ Watch modes: `full` keeps the whole object, `hashed` keeps a content hash, `stat
 | ClusterRoleBinding | rbac.authorization.k8s.io | status |
 | ClusterTrustBundle | certificates.k8s.io | metadata |
 | ConfigMap | core | hashed |
-| ControllerRevision | apps | metadata |
+| ControllerRevision | apps | status |
 | CronJob | batch | full |
 | CustomResourceDefinition | apiextensions.k8s.io | status |
 | DaemonSet | apps | full |
@@ -91,6 +91,8 @@ Watch modes: `full` keeps the whole object, `hashed` keeps a content hash, `stat
 | VolumeSnapshotContent | snapshot.storage.k8s.io | status |
 | Workload | scheduling.k8s.io | metadata |
 
+Helm's release Secrets (type `helm.sh/release.v1`) are left out of the Secret watch and watched for their labels only (`metadata`), never their payload; with `watch.secrets: false` they are not watched either.
+
 ## Failure modes
 
 Health is taken from the severity each detector assigns: warning is degraded, critical is failing; `varies` means the severity depends on the observation.
@@ -156,6 +158,8 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Filesystem.Usage | varies | `NodeFilesystemUsageCritical`, `NodeFilesystemUsageHigh` | `usage` |
 | FlowControl | varies | `APIPriorityAndFairnessFailure` | `custom` |
 | Heartbeat.Stale | degraded | `NodeHeartbeatStale` | `node_health` |
+| HelmRelease.Failed | varies | `HelmReleaseFailed` | `helm_release` |
+| HelmRelease.Stuck | degraded | `HelmReleaseStuck` | `helm_release` |
 | Hook.PostStart | failing | `PostStartHookError` | `container` |
 | Hook.PreStart | failing | `PreStartHookError` | `container` |
 | ImageDrift | degraded | `ImageDigestDrift` | `image_drift` |
@@ -189,6 +193,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | LeaseStale | degraded | `LeaseStale` | `lease` |
 | LoadBalancer.SyncFailed | degraded | `LoadBalancerSyncFailed` | `loadbalancer` |
 | LoadBalancerPending | degraded | `LoadBalancerProvisioning` | `loadbalancer_wait` |
+| LogServiceMissing | degraded | `LogServiceMissing` | `log_missing_service` |
 | MemoryHigh | varies | `ContainerMemoryUsageHigh` | `resources` |
 | MemoryOvercommitted | degraded | `NodeMemoryOvercommitted` | `node_commitment` |
 | MemoryPressure | varies | `MemoryPressure`, `NodeMemoryPressure` | `condition_rules` |
@@ -278,3 +283,5 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Webhook.NoEndpoints | varies | `WebhookNoEndpoints` | `policy` |
 | Webhook.Rejecting | degraded | `WebhookRejecting` | `webhook_calls` |
 | Webhook.Slow | varies | `WebhookSlow` | `webhook_calls` |
+
+Restarts Kubernetes makes on purpose are not crashes. A native sidecar (an init container with `restartPolicy: Always`) is reported as a sidecar, never as a pod stuck in init, and while it runs within its startup probe's budget its Pending pod is starting. An exit that a container's own restart rule (`restartPolicyRules`, operator `In`) restarts is no crash loop unless the container keeps ending that way within seconds of each start. A crash loop is judged by the container's own run lengths, not a fixed back-off, so a kubelet with a short `crashLoopBackOff.maxContainerRestartPeriod` reads the same.

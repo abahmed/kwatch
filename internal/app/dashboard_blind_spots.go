@@ -16,4 +16,5 @@ func wireDashboardBlindSpots(
 		return
 	}
 	dash.SetComponentErrors(server.ComponentErrors)
+	dash.SetHeartbeat(server.Heartbeat)
 }

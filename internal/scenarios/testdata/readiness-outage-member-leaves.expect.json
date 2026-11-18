@@ -1,0 +1,16 @@
+{
+  "name": "readiness-outage-member-leaves",
+  "description": "Seven services lose their database; two of them then crash on a setting of their own and leave the database's incident.",
+  "root": "external-endpoint//10.0.9.40:5432",
+  "otherRoots": [
+    "deployment/shop/payments",
+    "deployment/shop/reports"
+  ],
+  "tier": "notify",
+  "maxMessages": 6,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

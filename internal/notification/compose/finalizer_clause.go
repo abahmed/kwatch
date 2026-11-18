@@ -23,11 +23,11 @@ func handlerClause(
 		it = "them"
 	}
 	switch {
-	case cause.Rule == "finalizer-handler-stopped" &&
+	case cause.Rule == explain.RuleFinalizerHandlerStopped &&
 		cause.Mode.Within(explain.ModeHandlerScaledDown):
 		return "the controller that handles " + it + ", " +
 			workloadRef(cause.Root) + ", is scaled to 0"
-	case cause.Rule == "finalizer-handler-stopped":
+	case cause.Rule == explain.RuleFinalizerHandlerStopped:
 		return "the controller that handles " + it + ", " +
 			workloadRef(cause.Root) + ", has no ready replica"
 	case cause.Mode.Within(explain.ModeFinalizerHandlerRuns):

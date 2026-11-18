@@ -52,8 +52,10 @@ func changesOf(
 		cut = len(found) - maxChanges
 		found = found[:maxChanges]
 	}
+	links := newChangeLinks(model, p)
 	for _, change := range found {
 		item := toChangeItem(change, onset)
+		item.Why = links.why(change)
 		item.Fixing = p.FixedBy != nil &&
 			change.Entity == p.FixedBy.Entity &&
 			change.At.Equal(p.FixedBy.At)
@@ -68,8 +70,7 @@ func blamed(p incident.Incident, change inventory.Change) bool {
 	if p.Cause == nil || p.Cause.Change == nil {
 		return false
 	}
-	c := p.Cause.Change
-	return change.Entity == c.Entity && change.At.Equal(c.At)
+	return inventory.SameChange(change, *p.Cause.Change)
 }
 
 // withStored puts the changes p stored first, since they outlive the
@@ -92,10 +93,10 @@ func withStored(
 	return out
 }
 
-// sameChange matches the change of the same object at the same time.
+// sameChange matches the same change (inventory.SameChange).
 func sameChange(c inventory.Change) func(inventory.Change) bool {
 	return func(o inventory.Change) bool {
-		return o.Entity == c.Entity && o.At.Equal(c.At)
+		return inventory.SameChange(o, c)
 	}
 }
 
@@ -116,6 +117,7 @@ func toChangeItem(change inventory.Change, onset time.Time) ChangeItem {
 		App:       redact.Evidence(change.App),
 		Note:      redact.Evidence(change.Cause),
 		Fields:    fieldDiffs(change),
+		source:    incident.SourceOf(change),
 	}
 }
 
@@ -142,6 +144,9 @@ func changeSummary(change inventory.Change) string {
 		return "deleted"
 	case len(change.Fields) == 0:
 		return "changed"
+	}
+	if words, target, ok := incident.EndedLink(change); ok {
+		return words + " " + string(target.Kind) + " " + target.Name
 	}
 	text := fieldSummary(change.Fields[0])
 	if extra := len(change.Fields) - 1; extra > 0 {

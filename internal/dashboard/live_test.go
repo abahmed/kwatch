@@ -51,7 +51,7 @@ func newLiveRig(t *testing.T, items ...incident.Incident) *liveRig {
 }
 
 // change replaces the incidents, moves the clock past liveCheck and
-// records an engine loop.
+// publishes them, as one engine loop does.
 func (g *liveRig) change(items ...incident.Incident) {
 	g.items.mu.Lock()
 	g.items.items = items
@@ -59,7 +59,7 @@ func (g *liveRig) change(items ...incident.Incident) {
 	g.mu.Lock()
 	g.now = g.now.Add(liveCheck)
 	g.mu.Unlock()
-	g.s.NoteScan()
+	g.items.publish()
 }
 
 // liveClient reads one stream's events.
@@ -133,7 +133,7 @@ func TestLiveStreamsChangesAndHeartbeats(t *testing.T) {
 	assert.Equal(t, "ping", name)
 }
 
-func TestLiveSkipsAComparisonUntilTheEngineRan(t *testing.T) {
+func TestLiveSkipsAComparisonUntilTheEnginePublished(t *testing.T) {
 	g := newLiveRig(t, testIncident("a", "shop", 0))
 	g.s.checkLive()
 	before := g.s.live.state()
@@ -147,7 +147,7 @@ func TestLiveSkipsAComparisonUntilTheEngineRan(t *testing.T) {
 	g.s.checkLive()
 	assert.Equal(t, before.seq, g.s.live.state().seq)
 
-	g.s.NoteScan()
+	g.items.publish()
 	g.s.checkLive()
 	assert.Equal(t, before.seq+1, g.s.live.state().seq)
 }

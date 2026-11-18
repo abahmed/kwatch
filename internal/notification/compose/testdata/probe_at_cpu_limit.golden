@@ -1,0 +1,3 @@
+🟠 payments in shop is not ready: its readiness check fails. Cause not found yet: nothing outside it points to one, so look at the app itself. Readiness timed out while the container used 248m of its 250m CPU limit; its CPU peaked at 250m in the last 24 hours. Kubernetes reports: "context deadline exceeded". To see the pod's state and events, run kubectl describe pods payments- -n shop
+
+🟠 payments in shop is not ready: its readiness check fails.

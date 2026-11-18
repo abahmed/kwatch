@@ -1,0 +1,10 @@
+{
+  "name": "restart-rule-other-code",
+  "description": "A container with a restart rule for exit 42 keeps exiting 1 on start; a crash loop.",
+  "root": "deployment/jobs/worker",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

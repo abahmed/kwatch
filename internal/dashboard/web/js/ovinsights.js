@@ -58,7 +58,7 @@
     var r = tr && (tr.resolveAlerted || tr.resolve);
     var items = [[L.alerted, KW.num(alerted), vs || L.alertedSub],
       [L.resolvedAlerted, KW.num(resolved), L.resolvedAlertedSub],
-      [L.alertedOnCall, KW.num(paged), L.alertedOnCallSub],
+      [L.alertedOnCall, KW.num(paged), L.alertedOnCallSub, L.noPagerHint],
       // The median names no count of its own: it is over the issues
       // the Resolved card counts (trends.go resolvedIn), so the two
       // cards can never disagree.
@@ -71,6 +71,8 @@
       d.appendChild(KW.el("dd", "ov-stat-n", it[1]));
       if (it[2] && it[2].nodeType) d.appendChild(KW.el("dd", "ov-stat-sub")).appendChild(it[2]);
       else if (it[2]) d.appendChild(KW.el("dd", "ov-stat-sub", it[2]));
+      // Without a pager, say where urgent issues go.
+      if (it[3]) d.appendChild(KW.el("dd", "ov-stat-sub ov-stat-hint", it[3]));
     });
     return dl;
   }
@@ -84,6 +86,20 @@
     p.appendChild(KW.el("b", "", KW.num(w.untold)));
     p.appendChild(document.createTextNode(" of " + KW.num(w.opened) +
       " issues settled on their own before anyone was alerted."));
+    return p;
+  }
+
+  /* watching: when kwatch was not running for part of the week, the
+     numbers above count only the time it watched; say so, in words. */
+  function watching(ins) {
+    var w = KW.weekOff(ins.days);
+    if (!w.off) return null;
+    var whole = Math.floor(w.watched), half = w.watched % 1 ? "½" : "";
+    var n = (whole || !half ? String(whole) : "") + half;
+    var p = KW.el("p", "ov-settled ov-watching");
+    p.dataset.watched = String(w.watched);
+    p.textContent = "Based on " + n + " of " + w.days + " days of watching: kwatch was not running for " +
+      KW.duration(w.off) + " this week, so what happened then is not counted.";
     return p;
   }
 
@@ -192,6 +208,8 @@
       nums.appendChild(stats(ins, tr));
       var said = settled(ins, tr);
       if (said) nums.appendChild(said);
+      var cover = watching(ins);
+      if (cover) nums.appendChild(cover);
       week.textContent = "";
       week.appendChild(KW.weekCard(ins.days || [], tr));
       main.textContent = "";

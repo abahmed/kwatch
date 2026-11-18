@@ -118,11 +118,9 @@ func scanWake(r inventory.Reader, now time.Time) (Wake, bool) {
 		}
 	}
 	for _, id := range r.Entities(KindNode) {
-		if node, ok := r.Entity(id); ok {
-			if a, ok := node.Attribute(AttrCreated); ok &&
-				a.Value.AsTime().After(since) {
-				starts = append(starts, start{at: a.Value.AsTime()})
-			}
+		if a, ok := r.Attribute(id, AttrCreated); ok &&
+			a.Value.AsTime().After(since) {
+			starts = append(starts, start{at: a.Value.AsTime()})
 		}
 	}
 	slices.SortFunc(starts, func(a, b start) int {

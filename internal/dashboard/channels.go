@@ -27,6 +27,7 @@ var channelNames = map[string]string{
 	"rocketchat":    "Rocket.Chat",
 	"sendgrid":      "SendGrid",
 	"sensugo":       "Sensu Go",
+	"servicenow":    "ServiceNow",
 	"ses":           "Amazon SES",
 	"signl4":        "SIGNL4",
 	"sns":           "Amazon SNS",

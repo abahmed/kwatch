@@ -3,6 +3,7 @@ package dashboard
 import (
 	"time"
 
+	"github.com/abahmed/kwatch/internal/format"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/rootcause"
 )
@@ -18,6 +19,11 @@ type IncidentSummary struct {
 	Next  *SummaryNext   `json:"next,omitempty"`
 	Told  []SummaryTold  `json:"told"`
 	Stage SummaryStage   `json:"stage"`
+	// Grouped, Replicas and Users say how the issue is shaped
+	// (summary_shape.go); each is absent when kwatch cannot say.
+	Grouped  *SummaryGrouped `json:"grouped,omitempty"`
+	Replicas []string        `json:"replicas,omitempty"`
+	Users    *SummaryUsers   `json:"users,omitempty"`
 }
 
 // SummaryWhy is the cause in one sentence, empty when kwatch has none.
@@ -26,6 +32,9 @@ type SummaryWhy struct {
 	Text       string `json:"text"`
 	Confidence string `json:"confidence"`
 	CauseKnown bool   `json:"causeKnown"`
+	// Checked is what kwatch checked for this issue when it has no
+	// sure cause (summary_checked.go); absent when nothing was.
+	Checked *SummaryChecked `json:"checked,omitempty"`
 }
 
 // SummaryProof is one piece of evidence: Kind is probe, log, exit,
@@ -38,6 +47,8 @@ type SummaryProof struct {
 	Detail string    `json:"detail,omitempty"`
 	Count  int       `json:"count,omitempty"`
 	At     time.Time `json:"at,omitzero"`
+	// Links lead to where a blamed change came from (source_links.go).
+	Links []format.SourceLink `json:"links,omitempty"`
 }
 
 // SummaryNext is the first fix step; More counts the steps after it.
@@ -91,14 +102,18 @@ const (
 // the incident p.
 func summaryOf(d *IncidentDetail, p incident.Incident) *IncidentSummary {
 	what, _ := shortText(whatOf(d, p), maxSummaryText)
-	return &IncidentSummary{
+	why := whyText(d, p)
+	why.Checked = d.checked
+	out := &IncidentSummary{
 		What:  what,
-		Why:   whyText(d, p),
+		Why:   why,
 		Proof: proofOf(d),
 		Next:  nextOf(d.FixSteps),
 		Told:  toldOf(d),
 		Stage: stageOf(d, p),
 	}
+	d.shape.apply(out)
+	return out
 }
 
 // whyText is the cause sentence and how sure kwatch is of it.
@@ -107,21 +122,18 @@ func whyText(d *IncidentDetail, p incident.Incident) SummaryWhy {
 		return SummaryWhy{}
 	}
 	text, _ := shortText(causeSentence(d, p), maxSummaryText)
+	if text == "" {
+		// An absent "Why?" beats one that says nothing.
+		return SummaryWhy{}
+	}
 	return SummaryWhy{Text: text, Confidence: confidenceOf(p.Cause),
 		CauseKnown: true}
 }
 
-// confidenceOf words a cause's score in the levels messages use; a
-// cause with a rival is never stated as high.
+// confidenceOf words a cause's score as messages do:
+// rootcause.CertaintyOf, so a cause with a rival is only possible.
 func confidenceOf(c *rootcause.CauseRecord) string {
-	switch {
-	case c.Score >= rootcause.High && c.Rival == nil:
-		return "high"
-	case c.Score >= rootcause.Likely:
-		return "likely"
-	default:
-		return "possible"
-	}
+	return string(rootcause.CertaintyOf(c))
 }
 
 // nextOf is the first step, nil without steps.

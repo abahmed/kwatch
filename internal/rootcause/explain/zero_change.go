@@ -42,3 +42,20 @@ func (v *view) onlyScaledToZero(effect inventory.EntityID) bool {
 	}
 	return found
 }
+
+// refutedChanges are the failures whose own change came before them
+// but cannot have broken them: they only wait for their controller to
+// read it, or they are only held at zero replicas by changes that did
+// not set the replica count.
+func (v *view) refutedChanges(
+	failures []inventory.EntityID,
+) []inventory.EntityID {
+	var out []inventory.EntityID
+	for _, f := range failures {
+		if v.changedBefore(f, f) && (v.onlyNotReconciling(f) ||
+			v.zeroNotFromChange(f, f)) {
+			out = append(out, f)
+		}
+	}
+	return out
+}

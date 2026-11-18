@@ -130,6 +130,7 @@ func (v *view) solveArea(
 	}
 	area.Trace = v.traceOf(ranked, inArea, rejected, isChosen)
 	area.Unverified, area.Inputs = v.areaInputs(failures)
+	area.ChangeRefuted = v.refutedChanges(failures)
 	return area
 }
 

@@ -60,7 +60,11 @@ func checkedSentences(f caseFacts) []sentence {
 	}
 	next := "."
 	if lookAtTheApp(f, len(recent) > 0) {
-		next = ", so look at the app itself."
+		subject := "the app"
+		if f.ok {
+			subject = helperSubject(f.lead.Summary)
+		}
+		next = ", so look at " + subject + " itself."
 	}
 	text := "Cause not found yet: nothing outside it points to one" + next
 	if words := checkedWordsFor(p.Checked); len(words) > 0 {

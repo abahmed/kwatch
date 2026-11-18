@@ -1,0 +1,7 @@
+{
+  "name": "helm-old-failure-healthy",
+  "description": "A Helm release failed two months before kwatch started and its workload is healthy: an old problem, not a warning.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "1h0m0s"
+}

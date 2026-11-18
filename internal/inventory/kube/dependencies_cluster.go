@@ -111,11 +111,26 @@ func splitAddress(value string) (host, port string, bare bool) {
 	return strings.ToLower(value), "", true
 }
 
+// hintedName reports a variable name that says its value is an
+// address: one of its words is a hint, or a hint followed by NAME
+// (REDIS_HOST, DB_HOSTNAME, BROKER), or, for a name of one word, the
+// name holds a hint (REDISHOST). A bare word under a plural or longer
+// word is not read: AWS_STS_REGIONAL_ENDPOINTS=regional, a mode an
+// admission webhook injects into every pod, would otherwise blame a
+// Service nothing calls. The trade-off: KAFKA_BROKERS=kafka, a single
+// bare name under a plural, is not read either (with a port it is).
 func hintedName(name string) bool {
-	name = strings.ToUpper(name)
+	words := strings.FieldsFunc(strings.ToUpper(name), func(r rune) bool {
+		return r == '_' || r == '-' || r == '.'
+	})
 	for _, hint := range envHints {
-		if strings.Contains(name, hint) {
+		if len(words) == 1 && strings.Contains(words[0], hint) {
 			return true
+		}
+		for _, word := range words {
+			if word == hint || word == hint+"NAME" {
+				return true
+			}
 		}
 	}
 	return false

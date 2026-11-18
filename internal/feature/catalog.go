@@ -52,7 +52,8 @@ var definitions = []Definition{
 		Runtime, nil,
 	},
 	{
-		WorkloadRollouts, "Detect stuck workload rollouts",
+		WorkloadRollouts, "Detect stuck workload rollouts and failed or " +
+			"stuck Helm releases",
 		Runtime, []ID{WorkloadDetection},
 	},
 	{

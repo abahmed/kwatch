@@ -6,7 +6,11 @@ import (
 	"github.com/abahmed/kwatch/internal/detection"
 )
 
+// progress ends one loop iteration: it publishes the incidents the
+// dashboard reads until the next one (incident.View), then reports
+// progress.
 func (e *Engine) progress() {
+	e.deps.Incidents.Publish()
 	if e.deps.Progress != nil {
 		e.deps.Progress()
 	}

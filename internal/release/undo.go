@@ -52,14 +52,31 @@ func UndoFor(kind, namespace, name, app, revision string) Undo {
 	return Undo{Text: text, Command: command, Mutating: true}
 }
 
-// Undo says how to undo the release.
-func (r Record) Undo() Undo {
-	return UndoFor(r.Kind, r.Namespace, r.Name, r.App, r.Revision)
-}
-
 func nsFlag(namespace string) string {
 	if namespace == "" {
 		return ""
 	}
 	return " -n " + namespace
+}
+
+// HelmUndo rolls the Helm release that app names ("helm/api" or
+// "helm/ops/api"; namespace is the workload's when app names none) back
+// to revision, the one Helm last recorded as deployed. A bare helm
+// rollback goes to the revision just before, which may have failed too,
+// so without a revision it offers nothing: ok is false, and also for an
+// app that is not a Helm release.
+func HelmUndo(namespace, app, revision string) (Undo, bool) {
+	tool, name, _ := strings.Cut(app, "/")
+	if s, rel, ok := strings.Cut(name, "/"); ok {
+		namespace, name = s, rel
+	}
+	if tool != "helm" || name == "" || revision == "" {
+		return Undo{}, false
+	}
+	return Undo{Text: "Roll back the Helm release " + name +
+		" to revision " + revision + ", its last deployed one " +
+		"(changes the cluster)",
+		Command: "helm rollback " + name + " " + revision +
+			nsFlag(namespace),
+		Mutating: true}, true
 }

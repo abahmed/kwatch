@@ -1,0 +1,19 @@
+10:07:15 settled
+🟠 orders in shop (prod-eu-1) keeps crashing because external endpoint 10.0.7.20:6379 refuses connections. It fails with "dial tcp 10.0.7.20:6379: connect: connection refused". Every error mentions it. All three failing apps use it. Affected: payments and search. To read the output of the last crash, run kubectl logs deploy/orders -c app -n shop --previous
+Proof: both replicas fail, on 2 nodes (orders); both replicas fail, on 2 nodes (payments); both replicas fail, on 2 nodes (search).
+🟠 orders in shop (prod-eu-1) keeps crashing because external endpoint 10.0.7.20:6379 refuses connections.
+| 🟠 **orders** in **shop** (**prod-eu-1**) keeps crashing because external endpoint **10.0.7.20:6379** refuses connections.
+| It fails with `dial tcp 10.0.7.20:6379: connect: connection refused`. Every error mentions it.
+| All three failing apps use it.
+| Affected: **payments** and **search**.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/orders -c app -n shop --previous
+| ```
+| *Proof: both replicas fail, on 2 nodes (orders); both replicas fail, on 2 nodes (payments); both replicas fail, on 2 nodes (search).*
+10:15:00 healthy for 3m0s
+✅ orders in shop (prod-eu-1) is healthy again. It was failing for six minutes because external endpoint 10.0.7.20:6379 refused connections. Six pods were affected.
+✅ orders in shop (prod-eu-1) is healthy again.
+| ✅ orders in shop (**prod-eu-1**) is healthy again.
+| It was failing for six minutes because external endpoint **10.0.7.20:6379** refused connections.
+| Six pods were affected.

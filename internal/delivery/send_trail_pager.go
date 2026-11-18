@@ -36,7 +36,7 @@ func PagerStates(attempts []SendAttempt) []PagerState {
 	var out []PagerState
 	index := map[string]int{}
 	for _, a := range attempts {
-		if !a.Pager || a.Provider == "" {
+		if !a.Keyed || a.Provider == "" {
 			continue
 		}
 		i, seen := index[a.Provider]

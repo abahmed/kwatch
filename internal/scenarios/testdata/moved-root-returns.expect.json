@@ -1,0 +1,13 @@
+{
+  "name": "moved-root-returns",
+  "description": "A missing ConfigMap stops a Deployment's pods; it is created, the incident resolves, and twenty minutes later the ConfigMap is deleted again and the pods are replaced.",
+  "root": "configmap/shop/settings",
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "revisesRoot": true,
+  "tail": "10m0s"
+}

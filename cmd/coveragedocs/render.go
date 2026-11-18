@@ -36,6 +36,10 @@ func render(root string) ([]byte, error) {
 		}
 		fmt.Fprintf(&b, "| %s | %s | %s |\n", e.Kind, group, e.Mode)
 	}
+	b.WriteString("\nHelm's release Secrets (type `helm.sh/release.v1`) " +
+		"are left out of the Secret watch and watched for their labels " +
+		"only (`metadata`), never their payload; with `watch.secrets: " +
+		"false` they are not watched either.\n")
 	b.WriteString("\n## Failure modes\n\n")
 	b.WriteString("Health is taken from the severity each detector " +
 		"assigns: warning is degraded, critical is failing; `varies` " +
@@ -47,8 +51,22 @@ func render(root string) ([]byte, error) {
 			usage.health(m.Reasons), codeList(m.Reasons),
 			codeList(usage.detectors(m.Reasons)))
 	}
+	b.WriteString(restartNote)
 	return []byte(b.String()), nil
 }
+
+// restartNote says how restarts that Kubernetes makes on purpose are
+// read.
+const restartNote = "\nRestarts Kubernetes makes on purpose are not " +
+	"crashes. A native sidecar (an init container with `restartPolicy: " +
+	"Always`) is reported as a sidecar, never as a pod stuck in init, " +
+	"and while it runs within its startup probe's budget its Pending " +
+	"pod is starting. An exit that a container's own restart rule " +
+	"(`restartPolicyRules`, operator `In`) restarts is no crash loop " +
+	"unless the container keeps ending that way within seconds of each " +
+	"start. A crash loop is judged by the container's own run lengths, " +
+	"not a fixed back-off, so a kubelet with a short " +
+	"`crashLoopBackOff.maxContainerRestartPeriod` reads the same.\n"
 
 func sortedCatalog() []kube.CoverageEntry {
 	entries := kube.CoverageCatalog()

@@ -11,8 +11,9 @@
     /* The alert level of an issue: the badge, how people were alerted
        (level) and the tooltip (title). The keys are the API's. */
     severity: {
-      page: { label: "Urgent", level: "Alerted the on-call person",
-        title: "Urgent: kwatch alerted the on-call person. Look now." },
+      // level and title follow the channels (KW.setPager).
+      page: { label: "Urgent", level: "Sent as urgent",
+        title: "Urgent: kwatch sent it as urgent. Look now." },
       notify: { label: "Needs attention", level: "Alerted your chat channels",
         title: "Needs attention: kwatch alerted your chat channels. Look soon." },
       digest: { label: "Low", level: "Listed in the daily summary only",
@@ -74,6 +75,27 @@
      work (the API's kwatch.blindSpots, by health component and reason):
      what kwatch can't do, then what that means. Words only, no fix
      steps. */
+  /* The heartbeat (the API's kwatch.heartbeat), by state: whether
+     anyone is told when kwatch itself stops. Plain words; the
+     Community words never ask for a setting it cannot use. */
+  KW.TERMS.heartbeat = {
+    label: "Heartbeat",
+    ok: "Pinging",
+    waiting: "Set up; the first ping goes out once kwatch is ready.",
+    rejected: "The monitoring URL refused the ping",
+    unreachable: "The monitoring URL did not answer",
+    not_configured: "Not set up. Nobody is told when kwatch itself stops. Set heartbeatMonitor.url to a monitoring URL that alerts when pings stop.",
+    pro_only: "Not part of this edition. To learn when kwatch stops, watch its pod from outside, for example an alert when the kwatch Deployment has no ready replica."
+  };
+
+  /* kwatch's own node carries a spot or preemptible label (the API's
+     kwatch.spotNode). Plain words, optional next steps, no provider. */
+  KW.TERMS.spot = {
+    head: "kwatch runs on a spot node",
+    text: "A spot node is one the cloud can take back at any time. Each time, kwatch is not watching for a few minutes.",
+    next: "Optional: give kwatch a priority class (the chart's priorityClass.create), and if your cluster has stable nodes, set nodeSelector or affinity to keep kwatch on them."
+  };
+
   KW.TERMS.blind = {
     parts: {
       "kubelet-stats": ["kwatch can't read node stats from the kubelets",
@@ -148,8 +170,10 @@
     counts: { page: "urgent", notify: "need attention", digest: "low",
       silent: "quiet" },
     order: "Most urgent first, then longest running.",
-    alertedOnCall: "Alerted the on-call person",
+    // alertedOnCall and noPagerHint follow the channels (KW.setPager).
+    alertedOnCall: "Sent as urgent",
     alertedOnCallSub: "urgent issues opened",
+    noPagerHint: "",
     medianResolve: "Median time to resolve",
     /* The week's numbers count the issues someone was alerted about. */
     alerted: "Alerted",
@@ -178,5 +202,47 @@
     held: "Paging held while the cluster scales",
     heldTold: "the page is held while the cluster scales",
     nonProd: "Non-production cluster: nothing pages"
+  };
+
+  /* Urgent wording follows the channels kwatch sends to. Only a
+     pager-kind channel (PagerDuty, Opsgenie ...) reaches an on-call
+     person; with chat alone an urgent issue is only sent as urgent.
+     Until /api/status says (KW.setPager), the words claim no pager. */
+  var URGENT = {
+    pager: { level: "Alerted the on-call person",
+      title: "Urgent: kwatch alerted the on-call person. Look now.",
+      chart: "alerted the on-call person", column: "Alerted on-call",
+      legend: "Of those, alerted the on-call person", hint: "" },
+    none: { level: "Sent as urgent",
+      title: "Urgent: kwatch sent it as urgent. Look now.",
+      chart: "sent as urgent", column: "Sent as urgent",
+      legend: "Of those, sent as urgent",
+      hint: "No pager is connected, so urgent issues go to chat only." }
+  };
+  KW.TERMS.urgent = URGENT.none;
+
+  /* KW.hasPager: whether any alert channel is a pager, from the kinds
+     the server reports (perChannelHealth and the kwatch part's
+     delivery). */
+  KW.hasPager = function (status, kw) {
+    var list = ((status && status.perChannelHealth) || []).concat(
+      ((kw || (status && status.kwatch) || {}).delivery) || []);
+    return list.some(function (c) { return c && c.kind === "pager"; });
+  };
+
+  /* KW.setPager sets the urgent words for whether a pager is
+     connected, in the terms, the severity table and the help legend. */
+  KW.setPager = function (has) {
+    var u = URGENT[has ? "pager" : "none"], T = KW.TERMS;
+    T.urgent = u;
+    T.severity.page.level = T.lists.alertedOnCall = u.level;
+    T.severity.page.title = u.title;
+    T.lists.noPagerHint = u.hint;
+    if (KW.SEVERITY) {
+      KW.SEVERITY.page.level = u.level;
+      KW.SEVERITY.page.title = u.title;
+    }
+    Array.prototype.forEach.call(document.querySelectorAll("[data-legend-urgent]"),
+      function (e) { e.textContent = u.title.replace(/^Urgent: /, ""); });
   };
 })();

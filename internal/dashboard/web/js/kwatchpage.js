@@ -10,7 +10,8 @@
   var DAY = 24 * 3600 * 1000;
   var HINT = "Check the provider settings in the installer: \"Edit notification providers\".";
   var H = KW.TERMS.health;
-  // Memory, CPU and disk turn amber at 70% of their limit, red at 90%.
+  // CPU and disk turn amber at 70% of their limit, red at 90%. Memory
+  // follows the server's level (memoryLevel).
   var WARN = 0.7, BAD = 0.9;
 
   /* facts: label and value rows; a row's third item is a class for its
@@ -39,9 +40,29 @@
     return p >= BAD ? "bad" : p >= WARN ? "warn" : "";
   }
 
+  /* memoryLevel: the server's level for kwatch's own memory. It is
+     judged on the memory the Go runtime holds, not on the container's
+     use, which counts state-file cache the system can free, and it
+     changes only after holding a few minutes, so it does not flap. */
   function memoryLevel(k) {
     var m = k && k.resources && k.resources.memory;
-    return m ? usage(m.used, m.limit) : "";
+    if (!m) return "";
+    return typeof m.level === "string" ? m.level : usage(m.used, m.limit);
+  }
+
+  /* memBase: what kwatch's own memory is compared with: the Go memory
+     limit when set below the container's limit, else that limit. */
+  function memBase(m) {
+    return m.goLimit > 0 && (!(m.limit > 0) || m.goLimit < m.limit) ? m.goLimit : m.limit;
+  }
+
+  /* memOwn: the memory kwatch holds and cannot give back. */
+  function memOwn(m) { return m.goUsed > 0 ? m.goUsed : m.used; }
+
+  function memWords(m) {
+    var base = memBase(m);
+    return "It holds " + KW.size(memOwn(m)) + ", " + Math.round(memOwn(m) / base * 100) +
+      "% of the " + KW.size(base) + " it can use";
   }
 
   /* problems: what is wrong with kwatch, in plain words, and how bad
@@ -54,7 +75,7 @@
     }
     if (mem === "bad") {
       out.push({ cls: "bad", head: "kwatch is almost out of memory",
-        text: "It uses " + Math.round(m.used / m.limit * 100) + "% of its memory limit and may be restarted." });
+        text: memWords(m) + ", and may be restarted." });
     }
     var contact = s && s.self && s.self.lastApiContact;
     if (KW.valid(contact) && KW.now() - Date.parse(contact) > 5 * 60000) {
@@ -67,7 +88,7 @@
     issues.forEach(function (t, i) { out.push({ cls: "warn", text: i < own ? KW.cap(t) + "." : "" }); });
     if (mem === "warn") {
       out.push({ cls: "warn", head: "kwatch is using most of its memory",
-        text: "Memory is at " + Math.round(m.used / m.limit * 100) + "% of its limit." });
+        text: memWords(m) + ". Give it more memory if this lasts." });
     }
     return out;
   }
@@ -91,6 +112,8 @@
     } else {
       var sent = ((k && k.delivery) || []).reduce(function (n, d) { return n + (d.sent || 0); }, 0);
       if (sent) why.push(KW.plural(sent, "alert", "alerts") + " sent in the last 24 hours.");
+      // Working now is not the same as watching all day: say it.
+      if (k && k.notWatchingSeconds >= 900) why.push(gapLine(k));
     }
     box.className = "ov-tile " + cls;
     var mark = box.appendChild(KW.el("span", "ov-mark"));
@@ -102,6 +125,40 @@
     if (cls === "wait") KW.startupLine(box, s);
     var np = KW.nonProdLine(k);
     if (np) box.appendChild(np);
+  }
+
+  /* spotNotice: kwatch's own node carries a known spot label (the API's
+     kwatch.spotNode), so it is taken back now and then. Nothing is shown
+     when no label matches. */
+  function spotNotice(notes, k) {
+    if (!k || !k.spotNode) return;
+    var T = KW.TERMS.spot;
+    var n = notes.appendChild(KW.el("div", "notice ov-note"));
+    n.dataset.spot = k.spotNode.label;
+    n.appendChild(KW.el("b", "", T.head));
+    n.appendChild(KW.el("p", "", T.text));
+    n.appendChild(KW.el("p", "", T.next));
+    notes.hidden = false;
+  }
+
+  /* gapLine: the time kwatch was not watching in the last 24 hours,
+     from the API's kwatch.notWatchingSeconds; restarts with no stop
+     time (a crash) are said, not guessed. "" when nothing to say. */
+  function gapLine(k) {
+    if (!k || typeof k.notWatchingSeconds !== "number") return "";
+    var sec = k.notWatchingSeconds, unk = k.gapUnknown || 0, t = "";
+    if (sec >= 60) {
+      var iso = new Date(KW.now() - sec * 1000).toISOString();
+      t = "Not watching for about " + KW.lasted(iso, new Date(KW.now()).toISOString()) +
+        " in the last 24 hours.";
+    } else if (sec > 0) {
+      t = "Not watching for less than a minute in the last 24 hours.";
+    }
+    if (unk) {
+      t += (t ? " " : "") + KW.plural(unk, "restart has", "restarts have") +
+        " no recorded stop time, so " + (unk === 1 ? "it is" : "they are") + " not counted.";
+    }
+    return t;
   }
 
   /* blindNotices: one notice per optional part of kwatch that does not
@@ -119,6 +176,54 @@
     });
   }
 
+  /* clusterNotice: one notice when the cluster has no name (the API's
+     kwatch.clusterName.notice, worded by the server). */
+  function clusterNotice(notes, k) {
+    var c = k && k.clusterName;
+    if (!c || !c.notice) return;
+    var n = notes.appendChild(KW.el("div", "notice ov-note"));
+    n.dataset.noName = "1";
+    n.appendChild(KW.el("b", "", "This cluster has no name"));
+    n.appendChild(KW.el("p", "", c.notice));
+    notes.hidden = false;
+  }
+
+  /* clusterLine: "Cluster name: prod-eu-1 (configured)" with where the
+     name came from, or null without a name. */
+  function clusterLine(k) {
+    var c = k && k.clusterName;
+    if (!c || !c.name) return null;
+    var p = KW.el("p", "kp-why", "Cluster name: " + c.name + (c.source ? " (" + c.source + ")" : ""));
+    p.dataset.clusterSource = c.source || "";
+    return p;
+  }
+
+  /* heartbeatRow: whether anyone is told when kwatch itself stops (the
+     API's kwatch.heartbeat): pinging, failing and why, or not set up
+     with what to do. Not set up is information, never a warning. */
+  function heartbeatRow(k) {
+    var hb = k && k.heartbeat, T = KW.TERMS.heartbeat;
+    if (!hb) return null;
+    var v = KW.el("span"), cls = "";
+    v.dataset.heartbeat = hb.state;
+    function text(t) { v.appendChild(document.createTextNode(t)); }
+    if (hb.state === "ok" || hb.state === "failing") {
+      if (hb.state === "failing") {
+        cls = "warn";
+        text((hb.failure === "rejected" ? T.rejected + (hb.httpStatus ? " (HTTP " + hb.httpStatus + ")" : "") :
+          T.unreachable) + " · failing since ");
+        v.appendChild(KW.timeEl(hb.lastFailure));
+        if (KW.valid(hb.lastPing)) text(" · last good ping ");
+      } else {
+        text(T.ok + (hb.intervalSeconds ? " every " + KW.duration(hb.intervalSeconds) : "") + " · last ping ");
+      }
+      if (KW.valid(hb.lastPing)) v.appendChild(KW.timeEl(hb.lastPing));
+    } else {
+      text(T[hb.state] || T.not_configured);
+    }
+    return [T.label, v, cls];
+  }
+
   function itself(s, k) {
     var c = KW.viz.card("kwatch itself");
     var self = s && s.self;
@@ -130,14 +235,15 @@
     if (stop && KW.valid(stop.at)) {
       last = KW.el("span");
       last.appendChild(KW.timeEl(stop.at));
-      last.appendChild(document.createTextNode(" · " + (KW.STOPPED[stop.reason] || KW.STOPPED.unknown)));
+      last.appendChild(document.createTextNode(" · " + KW.stopWords(stop)));
     }
     c.appendChild(facts([
       KW.valid(self.startedAt) ? ["Running since", KW.timeEl(self.startedAt)] : null,
       last ? ["Last restart", last] : null,
       KW.valid(self.lastApiContact) ? [H.api, KW.timeEl(self.lastApiContact, "", true)] : null,
       // A queue of zero is the normal case: say so only when it isn't.
-      self.outboxPending > 0 ? [H.waiting, KW.num(self.outboxPending), "warn"] : null
+      self.outboxPending > 0 ? [H.waiting, KW.num(self.outboxPending), "warn"] : null,
+      heartbeatRow(k)
     ]));
     var now = KW.now(), list = (self.restarts || []).filter(function (r) {
       return KW.valid(r.at) && now - Date.parse(r.at) <= DAY;
@@ -145,8 +251,13 @@
     var n = k && typeof k.restarts24h === "number" ? k.restarts24h : list.length;
     c.appendChild(KW.el("h3", "kp-sub", n ? KW.plural(n, "restart", "restarts") + " in the last 24 hours" :
       "No restarts in the last 24 hours"));
+    var gap = gapLine(k);
+    if (gap) {
+      var gp = c.appendChild(KW.el("p", "kp-gap", gap));
+      gp.dataset.gap = "1";
+    }
     c.appendChild(KW.viz.dots(list.map(function (r) {
-      var why = KW.STOPPED[r.reason] || KW.STOPPED.unknown;
+      var why = KW.stopWords(r);
       return { at: r.at, text: KW.when(r.at) + " · " + why,
         cls: /oom_killed|internal_failure|eviction/.test(r.reason) ? "bad" : "" };
     }), now - DAY, now, "Restarts in the last 24 hours"));
@@ -176,10 +287,10 @@
   /* resPart: one resource: a gauge against its limit, or the use alone
      when no limit is set. Amber from 70% of the limit, red from 90%,
      and the words say so too. */
-  function resPart(box, name, used, limit, words, extra) {
+  function resPart(box, name, used, limit, words, extra, level) {
     var part = box.appendChild(KW.el("div", "kp-res-part"));
-    var lvl = usage(used, limit);
-    if (limit > 0) part.appendChild(KW.viz.gauge(used, limit, name + ": " + words, WARN));
+    var lvl = typeof level === "string" ? level : usage(used, limit);
+    if (limit > 0) part.appendChild(KW.viz.gauge(used, limit, name + ": " + words, WARN, lvl));
     var h = part.appendChild(KW.el("h3", "kp-res-h", name));
     if (lvl) h.appendChild(KW.chip(lvl === "bad" ? "c-page" : "c-notify", LEVEL[lvl]));
     part.appendChild(KW.el("p", "kp-res-t", words));
@@ -187,6 +298,25 @@
   }
 
   function pctOf(used, limit, of) { return Math.round(used / limit * 100) + "% of " + (of || "its limit"); }
+
+  /* memoryPart: the memory kwatch holds against what it can use, with
+     the container's figure as information: it counts state-file cache
+     the system frees when it needs the room. */
+  function memoryPart(box, k, m, f) {
+    var own = memOwn(m), base = memBase(m), info = [];
+    if (m.goUsed > 0 && m.limit > 0) {
+      info.push("The container shows " + KW.size(m.used) + " of its " + KW.size(m.limit) + " limit");
+    }
+    if (m.cache > 0) {
+      info.push("includes " + KW.size(m.cache) + " of state-file cache the system can free");
+    } else if (f && f.bytes > 0) {
+      info.push("includes its saved history (" + KW.size(f.bytes) + ")");
+    }
+    var extra = info.length ? KW.cap(info.join("; ")) + "." : "";
+    resPart(box, "Memory", own, base, base > 0 ?
+      pctOf(own, base, "what it can use") + ": " + KW.size(own) + " of " + KW.size(base) :
+      KW.size(own) + " · no limit set", extra, memoryLevel(k));
+  }
 
   /* resources: kwatch's own memory, CPU and disk against its
      container's limits (/api/status resources); null when unknown. */
@@ -196,12 +326,7 @@
     var c = KW.viz.card("Resources", "How much of its limits kwatch uses.");
     var box = c.appendChild(KW.el("div", "kp-res"));
     var m = r.memory, cpu = r.cpu, d = r.disk, f = r.stateFile;
-    if (m) {
-      resPart(box, "Memory", m.used, m.limit, m.limit > 0 ?
-        pctOf(m.used, m.limit) + ": " + KW.size(m.used) + " of " + KW.size(m.limit) :
-        KW.size(m.used) + " · no limit set",
-        f && f.bytes > 0 ? "Includes its saved history (" + KW.size(f.bytes) + ")" : "");
-    }
+    if (m) memoryPart(box, k, m, f);
     if (cpu) {
       resPart(box, "CPU", cpu.cores, cpu.limitCores, cpu.limitCores > 0 ?
         pctOf(cpu.cores, cpu.limitCores) + ": " + cores(cpu.cores) + " of " +
@@ -365,8 +490,12 @@
         notes.hidden = false;
       }
       blindNotices(notes, k);
+      spotNotice(notes, k);
+      clusterNotice(notes, k);
       aboutBox.textContent = "";
       if (s) aboutBox.appendChild(about(s));
+      var cl = clusterLine(k);
+      if (cl) aboutBox.appendChild(cl);
       summary(sum, s, k, KW.selfIssues(s, k), loading);
       grid.textContent = "";
       // Half-width cards in pairs of about the same height: kwatch

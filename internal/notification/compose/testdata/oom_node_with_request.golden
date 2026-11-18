@@ -1,0 +1,3 @@
+🟠 payments in shop was OOM-killed by the node and not by its own limit. It used 180Mi of its 512Mi limit, over its 128Mi request. Node n1 ran out of memory (requested 7.5Gi of 8Gi allocatable; 7.9Gi in use); biggest users: batch/importer 3.1Gi (request 1Gi, no limit). To see the node's memory use and the pods on it, run kubectl describe node n1
+
+🟠 payments in shop was OOM-killed by the node and not by its own limit.

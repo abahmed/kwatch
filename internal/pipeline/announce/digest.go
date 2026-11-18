@@ -79,7 +79,7 @@ func (c *Collector) PendingRisks() []detection.Finding {
 	var out []detection.Finding
 	for _, f := range c.advisories() {
 		if f.Reason == reasons.WorkloadNeverReady &&
-			!c.mentionedRisks[f.Key()] {
+			!c.mentionedRisks[riskKey(f)] {
 			out = append(out, f)
 		}
 	}
@@ -92,13 +92,18 @@ func (c *Collector) PendingRisks() []detection.Finding {
 	return out
 }
 
+// riskKey names a risk finding in the persisted digest state.
+func riskKey(f detection.Finding) string {
+	return f.Entity.String() + "|" + f.Reason
+}
+
 // mentionRisks remembers that a digest named these risks.
 func (c *Collector) mentionRisks(risks []detection.Finding) {
 	if len(c.mentionedRisks) > maxMentionedRisks {
-		c.mentionedRisks = map[detection.Key]bool{}
+		c.mentionedRisks = map[string]bool{}
 	}
 	for _, f := range risks {
-		c.mentionedRisks[f.Key()] = true
+		c.mentionedRisks[riskKey(f)] = true
 	}
 }
 

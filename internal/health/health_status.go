@@ -33,6 +33,7 @@ func (h *HealthServer) healthHandler(w http.ResponseWriter, _ *http.Request) {
 		Components: h.ComponentStatuses(),
 		Leadership: h.LeadershipStatus(),
 		Coverage:   h.Coverage(),
+		Heartbeat:  h.heartbeatOrNil(),
 	}
 	if degraded := h.ComponentErrors(); len(degraded) > 0 {
 		response.Status = "degraded"
@@ -232,7 +233,8 @@ func normalizeReason(reason string) string {
 		"leadership_lost", "cache_sync_pending", "watcher_failed",
 		"api_unavailable", "api_unreachable", "permission_denied",
 		"optional_permission_denied", "storage_reset", "storage_over_cap",
-		"heartbeat_failed", "config_overlay_invalid",
+		"heartbeat_failed", "heartbeat_not_configured",
+		"heartbeat_pro_only", "config_overlay_invalid",
 		"kubelet_unreachable", "kubelet_partially_unreachable",
 		"provider_unavailable", "provider_rejected", "provider_rate_limited",
 		"license_invalid", "license_expired", "license_revoked",

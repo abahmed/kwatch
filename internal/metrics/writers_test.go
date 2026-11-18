@@ -16,17 +16,18 @@ import (
 // writtenVia maps Registry fields that production code updates through a
 // helper method instead of touching the field directly.
 var writtenVia = map[string]string{
-	"IncidentActions":   "IncIncident",
-	"TelemetryFailures": "IncTelemetryFailure",
-	"StorageResets":     "IncStorageReset",
-	"Investigations":    "IncInvestigation",
-	"Unexplained":       "AddUnexplained",
-	"DecisionLag":       "ObserveDecisionLag",
-	"Panics":            "IncPanic",
-	"LicenseStateIndex": "SetLicenseState",
-	"LicenseRenewals":   "IncLicenseRenewal",
-	"EditionRebuilds":   "IncEditionRebuild",
-	"LeadershipRejoins": "IncLeadershipRejoin",
+	"IncidentActions":    "IncIncident",
+	"TelemetryFailures":  "IncTelemetryFailure",
+	"StorageResets":      "IncStorageReset",
+	"Investigations":     "IncInvestigation",
+	"Unexplained":        "AddUnexplained",
+	"DecisionLag":        "ObserveDecisionLag",
+	"Panics":             "IncPanic",
+	"LicenseStateIndex":  "SetLicenseState",
+	"LicenseRenewals":    "IncLicenseRenewal",
+	"EditionRebuilds":    "IncEditionRebuild",
+	"LeadershipRejoins":  "IncLeadershipRejoin",
+	"APIPressureSignals": "IncAPIPressureSignal",
 }
 
 // productionSelectors returns every selector name used by non-test Go files

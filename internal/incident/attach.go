@@ -12,7 +12,7 @@ import (
 )
 
 // selfRow names the explain row of a workload blamed for itself.
-const selfRow = "self"
+const selfRow = explain.RuleSelf
 
 // Standalone reports an incident that nothing ties to another failure:
 // no cause was found, or the workload is blamed for itself. Many of them
@@ -53,6 +53,7 @@ func (m *Manager) placeArea(
 	s explain.Snapshot, area explain.Area, placed map[detection.Key]bool,
 ) {
 	p := newAreaPlacer(s, area)
+	refuted := ownChangeSolves{}
 	for _, failure := range area.Failures {
 		where := p.placementOf(failure)
 		for _, f := range s.Findings[failure] {
@@ -64,8 +65,10 @@ func (m *Manager) placeArea(
 			}
 			m.attach(s.Now, f, where)
 			placed[f.Key()] = true
+			refuted.note(where)
 		}
 	}
+	m.dropRefutedChanges(area.ChangeRefuted, refuted, placed)
 }
 
 // attach makes s a member of the incident of where.root. A finding that
@@ -83,10 +86,12 @@ func (m *Manager) attach(
 	}
 	s, where = m.joinStuckPeers(s, where)
 	where = m.joinLeftover(s, where)
+	where = m.keepOwnRoot(s, where)
 	if m.heldForChurn(now, s, where) || m.leavesAsHistory(now, s, where) ||
-		m.agesOut(now, s, where) {
+		m.agesOut(now, s, where) || m.heldOnYoungNode(now, s, where) {
 		return
 	}
+	s = withNodeAge(m.model, s)
 	key := s.Key()
 	where = m.reroute(now, s, where)
 	revised, rerooted := false, false
@@ -120,6 +125,7 @@ func (m *Manager) attach(
 	}
 	m.byMember[key] = p.ID
 	m.changed[p.ID] = true
+	m.releaseYoungFor(now, where.root)
 }
 
 // keepsMember keeps finding s in its incident, and says so, when moving
@@ -193,6 +199,7 @@ func (m *Manager) refresh(model inventory.Reader, now time.Time) {
 		if p := m.incidents[id]; p != nil {
 			p.Mode = incidentMode(p)
 			p.Impact = impact(model, p)
+			p.Belongs = belongsOf(model, p)
 			p.trafficLost = trafficLost(model, p)
 			p.servingDown = servingDown(model, p)
 			p.PreviousServes = previousServes(model, p)
@@ -248,6 +255,7 @@ func (m *Manager) detach(
 	key := s.Key()
 	m.forgetAged(key)
 	delete(m.churn.held, key)
+	delete(m.churn.young, key)
 	delete(m.left, key)
 	delete(m.flips, key)
 	id, ok := m.byMember[key]
@@ -373,6 +381,7 @@ func (p *Incident) takeCause(where placement) {
 		p.Cause, p.CauseUnclear = where.cause, false
 	case staleInsideCause(p, where):
 		p.Cause, p.CauseUnclear = nil, where.unclear
+		p.Pending.reshaped = true
 	case p.Cause == nil && where.unclear:
 		p.CauseUnclear = true
 	}

@@ -79,8 +79,8 @@ func (s *Server) lookAtReleases(
 		return
 	}
 	var items []incident.Incident
-	if reader := s.sources.incidents.Load(); reader != nil {
-		items = (*reader).Incidents()
+	if v := s.view(); v != nil {
+		items = v.Incidents()
 	}
 	view := release.View{Model: *model, Incidents: items,
 		InScope: s.opts.Scope.over(*model), OwnNamespace: own.Namespace,

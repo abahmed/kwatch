@@ -82,7 +82,24 @@ func phasesOf(p incident.Incident, now time.Time) []Phase {
 	}
 	opened := later(p.Opened, start, last)
 	out = appendQuiet(out, last, opened)
-	return append(out, currentPhases(p, opened)...)
+	out = append(out, currentPhases(p, opened)...)
+	if began := beganOf(p); began.Before(start) {
+		out[0].Began = began
+	}
+	return out
+}
+
+// beganOf is when the failure first began: the opening of the earliest
+// occurrence kwatch remembers, else of p. The phase window never hides
+// it (see Phase.Began).
+func beganOf(p incident.Incident) time.Time {
+	began := p.Opened
+	for _, o := range p.History {
+		if !o.Opened.IsZero() && o.Opened.Before(began) {
+			began = o.Opened
+		}
+	}
+	return began
 }
 
 // currentPhases are the phases of the current occurrence from opened.

@@ -54,6 +54,9 @@ func changeFact(change inventory.Change) string {
 		who += " "
 	}
 	at := " at " + clock(change.At)
+	if text, ok := linkFact(change, who, at); ok {
+		return text
+	}
 	name := shortName(change.Entity)
 	if edits := valueEdits(change); len(edits) > 0 &&
 		!change.Created && !change.Deleted {

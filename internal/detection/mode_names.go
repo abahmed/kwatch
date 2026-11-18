@@ -83,6 +83,7 @@ const (
 	ModeImageDrift             Mode = "ImageDrift"
 	ModeReleaseRegression      Mode = "ReleaseRegression"
 	ModeErrorBurst             Mode = "ErrorBurst"
+	ModeLogServiceMissing      Mode = "LogServiceMissing"
 	ModeLeaseStale             Mode = "LeaseStale"
 	ModeDeprecatedAPI          Mode = "DeprecatedAPI"
 	ModeAPIServerErrors        Mode = "APIServer.Errors"
@@ -212,7 +213,11 @@ const (
 const (
 	// ModeStatefulSetRolloutStuck is a StatefulSet rollout that
 	// stopped; it is not the Deployment ModeRolloutStuck.
-	ModeStatefulSetRolloutStuck       Mode = "Rollout.Stuck"
+	ModeStatefulSetRolloutStuck Mode = "Rollout.Stuck"
+	// ModeHelmReleaseFailed and ModeHelmReleaseStuck are a Helm
+	// release whose latest revision failed or stays pending.
+	ModeHelmReleaseFailed             Mode = "HelmRelease.Failed"
+	ModeHelmReleaseStuck              Mode = "HelmRelease.Stuck"
 	ModeScheduleMissed                Mode = "Schedule.Missed"
 	ModeScheduleBlocked               Mode = "Schedule.Blocked"
 	ModeScheduleRepeatedFailure       Mode = "Schedule.RepeatedFailure"

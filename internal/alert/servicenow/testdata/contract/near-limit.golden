@@ -1,0 +1,21 @@
+--- request 1 of 2
+GET /api/now/table/incident?sysparm_fields=sys_id&sysparm_limit=1&sysparm_query=correlation_id=kwatchkey8b2cb844620fe5dc^active=true^state!=6
+Authorization: Basic <redacted>
+Accept: application/json
+
+(empty body)
+
+--- request 2 of 2
+POST /api/now/table/incident?sysparm_fields=sys_id
+Content-Type: application/json
+Authorization: Basic <redacted>
+Accept: application/json
+
+{
+  "correlation_display": "kwatch",
+  "correlation_id": "kwatchkey8b2cb844620fe5dc",
+  "description": "🔴 payments in shop is crash-looping. Last output:\n\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…[3963 runes sha256:0ca064983377851de7377f62]…xxxxxxxxxxxxxxxxxxxxxxxxxxx\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…\n\nRef: kwatchkey8b2cb844620fe5dc",
+  "impact": "1",
+  "short_description": "🔴 payments in shop is crash-looping.",
+  "urgency": "1"
+}

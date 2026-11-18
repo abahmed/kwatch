@@ -72,7 +72,10 @@ func joinNew(have, more, sep string) string {
 // not stuck deleting nor expired: its members are, each in the list.
 // ok is false for any other issue, and for a lone leftover.
 func leftoverWhat(p incident.Incident) (string, bool) {
-	n := p.LeftoverObjects()
+	if _, ok := p.Leftovers(); !ok {
+		return "", false
+	}
+	n := len(groupObjects(p))
 	if n < 2 || p.Root.Name == "" {
 		return "", false
 	}

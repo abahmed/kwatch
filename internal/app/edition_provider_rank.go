@@ -1,5 +1,7 @@
 package app
 
+import providercatalog "github.com/abahmed/kwatch/internal/provider/catalog"
+
 // The Community edition runs one alert provider. When the operator did not
 // name it (app.communityProvider), the one kept is chosen by what an
 // incident needs from it, not by the alphabet: a pager first, because it
@@ -13,16 +15,6 @@ const (
 	rankEmail
 )
 
-// pagerProviders are the paging services: they page a person and keep the
-// alert open by key until a resolve closes it.
-var pagerProviders = map[string]bool{
-	"alerta": true, "datadog": true, "goalert": true, "ilert": true,
-	"incident.io": true, "incidentio": true, "newrelic": true,
-	"opsgenie": true, "pagerduty": true, "sensugo": true, "signl4": true,
-	"splunk": true, "splunkoncall": true, "squadcast": true,
-	"zenduty": true,
-}
-
 // emailProviders send mail.
 var emailProviders = map[string]bool{
 	"email": true, "mailgun": true, "resend": true, "sendgrid": true,
@@ -33,7 +25,7 @@ var emailProviders = map[string]bool{
 // first.
 func providerRank(name string) int {
 	switch {
-	case pagerProviders[name]:
+	case providercatalog.PagesPerson(name):
 		return rankPager
 	case emailProviders[name]:
 		return rankEmail
@@ -41,7 +33,9 @@ func providerRank(name string) int {
 	return rankChat
 }
 
-// isPagerProvider reports a provider that pages and holds alerts by key.
+// isPagerProvider reports a provider that pages a person and holds
+// alerts by key (providercatalog.PagesPerson, the list the dashboard's
+// "on-call" wording reads too).
 func isPagerProvider(name string) bool {
-	return pagerProviders[name]
+	return providercatalog.PagesPerson(name)
 }

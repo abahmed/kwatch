@@ -79,8 +79,8 @@ func workloadEvidence(
 			inventory.Outgoing) {
 			names = append(names, strings.ToLower(image.Name))
 		}
-		if e, ok := model.Entity(pod); ok && namesIn(
-			attrString(e, AttrDriverNames), name) {
+		if drivers, ok := model.Attribute(pod, AttrDriverNames); ok &&
+			namesIn(drivers.Value.AsText(), name) {
 			level = evidenceFullName
 		}
 	}
@@ -104,13 +104,6 @@ func namesIn(names, name string) bool {
 		}
 	}
 	return false
-}
-
-func attrString(e inventory.Entity, name string) string {
-	if a, ok := e.Attribute(name); ok {
-		return a.Value.AsText()
-	}
-	return ""
 }
 
 // genericWords say nothing about which driver a name is for: they are

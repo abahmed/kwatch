@@ -1,0 +1,7 @@
+{
+  "name": "log-missing-service-exists",
+  "description": "A Ready workload's log keeps failing to resolve a Service that exists.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

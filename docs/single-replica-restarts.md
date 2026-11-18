@@ -17,6 +17,11 @@ cannot. The mechanics of the gap are in
   your chat messages are saved, so an issue that was announced before the
   restart is not announced a second time, and its later updates go to the
   same thread.
+- **A restart is quiet unless there is news.** It sends at most one
+  message: the gap after a long downtime, what changed meanwhile, and the
+  open issues that are new or got worse; the ones already told and
+  unchanged are only counted. A short restart with nothing new sends
+  nothing (the health page and audit log still record it).
 - **Nothing is sent twice by two pods.** Only the pod that holds the lock
   claims the state file; an old pod that lost it stops sending.
 - **An API server outage does not restart the pod.** While the API server
@@ -51,4 +56,6 @@ cannot. The mechanics of the gap are in
   every provider refused for good is not retried after a restart.
 
 If you need a signal while kwatch itself is down, use the heartbeat
-(`config.heartbeatMonitor`), which is checked from outside the cluster.
+(`config.heartbeatMonitor`), which is checked from outside the cluster. Afterwards the dashboard marks the time kwatch was not running on its
+charts, in Activity and in issue timelines, so the gap is not read as a
+quiet time.

@@ -1,0 +1,14 @@
+{
+  "name": "helm-old-failure-workload-down",
+  "description": "A Helm release failed two months ago; now its workload crash-loops after a rollout: the release is not blamed for the new crash, nor hidden.",
+  "root": "deployment/shop/payments",
+  "otherRoots": [
+    "helmrelease/shop/payments"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "1h0m0s"
+}

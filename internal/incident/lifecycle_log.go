@@ -4,6 +4,9 @@ import (
 	"time"
 
 	"k8s.io/klog/v2"
+
+	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
 
 // logLifecycle writes one default-level line for a lifecycle step
@@ -44,9 +47,14 @@ const reasonMovedUntold = "moved before alerting"
 // One with a failure that recovered while a member settled before
 // alerting, even when its other failures moved: it is kept as that.
 // Either way the close is logged, like every resolve.
+//
+// One rooted at an object that has an owner by now (a ReplicaSet listed
+// before its Deployment at startup) is dropped too, whatever became of
+// its failures: they belong to the owner's incident, and a standalone
+// one would list the same problem twice.
 func (m *Manager) closeUntold(p *Incident, now time.Time) {
-	moved := len(p.movedTo) > 0 && !p.recoveredHere &&
-		p.SupersededBy == "" && len(p.History) == 0
+	moved := (len(p.movedTo) > 0 && !p.recoveredHere &&
+		p.SupersededBy == "" && len(p.History) == 0) || m.ownedNow(p.Root)
 	why := reasonUntold
 	if moved {
 		why = reasonMovedUntold
@@ -55,4 +63,14 @@ func (m *Manager) closeUntold(p *Incident, now time.Time) {
 	if moved {
 		m.forget(p)
 	}
+}
+
+// ownedNow reports a root a controller in the model owns: it was only
+// a root while its owner was not listed yet.
+func (m *Manager) ownedNow(root inventory.EntityID) bool {
+	if m.model == nil {
+		return false
+	}
+	owner, ok := inventory.Owner(m.model, root)
+	return ok && owner.Kind != kube.KindNode && m.model.Exists(owner)
 }

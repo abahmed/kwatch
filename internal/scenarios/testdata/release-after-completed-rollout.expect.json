@@ -1,0 +1,12 @@
+{
+  "name": "release-after-completed-rollout",
+  "description": "Revision 14 of a Deployment rolls out, serves and replaces revision 13; later revision 15 replaces it all at once and crash-loops. Revision 14 has no pod left, but kwatch saw it serve, so the rollback to it is suggested.",
+  "root": "deployment/shop/checkout",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "20m0s"
+}

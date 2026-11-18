@@ -50,6 +50,13 @@ func (c Context) Synced(kind inventory.Kind) bool {
 	return false
 }
 
+// Readable reports whether kind has synced, like Synced, but records
+// nothing: for context a finding only adds when it can, whose absence
+// must not hold the finding back as unsure.
+func (c Context) Readable(kind inventory.Kind) bool {
+	return c.synced == nil || c.synced(kind)
+}
+
 // Fresh reports whether the watch of kind still gets through. A synced
 // kind whose watch keeps failing holds what was true when it broke, so a
 // detector that would raise from the passage of time alone (a run that
@@ -162,6 +169,13 @@ func NewRegistry(
 // Evaluate; nil, the default, treats every kind as fresh.
 func (r *Registry) SetFresh(fresh func(inventory.Kind) bool) {
 	r.fresh = fresh
+}
+
+// Watching reports whether a detector remembers an ongoing bad state of
+// id: it asked for the state's onset at the last evaluation, so the
+// state is waited out or already raised. Tracked values do not count.
+func (r *Registry) Watching(id inventory.EntityID) bool {
+	return r.onsets.watching(id)
 }
 
 // Evaluate runs every detector for the entity's kind. An absent entity is

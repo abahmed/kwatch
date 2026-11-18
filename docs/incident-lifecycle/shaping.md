@@ -85,36 +85,34 @@ another that closed), and then nobody would be told.
   workloads set to 0 within `ScaleDownSpan` (15m), is a planned scale-down:
   those workloads raise no "scaled to 0 but still routed" finding, and a
   cordoned node that leaves is a drain (`NodeDraining`), not a loss.
-- **Restart.** Incidents are saved and restored. For `restoreGrace` (10m) a
-  restored incident without members does not recover, because detectors
-  have not re-raised its findings yet (`grace.go`). A restart announces no
-  incident, so when the grace is over one summary (`ListRestored` in
-  `pipeline/announce/restored_list.go`) names the restored incidents that
-  still fail and have not spoken for themselves since the restart,
-  digest-tier ones after the louder ones, within the usual cap, so nothing
-  restored is silent. One a listing named less than `RestoredRetell` (12h)
-  ago whose told fingerprint (`Digest`) has not changed is left out
-  (`toldUnchanged` in `restart_note.go`); when nothing else is listed, the
-  short restart note counts it instead. A restored incident that only a
-  listing named and that never spoke on its own (`SpokeOnItsOwn`) is owed
-  one introduction: at the end of the grace it is queued like a roll-up's
+- **Restart.** Incidents are saved and restored. Until its model is
+  rebuilt (the sync, a 2m settle, its kinds synced; at most `restoreGrace`,
+  10m) a restored incident without members does not recover, because
+  detectors have not re-raised its findings yet (`grace.go`). A restart announces no
+  incident, so when the grace is over (`WarmAt`) one message
+  (`ListRestored` in `pipeline/announce/restored_list.go`,
+  `sendRestart` in `restart_message.go`) is the whole restart: the gap
+  report the engine held for it (`HoldGap`), the restored incidents that
+  are news, and the count of the ongoing ones told before and unchanged.
+  News is a restored incident at the notify tier or higher whose findings
+  still call for it (`currentNews`) that nobody was told about
+  (`toldBefore`) or whose live tier (`Incident.LiveTier`) is above the
+  tier it was told at, plus the problems held after the restart
+  (`holdWarm`). Told and unchanged ones, and the digest-bound ones
+  (`Incident.DigestBound`), are only counted; the message's tier comes
+  from the news alone. With no gap and no news nothing is sent and the
+  audit log alone records the restart (`CarrierQuietRestart`). Findings
+  back after the grace are named only when they are news
+  (`listLateRestored`). A restored incident that only a listing named and
+  that never spoke on its own (`SpokeOnItsOwn`) is owed one
+  introduction: at the end of the grace it is queued like a roll-up's
   (`noteRestoredIntros` in `restored_intro.go`, `queueRestoredIntros` in
-  `pipeline/introduce.go`), sent once its investigation is ready, threaded
-  under the listing, and never paging by itself; once sent, the listing
-  records it as followed, so a later restart does not introduce it again.
-  A restored incident at the notify tier or higher whose
-  findings are back and still call for that tier does not wait for the whole
-  grace: it is named one settle (`DefaultSettle`) after the sources synced,
-  with the lower-priority ones that are back by then, and the end of the
-  grace names the rest. A tier that may still fall when its findings settle
-  waits for the grace (`currentNews`, `Incident.LiveTier`). One whose
-  findings only wait for the digest (an idle fail-closed webhook that
-  refused nothing, or digest findings alone: `Incident.DigestBound`) was
-  told once already and is counted with the lower-priority ones the next
-  digest lists, not announced at the notify tier again. The audit entry of
-  the summary counts the restored incidents as ongoing, not opened, names
-  the lower-priority ones after the listed ones, and carries the loudest
-  listed tier. On a
+  `pipeline/introduce.go`), sent once its investigation is ready,
+  threaded under the listing, and never paging by itself; once sent, the
+  startup marker records it with its told fingerprint
+  (`StartupState.Spoke`, `NoteSpoke`) until the incident is over, so a
+  later restart does not introduce it again. The audit entry names the
+  news first, then the counted ones. On a
   cold start the first `StartupWindow` (2m) collects existing incidents into
   one startup summary, and an active page still reaches the pagers at once
   (Pro; Community announces each still-failing one after the startup

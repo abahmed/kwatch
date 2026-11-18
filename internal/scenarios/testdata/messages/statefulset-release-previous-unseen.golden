@@ -1,0 +1,17 @@
+10:06:15 settled
+🟠 queue is failing in streaming (prod-eu-1) after the 10:05 UTC release of registry.example.com/queue:5. The previous image was registry.example.com/queue:4. It fails with "panic: unknown flag --queue-size". It runs a single replica. Fix: change the image of container app in statefulset/queue. kwatch has no record of revision 1 running healthily, so it does not suggest rolling back to it. To see the rollout state, run kubectl rollout status statefulset/queue -n streaming
+🟠 queue is failing in streaming (prod-eu-1) after the 10:05 UTC release of registry.example.com/queue:5.
+| 🟠 **queue** is failing in **streaming** (**prod-eu-1**) after the 10:05 UTC release of registry.example.com/queue:5.
+| The previous image was registry.example.com/queue:4.
+| It fails with `panic: unknown flag --queue-size`.
+| It runs a single replica.
+| Fix: change the image of container app in statefulset/queue.
+| kwatch has no record of revision 1 running healthily, so it does not suggest rolling back to it.
+| To see the rollout state, run
+| ```
+| kubectl rollout status statefulset/queue -n streaming
+| ```
+10:15:00 material change
+🟠 queue in streaming (prod-eu-1) is now failing: rollout to revision queue-9f2b is stuck: 1 of 1 pods updated.
+🟠 queue in streaming (prod-eu-1) is now failing: rollout to revision queue-9f2b is stuck: 1 of 1 pods updated.
+| 🟠 **queue** in **streaming** (**prod-eu-1**) is now failing: rollout to revision queue-9f2b is stuck: 1 of 1 pods updated.

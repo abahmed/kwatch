@@ -154,10 +154,16 @@
   /* STOPPED: why kwatch's last session ended, in plain words. */
   KW.STOPPED = {
     graceful_shutdown: "normal restart", leader_handoff: "another kwatch took over",
-    internal_failure: "internal error", oom_killed: "ran out of memory",
-    eviction: "evicted", node_disruption: "its node went away",
-    deployment_rollout: "new version rolled out", api_unavailable: "API server unreachable",
-    unknown: "unknown"
+    internal_failure: "kwatch stopped on an internal error", oom_killed: "ran out of memory",
+    eviction: "evicted from its node", node_disruption: "its node was drained, shut down or removed",
+    deployment_rollout: "a new version or new settings rolled out",
+    api_unavailable: "could not reach the Kubernetes API",
+    unknown: "unknown reason"
+  };
+  /* KW.stopWords: a restart's reason in plain words, the server's own
+     text first (self.lastStop.text, self.restarts[].text). */
+  KW.stopWords = function (r) {
+    return (r && r.text) || KW.STOPPED[r && r.reason] || KW.STOPPED.unknown;
   };
 
   /* KW.size: bytes in words: "812 B", "4.2 MB". */

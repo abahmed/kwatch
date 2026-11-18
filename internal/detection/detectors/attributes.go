@@ -17,6 +17,31 @@ func text(e inventory.Entity, name string) string {
 	return attribute.Value.AsText()
 }
 
+// textOf is text read from the model without copying the entity: ""
+// when id is absent or lacks the attribute.
+func textOf(
+	model inventory.Reader, id inventory.EntityID, name string,
+) string {
+	attribute, ok := model.Attribute(id, name)
+	if !ok {
+		return ""
+	}
+	return attribute.Value.AsText()
+}
+
+// flagOf is flag read from the model without copying the entity.
+// present is false only when id is absent, as Entity would report; a
+// present entity without the attribute is false, as flag reads it.
+func flagOf(
+	model inventory.Reader, id inventory.EntityID, name string,
+) (value, present bool) {
+	if attribute, ok := model.Attribute(id, name); ok {
+		value, _ = attribute.Value.AsBool()
+		return value, true
+	}
+	return false, model.Exists(id)
+}
+
 func number(e inventory.Entity, name string) (float64, bool) {
 	attribute, ok := e.Attribute(name)
 	if !ok {

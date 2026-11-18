@@ -35,6 +35,10 @@ func (c *selfHealthClock) due(now time.Time) bool {
 // swings between the live heap and about twice that. heapLiveMiB is what
 // the last collection found still reachable: the number to watch for a
 // leak. heapGoalMiB is the size at which the next collection starts.
+// heapIdleUnreleasedMiB is free heap the runtime has not yet returned
+// to the system (HeapIdle minus HeapReleased); stackInuseMiB is the
+// goroutine stacks and gcSysMiB the collector's own metadata. Together
+// they explain most of the gap between the heap and goMemoryMiB.
 // goMemoryMiB is all the memory the Go runtime holds from the system
 // (heap, stacks, its own structures). The container's working set is
 // larger still: the state file is mapped into memory, and the pages of
@@ -48,6 +52,9 @@ func RuntimeFields() []any {
 		"heapInuseMiB", stats.HeapInuse >> 20,
 		"heapLiveMiB", live >> 20,
 		"heapGoalMiB", goal >> 20,
+		"heapIdleUnreleasedMiB", (stats.HeapIdle - stats.HeapReleased) >> 20,
+		"stackInuseMiB", stats.StackInuse >> 20,
+		"gcSysMiB", stats.GCSys >> 20,
 		"goMemoryMiB", stats.Sys >> 20,
 		"goroutines", runtime.NumGoroutine(),
 	}

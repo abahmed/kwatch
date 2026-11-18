@@ -18,11 +18,12 @@ import (
 	"github.com/abahmed/kwatch/internal/status"
 )
 
-// incidentReader lists and looks up incidents. incident.Manager satisfies
-// it.
+// incidentReader hands out the latest published view of the incidents
+// (incident.View): every endpoint reads one, so the answers of one
+// moment agree, and no read waits for the decision loop.
+// incident.Manager satisfies it; nil until the loop first published.
 type incidentReader interface {
-	Incidents() []incident.Incident
-	Incident(id string) *incident.Incident
+	View() *incident.View
 }
 
 // statusSource builds the /api/status report.
@@ -81,6 +82,13 @@ type Options struct {
 	// StateCapBytes is the size cap the state file's compactor keeps
 	// the stored data under, for /api/kwatch; 0 when unknown.
 	StateCapBytes int64
+	// NodeName is the node kwatch runs on (the NODE_NAME variable), so
+	// the kwatch page can say when it is a spot node; empty leaves the
+	// notice out.
+	NodeName string
+	// ClusterNameSource is where the cluster name came from, for the
+	// kwatch page (see SetClusterNameSource).
+	ClusterNameSource string
 }
 
 // sources holds what the running pipeline provides. The listener serves
@@ -109,8 +117,13 @@ type sources struct {
 	delivery atomic.Pointer[deliveryDetailSource]
 	// components is kwatch's failed optional parts (blind_spots.go).
 	components atomic.Pointer[componentSource]
+	// heartbeat is the heartbeat's state (kwatch_heartbeat.go).
+	heartbeat atomic.Pointer[heartbeatSource]
 	// push sends browser notifications (push_run.go).
 	push atomic.Pointer[pusher]
+	// gitOps is app.gitOpsLinks, the GitOps web page templates by tool
+	// (source_links.go).
+	gitOps atomic.Pointer[map[string]string]
 	// lastScan is the Unix nanosecond time of the engine's latest loop
 	// iteration; zero until the first.
 	lastScan atomic.Int64

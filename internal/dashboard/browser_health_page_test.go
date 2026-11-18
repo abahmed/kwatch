@@ -48,6 +48,24 @@ type healthOpts struct {
 	memory  float64 // memory used, as a fraction of its limit
 	failing bool    // the Slack channel's last send failed
 	waiting int     // alerts waiting to be sent
+	// goMemory and cache are the Go memory and the file cache as a
+	// fraction of the limit, and level the server's memory level; all
+	// are left out while level is nil.
+	goMemory, cache float64
+	level           *string
+}
+
+// memoryAnswer is the memory part of resources for o.
+func memoryAnswer(o healthOpts, limit int64) map[string]any {
+	m := map[string]any{"used": int64(o.memory * float64(limit)),
+		"limit": limit}
+	if o.level != nil {
+		m["goUsed"] = int64(o.goMemory * float64(limit))
+		m["goLimit"] = limit / 100 * 90
+		m["cache"] = int64(o.cache * float64(limit))
+		m["level"] = *o.level
+	}
+	return m
 }
 
 // healthStatus is an /api/status answer for a kwatch that is well.
@@ -76,8 +94,7 @@ func healthStatus(o healthOpts) map[string]any {
 			"stateFile": map[string]any{"bytes": 169955328,
 				"capBytes": limit, "capKnown": true},
 			"resources": map[string]any{
-				"memory": map[string]any{
-					"used": int64(o.memory * limit), "limit": limit},
+				"memory":    memoryAnswer(o, limit),
 				"stateFile": map[string]any{"bytes": 169955328},
 				"cpu":       map[string]any{"cores": 0.01, "limitCores": 0.5},
 				"disk":      map[string]any{"used": 169979904, "total": 2040373248}}}}
@@ -185,6 +202,41 @@ func TestBrowserHealthMemoryTurnsAmberThenRed(t *testing.T) {
 	if seen.Bad != 1 || seen.Level != "Almost full" ||
 		!strings.Contains(seen.Tile, "bad") {
 		t.Errorf("93%%: %d red, %q (%s)", seen.Bad, seen.Level, seen.Tile)
+	}
+}
+
+// The headline follows the server's memory level, judged on the Go
+// memory: a container figure swollen by state-file cache warns of
+// nothing, and the cache is said in words.
+func TestBrowserHealthMemoryFollowsTheServerLevel(t *testing.T) {
+	calm, warn, bad := "", "warn", "bad"
+	seen := seeHealth(t, healthOpts{memory: 0.76, goMemory: 0.4,
+		cache: 0.3, level: &calm})
+	if seen.Say != "kwatch is working normally" ||
+		seen.Warn+seen.Bad != 0 || seen.Level != "" {
+		t.Errorf("cache only: %q, %d amber, %d red, %q",
+			seen.Say, seen.Warn, seen.Bad, seen.Level)
+	}
+	for _, want := range []string{
+		"The container shows 389 MB of its 512 MB limit",
+		"state-file cache the system can free",
+		"44% of what it can use"} {
+		if !strings.Contains(seen.Page, want) {
+			t.Errorf("page lacks %q", want)
+		}
+	}
+	seen = seeHealth(t, healthOpts{memory: 0.8, goMemory: 0.74,
+		cache: 0.05, level: &warn})
+	if seen.Say != "kwatch is using most of its memory" ||
+		seen.Warn != 1 || seen.Level != "Getting high" ||
+		!strings.Contains(seen.Page, "82% of the 461 MB it can use") {
+		t.Errorf("warn: %q, %d amber, %q", seen.Say, seen.Warn, seen.Level)
+	}
+	seen = seeHealth(t, healthOpts{memory: 0.6, goMemory: 0.88,
+		level: &bad})
+	if seen.Say != "kwatch is almost out of memory" || seen.Bad != 1 ||
+		!strings.Contains(seen.Tile, "bad") {
+		t.Errorf("bad: %q, %d red (%s)", seen.Say, seen.Bad, seen.Tile)
 	}
 }
 

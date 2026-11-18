@@ -1,0 +1,12 @@
+{
+  "name": "replicas-fail-only-on-arm64",
+  "description": "Three replicas on arm64 nodes crash with an ordinary error while four on amd64 nodes are ready; the comparison names the split, not the node.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//a1",
+    "node//a2"
+  ],
+  "tail": "10m0s"
+}

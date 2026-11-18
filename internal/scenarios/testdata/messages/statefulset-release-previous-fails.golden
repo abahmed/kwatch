@@ -1,0 +1,16 @@
+10:06:55 settled
+🟠 queue in streaming (prod-eu-1) keeps crashing. It fails with "panic: unknown flag --queue-size". Two of the three apps that use it are failing. The previous version fails the same way: the latest release did not break it, the error both versions stop with did. Also changed before it broke: queue: image registry.example.com/queue:4 → registry.example.com/queue:5 at 10:05 UTC. To read the output of the last crash, run kubectl logs queue-0 -c app -n streaming --previous
+🟠 queue in streaming (prod-eu-1) keeps crashing.
+| 🟠 **queue** in **streaming** (**prod-eu-1**) keeps crashing.
+| It fails with `panic: unknown flag --queue-size`.
+| Two of the three apps that use it are failing.
+| The previous version fails the same way: the latest release did not break it, the error both versions stop with did.
+| Also changed before it broke: queue: image registry.example.com/queue:4 → registry.example.com/queue:5 at 10:05 UTC.
+| To read the output of the last crash, run
+| ```
+| kubectl logs queue-0 -c app -n streaming --previous
+| ```
+10:15:00 material change
+🟠 queue in streaming (prod-eu-1) now has 2 of 3 replicas ready.
+🟠 queue in streaming (prod-eu-1) now has 2 of 3 replicas ready.
+| 🟠 **queue** in **streaming** (**prod-eu-1**) now has 2 of 3 replicas ready.

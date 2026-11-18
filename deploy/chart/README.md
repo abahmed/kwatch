@@ -33,6 +33,11 @@ app:
   clusterName: "production"
 ```
 
+`app.clusterName` names the cluster in alerts and the dashboard. Set it on
+every cluster: without it kwatch only looks for a name its nodes carry
+(see `app.clusterName` in docs/configuration.md) and says on its health
+page when it has none.
+
 Create an existing Secret from that file and a local credential file:
 
 ```bash
@@ -251,7 +256,7 @@ pointing at Service `<release>-dashboard` (port name `dashboard`).
 | `persistence.flightRecorderText` | Keep scrubbed log error lines, event and condition messages in the flight recording `kwatch replay-export` exports (names, hosts, emails, images and credentials inside them hidden); `false` drops all free text. Sets `KWATCH_FLIGHT_TEXT` | `true` |
 | `persistence.emptyDirSizeLimit` | `sizeLimit` of the `emptyDir`; also passed to kwatch as `KWATCH_VOLUME_LIMIT` so the startup rewrite checks the real limit | `2Gi` |
 | `watch.secrets` | Watch Secrets; `false` removes all Secret RBAC (in both `rbac.mode` values) and Secret-based checks report that they cannot verify. Secrets are watched by default, which lets the kwatch ServiceAccount list and watch Secrets cluster-wide; set `watch.secrets: false` to remove all Secret RBAC and the Secret watch. | `true` |
-| `resources` | CPU and memory requests/limits; the chart sets `KWATCH_MEMORY_LIMIT` from the memory limit and kwatch sets the Go soft limit to 90% of it. Live heap is about 26 KB per pod: the default 512Mi suits up to about 8,000 pods, 10,000 pods need `768Mi` and 20,000 need `1Gi` (see docs/production-operations.md, Memory) | `100m` CPU and `128Mi` memory request (use `256Mi` or more on large clusters), `500m` CPU and `512Mi` memory limit |
+| `resources` | CPU and memory requests/limits; the chart sets `KWATCH_MEMORY_LIMIT` from the memory limit and kwatch sets the Go soft limit to 90% of it. Live heap is about 24 KB per pod: the default 512Mi suits about 5,000 pods comfortably and 8,000 at the edge, 10,000 pods need `768Mi` and 20,000 need `1Gi` (see docs/production-operations.md, Memory) | `100m` CPU and `128Mi` memory request (use `256Mi` or more on large clusters), `500m` CPU and `512Mi` memory limit |
 | `securityContext.runAsUser` / `securityContext.runAsGroup` | Numeric user and group of the container; they match the image's `kwatch` user | `1000` / `1000` |
 | `podSecurityContext.fsGroup` | Group that owns the state volume | `1000` |
 | `persistence.storageClass` | StorageClass of the state claim; empty uses the cluster default | `""` |
@@ -262,6 +267,11 @@ pointing at Service `<release>-dashboard` (port name `dashboard`).
 | `securityContext.seccompProfile.type` | Seccomp profile | `RuntimeDefault` |
 | `podAnnotations` | Pod annotations; the default asks the cluster autoscaler not to scale down kwatch's node (see below), and your keys are merged with it | `cluster-autoscaler.kubernetes.io/safe-to-evict: "false"` |
 | `priorityClassName` | PriorityClass of the kwatch pod, so the pod that reports failures is not the first one preempted | `""` |
+| `priorityClass.create` | Create a PriorityClass for kwatch (plain Kubernetes, works on every cluster). The kwatch pod uses it unless `priorityClassName` is set, which always wins | `false` |
+| `priorityClass.name` | Name of the created class; empty uses the release's full name | `""` |
+| `priorityClass.value` | Priority value, at most 1000000000; pick one above your workloads | `1000000` |
+| `priorityClass.preemptionPolicy` | `PreemptLowerPriority` or `Never` | `PreemptLowerPriority` |
+| `priorityClass.globalDefault` | Make the class the cluster default; leave `false` | `false` |
 | `imagePullSecrets` | Pull secrets for the kwatch image (a private registry mirror); a list of `{name: <secret>}` | `[]` |
 | `extraVolumes` / `extraVolumeMounts` | Extra volumes and mounts of the kwatch container, for example a Secret holding the CA bundle `config.app.caBundlePath` names. The names `config-volume` and `data` and the paths `/config` and `/var/lib/kwatch` are taken | `[]` |
 | `podLabels` | Additional Pod labels | `{}` |

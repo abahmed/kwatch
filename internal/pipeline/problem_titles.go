@@ -18,7 +18,22 @@ func (a *announcer) titleProblems(now time.Time) {
 			short, full := a.problemTitle(p, now)
 			a.incidents.SetProblem(p.ID, short, full)
 		})
+		if p.StepsStale() {
+			contain("compose", "steps", func() {
+				a.incidents.SetSteps(p.ID, a.problemSteps(p, now))
+			})
+		}
 	}
+}
+
+// problemSteps are the steps the composer writes for p's diagnosis as
+// it stands: a revised cause brings its own steps to the dashboard
+// before, or without, a message about it.
+func (a *announcer) problemSteps(
+	p incident.Incident, now time.Time,
+) []incident.FixStep {
+	d := incident.Decision{Incident: p, Action: incident.Update}
+	return FixSteps(a.messages.Write(d, now))
 }
 
 // problemTitle is the composer's problem title of p, bounded and uncut.

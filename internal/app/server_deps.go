@@ -49,6 +49,9 @@ type serverDeps struct {
 	license *licenseSetup
 	// overlay is how the startup KwatchConfig turned out.
 	overlay overlayOutcome
+	// displayName is the cluster name shown to people; see
+	// clusterName.
+	displayName string
 	// self is kwatch's view of itself while a pipeline runs, for the
 	// dashboard overview (self_report.go).
 	self selfHolder
@@ -106,6 +109,7 @@ func newServerDeps(
 		notice:           boot.notice,
 		license:          boot.license,
 		overlay:          boot.overlay,
+		displayName:      boot.displayName,
 	}
 	deps.edition.Store(boot.entitlements)
 	if deps.dashboardServer != nil {

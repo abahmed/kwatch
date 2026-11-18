@@ -98,5 +98,12 @@ func TestOwnChangeExplainsZeroOnlyWhenItSetTheReplicas(t *testing.T) {
 			t.Errorf("change of %v: own-change = %v, want %v", tt.paths,
 				got, tt.want)
 		}
+		// The refutation is reported, so a cause stated before it
+		// is dropped (incident.dropRefutedChanges).
+		refuted := newView(f.snapshot()).refutedChanges(
+			[]inventory.EntityID{dep})
+		if got := len(refuted) == 1; got == tt.want {
+			t.Errorf("change of %v: refuted = %v", tt.paths, refuted)
+		}
 	}
 }

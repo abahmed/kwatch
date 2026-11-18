@@ -25,6 +25,8 @@ type oomFixture struct {
 	event    string
 	message  string
 	eventAge time.Duration
+	// more are further attributes of the killed container.
+	more map[string]inventory.Value
 }
 
 func detectOOM(t *testing.T, f oomFixture) detection.Finding {
@@ -46,15 +48,22 @@ func detectOOM(t *testing.T, f oomFixture) detection.Finding {
 			podNodeNow.Add(-time.Minute-f.eventAge))
 	}
 	addPodOn(model, node, "batch", "importer", "main", 3174*mib, 0, nil)
+	attrs := map[string]inventory.Value{
+		kube.AttrState:         inventory.Text("terminated"),
+		kube.AttrStateReason:   inventory.Text(reasons.OOMKilled),
+		kube.AttrExitCode:      inventory.Number(137),
+		kube.AttrMemoryPeak24h: inventory.Number(f.peak),
+		kube.AttrLastFinished: inventory.Time(
+			podNodeNow.Add(-time.Minute)),
+	}
+	if f.peak == 0 {
+		delete(attrs, kube.AttrMemoryPeak24h)
+	}
+	for name, value := range f.more {
+		attrs[name] = value
+	}
 	victim := addPodOn(model, node, "shop", "api", "app", f.peak, f.limit,
-		map[string]inventory.Value{
-			kube.AttrState:         inventory.Text("terminated"),
-			kube.AttrStateReason:   inventory.Text(reasons.OOMKilled),
-			kube.AttrExitCode:      inventory.Number(137),
-			kube.AttrMemoryPeak24h: inventory.Number(f.peak),
-			kube.AttrLastFinished: inventory.Time(
-				podNodeNow.Add(-time.Minute)),
-		})
+		attrs)
 	found := Container{}.Detect(testDetectorContext(model, podNodeNow),
 		entityOf(model, victim))
 	require.Len(t, found, 1)
@@ -106,7 +115,8 @@ func TestOOMDuringSystemOOMIsTheNodes(t *testing.T) {
 	assert.Equal(t, "180Mi", evidenceOf(f, detection.EvidenceMemoryUsed))
 	assert.Equal(t, "512Mi", evidenceOf(f, detection.EvidenceMemoryLimit))
 	assert.Contains(t, f.Summary, "by the node")
-	assert.Equal(t, []string{"batch/importer 3.1Gi (no limit)"}, usersOf(f))
+	assert.Equal(t, []string{"batch/importer 3.1Gi (no request, no limit)"},
+		usersOf(f))
 }
 
 func TestOOMKilledByKernelEventIsTheNodes(t *testing.T) {

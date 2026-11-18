@@ -161,6 +161,14 @@ func (e *Engine) readers(
 	o inventory.Observation, update inventory.Update,
 ) []inventory.EntityID {
 	out := e.deps.Model.Related(o.Entity, inventory.Backs, inventory.Outgoing)
+	// A failed release is judged by the health of what it deploys and
+	// of its pods.
+	deployed := o.Entity
+	if deployed.Kind == kube.KindPod {
+		deployed = inventory.TopOwner(e.deps.Model, deployed)
+	}
+	out = append(out, e.deps.Model.Related(deployed, inventory.DeployedBy,
+		inventory.Outgoing)...)
 	if o.Kind == inventory.Noted && detectors.IsQuotaRefusal(o.Note) {
 		// The refusal is recorded on the controller, yet it explains the
 		// quota: judge the namespace quotas again so the one named in the

@@ -57,8 +57,9 @@ var nodeLifecycleRows = []Row{
 }
 
 // removedNodeHops lead from a pod that waits for a node to the nodes
-// removed just before it started waiting: it is a replacement of a pod
-// that ran there, or wants the room that node had.
+// removed just before it started waiting that the removal touches (see
+// removalTouches): it is a replacement of a pod that ran there, or
+// wants the room that node had. Timing alone ties no pod to a removal.
 func (v *view) removedNodeHops(pod inventory.EntityID) []hop {
 	waiting := v.earliestSince([]inventory.EntityID{pod})
 	if !waiting.ok || !v.hasMode(pod, []detection.Mode{
@@ -67,8 +68,9 @@ func (v *view) removedNodeHops(pod inventory.EntityID) []hop {
 	}
 	removals := map[inventory.EntityID]time.Time{}
 	var latest time.Time
-	for _, node := range v.removedNodes() {
-		if at, ok := v.replacedAfter(node, waiting.t); ok {
+	for _, node := range v.removedOf(kube.KindNode) {
+		at, ok := v.replacedAfter(node, waiting.t)
+		if ok && v.removalTouches(pod, node) {
 			removals[node] = at
 			latest = maxTime(latest, at)
 		}
@@ -107,16 +109,17 @@ func (v *view) replacedAfter(
 	return time.Time{}, false
 }
 
-// removedNodes lists the nodes deleted in the window, once per solve.
-func (v *view) removedNodes() []inventory.EntityID {
-	if v.removed != nil {
-		return *v.removed
+// removedOf lists the entities of kind deleted in the window and gone,
+// once per kind and solve.
+func (v *view) removedOf(kind inventory.Kind) []inventory.EntityID {
+	if out, ok := v.removed[kind]; ok {
+		return out
 	}
 	found := map[inventory.EntityID]bool{}
 	if sets, ok := v.s.Model.(recentChangeSets); ok {
 		for _, set := range sets.RecentChangeSets(v.since) {
 			for _, id := range set.Entities() {
-				if id.Kind == kube.KindNode && !v.s.Model.Exists(id) &&
+				if id.Kind == kind && !v.s.Model.Exists(id) &&
 					v.deleted(id) {
 					found[id] = true
 				}
@@ -124,7 +127,10 @@ func (v *view) removedNodes() []inventory.EntityID {
 		}
 	}
 	out := sortedKeys(found)
-	v.removed = &out
+	if v.removed == nil {
+		v.removed = map[inventory.Kind][]inventory.EntityID{}
+	}
+	v.removed[kind] = out
 	return out
 }
 

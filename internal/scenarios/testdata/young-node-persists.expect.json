@@ -1,0 +1,11 @@
+{
+  "name": "young-node-persists",
+  "description": "Pods on a node that joined a minute ago cannot reach the cache and still cannot when the node is no longer new: reported once the node's window is over.",
+  "root": "failure-signature//dial tcp \u003cip\u003e:6379: connect: connection refused",
+  "tier": "notify",
+  "bootHeld": true,
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ]
+}

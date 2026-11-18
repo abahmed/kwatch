@@ -114,3 +114,8 @@ const (
 	// evidence: it never changes a score (finalizer).
 	ProofNamedLikeHandler ProofCode = "named-like-handler"
 )
+
+// ProofAddressNotStated says Count workloads, named in Fields, fail the
+// same way as the callers of an endpoint, but their errors only say what
+// kind of service they cannot reach. A note: it never moves a score.
+const ProofAddressNotStated ProofCode = "address-not-stated"

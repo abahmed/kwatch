@@ -18,21 +18,21 @@ const maxItemReasons = 5
 
 // restoredListing summarises the restored incidents for the audit log,
 // so the summary entry says which incidents it covers: each as
-// "id: root tier=T reasons=A,B", the listed ones first, then the
-// lower-priority ones the next digest carries, the first
+// "id: root tier=T reasons=A,B", the listed ones first, then the ones
+// already told and unchanged that the restart only counted, the first
 // MaxRestoredAuditItems of them. They are not new: Ongoing counts the
 // listed ones still open and Opened stays zero.
 func restoredListing(
-	decisions []incident.Decision, lower ...incident.Decision,
+	decisions []incident.Decision, counted ...incident.Decision,
 ) *notification.Listed {
 	listed := &notification.Listed{Ongoing: len(decisions)}
-	all := append(slices.Clip(decisions), lower...)
+	all := append(slices.Clip(decisions), counted...)
 	for i, d := range all[:min(len(all), MaxRestoredAuditItems)] {
 		p := d.Incident
 		item := p.ID + ": " + p.Root.String() + " tier=" + p.Tier.String() +
 			" reasons=" + memberReasons(p)
 		if i >= len(decisions) {
-			item += " (lower priority, next digest)"
+			item += " (told before, unchanged: counted)"
 		}
 		listed.Items = append(listed.Items, item)
 	}

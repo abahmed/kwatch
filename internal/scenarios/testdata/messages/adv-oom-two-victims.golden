@@ -1,11 +1,11 @@
 10:01:15 settled
-🟠 Node n1 (prod-eu-1) is low on memory. Container app in pod cart-d976a8be-a in shop used 140Mi of its 512Mi limit. Node n1 ran out of memory; biggest users: batch/importer 3.1Gi. Affected: cart in shop.
+🟠 Node n1 (prod-eu-1) is low on memory. Container app in pod cart-d976a8be-a in shop used 140Mi of its 512Mi limit. Node n1 ran out of memory (3.1Gi in use); biggest users: batch/importer 3.1Gi (no request). Affected: cart in shop.
 Related alerts: 1 out-of-memory kill
 To check the node's conditions and recent events, run kubectl describe node n1
 🟠 Node n1 (prod-eu-1) is low on memory.
 | 🟠 Node n1 (**prod-eu-1**) is low on memory.
 | Container app in pod cart-d976a8be-a in **shop** used 140Mi of its 512Mi limit.
-| Node n1 ran out of memory; biggest users: batch/importer 3.1Gi.
+| Node n1 ran out of memory (3.1Gi in use); biggest users: batch/importer 3.1Gi (no request).
 | Affected: **cart** in **shop**.
 | Related alerts: 1 out-of-memory kill
 | To check the node's conditions and recent events, run

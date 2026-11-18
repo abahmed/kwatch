@@ -47,7 +47,11 @@ var workloadReasons = []ReasonInfo{
 	reason(reasons.ImageDigestDrift, ModeImageDrift),
 	reason(reasons.ReleaseRegression, ModeReleaseRegression),
 	reason(reasons.LogErrorBurst, ModeErrorBurst),
+	// Pods stay Ready: worth a look, never a page.
+	reason(reasons.LogServiceMissing, ModeLogServiceMissing).digest(),
 	reason(reasons.LeaseStale, ModeLeaseStale),
+	reason(reasons.HelmReleaseFailed, ModeHelmReleaseFailed),
+	reason(reasons.HelmReleaseStuck, ModeHelmReleaseStuck),
 	reason(reasons.DeprecatedAPIInUse, ModeDeprecatedAPI),
 	reason(reasons.APIServerErrors, ModeAPIServerErrors),
 	reason(reasons.CoreDNSServfail, ModeDNSServfail),

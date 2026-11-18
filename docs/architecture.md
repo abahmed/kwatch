@@ -44,7 +44,10 @@ lifecycles. Slow work never runs on the loop. Log reads and other
 investigations run on a bounded worker pool with deadlines. Storage writes go
 to one writer that batches the latest snapshot. Delivery has its own queues.
 Every loop iteration reports progress, so a stuck loop shows up as a stall and
-Kubernetes restarts the pod. The loop's helpers live in subpackages of
+Kubernetes restarts the pod. Each iteration also publishes one read-only view
+of the incidents (`incident.View`, swapped in whole); every dashboard endpoint
+reads that view, so its answers of one moment agree and no request waits for
+the loop or copies the incidents. The loop's helpers live in subpackages of
 `internal/pipeline`: `announce` (summary, digest, roll-up, outage),
 `coverage` and `investigate`.
 
@@ -267,6 +270,18 @@ release); `kubectl rollout undo` otherwise, offered as a command only on
 the workload's newest release. The issue's steps and its message use the same rule
 (`compose/managed_undo.go`).
 
+A rollback is offered only to a revision kwatch has evidence served: a
+ready replica or pod of it now, or kwatch's memory of seeing it serve.
+kwatch remembers, per Deployment, StatefulSet and DaemonSet, the last 5
+revisions (ReplicaSet or ControllerRevision names) it saw ready while
+they were current, for 30 days; the memory is saved with the workload's
+last healthy time, survives a restart and goes when the workload is
+deleted. So a revision that served before a completed rollout scaled it
+to zero is still a rollback target. A release whose previous version
+fails the same way (a pod of the earlier ReplicaSet, or for a
+StatefulSet or DaemonSet of the earlier ControllerRevision, crashes on
+its own) is not blamed, and no rollback is offered.
+
 ## How kwatch watches
 
 Sources turn Kubernetes objects into observations. Each kind has a schema in
@@ -278,12 +293,18 @@ change. A watch mode bounds the memory per kind:
 | Mode | What is kept | Used for |
 | --- | --- | --- |
 | `full` | The typed object, trimmed, with a kind-specific schema | Pods, nodes, workloads, services, storage, policy |
-| `status` | Metadata, status and a small subset of spec | Custom resources and other kinds with status |
-| `metadata` | Name, labels, owners, generation, finalizers | Leases, ControllerRevisions, RBAC |
+| `status` | Metadata, status and a small subset of spec | Custom resources and other kinds with status; ControllerRevisions keep only metadata and their revision number |
+| `metadata` | Name, labels, owners, generation, finalizers | Leases, RBAC |
 | `hashed` | Metadata plus a hash of the data | Secrets and ConfigMaps |
 
 There is a resource budget, a per-kind object cap and an overall object cap.
 A kind kwatch cannot watch is reported in `/health` with a bounded reason code.
+
+Workloads carry a `template.calls` attribute: the Services and external
+endpoints their pod template's environment names, as sorted entity keys.
+It changes only when the template does, never as pods come and go. A call
+that disappears from it is recorded in the change journal as a "no longer
+calls" change, so a message can say that a link ended.
 [Kubernetes coverage](./kubernetes-coverage.md) lists every kind and its mode.
 
 Other sources feed the same observation format: kubelet statistics read
@@ -331,9 +352,9 @@ one bucket per data class:
 | `changes` | Full change records (actor, fields, revision, times) of workloads, config, services, policy and nodes, in one time-ordered stream | 7 days, at most 8 MiB; the last 24 hours reload at start |
 | `baselines` | Rolling per-workload statistics over 7 days: restarts, readiness, memory, Warning events | Dropped 7 days after the workload is gone |
 | `evidence` | Log excerpts and termination messages | 30 days, at most 128 MiB |
-| `timeline` | Health transitions, changes, events, decisions | 7 days, at most 32 MiB (about 100,000 entries): whichever limit is reached first, so a busy cluster keeps less than 7 days |
+| `timeline` | Health transitions, changes, events, decisions | 7 days, at most 32 MiB (about 100,000 entries): whichever limit is reached first, so a busy cluster keeps less than 7 days. The objects of open incidents are held: the cap evicts other objects' entries first, then thins the middle of a held object (an old stretch keeps one entry per hour), and keeps its first 8 and newest 32 entries and its decision times to the end; those decision times also outlive the 7 days while the incident is open |
 | `fingerprints` | Last seen digest per object | No expiry |
-| `state` | Cluster identity, version, startup and telemetry markers (with the pending digest and what digests listed in full today), each workload's last healthy time, the flight recorder's pseudonym salt, and the 7-day counts behind the cause self-check and the unexplained list in `/status` | No expiry; a healthy time lasts 7 days; the counts hold 7 days |
+| `state` | Cluster identity, version, startup and telemetry markers (with the pending digest and what digests listed in full today), each workload's last healthy time and the revisions it was seen serving, the flight recorder's pseudonym salt, and the 7-day counts behind the cause self-check and the unexplained list in `/status` | No expiry; a healthy time lasts 7 days, a served revision 30 days (5 per workload, dropped when the workload is deleted); the counts hold 7 days |
 | `flight` | The flight recorder: sanitized, compressed batches of what the sources observed (names hashed; log error lines, event and condition messages kept scrubbed unless `KWATCH_FLIGHT_TEXT=false`), exported with `kwatch replay-export` | 48 hours, at most 64 MiB |
 | `threads` | Provider thread IDs, so updates stay in one conversation | No expiry |
 | `outbox` | Delivery jobs not yet accepted by a provider | Until accepted; at most 2048 jobs, none older than 24 hours |
@@ -346,7 +367,8 @@ the timeline 32 MiB, the changes 8 MiB and the flight recording 64 MiB. When
 most of the file is free pages, the compactor rewrites the file while running
 (a copy of the live data renamed over the original; writes wait about a
 second), so the file follows its content down.
-Only history is evicted, oldest first; open incidents, baselines, fingerprints,
+Only history is evicted, oldest first (the timeline holds the story of open
+incidents longer, see above); open incidents, baselines, fingerprints,
 state, threads and the outbox are never evicted. Usage history is not evicted by size either: it expires 24 hours after the last reading. The file itself is larger than
 its logical data, because bbolt keeps freed pages. When the file is more than a
 quarter past the cap, the compactor lowers its target by the excess, and the

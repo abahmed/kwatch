@@ -10,7 +10,7 @@ import (
 )
 
 // selfRow is the row of a failing workload blamed for itself.
-var selfRow = Row{Name: "self", Prior: SelfPrior}
+var selfRow = Row{Name: RuleSelf, Prior: SelfPrior}
 
 // summaryRow marks an owner's summary finding covered with its pods.
 var summaryRow = Row{Name: "summary"}
@@ -235,6 +235,11 @@ func (v *view) addUpstream(cs *candidateSet, effect inventory.EntityID) {
 		if !ok {
 			cs.reject(r.id, effect, "no propagation row links it to "+
 				effect.String())
+			continue
+		}
+		if v.outsideRelease(r, effect) {
+			cs.reject(r.id, effect, "it began failing outside "+
+				"the window of the release")
 			continue
 		}
 		if !v.s.verifiable(r.id.Kind) {

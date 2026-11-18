@@ -90,11 +90,21 @@
     return li;
   }
 
-  /* drawRows puts events in list, folding bursts. */
-  function drawRows(list, events, open) {
-    var i = 0;
+  /* drawRows puts events in list, folding bursts, with a marker where
+     kwatch was not running (spans), so a jump in time is not read as
+     a quiet one. whole says the list reaches the window's start, so
+     a gap older than the last event belongs at the end. */
+  function drawRows(list, events, open, spans, whole) {
+    var i = 0, prev = null, seen = {};
+    function gaps(after) {
+      KW.offBetween(spans, after, prev, seen).forEach(function (sp) {
+        list.appendChild(KW.offMarker("li", sp, "act-off"));
+      });
+    }
     while (i < events.length) {
       var e = events[i], key = KW.hm(e.at).textContent + e.kind, j = i;
+      gaps(Date.parse(e.at));
+      prev = Date.parse(e.at);
       while (j < events.length && events[j].kind === e.kind &&
         KW.hm(events[j].at).textContent + events[j].kind === key) j++;
       var n = j - i, shown = n >= BURST ? SHOWN : n;
@@ -102,6 +112,7 @@
       if (n > shown) list.appendChild(fold(events.slice(i + shown, j), e, open));
       i = j;
     }
+    if (whole) gaps(null);
   }
 
   /* tally: "25 issues started, 4 got more urgent and 21 resolved", from
@@ -156,14 +167,15 @@
     }
 
     function draw(data) {
-      var events = data.events || [];
+      var events = data.events || [], spans = data.notWatching || [];
       list.textContent = "";
-      drawRows(list, events, open);
-      list.hidden = !events.length;
+      drawRows(list, events, open, spans, (data.total || events.length) <= events.length);
+      list.hidden = !list.childElementCount;
       line.classList.toggle("is-empty", !events.length);
       var total = data.total || events.length;
       line.textContent = events.length ? "In " + WINDOWS[since] + ", " +
         tally(events, data.kinds) + "." : "Nothing changed in " + WINDOWS[since] + ".";
+      if (spans.length) line.textContent += " kwatch was not running for part of this time; it is marked below.";
       more.hidden = total <= events.length;
       moreText.textContent = "Showing the latest " + KW.num(events.length) + " of " +
         KW.num(total) + " changes. ";

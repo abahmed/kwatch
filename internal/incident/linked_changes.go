@@ -80,10 +80,10 @@ func boolOrder(a, b bool) int {
 	return -1
 }
 
-// sameChange matches the change of the same object at the same time.
+// sameChange matches the same change (inventory.SameChange).
 func sameChange(c inventory.Change) func(inventory.Change) bool {
 	return func(o inventory.Change) bool {
-		return o.Entity == c.Entity && o.At.Equal(c.At)
+		return inventory.SameChange(o, c)
 	}
 }
 

@@ -68,6 +68,10 @@ var causeWords = map[string]causeWording{
 	// helper-container-blocks-pod is worded by containerPhrase.
 	"helper-container-blocks-pod": {words: "keeps failing and blocks its pod"},
 	"init-waits-on-service":       {words: "has no ready endpoints"},
+	// A Helm release blamed for its workloads states its own finding;
+	// these words are only the fallback.
+	explain.RuleHelmReleaseFailed: {
+		words: "failed to install or upgrade, or is stuck"},
 	"image-drift": {own: true,
 		words: "its pods run different builds of the same image tag"},
 	"liveness-shorter-than-start": {own: true,
@@ -190,7 +194,7 @@ func causeWordsFor(cause *rootcause.CauseRecord) string {
 		}
 	}
 	if cause.Root.Kind == explain.KindExternalEndpoint &&
-		cause.Rule != "external-endpoint-unreachable" {
+		cause.Rule != explain.RuleExternalEndpointUnreachable {
 		return endpointWords(cause.Mode)
 	}
 	if claimFull(cause) {

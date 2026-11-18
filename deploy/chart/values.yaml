@@ -89,7 +89,7 @@ terminationGracePeriodSeconds: 60
 #
 # What the defaults do not cover (kwatch dials these itself):
 #   - activeProbeMonitor http/tcp/dns targets, and autoServices and
-#     autoDependencies targets (any Service or external port);
+#     autoDependencies targets (any Service or external address and port);
 #   - app.proxyURL (the proxy's port);
 #   - alert providers and heartbeat URLs on a port other than 443.
 # With the policy on and none of these opened, active probes report every
@@ -124,8 +124,9 @@ networkPolicy:
 
 # -- The chart sets KWATCH_MEMORY_LIMIT from the memory limit, and kwatch
 # sets the Go soft memory limit to 90% of it, so garbage collection works
-# harder before the kernel would kill the Pod. Live heap is about 26 KB per pod: 140 MiB at 5,000 pods and
-# 520 MiB at 20,000. The default 512Mi suits up to about 8,000 pods; use
+# harder before the kernel would kill the Pod. Live heap is about 24 KB per pod: 140 MiB at 5,000 pods and
+# 460 MiB at 20,000. The default 512Mi suits about 5,000 pods comfortably and 8,000 at the
+# edge (cached state-file pages and evidence buffers come on top); use
 # 768Mi at 10,000 pods and 1Gi at 20,000 (raise the request with the limit).
 # The request stays 128Mi so upgrades with an older 128Mi limit still work;
 # set it to 256Mi or more on large clusters so the node keeps room for kwatch.
@@ -224,6 +225,27 @@ podAnnotations:
 # so the pod that reports their failures is not the first one the scheduler
 # preempts under node pressure.
 priorityClassName: ""
+
+# Optional: let the chart create the PriorityClass too. Off by default.
+# A PriorityClass is plain Kubernetes and works on every cluster. Under
+# node pressure the scheduler removes low-priority pods first, so the pod
+# that reports failures should not be the first one removed. When create
+# is true the kwatch pod uses the class, unless priorityClassName above is
+# set: an explicit priorityClassName always wins.
+priorityClass:
+  # -- Create a PriorityClass for kwatch (off by default)
+  create: false
+  # -- Name of the class; empty uses the release's full name
+  name: ""
+  # -- Priority value; higher is evicted later. Pick one above your
+  # workloads (user classes must stay under 1,000,000,000)
+  value: 1000000
+  # -- PreemptLowerPriority lets kwatch push lower-priority pods off a
+  # node to fit; Never keeps the priority but never preempts others
+  preemptionPolicy: PreemptLowerPriority
+  # -- Make this the default class for pods that name none. Leave false:
+  # only one class in a cluster can be the default
+  globalDefault: false
 
 # -- Pull secrets for the kwatch image, for a private registry mirror. Each
 # entry is {name: <secret>}.

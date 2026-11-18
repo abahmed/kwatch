@@ -43,9 +43,13 @@ func evidenceFixSteps(
 	if !incident.IsWorkload(workload.Kind) || workload.Kind == kube.KindPod {
 		return nil
 	}
+	app := ""
+	if p.Cause != nil && p.Cause.Change != nil {
+		app = p.Cause.Change.App
+	}
 	for _, m := range failing(members) {
 		if step, ok := memoryFix(workload, m); ok {
-			return []notification.Step{step}
+			return []notification.Step{checkedMemoryFix(step, m, app)}
 		}
 	}
 	return nil
@@ -58,22 +62,21 @@ func memoryFix(
 		evidence(m, detection.EvidenceKilledByNode) != "" {
 		return notification.Step{}, false
 	}
-	used, word := mebibytes(evidence(m, detection.EvidenceMemoryPeak)),
-		"observed peak"
-	if limit := mebibytes(evidence(m,
-		detection.EvidenceMemoryLimit)); limit > used {
-		used, word = limit, "limit it was killed at"
-	}
-	if used <= 0 {
+	limit := mebibytes(evidence(m, detection.EvidenceMemoryLimit))
+	if limit <= 0 {
 		return notification.Step{}, false
 	}
-	target := int(math.Ceil(used*memoryHeadroom/memoryStepMi)) * memoryStepMi
 	_, container := splitContainer(m.Entity.Name)
+	if usageClipped(m) {
+		return clippedMemoryStep(container, m), true
+	}
+	target := int(math.Ceil(limit*memoryHeadroom/memoryStepMi)) * memoryStepMi
 	return notification.Step{
 		Text: "Raise the memory limit to " + strconv.Itoa(target) +
-			"Mi, half again above the " + word + " of " +
-			strconv.FormatFloat(used, 'f', -1, 64) +
-			"Mi (changes the cluster)",
+			"Mi, half again above the limit it was killed at of " +
+			strconv.FormatFloat(limit, 'f', -1, 64) + "Mi; its use " +
+			"peaked at " + evidence(m, detection.EvidenceMemoryPeak) +
+			" (changes the cluster)",
 		Command: "kubectl set resources " +
 			quote(string(workload.Kind)+"/"+workload.Name) +
 			namespaceFlag(workload.Namespace) + " -c " + quote(container) +

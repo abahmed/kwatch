@@ -1,0 +1,10 @@
+{
+  "name": "statefulset-release-previous-unseen",
+  "description": "A one-replica StatefulSet rolls out an image that crash-loops; no pod of the previous revision is left to show it served, so no rollback is suggested.",
+  "root": "statefulset/streaming/queue",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n2"
+  ]
+}

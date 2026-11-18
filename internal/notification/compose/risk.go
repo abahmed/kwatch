@@ -5,6 +5,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // weightRisk ranks a risk's cost below usage facts and above a quoted
@@ -50,7 +51,8 @@ func riskCost(f caseFacts, risk string) string {
 		}
 	case reasons.RiskNoMemoryLimit:
 		if anyMemberMode(f, detection.ModeOOMKilled) || memoryEviction(f) ||
-			causeRuleIs(f, "node-memory-pressure", "node-overcommitted") {
+			causeRuleIs(f, explain.RuleNodeMemoryPressure,
+				explain.RuleNodeOvercommitted) {
 			return "Its containers have no memory limit, so nothing " +
 				"caps their memory use."
 		}

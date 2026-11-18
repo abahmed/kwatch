@@ -10,9 +10,10 @@ package incident
 // startup summary), leaves the mark where it was; the hold's release
 // moves it.
 type sentMark struct {
-	// noted counts every entry ever added to the timeline in this
-	// process. The timeline keeps only its newest entries, so
-	// noted-len(Timeline) entries were trimmed from its front.
+	// noted counts the entries of the timeline as they were noted: one
+	// more for each entry added, one less for each removed (see
+	// removed), which moves the marks with it. reported still allows
+	// for entries trimmed from the front, which none are now.
 	noted int
 	// covered is the noted count the last delivered message covered,
 	// or unknownMark.
@@ -51,6 +52,20 @@ func (s sentMark) reported(n int) (count int, known bool) {
 	}
 	trimmed := s.noted - n
 	return min(max(s.covered-trimmed, 0), n), true
+}
+
+// removed records that the k-th noted entry (1-based) left the
+// timeline. Every mark at or past it covered it, so it moves down by
+// one; a mark before it stays. An entry no delivered message covered is
+// removed without moving the delivered mark, so the next update still
+// starts right after the last line people got.
+func (s *sentMark) removed(k int) {
+	s.noted--
+	for _, mark := range []*int{&s.covered, &s.pending, &s.before} {
+		if *mark != unknownMark && *mark >= k {
+			*mark--
+		}
+	}
 }
 
 // decided records a new decision. delivered is false when the decision

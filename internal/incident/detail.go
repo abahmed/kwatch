@@ -57,6 +57,7 @@ func (m *Manager) StoreDetail(id string, d Detail) {
 	p.Facts = mergeFacts(p.Facts, d.Facts)
 	if len(d.Steps) > 0 {
 		p.Steps = boundSteps(d.Steps)
+		p.Pending.stepsFor = stepsKey(p)
 	}
 	if len(d.Evidence) > 0 {
 		p.Evidence, p.Correlation = d.Evidence, d.Correlation

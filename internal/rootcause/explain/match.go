@@ -19,6 +19,9 @@ type state struct {
 	// verdicts are modes of the entity's containers that settle how
 	// the entity itself fails; a side with Unless refuses them.
 	verdicts []detection.Mode
+	// ran marks an effect whose container has started (hasRun), and
+	// agent one a DaemonSet runs on every node (daemonPod).
+	ran, agent bool
 }
 
 // modeHealth is one mode an entity shows with the health it implies.
@@ -82,6 +85,14 @@ func (s Side) healthMatches(health detection.Health) bool {
 // matches reports whether the side selects the state, and the first
 // mode that made it match.
 func (s Side) matches(st state) (modeHealth, bool) {
+	return s.matchesBut(st, nil)
+}
+
+// matchesBut is matches over the modes not in excluded: the effect
+// modes a cause cannot produce (contradicted).
+func (s Side) matchesBut(
+	st state, excluded []detection.Mode,
+) (modeHealth, bool) {
 	text := st.text
 	if s.Signal == SignalNodeAgent {
 		text = st.errText
@@ -92,7 +103,8 @@ func (s Side) matches(st state) (modeHealth, bool) {
 	}
 	for _, mh := range st.modes {
 		if !s.healthMatches(mh.health) ||
-			anyModeMatches(s.NotModes, mh.mode) {
+			anyModeMatches(s.NotModes, mh.mode) ||
+			anyModeMatches(excluded, mh.mode) {
 			continue
 		}
 		if (len(s.Modes) == 0 && !mh.pseudo) ||
@@ -136,7 +148,8 @@ func bestRow(
 		if !ok {
 			continue
 		}
-		effectMode, ok := row.Effect.matches(effect)
+		effectMode, ok := row.Effect.matchesBut(effect,
+			effect.contradicted(causeMode.mode))
 		if !ok {
 			continue
 		}

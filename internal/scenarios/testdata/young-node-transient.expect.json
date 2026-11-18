@@ -1,0 +1,7 @@
+{
+  "name": "young-node-transient",
+  "description": "Pods on a node that joined a minute ago cannot reach the cache for two minutes while their replicas on an old node stay healthy; then they recover.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "20m0s"
+}

@@ -119,6 +119,9 @@
       line.appendChild(KW.newMark());
     }
     body.appendChild(line);
+    // why: how the changed object is linked to the failing ones, in
+    // the server's words; absent when no link is known.
+    if (c.why) body.appendChild(KW.el("p", "cx-why", c.why));
     var meta = KW.el("small", "cx-meta");
     var t = KW.el("time", "", offset(inc, c.at));
     t.dateTime = c.at;
@@ -128,6 +131,8 @@
     if (w) meta.appendChild(document.createTextNode(" · " + w));
     if (c.note) meta.appendChild(document.createTextNode(" · recorded as “" + c.note + "”"));
     body.appendChild(meta);
+    var src = KW.sourceLinks && KW.sourceLinks(c.links, "cx-src");
+    if (src) body.appendChild(src);
     if ((c.fields || []).length) body.appendChild(diff(c));
     li.appendChild(body);
     return li;

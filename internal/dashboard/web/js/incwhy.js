@@ -168,19 +168,33 @@
     open: ["still open on the pager", ""], closed: ["closed", "closedAt"],
     pending: ["alert pending", ""], failed: ["alert failed", ""]
   };
+  /* Only a pager pages a person; an issue tracker holds a ticket and a
+     keyed webhook an alert, so their lines never say "on the pager". */
+  var TICKET = {
+    open: ["ticket still open", ""], closed: ["closed", "closedAt"],
+    pending: ["ticket pending", ""], failed: ["ticket failed", ""]
+  };
+  var KEYED = {
+    open: ["still open there", ""], closed: ["closed", "closedAt"],
+    pending: ["send pending", ""], failed: ["send failed", ""]
+  };
+  function keyedWords(g) {
+    return g.kind === "pager" || !g.kind ? PAGER : g.kind === "ticket" ? TICKET : KEYED;
+  }
 
   function pagerLine(g) {
-    var name = g.name || g.provider || "the pager";
+    var name = g.name || g.provider || "the pager", W = keyedWords(g);
     var p = KW.el("p", "al-line al-pager");
     if (g.state === "failed" || g.state === "pending") {
-      p.textContent = name + ": " + PAGER[g.state][0] + (g.state === "failed" && g.reason ? ": " + g.reason : "");
+      p.textContent = name + ": " + W[g.state][0] + (g.state === "failed" && g.reason ? ": " + g.reason : "");
       return p;
     }
     var bits = [];
     if (KW.valid(g.pagedAt)) bits.push(" at " + KW.when(g.pagedAt));
     var tail = g.state === "closed" && KW.valid(g.closedAt) ? "closed at " + KW.when(g.closedAt) :
-      (PAGER[g.state] || ["", ""])[0];
-    p.textContent = "Alerted " + name + bits.join("") + (tail ? " · " + tail : "");
+      (W[g.state] || ["", ""])[0];
+    var lead = W === PAGER ? "Alerted " : W === TICKET ? "Opened a ticket in " : "Sent to ";
+    p.textContent = lead + name + bits.join("") + (tail ? " · " + tail : "");
     if (KW.valid(g.pagedAt)) p.title = KW.full(g.pagedAt);
     return p;
   }

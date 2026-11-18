@@ -3,6 +3,7 @@ package incident
 import (
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
@@ -33,6 +34,9 @@ type Manager struct {
 	// incident's ID, for retakeFormer. Restore rebuilds it from the
 	// FormerRoot of each record.
 	former map[string]string
+	// pastRoots maps every root an incident left to its ID, for a
+	// failure that returns there after it resolved (past_roots.go).
+	pastRoots map[string]string
 	// groups maps a node, zone or pool root that joined a node outage
 	// to the ID of the incident it joined (see node_group.go).
 	groups map[string]string
@@ -49,9 +53,12 @@ type Manager struct {
 	// apart from those of an earlier, reset store (see newID).
 	seq   int
 	nonce string
-	// restoreGrace delays recovery of restored incidents until detectors
-	// had time to re-raise their findings.
+	// restoreGrace bounds how long recovery of restored incidents waits
+	// for detectors to re-raise their findings; graceSettled is when
+	// the model was rebuilt, from which each one may leave the grace
+	// sooner (grace_rebuilt.go).
 	restoreGrace time.Time
+	graceSettled time.Time
 	// started is when the manager first ran (own_start.go).
 	started time.Time
 	// gaps are the recovering incidents whose workload kept crashing
@@ -107,6 +114,10 @@ type Manager struct {
 	// scopeWaiting are the incidents whose announcement waits for the
 	// scope's verdict (scope_waiting.go).
 	scopeWaiting map[string]bool
+	// view is the latest published View and revision its number
+	// (view.go); revision is guarded by mu.
+	view     atomic.Pointer[View]
+	revision uint64
 }
 
 // NewManager builds a manager that explains failures with explainer.
@@ -194,6 +205,7 @@ func (m *Manager) Apply(
 	m.recallSuspects(s.Now)
 	m.adoptAdvisories(s)
 	m.refresh(s.Model, s.Now)
+	m.retireOldProblems(s)
 	m.logOpened()
 	m.observeAttempts(dirty, s.Now)
 }
@@ -254,18 +266,12 @@ func ordinal(n int) string {
 }
 
 // Incidents returns detached copies of every tracked incident ordered by ID,
-// so callers on other goroutines never touch manager state.
+// so callers on other goroutines never touch manager state. It copies
+// under the lock; the dashboard reads the published View instead.
 func (m *Manager) Incidents() []Incident {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	out := make([]Incident, 0, len(m.incidents))
-	index := m.indexLive()
-	for _, id := range m.sortedIDs() {
-		snap := m.incidents[id].Snapshot()
-		m.relateAmong(&snap, index)
-		out = append(out, snap)
-	}
-	return out
+	return m.snapshots()
 }
 
 // Incident returns a detached copy of the incident with the given ID, or nil

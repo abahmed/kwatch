@@ -29,6 +29,13 @@ type historyRecorder struct {
 	// unexplained counts what kwatch saw and could not explain.
 	// Display only (unexplained.go).
 	unexplained *unexplainedTracker
+	// incidents and holds keep the story of open incidents in the
+	// timeline (timeline_hold.go); incidents may be nil.
+	incidents *incident.Manager
+	holds     timelineHolds
+	// restored is the served memory restored and not yet checked
+	// against the cluster (served_restore.go).
+	restored servedCheck
 }
 
 func newHistoryRecorder(
@@ -44,7 +51,7 @@ func newHistoryRecorder(
 	h := &historyRecorder{
 		model: deps.Model, sampler: newBaselineSampler(deps.Model),
 		store: store, timer: deps.Timer, now: now, stats: stats,
-		checks: newCauseChecker(deps.Model),
+		checks: newCauseChecker(deps.Model), incidents: deps.Incidents,
 	}
 	h.checks.save = h.saveChecks
 	h.unexplained = newUnexplainedTracker(now)
@@ -65,6 +72,7 @@ func (h *historyRecorder) start() {
 	}
 	h.model.Baselines().Restore(saved, h.now())
 	h.restoreChanges()
+	h.holds.restore(h.store)
 	h.writer = newHistoryWriter(h.store, h.model, h.timer, h.stats)
 	h.writer.expireFrom(h.now)
 	go h.writer.run()
@@ -87,6 +95,7 @@ func (h *historyRecorder) stop(deadline <-chan time.Time) bool {
 // observed records one applied observation.
 func (h *historyRecorder) observed(o inventory.Observation) {
 	h.sampler.observe(o)
+	h.served(o)
 	if o.Kind == inventory.Noted {
 		h.unexplained.observeNote(o)
 	}
@@ -193,6 +202,10 @@ func (h *historyRecorder) decided(
 	}
 	for _, d := range decisions {
 		h.writer.add(decisionEntry(d, now))
+	}
+	if len(decisions) > 0 && h.incidents != nil {
+		h.writer.addHold(h.holds.decided(now, decisions,
+			h.incidents.Incidents()))
 	}
 }
 

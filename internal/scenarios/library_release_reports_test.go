@@ -15,13 +15,17 @@ func releaseReportScenarios() []scenario {
 		managedBadRelease("release-gitops-managed", "orders",
 			map[string]string{"argocd.argoproj.io/instance": "shop"}, nil),
 		managedBadRelease("release-helm-managed", "billing", nil,
-			map[string]string{"meta.helm.sh/release-name": "billing"}),
+			map[string]string{helmReleaseAnnotation: "billing"}),
 	}
 }
 
+// helmReleaseAnnotation names the Helm release that deploys an object.
+const helmReleaseAnnotation = "meta.helm.sh/release-name"
+
 // managedBadRelease rolls out a new image whose pods crash-loop on a
 // Deployment carrying labels and annotations of the tool that deploys
-// it; the previous revision keeps serving.
+// it; the previous revision keeps serving. A Helm release's revisions
+// are listed too: the rollback goes to the last deployed one.
 func managedBadRelease(
 	name, app string, labels, annotations map[string]string,
 ) scenario {
@@ -41,8 +45,16 @@ func managedBadRelease(
 			w.deployment.Labels = mergeLabels(w.deployment.Labels, labels)
 			w.deployment.Annotations = mergeLabels(
 				w.deployment.Annotations, annotations)
+			helm := annotations[helmReleaseAnnotation] != ""
+			if helm {
+				// The release is named as the cluster names objects.
+				w.deployment.Annotations[helmReleaseAnnotation] = c.n(app)
+			}
 			c.list(w.objects())
 			c.list(w.pod(0, "n1"), w.pod(1, "n2"))
+			if helm {
+				c.helmRelease("shop", app, "deployed")
+			}
 			c.after(70 * time.Second)
 			rs := w.rollout(func(spec *corev1.PodSpec) {
 				spec.Containers[0].Image = "registry.example.com/" +
@@ -50,6 +62,9 @@ func managedBadRelease(
 			})
 			c.update(w.deployment)
 			c.create(rs)
+			if helm {
+				c.helmRelease("shop", app, "superseded", "deployed")
+			}
 			c.create(w.pod(0, "n1", startedNow, notReady))
 			c.after(40 * time.Second)
 			c.update(w.pod(0, "n1", startedNow, crashLoop(1, "Error",

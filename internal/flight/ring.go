@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/abahmed/kwatch/internal/replay"
@@ -48,19 +49,39 @@ func (r Ring) Append(entries []replay.Entry) error {
 	if len(entries) == 0 {
 		return nil
 	}
-	var raw bytes.Buffer
-	zip := gzip.NewWriter(&raw)
-	encoder := json.NewEncoder(zip)
-	for _, entry := range entries {
-		if err := encoder.Encode(entry); err != nil {
-			return err
-		}
-	}
-	if err := zip.Close(); err != nil {
+	z, err := encodeBatch(entries)
+	if err != nil {
 		return err
 	}
 	return r.log.Append(Stream, entries[0].At,
-		Batch{Z: raw.Bytes(), N: len(entries)})
+		Batch{Z: z, N: len(entries)})
+}
+
+// zipWriters reuses gzip writers across flushes: a new writer allocates
+// its compressor, several hundred KiB, on every flush. A reset writer
+// writes exactly the bytes a new one would.
+var zipWriters = sync.Pool{
+	New: func() any { return gzip.NewWriter(io.Discard) },
+}
+
+// encodeBatch compresses entries as JSON lines. A writer that failed is
+// dropped rather than returned to the pool.
+func encodeBatch(entries []replay.Entry) ([]byte, error) {
+	var raw bytes.Buffer
+	zip, _ := zipWriters.Get().(*gzip.Writer)
+	zip.Reset(&raw)
+	encoder := json.NewEncoder(zip)
+	for _, entry := range entries {
+		if err := encoder.Encode(entry); err != nil {
+			return nil, err
+		}
+	}
+	if err := zip.Close(); err != nil {
+		return nil, err
+	}
+	zip.Reset(io.Discard)
+	zipWriters.Put(zip)
+	return raw.Bytes(), nil
 }
 
 // errStop ends a walk early without an error.

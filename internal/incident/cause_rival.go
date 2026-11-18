@@ -46,7 +46,7 @@ func (a *areaPlacer) annotate(record *rootcause.CauseRecord, c explain.Cause) {
 // says no outside cause explains the failures; it is not a second
 // explanation to hedge with.
 func isExplanation(alt explain.Cause) bool {
-	return alt.Row != "" && alt.Row != "self"
+	return alt.Row != "" && alt.Row != explain.RuleSelf
 }
 
 // shareFailure reports two causes that explain some failure in common.

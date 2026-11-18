@@ -1,0 +1,6 @@
+{
+  "name": "networkpolicy-selector-flips-back",
+  "description": "The API's egress policy is edited to a typo and set back within half a minute; nothing fails.",
+  "maxMessages": 0,
+  "quiet": true
+}

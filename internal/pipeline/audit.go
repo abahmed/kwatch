@@ -51,6 +51,7 @@ func AuditEntry(
 	case m.SkipPaging && entry.Delivery == "":
 		entry.Delivery = "chat"
 	}
+	entry.Steps, entry.StepsMore = auditSteps(m.Steps)
 	if m.Listed != nil {
 		entry.Opened, entry.Resolved = m.Listed.Opened, m.Listed.Resolved
 		entry.Risks, entry.Items = m.Listed.Risks, m.Listed.Items

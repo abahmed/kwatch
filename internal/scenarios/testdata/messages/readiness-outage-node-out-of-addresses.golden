@@ -1,0 +1,25 @@
+10:06:15 settled
+🟠 payments in shop (prod-eu-1) keeps crashing because external endpoint 10.0.9.40:5432 cannot be reached. The readiness check of container app in pod accounts-b10d111b-a in shop answers HTTP 503 (from its log: "Npgsql.NpgsqlException (0x80004005): Failed to connect to 10.0.9.40:5432"). All seven failing apps use it. Affected: accounts, billing, fleet and three others.
+Related alerts: 5 probe failures
+To read the output of the last crash, run kubectl logs deploy/payments -c app -n shop --previous
+🟠 payments in shop (prod-eu-1) keeps crashing because external endpoint 10.0.9.40:5432 cannot be reached.
+| 🟠 **payments** in **shop** (**prod-eu-1**) keeps crashing because external endpoint **10.0.9.40:5432** cannot be reached.
+| The readiness check of container app in pod accounts-b10d111b-a in **shop** answers HTTP 503 (from its log: `Npgsql.NpgsqlException (0x80004005): Failed to connect to 10.0.9.40:5432`).
+| All seven failing apps use it.
+| Affected: **accounts**, **billing**, **fleet** and three others.
+| Related alerts: 5 probe failures
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/payments -c app -n shop --previous
+| ```
+10:14:15 settled
+🟠 Node n1 (prod-eu-1) has run out of pod IP addresses. 3 pods can't start: no free pod IPs. Their events say "failed to assign an IP address to container". Every app that uses it is failing. Affected: batch in shop. To check the node's conditions and recent events, run kubectl describe node n1
+🟠 Node n1 (prod-eu-1) has run out of pod IP addresses.
+| 🟠 Node n1 (**prod-eu-1**) has run out of pod IP addresses.
+| 3 pods can't start: no free pod IPs. Their events say `failed to assign an IP address to container`.
+| Every app that uses it is failing.
+| Affected: **batch** in **shop**.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```

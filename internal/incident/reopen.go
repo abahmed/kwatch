@@ -17,11 +17,12 @@ const ReasonFailingAgain Reason = "failing again"
 // RepageWindow ago. Such an outage is flapping, so it comes back as the
 // same incident, and not as a new one with a new thread and, for a
 // page, a new paging alert. A finding with no
-// mode, or an incident without one, matches any mode.
+// mode, or an incident without one, matches any mode. One closed
+// quietly told no end, so its return is not "failing again".
 func reopenable(
 	p *Incident, now time.Time, mode detection.Mode,
 ) bool {
-	return p.State == Resolved && p.CanReopen() &&
+	return p.State == Resolved && !p.quiet && p.CanReopen() &&
 		now.Sub(p.Resolved) <= RepageWindow &&
 		p.hasMode(mode)
 }
@@ -122,12 +123,22 @@ func (m *Manager) incident(
 	if previous != nil && previous.State != Resolved {
 		return previous
 	}
-	if previous != nil && reopenable(previous, now, s.Mode) &&
+	if previous == nil {
+		// The incident that last failed here may have moved away
+		// with a revised cause: the return finds it all the same.
+		previous = m.pastRootIncident(root)
+		if m.returnsHere(now, previous, s, root) {
+			return previous
+		}
+	}
+	if previous != nil && previous.Root == root &&
+		reopenable(previous, now, s.Mode) &&
 		!m.reopenRefused(now, previous, s, root) {
 		m.reopen(previous, now)
 		return previous
 	}
-	if previous != nil && m.revivable(previous, now) {
+	if previous != nil && previous.Root == root &&
+		m.revivable(previous, now) {
 		m.revive(previous, now)
 		return previous
 	}
@@ -153,6 +164,8 @@ func (m *Manager) incident(
 // failures still doubles its hold and flaps.
 func (m *Manager) recur(p, previous *Incident, now time.Time) {
 	p.Previous = previous.ID
+	carryRoots(p, previous)
+	m.indexPastRoots(p)
 	p.Cycles = recent(previous.Cycles, now, m.cfg.FlapWindow)
 	if now.Sub(previous.Resolved) <= m.cfg.FlapWindow &&
 		!m.crashLoopReturn(previous, previous.Resolved, now) {

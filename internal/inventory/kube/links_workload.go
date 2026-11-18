@@ -20,9 +20,8 @@ func ServicesSelecting(
 	}
 	var out []inventory.EntityID
 	for _, id := range r.EntitiesIn(KindService, workload.ID.Namespace) {
-		service, ok := r.Entity(id)
-		if ok && selectorMatches(entityText(service, AttrSelector),
-			podLabels) {
+		selector, _ := r.Attribute(id, AttrSelector)
+		if selectorMatches(selector.Value.AsText(), podLabels) {
 			out = append(out, id)
 		}
 	}

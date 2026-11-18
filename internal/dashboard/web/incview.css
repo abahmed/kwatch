@@ -122,6 +122,8 @@
 .uc-svg { display: block; width: 100%; height: 96px; background: var(--surface); border-radius: var(--radius-chip); }
 .uc-col { fill: var(--resolved); }
 .uc-col.hot { fill: var(--failing); }
+/* Hours kwatch was not running (js/offtime.js); the summary says it. */
+.uc-off .viz-off-line, .uc-svg .viz-off-line { stroke: var(--text-muted); stroke-width: 1.5; }
 .uc-limit { stroke: var(--failing); stroke-width: 1.5; stroke-dasharray: 5 4; }
 .uc-base { stroke: var(--line); stroke-width: 1; }
 .uc-axis { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; font-variant-numeric: tabular-nums; font-size: var(--t-micro); color: var(--text-muted); }
@@ -152,6 +154,14 @@
 .lo-age { flex: none; color: var(--text-muted); font-size: var(--t-micro); }
 .lo-all { margin-top: 8px; }
 .lo-line { margin: 4px 0 0; font-size: var(--t-small); color: var(--text-soft); }
+/* The issue's shape in "What's wrong?" (incshape.js). */
+.sh-users { margin: 0 0 4px; font-weight: 600; overflow-wrap: anywhere; }
+.sh-users.sh-hit { color: var(--failing); }
+.sh-grouped, .sh-split { margin: 4px 0 0; font-size: var(--t-small); color: var(--text-soft); overflow-wrap: anywhere; }
+.sh-why { margin: 0; }
+.sh-groups > summary { cursor: pointer; }
+.sh-list { margin: 4px 0 0; padding-left: 1.25rem; }
+.sh-members, .sh-more { color: var(--text-soft); }
 /* Beside the alert level: why kwatch lowered, capped or held it. */
 .ds-lvl { margin: 6px 0 0; font-size: var(--t-small); color: var(--text-soft); overflow-wrap: anywhere; }
 

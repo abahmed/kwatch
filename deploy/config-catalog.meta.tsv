@@ -29,6 +29,8 @@ maintenance.untilAnnotation|Operations|Pro only. Optional annotation containing 
 app.clusterName|Operations|Cluster name shown in notifications.|active|
 app.proxyURL|Operations|Optional proxy for outbound provider requests.|active|
 app.disableStartupMessage|Operations|Disable the startup notification.|active|
+app.disableSelfAlerts|Operations|Stop kwatch from sending a message when one of its own parts is degraded.|active|
+app.gitOpsLinks|Operations|Pro. JSON map of GitOps tool (argocd, flux or helm) to the web address of one application, with {app} where its name goes; messages and the dashboard then link a change to the application that deployed it.|active|
 app.logFormatter|Operations|Log output format: text or json.|active|
 app.insecureSkipTLSVerify|Security|Skip TLS verification for outbound providers; strongly discouraged.|active|
 app.caBundlePath|Security|Path to a mounted PEM bundle for outbound provider TLS.|active|

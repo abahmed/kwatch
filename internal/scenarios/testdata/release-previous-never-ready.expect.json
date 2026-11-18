@@ -1,0 +1,12 @@
+{
+  "name": "release-previous-never-ready",
+  "description": "A Deployment kept at zero replicas is scaled up with a release whose pods crash-loop; the revision before it never ran while kwatch watched, so no rollback to it is suggested.",
+  "root": "deployment/shop/checkout",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "20m0s"
+}

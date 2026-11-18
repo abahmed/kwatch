@@ -23,7 +23,7 @@ var livenessStartRows = []Row{
 	{
 		// The history is the proof: starts took longer than liveness
 		// allows, so every new container is killed before it is up.
-		Name: "liveness-shorter-than-start",
+		Name: RuleLivenessShorterThanStart,
 		Cause: Side{Group: AnyGroup, Kind: AnyKind,
 			Modes: []detection.Mode{ModeLivenessStartShort}},
 		Link: LinkSelf,
@@ -36,7 +36,7 @@ var livenessStartRows = []Row{
 		// Without history the fact is thin: a container that never got
 		// ready before each kill may also hang. It stays below the rows
 		// that have more to go on.
-		Name: "liveness-kills-before-ready",
+		Name: RuleLivenessKillsBeforeReady,
 		Cause: Side{Group: AnyGroup, Kind: AnyKind,
 			Modes: []detection.Mode{ModeLivenessNeverReady}},
 		Link: LinkSelf,

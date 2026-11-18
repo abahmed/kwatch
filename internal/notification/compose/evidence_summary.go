@@ -8,8 +8,10 @@ import (
 )
 
 // evidenceSummary is what a Pro message carries for providers that lay
-// out the evidence themselves: the key facts, the log quote and the fix
-// steps. nil without a report.
+// out the evidence themselves: the key facts, the log quote, the fix
+// steps and the incident's shape (addShape). nil without a report: a
+// mail or card provider lays out a message with evidence in its
+// evidence form, which a shape alone must not switch it to.
 func evidenceSummary(
 	d incident.Decision, steps []notification.Step,
 ) *notification.Evidence {
@@ -18,6 +20,7 @@ func evidenceSummary(
 	}
 	out := &notification.Evidence{Checks: checksRead(d.Facts.Report),
 		Quote: quoteOf(d.Facts.Report)}
+	addShape(out, d.Facts)
 	if c := d.Facts.Correlation; c != nil {
 		out.Confirmed = c.Confirmed != "" &&
 			!rootUnseen(d.Incident, d.Facts.Report)
@@ -35,6 +38,7 @@ func evidenceSummary(
 		}
 	}
 	out.Facts = out.Facts[:min(len(out.Facts), notification.MaxEvidenceFacts)]
+	out.Checked = checkedEvidence(d)
 	for _, s := range steps {
 		if s.Mutating {
 			out.Fix = append(out.Fix, notification.EvidenceStep{
@@ -42,6 +46,21 @@ func evidenceSummary(
 		}
 	}
 	return out
+}
+
+// addShape adds how the incident is shaped: what ties its members
+// together, what its failing replicas share and whether users are
+// affected, each when known.
+func addShape(out *notification.Evidence, f incident.Facts) {
+	if f.Grouping != nil {
+		out.Grouped = f.Grouping.Text
+	}
+	if f.Split != nil {
+		out.Replicas = append([]string(nil), f.Split.Lines...)
+	}
+	if f.Users != nil {
+		out.Users = f.Users.Text
+	}
 }
 
 func factLine(f incident.Fact) string {

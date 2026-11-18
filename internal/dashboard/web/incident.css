@@ -116,6 +116,7 @@
 .cx-line { overflow-wrap: anywhere; }
 .cx-line .mono { font-size: var(--t-small); }
 .cx-line .chip { margin-left: 8px; vertical-align: 1px; }
+.cx-why { margin-top: 2px; font-size: var(--t-small); color: var(--text-muted); overflow-wrap: anywhere; }
 .cx-meta { display: block; margin-top: 2px; font-size: var(--t-micro); color: var(--text-muted); overflow-wrap: anywhere; }
 
 /* Seen before. */
@@ -224,6 +225,8 @@
 .ds-row dt { font-size: var(--t-small); color: var(--text-soft); font-weight: 700; }
 .ds-why-t { font-size: 1.0625rem; font-weight: 600; }
 .ds-rel { margin-top: 6px; font-size: var(--t-small); color: var(--text-soft); cursor: help; }
+.ds-checked-l { margin: 2px 0 4px; padding-left: 1.2em; font-size: var(--t-small); color: var(--text-soft); }
+.ds-src, .cx-src { margin-top: 2px; font-size: var(--t-small); color: var(--text-soft); overflow-wrap: anywhere; }
 .ds-cap { margin-top: 10px; font-size: var(--t-small); color: var(--text-soft); }
 .ds-cap b { color: var(--text); }
 .ds-key { margin-top: 8px; font-size: var(--t-small); font-weight: 600; }

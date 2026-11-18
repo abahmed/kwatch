@@ -28,7 +28,15 @@ var gapComponents = map[string]string{
 	"rbac":          "permissions kwatch needs",
 	PodLogsComponent: "crash output from pod logs, " +
 		"kwatch cannot read them",
+	APIPressureComponent: "reduced coverage: the API server is " +
+		"throttling kwatch, log samples and optional kinds' " +
+		"rediscovery wait",
 }
+
+// APIPressureComponent is the health component of API server pressure:
+// degraded with rate_limited while the API server throttles or slows
+// kwatch and optional work waits. It never raises an incident.
+const APIPressureComponent = "api-pressure"
 
 // coverageGaps lists what kwatch cannot see: kinds it does not watch,
 // kubelets it cannot reach and permissions it lacks. It reuses the

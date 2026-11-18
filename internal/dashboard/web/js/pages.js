@@ -206,6 +206,7 @@
     providerBanner(status);
     if (status) seen.status = status;
     if (kw) seen.kw = kw;
+    if (seen.status) KW.setPager(KW.hasPager(seen.status, seen.kw));
     if (status) showCluster(status);
     var dot = document.querySelector("[data-kw-dot]");
     if (!dot) return;

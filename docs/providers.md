@@ -81,9 +81,9 @@ anyone. Sensu Go records them as a passing (OK) check.
 |:--|:--|:--|
 | 💬 Chat | Slack, Discord, Microsoft Teams, Teams Workflow, Mattermost, Rocket.Chat, Google Chat, Webex, Matrix, Telegram, Zulip, Feishu, DingTalk, WeCom, Flock, Threema, Signal | The Note as the message text, escaped for the chat's markup, with recent application output as a code or quoted block when there is any. Broadcast mentions such as `@channel` are neutralized, and only where they stand alone: an `@` inside an email address or a URL is left as it is. Mattermost and Rocket.Chat neutralize every `@name`, because both notify the user or group of any name. WeCom and Teams Workflow escape Markdown in the narrative. Matrix sends the Note as `body` and HTML-escaped as `formatted_body`. Slack with a bot token announces each incident as one root message holding the whole Note and its output, keeps every update and the resolve in its thread, and edits the root to the same announcement under the new status marker when the status changes (a thread reply that is not a status change leaves the root alone; after a restart the root cannot be rebuilt, so only the thread grows). Application output is fenced with a code fence longer than any run of backticks in it, so it cannot close the block; it is cut before the closing fence is added. WeCom `<@userid>` and Zulip `@*group*` mentions in workload text are neutralized too, and so is Telegram's `@username` (a zero-width space follows the `@`). Microsoft Teams shows the incident title as escaped text, so a title taken from the cluster never becomes a link or a mention. |
 | 🚨 Paging | PagerDuty, Opsgenie, Splunk On-Call, GoAlert, ilert, incident.io, Squadcast, Zenduty, SIGNL4, Alerta, Datadog, New Relic, AWS SNS, Splunk HEC, Sensu Go | The Short as the alert title or summary, the Note (plus output) as details, the incident id as the dedup or alert key, and the provider's resolve or close action when the incident resolves. Severity follows the incident severity: only a page-tier incident gets the priority that pages (for ilert the configured `priority`); a notify or low tier incident is sent at a lower one (ilert `LOW`, Opsgenie P3 or P4). When an incident the pagers heard below Urgent rises to Urgent, PagerDuty and ilert open a second alert under the incident key plus `-page` and close the first, because an open alert keeps the urgency it was opened with; later updates and the resolve go to the `-page` alert, and the resolve closes both keys. Zenduty, Squadcast, SIGNL4 and incident.io keep the urgency of the first alert; to page only on Urgent there, route the provider with `severities: [critical]`, so the rise is the first alert it hears. An incident that paged and falls back to notify because the previous version serves again (only the new rollout fails) sends these providers one paging-only update ("is no longer urgent"): Opsgenie lowers the open alert to P3, PagerDuty updates the alert's severity to `warning` but keeps the urgency of the incident it opened. AWS SNS and Splunk HEC also receive the paging-only messages (the close of an incident another one took over), because their subscribers track the incident key; so do the keyed structured receivers (Custom Webhook, n8n, Zapier). When Community picks its one provider, AWS SNS ranks with chat, not with the paging services. |
-| 📋 Issue trackers | GitHub, GitLab, Gitea, Jira, ClickUp | One issue per incident: the Short as title and the Note (plus output and the cluster name) as body. Updates add a comment. On resolve kwatch comments and closes the issue (GitHub, GitLab, Gitea; Jira moves it through `closeTransition` and ClickUp to `closeStatus` when you set one, otherwise they only comment, because workflows are defined per project or list). A resolved incident that fails again within its reopen window comments on the same issue and reopens it on GitHub, GitLab and Gitea. Jira (`reopenTransition`) and ClickUp (`reopenStatus`) reopen only when you configure both the close and the reopen name; otherwise the mapping is forgotten at resolve and a recurrence opens a new issue. Pod-controlled text in the Note has its `@mentions` neutralized, and Jira wiki markup in it is escaped. A GitHub 403 that says the rate limit was hit is retried like a 429. |
+| 📋 Issue trackers | GitHub, GitLab, Gitea, Jira, ClickUp, ServiceNow | One issue per incident: the Short as title and the Note (plus output and the cluster name) as body. Updates add a comment (a work note in ServiceNow). ServiceNow resolves its incident on recovery and reopens it within the reopen window (see its section). On resolve kwatch comments and closes the issue (GitHub, GitLab, Gitea; Jira moves it through `closeTransition` and ClickUp to `closeStatus` when you set one, otherwise they only comment, because workflows are defined per project or list). A resolved incident that fails again within its reopen window comments on the same issue and reopens it on GitHub, GitLab and Gitea. Jira (`reopenTransition`) and ClickUp (`reopenStatus`) reopen only when you configure both the close and the reopen name; otherwise the mapping is forgotten at resolve and a recurrence opens a new issue. Pod-controlled text in the Note has its `@mentions` neutralized, and Jira wiki markup in it is escaped. A GitHub 403 that says the rate limit was hit is retried like a 429. |
 | 📱 SMS and push | Twilio, Plivo, Vonage, MessageBird, Pushover, Pushbullet, Gotify, ntfy, IFTTT, Home Assistant | The Short. A resolve is never louder than the incident: for Pushover, Gotify and ntfy it is sent at the configured priority capped at normal, or at `resolvedPriority` when set. IFTTT also sends the Note as `value2` and the status as `value3`. |
-| 📧 Email | Email (SMTP), AWS SES, SendGrid, Mailgun, Resend | Subject is the Short on one line; the body is the Note followed by recent output as a `> ` quoted block. A Pro message with evidence is sent as the same plain text plus an HTML alternative, by all five (SMTP, SES, SendGrid, Mailgun and Resend). |
+| 📧 Email | Email (SMTP), AWS SES, SendGrid, Mailgun, Resend | Subject is the Short on one line; the body is the Note followed by recent output as a `> ` quoted block. A Pro message with evidence is sent as the same plain text plus an HTML alternative, by all five (SMTP, SES, SendGrid, Mailgun and Resend). Teams and email also show the evidence's users, grouped and replicas lines (at most two replica lines) and up to five "What kwatch checked" items. |
 | 🔗 Structured | Custom Webhook, n8n, Zapier | The whole message as JSON (fields below). |
 
 Long texts are cut at the provider's size limit on a character boundary and end
@@ -215,7 +215,7 @@ backtick as `ˋ` (U+02CB), which is why text with backticks goes in a block.
 | A page when it's serious | 🚨 PagerDuty · 🔔 Opsgenie · 🆘 SIGNL4 · 📟 Squadcast · 🔭 ilert · 🆘 Splunk OnCall |
 | An email or SMS trail | 📧 Email (SMTP) · ✈️ SendGrid · ☁️ AWS SES · ✉️ Twilio |
 | Alerts to your own system | 🔗 Custom Webhook · 🔔 Ntfy · 📳 Gotify · 🏠 HomeAssistant |
-| An issue/ticket system | 📋 Jira · 📋 ClickUp · 🐙 GitHub · 🦊 GitLab · 🦘 Gitea |
+| An issue/ticket system | 📋 Jira · 🎫 ServiceNow · 📋 ClickUp · 🐙 GitHub · 🦊 GitLab · 🦘 Gitea |
 
 Everything below is a reference — one section per provider, with the parameter table you need.
 
@@ -875,6 +875,83 @@ alert:
 
 kwatch finds an incident's issue with `/rest/api/2/search` and, where the
 server has retired it (404 or 410), with `/rest/api/2/search/jql`.
+
+### 🎫 ServiceNow
+
+One ServiceNow incident per kwatch incident, through the Table API
+(`/api/now/table/incident`):
+
+- **Open:** kwatch first looks for an open incident whose `correlation_id`
+  is the kwatch incident's reference (`kwatchkey…`, built from the alert key
+  and the cluster name) and creates one only when none is found. A create
+  retried after a lost answer, a restart or a reset of kwatch's state
+  therefore never files a duplicate. The `sys_id` is kept in kwatch's
+  state file like the other trackers' issue ids.
+- **Update:** a journal entry in `noteField` (`work_notes` by default;
+  `comments` makes it customer-visible).
+- **Resolve:** a journal entry, then `state` = `resolveState`, `close_code`
+  = `closeCode` and `close_notes` = `closeNotes`. A failure within the
+  reopen window sets `reopenState` and notes on the same incident;
+  `reopenState: ""` files a new incident instead.
+- **Text:** the Short (one line, 160 characters) as `short_description`,
+  the Note as plain text (no markup) plus recent output between `----`
+  lines as `description`, each cut to fit 4000 characters.
+- **Urgency and impact** follow the tier: `page` 1, `notify` 2, `low` 3
+  unless you map them. They are set when the incident is filed; a later
+  rise is told in the work notes.
+- Startup banners, summaries and other plain notices are skipped, like
+  the other trackers.
+
+| Parameter | What it does |
+|:---|---|
+| `alert.servicenow.instanceURL` | 🔗 Instance address, `https://<name>.service-now.com` or your custom domain. https only, no path |
+| `alert.servicenow.user` / `password` | 👤🔑 Basic authentication with an integration user |
+| `alert.servicenow.clientID` / `clientSecret` | 🔑 OAuth client credentials instead of a user (`/oauth_token.do`); the token is cached and fetched again when it expires or is refused |
+| `alert.servicenow.table` | 🗂️ Table (default `incident`) |
+| `alert.servicenow.assignmentGroup` | 👥 Assignment group (sys_id or name) |
+| `alert.servicenow.caller` | 🙋 Caller (sys_id or user name) |
+| `alert.servicenow.category` | 🏷️ Category |
+| `alert.servicenow.urgency` / `impact` | 🎚️ Value per tier, for example `{page: "1", notify: "2", low: "3"}` (the default) |
+| `alert.servicenow.fields` | ➕ Extra columns set on a new incident, for example `{u_cluster: prod}` |
+| `alert.servicenow.noteField` | 📝 Journal column for updates (default `work_notes`) |
+| `alert.servicenow.resolveState` | ✅ State a resolve sets (default `6`, Resolved) |
+| `alert.servicenow.closeCode` | ✅ Resolution code (default `Solution provided`; use a value from your instance's choice list) |
+| `alert.servicenow.closeNotes` | ✅ Resolution notes (default `Resolved by kwatch: the failure recovered.`) |
+| `alert.servicenow.reopenState` | 🔁 State a recurrence sets (default `2`, In Progress); `""` files a new incident |
+
+Set exactly one pair: `user` and `password`, or `clientID` and
+`clientSecret`. Both secrets must be `${file:…}` references.
+
+```yaml
+alert:
+  servicenow:
+    instanceURL: "https://example.service-now.com"
+    user: "kwatch.integration"
+    password: "${file:/config/servicenow-password}"
+    assignmentGroup: "Platform Operations"
+```
+
+On the ServiceNow side:
+
+- Create an integration user (Web service access only) with the `itil`
+  role, or a role that can create, read and write incidents and their
+  `correlation_id`, `correlation_display`, `work_notes`, `state`,
+  `close_code` and `close_notes` fields. Read access matters: a user that
+  cannot read the incidents it filed never finds them again, and every
+  retry files a new one.
+- For OAuth, create an OAuth API endpoint for external clients with the
+  client credentials grant and an OAuth application user that has the
+  same role.
+- If your instance changed the incident states or resolution codes, set
+  `resolveState`, `reopenState` and `closeCode` to the values (not the
+  labels) of its choice lists. A data policy that requires more fields on
+  resolve refuses the resolve; add those columns to `fields` or relax the
+  policy for the integration user.
+
+A `401` or `403` (credentials or role) and a `404` (wrong table) are
+refusals: kwatch stops retrying and the dashboard says to fix the
+settings. A `429` waits for its `Retry-After`; a `5xx`, a timeout or an
+answer that is not the Table API's (a hibernating instance) is retried.
 
 ### 🟩 WeCom (WeChat Work)
 

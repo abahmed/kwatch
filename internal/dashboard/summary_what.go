@@ -71,6 +71,9 @@ func whatOf(d *IncidentDetail, p incident.Incident) string {
 		// the leftovers list.
 		return lead
 	}
+	if named, ok := namedRootWhat(p); ok {
+		return named
+	}
 	what := symptomOf(d, p)
 	if bare(what) != "" && bare(what) != bare(d.Title) {
 		return what
@@ -79,6 +82,27 @@ func whatOf(d *IncidentDetail, p incident.Incident) string {
 		return sentence(f)
 	}
 	return what
+}
+
+// namedRootWhat is the root's own finding when it names the root by
+// what it joins, as an object whose own name is a hash needs (a
+// VolumeAttachment is the attachment of a volume to a node): the same
+// sentence for every such object, never the bare family words beside
+// the hash. ok is false when no finding of the root names them.
+func namedRootWhat(p incident.Incident) (string, bool) {
+	best := detection.Finding{}
+	for _, f := range p.Members {
+		if f.Advisory || f.Entity != p.Root ||
+			evidenceOf(f, detection.EvidenceAttachVolume) == "" ||
+			evidenceOf(f, detection.EvidenceAttachNode) == "" {
+			continue
+		}
+		if best.Summary == "" || laterFinding(f, best, p.Root) {
+			best = f
+		}
+	}
+	text := redact.Evidence(best.Summary)
+	return sentence(text), bare(text) != ""
 }
 
 // findingText is the summary of the latest finding the incident
@@ -122,29 +146,46 @@ func bare(s string) string {
 }
 
 // symptomOf is the symptom sentence of whatOf, before the finding
-// fallback.
+// fallback. Its subject is what has the symptom (holderOf): the root
+// when it can, else the failing members; the cause is "Why?"'s.
 func symptomOf(d *IncidentDetail, p incident.Incident) string {
 	past := p.State == incident.Resolved
 	subject := subjectOf(p)
-	if s, ok := notServing(d, past); ok && subject != "" {
+	if s, ok := notServing(d, past); ok && subject != "" &&
+		(canHave(p.Root, probeFamily) || canHave(p.Root, "NoEndpoints")) {
 		return sentence(subject + " " + s)
 	}
 	if p.PreviousServes && p.Root.Name != "" {
 		return newVersionWhat(d, p)
 	}
 	s, ok := symptomFor(p)
+	family := modeFamily(p)
 	if probe, found := failingProbe(d); found &&
 		(probe != "liveness" || !crashedOnItsOwn(d)) {
 		// A liveness probe that fails after the container crashed by
 		// itself is a symptom: the crash leads.
-		s, ok = probeSymptoms[probe], true
+		s, ok, family = probeSymptoms[probe], true, probeFamily
 	}
-	if !ok || subject == "" {
-		return sentence(d.Title)
+	if subject != "" {
+		holder, names := holderOf(p, family)
+		if ok && holder != "" {
+			return holderSentence(d, p, s, holder, names)
+		}
 	}
+	return sentence(d.Title)
+}
+
+// holderSentence is "{subject} {symptom}", the restarts after it when
+// the subject is one object and the names of a group at the end.
+func holderSentence(d *IncidentDetail, p incident.Incident, s symptom,
+	subject string, names []string) string {
+	past := p.State == incident.Resolved
 	text := s.now
 	if past {
 		text = s.was
+	}
+	if len(names) > 0 {
+		return sentence(subject + " " + text + holderNames(names))
 	}
 	return sentence(subject + " " + text + extentOf(d, p, past))
 }

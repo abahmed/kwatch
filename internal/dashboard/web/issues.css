@@ -121,7 +121,7 @@
   .itable, .itable tbody { display: block; min-width: 0 !important; }
   .itable thead { display: none; }
   /* A card is two lines: the title, then where, how urgent, how long. */
-  .itable tr { position: relative; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; padding: 10px 12px; border: 1px solid var(--line); border-left-width: 4px; border-radius: var(--radius-card); margin-bottom: 8px; }
+  .itable tr { position: relative; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 4px; padding: 10px 8px; border: 1px solid var(--line); border-left-width: 4px; border-radius: var(--radius-card); margin-bottom: 8px; }
   .it-row.sev-page { border-left-color: var(--failing); }
   .it-row.sev-notify { border-left-color: var(--degraded); }
   .it-row.sev-resolved { border-left-color: var(--success); }

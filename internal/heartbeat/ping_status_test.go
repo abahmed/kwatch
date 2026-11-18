@@ -37,7 +37,7 @@ func TestHeartbeatReportsPingOutcome(t *testing.T) {
 	})
 
 	require.Len(t, reported, 2)
-	require.ErrorIs(t, reported[0], errPingRejected)
+	require.ErrorIs(t, reported[0], ErrPingRejected)
 	require.NoError(t, reported[1])
 	require.Equal(t, int64(1),
 		metrics.DefaultRegistry().HeartbeatFailures.Load()-before)

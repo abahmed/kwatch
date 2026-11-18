@@ -93,7 +93,7 @@ func TestKwatchStatusCountsTheLastDaysSendsPerChannel(t *testing.T) {
 				Result: "ok"},
 			{At: testEpoch.Add(-time.Hour), Channel: "slack", Result: "ok"},
 			{At: testEpoch.Add(-time.Hour), Channel: "pagerduty",
-				Result: "failed", Pager: true},
+				Result: "failed", Keyed: true},
 			{At: testEpoch.Add(-time.Hour), Result: "carried"},
 		},
 		"b": {
@@ -182,4 +182,52 @@ func TestStatusCarriesAFailingChannelForTheBanner(t *testing.T) {
 	assert.True(t, c.Failing)
 	assert.Equal(t, 12, c.Waiting)
 	assert.Equal(t, "it isn't answering", c.Problem)
+}
+
+// Each channel says how it reaches people, so the page says "on-call"
+// only when a pager is connected.
+func TestStatusSaysEachChannelsKind(t *testing.T) {
+	s := newTestServer()
+	s.SetStatus(func() status.Report { return status.Report{} })
+	s.SetDeliveryHealth(func() []ChannelHealth {
+		return []ChannelHealth{{Channel: "slack"}, {Channel: "pagerduty"},
+			{Channel: "webhook"}}
+	})
+	got, _ := readStatus(t, s)
+	kinds := map[string]string{}
+	for _, c := range got.PerChannelHealth {
+		kinds[c.Type] = c.Kind
+	}
+	assert.Equal(t, map[string]string{"slack": "chat",
+		"pagerduty": "pager", "webhook": "webhook"}, kinds)
+}
+
+// The page says "on-call" when any channel's kind is pager: Datadog
+// alone does, issue trackers alone do not.
+func TestStatusPagerKindFollowsWhoPagesAPerson(t *testing.T) {
+	cases := map[string]struct {
+		channels []string
+		pager    bool
+	}{
+		"datadog only": {[]string{"datadog"}, true},
+		"trackers only": {[]string{"github", "jira", "servicenow"},
+			false},
+	}
+	for name, tc := range cases {
+		s := newTestServer()
+		s.SetStatus(func() status.Report { return status.Report{} })
+		s.SetDeliveryHealth(func() []ChannelHealth {
+			var out []ChannelHealth
+			for _, c := range tc.channels {
+				out = append(out, ChannelHealth{Channel: c})
+			}
+			return out
+		})
+		got, _ := readStatus(t, s)
+		pager := false
+		for _, c := range got.PerChannelHealth {
+			pager = pager || c.Kind == channelPager
+		}
+		assert.Equal(t, tc.pager, pager, name)
+	}
 }

@@ -14,7 +14,7 @@ import (
 
 func pagerAttempt(at int, kind, result string) SendAttempt {
 	return SendAttempt{At: time.Unix(int64(at), 0), Provider: "pd",
-		Kind: kind, Result: result, Pager: true}
+		Kind: kind, Result: result, Keyed: true}
 }
 
 func TestPagerStatesReadTheTrail(t *testing.T) {

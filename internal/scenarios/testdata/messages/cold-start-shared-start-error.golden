@@ -1,25 +1,22 @@
-10:02:15 settled
-🟠 cart in shop (prod-eu-1) and three other workloads keep crashing with the same error. It fails with "StackExchange.Redis.RedisConnectionException: It was not possible to connect to the redis server(s). Error connecting…". Its last run lasted ten seconds. Affected: ledger in billing; orders and search in shop.
-Related alerts: 2 probe failures
-To read the output of the last crash, run kubectl logs deploy/cart -c app -n shop --previous
-🟠 cart in shop (prod-eu-1) and three other workloads keep crashing with the same error.
-| 🟠 **cart** in **shop** (**prod-eu-1**) and three other workloads keep crashing with the same error.
+10:04:15 settled
+🟠 cart in shop (prod-eu-1) and five other workloads keep crashing with the same error: they cannot reach their cache (Redis), and the error does not name the address. The failing pods run on nodes n1 and n2, which joined 1 minute before they began failing. It fails with "StackExchange.Redis.RedisConnectionException: It was not possible to connect to the redis server(s). Error connecting…". Affected: invoicer and ledger in billing; thumbs in media; and two others.
+Related alerts: 1 exit alert, 1 not-ready pod
+The error does not name the cache address: find it in cart's configuration, the environment variables and the ConfigMaps or Secrets it reads, and check that it is reachable from shop.
+🟠 cart in shop (prod-eu-1) and five other workloads keep crashing with the same error: they cannot reach their cache (Redis), and the error does not name the address.
+| 🟠 **cart** in **shop** (**prod-eu-1**) and five other workloads keep crashing with the same error: they cannot reach their cache (Redis), and the error does not name the address.
+| The failing pods run on nodes n1 and n2, which joined 1 minute before they began failing.
 | It fails with
 | ```
 | StackExchange.Redis.RedisConnectionException: It was not possible to connect to the redis server(s). Error connecting…
 | ```
-| Its last run lasted ten seconds.
-| Affected: **ledger** in **billing**; **orders** and **search** in **shop**.
-| Related alerts: 2 probe failures
-| To read the output of the last crash, run
-| ```
-| kubectl logs deploy/cart -c app -n shop --previous
-| ```
+| Affected: **invoicer** and **ledger** in **billing**; **thumbs** in **media**; and two others.
+| Related alerts: 1 exit alert, 1 not-ready pod
+| The error does not name the cache address: find it in **cart**'s configuration, the environment variables and the ConfigMaps or Secrets it reads, and check that it is reachable from **shop**.
 10:09:20 healthy for 3m0s
-✅ cart in shop (prod-eu-1) is healthy again. It was failing for five minutes because the error "StackExchange.Redis.RedisConnectionException: It was not possible to connect to the redis server(s). Error connecting…" was what several workloads fail with. Six pods were affected.
+✅ cart in shop (prod-eu-1) is healthy again. It was failing for about three minutes because the error "StackExchange.Redis.RedisConnectionException: It was not possible to connect to the redis server(s). Error connecting…" was what several workloads fail with. Six pods were affected.
 ✅ cart in shop (prod-eu-1) is healthy again.
 | ✅ cart in shop (**prod-eu-1**) is healthy again.
-| It was failing for five minutes because the error
+| It was failing for about three minutes because the error
 | ```
 | StackExchange.Redis.RedisConnectionException: It was not possible to connect to the redis server(s). Error connecting…
 | ```

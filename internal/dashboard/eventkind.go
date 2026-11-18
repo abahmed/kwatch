@@ -20,6 +20,9 @@ const (
 	kindSameOutage   = "same_outage"
 	kindResolved     = "resolved"
 	kindNote         = "note"
+	// kindGap marks where an incident dropped updates from the middle of
+	// its timeline; it has no text to classify.
+	kindGap = "gap"
 )
 
 // eventKinds maps the start of a timeline note (internal/incident note
@@ -43,6 +46,7 @@ const (
 	reasonRecoveredUnheard = "recovered_unheard"
 	reasonSuperseded       = "superseded"
 	reasonStoppedTracking  = "stopped_tracking"
+	reasonOldProblem       = "old_problem"
 	reasonOther            = "other"
 )
 
@@ -54,6 +58,7 @@ var resolveReasons = []struct{ prefix, reason string }{
 		reasonRecoveredUnheard},
 	{string(incident.ReasonSuperseded), reasonSuperseded},
 	{incident.StoppedTrackingPrefix, reasonStoppedTracking},
+	{string(incident.ReasonOldProblem), reasonOldProblem},
 }
 
 // classifyEvent returns the kind of a timeline note and, for a resolve,

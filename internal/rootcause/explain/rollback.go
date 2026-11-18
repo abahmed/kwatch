@@ -8,22 +8,60 @@ import (
 	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
-// rollbackRevision is the Deployment revision a rollback of a blamed
-// rollout returns to: the one before the Deployment's newest
-// ReplicaSet, whichever revision the covered pod itself runs. Covers
-// are tried in order until one belongs to a Deployment with an earlier
-// revision; it is empty when none does.
+// rollbackRevision is the revision a rollback of a blamed rollout
+// returns to: for a Deployment the one before its newest ReplicaSet,
+// for a StatefulSet or DaemonSet the one before its newest
+// ControllerRevision, whichever revision a covered pod itself runs.
+// workload is the one whose change is blamed (blamedWorkload), the one
+// the undo names; it is empty when that workload has no earlier
+// revision.
 func rollbackRevision(
-	model inventory.Reader, covers []inventory.EntityID,
+	model inventory.Reader, workload inventory.EntityID,
 ) string {
+	return previousRevision(model, workload)
+}
+
+// blamedWorkload is the Deployment, StatefulSet or DaemonSet whose
+// change is blamed, when a covered entity is or runs under it. Only
+// that workload's revisions say what undoing the change returns to;
+// another covered workload's say nothing about it. ok is false when no
+// cover belongs to the changed workload, as for a change of a Secret.
+func blamedWorkload(
+	model inventory.Reader, change inventory.Change,
+	covers []inventory.EntityID,
+) (inventory.EntityID, bool) {
 	for _, id := range covers {
-		deployment, ok := deploymentOf(model, id)
-		if !ok {
-			continue
+		if w, ok := rolloutWorkloadOf(model, id); ok &&
+			w == change.Entity {
+			return w, true
 		}
-		if revision := deploymentPrevious(model, deployment); revision != "" {
-			return revision
-		}
+	}
+	return inventory.EntityID{}, false
+}
+
+// rolloutWorkloadOf is the Deployment, StatefulSet or DaemonSet an
+// entity is or runs under.
+func rolloutWorkloadOf(
+	model inventory.Reader, id inventory.EntityID,
+) (inventory.EntityID, bool) {
+	if deployment, ok := deploymentOf(model, id); ok {
+		return deployment, true
+	}
+	return revisionWorkloadOf(model, id)
+}
+
+// previousRevision is the revision a rollback of the workload a
+// covered entity belongs to returns to, or "" when there is none.
+func previousRevision(
+	model inventory.Reader, id inventory.EntityID,
+) string {
+	if deployment, ok := deploymentOf(model, id); ok {
+		_, revision := deploymentPrevious(model, deployment)
+		return revision
+	}
+	if workload, ok := revisionWorkloadOf(model, id); ok {
+		_, revision := controllerPrevious(model, workload)
+		return revision
 	}
 	return ""
 }
@@ -48,13 +86,15 @@ func deploymentOf(
 	return chain[1], true
 }
 
-// deploymentPrevious returns the highest ReplicaSet revision below the
-// newest one of a Deployment: the revision a rollback returns to when
-// the finding names the Deployment itself, not one of its pods.
+// deploymentPrevious returns the ReplicaSet with the highest revision
+// below the newest one of a Deployment, and that revision: the one a
+// rollback returns to when the finding names the Deployment itself, not
+// one of its pods. The revision is empty when there is none.
 func deploymentPrevious(
 	model inventory.Reader, deployment inventory.EntityID,
-) string {
+) (inventory.EntityID, string) {
 	newest, previous := 0, 0
+	var newestSet, previousSet inventory.EntityID
 	for _, rs := range model.Related(
 		deployment, inventory.OwnedBy, inventory.Incoming,
 	) {
@@ -62,15 +102,16 @@ func deploymentPrevious(
 		switch {
 		case !ok:
 		case revision > newest:
-			previous, newest = newest, revision
+			previous, previousSet = newest, newestSet
+			newest, newestSet = revision, rs
 		case revision > previous && revision < newest:
-			previous = revision
+			previous, previousSet = revision, rs
 		}
 	}
 	if previous == 0 {
-		return ""
+		return inventory.EntityID{}, ""
 	}
-	return strconv.Itoa(previous)
+	return previousSet, strconv.Itoa(previous)
 }
 
 // revisionOf reads a ReplicaSet's Deployment revision.

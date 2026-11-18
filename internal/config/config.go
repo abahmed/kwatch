@@ -197,6 +197,11 @@ type App struct {
 	// still counts them. Default false.
 	HideProHints bool `yaml:"hideProHints"`
 
+	// DisableSelfAlerts stops the messages kwatch sends about itself
+	// when one of its own parts stays degraded (kubelet reads, pod
+	// logs, alert delivery, ...). Default false: they are sent.
+	DisableSelfAlerts bool `yaml:"disableSelfAlerts"`
+
 	// CommunityProvider names the alert provider the Community edition
 	// keeps when more than one is configured (it runs one). Empty keeps
 	// the first by name; a name that is not configured is warned about
@@ -207,6 +212,13 @@ type App struct {
 	// default, also when empty) or "non-production", which caps every
 	// incident at Needs attention: nothing in the cluster pages.
 	Environment string `yaml:"environment"`
+
+	// GitOpsLinks maps a GitOps tool ("argocd", "flux", "helm") to the
+	// address of its web page for one application, with {app} where
+	// the application's name goes. Messages and the dashboard then link
+	// a change to the application that deployed it. Empty: the
+	// application is named without a link.
+	GitOpsLinks map[string]string `yaml:"gitOpsLinks"`
 }
 
 // EnvironmentNonProduction is the app.environment value of a cluster

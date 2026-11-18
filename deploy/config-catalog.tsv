@@ -58,3 +58,5 @@ dashboard.trustedProxies|list|null|Security|CIDRs or addresses of the proxies th
 investigation.sampleLogs|boolean|true|Scope|Sample a bounded slice of the logs of Running and Ready pods for a burst of errors (redacted); false reads none.|active|
 oldProblemDays|integer|30|Performance|Days after which a problem kwatch found already there is old: a low one opens no issue and is only counted, one that needs attention is lowered to Low; zero turns it off.|active|
 app.environment|string|empty|Operations|What the cluster is for: production (default) or non-production; non-production caps every incident at Needs attention, so nothing in the cluster pages.|active|
+app.disableSelfAlerts|boolean|false|Operations|Stop kwatch from sending a message when one of its own parts is degraded.|active|
+app.gitOpsLinks|json|{}|Operations|Pro. JSON map of GitOps tool (argocd, flux or helm) to the web address of one application, with {app} where its name goes; messages and the dashboard then link a change to the application that deployed it.|active|

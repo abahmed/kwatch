@@ -23,22 +23,19 @@ const (
 	certaintyHigh
 )
 
-// certaintyOf is the level a cause is stated at. A cause with a rival
-// of nearly the same score is only possible: kwatch cannot tell them
-// apart, so it must not pick one.
+// certaintyOf is the level a cause is stated at, as
+// rootcause.CertaintyOf words it: a cause with a near rival is only
+// possible.
 func certaintyOf(cause *rootcause.CauseRecord) certainty {
-	switch {
-	case cause == nil:
-		return certaintyNone
-	case cause.Rival != nil:
-		return certaintyPossible
-	case cause.Score >= rootcause.High:
+	switch rootcause.CertaintyOf(cause) {
+	case rootcause.LevelHigh:
 		return certaintyHigh
-	case cause.Score >= rootcause.Likely:
+	case rootcause.LevelLikely:
 		return certaintyLikely
-	default:
+	case rootcause.LevelPossible:
 		return certaintyPossible
 	}
+	return certaintyNone
 }
 
 // word is the level's name, as the scorecard calls it.

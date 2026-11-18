@@ -83,6 +83,7 @@ var causeCategories = map[string]string{
 	"finalizer-handler-stopped":        categoryFinalizer,
 	"finalizer-unhandled":              categoryFinalizer,
 	"helper-container-blocks-pod":      categoryHelper,
+	explain.RuleHelmReleaseFailed:      categoryRollout,
 	"image-drift":                      categoryImage,
 	"init-waits-on-service":            categoryDependency,
 	"lease-holder-failing":             categoryController,
@@ -165,7 +166,7 @@ var whichCategories = map[string]bool{
 // or "" when there is nothing to tell: no cause, or a workload failing
 // on its own.
 func causeCategory(c *rootcause.CauseRecord) string {
-	if c == nil || c.Rule == "self" {
+	if c == nil || c.Rule == explain.RuleSelf {
 		return ""
 	}
 	category, ok := causeCategories[c.Rule]

@@ -1,0 +1,10 @@
+{
+  "name": "daemonset-gitops-release",
+  "description": "A DaemonSet a GitOps controller deploys rolls out an image whose new pod crash-loops while the pod of the previous revision serves; the undo is a change in Git.",
+  "root": "daemonset/ops/agent",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n2"
+  ]
+}

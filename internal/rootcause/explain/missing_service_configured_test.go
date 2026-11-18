@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
@@ -58,4 +59,27 @@ func TestMissingServiceFromConfigExplainsALogThatNamesIt(t *testing.T) {
 	failAPI(f, api, "back-off restarting failed container")
 
 	requireRoot(t, f, containerOf(api[0]), missing.String())
+}
+
+// A container whose own finding proves its own fault (its binary cannot
+// run here) is not explained by a missing name its configuration holds.
+// The twin: the same pods without that proof are.
+func TestMissingServiceFromConfigYieldsToAProvenOwnFault(t *testing.T) {
+	for _, proven := range []bool{false, true} {
+		f := newFixture(t)
+		api, missing := missingFixture(f, "shop/paymnts:8080")
+		for _, pod := range api {
+			f.fail(containerOf(pod), detection.ModeNotReady,
+				detection.Failing, 1, "")
+			if proven {
+				f.fail(containerOf(pod), detection.ModeExitNotExecutable,
+					detection.Failing, 1, "exec format error")
+			}
+		}
+
+		c, ok := f.explain().CauseOf(containerOf(api[0]))
+
+		assert.Equal(t, !proven, ok && c.Root == missing,
+			"proven own fault = %v", proven)
+	}
 }

@@ -1,0 +1,8 @@
+{
+  "name": "oom-flat-at-limit-sizing",
+  "description": "A container stayed near its 512Mi limit for hours and was OOM-killed there run after run; five hours of usage history exist.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "10m0s"
+}

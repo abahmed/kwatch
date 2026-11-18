@@ -118,6 +118,19 @@ func managerOf(
 	return elsewhere[0], true
 }
 
+// presentAttribute reads one attribute without snapshotting the
+// entity, for loops over many entities. Like Entity followed by
+// Attribute, ok is false only when the entity is absent; a present
+// entity without the attribute yields the zero Attribute.
+func presentAttribute(
+	r inventory.Reader, id inventory.EntityID, name string,
+) (inventory.Attribute, bool) {
+	if attribute, ok := r.Attribute(id, name); ok {
+		return attribute, true
+	}
+	return inventory.Attribute{}, r.Exists(id)
+}
+
 func entityText(e inventory.Entity, name string) string {
 	attribute, ok := e.Attribute(name)
 	if !ok {

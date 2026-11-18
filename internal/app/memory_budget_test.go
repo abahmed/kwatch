@@ -18,14 +18,16 @@ import (
 // memBudgetMiB is the most live heap the 5,000-pod cluster may keep
 // after a collection (docs/production-goals.md). The default 512Mi
 // limit sets GOMEMLIMIT at about 90%; the rest of the limit is stacks,
-// runtime overhead and the delivery queues.
-const memBudgetMiB = 65
+// runtime overhead and the delivery queues. Measured at about 47.5 MiB;
+// the budget leaves about 13% headroom.
+const memBudgetMiB = 54
 
 // memPeakMiB bounds the peak heap: the most heap memory the process
 // held from the operating system at any sampled phase, live objects and
 // garbage not yet collected together. It is what counts against the
-// container limit, so it may not pass the default 512Mi.
-const memPeakMiB = 200
+// container limit, so it may not pass the default 512Mi. Measured
+// between 144 and 156 MiB; the limit leaves about 12% headroom.
+const memPeakMiB = 175
 
 // memKinds are the kinds detection evaluates in the budget test.
 var memKinds = []inventory.Kind{

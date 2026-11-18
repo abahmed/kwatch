@@ -1,6 +1,7 @@
 package announce
 
 import (
+	"maps"
 	"slices"
 	"time"
 
@@ -41,6 +42,9 @@ type DigestState struct {
 	// Shown are the ongoing problems a digest listed in full today, so a
 	// restart does not list them in full again (see ongoing_compact.go).
 	Shown []ShownLine `json:",omitempty"`
+	// Risks are the risks a digest already named (riskKey), so a
+	// restart does not name them again. Absent in older files.
+	Risks []string `json:",omitempty"`
 }
 
 // ShownLine is how one ongoing problem was last listed in full.
@@ -53,13 +57,15 @@ func (s DigestState) clone() DigestState {
 	s.Resolved = slices.Clone(s.Resolved)
 	s.Listed = slices.Clone(s.Listed)
 	s.Shown = slices.Clone(s.Shown)
+	s.Risks = slices.Clone(s.Risks)
 	return s
 }
 
 func (s DigestState) equal(o DigestState) bool {
 	return s.Since.Equal(o.Since) && slices.Equal(s.Told, o.Told) &&
 		slices.Equal(s.Resolved, o.Resolved) &&
-		slices.Equal(s.Listed, o.Listed) && slices.Equal(s.Shown, o.Shown)
+		slices.Equal(s.Listed, o.Listed) && slices.Equal(s.Shown, o.Shown) &&
+		slices.Equal(s.Risks, o.Risks)
 }
 
 func linesOf(decisions []incident.Decision, told func(
@@ -77,7 +83,8 @@ func linesOf(decisions []incident.Decision, told func(
 func (c *Collector) pendingState() DigestState {
 	g := &c.Low
 	state := DigestState{Since: g.Since, Listed: c.digested,
-		Shown: c.shownLines()}
+		Shown: c.shownLines(),
+		Risks: slices.Sorted(maps.Keys(c.mentionedRisks))}
 	state.Told = linesOf(g.Opened, func(d incident.Decision) bool {
 		return d.Reason == incident.ReasonReminder ||
 			d.Reason == incident.ReasonFailingAgain
@@ -105,6 +112,9 @@ func (c *Collector) RestoreDigest() {
 	state := c.Startup.Summary.Digest
 	c.digested = slices.Clone(state.Listed)
 	c.restoreShown(state.Shown)
+	for _, key := range state.Risks {
+		c.mentionedRisks[key] = true
+	}
 	if len(state.Told)+len(state.Resolved) == 0 {
 		return
 	}

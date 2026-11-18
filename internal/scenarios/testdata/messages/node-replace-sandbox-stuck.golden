@@ -1,7 +1,8 @@
 10:17:15 settled
-🟠 fleet is failing in shop (prod-eu-1) after the 10:10 UTC removal of node n3. All three failing apps use it. Services fleet, storage and support can't serve traffic. To see the pods' state and events, run kubectl describe pods fleet- -n shop
-🟠 fleet is failing in shop (prod-eu-1) after the 10:10 UTC removal of node n3.
-| 🟠 **fleet** is failing in **shop** (**prod-eu-1**) after the 10:10 UTC removal of node n3.
+🟠 fleet in shop (prod-eu-1) has been Pending since it was scheduled because node n3 was removed at 10:10 UTC. The failing pods run on node n5, which joined under a minute before they began failing. All three failing apps use it. Services fleet, storage and support can't serve traffic. To see the pods' state and events, run kubectl describe pods fleet- -n shop
+🟠 fleet in shop (prod-eu-1) has been Pending since it was scheduled because node n3 was removed at 10:10 UTC.
+| 🟠 **fleet** in **shop** (**prod-eu-1**) has been Pending since it was scheduled because node n3 was removed at 10:10 UTC.
+| The failing pods run on node n5, which joined under a minute before they began failing.
 | All three failing apps use it.
 | Services **fleet**, **storage** and **support** can't serve traffic.
 | To see the pods' state and events, run
@@ -9,8 +10,8 @@
 | kubectl describe pods fleet- -n shop
 | ```
 10:20:00 material change
-🔴 Node n3 (prod-eu-1) is now also affecting fleet, storage and support in shop: they have no ready replicas (0 of 1) and have been Pending since they were scheduled. It is also affecting services fleet, storage and support in shop: they have no ready backends. It is now critical.
-🔴 Node n3 (prod-eu-1) is now also affecting fleet, storage and support in shop: they have no ready replicas (0 of 1) and have been Pending since they were scheduled.
-| 🔴 Node n3 (**prod-eu-1**) is now also affecting **fleet**, **storage** and **support** in shop: they have no ready replicas (0 of 1) and have been Pending since they were scheduled.
-| It is also affecting services **fleet**, **storage** and **support** in shop: they have no ready backends.
-| It is now critical.
+🔴 fleet, storage and support in shop (prod-eu-1) now have no ready replicas (0 of 1) and have been Pending since they were scheduled because node n3 was removed at 10:10 UTC. Services fleet, storage and support in shop now have no ready backends. This is now critical.
+🔴 fleet, storage and support in shop (prod-eu-1) now have no ready replicas (0 of 1) and have been Pending since they were scheduled because node n3 was removed at 10:10 UTC.
+| 🔴 **fleet**, **storage** and **support** in **shop** (**prod-eu-1**) now have no ready replicas (0 of 1) and have been Pending since they were scheduled because node n3 was removed at 10:10 UTC.
+| Services **fleet**, **storage** and **support** in **shop** now have no ready backends.
+| This is now critical.

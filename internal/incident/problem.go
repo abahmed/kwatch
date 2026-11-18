@@ -1,7 +1,9 @@
 package incident
 
 import (
+	"hash/fnv"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -14,44 +16,69 @@ import (
 // incidents by it, so an incident nobody was told about has a title too.
 // A recovery never re-titles it (see noteProblem).
 
-// problemKey is what the problem title depends on: the root, the cause,
-// the failure mode and the reasons of the failing members. Counts are
-// left out, so a storm that grows by a pod does not rewrite the title.
+// problemKey is what the problem title depends on: the root, the
+// cause, the failure mode, the reasons of the failing members and the
+// evidence that names what they are about. Counts are left out, so a
+// storm that grows by a pod does not rewrite the title.
 func problemKey(p *Incident) string {
-	reasons := make([]string, 0, len(p.Members))
+	var reasons, named []string
 	for key, s := range p.Members {
-		if !s.Advisory && !slices.Contains(reasons, key.Reason) {
-			reasons = append(reasons, key.Reason)
+		if s.Advisory {
+			continue
+		}
+		reasons = appendNew(reasons, key.Reason)
+		for _, e := range s.Evidence {
+			if e.Value != "" {
+				named = appendNew(named, key.Reason+":"+e.Label)
+			}
 		}
 	}
 	slices.Sort(reasons)
-	cause := ""
-	if p.Cause != nil {
-		cause = p.Cause.Root.String() + "/" + p.Cause.Rule
-	}
-	return strings.Join([]string{p.Root.String(), cause, string(p.Mode),
-		strings.Join(reasons, ",")}, "|")
+	slices.Sort(named)
+	return strings.Join([]string{p.Root.String(), causeKey(p),
+		string(p.Mode), strings.Join(reasons, ","),
+		strings.Join(named, ",")}, "|")
 }
 
-// noteProblem queues p for a new problem title when the problem got
-// worse: another cause, another root, or a failure reason the title was
-// not written for. Members that only drop out (recoveries) never
-// re-title it: the last one left, such as an event about how a killed
-// container stopped, is not what the incident is about. An incident
-// titled in an earlier session (restored, so without the key it was
-// titled for) takes its current key as the baseline. Only a live
-// incident with a failing member is titled: the composer has nothing to
-// say about one without.
+// causeKey names the cause the title and steps are written for: its
+// root, row and mode; "" without a cause.
+func causeKey(p *Incident) string {
+	if p.Cause == nil {
+		return ""
+	}
+	return p.Cause.Root.String() + "/" + p.Cause.Rule + "/" +
+		string(p.Cause.Mode)
+}
+
+// appendNew appends s unless list holds it.
+func appendNew(list []string, s string) []string {
+	if slices.Contains(list, s) {
+		return list
+	}
+	return append(list, s)
+}
+
+// noteProblem queues p for a new problem title when the diagnosis got
+// worse or more specific: another root, another cause (not one that
+// went away), a failure reason or a piece of naming evidence the title
+// was not written for, or a reshape the key does not show (Pending.
+// reshaped: a member moved out, a refuted cause dropped). Members that
+// only drop out (recoveries) never re-title it: the last one left,
+// such as an event about how a killed container stopped, is not what
+// the incident is about. An incident titled in an earlier session
+// (restored, so without the key it was titled for) takes its current
+// key as the baseline. Only a live incident with a failing member is
+// titled: the composer has nothing to say about one without.
 func (m *Manager) noteProblem(p *Incident) {
 	if p.State == Resolved || !hasFailingMember(p) {
 		return
 	}
 	key := problemKey(p)
-	if p.problemKey == "" && p.Problem != "" {
+	if p.problemKey == "" && p.Problem != "" && !p.Pending.reshaped {
 		p.problemKey = key
 		return
 	}
-	if !worseProblem(p.problemKey, key) {
+	if !p.Pending.reshaped && !worseProblem(p.problemKey, key) {
 		return
 	}
 	if m.untitled == nil {
@@ -62,22 +89,25 @@ func (m *Manager) noteProblem(p *Incident) {
 
 // worseProblem reports whether the problem of key next is worse than
 // the one titled for key titled: the root changed, a cause appeared or
-// changed (not one that went away), or a failure reason is new.
+// changed (not one that went away), or a failure reason or naming
+// evidence is new.
 func worseProblem(titled, next string) bool {
 	if titled == next {
 		return false
 	}
 	was, now := strings.Split(titled, "|"), strings.Split(next, "|")
-	if len(was) != 4 || len(now) != 4 {
+	if len(was) != len(now) {
 		return true
 	}
 	if was[0] != now[0] || (now[1] != "" && was[1] != now[1]) {
 		return true
 	}
-	reasons := strings.Split(was[3], ",")
-	for _, reason := range strings.Split(now[3], ",") {
-		if reason != "" && !slices.Contains(reasons, reason) {
-			return true
+	for _, part := range []int{3, 4} {
+		before := strings.Split(was[part], ",")
+		for _, item := range strings.Split(now[part], ",") {
+			if item != "" && !slices.Contains(before, item) {
+				return true
+			}
 		}
 	}
 	return false
@@ -98,10 +128,49 @@ func (m *Manager) TakeUntitled() []Incident {
 			continue
 		}
 		p.problemKey = problemKey(p)
+		p.Pending.reshaped = false
 		out = append(out, p.Snapshot())
 	}
 	clear(m.untitled)
 	return out
+}
+
+// StepsStale reports steps written for another cause or other failing
+// members than the incident has now: they are recomputed with its
+// title, so a revised cause or a member that moved out does not leave
+// steps about what is no longer the story.
+func (p Incident) StepsStale() bool {
+	return p.Pending.stepsFor != stepsKey(&p)
+}
+
+// stepsKey is what the steps are written for: the cause and the
+// failing members, since steps name the objects to look at.
+func stepsKey(p *Incident) string {
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(causeKey(p)))
+	ids := make([]string, 0, len(p.Members))
+	for key, f := range p.Members {
+		if !f.Advisory {
+			ids = appendNew(ids, key.Entity.String())
+		}
+	}
+	slices.Sort(ids)
+	for _, id := range ids {
+		_, _ = h.Write([]byte("|" + id))
+	}
+	return strconv.FormatUint(h.Sum64(), 36)
+}
+
+// SetSteps stores the steps written for the incident's current cause
+// and members.
+// No steps keep the earlier ones. No-op for an unknown incident.
+func (m *Manager) SetSteps(id string, steps []FixStep) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if p := m.incidents[id]; p != nil && len(steps) > 0 {
+		p.Steps = boundSteps(steps)
+		p.Pending.stepsFor = stepsKey(p)
+	}
 }
 
 // SetProblem stores the problem title of incident id, bounded for a

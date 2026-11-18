@@ -31,6 +31,69 @@ var releaseKeys = []string{
 	helmReleaseName,
 }
 
+// deployedKinds are the kinds a release's marks link to their release
+// (DeployedBy): the workloads a Helm release deploys.
+var deployedKinds = []inventory.Kind{
+	KindDeployment, KindStatefulSet, KindDaemonSet, KindCronJob,
+}
+
+// helmMarkKeys name the Helm release that installed an object: Helm's
+// own annotation and the instance label charts set to the release name.
+// part-of names an application, not a release, so it links nothing.
+var helmMarkKeys = []string{helmReleaseName, "app.kubernetes.io/instance"}
+
+// annotateDeployer relates a workload to the Helm releases of its
+// namespace its marks name. A release Helm records in another namespace
+// (meta.helm.sh/release-namespace) is left out: only a release of the
+// workload's own namespace is linked.
+func annotateDeployer(obj metav1.Object, desc *Description) {
+	if !slices.Contains(deployedKinds, desc.ID.Kind) {
+		return
+	}
+	labels, annotations := obj.GetLabels(), obj.GetAnnotations()
+	space := strings.TrimSpace(annotations[helmReleaseSpace])
+	var targets []inventory.EntityID
+	for _, key := range helmMarkKeys {
+		value := strings.TrimSpace(labels[key])
+		if value == "" {
+			value = strings.TrimSpace(annotations[key])
+		}
+		if key == helmReleaseName && space != "" &&
+			space != obj.GetNamespace() {
+			continue
+		}
+		id := HelmReleaseID(obj.GetNamespace(),
+			boundedLabel(value, maxOwnerValue))
+		if id.Name != "" && !slices.Contains(targets, id) {
+			targets = append(targets, id)
+		}
+	}
+	if len(targets) == 0 {
+		return
+	}
+	if desc.Relations == nil {
+		desc.Relations = map[inventory.RelationType][]inventory.EntityID{}
+	}
+	desc.Relations[inventory.DeployedBy] = targets
+}
+
+// withDeployer adds DeployedBy to a schema's relation types when either
+// version of the object has it. Only objects with release marks tell
+// the relation, so the observations of every other object stay as they
+// were; one whose marks went away clears it.
+func withDeployer(
+	types []inventory.RelationType, desc Description,
+	previous *Description,
+) []inventory.RelationType {
+	had := previous != nil &&
+		len(previous.Relations[inventory.DeployedBy]) > 0
+	if (len(desc.Relations[inventory.DeployedBy]) == 0 && !had) ||
+		slices.Contains(types, inventory.DeployedBy) {
+		return types
+	}
+	return append(slices.Clip(types), inventory.DeployedBy)
+}
+
 // cert-manager annotations.
 const (
 	certNameAnnotation   = "cert-manager.io/certificate-name"

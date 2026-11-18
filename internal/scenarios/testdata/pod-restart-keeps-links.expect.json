@@ -1,0 +1,6 @@
+{
+  "name": "pod-restart-keeps-links",
+  "description": "An API pod is deleted and replaced, and the new one becomes ready; its links end with the old pod and nothing is said.",
+  "maxMessages": 0,
+  "quiet": true
+}

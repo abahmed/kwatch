@@ -1,6 +1,10 @@
 package dashboard
 
-import "time"
+import (
+	"time"
+
+	"github.com/abahmed/kwatch/internal/format"
+)
 
 // ChangeItem is one change people made to the incident's root or an
 // object near it (what it uses, routes to it, its node). When is
@@ -23,9 +27,18 @@ type ChangeItem struct {
 	// Cause marks the change the likely cause blames, so the page can
 	// name it rather than the nearest change.
 	Cause bool `json:"cause,omitempty"`
+	// Why says in plain words how the changed object is linked to the
+	// failing objects; empty when no link is known.
+	Why string `json:"why,omitempty"`
 	// Fields are the changed fields with their values before and
 	// after, for a diff; at most six (see incident.SafeChange).
 	Fields []FieldDiff `json:"fields,omitempty"`
+	// Links lead to where the change came from: its GitOps app, the
+	// commit or repository and the image page (source_links.go). A
+	// link without a URL is shown as text.
+	Links []format.SourceLink `json:"links,omitempty"`
+	// source is what the change records of its origin, for Links.
+	source format.ChangeSource
 }
 
 // SeenBefore is what kwatch remembers of earlier occurrences of the
@@ -92,8 +105,10 @@ type DeliveryAttempt struct {
 	Fallback  string    `json:"fallbackFor,omitempty"`
 	Error     string    `json:"error,omitempty"`
 	Reason    string    `json:"reason,omitempty"`
-	// Pager marks a send to a provider that holds alerts by key.
-	Pager bool `json:"pager,omitempty"`
+	// Keyed marks a send to a provider that holds alerts by key (a
+	// pager, an issue tracker or a keyed webhook). It does not say the
+	// provider pages a person; channelKind does.
+	Keyed bool `json:"pager,omitempty"`
 }
 
 // AffectedObject is one object the incident is about. Status is
@@ -119,4 +134,8 @@ type Phase struct {
 	State string    `json:"state"`
 	From  time.Time `json:"from"`
 	To    time.Time `json:"to,omitzero"`
+	// Began, on the first phase only, is when the incident really began
+	// when the phase window cut that start off: From is then the start
+	// of the window and the time before it is not drawn.
+	Began time.Time `json:"began,omitzero"`
 }

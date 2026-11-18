@@ -47,7 +47,7 @@ func TestHeartbeatRetryWaitDoublesToItsCap(t *testing.T) {
 	var r retrySchedule
 	var waits []time.Duration
 	for i := 0; i < 5; i++ {
-		r.after(errPingFailed, m, time.Hour)
+		r.after(ErrPingFailed, m, time.Hour)
 		waits = append(waits, r.at.Sub(now))
 	}
 	require.Equal(t, []time.Duration{
@@ -56,7 +56,7 @@ func TestHeartbeatRetryWaitDoublesToItsCap(t *testing.T) {
 
 	r.after(nil, m, time.Hour)
 	require.False(t, r.due(now.Add(time.Hour)), "success clears retries")
-	r.after(errPingFailed, m, 3*time.Second)
+	r.after(ErrPingFailed, m, 3*time.Second)
 	require.Equal(t, 3*time.Second, r.at.Sub(now),
 		"the wait never exceeds the interval")
 }

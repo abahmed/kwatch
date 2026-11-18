@@ -1,0 +1,6 @@
+{
+  "name": "restart-rule-exit-code",
+  "description": "A container exits with the code its restart rule restarts, every four minutes; no crash loop.",
+  "maxMessages": 0,
+  "quiet": true
+}

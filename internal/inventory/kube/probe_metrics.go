@@ -152,11 +152,7 @@ func (p *Prober) dnsRates(
 func (p *Prober) dnsPodIPs() []string {
 	var out []string
 	for _, pod := range DNSServerPods(p.cfg.Model) {
-		entity, ok := p.cfg.Model.Entity(pod)
-		if !ok {
-			continue
-		}
-		if ip, ok := entity.Attribute(AttrPodIP); ok &&
+		if ip, ok := p.cfg.Model.Attribute(pod, AttrPodIP); ok &&
 			ip.Value.AsText() != "" {
 			out = append(out, ip.Value.AsText())
 		}

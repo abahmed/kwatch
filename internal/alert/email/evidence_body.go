@@ -36,6 +36,18 @@ func evidenceText(m notification.Message) string {
 			b.WriteString("- " + f + "\n")
 		}
 	}
+	if notes := ev.Notes(); len(notes) > 0 {
+		b.WriteString("\n")
+		for _, n := range notes {
+			b.WriteString(n + "\n")
+		}
+	}
+	if checked := ev.CheckedShown(); len(checked) > 0 {
+		b.WriteString("\nWhat kwatch checked\n")
+		for _, c := range checked {
+			b.WriteString(c + "\n")
+		}
+	}
 	if q := ev.Quote; q != nil && len(q.Lines) > 0 {
 		b.WriteString("\n" + quoteLabel(q) + "\n")
 		for _, l := range q.Lines {
@@ -70,6 +82,15 @@ func evidenceHTML(m notification.Message) string {
 			b.WriteString(`<li>` + html.EscapeString(f) + `</li>`)
 		}
 		b.WriteString(`</ul>`)
+	}
+	for _, n := range ev.Notes() {
+		b.WriteString(`<p>` + html.EscapeString(n) + `</p>`)
+	}
+	if checked := ev.CheckedShown(); len(checked) > 0 {
+		b.WriteString(`<h3>What kwatch checked</h3>`)
+		for _, c := range checked {
+			b.WriteString(`<p>` + html.EscapeString(c) + `</p>`)
+		}
 	}
 	if q := ev.Quote; q != nil && len(q.Lines) > 0 {
 		b.WriteString(`<h3>` + html.EscapeString(quoteLabel(q)) + `</h3>`)

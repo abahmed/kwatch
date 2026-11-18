@@ -9,28 +9,73 @@ import (
 	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
-// previousFails reports a blamed release of a Deployment whose previous
-// version fails too: a pod of a ReplicaSet that existed before the
-// release, and is not the Deployment's newest, has a container failing
-// on its own. The release cannot be what broke it, and undoing it would
-// bring back a version that fails as well. A change of another object
-// (a Secret both versions read) says nothing here, nor does a
-// ReplicaSet kwatch first saw after the release (a later fix attempt)
-// or the newest one (a rollback to an earlier template).
+// previousFails reports a blamed release of a workload whose previous
+// version fails too: a pod of an earlier version, one that existed
+// before the release and is not the newest, has a container failing on
+// its own. For a Deployment the version is a ReplicaSet; for a
+// StatefulSet or DaemonSet it is the ControllerRevision its pods name
+// in their controller-revision-hash label. The release cannot be what
+// broke that pod, and undoing it would bring back a version that fails
+// as well. A change of another object (a Secret both versions read)
+// says nothing here, nor does a version kwatch first saw after the
+// release (a later fix attempt) or the newest one (a rollback to an
+// earlier template).
 func (s Snapshot) previousFails(
 	change inventory.Change, covers []inventory.EntityID,
 ) bool {
-	for _, id := range covers {
-		deployment, ok := deploymentOf(s.Model, id)
-		if !ok || change.Entity != deployment {
+	workload, ok := blamedWorkload(s.Model, change, covers)
+	switch {
+	case !ok:
+		return false
+	case workload.Kind == kube.KindDeployment:
+		return s.previousSetFails(workload, change.At)
+	}
+	return s.previousRevisionFails(workload, change.At)
+}
+
+// previousSetFails reports a failing pod of a ReplicaSet of the
+// Deployment other than its newest that kwatch saw before at.
+func (s Snapshot) previousSetFails(
+	deployment inventory.EntityID, at time.Time,
+) bool {
+	newest, _ := s.newestReplicaSet(deployment)
+	for _, pod := range rootcause.OwnedPods(s.Model, deployment) {
+		if s.onSetBefore(pod, newest, at) && s.podFailing(pod) {
+			return true
+		}
+	}
+	return false
+}
+
+// previousRevisionFails reports a failing pod of the StatefulSet or
+// DaemonSet made from a ControllerRevision other than its newest that
+// kwatch saw before at.
+func (s Snapshot) previousRevisionFails(
+	workload inventory.EntityID, at time.Time,
+) bool {
+	newest, _ := controllerNewest(s.Model, workload)
+	for _, pod := range rootcause.OwnedPods(s.Model, workload) {
+		if s.onRevisionBefore(pod, workload, newest, at) &&
+			s.podFailing(pod) {
+			return true
+		}
+	}
+	return false
+}
+
+// onRevisionBefore reports a pod made from a ControllerRevision of the
+// workload other than newest that kwatch saw before t.
+func (s Snapshot) onRevisionBefore(
+	pod, workload, newest inventory.EntityID, t time.Time,
+) bool {
+	for _, cr := range s.Model.Related(workload, inventory.OwnedBy,
+		inventory.Incoming) {
+		if cr.Kind != kube.KindControllerRevision || cr == newest ||
+			!podOfRevision(s.Model, pod, workload, cr) {
 			continue
 		}
-		newest, _ := s.newestReplicaSet(deployment)
-		for _, pod := range rootcause.OwnedPods(s.Model, deployment) {
-			if s.onSetBefore(pod, newest, change.At) && s.podFailing(pod) {
-				return true
-			}
-		}
+		e, ok := s.Model.Entity(cr)
+		return ok && e.FirstSeen.Before(t)
 	}
 	return false
 }

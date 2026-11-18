@@ -46,8 +46,11 @@ type Env struct {
 	// risks are left out of the digest.
 	OwnNamespace string
 	// Restart is how this start followed the previous session, for the
-	// restart note (restart_note.go). Optional.
+	// audit of a quiet restart (restart_message.go). Optional.
 	Restart Restart
+	// Notify sends the gap message with a report: the startup sentence,
+	// the gap and what changed meanwhile (see HoldGap). Optional.
+	Notify func(report string)
 }
 
 // Collector holds the state of the collecting steps. Its exported
@@ -71,8 +74,9 @@ type Collector struct {
 	// digested are the incidents a digest listed that have not spoken
 	// since (see DigestState.Listed).
 	digested []string
-	// mentionedRisks are the findings a digest already named.
-	mentionedRisks map[detection.Key]bool
+	// mentionedRisks are the findings a digest already named, by
+	// riskKey; persisted with the digest state (DigestState.Risks).
+	mentionedRisks map[string]bool
 	// ongoingMarks is how often each listed problem had been seen when
 	// a digest last listed it, by incident ID; ongoingChecked is when
 	// the open ones were last compared with it.
@@ -94,6 +98,8 @@ type Collector struct {
 	// start (restored_intro.go).
 	restoredIntros []incident.Incident
 	introsNoted    bool
+	// gap is the gap report held for the restart message (HoldGap).
+	gap string
 	// folded are the restored incidents whose first demotion to the
 	// digest tier was folded into a digest, not posted (see
 	// carriesThread).
@@ -109,7 +115,7 @@ func New(env Env) *Collector {
 	return &Collector{
 		env:            env,
 		Outages:        map[string]*OutageHold{},
-		mentionedRisks: map[detection.Key]bool{},
+		mentionedRisks: map[string]bool{},
 		ongoingMarks:   map[string]int{},
 		folded:         map[string]bool{},
 	}

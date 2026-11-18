@@ -121,10 +121,14 @@ kwatch does not learn from user feedback. It reasons from the cluster:
 
 ## Scale
 
-- 5,000 pods and 500 nodes within the default 512Mi memory limit (the Go
-  memory limit is set at 90% of it). Tests assert a live heap of at most
-  65 MiB and a peak of at most 200 MiB; the measured live heap is about
-  50 MiB. Sizing for larger clusters is in docs/production-operations.md.
+- 5,000 simple pods and 500 nodes within the default 512Mi memory limit
+  (the Go memory limit is set at 90% of it). Tests assert a live heap of
+  at most 54 MiB and a peak of at most 175 MiB; the measured live heap is
+  about 47 MiB. Realistic pods weigh about 24 KB each, so the default
+  512Mi holds about 5,000 of them comfortably and about 8,000 at the
+  edge. The heap excludes the state file's cached pages, the flight
+  recorder's and evidence buffers, and extra resource types. The sizing
+  table is in docs/production-operations.md.
 - Decisions are fresh: at 5,000 pods, the p99 time from an observation
   being submitted to its decisions being applied is at most 2 seconds
   in-process. Production exports it as
@@ -171,8 +175,8 @@ kwatch does not learn from user feedback. It reasons from the cluster:
 - No labels or sections, and no links except the optional "Open in dashboard" link when the dashboard is reachable.
 - The startup and upgrade notices are single sentences. Summaries and plain
   notices are not sent to PagerDuty, Opsgenie, GoAlert, Zenduty, Squadcast,
-  SIGNL4, iLert, incident.io, GitLab, Gitea, GitHub, Jira or ClickUp, because
-  nothing would close what they open. Splunk On-Call, Alerta, Sensu Go,
+  SIGNL4, iLert, incident.io, GitLab, Gitea, GitHub, Jira, ClickUp or
+  ServiceNow, because nothing would close what they open. Splunk On-Call, Alerta, Sensu Go,
   Datadog, New Relic, SNS and Splunk HEC receive them as informational.
 
 ## Code quality

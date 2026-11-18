@@ -18,6 +18,10 @@ var (
 	podFacts = []labelled{
 		{"Phase", kube.AttrPhase}, {"Reason", kube.AttrReason},
 		{"QoS", kube.AttrQoS}, {"Message", kube.AttrMessage},
+		// A Helm release's state, from its release Secrets' labels.
+		{"Helm status", kube.AttrHelmStatus},
+		{"Helm revision", kube.AttrHelmRevision},
+		{"Last deployed revision", kube.AttrHelmGoodRevision},
 	}
 	containerFacts = []labelled{
 		{"State", kube.AttrState}, {"Waiting reason", kube.AttrStateReason},
@@ -184,7 +188,7 @@ func readEvents(
 // memory kill, CPU throttling or any container member.
 func usesMemoryOrCPU(p incident.Incident, model inventory.Reader) bool {
 	return hasMode(p, []string{"OOMKilled", "CPUThrottled", "CrashLoop",
-		"Restarting"}) && hasPods(p, model)
+		"Restarting", "Evicted"}) && hasPods(p, model)
 }
 
 // readUsage compares each container's use with its request and limit,
@@ -202,7 +206,7 @@ func readUsage(
 		}
 		out = append(out, sec.done())
 	}
-	return out
+	return append(out, memoryContextSections(p)...)
 }
 
 // addUsage adds one container's use and limits.
@@ -253,6 +257,11 @@ var probeFacts = []labelled{
 	{"Failure kind", kube.AttrProbeFailureKind},
 	{"Liveness failures", kube.AttrLivenessFailures},
 	{"Timeout seconds", kube.AttrProbeTimeoutSeconds},
+	// How the container stands against its CPU limit: a handler held
+	// at the limit answers late.
+	{"CPU used (millicores)", kube.AttrCPUUsageMilli},
+	{"CPU limit (millicores)", kube.AttrCPULimit},
+	{"CPU throttled (% of periods)", kube.AttrThrottledPct},
 }
 
 // readProbes reads each container's probe spec and last failure, and

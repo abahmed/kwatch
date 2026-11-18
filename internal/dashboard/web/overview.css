@@ -89,6 +89,11 @@
 .ov-rel-at { margin-top: 2px; color: var(--text-muted); overflow-wrap: anywhere; }
 .ov-look { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; }
 .ov-look > li + li { border-top: 1px solid var(--line); }
+/* The capped list beside a taller neighbour: rows share the spare room
+   (js/lookfit.js) and keep their text in the middle. */
+.ov-look.ov-fill { flex: 1 0 auto; display: flex; flex-direction: column; }
+.ov-look.ov-fill > li { flex: 1 1 auto; display: flex; flex-direction: column; }
+.ov-look.ov-fill .ov-row { flex: 1 1 auto; align-content: center; }
 .ov-rule { margin: -4px 0 8px; font-size: var(--t-micro); color: var(--text-muted); }
 .ov-row { display: grid; grid-template-columns: minmax(0, 1fr) 11rem; gap: 6px 16px; align-items: start; padding: 12px 16px; min-height: var(--hit); color: var(--text); text-decoration: none; }
 .ov-row:hover { background: var(--surface); }
@@ -132,6 +137,18 @@ a.viz-key:hover span:not(.viz-sw) { text-decoration: underline; }
 .viz-cols .viz-res { fill: var(--s-ok); }
 .viz-cols text { font-family: var(--font-body); font-size: 12px; fill: var(--text-muted); }
 .viz-cols .viz-cnum { fill: var(--text); font-variant-numeric: tabular-nums; }
+/* The hours kwatch was not running (js/offtime.js): a hatch over the
+   day, never colour alone; "6 h off" under the day, "not running"
+   across a day off, the tooltip and the table say it in words. */
+.viz-cols.has-off { height: 164px; }
+.viz-cols .viz-off { stroke: var(--line); }
+.viz-cols .viz-off-part { opacity: .5; }
+.viz-cols .viz-off-line { stroke: var(--text-muted); stroke-width: 1.5; }
+.viz-cols .viz-off-t { font-size: 11px; }
+.viz-cols .viz-off-say { font-size: 11px; font-weight: 600; fill: var(--text); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
+.viz-sw.s-off { background: repeating-linear-gradient(45deg, var(--text-muted) 0 1.5px, transparent 1.5px 4px); box-shadow: inset 0 0 0 1px var(--line); }
+.ip-off-note { margin: 4px 0 0; color: var(--text-muted); font-size: var(--t-small); }
+.ip-t td.ip-off { color: var(--text-muted); }
 .viz-tl { margin-top: 8px; }
 .viz-tltrack { position: relative; height: 22px; border-bottom: 2px solid var(--line); margin: 0 7px; }
 .viz-dot { position: absolute; bottom: -8px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: var(--control-border); border: 2px solid var(--bg); cursor: help; }

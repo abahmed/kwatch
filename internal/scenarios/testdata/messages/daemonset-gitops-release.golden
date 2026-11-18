@@ -1,0 +1,8 @@
+10:06:55 settled
+🟠 agent is failing in ops (prod-eu-1) after the 10:05 UTC release of registry.example.com/agent:3. The previous image was registry.example.com/agent:2. It fails with "panic: unknown flag --queue-size". Fix: change the image of container app in daemonset/agent. Revert the change in Git (argocd/ops): a rollback in the cluster would be overwritten by the next sync.
+🟠 agent is failing in ops (prod-eu-1) after the 10:05 UTC release of registry.example.com/agent:3.
+| 🟠 **agent** is failing in **ops** (**prod-eu-1**) after the 10:05 UTC release of registry.example.com/agent:3.
+| The previous image was registry.example.com/agent:2.
+| It fails with `panic: unknown flag --queue-size`.
+| Fix: change the image of container app in daemonset/agent.
+| Revert the change in Git (argocd/ops): a rollback in the cluster would be overwritten by the next sync.

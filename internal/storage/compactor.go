@@ -150,7 +150,8 @@ func (c *Compactor) expire(ctx context.Context) (int, error) {
 			if keep <= 0 {
 				continue
 			}
-			expired = logExpired(now.Add(-keep))
+			expired = keepMarked(logExpired(now.Add(-keep)),
+				c.store.holds(sp.name))
 		}
 		n, err := c.store.expireBucket(
 			ctx, sp.name, c.policy.Batch, expired)

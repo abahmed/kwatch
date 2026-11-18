@@ -1,0 +1,14 @@
+{
+  "name": "helm-upgrade-fails-after-crash",
+  "description": "A workload crash-loops; a later Helm upgrade of its release fails: the release is not blamed for the earlier crash.",
+  "root": "deployment/shop/payments",
+  "otherRoots": [
+    "helmrelease/shop/payments"
+  ],
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "20m0s"
+}

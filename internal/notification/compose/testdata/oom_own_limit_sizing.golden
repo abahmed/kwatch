@@ -1,0 +1,3 @@
+🟠 payments in shop was OOM-killed. Cause not found yet: nothing outside it points to one. Its memory stayed near 510Mi for four hours before the kill. In the last 5h, all the history kwatch has, its memory peaked at 510Mi (limit 512Mi, request 128Mi); it was near the limit in 4 of those hours, so how much more it needs is not known. To see the pod's state and events, run kubectl describe pods payments- -n shop
+
+🟠 payments in shop was OOM-killed.

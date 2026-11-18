@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/rest"
+	clientmetrics "k8s.io/client-go/tools/metrics"
 
 	"github.com/abahmed/kwatch/internal/clock"
 	"github.com/abahmed/kwatch/internal/config"
@@ -41,6 +42,9 @@ type ClientSet struct {
 	// Answers counts the lists and watches the API server answered, so
 	// a watch that failed can tell when one got through again.
 	Answers *Answers
+	// Pressure says when the API server throttles or slows kwatch, so
+	// optional work can wait (pressure.go).
+	Pressure *Pressure
 	// HTTP is the client for alert providers and the heartbeat URL; the
 	// only one app.insecureSkipTLSVerify applies to.
 	HTTP *http.Client
@@ -91,10 +95,15 @@ func NewClusterClientSet(
 	if err != nil {
 		return ClientSet{}, err
 	}
-	clients, err := newClusterClients(restConfig)
+	pressure := NewPressure(timeSource)
+	clients, err := newClusterClients(restConfig, pressure)
 	if err != nil {
 		return ClientSet{}, err
 	}
+	// client-go reports its limiter waits through a process-wide hook,
+	// registered once; the process builds one cluster client set.
+	clientmetrics.Register(clientmetrics.RegisterOpts{
+		RateLimiterLatency: pressure})
 	clients.Resolver = resolver
 	clients.Clock = timeSource
 	return clients, nil
@@ -147,12 +156,17 @@ func NewPlatformHTTPClientWithRuntime(
 	return NewPlatformHTTPClient(runtime.Application())
 }
 
-func newClusterClients(restConfig *rest.Config) (ClientSet, error) {
-	// Only the API clients count their answers; the kubelet client
-	// derives from the plain configuration.
+func newClusterClients(
+	restConfig *rest.Config, pressure *Pressure,
+) (ClientSet, error) {
+	// Only the API clients count their answers and signs of pressure;
+	// the kubelet client derives from the plain configuration.
 	answers, plain := &Answers{}, restConfig
 	restConfig = rest.CopyConfig(plain)
 	restConfig.Wrap(answers.Wrap)
+	if pressure != nil {
+		restConfig.Wrap(pressure.Wrap)
+	}
 	kubernetesClient, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
 		return ClientSet{}, err
@@ -191,6 +205,7 @@ func newClusterClients(restConfig *rest.Config) (ClientSet, error) {
 		Discovery:  discoveryClient,
 		REST:       restClient,
 		Answers:    answers,
+		Pressure:   pressure,
 		restConfig: plain,
 	}, nil
 }

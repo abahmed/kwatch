@@ -69,8 +69,7 @@
   /* marks: under the title (never beside it, so they cannot squeeze
      it), only when there is one: "failed again 3 times", New or
      Changed since the last visit, "Settled on its own", "Stopped
-     tracking"; "in the cause" when the search matched only the likely
-     cause. */
+     tracking"; "in the cause" when the search matched only the likely cause. */
   function marks(td, item, ctx) {
     var row = KW.el("span", "it-marks");
     if (item.repeatCount > 0) {

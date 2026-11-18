@@ -70,6 +70,7 @@
 <script defer src="{{asset:js/inclinks.js}}"></script>
 <script defer src="{{asset:js/usagechart.js}}"></script>
 <script defer src="{{asset:js/incsum.js}}"></script>
+<script defer src="{{asset:js/incshape.js}}"></script>
 <script defer src="{{asset:js/incdetails.js}}"></script>
 <script defer src="{{asset:js/release.js}}"></script>
 <script defer src="{{asset:js/detail.js}}"></script>
@@ -77,6 +78,7 @@
 <script defer src="{{asset:js/incpanel.js}}"></script>
 <script defer src="{{asset:js/incnav.js}}"></script>
 <script defer src="{{asset:js/viz.js}}"></script>
+<script defer src="{{asset:js/offtime.js}}"></script>
 <script defer src="{{asset:js/pages.js}}"></script>
 <script defer src="{{asset:js/trends.js}}"></script>
 <script defer src="{{asset:js/activity.js}}"></script>
@@ -130,7 +132,7 @@
           <div class="legend-pop">
             <p class="legend-h">Colors and words</p>
             <ul>
-              <li><span class="dot page"></span><b>Urgent</b>: kwatch alerted the on-call person. Look now.</li>
+              <li><span class="dot page"></span><b>Urgent</b>: <span data-legend-urgent>kwatch sent it as urgent. Look now.</span></li>
               <li><span class="dot notify"></span><b>Needs attention</b>: kwatch alerted your chat channels. Look soon.</li>
               <li><span class="dot low"></span><b>Low</b>: listed in the daily summary only. No rush.</li>
               <li><span class="dot quiet"></span><b>Quiet</b>: nobody was alerted. kwatch only keeps track of it.</li>

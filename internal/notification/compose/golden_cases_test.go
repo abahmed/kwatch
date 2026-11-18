@@ -43,6 +43,8 @@ func goldenCases() []goldenCase {
 	cases = append(cases, reachCases()...)
 	cases = append(cases, checkCases()...)
 	cases = append(cases, probeCases()...)
+	cases = append(cases, helmCases()...)
+	cases = append(cases, memoryContextCases()...)
 	return append(cases, []goldenCase{
 		{"bad_rollout", func() notification.Message {
 			return Writer{}.Write(announce(badRollout()), at(5, 0))
@@ -93,7 +95,8 @@ func badRollout() incident.Incident {
 		},
 		Cause: &rootcause.CauseRecord{
 			Root: payments, Score: 0.95, RollbackRevision: "13",
-			Chain: []inventory.EntityID{payments, paymentsCt},
+			PreviousServed: true,
+			Chain:          []inventory.EntityID{payments, paymentsCt},
 			Change: &inventory.Change{Entity: payments, At: at(2, 0),
 				Actor: "alice", Revision: "14",
 				Fields: []inventory.FieldChange{{

@@ -148,7 +148,7 @@ func changeProof(d *IncidentDetail) []SummaryProof {
 		text := fmt.Sprintf("%s %s changed %s it broke", c.Kind, c.Name,
 			c.When)
 		out = append(out, SummaryProof{Kind: "change", Text: text,
-			Detail: c.Summary, At: c.At})
+			Detail: c.Summary, At: c.At, Links: c.Links})
 	}
 	return out
 }

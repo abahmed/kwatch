@@ -31,6 +31,8 @@ func containerDescriptions(
 		status, hasStatus := statuses[c.Name]
 		if hasStatus {
 			containerStatusAttributes(attrs, status)
+			setRestartRule(attrs, c, status)
+			setSidecarStarting(attrs, status)
 		}
 		if init && !flagAttr(attrs, AttrSidecar) {
 			if !hasStatus {

@@ -30,6 +30,9 @@ type ApplicationRuntime struct {
 	// HideProHints removes the Pro note from Community messages
 	// (app.hideProHints).
 	HideProHints bool
+	// DisableSelfAlerts stops kwatch's messages about its own degraded
+	// parts (app.disableSelfAlerts).
+	DisableSelfAlerts bool
 	// NonProduction is set when app.environment marks the cluster as
 	// not production: nothing in it pages.
 	NonProduction bool
@@ -81,6 +84,7 @@ type runtimePolicy struct {
 	severityByReason    map[string]string
 	severityByOwnerKind map[string]string
 	runbooks            map[string]string
+	gitOpsLinks         map[string]string
 	maintenance         MaintenanceConfig
 }
 
@@ -135,6 +139,7 @@ func CompileRuntimeConfig(c *Config) RuntimeConfig {
 			severityByReason:    cloneStringMap(c.SeverityByReason),
 			severityByOwnerKind: cloneStringMap(c.SeverityByOwnerKind),
 			runbooks:            cloneStringMap(c.Runbooks),
+			gitOpsLinks:         cloneStringMap(c.App.GitOpsLinks),
 			maintenance:         c.Maintenance,
 		},
 		activeProbe: cloneActiveProbeMonitor(c.ActiveProbeMonitor),
@@ -151,6 +156,7 @@ func applicationRuntime(c *Config) ApplicationRuntime {
 		InsecureSkipTLSVerify:     c.App.InsecureSkipTLSVerify,
 		CABundlePath:              c.App.CABundlePath,
 		HideProHints:              c.App.HideProHints,
+		DisableSelfAlerts:         c.App.DisableSelfAlerts,
 		NonProduction:             c.App.NonProduction(),
 		KubeletInsecureSkipVerify: c.Kubelet.InsecureSkipVerify,
 		WatchSecrets:              c.Watch.Secrets,

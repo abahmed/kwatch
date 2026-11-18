@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/incident"
 )
 
@@ -53,6 +54,9 @@ type ActivityResponse struct {
 	Untold int             `json:"untold"`
 	// WithUntold says the events include the untold ones (?untold=1).
 	WithUntold bool `json:"withUntold"`
+	// NotWatching are the times in the window kwatch was not running,
+	// cut to it, oldest first: a jump in time there is not silence.
+	NotWatching []health.NotWatchingSpan `json:"notWatching,omitempty"`
 }
 
 // ActivityEvent is one change to one incident: it opened (new), became
@@ -110,14 +114,17 @@ func (s *Server) activityHandler(w http.ResponseWriter, r *http.Request) {
 			"Unknown limit: %q. Use a number from 1 to 200.", raw))
 		return
 	}
-	reader := s.sources.incidents.Load()
-	if reader == nil {
+	v := s.view()
+	if v == nil {
 		unavailable(w)
 		return
 	}
-	out := buildActivity((*reader).Incidents(), s.now.Now(), window,
+	markRevision(w, v)
+	out := buildActivity(v.Incidents(), s.now.Now(), window,
 		s.texts.redact, untold == "1").newest(limit)
 	out.Since = cmp.Or(since, "1h")
+	now := s.now.Now()
+	out.NotWatching = spansWithin(s.notWatching(), now.Add(-window), now)
 	writeTagged(w, r, out)
 }
 

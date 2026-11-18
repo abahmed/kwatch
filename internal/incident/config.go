@@ -45,6 +45,12 @@ type Config struct {
 	// kind can be unverifiable as a whole while most of its objects are
 	// still observed. Nil judges a root by its kind.
 	VerifiableObject func(inventory.EntityID) bool
+	// Watching reports whether a detector still waits out a bad state
+	// of an object before raising it (a sustain counted from when
+	// kwatch first saw it). A restored incident stays in the restore
+	// grace while one of its former objects is watched. Nil watches
+	// nothing.
+	Watching func(inventory.EntityID) bool
 	// AlertIdentity is a stable identity of this cluster (the
 	// kube-system namespace UID). It is set only when no cluster name is
 	// configured, and is hashed into the alert key of every new

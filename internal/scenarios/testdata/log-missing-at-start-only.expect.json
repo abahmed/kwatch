@@ -1,0 +1,7 @@
+{
+  "name": "log-missing-at-start-only",
+  "description": "A Ready workload's log fails to resolve a Service once, at start-up, and never again.",
+  "maxMessages": 0,
+  "quiet": true,
+  "tail": "30m0s"
+}

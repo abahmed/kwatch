@@ -82,12 +82,13 @@ func (s *Server) incidentsHandler(w http.ResponseWriter, r *http.Request) {
 		writeBadQuery(w, err)
 		return
 	}
-	reader := s.sources.incidents.Load()
-	if reader == nil {
+	v := s.view()
+	if v == nil {
 		unavailable(w)
 		return
 	}
-	items := (*reader).Incidents()
+	markRevision(w, v)
+	items := v.Incidents()
 	if req.filter.nodes != nil {
 		var model inventory.Reader
 		if m := s.sources.model.Load(); m != nil {
@@ -133,17 +134,18 @@ func (s *Server) incidentDetailHandler(
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	reader := s.sources.incidents.Load()
-	if reader == nil {
+	v := s.view()
+	if v == nil {
 		unavailable(w)
 		return
 	}
-	p := (*reader).Incident(id)
+	markRevision(w, v)
+	p := v.Incident(id)
 	if p == nil {
 		writeError(w, http.StatusNotFound, "not found")
 		return
 	}
-	writeJSON(w, r, s.detailOf(*p))
+	writeJSON(w, r, s.detailOf(v, *p))
 }
 
 // statusHandler serves GET /api/status.
@@ -162,6 +164,7 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 		for _, c := range (*h)() {
 			c.Type = cmp.Or(c.Type, c.Channel)
 			c.Name = channelName(c.Type)
+			c.Kind = channelKind(c.Type)
 			health = append(health, c)
 		}
 	}

@@ -1,4 +1,4 @@
-10:32:15 digest
+10:31:15 digest
 🟡 kwatch summary (prod-eu-1): one new low-priority problem. Service ingress-internal in kube-addons is stuck deleting: finalizers service.k8s.aws/resources hold it; the latest Warning event on it says: "…cannot be deleted because it is currently associated with another service". Not urgent: kwatch alerts on its own if it gets worse.
 🟡 kwatch summary (prod-eu-1): one new low-priority problem.
 | 🟡 **kwatch summary** · prod-eu-1 — 1 problem

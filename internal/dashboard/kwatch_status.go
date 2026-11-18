@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/abahmed/kwatch/internal/health"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/status"
 )
@@ -26,10 +27,19 @@ type KwatchResponse struct {
 	// LikelyMisses are the incidents of the last seven days whose
 	// recovery followed a change to something other than the cause they
 	// named (the cause self-check), newest first; Pro only.
-	LikelyMisses        []status.LikelyMiss `json:"likelyMisses,omitempty"`
-	Restarts24h         *int                `json:"restarts24h,omitempty"`
-	OutboxPending       *int                `json:"outboxPending,omitempty"`
-	FailedSendsLastHour *int                `json:"failedSendsLastHour,omitempty"`
+	LikelyMisses []status.LikelyMiss `json:"likelyMisses,omitempty"`
+	Restarts24h  *int                `json:"restarts24h,omitempty"`
+	// NotWatchingSeconds is the time in the last 24 hours between a
+	// session stopping and the next one starting, from the restart
+	// records; GapUnknown counts restarts with no recorded stop time,
+	// which it leaves out.
+	NotWatchingSeconds *int `json:"notWatchingSeconds,omitempty"`
+	GapUnknown         int  `json:"gapUnknown,omitempty"`
+	// SpotNode is set when kwatch's own node carries a known spot or
+	// preemptible label: the cloud can take it back at any time.
+	SpotNode            *SpotNode `json:"spotNode,omitempty"`
+	OutboxPending       *int      `json:"outboxPending,omitempty"`
+	FailedSendsLastHour *int      `json:"failedSendsLastHour,omitempty"`
 	// NonProduction is set when app.environment marks the cluster as
 	// not production: nothing in it pages.
 	NonProduction bool `json:"nonProduction"`
@@ -40,6 +50,12 @@ type KwatchResponse struct {
 	// because kwatch has not read their namespace's labels; 0 is left
 	// out.
 	ScopeWaiting int `json:"scopeWaiting,omitempty"`
+	// ClusterName is the cluster's name and where it came from, or the
+	// notice that it has none.
+	ClusterName *ClusterNameInfo `json:"clusterName,omitempty"`
+	// Heartbeat says whether anyone is told when kwatch stops
+	// (kwatch_heartbeat.go); absent before a session publishes it.
+	Heartbeat *health.HeartbeatStatus `json:"heartbeat,omitempty"`
 }
 
 // KwatchCoverage is what kwatch reads, in totals (see /api/coverage
@@ -100,6 +116,9 @@ func (s *Server) kwatchReport(report status.Report) *KwatchResponse {
 	if self, ok := s.selfReport(); ok {
 		restarts := len(self.Restarts)
 		out.Restarts24h, out.OutboxPending = &restarts, self.OutboxPending
+		gap, unknown := notWatching(self.Restarts, s.now.Now())
+		secs := int(gap / time.Second)
+		out.NotWatchingSeconds, out.GapUnknown = &secs, unknown
 		out.StateFile = &StateFileStatus{Bytes: self.StateFileBytes,
 			CapBytes: s.opts.StateCapBytes,
 			CapKnown: s.opts.StateCapBytes > 0}
@@ -109,8 +128,8 @@ func (s *Server) kwatchReport(report status.Report) *KwatchResponse {
 		health = (*h)()
 	}
 	var items []incident.Incident
-	if reader := s.sources.incidents.Load(); reader != nil {
-		items = (*reader).Incidents()
+	if v := s.view(); v != nil {
+		items = v.Incidents()
 	}
 	var trail deliveryTrailSource
 	if t := s.sources.trail.Load(); t != nil {
@@ -121,6 +140,9 @@ func (s *Server) kwatchReport(report status.Report) *KwatchResponse {
 	out.LikelyMisses = report.LikelyMisses
 	out.BlindSpots = s.blindSpots()
 	out.ScopeWaiting = s.scopeWaiting()
+	out.SpotNode = s.spotNode()
+	out.ClusterName = s.clusterName(report.Cluster)
+	out.Heartbeat = s.heartbeat()
 	return &out
 }
 
@@ -152,7 +174,7 @@ func channelDeliveries(
 		if c == nil {
 			c = &ChannelDelivery{Provider: provider,
 				Name: channelName(provider),
-				Kind: channelKind(provider, false)}
+				Kind: channelKind(provider)}
 			byProvider[key] = c
 		}
 		return c
@@ -189,9 +211,6 @@ func countSends(
 				continue
 			}
 			c := entry(a.Channel)
-			if a.Pager {
-				c.Kind = channelPager
-			}
 			switch a.Result {
 			case deliveredOK:
 				c.Sent++

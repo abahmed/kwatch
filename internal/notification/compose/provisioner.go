@@ -5,6 +5,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // weightProvisioner ranks what runs a claim's provisioner with the other
@@ -17,7 +18,8 @@ const provisionerNone = "none found"
 
 // provisionerRules are the explain rows that blame the workload serving
 // a claim's provisioner.
-var provisionerRules = []string{"provisioner-down", "provisioner-down-pending"}
+var provisionerRules = []string{
+	explain.RuleProvisionerDown, explain.RuleProvisionerDownPending}
 
 // noReadyPods ends the evidence of a serving workload with no ready pod.
 const noReadyPods = ", no ready pods"

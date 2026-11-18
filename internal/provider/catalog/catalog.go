@@ -12,10 +12,10 @@ var providerNames = []string{
 	"incident.io", "incidentio", "jira", "mailgun", "matrix",
 	"mattermost", "messagebird", "n8n", "newrelic", "ntfy", "opsgenie",
 	"pagerduty", "plivo", "pushbullet", "pushover", "resend",
-	"rocketchat", "sendgrid", "sensugo", "ses", "signal", "signl4",
-	"slack", "sns", "splunk", "splunkoncall", "squadcast", "teams",
-	"teamsworkflow", "telegram", "threema", "twilio", "vonage", "webex",
-	"webhook", "wecom", "zapier", "zenduty", "zulip",
+	"rocketchat", "sendgrid", "sensugo", "servicenow", "ses", "signal",
+	"signl4", "slack", "sns", "splunk", "splunkoncall", "squadcast",
+	"teams", "teamsworkflow", "telegram", "threema", "twilio", "vonage",
+	"webex", "webhook", "wecom", "zapier", "zenduty", "zulip",
 }
 
 var providerAliases = map[string]string{

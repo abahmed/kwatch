@@ -1,6 +1,12 @@
 package dashboard
 
-import "time"
+import (
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/abahmed/kwatch/internal/incident"
+)
 
 // The incident manager also answers two questions the incident list
 // cannot: which incidents kwatch cannot verify now, and how many wait
@@ -47,4 +53,22 @@ func (s *Server) incidentReader() incidentReader {
 		return *r
 	}
 	return nil
+}
+
+// view is the published view of the incidents every endpoint reads;
+// nil while the pipeline is not running or has not published yet.
+func (s *Server) view() *incident.View {
+	if r := s.incidentReader(); r != nil {
+		return r.View()
+	}
+	return nil
+}
+
+// revisionHeader names the view an answer was read from, so two
+// answers can be told to come from the same moment.
+const revisionHeader = "X-Kwatch-Revision"
+
+// markRevision says which view w's answer was read from.
+func markRevision(w http.ResponseWriter, v *incident.View) {
+	w.Header().Set(revisionHeader, strconv.FormatUint(v.Revision, 10))
 }

@@ -1,0 +1,11 @@
+10:06:15 settled
+🟠 accounts in shop (prod-eu-1) keeps crashing because external endpoint 10.0.7.20:6379 refuses connections. pricing and tracking fail the same way; their errors do not state the address. It fails with "dial tcp 10.0.7.20:6379: connect: connection refused". Three of the five errors mention it. Affected: billing, fleet, pricing and one other. To read the output of the last crash, run kubectl logs deploy/accounts -c app -n shop --previous
+🟠 accounts in shop (prod-eu-1) keeps crashing because external endpoint 10.0.7.20:6379 refuses connections.
+| 🟠 **accounts** in **shop** (**prod-eu-1**) keeps crashing because external endpoint **10.0.7.20:6379** refuses connections.
+| **pricing** and **tracking** fail the same way; their errors do not state the address.
+| It fails with `dial tcp 10.0.7.20:6379: connect: connection refused`. Three of the five errors mention it.
+| Affected: **billing**, **fleet**, **pricing** and one other.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/accounts -c app -n shop --previous
+| ```

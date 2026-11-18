@@ -1,0 +1,8 @@
+{
+  "name": "oom-at-limitrange-cap",
+  "description": "A container is OOM-killed at its 512Mi limit in a namespace whose LimitRange allows no more.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "tail": "10m0s"
+}

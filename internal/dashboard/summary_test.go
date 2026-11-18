@@ -116,8 +116,11 @@ func TestSummaryWhyWordsTheConfidence(t *testing.T) {
 		rival bool
 		want  string
 	}{
-		{0.9, false, "high"}, {0.9, true, "likely"},
+		{0.9, false, "high"}, {0.9, true, "possible"},
 		{0.55, false, "likely"}, {0.3, false, "possible"},
+		// A near rival makes a cause only possible, as chat says it:
+		// kwatch cannot tell the two apart.
+		{0.6, true, "possible"}, {0.6, false, "likely"},
 	}
 	for _, c := range cases {
 		p.Cause = &rootcause.CauseRecord{Summary: "the image is wrong",

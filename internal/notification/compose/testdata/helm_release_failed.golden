@@ -1,0 +1,3 @@
+🟠 Helm release payments in shop has failed to upgrade or roll back at revision 12. To see its revisions, run helm history payments -n shop
+
+🟠 Helm release payments in shop has failed to upgrade or roll back at revision 12.

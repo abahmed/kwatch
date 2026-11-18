@@ -74,6 +74,11 @@ type Record struct {
 	Actor string `json:"actor,omitempty"`
 	App   string `json:"app,omitempty"`
 	Cause string `json:"cause,omitempty"`
+	// Repo and Commit are the repository and the commit SHA or tag the
+	// release was built from, when CI or a GitOps tool recorded them on
+	// the workload (inventory.Change).
+	Repo   string `json:"repo,omitempty"`
+	Commit string `json:"commit,omitempty"`
 	// Revision is the workload revision to go back to, when known.
 	Revision string  `json:"revision,omitempty"`
 	Verdict  Verdict `json:"verdict"`

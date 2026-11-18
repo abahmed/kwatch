@@ -29,6 +29,8 @@ type stubExplainer struct {
 	alternatives map[inventory.EntityID][]explain.Cause
 	// compared are the counterfactual checks made for a failure.
 	compared map[inventory.EntityID][]explain.Comparison
+	// refuted are the failures whose own change the solve refutes.
+	refuted map[inventory.EntityID]bool
 	// last is the snapshot of the latest Solve.
 	last explain.Snapshot
 }
@@ -52,6 +54,9 @@ func (e *stubExplainer) Solve(
 				id: ids}
 		}
 		area.Alternatives = e.alternatives[id]
+		if e.refuted[id] {
+			area.ChangeRefuted = []inventory.EntityID{id}
+		}
 		if checks, ok := e.compared[id]; ok {
 			area.Trace.Compared = map[inventory.EntityID][]explain.Comparison{
 				id: checks}

@@ -27,6 +27,13 @@
 .act-fold[open] > summary { border-bottom: 1px solid var(--line); }
 .act-quiet { margin-top: 8px; font-size: var(--t-small); }
 .act-more { margin-top: 10px; color: var(--text-muted); font-size: var(--t-small); }
+/* A time kwatch was not running (js/offtime.js), here and in an
+   issue's timeline: a hatched band with the words, so a jump in time
+   is never read as a quiet one. */
+.off-mark { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; padding: 10px 16px; font-size: var(--t-small); color: var(--text); background: repeating-linear-gradient(45deg, var(--surface) 0 6px, transparent 6px 12px); }
+.off-mark-k { font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: var(--t-micro); color: var(--text-muted); }
+.off-mark-t { overflow-wrap: anywhere; min-width: 0; }
+.tl-off { margin: 8px 0; border-radius: var(--radius-chip); }
 @media (max-width: 700px) {
   .act-row { grid-template-columns: auto minmax(0, 1fr); padding: 10px 14px; }
   .act-body { grid-column: 1 / -1; grid-row: 2; }

@@ -28,12 +28,13 @@ func GroupBootRemaining(
 	var ages []time.Duration
 	for _, node := range r.Related(group, inventory.PartOf,
 		inventory.Incoming) {
-		entity, ok := r.Entity(node)
+		// One attribute, not a snapshot of the node: this runs for
+		// every node of the pool for every pod checked.
+		attribute, ok := presentAttribute(r, node, AttrCreated)
 		if !ok {
 			continue
 		}
-		attribute, ok := entity.Attribute(AttrCreated)
-		if !ok || attribute.Value.AsTime().IsZero() {
+		if attribute.Value.AsTime().IsZero() {
 			// Without a creation time the node cannot be called new.
 			ages = append(ages, BootWindow)
 			continue
@@ -90,6 +91,14 @@ func ClusterBootRemaining(r inventory.Reader, now time.Time) time.Duration {
 	return longest
 }
 
+// YoungNodeWindow is how long a node counts as new for a connection or
+// lookup failure of its pods (incident/young_node_hold.go). It is much
+// shorter than BootWindow: the network and DNS on a new node settle
+// within a couple of minutes, while BootWindow also covers pulling every
+// image cold. A connection failure can be a real outage, so it is held
+// back no longer than that.
+const YoungNodeWindow = 3 * time.Minute
+
 // NodeYoungRemaining is how much longer the node itself counts as new:
 // BootWindow after it was created, or zero. Unlike NodeBootRemaining it
 // looks at this node alone, so a single replacement node in an old pool
@@ -97,13 +106,21 @@ func ClusterBootRemaining(r inventory.Reader, now time.Time) time.Duration {
 func NodeYoungRemaining(
 	r inventory.Reader, node inventory.EntityID, now time.Time,
 ) time.Duration {
-	entity, ok := r.Entity(node)
-	if !ok || now.IsZero() {
+	return NodeYoungWithin(r, node, now, BootWindow)
+}
+
+// NodeYoungWithin is NodeYoungRemaining for a window of the caller's:
+// how much longer than now the node is younger than window, or zero.
+func NodeYoungWithin(
+	r inventory.Reader, node inventory.EntityID, now time.Time,
+	window time.Duration,
+) time.Duration {
+	if now.IsZero() {
 		return 0
 	}
-	attribute, ok := entity.Attribute(AttrCreated)
+	attribute, ok := r.Attribute(node, AttrCreated)
 	if !ok || attribute.Value.AsTime().IsZero() {
 		return 0
 	}
-	return max(0, BootWindow-now.Sub(attribute.Value.AsTime()))
+	return max(0, window-now.Sub(attribute.Value.AsTime()))
 }

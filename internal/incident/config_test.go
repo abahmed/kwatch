@@ -53,9 +53,10 @@ func TestIncidentTimelineIsBounded(t *testing.T) {
 	for i := 0; i < 60; i++ {
 		p.note(at(time.Duration(i)*time.Second), "e")
 	}
-	if len(p.Timeline) != 50 || !p.Timeline[0].At.Equal(at(10*time.Second)) {
-		t.Fatalf("timeline = %d entries from %v",
-			len(p.Timeline), p.Timeline[0].At)
+	if len(p.Timeline) != 50 || !p.Timeline[0].At.Equal(at(0)) ||
+		!p.Timeline[49].At.Equal(at(59*time.Second)) {
+		t.Fatalf("timeline = %d entries from %v to %v", len(p.Timeline),
+			p.Timeline[0].At, p.Timeline[49].At)
 	}
 }
 

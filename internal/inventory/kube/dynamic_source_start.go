@@ -137,9 +137,18 @@ func (d *DynamicSource) informerFor(
 			d.cfg.Resync, metav1.NamespaceAll, r.gvr,
 			guardTransform(r.gvr.Resource,
 				capTransform(admission, transformFor(r.gvr))))
-		return informer, NewUnstructuredSchema(r.gvr.Group, r.kind), err
+		return informer, statusSchema(r), err
 	}
 	return nil, nil, fmt.Errorf("watch mode %q is not dynamic", r.mode)
+}
+
+// statusSchema is the schema of a status watch: ControllerRevisions
+// have their own, every other kind is described generically.
+func statusSchema(r plannedResource) Schema {
+	if isControllerRevision(r.gvr) {
+		return ControllerRevisionSchema{}
+	}
+	return NewUnstructuredSchema(r.gvr.Group, r.kind)
 }
 
 func (d *DynamicSource) addHandlers(

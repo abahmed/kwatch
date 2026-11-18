@@ -85,6 +85,8 @@ type memoryHistory struct {
 	run     memoryRun
 	prev    memoryRun
 	hours   [memoryWindowHours]hourPeak
+	// ends are the peaks of the last ended runs, oldest first.
+	ends []runEnd
 	// stored is the record last handed to the store (see stableRecord).
 	stored *UsageRecord
 }
@@ -104,6 +106,7 @@ func (h *memoryHistory) observe(
 ) {
 	// A new start time is a new run: the container restarted.
 	if h.run.samples > 0 && !started.IsZero() && !started.Equal(h.started) {
+		h.endRun(h.run)
 		h.prev, h.run = h.run, memoryRun{}
 	}
 	h.started = started
@@ -141,6 +144,7 @@ func (h *memoryHistory) attributes(
 	if milli > 0 {
 		attrs[AttrCPUPeak24h] = inventory.Number(milli)
 	}
+	h.addShape(attrs, now, bytes)
 	if h.prev.samples == 0 {
 		return attrs
 	}

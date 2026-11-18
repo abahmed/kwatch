@@ -22,6 +22,8 @@
 
 - **Browser notifications with the dashboard closed.** Turning notifications on in the dashboard subscribes the browser to Web Push: kwatch sends each change itself, encrypted for that browser, and every notification stays on screen until closed, so macOS shows it.
 
+- **Downtime is visible, and kwatch says when it is degraded.** The dashboard marks the hours kwatch was not running: hatched days with "6 h off" on the Overview's week chart (and its table), "Based on 5½ of 7 days of watching" under the week's numbers, and a "kwatch was not running from ... to ..." marker in Activity and issue timelines. `/health`, `/api/status` and the kwatch page always show the `heartbeat` component (not set up is information, not a failure). When one of its own parts stays degraded for 10 minutes (kubelet reads, refused kinds, pod logs (an optional permission you never granted stays quiet; only one lost after it worked is told), the state file, an alert channel, heartbeat pings, API throttling, decision lag, unsent alerts), kwatch sends one low-priority message, updated in place at most once per 10 minutes (the newest reason is never lost), and "back to normal" when it recovers: never paged, at most 6 a day, route reason `kwatch_degraded`, off with `app.disableSelfAlerts`.
+
 - Built with Go 1.27.4 (GO-2026-6859).
 
 ### Editions
@@ -150,6 +152,9 @@
 
 ### Dashboard
 
+- A change links to where it came from: "Source: Argo CD app shop · commit 1a2b3c4 · image api:1.5", in "What changed just before", on the release line of Why? and on a blamed change's proof. Built only from what the objects carry: the GitOps application kwatch already names (linked when the new `app.gitOpsLinks` setting gives its web address, e.g. `argocd: https://argocd.example.com/applications/{app}`), the `org.opencontainers.image.source` and `.revision` annotations on the workload or its pod template (a commit is linked on github.com, gitlab.com and bitbucket.org; elsewhere the repository is linked and the revision is text; invalid values are ignored) and the image (linked on Docker Hub and Quay only).
+- Why? on an issue without a cause lists what kwatch checked for that issue and found fine ("its node is healthy", "its ConfigMaps and Secrets are there and did not change", "nothing near it was changed in the 30 minutes before it started") and what it could not check ("kwatch cannot read pod logs here."), instead of "kwatch checked 3 things and could read them all". A possible cause gets the same list as "Also ruled out: …". Nothing checked shows no list.
+- "What changed just before" says under each change why it is listed, from the links kwatch already holds: "The failing pods mount this ConfigMap", "This is the workload's own template", "This Service routes to the failing pods", "This is the node the failing pods run on". A change with no known link says nothing.
 - The issue page and the drawer head with a short title; the whole one is under "Full title" (and in the tooltip). At most three lines on a phone.
 - A row that settled on its own shows a muted "Was Urgent" (no red chip) on Issues and Activity.
 - Copy summary adds the proof line, who was alerted and when, and the cluster name (when the page knows it).
@@ -340,6 +345,10 @@
 - The evidence is Pro only: Community messages carry none of it.
 
 ### Incidents and messages
+
+- A message that blames or lists a change adds one line linking it to its source when an address is known: "Source: Argo CD app shop · commit 1a2b3c4" (the GitOps app only with `app.gitOpsLinks`; the commit from the `org.opencontainers.image.source` and `.revision` annotations). Providers without links write "label: address"; the short note never carries a link, and Community messages none.
+- The evidence of a Pro message about an issue without a sure cause (Teams, email, the generic webhook's `evidence.checked`) says what kwatch checked for it, at most five items ("kwatch checked: its node is healthy; its image shows no pull errors and did not change; nothing in shop was changed in the last 30 minutes.", or "Also ruled out: its node and its image." under a possible cause), and what it could not check ("kwatch cannot read pod logs here.").
+- Changes now record the repository and commit a CI or GitOps tool set on the object; the state file gains two optional fields, read as empty from older files.
 
 - Recovered CronJobs close. Finished helper containers in Job pods, a Job's brief create refusal, progressing ordered StatefulSet scale-ups and suspended CronJobs and Jobs do not alert.
 
@@ -699,7 +708,7 @@
   hop repeated, "The pod-security changed.", a workload named "storage"
   capitalized, one workload named twice in an update.
 
-- Fixed: an update that only raised the tier says "It is now critical."
+- Fixed: an update that only raised the tier says "This is now critical."
 
 - Fixed: messages speak of kwatch in the third person ("kwatch can't see ...",
   "kwatch will write again ...").
@@ -807,6 +816,62 @@
 - Reminders for low problems that nothing else tells (digest tier, or only named in a roll-up) back off: the first "still open" comes after a day, then 3 days later, then a week later and weekly from then on, instead of daily for as long as the problem exists. A rise, a new cause, new objects or a reopening starts them over; the count is saved with the incident. Notify and page reminders are unchanged.
 
 ### Detection
+
+- **Newer restart semantics are not read as crashes.** A container
+  restarted by its own restart rule (`restartPolicyRules`, operator `In`)
+  on the exit code it exited with is not a crash loop, unless it keeps
+  ending that way within seconds of each start; a memory kill is always
+  reported. Containers stopped while a `RestartAllContainers` rule
+  restarts the pod (condition `AllContainersRestarting`) are not
+  reported. A native sidecar that runs but has not passed its startup
+  probe yet keeps its pod from counting as stuck Pending within that
+  probe's budget. A crash loop is held through the runs between crashes
+  for twice the last run (up to 5 minutes), so on a kubelet with a short
+  `crashLoopBackOff.maxContainerRestartPeriod` a container that crashes
+  every minute stays one crash loop instead of clearing on every run.
+  Messages name a failing sidecar or init container ("has a sidecar
+  container proxy that keeps crashing") and say to look at it, not at
+  the app.
+
+- **Failed or stuck Helm releases (Pro, `core.workloads.rollouts`).** A
+  Helm release whose latest revision is `failed`, or has stayed
+  `pending-install`, `pending-upgrade`, `pending-rollback` or
+  `uninstalling` for 15 minutes, is reported ("Helm release payments in
+  shop has failed to upgrade or roll back at revision 12"), at notify
+  level, never paged. kwatch reads only the labels Helm writes on its
+  release Secrets, through a metadata-only watch (the release payload is
+  never fetched; no new permission). Steps: `helm history`, `helm status`
+  and `helm rollback <release> <last deployed revision>`, marked as a
+  change, with the note to change it in Git when a GitOps controller
+  manages the release. With `watch.secrets: false` releases are not
+  watched. A `deployed` or `superseded` release, or a pending one younger
+  than 15 minutes, raises nothing.
+
+- **Memory context on OOM kills and memory evictions.** From the usage
+  history kwatch already keeps (hourly peaks for 24 hours and the last
+  runs): which limit was reached (the container's own or the node's),
+  how much history there is ("in the last 5h, all the history kwatch
+  has"), a run that stayed near one level, how many hours came near the
+  limit, where the last runs ended, the request beside the limit, and for
+  a node kill or a memory eviction the node's requested and used memory,
+  its biggest users with their requests, and the victim's use against its
+  request. A container killed before its first reading says so in the
+  Proof tab and nothing is invented.
+
+- **Observed sizing at failure time.** On a kill by the container's own
+  limit the message states the peak against limit and request over the
+  history kwatch really has, and when the peak is at the limit that the
+  real need is not known. The Pro memory fix is checked first against the
+  namespace's LimitRange maximum, ResourceQuota `limits.memory` room for
+  every replica and the largest node; a value the cluster refuses is not
+  offered and the step says what blocks it; kinds kwatch cannot read are
+  named. The fix line names a LimitRange that already caps the limit.
+
+- **CPU at its limit as probe evidence.** A probe that fails while its
+  container runs at its CPU limit (90% of it, even when lightly
+  throttled) says so: "Liveness timed out while the container used 198m
+  of its 200m CPU limit". No line when the container is under its limit;
+  the throttling finding itself stays silent.
 
 - A custom resource kind whose watch is stale or whose access was lost no longer raises its kind checks from the frozen cache (an approved CSR without a certificate, an unallocated ResourceClaim, a CRD not established, a missing route backend): they hold, like its conditions, until kwatch can read the kind again.
 
@@ -1081,6 +1146,10 @@
 
 ### Root cause
 
+- A link that ends is a change kwatch can blame. When a Service stops routing to a workload, a NetworkPolicy stops covering one, a workload stops mounting or naming a ConfigMap, Secret or volume claim, or an Ingress, route or webhook stops pointing at a Service, and the link stays gone for a minute, the object that held it records the change ("network policy orders-egress stopped covering orders"). It counts against the change history caps, is listed among the changes next to a failure and on the issue page with why it is shown, and a policy that stopped covering a workload is blamed for its connection failures. Links of pods, containers and node assignment, and those of a deleted object, are never recorded.
+
+- StatefulSets and DaemonSets get the same rollback suggestion as Deployments: `kubectl rollout undo statefulset/<name> --to-revision=N` to the ControllerRevision before the newest, only for a cause stated at least likely and only when a ready pod of that revision shows it served; GitOps and Helm-managed ones are changed in Git or rolled back with Helm. ControllerRevisions are now watched with their revision number (status mode, the saved template dropped from the cache); the RBAC rules are unchanged.
+
 - Causes are looked for back to the start of the failure, up to 7 days (`MaxChangeAge`). An unrelated older failure of the same workload does not widen that.
 
 - A missing image pull secret is blamed only when a pull fails for it, including Docker Hub's "may require authorization" answer.
@@ -1323,6 +1392,8 @@
   in its clause, or in the exception or client class name.
 
 ### Delivery and providers
+
+- New provider: ServiceNow (`alert.servicenow`). One incident per kwatch incident through the Table API: kwatch finds it again by `correlation_id` before it files one, so a retry, a restart or a reset never files a duplicate; updates are work notes; a resolve sets the resolve state, resolution code and notes, and a failure within the reopen window reopens it. Basic or OAuth client-credentials authentication, urgency and impact per tier, assignment group, caller, category and extra columns. See docs/providers.md.
 
 - AWS SES and SNS also take the JSON APIs' `ExpiredTokenException` and `UnrecognizedClientException` refusals as an expired or invalid token, and fetch new role credentials for them as for `ExpiredToken` and `InvalidClientTokenId`.
 
@@ -1824,6 +1895,12 @@
   on large clusters.
 
 - Changing the dashboard password restarts the pod.
+
+- Optional `priorityClass`: with `priorityClass.create: true` (off by
+  default) the chart creates a PriorityClass (`priorityClass.name`, value
+  1000000, `PreemptLowerPriority`, never the global default) and the pod
+  uses it, so the pod that reports failures is not the first one evicted
+  under node pressure. An explicit `priorityClassName` still wins.
 
 - `KWATCH_DASHBOARD_ENABLED` and `KWATCH_DASHBOARD_TRUSTED_PROXIES` are always set,
   on or off and with the list of trusted proxies (empty when off).

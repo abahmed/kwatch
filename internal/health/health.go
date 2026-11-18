@@ -22,6 +22,7 @@ type HealthServer struct {
 	componentMu     sync.RWMutex
 	componentErrors map[string]string
 	componentStatus map[string]ComponentStatus
+	accessProven    map[string]bool
 	clock           clock.Clock
 	lifecycleMu     sync.Mutex
 	started         bool
@@ -37,6 +38,9 @@ type HealthServer struct {
 	// links is the state of the dashboard links in messages; nil
 	// while no dashboard reports one (SetDashboardLinks).
 	links atomic.Pointer[LinkStatus]
+	// heartbeat is the heartbeat's state; nil before a session
+	// publishes one (SetHeartbeat).
+	heartbeat atomic.Pointer[HeartbeatStatus]
 }
 
 // HealthResponse is the JSON body of the /health endpoint.
@@ -50,6 +54,9 @@ type HealthResponse struct {
 	// Coverage summarises which Kubernetes resource types are watched.
 	// It is informational and never affects readiness.
 	Coverage *CoverageSummary `json:"coverage,omitempty"`
+	// Heartbeat says whether anyone is told when kwatch stops, and how
+	// the last ping went. Informational unless pings fail.
+	Heartbeat *HeartbeatStatus `json:"heartbeat,omitempty"`
 }
 
 // LeadershipStatus is the safe, bounded election state exposed by health.

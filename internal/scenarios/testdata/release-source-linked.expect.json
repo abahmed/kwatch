@@ -1,0 +1,12 @@
+{
+  "name": "release-source-linked",
+  "description": "A GitOps release whose Deployment records its repository and commit crash-loops; the message links the commit and names the application.",
+  "root": "deployment/shop/checkout",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "20m0s"
+}

@@ -33,6 +33,10 @@ var stepChecks = []struct{ prefix, check string }{
 	{"kubectl logs ", incident.CheckLogs},
 	{"kubectl top pod ", incident.CheckUsage},
 	{"kubectl rollout status ", incident.CheckRollout},
+	// The rollout check lists what the release changed.
+	{"kubectl rollout history ", incident.CheckRollout},
+	// The object check reads a Helm release's status and revisions.
+	{"helm history ", incident.CheckObject},
 }
 
 // stepCheck is the check that covers a read-only command, or "".

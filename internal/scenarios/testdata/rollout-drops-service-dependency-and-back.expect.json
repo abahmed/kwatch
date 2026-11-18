@@ -1,0 +1,6 @@
+{
+  "name": "rollout-drops-service-dependency-and-back",
+  "description": "A release removes the environment value that names the payments Service and the next one, 20 seconds later, puts it back; nothing fails.",
+  "maxMessages": 0,
+  "quiet": true
+}

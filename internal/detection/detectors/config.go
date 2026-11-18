@@ -196,7 +196,7 @@ func missingObjects(
 	) {
 		reason := missingReason(id.Kind)
 		if reason == "" || !ctx.Synced(id.Kind) || ctx.Model.Exists(id) ||
-			kube.OptionalReference(pod, id) {
+			kube.OptionalReference(pod, id) || bootstrapping(ctx, id) {
 			continue
 		}
 		if missing[reason] == nil {
@@ -205,6 +205,17 @@ func missingObjects(
 		missing[reason] = append(missing[reason], id.Name)
 	}
 	return order, missing
+}
+
+// bootstrapping reports an object the control plane publishes into a
+// namespace it created moments ago: missing now is an ordering effect.
+// The pod is looked at again when that moment is over.
+func bootstrapping(ctx detection.Context, id inventory.EntityID) bool {
+	pending := kube.BootstrapPending(ctx.Model, id, ctx.Now)
+	if pending > 0 {
+		ctx.RecheckAfter(pending)
+	}
+	return pending > 0
 }
 
 func missingReason(kind inventory.Kind) string {

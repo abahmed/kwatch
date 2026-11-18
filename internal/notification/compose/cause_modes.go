@@ -9,10 +9,10 @@ import (
 // What is wrong with it depends on the mode that matched, so the words
 // follow the mode, not the row.
 var modalRows = map[string]bool{
-	"config-missing-or-changed":        true,
-	"configmap-missing-or-changed":     true,
-	"run-configmap-missing-or-changed": true,
-	"run-secret-missing-or-changed":    true,
+	explain.RuleConfigMissingOrChanged:       true,
+	explain.RuleConfigMapMissingOrChanged:    true,
+	explain.RuleRunConfigMapMissingOrChanged: true,
+	explain.RuleRunSecretMissingOrChanged:    true,
 }
 
 // modalWords say what is wrong with the object a modal row blames. A

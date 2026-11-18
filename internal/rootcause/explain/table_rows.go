@@ -110,7 +110,7 @@ var genericRows = []Row{
 		// itself: a custom resource given an invalid value, a Service
 		// given a selector that matches nothing, a route its gateway
 		// no longer accepts. Only objects without an owner match.
-		Name: "own-change",
+		Name: RuleOwnChange,
 		Cause: Side{Group: AnyGroup, Kind: AnyKind,
 			Modes: []detection.Mode{ModeSpecChanged}},
 		Link:   LinkSelf,
@@ -158,7 +158,7 @@ var nodeRows = []Row{
 	{
 		// Exit code 137 without OOMKilled is a plain SIGKILL, which
 		// the kubelet sends when it reclaims memory.
-		Name: "node-memory-pressure",
+		Name: RuleNodeMemoryPressure,
 		Cause: Side{Kind: kube.KindNode,
 			Modes: []detection.Mode{
 				detection.ModeMemoryPressure, detection.ModeMemory}},
@@ -213,10 +213,13 @@ var nodeRows = []Row{
 			detection.ModeNetworkUnavailable, detection.ModeNetwork,
 			detection.ModeNetworkErrors}},
 		Link: LinkRunsOn,
+		// A pod's own "networking cannot be set up" (ModeNetwork) is
+		// the symptom a node out of addresses produces; a running
+		// container is not (contradictions).
 		Effect: podSide(
 			detection.ModeNotReady, detection.ModeCreating,
 			detection.ModeCreateError, detection.ModeProbe,
-			detection.ModeCrashLoop),
+			detection.ModeCrashLoop, detection.ModeNetwork),
 		Prior: 0.7,
 	},
 	{
@@ -225,7 +228,7 @@ var nodeRows = []Row{
 		// killed for the node's sake. The finding exists only while the
 		// node is short, never for the limits alone. Weaker than memory
 		// pressure, which the kubelet states outright.
-		Name: "node-overcommitted",
+		Name: RuleNodeOvercommitted,
 		Cause: Side{Kind: kube.KindNode, Modes: []detection.Mode{
 			detection.ModeMemoryOvercommitted}},
 		Link: LinkRunsOn,
@@ -240,13 +243,13 @@ var nodeRows = []Row{
 var workloadRows = []Row{
 	{
 		// A new template explains pods that fail right after it.
-		Name: "rollout",
+		Name: RuleRollout,
 		Cause: Side{Group: AnyGroup, Kind: AnyKind,
 			Modes: []detection.Mode{ModeSpecChanged, ModeCreated}},
 		Link: LinkOwns, Effect: podSide(podFailures...), Prior: 0.7,
 	},
 	{
-		Name: "config-missing-or-changed",
+		Name: RuleConfigMissingOrChanged,
 		Cause: Side{Kind: kube.KindSecret, Modes: []detection.Mode{ModeMissing,
 			ModeChanged, ModeKeyMissing}},
 		// A Secret can be an image pull Secret: a pod that cannot
@@ -256,7 +259,7 @@ var workloadRows = []Row{
 				configModes...)...), Prior: 0.7,
 	},
 	{
-		Name: "configmap-missing-or-changed",
+		Name: RuleConfigMapMissingOrChanged,
 		Cause: Side{Kind: kube.KindConfigMap, Modes: []detection.Mode{
 			ModeMissing, ModeChanged, ModeKeyMissing}},
 		Link: LinkUses, Effect: podSide(configModes...), Prior: 0.7,
@@ -295,7 +298,7 @@ var specificRows = concatRows(nodeRows, workloadRows, clusterRows,
 	serviceCallRows, policyCallRows, livenessStartRows, dependencyLogRows,
 	scalingRows, sharedRows, agentRows, preemptionRows, leaseRows, runConfigRows,
 	missingServiceRows, initWaitRows, finalizerRows, storageRows,
-	policyAdmitRows, nodeDegradedRows, claimRows)
+	policyAdmitRows, nodeDegradedRows, claimRows, helmRows)
 
 func concatRows(groups ...[]Row) []Row {
 	var out []Row

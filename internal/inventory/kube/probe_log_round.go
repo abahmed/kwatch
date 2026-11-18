@@ -64,7 +64,9 @@ func ProbeAnsweredStatus(message string) int {
 func (r *CrashLogRound) probePass(
 	ctx context.Context, containers []inventory.EntityID, pass *readPass,
 ) []inventory.Observation {
-	if r.cfg.Current == nil {
+	if r.cfg.Current == nil || r.paused() {
+		// Reading a running container's log is optional work: it
+		// waits while the API server is under pressure.
 		return nil
 	}
 	now := r.cfg.Now()
@@ -128,8 +130,13 @@ func (r *CrashLogRound) forgetProbe(
 	return []inventory.Observation{ProbeLogObservation(id, now, nil)}
 }
 
-// probeAnsweredError reports a running container whose newest failed
-// probe, within probeLogRecency, got an HTTP error status.
+// probeAnsweredError reports a running container whose current log is
+// worth a read: its newest failed probe, within probeLogRecency, got an
+// HTTP error status (the application is up and says it is unwell), or
+// it is not ready and its newest failure is its readiness probe. A
+// container that stays up but is never ready writes why in its own
+// log (a database or cache it cannot reach); without a restart the
+// crash pass never reads it.
 func (r *CrashLogRound) probeAnsweredError(
 	id inventory.EntityID, now time.Time,
 ) bool {
@@ -148,8 +155,18 @@ func (r *CrashLogRound) probeAnsweredError(
 			newest = note
 		}
 	}
-	return ProbeAnsweredStatus(newest.Message) >= 400
+	if ProbeAnsweredStatus(newest.Message) >= 400 {
+		return true
+	}
+	ready, known := e.Attribute(AttrReady)
+	isReady, isBool := ready.Value.AsBool()
+	return known && isBool && !isReady &&
+		strings.HasPrefix(newest.Message, readinessFailed)
 }
+
+// readinessFailed starts the kubelet's message for a failed readiness
+// probe.
+const readinessFailed = "Readiness probe failed"
 
 // ProbeLogObservation is what the round records for a running container
 // whose probe gets an HTTP error status: the last line of its current
@@ -185,4 +202,9 @@ func LastFailureLine(lines []string) string {
 		}
 	}
 	return ""
+}
+
+// paused reports an API server under pressure (CrashLogConfig.Paused).
+func (r *CrashLogRound) paused() bool {
+	return r.cfg.Paused != nil && r.cfg.Paused()
 }

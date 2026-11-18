@@ -1,0 +1,12 @@
+{
+  "name": "drain-evictions-find-no-room",
+  "description": "A node is drained and removed; the replacements of its evicted pods stay Pending for lack of cpu.",
+  "root": "node//n3",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "scheduling//Insufficient cpu",
+    "deployment/shop/cart",
+    "deployment/shop/search"
+  ]
+}

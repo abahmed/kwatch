@@ -2,17 +2,26 @@ package app
 
 import (
 	"fmt"
-	"os"
 	"time"
 )
 
+// classifyRestart explains how the previous session ended, compared
+// with this process (envIdentity). "" is a first run or a normal
+// restart.
 func classifyRestart(previous runtimeSession) string {
+	return classifyRestartAt(previous, envIdentity(""))
+}
+
+// classifyRestartAt is classifyRestart against a given identity of
+// this start.
+func classifyRestartAt(previous runtimeSession, now runIdentity) string {
 	if previous.SessionID == "" {
 		return ""
 	}
 	if previous.EndReason == "graceful_shutdown" {
-		// A clean stop, as in a rollout: nothing was interrupted.
-		return ""
+		// Asked to stop: a rollout, a drained or lost node, an
+		// eviction, or a plain restart (classifyStop).
+		return classifyStop(previous, now)
 	}
 	if previous.EndReason != "" {
 		return normalizeRestartReason(previous.EndReason)
@@ -20,13 +29,27 @@ func classifyRestart(previous runtimeSession) string {
 	if !previous.EndedAt.IsZero() {
 		return ""
 	}
-	if previous.NodeName != "" && previous.NodeName != os.Getenv("NODE_NAME") {
+	if previous.NodeName != "" && previous.NodeName != now.Node {
 		return "node_disruption"
 	}
-	if previous.PodName != "" && previous.PodName != os.Getenv("POD_NAME") {
+	if previous.PodName != "" && previous.PodName != now.Pod {
 		return "deployment_rollout"
 	}
 	return "internal_failure"
+}
+
+// wantsEvidence reports whether the API is asked about the previous
+// pod and node: after a crash, and after a stop on a signal when the
+// pod was replaced (an evicted pod stays behind with reason Evicted).
+func wantsEvidence(previous runtimeSession, now runIdentity) bool {
+	if previous.SessionID == "" {
+		return false
+	}
+	if previous.EndedAt.IsZero() {
+		return true
+	}
+	return previous.EndReason == "graceful_shutdown" &&
+		changed(previous.PodName, now.Pod)
 }
 
 func classifyWithEvidence(
@@ -34,6 +57,9 @@ func classifyWithEvidence(
 	evidence restartEvidence,
 	fallback string,
 ) string {
+	if previous.EndReason == "graceful_shutdown" {
+		return stopEvidence(evidence, fallback)
+	}
 	if previous.EndReason != "" {
 		return fallback
 	}
@@ -50,11 +76,30 @@ func classifyWithEvidence(
 	if evidence.LeaseLost {
 		return "leader_handoff"
 	}
-	if !evidence.NodeReady &&
-		(evidence.NodeObserved || evidence.NodeReason != "") {
+	if nodeGone(evidence) {
 		return "node_disruption"
 	}
 	return fallback
+}
+
+// stopEvidence adds what the API shows to a stop on a signal that the
+// stop facts did not explain: the old pod evicted, or its node gone or
+// not ready.
+func stopEvidence(evidence restartEvidence, fallback string) string {
+	switch {
+	case fallback != "" && fallback != "node_disruption":
+		return fallback
+	case evidence.PodReason == "Evicted":
+		return "eviction"
+	case nodeGone(evidence):
+		return "node_disruption"
+	}
+	return fallback
+}
+
+func nodeGone(evidence restartEvidence) bool {
+	return !evidence.NodeReady &&
+		(evidence.NodeObserved || evidence.NodeReason != "")
 }
 
 func startupClaimKey(

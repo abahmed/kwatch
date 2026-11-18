@@ -117,7 +117,7 @@ func requestedOn(
 	total := 0.0
 	for _, id := range model.Related(node, inventory.RunsOn,
 		inventory.Incoming) {
-		if pod, ok := model.Entity(id); ok && podFinished(pod) {
+		if podFinishedID(model, id) {
 			continue
 		}
 		total += podRequest(model, id, attr)

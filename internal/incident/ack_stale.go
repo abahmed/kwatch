@@ -38,9 +38,10 @@ func (m *Manager) staleAck(
 	listed := slices.Contains(p.ackIgnored, id)
 	known := listed || p.ackAll
 	floor := p.Opened
-	if known && p.restored && m.restoreGrace.After(floor) {
+	if rebuilt := m.rebuildFloor(); known && p.restored &&
+		rebuilt.After(floor) {
 		// Seen again while the model was rebuilt: still the old one.
-		floor = m.restoreGrace
+		floor = rebuilt
 	}
 	if since.Before(floor) {
 		if !listed {

@@ -11,7 +11,7 @@ import (
 func reopenScenarios() []scenario {
 	return []scenario{
 		pageFlapsReopens(), longPageReminder(), digestNeverPagedResolve(),
-		rollupChronicWorsens(), unusualEventRecurs(),
+		rollupChronicWorsens(), unusualEventRecurs(), movedRootReturns(),
 	}
 }
 

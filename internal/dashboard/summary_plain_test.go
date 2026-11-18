@@ -8,6 +8,7 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/rootcause"
 )
 
@@ -29,8 +30,20 @@ func TestSummaryWhatOfANewVersionThatCannotStart(t *testing.T) {
 		whatOf(&d, p))
 }
 
+// holderKinds root a family that only some kinds can have (canHave) on
+// such a kind; the others keep the Deployment.
+var holderKinds = map[detection.Mode]inventory.Kind{
+	detection.ModeMemoryPressure: "node", detection.ModeNodeCondition: "node",
+	detection.ModeScalingMaxedOut: "horizontalpodautoscaler",
+	detection.ModeNoEndpoints:     "service",
+	detection.ModeBackendMissing:  "ingress",
+}
+
 // Each family has a plain sentence: no engine wording, no raw reason.
 func TestSummaryWhatIsPlainForEveryFamily(t *testing.T) {
+	// A family only some kinds can have is said of such a kind
+	// (canHave); TestSymptomIsNeverPutOnAKindThatCannotHaveIt covers
+	// the rest.
 	cases := []struct {
 		mode detection.Mode
 		prev bool
@@ -64,9 +77,9 @@ func TestSummaryWhatIsPlainForEveryFamily(t *testing.T) {
 			"becomes ready. The previous version is still serving " +
 			"users."},
 		{detection.ModeMemoryPressure, false,
-			"Deployment api in shop is low on memory."},
+			"Node api is low on memory."},
 		{detection.ModeNodeCondition, false,
-			"Deployment api in shop is not working properly."},
+			"Node api is not working properly."},
 		{detection.ModeMissingSecret, false,
 			"Deployment api in shop can't find a Secret it needs."},
 		{detection.ModeMissingConfigMap, false,
@@ -74,16 +87,22 @@ func TestSummaryWhatIsPlainForEveryFamily(t *testing.T) {
 		{detection.ModeJobFailed, false, "Deployment api in shop failed."},
 		{detection.ModeCertExpired, false, "Deployment api in shop has " +
 			"a certificate that has expired."},
-		{detection.ModeScalingMaxedOut, false,
-			"Deployment api in shop can't scale automatically."},
-		{detection.ModeNoEndpoints, false, "Deployment api in shop has " +
+		{detection.ModeScalingMaxedOut, false, "HorizontalPodAutoscaler " +
+			"api in shop can't scale automatically."},
+		{detection.ModeNoEndpoints, false, "Service api in shop has " +
 			"no ready pods to send traffic to."},
-		{detection.ModeBackendMissing, false, "Deployment api in shop " +
+		{detection.ModeBackendMissing, false, "Ingress api in shop " +
 			"sends traffic to a Service that does not exist."},
 	}
 	for _, c := range cases {
 		p := summaryIncident()
 		p.Mode, p.PreviousServes = c.mode, c.prev
+		if kind, ok := holderKinds[c.mode]; ok {
+			p.Root.Kind = kind
+		}
+		if p.Root.Kind == "node" {
+			p.Root.Namespace = ""
+		}
 		d := toDetail(p)
 
 		got := whatOf(&d, p)

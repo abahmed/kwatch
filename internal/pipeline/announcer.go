@@ -90,6 +90,7 @@ func newAnnouncer(
 		Withheld:      deps.Withheld.Counts,
 		WithheldToday: deps.Withheld.Today,
 		Restart:       deps.Restart,
+		Notify:        deps.Notify,
 	})
 	return a
 }

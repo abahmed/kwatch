@@ -56,8 +56,9 @@ func TestIncidentDetailCarriesItsRelease(t *testing.T) {
 		RolledOut: now.Add(-time.Hour + time.Minute),
 		Verdict:   release.Failed, App: "argocd/shop",
 		Incident: "inc-1"})
-	s.SetIncidents(&fakeIncidents{items: []incident.Incident{
-		testIncident("inc-1", "shop", 0)}})
+	inc := testIncident("inc-1", "shop", 0)
+	inc.Cause = servedCause("api", "shop", "3", 0.9)
+	s.SetIncidents(&fakeIncidents{items: []incident.Incident{inc}})
 	got := releaseOfIncident(t, s, "inc-1")
 	require.NotNil(t, got)
 	assert.Equal(t, release.Failed, got.Verdict)
@@ -67,7 +68,7 @@ func TestIncidentDetailCarriesItsRelease(t *testing.T) {
 	if assert.NotNil(t, got.RolloutSeconds) {
 		assert.InDelta(t, 60, *got.RolloutSeconds, 0.1)
 	}
-	assert.Nil(t, releaseOf(release.Book{}, "inc-1"))
+	assert.Nil(t, releaseOf(release.Book{}, "inc-1", nil))
 }
 
 // Only a workload's newest release offers an undo command: on an older
@@ -84,14 +85,15 @@ func TestReleaseUndoOnNewestAndDetailOnlyWithHistory(t *testing.T) {
 			At: now.Add(-2 * time.Hour), Verdict: release.Failed,
 			Incident: "o",
 			Detail:   &release.Detail{RestartsAfter: &restarts}}}}
-	newest := releaseOf(book, "n")
+	cause := servedCause("api", "shop", "3", 0.9)
+	newest := releaseOf(book, "n", cause)
 	assert.Contains(t, newest.Undo.Command, "rollout undo")
-	old := releaseOf(book, "o")
+	old := releaseOf(book, "o", cause)
 	assert.Empty(t, old.Undo.Command)
 	assert.False(t, old.Newest)
 	assert.Contains(t, old.Undo.Text, "newer release")
 	stripDetail(&book)
-	assert.Nil(t, releaseOf(book, "o").Detail)
+	assert.Nil(t, releaseOf(book, "o", nil).Detail)
 }
 
 // A release that went wrong without opening an issue (a regression)

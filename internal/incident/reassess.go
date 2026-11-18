@@ -95,7 +95,7 @@ func (m *Manager) reassessDeadline(
 		return time.Time{}, false
 	}
 	if m.inGrace(p, now) {
-		return m.restoreGrace, true
+		return m.graceEnd(p, now), true
 	}
 	if last := p.Delivery.LastMaterial(); !last.IsZero() &&
 		now.Before(last.Add(MaterialGap)) {

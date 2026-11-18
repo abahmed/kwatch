@@ -31,6 +31,9 @@ func TestSelfHealthFieldsNameTheRuntimeAndTheBoundedMaps(t *testing.T) {
 	}
 	assert.Contains(t, values, "heapAllocMiB")
 	assert.Contains(t, values, "heapInuseMiB")
+	assert.Contains(t, values, "heapIdleUnreleasedMiB")
+	assert.Contains(t, values, "stackInuseMiB")
+	assert.Contains(t, values, "gcSysMiB")
 	assert.Greater(t, values["goMemoryMiB"], uint64(0))
 	assert.Greater(t, values["goroutines"], 0)
 	assert.Equal(t, 1, values["reachLogNodes"])

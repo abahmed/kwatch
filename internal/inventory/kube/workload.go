@@ -54,6 +54,7 @@ func (s workloadSchema[T]) Describe(obj any) (Description, bool) {
 		attrs[AttrTemplateLabels] = inventory.Text(
 			labelText(template.Labels))
 		setHandlerSignals(attrs, template)
+		setTemplateCalls(attrs, workload.GetNamespace(), template)
 		rel.add(inventory.References,
 			templateReferences(workload.GetNamespace(), template)...)
 		// The claims it names are in use even with no pod running

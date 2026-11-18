@@ -1,0 +1,19 @@
+{
+  "name": "readiness-outage-shared-database",
+  "description": "Seven services on one node lose their database: five stay up and fail readiness, two crash, all logging the same failed connection.",
+  "root": "external-endpoint//10.0.9.40:5432",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/shop/accounts",
+    "deployment/shop/billing",
+    "deployment/shop/fleet",
+    "deployment/shop/pricing",
+    "deployment/shop/tracking",
+    "deployment/shop/payments",
+    "deployment/shop/reports"
+  ],
+  "tail": "10m0s"
+}

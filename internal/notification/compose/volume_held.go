@@ -5,11 +5,13 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // heldVolumeRules are the explain rows that blame what still holds the
 // volume a pod waits for.
-var heldVolumeRules = []string{"volume-held-by-pod", "volume-held-by-node"}
+var heldVolumeRules = []string{
+	explain.RuleVolumeHeldByPod, explain.RuleVolumeHeldByNode}
 
 // volumeHeldLead leads a multi-attach incident with the waiting
 // workload and what holds its volume: "api in shop can't start: its

@@ -74,13 +74,43 @@ func TestBrowserOverviewWeekCountsAlerted(t *testing.T) {
 	tab := pagingTab(t, srv, 1280, 800, "/", ".ov-stat")
 	got := evalString(t, tab, `[...document.querySelectorAll(".ov-stat")].
   map((d) => d.textContent).join("|")`)
+	// The test server's only channel is Slack: no pager, no on-call.
 	want := "Alerted21▲ 1 more than last week|Resolved this week21" +
-		"alerted issues, incl. ones opened earlier|Alerted the " +
-		"on-call person7urgent issues opened|Median time to resolve " +
+		"alerted issues, incl. ones opened earlier|Sent as urgent7" +
+		"urgent issues openedNo pager is connected, so urgent issues " +
+		"go to chat only.|Median time to resolve " +
 		"an alerted issue10 minover the alerted issues resolved " +
 		"this week"
 	if got != want {
 		t.Errorf("week numbers\n%q, want\n%q", got, want)
+	}
+	legend := evalString(t, tab, `[...document.querySelectorAll(
+  ".ip-legend li, .viz-legend li, [data-legend-urgent]")].
+  map((d) => d.textContent).join("|")`)
+	if strings.Contains(legend, "on-call") {
+		t.Errorf("no pager, yet the page says on-call: %q", legend)
+	}
+}
+
+// With a pager connected, urgent issues alerted the on-call person,
+// and the page says so without the hint.
+func TestBrowserOverviewSaysOnCallWithAPager(t *testing.T) {
+	ov := overviewAnswer(1, 0, 0, false)
+	st := healthStatus(healthOpts{memory: 0.4})
+	st["perChannelHealth"] = []map[string]any{{"channel": "pagerduty",
+		"type": "pagerduty", "name": "PagerDuty", "kind": "pager",
+		"lastSuccess": isoAgo(time.Minute)}}
+	srv := listsServer(t, map[string]any{"/api/overview": ov,
+		"/api/status": st})
+	tab := pagingTab(t, srv, 1280, 800, "/", ".ov-stat")
+	got := evalString(t, tab, `[...document.querySelectorAll(".ov-stat")].
+  map((d) => d.textContent).join("|") + "#" +
+  document.querySelector("[data-legend-urgent]").textContent`)
+	if !strings.Contains(got, "Alerted the on-call person") ||
+		strings.Contains(got, "No pager is connected") ||
+		!strings.HasSuffix(got,
+			"#kwatch alerted the on-call person. Look now.") {
+		t.Errorf("with a pager the week says %q", got)
 	}
 }
 

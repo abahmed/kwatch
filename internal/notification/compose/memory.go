@@ -1,6 +1,8 @@
 package compose
 
 import (
+	"strings"
+
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
 	"github.com/abahmed/kwatch/internal/notification"
@@ -52,9 +54,18 @@ func memoryText(m detection.Finding) string {
 		return "Its memory rose steadily from " + humanizeText(rise) +
 			" before the kill."
 	}
+	if flat := evidence(m, detection.EvidenceMemoryFlat); flat != "" {
+		return "Its memory stayed " + humanizeText(flat) +
+			" before the kill."
+	}
+	if runs := runsSentence(evidence(m,
+		detection.EvidenceMemoryRuns)); runs != "" {
+		return runs
+	}
 	peak := evidence(m, detection.EvidenceMemoryPeak)
 	switch {
-	case peak == "":
+	case peak == "", sizingText(m) != "":
+		// The sizing sentence states the peak against the limit.
 		return ""
 	case limit == "":
 		return "It used " + peak + " at peak in the last 24 hours."
@@ -72,4 +83,17 @@ func memorySteps(s detection.Finding) []notification.Step {
 		return nil
 	}
 	return []notification.Step{{Text: memoryAdvice}}
+}
+
+// runsSentence words where the last runs ended: "3 runs, each near
+// 510Mi" becomes "Its last 3 runs each ended near 510Mi."
+func runsSentence(runs string) string {
+	count, rest, ok := strings.Cut(runs, ", ")
+	if !ok {
+		return ""
+	}
+	if near, ok := strings.CutPrefix(rest, "each "); ok {
+		return "Its last " + count + " each ended " + near + "."
+	}
+	return "Its last " + count + " ended " + rest + "."
 }

@@ -19,6 +19,9 @@ func (p *pipelineBuild) baseIncidentConfig() incident.Config {
 		VerifiableObject: func(id inventory.EntityID) bool {
 			return p.source == nil || p.source.VerifiableObject(id)
 		},
+		Watching: func(id inventory.EntityID) bool {
+			return p.detectors != nil && p.detectors.Watching(id)
+		},
 		OwnNamespace: envOrKwatch("POD_NAMESPACE"),
 		OwnWorkload:  incident.OwnWorkloadOf(os.Getenv("POD_NAME")),
 	}

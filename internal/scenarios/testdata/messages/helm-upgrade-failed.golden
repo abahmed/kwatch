@@ -1,0 +1,8 @@
+10:02:15 settled
+🟠 Helm release payments in shop (prod-eu-1) has failed to upgrade or roll back at revision 3. To see its revisions, run helm history payments -n shop
+🟠 Helm release payments in shop (prod-eu-1) has failed to upgrade or roll back at revision 3.
+| 🟠 Helm release **payments** in **shop** (**prod-eu-1**) has failed to upgrade or roll back at revision 3.
+| To see its revisions, run
+| ```
+| helm history payments -n shop
+| ```

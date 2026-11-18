@@ -56,7 +56,11 @@ func (h *historyRecorder) restoreHealthy(since time.Time) int {
 	restored := 0
 	for key, record := range saved {
 		id, ok := inventory.ParseEntityID(key)
-		if !ok || record.Mark.Failing || record.Mark.At.Before(since) {
+		if !ok {
+			continue
+		}
+		h.restoreServed(id, record, h.now())
+		if record.Mark.Failing || record.Mark.At.Before(since) {
 			continue
 		}
 		h.model.RestoreHealth(id, record.Mark)

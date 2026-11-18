@@ -85,7 +85,7 @@ func reasonsBack(p *Incident) bool {
 func (m *Manager) provisionalDeadline(
 	p *Incident, now time.Time,
 ) (time.Time, bool) {
-	return m.restoreGrace, m.provisional(p, now)
+	return m.graceEnd(p, now), m.provisional(p, now)
 }
 
 // maxSavedMembers bounds Record.Members: a storm incident needs only a

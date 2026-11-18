@@ -1,0 +1,26 @@
+10:01:15 settled
+🟠 refailure in shop (prod-eu-1) cannot start because config map settings does not exist. It fails with "configmap "settings" not found". Every error mentions it. Every app that uses it is failing.
+Related alerts: 2 missing references
+To check the object the pods depend on, run kubectl get configmap settings -n shop -o yaml
+Proof: both replicas fail, on 2 nodes.
+🟠 refailure in shop (prod-eu-1) cannot start because config map settings does not exist.
+| 🟠 **refailure** in **shop** (**prod-eu-1**) cannot start because config map **settings** does not exist.
+| It fails with `configmap "settings" not found`. Every error mentions it.
+| Every app that uses it is failing.
+| Related alerts: 2 missing references
+| To check the object the pods depend on, run
+| ```
+| kubectl get configmap settings -n shop -o yaml
+| ```
+| *Proof: both replicas fail, on 2 nodes.*
+10:09:20 healthy for 3m0s
+✅ refailure in shop (prod-eu-1) is healthy again. Someone rolled out revision d840680523cc at 10:06 UTC; it was failing for six minutes. Two pods were affected.
+✅ refailure in shop (prod-eu-1) is healthy again.
+| ✅ **refailure** in **shop** (**prod-eu-1**) is healthy again.
+| Someone rolled out revision d840680523cc at 10:06 UTC; it was failing for six minutes.
+| Two pods were affected.
+10:37:00 failing again
+🟠 refailure in shop (prod-eu-1) is failing again: 2nd time in two hours. It fails with "configmap "settings" not found". Every error mentions it.
+🟠 refailure in shop (prod-eu-1) is failing again: 2nd time in two hours.
+| 🟠 **refailure** in **shop** (**prod-eu-1**) is failing again: 2nd time in two hours.
+| It fails with `configmap "settings" not found`. Every error mentions it.

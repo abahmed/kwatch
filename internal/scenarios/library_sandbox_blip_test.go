@@ -35,7 +35,9 @@ func nodeReplaceSandboxBlip() scenario {
 				"setup for two minutes, then start.",
 			Quiet: true, Tail: duration(15 * time.Minute),
 		},
-		build: func(c *cluster) { buildSandboxReplace(c, 90*time.Second) },
+		build: func(c *cluster) {
+			buildSandboxReplace(c, 90*time.Second, nil)
+		},
 	}
 }
 
@@ -52,7 +54,7 @@ func nodeReplaceSandboxStuck() scenario {
 			Root: "node//n3", Tier: "page", MaxMessages: 2,
 			BootHeld: true, Tail: duration(5 * time.Minute),
 		},
-		build: func(c *cluster) { buildSandboxReplace(c, 0) },
+		build: func(c *cluster) { buildSandboxReplace(c, 0, nil) },
 	}
 }
 
@@ -62,8 +64,10 @@ var sandboxServices = []string{"fleet", "storage", "support"}
 // buildSandboxReplace terminates node n3 of a four-node pool, joins n5
 // and replaces the pods of three single-replica Deployments, each behind
 // a LoadBalancer Service. They retry their sandbox until heal; a zero
-// heal never.
-func buildSandboxReplace(c *cluster, heal time.Duration) {
+// heal never. alongside, when set, runs just before n3 goes.
+func buildSandboxReplace(
+	c *cluster, heal time.Duration, alongside func(c *cluster),
+) {
 	var works []*workload
 	for _, name := range []string{"n1", "n2", "n3", "n4"} {
 		c.list(workerNode(c, name))
@@ -80,6 +84,9 @@ func buildSandboxReplace(c *cluster, heal time.Duration) {
 		works = append(works, w)
 	}
 	c.after(10 * time.Minute)
+	if alongside != nil {
+		alongside(c)
+	}
 	c.remove(last(c, workerNode(c, "n3")))
 	born := c.now
 	n5 := workerNode(c, "n5")

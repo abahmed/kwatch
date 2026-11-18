@@ -13,8 +13,7 @@ type State uint8
 
 // Lifecycle states.
 const (
-	// Settling incidents are collecting related findings before the first
-	// message.
+	// Settling incidents collect related findings before the first message.
 	Settling State = iota + 1
 	// Open incidents have been announced and are still failing.
 	Open
@@ -237,19 +236,20 @@ type Incident struct {
 	// flags.go). Pending is follow-up work the thread is owed.
 	Delivery Delivery
 	Pending  Pending
-	// Journal is what the dashboard shows of the incident's life: its
-	// containers when it broke, the changes around it, its state
-	// changes and the timers it waits on (see journal.go).
+	// Journal is what the dashboard shows of the incident's life:
+	// containers, changes, state changes and timers (journal.go).
 	Journal Journal
 	// CausedBy are the live incidents this one is caused by, and
 	// Causing the ones it causes (see relations.go); at most
 	// maxRelated each. The manager fills them on the copies it hands
 	// out; they are not persisted.
 	CausedBy, Causing []Related
-	// Radius is how far the incident reaches now (see radius.go). It is
-	// recomputed with the impact and not persisted; the journal keeps
-	// its widest.
-	Radius Radius
+	// Radius is how far the incident reaches now (radius.go); the
+	// journal keeps its widest. Belongs is the workload each of its
+	// objects is part of (belongs.go). Both follow the impact and are
+	// not persisted.
+	Radius  Radius
+	Belongs Belongs
 
 	// decided is the set of failure findings at the latest decision, so
 	// a later re-blaming of the same failures can be told from news.
@@ -282,8 +282,10 @@ type Incident struct {
 	recoveredHere bool
 	// formerRoot is the root the incident was moved away from by its
 	// latest cause revision, and rerootedAt is when; see retakeFormer.
+	// pastRoots are every root it left (past_roots.go).
 	formerRoot inventory.EntityID
 	rerootedAt time.Time
+	pastRoots  []inventory.EntityID
 	// rootReasons are the root's own finding reasons ever seen in this
 	// incident. The fingerprint reads them, so a crash loop whose pods
 	// come up and fall over again, toggling the workload's own
@@ -299,8 +301,7 @@ type Incident struct {
 	// impactPeak is the largest impact size seen. The fingerprint reads it,
 	// so impact that shrinks while failures churn is not news.
 	impactPeak int
-	// modes is every failure mode the members of this incident had; see
-	// modes.go.
+	// modes is every failure mode its members had (modes.go).
 	modes map[detection.Mode]struct{}
 	// stagePeak is the worst stage the members reached; the fingerprint
 	// reads it, so a crash loop that begins after the announcement is
@@ -383,16 +384,4 @@ func (inc *Incident) criticalRoot() bool {
 // incidents first.
 func (inc Incident) TrafficLost() bool {
 	return inc.trafficLost
-}
-
-// Event is one line of the incident timeline.
-type Event struct {
-	At   time.Time
-	Text string
-	// Entity is the member the event is about: the one that joined or
-	// recovered. Nil for events about the incident itself.
-	Entity *inventory.EntityID `json:",omitempty"`
-	// Repeats counts earlier entries that said the same thing and were
-	// folded into this one to keep the timeline within its bound.
-	Repeats int `json:",omitempty"`
 }

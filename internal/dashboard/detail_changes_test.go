@@ -156,23 +156,88 @@ func TestChangeSummaryWording(t *testing.T) {
 	}
 }
 
-// The page measures a change from the time the server sorts it
-// against: the onset of the current failures, not when the issue
-// first opened (an issue reopened by a later failure keeps its first
-// open time).
-func TestDetailChangesSendTheOnsetTheyAreSortedBy(t *testing.T) {
-	tm, p := changesFixture(t)
-	onset := p.Onset()
-	p.Opened = onset.Add(-9 * time.Hour)
-	d := detailOf(t, contextServer(tm.m, true, p), "c")
-	if !d.Onset.Equal(onset) || d.FirstSeen.Equal(onset) {
-		t.Fatalf("onset %v, first seen %v, want onset %v",
-			d.Onset, d.FirstSeen, onset)
+// startMembersAt moves the start of every failure of p to since,
+// leaving the time the incident opened as it was.
+func startMembersAt(p *incident.Incident, since time.Time) {
+	for key, member := range p.Members {
+		member.Since = since
+		p.Members[key] = member
+	}
+}
+
+// checkOnsetContract checks what the page relies on: the onset it
+// labels changes against is never after the first-seen time, and every
+// change is classed before or during against that same value.
+func checkOnsetContract(t *testing.T, d IncidentDetail) {
+	t.Helper()
+	if d.Onset.IsZero() || d.Onset.After(d.FirstSeen) {
+		t.Fatalf("onset %v is after first seen %v", d.Onset, d.FirstSeen)
 	}
 	for _, c := range d.Changes {
 		if (c.When == "before") != !c.At.After(d.Onset) {
 			t.Errorf("%s at %v is %q against onset %v",
 				c.Name, c.At, c.When, d.Onset)
 		}
+	}
+}
+
+// Failures that began before the incident was opened (it was found
+// late) put the onset before the first-seen time. The page labels
+// changes against the onset it is sent, so a change made between the
+// two is "after it started failing", and the server says the same.
+func TestDetailChangesBeforeTheOpeningAreMeasuredFromTheOnset(
+	t *testing.T,
+) {
+	tm, p := changesFixture(t)
+	startMembersAt(&p, p.Opened.Add(-30*time.Minute))
+	d := detailOf(t, contextServer(tm.m, true, p), "c")
+
+	checkOnsetContract(t, d)
+	if want := p.Opened.Add(-30 * time.Minute); !d.Onset.Equal(want) {
+		t.Fatalf("onset = %v, want %v", d.Onset, want)
+	}
+	if !d.Onset.Before(d.FirstSeen) {
+		t.Fatalf("onset %v is not before first seen %v", d.Onset,
+			d.FirstSeen)
+	}
+	between := 0
+	for _, c := range d.Changes {
+		if c.At.After(d.Onset) && c.At.Before(d.FirstSeen) {
+			between++
+			if c.When != "during" {
+				t.Errorf("%s at %v, between onset and first seen, is %q",
+					c.Name, c.At, c.When)
+			}
+		}
+	}
+	if between == 0 {
+		t.Errorf("no change between onset and first seen: %+v", d.Changes)
+	}
+}
+
+// Members replaced after the opening (a recreated pod starts its own
+// failure later) do not move the onset past the first-seen time: it
+// clamps to it, and a change after it is "after" it started failing.
+func TestDetailChangesAfterReplacedMembersClampTheOnset(t *testing.T) {
+	tm, p := changesFixture(t)
+	startMembersAt(&p, p.Opened.Add(20*time.Minute))
+	d := detailOf(t, contextServer(tm.m, true, p), "c")
+
+	checkOnsetContract(t, d)
+	if !d.Onset.Equal(d.FirstSeen) {
+		t.Fatalf("onset %v, want first seen %v", d.Onset, d.FirstSeen)
+	}
+	var before, during int
+	for _, c := range d.Changes {
+		switch c.When {
+		case "before":
+			before++
+		case "during":
+			during++
+		}
+	}
+	if before != 2 || during != 1 {
+		t.Errorf("before %d, during %d, changes = %+v", before, during,
+			d.Changes)
 	}
 }

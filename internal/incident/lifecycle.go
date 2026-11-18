@@ -19,7 +19,6 @@ func (m *Manager) adoptFingerprints(now time.Time) {
 	if len(m.refingerprint) == 0 {
 		return
 	}
-	graceOver := !now.Before(m.restoreGrace)
 	kept := m.refingerprint[:0]
 	for _, id := range m.refingerprint {
 		p := m.incidents[id]
@@ -34,7 +33,7 @@ func (m *Manager) adoptFingerprints(now time.Time) {
 		if !p.causes.known {
 			p.causes.record(p.causePart())
 		}
-		if !graceOver {
+		if m.inGrace(p, now) {
 			kept = append(kept, id)
 		}
 	}
@@ -347,6 +346,8 @@ func (m *Manager) decide(p *Incident, action Action, why Reason) Decision {
 	// An announcement of an incident whose alert is already open (a
 	// restored held page) must not page again.
 	d.PagedAlready = action == Announce && p.Delivery.OpenAtPagers()
+	d.SubjectFailing = action == Resolve && p.Subject != p.Root &&
+		m.hasFailure(p.Subject)
 	if m.pagesFlapper(p, action, why) {
 		d.Incident.Tier = Page
 		p.widenRouteToPage(&d)

@@ -35,7 +35,8 @@ func (h *memoryHistory) stableRecord(now time.Time) UsageRecord {
 func sameLasting(a, b UsageRecord) bool {
 	return a.Node == b.Node && a.Started.Equal(b.Started) &&
 		sameRunStart(a.Run, b.Run) && sameRun(a.Prev, b.Prev) &&
-		slices.EqualFunc(a.Hours, b.Hours, sameHour)
+		slices.EqualFunc(a.Hours, b.Hours, sameHour) &&
+		slices.EqualFunc(a.Ends, b.Ends, sameEnd)
 }
 
 // sameRunStart compares what a current run keeps: its start, peak and
@@ -61,4 +62,8 @@ func sameRun(a, b *UsageRun) bool {
 func sameHour(a, b UsageHour) bool {
 	return a.Start.Equal(b.Start) && a.MemoryBytes == b.MemoryBytes &&
 		a.CPUMilli == b.CPUMilli
+}
+
+func sameEnd(a, b UsageEnd) bool {
+	return a.At.Equal(b.At) && a.Peak == b.Peak
 }

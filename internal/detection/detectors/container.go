@@ -32,8 +32,8 @@ func (c Container) Detect(
 	if flag(e, kube.AttrEphemeral) {
 		return nil
 	}
-	return withArchMismatch(ctx, e,
-		withNodeOOM(ctx, e, withHowItFailed(ctx, e, c.byState(ctx, e))))
+	return withArchMismatch(ctx, e, withMemoryContext(ctx, e,
+		withNodeOOM(ctx, e, withHowItFailed(ctx, e, c.byState(ctx, e)))))
 }
 
 // byState finds what the container's state shows.
@@ -42,6 +42,10 @@ func (Container) byState(
 ) []detection.Finding {
 	switch text(e, kube.AttrState) {
 	case "waiting":
+		if text(e, kube.AttrStateReason) == reasons.CrashLoopBackOff &&
+			ruleRestart(e) {
+			return nil
+		}
 		return withRestartBaseline(ctx, e,
 			livenessKilledWaiting(ctx, e, waitingFinding(ctx, e)))
 	case "terminated":
@@ -49,6 +53,9 @@ func (Container) byState(
 	case "running":
 		if killed := livenessKilledFinding(ctx, e); killed != nil {
 			return killed
+		}
+		if ruleRestart(e) {
+			return probeFindings(ctx, e)
 		}
 		// Between two back-offs its probes fail because it is about to
 		// crash again: the loop is the finding, they are its symptom.
@@ -178,7 +185,7 @@ func terminatedFinding(
 ) []detection.Finding {
 	code, _ := number(e, kube.AttrExitCode)
 	reason := text(e, kube.AttrStateReason)
-	if code == 0 || reason == reasons.Completed {
+	if code == 0 || reason == reasons.Completed || ruleRestart(e) {
 		return nil
 	}
 	if pod, ok := owningPod(ctx, e); ok && ownerJobComplete(ctx, pod) {
@@ -266,7 +273,8 @@ func stoppedOnPurpose(
 		return false
 	}
 	return text(pod, kube.AttrPhase) == "Succeeded" ||
-		flag(pod, kube.AttrDeleting) || disrupted(pod)
+		flag(pod, kube.AttrDeleting) || disrupted(pod) ||
+		restartingAllContainers(pod)
 }
 
 func owningPod(

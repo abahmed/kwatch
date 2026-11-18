@@ -115,3 +115,39 @@ func containsText(list []string, s string) bool {
 	}
 	return false
 }
+
+// keepOwnRoot keeps a finding with the live incident rooted at its own
+// object when a placement without a cause (a group of stuck peers or of
+// leftovers) would take it there while another finding of the object,
+// one no group takes, stays behind: one object is a member of one live
+// incident, and the incident it roots owns it. An object whose every
+// finding the group takes moves whole; a placement with a cause, an
+// upstream object that explains it, still moves it.
+func (m *Manager) keepOwnRoot(
+	s detection.Finding, where placement,
+) placement {
+	if where.cause != nil || where.root == s.Entity {
+		return where
+	}
+	own := m.lookup(s.Entity)
+	if own == nil || own.State == Resolved || !keepsOther(own, s) {
+		return where
+	}
+	return placement{root: s.Entity}
+}
+
+// keepsOther reports a failing member of p, a finding of s's object
+// other than s, that no group of stuck peers or leftovers would take.
+func keepsOther(p *Incident, s detection.Finding) bool {
+	for key, member := range p.Members {
+		if key.Entity != s.Entity || key == s.Key() || member.Advisory {
+			continue
+		}
+		grouped := lowAlone(member) && (isStuckDeletion(member) ||
+			!member.Leftover.IsZero())
+		if !grouped {
+			return true
+		}
+	}
+	return false
+}

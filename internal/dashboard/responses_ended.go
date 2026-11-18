@@ -10,14 +10,17 @@ type DeliveryOutcome struct {
 	Sent  []SentMessage `json:"sent,omitempty"`
 }
 
-// PagerRow is the incident's alert at one pager. State is open (paged,
-// not resolved there), closed (the resolve landed), failed (the pager
-// refused the page for good) or pending (still being retried). PagedAt
-// and ClosedAt are absent until they happen; Reason is the last
+// PagerRow is the incident's alert at one provider that keeps one alert
+// by key: a pager, an issue tracker or a webhook. Kind is that
+// provider's channel kind (channelKind): only "pager" pages a person.
+// State is open (accepted, not resolved there), closed (the resolve
+// landed), failed (refused for good) or pending (still being retried).
+// PagedAt and ClosedAt are absent until they happen; Reason is the last
 // failure's plain reason, such as "token refused (401)".
 type PagerRow struct {
 	Provider string    `json:"provider"`
 	Name     string    `json:"name"`
+	Kind     string    `json:"kind,omitempty"`
 	State    string    `json:"state"`
 	PagedAt  time.Time `json:"pagedAt,omitzero"`
 	ClosedAt time.Time `json:"closedAt,omitzero"`

@@ -1,0 +1,11 @@
+{
+  "name": "statefulset-release-previous-fails",
+  "description": "A StatefulSet rolls out an image whose first replaced pod crash-loops, and a pod still on the previous revision, restarted, stops with the same line: the release is not what broke it.",
+  "root": "statefulset/streaming/queue",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

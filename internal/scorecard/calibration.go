@@ -4,9 +4,10 @@ import "math"
 
 // Calibration method. The confidence levels are bucket boundaries over
 // the engine's score, chosen once from the labelled scenarios and then
-// committed as constants (HighConfidence and its copies in rootcause
-// and explain). The report prints what the method gives for the current
-// labelled set, so a drift between it and the committed value is seen.
+// committed as a constant (rootcause.High, which HighConfidence and
+// explain.ConfidenceHigh name). The report prints what the method gives
+// for the current labelled set, so a drift between it and the committed
+// value is seen.
 //
 // The method is isotonic in spirit: a score range may be stated plainly
 // only if it, and everything scored above it, is right at least as often
@@ -66,7 +67,7 @@ func calibrationBuckets(cases []Case) (
 	counts = map[int]*Level{}
 	lowest, highest = math.MaxInt, math.MinInt
 	for _, c := range cases {
-		if c.Confidence+confidenceEpsilon < LikelyConfidence {
+		if !statedAtLikely(ConfidenceLevel(c.Confidence)) {
 			continue
 		}
 		// The epsilon keeps 0.7 in the 0.70 range despite rounding.

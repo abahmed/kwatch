@@ -4,19 +4,25 @@ import (
 	"cmp"
 	"slices"
 	"strings"
+
+	providercatalog "github.com/abahmed/kwatch/internal/provider/catalog"
 )
 
 // Channel kinds, as the summary and /api/kwatch group channels.
 const (
-	channelChat  = "chat"
-	channelPager = "pager"
-	channelEmail = "email"
-	channelOther = "other"
+	channelChat    = "chat"
+	channelPager   = "pager"
+	channelTicket  = "ticket"
+	channelWebhook = "webhook"
+	channelEmail   = "email"
+	channelOther   = "other"
 )
 
 // channelKinds sort the providers people read from by how they reach
-// them. A provider not listed is "other"; one the send trail marks as
-// holding alerts by key is a pager whatever this says.
+// them. A provider not listed is "other". Pagers are not listed: a
+// provider is a pager only when it pages a person
+// (providercatalog.PagesPerson), never because it keeps an alert by key
+// as issue trackers and webhooks do.
 var channelKinds = map[string]string{
 	"slack": channelChat, "discord": channelChat, "teams": channelChat,
 	"teamsworkflow": channelChat, "telegram": channelChat,
@@ -25,18 +31,18 @@ var channelKinds = map[string]string{
 	"zulip": channelChat, "webex": channelChat, "flock": channelChat,
 	"feishu": channelChat, "dingtalk": channelChat, "wecom": channelChat,
 	"signal": channelChat, "threema": channelChat,
-	"pagerduty": channelPager, "opsgenie": channelPager,
-	"goalert": channelPager, "ilert": channelPager,
-	"incidentio": channelPager, "incident.io": channelPager,
-	"splunkoncall": channelPager, "squadcast": channelPager,
-	"zenduty": channelPager, "signl4": channelPager,
+	"github": channelTicket, "gitlab": channelTicket,
+	"gitea": channelTicket, "jira": channelTicket,
+	"clickup": channelTicket, "servicenow": channelTicket,
+	"webhook": channelWebhook, "n8n": channelWebhook,
+	"zapier": channelWebhook, "sns": channelWebhook,
 	"email": channelEmail, "ses": channelEmail, "sendgrid": channelEmail,
 	"mailgun": channelEmail, "resend": channelEmail,
 }
 
 // channelKind is how provider reaches people.
-func channelKind(provider string, pager bool) string {
-	if pager {
+func channelKind(provider string) string {
+	if providercatalog.PagesPerson(provider) {
 		return channelPager
 	}
 	if k, ok := channelKinds[strings.ToLower(provider)]; ok {
@@ -54,8 +60,10 @@ var toldStates = map[string]string{
 }
 
 // toldOf is each channel's latest state for the incident: the latest
-// send per provider from the trail, then each pager's own alert state,
-// which is what the pager holds. Pagers lead, then by name.
+// send per provider from the trail, then the alert state of each
+// provider that keeps one alert by key (a pager, an issue tracker or a
+// webhook), which is what that provider holds. Pagers lead, then by
+// name.
 func toldOf(d *IncidentDetail) []SummaryTold {
 	byProvider := map[string]*SummaryTold{}
 	for _, a := range d.Deliveries {
@@ -69,9 +77,7 @@ func toldOf(d *IncidentDetail) []SummaryTold {
 				Name: channelName(a.Channel)}
 			byProvider[a.Channel] = t
 		}
-		if t.Kind != channelPager {
-			t.Kind = channelKind(a.Channel, a.Pager)
-		}
+		t.Kind = channelKind(a.Channel)
 		if !a.At.Before(t.At) {
 			t.State, t.At = state, a.At
 		}
@@ -83,7 +89,7 @@ func toldOf(d *IncidentDetail) []SummaryTold {
 				Name: channelName(p.Provider)}
 			byProvider[p.Provider] = t
 		}
-		t.Kind, t.State = channelPager, p.State
+		t.Kind, t.State = channelKind(p.Provider), p.State
 		t.At = cmp.Or(p.ClosedAt, p.PagedAt, t.At)
 	}
 	out := make([]SummaryTold, 0, len(byProvider))

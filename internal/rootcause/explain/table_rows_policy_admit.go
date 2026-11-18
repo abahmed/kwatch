@@ -40,7 +40,7 @@ var policyAdmitRows = []Row{
 	{
 		// The ServiceAccount admission controller refused the pods
 		// because the account their template names is gone.
-		Name: "account-missing-at-create",
+		Name: RuleAccountMissingAtCreate,
 		Cause: Side{Kind: kube.KindAccount,
 			Modes: []detection.Mode{ModeMissing}},
 		Link: LinkUses,

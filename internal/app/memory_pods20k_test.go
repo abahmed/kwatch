@@ -16,13 +16,15 @@ import (
 // docs/production-operations.md.
 const memPods20k = 20000
 
-// Budgets for 20,000 realistic pods, set from the measured result with
-// about 25% headroom (see the test log for the measured values).
+// Budgets for 20,000 realistic pods, set from the measured result (see
+// the test log for the measured values).
 const (
-	// mem20kCacheMiB bounds the informer cache after the transform.
+	// mem20kCacheMiB bounds the informer cache after the transform:
+	// measured 158.5 MiB, about 25% headroom.
 	mem20kCacheMiB = 200
-	// mem20kTotalMiB bounds cache and model together.
-	mem20kTotalMiB = 650
+	// mem20kTotalMiB bounds cache and model together: measured
+	// 461.6 MiB, about 12% headroom.
+	mem20kTotalMiB = 520
 	// memCacheShrink is the least the transform must save compared with
 	// caching the pods as the API server sent them.
 	memCacheShrink = 0.75

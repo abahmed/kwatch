@@ -1,5 +1,7 @@
 package compose
 
+import "github.com/abahmed/kwatch/internal/rootcause/explain"
+
 // weightClaimClass ranks the missing storage class above the generic
 // facts of a claim that waits for a volume.
 const weightClaimClass = 0.7
@@ -8,7 +10,7 @@ const weightClaimClass = 0.7
 // "Claim cache-0 sets no storage class and the cluster has no default
 // one." The row that blames it checked the classes and static volumes.
 func claimClassSentences(f caseFacts) []sentence {
-	if !causeRuleIs(f, "claim-no-storage-class") {
+	if !causeRuleIs(f, explain.RuleClaimNoStorageClass) {
 		return nil
 	}
 	return []sentence{{part: partProof, weight: weightClaimClass,

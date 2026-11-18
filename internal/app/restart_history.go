@@ -28,6 +28,10 @@ type restartRecord struct {
 	At        time.Time `json:"at"`
 	Reason    string    `json:"reason"`
 	StoppedAt time.Time `json:"stoppedAt,omitzero"`
+	// LastSeen is the previous session's last liveness stamp, at most
+	// aliveInterval before it stopped; it bounds a gap with no stop
+	// record (a crash, a lost node).
+	LastSeen time.Time `json:"lastSeen,omitzero"`
 }
 
 // restartHistoryStore is the part of persistence that keeps the
@@ -52,18 +56,20 @@ func (d diskState) SaveRestarts(
 }
 
 // stopReason is how the previous session ended, as a restart reason
-// code: its own stop record when it wrote one (graceful_shutdown for a
-// signal, leader_handoff for a lost Lease, internal_failure), else the
-// classified restart reason; unknown when nothing says. "" on a first
-// run.
+// code: the classified restart reason when there is one, else its own
+// stop record (graceful_shutdown for a plain stop on a signal,
+// leader_handoff for a lost Lease, internal_failure); unknown when
+// nothing says. "" on a first run.
 func stopReason(previous runtimeSession, classified string) string {
 	switch {
 	case previous.SessionID == "":
 		return ""
+	case classified != "":
+		// Explains the stop record too: a stop on a signal may have
+		// been a drained node or a rollout (classifyStop).
+		return classified
 	case previous.EndReason != "":
 		return normalizeRestartReason(previous.EndReason)
-	case classified != "":
-		return classified
 	default:
 		return "unknown"
 	}
@@ -81,18 +87,21 @@ func (s *startupManager) recordRestart(
 	}
 	now := s.now()
 	s.lastStop = &health.SelfStop{At: now, Reason: reason,
-		StoppedAt: previous.EndedAt}
+		StoppedAt: previous.EndedAt,
+		Text:      health.StopReasonText(reason)}
 	store, ok := s.persistenceManager.(restartHistoryStore)
+	record := restartRecord{At: now, Reason: reason,
+		StoppedAt: previous.EndedAt, LastSeen: s.lastSeen()}
 	if !ok {
 		s.restarts = []health.SelfStop{*s.lastStop}
+		s.notWatching = notWatchingSpans([]restartRecord{record}, now)
 		return
 	}
 	records, err := store.GetRestarts(ctx)
 	if err != nil {
 		klog.V(2).InfoS("restart history unavailable", "error", err)
 	}
-	records = append(records, restartRecord{At: now, Reason: reason,
-		StoppedAt: previous.EndedAt})
+	records = append(records, record)
 	if len(records) > maxRestartRecords {
 		records = records[len(records)-maxRestartRecords:]
 	}
@@ -100,6 +109,7 @@ func (s *startupManager) recordRestart(
 		klog.V(2).InfoS("failed to record restart", "error", err)
 	}
 	s.restarts = recentRestarts(records, now)
+	s.notWatching = notWatchingSpans(records, now)
 }
 
 // recentRestarts are the records of the last restartWindow, newest
@@ -112,7 +122,8 @@ func recentRestarts(records []restartRecord, now time.Time) []health.SelfStop {
 			continue
 		}
 		out = append(out, health.SelfStop{At: r.At, Reason: r.Reason,
-			StoppedAt: r.StoppedAt})
+			StoppedAt: r.StoppedAt,
+			Text:      health.StopReasonText(r.Reason)})
 	}
 	return out
 }
@@ -125,6 +136,16 @@ type startNotice struct {
 	message func(report string) (string, bool)
 	restart announce.Restart
 	self    selfSession
+	// onStop, when set, reads kwatch's own pod and node from the model
+	// as the pipeline stops (startupManager.noteStop).
+	onStop func(attributeReader)
+}
+
+// stopped hands the stopping pipeline's model to onStop.
+func (n startNotice) stopped(model attributeReader) {
+	if n.onStop != nil {
+		n.onStop(model)
+	}
 }
 
 // selfSession is what this start knows about kwatch's own sessions.
@@ -132,13 +153,16 @@ type selfSession struct {
 	startedAt time.Time
 	lastStop  *health.SelfStop
 	restarts  []health.SelfStop
+	// notWatching are the stretches kwatch was not running before this
+	// start, oldest first (not_watching.go).
+	notWatching []health.NotWatchingSpan
 }
 
 // gap is what this start hands the pipeline (startNotice): the
 // unmonitored time before it with the sender of the gap message (none
 // without a gap), and how it followed the previous session.
 func (s *startupManager) gap() startNotice {
-	notice := startNotice{self: s.selfSession()}
+	notice := startNotice{self: s.selfSession(), onStop: s.noteStop}
 	if s.lastStop != nil {
 		notice.restart = announce.Restart{At: s.lastStop.At,
 			Reason: s.lastStop.Reason, Down: s.lastGap}
@@ -158,5 +182,7 @@ func (s *startupManager) selfSession() selfSession {
 	started := s.session.StartedAt
 	s.sessionMu.Unlock()
 	return selfSession{startedAt: started, lastStop: s.lastStop,
-		restarts: append([]health.SelfStop(nil), s.restarts...)}
+		restarts: append([]health.SelfStop(nil), s.restarts...),
+		notWatching: append([]health.NotWatchingSpan(nil),
+			s.notWatching...)}
 }

@@ -11,7 +11,7 @@ import (
 // new revision is the difference. If every revision fails alike, the
 // rollout is not what broke.
 func scoreRevision(v *view, c *candidate) outcome {
-	if c.bestMatch().match.row.Name != "rollout" {
+	if c.bestMatch().match.row.Name != RuleRollout {
 		return outcome{}
 	}
 	failingRevisions, healthyRevisions := 0, 0

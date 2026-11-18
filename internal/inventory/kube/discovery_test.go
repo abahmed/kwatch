@@ -59,7 +59,7 @@ func TestDiscoverResourcesPlansEveryListWatchType(t *testing.T) {
 		"apiregistration.k8s.io/v1/apiservices":             WatchStatus,
 		"/v1/replicationcontrollers":                        WatchStatus,
 		"coordination.k8s.io/v1/leases":                     WatchMetadata,
-		"apps/v1/controllerrevisions":                       WatchMetadata,
+		"apps/v1/controllerrevisions":                       WatchStatus,
 		"rbac.authorization.k8s.io/v1/roles":                WatchStatus,
 		"rbac.authorization.k8s.io/v1/clusterrolebindings":  WatchStatus,
 		"scheduling.k8s.io/v1/priorityclasses":              WatchMetadata,

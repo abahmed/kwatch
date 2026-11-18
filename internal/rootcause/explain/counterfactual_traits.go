@@ -13,9 +13,15 @@ import (
 const shortDigestLen = 12
 
 // podTraits is what one pod can differ in from its replicas: the zone
-// it runs in, the containers it carries and the build each runs.
+// it runs in, the containers it carries and the build each runs, and
+// for ReplicaSplit its node, the node's architecture and instance
+// type, the revision it was made from and its QoS class.
 type podTraits struct {
 	zone string
+	// node, arch and instance describe the node it runs on; revision
+	// names the ReplicaSet or the controller revision hash it was made
+	// from; qos is its QoS class. Each is "" when unknown.
+	node, arch, instance, revision, qos string
 	// images maps a container name to its image reference; init
 	// containers are left out.
 	images map[string]string
@@ -30,6 +36,7 @@ func (v *view) traitsOf(pod inventory.EntityID) podTraits {
 	t := podTraits{images: map[string]string{},
 		builds: map[string]string{}, seen: map[string]time.Time{}}
 	t.zone = v.zoneOf(pod)
+	v.placeTraits(pod, &t)
 	for _, id := range v.s.Model.Related(pod, inventory.PartOf,
 		inventory.Incoming) {
 		if e, ok := v.s.Model.Entity(id); ok && !attrBool(e, kube.AttrInit) {

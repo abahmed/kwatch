@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/clock"
+	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/incident"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/status"
@@ -22,28 +23,28 @@ const (
 
 var testEpoch = time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 
-// fakeIncidents is an incidentReader over a fixed list.
+// fakeIncidents is an incidentReader over a fixed list, with the old
+// problems and their days. Its revision moves only on publish, as the
+// engine's does once per loop.
 type fakeIncidents struct {
 	mu    sync.Mutex
 	items []incident.Incident
+	old   []detection.Finding
+	days  int
+	rev   uint64
 }
 
-func (f *fakeIncidents) Incidents() []incident.Incident {
+func (f *fakeIncidents) View() *incident.View {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return append([]incident.Incident(nil), f.items...)
+	return incident.NewView(f.rev, f.items, f.old, f.days)
 }
 
-func (f *fakeIncidents) Incident(id string) *incident.Incident {
+// publish is one engine loop: the next View is a new revision.
+func (f *fakeIncidents) publish() {
 	f.mu.Lock()
-	defer f.mu.Unlock()
-	for i := range f.items {
-		if f.items[i].ID == id {
-			p := f.items[i]
-			return &p
-		}
-	}
-	return nil
+	f.rev++
+	f.mu.Unlock()
 }
 
 func testIncident(

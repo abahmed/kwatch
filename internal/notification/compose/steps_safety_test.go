@@ -92,7 +92,8 @@ func TestRolloutUndoNeedsKnownRevision(t *testing.T) {
 			t.Errorf("undo without a revision: %q", step.Command)
 		}
 	}
-	cause.RollbackRevision = "4"
+	cause.RollbackRevision, cause.Score = "4", 0.9
+	cause.PreviousServed = true
 	steps := nextSteps(p, nil)
 	last := steps[len(steps)-1]
 	if last.Command != "kubectl rollout undo deployment/api -n ns "+

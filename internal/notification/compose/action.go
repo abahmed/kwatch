@@ -8,7 +8,8 @@ import (
 )
 
 // rollbackWords introduce a rollback, by how sure the cause is. A
-// rollback is only offered when the cause is at least likely, and is
+// rollback is only offered when the cause is at least likely (undoSure),
+// and is
 // labelled as a change: every command that changes the cluster says so.
 // They say what the command does (it undoes the release), never that
 // it will fix anything.
@@ -22,15 +23,25 @@ var rollbackWords = map[certainty]string{
 
 // actionSentences suggest the one most useful command: a labelled
 // rollback when the blamed change is known, otherwise the first
-// read-only command. Commands end the sentence so they copy cleanly.
+// read-only command. Commands end the sentence so they copy cleanly. A
+// rollback kwatch withholds for want of a record of the previous
+// version serving is said first (withheldSentence).
 func actionSentences(f caseFacts) []sentence {
 	steps := proSteps(f)
-	if step, ok := rollbackStep(steps); ok {
-		if words, sure := rollbackWords[certaintyOf(f.p.Cause)]; sure {
-			return []sentence{{part: partAction,
-				text: fmt.Sprintf(words, f.p.Cause.RollbackRevision) +
-					step.Command}}
-		}
+	action := firstAction(f, steps)
+	if withheld, ok := withheldSentence(steps); ok {
+		return append([]sentence{withheld}, action...)
+	}
+	return action
+}
+
+// firstAction is the one most useful command (actionSentences).
+func firstAction(f caseFacts, steps []notification.Step) []sentence {
+	if step, ok := rollbackStep(steps); ok && undoSure(f.p.Cause) {
+		words := rollbackWords[certaintyOf(f.p.Cause)]
+		return []sentence{{part: partAction,
+			text: fmt.Sprintf(words, f.p.Cause.RollbackRevision) +
+				step.Command}}
 	}
 	if text, ok := managedAction(f, steps); ok {
 		return []sentence{{part: partAction, text: text}}
@@ -40,7 +51,7 @@ func actionSentences(f caseFacts) []sentence {
 			text: "To " + lowerFirst(step.Text) + ", run " + step.Command}}
 	}
 	if len(steps) > 0 && steps[0].Command == "" &&
-		dependencyLogCause(f.p.Cause) {
+		(dependencyLogCause(f.p.Cause) || kindOnlyCause(f.p.Cause)) {
 		// The dependency's address is in the workload's configuration,
 		// which may hold credentials: the step says where to look.
 		return []sentence{{part: partAction, text: steps[0].Text + "."}}

@@ -125,15 +125,16 @@ func (QuotaSchema) Describe(obj any) (Description, bool) {
 	rel := relations{}
 	rel.add(inventory.Constrains,
 		inventory.CoreID(KindNamespace, "", quota.Namespace))
+	attrs := map[string]inventory.Value{
+		AttrExhausted:     inventory.Text(strings.Join(exhausted, ",")),
+		AttrQuotaZeroHard: inventory.Text(strings.Join(zero, ",")),
+		AttrQuotaNearLimit: inventory.Text(
+			quotaNearLimit(quota.Status)),
+	}
+	addQuotaMemoryLeft(attrs, quota)
 	return Description{
 		ID: objectID(KindQuota, quota), UID: string(quota.UID),
-		Attributes: map[string]inventory.Value{
-			AttrExhausted:     inventory.Text(strings.Join(exhausted, ",")),
-			AttrQuotaZeroHard: inventory.Text(strings.Join(zero, ",")),
-			AttrQuotaNearLimit: inventory.Text(
-				quotaNearLimit(quota.Status)),
-		},
-		Relations: rel,
+		Attributes: attrs, Relations: rel,
 	}, true
 }
 

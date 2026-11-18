@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -34,7 +35,7 @@ func toListItemWith(
 		WorkloadKind:    string(p.Root.Kind),
 		FirstSeen:       p.Opened,
 		LastSeen:        lastSeen(p),
-		RepeatCount:     p.RepeatCount,
+		RepeatCount:     failedAgain(p),
 		AckedBy:         ackedBy(p),
 		Acked:           p.Ack != nil,
 		StoppedTracking: stoppedTracking(p),
@@ -61,12 +62,12 @@ func shortCause(cause string) string {
 // buildDetail converts p, adds the context c and fits the result to
 // the response limit.
 func buildDetail(p incident.Incident, c detailContext) IncidentDetail {
-	steps := toSteps(p.Steps)
+	steps := currentSteps(toSteps(p.Steps), p, c.model)
 	item := toListItem(p)
 	item.RootCause = redact.Evidence(causeText(p))
 	d := IncidentDetail{
 		IncidentListItem: item,
-		FullTitle:        redact.Evidence(p.FullTitle()),
+		FullTitle:        redact.Evidence(groupTitle(p, p.FullTitle())),
 		FixSteps:         steps,
 		Timeline:         toTimeline(p.Timeline),
 		CapturedLogLines: redactAll(p.Facts),
@@ -100,7 +101,7 @@ func toSteps(in []incident.FixStep) []FixStep {
 func titleFor(p incident.Incident, red func(string) string) string {
 	switch title := p.Title(); {
 	case title != "":
-		return red(title)
+		return red(groupTitle(p, title))
 	case p.Root.Name != "":
 		return rootWords(p.Root)
 	default:
@@ -201,8 +202,18 @@ func toTimeline(events []incident.Event) []Event {
 			Entity:  entityIDString(e.Entity),
 			Repeats: e.Repeats,
 		})
+		if e.Gap > 0 {
+			out = append(out, gapEvent(e))
+		}
 	}
 	return out
+}
+
+// gapEvent marks, right after e, the updates kwatch did not keep there
+// to bound a long-lived incident's timeline.
+func gapEvent(e incident.Event) Event {
+	return Event{At: e.At, Kind: kindGap, Gap: e.Gap,
+		Text: strconv.Itoa(e.Gap) + " earlier updates not kept"}
 }
 
 func entityIDString(e *inventory.EntityID) string {

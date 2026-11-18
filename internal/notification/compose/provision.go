@@ -1,5 +1,7 @@
 package compose
 
+import "github.com/abahmed/kwatch/internal/rootcause/explain"
+
 // weightProvision puts the provisioner's own words above the
 // scheduler's: they name the missing class.
 const weightProvision = 0.6
@@ -8,8 +10,8 @@ const weightProvision = 0.6
 // StorageClass does not exist: the claim's event says which class it
 // could not find.
 func provisionSentences(f caseFacts) []sentence {
-	if !causeRuleIs(f, "storage-class-missing",
-		"storage-class-missing-pending") {
+	if !causeRuleIs(f, explain.RuleStorageClassMissing,
+		explain.RuleStorageClassMissingPending) {
 		return nil
 	}
 	for _, s := range f.members {
