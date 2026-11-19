@@ -58,6 +58,9 @@ var conversionDownRow = Row{
 // the conversion webhook that failed.
 func (v *view) errorNamedHops(id inventory.EntityID) []hop {
 	var out []hop
+	if id.Kind == kube.KindPVC {
+		out = append(out, v.provisionerHops(id)...)
+	}
 	if id.Kind == kube.KindPVC || id.Kind == kube.KindPod {
 		out = append(out, v.boundElsewhereHops(id)...)
 	}

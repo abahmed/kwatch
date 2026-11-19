@@ -48,9 +48,6 @@ func (v *view) virtualHops(id inventory.EntityID) []hop {
 		out = append(out, v.agentHops(id)...)
 		out = append(out, v.preemptionHops(id)...)
 	}
-	if id.Kind == kube.KindPVC {
-		out = append(out, v.provisionerHops(id)...)
-	}
 	out = append(out, v.errorNamedHops(id)...)
 	if id.Kind == kube.KindContainer {
 		out = append(out, v.initWaitHops(id)...)
