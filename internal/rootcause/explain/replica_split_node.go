@@ -47,9 +47,10 @@ func (v *view) splitOnNode(effect, node inventory.EntityID) bool {
 		case !onNode:
 			continue
 		case at == node:
-			if !v.unitFailing(sibling) {
-				return false
-			}
+			// A sibling that runs here beside the failing ones fits a
+			// node-local error too (the kubelet rejects some pods and
+			// not others); nodeLocalErrors gates that.
+			continue
 		case v.unitFailing(sibling):
 			return false
 		default:
@@ -98,6 +99,7 @@ var nodeLocalMarkers = []string{
 	"didn't have enough resource", "outofcpu", "outofmemory",
 	"too many open files", "inotify", "no space left on device",
 	"hostpath type check failed", "topology affinity",
+	"topology locality",
 }
 
 // nodeLocalErrors reports whether some effect's own error text carries a
