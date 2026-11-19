@@ -1,17 +1,19 @@
 version: 2
+
+# One weekly pull request for every ecosystem keeps updates reviewable and
+# lets the full CI gate run once for the whole set.
+multi-ecosystem-groups:
+  all-dependencies:
+    schedule:
+      interval: "weekly"
+
 updates:
-  # One grouped weekly pull request keeps module updates reviewable and lets
-  # the full CI gate run once for the whole set.
   - package-ecosystem: "gomod"
     directory: "/"
     commit-message:
       prefix: "⬆️"
-    schedule:
-      interval: "weekly"
-    groups:
-      go-dependencies:
-        patterns:
-          - "*"
+    patterns: ["*"]
+    multi-ecosystem-group: "all-dependencies"
   # The release image and the e2e receiver and workload images. Base images
   # pinned by digest get their digest bumped here.
   - package-ecosystem: "docker"
@@ -21,19 +23,11 @@ updates:
       - "/test/e2e/workload"
     commit-message:
       prefix: "⬆️"
-    schedule:
-      interval: "weekly"
-    groups:
-      docker-dependencies:
-        patterns:
-          - "*"
+    patterns: ["*"]
+    multi-ecosystem-group: "all-dependencies"
   - package-ecosystem: "github-actions"
     directory: "/"
     commit-message:
       prefix: "⬆️"
-    schedule:
-      interval: "weekly"
-    groups:
-      github-actions:
-        patterns:
-          - "*"
+    patterns: ["*"]
+    multi-ecosystem-group: "all-dependencies"
