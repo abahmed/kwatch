@@ -112,9 +112,10 @@ func gap7aJobFailsOnDrains() scenario {
 	e := g2Exp("job-fails-backoff-limit-from-node-drains",
 		"A Job's pod is evicted by three node drains in a row; the "+
 			"evictions count as failures and the Job reaches "+
-			"BackoffLimitExceeded though its code never failed.",
-		"node//n1", "notify", "node//n2").budget(3).tail(10 * time.Minute)
-	e.Ambiguous = true
+			"BackoffLimitExceeded though its code never failed. The Job "+
+			"counting disruptions (no podFailurePolicy that ignores "+
+			"them) is the cause to act on; the drains were deliberate.",
+		"job/batch/nightly", "notify").budget(3).tail(10 * time.Minute)
 	return scenario{expect: e, build: func(c *cluster) {
 		c.list(c.node("n1", "zone-a"), c.node("n2", "zone-a"),
 			c.node("n3", "zone-a"))

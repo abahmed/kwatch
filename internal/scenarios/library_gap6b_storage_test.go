@@ -183,7 +183,7 @@ func gap6bSnapshotClassAmbiguous() scenario {
 		"A VolumeSnapshot never starts because two snapshot classes "+
 			"are default for its driver; the controller warns "+
 			"SetDefaultSnapshotClassFailed.",
-		"volumesnapshot/shop/nightly", "digest", "node//n1").
+		"volumesnapshot.snapshot.storage.k8s.io/shop/nightly", "digest", "node//n1").
 		tail(10 * time.Minute)
 	e.Ambiguous = true
 	return scenario{expect: e, build: func(c *cluster) {
@@ -216,7 +216,7 @@ func gap6bSnapshotCreationFailed() scenario {
 			"A VolumeSnapshot never becomes ready because the driver "+
 				"fails to create it; the content's status carries the "+
 				"error.",
-			"volumesnapshotcontent//snapcontent-3f2a", "notify",
+			"volumesnapshotcontent.snapshot.storage.k8s.io//snapcontent-3f2a", "notify",
 			"node//n1").tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
@@ -309,7 +309,7 @@ func gap6bSnapshotContentMissing() scenario {
 			"A VolumeSnapshot recreated from a backup names a "+
 				"VolumeSnapshotContent that does not exist; it is never "+
 				"Ready (SnapshotContentMissing).",
-			"volumesnapshotcontent//imported-content", "notify",
+			"volumesnapshotcontent.snapshot.storage.k8s.io//imported-content", "notify",
 			"node//n1").tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))

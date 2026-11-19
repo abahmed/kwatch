@@ -1,12 +1,8 @@
 {
   "name": "job-fails-backoff-limit-from-node-drains",
-  "description": "A Job's pod is evicted by three node drains in a row; the evictions count as failures and the Job reaches BackoffLimitExceeded though its code never failed.",
-  "root": "node//n1",
+  "description": "A Job's pod is evicted by three node drains in a row; the evictions count as failures and the Job reaches BackoffLimitExceeded though its code never failed. The Job counting disruptions (no podFailurePolicy that ignores them) is the cause to act on; the drains were deliberate.",
+  "root": "job/batch/nightly",
   "tier": "notify",
   "maxMessages": 3,
-  "mustNotBlame": [
-    "node//n2"
-  ],
-  "ambiguous": true,
   "tail": "10m0s"
 }

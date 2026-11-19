@@ -1,7 +1,7 @@
 {
   "name": "volume-snapshot-content-missing",
   "description": "A VolumeSnapshot recreated from a backup names a VolumeSnapshotContent that does not exist; it is never Ready (SnapshotContentMissing).",
-  "root": "volumesnapshotcontent//imported-content",
+  "root": "volumesnapshotcontent.snapshot.storage.k8s.io//imported-content",
   "tier": "notify",
   "maxMessages": 2,
   "mustNotBlame": [
