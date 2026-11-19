@@ -1,0 +1,6 @@
+{
+  "name": "drain-long-grace-period-within-grace-quiet",
+  "description": "A node is drained during an upgrade; its pods have a ten-minute grace period and stay Terminating for eight, while two ReplicaSets hold pods for half an hour.",
+  "maxMessages": 0,
+  "quiet": true
+}

@@ -1,0 +1,11 @@
+{
+  "name": "node-runtime-class-handler-missing",
+  "description": "A pod with a RuntimeClass lands on the one node whose runtime has no such handler; it stays in ContainerCreating with FailedCreatePodSandBox.",
+  "root": "node//n3",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/sandboxed"
+  ],
+  "tail": "10m0s"
+}

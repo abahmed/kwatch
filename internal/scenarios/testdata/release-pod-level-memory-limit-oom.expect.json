@@ -1,0 +1,11 @@
+{
+  "name": "release-pod-level-memory-limit-oom",
+  "description": "A release sets a pod-level memory limit that its containers together exceed; one container is OOMKilled repeatedly.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

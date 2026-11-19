@@ -1,0 +1,15 @@
+{
+  "name": "scheduler-leader-lost-after-etcd-slow",
+  "description": "etcd requests time out; the scheduler loses its lease and new pods stay Pending without events until it is leader again.",
+  "root": "etcd//etcd",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "scheduler//kube-scheduler",
+    "deployment/shop/cart",
+    "deployment/shop/search",
+    "deployment/billing/invoices",
+    "node//n1",
+    "node//n2"
+  ]
+}

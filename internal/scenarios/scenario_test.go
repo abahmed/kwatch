@@ -221,6 +221,7 @@ func library() []scenario {
 		gapStorageScenarios(), gapStartScenarios(), gapSpecScenarios(),
 		gapClusterScenarios(),
 		gap2Scenarios(), gap3Scenarios(),
+		gap4aScenarios(), gap4bScenarios(),
 	} {
 		out = append(out, group...)
 	}

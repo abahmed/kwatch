@@ -1,0 +1,8 @@
+10:21:15 settled
+🟠 Volume pv-pgdata (prod-eu-1) is stuck deleting: finalizers kubernetes.io/pv-protection hold it. To see the object's state and events, run kubectl describe persistentvolume pv-pgdata
+🟠 Volume pv-pgdata (prod-eu-1) is stuck deleting: finalizers kubernetes.io/pv-protection hold it.
+| 🟠 Volume **pv-pgdata** (**prod-eu-1**) is stuck deleting: finalizers kubernetes.io/pv-protection hold it.
+| To see the object's state and events, run
+| ```
+| kubectl describe persistentvolume pv-pgdata
+| ```

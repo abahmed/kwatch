@@ -1,0 +1,13 @@
+{
+  "name": "all-nodes-lost-evictions-halted",
+  "description": "Every node stops reporting in the same minute; no pod is evicted or replaced because the controller halts evictions when all zones are disrupted.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "deployment/shop/payments",
+    "deployment/shop/cart"
+  ],
+  "tail": "15m0s"
+}

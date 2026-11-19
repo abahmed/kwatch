@@ -1,0 +1,12 @@
+{
+  "name": "workload-hits-pod-pids-limit",
+  "description": "A worker crashes with \"Resource temporarily unavailable\" when it forks past the per-pod PID limit while its nodes report no pressure.",
+  "root": "deployment/shop/worker",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

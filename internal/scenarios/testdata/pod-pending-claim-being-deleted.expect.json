@@ -1,0 +1,12 @@
+{
+  "name": "pod-pending-claim-being-deleted",
+  "description": "A claim deleted while a pod uses it stays Terminating; the replacement pod is Pending with \"persistentvolumeclaim is being deleted\".",
+  "root": "persistentvolumeclaim/shop/pgdata",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

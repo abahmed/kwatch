@@ -1,0 +1,14 @@
+10:06:15 settled
+🟠 worker in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "java.lang.OutOfMemoryError: unable to create native thread: possibly out of memory or process/resource limits reached…". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs deploy/worker -c app -n shop --previous
+🟠 worker in shop (prod-eu-1) keeps crashing.
+| 🟠 **worker** in **shop** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| It fails with
+| ```
+| java.lang.OutOfMemoryError: unable to create native thread: possibly out of memory or process/resource limits reached…
+| ```
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/worker -c app -n shop --previous
+| ```

@@ -1,0 +1,13 @@
+{
+  "name": "node-allocatable-enforcement-failed",
+  "description": "A kubelet warns FailedNodeAllocatableEnforcement because its reserved cgroup cannot be set; pods run.",
+  "root": "node//n1",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "deployment/shop/payments",
+    "deployment/shop/cart"
+  ],
+  "tail": "10m0s"
+}

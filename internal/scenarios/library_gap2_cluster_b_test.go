@@ -213,9 +213,11 @@ func gap2NamespaceAPIService() scenario {
 		expect: g2Exp("namespace-stuck-on-unavailable-apiservice",
 			"A namespace stays Terminating because discovery fails for "+
 				"the metrics API group, whose APIService has no "+
-				"endpoints.",
+				"endpoints; when the extension is restarted, every "+
+				"workload in the namespace is deleted at once.",
 			"apiservice//v1beta1.metrics.k8s.io", "notify",
-			"namespace//old-shop").tail(10 * time.Minute),
+			"namespace//old-shop", "deployment/old-shop/web").
+			budget(3).tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(clusterService(c, "kube-system", "metrics-server", 10250),
 				clusterSlice(c, "kube-system", "metrics-server"))
@@ -237,8 +239,21 @@ func gap2NamespaceAPIService() scenario {
 					c.now.Add(-2 * time.Hour)),
 			}}
 			c.list(ns)
+			c.list(c.node("n1", "zone-a"))
+			web := c.deployment("old-shop", "web",
+				"registry.example.com/web:7", 2)
+			c.list(web.objects())
+			c.list(web.pod(0, "n1"), web.pod(1, "n1"))
 			c.after(20 * time.Minute)
 			c.update(ns.DeepCopy())
+			c.after(20 * time.Minute)
+			c.update(clusterAPIService(c, "True", "Passed",
+				"all checks passed"))
+			c.after(30 * time.Second)
+			c.remove(web.pod(0, "n1"), web.pod(1, "n1"))
+			c.remove(web.objects())
+			c.remove(ns)
+			c.after(5 * time.Minute)
 		},
 	}
 }

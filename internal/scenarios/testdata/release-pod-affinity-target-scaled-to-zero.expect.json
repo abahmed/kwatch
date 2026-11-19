@@ -1,0 +1,12 @@
+{
+  "name": "release-pod-affinity-target-scaled-to-zero",
+  "description": "A release requires scheduling next to pods labelled app=cache; the cache Deployment is scaled to zero and the new pod is Pending with \"didn't match pod affinity rules\".",
+  "root": "deployment/shop/cache",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

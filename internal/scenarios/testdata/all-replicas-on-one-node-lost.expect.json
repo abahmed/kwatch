@@ -1,0 +1,12 @@
+{
+  "name": "all-replicas-on-one-node-lost",
+  "description": "All replicas of a service and its cache run on one node, which stops reporting; the service has no ready pod.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/web",
+    "deployment/shop/cache"
+  ],
+  "tail": "10m0s"
+}

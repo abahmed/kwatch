@@ -1,0 +1,6 @@
+{
+  "name": "node-swap-notices-healthy-pods-quiet",
+  "description": "Pods on swap-enabled nodes get SwapLimitNotEnforced and PossibleMemoryBackedVolumesOnDisk warnings and are ready.",
+  "maxMessages": 0,
+  "quiet": true
+}

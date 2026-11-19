@@ -1,0 +1,11 @@
+{
+  "name": "release-grpc-liveness-probe-tls-server",
+  "description": "A release adds a plain gRPC liveness probe to a TLS-only server; the probe fails and the kubelet restarts the container while the application logs no error.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

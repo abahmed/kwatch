@@ -1,0 +1,10 @@
+10:03:15 settled
+🟠 runner in ci (prod-eu-1) has not been looked at by the scheduler for two minutes. Cause not found yet: its node and registry are healthy and unchanged. In the last 30 minutes in ci: runner was created at 10:00 UTC. To see the pods' state and events, run kubectl describe pods runner- -n ci
+🟠 runner in ci (prod-eu-1) has not been looked at by the scheduler for two minutes.
+| 🟠 **runner** in ci (**prod-eu-1**) has not been looked at by the scheduler for two minutes.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| In the last 30 minutes in ci: **runner** was created at 10:00 UTC.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods runner- -n ci
+| ```

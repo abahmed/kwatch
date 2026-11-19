@@ -1,0 +1,9 @@
+10:12:15 settled
+🟠 web in shop (prod-eu-1) is failing: networking cannot be set up. Cause not found yet: its node and registry are healthy and unchanged. To see the pods' state and events, run kubectl describe pods web- -n shop
+🟠 web in shop (prod-eu-1) is failing: networking cannot be set up.
+| 🟠 **web** in **shop** (**prod-eu-1**) is failing: networking cannot be set up.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods web- -n shop
+| ```

@@ -1,0 +1,12 @@
+{
+  "name": "etcd-restarted-by-own-liveness-probe",
+  "description": "etcd's liveness probe times out and the kubelet restarts it every couple of minutes, with short healthy windows in between.",
+  "root": "etcd//etcd",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "apiserver//kube-apiserver",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

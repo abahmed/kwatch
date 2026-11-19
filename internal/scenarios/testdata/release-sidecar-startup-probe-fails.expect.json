@@ -1,0 +1,12 @@
+{
+  "name": "release-sidecar-startup-probe-fails",
+  "description": "A release adds a restartable init container (a native sidecar) whose startup probe checks the wrong port; the pod stays in PodInitializing and the main container never starts.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

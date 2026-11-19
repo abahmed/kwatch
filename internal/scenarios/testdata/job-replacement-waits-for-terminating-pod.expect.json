@@ -1,0 +1,11 @@
+{
+  "name": "job-replacement-waits-for-terminating-pod",
+  "description": "A Job with podReplacementPolicy Failed has no replacement pod because its pod is Terminating on a node that stopped reporting.",
+  "root": "node//n1",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "job/batch/nightly-export"
+  ],
+  "tail": "10m0s"
+}

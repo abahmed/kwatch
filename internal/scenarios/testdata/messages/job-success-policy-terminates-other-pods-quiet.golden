@@ -1,0 +1,9 @@
+10:09:15 settled
+🟠 Job mpi-train is failing in batch (prod-eu-1) after the 10:00 UTC change. Every app that uses it is failing. To see the pods' state and events, run kubectl describe pods mpi-train- -n batch
+🟠 Job mpi-train is failing in batch (prod-eu-1) after the 10:00 UTC change.
+| 🟠 Job **mpi-train** is failing in **batch** (**prod-eu-1**) after the 10:00 UTC change.
+| Every app that uses it is failing.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods mpi-train- -n batch
+| ```

@@ -1,0 +1,23 @@
+10:04:15 settled
+🟠 Job nightly-export is failing in batch (prod-eu-1) after the 10:00 UTC change. The apps that use it failed soon after it changed. To see the pods' state and events, run kubectl describe pods nightly-export- -n batch
+🟠 Job nightly-export is failing in batch (prod-eu-1) after the 10:00 UTC change.
+| 🟠 Job **nightly-export** is failing in **batch** (**prod-eu-1**) after the 10:00 UTC change.
+| The apps that use it failed soon after it changed.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods nightly-export- -n batch
+| ```
+10:11:10 cause revised
+🟠 Cause changed (earlier: job nightly-export in batch): Node n1 (prod-eu-1) is failing; two possible causes: it is not ready or job nightly-export in batch rolled out a change shortly before. The apps that use it failed soon after it changed.
+🟠 Cause changed (earlier: job nightly-export in batch): Node n1 (prod-eu-1) is failing; two possible causes: it is not ready or job nightly-export in batch rolled out a change shortly before.
+| 🟠 Cause changed (earlier: job nightly-export in batch): Node n1 (**prod-eu-1**) is failing; two possible causes: it is not ready or job nightly-export in batch rolled out a change shortly before.
+| The apps that use it failed soon after it changed.
+10:11:30 material change
+🔴 Node n1 (prod-eu-1) is now failing: heartbeat is stale: the kubelet stopped renewing its lease. This is now critical.
+🔴 Node n1 (prod-eu-1) is now failing: heartbeat is stale: the kubelet stopped renewing its lease.
+| 🔴 Node n1 (**prod-eu-1**) is now failing: heartbeat is stale: the kubelet stopped renewing its lease.
+| This is now critical.
+10:21:30 material change
+🔴 Node n1 (prod-eu-1) is now also affecting pod nightly-export-a in batch: it has been terminating for ten minutes.
+🔴 Node n1 (prod-eu-1) is now also affecting pod nightly-export-a in batch: it has been terminating for ten minutes.
+| 🔴 Node n1 (**prod-eu-1**) is now also affecting pod **nightly-export-a** in batch: it has been terminating for ten minutes.

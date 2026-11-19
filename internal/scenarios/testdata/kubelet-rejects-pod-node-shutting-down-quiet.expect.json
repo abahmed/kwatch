@@ -1,0 +1,6 @@
+{
+  "name": "kubelet-rejects-pod-node-shutting-down-quiet",
+  "description": "A pod bound to a node as it starts shutting down is rejected by the kubelet; the replacement runs on another node within half a minute.",
+  "maxMessages": 0,
+  "quiet": true
+}

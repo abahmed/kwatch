@@ -1,0 +1,12 @@
+{
+  "name": "terminating-pods-hold-addresses",
+  "description": "Eight pods held by a finalizer whose operator is gone stay Terminating for hours; the address pool is used up and new pods elsewhere cannot get an address.",
+  "root": "finalizer/jobs/jobs.example.com/cleanup",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/web"
+  ],
+  "tail": "10m0s"
+}

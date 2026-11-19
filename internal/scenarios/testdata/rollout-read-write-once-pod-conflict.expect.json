@@ -1,0 +1,12 @@
+{
+  "name": "rollout-read-write-once-pod-conflict",
+  "description": "A Deployment mounting a ReadWriteOncePod claim rolls out with a surge pod; the new pod is Pending because the old pod still uses the claim.",
+  "root": "deployment/shop/db",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

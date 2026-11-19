@@ -1,0 +1,16 @@
+{
+  "name": "memory-hog-moves-and-takes-down-nodes",
+  "description": "One workload without memory limits is placed on the next node after each node it ran on reports a system OOM and stops reporting.",
+  "root": "deployment/batch/ingest",
+  "tier": "page",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "node//n3",
+    "deployment/shop/orders",
+    "deployment/shop/payments",
+    "deployment/shop/cart"
+  ],
+  "tail": "10m0s"
+}

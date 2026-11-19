@@ -1,0 +1,9 @@
+{
+  "name": "kubelet-supplemental-groups-policy-unsupported",
+  "description": "A pod asks for supplementalGroupsPolicy Strict on a node whose runtime lacks it; the kubelet rejects each pod and lists the unsatisfied feature.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 3,
+  "ambiguous": true,
+  "tail": "10m0s"
+}
