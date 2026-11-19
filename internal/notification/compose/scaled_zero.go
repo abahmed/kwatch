@@ -5,6 +5,8 @@ import (
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
+	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/notification"
 )
 
 // weightScaledZero ranks who scaled a workload to zero: it is the whole
@@ -66,4 +68,15 @@ func onlyPausedEdit(members []detection.Finding) bool {
 		found = true
 	}
 	return found
+}
+
+// pausedSteps resume a Deployment that is paused with an edit waiting.
+func pausedSteps(root inventory.EntityID) []notification.Step {
+	return []notification.Step{{
+		Text: "Roll out the edit by resuming the Deployment " +
+			"(changes the cluster)",
+		Command: "kubectl rollout resume deploy/" + quote(root.Name) +
+			namespaceFlag(root.Namespace),
+		Mutating: true,
+	}}
 }
