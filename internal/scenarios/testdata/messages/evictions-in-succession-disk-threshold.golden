@@ -1,0 +1,63 @@
+10:06:15 settled
+🟠 orders in shop (prod-eu-1) is failing: exited with code 137. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. To see the pod's state and events, run kubectl describe pods orders- -n shop
+🟠 orders in shop (prod-eu-1) is failing: exited with code 137.
+| 🟠 **orders** in **shop** (**prod-eu-1**) is failing: exited with code 137.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| To see the pod's state and events, run
+| ```
+| kubectl describe pods orders- -n shop
+| ```
+10:07:15 settled
+🟠 Node n1 (prod-eu-1) is low on disk space. Replicas that do not depend on it are healthy. Both failing apps use it. Affected: orders and payments in shop.
+Related alerts: 2 evictions
+To check the node's conditions and recent events, run kubectl describe node n1
+🟠 Node n1 (prod-eu-1) is low on disk space.
+| 🟠 Node n1 (**prod-eu-1**) is low on disk space.
+| Replicas that do not depend on it are healthy.
+| Both failing apps use it.
+| Affected: **orders** and **payments** in **shop**.
+| Related alerts: 2 evictions
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```
+10:07:30 settled
+🟠 payments in shop (prod-eu-1) is failing: exited with code 137. Cause not found yet: its registry is healthy and unchanged, so look at the app itself. To see the pod's state and events, run kubectl describe pods payments- -n shop
+🟠 payments in shop (prod-eu-1) is failing: exited with code 137.
+| 🟠 **payments** in **shop** (**prod-eu-1**) is failing: exited with code 137.
+| Cause not found yet: its registry is healthy and unchanged, so look at the app itself.
+| To see the pod's state and events, run
+| ```
+| kubectl describe pods payments- -n shop
+| ```
+10:08:45 settled
+🟠 cart in shop (prod-eu-1) is failing: exited with code 137. Cause not found yet: its registry is healthy and unchanged, so look at the app itself. To see the pod's state and events, run kubectl describe pods cart- -n shop
+🟠 cart in shop (prod-eu-1) is failing: exited with code 137.
+| 🟠 **cart** in **shop** (**prod-eu-1**) is failing: exited with code 137.
+| Cause not found yet: its registry is healthy and unchanged, so look at the app itself.
+| To see the pod's state and events, run
+| ```
+| kubectl describe pods cart- -n shop
+| ```
+10:08:45 material change
+🟠 Node n1 (prod-eu-1) is now also affecting cart and search in shop: they were evicted.
+🟠 Node n1 (prod-eu-1) is now also affecting cart and search in shop: they were evicted.
+| 🟠 Node n1 (**prod-eu-1**) is now also affecting **cart** and **search** in shop: they were evicted.
+10:10:00 settled
+🟠 search in shop (prod-eu-1) is failing: exited with code 137. Cause not found yet: its registry is healthy and unchanged, so look at the app itself. To see the pod's state and events, run kubectl describe pods search- -n shop
+🟠 search in shop (prod-eu-1) is failing: exited with code 137.
+| 🟠 **search** in **shop** (**prod-eu-1**) is failing: exited with code 137.
+| Cause not found yet: its registry is healthy and unchanged, so look at the app itself.
+| To see the pod's state and events, run
+| ```
+| kubectl describe pods search- -n shop
+| ```
+10:11:15 settled
+🟠 ledger in shop (prod-eu-1) is failing: exited with code 137. Cause not found yet: its registry is healthy and unchanged, so look at the app itself. To see the pod's state and events, run kubectl describe pods ledger- -n shop
+🟠 ledger in shop (prod-eu-1) is failing: exited with code 137.
+| 🟠 **ledger** in **shop** (**prod-eu-1**) is failing: exited with code 137.
+| Cause not found yet: its registry is healthy and unchanged, so look at the app itself.
+| To see the pod's state and events, run
+| ```
+| kubectl describe pods ledger- -n shop
+| ```

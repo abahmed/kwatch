@@ -1,0 +1,19 @@
+10:11:15 settled
+🟠 orders in shop (prod-eu-1) is failing: exited with code 137. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. To see the pod's state and events, run kubectl describe pods orders- -n shop
+🟠 orders in shop (prod-eu-1) is failing: exited with code 137.
+| 🟠 **orders** in **shop** (**prod-eu-1**) is failing: exited with code 137.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| To see the pod's state and events, run
+| ```
+| kubectl describe pods orders- -n shop
+| ```
+10:12:15 roll-up
+🟠 kwatch (prod-eu-1) found two new problems at the same time. Node n1 is low on disk space. payments in shop is failing: exited with code 137. Each one alerts on its own when it changes or resolves.
+🟠 kwatch (prod-eu-1) found two new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
+|
+| **Problems**
+| - Node n1 — low on disk space
+| - **payments** (**shop**) — exited with code 137
+|
+| *Each one alerts on its own when it changes or resolves.*

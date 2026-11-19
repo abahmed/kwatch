@@ -1,0 +1,12 @@
+{
+  "name": "release-server-binds-other-ip-family",
+  "description": "A release makes the server listen on an IPv6 address only while pod addresses are IPv4; the readiness probe is refused from the first start.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "5m0s"
+}

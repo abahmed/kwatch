@@ -1,0 +1,15 @@
+{
+  "name": "kube-dns-service-recreated-new-cluster-ip",
+  "description": "The kube-dns Service is recreated with a new ClusterIP; older pods time out on lookups at the old address, newer pods resolve.",
+  "root": "service/kube-system/kube-dns",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/kube-system/coredns",
+    "deployment/shop/cart",
+    "deployment/billing/invoices"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "node-left-cordoned-after-maintenance",
+  "description": "A node cordoned three days ago was never uncordoned; scaled-up pods are Pending because one node is unschedulable and the others are full. The cordon explains the Pending, not the scheduling reason alone.",
+  "root": "node//n3",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/web"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,23 @@
+10:03:15 settled
+🟠 web in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged. In the last 30 minutes in shop: api: env LISTEN changed; readiness probe unset → http /ready :8080 every 10s, timeout 1s, 3 failures at 10:02 UTC. It fails with "dial tcp 10.96.22.5:8080: connect: connection refused". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs deploy/web -c app -n shop --previous
+🟠 web in shop (prod-eu-1) keeps crashing.
+| 🟠 **web** in **shop** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| In the last 30 minutes in shop: api: env LISTEN changed; readiness probe unset → http /ready :8080 every 10s, timeout 1s, 3 failures at 10:02 UTC.
+| It fails with `dial tcp 10.96.22.5:8080: connect: connection refused`.
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/web -c app -n shop --previous
+| ```
+10:09:45 settled
+🟠 api is failing in shop (prod-eu-1) after the 10:02 UTC release. The release changed the LISTEN and one other field. Only the new revision fails; the previous one stays healthy. To see the rollout state, run kubectl rollout status deployment/api -n shop
+🟠 api is failing in shop (prod-eu-1) after the 10:02 UTC release.
+| 🟠 **api** is failing in **shop** (**prod-eu-1**) after the 10:02 UTC release.
+| The release changed the LISTEN and one other field.
+| Only the new revision fails; the previous one stays healthy.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/api -n shop
+| ```

@@ -1,0 +1,14 @@
+{
+  "name": "kube-dns-service-selector-matches-nothing",
+  "description": "The kube-dns Service's selector is edited to a label that no CoreDNS pod has; it has no endpoints, lookups fail everywhere and CoreDNS pods stay Ready.",
+  "root": "service/kube-system/kube-dns",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/kube-system/coredns",
+    "deployment/shop/cart",
+    "deployment/billing/invoices"
+  ]
+}

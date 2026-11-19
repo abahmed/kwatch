@@ -1,0 +1,13 @@
+10:11:15 settled
+🟠 api in shop (prod-eu-1) cannot start (create container error). Cause not found yet: its node and registry are healthy and unchanged. It fails with "failed to reserve container name "app_api-0_shop_6a1c_0": name "app_api-0_shop_6a1c_0" is reserved for "4f1c0e2a"". To see why the container cannot start, run kubectl describe pods api- -n shop
+🟠 api in shop (prod-eu-1) cannot start (create container error).
+| 🟠 **api** in **shop** (**prod-eu-1**) cannot start (create container error).
+| Cause not found yet: its node and registry are healthy and unchanged.
+| It fails with
+| ```
+| failed to reserve container name "app_api-0_shop_6a1c_0": name "app_api-0_shop_6a1c_0" is reserved for "4f1c0e2a"
+| ```
+| To see why the container cannot start, run
+| ```
+| kubectl describe pods api- -n shop
+| ```

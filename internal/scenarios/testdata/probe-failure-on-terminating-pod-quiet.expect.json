@@ -1,0 +1,6 @@
+{
+  "name": "probe-failure-on-terminating-pod-quiet",
+  "description": "One readiness probe failure appears for a pod just after it is deleted; its replacement is ready within a minute.",
+  "maxMessages": 0,
+  "quiet": true
+}

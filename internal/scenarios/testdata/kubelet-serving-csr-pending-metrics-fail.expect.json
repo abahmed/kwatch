@@ -1,0 +1,13 @@
+{
+  "name": "kubelet-serving-csr-pending-metrics-fail",
+  "description": "A kubelet serving certificate request stays Pending; the node's self-signed certificate is rejected by metrics-server and the HPA reports FailedGetResourceMetric.",
+  "root": "certificatesigningrequest//csr-4k8x2",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/kube-system/metrics-server",
+    "node//n1",
+    "deployment/shop/web"
+  ],
+  "tail": "20m0s"
+}

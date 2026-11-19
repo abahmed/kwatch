@@ -1,0 +1,11 @@
+{
+  "name": "bare-pod-restart-never-failed",
+  "description": "A one-off pod with restartPolicy Never exits with a non-zero code and stays Failed; no controller retries it.",
+  "root": "pod/batch/migrate-once",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

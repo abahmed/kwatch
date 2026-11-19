@@ -1,0 +1,12 @@
+{
+  "name": "release-post-start-hook-hangs",
+  "description": "A release adds a postStart hook that never returns; the new pod stays in ContainerCreating with no event for ten minutes.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

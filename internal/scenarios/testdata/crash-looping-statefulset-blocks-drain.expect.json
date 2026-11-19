@@ -1,0 +1,12 @@
+{
+  "name": "crash-looping-statefulset-blocks-drain",
+  "description": "A StatefulSet's pods crash-loop; its disruption budget allows no eviction because too few are healthy, and a node drain waits on them.",
+  "root": "statefulset/streaming/queue",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "poddisruptionbudget/streaming/queue-pdb",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

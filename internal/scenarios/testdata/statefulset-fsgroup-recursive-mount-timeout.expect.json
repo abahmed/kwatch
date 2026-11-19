@@ -1,0 +1,12 @@
+{
+  "name": "statefulset-fsgroup-recursive-mount-timeout",
+  "description": "A StatefulSet pod waits in ContainerCreating with FailedMount \"timed out waiting for the condition\" because fsGroup makes the kubelet change ownership of a very large volume.",
+  "root": "statefulset/streaming/queue",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

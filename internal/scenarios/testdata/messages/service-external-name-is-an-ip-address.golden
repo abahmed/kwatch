@@ -1,0 +1,11 @@
+10:03:15 settled
+🟠 web in shop (prod-eu-1) keeps crashing. Cause not found yet: its node, registry and services are healthy and unchanged, so look at the app itself. It fails with "dial tcp: lookup db.shop.svc.cluster.local on 10.96.0.10:53: no such host". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs deploy/web -c app -n shop --previous
+🟠 web in shop (prod-eu-1) keeps crashing.
+| 🟠 **web** in **shop** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node, registry and services are healthy and unchanged, so look at the app itself.
+| It fails with `dial tcp: lookup db.shop.svc.cluster.local on 10.96.0.10:53: no such host`.
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/web -c app -n shop --previous
+| ```

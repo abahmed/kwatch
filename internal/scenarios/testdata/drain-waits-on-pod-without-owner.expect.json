@@ -1,0 +1,11 @@
+{
+  "name": "drain-waits-on-pod-without-owner",
+  "description": "A node cordoned for an upgrade stays cordoned for hours because a pod without a controller cannot be moved.",
+  "root": "pod/ops/debug-shell",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

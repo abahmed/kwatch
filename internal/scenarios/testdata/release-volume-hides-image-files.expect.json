@@ -1,0 +1,11 @@
+{
+  "name": "release-volume-hides-image-files",
+  "description": "A release mounts an empty volume over the directory where the image keeps its configuration; the container exits at once on a missing file under the mount.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

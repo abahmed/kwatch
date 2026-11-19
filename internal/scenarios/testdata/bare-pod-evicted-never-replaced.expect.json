@@ -1,0 +1,12 @@
+{
+  "name": "bare-pod-evicted-never-replaced",
+  "description": "A standalone pod with no controller is evicted for ephemeral storage; nothing recreates it and the service it backed fails.",
+  "root": "pod/shop/cache-standalone",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/web"
+  ],
+  "tail": "10m0s"
+}
