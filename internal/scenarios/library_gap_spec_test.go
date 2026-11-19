@@ -13,6 +13,7 @@ import (
 func gapSpecScenarios() []scenario {
 	return []scenario{
 		gapPriorityClassMissing(), gapDeploymentPaused(),
+		gapDeploymentPausedNoEdit(),
 		gapConfigMapVolumeMissing(), gapNodeNameMissing(),
 	}
 }
@@ -67,9 +68,9 @@ func gapDeploymentPaused() scenario {
 			Description: "A Deployment is paused and then edited; the " +
 				"change never rolls out and the Progressing condition " +
 				"reads DeploymentPaused.",
-			Root: "deployment/shop/api", Tier: "notify", MaxMessages: 2,
+			Root: "deployment/shop/api", Tier: "digest", MaxMessages: 2,
 			MustNotBlame: []string{"node//n1", "node//n2"},
-			Tail:         duration(10 * time.Minute),
+			Tail:         duration(20 * time.Minute),
 		},
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"), c.node("n2", "zone-a"))
@@ -83,6 +84,40 @@ func gapDeploymentPaused() scenario {
 			d.Spec.Template.Spec.Containers[0].Image =
 				"registry.example.com/api:2.6"
 			d.Generation, d.Status.ObservedGeneration = 2, 2
+			d.Status.Conditions = []appsv1.DeploymentCondition{{
+				Type: appsv1.DeploymentProgressing, Status: "Unknown",
+				Reason: "DeploymentPaused", Message: "Deployment is paused",
+				LastTransitionTime: metav1.NewTime(c.now),
+			}}
+			c.update(d)
+			for range 4 {
+				c.after(15 * time.Minute)
+				c.update(d.DeepCopy())
+			}
+		},
+	}
+}
+
+// gapDeploymentPausedNoEdit: a Deployment is paused and left alone for an
+// hour. Nothing is waiting to roll out, so nothing is said.
+func gapDeploymentPausedNoEdit() scenario {
+	return scenario{
+		expect: expectation{
+			Name: "deployment-paused-no-edit",
+			Description: "A Deployment is paused and not edited; its " +
+				"Progressing condition reads DeploymentPaused for an " +
+				"hour and every replica is ready.",
+			Quiet: true,
+		},
+		build: func(c *cluster) {
+			c.list(c.node("n1", "zone-a"), c.node("n2", "zone-a"))
+			w := c.deployment("shop", "api", "registry.example.com/api:2.5",
+				2)
+			c.list(w.objects())
+			c.list(w.pod(0, "n1"), w.pod(1, "n2"))
+			c.after(5 * time.Minute)
+			d := w.deployment.DeepCopy()
+			d.Spec.Paused = true
 			d.Status.Conditions = []appsv1.DeploymentCondition{{
 				Type: appsv1.DeploymentProgressing, Status: "Unknown",
 				Reason: "DeploymentPaused", Message: "Deployment is paused",

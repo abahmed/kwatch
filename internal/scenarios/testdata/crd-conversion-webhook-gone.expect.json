@@ -1,7 +1,7 @@
 {
   "name": "crd-conversion-webhook-gone",
   "description": "A CRD's conversion webhook has no backend; the operator that reads its resources crash-loops on \"no endpoints available for service\".",
-  "root": "customresourcedefinition.apiextensions.k8s.io//widgets.acme.example",
+  "root": "customresourcedefinition//widgets.acme.example",
   "tier": "notify",
   "maxMessages": 2,
   "mustNotBlame": [

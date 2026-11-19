@@ -202,6 +202,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Missing.Secret | varies | `ProjectedSecretMissing` | `config` |
 | Missing.ServiceAccount | varies | `ServiceAccountMissing` | `config` |
 | Network.CNINotReady | varies | `NodeCNINotReady` | `node_health` |
+| Network.Conflict | varies | `NodePodNetworkConflict` | `node_health` |
 | Network.IPExhausted | varies | `NodePodIPExhausted` | `node_health` |
 | NetworkErrors | varies | `NodeNetworkErrors` | `resources` |
 | NetworkPolicy | degraded | `RestrictiveNetworkPolicy` | `network` |

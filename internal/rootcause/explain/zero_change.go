@@ -53,7 +53,7 @@ func (v *view) refutedChanges(
 	var out []inventory.EntityID
 	for _, f := range failures {
 		if v.changedBefore(f, f) && (v.onlyNotReconciling(f) ||
-			v.zeroNotFromChange(f, f)) {
+			v.onlyPausedEdit(f) || v.zeroNotFromChange(f, f)) {
 			out = append(out, f)
 		}
 	}

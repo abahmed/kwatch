@@ -1,12 +1,11 @@
 {
   "name": "sched-node-selector-no-match",
   "description": "A Deployment edit adds a nodeSelector that no node matches; the new pod is Pending on \"didn't match Pod's node affinity/selector\" while the old pods run.",
-  "root": "deployment/shop/api",
+  "root": "scheduling//didn't match Pod's node affinity/selector",
   "tier": "notify",
   "maxMessages": 2,
   "mustNotBlame": [
     "node//n1",
-    "node//n2",
-    "scheduling//didn't match Pod's node affinity/selector"
+    "node//n2"
   ]
 }

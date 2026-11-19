@@ -23,7 +23,9 @@ func gapClusterScenarios() []scenario {
 // gapPacketLoss: the ledger database runs healthy on n3; its callers on
 // n1 and n2 time out on connect again and again while no NetworkPolicy
 // was touched. The evidence cannot separate the node's network from the
-// database, but the database itself answers its probes.
+// database, but the database itself answers its probes: nothing in the
+// cluster's own state (no node condition, no event, no policy) names
+// the node, so no cause is stated.
 func gapPacketLoss() scenario {
 	return scenario{
 		expect: expectation{
@@ -31,8 +33,8 @@ func gapPacketLoss() scenario {
 			Description: "Callers of a healthy database time out " +
 				"connecting to it; its pods run on one node, its " +
 				"Service lists them ready and no policy changed.",
-			Root: "node//n3", Tier: "notify", MaxMessages: 2,
-			Ambiguous: true, MustNotBlame: []string{
+			Root: "unknown", Tier: "notify", MaxMessages: 2,
+			MustNotBlame: []string{
 				"networkpolicy/shop/default-deny", "node//n1", "node//n2"},
 			Tail: duration(10 * time.Minute),
 		},
@@ -44,8 +46,11 @@ func gapPacketLoss() scenario {
 			c.list(db.objects())
 			pods := []*corev1.Pod{db.pod(0, "n3"), db.pod(1, "n3")}
 			c.list(pods[0], pods[1])
-			c.list(clusterService(c, "shop", "ledger", 5432),
-				clusterSlice(c, "shop", "ledger", pods...))
+			// The address the callers dial is the Service's ClusterIP.
+			svc := clusterService(c, "shop", "ledger", 5432)
+			svc.Spec.ClusterIP = "10.96.14.7"
+			svc.Spec.ClusterIPs = []string{"10.96.14.7"}
+			c.list(svc, clusterSlice(c, "shop", "ledger", pods...))
 			api := c.deployment("shop", "api",
 				"registry.example.com/api:2.5", 2)
 			c.list(api.objects())
@@ -183,8 +188,7 @@ func gapGatewayClassMissing() scenario {
 // the operator that lists the resources fails on every read with "no
 // endpoints available for service".
 func gapConversionWebhookGone() scenario {
-	root := "customresourcedefinition.apiextensions.k8s.io//" +
-		"widgets.acme.example"
+	root := "customresourcedefinition//widgets.acme.example"
 	return scenario{
 		expect: expectation{
 			Name: "crd-conversion-webhook-gone",
@@ -219,8 +223,10 @@ func gapConversionWebhookGone() scenario {
 			crd.SetCreationTimestamp(metav1.NewTime(
 				c.start.Add(-24 * time.Hour)))
 			c.list(crd)
+			// The endpoint slice controller keeps an empty slice for a
+			// Service whose pods are gone.
 			c.list(clusterService(c, "acme-system", "widget-conversion",
-				443))
+				443), clusterSlice(c, "acme-system", "widget-conversion"))
 			conversion := c.deployment("acme-system", "widget-conversion",
 				"registry.example.com/widget-conversion:1", 0)
 			c.list(conversion.objects())

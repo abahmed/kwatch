@@ -41,6 +41,9 @@ func (v *view) storageModes(
 			return pseudoFailing(v.claimFullMode(id)), true
 		}
 	case kube.KindPV:
+		if link == LinkUses && v.refusedAsBound(id, effect) {
+			return pseudoFailing(ModeBoundElsewhere), true
+		}
 		if v.boundByClaim(id) {
 			return nil, true
 		}

@@ -81,6 +81,9 @@ type failingCondition struct {
 	// unknown marks a controller that cannot tell yet, not one that
 	// reports a failure.
 	unknown bool
+	// unclaimed marks a Gateway API object whose Accepted or Programmed
+	// condition no controller has set: it waits for a controller.
+	unclaimed bool
 }
 
 // failingConditions lists the conditions that are in their bad status
@@ -99,6 +102,7 @@ func failingConditions(e inventory.Entity) []failingCondition {
 		}
 		failing = append(failing, failingCondition{
 			label: label, since: at, unknown: rule.Bad == "Unknown",
+			unclaimed: rule.Bad == "Unknown" && gatewayAcceptance(rule.Type),
 			message: text(e, kube.ConditionKey(rule.Type)+
 				kube.AttrConditionMessage),
 		})
@@ -122,10 +126,35 @@ func failingGrace(failing []failingCondition) time.Duration {
 			return DefaultCustomFailing
 		}
 	}
+	if unclaimed(failing) {
+		return DefaultGatewayUnclaimed
+	}
 	if len(failing) == 0 {
 		return DefaultCustomFailing
 	}
 	return DefaultGenerationGrace
+}
+
+// DefaultGatewayUnclaimed is how long a Gateway API object may wait for a
+// controller to accept it. A controller sets Accepted within seconds of
+// seeing the object; one that is still Unknown after this has none.
+const DefaultGatewayUnclaimed = 2 * time.Minute
+
+// gatewayAcceptance reports the condition types a Gateway API controller
+// sets first when it takes an object over.
+func gatewayAcceptance(conditionType string) bool {
+	return conditionType == "Accepted" || conditionType == "Programmed"
+}
+
+// unclaimed reports failing conditions that are all a Gateway API
+// object waiting for a controller.
+func unclaimed(failing []failingCondition) bool {
+	for _, c := range failing {
+		if !c.unclaimed {
+			return false
+		}
+	}
+	return len(failing) > 0
 }
 
 // failingSince is when the first of the conditions began, or zero. A

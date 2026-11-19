@@ -2,7 +2,7 @@
   "name": "node-clock-skew-cert-rejected",
   "description": "A node's clock is ten minutes off; its kubelet reports NotReady with a certificate \"is before\" validity error while other nodes are healthy.",
   "root": "node//n3",
-  "tier": "notify",
+  "tier": "page",
   "maxMessages": 2,
   "mustNotBlame": [
     "deployment/shop/orders",

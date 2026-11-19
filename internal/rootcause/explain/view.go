@@ -329,5 +329,9 @@ func (v *view) causeState(
 		// a Secret that is only a login is blamed for nothing else.
 		modes = withoutPseudo(modes)
 	}
+	if link == LinkUses && id.Kind == kube.KindSecret &&
+		v.pullFailing(effect) && v.wrongTypePullLogin(id, effect) {
+		modes = append(modes, pseudoFailing(ModeWrongType)...)
+	}
 	return state{id: id, modes: modes}
 }

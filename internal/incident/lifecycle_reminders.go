@@ -17,7 +17,7 @@ func (m *Manager) settleFor(p *Incident) time.Duration {
 	if m.fastPage(p) {
 		settle = m.cfg.PageSettle
 	}
-	return m.scaleSettle(p, settle)
+	return m.waitForNotReady(p, m.scaleSettle(p, settle))
 }
 
 // fastPage reports whether p settles with the short page settle.

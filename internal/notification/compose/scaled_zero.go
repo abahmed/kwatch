@@ -53,3 +53,17 @@ func onlyScaledToZero(members []detection.Finding) bool {
 	}
 	return found
 }
+
+// onlyPausedEdit reports members that only say a Deployment is paused
+// with an edit that has not rolled out. Nothing is failing, and the
+// release is not blamed: the edit is what waits.
+func onlyPausedEdit(members []detection.Finding) bool {
+	found := false
+	for _, m := range failing(members) {
+		if m.Reason != reasons.DeploymentPausedEdit {
+			return false
+		}
+		found = true
+	}
+	return found
+}

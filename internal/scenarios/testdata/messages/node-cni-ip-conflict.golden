@@ -1,18 +1,15 @@
-10:03:15 settled
-🟠 orders in shop (prod-eu-1) is failing: networking cannot be set up. Cause not found yet: its node and registry are healthy and unchanged. To see the pods' state and events, run kubectl describe pods orders- -n shop
-🟠 orders in shop (prod-eu-1) is failing: networking cannot be set up.
-| 🟠 **orders** in **shop** (**prod-eu-1**) is failing: networking cannot be set up.
-| Cause not found yet: its node and registry are healthy and unchanged.
-| To see the pods' state and events, run
+10:02:15 settled
+🟠 Node n2 (prod-eu-1) cannot set up pod networking: an address or route it assigns is already in use. Replicas that do not depend on it are healthy. Affected: orders in shop. To check the node's conditions and recent events, run kubectl describe node n2
+🟠 Node n2 (prod-eu-1) cannot set up pod networking: an address or route it assigns is already in use.
+| 🟠 Node n2 (**prod-eu-1**) cannot set up pod networking: an address or route it assigns is already in use.
+| Replicas that do not depend on it are healthy.
+| Affected: **orders** in **shop**.
+| To check the node's conditions and recent events, run
 | ```
-| kubectl describe pods orders- -n shop
+| kubectl describe node n2
 | ```
-10:08:15 settled
-🟠 cart in shop (prod-eu-1) is failing: networking cannot be set up. Cause not found yet: its node and registry are healthy and unchanged. To see the pods' state and events, run kubectl describe pods cart- -n shop
-🟠 cart in shop (prod-eu-1) is failing: networking cannot be set up.
-| 🟠 **cart** in **shop** (**prod-eu-1**) is failing: networking cannot be set up.
-| Cause not found yet: its node and registry are healthy and unchanged.
-| To see the pods' state and events, run
-| ```
-| kubectl describe pods cart- -n shop
-| ```
+10:07:00 material change
+🟠 Node n2 (prod-eu-1) is now also affecting orders in shop: it has only 2 of 3 replicas ready and has been Pending since it was scheduled. It is also affecting cart in shop: it is failing: networking cannot be set up.
+🟠 Node n2 (prod-eu-1) is now also affecting orders in shop: it has only 2 of 3 replicas ready and has been Pending since it was scheduled.
+| 🟠 Node n2 (**prod-eu-1**) is now also affecting **orders** in shop: it has only 2 of 3 replicas ready and has been Pending since it was scheduled.
+| It is also affecting **cart** in shop: it is failing: networking cannot be set up.

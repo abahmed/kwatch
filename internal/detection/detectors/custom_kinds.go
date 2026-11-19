@@ -43,7 +43,8 @@ func kindFindings(
 		return routeBackends(ctx, e)
 	}
 	if e.ID.Kind == kindCRD {
-		return conditionFindings(ctx, e)
+		return append(conditionFindings(ctx, e),
+			conversionBackendFindings(ctx, e)...)
 	}
 	var f detection.Finding
 	var ok bool

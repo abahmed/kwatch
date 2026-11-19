@@ -128,7 +128,7 @@ func failingNodes(f caseFacts) (int, string) {
 func blamedChange(f caseFacts) *inventory.Change {
 	cause := f.p.Cause
 	if cause == nil || cause.Change == nil || systemChange(*cause.Change) ||
-		onlyScaledToZero(f.members) {
+		onlyScaledToZero(f.members) || onlyPausedEdit(f.members) {
 		return nil
 	}
 	if cause.Rule == explain.RuleAccountMissingAtCreate ||

@@ -80,9 +80,9 @@ func gapNodeSelectorNoMatch() scenario {
 			Description: "A Deployment edit adds a nodeSelector that no " +
 				"node matches; the new pod is Pending on \"didn't match " +
 				"Pod's node affinity/selector\" while the old pods run.",
-			Root: "deployment/shop/api", Tier: "notify", MaxMessages: 2,
-			MustNotBlame: []string{"node//n1", "node//n2",
-				"scheduling//didn't match Pod's node affinity/selector"},
+			Root: "scheduling//didn't match Pod's node affinity/selector",
+			Tier: "notify", MaxMessages: 2,
+			MustNotBlame: []string{"node//n1", "node//n2"},
 		},
 		build: func(c *cluster) {
 			w := gapRelease(c, "api", func(spec *corev1.PodSpec) {
@@ -110,7 +110,8 @@ func gapAntiAffinityPending() scenario {
 				"per node is scaled to four replicas on three nodes; " +
 				"the fourth stays Pending on \"didn't match pod " +
 				"anti-affinity rules\".",
-			Root: "deployment/shop/search", Tier: "notify", MaxMessages: 2,
+			Root: "scheduling//didn't match pod anti-affinity rules",
+			Tier: "notify", MaxMessages: 2,
 			MustNotBlame: []string{"node//n1", "node//n2", "node//n3",
 				"scheduling//Insufficient cpu"},
 		},
@@ -126,7 +127,8 @@ func gapAntiAffinityPending() scenario {
 				}
 				spec.Affinity = &corev1.Affinity{
 					PodAntiAffinity: &corev1.PodAntiAffinity{
-						RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{term},
+						RequiredDuringSchedulingIgnoredDuringExecution: []corev1.
+							PodAffinityTerm{term},
 					},
 				}
 			})
@@ -219,10 +221,11 @@ func gapHPANoCPURequest() scenario {
 			Description: "An HPA on CPU utilisation reports \"missing " +
 				"request for cpu\" because its target Deployment's pods " +
 				"set no CPU request; the metrics API is healthy.",
-			Root: "deployment/shop/web", Tier: "notify", MaxMessages: 2,
+			Root: "horizontalpodautoscaler/shop/web", Tier: "digest",
+			MaxMessages: 2,
 			MustNotBlame: []string{"apiservice//v1beta1.metrics.k8s.io",
 				"deployment/kube-system/metrics-server"},
-			Tail: duration(10 * time.Minute),
+			Tail: duration(25 * time.Minute),
 		},
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))

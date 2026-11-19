@@ -104,7 +104,7 @@ func gapSlowImagePull() scenario {
 		expect: expectation{
 			Name: "release-image-pull-deadline",
 			Description: "A release's very large image takes more than " +
-				"eight minutes to pull; the pull fails with " +
+				"three minutes to pull; the pull fails with " +
 				"DeadlineExceeded and the pod goes to ImagePullBackOff.",
 			Root: "deployment/shop/etl", Tier: "notify", MaxMessages: 2,
 			MustNotBlame: []string{"registry//registry.example.com",
@@ -119,7 +119,7 @@ func gapSlowImagePull() scenario {
 			created := c.now
 			c.create(w.pod(0, "n1", createdAt(created),
 				gapPending(waiting("ContainerCreating", ""))))
-			c.after(8 * time.Minute)
+			c.after(3 * time.Minute)
 			message := "Failed to pull image \"" + image + "\": rpc " +
 				"error: code = DeadlineExceeded desc = context deadline " +
 				"exceeded"

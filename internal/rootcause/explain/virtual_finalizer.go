@@ -107,8 +107,9 @@ func (v *view) finalizerModes(
 // are those of an object whose own finding says why its handler cannot
 // finish (see handlerCannotFinish).
 func (v *view) finalizersOf(id inventory.EntityID) []string {
-	if id.Kind == kube.KindNamespace || id.Kind == kube.KindPod ||
-		id.Kind == kube.KindNode || v.handlerCannotFinish(id) {
+	if id.Kind == kube.KindNamespace || id.Kind == kube.KindNode ||
+		(id.Kind == kube.KindPod && !v.podOnHealthyNode(id)) ||
+		v.handlerCannotFinish(id) {
 		return nil
 	}
 	var out []string
@@ -118,6 +119,23 @@ func (v *view) finalizersOf(id inventory.EntityID) []string {
 		}
 	}
 	return out
+}
+
+// podOnHealthyNode reports a pod whose node is known and has no failing
+// finding. Such a pod's kubelet can finish it, so a finalizer that holds
+// its deletion is the reason it stays; a pod on a failing or unknown
+// node stays that node's problem.
+func (v *view) podOnHealthyNode(pod inventory.EntityID) bool {
+	node, ok := v.nodeOf(pod)
+	if !ok {
+		return false
+	}
+	for _, f := range v.s.Findings[node] {
+		if unhealthy(f) {
+			return false
+		}
+	}
+	return true
 }
 
 // findingFinalizers are the finalizers a finding names that a workload

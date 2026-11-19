@@ -1,0 +1,7 @@
+11:06:15 digest
+🟡 kwatch summary (prod-eu-1): one new low-priority problem. api in shop is paused with a pod template edit that has not rolled out, for 30 minutes. Not urgent: kwatch alerts on its own if it gets worse.
+🟡 kwatch summary (prod-eu-1): one new low-priority problem.
+| 🟡 **kwatch summary** · prod-eu-1 — 1 problem
+|
+| **Problems**
+| - **api** (**shop**) — paused with a pod template edit that has not rolled out, for 30 min

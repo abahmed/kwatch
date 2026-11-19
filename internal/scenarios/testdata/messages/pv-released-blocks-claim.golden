@@ -1,14 +1,17 @@
-10:02:15 settled
-🟠 Volume claim data-db-0 in ledger (prod-eu-1) has been waiting for a volume for two minutes. It was created at 10:00 UTC. Claim data-db-0 is Pending: kwatch sees no workload in the cluster serving its provisioner pd.csi.storage.gke.io (it may run outside the cluster). Affected: db.
+10:03:15 settled
+🟠 Volume claim data-db-0 in ledger (prod-eu-1) has been waiting for a volume for two minutes because volume pv-db-0 is already bound to a different claim. The scheduler says "0/1 nodes are available: pod has unbound immediate PersistentVolumeClaims. preemption: 0/1 nodes are available: 1…". Both failing apps use it. Affected: db.
 Related alerts: 1 failed binding alert, 1 scheduling failure
-To see why the volume claim is not usable, run kubectl describe pvc data-db-0 -n ledger
-🟠 Volume claim data-db-0 in ledger (prod-eu-1) has been waiting for a volume for two minutes.
-| 🟠 Volume claim **data-db-0** in **ledger** (**prod-eu-1**) has been waiting for a volume for two minutes.
-| It was created at 10:00 UTC.
-| Claim **data-db-0** is Pending: kwatch sees no workload in the cluster serving its provisioner pd.csi.storage.gke.io (it may run outside the cluster).
+To see the object's state and events, run kubectl describe persistentvolumeclaim data-db-0 -n ledger
+🟠 Volume claim data-db-0 in ledger (prod-eu-1) has been waiting for a volume for two minutes because volume pv-db-0 is already bound to a different claim.
+| 🟠 Volume claim **data-db-0** in **ledger** (**prod-eu-1**) has been waiting for a volume for two minutes because volume **pv-db-0** is already bound to a different claim.
+| The scheduler says
+| ```
+| 0/1 nodes are available: pod has unbound immediate PersistentVolumeClaims. preemption: 0/1 nodes are available: 1…
+| ```
+| Both failing apps use it.
 | Affected: db.
 | Related alerts: 1 failed binding alert, 1 scheduling failure
-| To see why the volume claim is not usable, run
+| To see the object's state and events, run
 | ```
-| kubectl describe pvc data-db-0 -n ledger
+| kubectl describe persistentvolumeclaim data-db-0 -n ledger
 | ```

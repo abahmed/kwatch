@@ -58,6 +58,12 @@ var registryLoginTypes = map[corev1.SecretType]bool{
 	corev1.SecretTypeDockercfg:        true,
 }
 
+// RegistryLoginType reports a Secret type that holds a registry login,
+// the only kind the kubelet reads when it pulls an image.
+func RegistryLoginType(secretType string) bool {
+	return registryLoginTypes[corev1.SecretType(secretType)]
+}
+
 // setLoginChanged records when a registry login Secret last changed.
 // Other Secrets carry no such attribute.
 func setLoginChanged(attrs map[string]inventory.Value, s *corev1.Secret) {

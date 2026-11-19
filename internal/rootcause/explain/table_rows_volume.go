@@ -23,6 +23,11 @@ const (
 	// ModeProvisionerDown is a workload serving a provisioner that has
 	// no ready pod.
 	ModeProvisionerDown detection.Mode = "ProvisionerDown"
+	// ModeBoundElsewhere is a PersistentVolume that the volume controller
+	// refuses a claim because it "is already bound to a different
+	// claim": it still references a claim that was deleted (Released), or
+	// one that is another claim's. The claim's own event names it.
+	ModeBoundElsewhere detection.Mode = "BoundElsewhere"
 	// ModeNoStorageClass is a claim that names no class when the
 	// cluster has no default class and no static volume to give it.
 	ModeNoStorageClass detection.Mode = "Config.NoStorageClass"
@@ -50,6 +55,26 @@ var volumeRows = []Row{
 		Link:   LinkHoldsVolume,
 		Effect: podSide(detection.ModeVolumeMultiAttach),
 		Prior:  0.7,
+	},
+	{
+		// The volume controller names the volume it will not bind to
+		// the claim: the volume is what holds the claim back.
+		Name: RuleVolumeBoundElsewhere,
+		Cause: Side{Kind: kube.KindPV,
+			Modes: []detection.Mode{ModeBoundElsewhere}},
+		Link:   LinkUses,
+		Effect: unboundClaimSide(),
+		Prior:  0.8,
+	},
+	{
+		// The same volume, seen from the pod that waits for the claim.
+		Name: RuleVolumeBoundElsewhere,
+		Cause: Side{Kind: kube.KindPV,
+			Modes: []detection.Mode{ModeBoundElsewhere}},
+		Link: LinkUses,
+		Effect: podSide(detection.ModePending, detection.ModeUnschedulable,
+			detection.ModeCreating),
+		Prior: 0.8,
 	},
 	{
 		Name: RuleProvisionerDown,

@@ -1,0 +1,6 @@
+{
+  "name": "deployment-paused-no-edit",
+  "description": "A Deployment is paused and not edited; its Progressing condition reads DeploymentPaused for an hour and every replica is ready.",
+  "maxMessages": 0,
+  "quiet": true
+}

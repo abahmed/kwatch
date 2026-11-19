@@ -50,7 +50,8 @@ var genericRows = []Row{
 				detection.Failing}},
 		Link: LinkUses,
 		Effect: Side{Group: AnyGroup, Kind: AnyKind,
-			Modes: configModes},
+			Modes: append([]detection.Mode{detection.ModeReplicaFailure,
+				detection.ModeFailedCreate}, configModes...)},
 		Prior: 0.6,
 	},
 	{
@@ -251,7 +252,7 @@ var workloadRows = []Row{
 	{
 		Name: RuleConfigMissingOrChanged,
 		Cause: Side{Kind: kube.KindSecret, Modes: []detection.Mode{ModeMissing,
-			ModeChanged, ModeKeyMissing}},
+			ModeChanged, ModeKeyMissing, ModeWrongType}},
 		// A Secret can be an image pull Secret: a pod that cannot
 		// pull with a missing or rotated login fails with ImagePull.
 		Link: LinkUses, Effect: podSide(

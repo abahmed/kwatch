@@ -81,6 +81,7 @@ const (
 const (
 	ProgressDeadlineExceeded = "ProgressDeadlineExceeded"
 	DeploymentUnavailable    = "DeploymentUnavailable"
+	DeploymentPausedEdit     = "DeploymentPausedEdit"
 	DeploymentReplicaFailure = "DeploymentReplicaFailure"
 	ReplicaSetFailure        = "ReplicaSetFailure"
 	DaemonSetUnavailable     = "DaemonSetUnavailable"
@@ -313,6 +314,7 @@ const (
 	ContainerGCFailed      = "ContainerGCFailed"
 	NodePodIPExhausted     = "NodePodIPExhausted"
 	NodeCNINotReady        = "NodeCNINotReady"
+	NodePodNetworkConflict = "NodePodNetworkConflict"
 	NodeHeartbeatStale     = "NodeHeartbeatStale"
 	PodResizeInfeasible    = "PodResizeInfeasible"
 	PodResizeDeferred      = "PodResizeDeferred"

@@ -1,6 +1,7 @@
 package scenarios
 
 import (
+	"fmt"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -122,8 +123,8 @@ func gapReleasedVolume() scenario {
 	}
 }
 
-// gapCronDeadlineExceeded: every run of a half-hourly CronJob outlives
-// its activeDeadlineSeconds of five minutes and is failed with
+// gapCronDeadlineExceeded: every run of an hourly CronJob outlives
+// its activeDeadlineSeconds of two minutes and is failed with
 // DeadlineExceeded. The CronJob's deadline is the cause, not the node.
 func gapCronDeadlineExceeded() scenario {
 	return scenario{
@@ -138,9 +139,11 @@ func gapCronDeadlineExceeded() scenario {
 		},
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
+			// Hourly, at the minute after the scenario starts, so that
+			// each run starts on its schedule whatever the clock.
 			cron := scheduleCronJob(c, "ops", "stats-rollup",
-				"*/30 * * * *")
-			deadline := int64(300)
+				fmt.Sprintf("%d * * * *", (c.start.Minute()+1)%60))
+			deadline := int64(120)
 			cron.Spec.JobTemplate.Spec.ActiveDeadlineSeconds = &deadline
 			c.list(cron)
 			for run := range 3 {
@@ -156,7 +159,7 @@ func gapCronDeadlineExceeded() scenario {
 					Kind: "Job", Namespace: job.Namespace, Name: job.Name}}
 				c.update(edited)
 				c.create(job)
-				c.after(5 * time.Minute)
+				c.after(2 * time.Minute)
 				job = job.DeepCopy()
 				job.Status.Active = 0
 				job.Status.Conditions = []batchv1.JobCondition{{
@@ -172,7 +175,7 @@ func gapCronDeadlineExceeded() scenario {
 				edited = last(c, cron)
 				edited.Status.Active = nil
 				c.update(edited)
-				c.after(24 * time.Minute)
+				c.after(57 * time.Minute)
 			}
 		},
 	}
@@ -206,7 +209,9 @@ func gapPodStuckTerminating() scenario {
 			updated.Status.AvailableReplicas = 2
 			c.update(updated)
 			pod := operatorBroker(c, sts, 2, "n1", notReady)
-			deleting(&pod.ObjectMeta, c.now, finalizer)
+			// Deletion was requested forty minutes ago, as the
+			// description says.
+			deleting(&pod.ObjectMeta, c.now.Add(-40*time.Minute), finalizer)
 			c.update(pod)
 			for range 4 {
 				c.after(10 * time.Minute)

@@ -66,6 +66,10 @@ const (
 	ModeCreated detection.Mode = "Changed.Created"
 	// ModeMissing is a referenced object that does not exist.
 	ModeMissing detection.Mode = "Missing"
+	// ModeWrongType is a Secret that exists but is not of a registry
+	// login type, named as the image pull Secret of a pod whose pull the
+	// registry refused as anonymous.
+	ModeWrongType detection.Mode = "WrongType"
 	// ModeKeyMissing is a Secret or ConfigMap that exists without a
 	// key a container reads from it, as the kubelet reports it.
 	ModeKeyMissing detection.Mode = "KeyMissing"

@@ -2,11 +2,11 @@
   "name": "deployment-paused-with-pending-edit",
   "description": "A Deployment is paused and then edited; the change never rolls out and the Progressing condition reads DeploymentPaused.",
   "root": "deployment/shop/api",
-  "tier": "notify",
+  "tier": "digest",
   "maxMessages": 2,
   "mustNotBlame": [
     "node//n1",
     "node//n2"
   ],
-  "tail": "10m0s"
+  "tail": "20m0s"
 }

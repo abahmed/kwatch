@@ -1,0 +1,6 @@
+{
+  "name": "node-no-execute-taint-tolerated",
+  "description": "A node is given a NoExecute taint that every pod on it tolerates; no pod is evicted.",
+  "maxMessages": 0,
+  "quiet": true
+}

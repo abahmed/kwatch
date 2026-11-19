@@ -75,7 +75,7 @@ func gapPLEGNotHealthy() scenario {
 			Description: "A node's container runtime stops; its kubelet " +
 				"reports NotReady with \"PLEG is not healthy\" and the " +
 				"pods on it go unready.",
-			Root: "node//n1", Tier: "notify", MaxMessages: 2,
+			Root: "node//n1", Tier: "page", MaxMessages: 2,
 			MustNotBlame: []string{"deployment/shop/orders",
 				"deployment/shop/payments", "deployment/shop/cart",
 				"zone//zone-a"},

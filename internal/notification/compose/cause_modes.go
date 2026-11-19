@@ -30,6 +30,8 @@ func modalWords(cause *rootcause.CauseRecord) (string, bool) {
 		return "does not exist", true
 	case cause.Mode.Within(explain.ModeKeyMissing):
 		return "lacks a key the pods read", true
+	case cause.Mode.Within(explain.ModeWrongType):
+		return "is not a registry login", true
 	case cause.Mode.Within(explain.ModeChanged):
 		return "changed shortly before", true
 	}

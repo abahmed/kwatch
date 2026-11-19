@@ -382,6 +382,9 @@ func consequenceSentences(f caseFacts) []sentence {
 	webhook := f.lead.Reason == reasons.WebhookNoEndpoints ||
 		f.lead.Reason == reasons.WebhookBackendNotFound
 	expired := f.lead.Reason == reasons.TLSCertExpired
+	if s, ok := conversionConsequence(f, webhook); ok {
+		return s
+	}
 	if webhook && f.lead.Severity == detection.Warning {
 		text := idleWebhookText(f)
 		if text == "" {

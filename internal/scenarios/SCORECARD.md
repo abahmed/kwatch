@@ -582,17 +582,17 @@ here verbatim and checked by `TestScorecardGates`.
 | --- | --- | --- | --- |
 | Correct root cause (labelled) | >= 90% | 99.1% | pass |
 | Correct root cause (held-out) | >= 80% | 100% | pass |
-| Wrong high-confidence root | <= 5% (at least 20 cases) | 0% (0 of 270 high-confidence cases, labelled and held-out) | pass |
+| Wrong high-confidence root | <= 5% (at least 20 cases) | 0% (0 of 289 high-confidence cases, labelled and held-out) | pass |
 | Wrong root stated at likely confidence or higher (labelled) | <= 0 | 0 | pass |
 | Scenarios whose first message stated a wrong root | <= 0 | 0 | pass |
-| Calibration: high confidence | 80-100% (at least 10 cases) | 100.0% (257 of 257 right) | pass |
-| Calibration: likely confidence | 50-95% (at least 10 cases) | 90.4% (47 of 52 right) | pass |
+| Calibration: high confidence | 80-100% (at least 10 cases) | 100.0% (276 of 276 right) | pass |
+| Calibration: likely confidence | 50-95% (at least 10 cases) | 90.6% (48 of 53 right) | pass |
 | Calibration: high-confidence boundary | 0.55-0.75 (committed 0.70) | 0.55 | pass |
-| Calibration: precision at the high boundary | >= 92% (at least 10 cases) | 100.0% (257 of 257 right) | pass |
+| Calibration: precision at the high boundary | >= 92% (at least 10 cases) | 100.0% (276 of 276 right) | pass |
 | Messages per incident (p95) | <= 3 | 3 | pass |
 | Messages per incident (most) | <= 5 | 5 | pass |
-| Time to first message (page tier) | max <= 2m0s | p95 1m45s, max 1m45s (50 scenarios) | pass |
-| Time to first message (notify tier) | max <= 5m0s | p95 3m15s, max 4m15s (369 scenarios) | pass |
+| Time to first message (page tier) | max <= 2m0s | p95 1m45s, max 1m45s (53 scenarios) | pass |
+| Time to first message (notify tier) | max <= 5m0s | p95 3m15s, max 4m15s (392 scenarios) | pass |
 | Time to first message (boot-held) | max <= 15m0s | p95 12m15s, max 12m15s (7 scenarios) | pass |
 | Notifications from non-events (staging day) | <= 0 | 0 | pass |
 | Notifications per hour (staging day peak) | <= 30/h | 26/h | pass |
@@ -611,15 +611,15 @@ here verbatim and checked by `TestScorecardGates`.
 | Recoveries said while members still fail | <= 0 | 0 | pass |
 | Scenarios that passed and no longer do (ratchet) | <= 0 | 0 | pass |
 
-30 of 30 gates pass. 528 labelled root cases in 546 scenarios; first-incident tier matches in 546 of 546 scenarios.
-Staging day: 1073 notifications in 81h27m0s (13.2/h mean, peak hour 26); 0 from non-events, 0 of them notify or page.
+30 of 30 gates pass. 556 labelled root cases in 577 scenarios; first-incident tier matches in 577 of 577 scenarios.
+Staging day: 1139 notifications in 86h23m0s (13.2/h mean, peak hour 26); 0 from non-events, 0 of them notify or page.
 Storm shared node: 1000 pods, 2 messages in total, 1 in the loudest 2 minutes.
 Storm shared registry: 1000 pods, 1 messages in total, 1 in the loudest 2 minutes.
 Storm multi-cause: 1000 pods from 10 causes, 10 of them reported, 10 messages in total, 8 in the loudest 2 minutes.
 Slowest first messages: boot-endpoints-still-down notify 12m15s, scale-down-moved-pod-never-starts page 12m0s, node-join-never-ready page 10m15s, young-node-persists notify 10m0s, own-volume-wait-too-long notify 10m0s.
 Calibration: the labelled cases put high confidence at 0.55 (committed 0.70).
-Right roots: 312 with a stated cause, 206 by falling back to the failing entity with no stated cause, 5 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 9 scenarios, 9 of them labelled as legitimate revisions.
-Time to first correct root: p95 4m15s, max 25m30s over 458 scenarios; slowest: hpa-metrics-outlive-recovery 25m30s, log-missing-service 21m15s, boot-endpoints-still-down 12m15s, scale-down-moved-pod-never-starts 12m0s, one-hpa-bad-target 11m15s. Never stated: coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
+Right roots: 332 with a stated cause, 213 by falling back to the failing entity with no stated cause, 6 by stating no cause as labelled. Wrong roots stated at likely confidence or higher: 0 (5 hedges on ambiguous labels tolerated). Wrong root stated in some message: 9 scenarios, 9 of them labelled as legitimate revisions.
+Time to first correct root: p95 4m15s, max 31m15s over 486 scenarios; slowest: deployment-paused-with-pending-edit 31m15s, hpa-metrics-outlive-recovery 25m30s, log-missing-service 21m15s, boot-endpoints-still-down 12m15s, scale-down-moved-pod-never-starts 12m0s. Never stated: coupled-silent-image-fault, coupled-silent-image-fault-secret, coupled-silent-image-fault-state, adv-two-causes-stable, adv-two-causes-six-hours.
 
 ## Scenarios
 
@@ -1025,7 +1025,7 @@ Time to first correct root: p95 4m15s, max 25m30s over 458 scenarios; slowest: h
 | ingress-to-scaled-to-zero-service | quiet | - | - | -/- | 0 (0) | pass |
 | job-retry-succeeds | quiet | - | - | -/- | 0 (0) | pass |
 | job-retries-all-fail | `job/batch/report` | `job/batch/report (no cause)` | none | notify/notify | 2 (3) | pass |
-| node-join-kubelet-notices | quiet | - | - | -/digest | 0 (0) | pass |
+| node-join-kubelet-notices | quiet | - | - | -/- | 0 (0) | pass |
 | pod-dns-search-line-notice | quiet | - | - | -/digest | 0 (0) | pass |
 | chronic-never-ready-deployment | `deployment/shop/cert-controller` | `deployment/shop/cert-controller (no cause)` | none | notify/notify | 1 (3) | pass |
 | webhook-backend-namespace-gone | `service/policy-gone/policy-svc` | `service/policy-gone/policy-svc` | high 0.95 | notify/notify | 1 (2) | pass |
@@ -1171,6 +1171,37 @@ Time to first correct root: p95 4m15s, max 25m30s over 458 scenarios; slowest: h
 | helm-old-failure-workload-down | `deployment/shop/payments`, `helmrelease/shop/payments` | `deployment/shop/payments`, `helmrelease/shop/payments (no cause)` | high 0.98 | notify/notify | 2 (4) | pass |
 | drain-beside-stuck-replacement | `node//n3` | `node//n3` | high 1.00 | page/page | 1 (2) | pass |
 | drain-evictions-find-no-room | `node//n3` | `node//n3` | high 1.00 | notify/notify | 2 (2) | pass |
+| sched-node-selector-no-match | `scheduling//didn't match Pod's node affinity/selector` | `scheduling//didn't match Pod's node affinity/selector` | high 1.00 | notify/notify | 1 (2) | pass |
+| sched-anti-affinity-pending | `scheduling//didn't match pod anti-affinity rules` | `scheduling//didn't match pod anti-affinity rules` | high 1.00 | notify/notify | 1 (2) | pass |
+| release-command-not-found | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| release-read-only-root-filesystem | `deployment/shop/api` | `deployment/shop/api` | high 0.91 | notify/notify | 1 (2) | pass |
+| hpa-target-no-cpu-request | `horizontalpodautoscaler/shop/web` | `horizontalpodautoscaler/shop/web (no cause)` | none | digest/digest | 0 (2) | pass |
+| node-pid-pressure | `node//n1` | `node//n1` | high 1.00 | notify/notify | 1 (2) | pass |
+| node-pleg-not-healthy | `node//n1` | `node//n1` | high 1.00 | page/page | 2 (2) | pass |
+| node-max-pods-reached | `scheduling//Too many pods` | `scheduling//Too many pods` | high 0.85 | notify/notify | 1 (2) | pass |
+| node-no-execute-taint-evicts | quiet | - | - | -/- | 0 (0) | pass |
+| node-no-execute-taint-tolerated | quiet | - | - | -/- | 0 (0) | pass |
+| node-cni-ip-conflict | `node//n2` | `node//n2` | high 1.00 | notify/notify | 2 (2) | pass |
+| node-clock-skew-cert-rejected | `node//n3` | `node//n3` | high 1.00 | page/page | 2 (2) | pass |
+| pvc-volume-resize-failed | `persistentvolumeclaim/inventory/pgdata` | `persistentvolumeclaim/inventory/pgdata` | likely 0.53 | notify/notify | 2 (3) | pass |
+| pv-released-blocks-claim | `persistentvolume//pv-db-0` | `persistentvolume//pv-db-0` | high 1.00 | notify/notify | 1 (2) | pass |
+| cron-active-deadline-exceeded | `cronjob/ops/stats-rollup` | `cronjob/ops/stats-rollup` | high 0.70 | notify/notify | 1 (3) | pass |
+| pod-stuck-terminating-finalizer | `finalizer/streaming/storage.example.com/volume-detach` | `finalizer/streaming/storage.example.com/volume-detach` | high 0.85 | notify/notify | 1 (2) | pass |
+| release-post-start-hook-fails | `deployment/shop/api` | `deployment/shop/api` | high 0.77 | notify/notify | 2 (2) | pass |
+| release-invalid-image-name | `deployment/shop/api` | `deployment/shop/api` | high 0.77 | notify/notify | 1 (2) | pass |
+| release-image-pull-deadline | `deployment/shop/etl` | `deployment/shop/etl` | high 0.77 | notify/notify | 1 (2) | pass |
+| release-seccomp-profile-missing | `deployment/shop/api` | `deployment/shop/api` | high 0.77 | notify/notify | 1 (2) | pass |
+| release-pull-secret-wrong-type | `secret/shop/regcred` | `secret/shop/regcred` | high 1.00 | notify/notify | 1 (2) | pass |
+| release-priority-class-missing | `priorityclass//batch-critical` | `priorityclass//batch-critical` | high 0.75 | notify/notify | 1 (2) | pass |
+| deployment-paused-with-pending-edit | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | digest/digest | 1 (2) | pass |
+| deployment-paused-no-edit | quiet | - | - | -/- | 0 (0) | pass |
+| release-configmap-volume-missing | `configmap/shop/app-config` | `configmap/shop/app-config` | high 0.85 | notify/notify | 1 (2) | pass |
+| release-node-name-missing | `deployment/shop/api` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| network-packet-loss-to-node | `unknown` | `deployment/shop/api (no cause)` | none | notify/notify | 1 (2) | pass |
+| etcd-database-space-exceeded | `etcd//etcd` | `etcd//etcd (no cause)` | none | page/page | 1 (2) | pass |
+| ingress-class-unknown | `ingress/shop/shop` | `ingress/shop/shop (no cause)` | none | notify/notify | 1 (2) | pass |
+| gateway-class-missing | `gateway.gateway.networking.k8s.io/shop/public` | `gateway.gateway.networking.k8s.io/shop/public (no cause)` | none | notify/notify | 1 (2) | pass |
+| crd-conversion-webhook-gone | `customresourcedefinition//widgets.acme.example` | `customresourcedefinition//widgets.acme.example` | high 1.00 | notify/notify | 1 (2) | pass |
 
 ## Held-out scenarios
 

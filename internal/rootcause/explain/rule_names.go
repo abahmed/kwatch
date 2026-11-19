@@ -32,6 +32,8 @@ const (
 	RuleNodeOvercommitted            = "node-overcommitted"
 	RuleVolumeHeldByPod              = "volume-held-by-pod"
 	RuleVolumeHeldByNode             = "volume-held-by-node"
+	RuleVolumeBoundElsewhere         = "volume-bound-elsewhere"
+	RuleConversionWebhookDown        = "conversion-webhook-down"
 	RuleWebhookRejects               = "webhook-rejects"
 	RuleLivenessShorterThanStart     = "liveness-shorter-than-start"
 	RuleLivenessKillsBeforeReady     = "liveness-kills-before-ready"

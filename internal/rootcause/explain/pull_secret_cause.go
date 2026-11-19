@@ -51,6 +51,15 @@ func (v *view) isPullLogin(secret, effect inventory.EntityID) bool {
 	return false
 }
 
+// wrongTypePullLogin reports a pull Secret the registry refused as
+// anonymous because the Secret holds no registry login (its type is not
+// kubernetes.io/dockerconfigjson or dockercfg).
+func (v *view) wrongTypePullLogin(secret, effect inventory.EntityID) bool {
+	entity, ok := v.s.Model.Entity(secret)
+	return ok && v.isPullLogin(secret, effect) &&
+		!kube.RegistryLoginType(attrText(entity, kube.AttrSecretType))
+}
+
 // mayRequireAuthPattern is a registry's refusal that is either an
 // unknown image or one the client may not read without a login.
 var mayRequireAuthPattern = regexp.MustCompile(

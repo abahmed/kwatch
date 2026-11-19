@@ -52,6 +52,9 @@ func (d Workload) Detect(
 	if s, ok := d.availability(ctx, e); ok {
 		out = append(out, s)
 	}
+	if s, ok := pausedEdit(ctx, e); ok {
+		out = append(out, s)
+	}
 	if s, ok := neverReady(ctx, e); ok {
 		out = append(out, s)
 	}

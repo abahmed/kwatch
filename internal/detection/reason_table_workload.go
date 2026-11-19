@@ -9,6 +9,9 @@ import (
 var workloadReasons = []ReasonInfo{
 	reason(reasons.ProgressDeadlineExceeded, ModeRolloutStuck),
 	reason(reasons.DeploymentUnavailable, ModeUnavailable),
+	// Someone paused it on purpose and replicas keep serving: worth a
+	// look in the digest, never an interruption.
+	reason(reasons.DeploymentPausedEdit, ModePausedEdit).digest(),
 	reason(reasons.DeploymentReplicaFailure, ModeReplicaFailure),
 	reason(reasons.ReplicaSetFailure, ModeReplicaFailure),
 	reason(reasons.DaemonSetUnavailable, ModeUnavailable),

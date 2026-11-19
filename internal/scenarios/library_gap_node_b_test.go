@@ -10,23 +10,25 @@ import (
 // the pods placed on them.
 func gapNodeBScenarios() []scenario {
 	return []scenario{
-		gapNoExecuteTaint(), gapSandboxIPConflict(), gapClockSkew(),
+		gapNoExecuteTaint(), gapNoExecuteTolerated(),
+		gapSandboxIPConflict(), gapClockSkew(),
 	}
 }
 
 // gapNoExecuteTaint: operations taint n1 for maintenance with NoExecute;
 // the taint manager deletes the pods that do not tolerate it and their
-// replacements start on n3. The taint on the node is the cause.
+// replacements are ready on n3 within a minute. A deliberate taint whose
+// evictions are replaced at once is maintenance, not a failure: nothing
+// to tell anyone, as for a drain.
 func gapNoExecuteTaint() scenario {
 	return scenario{
 		expect: expectation{
 			Name: "node-no-execute-taint-evicts",
 			Description: "A node is given a NoExecute maintenance taint; " +
 				"pods of three workloads without a toleration are " +
-				"deleted by the taint manager and restart elsewhere.",
-			Root: "node//n1", Tier: "notify", MaxMessages: 2,
-			MustNotBlame: []string{"deployment/shop/orders",
-				"deployment/shop/payments", "deployment/shop/cart"},
+				"deleted by the taint manager and are ready again " +
+				"elsewhere within a minute.",
+			Quiet: true,
 		},
 		build: func(c *cluster) {
 			n1, fleet := gapNodeFleet(c)
@@ -56,6 +58,30 @@ func gapNoExecuteTaint() scenario {
 				c.update(w.objects())
 			}
 			c.after(5 * time.Minute)
+		},
+	}
+}
+
+// gapNoExecuteTolerated: the same maintenance taint, but every pod on n1
+// tolerates it, so nothing is evicted and nothing is said.
+func gapNoExecuteTolerated() scenario {
+	return scenario{
+		expect: expectation{
+			Name: "node-no-execute-taint-tolerated",
+			Description: "A node is given a NoExecute taint that every " +
+				"pod on it tolerates; no pod is evicted.",
+			Quiet: true,
+		},
+		build: func(c *cluster) {
+			n1, _ := gapNodeFleet(c)
+			c.after(time.Minute)
+			tainted := last(c, n1)
+			tainted.Spec.Taints = []corev1.Taint{{
+				Key: "maintenance", Value: "true",
+				Effect: corev1.TaintEffectNoExecute,
+			}}
+			c.update(tainted)
+			c.after(6 * time.Minute)
 		},
 	}
 }
@@ -114,7 +140,7 @@ func gapClockSkew() scenario {
 			Description: "A node's clock is ten minutes off; its kubelet " +
 				"reports NotReady with a certificate \"is before\" " +
 				"validity error while other nodes are healthy.",
-			Root: "node//n3", Tier: "notify", MaxMessages: 2,
+			Root: "node//n3", Tier: "page", MaxMessages: 2,
 			MustNotBlame: []string{"deployment/shop/orders",
 				"deployment/shop/payments", "deployment/shop/cart"},
 			Tail: duration(10 * time.Minute),

@@ -41,6 +41,10 @@ var causeWords = map[string]causeWording{
 	"budget-blocks-drain": {words: "allows no eviction"},
 	"certificate-expired": {words: "holds an expired certificate"},
 	"claim-not-usable":    {words: "cannot be used"},
+	"conversion-webhook-down": {
+		words: "cannot convert its resources: its webhook backend is gone"},
+	"volume-bound-elsewhere": {
+		words: "is already bound to a different claim"},
 	"claim-pins-pod": {
 		words: "is bound to a volume in a zone with no node for the pod"},
 	"cluster-dns-failing":          {words: "is not resolving names"},

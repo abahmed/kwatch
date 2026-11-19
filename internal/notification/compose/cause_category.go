@@ -67,6 +67,8 @@ var causeCategories = map[string]string{
 	"certificate-expired":              categoryCertificate,
 	"claim-no-storage-class":           categoryStorage,
 	"claim-not-usable":                 categoryStorage,
+	"volume-bound-elsewhere":           categoryStorage,
+	"conversion-webhook-down":          categoryAdmission,
 	"claim-pins-pod":                   categoryStorage,
 	"cluster-dns-failing":              categoryDNS,
 	"cluster-dns-server-workload":      categoryDNS,
