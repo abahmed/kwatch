@@ -1,9 +1,9 @@
 10:02:15 settled
-🟠 Node n1 (prod-eu-1) is running out of process IDs. Every app that uses it is failing. Replicas that do not depend on it are healthy. Affected: cart, orders and payments in shop.
+🟠 Node n1 (prod-eu-1) is low on process IDs. Every app that uses it is failing. Replicas that do not depend on it are healthy. Affected: cart, orders and payments in shop.
 Related alerts: 3 crash loops, 1 node problem
 To check the node's conditions and recent events, run kubectl describe node n1
-🟠 Node n1 (prod-eu-1) is running out of process IDs.
-| 🟠 Node n1 (**prod-eu-1**) is running out of process IDs.
+🟠 Node n1 (prod-eu-1) is low on process IDs.
+| 🟠 Node n1 (**prod-eu-1**) is low on process IDs.
 | Every app that uses it is failing.
 | Replicas that do not depend on it are healthy.
 | Affected: **cart**, **orders** and **payments** in **shop**.

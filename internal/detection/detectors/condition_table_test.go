@@ -61,7 +61,7 @@ var condCases = []condCase{
 	{name: "pid pressure", kind: kube.KindNode,
 		cond: "PIDPressure", status: "True", age: 2 * time.Minute,
 		want: []wantFinding{{reasons.PIDPressure, detection.Critical, 0,
-			"Node is running out of process IDs", nil, true}}},
+			"Node is low on process IDs", nil, true}}},
 	{name: "pressure false", kind: kube.KindNode,
 		cond: "DiskPressure", status: "False", age: 2 * time.Minute},
 	{name: "network unavailable at once", kind: kube.KindNode,
