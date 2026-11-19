@@ -99,7 +99,10 @@ var nodeLocalMarkers = []string{
 	"didn't have enough resource", "outofcpu", "outofmemory",
 	"too many open files", "inotify", "no space left on device",
 	"hostpath type check failed", "topology affinity",
-	"topology locality",
+	"topology locality", "failed to reserve container name",
+	"invalid cni configuration", "invalid network config",
+	"no networks found in", "cni plugin not initialized",
+	"no runtime for", "runtimehandler",
 }
 
 // nodeLocalErrors reports whether some effect's own error text carries a
