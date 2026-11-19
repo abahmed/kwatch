@@ -39,11 +39,13 @@ func (ClusterService) Detect(
 		return nil
 	}
 	if ok, _ := healthy.Value.AsBool(); ok {
-		return append(apiLatency(ctx, e), errorRates(ctx, e)...)
+		return append(append(apiLatency(ctx, e), errorRates(ctx, e)...),
+			recurringOutage(ctx, e, false, healthy.Since)...)
 	}
 	if !sustained(ctx, "api-unhealthy", healthy.Since, DefaultProbeFailing) {
-		return nil
+		return recurringOutage(ctx, e, true, healthy.Since)
 	}
+	recurringOutage(ctx, e, true, healthy.Since)
 	reason, what := serviceReason(e.ID)
 	return []detection.Finding{{
 		Reason: reason, Severity: detection.Critical, Since: healthy.Since,

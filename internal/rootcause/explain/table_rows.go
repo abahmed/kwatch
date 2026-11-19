@@ -299,7 +299,7 @@ var specificRows = concatRows(nodeRows, workloadRows, clusterRows,
 	serviceCallRows, policyCallRows, livenessStartRows, dependencyLogRows,
 	scalingRows, sharedRows, agentRows, preemptionRows, leaseRows, runConfigRows,
 	missingServiceRows, initWaitRows, finalizerRows, storageRows,
-	policyAdmitRows, nodeDegradedRows, claimRows, helmRows)
+	policyAdmitRows, nodeDegradedRows, componentRows, claimRows, helmRows)
 
 func concatRows(groups ...[]Row) []Row {
 	var out []Row
