@@ -34,6 +34,7 @@ const (
 	RuleVolumeHeldByNode             = "volume-held-by-node"
 	RuleVolumeBoundElsewhere         = "volume-bound-elsewhere"
 	RuleConversionWebhookDown        = "conversion-webhook-down"
+	RuleSchedulerNames               = "scheduler-names-object"
 	RuleWebhookRejects               = "webhook-rejects"
 	RuleLivenessShorterThanStart     = "liveness-shorter-than-start"
 	RuleLivenessKillsBeforeReady     = "liveness-kills-before-ready"

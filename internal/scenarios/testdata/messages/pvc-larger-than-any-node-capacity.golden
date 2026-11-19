@@ -1,12 +1,13 @@
 10:03:15 settled
-🟠 etl in shop (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (did not have enough free storage). The scheduler says "0/3 nodes are available: 3 node(s) did not have enough free storage. preemption: 0/3 nodes are available: 3 Preemption…". To see the pods' state and events, run kubectl describe pods etl- -n shop
-🟠 etl in shop (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (did not have enough free storage).
-| 🟠 **etl** in **shop** (**prod-eu-1**) has waited two minutes for a node because the scheduler rejects every node (**did not have enough free storage**).
+🟠 etl is failing in shop (prod-eu-1) after the 10:00 UTC creation of volume claim scratch. The scheduler says "0/3 nodes are available: 3 node(s) did not have enough free storage. preemption: 0/3 nodes are available: 3 Preemption…". It was created shortly before. To see why the volume claim is not usable, run kubectl describe pvc scratch -n shop
+🟠 etl is failing in shop (prod-eu-1) after the 10:00 UTC creation of volume claim scratch.
+| 🟠 **etl** is failing in **shop** (**prod-eu-1**) after the 10:00 UTC creation of volume claim **scratch**.
 | The scheduler says
 | ```
 | 0/3 nodes are available: 3 node(s) did not have enough free storage. preemption: 0/3 nodes are available: 3 Preemption…
 | ```
-| To see the pods' state and events, run
+| It was created shortly before.
+| To see why the volume claim is not usable, run
 | ```
-| kubectl describe pods etl- -n shop
+| kubectl describe pvc scratch -n shop
 | ```

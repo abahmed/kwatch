@@ -8,7 +8,7 @@ import (
 // Rows for shared cluster services.
 
 // clusterRows cover shared services every workload depends on.
-var clusterRows = []Row{
+var clusterRows = concatRows(schedulerNamesRows(), []Row{
 	pullWithoutSecretRow, diskHogRow, accountNoGrantRow,
 	{
 		Name: "registry-refuses",
@@ -145,7 +145,7 @@ var clusterRows = []Row{
 		Link: LinkContains, Effect: anything, Prior: 0.6,
 		MinCovered: 2,
 	},
-}
+})
 
 // Names of the rows that blame failing nodes, for the incident layer to
 // recognise them.

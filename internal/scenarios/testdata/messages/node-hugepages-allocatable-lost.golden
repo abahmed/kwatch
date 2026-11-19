@@ -1,12 +1,12 @@
 10:13:15 settled
-🟠 db in shop (prod-eu-1) has waited two minutes for a node because no node has enough hugepages-2Mi. The scheduler says "0/2 nodes are available: 2 Insufficient hugepages-2Mi. preemption: 0/2 nodes are available: 2 No preemption victims…". To see the pods' state and events, run kubectl describe pods db- -n shop
-🟠 db in shop (prod-eu-1) has waited two minutes for a node because no node has enough hugepages-2Mi.
-| 🟠 db in **shop** (**prod-eu-1**) has waited two minutes for a node because no node has enough hugepages-2Mi.
+🟠 db in shop (prod-eu-1) has waited two minutes for a node, likely because node n2 is failing. The scheduler says "0/2 nodes are available: 2 Insufficient hugepages-2Mi. preemption: 0/2 nodes are available: 2 No preemption victims…". To check the node's conditions and recent events, run kubectl describe node n2
+🟠 db in shop (prod-eu-1) has waited two minutes for a node, likely because node n2 is failing.
+| 🟠 db in **shop** (**prod-eu-1**) has waited two minutes for a node, likely because node n2 is failing.
 | The scheduler says
 | ```
 | 0/2 nodes are available: 2 Insufficient hugepages-2Mi. preemption: 0/2 nodes are available: 2 No preemption victims…
 | ```
-| To see the pods' state and events, run
+| To check the node's conditions and recent events, run
 | ```
-| kubectl describe pods db- -n shop
+| kubectl describe node n2
 | ```

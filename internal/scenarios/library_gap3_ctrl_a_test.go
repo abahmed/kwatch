@@ -50,6 +50,13 @@ func gap3DaemonPlacement() scenario {
 			setAgentCounts(ds, 4, 3)
 			c.update(ds)
 			pod := agentPod(c, ds, "n4", pendingUnscheduled(message))
+			// The DaemonSet controller pins each pod to its node by name.
+			pod.Spec.Affinity = &corev1.Affinity{NodeAffinity: &corev1.
+				NodeAffinity{RequiredDuringSchedulingIgnoredDuringExecution: &corev1.
+				NodeSelector{NodeSelectorTerms: []corev1.NodeSelectorTerm{{
+				MatchFields: []corev1.NodeSelectorRequirement{{
+					Key: "metadata.name", Operator: corev1.NodeSelectorOpIn,
+					Values: []string{c.n("n4")}}}}}}}}
 			c.create(pod)
 			for m := int32(1); m <= 6; m++ {
 				c.after(time.Minute)

@@ -1,0 +1,246 @@
+package explain
+
+import (
+	"strings"
+
+	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/inventory"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
+	"github.com/abahmed/kwatch/internal/rootcause"
+)
+
+// ModeNamedByScheduler is an object the scheduler's verdict on a pod
+// points at: its words are about a setting, a claim or a node that one
+// object owns, and that object explains the Pending better than the
+// reason alone. The scheduler's reasons are read against the pod; each
+// entry of schedulerNamers says what object a kind of reason points at.
+const ModeNamedByScheduler detection.Mode = "NamedByScheduler"
+
+// schedulerNamer reads one kind of scheduling reason. match says whether
+// the verdict is of its kind; named returns the objects it points at.
+type schedulerNamer struct {
+	match func(verdict string) bool
+	named func(v *view, pod inventory.EntityID, verdict string,
+	) []inventory.EntityID
+}
+
+// schedulerNamers are the reasons that point at an object, in order; the
+// first that names something decides.
+var schedulerNamers = []schedulerNamer{
+	{ // The pod's PriorityClass never preempts.
+		match: func(s string) bool {
+			return strings.Contains(s, "preemptionpolicy=never")
+		},
+		named: func(v *view, pod inventory.EntityID, _ string,
+		) []inventory.EntityID {
+			return v.referenced(pod, kube.KindPriorityClass)
+		}},
+	{ // The pod conflicts with its own workload's old pod.
+		match: func(s string) bool {
+			return strings.Contains(s, "readwriteoncepod")
+		},
+		named: func(v *view, pod inventory.EntityID, _ string,
+		) []inventory.EntityID {
+			return []inventory.EntityID{rootcause.TopOwner(v.s.Model, pod)}
+		}},
+	{ // No node has room for the claim the pod mounts.
+		match: func(s string) bool {
+			return strings.Contains(s, "enough free storage")
+		},
+		named: func(v *view, pod inventory.EntityID, _ string,
+		) []inventory.EntityID {
+			return v.claimsOf(pod)
+		}},
+	{ // The pod asks to sit next to pods that no workload runs.
+		match: func(s string) bool {
+			return strings.Contains(s, "pod affinity rules")
+		},
+		named: (*view).affinityTargets},
+	{ // The pod is pinned to one node by name and that node has no room.
+		match: func(s string) bool { return strings.Contains(s, "insufficient") },
+		named: (*view).pinnedNode},
+	{ // A node lists the scarce resource at zero.
+		match: func(s string) bool {
+			return strings.Contains(s, "insufficient ")
+		},
+		named: (*view).nodesLackingResource},
+}
+
+// schedulerMessage is the scheduler's full verdict on the pod, lower
+// case.
+func (v *view) schedulerMessage(pod inventory.EntityID) string {
+	for _, f := range v.s.Findings[pod] {
+		for _, e := range f.Evidence {
+			if e.Label == "scheduler" {
+				return strings.ToLower(e.Value)
+			}
+		}
+	}
+	return ""
+}
+
+// schedulerNamed is the object the scheduler's verdict on pod points at.
+func (v *view) schedulerNamed(pod inventory.EntityID) []inventory.EntityID {
+	verdict := v.schedulerMessage(pod)
+	if verdict == "" {
+		return nil
+	}
+	for _, namer := range schedulerNamers {
+		if !namer.match(verdict) {
+			continue
+		}
+		if out := namer.named(v, pod, verdict); len(out) > 0 {
+			return out
+		}
+	}
+	return nil
+}
+
+// namedModes is ModeNamedByScheduler for an object the effect pod's
+// verdict names.
+func (v *view) namedModes(
+	id, effect inventory.EntityID, link LinkType,
+) []modeHealth {
+	if link != LinkSchedules && link != LinkMounts && link != LinkUses {
+		return nil
+	}
+	pod, ok := v.unitOf(effect)
+	if !ok {
+		return nil
+	}
+	for _, named := range v.schedulerNamed(pod) {
+		if named == id {
+			return pseudoFailing(ModeNamedByScheduler)
+		}
+	}
+	return nil
+}
+
+// referenced lists what the pod references of one kind.
+func (v *view) referenced(
+	pod inventory.EntityID, kind inventory.Kind,
+) []inventory.EntityID {
+	var out []inventory.EntityID
+	for _, id := range v.s.Model.Related(
+		pod, inventory.References, inventory.Outgoing) {
+		if id.Kind == kind {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// affinityTargets are the workloads whose pods the pod's required pod
+// affinity selects and that run no ready pod: scaled to zero or down.
+func (v *view) affinityTargets(
+	pod inventory.EntityID, _ string,
+) []inventory.EntityID {
+	entity, ok := v.s.Model.Entity(pod)
+	if !ok {
+		return nil
+	}
+	spec := kube.ParseSchedulingSpec(entity)
+	var out []inventory.EntityID
+	for _, term := range spec.Affinity {
+		for _, kind := range workloadKinds {
+			for _, id := range v.s.Model.EntitiesIn(kind, pod.Namespace) {
+				w, found := v.s.Model.Entity(id)
+				if !found || !v.selectsLabels(term.Selector, w) {
+					continue
+				}
+				ready, _ := attrNumber(w, kube.AttrReadyReplicas)
+				if ready == 0 {
+					out = append(out, id)
+				}
+			}
+		}
+	}
+	return out
+}
+
+// selectsLabels reports whether the selector matches the labels of the
+// pods the workload creates.
+func (v *view) selectsLabels(
+	selector []kube.Requirement, workload inventory.Entity,
+) bool {
+	if len(selector) == 0 {
+		return false
+	}
+	labels := kube.ParseLabels(attrText(workload, kube.AttrTemplateLabels))
+	for _, r := range selector {
+		if !r.Matches(labels) {
+			return false
+		}
+	}
+	return true
+}
+
+// pinnedNode is the one node a DaemonSet-style pod is pinned to by name,
+// when the verdict says a node was short of a resource.
+func (v *view) pinnedNode(
+	pod inventory.EntityID, _ string,
+) []inventory.EntityID {
+	if node, found := v.nodeOf(pod); found {
+		return []inventory.EntityID{node}
+	}
+	entity, ok := v.s.Model.Entity(pod)
+	if !ok {
+		return nil
+	}
+	for _, term := range kube.ParseSchedulingSpec(entity).NodeTerms {
+		for _, r := range term {
+			if r.Key == kube.FieldPrefix+"metadata.name" &&
+				len(r.Values) == 1 {
+				return []inventory.EntityID{inventory.CoreID(
+					kube.KindNode, "", r.Values[0])}
+			}
+		}
+	}
+	return nil
+}
+
+// nodesLackingResource are the nodes that list the scarce extended
+// resource the verdict names at zero allocatable.
+func (v *view) nodesLackingResource(
+	_ inventory.EntityID, verdict string,
+) []inventory.EntityID {
+	_, after, found := strings.Cut(verdict, "insufficient ")
+	if !found {
+		return nil
+	}
+	resource := strings.TrimRight(strings.Fields(after)[0], ".,:")
+	var out []inventory.EntityID
+	for _, id := range v.s.Model.Entities(kube.KindNode) {
+		node, ok := v.s.Model.Entity(id)
+		if !ok {
+			continue
+		}
+		for _, item := range strings.Split(
+			attrText(node, kube.AttrAllocatable), ",") {
+			if strings.EqualFold(item, resource+"=0") {
+				out = append(out, id)
+			}
+		}
+	}
+	return out
+}
+
+// schedulerNamesRows say that the object a pod's scheduling verdict
+// points at explains the Pending. A walk keeps one link per target, and
+// the object may be reached by the pod's own relation to it (it mounts
+// the claim, it uses the class), so the row exists for each link.
+func schedulerNamesRows() []Row {
+	var rows []Row
+	for _, link := range []LinkType{LinkSchedules, LinkMounts, LinkUses} {
+		rows = append(rows, Row{
+			Name: RuleSchedulerNames,
+			Cause: Side{Group: AnyGroup, Kind: AnyKind,
+				Modes: []detection.Mode{ModeNamedByScheduler}},
+			Link: link,
+			Effect: podSide(detection.ModePending,
+				detection.ModeUnschedulable),
+			Prior: 0.8,
+		})
+	}
+	return rows
+}

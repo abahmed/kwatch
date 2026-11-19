@@ -1,13 +1,13 @@
 10:08:15 settled
-🟠 logship in observability (prod-eu-1) has waited two minutes for a node because no node matches its node affinity or node selector. The scheduler says "0/4 nodes are available: 1 Insufficient memory, 3 node(s) didn't match Pod's node affinity/selector. preemption: 0/4…". Replicas that do not depend on it are healthy. To see the pods' state and events, run kubectl describe pods logship- -n observability
-🟠 logship in observability (prod-eu-1) has waited two minutes for a node because no node matches its node affinity or node selector.
-| 🟠 **logship** in **observability** (**prod-eu-1**) has waited two minutes for a node because no node matches its node affinity or node selector.
+🟠 logship in observability (prod-eu-1) has waited two minutes for a node because node n4 is failing. No node fits: no node meets the pod's node affinity (field:metadata.name=n4). The scheduler says "0/4 nodes are available: 1 Insufficient memory, 3 node(s) didn't match Pod's node affinity/selector. preemption: 0/4…". To check the node's conditions and recent events, run kubectl describe node n4
+🟠 logship in observability (prod-eu-1) has waited two minutes for a node because node n4 is failing.
+| 🟠 **logship** in **observability** (**prod-eu-1**) has waited two minutes for a node because node n4 is failing.
+| No node fits: no node meets the pod's node affinity (field:metadata.name=n4).
 | The scheduler says
 | ```
 | 0/4 nodes are available: 1 Insufficient memory, 3 node(s) didn't match Pod's node affinity/selector. preemption: 0/4…
 | ```
-| Replicas that do not depend on it are healthy.
-| To see the pods' state and events, run
+| To check the node's conditions and recent events, run
 | ```
-| kubectl describe pods logship- -n observability
+| kubectl describe node n4
 | ```

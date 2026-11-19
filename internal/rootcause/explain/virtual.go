@@ -195,6 +195,9 @@ func (v *view) metricsAPIHops() []hop {
 // rejects most nodes, as a virtual "scheduling" entity.
 func (v *view) schedulingHops(pod inventory.EntityID) []hop {
 	reason, ok := v.schedulerVerdict(pod)
+	if named := v.schedulerNamed(pod); ok && len(named) > 0 {
+		return hopsTo(LinkSchedules, named...)
+	}
 	switch {
 	case !ok:
 		return nil
