@@ -38,9 +38,9 @@ func pausedEdit(
 	return detection.Finding{
 		Reason: reasons.DeploymentPausedEdit, Severity: detection.Warning,
 		Since: since,
-		Summary: "Deployment is paused with a pod template edit that " +
-			"has not rolled out, for " +
-			format.Duration(ctx.Now.Sub(since)),
+		Summary: "Deployment has been paused for " +
+			format.Duration(ctx.Now.Sub(since)) +
+			" with a pod template edit that has not rolled out",
 		Evidence: []detection.Evidence{{
 			Label: "condition", Value: "Progressing " + pausedReason}},
 	}, true

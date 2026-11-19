@@ -70,6 +70,14 @@ func rootSteps(
 			knownOwners(p))
 	case root.Kind == kube.KindNode && !nodeRemoved(p):
 		return nodeRootSteps(p)
+	case incident.IsWorkload(root.Kind) && onlyPausedEdit(members):
+		return []notification.Step{{
+			Text: "Roll out the edit by resuming the Deployment " +
+				"(changes the cluster)",
+			Command: "kubectl rollout resume deploy/" + quote(root.Name) +
+				namespaceFlag(root.Namespace),
+			Mutating: true,
+		}}
 	case root.Kind == kube.KindSecret:
 		return secretSteps(root, members)
 	case root.Kind == kube.KindHelmRelease:

@@ -69,7 +69,7 @@ var nodeSandboxReasons = map[detection.Mode]struct {
 	detection.ModeNetworkCNINotReady: {reasons.NodeCNINotReady,
 		"Node network plugin is not ready; pods cannot get a network"},
 	detection.ModeNetworkConflict: {reasons.NodePodNetworkConflict,
-		"Node cannot set up pod networking: an address or route it " +
+		"Node cannot set up pod networking: an IP address or route it " +
 			"assigns is already in use"},
 }
 

@@ -11,5 +11,5 @@ func conversionConsequence(f caseFacts, webhook bool) ([]sentence, bool) {
 		return nil, false
 	}
 	return []sentence{{part: partConsequence, weight: 1,
-		text: "Reads of its resources that need a conversion fail."}}, true
+		text: "Requests for its resources that need version conversion fail."}}, true
 }
