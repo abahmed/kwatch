@@ -60,7 +60,8 @@ func (v *view) applySharedFactorWindow(cs *candidateSet) {
 		if len(effects) == 0 {
 			continue
 		}
-		reason := v.sharedFactorVeto(c.id, effects)
+		c.split = v.splitAlone(cs, c, effects)
+		reason := v.sharedFactorVeto(c, effects)
 		if reason == "" {
 			reason = v.sharedFactorCount(c, effects)
 		}
@@ -109,10 +110,14 @@ func (v *view) healthyReplicaElsewhere(
 // sharedFactorVeto says why shared-factor coverage must be dropped, or
 // returns "" when the suspicion stands.
 func (v *view) sharedFactorVeto(
-	id inventory.EntityID, effects []inventory.EntityID,
+	c *candidate, effects []inventory.EntityID,
 ) string {
+	id := c.id
 	if !v.beganTogether(effects) {
 		return "the failures it would explain did not begin together"
+	}
+	if c.split {
+		return ""
 	}
 	if !v.mostDependentsFail(id) {
 		return "most of what depends on it is healthy"
@@ -170,7 +175,7 @@ func (v *view) beganTogether(effects []inventory.EntityID) bool {
 func (v *view) sharedFactorCount(
 	c *candidate, effects []inventory.EntityID,
 ) string {
-	if v.workloadsOf(c.direct()) >= SharedFactorMinWorkloads {
+	if v.workloadsOf(c.direct()) >= SharedFactorMinWorkloads || c.split {
 		return ""
 	}
 	if _, _, ok := v.coOnset(effects); !ok {

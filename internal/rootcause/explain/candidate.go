@@ -40,6 +40,9 @@ type candidate struct {
 	// coOnset marks a shared factor of only CoOnsetMinWorkloads
 	// workloads, kept because they began failing as one moment.
 	coOnset bool
+	// split marks a node accepted for a clean replica split (see
+	// cleanReplicaSplit) with nothing else explaining its effects.
+	split bool
 }
 
 // direct returns the effects the candidate explains through a row,

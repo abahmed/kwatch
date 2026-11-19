@@ -23,7 +23,8 @@ func (v *view) applyMinWorkloads(cs *candidateSet) {
 				// says.
 				counted = c.direct()
 			}
-			if v.workloadsOf(counted) >= group.need {
+			if v.workloadsOf(counted) >= group.need ||
+				c.split {
 				continue
 			}
 			for _, effect := range group.effects {
