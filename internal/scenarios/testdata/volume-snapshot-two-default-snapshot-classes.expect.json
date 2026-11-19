@@ -1,0 +1,12 @@
+{
+  "name": "volume-snapshot-two-default-snapshot-classes",
+  "description": "A VolumeSnapshot never starts because two snapshot classes are default for its driver; the controller warns SetDefaultSnapshotClassFailed.",
+  "root": "volumesnapshot/shop/nightly",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "ambiguous": true,
+  "tail": "10m0s"
+}

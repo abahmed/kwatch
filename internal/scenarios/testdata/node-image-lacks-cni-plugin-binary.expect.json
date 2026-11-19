@@ -1,0 +1,13 @@
+{
+  "name": "node-image-lacks-cni-plugin-binary",
+  "description": "Pods of three namespaces placed on a node with a new image fail sandbox creation: the portmap plugin binary is missing; other nodes are fine.",
+  "root": "node//n4",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/web",
+    "deployment/billing/invoices",
+    "deployment/media/transcode"
+  ],
+  "tail": "10m0s"
+}

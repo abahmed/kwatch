@@ -1,0 +1,11 @@
+{
+  "name": "volume-snapshot-delete-blocked-by-restoring-claim",
+  "description": "A deleted VolumeSnapshot stays Terminating because a claim is still being restored from it.",
+  "root": "persistentvolumeclaim/shop/restore-data",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

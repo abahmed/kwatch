@@ -1,0 +1,11 @@
+{
+  "name": "cronjob-replace-policy-kills-every-run",
+  "description": "A CronJob whose runs take ten minutes is scheduled every five under Replace; each tick deletes the run in progress and none completes for hours.",
+  "root": "cronjob/reports/slow-export",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

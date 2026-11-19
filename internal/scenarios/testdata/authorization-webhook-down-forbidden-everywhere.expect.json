@@ -1,0 +1,14 @@
+{
+  "name": "authorization-webhook-down-forbidden-everywhere",
+  "description": "Controllers in three unrelated namespaces are refused \"forbidden\" in the same minute while no Role or binding changed.",
+  "root": "unknown",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/operator",
+    "deployment/billing/operator",
+    "deployment/media/operator"
+  ],
+  "tail": "10m0s"
+}

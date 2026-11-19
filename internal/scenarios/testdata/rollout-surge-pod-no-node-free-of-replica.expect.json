@@ -1,0 +1,13 @@
+{
+  "name": "rollout-surge-pod-no-node-free-of-replica",
+  "description": "A rollout of a Deployment with required per-node anti-affinity and no unavailable pods allowed stalls: the surge pod is Pending on \"didn't match pod anti-affinity rules\" while every old pod runs. The rollout strategy explains it, not the scheduling reason alone.",
+  "root": "deployment/shop/search",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "node//n3"
+  ],
+  "tail": "10m0s"
+}

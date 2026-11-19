@@ -1,0 +1,11 @@
+10:11:15 settled
+🟠 cart in shop (prod-eu-1) is failing; node n2 is what the failing workloads have in common, though it looks healthy, which might be related. Every app that uses it is failing. Replicas that do not depend on it are healthy. Affected: orders and payments. To check the node's conditions and recent events, run kubectl describe node n2
+🟠 cart in shop (prod-eu-1) is failing; node n2 is what the failing workloads have in common, though it looks healthy, which might be related.
+| 🟠 **cart** in **shop** (**prod-eu-1**) is failing; node n2 is what the failing workloads have in common, though it looks healthy, which might be related.
+| Every app that uses it is failing.
+| Replicas that do not depend on it are healthy.
+| Affected: **orders** and **payments**.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n2
+| ```

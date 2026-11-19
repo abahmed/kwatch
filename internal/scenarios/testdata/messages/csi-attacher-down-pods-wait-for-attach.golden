@@ -1,0 +1,25 @@
+10:11:15 roll-up
+🟠 kwatch (prod-eu-1) found three new problems at the same time. ebs-csi-controller in kube-system keeps crashing. ledger in billing is failing: volume cannot be mounted. db in shop is failing: volume cannot be mounted. Each one alerts on its own when it changes or resolves.
+🟠 kwatch (prod-eu-1) found three new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 3 new problems at the same time
+|
+| **Problems**
+| - **ebs-csi-controller** in **kube-system** keeps crashing
+| - **ledger** (**billing**) — volume cannot be mounted
+| - db (**shop**) — volume cannot be mounted
+|
+| *Each one alerts on its own when it changes or resolves.*
+10:15:30 cause revised
+🟠 ledger in billing (prod-eu-1) is failing; node n2 is what the failing workloads have in common, though it looks healthy, which might be related. Every app that uses it is failing. Replicas that do not depend on it are healthy. Affected: db in shop.
+Related alerts: 2 unavailable workloads
+To check the node's conditions and recent events, run kubectl describe node n2
+🟠 ledger in billing (prod-eu-1) is failing; node n2 is what the failing workloads have in common, though it looks healthy, which might be related.
+| 🟠 **ledger** in **billing** (**prod-eu-1**) is failing; node n2 is what the failing workloads have in common, though it looks healthy, which might be related.
+| Every app that uses it is failing.
+| Replicas that do not depend on it are healthy.
+| Affected: db in **shop**.
+| Related alerts: 2 unavailable workloads
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n2
+| ```

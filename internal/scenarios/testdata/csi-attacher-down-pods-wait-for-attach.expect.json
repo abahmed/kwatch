@@ -1,0 +1,14 @@
+{
+  "name": "csi-attacher-down-pods-wait-for-attach",
+  "description": "The attacher of a CSI driver crash-loops; new pods that need a volume attached wait in ContainerCreating in two namespaces with \"timed out waiting for external-attacher\".",
+  "root": "deployment/kube-system/ebs-csi-controller",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/shop/db",
+    "deployment/billing/ledger"
+  ],
+  "tail": "10m0s"
+}

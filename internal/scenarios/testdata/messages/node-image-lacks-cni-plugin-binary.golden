@@ -1,0 +1,11 @@
+10:12:15 settled
+🟠 invoices in billing (prod-eu-1) is failing; node n4 is what the failing workloads have in common, though it looks healthy, which might be related. Every app that uses it is failing. Replicas that do not depend on it are healthy. Affected: transcode in media; web in shop. To check the node's conditions and recent events, run kubectl describe node n4
+🟠 invoices in billing (prod-eu-1) is failing; node n4 is what the failing workloads have in common, though it looks healthy, which might be related.
+| 🟠 **invoices** in **billing** (**prod-eu-1**) is failing; node n4 is what the failing workloads have in common, though it looks healthy, which might be related.
+| Every app that uses it is failing.
+| Replicas that do not depend on it are healthy.
+| Affected: **transcode** in **media**; **web** in **shop**.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n4
+| ```

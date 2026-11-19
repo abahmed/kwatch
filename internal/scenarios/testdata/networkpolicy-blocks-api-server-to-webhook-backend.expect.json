@@ -1,0 +1,13 @@
+{
+  "name": "networkpolicy-blocks-api-server-to-webhook-backend",
+  "description": "A default-deny policy added to a webhook backend's namespace makes its calls from the API server time out; pod creation fails in two namespaces while the backend's endpoints are ready.",
+  "root": "networkpolicy/policy-system/default-deny",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "validatingwebhookconfiguration//image-guard",
+    "deployment/policy-system/guard",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

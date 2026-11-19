@@ -1,0 +1,12 @@
+{
+  "name": "admission-policy-expression-error-denies-all",
+  "description": "A ValidatingAdmissionPolicy's expression errors on every object (no such key); under failurePolicy Fail pod creation is refused in three namespaces.",
+  "root": "validatingadmissionpolicy//require-team-label",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/orders"
+  ],
+  "tail": "10m0s"
+}

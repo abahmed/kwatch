@@ -1,0 +1,12 @@
+{
+  "name": "pv-filesystem-mismatch-pod-waits",
+  "description": "A restored volume holds a different filesystem than the class asks for; the kubelet warns FailedMountOnFilesystemMismatch on the volume and the pod waits in ContainerCreating.",
+  "root": "persistentvolume//pv-restored",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/db"
+  ],
+  "tail": "10m0s"
+}

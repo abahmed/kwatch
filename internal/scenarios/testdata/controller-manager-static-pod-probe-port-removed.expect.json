@@ -1,0 +1,11 @@
+{
+  "name": "controller-manager-static-pod-probe-port-removed",
+  "description": "A static pod manifest for the controller manager probes a port the upgraded component no longer serves; the kubelet restarts it again and again.",
+  "root": "controller-manager//kube-controller-manager",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

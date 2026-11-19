@@ -1,0 +1,16 @@
+10:07:15 settled
+🟠 api is failing in shop (prod-eu-1) after the 10:02 UTC release. The release changed the readinessProbe to http /ready :8080 every 10s, timeout 1s, 3 failures. The apps that use it failed soon after it changed. Fix: give the readiness probe of container app in deployment/api more time (now http /ready :8080 every 10s, timeout 1s, 3 failures). To see the rollout state, run kubectl rollout status deployment/api -n shop
+🟠 api is failing in shop (prod-eu-1) after the 10:02 UTC release.
+| 🟠 **api** is failing in **shop** (**prod-eu-1**) after the 10:02 UTC release.
+| The release changed the readinessProbe to http /ready :8080 every 10s, timeout 1s, 3 failures.
+| The apps that use it failed soon after it changed.
+| Fix: give the readiness probe of container app in deployment/api more time (now http /ready :8080 every 10s, timeout 1s, 3 failures).
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/api -n shop
+| ```
+10:09:00 material change
+🟠 api is failing in shop (prod-eu-1) after the 10:02 UTC release. The release changed the readinessProbe to http /ready :8080 every 10s, timeout 1s, 3 failures.
+🟠 api is failing in shop (prod-eu-1) after the 10:02 UTC release.
+| 🟠 **api** is failing in **shop** (**prod-eu-1**) after the 10:02 UTC release.
+| The release changed the readinessProbe to http /ready :8080 every 10s, timeout 1s, 3 failures.

@@ -1,0 +1,12 @@
+{
+  "name": "endpointslice-writes-refused-by-quota",
+  "description": "An object-count quota for EndpointSlices is full; the controller warns FailedToUpdateEndpointSlices and the Service keeps listing a pod that is gone.",
+  "root": "resourcequota/shop/object-counts",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "service/shop/web",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

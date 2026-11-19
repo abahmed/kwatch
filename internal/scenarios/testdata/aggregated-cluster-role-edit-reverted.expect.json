@@ -1,0 +1,12 @@
+{
+  "name": "aggregated-cluster-role-edit-reverted",
+  "description": "A rule added to an aggregated ClusterRole is reverted at the next reconcile; the app that relied on it starts to be refused \"forbidden\".",
+  "root": "clusterrole//view-extended",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/dashboard"
+  ],
+  "tail": "10m0s"
+}

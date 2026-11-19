@@ -1,0 +1,13 @@
+{
+  "name": "networkpolicy-isolates-metrics-server",
+  "description": "A policy isolates the metrics server's pods; the metrics APIService turns Available=False on a discovery timeout and the HPA cannot read metrics.",
+  "root": "networkpolicy/kube-system/isolate-metrics",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/kube-system/metrics-server",
+    "apiservice//v1beta1.metrics.k8s.io",
+    "deployment/shop/web"
+  ],
+  "tail": "20m0s"
+}

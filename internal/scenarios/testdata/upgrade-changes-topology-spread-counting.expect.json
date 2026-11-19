@@ -1,0 +1,13 @@
+{
+  "name": "upgrade-changes-topology-spread-counting",
+  "description": "After an upgrade the topology spread constraint counts only nodes matching the selector; the scaled-up pods are Pending with \"didn't match pod topology spread constraints\". The pod spec's constraint explains it, not the scheduling reason alone.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "node//n3"
+  ],
+  "tail": "10m0s"
+}

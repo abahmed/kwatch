@@ -1,0 +1,11 @@
+{
+  "name": "volume-snapshot-content-creation-failed",
+  "description": "A VolumeSnapshot never becomes ready because the driver fails to create it; the content's status carries the error.",
+  "root": "volumesnapshotcontent//snapcontent-3f2a",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

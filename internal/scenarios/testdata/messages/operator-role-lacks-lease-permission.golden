@@ -1,0 +1,15 @@
+10:11:15 settled
+🟠 operator in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "error retrieving resource lock shop/operator-lock: leases.coordination.k8s.io "operator-lock" is forbidden: User…". Its last run lasted ten seconds; two restarts since its pod was created about one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs deploy/operator -c app -n shop --previous
+🟠 operator in shop (prod-eu-1) keeps crashing.
+| 🟠 **operator** in **shop** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| It fails with
+| ```
+| error retrieving resource lock shop/operator-lock: leases.coordination.k8s.io "operator-lock" is forbidden: User…
+| ```
+| Its last run lasted ten seconds; two restarts since its pod was created about one hour ago.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/operator -c app -n shop --previous
+| ```

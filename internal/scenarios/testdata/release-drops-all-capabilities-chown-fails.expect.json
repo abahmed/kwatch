@@ -1,0 +1,11 @@
+{
+  "name": "release-drops-all-capabilities-chown-fails",
+  "description": "A hardening release drops all capabilities; the entrypoint's chown of its data directory fails with \"Operation not permitted\" at every start.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

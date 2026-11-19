@@ -1,0 +1,15 @@
+10:05:10 settled
+🟠 web in shop (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged. In the last 30 minutes in shop: api: env V changed at 10:02 UTC. It fails with "Get "http://api.shop.svc:8080/items": read tcp 10.244.1.5:43210->10.96.22.5:8080: read: connection reset by peer". Its last run lasted ten seconds. To read the output of the last crash, run kubectl logs deploy/web -c app -n shop --previous
+🟠 web in shop (prod-eu-1) keeps crashing.
+| 🟠 **web** in **shop** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| In the last 30 minutes in shop: api: env V changed at 10:02 UTC.
+| It fails with
+| ```
+| Get "http://api.shop.svc:8080/items": read tcp 10.244.1.5:43210->10.96.22.5:8080: read: connection reset by peer
+| ```
+| Its last run lasted ten seconds.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/web -c app -n shop --previous
+| ```

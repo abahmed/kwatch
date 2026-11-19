@@ -1,0 +1,9 @@
+10:04:15 settled
+🟠 Job report-gen is failing in batch (prod-eu-1) after the 10:00 UTC change. The apps that use it failed soon after it changed. To see the pods' state and events, run kubectl describe pods report-gen- -n batch
+🟠 Job report-gen is failing in batch (prod-eu-1) after the 10:00 UTC change.
+| 🟠 Job **report-gen** is failing in **batch** (**prod-eu-1**) after the 10:00 UTC change.
+| The apps that use it failed soon after it changed.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods report-gen- -n batch
+| ```
