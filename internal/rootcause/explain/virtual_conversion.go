@@ -52,3 +52,17 @@ var conversionDownRow = Row{
 	Effect: Side{Kind: kube.KindPod, Modes: callerFailures},
 	Prior:  0.75,
 }
+
+// errorNamedHops are the hops read from what a claim's, pod's or
+// container's own error names: the volume refused as bound elsewhere and
+// the conversion webhook that failed.
+func (v *view) errorNamedHops(id inventory.EntityID) []hop {
+	var out []hop
+	if id.Kind == kube.KindPVC || id.Kind == kube.KindPod {
+		out = append(out, v.boundElsewhereHops(id)...)
+	}
+	if id.Kind == kube.KindContainer || id.Kind == kube.KindPod {
+		out = append(out, v.conversionHops(id)...)
+	}
+	return out
+}
