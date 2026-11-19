@@ -11,3 +11,11 @@
 | ```
 | kubectl describe pods api- -n shop
 | ```
+10:12:00 cause revised
+🟠 Cause now known: api in shop (prod-eu-1) cannot pull its image because node n2 is what the failing workloads have in common, though it looks healthy. It fails with "Failed to pull image "registry.example.com/api:4": failed to register layer: ApplyLayer exit status 1 stdout:  stderr…".
+🟠 Cause now known: api in shop (prod-eu-1) cannot pull its image because node n2 is what the failing workloads have in common, though it looks healthy.
+| 🟠 Cause now known: **api** in **shop** (**prod-eu-1**) cannot pull its image because node n2 is what the failing workloads have in common, though it looks healthy.
+| It fails with
+| ```
+| Failed to pull image "registry.example.com/api:4": failed to register layer: ApplyLayer exit status 1 stdout:  stderr…
+| ```

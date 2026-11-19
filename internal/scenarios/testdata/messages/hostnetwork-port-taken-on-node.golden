@@ -9,3 +9,8 @@
 | ```
 | kubectl logs deploy/edge -c app -n shop --previous
 | ```
+10:10:30 cause revised
+🟠 Cause now known: edge in shop (prod-eu-1) keeps crashing because node n1 is what the failing workloads have in common, though it looks healthy. It fails with "listen tcp 0.0.0.0:9100: bind: address already in use".
+🟠 Cause now known: edge in shop (prod-eu-1) keeps crashing because node n1 is what the failing workloads have in common, though it looks healthy.
+| 🟠 Cause now known: **edge** in **shop** (**prod-eu-1**) keeps crashing because node n1 is what the failing workloads have in common, though it looks healthy.
+| It fails with `listen tcp 0.0.0.0:9100: bind: address already in use`.

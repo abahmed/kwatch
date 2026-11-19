@@ -1,19 +1,18 @@
-10:12:30 settled
-🔴 Cluster DNS (prod-eu-1) is down; two possible causes: it is not resolving names or config map coredns in kube-system changed shortly before. It reports "lookup kubernetes.default.svc.cluster.local on 10.96.0.10:53: read udp 10.244.1.7:41234->10.96.0.10:53: i/o timeout". All three failing apps use it. Affected: invoices in billing; coredns in kube-system; cart in shop.
-Related alerts: 6 crash loops
-To see the cluster DNS pods, run kubectl -n kube-system get pods -l k8s-app=kube-dns
+10:12:15 settled
+🟠 coredns is failing in kube-system (prod-eu-1) after the 10:10 UTC change to config map coredns. Key Corefile changed. It fails with "[FATAL] plugin/loop: Loop (127.0.0.1:41738 -> :53) detected for zone ".", see…". Every error mentions it. Affected: invoices in billing; cart in shop. To check the object the pods depend on, run kubectl get configmap coredns -n kube-system -o yaml
 Proof: both replicas fail, on 2 nodes (invoices); both replicas fail, on 2 nodes (coredns); both replicas fail, on 2 nodes (cart).
-🔴 Cluster DNS (prod-eu-1) is down; two possible causes: it is not resolving names or config map coredns in kube-system changed shortly before.
-| 🔴 Cluster DNS (**prod-eu-1**) is down; two possible causes: it is not resolving names or config map **coredns** in **kube-system** changed shortly before.
-| It reports
+🟠 coredns is failing in kube-system (prod-eu-1) after the 10:10 UTC change to config map coredns.
+| 🟠 **coredns** is failing in **kube-system** (**prod-eu-1**) after the 10:10 UTC change to config map **coredns**.
+| Key Corefile changed.
+| It fails with `[FATAL] plugin/loop: Loop (127.0.0.1:41738 -> :53) detected for zone ".", see…`. Every error mentions it.
+| Affected: **invoices** in **billing**; **cart** in **shop**.
+| To check the object the pods depend on, run
 | ```
-| lookup kubernetes.default.svc.cluster.local on 10.96.0.10:53: read udp 10.244.1.7:41234->10.96.0.10:53: i/o timeout
-| ```
-| All three failing apps use it.
-| Affected: **invoices** in **billing**; **coredns** in **kube-system**; **cart** in **shop**.
-| Related alerts: 6 crash loops
-| To see the cluster DNS pods, run
-| ```
-| kubectl -n kube-system get pods -l k8s-app=kube-dns
+| kubectl get configmap coredns -n kube-system -o yaml
 | ```
 | *Proof: both replicas fail, on 2 nodes (invoices); both replicas fail, on 2 nodes (coredns); both replicas fail, on 2 nodes (cart).*
+10:12:30 material change
+🔴 Config map coredns in kube-system (prod-eu-1) is now also affecting cluster DNS: it has been failing for about two minutes. This is now critical.
+🔴 Config map coredns in kube-system (prod-eu-1) is now also affecting cluster DNS: it has been failing for about two minutes.
+| 🔴 Config map **coredns** in **kube-system** (**prod-eu-1**) is now also affecting cluster DNS: it has been failing for about two minutes.
+| This is now critical.

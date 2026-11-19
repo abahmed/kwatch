@@ -8,3 +8,8 @@
 | ```
 | kubectl describe pods api- -n shop
 | ```
+10:12:30 cause revised
+🟠 Cause now known: api in shop (prod-eu-1) is failing because node n2 is what the failing workloads have in common, though it looks healthy. It fails with "Resources cannot be allocated with Topology locality".
+🟠 Cause now known: api in shop (prod-eu-1) is failing because node n2 is what the failing workloads have in common, though it looks healthy.
+| 🟠 Cause now known: **api** in **shop** (**prod-eu-1**) is failing because node n2 is what the failing workloads have in common, though it looks healthy.
+| It fails with `Resources cannot be allocated with Topology locality`.

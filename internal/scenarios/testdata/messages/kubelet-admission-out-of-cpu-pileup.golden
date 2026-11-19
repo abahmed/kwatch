@@ -11,3 +11,11 @@
 | ```
 | kubectl describe pods render- -n batch
 | ```
+10:04:30 cause revised
+🟠 Cause now known: render in batch (prod-eu-1) is failing because node n2 is what the failing workloads have in common, though it looks healthy. It fails with "Pod was rejected: Node didn't have enough resource: cpu, requested: 2000, used: 3100, capacity: 4000".
+🟠 Cause now known: render in batch (prod-eu-1) is failing because node n2 is what the failing workloads have in common, though it looks healthy.
+| 🟠 Cause now known: **render** in **batch** (**prod-eu-1**) is failing because node n2 is what the failing workloads have in common, though it looks healthy.
+| It fails with
+| ```
+| Pod was rejected: Node didn't have enough resource: cpu, requested: 2000, used: 3100, capacity: 4000
+| ```
