@@ -1,6 +1,9 @@
 package explain
 
 import (
+	"time"
+
+	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
 )
@@ -36,5 +39,23 @@ var gapRowCases = []rowCase{
 				}
 			}
 			return first
+		}},
+	{row: RuleSchedulerNames, want: "priorityclass//batch-low",
+		build: func(f *fixture) inventory.EntityID {
+			pod := f.workload("shop", "api", 1)[0]
+			class := inventory.CoreID(kube.KindPriorityClass, "",
+				"batch-low")
+			f.add(class)
+			f.relate(pod, inventory.References, class)
+			f.findings[pod] = append(f.findings[pod], detection.Finding{
+				Entity: pod, Reason: "Unschedulable",
+				Mode: detection.ModePending, Health: failingH,
+				Since:   t0.Add(2 * time.Minute),
+				Summary: "Pod cannot be scheduled",
+				Evidence: []detection.Evidence{{Label: "scheduler",
+					Value: "0/3 nodes are available: 3 Insufficient cpu. " +
+						"preemption: PreemptionPolicy=Never."}},
+			})
+			return pod
 		}},
 }
