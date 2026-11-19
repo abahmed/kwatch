@@ -166,6 +166,12 @@ func gap3ScopedQuota() scenario {
 			"node//n1", "deployment/shop/web").tail(10 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
+			// The class the pods name exists; the quota is scoped to it.
+			c.list(&metav1.PartialObjectMetadata{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "scheduling.k8s.io/v1",
+					Kind:       "PriorityClass"},
+				ObjectMeta: c.meta("", "high")})
 			w := c.deployment("shop", "web", "registry.example.com/web:7", 2)
 			configTemplate(w, func(spec *corev1.PodSpec) {
 				spec.PriorityClassName = "high"
