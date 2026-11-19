@@ -52,7 +52,9 @@ func gap4aRWOPConflict() scenario {
 		expect: g2Exp("rollout-read-write-once-pod-conflict",
 			"A Deployment mounting a ReadWriteOncePod claim rolls out "+
 				"with a surge pod; the new pod is Pending because the "+
-				"old pod still uses the claim.",
+				"old pod still uses the claim. The ReadWriteOncePod claim and "+
+				"the surge strategy of the Deployment explain the "+
+				"Pending, not the scheduling reason alone.",
 			"deployment/shop/db", "notify", "node//n1", "node//n2").
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
@@ -79,7 +81,9 @@ func gap4aNoFreeStorage() scenario {
 		expect: g2Exp("pvc-larger-than-any-node-capacity",
 			"A WaitForFirstConsumer claim asks for more storage than any "+
 				"node reports free; its pod is Pending with \"did not "+
-				"have enough free storage\" on every node.",
+				"have enough free storage\" on every node. The claim's "+
+				"size explains the Pending, not the scheduling reason "+
+				"alone.",
 			"persistentvolumeclaim/shop/scratch", "notify", "node//n1",
 			"deployment/shop/etl").tail(10 * time.Minute),
 		build: func(c *cluster) {
@@ -162,7 +166,9 @@ func gap4aPodAffinityNoMatch() scenario {
 	return g2Release(g2Exp("release-pod-affinity-target-scaled-to-zero",
 		"A release requires scheduling next to pods labelled app=cache; "+
 			"the cache Deployment is scaled to zero and the new pod is "+
-			"Pending with \"didn't match pod affinity rules\".",
+			"Pending with \"didn't match pod affinity rules\". The "+
+			"scaled-down cache Deployment is the object that explains "+
+			"it, not the scheduling reason alone.",
 		"deployment/shop/cache", "notify", "node//n1", "node//n2").
 		tail(10*time.Minute),
 		func(c *cluster, spec *corev1.PodSpec) {
@@ -190,7 +196,9 @@ func gap4aPodAffinityNoMatch() scenario {
 func gap4aPreemptionNever() scenario {
 	return g2Release(g2Exp("pod-priority-class-preemption-never",
 		"A pod whose PriorityClass has preemptionPolicy Never waits on a "+
-			"full cluster although lower-priority pods run there.",
+			"full cluster although lower-priority pods run there. The "+
+			"PriorityClass explains the Pending, not the scheduling "+
+			"reason alone.",
 		"priorityclass//batch-nopreempt", "notify", "node//n1",
 		"node//n2", "deployment/shop/api").tail(10*time.Minute),
 		func(_ *cluster, spec *corev1.PodSpec) {

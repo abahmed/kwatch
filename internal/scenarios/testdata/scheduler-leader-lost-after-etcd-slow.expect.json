@@ -5,11 +5,11 @@
   "tier": "page",
   "maxMessages": 2,
   "mustNotBlame": [
-    "scheduler//kube-scheduler",
     "deployment/shop/cart",
     "deployment/shop/search",
     "deployment/billing/invoices",
     "node//n1",
     "node//n2"
-  ]
+  ],
+  "revisesRoot": true
 }

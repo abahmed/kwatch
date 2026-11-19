@@ -26,8 +26,9 @@ func gap4bStaleEndpoints() scenario {
 	e := g2Exp("endpoint-slice-lists-pods-that-are-gone",
 		"After a control-plane change a Service's EndpointSlice lists "+
 			"pods that no longer exist and omits the running ones; "+
-			"callers get \"no route to host\".", "etcd//etcd", "notify",
-		"deployment/shop/payments", "node//n1", "node//n2").budget(3).
+			"callers get \"no route to host\".", "unknown", "notify",
+		"deployment/shop/payments", "node//n1", "node//n2",
+		"external-endpoint//10.244.0.10:8080").budget(3).
 		tail(10 * time.Minute)
 	e.Ambiguous = true
 	return scenario{expect: e, build: func(c *cluster) {

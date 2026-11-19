@@ -1,6 +1,6 @@
 {
   "name": "pvc-larger-than-any-node-capacity",
-  "description": "A WaitForFirstConsumer claim asks for more storage than any node reports free; its pod is Pending with \"did not have enough free storage\" on every node.",
+  "description": "A WaitForFirstConsumer claim asks for more storage than any node reports free; its pod is Pending with \"did not have enough free storage\" on every node. The claim's size explains the Pending, not the scheduling reason alone.",
   "root": "persistentvolumeclaim/shop/scratch",
   "tier": "notify",
   "maxMessages": 2,

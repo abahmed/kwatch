@@ -1,6 +1,6 @@
 {
   "name": "rollout-read-write-once-pod-conflict",
-  "description": "A Deployment mounting a ReadWriteOncePod claim rolls out with a surge pod; the new pod is Pending because the old pod still uses the claim.",
+  "description": "A Deployment mounting a ReadWriteOncePod claim rolls out with a surge pod; the new pod is Pending because the old pod still uses the claim. The ReadWriteOncePod claim and the surge strategy of the Deployment explain the Pending, not the scheduling reason alone.",
   "root": "deployment/shop/db",
   "tier": "notify",
   "maxMessages": 2,

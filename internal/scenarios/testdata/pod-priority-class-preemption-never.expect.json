@@ -1,6 +1,6 @@
 {
   "name": "pod-priority-class-preemption-never",
-  "description": "A pod whose PriorityClass has preemptionPolicy Never waits on a full cluster although lower-priority pods run there.",
+  "description": "A pod whose PriorityClass has preemptionPolicy Never waits on a full cluster although lower-priority pods run there. The PriorityClass explains the Pending, not the scheduling reason alone.",
   "root": "priorityclass//batch-nopreempt",
   "tier": "notify",
   "maxMessages": 2,

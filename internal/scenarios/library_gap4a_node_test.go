@@ -141,7 +141,9 @@ func gap4aHugepagesGone() scenario {
 		expect: g2Exp("node-hugepages-allocatable-lost",
 			"A node reboots without its hugepages setting; its "+
 				"allocatable hugepages fall to zero and the pod that "+
-				"needs them is Pending \"Insufficient hugepages\".",
+				"needs them is Pending \"Insufficient hugepages\". The "+
+				"rebooted node's lost allocatable explains it, not "+
+				"the scheduling reason alone.",
 			"node//n2", "notify", "deployment/shop/db").
 			tail(10 * time.Minute),
 		build: func(c *cluster) {

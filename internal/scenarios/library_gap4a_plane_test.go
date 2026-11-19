@@ -121,13 +121,12 @@ func gap4aLingeringEvicted() scenario {
 // Pending with no event until it is leader again.
 func gap4aLeaderLost() scenario {
 	return scenario{
-		expect: g2Exp("scheduler-leader-lost-after-etcd-slow",
+		expect: gap4aRevises(g2Exp("scheduler-leader-lost-after-etcd-slow",
 			"etcd requests time out; the scheduler loses its lease and "+
 				"new pods stay Pending without events until it is "+
 				"leader again.",
-			"etcd//etcd", "page", "scheduler//kube-scheduler",
-			"deployment/shop/cart", "deployment/shop/search",
-			"deployment/billing/invoices", "node//n1", "node//n2"),
+			"etcd//etcd", "page", "deployment/shop/cart", "deployment/shop/search",
+			"deployment/billing/invoices", "node//n1", "node//n2")),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"), c.node("n2", "zone-a"))
 			fleet := controlPlaneFleet(c)
@@ -181,4 +180,10 @@ func gap4aNoisyClient() scenario {
 			c.after(time.Minute)
 		}
 	}}
+}
+
+// gap4aRevises lets the first message name a real intermediate cause.
+func gap4aRevises(e expectation) expectation {
+	e.RevisesRoot = true
+	return e
 }
