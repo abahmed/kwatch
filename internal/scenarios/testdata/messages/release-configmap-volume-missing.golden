@@ -1,0 +1,11 @@
+10:03:15 settled
+🟠 api in shop (prod-eu-1) is failing because config map app-config does not exist.
+Related alerts: 1 failed mount alert
+To check the object the pods depend on, run kubectl get configmap app-config -n shop -o yaml
+🟠 api in shop (prod-eu-1) is failing because config map app-config does not exist.
+| 🟠 **api** in **shop** (**prod-eu-1**) is failing because config map **app-config** does not exist.
+| Related alerts: 1 failed mount alert
+| To check the object the pods depend on, run
+| ```
+| kubectl get configmap app-config -n shop -o yaml
+| ```

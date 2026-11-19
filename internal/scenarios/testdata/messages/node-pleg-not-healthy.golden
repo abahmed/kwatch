@@ -1,0 +1,17 @@
+10:02:15 settled
+🟠 Node n1 (prod-eu-1) cannot garbage-collect dead containers. To check the node's conditions and recent events, run kubectl describe node n1
+🟠 Node n1 (prod-eu-1) cannot garbage-collect dead containers.
+| 🟠 Node n1 (**prod-eu-1**) cannot garbage-collect dead containers.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```
+10:02:30 material change
+🔴 Node n1 (prod-eu-1) now cannot garbage-collect dead containers. This is now critical.
+🔴 Node n1 (prod-eu-1) now cannot garbage-collect dead containers.
+| 🔴 Node n1 (**prod-eu-1**) now cannot garbage-collect dead containers.
+| This is now critical.
+10:12:30 material change
+🔴 Node n1 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes and have only 1 of 2 replicas ready.
+🔴 Node n1 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes and have only 1 of 2 replicas ready.
+| 🔴 Node n1 (**prod-eu-1**) is now also affecting **cart**, **orders** and **payments** in shop: they have not been ready for three minutes and have only 1 of 2 replicas ready.

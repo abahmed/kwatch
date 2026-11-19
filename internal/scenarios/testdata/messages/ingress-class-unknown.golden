@@ -1,0 +1,9 @@
+10:03:15 settled
+🟠 Ingress shop in shop (prod-eu-1) is failing: ingressClass nginx-internal does not exist. The cause is not clear yet. To see the object's state and events, run kubectl describe ingress shop -n shop
+🟠 Ingress shop in shop (prod-eu-1) is failing: ingressClass nginx-internal does not exist.
+| 🟠 Ingress **shop** in **shop** (**prod-eu-1**) is failing: ingressClass nginx-internal does not exist.
+| The cause is not clear yet.
+| To see the object's state and events, run
+| ```
+| kubectl describe ingress shop -n shop
+| ```

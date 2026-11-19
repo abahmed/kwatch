@@ -1,0 +1,11 @@
+{
+  "name": "cron-active-deadline-exceeded",
+  "description": "Three consecutive runs of a CronJob are failed with DeadlineExceeded because they run longer than activeDeadlineSeconds.",
+  "root": "cronjob/ops/stats-rollup",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

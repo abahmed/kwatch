@@ -1,0 +1,12 @@
+{
+  "name": "release-image-pull-deadline",
+  "description": "A release's very large image takes more than eight minutes to pull; the pull fails with DeadlineExceeded and the pod goes to ImagePullBackOff.",
+  "root": "deployment/shop/etl",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "registry//registry.example.com",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

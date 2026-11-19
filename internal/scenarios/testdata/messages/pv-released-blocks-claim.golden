@@ -1,0 +1,14 @@
+10:02:15 settled
+🟠 Volume claim data-db-0 in ledger (prod-eu-1) has been waiting for a volume for two minutes. It was created at 10:00 UTC. Claim data-db-0 is Pending: kwatch sees no workload in the cluster serving its provisioner pd.csi.storage.gke.io (it may run outside the cluster). Affected: db.
+Related alerts: 1 failed binding alert, 1 scheduling failure
+To see why the volume claim is not usable, run kubectl describe pvc data-db-0 -n ledger
+🟠 Volume claim data-db-0 in ledger (prod-eu-1) has been waiting for a volume for two minutes.
+| 🟠 Volume claim **data-db-0** in **ledger** (**prod-eu-1**) has been waiting for a volume for two minutes.
+| It was created at 10:00 UTC.
+| Claim **data-db-0** is Pending: kwatch sees no workload in the cluster serving its provisioner pd.csi.storage.gke.io (it may run outside the cluster).
+| Affected: db.
+| Related alerts: 1 failed binding alert, 1 scheduling failure
+| To see why the volume claim is not usable, run
+| ```
+| kubectl describe pvc data-db-0 -n ledger
+| ```

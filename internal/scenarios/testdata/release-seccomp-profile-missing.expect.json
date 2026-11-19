@@ -1,0 +1,11 @@
+{
+  "name": "release-seccomp-profile-missing",
+  "description": "A release requests a Localhost seccomp profile that is absent from the node; the new pod fails with CreateContainerError \"cannot load seccomp profile\".",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

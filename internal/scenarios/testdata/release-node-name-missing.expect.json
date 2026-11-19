@@ -1,0 +1,12 @@
+{
+  "name": "release-node-name-missing",
+  "description": "A release sets spec.nodeName to a node that does not exist; the new pod is Pending with no scheduler or kubelet events.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//gpu-worker-07",
+    "node//n1"
+  ],
+  "tail": "15m0s"
+}

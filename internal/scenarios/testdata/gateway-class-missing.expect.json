@@ -1,0 +1,12 @@
+{
+  "name": "gateway-class-missing",
+  "description": "A Gateway names a GatewayClass that does not exist; its Accepted and Programmed conditions stay Unknown, waiting for a controller.",
+  "root": "gateway.gateway.networking.k8s.io/shop/public",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/web",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,12 @@
+{
+  "name": "node-cni-ip-conflict",
+  "description": "New pods on one node stay in ContainerCreating because the CNI reports a route that already exists for the pod address; other nodes start pods fine.",
+  "root": "node//n2",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "deployment/shop/cart"
+  ],
+  "tail": "10m0s"
+}

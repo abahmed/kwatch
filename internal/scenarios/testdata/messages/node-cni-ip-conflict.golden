@@ -1,0 +1,18 @@
+10:03:15 settled
+🟠 orders in shop (prod-eu-1) is failing: networking cannot be set up. Cause not found yet: its node and registry are healthy and unchanged. To see the pods' state and events, run kubectl describe pods orders- -n shop
+🟠 orders in shop (prod-eu-1) is failing: networking cannot be set up.
+| 🟠 **orders** in **shop** (**prod-eu-1**) is failing: networking cannot be set up.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods orders- -n shop
+| ```
+10:08:15 settled
+🟠 cart in shop (prod-eu-1) is failing: networking cannot be set up. Cause not found yet: its node and registry are healthy and unchanged. To see the pods' state and events, run kubectl describe pods cart- -n shop
+🟠 cart in shop (prod-eu-1) is failing: networking cannot be set up.
+| 🟠 **cart** in **shop** (**prod-eu-1**) is failing: networking cannot be set up.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods cart- -n shop
+| ```

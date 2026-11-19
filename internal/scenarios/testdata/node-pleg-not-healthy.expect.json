@@ -1,0 +1,13 @@
+{
+  "name": "node-pleg-not-healthy",
+  "description": "A node's container runtime stops; its kubelet reports NotReady with \"PLEG is not healthy\" and the pods on it go unready.",
+  "root": "node//n1",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "deployment/shop/payments",
+    "deployment/shop/cart",
+    "zone//zone-a"
+  ]
+}

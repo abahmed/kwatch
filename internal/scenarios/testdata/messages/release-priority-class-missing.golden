@@ -1,0 +1,20 @@
+10:03:15 settled
+🟠 api is failing in shop (prod-eu-1), likely caused by the 10:02 UTC release. The release changed the references to priorityclass/batch-critical. It reports "Error creating: pods "api-c068571c-" is forbidden: no PriorityClass with name batch-critical was found".
+Related alerts: 1 failed pod creation
+To see the rollout state, run kubectl rollout status deployment/api -n shop
+🟠 api is failing in shop (prod-eu-1), likely caused by the 10:02 UTC release.
+| 🟠 **api** is failing in **shop** (**prod-eu-1**), likely caused by the 10:02 UTC release.
+| The release changed the references to priorityclass/batch-critical.
+| It reports
+| ```
+| Error creating: pods "api-c068571c-" is forbidden: no PriorityClass with name batch-critical was found
+| ```
+| Related alerts: 1 failed pod creation
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/api -n shop
+| ```
+10:04:00 material change
+🟠 api in shop (prod-eu-1) is now failing: pod template references PriorityClass batch-critical, which does not exist.
+🟠 api in shop (prod-eu-1) is now failing: pod template references PriorityClass batch-critical, which does not exist.
+| 🟠 **api** in **shop** (**prod-eu-1**) is now failing: pod template references PriorityClass batch-critical, which does not exist.

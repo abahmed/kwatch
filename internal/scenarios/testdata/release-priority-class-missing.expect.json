@@ -1,0 +1,12 @@
+{
+  "name": "release-priority-class-missing",
+  "description": "A release names a PriorityClass that does not exist; the ReplicaSet reports FailedCreate \"no PriorityClass with name batch-critical was found\".",
+  "root": "priorityclass//batch-critical",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/api"
+  ],
+  "tail": "10m0s"
+}

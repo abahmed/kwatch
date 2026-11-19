@@ -1,0 +1,13 @@
+{
+  "name": "sched-anti-affinity-pending",
+  "description": "A Deployment with required pod anti-affinity per node is scaled to four replicas on three nodes; the fourth stays Pending on \"didn't match pod anti-affinity rules\".",
+  "root": "deployment/shop/search",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "node//n3",
+    "scheduling//Insufficient cpu"
+  ]
+}

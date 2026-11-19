@@ -1,0 +1,14 @@
+{
+  "name": "network-packet-loss-to-node",
+  "description": "Callers of a healthy database time out connecting to it; its pods run on one node, its Service lists them ready and no policy changed.",
+  "root": "node//n3",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "networkpolicy/shop/default-deny",
+    "node//n1",
+    "node//n2"
+  ],
+  "ambiguous": true,
+  "tail": "10m0s"
+}

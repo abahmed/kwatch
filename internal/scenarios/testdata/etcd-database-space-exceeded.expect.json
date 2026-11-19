@@ -1,0 +1,10 @@
+{
+  "name": "etcd-database-space-exceeded",
+  "description": "etcd's database exceeds its quota; the API server serves reads but rejects every write with \"mvcc: database space exceeded\".",
+  "root": "etcd//etcd",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "apiserver//kube-apiserver"
+  ]
+}
