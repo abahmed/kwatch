@@ -1,0 +1,13 @@
+{
+  "name": "runaway-cronjob-fills-nodes",
+  "description": "A CronJob's run creates pods until every node is at its pod limit; Deployments of three other namespaces cannot place new replicas (\"Too many pods\").",
+  "root": "cronjob/batch/fanout",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/web",
+    "deployment/billing/invoices",
+    "deployment/media/transcode"
+  ],
+  "tail": "10m0s"
+}

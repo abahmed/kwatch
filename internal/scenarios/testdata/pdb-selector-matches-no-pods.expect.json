@@ -1,0 +1,12 @@
+{
+  "name": "pdb-selector-matches-no-pods",
+  "description": "A budget's selector matches no pod (\"No matching pods found\"); a node drain evicts every replica of the application at once and it is down until they restart.",
+  "root": "poddisruptionbudget/shop/search-pdb",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/search"
+  ],
+  "tail": "10m0s"
+}

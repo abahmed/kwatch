@@ -1,0 +1,9 @@
+10:06:15 settled
+🟠 cache in shop (prod-eu-1) is failing: volume cannot be mounted. Cause not found yet: its node and registry are healthy and unchanged. To see the pods' state and events, run kubectl describe pods cache- -n shop
+🟠 cache in shop (prod-eu-1) is failing: volume cannot be mounted.
+| 🟠 **cache** in **shop** (**prod-eu-1**) is failing: volume cannot be mounted.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods cache- -n shop
+| ```

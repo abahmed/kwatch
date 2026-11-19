@@ -1,0 +1,12 @@
+{
+  "name": "preemption-chain-across-namespaces",
+  "description": "A high-priority trainer's scale-up preempts pods of two namespaces; their replacements preempt pods of a third, and the evicted pods stay Pending.",
+  "root": "deployment/ml/trainer",
+  "tier": "notify",
+  "maxMessages": 4,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

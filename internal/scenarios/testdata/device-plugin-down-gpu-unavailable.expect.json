@@ -1,0 +1,12 @@
+{
+  "name": "device-plugin-down-gpu-unavailable",
+  "description": "The GPU device plugin crash-loops on a node; its GPU allocatable drops to zero, a restarted pod is rejected there and new pods stay Pending on \"Insufficient nvidia.com/gpu\".",
+  "root": "daemonset/kube-system/nvidia-device-plugin",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/ml/trainer",
+    "node//n3"
+  ],
+  "tail": "10m0s"
+}

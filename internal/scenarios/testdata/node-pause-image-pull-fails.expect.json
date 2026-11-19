@@ -1,0 +1,13 @@
+{
+  "name": "node-pause-image-pull-fails",
+  "description": "Pods of three namespaces placed on one node never get a sandbox: FailedCreatePodSandBox says the sandbox image cannot be pulled; pods on other nodes run.",
+  "root": "node//n4",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/web",
+    "deployment/billing/invoices",
+    "deployment/media/transcode"
+  ],
+  "tail": "10m0s"
+}

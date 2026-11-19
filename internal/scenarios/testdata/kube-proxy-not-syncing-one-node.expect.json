@@ -1,0 +1,15 @@
+{
+  "name": "kube-proxy-not-syncing-one-node",
+  "description": "kube-proxy runs on every node but its pod on one node is not ready because it cannot program rules; pods there time out on Service addresses.",
+  "root": "daemonset/kube-system/kube-proxy",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n3",
+    "deployment/shop/web",
+    "deployment/billing/invoices",
+    "deployment/media/transcode",
+    "cluster-dns//cluster-dns"
+  ],
+  "tail": "10m0s"
+}

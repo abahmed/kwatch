@@ -1,0 +1,11 @@
+{
+  "name": "namespace-stuck-on-unavailable-apiservice",
+  "description": "A namespace stays Terminating because discovery fails for the metrics API group, whose APIService has no endpoints.",
+  "root": "apiservice//v1beta1.metrics.k8s.io",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "namespace//old-shop"
+  ],
+  "tail": "10m0s"
+}

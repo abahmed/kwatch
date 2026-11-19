@@ -1,0 +1,6 @@
+{
+  "name": "daemonset-pod-pending-briefly-quiet",
+  "description": "A DaemonSet's pod for a newly added node is Pending for under a minute and then runs.",
+  "maxMessages": 0,
+  "quiet": true
+}

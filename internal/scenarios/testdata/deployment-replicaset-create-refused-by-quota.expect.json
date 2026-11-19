@@ -1,0 +1,12 @@
+{
+  "name": "deployment-replicaset-create-refused-by-quota",
+  "description": "A rollout cannot create its new ReplicaSet because the namespace's object-count quota is full; the old pods keep serving.",
+  "root": "resourcequota/shop/object-counts",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/api"
+  ],
+  "tail": "10m0s"
+}

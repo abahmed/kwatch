@@ -1,0 +1,22 @@
+10:01:15 settled
+🟠 Cron job fanout in batch (prod-eu-1) is failing: scheduled run did not start (due eight hours ago). To see the object's state and events, run kubectl describe cronjob fanout -n batch
+🟠 Cron job fanout in batch (prod-eu-1) is failing: scheduled run did not start (due eight hours ago).
+| 🟠 Cron job **fanout** in **batch** (**prod-eu-1**) is failing: scheduled run did not start (due eight hours ago).
+| To see the object's state and events, run
+| ```
+| kubectl describe cronjob fanout -n batch
+| ```
+10:14:15 settled
+🟠 invoices in billing (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (Too many pods). The scheduler says "0/3 nodes are available: 3 Too many pods. preemption: 0/3 nodes are available: 3 No preemption victims found for…". Replicas that do not depend on it are healthy. Affected: transcode in media; web in shop. To see the pods' state and events, run kubectl describe pods invoices- -n billing
+🟠 invoices in billing (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (Too many pods).
+| 🟠 **invoices** in **billing** (**prod-eu-1**) has waited two minutes for a node because the scheduler rejects every node (**Too many pods**).
+| The scheduler says
+| ```
+| 0/3 nodes are available: 3 Too many pods. preemption: 0/3 nodes are available: 3 No preemption victims found for…
+| ```
+| Replicas that do not depend on it are healthy.
+| Affected: **transcode** in **media**; **web** in **shop**.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods invoices- -n billing
+| ```

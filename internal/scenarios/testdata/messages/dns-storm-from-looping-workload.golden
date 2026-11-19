@@ -1,0 +1,43 @@
+10:02:15 settled
+🟠 crawler in batch (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "Get "https://feed.partner.example/v1/items": dial tcp: lookup feed.partner.example on 10.96.0.10:53: no such host". Its last run lasted ten seconds; 18 restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs deploy/crawler -c app -n batch --previous
+🟠 crawler in batch (prod-eu-1) keeps crashing.
+| 🟠 **crawler** in **batch** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| It fails with
+| ```
+| Get "https://feed.partner.example/v1/items": dial tcp: lookup feed.partner.example on 10.96.0.10:53: no such host
+| ```
+| Its last run lasted ten seconds; 18 restarts since its pod was created one hour ago.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/crawler -c app -n batch --previous
+| ```
+10:03:15 settled
+🟠 invoices in billing (prod-eu-1) keeps crashing; two possible causes: cluster DNS is not resolving names or its memory limit is too low for normal use. It was killed within 10 seconds of starting. It fails with "dial tcp: lookup db on 10.96.0.10:53: read udp 10.244.1.5:48762->10.96.0.10:53: i/o timeout". Affected: coredns in kube-system; web in shop.
+Related alerts: 2 out-of-memory kills
+To see the cluster DNS pods, run kubectl -n kube-system get pods -l k8s-app=kube-dns
+Proof: both replicas fail, on 2 nodes.
+🟠 invoices in billing (prod-eu-1) keeps crashing; two possible causes: cluster DNS is not resolving names or its memory limit is too low for normal use.
+| 🟠 **invoices** in **billing** (**prod-eu-1**) keeps crashing; two possible causes: cluster DNS is not resolving names or its memory limit is too low for normal use.
+| It was killed within 10 seconds of starting.
+| It fails with
+| ```
+| dial tcp: lookup db on 10.96.0.10:53: read udp 10.244.1.5:48762->10.96.0.10:53: i/o timeout
+| ```
+| Affected: **coredns** in **kube-system**; **web** in **shop**.
+| Related alerts: 2 out-of-memory kills
+| To see the cluster DNS pods, run
+| ```
+| kubectl -n kube-system get pods -l k8s-app=kube-dns
+| ```
+| *Proof: both replicas fail, on 2 nodes.*
+10:03:30 material change
+🔴 Cluster DNS (prod-eu-1) is getting worse: crawler in batch now crash-loops. This is now critical. It was killed within 10 seconds of starting.
+🔴 Cluster DNS (prod-eu-1) is getting worse: crawler in batch now crash-loops.
+| 🔴 Cluster DNS (**prod-eu-1**) is getting worse: **crawler** in **batch** now crash-loops.
+| This is now critical.
+| It was killed within 10 seconds of starting.
+10:03:30 superseded by revised cause
+🟠 Moved: this is now part of the cluster DNS crash (prod-eu-1).
+🟠 Moved: this is now part of the cluster DNS crash (prod-eu-1).
+| 🟠 Moved: this is now part of the cluster DNS crash (**prod-eu-1**).

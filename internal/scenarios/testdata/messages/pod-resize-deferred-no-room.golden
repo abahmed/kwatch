@@ -1,0 +1,13 @@
+10:15:00 material change
+🟠 api in shop (prod-eu-1) is failing: resize has been deferred for lack of room on its node. Cause not found yet: its node and registry are healthy and unchanged. It fails with "Node didn't have enough capacity: cpu, requested: 6000, capacity: 4000".
+Related alerts: 1 resize deferred alert
+To see the pods' state and events, run kubectl describe pods api- -n shop
+🟠 api in shop (prod-eu-1) is failing: resize has been deferred for lack of room on its node.
+| 🟠 **api** in **shop** (**prod-eu-1**) is failing: resize has been deferred for lack of room on its node.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| It fails with `Node didn't have enough capacity: cpu, requested: 6000, capacity: 4000`.
+| Related alerts: 1 resize deferred alert
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods api- -n shop
+| ```

@@ -1,0 +1,12 @@
+{
+  "name": "pvc-lost-volume-deleted",
+  "description": "A PersistentVolume is deleted while its claim is bound; the claim becomes Lost (ClaimLost) and the pod that uses it cannot start.",
+  "root": "persistentvolumeclaim/shop/data",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/db"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,13 @@
+10:06:45 settled
+🟠 api in shop (prod-eu-1) cannot pull its image. Cause not found yet: its node and registry are healthy and unchanged. It fails with "Failed to pull image "registry.example.com/api:4": failed to register layer: ApplyLayer exit status 1 stdout:  stderr…". To see why the container cannot start, run kubectl describe pods api- -n shop
+🟠 api in shop (prod-eu-1) cannot pull its image.
+| 🟠 **api** in **shop** (**prod-eu-1**) cannot pull its image.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| It fails with
+| ```
+| Failed to pull image "registry.example.com/api:4": failed to register layer: ApplyLayer exit status 1 stdout:  stderr…
+| ```
+| To see why the container cannot start, run
+| ```
+| kubectl describe pods api- -n shop
+| ```

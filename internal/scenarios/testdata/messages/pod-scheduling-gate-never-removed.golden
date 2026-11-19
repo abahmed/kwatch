@@ -1,0 +1,10 @@
+10:06:15 settled
+🟠 worker in shop (prod-eu-1) has no ready replicas (0 of 2). Cause not found yet: nothing outside it points to one. In the last 30 minutes in shop: worker was created at 10:00 UTC. To see the object's state and events, run kubectl describe deployment worker -n shop
+🟠 worker in shop (prod-eu-1) has no ready replicas (0 of 2).
+| 🟠 **worker** in **shop** (**prod-eu-1**) has no ready replicas (0 of 2).
+| Cause not found yet: nothing outside it points to one.
+| In the last 30 minutes in shop: **worker** was created at 10:00 UTC.
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment worker -n shop
+| ```

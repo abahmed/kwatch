@@ -1,0 +1,6 @@
+{
+  "name": "hpa-single-scale-up-quiet",
+  "description": "An HPA scales a Deployment from three to six replicas once and the new pods are ready within a minute.",
+  "maxMessages": 0,
+  "quiet": true
+}

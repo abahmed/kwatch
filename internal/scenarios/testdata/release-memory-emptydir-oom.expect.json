@@ -1,0 +1,11 @@
+{
+  "name": "release-memory-emptydir-oom",
+  "description": "A release stores its cache in a memory-backed emptyDir; the files count against the memory limit and the container is OOMKilled repeatedly.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

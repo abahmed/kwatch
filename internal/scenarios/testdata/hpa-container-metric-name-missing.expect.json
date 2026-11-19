@@ -1,0 +1,12 @@
+{
+  "name": "hpa-container-metric-name-missing",
+  "description": "An HPA's containerResource metric names a container that the pods no longer have; it cannot scale.",
+  "root": "horizontalpodautoscaler/shop/web",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "apiservice//v1beta1.metrics.k8s.io"
+  ],
+  "tail": "20m0s"
+}

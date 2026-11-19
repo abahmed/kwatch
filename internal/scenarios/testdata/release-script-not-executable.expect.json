@@ -1,0 +1,11 @@
+{
+  "name": "release-script-not-executable",
+  "description": "A release starts the app with a ConfigMap-mounted script that lacks the execute bit; the container exits 126 with \"Permission denied\" at every start.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

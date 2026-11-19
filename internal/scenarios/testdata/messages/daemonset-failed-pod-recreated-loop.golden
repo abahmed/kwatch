@@ -1,0 +1,11 @@
+10:06:15 settled
+🟠 logship in observability (prod-eu-1) is failing: Kubernetes reported FailedDaemonPod.
+Related alerts: 1 admission alert
+To see the pods' state and events, run kubectl describe pods logship- -n observability
+🟠 logship in observability (prod-eu-1) is failing: Kubernetes reported FailedDaemonPod.
+| 🟠 **logship** in **observability** (**prod-eu-1**) is failing: Kubernetes reported FailedDaemonPod.
+| Related alerts: 1 admission alert
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods logship- -n observability
+| ```

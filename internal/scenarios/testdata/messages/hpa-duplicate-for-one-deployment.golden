@@ -1,0 +1,36 @@
+10:13:15 roll-up
+🟠 kwatch (prod-eu-1) found two new problems at the same time. Autoscaler web in shop cannot resolve its target's pod selector. Autoscaler web-extra in shop cannot resolve its target's pod selector. Each one alerts on its own when it changes or resolves.
+🟠 kwatch (prod-eu-1) found two new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
+|
+| **Problems**
+| - Autoscaler **web** in **shop** cannot resolve its target's pod selector
+| - Autoscaler **web-extra** in **shop** cannot resolve its target's pod selector
+|
+| *Each one alerts on its own when it changes or resolves.*
+10:27:00 flapping
+🟠 Autoscaler web in shop (prod-eu-1) keeps failing and recovering. It reports "pods by selector app=web are controlled by multiple HPAs: [shop/web shop/web-extra]". It has recovered and failed again three times recently. To see the object's state and events, run kubectl describe horizontalpodautoscaler web -n shop
+🟠 Autoscaler web in shop (prod-eu-1) keeps failing and recovering.
+| 🟠 Autoscaler **web** in **shop** (**prod-eu-1**) keeps failing and recovering.
+| It reports
+| ```
+| pods by selector app=web are controlled by multiple HPAs: [shop/web shop/web-extra]
+| ```
+| It has recovered and failed again three times recently.
+| To see the object's state and events, run
+| ```
+| kubectl describe horizontalpodautoscaler web -n shop
+| ```
+10:27:00 flapping
+🟠 Autoscaler web-extra in shop (prod-eu-1) keeps failing and recovering. It reports "pods by selector app=web are controlled by multiple HPAs: [shop/web shop/web-extra]". It has recovered and failed again three times recently. To see the object's state and events, run kubectl describe horizontalpodautoscaler web-extra -n shop
+🟠 Autoscaler web-extra in shop (prod-eu-1) keeps failing and recovering.
+| 🟠 Autoscaler **web-extra** in **shop** (**prod-eu-1**) keeps failing and recovering.
+| It reports
+| ```
+| pods by selector app=web are controlled by multiple HPAs: [shop/web shop/web-extra]
+| ```
+| It has recovered and failed again three times recently.
+| To see the object's state and events, run
+| ```
+| kubectl describe horizontalpodautoscaler web-extra -n shop
+| ```

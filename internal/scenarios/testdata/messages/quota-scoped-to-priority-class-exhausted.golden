@@ -1,0 +1,13 @@
+10:03:15 settled
+🟠 web in shop (prod-eu-1) is failing, likely because priority class high does not exist. To see the object's state and events, run kubectl describe deployment web -n shop
+🟠 web in shop (prod-eu-1) is failing, likely because priority class high does not exist.
+| 🟠 **web** in **shop** (**prod-eu-1**) is failing, likely because priority class **high** does not exist.
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment web -n shop
+| ```
+10:10:30 cause revised
+🟠 Cause changed (earlier: priority class high): Quota high-priority-pods in shop (prod-eu-1) is used up (pods). ResourceQuota high-priority-pods: pods 2 of 2 used; this pod asks 1.
+🟠 Cause changed (earlier: priority class high): Quota high-priority-pods in shop (prod-eu-1) is used up (pods).
+| 🟠 Cause changed (earlier: priority class high): Quota **high-priority-pods** in **shop** (**prod-eu-1**) is used up (pods).
+| ResourceQuota high-priority-pods: pods 2 of 2 used; this pod asks 1.

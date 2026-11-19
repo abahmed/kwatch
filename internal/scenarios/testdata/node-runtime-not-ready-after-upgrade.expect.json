@@ -1,0 +1,13 @@
+{
+  "name": "node-runtime-not-ready-after-upgrade",
+  "description": "A node upgrade leaves the kubelet unable to reach its container runtime; the node reports NotReady with \"container runtime not ready\" and its pods go unready.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "deployment/shop/payments",
+    "deployment/shop/cart"
+  ],
+  "tail": "5m0s"
+}

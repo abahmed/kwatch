@@ -1,0 +1,11 @@
+{
+  "name": "pdb-percentage-on-unmanaged-pods",
+  "description": "A budget with a percentage selects pods that no controller owns; the disruption controller cannot compute the expected count.",
+  "root": "poddisruptionbudget/shop/queue-pdb",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

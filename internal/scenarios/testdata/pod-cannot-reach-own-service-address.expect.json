@@ -1,0 +1,13 @@
+{
+  "name": "pod-cannot-reach-own-service-address",
+  "description": "A single-replica app times out connecting to its own Service address while its endpoints are ready and no policy changed.",
+  "root": "unknown",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "service/shop/ledger",
+    "node//n1",
+    "deployment/shop/ledger"
+  ],
+  "tail": "10m0s"
+}

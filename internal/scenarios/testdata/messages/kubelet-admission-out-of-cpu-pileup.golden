@@ -1,0 +1,13 @@
+10:03:15 settled
+🟠 render in batch (prod-eu-1) is failing: kubelet rejected the pod at admission (out ofcpu). Cause not found yet: its node and registry are healthy and unchanged. It fails with "Pod was rejected: Node didn't have enough resource: cpu, requested: 2000, used: 3100, capacity: 4000". To see the pods' state and events, run kubectl describe pods render- -n batch
+🟠 render in batch (prod-eu-1) is failing: kubelet rejected the pod at admission (out ofcpu).
+| 🟠 **render** in **batch** (**prod-eu-1**) is failing: kubelet rejected the pod at admission (out ofcpu).
+| Cause not found yet: its node and registry are healthy and unchanged.
+| It fails with
+| ```
+| Pod was rejected: Node didn't have enough resource: cpu, requested: 2000, used: 3100, capacity: 4000
+| ```
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods render- -n batch
+| ```

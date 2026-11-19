@@ -1,0 +1,11 @@
+10:03:15 settled
+🟠 api in shop (prod-eu-1): the new version (proxy:1.4) keeps failing; the previous version is still serving. The release changed the image and one other field. It fails with "listen tcp :8080: bind: address already in use". Fix: change the image of container proxy in deployment/api. To see the rollout state, run kubectl rollout status deployment/api -n shop
+🟠 api in shop (prod-eu-1): the new version (proxy:1.4) keeps failing; the previous version is still serving.
+| 🟠 **api** in **shop** (**prod-eu-1**): the new version (proxy:1.4) keeps failing; the previous version is still serving.
+| The release changed the image and one other field.
+| It fails with `listen tcp :8080: bind: address already in use`.
+| Fix: change the image of container proxy in deployment/api.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/api -n shop
+| ```

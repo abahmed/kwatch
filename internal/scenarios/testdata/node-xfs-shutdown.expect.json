@@ -1,0 +1,13 @@
+{
+  "name": "node-xfs-shutdown",
+  "description": "A node problem detector sets XfsShutdown on a node and reports I/O errors; pods that write local disk there crash with \"input/output error\", their replicas on other nodes work.",
+  "root": "node//n3",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "deployment/shop/payments",
+    "deployment/shop/cart"
+  ],
+  "tail": "10m0s"
+}

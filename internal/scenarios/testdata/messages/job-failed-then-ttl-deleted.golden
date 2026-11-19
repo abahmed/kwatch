@@ -1,0 +1,14 @@
+10:01:45 settled
+🟠 Job rebuild-index is failing in batch (prod-eu-1) after the 10:00 UTC change. It fails with "FATAL: password authentication failed for user "indexer"". The apps that use it failed soon after it changed. Also changed before it broke: job rebuild-index was deleted at 10:01 UTC.
+Related alerts: 1 failed pod
+To see the pod's state and events, run kubectl describe pods rebuild-index- -n batch
+🟠 Job rebuild-index is failing in batch (prod-eu-1) after the 10:00 UTC change.
+| 🟠 Job **rebuild-index** is failing in **batch** (**prod-eu-1**) after the 10:00 UTC change.
+| It fails with `FATAL: password authentication failed for user "indexer"`.
+| The apps that use it failed soon after it changed.
+| Also changed before it broke: job **rebuild-index** was deleted at 10:01 UTC.
+| Related alerts: 1 failed pod
+| To see the pod's state and events, run
+| ```
+| kubectl describe pods rebuild-index- -n batch
+| ```

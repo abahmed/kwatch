@@ -1,0 +1,13 @@
+10:03:15 settled
+🟠 api in shop (prod-eu-1): the new version keeps failing; the previous version is still serving. The release changed the memory and one other field. Only the new revision fails; the previous one stays healthy. Its containers have no memory limit, so nothing caps their memory use. It was killed within 10 seconds of starting; it has failed since 10:02 UTC, less than a second after the 10:02 UTC release. Fix: raise the memory limit of container app in deployment/api above 512Mi. To see the rollout state, run kubectl rollout status deployment/api -n shop
+🟠 api in shop (prod-eu-1): the new version keeps failing; the previous version is still serving.
+| 🟠 **api** in **shop** (**prod-eu-1**): the new version keeps failing; the previous version is still serving.
+| The release changed the memory and one other field.
+| Only the new revision fails; the previous one stays healthy.
+| Its containers have no memory limit, so nothing caps their memory use.
+| It was killed within 10 seconds of starting; it has failed since 10:02 UTC, less than a second after the 10:02 UTC release.
+| Fix: raise the memory limit of container app in deployment/api above 512Mi.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/api -n shop
+| ```

@@ -1,0 +1,12 @@
+{
+  "name": "control-plane-certificate-expired",
+  "description": "The API server's serving certificate has expired; kwatch's probe of it fails with an x509 expiry error.",
+  "root": "apiserver//kube-apiserver",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "etcd//etcd"
+  ]
+}

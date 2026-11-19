@@ -1,0 +1,11 @@
+10:03:15 settled
+🟠 api in shop (prod-eu-1) is failing: kubelet rejected the pod at admission (sysctl forbidden). Cause not found yet: its node and registry are healthy and unchanged. In the last 30 minutes in shop: the api rollout started at 10:02 UTC. It fails with "forbidden sysctl: "kernel.msgmax" not allowlisted". To see the pods' state and events, run kubectl describe pods api- -n shop
+🟠 api in shop (prod-eu-1) is failing: kubelet rejected the pod at admission (sysctl forbidden).
+| 🟠 **api** in **shop** (**prod-eu-1**) is failing: kubelet rejected the pod at admission (sysctl forbidden).
+| Cause not found yet: its node and registry are healthy and unchanged.
+| In the last 30 minutes in shop: the **api** rollout started at 10:02 UTC.
+| It fails with `forbidden sysctl: "kernel.msgmax" not allowlisted`.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods api- -n shop
+| ```

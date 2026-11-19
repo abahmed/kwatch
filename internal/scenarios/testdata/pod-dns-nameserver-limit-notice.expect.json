@@ -1,0 +1,6 @@
+{
+  "name": "pod-dns-nameserver-limit-notice",
+  "description": "The kubelet warns for each of three healthy pods that the node lists more than three nameservers and some were omitted.",
+  "maxMessages": 0,
+  "quiet": true
+}

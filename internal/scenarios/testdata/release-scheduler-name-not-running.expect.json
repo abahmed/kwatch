@@ -1,0 +1,12 @@
+{
+  "name": "release-scheduler-name-not-running",
+  "description": "A release sets a schedulerName that no scheduler runs; the new pod is Pending with no scheduling events at all.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "15m0s"
+}

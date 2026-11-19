@@ -1,0 +1,12 @@
+{
+  "name": "node-corrupt-image-layer",
+  "description": "A new replica on a node whose runtime image store is corrupt fails to unpack the image (\"failed to register layer\"); the same image starts on another node.",
+  "root": "node//n2",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/api",
+    "registry//registry.example.com"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,25 @@
+10:08:15 roll-up
+🟠 kwatch (prod-eu-1) found three new problems at the same time. cart, orders and payments in shop have only 2 of 3 replicas ready. Each one alerts on its own when it changes or resolves.
+🟠 kwatch (prod-eu-1) found three new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 3 new problems at the same time
+|
+| **Problems**
+| - **cart** in **shop** has only 2 of 3 replicas ready
+| - **orders** in **shop** has only 2 of 3 replicas ready
+| - **payments** in **shop** has only 2 of 3 replicas ready
+|
+| *Each one alerts on its own when it changes or resolves.*
+10:10:00 material change
+🟠 Node n2 (prod-eu-1) is failing: condition KernelDeadlock is True (docker hung). It reports "task docker:7421 blocked for more than 120 seconds." Every app that uses it is failing. Affected: cart, orders and payments in shop.
+Related alerts: 3 not-ready pods, 3 unavailable workloads, 1 node problem
+To check the node's conditions and recent events, run kubectl describe node n2
+🟠 Node n2 (prod-eu-1) is failing: condition KernelDeadlock is True (docker hung).
+| 🟠 Node n2 (**prod-eu-1**) is failing: condition KernelDeadlock is True (docker hung).
+| It reports `task docker:7421 blocked for more than 120 seconds.`
+| Every app that uses it is failing.
+| Affected: **cart**, **orders** and **payments** in **shop**.
+| Related alerts: 3 not-ready pods, 3 unavailable workloads, 1 node problem
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n2
+| ```

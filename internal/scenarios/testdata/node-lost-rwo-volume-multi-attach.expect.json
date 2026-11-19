@@ -1,0 +1,12 @@
+{
+  "name": "node-lost-rwo-volume-multi-attach",
+  "description": "A node that holds a ReadWriteOnce disk stops reporting; the database's replacement pod waits on a Multi-Attach error.",
+  "root": "node//n1",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/db",
+    "persistentvolumeclaim/shop/data"
+  ],
+  "tail": "10m0s"
+}

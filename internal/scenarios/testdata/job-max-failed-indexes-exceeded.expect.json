@@ -1,0 +1,11 @@
+{
+  "name": "job-max-failed-indexes-exceeded",
+  "description": "An indexed Job fails with MaxFailedIndexesExceeded after three of its indexes fail with the same input error.",
+  "root": "job/batch/import-shards",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

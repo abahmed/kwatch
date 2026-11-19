@@ -1,0 +1,11 @@
+{
+  "name": "release-token-automount-disabled",
+  "description": "A release disables automountServiceAccountToken for an application that uses the in-cluster configuration; it exits because the token file does not exist.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

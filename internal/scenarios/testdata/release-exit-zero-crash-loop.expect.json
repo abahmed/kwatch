@@ -1,0 +1,11 @@
+{
+  "name": "release-exit-zero-crash-loop",
+  "description": "A release's command forks the server into the background and exits 0; the container is restarted and ends in CrashLoopBackOff although every exit is a success.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

@@ -1,0 +1,14 @@
+10:03:15 settled
+🟠 api in shop (prod-eu-1) cannot start (run container error). Cause not found yet: its configuration, node and registry are healthy and unchanged. In the last 30 minutes in shop: api: references unset → configmap/api-settings; volume cfg unset → configmap/api-settings at 10:02 UTC. It fails with "failed to create containerd task: failed to create shim task: OCI runtime create failed: runc create failed: unable to…". To see the pod's state and events, run kubectl describe pods api- -n shop
+🟠 api in shop (prod-eu-1) cannot start (run container error).
+| 🟠 **api** in **shop** (**prod-eu-1**) cannot start (run container error).
+| Cause not found yet: its configuration, node and registry are healthy and unchanged.
+| In the last 30 minutes in shop: api: references unset → configmap/api-settings; volume cfg unset → configmap/api-settings at 10:02 UTC.
+| It fails with
+| ```
+| failed to create containerd task: failed to create shim task: OCI runtime create failed: runc create failed: unable to…
+| ```
+| To see the pod's state and events, run
+| ```
+| kubectl describe pods api- -n shop
+| ```

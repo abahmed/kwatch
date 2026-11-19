@@ -1,0 +1,12 @@
+{
+  "name": "release-probe-scheme-mismatch",
+  "description": "A release probes readiness over HTTPS on a port that serves plain HTTP; the kubelet reports \"server gave HTTP response to HTTPS client\" and the new pod never becomes ready.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "5m0s"
+}

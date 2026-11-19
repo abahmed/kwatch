@@ -1,0 +1,11 @@
+{
+  "name": "daemonset-failed-pod-recreated-loop",
+  "description": "A DaemonSet's pod on one node is rejected by the kubelet every minute and recreated by the controller, which reports FailedDaemonPod each time.",
+  "root": "node//n2",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "daemonset/observability/logship"
+  ],
+  "tail": "10m0s"
+}
