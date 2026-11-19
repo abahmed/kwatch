@@ -216,6 +216,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | OOMKilled | failing | `OOMKILLED`, `OOMKilled` | `container`, `container_crashloop_run` |
 | PIDPressure | varies | `PIDPressure` | `condition_rules` |
 | PLEGSlow | degraded | `NodePLEGSlow` | `kubelet_health` |
+| PausedEdit | degraded | `DeploymentPausedEdit` | `workload_paused` |
 | Pending | degraded | `PhasePending`, `PodPending` | `generic`, `pod` |
 | PortMismatch | failing | `IngressBackendPortMissing`, `ServicePortMismatch` | `ingress_ports`, `service_ports` |
 | Preempted | degraded | `PodPreempted` | `pod_preempted` |
@@ -280,8 +281,8 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | VolumeFull | varies | `VolumeUsageHigh` | `usage` |
 | VolumeFull.Inodes | varies | `VolumeInodesHigh` | `usage` |
 | Waiting.Unknown | varies | `UnknownWaiting.` | - |
-| Webhook.BackendMissing | varies | `WebhookBackendNotFound` | `policy` |
-| Webhook.NoEndpoints | varies | `WebhookNoEndpoints` | `policy` |
+| Webhook.BackendMissing | degraded | `WebhookBackendNotFound` | `conversion_backend`, `policy` |
+| Webhook.NoEndpoints | degraded | `WebhookNoEndpoints` | `conversion_backend`, `policy` |
 | Webhook.Rejecting | degraded | `WebhookRejecting` | `webhook_calls` |
 | Webhook.Slow | varies | `WebhookSlow` | `webhook_calls` |
 

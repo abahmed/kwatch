@@ -133,8 +133,9 @@ func (v *view) pullSecretsWrongType(
 	for _, name := range names {
 		secret, ok := v.s.Model.Entity(
 			inventory.CoreID(kube.KindSecret, pod.Namespace, name))
-		if !ok || kube.RegistryLoginType(attrText(secret,
-			kube.AttrSecretType)) {
+		if !ok || attrText(secret, kube.AttrSecretType) == "" ||
+			kube.RegistryLoginType(attrText(secret,
+				kube.AttrSecretType)) {
 			return false
 		}
 	}

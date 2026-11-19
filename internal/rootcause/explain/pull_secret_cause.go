@@ -56,8 +56,9 @@ func (v *view) isPullLogin(secret, effect inventory.EntityID) bool {
 // kubernetes.io/dockerconfigjson or dockercfg).
 func (v *view) wrongTypePullLogin(secret, effect inventory.EntityID) bool {
 	entity, ok := v.s.Model.Entity(secret)
-	return ok && v.isPullLogin(secret, effect) &&
-		!kube.RegistryLoginType(attrText(entity, kube.AttrSecretType))
+	kind := attrText(entity, kube.AttrSecretType)
+	return ok && kind != "" && v.isPullLogin(secret, effect) &&
+		!kube.RegistryLoginType(kind)
 }
 
 // mayRequireAuthPattern is a registry's refusal that is either an
