@@ -57,6 +57,10 @@ func gap3PSAStatefulSetJob() scenario {
 			ns := namespaceOf(c, "streaming", nil)
 			c.list(ns)
 			cron := scheduleCronJob(c, "streaming", "compact", "0 * * * *")
+			// An hourly job that ran on time: nothing is overdue.
+			ran := metav1.NewTime(c.start)
+			cron.Status.LastScheduleTime = &ran
+			cron.Status.LastSuccessfulTime = &ran
 			c.list(cron)
 			c.after(10 * time.Minute)
 			labelled := last(c, ns)

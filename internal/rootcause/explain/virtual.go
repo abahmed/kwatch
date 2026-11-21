@@ -17,7 +17,8 @@ var admitKinds = []inventory.Kind{
 
 // createModes are the modes of a controller that cannot create objects.
 var createModes = []detection.Mode{
-	detection.ModeFailedCreate, detection.ModeReplicaFailure}
+	detection.ModeFailedCreate, detection.ModeReplicaFailure,
+	detection.ModeReplicaSetCreateError}
 
 // metricsAPIMarker names the APIServices that serve autoscaling metrics:
 // metrics.k8s.io, custom.metrics.k8s.io and external.metrics.k8s.io.

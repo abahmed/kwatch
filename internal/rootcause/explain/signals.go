@@ -17,6 +17,9 @@ const (
 	SignalDNS     Signal = "dns-error"
 	SignalWebhook Signal = "webhook-error"
 	SignalQuota   Signal = "quota-error"
+	// SignalClaimWait is a pod waiting for the claim of its generic
+	// ephemeral volume, which only a full storage quota holds back.
+	SignalClaimWait Signal = "claim-wait"
 	// SignalMetricsAPI is an autoscaler that cannot read the metrics
 	// API: the APIService is failing even before its own status says.
 	SignalMetricsAPI Signal = "metrics-api-error"
@@ -51,7 +54,9 @@ var signalPatterns = map[Signal]*regexp.Regexp{
 		`timed out`),
 	SignalDiskFull: regexp.MustCompile(`no space left on device|enospc|` +
 		`disk quota exceeded|file system is full|filesystem is full`),
-	SignalQuota:       regexp.MustCompile(`exceeded quota|failed quota`),
+	SignalQuota: regexp.MustCompile(`exceeded quota|failed quota`),
+	SignalClaimWait: regexp.MustCompile(`waiting for ephemeral volume ` +
+		`controller to create the persistentvolumeclaim`),
 	SignalPodSecurity: regexp.MustCompile(`violates podsecurity`),
 	SignalLimitRange: regexp.MustCompile(`(maximum|minimum) [a-z./-]+ ` +
 		`usage per (container|pod|persistentvolumeclaim)|max limit to ` +

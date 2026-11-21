@@ -104,9 +104,22 @@ var clusterRows = concatRows(schedulerNamesRows(), []Row{
 				detection.ModeQuotaExhausted, detection.ModeQuota}},
 		Link: LinkAdmits,
 		Effect: Side{Group: AnyGroup, Kind: AnyKind,
-			Modes: []detection.Mode{
-				detection.ModeFailedCreate, detection.ModeReplicaFailure},
+			Modes: append([]detection.Mode{
+				detection.ModeEndpointSlicesFailed,
+				detection.ModeNotReconciling}, createModes...),
 			Signal: SignalQuota},
+		Prior: 0.8,
+	},
+	{
+		// A pod waits for the claim of its ephemeral volume while the
+		// namespace's quota is used up: the claim create is refused.
+		Name: "quota-exhausted",
+		Cause: Side{Kind: kube.KindQuota,
+			Modes: []detection.Mode{detection.ModeQuotaExhausted}},
+		Link: LinkAdmits,
+		Effect: Side{Kind: kube.KindPod, Signal: SignalClaimWait,
+			Modes: []detection.Mode{detection.ModePending,
+				detection.ModeUnschedulable}},
 		Prior: 0.8,
 	},
 	{

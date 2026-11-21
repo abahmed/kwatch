@@ -44,6 +44,11 @@ const (
 	// ModeFailedCreate is the mode of a FailedCreate event: the reason
 	// has no shorter name, so it is its own mode.
 	ModeFailedCreate Mode = "FailedCreate"
+	// ModeReplicaSetCreateError and ModeEndpointSlicesFailed are the
+	// refused creates of a Deployment's ReplicaSet and of a Service's
+	// EndpointSlices; they carry their reason's name.
+	ModeReplicaSetCreateError Mode = "ReplicaSetCreateError"
+	ModeEndpointSlicesFailed  Mode = "FailedToUpdateEndpointSlices"
 	// ModeOOMKilledNode and ModeOOMKilledLimit are the verdicts on an
 	// OOM kill (see detectors.markNodeOOM): the node ran out of memory
 	// and killed a container that stayed within its limit, or the
@@ -80,6 +85,7 @@ const (
 var extraModes = []Mode{
 	ModeMemoryEvictionThreshold, ModePIDEvictionThreshold,
 	ModeFailedCreate, ModeTerminating, ModeUnreachable,
+	ModeReplicaSetCreateError, ModeEndpointSlicesFailed,
 	ModeOOMKilledNode, ModeOOMKilledLimit, ModeNodeCondition,
 	// ModeQuota is the family the quota rows match; no finer quota mode
 	// remains since the near-limit finding was retired.
