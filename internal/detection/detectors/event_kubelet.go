@@ -66,6 +66,8 @@ var sandboxClasses = []struct {
 // than its reason; "" keeps the reason's mode.
 func eventMode(note inventory.Note) detection.Mode {
 	switch note.Reason {
+	case "FailedMount", "FailedAttachVolume":
+		return detection.ModeVolume
 	case failedCreatePodSandBox, networkNotReady:
 		return sandboxMode(note.Message)
 	case reasons.EvictionThresholdMet:

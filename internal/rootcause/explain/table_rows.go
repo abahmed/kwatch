@@ -275,7 +275,8 @@ var workloadRows = []Row{
 		Effect: podSide(
 			detection.ModePending, detection.ModeUnschedulable,
 			detection.ModeCreating, detection.ModeCrashLoop,
-			detection.ModeCreateError, detection.ModeFailed),
+			detection.ModeCreateError, detection.ModeFailed,
+			detection.ModeVolume),
 		Prior: 0.7,
 	},
 	{

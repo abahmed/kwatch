@@ -61,6 +61,10 @@ var upstreamReasons = []ReasonInfo{
 	eventReason("VolumeFailedRecycle", Warning),
 	eventReason("VolumeFailedDelete", Warning),
 	eventReason("ClaimLost", Critical),
+	// The snapshot controllers: a snapshot the driver cannot create or
+	// whose content is gone is never ready.
+	eventReason("SnapshotCreationFailed", Critical),
+	eventReason("SnapshotContentMissing", Critical),
 	eventReason("VolumeMismatch", Info),
 	// Endpoints, load balancers and the rest of the control plane. The
 	// Service detectors read the endpoint and load balancer failures

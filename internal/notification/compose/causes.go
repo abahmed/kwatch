@@ -177,6 +177,12 @@ var causeWords = map[string]causeWording{
 		words: "sets no storage class and the cluster has no default one"},
 	"storage-class-missing":         {words: "does not exist"},
 	"storage-class-missing-pending": {words: "does not exist"},
+	"claim-pins-volume": {
+		words: "is bound to the volume whose deletion waits for it"},
+	"storage-class-rejects": {
+		words: "sets a secret or parameter its provisioner rejects"},
+	"storage-class-rejects-pending": {
+		words: "sets a secret or parameter its provisioner rejects"},
 	"startup-budget-too-short": {own: true,
 		words: "its containers get too little time to start"},
 	"summary":                 {words: "is failing"},

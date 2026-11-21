@@ -61,8 +61,12 @@ func (v *view) errorNamedHops(id inventory.EntityID) []hop {
 	if id.Kind == kube.KindPVC {
 		out = append(out, v.provisionerHops(id)...)
 	}
+	if id.Kind == kube.KindPV {
+		out = append(out, v.pinnedVolumeHops(id)...)
+	}
 	if id.Kind == kube.KindPVC || id.Kind == kube.KindPod {
 		out = append(out, v.boundElsewhereHops(id)...)
+		out = append(out, v.classRejectHops(id)...)
 	}
 	if id.Kind == kube.KindContainer || id.Kind == kube.KindPod {
 		out = append(out, v.conversionHops(id)...)
