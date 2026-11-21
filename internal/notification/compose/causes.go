@@ -26,14 +26,17 @@ type causeWording struct {
 // causeWords are keyed by the explain row that blamed the cause
 // (rootcause.CauseRecord.Rule). A row missing here reads "is failing".
 var causeWords = map[string]causeWording{
-	"account-missing-at-create":       {words: "does not exist"},
-	"apiserver-unavailable":           {words: "is not answering"},
-	"apiservice-backend-missing":      {words: "does not exist"},
-	"apiservice-unavailable":          {words: "is unavailable"},
-	"backends-failing":                {words: "has no healthy backends"},
-	"called-service-backend-changed":  {words: "changed shortly before"},
-	"called-service-backends-failing": {words: "is failing"},
-	"called-service-no-endpoints":     {words: "has no ready endpoints"},
+	"account-missing-at-create":             {words: "does not exist"},
+	"apiserver-unavailable":                 {words: "is not answering"},
+	"component-pod-etcd":                    {words: "is not running"},
+	"component-pod-kube-scheduler":          {words: "is not running"},
+	"component-pod-kube-controller-manager": {words: "is not running"},
+	"apiservice-backend-missing":            {words: "does not exist"},
+	"apiservice-unavailable":                {words: "is unavailable"},
+	"backends-failing":                      {words: "has no healthy backends"},
+	"called-service-backend-changed":        {words: "changed shortly before"},
+	"called-service-backends-failing":       {words: "is failing"},
+	"called-service-no-endpoints":           {words: "has no ready endpoints"},
 	"autoscaling-limit": {
 		words: "has reached its autoscaling limit"},
 	"autoscaler-flaps-replicas": {
