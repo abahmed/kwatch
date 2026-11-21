@@ -192,6 +192,12 @@ func terminatedFinding(
 		// The Job succeeded on a retry: this run is history, even an OOM.
 		return nil
 	}
+	if pod, ok := owningPod(ctx, e); ok &&
+		text(pod, kube.AttrReason) == reasons.Evicted &&
+		evictionOver(ctx, terminatedAt(e)) {
+		// The eviction is over; its exit is history, as the pod's is.
+		return nil
+	}
 	if reason != reasons.OOMKilled && stoppedOnPurpose(ctx, e, code) {
 		return nil
 	}
