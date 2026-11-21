@@ -1,6 +1,8 @@
 package incident
 
 import (
+	"time"
+
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/inventory"
 	"github.com/abahmed/kwatch/internal/inventory/kube"
@@ -45,4 +47,15 @@ func (m *Manager) joinHolder(
 		return where
 	}
 	return placement{root: p.Root}
+}
+
+// joinOutages places a failure in the outage it belongs to: the nodes
+// lost together, the incident that already speaks for its workload and
+// the control-plane failure it rests on.
+func (m *Manager) joinOutages(
+	now time.Time, s detection.Finding, where placement,
+) placement {
+	where = m.joinNodeGroup(now, s, where)
+	where = m.joinHolder(s, where)
+	return m.joinPlane(now, s, where)
 }

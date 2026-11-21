@@ -47,7 +47,7 @@ func touchesAttemptKind(ids []inventory.EntityID) bool {
 func findAttempt(
 	model inventory.HistoryReader, p *Incident, now time.Time,
 ) *inventory.Change {
-	if model == nil {
+	if model == nil || storageRoot(p.Root) {
 		return nil
 	}
 	since := p.Announced
@@ -69,6 +69,12 @@ func findAttempt(
 		}
 	}
 	return latest
+}
+
+// storageRoot reports a root that is stored data: a claim or a volume.
+// Rolling out the workload that merely uses it does not repair it.
+func storageRoot(id inventory.EntityID) bool {
+	return id.Kind == kube.KindPVC || id.Kind == kube.KindPV
 }
 
 // isAttempt reports a change after since that edits a workload's pod
