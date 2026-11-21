@@ -123,12 +123,12 @@ func gap7aJobFailsOnDrains() scenario {
 		c.create(job)
 		nodes := []string{"n1", "n2", "n3"}
 		for i, name := range nodes {
-			pod := retryPod(c, job, i, "")
+			pod := readyJobPod(c, retryPod(c, job, i, ""))
 			pod.Spec.NodeName = c.n(name)
 			c.create(pod)
 			c.after(20 * time.Minute)
 			advCordon(c, last(c, c.node(name, "zone-a")))
-			failed := retryPod(c, job, i, "")
+			failed := readyJobPod(c, retryPod(c, job, i, ""))
 			failed.Spec.NodeName = c.n(name)
 			failed.Status.Phase = corev1.PodFailed
 			failed.Status.Conditions = append(failed.Status.Conditions,

@@ -182,7 +182,7 @@ func gap4aSuccessPolicy() scenario {
 			c.create(job)
 			c.after(5 * time.Minute)
 			for i := range 4 {
-				pod := retryPod(c, job, i, "")
+				pod := readyJobPod(c, retryPod(c, job, i, ""))
 				pod.Spec.NodeName = c.n("n1")
 				c.create(pod)
 			}
@@ -196,7 +196,8 @@ func gap4aSuccessPolicy() scenario {
 				LastTransitionTime: metav1.NewTime(c.now)}}
 			c.update(done)
 			for i := 1; i < 4; i++ {
-				pod := retryPod(c, job, i, "terminated by the Job")
+				pod := readyJobPod(c, retryPod(c, job, i,
+					"terminated by the Job"))
 				pod.Spec.NodeName = c.n("n1")
 				pod.Status.ContainerStatuses[0].State.Terminated.ExitCode = 143
 				c.update(pod)
@@ -224,7 +225,7 @@ func gap4aReplacementStuck() scenario {
 			policy := batchv1.Failed
 			job.Spec.PodReplacementPolicy = &policy
 			c.create(job)
-			pod := retryPod(c, job, 0, "")
+			pod := readyJobPod(c, retryPod(c, job, 0, ""))
 			pod.Spec.NodeName = c.n("n1")
 			c.create(pod)
 			c.after(10 * time.Minute)
@@ -254,7 +255,7 @@ func gap4aJobSuspended() scenario {
 			c.list(c.node("n1", "zone-a"))
 			job := retryJob(c, "reindex", 3)
 			c.create(job)
-			pod := retryPod(c, job, 0, "")
+			pod := readyJobPod(c, retryPod(c, job, 0, ""))
 			pod.Spec.NodeName = c.n("n1")
 			c.create(pod)
 			c.after(10 * time.Minute)

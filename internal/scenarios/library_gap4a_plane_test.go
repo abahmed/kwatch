@@ -107,8 +107,9 @@ func gap4aLingeringEvicted() scenario {
 				[]string{"n1", "n2"})
 			for i := range 40 {
 				w := fleet[i%2]
-				pod := w.pod(10+i, "n1", evicted("The node was low on "+
-					"resource: ephemeral-storage."))
+				pod := w.pod(10+i, "n1", evictedSince(
+					c.now.Add(-3*time.Hour-30*time.Minute),
+					"The node was low on resource: ephemeral-storage."))
 				c.list(pod)
 			}
 			c.after(30 * time.Minute)

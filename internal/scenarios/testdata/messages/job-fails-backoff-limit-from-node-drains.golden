@@ -1,25 +1,9 @@
-10:04:15 settled
-🟠 Job nightly is failing in batch (prod-eu-1) after the 10:00 UTC change. The apps that use it failed soon after it changed. To see the pods' state and events, run kubectl describe pods nightly- -n batch
-🟠 Job nightly is failing in batch (prod-eu-1) after the 10:00 UTC change.
-| 🟠 Job **nightly** is failing in **batch** (**prod-eu-1**) after the 10:00 UTC change.
-| The apps that use it failed soon after it changed.
-| To see the pods' state and events, run
+11:04:15 settled
+🟠 Job nightly in batch (prod-eu-1) is failing: failed after 3 pod failures. It reports "Job has reached the specified backoff limit". To see the object's state and events, run kubectl describe job nightly -n batch
+🟠 Job nightly in batch (prod-eu-1) is failing: failed after 3 pod failures.
+| 🟠 Job **nightly** in **batch** (**prod-eu-1**) is failing: failed after 3 pod failures.
+| It reports `Job has reached the specified backoff limit`.
+| To see the object's state and events, run
 | ```
-| kubectl describe pods nightly- -n batch
+| kubectl describe job nightly -n batch
 | ```
-10:23:00 healthy for 3m0s
-✅ Job nightly in batch (prod-eu-1) is healthy again. It was failing for 17 minutes. Changed just before it recovered: node n1: unschedulable false → true; taints unset → node.kubernetes.io/unschedulable:NoSchedule at 10:20 UTC.
-✅ Job nightly in batch (prod-eu-1) is healthy again.
-| ✅ Job **nightly** in **batch** (**prod-eu-1**) is healthy again.
-| It was failing for 17 minutes.
-| Changed just before it recovered: node n1: unschedulable false → true; taints unset → node.kubernetes.io/unschedulable:NoSchedule at 10:20 UTC.
-10:25:30 failing again
-🟠 Job nightly in batch (prod-eu-1) is failing again: 2nd time in two hours. The apps that use it failed soon after it changed.
-🟠 Job nightly in batch (prod-eu-1) is failing again: 2nd time in two hours.
-| 🟠 Job **nightly** in **batch** (**prod-eu-1**) is failing again: 2nd time in two hours.
-| The apps that use it failed soon after it changed.
-11:03:10 material change
-🟠 Pods nightly-b and nightly-c have recovered; job nightly in batch (prod-eu-1) still has one open failure. Job nightly in batch (prod-eu-1) is now failing: failed after 3 pod failures.
-🟠 Pods nightly-b and nightly-c have recovered; job nightly in batch (prod-eu-1) still has one open failure.
-| 🟠 Pods nightly-b and nightly-c have recovered; job **nightly** in **batch** (**prod-eu-1**) still has one open failure.
-| Job **nightly** in **batch** (**prod-eu-1**) is now failing: failed after 3 pod failures.
