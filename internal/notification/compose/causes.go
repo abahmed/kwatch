@@ -36,6 +36,10 @@ var causeWords = map[string]causeWording{
 	"called-service-no-endpoints":     {words: "has no ready endpoints"},
 	"autoscaling-limit": {
 		words: "has reached its autoscaling limit"},
+	"autoscaler-flaps-replicas": {
+		words: "keeps changing the replica count"},
+	"scheduler-names-object": {
+		words: "is named by the scheduler's verdict"},
 	"autoscaling-limit-unavailable": {
 		words: "has reached its autoscaling limit"},
 	"budget-blocks-drain": {words: "allows no eviction"},

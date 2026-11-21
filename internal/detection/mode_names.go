@@ -176,7 +176,9 @@ const (
 	ModeCrashLoopLiveness Mode = "CrashLoop.Liveness"
 	ModeProbeReadiness    Mode = "Probe.Readiness"
 	// ModeReadinessFlapping is a readiness failure that comes and goes.
-	ModeReadinessFlapping     Mode = "Probe.Readiness.Flapping"
+	ModeReadinessFlapping Mode = "Probe.Readiness.Flapping"
+	// ModeReplicasFlapping is a replica count that keeps changing.
+	ModeReplicasFlapping      Mode = "Scale.Flapping"
 	ModeAdmissionRejected     Mode = "Admission.Rejected"
 	ModeExitNotExecutable     Mode = "Exit.NotExecutable"
 	ModeExitCommandNotFound   Mode = "Exit.CommandNotFound"

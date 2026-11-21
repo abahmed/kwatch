@@ -296,7 +296,10 @@ const (
 	ReadinessProbeFailed = "ReadinessProbeFailed"
 	// ReadinessFlapping is a workload whose pods keep switching between
 	// ready and not ready, so the endpoints of its Service keep changing.
-	ReadinessFlapping      = "ReadinessFlapping"
+	ReadinessFlapping = "ReadinessFlapping"
+	// ReplicasFlapping is a workload whose replica count is set back and
+	// forth, by an autoscaler or by two writers that disagree.
+	ReplicasFlapping       = "ReplicasFlapping"
 	PodAdmissionRejected   = "PodAdmissionRejected"
 	ExitNotExecutable      = "ContainerExitNotExecutable"
 	ExitCommandNotFound    = "ContainerExitCommandNotFound"

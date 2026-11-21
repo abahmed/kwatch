@@ -58,4 +58,18 @@ var gapRowCases = []rowCase{
 			})
 			return pod
 		}},
+	{row: "autoscaler-flaps-replicas",
+		want: "horizontalpodautoscaler/shop/web",
+		build: func(f *fixture) inventory.EntityID {
+			f.workload("shop", "web", 1)
+			deploy := inventory.CoreID(kube.KindDeployment, "shop", "web")
+			hpa := inventory.CoreID(kube.KindHPA, "shop", "web")
+			f.add(hpa)
+			f.relate(hpa, inventory.Scales, deploy)
+			f.fail(hpa, detection.ModeReplicasFlapping, failingH, 1,
+				"Replicas changed 6 times")
+			f.fail(deploy, detection.ModeReplicasFlapping, failingH, 2,
+				"Replicas changed 6 times")
+			return deploy
+		}},
 }

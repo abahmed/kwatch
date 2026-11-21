@@ -58,6 +58,8 @@ var causeCategories = map[string]string{
 	"apiservice-unavailable":           categoryControlPlane,
 	"autoscaling-limit":                categoryScaling,
 	"autoscaling-limit-unavailable":    categoryScaling,
+	"autoscaler-flaps-replicas":        categoryScaling,
+	"scheduler-names-object":           categoryScheduling,
 	"backends-failing":                 categoryDependency,
 	"backends-not-ready":               categoryDependency,
 	"budget-blocks-drain":              categoryBudget,

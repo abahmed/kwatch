@@ -35,6 +35,7 @@ var workloadReasons = []ReasonInfo{
 	reason(reasons.HPATargetMissing, ModeScalingTargetMissing).digest(),
 	reason(reasons.WorkloadNeverReady, ModeNeverReady),
 	reason(reasons.ReadinessFlapping, ModeReadinessFlapping),
+	reason(reasons.ReplicasFlapping, ModeReplicasFlapping).digest(),
 	reason(reasons.KubeletUnreachable, ModeKubeletUnreachable).digest(),
 	reason(reasons.KwatchNetworkRestricted, ModeKwatchNetwork),
 	reason(reasons.JobRunningLong, ModeJobRunningLong),
