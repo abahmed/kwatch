@@ -122,9 +122,10 @@ func gap5aBootstrapTokenExpired() scenario {
 		expect: g2Exp("bootstrap-token-expired-nodes-cannot-join",
 			"A scale-up needs new nodes whose join token expired a day "+
 				"ago; no Node object appears and the new pods stay "+
-				"Pending for lack of CPU. The expired bootstrap token "+
-				"explains the Pending, not the scheduling reason alone.",
-			"secret/kube-system/bootstrap-token-abcdef", "notify",
+				"Pending for lack of CPU. The token expiry is a Secret "+
+				"value kwatch cannot read, so only the Pending for "+
+				"lack of CPU is visible.",
+			"scheduling//Insufficient cpu", "notify",
 			"deployment/shop/web", "node//n1", "node//n2").
 			tail(10 * time.Minute),
 		build: func(c *cluster) {
