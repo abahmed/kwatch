@@ -84,7 +84,7 @@ var workloadReasons = []ReasonInfo{
 	reason(reasons.RuntimeClassMissing, ModeReferenceRuntimeClassMissing),
 	// A budget selecting no pods protects nothing, but on a cluster that
 	// scales workloads to zero it is the normal night.
-	reason(reasons.PdbSelectsNothing, ModeBudgetSelectsNothing).digest(),
+	reason(reasons.PdbSelectsNothing, ModeBudgetSelectsNothing),
 	reason(reasons.PdbOverlap, ModeBudgetOverlap),
 	reason(reasons.PdbSyncFailed, ModeBudgetSyncFailed),
 	reason(reasons.PdbBlocksDrain, ModeBudgetBlocksDrain),
