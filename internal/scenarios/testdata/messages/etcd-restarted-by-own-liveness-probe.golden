@@ -9,8 +9,3 @@
 | ```
 | kubectl logs deploy/etcd -c app -n kube-system --previous
 | ```
-10:05:30 cause revised
-🔴 Cause now known: etcd (prod-eu-1) is failing: went down 3 times in 15 minutes. It reports "[-]etcd failed: reason withheld". The error mentions it.
-🔴 Cause now known: etcd (prod-eu-1) is failing: went down 3 times in 15 minutes.
-| 🔴 Cause now known: **etcd** (**prod-eu-1**) is failing: went down 3 times in 15 minutes.
-| It reports `[-]etcd failed: reason withheld`. The error mentions it.

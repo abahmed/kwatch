@@ -1,9 +1,0 @@
-10:15:15 settled
-🟠 etcd (prod-eu-1) is failing: went down 3 times in 15 minutes. It reports "[-]etcd failed: context deadline exceeded". To see whether the API server's etcd check passes, run kubectl get --raw '/readyz?verbose'
-🟠 etcd (prod-eu-1) is failing: went down 3 times in 15 minutes.
-| 🟠 **etcd** (**prod-eu-1**) is failing: went down 3 times in 15 minutes.
-| It reports `[-]etcd failed: context deadline exceeded`.
-| To see whether the API server's **etcd** check passes, run
-| ```
-| kubectl get --raw '/readyz?verbose'
-| ```
