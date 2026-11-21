@@ -106,9 +106,18 @@ func TestTierDerivation(t *testing.T) {
 			incidentOf(node, nil, sig(node, "NodeNotReady", detection.Critical)),
 			Page,
 		},
-		"node under pressure notifies": {
+		"node under pressure that evicts nothing digests": {
 			incidentOf(node, nil, sig(node, reasons.NodeMemoryPressure,
 				detection.Critical)),
+			Digest,
+		},
+		"node under pressure with a pod failing on it notifies": {
+			func() *Incident {
+				p := incidentOf(node, nil, sig(node,
+					reasons.NodeMemoryPressure, detection.Critical))
+				p.hostedFailing = true
+				return p
+			}(),
 			Notify,
 		},
 		"zone of lost nodes pages": {

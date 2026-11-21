@@ -150,6 +150,8 @@ func quietTier(p *Incident) (Tier, string, bool) {
 			return Notify, levelRoutine, true
 		}
 		return Digest, levelRoutine, true
+	case unaffected(p) && !reachedPaging(p) && !p.persistent:
+		return Digest, levelUnaffected, true
 	case reachedPaging(p) || p.persistent || unusual(p):
 		return 0, "", false
 	case Known(*p, p.Opened):

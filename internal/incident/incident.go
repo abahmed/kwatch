@@ -349,6 +349,9 @@ type Incident struct {
 	// impact has no ready replica. It is recomputed with the impact;
 	// the last-replica-down page reads it.
 	servingDown bool
+	// hostedFailing records that a pod running on the root node is not
+	// ready. It is recomputed with the radius (unaffected).
+	hostedFailing bool
 	// admissionBlocked records that the root is a fail-closed admission
 	// webhook whose failed calls block creates. Such a root often has
 	// no finding of its own (its endpoints are ready, its backend just

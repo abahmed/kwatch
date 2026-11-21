@@ -70,6 +70,7 @@ func radiusOf(model inventory.Reader, p *Incident) Radius {
 // with the highest pod count seen.
 func (p *Incident) noteRadius(model inventory.Reader) {
 	p.Radius = radiusOf(model, p)
+	p.hostedFailing = hostedFailing(model, p.Root)
 	peak := max(p.Journal.Widest.Pods, p.Radius.Pods)
 	if p.Radius.size() > p.Journal.Widest.size() {
 		p.Journal.Widest = p.Radius

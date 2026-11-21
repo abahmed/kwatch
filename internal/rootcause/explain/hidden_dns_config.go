@@ -8,7 +8,7 @@ import (
 )
 
 // blindToHiddenDNSConfig reports a cluster DNS whose servers keep
-// crashing, or an external endpoint, blamed for failing lookups while the
+// crashing, the DNS server workload itself, or an external endpoint, blamed for failing lookups while the
 // ConfigMaps the DNS servers read are unreadable to kwatch. Its Corefile may be the cause, so nothing is
 // stated: the message says the cause is unknown and names what is
 // unreadable. It records that on the failures it covers.
@@ -26,7 +26,12 @@ func (v *view) blindToHiddenDNSConfig(c *candidate) bool {
 			return false
 		}
 	default:
-		return false
+		// The DNS servers run and answer, but not for what clients
+		// ask: the Corefile they serve from may be why, whichever
+		// object is blamed for failures that are all lookups.
+		if !v.dnsServersReady() || !v.onlyLookups(c) {
+			return false
+		}
 	}
 	note := rootcause.UnverifiedScope(
 		inventory.CoreID(kube.KindConfigMap, "kube-system", ""))
@@ -35,6 +40,18 @@ func (v *view) blindToHiddenDNSConfig(c *candidate) bool {
 			v.unverified[effect], []string{note})
 	}
 	return true
+}
+
+// onlyLookups reports a candidate whose every direct failure is a pod
+// whose own error shows name resolution failing.
+func (v *view) onlyLookups(c *candidate) bool {
+	effects := c.direct()
+	for _, effect := range effects {
+		if !v.unitDNS(effect) {
+			return false
+		}
+	}
+	return len(effects) > 0
 }
 
 // namedOnlyByLookups reports an endpoint that the errors name, and only
