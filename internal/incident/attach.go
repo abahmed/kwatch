@@ -368,7 +368,8 @@ func (m *Manager) reroute(
 	where = m.retakeFormer(now, s, where)
 	where = m.retakeSuspect(now, s, where)
 	where = m.retakeZone(now, where)
-	return m.joinNodeGroup(s, where)
+	where = m.joinNodeGroup(now, s, where)
+	return m.joinHolder(s, where)
 }
 
 // takeCause adopts the cause of a placement. A grouped incident speaks for

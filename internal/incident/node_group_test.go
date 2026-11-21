@@ -34,14 +34,17 @@ func TestNodesLostTogetherShareOneIncident(t *testing.T) {
 	assert.Len(t, r.m.Export(), 1)
 }
 
-// A node lost after the outage was announced is news of its own: it is
-// not folded into what people were already told.
+// A node lost long after the outage was announced is news of its own:
+// it is not folded into what people were already told.
 func TestNodeLostAfterTheAnnouncementHasItsOwnIncident(t *testing.T) {
 	r := newRig(t, Config{})
 	r.raise(at(0), lostNode("n1"))
 	wantAction(t, r.tick(at(DefaultPageSettle)), Announce, ReasonSettled)
 
-	r.raise(at(time.Minute), lostNode("n2"))
+	late := at(NodeGroupWindow + 2*time.Minute)
+	n2 := lostNode("n2")
+	n2.Since = late
+	r.raise(late, n2)
 
 	assert.Len(t, r.m.Export(), 2)
 	assert.False(t, r.of(inventory.CoreID(kube.KindNode, "", "n1")).Grouped())

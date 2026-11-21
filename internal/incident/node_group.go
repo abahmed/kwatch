@@ -2,6 +2,7 @@ package incident
 
 import (
 	"slices"
+	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
 	"github.com/abahmed/kwatch/internal/detection/reasons"
@@ -97,7 +98,7 @@ func (m *Manager) takenOver(p *Incident) bool {
 // the outage it belongs to: one it already joined, or one that is still
 // settling when nothing holds the root yet.
 func (m *Manager) joinNodeGroup(
-	s detection.Finding, where placement,
+	now time.Time, s detection.Finding, where placement,
 ) placement {
 	root := where.root
 	if !nodeFamily(root.Kind) {
@@ -110,6 +111,9 @@ func (m *Manager) joinNodeGroup(
 	}
 	if g == nil {
 		g = m.settlingOutage()
+		if g == nil {
+			g = m.openOutage(now, s)
+		}
 		if g == nil || g.Root == root || m.placeOf(root, g.Root) ||
 			m.coversGroup(root, g) {
 			return where
