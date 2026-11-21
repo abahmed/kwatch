@@ -52,6 +52,7 @@ func (v *view) virtualHops(id inventory.EntityID) []hop {
 		out = append(out, v.calledHops(id)...)
 		out = append(out, v.serviceCallHops(id)...)
 		out = append(out, v.missingServiceHops(id)...)
+		out = append(out, v.peerHops(id)...)
 		out = append(out, v.agentHops(id)...)
 		out = append(out, v.preemptionHops(id)...)
 	}

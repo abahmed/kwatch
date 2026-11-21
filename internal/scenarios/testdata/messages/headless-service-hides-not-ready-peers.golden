@@ -7,3 +7,7 @@
 | ```
 | kubectl describe statefulset queue -n streaming
 | ```
+10:20:30 cause revised
+🟠 Cause now known: queue in streaming (prod-eu-1) has no ready replicas (0 of 3) because service queue answers only for ready pods, which wait for each other's names.
+🟠 Cause now known: queue in streaming (prod-eu-1) has no ready replicas (0 of 3) because service queue answers only for ready pods, which wait for each other's names.
+| 🟠 Cause now known: **queue** in **streaming** (**prod-eu-1**) has no ready replicas (0 of 3) because service **queue** answers only for ready pods, which wait for each other's names.

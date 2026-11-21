@@ -64,6 +64,9 @@ const (
 	ModeScaled detection.Mode = "Changed.Scale"
 	// ModeCreated is the creation of the object.
 	ModeCreated detection.Mode = "Changed.Created"
+	// ModeHidesNotReady is a headless Service that leaves the pods
+	// that are not ready out of its DNS answers.
+	ModeHidesNotReady detection.Mode = "HidesNotReady"
 	// ModeMissing is a referenced object that does not exist.
 	ModeMissing detection.Mode = "Missing"
 	// ModeWrongType is a Secret that exists but is not of a registry

@@ -70,6 +70,9 @@ func (v *view) callModes(
 		if modes := v.calledServiceModes(id, effect, link); len(modes) > 0 {
 			return modes
 		}
+		if modes := v.peerModes(id, effect, link); len(modes) > 0 {
+			return modes
+		}
 		return v.missingCalledModes(id, effect, link)
 	}
 	return v.calledBackendModes(id, effect, link)

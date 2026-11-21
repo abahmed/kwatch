@@ -162,11 +162,15 @@ var causeWords = map[string]causeWording{
 		words: "enforces a Pod Security level the new pods do not meet"},
 	"limit-range-rejects": {
 		words: "has bounds the new pods are outside of"},
-	"admission-policy-denies":    {words: "denies the pods being created"},
-	"rbac-change":                {words: "no longer grants the access it needs"},
-	"registry-refuses":           {words: "refuses the image pulls"},
-	"rollout":                    {words: "rolled out a change shortly before"},
-	"routed-missing":             {words: "does not exist"},
+	"admission-policy-denies": {words: "denies the pods being created"},
+	"rbac-change":             {words: "no longer grants the access it needs"},
+	"registry-refuses":        {words: "refuses the image pulls"},
+	"rollout":                 {words: "rolled out a change shortly before"},
+	"rollout-unschedulable": {
+		words: "rolled out a change shortly before that no node can take"},
+	"routed-missing": {words: "does not exist"},
+	"headless-hides-not-ready-peers": {
+		words: "answers only for ready pods, which wait for each other's names"},
 	"missing-service-called":     {words: "does not exist"},
 	"missing-service-configured": {words: "does not exist"},
 	// scheduler-capacity is worded by schedulingWords.
