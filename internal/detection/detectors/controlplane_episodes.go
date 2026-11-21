@@ -72,8 +72,9 @@ func recurringOutage(
 	}
 	return []detection.Finding{{
 		Reason: reason, Severity: severity, Since: oldest,
-		Summary: what + " went down " + strconv.Itoa(outageEpisodes) +
-			" times in " + strconv.Itoa(int(outageWindow.Minutes())) +
+		Summary: what + " has been down " + strconv.Itoa(outageEpisodes) +
+			" times in the last " +
+			strconv.Itoa(int(outageWindow.Minutes())) +
 			" minutes",
 		Evidence: errorEvidence(e),
 	}}

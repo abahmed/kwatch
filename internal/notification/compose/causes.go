@@ -41,8 +41,18 @@ var causeWords = map[string]causeWording{
 		words: "has reached its autoscaling limit"},
 	"autoscaler-flaps-replicas": {
 		words: "keeps changing the replica count"},
-	"scheduler-names-object": {
-		words: "is named by the scheduler's verdict"},
+	"scheduler-names-priority-class": {
+		words: "never preempts, so its pods wait for room"},
+	"scheduler-names-owner": {
+		words: "has an old pod that still holds its single-pod volume claim"},
+	"scheduler-names-claim": {
+		words: "has no node with enough free storage"},
+	"scheduler-names-affinity-target": {
+		words: "has no ready pods for the waiting pod to be placed beside"},
+	"scheduler-names-pinned-node": {
+		words: "has no room for the pod pinned to it"},
+	"scheduler-names-scarce-node": {
+		words: "has none left of the resource the pod asks for"},
 	"autoscaling-limit-unavailable": {
 		words: "has reached its autoscaling limit"},
 	"budget-blocks-drain": {words: "allows no eviction"},

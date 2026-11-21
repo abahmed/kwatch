@@ -40,7 +40,7 @@ var gapRowCases = []rowCase{
 			}
 			return first
 		}},
-	{row: RuleSchedulerNames, want: "priorityclass//batch-low",
+	{row: "scheduler-names-priority-class", want: "priorityclass//batch-low",
 		build: func(f *fixture) inventory.EntityID {
 			pod := f.workload("shop", "api", 1)[0]
 			class := inventory.CoreID(kube.KindPriorityClass, "",

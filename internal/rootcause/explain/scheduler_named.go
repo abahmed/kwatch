@@ -17,8 +17,11 @@ import (
 const ModeNamedByScheduler detection.Mode = "NamedByScheduler"
 
 // schedulerNamer reads one kind of scheduling reason. match says whether
-// the verdict is of its kind; named returns the objects it points at.
+// the verdict is of its kind; named returns the objects it points at. Its
+// mode and rule are its own, so that each kind reads in its own words.
 type schedulerNamer struct {
+	mode  detection.Mode
+	rule  string
 	match func(verdict string) bool
 	named func(v *view, pod inventory.EntityID, verdict string,
 	) []inventory.EntityID
@@ -28,6 +31,8 @@ type schedulerNamer struct {
 // first that names something decides.
 var schedulerNamers = []schedulerNamer{
 	{ // The pod's PriorityClass never preempts.
+		mode: ModeNamedByScheduler + ".PriorityClass",
+		rule: "scheduler-names-priority-class",
 		match: func(s string) bool {
 			return strings.Contains(s, "preemptionpolicy=never")
 		},
@@ -36,6 +41,8 @@ var schedulerNamers = []schedulerNamer{
 			return v.referenced(pod, kube.KindPriorityClass)
 		}},
 	{ // The pod conflicts with its own workload's old pod.
+		mode: ModeNamedByScheduler + ".Owner",
+		rule: "scheduler-names-owner",
 		match: func(s string) bool {
 			return strings.Contains(s, "readwriteoncepod")
 		},
@@ -44,6 +51,8 @@ var schedulerNamers = []schedulerNamer{
 			return []inventory.EntityID{rootcause.TopOwner(v.s.Model, pod)}
 		}},
 	{ // No node has room for the claim the pod mounts.
+		mode: ModeNamedByScheduler + ".Claim",
+		rule: "scheduler-names-claim",
 		match: func(s string) bool {
 			return strings.Contains(s, "enough free storage")
 		},
@@ -52,14 +61,20 @@ var schedulerNamers = []schedulerNamer{
 			return v.claimsOf(pod)
 		}},
 	{ // The pod asks to sit next to pods that no workload runs.
+		mode: ModeNamedByScheduler + ".AffinityTarget",
+		rule: "scheduler-names-affinity-target",
 		match: func(s string) bool {
 			return strings.Contains(s, "pod affinity rules")
 		},
 		named: (*view).affinityTargets},
 	{ // The pod is pinned to one node by name and that node has no room.
+		mode:  ModeNamedByScheduler + ".PinnedNode",
+		rule:  "scheduler-names-pinned-node",
 		match: func(s string) bool { return strings.Contains(s, "insufficient") },
 		named: (*view).pinnedNode},
 	{ // A node lists the scarce resource at zero.
+		mode: ModeNamedByScheduler + ".ScarceNode",
+		rule: "scheduler-names-scarce-node",
 		match: func(s string) bool {
 			return strings.Contains(s, "insufficient ")
 		},
@@ -79,21 +94,24 @@ func (v *view) schedulerMessage(pod inventory.EntityID) string {
 	return ""
 }
 
-// schedulerNamed is the object the scheduler's verdict on pod points at.
-func (v *view) schedulerNamed(pod inventory.EntityID) []inventory.EntityID {
+// schedulerNamed is the object the scheduler's verdict on pod points at,
+// with the kind of reason that named it.
+func (v *view) schedulerNamed(
+	pod inventory.EntityID,
+) (schedulerNamer, []inventory.EntityID) {
 	verdict := v.schedulerMessage(pod)
 	if verdict == "" {
-		return nil
+		return schedulerNamer{}, nil
 	}
 	for _, namer := range schedulerNamers {
 		if !namer.match(verdict) {
 			continue
 		}
 		if out := namer.named(v, pod, verdict); len(out) > 0 {
-			return out
+			return namer, out
 		}
 	}
-	return nil
+	return schedulerNamer{}, nil
 }
 
 // namedModes is ModeNamedByScheduler for an object the effect pod's
@@ -108,9 +126,10 @@ func (v *view) namedModes(
 	if !ok {
 		return nil
 	}
-	for _, named := range v.schedulerNamed(pod) {
+	namer, objects := v.schedulerNamed(pod)
+	for _, named := range objects {
 		if named == id {
-			return pseudoFailing(ModeNamedByScheduler)
+			return pseudoFailing(namer.mode)
 		}
 	}
 	return nil
@@ -228,19 +247,23 @@ func (v *view) nodesLackingResource(
 // schedulerNamesRows say that the object a pod's scheduling verdict
 // points at explains the Pending. A walk keeps one link per target, and
 // the object may be reached by the pod's own relation to it (it mounts
-// the claim, it uses the class), so the row exists for each link.
+// the claim, it uses the class), so each kind of reason has a row for
+// each link.
 func schedulerNamesRows() []Row {
 	var rows []Row
-	for _, link := range []LinkType{LinkSchedules, LinkMounts, LinkUses} {
-		rows = append(rows, Row{
-			Name: RuleSchedulerNames,
-			Cause: Side{Group: AnyGroup, Kind: AnyKind,
-				Modes: []detection.Mode{ModeNamedByScheduler}},
-			Link: link,
-			Effect: podSide(detection.ModePending,
-				detection.ModeUnschedulable),
-			Prior: 0.8,
-		})
+	for _, namer := range schedulerNamers {
+		for _, link := range []LinkType{
+			LinkSchedules, LinkMounts, LinkUses} {
+			rows = append(rows, Row{
+				Name: namer.rule,
+				Cause: Side{Group: AnyGroup, Kind: AnyKind,
+					Modes: []detection.Mode{namer.mode}},
+				Link: link,
+				Effect: podSide(detection.ModePending,
+					detection.ModeUnschedulable),
+				Prior: 0.8,
+			})
+		}
 	}
 	return rows
 }
