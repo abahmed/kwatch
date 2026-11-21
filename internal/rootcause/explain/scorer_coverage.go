@@ -15,6 +15,9 @@ import (
 // of them. A node whose every pod fails is a better cause than one
 // where one pod in twenty fails.
 func scoreCoverage(v *view, c *candidate) outcome {
+	if dnsConfigCause(c) {
+		return outcome{}
+	}
 	// An entity blamed only for itself is judged by its own finding;
 	// what its dependents do says nothing about that.
 	if len(c.others()) == 0 {

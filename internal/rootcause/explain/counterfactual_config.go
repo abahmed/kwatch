@@ -15,6 +15,9 @@ import (
 // of the failing workload itself are not counted: coverage already
 // weighs them.
 func scoreConfigElsewhere(v *view, c *candidate) outcome {
+	if dnsConfigCause(c) {
+		return outcome{}
+	}
 	if c.id.Kind != kube.KindConfigMap && c.id.Kind != kube.KindSecret {
 		return outcome{}
 	}

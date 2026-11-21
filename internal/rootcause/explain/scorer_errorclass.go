@@ -96,6 +96,9 @@ var addressKeyMarkers = []string{"host", "url", "uri", "addr", "port",
 // scoreErrorClass reads what the failures' errors say they are and asks
 // whether the candidate is the kind of object that causes that.
 func scoreErrorClass(v *view, c *candidate) outcome {
+	if dnsConfigCause(c) {
+		return outcome{}
+	}
 	effects := c.others()
 	if len(effects) == 0 || c.isSelf() {
 		return outcome{}

@@ -126,3 +126,8 @@ func TopOwner(
 ) inventory.EntityID {
 	return inventory.TopOwner(model, pod)
 }
+
+// DNSServices are the Services that front the cluster DNS.
+func DNSServices(model inventory.Reader) []inventory.EntityID {
+	return dnsServices(model)
+}
