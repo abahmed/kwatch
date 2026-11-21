@@ -67,6 +67,7 @@ var causeCategories = map[string]string{
 	"scheduler-names-claim":                 categoryScheduling,
 	"scheduler-names-affinity-target":       categoryScheduling,
 	"scheduler-names-pinned-node":           categoryScheduling,
+	"scheduler-names-cordoned-node":         categoryScheduling,
 	"scheduler-names-scarce-node":           categoryScheduling,
 	"backends-failing":                      categoryDependency,
 	"backends-not-ready":                    categoryDependency,

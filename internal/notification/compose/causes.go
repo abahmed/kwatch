@@ -51,6 +51,8 @@ var causeWords = map[string]causeWording{
 		words: "has no ready pods for the waiting pod to be placed beside"},
 	"scheduler-names-pinned-node": {
 		words: "has no room for the pod pinned to it"},
+	"scheduler-names-cordoned-node": {
+		words: "is cordoned, which leaves the waiting pod without a place"},
 	"scheduler-names-scarce-node": {
 		words: "has none left of the resource the pod asks for"},
 	"autoscaling-limit-unavailable": {

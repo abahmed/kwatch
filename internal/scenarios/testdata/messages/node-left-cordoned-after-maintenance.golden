@@ -1,13 +1,17 @@
-10:13:15 settled
-🟠 web in shop (prod-eu-1) has waited two minutes for a node because no node has enough cpu. The scheduler says "0/3 nodes are available: 1 node(s) were unschedulable, 2 Insufficient cpu. preemption: 0/3 nodes are available: 1…". Replicas that do not depend on it are healthy. To see the pods' state and events, run kubectl describe pods web- -n shop
-🟠 web in shop (prod-eu-1) has waited two minutes for a node because no node has enough cpu.
-| 🟠 **web** in **shop** (**prod-eu-1**) has waited two minutes for a node because no node has enough cpu.
+10:12:00 settled
+🟠 Node n3 (prod-eu-1) is cordoned for maintenance. The scheduler says "0/3 nodes are available: 1 node(s) were unschedulable, 2 Insufficient cpu. preemption: 0/3 nodes are available: 1…". Replicas that do not depend on it are healthy. Affected: web in shop.
+Related alerts: 2 scheduling failures
+To check the node's conditions and recent events, run kubectl describe node n3
+🟠 Node n3 (prod-eu-1) is cordoned for maintenance.
+| 🟠 Node n3 (**prod-eu-1**) is cordoned for maintenance.
 | The scheduler says
 | ```
 | 0/3 nodes are available: 1 node(s) were unschedulable, 2 Insufficient cpu. preemption: 0/3 nodes are available: 1…
 | ```
 | Replicas that do not depend on it are healthy.
-| To see the pods' state and events, run
+| Affected: **web** in **shop**.
+| Related alerts: 2 scheduling failures
+| To check the node's conditions and recent events, run
 | ```
-| kubectl describe pods web- -n shop
+| kubectl describe node n3
 | ```

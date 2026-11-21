@@ -67,6 +67,15 @@ var schedulerNamers = []schedulerNamer{
 			return strings.Contains(s, "pod affinity rules")
 		},
 		named: (*view).affinityTargets},
+	{ // A node is cordoned and the rest have no room: the cordon is what
+		// left the pod without a place.
+		mode: ModeNamedByScheduler + ".CordonedNode",
+		rule: "scheduler-names-cordoned-node",
+		match: func(s string) bool {
+			return strings.Contains(s, "were unschedulable") &&
+				strings.Contains(s, "insufficient ")
+		},
+		named: (*view).cordonedNodes},
 	{ // The pod is pinned to one node by name and that node has no room.
 		mode:  ModeNamedByScheduler + ".PinnedNode",
 		rule:  "scheduler-names-pinned-node",
@@ -266,4 +275,18 @@ func schedulerNamesRows() []Row {
 		}
 	}
 	return rows
+}
+
+// cordonedNodes are the nodes marked unschedulable.
+func (v *view) cordonedNodes(
+	_ inventory.EntityID, _ string,
+) []inventory.EntityID {
+	var out []inventory.EntityID
+	for _, id := range v.s.Model.Entities(kube.KindNode) {
+		if node, ok := v.s.Model.Entity(id); ok &&
+			attrBool(node, kube.AttrUnschedulable) {
+			out = append(out, id)
+		}
+	}
+	return out
 }
