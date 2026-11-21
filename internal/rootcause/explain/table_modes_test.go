@@ -24,7 +24,7 @@ var pseudoModes = []detection.Mode{
 	ModeAgentAbsent, ModeNoPullSecret, ModeDiskHog, ModeNoGrant,
 	ModeDependencyUnreachable, ModeBackendsNotReady, ModeKeyMissing,
 	ModePullThrottled, ModeWrongType, ModeBoundElsewhere,
-	ModeNamedByScheduler,
+	ModeNamedByScheduler, ModeClassRejects, ModeClaimPinsVolume,
 }
 
 // TestTableModesAreKnown checks every mode a row names is one some

@@ -276,7 +276,7 @@ var workloadRows = []Row{
 			detection.ModePending, detection.ModeUnschedulable,
 			detection.ModeCreating, detection.ModeCrashLoop,
 			detection.ModeCreateError, detection.ModeFailed,
-			detection.ModeVolume),
+			modeFailedMount, modeFailedAttach),
 		Prior: 0.7,
 	},
 	{
