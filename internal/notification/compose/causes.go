@@ -195,6 +195,13 @@ var causeWords = map[string]causeWording{
 	"storage-class-missing-pending": {words: "does not exist"},
 	"claim-pins-volume": {
 		words: "is bound to the volume whose deletion waits for it"},
+	"attacher-down": {
+		words: "runs the volume attacher the pods wait for and has no " +
+			"ready pods"},
+	"claim-selected-node-gone": {
+		words: "waits on a selected node that no longer exists"},
+	"claim-restores-from-snapshot": {
+		words: "is restored from the snapshot whose deletion waits for it"},
 	"storage-class-rejects": {
 		words: "sets a secret or parameter its provisioner rejects"},
 	"storage-class-rejects-pending": {

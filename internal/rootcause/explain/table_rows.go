@@ -281,7 +281,8 @@ var workloadRows = []Row{
 		Cause: Side{Kind: kube.KindPVC, Modes: []detection.Mode{
 			detection.ModeClaimFailed, detection.ModeVolume,
 			detection.ModeVolumeFull,
-			detection.ModeAttachFailed, detection.ModePending, ModeMissing}},
+			detection.ModeAttachFailed, detection.ModePending, ModeMissing,
+			detection.ModeStuckDeleting}},
 		Link: LinkMounts,
 		Effect: podSide(
 			detection.ModePending, detection.ModeUnschedulable,

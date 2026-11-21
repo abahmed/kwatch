@@ -72,6 +72,12 @@ func (PVCSchema) Describe(obj any) (Description, bool) {
 	} else {
 		attrs[AttrClassUnset] = inventory.Bool(true)
 	}
+	if snap := claimSnapshotSource(pvc); snap != "" {
+		attrs[AttrRestoreSnapshot] = inventory.Text(snap)
+	}
+	if node := claimSelectedNode(pvc); node != "" {
+		attrs[AttrSelectedNode] = inventory.Text(node)
+	}
 	if pvc.Spec.Selector != nil {
 		attrs[AttrHasSelector] = inventory.Bool(true)
 	}

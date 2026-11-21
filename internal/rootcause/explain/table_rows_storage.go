@@ -9,7 +9,8 @@ import (
 // the provisioner, the node that still holds the volume.
 var storageRows = concatRows(storageClassRows, volumeRows,
 	[]Row{conversionDownRow}, classRows,
-	pinnedVolumeRows)
+	pinnedVolumeRows, namedMissingRows, snapshotRestoreRows,
+	selectedNodeRows, attacherRows)
 
 // storageClassRows cover what a claim depends on before any pod mounts
 // it.

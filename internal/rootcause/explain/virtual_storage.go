@@ -33,6 +33,9 @@ func (v *view) storageModes(
 	}
 	switch id.Kind {
 	case kube.KindPVC:
+		if link == LinkMounts && v.selectedNodeGone(id) {
+			return pseudoFailing(ModeSelectedNodeGone), true
+		}
 		if link == LinkUses && v.claimPins(id, effect) {
 			return pseudoFailing(ModeClaimPinsVolume), true
 		}

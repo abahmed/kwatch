@@ -30,6 +30,7 @@ var pseudoModes = []detection.Mode{
 	ModeNamedByScheduler + ".AffinityTarget",
 	ModeNamedByScheduler + ".PinnedNode",
 	ModeNamedByScheduler + ".ScarceNode", ModeNamedByScheduler + ".CordonedNode", ModeClassRejects, ModeClaimPinsVolume,
+	ModeSelectedNodeGone,
 }
 
 // TestTableModesAreKnown checks every mode a row names is one some

@@ -1,12 +1,13 @@
 10:03:15 settled
-🟠 db in shop (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (didn't find available persistent volumes to bind). The scheduler says "0/2 nodes are available: 2 node(s) didn't find available persistent volumes to bind. preemption: 0/2 nodes are…". To see the pods' state and events, run kubectl describe pods db- -n shop
-🟠 db in shop (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (didn't find available persistent volumes to bind).
-| 🟠 db in **shop** (**prod-eu-1**) has waited two minutes for a node because the scheduler rejects every node (**didn't find available persistent volumes to bind**).
+🟠 db is failing in shop (prod-eu-1) after the 10:00 UTC creation of volume claim data. The scheduler says "0/2 nodes are available: 2 node(s) didn't find available persistent volumes to bind. preemption: 0/2 nodes are…". It was created shortly before. To see why the volume claim is not usable, run kubectl describe pvc data -n shop
+🟠 db is failing in shop (prod-eu-1) after the 10:00 UTC creation of volume claim data.
+| 🟠 db is failing in **shop** (**prod-eu-1**) after the 10:00 UTC creation of volume claim **data**.
 | The scheduler says
 | ```
 | 0/2 nodes are available: 2 node(s) didn't find available persistent volumes to bind. preemption: 0/2 nodes are…
 | ```
-| To see the pods' state and events, run
+| It was created shortly before.
+| To see why the volume claim is not usable, run
 | ```
-| kubectl describe pods db- -n shop
+| kubectl describe pvc data -n shop
 | ```

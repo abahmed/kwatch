@@ -49,5 +49,6 @@ func (v *view) pinnedVolumeHops(volume inventory.EntityID) []hop {
 
 // claimPins reports whether claim is bound to the stuck volume effect.
 func (v *view) claimPins(claim, effect inventory.EntityID) bool {
-	return containsID(v.boundClaims(effect), claim)
+	return containsID(v.boundClaims(effect), claim) ||
+		containsID(v.restoringClaims(effect), claim)
 }
