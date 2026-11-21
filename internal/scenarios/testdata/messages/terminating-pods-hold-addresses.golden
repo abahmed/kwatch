@@ -1,8 +1,12 @@
-10:12:15 settled
-🟠 web in shop (prod-eu-1) is failing: networking cannot be set up. Cause not found yet: its node and registry are healthy and unchanged. To see the pods' state and events, run kubectl describe pods web- -n shop
-🟠 web in shop (prod-eu-1) is failing: networking cannot be set up.
-| 🟠 **web** in **shop** (**prod-eu-1**) is failing: networking cannot be set up.
-| Cause not found yet: its node and registry are healthy and unchanged.
+10:11:00 material change
+🟠 web in shop (prod-eu-1) is failing because finalizer jobs.example.com/cleanup in jobs holds pods Terminating that keep the node's addresses. Both failing apps use it. Affected: runner in jobs.
+Related alerts: 8 stuck deleting alerts
+To see the pods' state and events, run kubectl describe pods web- -n shop
+🟠 web in shop (prod-eu-1) is failing because finalizer jobs.example.com/cleanup in jobs holds pods Terminating that keep the node's addresses.
+| 🟠 **web** in **shop** (**prod-eu-1**) is failing because finalizer **jobs.example.com/cleanup** in **jobs** holds pods Terminating that keep the node's addresses.
+| Both failing apps use it.
+| Affected: **runner** in **jobs**.
+| Related alerts: 8 stuck deleting alerts
 | To see the pods' state and events, run
 | ```
 | kubectl describe pods web- -n shop

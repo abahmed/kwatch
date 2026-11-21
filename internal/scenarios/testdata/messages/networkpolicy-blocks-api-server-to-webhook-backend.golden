@@ -1,18 +1,17 @@
 10:12:15 settled
-🔴 ledger in billing (prod-eu-1) cannot create pods because validating webhook image-guard times out on every call. It reports "Internal error occurred: failed calling webhook "image-guard.policy.example.com": failed to call webhook: Post…". Every error mentions it. Both failing apps use it. Affected: orders in shop.
+🔴 ledger is down in billing (prod-eu-1) after the 10:10 UTC creation of network policy default-deny in policy-system. It reports "Internal error occurred: failed calling webhook "image-guard.policy.example.com": failed to call webhook: Post…". It was created shortly before. Affected: orders in shop.
 Related alerts: 2 failed pod creations
-To check the webhook's backend and timeout, run kubectl get validatingwebhookconfiguration image-guard -o yaml
-🔴 ledger in billing (prod-eu-1) cannot create pods because validating webhook image-guard times out on every call.
-| 🔴 **ledger** in **billing** (**prod-eu-1**) cannot create pods because validating webhook **image-guard** times out on every call.
+To see the object's state and events, run kubectl describe deployment ledger -n billing
+🔴 ledger is down in billing (prod-eu-1) after the 10:10 UTC creation of network policy default-deny in policy-system.
+| 🔴 **ledger** is down in **billing** (**prod-eu-1**) after the 10:10 UTC creation of network policy **default-deny** in **policy-system**.
 | It reports
 | ```
 | Internal error occurred: failed calling webhook "image-guard.policy.example.com": failed to call webhook: Post…
 | ```
-| Every error mentions it.
-| Both failing apps use it.
+| It was created shortly before.
 | Affected: **orders** in **shop**.
 | Related alerts: 2 failed pod creations
-| To check the webhook's backend and timeout, run
+| To see the object's state and events, run
 | ```
-| kubectl get validatingwebhookconfiguration image-guard -o yaml
+| kubectl describe deployment ledger -n billing
 | ```

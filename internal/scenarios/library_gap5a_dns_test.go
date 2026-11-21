@@ -45,6 +45,10 @@ func gap5aBindRelease(e expectation, listen string, caller bool) scenario {
 					"registry.example.com/web:3", 1)
 				c.list(web.objects())
 				c.list(web.pod(0, "n1"))
+				// The caller dials the Service of api by its address.
+				svc := clusterService(c, "shop", "api", 8080)
+				svc.Spec.ClusterIP = "10.96.22.5"
+				c.list(svc, clusterSlice(c, "shop", "api"))
 			}
 			gapRounds(c, w, 8, 30*time.Second, func(int32) podState {
 				return notReady

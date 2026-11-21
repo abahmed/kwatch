@@ -264,6 +264,9 @@ func (v *view) objectModes(
 	if modes, ok := v.finalizerModes(id, effect, link); ok {
 		return modes, true
 	}
+	if modes, ok := v.addressHolderModes(id, effect, link); ok {
+		return modes, true
+	}
 	return v.storageModes(id, effect, link)
 }
 

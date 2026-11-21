@@ -68,6 +68,9 @@ func (v *view) callModes(
 ) []modeHealth {
 	switch id.Kind {
 	case kube.KindNetworkPolicy:
+		if modes := v.isolationModes(id, effect, link); len(modes) > 0 {
+			return modes
+		}
 		return v.blockModes(id, effect, link)
 	case kube.KindService:
 		if modes := v.serviceDefectModes(id, effect, link); len(modes) > 0 {

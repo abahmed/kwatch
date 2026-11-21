@@ -20,7 +20,7 @@ var pseudoModes = []detection.Mode{
 	pullUnexplained, pullRemoved, ModePreempting, ModeEphemeralTooLow,
 	ModePodSecurityDenied, ModeLimitRangeDenied, ModePolicyDenied,
 	ModeHoldsVolume, ModeProvisionerDown, ModeHidesNotReady, ModeRefusesPods,
-	ModeProtocolMismatch, ModeNameIsAddress, ModeFamilyMismatch,
+	ModeProtocolMismatch, ModeNameIsAddress, ModeFamilyMismatch, ModeIsolatesBackend,
 	ModeNoStorageClass, modeFailedMount, modeFailedAttach,
 	ModeAgentAbsent, ModeNoPullSecret, ModeDiskHog, ModeNoGrant, ModeRoleShort,
 	ModeDependencyUnreachable, ModeBackendsNotReady, ModeKeyMissing,

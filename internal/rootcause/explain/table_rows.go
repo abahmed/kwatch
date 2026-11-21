@@ -310,7 +310,7 @@ var specificRows = concatRows(nodeRows, workloadRows, clusterRows,
 	operatorRows, workloadConfigRows, containerRows, calledRows,
 	serviceCallRows, policyCallRows, livenessStartRows, dependencyLogRows,
 	scalingRows, sharedRows, agentRows, preemptionRows, leaseRows, runConfigRows,
-	missingServiceRows, peerRows, serviceDefectRows, initWaitRows,
+	missingServiceRows, peerRows, serviceDefectRows, isolationRows, addressHolderRows, initWaitRows,
 	finalizerRows, storageRows, policyAdmitRows, nodeDegradedRows,
 	componentRows, claimRows, helmRows)
 
