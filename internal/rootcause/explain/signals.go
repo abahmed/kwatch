@@ -20,6 +20,9 @@ const (
 	// SignalClaimWait is a pod waiting for the claim of its generic
 	// ephemeral volume, which only a full storage quota holds back.
 	SignalClaimWait Signal = "claim-wait"
+	// SignalUnauthorized is a call the API server refuses because the
+	// caller's identity is not accepted (401), not for lack of rights.
+	SignalUnauthorized Signal = "unauthorized-error"
 	// SignalMetricsAPI is an autoscaler that cannot read the metrics
 	// API: the APIService is failing even before its own status says.
 	SignalMetricsAPI Signal = "metrics-api-error"
@@ -55,6 +58,9 @@ var signalPatterns = map[Signal]*regexp.Regexp{
 	SignalDiskFull: regexp.MustCompile(`no space left on device|enospc|` +
 		`disk quota exceeded|file system is full|filesystem is full`),
 	SignalQuota: regexp.MustCompile(`exceeded quota|failed quota`),
+	SignalUnauthorized: regexp.MustCompile(`must be logged in to the ` +
+		`server|\(unauthorized\)|401 unauthorized|status code 401: ` +
+		`unauthorized`),
 	SignalClaimWait: regexp.MustCompile(`waiting for ephemeral volume ` +
 		`controller to create the persistentvolumeclaim`),
 	SignalPodSecurity: regexp.MustCompile(`violates podsecurity`),

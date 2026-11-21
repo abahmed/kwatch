@@ -140,6 +140,8 @@ func gap7bServiceAccountRecreated() scenario {
 			account := &corev1.ServiceAccount{ObjectMeta: c.meta("shop", "api")}
 			c.list(account)
 			w := c.deployment("shop", "api", "registry.example.com/api:3", 2)
+			// The pods run as the account the sync recreates.
+			w.deployment.Spec.Template.Spec.ServiceAccountName = "api"
 			c.list(w.objects())
 			c.list(w.pod(0, "n1"), w.pod(1, "n2"))
 			c.after(10 * time.Minute)

@@ -33,6 +33,17 @@ const (
 // Secret after HashSecretData replaced the certificate itself.
 const certExpiryAnnotation = "kwatch.dev/tls-not-after"
 
+// AttrTokenExpiry is when a node bootstrap token stops being accepted.
+const AttrTokenExpiry = "token.expires"
+
+// bootstrapTokenType is the type of the Secrets that hold the tokens new
+// nodes join with.
+const bootstrapTokenType = "bootstrap.kubernetes.io/token"
+
+// tokenExpiryAnnotation carries a bootstrap token's expiry on the cached
+// Secret after HashSecretData replaced the value.
+const tokenExpiryAnnotation = "kwatch.dev/token-expires"
+
 // digestBytes is how much of the HMAC each keyed digest keeps.
 const digestBytes = 8
 
@@ -84,6 +95,16 @@ func (d Digester) HashSecretData(obj any) (any, error) {
 		}
 		secret.Annotations[certExpiryAnnotation] =
 			notAfter.Format(time.RFC3339)
+	}
+	if secret.Type == bootstrapTokenType {
+		if at, err := time.Parse(time.RFC3339,
+			string(secret.Data["expiration"])); err == nil {
+			if secret.Annotations == nil {
+				secret.Annotations = map[string]string{}
+			}
+			secret.Annotations[tokenExpiryAnnotation] =
+				at.Format(time.RFC3339)
+		}
 	}
 	for key, value := range secret.Data {
 		secret.Data[key] = []byte(d.digest(value))
@@ -155,6 +176,15 @@ func (s SecretSchema) Describe(obj any) (Description, bool) {
 	if raw := secret.Annotations[certExpiryAnnotation]; raw != "" {
 		if notAfter, err := time.Parse(time.RFC3339, raw); err == nil {
 			attrs[AttrCertExpiry] = inventory.Time(notAfter)
+		}
+	}
+	raw := secret.Annotations[tokenExpiryAnnotation]
+	if raw == "" && secret.Type == bootstrapTokenType {
+		raw = string(secret.Data["expiration"])
+	}
+	if raw != "" {
+		if at, err := time.Parse(time.RFC3339, raw); err == nil {
+			attrs[AttrTokenExpiry] = inventory.Time(at)
 		}
 	}
 	return Description{

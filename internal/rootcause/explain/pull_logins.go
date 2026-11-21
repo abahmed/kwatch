@@ -172,6 +172,9 @@ func (v *view) registryClass(
 		return "", false
 	}
 	class := classifyRegistryPull(text)
+	if class == pullImage && v.removedImage(text) {
+		return pullRemoved, true
+	}
 	if class == pullImage || class == pullNodeThrottled ||
 		v.pullSecretsMissing(effect, class) ||
 		v.pullSecretsWrongType(effect, class) ||

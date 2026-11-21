@@ -9,14 +9,23 @@ import (
 
 // clusterRows cover shared services every workload depends on.
 var clusterRows = concatRows(schedulerNamesRows(), []Row{
-	pullWithoutSecretRow, diskHogRow, accountNoGrantRow,
+	pullWithoutSecretRow, diskHogRow, accountNoGrantRow, roleShortRow,
+	accountReplacedRow, tokenExpiredRow,
 	{
 		Name: "registry-refuses",
 		Cause: Side{Kind: kube.KindRegistry, Modes: []detection.Mode{
-			pullAuth, pullRateLimit, pullServer, pullTLS, pullNetwork,
-			pullStatus, pullUnexplained}},
+			pullAuth, pullRateLimit, pullServer, pullNetwork,
+			pullStatus, pullUnexplained, pullRemoved}},
 		Link: LinkPulls, Effect: podSide(detection.ModeImagePull), Prior: 0.7,
 		MinCovered: 2,
+	},
+	{
+		// A certificate the nodes reject is the registry's, however
+		// many images fail: no image can cause it.
+		Name: "registry-refuses",
+		Cause: Side{Kind: kube.KindRegistry,
+			Modes: []detection.Mode{pullTLS}},
+		Link: LinkPulls, Effect: podSide(detection.ModeImagePull), Prior: 0.7,
 	},
 	{
 		// The cluster DNS servers fail with the service they make

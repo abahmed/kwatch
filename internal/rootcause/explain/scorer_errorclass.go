@@ -31,6 +31,9 @@ type errorClass struct {
 	// change is their creation: a first rollout has no previous
 	// template to blame for a refused connection.
 	newMisfits []inventory.Kind
+	// vetoes are kinds the class rules out: the words are the
+	// cluster's own answer, so what the failures share is no cause.
+	vetoes []inventory.Kind
 }
 
 var (
@@ -52,6 +55,17 @@ var errorClasses = []errorClass{
 			"cannot parse", "yaml:"},
 		fits: configKinds},
 	programDefect,
+	{name: "an API server that fails its own request",
+		markers: []string{"internal error occurred: failed to decrypt",
+			"internal error occurred: authorization webhook"},
+		vetoes: []inventory.Kind{KindFailureSignature},
+		misfits: []inventory.Kind{kube.KindNode,
+			kube.KindZone, kube.KindNodePool, kube.KindDeployment,
+			kube.KindSecret, kube.KindConfigMap}},
+	{name: "a certificate the node does not trust",
+		markers: []string{"signed by unknown authority",
+			"failed to verify certificate"},
+		fits: []inventory.Kind{kube.KindRegistry}, misfits: codeKinds},
 	{name: "a connection that does not arrive",
 		markers: connectionMarkers,
 		fits:    networkKinds, misfits: configKinds, addressKeys: true,
@@ -120,6 +134,10 @@ func scoreErrorClass(v *view, c *candidate) outcome {
 
 func (v *view) classOutcome(class errorClass, c *candidate) outcome {
 	switch {
+	case slices.Contains(class.vetoes, c.id.Kind):
+		return outcome{code: rootcause.ProofErrorMisfits,
+			veto: "the errors describe " + class.name +
+				", which only the API server can explain"}
 	case slices.Contains(class.fits, c.id.Kind):
 		return outcome{weight: ErrorClassWeight,
 			code: rootcause.ProofErrorFits,

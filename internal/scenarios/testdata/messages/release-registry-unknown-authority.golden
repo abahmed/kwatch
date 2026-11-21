@@ -1,13 +1,13 @@
 10:03:15 settled
-🟠 api is failing in shop (prod-eu-1) after the 10:02 UTC release of registry.corp.example/shop/api:2.6. The previous image was registry.example.com/api:2.5. It fails with "Failed to pull image "registry.corp.example/shop/api:2.6": failed to pull and unpack image…". Fix: change the image of container app in deployment/api. To see why the container cannot start, run kubectl describe pods api- -n shop
-🟠 api is failing in shop (prod-eu-1) after the 10:02 UTC release of registry.corp.example/shop/api:2.6.
-| 🟠 **api** is failing in **shop** (**prod-eu-1**) after the 10:02 UTC release of registry.corp.example/shop/api:2.6.
-| The previous image was registry.example.com/api:2.5.
+🟠 api in shop (prod-eu-1) cannot pull its image because registry registry.corp.example the registry's certificate is not trusted. It fails with "Failed to pull image "registry.corp.example/shop/api:2.6": failed to pull and unpack image…". The error mentions it. Replicas that do not depend on it are healthy. To see why the container cannot start, run kubectl describe pods api- -n shop
+🟠 api in shop (prod-eu-1) cannot pull its image because registry registry.corp.example the registry's certificate is not trusted.
+| 🟠 **api** in **shop** (**prod-eu-1**) cannot pull its image because registry **registry.corp.example** the registry's certificate is not trusted.
 | It fails with
 | ```
 | Failed to pull image "registry.corp.example/shop/api:2.6": failed to pull and unpack image…
 | ```
-| Fix: change the image of container app in deployment/api.
+| The error mentions it.
+| Replicas that do not depend on it are healthy.
 | To see why the container cannot start, run
 | ```
 | kubectl describe pods api- -n shop

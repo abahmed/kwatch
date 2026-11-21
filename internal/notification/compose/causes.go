@@ -140,6 +140,13 @@ var causeWords = map[string]causeWording{
 			"those nodes are evicted"},
 	"account-has-no-grant": {
 		words: "is named by no role binding, so nothing is granted to it"},
+	"role-lacks-grant": {
+		words: "does not grant the access its account is refused"},
+	"account-replaced": {
+		words: "was deleted and created again, so the tokens of " +
+			"running pods are no longer accepted"},
+	"join-token-expired": {
+		words: "has expired, so the nodes a scale-up adds cannot join"},
 	"quota-exhausted": {words: "is used up"},
 	"resource-claim-unallocated": {
 		words: "has no device allocated, so its pod cannot start"},

@@ -1,17 +1,12 @@
 10:03:15 settled
-🟠 api is failing in shop (prod-eu-1), likely caused by the 10:02 UTC release. The release changed the LOG. It reports "Error creating: pods "api-9ec50474-" is forbidden: failed quota: compute-quota: must specify limits.cpu for: app…". Fix: correct env var LOG of container app in deployment/api.
-Related alerts: 1 failed pod creation
-To see the rollout state, run kubectl rollout status deployment/api -n shop
-🟠 api is failing in shop (prod-eu-1), likely caused by the 10:02 UTC release.
-| 🟠 **api** is failing in **shop** (**prod-eu-1**), likely caused by the 10:02 UTC release.
-| The release changed the LOG.
-| It reports
+🟠 Quota compute-quota in shop (prod-eu-1) is failing: refuses the creates that name it. Affected: api.
+Related alerts: 1 failed pod creation, 1 replica failure alert
+To see the object's state and events, run kubectl describe deployment api -n shop
+🟠 Quota compute-quota in shop (prod-eu-1) is failing: refuses the creates that name it.
+| 🟠 Quota **compute-quota** in **shop** (**prod-eu-1**) is failing: refuses the creates that name it.
+| Affected: **api**.
+| Related alerts: 1 failed pod creation, 1 replica failure alert
+| To see the object's state and events, run
 | ```
-| Error creating: pods "api-9ec50474-" is forbidden: failed quota: compute-quota: must specify limits.cpu for: app…
-| ```
-| Fix: correct env var LOG of container app in deployment/api.
-| Related alerts: 1 failed pod creation
-| To see the rollout state, run
-| ```
-| kubectl rollout status deployment/api -n shop
+| kubectl describe deployment api -n shop
 | ```

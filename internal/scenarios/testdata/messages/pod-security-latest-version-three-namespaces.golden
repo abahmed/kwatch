@@ -1,11 +1,11 @@
 10:11:15 roll-up
-🟠 kwatch (prod-eu-1) found three new problems at the same time. app is failing in team-a after the 10:10 UTC release of registry.example.com/app:2. app is failing in team-b after the 10:10 UTC release of registry.example.com/app:2. app is failing in team-c after the 10:10 UTC release of registry.example.com/app:2. Each one alerts on its own when it changes or resolves.
+🟠 kwatch (prod-eu-1) found three new problems at the same time. app in team-a cannot create pods because namespace team-a enforces a Pod Security level the new pods do not meet. app in team-b cannot create pods because namespace team-b enforces a Pod Security level the new pods do not meet. app in team-c cannot create pods because namespace team-c enforces a Pod Security level the new pods do not meet. Each one alerts on its own when it changes or resolves.
 🟠 kwatch (prod-eu-1) found three new problems at the same time.
 | 🟠 **kwatch roll-up** · prod-eu-1 — 3 new problems at the same time
 |
 | **Problems**
-| - **app** — failing in **team-a** after the 10:10 UTC release of registry.example.com/app:2
-| - **app** — failing in **team-b** after the 10:10 UTC release of registry.example.com/app:2
-| - **app** — failing in **team-c** after the 10:10 UTC release of registry.example.com/app:2
+| - **app** in **team-a** cannot create pods because namespace **team-a** enforces a Pod Security level the new pods do not meet
+| - **app** in **team-b** cannot create pods because namespace **team-b** enforces a Pod Security level the new pods do not meet
+| - **app** in **team-c** cannot create pods because namespace **team-c** enforces a Pod Security level the new pods do not meet
 |
 | *Each one alerts on its own when it changes or resolves.*

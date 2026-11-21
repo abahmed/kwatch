@@ -1,14 +1,11 @@
-10:11:15 settled
-🟠 operator in billing (prod-eu-1) and two other workloads keep crashing with the same error. It fails with "pods is forbidden: User "system:serviceaccount:operator" cannot list resource "pods" in API group "": Internal error…". Its last run lasted ten seconds; two restarts since its pod was created about one hour ago. Affected: operator in media; operator in shop. To read the output of the last crash, run kubectl logs deploy/operator -c app -n billing --previous
-🟠 operator in billing (prod-eu-1) and two other workloads keep crashing with the same error.
-| 🟠 **operator** in **billing** (**prod-eu-1**) and two other workloads keep crashing with the same error.
-| It fails with
-| ```
-| pods is forbidden: User "system:serviceaccount:operator" cannot list resource "pods" in API group "": Internal error…
-| ```
-| Its last run lasted ten seconds; two restarts since its pod was created about one hour ago.
-| Affected: **operator** in **media**; **operator** in **shop**.
-| To read the output of the last crash, run
-| ```
-| kubectl logs deploy/operator -c app -n billing --previous
-| ```
+10:11:15 roll-up
+🟠 kwatch (prod-eu-1) found three new problems at the same time. operator in billing keeps crashing. operator in media keeps crashing. operator in shop keeps crashing. Each one alerts on its own when it changes or resolves.
+🟠 kwatch (prod-eu-1) found three new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 3 new problems at the same time
+|
+| **Problems**
+| - **operator** in **billing** keeps crashing
+| - **operator** in **media** keeps crashing
+| - **operator** in **shop** keeps crashing
+|
+| *Each one alerts on its own when it changes or resolves.*

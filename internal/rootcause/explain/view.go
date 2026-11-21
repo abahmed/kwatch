@@ -37,7 +37,9 @@ type view struct {
 	// the entity: when one starts failing, the walk can reach further.
 	gates map[inventory.EntityID][]inventory.EntityID
 	// dnsSeen memoises dnsSignalled; nil until it is computed.
-	dnsSeen *bool
+	// removedImages memoises removedImage by image.
+	removedImages map[string]int
+	dnsSeen       *bool
 	// rbac memoises changedRBAC; nil until it is computed.
 	rbac *[]inventory.EntityID
 	// removed memoises removedOf per kind; nil until it is computed.
