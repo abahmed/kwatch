@@ -27,12 +27,13 @@ var sharedRows = []Row{
 		// The kubelet of a node refuses a pod by its own accounting
 		// (OutOfcpu, OutOfmemory): the refusal is about that node, so
 		// one workload is enough.
-		Name: RuleAdmissionRejectedOnNode,
+		Name: RuleNodeRefusesPods,
 		Cause: Side{Kind: kube.KindNode,
 			Modes: []detection.Mode{ModeRefusesPods}},
 		Link: LinkRunsOn,
 		Effect: Side{Kind: kube.KindPod,
-			Modes: []detection.Mode{detection.ModeAdmissionRejected}},
+			Modes: []detection.Mode{detection.ModeAdmissionRejected,
+				detection.ModeResizeDeferred}},
 		Prior: 0.6,
 	},
 }

@@ -169,8 +169,8 @@ var causeWords = map[string]causeWording{
 	"rollout-unschedulable": {
 		words: "rolled out a change shortly before that no node can take"},
 	"routed-missing": {words: "does not exist"},
-	"admission-rejected-on-node": {
-		words: "has no room left by its own count, so its kubelet refuses pods"},
+	"node-refuses-pods": {
+		words: "has no room for the pod by its own kubelet's count"},
 	"headless-hides-not-ready-peers": {
 		words: "answers only for ready pods, which wait for each other's names"},
 	"missing-service-called":     {words: "does not exist"},

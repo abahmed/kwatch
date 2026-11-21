@@ -1,10 +1,10 @@
 10:06:15 roll-up
-🟠 kwatch (prod-eu-1) found two new problems at the same time. logship in observability is failing because node n2 has no room left by its own count, so its kubelet refuses pods. logship in observability is failing: Kubernetes reported FailedDaemonPod. Each one alerts on its own when it changes or resolves.
+🟠 kwatch (prod-eu-1) found two new problems at the same time. logship in observability is failing because node n2 has no room for the pod by its own kubelet's count. logship in observability is failing: Kubernetes reported FailedDaemonPod. Each one alerts on its own when it changes or resolves.
 🟠 kwatch (prod-eu-1) found two new problems at the same time.
 | 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
 |
 | **Problems**
-| - **logship** in **observability** — failing because node n2 has no room left by its own count, so its kubelet refuses pods
+| - **logship** in **observability** — failing because node n2 has no room for the pod by its own kubelet's count
 | - **logship** (**observability**) — Kubernetes reported FailedDaemonPod
 |
 | *Each one alerts on its own when it changes or resolves.*

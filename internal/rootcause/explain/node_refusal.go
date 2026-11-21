@@ -10,12 +10,13 @@ import (
 
 // ModeRefusesPods is the pseudo mode of a node whose own kubelet
 // refused a pod at admission for want of a resource it counts itself
-// (OutOfcpu, OutOfmemory, OutOfpods): the refusal is about that node.
+// (OutOfcpu, OutOfmemory, OutOfpods), or deferred a resize for want of
+// room: the refusal is about that node.
 const ModeRefusesPods detection.Mode = "RefusesPods"
 
-// RuleAdmissionRejectedOnNode names the row for a pod a node's kubelet
+// RuleNodeRefusesPods names the row for a pod a node's kubelet
 // refused at admission.
-const RuleAdmissionRejectedOnNode = "admission-rejected-on-node"
+const RuleNodeRefusesPods = "node-refuses-pods"
 
 // refusalState is ModeRefusesPods for the node a failing pod was
 // refused by, and nothing for any other entity.
@@ -35,8 +36,9 @@ func (v *view) refusalState(id, effect inventory.EntityID) state {
 // want of a resource.
 func (v *view) refusedAt(pod inventory.EntityID) bool {
 	for _, f := range v.s.Findings[pod] {
-		if f.Mode.Within(detection.ModeAdmissionRejected) &&
-			strings.Contains(string(f.Mode), ".OutOf") {
+		if f.Mode.Within(detection.ModeResizeDeferred) ||
+			f.Mode.Within(detection.ModeAdmissionRejected) &&
+				strings.Contains(string(f.Mode), ".OutOf") {
 			return true
 		}
 	}
@@ -51,7 +53,7 @@ func refusedByNode(c *candidate, effects []inventory.EntityID) bool {
 		return false
 	}
 	for _, effect := range effects {
-		if c.covers[effect].match.row.Name != RuleAdmissionRejectedOnNode {
+		if c.covers[effect].match.row.Name != RuleNodeRefusesPods {
 			return false
 		}
 	}

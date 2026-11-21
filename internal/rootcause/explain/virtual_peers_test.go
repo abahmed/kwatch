@@ -26,7 +26,7 @@ var peerRowCases = []rowCase{
 }
 
 var refusalRowCases = []rowCase{
-	{row: "admission-rejected-on-node", want: "node//n1",
+	{row: "node-refuses-pods", want: "node//n1",
 		build: func(f *fixture) inventory.EntityID {
 			nodes := f.nodes("zone-a", "n1", "n2")
 			pods := f.workload("ops", "agent", 1, nodes[0])
