@@ -1,10 +1,11 @@
-10:12:15 roll-up
-🟠 kwatch (prod-eu-1) found two new problems at the same time. invoices in billing is failing: networking cannot be set up. web in shop is failing: networking cannot be set up. Each one alerts on its own when it changes or resolves.
-🟠 kwatch (prod-eu-1) found two new problems at the same time.
-| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
-|
-| **Problems**
-| - **invoices** (**billing**) — networking cannot be set up
-| - **web** (**shop**) — networking cannot be set up
-|
-| *Each one alerts on its own when it changes or resolves.*
+10:12:15 settled
+🟠 net-agent is failing in kube-system (prod-eu-1) after the 10:00 UTC release. The release changed the template. Replicas that do not depend on it are healthy. Affected: invoices in billing; web in shop. To see the rollout state, run kubectl rollout status daemonset/net-agent -n kube-system
+🟠 net-agent is failing in kube-system (prod-eu-1) after the 10:00 UTC release.
+| 🟠 **net-agent** is failing in **kube-system** (**prod-eu-1**) after the 10:00 UTC release.
+| The release changed the template.
+| Replicas that do not depend on it are healthy.
+| Affected: **invoices** in **billing**; **web** in **shop**.
+| To see the rollout state, run
+| ```
+| kubectl rollout status daemonset/net-agent -n kube-system
+| ```

@@ -65,7 +65,8 @@ var agentRows = []Row{
 		Link: LinkNodeAgent,
 		Effect: Side{Kind: kube.KindPod, Signal: SignalNodeAgent,
 			Modes: append([]detection.Mode{modeFailedMount,
-				modeFailedAttach}, agentEffectModes...)},
+				modeFailedAttach, detection.ModeNetworkCNINotReady},
+				agentEffectModes...)},
 		Prior: 0.65,
 	},
 }
