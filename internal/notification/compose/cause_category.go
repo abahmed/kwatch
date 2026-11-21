@@ -81,6 +81,7 @@ var causeCategories = map[string]string{
 	"conversion-webhook-down":               categoryAdmission,
 	"claim-pins-pod":                        categoryStorage,
 	"cluster-dns-failing":                   categoryDNS,
+	"dns-servers-not-resolving":             categoryDNS,
 	"dns-config-changed":                    categoryConfigChange,
 	"dns-config-changed-resolver":           categoryConfigChange,
 	"dns-service-changed":                   categoryConfigChange,

@@ -72,6 +72,7 @@ var causeWords = map[string]causeWording{
 	"dns-role-changed":             {words: "no longer grants the access it needs"},
 	"dns-role-changed-resolver":    {words: "no longer grants the access it needs"},
 	"cluster-dns-servers":          {words: "is not resolving names"},
+	"dns-servers-not-resolving":    {words: "is not resolving names"},
 	"cluster-dns-server-workload":  {words: "is not resolving names"},
 	"config-missing-or-changed":    {words: "does not exist"},
 	"configmap-missing-or-changed": {words: "does not exist"},

@@ -44,6 +44,7 @@ func gap5bCoreDNSPodRemoved() scenario {
 				c.after(time.Minute)
 			}
 			for _, w := range fleet {
+				c.update(w.pod(0, "n1"))
 				w.setReady(2)
 				c.update(w.objects())
 			}

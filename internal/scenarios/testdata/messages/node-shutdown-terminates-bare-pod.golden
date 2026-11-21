@@ -1,9 +1,0 @@
-10:06:15 settled
-🟠 Pod tools-shell in shop (prod-eu-1) has failed. It fails with "Pod was terminated in response to imminent node shutdown." To see the object's state and events, run kubectl describe pod tools-shell -n shop
-🟠 Pod tools-shell in shop (prod-eu-1) has failed.
-| 🟠 Pod **tools-shell** in **shop** (**prod-eu-1**) has failed.
-| It fails with `Pod was terminated in response to imminent node shutdown.`
-| To see the object's state and events, run
-| ```
-| kubectl describe pod tools-shell -n shop
-| ```

@@ -305,7 +305,7 @@ var workloadRows = []Row{
 
 // specificRows are the precise rows for the most common failures.
 var specificRows = concatRows(nodeRows, workloadRows, clusterRows,
-	controlPlaneRows, apiLatencyRows, accessRows, dnsConfigRows, trafficRows,
+	controlPlaneRows, apiLatencyRows, accessRows, dnsConfigRows, dnsServingRows, trafficRows,
 	nodeLifecycleRows,
 	operatorRows, workloadConfigRows, containerRows, calledRows,
 	serviceCallRows, policyCallRows, livenessStartRows, dependencyLogRows,

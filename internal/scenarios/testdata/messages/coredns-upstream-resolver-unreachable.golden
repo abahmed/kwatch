@@ -1,16 +1,16 @@
 10:11:15 settled
-🟠 invoices in billing (prod-eu-1) keeps crashing because cluster DNS is not resolving names. It fails with "Get "https://api.partner.example/v1": dial tcp: lookup api.partner.example on 10.96.0.10:53: server misbehaving". Both failing apps use it. Affected: cart in shop. To see the cluster DNS pods, run kubectl -n kube-system get pods -l k8s-app=kube-dns
+🟠 coredns in kube-system (prod-eu-1) is failing because it is not resolving names. It fails with "Get "https://api.partner.example/v1": dial tcp: lookup api.partner.example on 10.96.0.10:53: server misbehaving". Both failing apps use it. Affected: invoices in billing; cart in shop. To read the output of the last crash, run kubectl logs deploy/invoices -c app -n billing --previous
 Proof: both replicas fail, on 2 nodes (invoices); both replicas fail, on 2 nodes (cart).
-🟠 invoices in billing (prod-eu-1) keeps crashing because cluster DNS is not resolving names.
-| 🟠 **invoices** in **billing** (**prod-eu-1**) keeps crashing because cluster DNS is not resolving names.
+🟠 coredns in kube-system (prod-eu-1) is failing because it is not resolving names.
+| 🟠 **coredns** in **kube-system** (**prod-eu-1**) is failing because it is not resolving names.
 | It fails with
 | ```
 | Get "https://api.partner.example/v1": dial tcp: lookup api.partner.example on 10.96.0.10:53: server misbehaving
 | ```
 | Both failing apps use it.
-| Affected: **cart** in **shop**.
-| To see the cluster DNS pods, run
+| Affected: **invoices** in **billing**; **cart** in **shop**.
+| To read the output of the last crash, run
 | ```
-| kubectl -n kube-system get pods -l k8s-app=kube-dns
+| kubectl logs deploy/invoices -c app -n billing --previous
 | ```
 | *Proof: both replicas fail, on 2 nodes (invoices); both replicas fail, on 2 nodes (cart).*

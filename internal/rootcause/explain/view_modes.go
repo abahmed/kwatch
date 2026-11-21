@@ -124,6 +124,9 @@ func (v *view) virtualModes(
 	if modes := v.sharedServiceModes(id, effect, link); len(modes) > 0 {
 		return modes
 	}
+	if modes := v.dnsServingModes(id, effect, link); len(modes) > 0 {
+		return modes
+	}
 	switch id.Kind {
 	case kube.KindZone, kube.KindNodePool:
 		return v.groupModes(id)
@@ -168,7 +171,8 @@ func (v *view) sharedServiceModes(
 			return pseudoFailing(ModePullThrottled)
 		}
 	case kindClusterDNS:
-		if v.resolutionFailing(effect, link) {
+		if v.resolutionFailing(effect, link) &&
+			!(link == LinkResolvesVia && v.dnsServersReady()) {
 			return pseudoFailing(ModeResolution)
 		}
 	case kube.KindAPIService:

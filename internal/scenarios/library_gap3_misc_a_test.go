@@ -237,7 +237,7 @@ func gap3NodeLostMultiAttach() scenario {
 // kubelet's node shutdown handling and end Failed. With bare a pod that
 // no controller owns is among them.
 func gap3Shutdown(c *cluster, bare bool) {
-	_, fleet := gapNodeFleet(c)
+	n1, fleet := gapNodeFleet(c)
 	message := "Pod was terminated in response to imminent node shutdown."
 	var tools *corev1.Pod
 	if bare {
@@ -249,6 +249,7 @@ func gap3Shutdown(c *cluster, bare bool) {
 	c.after(5 * time.Minute)
 	for _, w := range fleet {
 		pod := w.pod(0, "n1", g2Failed("Terminated", message))
+		nodeDisruption(c, pod, "TerminationByKubelet", message)
 		c.update(pod)
 		gapKubelet(c, pod, "NodeShutdown", message, 1)
 		w.setReady(1)
@@ -257,9 +258,19 @@ func gap3Shutdown(c *cluster, bare bool) {
 	if bare {
 		failed := tools.DeepCopy()
 		g2Failed("Terminated", message)(c, failed)
+		nodeDisruption(c, failed, "TerminationByKubelet", message)
 		c.update(failed)
 	}
 	c.after(30 * time.Second)
+	rebooting := last(c, n1)
+	setNodeCondition(rebooting, corev1.NodeReady, corev1.ConditionFalse,
+		"KubeletNotReady", "container runtime is down", c.now)
+	c.update(rebooting)
+	c.after(time.Minute)
+	ready := last(c, n1)
+	setNodeCondition(ready, corev1.NodeReady, corev1.ConditionTrue,
+		"KubeletReady", "kubelet is posting ready status", c.now)
+	c.update(ready)
 	for i, w := range fleet {
 		c.remove(w.pod(0, "n1"))
 		c.create(w.pod(2+i, "n2", startedNow))
