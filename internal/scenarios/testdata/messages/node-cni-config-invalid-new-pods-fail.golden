@@ -1,9 +1,9 @@
 10:12:15 settled
-🟠 api in shop (prod-eu-1) is failing: networking cannot be set up. Cause not found yet: its node and registry are healthy and unchanged. To see the pods' state and events, run kubectl describe pods api- -n shop
-🟠 api in shop (prod-eu-1) is failing: networking cannot be set up.
-| 🟠 **api** in **shop** (**prod-eu-1**) is failing: networking cannot be set up.
-| Cause not found yet: its node and registry are healthy and unchanged.
-| To see the pods' state and events, run
+🟠 api in shop (prod-eu-1) is failing because node n3 is what the failing workloads have in common, though it looks healthy. Replicas that do not depend on it are healthy. To check the node's conditions and recent events, run kubectl describe node n3
+🟠 api in shop (prod-eu-1) is failing because node n3 is what the failing workloads have in common, though it looks healthy.
+| 🟠 **api** in **shop** (**prod-eu-1**) is failing because node n3 is what the failing workloads have in common, though it looks healthy.
+| Replicas that do not depend on it are healthy.
+| To check the node's conditions and recent events, run
 | ```
-| kubectl describe pods api- -n shop
+| kubectl describe node n3
 | ```

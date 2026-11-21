@@ -13,15 +13,11 @@
 | ```
 | kubectl logs deploy/kube-scheduler -c app -n kube-system --previous
 | ```
-10:02:45 settled
-🔴 The scheduler (prod-eu-1) has been failing for about two minutes. It reports "leader lease not renewed for 3m5s". To see the scheduler pods, run kubectl -n kube-system get pods -l component=kube-scheduler
-🔴 The scheduler (prod-eu-1) has been failing for about two minutes.
-| 🔴 The scheduler (**prod-eu-1**) has been failing for about two minutes.
-| It reports `leader lease not renewed for 3m5s`.
-| To see the scheduler pods, run
-| ```
-| kubectl -n kube-system get pods -l component=kube-scheduler
-| ```
+10:03:00 cause revised
+🔴 Cause now known: The scheduler (prod-eu-1) has been failing for about two minutes. It reports "leader lease not renewed for 3m5s". The error mentions it.
+🔴 Cause now known: The scheduler (prod-eu-1) has been failing for about two minutes.
+| 🔴 Cause now known: The scheduler (**prod-eu-1**) has been failing for about two minutes.
+| It reports `leader lease not renewed for 3m5s`. The error mentions it.
 10:04:00 material change
 🔴 The scheduler (prod-eu-1) is now also affecting invoices in billing; cart and search in shop: they have not been looked at by the scheduler for two minutes.
 🔴 The scheduler (prod-eu-1) is now also affecting invoices in billing; cart and search in shop: they have not been looked at by the scheduler for two minutes.

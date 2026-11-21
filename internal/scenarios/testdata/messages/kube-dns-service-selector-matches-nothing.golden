@@ -1,29 +1,22 @@
 10:11:15 settled
-🟠 invoices in billing (prod-eu-1) keeps crashing because cluster DNS is not resolving names. It fails with "dial tcp: lookup db.shop.svc.cluster.local on 10.96.0.10:53: i/o timeout". Both failing apps use it. Affected: cart in shop. To see the cluster DNS pods, run kubectl -n kube-system get pods -l k8s-app=kube-dns
+🟠 Service kube-dns in kube-system (prod-eu-1) selects no pods. Its selector changed at 10:10 UTC from app=kube-dns to k8s-app=kube-dns-v2. Both failing apps use it. Affected: invoices in billing; cart in shop. Fix: correct the selector of service/kube-dns so it matches the pods (now k8s-app=kube-dns-v2).
+Related alerts: 4 crash loops
+To read the output of the last crash, run kubectl logs deploy/invoices -c app -n billing --previous
 Proof: both replicas fail, on 2 nodes (invoices); both replicas fail, on 2 nodes (cart).
-🟠 invoices in billing (prod-eu-1) keeps crashing because cluster DNS is not resolving names.
-| 🟠 **invoices** in **billing** (**prod-eu-1**) keeps crashing because cluster DNS is not resolving names.
-| It fails with `dial tcp: lookup db.shop.svc.cluster.local on 10.96.0.10:53: i/o timeout`.
-| Both failing apps use it.
-| Affected: **cart** in **shop**.
-| To see the cluster DNS pods, run
-| ```
-| kubectl -n kube-system get pods -l k8s-app=kube-dns
-| ```
-| *Proof: both replicas fail, on 2 nodes (invoices); both replicas fail, on 2 nodes (cart).*
-10:11:30 material change
-🔴 Cluster DNS (prod-eu-1) has been failing for about two minutes now. This is now critical.
-🔴 Cluster DNS (prod-eu-1) has been failing for about two minutes now.
-| 🔴 Cluster DNS (**prod-eu-1**) has been failing for about two minutes now.
-| This is now critical.
-10:12:15 settled
-🟠 Service kube-dns in kube-system (prod-eu-1) selects no pods. Its selector changed at 10:10 UTC from app=kube-dns to k8s-app=kube-dns-v2. The apps that use it failed soon after it changed. Fix: correct the selector of service/kube-dns so it matches the pods (now k8s-app=kube-dns-v2). To see the object's state and events, run kubectl describe service kube-dns -n kube-system
 🟠 Service kube-dns in kube-system (prod-eu-1) selects no pods.
 | 🟠 Service **kube-dns** in **kube-system** (**prod-eu-1**) selects no pods.
 | Its selector changed at 10:10 UTC from app=**kube-dns** to k8s-app=kube-dns-v2.
-| The apps that use it failed soon after it changed.
+| Both failing apps use it.
+| Affected: **invoices** in **billing**; **cart** in **shop**.
 | Fix: correct the selector of service/kube-dns so it matches the pods (now k8s-app=kube-dns-v2).
-| To see the object's state and events, run
+| Related alerts: 4 crash loops
+| To read the output of the last crash, run
 | ```
-| kubectl describe service kube-dns -n kube-system
+| kubectl logs deploy/invoices -c app -n billing --previous
 | ```
+| *Proof: both replicas fail, on 2 nodes (invoices); both replicas fail, on 2 nodes (cart).*
+10:11:30 material change
+🔴 Service kube-dns in kube-system (prod-eu-1) is now also affecting cluster DNS: it has been failing for about two minutes. This is now critical.
+🔴 Service kube-dns in kube-system (prod-eu-1) is now also affecting cluster DNS: it has been failing for about two minutes.
+| 🔴 Service **kube-dns** in **kube-system** (**prod-eu-1**) is now also affecting cluster DNS: it has been failing for about two minutes.
+| This is now critical.

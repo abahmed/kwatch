@@ -1,10 +1,10 @@
 10:12:15 settled
-🟠 coredns is failing in kube-system (prod-eu-1) after the 10:10 UTC change to config map coredns. Key Corefile changed. It fails with "[FATAL] plugin/loop: Loop (127.0.0.1:41738 -> :53) detected for zone ".", see…". Every error mentions it. Affected: invoices in billing; cart in shop. To check the object the pods depend on, run kubectl get configmap coredns -n kube-system -o yaml
+🟠 coredns is failing in kube-system (prod-eu-1) after the 10:10 UTC change to config map coredns. Key Corefile changed. It fails with "[FATAL] plugin/loop: Loop (127.0.0.1:41738 -> :53) detected for zone ".", see…". Affected: invoices in billing; cart in shop. To check the object the pods depend on, run kubectl get configmap coredns -n kube-system -o yaml
 Proof: both replicas fail, on 2 nodes (invoices); both replicas fail, on 2 nodes (coredns); both replicas fail, on 2 nodes (cart).
 🟠 coredns is failing in kube-system (prod-eu-1) after the 10:10 UTC change to config map coredns.
 | 🟠 **coredns** is failing in **kube-system** (**prod-eu-1**) after the 10:10 UTC change to config map **coredns**.
 | Key Corefile changed.
-| It fails with `[FATAL] plugin/loop: Loop (127.0.0.1:41738 -> :53) detected for zone ".", see…`. Every error mentions it.
+| It fails with `[FATAL] plugin/loop: Loop (127.0.0.1:41738 -> :53) detected for zone ".", see…`.
 | Affected: **invoices** in **billing**; **cart** in **shop**.
 | To check the object the pods depend on, run
 | ```

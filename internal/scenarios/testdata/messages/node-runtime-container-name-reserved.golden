@@ -1,13 +1,13 @@
 10:11:15 settled
-🟠 api in shop (prod-eu-1) cannot start (create container error). Cause not found yet: its node and registry are healthy and unchanged. It fails with "failed to reserve container name "app_api-0_shop_6a1c_0": name "app_api-0_shop_6a1c_0" is reserved for "4f1c0e2a"". To see why the container cannot start, run kubectl describe pods api- -n shop
-🟠 api in shop (prod-eu-1) cannot start (create container error).
-| 🟠 **api** in **shop** (**prod-eu-1**) cannot start (create container error).
-| Cause not found yet: its node and registry are healthy and unchanged.
+🟠 api in shop (prod-eu-1) cannot start (create container error) because node n3 is what the failing workloads have in common, though it looks healthy. It fails with "failed to reserve container name "app_api-0_shop_6a1c_0": name "app_api-0_shop_6a1c_0" is reserved for "4f1c0e2a"". Replicas that do not depend on it are healthy. To check the node's conditions and recent events, run kubectl describe node n3
+🟠 api in shop (prod-eu-1) cannot start (create container error) because node n3 is what the failing workloads have in common, though it looks healthy.
+| 🟠 **api** in **shop** (**prod-eu-1**) cannot start (create container error) because node n3 is what the failing workloads have in common, though it looks healthy.
 | It fails with
 | ```
 | failed to reserve container name "app_api-0_shop_6a1c_0": name "app_api-0_shop_6a1c_0" is reserved for "4f1c0e2a"
 | ```
-| To see why the container cannot start, run
+| Replicas that do not depend on it are healthy.
+| To check the node's conditions and recent events, run
 | ```
-| kubectl describe pods api- -n shop
+| kubectl describe node n3
 | ```
