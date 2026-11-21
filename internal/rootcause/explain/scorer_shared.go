@@ -42,6 +42,9 @@ func scoreShared(v *view, c *candidate) outcome {
 			code: rootcause.ProofWorkloadsMeet, count: workloads,
 			text: fmt.Sprintf(
 				"failures of %d workloads meet here", workloads)}
+	case refusedByNode(c, c.direct()):
+		// The node's own kubelet refused the pod: one workload is enough.
+		return outcome{}
 	case sharedKinds[c.id.Kind] && !isTopology(c.id) && !quotesCheck(c):
 		return outcome{weight: -SharedPenalty,
 			code: rootcause.ProofOneWorkload,

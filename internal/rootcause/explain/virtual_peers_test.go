@@ -24,3 +24,15 @@ var peerRowCases = []rowCase{
 			return pods[0]
 		}},
 }
+
+var refusalRowCases = []rowCase{
+	{row: "admission-rejected-on-node", want: "node//n1",
+		build: func(f *fixture) inventory.EntityID {
+			nodes := f.nodes("zone-a", "n1", "n2")
+			pods := f.workload("ops", "agent", 1, nodes[0])
+			f.fail(pods[0], detection.ModeAdmissionRejected+".OutOfcpu",
+				failingH, 2, "Pod was rejected: Node didn't have enough "+
+					"resource: cpu")
+			return pods[0]
+		}},
+}

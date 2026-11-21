@@ -102,6 +102,7 @@ var causeCategories = map[string]string{
 	"finalizer-unhandled":                   categoryFinalizer,
 	"helper-container-blocks-pod":           categoryHelper,
 	explain.RuleHelmReleaseFailed:           categoryRollout,
+	"admission-rejected-on-node":            categoryNode,
 	"headless-hides-not-ready-peers":        categoryDependency,
 	"rollout-unschedulable":                 categoryRollout,
 	"image-drift":                           categoryImage,

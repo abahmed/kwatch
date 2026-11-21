@@ -1,11 +1,10 @@
-10:06:15 settled
-🟠 logship in observability (prod-eu-1) is failing: Kubernetes reported FailedDaemonPod.
-Related alerts: 1 admission alert
-To see the pods' state and events, run kubectl describe pods logship- -n observability
-🟠 logship in observability (prod-eu-1) is failing: Kubernetes reported FailedDaemonPod.
-| 🟠 **logship** in **observability** (**prod-eu-1**) is failing: Kubernetes reported FailedDaemonPod.
-| Related alerts: 1 admission alert
-| To see the pods' state and events, run
-| ```
-| kubectl describe pods logship- -n observability
-| ```
+10:06:15 roll-up
+🟠 kwatch (prod-eu-1) found two new problems at the same time. logship in observability is failing because node n2 has no room left by its own count, so its kubelet refuses pods. logship in observability is failing: Kubernetes reported FailedDaemonPod. Each one alerts on its own when it changes or resolves.
+🟠 kwatch (prod-eu-1) found two new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
+|
+| **Problems**
+| - **logship** in **observability** — failing because node n2 has no room left by its own count, so its kubelet refuses pods
+| - **logship** (**observability**) — Kubernetes reported FailedDaemonPod
+|
+| *Each one alerts on its own when it changes or resolves.*

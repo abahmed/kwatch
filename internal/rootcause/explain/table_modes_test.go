@@ -19,7 +19,7 @@ var pseudoModes = []detection.Mode{
 	pullAuth, pullRateLimit, pullServer, pullTLS, pullNetwork, pullStatus,
 	pullUnexplained, pullRemoved, ModePreempting, ModeEphemeralTooLow,
 	ModePodSecurityDenied, ModeLimitRangeDenied, ModePolicyDenied,
-	ModeHoldsVolume, ModeProvisionerDown, ModeHidesNotReady,
+	ModeHoldsVolume, ModeProvisionerDown, ModeHidesNotReady, ModeRefusesPods,
 	ModeNoStorageClass, modeFailedMount, modeFailedAttach,
 	ModeAgentAbsent, ModeNoPullSecret, ModeDiskHog, ModeNoGrant, ModeRoleShort,
 	ModeDependencyUnreachable, ModeBackendsNotReady, ModeKeyMissing,

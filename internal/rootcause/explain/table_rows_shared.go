@@ -1,6 +1,9 @@
 package explain
 
-import "github.com/abahmed/kwatch/internal/inventory/kube"
+import (
+	"github.com/abahmed/kwatch/internal/detection"
+	"github.com/abahmed/kwatch/internal/inventory/kube"
+)
 
 // sharedRows suspect what several workloads failing at the same time
 // have in common when nothing else explains them. Only a node is
@@ -19,5 +22,17 @@ var sharedRows = []Row{
 		Link:   LinkRunsOn,
 		Effect: anything, Prior: 0.4,
 		MinWorkloads: CoOnsetMinWorkloads,
+	},
+	{
+		// The kubelet of a node refuses a pod by its own accounting
+		// (OutOfcpu, OutOfmemory): the refusal is about that node, so
+		// one workload is enough.
+		Name: RuleAdmissionRejectedOnNode,
+		Cause: Side{Kind: kube.KindNode,
+			Modes: []detection.Mode{ModeRefusesPods}},
+		Link: LinkRunsOn,
+		Effect: Side{Kind: kube.KindPod,
+			Modes: []detection.Mode{detection.ModeAdmissionRejected}},
+		Prior: 0.6,
 	},
 }
