@@ -216,7 +216,7 @@ func gap4aReplacementStuck() scenario {
 			"A Job with podReplacementPolicy Failed has no replacement "+
 				"pod because its pod is Terminating on a node that "+
 				"stopped reporting.",
-			"node//n1", "notify", "job/batch/nightly-export").
+			"node//n1", "page", "job/batch/nightly-export").
 			budget(3).tail(10 * time.Minute),
 		build: func(c *cluster) {
 			n1 := c.node("n1", "zone-a")
