@@ -1,0 +1,12 @@
+{
+  "name": "pod-stuck-terminating-finalizer",
+  "description": "A StatefulSet update waits for a pod that has been Terminating for forty minutes, held by a finalizer.",
+  "root": "finalizer/streaming/storage.example.com/volume-detach",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "statefulset/streaming/queue",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

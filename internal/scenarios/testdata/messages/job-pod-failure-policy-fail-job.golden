@@ -1,0 +1,16 @@
+10:01:45 settled
+🟠 Job migrate in batch (prod-eu-1) is failing: failed after 1 pod failure. It was created at 10:00 UTC. It reports "Container app for pod batch/migrate-a failed with exit code 42 matching FailJob rule at index 0".
+Related alerts: 1 error alert, 1 failed pod, 1 pod failure policy alert
+To see the pod's state and events, run kubectl describe pods migrate- -n batch
+🟠 Job migrate in batch (prod-eu-1) is failing: failed after 1 pod failure.
+| 🟠 Job **migrate** in **batch** (**prod-eu-1**) is failing: failed after 1 pod failure.
+| It was created at 10:00 UTC.
+| It reports
+| ```
+| Container app for pod batch/migrate-a failed with exit code 42 matching FailJob rule at index 0
+| ```
+| Related alerts: 1 error alert, 1 failed pod, 1 pod failure policy alert
+| To see the pod's state and events, run
+| ```
+| kubectl describe pods migrate- -n batch
+| ```

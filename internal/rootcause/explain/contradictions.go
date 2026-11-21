@@ -30,7 +30,8 @@ var contradictions = []contradiction{
 	},
 	{
 		cause: []detection.Mode{detection.ModeNetworkIPExhausted,
-			detection.ModeNetworkCNINotReady},
+			detection.ModeNetworkCNINotReady,
+			detection.ModeNetworkConflict},
 		effect: []detection.Mode{detection.ModeProbe,
 			detection.ModeCrashLoop, detection.ModeRestarting,
 			detection.ModeOOMKilled, detection.ModeExit},

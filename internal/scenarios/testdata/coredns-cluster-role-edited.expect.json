@@ -1,0 +1,13 @@
+{
+  "name": "coredns-cluster-role-edited",
+  "description": "The ClusterRole CoreDNS uses loses access to EndpointSlices; CoreDNS pods stay Running but lookups of Services fail in several namespaces and the DNS probe fails.",
+  "root": "clusterrole//system:coredns",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/shop/cart",
+    "deployment/billing/invoices"
+  ]
+}

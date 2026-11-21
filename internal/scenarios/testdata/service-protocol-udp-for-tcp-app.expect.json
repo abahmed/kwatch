@@ -1,0 +1,13 @@
+{
+  "name": "service-protocol-udp-for-tcp-app",
+  "description": "A Service declares protocol UDP for a TCP application; its endpoints are ready and a caller times out connecting to it.",
+  "root": "service/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/api",
+    "deployment/shop/web",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

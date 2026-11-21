@@ -1,0 +1,12 @@
+{
+  "name": "release-probe-exec-binary-missing",
+  "description": "A release adds an exec readiness probe that runs curl, which the image lacks; the new pod never becomes ready and the kubelet reports the probe erroring.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "5m0s"
+}

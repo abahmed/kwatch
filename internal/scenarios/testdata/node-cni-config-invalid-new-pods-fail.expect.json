@@ -1,0 +1,11 @@
+{
+  "name": "node-cni-config-invalid-new-pods-fail",
+  "description": "New pods on one node fail sandbox creation because the node's CNI configuration is invalid (code 7); pods on other nodes start.",
+  "root": "node//n3",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/api"
+  ],
+  "tail": "10m0s"
+}

@@ -7,7 +7,9 @@ import (
 
 // storageRows cover what a claim and its volume depend on: the class,
 // the provisioner, the node that still holds the volume.
-var storageRows = concatRows(storageClassRows, volumeRows)
+var storageRows = concatRows(storageClassRows, volumeRows,
+	[]Row{conversionDownRow}, classRows,
+	pinnedVolumeRows)
 
 // storageClassRows cover what a claim depends on before any pod mounts
 // it.

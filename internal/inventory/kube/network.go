@@ -15,8 +15,11 @@ import (
 
 // Attribute names specific to networking entities.
 const (
-	AttrServiceType     = "service.type"
-	AttrHeadless        = "service.headless"
+	AttrServiceType = "service.type"
+	AttrHeadless    = "service.headless"
+	// AttrPublishNotReady is a Service that publishes the addresses of
+	// pods that are not ready yet (a peer-discovery Service).
+	AttrPublishNotReady = "service.publish.not.ready"
 	AttrSelector        = "selector"
 	AttrPorts           = "ports"
 	AttrLoadBalancer    = "loadbalancer.assigned"
@@ -66,6 +69,9 @@ func (ServiceSchema) Describe(obj any) (Description, bool) {
 	}
 	if svc.Spec.ClusterIP == corev1.ClusterIPNone {
 		attrs[AttrHeadless] = inventory.Bool(true)
+	}
+	if svc.Spec.PublishNotReadyAddresses {
+		attrs[AttrPublishNotReady] = inventory.Bool(true)
 	}
 	if ip := svc.Spec.ClusterIP; ip != "" && ip != corev1.ClusterIPNone {
 		attrs[AttrClusterIP] = inventory.Text(ip)

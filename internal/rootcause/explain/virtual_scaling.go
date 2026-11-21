@@ -45,6 +45,17 @@ var scalingRows = []Row{
 			Modes: []detection.Mode{detection.ModeUnavailable}},
 		Prior: 0.55,
 	},
+	{
+		// The autoscaler that keeps changing the replica count of the
+		// workload it scales: the count is its doing.
+		Name: "autoscaler-flaps-replicas",
+		Cause: Side{Kind: kube.KindHPA,
+			Modes: []detection.Mode{detection.ModeReplicasFlapping}},
+		Link: LinkScales,
+		Effect: Side{Group: AnyGroup, Kind: AnyKind,
+			Modes: []detection.Mode{detection.ModeReplicasFlapping}},
+		Prior: 0.7,
+	},
 }
 
 // scalerHops lead from a workload to the autoscalers that scale it.

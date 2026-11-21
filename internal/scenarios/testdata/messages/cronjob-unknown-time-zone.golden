@@ -1,0 +1,12 @@
+10:01:15 settled
+🟠 Cron job nightly-digest in reports (prod-eu-1) is failing: time zone is unknown. To see the object's state and events, run kubectl describe cronjob nightly-digest -n reports
+🟠 Cron job nightly-digest in reports (prod-eu-1) is failing: time zone is unknown.
+| 🟠 Cron job **nightly-digest** in **reports** (**prod-eu-1**) is failing: time zone is unknown.
+| To see the object's state and events, run
+| ```
+| kubectl describe cronjob nightly-digest -n reports
+| ```
+10:10:00 material change
+🟠 Cron job nightly-digest in reports (prod-eu-1) is now failing: Kubernetes reported UnknownTimeZone.
+🟠 Cron job nightly-digest in reports (prod-eu-1) is now failing: Kubernetes reported UnknownTimeZone.
+| 🟠 Cron job **nightly-digest** in **reports** (**prod-eu-1**) is now failing: Kubernetes reported UnknownTimeZone.

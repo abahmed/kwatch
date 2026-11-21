@@ -1,0 +1,9 @@
+{
+  "name": "dns-storm-from-looping-workload",
+  "description": "A crawler crash-loops on a failing lookup and floods CoreDNS; CoreDNS is OOM-killed and lookups of other namespaces time out.",
+  "root": "deployment/batch/crawler",
+  "tier": "notify",
+  "maxMessages": 3,
+  "ambiguous": true,
+  "tail": "10m0s"
+}

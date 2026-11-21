@@ -1,0 +1,11 @@
+{
+  "name": "release-invalid-image-name",
+  "description": "A release sets an image reference with upper case repository names; the new pod is stuck in InvalidImageName.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "registry//registry.example.com",
+    "node//n1"
+  ]
+}

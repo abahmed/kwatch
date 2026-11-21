@@ -1,0 +1,6 @@
+{
+  "name": "node-no-execute-taint-evicts",
+  "description": "A node is given a NoExecute maintenance taint; pods of three workloads without a toleration are deleted by the taint manager and are ready again elsewhere within a minute.",
+  "maxMessages": 0,
+  "quiet": true
+}

@@ -11,9 +11,11 @@ import (
 // externalEventReasons are event reasons from components outside
 // kubernetes/kubernetes, which the generated corpus cannot hold.
 var externalEventReasons = map[string]string{
-	"FailedDeployModel": "AWS load balancer controller",
-	"FailedBuildModel":  "AWS load balancer controller",
-	"OOMKilling":        "node-problem-detector kernel monitor",
+	"FailedDeployModel":      "AWS load balancer controller",
+	"FailedBuildModel":       "AWS load balancer controller",
+	"OOMKilling":             "node-problem-detector kernel monitor",
+	"SnapshotCreationFailed": "external-snapshotter",
+	"SnapshotContentMissing": "snapshot-controller",
 }
 
 // A registry entry that names an event or state reason Kubernetes does

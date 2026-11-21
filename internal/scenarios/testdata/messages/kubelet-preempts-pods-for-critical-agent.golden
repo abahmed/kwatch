@@ -1,0 +1,24 @@
+10:11:15 roll-up
+🟠 kwatch (prod-eu-1) found two new problems at the same time. payments in billing has failed. orders in shop has failed. Each one alerts on its own when it changes or resolves.
+🟠 kwatch (prod-eu-1) found two new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
+|
+| **Problems**
+| - **payments** in **billing** has failed
+| - **orders** in **shop** has failed
+|
+| *Each one alerts on its own when it changes or resolves.*
+10:13:45 settled
+🟠 payments in billing (prod-eu-1) has waited two minutes for a node because no node has enough cpu. The scheduler says "0/2 nodes are available: 2 Insufficient cpu. preemption: 0/2 nodes are available: 2 No preemption victims found for…". Both failing apps use it. Affected: orders in shop. To see the pods' state and events, run kubectl describe pods payments- -n billing
+🟠 payments in billing (prod-eu-1) has waited two minutes for a node because no node has enough cpu.
+| 🟠 **payments** in **billing** (**prod-eu-1**) has waited two minutes for a node because no node has enough cpu.
+| The scheduler says
+| ```
+| 0/2 nodes are available: 2 Insufficient cpu. preemption: 0/2 nodes are available: 2 No preemption victims found for…
+| ```
+| Both failing apps use it.
+| Affected: **orders** in **shop**.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods payments- -n billing
+| ```

@@ -8,15 +8,24 @@ import (
 // Rows for shared cluster services.
 
 // clusterRows cover shared services every workload depends on.
-var clusterRows = []Row{
-	pullWithoutSecretRow, diskHogRow, accountNoGrantRow,
+var clusterRows = concatRows(schedulerNamesRows(), []Row{
+	pullWithoutSecretRow, diskHogRow, accountNoGrantRow, roleShortRow,
+	accountReplacedRow,
 	{
 		Name: "registry-refuses",
 		Cause: Side{Kind: kube.KindRegistry, Modes: []detection.Mode{
-			pullAuth, pullRateLimit, pullServer, pullTLS, pullNetwork,
-			pullStatus, pullUnexplained}},
+			pullAuth, pullRateLimit, pullServer, pullNetwork,
+			pullStatus, pullUnexplained, pullRemoved}},
 		Link: LinkPulls, Effect: podSide(detection.ModeImagePull), Prior: 0.7,
 		MinCovered: 2,
+	},
+	{
+		// A certificate the nodes reject is the registry's, however
+		// many images fail: no image can cause it.
+		Name: "registry-refuses",
+		Cause: Side{Kind: kube.KindRegistry,
+			Modes: []detection.Mode{pullTLS}},
+		Link: LinkPulls, Effect: podSide(detection.ModeImagePull), Prior: 0.7,
 	},
 	{
 		// The cluster DNS servers fail with the service they make
@@ -104,9 +113,22 @@ var clusterRows = []Row{
 				detection.ModeQuotaExhausted, detection.ModeQuota}},
 		Link: LinkAdmits,
 		Effect: Side{Group: AnyGroup, Kind: AnyKind,
-			Modes: []detection.Mode{
-				detection.ModeFailedCreate, detection.ModeReplicaFailure},
+			Modes: append([]detection.Mode{
+				detection.ModeEndpointSlicesFailed,
+				detection.ModeNotReconciling}, createModes...),
 			Signal: SignalQuota},
+		Prior: 0.8,
+	},
+	{
+		// A pod waits for the claim of its ephemeral volume while the
+		// namespace's quota is used up: the claim create is refused.
+		Name: "quota-exhausted",
+		Cause: Side{Kind: kube.KindQuota,
+			Modes: []detection.Mode{detection.ModeQuotaExhausted}},
+		Link: LinkAdmits,
+		Effect: Side{Kind: kube.KindPod, Signal: SignalClaimWait,
+			Modes: []detection.Mode{detection.ModePending,
+				detection.ModeUnschedulable}},
 		Prior: 0.8,
 	},
 	{
@@ -145,7 +167,7 @@ var clusterRows = []Row{
 		Link: LinkContains, Effect: anything, Prior: 0.6,
 		MinCovered: 2,
 	},
-}
+})
 
 // Names of the rows that blame failing nodes, for the incident layer to
 // recognise them.

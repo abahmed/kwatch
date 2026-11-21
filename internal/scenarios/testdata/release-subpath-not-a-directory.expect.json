@@ -1,0 +1,11 @@
+{
+  "name": "release-subpath-not-a-directory",
+  "description": "A release mounts a ConfigMap key with subPath onto a directory of the image; the container fails to be created with \"not a directory\".",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

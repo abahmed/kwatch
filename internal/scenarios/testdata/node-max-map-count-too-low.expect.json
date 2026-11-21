@@ -1,0 +1,11 @@
+{
+  "name": "node-max-map-count-too-low",
+  "description": "One replica of a search engine exits at its bootstrap check because its node's vm.max_map_count is too low; the replicas on the other nodes run.",
+  "root": "node//n3",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/search"
+  ],
+  "tail": "10m0s"
+}

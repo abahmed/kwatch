@@ -1,0 +1,12 @@
+{
+  "name": "pvc-rwx-class-supports-only-rwo",
+  "description": "A claim asks for ReadWriteMany from a StorageClass whose driver supports only ReadWriteOnce; provisioning fails and the pod that mounts it stays Pending.",
+  "root": "persistentvolumeclaim/shop/shared-uploads",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/uploads"
+  ],
+  "tail": "10m0s"
+}

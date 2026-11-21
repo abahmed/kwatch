@@ -114,9 +114,17 @@ func quotaForbidsCreates(
 	ctx detection.Context, e inventory.Entity,
 ) (detection.Finding, bool) {
 	zero := text(e, kube.AttrQuotaZeroHard)
-	if zero == "" ||
-		!quotaRefusedCreate(ctx, e.ID.Namespace, e.ID.Name) {
+	if !quotaRefusedCreate(ctx, e.ID.Namespace, e.ID.Name) {
 		return detection.Finding{}, false
+	}
+	if zero == "" {
+		// A scope or a missing request refused it, not a used-up limit.
+		return detection.Finding{
+			Reason:   reasons.ResourceQuotaExhausted,
+			Severity: detection.Warning,
+			Since:    ctx.Now,
+			Summary:  "Namespace quota refuses the creates that name it",
+		}, true
 	}
 	return detection.Finding{
 		Reason:   reasons.ResourceQuotaExhausted,

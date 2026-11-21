@@ -1,0 +1,10 @@
+10:11:15 settled
+🟠 queue in streaming (prod-eu-1) is failing: volume cannot be mounted. Cause not found yet: its node and registry are healthy and unchanged. In the last 30 minutes in streaming: the queue rollout started at 10:00 UTC. To see the object's state and events, run kubectl describe pod queue-2 -n streaming
+🟠 queue in streaming (prod-eu-1) is failing: volume cannot be mounted.
+| 🟠 **queue** in **streaming** (**prod-eu-1**) is failing: volume cannot be mounted.
+| Cause not found yet: its node and registry are healthy and unchanged.
+| In the last 30 minutes in streaming: the **queue** rollout started at 10:00 UTC.
+| To see the object's state and events, run
+| ```
+| kubectl describe pod queue-2 -n streaming
+| ```

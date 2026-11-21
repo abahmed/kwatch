@@ -1,0 +1,16 @@
+10:10:00 settled
+🟠 Quota object-counts in shop (prod-eu-1) is used up (count/replicasets.apps). To see the object's state and events, run kubectl describe resourcequota object-counts -n shop
+🟠 Quota object-counts in shop (prod-eu-1) is used up (count/replicasets.apps).
+| 🟠 Quota **object-counts** in **shop** (**prod-eu-1**) is used up (count/replicasets.apps).
+| To see the object's state and events, run
+| ```
+| kubectl describe resourcequota object-counts -n shop
+| ```
+10:16:15 settled
+🟠 api in shop (prod-eu-1) is waiting for its controller to process the latest change. To see the object's state and events, run kubectl describe deployment api -n shop
+🟠 api in shop (prod-eu-1) is waiting for its controller to process the latest change.
+| 🟠 **api** in **shop** (**prod-eu-1**) is waiting for its controller to process the latest change.
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment api -n shop
+| ```

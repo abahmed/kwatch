@@ -40,6 +40,9 @@ type candidate struct {
 	// coOnset marks a shared factor of only CoOnsetMinWorkloads
 	// workloads, kept because they began failing as one moment.
 	coOnset bool
+	// split marks a node accepted for a clean replica split (see
+	// cleanReplicaSplit) with nothing else explaining its effects.
+	split bool
 }
 
 // direct returns the effects the candidate explains through a row,
@@ -221,7 +224,7 @@ func (v *view) addUpstream(cs *candidateSet, effect inventory.EntityID) {
 			// Nothing is wrong with it; it is still what several
 			// failing workloads may have in common.
 			cs.noteChecked(effect, r.id)
-			cause = v.sharedFactorState(r.id)
+			cause = v.suspectState(r.id, effect)
 			if len(cause.modes) == 0 {
 				continue
 			}

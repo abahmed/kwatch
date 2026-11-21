@@ -1,0 +1,12 @@
+{
+  "name": "release-writes-into-configmap-volume",
+  "description": "A release mounts a ConfigMap at the directory the entrypoint rewrites at start; the container exits with \"read-only file system\".",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "configmap/shop/app-config",
+    "node//n1",
+    "node//n2"
+  ]
+}

@@ -1,0 +1,14 @@
+10:11:15 settled
+🟠 invoices in billing (prod-eu-1) keeps crashing because cluster DNS is not resolving names. It fails with "dial tcp: lookup db.shop.svc.cluster.local on 10.96.0.10:53: read udp 10.244.1.5:48762->10.96.0.10:53: i/o timeout". Both failing apps use it. Affected: cart in shop. To see the cluster DNS pods, run kubectl -n kube-system get pods -l k8s-app=kube-dns
+🟠 invoices in billing (prod-eu-1) keeps crashing because cluster DNS is not resolving names.
+| 🟠 **invoices** in **billing** (**prod-eu-1**) keeps crashing because cluster DNS is not resolving names.
+| It fails with
+| ```
+| dial tcp: lookup db.shop.svc.cluster.local on 10.96.0.10:53: read udp 10.244.1.5:48762->10.96.0.10:53: i/o timeout
+| ```
+| Both failing apps use it.
+| Affected: **cart** in **shop**.
+| To see the cluster DNS pods, run
+| ```
+| kubectl -n kube-system get pods -l k8s-app=kube-dns
+| ```

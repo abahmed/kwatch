@@ -1,0 +1,14 @@
+{
+  "name": "registry-removes-tags-shared-by-workloads",
+  "description": "A registry stops serving the tags of an image used by workloads in three namespaces; their running pods are fine and every new pod fails with \"manifest unknown\".",
+  "root": "registry//registry.example.com",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/web",
+    "deployment/billing/invoices",
+    "deployment/media/transcode",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

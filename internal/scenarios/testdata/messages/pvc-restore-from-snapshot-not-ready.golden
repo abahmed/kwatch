@@ -1,0 +1,17 @@
+10:02:15 settled
+🟠 Volume claim restore-data in shop (prod-eu-1) has been waiting for a volume for two minutes. It was created at 10:00 UTC. Claim restore-data is Pending: kwatch sees no workload in the cluster serving its provisioner pd.csi.storage.gke.io (it may run outside the cluster); the last provisioning failure says "failed to provision volume with StorageClass "standard": error getting handle for DataSource Type VolumeSnapshot by…". Affected: db.
+Related alerts: 1 scheduling failure, 1 volume alert
+To see why the volume claim is not usable, run kubectl describe pvc restore-data -n shop
+🟠 Volume claim restore-data in shop (prod-eu-1) has been waiting for a volume for two minutes.
+| 🟠 Volume claim **restore-data** in **shop** (**prod-eu-1**) has been waiting for a volume for two minutes.
+| It was created at 10:00 UTC.
+| Claim **restore-data** is Pending: kwatch sees no workload in the cluster serving its provisioner pd.csi.storage.gke.io (it may run outside the cluster); the last provisioning failure says
+| ```
+| failed to provision volume with StorageClass "standard": error getting handle for DataSource Type VolumeSnapshot by…
+| ```
+| Affected: db.
+| Related alerts: 1 scheduling failure, 1 volume alert
+| To see why the volume claim is not usable, run
+| ```
+| kubectl describe pvc restore-data -n shop
+| ```

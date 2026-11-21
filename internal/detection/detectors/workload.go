@@ -52,7 +52,13 @@ func (d Workload) Detect(
 	if s, ok := d.availability(ctx, e); ok {
 		out = append(out, s)
 	}
+	if s, ok := pausedEdit(ctx, e); ok {
+		out = append(out, s)
+	}
 	if s, ok := neverReady(ctx, e); ok {
+		out = append(out, s)
+	}
+	if s, ok := replicasFlapping(ctx, e); ok {
 		out = append(out, s)
 	}
 	if s, ok := readinessFlapping(ctx, e); ok {
@@ -76,7 +82,7 @@ func (d Workload) availability(
 	ctx detection.Context, e inventory.Entity,
 ) (detection.Finding, bool) {
 	desired, ok := desiredReplicas(e)
-	if !ok || desired == 0 {
+	if !ok || desired == 0 || nameHeldByPod(ctx, e) {
 		return detection.Finding{}, false
 	}
 	ready, _ := number(e, kube.AttrReadyReplicas)

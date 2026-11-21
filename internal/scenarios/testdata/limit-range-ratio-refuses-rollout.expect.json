@@ -1,0 +1,12 @@
+{
+  "name": "limit-range-ratio-refuses-rollout",
+  "description": "A rollout whose CPU limit is eight times its request is refused by the namespace's LimitRange, which allows a ratio of two.",
+  "root": "limitrange/shop/limits",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/api"
+  ],
+  "tail": "10m0s"
+}

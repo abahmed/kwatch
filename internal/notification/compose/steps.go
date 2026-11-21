@@ -60,6 +60,16 @@ func causeSteps(
 func rootSteps(
 	p incident.Incident, members []detection.Finding,
 ) []notification.Step {
+	if incident.IsWorkload(p.Root.Kind) && onlyPausedEdit(members) {
+		return pausedSteps(p.Root)
+	}
+	return rootKindSteps(p, members)
+}
+
+// rootKindSteps chooses the steps by the kind of the root.
+func rootKindSteps(
+	p incident.Incident, members []detection.Finding,
+) []notification.Step {
 	root := p.Root
 	switch {
 	case p.Cause != nil && p.Cause.Change != nil &&

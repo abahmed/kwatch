@@ -1,0 +1,16 @@
+10:03:45 settled
+🔴 Node n3 (prod-eu-1) has not been ready for about two minutes. Its kubelet reports "x509: certificate has expired or is not yet valid: current time 2026-11-19T09:52:10Z is before 2026-11-19T10:02:07Z". To check the node's conditions and recent events, run kubectl describe node n3
+🔴 Node n3 (prod-eu-1) has not been ready for about two minutes.
+| 🔴 Node n3 (**prod-eu-1**) has not been ready for about two minutes.
+| Its kubelet reports
+| ```
+| x509: certificate has expired or is not yet valid: current time 2026-11-19T09:52:10Z is before 2026-11-19T10:02:07Z
+| ```
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n3
+| ```
+10:05:30 material change
+🔴 Node n3 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
+🔴 Node n3 (prod-eu-1) is now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
+| 🔴 Node n3 (**prod-eu-1**) is now also affecting **cart**, **orders** and **payments** in shop: they have not been ready for three minutes.

@@ -22,6 +22,7 @@ var nodeDegradedRows = []Row{{
 	Effect: podSide(
 		detection.ModeNotReady, detection.ModeProbe,
 		detection.ModeCreating, detection.ModeCreateError,
-		detection.ModeCrashLoop, detection.ModeEvicted),
+		detection.ModeCrashLoop, detection.ModeEvicted,
+		detection.ModeRestarting),
 	Prior: 0.55,
 }, nodePullThrottledRow}

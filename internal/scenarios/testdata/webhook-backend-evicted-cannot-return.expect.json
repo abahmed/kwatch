@@ -1,0 +1,13 @@
+{
+  "name": "webhook-backend-evicted-cannot-return",
+  "description": "A fail-closed webhook's single backend pod is evicted; every pod create is refused because the webhook has no endpoint, including the backend's replacement.",
+  "root": "validatingwebhookconfiguration//policy-guard",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/orders",
+    "deployment/billing/ledger"
+  ],
+  "tail": "10m0s"
+}

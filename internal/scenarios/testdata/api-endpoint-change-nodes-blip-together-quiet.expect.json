@@ -1,0 +1,6 @@
+{
+  "name": "api-endpoint-change-nodes-blip-together-quiet",
+  "description": "Every node misses its status updates for three minutes after the API server's address changes and then reports Ready again; pods keep running.",
+  "maxMessages": 0,
+  "quiet": true
+}

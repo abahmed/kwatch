@@ -1,0 +1,6 @@
+{
+  "name": "job-suspended-while-running-quiet",
+  "description": "An operator sets suspend on a running Job; the controller deletes its pods and the Job reads Suspended.",
+  "maxMessages": 0,
+  "quiet": true
+}

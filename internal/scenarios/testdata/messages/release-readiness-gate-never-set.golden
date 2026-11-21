@@ -1,0 +1,10 @@
+10:13:15 settled
+🟠 api is failing in shop (prod-eu-1) after the 10:02 UTC release. The release changed the template. Only the new revision fails; the previous one stays healthy. To see the rollout state, run kubectl rollout status deployment/api -n shop
+🟠 api is failing in shop (prod-eu-1) after the 10:02 UTC release.
+| 🟠 **api** is failing in **shop** (**prod-eu-1**) after the 10:02 UTC release.
+| The release changed the template.
+| Only the new revision fails; the previous one stays healthy.
+| To see the rollout state, run
+| ```
+| kubectl rollout status deployment/api -n shop
+| ```

@@ -1,0 +1,11 @@
+{
+  "name": "node-kubelet-status-updates-lag",
+  "description": "Pods on a node that churns many short-lived pods stay Pending with no status for minutes because the kubelet's status updates are rate limited.",
+  "root": "node//n1",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/ci/runner"
+  ],
+  "tail": "10m0s"
+}

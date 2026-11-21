@@ -1,0 +1,11 @@
+{
+  "name": "release-exit-139-segfault",
+  "description": "A release's new image crashes with a segmentation fault at every start (exit code 139) while the old pods serve.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

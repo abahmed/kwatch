@@ -1,0 +1,12 @@
+{
+  "name": "pvc-restore-from-snapshot-not-ready",
+  "description": "A claim restored from a VolumeSnapshot that is not Ready stays Pending with ProvisioningFailed.",
+  "root": "persistentvolumeclaim/shop/restore-data",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/db"
+  ],
+  "tail": "10m0s"
+}

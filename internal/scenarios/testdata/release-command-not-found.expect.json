@@ -1,0 +1,11 @@
+{
+  "name": "release-command-not-found",
+  "description": "A release sets a container command that the image lacks; the new pod fails with RunContainerError \"no such file or directory\".",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

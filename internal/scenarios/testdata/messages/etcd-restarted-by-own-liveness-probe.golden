@@ -1,0 +1,16 @@
+10:02:15 settled
+🟠 etcd in kube-system (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. Its last run lasted ten seconds; 121 restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs deploy/etcd -c app -n kube-system --previous
+🟠 etcd in kube-system (prod-eu-1) keeps crashing.
+| 🟠 **etcd** in **kube-system** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| Its last run lasted ten seconds; 121 restarts since its pod was created one hour ago.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/etcd -c app -n kube-system --previous
+| ```
+10:05:30 cause revised
+🔴 Cause now known: etcd (prod-eu-1) has been down 3 times in the last 15 minutes. It reports "[-]etcd failed: reason withheld". The error mentions it.
+🔴 Cause now known: etcd (prod-eu-1) has been down 3 times in the last 15 minutes.
+| 🔴 Cause now known: **etcd** (**prod-eu-1**) has been down 3 times in the last 15 minutes.
+| It reports `[-]etcd failed: reason withheld`. The error mentions it.

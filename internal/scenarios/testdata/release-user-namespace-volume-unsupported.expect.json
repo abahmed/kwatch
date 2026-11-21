@@ -1,0 +1,11 @@
+{
+  "name": "release-user-namespace-volume-unsupported",
+  "description": "A release runs the pods in a user namespace (hostUsers false) while their volume's file system lacks idmapped mounts; the new pod stays in ContainerCreating with FailedMount.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

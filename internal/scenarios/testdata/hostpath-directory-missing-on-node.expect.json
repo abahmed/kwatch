@@ -1,0 +1,13 @@
+{
+  "name": "hostpath-directory-missing-on-node",
+  "description": "A replica placed on a newly added node waits in ContainerCreating with FailedMount \"hostPath type check failed\" while the replicas on the other nodes run.",
+  "root": "node//n3",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/shop/cache"
+  ],
+  "tail": "10m0s"
+}

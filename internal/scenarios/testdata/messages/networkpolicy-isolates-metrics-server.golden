@@ -1,0 +1,17 @@
+10:10:15 settled
+🟠 Network policy isolate-metrics is failing in kube-system (prod-eu-1) after the 10:05 UTC change. It reports "failing or missing response from https://10.244.1.7:10250/apis/metrics.k8s.io/v1beta1: Get…". It was created shortly before. To see the object's state and events, run kubectl describe apiservice v1beta1.metrics.k8s.io
+🟠 Network policy isolate-metrics is failing in kube-system (prod-eu-1) after the 10:05 UTC change.
+| 🟠 Network policy **isolate-metrics** is failing in **kube-system** (**prod-eu-1**) after the 10:05 UTC change.
+| It reports
+| ```
+| failing or missing response from https://10.244.1.7:10250/apis/metrics.k8s.io/v1beta1: Get…
+| ```
+| It was created shortly before.
+| To see the object's state and events, run
+| ```
+| kubectl describe apiservice v1beta1.metrics.k8s.io
+| ```
+10:22:00 material change
+🟠 Network policy isolate-metrics in kube-system (prod-eu-1) is now also affecting autoscaler web in shop: it cannot read the metrics it scales on.
+🟠 Network policy isolate-metrics in kube-system (prod-eu-1) is now also affecting autoscaler web in shop: it cannot read the metrics it scales on.
+| 🟠 Network policy **isolate-metrics** in **kube-system** (**prod-eu-1**) is now also affecting autoscaler **web** in shop: it cannot read the metrics it scales on.

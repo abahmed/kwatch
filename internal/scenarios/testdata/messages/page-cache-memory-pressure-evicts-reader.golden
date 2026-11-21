@@ -1,0 +1,8 @@
+10:08:15 settled
+🟠 reader in media (prod-eu-1) is failing; node n1 is low on memory, which might be related. To check the node's conditions and recent events, run kubectl describe node n1
+🟠 reader in media (prod-eu-1) is failing; node n1 is low on memory, which might be related.
+| 🟠 **reader** in **media** (**prod-eu-1**) is failing; node n1 is low on memory, which might be related.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```

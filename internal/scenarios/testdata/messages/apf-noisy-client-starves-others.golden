@@ -1,0 +1,16 @@
+10:06:15 settled
+🟠 ledger in billing (prod-eu-1) and two other workloads keep crashing with the same error. It fails with "failed to list *v1.ConfigMap: the server has received too many requests and has asked us to try again later (get…". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. Affected: thumbs in media; orders in shop. To read the output of the last crash, run kubectl logs deploy/ledger -c app -n billing --previous
+Proof: both replicas fail, on 2 nodes (ledger); both replicas fail, on 2 nodes (thumbs); both replicas fail, on 2 nodes (orders).
+🟠 ledger in billing (prod-eu-1) and two other workloads keep crashing with the same error.
+| 🟠 **ledger** in **billing** (**prod-eu-1**) and two other workloads keep crashing with the same error.
+| It fails with
+| ```
+| failed to list *v1.ConfigMap: the server has received too many requests and has asked us to try again later (get…
+| ```
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| Affected: **thumbs** in **media**; **orders** in **shop**.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/ledger -c app -n billing --previous
+| ```
+| *Proof: both replicas fail, on 2 nodes (ledger); both replicas fail, on 2 nodes (thumbs); both replicas fail, on 2 nodes (orders).*

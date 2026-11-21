@@ -1,0 +1,8 @@
+10:01:15 settled
+🟠 Volume claim results in batch (prod-eu-1) is stuck deleting: finalizers kubernetes.io/pvc-protection (still used by pod export-a) hold it. To see why the volume claim is not usable, run kubectl describe pvc results -n batch
+🟠 Volume claim results in batch (prod-eu-1) is stuck deleting: finalizers kubernetes.io/pvc-protection (still used by pod export-a) hold it.
+| 🟠 Volume claim **results** in **batch** (**prod-eu-1**) is stuck deleting: finalizers kubernetes.io/pvc-protection (still used by pod export-a) hold it.
+| To see why the volume claim is not usable, run
+| ```
+| kubectl describe pvc results -n batch
+| ```

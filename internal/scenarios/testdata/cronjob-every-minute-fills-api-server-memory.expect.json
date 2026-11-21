@@ -1,0 +1,12 @@
+{
+  "name": "cronjob-every-minute-fills-api-server-memory",
+  "description": "A CronJob that runs every minute and keeps every Job piles up objects until the API server is OOMKilled and its health probe fails.",
+  "root": "cronjob/reports/minutely-sync",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "apiserver//kube-apiserver"
+  ],
+  "tail": "10m0s"
+}

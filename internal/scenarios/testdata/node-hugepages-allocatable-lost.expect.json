@@ -1,0 +1,11 @@
+{
+  "name": "node-hugepages-allocatable-lost",
+  "description": "A node reboots without its hugepages setting; its allocatable hugepages fall to zero and the pod that needs them is Pending \"Insufficient hugepages\". The rebooted node's lost allocatable explains it, not the scheduling reason alone.",
+  "root": "node//n2",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/db"
+  ],
+  "tail": "10m0s"
+}

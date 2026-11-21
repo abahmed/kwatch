@@ -1,0 +1,13 @@
+10:11:15 settled
+🟠 api in shop (prod-eu-1) is failing: kubelet rejected the pod at admission (supplemental groups policy not supported). Cause not found yet: its node and registry are healthy and unchanged. It fails with "Pod was rejected: SupplementalGroupsPolicy=Strict is not supported by the node: the container runtime does not report…". To see the pods' state and events, run kubectl describe pods api- -n shop
+🟠 api in shop (prod-eu-1) is failing: kubelet rejected the pod at admission (supplemental groups policy not supported).
+| 🟠 **api** in **shop** (**prod-eu-1**) is failing: kubelet rejected the pod at admission (supplemental groups policy not supported).
+| Cause not found yet: its node and registry are healthy and unchanged.
+| It fails with
+| ```
+| Pod was rejected: SupplementalGroupsPolicy=Strict is not supported by the node: the container runtime does not report…
+| ```
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods api- -n shop
+| ```

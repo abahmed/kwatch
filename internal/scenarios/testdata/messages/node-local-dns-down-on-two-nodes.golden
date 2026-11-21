@@ -1,0 +1,25 @@
+10:03:15 settled
+🟠 node-local-dns in kube-system (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "[FATAL] listen tcp 169.254.20.10:8080: bind: address already in use". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs ds/node-local-dns -c app -n kube-system --previous
+🟠 node-local-dns in kube-system (prod-eu-1) keeps crashing.
+| 🟠 **node-local-dns** in **kube-system** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| It fails with `[FATAL] listen tcp 169.254.20.10:8080: bind: address already in use`.
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| To read the output of the last crash, run
+| ```
+| kubectl logs ds/node-local-dns -c app -n kube-system --previous
+| ```
+10:04:15 settled
+🟠 invoices in billing (prod-eu-1) keeps crashing; two possible causes: cluster DNS is not resolving names or the error "dial tcp: lookup db on 169.254.20.10:53: read udp 10.244.1.5:48762->169.254.20.10:53: i/o timeout" is what several workloads fail with. It fails with "dial tcp: lookup db on 169.254.20.10:53: read udp 10.244.1.5:48762->169.254.20.10:53: i/o timeout". All three failing apps use it. Affected: transcode in media; web in shop. To see the cluster DNS pods, run kubectl -n kube-system get pods -l k8s-app=kube-dns
+🟠 invoices in billing (prod-eu-1) keeps crashing; two possible causes: cluster DNS is not resolving names or the error "dial tcp: lookup db on 169.254.20.10:53: read udp 10.244.1.5:48762->169.254.20.10:53: i/o timeout" is what several workloads fail with.
+| 🟠 **invoices** in **billing** (**prod-eu-1**) keeps crashing; two possible causes: cluster DNS is not resolving names or the error `dial tcp: lookup db on 169.254.20.10:53: read udp 10.244.1.5:48762->169.254.20.10:53: i/o timeout` is what several workloads fail with.
+| It fails with
+| ```
+| dial tcp: lookup db on 169.254.20.10:53: read udp 10.244.1.5:48762->169.254.20.10:53: i/o timeout
+| ```
+| All three failing apps use it.
+| Affected: **transcode** in **media**; **web** in **shop**.
+| To see the cluster DNS pods, run
+| ```
+| kubectl -n kube-system get pods -l k8s-app=kube-dns
+| ```

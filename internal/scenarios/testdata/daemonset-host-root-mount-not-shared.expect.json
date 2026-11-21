@@ -1,0 +1,13 @@
+{
+  "name": "daemonset-host-root-mount-not-shared",
+  "description": "A node agent DaemonSet mounts the host root with shared propagation; every pod fails with \"is mounted on / but it is not a shared or slave mount\".",
+  "root": "daemonset/monitoring/host-agent",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "node//n3"
+  ],
+  "tail": "10m0s"
+}

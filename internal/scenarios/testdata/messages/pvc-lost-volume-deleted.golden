@@ -1,0 +1,13 @@
+10:11:15 settled
+🟠 Volume claim data in shop (prod-eu-1) is failing: lost its bound volume. Also changed before it broke: volume pv-data was deleted at 10:10 UTC. Affected: db.
+Related alerts: 1 claim lost alert, 1 failed mount alert
+To see why the volume claim is not usable, run kubectl describe pvc data -n shop
+🟠 Volume claim data in shop (prod-eu-1) is failing: lost its bound volume.
+| 🟠 Volume claim **data** in **shop** (**prod-eu-1**) is failing: lost its bound volume.
+| Also changed before it broke: volume pv-data was deleted at 10:10 UTC.
+| Affected: db.
+| Related alerts: 1 claim lost alert, 1 failed mount alert
+| To see why the volume claim is not usable, run
+| ```
+| kubectl describe pvc data -n shop
+| ```

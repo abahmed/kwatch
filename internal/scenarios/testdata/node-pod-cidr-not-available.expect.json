@@ -1,0 +1,12 @@
+{
+  "name": "node-pod-cidr-not-available",
+  "description": "A node that joined after the cluster's pod range was used up has no pod CIDR; the controller reports CIDRNotAvailable and pods placed on it stay in ContainerCreating.",
+  "root": "node//n4",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/web",
+    "deployment/billing/invoices"
+  ],
+  "tail": "10m0s"
+}

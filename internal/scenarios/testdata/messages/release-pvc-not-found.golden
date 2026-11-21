@@ -1,0 +1,12 @@
+10:05:15 settled
+🟠 api in shop (prod-eu-1) has waited two minutes for a node because volume claim data-0 cannot be used. The scheduler says "0/2 nodes are available: persistentvolumeclaim "data-0" not found. preemption: 0/2 nodes are available: 2 Preemption is…". To see why the volume claim is not usable, run kubectl describe pvc data-0 -n shop
+🟠 api in shop (prod-eu-1) has waited two minutes for a node because volume claim data-0 cannot be used.
+| 🟠 **api** in **shop** (**prod-eu-1**) has waited two minutes for a node because volume claim **data-0** cannot be used.
+| The scheduler says
+| ```
+| 0/2 nodes are available: persistentvolumeclaim "data-0" not found. preemption: 0/2 nodes are available: 2 Preemption is…
+| ```
+| To see why the volume claim is not usable, run
+| ```
+| kubectl describe pvc data-0 -n shop
+| ```

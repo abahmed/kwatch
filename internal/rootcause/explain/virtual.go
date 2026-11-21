@@ -17,7 +17,8 @@ var admitKinds = []inventory.Kind{
 
 // createModes are the modes of a controller that cannot create objects.
 var createModes = []detection.Mode{
-	detection.ModeFailedCreate, detection.ModeReplicaFailure}
+	detection.ModeFailedCreate, detection.ModeReplicaFailure,
+	detection.ModeReplicaSetCreateError}
 
 // metricsAPIMarker names the APIServices that serve autoscaling metrics:
 // metrics.k8s.io, custom.metrics.k8s.io and external.metrics.k8s.io.
@@ -30,6 +31,9 @@ const metricsAPIMarker = "metrics.k8s.io"
 func (v *view) virtualHops(id inventory.EntityID) []hop {
 	var out []hop
 	out = append(out, v.dnsWorkloadHops(id)...)
+	if id.Kind == kindClusterDNS {
+		out = append(out, v.dnsConfigHops(id)...)
+	}
 	if id.Kind == kube.KindPod && v.dnsServer(id) {
 		out = append(out, hop{link: LinkContains, to: kube.ClusterDNS})
 	} else if id.Kind == kube.KindPod {
@@ -39,24 +43,27 @@ func (v *view) virtualHops(id inventory.EntityID) []hop {
 		out = append(out, v.schedulingHops(id)...)
 		out = append(out, v.claimHops(id)...)
 		out = append(out, v.holdHops(id)...)
+		out = append(out, v.addressHolderHops(id)...)
+		out = append(out, v.dnsConfigHops(id)...)
 		out = append(out, v.accessHops(id)...)
+		out = append(out, v.roleHops(id)...)
+		out = append(out, v.unauthorizedHops(id)...)
 		out = append(out, v.removedNodeHops(id)...)
 		out = append(out, v.helperHops(id)...)
 		out = append(out, v.calledHops(id)...)
 		out = append(out, v.serviceCallHops(id)...)
-		out = append(out, v.missingServiceHops(id)...)
+		out = append(out, v.serviceNameHops(id)...)
 		out = append(out, v.agentHops(id)...)
 		out = append(out, v.preemptionHops(id)...)
 	}
-	if id.Kind == kube.KindPVC {
-		out = append(out, v.provisionerHops(id)...)
-	}
+	out = append(out, v.errorNamedHops(id)...)
 	if id.Kind == kube.KindContainer {
 		out = append(out, v.initWaitHops(id)...)
 	}
 	if v.hasMode(id, createModes) {
 		out = append(out, v.allAdmitHops(id)...)
 	}
+	out = append(out, v.isolationHops(id)...)
 	if id.Kind == kube.KindService {
 		out = append(out, v.backendHops(id)...)
 		out = append(out, v.webhookHops(id)...)
@@ -197,6 +204,9 @@ func (v *view) metricsAPIHops() []hop {
 // rejects most nodes, as a virtual "scheduling" entity.
 func (v *view) schedulingHops(pod inventory.EntityID) []hop {
 	reason, ok := v.schedulerVerdict(pod)
+	if _, named := v.schedulerNamed(pod); ok && len(named) > 0 {
+		return hopsTo(LinkSchedules, named...)
+	}
 	switch {
 	case !ok:
 		return nil

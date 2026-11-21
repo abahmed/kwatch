@@ -1,0 +1,13 @@
+{
+  "name": "sporadic-probe-timeouts-no-event",
+  "description": "Pods of three workloads fail a readiness probe by timeout now and then for an hour; CoreDNS and the nodes look healthy and nothing else is reported.",
+  "root": "unknown",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "cluster-dns//cluster-dns",
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

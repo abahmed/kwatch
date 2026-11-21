@@ -1,0 +1,13 @@
+{
+  "name": "upgrade-addon-image-repository-not-mirrored",
+  "description": "An upgrade moves the CoreDNS add-on to registry.k8s.io, which the cluster's mirror lacks; its new pod stays in ImagePullBackOff while the old one serves.",
+  "root": "deployment/kube-system/coredns",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "ambiguous": true,
+  "tail": "10m0s"
+}

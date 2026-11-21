@@ -1,0 +1,11 @@
+{
+  "name": "release-crash-loop-reduced-backoff",
+  "description": "A bad release crash-loops under a reduced restart back-off: the restart count reaches 90 in minutes.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

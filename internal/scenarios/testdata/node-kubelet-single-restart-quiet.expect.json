@@ -1,0 +1,6 @@
+{
+  "name": "node-kubelet-single-restart-quiet",
+  "description": "A node's kubelet restarts once for a configuration change; the node stays Ready and its pods stay ready.",
+  "maxMessages": 0,
+  "quiet": true
+}

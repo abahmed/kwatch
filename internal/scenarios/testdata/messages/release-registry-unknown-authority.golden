@@ -1,0 +1,14 @@
+10:03:15 settled
+🟠 api in shop (prod-eu-1) cannot pull its image because registry registry.corp.example the registry's certificate is not trusted. It fails with "Failed to pull image "registry.corp.example/shop/api:2.6": failed to pull and unpack image…". The error mentions it. Replicas that do not depend on it are healthy. To see why the container cannot start, run kubectl describe pods api- -n shop
+🟠 api in shop (prod-eu-1) cannot pull its image because registry registry.corp.example the registry's certificate is not trusted.
+| 🟠 **api** in **shop** (**prod-eu-1**) cannot pull its image because registry **registry.corp.example** the registry's certificate is not trusted.
+| It fails with
+| ```
+| Failed to pull image "registry.corp.example/shop/api:2.6": failed to pull and unpack image…
+| ```
+| The error mentions it.
+| Replicas that do not depend on it are healthy.
+| To see why the container cannot start, run
+| ```
+| kubectl describe pods api- -n shop
+| ```

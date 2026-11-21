@@ -1,0 +1,25 @@
+10:06:15 settled
+🟠 ledger-batch in billing (prod-eu-1) was preempted by the scheduler for a pod of higher priority because trainer in ml is preempting lower-priority pods. 3 pods were preempted by ml/trainer-d1752e09-a (priority 1000 > 500) at 10:05 UTC. Replicas that do not depend on it are healthy. Affected: worker in shop. To see the pods' state and events, run kubectl describe pods ledger-batch- -n billing
+Proof: 2 failing replicas share node n1 while 1 runs healthy on other nodes.
+🟠 ledger-batch in billing (prod-eu-1) was preempted by the scheduler for a pod of higher priority because trainer in ml is preempting lower-priority pods.
+| 🟠 **ledger-batch** in **billing** (**prod-eu-1**) was preempted by the scheduler for a pod of higher priority because **trainer** in ml is preempting lower-priority pods.
+| 3 pods were preempted by ml/trainer-d1752e09-a (priority 1000 \> 500) at 10:05 UTC.
+| Replicas that do not depend on it are healthy.
+| Affected: **worker** in **shop**.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods ledger-batch- -n billing
+| ```
+| *Proof: 2 failing replicas share node n1 while 1 runs healthy on other nodes.*
+10:07:15 settled
+🟠 render in media (prod-eu-1) was preempted by the scheduler for a pod of higher priority because worker in shop is preempting lower-priority pods. render-e272e683-a was preempted by shop/worker-8eef3660-c (priority 500 > 0) at 10:06 UTC. Replicas that do not depend on it are healthy. To see the pods' state and events, run kubectl describe pods render- -n media
+Proof: 2 failing replicas share node n1 while 1 runs healthy on other nodes.
+🟠 render in media (prod-eu-1) was preempted by the scheduler for a pod of higher priority because worker in shop is preempting lower-priority pods.
+| 🟠 **render** in **media** (**prod-eu-1**) was preempted by the scheduler for a pod of higher priority because **worker** in **shop** is preempting lower-priority pods.
+| **render-e272e683-a** was preempted by shop/worker-8eef3660-c (priority 500 \> 0) at 10:06 UTC.
+| Replicas that do not depend on it are healthy.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods render- -n media
+| ```
+| *Proof: 2 failing replicas share node n1 while 1 runs healthy on other nodes.*

@@ -1,0 +1,14 @@
+10:06:15 settled
+🟠 etl is failing in shop (prod-eu-1) after the 10:02 UTC release of registry.example.com/shop/etl:9. The previous image was registry.example.com/etl:2.5. It fails with "Failed to pull image "registry.example.com/shop/etl:9": rpc error: code = DeadlineExceeded desc = context deadline…". Fix: change the image of container app in deployment/etl. To see why the container cannot start, run kubectl describe pods etl- -n shop
+🟠 etl is failing in shop (prod-eu-1) after the 10:02 UTC release of registry.example.com/shop/etl:9.
+| 🟠 **etl** is failing in **shop** (**prod-eu-1**) after the 10:02 UTC release of registry.example.com/shop/etl:9.
+| The previous image was registry.example.com/etl:2.5.
+| It fails with
+| ```
+| Failed to pull image "registry.example.com/shop/etl:9": rpc error: code = DeadlineExceeded desc = context deadline…
+| ```
+| Fix: change the image of container app in deployment/etl.
+| To see why the container cannot start, run
+| ```
+| kubectl describe pods etl- -n shop
+| ```

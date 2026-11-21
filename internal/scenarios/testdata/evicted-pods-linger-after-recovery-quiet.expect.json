@@ -1,0 +1,6 @@
+{
+  "name": "evicted-pods-linger-after-recovery-quiet",
+  "description": "Forty Evicted pods from an incident hours ago are still listed in two namespaces while every workload runs on healthy nodes.",
+  "maxMessages": 0,
+  "quiet": true
+}

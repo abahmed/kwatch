@@ -1,0 +1,11 @@
+10:02:15 settled
+🟠 kube-controller-manager in kube-system (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. Its last run lasted ten seconds; two restarts since its pod was created one hour ago. It runs a single replica. To read the output of the last crash, run kubectl logs deploy/kube-controller-manager -c app -n kube-system --previous
+🟠 kube-controller-manager in kube-system (prod-eu-1) keeps crashing.
+| 🟠 **kube-controller-manager** in **kube-system** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/kube-controller-manager -c app -n kube-system --previous
+| ```

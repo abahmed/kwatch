@@ -1,0 +1,12 @@
+{
+  "name": "node-disk-full-by-deleted-open-file",
+  "description": "A node's disk is full from a deleted file a container still holds open; the kubelet evicts neighbours that use little.",
+  "root": "node//n1",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "deployment/shop/payments"
+  ],
+  "tail": "10m0s"
+}

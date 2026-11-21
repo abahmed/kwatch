@@ -1,0 +1,6 @@
+{
+  "name": "kubelet-admission-single-reject-replaced",
+  "description": "One pod is rejected by a kubelet with OutOfcpu after a scheduling race; its replacement runs on another node within a minute.",
+  "maxMessages": 0,
+  "quiet": true
+}

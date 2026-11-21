@@ -1,0 +1,12 @@
+{
+  "name": "statefulset-governing-service-missing",
+  "description": "A StatefulSet's serviceName points to a Service that does not exist; its pods fail to resolve their peers' stable names and restart.",
+  "root": "service/streaming/queue",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

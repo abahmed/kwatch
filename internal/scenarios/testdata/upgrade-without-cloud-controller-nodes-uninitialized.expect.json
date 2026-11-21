@@ -1,0 +1,13 @@
+{
+  "name": "upgrade-without-cloud-controller-nodes-uninitialized",
+  "description": "After an upgrade removed the in-tree cloud provider with no cloud controller installed, new nodes keep the uninitialized taint and the pods that need them stay Pending; the taint explains it, not the scheduling reason alone.",
+  "root": "node//n3",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/web",
+    "node//n1",
+    "service/shop/web"
+  ],
+  "tail": "10m0s"
+}

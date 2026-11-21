@@ -1,0 +1,15 @@
+10:11:15 settled
+🟠 invoices in billing (prod-eu-1) cannot pull its image because registry registry.example.com refuses the image pulls. It fails with "Failed to pull image "registry.example.com/vendor/base:1.2": rpc error: code = NotFound desc = failed to pull and…". Every error mentions it. All three failing apps use it. Affected: transcode in media; web in shop. To see why the container cannot start, run kubectl describe pods invoices- -n billing
+🟠 invoices in billing (prod-eu-1) cannot pull its image because registry registry.example.com refuses the image pulls.
+| 🟠 **invoices** in **billing** (**prod-eu-1**) cannot pull its image because registry **registry.example.com** refuses the image pulls.
+| It fails with
+| ```
+| Failed to pull image "registry.example.com/vendor/base:1.2": rpc error: code = NotFound desc = failed to pull and…
+| ```
+| Every error mentions it.
+| All three failing apps use it.
+| Affected: **transcode** in **media**; **web** in **shop**.
+| To see why the container cannot start, run
+| ```
+| kubectl describe pods invoices- -n billing
+| ```

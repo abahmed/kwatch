@@ -1,0 +1,9 @@
+10:06:15 settled
+🟠 logship in observability (prod-eu-1) was OOM-killed by the node and not by its own limit. Node n1 ran out of memory. To see the node's memory use and the pods on it, run kubectl describe node n1
+🟠 logship in observability (prod-eu-1) was OOM-killed by the node and not by its own limit.
+| 🟠 **logship** in **observability** (**prod-eu-1**) was OOM-killed by the node and not by its own limit.
+| Node n1 ran out of memory.
+| To see the node's memory use and the pods on it, run
+| ```
+| kubectl describe node n1
+| ```

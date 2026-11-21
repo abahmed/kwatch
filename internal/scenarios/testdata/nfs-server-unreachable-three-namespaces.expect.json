@@ -1,0 +1,15 @@
+{
+  "name": "nfs-server-unreachable-three-namespaces",
+  "description": "Pods of three namespaces that mount the same NFS server stay in ContainerCreating with FailedMount \"Connection timed out\".",
+  "root": "unknown",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/shop/web",
+    "deployment/billing/invoices",
+    "deployment/media/transcode"
+  ],
+  "tail": "10m0s"
+}

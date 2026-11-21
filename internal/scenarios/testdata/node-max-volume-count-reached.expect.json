@@ -1,0 +1,13 @@
+{
+  "name": "node-max-volume-count-reached",
+  "description": "Every node already has its maximum number of volumes attached; a new Deployment's pods are Pending with \"exceed max volume count\" on all nodes.",
+  "root": "scheduling//exceed max volume count",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/web",
+    "scheduling//Insufficient cpu",
+    "scheduling//Too many pods"
+  ],
+  "tail": "10m0s"
+}

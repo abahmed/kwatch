@@ -1,0 +1,12 @@
+10:08:15 settled
+🟠 web in shop (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (exceed max volume count). The scheduler says "0/3 nodes are available: 3 node(s) exceed max volume count. preemption: 0/3 nodes are available: 3 No preemption…". To see the pods' state and events, run kubectl describe pods web- -n shop
+🟠 web in shop (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (exceed max volume count).
+| 🟠 **web** in **shop** (**prod-eu-1**) has waited two minutes for a node because the scheduler rejects every node (**exceed max volume count**).
+| The scheduler says
+| ```
+| 0/3 nodes are available: 3 node(s) exceed max volume count. preemption: 0/3 nodes are available: 3 No preemption…
+| ```
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods web- -n shop
+| ```

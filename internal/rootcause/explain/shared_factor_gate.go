@@ -32,7 +32,7 @@ func sharedGain(
 			n++
 		}
 	}
-	if n < SharedFactorMinWorkloads && !(s.c.coOnset &&
+	if n < SharedFactorMinWorkloads && !s.c.split && !(s.c.coOnset &&
 		n >= CoOnsetMinWorkloads) {
 		return 0
 	}

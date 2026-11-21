@@ -1,0 +1,14 @@
+{
+  "name": "coredns-upstream-resolver-unreachable",
+  "description": "CoreDNS's upstream resolver stops answering; cluster names resolve but every external name fails with \"server misbehaving\" in several namespaces.",
+  "root": "deployment/kube-system/coredns",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/shop/cart",
+    "deployment/billing/invoices"
+  ],
+  "tail": "10m0s"
+}

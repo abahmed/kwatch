@@ -1,0 +1,14 @@
+{
+  "name": "daemonset-selector-matches-no-node-after-upgrade",
+  "description": "A node upgrade removes the label a networking DaemonSet's nodeSelector requires; it selects no node, its pods are gone and new pods cannot set up their network.",
+  "root": "daemonset/kube-system/net-agent",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/shop/web",
+    "deployment/billing/invoices"
+  ],
+  "tail": "10m0s"
+}

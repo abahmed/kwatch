@@ -1,0 +1,11 @@
+{
+  "name": "job-failed-then-ttl-deleted",
+  "description": "A Job that failed is deleted 30 seconds later by its ttlSecondsAfterFinished; its pod's error was the only evidence.",
+  "root": "job/batch/rebuild-index",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

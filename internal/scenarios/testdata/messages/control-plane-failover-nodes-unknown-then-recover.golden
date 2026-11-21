@@ -1,0 +1,37 @@
+10:06:30 settled
+🔴 Three nodes (prod-eu-1) have not reported for about two minutes: n1, n2 and n3. They report "Kubelet stopped posting node status." kwatch cannot see why from inside the cluster: the kubelets stopped reporting, so the nodes may be down or unreachable.
+Related alerts: 3 node problems
+To check the node's conditions and recent events, run kubectl describe node n1
+🔴 Three nodes (prod-eu-1) have not reported for about two minutes: n1, n2 and n3.
+| 🔴 Three nodes (**prod-eu-1**) have not reported for about two minutes: n1, n2 and n3.
+| They report `Kubelet stopped posting node status.`
+| kwatch cannot see why from inside the cluster: the kubelets stopped reporting, so the nodes may be down or unreachable.
+| Related alerts: 3 node problems
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```
+10:06:45 settled
+🔴 The Kubernetes API (prod-eu-1) has been failing for about two minutes. It reports "Get "https://10.96.0.1:443/readyz": dial tcp 10.96.0.1:443: i/o timeout". To see which API server health checks fail, run kubectl get --raw '/readyz?verbose'
+🔴 The Kubernetes API (prod-eu-1) has been failing for about two minutes.
+| 🔴 The Kubernetes API (**prod-eu-1**) has been failing for about two minutes.
+| It reports `Get "https://10.96.0.1:443/readyz": dial tcp 10.96.0.1:443: i/o timeout`.
+| To see which API server health checks fail, run
+| ```
+| kubectl get --raw '/readyz?verbose'
+| ```
+10:08:40 material change
+🔴 Nodes n1–n3 (prod-eu-1) are now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
+🔴 Nodes n1–n3 (prod-eu-1) are now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
+| 🔴 Nodes n1–n3 (**prod-eu-1**) are now also affecting **cart**, **orders** and **payments** in shop: they have not been ready for three minutes.
+10:14:40 healthy for 3m0s
+✅ Node n1 (prod-eu-1) is ready again. It was down for six minutes. Six pods were affected.
+✅ Node n1 (prod-eu-1) is ready again.
+| ✅ Node n1 (**prod-eu-1**) is ready again.
+| It was down for six minutes.
+| Six pods were affected.
+10:14:40 healthy for 3m0s
+✅ The Kubernetes API (prod-eu-1) is healthy again. It was down for five minutes and recovered on its own.
+✅ The Kubernetes API (prod-eu-1) is healthy again.
+| ✅ The Kubernetes API (**prod-eu-1**) is healthy again.
+| It was down for five minutes and recovered on its own.

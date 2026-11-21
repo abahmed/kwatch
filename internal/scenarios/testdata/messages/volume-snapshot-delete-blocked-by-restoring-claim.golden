@@ -1,0 +1,18 @@
+10:01:15 settled
+🟠 VolumeSnapshot nightly in shop (prod-eu-1) is stuck deleting: finalizers snapshot.storage.kubernetes.io/volumesnapshot-as-source-protection hold it. The cause is not clear yet. To see the object's state and events, run kubectl describe volumesnapshot nightly -n shop
+🟠 VolumeSnapshot nightly in shop (prod-eu-1) is stuck deleting: finalizers snapshot.storage.kubernetes.io/volumesnapshot-as-source-protection hold it.
+| 🟠 VolumeSnapshot **nightly** in **shop** (**prod-eu-1**) is stuck deleting: finalizers snapshot.storage.kubernetes.io/volumesnapshot-as-source-protection hold it.
+| The cause is not clear yet.
+| To see the object's state and events, run
+| ```
+| kubectl describe volumesnapshot nightly -n shop
+| ```
+10:03:15 settled
+🟠 Volume claim restore-data in shop (prod-eu-1) has been waiting for a volume for two minutes. Claim restore-data is Pending: kwatch sees no workload in the cluster serving its provisioner pd.csi.storage.gke.io (it may run outside the cluster). To see why the volume claim is not usable, run kubectl describe pvc restore-data -n shop
+🟠 Volume claim restore-data in shop (prod-eu-1) has been waiting for a volume for two minutes.
+| 🟠 Volume claim **restore-data** in **shop** (**prod-eu-1**) has been waiting for a volume for two minutes.
+| Claim **restore-data** is Pending: kwatch sees no workload in the cluster serving its provisioner pd.csi.storage.gke.io (it may run outside the cluster).
+| To see why the volume claim is not usable, run
+| ```
+| kubectl describe pvc restore-data -n shop
+| ```

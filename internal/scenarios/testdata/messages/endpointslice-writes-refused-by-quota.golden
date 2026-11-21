@@ -1,0 +1,8 @@
+10:11:00 settled
+🟠 Quota object-counts in shop (prod-eu-1) is used up (count/endpointslices.discovery.k8s.io). To see the object's state and events, run kubectl describe resourcequota object-counts -n shop
+🟠 Quota object-counts in shop (prod-eu-1) is used up (count/endpointslices.discovery.k8s.io).
+| 🟠 Quota **object-counts** in **shop** (**prod-eu-1**) is used up (count/endpointslices.discovery.k8s.io).
+| To see the object's state and events, run
+| ```
+| kubectl describe resourcequota object-counts -n shop
+| ```

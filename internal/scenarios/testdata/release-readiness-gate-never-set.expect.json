@@ -1,0 +1,12 @@
+{
+  "name": "release-readiness-gate-never-set",
+  "description": "A release adds a readiness gate whose controller no longer runs; the new pod's containers are ready but the pod never becomes Ready and the rollout stalls.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

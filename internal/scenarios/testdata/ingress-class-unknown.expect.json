@@ -1,0 +1,13 @@
+{
+  "name": "ingress-class-unknown",
+  "description": "An Ingress names an IngressClass that no controller serves; it never gets an address while the backend and the controller are healthy.",
+  "root": "ingress/shop/shop",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "service/shop/web",
+    "deployment/shop/web",
+    "deployment/ingress-nginx/controller"
+  ],
+  "tail": "10m0s"
+}

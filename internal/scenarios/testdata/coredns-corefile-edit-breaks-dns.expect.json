@@ -1,0 +1,13 @@
+{
+  "name": "coredns-corefile-edit-breaks-dns",
+  "description": "The CoreDNS Corefile ConfigMap is edited and CoreDNS crash-loops on the new configuration; lookups fail in several namespaces and the DNS probe fails.",
+  "root": "configmap/kube-system/coredns",
+  "tier": "page",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "deployment/shop/cart",
+    "deployment/billing/invoices"
+  ]
+}

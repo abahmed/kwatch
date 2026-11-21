@@ -1,0 +1,11 @@
+10:06:15 roll-up
+🟠 kwatch (prod-eu-1) found three new problems at the same time. invoices in billing is failing: volume cannot be mounted. transcode in media is failing: volume cannot be mounted. web in shop is failing: volume cannot be mounted. Each one alerts on its own when it changes or resolves.
+🟠 kwatch (prod-eu-1) found three new problems at the same time.
+| 🟠 **kwatch roll-up** · prod-eu-1 — 3 new problems at the same time
+|
+| **Problems**
+| - **invoices** (**billing**) — volume cannot be mounted
+| - **transcode** (**media**) — volume cannot be mounted
+| - **web** (**shop**) — volume cannot be mounted
+|
+| *Each one alerts on its own when it changes or resolves.*

@@ -1,0 +1,12 @@
+{
+  "name": "upgrade-enforces-exec-probe-timeout",
+  "description": "After an upgrade an exec liveness probe that takes three seconds exceeds its one-second timeout; the kubelet restarts the container again and again.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

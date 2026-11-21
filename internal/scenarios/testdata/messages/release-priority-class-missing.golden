@@ -1,0 +1,16 @@
+10:03:15 settled
+🟠 api in shop (prod-eu-1) cannot create pods because priority class batch-critical does not exist. It reports "Error creating: pods "api-c068571c-" is forbidden: no PriorityClass with name batch-critical was found". Every error mentions it.
+Related alerts: 1 failed pod creation, 1 missing reference
+To see the object's state and events, run kubectl describe deployment api -n shop
+🟠 api in shop (prod-eu-1) cannot create pods because priority class batch-critical does not exist.
+| 🟠 **api** in **shop** (**prod-eu-1**) cannot create pods because priority class **batch-critical** does not exist.
+| It reports
+| ```
+| Error creating: pods "api-c068571c-" is forbidden: no PriorityClass with name batch-critical was found
+| ```
+| Every error mentions it.
+| Related alerts: 1 failed pod creation, 1 missing reference
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment api -n shop
+| ```

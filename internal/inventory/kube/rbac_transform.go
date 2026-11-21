@@ -44,6 +44,9 @@ func rbacTransform(obj any) (any, error) {
 	if rules := writeRules(u); len(rules) > 0 {
 		out.Object["rules"] = rules
 	}
+	if digest := rulesDigest(u); digest != "" {
+		out.Object[rulesDigestField] = digest
+	}
 	if ref, ok := u.Object["roleRef"].(map[string]any); ok {
 		out.Object["roleRef"] = map[string]any{
 			"kind": str(ref, "kind"), "name": str(ref, "name")}

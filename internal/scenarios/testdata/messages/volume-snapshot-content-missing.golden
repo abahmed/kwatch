@@ -1,0 +1,9 @@
+10:04:15 settled
+🟠 VolumeSnapshot restored in shop (prod-eu-1) is failing: Kubernetes reported SnapshotContentMissing. The cause is not clear yet. To see the object's state and events, run kubectl describe volumesnapshot restored -n shop
+🟠 VolumeSnapshot restored in shop (prod-eu-1) is failing: Kubernetes reported SnapshotContentMissing.
+| 🟠 VolumeSnapshot **restored** in **shop** (**prod-eu-1**) is failing: Kubernetes reported SnapshotContentMissing.
+| The cause is not clear yet.
+| To see the object's state and events, run
+| ```
+| kubectl describe volumesnapshot restored -n shop
+| ```

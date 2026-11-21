@@ -58,6 +58,9 @@ func checkedSentences(f caseFacts) []sentence {
 	if !checkedSaysMore(f) {
 		return recent
 	}
+	if text, ok := timeoutSentence(f); ok {
+		return append([]sentence{{part: partCause, text: text}}, recent...)
+	}
 	next := "."
 	if lookAtTheApp(f, len(recent) > 0) {
 		subject := "the app"

@@ -38,7 +38,8 @@ func (v *view) selfMatch(root, effect inventory.EntityID) (rowMatch, bool) {
 	}
 	cause := v.causeState(root, effect, LinkSelf)
 	if root != effect || !v.changedBefore(root, effect) ||
-		v.onlyNotReconciling(effect) || v.zeroNotFromChange(root, effect) {
+		v.onlyNotReconciling(effect) || v.onlyPausedEdit(effect) ||
+		v.zeroNotFromChange(root, effect) {
 		// An owner's change reaches its pods through the rollout row;
 		// a change after the failure began did not cause it.
 		cause.modes = withoutChanges(cause.modes)
@@ -62,6 +63,23 @@ func (v *view) onlyNotReconciling(effect inventory.EntityID) bool {
 		waiting = true
 	}
 	return waiting
+}
+
+// onlyPausedEdit reports an effect whose only failure is that it is
+// paused with an edit that has not rolled out: the edit is what waits,
+// so it cannot be what broke the object.
+func (v *view) onlyPausedEdit(effect inventory.EntityID) bool {
+	var paused bool
+	for _, f := range v.s.Findings[effect] {
+		if f.Health == detection.Healthy || f.Advisory {
+			continue
+		}
+		if f.Reason != reasons.DeploymentPausedEdit {
+			return false
+		}
+		paused = true
+	}
+	return paused
 }
 
 // changedBefore reports a change of id, other than a scale, no later

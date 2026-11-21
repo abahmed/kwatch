@@ -38,6 +38,9 @@ var serviceMentions = []*regexp.Regexp{
 		`connecting to|://)\s?([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)\b`),
 }
 
+// bracketedHost reads an IPv6 address with its port: "[fd00::1]:8080".
+var bracketedHost = regexp.MustCompile(`\[([0-9a-f:]+)\]:(\d{2,5})\b`)
+
 // ModeBackendsFailing is a pod behind a Service, or the workload that
 // owns such pods, that fails while the effect calls the Service. A finer
 // mode names the Service: "BackendsFailing.shop/redis".
@@ -65,9 +68,18 @@ func (v *view) callModes(
 ) []modeHealth {
 	switch id.Kind {
 	case kube.KindNetworkPolicy:
+		if modes := v.isolationModes(id, effect, link); len(modes) > 0 {
+			return modes
+		}
 		return v.blockModes(id, effect, link)
 	case kube.KindService:
+		if modes := v.serviceDefectModes(id, effect, link); len(modes) > 0 {
+			return modes
+		}
 		if modes := v.calledServiceModes(id, effect, link); len(modes) > 0 {
+			return modes
+		}
+		if modes := v.peerModes(id, effect, link); len(modes) > 0 {
 			return modes
 		}
 		return v.missingCalledModes(id, effect, link)
@@ -243,7 +255,8 @@ func (v *view) serviceIn(
 		return clusterCall{}, false
 	}
 	ported := map[string]bool{}
-	for _, mention := range serviceMentions {
+	for _, mention := range append(
+		[]*regexp.Regexp{bracketedHost}, serviceMentions...) {
 		for _, m := range mention.FindAllStringSubmatch(lower, -1) {
 			if len(m) > 2 {
 				ported[m[1]] = true

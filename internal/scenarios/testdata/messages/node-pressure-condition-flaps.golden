@@ -1,0 +1,13 @@
+10:04:15 settled
+🟠 Node n1 (prod-eu-1) is low on memory. To check the node's conditions and recent events, run kubectl describe node n1
+🟠 Node n1 (prod-eu-1) is low on memory.
+| 🟠 Node n1 (**prod-eu-1**) is low on memory.
+| To check the node's conditions and recent events, run
+| ```
+| kubectl describe node n1
+| ```
+10:18:00 flapping
+🟠 Node n1 (prod-eu-1) keeps failing and recovering: it has recovered three times recently. kwatch will write again when it stays healthy or fails differently.
+🟠 Node n1 (prod-eu-1) keeps failing and recovering: it has recovered three times recently.
+| 🟠 Node n1 (**prod-eu-1**) keeps failing and recovering: it has recovered three times recently.
+| kwatch will write again when it stays healthy or fails differently.

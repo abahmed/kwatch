@@ -1,0 +1,13 @@
+{
+  "name": "node-kubelet-restarts-repeatedly",
+  "description": "A node's kubelet restarts every two minutes; the detector sets FrequentKubeletRestart and the pods of three workloads on it blip unready while the node stays Ready.",
+  "root": "node//n1",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "deployment/shop/payments",
+    "deployment/shop/cart"
+  ],
+  "tail": "10m0s"
+}

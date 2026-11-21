@@ -1,0 +1,6 @@
+{
+  "name": "node-shutdown-pods-replaced-quiet",
+  "description": "A node is rebooted for patching; its Deployment pods end Failed with the node shutdown reason and are replaced on another node within a minute.",
+  "maxMessages": 0,
+  "quiet": true
+}

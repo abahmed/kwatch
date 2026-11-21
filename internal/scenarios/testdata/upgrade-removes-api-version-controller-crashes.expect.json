@@ -1,0 +1,12 @@
+{
+  "name": "upgrade-removes-api-version-controller-crashes",
+  "description": "After a cluster upgrade a controller built for a beta API version that is no longer served exits at start because it cannot list it.",
+  "root": "deployment/ingress-system/legacy-controller",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

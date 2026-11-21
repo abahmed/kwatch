@@ -1,0 +1,12 @@
+{
+  "name": "ephemeral-volume-claim-refused-by-quota",
+  "description": "A pod with a generic ephemeral volume stays Pending waiting for its claim, which the namespace's storage quota refuses.",
+  "root": "resourcequota/shop/storage-quota",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "deployment/shop/api"
+  ],
+  "tail": "10m0s"
+}

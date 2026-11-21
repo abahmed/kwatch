@@ -1,0 +1,11 @@
+{
+  "name": "daemonset-pod-pending-node-full",
+  "description": "A DaemonSet's pod for one node stays Pending with \"Insufficient memory\" and the DaemonSet is one pod short.",
+  "root": "node//n4",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "daemonset/observability/logship"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,14 @@
+10:05:15 settled
+🟠 cache in shop (prod-eu-1) is failing because it has no ready pods for the waiting pod to be placed beside. No node fits: the nodes: the closest node, n1, has no pod in its kubernetes.io/hostname that the pod's affinity requires. The scheduler says "0/2 nodes are available: 2 node(s) didn't match pod affinity rules. preemption: 0/2 nodes are available: 2 Preemption…". Affected: api. To see the pods' state and events, run kubectl describe pods api- -n shop
+🟠 cache in shop (prod-eu-1) is failing because it has no ready pods for the waiting pod to be placed beside.
+| 🟠 **cache** in **shop** (**prod-eu-1**) is failing because it has no ready pods for the waiting pod to be placed beside.
+| No node fits: the nodes: the closest node, n1, has no pod in its kubernetes.io/hostname that the pod's affinity requires.
+| The scheduler says
+| ```
+| 0/2 nodes are available: 2 node(s) didn't match pod affinity rules. preemption: 0/2 nodes are available: 2 Preemption…
+| ```
+| Affected: **api**.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods api- -n shop
+| ```

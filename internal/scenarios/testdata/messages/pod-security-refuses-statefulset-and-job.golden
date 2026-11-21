@@ -1,0 +1,11 @@
+10:12:15 settled
+🟠 Namespace streaming is failing (prod-eu-1) after the 10:10 UTC change to its pod-security. The pod-security changed to enforce=restricted. Both failing apps use it. Affected: queue in streaming. To see the object's state and events, run kubectl describe job compact-29251930 -n streaming
+🟠 Namespace streaming is failing (prod-eu-1) after the 10:10 UTC change to its pod-security.
+| 🟠 Namespace **streaming** is failing (**prod-eu-1**) after the 10:10 UTC change to its pod-security.
+| The pod-security changed to enforce=restricted.
+| Both failing apps use it.
+| Affected: **queue** in **streaming**.
+| To see the object's state and events, run
+| ```
+| kubectl describe job compact-29251930 -n streaming
+| ```

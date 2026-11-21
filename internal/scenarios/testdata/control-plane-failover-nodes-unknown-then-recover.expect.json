@@ -1,0 +1,14 @@
+{
+  "name": "control-plane-failover-nodes-unknown-then-recover",
+  "description": "Every node reads Ready=Unknown for six minutes after a control-plane failover and all return together; no drain or reboot is involved.",
+  "root": "unknown",
+  "tier": "page",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "deployment/shop/payments",
+    "deployment/shop/cart"
+  ],
+  "ambiguous": true,
+  "tail": "10m0s"
+}

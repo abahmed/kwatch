@@ -1,0 +1,7 @@
+10:31:15 digest
+🟡 kwatch summary (prod-eu-1): one new low-priority problem. Cron job slow-export in reports has not succeeded since 2026-09-29 (96 scheduled runs). Not urgent: kwatch alerts on its own if it gets worse.
+🟡 kwatch summary (prod-eu-1): one new low-priority problem.
+| 🟡 **kwatch summary** · prod-eu-1 — 1 problem
+|
+| **Problems**
+| - Cron job **slow-export** in **reports** has not succeeded since 2026-09-29 (96 scheduled runs)

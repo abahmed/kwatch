@@ -1,0 +1,11 @@
+{
+  "name": "pod-resize-deferred-no-room",
+  "description": "An in-place resize of a pod's CPU stays Pending (PodResizePending, Deferred) because its node has no room.",
+  "root": "node//n1",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/api"
+  ],
+  "tail": "10m0s"
+}

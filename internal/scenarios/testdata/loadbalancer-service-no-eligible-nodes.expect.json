@@ -1,0 +1,11 @@
+{
+  "name": "loadbalancer-service-no-eligible-nodes",
+  "description": "A LoadBalancer Service has no node to register: every node is excluded from external load balancers; the Service controller reports UnAvailableLoadBalancer.",
+  "root": "unknown",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/web"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "node-runtime-container-name-reserved",
+  "description": "New pods on one node fail with CreateContainerError \"failed to reserve container name\" while the same workload starts on other nodes.",
+  "root": "node//n3",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/api"
+  ],
+  "tail": "10m0s"
+}

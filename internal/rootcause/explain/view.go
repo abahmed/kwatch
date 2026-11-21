@@ -37,7 +37,9 @@ type view struct {
 	// the entity: when one starts failing, the walk can reach further.
 	gates map[inventory.EntityID][]inventory.EntityID
 	// dnsSeen memoises dnsSignalled; nil until it is computed.
-	dnsSeen *bool
+	// removedImages memoises removedImage by image.
+	removedImages map[string]int
+	dnsSeen       *bool
 	// rbac memoises changedRBAC; nil until it is computed.
 	rbac *[]inventory.EntityID
 	// removed memoises removedOf per kind; nil until it is computed.
@@ -328,6 +330,10 @@ func (v *view) causeState(
 		// A failed pull blames a Secret only as the pod's login, and
 		// a Secret that is only a login is blamed for nothing else.
 		modes = withoutPseudo(modes)
+	}
+	if link == LinkUses && id.Kind == kube.KindSecret &&
+		v.pullFailing(effect) && v.wrongTypePullLogin(id, effect) {
+		modes = append(modes, pseudoFailing(ModeWrongType)...)
 	}
 	return state{id: id, modes: modes}
 }

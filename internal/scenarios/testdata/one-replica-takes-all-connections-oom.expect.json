@@ -1,0 +1,13 @@
+{
+  "name": "one-replica-takes-all-connections-oom",
+  "description": "One replica of a three-replica service is OOMKilled repeatedly and goes unready while its siblings are fine and no node reports a fault.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "node//n3"
+  ],
+  "tail": "10m0s"
+}

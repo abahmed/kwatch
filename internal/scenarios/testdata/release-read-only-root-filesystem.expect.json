@@ -1,0 +1,11 @@
+{
+  "name": "release-read-only-root-filesystem",
+  "description": "A release turns on readOnlyRootFilesystem; the new pods crash-loop because the app cannot write its pid file.",
+  "root": "deployment/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ]
+}

@@ -1,0 +1,8 @@
+10:03:15 settled
+🟠 VolumeSnapshotContent snapcontent-3f2a (prod-eu-1) is failing: Kubernetes reported SnapshotCreationFailed. To see the object's state and events, run kubectl describe volumesnapshotcontent snapcontent-3f2a
+🟠 VolumeSnapshotContent snapcontent-3f2a (prod-eu-1) is failing: Kubernetes reported SnapshotCreationFailed.
+| 🟠 VolumeSnapshotContent **snapcontent-3f2a** (**prod-eu-1**) is failing: Kubernetes reported SnapshotCreationFailed.
+| To see the object's state and events, run
+| ```
+| kubectl describe volumesnapshotcontent snapcontent-3f2a
+| ```

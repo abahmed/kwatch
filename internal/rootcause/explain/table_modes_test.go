@@ -17,13 +17,19 @@ var pseudoModes = []detection.Mode{
 	ModeVolumePinned, ModeBlocksCall, ModeBackendsFailing,
 	ModeBackendChanged, ModeLivenessStartShort, ModeLivenessNeverReady,
 	pullAuth, pullRateLimit, pullServer, pullTLS, pullNetwork, pullStatus,
-	pullUnexplained, ModePreempting, ModeEphemeralTooLow,
+	pullUnexplained, pullRemoved, ModePreempting, ModeEphemeralTooLow,
 	ModePodSecurityDenied, ModeLimitRangeDenied, ModePolicyDenied,
-	ModeHoldsVolume, ModeProvisionerDown,
+	ModeHoldsVolume, ModeProvisionerDown, ModeHidesNotReady, ModeRefusesPods,
+	ModeProtocolMismatch, ModeNameIsAddress, ModeFamilyMismatch, ModeIsolatesBackend,
 	ModeNoStorageClass, modeFailedMount, modeFailedAttach,
-	ModeAgentAbsent, ModeNoPullSecret, ModeDiskHog, ModeNoGrant,
+	ModeAgentAbsent, ModeNoPullSecret, ModeDiskHog, ModeNoGrant, ModeRoleShort,
 	ModeDependencyUnreachable, ModeBackendsNotReady, ModeKeyMissing,
-	ModePullThrottled,
+	ModePullThrottled, ModeWrongType, ModeBoundElsewhere,
+	ModeNamedByScheduler, ModeNamedByScheduler + ".PriorityClass",
+	ModeNamedByScheduler + ".Owner", ModeNamedByScheduler + ".Claim",
+	ModeNamedByScheduler + ".AffinityTarget",
+	ModeNamedByScheduler + ".PinnedNode",
+	ModeNamedByScheduler + ".ScarceNode", ModeNamedByScheduler + ".CordonedNode", ModeClassRejects, ModeClaimPinsVolume,
 }
 
 // TestTableModesAreKnown checks every mode a row names is one some

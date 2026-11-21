@@ -1,0 +1,12 @@
+10:02:45 settled
+🔴 The Kubernetes API (prod-eu-1) has been failing for about two minutes. It reports "Get "https://10.96.0.1:443/readyz": tls: failed to verify certificate: x509: certificate has expired or is not yet…". To see which API server health checks fail, run kubectl get --raw '/readyz?verbose'
+🔴 The Kubernetes API (prod-eu-1) has been failing for about two minutes.
+| 🔴 The Kubernetes API (**prod-eu-1**) has been failing for about two minutes.
+| It reports
+| ```
+| Get "https://10.96.0.1:443/readyz": tls: failed to verify certificate: x509: certificate has expired or is not yet…
+| ```
+| To see which API server health checks fail, run
+| ```
+| kubectl get --raw '/readyz?verbose'
+| ```

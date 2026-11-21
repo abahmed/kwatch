@@ -1,0 +1,12 @@
+{
+  "name": "selectorless-service-without-endpoints",
+  "description": "A Service without a selector has no endpoints because its Endpoints object carries another name; callers are refused.",
+  "root": "service/shop/external-db",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/web",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,13 @@
+{
+  "name": "node-unregister-netdevice-stuck",
+  "description": "A node's kernel cannot release network devices; the detector sets FrequentUnregisterNetDevice, deleted pods stay Terminating and new pods fail to create a sandbox.",
+  "root": "node//n3",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "deployment/shop/orders",
+    "deployment/shop/payments",
+    "deployment/shop/cart"
+  ],
+  "tail": "10m0s"
+}

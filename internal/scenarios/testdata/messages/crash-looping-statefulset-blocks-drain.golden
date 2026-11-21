@@ -1,0 +1,24 @@
+10:06:15 settled
+🟠 queue in streaming (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "panic: failed to join cluster: cluster id mismatch". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs queue-0 -c app -n streaming --previous
+🟠 queue in streaming (prod-eu-1) keeps crashing.
+| 🟠 **queue** in **streaming** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| It fails with `panic: failed to join cluster: cluster id mismatch`.
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| To read the output of the last crash, run
+| ```
+| kubectl logs queue-0 -c app -n streaming --previous
+| ```
+10:11:15 settled
+🟠 Disruption budget queue-pdb in streaming (prod-eu-1) is failing: blocks node drains: too few healthy pods. To see the object's state and events, run kubectl describe poddisruptionbudget queue-pdb -n streaming
+🟠 Disruption budget queue-pdb in streaming (prod-eu-1) is failing: blocks node drains: too few healthy pods.
+| 🟠 Disruption budget **queue-pdb** in **streaming** (**prod-eu-1**) is failing: blocks node drains: too few healthy pods.
+| To see the object's state and events, run
+| ```
+| kubectl describe poddisruptionbudget queue-pdb -n streaming
+| ```
+10:17:00 material change
+🟠 Disruption budget queue-pdb in streaming (prod-eu-1) now allows no eviction, so the drain of node n1 is blocked. It is now also affecting node n1: it is cordoned for maintenance.
+🟠 Disruption budget queue-pdb in streaming (prod-eu-1) now allows no eviction, so the drain of node n1 is blocked.
+| 🟠 Disruption budget **queue-pdb** in **streaming** (**prod-eu-1**) now allows no eviction, so the drain of node n1 is blocked.
+| It is now also affecting node n1: it is cordoned for maintenance.

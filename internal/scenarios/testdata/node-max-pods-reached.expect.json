@@ -1,0 +1,11 @@
+{
+  "name": "node-max-pods-reached",
+  "description": "Every node already runs its maximum number of pods; a new Deployment's replicas are Pending with \"Too many pods\" on all nodes.",
+  "root": "scheduling//Too many pods",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/web",
+    "scheduling//Insufficient cpu"
+  ]
+}

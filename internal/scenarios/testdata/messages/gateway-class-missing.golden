@@ -1,0 +1,8 @@
+10:03:15 settled
+🟠 Gateway public in shop (prod-eu-1) reports Accepted=Unknown: "Waiting for controller". To see the object's state and events, run kubectl describe gateway public -n shop
+🟠 Gateway public in shop (prod-eu-1) reports Accepted=Unknown: "Waiting for controller".
+| 🟠 Gateway **public** in **shop** (**prod-eu-1**) reports Accepted=Unknown: `Waiting for controller`.
+| To see the object's state and events, run
+| ```
+| kubectl describe gateway public -n shop
+| ```

@@ -1,0 +1,42 @@
+10:02:45 roll-up
+🔴 kwatch (prod-eu-1) found two new problems at the same time. etcd has been failing for about two minutes. The scheduler has been failing for about two minutes. Each one alerts on its own when it changes or resolves.
+🔴 kwatch (prod-eu-1) found two new problems at the same time.
+| 🔴 **kwatch roll-up** · prod-eu-1 — 2 new problems at the same time
+|
+| **Problems**
+| - **etcd** has been failing for about two minutes
+| - The scheduler has been failing for about two minutes
+|
+| *Each one alerts on its own when it changes or resolves.*
+10:02:45 settled
+🔴 etcd (prod-eu-1) has been failing for about two minutes. It reports "[-]etcd failed: etcdserver: request timed out". To see whether the API server's etcd check passes, run kubectl get --raw '/readyz?verbose'
+🔴 etcd (prod-eu-1) has been failing for about two minutes.
+| 🔴 **etcd** (**prod-eu-1**) has been failing for about two minutes.
+| It reports `[-]etcd failed: etcdserver: request timed out`.
+| To see whether the API server's **etcd** check passes, run
+| ```
+| kubectl get --raw '/readyz?verbose'
+| ```
+10:02:45 settled
+🔴 The scheduler (prod-eu-1) has been failing for about two minutes. It reports "leader lease not renewed for 2m5s". To see the scheduler pods, run kubectl -n kube-system get pods -l component=kube-scheduler
+🔴 The scheduler (prod-eu-1) has been failing for about two minutes.
+| 🔴 The scheduler (**prod-eu-1**) has been failing for about two minutes.
+| It reports `leader lease not renewed for 2m5s`.
+| To see the scheduler pods, run
+| ```
+| kubectl -n kube-system get pods -l component=kube-scheduler
+| ```
+10:04:00 material change
+🔴 The scheduler (prod-eu-1) has been failing for two minutes. It reports "leader lease not renewed for 3m5s". Replicas that do not depend on it are healthy. Affected: invoices in billing; cart and search in shop.
+Related alerts: 3 pending pods
+To see the scheduler pods, run kubectl -n kube-system get pods -l component=kube-scheduler
+🔴 The scheduler (prod-eu-1) has been failing for two minutes.
+| 🔴 The scheduler (**prod-eu-1**) has been failing for two minutes.
+| It reports `leader lease not renewed for 3m5s`.
+| Replicas that do not depend on it are healthy.
+| Affected: **invoices** in **billing**; **cart** and **search** in **shop**.
+| Related alerts: 3 pending pods
+| To see the scheduler pods, run
+| ```
+| kubectl -n kube-system get pods -l component=kube-scheduler
+| ```

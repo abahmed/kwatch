@@ -1,0 +1,13 @@
+10:03:15 settled
+🟠 ledger in shop (prod-eu-1) keeps crashing. No cause found in cluster state: its node, registry and services are healthy and unchanged. Its error is a network timeout to 10.96.22.5:8080, so check the path to that address. It fails with "level=fatal msg="self check" err="dial tcp 10.96.22.5:8080: i/o timeout"". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. Service ledger can't serve traffic. It runs a single replica. To read the output of the last crash, run kubectl logs deploy/ledger -c app -n shop --previous
+🟠 ledger in shop (prod-eu-1) keeps crashing.
+| 🟠 **ledger** in **shop** (**prod-eu-1**) keeps crashing.
+| No cause found in cluster state: its node, registry and services are healthy and unchanged. Its error is a network timeout to 10.96.22.5:8080, so check the path to that address.
+| It fails with `level=fatal msg="self check" err="dial tcp 10.96.22.5:8080: i/o timeout"`.
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| Service **ledger** can't serve traffic.
+| It runs a single replica.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/ledger -c app -n shop --previous
+| ```

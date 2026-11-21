@@ -26,24 +26,51 @@ type causeWording struct {
 // causeWords are keyed by the explain row that blamed the cause
 // (rootcause.CauseRecord.Rule). A row missing here reads "is failing".
 var causeWords = map[string]causeWording{
-	"account-missing-at-create":       {words: "does not exist"},
-	"apiserver-unavailable":           {words: "is not answering"},
-	"apiservice-backend-missing":      {words: "does not exist"},
-	"apiservice-unavailable":          {words: "is unavailable"},
-	"backends-failing":                {words: "has no healthy backends"},
-	"called-service-backend-changed":  {words: "changed shortly before"},
-	"called-service-backends-failing": {words: "is failing"},
-	"called-service-no-endpoints":     {words: "has no ready endpoints"},
+	"account-missing-at-create":             {words: "does not exist"},
+	"apiserver-unavailable":                 {words: "is not answering"},
+	"component-pod-etcd":                    {words: "is not running"},
+	"component-pod-kube-scheduler":          {words: "is not running"},
+	"component-pod-kube-controller-manager": {words: "is not running"},
+	"apiservice-backend-missing":            {words: "does not exist"},
+	"apiservice-unavailable":                {words: "is unavailable"},
+	"backends-failing":                      {words: "has no healthy backends"},
+	"called-service-backend-changed":        {words: "changed shortly before"},
+	"called-service-backends-failing":       {words: "is failing"},
+	"called-service-no-endpoints":           {words: "has no ready endpoints"},
 	"autoscaling-limit": {
 		words: "has reached its autoscaling limit"},
+	"autoscaler-flaps-replicas": {
+		words: "keeps changing the replica count"},
+	"scheduler-names-priority-class": {
+		words: "never preempts, so its pods wait for room"},
+	"scheduler-names-owner": {
+		words: "has an old pod that still holds its single-pod volume claim"},
+	"scheduler-names-claim": {
+		words: "has no node with enough free storage"},
+	"scheduler-names-affinity-target": {
+		words: "has no ready pods for the waiting pod to be placed beside"},
+	"scheduler-names-pinned-node": {
+		words: "has no room for the pod pinned to it"},
+	"scheduler-names-scarce-node": {
+		words: "has none left of the resource the pod asks for"},
 	"autoscaling-limit-unavailable": {
 		words: "has reached its autoscaling limit"},
 	"budget-blocks-drain": {words: "allows no eviction"},
 	"certificate-expired": {words: "holds an expired certificate"},
 	"claim-not-usable":    {words: "cannot be used"},
+	"conversion-webhook-down": {
+		words: "cannot convert its resources: its webhook backend is gone"},
+	"volume-bound-elsewhere": {
+		words: "is already bound to a different claim"},
 	"claim-pins-pod": {
 		words: "is bound to a volume in a zone with no node for the pod"},
 	"cluster-dns-failing":          {words: "is not resolving names"},
+	"dns-config-changed":           {words: "changed shortly before"},
+	"dns-config-changed-resolver":  {words: "changed shortly before"},
+	"dns-service-changed":          {words: "changed shortly before"},
+	"dns-service-changed-resolver": {words: "changed shortly before"},
+	"dns-role-changed":             {words: "no longer grants the access it needs"},
+	"dns-role-changed-resolver":    {words: "no longer grants the access it needs"},
 	"cluster-dns-servers":          {words: "is not resolving names"},
 	"cluster-dns-server-workload":  {words: "is not resolving names"},
 	"config-missing-or-changed":    {words: "does not exist"},
@@ -123,6 +150,11 @@ var causeWords = map[string]causeWording{
 			"those nodes are evicted"},
 	"account-has-no-grant": {
 		words: "is named by no role binding, so nothing is granted to it"},
+	"role-lacks-grant": {
+		words: "does not grant the access its account is refused"},
+	"account-replaced": {
+		words: "was deleted and created again, so the tokens of " +
+			"running pods are no longer accepted"},
 	"quota-exhausted": {words: "is used up"},
 	"resource-claim-unallocated": {
 		words: "has no device allocated, so its pod cannot start"},
@@ -160,6 +192,12 @@ var causeWords = map[string]causeWording{
 		words: "sets no storage class and the cluster has no default one"},
 	"storage-class-missing":         {words: "does not exist"},
 	"storage-class-missing-pending": {words: "does not exist"},
+	"claim-pins-volume": {
+		words: "is bound to the volume whose deletion waits for it"},
+	"storage-class-rejects": {
+		words: "sets a secret or parameter its provisioner rejects"},
+	"storage-class-rejects-pending": {
+		words: "sets a secret or parameter its provisioner rejects"},
 	"startup-budget-too-short": {own: true,
 		words: "its containers get too little time to start"},
 	"summary":                 {words: "is failing"},

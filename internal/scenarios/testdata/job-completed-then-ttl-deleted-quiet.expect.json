@@ -1,0 +1,6 @@
+{
+  "name": "job-completed-then-ttl-deleted-quiet",
+  "description": "A Job that completed is deleted 30 seconds later by its ttlSecondsAfterFinished.",
+  "maxMessages": 0,
+  "quiet": true
+}

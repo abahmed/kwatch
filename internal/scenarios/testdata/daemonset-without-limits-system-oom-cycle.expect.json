@@ -1,0 +1,13 @@
+{
+  "name": "daemonset-without-limits-system-oom-cycle",
+  "description": "A node agent without a memory limit grows on every node; each node reports a system OOM naming it and flaps NotReady and Ready, twice.",
+  "root": "daemonset/observability/logship",
+  "tier": "notify",
+  "maxMessages": 3,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2",
+    "node//n3"
+  ],
+  "tail": "10m0s"
+}

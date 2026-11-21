@@ -1,0 +1,6 @@
+{
+  "name": "ephemeral-debug-container-fails-quiet",
+  "description": "A debug container attached to a healthy pod cannot pull its image; the pod's own containers stay ready.",
+  "maxMessages": 0,
+  "quiet": true
+}

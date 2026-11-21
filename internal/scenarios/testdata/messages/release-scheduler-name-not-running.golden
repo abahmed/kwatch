@@ -1,0 +1,10 @@
+10:05:15 settled
+🟠 api in shop (prod-eu-1) has not been looked at by the scheduler for two minutes. Cause not found yet: its registry is healthy and unchanged. In the last 30 minutes in shop: the api rollout started at 10:02 UTC. To see the pods' state and events, run kubectl describe pods api- -n shop
+🟠 api in shop (prod-eu-1) has not been looked at by the scheduler for two minutes.
+| 🟠 **api** in **shop** (**prod-eu-1**) has not been looked at by the scheduler for two minutes.
+| Cause not found yet: its registry is healthy and unchanged.
+| In the last 30 minutes in shop: the **api** rollout started at 10:02 UTC.
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods api- -n shop
+| ```

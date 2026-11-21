@@ -1,0 +1,6 @@
+{
+  "name": "pod-scheduling-gate-removed-quickly-quiet",
+  "description": "Pods are gated for 30 seconds by a queueing controller and run once it lifts the gate.",
+  "maxMessages": 0,
+  "quiet": true
+}

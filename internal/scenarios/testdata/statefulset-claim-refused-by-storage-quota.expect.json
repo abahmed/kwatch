@@ -1,0 +1,12 @@
+{
+  "name": "statefulset-claim-refused-by-storage-quota",
+  "description": "A StatefulSet scale-up cannot create its fourth PersistentVolumeClaim: the namespace's storage quota is used up; no pod is created.",
+  "root": "resourcequota/streaming/storage-quota",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "statefulset/streaming/queue",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

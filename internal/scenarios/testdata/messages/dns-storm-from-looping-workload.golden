@@ -1,0 +1,41 @@
+10:02:15 settled
+🟠 crawler in batch (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "Get "https://feed.partner.example/v1/items": dial tcp: lookup feed.partner.example on 10.96.0.10:53: no such host". Its last run lasted ten seconds; 18 restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs deploy/crawler -c app -n batch --previous
+🟠 crawler in batch (prod-eu-1) keeps crashing.
+| 🟠 **crawler** in **batch** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| It fails with
+| ```
+| Get "https://feed.partner.example/v1/items": dial tcp: lookup feed.partner.example on 10.96.0.10:53: no such host
+| ```
+| Its last run lasted ten seconds; 18 restarts since its pod was created one hour ago.
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/crawler -c app -n batch --previous
+| ```
+10:03:15 settled
+🟠 coredns in kube-system (prod-eu-1) keeps running out of memory because it is not resolving names. It was killed within 10 seconds of starting. The last run of container app in pod invoices-bcf7f095-a in billing lasted ten seconds; two restarts since the pod was created one hour ago. Its containers have no memory limit, so nothing caps their memory use. Affected: invoices in billing; web in shop.
+Related alerts: 2 crash loops
+To read the output of the last crash, run kubectl logs deploy/invoices -c app -n billing --previous
+Proof: both replicas fail, on 2 nodes.
+🟠 coredns in kube-system (prod-eu-1) keeps running out of memory because it is not resolving names.
+| 🟠 **coredns** in **kube-system** (**prod-eu-1**) keeps running out of memory because it is not resolving names.
+| It was killed within 10 seconds of starting.
+| The last run of container app in pod invoices-bcf7f095-a in **billing** lasted ten seconds; two restarts since the pod was created one hour ago.
+| Its containers have no memory limit, so nothing caps their memory use.
+| Affected: **invoices** in **billing**; **web** in **shop**.
+| Related alerts: 2 crash loops
+| To read the output of the last crash, run
+| ```
+| kubectl logs deploy/invoices -c app -n billing --previous
+| ```
+| *Proof: both replicas fail, on 2 nodes.*
+10:03:30 material change
+🔴 coredns in kube-system (prod-eu-1) is getting worse: crawler in batch now crash-loops. This is now critical. It was killed within 10 seconds of starting.
+🔴 coredns in kube-system (prod-eu-1) is getting worse: crawler in batch now crash-loops.
+| 🔴 **coredns** in **kube-system** (**prod-eu-1**) is getting worse: **crawler** in **batch** now crash-loops.
+| This is now critical.
+| It was killed within 10 seconds of starting.
+10:03:30 superseded by revised cause
+🟠 Moved: this is now part of the coredns crash in kube-system (prod-eu-1).
+🟠 Moved: this is now part of the coredns crash in kube-system (prod-eu-1).
+| 🟠 Moved: this is now part of the coredns crash in kube-system (**prod-eu-1**).

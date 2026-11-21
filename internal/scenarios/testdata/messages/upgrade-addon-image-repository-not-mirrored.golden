@@ -1,0 +1,14 @@
+10:06:15 settled
+🟠 coredns is failing in kube-system (prod-eu-1) after the 10:05 UTC release of registry.k8s.io/coredns/coredns:v1.11.3. The previous image was registry.example.com/mirror/coredns:v1.11.1. It fails with "Failed to pull image "registry.k8s.io/coredns/coredns:v1.11.3": failed to resolve reference: failed to do request: Head…". Fix: change the image of container app in deployment/coredns. To see why the container cannot start, run kubectl describe pods coredns- -n kube-system
+🟠 coredns is failing in kube-system (prod-eu-1) after the 10:05 UTC release of registry.k8s.io/coredns/coredns:v1.11.3.
+| 🟠 **coredns** is failing in **kube-system** (**prod-eu-1**) after the 10:05 UTC release of registry.k8s.io/coredns/coredns:v1.11.3.
+| The previous image was registry.example.com/mirror/coredns:v1.11.1.
+| It fails with
+| ```
+| Failed to pull image "registry.k8s.io/coredns/coredns:v1.11.3": failed to resolve reference: failed to do request: Head…
+| ```
+| Fix: change the image of container app in deployment/coredns.
+| To see why the container cannot start, run
+| ```
+| kubectl describe pods coredns- -n kube-system
+| ```

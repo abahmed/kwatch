@@ -1,0 +1,30 @@
+10:01:15 settled
+🟠 Namespace old-shop (prod-eu-1) has been terminating for two hours: Discovery failed for some groups, 1 failing: unable to retrieve the complete list of server APIs: metrics.k8s.io/v1beta1: stale GroupVersion discovery: metrics.k8s.io/v1beta1. To see the object's state and events, run kubectl describe namespace old-shop
+🟠 Namespace old-shop (prod-eu-1) has been terminating for two hours: Discovery failed for some groups, 1 failing: unable to retrieve the complete list of server APIs: metrics.k8s.io/v1beta1: stale GroupVersion discovery: metrics.k8s.io/v1beta1.
+| 🟠 Namespace **old-shop** (**prod-eu-1**) has been terminating for two hours: Discovery failed for some groups, 1 failing: unable to retrieve the complete list of server APIs: metrics.k8s.io/v1beta1: stale GroupVersion discovery: metrics.k8s.io/v1beta1.
+| To see the object's state and events, run
+| ```
+| kubectl describe namespace old-shop
+| ```
+10:03:15 settled
+🟠 API service v1beta1.metrics.k8s.io (prod-eu-1) is not available (missing endpoints). It reports "endpoints for service/metrics-server in "kube-system" have no addresses with port name "https"". To see the object's state and events, run kubectl describe apiservice v1beta1.metrics.k8s.io
+🟠 API service v1beta1.metrics.k8s.io (prod-eu-1) is not available (missing endpoints).
+| 🟠 API service **v1beta1.metrics.k8s.io** (**prod-eu-1**) is not available (missing endpoints).
+| It reports
+| ```
+| endpoints for service/metrics-server in "kube-system" have no addresses with port name "https"
+| ```
+| To see the object's state and events, run
+| ```
+| kubectl describe apiservice v1beta1.metrics.k8s.io
+| ```
+10:43:00 healthy for 3m0s
+✅ API service v1beta1.metrics.k8s.io (prod-eu-1) is healthy again. It was failing for 38 minutes and recovered on its own.
+✅ API service v1beta1.metrics.k8s.io (prod-eu-1) is healthy again.
+| ✅ API service **v1beta1.metrics.k8s.io** (**prod-eu-1**) is healthy again.
+| It was failing for 38 minutes and recovered on its own.
+10:43:30 healthy for 3m0s
+✅ Namespace old-shop (prod-eu-1) was deleted. It was failing for 41 minutes.
+✅ Namespace old-shop (prod-eu-1) was deleted.
+| ✅ Namespace **old-shop** (**prod-eu-1**) was deleted.
+| It was failing for 41 minutes.

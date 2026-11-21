@@ -1,0 +1,27 @@
+10:06:15 settled
+🟠 nvidia-device-plugin in kube-system (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "failed to start device plugin: could not load NVML: Driver/library version mismatch". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs ds/nvidia-device-plugin -c app -n kube-system --previous
+🟠 nvidia-device-plugin in kube-system (prod-eu-1) keeps crashing.
+| 🟠 **nvidia-device-plugin** in **kube-system** (**prod-eu-1**) keeps crashing.
+| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
+| It fails with
+| ```
+| failed to start device plugin: could not load NVML: Driver/library version mismatch
+| ```
+| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| To read the output of the last crash, run
+| ```
+| kubectl logs ds/nvidia-device-plugin -c app -n kube-system --previous
+| ```
+10:09:15 settled
+🟠 trainer in ml (prod-eu-1) is failing: kubelet rejected the pod at admission (unexpected admission error). Cause not found yet: its node and registry are healthy and unchanged. It fails with "Allocate failed due to no healthy devices present; cannot allocate unhealthy devices nvidia.com/gpu, which is unexpected". To see the pods' state and events, run kubectl describe pods trainer- -n ml
+🟠 trainer in ml (prod-eu-1) is failing: kubelet rejected the pod at admission (unexpected admission error).
+| 🟠 **trainer** in ml (**prod-eu-1**) is failing: kubelet rejected the pod at admission (unexpected admission error).
+| Cause not found yet: its node and registry are healthy and unchanged.
+| It fails with
+| ```
+| Allocate failed due to no healthy devices present; cannot allocate unhealthy devices nvidia.com/gpu, which is unexpected
+| ```
+| To see the pods' state and events, run
+| ```
+| kubectl describe pods trainer- -n ml
+| ```

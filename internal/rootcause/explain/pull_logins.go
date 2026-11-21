@@ -113,6 +113,35 @@ func (v *view) pullSecretsMissing(
 	return len(names) > 0
 }
 
+// pullSecretsWrongType reports an authentication refusal that is the
+// pod's own doing: every image pull Secret it names exists but none is a
+// registry login, so the kubelet found no credentials in it and pulled
+// anonymously. The Secret is the cause, and the registry, which refuses
+// an anonymous pull, is not at fault.
+func (v *view) pullSecretsWrongType(
+	effect inventory.EntityID, class detection.Mode,
+) bool {
+	pod, ok := v.podOf(effect)
+	if !ok || class != pullAuth {
+		return false
+	}
+	entity, ok := v.s.Model.Entity(pod)
+	if !ok {
+		return false
+	}
+	names := kube.PullSecretNames(attrText(entity, kube.AttrPullSecrets))
+	for _, name := range names {
+		secret, ok := v.s.Model.Entity(
+			inventory.CoreID(kube.KindSecret, pod.Namespace, name))
+		if !ok || attrText(secret, kube.AttrSecretType) == "" ||
+			kube.RegistryLoginType(attrText(secret,
+				kube.AttrSecretType)) {
+			return false
+		}
+	}
+	return len(names) > 0
+}
+
 // refusalOf is the registry refusal in the recent failed-pull notes of
 // a container or pod, and of the containers of a pod.
 func (v *view) refusalOf(id inventory.EntityID) string {
@@ -143,8 +172,12 @@ func (v *view) registryClass(
 		return "", false
 	}
 	class := classifyRegistryPull(text)
+	if class == pullImage && v.removedImage(text) {
+		return pullRemoved, true
+	}
 	if class == pullImage || class == pullNodeThrottled ||
 		v.pullSecretsMissing(effect, class) ||
+		v.pullSecretsWrongType(effect, class) ||
 		v.anonymousBesideLogins(effect) {
 		return "", false
 	}

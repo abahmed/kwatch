@@ -61,7 +61,7 @@ var condCases = []condCase{
 	{name: "pid pressure", kind: kube.KindNode,
 		cond: "PIDPressure", status: "True", age: 2 * time.Minute,
 		want: []wantFinding{{reasons.PIDPressure, detection.Critical, 0,
-			"Node is running out of process IDs", nil, true}}},
+			"Node is low on process IDs", nil, true}}},
 	{name: "pressure false", kind: kube.KindNode,
 		cond: "DiskPressure", status: "False", age: 2 * time.Minute},
 	{name: "network unavailable at once", kind: kube.KindNode,
@@ -184,7 +184,7 @@ var condCases = []condCase{
 	{name: "pod resize error", kind: kube.KindPod,
 		cond: "PodResizeInProgress", status: "True", reason: "Error",
 		message: "kubelet said no",
-		want: []wantFinding{{reasons.PodResizeError, detection.Warning, 0,
+		want: []wantFinding{{reasons.PodResizeError, detection.Info, 0,
 			"Pod resize failed to apply", msg("kubelet said no"), false}}},
 }
 

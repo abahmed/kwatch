@@ -50,7 +50,8 @@ var genericRows = []Row{
 				detection.Failing}},
 		Link: LinkUses,
 		Effect: Side{Group: AnyGroup, Kind: AnyKind,
-			Modes: configModes},
+			Modes: append([]detection.Mode{detection.ModeReplicaFailure,
+				detection.ModeFailedCreate}, configModes...)},
 		Prior: 0.6,
 	},
 	{
@@ -249,9 +250,20 @@ var workloadRows = []Row{
 		Link: LinkOwns, Effect: podSide(podFailures...), Prior: 0.7,
 	},
 	{
+		// A new template explains the new pod that cannot be placed:
+		// what it asks for or how it spreads is what the release set.
+		Name: "rollout-unschedulable",
+		Cause: Side{Group: AnyGroup, Kind: AnyKind,
+			Modes: []detection.Mode{ModeSpecChanged}},
+		Link: LinkOwns, Effect: Side{Kind: kube.KindPod,
+			Signal: SignalSpread, Modes: []detection.Mode{
+				detection.ModePending, detection.ModeUnschedulable}},
+		Prior: 0.85,
+	},
+	{
 		Name: RuleConfigMissingOrChanged,
 		Cause: Side{Kind: kube.KindSecret, Modes: []detection.Mode{ModeMissing,
-			ModeChanged, ModeKeyMissing}},
+			ModeChanged, ModeKeyMissing, ModeWrongType}},
 		// A Secret can be an image pull Secret: a pod that cannot
 		// pull with a missing or rotated login fails with ImagePull.
 		Link: LinkUses, Effect: podSide(
@@ -274,7 +286,8 @@ var workloadRows = []Row{
 		Effect: podSide(
 			detection.ModePending, detection.ModeUnschedulable,
 			detection.ModeCreating, detection.ModeCrashLoop,
-			detection.ModeCreateError, detection.ModeFailed),
+			detection.ModeCreateError, detection.ModeFailed,
+			modeFailedMount, modeFailedAttach),
 		Prior: 0.7,
 	},
 	{
@@ -292,13 +305,14 @@ var workloadRows = []Row{
 
 // specificRows are the precise rows for the most common failures.
 var specificRows = concatRows(nodeRows, workloadRows, clusterRows,
-	controlPlaneRows, apiLatencyRows, accessRows, trafficRows,
+	controlPlaneRows, apiLatencyRows, accessRows, dnsConfigRows, trafficRows,
 	nodeLifecycleRows,
 	operatorRows, workloadConfigRows, containerRows, calledRows,
 	serviceCallRows, policyCallRows, livenessStartRows, dependencyLogRows,
 	scalingRows, sharedRows, agentRows, preemptionRows, leaseRows, runConfigRows,
-	missingServiceRows, initWaitRows, finalizerRows, storageRows,
-	policyAdmitRows, nodeDegradedRows, claimRows, helmRows)
+	missingServiceRows, peerRows, serviceDefectRows, isolationRows, addressHolderRows, initWaitRows,
+	finalizerRows, storageRows, policyAdmitRows, nodeDegradedRows,
+	componentRows, claimRows, helmRows)
 
 func concatRows(groups ...[]Row) []Row {
 	var out []Row

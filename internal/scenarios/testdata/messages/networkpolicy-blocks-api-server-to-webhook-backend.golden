@@ -1,0 +1,17 @@
+10:12:15 settled
+🔴 ledger is down in billing (prod-eu-1) after the 10:10 UTC creation of network policy default-deny in policy-system. It reports "Internal error occurred: failed calling webhook "image-guard.policy.example.com": failed to call webhook: Post…". It was created shortly before. Affected: orders in shop.
+Related alerts: 2 failed pod creations
+To see the object's state and events, run kubectl describe deployment ledger -n billing
+🔴 ledger is down in billing (prod-eu-1) after the 10:10 UTC creation of network policy default-deny in policy-system.
+| 🔴 **ledger** is down in **billing** (**prod-eu-1**) after the 10:10 UTC creation of network policy **default-deny** in **policy-system**.
+| It reports
+| ```
+| Internal error occurred: failed calling webhook "image-guard.policy.example.com": failed to call webhook: Post…
+| ```
+| It was created shortly before.
+| Affected: **orders** in **shop**.
+| Related alerts: 2 failed pod creations
+| To see the object's state and events, run
+| ```
+| kubectl describe deployment ledger -n billing
+| ```

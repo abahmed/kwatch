@@ -1,0 +1,11 @@
+{
+  "name": "kubelet-admission-out-of-cpu-pileup",
+  "description": "Pods bound to one node are rejected by its kubelet with OutOfcpu; the ReplicaSet replaces each and the failed pods pile up.",
+  "root": "node//n2",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/batch/render"
+  ],
+  "tail": "10m0s"
+}

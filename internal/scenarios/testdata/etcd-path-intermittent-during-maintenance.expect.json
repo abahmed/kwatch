@@ -1,0 +1,12 @@
+{
+  "name": "etcd-path-intermittent-during-maintenance",
+  "description": "etcd is unreachable for a minute at a time, three times in fifteen minutes, with the API server timing out and recovering after each.",
+  "root": "etcd//etcd",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1",
+    "node//n2"
+  ],
+  "tail": "10m0s"
+}

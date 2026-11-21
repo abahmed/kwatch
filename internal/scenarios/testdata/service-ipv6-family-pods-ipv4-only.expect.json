@@ -1,0 +1,12 @@
+{
+  "name": "service-ipv6-family-pods-ipv4-only",
+  "description": "A Service whose primary IP family is IPv6 has no endpoints because the cluster's pods only get IPv4 addresses; its callers fail.",
+  "root": "service/shop/api",
+  "tier": "notify",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "deployment/shop/api",
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

@@ -1,0 +1,11 @@
+{
+  "name": "hpa-flapping-scale-up-down",
+  "description": "An HPA scales a Deployment from three to six replicas and back every few minutes for half an hour.",
+  "root": "horizontalpodautoscaler/shop/web",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "tail": "10m0s"
+}

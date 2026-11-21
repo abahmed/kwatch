@@ -137,7 +137,8 @@ func hintedName(name string) bool {
 }
 
 // ClusterServiceName reads a host as an in-cluster Service name: "svc",
-// "svc.ns", "svc.ns.svc" or "svc.ns.svc.<cluster domain>". A bare name
+// "svc.ns", "svc.ns.svc" or "svc.ns.svc.<cluster domain>", or a pod of a
+// StatefulSet by its stable name "pod.svc.ns.svc[...]". A bare name
 // belongs to namespace. Whether the Service exists is for the caller to
 // check. IP addresses and "localhost" are never Services, and neither
 // is a word Kubernetes would refuse as a Service or namespace name
@@ -153,6 +154,10 @@ func ClusterServiceName(host, namespace string) (ns, name string, ok bool) {
 		ns, name = namespace, labels[0]
 	case len(labels) == 2, len(labels) >= 3 && labels[2] == "svc":
 		ns, name = labels[1], labels[0]
+	case len(labels) >= 4 && labels[3] == "svc":
+		// A pod's stable name "<pod>.<svc>.<ns>.svc": the Service that
+		// governs it is the second label.
+		ns, name = labels[2], labels[1]
 	default:
 		return "", "", false
 	}

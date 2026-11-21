@@ -1,0 +1,12 @@
+{
+  "name": "hpa-duplicate-for-one-deployment",
+  "description": "A second HPA is created for a Deployment; both report AmbiguousSelector and neither scales.",
+  "root": "horizontalpodautoscaler/shop/web-extra",
+  "tier": "digest",
+  "maxMessages": 2,
+  "mustNotBlame": [
+    "node//n1"
+  ],
+  "ambiguous": true,
+  "tail": "10m0s"
+}

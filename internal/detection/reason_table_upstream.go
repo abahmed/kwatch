@@ -26,7 +26,7 @@ var upstreamReasons = []ReasonInfo{
 	// Pods run fine, so they reach the digest at most.
 	eventReason("Rebooted", Info),
 	eventReason("InvalidDiskCapacity", Info),
-	eventReason("FailedNodeAllocatableEnforcement", Warning),
+	eventReason("FailedNodeAllocatableEnforcement", Info),
 	// The node conditions and the OOM-killed container already show
 	// these.
 	stateReason("NodeHasInsufficientMemory", kube.KindNode),
@@ -61,6 +61,10 @@ var upstreamReasons = []ReasonInfo{
 	eventReason("VolumeFailedRecycle", Warning),
 	eventReason("VolumeFailedDelete", Warning),
 	eventReason("ClaimLost", Critical),
+	// The snapshot controllers: a snapshot the driver cannot create or
+	// whose content is gone is never ready.
+	eventReason("SnapshotCreationFailed", Critical),
+	eventReason("SnapshotContentMissing", Critical),
 	eventReason("VolumeMismatch", Info),
 	// Endpoints, load balancers and the rest of the control plane. The
 	// Service detectors read the endpoint and load balancer failures
@@ -91,7 +95,7 @@ var upstreamReasons = []ReasonInfo{
 	eventReason("VolumePermissionChangeInProgress", Info),
 	eventReason("ResizeDeferred", Info),
 	eventReason("ResizeInfeasible", Warning),
-	eventReason("ResizeError", Warning),
+	eventReason("ResizeError", Info),
 	eventReason("CertificateExpired", Warning),
 	eventReason("CertificateOverdueForRefresh", Warning),
 	eventReason("Denied", Warning),

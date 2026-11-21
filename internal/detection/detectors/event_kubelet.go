@@ -56,6 +56,10 @@ var sandboxClasses = []struct {
 		"network plugin is not ready", "cni plugin not initialized",
 		"cni config uninitialized", "networkpluginnotready",
 	}},
+	{detection.ModeNetworkConflict, []string{
+		"already exists for an interface", "address already in use",
+		"address already allocated", "route already exists",
+	}},
 }
 
 // eventMode names the failure mode an event's message makes more precise
