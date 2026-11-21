@@ -155,7 +155,7 @@ func (d Node) readiness(
 	// one: it keeps its onset, so the wait is not restarted by a flap.
 	since = ctx.Onset(notReadyOnset, since)
 	if !sustained(ctx, "node-not-ready", since,
-		silentGrace(ctx, d.notReady)) {
+		silentGrace(ctx, since, d.notReady)) {
 		return detection.Finding{}, false
 	}
 	ctx.Onset(reportedOnset, ctx.Now)

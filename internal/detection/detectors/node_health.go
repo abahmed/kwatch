@@ -34,7 +34,7 @@ func heartbeatFinding(
 	status, reason, since := condition(e, "Ready")
 	if status != "Unknown" || reason != nodeStatusUnknown ||
 		!sustained(ctx, "node-heartbeat", since,
-			silentGrace(ctx, nodeHeartbeatGrace)) {
+			silentGrace(ctx, since, nodeHeartbeatGrace)) {
 		return detection.Finding{}, false
 	}
 	if holding, _ := joinHold(ctx, e, status, since); holding {
