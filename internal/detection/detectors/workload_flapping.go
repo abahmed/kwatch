@@ -126,7 +126,29 @@ func flapExcluded(
 	ctx detection.Context, pod inventory.Entity, window time.Duration,
 ) bool {
 	return flag(pod, kube.AttrDeleting) || bootGraceFor(ctx, pod) > 0 ||
-		podStartingInRollout(ctx, pod) || restartedWithin(ctx, pod, min(window, flapWindow))
+		podStartingInRollout(ctx, pod) ||
+		restartedWithin(ctx, pod, min(window, flapWindow)) ||
+		nodeFlippedWithin(ctx, pod, window)
+}
+
+// nodeFlippedWithin reports a pod whose node went ready or not ready
+// inside the window: the pod followed its node, which the node's own
+// incident says, so its flips are no flapping of the workload.
+func nodeFlippedWithin(
+	ctx detection.Context, pod inventory.Entity, window time.Duration,
+) bool {
+	for _, id := range ctx.Model.Related(pod.ID, inventory.RunsOn,
+		inventory.Outgoing) {
+		attr, ok := ctx.Model.Attribute(id, kube.AttrReadySince)
+		if !ok {
+			continue
+		}
+		if at := attr.Value.AsTime(); !at.IsZero() &&
+			ctx.Now.Sub(at) < window {
+			return true
+		}
+	}
+	return false
 }
 
 // restartedWithin reports a pod with a container whose restart count
