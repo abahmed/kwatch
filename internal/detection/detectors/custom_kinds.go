@@ -83,6 +83,7 @@ func certificateRequest(
 	}
 	approved, _, approvedAt := condition(e, "Approved")
 	grace := DefaultCertificateIssue
+	severity := detection.Warning
 	since := approvedAt
 	summary := "Certificate request was approved but no certificate " +
 		"was issued; no signer handles " + signer
@@ -90,6 +91,9 @@ func certificateRequest(
 		if signer != kubeletServingSigner {
 			return detection.Finding{}, false
 		}
+		// The kubelet keeps serving with its own certificate; only the
+		// clients that verify it fail, so it is a digest line.
+		severity = detection.Info
 		grace, since = DefaultServingApproval, clusterSince(e,
 			valueSince(e, kube.AttrCertificateIssued))
 		summary = "Kubelet serving certificate request is waiting for " +
@@ -99,7 +103,7 @@ func certificateRequest(
 		return detection.Finding{}, false
 	}
 	return detection.Finding{
-		Reason: reasons.CertificateNotIssued, Severity: detection.Warning,
+		Reason: reasons.CertificateNotIssued, Severity: severity,
 		Health: detection.Failing, Since: since, Summary: summary,
 		Evidence: evidence,
 	}, true

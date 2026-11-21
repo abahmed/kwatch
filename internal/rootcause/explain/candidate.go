@@ -224,10 +224,7 @@ func (v *view) addUpstream(cs *candidateSet, effect inventory.EntityID) {
 			// Nothing is wrong with it; it is still what several
 			// failing workloads may have in common.
 			cs.noteChecked(effect, r.id)
-			cause = v.refusalState(r.id, effect)
-			if len(cause.modes) == 0 {
-				cause = v.sharedFactorState(r.id)
-			}
+			cause = v.suspectState(r.id, effect)
 			if len(cause.modes) == 0 {
 				continue
 			}

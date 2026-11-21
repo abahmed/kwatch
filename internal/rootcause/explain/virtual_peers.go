@@ -91,3 +91,10 @@ func (v *view) peerModes(
 	}
 	return pseudoFailing(ModeHidesNotReady)
 }
+
+// serviceNameHops lead from a failing pod to the Services its errors
+// and configuration name: one that does not exist, or a headless one
+// that hides its peers.
+func (v *view) serviceNameHops(pod inventory.EntityID) []hop {
+	return append(v.missingServiceHops(pod), v.peerHops(pod)...)
+}

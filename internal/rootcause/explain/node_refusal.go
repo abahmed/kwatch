@@ -18,6 +18,16 @@ const ModeRefusesPods detection.Mode = "RefusesPods"
 // refused at admission.
 const RuleNodeRefusesPods = "node-refuses-pods"
 
+// suspectState is what an upstream entity that shows no finding and no
+// change is suspected of: refusing the pod, else being what workloads
+// have in common.
+func (v *view) suspectState(id, effect inventory.EntityID) state {
+	if s := v.refusalState(id, effect); len(s.modes) > 0 {
+		return s
+	}
+	return v.sharedFactorState(id)
+}
+
 // refusalState is ModeRefusesPods for the node a failing pod was
 // refused by, and nothing for any other entity.
 func (v *view) refusalState(id, effect inventory.EntityID) state {

@@ -1,8 +1,0 @@
-10:17:15 settled
-🟠 CertificateSigningRequest csr-4k8x2 (prod-eu-1) is failing: kubelet serving certificate request is waiting for approval. To see the object's state and events, run kubectl describe certificatesigningrequest csr-4k8x2
-🟠 CertificateSigningRequest csr-4k8x2 (prod-eu-1) is failing: kubelet serving certificate request is waiting for approval.
-| 🟠 CertificateSigningRequest **csr-4k8x2** (**prod-eu-1**) is failing: kubelet serving certificate request is waiting for approval.
-| To see the object's state and events, run
-| ```
-| kubectl describe certificatesigningrequest csr-4k8x2
-| ```
