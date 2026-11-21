@@ -85,7 +85,8 @@ func registerClusterObjects() {
 				"its node"},
 		conditionCheck{cond: "PodResizeInProgress", status: "True",
 			reason: "Error", finding: reasons.PodResizeError,
-			severity: detection.Warning, message: quoteMessageIfAny,
+			// The pod keeps running at its old size.
+			severity: detection.Info, message: quoteMessageIfAny,
 			summary: "Pod resize failed to apply"},
 	)
 }

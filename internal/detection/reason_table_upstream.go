@@ -26,7 +26,7 @@ var upstreamReasons = []ReasonInfo{
 	// Pods run fine, so they reach the digest at most.
 	eventReason("Rebooted", Info),
 	eventReason("InvalidDiskCapacity", Info),
-	eventReason("FailedNodeAllocatableEnforcement", Warning),
+	eventReason("FailedNodeAllocatableEnforcement", Info),
 	// The node conditions and the OOM-killed container already show
 	// these.
 	stateReason("NodeHasInsufficientMemory", kube.KindNode),
@@ -95,7 +95,7 @@ var upstreamReasons = []ReasonInfo{
 	eventReason("VolumePermissionChangeInProgress", Info),
 	eventReason("ResizeDeferred", Info),
 	eventReason("ResizeInfeasible", Warning),
-	eventReason("ResizeError", Warning),
+	eventReason("ResizeError", Info),
 	eventReason("CertificateExpired", Warning),
 	eventReason("CertificateOverdueForRefresh", Warning),
 	eventReason("Denied", Warning),

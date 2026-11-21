@@ -184,7 +184,7 @@ var condCases = []condCase{
 	{name: "pod resize error", kind: kube.KindPod,
 		cond: "PodResizeInProgress", status: "True", reason: "Error",
 		message: "kubelet said no",
-		want: []wantFinding{{reasons.PodResizeError, detection.Warning, 0,
+		want: []wantFinding{{reasons.PodResizeError, detection.Info, 0,
 			"Pod resize failed to apply", msg("kubelet said no"), false}}},
 }
 

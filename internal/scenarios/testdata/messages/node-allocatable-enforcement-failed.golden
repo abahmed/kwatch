@@ -1,8 +1,7 @@
-10:11:15 settled
-🟠 Node n1 (prod-eu-1) is failing: Kubernetes reported FailedNodeAllocatableEnforcement. To check the node's conditions and recent events, run kubectl describe node n1
-🟠 Node n1 (prod-eu-1) is failing: Kubernetes reported FailedNodeAllocatableEnforcement.
-| 🟠 Node n1 (**prod-eu-1**) is failing: Kubernetes reported FailedNodeAllocatableEnforcement.
-| To check the node's conditions and recent events, run
-| ```
-| kubectl describe node n1
-| ```
+10:41:15 digest
+🟡 kwatch summary (prod-eu-1): one new low-priority problem. Node n1 is failing: Kubernetes reported FailedNodeAllocatableEnforcement. Not urgent: kwatch alerts on its own if it gets worse.
+🟡 kwatch summary (prod-eu-1): one new low-priority problem.
+| 🟡 **kwatch summary** · prod-eu-1 — 1 problem
+|
+| **Problems**
+| - Node n1 — Kubernetes reported FailedNodeAllocatableEnforcement
