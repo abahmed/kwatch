@@ -1,17 +1,7 @@
-10:01:15 settled
-🟠 Cron job slow-export in reports (prod-eu-1) is failing: scheduled run did not start (due eight hours ago). To see the object's state and events, run kubectl describe cronjob slow-export -n reports
-🟠 Cron job slow-export in reports (prod-eu-1) is failing: scheduled run did not start (due eight hours ago).
-| 🟠 Cron job **slow-export** in **reports** (**prod-eu-1**) is failing: scheduled run did not start (due eight hours ago).
-| To see the object's state and events, run
-| ```
-| kubectl describe cronjob slow-export -n reports
-| ```
-10:05:30 cause revised
-🟡 Cause now known: Cron job slow-export in reports (prod-eu-1) has not succeeded since 2026-09-29 (97 scheduled runs).
-🟡 Cause now known: Cron job slow-export in reports (prod-eu-1) has not succeeded since 2026-09-29 (97 scheduled runs).
-| 🟡 Cause now known: Cron job **slow-export** in **reports** (**prod-eu-1**) has not succeeded since 2026-09-29 (97 scheduled runs).
-10:50:00 material change
-🟠 Cron job slow-export in reports (prod-eu-1) now has not succeeded since 2026-09-29 (100 scheduled runs). This is now a warning.
-🟠 Cron job slow-export in reports (prod-eu-1) now has not succeeded since 2026-09-29 (100 scheduled runs).
-| 🟠 Cron job **slow-export** in **reports** (**prod-eu-1**) now has not succeeded since 2026-09-29 (100 scheduled runs).
-| This is now a warning.
+10:31:15 digest
+🟡 kwatch summary (prod-eu-1): one new low-priority problem. Cron job slow-export in reports has not succeeded since 2026-09-29 (96 scheduled runs). Not urgent: kwatch alerts on its own if it gets worse.
+🟡 kwatch summary (prod-eu-1): one new low-priority problem.
+| 🟡 **kwatch summary** · prod-eu-1 — 1 problem
+|
+| **Problems**
+| - Cron job **slow-export** in **reports** has not succeeded since 2026-09-29 (96 scheduled runs)

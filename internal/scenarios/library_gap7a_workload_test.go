@@ -163,16 +163,19 @@ func gap7aCronReplaceKillsRuns() scenario {
 				"five under Replace; each tick deletes the run in "+
 				"progress and none completes for hours.",
 			"cronjob/reports/slow-export", "digest", "node//n1").
-			tail(10 * time.Minute),
+			tail(4 * time.Minute),
 		build: func(c *cluster) {
 			c.list(c.node("n1", "zone-a"))
 			cron := scheduleCronJob(c, "reports", "slow-export",
 				"*/5 * * * *")
 			replace := batchv1.ReplaceConcurrent
 			cron.Spec.ConcurrencyPolicy = replace
+			// The schedule fires on time: only the runs never finish.
+			fired := metav1.NewTime(c.now)
+			cron.Status.LastScheduleTime = &fired
 			c.list(cron)
 			var previous *batchv1.Job
-			for i := range 8 {
+			for i := range 10 {
 				c.after(5 * time.Minute)
 				if previous != nil {
 					c.remove(previous)

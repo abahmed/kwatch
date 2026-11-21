@@ -1,13 +1,13 @@
 10:03:15 settled
-🟠 queue in streaming (prod-eu-1) keeps crashing. Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself. It fails with "peer discovery failed: lookup queue-0.queue.streaming.svc.cluster.local on 10.96.0.10:53: no such host". Its last run lasted ten seconds; two restarts since its pod was created one hour ago. To read the output of the last crash, run kubectl logs queue-1 -c app -n streaming --previous
-🟠 queue in streaming (prod-eu-1) keeps crashing.
-| 🟠 **queue** in **streaming** (**prod-eu-1**) keeps crashing.
-| Cause not found yet: its node and registry are healthy and unchanged, so look at the app itself.
-| It fails with
+🟠 queue in streaming (prod-eu-1) keeps crashing because service queue does not exist. queue calls queue and fails with "peer discovery failed: lookup queue-0.queue.streaming.svc.cluster.local on 10.96.0.10:53: no such host", but there is no Service queue in streaming. Replicas that do not depend on it are healthy. To read the output of the last crash, run kubectl logs queue-1 -c app -n streaming --previous
+🟠 queue in streaming (prod-eu-1) keeps crashing because service queue does not exist.
+| 🟠 **queue** in **streaming** (**prod-eu-1**) keeps crashing because service **queue** does not exist.
+| **queue** calls **queue** and fails with
 | ```
 | peer discovery failed: lookup queue-0.queue.streaming.svc.cluster.local on 10.96.0.10:53: no such host
 | ```
-| Its last run lasted ten seconds; two restarts since its pod was created one hour ago.
+| but there is no Service **queue** in **streaming**.
+| Replicas that do not depend on it are healthy.
 | To read the output of the last crash, run
 | ```
 | kubectl logs queue-1 -c app -n streaming --previous

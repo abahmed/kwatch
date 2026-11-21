@@ -7,5 +7,5 @@
   "mustNotBlame": [
     "node//n1"
   ],
-  "tail": "10m0s"
+  "tail": "4m0s"
 }
