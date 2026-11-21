@@ -10,6 +10,8 @@ Please use GitHub's **Report a vulnerability** button in the Security tab to sen
 private report. Do not open a public issue or include credentials, tokens, customer
 data, or an unpatched proof of concept in a public discussion.
 
+The canonical contact file is <https://kwatch.dev/.well-known/security.txt>.
+
 If private reporting is unavailable, open a minimal issue asking for a private
 contact channel without describing the vulnerability.
 
@@ -23,9 +25,9 @@ Please include, when safe to share:
 
 ## Supported versions
 
-The 1.0.x line (latest stable) is supported and receives security fixes. 0.10.x
-and older releases are not supported; upgrade to 1.0. Release candidates are
-handled on a best-effort basis.
+The latest stable minor line (currently 1.2.x) is supported and receives security
+fixes. Older lines are not supported; upgrade to the latest stable release.
+Release candidates are handled on a best-effort basis.
 
 ## Response and disclosure
 
