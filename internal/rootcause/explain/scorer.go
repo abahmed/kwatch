@@ -122,6 +122,9 @@ func (v *view) score(c *candidate) scored {
 	if v.blindToHiddenCause(c, out.contributions) {
 		total = min(total, HiddenCauseMaxConfidence)
 	}
+	if v.blindToHiddenDNSConfig(c) {
+		total = min(total, HiddenCauseMaxConfidence)
+	}
 	if v.releaseUnclaimed(c) {
 		total = min(total, ReleaseUnclaimedMaxConfidence)
 	}
