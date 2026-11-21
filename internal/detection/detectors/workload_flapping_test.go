@@ -101,10 +101,14 @@ func TestReadinessFlappingForgetsOldFlips(t *testing.T) {
 	toggle(model, pods[0], t0.Add(time.Minute), 30*time.Second, 8)
 
 	_, now := flappingOf(detectFlap(model, deploy, t0.Add(6*time.Minute)))
-	_, later := flappingOf(detectFlap(model, deploy, t0.Add(20*time.Minute)))
+	old, later := flappingOf(detectFlap(model, deploy, t0.Add(20*time.Minute)))
+	_, gone := flappingOf(detectFlap(model, deploy, t0.Add(90*time.Minute)))
 
 	assert.True(t, now)
-	assert.False(t, later, "the flips left the window")
+	assert.True(t, later, "the hour still holds them")
+	assert.Equal(t, detection.Info, old.Severity,
+		"flips older than the short window are history")
+	assert.False(t, gone, "the flips left the hour")
 }
 
 func TestReadinessFlappingAsksToBeChecked(t *testing.T) {

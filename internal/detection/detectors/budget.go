@@ -51,7 +51,7 @@ func budgetSelectsNothing(
 	}
 	return detection.Finding{
 		Reason: reasons.PdbSelectsNothing, Severity: detection.Warning,
-		Since: since,
+		Since:   since,
 		Summary: "Disruption budget selects no pods; it protects nothing",
 		Evidence: []detection.Evidence{{
 			Label: "selector", Value: text(e, kube.AttrSelector),

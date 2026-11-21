@@ -31,6 +31,22 @@ const (
 func readinessFlapping(
 	ctx detection.Context, e inventory.Entity,
 ) (detection.Finding, bool) {
+	if f, ok := flappingWithin(ctx, e, flapWindow); ok {
+		return f, true
+	}
+	// Sporadic flips over a longer time are history for the digest.
+	f, ok := flappingWithin(ctx, e, flapLongWindow)
+	f.Severity = detection.Info
+	return f, ok
+}
+
+// flapLongWindow is the window of sporadic flapping, which is only
+// worth the digest.
+const flapLongWindow = time.Hour
+
+func flappingWithin(
+	ctx detection.Context, e inventory.Entity, window time.Duration,
+) (detection.Finding, bool) {
 	if ctx.Model == nil || !ctx.Synced(kube.KindPod) {
 		return detection.Finding{}, false
 	}
@@ -39,10 +55,10 @@ func readinessFlapping(
 	downs, total := 0, 0
 	for _, id := range runningPodsOf(ctx.Model, e.ID) {
 		pod, ok := ctx.Model.Entity(id)
-		if !ok || flapExcluded(ctx, pod) {
+		if !ok || flapExcluded(ctx, pod, window) {
 			continue
 		}
-		times, down := recentFlips(ctx.Now, pod)
+		times, down := recentFlips(ctx.Now, pod, window)
 		if len(times) == 0 {
 			continue
 		}
@@ -53,13 +69,13 @@ func readinessFlapping(
 	if total < flapMinFlips {
 		return detection.Finding{}, false
 	}
-	ctx.RecheckAfter(since.Add(flapWindow).Sub(ctx.Now) + time.Nanosecond)
+	ctx.RecheckAfter(since.Add(window).Sub(ctx.Now) + time.Nanosecond)
 	finding := detection.Finding{
 		Reason: reasons.ReadinessFlapping, Severity: detection.Warning,
 		Since: since,
 		Summary: "Has pods that went ready to unready " +
 			strconv.Itoa(downs) + " times in the last " +
-			strconv.Itoa(int(flapWindow/time.Minute)) +
+			strconv.Itoa(int(window/time.Minute)) +
 			" min; the endpoints of its " +
 			"Service keep changing",
 		Evidence: flapEvidence(ctx, e, pods, total),
@@ -106,9 +122,11 @@ func earliest(a, b time.Time) time.Time {
 // flapExcluded reports a pod whose Ready changes say nothing about
 // flapping: it is going away, boots with its node pool, starts inside a
 // rollout, or restarted inside the window.
-func flapExcluded(ctx detection.Context, pod inventory.Entity) bool {
+func flapExcluded(
+	ctx detection.Context, pod inventory.Entity, window time.Duration,
+) bool {
 	return flag(pod, kube.AttrDeleting) || bootGraceFor(ctx, pod) > 0 ||
-		podStartingInRollout(ctx, pod) || restartedWithin(ctx, pod, flapWindow)
+		podStartingInRollout(ctx, pod) || restartedWithin(ctx, pod, min(window, flapWindow))
 }
 
 // restartedWithin reports a pod with a container whose restart count
@@ -134,7 +152,9 @@ func restartedWithin(
 // oldest first, and how many of them were to not ready. The first
 // change of a pod that was not ready when first seen is its first Ready,
 // part of starting, and is left out unless older ones were forgotten.
-func recentFlips(now time.Time, pod inventory.Entity) ([]time.Time, int) {
+func recentFlips(
+	now time.Time, pod inventory.Entity, window time.Duration,
+) ([]time.Time, int) {
 	attribute, ok := pod.Attribute(kube.AttrReady)
 	if !ok || len(attribute.Flips) == 0 {
 		return nil, 0
@@ -152,7 +172,7 @@ func recentFlips(now time.Time, pod inventory.Entity) ([]time.Time, int) {
 	var times []time.Time
 	downs := 0
 	for i := first; i < len(flips); i++ {
-		if now.Sub(flips[i]) >= flapWindow {
+		if now.Sub(flips[i]) >= window {
 			continue
 		}
 		times = append(times, flips[i])
