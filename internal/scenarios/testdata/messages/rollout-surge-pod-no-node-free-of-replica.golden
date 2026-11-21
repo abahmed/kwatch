@@ -1,13 +1,11 @@
 10:13:15 settled
-🟠 search in shop (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (didn't match pod anti-affinity rules). No node fits: the nodes: the closest node, n1, already runs shop/search-a51a0a8d-a in its kubernetes.io/hostname, which the pod's anti-affinity refuses. The scheduler says "0/3 nodes are available: 3 node(s) didn't match pod anti-affinity rules. preemption: 0/3 nodes are available: 3 No…". To see the pods' state and events, run kubectl describe pods search- -n shop
-🟠 search in shop (prod-eu-1) has waited two minutes for a node because the scheduler rejects every node (didn't match pod anti-affinity rules).
-| 🟠 **search** in **shop** (**prod-eu-1**) has waited two minutes for a node because the scheduler rejects every node (**didn't match pod anti-affinity rules**).
+🟠 search is failing in shop (prod-eu-1) after the 10:10 UTC release of registry.example.com/search:7. The previous image was registry.example.com/search:6. No node fits: the nodes: the closest node, n1, already runs shop/search-a51a0a8d-a in its kubernetes.io/hostname, which the pod's anti-affinity refuses. Fix: change the image of container app in deployment/search. To see the rollout state, run kubectl rollout status deployment/search -n shop
+🟠 search is failing in shop (prod-eu-1) after the 10:10 UTC release of registry.example.com/search:7.
+| 🟠 **search** is failing in **shop** (**prod-eu-1**) after the 10:10 UTC release of registry.example.com/search:7.
+| The previous image was registry.example.com/search:6.
 | No node fits: the nodes: the closest node, n1, already runs shop/search-a51a0a8d-a in its kubernetes.io/hostname, which the pod's anti-affinity refuses.
-| The scheduler says
+| Fix: change the image of container app in deployment/search.
+| To see the rollout state, run
 | ```
-| 0/3 nodes are available: 3 node(s) didn't match pod anti-affinity rules. preemption: 0/3 nodes are available: 3 No…
-| ```
-| To see the pods' state and events, run
-| ```
-| kubectl describe pods search- -n shop
+| kubectl rollout status deployment/search -n shop
 | ```

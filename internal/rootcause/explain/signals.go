@@ -45,6 +45,9 @@ const (
 	// SignalNodeAgent is an error naming what a node agent does: the
 	// network plugin (CNI) or a storage driver (CSI) not ready.
 	SignalNodeAgent Signal = "node-agent-error"
+	// SignalSpread is a pod the scheduler cannot place because of the
+	// spread its own template asks for: required anti-affinity.
+	SignalSpread Signal = "spread-error"
 )
 
 // signalPatterns match each signal in lower-case text.
@@ -82,6 +85,8 @@ var signalPatterns = map[Signal]*regexp.Regexp{
 		`failed to set ?up sandbox container .*network|` +
 		`driver name \S+ not found in the list of registered csi|` +
 		`csinode \S+ does not contain driver`),
+	SignalSpread: regexp.MustCompile(`didn't match pod anti-affinity ` +
+		`rules`),
 	SignalTLS: regexp.MustCompile(`x509:|certificate has expired|` +
 		`tls: (bad|expired|unknown) certificate|certificate is not ` +
 		`yet valid`),

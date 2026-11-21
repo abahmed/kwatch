@@ -250,6 +250,17 @@ var workloadRows = []Row{
 		Link: LinkOwns, Effect: podSide(podFailures...), Prior: 0.7,
 	},
 	{
+		// A new template explains the new pod that cannot be placed:
+		// what it asks for or how it spreads is what the release set.
+		Name: "rollout-unschedulable",
+		Cause: Side{Group: AnyGroup, Kind: AnyKind,
+			Modes: []detection.Mode{ModeSpecChanged}},
+		Link: LinkOwns, Effect: Side{Kind: kube.KindPod,
+			Signal: SignalSpread, Modes: []detection.Mode{
+				detection.ModePending, detection.ModeUnschedulable}},
+		Prior: 0.85,
+	},
+	{
 		Name: RuleConfigMissingOrChanged,
 		Cause: Side{Kind: kube.KindSecret, Modes: []detection.Mode{ModeMissing,
 			ModeChanged, ModeKeyMissing, ModeWrongType}},

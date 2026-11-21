@@ -62,8 +62,7 @@ func gap7aSurgePodUnplaceable() scenario {
 			c.list(w.pod(0, "n1"), w.pod(1, "n2"), w.pod(2, "n3"))
 			c.after(10 * time.Minute)
 			rs := w.rollout(func(spec *corev1.PodSpec) {
-				spec.Containers[0].Env = []corev1.EnvVar{{Name: "V",
-					Value: "2"}}
+				spec.Containers[0].Image = "registry.example.com/search:7"
 			})
 			d := w.deployment
 			d.Status.Replicas, d.Status.UpdatedReplicas = 4, 1
