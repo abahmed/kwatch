@@ -10,7 +10,7 @@ import (
 // clusterRows cover shared services every workload depends on.
 var clusterRows = concatRows(schedulerNamesRows(), []Row{
 	pullWithoutSecretRow, diskHogRow, accountNoGrantRow, roleShortRow,
-	accountReplacedRow, tokenExpiredRow,
+	accountReplacedRow,
 	{
 		Name: "registry-refuses",
 		Cause: Side{Kind: kube.KindRegistry, Modes: []detection.Mode{

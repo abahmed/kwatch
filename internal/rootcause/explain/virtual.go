@@ -46,7 +46,6 @@ func (v *view) virtualHops(id inventory.EntityID) []hop {
 		out = append(out, v.dnsConfigHops(id)...)
 		out = append(out, v.accessHops(id)...)
 		out = append(out, v.roleHops(id)...)
-		out = append(out, v.tokenHops(id)...)
 		out = append(out, v.unauthorizedHops(id)...)
 		out = append(out, v.removedNodeHops(id)...)
 		out = append(out, v.helperHops(id)...)

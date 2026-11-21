@@ -137,7 +137,6 @@ var causeCategories = map[string]string{
 	"quota-exhausted":                       categoryShortage,
 	"role-lacks-grant":                      categoryPermissions,
 	"account-replaced":                      categoryPermissions,
-	"join-token-expired":                    categoryShortage,
 	"rbac-change":                           categoryPermissions,
 	"registry-refuses":                      categoryImagePull,
 	"resource-claim-unallocated":            categoryShortage,

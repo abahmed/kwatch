@@ -56,9 +56,6 @@ var admissionChecks = []struct {
 		hops:  (*view).policyAdmitHops,
 		modes: (*view).policyModes,
 	}},
-	{[]inventory.Kind{kube.KindSecret}, admissionCheck{
-		modes: (*view).tokenModes,
-	}},
 	{[]inventory.Kind{kube.KindRole}, admissionCheck{
 		modes: (*view).roleShortModes,
 	}},

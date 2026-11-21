@@ -182,6 +182,13 @@ func gap7bLeasesForbidden() scenario {
 					"apiGroups": []any{""},
 					"resources": []any{"configmaps"},
 					"verbs":     []any{"get", "list", "watch"}}}}))
+			c.list(rbacObject(c, "RoleBinding", "shop", "operator-binding",
+				map[string]any{
+					"subjects": []any{map[string]any{"kind": "ServiceAccount",
+						"name": "operator", "namespace": "shop"}},
+					"roleRef": map[string]any{
+						"apiGroup": "rbac.authorization.k8s.io",
+						"kind":     "Role", "name": "operator-role"}}))
 			w := c.deployment("shop", "operator",
 				"registry.example.com/operator:2.0", 1)
 			c.list(w.objects())

@@ -21,7 +21,7 @@ var pseudoModes = []detection.Mode{
 	ModePodSecurityDenied, ModeLimitRangeDenied, ModePolicyDenied,
 	ModeHoldsVolume, ModeProvisionerDown,
 	ModeNoStorageClass, modeFailedMount, modeFailedAttach,
-	ModeAgentAbsent, ModeNoPullSecret, ModeDiskHog, ModeNoGrant, ModeRoleShort, ModeTokenExpired,
+	ModeAgentAbsent, ModeNoPullSecret, ModeDiskHog, ModeNoGrant, ModeRoleShort,
 	ModeDependencyUnreachable, ModeBackendsNotReady, ModeKeyMissing,
 	ModePullThrottled, ModeWrongType, ModeBoundElsewhere,
 	ModeNamedByScheduler, ModeClassRejects, ModeClaimPinsVolume,

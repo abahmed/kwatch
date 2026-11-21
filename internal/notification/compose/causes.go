@@ -145,8 +145,6 @@ var causeWords = map[string]causeWording{
 	"account-replaced": {
 		words: "was deleted and created again, so the tokens of " +
 			"running pods are no longer accepted"},
-	"join-token-expired": {
-		words: "has expired, so the nodes a scale-up adds cannot join"},
 	"quota-exhausted": {words: "is used up"},
 	"resource-claim-unallocated": {
 		words: "has no device allocated, so its pod cannot start"},
