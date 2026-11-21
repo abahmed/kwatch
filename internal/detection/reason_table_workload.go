@@ -26,7 +26,7 @@ var workloadReasons = []ReasonInfo{
 	reason(reasons.FailedGetScale, ModeScalingTargetMissing).shown(kube.KindHPA),
 	// A condition reason only: the matching event is FailedRescale.
 	reason(reasons.FailedUpdateScale, ModeScalingUpdateFailed),
-	reason(reasons.HPAInvalidSelector, ModeScalingInvalidSelector),
+	reason(reasons.HPAInvalidSelector, ModeScalingInvalidSelector).digest(),
 	reason(reasons.HPAMaxedOut, ModeScalingMaxedOut).causeOnly(),
 	reason(reasons.HPAScalingError, ModeScalingError),
 	// A scale target that does not exist and a Ready node whose kubelet
