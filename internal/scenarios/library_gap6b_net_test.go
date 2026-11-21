@@ -269,7 +269,9 @@ func gap6bDualStackMismatch() scenario {
 			c.list(c.node("n1", "zone-a"), c.node("n2", "zone-a"))
 			api := c.deployment("shop", "api", "registry.example.com/api:4", 2)
 			c.list(api.objects())
-			c.list(api.pod(0, "n1"), api.pod(1, "n2"))
+			first, second := api.pod(0, "n1"), api.pod(1, "n2")
+			first.Status.PodIP, second.Status.PodIP = "10.244.1.7", "10.244.2.7"
+			c.list(first, second)
 			svc := clusterService(c, "shop", "api", 8080)
 			svc.Spec.IPFamilies = []corev1.IPFamily{corev1.IPv6Protocol}
 			svc.Spec.ClusterIP = "fd00:10:96::2a"
