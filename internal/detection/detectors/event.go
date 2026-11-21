@@ -41,7 +41,8 @@ func (Event) Detect(
 			overcomeAtStart(e, note) || partOfLivenessKill(ctx, e, note) ||
 			recoveredBefore(e, note) || jobCreateOvercome(ctx, e, note) ||
 			bootNoise(ctx, e, note) ||
-			daemonNodeNoise(ctx, e, note) || staleNodeNote(e, note) {
+			daemonNodeNoise(ctx, e, note) || staleNodeNote(e, note) ||
+			conflictNamesPod(ctx, e, note) {
 			continue
 		}
 		// A note exactly as old as its life still counts, so the

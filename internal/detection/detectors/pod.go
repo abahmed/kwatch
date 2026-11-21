@@ -68,8 +68,9 @@ func (Pod) Kinds() []inventory.Kind { return []inventory.Kind{kube.KindPod} }
 func (d Pod) Detect(
 	ctx detection.Context, e inventory.Entity,
 ) []detection.Finding {
-	return append(append(d.detect(ctx, e), preemptedFindings(ctx, e)...),
-		graceKillFindings(ctx, e)...)
+	return append(append(append(d.detect(ctx, e),
+		preemptedFindings(ctx, e)...), graceKillFindings(ctx, e)...),
+		nameTakenFindings(ctx, e)...)
 }
 
 func (d Pod) detect(

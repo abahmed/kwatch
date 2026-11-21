@@ -86,6 +86,7 @@ const (
 	ReplicaSetFailure        = "ReplicaSetFailure"
 	DaemonSetUnavailable     = "DaemonSetUnavailable"
 	DaemonSetMisscheduled    = "DaemonSetMisscheduled"
+	PodNameTaken             = "PodNameTaken"
 	StsUnavailable           = "StsUnavailable"
 	ScalingDisabled          = "ScalingDisabled"
 	FailedGetResourceMetric  = "FailedGetResourceMetric"

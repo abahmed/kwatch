@@ -65,6 +65,7 @@ const (
 	ModeRolloutStuck           Mode = "RolloutStuck"
 	ModeUnavailable            Mode = "Unavailable"
 	ModeDaemonSetMisscheduled  Mode = "Misscheduled"
+	ModeNameTaken              Mode = "NameTaken"
 	ModeReplicaFailure         Mode = "ReplicaFailure"
 	ModePausedEdit             Mode = "PausedEdit"
 	ModeScalingDisabled        Mode = "Scaling.Disabled"

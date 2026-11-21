@@ -82,7 +82,7 @@ func (d Workload) availability(
 	ctx detection.Context, e inventory.Entity,
 ) (detection.Finding, bool) {
 	desired, ok := desiredReplicas(e)
-	if !ok || desired == 0 {
+	if !ok || desired == 0 || nameHeldByPod(ctx, e) {
 		return detection.Finding{}, false
 	}
 	ready, _ := number(e, kube.AttrReadyReplicas)

@@ -1,8 +1,0 @@
-10:03:15 settled
-🟠 db in data (prod-eu-1) is failing: Kubernetes reported ConflictingController. To see the object's state and events, run kubectl describe statefulset db -n data
-🟠 db in data (prod-eu-1) is failing: Kubernetes reported ConflictingController.
-| 🟠 db in **data** (**prod-eu-1**) is failing: Kubernetes reported ConflictingController.
-| To see the object's state and events, run
-| ```
-| kubectl describe statefulset db -n data
-| ```

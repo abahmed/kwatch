@@ -18,6 +18,8 @@ var workloadReasons = []ReasonInfo{
 	reason(reasons.DaemonSetMisscheduled, ModeDaemonSetMisscheduled).
 		digest(),
 	reason(reasons.StsUnavailable, ModeUnavailable),
+	// A pod made by hand holds the name its controller needs.
+	reason(reasons.PodNameTaken, ModeNameTaken).digest(),
 	reason(reasons.ScalingDisabled, ModeScalingDisabled),
 	reason(reasons.FailedGetResourceMetric, ModeScalingNoMetrics).digest().
 		shown(kube.KindHPA),

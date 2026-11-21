@@ -201,6 +201,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Missing.ConfigMap | varies | `ProjectedConfigMapMissing` | `config` |
 | Missing.Secret | varies | `ProjectedSecretMissing` | `config` |
 | Missing.ServiceAccount | varies | `ServiceAccountMissing` | `config` |
+| NameTaken | degraded | `PodNameTaken` | `pod_name_taken` |
 | Network.CNINotReady | varies | `NodeCNINotReady` | `node_health` |
 | Network.Conflict | varies | `NodePodNetworkConflict` | `node_health` |
 | Network.IPExhausted | varies | `NodePodIPExhausted` | `node_health` |
@@ -244,6 +245,7 @@ Health is taken from the severity each detector assigns: warning is degraded, cr
 | Rollout.Stuck | degraded | `StatefulSetRolloutStuck` | `rollout` |
 | RolloutStuck | varies | `ProgressDeadlineExceeded` | `condition_rules` |
 | RuntimeErrors | varies | `NodeRuntimeErrors` | `resources` |
+| Scale.Flapping | degraded | `ReplicasFlapping` | `replicas_flapping` |
 | ScaledToZero | varies | `ScaledToZeroRouted` | `scaled_to_zero` |
 | Scaling.Disabled | varies | `ScalingDisabled` | - |
 | Scaling.Error | varies | `HPAScalingError` | `hpa` |
