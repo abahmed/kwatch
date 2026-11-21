@@ -1,13 +1,13 @@
 10:12:15 settled
-🟠 invoices in billing (prod-eu-1) keeps crashing because external endpoint billing-db.corp.internal does not resolve. It fails with "dial tcp: lookup billing-db.corp.internal on 10.96.0.10:53: no such host". Every error mentions it. Both failing apps use it. Affected: cart in shop. To read the output of the last crash, run kubectl logs deploy/invoices -c app -n billing --previous
+🟠 invoices is failing in billing (prod-eu-1) after the 10:10 UTC change to config map coredns in kube-system. Key Corefile changed. It fails with "dial tcp: lookup billing-db.corp.internal on 10.96.0.10:53: no such host". Affected: cart in shop. To check the object the pods depend on, run kubectl get configmap coredns -n kube-system -o yaml
 Proof: both replicas fail, on 2 nodes (invoices); both replicas fail, on 2 nodes (cart).
-🟠 invoices in billing (prod-eu-1) keeps crashing because external endpoint billing-db.corp.internal does not resolve.
-| 🟠 **invoices** in **billing** (**prod-eu-1**) keeps crashing because external endpoint **billing-db.corp.internal** does not resolve.
-| It fails with `dial tcp: lookup billing-db.corp.internal on 10.96.0.10:53: no such host`. Every error mentions it.
-| Both failing apps use it.
+🟠 invoices is failing in billing (prod-eu-1) after the 10:10 UTC change to config map coredns in kube-system.
+| 🟠 **invoices** is failing in **billing** (**prod-eu-1**) after the 10:10 UTC change to config map **coredns** in **kube-system**.
+| Key Corefile changed.
+| It fails with `dial tcp: lookup billing-db.corp.internal on 10.96.0.10:53: no such host`.
 | Affected: **cart** in **shop**.
-| To read the output of the last crash, run
+| To check the object the pods depend on, run
 | ```
-| kubectl logs deploy/invoices -c app -n billing --previous
+| kubectl get configmap coredns -n kube-system -o yaml
 | ```
 | *Proof: both replicas fail, on 2 nodes (invoices); both replicas fail, on 2 nodes (cart).*

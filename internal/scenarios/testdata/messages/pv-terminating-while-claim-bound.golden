@@ -1,8 +1,7 @@
-10:21:15 settled
-🟠 Volume pv-pgdata (prod-eu-1) is stuck deleting: finalizers kubernetes.io/pv-protection hold it. To see the object's state and events, run kubectl describe persistentvolume pv-pgdata
-🟠 Volume pv-pgdata (prod-eu-1) is stuck deleting: finalizers kubernetes.io/pv-protection hold it.
-| 🟠 Volume **pv-pgdata** (**prod-eu-1**) is stuck deleting: finalizers kubernetes.io/pv-protection hold it.
-| To see the object's state and events, run
-| ```
-| kubectl describe persistentvolume pv-pgdata
-| ```
+10:51:15 digest
+🟡 kwatch summary (prod-eu-1): one new low-priority problem. Volume pv-pgdata is stuck deleting because volume claim pgdata in shop is bound to the volume whose deletion waits for it. Not urgent: kwatch alerts on its own if it gets worse.
+🟡 kwatch summary (prod-eu-1): one new low-priority problem.
+| 🟡 **kwatch summary** · prod-eu-1 — 1 problem
+|
+| **Problems**
+| - Volume **pv-pgdata** — stuck deleting because volume claim **pgdata** in **shop** is bound to the volume whose deletion waits for it
