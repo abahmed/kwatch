@@ -155,6 +155,10 @@ func resolution(f caseFacts, subject inventory.EntityID) string {
 	case f.p.Fix == incident.FixNodeReplaced:
 		return "was replaced and its pods were rescheduled"
 	}
+	if apiOutage(f) {
+		return nodeRecovered(f) +
+			", and the Kubernetes API is reachable again"
+	}
 	return nodeRecovered(f)
 }
 

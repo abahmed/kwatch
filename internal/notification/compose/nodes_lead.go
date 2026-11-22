@@ -28,7 +28,32 @@ func nodesLead(f caseFacts) string {
 	if state != "" {
 		text += " " + pluralPredicate(state)
 	}
-	return text + ": " + nodeNames(f)
+	text += ": " + nodeNames(f)
+	if apiOutage(f) {
+		text += "; the Kubernetes API is also down"
+	}
+	return text
+}
+
+// apiOutage reports that the API server failed with the nodes: it joined
+// their incident, and the message says so instead of counting it.
+func apiOutage(f caseFacts) bool {
+	for _, m := range f.members {
+		if m.Entity.Kind == kube.APIServer.Kind {
+			return true
+		}
+	}
+	for _, m := range f.p.Members {
+		if m.Entity.Kind == kube.APIServer.Kind {
+			return true
+		}
+	}
+	for _, e := range f.p.Timeline {
+		if e.Entity != nil && e.Entity.Kind == kube.APIServer.Kind {
+			return true
+		}
+	}
+	return false
 }
 
 // nodeNames lists the failing nodes, sorted, and counts the ones past

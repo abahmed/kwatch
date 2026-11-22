@@ -1,9 +1,9 @@
 10:06:30 settled
-🔴 Three nodes (prod-eu-1) have not reported for about two minutes: n1, n2 and n3. They report "Kubelet stopped posting node status." kwatch cannot see why from inside the cluster: the kubelets stopped reporting, so the nodes may be down or unreachable.
+🔴 Three nodes (prod-eu-1) have not reported for about two minutes: n1, n2 and n3; the Kubernetes API is also down. They report "Kubelet stopped posting node status." kwatch cannot see why from inside the cluster: the kubelets stopped reporting, so the nodes may be down or unreachable.
 Related alerts: 3 node problems, 1 unavailable alert
 To check the node's conditions and recent events, run kubectl describe node n1
-🔴 Three nodes (prod-eu-1) have not reported for about two minutes: n1, n2 and n3.
-| 🔴 Three nodes (**prod-eu-1**) have not reported for about two minutes: n1, n2 and n3.
+🔴 Three nodes (prod-eu-1) have not reported for about two minutes: n1, n2 and n3; the Kubernetes API is also down.
+| 🔴 Three nodes (**prod-eu-1**) have not reported for about two minutes: n1, n2 and n3; the Kubernetes API is also down.
 | They report `Kubelet stopped posting node status.`
 | kwatch cannot see why from inside the cluster: the kubelets stopped reporting, so the nodes may be down or unreachable.
 | Related alerts: 3 node problems, 1 unavailable alert
@@ -16,8 +16,8 @@ To check the node's conditions and recent events, run kubectl describe node n1
 🔴 Nodes n1–n3 (prod-eu-1) are now also affecting cart, orders and payments in shop: they have not been ready for three minutes.
 | 🔴 Nodes n1–n3 (**prod-eu-1**) are now also affecting **cart**, **orders** and **payments** in shop: they have not been ready for three minutes.
 10:14:40 healthy for 3m0s
-✅ Node n1 (prod-eu-1) is ready again. It was down for six minutes. Six pods were affected.
-✅ Node n1 (prod-eu-1) is ready again.
-| ✅ Node n1 (**prod-eu-1**) is ready again.
+✅ Node n1 (prod-eu-1) is ready again, and the Kubernetes API is reachable again. It was down for six minutes. Six pods were affected.
+✅ Node n1 (prod-eu-1) is ready again, and the Kubernetes API is reachable again.
+| ✅ Node n1 (**prod-eu-1**) is ready again, and the Kubernetes API is reachable again.
 | It was down for six minutes.
 | Six pods were affected.

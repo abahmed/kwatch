@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/abahmed/kwatch/internal/detection"
-	"github.com/abahmed/kwatch/internal/notification"
-
 	"github.com/abahmed/kwatch/internal/incident"
+	"github.com/abahmed/kwatch/internal/notification"
+	"github.com/abahmed/kwatch/internal/rootcause/explain"
 )
 
 // maxSummaryNamed bounds how many existing problems the startup
@@ -243,8 +243,8 @@ func (w Writer) digestTitles(
 			break
 		}
 		out = append(out, sentence{part: partProof,
-			text: prefix + withUsualTail(
-				markedTitle(w.listWriter().Write(d, now)), d)})
+			text: prefix + withUsualTail(withOwnCause(
+				markedTitle(w.listWriter().Write(d, now)), d), d)})
 	}
 	return mergeTitles(out)
 }
@@ -276,4 +276,24 @@ func (w Writer) StartupResolved(key string, count int) notification.Message {
 	fill(&msg, notification.MarkerResolved, []sentence{{part: partLead,
 		text: sentenceCase(text)}})
 	return msg
+}
+
+// ownRootCauses are the rules whose cause is the root's own state, which
+// the lead leaves out: the digest line says it, so the cause is not lost.
+var ownRootCauses = map[string]string{
+	explain.RuleClaimRestoresFromSnapshot: "it is restored from a " +
+		"snapshot whose deletion waits for it",
+}
+
+// withOwnCause adds the cause of an own-root rule to a digest title.
+func withOwnCause(title string, d incident.Decision) string {
+	cause := d.Incident.Cause
+	if cause == nil || d.Incident.Cause.Root != d.Incident.Root {
+		return title
+	}
+	words, ok := ownRootCauses[cause.Rule]
+	if !ok {
+		return title
+	}
+	return strings.TrimSuffix(title, ".") + "; " + words + "."
 }
